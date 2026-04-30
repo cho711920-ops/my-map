@@ -2,334 +2,220 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>내 매물 지도</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>매물 지도</title>
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services,clusterer&autoload=false"></script>
 
 <style>
-body { margin:0; font-family:Arial, sans-serif; }
-#wrap { display:flex; height:100vh; }
-#sidebar { width:390px; background:white; border-right:1px solid #ddd; overflow:auto; }
-#map { flex:1; }
-.header { padding:15px; font-size:20px; font-weight:bold; border-bottom:1px solid #ddd; }
-.filters { padding:10px; border-bottom:1px solid #ddd; }
-.filters input { width:95%; padding:7px; margin-bottom:6px; border:1px solid #ccc; }
-.row { display:flex; gap:6px; }
-.row input { width:46%; }
-.btn-row { display:flex; gap:6px; }
-button { padding:9px; border:0; cursor:pointer; }
-.search-btn { flex:1; background:#1e88ff; color:white; }
-.reset-btn { width:70px; background:#eee; }
-.item { padding:12px; border-bottom:1px solid #eee; cursor:pointer; }
-.item:hover { background:#f5f8ff; }
-.title { font-weight:bold; font-size:16px; }
-.price { color:#0066ff; margin-top:4px; }
-.small { font-size:13px; color:#555; margin-top:4px; }
-#status { position:absolute; top:10px; left:410px; background:white; padding:8px; z-index:9999; border:1px solid #ccc; }
-.info-btn { display:inline-block; margin-top:6px; padding:5px 8px; background:#03c75a; color:white; text-decoration:none; border-radius:4px; font-size:13px; }
-.call-btn { background:#1e88ff; }
+body {margin:0;font-family:Arial;}
+#wrap{display:flex;height:100vh;}
+#sidebar{width:390px;border-right:1px solid #ddd;overflow:auto;background:#fff;}
+#map{flex:1;}
+
+.header{padding:15px;font-size:20px;font-weight:bold;border-bottom:1px solid #ddd;}
+.filters{padding:10px;border-bottom:1px solid #ddd;}
+.filters input{width:95%;padding:6px;margin-bottom:5px;}
+.row{display:flex;gap:5px;}
+.row input{width:48%;}
+button{padding:8px;border:0;cursor:pointer;}
+.search-btn{background:#1e88ff;color:#fff;}
+.reset-btn{background:#eee;}
+
+.item{padding:10px;border-bottom:1px solid #eee;cursor:pointer;}
+.item:hover{background:#f5f5f5;}
+.title{font-weight:bold;}
+.small{font-size:13px;color:#555;margin-top:3px;}
+.price{color:#0066ff;margin-top:4px;}
+
+#status{position:absolute;top:10px;left:410px;background:#fff;padding:6px;}
+
+#toggleBtn{display:none;}
+
+@media (max-width:768px){
+ #wrap{display:block;}
+ #map{width:100%;height:100vh;}
+ #sidebar{
+  position:fixed;bottom:0;left:0;width:100%;height:60%;
+  transform:translateY(100%);transition:.3s;z-index:999;
+ }
+ #sidebar.open{transform:translateY(0);}
+ #toggleBtn{
+  display:block;position:fixed;bottom:20px;left:50%;
+  transform:translateX(-50%);
+  background:#1e88ff;color:#fff;padding:12px 20px;
+  border-radius:20px;z-index:1000;
+ }
+}
 </style>
 </head>
 
 <body>
 
 <div id="wrap">
-  <div id="sidebar">
-    <div class="header">내 매물 지도</div>
+ <div id="sidebar">
+  <div class="header">매물</div>
 
-    <div class="filters">
-      <input id="keyword" placeholder="지역 / 건물이름 / 메모 검색">
+  <div class="filters">
+   <input id="keyword" placeholder="검색">
 
-      <div class="row">
-        <input id="minDeposit" placeholder="보증금 최소">
-        <input id="maxDeposit" placeholder="보증금 최대">
-      </div>
+   <div class="row">
+    <input id="minDeposit" placeholder="보증금 최소">
+    <input id="maxDeposit" placeholder="보증금 최대">
+   </div>
 
-      <div class="row">
-        <input id="minRent" placeholder="월세 최소">
-        <input id="maxRent" placeholder="월세 최대">
-      </div>
+   <div class="row">
+    <input id="minRent" placeholder="월세 최소">
+    <input id="maxRent" placeholder="월세 최대">
+   </div>
 
-      <div class="row">
-        <input id="minArea" placeholder="평수 최소">
-        <input id="maxArea" placeholder="평수 최대">
-      </div>
+   <div class="row">
+    <input id="minArea" placeholder="평수 최소">
+    <input id="maxArea" placeholder="평수 최대">
+   </div>
 
-      <div class="btn-row">
-        <button class="search-btn" onclick="applyFilter()">검색 / 필터</button>
-        <button class="reset-btn" onclick="resetFilter()">해제</button>
-      </div>
-    </div>
-
-    <div id="list"></div>
+   <button class="search-btn" onclick="applyFilter()">검색</button>
+   <button class="reset-btn" onclick="resetFilter()">해제</button>
   </div>
 
-  <div id="map"></div>
+  <div id="list"></div>
+ </div>
+
+ <div id="map"></div>
 </div>
 
+<button id="toggleBtn" onclick="toggleSidebar()">매물 보기</button>
 <div id="status">로딩중...</div>
 
 <script>
-var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
+var sheetURL="https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
 
-var map, geocoder, clusterer;
-var allItems = [];
-var markers = [];
-var infoWindows = [];
+var map,geocoder,clusterer;
+var allItems=[],markers=[];
 
-function clean(t) {
-  return (t || "").replaceAll('"', '').trim();
+function clean(t){return (t||"").replaceAll('"','').trim();}
+
+function parseCSV(l){
+ let r=[],c="",q=false;
+ for(let ch of l){
+  if(ch=='"') q=!q;
+  else if(ch==","&&!q){r.push(c);c="";}
+  else c+=ch;
+ }
+ r.push(c);
+ return r;
 }
 
-function parseCSVLine(line) {
-  var result = [], current = "", insideQuotes = false;
-  for (var i = 0; i < line.length; i++) {
-    var char = line[i];
-    if (char === '"') insideQuotes = !insideQuotes;
-    else if (char === "," && !insideQuotes) {
-      result.push(current);
-      current = "";
-    } else current += char;
-  }
-  result.push(current);
-  return result;
+function toggleSidebar(){
+ document.getElementById("sidebar").classList.toggle("open");
 }
 
-function naverRoadviewUrl(lat, lng) {
-  return "https://map.naver.com/p?c=" + lng + "," + lat + ",17,0,0,0,dh";
-}
+kakao.maps.load(function(){
+ map=new kakao.maps.Map(document.getElementById("map"),{
+  center:new kakao.maps.LatLng(36.35,127.38),level:5
+ });
 
-kakao.maps.load(function() {
-  map = new kakao.maps.Map(document.getElementById("map"), {
-    center: new kakao.maps.LatLng(36.3504, 127.3845),
-    level: 5
-  });
+ geocoder=new kakao.maps.services.Geocoder();
 
-  geocoder = new kakao.maps.services.Geocoder();
+ clusterer=new kakao.maps.MarkerClusterer({
+  map:map,averageCenter:true,minLevel:1,disableClickZoom:true
+ });
 
-  clusterer = new kakao.maps.MarkerClusterer({
-    map: map,
-    averageCenter: true,
-    minLevel: 1,
-    disableClickZoom: true,
-    styles: [{
-      width: '40px',
-      height: '40px',
-      background: '#1e88ff',
-      color: '#fff',
-      textAlign: 'center',
-      lineHeight: '40px',
-      borderRadius: '20px',
-      fontWeight: 'bold'
-    }]
-  });
+ kakao.maps.event.addListener(clusterer,"clusterclick",function(cluster){
+  let arr=cluster.getMarkers().map(m=>m.item);
+  showList(arr);
+ });
 
-  kakao.maps.event.addListener(clusterer, "clusterclick", function(cluster) {
-    var clusterMarkers = cluster.getMarkers();
-    var selectedItems = clusterMarkers.map(function(marker) {
-      return marker.__item;
-    }).filter(Boolean);
-
-    document.getElementById("status").innerHTML = "선택 매물 " + selectedItems.length + "개";
-    showList(selectedItems);
-  });
-
-  loadSheet();
-
-  kakao.maps.event.addListener(map, "idle", function() {
-    applyFilter();
-  });
+ load();
 });
 
-function loadSheet() {
-  fetch(sheetURL)
-    .then(res => res.text())
-    .then(data => {
-      var rows = data.trim().split("\n");
-      var pending = rows.length - 1;
+function load(){
+ fetch(sheetURL).then(r=>r.text()).then(d=>{
+  let rows=d.trim().split("\n");
+  let pending=rows.length-1;
 
-      if (pending <= 0) {
-        document.getElementById("status").innerHTML = "시트 데이터 없음";
-        return;
-      }
+  for(let i=1;i<rows.length;i++){
+   let c=parseCSV(rows[i]);
 
-      for (var i = 1; i < rows.length; i++) {
-        var c = parseCSVLine(rows[i]);
+   let item={
+    name:clean(c[0]),
+    address:clean(c[1]),
+    room:clean(c[2]),
+    deposit:+clean(c[3])||0,
+    rent:+clean(c[4])||0,
+    fee:+clean(c[5])||0,
+    premium:+clean(c[6])||0,
+    area:+clean(c[7])||0,
+    phone1:clean(c[8]),
+    phone2:clean(c[9]),
+    memo:clean(c[10])
+   };
 
-        var item = {
-          name: clean(c[0]),
-          address: clean(c[1]),
-          deposit: Number(clean(c[2])) || 0,
-          rent: Number(clean(c[3])) || 0,
-          fee: Number(clean(c[4])) || 0,
-          premium: Number(clean(c[5])) || 0,
-          area: Number(clean(c[6])) || 0,
-          phone: clean(c[7]),
-          memo: clean(c[8]),
-          latlng: null
-        };
+   geocoder.addressSearch(item.address,(res,st)=>{
+    if(st===kakao.maps.services.Status.OK){
+     item.latlng=new kakao.maps.LatLng(res[0].y,res[0].x);
+     allItems.push(item);
 
-        if (!item.address) {
-          pending--;
-          continue;
-        }
+     let m=new kakao.maps.Marker({position:item.latlng});
+     m.item=item;
 
-        geocoder.addressSearch(item.address, function(currentItem) {
-          return function(result, status) {
-            if (status === kakao.maps.services.Status.OK) {
-              currentItem.latlng = new kakao.maps.LatLng(result[0].y, result[0].x);
-              allItems.push(currentItem);
-            }
-
-            pending--;
-            if (pending <= 0) {
-              document.getElementById("status").innerHTML = "매물 " + allItems.length + "개 불러옴";
-              drawItems(allItems);
-            }
-          };
-        }(item));
-      }
-    });
-}
-
-function clearMap() {
-  clusterer.clear();
-  markers.forEach(m => m.setMap(null));
-  infoWindows.forEach(i => i.close());
-  markers = [];
-  infoWindows = [];
-  document.getElementById("list").innerHTML = "";
-}
-
-function drawItems(items) {
-  clearMap();
-
-  items.forEach(function(item) {
-    if (!item.latlng) return;
-
-    var marker = new kakao.maps.Marker({
-      position: item.latlng
-    });
-
-    marker.__item = item;
-
-    var lat = item.latlng.getLat();
-    var lng = item.latlng.getLng();
-
-    var info = new kakao.maps.InfoWindow({
-      content:
-      '<div style="padding:10px;width:260px;">' +
-        '<b>' + item.name + '</b><br>' +
-        item.address + '<br>' +
-        '<span style="color:#0066ff;">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</span><br>' +
-        '관리비 ' + item.fee + '<br>' +
-        '권리금 ' + item.premium + '<br>' +
-        '평수 ' + item.area + '평<br>' +
-        '☎ ' + item.phone + '<br>' +
-        '<div style="margin-top:4px;">' + item.memo + '</div>' +
-        '<a class="info-btn call-btn" href="tel:' + item.phone + '">전화걸기</a> ' +
-        '<a class="info-btn" target="_blank" href="' + naverRoadviewUrl(lat, lng) + '">네이버 로드뷰</a>' +
-      '</div>'
-    });
-
-    kakao.maps.event.addListener(marker, "click", function() {
-      infoWindows.forEach(i => i.close());
-      info.open(map, marker);
-      document.getElementById("status").innerHTML = "선택 매물 1개";
+     kakao.maps.event.addListener(m,'click',()=>{
       showList([item]);
-    });
+      if(window.innerWidth<=768) toggleSidebar();
+     });
 
-    markers.push(marker);
-    infoWindows.push(info);
-    clusterer.addMarker(marker);
+     markers.push(m);
+     clusterer.addMarker(m);
+    }
 
-    addListItem(item, marker, info);
-  });
+    pending--;
+    if(pending<=0){
+     showList(allItems);
+     status.innerHTML="완료";
+    }
+   });
+  }
+ });
 }
 
-function showList(items) {
-  document.getElementById("list").innerHTML = "";
-  items.forEach(function(item) {
-    var marker = markers.find(function(m) {
-      return m.__item === item;
-    });
-    var info = infoWindows[markers.indexOf(marker)];
-    addListItem(item, marker, info);
-  });
+function showList(arr){
+ let list=document.getElementById("list");
+ list.innerHTML="";
+
+ arr.forEach(i=>{
+  let div=document.createElement("div");
+  div.className="item";
+
+  div.innerHTML=
+   `<div class="title">${i.name} / ${i.address} / ${i.room}</div>
+    <div class="price">${i.deposit} / ${i.rent}</div>
+    <div class="small">관리비 ${i.fee} / 권리금 ${i.premium} / ${i.area}평</div>
+    <div class="small">임대인☎ ${i.phone1}</div>
+    <div class="small">세입자☎ ${i.phone2}</div>
+    <div class="small">${i.memo}</div>`;
+
+  list.appendChild(div);
+ });
 }
 
-function addListItem(item, marker, info) {
-  var div = document.createElement("div");
-  div.className = "item";
+function applyFilter(){
+ let k=keyword.value;
+ let minD=+minDeposit.value||0,maxD=+maxDeposit.value||999999999;
+ let minR=+minRent.value||0,maxR=+maxRent.value||999999999;
+ let minA=+minArea.value||0,maxA=+maxArea.value||999999999;
 
-  div.innerHTML =
-    '<div class="title">' + item.name + '</div>' +
-    '<div>' + item.address + '</div>' +
-    '<div class="price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
-    '<div class="small">관리비 ' + item.fee + ' / 권리금 ' + item.premium + '</div>' +
-    '<div class="small">' + item.area + '평 / ☎ ' + item.phone + '</div>' +
-    '<div class="small">' + item.memo + '</div>';
+ let f=allItems.filter(i=>
+  (!k||i.name.includes(k)||i.address.includes(k)||i.room.includes(k)) &&
+  i.deposit>=minD&&i.deposit<=maxD &&
+  i.rent>=minR&&i.rent<=maxR &&
+  i.area>=minA&&i.area<=maxA
+ );
 
-  div.onclick = function() {
-    if (!marker || !info) return;
-    infoWindows.forEach(i => i.close());
-    info.open(map, marker);
-  };
-
-  document.getElementById("list").appendChild(div);
+ showList(f);
 }
 
-function applyFilter() {
-  if (!map || allItems.length === 0) return;
-
-  var bounds = map.getBounds();
-
-  var keyword = document.getElementById("keyword").value.trim();
-
-  var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
-  var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
-
-  var minRent = Number(document.getElementById("minRent").value) || 0;
-  var maxRent = Number(document.getElementById("maxRent").value) || 999999999;
-
-  var minArea = Number(document.getElementById("minArea").value) || 0;
-  var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
-
-  var filtered = allItems.filter(function(item) {
-    var matchKeyword =
-      !keyword ||
-      item.name.includes(keyword) ||
-      item.address.includes(keyword) ||
-      item.memo.includes(keyword);
-
-    var matchPrice =
-      item.deposit >= minDeposit &&
-      item.deposit <= maxDeposit &&
-      item.rent >= minRent &&
-      item.rent <= maxRent &&
-      item.area >= minArea &&
-      item.area <= maxArea;
-
-    var inMap = item.latlng && bounds.contain(item.latlng);
-
-    return matchKeyword && matchPrice && inMap;
-  });
-
-  document.getElementById("status").innerHTML = "검색 결과 " + filtered.length + "개";
-  drawItems(filtered);
-}
-
-function resetFilter() {
-  document.getElementById("keyword").value = "";
-  document.getElementById("minDeposit").value = "";
-  document.getElementById("maxDeposit").value = "";
-  document.getElementById("minRent").value = "";
-  document.getElementById("maxRent").value = "";
-  document.getElementById("minArea").value = "";
-  document.getElementById("maxArea").value = "";
-
-  document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
-  drawItems(allItems);
+function resetFilter(){
+ showList(allItems);
 }
 </script>
 
