@@ -3,47 +3,296 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>내 매물 지도</title>
+<title>JS부동산 매물지도</title>
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services,clusterer&autoload=false"></script>
 
 <style>
-body { margin:0; font-family:Arial, sans-serif; }
-#wrap { display:flex; height:100vh; }
-#sidebar { width:410px; background:#fff; border-right:1px solid #ddd; overflow:auto; }
-#map { flex:1; }
+:root {
+  --blue:#1e88ff;
+  --blue-dark:#006de5;
+  --green:#03c75a;
+  --red:#ff4d4f;
+  --gray:#f4f6f8;
+  --text:#222;
+  --muted:#777;
+}
 
-.header { padding:15px; font-size:20px; font-weight:bold; border-bottom:1px solid #ddd; }
-.filters { padding:10px; border-bottom:1px solid #ddd; }
-.filters input { width:95%; padding:7px; margin-bottom:6px; border:1px solid #ccc; }
-.row { display:flex; gap:6px; }
-.row input { width:46%; }
-.btn-row { display:flex; gap:6px; }
-button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
-.search-btn { flex:1; background:#1e88ff; color:white; }
-.reset-btn { width:70px; background:#eee; }
+* { box-sizing:border-box; }
 
-.item { padding:12px; border-bottom:1px solid #eee; cursor:pointer; }
-.item:hover { background:#f5f8ff; }
-.title { font-weight:bold; font-size:16px; }
-.price { color:#0066ff; margin-top:5px; }
-.small { font-size:13px; color:#555; margin-top:4px; }
+body {
+  margin:0;
+  font-family:Arial, sans-serif;
+  color:var(--text);
+  background:#f5f7fb;
+}
 
-#status { position:absolute; top:10px; left:430px; background:white; padding:8px; z-index:9999; border:1px solid #ccc; }
+#wrap {
+  display:flex;
+  height:100vh;
+}
+
+#sidebar {
+  width:430px;
+  background:#fff;
+  border-right:1px solid #ddd;
+  overflow:auto;
+  box-shadow:2px 0 8px rgba(0,0,0,0.05);
+  z-index:5;
+}
+
+#map {
+  flex:1;
+}
+
+.header {
+  padding:18px 16px;
+  font-size:22px;
+  font-weight:800;
+  border-bottom:1px solid #eee;
+  background:linear-gradient(135deg,#1e88ff,#005bea);
+  color:#fff;
+}
+
+.filters {
+  padding:14px;
+  border-bottom:1px solid #eee;
+  background:#fff;
+}
+
+.filter-title {
+  font-size:14px;
+  font-weight:bold;
+  margin-bottom:8px;
+}
+
+.filters input {
+  width:100%;
+  padding:10px;
+  margin-bottom:8px;
+  border:1px solid #d8dee8;
+  border-radius:8px;
+  font-size:14px;
+  outline:none;
+}
+
+.filters input:focus {
+  border-color:var(--blue);
+}
+
+.row {
+  display:flex;
+  gap:8px;
+}
+
+.row input {
+  width:50%;
+}
+
+.btn-row {
+  display:flex;
+  gap:8px;
+  margin-top:4px;
+}
+
+button {
+  padding:10px;
+  border:0;
+  cursor:pointer;
+  border-radius:8px;
+  font-weight:bold;
+}
+
+.search-btn {
+  flex:1;
+  background:var(--blue);
+  color:white;
+}
+
+.search-btn:hover { background:var(--blue-dark); }
+
+.reset-btn {
+  width:72px;
+  background:#eef1f5;
+  color:#333;
+}
+
+.favorite-filter-btn {
+  width:90px;
+  background:#ffe58f;
+  color:#5c4300;
+}
+
+#list {
+  padding:10px;
+}
+
+.item {
+  background:#fff;
+  padding:14px;
+  margin-bottom:10px;
+  border:1px solid #e7ebf0;
+  border-radius:14px;
+  cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,0.04);
+}
+
+.item:hover {
+  background:#f8fbff;
+  border-color:#bcd8ff;
+}
+
+.item.selected {
+  border:2px solid var(--blue);
+  background:#eef6ff;
+}
+
+.item-top {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:8px;
+}
+
+.title {
+  font-weight:800;
+  font-size:16px;
+  line-height:1.35;
+}
+
+.star {
+  font-size:22px;
+  cursor:pointer;
+  color:#c7c7c7;
+  user-select:none;
+}
+
+.star.on {
+  color:#ffb300;
+}
+
+.price {
+  color:var(--blue);
+  margin-top:8px;
+  font-size:15px;
+  font-weight:bold;
+}
+
+.chips {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:8px;
+}
+
+.chip {
+  background:#f1f4f8;
+  padding:5px 7px;
+  border-radius:999px;
+  font-size:12px;
+  color:#444;
+}
+
+.small {
+  font-size:13px;
+  color:#555;
+  margin-top:6px;
+  line-height:1.4;
+}
+
+.phone-row {
+  display:flex;
+  gap:6px;
+  margin-top:9px;
+}
+
+.phone-btn {
+  flex:1;
+  text-align:center;
+  padding:7px;
+  border-radius:8px;
+  font-size:13px;
+  color:#fff;
+  text-decoration:none;
+  font-weight:bold;
+}
+
+.landlord { background:#1e88ff; }
+.tenant { background:#03c75a; }
+
+#status {
+  position:absolute;
+  top:12px;
+  left:450px;
+  background:white;
+  padding:9px 12px;
+  z-index:9999;
+  border:1px solid #ddd;
+  border-radius:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.12);
+  font-size:14px;
+}
+
+.circle-marker {
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  background:var(--blue);
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:15px;
+  font-weight:bold;
+  border:3px solid white;
+  box-shadow:0 2px 8px rgba(0,0,0,0.35);
+  cursor:pointer;
+}
+
+.circle-marker.selected {
+  background:#ff4d4f;
+  transform:scale(1.12);
+}
+
+.info-card {
+  width:285px;
+  padding:12px;
+  border-radius:14px;
+  background:white;
+  font-size:13px;
+  line-height:1.45;
+}
+
+.info-title {
+  font-weight:800;
+  font-size:16px;
+  margin-bottom:5px;
+}
+
+.info-price {
+  color:var(--blue);
+  font-weight:bold;
+  margin-top:6px;
+}
 
 .info-btn {
   display:inline-block;
-  margin-top:6px;
-  padding:5px 8px;
-  background:#03c75a;
+  margin-top:8px;
+  margin-right:4px;
+  padding:7px 9px;
   color:white;
   text-decoration:none;
-  border-radius:4px;
-  font-size:13px;
+  border-radius:7px;
+  font-size:12px;
+  font-weight:bold;
 }
-.call-btn { background:#1e88ff; }
 
-#toggleBtn { display:none; }
+.call-btn { background:#1e88ff; }
+.road-btn { background:#03c75a; }
+
+#toggleBtn {
+  display:none;
+}
 
 #roadviewModal {
   display:none;
@@ -53,6 +302,7 @@ button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
   background:rgba(0,0,0,0.45);
   z-index:99999;
 }
+
 #roadviewBox {
   position:absolute;
   top:50%; left:50%;
@@ -60,9 +310,11 @@ button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
   background:white;
   width:320px;
   padding:20px;
-  border-radius:10px;
+  border-radius:14px;
   text-align:center;
+  box-shadow:0 8px 30px rgba(0,0,0,0.25);
 }
+
 .rv-btn {
   display:block;
   background:#03c75a;
@@ -73,6 +325,7 @@ button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
   border-radius:8px;
   font-weight:bold;
 }
+
 .rv-close {
   margin-top:10px;
   background:#eee;
@@ -90,34 +343,42 @@ button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
     bottom:0;
     left:0;
     width:100%;
-    height:60%;
+    height:62%;
     z-index:999;
     transform:translateY(100%);
     transition:0.3s;
     border-right:0;
     border-top:1px solid #ddd;
+    border-radius:18px 18px 0 0;
   }
 
-  #sidebar.open { transform:translateY(0); }
+  #sidebar.open {
+    transform:translateY(0);
+  }
 
   #toggleBtn {
     display:block;
     position:fixed;
-    bottom:20px;
+    bottom:22px;
     left:50%;
     transform:translateX(-50%);
     z-index:1000;
-    background:#1e88ff;
+    background:var(--blue);
     color:white;
-    padding:12px 22px;
-    border-radius:25px;
-    box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    padding:13px 24px;
+    border-radius:999px;
+    box-shadow:0 3px 12px rgba(0,0,0,0.28);
   }
 
   #status {
     left:10px;
     top:10px;
     font-size:12px;
+  }
+
+  .header {
+    font-size:18px;
+    padding:14px;
   }
 }
 </style>
@@ -127,9 +388,10 @@ button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
 
 <div id="wrap">
   <div id="sidebar">
-    <div class="header">내 매물 지도</div>
+    <div class="header">JS부동산 매물지도</div>
 
     <div class="filters">
+      <div class="filter-title">매물 검색</div>
       <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 메모 검색">
 
       <div class="row">
@@ -149,6 +411,7 @@ button { padding:9px; border:0; cursor:pointer; border-radius:3px; }
 
       <div class="btn-row">
         <button class="search-btn" onclick="applyFilter()">검색 / 필터</button>
+        <button class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
         <button class="reset-btn" onclick="resetFilter()">해제</button>
       </div>
     </div>
@@ -179,11 +442,26 @@ var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72q
 
 var map, geocoder, clusterer;
 var allItems = [];
+var currentItems = [];
 var markers = [];
+var overlays = [];
 var infoWindows = [];
+var selectedItemKey = null;
+var favoriteOnly = false;
+var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
+var isRendering = false;
 
 function clean(t) {
   return (t || "").replaceAll('"', '').trim();
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function parseCSVLine(line) {
@@ -206,6 +484,31 @@ function parseCSVLine(line) {
 
   result.push(current);
   return result;
+}
+
+function itemKey(item) {
+  return item.name + "|" + item.address + "|" + item.room;
+}
+
+function isFavorite(item) {
+  return favoriteKeys.includes(item.key);
+}
+
+function toggleFavorite(key) {
+  if (favoriteKeys.includes(key)) {
+    favoriteKeys = favoriteKeys.filter(function(k) { return k !== key; });
+  } else {
+    favoriteKeys.push(key);
+  }
+
+  localStorage.setItem("favoriteKeys", JSON.stringify(favoriteKeys));
+  applyFilter();
+}
+
+function toggleFavoriteOnly() {
+  favoriteOnly = !favoriteOnly;
+  document.querySelector(".favorite-filter-btn").innerText = favoriteOnly ? "전체보기" : "찜만";
+  applyFilter();
 }
 
 function naverRoadviewUrl(lat, lng) {
@@ -236,17 +539,19 @@ kakao.maps.load(function() {
   clusterer = new kakao.maps.MarkerClusterer({
     map: map,
     averageCenter: true,
-    minLevel: 1,
+    minLevel: 6,
     disableClickZoom: true,
     styles: [{
-      width: '42px',
-      height: '42px',
+      width: '44px',
+      height: '44px',
       background: '#1e88ff',
       color: '#fff',
       textAlign: 'center',
-      lineHeight: '42px',
-      borderRadius: '21px',
-      fontWeight: 'bold'
+      lineHeight: '44px',
+      borderRadius: '22px',
+      fontWeight: 'bold',
+      border: '3px solid white',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.35)'
     }]
   });
 
@@ -263,20 +568,24 @@ kakao.maps.load(function() {
     }
   });
 
+  kakao.maps.event.addListener(map, "idle", function() {
+    if (isRendering) return;
+    applyFilter();
+  });
+
   loadSheet();
+
+  setInterval(function() {
+    loadSheet(true);
+  }, 60000);
 });
 
-function loadSheet() {
+function loadSheet(isAuto) {
   fetch(sheetURL)
     .then(function(res) { return res.text(); })
     .then(function(data) {
       var rows = data.trim().split("\n");
-      var pending = rows.length - 1;
-
-      if (pending <= 0) {
-        document.getElementById("status").innerHTML = "시트 데이터 없음";
-        return;
-      }
+      var rawItems = [];
 
       for (var i = 1; i < rows.length; i++) {
         var c = parseCSVLine(rows[i]);
@@ -296,47 +605,116 @@ function loadSheet() {
           latlng: null
         };
 
-        if (!item.address) {
-          pending--;
-          continue;
-        }
+        item.key = itemKey(item);
 
-        geocoder.addressSearch(item.address, function(currentItem) {
-          return function(result, status) {
-            if (status === kakao.maps.services.Status.OK) {
-              currentItem.latlng = new kakao.maps.LatLng(result[0].y, result[0].x);
-              allItems.push(currentItem);
-            }
-
-            pending--;
-
-            if (pending <= 0) {
-              drawItems(allItems);
-              document.getElementById("status").innerHTML = "매물 " + allItems.length + "개 불러옴";
-            }
-          };
-        }(item));
+        if (item.address) rawItems.push(item);
       }
+
+      geocodeItems(rawItems, function(doneItems) {
+        allItems = doneItems;
+        applyFilter();
+        document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" : "매물 " + allItems.length + "개 불러옴";
+      });
+    })
+    .catch(function(err) {
+      document.getElementById("status").innerHTML = "시트 오류";
+      console.error(err);
     });
+}
+
+function geocodeItems(items, callback) {
+  var done = [];
+  var pending = items.length;
+
+  if (pending === 0) {
+    callback([]);
+    return;
+  }
+
+  items.forEach(function(item) {
+    geocoder.addressSearch(item.address, function(result, status) {
+      if (status === kakao.maps.services.Status.OK) {
+        item.latlng = new kakao.maps.LatLng(result[0].y, result[0].x);
+        done.push(item);
+      }
+
+      pending--;
+      if (pending <= 0) callback(done);
+    });
+  });
+}
+
+function getFilteredItems() {
+  if (!map) return allItems;
+
+  var bounds = map.getBounds();
+
+  var keyword = document.getElementById("keyword").value.trim();
+
+  var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
+  var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
+
+  var minRent = Number(document.getElementById("minRent").value) || 0;
+  var maxRent = Number(document.getElementById("maxRent").value) || 999999999;
+
+  var minArea = Number(document.getElementById("minArea").value) || 0;
+  var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
+
+  return allItems.filter(function(item) {
+    var matchKeyword =
+      !keyword ||
+      item.name.includes(keyword) ||
+      item.address.includes(keyword) ||
+      item.room.includes(keyword) ||
+      item.memo.includes(keyword);
+
+    var matchPrice =
+      item.deposit >= minDeposit &&
+      item.deposit <= maxDeposit &&
+      item.rent >= minRent &&
+      item.rent <= maxRent &&
+      item.area >= minArea &&
+      item.area <= maxArea;
+
+    var matchFavorite = !favoriteOnly || isFavorite(item);
+
+    var inMap = item.latlng && bounds.contain(item.latlng);
+
+    return matchKeyword && matchPrice && matchFavorite && inMap;
+  });
 }
 
 function clearMap() {
   clusterer.clear();
+
   markers.forEach(function(m) { m.setMap(null); });
+  overlays.forEach(function(o) { o.setMap(null); });
   infoWindows.forEach(function(i) { i.close(); });
+
   markers = [];
+  overlays = [];
   infoWindows = [];
   document.getElementById("list").innerHTML = "";
 }
 
+function applyFilter() {
+  var filtered = getFilteredItems();
+  currentItems = filtered;
+
+  drawItems(filtered);
+  document.getElementById("status").innerHTML = "검색 결과 " + filtered.length + "개";
+}
+
 function drawItems(items) {
+  isRendering = true;
   clearMap();
 
   items.forEach(function(item) {
     if (!item.latlng) return;
 
     var marker = new kakao.maps.Marker({
-      position: item.latlng
+      position: item.latlng,
+      opacity: 0.01
     });
 
     marker.__item = item;
@@ -344,39 +722,101 @@ function drawItems(items) {
     var lat = item.latlng.getLat();
     var lng = item.latlng.getLng();
 
+    var overlayContent =
+      '<div class="circle-marker ' + (selectedItemKey === item.key ? 'selected' : '') + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">1</div>';
+
+    var overlay = new kakao.maps.CustomOverlay({
+      position: item.latlng,
+      content: overlayContent,
+      yAnchor: 0.5,
+      xAnchor: 0.5
+    });
+
+    overlay.__item = item;
+
+    if (map.getLevel() < 6) {
+      overlay.setMap(map);
+    }
+
     var info = new kakao.maps.InfoWindow({
-      content:
-        '<div style="padding:10px;width:280px;">' +
-          '<b>' + item.name + '</b><br>' +
-          item.address + ' / ' + item.room + '<br>' +
-          '<span style="color:#0066ff;">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</span><br>' +
-          '관리비 ' + item.fee + ' / 권리금 ' + item.premium + ' / ' + item.area + '평<br>' +
-          '임대인☎ ' + item.landlordPhone + '<br>' +
-          '세입자☎ ' + item.tenantPhone + '<br>' +
-          '<div style="margin-top:4px;">' + item.memo + '</div>' +
-          '<a class="info-btn call-btn" href="tel:' + item.landlordPhone + '">임대인 전화</a> ' +
-          '<a class="info-btn call-btn" href="tel:' + item.tenantPhone + '">세입자 전화</a> ' +
-          '<a class="info-btn" href="javascript:openRoadviewModal(' + lat + ',' + lng + ')">로드뷰</a>' +
-        '</div>'
+      content: makeInfoContent(item, lat, lng)
     });
 
     kakao.maps.event.addListener(marker, "click", function() {
-      infoWindows.forEach(function(i) { i.close(); });
-      info.open(map, marker);
-      showList([item]);
-      document.getElementById("status").innerHTML = "선택 매물 1개";
-
-      if (window.innerWidth <= 768) {
-        document.getElementById("sidebar").classList.add("open");
-      }
+      openItem(item, marker, info);
     });
 
     markers.push(marker);
+    overlays.push(overlay);
     infoWindows.push(info);
     clusterer.addMarker(marker);
 
     addListItem(item, marker, info);
   });
+
+  updateOverlayVisibility();
+  isRendering = false;
+}
+
+function updateOverlayVisibility() {
+  var show = map.getLevel() < 6;
+
+  overlays.forEach(function(o) {
+    o.setMap(show ? map : null);
+  });
+}
+
+kakao.maps.event.addListener = kakao.maps.event.addListener;
+
+function makeInfoContent(item, lat, lng) {
+  return (
+    '<div class="info-card">' +
+      '<div class="info-title">' + escapeHtml(item.name) + '</div>' +
+      '<div>' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+      '<div class="info-price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
+      '<div>관리비 ' + item.fee + ' / 권리금 ' + item.premium + ' / ' + item.area + '평</div>' +
+      '<div>임대인☎ ' + escapeHtml(item.landlordPhone) + '</div>' +
+      '<div>세입자☎ ' + escapeHtml(item.tenantPhone) + '</div>' +
+      '<div style="margin-top:4px;">' + escapeHtml(item.memo) + '</div>' +
+      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.landlordPhone) + '">임대인 전화</a>' +
+      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.tenantPhone) + '">세입자 전화</a>' +
+      '<a class="info-btn road-btn" href="javascript:openRoadviewModal(' + lat + ',' + lng + ')">로드뷰</a>' +
+    '</div>'
+  );
+}
+
+function openItemByKey(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(i) { return i.key === key; });
+  if (!item) return;
+
+  var marker = markers.find(function(m) { return m.__item.key === key; });
+  var info = infoWindows[markers.indexOf(marker)];
+
+  openItem(item, marker, info);
+}
+
+function openItem(item, marker, info) {
+  selectedItemKey = item.key;
+
+  infoWindows.forEach(function(i) { i.close(); });
+
+  if (marker && info) {
+    info.open(map, marker);
+  }
+
+  showList([item]);
+  document.getElementById("status").innerHTML = "선택 매물 1개";
+
+  overlays.forEach(function(o) {
+    if (!o.__item) return;
+    var content = '<div class="circle-marker ' + (o.__item.key === item.key ? 'selected' : '') + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">1</div>';
+    o.setContent(content);
+  });
+
+  if (window.innerWidth <= 768) {
+    document.getElementById("sidebar").classList.add("open");
+  }
 }
 
 function showList(items) {
@@ -395,58 +835,32 @@ function showList(items) {
 
 function addListItem(item, marker, info) {
   var div = document.createElement("div");
-  div.className = "item";
+  div.className = "item" + (selectedItemKey === item.key ? " selected" : "");
 
   div.innerHTML =
-    '<div class="title">' + item.name + ' / ' + item.address + ' / ' + item.room + '</div>' +
+    '<div class="item-top">' +
+      '<div class="title">' + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+      '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + escapeHtml(item.key) + '\')">★</div>' +
+    '</div>' +
     '<div class="price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
-    '<div class="small">관리비 ' + item.fee + ' / 권리금 ' + item.premium + ' / ' + item.area + '평</div>' +
-    '<div class="small">임대인☎ ' + item.landlordPhone + '</div>' +
-    '<div class="small">세입자☎ ' + item.tenantPhone + '</div>' +
-    '<div class="small">' + item.memo + '</div>';
+    '<div class="chips">' +
+      '<span class="chip">관리비 ' + item.fee + '</span>' +
+      '<span class="chip">권리금 ' + item.premium + '</span>' +
+      '<span class="chip">' + item.area + '평</span>' +
+    '</div>' +
+    '<div class="small">임대인☎ ' + escapeHtml(item.landlordPhone) + '</div>' +
+    '<div class="small">세입자☎ ' + escapeHtml(item.tenantPhone) + '</div>' +
+    '<div class="small">' + escapeHtml(item.memo) + '</div>' +
+    '<div class="phone-row">' +
+      '<a class="phone-btn landlord" href="tel:' + escapeHtml(item.landlordPhone) + '" onclick="event.stopPropagation();">임대인 전화</a>' +
+      '<a class="phone-btn tenant" href="tel:' + escapeHtml(item.tenantPhone) + '" onclick="event.stopPropagation();">세입자 전화</a>' +
+    '</div>';
 
   div.onclick = function() {
-    if (!marker || !info) return;
-    infoWindows.forEach(function(i) { i.close(); });
-    info.open(map, marker);
+    openItem(item, marker, info);
   };
 
   document.getElementById("list").appendChild(div);
-}
-
-function applyFilter() {
-  var keyword = document.getElementById("keyword").value.trim();
-
-  var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
-  var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
-
-  var minRent = Number(document.getElementById("minRent").value) || 0;
-  var maxRent = Number(document.getElementById("maxRent").value) || 999999999;
-
-  var minArea = Number(document.getElementById("minArea").value) || 0;
-  var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
-
-  var filtered = allItems.filter(function(item) {
-    var matchKeyword =
-      !keyword ||
-      item.name.includes(keyword) ||
-      item.address.includes(keyword) ||
-      item.room.includes(keyword) ||
-      item.memo.includes(keyword);
-
-    return (
-      matchKeyword &&
-      item.deposit >= minDeposit &&
-      item.deposit <= maxDeposit &&
-      item.rent >= minRent &&
-      item.rent <= maxRent &&
-      item.area >= minArea &&
-      item.area <= maxArea
-    );
-  });
-
-  drawItems(filtered);
-  document.getElementById("status").innerHTML = "검색 결과 " + filtered.length + "개";
 }
 
 function resetFilter() {
@@ -458,9 +872,17 @@ function resetFilter() {
   document.getElementById("minArea").value = "";
   document.getElementById("maxArea").value = "";
 
+  favoriteOnly = false;
+  document.querySelector(".favorite-filter-btn").innerText = "찜만";
+  selectedItemKey = null;
+
   drawItems(allItems);
   document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
 }
+
+kakao.maps.event.addListener(window, "resize", function() {
+  map.relayout();
+});
 </script>
 
 </body>
