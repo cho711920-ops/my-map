@@ -360,18 +360,23 @@ button {
     border-radius:18px 18px 0 0;
   }
 
-  #sidebar::before {
-    content:'';
+  #panelHandle {
     display:block;
-    width:44px;
+    width:48px;
     height:5px;
     background:#cfd4dc;
     border-radius:999px;
     margin:9px auto 6px;
+    cursor:grab;
+    touch-action:none;
   }
 
   #sidebar.open {
     transform:translateY(0);
+  }
+
+  #sidebar.expanded {
+    height:80%;
   }
 
   #toggleBtn {
@@ -406,6 +411,7 @@ button {
 
 <div id="wrap">
   <div id="sidebar">
+    <div id="panelHandle"></div>
     <div class="header">JS부동산 매물지도</div>
 
     <div class="filters">
@@ -561,7 +567,53 @@ function closeRoadviewModal() {
 }
 
 function toggleSidebar() {
-  document.getElementById("sidebar").classList.toggle("open");
+  var sidebar = document.getElementById("sidebar");
+  sidebar.classList.toggle("open");
+
+  if (!sidebar.classList.contains("open")) {
+    sidebar.classList.remove("expanded");
+  }
+}
+
+function setupMobilePanelDrag() {
+  var sidebar = document.getElementById("sidebar");
+  var handle = document.getElementById("panelHandle");
+  if (!sidebar || !handle) return;
+
+  var startY = 0;
+  var endY = 0;
+
+  handle.addEventListener("touchstart", function(e) {
+    startY = e.touches[0].clientY;
+    endY = startY;
+  }, { passive:true });
+
+  handle.addEventListener("touchmove", function(e) {
+    endY = e.touches[0].clientY;
+  }, { passive:true });
+
+  handle.addEventListener("touchend", function() {
+    var diff = endY - startY;
+
+    if (diff < -25) {
+      sidebar.classList.add("open");
+      sidebar.classList.add("expanded");
+    } else if (diff > 25) {
+      if (sidebar.classList.contains("expanded")) {
+        sidebar.classList.remove("expanded");
+      } else {
+        sidebar.classList.remove("open");
+      }
+    } else {
+      sidebar.classList.toggle("expanded");
+      sidebar.classList.add("open");
+    }
+  });
+
+  handle.addEventListener("click", function() {
+    sidebar.classList.add("open");
+    sidebar.classList.toggle("expanded");
+  });
 }
 
 function setupEnterSearch() {
@@ -696,6 +748,7 @@ kakao.maps.load(function() {
   });
 
   setupEnterSearch();
+  setupMobilePanelDrag();
   loadSheet();
 
   setInterval(function() {
