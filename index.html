@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JS부동산 매물지도</title>
 
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services,clusterer&autoload=false"></script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
 <style>
 :root {
@@ -13,9 +13,7 @@
   --blue-dark:#006de5;
   --green:#03c75a;
   --red:#ff4d4f;
-  --gray:#f4f6f8;
   --text:#222;
-  --muted:#777;
 }
 
 * { box-sizing:border-box; }
@@ -49,15 +47,14 @@ body {
   padding:18px 16px;
   font-size:22px;
   font-weight:800;
-  border-bottom:1px solid #eee;
   background:linear-gradient(135deg,#1e88ff,#005bea);
-  color:#fff;
+  color:white;
 }
 
 .filters {
   padding:14px;
   border-bottom:1px solid #eee;
-  background:#fff;
+  background:white;
 }
 
 .filter-title {
@@ -117,12 +114,6 @@ button {
   color:white;
 }
 
-.reset-btn {
-  width:72px;
-  background:#eef1f5;
-  color:#333;
-}
-
 .favorite-filter-btn {
   width:90px;
   background:#ffe58f;
@@ -132,6 +123,12 @@ button {
 .favorite-filter-btn.on {
   background:#ffb300;
   color:white;
+}
+
+.reset-btn {
+  width:72px;
+  background:#eef1f5;
+  color:#333;
 }
 
 .detail-filter {
@@ -156,7 +153,7 @@ button {
 }
 
 .item {
-  background:#fff;
+  background:white;
   padding:14px;
   margin-bottom:10px;
   border:1px solid #e7ebf0;
@@ -271,7 +268,7 @@ button {
   padding:7px;
   border-radius:8px;
   font-size:13px;
-  color:#fff;
+  color:white;
   text-decoration:none;
   font-weight:bold;
 }
@@ -293,15 +290,15 @@ button {
 }
 
 .circle-marker {
-  width:38px;
-  height:38px;
+  width:42px;
+  height:42px;
   border-radius:50%;
   background:var(--blue);
   color:white;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:15px;
+  font-size:16px;
   font-weight:bold;
   border:3px solid white;
   box-shadow:0 2px 8px rgba(0,0,0,0.35);
@@ -319,63 +316,7 @@ button {
 
 .circle-marker.done.selected {
   background:#777;
-  transform:scale(1.12);
 }
-
-.info-card {
-  width:270px;
-  padding:10px;
-  border-radius:12px;
-  background:white;
-  font-size:13px;
-  line-height:1.38;
-}
-
-.info-title {
-  font-weight:800;
-  font-size:15px;
-  margin-bottom:4px;
-}
-
-.info-sub {
-  color:#555;
-  font-size:12px;
-  margin-bottom:5px;
-}
-
-.info-price {
-  color:var(--blue);
-  font-weight:bold;
-  margin-top:5px;
-}
-
-.info-line {
-  margin-top:3px;
-  color:#444;
-}
-
-.info-memo {
-  margin-top:5px;
-  padding:6px;
-  background:#f5f7fb;
-  border-radius:8px;
-  color:#444;
-}
-
-.info-btn {
-  display:inline-block;
-  margin-top:7px;
-  margin-right:4px;
-  padding:6px 8px;
-  color:white;
-  text-decoration:none;
-  border-radius:7px;
-  font-size:12px;
-  font-weight:bold;
-}
-
-.call-btn { background:#1e88ff; }
-.road-btn { background:#03c75a; }
 
 #toggleBtn {
   display:none;
@@ -384,15 +325,18 @@ button {
 #roadviewModal {
   display:none;
   position:fixed;
-  top:0; left:0;
-  width:100%; height:100%;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
   background:rgba(0,0,0,0.45);
   z-index:99999;
 }
 
 #roadviewBox {
   position:absolute;
-  top:50%; left:50%;
+  top:50%;
+  left:50%;
   transform:translate(-50%,-50%);
   background:white;
   width:320px;
@@ -536,17 +480,15 @@ button {
 <script>
 var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
 
-var map, geocoder, clusterer;
+var map, geocoder;
 var allItems = [];
 var currentItems = [];
-var markers = [];
 var overlays = [];
-var infoWindows = [];
+var selectedGroupKey = null;
 var selectedItemKey = null;
 var favoriteOnly = false;
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
-var markerVisibleLevel = 10;
 
 function clean(t) {
   return (t || "").replaceAll('"', '').trim();
@@ -682,6 +624,7 @@ function groupByAddress(items) {
 
     if (!grouped[key]) {
       grouped[key] = {
+        key: key,
         address: item.address,
         latlng: item.latlng,
         items: []
@@ -694,6 +637,64 @@ function groupByAddress(items) {
   return Object.values(grouped);
 }
 
+function getClusterDistance() {
+  var level = map.getLevel();
+
+  if (level <= 3) return 25;
+  if (level <= 5) return 45;
+  if (level <= 7) return 65;
+  if (level <= 9) return 85;
+  return 110;
+}
+
+function createDynamicClusters(addressGroups) {
+  var projection = map.getProjection();
+  var distance = getClusterDistance();
+  var clusters = [];
+
+  addressGroups.forEach(function(group) {
+    var point = projection.containerPointFromCoords(group.latlng);
+    var added = false;
+
+    for (var i = 0; i < clusters.length; i++) {
+      var cluster = clusters[i];
+      var dx = point.x - cluster.point.x;
+      var dy = point.y - cluster.point.y;
+      var gap = Math.sqrt(dx * dx + dy * dy);
+
+      if (gap <= distance) {
+        cluster.groups.push(group);
+        cluster.items = cluster.items.concat(group.items);
+
+        var n = cluster.groups.length;
+        cluster.point = new kakao.maps.Point(
+          (cluster.point.x * (n - 1) + point.x) / n,
+          (cluster.point.y * (n - 1) + point.y) / n
+        );
+
+        cluster.latlng = projection.coordsFromContainerPoint(cluster.point);
+        added = true;
+        break;
+      }
+    }
+
+    if (!added) {
+      clusters.push({
+        point: point,
+        latlng: group.latlng,
+        groups: [group],
+        items: group.items.slice()
+      });
+    }
+  });
+
+  clusters.forEach(function(cluster, index) {
+    cluster.key = cluster.groups.map(function(g) { return g.key; }).join("||") + "|" + index;
+  });
+
+  return clusters;
+}
+
 kakao.maps.load(function() {
   map = new kakao.maps.Map(document.getElementById("map"), {
     center: new kakao.maps.LatLng(36.3504, 127.3845),
@@ -702,41 +703,8 @@ kakao.maps.load(function() {
 
   geocoder = new kakao.maps.services.Geocoder();
 
-  clusterer = new kakao.maps.MarkerClusterer({
-    map: map,
-    averageCenter: true,
-    minLevel: 5,
-    disableClickZoom: true,
-    styles: [{
-      width: '44px',
-      height: '44px',
-      background: '#1e88ff',
-      color: '#fff',
-      textAlign: 'center',
-      lineHeight: '44px',
-      borderRadius: '22px',
-      fontWeight: 'bold',
-      border: '3px solid white',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.35)'
-    }]
-  });
-
-  kakao.maps.event.addListener(clusterer, "clusterclick", function(cluster) {
-    var selectedItems = cluster.getMarkers().map(function(marker) {
-      return marker.__item;
-    }).filter(Boolean);
-
-    showList(selectedItems);
-    document.getElementById("status").innerHTML = "선택 매물 " + selectedItems.length + "개";
-
-    if (window.innerWidth <= 768) {
-      document.getElementById("sidebar").classList.add("open");
-    }
-  });
-
   kakao.maps.event.addListener(map, "idle", function() {
     if (isRendering) return;
-    updateOverlayVisibility();
     applyFilter();
   });
 
@@ -860,15 +828,8 @@ function getFilteredItems() {
 }
 
 function clearMap() {
-  clusterer.clear();
-
-  markers.forEach(function(m) { m.setMap(null); });
   overlays.forEach(function(o) { o.setMap(null); });
-  infoWindows.forEach(function(i) { i.close(); });
-
-  markers = [];
   overlays = [];
-  infoWindows = [];
   document.getElementById("list").innerHTML = "";
 }
 
@@ -884,88 +845,79 @@ function drawItems(items) {
   isRendering = true;
   clearMap();
 
-  var groups = groupByAddress(items);
+  var addressGroups = groupByAddress(items);
+  var clusters = createDynamicClusters(addressGroups);
 
-  groups.forEach(function(group) {
-    if (!group.latlng) return;
-
-    var count = group.items.length;
-    var hasDone = group.items.some(function(item) {
+  clusters.forEach(function(cluster) {
+    var count = cluster.items.length;
+    var allDone = cluster.items.length > 0 && cluster.items.every(function(item) {
       return isDone(item);
     });
 
-    var marker = new kakao.maps.Marker({
-      position: group.latlng,
-      opacity: 0.01
-    });
-
-    marker.__group = group;
-    marker.__items = group.items;
-    marker.__item = group.items[0];
+    var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
+    var doneClass = allDone ? " done" : "";
 
     var overlayContent =
-      '<div class="circle-marker' + (hasDone ? ' done' : '') + '" onclick="openGroupByAddress(\'' + encodeURIComponent(group.address) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
-      position: group.latlng,
+      position: cluster.latlng,
       content: overlayContent,
       yAnchor: 0.5,
       xAnchor: 0.5
     });
 
-    overlay.__group = group;
-
-    markers.push(marker);
+    overlay.__cluster = cluster;
+    overlay.setMap(map);
     overlays.push(overlay);
-
-    group.items.forEach(function(item) {
-      var itemMarker = new kakao.maps.Marker({
-        position: item.latlng,
-        opacity: 0.01
-      });
-
-      itemMarker.__item = item;
-      clusterer.addMarker(itemMarker);
-      markers.push(itemMarker);
-    });
-
-    addGroupItemsToList(group.items);
   });
 
-  updateOverlayVisibility();
+  showList(items);
   isRendering = false;
 }
 
-function addGroupItemsToList(items) {
-  items.forEach(function(item) {
-    var marker = markers.find(function(m) {
-      return m.__item === item;
-    });
+function openCluster(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
 
-    addListItem(item, marker, null);
-  });
-}
-
-function updateOverlayVisibility() {
-  var show = map.getLevel() <= markerVisibleLevel;
-
-  overlays.forEach(function(o) {
-    o.setMap(show ? map : null);
-  });
-}
-
-function openGroupByAddress(encodedAddress) {
-  var address = decodeURIComponent(encodedAddress);
-  var matched = currentItems.filter(function(item) {
-    return item.address === address;
+  var overlay = overlays.find(function(o) {
+    return o.__cluster && o.__cluster.key === key;
   });
 
-  showList(matched);
-  document.getElementById("status").innerHTML = address + " 매물 " + matched.length + "개";
+  if (!overlay) return;
+
+  selectedGroupKey = key;
+  selectedItemKey = null;
+
+  var items = overlay.__cluster.items;
+
+  showList(items);
+  document.getElementById("status").innerHTML = "선택 매물 " + items.length + "개";
 
   if (window.innerWidth <= 768) {
     document.getElementById("sidebar").classList.add("open");
   }
+
+  redrawSelectedMarkers();
+}
+
+function redrawSelectedMarkers() {
+  overlays.forEach(function(o) {
+    if (!o.__cluster) return;
+
+    var cluster = o.__cluster;
+    var count = cluster.items.length;
+    var allDone = cluster.items.length > 0 && cluster.items.every(function(item) {
+      return isDone(item);
+    });
+
+    var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
+    var doneClass = allDone ? " done" : "";
+
+    var content =
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+
+    o.setContent(content);
+  });
 }
 
 function makeInfoContent(item, lat, lng) {
@@ -988,20 +940,9 @@ function makeInfoContent(item, lat, lng) {
   );
 }
 
-function openItemByKey(encodedKey) {
-  var key = decodeURIComponent(encodedKey);
-  var item = allItems.find(function(i) { return i.key === key; });
-  if (!item) return;
-
-  var marker = markers.find(function(m) { return m.__item && m.__item.key === key; });
-
-  openItem(item, marker, null);
-}
-
-function openItem(item, marker, info) {
+function openItem(item) {
   selectedItemKey = item.key;
-
-  infoWindows.forEach(function(i) { i.close(); });
+  selectedGroupKey = null;
 
   showList([item]);
   document.getElementById("status").innerHTML = "선택 매물 1개";
@@ -1015,15 +956,11 @@ function showList(items) {
   document.getElementById("list").innerHTML = "";
 
   items.forEach(function(item) {
-    var marker = markers.find(function(m) {
-      return m.__item === item;
-    });
-
-    addListItem(item, marker, null);
+    addListItem(item);
   });
 }
 
-function addListItem(item, marker, info) {
+function addListItem(item) {
   var div = document.createElement("div");
   div.className =
     "item" +
@@ -1053,7 +990,7 @@ function addListItem(item, marker, info) {
     '</div>';
 
   div.onclick = function() {
-    openItem(item, marker, info);
+    openItem(item);
   };
 
   document.getElementById("list").appendChild(div);
@@ -1072,6 +1009,7 @@ function resetFilter() {
   favoriteOnly = false;
   document.getElementById("favoriteBtn").innerText = "찜만";
   document.getElementById("favoriteBtn").classList.remove("on");
+  selectedGroupKey = null;
   selectedItemKey = null;
 
   drawItems(allItems);
