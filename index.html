@@ -650,8 +650,8 @@ function setupEnterSearch() {
 function updateTypeOptions(items) {
   var select = document.getElementById("typeFilter");
   var currentValue = select.value;
-
   var types = [];
+
   items.forEach(function(item) {
     if (item.type && !types.includes(item.type)) {
       types.push(item.type);
@@ -672,6 +672,26 @@ function updateTypeOptions(items) {
   if (types.includes(currentValue)) {
     select.value = currentValue;
   }
+}
+
+function groupByAddress(items) {
+  var grouped = {};
+
+  items.forEach(function(item) {
+    var key = item.address;
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        address: item.address,
+        latlng: item.latlng,
+        items: []
+      };
+    }
+
+    grouped[key].items.push(item);
+  });
+
+  return Object.values(grouped);
 }
 
 kakao.maps.load(function() {
@@ -864,53 +884,66 @@ function drawItems(items) {
   isRendering = true;
   clearMap();
 
-  items.forEach(function(item) {
-    if (!item.latlng) return;
+  var groups = groupByAddress(items);
+
+  groups.forEach(function(group) {
+    if (!group.latlng) return;
+
+    var count = group.items.length;
+    var hasDone = group.items.some(function(item) {
+      return isDone(item);
+    });
 
     var marker = new kakao.maps.Marker({
-      position: item.latlng,
+      position: group.latlng,
       opacity: 0.01
     });
 
-    marker.__item = item;
-
-    var lat = item.latlng.getLat();
-    var lng = item.latlng.getLng();
-
-    var doneClass = isDone(item) ? " done" : "";
-    var selectedClass = selectedItemKey === item.key ? " selected" : "";
-    var markerText = "1";
+    marker.__group = group;
+    marker.__items = group.items;
+    marker.__item = group.items[0];
 
     var overlayContent =
-      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">' + markerText + '</div>';
+      '<div class="circle-marker' + (hasDone ? ' done' : '') + '" onclick="openGroupByAddress(\'' + encodeURIComponent(group.address) + '\')">' + count + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
-      position: item.latlng,
+      position: group.latlng,
       content: overlayContent,
       yAnchor: 0.5,
       xAnchor: 0.5
     });
 
-    overlay.__item = item;
-
-    var info = new kakao.maps.InfoWindow({
-      content: makeInfoContent(item, lat, lng)
-    });
-
-    kakao.maps.event.addListener(marker, "click", function() {
-      openItem(item, marker, info);
-    });
+    overlay.__group = group;
 
     markers.push(marker);
     overlays.push(overlay);
-    infoWindows.push(info);
-    clusterer.addMarker(marker);
 
-    addListItem(item, marker, info);
+    group.items.forEach(function(item) {
+      var itemMarker = new kakao.maps.Marker({
+        position: item.latlng,
+        opacity: 0.01
+      });
+
+      itemMarker.__item = item;
+      clusterer.addMarker(itemMarker);
+      markers.push(itemMarker);
+    });
+
+    addGroupItemsToList(group.items);
   });
 
   updateOverlayVisibility();
   isRendering = false;
+}
+
+function addGroupItemsToList(items) {
+  items.forEach(function(item) {
+    var marker = markers.find(function(m) {
+      return m.__item === item;
+    });
+
+    addListItem(item, marker, null);
+  });
 }
 
 function updateOverlayVisibility() {
@@ -919,6 +952,20 @@ function updateOverlayVisibility() {
   overlays.forEach(function(o) {
     o.setMap(show ? map : null);
   });
+}
+
+function openGroupByAddress(encodedAddress) {
+  var address = decodeURIComponent(encodedAddress);
+  var matched = currentItems.filter(function(item) {
+    return item.address === address;
+  });
+
+  showList(matched);
+  document.getElementById("status").innerHTML = address + " 매물 " + matched.length + "개";
+
+  if (window.innerWidth <= 768) {
+    document.getElementById("sidebar").classList.add("open");
+  }
 }
 
 function makeInfoContent(item, lat, lng) {
@@ -946,10 +993,9 @@ function openItemByKey(encodedKey) {
   var item = allItems.find(function(i) { return i.key === key; });
   if (!item) return;
 
-  var marker = markers.find(function(m) { return m.__item.key === key; });
-  var info = infoWindows[markers.indexOf(marker)];
+  var marker = markers.find(function(m) { return m.__item && m.__item.key === key; });
 
-  openItem(item, marker, info);
+  openItem(item, marker, null);
 }
 
 function openItem(item, marker, info) {
@@ -957,25 +1003,8 @@ function openItem(item, marker, info) {
 
   infoWindows.forEach(function(i) { i.close(); });
 
-  if (marker && info) {
-    info.open(map, marker);
-  }
-
   showList([item]);
   document.getElementById("status").innerHTML = "선택 매물 1개";
-
-  overlays.forEach(function(o) {
-    if (!o.__item) return;
-
-    var doneClass = isDone(o.__item) ? " done" : "";
-    var selectedClass = o.__item.key === item.key ? " selected" : "";
-    var markerText = "1";
-
-    var content =
-      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">' + markerText + '</div>';
-
-    o.setContent(content);
-  });
 
   if (window.innerWidth <= 768) {
     document.getElementById("sidebar").classList.add("open");
@@ -990,9 +1019,7 @@ function showList(items) {
       return m.__item === item;
     });
 
-    var info = infoWindows[markers.indexOf(marker)];
-
-    addListItem(item, marker, info);
+    addListItem(item, marker, null);
   });
 }
 
