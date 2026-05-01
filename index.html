@@ -31,7 +31,7 @@ body {
 }
 
 #sidebar {
-  width:430px;
+  width:620px;
   background:#fff;
   border-right:1px solid #ddd;
   overflow:auto;
@@ -44,15 +44,15 @@ body {
 }
 
 .header {
-  padding:18px 16px;
-  font-size:22px;
+  padding:16px 16px;
+  font-size:21px;
   font-weight:800;
   background:linear-gradient(135deg,#1e88ff,#005bea);
   color:white;
 }
 
 .filters {
-  padding:14px;
+  padding:12px;
   border-bottom:1px solid #eee;
   background:white;
 }
@@ -149,17 +149,17 @@ button {
 }
 
 #list {
-  padding:10px;
+  padding:8px;
 }
 
 .item {
   background:white;
-  padding:14px;
-  margin-bottom:10px;
+  padding:10px 12px;
+  margin-bottom:7px;
   border:1px solid #e7ebf0;
-  border-radius:14px;
+  border-radius:12px;
   cursor:pointer;
-  box-shadow:0 2px 8px rgba(0,0,0,0.04);
+  box-shadow:0 1px 5px rgba(0,0,0,0.035);
 }
 
 .item:hover {
@@ -190,17 +190,17 @@ button {
 
 .title {
   font-weight:800;
-  font-size:16px;
-  line-height:1.35;
+  font-size:14px;
+  line-height:1.25;
 }
 
 .type-badge {
   display:inline-block;
   background:#eef4ff;
   color:#005bea;
-  padding:3px 7px;
+  padding:2px 6px;
   border-radius:999px;
-  font-size:12px;
+  font-size:11px;
   font-weight:800;
   margin-right:4px;
 }
@@ -209,77 +209,53 @@ button {
   display:inline-block;
   background:#ddd;
   color:#777;
-  padding:3px 7px;
+  padding:2px 6px;
   border-radius:999px;
-  font-size:12px;
+  font-size:11px;
   font-weight:800;
   margin-right:4px;
 }
 
 .star {
-  font-size:22px;
+  font-size:19px;
   cursor:pointer;
   color:#c7c7c7;
   user-select:none;
+  line-height:1;
 }
 
 .star.on {
   color:#ffb300;
 }
 
-.price {
+.price-line {
   color:var(--blue);
-  margin-top:8px;
-  font-size:15px;
+  margin-top:5px;
+  font-size:13px;
   font-weight:bold;
 }
 
-.chips {
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-  margin-top:8px;
-}
-
-.chip {
-  background:#f1f4f8;
-  padding:5px 7px;
-  border-radius:999px;
+.info-line-compact {
+  margin-top:4px;
   font-size:12px;
   color:#444;
+  line-height:1.25;
 }
 
-.small {
-  font-size:13px;
+.memo-line {
+  margin-top:4px;
+  font-size:12px;
   color:#555;
-  margin-top:6px;
-  line-height:1.4;
+  line-height:1.25;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
-
-.phone-row {
-  display:flex;
-  gap:6px;
-  margin-top:9px;
-}
-
-.phone-btn {
-  flex:1;
-  text-align:center;
-  padding:7px;
-  border-radius:8px;
-  font-size:13px;
-  color:white;
-  text-decoration:none;
-  font-weight:bold;
-}
-
-.landlord { background:#1e88ff; }
-.tenant { background:#03c75a; }
 
 #status {
   position:absolute;
   top:12px;
-  left:450px;
+  left:640px;
   background:white;
   padding:9px 12px;
   z-index:9999;
@@ -920,26 +896,6 @@ function redrawSelectedMarkers() {
   });
 }
 
-function makeInfoContent(item, lat, lng) {
-  var doneLabel = isDone(item) ? "[계약완료] " : "";
-  var typeLabel = item.type ? "[" + escapeHtml(item.type) + "] " : "";
-
-  return (
-    '<div class="info-card">' +
-      '<div class="info-title">' + doneLabel + typeLabel + escapeHtml(item.name) + '</div>' +
-      '<div class="info-sub">' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
-      '<div class="info-price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
-      '<div class="info-line">관리비 ' + item.fee + ' / 권리금 ' + item.premium + ' / ' + item.area + '평</div>' +
-      '<div class="info-line">임대인☎ ' + escapeHtml(item.landlordPhone) + '</div>' +
-      '<div class="info-line">세입자☎ ' + escapeHtml(item.tenantPhone) + '</div>' +
-      '<div class="info-memo">' + escapeHtml(item.memo) + '</div>' +
-      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.landlordPhone) + '">임대인</a>' +
-      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.tenantPhone) + '">세입자</a>' +
-      '<a class="info-btn road-btn" href="javascript:openRoadviewModal(' + lat + ',' + lng + ')">로드뷰</a>' +
-    '</div>'
-  );
-}
-
 function openItem(item) {
   selectedItemKey = item.key;
   selectedGroupKey = null;
@@ -975,19 +931,9 @@ function addListItem(item) {
       '<div class="title">' + doneLabel + typeLabel + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
       '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + escapeHtml(item.key) + '\')">★</div>' +
     '</div>' +
-    '<div class="price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
-    '<div class="chips">' +
-      '<span class="chip">관리비 ' + item.fee + '</span>' +
-      '<span class="chip">권리금 ' + item.premium + '</span>' +
-      '<span class="chip">' + item.area + '평</span>' +
-    '</div>' +
-    '<div class="small">임대인☎ ' + escapeHtml(item.landlordPhone) + '</div>' +
-    '<div class="small">세입자☎ ' + escapeHtml(item.tenantPhone) + '</div>' +
-    '<div class="small">' + escapeHtml(item.memo) + '</div>' +
-    '<div class="phone-row">' +
-      '<a class="phone-btn landlord" href="tel:' + escapeHtml(item.landlordPhone) + '" onclick="event.stopPropagation();">임대인 전화</a>' +
-      '<a class="phone-btn tenant" href="tel:' + escapeHtml(item.tenantPhone) + '" onclick="event.stopPropagation();">세입자 전화</a>' +
-    '</div>';
+    '<div class="price-line">보증금 ' + item.deposit + ' / 월세 ' + item.rent + ' | 관리비 ' + item.fee + ' | 권리금 ' + item.premium + ' | ' + item.area + '평</div>' +
+    '<div class="info-line-compact">임대인 ' + escapeHtml(item.landlordPhone) + ' | 세입자 ' + escapeHtml(item.tenantPhone) + '</div>' +
+    '<div class="memo-line">' + escapeHtml(item.memo) + '</div>';
 
   div.onclick = function() {
     openItem(item);
