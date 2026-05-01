@@ -103,13 +103,16 @@ button {
   font-weight:bold;
 }
 
-.search-btn {
+.detail-btn {
   flex:1;
+  background:#eef4ff;
+  color:#005bea;
+}
+
+.detail-btn.on {
   background:var(--blue);
   color:white;
 }
-
-.search-btn:hover { background:var(--blue-dark); }
 
 .reset-btn {
   width:72px;
@@ -121,6 +124,28 @@ button {
   width:90px;
   background:#ffe58f;
   color:#5c4300;
+}
+
+.favorite-filter-btn.on {
+  background:#ffb300;
+  color:white;
+}
+
+.detail-filter {
+  display:none;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px dashed #d8dee8;
+}
+
+.detail-filter.open {
+  display:block;
+}
+
+.apply-btn {
+  width:100%;
+  background:var(--blue);
+  color:white;
 }
 
 #list {
@@ -147,6 +172,15 @@ button {
   background:#eef6ff;
 }
 
+.item.done {
+  background:#f1f1f1;
+  color:#999;
+}
+
+.item.done .price {
+  color:#888;
+}
+
 .item-top {
   display:flex;
   justify-content:space-between;
@@ -158,6 +192,28 @@ button {
   font-weight:800;
   font-size:16px;
   line-height:1.35;
+}
+
+.type-badge {
+  display:inline-block;
+  background:#eef4ff;
+  color:#005bea;
+  padding:3px 7px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  margin-right:4px;
+}
+
+.done-badge {
+  display:inline-block;
+  background:#ddd;
+  color:#777;
+  padding:3px 7px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  margin-right:4px;
 }
 
 .star {
@@ -234,19 +290,27 @@ button {
 }
 
 .circle-marker {
-  width:34px;
-  height:34px;
+  width:38px;
+  height:38px;
   border-radius:50%;
   background:var(--blue);
   color:white;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:15px;
+  font-size:12px;
   font-weight:bold;
   border:3px solid white;
   box-shadow:0 2px 8px rgba(0,0,0,0.35);
   cursor:pointer;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  padding:2px;
+}
+
+.circle-marker.done {
+  background:#999;
 }
 
 .circle-marker.selected {
@@ -254,32 +318,56 @@ button {
   transform:scale(1.12);
 }
 
+.circle-marker.done.selected {
+  background:#777;
+  transform:scale(1.12);
+}
+
 .info-card {
-  width:285px;
-  padding:12px;
-  border-radius:14px;
+  width:270px;
+  padding:10px;
+  border-radius:12px;
   background:white;
   font-size:13px;
-  line-height:1.45;
+  line-height:1.38;
 }
 
 .info-title {
   font-weight:800;
-  font-size:16px;
+  font-size:15px;
+  margin-bottom:4px;
+}
+
+.info-sub {
+  color:#555;
+  font-size:12px;
   margin-bottom:5px;
 }
 
 .info-price {
   color:var(--blue);
   font-weight:bold;
-  margin-top:6px;
+  margin-top:5px;
+}
+
+.info-line {
+  margin-top:3px;
+  color:#444;
+}
+
+.info-memo {
+  margin-top:5px;
+  padding:6px;
+  background:#f5f7fb;
+  border-radius:8px;
+  color:#444;
 }
 
 .info-btn {
   display:inline-block;
-  margin-top:8px;
+  margin-top:7px;
   margin-right:4px;
-  padding:7px 9px;
+  padding:6px 8px;
   color:white;
   text-decoration:none;
   border-radius:7px;
@@ -343,7 +431,7 @@ button {
     bottom:0;
     left:0;
     width:100%;
-    height:62%;
+    height:64%;
     z-index:999;
     transform:translateY(100%);
     transition:0.3s;
@@ -392,27 +480,32 @@ button {
 
     <div class="filters">
       <div class="filter-title">매물 검색</div>
-      <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 메모 검색">
 
-      <div class="row">
-        <input id="minDeposit" placeholder="보증금 최소">
-        <input id="maxDeposit" placeholder="보증금 최대">
-      </div>
-
-      <div class="row">
-        <input id="minRent" placeholder="월세 최소">
-        <input id="maxRent" placeholder="월세 최대">
-      </div>
-
-      <div class="row">
-        <input id="minArea" placeholder="평수 최소">
-        <input id="maxArea" placeholder="평수 최대">
-      </div>
+      <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 구분 / 메모 검색">
 
       <div class="btn-row">
-        <button class="search-btn" onclick="applyFilter()">검색 / 필터</button>
-        <button class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
+        <button id="detailBtn" class="detail-btn" onclick="toggleDetailFilter()">상세필터</button>
+        <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
         <button class="reset-btn" onclick="resetFilter()">해제</button>
+      </div>
+
+      <div id="detailFilter" class="detail-filter">
+        <div class="row">
+          <input id="minDeposit" placeholder="보증금 최소">
+          <input id="maxDeposit" placeholder="보증금 최대">
+        </div>
+
+        <div class="row">
+          <input id="minRent" placeholder="월세 최소">
+          <input id="maxRent" placeholder="월세 최대">
+        </div>
+
+        <div class="row">
+          <input id="minArea" placeholder="평수 최소">
+          <input id="maxArea" placeholder="평수 최대">
+        </div>
+
+        <button class="apply-btn" onclick="applyFilter()">필터 적용</button>
       </div>
     </div>
 
@@ -450,6 +543,7 @@ var selectedItemKey = null;
 var favoriteOnly = false;
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
+var markerVisibleLevel = 10;
 
 function clean(t) {
   return (t || "").replaceAll('"', '').trim();
@@ -487,7 +581,11 @@ function parseCSVLine(line) {
 }
 
 function itemKey(item) {
-  return item.name + "|" + item.address + "|" + item.room;
+  return item.name + "|" + item.address + "|" + item.room + "|" + item.type;
+}
+
+function isDone(item) {
+  return item.state === "계약완료";
 }
 
 function isFavorite(item) {
@@ -507,8 +605,14 @@ function toggleFavorite(key) {
 
 function toggleFavoriteOnly() {
   favoriteOnly = !favoriteOnly;
-  document.querySelector(".favorite-filter-btn").innerText = favoriteOnly ? "전체보기" : "찜만";
+  document.getElementById("favoriteBtn").innerText = favoriteOnly ? "전체" : "찜만";
+  document.getElementById("favoriteBtn").classList.toggle("on", favoriteOnly);
   applyFilter();
+}
+
+function toggleDetailFilter() {
+  document.getElementById("detailFilter").classList.toggle("open");
+  document.getElementById("detailBtn").classList.toggle("on");
 }
 
 function naverRoadviewUrl(lat, lng) {
@@ -528,6 +632,18 @@ function toggleSidebar() {
   document.getElementById("sidebar").classList.toggle("open");
 }
 
+function setupEnterSearch() {
+  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minArea, #maxArea");
+
+  inputs.forEach(function(input) {
+    input.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        applyFilter();
+      }
+    });
+  });
+}
+
 kakao.maps.load(function() {
   map = new kakao.maps.Map(document.getElementById("map"), {
     center: new kakao.maps.LatLng(36.3504, 127.3845),
@@ -539,7 +655,7 @@ kakao.maps.load(function() {
   clusterer = new kakao.maps.MarkerClusterer({
     map: map,
     averageCenter: true,
-    minLevel: 6,
+    minLevel: 11,
     disableClickZoom: true,
     styles: [{
       width: '44px',
@@ -570,9 +686,11 @@ kakao.maps.load(function() {
 
   kakao.maps.event.addListener(map, "idle", function() {
     if (isRendering) return;
+    updateOverlayVisibility();
     applyFilter();
   });
 
+  setupEnterSearch();
   loadSheet();
 
   setInterval(function() {
@@ -594,14 +712,16 @@ function loadSheet(isAuto) {
           name: clean(c[0]),
           address: clean(c[1]),
           room: clean(c[2]),
-          deposit: Number(clean(c[3])) || 0,
-          rent: Number(clean(c[4])) || 0,
-          fee: Number(clean(c[5])) || 0,
-          premium: Number(clean(c[6])) || 0,
-          area: Number(clean(c[7])) || 0,
-          landlordPhone: clean(c[8]),
-          tenantPhone: clean(c[9]),
-          memo: clean(c[10]),
+          type: clean(c[3]),
+          deposit: Number(clean(c[4])) || 0,
+          rent: Number(clean(c[5])) || 0,
+          fee: Number(clean(c[6])) || 0,
+          premium: Number(clean(c[7])) || 0,
+          area: Number(clean(c[8])) || 0,
+          landlordPhone: clean(c[9]),
+          tenantPhone: clean(c[10]),
+          memo: clean(c[11]),
+          state: clean(c[12]),
           latlng: null
         };
 
@@ -666,6 +786,7 @@ function getFilteredItems() {
       item.name.includes(keyword) ||
       item.address.includes(keyword) ||
       item.room.includes(keyword) ||
+      item.type.includes(keyword) ||
       item.memo.includes(keyword);
 
     var matchPrice =
@@ -722,8 +843,12 @@ function drawItems(items) {
     var lat = item.latlng.getLat();
     var lng = item.latlng.getLng();
 
+    var doneClass = isDone(item) ? " done" : "";
+    var selectedClass = selectedItemKey === item.key ? " selected" : "";
+    var markerText = item.type || "1";
+
     var overlayContent =
-      '<div class="circle-marker ' + (selectedItemKey === item.key ? 'selected' : '') + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">1</div>';
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">' + escapeHtml(markerText) + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
       position: item.latlng,
@@ -733,10 +858,6 @@ function drawItems(items) {
     });
 
     overlay.__item = item;
-
-    if (map.getLevel() < 6) {
-      overlay.setMap(map);
-    }
 
     var info = new kakao.maps.InfoWindow({
       content: makeInfoContent(item, lat, lng)
@@ -759,27 +880,28 @@ function drawItems(items) {
 }
 
 function updateOverlayVisibility() {
-  var show = map.getLevel() < 6;
+  var show = map.getLevel() <= markerVisibleLevel;
 
   overlays.forEach(function(o) {
     o.setMap(show ? map : null);
   });
 }
 
-kakao.maps.event.addListener = kakao.maps.event.addListener;
-
 function makeInfoContent(item, lat, lng) {
+  var doneLabel = isDone(item) ? "[계약완료] " : "";
+  var typeLabel = item.type ? "[" + escapeHtml(item.type) + "] " : "";
+
   return (
     '<div class="info-card">' +
-      '<div class="info-title">' + escapeHtml(item.name) + '</div>' +
-      '<div>' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+      '<div class="info-title">' + doneLabel + typeLabel + escapeHtml(item.name) + '</div>' +
+      '<div class="info-sub">' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
       '<div class="info-price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
-      '<div>관리비 ' + item.fee + ' / 권리금 ' + item.premium + ' / ' + item.area + '평</div>' +
-      '<div>임대인☎ ' + escapeHtml(item.landlordPhone) + '</div>' +
-      '<div>세입자☎ ' + escapeHtml(item.tenantPhone) + '</div>' +
-      '<div style="margin-top:4px;">' + escapeHtml(item.memo) + '</div>' +
-      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.landlordPhone) + '">임대인 전화</a>' +
-      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.tenantPhone) + '">세입자 전화</a>' +
+      '<div class="info-line">관리비 ' + item.fee + ' / 권리금 ' + item.premium + ' / ' + item.area + '평</div>' +
+      '<div class="info-line">임대인☎ ' + escapeHtml(item.landlordPhone) + '</div>' +
+      '<div class="info-line">세입자☎ ' + escapeHtml(item.tenantPhone) + '</div>' +
+      '<div class="info-memo">' + escapeHtml(item.memo) + '</div>' +
+      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.landlordPhone) + '">임대인</a>' +
+      '<a class="info-btn call-btn" href="tel:' + escapeHtml(item.tenantPhone) + '">세입자</a>' +
       '<a class="info-btn road-btn" href="javascript:openRoadviewModal(' + lat + ',' + lng + ')">로드뷰</a>' +
     '</div>'
   );
@@ -810,7 +932,14 @@ function openItem(item, marker, info) {
 
   overlays.forEach(function(o) {
     if (!o.__item) return;
-    var content = '<div class="circle-marker ' + (o.__item.key === item.key ? 'selected' : '') + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">1</div>';
+
+    var doneClass = isDone(o.__item) ? " done" : "";
+    var selectedClass = o.__item.key === item.key ? " selected" : "";
+    var markerText = o.__item.type || "1";
+
+    var content =
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">' + escapeHtml(markerText) + '</div>';
+
     o.setContent(content);
   });
 
@@ -835,11 +964,17 @@ function showList(items) {
 
 function addListItem(item, marker, info) {
   var div = document.createElement("div");
-  div.className = "item" + (selectedItemKey === item.key ? " selected" : "");
+  div.className =
+    "item" +
+    (selectedItemKey === item.key ? " selected" : "") +
+    (isDone(item) ? " done" : "");
+
+  var doneLabel = isDone(item) ? '<span class="done-badge">계약완료</span>' : "";
+  var typeLabel = item.type ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>' : "";
 
   div.innerHTML =
     '<div class="item-top">' +
-      '<div class="title">' + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+      '<div class="title">' + doneLabel + typeLabel + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
       '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + escapeHtml(item.key) + '\')">★</div>' +
     '</div>' +
     '<div class="price">보증금 ' + item.deposit + ' / 월세 ' + item.rent + '</div>' +
@@ -873,16 +1008,13 @@ function resetFilter() {
   document.getElementById("maxArea").value = "";
 
   favoriteOnly = false;
-  document.querySelector(".favorite-filter-btn").innerText = "찜만";
+  document.getElementById("favoriteBtn").innerText = "찜만";
+  document.getElementById("favoriteBtn").classList.remove("on");
   selectedItemKey = null;
 
   drawItems(allItems);
   document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
 }
-
-kakao.maps.event.addListener(window, "resize", function() {
-  map.relayout();
-});
 </script>
 
 </body>
