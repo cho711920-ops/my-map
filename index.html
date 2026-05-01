@@ -66,7 +66,8 @@ body {
   margin-bottom:8px;
 }
 
-.filters input {
+.filters input,
+.filters select {
   width:100%;
   padding:10px;
   margin-bottom:8px;
@@ -74,9 +75,11 @@ body {
   border-radius:8px;
   font-size:14px;
   outline:none;
+  background:white;
 }
 
-.filters input:focus {
+.filters input:focus,
+.filters select:focus {
   border-color:var(--blue);
 }
 
@@ -298,15 +301,11 @@ button {
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:12px;
+  font-size:15px;
   font-weight:bold;
   border:3px solid white;
   box-shadow:0 2px 8px rgba(0,0,0,0.35);
   cursor:pointer;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  padding:2px;
 }
 
 .circle-marker.done {
@@ -483,6 +482,10 @@ button {
 
       <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 구분 / 메모 검색">
 
+      <select id="typeFilter" onchange="applyFilter()">
+        <option value="">구분 전체</option>
+      </select>
+
       <div class="btn-row">
         <button id="detailBtn" class="detail-btn" onclick="toggleDetailFilter()">상세필터</button>
         <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
@@ -644,6 +647,33 @@ function setupEnterSearch() {
   });
 }
 
+function updateTypeOptions(items) {
+  var select = document.getElementById("typeFilter");
+  var currentValue = select.value;
+
+  var types = [];
+  items.forEach(function(item) {
+    if (item.type && !types.includes(item.type)) {
+      types.push(item.type);
+    }
+  });
+
+  types.sort();
+
+  select.innerHTML = '<option value="">구분 전체</option>';
+
+  types.forEach(function(type) {
+    var option = document.createElement("option");
+    option.value = type;
+    option.textContent = type;
+    select.appendChild(option);
+  });
+
+  if (types.includes(currentValue)) {
+    select.value = currentValue;
+  }
+}
+
 kakao.maps.load(function() {
   map = new kakao.maps.Map(document.getElementById("map"), {
     center: new kakao.maps.LatLng(36.3504, 127.3845),
@@ -732,6 +762,7 @@ function loadSheet(isAuto) {
 
       geocodeItems(rawItems, function(doneItems) {
         allItems = doneItems;
+        updateTypeOptions(allItems);
         applyFilter();
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" : "매물 " + allItems.length + "개 불러옴";
       });
@@ -770,6 +801,7 @@ function getFilteredItems() {
   var bounds = map.getBounds();
 
   var keyword = document.getElementById("keyword").value.trim();
+  var selectedType = document.getElementById("typeFilter").value;
 
   var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
   var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
@@ -789,6 +821,8 @@ function getFilteredItems() {
       item.type.includes(keyword) ||
       item.memo.includes(keyword);
 
+    var matchType = !selectedType || item.type === selectedType;
+
     var matchPrice =
       item.deposit >= minDeposit &&
       item.deposit <= maxDeposit &&
@@ -801,7 +835,7 @@ function getFilteredItems() {
 
     var inMap = item.latlng && bounds.contain(item.latlng);
 
-    return matchKeyword && matchPrice && matchFavorite && inMap;
+    return matchKeyword && matchType && matchPrice && matchFavorite && inMap;
   });
 }
 
@@ -845,10 +879,10 @@ function drawItems(items) {
 
     var doneClass = isDone(item) ? " done" : "";
     var selectedClass = selectedItemKey === item.key ? " selected" : "";
-   var markerText = "1";
+    var markerText = "1";
 
     var overlayContent =
-      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">' + escapeHtml(markerText) + '</div>';
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">' + markerText + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
       position: item.latlng,
@@ -938,7 +972,7 @@ function openItem(item, marker, info) {
     var markerText = "1";
 
     var content =
-      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">' + escapeHtml(markerText) + '</div>';
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">' + markerText + '</div>';
 
     o.setContent(content);
   });
@@ -1000,6 +1034,7 @@ function addListItem(item, marker, info) {
 
 function resetFilter() {
   document.getElementById("keyword").value = "";
+  document.getElementById("typeFilter").value = "";
   document.getElementById("minDeposit").value = "";
   document.getElementById("maxDeposit").value = "";
   document.getElementById("minRent").value = "";
