@@ -845,7 +845,7 @@ function drawItems(items) {
 
     var doneClass = isDone(item) ? " done" : "";
     var selectedClass = selectedItemKey === item.key ? " selected" : "";
-    var markerText = item.type || "1";
+   var markerText = "1";
 
     var overlayContent =
       '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(item.key) + '\')">' + escapeHtml(markerText) + '</div>';
@@ -935,7 +935,7 @@ function openItem(item, marker, info) {
 
     var doneClass = isDone(o.__item) ? " done" : "";
     var selectedClass = o.__item.key === item.key ? " selected" : "";
-    var markerText = o.__item.type || "1";
+    var markerText = "1";
 
     var content =
       '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openItemByKey(\'' + encodeURIComponent(o.__item.key) + '\')">' + escapeHtml(markerText) + '</div>';
