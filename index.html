@@ -8,18 +8,12 @@
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
 <style>
-
 :root {
   --blue:#1e88ff;
   --blue-dark:#006de5;
   --green:#03c75a;
   --red:#ff4d4f;
-  --yellow:#ffb300;
-  --bg:#f5f7fb;
-  --card:#ffffff;
-  --line:#e6ebf1;
   --text:#222;
-  --muted:#667085;
 }
 
 * { box-sizing:border-box; }
@@ -28,7 +22,7 @@ body {
   margin:0;
   font-family:Arial, sans-serif;
   color:var(--text);
-  background:var(--bg);
+  background:#f5f7fb;
 }
 
 #wrap {
@@ -39,9 +33,9 @@ body {
 #sidebar {
   width:620px;
   background:#fff;
-  border-right:1px solid #dfe5ec;
+  border-right:1px solid #ddd;
   overflow:auto;
-  box-shadow:3px 0 14px rgba(0,0,0,0.06);
+  box-shadow:2px 0 8px rgba(0,0,0,0.05);
   z-index:5;
 }
 
@@ -50,103 +44,67 @@ body {
 }
 
 .header {
-  padding:16px 18px;
+  padding:16px 16px;
   font-size:21px;
-  font-weight:900;
+  font-weight:800;
   background:linear-gradient(135deg,#1e88ff,#005bea);
   color:white;
-  letter-spacing:-0.3px;
 }
 
 .filters {
   padding:12px;
-  border-bottom:1px solid #edf0f4;
-  background:#fff;
-  position:sticky;
-  top:0;
-  z-index:10;
+  border-bottom:1px solid #eee;
+  background:white;
 }
 
 .filter-title {
-  font-size:13px;
-  font-weight:800;
-  margin-bottom:8px;
-  color:#344054;
-}
-
-.search-row {
-  display:flex;
-  gap:8px;
+  font-size:14px;
+  font-weight:bold;
   margin-bottom:8px;
 }
 
-.search-row input {
-  flex:1;
-  min-width:0;
-  padding:11px 12px;
+.filters input,
+.filters select {
+  width:100%;
+  padding:10px;
+  margin-bottom:8px;
   border:1px solid #d8dee8;
-  border-radius:10px;
+  border-radius:8px;
   font-size:14px;
   outline:none;
-  background:#fbfcfe;
+  background:white;
 }
 
-.search-row input:focus {
+.filters input:focus,
+.filters select:focus {
   border-color:var(--blue);
-  background:#fff;
-  box-shadow:0 0 0 3px rgba(30,136,255,0.12);
 }
 
-.search-btn {
-  width:82px;
-  flex:0 0 82px;
-  background:var(--blue);
-  color:white;
-  border-radius:10px;
-  border:0;
-  font-weight:900;
-}
-
-.search-btn:hover {
-  background:var(--blue-dark);
-}
-
-.filter-row {
+.row {
   display:flex;
   gap:8px;
-  align-items:center;
 }
 
-.filter-row button,
-.filter-row select {
-  height:40px;
-  border-radius:10px;
-  border:1px solid #d8dee8;
-  font-weight:800;
+.row input {
+  width:50%;
 }
 
-.filter-row select {
-  flex:1;
-  min-width:120px;
-  padding:0 10px;
-  background:#fff;
-  color:#344054;
-  outline:none;
-}
-
-.filter-row select:focus {
-  border-color:var(--blue);
-  box-shadow:0 0 0 3px rgba(30,136,255,0.10);
+.btn-row {
+  display:flex;
+  gap:8px;
+  margin-top:4px;
 }
 
 button {
+  padding:10px;
   border:0;
   cursor:pointer;
+  border-radius:8px;
+  font-weight:bold;
 }
 
 .detail-btn {
-  width:92px;
-  flex:0 0 92px;
+  flex:1;
   background:#eef4ff;
   color:#005bea;
 }
@@ -157,85 +115,56 @@ button {
 }
 
 .favorite-filter-btn {
-  width:80px;
-  flex:0 0 80px;
-  background:#fff4cc;
-  color:#6b4e00;
+  width:90px;
+  background:#ffe58f;
+  color:#5c4300;
 }
 
 .favorite-filter-btn.on {
-  background:var(--yellow);
+  background:#ffb300;
   color:white;
 }
 
 .reset-btn {
-  width:74px;
-  flex:0 0 74px;
-  background:#f1f4f8;
-  color:#344054;
+  width:72px;
+  background:#eef1f5;
+  color:#333;
 }
 
 .detail-filter {
   display:none;
   margin-top:10px;
-  padding:10px;
-  border:1px dashed #d8dee8;
-  border-radius:12px;
-  background:#fafcff;
+  padding-top:10px;
+  border-top:1px dashed #d8dee8;
 }
 
 .detail-filter.open {
   display:block;
 }
 
-.row {
-  display:flex;
-  gap:8px;
-  margin-bottom:8px;
-}
-
-.row input {
-  width:50%;
-  padding:10px;
-  border:1px solid #d8dee8;
-  border-radius:9px;
-  font-size:13px;
-  outline:none;
-}
-
-.row input:focus {
-  border-color:var(--blue);
-  box-shadow:0 0 0 3px rgba(30,136,255,0.10);
-}
-
 .apply-btn {
   width:100%;
-  height:38px;
   background:var(--blue);
   color:white;
-  border-radius:9px;
-  font-weight:900;
 }
 
 #list {
-  padding:9px;
+  padding:8px;
 }
 
 .item {
-  background:var(--card);
+  background:white;
   padding:10px 12px;
-  margin-bottom:8px;
-  border:1px solid var(--line);
-  border-radius:13px;
+  margin-bottom:7px;
+  border:1px solid #e7ebf0;
+  border-radius:12px;
   cursor:pointer;
-  box-shadow:0 2px 7px rgba(16,24,40,0.045);
-  transition:0.15s ease;
+  box-shadow:0 1px 5px rgba(0,0,0,0.035);
 }
 
 .item:hover {
   background:#f8fbff;
   border-color:#bcd8ff;
-  transform:translateY(-1px);
 }
 
 .item.selected {
@@ -244,104 +173,83 @@ button {
 }
 
 .item.done {
-  background:#f2f3f5;
-  color:#8a8f98;
+  background:#f1f1f1;
+  color:#999;
 }
 
-.item.done .price-line {
-  color:#7a7f87;
+.item.done .price {
+  color:#888;
 }
 
 .item-top {
   display:flex;
+  justify-content:space-between;
   align-items:flex-start;
   gap:8px;
-  width:100%;
 }
 
 .title {
-  flex:1;
-  min-width:0;
-  font-weight:900;
+  font-weight:800;
   font-size:14px;
-  line-height:1.3;
-  letter-spacing:-0.2px;
-  display:-webkit-box;
-  -webkit-line-clamp:2;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
+  line-height:1.25;
 }
 
 .type-badge {
   display:inline-block;
-  background:#eaf3ff;
+  background:#eef4ff;
   color:#005bea;
-  padding:2px 7px;
+  padding:2px 6px;
   border-radius:999px;
   font-size:11px;
-  font-weight:900;
+  font-weight:800;
   margin-right:4px;
-  vertical-align:1px;
 }
 
 .done-badge {
   display:inline-block;
-  background:#d9dce1;
-  color:#667085;
-  padding:2px 7px;
+  background:#ddd;
+  color:#777;
+  padding:2px 6px;
   border-radius:999px;
   font-size:11px;
-  font-weight:900;
+  font-weight:800;
   margin-right:4px;
-  vertical-align:1px;
 }
 
 .star {
-  width:32px;
-  flex:0 0 32px;
-  text-align:right;
-  font-size:20px;
+  font-size:19px;
   cursor:pointer;
   color:#c7c7c7;
   user-select:none;
-  line-height:1.1;
+  line-height:1;
 }
 
 .star.on {
-  color:var(--yellow);
+  color:#ffb300;
 }
 
 .price-line {
   color:var(--blue);
   margin-top:5px;
   font-size:13px;
-  font-weight:900;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  font-weight:bold;
 }
 
 .info-line-compact {
   margin-top:4px;
   font-size:12px;
-  color:#344054;
+  color:#444;
   line-height:1.25;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
 }
 
 .memo-line {
   margin-top:4px;
   font-size:12px;
-  color:#667085;
+  color:#555;
   line-height:1.25;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
-  background:#f6f8fb;
-  border-radius:7px;
-  padding:4px 6px;
 }
 
 #status {
@@ -349,38 +257,36 @@ button {
   top:12px;
   left:640px;
   background:white;
-  padding:9px 13px;
+  padding:9px 12px;
   z-index:9999;
-  border:1px solid #dfe5ec;
-  border-radius:999px;
-  box-shadow:0 3px 12px rgba(0,0,0,0.14);
-  font-size:13px;
-  font-weight:800;
-  color:#344054;
+  border:1px solid #ddd;
+  border-radius:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.12);
+  font-size:14px;
 }
 
 .circle-marker {
   width:42px;
   height:42px;
   border-radius:50%;
-  background:linear-gradient(135deg,#1e88ff,#006de5);
+  background:var(--blue);
   color:white;
   display:flex;
   align-items:center;
   justify-content:center;
   font-size:16px;
-  font-weight:900;
+  font-weight:bold;
   border:3px solid white;
-  box-shadow:0 3px 10px rgba(0,0,0,0.35);
+  box-shadow:0 2px 8px rgba(0,0,0,0.35);
   cursor:pointer;
 }
 
 .circle-marker.done {
-  background:linear-gradient(135deg,#9aa0a6,#73777d);
+  background:#999;
 }
 
 .circle-marker.selected {
-  background:linear-gradient(135deg,#ff4d4f,#d9363e);
+  background:#ff4d4f;
   transform:scale(1.12);
 }
 
@@ -444,13 +350,24 @@ button {
     bottom:0;
     left:0;
     width:100%;
-    height:64%;
+    height:45%;
+    max-height:80%;
     z-index:999;
     transform:translateY(100%);
     transition:0.3s;
     border-right:0;
     border-top:1px solid #ddd;
     border-radius:18px 18px 0 0;
+  }
+
+  #sidebar::before {
+    content:'';
+    display:block;
+    width:44px;
+    height:5px;
+    background:#cfd4dc;
+    border-radius:999px;
+    margin:9px auto 6px;
   }
 
   #sidebar.open {
@@ -481,16 +398,7 @@ button {
     font-size:18px;
     padding:14px;
   }
-
-  .filter-row {
-    gap:6px;
-  }
-
-  .detail-btn { width:82px; flex-basis:82px; }
-  .favorite-filter-btn { width:72px; flex-basis:72px; }
-  .reset-btn { width:66px; flex-basis:66px; }
 }
-
 </style>
 </head>
 
@@ -503,20 +411,16 @@ button {
     <div class="filters">
       <div class="filter-title">매물 검색</div>
 
-      <div class="search-row">
-        <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 구분 / 메모 검색">
-        <button class="search-btn" onclick="applyFilter()">검색</button>
-      </div>
+      <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 구분 / 메모 검색">
 
-      <div class="filter-row">
-        <button id="detailBtn" class="detail-btn" onclick="toggleDetailFilter()">상세▼</button>
+      <select id="typeFilter" onchange="applyFilter()">
+        <option value="">구분 전체</option>
+      </select>
 
-        <select id="typeFilter" onchange="applyFilter()">
-          <option value="">구분</option>
-        </select>
-
+      <div class="btn-row">
+        <button id="detailBtn" class="detail-btn" onclick="toggleDetailFilter()">상세필터</button>
         <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
-        <button class="reset-btn" onclick="resetFilter()">초기화</button>
+        <button class="reset-btn" onclick="resetFilter()">해제</button>
       </div>
 
       <div id="detailFilter" class="detail-filter">
