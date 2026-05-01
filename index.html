@@ -298,6 +298,10 @@ button {
   display:none;
 }
 
+#panelHandle {
+  display:none;
+}
+
 #roadviewModal {
   display:none;
   position:fixed;
@@ -350,23 +354,24 @@ button {
     bottom:0;
     left:0;
     width:100%;
-    height:45%;
-    max-height:80%;
+    height:45vh;
+    max-height:70vh;
     z-index:999;
-    transform:translateY(100%);
-    transition:0.3s;
+    transform:translateY(0);
+    transition:height 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     border-right:0;
     border-top:1px solid #ddd;
     border-radius:18px 18px 0 0;
+    box-shadow:0 -4px 18px rgba(0,0,0,0.16);
   }
 
   #panelHandle {
     display:block;
-    width:48px;
+    width:54px;
     height:5px;
     background:#cfd4dc;
     border-radius:999px;
-    margin:9px auto 6px;
+    margin:10px auto 7px;
     cursor:grab;
     touch-action:none;
   }
@@ -376,21 +381,11 @@ button {
   }
 
   #sidebar.expanded {
-    height:80%;
+    height:70vh;
   }
 
   #toggleBtn {
-    display:block;
-    position:fixed;
-    bottom:22px;
-    left:50%;
-    transform:translateX(-50%);
-    z-index:1000;
-    background:var(--blue);
-    color:white;
-    padding:13px 24px;
-    border-radius:999px;
-    box-shadow:0 3px 12px rgba(0,0,0,0.28);
+    display:none !important;
   }
 
   #status {
@@ -581,39 +576,116 @@ function setupMobilePanelDrag() {
   if (!sidebar || !handle) return;
 
   var startY = 0;
-  var endY = 0;
+  var startHeight = 0;
+  var dragging = false;
+  var minRatio = 0.45;
+  var maxRatio = 0.70;
+
+  function isMobile() {
+    return window.innerWidth <= 768;
+  }
+
+  function setHeightByRatio(ratio) {
+    sidebar.style.height = (window.innerHeight * ratio) + "px";
+  }
+
+  function startDrag(clientY) {
+    if (!isMobile()) return;
+
+    dragging = true;
+    startY = clientY;
+    startHeight = sidebar.getBoundingClientRect().height;
+    sidebar.style.transition = "none";
+  }
+
+  function moveDrag(clientY) {
+    if (!dragging || !isMobile()) return;
+
+    var deltaY = startY - clientY;
+    var newHeight = startHeight + deltaY;
+    var minHeight = window.innerHeight * minRatio;
+    var maxHeight = window.innerHeight * maxRatio;
+
+    if (newHeight < minHeight) newHeight = minHeight;
+    if (newHeight > maxHeight) newHeight = maxHeight;
+
+    sidebar.style.height = newHeight + "px";
+  }
+
+  function endDrag() {
+    if (!dragging || !isMobile()) return;
+
+    dragging = false;
+
+    var currentHeight = sidebar.getBoundingClientRect().height;
+    var middleHeight = window.innerHeight * ((minRatio + maxRatio) / 2);
+
+    sidebar.style.transition = "height 0.28s cubic-bezier(0.22, 1, 0.36, 1)";
+
+    if (currentHeight >= middleHeight) {
+      setHeightByRatio(maxRatio);
+    } else {
+      setHeightByRatio(minRatio);
+    }
+  }
 
   handle.addEventListener("touchstart", function(e) {
-    startY = e.touches[0].clientY;
-    endY = startY;
-  }, { passive:true });
-
-  handle.addEventListener("touchmove", function(e) {
-    endY = e.touches[0].clientY;
-  }, { passive:true });
-
-  handle.addEventListener("touchend", function() {
-    var diff = endY - startY;
-
-    if (diff < -25) {
-      sidebar.classList.add("open");
-      sidebar.classList.add("expanded");
-    } else if (diff > 25) {
-      if (sidebar.classList.contains("expanded")) {
-        sidebar.classList.remove("expanded");
-      } else {
-        sidebar.classList.remove("open");
-      }
-    } else {
-      sidebar.classList.toggle("expanded");
-      sidebar.classList.add("open");
+    if (e.touches && e.touches.length > 0) {
+      startDrag(e.touches[0].clientY);
     }
+  }, { passive:true });
+
+  window.addEventListener("touchmove", function(e) {
+    if (!dragging) return;
+    if (e.touches && e.touches.length > 0) {
+      e.preventDefault();
+      moveDrag(e.touches[0].clientY);
+    }
+  }, { passive:false });
+
+  window.addEventListener("touchend", function() {
+    endDrag();
+  });
+
+  handle.addEventListener("mousedown", function(e) {
+    startDrag(e.clientY);
+  });
+
+  window.addEventListener("mousemove", function(e) {
+    moveDrag(e.clientY);
+  });
+
+  window.addEventListener("mouseup", function() {
+    endDrag();
   });
 
   handle.addEventListener("click", function() {
-    sidebar.classList.add("open");
-    sidebar.classList.toggle("expanded");
+    if (!isMobile()) return;
+
+    var currentHeight = sidebar.getBoundingClientRect().height;
+    var middleHeight = window.innerHeight * ((minRatio + maxRatio) / 2);
+
+    sidebar.style.transition = "height 0.28s cubic-bezier(0.22, 1, 0.36, 1)";
+
+    if (currentHeight < middleHeight) {
+      setHeightByRatio(maxRatio);
+    } else {
+      setHeightByRatio(minRatio);
+    }
   });
+
+  window.addEventListener("resize", function() {
+    if (isMobile()) {
+      setHeightByRatio(minRatio);
+    } else {
+      sidebar.style.height = "";
+      sidebar.style.transition = "";
+    }
+  });
+
+  if (isMobile()) {
+    setHeightByRatio(minRatio);
+  }
 }
 
 function setupEnterSearch() {
