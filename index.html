@@ -736,17 +736,22 @@ function setupMobilePanelDrag() {
   }
 
   handle.addEventListener("touchstart", function(e) {
-    if (e.touches && e.touches.length > 0) {
-      startDrag(e.touches[0].clientY);
-    }
+    if (!e.touches || e.touches.length !== 1) return;
+    startDrag(e.touches[0].clientY);
   }, { passive:true });
 
   window.addEventListener("touchmove", function(e) {
     if (!dragging) return;
-    if (e.touches && e.touches.length > 0) {
-      e.preventDefault();
-      moveDrag(e.touches[0].clientY);
+
+    // 두 손가락 터치는 지도 확대/축소가 쓰도록 막지 않음
+    if (!e.touches || e.touches.length !== 1) {
+      dragging = false;
+      sidebar.style.transition = "height 0.28s cubic-bezier(0.22, 1, 0.36, 1)";
+      return;
     }
+
+    e.preventDefault();
+    moveDrag(e.touches[0].clientY);
   }, { passive:false });
 
   window.addEventListener("touchend", function() {
