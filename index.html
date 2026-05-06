@@ -685,6 +685,8 @@ function setupMobilePanelDrag() {
   var minRatio = 0.45;
   var maxRatio = 0.70;
   var dragging = false;
+  var moved = false;
+  var suppressClick = false;
 
   function isMobile() {
     return window.innerWidth <= 768;
@@ -698,6 +700,7 @@ function setupMobilePanelDrag() {
     if (!isMobile()) return;
 
     dragging = true;
+    moved = false;
     startY = clientY;
     startHeight = sidebar.getBoundingClientRect().height;
     sidebar.style.transition = "none";
@@ -707,6 +710,11 @@ function setupMobilePanelDrag() {
     if (!dragging || !isMobile()) return;
 
     var deltaY = startY - clientY;
+
+    if (Math.abs(deltaY) > 4) {
+      moved = true;
+    }
+
     var newHeight = startHeight + deltaY;
 
     var minHeight = window.innerHeight * minRatio;
@@ -733,6 +741,13 @@ function setupMobilePanelDrag() {
     } else {
       setHeightByRatio(minRatio);
     }
+
+    if (moved) {
+      suppressClick = true;
+      setTimeout(function() {
+        suppressClick = false;
+      }, 250);
+    }
   }
 
   handle.addEventListener("touchstart", function(e) {
@@ -741,22 +756,22 @@ function setupMobilePanelDrag() {
     }
   }, { passive:true });
 
-  window.addEventListener("touchmove", function(e) {
-    if (!e.touches || e.touches.length === 0) return;
-
-    // 두 손가락 터치는 지도 확대/축소가 되도록 절대 막지 않음
-    if (e.touches.length > 1) {
-      return;
-    }
-
-    // 패널 손잡이를 잡고 드래그 중일 때만 기본 터치를 막음
+  handle.addEventListener("touchmove", function(e) {
     if (!dragging) return;
+
+    // 손잡이에서 한 손가락으로 움직일 때만 패널 드래그 처리
+    // 두 손가락 확대/축소나 지도 터치는 막지 않음
+    if (!e.touches || e.touches.length !== 1) return;
 
     e.preventDefault();
     moveDrag(e.touches[0].clientY);
   }, { passive:false });
 
-  window.addEventListener("touchend", function() {
+  handle.addEventListener("touchend", function() {
+    endDrag();
+  });
+
+  handle.addEventListener("touchcancel", function() {
     endDrag();
   });
 
@@ -774,6 +789,7 @@ function setupMobilePanelDrag() {
 
   handle.addEventListener("click", function() {
     if (!isMobile()) return;
+    if (suppressClick) return;
 
     var currentHeight = sidebar.getBoundingClientRect().height;
     var middleHeight = window.innerHeight * ((minRatio + maxRatio) / 2);
