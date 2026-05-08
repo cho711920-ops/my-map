@@ -492,6 +492,75 @@ button {
   .reset-btn { width:70px; flex-basis:70px; }
 }
 
+/* === 추가: 정렬/인쇄/완료숨김/주소오류 === */
+.extra-action-row {
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+}
+
+.hide-done-btn {
+  width:105px;
+  background:#fff0f0;
+  color:#d93025;
+}
+
+.hide-done-btn.on {
+  background:#d93025;
+  color:white;
+}
+
+.print-btn {
+  flex:1;
+  background:#263238;
+  color:white;
+}
+
+.filter-select-wrap {
+  display:flex;
+  gap:8px;
+  flex:1;
+  min-width:0;
+}
+
+.filter-select-wrap select {
+  flex:1;
+  min-width:0;
+}
+
+#errorStatus {
+  position:absolute;
+  top:60px;
+  left:640px;
+  background:#fff4f4;
+  color:#d93025;
+  padding:8px 12px;
+  border:1px solid #ffc9c9;
+  border-radius:10px;
+  z-index:9999;
+  font-size:13px;
+  display:none;
+  box-shadow:0 2px 8px rgba(0,0,0,0.12);
+  cursor:pointer;
+}
+
+@media (max-width:768px) {
+  #errorStatus {
+    left:10px;
+    top:48px;
+    font-size:12px;
+  }
+
+  .filter-select-wrap {
+    gap:6px;
+  }
+
+  .hide-done-btn {
+    width:92px;
+    flex:0 0 92px;
+  }
+}
+
 </style>
 </head>
 
@@ -513,12 +582,30 @@ button {
       <div class="filter-row">
         <button id="detailBtn" class="detail-btn" onclick="toggleDetailFilter()">상세▼</button>
 
-        <select id="typeFilter" onchange="applyFilter()">
-          <option value="">구분 전체</option>
-        </select>
+        <div class="filter-select-wrap">
+          <select id="typeFilter" onchange="applyFilter()">
+            <option value="">구분 전체</option>
+          </select>
+
+          <select id="sortFilter" onchange="applyFilter()">
+            <option value="latest">최신등록순</option>
+            <option value="name">가나다순</option>
+            <option value="depositLow">보증금 낮은순</option>
+            <option value="depositHigh">보증금 높은순</option>
+            <option value="rentLow">월세 낮은순</option>
+            <option value="rentHigh">월세 높은순</option>
+            <option value="areaHigh">평수 큰순</option>
+            <option value="areaLow">평수 작은순</option>
+          </select>
+        </div>
 
         <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
         <button class="reset-btn" onclick="resetFilter()">초기화</button>
+      </div>
+
+      <div class="extra-action-row">
+        <button id="hideDoneBtn" class="hide-done-btn" onclick="toggleHideDone()">완료숨김</button>
+        <button class="print-btn" onclick="printCurrentList()">현재목록 인쇄</button>
       </div>
 
       <div id="detailFilter" class="detail-filter">
@@ -549,6 +636,7 @@ button {
 
 <button id="toggleBtn" onclick="toggleSidebar()">매물 보기</button>
 <div id="status">로딩중...</div>
+<div id="errorStatus" onclick="showAddressErrors()">주소 오류 0개</div>
 
 <div id="roadviewModal">
   <div id="roadviewBox">
@@ -572,6 +660,8 @@ var overlays = [];
 var selectedGroupKey = null;
 var selectedItemKey = null;
 var favoriteOnly = false;
+var hideDone = false;
+var errorItems = [];
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
 
@@ -946,6 +1036,8 @@ kakao.maps.load(function() {
 });
 
 function loadSheet(isAuto) {
+  errorItems = [];
+
   fetch(sheetURL)
     .then(function(res) { return res.text(); })
     .then(function(data) {
@@ -969,6 +1061,7 @@ function loadSheet(isAuto) {
           tenantPhone: clean(c[10]),
           memo: clean(c[11]),
           state: clean(c[12]),
+          regDate: clean(c[13]),
           latlng: null
         };
 
@@ -981,6 +1074,7 @@ function loadSheet(isAuto) {
         allItems = doneItems;
         updateTypeOptions(allItems);
         applyFilter();
+        updateErrorStatus();
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" : "매물 " + allItems.length + "개 불러옴";
       });
     })
@@ -1004,6 +1098,8 @@ function geocodeItems(items, callback) {
       if (status === kakao.maps.services.Status.OK) {
         item.latlng = new kakao.maps.LatLng(result[0].y, result[0].x);
         done.push(item);
+      } else {
+        errorItems.push(item);
       }
 
       pending--;
@@ -1019,6 +1115,7 @@ function getFilteredItems() {
 
   var keyword = document.getElementById("keyword").value.trim();
   var selectedType = document.getElementById("typeFilter").value;
+  var sortType = document.getElementById("sortFilter").value;
 
   var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
   var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
@@ -1029,7 +1126,7 @@ function getFilteredItems() {
   var minArea = Number(document.getElementById("minArea").value) || 0;
   var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
 
-  return allItems.filter(function(item) {
+  var filtered = allItems.filter(function(item) {
     var matchKeyword =
       !keyword ||
       item.name.includes(keyword) ||
@@ -1049,11 +1146,34 @@ function getFilteredItems() {
       item.area <= maxArea;
 
     var matchFavorite = !favoriteOnly || isFavorite(item);
-
+    var matchDone = !hideDone || !isDone(item);
     var inMap = item.latlng && bounds.contain(item.latlng);
 
-    return matchKeyword && matchType && matchPrice && matchFavorite && inMap;
+    return matchKeyword && matchType && matchPrice && matchFavorite && matchDone && inMap;
   });
+
+  filtered.sort(function(a, b) {
+    if (sortType === "latest") {
+      var dateA = new Date((a.regDate || "").replace(/\./g, "-")).getTime() || 0;
+      var dateB = new Date((b.regDate || "").replace(/\./g, "-")).getTime() || 0;
+      return dateB - dateA;
+    }
+
+    if (sortType === "name") {
+      return (a.name || "").localeCompare((b.name || ""), "ko");
+    }
+
+    if (sortType === "depositLow") return a.deposit - b.deposit;
+    if (sortType === "depositHigh") return b.deposit - a.deposit;
+    if (sortType === "rentLow") return a.rent - b.rent;
+    if (sortType === "rentHigh") return b.rent - a.rent;
+    if (sortType === "areaHigh") return b.area - a.area;
+    if (sortType === "areaLow") return a.area - b.area;
+
+    return 0;
+  });
+
+  return filtered;
 }
 
 function clearMap() {
@@ -1198,6 +1318,7 @@ function addListItem(item) {
 function resetFilter() {
   document.getElementById("keyword").value = "";
   document.getElementById("typeFilter").value = "";
+  document.getElementById("sortFilter").value = "latest";
   document.getElementById("minDeposit").value = "";
   document.getElementById("maxDeposit").value = "";
   document.getElementById("minRent").value = "";
@@ -1206,14 +1327,184 @@ function resetFilter() {
   document.getElementById("maxArea").value = "";
 
   favoriteOnly = false;
+  hideDone = false;
   document.getElementById("favoriteBtn").innerText = "찜만";
   document.getElementById("favoriteBtn").classList.remove("on");
+  document.getElementById("hideDoneBtn").innerText = "완료숨김";
+  document.getElementById("hideDoneBtn").classList.remove("on");
   selectedGroupKey = null;
   selectedItemKey = null;
 
   drawItems(allItems);
   document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
 }
+function toggleHideDone() {
+  hideDone = !hideDone;
+
+  var btn = document.getElementById("hideDoneBtn");
+
+  if (hideDone) {
+    btn.innerText = "전체보기";
+    btn.classList.add("on");
+  } else {
+    btn.innerText = "완료숨김";
+    btn.classList.remove("on");
+  }
+
+  selectedGroupKey = null;
+  selectedItemKey = null;
+  applyFilter();
+}
+
+function updateErrorStatus() {
+  var errorBox = document.getElementById("errorStatus");
+
+  if (!errorBox) return;
+
+  if (errorItems.length > 0) {
+    errorBox.style.display = "block";
+    errorBox.innerHTML = "주소 오류 " + errorItems.length + "개";
+  } else {
+    errorBox.style.display = "none";
+  }
+}
+
+function showAddressErrors() {
+  if (!errorItems || errorItems.length === 0) return;
+
+  var lines = errorItems.map(function(item, index) {
+    return (index + 1) + ". " + item.name + " / " + item.address + " / " + item.room;
+  });
+
+  alert("지도에 표시되지 않은 주소 오류 매물입니다.\\n\\n" + lines.join("\\n"));
+}
+
+function printCurrentList() {
+  var printItems = currentItems && currentItems.length ? currentItems : getFilteredItems();
+
+  if (!printItems || printItems.length === 0) {
+    alert("인쇄할 매물이 없습니다.");
+    return;
+  }
+
+  var html = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+  <meta charset="utf-8">
+  <title>JS부동산 매물 리스트</title>
+
+  <style>
+  * { box-sizing:border-box; }
+
+  body {
+    font-family:Arial, sans-serif;
+    padding:22px;
+    color:#222;
+  }
+
+  h1 {
+    font-size:24px;
+    margin:0 0 6px 0;
+  }
+
+  .summary {
+    font-size:13px;
+    color:#555;
+    margin-bottom:18px;
+  }
+
+  .print-item {
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:13px 14px;
+    margin-bottom:12px;
+    page-break-inside:avoid;
+  }
+
+  .title {
+    font-size:17px;
+    font-weight:bold;
+    margin-bottom:8px;
+  }
+
+  .badge {
+    display:inline-block;
+    padding:2px 7px;
+    border-radius:999px;
+    background:#eef4ff;
+    color:#005bea;
+    font-size:12px;
+    font-weight:bold;
+    margin-right:5px;
+  }
+
+  .done {
+    background:#eee;
+    color:#777;
+  }
+
+  .line {
+    margin-bottom:4px;
+    font-size:14px;
+    line-height:1.35;
+  }
+
+  @media print {
+    body { padding:10px; }
+    .print-item { margin-bottom:9px; }
+  }
+  </style>
+  </head>
+
+  <body>
+  <h1>JS부동산 매물 리스트</h1>
+  <div class="summary">총 ${printItems.length}개 / 출력일 ${new Date().toLocaleString("ko-KR")}</div>
+  `;
+
+  printItems.forEach(function(item) {
+    var stateText = item.state || "계약가능";
+    var stateClass = isDone(item) ? "badge done" : "badge";
+    var safeMemo = escapeHtml(item.memo || "");
+
+    html += `
+    <div class="print-item">
+      <div class="title">
+        <span class="${stateClass}">${escapeHtml(stateText)}</span>
+        ${escapeHtml(item.type || "")} ${escapeHtml(item.name || "")}
+      </div>
+
+      <div class="line"><b>주소</b> : ${escapeHtml(item.address || "")} ${escapeHtml(item.room || "")}</div>
+      <div class="line"><b>금액</b> : 보증금 ${item.deposit} / 월세 ${item.rent} / 관리비 ${item.fee} / 권리금 ${item.premium}</div>
+      <div class="line"><b>평수</b> : ${item.area}평</div>
+      <div class="line"><b>연락처</b> : 임대인 ${escapeHtml(item.landlordPhone || "")} / 세입자 ${escapeHtml(item.tenantPhone || "")}</div>
+      <div class="line"><b>등록일</b> : ${escapeHtml(item.regDate || "")}</div>
+      <div class="line"><b>메모</b> : ${safeMemo}</div>
+    </div>
+    `;
+  });
+
+  html += `
+  </body>
+  </html>
+  `;
+
+  var win = window.open("", "", "width=1000,height=900");
+
+  if (!win) {
+    alert("팝업이 차단되었습니다. 브라우저 팝업 허용 후 다시 눌러주세요.");
+    return;
+  }
+
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+
+  setTimeout(function() {
+    win.print();
+  }, 300);
+}
+
 </script>
 
 </body>
