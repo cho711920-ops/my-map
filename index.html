@@ -188,6 +188,33 @@ button {
   gap:8px;
 }
 
+.item-left {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  min-width:0;
+  flex:1;
+}
+
+.print-check {
+  width:18px;
+  height:18px;
+  margin-top:1px;
+  flex:0 0 18px;
+  cursor:pointer;
+  accent-color:var(--blue);
+}
+
+.item-title-wrap {
+  min-width:0;
+  flex:1;
+}
+
+.item.print-selected {
+  border-color:#263238;
+  background:#f7fafc;
+}
+
 .title {
   font-weight:800;
   font-size:14px;
@@ -500,9 +527,16 @@ button {
 }
 
 .hide-done-btn {
-  width:105px;
+  width:95px;
   background:#fff0f0;
   color:#d93025;
+}
+
+.select-all-btn,
+.clear-selected-btn {
+  width:82px;
+  background:#eef1f5;
+  color:#333;
 }
 
 .hide-done-btn.on {
@@ -556,8 +590,23 @@ button {
   }
 
   .hide-done-btn {
-    width:92px;
-    flex:0 0 92px;
+    width:82px;
+    flex:0 0 82px;
+  }
+
+  .select-all-btn,
+  .clear-selected-btn {
+    width:68px;
+    flex:0 0 68px;
+    font-size:12px;
+    padding-left:4px;
+    padding-right:4px;
+  }
+
+  .print-btn {
+    font-size:12px;
+    padding-left:4px;
+    padding-right:4px;
   }
 }
 
@@ -605,7 +654,9 @@ button {
 
       <div class="extra-action-row">
         <button id="hideDoneBtn" class="hide-done-btn" onclick="toggleHideDone()">완료숨김</button>
-        <button class="print-btn" onclick="printCurrentList()">현재목록 인쇄</button>
+        <button class="select-all-btn" onclick="selectAllVisibleItems()">전체선택</button>
+        <button class="clear-selected-btn" onclick="clearSelectedPrintItems()">선택해제</button>
+        <button id="printSelectedBtn" class="print-btn" onclick="printSelectedList()">선택인쇄</button>
       </div>
 
       <div id="detailFilter" class="detail-filter">
@@ -662,6 +713,8 @@ var selectedItemKey = null;
 var favoriteOnly = false;
 var hideDone = false;
 var errorItems = [];
+var selectedPrintKeys = [];
+var visibleListItems = [];
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
 
@@ -1282,27 +1335,40 @@ function openItem(item) {
 }
 
 function showList(items) {
+  visibleListItems = items.slice();
   document.getElementById("list").innerHTML = "";
 
   items.forEach(function(item) {
     addListItem(item);
   });
+
+  updatePrintSelectedButton();
 }
 
 function addListItem(item) {
   var div = document.createElement("div");
+  var printSelected = selectedPrintKeys.includes(item.key);
+
   div.className =
     "item" +
     (selectedItemKey === item.key ? " selected" : "") +
-    (isDone(item) ? " done" : "");
+    (isDone(item) ? " done" : "") +
+    (printSelected ? " print-selected" : "");
 
   var doneLabel = isDone(item) ? '<span class="done-badge">계약완료</span>' : "";
   var typeLabel = item.type ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>' : "";
+  var encodedKey = encodeURIComponent(item.key);
+  var safeKey = escapeHtml(item.key);
 
   div.innerHTML =
     '<div class="item-top">' +
-      '<div class="title">' + doneLabel + typeLabel + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
-      '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + escapeHtml(item.key) + '\')">★</div>' +
+      '<div class="item-left">' +
+        '<input type="checkbox" class="print-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+        '<div class="item-title-wrap">' +
+          '<div class="title">' + doneLabel + typeLabel + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
     '</div>' +
     '<div class="price-line">보증금 ' + item.deposit + ' / 월세 ' + item.rent + ' | 관리비 ' + item.fee + ' | 권리금 ' + item.premium + ' | ' + item.area + '평</div>' +
     '<div class="info-line-compact">임대인 ' + escapeHtml(item.landlordPhone) + ' | 세입자 ' + escapeHtml(item.tenantPhone) + '</div>' +
@@ -1338,6 +1404,46 @@ function resetFilter() {
   drawItems(allItems);
   document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
 }
+function togglePrintSelection(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+
+  if (selectedPrintKeys.includes(key)) {
+    selectedPrintKeys = selectedPrintKeys.filter(function(k) { return k !== key; });
+  } else {
+    selectedPrintKeys.push(key);
+  }
+
+  showList(visibleListItems);
+}
+
+function selectAllVisibleItems() {
+  visibleListItems.forEach(function(item) {
+    if (!selectedPrintKeys.includes(item.key)) {
+      selectedPrintKeys.push(item.key);
+    }
+  });
+
+  showList(visibleListItems);
+}
+
+function clearSelectedPrintItems() {
+  selectedPrintKeys = [];
+  showList(visibleListItems);
+}
+
+function updatePrintSelectedButton() {
+  var btn = document.getElementById("printSelectedBtn");
+  if (!btn) return;
+
+  btn.innerText = selectedPrintKeys.length > 0 ? "선택인쇄 " + selectedPrintKeys.length : "선택인쇄";
+}
+
+function getSelectedPrintItems() {
+  return allItems.filter(function(item) {
+    return selectedPrintKeys.includes(item.key);
+  });
+}
+
 function toggleHideDone() {
   hideDone = !hideDone;
 
@@ -1379,11 +1485,11 @@ function showAddressErrors() {
   alert("지도에 표시되지 않은 주소 오류 매물입니다.\\n\\n" + lines.join("\\n"));
 }
 
-function printCurrentList() {
-  var printItems = currentItems && currentItems.length ? currentItems : getFilteredItems();
+function printSelectedList() {
+  var printItems = getSelectedPrintItems();
 
   if (!printItems || printItems.length === 0) {
-    alert("인쇄할 매물이 없습니다.");
+    alert("인쇄할 매물을 체크해주세요.");
     return;
   }
 
@@ -1392,7 +1498,7 @@ function printCurrentList() {
   <html>
   <head>
   <meta charset="utf-8">
-  <title>JS부동산 매물 리스트</title>
+  <title>JS부동산 선택 매물 리스트</title>
 
   <style>
   * { box-sizing:border-box; }
@@ -1458,7 +1564,7 @@ function printCurrentList() {
   </head>
 
   <body>
-  <h1>JS부동산 매물 리스트</h1>
+  <h1>JS부동산 선택 매물 리스트</h1>
   <div class="summary">총 ${printItems.length}개 / 출력일 ${new Date().toLocaleString("ko-KR")}</div>
   `;
 
