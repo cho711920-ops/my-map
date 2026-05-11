@@ -1554,7 +1554,7 @@ function printSelectedList() {
   }
 
   .line1 {
-    font-size:13px;
+    font-size:14px;
     font-weight:800;
     white-space:nowrap;
     overflow:hidden;
@@ -1562,11 +1562,23 @@ function printSelectedList() {
   }
 
   .line {
-    font-size:12px;
+    font-size:12.5px;
     margin-top:2px;
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
+  }
+
+  .memo-print {
+    font-size:12px;
+    margin-top:2px;
+    white-space:normal;
+    overflow:hidden;
+    line-height:1.35;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    word-break:break-all;
   }
 
   .type {
@@ -1620,12 +1632,24 @@ function printSelectedList() {
     }
 
     .line1 {
-      font-size:10.8px;
+      font-size:12.2px;
     }
 
     .line {
-      font-size:10.2px;
+      font-size:11.7px;
       margin-top:1px;
+    }
+
+    .memo-print {
+      font-size:11.5px;
+      margin-top:1px;
+      line-height:1.28;
+      white-space:normal;
+      overflow:hidden;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      word-break:break-all;
     }
   }
   </style>
@@ -1642,14 +1666,14 @@ function printSelectedList() {
     var stateLabel = done ? '<span class="done-label">계약완료</span>' : '';
     var typeText = item.type ? '[' + escapeHtml(item.type) + ']' : '[구분없음]';
     var nameText = item.name ? escapeHtml(item.name) + ' / ' : '';
-    var memoText = shortText(item.memo || "", 80);
+    var memoText = shortText(item.memo || "", 160);
 
     html += `
     <div class="print-item ${done ? 'done' : ''}">
       <div class="line1"><span class="type">${typeText}</span> ${nameText}${escapeHtml(item.address || "")} / ${escapeHtml(item.room || "")}${stateLabel}</div>
       <div class="line">보${item.deposit} / 월${item.rent} / 관${item.fee} / 권${item.premium} / ${item.area}평</div>
       <div class="line">임대인 ${escapeHtml(item.landlordPhone || "")} / 세입자 ${escapeHtml(item.tenantPhone || "")}</div>
-      <div class="line">메모 : ${escapeHtml(memoText)}</div>
+      <div class="memo-print">메모 : ${escapeHtml(memoText)}</div>
     </div>
     `;
   });
