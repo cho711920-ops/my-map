@@ -714,6 +714,7 @@ var favoriteOnly = false;
 var hideDone = false;
 var errorItems = [];
 var isLoadingSheet = false;
+var pendingAutoUpdate = false;
 var geocodeCache = {};
 var selectedPrintKeys = [];
 var visibleListItems = [];
@@ -1086,12 +1087,22 @@ kakao.maps.load(function() {
   loadSheet();
 
   setInterval(function() {
+    if (isLoadingSheet) {
+      pendingAutoUpdate = true;
+      console.log("주소 변환중이라 자동 업데이트를 건너뜁니다.");
+      return;
+    }
+
     loadSheet(true);
   }, 60000);
 });
 
 function loadSheet(isAuto) {
-  if (isLoadingSheet) return;
+  if (isLoadingSheet) {
+    pendingAutoUpdate = true;
+    document.getElementById("status").innerHTML = "주소 변환중... 자동 업데이트 대기";
+    return;
+  }
 
   isLoadingSheet = true;
   errorItems = [];
@@ -1134,7 +1145,9 @@ function loadSheet(isAuto) {
         updateTypeOptions(allItems);
         applyFilter();
         updateErrorStatus();
-        document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" : "매물 " + allItems.length + "개 불러옴";
+        var waitText = pendingAutoUpdate ? " / 중복 업데이트 1회 건너뜀" : "";
+        document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
+        pendingAutoUpdate = false;
         isLoadingSheet = false;
       });
     })
