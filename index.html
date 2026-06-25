@@ -713,6 +713,8 @@ var selectedItemKey = null;
 var favoriteOnly = false;
 var hideDone = false;
 var errorItems = [];
+var isLoadingSheet = false;
+var geocodeCache = {};
 var selectedPrintKeys = [];
 var visibleListItems = [];
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
@@ -1089,7 +1091,11 @@ kakao.maps.load(function() {
 });
 
 function loadSheet(isAuto) {
+  if (isLoadingSheet) return;
+
+  isLoadingSheet = true;
   errorItems = [];
+  document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "시트 읽는중...";
 
   fetch(sheetURL)
     .then(function(res) { return res.text(); })
@@ -1129,9 +1135,11 @@ function loadSheet(isAuto) {
         applyFilter();
         updateErrorStatus();
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" : "매물 " + allItems.length + "개 불러옴";
+        isLoadingSheet = false;
       });
     })
     .catch(function(err) {
+      isLoadingSheet = false;
       document.getElementById("status").innerHTML = "시트 오류";
       console.error(err);
     });
@@ -1139,26 +1147,85 @@ function loadSheet(isAuto) {
 
 function geocodeItems(items, callback) {
   var done = [];
-  var pending = items.length;
+  var total = items.length;
+  var index = 0;
 
-  if (pending === 0) {
+  // 모바일 안정화 핵심 설정
+  // 주소를 한 번에 173개씩 동시에 요청하지 않고, 하나씩 천천히 처리합니다.
+  var requestDelay = 180;
+  var retryDelay = 450;
+  var maxRetry = 1;
+
+  if (total === 0) {
     callback([]);
     return;
   }
 
-  items.forEach(function(item) {
-    geocoder.addressSearch(item.address, function(result, status) {
-      if (status === kakao.maps.services.Status.OK) {
-        item.latlng = new kakao.maps.LatLng(result[0].y, result[0].x);
+  function updateProgress() {
+    document.getElementById("status").innerHTML = "주소 변환중 " + Math.min(index + 1, total) + " / " + total;
+  }
+
+  function finishOne() {
+    index++;
+
+    if (index >= total) {
+      callback(done);
+      return;
+    }
+
+    setTimeout(processNext, requestDelay);
+  }
+
+  function searchAddress(item, retryCount) {
+    var address = item.address;
+
+    if (geocodeCache[address]) {
+      item.latlng = new kakao.maps.LatLng(geocodeCache[address].lat, geocodeCache[address].lng);
+      done.push(item);
+      finishOne();
+      return;
+    }
+
+    geocoder.addressSearch(address, function(result, status) {
+      if (status === kakao.maps.services.Status.OK && result && result.length > 0) {
+        var lat = result[0].y;
+        var lng = result[0].x;
+
+        geocodeCache[address] = { lat: lat, lng: lng };
+        item.latlng = new kakao.maps.LatLng(lat, lng);
         done.push(item);
-      } else {
-        errorItems.push(item);
+        finishOne();
+        return;
       }
 
-      pending--;
-      if (pending <= 0) callback(done);
+      if (retryCount < maxRetry) {
+        document.getElementById("status").innerHTML = "주소 재시도중 " + (index + 1) + " / " + total;
+
+        setTimeout(function() {
+          searchAddress(item, retryCount + 1);
+        }, retryDelay);
+
+        return;
+      }
+
+      errorItems.push(item);
+      finishOne();
     });
-  });
+  }
+
+  function processNext() {
+    var item = items[index];
+
+    if (!item || !item.address) {
+      finishOne();
+      return;
+    }
+
+    updateProgress();
+    searchAddress(item, 0);
+  }
+
+  processNext();
 }
 
 function getFilteredItems() {
