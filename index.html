@@ -715,11 +715,38 @@ var hideDone = false;
 var errorItems = [];
 var isLoadingSheet = false;
 var pendingAutoUpdate = false;
-var geocodeCache = {};
+var geocodeCacheKey = "JS_REAL_ESTATE_GEOCODE_CACHE_V1";
+var geocodeCache = loadGeocodeCache();
+var geocodeCacheDirty = false;
 var selectedPrintKeys = [];
 var visibleListItems = [];
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
+
+function loadGeocodeCache() {
+  try {
+    return JSON.parse(localStorage.getItem(geocodeCacheKey) || "{}");
+  } catch (e) {
+    console.warn("좌표 캐시 읽기 실패", e);
+    return {};
+  }
+}
+
+function saveGeocodeCache() {
+  if (!geocodeCacheDirty) return;
+
+  try {
+    localStorage.setItem(geocodeCacheKey, JSON.stringify(geocodeCache));
+    geocodeCacheDirty = false;
+  } catch (e) {
+    console.warn("좌표 캐시 저장 실패", e);
+  }
+}
+
+function normalizeAddressForCache(address) {
+  return String(address || "").replace(/\s+/g, " ").trim();
+}
+
 
 function clean(t) {
   return (t || "").replaceAll('"', '').trim();
@@ -1162,10 +1189,14 @@ function geocodeItems(items, callback) {
   var done = [];
   var total = items.length;
   var index = 0;
+  var convertedCount = 0;
+  var cachedCount = 0;
 
-  // 모바일 안정화 핵심 설정
-  // 주소를 한 번에 173개씩 동시에 요청하지 않고, 하나씩 천천히 처리합니다.
-  var requestDelay = 180;
+  // 성능 핵심:
+  // 1) 이미 변환했던 주소는 localStorage 캐시에서 즉시 사용
+  // 2) 캐시에 없는 새 주소만 카카오 주소검색으로 순차 변환
+  // 3) 실패한 주소는 1회 재시도 후에만 주소오류 처리
+  var requestDelay = 170;
   var retryDelay = 450;
   var maxRetry = 1;
 
@@ -1174,45 +1205,60 @@ function geocodeItems(items, callback) {
     return;
   }
 
-  function updateProgress() {
-    document.getElementById("status").innerHTML = "주소 변환중 " + Math.min(index + 1, total) + " / " + total;
+  function updateProgress(mode) {
+    var text = "주소 처리중 " + Math.min(index + 1, total) + " / " + total;
+
+    if (mode === "cache") {
+      text += " · 저장좌표 " + cachedCount + "개 사용";
+    }
+
+    if (mode === "search") {
+      text += " · 새 주소 변환중";
+    }
+
+    if (mode === "retry") {
+      text = "주소 재시도중 " + (index + 1) + " / " + total;
+    }
+
+    document.getElementById("status").innerHTML = text;
   }
 
-  function finishOne() {
+  function finishOne(delay) {
+    convertedCount++;
     index++;
 
     if (index >= total) {
+      saveGeocodeCache();
       callback(done);
       return;
     }
 
-    setTimeout(processNext, requestDelay);
+    setTimeout(processNext, delay || 0);
   }
 
   function searchAddress(item, retryCount) {
-    var address = item.address;
+    var addressKey = normalizeAddressForCache(item.address);
 
-    if (geocodeCache[address]) {
-      item.latlng = new kakao.maps.LatLng(geocodeCache[address].lat, geocodeCache[address].lng);
-      done.push(item);
-      finishOne();
-      return;
-    }
-
-    geocoder.addressSearch(address, function(result, status) {
+    geocoder.addressSearch(addressKey, function(result, status) {
       if (status === kakao.maps.services.Status.OK && result && result.length > 0) {
         var lat = result[0].y;
         var lng = result[0].x;
 
-        geocodeCache[address] = { lat: lat, lng: lng };
+        geocodeCache[addressKey] = {
+          lat: lat,
+          lng: lng,
+          savedAt: new Date().toISOString()
+        };
+        geocodeCacheDirty = true;
+
         item.latlng = new kakao.maps.LatLng(lat, lng);
         done.push(item);
-        finishOne();
+        finishOne(requestDelay);
         return;
       }
 
       if (retryCount < maxRetry) {
-        document.getElementById("status").innerHTML = "주소 재시도중 " + (index + 1) + " / " + total;
+        updateProgress("retry");
 
         setTimeout(function() {
           searchAddress(item, retryCount + 1);
@@ -1222,7 +1268,7 @@ function geocodeItems(items, callback) {
       }
 
       errorItems.push(item);
-      finishOne();
+      finishOne(requestDelay);
     });
   }
 
@@ -1230,11 +1276,26 @@ function geocodeItems(items, callback) {
     var item = items[index];
 
     if (!item || !item.address) {
-      finishOne();
+      finishOne(0);
       return;
     }
 
-    updateProgress();
+    var addressKey = normalizeAddressForCache(item.address);
+    var cached = geocodeCache[addressKey];
+
+    if (cached && cached.lat && cached.lng) {
+      item.latlng = new kakao.maps.LatLng(cached.lat, cached.lng);
+      done.push(item);
+      cachedCount++;
+      updateProgress("cache");
+
+      // 캐시된 주소는 기다리지 않고 빠르게 넘김.
+      // 50개마다 아주 짧게 쉬어서 모바일 화면 멈춤을 방지.
+      finishOne(cachedCount % 50 === 0 ? 15 : 0);
+      return;
+    }
+
+    updateProgress("search");
     searchAddress(item, 0);
   }
 
