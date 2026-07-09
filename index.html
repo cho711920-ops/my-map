@@ -1731,6 +1731,32 @@ button {
   color:#667085;
   line-height:1.45;
 }
+.ai-radius-tabs {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin:6px 0 8px 0;
+}
+.ai-radius-btn {
+  border:1px solid #cfe0ff;
+  background:white;
+  color:#005bea;
+  border-radius:999px;
+  padding:5px 8px;
+  font-size:11px;
+  font-weight:900;
+  cursor:pointer;
+}
+.ai-radius-btn.on {
+  background:#005bea;
+  color:white;
+  border-color:#005bea;
+}
+.ai-commerce-mode {
+  font-size:11px;
+  color:#667085;
+  margin-bottom:6px;
+}
 .ai-commerce-summary {
   font-size:12px;
   color:#344054;
@@ -3371,7 +3397,10 @@ var commercialSearchGroups = [
     { key:"convenience", label:"편의점", keyword:"편의점" },
     { key:"cafe", label:"카페", keyword:"카페" },
     { key:"bank", label:"은행", keyword:"은행" },
-    { key:"bus", label:"버스정류장", keyword:"버스정류장" }
+    { key:"bus", label:"버스정류장", keyword:"버스정류장" },
+    { key:"laundry", label:"세탁소", keyword:"세탁소" },
+    { key:"coinLaundry", label:"빨래방", keyword:"빨래방" },
+    { key:"post", label:"우체국", keyword:"우체국" }
   ]},
   { group:"음식", items:[
     { key:"korean", label:"한식", keyword:"한식" },
@@ -3379,6 +3408,8 @@ var commercialSearchGroups = [
     { key:"japanese", label:"일식", keyword:"일식" },
     { key:"snack", label:"분식", keyword:"분식" },
     { key:"chicken", label:"치킨", keyword:"치킨" },
+    { key:"pizza", label:"피자", keyword:"피자" },
+    { key:"burger", label:"햄버거", keyword:"햄버거" },
     { key:"beer", label:"호프", keyword:"호프" },
     { key:"meat", label:"고깃집", keyword:"고기집" },
     { key:"gukbap", label:"국밥", keyword:"국밥" },
@@ -3391,13 +3422,17 @@ var commercialSearchGroups = [
     { key:"eyelash", label:"속눈썹", keyword:"속눈썹" },
     { key:"skin", label:"피부샵", keyword:"피부관리" },
     { key:"waxing", label:"왁싱", keyword:"왁싱" },
-    { key:"massage", label:"마사지", keyword:"마사지" }
+    { key:"massage", label:"마사지", keyword:"마사지" },
+    { key:"makeup", label:"메이크업", keyword:"메이크업" }
   ]},
   { group:"교육/의료", items:[
     { key:"academy", label:"학원", keyword:"학원" },
     { key:"english", label:"영어학원", keyword:"영어학원" },
     { key:"math", label:"수학학원", keyword:"수학학원" },
     { key:"taekwondo", label:"태권도", keyword:"태권도" },
+    { key:"piano", label:"피아노", keyword:"피아노학원" },
+    { key:"art", label:"미술", keyword:"미술학원" },
+    { key:"study", label:"독서실", keyword:"독서실" },
     { key:"hospital", label:"병원", keyword:"병원" },
     { key:"dental", label:"치과", keyword:"치과" },
     { key:"pharmacy", label:"약국", keyword:"약국" },
@@ -3420,6 +3455,26 @@ function getCommercialCacheKey(item) {
   var lat = typeof item.latlng.getLat === "function" ? item.latlng.getLat() : "";
   var lng = typeof item.latlng.getLng === "function" ? item.latlng.getLng() : "";
   return [item.key || "", lat, lng, commercialRadius].join("|");
+}
+
+function buildRadiusTabs() {
+  var radiuses = [50, 100, 200, 300, 500];
+  return '<div class="ai-radius-tabs">' + radiuses.map(function(r) {
+    return '<button class="ai-radius-btn ' + (commercialRadius === r ? 'on' : '') + '" onclick="event.stopPropagation(); setCommercialRadius(' + r + ')">' + r + 'm</button>';
+  }).join("") + '</div>' +
+  '<div class="ai-commerce-mode">50m=바로 옆 경쟁 / 100m=같은 블록 / 200m=도보권 / 300m=기본상권 / 500m=생활권</div>';
+}
+
+function getSelectedCommercialItem() {
+  var key = window.selectedItemKey || selectedItemKey;
+  if (!key) return null;
+  return (allItems || []).find(function(item) { return item.key === key; }) || null;
+}
+
+function setCommercialRadius(radius) {
+  commercialRadius = Number(radius) || 300;
+  var item = getSelectedCommercialItem();
+  if (item) loadCommercialAreaAnalysis(item);
 }
 
 function flattenCommercialSearchItems() {
@@ -3507,9 +3562,9 @@ function commercialCount(counts, key) {
 }
 
 function buildCommercialAnalysisResult(item, counts, labels, groups) {
-  var foodTotal = ["korean","chinese","japanese","snack","chicken","beer","meat","gukbap","bakery","dessert"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
-  var beautyTotal = ["hair","nail","eyelash","skin","waxing","massage"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
-  var educationTotal = ["academy","english","math","taekwondo"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+  var foodTotal = ["korean","chinese","japanese","snack","chicken","pizza","burger","beer","meat","gukbap","bakery","dessert"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+  var beautyTotal = ["hair","nail","eyelash","skin","waxing","massage","makeup"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+  var educationTotal = ["academy","english","math","taekwondo","piano","art","study"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
   var medicalTotal = ["hospital","dental","pharmacy","oriental"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
 
   var recommendations = [];
@@ -3530,7 +3585,7 @@ function buildCommercialAnalysisResult(item, counts, labels, groups) {
   var hospital = commercialCount(counts, "hospital");
   var bus = commercialCount(counts, "bus");
 
-  if (convenience === 0) addRec("편의점", 96, "반경 300m 내 편의점 경쟁이 거의 없습니다.");
+  if (convenience === 0) addRec("편의점", 96, "선택 반경 내 편의점 경쟁이 거의 없습니다.");
   else if (convenience <= 1) addRec("편의점", 86, "편의점 경쟁이 적은 편입니다.");
 
   if (beautyTotal >= 5 && nail <= 1) addRec("네일샵", 90, "미용실·뷰티 수요는 보이지만 네일샵 경쟁은 적습니다.");
@@ -3613,6 +3668,7 @@ function buildCommercialAnalysisHtml(analysis) {
   }).join("");
 
   return '' +
+    buildRadiusTabs() +
     '<div class="ai-commerce-summary">반경 ' + analysis.radius + 'm 기준 카카오 Places 검색 결과입니다. 실제 폐업/신규점포는 현장 확인이 필요합니다.</div>' +
     '<div class="ai-commerce-grid">' +
       '<div class="ai-commerce-block"><div class="ai-commerce-block-title">생활/교통</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "생활") + '</div></div>' +
@@ -3644,7 +3700,7 @@ function loadCommercialAreaAnalysis(item) {
   var box = document.getElementById(boxId);
   if (!box) return;
 
-  box.innerHTML = '<div class="ai-commerce-loading">카카오 Places로 반경 ' + commercialRadius + 'm 상권을 분석중입니다...<br>편의점·음식점·뷰티샵·학원·병원 등을 순차 검색합니다.</div>';
+  box.innerHTML = buildRadiusTabs() + '<div class="ai-commerce-loading">카카오 Places로 반경 ' + commercialRadius + 'm 상권을 분석중입니다...<br>편의점·음식점·뷰티샵·학원·병원 등을 순차 검색합니다.</div>';
 
   analyzeCommercialArea(item, function(analysis) {
     var target = document.getElementById(boxId);
@@ -3900,7 +3956,7 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + buildAiTags(ai.businesses) + '</div></div>' +
         '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
         buildMarketAnalysisHtml(ai.marketAnalysis) +
-        '<div class="ai-section full ai-commerce-section"><div class="ai-section-title">AI 상권분석 300m</div><div id="' + getCommercialBoxId(item) + '"><div class="ai-commerce-loading">상권분석 준비중...</div></div></div>' +
+        '<div class="ai-section full ai-commerce-section"><div class="ai-section-title">AI 상권분석 반경 선택</div><div id="' + getCommercialBoxId(item) + '"><div class="ai-commerce-loading">상권분석 준비중...</div></div></div>' +
         '<div class="ai-section full"><div class="ai-section-title">업종별 적합도 / 추천사유</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +
         '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
         '<div class="ai-section full ai-negotiation-section"><div class="ai-section-title">협상포인트</div><ul class="ai-list ai-action-list">' + buildAiList(ai.negotiationTips) + '</ul></div>' +
