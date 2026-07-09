@@ -748,6 +748,164 @@ button {
   .close-quick-btn { margin-left:0; }
 }
 
+
+
+/* === v3.0.6 추가: AI 스마트 매물카드 === */
+.ai-card {
+  margin:10px 8px 12px;
+  padding:14px;
+  border:1px solid #dbe7ff;
+  border-radius:16px;
+  background:linear-gradient(180deg,#f7fbff,#ffffff);
+  box-shadow:0 2px 10px rgba(30,136,255,0.12);
+}
+
+.ai-card-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.ai-card-title {
+  font-size:15px;
+  font-weight:900;
+  color:#005bea;
+}
+
+.ai-card-badge {
+  background:#eef4ff;
+  color:#005bea;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+
+.ai-score-wrap {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.ai-score {
+  width:72px;
+  height:72px;
+  border-radius:50%;
+  background:#1e88ff;
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  font-weight:900;
+  flex:0 0 72px;
+  box-shadow:0 3px 10px rgba(30,136,255,0.28);
+}
+
+.ai-score strong {
+  font-size:23px;
+  line-height:1;
+}
+
+.ai-score span {
+  font-size:10px;
+  margin-top:3px;
+}
+
+.ai-summary {
+  flex:1;
+  font-size:13px;
+  line-height:1.45;
+  color:#333;
+  font-weight:700;
+}
+
+.ai-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.ai-section {
+  background:#f8fafc;
+  border:1px solid #edf1f7;
+  border-radius:10px;
+  padding:9px;
+  min-width:0;
+}
+
+.ai-section.full {
+  grid-column:1 / -1;
+}
+
+.ai-section-title {
+  font-size:12px;
+  font-weight:900;
+  margin-bottom:5px;
+  color:#222;
+}
+
+.ai-list {
+  margin:0;
+  padding-left:16px;
+  font-size:12px;
+  line-height:1.45;
+  color:#444;
+}
+
+.ai-list li {
+  margin:2px 0;
+}
+
+.ai-tags {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+}
+
+.ai-tag {
+  display:inline-block;
+  padding:4px 7px;
+  background:white;
+  border:1px solid #dbe7ff;
+  color:#005bea;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+}
+
+.ai-note {
+  margin-top:8px;
+  font-size:11px;
+  line-height:1.45;
+  color:#666;
+}
+
+@media (max-width:768px) {
+  .ai-card {
+    margin:9px 8px 12px;
+    padding:12px;
+  }
+
+  .ai-grid {
+    grid-template-columns:1fr;
+  }
+
+  .ai-score {
+    width:64px;
+    height:64px;
+    flex-basis:64px;
+  }
+
+  .ai-score strong {
+    font-size:20px;
+  }
+}
+
 </style>
 </head>
 
@@ -1730,7 +1888,8 @@ function openItem(item) {
   selectedGroupKey = null;
 
   showList([item]);
-  document.getElementById("status").innerHTML = "선택 매물 1개";
+  addSmartItemCard(item);
+  document.getElementById("status").innerHTML = "선택 매물 1개 · AI 분석 표시";
 
   if (window.innerWidth <= 768) {
     document.getElementById("sidebar").classList.add("open");
@@ -1782,6 +1941,200 @@ function addListItem(item) {
   };
 
   document.getElementById("list").appendChild(div);
+}
+
+
+
+/* === v3.0.6 추가: AI 스마트 매물카드 === */
+function clampNumber(value, min, max) {
+  value = Number(value) || 0;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function hasText(item, pattern) {
+  var text = [item.name, item.address, item.room, item.type, item.memo].join(" ");
+  return pattern.test(text);
+}
+
+function formatAiMoney(value) {
+  value = Number(value) || 0;
+  if (!value) return "0";
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function getSmartItemAnalysis(item) {
+  var score = 62;
+  var pros = [];
+  var cons = [];
+  var tags = [];
+  var businesses = [];
+
+  var deposit = Number(item.deposit) || 0;
+  var rent = Number(item.rent) || 0;
+  var fee = Number(item.fee) || 0;
+  var premium = Number(item.premium) || 0;
+  var area = Number(item.area) || 0;
+  var totalMonthly = rent + fee;
+  var rentPerPyeong = area > 0 ? Math.round((totalMonthly / area) * 10) / 10 : 0;
+
+  if (isDone(item)) {
+    score -= 35;
+    cons.push("계약완료 상태라 현재 검토 우선순위가 낮음");
+  } else {
+    score += 5;
+    pros.push("현재 계약 가능 상태로 보임");
+  }
+
+  if (rent > 0) {
+    score += 5;
+    pros.push("월세 정보가 있어 수익성 판단 가능");
+  } else {
+    cons.push("월세 정보가 없어 수익성 판단이 제한됨");
+  }
+
+  if (area > 0) {
+    score += 4;
+    pros.push(area + "평 규모로 면적 확인 가능");
+  } else {
+    cons.push("평수 정보가 없어 업종 적합성 판단이 어려움");
+  }
+
+  if (premium === 0) {
+    score += 12;
+    pros.push("권리금이 없거나 0으로 보여 진입 부담이 낮음");
+  } else if (premium > 0 && premium <= 1000) {
+    score += 8;
+    pros.push("권리금 " + formatAiMoney(premium) + "만원 수준으로 비교적 부담이 낮음");
+  } else if (premium > 3000) {
+    score -= 8;
+    cons.push("권리금 " + formatAiMoney(premium) + "만원으로 초기 부담 확인 필요");
+  }
+
+  if (deposit > 0 && deposit <= 2000) {
+    score += 5;
+    pros.push("보증금 부담이 비교적 낮은 편");
+  } else if (deposit >= 5000) {
+    score -= 4;
+    cons.push("보증금이 높아 초기 자금 부담 확인 필요");
+  }
+
+  if (fee > 0 && rent > 0 && fee >= rent * 0.2) {
+    score -= 5;
+    cons.push("관리비 비중이 높아 실제 월 고정비 확인 필요");
+  }
+
+  if (rentPerPyeong > 0) {
+    tags.push("평당월비 " + rentPerPyeong + "만");
+    if (rentPerPyeong <= 4) {
+      score += 6;
+      pros.push("평당 월비가 낮아 가성비 검토 가치 있음");
+    } else if (rentPerPyeong >= 8) {
+      score -= 5;
+      cons.push("평당 월비가 높은 편이라 매출 가능성 확인 필요");
+    }
+  }
+
+  if (hasText(item, /대로|큰길|코너|역세권|유동|메인|사거리|버스|전면/i)) {
+    score += 8;
+    pros.push("입지 키워드가 좋아 노출/유동 가능성이 있음");
+    tags.push("입지우수");
+  }
+
+  if (hasText(item, /주차불가|주차\s*없|협소/i)) {
+    score -= 6;
+    cons.push("주차 조건은 현장 확인 필요");
+  } else if (hasText(item, /주차|주차가능/i)) {
+    score += 4;
+    pros.push("주차 관련 장점이 있을 가능성");
+    tags.push("주차확인");
+  }
+
+  if (hasText(item, /1층|일층|전면|통유리/i)) {
+    score += 6;
+    pros.push("1층/전면 키워드가 있어 접근성 검토 가치 있음");
+    tags.push("접근성");
+  }
+
+  if (area > 0) {
+    if (area <= 15) businesses = ["테이크아웃", "소형사무실", "네일/미용" ];
+    else if (area <= 35) businesses = ["카페", "미용실", "소매점" ];
+    else if (area <= 70) businesses = ["음식점", "학원", "판매점" ];
+    else businesses = ["대형식당", "전시장", "사무실" ];
+  } else {
+    businesses = ["카페", "사무실", "소매점" ];
+  }
+
+  if (/상가|점포|가게/.test(item.type || "")) tags.push("상가");
+  if (/사무실/.test(item.type || "")) businesses = ["사무실", "공방", "쇼룸" ];
+  if (rent > 0 && totalMonthly <= 100) tags.push("월고정비낮음");
+  if (premium === 0) tags.push("무권리검토");
+  if (isFavorite(item)) tags.push("찜매물");
+
+  if (pros.length === 0) pros.push("기본 정보 기준으로 추가 현장 확인 추천");
+  if (cons.length === 0) cons.push("큰 약점은 보이지 않으나 권리관계/현장상태 확인 필요");
+  if (tags.length === 0) tags.push("기본검토");
+
+  score = clampNumber(score, 10, 98);
+
+  var grade = "보통";
+  if (score >= 85) grade = "강력검토";
+  else if (score >= 75) grade = "검토추천";
+  else if (score >= 60) grade = "보통";
+  else grade = "주의";
+
+  var oneLine = "";
+  if (score >= 85) oneLine = "조건이 좋아 우선 확인할 만한 매물입니다.";
+  else if (score >= 75) oneLine = "가격과 입지 조건을 함께 비교해볼 만한 매물입니다.";
+  else if (score >= 60) oneLine = "기본 검토는 가능하지만 현장 확인이 필요합니다.";
+  else oneLine = "조건 확인 전까지는 신중하게 접근하는 것이 좋습니다.";
+
+  return {
+    score: score,
+    grade: grade,
+    oneLine: oneLine,
+    pros: pros.slice(0, 4),
+    cons: cons.slice(0, 4),
+    businesses: businesses.slice(0, 4),
+    tags: tags.slice(0, 5),
+    rentPerPyeong: rentPerPyeong
+  };
+}
+
+function buildAiList(items) {
+  return items.map(function(text) {
+    return "<li>" + escapeHtml(text) + "</li>";
+  }).join("");
+}
+
+function addSmartItemCard(item) {
+  var list = document.getElementById("list");
+  if (!list || !item) return;
+
+  var ai = getSmartItemAnalysis(item);
+  var card = document.createElement("div");
+  card.className = "ai-card";
+
+  card.innerHTML =
+    '<div class="ai-card-header">' +
+      '<div class="ai-card-title">🤖 AI 스마트 매물카드</div>' +
+      '<div class="ai-card-badge">' + escapeHtml(ai.grade) + '</div>' +
+    '</div>' +
+    '<div class="ai-score-wrap">' +
+      '<div class="ai-score"><strong>' + ai.score + '</strong><span>투자점수</span></div>' +
+      '<div class="ai-summary">' + escapeHtml(ai.oneLine) + '<br>보증금 ' + formatAiMoney(item.deposit) + ' / 월세 ' + formatAiMoney(item.rent) + ' / 권리금 ' + formatAiMoney(item.premium) + '</div>' +
+    '</div>' +
+    '<div class="ai-grid">' +
+      '<div class="ai-section"><div class="ai-section-title">장점</div><ul class="ai-list">' + buildAiList(ai.pros) + '</ul></div>' +
+      '<div class="ai-section"><div class="ai-section-title">주의점</div><ul class="ai-list">' + buildAiList(ai.cons) + '</ul></div>' +
+      '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + ai.businesses.map(function(v){ return '<span class="ai-tag">' + escapeHtml(v) + '</span>'; }).join('') + '</div></div>' +
+      '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + ai.tags.map(function(v){ return '<span class="ai-tag">' + escapeHtml(v) + '</span>'; }).join('') + '</div></div>' +
+      '<div class="ai-section full"><div class="ai-section-title">확인할 것</div><ul class="ai-list"><li>실제 유동인구와 전면 노출 확인</li><li>관리비 포함 항목과 권리금 협의 가능 여부 확인</li><li>주차, 간판, 원상복구 조건 확인</li></ul></div>' +
+    '</div>' +
+    '<div class="ai-note">※ 현재 입력된 매물정보와 메모 키워드를 바탕으로 한 보조 분석입니다. 최종 판단은 현장 확인과 계약 조건 확인 후 진행하세요.</div>';
+
+  list.appendChild(card);
 }
 
 function resetFilter() {
