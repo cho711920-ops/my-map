@@ -1588,12 +1588,27 @@ button {
   border-color:#ffd6d2;
 }
 
-.circle-marker.source-gongsil { background:#1e88ff; }
-.circle-marker.source-naver { background:#03c75a; }
-.circle-marker.source-danggeun { background:#ff8a00; }
-.circle-marker.source-direct { background:#ffd43b; color:#222; }
-.circle-marker.source-mixed { background:#7c4dff; }
-.circle-marker.source-unknown { background:#1e88ff; }
+/* v3.0.13.3: 출처별 색상 최종안 */
+/* 출처 없음: 기본 파란색 */
+.circle-marker.source-unknown { background:#1e88ff; color:white; }
+
+/* 출처:공실박스: 노란색 */
+.circle-marker.source-gongsil { background:#ffd43b; color:#222; }
+
+/* 출처:네이버: 초록색 */
+.circle-marker.source-naver { background:#03c75a; color:white; }
+
+/* 출처:당근: 주황색 */
+.circle-marker.source-danggeun { background:#ff8a00; color:white; }
+
+/* 출처:직접매물: 보라색 */
+.circle-marker.source-direct { background:#7c4dff; color:white; }
+
+/* 여러 출처가 섞인 클러스터: 혼합색 표시 */
+.circle-marker.source-mixed {
+  background:linear-gradient(135deg,#1e88ff 0%,#1e88ff 24%,#ffd43b 25%,#ffd43b 49%,#03c75a 50%,#03c75a 74%,#ff8a00 75%,#ff8a00 100%);
+  color:white;
+}
 
 /* v3.0.13.1: 거래완료는 출처색보다 우선해서 어두운 회색으로 표시 */
 .circle-marker.done,
@@ -2591,7 +2606,7 @@ function getClusterSourceType(items) {
   // 명확한 출처가 없으면 기본 파란색(source-unknown)
   if (activeSources.length === 0) return "unknown";
 
-  // 명확한 출처가 2종류 이상 섞였을 때만 보라색
+  // 명확한 출처가 2종류 이상 섞였을 때만 혼합색
   if (activeSources.length >= 2) return "mixed";
 
   return activeSources[0];
