@@ -702,6 +702,7 @@ button {
 .auto-save-btn { background:#03c75a; color:white; }
 .copy-row-btn { background:#263238; color:white; }
 .open-sheet-btn { background:#eef1f5; color:#333; }
+.reset-quick-btn { background:#fff4e5; color:#b45f00; }
 .close-quick-btn { background:#eee; color:#333; margin-left:auto; }
 
 .quick-add-tip {
@@ -948,6 +949,7 @@ button {
       <button class="auto-save-btn" onclick="saveQuickAddToSheet()">자동등록 준비</button>
       <button class="copy-row-btn" onclick="copyQuickAddRow()">시트 행 복사</button>
       <button class="open-sheet-btn" onclick="openGoogleSheet()">시트 열기</button>
+      <button class="reset-quick-btn" onclick="clearQuickAddForm()">입력초기화</button>
       <button class="close-quick-btn" onclick="closeQuickAddModal()">닫기</button>
     </div>
 
@@ -1370,6 +1372,7 @@ kakao.maps.load(function() {
 
   setupEnterSearch();
   setupMobilePanelDrag();
+  setupQuickAddShortcuts();
   loadSheet();
 
   setInterval(function() {
@@ -2117,9 +2120,9 @@ function closeQuickAddModal() {
   if (modal) modal.style.display = "none";
 }
 
-function setQuickAddNow() {
+function setQuickAddNow(force) {
   var regDate = document.getElementById("qaRegDate");
-  if (regDate && !regDate.value) {
+  if (regDate && (force || !regDate.value)) {
     var now = new Date();
     var yyyy = now.getFullYear();
     var mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -2128,6 +2131,26 @@ function setQuickAddNow() {
     var mi = String(now.getMinutes()).padStart(2, "0");
     regDate.value = yyyy + "-" + mm + "-" + dd + " " + hh + ":" + mi;
   }
+}
+
+function setupQuickAddShortcuts() {
+  var raw = document.getElementById("qaRaw");
+  var modal = document.getElementById("quickAddModal");
+
+  if (raw) {
+    raw.addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        parseQuickAddText();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape" && modal && modal.style.display === "block") {
+      closeQuickAddModal();
+    }
+  });
 }
 
 function onlyNumberText(value) {
@@ -2290,7 +2313,8 @@ function copyQuickAddRow() {
   }).join("\t");
 
   function done() {
-    alert("시트에 붙여넣을 한 줄을 복사했습니다.\n구글시트 맨 아래 첫 칸에 붙여넣으면 됩니다.");
+    alert("시트에 붙여넣을 한 줄을 복사했습니다.\n구글시트 맨 아래 첫 칸에 붙여넣으면 됩니다.\n\n입력칸은 새 등록을 위해 초기화됩니다.");
+    clearQuickAddForm();
   }
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2307,7 +2331,8 @@ function fallbackCopyText(text) {
   ta.select();
   document.execCommand("copy");
   document.body.removeChild(ta);
-  alert("시트에 붙여넣을 한 줄을 복사했습니다.");
+  alert("시트에 붙여넣을 한 줄을 복사했습니다.\n\n입력칸은 새 등록을 위해 초기화됩니다.");
+  clearQuickAddForm();
 }
 
 function saveQuickAddToSheet() {
@@ -2351,9 +2376,29 @@ function clearQuickAddForm() {
     var el = document.getElementById(id);
     if (el) el.value = "";
   });
+
+  var source = document.getElementById("qaSource");
+  if (source) source.value = "공실박스";
+
   var state = document.getElementById("qaState");
   if (state) state.value = "";
-  setQuickAddNow();
+
+  var warning = document.getElementById("quickAddWarning");
+  if (warning) {
+    warning.style.display = "none";
+    warning.innerHTML = "";
+  }
+
+  var preview = document.getElementById("quickAddPreview");
+  if (preview) preview.innerHTML = "AI 분석 전입니다. 외부 매물 내용을 붙여넣고 AI 분석을 눌러주세요.";
+
+  setQuickAddNow(true);
+
+  var modal = document.getElementById("quickAddModal");
+  var raw = document.getElementById("qaRaw");
+  if (modal && modal.style.display === "block" && raw) {
+    setTimeout(function() { raw.focus(); }, 50);
+  }
 }
 
 function openGoogleSheet() {
