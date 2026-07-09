@@ -901,6 +901,79 @@ button {
 }
 
 
+
+
+/* === v3.1.0 추가: AI 시장분석 브리핑 === */
+.ai-market-section {
+  background:#f7fbff;
+  border-color:#cfe4ff;
+}
+
+.ai-market-summary {
+  background:white;
+  border:1px solid #dbeafe;
+  border-radius:12px;
+  padding:10px 11px;
+  font-size:12px;
+  line-height:1.45;
+  color:#1f3b64;
+  font-weight:800;
+  margin-bottom:8px;
+}
+
+.ai-market-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:7px;
+}
+
+.ai-market-item {
+  background:white;
+  border:1px solid #e6eefb;
+  border-radius:12px;
+  padding:9px;
+  min-width:0;
+}
+
+.ai-market-label {
+  font-size:11px;
+  color:#667085;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.ai-market-value {
+  font-size:14px;
+  color:#111827;
+  font-weight:900;
+  line-height:1.25;
+}
+
+.ai-market-compare {
+  margin-top:4px;
+  font-size:11px;
+  line-height:1.35;
+  font-weight:800;
+}
+
+.ai-market-low { color:#0f8a3b; }
+.ai-market-high { color:#d93025; }
+.ai-market-neutral { color:#667085; }
+
+.ai-market-brief {
+  margin:8px 0 0;
+  padding-left:16px;
+  font-size:12px;
+  line-height:1.45;
+  color:#344054;
+}
+
+.ai-market-brief li { margin:2px 0; }
+
+@media (max-width:768px) {
+  .ai-market-grid { grid-template-columns:1fr; }
+}
+
 /* === v3.0.7 추가: AI 카드 핵심지표 + 분석복사 === */
 .ai-metrics {
   display:grid;
@@ -2975,6 +3048,223 @@ function getAiBusinessFitList(item, rentPerPyeong) {
   }).slice(0, 4);
 }
 
+
+
+/* === v3.1.0 추가: AI 시장분석 엔진 1단계 === */
+function getDongNameFromText(text) {
+  var m = String(text || "").match(/([가-힣0-9]+동)/);
+  return m ? m[1] : "";
+}
+
+function getItemDong(item) {
+  return getDongNameFromText([item.address, item.name, item.memo].join(" "));
+}
+
+function getFloorGroup(item) {
+  var text = [item.room, item.name, item.memo].join(" ");
+  if (/지하|\bB\s?\d|B1|비\d/i.test(text)) return "지하";
+  if (/1\s*층|일층|1F|1층/.test(text)) return "1층";
+  if (/2\s*층|2F|2층/.test(text)) return "2층";
+  if (/3\s*층|3F|3층/.test(text)) return "3층";
+  if (/4\s*층|4F|4층/.test(text)) return "4층이상";
+  if (/5\s*층|6\s*층|7\s*층|8\s*층|9\s*층|10\s*층|[5-9]F|10F/.test(text)) return "4층이상";
+  return "층정보없음";
+}
+
+function getRentPerAreaValue(item) {
+  var area = Number(item.area) || 0;
+  var rent = Number(item.rent) || 0;
+  var fee = Number(item.fee) || 0;
+  if (area <= 0) return 0;
+  return Math.round(((rent + fee) / area) * 10) / 10;
+}
+
+function averageNumber(values) {
+  var nums = values.map(function(v) { return Number(v) || 0; }).filter(function(v) { return v > 0; });
+  if (!nums.length) return 0;
+  var sum = nums.reduce(function(a, b) { return a + b; }, 0);
+  return Math.round((sum / nums.length) * 10) / 10;
+}
+
+function percentDiff(current, avg) {
+  current = Number(current) || 0;
+  avg = Number(avg) || 0;
+  if (!current || !avg) return 0;
+  return Math.round(((current - avg) / avg) * 1000) / 10;
+}
+
+function compareLabel(current, avg, unit, lowerIsGood) {
+  var diff = percentDiff(current, avg);
+  if (!current || !avg) {
+    return { text:"비교 데이터 부족", cls:"ai-market-neutral", diff:0 };
+  }
+  var abs = Math.abs(diff);
+  if (abs < 5) {
+    return { text:"주변 평균과 비슷", cls:"ai-market-neutral", diff:diff };
+  }
+  var isLower = diff < 0;
+  var good = lowerIsGood ? isLower : !isLower;
+  return {
+    text:(isLower ? "평균보다 " + abs + "% 낮음" : "평균보다 " + abs + "% 높음"),
+    cls:good ? "ai-market-low" : "ai-market-high",
+    diff:diff
+  };
+}
+
+function pickSimilarItemsForMarket(item) {
+  var dong = getItemDong(item);
+  var floor = getFloorGroup(item);
+  var area = Number(item.area) || 0;
+  var type = item.type || "";
+  var candidates = allItems.filter(function(other) {
+    if (!other || other.key === item.key) return false;
+    if (isDone(other)) return false;
+    if (dong && getItemDong(other) !== dong) return false;
+    if (type && other.type && other.type !== type) return false;
+    return true;
+  });
+
+  var stage = "같은 동";
+  var filtered = candidates.slice();
+
+  if (floor && floor !== "층정보없음") {
+    var byFloor = filtered.filter(function(other) { return getFloorGroup(other) === floor; });
+    if (byFloor.length >= 3) {
+      filtered = byFloor;
+      stage += " · 같은 층";
+    }
+  }
+
+  if (area > 0) {
+    var minArea = area * 0.7;
+    var maxArea = area * 1.3;
+    var byArea = filtered.filter(function(other) {
+      var a = Number(other.area) || 0;
+      return a > 0 && a >= minArea && a <= maxArea;
+    });
+    if (byArea.length >= 3) {
+      filtered = byArea;
+      stage += " · 비슷한 평수";
+    }
+  }
+
+  if (filtered.length < 3 && candidates.length >= 3) {
+    filtered = candidates;
+    stage = dong ? "같은 동 전체" : "전체 유사매물";
+  }
+
+  return { items:filtered, stage:stage, dong:dong, floor:floor };
+}
+
+function getMarketAnalysis(item) {
+  var similar = pickSimilarItemsForMarket(item);
+  var items = similar.items || [];
+  var currentRentPerArea = getRentPerAreaValue(item);
+  var currentPremium = Number(item.premium) || 0;
+  var currentFee = Number(item.fee) || 0;
+  var currentDeposit = Number(item.deposit) || 0;
+  var currentStart = currentDeposit + currentPremium;
+
+  var avgRentPerArea = averageNumber(items.map(getRentPerAreaValue));
+  var avgPremium = averageNumber(items.map(function(v) { return v.premium; }));
+  var avgFee = averageNumber(items.map(function(v) { return v.fee; }));
+  var avgStart = averageNumber(items.map(function(v) { return (Number(v.deposit) || 0) + (Number(v.premium) || 0); }));
+
+  var rentCompare = compareLabel(currentRentPerArea, avgRentPerArea, "만", true);
+  var premiumCompare = compareLabel(currentPremium, avgPremium, "만", true);
+  var feeCompare = compareLabel(currentFee, avgFee, "만", true);
+  var startCompare = compareLabel(currentStart, avgStart, "만", true);
+
+  var briefs = [];
+  if (items.length < 3) {
+    briefs.push("비교 가능한 유사 매물이 적어 참고용으로만 확인하세요.");
+  } else {
+    briefs.push((similar.dong || "현재 권역") + " 기준 유사 매물 " + items.length + "건과 비교했습니다.");
+  }
+
+  if (rentCompare.diff <= -10) briefs.push("평당월비가 주변보다 낮아 임차인 유치나 업종 운영 측면에서 경쟁력이 있습니다.");
+  else if (rentCompare.diff >= 10) briefs.push("평당월비가 주변보다 높아 예상 매출과 월세 부담을 보수적으로 확인해야 합니다.");
+
+  if (premiumCompare.diff <= -15) briefs.push("권리금이 주변보다 낮아 초기 진입비용 협상력이 좋습니다.");
+  else if (premiumCompare.diff >= 15) briefs.push("권리금이 주변보다 높아 시설·매출·입지 근거 확인이 필요합니다.");
+
+  if (startCompare.diff <= -12) briefs.push("보증금+권리금 기준 초기비용이 주변보다 낮은 편입니다.");
+  else if (startCompare.diff >= 12) briefs.push("초기비용이 주변보다 높아 회수기간을 반드시 계산해야 합니다.");
+
+  if (hasText(item, /코너|사거리|대로|큰길|전면|통유리|유동/i)) {
+    briefs.push("메모상 노출·코너·대로변 키워드가 있어 현장 유동과 간판 위치 확인 가치가 큽니다.");
+  }
+
+  if (briefs.length === 1) briefs.push("평당월비·권리금·관리비를 함께 비교해 협상 우선순위를 잡는 것이 좋습니다.");
+
+  return {
+    count: items.length,
+    scope: similar.stage,
+    dong: similar.dong,
+    floor: similar.floor,
+    currentRentPerArea: currentRentPerArea,
+    avgRentPerArea: avgRentPerArea,
+    rentCompare: rentCompare,
+    currentPremium: currentPremium,
+    avgPremium: avgPremium,
+    premiumCompare: premiumCompare,
+    currentFee: currentFee,
+    avgFee: avgFee,
+    feeCompare: feeCompare,
+    currentStart: currentStart,
+    avgStart: avgStart,
+    startCompare: startCompare,
+    briefs: briefs.slice(0, 5)
+  };
+}
+
+function marketValueText(value, suffix) {
+  value = Number(value) || 0;
+  if (!value) return "-";
+  return formatAiMoney(value) + (suffix || "");
+}
+
+function buildMarketCompareItem(label, current, avg, compare, suffix) {
+  return '' +
+    '<div class="ai-market-item">' +
+      '<div class="ai-market-label">' + escapeHtml(label) + '</div>' +
+      '<div class="ai-market-value">' + escapeHtml(marketValueText(current, suffix)) + '</div>' +
+      '<div class="ai-market-compare ' + compare.cls + '">주변평균 ' + escapeHtml(marketValueText(avg, suffix)) + ' · ' + escapeHtml(compare.text) + '</div>' +
+    '</div>';
+}
+
+function buildMarketAnalysisHtml(market) {
+  if (!market) return "";
+  var summary = market.count >= 3
+    ? (market.scope + " 기준 " + market.count + "건 비교")
+    : "유사 매물 데이터가 부족해 참고 분석으로 표시합니다.";
+
+  return '' +
+    '<div class="ai-section full ai-market-section">' +
+      '<div class="ai-section-title">AI 시장분석 브리핑</div>' +
+      '<div class="ai-market-summary">' + escapeHtml(summary) + '</div>' +
+      '<div class="ai-market-grid">' +
+        buildMarketCompareItem('평당월비', market.currentRentPerArea, market.avgRentPerArea, market.rentCompare, '만') +
+        buildMarketCompareItem('권리금', market.currentPremium, market.avgPremium, market.premiumCompare, '만') +
+        buildMarketCompareItem('관리비', market.currentFee, market.avgFee, market.feeCompare, '만') +
+        buildMarketCompareItem('초기비용', market.currentStart, market.avgStart, market.startCompare, '만') +
+      '</div>' +
+      '<ul class="ai-market-brief">' + buildAiList(market.briefs) + '</ul>' +
+    '</div>';
+}
+
+function buildMarketAnalysisText(market) {
+  if (!market) return "";
+  return [
+    "AI 시장분석: " + (market.count >= 3 ? market.scope + " 기준 " + market.count + "건 비교" : "유사 매물 데이터 부족 / 참고 분석"),
+    "- 평당월비: 현재 " + marketValueText(market.currentRentPerArea, "만") + " / 평균 " + marketValueText(market.avgRentPerArea, "만") + " / " + market.rentCompare.text,
+    "- 권리금: 현재 " + marketValueText(market.currentPremium, "만") + " / 평균 " + marketValueText(market.avgPremium, "만") + " / " + market.premiumCompare.text,
+    "- 관리비: 현재 " + marketValueText(market.currentFee, "만") + " / 평균 " + marketValueText(market.avgFee, "만") + " / " + market.feeCompare.text,
+    "- 초기비용: 현재 " + marketValueText(market.currentStart, "만") + " / 평균 " + marketValueText(market.avgStart, "만") + " / " + market.startCompare.text,
+    "- 브리핑: " + market.briefs.join(" | ")
+  ].join("\n");
+}
+
 function getSmartItemAnalysis(item) {
   var score = 62;
   var pros = [];
@@ -3108,6 +3398,7 @@ function getSmartItemAnalysis(item) {
   var negotiationTips = getAiNegotiationTips(item, rentPerPyeong);
   var fieldChecks = getAiFieldCheckList(item, rentPerPyeong);
   var businessFits = getAiBusinessFitList(item, rentPerPyeong);
+  var marketAnalysis = getMarketAnalysis(item);
 
   return {
     score: score,
@@ -3123,7 +3414,8 @@ function getSmartItemAnalysis(item) {
     tags: tags.slice(0, 5),
     negotiationTips: negotiationTips,
     fieldChecks: fieldChecks,
-    businessFits: businessFits
+    businessFits: businessFits,
+    marketAnalysis: marketAnalysis
   };
 }
 
@@ -3218,6 +3510,7 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">주의점</div><ul class="ai-list">' + buildAiList(ai.cons) + '</ul></div>' +
         '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + buildAiTags(ai.businesses) + '</div></div>' +
         '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
+        buildMarketAnalysisHtml(ai.marketAnalysis) +
         '<div class="ai-section full"><div class="ai-section-title">업종별 적합도 / 추천사유</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +
         '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
         '<div class="ai-section full ai-negotiation-section"><div class="ai-section-title">협상포인트</div><ul class="ai-list ai-action-list">' + buildAiList(ai.negotiationTips) + '</ul></div>' +
@@ -3257,6 +3550,7 @@ function buildSmartItemAnalysisText(item) {
     "한줄평: " + ai.oneLine,
     "금액: 보증금 " + formatAiMoney(deposit) + " / 월세 " + formatAiMoney(rent) + " / 관리비 " + formatAiMoney(fee) + " / 권리금 " + formatAiMoney(premium),
     "핵심지표: 초기비용 " + formatAiMoney(startMoney) + " / 월고정비 " + formatAiMoney(totalMonthly) + " / 평당월비 " + (rentPerArea || "-") + " / 면적 " + (area ? area + "평" : "-"),
+    buildMarketAnalysisText(ai.marketAnalysis),
     "장점: " + ai.pros.join(" | "),
     "주의점: " + ai.cons.join(" | "),
     "추천업종: " + ai.businesses.join(" | "),
