@@ -5968,6 +5968,177 @@ function jsV40Style() {
 
 jsV40Style();
 setInterval(jsV40Render, 1000);
+/* === v4.1 실무형 입지/업종 적합도 AI === */
+
+var JS_V41_LAST_SIG = "";
+
+function jsV41_getSelectedItem() {
+  if (typeof selectedItemKey === "undefined" || !selectedItemKey) return null;
+  if (typeof allItems === "undefined") return null;
+  return allItems.find(function(x){ return x.key === selectedItemKey; }) || null;
+}
+
+function jsV41_count(card, label) {
+  var text = card.innerText || "";
+  var reg = new RegExp(label + "\\s*(\\d+|없음)", "i");
+  var m = text.match(reg);
+  if (!m) return 0;
+  return m[1] === "없음" ? 0 : Number(m[1]) || 0;
+}
+
+function jsV41_floor(item) {
+  var t = String((item && item.room) || "");
+  if (/지하|B/i.test(t)) return -1;
+  var m = t.match(/(\d+)\s*층/);
+  if (m) return Number(m[1]);
+  if (/1층|101|102|103/.test(t)) return 1;
+  return 0;
+}
+
+function jsV41_context(item) {
+  var text = ((item.address || "") + " " + (item.memo || "") + " " + (item.type || "")).toLowerCase();
+
+  var ctx = [];
+  if (/아파트|단지|세대|apt/i.test(text)) ctx.push("아파트 배후");
+  if (/다가구|원룸|빌라|주택가|주거/i.test(text)) ctx.push("다가구/주거 밀집");
+  if (/상업|먹자|번화|대로|상권|중심/i.test(text)) ctx.push("상업지역");
+  if (/학원|학교|초등|중등|고등|대학/i.test(text)) ctx.push("학원/교육 상권");
+  if (/병원|의원|메디컬|약국/i.test(text)) ctx.push("의료 상권");
+  if (/코너|corner/i.test(text)) ctx.push("코너자리");
+  if (/대로변|큰길|전면|노출/i.test(text)) ctx.push("전면노출");
+  if (/주차/i.test(text)) ctx.push("주차확인");
+
+  if (!ctx.length) ctx.push("일반 상권");
+  return ctx;
+}
+
+function jsV41_businessScores(item, card) {
+  var floor = jsV41_floor(item);
+  var ctx = jsV41_context(item);
+
+  var convenience = jsV41_count(card, "편의점");
+  var cafe = jsV41_count(card, "카페");
+  var korean = jsV41_count(card, "한식");
+  var snack = jsV41_count(card, "분식");
+  var japanese = jsV41_count(card, "일식");
+  var beauty = jsV41_count(card, "미용실");
+  var nail = jsV41_count(card, "네일");
+  var academy = jsV41_count(card, "학원");
+  var hospital = jsV41_count(card, "병원");
+  var pharmacy = jsV41_count(card, "약국");
+
+  function has(name) {
+    return ctx.join(" ").includes(name);
+  }
+
+  var base = [
+    {name:"편의점", score:85 - convenience*22, floorGood:floor===1, reasons:["근거리 경쟁 편의점 수", "생활수요", "전면노출/코너 여부"]},
+    {name:"카페", score:76 - cafe*9, floorGood:floor===1, reasons:["유동인구", "전면 노출", "카페 경쟁도"]},
+    {name:"분식", score:82 - snack*15 + academy*3, floorGood:floor<=2 && floor>=1, reasons:["학원·주거 수요", "점심/간식 수요", "소형 평수 적합"]},
+    {name:"일식", score:80 - japanese*18 + korean, floorGood:floor<=2 && floor>=1, reasons:["경쟁 일식 수", "직장/생활 수요", "차별화 가능성"]},
+    {name:"미용실", score:78 - beauty*10 + nail*2, floorGood:floor<=2 && floor>=1, reasons:["뷰티 상권 형성", "접근성", "기존 경쟁 미용실 수"]},
+    {name:"네일샵", score:86 - nail*20 + beauty*4, floorGood:floor<=3 && floor>=1, reasons:["미용실 주변 시너지", "네일 경쟁도", "예약형 업종 적합"]},
+    {name:"피부샵", score:78 + beauty*2, floorGood:floor>=2 && floor<=5, reasons:["목적 방문 업종", "뷰티 수요", "조용한 층 적합"]},
+    {name:"학원", score:74 + academy*2, floorGood:floor>=2 && floor<=5, reasons:["교육 상권", "목적 방문", "층수 적합"]},
+    {name:"약국", score:70 - pharmacy*25 + hospital*6, floorGood:floor===1, reasons:["병원 연계", "약국 경쟁도", "1층 접근성"]}
+  ];
+
+  base.forEach(function(x) {
+    if (!x.floorGood) x.score -= 25;
+    if (has("아파트")) {
+      if (["편의점","분식","미용실","네일샵","카페"].includes(x.name)) x.score += 10;
+    }
+    if (has("다가구")) {
+      if (["분식","편의점","미용실"].includes(x.name)) x.score += 8;
+    }
+    if (has("상업")) {
+      if (["카페","일식","분식","미용실"].includes(x.name)) x.score += 8;
+    }
+    if (has("학원")) {
+      if (["분식","카페","편의점","학원"].includes(x.name)) x.score += 10;
+    }
+    if (has("의료")) {
+      if (["약국","카페","피부샵"].includes(x.name)) x.score += 12;
+    }
+    if (has("코너자리") || has("전면노출")) {
+      if (["편의점","카페","분식","미용실"].includes(x.name)) x.score += 12;
+    }
+
+    if (x.score > 98) x.score = 98;
+    if (x.score < 20) x.score = 20;
+  });
+
+  base.sort(function(a,b){ return b.score - a.score; });
+
+  return { floor:floor, ctx:ctx, top:base.slice(0,3), low:base.slice(-3).reverse() };
+}
+
+function jsV41_render() {
+  var card = document.querySelector(".item.selected");
+  var item = jsV41_getSelectedItem();
+  if (!card || !item) return;
+
+  var data = jsV41_businessScores(item, card);
+  var sig = selectedItemKey + "|" + data.floor + "|" + data.ctx.join("|") + "|" + data.top.map(function(x){return x.name+x.score;}).join("|");
+
+  if (JS_V41_LAST_SIG === sig && card.querySelector("#jsV41Box")) return;
+  JS_V41_LAST_SIG = sig;
+
+  var old = card.querySelector("#jsV41Box");
+  if (old) old.remove();
+
+  var floorText = data.floor > 0 ? data.floor + "층" : (data.floor === -1 ? "지하" : "층수 미확인");
+
+  var topHtml = data.top.map(function(x, i) {
+    return '<div class="js-v41-rank">'
+      + '<div><b>' + (i+1) + '위 ' + x.name + '</b><span>' + x.reasons.join(" · ") + '</span></div>'
+      + '<strong>' + x.score + '점</strong>'
+      + '</div>';
+  }).join("");
+
+  var lowHtml = data.low.map(function(x) {
+    return '<span>' + x.name + '</span>';
+  }).join("");
+
+  var opinion = data.top[0].name + "은 현재 층수와 상권 조건을 함께 봤을 때 가장 우선 검토할 업종입니다. "
+    + floorText + " 조건과 " + data.ctx.join(", ") + " 특성을 반영했습니다.";
+
+  var html = ''
+    + '<div id="jsV41Box" class="js-v41-box">'
+    + '<div class="js-v41-title">🏙 실무형 입지 AI 판단</div>'
+    + '<div class="js-v41-meta">층수: <b>' + floorText + '</b> · 상권성격: <b>' + data.ctx.join(" / ") + '</b></div>'
+    + '<div class="js-v41-section"><b>추천업종 TOP3</b>' + topHtml + '</div>'
+    + '<div class="js-v41-section warn"><b>신중 검토 업종</b><br>' + lowHtml + '</div>'
+    + '<div class="js-v41-opinion"><b>AI 실무의견</b><br>' + opinion + '<br><br>'
+    + '현장에서는 전면 노출, 유동 방향, 주차, 엘리베이터, 실제 경쟁점포 영업상태를 반드시 같이 확인하세요.'
+    + '</div>'
+    + '</div>';
+
+  var target = card.querySelector("#jsV40UnifiedAI") || card.querySelector(".ai-commercial-box") || card;
+  target.insertAdjacentHTML("afterend", html);
+}
+
+function jsV41_style() {
+  if (document.getElementById("jsV41Style")) return;
+  var style = document.createElement("style");
+  style.id = "jsV41Style";
+  style.innerHTML =
+    ".js-v41-box{margin-top:12px;padding:12px;border:1px solid #cfe0ff;border-radius:14px;background:#fff;text-align:left;}" +
+    ".js-v41-title{font-size:15px;font-weight:900;color:#005bea;margin-bottom:7px;}" +
+    ".js-v41-meta{font-size:12px;background:#f6f9ff;border:1px solid #e1ecff;border-radius:10px;padding:8px;margin-bottom:8px;line-height:1.5;}" +
+    ".js-v41-section{background:#f8fbff;border:1px solid #e1ecff;border-radius:10px;padding:9px;margin-top:8px;font-size:12px;}" +
+    ".js-v41-section.warn{background:#fff7e6;border-color:#ffd591;}" +
+    ".js-v41-rank{display:flex;justify-content:space-between;gap:8px;align-items:center;background:#fff;border:1px solid #e8f0ff;border-radius:9px;padding:8px;margin-top:6px;}" +
+    ".js-v41-rank b{display:block;font-size:13px;color:#111;}" +
+    ".js-v41-rank span{display:block;font-size:11px;color:#667085;margin-top:3px;line-height:1.35;}" +
+    ".js-v41-rank strong{font-size:16px;color:#005bea;white-space:nowrap;}" +
+    ".js-v41-section.warn span{display:inline-block;margin:5px 5px 0 0;background:#fff;border:1px solid #ffe0a3;border-radius:999px;padding:4px 8px;font-weight:800;}" +
+    ".js-v41-opinion{margin-top:8px;background:#f6ffed;border:1px solid #b7eb8f;border-radius:10px;padding:9px;font-size:12px;line-height:1.55;}";
+  document.head.appendChild(style);
+}
+
+jsV41_style();
+setInterval(jsV41_render, 1300);
 </script>
 
 </body>
