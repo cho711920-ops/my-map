@@ -1594,7 +1594,33 @@ button {
 .circle-marker.source-direct { background:#ffd43b; color:#222; }
 .circle-marker.source-mixed { background:#7c4dff; }
 .circle-marker.source-unknown { background:#1e88ff; }
-.circle-marker.done { opacity:0.68; }
+
+/* v3.0.13.1: 거래완료는 출처색보다 우선해서 어두운 회색으로 표시 */
+.circle-marker.done,
+.circle-marker.source-gongsil.done,
+.circle-marker.source-naver.done,
+.circle-marker.source-danggeun.done,
+.circle-marker.source-direct.done,
+.circle-marker.source-mixed.done,
+.circle-marker.source-unknown.done {
+  background:#555 !important;
+  color:white !important;
+  border-color:#f1f1f1;
+  opacity:0.78;
+}
+
+.circle-marker.done.selected {
+  background:#333 !important;
+  color:white !important;
+  opacity:1;
+}
+
+.item.done .pyeong-mini-badge {
+  background:#e1e1e1 !important;
+  color:#777 !important;
+  border-color:#d0d0d0 !important;
+}
+
 .circle-marker.selected { opacity:1; }
 
 @media (max-width:768px) {
@@ -2534,13 +2560,19 @@ function buildPyeongMiniBadge(item) {
 }
 
 function getItemSourceType(item) {
-  var text = ((item && item.memo) ? item.memo : "") + " " + ((item && item.name) ? item.name : "") + " " + ((item && item.type) ? item.type : "");
-  text = String(text || "").toLowerCase();
+  // v3.0.13.1: 메모/상호/구분에 우연히 들어간 단어로 출처를 추정하지 않음.
+  // 반드시 메모에 "출처:공실박스", "출처:네이버", "출처:당근", "출처:직접확인"처럼 명확히 저장된 경우만 색상 반영.
+  var memo = String((item && item.memo) ? item.memo : "");
+  var m = memo.match(/출처\s*[:：]\s*([^\/|,，\n]+)/);
 
-  if (/네이버|naver/.test(text)) return "naver";
-  if (/당근|daangn|karrot/.test(text)) return "danggeun";
-  if (/직접확인|직접매물|직접|현장확인/.test(text)) return "direct";
-  if (/공실박스|gongsil/.test(text)) return "gongsil";
+  if (!m || !m[1]) return "unknown";
+
+  var source = String(m[1] || "").trim().toLowerCase();
+
+  if (/네이버|naver/.test(source)) return "naver";
+  if (/당근|daangn|karrot/.test(source)) return "danggeun";
+  if (/직접확인|직접매물|직접|현장확인/.test(source)) return "direct";
+  if (/공실박스|gongsil/.test(source)) return "gongsil";
 
   return "unknown";
 }
@@ -2552,23 +2584,17 @@ function getClusterSourceType(items) {
     counts[source] = (counts[source] || 0) + 1;
   });
 
-  var best = "unknown";
-  var bestCount = 0;
-  Object.keys(counts).forEach(function(key) {
-    if (counts[key] > bestCount) {
-      best = key;
-      bestCount = counts[key];
-    }
-  });
-
-  if (!bestCount) return "unknown";
-
   var activeSources = Object.keys(counts).filter(function(key) {
     return key !== "unknown" && counts[key] > 0;
   });
 
+  // 명확한 출처가 없으면 기본 파란색(source-unknown)
+  if (activeSources.length === 0) return "unknown";
+
+  // 명확한 출처가 2종류 이상 섞였을 때만 보라색
   if (activeSources.length >= 2) return "mixed";
-  return best === "unknown" ? "gongsil" : best;
+
+  return activeSources[0];
 }
 
 function drawItems(items) {
