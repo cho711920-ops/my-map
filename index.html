@@ -2574,12 +2574,45 @@ function loadSheet(isAuto) {
       }
 
       geocodeItems(rawItems, function(doneItems) {
+        var keepSelectedKey = selectedItemKey;
+        var keepGroupKey = selectedGroupKey;
+        var keepListScroll = document.getElementById("list") ? document.getElementById("list").scrollTop : 0;
+
         allItems = doneItems;
         updateTypeOptions(allItems);
-        applyFilter();
+
+        // v4.0.2: 자동 업데이트 때 선택 중인 매물/AI카드가 닫히지 않도록 유지
+        if (isAuto && keepSelectedKey) {
+          var keptItem = allItems.find(function(item) {
+            return item.key === keepSelectedKey;
+          });
+
+          if (keptItem) {
+            selectedItemKey = keepSelectedKey;
+            selectedGroupKey = null;
+
+            var filteredForMap = getFilteredItems();
+            currentItems = filteredForMap;
+            drawItems(filteredForMap);
+            showList([keptItem]);
+
+            setTimeout(function() {
+              loadCommercialAreaAnalysis(keptItem);
+              var listEl = document.getElementById("list");
+              if (listEl) listEl.scrollTop = keepListScroll;
+            }, 120);
+          } else {
+            selectedItemKey = null;
+            selectedGroupKey = keepGroupKey;
+            applyFilter();
+          }
+        } else {
+          applyFilter();
+        }
+
         updateErrorStatus();
         var waitText = pendingAutoUpdate ? " / 중복 업데이트 1회 건너뜀" : "";
-        document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
+        document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개 · 선택화면 유지" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
         pendingAutoUpdate = false;
         isLoadingSheet = false;
       });
