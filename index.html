@@ -1501,6 +1501,57 @@ button {
   }
 }
 
+
+/* === v3.0.12 추가: 리스트 AI 점수 뱃지 + AI점수순 정렬 === */
+.ai-mini-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  margin-right:5px;
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:10.5px;
+  font-weight:900;
+  vertical-align:1px;
+  background:#eef4ff;
+  color:#005bea;
+  border:1px solid #d9e8ff;
+  white-space:nowrap;
+}
+
+.ai-mini-badge.grade-s {
+  background:#fff1f0;
+  color:#d93025;
+  border-color:#ffd6d2;
+}
+
+.ai-mini-badge.grade-a {
+  background:#fff7e6;
+  color:#b54708;
+  border-color:#ffe0a3;
+}
+
+.ai-mini-badge.grade-b {
+  background:#eefbf3;
+  color:#087f3f;
+  border-color:#c9f2d8;
+}
+
+.ai-mini-badge.grade-c,
+.ai-mini-badge.grade-d {
+  background:#f1f3f5;
+  color:#555;
+  border-color:#e2e6ea;
+}
+
+@media (max-width:768px) {
+  .ai-mini-badge {
+    font-size:10px;
+    padding:2px 5px;
+    margin-right:4px;
+  }
+}
+
 </style>
 </head>
 
@@ -1529,6 +1580,7 @@ button {
 
           <select id="sortFilter" onchange="applyFilter()">
             <option value="latest">최신등록순</option>
+            <option value="aiScoreHigh">AI점수 높은순</option>
             <option value="name">가나다순</option>
             <option value="depositLow">보증금 낮은순</option>
             <option value="depositHigh">보증금 높은순</option>
@@ -2372,6 +2424,12 @@ function getFilteredItems() {
       return (a.name || "").localeCompare((b.name || ""), "ko");
     }
 
+    if (sortType === "aiScoreHigh") {
+      var aiA = getSmartItemAnalysis(a).score || 0;
+      var aiB = getSmartItemAnalysis(b).score || 0;
+      return aiB - aiA;
+    }
+
     if (sortType === "depositLow") return a.deposit - b.deposit;
     if (sortType === "depositHigh") return b.deposit - a.deposit;
     if (sortType === "rentLow") return a.rent - b.rent;
@@ -2515,6 +2573,8 @@ function addListItem(item) {
   var typeLabel = item.type ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>' : "";
   var encodedKey = encodeURIComponent(item.key);
   var safeKey = escapeHtml(item.key);
+  var aiQuick = getSmartItemAnalysis(item);
+  var aiMiniBadge = '<span class="ai-mini-badge grade-' + escapeHtml(String(aiQuick.gradeCode || "").toLowerCase()) + '">AI ' + escapeHtml(aiQuick.score) + ' · ' + escapeHtml(aiQuick.gradeCode) + '</span>';
   var smartCardHtml = selectedItemKey === item.key ? buildSmartItemCardHtml(item) : "";
 
   div.innerHTML =
@@ -2522,7 +2582,7 @@ function addListItem(item) {
       '<div class="item-left">' +
         '<input type="checkbox" class="print-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
         '<div class="item-title-wrap">' +
-          '<div class="title">' + doneLabel + typeLabel + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+          '<div class="title">' + doneLabel + typeLabel + aiMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
