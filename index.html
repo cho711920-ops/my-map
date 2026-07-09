@@ -1719,6 +1719,95 @@ button {
   }
 }
 
+
+
+/* === v3.1.1 추가: 카카오 Places 기반 AI 상권분석 1단계 === */
+.ai-commerce-section {
+  background:#f8fbff;
+  border:1px solid #d8e8ff;
+}
+.ai-commerce-loading {
+  font-size:12px;
+  color:#667085;
+  line-height:1.45;
+}
+.ai-commerce-summary {
+  font-size:12px;
+  color:#344054;
+  line-height:1.45;
+  background:#ffffff;
+  border:1px solid #e6eefc;
+  border-radius:10px;
+  padding:8px;
+  margin-bottom:8px;
+}
+.ai-commerce-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
+}
+.ai-commerce-block {
+  background:white;
+  border:1px solid #e6eefc;
+  border-radius:10px;
+  padding:8px;
+}
+.ai-commerce-block-title {
+  font-size:12px;
+  font-weight:900;
+  color:#1d2939;
+  margin-bottom:5px;
+}
+.ai-commerce-chip-wrap {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+}
+.ai-commerce-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  border-radius:999px;
+  background:#eef4ff;
+  color:#005bea;
+  padding:3px 7px;
+  font-size:11px;
+  font-weight:800;
+}
+.ai-commerce-chip.good { background:#eafaf0; color:#0f8a3b; }
+.ai-commerce-chip.warn { background:#fff7e6; color:#b54708; }
+.ai-commerce-chip.danger { background:#fff0f0; color:#d93025; }
+.ai-commerce-recommend {
+  margin-top:8px;
+  background:#fffdf5;
+  border:1px solid #ffe08a;
+  border-radius:10px;
+  padding:8px;
+}
+.ai-commerce-recommend-title {
+  font-size:12px;
+  font-weight:900;
+  color:#8a5a00;
+  margin-bottom:4px;
+}
+.ai-commerce-recommend ol {
+  margin:0;
+  padding-left:18px;
+  font-size:12px;
+  line-height:1.45;
+}
+.ai-commerce-brief {
+  margin:8px 0 0 0;
+  padding-left:16px;
+  font-size:12px;
+  line-height:1.45;
+  color:#344054;
+}
+.ai-commerce-brief li { margin:2px 0; }
+@media (max-width:768px) {
+  .ai-commerce-grid { grid-template-columns:1fr; }
+}
+
 </style>
 </head>
 
@@ -2826,6 +2915,12 @@ function addListItem(item) {
   };
 
   document.getElementById("list").appendChild(div);
+
+  if (selectedItemKey === item.key) {
+    setTimeout(function() {
+      loadCommercialAreaAnalysis(item);
+    }, 80);
+  }
 }
 
 
@@ -3265,6 +3360,300 @@ function buildMarketAnalysisText(market) {
   ].join("\n");
 }
 
+
+
+/* === v3.1.1 추가: 카카오 Places 기반 AI 상권분석 1단계 === */
+var commercialRadius = 300;
+var commercialAnalysisCache = {};
+
+var commercialSearchGroups = [
+  { group:"생활", items:[
+    { key:"convenience", label:"편의점", keyword:"편의점" },
+    { key:"cafe", label:"카페", keyword:"카페" },
+    { key:"bank", label:"은행", keyword:"은행" },
+    { key:"bus", label:"버스정류장", keyword:"버스정류장" }
+  ]},
+  { group:"음식", items:[
+    { key:"korean", label:"한식", keyword:"한식" },
+    { key:"chinese", label:"중식", keyword:"중국집" },
+    { key:"japanese", label:"일식", keyword:"일식" },
+    { key:"snack", label:"분식", keyword:"분식" },
+    { key:"chicken", label:"치킨", keyword:"치킨" },
+    { key:"beer", label:"호프", keyword:"호프" },
+    { key:"meat", label:"고깃집", keyword:"고기집" },
+    { key:"gukbap", label:"국밥", keyword:"국밥" },
+    { key:"bakery", label:"베이커리", keyword:"베이커리" },
+    { key:"dessert", label:"디저트", keyword:"디저트" }
+  ]},
+  { group:"뷰티", items:[
+    { key:"hair", label:"미용실", keyword:"미용실" },
+    { key:"nail", label:"네일", keyword:"네일" },
+    { key:"eyelash", label:"속눈썹", keyword:"속눈썹" },
+    { key:"skin", label:"피부샵", keyword:"피부관리" },
+    { key:"waxing", label:"왁싱", keyword:"왁싱" },
+    { key:"massage", label:"마사지", keyword:"마사지" }
+  ]},
+  { group:"교육/의료", items:[
+    { key:"academy", label:"학원", keyword:"학원" },
+    { key:"english", label:"영어학원", keyword:"영어학원" },
+    { key:"math", label:"수학학원", keyword:"수학학원" },
+    { key:"taekwondo", label:"태권도", keyword:"태권도" },
+    { key:"hospital", label:"병원", keyword:"병원" },
+    { key:"dental", label:"치과", keyword:"치과" },
+    { key:"pharmacy", label:"약국", keyword:"약국" },
+    { key:"oriental", label:"한의원", keyword:"한의원" }
+  ]}
+];
+
+function getCommercialBoxId(item) {
+  var raw = String((item && item.key) || "");
+  var hash = 0;
+  for (var i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return "aiCommerce_" + Math.abs(hash);
+}
+
+function getCommercialCacheKey(item) {
+  if (!item || !item.latlng) return "";
+  var lat = typeof item.latlng.getLat === "function" ? item.latlng.getLat() : "";
+  var lng = typeof item.latlng.getLng === "function" ? item.latlng.getLng() : "";
+  return [item.key || "", lat, lng, commercialRadius].join("|");
+}
+
+function flattenCommercialSearchItems() {
+  var out = [];
+  commercialSearchGroups.forEach(function(group) {
+    group.items.forEach(function(item) {
+      out.push({ group: group.group, key: item.key, label: item.label, keyword: item.keyword });
+    });
+  });
+  return out;
+}
+
+function searchPlaceCount(keyword, latlng, callback) {
+  if (!window.kakao || !kakao.maps || !kakao.maps.services || !kakao.maps.services.Places || !latlng) {
+    callback(0, []);
+    return;
+  }
+
+  var ps = new kakao.maps.services.Places();
+  ps.keywordSearch(keyword, function(data, status, pagination) {
+    if (status === kakao.maps.services.Status.OK) {
+      var count = 0;
+      if (pagination && typeof pagination.totalCount === "number") {
+        count = pagination.totalCount;
+      } else if (data && data.length) {
+        count = data.length;
+      }
+      callback(count, data || []);
+      return;
+    }
+    callback(0, []);
+  }, {
+    location: latlng,
+    radius: commercialRadius,
+    sort: kakao.maps.services.SortBy.DISTANCE
+  });
+}
+
+function analyzeCommercialArea(item, callback) {
+  var cacheKey = getCommercialCacheKey(item);
+  if (!item || !item.latlng) {
+    callback({ available:false, reason:"좌표 정보가 없어 상권분석을 할 수 없습니다." });
+    return;
+  }
+
+  if (cacheKey && commercialAnalysisCache[cacheKey]) {
+    callback(commercialAnalysisCache[cacheKey]);
+    return;
+  }
+
+  var tasks = flattenCommercialSearchItems();
+  var index = 0;
+  var counts = {};
+  var labels = {};
+  var groups = {};
+
+  tasks.forEach(function(t) {
+    counts[t.key] = 0;
+    labels[t.key] = t.label;
+    if (!groups[t.group]) groups[t.group] = [];
+    groups[t.group].push(t.key);
+  });
+
+  function next() {
+    if (index >= tasks.length) {
+      var analysis = buildCommercialAnalysisResult(item, counts, labels, groups);
+      if (cacheKey) commercialAnalysisCache[cacheKey] = analysis;
+      callback(analysis);
+      return;
+    }
+
+    var task = tasks[index++];
+    searchPlaceCount(task.keyword, item.latlng, function(count) {
+      counts[task.key] = count;
+      // 카카오 API 호출 간격을 조금 둬서 브라우저/API 부담을 줄임
+      setTimeout(next, 90);
+    });
+  }
+
+  next();
+}
+
+function commercialCount(counts, key) {
+  return Number(counts[key]) || 0;
+}
+
+function buildCommercialAnalysisResult(item, counts, labels, groups) {
+  var foodTotal = ["korean","chinese","japanese","snack","chicken","beer","meat","gukbap","bakery","dessert"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+  var beautyTotal = ["hair","nail","eyelash","skin","waxing","massage"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+  var educationTotal = ["academy","english","math","taekwondo"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+  var medicalTotal = ["hospital","dental","pharmacy","oriental"].reduce(function(sum, key) { return sum + commercialCount(counts, key); }, 0);
+
+  var recommendations = [];
+  function addRec(name, score, reason) {
+    recommendations.push({ name:name, score:clampNumber(score, 30, 99), reason:reason });
+  }
+
+  var convenience = commercialCount(counts, "convenience");
+  var cafe = commercialCount(counts, "cafe");
+  var nail = commercialCount(counts, "nail");
+  var hair = commercialCount(counts, "hair");
+  var japanese = commercialCount(counts, "japanese");
+  var chinese = commercialCount(counts, "chinese");
+  var snack = commercialCount(counts, "snack");
+  var dessert = commercialCount(counts, "dessert");
+  var bakery = commercialCount(counts, "bakery");
+  var pharmacy = commercialCount(counts, "pharmacy");
+  var hospital = commercialCount(counts, "hospital");
+  var bus = commercialCount(counts, "bus");
+
+  if (convenience === 0) addRec("편의점", 96, "반경 300m 내 편의점 경쟁이 거의 없습니다.");
+  else if (convenience <= 1) addRec("편의점", 86, "편의점 경쟁이 적은 편입니다.");
+
+  if (beautyTotal >= 5 && nail <= 1) addRec("네일샵", 90, "미용실·뷰티 수요는 보이지만 네일샵 경쟁은 적습니다.");
+  if (hair >= 6 && commercialCount(counts, "eyelash") <= 1) addRec("속눈썹/뷰티샵", 84, "미용실 기반 뷰티 상권에서 세부 업종 공백이 있습니다.");
+
+  if (foodTotal >= 15 && japanese <= 1) addRec("일식/덮밥", 86, "음식 수요는 강한데 일식 경쟁이 적습니다.");
+  if (foodTotal >= 15 && chinese <= 1) addRec("중식/마라/면요리", 82, "음식점 밀집 대비 중식 계열 경쟁이 낮습니다.");
+  if (educationTotal >= 8 && snack <= 2) addRec("분식/테이크아웃", 84, "학원가 수요 대비 간편식 업종이 부족합니다.");
+  if (cafe >= 8 && dessert <= 2 && bakery <= 2) addRec("디저트/베이커리", 83, "카페 수요는 있으나 디저트 전문 경쟁은 낮은 편입니다.");
+
+  if (medicalTotal >= 5 && pharmacy <= 1) addRec("약국", 88, "병원·의료 수요 대비 약국 경쟁이 낮습니다.");
+  if (bus >= 3 && convenience <= 1) addRec("무인매장/편의형 소매", 80, "버스정류장 접근성과 생활수요를 활용할 수 있습니다.");
+
+  if (recommendations.length === 0) {
+    addRec("현장형 업종 검토", 70, "뚜렷한 공백 업종은 적어 유동·간판·전면 조건 확인이 우선입니다.");
+  }
+
+  recommendations.sort(function(a, b) { return b.score - a.score; });
+
+  var briefs = [];
+  if (foodTotal >= 20) briefs.push("음식점 밀집도가 높아 식사·야간 수요가 있는 상권으로 보입니다.");
+  else if (foodTotal >= 8) briefs.push("음식점 수요가 어느 정도 형성된 생활상권입니다.");
+
+  if (educationTotal >= 8) briefs.push("학원·교육 업종이 많아 학생/학부모 동선 활용 업종을 검토할 수 있습니다.");
+  if (beautyTotal >= 6) briefs.push("미용실·뷰티 업종이 많아 뷰티 수요는 있으나 경쟁도 함께 확인해야 합니다.");
+  if (convenience === 0) briefs.push("편의점이 거의 없어 코너/대로변 조건이 맞으면 편의점 검토 가치가 큽니다.");
+  if (cafe >= 12) briefs.push("카페 경쟁은 높은 편이므로 일반 카페보다 디저트·테이크아웃 차별화가 유리합니다.");
+  if (medicalTotal >= 5) briefs.push("의료·약국 수요가 있는 상권으로 보이며 대기수요 업종을 검토할 수 있습니다.");
+  if (briefs.length === 0) briefs.push("반경 300m 상권 데이터는 수집됐지만, 현장 유동·전면·주차 조건 확인이 필요합니다.");
+
+  return {
+    available:true,
+    radius: commercialRadius,
+    counts: counts,
+    labels: labels,
+    groups: groups,
+    totals: {
+      food: foodTotal,
+      beauty: beautyTotal,
+      education: educationTotal,
+      medical: medicalTotal
+    },
+    recommendations: recommendations.slice(0, 5),
+    briefs: briefs.slice(0, 5)
+  };
+}
+
+function commerceChipClass(key, count) {
+  count = Number(count) || 0;
+  if ((key === "convenience" || key === "nail" || key === "japanese" || key === "dessert") && count <= 1) return "good";
+  if (count >= 15) return "danger";
+  if (count >= 8) return "warn";
+  return "";
+}
+
+function buildCommerceChips(analysis, groupName, limit) {
+  if (!analysis || !analysis.groups || !analysis.groups[groupName]) return "";
+  var keys = analysis.groups[groupName].slice();
+  keys.sort(function(a, b) {
+    return commercialCount(analysis.counts, b) - commercialCount(analysis.counts, a);
+  });
+  if (limit) keys = keys.slice(0, limit);
+  return keys.map(function(key) {
+    var count = commercialCount(analysis.counts, key);
+    var label = analysis.labels[key] || key;
+    return '<span class="ai-commerce-chip ' + commerceChipClass(key, count) + '">' + escapeHtml(label) + ' <b>' + count + '</b></span>';
+  }).join("");
+}
+
+function buildCommercialAnalysisHtml(analysis) {
+  if (!analysis) {
+    return '<div class="ai-commerce-loading">상권분석 데이터를 준비중입니다.</div>';
+  }
+  if (!analysis.available) {
+    return '<div class="ai-commerce-loading">' + escapeHtml(analysis.reason || "상권분석을 불러오지 못했습니다.") + '</div>';
+  }
+
+  var recHtml = analysis.recommendations.map(function(rec) {
+    return '<li><b>' + escapeHtml(rec.name) + ' ' + rec.score + '점</b> · ' + escapeHtml(rec.reason) + '</li>';
+  }).join("");
+
+  return '' +
+    '<div class="ai-commerce-summary">반경 ' + analysis.radius + 'm 기준 카카오 Places 검색 결과입니다. 실제 폐업/신규점포는 현장 확인이 필요합니다.</div>' +
+    '<div class="ai-commerce-grid">' +
+      '<div class="ai-commerce-block"><div class="ai-commerce-block-title">생활/교통</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "생활") + '</div></div>' +
+      '<div class="ai-commerce-block"><div class="ai-commerce-block-title">음식 상세</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "음식", 10) + '</div></div>' +
+      '<div class="ai-commerce-block"><div class="ai-commerce-block-title">뷰티 상세</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "뷰티") + '</div></div>' +
+      '<div class="ai-commerce-block"><div class="ai-commerce-block-title">교육/의료</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "교육/의료") + '</div></div>' +
+    '</div>' +
+    '<div class="ai-commerce-recommend"><div class="ai-commerce-recommend-title">AI 추천업종 후보</div><ol>' + recHtml + '</ol></div>' +
+    '<ul class="ai-commerce-brief">' + buildAiList(analysis.briefs) + '</ul>';
+}
+
+function buildCommercialAnalysisText(analysis) {
+  if (!analysis || !analysis.available) return "AI 상권분석: 데이터 없음";
+  var lines = ["AI 상권분석: 반경 " + analysis.radius + "m"];
+  ["생활","음식","뷰티","교육/의료"].forEach(function(groupName) {
+    var keys = (analysis.groups[groupName] || []);
+    var parts = keys.map(function(key) {
+      return (analysis.labels[key] || key) + " " + commercialCount(analysis.counts, key);
+    });
+    lines.push("- " + groupName + ": " + parts.join(" / "));
+  });
+  lines.push("- 추천업종: " + analysis.recommendations.map(function(r) { return r.name + " " + r.score + "점(" + r.reason + ")"; }).join(" | "));
+  lines.push("- 브리핑: " + analysis.briefs.join(" | "));
+  return lines.join("\n");
+}
+
+function loadCommercialAreaAnalysis(item) {
+  var boxId = getCommercialBoxId(item);
+  var box = document.getElementById(boxId);
+  if (!box) return;
+
+  box.innerHTML = '<div class="ai-commerce-loading">카카오 Places로 반경 ' + commercialRadius + 'm 상권을 분석중입니다...<br>편의점·음식점·뷰티샵·학원·병원 등을 순차 검색합니다.</div>';
+
+  analyzeCommercialArea(item, function(analysis) {
+    var target = document.getElementById(boxId);
+    if (!target) return;
+    target.innerHTML = buildCommercialAnalysisHtml(analysis);
+  });
+}
+
+
 function getSmartItemAnalysis(item) {
   var score = 62;
   var pros = [];
@@ -3511,6 +3900,7 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + buildAiTags(ai.businesses) + '</div></div>' +
         '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
         buildMarketAnalysisHtml(ai.marketAnalysis) +
+        '<div class="ai-section full ai-commerce-section"><div class="ai-section-title">AI 상권분석 300m</div><div id="' + getCommercialBoxId(item) + '"><div class="ai-commerce-loading">상권분석 준비중...</div></div></div>' +
         '<div class="ai-section full"><div class="ai-section-title">업종별 적합도 / 추천사유</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +
         '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
         '<div class="ai-section full ai-negotiation-section"><div class="ai-section-title">협상포인트</div><ul class="ai-list ai-action-list">' + buildAiList(ai.negotiationTips) + '</ul></div>' +
@@ -3551,6 +3941,7 @@ function buildSmartItemAnalysisText(item) {
     "금액: 보증금 " + formatAiMoney(deposit) + " / 월세 " + formatAiMoney(rent) + " / 관리비 " + formatAiMoney(fee) + " / 권리금 " + formatAiMoney(premium),
     "핵심지표: 초기비용 " + formatAiMoney(startMoney) + " / 월고정비 " + formatAiMoney(totalMonthly) + " / 평당월비 " + (rentPerArea || "-") + " / 면적 " + (area ? area + "평" : "-"),
     buildMarketAnalysisText(ai.marketAnalysis),
+    buildCommercialAnalysisText(commercialAnalysisCache[getCommercialCacheKey(item)]),
     "장점: " + ai.pros.join(" | "),
     "주의점: " + ai.cons.join(" | "),
     "추천업종: " + ai.businesses.join(" | "),
@@ -4609,7 +5000,5 @@ function parseQuickAddText() {
 
 </script>
 
-<script src="js/analysis.js"></script>
-  
 </body>
 </html>
