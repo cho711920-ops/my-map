@@ -5,322 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JS부동산 매물지도</title>
 
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false">
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-/* === JS부동산 AI v2.1 스마트 매물카드 === */
-function parseNumberForAI(value) {
-  if (value === null || value === undefined) return 0;
-  var text = String(value).replace(/,/g, "").trim();
-  var n = Number(text);
-  return isNaN(n) ? 0 : n;
-}
 
-function extractDong(address) {
-  var text = String(address || "");
-  var m = text.match(/([가-힣0-9]+동)/);
-  return m ? m[1] : "지역미상";
-}
-
-function getFloorGroup(item) {
-  var text = (String(item.room || "") + " " + String(item.memo || "")).replace(/\s+/g, "");
-  if (/1층|일층|지상1층/.test(text)) return "1층";
-  if (/2층|이층/.test(text)) return "2층";
-  if (/지하|B1|b1/.test(text)) return "지하";
-  return "기타층";
-}
-
-function itemTypeGroup(item) {
-  var t = String(item.type || "");
-  if (t.includes("상가")) return "상가";
-  if (t.includes("사무")) return "사무실";
-  if (t.includes("매매")) return "매매";
-  if (t.includes("전세")) return "전세";
-  if (t.includes("월세")) return "월세";
-  return t || "구분없음";
-}
-
-function average(nums) {
-  var valid = nums.filter(function(n) { return isFinite(n) && n > 0; });
-  if (valid.length === 0) return 0;
-  return valid.reduce(function(a, b) { return a + b; }, 0) / valid.length;
-}
-
-function pctDiff(current, avg) {
-  if (!avg || !current) return 0;
-  return ((current - avg) / avg) * 100;
-}
-
-function pctText(diff) {
-  if (!isFinite(diff) || diff === 0) return "평균 수준";
-  return (diff > 0 ? "+" : "") + diff.toFixed(1) + "%";
-}
-
-function moneyPerArea(money, area) {
-  money = parseNumberForAI(money);
-  area = parseNumberForAI(area);
-  if (!money || !area) return 0;
-  return money / area;
-}
-
-function formatOne(n) {
-  if (!isFinite(n) || !n) return "-";
-  return Math.round(n * 10) / 10;
-}
-
-function findSmartComparableItems(item) {
-  var dong = extractDong(item.address);
-  var floor = getFloorGroup(item);
-  var type = itemTypeGroup(item);
-
-  var strict = allItems.filter(function(other) {
-    if (other.key === item.key) return false;
-    return extractDong(other.address) === dong && getFloorGroup(other) === floor && itemTypeGroup(other) === type;
-  });
-
-  if (strict.length >= 5) return { items: strict, label: dong + " · " + floor + " · " + type };
-
-  var medium = allItems.filter(function(other) {
-    if (other.key === item.key) return false;
-    return extractDong(other.address) === dong && itemTypeGroup(other) === type;
-  });
-
-  if (medium.length >= 5) return { items: medium, label: dong + " · " + type };
-
-  var loose = allItems.filter(function(other) {
-    if (other.key === item.key) return false;
-    return extractDong(other.address) === dong;
-  });
-
-  if (loose.length >= 3) return { items: loose, label: dong + " 전체" };
-
-  var allSimilar = allItems.filter(function(other) {
-    if (other.key === item.key) return false;
-    return itemTypeGroup(other) === type;
-  });
-
-  return { items: allSimilar, label: type + " 전체" };
-}
-
-function buildSmartAnalysis(item) {
-  var area = parseNumberForAI(item.area);
-  var rent = parseNumberForAI(item.rent);
-  var deposit = parseNumberForAI(item.deposit);
-  var premium = parseNumberForAI(item.premium);
-  var compInfo = findSmartComparableItems(item);
-  var comps = compInfo.items || [];
-
-  var rentPA = moneyPerArea(rent, area);
-  var depositPA = moneyPerArea(deposit, area);
-  var premiumPA = moneyPerArea(premium, area);
-
-  var avgRentPA = average(comps.map(function(x) { return moneyPerArea(x.rent, x.area); }));
-  var avgDepositPA = average(comps.map(function(x) { return moneyPerArea(x.deposit, x.area); }));
-  var avgPremiumPA = average(comps.map(function(x) { return moneyPerArea(x.premium, x.area); }));
-
-  var rentDiff = pctDiff(rentPA, avgRentPA);
-  var depositDiff = pctDiff(depositPA, avgDepositPA);
-  var premiumDiff = pctDiff(premiumPA, avgPremiumPA);
-
-  var score = 70;
-  var reasons = [];
-
-  if (comps.length < 5) {
-    score -= 5;
-    reasons.push("비교매물이 적어서 분석 신뢰도는 참고용입니다.");
-  } else {
-    reasons.push(compInfo.label + " 비교매물 " + comps.length + "건 기준입니다.");
-  }
-
-  if (area > 0) {
-    reasons.push("평수 정보가 있어 평단가 비교가 가능합니다.");
-    score += 4;
-  } else {
-    reasons.push("평수 정보가 없어 평단가 분석이 제한됩니다.");
-    score -= 8;
-  }
-
-  if (avgRentPA > 0 && rentPA > 0) {
-    if (rentDiff <= -10) { score += 13; reasons.push("월세 평단가가 평균보다 " + Math.abs(rentDiff).toFixed(1) + "% 저렴합니다."); }
-    else if (rentDiff <= -3) { score += 8; reasons.push("월세 평단가가 평균보다 약간 저렴합니다."); }
-    else if (rentDiff <= 8) { score += 3; reasons.push("월세 평단가는 평균권입니다."); }
-    else { score -= 8; reasons.push("월세 평단가가 평균보다 " + rentDiff.toFixed(1) + "% 높습니다."); }
-  } else {
-    reasons.push("월세 또는 평수 정보가 부족해 월세 평단가 비교는 제외했습니다.");
-  }
-
-  if (avgPremiumPA > 0 && premiumPA > 0) {
-    if (premiumDiff <= -15) { score += 12; reasons.push("권리금 평단가가 평균보다 " + Math.abs(premiumDiff).toFixed(1) + "% 낮습니다."); }
-    else if (premiumDiff <= -5) { score += 7; reasons.push("권리금이 평균보다 낮은 편입니다."); }
-    else if (premiumDiff <= 10) { score += 2; reasons.push("권리금은 평균권입니다."); }
-    else { score -= 7; reasons.push("권리금이 평균보다 높은 편입니다."); }
-  } else if (premium === 0) {
-    score += 8;
-    reasons.push("권리금이 없거나 0으로 입력되어 초기 부담이 낮습니다.");
-  } else {
-    reasons.push("권리금 비교 데이터가 부족합니다.");
-  }
-
-  if (avgDepositPA > 0 && depositPA > 0) {
-    if (depositDiff <= -10) { score += 6; reasons.push("보증금 평단가가 평균보다 낮습니다."); }
-    else if (depositDiff <= 10) { score += 2; reasons.push("보증금은 평균권입니다."); }
-    else { score -= 4; reasons.push("보증금이 평균보다 높은 편입니다."); }
-  }
-
-  if (item.memo && String(item.memo).trim().length >= 8) {
-    score += 3;
-    reasons.push("메모 정보가 있어 현장 판단에 도움이 됩니다.");
-  }
-
-  if (isFavorite(item)) {
-    score += 2;
-    reasons.push("찜한 매물입니다.");
-  }
-
-  if (isDone(item)) {
-    score -= 25;
-    reasons.push("계약완료 상태이므로 신규 검토 대상에서는 제외하는 것이 좋습니다.");
-  }
-
-  score = Math.max(0, Math.min(100, Math.round(score)));
-
-  var grade = "검토";
-  if (score >= 88) grade = "강력추천";
-  else if (score >= 78) grade = "추천";
-  else if (score >= 65) grade = "보통";
-  else grade = "주의";
-
-  var brief = "";
-  if (isDone(item)) {
-    brief = "계약완료 매물입니다. 시세 참고용으로 보는 것이 좋습니다.";
-  } else if (score >= 88) {
-    brief = "가격 경쟁력이 좋은 편입니다. 우선 확인할 만한 매물입니다.";
-  } else if (score >= 78) {
-    brief = "조건이 무난하게 좋은 편입니다. 현장 확인 가치가 있습니다.";
-  } else if (score >= 65) {
-    brief = "평균권 매물입니다. 위치와 내부 상태 확인 후 판단하는 것이 좋습니다.";
-  } else {
-    brief = "가격 또는 정보 측면에서 주의가 필요합니다. 협상 여지를 먼저 확인하세요.";
-  }
-
-  return {
-    score: score,
-    grade: grade,
-    brief: brief,
-    compCount: comps.length,
-    compLabel: compInfo.label,
-    rentPA: rentPA,
-    depositPA: depositPA,
-    premiumPA: premiumPA,
-    avgRentPA: avgRentPA,
-    avgDepositPA: avgDepositPA,
-    avgPremiumPA: avgPremiumPA,
-    rentDiff: rentDiff,
-    depositDiff: depositDiff,
-    premiumDiff: premiumDiff,
-    reasons: reasons
-  };
-}
-
-function openSmartCard(encodedKey) {
-  var key = decodeURIComponent(encodedKey);
-  var item = allItems.find(function(x) { return x.key === key; }) || currentItems.find(function(x) { return x.key === key; });
-  if (!item) {
-    alert("매물 정보를 찾을 수 없습니다.");
-    return;
-  }
-
-  var a = buildSmartAnalysis(item);
-  var title = document.getElementById("smartCardTitle");
-  var sub = document.getElementById("smartCardSub");
-  var content = document.getElementById("smartCardContent");
-
-  title.innerHTML = escapeHtml(item.name || "건물이름 없음") + " / " + escapeHtml(item.room || "");
-  sub.innerHTML = escapeHtml(item.address || "주소 없음") + " · " + escapeHtml(item.type || "구분 없음");
-
-  var trustText = a.compCount >= 10 ? "신뢰도 높음" : (a.compCount >= 5 ? "신뢰도 보통" : "참고용");
-  var doneClass = isDone(item) ? " done" : "";
-
-  content.innerHTML =
-    '<div class="smart-score-wrap' + doneClass + '">' +
-      '<div class="smart-score-main">' +
-        '<div>' +
-          '<div style="font-size:12px;font-weight:900;color:#667085;margin-bottom:2px;">AI 추천도</div>' +
-          '<div class="smart-score">' + a.score + '점</div>' +
-        '</div>' +
-        '<div class="smart-grade">' + escapeHtml(a.grade) + '</div>' +
-      '</div>' +
-      '<div class="smart-briefing">' + escapeHtml(a.brief) + '</div>' +
-    '</div>' +
-
-    '<div class="smart-grid">' +
-      smartMetric("비교 기준", a.compLabel, a.compCount + "건 · " + trustText) +
-      smartMetric("월세 평단가", formatOne(a.rentPA) + "만/평", "평균 " + formatOne(a.avgRentPA) + " · " + pctText(a.rentDiff)) +
-      smartMetric("권리금 평단가", formatOne(a.premiumPA) + "만/평", "평균 " + formatOne(a.avgPremiumPA) + " · " + pctText(a.premiumDiff)) +
-      smartMetric("보증금 평단가", formatOne(a.depositPA) + "만/평", "평균 " + formatOne(a.avgDepositPA) + " · " + pctText(a.depositDiff)) +
-    '</div>' +
-
-    '<div class="smart-section">' +
-      '<div class="smart-section-title">왜 이렇게 판단했나</div>' +
-      '<div class="smart-reason-list">' + a.reasons.map(function(r) { return '✔ ' + escapeHtml(r); }).join('<br>') + '</div>' +
-    '</div>' +
-
-    '<div class="smart-warning">※ v2.1 스마트 매물카드는 현재 네 구글시트 DB 안의 매물만 기준으로 비교합니다. 외부 전체 시장가격이 아니라, 누적된 자체 DB 기준 판단입니다.</div>' +
-
-    '<div class="smart-action-row">' +
-      '<button onclick="openRoadviewModalFromKey(\'' + encodeURIComponent(item.key) + '\')">네이버지도</button>' +
-      '<button class="smart-sub-btn" onclick="copySmartBriefing(\'' + encodeURIComponent(item.key) + '\')">AI요약 복사</button>' +
-    '</div>';
-
-  document.getElementById("smartCardModal").style.display = "block";
-}
-
-function smartMetric(label, value, note) {
-  return '<div class="smart-metric">' +
-    '<div class="smart-metric-label">' + escapeHtml(label) + '</div>' +
-    '<div class="smart-metric-value">' + escapeHtml(value) + '</div>' +
-    '<div class="smart-metric-note">' + escapeHtml(note) + '</div>' +
-  '</div>';
-}
-
-function closeSmartCard() {
-  document.getElementById("smartCardModal").style.display = "none";
-}
-
-function openRoadviewModalFromKey(encodedKey) {
-  var key = decodeURIComponent(encodedKey);
-  var item = allItems.find(function(x) { return x.key === key; });
-  if (!item || !item.latlng) return;
-  openRoadviewModal(item.latlng.getLat(), item.latlng.getLng());
-}
-
-function copySmartBriefing(encodedKey) {
-  var key = decodeURIComponent(encodedKey);
-  var item = allItems.find(function(x) { return x.key === key; });
-  if (!item) return;
-  var a = buildSmartAnalysis(item);
-  var text =
-    "[JS부동산 AI 매물요약]
-" +
-    (item.name || "") + " / " + (item.address || "") + " / " + (item.room || "") + "
-" +
-    "추천도: " + a.score + "점(" + a.grade + ")
-" +
-    "판단: " + a.brief + "
-" +
-    "비교기준: " + a.compLabel + " " + a.compCount + "건
-" +
-    "월세평단가: " + formatOne(a.rentPA) + "만/평, 평균 " + formatOne(a.avgRentPA) + "만/평(" + pctText(a.rentDiff) + ")
-" +
-    "권리금평단가: " + formatOne(a.premiumPA) + "만/평, 평균 " + formatOne(a.avgPremiumPA) + "만/평(" + pctText(a.premiumDiff) + ")";
-
-  navigator.clipboard.writeText(text).then(function() {
-    alert("AI 요약을 복사했습니다.");
-  }).catch(function() {
-    alert(text);
-  });
-}
-
-</script>
 
 <style>
 :root {
@@ -3310,6 +2997,320 @@ function parseQuickAddText() {
   updateQuickAddPreview();
 }
 
+
+
+/* === JS부동산 AI v2.1 스마트 매물카드 === */
+function parseNumberForAI(value) {
+  if (value === null || value === undefined) return 0;
+  var text = String(value).replace(/,/g, "").trim();
+  var n = Number(text);
+  return isNaN(n) ? 0 : n;
+}
+
+function extractDong(address) {
+  var text = String(address || "");
+  var m = text.match(/([가-힣0-9]+동)/);
+  return m ? m[1] : "지역미상";
+}
+
+function getFloorGroup(item) {
+  var text = (String(item.room || "") + " " + String(item.memo || "")).replace(/\s+/g, "");
+  if (/1층|일층|지상1층/.test(text)) return "1층";
+  if (/2층|이층/.test(text)) return "2층";
+  if (/지하|B1|b1/.test(text)) return "지하";
+  return "기타층";
+}
+
+function itemTypeGroup(item) {
+  var t = String(item.type || "");
+  if (t.includes("상가")) return "상가";
+  if (t.includes("사무")) return "사무실";
+  if (t.includes("매매")) return "매매";
+  if (t.includes("전세")) return "전세";
+  if (t.includes("월세")) return "월세";
+  return t || "구분없음";
+}
+
+function average(nums) {
+  var valid = nums.filter(function(n) { return isFinite(n) && n > 0; });
+  if (valid.length === 0) return 0;
+  return valid.reduce(function(a, b) { return a + b; }, 0) / valid.length;
+}
+
+function pctDiff(current, avg) {
+  if (!avg || !current) return 0;
+  return ((current - avg) / avg) * 100;
+}
+
+function pctText(diff) {
+  if (!isFinite(diff) || diff === 0) return "평균 수준";
+  return (diff > 0 ? "+" : "") + diff.toFixed(1) + "%";
+}
+
+function moneyPerArea(money, area) {
+  money = parseNumberForAI(money);
+  area = parseNumberForAI(area);
+  if (!money || !area) return 0;
+  return money / area;
+}
+
+function formatOne(n) {
+  if (!isFinite(n) || !n) return "-";
+  return Math.round(n * 10) / 10;
+}
+
+function findSmartComparableItems(item) {
+  var dong = extractDong(item.address);
+  var floor = getFloorGroup(item);
+  var type = itemTypeGroup(item);
+
+  var strict = allItems.filter(function(other) {
+    if (other.key === item.key) return false;
+    return extractDong(other.address) === dong && getFloorGroup(other) === floor && itemTypeGroup(other) === type;
+  });
+
+  if (strict.length >= 5) return { items: strict, label: dong + " · " + floor + " · " + type };
+
+  var medium = allItems.filter(function(other) {
+    if (other.key === item.key) return false;
+    return extractDong(other.address) === dong && itemTypeGroup(other) === type;
+  });
+
+  if (medium.length >= 5) return { items: medium, label: dong + " · " + type };
+
+  var loose = allItems.filter(function(other) {
+    if (other.key === item.key) return false;
+    return extractDong(other.address) === dong;
+  });
+
+  if (loose.length >= 3) return { items: loose, label: dong + " 전체" };
+
+  var allSimilar = allItems.filter(function(other) {
+    if (other.key === item.key) return false;
+    return itemTypeGroup(other) === type;
+  });
+
+  return { items: allSimilar, label: type + " 전체" };
+}
+
+function buildSmartAnalysis(item) {
+  var area = parseNumberForAI(item.area);
+  var rent = parseNumberForAI(item.rent);
+  var deposit = parseNumberForAI(item.deposit);
+  var premium = parseNumberForAI(item.premium);
+  var compInfo = findSmartComparableItems(item);
+  var comps = compInfo.items || [];
+
+  var rentPA = moneyPerArea(rent, area);
+  var depositPA = moneyPerArea(deposit, area);
+  var premiumPA = moneyPerArea(premium, area);
+
+  var avgRentPA = average(comps.map(function(x) { return moneyPerArea(x.rent, x.area); }));
+  var avgDepositPA = average(comps.map(function(x) { return moneyPerArea(x.deposit, x.area); }));
+  var avgPremiumPA = average(comps.map(function(x) { return moneyPerArea(x.premium, x.area); }));
+
+  var rentDiff = pctDiff(rentPA, avgRentPA);
+  var depositDiff = pctDiff(depositPA, avgDepositPA);
+  var premiumDiff = pctDiff(premiumPA, avgPremiumPA);
+
+  var score = 70;
+  var reasons = [];
+
+  if (comps.length < 5) {
+    score -= 5;
+    reasons.push("비교매물이 적어서 분석 신뢰도는 참고용입니다.");
+  } else {
+    reasons.push(compInfo.label + " 비교매물 " + comps.length + "건 기준입니다.");
+  }
+
+  if (area > 0) {
+    reasons.push("평수 정보가 있어 평단가 비교가 가능합니다.");
+    score += 4;
+  } else {
+    reasons.push("평수 정보가 없어 평단가 분석이 제한됩니다.");
+    score -= 8;
+  }
+
+  if (avgRentPA > 0 && rentPA > 0) {
+    if (rentDiff <= -10) { score += 13; reasons.push("월세 평단가가 평균보다 " + Math.abs(rentDiff).toFixed(1) + "% 저렴합니다."); }
+    else if (rentDiff <= -3) { score += 8; reasons.push("월세 평단가가 평균보다 약간 저렴합니다."); }
+    else if (rentDiff <= 8) { score += 3; reasons.push("월세 평단가는 평균권입니다."); }
+    else { score -= 8; reasons.push("월세 평단가가 평균보다 " + rentDiff.toFixed(1) + "% 높습니다."); }
+  } else {
+    reasons.push("월세 또는 평수 정보가 부족해 월세 평단가 비교는 제외했습니다.");
+  }
+
+  if (avgPremiumPA > 0 && premiumPA > 0) {
+    if (premiumDiff <= -15) { score += 12; reasons.push("권리금 평단가가 평균보다 " + Math.abs(premiumDiff).toFixed(1) + "% 낮습니다."); }
+    else if (premiumDiff <= -5) { score += 7; reasons.push("권리금이 평균보다 낮은 편입니다."); }
+    else if (premiumDiff <= 10) { score += 2; reasons.push("권리금은 평균권입니다."); }
+    else { score -= 7; reasons.push("권리금이 평균보다 높은 편입니다."); }
+  } else if (premium === 0) {
+    score += 8;
+    reasons.push("권리금이 없거나 0으로 입력되어 초기 부담이 낮습니다.");
+  } else {
+    reasons.push("권리금 비교 데이터가 부족합니다.");
+  }
+
+  if (avgDepositPA > 0 && depositPA > 0) {
+    if (depositDiff <= -10) { score += 6; reasons.push("보증금 평단가가 평균보다 낮습니다."); }
+    else if (depositDiff <= 10) { score += 2; reasons.push("보증금은 평균권입니다."); }
+    else { score -= 4; reasons.push("보증금이 평균보다 높은 편입니다."); }
+  }
+
+  if (item.memo && String(item.memo).trim().length >= 8) {
+    score += 3;
+    reasons.push("메모 정보가 있어 현장 판단에 도움이 됩니다.");
+  }
+
+  if (isFavorite(item)) {
+    score += 2;
+    reasons.push("찜한 매물입니다.");
+  }
+
+  if (isDone(item)) {
+    score -= 25;
+    reasons.push("계약완료 상태이므로 신규 검토 대상에서는 제외하는 것이 좋습니다.");
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  var grade = "검토";
+  if (score >= 88) grade = "강력추천";
+  else if (score >= 78) grade = "추천";
+  else if (score >= 65) grade = "보통";
+  else grade = "주의";
+
+  var brief = "";
+  if (isDone(item)) {
+    brief = "계약완료 매물입니다. 시세 참고용으로 보는 것이 좋습니다.";
+  } else if (score >= 88) {
+    brief = "가격 경쟁력이 좋은 편입니다. 우선 확인할 만한 매물입니다.";
+  } else if (score >= 78) {
+    brief = "조건이 무난하게 좋은 편입니다. 현장 확인 가치가 있습니다.";
+  } else if (score >= 65) {
+    brief = "평균권 매물입니다. 위치와 내부 상태 확인 후 판단하는 것이 좋습니다.";
+  } else {
+    brief = "가격 또는 정보 측면에서 주의가 필요합니다. 협상 여지를 먼저 확인하세요.";
+  }
+
+  return {
+    score: score,
+    grade: grade,
+    brief: brief,
+    compCount: comps.length,
+    compLabel: compInfo.label,
+    rentPA: rentPA,
+    depositPA: depositPA,
+    premiumPA: premiumPA,
+    avgRentPA: avgRentPA,
+    avgDepositPA: avgDepositPA,
+    avgPremiumPA: avgPremiumPA,
+    rentDiff: rentDiff,
+    depositDiff: depositDiff,
+    premiumDiff: premiumDiff,
+    reasons: reasons
+  };
+}
+
+function openSmartCard(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(x) { return x.key === key; }) || currentItems.find(function(x) { return x.key === key; });
+  if (!item) {
+    alert("매물 정보를 찾을 수 없습니다.");
+    return;
+  }
+
+  var a = buildSmartAnalysis(item);
+  var title = document.getElementById("smartCardTitle");
+  var sub = document.getElementById("smartCardSub");
+  var content = document.getElementById("smartCardContent");
+
+  title.innerHTML = escapeHtml(item.name || "건물이름 없음") + " / " + escapeHtml(item.room || "");
+  sub.innerHTML = escapeHtml(item.address || "주소 없음") + " · " + escapeHtml(item.type || "구분 없음");
+
+  var trustText = a.compCount >= 10 ? "신뢰도 높음" : (a.compCount >= 5 ? "신뢰도 보통" : "참고용");
+  var doneClass = isDone(item) ? " done" : "";
+
+  content.innerHTML =
+    '<div class="smart-score-wrap' + doneClass + '">' +
+      '<div class="smart-score-main">' +
+        '<div>' +
+          '<div style="font-size:12px;font-weight:900;color:#667085;margin-bottom:2px;">AI 추천도</div>' +
+          '<div class="smart-score">' + a.score + '점</div>' +
+        '</div>' +
+        '<div class="smart-grade">' + escapeHtml(a.grade) + '</div>' +
+      '</div>' +
+      '<div class="smart-briefing">' + escapeHtml(a.brief) + '</div>' +
+    '</div>' +
+
+    '<div class="smart-grid">' +
+      smartMetric("비교 기준", a.compLabel, a.compCount + "건 · " + trustText) +
+      smartMetric("월세 평단가", formatOne(a.rentPA) + "만/평", "평균 " + formatOne(a.avgRentPA) + " · " + pctText(a.rentDiff)) +
+      smartMetric("권리금 평단가", formatOne(a.premiumPA) + "만/평", "평균 " + formatOne(a.avgPremiumPA) + " · " + pctText(a.premiumDiff)) +
+      smartMetric("보증금 평단가", formatOne(a.depositPA) + "만/평", "평균 " + formatOne(a.avgDepositPA) + " · " + pctText(a.depositDiff)) +
+    '</div>' +
+
+    '<div class="smart-section">' +
+      '<div class="smart-section-title">왜 이렇게 판단했나</div>' +
+      '<div class="smart-reason-list">' + a.reasons.map(function(r) { return '✔ ' + escapeHtml(r); }).join('<br>') + '</div>' +
+    '</div>' +
+
+    '<div class="smart-warning">※ v2.1 스마트 매물카드는 현재 네 구글시트 DB 안의 매물만 기준으로 비교합니다. 외부 전체 시장가격이 아니라, 누적된 자체 DB 기준 판단입니다.</div>' +
+
+    '<div class="smart-action-row">' +
+      '<button onclick="openRoadviewModalFromKey(\'' + encodeURIComponent(item.key) + '\')">네이버지도</button>' +
+      '<button class="smart-sub-btn" onclick="copySmartBriefing(\'' + encodeURIComponent(item.key) + '\')">AI요약 복사</button>' +
+    '</div>';
+
+  document.getElementById("smartCardModal").style.display = "block";
+}
+
+function smartMetric(label, value, note) {
+  return '<div class="smart-metric">' +
+    '<div class="smart-metric-label">' + escapeHtml(label) + '</div>' +
+    '<div class="smart-metric-value">' + escapeHtml(value) + '</div>' +
+    '<div class="smart-metric-note">' + escapeHtml(note) + '</div>' +
+  '</div>';
+}
+
+function closeSmartCard() {
+  document.getElementById("smartCardModal").style.display = "none";
+}
+
+function openRoadviewModalFromKey(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(x) { return x.key === key; });
+  if (!item || !item.latlng) return;
+  openRoadviewModal(item.latlng.getLat(), item.latlng.getLng());
+}
+
+function copySmartBriefing(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(x) { return x.key === key; });
+  if (!item) return;
+  var a = buildSmartAnalysis(item);
+  var text =
+    "[JS부동산 AI 매물요약]
+" +
+    (item.name || "") + " / " + (item.address || "") + " / " + (item.room || "") + "
+" +
+    "추천도: " + a.score + "점(" + a.grade + ")
+" +
+    "판단: " + a.brief + "
+" +
+    "비교기준: " + a.compLabel + " " + a.compCount + "건
+" +
+    "월세평단가: " + formatOne(a.rentPA) + "만/평, 평균 " + formatOne(a.avgRentPA) + "만/평(" + pctText(a.rentDiff) + ")
+" +
+    "권리금평단가: " + formatOne(a.premiumPA) + "만/평, 평균 " + formatOne(a.avgPremiumPA) + "만/평(" + pctText(a.premiumDiff) + ")";
+
+  navigator.clipboard.writeText(text).then(function() {
+    alert("AI 요약을 복사했습니다.");
+  }).catch(function() {
+    alert(text);
+  });
+}
 </script>
 
 </body>
