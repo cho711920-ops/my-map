@@ -962,6 +962,59 @@ button {
   }
 }
 
+
+/* === v3.0.8 추가: AI 투자등급 + 판단요약 === */
+.ai-decision-row {
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:7px;
+  margin:8px 0 10px;
+}
+
+.ai-decision-card {
+  background:#fff;
+  border:1px solid #e7edf7;
+  border-radius:12px;
+  padding:8px 7px;
+  text-align:center;
+  min-width:0;
+}
+
+.ai-decision-card strong {
+  display:block;
+  font-size:15px;
+  line-height:1.25;
+  color:#1f2937;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ai-decision-card span {
+  display:block;
+  margin-top:3px;
+  color:#667085;
+  font-size:11px;
+  font-weight:900;
+}
+
+.ai-stars {
+  letter-spacing:1px;
+  color:#ffb300 !important;
+}
+
+.ai-grade-s { color:#d93025 !important; }
+.ai-grade-a { color:#005bea !important; }
+.ai-grade-b { color:#0f8a3b !important; }
+.ai-grade-c { color:#8a6d00 !important; }
+.ai-grade-d { color:#777 !important; }
+
+@media (max-width:768px) {
+  .ai-decision-row {
+    grid-template-columns:1fr;
+  }
+}
+
 </style>
 </head>
 
@@ -2020,6 +2073,50 @@ function formatAiMoney(value) {
   return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+
+function buildStarRating(score) {
+  score = Number(score) || 0;
+  var full = 1;
+  if (score >= 90) full = 5;
+  else if (score >= 80) full = 4;
+  else if (score >= 70) full = 3;
+  else if (score >= 60) full = 2;
+  else full = 1;
+
+  var stars = "";
+  for (var i = 1; i <= 5; i++) {
+    stars += i <= full ? "★" : "☆";
+  }
+  return stars;
+}
+
+function getAiGradeCode(score) {
+  score = Number(score) || 0;
+  if (score >= 90) return "S";
+  if (score >= 80) return "A";
+  if (score >= 70) return "B";
+  if (score >= 60) return "C";
+  return "D";
+}
+
+function getAiDecisionText(score) {
+  score = Number(score) || 0;
+  if (score >= 90) return "최우선 확인";
+  if (score >= 80) return "적극 검토";
+  if (score >= 70) return "조건 협의";
+  if (score >= 60) return "현장 확인";
+  return "신중 검토";
+}
+
+function getAiRiskLevel(score, consCount) {
+  score = Number(score) || 0;
+  consCount = Number(consCount) || 0;
+  if (score >= 85 && consCount <= 2) return "낮음";
+  if (score >= 70) return "보통";
+  if (score >= 60) return "주의";
+  return "높음";
+}
+
 function getSmartItemAnalysis(item) {
   var score = 62;
   var pros = [];
@@ -2146,9 +2243,18 @@ function getSmartItemAnalysis(item) {
   else if (score >= 60) oneLine = "기본 검토는 가능하지만 현장 확인이 필요합니다.";
   else oneLine = "조건 확인 전까지는 신중하게 접근하는 것이 좋습니다.";
 
+  var gradeCode = getAiGradeCode(score);
+  var stars = buildStarRating(score);
+  var decision = getAiDecisionText(score);
+  var riskLevel = getAiRiskLevel(score, cons.length);
+
   return {
     score: score,
     grade: grade,
+    gradeCode: gradeCode,
+    stars: stars,
+    decision: decision,
+    riskLevel: riskLevel,
     oneLine: oneLine,
     pros: pros.slice(0, 4),
     cons: cons.slice(0, 4),
@@ -2190,6 +2296,11 @@ function buildSmartItemCardHtml(item) {
       '<div class="ai-score-wrap">' +
         '<div class="ai-score"><strong>' + ai.score + '</strong><span>투자점수</span></div>' +
         '<div class="ai-summary">' + escapeHtml(ai.oneLine) + '<br>보증금 ' + formatAiMoney(deposit) + ' / 월세 ' + formatAiMoney(rent) + ' / 권리금 ' + formatAiMoney(premium) + '</div>' +
+      '</div>' +
+      '<div class="ai-decision-row">' +
+        '<div class="ai-decision-card"><strong class="ai-grade-' + String(ai.gradeCode).toLowerCase() + '">' + ai.gradeCode + '등급</strong><span>투자등급</span></div>' +
+        '<div class="ai-decision-card"><strong>' + escapeHtml(ai.decision) + '</strong><span>AI판단</span></div>' +
+        '<div class="ai-decision-card"><strong class="ai-stars">' + ai.stars + '</strong><span>추천도</span></div>' +
       '</div>' +
       '<div class="ai-metrics">' +
         '<div class="ai-metric"><strong>' + formatAiMoney(startMoney) + '</strong><span>초기비용</span></div>' +
@@ -2234,7 +2345,8 @@ function buildSmartItemAnalysisText(item) {
   return [
     "[JS부동산 AI 스마트 매물카드]",
     "매물: " + [item.name, item.address, item.room].filter(Boolean).join(" / "),
-    "투자점수: " + ai.score + "점 (" + ai.grade + ")",
+    "투자점수: " + ai.score + "점 (" + ai.gradeCode + "등급 / " + ai.grade + ")",
+    "AI판단: " + ai.decision + " / 추천도 " + ai.stars + " / 위험도 " + ai.riskLevel,
     "한줄평: " + ai.oneLine,
     "금액: 보증금 " + formatAiMoney(deposit) + " / 월세 " + formatAiMoney(rent) + " / 관리비 " + formatAiMoney(fee) + " / 권리금 " + formatAiMoney(premium),
     "핵심지표: 초기비용 " + formatAiMoney(startMoney) + " / 월고정비 " + formatAiMoney(totalMonthly) + " / 평당월비 " + (rentPerArea || "-") + " / 면적 " + (area ? area + "평" : "-"),
