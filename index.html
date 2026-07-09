@@ -1104,6 +1104,76 @@ button {
   }
 }
 
+
+
+/* === v3.0.10.1 수정: 업종별 적합도 화면 표시 강화 === */
+.ai-business-fit-strong {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.ai-business-summary {
+  background:#f6f9ff;
+  border:1px solid #dbe9ff;
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:13px;
+  line-height:1.45;
+  color:#1f3b64;
+  font-weight:700;
+}
+.ai-business-row-strong {
+  background:white;
+  border:1px solid #e2ebff;
+  border-radius:12px;
+  padding:10px;
+}
+.ai-business-row-top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:7px;
+}
+.ai-business-name-strong {
+  font-size:13px;
+  font-weight:900;
+  color:#111;
+}
+.ai-business-score-strong {
+  font-size:13px;
+  font-weight:900;
+  color:#005bea;
+}
+.ai-business-bar-strong {
+  width:100%;
+  height:10px;
+  background:#edf3ff;
+  border-radius:999px;
+  overflow:hidden;
+  margin-bottom:7px;
+}
+.ai-business-bar-fill-strong {
+  height:100%;
+  background:linear-gradient(90deg,#1e88ff,#03c75a);
+  border-radius:999px;
+}
+.ai-business-reason-strong {
+  font-size:12px;
+  color:#444;
+  line-height:1.45;
+}
+.ai-business-verdict {
+  display:inline-block;
+  margin-left:6px;
+  padding:2px 7px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:900;
+  background:#eef4ff;
+  color:#005bea;
+}
+
 </style>
 </head>
 
@@ -2527,18 +2597,44 @@ function buildAiTags(items) {
 }
 
 
+function getAiBusinessVerdict(score) {
+  if (score >= 85) return "강력추천";
+  if (score >= 75) return "추천";
+  if (score >= 65) return "보통";
+  if (score >= 55) return "주의";
+  return "비추천";
+}
+
+function buildAiBusinessSummary(items) {
+  if (!items || items.length === 0) return "업종 후보를 계산할 수 없습니다.";
+  var top = items[0];
+  return "가장 적합한 업종은 " + top.name + "입니다. " + top.reason + " 기준으로 " + top.score + "점으로 평가됩니다.";
+}
+
 function buildAiBusinessFitHtml(items) {
-  return items.map(function(item) {
+  if (!items || items.length === 0) {
+    return '<div class="ai-business-summary">업종별 적합도 정보가 없습니다. 평수, 월세, 메모를 보완하면 더 정확해집니다.</div>';
+  }
+
+  var html = '<div class="ai-business-fit-strong">' +
+    '<div class="ai-business-summary">' + escapeHtml(buildAiBusinessSummary(items)) + '</div>';
+
+  html += items.map(function(item) {
     var width = clampNumber(item.score, 0, 100);
+    var verdict = getAiBusinessVerdict(item.score);
     return '' +
-      '<div class="ai-business-row">' +
-        '<div class="ai-business-name">' + escapeHtml(item.name) + '</div>' +
-        '<div class="ai-business-bar-wrap">' +
-          '<div class="ai-business-bar"><div class="ai-business-bar-fill" style="width:' + width + '%"></div></div>' +
-          '<div class="ai-business-reason"><span class="ai-business-score">' + item.score + '점</span> · ' + escapeHtml(item.reason) + '</div>' +
+      '<div class="ai-business-row-strong">' +
+        '<div class="ai-business-row-top">' +
+          '<div class="ai-business-name-strong">' + escapeHtml(item.name) + '<span class="ai-business-verdict">' + escapeHtml(verdict) + '</span></div>' +
+          '<div class="ai-business-score-strong">' + item.score + '점</div>' +
         '</div>' +
+        '<div class="ai-business-bar-strong"><div class="ai-business-bar-fill-strong" style="width:' + width + '%"></div></div>' +
+        '<div class="ai-business-reason-strong"><b>추천사유</b> · ' + escapeHtml(item.reason) + '</div>' +
       '</div>';
   }).join("");
+
+  html += '</div>';
+  return html;
 }
 
 function buildSmartItemCardHtml(item) {
@@ -2579,7 +2675,8 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">주의점</div><ul class="ai-list">' + buildAiList(ai.cons) + '</ul></div>' +
         '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + buildAiTags(ai.businesses) + '</div></div>' +
         '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
-        '<div class="ai-section full"><div class="ai-section-title">업종별 적합도</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +        '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
+        '<div class="ai-section full"><div class="ai-section-title">업종별 적합도 / 추천사유</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +
+        '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
         '<div class="ai-section full ai-negotiation-section"><div class="ai-section-title">협상포인트</div><ul class="ai-list ai-action-list">' + buildAiList(ai.negotiationTips) + '</ul></div>' +
       '</div>' +
       '<div class="ai-card-actions">' +
