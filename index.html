@@ -5329,6 +5329,92 @@ function addAIReportPrintButton() {
 }
 
 setInterval(addAIReportPrintButton, 700);
+  /* === v3.2.3 상권분석 UI 정리 === */
+
+function enhanceCommercialUI() {
+  var selected = document.querySelector(".item.selected");
+  if (!selected) return;
+
+  // 0개 → 없음 표시
+  selected.querySelectorAll("*").forEach(function(el) {
+    if (el.children.length === 0 && el.innerText) {
+      el.innerText = el.innerText.replace(/0개/g, "없음");
+    }
+  });
+
+  // 반경 버튼 강조
+  selected.querySelectorAll("button").forEach(function(btn) {
+    var t = btn.innerText || "";
+    if (/50m|100m|200m|300m|500m/.test(t)) {
+      btn.classList.add("radius-clean-btn");
+
+      btn.onclick = (function(oldClick) {
+        return function(e) {
+          selected.querySelectorAll(".radius-clean-btn").forEach(function(b) {
+            b.classList.remove("radius-active");
+          });
+          btn.classList.add("radius-active");
+          if (oldClick) oldClick.call(this, e);
+        };
+      })(btn.onclick);
+    }
+  });
+
+  // 상권분석 박스 제목 강화
+  selected.querySelectorAll("*").forEach(function(el) {
+    if ((el.innerText || "").includes("AI 상권분석") && !el.classList.contains("commercial-title-done")) {
+      el.classList.add("commercial-title-done");
+      el.style.fontWeight = "900";
+      el.style.color = "#005bea";
+      el.style.fontSize = "15px";
+    }
+  });
+
+  // 블루오션/포화주의 시각 강화
+  selected.querySelectorAll("*").forEach(function(el) {
+    var txt = el.innerText || "";
+
+    if (txt.includes("블루오션") && !el.classList.contains("blue-ocean-mark")) {
+      el.classList.add("blue-ocean-mark");
+      el.style.background = "#eefaf2";
+      el.style.border = "1px solid #b7ebc6";
+      el.style.borderRadius = "10px";
+      el.style.padding = "8px";
+      el.style.marginTop = "6px";
+    }
+
+    if (txt.includes("포화") && !el.classList.contains("saturation-mark")) {
+      el.classList.add("saturation-mark");
+      el.style.background = "#fff7e6";
+      el.style.border = "1px solid #ffd591";
+      el.style.borderRadius = "10px";
+      el.style.padding = "8px";
+      el.style.marginTop = "6px";
+    }
+  });
+}
+
+function injectCommercialUIStyle() {
+  if (document.getElementById("commercial-ui-style-v323")) return;
+
+  var style = document.createElement("style");
+  style.id = "commercial-ui-style-v323";
+  style.innerHTML =
+    ".radius-clean-btn{" +
+    "margin:3px;padding:6px 9px;border-radius:999px;background:#eef4ff;color:#005bea;font-size:12px;font-weight:800;" +
+    "}" +
+    ".radius-clean-btn.radius-active{" +
+    "background:#005bea!important;color:white!important;" +
+    "}" +
+    ".item.selected{" +
+    "box-shadow:0 4px 16px rgba(0,91,234,0.12);" +
+    "}";
+
+  document.head.appendChild(style);
+}
+
+injectCommercialUIStyle();
+setInterval(enhanceCommercialUI, 800);
 </script>
 
 </body>
