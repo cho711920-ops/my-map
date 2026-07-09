@@ -900,6 +900,68 @@ button {
   }
 }
 
+
+/* === v3.0.7 추가: AI 카드 핵심지표 + 분석복사 === */
+.ai-metrics {
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:7px;
+  margin:10px 0 8px;
+}
+
+.ai-metric {
+  background:#f6f9ff;
+  border:1px solid #e1ecff;
+  border-radius:12px;
+  padding:8px 6px;
+  text-align:center;
+  min-width:0;
+}
+
+.ai-metric strong {
+  display:block;
+  color:#005bea;
+  font-size:14px;
+  line-height:1.2;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ai-metric span {
+  display:block;
+  margin-top:3px;
+  color:#667085;
+  font-size:11px;
+  font-weight:800;
+}
+
+.ai-card-actions {
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+}
+
+.ai-copy-btn {
+  background:#eef4ff;
+  color:#005bea;
+  border:1px solid #cfe0ff;
+  padding:8px 10px;
+  border-radius:9px;
+  font-size:12px;
+  font-weight:900;
+}
+
+.ai-copy-btn:hover {
+  background:#dceaff;
+}
+
+@media (max-width:768px) {
+  .ai-metrics {
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+}
+
 </style>
 </head>
 
@@ -2109,6 +2171,15 @@ function buildAiTags(items) {
 
 function buildSmartItemCardHtml(item) {
   var ai = getSmartItemAnalysis(item);
+  var deposit = Number(item.deposit) || 0;
+  var rent = Number(item.rent) || 0;
+  var fee = Number(item.fee) || 0;
+  var premium = Number(item.premium) || 0;
+  var area = Number(item.area) || 0;
+  var totalMonthly = rent + fee;
+  var startMoney = deposit + premium;
+  var rentPerArea = area > 0 ? Math.round((totalMonthly / area) * 10) / 10 : 0;
+  var encodedKey = encodeURIComponent(item.key || "");
 
   return '' +
     '<div class="ai-card" onclick="event.stopPropagation();">' +
@@ -2118,7 +2189,13 @@ function buildSmartItemCardHtml(item) {
       '</div>' +
       '<div class="ai-score-wrap">' +
         '<div class="ai-score"><strong>' + ai.score + '</strong><span>투자점수</span></div>' +
-        '<div class="ai-summary">' + escapeHtml(ai.oneLine) + '<br>보증금 ' + formatAiMoney(item.deposit) + ' / 월세 ' + formatAiMoney(item.rent) + ' / 권리금 ' + formatAiMoney(item.premium) + '</div>' +
+        '<div class="ai-summary">' + escapeHtml(ai.oneLine) + '<br>보증금 ' + formatAiMoney(deposit) + ' / 월세 ' + formatAiMoney(rent) + ' / 권리금 ' + formatAiMoney(premium) + '</div>' +
+      '</div>' +
+      '<div class="ai-metrics">' +
+        '<div class="ai-metric"><strong>' + formatAiMoney(startMoney) + '</strong><span>초기비용</span></div>' +
+        '<div class="ai-metric"><strong>' + formatAiMoney(totalMonthly) + '</strong><span>월고정비</span></div>' +
+        '<div class="ai-metric"><strong>' + (rentPerArea ? rentPerArea : '-') + '</strong><span>평당월비</span></div>' +
+        '<div class="ai-metric"><strong>' + (area ? area + '평' : '-') + '</strong><span>면적</span></div>' +
       '</div>' +
       '<div class="ai-grid">' +
         '<div class="ai-section"><div class="ai-section-title">장점</div><ul class="ai-list">' + buildAiList(ai.pros) + '</ul></div>' +
@@ -2127,8 +2204,68 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
         '<div class="ai-section full"><div class="ai-section-title">확인할 것</div><ul class="ai-list"><li>실제 유동인구와 전면 노출 확인</li><li>관리비 포함 항목과 권리금 협의 가능 여부 확인</li><li>주차, 간판, 원상복구 조건 확인</li></ul></div>' +
       '</div>' +
+      '<div class="ai-card-actions">' +
+        '<button class="ai-copy-btn" onclick="event.stopPropagation(); copySmartItemAnalysis(\'' + encodedKey + '\')">AI분석 복사</button>' +
+      '</div>' +
       '<div class="ai-note">※ 현재 입력된 매물정보와 메모 키워드를 바탕으로 한 보조 분석입니다. 최종 판단은 현장 확인과 계약 조건 확인 후 진행하세요.</div>' +
     '</div>';
+}
+
+function getItemByEncodedKey(encodedKey) {
+  var key = decodeURIComponent(encodedKey || "");
+  return allItems.find(function(item) {
+    return item.key === key;
+  }) || visibleListItems.find(function(item) {
+    return item.key === key;
+  }) || null;
+}
+
+function buildSmartItemAnalysisText(item) {
+  var ai = getSmartItemAnalysis(item);
+  var deposit = Number(item.deposit) || 0;
+  var rent = Number(item.rent) || 0;
+  var fee = Number(item.fee) || 0;
+  var premium = Number(item.premium) || 0;
+  var area = Number(item.area) || 0;
+  var totalMonthly = rent + fee;
+  var startMoney = deposit + premium;
+  var rentPerArea = area > 0 ? Math.round((totalMonthly / area) * 10) / 10 : 0;
+
+  return [
+    "[JS부동산 AI 스마트 매물카드]",
+    "매물: " + [item.name, item.address, item.room].filter(Boolean).join(" / "),
+    "투자점수: " + ai.score + "점 (" + ai.grade + ")",
+    "한줄평: " + ai.oneLine,
+    "금액: 보증금 " + formatAiMoney(deposit) + " / 월세 " + formatAiMoney(rent) + " / 관리비 " + formatAiMoney(fee) + " / 권리금 " + formatAiMoney(premium),
+    "핵심지표: 초기비용 " + formatAiMoney(startMoney) + " / 월고정비 " + formatAiMoney(totalMonthly) + " / 평당월비 " + (rentPerArea || "-") + " / 면적 " + (area ? area + "평" : "-"),
+    "장점: " + ai.pros.join(" | "),
+    "주의점: " + ai.cons.join(" | "),
+    "추천업종: " + ai.businesses.join(" | "),
+    "키워드: " + ai.tags.join(" | "),
+    "확인할 것: 유동인구 / 관리비 포함항목 / 권리금 협의 / 주차 / 간판 / 원상복구"
+  ].join("\n");
+}
+
+function copySmartItemAnalysis(encodedKey) {
+  var item = getItemByEncodedKey(encodedKey);
+  if (!item) {
+    alert("복사할 매물을 찾지 못했습니다.");
+    return;
+  }
+
+  var text = buildSmartItemAnalysisText(item);
+
+  function done() {
+    alert("AI 분석 내용을 복사했습니다.");
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(function() {
+      fallbackCopyText(text);
+    });
+  } else {
+    fallbackCopyText(text);
+  }
 }
 
 
