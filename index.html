@@ -1552,6 +1552,59 @@ button {
   }
 }
 
+
+/* === v3.0.13 추가: 리스트 평당가 뱃지 + 출처별 마커 색상 === */
+.pyeong-mini-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  margin-right:5px;
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:10.5px;
+  font-weight:900;
+  vertical-align:1px;
+  background:#eaf3ff;
+  color:#006de5;
+  border:1px solid #cfe3ff;
+  white-space:nowrap;
+}
+
+.pyeong-mini-badge.low {
+  background:#eefbf3;
+  color:#087f3f;
+  border-color:#c9f2d8;
+}
+
+.pyeong-mini-badge.mid {
+  background:#fff7e6;
+  color:#b54708;
+  border-color:#ffe0a3;
+}
+
+.pyeong-mini-badge.high {
+  background:#fff1f0;
+  color:#d93025;
+  border-color:#ffd6d2;
+}
+
+.circle-marker.source-gongsil { background:#1e88ff; }
+.circle-marker.source-naver { background:#03c75a; }
+.circle-marker.source-danggeun { background:#ff8a00; }
+.circle-marker.source-direct { background:#ffd43b; color:#222; }
+.circle-marker.source-mixed { background:#7c4dff; }
+.circle-marker.source-unknown { background:#1e88ff; }
+.circle-marker.done { opacity:0.68; }
+.circle-marker.selected { opacity:1; }
+
+@media (max-width:768px) {
+  .pyeong-mini-badge {
+    font-size:10px;
+    padding:2px 5px;
+    margin-right:4px;
+  }
+}
+
 </style>
 </head>
 
@@ -2457,6 +2510,67 @@ function applyFilter() {
   document.getElementById("status").innerHTML = "검색 결과 " + filtered.length + "개";
 }
 
+
+/* === v3.0.13 추가: 리스트 평당가 뱃지 + 출처별 마커 색상 로직 === */
+function getRentPerPyeongValue(item) {
+  var area = Number(item && item.area) || 0;
+  var rent = Number(item && item.rent) || 0;
+  var fee = Number(item && item.fee) || 0;
+  if (!area) return 0;
+  return Math.round(((rent + fee) / area) * 10) / 10;
+}
+
+function getPyeongBadgeClass(value) {
+  if (!value) return "";
+  if (value <= 4.5) return " low";
+  if (value <= 7) return " mid";
+  return " high";
+}
+
+function buildPyeongMiniBadge(item) {
+  var value = getRentPerPyeongValue(item);
+  if (!value) return '<span class="pyeong-mini-badge">평당 -</span>';
+  return '<span class="pyeong-mini-badge' + getPyeongBadgeClass(value) + '">평당 ' + escapeHtml(value) + '만</span>';
+}
+
+function getItemSourceType(item) {
+  var text = ((item && item.memo) ? item.memo : "") + " " + ((item && item.name) ? item.name : "") + " " + ((item && item.type) ? item.type : "");
+  text = String(text || "").toLowerCase();
+
+  if (/네이버|naver/.test(text)) return "naver";
+  if (/당근|daangn|karrot/.test(text)) return "danggeun";
+  if (/직접확인|직접매물|직접|현장확인/.test(text)) return "direct";
+  if (/공실박스|gongsil/.test(text)) return "gongsil";
+
+  return "unknown";
+}
+
+function getClusterSourceType(items) {
+  var counts = { gongsil:0, naver:0, danggeun:0, direct:0, unknown:0 };
+  (items || []).forEach(function(item) {
+    var source = getItemSourceType(item);
+    counts[source] = (counts[source] || 0) + 1;
+  });
+
+  var best = "unknown";
+  var bestCount = 0;
+  Object.keys(counts).forEach(function(key) {
+    if (counts[key] > bestCount) {
+      best = key;
+      bestCount = counts[key];
+    }
+  });
+
+  if (!bestCount) return "unknown";
+
+  var activeSources = Object.keys(counts).filter(function(key) {
+    return key !== "unknown" && counts[key] > 0;
+  });
+
+  if (activeSources.length >= 2) return "mixed";
+  return best === "unknown" ? "gongsil" : best;
+}
+
 function drawItems(items) {
   isRendering = true;
   clearMap();
@@ -2472,9 +2586,10 @@ function drawItems(items) {
 
     var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
     var doneClass = allDone ? " done" : "";
+    var sourceClass = " source-" + getClusterSourceType(cluster.items);
 
     var overlayContent =
-      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + sourceClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
       position: cluster.latlng,
@@ -2528,9 +2643,10 @@ function redrawSelectedMarkers() {
 
     var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
     var doneClass = allDone ? " done" : "";
+    var sourceClass = " source-" + getClusterSourceType(cluster.items);
 
     var content =
-      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + sourceClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     o.setContent(content);
   });
@@ -2573,8 +2689,7 @@ function addListItem(item) {
   var typeLabel = item.type ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>' : "";
   var encodedKey = encodeURIComponent(item.key);
   var safeKey = escapeHtml(item.key);
-  var aiQuick = getSmartItemAnalysis(item);
-  var aiMiniBadge = '<span class="ai-mini-badge grade-' + escapeHtml(String(aiQuick.gradeCode || "").toLowerCase()) + '">AI ' + escapeHtml(aiQuick.score) + ' · ' + escapeHtml(aiQuick.gradeCode) + '</span>';
+  var pyeongMiniBadge = buildPyeongMiniBadge(item);
   var smartCardHtml = selectedItemKey === item.key ? buildSmartItemCardHtml(item) : "";
 
   div.innerHTML =
@@ -2582,7 +2697,7 @@ function addListItem(item) {
       '<div class="item-left">' +
         '<input type="checkbox" class="print-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
         '<div class="item-title-wrap">' +
-          '<div class="title">' + doneLabel + typeLabel + aiMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+          '<div class="title">' + doneLabel + typeLabel + pyeongMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
