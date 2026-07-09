@@ -1175,7 +1175,7 @@ button {
 }
 
 
-/* === v3.0.11 추가: 상단 통합바 + 압축형 리스트 UI === */
+/* === v3.0.11.2 추가: 상단 1줄 통합바 + 리스트 420px UI === */
 @media (min-width:769px) {
   body {
     background:#f6f8fc;
@@ -1184,7 +1184,7 @@ button {
   #wrap {
     display:flex;
     height:100vh;
-    padding-top:148px;
+    padding-top:58px;
     overflow:hidden;
   }
 
@@ -1192,31 +1192,45 @@ button {
     position:fixed;
     top:0;
     left:0;
-    right:0;
+    width:238px;
     height:58px;
     z-index:12000;
     display:flex;
     align-items:center;
-    padding:0 18px;
-    font-size:24px;
+    padding:0 16px;
+    font-size:23px;
     letter-spacing:-0.5px;
     box-shadow:0 2px 10px rgba(0,0,0,0.12);
+    white-space:nowrap;
   }
 
   .filters {
     position:fixed;
-    top:58px;
-    left:0;
-    right:0;
-    min-height:90px;
+    top:0;
+    left:238px;
+    right:132px;
+    height:58px;
+    min-height:58px;
     z-index:11990;
     display:flex;
-    flex-wrap:wrap;
+    flex-wrap:nowrap;
     align-items:center;
-    gap:8px;
-    padding:10px 14px;
+    gap:7px;
+    padding:8px 12px;
     border-bottom:1px solid #dfe6f2;
     box-shadow:0 2px 12px rgba(15,23,42,0.08);
+    overflow-x:auto;
+    overflow-y:hidden;
+    white-space:nowrap;
+  }
+
+  .filters::-webkit-scrollbar {
+    height:4px;
+  }
+
+  .filters::-webkit-scrollbar-thumb {
+    background:#c8d4e6;
+    border-radius:999px;
   }
 
   .filter-title {
@@ -1224,11 +1238,11 @@ button {
   }
 
   .search-row {
-    flex:1 1 430px;
-    min-width:360px;
-    max-width:560px;
+    flex:0 0 450px;
+    min-width:450px;
+    max-width:450px;
     margin:0;
-    gap:8px;
+    gap:7px;
   }
 
   .search-row input {
@@ -1239,7 +1253,7 @@ button {
   }
 
   .search-btn {
-    width:78px;
+    width:70px;
     height:40px;
     padding:0;
     box-shadow:0 2px 6px rgba(30,136,255,0.22);
@@ -1249,8 +1263,9 @@ button {
   .extra-action-row {
     display:flex;
     align-items:center;
-    gap:8px;
+    gap:7px;
     margin:0;
+    flex:0 0 auto;
   }
 
   .filter-row button,
@@ -1264,58 +1279,58 @@ button {
   }
 
   .detail-btn {
-    width:84px;
-    flex:0 0 84px;
+    width:72px;
+    flex:0 0 72px;
   }
 
   .filter-select-wrap {
     flex:0 0 auto;
     display:flex;
-    gap:8px;
+    gap:7px;
   }
 
   .filter-select-wrap select {
-    width:128px;
-    min-width:128px;
-    flex:0 0 128px;
-    padding:0 10px;
+    width:112px;
+    min-width:112px;
+    flex:0 0 112px;
+    padding:0 9px;
   }
 
   .favorite-filter-btn {
-    width:76px;
-    flex:0 0 76px;
+    width:62px;
+    flex:0 0 62px;
   }
 
   .reset-btn {
+    width:62px;
+    flex:0 0 62px;
+  }
+
+  .hide-done-btn {
     width:74px;
     flex:0 0 74px;
   }
 
-  .hide-done-btn {
-    width:86px;
-    flex:0 0 86px;
-  }
-
   .select-all-btn,
   .clear-selected-btn {
-    width:78px;
-    flex:0 0 78px;
+    width:70px;
+    flex:0 0 70px;
   }
 
   .print-btn {
-    width:104px;
-    flex:0 0 104px;
+    width:90px;
+    flex:0 0 90px;
   }
 
   .quick-add-btn {
-    width:104px;
-    flex:0 0 104px;
+    width:92px;
+    flex:0 0 92px;
   }
 
   #detailFilter {
     position:fixed;
-    top:142px;
-    left:14px;
+    top:64px;
+    left:252px;
     width:420px;
     z-index:12010;
     margin:0;
@@ -1340,10 +1355,10 @@ button {
   }
 
   #sidebar {
-    width:360px;
-    min-width:360px;
-    max-width:360px;
-    height:calc(100vh - 148px);
+    width:420px;
+    min-width:420px;
+    max-width:420px;
+    height:calc(100vh - 58px);
     overflow:auto;
     border-right:1px solid #d8e1ef;
     box-shadow:2px 0 10px rgba(15,23,42,0.06);
@@ -1351,7 +1366,7 @@ button {
 
   #map {
     flex:1;
-    height:calc(100vh - 148px);
+    height:calc(100vh - 58px);
   }
 
   #list {
@@ -1464,22 +1479,25 @@ button {
 }
 
 @media (min-width:769px) and (max-width:1180px) {
-  #wrap {
-    padding-top:188px;
+  .header {
+    width:210px;
+    font-size:20px;
+    padding:0 12px;
   }
-  #sidebar,
-  #map {
-    height:calc(100vh - 188px);
-  }
+
   .filters {
-    min-height:130px;
+    left:210px;
+    right:8px;
   }
-  #detailFilter {
-    top:182px;
-  }
+
   .search-row {
-    max-width:none;
-    flex-basis:100%;
+    flex-basis:360px;
+    min-width:360px;
+    max-width:360px;
+  }
+
+  #detailFilter {
+    left:224px;
   }
 }
 
