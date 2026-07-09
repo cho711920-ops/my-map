@@ -5579,7 +5579,8 @@ function jsV33_injectStyle() {
 }
 
 jsV33_injectStyle();
-setInterval(jsV33_renderBriefing, 1200);
+// v4.0 수정: 기존 AI 상권브리핑 반복 렌더링 중지 (스크롤 튐 방지)
+// setInterval(jsV33_renderBriefing, 1200);
 /* === v3.3.1 추천업종 TOP3 실무형 브리핑 === */
 
 function jsV331_getSelectedCard() {
@@ -5770,7 +5771,8 @@ function jsV331_injectStyle() {
 }
 
 jsV331_injectStyle();
-setInterval(jsV331_renderTopBusiness, 1500);
+// v4.0 수정: 기존 AI 추천업종 반복 렌더링 중지 (스크롤 튐 방지)
+// setInterval(jsV331_renderTopBusiness, 1500);
 /* === v4.0 AI 엔진 통합 안정화: 스크롤 튐 방지 === */
 
 /* 기존 반복 렌더링 함수 무력화 */
@@ -5846,9 +5848,31 @@ function jsV40Build(card) {
   };
 }
 
+
+var JS_V40_LAST_50_KEY = "";
+
+function jsV40EnsureDefault50m(card) {
+  if (!card) return;
+  var key = (typeof selectedItemKey !== "undefined" ? selectedItemKey : "") + "|" + ((card.innerText || "").slice(0, 80));
+  if (JS_V40_LAST_50_KEY === key) return;
+  JS_V40_LAST_50_KEY = key;
+
+  setTimeout(function() {
+    var buttons = card.querySelectorAll("button");
+    buttons.forEach(function(btn) {
+      var t = (btn.innerText || "").trim();
+      if (t === "50m") {
+        btn.click();
+      }
+    });
+  }, 250);
+}
+
 function jsV40Render() {
   var card = document.querySelector(".item.selected");
   if (!card) return;
+
+  jsV40EnsureDefault50m(card);
 
   var data = jsV40Build(card);
   var key = (typeof selectedItemKey !== "undefined" ? selectedItemKey : "") + "|" + data.sig;
