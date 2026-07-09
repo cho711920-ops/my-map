@@ -5191,7 +5191,181 @@ function parseQuickAddText() {
   updateQuickAddWarning();
   updateQuickAddPreview();
 }
+/* === v3.2.2 AI 투자리포트 A4 인쇄 === */
 
+function getSelectedAIReportItem() {
+  if (!selectedItemKey) return null;
+  return allItems.find(function(item) {
+    return item.key === selectedItemKey;
+  }) || null;
+}
+
+function makeSimpleAIReportText(item) {
+  var area = Number(item.area) || 0;
+  var rent = Number(item.rent) || 0;
+  var fee = Number(item.fee) || 0;
+  var premium = Number(item.premium) || 0;
+  var deposit = Number(item.deposit) || 0;
+  var perRent = area ? Math.round(((rent + fee) / area) * 10) / 10 : 0;
+  var initCost = deposit + premium;
+
+  var opinion = "데이터가 더 쌓이면 분석 정확도가 높아집니다.";
+
+  if (perRent > 0 && perRent <= 5 && premium <= 1000) {
+    opinion = "평당월비와 권리금 부담이 낮은 편으로 초기 창업자에게 검토 가치가 있습니다.";
+  } else if (perRent >= 8 || premium >= 3000) {
+    opinion = "고정비 또는 권리금 부담이 있어 협상 후 재검토가 필요합니다.";
+  } else {
+    opinion = "조건은 보통 수준이며 현장 유동인구와 경쟁업종 확인이 필요합니다.";
+  }
+
+  return {
+    perRent: perRent,
+    initCost: initCost,
+    opinion: opinion
+  };
+}
+
+function printAIInvestmentReport() {
+  var item = getSelectedAIReportItem();
+
+  if (!item) {
+    alert("먼저 매물 1개를 클릭해주세요.");
+    return;
+  }
+
+  var ai = makeSimpleAIReportText(item);
+  var now = new Date().toLocaleString("ko-KR");
+
+  var html =
+'<!DOCTYPE html>' +
+'<html>' +
+'<head>' +
+'<meta charset="utf-8">' +
+'<title>AI 투자리포트</title>' +
+'<style>' +
+'@page{size:A4 portrait;margin:10mm;}' +
+'*{box-sizing:border-box;}' +
+'body{font-family:Arial,"Malgun Gothic",sans-serif;margin:0;color:#222;background:white;}' +
+'.report{width:100%;padding:0;}' +
+'.top{border-bottom:3px solid #1e88ff;padding-bottom:8px;margin-bottom:10px;}' +
+'.title{font-size:22px;font-weight:900;color:#005bea;}' +
+'.sub{font-size:12px;color:#666;margin-top:4px;}' +
+'.section{border:1px solid #d9e6f7;border-radius:10px;padding:10px;margin-bottom:8px;page-break-inside:avoid;}' +
+'.section h2{font-size:15px;margin:0 0 8px 0;color:#005bea;}' +
+'.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}' +
+'.box{background:#f6f9ff;border:1px solid #d9e6f7;border-radius:8px;padding:8px;text-align:center;}' +
+'.box b{display:block;font-size:11px;color:#666;}' +
+'.box strong{display:block;font-size:17px;color:#111;margin-top:3px;}' +
+'.line{font-size:13px;line-height:1.55;margin:2px 0;}' +
+'.memo{font-size:12px;line-height:1.45;white-space:normal;}' +
+'.opinion{font-size:14px;font-weight:800;line-height:1.55;background:#fffdf2;border:1px solid #f3df91;border-radius:8px;padding:9px;}' +
+'.footer{font-size:10px;color:#777;text-align:right;margin-top:6px;}' +
+'</style>' +
+'</head>' +
+'<body>' +
+'<div class="report">' +
+'<div class="top">' +
+'<div class="title">JS부동산 AI 투자리포트</div>' +
+'<div class="sub">출력일: ' + now + '</div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>1. 매물 기본정보</h2>' +
+'<div class="line"><b>매물:</b> ' + escapeHtml(item.name || "") + '</div>' +
+'<div class="line"><b>주소:</b> ' + escapeHtml(item.address || "") + ' / ' + escapeHtml(item.room || "") + '</div>' +
+'<div class="line"><b>구분:</b> ' + escapeHtml(item.type || "") + ' / <b>상태:</b> ' + escapeHtml(item.state || "계약가능") + '</div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>2. 핵심지표</h2>' +
+'<div class="grid">' +
+'<div class="box"><b>보증금</b><strong>' + item.deposit + '</strong></div>' +
+'<div class="box"><b>월세+관리비</b><strong>' + (rent + fee) + '</strong></div>' +
+'<div class="box"><b>권리금</b><strong>' + premium + '</strong></div>' +
+'<div class="box"><b>평당월비</b><strong>' + (ai.perRent || "-") + '만</strong></div>' +
+'</div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>3. AI 시장분석</h2>' +
+'<div class="line">초기비용: 보증금 ' + deposit + ' + 권리금 ' + premium + ' = <b>' + ai.initCost + '</b></div>' +
+'<div class="line">평당월비: <b>' + (ai.perRent || "-") + '만</b></div>' +
+'<div class="line">관리비: <b>' + fee + '</b></div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>4. 현장 체크포인트</h2>' +
+'<div class="line">□ 유동인구 확인</div>' +
+'<div class="line">□ 전면 노출/간판 위치 확인</div>' +
+'<div class="line">□ 주차 가능 여부 확인</div>' +
+'<div class="line">□ 주변 경쟁업종 확인</div>' +
+'<div class="line">□ 권리금 세부내역 확인</div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>5. 협상 포인트</h2>' +
+'<div class="line">• 평당월비가 높다면 월세 인하를 우선 협상</div>' +
+'<div class="line">• 권리금이 높다면 시설/집기 내역 확인 후 조정</div>' +
+'<div class="line">• 관리비 포함 항목을 반드시 확인</div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>6. AI 종합의견</h2>' +
+'<div class="opinion">' + escapeHtml(ai.opinion) + '</div>' +
+'</div>' +
+
+'<div class="section">' +
+'<h2>7. 메모</h2>' +
+'<div class="memo">' + escapeHtml(item.memo || "") + '</div>' +
+'</div>' +
+
+'<div class="footer">JS부동산 AI 리포트</div>' +
+'</div>' +
+'</body>' +
+'</html>';
+
+  var win = window.open("", "", "width=900,height=1000");
+
+  if (!win) {
+    alert("팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.");
+    return;
+  }
+
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+
+  setTimeout(function() {
+    win.print();
+  }, 400);
+}
+
+function addAIReportPrintButton() {
+  var selected = document.querySelector(".item.selected");
+  if (!selected) return;
+
+  if (selected.querySelector(".ai-report-print-btn")) return;
+
+  var btn = document.createElement("button");
+  btn.className = "ai-report-print-btn";
+  btn.innerText = "AI 리포트 인쇄";
+  btn.onclick = function(e) {
+    e.stopPropagation();
+    printAIInvestmentReport();
+  };
+
+  btn.style.marginTop = "8px";
+  btn.style.width = "100%";
+  btn.style.background = "#005bea";
+  btn.style.color = "white";
+  btn.style.borderRadius = "8px";
+  btn.style.fontWeight = "800";
+
+  selected.appendChild(btn);
+}
+
+setInterval(addAIReportPrintButton, 700);
 </script>
 
 </body>
