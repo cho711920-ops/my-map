@@ -1038,6 +1038,72 @@ button {
   }
 }
 
+
+/* === v3.0.10 추가: 업종별 적합도 === */
+.ai-business-fit {
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+
+.ai-business-row {
+  display:grid;
+  grid-template-columns:72px 1fr;
+  gap:8px;
+  align-items:center;
+  background:white;
+  border:1px solid #e7edf7;
+  border-radius:10px;
+  padding:7px 8px;
+}
+
+.ai-business-name {
+  font-size:12px;
+  font-weight:900;
+  color:#1f2937;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ai-business-bar-wrap {
+  min-width:0;
+}
+
+.ai-business-bar {
+  height:8px;
+  border-radius:999px;
+  background:#e9eef7;
+  overflow:hidden;
+  margin-bottom:4px;
+}
+
+.ai-business-bar-fill {
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,#1e88ff,#03c75a);
+}
+
+.ai-business-reason {
+  font-size:11px;
+  color:#667085;
+  line-height:1.35;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ai-business-score {
+  font-weight:900;
+  color:#005bea;
+}
+
+@media (max-width:768px) {
+  .ai-business-row {
+    grid-template-columns:64px 1fr;
+  }
+}
+
 </style>
 </head>
 
@@ -2197,6 +2263,105 @@ function getAiFieldCheckList(item, rentPerPyeong) {
   return checks.slice(0, 5);
 }
 
+
+/* === v3.0.10 추가: 업종별 적합도 로직 === */
+function getAiBusinessFitList(item, rentPerPyeong) {
+  var area = Number(item.area) || 0;
+  var rent = Number(item.rent) || 0;
+  var fee = Number(item.fee) || 0;
+  var premium = Number(item.premium) || 0;
+  var totalMonthly = rent + fee;
+  var text = [item.name, item.address, item.room, item.type, item.memo].join(" ");
+
+  var candidates = [];
+  if (area > 0 && area <= 15) {
+    candidates = ["테이크아웃", "네일/미용", "무인점포", "소형사무실"];
+  } else if (area > 15 && area <= 35) {
+    candidates = ["카페", "미용실", "소매점", "공방"];
+  } else if (area > 35 && area <= 70) {
+    candidates = ["음식점", "학원", "판매점", "사무실"];
+  } else if (area > 70) {
+    candidates = ["대형식당", "전시장", "학원", "사무실"];
+  } else {
+    candidates = ["카페", "소매점", "사무실", "공방"];
+  }
+
+  if (/사무실/.test(item.type || "")) candidates = ["사무실", "쇼룸", "공방", "학원"];
+  if (/음식|식당|주방|배달/i.test(text)) candidates = ["음식점", "배달전문", "카페", "분식"];
+  if (/학원|교습|교육/i.test(text)) candidates = ["학원", "교습소", "스터디룸", "사무실"];
+
+  return candidates.map(function(name) {
+    var score = 62;
+    var reasons = [];
+
+    if (area > 0) {
+      if ((name === "테이크아웃" || name === "네일/미용" || name === "무인점포") && area <= 18) {
+        score += 14;
+        reasons.push("소형 평수 적합");
+      }
+      if ((name === "카페" || name === "미용실" || name === "소매점" || name === "공방") && area > 15 && area <= 40) {
+        score += 12;
+        reasons.push("중소형 운영 적합");
+      }
+      if ((name === "음식점" || name === "학원" || name === "판매점") && area >= 35) {
+        score += 10;
+        reasons.push("면적 활용 가능");
+      }
+      if ((name === "사무실" || name === "쇼룸") && area >= 20) {
+        score += 8;
+        reasons.push("업무공간 구성 가능");
+      }
+    }
+
+    if (/1층|일층|전면|통유리|대로|메인|코너|사거리/i.test(text)) {
+      score += 10;
+      reasons.push("노출/접근성 키워드");
+    }
+
+    if (/주차|주차가능/i.test(text)) {
+      score += 5;
+      reasons.push("주차 조건 확인 가치");
+    } else if (/주차불가|주차\s*없|협소/i.test(text)) {
+      if (name === "음식점" || name === "학원" || name === "대형식당") {
+        score -= 8;
+        reasons.push("주차 제약 확인");
+      }
+    }
+
+    if (rentPerPyeong > 0 && rentPerPyeong <= 4) {
+      score += 8;
+      reasons.push("평당 월비 부담 낮음");
+    } else if (rentPerPyeong >= 8) {
+      score -= 9;
+      reasons.push("평당 월비 높음");
+    }
+
+    if (premium === 0) {
+      score += 6;
+      reasons.push("무권리 진입 가능");
+    } else if (premium >= 3000) {
+      score -= 6;
+      reasons.push("권리금 회수 검토 필요");
+    }
+
+    if (totalMonthly > 0 && totalMonthly <= 100) {
+      score += 5;
+      reasons.push("월고정비 낮음");
+    }
+
+    score = clampNumber(score, 30, 96);
+    if (reasons.length === 0) reasons.push("현장 조건 확인 후 판단");
+
+    return {
+      name: name,
+      score: score,
+      reason: reasons.slice(0, 2).join(" · ")
+    };
+  }).sort(function(a, b) {
+    return b.score - a.score;
+  }).slice(0, 4);
+}
+
 function getSmartItemAnalysis(item) {
   var score = 62;
   var pros = [];
@@ -2329,6 +2494,7 @@ function getSmartItemAnalysis(item) {
   var riskLevel = getAiRiskLevel(score, cons.length);
   var negotiationTips = getAiNegotiationTips(item, rentPerPyeong);
   var fieldChecks = getAiFieldCheckList(item, rentPerPyeong);
+  var businessFits = getAiBusinessFitList(item, rentPerPyeong);
 
   return {
     score: score,
@@ -2343,7 +2509,8 @@ function getSmartItemAnalysis(item) {
     businesses: businesses.slice(0, 4),
     tags: tags.slice(0, 5),
     negotiationTips: negotiationTips,
-    fieldChecks: fieldChecks
+    fieldChecks: fieldChecks,
+    businessFits: businessFits
   };
 }
 
@@ -2356,6 +2523,21 @@ function buildAiList(items) {
 function buildAiTags(items) {
   return items.map(function(text) {
     return '<span class="ai-tag">' + escapeHtml(text) + '</span>';
+  }).join("");
+}
+
+
+function buildAiBusinessFitHtml(items) {
+  return items.map(function(item) {
+    var width = clampNumber(item.score, 0, 100);
+    return '' +
+      '<div class="ai-business-row">' +
+        '<div class="ai-business-name">' + escapeHtml(item.name) + '</div>' +
+        '<div class="ai-business-bar-wrap">' +
+          '<div class="ai-business-bar"><div class="ai-business-bar-fill" style="width:' + width + '%"></div></div>' +
+          '<div class="ai-business-reason"><span class="ai-business-score">' + item.score + '점</span> · ' + escapeHtml(item.reason) + '</div>' +
+        '</div>' +
+      '</div>';
   }).join("");
 }
 
@@ -2396,7 +2578,8 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">장점</div><ul class="ai-list">' + buildAiList(ai.pros) + '</ul></div>' +
         '<div class="ai-section"><div class="ai-section-title">주의점</div><ul class="ai-list">' + buildAiList(ai.cons) + '</ul></div>' +
         '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + buildAiTags(ai.businesses) + '</div></div>' +
-        '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +        '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
+        '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
+        '<div class="ai-section full"><div class="ai-section-title">업종별 적합도</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +        '<div class="ai-section full ai-alert-section"><div class="ai-section-title">현장체크</div><ul class="ai-list ai-action-list">' + buildAiList(ai.fieldChecks) + '</ul></div>' +
         '<div class="ai-section full ai-negotiation-section"><div class="ai-section-title">협상포인트</div><ul class="ai-list ai-action-list">' + buildAiList(ai.negotiationTips) + '</ul></div>' +
       '</div>' +
       '<div class="ai-card-actions">' +
@@ -2437,6 +2620,7 @@ function buildSmartItemAnalysisText(item) {
     "장점: " + ai.pros.join(" | "),
     "주의점: " + ai.cons.join(" | "),
     "추천업종: " + ai.businesses.join(" | "),
+    "업종별 적합도: " + ai.businessFits.map(function(v) { return v.name + " " + v.score + "점(" + v.reason + ")"; }).join(" | "),
     "키워드: " + ai.tags.join(" | "),
     "현장체크: " + ai.fieldChecks.join(" | "),
     "협상포인트: " + ai.negotiationTips.join(" | ")
