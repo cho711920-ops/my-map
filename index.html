@@ -1830,6 +1830,63 @@ button {
   color:#344054;
 }
 .ai-commerce-brief li { margin:2px 0; }
+
+.ai-opportunity-panel {
+  margin-top:8px;
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:8px;
+}
+.ai-opportunity-card {
+  background:#fff;
+  border:1px solid #e6eefc;
+  border-radius:10px;
+  padding:8px;
+}
+.ai-opportunity-card.blue { border-color:#b7ebc6; background:#f6fffa; }
+.ai-opportunity-card.hot { border-color:#ffd6d6; background:#fff8f8; }
+.ai-opportunity-card.score { border-color:#cfe0ff; background:#f8fbff; }
+.ai-opportunity-head {
+  font-size:12px;
+  font-weight:900;
+  color:#1d2939;
+  margin-bottom:5px;
+}
+.ai-opportunity-main {
+  font-size:16px;
+  font-weight:900;
+  color:#005bea;
+  margin-bottom:4px;
+}
+.ai-opportunity-card.blue .ai-opportunity-main { color:#0f8a3b; }
+.ai-opportunity-card.hot .ai-opportunity-main { color:#d93025; }
+.ai-opportunity-desc {
+  font-size:11px;
+  color:#475467;
+  line-height:1.35;
+}
+.ai-opportunity-list {
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+}
+.ai-opportunity-pill {
+  display:inline-flex;
+  align-items:center;
+  border-radius:999px;
+  padding:3px 7px;
+  font-size:11px;
+  font-weight:900;
+  background:#eafaf0;
+  color:#0f8a3b;
+}
+.ai-opportunity-pill.hot {
+  background:#fff0f0;
+  color:#d93025;
+}
+@media (max-width:768px) {
+  .ai-opportunity-panel { grid-template-columns:1fr; }
+}
 @media (max-width:768px) {
   .ai-commerce-grid { grid-template-columns:1fr; }
 }
@@ -3616,6 +3673,50 @@ function buildCommercialAnalysisResult(item, counts, labels, groups) {
   if (medicalTotal >= 5) briefs.push("의료·약국 수요가 있는 상권으로 보이며 대기수요 업종을 검토할 수 있습니다.");
   if (briefs.length === 0) briefs.push("반경 300m 상권 데이터는 수집됐지만, 현장 유동·전면·주차 조건 확인이 필요합니다.");
 
+  var blueOceans = [];
+  function addBlue(key, name, reason) {
+    var c = commercialCount(counts, key);
+    if (c <= 1) blueOceans.push({ name:name, count:c, reason:reason });
+  }
+  addBlue("convenience", "편의점", "생활·음식 수요 대비 경쟁이 적음");
+  addBlue("japanese", "일식/덮밥", "음식 상권 내 세부 경쟁이 낮음");
+  addBlue("nail", "네일샵", "뷰티 수요 대비 세부 업종 공백 가능");
+  addBlue("eyelash", "속눈썹", "미용실 주변 연계수요 활용 가능");
+  addBlue("dessert", "디저트", "카페 수요 대비 디저트 전문점 부족 가능");
+  addBlue("pharmacy", "약국", "의료시설 대비 약국 경쟁이 낮음");
+
+  var saturated = [];
+  function addHot(key, name, limit) {
+    var c = commercialCount(counts, key);
+    if (c >= limit) saturated.push({ name:name, count:c });
+  }
+  addHot("cafe", "카페", 12);
+  addHot("hair", "미용실", 10);
+  addHot("korean", "한식", 10);
+  addHot("academy", "학원", 10);
+  addHot("beer", "호프", 8);
+
+  var topScore = recommendations.length ? recommendations[0].score : 70;
+  var successScore = topScore;
+  if (commercialCount(counts, "bus") >= 2) successScore += 3;
+  if (foodTotal >= 12) successScore += 2;
+  if (educationTotal >= 8) successScore += 2;
+  if (saturated.length >= 3) successScore -= 5;
+  successScore = clampNumber(successScore, 35, 98);
+
+  var successLabel = "보통";
+  if (successScore >= 90) successLabel = "매우 높음";
+  else if (successScore >= 80) successLabel = "높음";
+  else if (successScore >= 70) successLabel = "양호";
+  else if (successScore < 60) successLabel = "신중";
+
+  if (blueOceans.length > 0) {
+    briefs.unshift("블루오션 후보: " + blueOceans.slice(0, 3).map(function(x) { return x.name + "(" + x.count + "개)"; }).join(" / ") + " 업종은 경쟁이 낮아 우선 검토 가치가 있습니다.");
+  }
+  if (saturated.length > 0) {
+    briefs.push("포화주의 업종: " + saturated.slice(0, 3).map(function(x) { return x.name + "(" + x.count + "개)"; }).join(" / ") + " 계열은 차별화 전략이 필요합니다.");
+  }
+
   return {
     available:true,
     radius: commercialRadius,
@@ -3629,7 +3730,11 @@ function buildCommercialAnalysisResult(item, counts, labels, groups) {
       medical: medicalTotal
     },
     recommendations: recommendations.slice(0, 5),
-    briefs: briefs.slice(0, 5)
+    blueOceans: blueOceans.slice(0, 5),
+    saturated: saturated.slice(0, 5),
+    successScore: successScore,
+    successLabel: successLabel,
+    briefs: briefs.slice(0, 7)
   };
 }
 
@@ -3676,8 +3781,38 @@ function buildCommercialAnalysisHtml(analysis) {
       '<div class="ai-commerce-block"><div class="ai-commerce-block-title">뷰티 상세</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "뷰티") + '</div></div>' +
       '<div class="ai-commerce-block"><div class="ai-commerce-block-title">교육/의료</div><div class="ai-commerce-chip-wrap">' + buildCommerceChips(analysis, "교육/의료") + '</div></div>' +
     '</div>' +
+    buildOpportunityHtml(analysis) +
     '<div class="ai-commerce-recommend"><div class="ai-commerce-recommend-title">AI 추천업종 후보</div><ol>' + recHtml + '</ol></div>' +
     '<ul class="ai-commerce-brief">' + buildAiList(analysis.briefs) + '</ul>';
+}
+
+function buildOpportunityHtml(analysis) {
+  if (!analysis || !analysis.available) return "";
+
+  var blue = (analysis.blueOceans || []).slice(0, 3).map(function(x) {
+    return '<span class="ai-opportunity-pill">' + escapeHtml(x.name) + ' ' + x.count + '</span>';
+  }).join("") || '<span class="ai-opportunity-desc">뚜렷한 공백 업종 없음</span>';
+
+  var hot = (analysis.saturated || []).slice(0, 3).map(function(x) {
+    return '<span class="ai-opportunity-pill hot">' + escapeHtml(x.name) + ' ' + x.count + '</span>';
+  }).join("") || '<span class="ai-opportunity-desc">과밀 업종 낮음</span>';
+
+  return '' +
+    '<div class="ai-opportunity-panel">' +
+      '<div class="ai-opportunity-card score">' +
+        '<div class="ai-opportunity-head">예상 성공가능성</div>' +
+        '<div class="ai-opportunity-main">' + (analysis.successScore || '-') + '점 · ' + escapeHtml(analysis.successLabel || '보통') + '</div>' +
+        '<div class="ai-opportunity-desc">경쟁도·생활수요·음식/교육/의료 밀집도를 종합한 내부 적합도 점수입니다.</div>' +
+      '</div>' +
+      '<div class="ai-opportunity-card blue">' +
+        '<div class="ai-opportunity-head">블루오션 후보</div>' +
+        '<div class="ai-opportunity-list">' + blue + '</div>' +
+      '</div>' +
+      '<div class="ai-opportunity-card hot">' +
+        '<div class="ai-opportunity-head">포화주의 업종</div>' +
+        '<div class="ai-opportunity-list">' + hot + '</div>' +
+      '</div>' +
+    '</div>';
 }
 
 function buildCommercialAnalysisText(analysis) {
@@ -3691,6 +3826,9 @@ function buildCommercialAnalysisText(analysis) {
     lines.push("- " + groupName + ": " + parts.join(" / "));
   });
   lines.push("- 추천업종: " + analysis.recommendations.map(function(r) { return r.name + " " + r.score + "점(" + r.reason + ")"; }).join(" | "));
+  lines.push("- 예상 성공가능성: " + (analysis.successScore || "-") + "점 / " + (analysis.successLabel || "보통"));
+  lines.push("- 블루오션 후보: " + ((analysis.blueOceans || []).map(function(x) { return x.name + " " + x.count + "개"; }).join(" / ") || "뚜렷한 후보 없음"));
+  lines.push("- 포화주의 업종: " + ((analysis.saturated || []).map(function(x) { return x.name + " " + x.count + "개"; }).join(" / ") || "낮음"));
   lines.push("- 브리핑: " + analysis.briefs.join(" | "));
   return lines.join("\n");
 }
