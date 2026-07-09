@@ -5415,6 +5415,171 @@ function injectCommercialUIStyle() {
 
 injectCommercialUIStyle();
 setInterval(enhanceCommercialUI, 800);
+  /* === v3.3 AI 상권브리핑 + 기본반경 50m === */
+
+var JS_V33_lastSelectedText = "";
+
+function jsV33_getSelectedCard() {
+  return document.querySelector(".item.selected");
+}
+
+function jsV33_clickDefault50m(card) {
+  if (!card) return;
+
+  var keyText = card.innerText || "";
+  if (JS_V33_lastSelectedText === keyText) return;
+  JS_V33_lastSelectedText = keyText;
+
+  setTimeout(function() {
+    var buttons = card.querySelectorAll("button");
+    buttons.forEach(function(btn) {
+      if ((btn.innerText || "").trim() === "50m") {
+        btn.click();
+        btn.style.background = "#005bea";
+        btn.style.color = "#fff";
+      }
+    });
+  }, 500);
+}
+
+function jsV33_getCount(card, label) {
+  var text = card.innerText || "";
+  var reg = new RegExp(label + "\\s*(\\d+)", "i");
+  var m = text.match(reg);
+  return m ? Number(m[1]) : 0;
+}
+
+function jsV33_grade(count, lowGood) {
+  if (lowGood) {
+    if (count === 0) return "★★★★★ 강력추천";
+    if (count <= 1) return "★★★★☆ 추천";
+    if (count <= 3) return "★★★☆☆ 보통";
+    return "★☆☆☆☆ 경쟁심함";
+  } else {
+    if (count >= 5) return "★★★★★ 수요강함";
+    if (count >= 3) return "★★★★☆ 양호";
+    if (count >= 1) return "★★★☆☆ 보통";
+    return "★★☆☆☆ 약함";
+  }
+}
+
+function jsV33_makeBriefing(card) {
+  var convenience = jsV33_getCount(card, "편의점");
+  var cafe = jsV33_getCount(card, "카페");
+  var korean = jsV33_getCount(card, "한식");
+  var japanese = jsV33_getCount(card, "일식");
+  var snack = jsV33_getCount(card, "분식");
+  var beauty = jsV33_getCount(card, "미용실");
+  var nail = jsV33_getCount(card, "네일");
+  var academy = jsV33_getCount(card, "학원");
+
+  var blue = [];
+  var saturated = [];
+
+  if (convenience <= 1) blue.push("편의점");
+  if (japanese <= 1) blue.push("일식");
+  if (snack <= 1) blue.push("분식");
+  if (nail <= 1 && beauty >= 1) blue.push("네일샵");
+
+  if (cafe >= 5) saturated.push("카페");
+  if (beauty >= 5) saturated.push("미용실");
+  if (korean >= 5) saturated.push("한식");
+
+  var score = 70;
+  score += Math.max(0, 2 - convenience) * 8;
+  score += Math.max(0, 2 - nail) * 5;
+  score += Math.min(academy, 5) * 2;
+  score -= Math.max(0, cafe - 5) * 2;
+  score -= Math.max(0, beauty - 5) * 2;
+  if (score > 98) score = 98;
+  if (score < 45) score = 45;
+
+  return {
+    score: score,
+    convenience: convenience,
+    cafe: cafe,
+    korean: korean,
+    japanese: japanese,
+    snack: snack,
+    beauty: beauty,
+    nail: nail,
+    academy: academy,
+    blue: blue,
+    saturated: saturated
+  };
+}
+
+function jsV33_renderBriefing() {
+  var card = jsV33_getSelectedCard();
+  if (!card) return;
+
+  jsV33_clickDefault50m(card);
+
+  var old = card.querySelector("#jsV33Briefing");
+  if (old) old.remove();
+
+  var b = jsV33_makeBriefing(card);
+
+  var html = ''
+    + '<div id="jsV33Briefing" class="js-v33-briefing">'
+    + '<div class="js-v33-title">🧠 AI 상권 브리핑</div>'
+    + '<div class="js-v33-score">예상 성공가능성 <b>' + b.score + '점</b></div>'
+    + '<div class="js-v33-bar"><span style="width:' + b.score + '%"></span></div>'
+
+    + '<div class="js-v33-section"><b>생활/교통 판단</b>'
+    + '<p>편의점 ' + b.convenience + '개 · ' + jsV33_grade(b.convenience, true) + '</p>'
+    + '<p>학원 ' + b.academy + '개 · 주변 생활수요 참고 가능</p>'
+    + '</div>'
+
+    + '<div class="js-v33-section"><b>음식 상권 판단</b>'
+    + '<p>한식 ' + b.korean + '개 · ' + jsV33_grade(b.korean, true) + '</p>'
+    + '<p>일식 ' + b.japanese + '개 · ' + jsV33_grade(b.japanese, true) + '</p>'
+    + '<p>분식 ' + b.snack + '개 · ' + jsV33_grade(b.snack, true) + '</p>'
+    + '</div>'
+
+    + '<div class="js-v33-section"><b>뷰티 상권 판단</b>'
+    + '<p>미용실 ' + b.beauty + '개 · ' + jsV33_grade(b.beauty, true) + '</p>'
+    + '<p>네일 ' + b.nail + '개 · ' + jsV33_grade(b.nail, true) + '</p>'
+    + '</div>'
+
+    + '<div class="js-v33-result blue"><b>블루오션 후보</b><br>' + (b.blue.length ? b.blue.join(" · ") : "뚜렷한 후보 없음") + '</div>'
+    + '<div class="js-v33-result warn"><b>포화주의 업종</b><br>' + (b.saturated.length ? b.saturated.join(" · ") : "과밀 업종 낮음") + '</div>'
+
+    + '<div class="js-v33-opinion"><b>AI 종합의견</b><br>'
+    + (b.blue.length ? b.blue[0] + ' 업종은 근거리 경쟁이 낮아 우선 검토할 만합니다. ' : '')
+    + (b.saturated.length ? b.saturated[0] + ' 업종은 경쟁이 높아 신중한 접근이 필요합니다. ' : '')
+    + '최종 판단은 유동인구, 전면노출, 주차, 실제 경쟁점포 상태를 현장에서 확인한 뒤 진행하세요.'
+    + '</div>'
+    + '</div>';
+
+  var target = card.querySelector(".ai-commercial-box") || card.querySelector(".ai-market-box") || card;
+  target.insertAdjacentHTML("beforeend", html);
+}
+
+function jsV33_injectStyle() {
+  if (document.getElementById("jsV33Style")) return;
+
+  var style = document.createElement("style");
+  style.id = "jsV33Style";
+  style.innerHTML =
+    ".js-v33-briefing{margin-top:12px;padding:12px;border:1px solid #bcd8ff;border-radius:14px;background:#f8fbff;text-align:left;}" +
+    ".js-v33-title{font-size:15px;font-weight:900;color:#005bea;margin-bottom:8px;}" +
+    ".js-v33-score{font-size:13px;margin-bottom:6px;}" +
+    ".js-v33-score b{font-size:20px;color:#005bea;}" +
+    ".js-v33-bar{height:10px;background:#e9f2ff;border-radius:999px;overflow:hidden;margin-bottom:10px;}" +
+    ".js-v33-bar span{display:block;height:100%;background:linear-gradient(90deg,#1e88ff,#03c75a);}" +
+    ".js-v33-section{background:white;border:1px solid #e1ecff;border-radius:10px;padding:9px;margin-top:8px;font-size:12px;line-height:1.45;}" +
+    ".js-v33-section b{display:block;color:#111;margin-bottom:4px;}" +
+    ".js-v33-section p{margin:3px 0;}" +
+    ".js-v33-result{padding:9px;border-radius:10px;margin-top:8px;font-size:12px;line-height:1.5;}" +
+    ".js-v33-result.blue{background:#eefaf2;border:1px solid #b7ebc6;}" +
+    ".js-v33-result.warn{background:#fff7e6;border:1px solid #ffd591;}" +
+    ".js-v33-opinion{margin-top:8px;background:#fff;border:1px solid #d9e6f7;border-radius:10px;padding:9px;font-size:12px;line-height:1.5;}";
+  document.head.appendChild(style);
+}
+
+jsV33_injectStyle();
+setInterval(jsV33_renderBriefing, 1200);
 </script>
 
 </body>
