@@ -150,7 +150,7 @@ function toggleSidebar() {
 
 
 function setupEnterSearch() {
-  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minArea, #maxArea");
+  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minArea, #maxArea, #minFloor, #maxFloor");
 
   inputs.forEach(function(input) {
     input.addEventListener("keydown", function(e) {
@@ -334,6 +334,52 @@ function updateTypeOptions(items) {
 }
 
 
+/* === v4.3.1 층수 범위 필터 === */
+function getItemFloorNumber(item) {
+  var room = String((item && item.room) || "").trim();
+  var memo = String((item && item.memo) || "").trim();
+  var name = String((item && item.name) || "").trim();
+  var text = [room, name, memo].join(" ");
+
+  // 지하층: -1로 통일
+  if (/지하|地下|\bB\s*1\b|\bB1\b|비\s*1\s*층/i.test(text)) return -1;
+
+  // "3층", "10 층"처럼 층이 명시된 경우를 최우선 사용
+  var explicitFloor = text.match(/(?:^|[^0-9])(\d{1,2})\s*층/);
+  if (explicitFloor) return Number(explicitFloor[1]) || 0;
+
+  // "3F", "10F" 표기
+  var floorF = text.match(/(?:^|[^0-9])(\d{1,2})\s*F(?:[^A-Z]|$)/i);
+  if (floorF) return Number(floorF[1]) || 0;
+
+  // 호실만 있는 경우: 101호→1층, 201호→2층, 1001호→10층
+  var roomNumber = room.match(/(?:^|[^0-9])(\d{3,4})\s*호/);
+  if (roomNumber) {
+    var value = roomNumber[1];
+    var inferred = value.length === 3
+      ? Number(value.charAt(0))
+      : Number(value.slice(0, value.length - 2));
+
+    if (inferred > 0) return inferred;
+  }
+
+  // 층수 정보가 없으면 null
+  return null;
+}
+
+
+function readOptionalNumberInput(id) {
+  var el = document.getElementById(id);
+  if (!el) return null;
+
+  var value = String(el.value || "").trim();
+  if (value === "") return null;
+
+  var number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+
 function getFilteredItems() {
   if (!map) return allItems;
 
@@ -351,6 +397,16 @@ function getFilteredItems() {
 
   var minArea = Number(document.getElementById("minArea").value) || 0;
   var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
+
+  var minFloor = readOptionalNumberInput("minFloor");
+  var maxFloor = readOptionalNumberInput("maxFloor");
+  var hasFloorFilter = minFloor !== null || maxFloor !== null;
+
+  if (minFloor !== null && maxFloor !== null && minFloor > maxFloor) {
+    var floorSwap = minFloor;
+    minFloor = maxFloor;
+    maxFloor = floorSwap;
+  }
 
   var filtered = allItems.filter(function(item) {
     var matchKeyword =
@@ -371,11 +427,22 @@ function getFilteredItems() {
       item.area >= minArea &&
       item.area <= maxArea;
 
+    var itemFloor = getItemFloorNumber(item);
+    var matchFloor = true;
+
+    if (hasFloorFilter) {
+      // 층수 범위를 사용하면 층수 미확인 매물은 제외
+      matchFloor =
+        itemFloor !== null &&
+        (minFloor === null || itemFloor >= minFloor) &&
+        (maxFloor === null || itemFloor <= maxFloor);
+    }
+
     var matchFavorite = !favoriteOnly || isFavorite(item);
     var matchDone = !hideDone || !isDone(item);
     var inMap = item.latlng && bounds.contain(item.latlng);
 
-    return matchKeyword && matchType && matchPrice && matchFavorite && matchDone && inMap;
+    return matchKeyword && matchType && matchPrice && matchFloor && matchFavorite && matchDone && inMap;
   });
 
   filtered.sort(function(a, b) {
@@ -695,6 +762,8 @@ function resetFilter() {
   document.getElementById("maxRent").value = "";
   document.getElementById("minArea").value = "";
   document.getElementById("maxArea").value = "";
+  document.getElementById("minFloor").value = "";
+  document.getElementById("maxFloor").value = "";
 
   favoriteOnly = false;
   hideDone = false;
