@@ -2142,3 +2142,137 @@ body.ai-side-panel-open #map {
   background:#555;
   color:#fff;
 }
+
+
+/* =========================================================
+   v4.6 단일 선택 체크박스 + 상단 작업 + 다중 클러스터
+   ========================================================= */
+.item-action-select {
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  flex:0 0 24px;
+  min-width:24px;
+  padding-top:2px;
+  margin:0;
+  cursor:pointer;
+}
+
+.item-action-select input {
+  width:17px;
+  height:17px;
+  margin:0;
+  accent-color:#005bea;
+  cursor:pointer;
+}
+
+/* 과거 개별 AI 리포트 버튼은 리스트에서 숨김 */
+.item .ai-report-print-btn,
+.item .ai-report-btn {
+  display:none !important;
+}
+
+.complete-selected-btn {
+  background:#198754;
+  color:#fff;
+  border:1px solid #157347;
+}
+
+.complete-selected-btn:disabled,
+.print-btn:disabled {
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.multi-cluster-btn {
+  background:#f3f4f6;
+  color:#374151;
+  border:1px solid #d1d5db;
+}
+
+.multi-cluster-btn.on {
+  background:#6f42c1;
+  color:#fff;
+  border-color:#5f36aa;
+  box-shadow:0 0 0 2px rgba(111,66,193,.18);
+}
+
+.multi-cluster-status {
+  display:none;
+  margin-top:5px;
+  padding:6px 8px;
+  border:1px solid #d8c8f3;
+  border-radius:8px;
+  background:#f7f2ff;
+  color:#5f36aa;
+  font-size:11px;
+  font-weight:900;
+  text-align:center;
+}
+
+.multi-cluster-status.show {
+  display:block;
+}
+
+/* AI 패널 하단 고정 작업바 */
+.ai-side-panel-actions {
+  display:flex;
+  gap:8px;
+  flex:0 0 auto;
+  padding:10px 12px;
+  border-top:1px solid #e5e7eb;
+  background:#fff;
+}
+
+.ai-side-panel-actions button {
+  flex:1;
+  min-height:38px;
+  border-radius:9px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.ai-panel-copy-btn {
+  border:1px solid #cfd8e6;
+  background:#f5f8fc;
+  color:#344054;
+}
+
+.ai-panel-report-btn {
+  border:1px solid #005bea;
+  background:#005bea;
+  color:#fff;
+}
+
+/* 패널 본문이 하단 버튼 때문에 가려지지 않도록 */
+#aiSidePanel {
+  display:flex;
+  flex-direction:column;
+}
+
+.ai-side-panel-body {
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+}
+
+@media (max-width:768px) {
+  .item-action-select {
+    flex-basis:22px;
+    min-width:22px;
+  }
+
+  .item-action-select input {
+    width:16px;
+    height:16px;
+  }
+
+  .ai-side-panel-actions {
+    padding:8px;
+  }
+
+  .ai-side-panel-actions button {
+    min-height:36px;
+    font-size:12px;
+  }
+}
