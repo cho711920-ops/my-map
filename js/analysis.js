@@ -1,11 +1,12 @@
 /* =========================================================
-   JS부동산 AI 분석 스크립트
-   AI 스마트 매물카드 단일화 완전 수정본
-   - 독립 상권 브리핑 제거
-   - 독립 추천업종 TOP3 제거
-   - 과거 실무형 AI 독립 박스 제거
-   - AI 통합 투자 브리핑을 스마트 매물카드 내부에 1개만 표시
-   - 반복 생성/번갈아 표시/중복 박스 방지
+   JS부동산 AI 분석 스크립트 v4.3
+   실무형 층수·배후상권·경쟁도 통합 엔진
+   - 1층 미용실/뷰티 업종 가산
+   - 3층 이상 편의점 등 즉시 유입형 업종 감점
+   - 아파트·다가구·상업·교육·의료·오피스 상권 반영
+   - 코너·전면노출·주차·엘리베이터 키워드 반영
+   - 추천업종마다 구체적인 산정 이유 표시
+   - 반복 렌더링 제거, 상권분석 완료 시 1회 갱신
    ========================================================= */
 
 /* JS부동산 AI 분석/상권분석 전용 스크립트 */
@@ -735,6 +736,13 @@ function loadCommercialAreaAnalysis(item) {
     var target = document.getElementById(boxId);
     if (!target) return;
     target.innerHTML = buildCommercialAnalysisHtml(analysis);
+
+    /*
+     * 상권 데이터가 모두 들어온 시점에만 통합 브리핑을 다시 계산합니다.
+     * 주기적 재생성을 사용하지 않아 깜빡임과 스크롤 튐을 막습니다.
+     */
+    JS_V40_LAST_SIG = "";
+    setTimeout(jsV40Render, 30);
   });
 }
 
@@ -1551,54 +1559,290 @@ function jsV40ScoreLine(name, score) {
 }
 
 
+function jsV43FloorInfo(item) {
+  var raw = String((item && item.room) || "") + " " + String((item && item.memo) || "");
+
+  if (/지하|\bB\s?\d|B1|비\d/i.test(raw)) {
+    return { value:-1, label:"지하" };
+  }
+
+  var floorMatch = raw.match(/(\d+)\s*층/);
+  if (floorMatch) {
+    var floor = Number(floorMatch[1]) || 0;
+    return { value:floor, label:floor + "층" };
+  }
+
+  if (/1F|101호|102호|103호|일층/i.test(raw)) return { value:1, label:"1층" };
+  if (/2F|201호|202호|203호|이층/i.test(raw)) return { value:2, label:"2층" };
+  if (/3F|301호|302호|303호|삼층/i.test(raw)) return { value:3, label:"3층" };
+
+  return { value:0, label:"층수 미확인" };
+}
+
+
+function jsV43ContextInfo(item) {
+  var text = [
+    item && item.name,
+    item && item.address,
+    item && item.type,
+    item && item.memo
+  ].join(" ");
+
+  var tags = [];
+  var source = [];
+
+  function add(pattern, label, sourceText) {
+    if (pattern.test(text)) {
+      tags.push(label);
+      source.push(sourceText || label);
+    }
+  }
+
+  add(/아파트|대단지|단지내|세대/i, "아파트 배후", "메모·주소의 아파트/세대 키워드");
+  add(/다가구|원룸|빌라|주택가|주거밀집/i, "다가구·주거 밀집", "메모·주소의 다가구/주거 키워드");
+  add(/상업지역|상업지|먹자골목|번화가|중심상권|메인상권/i, "상업지역", "메모의 상업지역/번화가 키워드");
+  add(/학원가|학교앞|초등학교|중학교|고등학교|대학교/i, "교육 상권", "메모·주소의 학교/학원가 키워드");
+  add(/병원가|메디컬|병원밀집|의원밀집/i, "의료 상권", "메모의 의료 상권 키워드");
+  add(/오피스|사무실밀집|업무지구|직장인/i, "오피스 상권", "메모의 오피스/업무지구 키워드");
+  add(/코너|사거리코너|모서리/i, "코너자리", "메모의 코너 키워드");
+  add(/대로변|큰길|전면노출|통유리|간판노출/i, "전면노출", "메모의 대로변/전면노출 키워드");
+  add(/주차가능|주차\s*\d+대|주차장/i, "주차 가능", "메모의 주차 키워드");
+  add(/엘리베이터|승강기/i, "엘리베이터", "메모의 엘리베이터 키워드");
+  add(/엘리베이터없|승강기없|엘베없/i, "엘리베이터 없음", "메모의 엘리베이터 없음 키워드");
+
+  if (!tags.length) {
+    tags.push("배후상권 미확인");
+    source.push("입력된 메모에 배후상권 정보 없음");
+  }
+
+  return { tags:tags, source:source };
+}
+
+
+function jsV43ClampScore(score) {
+  return Math.max(15, Math.min(98, Math.round(score)));
+}
+
+
+function jsV43AddReason(list, text) {
+  if (text && list.indexOf(text) < 0) list.push(text);
+}
+
+
 function jsV40Build(card) {
-  var convenience = jsV40Count(card, "편의점");
-  var cafe = jsV40Count(card, "카페");
-  var korean = jsV40Count(card, "한식");
-  var japanese = jsV40Count(card, "일식");
-  var snack = jsV40Count(card, "분식");
-  var beauty = jsV40Count(card, "미용실");
-  var nail = jsV40Count(card, "네일");
-  var academy = jsV40Count(card, "학원");
+  var item = null;
+  if (typeof selectedItemKey !== "undefined" && selectedItemKey && typeof allItems !== "undefined") {
+    item = allItems.find(function(x) { return x.key === selectedItemKey; }) || null;
+  }
+
+  if (!item) {
+    return {
+      sig:"no-item",
+      score:0,
+      top:[],
+      low:[],
+      blue:[],
+      warn:[],
+      floor:{ value:0, label:"층수 미확인" },
+      context:{ tags:["배후상권 미확인"], source:[] },
+      counts:{},
+      scoreReasons:["선택 매물 정보를 찾지 못했습니다."]
+    };
+  }
+
+  var floor = jsV43FloorInfo(item);
+  var context = jsV43ContextInfo(item);
+  var contextText = context.tags.join(" ");
+
+  var counts = {
+    convenience: jsV40Count(card, "편의점"),
+    cafe: jsV40Count(card, "카페"),
+    korean: jsV40Count(card, "한식"),
+    japanese: jsV40Count(card, "일식"),
+    chinese: jsV40Count(card, "중식"),
+    snack: jsV40Count(card, "분식"),
+    beauty: jsV40Count(card, "미용실"),
+    nail: jsV40Count(card, "네일"),
+    eyelash: jsV40Count(card, "속눈썹"),
+    skin: jsV40Count(card, "피부샵"),
+    academy: jsV40Count(card, "학원"),
+    hospital: jsV40Count(card, "병원"),
+    pharmacy: jsV40Count(card, "약국"),
+    bus: jsV40Count(card, "버스정류장")
+  };
 
   var list = [
-    { name:"편의점", score:95 - convenience * 18 + academy * 2 },
-    { name:"분식", score:88 - snack * 14 + academy * 3 },
-    { name:"일식", score:86 - japanese * 16 + korean },
-    { name:"네일샵", score:87 - nail * 18 + beauty * 3 },
-    { name:"카페", score:75 - cafe * 10 + academy }
+    { name:"편의점", score:92 - counts.convenience * 22, reasons:[], ground:true },
+    { name:"카페", score:78 - counts.cafe * 9, reasons:[], ground:true },
+    { name:"분식", score:84 - counts.snack * 15 + counts.academy * 2, reasons:[], ground:true },
+    { name:"일식/덮밥", score:82 - counts.japanese * 17 + Math.min(counts.korean, 8), reasons:[], ground:true },
+    { name:"미용실", score:82 - counts.beauty * 10, reasons:[], ground:true },
+    { name:"네일샵", score:86 - counts.nail * 19 + counts.beauty * 3, reasons:[], ground:false },
+    { name:"속눈썹", score:82 - counts.eyelash * 18 + counts.beauty * 2, reasons:[], ground:false },
+    { name:"피부샵", score:80 - counts.skin * 14 + counts.beauty * 2, reasons:[], ground:false },
+    { name:"학원", score:74 + Math.min(counts.academy, 10) * 2, reasons:[], ground:false },
+    { name:"필라테스/요가", score:72 + Math.min(counts.academy, 6), reasons:[], ground:false },
+    { name:"사무실/공유오피스", score:68, reasons:[], ground:false },
+    { name:"약국", score:70 - counts.pharmacy * 23 + counts.hospital * 6, reasons:[], ground:true }
   ];
 
   list.forEach(function(x) {
-    if (x.score > 98) x.score = 98;
-    if (x.score < 35) x.score = 35;
+    /* 층수 반영 */
+    if (floor.value === 1) {
+      if (x.ground) {
+        x.score += 13;
+        jsV43AddReason(x.reasons, "1층 접근성과 즉시 유입에 적합");
+      }
+      if (["미용실","네일샵"].includes(x.name)) {
+        x.score += 6;
+        jsV43AddReason(x.reasons, "뷰티 업종의 1층 접근성 장점");
+      }
+    } else if (floor.value === 2) {
+      if (x.name === "편의점") x.score -= 22;
+      if (["미용실","네일샵","피부샵","학원"].includes(x.name)) {
+        x.score += 8;
+        jsV43AddReason(x.reasons, "2층 목적 방문 업종에 적합");
+      }
+    } else if (floor.value >= 3) {
+      if (x.name === "편의점") x.score -= 45;
+      if (["카페","분식","일식/덮밥","미용실","약국"].includes(x.name)) x.score -= 18;
+      if (["피부샵","학원","필라테스/요가","사무실/공유오피스","네일샵","속눈썹"].includes(x.name)) {
+        x.score += 12;
+        jsV43AddReason(x.reasons, "상층부 목적 방문형 업종에 적합");
+      }
+    } else if (floor.value === -1) {
+      if (x.ground) x.score -= 30;
+      if (["필라테스/요가","사무실/공유오피스"].includes(x.name)) x.score += 5;
+    } else {
+      jsV43AddReason(x.reasons, "층수 입력 시 정확도 향상");
+    }
+
+    /* 배후세대·상권 성격 반영 */
+    if (contextText.indexOf("아파트 배후") >= 0) {
+      if (["편의점","분식","미용실","네일샵","카페","피부샵"].includes(x.name)) {
+        x.score += 10;
+        jsV43AddReason(x.reasons, "아파트 생활수요와 궁합");
+      }
+    }
+
+    if (contextText.indexOf("다가구·주거 밀집") >= 0) {
+      if (["편의점","분식","미용실","카페"].includes(x.name)) {
+        x.score += 8;
+        jsV43AddReason(x.reasons, "다가구·원룸 생활밀착 수요");
+      }
+    }
+
+    if (contextText.indexOf("상업지역") >= 0) {
+      if (["카페","일식/덮밥","분식","미용실","네일샵"].includes(x.name)) {
+        x.score += 8;
+        jsV43AddReason(x.reasons, "상업지역 유동과 소비수요");
+      }
+    }
+
+    if (contextText.indexOf("교육 상권") >= 0) {
+      if (["분식","카페","편의점","학원"].includes(x.name)) {
+        x.score += 11;
+        jsV43AddReason(x.reasons, "학생·학부모 반복 수요");
+      }
+    }
+
+    if (contextText.indexOf("의료 상권") >= 0) {
+      if (["약국","카페","피부샵"].includes(x.name)) {
+        x.score += 13;
+        jsV43AddReason(x.reasons, "병원 방문 및 대기수요 연계");
+      }
+    }
+
+    if (contextText.indexOf("오피스 상권") >= 0) {
+      if (["카페","일식/덮밥","사무실/공유오피스"].includes(x.name)) {
+        x.score += 11;
+        jsV43AddReason(x.reasons, "직장인 점심·업무수요");
+      }
+    }
+
+    if (contextText.indexOf("코너자리") >= 0 || contextText.indexOf("전면노출") >= 0) {
+      if (["편의점","카페","분식","미용실"].includes(x.name)) {
+        x.score += 12;
+        jsV43AddReason(x.reasons, "코너·전면 노출 가산");
+      }
+    }
+
+    if (contextText.indexOf("엘리베이터 없음") >= 0 && floor.value >= 3) {
+      if (["피부샵","학원","필라테스/요가","사무실/공유오피스"].includes(x.name)) {
+        x.score -= 15;
+        jsV43AddReason(x.reasons, "상층부 엘리베이터 부재 감점");
+      }
+    }
+
+    /* 경쟁도 근거 */
+    if (x.name === "편의점") jsV43AddReason(x.reasons, "반경 내 편의점 " + counts.convenience + "개");
+    if (x.name === "카페") jsV43AddReason(x.reasons, "반경 내 카페 " + counts.cafe + "개");
+    if (x.name === "분식") jsV43AddReason(x.reasons, "반경 내 분식 " + counts.snack + "개");
+    if (x.name === "일식/덮밥") jsV43AddReason(x.reasons, "반경 내 일식 " + counts.japanese + "개");
+    if (x.name === "미용실") jsV43AddReason(x.reasons, "반경 내 미용실 " + counts.beauty + "개");
+    if (x.name === "네일샵") jsV43AddReason(x.reasons, "미용실 " + counts.beauty + "개·네일 " + counts.nail + "개");
+    if (x.name === "속눈썹") jsV43AddReason(x.reasons, "미용실 " + counts.beauty + "개·속눈썹 " + counts.eyelash + "개");
+    if (x.name === "피부샵") jsV43AddReason(x.reasons, "뷰티 수요 대비 피부샵 " + counts.skin + "개");
+    if (x.name === "학원") jsV43AddReason(x.reasons, "반경 내 학원 " + counts.academy + "개");
+    if (x.name === "약국") jsV43AddReason(x.reasons, "병원 " + counts.hospital + "개·약국 " + counts.pharmacy + "개");
+
+    x.score = jsV43ClampScore(x.score);
+    if (!x.reasons.length) x.reasons.push("현장 조건 확인 필요");
   });
 
-  list.sort(function(a,b){ return b.score - a.score; });
+  list.sort(function(a, b) { return b.score - a.score; });
 
-  var blue = [];
-  if (convenience <= 1) blue.push("편의점");
-  if (japanese <= 1) blue.push("일식");
-  if (snack <= 1) blue.push("분식");
-  if (nail <= 1 && beauty >= 1) blue.push("네일샵");
+  var blue = list.filter(function(x) {
+    return x.score >= 85;
+  }).slice(0, 4).map(function(x) {
+    return x.name;
+  });
 
-  var warn = [];
-  if (cafe >= 5) warn.push("카페");
-  if (beauty >= 5) warn.push("미용실");
-  if (korean >= 5) warn.push("한식");
+  var warn = list.filter(function(x) {
+    return x.score <= 48;
+  }).slice(0, 4).map(function(x) {
+    return x.name;
+  });
 
-  var totalScore = Math.round((list[0].score + list[1].score + list[2].score) / 3);
+  var top = list.slice(0, 3);
+  var low = list.slice(-3).reverse();
+  var totalScore = Math.round((top[0].score + top[1].score + top[2].score) / 3);
+
+  var scoreReasons = [];
+  scoreReasons.push(floor.label + " 조건을 업종별로 반영");
+  scoreReasons.push("상권성격: " + context.tags.join(" / "));
+  scoreReasons.push("반경 내 실제 경쟁업종 개수 반영");
+  if (context.tags[0] === "배후상권 미확인") {
+    scoreReasons.push("메모에 아파트·다가구·상업지역 등을 적으면 정확도가 높아집니다.");
+  }
 
   return {
-    sig: [convenience,cafe,korean,japanese,snack,beauty,nail,academy].join("|"),
-    score: totalScore,
-    top: list.slice(0,3),
-    blue: blue,
-    warn: warn,
-    convenience: convenience,
-    cafe: cafe,
-    beauty: beauty,
-    academy: academy
+    sig: [
+      item.key,
+      floor.label,
+      context.tags.join(","),
+      counts.convenience,
+      counts.cafe,
+      counts.korean,
+      counts.japanese,
+      counts.snack,
+      counts.beauty,
+      counts.nail,
+      counts.eyelash,
+      counts.skin,
+      counts.academy,
+      counts.hospital,
+      counts.pharmacy
+    ].join("|"),
+    score:totalScore,
+    top:top,
+    low:low,
+    blue:blue,
+    warn:warn,
+    floor:floor,
+    context:context,
+    counts:counts,
+    scoreReasons:scoreReasons
   };
 }
 
@@ -1608,10 +1852,6 @@ function jsV40Render() {
   var smartCard = panelBody ? panelBody.querySelector(".ai-card") : null;
   if (!smartCard) return;
 
-  /*
-   * 과거 버전에서 생성되던 독립 박스를 전부 제거합니다.
-   * 최종 화면에는 AI 스마트 매물카드 내부 통합 브리핑 1개만 남습니다.
-   */
   panelBody.querySelectorAll(
     "#jsV33Briefing, #jsV331BusinessBox, #jsV40UnifiedAI, #jsV41Box, #jsV411PracticalAI"
   ).forEach(function(box) {
@@ -1625,25 +1865,56 @@ function jsV40Render() {
   JS_V40_LAST_SIG = key;
 
   var topHtml = data.top.map(function(x, i) {
-    return jsV40ScoreLine((i + 1) + "위 " + x.name, x.score);
+    return ''
+      + '<div class="js-v43-rank">'
+      +   '<div class="js-v43-rank-main">'
+      +     '<b>' + (i + 1) + '위 ' + escapeHtml(x.name) + '</b>'
+      +     '<small>' + escapeHtml(x.reasons.slice(0, 3).join(" · ")) + '</small>'
+      +   '</div>'
+      +   '<strong>' + x.score + '점</strong>'
+      + '</div>';
   }).join("");
+
+  var lowHtml = data.low.map(function(x) {
+    return '<span class="js-v43-low-pill">' + escapeHtml(x.name) + ' ' + x.score + '점</span>';
+  }).join("");
+
+  var reasonHtml = data.scoreReasons.map(function(reason) {
+    return '<li>' + escapeHtml(reason) + '</li>';
+  }).join("");
+
+  var first = data.top[0];
+  var opinion = first
+    ? first.name + "이 현재 층수·배후상권·경쟁도 기준에서 가장 높은 적합도를 보입니다. "
+    : "추천업종을 계산할 데이터가 부족합니다. ";
+
+  if (data.floor.value >= 3) {
+    opinion += "상층부이므로 즉시 유입형 업종보다 예약·목적 방문형 업종을 우선 검토하세요. ";
+  } else if (data.floor.value === 1) {
+    opinion += "1층은 편의점뿐 아니라 미용실·뷰티·카페·생활밀착 업종도 함께 검토할 수 있습니다. ";
+  }
+
+  if (data.context.tags[0] === "배후상권 미확인") {
+    opinion += "현재 배후상권 성격은 입력정보 부족으로 확정하지 않았습니다.";
+  } else {
+    opinion += data.context.tags.join(", ") + " 특성을 반영했습니다.";
+  }
 
   var html = ''
     + '<div id="jsV40UnifiedAI" class="js-v40-box">'
-    + '<div class="js-v40-title">🧠 AI 통합 투자 브리핑</div>'
-    + '<div class="js-v40-score">예상 성공가능성 <b>' + data.score + '점</b></div>'
+    + '<div class="js-v40-title">🧠 실무형 AI 통합 투자 브리핑</div>'
+    + '<div class="js-v43-meta">'
+    +   '<span><b>층수</b> ' + escapeHtml(data.floor.label) + '</span>'
+    +   '<span><b>상권성격</b> ' + escapeHtml(data.context.tags.join(" / ")) + '</span>'
+    + '</div>'
+    + '<div class="js-v40-score">입지·업종 적합도 <b>' + data.score + '점</b></div>'
     + '<div class="js-v40-bar"><span style="width:' + data.score + '%"></span></div>'
     + '<div class="js-v40-section"><b>🥇 추천업종 TOP3</b>' + topHtml + '</div>'
-    + '<div class="js-v40-section"><b>💎 블루오션 후보</b><p>' + (data.blue.length ? data.blue.join(" · ") : "뚜렷한 후보 없음") + '</p></div>'
-    + '<div class="js-v40-section warn"><b>⚠️ 포화주의 업종</b><p>' + (data.warn.length ? data.warn.join(" · ") : "과밀 업종 낮음") + '</p></div>'
-    + '<div class="js-v40-section"><b>📌 AI 판단 근거</b>'
-    + '<p>편의점 ' + data.convenience + '개 / 카페 ' + data.cafe + '개 / 미용실 ' + data.beauty + '개 / 학원 ' + data.academy + '개 기준</p>'
-    + '<p>근거리 경쟁도와 생활수요를 함께 반영했습니다.</p>'
-    + '</div>'
-    + '<div class="js-v40-opinion"><b>AI 종합의견</b><br>'
-    + (data.blue.length ? data.blue[0] + ' 업종은 우선 검토 가치가 있습니다. ' : '')
-    + (data.warn.length ? data.warn[0] + ' 업종은 경쟁이 높아 신중 검토가 필요합니다. ' : '')
-    + '최종 판단은 유동인구, 전면노출, 주차, 실제 경쟁점포 상태 확인 후 진행하세요.'
+    + '<div class="js-v40-section"><b>💎 우선 검토 후보</b><p>' + (data.blue.length ? escapeHtml(data.blue.join(" · ")) : "뚜렷한 후보 없음") + '</p></div>'
+    + '<div class="js-v40-section warn"><b>⚠️ 신중 검토 업종</b><div class="js-v43-low-wrap">' + (lowHtml || "없음") + '</div></div>'
+    + '<div class="js-v40-section"><b>📌 점수 산정 근거</b><ul class="js-v43-reason-list">' + reasonHtml + '</ul></div>'
+    + '<div class="js-v40-opinion"><b>AI 실무의견</b><br>' + escapeHtml(opinion)
+    + '<br><br>※ 배후세대·코너·주차·엘리베이터 판단은 현재 주소와 메모에 입력된 내용을 기준으로 합니다. 실제 현장 확인이 필요합니다.'
     + '</div>'
     + '</div>';
 
@@ -1670,13 +1941,23 @@ function jsV40Style() {
     ".js-v40-section.warn{background:#ffffff;border-color:#d9e6f7;}" +
     ".js-v40-rank{display:flex;justify-content:space-between;align-items:center;margin:5px 0;padding:6px 8px;background:#f6f9ff;border-radius:8px;}" +
     ".js-v40-rank span{font-weight:900;color:#005bea;}" +
-    ".js-v40-opinion{margin-top:8px;background:#fff;border:1px solid #d9e6f7;border-radius:10px;padding:9px;font-size:12px;line-height:1.5;}";
+    ".js-v40-opinion{margin-top:8px;background:#fff;border:1px solid #d9e6f7;border-radius:10px;padding:9px;font-size:12px;line-height:1.55;}" +
+    ".js-v43-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}" +
+    ".js-v43-meta span{display:inline-flex;gap:4px;align-items:center;padding:5px 8px;border:1px solid #d9e6f7;border-radius:999px;background:#f8fbff;font-size:11px;}" +
+    ".js-v43-rank{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:7px;padding:9px;border:1px solid #e1ecff;border-radius:10px;background:#f8fbff;}" +
+    ".js-v43-rank-main{min-width:0;flex:1;}" +
+    ".js-v43-rank-main b{display:block;font-size:13px;color:#111827;}" +
+    ".js-v43-rank-main small{display:block;margin-top:3px;color:#667085;font-size:11px;line-height:1.4;}" +
+    ".js-v43-rank strong{color:#005bea;font-size:16px;white-space:nowrap;}" +
+    ".js-v43-low-wrap{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}" +
+    ".js-v43-low-pill{display:inline-flex;padding:4px 7px;border:1px solid #d9e6f7;border-radius:999px;background:#fff;color:#475467;font-size:11px;font-weight:800;}" +
+    ".js-v43-reason-list{margin:6px 0 0;padding-left:18px;line-height:1.55;}";
   document.head.appendChild(style);
 }
 
 
 jsV40Style();
-setInterval(jsV40Render, 1000);
+// 상권분석 완료 시 jsV40Render가 1회 실행됩니다.
 
 /* =========================================================
    v4.2 AI 스마트 매물카드 독립 사이드 패널
