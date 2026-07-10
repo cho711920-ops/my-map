@@ -1,10 +1,11 @@
 /* =========================================================
    JS부동산 AI 분석 스크립트
-   중복 브리핑/번갈아 표시 완전 수정본
-   - v3.3 상권 브리핑 반복 렌더링 중지
-   - v3.3.1 추천업종 TOP3 반복 렌더링 중지
-   - v4.0 통합 투자 브리핑만 표시
-   - DOM 반복 삭제/재생성으로 인한 깜빡임 및 스크롤 튐 방지
+   AI 스마트 매물카드 단일화 완전 수정본
+   - 독립 상권 브리핑 제거
+   - 독립 추천업종 TOP3 제거
+   - 과거 실무형 AI 독립 박스 제거
+   - AI 통합 투자 브리핑을 스마트 매물카드 내부에 1개만 표시
+   - 반복 생성/번갈아 표시/중복 박스 방지
    ========================================================= */
 
 /* JS부동산 AI 분석/상권분석 전용 스크립트 */
@@ -1603,21 +1604,27 @@ function jsV40Build(card) {
 
 
 function jsV40Render() {
-  var card = document.querySelector(".item.selected");
-  if (!card) return;
+  var selectedItem = document.querySelector(".item.selected");
+  if (!selectedItem) return;
 
-  var data = jsV40Build(card);
+  var smartCard = selectedItem.querySelector(".ai-card");
+  if (!smartCard) return;
+
+  /*
+   * 과거 버전에서 생성되던 독립 박스를 전부 제거합니다.
+   * 최종 화면에는 AI 스마트 매물카드 내부의 통합 브리핑 하나만 남습니다.
+   */
+  selectedItem.querySelectorAll(
+    "#jsV33Briefing, #jsV331BusinessBox, #jsV40UnifiedAI, #jsV41Box, #jsV411PracticalAI"
+  ).forEach(function(box) {
+    box.remove();
+  });
+
+  var data = jsV40Build(selectedItem);
   var key = (typeof selectedItemKey !== "undefined" ? selectedItemKey : "") + "|" + data.sig;
 
-  if (JS_V40_LAST_SIG === key && card.querySelector("#jsV40UnifiedAI")) return;
+  if (JS_V40_LAST_SIG === key && smartCard.querySelector("#jsV40UnifiedAI")) return;
   JS_V40_LAST_SIG = key;
-
-  var old1 = card.querySelector("#jsV33Briefing");
-  var old2 = card.querySelector("#jsV331BusinessBox");
-  var old3 = card.querySelector("#jsV40UnifiedAI");
-  if (old1) old1.remove();
-  if (old2) old2.remove();
-  if (old3) old3.remove();
 
   var topHtml = data.top.map(function(x, i) {
     return jsV40ScoreLine((i + 1) + "위 " + x.name, x.score);
@@ -1642,17 +1649,24 @@ function jsV40Render() {
     + '</div>'
     + '</div>';
 
-  var target = card.querySelector(".ai-commercial-box") || card;
-  target.insertAdjacentHTML("beforeend", html);
+  /*
+   * AI 스마트 매물카드 내부에서
+   * 현장체크/협상포인트 다음, 복사 버튼 바로 위에 통합 브리핑을 배치합니다.
+   */
+  var actions = smartCard.querySelector(".ai-card-actions");
+  if (actions) {
+    actions.insertAdjacentHTML("beforebegin", html);
+  } else {
+    smartCard.insertAdjacentHTML("beforeend", html);
+  }
 }
-
 
 function jsV40Style() {
   if (document.getElementById("jsV40Style")) return;
   var style = document.createElement("style");
   style.id = "jsV40Style";
   style.innerHTML =
-    ".js-v40-box{margin-top:12px;padding:12px;border:1px solid #bcd8ff;border-radius:14px;background:#f8fbff;text-align:left;}" +
+    ".js-v40-box{margin-top:12px;padding:12px;border:1px solid #d9e6f7;border-radius:14px;background:#ffffff;text-align:left;}" +
     ".js-v40-title{font-size:15px;font-weight:900;color:#005bea;margin-bottom:8px;}" +
     ".js-v40-score{font-size:13px;margin-bottom:6px;}" +
     ".js-v40-score b{font-size:21px;color:#005bea;}" +
