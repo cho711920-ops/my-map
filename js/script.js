@@ -133,22 +133,6 @@ function toggleDetailFilter() {
 }
 
 
-function naverRoadviewUrl(lat, lng) {
-  return "https://map.naver.com/v5/search/" + lat + "," + lng;
-}
-
-
-function openRoadviewModal(lat, lng) {
-  document.getElementById("roadviewLink").href = naverRoadviewUrl(lat, lng);
-  document.getElementById("roadviewModal").style.display = "block";
-}
-
-
-function closeRoadviewModal() {
-  document.getElementById("roadviewModal").style.display = "none";
-}
-
-
 function toggleSidebar() {
   document.getElementById("sidebar").classList.toggle("open");
 }
@@ -688,7 +672,19 @@ function openKakaoNavigation(encodedKey) {
     return;
   }
 
-  var destinationName = item.name || item.address || "매물 위치";
+  /*
+   * 카카오맵 목적지 이름도 건물명이 아닌 주소로 표시합니다.
+   * 좌표는 기존 매물 좌표를 그대로 사용하므로 정확한 위치로 이동합니다.
+   */
+  var destinationName = String(item.address || "").trim();
+
+  if (!destinationName) {
+    destinationName = "매물 위치";
+  } else if (
+    !/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/.test(destinationName)
+  ) {
+    destinationName = "대전 " + destinationName;
+  }
 
   /*
    * 카카오맵 공식 링크 형식:
@@ -727,14 +723,18 @@ function openKakaoRoadview(encodedKey) {
     return;
   }
 
-  var modal = document.getElementById("roadviewModal");
+  /*
+   * 카카오 로드뷰 전용 모달을 정확히 선택합니다.
+   * 과거 모달과 id가 겹치는 문제를 방지하기 위해 class까지 확인합니다.
+   */
+  var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
   var title = document.getElementById("roadviewModalTitle");
   var address = document.getElementById("roadviewModalAddress");
   var status = document.getElementById("roadviewModalStatus");
 
-  if (!modal || !container || !status) {
-    alert("로드뷰 화면을 찾지 못했습니다.");
+  if (!modal || !container || !title || !address || !status) {
+    alert("카카오 로드뷰 화면을 찾지 못했습니다. 새 파일이 모두 적용됐는지 확인해주세요.");
     return;
   }
 
@@ -812,7 +812,7 @@ function openKakaoRoadview(encodedKey) {
 
 
 function closeRoadviewModal() {
-  var modal = document.getElementById("roadviewModal");
+  var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
 
   if (!modal) return;
@@ -831,7 +831,7 @@ function closeRoadviewModal() {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Escape") {
-    var modal = document.getElementById("roadviewModal");
+    var modal = document.querySelector("#roadviewModal.roadview-modal");
 
     if (modal && modal.classList.contains("open")) {
       closeRoadviewModal();
