@@ -385,6 +385,61 @@ function readOptionalNumberInput(id) {
 }
 
 
+function buildSearchText(item) {
+  return [
+    item && item.name,
+    item && item.address,
+    item && item.room,
+    item && item.type,
+    item && item.memo
+  ].map(function(value) {
+    return String(value || "").toLowerCase();
+  }).join(" ");
+}
+
+
+/*
+ * 쉼표(,) = OR 검색
+ * 각 쉼표 그룹 안의 공백 = AND 검색
+ *
+ * 예:
+ * 괴정,탄방,월평
+ * → 괴정 OR 탄방 OR 월평
+ *
+ * 괴정 1층,탄방 1층
+ * → (괴정 AND 1층) OR (탄방 AND 1층)
+ */
+function matchesMultiKeyword(item, rawKeyword) {
+  var keyword = String(rawKeyword || "").trim().toLowerCase();
+
+  if (!keyword) return true;
+
+  var searchText = buildSearchText(item);
+
+  var orGroups = keyword
+    .split(",")
+    .map(function(group) {
+      return group.trim();
+    })
+    .filter(Boolean);
+
+  if (!orGroups.length) return true;
+
+  return orGroups.some(function(group) {
+    var andWords = group
+      .split(/\s+/)
+      .map(function(word) {
+        return word.trim();
+      })
+      .filter(Boolean);
+
+    return andWords.every(function(word) {
+      return searchText.includes(word);
+    });
+  });
+}
+
+
 function getFilteredItems() {
   if (!map) return allItems;
 
@@ -414,13 +469,7 @@ function getFilteredItems() {
   }
 
   var filtered = allItems.filter(function(item) {
-    var matchKeyword =
-      !keyword ||
-      item.name.includes(keyword) ||
-      item.address.includes(keyword) ||
-      item.room.includes(keyword) ||
-      item.type.includes(keyword) ||
-      item.memo.includes(keyword);
+    var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || item.type === selectedType;
 
@@ -627,8 +676,10 @@ function addListItem(item) {
             '<span class="item-building-name">' + escapeHtml(item.name) + '</span>' +
           '</div>' +
           '<div class="item-address-room">' +
-            '<span class="item-address-text">' + escapeHtml(item.address) + '</span>' +
-            (item.room ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>' : '') +
+            '<span class="item-address-inline">' +
+              '<span class="item-address-text">' + escapeHtml(item.address) + '</span>' +
+              (item.room ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>' : '') +
+            '</span>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1000,6 +1051,7 @@ function clearSelectedPrintItems() {
 function updatePrintSelectedButton() {
   var printBtn = document.getElementById("printSelectedBtn");
   var completeBtn = document.getElementById("completeSelectedBtn");
+  var fieldVisitBtn = document.getElementById("fieldVisitBtn");
   var count = selectedPrintKeys.length;
 
   if (printBtn) {
@@ -1011,6 +1063,134 @@ function updatePrintSelectedButton() {
     completeBtn.innerText = count > 0 ? "완료 " + count : "완료";
     completeBtn.disabled = count === 0;
   }
+
+  if (fieldVisitBtn) {
+    fieldVisitBtn.innerText = count > 0 ? "임장 ON " + count : "임장 ON";
+    fieldVisitBtn.disabled = count === 0;
+  }
+}
+
+
+function removeGongsilBoxMarkerFromMemo(memo) {
+  var text = String(memo || "");
+
+  text = text
+    .replace(/\(\s*공실박스\s*\)/gi, "")
+    .replace(/출처\s*[:：]\s*공실박스/gi, "")
+    .replace(/\s*\/\s*\/\s*/g, " / ")
+    .replace(/^\s*\/\s*/, "")
+    .replace(/\s*\/\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return text;
+}
+
+
+function markSelectedAsVisited() {
+  if (!selectedPrintKeys.length) {
+    alert("임장 처리할 매물을 선택해주세요.");
+    return;
+  }
+
+  if (!saveApiURL) {
+    alert("구글시트 자동수정 URL이 아직 연결되지 않았습니다.");
+    return;
+  }
+
+  var selectedItems = getSelectedPrintItems();
+  var targetItems = selectedItems.filter(function(item) {
+    return isGongsilBoxItem(item);
+  });
+
+  if (!targetItems.length) {
+    alert("선택한 매물 중 (공실박스) 매물이 없습니다.");
+    return;
+  }
+
+  var skippedCount = selectedItems.length - targetItems.length;
+
+  var confirmText =
+    "선택한 공실박스 매물 " + targetItems.length +
+    "개의 임장 처리를 완료할까요?\n\n" +
+    "메모의 (공실박스)가 삭제되고 클러스터가 기본색으로 바뀝니다.";
+
+  if (skippedCount > 0) {
+    confirmText += "\n\n공실박스가 아닌 " + skippedCount + "개 매물은 제외됩니다.";
+  }
+
+  if (!confirm(confirmText)) return;
+
+  var sidebar = document.getElementById("sidebar");
+  var scrollTop = sidebar ? sidebar.scrollTop : 0;
+  var previousValues = {};
+
+  targetItems.forEach(function(item) {
+    previousValues[item.key] = item.memo || "";
+    doneTogglePendingKeys[item.key] = true;
+    item.memo = removeGongsilBoxMarkerFromMemo(item.memo || "");
+  });
+
+  refreshDoneStatusUI(true);
+  document.getElementById("status").innerHTML =
+    "임장 처리 " + targetItems.length + "개 저장중...";
+
+  var requests = targetItems.map(function(item) {
+    var payload = {
+      /*
+       * 기존 Apps Script의 toggleDone 수정 기능을 재사용합니다.
+       * 상태는 그대로 두고 메모만 최신값으로 저장합니다.
+       */
+      action: "toggleDone",
+      key: {
+        name: item.name || "",
+        address: item.address || "",
+        room: item.room || "",
+        type: item.type || ""
+      },
+      state: item.state || "",
+      memo: item.memo || ""
+    };
+
+    return fetch(saveApiURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify(payload)
+    });
+  });
+
+  Promise.all(requests).then(function() {
+    targetItems.forEach(function(item) {
+      delete doneTogglePendingKeys[item.key];
+    });
+
+    selectedPrintKeys = [];
+    refreshDoneStatusUI(true);
+
+    requestAnimationFrame(function() {
+      if (sidebar) sidebar.scrollTop = scrollTop;
+    });
+
+    document.getElementById("status").innerHTML =
+      "임장 처리 " + targetItems.length + "개 저장 요청 완료";
+
+    setTimeout(function() {
+      loadSheet(true);
+    }, 1800);
+  }).catch(function(error) {
+    console.error(error);
+
+    targetItems.forEach(function(item) {
+      item.memo = previousValues[item.key] || "";
+      delete doneTogglePendingKeys[item.key];
+    });
+
+    refreshDoneStatusUI(true);
+    alert("임장 처리 저장 중 오류가 발생했습니다.");
+  });
 }
 
 
