@@ -1604,23 +1604,21 @@ function jsV40Build(card) {
 
 
 function jsV40Render() {
-  var selectedItem = document.querySelector(".item.selected");
-  if (!selectedItem) return;
-
-  var smartCard = selectedItem.querySelector(".ai-card");
+  var panelBody = document.getElementById("aiSidePanelBody");
+  var smartCard = panelBody ? panelBody.querySelector(".ai-card") : null;
   if (!smartCard) return;
 
   /*
    * 과거 버전에서 생성되던 독립 박스를 전부 제거합니다.
-   * 최종 화면에는 AI 스마트 매물카드 내부의 통합 브리핑 하나만 남습니다.
+   * 최종 화면에는 AI 스마트 매물카드 내부 통합 브리핑 1개만 남습니다.
    */
-  selectedItem.querySelectorAll(
+  panelBody.querySelectorAll(
     "#jsV33Briefing, #jsV331BusinessBox, #jsV40UnifiedAI, #jsV41Box, #jsV411PracticalAI"
   ).forEach(function(box) {
     box.remove();
   });
 
-  var data = jsV40Build(selectedItem);
+  var data = jsV40Build(panelBody);
   var key = (typeof selectedItemKey !== "undefined" ? selectedItemKey : "") + "|" + data.sig;
 
   if (JS_V40_LAST_SIG === key && smartCard.querySelector("#jsV40UnifiedAI")) return;
@@ -1649,10 +1647,6 @@ function jsV40Render() {
     + '</div>'
     + '</div>';
 
-  /*
-   * AI 스마트 매물카드 내부에서
-   * 현장체크/협상포인트 다음, 복사 버튼 바로 위에 통합 브리핑을 배치합니다.
-   */
   var actions = smartCard.querySelector(".ai-card-actions");
   if (actions) {
     actions.insertAdjacentHTML("beforebegin", html);
@@ -1683,3 +1677,94 @@ function jsV40Style() {
 
 jsV40Style();
 setInterval(jsV40Render, 1000);
+
+/* =========================================================
+   v4.2 AI 스마트 매물카드 독립 사이드 패널
+   ========================================================= */
+var aiSidePanelCurrentKey = "";
+
+function relayoutMapAfterAiPanel() {
+  setTimeout(function() {
+    if (typeof map !== "undefined" && map && typeof map.relayout === "function") {
+      map.relayout();
+    }
+  }, 280);
+}
+
+function openAiSidePanel(item) {
+  if (!item) return;
+
+  var panel = document.getElementById("aiSidePanel");
+  var body = document.getElementById("aiSidePanelBody");
+  var subtitle = document.getElementById("aiSidePanelSubtitle");
+
+  if (!panel || !body) return;
+
+  aiSidePanelCurrentKey = item.key || "";
+  selectedItemKey = item.key;
+
+  if (subtitle) {
+    subtitle.textContent = [item.name, item.address, item.room].filter(Boolean).join(" / ");
+  }
+
+  body.innerHTML = buildSmartItemCardHtml(item);
+  body.scrollTop = 0;
+
+  panel.setAttribute("aria-hidden", "false");
+  document.body.classList.add("ai-side-panel-open");
+
+  /*
+   * 패널 안의 상권분석을 시작합니다.
+   * 카드 DOM이 만들어진 뒤 실행해야 정상적으로 결과가 들어갑니다.
+   */
+  setTimeout(function() {
+    loadCommercialAreaAnalysis(item);
+    JS_V40_LAST_SIG = "";
+    jsV40Render();
+  }, 80);
+
+  relayoutMapAfterAiPanel();
+}
+
+function closeAiSidePanel() {
+  var panel = document.getElementById("aiSidePanel");
+  var body = document.getElementById("aiSidePanelBody");
+  var subtitle = document.getElementById("aiSidePanelSubtitle");
+
+  document.body.classList.remove("ai-side-panel-open");
+
+  if (panel) panel.setAttribute("aria-hidden", "true");
+  if (body) body.innerHTML = "";
+  if (subtitle) subtitle.textContent = "매물을 선택해주세요.";
+
+  aiSidePanelCurrentKey = "";
+  JS_V40_LAST_SIG = "";
+
+  /*
+   * 닫기 버튼은 AI 패널만 닫습니다.
+   * 지도 마커와 매물 선택 상태는 그대로 유지합니다.
+   */
+  relayoutMapAfterAiPanel();
+}
+
+function refreshOpenAiSidePanel() {
+  if (!document.body.classList.contains("ai-side-panel-open")) return;
+  if (!aiSidePanelCurrentKey) return;
+
+  var item = (allItems || []).find(function(x) {
+    return x.key === aiSidePanelCurrentKey;
+  });
+
+  if (!item) {
+    closeAiSidePanel();
+    return;
+  }
+
+  openAiSidePanel(item);
+}
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape" && document.body.classList.contains("ai-side-panel-open")) {
+    closeAiSidePanel();
+  }
+});
