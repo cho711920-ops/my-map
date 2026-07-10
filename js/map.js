@@ -1,3 +1,11 @@
+/* =========================================================
+   JS부동산 지도/마커/클러스터 스크립트 수정본
+   - 클러스터는 출처와 무관하게 기본 파란색
+   - 클러스터 내부 매물이 모두 거래완료일 때만 회색
+   - 거래가능 매물이 1개라도 있으면 파란색
+   - 클러스터 원 크기와 기존 동작은 그대로 유지
+   ========================================================= */
+
 /* JS부동산 지도/마커/클러스터/시트 로딩 전용 스크립트 */
 function groupByAddress(items) {
   var grouped = {};
@@ -313,10 +321,13 @@ function drawItems(items) {
 
     var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
     var doneClass = allDone ? " done" : "";
-    var sourceClass = " source-" + getClusterSourceType(cluster.items);
 
+    /*
+     * 클러스터는 출처와 무관하게 기본 파란색을 사용합니다.
+     * 클러스터 안의 모든 매물이 거래완료일 때만 done 클래스가 붙어 회색이 됩니다.
+     */
     var overlayContent =
-      '<div class="circle-marker' + sourceClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
       position: cluster.latlng,
@@ -372,10 +383,13 @@ function redrawSelectedMarkers() {
 
     var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
     var doneClass = allDone ? " done" : "";
-    var sourceClass = " source-" + getClusterSourceType(cluster.items);
 
+    /*
+     * 선택 상태가 바뀌어 다시 그릴 때도
+     * 일반 클러스터는 파란색, 전부 거래완료인 클러스터만 회색을 유지합니다.
+     */
     var content =
-      '<div class="circle-marker' + sourceClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     o.setContent(content);
   });
