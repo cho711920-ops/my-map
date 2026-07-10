@@ -1,7 +1,7 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
 var saveApiURL = ""; // Apps Script 웹앱 URL을 여기에 붙여넣으면 자동등록이 켜집니다.
-
+https://script.google.com/macros/s/AKfycbwQVix7zFQekdo5jPNBhaehfcNC-6w2giEZZ1Ra-0HAG7HYdsSg4SiprL8XAL9yxceS/exec
 var map, geocoder;
 var allItems = [];
 var currentItems = [];
