@@ -1,4 +1,14 @@
 /* =========================================================
+   JS부동산 지도/시트 로딩 스크립트 v4.4.1
+   자동업데이트 화면 상태 유지 수정본
+   - 매물리스트 초기화 방지
+   - 리스트 스크롤 위치 유지
+   - 선택 매물 및 선택 클러스터 유지
+   - AI 사이드패널 열림 상태 및 내부 스크롤 유지
+   - 기존 클러스터 색상과 크기는 그대로 유지
+   ========================================================= */
+
+/* =========================================================
    JS부동산 지도/마커/클러스터 스크립트 수정본
    - 클러스터는 출처와 무관하게 기본 파란색
    - 클러스터 내부 매물이 모두 거래완료일 때만 회색
@@ -119,12 +129,132 @@ kakao.maps.load(function() {
 });
 
 
+/* =========================================================
+   v4.4.1 자동업데이트 화면 상태 유지
+   - 현재 매물리스트 유지
+   - 리스트 스크롤 위치 유지
+   - 선택 매물/클러스터 유지
+   - AI 사이드패널 열림 상태와 스크롤 유지
+   ========================================================= */
+function captureAutoUpdateViewState() {
+  var sidebar = document.getElementById("sidebar");
+  var aiBody = document.getElementById("aiSidePanelBody");
+  var aiOpen = document.body.classList.contains("ai-side-panel-open");
+
+  return {
+    selectedItemKey: selectedItemKey || "",
+    selectedGroupKey: selectedGroupKey || "",
+    visibleKeys: (visibleListItems || []).map(function(item) {
+      return item.key;
+    }),
+    sidebarScrollTop: sidebar ? sidebar.scrollTop : 0,
+    aiOpen: aiOpen,
+    aiItemKey: typeof aiSidePanelCurrentKey !== "undefined"
+      ? (aiSidePanelCurrentKey || selectedItemKey || "")
+      : (selectedItemKey || ""),
+    aiScrollTop: aiBody ? aiBody.scrollTop : 0
+  };
+}
+
+
+function findItemsBySavedKeys(keys) {
+  if (!Array.isArray(keys) || !keys.length) return [];
+
+  var keySet = {};
+  keys.forEach(function(key) {
+    keySet[key] = true;
+  });
+
+  var foundMap = {};
+  (allItems || []).forEach(function(item) {
+    if (keySet[item.key]) {
+      foundMap[item.key] = item;
+    }
+  });
+
+  // 기존 리스트 순서를 그대로 유지
+  return keys.map(function(key) {
+    return foundMap[key] || null;
+  }).filter(Boolean);
+}
+
+
+function restoreAutoUpdateViewState(state) {
+  if (!state) return;
+
+  var sidebar = document.getElementById("sidebar");
+  var aiBody = document.getElementById("aiSidePanelBody");
+
+  var restoredList = findItemsBySavedKeys(state.visibleKeys);
+  var selectedItem = state.selectedItemKey
+    ? (allItems || []).find(function(item) {
+        return item.key === state.selectedItemKey;
+      }) || null
+    : null;
+
+  /*
+   * 자동업데이트 전에 보고 있던 리스트가 남아 있으면
+   * 전체 검색결과 대신 그 리스트를 다시 보여줍니다.
+   */
+  if (restoredList.length) {
+    visibleListItems = restoredList.slice();
+    showList(restoredList);
+  }
+
+  selectedItemKey = selectedItem ? selectedItem.key : null;
+
+  /*
+   * 클러스터 키가 새 렌더링 후에도 존재하면 선택 상태를 유지합니다.
+   * 없으면 리스트는 유지하되 클러스터 선택 테두리만 해제합니다.
+   */
+  var sameClusterExists = state.selectedGroupKey && overlays.some(function(overlay) {
+    return overlay.__cluster && overlay.__cluster.key === state.selectedGroupKey;
+  });
+
+  selectedGroupKey = sameClusterExists ? state.selectedGroupKey : null;
+  redrawSelectedMarkers();
+
+  requestAnimationFrame(function() {
+    if (sidebar) {
+      sidebar.scrollTop = state.sidebarScrollTop || 0;
+    }
+  });
+
+  /*
+   * AI 패널이 열려 있었다면 같은 매물로 다시 열고
+   * 패널 내부 스크롤 위치도 복원합니다.
+   */
+  if (state.aiOpen && state.aiItemKey && typeof openAiSidePanel === "function") {
+    var aiItem = (allItems || []).find(function(item) {
+      return item.key === state.aiItemKey;
+    }) || null;
+
+    if (aiItem) {
+      openAiSidePanel(aiItem);
+
+      setTimeout(function() {
+        var latestAiBody = document.getElementById("aiSidePanelBody");
+        if (latestAiBody) {
+          latestAiBody.scrollTop = state.aiScrollTop || 0;
+        }
+      }, 180);
+    }
+  }
+}
+
+
 function loadSheet(isAuto) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
     document.getElementById("status").innerHTML = "주소 변환중... 자동 업데이트 대기";
     return;
   }
+
+  /*
+   * 자동업데이트일 때만 현재 화면 상태를 저장합니다.
+   * 최초 로딩과 수동 필터 동작에는 영향을 주지 않습니다.
+   */
+  var autoUpdateViewState = isAuto ? captureAutoUpdateViewState() : null;
 
   isLoadingSheet = true;
   errorItems = [];
@@ -165,7 +295,19 @@ function loadSheet(isAuto) {
       geocodeItems(rawItems, function(doneItems) {
         allItems = doneItems;
         updateTypeOptions(allItems);
+
+        /*
+         * 지도/마커와 현재 필터 결과는 최신 데이터로 다시 계산합니다.
+         */
         applyFilter();
+
+        /*
+         * 그다음 자동업데이트 직전의 리스트·스크롤·선택·AI패널을 복원합니다.
+         */
+        if (isAuto && autoUpdateViewState) {
+          restoreAutoUpdateViewState(autoUpdateViewState);
+        }
+
         updateErrorStatus();
         var waitText = pendingAutoUpdate ? " / 중복 업데이트 1회 건너뜀" : "";
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
