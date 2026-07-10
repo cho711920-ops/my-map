@@ -645,6 +645,201 @@ function showList(items) {
 }
 
 
+function getItemCoordinates(item) {
+  if (!item || !item.latlng) return null;
+
+  try {
+    var lat = typeof item.latlng.getLat === "function"
+      ? item.latlng.getLat()
+      : Number(item.lat || item.latitude);
+
+    var lng = typeof item.latlng.getLng === "function"
+      ? item.latlng.getLng()
+      : Number(item.lng || item.longitude);
+
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+
+    return {
+      lat: lat,
+      lng: lng
+    };
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+
+function openKakaoNavigation(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(currentItem) {
+    return currentItem.key === key;
+  });
+
+  if (!item) {
+    alert("매물 정보를 찾지 못했습니다.");
+    return;
+  }
+
+  var coords = getItemCoordinates(item);
+
+  if (!coords) {
+    alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
+    return;
+  }
+
+  var destinationName = item.name || item.address || "매물 위치";
+
+  /*
+   * 카카오맵 공식 링크 형식:
+   * /link/to/이름,위도,경도
+   * 모바일에서는 카카오맵 앱 연결을 지원하고,
+   * 앱이 없거나 PC이면 카카오맵 웹으로 열립니다.
+   */
+  var url =
+    "https://map.kakao.com/link/to/" +
+    encodeURIComponent(destinationName) + "," +
+    coords.lat + "," +
+    coords.lng;
+
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+
+var roadviewInstance = null;
+
+
+function openKakaoRoadview(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(currentItem) {
+    return currentItem.key === key;
+  });
+
+  if (!item) {
+    alert("매물 정보를 찾지 못했습니다.");
+    return;
+  }
+
+  var coords = getItemCoordinates(item);
+
+  if (!coords) {
+    alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
+    return;
+  }
+
+  var modal = document.getElementById("roadviewModal");
+  var container = document.getElementById("roadviewContainer");
+  var title = document.getElementById("roadviewModalTitle");
+  var address = document.getElementById("roadviewModalAddress");
+  var status = document.getElementById("roadviewModalStatus");
+
+  if (!modal || !container || !status) {
+    alert("로드뷰 화면을 찾지 못했습니다.");
+    return;
+  }
+
+  title.textContent = item.name || "카카오 로드뷰";
+  address.textContent = [
+    item.address || "",
+    item.room || ""
+  ].filter(Boolean).join(" ");
+
+  status.textContent = "가장 가까운 로드뷰를 찾고 있습니다.";
+  status.className = "roadview-modal-status loading";
+
+  container.innerHTML = "";
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("roadview-modal-open");
+
+  /*
+   * 기존 지도에서 카카오 SDK가 이미 로드되어 있으므로
+   * 별도 HTML이나 별도 API 키 없이 같은 화면에서 실행합니다.
+   */
+  if (
+    typeof kakao === "undefined" ||
+    !kakao.maps ||
+    !kakao.maps.Roadview ||
+    !kakao.maps.RoadviewClient
+  ) {
+    status.textContent = "카카오 지도 SDK를 불러오지 못했습니다.";
+    status.className = "roadview-modal-status error";
+    return;
+  }
+
+  var position = new kakao.maps.LatLng(coords.lat, coords.lng);
+  var roadviewClient = new kakao.maps.RoadviewClient();
+
+  /*
+   * 상가 건물은 도로에서 조금 떨어져 있을 수 있어
+   * 반경 150m 안의 가장 가까운 촬영 지점을 사용합니다.
+   */
+  roadviewClient.getNearestPanoId(position, 150, function(panoId) {
+    if (!modal.classList.contains("open")) return;
+
+    if (!panoId) {
+      status.textContent = "이 위치 반경 150m 안에서 로드뷰를 찾지 못했습니다.";
+      status.className = "roadview-modal-status error";
+
+      container.innerHTML =
+        '<div class="roadview-empty">' +
+          '<div class="roadview-empty-icon">🏠</div>' +
+          '<div>주변 도로에 카카오 로드뷰가 없을 수 있습니다.</div>' +
+        '</div>';
+
+      return;
+    }
+
+    roadviewInstance = new kakao.maps.Roadview(container);
+    roadviewInstance.setPanoId(panoId, position);
+
+    status.textContent = "로드뷰 연결 완료";
+    status.className = "roadview-modal-status success";
+
+    /*
+     * 모달이 열린 직후 크기 계산이 어긋나는 것을 방지합니다.
+     */
+    setTimeout(function() {
+      if (
+        roadviewInstance &&
+        typeof roadviewInstance.relayout === "function"
+      ) {
+        roadviewInstance.relayout();
+      }
+    }, 100);
+  });
+}
+
+
+function closeRoadviewModal() {
+  var modal = document.getElementById("roadviewModal");
+  var container = document.getElementById("roadviewContainer");
+
+  if (!modal) return;
+
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("roadview-modal-open");
+
+  if (container) {
+    container.innerHTML = "";
+  }
+
+  roadviewInstance = null;
+}
+
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    var modal = document.getElementById("roadviewModal");
+
+    if (modal && modal.classList.contains("open")) {
+      closeRoadviewModal();
+    }
+  }
+});
+
+
 function addListItem(item) {
   var div = document.createElement("div");
   var printSelected = selectedPrintKeys.includes(item.key);
@@ -655,39 +850,90 @@ function addListItem(item) {
     (isDone(item) ? " done" : "") +
     (printSelected ? " print-selected" : "");
 
-  var doneLabel = isDone(item) ? '<span class="done-badge">계약완료</span>' : "";
-  var typeLabel = item.type ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>' : "";
+  var doneLabel = isDone(item)
+    ? '<span class="done-badge">계약완료</span>'
+    : "";
+
+  var typeLabel = item.type
+    ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>'
+    : "";
+
   var sourceLabel = isGongsilBoxItem(item)
     ? '<span class="gongsil-source-badge">공실박스</span>'
     : "";
+
   var encodedKey = encodeURIComponent(item.key);
   var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
 
   div.innerHTML =
-    '<div class="item-top">' +
-      '<div class="item-left">' +
+    /*
+     * 첫 줄: 체크박스 + 내비/로드뷰 + 찜
+     */
+    '<div class="item-action-row">' +
+      '<div class="item-action-left">' +
         '<label class="item-action-select" title="이 매물을 작업 대상으로 선택">' +
-          '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+          '<input type="checkbox" class="action-select-check" ' +
+            (printSelected ? 'checked' : '') +
+            ' onclick="event.stopPropagation(); togglePrintSelection(\'' +
+            encodedKey + '\')">' +
         '</label>' +
-        '<div class="item-title-wrap">' +
-          '<div class="item-heading-line">' +
-            doneLabel + sourceLabel + typeLabel + pyeongMiniBadge +
-            '<span class="item-building-name">' + escapeHtml(item.name) + '</span>' +
-          '</div>' +
-          '<div class="item-address-room">' +
-            '<span class="item-address-inline">' +
-              '<span class="item-address-text">' + escapeHtml(item.address) + '</span>' +
-              (item.room ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>' : '') +
-            '</span>' +
-          '</div>' +
-        '</div>' +
+        '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
+          'onclick="event.stopPropagation(); openKakaoNavigation(\'' +
+          encodedKey + '\')">내비</button>' +
+        '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
+          'onclick="event.stopPropagation(); openKakaoRoadview(\'' +
+          encodedKey + '\')">로드뷰</button>' +
       '</div>' +
-      '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
+      '<div class="star ' + (isFavorite(item) ? 'on' : '') +
+        '" onclick="event.stopPropagation(); toggleFavorite(\'' +
+        safeKey + '\')">★</div>' +
     '</div>' +
-    '<div class="price-line">보증금 ' + item.deposit + ' / 월세 ' + item.rent + ' | 관리비 ' + item.fee + ' | 권리금 ' + item.premium + ' | ' + item.area + '평</div>' +
-    '<div class="info-line-compact">임대인 ' + escapeHtml(item.landlordPhone) + ' | 세입자 ' + escapeHtml(item.tenantPhone) + '</div>' +
-    '<div class="memo-line">' + escapeHtml(item.memo) + '</div>';
+
+    /*
+     * 둘째 줄: 평당 배지 + 구분 배지 + 건물이름
+     */
+    '<div class="item-identity-row">' +
+      doneLabel +
+      sourceLabel +
+      pyeongMiniBadge +
+      typeLabel +
+      '<span class="item-building-name">' +
+        escapeHtml(item.name) +
+      '</span>' +
+    '</div>' +
+
+    /*
+     * 셋째 줄: 주소 + 호실
+     */
+    '<div class="item-address-room">' +
+      '<span class="item-address-inline">' +
+        '<span class="item-address-text">' +
+          escapeHtml(item.address) +
+        '</span>' +
+        (item.room
+          ? '<span class="item-room-badge">' +
+              escapeHtml(item.room) +
+            '</span>'
+          : '') +
+      '</span>' +
+    '</div>' +
+
+    '<div class="price-line">보증금 ' + item.deposit +
+      ' / 월세 ' + item.rent +
+      ' | 관리비 ' + item.fee +
+      ' | 권리금 ' + item.premium +
+      ' | ' + item.area + '평</div>' +
+
+    '<div class="info-line-compact">임대인 ' +
+      escapeHtml(item.landlordPhone) +
+      ' | 세입자 ' +
+      escapeHtml(item.tenantPhone) +
+    '</div>' +
+
+    '<div class="memo-line">' +
+      escapeHtml(item.memo) +
+    '</div>';
 
   div.onclick = function() {
     openItem(item);
