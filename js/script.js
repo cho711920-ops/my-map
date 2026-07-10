@@ -512,7 +512,6 @@ function addListItem(item) {
   var encodedKey = encodeURIComponent(item.key);
   var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
-  var smartCardHtml = selectedItemKey === item.key ? buildSmartItemCardHtml(item) : "";
 
   div.innerHTML =
     '<div class="item-top">' +
@@ -526,20 +525,13 @@ function addListItem(item) {
     '</div>' +
     '<div class="price-line">보증금 ' + item.deposit + ' / 월세 ' + item.rent + ' | 관리비 ' + item.fee + ' | 권리금 ' + item.premium + ' | ' + item.area + '평</div>' +
     '<div class="info-line-compact">임대인 ' + escapeHtml(item.landlordPhone) + ' | 세입자 ' + escapeHtml(item.tenantPhone) + '</div>' +
-    '<div class="memo-line">' + escapeHtml(item.memo) + '</div>' +
-    smartCardHtml;
+    '<div class="memo-line">' + escapeHtml(item.memo) + '</div>';
 
   div.onclick = function() {
     openItem(item);
   };
 
   document.getElementById("list").appendChild(div);
-
-  if (selectedItemKey === item.key) {
-    setTimeout(function() {
-      loadCommercialAreaAnalysis(item);
-    }, 80);
-  }
 }
 
 
