@@ -13,6 +13,7 @@ var hideDone = false;
 var gongsilOnly = false;
 var multiClusterMode = false;
 var selectedGroupKeys = [];
+var preserveActionSelectionDuringRender = false;
 var errorItems = [];
 var isLoadingSheet = false;
 var pendingAutoUpdate = false;
@@ -564,6 +565,26 @@ function getClusterSourceType(items) {
 
 
 function showList(items) {
+  var previousSignature = (visibleListItems || []).map(function(item) {
+    return item.key;
+  }).join("||");
+
+  var nextSignature = (items || []).map(function(item) {
+    return item.key;
+  }).join("||");
+
+  /*
+   * 사용자가 보고 있는 리스트 구성이 바뀌면 체크를 자동 해제합니다.
+   * 단, 자동업데이트가 같은 화면을 복원하는 동안에는 유지합니다.
+   */
+  if (
+    previousSignature &&
+    previousSignature !== nextSignature &&
+    !preserveActionSelectionDuringRender
+  ) {
+    selectedPrintKeys = [];
+  }
+
   visibleListItems = items.slice();
   document.getElementById("list").innerHTML = "";
 
@@ -601,7 +622,14 @@ function addListItem(item) {
           '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
         '</label>' +
         '<div class="item-title-wrap">' +
-          '<div class="title">' + doneLabel + sourceLabel + typeLabel + pyeongMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+          '<div class="item-heading-line">' +
+            doneLabel + sourceLabel + typeLabel + pyeongMiniBadge +
+            '<span class="item-building-name">' + escapeHtml(item.name) + '</span>' +
+          '</div>' +
+          '<div class="item-address-room">' +
+            '<span class="item-address-text">' + escapeHtml(item.address) + '</span>' +
+            (item.room ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>' : '') +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
@@ -1204,6 +1232,53 @@ function printCurrentAIReport() {
 
   alert("AI 리포트 인쇄 기능을 찾지 못했습니다.");
 }
+
+
+function updateSyncIndicatorFromStatus() {
+  var statusBox = document.getElementById("status");
+  var indicator = document.getElementById("syncIndicator");
+
+  if (!statusBox || !indicator) return;
+
+  var text = String(statusBox.textContent || "").trim();
+
+  indicator.classList.remove("syncing", "ok", "error");
+
+  if (/오류|실패/.test(text)) {
+    indicator.classList.add("error");
+    indicator.title = text || "동기화 오류";
+  } else if (/로딩|불러오|변환중|업데이트중|저장중|대기/.test(text)) {
+    indicator.classList.add("syncing");
+    indicator.title = text || "동기화 중";
+  } else {
+    indicator.classList.add("ok");
+    indicator.title = text || "동기화 정상";
+  }
+}
+
+
+function initSyncIndicator() {
+  var statusBox = document.getElementById("status");
+
+  if (!statusBox || typeof MutationObserver === "undefined") {
+    return;
+  }
+
+  updateSyncIndicatorFromStatus();
+
+  var observer = new MutationObserver(function() {
+    updateSyncIndicatorFromStatus();
+  });
+
+  observer.observe(statusBox, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+}
+
+
+setTimeout(initSyncIndicator, 0);
 
 
 function toggleHideDone() {
