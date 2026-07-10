@@ -21,7 +21,7 @@
       <div class="filter-title">매물 검색</div>
 
       <div class="search-row">
-        <input id="keyword" placeholder="지역 / 건물이름 / 호실 / 구분 / 메모 검색">
+        <input id="keyword" placeholder="지역 / 건물 / 호실 검색 · 쉼표 다중검색 (괴정,탄방,월평)">
         <button class="search-btn" onclick="applyFilter()">검색</button>
       </div>
 
@@ -57,9 +57,10 @@
         <button class="clear-selected-btn" onclick="clearSelectedPrintItems()">선택해제</button>
         <button id="printSelectedBtn" class="print-btn" onclick="printSelectedList()">인쇄</button>
         <button id="completeSelectedBtn" class="complete-selected-btn" onclick="completeSelectedItems()">완료</button>
+        <button id="fieldVisitBtn" class="field-visit-btn" onclick="markSelectedAsVisited()">임장 ON</button>
         <button id="multiClusterBtn" class="multi-cluster-btn" onclick="toggleMultiClusterMode()">다중선택 OFF</button>
         <button class="quick-add-btn" onclick="openQuickAddModal()">빠른등록</button>
-      </div>
+              </div>
       <div id="multiClusterStatus" class="multi-cluster-status"></div>
 
       <div id="detailFilter" class="detail-filter">
