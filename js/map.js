@@ -386,10 +386,18 @@ function openItem(item) {
   selectedItemKey = item.key;
   selectedGroupKey = null;
 
-  showList([item]);
-  document.getElementById("status").innerHTML = "선택 매물 1개 · AI 분석 표시";
+  /*
+   * 리스트 안에 AI카드를 펼치지 않고,
+   * 선택 상태만 다시 표시한 뒤 독립 AI 패널을 엽니다.
+   */
+  showList(visibleListItems && visibleListItems.length ? visibleListItems : [item]);
+  document.getElementById("status").innerHTML = "선택 매물 1개 · AI 분석 패널 표시";
+
+  if (typeof openAiSidePanel === "function") {
+    openAiSidePanel(item);
+  }
 
   if (window.innerWidth <= 768) {
-    document.getElementById("sidebar").classList.add("open");
+    document.getElementById("sidebar").classList.remove("open");
   }
 }
