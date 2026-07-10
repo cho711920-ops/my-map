@@ -1418,9 +1418,9 @@ button {
   }
 
   #sidebar {
-    width:480px;
-    min-width:480px;
-    max-width:480px;
+    width:420px;
+    min-width:420px;
+    max-width:420px;
     height:calc(100vh - 58px);
     overflow:auto;
     border-right:1px solid #d8e1ef;
@@ -1879,4 +1879,153 @@ button {
 }
 @media (max-width:768px) {
   .ai-commerce-grid { grid-template-columns:1fr; }
+}
+
+
+/* =========================================================
+   v4.2 AI 스마트 매물카드 독립 사이드 패널
+   ========================================================= */
+#aiSidePanel {
+  position:fixed;
+  top:58px;
+  right:0;
+  bottom:0;
+  width:480px;
+  max-width:calc(100vw - 480px);
+  background:#ffffff;
+  border-left:1px solid #d8e1ef;
+  box-shadow:-8px 0 28px rgba(15,23,42,0.16);
+  z-index:11850;
+  display:flex;
+  flex-direction:column;
+  transform:translateX(105%);
+  visibility:hidden;
+  transition:transform .24s ease, visibility .24s ease;
+}
+
+body.ai-side-panel-open #aiSidePanel {
+  transform:translateX(0);
+  visibility:visible;
+}
+
+.ai-side-panel-header {
+  min-height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 14px;
+  border-bottom:1px solid #e5eaf2;
+  background:#ffffff;
+  flex:0 0 auto;
+}
+
+.ai-side-panel-title {
+  color:#005bea;
+  font-size:16px;
+  font-weight:900;
+}
+
+.ai-side-panel-subtitle {
+  max-width:390px;
+  margin-top:3px;
+  color:#667085;
+  font-size:11px;
+  line-height:1.35;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ai-side-panel-close {
+  width:38px;
+  height:38px;
+  flex:0 0 38px;
+  padding:0;
+  border-radius:50%;
+  background:#eef2f7;
+  color:#344054;
+  font-size:26px;
+  line-height:38px;
+  font-weight:500;
+}
+
+.ai-side-panel-close:hover {
+  background:#dde5ef;
+  color:#111827;
+}
+
+.ai-side-panel-body {
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:10px;
+  background:#f6f8fc;
+}
+
+.ai-side-panel-body .ai-card {
+  margin:0;
+  background:#ffffff;
+  box-shadow:none;
+  border-color:#d9e6f7;
+}
+
+body.ai-side-panel-open #map {
+  margin-right:480px;
+}
+
+#aiSidePanelBackdrop {
+  display:none;
+}
+
+@media (max-width:1300px) and (min-width:769px) {
+  #aiSidePanel {
+    width:420px;
+    max-width:calc(100vw - 480px);
+  }
+
+  body.ai-side-panel-open #map {
+    margin-right:420px;
+  }
+}
+
+@media (max-width:768px) {
+  #aiSidePanel {
+    top:0;
+    width:100%;
+    max-width:none;
+    z-index:100200;
+    border-left:0;
+    border-radius:0;
+  }
+
+  .ai-side-panel-header {
+    min-height:58px;
+    padding:9px 12px;
+  }
+
+  .ai-side-panel-subtitle {
+    max-width:calc(100vw - 86px);
+  }
+
+  .ai-side-panel-body {
+    padding:8px;
+  }
+
+  body.ai-side-panel-open #map {
+    margin-right:0;
+  }
+
+  body.ai-side-panel-open #aiSidePanelBackdrop {
+    display:block;
+    position:fixed;
+    inset:0;
+    background:rgba(15,23,42,0.28);
+    z-index:100150;
+  }
+
+  body.ai-side-panel-open {
+    overflow:hidden;
+  }
 }
