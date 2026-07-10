@@ -1,3 +1,12 @@
+/* =========================================================
+   JS부동산 AI 분석 스크립트
+   중복 브리핑/번갈아 표시 완전 수정본
+   - v3.3 상권 브리핑 반복 렌더링 중지
+   - v3.3.1 추천업종 TOP3 반복 렌더링 중지
+   - v4.0 통합 투자 브리핑만 표시
+   - DOM 반복 삭제/재생성으로 인한 깜빡임 및 스크롤 튐 방지
+   ========================================================= */
+
 /* JS부동산 AI 분석/상권분석 전용 스크립트 */
 function clampNumber(value, min, max) {
   value = Number(value) || 0;
@@ -1112,8 +1121,8 @@ function enhanceCommercialUI() {
 
     if (txt.includes("포화") && !el.classList.contains("saturation-mark")) {
       el.classList.add("saturation-mark");
-      el.style.background = "#ffffff";
-      el.style.border = "1px solid #d9e6f7";
+      el.style.background = "#fff7e6";
+      el.style.border = "1px solid #ffd591";
       el.style.borderRadius = "10px";
       el.style.padding = "8px";
       el.style.marginTop = "6px";
@@ -1143,7 +1152,7 @@ function injectCommercialUIStyle() {
 
 
 injectCommercialUIStyle();
-setInterval(enhanceCommercialUI, 800);
+// 중복 DOM 재가공 방지: 필요할 때만 통합 브리핑에서 처리
   /* === v3.3 AI 상권브리핑 + 기본반경 50m === */
 
 var JS_V33_lastSelectedText = "";
@@ -1309,14 +1318,14 @@ function jsV33_injectStyle() {
     ".js-v33-section p{margin:3px 0;}" +
     ".js-v33-result{padding:9px;border-radius:10px;margin-top:8px;font-size:12px;line-height:1.5;}" +
     ".js-v33-result.blue{background:#eefaf2;border:1px solid #b7ebc6;}" +
-    ".js-v33-result.warn{background:#ffffff;border:1px solid #d9e6f7;}" +
+    ".js-v33-result.warn{background:#fff7e6;border:1px solid #ffd591;}" +
     ".js-v33-opinion{margin-top:8px;background:#fff;border:1px solid #d9e6f7;border-radius:10px;padding:9px;font-size:12px;line-height:1.5;}";
   document.head.appendChild(style);
 }
 
 
 jsV33_injectStyle();
-setInterval(jsV33_renderBriefing, 1200);
+// v3.3 개별 상권 브리핑 반복 렌더링 중지 (v4.0 통합 브리핑 사용)
 /* === v3.3.1 추천업종 TOP3 실무형 브리핑 === */
 
 
@@ -1505,7 +1514,7 @@ function jsV331_injectStyle() {
     ".js-v331-mini-bar{height:8px;background:#e9f2ff;border-radius:999px;overflow:hidden;margin:7px 0;}" +
     ".js-v331-mini-bar span{display:block;height:100%;background:linear-gradient(90deg,#1e88ff,#03c75a);}" +
     ".js-v331-rank ul{margin:6px 0 0 17px;padding:0;font-size:12px;line-height:1.45;color:#333;}" +
-    ".js-v331-warn{margin-top:10px;padding:9px;border-radius:10px;background:#ffffff;border:1px solid #d9e6f7;font-size:12px;line-height:1.5;}" +
+    ".js-v331-warn{margin-top:10px;padding:9px;border-radius:10px;background:#fff7e6;border:1px solid #ffd591;font-size:12px;line-height:1.5;}" +
     ".js-v331-warn span{display:inline-block;margin:3px 5px 0 0;background:#fff;padding:4px 7px;border-radius:999px;border:1px solid #ffe0a3;}" +
     ".js-v331-check{margin-top:10px;padding:9px;border-radius:10px;background:#f6ffed;border:1px solid #b7eb8f;font-size:12px;line-height:1.6;}";
   document.head.appendChild(style);
@@ -1513,7 +1522,7 @@ function jsV331_injectStyle() {
 
 
 jsV331_injectStyle();
-setInterval(jsV331_renderTopBusiness, 1500);
+// v3.3.1 개별 추천업종 TOP3 반복 렌더링 중지 (v4.0 통합 브리핑 사용)
 /* === v4.0 AI 엔진 통합 안정화: 스크롤 튐 방지 === */
 
 /* 기존 반복 렌더링 함수 무력화 */
