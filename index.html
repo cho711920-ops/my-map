@@ -55,9 +55,12 @@
         <button id="gongsilOnlyBtn" class="gongsil-only-btn" onclick="toggleGongsilOnly()">공실박스만</button>
         <button class="select-all-btn" onclick="selectAllVisibleItems()">전체선택</button>
         <button class="clear-selected-btn" onclick="clearSelectedPrintItems()">선택해제</button>
-        <button id="printSelectedBtn" class="print-btn" onclick="printSelectedList()">선택인쇄</button>
+        <button id="printSelectedBtn" class="print-btn" onclick="printSelectedList()">인쇄</button>
+        <button id="completeSelectedBtn" class="complete-selected-btn" onclick="completeSelectedItems()">완료</button>
+        <button id="multiClusterBtn" class="multi-cluster-btn" onclick="toggleMultiClusterMode()">다중선택 OFF</button>
         <button class="quick-add-btn" onclick="openQuickAddModal()">빠른등록</button>
       </div>
+      <div id="multiClusterStatus" class="multi-cluster-status"></div>
 
       <div id="detailFilter" class="detail-filter">
         <div class="row">
@@ -100,6 +103,10 @@
     <button id="aiSidePanelClose" class="ai-side-panel-close" type="button" onclick="closeAiSidePanel()" aria-label="AI 분석 패널 닫기">×</button>
   </div>
   <div id="aiSidePanelBody" class="ai-side-panel-body"></div>
+  <div class="ai-side-panel-actions">
+    <button class="ai-panel-copy-btn" type="button" onclick="copyCurrentAIAnalysis()">분석복사</button>
+    <button class="ai-panel-report-btn" type="button" onclick="printCurrentAIReport()">AI 리포트 인쇄</button>
+  </div>
 </div>
 <div id="aiSidePanelBackdrop" onclick="closeAiSidePanel()"></div>
 
