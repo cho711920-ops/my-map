@@ -111,7 +111,8 @@
 <div id="aiSidePanelBackdrop" onclick="closeAiSidePanel()"></div>
 
 <button id="toggleBtn" onclick="toggleSidebar()">매물 보기</button>
-<div id="status">로딩중...</div>
+<div id="status" aria-live="polite">로딩중...</div>
+<div id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></div>
 <div id="errorStatus" onclick="showAddressErrors()">주소 오류 0개</div>
 
 <div id="roadviewModal">
