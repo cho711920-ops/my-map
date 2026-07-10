@@ -319,6 +319,12 @@ function loadSheet(isAuto) {
         updateTypeOptions(allItems);
 
         /*
+         * 자동업데이트가 같은 화면을 복원하는 동안에는
+         * 작업 체크박스 선택을 유지합니다.
+         */
+        preserveActionSelectionDuringRender = !!isAuto;
+
+        /*
          * 지도/마커와 현재 필터 결과는 최신 데이터로 다시 계산합니다.
          */
         applyFilter();
@@ -329,6 +335,8 @@ function loadSheet(isAuto) {
         if (isAuto && autoUpdateViewState) {
           restoreAutoUpdateViewState(autoUpdateViewState);
         }
+
+        preserveActionSelectionDuringRender = false;
 
         updateErrorStatus();
         var waitText = pendingAutoUpdate ? " / 중복 업데이트 1회 건너뜀" : "";
