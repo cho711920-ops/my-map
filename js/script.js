@@ -1,6 +1,6 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
-var saveApiURL = "https://script.google.com/macros/s/AKfycbwQVix7zFQekdo5jPNBhaehfcNC-6w2giEZZ1Ra-0HAG7HYdsSg4SiprL8XAL9yxceS/exec";
+var saveApiURL = ""; // Apps Script 웹앱 URL을 여기에 붙여넣으면 자동등록이 켜집니다.
 
 var map, geocoder;
 var allItems = [];
@@ -10,6 +10,7 @@ var selectedGroupKey = null;
 var selectedItemKey = null;
 var favoriteOnly = false;
 var hideDone = false;
+var gongsilOnly = false;
 var errorItems = [];
 var isLoadingSheet = false;
 var pendingAutoUpdate = false;
@@ -441,9 +442,11 @@ function getFilteredItems() {
 
     var matchFavorite = !favoriteOnly || isFavorite(item);
     var matchDone = !hideDone || !isDone(item);
+    var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var inMap = item.latlng && bounds.contain(item.latlng);
 
-    return matchKeyword && matchType && matchPrice && matchFloor && matchFavorite && matchDone && inMap;
+    return matchKeyword && matchType && matchPrice && matchFloor &&
+      matchFavorite && matchDone && matchGongsil && inMap;
   });
 
   filtered.sort(function(a, b) {
@@ -513,9 +516,15 @@ function buildPyeongMiniBadge(item) {
 }
 
 
+function isGongsilBoxItem(item) {
+  var memo = String((item && item.memo) ? item.memo : "");
+  return /\(\s*공실박스\s*\)|출처\s*[:：]\s*공실박스/i.test(memo);
+}
+
+
 function getItemSourceType(item) {
-  // v3.0.13.1: 메모/상호/구분에 우연히 들어간 단어로 출처를 추정하지 않음.
-  // 반드시 메모에 "출처:공실박스", "출처:네이버", "출처:당근", "출처:직접확인"처럼 명확히 저장된 경우만 색상 반영.
+  if (isGongsilBoxItem(item)) return "gongsil";
+
   var memo = String((item && item.memo) ? item.memo : "");
   var m = memo.match(/출처\s*[:：]\s*([^\/|,，\n]+)/);
 
@@ -530,7 +539,6 @@ function getItemSourceType(item) {
 
   return "unknown";
 }
-
 
 function getClusterSourceType(items) {
   var counts = { gongsil:0, naver:0, danggeun:0, direct:0, unknown:0 };
@@ -577,6 +585,9 @@ function addListItem(item) {
 
   var doneLabel = isDone(item) ? '<span class="done-badge">계약완료</span>' : "";
   var typeLabel = item.type ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>' : "";
+  var sourceLabel = isGongsilBoxItem(item)
+    ? '<span class="gongsil-source-badge">공실박스</span>'
+    : "";
   var encodedKey = encodeURIComponent(item.key);
   var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
@@ -595,7 +606,7 @@ function addListItem(item) {
           '</label>' +
         '</div>' +
         '<div class="item-title-wrap">' +
-          '<div class="title">' + doneLabel + typeLabel + pyeongMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
+          '<div class="title">' + doneLabel + sourceLabel + typeLabel + pyeongMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="star ' + (isFavorite(item) ? 'on' : '') + '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
@@ -777,10 +788,13 @@ function resetFilter() {
 
   favoriteOnly = false;
   hideDone = false;
+  gongsilOnly = false;
   document.getElementById("favoriteBtn").innerText = "찜만";
   document.getElementById("favoriteBtn").classList.remove("on");
   document.getElementById("hideDoneBtn").innerText = "완료숨김";
   document.getElementById("hideDoneBtn").classList.remove("on");
+  document.getElementById("gongsilOnlyBtn").innerText = "공실박스만";
+  document.getElementById("gongsilOnlyBtn").classList.remove("on");
   selectedGroupKey = null;
   selectedItemKey = null;
 
@@ -968,6 +982,25 @@ function getSelectedPrintItems() {
   return allItems.filter(function(item) {
     return selectedPrintKeys.includes(item.key);
   });
+}
+
+
+function toggleGongsilOnly() {
+  gongsilOnly = !gongsilOnly;
+
+  var btn = document.getElementById("gongsilOnlyBtn");
+
+  if (gongsilOnly) {
+    btn.innerText = "전체출처";
+    btn.classList.add("on");
+  } else {
+    btn.innerText = "공실박스만";
+    btn.classList.remove("on");
+  }
+
+  selectedGroupKey = null;
+  selectedItemKey = null;
+  applyFilter();
 }
 
 
