@@ -144,6 +144,8 @@ function captureAutoUpdateViewState() {
   return {
     selectedItemKey: selectedItemKey || "",
     selectedGroupKey: selectedGroupKey || "",
+    selectedGroupKeys: (selectedGroupKeys || []).slice(),
+    multiClusterMode: !!multiClusterMode,
     visibleKeys: (visibleListItems || []).map(function(item) {
       return item.key;
     }),
@@ -212,6 +214,26 @@ function restoreAutoUpdateViewState(state) {
   });
 
   selectedGroupKey = sameClusterExists ? state.selectedGroupKey : null;
+
+  if (state.multiClusterMode) {
+    multiClusterMode = true;
+    selectedGroupKeys = (state.selectedGroupKeys || []).filter(function(groupKey) {
+      return overlays.some(function(overlay) {
+        return overlay.__cluster && overlay.__cluster.key === groupKey;
+      });
+    });
+  } else {
+    selectedGroupKeys = [];
+  }
+
+  if (typeof updateMultiClusterButton === "function") {
+    updateMultiClusterButton();
+  }
+
+  if (typeof updateMultiClusterStatus === "function") {
+    updateMultiClusterStatus();
+  }
+
   redrawSelectedMarkers();
 
   requestAnimationFrame(function() {
@@ -461,7 +483,7 @@ function drawItems(items) {
       return isDone(item);
     });
 
-    var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
+    var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
     var gongsilClass = !allDone && cluster.items.some(function(item) {
       return typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item);
@@ -500,13 +522,67 @@ function openCluster(encodedKey) {
 
   if (!overlay) return;
 
-  selectedGroupKey = key;
   selectedItemKey = null;
 
-  var items = overlay.__cluster.items;
+  /*
+   * 다중선택 OFF: 기존처럼 한 클러스터만 표시
+   */
+  if (!multiClusterMode) {
+    selectedGroupKey = key;
+    selectedGroupKeys = [];
 
-  showList(items);
-  document.getElementById("status").innerHTML = "선택 매물 " + items.length + "개";
+    var singleItems = overlay.__cluster.items;
+    showList(singleItems);
+    document.getElementById("status").innerHTML =
+      "선택 매물 " + singleItems.length + "개";
+  } else {
+    /*
+     * 다중선택 ON: 같은 클러스터를 다시 누르면 해제,
+     * 다른 클러스터를 누르면 누적합니다.
+     */
+    selectedGroupKey = null;
+
+    if (selectedGroupKeys.includes(key)) {
+      selectedGroupKeys = selectedGroupKeys.filter(function(groupKey) {
+        return groupKey !== key;
+      });
+    } else {
+      selectedGroupKeys.push(key);
+    }
+
+    var combinedItems = [];
+    var seen = {};
+
+    overlays.forEach(function(currentOverlay) {
+      if (
+        !currentOverlay.__cluster ||
+        !selectedGroupKeys.includes(currentOverlay.__cluster.key)
+      ) {
+        return;
+      }
+
+      currentOverlay.__cluster.items.forEach(function(item) {
+        if (!seen[item.key]) {
+          seen[item.key] = true;
+          combinedItems.push(item);
+        }
+      });
+    });
+
+    if (combinedItems.length) {
+      showList(combinedItems);
+    } else {
+      applyFilter();
+    }
+
+    document.getElementById("status").innerHTML =
+      "선택 클러스터 " + selectedGroupKeys.length +
+      "개 · 매물 " + combinedItems.length + "개";
+
+    if (typeof updateMultiClusterStatus === "function") {
+      updateMultiClusterStatus();
+    }
+  }
 
   if (window.innerWidth <= 768) {
     document.getElementById("sidebar").classList.add("open");
@@ -526,7 +602,7 @@ function redrawSelectedMarkers() {
       return isDone(item);
     });
 
-    var selectedClass = selectedGroupKey === cluster.key ? " selected" : "";
+    var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
     var gongsilClass = !allDone && cluster.items.some(function(item) {
       return typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item);
