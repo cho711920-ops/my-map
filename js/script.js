@@ -20,6 +20,7 @@ var selectedPrintKeys = [];
 var visibleListItems = [];
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
+var doneTogglePendingKeys = {};
 
 
 function loadGeocodeCache() {
@@ -583,7 +584,16 @@ function addListItem(item) {
   div.innerHTML =
     '<div class="item-top">' +
       '<div class="item-left">' +
-        '<input type="checkbox" class="print-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+        '<div class="item-check-stack">' +
+          '<label class="item-check-label print-label" title="선택인쇄">' +
+            '<input type="checkbox" class="print-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+            '<span>인쇄</span>' +
+          '</label>' +
+          '<label class="item-check-label done-label' + (doneTogglePendingKeys[item.key] ? ' saving' : '') + '" title="거래완료 상태를 구글시트에 저장">' +
+            '<input type="checkbox" class="done-check" ' + (isDone(item) ? 'checked' : '') + (doneTogglePendingKeys[item.key] ? ' disabled' : '') + ' onclick="event.stopPropagation(); toggleDoneStatus(\'' + encodedKey + '\', this.checked)">' +
+            '<span>' + (doneTogglePendingKeys[item.key] ? '저장중' : '완료') + '</span>' +
+          '</label>' +
+        '</div>' +
         '<div class="item-title-wrap">' +
           '<div class="title">' + doneLabel + typeLabel + pyeongMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
         '</div>' +
@@ -776,6 +786,143 @@ function resetFilter() {
 
   drawItems(allItems);
   document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
+}
+
+
+/* =========================================================
+   v4.4 거래완료 원클릭 토글
+   - 화면 즉시 반영
+   - 상태 열: 계약완료 / 공란
+   - 메모 열: 거래완료 날짜 자동 기록
+   - 구글시트 Apps Script로 기존 행 수정
+   ========================================================= */
+function getItemByKeyForStatus(key) {
+  return (allItems || []).find(function(item) {
+    return item.key === key;
+  }) || (visibleListItems || []).find(function(item) {
+    return item.key === key;
+  }) || null;
+}
+
+
+function makeDoneMemo(memo, checked) {
+  var text = String(memo || "").trim();
+  var markerPattern = /(?:\s*\/\s*)?\[거래완료\s+\d{4}-\d{2}-\d{2}\]/g;
+
+  // 체크 해제 시 자동으로 넣었던 거래완료 표시 제거
+  if (!checked) {
+    return text.replace(markerPattern, "").replace(/\s*\/\s*$/, "").trim();
+  }
+
+  // 이미 거래완료 표시가 있으면 중복 추가하지 않음
+  if (/\[거래완료\s+\d{4}-\d{2}-\d{2}\]/.test(text)) {
+    return text;
+  }
+
+  var today = new Date();
+  var yyyy = today.getFullYear();
+  var mm = String(today.getMonth() + 1).padStart(2, "0");
+  var dd = String(today.getDate()).padStart(2, "0");
+  var marker = "[거래완료 " + yyyy + "-" + mm + "-" + dd + "]";
+
+  return text ? text + " / " + marker : marker;
+}
+
+
+function restoreListScrollAfterRender(scrollTop) {
+  requestAnimationFrame(function() {
+    var sidebar = document.getElementById("sidebar");
+    if (sidebar) sidebar.scrollTop = scrollTop;
+  });
+}
+
+
+function refreshDoneStatusUI(keepScroll) {
+  var sidebar = document.getElementById("sidebar");
+  var scrollTop = keepScroll && sidebar ? sidebar.scrollTop : 0;
+
+  if (typeof applyFilter === "function") {
+    applyFilter();
+  } else {
+    redrawSelectedMarkers();
+    showList(visibleListItems);
+  }
+
+  restoreListScrollAfterRender(scrollTop);
+}
+
+
+function toggleDoneStatus(encodedKey, checked) {
+  var key = decodeURIComponent(encodedKey || "");
+  var item = getItemByKeyForStatus(key);
+
+  if (!item) {
+    alert("거래완료 상태를 변경할 매물을 찾지 못했습니다.");
+    return;
+  }
+
+  if (!saveApiURL) {
+    alert(
+      "구글시트 자동수정 URL이 아직 연결되지 않았습니다.\n\n" +
+      "Apps Script 배포 URL을 script.js 상단의 saveApiURL에 넣어주세요."
+    );
+    showList(visibleListItems);
+    return;
+  }
+
+  if (doneTogglePendingKeys[key]) return;
+
+  var previousState = item.state || "";
+  var previousMemo = item.memo || "";
+  var nextState = checked ? "계약완료" : "";
+  var nextMemo = makeDoneMemo(previousMemo, checked);
+
+  doneTogglePendingKeys[key] = true;
+
+  // 먼저 화면에 즉시 반영
+  item.state = nextState;
+  item.memo = nextMemo;
+  refreshDoneStatusUI(true);
+
+  var payload = {
+    action: "toggleDone",
+    key: {
+      name: item.name || "",
+      address: item.address || "",
+      room: item.room || "",
+      type: item.type || ""
+    },
+    state: nextState,
+    memo: nextMemo
+  };
+
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload)
+  }).then(function() {
+    delete doneTogglePendingKeys[key];
+    refreshDoneStatusUI(true);
+
+    document.getElementById("status").innerHTML =
+      checked ? "거래완료 저장 요청 완료" : "계약가능 복구 요청 완료";
+
+    // 시트 반영값을 다시 읽어 실제 저장 상태를 확인
+    setTimeout(function() {
+      loadSheet(true);
+    }, 1800);
+  }).catch(function(error) {
+    console.error(error);
+
+    // 저장 요청 자체가 실패한 경우 화면도 원상복구
+    item.state = previousState;
+    item.memo = previousMemo;
+    delete doneTogglePendingKeys[key];
+    refreshDoneStatusUI(true);
+
+    alert("거래완료 상태 저장 중 오류가 발생했습니다.");
+  });
 }
 
 
