@@ -2500,15 +2500,6 @@ body.ai-side-panel-open #map {
    v5.0 매물리스트 3줄 구조 + 내비/로드뷰 + 상단 정리
    ========================================================= */
 
-/* 검색창을 데스크톱에서 살짝 축소 */
-@media (min-width:769px) {
-  .search-row input {
-    flex:0 1 315px;
-    width:315px;
-    max-width:315px;
-  }
-}
-
 /* 빠른등록 내부에 동기화 LED 고정 */
 .quick-add-with-sync {
   display:inline-flex;
@@ -2825,5 +2816,115 @@ body.roadview-modal-open {
     flex-basis:36px;
     width:36px;
     height:36px;
+  }
+}
+
+
+/* =========================================================
+   v5.2 로드뷰 중복 모달 방지
+   ========================================================= */
+#roadviewModal.roadview-modal {
+  display:none !important;
+}
+
+#roadviewModal.roadview-modal.open {
+  display:block !important;
+}
+
+
+/* =========================================================
+   v5.2.1 검색줄 공백 제거 + 모바일 상단 버튼 한 줄 스크롤
+   ========================================================= */
+
+/* 검색줄은 공백 없이 한 줄 유지 */
+.search-row {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  width:100%;
+  min-width:0;
+  flex-wrap:nowrap;
+}
+
+.search-row input {
+  flex:1 1 auto !important;
+  width:auto !important;
+  min-width:120px;
+  max-width:none !important;
+}
+
+.search-row button,
+.search-row select {
+  flex:0 0 auto;
+}
+
+/* PC에서도 버튼줄은 한 줄 유지 */
+.extra-action-row {
+  display:flex;
+  align-items:center;
+  flex-wrap:nowrap !important;
+  gap:5px;
+  width:100%;
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  white-space:nowrap;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+
+.extra-action-row::-webkit-scrollbar {
+  display:none;
+}
+
+.extra-action-row > * {
+  flex:0 0 auto;
+}
+
+/* 빠른등록 버튼은 항상 마지막에 남고 줄바꿈 금지 */
+.quick-add-with-sync {
+  flex:0 0 auto !important;
+  white-space:nowrap;
+}
+
+/* 모바일: 버튼 한 줄 가로 스크롤, 높이 최소화 */
+@media (max-width:768px) {
+  .search-row {
+    gap:4px;
+  }
+
+  .search-row input {
+    min-width:0;
+    font-size:13px;
+  }
+
+  .search-row button,
+  .search-row select {
+    padding-left:7px;
+    padding-right:7px;
+    font-size:11px;
+  }
+
+  .extra-action-row {
+    gap:4px;
+    padding-bottom:2px;
+    scroll-snap-type:x proximity;
+  }
+
+  .extra-action-row > * {
+    scroll-snap-align:start;
+  }
+
+  .extra-action-row button {
+    min-height:31px;
+    padding:5px 8px;
+    font-size:11px;
+    line-height:1.1;
+  }
+
+  .quick-add-with-sync .sync-indicator {
+    width:8px;
+    height:8px;
+    flex-basis:8px;
   }
 }
