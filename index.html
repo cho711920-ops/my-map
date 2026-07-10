@@ -253,6 +253,31 @@
 </div>
 
 
+<!-- 카카오 로드뷰 내부 모달 -->
+<div id="roadviewModal" class="roadview-modal" aria-hidden="true">
+  <div class="roadview-modal-backdrop" onclick="closeRoadviewModal()"></div>
+
+  <div class="roadview-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="roadviewModalTitle">
+    <div class="roadview-modal-header">
+      <div class="roadview-modal-heading">
+        <div id="roadviewModalTitle" class="roadview-modal-title">카카오 로드뷰</div>
+        <div id="roadviewModalAddress" class="roadview-modal-address"></div>
+      </div>
+
+      <button
+        type="button"
+        class="roadview-modal-close"
+        onclick="closeRoadviewModal()"
+        aria-label="로드뷰 닫기"
+      >×</button>
+    </div>
+
+    <div id="roadviewModalStatus" class="roadview-modal-status">로드뷰를 준비하고 있습니다.</div>
+    <div id="roadviewContainer" class="roadview-container"></div>
+  </div>
+</div>
+
+
 <script src="js/script.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/print.js"></script>
