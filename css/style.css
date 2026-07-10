@@ -1418,9 +1418,9 @@ button {
   }
 
   #sidebar {
-    width:420px;
-    min-width:420px;
-    max-width:420px;
+    width:480px;
+    min-width:480px;
+    max-width:480px;
     height:calc(100vh - 58px);
     overflow:auto;
     border-right:1px solid #d8e1ef;
