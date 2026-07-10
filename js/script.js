@@ -11,6 +11,8 @@ var selectedItemKey = null;
 var favoriteOnly = false;
 var hideDone = false;
 var gongsilOnly = false;
+var multiClusterMode = false;
+var selectedGroupKeys = [];
 var errorItems = [];
 var isLoadingSheet = false;
 var pendingAutoUpdate = false;
@@ -595,16 +597,9 @@ function addListItem(item) {
   div.innerHTML =
     '<div class="item-top">' +
       '<div class="item-left">' +
-        '<div class="item-check-stack">' +
-          '<label class="item-check-label print-label" title="선택인쇄">' +
-            '<input type="checkbox" class="print-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
-            '<span>인쇄</span>' +
-          '</label>' +
-          '<label class="item-check-label done-label' + (doneTogglePendingKeys[item.key] ? ' saving' : '') + '" title="거래완료 상태를 구글시트에 저장">' +
-            '<input type="checkbox" class="done-check" ' + (isDone(item) ? 'checked' : '') + (doneTogglePendingKeys[item.key] ? ' disabled' : '') + ' onclick="event.stopPropagation(); toggleDoneStatus(\'' + encodedKey + '\', this.checked)">' +
-            '<span>' + (doneTogglePendingKeys[item.key] ? '저장중' : '완료') + '</span>' +
-          '</label>' +
-        '</div>' +
+        '<label class="item-action-select" title="이 매물을 작업 대상으로 선택">' +
+          '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+        '</label>' +
         '<div class="item-title-wrap">' +
           '<div class="title">' + doneLabel + sourceLabel + typeLabel + pyeongMiniBadge + escapeHtml(item.name) + ' / ' + escapeHtml(item.address) + ' / ' + escapeHtml(item.room) + '</div>' +
         '</div>' +
@@ -789,12 +784,16 @@ function resetFilter() {
   favoriteOnly = false;
   hideDone = false;
   gongsilOnly = false;
+  multiClusterMode = false;
+  selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜만";
   document.getElementById("favoriteBtn").classList.remove("on");
   document.getElementById("hideDoneBtn").innerText = "완료숨김";
   document.getElementById("hideDoneBtn").classList.remove("on");
   document.getElementById("gongsilOnlyBtn").innerText = "공실박스만";
   document.getElementById("gongsilOnlyBtn").classList.remove("on");
+  updateMultiClusterButton();
+  updateMultiClusterStatus();
   selectedGroupKey = null;
   selectedItemKey = null;
 
@@ -971,10 +970,108 @@ function clearSelectedPrintItems() {
 
 
 function updatePrintSelectedButton() {
-  var btn = document.getElementById("printSelectedBtn");
-  if (!btn) return;
+  var printBtn = document.getElementById("printSelectedBtn");
+  var completeBtn = document.getElementById("completeSelectedBtn");
+  var count = selectedPrintKeys.length;
 
-  btn.innerText = selectedPrintKeys.length > 0 ? "선택인쇄 " + selectedPrintKeys.length : "선택인쇄";
+  if (printBtn) {
+    printBtn.innerText = count > 0 ? "인쇄 " + count : "인쇄";
+    printBtn.disabled = count === 0;
+  }
+
+  if (completeBtn) {
+    completeBtn.innerText = count > 0 ? "완료 " + count : "완료";
+    completeBtn.disabled = count === 0;
+  }
+}
+
+
+function completeSelectedItems() {
+  var selectedItems = getSelectedPrintItems().filter(function(item) {
+    return !isDone(item);
+  });
+
+  if (!selectedPrintKeys.length) {
+    alert("완료 처리할 매물을 선택해주세요.");
+    return;
+  }
+
+  if (!selectedItems.length) {
+    alert("선택한 매물은 이미 모두 거래완료 상태입니다.");
+    return;
+  }
+
+  if (!saveApiURL) {
+    alert("구글시트 자동수정 URL이 아직 연결되지 않았습니다.");
+    return;
+  }
+
+  if (!confirm("선택한 " + selectedItems.length + "개 매물을 거래완료로 처리할까요?")) {
+    return;
+  }
+
+  var sidebar = document.getElementById("sidebar");
+  var scrollTop = sidebar ? sidebar.scrollTop : 0;
+
+  selectedItems.forEach(function(item) {
+    doneTogglePendingKeys[item.key] = true;
+    item.state = "계약완료";
+    item.memo = makeDoneMemo(item.memo || "", true);
+  });
+
+  refreshDoneStatusUI(true);
+  document.getElementById("status").innerHTML =
+    "선택 매물 " + selectedItems.length + "개 완료 저장중...";
+
+  var requests = selectedItems.map(function(item) {
+    var payload = {
+      action: "toggleDone",
+      key: {
+        name: item.name || "",
+        address: item.address || "",
+        room: item.room || "",
+        type: item.type || ""
+      },
+      state: "계약완료",
+      memo: item.memo || ""
+    };
+
+    return fetch(saveApiURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+  });
+
+  Promise.all(requests).then(function() {
+    selectedItems.forEach(function(item) {
+      delete doneTogglePendingKeys[item.key];
+    });
+
+    selectedPrintKeys = [];
+    refreshDoneStatusUI(true);
+
+    requestAnimationFrame(function() {
+      if (sidebar) sidebar.scrollTop = scrollTop;
+    });
+
+    document.getElementById("status").innerHTML =
+      "선택 매물 " + selectedItems.length + "개 거래완료 요청 완료";
+
+    setTimeout(function() {
+      loadSheet(true);
+    }, 1800);
+  }).catch(function(error) {
+    console.error(error);
+
+    selectedItems.forEach(function(item) {
+      delete doneTogglePendingKeys[item.key];
+    });
+
+    refreshDoneStatusUI(true);
+    alert("선택 매물 완료 저장 중 오류가 발생했습니다.");
+  });
 }
 
 
@@ -1001,6 +1098,111 @@ function toggleGongsilOnly() {
   selectedGroupKey = null;
   selectedItemKey = null;
   applyFilter();
+}
+
+
+function toggleMultiClusterMode() {
+  multiClusterMode = !multiClusterMode;
+
+  /*
+   * 모드를 끄면 누적 선택을 모두 해제하고 일반 조회로 복귀합니다.
+   */
+  if (!multiClusterMode) {
+    selectedGroupKeys = [];
+    selectedGroupKey = null;
+    selectedItemKey = null;
+    applyFilter();
+  }
+
+  updateMultiClusterButton();
+  updateMultiClusterStatus();
+
+  if (typeof redrawSelectedMarkers === "function") {
+    redrawSelectedMarkers();
+  }
+}
+
+
+function updateMultiClusterButton() {
+  var btn = document.getElementById("multiClusterBtn");
+  if (!btn) return;
+
+  btn.innerText = multiClusterMode ? "다중선택 ON" : "다중선택 OFF";
+  btn.classList.toggle("on", multiClusterMode);
+}
+
+
+function updateMultiClusterStatus() {
+  var status = document.getElementById("multiClusterStatus");
+  if (!status) return;
+
+  if (!multiClusterMode || !selectedGroupKeys.length) {
+    status.innerHTML = "";
+    status.classList.remove("show");
+    return;
+  }
+
+  var selectedItems = [];
+  var seen = {};
+
+  overlays.forEach(function(overlay) {
+    if (!overlay.__cluster || !selectedGroupKeys.includes(overlay.__cluster.key)) return;
+
+    overlay.__cluster.items.forEach(function(item) {
+      if (!seen[item.key]) {
+        seen[item.key] = true;
+        selectedItems.push(item);
+      }
+    });
+  });
+
+  status.innerHTML =
+    "선택 " + selectedGroupKeys.length + "개 클러스터 · 매물 " + selectedItems.length + "개";
+  status.classList.add("show");
+}
+
+
+function isClusterSelected(clusterKey) {
+  if (multiClusterMode) {
+    return selectedGroupKeys.includes(clusterKey);
+  }
+
+  return selectedGroupKey === clusterKey;
+}
+
+
+function copyCurrentAIAnalysis() {
+  if (!selectedItemKey) {
+    alert("먼저 AI 분석할 매물을 선택해주세요.");
+    return;
+  }
+
+  if (typeof copySmartItemAnalysis === "function") {
+    copySmartItemAnalysis(encodeURIComponent(selectedItemKey));
+    return;
+  }
+
+  alert("분석복사 기능을 찾지 못했습니다.");
+}
+
+
+function printCurrentAIReport() {
+  if (!selectedItemKey) {
+    alert("먼저 AI 분석할 매물을 선택해주세요.");
+    return;
+  }
+
+  if (typeof printAIInvestmentReport === "function") {
+    printAIInvestmentReport();
+    return;
+  }
+
+  if (typeof printAiInvestmentReport === "function") {
+    printAiInvestmentReport(encodeURIComponent(selectedItemKey));
+    return;
+  }
+
+  alert("AI 리포트 인쇄 기능을 찾지 못했습니다.");
 }
 
 
