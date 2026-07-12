@@ -264,12 +264,32 @@
 </div>
 
 
-<!-- 카카오 로드뷰 내부 모달 -->
+<!-- JS 스마트 로드뷰 -->
 <div id="roadviewModal" class="roadview-modal" aria-hidden="true">
   <div class="roadview-modal-backdrop" onclick="closeRoadviewModal()"></div>
 
   <div class="roadview-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="roadviewModalTitle">
     <div class="roadview-modal-header">
+      <div class="roadview-view-tabs" role="tablist" aria-label="로드뷰와 지도 전환">
+        <button
+          id="roadviewTabBtn"
+          type="button"
+          class="roadview-view-tab active"
+          onclick="switchRoadviewMode('roadview')"
+          role="tab"
+          aria-selected="true"
+        >로드뷰</button>
+
+        <button
+          id="roadviewMapTabBtn"
+          type="button"
+          class="roadview-view-tab"
+          onclick="switchRoadviewMode('map')"
+          role="tab"
+          aria-selected="false"
+        >지도</button>
+      </div>
+
       <div class="roadview-modal-heading">
         <div id="roadviewModalTitle" class="roadview-modal-title">카카오 로드뷰</div>
         <div id="roadviewModalAddress" class="roadview-modal-address"></div>
@@ -283,22 +303,16 @@
       >×</button>
     </div>
 
-    <div id="roadviewModalStatus" class="roadview-modal-status">로드뷰를 준비하고 있습니다.</div>
+    <div class="roadview-tab-content">
+      <section id="roadviewPane" class="roadview-pane active" role="tabpanel">
+        <div id="roadviewContainer" class="roadview-container"></div>
+        <div id="roadviewTargetPin" class="roadview-screen-pin" aria-label="매물 위치"></div>
+        <div id="roadviewModalStatus" class="roadview-inline-status">로드뷰를 준비하고 있습니다.</div>
+      </section>
 
-    <div class="roadview-workspace">
-      <div id="roadviewContainer" class="roadview-container"></div>
-
-      <aside class="roadview-map-panel">
-        <div class="roadview-map-title">현재 위치 · 방향</div>
-        <div id="roadviewMiniMap" class="roadview-mini-map"></div>
-        <div class="roadview-map-help">빨간 표시는 선택 매물, 파란 화살표는 로드뷰 위치와 현재 보는 방향입니다.</div>
-      </aside>
-    </div>
-
-    <div class="roadview-modal-actions">
-      <button type="button" class="roadview-locate-btn" onclick="recenterRoadviewMiniMap()">위치맞춤</button>
-      <button type="button" class="roadview-nav-btn" onclick="openCurrentRoadviewNavigation()">내비</button>
-      <button type="button" class="roadview-close-bottom-btn" onclick="closeRoadviewModal()">닫기</button>
+      <section id="roadviewMapPane" class="roadview-pane" role="tabpanel">
+        <div id="roadviewFullMap" class="roadview-full-map"></div>
+      </section>
     </div>
   </div>
 </div>
