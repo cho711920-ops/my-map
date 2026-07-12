@@ -219,6 +219,28 @@
     return '<div class="aiv-detail-row"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>';
   }
 
+  function getDealLabel(item) {
+    if (!item) return "";
+    var explicit = String(item.tradeType || item.dealType || item.transactionType || item.contractType || "").trim();
+    if (explicit) {
+      if (/매매/.test(explicit)) return "매매";
+      if (/전세/.test(explicit)) return "전세";
+      if (/임대|월세/.test(explicit)) return "임대";
+      return explicit;
+    }
+    var searchable = [item.type, item.name, item.memo].filter(Boolean).join(" ");
+    if (/매매/.test(searchable)) return "매매";
+    if (/전세/.test(searchable)) return "전세";
+    return "임대";
+  }
+
+  function buildAddressWithRoom(item) {
+    var address = String((item && item.address) || "").trim();
+    var room = String((item && item.room) || "").trim();
+    if (!address) address = "주소 없음";
+    return room ? address + " · " + room : address;
+  }
+
   function renderCurrentCard(item, index, total) {
     var priceBits = [
       moneyLabel("보증금", item.deposit),
@@ -227,16 +249,20 @@
       moneyLabel("권리금", item.premium)
     ].filter(Boolean).join("");
 
-    var meta = [item.type, item.room].filter(Boolean).map(function (value) {
+    var dealLabel = getDealLabel(item);
+    var meta = [item.type].filter(Boolean).map(function (value) {
       return '<span>' + escapeHtml(value) + '</span>';
     }).join("");
 
     return '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
       '<div class="aiv-current-top">' +
         '<div>' +
+          '<div class="aiv-current-title-line">' +
+            (dealLabel ? '<span class="aiv-deal-badge ' + (dealLabel === "매매" ? "sale" : dealLabel === "전세" ? "jeonse" : "lease") + '">' + escapeHtml(dealLabel) + '</span>' : '') +
+            '<h2>' + escapeHtml(item.name || item.address || "매물") + '</h2>' +
+          '</div>' +
           '<div class="aiv-current-meta">' + meta + '</div>' +
-          '<h2>' + escapeHtml(item.name || item.address || "매물") + '</h2>' +
-          '<div class="aiv-current-address">' + escapeHtml(item.address || "주소 없음") + '</div>' +
+          '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
         '</div>' +
       '</div>' +
       (priceBits ? '<div class="aiv-price-grid">' + priceBits + '</div>' : '') +
@@ -319,10 +345,73 @@
     return item ? encodeURIComponent(item.key) : "";
   }
 
+  function buildDestinationName(item) {
+    var destinationName = String((item && item.address) || "").trim();
+    if (!destinationName) return "매물 위치";
+    if (!/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/.test(destinationName)) {
+      destinationName = "대전 " + destinationName;
+    }
+    return destinationName;
+  }
+
   function openNavigation() {
-    var encoded = encodedCurrentKey();
-    if (!encoded || typeof window.openKakaoNavigation !== "function") return alert("내비 기능을 불러오지 못했습니다.");
-    window.openKakaoNavigation(encoded);
+    var item = currentItem();
+    if (!item) return alert("매물 정보를 찾지 못했습니다.");
+
+    var coords = typeof window.getItemCoordinates === "function" ? window.getItemCoordinates(item) : null;
+    if (!coords || !isFinite(coords.lat) || !isFinite(coords.lng)) {
+      alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
+      return;
+    }
+
+    var popup = window.open("about:blank", "_blank");
+
+    function openDestinationOnly(message) {
+      var destinationUrl =
+        "https://map.kakao.com/link/to/" +
+        encodeURIComponent(buildDestinationName(item)) + "," +
+        coords.lat + "," +
+        coords.lng;
+
+      if (popup && !popup.closed) popup.location.href = destinationUrl;
+      else window.open(destinationUrl, "_blank", "noopener,noreferrer");
+
+      if (message) window.setTimeout(function () { alert(message); }, 100);
+    }
+
+    if (!navigator.geolocation) {
+      openDestinationOnly("현재 위치 기능을 지원하지 않아 목적지만 설정했습니다.\n카카오맵에서 출발지를 선택해주세요.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        var currentLat = Number(position.coords.latitude);
+        var currentLng = Number(position.coords.longitude);
+
+        if (!isFinite(currentLat) || !isFinite(currentLng)) {
+          openDestinationOnly("현재 위치를 확인하지 못해 목적지만 설정했습니다.\n카카오맵에서 출발지를 선택해주세요.");
+          return;
+        }
+
+        var routeUrl =
+          "https://map.kakao.com/link/from/" +
+          encodeURIComponent("현재 위치") + "," +
+          currentLat + "," +
+          currentLng +
+          "/to/" +
+          encodeURIComponent(buildDestinationName(item)) + "," +
+          coords.lat + "," +
+          coords.lng;
+
+        if (popup && !popup.closed) popup.location.href = routeUrl;
+        else window.open(routeUrl, "_blank", "noopener,noreferrer");
+      },
+      function () {
+        openDestinationOnly("현재 위치를 가져오지 못해 목적지만 설정했습니다.\n카카오맵에서 출발지를 선택해주세요.");
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
   }
 
   function openRoadview() {
@@ -368,19 +457,72 @@
     }
   }
 
+  function waitForItemsReady(callback, attempt) {
+    var currentAttempt = attempt || 0;
+    if (Array.isArray(window.allItems) && window.allItems.length > 0) {
+      callback();
+      return;
+    }
+    if (currentAttempt >= 40) {
+      alert("매물 데이터를 불러오지 못해 AI임장을 이어가지 못했습니다.\n잠시 후 AI임장하기 버튼을 다시 눌러주세요.");
+      return;
+    }
+    window.setTimeout(function () {
+      waitForItemsReady(callback, currentAttempt + 1);
+    }, 250);
+  }
+
+  function restoreStoredSession(stored) {
+    activeSession = {
+      active: true,
+      listId: stored.listId,
+      listName: stored.listName,
+      itemKeys: Array.isArray(stored.itemKeys) ? stored.itemKeys.slice() : [],
+      currentIndex: Number(stored.currentIndex) || 0,
+      startedAt: stored.startedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    var validItems = validSessionItems();
+    if (!validItems.length) {
+      activeSession = null;
+      localStorage.removeItem(SESSION_KEY);
+      alert("저장된 AI임장 매물을 찾지 못했습니다.");
+      return;
+    }
+
+    activeSession.itemKeys = validItems.map(function (item) { return item.key; });
+    if (activeSession.currentIndex >= activeSession.itemKeys.length) activeSession.currentIndex = activeSession.itemKeys.length - 1;
+    if (activeSession.currentIndex < 0) activeSession.currentIndex = 0;
+
+    saveSession();
+    openWorkspace();
+  }
+
   function offerResume() {
     var stored = loadStoredSession();
     if (!stored) return;
+
     var listStillExists = getVisitLists().some(function (list) { return list.id === stored.listId; });
-    if (!listStillExists || !stored.itemKeys || !stored.itemKeys.length) {
+    if (!listStillExists || !Array.isArray(stored.itemKeys) || !stored.itemKeys.length) {
       localStorage.removeItem(SESSION_KEY);
       return;
     }
-    activeSession = stored;
+
     window.setTimeout(function () {
-      if (confirm('진행 중인 AI임장이 있습니다.\n"' + stored.listName + '" ' + (stored.currentIndex + 1) + '번째 매물부터 이어갈까요?')) {
-        openWorkspace();
-      }
+      var shouldResume = confirm(
+        '진행 중인 AI임장이 있습니다.\n"' +
+        stored.listName +
+        '" ' +
+        (Number(stored.currentIndex || 0) + 1) +
+        '번째 매물부터 이어갈까요?'
+      );
+
+      if (!shouldResume) return;
+
+      waitForItemsReady(function () {
+        restoreStoredSession(stored);
+      });
     }, 700);
   }
 
