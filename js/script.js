@@ -19,7 +19,11 @@ var editingMemoKey = null;
 var memoEditMode = "replace";
 var roadviewMiniMap = null;
 var roadviewMiniMarker = null;
+var roadviewTargetOverlay = null;
 var roadviewDirectionOverlay = null;
+var roadviewGuideLine = null;
+var roadviewTargetPosition = null;
+var roadviewCameraPosition = null;
 var currentRoadviewItemKey = null;
 var currentRoadviewPosition = null;
 var errorItems = [];
@@ -478,6 +482,98 @@ function matchesMultiKeyword(item, rawKeyword) {
 }
 
 
+var SORT_LABELS = {
+  latest: "최신",
+  oldest: "오래된순",
+  aiScoreHigh: "AI점수",
+  pyeongHigh: "평당↓",
+  pyeongLow: "평당↑",
+  depositHigh: "보증금↓",
+  depositLow: "보증금↑",
+  rentHigh: "월세↓",
+  rentLow: "월세↑",
+  premiumHigh: "권리금↓",
+  premiumLow: "권리금↑",
+  areaHigh: "평수↓",
+  areaLow: "평수↑",
+  name: "건물명",
+  address: "주소순"
+};
+
+
+function toggleSortDropdown(event) {
+  if (event) event.stopPropagation();
+
+  var dropdown = document.getElementById("sortDropdown");
+  var button = document.getElementById("sortDropdownBtn");
+
+  if (!dropdown || !button) return;
+
+  var willOpen = !dropdown.classList.contains("open");
+  dropdown.classList.toggle("open", willOpen);
+  button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+
+function closeSortDropdown() {
+  var dropdown = document.getElementById("sortDropdown");
+  var button = document.getElementById("sortDropdownBtn");
+
+  if (dropdown) dropdown.classList.remove("open");
+  if (button) button.setAttribute("aria-expanded", "false");
+}
+
+
+function updateSortDropdownUI() {
+  var input = document.getElementById("sortFilter");
+  var button = document.getElementById("sortDropdownBtn");
+  var menu = document.getElementById("sortDropdownMenu");
+
+  if (!input || !button || !menu) return;
+
+  var value = input.value || "latest";
+
+  /*
+   * 첫 접속 기본값은 최신등록순이지만 버튼에는 정렬로 표시합니다.
+   * 사용자가 다른 기준을 선택한 뒤에는 현재 기준을 짧게 표시합니다.
+   */
+  button.textContent = value === "latest" ? "정렬" : (SORT_LABELS[value] || "정렬");
+
+  Array.prototype.forEach.call(
+    menu.querySelectorAll("[data-sort-value]"),
+    function(option) {
+      var selected = option.getAttribute("data-sort-value") === value;
+      option.classList.toggle("selected", selected);
+      option.setAttribute("aria-selected", selected ? "true" : "false");
+    }
+  );
+}
+
+
+function selectSortOption(value) {
+  var input = document.getElementById("sortFilter");
+
+  if (!input) return;
+
+  input.value = value || "latest";
+  updateSortDropdownUI();
+  closeSortDropdown();
+  applyFilter();
+}
+
+
+document.addEventListener("click", function(event) {
+  var dropdown = document.getElementById("sortDropdown");
+
+  if (dropdown && !dropdown.contains(event.target)) {
+    closeSortDropdown();
+  }
+});
+
+
+setTimeout(updateSortDropdownUI, 0);
+
+
 function getFilteredItems() {
   if (!map) return allItems;
 
@@ -540,14 +636,18 @@ function getFilteredItems() {
   });
 
   filtered.sort(function(a, b) {
-    if (sortType === "latest") {
-      var dateA = new Date((a.regDate || "").replace(/\./g, "-")).getTime() || 0;
-      var dateB = new Date((b.regDate || "").replace(/\./g, "-")).getTime() || 0;
-      return dateB - dateA;
-    }
+    var dateA = new Date((a.regDate || "").replace(/\./g, "-")).getTime() || 0;
+    var dateB = new Date((b.regDate || "").replace(/\./g, "-")).getTime() || 0;
+
+    if (sortType === "latest") return dateB - dateA;
+    if (sortType === "oldest") return dateA - dateB;
 
     if (sortType === "name") {
       return (a.name || "").localeCompare((b.name || ""), "ko");
+    }
+
+    if (sortType === "address") {
+      return (a.address || "").localeCompare((b.address || ""), "ko");
     }
 
     if (sortType === "aiScoreHigh") {
@@ -556,10 +656,17 @@ function getFilteredItems() {
       return aiB - aiA;
     }
 
+    var pyeongA = Number(a.area) > 0 ? Number(a.rent || 0) / Number(a.area) : 0;
+    var pyeongB = Number(b.area) > 0 ? Number(b.rent || 0) / Number(b.area) : 0;
+
+    if (sortType === "pyeongHigh") return pyeongB - pyeongA;
+    if (sortType === "pyeongLow") return pyeongA - pyeongB;
     if (sortType === "depositLow") return a.deposit - b.deposit;
     if (sortType === "depositHigh") return b.deposit - a.deposit;
     if (sortType === "rentLow") return a.rent - b.rent;
     if (sortType === "rentHigh") return b.rent - a.rent;
+    if (sortType === "premiumLow") return a.premium - b.premium;
+    if (sortType === "premiumHigh") return b.premium - a.premium;
     if (sortType === "areaHigh") return b.area - a.area;
     if (sortType === "areaLow") return a.area - b.area;
 
@@ -782,49 +889,118 @@ function updateRoadviewDirection(pan) {
 }
 
 
-function setupRoadviewMiniMap(position) {
+function updateRoadviewGuideLine() {
+  if (!roadviewGuideLine || !roadviewTargetPosition || !roadviewCameraPosition) return;
+
+  roadviewGuideLine.setPath([
+    roadviewCameraPosition,
+    roadviewTargetPosition
+  ]);
+}
+
+
+function updateRoadviewCameraPosition(position) {
+  if (!position) return;
+
+  roadviewCameraPosition = position;
+
+  if (roadviewDirectionOverlay) {
+    roadviewDirectionOverlay.setPosition(position);
+  }
+
+  if (roadviewMiniMarker) {
+    roadviewMiniMarker.setPosition(position);
+  }
+
+  updateRoadviewGuideLine();
+}
+
+
+function setupRoadviewMiniMap(targetPosition) {
   var miniMapContainer = document.getElementById("roadviewMiniMap");
 
   if (!miniMapContainer) return;
 
   miniMapContainer.innerHTML = "";
+  roadviewTargetPosition = targetPosition;
+  roadviewCameraPosition = targetPosition;
 
   roadviewMiniMap = new kakao.maps.Map(miniMapContainer, {
-    center: position,
+    center: targetPosition,
     level: 3
   });
 
-  roadviewMiniMarker = new kakao.maps.Marker({
+  /*
+   * 선택한 실제 매물 위치: 빨간 표식 + 라벨
+   */
+  var targetElement = document.createElement("div");
+  targetElement.className = "roadview-target-marker";
+  targetElement.innerHTML =
+    '<span class="roadview-target-dot"></span>' +
+    '<span class="roadview-target-label">선택 매물</span>';
+
+  roadviewTargetOverlay = new kakao.maps.CustomOverlay({
     map: roadviewMiniMap,
-    position: position
+    position: targetPosition,
+    content: targetElement,
+    yAnchor: 0.5,
+    xAnchor: 0.5,
+    zIndex: 8
   });
 
+  /*
+   * 로드뷰 촬영 위치: 작은 파란 점
+   */
+  roadviewMiniMarker = new kakao.maps.Marker({
+    map: roadviewMiniMap,
+    position: targetPosition
+  });
+
+  /*
+   * 현재 카메라가 보는 방향: 파란 화살표
+   */
   var directionElement = document.createElement("div");
   directionElement.className = "roadview-direction-arrow";
   directionElement.innerHTML = "➤";
 
   roadviewDirectionOverlay = new kakao.maps.CustomOverlay({
     map: roadviewMiniMap,
-    position: position,
+    position: targetPosition,
     content: directionElement,
     yAnchor: 0.5,
     xAnchor: 0.5,
-    zIndex: 5
+    zIndex: 9
+  });
+
+  /*
+   * 현재 로드뷰 위치에서 선택 매물까지 연결선
+   */
+  roadviewGuideLine = new kakao.maps.Polyline({
+    map: roadviewMiniMap,
+    path: [targetPosition, targetPosition],
+    strokeWeight: 3,
+    strokeColor: "#ef4444",
+    strokeOpacity: 0.8,
+    strokeStyle: "dashed"
   });
 
   setTimeout(function() {
-    if (roadviewMiniMap) {
-      roadviewMiniMap.relayout();
-      roadviewMiniMap.setCenter(position);
-    }
+    recenterRoadviewMiniMap();
   }, 80);
 }
 
-
 function recenterRoadviewMiniMap() {
-  if (roadviewMiniMap && currentRoadviewPosition) {
-    roadviewMiniMap.relayout();
-    roadviewMiniMap.setCenter(currentRoadviewPosition);
+  if (!roadviewMiniMap || !roadviewTargetPosition) return;
+
+  roadviewMiniMap.relayout();
+
+  if (roadviewCameraPosition) {
+    var bounds = new kakao.maps.LatLngBounds();
+    bounds.extend(roadviewTargetPosition);
+    bounds.extend(roadviewCameraPosition);
+    roadviewMiniMap.setBounds(bounds, 45, 45, 45, 45);
+  } else {
+    roadviewMiniMap.setCenter(roadviewTargetPosition);
     roadviewMiniMap.setLevel(3);
   }
 }
@@ -917,6 +1093,27 @@ function openKakaoRoadview(encodedKey) {
       updateRoadviewDirection(viewpoint ? viewpoint.pan : 0);
     });
 
+    /*
+     * 로드뷰 안에서 이동할 때 실제 촬영 위치도 미니맵에 반영합니다.
+     */
+    kakao.maps.event.addListener(roadviewInstance, "position_changed", function() {
+      var position = roadviewInstance.getPosition();
+      updateRoadviewCameraPosition(position);
+      recenterRoadviewMiniMap();
+    });
+
+    /*
+     * 최초 로드뷰 위치를 목표 매물 위치와 분리하여 표시합니다.
+     */
+    kakao.maps.event.addListener(roadviewInstance, "init", function() {
+      var position = roadviewInstance.getPosition();
+      var viewpoint = roadviewInstance.getViewpoint();
+
+      updateRoadviewCameraPosition(position);
+      updateRoadviewDirection(viewpoint ? viewpoint.pan : 0);
+      recenterRoadviewMiniMap();
+    });
+
     status.textContent = "로드뷰 연결 완료";
     status.className = "roadview-modal-status success";
 
@@ -946,7 +1143,11 @@ function closeRoadviewModal() {
   roadviewInstance = null;
   roadviewMiniMap = null;
   roadviewMiniMarker = null;
+  roadviewTargetOverlay = null;
   roadviewDirectionOverlay = null;
+  roadviewGuideLine = null;
+  roadviewTargetPosition = null;
+  roadviewCameraPosition = null;
   currentRoadviewItemKey = null;
   currentRoadviewCoords = null;
   currentRoadviewPosition = null;
@@ -1424,6 +1625,7 @@ function resetFilter() {
   document.getElementById("keyword").value = "";
   document.getElementById("typeFilter").value = "";
   document.getElementById("sortFilter").value = "latest";
+  updateSortDropdownUI();
   document.getElementById("minDeposit").value = "";
   document.getElementById("maxDeposit").value = "";
   document.getElementById("minRent").value = "";
