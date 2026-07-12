@@ -239,6 +239,7 @@
             '<div class="lm-list-actions">' +
               (selectedCount ? '<button class="bulk-add" type="button" onclick="addSelectedItemsToManagedList(\'' + list.id + '\')">선택 매물 ' + selectedCount + '개 추가</button>' : '') +
               (currentManagerType === "favorite" ? '<button type="button" onclick="showFavoriteListOnMap(\'' + list.id + '\')">지도에서 보기</button>' : '') +
+              (currentManagerType === "visit" ? '<button class="ai-visit-start" type="button" onclick="startAiVisitFromManagedList(\'' + list.id + '\')">AI임장 시작</button>' : '') +
               '<button type="button" onclick="renameManagedList(\'' + list.id + '\')">이름변경</button>' +
               '<button class="danger" type="button" onclick="deleteManagedList(\'' + list.id + '\')">삭제</button>' +
             '</div>' +
@@ -431,7 +432,25 @@
   };
 
   window.startAiVisitPreview = function () {
-    alert("AI임장하기는 STEP2에서 연결됩니다.\n현재 STEP1에서는 찜목록과 임장목록을 안정화하고 있습니다.");
+    if (window.JSAiVisitV6 && typeof window.JSAiVisitV6.openLauncher === "function") {
+      window.JSAiVisitV6.openLauncher();
+      return;
+    }
+    alert("AI임장 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+  };
+
+  window.startAiVisitFromManagedList = function (listId) {
+    if (window.JSAiVisitV6 && typeof window.JSAiVisitV6.openConfirmForList === "function") {
+      window.JSAiVisitV6.openConfirmForList(listId);
+      return;
+    }
+    alert("AI임장 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+  };
+
+  window.JSV6ListStore = {
+    load: function (type) { return loadLists(type === "visit" ? "visit" : "favorite"); },
+    save: function (type, lists) { saveLists(type === "visit" ? "visit" : "favorite", lists); },
+    getItem: getItem
   };
 
   window.closeV6ActionMenus = function () {
