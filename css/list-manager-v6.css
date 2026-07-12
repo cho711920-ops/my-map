@@ -364,3 +364,67 @@
     font-size: 11px !important;
   }
 }
+
+
+/* =========================================================
+   STEP2 안정화 B - 모바일 상단 툴바
+   1행: 보기 / 작업
+   2행: AI임장하기 / 빠른등록 / 다중
+   전체선택·선택해제는 모바일에서 작업 메뉴 안에 표시
+   ========================================================= */
+.v6-mobile-only { display: none !important; }
+
+@media (max-width: 768px) {
+  .extra-action-row.v6-command-bar {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    grid-template-rows: 48px 48px !important;
+    gap: 8px !important;
+    padding: 2px 0 4px !important;
+  }
+
+  .extra-action-row.v6-command-bar > * {
+    height: 48px !important;
+    min-height: 48px !important;
+  }
+
+  .extra-action-row.v6-command-bar .v6-command-menu[data-command-menu="view"] { grid-column: 1 / span 6; grid-row: 1; }
+  .extra-action-row.v6-command-bar .v6-command-menu[data-command-menu="work"] { grid-column: 7 / span 6; grid-row: 1; }
+  .extra-action-row.v6-command-bar .v6-primary-action.ai { grid-column: 1 / span 5; grid-row: 2; }
+  .extra-action-row.v6-command-bar .quick-add-btn.v6-primary-action { grid-column: 6 / span 5; grid-row: 2; }
+  .extra-action-row.v6-command-bar .multi-cluster-btn { grid-column: 11 / span 2; grid-row: 2; }
+
+  .extra-action-row.v6-command-bar > .select-all-btn,
+  .extra-action-row.v6-command-bar > .clear-selected-btn {
+    display: none !important;
+  }
+
+  .extra-action-row.v6-command-bar .v6-command-trigger,
+  .extra-action-row.v6-command-bar .v6-primary-action,
+  .extra-action-row.v6-command-bar .multi-cluster-btn {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 0 10px !important;
+    border-radius: 13px !important;
+    font-size: 14px !important;
+    letter-spacing: -.35px !important;
+  }
+
+  .extra-action-row.v6-command-bar .multi-cluster-btn {
+    padding: 0 4px !important;
+    font-size: 11px !important;
+    line-height: 1.02 !important;
+  }
+
+  .v6-mobile-only { display: block !important; }
+  .v6-command-dropdown .v6-mobile-only { width: 100% !important; }
+
+  .v6-command-dropdown {
+    left: 10px !important;
+    right: 10px !important;
+    bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+}
