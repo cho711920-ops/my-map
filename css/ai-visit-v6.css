@@ -166,3 +166,86 @@ body.aiv-workspace-open { overflow: hidden !important; }
   .aiv-primary-actions button { min-height: 45px; font-size: 14px; }
   .aiv-step-actions button { flex: 1; min-width: 0; }
 }
+
+/* STEP2 보완 A: 거래형태 배지 + 주소/호실 배치 */
+.aiv-current-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.aiv-current-title-line h2 {
+  margin: 0;
+}
+
+.aiv-deal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+}
+
+.aiv-deal-badge.lease {
+  background: #eaf2ff;
+  color: #1458bd;
+}
+
+.aiv-deal-badge.sale {
+  background: #fff1e8;
+  color: #b84b00;
+}
+
+.aiv-deal-badge.jeonse {
+  background: #eef8ef;
+  color: #28713b;
+}
+
+/* STEP2 보완 A: 모바일 로드뷰 닫기 버튼 가시성 강화 */
+@media (max-width: 640px) {
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    position: relative;
+    min-height: 64px;
+    padding-right: 66px !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-close {
+    position: fixed !important;
+    top: max(10px, env(safe-area-inset-top)) !important;
+    right: 12px !important;
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    min-height: 46px !important;
+    display: grid !important;
+    place-items: center !important;
+    border: 1px solid rgba(15, 23, 42, .16) !important;
+    border-radius: 14px !important;
+    background: rgba(255,255,255,.96) !important;
+    color: #162033 !important;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .22) !important;
+    font-size: 30px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    z-index: 100005 !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-close:active {
+    transform: scale(.96);
+  }
+}
