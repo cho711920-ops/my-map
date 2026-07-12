@@ -17,13 +17,12 @@ var preserveActionSelectionDuringRender = false;
 var openMemoKey = null;
 var editingMemoKey = null;
 var memoEditMode = "replace";
-var roadviewMiniMap = null;
-var roadviewMiniMarker = null;
-var roadviewTargetOverlay = null;
-var roadviewDirectionOverlay = null;
-var roadviewGuideLine = null;
+var roadviewFullMap = null;
+var roadviewFullMapMarker = null;
 var roadviewTargetPosition = null;
 var roadviewCameraPosition = null;
+var currentRoadviewPan = 0;
+var currentRoadviewMode = "roadview";
 var currentRoadviewItemKey = null;
 var currentRoadviewPosition = null;
 var errorItems = [];
@@ -878,24 +877,66 @@ var roadviewInstance = null;
 var currentRoadviewCoords = null;
 
 
-function updateRoadviewDirection(pan) {
-  if (!roadviewDirectionOverlay) return;
-
-  var element = roadviewDirectionOverlay.getContent();
-
-  if (element && element.style) {
-    element.style.transform = "translate(-50%, -50%) rotate(" + Number(pan || 0) + "deg)";
-  }
+function normalizeAngle(value) {
+  var angle = Number(value || 0) % 360;
+  return angle < -180 ? angle + 360 : (angle > 180 ? angle - 360 : angle);
 }
 
 
-function updateRoadviewGuideLine() {
-  if (!roadviewGuideLine || !roadviewTargetPosition || !roadviewCameraPosition) return;
+function bearingBetween(fromPosition, toPosition) {
+  if (!fromPosition || !toPosition) return 0;
 
-  roadviewGuideLine.setPath([
+  var lat1 = fromPosition.getLat() * Math.PI / 180;
+  var lat2 = toPosition.getLat() * Math.PI / 180;
+  var lngDiff = (toPosition.getLng() - fromPosition.getLng()) * Math.PI / 180;
+
+  var y = Math.sin(lngDiff) * Math.cos(lat2);
+  var x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(lngDiff);
+
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+
+function updateRoadviewTargetPin() {
+  var pin = document.getElementById("roadviewTargetPin");
+  var pane = document.getElementById("roadviewPane");
+
+  if (!pin || !pane || !roadviewTargetPosition || !roadviewCameraPosition) {
+    if (pin) pin.classList.remove("visible");
+    return;
+  }
+
+  var targetBearing = bearingBetween(
     roadviewCameraPosition,
     roadviewTargetPosition
-  ]);
+  );
+
+  /*
+   * 카카오 로드뷰 pan과 목표 방위각의 차이를 이용해
+   * 화면상 작은 핀의 가로 위치를 계산합니다.
+   * 건물의 정확한 외곽선이 아니라 '이 방향의 매물'을 알려주는 표식입니다.
+   */
+  var difference = normalizeAngle(targetBearing - currentRoadviewPan);
+  var halfVisibleAngle = 62;
+
+  if (Math.abs(difference) > halfVisibleAngle) {
+    pin.classList.remove("visible");
+    return;
+  }
+
+  var xPercent = 50 + (difference / halfVisibleAngle) * 46;
+  xPercent = Math.max(4, Math.min(96, xPercent));
+
+  pin.style.left = xPercent + "%";
+  pin.classList.add("visible");
+}
+
+
+function updateRoadviewDirection(pan) {
+  currentRoadviewPan = Number(pan || 0);
+  updateRoadviewTargetPin();
 }
 
 
@@ -903,114 +944,68 @@ function updateRoadviewCameraPosition(position) {
   if (!position) return;
 
   roadviewCameraPosition = position;
-
-  if (roadviewDirectionOverlay) {
-    roadviewDirectionOverlay.setPosition(position);
-  }
-
-  if (roadviewMiniMarker) {
-    roadviewMiniMarker.setPosition(position);
-  }
-
-  updateRoadviewGuideLine();
+  updateRoadviewTargetPin();
 }
 
 
-function setupRoadviewMiniMap(targetPosition) {
-  var miniMapContainer = document.getElementById("roadviewMiniMap");
+function setupRoadviewFullMap(targetPosition) {
+  var mapContainer = document.getElementById("roadviewFullMap");
 
-  if (!miniMapContainer) return;
+  if (!mapContainer) return;
 
-  miniMapContainer.innerHTML = "";
-  roadviewTargetPosition = targetPosition;
-  roadviewCameraPosition = targetPosition;
+  mapContainer.innerHTML = "";
 
-  roadviewMiniMap = new kakao.maps.Map(miniMapContainer, {
+  roadviewFullMap = new kakao.maps.Map(mapContainer, {
     center: targetPosition,
     level: 3
   });
 
-  /*
-   * 선택한 실제 매물 위치: 빨간 표식 + 라벨
-   */
-  var targetElement = document.createElement("div");
-  targetElement.className = "roadview-target-marker";
-  targetElement.innerHTML =
-    '<span class="roadview-target-dot"></span>' +
-    '<span class="roadview-target-label">선택 매물</span>';
-
-  roadviewTargetOverlay = new kakao.maps.CustomOverlay({
-    map: roadviewMiniMap,
-    position: targetPosition,
-    content: targetElement,
-    yAnchor: 0.5,
-    xAnchor: 0.5,
-    zIndex: 8
-  });
-
-  /*
-   * 로드뷰 촬영 위치: 작은 파란 점
-   */
-  roadviewMiniMarker = new kakao.maps.Marker({
-    map: roadviewMiniMap,
+  roadviewFullMapMarker = new kakao.maps.Marker({
+    map: roadviewFullMap,
     position: targetPosition
   });
 
-  /*
-   * 현재 카메라가 보는 방향: 파란 화살표
-   */
-  var directionElement = document.createElement("div");
-  directionElement.className = "roadview-direction-arrow";
-  directionElement.innerHTML = "➤";
-
-  roadviewDirectionOverlay = new kakao.maps.CustomOverlay({
-    map: roadviewMiniMap,
-    position: targetPosition,
-    content: directionElement,
-    yAnchor: 0.5,
-    xAnchor: 0.5,
-    zIndex: 9
+  kakao.maps.event.addListener(roadviewFullMapMarker, "click", function() {
+    switchRoadviewMode("roadview");
   });
-
-  /*
-   * 현재 로드뷰 위치에서 선택 매물까지 연결선
-   */
-  roadviewGuideLine = new kakao.maps.Polyline({
-    map: roadviewMiniMap,
-    path: [targetPosition, targetPosition],
-    strokeWeight: 3,
-    strokeColor: "#ef4444",
-    strokeOpacity: 0.8,
-    strokeStyle: "dashed"
-  });
-
-  setTimeout(function() {
-    recenterRoadviewMiniMap();
-  }, 80);
 }
 
-function recenterRoadviewMiniMap() {
-  if (!roadviewMiniMap || !roadviewTargetPosition) return;
 
-  roadviewMiniMap.relayout();
+function switchRoadviewMode(mode) {
+  var roadviewPane = document.getElementById("roadviewPane");
+  var mapPane = document.getElementById("roadviewMapPane");
+  var roadviewButton = document.getElementById("roadviewTabBtn");
+  var mapButton = document.getElementById("roadviewMapTabBtn");
 
-  if (roadviewCameraPosition) {
-    var bounds = new kakao.maps.LatLngBounds();
-    bounds.extend(roadviewTargetPosition);
-    bounds.extend(roadviewCameraPosition);
-    roadviewMiniMap.setBounds(bounds, 45, 45, 45, 45);
-  } else {
-    roadviewMiniMap.setCenter(roadviewTargetPosition);
-    roadviewMiniMap.setLevel(3);
+  if (!roadviewPane || !mapPane || !roadviewButton || !mapButton) return;
+
+  currentRoadviewMode = mode === "map" ? "map" : "roadview";
+  var mapActive = currentRoadviewMode === "map";
+
+  roadviewPane.classList.toggle("active", !mapActive);
+  mapPane.classList.toggle("active", mapActive);
+  roadviewButton.classList.toggle("active", !mapActive);
+  mapButton.classList.toggle("active", mapActive);
+  roadviewButton.setAttribute("aria-selected", mapActive ? "false" : "true");
+  mapButton.setAttribute("aria-selected", mapActive ? "true" : "false");
+
+  if (mapActive && roadviewFullMap && roadviewTargetPosition) {
+    setTimeout(function() {
+      roadviewFullMap.relayout();
+      roadviewFullMap.setCenter(roadviewTargetPosition);
+      roadviewFullMap.setLevel(3);
+    }, 60);
+  }
+
+  if (!mapActive && roadviewInstance) {
+    setTimeout(function() {
+      if (typeof roadviewInstance.relayout === "function") {
+        roadviewInstance.relayout();
+      }
+      updateRoadviewTargetPin();
+    }, 60);
   }
 }
-
-
-function openCurrentRoadviewNavigation() {
-  if (!currentRoadviewItemKey) return;
-  openKakaoNavigation(encodeURIComponent(currentRoadviewItemKey));
-}
-
 
 function openKakaoRoadview(encodedKey) {
   var key = decodeURIComponent(encodedKey);
@@ -1049,7 +1044,7 @@ function openKakaoRoadview(encodedKey) {
   address.textContent = [item.address || "", item.room || ""].filter(Boolean).join(" ");
 
   status.textContent = "가장 가까운 로드뷰를 찾고 있습니다.";
-  status.className = "roadview-modal-status loading";
+  status.className = "roadview-inline-status loading";
 
   container.innerHTML = "";
   modal.classList.add("open");
@@ -1063,11 +1058,16 @@ function openKakaoRoadview(encodedKey) {
     !kakao.maps.RoadviewClient
   ) {
     status.textContent = "카카오 지도 SDK를 불러오지 못했습니다.";
-    status.className = "roadview-modal-status error";
+    status.className = "roadview-inline-status error";
     return;
   }
 
-  setupRoadviewMiniMap(currentRoadviewPosition);
+  roadviewTargetPosition = currentRoadviewPosition;
+  roadviewCameraPosition = currentRoadviewPosition;
+  currentRoadviewPan = 0;
+  currentRoadviewMode = "roadview";
+  switchRoadviewMode("roadview");
+  setupRoadviewFullMap(currentRoadviewPosition);
 
   var roadviewClient = new kakao.maps.RoadviewClient();
 
@@ -1076,7 +1076,7 @@ function openKakaoRoadview(encodedKey) {
 
     if (!panoId) {
       status.textContent = "이 위치 반경 150m 안에서 로드뷰를 찾지 못했습니다.";
-      status.className = "roadview-modal-status error";
+      status.className = "roadview-inline-status error";
       container.innerHTML =
         '<div class="roadview-empty">' +
           '<div class="roadview-empty-icon">🏠</div>' +
@@ -1099,7 +1099,6 @@ function openKakaoRoadview(encodedKey) {
     kakao.maps.event.addListener(roadviewInstance, "position_changed", function() {
       var position = roadviewInstance.getPosition();
       updateRoadviewCameraPosition(position);
-      recenterRoadviewMiniMap();
     });
 
     /*
@@ -1111,17 +1110,20 @@ function openKakaoRoadview(encodedKey) {
 
       updateRoadviewCameraPosition(position);
       updateRoadviewDirection(viewpoint ? viewpoint.pan : 0);
-      recenterRoadviewMiniMap();
     });
 
     status.textContent = "로드뷰 연결 완료";
-    status.className = "roadview-modal-status success";
+    status.className = "roadview-inline-status success";
+
+    setTimeout(function() {
+      status.classList.add("hidden");
+    }, 900);
 
     setTimeout(function() {
       if (roadviewInstance && typeof roadviewInstance.relayout === "function") {
         roadviewInstance.relayout();
       }
-      recenterRoadviewMiniMap();
+      updateRoadviewTargetPin();
     }, 100);
   });
 }
@@ -1141,13 +1143,12 @@ function closeRoadviewModal() {
   }
 
   roadviewInstance = null;
-  roadviewMiniMap = null;
-  roadviewMiniMarker = null;
-  roadviewTargetOverlay = null;
-  roadviewDirectionOverlay = null;
-  roadviewGuideLine = null;
+  roadviewFullMap = null;
+  roadviewFullMapMarker = null;
   roadviewTargetPosition = null;
   roadviewCameraPosition = null;
+  currentRoadviewPan = 0;
+  currentRoadviewMode = "roadview";
   currentRoadviewItemKey = null;
   currentRoadviewCoords = null;
   currentRoadviewPosition = null;
