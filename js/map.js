@@ -306,6 +306,7 @@ function loadSheet(isAuto) {
           memo: clean(c[11]),
           state: clean(c[12]),
           regDate: clean(c[13]),
+          source: clean(c[14]),
           latlng: null
         };
 
