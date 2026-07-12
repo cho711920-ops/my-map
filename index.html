@@ -10,6 +10,7 @@
 
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/print-v2.css">
+<link rel="stylesheet" href="css/list-manager-v6.css">
 </head>
 
 <body>
@@ -67,7 +68,7 @@
           </div>
         </div>
 
-        <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜</button>
+        <button id="favoriteBtn" class="favorite-filter-btn" onclick="openListManager('favorite')">찜목록</button>
         <button class="reset-btn" onclick="resetFilter()">초기화</button>
       </div>
 
@@ -80,6 +81,8 @@
         <button id="completeSelectedBtn" class="complete-selected-btn" onclick="completeSelectedItems()">완료</button>
         <button id="fieldVisitBtn" class="field-visit-btn" onclick="markSelectedAsVisited()">임장 ON</button>
         <button id="multiClusterBtn" class="multi-cluster-btn compact-two-line" onclick="toggleMultiClusterMode()"><span>다중</span><span>X</span></button>
+        <button class="v6-list-menu-btn visit" type="button" onclick="openListManager('visit')">임장목록</button>
+        <button class="v6-list-menu-btn ai" type="button" onclick="startAiVisitPreview()">AI임장</button>
         <button class="quick-add-btn quick-add-with-sync" onclick="openQuickAddModal()">
           <span>빠른등록</span>
           <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
@@ -324,6 +327,7 @@
 <script src="js/print.js"></script>
 <script src="js/print-v2.js"></script>
 <script src="js/analysis.js"></script>
+<script src="js/list-manager-v6.js"></script>
 <script src="js/map.js"></script>
 </body>
 </html>
