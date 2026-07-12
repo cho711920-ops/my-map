@@ -3547,3 +3547,162 @@ body.roadview-modal-open {
     font-size:9px !important;
   }
 }
+
+
+/* =========================================================
+   v5.5 모바일 상단/로드뷰 최종 보강
+   ========================================================= */
+
+@media (max-width:768px) {
+  /* 모바일 상단 작업버튼: PC 순서 유지, 2줄 고정 */
+  .extra-action-row {
+    display:grid !important;
+    grid-template-columns:repeat(5, minmax(0, 1fr)) !important;
+    grid-auto-rows:34px !important;
+    gap:3px !important;
+    width:100% !important;
+    overflow:visible !important;
+    white-space:normal !important;
+    padding-bottom:2px !important;
+  }
+
+  .extra-action-row > button {
+    width:100% !important;
+    min-width:0 !important;
+    height:34px !important;
+    min-height:34px !important;
+    padding:2px 2px !important;
+    font-size:9px !important;
+    line-height:1.05 !important;
+    letter-spacing:-0.35px !important;
+    white-space:normal !important;
+  }
+
+  .extra-action-row .quick-add-with-sync {
+    width:100% !important;
+    min-width:0 !important;
+    justify-content:center !important;
+  }
+
+  /* 검색/필터도 화면 안에 안정적으로 유지 */
+  .search-row {
+    display:grid !important;
+    grid-template-columns:minmax(0, 1fr) 54px !important;
+    gap:4px !important;
+  }
+
+  .filter-row {
+    display:grid !important;
+    grid-template-columns:52px minmax(0, 1fr) 38px 44px !important;
+    gap:3px !important;
+  }
+
+  .filter-select-wrap {
+    display:grid !important;
+    grid-template-columns:minmax(52px, .75fr) minmax(80px, 1.25fr) !important;
+    gap:3px !important;
+  }
+
+  /* 모바일 로드뷰: 실제 보이는 화면 높이 기준 */
+  .roadview-modal {
+    position:fixed !important;
+    inset:0 !important;
+    width:100vw !important;
+    height:100dvh !important;
+    min-height:100dvh !important;
+  }
+
+  .roadview-modal-dialog {
+    position:fixed !important;
+    inset:4px !important;
+    left:4px !important;
+    top:4px !important;
+    transform:none !important;
+    width:calc(100vw - 8px) !important;
+    height:calc(100dvh - 8px) !important;
+    max-height:none !important;
+    border-radius:10px !important;
+    overflow:hidden !important;
+  }
+
+  .roadview-modal-header {
+    position:relative !important;
+    z-index:30 !important;
+    flex:0 0 54px !important;
+    min-height:54px !important;
+    padding:7px 54px 7px 10px !important;
+  }
+
+  /* 우측 상단 닫기 버튼 항상 보이게 */
+  .roadview-modal-close {
+    position:absolute !important;
+    top:8px !important;
+    right:8px !important;
+    z-index:40 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    width:38px !important;
+    height:38px !important;
+    border:1px solid #cfd8e6 !important;
+    border-radius:50% !important;
+    background:rgba(255,255,255,.96) !important;
+    color:#222 !important;
+    font-size:26px !important;
+    line-height:1 !important;
+    box-shadow:0 2px 10px rgba(0,0,0,.22) !important;
+  }
+
+  .roadview-modal-status {
+    flex:0 0 29px !important;
+    min-height:29px !important;
+    padding:6px 10px !important;
+  }
+
+  .roadview-workspace {
+    position:relative !important;
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  .roadview-container {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+  }
+
+  /* 미니맵은 하단 버튼 위로 */
+  .roadview-map-panel {
+    position:absolute !important;
+    right:10px !important;
+    bottom:66px !important;
+    width:42% !important;
+    height:30% !important;
+    min-width:145px !important;
+    min-height:145px !important;
+    z-index:20 !important;
+  }
+
+  /* 하단 버튼바 항상 화면 안쪽 고정 */
+  .roadview-modal-actions {
+    position:relative !important;
+    z-index:35 !important;
+    display:grid !important;
+    grid-template-columns:repeat(3, 1fr) !important;
+    flex:0 0 56px !important;
+    min-height:56px !important;
+    gap:6px !important;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom)) !important;
+    background:#fff !important;
+    border-top:1px solid #dfe5ee !important;
+  }
+
+  .roadview-modal-actions button {
+    width:100% !important;
+    min-width:0 !important;
+    min-height:38px !important;
+    font-size:12px !important;
+  }
+}
