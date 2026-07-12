@@ -3261,3 +3261,102 @@ body.roadview-modal-open {
     overflow-y:auto;
   }
 }
+
+
+/* =========================================================
+   v5.4 상단 메뉴 완전 표시형
+   ========================================================= */
+.extra-action-row {
+  display:grid !important;
+  grid-template-columns:repeat(9, minmax(0, 1fr)) !important;
+  align-items:stretch !important;
+  gap:3px !important;
+  width:100% !important;
+  max-width:100% !important;
+  overflow:visible !important;
+  white-space:normal !important;
+}
+
+.extra-action-row > button {
+  width:100% !important;
+  min-width:0 !important;
+  max-width:none !important;
+  min-height:34px !important;
+  padding:3px 2px !important;
+  font-size:clamp(8px, 1.65vw, 11px) !important;
+  line-height:1.05 !important;
+  letter-spacing:-0.45px;
+  overflow:hidden;
+  white-space:normal;
+  word-break:keep-all;
+}
+
+.extra-action-row .quick-add-with-sync {
+  width:100% !important;
+  min-width:0 !important;
+  gap:3px !important;
+}
+
+.extra-action-row .sync-indicator {
+  flex:0 0 7px !important;
+  width:7px !important;
+  height:7px !important;
+}
+
+.search-row {
+  display:grid !important;
+  grid-template-columns:minmax(0, 1fr) auto !important;
+  gap:5px !important;
+  width:100% !important;
+}
+
+.search-row input {
+  width:100% !important;
+  min-width:0 !important;
+}
+
+.filter-row {
+  display:grid !important;
+  grid-template-columns:auto minmax(0, 1fr) auto auto !important;
+  align-items:stretch !important;
+  gap:4px !important;
+  width:100% !important;
+}
+
+.filter-select-wrap {
+  display:grid !important;
+  grid-template-columns:minmax(56px, .8fr) minmax(90px, 1.2fr) !important;
+  gap:4px !important;
+  min-width:0 !important;
+}
+
+.filter-row button,
+.filter-row select {
+  min-width:0 !important;
+  padding-left:5px !important;
+  padding-right:5px !important;
+  font-size:clamp(9px, 1.75vw, 11px) !important;
+}
+
+.memo-add-btn {
+  border:1px solid #0f9f6e;
+  background:#ecfdf3;
+  color:#067647;
+}
+
+@media (max-width:768px) {
+  .extra-action-row {
+    gap:2px !important;
+  }
+
+  .extra-action-row > button {
+    min-height:32px !important;
+    padding:2px 1px !important;
+    font-size:8px !important;
+    letter-spacing:-0.6px;
+  }
+
+  .filter-select-wrap {
+    grid-template-columns:minmax(48px, .72fr) minmax(76px, 1.28fr) !important;
+  }
+}
