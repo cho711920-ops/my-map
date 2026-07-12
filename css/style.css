@@ -3360,3 +3360,190 @@ body.roadview-modal-open {
     grid-template-columns:minmax(48px, .72fr) minmax(76px, 1.28fr) !important;
   }
 }
+
+
+/* =========================================================
+   v5.4.1 상단 레이아웃 긴급 수정
+   원인:
+   - 데스크톱 .filters는 가로 한 줄 flex 구조인데,
+     v5.4에서 각 하위 줄에 width:100%를 강제로 지정해
+     검색/필터/작업줄이 각각 화면 전체 폭을 차지했습니다.
+   - 그 결과 큰 공백이 생기고 작업 버튼줄이 화면 밖으로 밀렸습니다.
+   ========================================================= */
+
+/* 데스크톱: 검색 / 기본필터 / 작업버튼을 정확히 3구역으로 배치 */
+@media (min-width:769px) {
+  .filters {
+    left:238px !important;
+    right:0 !important;
+    display:grid !important;
+    grid-template-columns:
+      minmax(300px, 1.35fr)
+      minmax(350px, 1.05fr)
+      minmax(560px, 1.8fr) !important;
+    align-items:center !important;
+    gap:5px !important;
+    overflow:hidden !important;
+    white-space:normal !important;
+    padding:6px 8px !important;
+  }
+
+  .search-row,
+  .filter-row,
+  .extra-action-row {
+    width:auto !important;
+    max-width:none !important;
+    min-width:0 !important;
+    margin:0 !important;
+  }
+
+  .search-row {
+    display:grid !important;
+    grid-template-columns:minmax(0, 1fr) 62px !important;
+    gap:4px !important;
+  }
+
+  .search-row input {
+    min-width:0 !important;
+    height:38px !important;
+    font-size:12px !important;
+  }
+
+  .search-btn {
+    width:62px !important;
+    min-width:62px !important;
+    height:38px !important;
+  }
+
+  .filter-row {
+    display:grid !important;
+    grid-template-columns:58px minmax(0, 1fr) 42px 48px !important;
+    gap:3px !important;
+  }
+
+  .filter-select-wrap {
+    display:grid !important;
+    grid-template-columns:minmax(64px, .8fr) minmax(92px, 1.2fr) !important;
+    gap:3px !important;
+  }
+
+  .filter-row button,
+  .filter-row select {
+    width:100% !important;
+    height:38px !important;
+    min-width:0 !important;
+    padding:0 4px !important;
+    font-size:10px !important;
+  }
+
+  .extra-action-row {
+    display:grid !important;
+    grid-template-columns:
+      minmax(50px, 1fr)
+      minmax(48px, 1fr)
+      minmax(34px, .75fr)
+      minmax(34px, .75fr)
+      minmax(38px, .8fr)
+      minmax(38px, .8fr)
+      minmax(45px, .9fr)
+      minmax(36px, .75fr)
+      minmax(56px, 1.1fr) !important;
+    gap:3px !important;
+  }
+
+  .extra-action-row > button {
+    width:100% !important;
+    min-width:0 !important;
+    height:38px !important;
+    min-height:38px !important;
+    padding:2px 2px !important;
+    font-size:9px !important;
+    line-height:1.02 !important;
+    letter-spacing:-0.35px !important;
+  }
+
+  .quick-add-with-sync {
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+  }
+}
+
+/* 화면이 더 좁거나 브라우저 확대가 큰 경우 한 단계 더 압축 */
+@media (min-width:769px) and (max-width:1450px) {
+  .filters {
+    left:205px !important;
+    grid-template-columns:
+      minmax(260px, 1.25fr)
+      minmax(305px, 1fr)
+      minmax(505px, 1.7fr) !important;
+    gap:3px !important;
+    padding-left:5px !important;
+    padding-right:5px !important;
+  }
+
+  .header {
+    width:205px !important;
+    font-size:18px !important;
+    padding-left:10px !important;
+    padding-right:8px !important;
+  }
+
+  .search-row {
+    grid-template-columns:minmax(0, 1fr) 54px !important;
+  }
+
+  .search-row input {
+    font-size:10px !important;
+    padding-left:7px !important;
+    padding-right:7px !important;
+  }
+
+  .search-btn {
+    width:54px !important;
+    min-width:54px !important;
+    font-size:10px !important;
+  }
+
+  .filter-row {
+    grid-template-columns:52px minmax(0, 1fr) 36px 42px !important;
+  }
+
+  .filter-row button,
+  .filter-row select {
+    font-size:9px !important;
+    padding-left:2px !important;
+    padding-right:2px !important;
+  }
+
+  .extra-action-row > button {
+    font-size:8px !important;
+    letter-spacing:-0.55px !important;
+  }
+}
+
+/* 모바일은 기존 한 줄 가로 스크롤 방식 유지 */
+@media (max-width:768px) {
+  .filters {
+    display:block !important;
+  }
+
+  .search-row,
+  .filter-row {
+    width:100% !important;
+  }
+
+  .extra-action-row {
+    display:flex !important;
+    width:100% !important;
+    overflow-x:auto !important;
+    white-space:nowrap !important;
+  }
+
+  .extra-action-row > button {
+    flex:0 0 auto !important;
+    width:auto !important;
+    min-width:44px !important;
+    font-size:9px !important;
+  }
+}
