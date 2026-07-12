@@ -16,6 +16,7 @@ var selectedGroupKeys = [];
 var preserveActionSelectionDuringRender = false;
 var openMemoKey = null;
 var editingMemoKey = null;
+var memoEditMode = "replace";
 var roadviewMiniMap = null;
 var roadviewMiniMarker = null;
 var roadviewDirectionOverlay = null;
@@ -361,7 +362,7 @@ function updateTypeOptions(items) {
 
   types.sort();
 
-  select.innerHTML = '<option value="">구분 전체</option>';
+  select.innerHTML = '<option value="">구분</option>';
 
   types.forEach(function(type) {
     var option = document.createElement("option");
@@ -605,26 +606,37 @@ function buildPyeongMiniBadge(item) {
 }
 
 
-function isGongsilBoxItem(item) {
+function isFieldVisitItem(item) {
   var memo = String((item && item.memo) ? item.memo : "");
-  return /\(\s*공실박스\s*\)|출처\s*[:：]\s*공실박스/i.test(memo);
+
+  return /\(\s*임장가자\s*\)|\(\s*공실박스\s*\)/i.test(memo);
+}
+
+
+function isGongsilBoxItem(item) {
+  return isFieldVisitItem(item);
 }
 
 
 function getItemSourceType(item) {
-  if (isGongsilBoxItem(item)) return "gongsil";
+  var source = String((item && item.source) ? item.source : "").trim().toLowerCase();
 
-  var memo = String((item && item.memo) ? item.memo : "");
-  var m = memo.match(/출처\s*[:：]\s*([^\/|,，\n]+)/);
-
-  if (!m || !m[1]) return "unknown";
-
-  var source = String(m[1] || "").trim().toLowerCase();
-
+  if (/공실박스|gongsil/.test(source)) return "gongsil";
   if (/네이버|naver/.test(source)) return "naver";
   if (/당근|daangn|karrot/.test(source)) return "danggeun";
-  if (/직접확인|직접매물|직접|현장확인/.test(source)) return "direct";
+  if (/직접확인|직접등록|직접매물|직접|현장확인/.test(source)) return "direct";
+
+  var memo = String((item && item.memo) ? item.memo : "");
+  var match = memo.match(/출처\s*[:：]\s*([^\/|,，\n]+)/);
+
+  if (!match || !match[1]) return "unknown";
+
+  source = String(match[1] || "").trim().toLowerCase();
+
   if (/공실박스|gongsil/.test(source)) return "gongsil";
+  if (/네이버|naver/.test(source)) return "naver";
+  if (/당근|daangn|karrot/.test(source)) return "danggeun";
+  if (/직접확인|직접등록|직접매물|직접|현장확인/.test(source)) return "direct";
 
   return "unknown";
 }
@@ -980,6 +992,7 @@ function toggleItemMemo(encodedKey) {
 
 function beginMemoEdit(encodedKey) {
   editingMemoKey = decodeURIComponent(encodedKey);
+  memoEditMode = "replace";
   openMemoKey = editingMemoKey;
   showList(visibleListItems);
 
@@ -995,8 +1008,41 @@ function beginMemoEdit(encodedKey) {
 }
 
 
+function beginMemoAdd(encodedKey) {
+  editingMemoKey = decodeURIComponent(encodedKey);
+  memoEditMode = "append";
+  openMemoKey = editingMemoKey;
+  showList(visibleListItems);
+
+  requestAnimationFrame(function() {
+    var editor = document.querySelector(
+      '[data-memo-editor-key="' + CSS.escape(editingMemoKey) + '"]'
+    );
+
+    if (editor) {
+      editor.value = "";
+      editor.placeholder = "추가할 메모를 입력하세요.";
+      editor.focus();
+      autoResizeMemoEditor(editor);
+    }
+  });
+}
+
+
+function memoDateLabel() {
+  var today = new Date();
+
+  return [
+    String(today.getFullYear()).slice(2),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0")
+  ].join(".");
+}
+
+
 function cancelMemoEdit() {
   editingMemoKey = null;
+  memoEditMode = "replace";
   showList(visibleListItems);
 }
 
@@ -1026,8 +1072,21 @@ function saveItemMemo(encodedKey) {
     return;
   }
 
-  var newMemo = editor.value.trim();
+  var enteredMemo = editor.value.trim();
   var previousMemo = item.memo || "";
+  var newMemo = enteredMemo;
+
+  if (memoEditMode === "append") {
+    if (!enteredMemo) {
+      alert("추가할 메모를 입력해주세요.");
+      return;
+    }
+
+    var addedLine = "[" + memoDateLabel() + "] " + enteredMemo;
+    newMemo = previousMemo
+      ? previousMemo.replace(/\s+$/, "") + "\n" + addedLine
+      : addedLine;
+  }
   var saveButton = document.querySelector('[data-memo-save-key="' + CSS.escape(key) + '"]');
 
   if (saveButton) {
@@ -1037,6 +1096,7 @@ function saveItemMemo(encodedKey) {
 
   item.memo = newMemo;
   editingMemoKey = null;
+  memoEditMode = "replace";
   showList(visibleListItems);
 
   var payload = {
@@ -1068,6 +1128,7 @@ function saveItemMemo(encodedKey) {
     console.error(error);
     item.memo = previousMemo;
     editingMemoKey = key;
+    memoEditMode = "replace";
     showList(visibleListItems);
     alert("메모 저장 중 오류가 발생했습니다.");
   });
@@ -1095,8 +1156,8 @@ function addListItem(item) {
     ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>'
     : "";
 
-  var sourceLabel = isGongsilBoxItem(item)
-    ? '<span class="gongsil-source-badge">공실박스</span>'
+  var sourceLabel = isFieldVisitItem(item)
+    ? '<span class="gongsil-source-badge">임장가자</span>'
     : "";
 
   var encodedKey = encodeURIComponent(item.key);
@@ -1112,7 +1173,7 @@ function addListItem(item) {
         '<div class="item-memo-panel editing" onclick="event.stopPropagation()">' +
           '<textarea class="item-memo-editor" data-memo-editor-key="' + safeKey + '" ' +
             'oninput="autoResizeMemoEditor(this)">' +
-            escapeHtml(item.memo || "") +
+            (memoEditMode === "append" ? "" : escapeHtml(item.memo || "")) +
           '</textarea>' +
           '<div class="item-memo-actions">' +
             '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
@@ -1128,6 +1189,7 @@ function addListItem(item) {
           '</div>' +
           '<div class="item-memo-actions">' +
             '<button type="button" class="memo-edit-btn" onclick="beginMemoEdit(\'' + encodedKey + '\')">수정</button>' +
+            '<button type="button" class="memo-add-btn" onclick="beginMemoAdd(\'' + encodedKey + '\')">추가하기</button>' +
           '</div>' +
         '</div>';
     }
@@ -1582,12 +1644,12 @@ function updatePrintSelectedButton() {
 }
 
 
-function removeGongsilBoxMarkerFromMemo(memo) {
+function removeFieldVisitMarkerFromMemo(memo) {
   var text = String(memo || "");
 
   text = text
+    .replace(/\(\s*임장가자\s*\)/gi, "")
     .replace(/\(\s*공실박스\s*\)/gi, "")
-    .replace(/출처\s*[:：]\s*공실박스/gi, "")
     .replace(/\s*\/\s*\/\s*/g, " / ")
     .replace(/^\s*\/\s*/, "")
     .replace(/\s*\/\s*$/, "")
@@ -1597,6 +1659,10 @@ function removeGongsilBoxMarkerFromMemo(memo) {
   return text;
 }
 
+
+function removeGongsilBoxMarkerFromMemo(memo) {
+  return removeFieldVisitMarkerFromMemo(memo);
+}
 
 function markSelectedAsVisited() {
   if (!selectedPrintKeys.length) {
@@ -1611,23 +1677,23 @@ function markSelectedAsVisited() {
 
   var selectedItems = getSelectedPrintItems();
   var targetItems = selectedItems.filter(function(item) {
-    return isGongsilBoxItem(item);
+    return isFieldVisitItem(item);
   });
 
   if (!targetItems.length) {
-    alert("선택한 매물 중 (공실박스) 매물이 없습니다.");
+    alert("선택한 매물 중 (임장가자) 매물이 없습니다.");
     return;
   }
 
   var skippedCount = selectedItems.length - targetItems.length;
 
   var confirmText =
-    "선택한 공실박스 매물 " + targetItems.length +
+    "선택한 임장 대상 매물 " + targetItems.length +
     "개의 임장 처리를 완료할까요?\n\n" +
-    "메모의 (공실박스)가 삭제되고 클러스터가 기본색으로 바뀝니다.";
+    "메모의 (임장가자)가 삭제되고 클러스터가 기본색으로 바뀝니다.";
 
   if (skippedCount > 0) {
-    confirmText += "\n\n공실박스가 아닌 " + skippedCount + "개 매물은 제외됩니다.";
+    confirmText += "\n\n임장 대상이 아닌 " + skippedCount + "개 매물은 제외됩니다.";
   }
 
   if (!confirm(confirmText)) return;
@@ -1639,7 +1705,7 @@ function markSelectedAsVisited() {
   targetItems.forEach(function(item) {
     previousValues[item.key] = item.memo || "";
     doneTogglePendingKeys[item.key] = true;
-    item.memo = removeGongsilBoxMarkerFromMemo(item.memo || "");
+    item.memo = removeFieldVisitMarkerFromMemo(item.memo || "");
   });
 
   refreshDoneStatusUI(true);
