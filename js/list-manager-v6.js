@@ -1,1 +1,380 @@
+/* JS부동산 v6.0 STEP1 - 찜목록 / 임장목록 관리 */
+(function () {
+  "use strict";
 
+  var FAVORITE_KEY = "js_favorite_lists_v6";
+  var VISIT_KEY = "js_visit_lists_v6";
+  var LEGACY_MIGRATION_KEY = "js_favorite_lists_v6_migrated";
+  var currentManagerType = "favorite";
+  var currentItemKey = "";
+
+  function uid(prefix) {
+    return prefix + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  }
+
+  function nowIso() {
+    return new Date().toISOString();
+  }
+
+  function storageKey(type) {
+    return type === "visit" ? VISIT_KEY : FAVORITE_KEY;
+  }
+
+  function typeLabel(type) {
+    return type === "visit" ? "임장" : "찜";
+  }
+
+  function loadLists(type) {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(storageKey(type)) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error("목록 불러오기 실패", error);
+      return [];
+    }
+  }
+
+  function saveLists(type, lists) {
+    localStorage.setItem(storageKey(type), JSON.stringify(lists));
+    if (type === "favorite") syncLegacyFavoriteKeys(lists);
+  }
+
+  function syncLegacyFavoriteKeys(lists) {
+    var union = [];
+    lists.forEach(function (list) {
+      (list.itemKeys || []).forEach(function (key) {
+        if (union.indexOf(key) === -1) union.push(key);
+      });
+    });
+    window.favoriteKeys = union;
+    localStorage.setItem("favoriteKeys", JSON.stringify(union));
+  }
+
+  function migrateLegacyFavorites() {
+    if (localStorage.getItem(LEGACY_MIGRATION_KEY) === "1") {
+      syncLegacyFavoriteKeys(loadLists("favorite"));
+      return;
+    }
+
+    var lists = loadLists("favorite");
+    var legacy = [];
+    try {
+      legacy = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
+      if (!Array.isArray(legacy)) legacy = [];
+    } catch (error) {
+      legacy = [];
+    }
+
+    if (legacy.length) {
+      var defaultList = lists.find(function (list) { return list.name === "관심매물"; });
+      if (!defaultList) {
+        defaultList = {
+          id: uid("fav"),
+          name: "관심매물",
+          itemKeys: [],
+          createdAt: nowIso(),
+          updatedAt: nowIso()
+        };
+        lists.unshift(defaultList);
+      }
+      legacy.forEach(function (key) {
+        if (defaultList.itemKeys.indexOf(key) === -1) defaultList.itemKeys.push(key);
+      });
+      defaultList.updatedAt = nowIso();
+    }
+
+    saveLists("favorite", lists);
+    localStorage.setItem(LEGACY_MIGRATION_KEY, "1");
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function getItem(key) {
+    if (!Array.isArray(window.allItems)) return null;
+    return window.allItems.find(function (item) { return item.key === key; }) || null;
+  }
+
+  function itemSummary(item) {
+    if (!item) return "삭제되었거나 불러오지 못한 매물";
+    var title = item.name || item.address || "매물";
+    var sub = [item.address, item.room].filter(Boolean).join(" · ");
+    var price = "보증금 " + (item.deposit || "-") + " / 월세 " + (item.rent || "-");
+    return '<div class="lm-item-title">' + escapeHtml(title) + '</div>' +
+      '<div class="lm-item-sub">' + escapeHtml(sub) + '</div>' +
+      '<div class="lm-item-price">' + escapeHtml(price) + '</div>';
+  }
+
+  function ensureModal() {
+    if (document.getElementById("listManagerModal")) return;
+    var wrapper = document.createElement("div");
+    wrapper.innerHTML =
+      '<div id="listManagerModal" class="lm-modal" aria-hidden="true">' +
+        '<div class="lm-backdrop" onclick="closeListManager()"></div>' +
+        '<div class="lm-dialog" role="dialog" aria-modal="true">' +
+          '<div class="lm-header">' +
+            '<div><div id="lmTitle" class="lm-title"></div><div id="lmSubtitle" class="lm-subtitle"></div></div>' +
+            '<button class="lm-close" type="button" onclick="closeListManager()">×</button>' +
+          '</div>' +
+          '<div id="lmBody" class="lm-body"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="itemListPickerModal" class="lm-modal" aria-hidden="true">' +
+        '<div class="lm-backdrop" onclick="closeItemListPicker()"></div>' +
+        '<div class="lm-dialog lm-picker-dialog" role="dialog" aria-modal="true">' +
+          '<div class="lm-header">' +
+            '<div><div id="lmPickerTitle" class="lm-title"></div><div id="lmPickerSubtitle" class="lm-subtitle"></div></div>' +
+            '<button class="lm-close" type="button" onclick="closeItemListPicker()">×</button>' +
+          '</div>' +
+          '<div id="lmPickerBody" class="lm-body"></div>' +
+          '<div class="lm-footer"><button class="lm-primary" type="button" onclick="applyItemListSelection()">적용</button></div>' +
+        '</div>' +
+      '</div>';
+    while (wrapper.firstChild) document.body.appendChild(wrapper.firstChild);
+  }
+
+  function openModal(id) {
+    var modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("lm-modal-open");
+  }
+
+  function closeModal(id) {
+    var modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    if (!document.querySelector(".lm-modal.open")) document.body.classList.remove("lm-modal-open");
+  }
+
+  function promptListName(type, currentName) {
+    var label = typeLabel(type);
+    var name = window.prompt(label + "목록 이름을 입력해주세요.", currentName || "");
+    if (name == null) return null;
+    name = name.trim();
+    if (!name) {
+      alert("목록 이름을 입력해주세요.");
+      return null;
+    }
+    return name;
+  }
+
+  function createList(type) {
+    var name = promptListName(type, "");
+    if (!name) return null;
+    var lists = loadLists(type);
+    if (lists.some(function (list) { return list.name === name; })) {
+      alert("같은 이름의 목록이 이미 있습니다.");
+      return null;
+    }
+    var list = {
+      id: uid(type === "visit" ? "visit" : "fav"),
+      name: name,
+      itemKeys: [],
+      createdAt: nowIso(),
+      updatedAt: nowIso()
+    };
+    lists.push(list);
+    saveLists(type, lists);
+    return list;
+  }
+
+  function renderManager() {
+    var lists = loadLists(currentManagerType);
+    var label = typeLabel(currentManagerType);
+    document.getElementById("lmTitle").textContent = label + "목록";
+    document.getElementById("lmSubtitle").textContent = "목록 " + lists.length + "개 · 등록 매물 " +
+      lists.reduce(function (sum, list) { return sum + (list.itemKeys || []).length; }, 0) + "개";
+
+    var html = '<div class="lm-toolbar"><button class="lm-primary" type="button" onclick="createManagedList()">+ 새 ' + label + '목록</button></div>';
+    if (!lists.length) {
+      html += '<div class="lm-empty">아직 만든 ' + label + '목록이 없습니다.</div>';
+    } else {
+      html += '<div class="lm-list-grid">';
+      lists.forEach(function (list) {
+        html += '<section class="lm-list-card">' +
+          '<div class="lm-list-card-head">' +
+            '<button class="lm-list-open" type="button" onclick="toggleManagedList(\'' + list.id + '\')">' +
+              '<span>' + escapeHtml(list.name) + '</span><strong>' + (list.itemKeys || []).length + '개</strong>' +
+            '</button>' +
+            '<div class="lm-list-actions">' +
+              (currentManagerType === "favorite" ? '<button type="button" onclick="showFavoriteListOnMap(\'' + list.id + '\')">지도에서 보기</button>' : '') +
+              '<button type="button" onclick="renameManagedList(\'' + list.id + '\')">이름변경</button>' +
+              '<button class="danger" type="button" onclick="deleteManagedList(\'' + list.id + '\')">삭제</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="lmListItems_' + list.id + '" class="lm-list-items"></div>' +
+        '</section>';
+      });
+      html += '</div>';
+    }
+    document.getElementById("lmBody").innerHTML = html;
+  }
+
+  window.openListManager = function (type) {
+    ensureModal();
+    currentManagerType = type === "visit" ? "visit" : "favorite";
+    renderManager();
+    openModal("listManagerModal");
+  };
+
+  window.closeListManager = function () { closeModal("listManagerModal"); };
+
+  window.createManagedList = function () {
+    if (createList(currentManagerType)) renderManager();
+  };
+
+  window.renameManagedList = function (id) {
+    var lists = loadLists(currentManagerType);
+    var list = lists.find(function (entry) { return entry.id === id; });
+    if (!list) return;
+    var name = promptListName(currentManagerType, list.name);
+    if (!name || name === list.name) return;
+    if (lists.some(function (entry) { return entry.id !== id && entry.name === name; })) {
+      alert("같은 이름의 목록이 이미 있습니다.");
+      return;
+    }
+    list.name = name;
+    list.updatedAt = nowIso();
+    saveLists(currentManagerType, lists);
+    renderManager();
+  };
+
+  window.deleteManagedList = function (id) {
+    var lists = loadLists(currentManagerType);
+    var list = lists.find(function (entry) { return entry.id === id; });
+    if (!list) return;
+    if (!confirm('"' + list.name + '" 목록을 삭제할까요?\n목록만 삭제되며 매물 원본은 삭제되지 않습니다.')) return;
+    lists = lists.filter(function (entry) { return entry.id !== id; });
+    saveLists(currentManagerType, lists);
+    renderManager();
+    if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  window.toggleManagedList = function (id) {
+    var box = document.getElementById("lmListItems_" + id);
+    if (!box) return;
+    if (box.dataset.open === "1") {
+      box.dataset.open = "0";
+      box.innerHTML = "";
+      return;
+    }
+    var list = loadLists(currentManagerType).find(function (entry) { return entry.id === id; });
+    if (!list) return;
+    box.dataset.open = "1";
+    if (!(list.itemKeys || []).length) {
+      box.innerHTML = '<div class="lm-empty small">등록된 매물이 없습니다.</div>';
+      return;
+    }
+    box.innerHTML = (list.itemKeys || []).map(function (key) {
+      return '<div class="lm-managed-item">' +
+        '<div class="lm-managed-info">' + itemSummary(getItem(key)) + '</div>' +
+        '<button type="button" onclick="removeItemFromManagedList(\'' + id + '\',\'' + encodeURIComponent(key) + '\')">제거</button>' +
+      '</div>';
+    }).join("");
+  };
+
+  window.removeItemFromManagedList = function (listId, encodedKey) {
+    var key = decodeURIComponent(encodedKey);
+    var lists = loadLists(currentManagerType);
+    var list = lists.find(function (entry) { return entry.id === listId; });
+    if (!list) return;
+    list.itemKeys = (list.itemKeys || []).filter(function (entry) { return entry !== key; });
+    list.updatedAt = nowIso();
+    saveLists(currentManagerType, lists);
+    renderManager();
+    setTimeout(function () { window.toggleManagedList(listId); }, 0);
+    if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  window.showFavoriteListOnMap = function (listId) {
+    var list = loadLists("favorite").find(function (entry) { return entry.id === listId; });
+    if (!list) return;
+    window.favoriteKeys = (list.itemKeys || []).slice();
+    localStorage.setItem("favoriteKeys", JSON.stringify(window.favoriteKeys));
+    window.favoriteOnly = true;
+    var button = document.getElementById("favoriteBtn");
+    if (button) button.classList.add("on");
+    closeListManager();
+    if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  window.openItemListPicker = function (type, encodedKey) {
+    ensureModal();
+    currentManagerType = type === "visit" ? "visit" : "favorite";
+    currentItemKey = decodeURIComponent(encodedKey);
+    renderPicker();
+    openModal("itemListPickerModal");
+  };
+
+  function renderPicker() {
+    var item = getItem(currentItemKey);
+    var lists = loadLists(currentManagerType);
+    var label = typeLabel(currentManagerType);
+    document.getElementById("lmPickerTitle").textContent = label + "추가";
+    document.getElementById("lmPickerSubtitle").textContent = item ? (item.address || item.name || "선택 매물") : "선택 매물";
+    var html = '<button class="lm-new-inline" type="button" onclick="createPickerList()">+ 새 ' + label + '목록 만들기</button>';
+    if (!lists.length) {
+      html += '<div class="lm-empty">목록을 먼저 만들어주세요.</div>';
+    } else {
+      html += '<div class="lm-check-list">';
+      lists.forEach(function (list) {
+        var checked = (list.itemKeys || []).indexOf(currentItemKey) !== -1;
+        html += '<label class="lm-check-row"><input type="checkbox" data-list-id="' + list.id + '" ' + (checked ? 'checked' : '') + '><span>' + escapeHtml(list.name) + '</span><strong>' + (list.itemKeys || []).length + '개</strong></label>';
+      });
+      html += '</div>';
+    }
+    document.getElementById("lmPickerBody").innerHTML = html;
+  }
+
+  window.createPickerList = function () {
+    if (createList(currentManagerType)) renderPicker();
+  };
+
+  window.applyItemListSelection = function () {
+    var lists = loadLists(currentManagerType);
+    var checkedById = {};
+    document.querySelectorAll("#lmPickerBody input[data-list-id]").forEach(function (input) {
+      checkedById[input.getAttribute("data-list-id")] = input.checked;
+    });
+    lists.forEach(function (list) {
+      var keys = Array.isArray(list.itemKeys) ? list.itemKeys.slice() : [];
+      var has = keys.indexOf(currentItemKey) !== -1;
+      var shouldHave = !!checkedById[list.id];
+      if (shouldHave && !has) keys.push(currentItemKey);
+      if (!shouldHave && has) keys = keys.filter(function (key) { return key !== currentItemKey; });
+      list.itemKeys = keys;
+      list.updatedAt = nowIso();
+    });
+    saveLists(currentManagerType, lists);
+    closeItemListPicker();
+    if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  window.closeItemListPicker = function () {
+    currentItemKey = "";
+    closeModal("itemListPickerModal");
+  };
+
+  window.startAiVisitPreview = function () {
+    alert("AI임장은 STEP2에서 연결됩니다.\n이번 STEP1에서는 찜목록과 임장목록을 먼저 안정화합니다.");
+  };
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeListManager();
+      closeItemListPicker();
+    }
+  });
+
+  migrateLegacyFavorites();
+  ensureModal();
+})();
