@@ -2928,3 +2928,336 @@ body.roadview-modal-open {
     flex-basis:8px;
   }
 }
+
+
+/* =========================================================
+   v5.3 Beta — 상단/상세/로드뷰/메모/등록일
+   ========================================================= */
+
+/* 상단 버튼을 100% 배율에서 더 촘촘하게 */
+.filters button,
+.filters select {
+  font-weight:800;
+}
+
+.extra-action-row {
+  gap:3px !important;
+}
+
+.extra-action-row button {
+  min-width:0 !important;
+  padding-left:6px !important;
+  padding-right:6px !important;
+}
+
+.compact-two-line {
+  display:inline-flex !important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+  min-width:42px !important;
+  line-height:1.02 !important;
+}
+
+.compact-two-line span {
+  display:block;
+}
+
+.print-btn {
+  min-width:44px !important;
+  width:auto !important;
+}
+
+.gongsil-only-btn {
+  min-width:60px !important;
+}
+
+.multi-cluster-btn {
+  min-width:43px !important;
+}
+
+.quick-add-with-sync {
+  min-width:78px !important;
+}
+
+/* 상세검색창을 매물리스트 밖 지도 위에 표시 */
+#detailFilter {
+  position:fixed !important;
+  z-index:18000 !important;
+  display:none !important;
+  margin:0 !important;
+  padding:12px !important;
+  border:1px solid #cfd8e6 !important;
+  border-radius:12px !important;
+  background:#fff !important;
+  box-shadow:0 14px 38px rgba(15,23,42,.22) !important;
+}
+
+#detailFilter.open {
+  display:block !important;
+}
+
+/* 매물 첫 줄 */
+.item-action-left .star {
+  position:static !important;
+  margin-left:2px;
+}
+
+.item-memo-toggle {
+  height:23px;
+  padding:0 7px;
+  border:1px solid #d5dbe5;
+  border-radius:6px;
+  background:#f8fafc;
+  color:#475467;
+  font-size:10px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.item-memo-toggle.on {
+  border-color:#7ba7e8;
+  background:#eaf3ff;
+  color:#005bea;
+}
+
+/* 연락처 + 등록일 */
+.item-contact-date-row {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:8px;
+  margin-top:3px;
+}
+
+.item-contact-date-row .info-line-compact {
+  min-width:0;
+  flex:1 1 auto;
+}
+
+.item-reg-date {
+  flex:0 0 auto;
+  color:#98a2b3;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+/* 접히는 메모 */
+.item-memo-panel {
+  margin-top:7px;
+  padding:8px 9px;
+  border:1px solid #dfe5ee;
+  border-radius:9px;
+  background:#f8fafc;
+  cursor:default;
+}
+
+.item-memo-content {
+  color:#344054;
+  font-size:12px;
+  line-height:1.5;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+
+.memo-empty {
+  color:#98a2b3;
+}
+
+.item-memo-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  margin-top:7px;
+}
+
+.item-memo-actions button {
+  min-height:27px;
+  padding:4px 9px;
+  border-radius:6px;
+  font-size:11px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.memo-edit-btn,
+.memo-cancel-btn {
+  border:1px solid #d0d5dd;
+  background:#fff;
+  color:#475467;
+}
+
+.memo-save-btn {
+  border:1px solid #005bea;
+  background:#005bea;
+  color:#fff;
+}
+
+.item-memo-editor {
+  display:block;
+  width:100%;
+  min-height:34px;
+  padding:7px 8px;
+  resize:none;
+  overflow:hidden;
+  border:1px solid #8eb6ee;
+  border-radius:7px;
+  background:#fff;
+  color:#111827;
+  font:inherit;
+  font-size:12px;
+  line-height:1.5;
+}
+
+/* 로드뷰를 화면 90%에 가깝게 */
+.roadview-modal-dialog {
+  width:min(1500px, 94vw) !important;
+  height:92vh !important;
+  max-height:920px;
+}
+
+.roadview-workspace {
+  display:grid;
+  grid-template-columns:minmax(0, 72fr) minmax(260px, 28fr);
+  gap:0;
+  flex:1 1 auto;
+  min-height:0;
+}
+
+.roadview-container {
+  min-width:0;
+  min-height:0;
+}
+
+.roadview-map-panel {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  border-left:1px solid #dfe5ee;
+  background:#f8fafc;
+}
+
+.roadview-map-title {
+  flex:0 0 auto;
+  padding:9px 10px;
+  color:#344054;
+  font-size:12px;
+  font-weight:900;
+}
+
+.roadview-mini-map {
+  flex:1 1 auto;
+  min-height:260px;
+  background:#e8edf3;
+}
+
+.roadview-map-help {
+  flex:0 0 auto;
+  padding:8px 10px;
+  color:#667085;
+  font-size:10px;
+  line-height:1.45;
+}
+
+.roadview-direction-arrow {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:34px;
+  height:34px;
+  border:2px solid #fff;
+  border-radius:50%;
+  background:#005bea;
+  color:#fff;
+  font-size:19px;
+  font-weight:900;
+  box-shadow:0 3px 10px rgba(0,0,0,.28);
+  transform-origin:center;
+}
+
+.roadview-modal-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:7px;
+  flex:0 0 auto;
+  padding:9px 12px;
+  border-top:1px solid #e5e7eb;
+  background:#fff;
+}
+
+.roadview-modal-actions button {
+  min-width:72px;
+  min-height:34px;
+  padding:6px 12px;
+  border-radius:8px;
+  font-size:12px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.roadview-locate-btn {
+  border:1px solid #cfd8e6;
+  background:#f8fafc;
+  color:#344054;
+}
+
+.roadview-nav-btn {
+  border:1px solid #e0b000;
+  background:#ffe36b;
+  color:#4d3b00;
+}
+
+.roadview-close-bottom-btn {
+  border:1px solid #005bea;
+  background:#005bea;
+  color:#fff;
+}
+
+@media (max-width:768px) {
+  .roadview-modal-dialog {
+    width:calc(100vw - 8px) !important;
+    height:calc(100vh - 8px) !important;
+    max-height:none;
+  }
+
+  .roadview-workspace {
+    display:block;
+    position:relative;
+  }
+
+  .roadview-container {
+    width:100%;
+    height:100%;
+  }
+
+  .roadview-map-panel {
+    position:absolute;
+    right:10px;
+    bottom:10px;
+    width:42%;
+    height:32%;
+    min-width:145px;
+    min-height:150px;
+    overflow:hidden;
+    border:2px solid #fff;
+    border-radius:10px;
+    box-shadow:0 7px 22px rgba(0,0,0,.3);
+  }
+
+  .roadview-map-title,
+  .roadview-map-help {
+    display:none;
+  }
+
+  .roadview-mini-map {
+    min-height:0;
+    height:100%;
+  }
+
+  #detailFilter {
+    max-height:calc(100vh - 100px);
+    overflow-y:auto;
+  }
+}
