@@ -68,26 +68,46 @@
           </div>
         </div>
 
-        <button id="favoriteBtn" class="favorite-filter-btn" onclick="openListManager('favorite')">찜목록</button>
-        <button class="reset-btn" onclick="resetFilter()">초기화</button>
       </div>
 
-      <div class="extra-action-row">
-        <button id="hideDoneBtn" class="hide-done-btn" onclick="toggleHideDone()">완료숨김</button>
-        <button id="gongsilOnlyBtn" class="gongsil-only-btn" onclick="toggleGongsilOnly()">임장가자</button>
-        <button class="select-all-btn compact-two-line" onclick="selectAllVisibleItems()"><span>전체</span><span>선택</span></button>
-        <button class="clear-selected-btn compact-two-line" onclick="clearSelectedPrintItems()"><span>선택</span><span>해제</span></button>
-        <button id="printSelectedBtn" class="print-btn" onclick="printSelectedList()">인쇄</button>
-        <button id="completeSelectedBtn" class="complete-selected-btn" onclick="completeSelectedItems()">완료</button>
-        <button id="fieldVisitBtn" class="field-visit-btn" onclick="markSelectedAsVisited()">임장 ON</button>
-        <button id="multiClusterBtn" class="multi-cluster-btn compact-two-line" onclick="toggleMultiClusterMode()"><span>다중</span><span>X</span></button>
-        <button class="v6-list-menu-btn visit" type="button" onclick="openListManager('visit')">임장목록</button>
-        <button class="v6-list-menu-btn ai" type="button" onclick="startAiVisitPreview()">AI임장</button>
-        <button class="quick-add-btn quick-add-with-sync" onclick="openQuickAddModal()">
+      <div class="extra-action-row v6-command-bar">
+        <div class="v6-command-menu" data-command-menu="view">
+          <button class="v6-command-trigger" type="button" onclick="toggleV6ActionMenu('view', event)" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.7"></circle></svg>
+            <span>보기</span><span class="v6-command-caret">▾</span>
+          </button>
+          <div id="v6ActionMenu_view" class="v6-command-dropdown" role="menu">
+            <button id="hideDoneBtn" class="hide-done-btn" type="button" onclick="toggleHideDone(); closeV6ActionMenus()">계약완료매물숨김</button>
+            <button id="gongsilOnlyBtn" class="gongsil-only-btn" type="button" onclick="toggleGongsilOnly(); closeV6ActionMenus()">임장할매물만보기</button>
+            <div class="v6-command-divider"></div>
+            <button id="favoriteBtn" class="favorite-filter-btn" type="button" onclick="openListManager('favorite'); closeV6ActionMenus()">찜목록</button>
+            <button type="button" onclick="openListManager('visit'); closeV6ActionMenus()">임장목록</button>
+            <div class="v6-command-divider"></div>
+            <button class="reset-btn" type="button" onclick="resetFilter(); closeV6ActionMenus()">전체보기로 초기화</button>
+          </div>
+        </div>
+
+        <div class="v6-command-menu" data-command-menu="work">
+          <button class="v6-command-trigger" type="button" onclick="toggleV6ActionMenu('work', event)" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 4.2h5l.7 2.1 2 .8 2-.9 1.6 3.5-1.8 1.2v2.2l1.8 1.2-1.6 3.5-2-.9-2 .8-.7 2.1h-5l-.7-2.1-2-.8-2 .9-1.6-3.5L5 13.1v-2.2L3.2 9.7l1.6-3.5 2 .9 2-.8.7-2.1Z"></path><circle cx="12" cy="12" r="2.7"></circle></svg>
+            <span>작업</span><span class="v6-command-caret">▾</span>
+          </button>
+          <div id="v6ActionMenu_work" class="v6-command-dropdown" role="menu">
+            <button id="printSelectedBtn" class="print-btn" type="button" onclick="printSelectedList(); closeV6ActionMenus()">선택인쇄하기</button>
+            <button id="completeSelectedBtn" class="complete-selected-btn" type="button" onclick="completeSelectedItems(); closeV6ActionMenus()">거래완료등록</button>
+            <button id="fieldVisitBtn" class="field-visit-btn" type="button" onclick="markSelectedAsVisited(); closeV6ActionMenus()">임장완료</button>
+          </div>
+        </div>
+
+        <button class="select-all-btn" type="button" onclick="selectAllVisibleItems()">전체선택</button>
+        <button class="clear-selected-btn" type="button" onclick="clearSelectedPrintItems()">선택해제</button>
+        <button id="multiClusterBtn" class="multi-cluster-btn compact-two-line" type="button" onclick="toggleMultiClusterMode()"><span>다중</span><span>X</span></button>
+        <button class="v6-primary-action ai" type="button" onclick="startAiVisitPreview()">AI임장하기</button>
+        <button class="quick-add-btn quick-add-with-sync v6-primary-action" type="button" onclick="openQuickAddModal()">
           <span>빠른등록</span>
           <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
         </button>
-              </div>
+      </div>
       <div id="multiClusterStatus" class="multi-cluster-status"></div>
 
       <div id="detailFilter" class="detail-filter">
