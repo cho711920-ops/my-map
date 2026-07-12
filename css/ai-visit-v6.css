@@ -249,3 +249,63 @@ body.aiv-workspace-open { overflow: hidden !important; }
     transform: scale(.96);
   }
 }
+
+
+/* =========================================================
+   STEP2 안정화 B
+   - 거래형태 중복 제거 이후 메타 간격 정리
+   - 가격정보 2×2 정렬
+   - 휴대폰/태블릿 공통 로드뷰 고정 닫기 버튼
+   ========================================================= */
+.aiv-current-meta:empty { display: none; }
+.aiv-price-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px 18px !important;
+}
+.aiv-price-grid span { min-width: 0 !important; }
+
+.aiv-roadview-emergency-close {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 2147483000;
+  min-width: 70px;
+  height: 48px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid rgba(15, 23, 42, .18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .97);
+  color: #172033;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .25);
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.aiv-roadview-emergency-close span { font-size: 27px; line-height: 1; font-weight: 500; }
+.aiv-roadview-emergency-close small { font-size: 13px; font-weight: 900; }
+.aiv-roadview-emergency-close:active { transform: scale(.96); }
+
+@media (max-width: 1366px), (pointer: coarse) {
+  .aiv-roadview-emergency-close { display: inline-flex; }
+  #roadviewModal.roadview-modal .roadview-modal-close {
+    position: fixed !important;
+    top: max(12px, env(safe-area-inset-top)) !important;
+    right: max(12px, env(safe-area-inset-right)) !important;
+    z-index: 2147482000 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .aiv-price-grid { gap: 12px !important; }
+  .aiv-roadview-emergency-close {
+    min-width: 52px;
+    width: 52px;
+    padding: 0;
+  }
+  .aiv-roadview-emergency-close small { display: none; }
+}
