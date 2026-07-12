@@ -35,17 +35,36 @@
             <option value="">구분</option>
           </select>
 
-          <select id="sortFilter" onchange="applyFilter()">
-            <option value="latest">최신등록순</option>
-            <option value="aiScoreHigh">AI점수 높은순</option>
-            <option value="name">가나다순</option>
-            <option value="depositLow">보증금 낮은순</option>
-            <option value="depositHigh">보증금 높은순</option>
-            <option value="rentLow">월세 낮은순</option>
-            <option value="rentHigh">월세 높은순</option>
-            <option value="areaHigh">평수 큰순</option>
-            <option value="areaLow">평수 작은순</option>
-          </select>
+          <div id="sortDropdown" class="sort-dropdown">
+            <input id="sortFilter" type="hidden" value="latest">
+
+            <button
+              id="sortDropdownBtn"
+              type="button"
+              class="sort-dropdown-btn"
+              onclick="toggleSortDropdown(event)"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >정렬</button>
+
+            <div id="sortDropdownMenu" class="sort-dropdown-menu" role="listbox">
+              <button type="button" data-sort-value="latest" onclick="selectSortOption('latest')">최신등록순</button>
+              <button type="button" data-sort-value="oldest" onclick="selectSortOption('oldest')">등록일 오래된순</button>
+              <button type="button" data-sort-value="aiScoreHigh" onclick="selectSortOption('aiScoreHigh')">AI점수 높은순</button>
+              <button type="button" data-sort-value="pyeongHigh" onclick="selectSortOption('pyeongHigh')">평당 높은순</button>
+              <button type="button" data-sort-value="pyeongLow" onclick="selectSortOption('pyeongLow')">평당 낮은순</button>
+              <button type="button" data-sort-value="depositHigh" onclick="selectSortOption('depositHigh')">보증금 높은순</button>
+              <button type="button" data-sort-value="depositLow" onclick="selectSortOption('depositLow')">보증금 낮은순</button>
+              <button type="button" data-sort-value="rentHigh" onclick="selectSortOption('rentHigh')">월세 높은순</button>
+              <button type="button" data-sort-value="rentLow" onclick="selectSortOption('rentLow')">월세 낮은순</button>
+              <button type="button" data-sort-value="premiumHigh" onclick="selectSortOption('premiumHigh')">권리금 높은순</button>
+              <button type="button" data-sort-value="premiumLow" onclick="selectSortOption('premiumLow')">권리금 낮은순</button>
+              <button type="button" data-sort-value="areaHigh" onclick="selectSortOption('areaHigh')">평수 큰순</button>
+              <button type="button" data-sort-value="areaLow" onclick="selectSortOption('areaLow')">평수 작은순</button>
+              <button type="button" data-sort-value="name" onclick="selectSortOption('name')">건물이름 가나다순</button>
+              <button type="button" data-sort-value="address" onclick="selectSortOption('address')">주소 가나다순</button>
+            </div>
+          </div>
         </div>
 
         <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜</button>
@@ -272,7 +291,7 @@
       <aside class="roadview-map-panel">
         <div class="roadview-map-title">현재 위치 · 방향</div>
         <div id="roadviewMiniMap" class="roadview-mini-map"></div>
-        <div class="roadview-map-help">파란 핀은 매물 위치, 화살표는 현재 바라보는 방향입니다.</div>
+        <div class="roadview-map-help">빨간 표시는 선택 매물, 파란 화살표는 로드뷰 위치와 현재 보는 방향입니다.</div>
       </aside>
     </div>
 
