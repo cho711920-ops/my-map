@@ -14,6 +14,13 @@ var gongsilOnly = false;
 var multiClusterMode = false;
 var selectedGroupKeys = [];
 var preserveActionSelectionDuringRender = false;
+var openMemoKey = null;
+var editingMemoKey = null;
+var roadviewMiniMap = null;
+var roadviewMiniMarker = null;
+var roadviewDirectionOverlay = null;
+var currentRoadviewItemKey = null;
+var currentRoadviewPosition = null;
 var errorItems = [];
 var isLoadingSheet = false;
 var pendingAutoUpdate = false;
@@ -121,16 +128,62 @@ function toggleFavorite(key) {
 
 function toggleFavoriteOnly() {
   favoriteOnly = !favoriteOnly;
-  document.getElementById("favoriteBtn").innerText = favoriteOnly ? "전체" : "찜만";
+  document.getElementById("favoriteBtn").innerText = favoriteOnly ? "전체" : "찜";
   document.getElementById("favoriteBtn").classList.toggle("on", favoriteOnly);
   applyFilter();
 }
 
 
-function toggleDetailFilter() {
-  document.getElementById("detailFilter").classList.toggle("open");
-  document.getElementById("detailBtn").classList.toggle("on");
+function positionDetailFilter() {
+  var panel = document.getElementById("detailFilter");
+  var sidebar = document.getElementById("sidebar");
+  var detailBtn = document.getElementById("detailBtn");
+
+  if (!panel || !sidebar || !detailBtn) return;
+
+  if (window.innerWidth <= 768) {
+    panel.style.left = "8px";
+    panel.style.right = "8px";
+    panel.style.top = Math.max(8, detailBtn.getBoundingClientRect().bottom + 6) + "px";
+    panel.style.width = "auto";
+    return;
+  }
+
+  var sidebarRect = sidebar.getBoundingClientRect();
+  var btnRect = detailBtn.getBoundingClientRect();
+  var panelWidth = Math.min(360, Math.max(300, window.innerWidth - sidebarRect.right - 30));
+  var left = Math.min(
+    window.innerWidth - panelWidth - 12,
+    Math.max(sidebarRect.right + 12, btnRect.left)
+  );
+
+  panel.style.left = left + "px";
+  panel.style.right = "auto";
+  panel.style.top = Math.max(12, btnRect.bottom + 8) + "px";
+  panel.style.width = panelWidth + "px";
 }
+
+
+function toggleDetailFilter() {
+  var panel = document.getElementById("detailFilter");
+  var button = document.getElementById("detailBtn");
+  var willOpen = !panel.classList.contains("open");
+
+  panel.classList.toggle("open", willOpen);
+  button.classList.toggle("on", willOpen);
+
+  if (willOpen) {
+    positionDetailFilter();
+  }
+}
+
+
+window.addEventListener("resize", function() {
+  var panel = document.getElementById("detailFilter");
+  if (panel && panel.classList.contains("open")) {
+    positionDetailFilter();
+  }
+});
 
 
 function toggleSidebar() {
@@ -703,6 +756,72 @@ function openKakaoNavigation(encodedKey) {
 
 
 var roadviewInstance = null;
+var currentRoadviewCoords = null;
+
+
+function updateRoadviewDirection(pan) {
+  if (!roadviewDirectionOverlay) return;
+
+  var element = roadviewDirectionOverlay.getContent();
+
+  if (element && element.style) {
+    element.style.transform = "translate(-50%, -50%) rotate(" + Number(pan || 0) + "deg)";
+  }
+}
+
+
+function setupRoadviewMiniMap(position) {
+  var miniMapContainer = document.getElementById("roadviewMiniMap");
+
+  if (!miniMapContainer) return;
+
+  miniMapContainer.innerHTML = "";
+
+  roadviewMiniMap = new kakao.maps.Map(miniMapContainer, {
+    center: position,
+    level: 3
+  });
+
+  roadviewMiniMarker = new kakao.maps.Marker({
+    map: roadviewMiniMap,
+    position: position
+  });
+
+  var directionElement = document.createElement("div");
+  directionElement.className = "roadview-direction-arrow";
+  directionElement.innerHTML = "➤";
+
+  roadviewDirectionOverlay = new kakao.maps.CustomOverlay({
+    map: roadviewMiniMap,
+    position: position,
+    content: directionElement,
+    yAnchor: 0.5,
+    xAnchor: 0.5,
+    zIndex: 5
+  });
+
+  setTimeout(function() {
+    if (roadviewMiniMap) {
+      roadviewMiniMap.relayout();
+      roadviewMiniMap.setCenter(position);
+    }
+  }, 80);
+}
+
+
+function recenterRoadviewMiniMap() {
+  if (roadviewMiniMap && currentRoadviewPosition) {
+    roadviewMiniMap.relayout();
+    roadviewMiniMap.setCenter(currentRoadviewPosition);
+    roadviewMiniMap.setLevel(3);
+  }
+}
+
+
+function openCurrentRoadviewNavigation() {
+  if (!currentRoadviewItemKey) return;
+  openKakaoNavigation(encodeURIComponent(currentRoadviewItemKey));
+}
 
 
 function openKakaoRoadview(encodedKey) {
@@ -723,10 +842,6 @@ function openKakaoRoadview(encodedKey) {
     return;
   }
 
-  /*
-   * 카카오 로드뷰 전용 모달을 정확히 선택합니다.
-   * 과거 모달과 id가 겹치는 문제를 방지하기 위해 class까지 확인합니다.
-   */
   var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
   var title = document.getElementById("roadviewModalTitle");
@@ -734,15 +849,16 @@ function openKakaoRoadview(encodedKey) {
   var status = document.getElementById("roadviewModalStatus");
 
   if (!modal || !container || !title || !address || !status) {
-    alert("카카오 로드뷰 화면을 찾지 못했습니다. 새 파일이 모두 적용됐는지 확인해주세요.");
+    alert("카카오 로드뷰 화면을 찾지 못했습니다.");
     return;
   }
 
+  currentRoadviewItemKey = item.key;
+  currentRoadviewCoords = coords;
+  currentRoadviewPosition = new kakao.maps.LatLng(coords.lat, coords.lng);
+
   title.textContent = item.name || "카카오 로드뷰";
-  address.textContent = [
-    item.address || "",
-    item.room || ""
-  ].filter(Boolean).join(" ");
+  address.textContent = [item.address || "", item.room || ""].filter(Boolean).join(" ");
 
   status.textContent = "가장 가까운 로드뷰를 찾고 있습니다.";
   status.className = "roadview-modal-status loading";
@@ -752,10 +868,6 @@ function openKakaoRoadview(encodedKey) {
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("roadview-modal-open");
 
-  /*
-   * 기존 지도에서 카카오 SDK가 이미 로드되어 있으므로
-   * 별도 HTML이나 별도 API 키 없이 같은 화면에서 실행합니다.
-   */
   if (
     typeof kakao === "undefined" ||
     !kakao.maps ||
@@ -767,49 +879,43 @@ function openKakaoRoadview(encodedKey) {
     return;
   }
 
-  var position = new kakao.maps.LatLng(coords.lat, coords.lng);
+  setupRoadviewMiniMap(currentRoadviewPosition);
+
   var roadviewClient = new kakao.maps.RoadviewClient();
 
-  /*
-   * 상가 건물은 도로에서 조금 떨어져 있을 수 있어
-   * 반경 150m 안의 가장 가까운 촬영 지점을 사용합니다.
-   */
-  roadviewClient.getNearestPanoId(position, 150, function(panoId) {
+  roadviewClient.getNearestPanoId(currentRoadviewPosition, 150, function(panoId) {
     if (!modal.classList.contains("open")) return;
 
     if (!panoId) {
       status.textContent = "이 위치 반경 150m 안에서 로드뷰를 찾지 못했습니다.";
       status.className = "roadview-modal-status error";
-
       container.innerHTML =
         '<div class="roadview-empty">' +
           '<div class="roadview-empty-icon">🏠</div>' +
           '<div>주변 도로에 카카오 로드뷰가 없을 수 있습니다.</div>' +
         '</div>';
-
       return;
     }
 
     roadviewInstance = new kakao.maps.Roadview(container);
-    roadviewInstance.setPanoId(panoId, position);
+    roadviewInstance.setPanoId(panoId, currentRoadviewPosition);
+
+    kakao.maps.event.addListener(roadviewInstance, "viewpoint_changed", function() {
+      var viewpoint = roadviewInstance.getViewpoint();
+      updateRoadviewDirection(viewpoint ? viewpoint.pan : 0);
+    });
 
     status.textContent = "로드뷰 연결 완료";
     status.className = "roadview-modal-status success";
 
-    /*
-     * 모달이 열린 직후 크기 계산이 어긋나는 것을 방지합니다.
-     */
     setTimeout(function() {
-      if (
-        roadviewInstance &&
-        typeof roadviewInstance.relayout === "function"
-      ) {
+      if (roadviewInstance && typeof roadviewInstance.relayout === "function") {
         roadviewInstance.relayout();
       }
+      recenterRoadviewMiniMap();
     }, 100);
   });
 }
-
 
 function closeRoadviewModal() {
   var modal = document.querySelector("#roadviewModal.roadview-modal");
@@ -826,6 +932,12 @@ function closeRoadviewModal() {
   }
 
   roadviewInstance = null;
+  roadviewMiniMap = null;
+  roadviewMiniMarker = null;
+  roadviewDirectionOverlay = null;
+  currentRoadviewItemKey = null;
+  currentRoadviewCoords = null;
+  currentRoadviewPosition = null;
 }
 
 
@@ -840,15 +952,140 @@ document.addEventListener("keydown", function(event) {
 });
 
 
+function formatListRegistrationDate(value) {
+  var text = String(value || "").trim();
+
+  if (!text) return "";
+
+  var match = text.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+
+  if (match) {
+    return match[1].slice(2) + "." +
+      String(match[2]).padStart(2, "0") + "." +
+      String(match[3]).padStart(2, "0");
+  }
+
+  return text;
+}
+
+
+function toggleItemMemo(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+
+  openMemoKey = openMemoKey === key ? null : key;
+  editingMemoKey = null;
+  showList(visibleListItems);
+}
+
+
+function beginMemoEdit(encodedKey) {
+  editingMemoKey = decodeURIComponent(encodedKey);
+  openMemoKey = editingMemoKey;
+  showList(visibleListItems);
+
+  requestAnimationFrame(function() {
+    var editor = document.querySelector('[data-memo-editor-key="' + CSS.escape(editingMemoKey) + '"]');
+
+    if (editor) {
+      editor.focus();
+      editor.style.height = "auto";
+      editor.style.height = editor.scrollHeight + "px";
+    }
+  });
+}
+
+
+function cancelMemoEdit() {
+  editingMemoKey = null;
+  showList(visibleListItems);
+}
+
+
+function autoResizeMemoEditor(element) {
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = element.scrollHeight + "px";
+}
+
+
+function saveItemMemo(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(currentItem) {
+    return currentItem.key === key;
+  });
+
+  var editor = document.querySelector('[data-memo-editor-key="' + CSS.escape(key) + '"]');
+
+  if (!item || !editor) {
+    alert("메모 수정 대상을 찾지 못했습니다.");
+    return;
+  }
+
+  if (!saveApiURL) {
+    alert("구글시트 쓰기 연결 URL을 확인해주세요.");
+    return;
+  }
+
+  var newMemo = editor.value.trim();
+  var previousMemo = item.memo || "";
+  var saveButton = document.querySelector('[data-memo-save-key="' + CSS.escape(key) + '"]');
+
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = "저장중";
+  }
+
+  item.memo = newMemo;
+  editingMemoKey = null;
+  showList(visibleListItems);
+
+  var payload = {
+    action: "toggleDone",
+    key: {
+      name: item.name || "",
+      address: item.address || "",
+      room: item.room || "",
+      type: item.type || ""
+    },
+    state: item.state || "",
+    memo: newMemo
+  };
+
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify(payload)
+  }).then(function() {
+    document.getElementById("status").innerHTML = "메모 저장 요청 완료";
+
+    setTimeout(function() {
+      loadSheet(true);
+    }, 1800);
+  }).catch(function(error) {
+    console.error(error);
+    item.memo = previousMemo;
+    editingMemoKey = key;
+    showList(visibleListItems);
+    alert("메모 저장 중 오류가 발생했습니다.");
+  });
+}
+
+
 function addListItem(item) {
   var div = document.createElement("div");
   var printSelected = selectedPrintKeys.includes(item.key);
+  var memoOpen = openMemoKey === item.key;
+  var memoEditing = editingMemoKey === item.key;
 
   div.className =
     "item" +
     (selectedItemKey === item.key ? " selected" : "") +
     (isDone(item) ? " done" : "") +
-    (printSelected ? " print-selected" : "");
+    (printSelected ? " print-selected" : "") +
+    (memoOpen ? " memo-open" : "");
 
   var doneLabel = isDone(item)
     ? '<span class="done-badge">계약완료</span>'
@@ -865,56 +1102,71 @@ function addListItem(item) {
   var encodedKey = encodeURIComponent(item.key);
   var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
+  var regDateLabel = formatListRegistrationDate(item.regDate);
+
+  var memoPanel = "";
+
+  if (memoOpen) {
+    if (memoEditing) {
+      memoPanel =
+        '<div class="item-memo-panel editing" onclick="event.stopPropagation()">' +
+          '<textarea class="item-memo-editor" data-memo-editor-key="' + safeKey + '" ' +
+            'oninput="autoResizeMemoEditor(this)">' +
+            escapeHtml(item.memo || "") +
+          '</textarea>' +
+          '<div class="item-memo-actions">' +
+            '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
+              'onclick="saveItemMemo(\'' + encodedKey + '\')">저장</button>' +
+            '<button type="button" class="memo-cancel-btn" onclick="cancelMemoEdit()">취소</button>' +
+          '</div>' +
+        '</div>';
+    } else {
+      memoPanel =
+        '<div class="item-memo-panel" onclick="event.stopPropagation()">' +
+          '<div class="item-memo-content">' +
+            (item.memo ? escapeHtml(item.memo) : '<span class="memo-empty">메모가 없습니다.</span>') +
+          '</div>' +
+          '<div class="item-memo-actions">' +
+            '<button type="button" class="memo-edit-btn" onclick="beginMemoEdit(\'' + encodedKey + '\')">수정</button>' +
+          '</div>' +
+        '</div>';
+    }
+  }
 
   div.innerHTML =
-    /*
-     * 첫 줄: 체크박스 + 내비/로드뷰 + 찜
-     */
     '<div class="item-action-row">' +
       '<div class="item-action-left">' +
         '<label class="item-action-select" title="이 매물을 작업 대상으로 선택">' +
           '<input type="checkbox" class="action-select-check" ' +
             (printSelected ? 'checked' : '') +
-            ' onclick="event.stopPropagation(); togglePrintSelection(\'' +
-            encodedKey + '\')">' +
+            ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
         '</label>' +
         '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
-          'onclick="event.stopPropagation(); openKakaoNavigation(\'' +
-          encodedKey + '\')">내비</button>' +
+          'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
         '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
-          'onclick="event.stopPropagation(); openKakaoRoadview(\'' +
-          encodedKey + '\')">로드뷰</button>' +
+          'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
+        '<div class="star ' + (isFavorite(item) ? 'on' : '') +
+          '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
       '</div>' +
-      '<div class="star ' + (isFavorite(item) ? 'on' : '') +
-        '" onclick="event.stopPropagation(); toggleFavorite(\'' +
-        safeKey + '\')">★</div>' +
+      '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
+        'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
+        (memoOpen ? '메모 ▲' : '메모 ▼') +
+      '</button>' +
     '</div>' +
 
-    /*
-     * 둘째 줄: 평당 배지 + 구분 배지 + 건물이름
-     */
     '<div class="item-identity-row">' +
       doneLabel +
       sourceLabel +
       pyeongMiniBadge +
       typeLabel +
-      '<span class="item-building-name">' +
-        escapeHtml(item.name) +
-      '</span>' +
+      '<span class="item-building-name">' + escapeHtml(item.name) + '</span>' +
     '</div>' +
 
-    /*
-     * 셋째 줄: 주소 + 호실
-     */
     '<div class="item-address-room">' +
       '<span class="item-address-inline">' +
-        '<span class="item-address-text">' +
-          escapeHtml(item.address) +
-        '</span>' +
+        '<span class="item-address-text">' + escapeHtml(item.address) + '</span>' +
         (item.room
-          ? '<span class="item-room-badge">' +
-              escapeHtml(item.room) +
-            '</span>'
+          ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>'
           : '') +
       '</span>' +
     '</div>' +
@@ -925,21 +1177,34 @@ function addListItem(item) {
       ' | 권리금 ' + item.premium +
       ' | ' + item.area + '평</div>' +
 
-    '<div class="info-line-compact">임대인 ' +
-      escapeHtml(item.landlordPhone) +
-      ' | 세입자 ' +
-      escapeHtml(item.tenantPhone) +
+    '<div class="item-contact-date-row">' +
+      '<div class="info-line-compact">임대인 ' +
+        escapeHtml(item.landlordPhone) +
+        ' | 세입자 ' +
+        escapeHtml(item.tenantPhone) +
+      '</div>' +
+      (regDateLabel
+        ? '<div class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</div>'
+        : '') +
     '</div>' +
 
-    '<div class="memo-line">' +
-      escapeHtml(item.memo) +
-    '</div>';
+    memoPanel;
 
   div.onclick = function() {
     openItem(item);
   };
 
   document.getElementById("list").appendChild(div);
+
+  if (memoEditing) {
+    requestAnimationFrame(function() {
+      var editor = div.querySelector(".item-memo-editor");
+
+      if (editor) {
+        autoResizeMemoEditor(editor);
+      }
+    });
+  }
 }
 
 
@@ -1111,11 +1376,11 @@ function resetFilter() {
   gongsilOnly = false;
   multiClusterMode = false;
   selectedGroupKeys = [];
-  document.getElementById("favoriteBtn").innerText = "찜만";
+  document.getElementById("favoriteBtn").innerText = "찜";
   document.getElementById("favoriteBtn").classList.remove("on");
   document.getElementById("hideDoneBtn").innerText = "완료숨김";
   document.getElementById("hideDoneBtn").classList.remove("on");
-  document.getElementById("gongsilOnlyBtn").innerText = "공실박스만";
+  document.getElementById("gongsilOnlyBtn").innerText = "임장가자";
   document.getElementById("gongsilOnlyBtn").classList.remove("on");
   updateMultiClusterButton();
   updateMultiClusterStatus();
@@ -1542,10 +1807,10 @@ function toggleGongsilOnly() {
   var btn = document.getElementById("gongsilOnlyBtn");
 
   if (gongsilOnly) {
-    btn.innerText = "전체출처";
+    btn.innerText = "전체보기";
     btn.classList.add("on");
   } else {
-    btn.innerText = "공실박스만";
+    btn.innerText = "임장가자";
     btn.classList.remove("on");
   }
 
@@ -1581,7 +1846,10 @@ function updateMultiClusterButton() {
   var btn = document.getElementById("multiClusterBtn");
   if (!btn) return;
 
-  btn.innerText = multiClusterMode ? "다중선택 ON" : "다중선택 OFF";
+  btn.innerHTML = multiClusterMode
+    ? "<span>다중</span><span>O</span>"
+    : "<span>다중</span><span>X</span>";
+
   btn.classList.toggle("on", multiClusterMode);
 }
 
