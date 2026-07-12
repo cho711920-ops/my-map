@@ -3853,3 +3853,265 @@ body.roadview-modal-open {
     font-size:9px;
   }
 }
+
+
+/* =========================================================
+   v5.5.2 JS 스마트 로드뷰 + 정렬 메뉴 + 지도 테두리 수정
+   ========================================================= */
+
+/* 지도 주변 회색 테두리 완전 제거 */
+html,
+body,
+#wrap,
+#map {
+  border:0 !important;
+  outline:0 !important;
+  box-shadow:none !important;
+}
+
+#wrap {
+  padding:0 !important;
+  gap:0 !important;
+  background:#fff !important;
+}
+
+#map {
+  margin-top:0 !important;
+  margin-bottom:0 !important;
+  background:#fff !important;
+}
+
+/* 정렬 드롭다운이 상단 바 밖으로 정상 표시되도록 */
+.filters,
+.filter-row,
+.filter-select-wrap,
+.sort-dropdown {
+  overflow:visible !important;
+}
+
+.filters {
+  z-index:16000 !important;
+}
+
+.sort-dropdown {
+  z-index:17000 !important;
+}
+
+.sort-dropdown-menu {
+  z-index:22000 !important;
+}
+
+/* 로드뷰 모달 전체 크기 확대 */
+.roadview-modal-dialog {
+  width:min(1720px, 98vw) !important;
+  height:96vh !important;
+  max-height:none !important;
+  border-radius:10px !important;
+}
+
+.roadview-modal-header {
+  display:grid !important;
+  grid-template-columns:auto minmax(0, 1fr) 40px !important;
+  align-items:center !important;
+  gap:10px !important;
+  min-height:48px !important;
+  padding:5px 8px !important;
+}
+
+.roadview-view-tabs {
+  display:flex;
+  align-items:center;
+  gap:3px;
+}
+
+.roadview-view-tab {
+  min-width:64px;
+  height:34px;
+  padding:0 12px;
+  border:1px solid #cfd7e3;
+  border-radius:7px;
+  background:#fff;
+  color:#344054;
+  font-size:12px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.roadview-view-tab.active {
+  border-color:#07853d;
+  background:#0aa04f;
+  color:#fff;
+}
+
+.roadview-modal-heading {
+  min-width:0;
+}
+
+.roadview-modal-title {
+  font-size:13px !important;
+}
+
+.roadview-modal-address {
+  margin-top:1px !important;
+  font-size:11px !important;
+}
+
+.roadview-modal-close {
+  position:static !important;
+  width:36px !important;
+  height:36px !important;
+  border-radius:8px !important;
+  font-size:24px !important;
+}
+
+.roadview-tab-content {
+  position:relative;
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+  background:#fff;
+}
+
+.roadview-pane {
+  display:none;
+  position:absolute;
+  inset:0;
+  min-width:0;
+  min-height:0;
+}
+
+.roadview-pane.active {
+  display:block;
+}
+
+.roadview-container,
+.roadview-full-map {
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+}
+
+/* 로드뷰 화면 안에 표시되는 작은 매물 핀 */
+.roadview-screen-pin {
+  display:none;
+  position:absolute;
+  top:46%;
+  z-index:25;
+  width:17px;
+  height:17px;
+  transform:translate(-50%, -100%);
+  border:3px solid #fff;
+  border-radius:50% 50% 50% 0;
+  background:#1787ff;
+  box-shadow:0 2px 8px rgba(0,0,0,.38);
+  pointer-events:none;
+}
+
+.roadview-screen-pin::after {
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:5px;
+  height:5px;
+  transform:translate(-50%, -50%);
+  border-radius:50%;
+  background:#fff;
+}
+
+.roadview-screen-pin.visible {
+  display:block;
+}
+
+/* 상태 메시지는 화면을 차지하지 않고 잠시만 표시 */
+.roadview-inline-status {
+  position:absolute;
+  top:8px;
+  left:50%;
+  z-index:30;
+  transform:translateX(-50%);
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.94);
+  color:#475467;
+  font-size:11px;
+  font-weight:900;
+  box-shadow:0 2px 9px rgba(0,0,0,.18);
+  transition:opacity .2s ease;
+  pointer-events:none;
+}
+
+.roadview-inline-status.loading {
+  color:#946200;
+  background:rgba(255,249,221,.96);
+}
+
+.roadview-inline-status.success {
+  color:#067647;
+  background:rgba(236,253,243,.96);
+}
+
+.roadview-inline-status.error {
+  color:#b42318;
+  background:rgba(254,243,242,.97);
+}
+
+.roadview-inline-status.hidden {
+  opacity:0;
+}
+
+/* 이전 미니맵/하단 버튼 완전 숨김 */
+.roadview-workspace,
+.roadview-map-panel,
+.roadview-modal-actions {
+  display:none !important;
+}
+
+@media (max-width:768px) {
+  .roadview-modal-dialog {
+    inset:2px !important;
+    left:2px !important;
+    top:2px !important;
+    width:calc(100vw - 4px) !important;
+    height:calc(100dvh - 4px) !important;
+    border-radius:8px !important;
+  }
+
+  .roadview-modal-header {
+    grid-template-columns:auto minmax(0, 1fr) 38px !important;
+    min-height:48px !important;
+    padding:5px 6px !important;
+    gap:6px !important;
+  }
+
+  .roadview-view-tab {
+    min-width:56px;
+    height:34px;
+    padding:0 8px;
+    font-size:11px;
+  }
+
+  .roadview-modal-heading {
+    overflow:hidden;
+  }
+
+  .roadview-modal-title,
+  .roadview-modal-address {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .roadview-modal-close {
+    position:static !important;
+    top:auto !important;
+    right:auto !important;
+    width:36px !important;
+    height:36px !important;
+  }
+
+  .roadview-screen-pin {
+    top:48%;
+  }
+}
