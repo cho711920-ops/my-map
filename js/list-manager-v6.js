@@ -8,6 +8,31 @@
   var currentManagerType = "favorite";
   var currentItemKey = "";
 
+  function getSelectedItemKeys() {
+    var keys = Array.isArray(window.selectedPrintKeys) ? window.selectedPrintKeys : [];
+    return keys.filter(function (key, index) {
+      return key && keys.indexOf(key) === index;
+    });
+  }
+
+  function showListToast(message, tone) {
+    var toast = document.getElementById("v6ListToast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "v6ListToast";
+      toast.className = "v6-list-toast";
+      toast.setAttribute("role", "status");
+      document.body.appendChild(toast);
+    }
+    toast.className = "v6-list-toast " + (tone || "success");
+    toast.textContent = message;
+    window.clearTimeout(showListToast._timer);
+    requestAnimationFrame(function () { toast.classList.add("show"); });
+    showListToast._timer = window.setTimeout(function () {
+      toast.classList.remove("show");
+    }, 2800);
+  }
+
   function uid(prefix) {
     return prefix + "_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
   }
@@ -194,7 +219,13 @@
     document.getElementById("lmSubtitle").textContent = "목록 " + lists.length + "개 · 등록 매물 " +
       lists.reduce(function (sum, list) { return sum + (list.itemKeys || []).length; }, 0) + "개";
 
-    var html = '<div class="lm-toolbar"><button class="lm-primary" type="button" onclick="createManagedList()">+ 새 ' + label + '목록</button></div>';
+    var selectedCount = getSelectedItemKeys().length;
+    var html = '<div class="lm-toolbar">' +
+      '<div class="lm-selection-summary ' + (selectedCount ? 'active' : '') + '">' +
+        (selectedCount ? '<strong>' + selectedCount + '개 선택됨</strong><span>아래 목록의 “선택 매물 추가”를 누르세요.</span>' : '<span>매물카드에서 여러 매물을 체크하면 한 번에 추가할 수 있습니다.</span>') +
+      '</div>' +
+      '<button class="lm-primary" type="button" onclick="createManagedList()">+ 새 ' + label + '목록</button>' +
+    '</div>';
     if (!lists.length) {
       html += '<div class="lm-empty">아직 만든 ' + label + '목록이 없습니다.</div>';
     } else {
@@ -206,6 +237,7 @@
               '<span>' + escapeHtml(list.name) + '</span><strong>' + (list.itemKeys || []).length + '개</strong>' +
             '</button>' +
             '<div class="lm-list-actions">' +
+              (selectedCount ? '<button class="bulk-add" type="button" onclick="addSelectedItemsToManagedList(\'' + list.id + '\')">선택 매물 ' + selectedCount + '개 추가</button>' : '') +
               (currentManagerType === "favorite" ? '<button type="button" onclick="showFavoriteListOnMap(\'' + list.id + '\')">지도에서 보기</button>' : '') +
               '<button type="button" onclick="renameManagedList(\'' + list.id + '\')">이름변경</button>' +
               '<button class="danger" type="button" onclick="deleteManagedList(\'' + list.id + '\')">삭제</button>' +
@@ -295,6 +327,40 @@
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
 
+  window.addSelectedItemsToManagedList = function (listId) {
+    var selectedKeys = getSelectedItemKeys();
+    if (!selectedKeys.length) {
+      showListToast("먼저 매물카드에서 추가할 매물을 체크해주세요.", "warning");
+      return;
+    }
+
+    var lists = loadLists(currentManagerType);
+    var list = lists.find(function (entry) { return entry.id === listId; });
+    if (!list) return;
+
+    var keys = Array.isArray(list.itemKeys) ? list.itemKeys.slice() : [];
+    var added = 0;
+    var duplicated = 0;
+    selectedKeys.forEach(function (key) {
+      if (keys.indexOf(key) === -1) {
+        keys.push(key);
+        added += 1;
+      } else {
+        duplicated += 1;
+      }
+    });
+
+    list.itemKeys = keys;
+    list.updatedAt = nowIso();
+    saveLists(currentManagerType, lists);
+    renderManager();
+    if (typeof window.applyFilter === "function") window.applyFilter();
+
+    var message = '"' + list.name + '"에 ' + added + '개를 추가했습니다.';
+    if (duplicated) message += ' · 중복 ' + duplicated + '개 제외';
+    showListToast(message, added ? "success" : "info");
+  };
+
   window.showFavoriteListOnMap = function (listId) {
     var list = loadLists("favorite").find(function (entry) { return entry.id === listId; });
     if (!list) return;
@@ -365,13 +431,39 @@
   };
 
   window.startAiVisitPreview = function () {
-    alert("AI임장은 STEP2에서 연결됩니다.\n이번 STEP1에서는 찜목록과 임장목록을 먼저 안정화합니다.");
+    alert("AI임장하기는 STEP2에서 연결됩니다.\n현재 STEP1에서는 찜목록과 임장목록을 안정화하고 있습니다.");
   };
+
+  window.closeV6ActionMenus = function () {
+    document.querySelectorAll(".v6-command-menu.open").forEach(function (menu) {
+      menu.classList.remove("open");
+      var trigger = menu.querySelector(".v6-command-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    });
+  };
+
+  window.toggleV6ActionMenu = function (name, event) {
+    if (event) event.stopPropagation();
+    var target = document.querySelector('.v6-command-menu[data-command-menu="' + name + '"]');
+    if (!target) return;
+    var willOpen = !target.classList.contains("open");
+    window.closeV6ActionMenus();
+    if (willOpen) {
+      target.classList.add("open");
+      var trigger = target.querySelector(".v6-command-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "true");
+    }
+  };
+
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest(".v6-command-menu")) window.closeV6ActionMenus();
+  });
 
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") {
       closeListManager();
       closeItemListPicker();
+      window.closeV6ActionMenus();
     }
   });
 
