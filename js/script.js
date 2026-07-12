@@ -1,6 +1,6 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
-var saveApiURL = ""; // Apps Script 웹앱 URL을 여기에 붙여넣으면 자동등록이 켜집니다.
+var saveApiURL = "https://script.google.com/macros/s/AKfycbzEpXbBWlz2bR7OmobH4AOYe7HgsrCLPNfJdGeVaH_xFj2atFJk-OiyHVZBsKom5o4k/exec"; // JS부동산 구글시트 쓰기용 Apps Script 웹앱 URL
 
 var map, geocoder;
 var allItems = [];
@@ -1202,7 +1202,7 @@ function toggleDoneStatus(encodedKey, checked) {
   if (!saveApiURL) {
     alert(
       "구글시트 자동수정 URL이 아직 연결되지 않았습니다.\n\n" +
-      "Apps Script 배포 URL을 script.js 상단의 saveApiURL에 넣어주세요."
+      "구글시트 쓰기 연결 URL을 확인해주세요."
     );
     showList(visibleListItems);
     return;
