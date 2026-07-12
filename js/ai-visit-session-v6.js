@@ -5,6 +5,9 @@
   var SESSION_KEY = "js_ai_visit_session_v6";
   var activeSession = null;
   var focusMarker = null;
+  var lastKnownLocation = null;
+  var locationWarmupStarted = false;
+  var roadviewCloseObserver = null;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -201,6 +204,7 @@
     workspace.classList.add("open");
     workspace.setAttribute("aria-hidden", "false");
     document.body.classList.add("aiv-workspace-open");
+    warmCurrentLocation();
     renderWorkspace();
   }
 
@@ -250,7 +254,11 @@
     ].filter(Boolean).join("");
 
     var dealLabel = getDealLabel(item);
-    var meta = [item.type].filter(Boolean).map(function (value) {
+    var meta = [item.type].filter(function (value) {
+      if (!value) return false;
+      var normalized = String(value).replace(/\s+/g, "").trim();
+      return !/^(임대|월세|전세|매매)$/.test(normalized) && normalized !== String(dealLabel).replace(/\s+/g, "");
+    }).map(function (value) {
       return '<span>' + escapeHtml(value) + '</span>';
     }).join("");
 
@@ -354,6 +362,80 @@
     return destinationName;
   }
 
+  function rememberLocation(position) {
+    if (!position || !position.coords) return null;
+    var lat = Number(position.coords.latitude);
+    var lng = Number(position.coords.longitude);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    lastKnownLocation = {
+      lat: lat,
+      lng: lng,
+      accuracy: Number(position.coords.accuracy) || 0,
+      timestamp: Number(position.timestamp) || Date.now()
+    };
+    return lastKnownLocation;
+  }
+
+  function getFreshCachedLocation(maxAgeMs) {
+    if (!lastKnownLocation) return null;
+    return Date.now() - lastKnownLocation.timestamp <= maxAgeMs ? lastKnownLocation : null;
+  }
+
+  function warmCurrentLocation() {
+    if (locationWarmupStarted || !navigator.geolocation) return;
+    locationWarmupStarted = true;
+    navigator.geolocation.getCurrentPosition(
+      function (position) { rememberLocation(position); },
+      function () {
+        navigator.geolocation.getCurrentPosition(
+          function (position) { rememberLocation(position); },
+          function () {},
+          { enableHighAccuracy: true, timeout: 7000, maximumAge: 120000 }
+        );
+      },
+      { enableHighAccuracy: false, timeout: 2500, maximumAge: 300000 }
+    );
+  }
+
+  function requestCurrentLocation(onSuccess, onFailure) {
+    var cached = getFreshCachedLocation(300000);
+    if (cached) {
+      onSuccess(cached);
+      return;
+    }
+    if (!navigator.geolocation) {
+      onFailure();
+      return;
+    }
+
+    var finished = false;
+    function success(position) {
+      if (finished) return;
+      var location = rememberLocation(position);
+      if (!location) return;
+      finished = true;
+      onSuccess(location);
+    }
+    function fallback() {
+      if (finished) return;
+      navigator.geolocation.getCurrentPosition(
+        success,
+        function () {
+          if (finished) return;
+          finished = true;
+          onFailure();
+        },
+        { enableHighAccuracy: true, timeout: 6500, maximumAge: 120000 }
+      );
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      success,
+      fallback,
+      { enableHighAccuracy: false, timeout: 2200, maximumAge: 300000 }
+    );
+  }
+
   function openNavigation() {
     var item = currentItem();
     if (!item) return alert("매물 정보를 찾지 못했습니다.");
@@ -365,59 +447,80 @@
     }
 
     var popup = window.open("about:blank", "_blank");
+    if (popup && !popup.closed) {
+      try {
+        popup.document.write('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>내비 준비 중</title><body style="margin:0;font-family:system-ui;background:#f5f7fb;display:grid;place-items:center;min-height:100vh;color:#334155"><div style="text-align:center"><b style="font-size:18px">현재 위치 확인 중</b><div style="margin-top:8px;font-size:14px;color:#64748b">잠시만 기다려주세요.</div></div></body>');
+      } catch (ignore) {}
+    }
 
-    function openDestinationOnly(message) {
-      var destinationUrl =
+    function navigate(url) {
+      if (popup && !popup.closed) popup.location.replace(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
+    }
+
+    function destinationOnly(message) {
+      navigate(
         "https://map.kakao.com/link/to/" +
-        encodeURIComponent(buildDestinationName(item)) + "," +
-        coords.lat + "," +
-        coords.lng;
-
-      if (popup && !popup.closed) popup.location.href = destinationUrl;
-      else window.open(destinationUrl, "_blank", "noopener,noreferrer");
-
-      if (message) window.setTimeout(function () { alert(message); }, 100);
+        encodeURIComponent(buildDestinationName(item)) + "," + coords.lat + "," + coords.lng
+      );
+      if (message) window.setTimeout(function () { alert(message); }, 150);
     }
 
-    if (!navigator.geolocation) {
-      openDestinationOnly("현재 위치 기능을 지원하지 않아 목적지만 설정했습니다.\n카카오맵에서 출발지를 선택해주세요.");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      function (position) {
-        var currentLat = Number(position.coords.latitude);
-        var currentLng = Number(position.coords.longitude);
-
-        if (!isFinite(currentLat) || !isFinite(currentLng)) {
-          openDestinationOnly("현재 위치를 확인하지 못해 목적지만 설정했습니다.\n카카오맵에서 출발지를 선택해주세요.");
-          return;
-        }
-
-        var routeUrl =
+    requestCurrentLocation(
+      function (location) {
+        navigate(
           "https://map.kakao.com/link/from/" +
-          encodeURIComponent("현재 위치") + "," +
-          currentLat + "," +
-          currentLng +
-          "/to/" +
-          encodeURIComponent(buildDestinationName(item)) + "," +
-          coords.lat + "," +
-          coords.lng;
-
-        if (popup && !popup.closed) popup.location.href = routeUrl;
-        else window.open(routeUrl, "_blank", "noopener,noreferrer");
+          encodeURIComponent("현재 위치") + "," + location.lat + "," + location.lng +
+          "/to/" + encodeURIComponent(buildDestinationName(item)) + "," + coords.lat + "," + coords.lng
+        );
       },
       function () {
-        openDestinationOnly("현재 위치를 가져오지 못해 목적지만 설정했습니다.\n카카오맵에서 출발지를 선택해주세요.");
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+        destinationOnly("현재 위치를 가져오지 못해 목적지만 설정했습니다.\n브라우저의 위치 권한을 확인해주세요.");
+      }
     );
+  }
+
+  function removeRoadviewEmergencyClose() {
+    var button = document.getElementById("aivRoadviewEmergencyClose");
+    if (button) button.remove();
+  }
+
+  function syncRoadviewEmergencyClose() {
+    var modal = document.getElementById("roadviewModal");
+    var isOpen = !!(modal && modal.classList.contains("open"));
+    var compactDevice = window.matchMedia("(max-width: 1366px), (pointer: coarse)").matches;
+    if (!isOpen || !compactDevice) {
+      removeRoadviewEmergencyClose();
+      return;
+    }
+    if (document.getElementById("aivRoadviewEmergencyClose")) return;
+    var button = document.createElement("button");
+    button.id = "aivRoadviewEmergencyClose";
+    button.type = "button";
+    button.className = "aiv-roadview-emergency-close";
+    button.setAttribute("aria-label", "로드뷰 닫기");
+    button.innerHTML = '<span aria-hidden="true">×</span><small>닫기</small>';
+    button.onclick = function () {
+      if (typeof window.closeRoadviewModal === "function") window.closeRoadviewModal();
+      removeRoadviewEmergencyClose();
+    };
+    document.body.appendChild(button);
+  }
+
+  function watchRoadviewCloseButton() {
+    var modal = document.getElementById("roadviewModal");
+    if (!modal || roadviewCloseObserver) return;
+    roadviewCloseObserver = new MutationObserver(syncRoadviewEmergencyClose);
+    roadviewCloseObserver.observe(modal, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
   }
 
   function openRoadview() {
     var encoded = encodedCurrentKey();
     if (!encoded || typeof window.openKakaoRoadview !== "function") return alert("로드뷰 기능을 불러오지 못했습니다.");
+    watchRoadviewCloseButton();
     window.openKakaoRoadview(encoded);
+    window.setTimeout(syncRoadviewEmergencyClose, 80);
+    window.setTimeout(syncRoadviewEmergencyClose, 450);
   }
 
   function toggleMemo() {
@@ -552,5 +655,7 @@
   });
 
   ensureUi();
+  watchRoadviewCloseButton();
+  warmCurrentLocation();
   offerResume();
 })();
