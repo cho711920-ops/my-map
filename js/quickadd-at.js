@@ -121,3 +121,77 @@
     }
   };
 })();
+
+
+/* =========================================================
+   v5.4 출처 별도 열 저장
+   ========================================================= */
+(function () {
+  "use strict";
+
+  function cleanSourceFromMemo(value) {
+    return String(value || "")
+      .replace(/출처\s*[:：]\s*[^\/|,，\n]+/gi, "")
+      .replace(/\s*\/\s*\/\s*/g, " / ")
+      .replace(/^\s*\/\s*/, "")
+      .replace(/\s*\/\s*$/, "")
+      .trim();
+  }
+
+  function ensureVisitMarker(memo, source) {
+    var text = cleanSourceFromMemo(memo);
+
+    if (/공실박스/i.test(String(source || ""))) {
+      if (!/\(\s*임장가자\s*\)/i.test(text)) {
+        text = text ? "(임장가자) / " + text : "(임장가자)";
+      }
+    }
+
+    return text;
+  }
+
+  var originalGetQuickAddRowValues = window.getQuickAddRowValues;
+
+  window.getQuickAddRowValues = function () {
+    var sourceElement = document.getElementById("qaSource");
+    var memoElement = document.getElementById("qaMemo");
+    var source = sourceElement ? sourceElement.value : "";
+    var memo = memoElement ? memoElement.value : "";
+
+    var values = typeof originalGetQuickAddRowValues === "function"
+      ? originalGetQuickAddRowValues()
+      : [];
+
+    values = values.slice(0, 14);
+    values[11] = ensureVisitMarker(memo, source);
+    values.push(source);
+
+    return values;
+  };
+
+  var previousParse = window.parseQuickAddText;
+
+  if (typeof previousParse === "function") {
+    window.parseQuickAddText = function () {
+      previousParse.apply(this, arguments);
+
+      var memoElement = document.getElementById("qaMemo");
+      var sourceElement = document.getElementById("qaSource");
+
+      if (memoElement) {
+        memoElement.value = ensureVisitMarker(
+          memoElement.value,
+          sourceElement ? sourceElement.value : ""
+        );
+      }
+
+      if (typeof window.updateQuickAddWarning === "function") {
+        window.updateQuickAddWarning();
+      }
+
+      if (typeof window.updateQuickAddPreview === "function") {
+        window.updateQuickAddPreview();
+      }
+    };
+  }
+})();
