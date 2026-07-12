@@ -31,7 +31,7 @@
 
         <div class="filter-select-wrap">
           <select id="typeFilter" onchange="applyFilter()">
-            <option value="">구분 전체</option>
+            <option value="">구분</option>
           </select>
 
           <select id="sortFilter" onchange="applyFilter()">
@@ -47,19 +47,19 @@
           </select>
         </div>
 
-        <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜만</button>
+        <button id="favoriteBtn" class="favorite-filter-btn" onclick="toggleFavoriteOnly()">찜</button>
         <button class="reset-btn" onclick="resetFilter()">초기화</button>
       </div>
 
       <div class="extra-action-row">
         <button id="hideDoneBtn" class="hide-done-btn" onclick="toggleHideDone()">완료숨김</button>
-        <button id="gongsilOnlyBtn" class="gongsil-only-btn" onclick="toggleGongsilOnly()">공실박스만</button>
-        <button class="select-all-btn" onclick="selectAllVisibleItems()">전체선택</button>
-        <button class="clear-selected-btn" onclick="clearSelectedPrintItems()">선택해제</button>
+        <button id="gongsilOnlyBtn" class="gongsil-only-btn" onclick="toggleGongsilOnly()">임장가자</button>
+        <button class="select-all-btn compact-two-line" onclick="selectAllVisibleItems()"><span>전체</span><span>선택</span></button>
+        <button class="clear-selected-btn compact-two-line" onclick="clearSelectedPrintItems()"><span>선택</span><span>해제</span></button>
         <button id="printSelectedBtn" class="print-btn" onclick="printSelectedList()">인쇄</button>
         <button id="completeSelectedBtn" class="complete-selected-btn" onclick="completeSelectedItems()">완료</button>
         <button id="fieldVisitBtn" class="field-visit-btn" onclick="markSelectedAsVisited()">임장 ON</button>
-        <button id="multiClusterBtn" class="multi-cluster-btn" onclick="toggleMultiClusterMode()">다중선택 OFF</button>
+        <button id="multiClusterBtn" class="multi-cluster-btn compact-two-line" onclick="toggleMultiClusterMode()"><span>다중</span><span>X</span></button>
         <button class="quick-add-btn quick-add-with-sync" onclick="openQuickAddModal()">
           <span>빠른등록</span>
           <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
@@ -264,7 +264,22 @@
     </div>
 
     <div id="roadviewModalStatus" class="roadview-modal-status">로드뷰를 준비하고 있습니다.</div>
-    <div id="roadviewContainer" class="roadview-container"></div>
+
+    <div class="roadview-workspace">
+      <div id="roadviewContainer" class="roadview-container"></div>
+
+      <aside class="roadview-map-panel">
+        <div class="roadview-map-title">현재 위치 · 방향</div>
+        <div id="roadviewMiniMap" class="roadview-mini-map"></div>
+        <div class="roadview-map-help">파란 핀은 매물 위치, 화살표는 현재 바라보는 방향입니다.</div>
+      </aside>
+    </div>
+
+    <div class="roadview-modal-actions">
+      <button type="button" class="roadview-locate-btn" onclick="recenterRoadviewMiniMap()">위치맞춤</button>
+      <button type="button" class="roadview-nav-btn" onclick="openCurrentRoadviewNavigation()">내비</button>
+      <button type="button" class="roadview-close-bottom-btn" onclick="closeRoadviewModal()">닫기</button>
+    </div>
   </div>
 </div>
 
