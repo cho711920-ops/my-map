@@ -132,7 +132,7 @@ function toggleFavorite(key) {
 
 function toggleFavoriteOnly() {
   favoriteOnly = !favoriteOnly;
-  document.getElementById("favoriteBtn").innerText = favoriteOnly ? "전체" : "찜";
+  document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.toggle("on", favoriteOnly);
   applyFilter();
 }
@@ -1409,8 +1409,10 @@ function addListItem(item) {
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
         '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
           'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
-        '<div class="star ' + (isFavorite(item) ? 'on' : '') +
-          '" onclick="event.stopPropagation(); toggleFavorite(\'' + safeKey + '\')">★</div>' +
+        '<button type="button" class="item-list-add-btn favorite" ' +
+          'onclick="event.stopPropagation(); openItemListPicker(\'favorite\',\'' + encodedKey + '\')">찜추가</button>' +
+        '<button type="button" class="item-list-add-btn visit" ' +
+          'onclick="event.stopPropagation(); openItemListPicker(\'visit\',\'' + encodedKey + '\')">임장추가</button>' +
       '</div>' +
       '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
         'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
@@ -1641,7 +1643,7 @@ function resetFilter() {
   gongsilOnly = false;
   multiClusterMode = false;
   selectedGroupKeys = [];
-  document.getElementById("favoriteBtn").innerText = "찜";
+  document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.remove("on");
   document.getElementById("hideDoneBtn").innerText = "완료숨김";
   document.getElementById("hideDoneBtn").classList.remove("on");
