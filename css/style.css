@@ -3706,3 +3706,150 @@ body.roadview-modal-open {
     font-size:12px !important;
   }
 }
+
+
+/* =========================================================
+   v5.5.1 모바일 필터 / 정렬 메뉴 / 로드뷰 미니맵
+   ========================================================= */
+
+.sort-dropdown {
+  position:relative;
+  min-width:0;
+  width:100%;
+}
+
+.sort-dropdown-btn {
+  width:100%;
+  height:100%;
+  min-width:0;
+  border:1px solid #d6dbe4;
+  border-radius:9px;
+  background:#fff;
+  color:#333;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.sort-dropdown-btn::after {
+  content:"⌄";
+  margin-left:5px;
+  font-size:10px;
+}
+
+.sort-dropdown-menu {
+  display:none;
+  position:absolute;
+  top:calc(100% + 5px);
+  left:0;
+  z-index:21000;
+  width:max-content;
+  min-width:178px;
+  max-height:320px;
+  overflow-y:auto;
+  padding:5px;
+  border:1px solid #d6dbe4;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 12px 30px rgba(15,23,42,.22);
+}
+
+.sort-dropdown.open .sort-dropdown-menu {
+  display:block;
+}
+
+.sort-dropdown-menu button {
+  display:block;
+  width:100%;
+  min-height:32px;
+  padding:6px 10px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#344054;
+  text-align:left;
+  font-size:11px;
+  font-weight:700;
+  white-space:nowrap;
+  cursor:pointer;
+}
+
+.sort-dropdown-menu button:hover,
+.sort-dropdown-menu button.selected {
+  background:#edf4ff;
+  color:#005bea;
+}
+
+.sort-dropdown-menu button.selected::before {
+  content:"✓ ";
+  font-weight:900;
+}
+
+/* 선택 매물 빨간 표시 */
+.roadview-target-marker {
+  display:flex;
+  align-items:center;
+  gap:5px;
+  transform:translate(-50%, -50%);
+  pointer-events:none;
+}
+
+.roadview-target-dot {
+  display:block;
+  width:18px;
+  height:18px;
+  border:3px solid #fff;
+  border-radius:50%;
+  background:#ef4444;
+  box-shadow:0 2px 8px rgba(0,0,0,.32);
+}
+
+.roadview-target-label {
+  padding:3px 6px;
+  border:1px solid #dc2626;
+  border-radius:6px;
+  background:rgba(255,255,255,.96);
+  color:#b91c1c;
+  font-size:10px;
+  font-weight:900;
+  white-space:nowrap;
+  box-shadow:0 2px 7px rgba(0,0,0,.18);
+}
+
+@media (max-width:768px) {
+  /*
+   * 상세 / 구분 / 정렬 / 찜 / 초기화를 5등분하여 겹침 제거
+   */
+  .filter-row {
+    display:grid !important;
+    grid-template-columns:repeat(5, minmax(0, 1fr)) !important;
+    gap:4px !important;
+    width:100% !important;
+  }
+
+  .filter-select-wrap {
+    display:contents !important;
+  }
+
+  .filter-row > button,
+  .filter-row select,
+  .sort-dropdown,
+  .sort-dropdown-btn {
+    width:100% !important;
+    min-width:0 !important;
+    height:44px !important;
+    padding:3px 2px !important;
+    font-size:10px !important;
+    letter-spacing:-.3px !important;
+  }
+
+  .sort-dropdown-menu {
+    left:auto;
+    right:0;
+    min-width:170px;
+    max-height:42vh;
+  }
+
+  .roadview-target-label {
+    font-size:9px;
+  }
+}
