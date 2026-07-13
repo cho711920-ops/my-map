@@ -470,13 +470,9 @@
 
   function syncCommandBackdrop() {
     var backdrop = ensureCommandBackdrop();
-    var isPhone = !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
-    var menuOpen = isPhone && !!document.querySelector(".v6-command-menu.open");
-    var sortOpen = isPhone && !!document.querySelector("#sortDropdown.open");
-
-    /* PC·태블릿은 일반 드롭다운을 사용하므로 dim 레이어를 절대 띄우지 않습니다. */
+    var menuOpen = !!document.querySelector(".v6-command-menu.open");
+    var sortOpen = !!document.querySelector("#sortDropdown.open");
     backdrop.classList.toggle("open", menuOpen || sortOpen);
-    backdrop.style.pointerEvents = (menuOpen || sortOpen) ? "auto" : "none";
     document.body.classList.toggle("v6-menu-open", menuOpen || sortOpen);
   }
 
@@ -691,144 +687,176 @@
 })();
 
 /* =========================================================
-   STEP2.8 상세필터 모바일 시트 / 데스크톱 메뉴 안정화
+   v6.0 STEP2.10 상세/구분/정렬 최종 안정화
+   - 모바일 상세필터를 독립 모달로 표시
+   - 정렬 재클릭 닫기
+   - PC/태블릿 정렬을 버튼 아래 세로 드롭다운으로 고정
    ========================================================= */
 (function () {
   "use strict";
 
-  var detailPanel = null;
-  var detailAnchor = null;
-  var desktopToggleDetail = window.toggleDetailFilter;
+  var detailHome = null;
+  var detailNext = null;
 
-  function isPhoneLayout() {
-    return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+  function isMobile() {
+    return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
   }
 
-  function getPortal() {
-    var root = document.getElementById("v6MobileMenuPortal");
-    if (root) return root;
+  function closeMobilePortal() {
+    var portal = document.getElementById("v6MobileMenuPortal");
+    if (portal) {
+      portal.classList.remove("open");
+      portal.removeAttribute("data-menu-type");
+    }
+    document.body.classList.remove("v6-mobile-sheet-open");
+  }
 
-    root = document.createElement("div");
-    root.id = "v6MobileMenuPortal";
-    root.className = "v6-mobile-menu-portal";
-    root.innerHTML =
-      '<div class="v6-mobile-menu-dim" data-v6-sheet-close></div>' +
-      '<section class="v6-mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="v6MobileMenuTitle">' +
-        '<div class="v6-mobile-menu-handle" aria-hidden="true"></div>' +
-        '<div class="v6-mobile-menu-head">' +
-          '<strong id="v6MobileMenuTitle"></strong>' +
-          '<button type="button" class="v6-mobile-menu-close" data-v6-sheet-close aria-label="닫기">×</button>' +
+  function ensureDetailPortal() {
+    var portal = document.getElementById("v6DetailFilterPortal");
+    if (portal) return portal;
+
+    portal = document.createElement("div");
+    portal.id = "v6DetailFilterPortal";
+    portal.className = "v6-detail-filter-portal";
+    portal.innerHTML =
+      '<div class="v6-detail-filter-dim" data-detail-close></div>' +
+      '<section class="v6-detail-filter-sheet" role="dialog" aria-modal="true" aria-labelledby="v6DetailFilterTitle">' +
+        '<div class="v6-detail-filter-head">' +
+          '<strong id="v6DetailFilterTitle">상세필터</strong>' +
+          '<button type="button" class="v6-detail-filter-close" data-detail-close aria-label="닫기">×</button>' +
         '</div>' +
-        '<div id="v6MobileMenuBody" class="v6-mobile-menu-body"></div>' +
+        '<div id="v6DetailFilterBody" class="v6-detail-filter-body"></div>' +
       '</section>';
-    root.addEventListener("click", function (event) {
-      if (!event.target.closest("[data-v6-sheet-close]")) return;
-      root.classList.remove("open");
-      root.removeAttribute("data-menu-type");
-      document.body.classList.remove("v6-mobile-sheet-open");
-      restoreDetailPanel();
-    });
-    document.body.appendChild(root);
-    return root;
-  }
 
-  function rememberDetailPosition() {
-    detailPanel = document.getElementById("detailFilter");
-    if (!detailPanel || detailAnchor) return;
-    detailAnchor = document.createComment("detail-filter-home");
-    detailPanel.parentNode.insertBefore(detailAnchor, detailPanel);
+    portal.addEventListener("click", function (event) {
+      if (event.target.closest("[data-detail-close]")) {
+        window.closeV6DetailFilter();
+      }
+    });
+    document.body.appendChild(portal);
+    return portal;
   }
 
   function restoreDetailPanel() {
-    rememberDetailPosition();
-    if (!detailPanel || !detailAnchor || !detailAnchor.parentNode) return;
-    if (detailPanel.parentNode !== detailAnchor.parentNode || detailPanel.previousSibling !== detailAnchor) {
-      detailAnchor.parentNode.insertBefore(detailPanel, detailAnchor.nextSibling);
+    var panel = document.getElementById("detailFilter");
+    if (!panel || !detailHome || panel.parentNode === detailHome) return;
+    if (detailNext && detailNext.parentNode === detailHome) {
+      detailHome.insertBefore(panel, detailNext);
+    } else {
+      detailHome.appendChild(panel);
     }
-    detailPanel.classList.remove("v6-detail-in-sheet", "open");
-    detailPanel.removeAttribute("style");
+  }
+
+  window.closeV6DetailFilter = function () {
+    var panel = document.getElementById("detailFilter");
     var button = document.getElementById("detailBtn");
-    if (button) button.classList.remove("on");
-  }
+    var portal = document.getElementById("v6DetailFilterPortal");
 
-  function closeDetailSheet() {
-    var root = document.getElementById("v6MobileMenuPortal");
-    if (root && root.getAttribute("data-menu-type") === "detail") {
-      root.classList.remove("open");
-      root.removeAttribute("data-menu-type");
-      document.body.classList.remove("v6-mobile-sheet-open");
+    if (panel) panel.classList.remove("open");
+    if (button) {
+      button.classList.remove("on");
+      button.setAttribute("aria-expanded", "false");
     }
+    if (portal) portal.classList.remove("open");
+    document.body.classList.remove("v6-detail-filter-open");
     restoreDetailPanel();
-  }
+  };
 
-  function openDetailSheet(event) {
+  var originalToggleDetail = window.toggleDetailFilter;
+  window.toggleDetailFilter = function () {
+    var panel = document.getElementById("detailFilter");
+    var button = document.getElementById("detailBtn");
+    if (!panel || !button) return;
+
+    if (!isMobile()) {
+      closeMobilePortal();
+      if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
+      if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
+      if (originalToggleDetail) originalToggleDetail();
+      button.setAttribute("aria-expanded", panel.classList.contains("open") ? "true" : "false");
+      return;
+    }
+
+    var portal = ensureDetailPortal();
+    var alreadyOpen = portal.classList.contains("open");
+    if (alreadyOpen) {
+      window.closeV6DetailFilter();
+      return;
+    }
+
+    closeMobilePortal();
+    if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
+    if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
+
+    if (!detailHome) {
+      detailHome = panel.parentNode;
+      detailNext = panel.nextSibling;
+    }
+
+    portal.querySelector("#v6DetailFilterBody").appendChild(panel);
+    panel.removeAttribute("style");
+    panel.classList.add("open");
+    button.classList.add("on");
+    button.setAttribute("aria-expanded", "true");
+    portal.classList.add("open");
+    document.body.classList.add("v6-detail-filter-open");
+  };
+
+  /* 필터 적용 뒤 모바일 상세창 자동 닫기 */
+  document.addEventListener("click", function (event) {
+    if (event.target && event.target.closest("#detailFilter .apply-btn") && isMobile()) {
+      window.setTimeout(window.closeV6DetailFilter, 0);
+    }
+  });
+
+  var previousToggleSort = window.toggleSortDropdown;
+  window.toggleSortDropdown = function (event) {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
-    rememberDetailPosition();
-    if (!detailPanel) return;
 
-    if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
-    if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
+    window.closeV6DetailFilter();
 
-    var root = getPortal();
-    if (!root) return;
-    var body = root.querySelector("#v6MobileMenuBody");
-    var title = root.querySelector("#v6MobileMenuTitle");
-    if (!body || !title) return;
-
-    title.textContent = "상세필터";
-    body.innerHTML = "";
-    detailPanel.classList.add("v6-detail-in-sheet", "open");
-    detailPanel.removeAttribute("style");
-    body.appendChild(detailPanel);
-    root.setAttribute("data-menu-type", "detail");
-    root.classList.add("open");
-    document.body.classList.add("v6-mobile-sheet-open");
-    var button = document.getElementById("detailBtn");
-    if (button) button.classList.add("on");
-  }
-
-  window.toggleDetailFilter = function (event) {
-    if (!isPhoneLayout()) {
-      closeDetailSheet();
-      return desktopToggleDetail ? desktopToggleDetail(event) : undefined;
-    }
-    var root = document.getElementById("v6MobileMenuPortal");
-    if (root && root.classList.contains("open") && root.getAttribute("data-menu-type") === "detail") {
-      closeDetailSheet();
+    if (isMobile()) {
+      var portal = document.getElementById("v6MobileMenuPortal");
+      if (portal && portal.classList.contains("open") && portal.getAttribute("data-menu-type") === "sort") {
+        closeMobilePortal();
+        return;
+      }
+      if (previousToggleSort) previousToggleSort(event);
       return;
     }
-    openDetailSheet(event);
+
+    if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
+    var dropdown = document.getElementById("sortDropdown");
+    var button = document.getElementById("sortDropdownBtn");
+    if (!dropdown || !button) return;
+    var willOpen = !dropdown.classList.contains("open");
+    dropdown.classList.toggle("open", willOpen);
+    button.setAttribute("aria-expanded", willOpen ? "true" : "false");
   };
 
-  var previousCloseActions = window.closeV6ActionMenus;
-  window.closeV6ActionMenus = function () {
-    closeDetailSheet();
-    if (previousCloseActions) previousCloseActions();
+  var previousToggleAction = window.toggleV6ActionMenu;
+  window.toggleV6ActionMenu = function (name, event) {
+    window.closeV6DetailFilter();
+    if (previousToggleAction) return previousToggleAction(name, event);
   };
-
-  var previousToggleSort = window.toggleSortDropdown;
-  window.toggleSortDropdown = function (event) {
-    closeDetailSheet();
-    return previousToggleSort ? previousToggleSort(event) : undefined;
-  };
-
-  document.addEventListener("change", function (event) {
-    if (event.target && event.target.id === "typeFilter") closeDetailSheet();
-  });
 
   document.addEventListener("click", function (event) {
-    if (event.target && event.target.matches("#detailFilter .apply-btn")) {
-      window.setTimeout(closeDetailSheet, 0);
-    }
-    if (event.target && event.target.matches("[data-v6-sheet-close]")) {
-      window.setTimeout(restoreDetailPanel, 0);
+    if (!isMobile()) return;
+    var panel = document.getElementById("detailFilter");
+    var portal = document.getElementById("v6DetailFilterPortal");
+    if (!panel || !portal || !portal.classList.contains("open")) return;
+    if (!event.target.closest(".v6-detail-filter-sheet") && !event.target.closest("#detailBtn")) {
+      window.closeV6DetailFilter();
     }
   });
 
   window.addEventListener("resize", function () {
-    if (!isPhoneLayout()) closeDetailSheet();
+    if (!isMobile()) window.closeV6DetailFilter();
   });
+
+  var detailButton = document.getElementById("detailBtn");
+  if (detailButton) detailButton.setAttribute("aria-expanded", "false");
 })();
