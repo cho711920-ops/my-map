@@ -1,10 +1,7 @@
-/* JS부동산 v6.0 STEP3.1 - 모바일 상세필터 포털 안정화 */
+/* JS부동산 v6.0 STEP3.2 - 모바일 상세필터 드롭다운 안정화 */
 (function () {
   "use strict";
 
-  var placeholder = null;
-  var originalParent = null;
-  var originalNextSibling = null;
   var opened = false;
 
   function isPhone() {
@@ -19,39 +16,34 @@
     return document.getElementById("detailBtn");
   }
 
-  function ensureDim() {
-    var dim = document.getElementById("v6DetailPortalDim");
-    if (dim) return dim;
-    dim = document.createElement("div");
-    dim.id = "v6DetailPortalDim";
-    dim.className = "v6-detail-portal-dim";
-    dim.addEventListener("click", close);
-    document.body.appendChild(dim);
-    return dim;
+  function removeLegacyLayers() {
+    ["v6DetailPortalDim", "v6DetailStableDim", "v6DetailDim"].forEach(function (id) {
+      var node = document.getElementById(id);
+      if (node) node.classList.remove("open");
+    });
+    document.body.classList.remove(
+      "v6-detail-portal-lock",
+      "v6-detail-stable-lock"
+    );
   }
 
-  function moveToBody(target) {
-    if (!target || target.parentNode === document.body) return;
-    originalParent = target.parentNode;
-    originalNextSibling = target.nextSibling;
-    placeholder = document.createComment("v6-detail-filter-placeholder");
-    originalParent.insertBefore(placeholder, target);
-    document.body.appendChild(target);
-  }
+  function positionPanel() {
+    var target = panel();
+    var trigger = button();
+    if (!target || !trigger || !opened || !isPhone()) return;
 
-  function restorePosition(target) {
-    if (!target || !originalParent) return;
-    if (placeholder && placeholder.parentNode === originalParent) {
-      originalParent.insertBefore(target, placeholder);
-      placeholder.remove();
-    } else if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
-      originalParent.insertBefore(target, originalNextSibling);
-    } else {
-      originalParent.appendChild(target);
-    }
-    placeholder = null;
-    originalParent = null;
-    originalNextSibling = null;
+    var rect = trigger.getBoundingClientRect();
+    var viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    var left = 8;
+    var right = 8;
+    var top = Math.max(8, rect.bottom + 6);
+    var availableBelow = (window.visualViewport ? window.visualViewport.height : window.innerHeight) - top - 8;
+
+    target.style.setProperty("--v6-detail-left", left + "px");
+    target.style.setProperty("--v6-detail-right", right + "px");
+    target.style.setProperty("--v6-detail-top", top + "px");
+    target.style.setProperty("--v6-detail-max-height", Math.max(220, availableBelow) + "px");
+    target.style.setProperty("--v6-detail-width", Math.max(280, viewportWidth - left - right) + "px");
   }
 
   function open() {
@@ -60,37 +52,29 @@
     var trigger = button();
     if (!target || !trigger) return;
 
-    moveToBody(target);
-    target.classList.add("open", "v6-detail-portal-open");
+    removeLegacyLayers();
+    target.classList.remove("v6-detail-portal-open", "v6-detail-stable-open");
+    target.classList.add("open", "v6-detail-dropdown-open");
     target.setAttribute("aria-hidden", "false");
     trigger.classList.add("on");
     trigger.setAttribute("aria-expanded", "true");
-    ensureDim().classList.add("open");
-    document.body.classList.add("v6-detail-portal-lock");
     opened = true;
-
-    window.requestAnimationFrame(function () {
-      var firstInput = target.querySelector("input");
-      if (firstInput) firstInput.focus({ preventScroll: true });
-    });
+    positionPanel();
   }
 
   function close() {
     var target = panel();
     var trigger = button();
-    var dim = document.getElementById("v6DetailPortalDim");
-
     if (target) {
-      target.classList.remove("v6-detail-portal-open", "open");
+      target.classList.remove("v6-detail-dropdown-open", "v6-detail-portal-open", "v6-detail-stable-open", "open");
       target.setAttribute("aria-hidden", "true");
-      restorePosition(target);
+      target.removeAttribute("style");
     }
     if (trigger) {
       trigger.classList.remove("on");
       trigger.setAttribute("aria-expanded", "false");
     }
-    if (dim) dim.classList.remove("open");
-    document.body.classList.remove("v6-detail-portal-lock");
+    removeLegacyLayers();
     opened = false;
   }
 
@@ -101,10 +85,11 @@
       event.stopPropagation();
       if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
     }
-    if (opened) close();
+    if (opened || (panel() && panel().classList.contains("v6-detail-dropdown-open"))) close();
     else open();
   }
 
+  /* 인라인 onclick과 기존 보완 이벤트보다 먼저 처리합니다. */
   document.addEventListener("click", function (event) {
     var trigger = event.target && event.target.closest ? event.target.closest("#detailBtn") : null;
     if (trigger && isPhone()) {
@@ -126,8 +111,32 @@
   });
 
   window.addEventListener("resize", function () {
-    if (!isPhone() && opened) close();
+    if (!isPhone()) close();
+    else if (opened) positionPanel();
   });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", function () {
+      if (opened) positionPanel();
+    });
+    window.visualViewport.addEventListener("scroll", function () {
+      if (opened) positionPanel();
+    });
+  }
+
+  /* 다른 코드가 호출해도 같은 동작을 사용하도록 마지막에 덮어씁니다. */
+  window.toggleDetailFilter = function () {
+    if (isPhone()) toggle();
+    else {
+      var target = panel();
+      var trigger = button();
+      if (!target || !trigger) return;
+      var willOpen = !target.classList.contains("open");
+      target.classList.toggle("open", willOpen);
+      trigger.classList.toggle("on", willOpen);
+      if (willOpen && typeof window.positionDetailFilter === "function") window.positionDetailFilter();
+    }
+  };
 
   window.JSV6MobileDetailFix = { open: open, close: close, toggle: toggle };
 })();
