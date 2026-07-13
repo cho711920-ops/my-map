@@ -429,75 +429,54 @@
   }
 }
 
+
 /* =========================================================
-   STEP2.7 Stable Base — 기기별 메뉴/상세필터 완전 분리
+   STEP2.5 모바일 메뉴 안정화
    ========================================================= */
-#v6CommandBackdrop{display:none!important;pointer-events:none!important}
-body.v6-menu-open{overflow:auto!important}
-.v6-mobile-menu-portal{display:none}
-
-/* PC·태블릿: 배경 dim 없이 원래 위치 드롭다운 */
-@media (min-width:769px){
-  .v6-command-menu{position:relative!important;z-index:1200!important}
-  .v6-command-dropdown{
-    position:absolute!important;
-    top:calc(100% + 8px)!important;
-    left:0!important;
-    right:auto!important;
-    bottom:auto!important;
-    width:max-content!important;
-    min-width:230px!important;
-    max-height:min(70vh,580px)!important;
-    overflow:auto!important;
-    display:none!important;
-    padding:8px!important;
-    background:#fff!important;
-    border:1px solid #dce3ec!important;
-    border-radius:14px!important;
-    box-shadow:0 16px 44px rgba(15,23,42,.20)!important;
-    z-index:5000!important;
-    opacity:1!important;
-    pointer-events:auto!important;
-  }
-  .v6-command-menu.open>.v6-command-dropdown{display:block!important}
-  .v6-command-dropdown button{width:100%!important;min-height:42px!important;text-align:left!important;background:#fff!important;color:#172033!important;pointer-events:auto!important}
-  #sortDropdown{position:relative!important;z-index:1200!important}
-  #sortDropdownMenu.sort-dropdown-menu{
-    position:absolute!important;
-    top:calc(100% + 8px)!important;
-    right:0!important;
-    left:auto!important;
-    bottom:auto!important;
-    min-width:210px!important;
-    max-height:min(70vh,580px)!important;
-    overflow:auto!important;
-    z-index:5000!important;
-    background:#fff!important;
-    opacity:1!important;
-    pointer-events:auto!important;
-  }
-  #sortDropdown.open>#sortDropdownMenu{display:block!important;visibility:visible!important}
-}
-
-/* 상세필터는 body 포털로 이동하므로 모든 기기에서 화면 기준 고정 */
-#detailFilter{
-  position:fixed!important;
-  z-index:2147482500!important;
-  display:none!important;
-  overflow:auto!important;
-  overscroll-behavior:contain;
-  margin:0!important;
-  background:#fff!important;
-  opacity:1!important;
-  pointer-events:auto!important;
-  border:1px solid #d7e0eb!important;
-  border-radius:16px!important;
-  box-shadow:0 20px 60px rgba(15,23,42,.26)!important;
-}
-#detailFilter.open{display:block!important}
+.v6-command-backdrop{display:none;position:fixed;inset:0;z-index:39990;background:rgba(15,23,42,.36);backdrop-filter:blur(1px)}
+.v6-command-backdrop.open{display:block}
+.v6-command-dropdown{background:#fff!important;opacity:1!important;z-index:40010!important;box-shadow:0 18px 55px rgba(15,23,42,.28)!important}
+.v6-command-menu.open{z-index:40020!important}
 
 @media (max-width:768px){
-  /* 검색 아래: 상세 / 구분 / 정렬 한 줄 고정 */
+  .extra-action-row.v6-command-bar{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    grid-template-rows:48px 48px!important;
+    gap:8px!important;
+    width:100%!important;
+    overflow:visible!important;
+  }
+  .extra-action-row.v6-command-bar .v6-command-menu[data-command-menu="view"]{grid-column:1;grid-row:1}
+  .extra-action-row.v6-command-bar .v6-command-menu[data-command-menu="work"]{grid-column:2;grid-row:1}
+  .extra-action-row.v6-command-bar .v6-primary-action.ai{grid-column:1;grid-row:2;width:100%!important;min-width:0!important;max-width:none!important}
+  .extra-action-row.v6-command-bar .quick-add-btn.v6-primary-action{grid-column:2;grid-row:2;width:100%!important;min-width:0!important;max-width:none!important}
+  .extra-action-row.v6-command-bar .multi-cluster-btn{display:none!important;position:fixed!important;right:12px!important;bottom:max(12px,env(safe-area-inset-bottom))!important;width:58px!important;height:48px!important;z-index:40100!important;box-shadow:0 8px 24px rgba(15,23,42,.25)!important}
+  .extra-action-row.v6-command-bar .multi-cluster-btn.has-selection{display:flex!important}
+  .extra-action-row.v6-command-bar>.select-all-btn,.extra-action-row.v6-command-bar>.clear-selected-btn{display:none!important}
+  .v6-command-dropdown{
+    position:fixed!important;left:12px!important;right:12px!important;top:auto!important;bottom:max(12px,env(safe-area-inset-bottom))!important;
+    width:auto!important;max-height:min(70vh,560px)!important;overflow:auto!important;border-radius:18px!important;padding:10px!important;
+  }
+  .v6-command-dropdown button{min-height:50px!important;font-size:15px!important;background:#fff!important;color:#172033!important}
+  #sortDropdown{position:relative!important}
+  #sortDropdown.open{z-index:40020!important}
+  #sortDropdownMenu.sort-dropdown-menu{
+    position:fixed!important;left:12px!important;right:12px!important;top:auto!important;bottom:max(12px,env(safe-area-inset-bottom))!important;
+    width:auto!important;max-height:min(70vh,560px)!important;overflow:auto!important;background:#fff!important;opacity:1!important;
+    border:1px solid #dce3ec!important;border-radius:18px!important;padding:10px!important;z-index:40030!important;box-shadow:0 18px 55px rgba(15,23,42,.28)!important;
+  }
+  #sortDropdown.open #sortDropdownMenu{display:block!important;visibility:visible!important}
+  #sortDropdownMenu button{width:100%!important;min-height:48px!important;text-align:left!important;font-size:14px!important;background:#fff!important;color:#172033!important}
+}
+
+/* =========================================================
+   STEP2.6 최종 모바일 레이아웃 / 단일 메뉴 포털
+   ========================================================= */
+.v6-mobile-menu-portal{display:none}
+
+@media (max-width:768px){
+  /* 검색 아래: 상세 / 구분 / 정렬을 반드시 한 줄로 고정 */
   .filters .filter-row{
     display:grid!important;
     grid-template-columns:92px minmax(0,1fr) 92px!important;
@@ -505,15 +484,38 @@ body.v6-menu-open{overflow:auto!important}
     width:100%!important;
     align-items:stretch!important;
   }
-  .filters .filter-row>.detail-btn{grid-column:1!important;width:100%!important;min-width:0!important}
-  .filters .filter-select-wrap{display:contents!important}
-  .filters .filter-select-wrap>select{grid-column:2!important;width:100%!important;min-width:0!important}
-  .filters .filter-select-wrap>#sortDropdown{grid-column:3!important;width:100%!important;min-width:0!important}
-  .filters #sortDropdownBtn{width:100%!important;min-width:0!important}
+  .filters .filter-row>.detail-btn{
+    grid-column:1!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .filters .filter-select-wrap{
+    display:contents!important;
+  }
+  .filters .filter-select-wrap>select{
+    grid-column:2!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .filters .filter-select-wrap>#sortDropdown{
+    grid-column:3!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .filters #sortDropdownBtn{
+    width:100%!important;
+    min-width:0!important;
+  }
 
-  /* 모바일에서는 원본 드롭다운을 숨기고 body 직속 바텀시트만 사용 */
+  /* 기존 드롭다운은 모바일에서 렌더링하지 않고 body 포털만 사용 */
   .v6-command-menu>.v6-command-dropdown,
-  #sortDropdown>#sortDropdownMenu{display:none!important}
+  #sortDropdown>#sortDropdownMenu{
+    display:none!important;
+  }
+  #v6CommandBackdrop{
+    display:none!important;
+    pointer-events:none!important;
+  }
 
   .v6-mobile-menu-portal{
     position:fixed;
@@ -522,8 +524,15 @@ body.v6-menu-open{overflow:auto!important}
     display:none;
     pointer-events:none;
   }
-  .v6-mobile-menu-portal.open{display:block;pointer-events:auto}
-  .v6-mobile-menu-dim{position:absolute;inset:0;background:rgba(15,23,42,.50)}
+  .v6-mobile-menu-portal.open{
+    display:block;
+    pointer-events:auto;
+  }
+  .v6-mobile-menu-dim{
+    position:absolute;
+    inset:0;
+    background:rgba(15,23,42,.54);
+  }
   .v6-mobile-menu-sheet{
     position:absolute;
     left:10px;
@@ -537,33 +546,216 @@ body.v6-menu-open{overflow:auto!important}
     border:1px solid #dbe3ee;
     border-radius:22px;
     box-shadow:0 24px 80px rgba(15,23,42,.34);
-    pointer-events:auto;
   }
-  .v6-mobile-menu-handle{width:48px;height:5px;margin:10px auto 2px;border-radius:999px;background:#d6dde8}
-  .v6-mobile-menu-head{min-height:58px;display:flex;align-items:center;justify-content:space-between;padding:8px 14px 8px 20px;border-bottom:1px solid #edf1f6}
-  .v6-mobile-menu-head strong{color:#172033;font-size:20px;font-weight:900}
-  .v6-mobile-menu-close{width:42px;height:42px;border:0;border-radius:12px;background:#f1f5f9;color:#334155;font-size:28px;line-height:1}
-  .v6-mobile-menu-body{padding:8px 12px 14px;overflow:auto;overscroll-behavior:contain}
-  .v6-mobile-menu-item{width:100%!important;min-height:54px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:0 16px!important;border:0!important;border-radius:12px!important;background:#fff!important;color:#172033!important;font-size:16px!important;font-weight:800!important;text-align:left!important}
-  .v6-mobile-menu-item:active{background:#eef5ff!important;color:#1261c9!important}
-  .v6-mobile-menu-divider{height:1px;margin:7px 4px;background:#e7edf4}
-  body.v6-mobile-sheet-open{overflow:hidden!important}
-
-  /* 상세는 같은 상단 필터 바로 아래 팝오버 */
-  #detailFilter{padding:14px!important;max-width:none!important}
-  #detailFilter .row{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin-bottom:10px!important}
-  #detailFilter input{width:100%!important;min-width:0!important;min-height:48px!important;font-size:15px!important}
-  #detailFilter .apply-btn{width:100%!important;min-height:48px!important;font-size:15px!important}
-
-  .extra-action-row.v6-command-bar .select-all-btn,
-  .extra-action-row.v6-command-bar .clear-selected-btn{display:none!important}
-  .extra-action-row.v6-command-bar .multi-cluster-btn{display:none!important}
-  .extra-action-row.v6-command-bar .multi-cluster-btn.has-selection{display:flex!important;position:fixed!important;right:12px!important;bottom:max(12px,env(safe-area-inset-bottom))!important;width:58px!important;height:48px!important;z-index:2147482000!important}
+  .v6-mobile-menu-handle{
+    width:48px;
+    height:5px;
+    margin:10px auto 2px;
+    border-radius:999px;
+    background:#d6dde8;
+  }
+  .v6-mobile-menu-head{
+    min-height:58px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:8px 14px 8px 20px;
+    border-bottom:1px solid #edf1f6;
+  }
+  .v6-mobile-menu-head strong{
+    color:#172033;
+    font-size:20px;
+    font-weight:900;
+  }
+  .v6-mobile-menu-close{
+    width:42px;
+    height:42px;
+    border:0;
+    border-radius:12px;
+    background:#f1f5f9;
+    color:#334155;
+    font-size:28px;
+    line-height:1;
+  }
+  .v6-mobile-menu-body{
+    padding:8px 12px 14px;
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+  .v6-mobile-menu-item{
+    width:100%!important;
+    min-height:54px!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    padding:0 16px!important;
+    border:0!important;
+    border-radius:12px!important;
+    background:#fff!important;
+    color:#172033!important;
+    font-size:16px!important;
+    font-weight:800!important;
+    text-align:left!important;
+  }
+  .v6-mobile-menu-item:active{
+    background:#eef5ff!important;
+    color:#1261c9!important;
+  }
+  .v6-mobile-menu-divider{
+    height:1px;
+    margin:7px 4px;
+    background:#e7edf4;
+  }
+  body.v6-mobile-sheet-open{
+    overflow:hidden!important;
+    touch-action:none;
+  }
+  body.v6-mobile-sheet-open .v6-mobile-menu-sheet{
+    touch-action:auto;
+  }
 }
 
 @media (max-width:390px){
-  .filters .filter-row{grid-template-columns:82px minmax(0,1fr) 82px!important;gap:6px!important}
+  .filters .filter-row{
+    grid-template-columns:82px minmax(0,1fr) 82px!important;
+    gap:6px!important;
+  }
   .filters .filter-row>.detail-btn,
   .filters #sortDropdownBtn,
-  .filters .filter-select-wrap>select{font-size:13px!important;padding-left:8px!important;padding-right:8px!important}
+  .filters .filter-select-wrap>select{
+    font-size:13px!important;
+    padding-left:8px!important;
+    padding-right:8px!important;
+  }
+}
+
+/* =========================================================
+   STEP2.8 상단 초기화 / 상세필터 / 데스크톱 세로메뉴
+   ========================================================= */
+.top-reset-btn{
+  box-sizing:border-box!important;
+  min-width:0!important;
+  border:1px solid #d8dee9!important;
+  border-radius:10px!important;
+  background:#fff!important;
+  color:#334155!important;
+  font-weight:800!important;
+  cursor:pointer!important;
+  white-space:nowrap!important;
+}
+.top-reset-btn:hover{border-color:#8fb8ef!important;background:#f4f8ff!important;color:#155fc2!important}
+
+@media (min-width:769px){
+  .filters .filter-row{
+    display:grid!important;
+    grid-template-columns:max-content max-content minmax(220px,1fr)!important;
+    gap:8px!important;
+    align-items:stretch!important;
+    overflow:visible!important;
+  }
+  .filters .filter-row>.top-reset-btn,
+  .filters .filter-row>.detail-btn{
+    width:auto!important;
+    min-width:max-content!important;
+    padding:0 14px!important;
+  }
+  .filters .filter-select-wrap{
+    display:grid!important;
+    grid-template-columns:minmax(120px,1fr) minmax(110px,auto)!important;
+    gap:8px!important;
+    min-width:0!important;
+  }
+  .v6-command-menu.open .v6-command-dropdown{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:3px!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    max-height:min(70vh,520px)!important;
+    white-space:normal!important;
+  }
+  .v6-command-dropdown button{
+    display:block!important;
+    flex:0 0 auto!important;
+    width:100%!important;
+    white-space:normal!important;
+    overflow-wrap:break-word!important;
+  }
+}
+
+@media (max-width:768px){
+  .filters .filter-row{
+    display:grid!important;
+    grid-template-columns:74px 78px minmax(0,1fr) 78px!important;
+    gap:7px!important;
+    width:100%!important;
+    align-items:stretch!important;
+  }
+  .filters .filter-row>.top-reset-btn{grid-column:1!important;width:100%!important;padding:0 7px!important}
+  .filters .filter-row>.detail-btn{grid-column:2!important;width:100%!important;padding:0 7px!important}
+  .filters .filter-select-wrap{display:contents!important}
+  .filters .filter-select-wrap>select{grid-column:3!important;width:100%!important;min-width:0!important}
+  .filters .filter-select-wrap>#sortDropdown{grid-column:4!important;width:100%!important;min-width:0!important}
+  .filters #sortDropdownBtn{width:100%!important;min-width:0!important}
+
+  #detailFilter.v6-detail-in-sheet{
+    position:static!important;
+    inset:auto!important;
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    max-height:none!important;
+    margin:0!important;
+    padding:6px 4px 14px!important;
+    border:0!important;
+    border-radius:0!important;
+    background:#fff!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+    transform:none!important;
+    z-index:auto!important;
+  }
+  #detailFilter.v6-detail-in-sheet .row{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:10px!important;
+    margin-bottom:10px!important;
+  }
+  #detailFilter.v6-detail-in-sheet input{
+    width:100%!important;
+    min-width:0!important;
+    height:52px!important;
+    padding:0 13px!important;
+    border:1px solid #d8dee9!important;
+    border-radius:12px!important;
+    background:#fff!important;
+    font-size:15px!important;
+    box-sizing:border-box!important;
+  }
+  #detailFilter.v6-detail-in-sheet .apply-btn{
+    width:100%!important;
+    min-height:50px!important;
+    margin-top:4px!important;
+    border-radius:12px!important;
+    font-size:16px!important;
+    font-weight:900!important;
+  }
+  .v6-mobile-menu-portal[data-menu-type="detail"] .v6-mobile-menu-sheet{
+    max-height:min(82vh,720px)!important;
+  }
+}
+
+@media (max-width:390px){
+  .filters .filter-row{
+    grid-template-columns:66px 70px minmax(0,1fr) 70px!important;
+    gap:5px!important;
+  }
+  .filters .filter-row>.top-reset-btn,
+  .filters .filter-row>.detail-btn,
+  .filters #sortDropdownBtn,
+  .filters .filter-select-wrap>select{
+    font-size:12px!important;
+    padding-left:5px!important;
+    padding-right:5px!important;
+  }
 }
