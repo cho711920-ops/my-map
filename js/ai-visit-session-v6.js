@@ -88,10 +88,6 @@
             '<div class="aiv-section-kicker">현재 방문 매물</div>' +
             '<div class="aiv-map-stage">' +
               '<div id="aivRouteMap" class="aiv-route-map"></div>' +
-              '<div class="aiv-map-controls">' +
-                '<button type="button" onclick="JSAiVisitV6.showAllOnMap()">전체보기</button>' +
-                '<button type="button" onclick="JSAiVisitV6.focusCurrentOnRouteMap()">현재매물</button>' +
-              '</div>' +
             '</div>' +
             '<div id="aivCurrentCard" class="aiv-current-card"></div>' +
           '</main>' +
@@ -617,65 +613,59 @@
     return { width: width, height: height, top: top, left: left };
   }
 
-  function syncRoadviewEmergencyClose() {
+  function syncRoadviewViewport() {
     var modal = document.getElementById("roadviewModal");
     if (!modal || !modal.classList.contains("open")) return;
 
     var metrics = roadviewViewportMetrics();
+    var isTabletLandscape = metrics.width >= 769 && metrics.width <= 1366 && metrics.width > metrics.height;
+    var outerGap = isTabletLandscape ? 6 : 8;
+
     modal.style.setProperty("--aiv-roadview-visible-height", metrics.height + "px");
     modal.style.setProperty("--aiv-roadview-visible-width", metrics.width + "px");
     modal.style.setProperty("--aiv-roadview-offset-top", metrics.top + "px");
     modal.style.setProperty("--aiv-roadview-offset-left", metrics.left + "px");
+    modal.style.setProperty("--aiv-roadview-outer-gap", outerGap + "px");
+    modal.classList.toggle("aiv-tablet-landscape", isTabletLandscape);
 
-    var close = document.getElementById("aivRoadviewEmergencyClose");
-    if (!close) {
-      close = document.createElement("button");
-      close.id = "aivRoadviewEmergencyClose";
-      close.type = "button";
-      close.className = "aiv-roadview-emergency-close";
-      close.innerHTML = '<span aria-hidden="true">×</span><small>닫기</small>';
-      close.setAttribute("aria-label", "로드뷰 닫기");
-      close.addEventListener("click", function () {
-        if (typeof window.closeRoadviewModal === "function") window.closeRoadviewModal();
-      });
-      document.body.appendChild(close);
-    }
-    close.style.setProperty("top", (metrics.top + 12) + "px", "important");
-    close.style.setProperty("right", "12px", "important");
-    close.classList.add("show");
+    /* 이전 보완판에서 만든 큰 비상 닫기 버튼은 제거합니다. */
+    var emergencyClose = document.getElementById("aivRoadviewEmergencyClose");
+    if (emergencyClose) emergencyClose.remove();
   }
 
-  function hideRoadviewEmergencyClose() {
-    var close = document.getElementById("aivRoadviewEmergencyClose");
-    if (close) close.classList.remove("show");
-  }
-
-  function watchRoadviewCloseButton() {
+  function watchRoadviewViewport() {
     var modal = document.getElementById("roadviewModal");
     if (!modal) return;
     if (roadviewCloseObserver) roadviewCloseObserver.disconnect();
     roadviewCloseObserver = new MutationObserver(function () {
-      if (modal.classList.contains("open")) syncRoadviewEmergencyClose();
-      else hideRoadviewEmergencyClose();
+      if (modal.classList.contains("open")) window.setTimeout(syncRoadviewViewport, 0);
     });
     roadviewCloseObserver.observe(modal, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
 
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", syncRoadviewEmergencyClose);
-      window.visualViewport.addEventListener("scroll", syncRoadviewEmergencyClose);
+    if (window.visualViewport && !window.__aivRoadviewViewportBound) {
+      window.visualViewport.addEventListener("resize", syncRoadviewViewport);
+      window.visualViewport.addEventListener("scroll", syncRoadviewViewport);
+      window.__aivRoadviewViewportBound = true;
     }
-    window.addEventListener("orientationchange", function () {
-      window.setTimeout(syncRoadviewEmergencyClose, 250);
-    });
+    if (!window.__aivRoadviewOrientationBound) {
+      window.addEventListener("orientationchange", function () {
+        window.setTimeout(syncRoadviewViewport, 120);
+        window.setTimeout(syncRoadviewViewport, 420);
+      });
+      window.addEventListener("resize", function () {
+        window.setTimeout(syncRoadviewViewport, 80);
+      });
+      window.__aivRoadviewOrientationBound = true;
+    }
   }
 
   function openRoadview() {
     var encoded = encodedCurrentKey();
     if (!encoded || typeof window.openKakaoRoadview !== "function") return alert("로드뷰 기능을 불러오지 못했습니다.");
-    watchRoadviewCloseButton();
+    watchRoadviewViewport();
     window.openKakaoRoadview(encoded);
-    window.setTimeout(syncRoadviewEmergencyClose, 80);
-    window.setTimeout(syncRoadviewEmergencyClose, 450);
+    window.setTimeout(syncRoadviewViewport, 60);
+    window.setTimeout(syncRoadviewViewport, 300);
   }
 
   function toggleMemo() {
