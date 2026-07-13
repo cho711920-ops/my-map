@@ -1,5 +1,15 @@
-/* JS부동산 v6.0 STEP3.2 - 모바일 상세필터를 구분/정렬처럼 버튼 아래에 표시 */
+/* JS부동산 v6.0 STEP3.3 - 모바일 상세필터를 정렬과 같은 독립 하단 시트로 표시 */
 @media (max-width: 768px) {
+  #detailFilter,
+  #detailFilter.open,
+  #detailFilter.v6-detail-dropdown-open,
+  #detailFilter.v6-detail-portal-open,
+  #detailFilter.v6-detail-stable-open {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
   #v6DetailPortalDim,
   #v6DetailStableDim,
   #v6DetailDim {
@@ -7,62 +17,113 @@
     pointer-events: none !important;
   }
 
-  body.v6-detail-portal-lock,
-  body.v6-detail-stable-lock {
-    overflow: auto !important;
+  .v6-detail-sheet-portal {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483300;
+    display: none;
+    pointer-events: none;
   }
 
-  #detailFilter.v6-detail-dropdown-open {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    position: fixed !important;
-    left: var(--v6-detail-left, 8px) !important;
-    right: var(--v6-detail-right, 8px) !important;
-    top: var(--v6-detail-top, 110px) !important;
-    bottom: auto !important;
-    width: auto !important;
-    max-width: none !important;
-    max-height: min(var(--v6-detail-max-height, 58dvh), 430px) !important;
-    margin: 0 !important;
-    padding: 12px !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    background: #fff !important;
-    border: 1px solid #cfd8e6 !important;
-    border-radius: 10px !important;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, .22) !important;
-    transform: none !important;
-    z-index: 2147483601 !important;
+  .v6-detail-sheet-portal.open {
+    display: block;
+    pointer-events: auto;
   }
 
-  #detailFilter.v6-detail-dropdown-open::before { display: none !important; }
-
-  #detailFilter.v6-detail-dropdown-open .row {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
-    margin-bottom: 8px !important;
+  .v6-detail-sheet-dim {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, .52);
   }
 
-  #detailFilter.v6-detail-dropdown-open input {
-    width: 100% !important;
-    min-width: 0 !important;
-    height: 42px !important;
-    margin: 0 !important;
-    padding: 0 10px !important;
-    border-radius: 8px !important;
-    font-size: 14px !important;
+  .v6-detail-sheet {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    max-height: min(72dvh, 620px);
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #dbe3ee;
+    border-radius: 22px;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, .34);
   }
 
-  #detailFilter.v6-detail-dropdown-open .apply-btn {
-    display: block !important;
-    width: 100% !important;
-    height: 43px !important;
-    margin: 2px 0 0 !important;
-    border-radius: 8px !important;
-    font-size: 14px !important;
-    font-weight: 900 !important;
+  .v6-detail-sheet-handle {
+    width: 48px;
+    height: 5px;
+    margin: 10px auto 2px;
+    border-radius: 999px;
+    background: #d6dde8;
+  }
+
+  .v6-detail-sheet-head {
+    min-height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px 8px 20px;
+    border-bottom: 1px solid #edf1f6;
+  }
+
+  .v6-detail-sheet-head strong {
+    font-size: 20px;
+    font-weight: 900;
+    color: #172033;
+  }
+
+  .v6-detail-sheet-close {
+    width: 42px;
+    height: 42px;
+    border: 0;
+    border-radius: 12px;
+    background: #f1f5f9;
+    color: #172033;
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  .v6-detail-sheet-body {
+    padding: 14px 14px max(16px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .v6-detail-sheet-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+    margin-bottom: 9px;
+  }
+
+  .v6-detail-sheet-row input {
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+    margin: 0;
+    padding: 0 11px;
+    border: 1px solid #cfd8e6;
+    border-radius: 10px;
+    background: #fff;
+    color: #172033;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+
+  .v6-detail-sheet-apply {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 3px;
+    border: 0;
+    border-radius: 11px;
+    background: #1769e8;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  body.v6-detail-sheet-open {
+    overflow: hidden !important;
   }
 }
