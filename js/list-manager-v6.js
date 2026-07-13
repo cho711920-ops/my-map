@@ -453,12 +453,36 @@
     getItem: getItem
   };
 
+  function ensureCommandBackdrop() {
+    var backdrop = document.getElementById("v6CommandBackdrop");
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.id = "v6CommandBackdrop";
+      backdrop.className = "v6-command-backdrop";
+      backdrop.addEventListener("click", function () {
+        window.closeV6ActionMenus();
+        if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
+      });
+      document.body.appendChild(backdrop);
+    }
+    return backdrop;
+  }
+
+  function syncCommandBackdrop() {
+    var backdrop = ensureCommandBackdrop();
+    var menuOpen = !!document.querySelector(".v6-command-menu.open");
+    var sortOpen = !!document.querySelector("#sortDropdown.open");
+    backdrop.classList.toggle("open", menuOpen || sortOpen);
+    document.body.classList.toggle("v6-menu-open", menuOpen || sortOpen);
+  }
+
   window.closeV6ActionMenus = function () {
     document.querySelectorAll(".v6-command-menu.open").forEach(function (menu) {
       menu.classList.remove("open");
       var trigger = menu.querySelector(".v6-command-trigger");
       if (trigger) trigger.setAttribute("aria-expanded", "false");
     });
+    syncCommandBackdrop();
   };
 
   window.toggleV6ActionMenu = function (name, event) {
@@ -466,17 +490,50 @@
     var target = document.querySelector('.v6-command-menu[data-command-menu="' + name + '"]');
     if (!target) return;
     var willOpen = !target.classList.contains("open");
+    if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
     window.closeV6ActionMenus();
     if (willOpen) {
       target.classList.add("open");
       var trigger = target.querySelector(".v6-command-trigger");
       if (trigger) trigger.setAttribute("aria-expanded", "true");
     }
+    syncCommandBackdrop();
   };
 
-  document.addEventListener("click", function (event) {
-    if (!event.target.closest(".v6-command-menu")) window.closeV6ActionMenus();
+  /* 기존 정렬 드롭다운을 모바일에서도 같은 단일 팝업 체계로 관리합니다. */
+  if (typeof window.toggleSortDropdown === "function") {
+    var originalToggleSort = window.toggleSortDropdown;
+    window.toggleSortDropdown = function (event) {
+      window.closeV6ActionMenus();
+      originalToggleSort(event);
+      window.setTimeout(syncCommandBackdrop, 0);
+    };
+  }
+  if (typeof window.closeSortDropdown === "function") {
+    var originalCloseSort = window.closeSortDropdown;
+    window.closeSortDropdown = function () {
+      originalCloseSort();
+      window.setTimeout(syncCommandBackdrop, 0);
+    };
+  }
+
+  function updateMultiButtonVisibility() {
+    var button = document.getElementById("multiClusterBtn");
+    if (!button) return;
+    var count = getSelectedItemKeys().length;
+    button.classList.toggle("has-selection", count > 0);
+  }
+
+  document.addEventListener("change", function (event) {
+    if (event.target && event.target.matches('input[type="checkbox"]')) window.setTimeout(updateMultiButtonVisibility, 0);
   });
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest(".v6-command-menu") && !event.target.closest("#sortDropdown") && !event.target.closest("#v6CommandBackdrop")) {
+      window.closeV6ActionMenus();
+    }
+    window.setTimeout(updateMultiButtonVisibility, 0);
+  });
+  window.setTimeout(updateMultiButtonVisibility, 300);
 
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") {
