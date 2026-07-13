@@ -39,72 +39,129 @@
   }
 
   function requestLocation(callback) {
-    if (!navigator.geolocation) return callback(null);
+    var CACHE_KEY = "js_ai_visit_location_v6";
+    if (!navigator.geolocation) {
+      callback(null, { code: "UNSUPPORTED", message: "이 기기는 위치 기능을 지원하지 않습니다." });
+      return;
+    }
 
     var finished = false;
-    var watchId = null;
-    var hardStopTimer = null;
+    var watchIds = [];
+    var timers = [];
+    var errors = [];
 
-    function cleanUp() {
-      if (watchId !== null) {
-        try { navigator.geolocation.clearWatch(watchId); } catch (error) {}
-        watchId = null;
-      }
-      if (hardStopTimer) {
-        window.clearTimeout(hardStopTimer);
-        hardStopTimer = null;
-      }
+    function clearAll() {
+      watchIds.forEach(function (id) {
+        try { navigator.geolocation.clearWatch(id); } catch (error) {}
+      });
+      watchIds = [];
+      timers.forEach(function (id) { window.clearTimeout(id); });
+      timers = [];
     }
 
-    function finish(value) {
+    function saveLocation(location) {
+      lastLocation = location;
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(location)); } catch (error) {}
+    }
+
+    function finish(value, errorInfo) {
       if (finished) return;
       finished = true;
-      cleanUp();
-      callback(value);
+      clearAll();
+      callback(value, errorInfo || null);
     }
 
-    function accept(position) {
-      if (!position || !position.coords) return false;
+    function normalize(position, source) {
+      if (!position || !position.coords) return null;
       var lat = Number(position.coords.latitude);
       var lng = Number(position.coords.longitude);
-      if (!isFinite(lat) || !isFinite(lng)) return false;
-      lastLocation = {
+      if (!isFinite(lat) || !isFinite(lng)) return null;
+      return {
         lat: lat,
         lng: lng,
         accuracy: Number(position.coords.accuracy) || 0,
-        timestamp: Number(position.timestamp) || Date.now()
+        timestamp: Number(position.timestamp) || Date.now(),
+        source: source || "device"
       };
-      finish(lastLocation);
+    }
+
+    function accept(position, source) {
+      var location = normalize(position, source);
+      if (!location) return false;
+      saveLocation(location);
+      finish(location, null);
       return true;
     }
 
-    function stageThreeWatch() {
+    function recordError(stage, error) {
+      errors.push({
+        stage: stage,
+        code: error && typeof error.code !== "undefined" ? error.code : 0,
+        message: error && error.message ? String(error.message) : "위치 정보를 가져오지 못했습니다."
+      });
+    }
+
+    /* 태블릿 Edge는 getCurrentPosition보다 watchPosition에서 먼저 위치가 들어오는 경우가 있어
+       저정밀 watch를 즉시 시작하고, 저정밀/고정밀 단발 요청도 병렬로 실행합니다. */
+    try {
+      var lowWatch = navigator.geolocation.watchPosition(
+        function (position) { accept(position, "watch-low"); },
+        function (error) { recordError("watch-low", error); },
+        { enableHighAccuracy: false, maximumAge: Infinity, timeout: 20000 }
+      );
+      watchIds.push(lowWatch);
+    } catch (error) { recordError("watch-low", error); }
+
+    try {
+      navigator.geolocation.getCurrentPosition(
+        function (position) { accept(position, "current-low"); },
+        function (error) { recordError("current-low", error); },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: Infinity }
+      );
+    } catch (error) { recordError("current-low", error); }
+
+    timers.push(window.setTimeout(function () {
       if (finished) return;
       try {
-        watchId = navigator.geolocation.watchPosition(
-          function (position) { accept(position); },
-          function () {},
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        navigator.geolocation.getCurrentPosition(
+          function (position) { accept(position, "current-high"); },
+          function (error) { recordError("current-high", error); },
+          { enableHighAccuracy: true, timeout: 16000, maximumAge: 0 }
         );
-      } catch (error) {}
-      hardStopTimer = window.setTimeout(function () { finish(null); }, 12500);
-    }
+      } catch (error) { recordError("current-high", error); }
 
-    function stageTwoHighAccuracy() {
+      try {
+        var highWatch = navigator.geolocation.watchPosition(
+          function (position) { accept(position, "watch-high"); },
+          function (error) { recordError("watch-high", error); },
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 18000 }
+        );
+        watchIds.push(highWatch);
+      } catch (error) { recordError("watch-high", error); }
+    }, 1200));
+
+    /* 기기 위치가 늦게 도착할 때를 고려해 최대 25초 기다립니다.
+       그래도 실패하면 30분 이내 저장 위치를 마지막 안전장치로 사용합니다. */
+    timers.push(window.setTimeout(function () {
       if (finished) return;
-      navigator.geolocation.getCurrentPosition(
-        function (position) { accept(position); },
-        stageThreeWatch,
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-      );
-    }
-
-    /* 태블릿은 Wi-Fi 위치가 먼저 잡히는 경우가 많아 저정밀 → 고정밀 → watch 순서로 시도합니다. */
-    navigator.geolocation.getCurrentPosition(
-      function (position) { accept(position); },
-      stageTwoHighAccuracy,
-      { enableHighAccuracy: false, timeout: 7000, maximumAge: 300000 }
-    );
+      var cached = null;
+      try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (error) {}
+      if (cached && isFinite(Number(cached.lat)) && isFinite(Number(cached.lng)) &&
+          Date.now() - Number(cached.timestamp || 0) <= 30 * 60 * 1000) {
+        cached = {
+          lat: Number(cached.lat),
+          lng: Number(cached.lng),
+          accuracy: Number(cached.accuracy) || 0,
+          timestamp: Number(cached.timestamp) || Date.now(),
+          source: "cache"
+        };
+        saveLocation(cached);
+        finish(cached, { code: "CACHE", message: "최근 위치를 사용했습니다." });
+        return;
+      }
+      var lastError = errors.length ? errors[errors.length - 1] : null;
+      finish(null, lastError || { code: "TIMEOUT", message: "위치 응답 시간이 초과되었습니다." });
+    }, 25000));
   }
 
   function optimizeKeys(keys, startLocation) {
@@ -136,18 +193,19 @@
   }
 
   function prepare(keys, callback) {
-    requestLocation(function (location) {
+    requestLocation(function (location, locationError) {
       callback({
         keys: optimizeKeys(keys, location),
         location: location,
-        optimized: !!location
+        optimized: !!location,
+        locationError: locationError || null
       });
     });
   }
 
   function recalculate(session, callback) {
-    requestLocation(function (location) {
-      if (!location) return callback({ ok: false, reason: "location" });
+    requestLocation(function (location, locationError) {
+      if (!location) return callback({ ok: false, reason: "location", locationError: locationError || null });
       var statuses = session.statuses || {};
       var processed = [];
       var pending = [];
