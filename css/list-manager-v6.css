@@ -469,3 +469,161 @@
   #sortDropdown.open #sortDropdownMenu{display:block!important;visibility:visible!important}
   #sortDropdownMenu button{width:100%!important;min-height:48px!important;text-align:left!important;font-size:14px!important;background:#fff!important;color:#172033!important}
 }
+
+/* =========================================================
+   STEP2.6 최종 모바일 레이아웃 / 단일 메뉴 포털
+   ========================================================= */
+.v6-mobile-menu-portal{display:none}
+
+@media (max-width:768px){
+  /* 검색 아래: 상세 / 구분 / 정렬을 반드시 한 줄로 고정 */
+  .filters .filter-row{
+    display:grid!important;
+    grid-template-columns:92px minmax(0,1fr) 92px!important;
+    gap:8px!important;
+    width:100%!important;
+    align-items:stretch!important;
+  }
+  .filters .filter-row>.detail-btn{
+    grid-column:1!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .filters .filter-select-wrap{
+    display:contents!important;
+  }
+  .filters .filter-select-wrap>select{
+    grid-column:2!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .filters .filter-select-wrap>#sortDropdown{
+    grid-column:3!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .filters #sortDropdownBtn{
+    width:100%!important;
+    min-width:0!important;
+  }
+
+  /* 기존 드롭다운은 모바일에서 렌더링하지 않고 body 포털만 사용 */
+  .v6-command-menu>.v6-command-dropdown,
+  #sortDropdown>#sortDropdownMenu{
+    display:none!important;
+  }
+  #v6CommandBackdrop{
+    display:none!important;
+    pointer-events:none!important;
+  }
+
+  .v6-mobile-menu-portal{
+    position:fixed;
+    inset:0;
+    z-index:2147483000;
+    display:none;
+    pointer-events:none;
+  }
+  .v6-mobile-menu-portal.open{
+    display:block;
+    pointer-events:auto;
+  }
+  .v6-mobile-menu-dim{
+    position:absolute;
+    inset:0;
+    background:rgba(15,23,42,.54);
+  }
+  .v6-mobile-menu-sheet{
+    position:absolute;
+    left:10px;
+    right:10px;
+    bottom:max(10px,env(safe-area-inset-bottom));
+    max-height:min(72vh,620px);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    background:#fff;
+    border:1px solid #dbe3ee;
+    border-radius:22px;
+    box-shadow:0 24px 80px rgba(15,23,42,.34);
+  }
+  .v6-mobile-menu-handle{
+    width:48px;
+    height:5px;
+    margin:10px auto 2px;
+    border-radius:999px;
+    background:#d6dde8;
+  }
+  .v6-mobile-menu-head{
+    min-height:58px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:8px 14px 8px 20px;
+    border-bottom:1px solid #edf1f6;
+  }
+  .v6-mobile-menu-head strong{
+    color:#172033;
+    font-size:20px;
+    font-weight:900;
+  }
+  .v6-mobile-menu-close{
+    width:42px;
+    height:42px;
+    border:0;
+    border-radius:12px;
+    background:#f1f5f9;
+    color:#334155;
+    font-size:28px;
+    line-height:1;
+  }
+  .v6-mobile-menu-body{
+    padding:8px 12px 14px;
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+  .v6-mobile-menu-item{
+    width:100%!important;
+    min-height:54px!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    padding:0 16px!important;
+    border:0!important;
+    border-radius:12px!important;
+    background:#fff!important;
+    color:#172033!important;
+    font-size:16px!important;
+    font-weight:800!important;
+    text-align:left!important;
+  }
+  .v6-mobile-menu-item:active{
+    background:#eef5ff!important;
+    color:#1261c9!important;
+  }
+  .v6-mobile-menu-divider{
+    height:1px;
+    margin:7px 4px;
+    background:#e7edf4;
+  }
+  body.v6-mobile-sheet-open{
+    overflow:hidden!important;
+    touch-action:none;
+  }
+  body.v6-mobile-sheet-open .v6-mobile-menu-sheet{
+    touch-action:auto;
+  }
+}
+
+@media (max-width:390px){
+  .filters .filter-row{
+    grid-template-columns:82px minmax(0,1fr) 82px!important;
+    gap:6px!important;
+  }
+  .filters .filter-row>.detail-btn,
+  .filters #sortDropdownBtn,
+  .filters .filter-select-wrap>select{
+    font-size:13px!important;
+    padding-left:8px!important;
+    padding-right:8px!important;
+  }
+}
