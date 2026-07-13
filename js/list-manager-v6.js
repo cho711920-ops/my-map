@@ -453,160 +453,68 @@
     getItem: getItem
   };
 
-  function ensureCommandBackdrop() {
-    var backdrop = document.getElementById("v6CommandBackdrop");
-    if (!backdrop) {
-      backdrop = document.createElement("div");
-      backdrop.id = "v6CommandBackdrop";
-      backdrop.className = "v6-command-backdrop";
-      backdrop.addEventListener("click", function () {
-        window.closeV6ActionMenus();
-        if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
-      });
-      document.body.appendChild(backdrop);
-    }
-    return backdrop;
+
+  function isMobileLayout() {
+    return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
   }
 
-  function syncCommandBackdrop() {
-    var backdrop = ensureCommandBackdrop();
-    var menuOpen = !!document.querySelector(".v6-command-menu.open");
-    var sortOpen = !!document.querySelector("#sortDropdown.open");
-    backdrop.classList.toggle("open", menuOpen || sortOpen);
-    document.body.classList.toggle("v6-menu-open", menuOpen || sortOpen);
-  }
-
-  window.closeV6ActionMenus = function () {
+  function closeDesktopMenus() {
     document.querySelectorAll(".v6-command-menu.open").forEach(function (menu) {
       menu.classList.remove("open");
       var trigger = menu.querySelector(".v6-command-trigger");
       if (trigger) trigger.setAttribute("aria-expanded", "false");
     });
-    syncCommandBackdrop();
-  };
-
-  window.toggleV6ActionMenu = function (name, event) {
-    if (event) event.stopPropagation();
-    var target = document.querySelector('.v6-command-menu[data-command-menu="' + name + '"]');
-    if (!target) return;
-    var willOpen = !target.classList.contains("open");
-    if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
-    window.closeV6ActionMenus();
-    if (willOpen) {
-      target.classList.add("open");
-      var trigger = target.querySelector(".v6-command-trigger");
-      if (trigger) trigger.setAttribute("aria-expanded", "true");
-    }
-    syncCommandBackdrop();
-  };
-
-  /* 기존 정렬 드롭다운을 모바일에서도 같은 단일 팝업 체계로 관리합니다. */
-  if (typeof window.toggleSortDropdown === "function") {
-    var originalToggleSort = window.toggleSortDropdown;
-    window.toggleSortDropdown = function (event) {
-      window.closeV6ActionMenus();
-      originalToggleSort(event);
-      window.setTimeout(syncCommandBackdrop, 0);
-    };
-  }
-  if (typeof window.closeSortDropdown === "function") {
-    var originalCloseSort = window.closeSortDropdown;
-    window.closeSortDropdown = function () {
-      originalCloseSort();
-      window.setTimeout(syncCommandBackdrop, 0);
-    };
   }
 
-  function updateMultiButtonVisibility() {
-    var button = document.getElementById("multiClusterBtn");
-    if (!button) return;
-    var count = getSelectedItemKeys().length;
-    button.classList.toggle("has-selection", count > 0);
-  }
-
-  document.addEventListener("change", function (event) {
-    if (event.target && event.target.matches('input[type="checkbox"]')) window.setTimeout(updateMultiButtonVisibility, 0);
-  });
-  document.addEventListener("click", function (event) {
-    if (!event.target.closest(".v6-command-menu") && !event.target.closest("#sortDropdown") && !event.target.closest("#v6CommandBackdrop")) {
-      window.closeV6ActionMenus();
-    }
-    window.setTimeout(updateMultiButtonVisibility, 0);
-  });
-  window.setTimeout(updateMultiButtonVisibility, 300);
-
-  document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape") {
-      closeListManager();
-      closeItemListPicker();
-      window.closeV6ActionMenus();
-    }
-  });
-
-  migrateLegacyFavorites();
-  ensureModal();
-})();
-
-/* =========================================================
-   STEP2.6 모바일 메뉴 포털 안정화
-   - 보기/작업/정렬을 body 직속 단일 바텀시트로 표시
-   - 기존 stacking-context 및 투명 레이어 클릭 충돌 제거
-   ========================================================= */
-(function () {
-  "use strict";
-
-  function isMobileLayout() {
-    return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+  function closeDesktopSort() {
+    var dropdown = document.getElementById("sortDropdown");
+    var button = document.getElementById("sortDropdownBtn");
+    if (dropdown) dropdown.classList.remove("open");
+    if (button) button.setAttribute("aria-expanded", "false");
   }
 
   function ensureMobileSheet() {
     var root = document.getElementById("v6MobileMenuPortal");
     if (root) return root;
-
     root = document.createElement("div");
     root.id = "v6MobileMenuPortal";
     root.className = "v6-mobile-menu-portal";
     root.innerHTML =
-      '<div class="v6-mobile-menu-dim" data-v6-sheet-close></div>' +
-      '<section class="v6-mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="v6MobileMenuTitle">' +
-        '<div class="v6-mobile-menu-handle" aria-hidden="true"></div>' +
-        '<div class="v6-mobile-menu-head">' +
-          '<strong id="v6MobileMenuTitle"></strong>' +
-          '<button type="button" class="v6-mobile-menu-close" data-v6-sheet-close aria-label="닫기">×</button>' +
-        '</div>' +
+      '<div class="v6-mobile-menu-dim" data-v6-close></div>' +
+      '<section class="v6-mobile-menu-sheet" role="dialog" aria-modal="true">' +
+        '<div class="v6-mobile-menu-handle"></div>' +
+        '<div class="v6-mobile-menu-head"><strong id="v6MobileMenuTitle"></strong><button type="button" class="v6-mobile-menu-close" data-v6-close>×</button></div>' +
         '<div id="v6MobileMenuBody" class="v6-mobile-menu-body"></div>' +
       '</section>';
-
     root.addEventListener("click", function (event) {
-      if (event.target.closest("[data-v6-sheet-close]")) closeMobileSheet();
+      if (event.target.closest("[data-v6-close]")) closeMobileSheet();
     });
     document.body.appendChild(root);
     return root;
   }
 
-  function closeOriginalMenus() {
-    document.querySelectorAll(".v6-command-menu.open").forEach(function (menu) {
-      menu.classList.remove("open");
-      var trigger = menu.querySelector(".v6-command-trigger");
-      if (trigger) trigger.setAttribute("aria-expanded", "false");
-    });
-    var sort = document.getElementById("sortDropdown");
-    if (sort) sort.classList.remove("open");
-    var sortButton = document.getElementById("sortDropdownBtn");
-    if (sortButton) sortButton.setAttribute("aria-expanded", "false");
-    var oldBackdrop = document.getElementById("v6CommandBackdrop");
-    if (oldBackdrop) oldBackdrop.classList.remove("open");
-    document.body.classList.remove("v6-menu-open");
-  }
-
   function closeMobileSheet() {
     var root = document.getElementById("v6MobileMenuPortal");
-    if (root) root.classList.remove("open");
+    if (root) {
+      root.classList.remove("open");
+      root.removeAttribute("data-menu-type");
+    }
     document.body.classList.remove("v6-mobile-sheet-open");
   }
 
-  function cloneButtons(source, body, closeAfterClick) {
-    Array.prototype.forEach.call(source.children, function (child) {
+  function openMobileSheet(title, source, type) {
+    var root = ensureMobileSheet();
+    if (root.classList.contains("open") && root.getAttribute("data-menu-type") === type) {
+      closeMobileSheet();
+      return;
+    }
+    closeDetailPopup();
+    closeDesktopMenus();
+    closeDesktopSort();
+    var body = root.querySelector("#v6MobileMenuBody");
+    root.querySelector("#v6MobileMenuTitle").textContent = title;
+    body.innerHTML = "";
+    Array.prototype.forEach.call(source ? source.children : [], function (child) {
       if (child.classList && child.classList.contains("v6-command-divider")) {
         var divider = document.createElement("div");
         divider.className = "v6-mobile-menu-divider";
@@ -617,246 +525,165 @@
       var clone = child.cloneNode(true);
       clone.removeAttribute("id");
       clone.classList.add("v6-mobile-menu-item");
-      clone.style.display = "flex";
-      clone.addEventListener("click", function () {
-        if (closeAfterClick) window.setTimeout(closeMobileSheet, 0);
-      });
+      clone.style.display = "block";
+      clone.addEventListener("click", function () { window.setTimeout(closeMobileSheet, 0); });
       body.appendChild(clone);
     });
-  }
-
-  function openMobileSheet(title, source, type) {
-    if (!source) return;
-    closeOriginalMenus();
-    var root = ensureMobileSheet();
-    var body = root.querySelector("#v6MobileMenuBody");
-    var heading = root.querySelector("#v6MobileMenuTitle");
-    heading.textContent = title;
-    body.innerHTML = "";
-    cloneButtons(source, body, true);
-    root.setAttribute("data-menu-type", type || "");
+    root.setAttribute("data-menu-type", type);
     root.classList.add("open");
     document.body.classList.add("v6-mobile-sheet-open");
   }
 
-  var desktopToggleAction = window.toggleV6ActionMenu;
-  window.toggleV6ActionMenu = function (name, event) {
-    if (!isMobileLayout()) {
-      return desktopToggleAction ? desktopToggleAction(name, event) : undefined;
-    }
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    var source = document.getElementById("v6ActionMenu_" + name);
-    openMobileSheet(name === "view" ? "보기" : "작업", source, name);
-  };
-
-  var desktopCloseActions = window.closeV6ActionMenus;
-  window.closeV6ActionMenus = function () {
-    closeMobileSheet();
-    closeOriginalMenus();
-    if (!isMobileLayout() && desktopCloseActions) desktopCloseActions();
-  };
-
-  var desktopToggleSort = window.toggleSortDropdown;
-  window.toggleSortDropdown = function (event) {
-    if (!isMobileLayout()) {
-      return desktopToggleSort ? desktopToggleSort(event) : undefined;
-    }
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    openMobileSheet("정렬", document.getElementById("sortDropdownMenu"), "sort");
-  };
-
-  var desktopCloseSort = window.closeSortDropdown;
-  window.closeSortDropdown = function () {
-    closeMobileSheet();
-    closeOriginalMenus();
-    if (!isMobileLayout() && desktopCloseSort) desktopCloseSort();
-  };
-
-  document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape") closeMobileSheet();
-  });
-  window.addEventListener("resize", function () {
-    if (!isMobileLayout()) closeMobileSheet();
-  });
-})();
-
-/* =========================================================
-   v6.0 STEP2.10 상세/구분/정렬 최종 안정화
-   - 모바일 상세필터를 독립 모달로 표시
-   - 정렬 재클릭 닫기
-   - PC/태블릿 정렬을 버튼 아래 세로 드롭다운으로 고정
-   ========================================================= */
-(function () {
-  "use strict";
-
-  var detailHome = null;
-  var detailNext = null;
-
-  function isMobile() {
-    return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+  function ensureDetailDim() {
+    var dim = document.getElementById("v6DetailDim");
+    if (dim) return dim;
+    dim = document.createElement("div");
+    dim.id = "v6DetailDim";
+    dim.className = "v6-detail-dim";
+    dim.addEventListener("click", closeDetailPopup);
+    document.body.appendChild(dim);
+    return dim;
   }
 
-  function closeMobilePortal() {
-    var portal = document.getElementById("v6MobileMenuPortal");
-    if (portal) {
-      portal.classList.remove("open");
-      portal.removeAttribute("data-menu-type");
-    }
-    document.body.classList.remove("v6-mobile-sheet-open");
-  }
-
-  function ensureDetailPortal() {
-    var portal = document.getElementById("v6DetailFilterPortal");
-    if (portal) return portal;
-
-    portal = document.createElement("div");
-    portal.id = "v6DetailFilterPortal";
-    portal.className = "v6-detail-filter-portal";
-    portal.innerHTML =
-      '<div class="v6-detail-filter-dim" data-detail-close></div>' +
-      '<section class="v6-detail-filter-sheet" role="dialog" aria-modal="true" aria-labelledby="v6DetailFilterTitle">' +
-        '<div class="v6-detail-filter-head">' +
-          '<strong id="v6DetailFilterTitle">상세필터</strong>' +
-          '<button type="button" class="v6-detail-filter-close" data-detail-close aria-label="닫기">×</button>' +
-        '</div>' +
-        '<div id="v6DetailFilterBody" class="v6-detail-filter-body"></div>' +
-      '</section>';
-
-    portal.addEventListener("click", function (event) {
-      if (event.target.closest("[data-detail-close]")) {
-        window.closeV6DetailFilter();
-      }
-    });
-    document.body.appendChild(portal);
-    return portal;
-  }
-
-  function restoreDetailPanel() {
-    var panel = document.getElementById("detailFilter");
-    if (!panel || !detailHome || panel.parentNode === detailHome) return;
-    if (detailNext && detailNext.parentNode === detailHome) {
-      detailHome.insertBefore(panel, detailNext);
-    } else {
-      detailHome.appendChild(panel);
-    }
-  }
-
-  window.closeV6DetailFilter = function () {
+  function closeDetailPopup() {
     var panel = document.getElementById("detailFilter");
     var button = document.getElementById("detailBtn");
-    var portal = document.getElementById("v6DetailFilterPortal");
-
+    var dim = document.getElementById("v6DetailDim");
     if (panel) panel.classList.remove("open");
-    if (button) {
-      button.classList.remove("on");
-      button.setAttribute("aria-expanded", "false");
-    }
-    if (portal) portal.classList.remove("open");
-    document.body.classList.remove("v6-detail-filter-open");
-    restoreDetailPanel();
-  };
+    if (button) button.classList.remove("on");
+    if (dim) dim.classList.remove("open");
+  }
 
   var originalToggleDetail = window.toggleDetailFilter;
   window.toggleDetailFilter = function () {
+    if (!isMobileLayout()) {
+      closeMobileSheet();
+      closeDesktopMenus();
+      closeDesktopSort();
+      return originalToggleDetail ? originalToggleDetail() : undefined;
+    }
+    closeMobileSheet();
     var panel = document.getElementById("detailFilter");
     var button = document.getElementById("detailBtn");
     if (!panel || !button) return;
-
-    if (!isMobile()) {
-      closeMobilePortal();
-      if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
-      if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
-      if (originalToggleDetail) originalToggleDetail();
-      button.setAttribute("aria-expanded", panel.classList.contains("open") ? "true" : "false");
-      return;
+    var willOpen = !panel.classList.contains("open");
+    closeDetailPopup();
+    if (willOpen) {
+      panel.removeAttribute("style");
+      panel.classList.add("open");
+      button.classList.add("on");
+      ensureDetailDim().classList.add("open");
     }
-
-    var portal = ensureDetailPortal();
-    var alreadyOpen = portal.classList.contains("open");
-    if (alreadyOpen) {
-      window.closeV6DetailFilter();
-      return;
-    }
-
-    closeMobilePortal();
-    if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
-    if (typeof window.closeSortDropdown === "function") window.closeSortDropdown();
-
-    if (!detailHome) {
-      detailHome = panel.parentNode;
-      detailNext = panel.nextSibling;
-    }
-
-    portal.querySelector("#v6DetailFilterBody").appendChild(panel);
-    panel.removeAttribute("style");
-    panel.classList.add("open");
-    button.classList.add("on");
-    button.setAttribute("aria-expanded", "true");
-    portal.classList.add("open");
-    document.body.classList.add("v6-detail-filter-open");
   };
 
-  /* 필터 적용 뒤 모바일 상세창 자동 닫기 */
-  document.addEventListener("click", function (event) {
-    if (event.target && event.target.closest("#detailFilter .apply-btn") && isMobile()) {
-      window.setTimeout(window.closeV6DetailFilter, 0);
-    }
-  });
+  window.closeV6ActionMenus = function () {
+    closeDesktopMenus();
+    closeMobileSheet();
+  };
 
-  var previousToggleSort = window.toggleSortDropdown;
+  window.toggleV6ActionMenu = function (name, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    var target = document.querySelector('.v6-command-menu[data-command-menu="' + name + '"]');
+    if (!target) return;
+    if (isMobileLayout()) {
+      openMobileSheet(name === "view" ? "보기" : "작업", document.getElementById("v6ActionMenu_" + name), name);
+      return;
+    }
+    closeDetailPopup();
+    closeDesktopSort();
+    var willOpen = !target.classList.contains("open");
+    closeDesktopMenus();
+    if (willOpen) {
+      target.classList.add("open");
+      var trigger = target.querySelector(".v6-command-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "true");
+    }
+  };
+
+  var originalToggleSort = window.toggleSortDropdown;
   window.toggleSortDropdown = function (event) {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
-
-    window.closeV6DetailFilter();
-
-    if (isMobile()) {
-      var portal = document.getElementById("v6MobileMenuPortal");
-      if (portal && portal.classList.contains("open") && portal.getAttribute("data-menu-type") === "sort") {
-        closeMobilePortal();
-        return;
-      }
-      if (previousToggleSort) previousToggleSort(event);
+    if (isMobileLayout()) {
+      openMobileSheet("정렬", document.getElementById("sortDropdownMenu"), "sort");
       return;
     }
+    closeDetailPopup();
+    closeDesktopMenus();
+    if (originalToggleSort) originalToggleSort(event);
+    syncSortButtonMarkup();
+  };
 
-    if (typeof window.closeV6ActionMenus === "function") window.closeV6ActionMenus();
-    var dropdown = document.getElementById("sortDropdown");
+  var originalCloseSort = window.closeSortDropdown;
+  window.closeSortDropdown = function () {
+    closeMobileSheet();
+    if (originalCloseSort) originalCloseSort();
+    else closeDesktopSort();
+    syncSortButtonMarkup();
+  };
+
+  function syncSortButtonMarkup() {
     var button = document.getElementById("sortDropdownBtn");
-    if (!dropdown || !button) return;
-    var willOpen = !dropdown.classList.contains("open");
-    dropdown.classList.toggle("open", willOpen);
-    button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    if (!button) return;
+    var label = button.querySelector(".v6-sort-label");
+    var text = label ? label.textContent : (button.textContent || "정렬").trim();
+    button.innerHTML = '<span class="v6-sort-label"></span><span class="v6-filter-caret" aria-hidden="true"></span>';
+    button.querySelector(".v6-sort-label").textContent = text || "정렬";
+  }
+
+  var originalSelectSort = window.selectSortOption;
+  window.selectSortOption = function (value) {
+    if (originalSelectSort) originalSelectSort(value);
+    syncSortButtonMarkup();
+    closeMobileSheet();
   };
 
-  var previousToggleAction = window.toggleV6ActionMenu;
-  window.toggleV6ActionMenu = function (name, event) {
-    window.closeV6DetailFilter();
-    if (previousToggleAction) return previousToggleAction(name, event);
-  };
+  function updateMultiButtonVisibility() {
+    var button = document.getElementById("multiClusterBtn");
+    if (!button) return;
+    button.classList.toggle("has-selection", getSelectedItemKeys().length > 0);
+  }
+
+  document.addEventListener("change", function (event) {
+    if (event.target && event.target.matches('input[type="checkbox"]')) window.setTimeout(updateMultiButtonVisibility, 0);
+  });
 
   document.addEventListener("click", function (event) {
-    if (!isMobile()) return;
-    var panel = document.getElementById("detailFilter");
-    var portal = document.getElementById("v6DetailFilterPortal");
-    if (!panel || !portal || !portal.classList.contains("open")) return;
-    if (!event.target.closest(".v6-detail-filter-sheet") && !event.target.closest("#detailBtn")) {
-      window.closeV6DetailFilter();
+    if (!isMobileLayout() && !event.target.closest(".v6-command-menu") && !event.target.closest("#sortDropdown")) {
+      closeDesktopMenus();
+      closeDesktopSort();
+      syncSortButtonMarkup();
     }
+    window.setTimeout(updateMultiButtonVisibility, 0);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    closeListManager();
+    closeItemListPicker();
+    closeDesktopMenus();
+    closeDesktopSort();
+    closeMobileSheet();
+    closeDetailPopup();
   });
 
   window.addEventListener("resize", function () {
-    if (!isMobile()) window.closeV6DetailFilter();
+    closeDesktopMenus();
+    closeDesktopSort();
+    closeMobileSheet();
+    closeDetailPopup();
   });
 
-  var detailButton = document.getElementById("detailBtn");
-  if (detailButton) detailButton.setAttribute("aria-expanded", "false");
+  window.setTimeout(function () {
+    syncSortButtonMarkup();
+    updateMultiButtonVisibility();
+  }, 100);
+
+  migrateLegacyFavorites();
+  ensureModal();
 })();
