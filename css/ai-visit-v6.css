@@ -355,3 +355,164 @@ body.aiv-workspace-open { overflow: hidden !important; }
   .aiv-route-map{height:250px;margin-bottom:14px;border-radius:14px}
   .aiv-route-actions{grid-template-columns:1fr 1fr}
 }
+
+/* =========================================================
+   v6.0 STEP3.1 — 현장형 임장센터 + 태블릿 로드뷰 안정화
+   ========================================================= */
+.aiv-progress-text { display: block; }
+.aiv-progress-track {
+  display: block;
+  width: min(220px, 48vw);
+  height: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8edf4;
+}
+.aiv-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1769e8;
+  transition: width .2s ease;
+}
+.aiv-travel-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 9px 12px;
+  border: 1px solid #dfe7f2;
+  border-radius: 12px;
+  background: #f8fbff;
+  color: #41506a;
+  font-size: 12px;
+  font-weight: 750;
+}
+.aiv-travel-strip strong { color: #1458bd; font-size: 13px; }
+.aiv-travel-strip small { color: #7a8799; font-size: 10px; }
+.aiv-travel-strip.pending { color: #7a8799; }
+.aiv-compact-contact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--aiv-line);
+  border-radius: 12px;
+  background: var(--aiv-line);
+}
+.aiv-next-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 9px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: #f5f7fa;
+}
+.aiv-next-preview > span {
+  grid-row: 1 / span 2;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  border-right: 1px solid #dfe5ed;
+  color: #1769e8;
+  font-size: 11px;
+  font-weight: 900;
+}
+.aiv-next-preview strong,
+.aiv-next-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aiv-next-preview strong { color: #273348; font-size: 12px; }
+.aiv-next-preview small { color: #7a8799; font-size: 10px; }
+.aiv-next-preview.last { display: block; color: #7a8799; text-align: center; }
+.aiv-next-preview.last > span { display: inline; border: 0; }
+
+.aiv-roadview-emergency-close { display: none !important; }
+.aiv-roadview-emergency-close.show { display: inline-flex !important; }
+
+@media (min-width: 769px) and (max-width: 1366px) {
+  #roadviewModal.roadview-modal {
+    padding: var(--aiv-roadview-top-offset, 84px) 10px 10px !important;
+    box-sizing: border-box !important;
+  }
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    height: calc(100dvh - var(--aiv-roadview-top-offset, 84px) - 10px) !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border-radius: 14px !important;
+  }
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    position: relative !important;
+    z-index: 80 !important;
+    min-height: 58px !important;
+    padding: 8px 12px !important;
+    background: #fff !important;
+  }
+  #roadviewModal.roadview-modal .roadview-view-tabs,
+  #roadviewModal.roadview-modal .roadview-modal-close {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .aiv-workspace-main { overflow: hidden; }
+  .aiv-current-panel {
+    height: calc(100dvh - 82px);
+    overflow: auto;
+    padding: 12px !important;
+  }
+  .aiv-route-map { height: 126px !important; min-height: 126px !important; margin-bottom: 8px !important; }
+  .aiv-section-kicker { margin-bottom: 7px; }
+  .aiv-current-index { font-size: 24px; }
+  .aiv-current-top { padding-right: 58px; }
+  .aiv-current-title-line { gap: 7px; margin-top: 2px; }
+  .aiv-current-title-line h2 { font-size: 19px !important; }
+  .aiv-current-address { margin-top: 3px; font-size: 12px; }
+  .aiv-current-meta { min-height: 0; }
+  .aiv-current-meta:empty { display: none; }
+  .aiv-travel-strip { margin-top: 9px; padding: 7px 9px; gap: 12px; font-size: 11px; }
+  .aiv-travel-strip strong { font-size: 12px; }
+  .aiv-price-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px !important;
+    margin-top: 8px !important;
+    padding: 1px !important;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    background: #e2e8f0 !important;
+  }
+  .aiv-price-grid span {
+    min-width: 0 !important;
+    padding: 7px 8px;
+    background: #f8fafc;
+  }
+  .aiv-price-grid em { font-size: 9px; }
+  .aiv-price-grid strong { font-size: 12px; }
+  .aiv-compact-contact { margin-top: 8px; }
+  .aiv-compact-contact .aiv-detail-row { min-height: 38px; padding: 0 9px; }
+  .aiv-compact-contact .aiv-detail-row span { font-size: 10px; }
+  .aiv-compact-contact .aiv-detail-row strong { font-size: 11px; }
+  .aiv-memo-box { margin-top: 8px; max-height: 40px; padding: 0 11px; }
+  .aiv-memo-title { line-height: 39px; font-size: 11px; }
+  .aiv-primary-actions { margin-top: 8px; }
+  .aiv-primary-actions button { min-height: 42px; }
+  .aiv-route-actions { margin-top: 7px !important; }
+  .aiv-route-actions button { min-height: 40px !important; }
+  .aiv-next-preview { margin-top: 7px; padding: 7px 9px; }
+  .aiv-step-actions { margin-top: 7px; }
+  .aiv-step-actions button { min-height: 38px; }
+  .aiv-route-panel { display: none !important; }
+}
