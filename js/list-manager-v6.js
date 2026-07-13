@@ -679,9 +679,30 @@
     closeDetailPopup();
   });
 
+  function bindMobileDetailButtonFix() {
+    var button = document.getElementById("detailBtn");
+    if (!button || button.dataset.v6DetailBound === "1") return;
+    button.dataset.v6DetailBound = "1";
+    button.addEventListener("click", function (event) {
+      if (!isMobileLayout()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.toggleDetailFilter();
+    }, true);
+
+    var applyButton = document.querySelector("#detailFilter .apply-btn");
+    if (applyButton && applyButton.dataset.v6DetailApplyBound !== "1") {
+      applyButton.dataset.v6DetailApplyBound = "1";
+      applyButton.addEventListener("click", function () {
+        window.setTimeout(closeDetailPopup, 0);
+      });
+    }
+  }
+
   window.setTimeout(function () {
     syncSortButtonMarkup();
     updateMultiButtonVisibility();
+    bindMobileDetailButtonFix();
   }, 100);
 
   migrateLegacyFavorites();
