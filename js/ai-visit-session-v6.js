@@ -636,22 +636,33 @@
     var isLandscape = metrics.width > metrics.height;
     var isTabletLandscape = isTouch && isLandscape && metrics.width >= 700;
 
-    /* visualViewport는 이미 브라우저 주소창과 하단 시스템바를 제외한 실제 웹 표시영역입니다.
-       따라서 별도 54px/34px 보정을 더하지 않고, 표시영역 안쪽 8px에 정확히 맞춥니다. */
+    /* STEP3.6: 태블릿 가로모드는 브라우저가 PC형 viewport 값을 주는 경우가 있어
+       flex 높이 계산 대신, 실제 웹 표시영역 안에 헤더와 본문을 절대 배치합니다.
+       position:fixed의 기준은 이미 웹 콘텐츠 viewport이므로 offsetTop을 다시 더하지 않습니다. */
     var gap = isTabletLandscape ? 8 : 6;
-    var headerHeight = isTabletLandscape ? 46 : 52;
-    var dialogWidth = Math.max(320, metrics.width - gap * 2);
-    var dialogHeight = Math.max(260, metrics.height - gap * 2);
+    var headerHeight = isTabletLandscape ? 48 : 52;
+    var visibleWidth = Math.max(320, Math.min(
+      Number(window.innerWidth || metrics.width || 0),
+      Number(metrics.width || window.innerWidth || 0)
+    ));
+    var visibleHeight = Math.max(260, Math.min(
+      Number(window.innerHeight || metrics.height || 0),
+      Number(metrics.height || window.innerHeight || 0)
+    ));
+    var dialogWidth = Math.max(320, visibleWidth - gap * 2);
+    var dialogHeight = Math.max(260, visibleHeight - gap * 2);
 
     modal.classList.toggle("aiv-tablet-landscape", isTabletLandscape);
     modal.style.position = "fixed";
     modal.style.inset = "0";
+    modal.style.width = "100%";
+    modal.style.height = "100%";
     modal.style.padding = "0";
     modal.style.overflow = "hidden";
 
     dialog.style.position = "fixed";
-    dialog.style.top = (metrics.top + gap) + "px";
-    dialog.style.left = (metrics.left + gap) + "px";
+    dialog.style.top = gap + "px";
+    dialog.style.left = gap + "px";
     dialog.style.right = "auto";
     dialog.style.bottom = "auto";
     dialog.style.width = dialogWidth + "px";
@@ -660,27 +671,61 @@
     dialog.style.maxHeight = "none";
     dialog.style.margin = "0";
     dialog.style.transform = "none";
-    dialog.style.display = "flex";
-    dialog.style.flexDirection = "column";
+    dialog.style.display = "block";
     dialog.style.overflow = "hidden";
     dialog.style.boxSizing = "border-box";
 
-    header.style.display = "grid";
-    header.style.gridTemplateColumns = "auto minmax(0,1fr) 40px";
-    header.style.flex = "0 0 " + headerHeight + "px";
-    header.style.height = headerHeight + "px";
-    header.style.minHeight = headerHeight + "px";
-    header.style.maxHeight = headerHeight + "px";
-    header.style.boxSizing = "border-box";
-    header.style.position = "relative";
-    header.style.zIndex = "100";
-    header.style.background = "#fff";
+    if (isTabletLandscape) {
+      /* 헤더가 카카오 로드뷰 캔버스 뒤로 들어가지 않도록 최상단에 고정합니다. */
+      header.style.display = "grid";
+      header.style.gridTemplateColumns = "auto minmax(0,1fr) 40px";
+      header.style.position = "absolute";
+      header.style.top = "0";
+      header.style.left = "0";
+      header.style.right = "0";
+      header.style.bottom = "auto";
+      header.style.width = "100%";
+      header.style.height = headerHeight + "px";
+      header.style.minHeight = headerHeight + "px";
+      header.style.maxHeight = headerHeight + "px";
+      header.style.boxSizing = "border-box";
+      header.style.zIndex = "2147483000";
+      header.style.background = "#fff";
+      header.style.visibility = "visible";
+      header.style.opacity = "1";
+      header.style.pointerEvents = "auto";
 
-    content.style.position = "relative";
-    content.style.flex = "1 1 auto";
-    content.style.height = Math.max(0, dialogHeight - headerHeight) + "px";
-    content.style.minHeight = "0";
-    content.style.overflow = "hidden";
+      content.style.position = "absolute";
+      content.style.top = headerHeight + "px";
+      content.style.left = "0";
+      content.style.right = "0";
+      content.style.bottom = "0";
+      content.style.width = "100%";
+      content.style.height = "auto";
+      content.style.minHeight = "0";
+      content.style.overflow = "hidden";
+      content.style.zIndex = "1";
+    } else {
+      dialog.style.display = "flex";
+      dialog.style.flexDirection = "column";
+
+      header.style.display = "grid";
+      header.style.gridTemplateColumns = "auto minmax(0,1fr) 40px";
+      header.style.position = "relative";
+      header.style.flex = "0 0 " + headerHeight + "px";
+      header.style.height = headerHeight + "px";
+      header.style.minHeight = headerHeight + "px";
+      header.style.maxHeight = headerHeight + "px";
+      header.style.boxSizing = "border-box";
+      header.style.zIndex = "100";
+      header.style.background = "#fff";
+
+      content.style.position = "relative";
+      content.style.flex = "1 1 auto";
+      content.style.height = Math.max(0, dialogHeight - headerHeight) + "px";
+      content.style.minHeight = "0";
+      content.style.overflow = "hidden";
+    }
 
     var emergencyClose = document.getElementById("aivRoadviewEmergencyClose");
     if (emergencyClose) emergencyClose.remove();
