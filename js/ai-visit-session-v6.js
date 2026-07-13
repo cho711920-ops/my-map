@@ -503,29 +503,34 @@
   }
 
   function launchKakaoRoute(location, destination) {
-    var sp = location.lat + "," + location.lng;
-    var ep = destination.lat + "," + destination.lng;
-    var appUrl = "kakaomap://route?sp=" + sp + "&ep=" + ep + "&by=car";
-    var webUrl = "https://m.map.kakao.com/scheme/route?sp=" + sp + "&ep=" + ep + "&by=car";
+    var startLat = Number(location && location.lat);
+    var startLng = Number(location && location.lng);
+    var endLat = Number(destination && destination.lat);
+    var endLng = Number(destination && destination.lng);
+
+    if (![startLat, startLng, endLat, endLng].every(isFinite)) {
+      alert("내비 좌표를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    var sp = startLat.toFixed(7) + "," + startLng.toFixed(7);
+    var ep = endLat.toFixed(7) + "," + endLng.toFixed(7);
+    var webUrl = "https://m.map.kakao.com/scheme/route?sp=" + encodeURIComponent(sp) + "&ep=" + encodeURIComponent(ep) + "&by=car";
 
     if (!isAndroidDevice()) {
       window.open(webUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
-    var hidden = false;
-    var fallbackTimer = null;
-    function visibilityHandler() {
-      if (document.hidden) {
-        hidden = true;
-        if (fallbackTimer) clearTimeout(fallbackTimer);
-      }
-    }
-    document.addEventListener("visibilitychange", visibilityHandler, { once: true });
-    window.location.href = appUrl;
-    fallbackTimer = window.setTimeout(function () {
-      if (!hidden && !document.hidden) window.location.href = webUrl;
-    }, 1400);
+    /* Android 휴대폰·태블릿 공통: 패키지를 지정한 intent URI로 카카오맵 앱을 우선 실행합니다.
+       기존처럼 시간제 웹 새창을 강제로 띄우지 않아, 앱이 늦게 뜨는 태블릿에서도 브라우저가 먼저 열리지 않습니다. */
+    var fallback = encodeURIComponent(webUrl);
+    var intentUrl = "intent://route?sp=" + encodeURIComponent(sp) +
+      "&ep=" + encodeURIComponent(ep) +
+      "&by=car#Intent;scheme=kakaomap;package=net.daum.android.map;" +
+      "S.browser_fallback_url=" + fallback + ";end";
+
+    window.location.href = intentUrl;
   }
 
   function openNavigation() {
