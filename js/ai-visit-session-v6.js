@@ -81,11 +81,12 @@
             '<div class="aiv-brand-mark">AI</div>' +
             '<div><div id="aivWorkspaceTitle" class="aiv-workspace-title">AI임장</div><div id="aivWorkspaceProgress" class="aiv-workspace-progress"></div></div>' +
           '</div>' +
-          '<button type="button" class="aiv-exit-btn" onclick="JSAiVisitV6.requestExit()">종료</button>' +
+          '<div class="aiv-header-actions"><button type="button" class="aiv-recalc-btn" onclick="JSAiVisitV6.recalculateRoute()">현위치 재계산</button><button type="button" class="aiv-exit-btn" onclick="JSAiVisitV6.requestExit()">종료</button></div>' +
         '</header>' +
         '<div class="aiv-workspace-main">' +
           '<main class="aiv-current-panel">' +
             '<div class="aiv-section-kicker">현재 방문 매물</div>' +
+            '<div id="aivRouteMap" class="aiv-route-map"></div>' +
             '<div id="aivCurrentCard" class="aiv-current-card"></div>' +
           '</main>' +
           '<aside class="aiv-route-panel">' +
@@ -145,7 +146,7 @@
     document.getElementById("aivConfirmBody").innerHTML =
       '<div class="aiv-confirm-name">' + escapeHtml(list.name) + '</div>' +
       '<div class="aiv-confirm-count">총 <strong>' + items.length + '개</strong> 매물</div>' +
-      '<p>이번 단계에서는 목록에 등록된 순서대로 진행됩니다.<br>현재 위치 기반 최적 동선은 다음 단계에서 연결됩니다.</p>';
+      '<p>현재 위치를 기준으로 가까운 매물부터 방문 순서를 계산합니다.<br>위치를 가져오지 못하면 기존 목록 순서로 시작합니다.</p>';
 
     var startButton = document.getElementById("aivConfirmStartBtn");
     startButton.textContent = "시작하기";
@@ -236,18 +237,43 @@
 
   function startSession(list) {
     var keys = getValidItems(list).map(function (item) { return item.key; });
-    activeSession = {
-      active: true,
-      listId: list.id,
-      listName: list.name,
-      itemKeys: keys,
-      currentIndex: 0,
-      startedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    saveSession();
-    closeModal("aiVisitConfirmModal");
-    openWorkspace();
+    var startButton = document.getElementById("aivConfirmStartBtn");
+    if (startButton) {
+      startButton.disabled = true;
+      startButton.textContent = "현재 위치 확인 중...";
+    }
+
+    function finishStart(result) {
+      var orderedKeys = result && Array.isArray(result.keys) ? result.keys : keys;
+      activeSession = {
+        active: true,
+        listId: list.id,
+        listName: list.name,
+        itemKeys: orderedKeys,
+        currentIndex: 0,
+        statuses: {},
+        routeOptimized: !!(result && result.optimized),
+        routeStartLocation: result && result.location ? result.location : null,
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      if (startButton) {
+        startButton.disabled = false;
+        startButton.textContent = "시작하기";
+      }
+      saveSession();
+      closeModal("aiVisitConfirmModal");
+      openWorkspace();
+      if (!(result && result.optimized)) {
+        window.setTimeout(function () { alert("현재 위치를 가져오지 못해 임장목록 순서로 시작합니다."); }, 120);
+      }
+    }
+
+    if (window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.prepare === "function") {
+      window.JSAiVisitRouteV6.prepare(keys, finishStart);
+    } else {
+      finishStart({ keys: keys, optimized: false, location: null });
+    }
   }
 
   function openWorkspace() {
@@ -339,6 +365,10 @@
         '<button type="button" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
         '<button type="button" onclick="JSAiVisitV6.toggleMemo()">메모</button>' +
       '</div>' +
+      '<div class="aiv-route-actions">' +
+        '<button type="button" class="recalc" onclick="JSAiVisitV6.recalculateRoute()">현위치 재계산</button>' +
+        '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
+      '</div>' +
       '<div class="aiv-step-actions">' +
         '<button type="button" ' + (index === 0 ? 'disabled' : '') + ' onclick="JSAiVisitV6.goPrevious()">이전</button>' +
         '<button type="button" ' + (index >= total - 1 ? 'disabled' : '') + ' onclick="JSAiVisitV6.goNext()">다음</button>' +
@@ -361,17 +391,25 @@
 
     var current = items[activeSession.currentIndex];
     document.getElementById("aivWorkspaceTitle").textContent = "AI임장 · " + activeSession.listName;
-    document.getElementById("aivWorkspaceProgress").textContent = (activeSession.currentIndex + 1) + " / " + items.length + " 진행 중";
+    var statuses = activeSession.statuses || {};
+    var holdCount = Object.keys(statuses).filter(function (key) { return statuses[key] === "hold"; }).length;
+    document.getElementById("aivWorkspaceProgress").textContent = (activeSession.currentIndex + 1) + " / " + items.length + " 진행 중" + (holdCount ? " · 보류 " + holdCount : "");
     document.getElementById("aivRouteCount").textContent = items.length + "개";
     document.getElementById("aivCurrentCard").innerHTML = renderCurrentCard(current, activeSession.currentIndex, items.length);
     document.getElementById("aivRouteList").innerHTML = items.map(function (item, index) {
-      return '<button type="button" class="aiv-route-item ' + (index === activeSession.currentIndex ? 'active' : '') + '" onclick="JSAiVisitV6.goTo(' + index + ')">' +
+      var state = statuses[item.key] || "";
+      return '<button type="button" class="aiv-route-item ' + (index === activeSession.currentIndex ? 'active ' : '') + (state ? state : '') + '" onclick="JSAiVisitV6.goTo(' + index + ')">' +
         '<span class="aiv-route-number">' + (index + 1) + '</span>' +
-        '<span class="aiv-route-copy"><strong>' + escapeHtml(item.name || item.address || "매물") + '</strong><small>' + escapeHtml(item.address || "") + '</small></span>' +
+        '<span class="aiv-route-copy"><strong>' + escapeHtml(item.name || item.address || "매물") + '</strong><small>' + escapeHtml(item.address || "") + (state === "hold" ? ' · 보류' : '') + '</small></span>' +
       '</button>';
     }).join("");
 
     focusCurrentOnMap(current);
+    if (window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.renderMap === "function") {
+      window.setTimeout(function () {
+        window.JSAiVisitRouteV6.renderMap(activeSession, activeSession.currentIndex, goTo);
+      }, 0);
+    }
   }
 
   function focusCurrentOnMap(item) {
@@ -566,6 +604,39 @@
     renderWorkspace();
   }
 
+  function recalculateRoute() {
+    if (!activeSession) return;
+    if (!window.JSAiVisitRouteV6 || typeof window.JSAiVisitRouteV6.recalculate !== "function") {
+      return alert("동선 계산 기능을 불러오지 못했습니다.");
+    }
+    var buttons = document.querySelectorAll(".aiv-recalc-btn, .aiv-route-actions .recalc");
+    buttons.forEach(function (button) { button.disabled = true; button.textContent = "재계산 중..."; });
+    window.JSAiVisitRouteV6.recalculate(activeSession, function (result) {
+      buttons.forEach(function (button) { button.disabled = false; button.textContent = "현위치 재계산"; });
+      if (!result || !result.ok) return alert("현재 위치를 가져오지 못했습니다. 위치 권한과 GPS를 확인해주세요.");
+      activeSession = result.session;
+      activeSession.updatedAt = new Date().toISOString();
+      saveSession();
+      renderWorkspace();
+    });
+  }
+
+  function holdCurrent() {
+    if (!activeSession) return;
+    var item = currentItem();
+    if (!item) return;
+    activeSession.statuses = activeSession.statuses || {};
+    activeSession.statuses[item.key] = "hold";
+    activeSession.updatedAt = new Date().toISOString();
+    var nextIndex = window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.nextPendingIndex === "function"
+      ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, activeSession.currentIndex)
+      : activeSession.currentIndex + 1;
+    if (nextIndex >= 0 && nextIndex < activeSession.itemKeys.length) activeSession.currentIndex = nextIndex;
+    saveSession();
+    renderWorkspace();
+    if (nextIndex < 0) alert("모든 매물을 확인했습니다. 보류 매물은 임장목록에 그대로 유지됩니다.");
+  }
+
   function requestExit() {
     if (!activeSession) return closeWorkspace(false);
     var ok = confirm("AI임장을 종료하시겠습니까?\n현재 진행상태는 자동 저장됩니다.");
@@ -585,6 +656,9 @@
     if (focusMarker) {
       focusMarker.setMap(null);
       focusMarker = null;
+    }
+    if (window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.clear === "function") {
+      window.JSAiVisitRouteV6.clear();
     }
     if (!keepSession) {
       var closingListId = activeSession && activeSession.listId;
@@ -615,6 +689,9 @@
       listName: stored.listName,
       itemKeys: Array.isArray(stored.itemKeys) ? stored.itemKeys.slice() : [],
       currentIndex: Number(stored.currentIndex) || 0,
+      statuses: stored.statuses && typeof stored.statuses === "object" ? stored.statuses : {},
+      routeOptimized: !!stored.routeOptimized,
+      routeStartLocation: stored.routeStartLocation || null,
       startedAt: stored.startedAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -646,7 +723,15 @@
     openRoadview: openRoadview,
     toggleMemo: toggleMemo,
     goPrevious: function () { if (activeSession) goTo(activeSession.currentIndex - 1); },
-    goNext: function () { if (activeSession) goTo(activeSession.currentIndex + 1); },
+    goNext: function () {
+      if (!activeSession) return;
+      var nextIndex = window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.nextPendingIndex === "function"
+        ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, activeSession.currentIndex)
+        : activeSession.currentIndex + 1;
+      if (nextIndex >= 0) goTo(nextIndex);
+    },
+    recalculateRoute: recalculateRoute,
+    holdCurrent: holdCurrent,
     goTo: goTo,
     requestExit: requestExit,
     getSavedProgress: function (listId) {
