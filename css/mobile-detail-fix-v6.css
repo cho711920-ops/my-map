@@ -1,1 +1,10 @@
-
+/* JS부동산 v6.0 STEP2.14 - 모바일 상세필터 단독 안정화 */
+@media (max-width:768px){
+  body.v6-detail-stable-lock{overflow:hidden!important}
+  .v6-detail-stable-dim{display:none;position:fixed;inset:0;z-index:2147483500;background:rgba(15,23,42,.54)}
+  .v6-detail-stable-dim.open{display:block!important}
+  #detailFilter.v6-detail-stable-open{display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;position:fixed!important;left:10px!important;right:10px!important;bottom:max(10px,env(safe-area-inset-bottom))!important;top:auto!important;width:auto!important;max-height:min(72dvh,620px)!important;margin:0!important;padding:18px 16px 16px!important;overflow:auto!important;background:#fff!important;border:1px solid #dbe3ee!important;border-radius:22px!important;box-shadow:0 24px 80px rgba(15,23,42,.34)!important;z-index:2147483501!important}
+  #detailFilter.v6-detail-stable-open .row{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin-bottom:10px!important}
+  #detailFilter.v6-detail-stable-open input{width:100%!important;height:50px!important;font-size:15px!important;border-radius:12px!important}
+  #detailFilter.v6-detail-stable-open .apply-btn{display:block!important;width:100%!important;height:50px!important;margin-top:5px!important;border-radius:12px!important;font-size:15px!important;font-weight:900!important}
+}
