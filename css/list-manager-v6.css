@@ -759,3 +759,130 @@
     padding-right:5px!important;
   }
 }
+
+/* =========================================================
+   v6.0 STEP2.9 - PC·태블릿 메뉴/필터 최종 안정화
+   ========================================================= */
+@media (min-width:769px){
+  /* PC·태블릿에서는 배경 dim을 사용하지 않습니다. */
+  #v6CommandBackdrop,
+  #v6CommandBackdrop.open{
+    display:none!important;
+    opacity:0!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+  }
+  body.v6-menu-open{overflow:visible!important;}
+
+  /* 검색 영역은 검색창에 공간을 우선 배분하고 필터 버튼은 컴팩트하게 고정합니다. */
+  .filters{
+    grid-template-columns:minmax(360px,1fr) auto minmax(560px,auto)!important;
+    column-gap:8px!important;
+  }
+  .filters .filter-row{
+    display:grid!important;
+    grid-template-columns:72px 82px 116px 116px!important;
+    gap:6px!important;
+    width:max-content!important;
+    min-width:0!important;
+    overflow:visible!important;
+  }
+  .filters .filter-row>.top-reset-btn{
+    grid-column:1!important;
+    width:72px!important;
+    min-width:72px!important;
+    padding:0 10px!important;
+  }
+  .filters .filter-row>.detail-btn{
+    grid-column:2!important;
+    width:82px!important;
+    min-width:82px!important;
+    padding:0 10px!important;
+  }
+  .filters .filter-select-wrap{
+    display:contents!important;
+  }
+  .filters .filter-select-wrap>select{
+    grid-column:3!important;
+    width:116px!important;
+    min-width:116px!important;
+    max-width:116px!important;
+  }
+  .filters .filter-select-wrap>#sortDropdown{
+    grid-column:4!important;
+    width:116px!important;
+    min-width:116px!important;
+    max-width:116px!important;
+  }
+  .filters .filter-row>button,
+  .filters .filter-row select,
+  .filters #sortDropdownBtn{
+    height:42px!important;
+    min-height:42px!important;
+    font-size:14px!important;
+    font-weight:800!important;
+    line-height:1!important;
+    letter-spacing:-.2px!important;
+  }
+  .filters #sortDropdownBtn{
+    width:116px!important;
+    min-width:116px!important;
+    padding:0 12px!important;
+  }
+
+  /* 보기·작업 메뉴는 아래 방향의 세로 드롭다운으로만 표시합니다. */
+  .v6-command-menu{position:relative!important;overflow:visible!important;}
+  .v6-command-menu.open .v6-command-dropdown{
+    display:flex!important;
+    position:absolute!important;
+    top:calc(100% + 8px)!important;
+    right:0!important;
+    left:auto!important;
+    bottom:auto!important;
+    width:240px!important;
+    min-width:240px!important;
+    max-width:280px!important;
+    max-height:520px!important;
+    flex-direction:column!important;
+    flex-wrap:nowrap!important;
+    gap:3px!important;
+    padding:8px!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    white-space:normal!important;
+    background:#fff!important;
+    opacity:1!important;
+    visibility:visible!important;
+    pointer-events:auto!important;
+    z-index:2147482000!important;
+  }
+  .v6-command-dropdown button{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    flex:0 0 auto!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+    text-align:left!important;
+  }
+}
+
+/* 중간 폭 노트북에서도 필터 폭이 과도하게 커지지 않도록 축소합니다. */
+@media (min-width:769px) and (max-width:1450px){
+  .filters{
+    grid-template-columns:minmax(300px,1fr) auto minmax(500px,auto)!important;
+    gap:6px!important;
+  }
+  .filters .filter-row{
+    grid-template-columns:64px 74px 104px 104px!important;
+    gap:5px!important;
+  }
+  .filters .filter-row>.top-reset-btn{width:64px!important;min-width:64px!important;padding:0 7px!important;}
+  .filters .filter-row>.detail-btn{width:74px!important;min-width:74px!important;padding:0 7px!important;}
+  .filters .filter-select-wrap>select{width:104px!important;min-width:104px!important;max-width:104px!important;}
+  .filters .filter-select-wrap>#sortDropdown,
+  .filters #sortDropdownBtn{width:104px!important;min-width:104px!important;max-width:104px!important;}
+  .filters .filter-row>button,
+  .filters .filter-row select,
+  .filters #sortDropdownBtn{font-size:13px!important;}
+}
