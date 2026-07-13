@@ -329,7 +329,8 @@
       moneyLabel("보증금", item.deposit),
       moneyLabel("월세", item.rent),
       moneyLabel("관리비", item.fee),
-      moneyLabel("권리금", item.premium)
+      moneyLabel("권리금", item.premium),
+      moneyLabel("평수", item.area || item.pyeong)
     ].filter(Boolean).join("");
 
     var dealLabel = getDealLabel(item);
@@ -340,6 +341,20 @@
     }).map(function (value) {
       return '<span>' + escapeHtml(value) + '</span>';
     }).join("");
+
+    var travel = window.JSAiVisitUiV6 && typeof window.JSAiVisitUiV6.estimate === "function"
+      ? window.JSAiVisitUiV6.estimate(item)
+      : null;
+    var travelHtml = travel
+      ? '<div class="aiv-travel-strip"><span>도보 <strong>' + travel.walkMinutes + '분</strong> <small>(' + escapeHtml(travel.distanceText) + ')</small></span><span>차량 <strong>' + travel.carMinutes + '분</strong> <small>(' + escapeHtml(travel.distanceText) + ')</small></span></div>'
+      : '<div class="aiv-travel-strip pending"><span>도보·차량 예상시간 계산 중</span></div>';
+
+    var next = window.JSAiVisitUiV6 && typeof window.JSAiVisitUiV6.nextItem === "function"
+      ? window.JSAiVisitUiV6.nextItem(activeSession)
+      : null;
+    var nextHtml = next
+      ? '<div class="aiv-next-preview"><span>다음</span><strong>' + escapeHtml(next.name || next.address || "다음 매물") + '</strong><small>' + escapeHtml(buildAddressWithRoom(next)) + '</small></div>'
+      : '<div class="aiv-next-preview last"><span>마지막 매물</span></div>';
 
     return '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
       '<div class="aiv-current-top">' +
@@ -352,12 +367,11 @@
           '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
         '</div>' +
       '</div>' +
+      travelHtml +
       (priceBits ? '<div class="aiv-price-grid">' + priceBits + '</div>' : '') +
-      '<div class="aiv-detail-grid">' +
-        fieldLine("평수", item.area || item.pyeong) +
+      '<div class="aiv-compact-contact">' +
         fieldLine("임대인", item.landlordPhone) +
         fieldLine("세입자", item.tenantPhone) +
-        fieldLine("등록일", item.regDate) +
       '</div>' +
       '<div id="aivMemoBox" class="aiv-memo-box"><div class="aiv-memo-title">메모</div><div class="aiv-memo-text">' + escapeHtml(item.memo || "메모가 없습니다.") + '</div></div>' +
       '<div class="aiv-primary-actions">' +
@@ -369,6 +383,7 @@
         '<button type="button" class="recalc" onclick="JSAiVisitV6.recalculateRoute()">현위치 재계산</button>' +
         '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
       '</div>' +
+      nextHtml +
       '<div class="aiv-step-actions">' +
         '<button type="button" ' + (index === 0 ? 'disabled' : '') + ' onclick="JSAiVisitV6.goPrevious()">이전</button>' +
         '<button type="button" ' + (index >= total - 1 ? 'disabled' : '') + ' onclick="JSAiVisitV6.goNext()">다음</button>' +
@@ -393,7 +408,12 @@
     document.getElementById("aivWorkspaceTitle").textContent = "AI임장 · " + activeSession.listName;
     var statuses = activeSession.statuses || {};
     var holdCount = Object.keys(statuses).filter(function (key) { return statuses[key] === "hold"; }).length;
-    document.getElementById("aivWorkspaceProgress").textContent = (activeSession.currentIndex + 1) + " / " + items.length + " 진행 중" + (holdCount ? " · 보류 " + holdCount : "");
+    var percent = window.JSAiVisitUiV6 && typeof window.JSAiVisitUiV6.progress === "function"
+      ? window.JSAiVisitUiV6.progress(activeSession.currentIndex, items.length)
+      : Math.round(((activeSession.currentIndex + 1) / Math.max(1, items.length)) * 100);
+    document.getElementById("aivWorkspaceProgress").innerHTML =
+      '<span class="aiv-progress-text">' + (activeSession.currentIndex + 1) + ' / ' + items.length + ' 진행 중' + (holdCount ? ' · 보류 ' + holdCount : '') + '</span>' +
+      '<span class="aiv-progress-track"><i style="width:' + percent + '%"></i></span>';
     document.getElementById("aivRouteCount").textContent = items.length + "개";
     document.getElementById("aivCurrentCard").innerHTML = renderCurrentCard(current, activeSession.currentIndex, items.length);
     document.getElementById("aivRouteList").innerHTML = items.map(function (item, index) {
@@ -579,6 +599,61 @@
       lat: Number(coords.lat),
       lng: Number(coords.lng),
       name: item.building || item.name || item.address || "임장 매물"
+    });
+  }
+
+  function roadviewTopOffset() {
+    var viewport = window.visualViewport;
+    var offset = viewport ? Math.max(0, Number(viewport.offsetTop) || 0) : 0;
+    var tablet = window.matchMedia("(min-width: 769px) and (max-width: 1366px)").matches;
+    return tablet ? Math.max(82, offset + 72) : Math.max(10, offset + 10);
+  }
+
+  function syncRoadviewEmergencyClose() {
+    var modal = document.getElementById("roadviewModal");
+    if (!modal || !modal.classList.contains("open")) return;
+
+    var top = roadviewTopOffset();
+    modal.style.setProperty("--aiv-roadview-top-offset", top + "px");
+
+    var close = document.getElementById("aivRoadviewEmergencyClose");
+    if (!close) {
+      close = document.createElement("button");
+      close.id = "aivRoadviewEmergencyClose";
+      close.type = "button";
+      close.className = "aiv-roadview-emergency-close";
+      close.innerHTML = '<span aria-hidden="true">×</span><small>닫기</small>';
+      close.setAttribute("aria-label", "로드뷰 닫기");
+      close.addEventListener("click", function () {
+        if (typeof window.closeRoadviewModal === "function") window.closeRoadviewModal();
+      });
+      document.body.appendChild(close);
+    }
+    close.style.setProperty("top", (top + 8) + "px", "important");
+    close.classList.add("show");
+  }
+
+  function hideRoadviewEmergencyClose() {
+    var close = document.getElementById("aivRoadviewEmergencyClose");
+    if (close) close.classList.remove("show");
+  }
+
+  function watchRoadviewCloseButton() {
+    var modal = document.getElementById("roadviewModal");
+    if (!modal) return;
+    if (roadviewCloseObserver) roadviewCloseObserver.disconnect();
+    roadviewCloseObserver = new MutationObserver(function () {
+      if (modal.classList.contains("open")) syncRoadviewEmergencyClose();
+      else hideRoadviewEmergencyClose();
+    });
+    roadviewCloseObserver.observe(modal, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", syncRoadviewEmergencyClose);
+      window.visualViewport.addEventListener("scroll", syncRoadviewEmergencyClose);
+    }
+    window.addEventListener("orientationchange", function () {
+      window.setTimeout(syncRoadviewEmergencyClose, 250);
     });
   }
 
