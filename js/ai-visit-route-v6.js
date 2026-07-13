@@ -40,35 +40,71 @@
 
   function requestLocation(callback) {
     if (!navigator.geolocation) return callback(null);
-    var done = false;
+
+    var finished = false;
+    var watchId = null;
+    var hardStopTimer = null;
+
+    function cleanUp() {
+      if (watchId !== null) {
+        try { navigator.geolocation.clearWatch(watchId); } catch (error) {}
+        watchId = null;
+      }
+      if (hardStopTimer) {
+        window.clearTimeout(hardStopTimer);
+        hardStopTimer = null;
+      }
+    }
+
     function finish(value) {
-      if (done) return;
-      done = true;
+      if (finished) return;
+      finished = true;
+      cleanUp();
       callback(value);
     }
-    navigator.geolocation.getCurrentPosition(function (position) {
+
+    function accept(position) {
+      if (!position || !position.coords) return false;
       var lat = Number(position.coords.latitude);
       var lng = Number(position.coords.longitude);
-      if (!isFinite(lat) || !isFinite(lng)) return finish(null);
-      lastLocation = { lat: lat, lng: lng, timestamp: Date.now() };
+      if (!isFinite(lat) || !isFinite(lng)) return false;
+      lastLocation = {
+        lat: lat,
+        lng: lng,
+        accuracy: Number(position.coords.accuracy) || 0,
+        timestamp: Number(position.timestamp) || Date.now()
+      };
       finish(lastLocation);
-    }, function () {
-      navigator.geolocation.getCurrentPosition(function (position) {
-        var lat = Number(position.coords.latitude);
-        var lng = Number(position.coords.longitude);
-        if (!isFinite(lat) || !isFinite(lng)) return finish(null);
-        lastLocation = { lat: lat, lng: lng, timestamp: Date.now() };
-        finish(lastLocation);
-      }, function () { finish(null); }, {
-        enableHighAccuracy: true,
-        timeout: 9000,
-        maximumAge: 60000
-      });
-    }, {
-      enableHighAccuracy: false,
-      timeout: 3500,
-      maximumAge: 180000
-    });
+      return true;
+    }
+
+    function stageThreeWatch() {
+      if (finished) return;
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          function (position) { accept(position); },
+          function () {},
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+      } catch (error) {}
+      hardStopTimer = window.setTimeout(function () { finish(null); }, 12500);
+    }
+
+    function stageTwoHighAccuracy() {
+      if (finished) return;
+      navigator.geolocation.getCurrentPosition(
+        function (position) { accept(position); },
+        stageThreeWatch,
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    }
+
+    /* 태블릿은 Wi-Fi 위치가 먼저 잡히는 경우가 많아 저정밀 → 고정밀 → watch 순서로 시도합니다. */
+    navigator.geolocation.getCurrentPosition(
+      function (position) { accept(position); },
+      stageTwoHighAccuracy,
+      { enableHighAccuracy: false, timeout: 7000, maximumAge: 300000 }
+    );
   }
 
   function optimizeKeys(keys, startLocation) {
