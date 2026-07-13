@@ -503,97 +503,45 @@
   }
 
   function launchKakaoRoute(location, destination) {
-    var startLat = Number(location && location.lat);
-    var startLng = Number(location && location.lng);
     var endLat = Number(destination && destination.lat);
     var endLng = Number(destination && destination.lng);
-
-    if (![startLat, startLng, endLat, endLng].every(isFinite)) {
-      alert("내비 좌표를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    if (![endLat, endLng].every(isFinite)) {
+      alert("목적지 좌표를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
-    var sp = startLat.toFixed(7) + "," + startLng.toFixed(7);
     var ep = endLat.toFixed(7) + "," + endLng.toFixed(7);
-    var webUrl = "https://m.map.kakao.com/scheme/route?sp=" + encodeURIComponent(sp) + "&ep=" + encodeURIComponent(ep) + "&by=car";
+    var destinationName = encodeURIComponent((destination && destination.name) || "임장 매물");
 
-    if (!isAndroidDevice()) {
-      window.open(webUrl, "_blank", "noopener,noreferrer");
+    if (isAndroidDevice()) {
+      /* Android 휴대폰·태블릿은 카카오맵 앱이 기기 GPS를 출발지로 직접 사용하게 합니다.
+         브라우저에서 출발지를 억지로 전달하지 않아 태블릿의 빈 출발지 문제를 피하고,
+         웹 새창 fallback도 넣지 않아 앱 실행을 방해하지 않습니다. */
+      var intentUrl = "intent://route?ep=" + encodeURIComponent(ep) +
+        "&by=CAR&ename=" + destinationName +
+        "#Intent;scheme=kakaomap;package=net.daum.android.map;end";
+      window.location.href = intentUrl;
       return;
     }
 
-    /* Android 휴대폰·태블릿 공통: 패키지를 지정한 intent URI로 카카오맵 앱을 우선 실행합니다.
-       기존처럼 시간제 웹 새창을 강제로 띄우지 않아, 앱이 늦게 뜨는 태블릿에서도 브라우저가 먼저 열리지 않습니다. */
-    var fallback = encodeURIComponent(webUrl);
-    var intentUrl = "intent://route?sp=" + encodeURIComponent(sp) +
-      "&ep=" + encodeURIComponent(ep) +
-      "&by=car#Intent;scheme=kakaomap;package=net.daum.android.map;" +
-      "S.browser_fallback_url=" + fallback + ";end";
-
-    window.location.href = intentUrl;
+    var webUrl = "https://map.kakao.com/link/to/" + destinationName + "," + endLat.toFixed(7) + "," + endLng.toFixed(7);
+    window.open(webUrl, "_blank", "noopener,noreferrer");
   }
 
   function openNavigation() {
     var item = currentItem();
     if (!item) return alert("매물 정보를 찾지 못했습니다.");
     var coords = typeof window.getItemCoordinates === "function" ? window.getItemCoordinates(item) : null;
-    if (!coords || !isFinite(coords.lat) || !isFinite(coords.lng)) return alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
-
-    var cached = getFreshCachedLocation(600000);
-    if (cached) {
-      launchKakaoRoute(cached, { lat: Number(coords.lat), lng: Number(coords.lng) });
-      return;
+    if (!coords || !isFinite(Number(coords.lat)) || !isFinite(Number(coords.lng))) {
+      return alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
     }
 
-    var button = document.activeElement;
-    if (button && button.tagName === "BUTTON") {
-      button.disabled = true;
-      var original = button.textContent;
-      button.textContent = "현위치 확인 중";
-      window.setTimeout(function () { button.disabled = false; button.textContent = original; }, 8000);
-    }
-
-    requestCurrentLocation(function (location) {
-      if (button) { button.disabled = false; button.textContent = "내비"; }
-      launchKakaoRoute(location, { lat: Number(coords.lat), lng: Number(coords.lng) });
-    }, function () {
-      if (button) { button.disabled = false; button.textContent = "내비"; }
-      alert("현재 위치를 가져오지 못했습니다. 위치 권한과 GPS를 확인한 뒤 다시 눌러주세요.");
+    /* Android에서는 앱 자체의 현 위치를 출발지로 사용하므로 GPS 대기 없이 즉시 실행합니다. */
+    launchKakaoRoute(null, {
+      lat: Number(coords.lat),
+      lng: Number(coords.lng),
+      name: item.building || item.name || item.address || "임장 매물"
     });
-  }
-
-  function removeRoadviewEmergencyClose() {
-    var button = document.getElementById("aivRoadviewEmergencyClose");
-    if (button) button.remove();
-  }
-
-  function syncRoadviewEmergencyClose() {
-    var modal = document.getElementById("roadviewModal");
-    var isOpen = !!(modal && (modal.classList.contains("open") || modal.getAttribute("aria-hidden") === "false" || getComputedStyle(modal).display !== "none"));
-    var compactDevice = window.matchMedia("(max-width: 1366px), (pointer: coarse)").matches;
-    if (!isOpen || !compactDevice) {
-      removeRoadviewEmergencyClose();
-      return;
-    }
-    if (document.getElementById("aivRoadviewEmergencyClose")) return;
-    var button = document.createElement("button");
-    button.id = "aivRoadviewEmergencyClose";
-    button.type = "button";
-    button.className = "aiv-roadview-emergency-close";
-    button.setAttribute("aria-label", "로드뷰 닫기");
-    button.innerHTML = '<span aria-hidden="true">×</span><small>닫기</small>';
-    button.onclick = function () {
-      if (typeof window.closeRoadviewModal === "function") window.closeRoadviewModal();
-      removeRoadviewEmergencyClose();
-    };
-    document.body.appendChild(button);
-  }
-
-  function watchRoadviewCloseButton() {
-    var modal = document.getElementById("roadviewModal");
-    if (!modal || roadviewCloseObserver) return;
-    roadviewCloseObserver = new MutationObserver(syncRoadviewEmergencyClose);
-    roadviewCloseObserver.observe(modal, { attributes: true, attributeFilter: ["class", "aria-hidden", "style"] });
   }
 
   function openRoadview() {
