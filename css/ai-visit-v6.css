@@ -790,3 +790,76 @@ body.aiv-workspace-open { overflow: hidden !important; }
     min-height: 0 !important;
   }
 }
+
+/* =========================================================
+   v6.0 STEP3.6 — 태블릿 가로 로드뷰 헤더/본문 절대 분리
+   태블릿이 데스크톱 폭(1366px 초과)으로 보고되어도 class 기준으로 적용합니다.
+   ========================================================= */
+#roadviewModal.roadview-modal.aiv-tablet-landscape {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-dialog {
+  display: block !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-header {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) 40px !important;
+  width: 100% !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  margin: 0 !important;
+  padding: 4px 8px !important;
+  z-index: 2147483000 !important;
+  background: #fff !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  box-sizing: border-box !important;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-tab-content {
+  position: absolute !important;
+  top: 48px !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-pane,
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-container,
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-full-map {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-view-tabs,
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-heading,
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-close {
+  position: relative !important;
+  z-index: 2147483001 !important;
+}
