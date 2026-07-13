@@ -606,8 +606,13 @@
 
   function roadviewViewportMetrics() {
     var viewport = window.visualViewport;
-    var width = viewport ? Math.round(viewport.width) : window.innerWidth;
-    var height = viewport ? Math.round(viewport.height) : window.innerHeight;
+    var width = viewport ? Math.round(viewport.width) : Math.round(window.innerWidth || document.documentElement.clientWidth || 0);
+    var heightCandidates = [
+      viewport ? Math.round(viewport.height) : 0,
+      Math.round(window.innerHeight || 0),
+      Math.round(document.documentElement.clientHeight || 0)
+    ].filter(function (value) { return value > 0; });
+    var height = heightCandidates.length ? Math.min.apply(Math, heightCandidates) : 0;
     var top = viewport ? Math.max(0, Math.round(viewport.offsetTop || 0)) : 0;
     var left = viewport ? Math.max(0, Math.round(viewport.offsetLeft || 0)) : 0;
     return { width: width, height: height, top: top, left: left };
@@ -618,17 +623,22 @@
     if (!modal || !modal.classList.contains("open")) return;
 
     var metrics = roadviewViewportMetrics();
-    var isTabletLandscape = metrics.width >= 769 && metrics.width <= 1366 && metrics.width > metrics.height;
-    var outerGap = isTabletLandscape ? 6 : 8;
+    var isTablet = metrics.width >= 769 && metrics.width <= 1366;
+    var isTabletLandscape = isTablet && metrics.width > metrics.height;
 
-    modal.style.setProperty("--aiv-roadview-visible-height", metrics.height + "px");
-    modal.style.setProperty("--aiv-roadview-visible-width", metrics.width + "px");
-    modal.style.setProperty("--aiv-roadview-offset-top", metrics.top + "px");
-    modal.style.setProperty("--aiv-roadview-offset-left", metrics.left + "px");
-    modal.style.setProperty("--aiv-roadview-outer-gap", outerGap + "px");
+    /* 가로모드 브라우저는 주소창/하단바를 viewport에 포함해 보고하는 경우가 있어 보수적으로 여백을 둡니다. */
+    var topInset = isTabletLandscape ? 54 : 10;
+    var bottomInset = isTabletLandscape ? 34 : 10;
+    var sideInset = isTabletLandscape ? 10 : 8;
+    var dialogHeight = Math.max(260, metrics.height - topInset - bottomInset);
+    var dialogWidth = Math.max(320, metrics.width - (sideInset * 2));
+
+    modal.style.setProperty("--aiv-roadview-dialog-top", (metrics.top + topInset) + "px");
+    modal.style.setProperty("--aiv-roadview-dialog-left", (metrics.left + sideInset) + "px");
+    modal.style.setProperty("--aiv-roadview-dialog-width", dialogWidth + "px");
+    modal.style.setProperty("--aiv-roadview-dialog-height", dialogHeight + "px");
     modal.classList.toggle("aiv-tablet-landscape", isTabletLandscape);
 
-    /* 이전 보완판에서 만든 큰 비상 닫기 버튼은 제거합니다. */
     var emergencyClose = document.getElementById("aivRoadviewEmergencyClose");
     if (emergencyClose) emergencyClose.remove();
   }
