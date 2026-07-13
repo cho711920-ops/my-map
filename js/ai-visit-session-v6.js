@@ -86,7 +86,13 @@
         '<div class="aiv-workspace-main">' +
           '<main class="aiv-current-panel">' +
             '<div class="aiv-section-kicker">현재 방문 매물</div>' +
-            '<div id="aivRouteMap" class="aiv-route-map"></div>' +
+            '<div class="aiv-map-stage">' +
+              '<div id="aivRouteMap" class="aiv-route-map"></div>' +
+              '<div class="aiv-map-controls">' +
+                '<button type="button" onclick="JSAiVisitV6.showAllOnMap()">전체보기</button>' +
+                '<button type="button" onclick="JSAiVisitV6.focusCurrentOnRouteMap()">현재매물</button>' +
+              '</div>' +
+            '</div>' +
             '<div id="aivCurrentCard" class="aiv-current-card"></div>' +
           '</main>' +
           '<aside class="aiv-route-panel">' +
@@ -602,19 +608,24 @@
     });
   }
 
-  function roadviewTopOffset() {
+  function roadviewViewportMetrics() {
     var viewport = window.visualViewport;
-    var offset = viewport ? Math.max(0, Number(viewport.offsetTop) || 0) : 0;
-    var tablet = window.matchMedia("(min-width: 769px) and (max-width: 1366px)").matches;
-    return tablet ? Math.max(82, offset + 72) : Math.max(10, offset + 10);
+    var width = viewport ? Math.round(viewport.width) : window.innerWidth;
+    var height = viewport ? Math.round(viewport.height) : window.innerHeight;
+    var top = viewport ? Math.max(0, Math.round(viewport.offsetTop || 0)) : 0;
+    var left = viewport ? Math.max(0, Math.round(viewport.offsetLeft || 0)) : 0;
+    return { width: width, height: height, top: top, left: left };
   }
 
   function syncRoadviewEmergencyClose() {
     var modal = document.getElementById("roadviewModal");
     if (!modal || !modal.classList.contains("open")) return;
 
-    var top = roadviewTopOffset();
-    modal.style.setProperty("--aiv-roadview-top-offset", top + "px");
+    var metrics = roadviewViewportMetrics();
+    modal.style.setProperty("--aiv-roadview-visible-height", metrics.height + "px");
+    modal.style.setProperty("--aiv-roadview-visible-width", metrics.width + "px");
+    modal.style.setProperty("--aiv-roadview-offset-top", metrics.top + "px");
+    modal.style.setProperty("--aiv-roadview-offset-left", metrics.left + "px");
 
     var close = document.getElementById("aivRoadviewEmergencyClose");
     if (!close) {
@@ -629,7 +640,8 @@
       });
       document.body.appendChild(close);
     }
-    close.style.setProperty("top", (top + 8) + "px", "important");
+    close.style.setProperty("top", (metrics.top + 12) + "px", "important");
+    close.style.setProperty("right", "12px", "important");
     close.classList.add("show");
   }
 
@@ -677,6 +689,16 @@
     if (index < 0 || index >= items.length) return;
     activeSession.currentIndex = index;
     renderWorkspace();
+  }
+
+  function showAllOnMap() {
+    if (!activeSession || !window.JSAiVisitRouteV6 || typeof window.JSAiVisitRouteV6.fitAll !== "function") return;
+    window.JSAiVisitRouteV6.fitAll(activeSession);
+  }
+
+  function focusCurrentOnRouteMap() {
+    if (!activeSession || !window.JSAiVisitRouteV6 || typeof window.JSAiVisitRouteV6.focusIndex !== "function") return;
+    window.JSAiVisitRouteV6.focusIndex(activeSession, activeSession.currentIndex);
   }
 
   function recalculateRoute() {
@@ -806,6 +828,8 @@
       if (nextIndex >= 0) goTo(nextIndex);
     },
     recalculateRoute: recalculateRoute,
+    showAllOnMap: showAllOnMap,
+    focusCurrentOnRouteMap: focusCurrentOnRouteMap,
     holdCurrent: holdCurrent,
     goTo: goTo,
     requestExit: requestExit,
