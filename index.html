@@ -30,7 +30,8 @@
       </div>
 
       <div class="filter-row">
-        <button id="detailBtn" class="detail-btn" onclick="toggleDetailFilter()">상세▼</button>
+        <button id="topResetBtn" class="top-reset-btn" type="button" onclick="resetFilter()">초기화</button>
+        <button id="detailBtn" class="detail-btn" type="button" onclick="toggleDetailFilter()">상세▼</button>
 
         <div class="filter-select-wrap">
           <select id="typeFilter" onchange="applyFilter()">
@@ -83,8 +84,7 @@
             <div class="v6-command-divider"></div>
             <button id="favoriteBtn" class="favorite-filter-btn" type="button" onclick="openListManager('favorite'); closeV6ActionMenus()">찜목록</button>
             <button type="button" onclick="openListManager('visit'); closeV6ActionMenus()">임장목록</button>
-            <div class="v6-command-divider"></div>
-            <button class="reset-btn" type="button" onclick="resetFilter(); closeV6ActionMenus()">전체보기로 초기화</button>
+
           </div>
         </div>
 
