@@ -103,3 +103,136 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-primary .search-row{grid-template-columns:minmax(0,1fr) 64px!important}
   .top-reset-btn,.detail-btn,.v6-filter-control select,.sort-dropdown-btn{font-size:13px!important;padding-left:8px!important;padding-right:26px!important}
 }
+
+/* =========================================================
+   v6.0 STEP2.13 — PC 툴바 2행 정렬 + 프레임 여백 제거
+   ========================================================= */
+@media (min-width:1201px) {
+  .filters {
+    left:253px !important;
+    right:0 !important;
+    top:0 !important;
+    height:88px !important;
+    min-height:88px !important;
+    padding:7px 10px !important;
+    display:grid !important;
+    grid-template-columns:minmax(420px,620px) 76px 76px minmax(0,1fr) !important;
+    grid-template-rows:36px 36px !important;
+    column-gap:6px !important;
+    row-gap:6px !important;
+    align-items:center !important;
+    overflow:visible !important;
+  }
+
+  .v6-toolbar-primary {
+    display:contents !important;
+  }
+
+  .v6-toolbar-primary .search-row {
+    grid-column:1;
+    grid-row:1;
+    width:100% !important;
+    min-width:0 !important;
+  }
+
+  .top-reset-btn {
+    grid-column:2;
+    grid-row:1;
+    width:76px !important;
+    min-width:76px !important;
+  }
+
+  .detail-btn {
+    grid-column:3;
+    grid-row:1;
+    width:76px !important;
+    min-width:76px !important;
+  }
+
+  .v6-type-control {
+    grid-column:1;
+    grid-row:2;
+    width:112px !important;
+    min-width:112px !important;
+    justify-self:start !important;
+  }
+
+  #sortDropdown {
+    grid-column:1;
+    grid-row:2;
+    width:112px !important;
+    min-width:112px !important;
+    margin-left:118px !important;
+    justify-self:start !important;
+  }
+
+  .v6-toolbar-secondary {
+    grid-column:2 / -1;
+    grid-row:2;
+    justify-content:flex-start !important;
+    align-items:center !important;
+    gap:6px !important;
+    min-width:0 !important;
+    overflow:visible !important;
+  }
+
+  /* 기존 프레임 보정과 중복되던 top/padding 제거 */
+  #wrap {
+    position:fixed !important;
+    top:88px !important;
+    right:0 !important;
+    bottom:0 !important;
+    left:0 !important;
+    width:auto !important;
+    height:auto !important;
+    min-height:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+  }
+
+  #sidebar,
+  #map {
+    top:auto !important;
+    height:100% !important;
+    min-height:0 !important;
+  }
+}
+
+@media (min-width:768px) and (max-width:1200px) {
+  #wrap {
+    position:fixed !important;
+    top:128px !important;
+    right:0 !important;
+    bottom:0 !important;
+    left:0 !important;
+    width:auto !important;
+    height:auto !important;
+    min-height:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+  }
+
+  #sidebar,
+  #map {
+    top:auto !important;
+    height:100% !important;
+    min-height:0 !important;
+  }
+}
+
+/* 모바일 상세필터는 항상 구분/정렬과 같은 독립 레이어로 표시 */
+@media (max-width:767px) {
+  #detailFilter.open {
+    display:block !important;
+    visibility:visible !important;
+    opacity:1 !important;
+    pointer-events:auto !important;
+  }
+
+  .v6-detail-dim.open {
+    display:block !important;
+    visibility:visible !important;
+    opacity:1 !important;
+    pointer-events:auto !important;
+  }
+}
