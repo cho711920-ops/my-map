@@ -610,3 +610,91 @@ body.aiv-workspace-open { overflow: hidden !important; }
     height: auto !important;
   }
 }
+
+/* =========================================================
+   v6.0 STEP3.3 — 지도 제어버튼 제거 / 태블릿 가로 로드뷰 맞춤
+   ========================================================= */
+.aiv-map-controls {
+  display: none !important;
+}
+
+/* 이전 보완판의 큰 비상 닫기 버튼은 모든 기기에서 제거 */
+#aivRoadviewEmergencyClose,
+.aiv-roadview-emergency-close,
+.aiv-roadview-emergency-close.show {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+@media (min-width: 769px) and (max-width: 1366px) {
+  #roadviewModal.roadview-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    position: fixed !important;
+    top: calc(var(--aiv-roadview-offset-top, 0px) + var(--aiv-roadview-outer-gap, 8px)) !important;
+    left: calc(var(--aiv-roadview-offset-left, 0px) + var(--aiv-roadview-outer-gap, 8px)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(var(--aiv-roadview-visible-width, 100vw) - (var(--aiv-roadview-outer-gap, 8px) * 2)) !important;
+    height: calc(var(--aiv-roadview-visible-height, 100dvh) - (var(--aiv-roadview-outer-gap, 8px) * 2)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    border-radius: 12px !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    flex: 0 0 auto !important;
+    min-height: 50px !important;
+    max-height: 56px !important;
+    padding: 6px 9px !important;
+    box-sizing: border-box !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-tab-content {
+    position: relative !important;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-pane,
+  #roadviewModal.roadview-modal .roadview-container,
+  #roadviewModal.roadview-modal .roadview-full-map {
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  /* 가로모드에서는 헤더를 더 얇게 하여 위·아래 잘림을 방지 */
+  #roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-header {
+    min-height: 44px !important;
+    max-height: 48px !important;
+    padding: 4px 8px !important;
+    gap: 6px !important;
+  }
+
+  #roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-view-tab {
+    height: 32px !important;
+    min-width: 56px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+  }
+
+  #roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-close {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 22px !important;
+  }
+}
