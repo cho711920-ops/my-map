@@ -267,7 +267,12 @@
       closeModal("aiVisitConfirmModal");
       openWorkspace();
       if (!(result && result.optimized)) {
-        window.setTimeout(function () { alert("현재 위치를 가져오지 못해 임장목록 순서로 시작합니다."); }, 120);
+        window.setTimeout(function () {
+          var detail = result && result.locationError && result.locationError.message
+            ? "\n원인: " + result.locationError.message
+            : "";
+          alert("현재 위치를 가져오지 못해 임장목록 순서로 시작합니다." + detail + "\n\n태블릿의 위치 기능이 켜져 있는지 확인한 뒤, AI임장 화면의 현위치 재계산을 눌러 다시 시도할 수 있습니다.");
+        }, 120);
       }
     }
 
@@ -606,41 +611,93 @@
 
   function roadviewViewportMetrics() {
     var viewport = window.visualViewport;
-    var width = viewport ? Math.round(viewport.width) : Math.round(window.innerWidth || document.documentElement.clientWidth || 0);
-    var heightCandidates = [
-      viewport ? Math.round(viewport.height) : 0,
-      Math.round(window.innerHeight || 0),
-      Math.round(document.documentElement.clientHeight || 0)
-    ].filter(function (value) { return value > 0; });
-    var height = heightCandidates.length ? Math.min.apply(Math, heightCandidates) : 0;
-    var top = viewport ? Math.max(0, Math.round(viewport.offsetTop || 0)) : 0;
-    var left = viewport ? Math.max(0, Math.round(viewport.offsetLeft || 0)) : 0;
-    return { width: width, height: height, top: top, left: left };
+    var width = viewport ? Number(viewport.width) : Number(window.innerWidth || document.documentElement.clientWidth || 0);
+    var height = viewport ? Number(viewport.height) : Number(window.innerHeight || document.documentElement.clientHeight || 0);
+    var top = viewport ? Number(viewport.offsetTop || 0) : 0;
+    var left = viewport ? Number(viewport.offsetLeft || 0) : 0;
+    return {
+      width: Math.max(0, Math.round(width)),
+      height: Math.max(0, Math.round(height)),
+      top: Math.max(0, Math.round(top)),
+      left: Math.max(0, Math.round(left))
+    };
   }
 
   function syncRoadviewViewport() {
     var modal = document.getElementById("roadviewModal");
     if (!modal || !modal.classList.contains("open")) return;
+    var dialog = modal.querySelector(".roadview-modal-dialog");
+    var header = modal.querySelector(".roadview-modal-header");
+    var content = modal.querySelector(".roadview-tab-content");
+    if (!dialog || !header || !content) return;
 
     var metrics = roadviewViewportMetrics();
-    var isTablet = metrics.width >= 769 && metrics.width <= 1366;
-    var isTabletLandscape = isTablet && metrics.width > metrics.height;
+    var isTouch = (navigator.maxTouchPoints || 0) > 0;
+    var isLandscape = metrics.width > metrics.height;
+    var isTabletLandscape = isTouch && isLandscape && metrics.width >= 700;
 
-    /* 가로모드 브라우저는 주소창/하단바를 viewport에 포함해 보고하는 경우가 있어 보수적으로 여백을 둡니다. */
-    var topInset = isTabletLandscape ? 54 : 10;
-    var bottomInset = isTabletLandscape ? 34 : 10;
-    var sideInset = isTabletLandscape ? 10 : 8;
-    var dialogHeight = Math.max(260, metrics.height - topInset - bottomInset);
-    var dialogWidth = Math.max(320, metrics.width - (sideInset * 2));
+    /* visualViewport는 이미 브라우저 주소창과 하단 시스템바를 제외한 실제 웹 표시영역입니다.
+       따라서 별도 54px/34px 보정을 더하지 않고, 표시영역 안쪽 8px에 정확히 맞춥니다. */
+    var gap = isTabletLandscape ? 8 : 6;
+    var headerHeight = isTabletLandscape ? 46 : 52;
+    var dialogWidth = Math.max(320, metrics.width - gap * 2);
+    var dialogHeight = Math.max(260, metrics.height - gap * 2);
 
-    modal.style.setProperty("--aiv-roadview-dialog-top", (metrics.top + topInset) + "px");
-    modal.style.setProperty("--aiv-roadview-dialog-left", (metrics.left + sideInset) + "px");
-    modal.style.setProperty("--aiv-roadview-dialog-width", dialogWidth + "px");
-    modal.style.setProperty("--aiv-roadview-dialog-height", dialogHeight + "px");
     modal.classList.toggle("aiv-tablet-landscape", isTabletLandscape);
+    modal.style.position = "fixed";
+    modal.style.inset = "0";
+    modal.style.padding = "0";
+    modal.style.overflow = "hidden";
+
+    dialog.style.position = "fixed";
+    dialog.style.top = (metrics.top + gap) + "px";
+    dialog.style.left = (metrics.left + gap) + "px";
+    dialog.style.right = "auto";
+    dialog.style.bottom = "auto";
+    dialog.style.width = dialogWidth + "px";
+    dialog.style.height = dialogHeight + "px";
+    dialog.style.maxWidth = "none";
+    dialog.style.maxHeight = "none";
+    dialog.style.margin = "0";
+    dialog.style.transform = "none";
+    dialog.style.display = "flex";
+    dialog.style.flexDirection = "column";
+    dialog.style.overflow = "hidden";
+    dialog.style.boxSizing = "border-box";
+
+    header.style.display = "grid";
+    header.style.gridTemplateColumns = "auto minmax(0,1fr) 40px";
+    header.style.flex = "0 0 " + headerHeight + "px";
+    header.style.height = headerHeight + "px";
+    header.style.minHeight = headerHeight + "px";
+    header.style.maxHeight = headerHeight + "px";
+    header.style.boxSizing = "border-box";
+    header.style.position = "relative";
+    header.style.zIndex = "100";
+    header.style.background = "#fff";
+
+    content.style.position = "relative";
+    content.style.flex = "1 1 auto";
+    content.style.height = Math.max(0, dialogHeight - headerHeight) + "px";
+    content.style.minHeight = "0";
+    content.style.overflow = "hidden";
 
     var emergencyClose = document.getElementById("aivRoadviewEmergencyClose");
     if (emergencyClose) emergencyClose.remove();
+
+    /* 크기 변경 뒤 카카오 지도/로드뷰가 새 영역을 다시 계산하게 합니다. */
+    window.setTimeout(function () {
+      try {
+        if (window.roadviewInstance && window.kakao && kakao.maps && kakao.maps.event) {
+          kakao.maps.event.trigger(window.roadviewInstance, "resize");
+        }
+      } catch (error) {}
+      try {
+        if (window.roadviewFullMap && window.kakao && kakao.maps && kakao.maps.event) {
+          kakao.maps.event.trigger(window.roadviewFullMap, "resize");
+        }
+      } catch (error) {}
+    }, 80);
   }
 
   function watchRoadviewViewport() {
