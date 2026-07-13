@@ -516,3 +516,97 @@ body.aiv-workspace-open { overflow: hidden !important; }
   .aiv-step-actions button { min-height: 38px; }
   .aiv-route-panel { display: none !important; }
 }
+
+/* =========================================================
+   v6.0 STEP3.2 — 큰 동선지도 / 지도 제어 / 태블릿 로드뷰 실화면 맞춤
+   ========================================================= */
+.aiv-map-stage {
+  position: relative;
+  width: 100%;
+  margin-bottom: 14px;
+}
+.aiv-map-stage .aiv-route-map {
+  margin-bottom: 0 !important;
+}
+.aiv-map-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+}
+.aiv-map-controls button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(23, 63, 120, .18);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .96);
+  color: #1b4f99;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .16);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.aiv-map-controls button:active { transform: translateY(1px); }
+
+.aiv-route-map {
+  height: clamp(300px, 44vh, 520px) !important;
+  min-height: 300px !important;
+}
+
+@media (max-width: 640px) {
+  .aiv-route-map {
+    height: clamp(230px, 35dvh, 340px) !important;
+    min-height: 230px !important;
+    margin-bottom: 0 !important;
+  }
+  .aiv-map-stage { margin-bottom: 8px; }
+  .aiv-map-controls {
+    top: 7px;
+    right: 7px;
+    gap: 5px;
+  }
+  .aiv-map-controls button {
+    min-height: 31px;
+    padding: 0 9px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+}
+
+/* 태블릿 로드뷰는 CSS viewport가 아니라 visualViewport 실측값으로 맞춥니다. */
+@media (min-width: 769px) and (max-width: 1366px) {
+  #roadviewModal.roadview-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    position: fixed !important;
+    top: calc(var(--aiv-roadview-offset-top, 0px) + 8px) !important;
+    left: calc(var(--aiv-roadview-offset-left, 0px) + 8px) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(var(--aiv-roadview-visible-width, 100vw) - 16px) !important;
+    height: calc(var(--aiv-roadview-visible-height, 100dvh) - 16px) !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+  }
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    flex: 0 0 auto !important;
+    min-height: 54px !important;
+    max-height: 64px !important;
+    padding: 7px 10px !important;
+  }
+  #roadviewModal.roadview-modal .roadview-tab-content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+}
