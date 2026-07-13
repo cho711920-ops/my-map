@@ -546,3 +546,142 @@
   migrateLegacyFavorites();
   ensureModal();
 })();
+
+/* =========================================================
+   STEP2.6 모바일 메뉴 포털 안정화
+   - 보기/작업/정렬을 body 직속 단일 바텀시트로 표시
+   - 기존 stacking-context 및 투명 레이어 클릭 충돌 제거
+   ========================================================= */
+(function () {
+  "use strict";
+
+  function isMobileLayout() {
+    return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+  }
+
+  function ensureMobileSheet() {
+    var root = document.getElementById("v6MobileMenuPortal");
+    if (root) return root;
+
+    root = document.createElement("div");
+    root.id = "v6MobileMenuPortal";
+    root.className = "v6-mobile-menu-portal";
+    root.innerHTML =
+      '<div class="v6-mobile-menu-dim" data-v6-sheet-close></div>' +
+      '<section class="v6-mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="v6MobileMenuTitle">' +
+        '<div class="v6-mobile-menu-handle" aria-hidden="true"></div>' +
+        '<div class="v6-mobile-menu-head">' +
+          '<strong id="v6MobileMenuTitle"></strong>' +
+          '<button type="button" class="v6-mobile-menu-close" data-v6-sheet-close aria-label="닫기">×</button>' +
+        '</div>' +
+        '<div id="v6MobileMenuBody" class="v6-mobile-menu-body"></div>' +
+      '</section>';
+
+    root.addEventListener("click", function (event) {
+      if (event.target.closest("[data-v6-sheet-close]")) closeMobileSheet();
+    });
+    document.body.appendChild(root);
+    return root;
+  }
+
+  function closeOriginalMenus() {
+    document.querySelectorAll(".v6-command-menu.open").forEach(function (menu) {
+      menu.classList.remove("open");
+      var trigger = menu.querySelector(".v6-command-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    });
+    var sort = document.getElementById("sortDropdown");
+    if (sort) sort.classList.remove("open");
+    var sortButton = document.getElementById("sortDropdownBtn");
+    if (sortButton) sortButton.setAttribute("aria-expanded", "false");
+    var oldBackdrop = document.getElementById("v6CommandBackdrop");
+    if (oldBackdrop) oldBackdrop.classList.remove("open");
+    document.body.classList.remove("v6-menu-open");
+  }
+
+  function closeMobileSheet() {
+    var root = document.getElementById("v6MobileMenuPortal");
+    if (root) root.classList.remove("open");
+    document.body.classList.remove("v6-mobile-sheet-open");
+  }
+
+  function cloneButtons(source, body, closeAfterClick) {
+    Array.prototype.forEach.call(source.children, function (child) {
+      if (child.classList && child.classList.contains("v6-command-divider")) {
+        var divider = document.createElement("div");
+        divider.className = "v6-mobile-menu-divider";
+        body.appendChild(divider);
+        return;
+      }
+      if (child.tagName !== "BUTTON") return;
+      var clone = child.cloneNode(true);
+      clone.removeAttribute("id");
+      clone.classList.add("v6-mobile-menu-item");
+      clone.style.display = "flex";
+      clone.addEventListener("click", function () {
+        if (closeAfterClick) window.setTimeout(closeMobileSheet, 0);
+      });
+      body.appendChild(clone);
+    });
+  }
+
+  function openMobileSheet(title, source, type) {
+    if (!source) return;
+    closeOriginalMenus();
+    var root = ensureMobileSheet();
+    var body = root.querySelector("#v6MobileMenuBody");
+    var heading = root.querySelector("#v6MobileMenuTitle");
+    heading.textContent = title;
+    body.innerHTML = "";
+    cloneButtons(source, body, true);
+    root.setAttribute("data-menu-type", type || "");
+    root.classList.add("open");
+    document.body.classList.add("v6-mobile-sheet-open");
+  }
+
+  var desktopToggleAction = window.toggleV6ActionMenu;
+  window.toggleV6ActionMenu = function (name, event) {
+    if (!isMobileLayout()) {
+      return desktopToggleAction ? desktopToggleAction(name, event) : undefined;
+    }
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    var source = document.getElementById("v6ActionMenu_" + name);
+    openMobileSheet(name === "view" ? "보기" : "작업", source, name);
+  };
+
+  var desktopCloseActions = window.closeV6ActionMenus;
+  window.closeV6ActionMenus = function () {
+    closeMobileSheet();
+    closeOriginalMenus();
+    if (!isMobileLayout() && desktopCloseActions) desktopCloseActions();
+  };
+
+  var desktopToggleSort = window.toggleSortDropdown;
+  window.toggleSortDropdown = function (event) {
+    if (!isMobileLayout()) {
+      return desktopToggleSort ? desktopToggleSort(event) : undefined;
+    }
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    openMobileSheet("정렬", document.getElementById("sortDropdownMenu"), "sort");
+  };
+
+  var desktopCloseSort = window.closeSortDropdown;
+  window.closeSortDropdown = function () {
+    closeMobileSheet();
+    closeOriginalMenus();
+    if (!isMobileLayout() && desktopCloseSort) desktopCloseSort();
+  };
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") closeMobileSheet();
+  });
+  window.addEventListener("resize", function () {
+    if (!isMobileLayout()) closeMobileSheet();
+  });
+})();
