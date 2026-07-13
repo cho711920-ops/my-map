@@ -1,73 +1,68 @@
-/* JS부동산 v6.0 STEP3.1 - 모바일 상세필터 포털 안정화 */
+/* JS부동산 v6.0 STEP3.2 - 모바일 상세필터를 구분/정렬처럼 버튼 아래에 표시 */
 @media (max-width: 768px) {
-  body.v6-detail-portal-lock { overflow: hidden !important; }
-
-  .v6-detail-portal-dim {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 2147483600;
-    background: rgba(15, 23, 42, .56);
-    pointer-events: auto;
+  #v6DetailPortalDim,
+  #v6DetailStableDim,
+  #v6DetailDim {
+    display: none !important;
+    pointer-events: none !important;
   }
-  .v6-detail-portal-dim.open { display: block !important; }
 
-  body > #detailFilter.v6-detail-portal-open {
+  body.v6-detail-portal-lock,
+  body.v6-detail-stable-lock {
+    overflow: auto !important;
+  }
+
+  #detailFilter.v6-detail-dropdown-open {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
     pointer-events: auto !important;
     position: fixed !important;
-    left: 10px !important;
-    right: 10px !important;
-    top: auto !important;
-    bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    left: var(--v6-detail-left, 8px) !important;
+    right: var(--v6-detail-right, 8px) !important;
+    top: var(--v6-detail-top, 110px) !important;
+    bottom: auto !important;
     width: auto !important;
     max-width: none !important;
-    max-height: min(72dvh, 620px) !important;
+    max-height: min(var(--v6-detail-max-height, 58dvh), 430px) !important;
     margin: 0 !important;
-    padding: 18px 16px 16px !important;
-    overflow: auto !important;
+    padding: 12px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     background: #fff !important;
-    border: 1px solid #dbe3ee !important;
-    border-radius: 22px !important;
-    box-shadow: 0 24px 80px rgba(15, 23, 42, .36) !important;
+    border: 1px solid #cfd8e6 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .22) !important;
     transform: none !important;
     z-index: 2147483601 !important;
   }
 
-  body > #detailFilter.v6-detail-portal-open::before {
-    content: "상세필터";
-    display: block;
-    margin: 0 0 14px;
-    color: #172033;
-    font-size: 19px;
-    font-weight: 900;
-  }
+  #detailFilter.v6-detail-dropdown-open::before { display: none !important; }
 
-  body > #detailFilter.v6-detail-portal-open .row {
+  #detailFilter.v6-detail-dropdown-open .row {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    margin-bottom: 10px !important;
+    gap: 8px !important;
+    margin-bottom: 8px !important;
   }
 
-  body > #detailFilter.v6-detail-portal-open input {
+  #detailFilter.v6-detail-dropdown-open input {
     width: 100% !important;
-    height: 50px !important;
     min-width: 0 !important;
+    height: 42px !important;
     margin: 0 !important;
-    font-size: 15px !important;
-    border-radius: 12px !important;
+    padding: 0 10px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
   }
 
-  body > #detailFilter.v6-detail-portal-open .apply-btn {
+  #detailFilter.v6-detail-dropdown-open .apply-btn {
     display: block !important;
     width: 100% !important;
-    height: 50px !important;
-    margin: 5px 0 0 !important;
-    border-radius: 12px !important;
-    font-size: 15px !important;
+    height: 43px !important;
+    margin: 2px 0 0 !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
     font-weight: 900 !important;
   }
 }
