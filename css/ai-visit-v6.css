@@ -741,3 +741,52 @@ body.aiv-workspace-open { overflow: hidden !important; }
     padding: 3px 8px !important;
   }
 }
+
+/* =========================================================
+   v6.0 STEP3.5 — 태블릿 가로 로드뷰 실제 표시영역 강제 고정
+   JS 인라인 계산을 최우선으로 사용하며, 헤더/본문 비율만 보장합니다.
+   ========================================================= */
+@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  #roadviewModal.roadview-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    transform: none !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) 40px !important;
+    flex: 0 0 46px !important;
+    height: 46px !important;
+    min-height: 46px !important;
+    max-height: 46px !important;
+    padding: 4px 8px !important;
+    position: relative !important;
+    z-index: 100 !important;
+    background: #fff !important;
+    box-sizing: border-box !important;
+  }
+  #roadviewModal.roadview-modal .roadview-tab-content {
+    position: relative !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  #roadviewModal.roadview-modal .roadview-pane,
+  #roadviewModal.roadview-modal .roadview-container,
+  #roadviewModal.roadview-modal .roadview-full-map {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+}
