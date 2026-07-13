@@ -21,6 +21,7 @@
 .v6-filter-control{position:relative;width:112px!important;min-width:112px!important}
 .v6-filter-control select,.sort-dropdown-btn{width:100%!important;min-width:0!important;padding:0 34px 0 12px!important;border:1px solid var(--v6-border)!important;background:#fff!important;color:var(--v6-text)!important;text-align:left!important;appearance:none!important;-webkit-appearance:none!important;background-image:linear-gradient(45deg,transparent 50%,#526174 50%),linear-gradient(135deg,#526174 50%,transparent 50%)!important;background-position:calc(100% - 15px) 15px,calc(100% - 10px) 15px!important;background-size:5px 5px,5px 5px!important;background-repeat:no-repeat!important}
 .sort-dropdown-btn{display:flex!important;align-items:center!important;justify-content:space-between!important;background-image:none!important;cursor:pointer}
+.sort-dropdown-btn::after{display:none!important;content:none!important}
 .v6-filter-caret,.v6-command-caret{display:inline-block;width:7px;height:7px;border-right:2px solid #526174;border-bottom:2px solid #526174;transform:rotate(45deg) translateY(-2px);transform-origin:center;transition:transform .15s ease;flex:0 0 auto}
 .sort-dropdown.open .v6-filter-caret,.v6-command-menu.open .v6-command-caret{transform:rotate(225deg) translate(-1px,-1px)}
 .v6-sort-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -48,8 +49,10 @@ body.v6-menu-open{overflow:auto!important}
   #wrap{padding-top:88px!important}
   .header{height:88px!important;width:245px!important;display:flex!important;align-items:center!important;font-size:22px!important}
   .filters{position:fixed!important;top:0!important;left:245px!important;right:0!important;height:88px!important;min-height:88px!important;padding:7px 10px!important;display:grid!important;grid-template-rows:36px 36px!important;grid-template-columns:1fr!important;gap:6px!important;overflow:visible!important;background:#fff!important;white-space:normal!important}
-  .v6-toolbar-primary{grid-template-columns:minmax(300px,1fr) 76px 76px 112px 112px!important}
-  .v6-toolbar-secondary{justify-content:flex-end!important}
+  .v6-toolbar-primary{grid-template-columns:minmax(420px,620px) 76px 76px 112px 112px!important;justify-content:start!important}
+  .v6-toolbar-secondary{justify-content:flex-start!important}
+  .v6-toolbar-secondary .v6-command-menu[data-command-menu="work"]{margin-right:10px!important}
+  .v6-toolbar-secondary .multi-cluster-btn{margin-right:10px!important}
   #sidebar{top:88px!important;height:calc(100vh - 88px)!important}
   #map{top:88px!important;height:calc(100vh - 88px)!important}
 }
