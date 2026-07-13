@@ -316,3 +316,42 @@ body.aiv-workspace-open { overflow: hidden !important; }
 .aiv-roadview-emergency-close{position:fixed!important;top:max(12px,env(safe-area-inset-top))!important;right:max(12px,env(safe-area-inset-right))!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;min-width:96px!important;height:48px!important;padding:0 15px!important;border:1px solid rgba(15,23,42,.18)!important;border-radius:14px!important;background:#fff!important;color:#172033!important;box-shadow:0 10px 30px rgba(15,23,42,.28)!important;z-index:2147483000!important;font-weight:900!important}
 .aiv-roadview-emergency-close span{font-size:25px;line-height:1}.aiv-roadview-emergency-close small{font-size:13px}
 @media(max-width:640px){.aiv-roadview-emergency-close{min-width:50px!important;width:50px!important;padding:0!important}.aiv-roadview-emergency-close small{display:none}.aiv-resume-actions{grid-template-columns:1fr}}
+
+/* =========================================================
+   v6.0 STEP2.14 + STEP3
+   모바일 상세는 별도 CSS, 태블릿 로드뷰 안전영역, AI 최적동선
+   ========================================================= */
+.aiv-header-actions{display:flex;align-items:center;gap:8px}
+.aiv-recalc-btn{min-height:40px;padding:0 15px;border:1px solid #b9d2f6;border-radius:11px;background:#edf5ff;color:#155fc2;font-weight:850;cursor:pointer}
+.aiv-recalc-btn:disabled,.aiv-route-actions button:disabled{opacity:.55;cursor:wait}
+.aiv-route-map{width:100%;height:clamp(220px,34vh,390px);margin-bottom:20px;overflow:hidden;border:1px solid var(--aiv-line);border-radius:16px;background:#eaf0f7}
+.aiv-route-map-empty{height:100%;display:grid;place-items:center;color:var(--aiv-muted);font-weight:800}
+.aiv-number-marker{width:34px;height:34px;border:3px solid #fff;border-radius:50%;display:grid;place-items:center;background:#2f7de8;color:#fff;box-shadow:0 5px 16px rgba(15,30,55,.3);font-size:13px;font-weight:950;cursor:pointer}
+.aiv-number-marker.current{width:40px;height:40px;background:#0c4fb8;font-size:15px;z-index:2}
+.aiv-number-marker.hold{background:#f59e0b}
+.aiv-number-marker.done{background:#7b8798}
+.aiv-route-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.aiv-route-actions button{min-height:46px;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer}
+.aiv-route-actions .recalc{border:1px solid #b9d2f6;background:#edf5ff;color:#155fc2}
+.aiv-route-actions .hold{border:1px solid #f2c66d;background:#fff7e7;color:#9a5b00}
+.aiv-route-item.hold{border-color:#f6d28b;background:#fff8e8}
+.aiv-route-item.hold .aiv-route-number{background:#f59e0b;color:#fff}
+.aiv-route-item.done{opacity:.66}
+
+/* 태블릿에서는 브라우저 UI에 가리지 않도록 로드뷰 전체 패널을 아래로 내립니다. */
+@media (min-width:769px) and (max-width:1366px) and (pointer:coarse){
+  #roadviewModal.roadview-modal{padding-top:max(58px,calc(env(safe-area-inset-top) + 46px))!important;padding-left:10px!important;padding-right:10px!important;padding-bottom:10px!important;box-sizing:border-box!important}
+  #roadviewModal.roadview-modal .roadview-modal-dialog{position:relative!important;top:auto!important;width:100%!important;height:calc(100dvh - max(68px,calc(env(safe-area-inset-top) + 56px)))!important;max-width:none!important;max-height:none!important;border-radius:16px!important;overflow:hidden!important}
+  #roadviewModal.roadview-modal .roadview-modal-header{position:relative!important;top:auto!important;z-index:50!important;min-height:64px!important;padding:10px 14px!important;background:#fff!important}
+  #roadviewModal.roadview-modal .roadview-view-tabs{display:flex!important;visibility:visible!important;opacity:1!important}
+  #roadviewModal.roadview-modal .roadview-modal-close{display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;top:auto!important;right:auto!important;z-index:60!important}
+  .aiv-roadview-emergency-close{top:max(66px,calc(env(safe-area-inset-top) + 54px))!important;right:18px!important}
+}
+
+@media (max-width:640px){
+  .aiv-header-actions{gap:5px}
+  .aiv-recalc-btn{display:none}
+  .aiv-exit-btn{padding:0 13px}
+  .aiv-route-map{height:250px;margin-bottom:14px;border-radius:14px}
+  .aiv-route-actions{grid-template-columns:1fr 1fr}
+}
