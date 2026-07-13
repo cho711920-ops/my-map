@@ -470,9 +470,13 @@
 
   function syncCommandBackdrop() {
     var backdrop = ensureCommandBackdrop();
-    var menuOpen = !!document.querySelector(".v6-command-menu.open");
-    var sortOpen = !!document.querySelector("#sortDropdown.open");
+    var isPhone = !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+    var menuOpen = isPhone && !!document.querySelector(".v6-command-menu.open");
+    var sortOpen = isPhone && !!document.querySelector("#sortDropdown.open");
+
+    /* PC·태블릿은 일반 드롭다운을 사용하므로 dim 레이어를 절대 띄우지 않습니다. */
     backdrop.classList.toggle("open", menuOpen || sortOpen);
+    backdrop.style.pointerEvents = (menuOpen || sortOpen) ? "auto" : "none";
     document.body.classList.toggle("v6-menu-open", menuOpen || sortOpen);
   }
 
