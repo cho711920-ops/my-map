@@ -2,7 +2,9 @@
 (function () {
   "use strict";
 
-  var SESSION_KEY = "js_ai_visit_session_v6";
+  var SESSION_KEY = "js_ai_visit_sessions_v6";
+  var LEGACY_SESSION_KEY = "js_ai_visit_session_v6";
+  var LOCATION_CACHE_KEY = "js_ai_visit_location_v6";
   var activeSession = null;
   var focusMarker = null;
   var lastKnownLocation = null;
@@ -138,20 +140,7 @@
     openModal("aiVisitLauncherModal");
   }
 
-  function openConfirmForList(listId) {
-    ensureUi();
-    var list = getVisitLists().find(function (entry) { return entry.id === listId; });
-    if (!list) {
-      alert("임장목록을 찾지 못했습니다.");
-      return;
-    }
-
-    var items = getValidItems(list);
-    if (!items.length) {
-      alert("이 임장목록에는 등록된 매물이 없습니다.");
-      return;
-    }
-
+  function showStartConfirmation(list, items) {
     closeModal("aiVisitLauncherModal");
     document.getElementById("aivConfirmBody").innerHTML =
       '<div class="aiv-confirm-name">' + escapeHtml(list.name) + '</div>' +
@@ -159,26 +148,90 @@
       '<p>이번 단계에서는 목록에 등록된 순서대로 진행됩니다.<br>현재 위치 기반 최적 동선은 다음 단계에서 연결됩니다.</p>';
 
     var startButton = document.getElementById("aivConfirmStartBtn");
+    startButton.textContent = "시작하기";
     startButton.onclick = function () { startSession(list); };
     openModal("aiVisitConfirmModal");
   }
 
-  function saveSession() {
-    if (!activeSession) return;
+  function openConfirmForList(listId) {
+    ensureUi();
+    var list = getVisitLists().find(function (entry) { return entry.id === listId; });
+    if (!list) return alert("임장목록을 찾지 못했습니다.");
+
+    var items = getValidItems(list);
+    if (!items.length) return alert("이 임장목록에는 등록된 매물이 없습니다.");
+
+    var stored = loadStoredSession(listId);
+    if (stored && Array.isArray(stored.itemKeys) && stored.itemKeys.length) {
+      closeModal("aiVisitLauncherModal");
+      document.getElementById("aivConfirmBody").innerHTML =
+        '<div class="aiv-confirm-name">' + escapeHtml(list.name) + '</div>' +
+        '<div class="aiv-confirm-count">완료하지 않은 AI임장이 있습니다.</div>' +
+        '<p><strong>' + (Number(stored.currentIndex || 0) + 1) + ' / ' + stored.itemKeys.length + '</strong> 위치에서 저장되었습니다.<br>이어서 진행하시겠습니까?</p>' +
+        '<div class="aiv-resume-actions">' +
+          '<button type="button" class="aiv-btn secondary" id="aivStartFreshBtn">아니오 · 새로 시작</button>' +
+          '<button type="button" class="aiv-btn primary" id="aivResumeBtn">예 · 이어가기</button>' +
+        '</div>';
+      document.getElementById("aivConfirmStartBtn").style.display = "none";
+      openModal("aiVisitConfirmModal");
+      document.getElementById("aivResumeBtn").onclick = function () {
+        closeModal("aiVisitConfirmModal");
+        waitForItemsReady(function () { restoreStoredSession(stored); });
+      };
+      document.getElementById("aivStartFreshBtn").onclick = function () {
+        removeStoredSession(listId);
+        document.getElementById("aivConfirmStartBtn").style.display = "";
+        closeModal("aiVisitConfirmModal");
+        showStartConfirmation(list, items);
+      };
+      return;
+    }
+    document.getElementById("aivConfirmStartBtn").style.display = "";
+    showStartConfirmation(list, items);
+  }
+
+  function loadSessionMap() {
+    var sessions = {};
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(activeSession));
+      var parsed = JSON.parse(localStorage.getItem(SESSION_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) sessions = parsed;
+    } catch (error) {}
+
+    /* STEP2 이전 단일 세션은 한 번만 목록별 저장소로 이전합니다. */
+    try {
+      var legacy = JSON.parse(localStorage.getItem(LEGACY_SESSION_KEY) || "null");
+      if (legacy && legacy.active && legacy.listId && !sessions[legacy.listId]) {
+        sessions[legacy.listId] = legacy;
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      }
+      localStorage.removeItem(LEGACY_SESSION_KEY);
+    } catch (error) {}
+    return sessions;
+  }
+
+  function saveSession() {
+    if (!activeSession || !activeSession.listId) return;
+    try {
+      var sessions = loadSessionMap();
+      sessions[activeSession.listId] = activeSession;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
     } catch (error) {
       console.error("AI임장 세션 저장 실패", error);
     }
   }
 
-  function loadStoredSession() {
+  function loadStoredSession(listId) {
+    var stored = loadSessionMap()[listId];
+    return stored && stored.active ? stored : null;
+  }
+
+  function removeStoredSession(listId) {
+    if (!listId) return;
     try {
-      var parsed = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-      return parsed && parsed.active ? parsed : null;
-    } catch (error) {
-      return null;
-    }
+      var sessions = loadSessionMap();
+      delete sessions[listId];
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+    } catch (error) {}
   }
 
   function startSession(list) {
@@ -373,10 +426,19 @@
       accuracy: Number(position.coords.accuracy) || 0,
       timestamp: Number(position.timestamp) || Date.now()
     };
+    try { localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(lastKnownLocation)); } catch (error) {}
     return lastKnownLocation;
   }
 
   function getFreshCachedLocation(maxAgeMs) {
+    if (!lastKnownLocation) {
+      try {
+        var cached = JSON.parse(localStorage.getItem(LOCATION_CACHE_KEY) || "null");
+        if (cached && isFinite(Number(cached.lat)) && isFinite(Number(cached.lng))) {
+          lastKnownLocation = { lat: Number(cached.lat), lng: Number(cached.lng), accuracy: Number(cached.accuracy) || 0, timestamp: Number(cached.timestamp) || 0 };
+        }
+      } catch (error) {}
+    }
     if (!lastKnownLocation) return null;
     return Date.now() - lastKnownLocation.timestamp <= maxAgeMs ? lastKnownLocation : null;
   }
@@ -436,48 +498,63 @@
     );
   }
 
-  function openNavigation() {
-    var item = currentItem();
-    if (!item) return alert("매물 정보를 찾지 못했습니다.");
+  function isAndroidDevice() {
+    return /Android/i.test(navigator.userAgent || "");
+  }
 
-    var coords = typeof window.getItemCoordinates === "function" ? window.getItemCoordinates(item) : null;
-    if (!coords || !isFinite(coords.lat) || !isFinite(coords.lng)) {
-      alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
+  function launchKakaoRoute(location, destination) {
+    var sp = location.lat + "," + location.lng;
+    var ep = destination.lat + "," + destination.lng;
+    var appUrl = "kakaomap://route?sp=" + sp + "&ep=" + ep + "&by=car";
+    var webUrl = "https://m.map.kakao.com/scheme/route?sp=" + sp + "&ep=" + ep + "&by=car";
+
+    if (!isAndroidDevice()) {
+      window.open(webUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
-    var popup = window.open("about:blank", "_blank");
-    if (popup && !popup.closed) {
-      try {
-        popup.document.write('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>내비 준비 중</title><body style="margin:0;font-family:system-ui;background:#f5f7fb;display:grid;place-items:center;min-height:100vh;color:#334155"><div style="text-align:center"><b style="font-size:18px">현재 위치 확인 중</b><div style="margin-top:8px;font-size:14px;color:#64748b">잠시만 기다려주세요.</div></div></body>');
-      } catch (ignore) {}
-    }
-
-    function navigate(url) {
-      if (popup && !popup.closed) popup.location.replace(url);
-      else window.open(url, "_blank", "noopener,noreferrer");
-    }
-
-    function destinationOnly(message) {
-      navigate(
-        "https://map.kakao.com/link/to/" +
-        encodeURIComponent(buildDestinationName(item)) + "," + coords.lat + "," + coords.lng
-      );
-      if (message) window.setTimeout(function () { alert(message); }, 150);
-    }
-
-    requestCurrentLocation(
-      function (location) {
-        navigate(
-          "https://map.kakao.com/link/from/" +
-          encodeURIComponent("현재 위치") + "," + location.lat + "," + location.lng +
-          "/to/" + encodeURIComponent(buildDestinationName(item)) + "," + coords.lat + "," + coords.lng
-        );
-      },
-      function () {
-        destinationOnly("현재 위치를 가져오지 못해 목적지만 설정했습니다.\n브라우저의 위치 권한을 확인해주세요.");
+    var hidden = false;
+    var fallbackTimer = null;
+    function visibilityHandler() {
+      if (document.hidden) {
+        hidden = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
       }
-    );
+    }
+    document.addEventListener("visibilitychange", visibilityHandler, { once: true });
+    window.location.href = appUrl;
+    fallbackTimer = window.setTimeout(function () {
+      if (!hidden && !document.hidden) window.location.href = webUrl;
+    }, 1400);
+  }
+
+  function openNavigation() {
+    var item = currentItem();
+    if (!item) return alert("매물 정보를 찾지 못했습니다.");
+    var coords = typeof window.getItemCoordinates === "function" ? window.getItemCoordinates(item) : null;
+    if (!coords || !isFinite(coords.lat) || !isFinite(coords.lng)) return alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
+
+    var cached = getFreshCachedLocation(600000);
+    if (cached) {
+      launchKakaoRoute(cached, { lat: Number(coords.lat), lng: Number(coords.lng) });
+      return;
+    }
+
+    var button = document.activeElement;
+    if (button && button.tagName === "BUTTON") {
+      button.disabled = true;
+      var original = button.textContent;
+      button.textContent = "현위치 확인 중";
+      window.setTimeout(function () { button.disabled = false; button.textContent = original; }, 8000);
+    }
+
+    requestCurrentLocation(function (location) {
+      if (button) { button.disabled = false; button.textContent = "내비"; }
+      launchKakaoRoute(location, { lat: Number(coords.lat), lng: Number(coords.lng) });
+    }, function () {
+      if (button) { button.disabled = false; button.textContent = "내비"; }
+      alert("현재 위치를 가져오지 못했습니다. 위치 권한과 GPS를 확인한 뒤 다시 눌러주세요.");
+    });
   }
 
   function removeRoadviewEmergencyClose() {
@@ -487,7 +564,7 @@
 
   function syncRoadviewEmergencyClose() {
     var modal = document.getElementById("roadviewModal");
-    var isOpen = !!(modal && modal.classList.contains("open"));
+    var isOpen = !!(modal && (modal.classList.contains("open") || modal.getAttribute("aria-hidden") === "false" || getComputedStyle(modal).display !== "none"));
     var compactDevice = window.matchMedia("(max-width: 1366px), (pointer: coarse)").matches;
     if (!isOpen || !compactDevice) {
       removeRoadviewEmergencyClose();
@@ -511,7 +588,7 @@
     var modal = document.getElementById("roadviewModal");
     if (!modal || roadviewCloseObserver) return;
     roadviewCloseObserver = new MutationObserver(syncRoadviewEmergencyClose);
-    roadviewCloseObserver.observe(modal, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
+    roadviewCloseObserver.observe(modal, { attributes: true, attributeFilter: ["class", "aria-hidden", "style"] });
   }
 
   function openRoadview() {
@@ -538,8 +615,10 @@
 
   function requestExit() {
     if (!activeSession) return closeWorkspace(false);
-    var ok = confirm("AI임장을 종료하시겠습니까?\n현재 순서는 이 기기에 저장되어 다시 이어갈 수 있습니다.");
+    var ok = confirm("AI임장을 종료하시겠습니까?\n현재 진행상태는 자동 저장됩니다.");
     if (!ok) return;
+    activeSession.updatedAt = new Date().toISOString();
+    saveSession();
     closeWorkspace(true);
   }
 
@@ -555,8 +634,9 @@
       focusMarker = null;
     }
     if (!keepSession) {
+      var closingListId = activeSession && activeSession.listId;
       activeSession = null;
-      localStorage.removeItem(SESSION_KEY);
+      removeStoredSession(closingListId);
     }
   }
 
@@ -588,8 +668,9 @@
 
     var validItems = validSessionItems();
     if (!validItems.length) {
+      var invalidListId = activeSession && activeSession.listId;
       activeSession = null;
-      localStorage.removeItem(SESSION_KEY);
+      removeStoredSession(invalidListId);
       alert("저장된 AI임장 매물을 찾지 못했습니다.");
       return;
     }
@@ -602,32 +683,6 @@
     openWorkspace();
   }
 
-  function offerResume() {
-    var stored = loadStoredSession();
-    if (!stored) return;
-
-    var listStillExists = getVisitLists().some(function (list) { return list.id === stored.listId; });
-    if (!listStillExists || !Array.isArray(stored.itemKeys) || !stored.itemKeys.length) {
-      localStorage.removeItem(SESSION_KEY);
-      return;
-    }
-
-    window.setTimeout(function () {
-      var shouldResume = confirm(
-        '진행 중인 AI임장이 있습니다.\n"' +
-        stored.listName +
-        '" ' +
-        (Number(stored.currentIndex || 0) + 1) +
-        '번째 매물부터 이어갈까요?'
-      );
-
-      if (!shouldResume) return;
-
-      waitForItemsReady(function () {
-        restoreStoredSession(stored);
-      });
-    }, 700);
-  }
 
   window.JSAiVisitV6 = {
     openLauncher: openLauncher,
@@ -640,7 +695,12 @@
     goPrevious: function () { if (activeSession) goTo(activeSession.currentIndex - 1); },
     goNext: function () { if (activeSession) goTo(activeSession.currentIndex + 1); },
     goTo: goTo,
-    requestExit: requestExit
+    requestExit: requestExit,
+    getSavedProgress: function (listId) {
+      var stored = loadStoredSession(listId);
+      if (!stored) return null;
+      return { current: Number(stored.currentIndex || 0) + 1, total: (stored.itemKeys || []).length, updatedAt: stored.updatedAt || "" };
+    }
   };
 
   document.addEventListener("keydown", function (event) {
@@ -657,5 +717,4 @@
   ensureUi();
   watchRoadviewCloseButton();
   warmCurrentLocation();
-  offerResume();
 })();
