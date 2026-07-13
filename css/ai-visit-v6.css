@@ -698,3 +698,46 @@ body.aiv-workspace-open { overflow: hidden !important; }
     font-size: 22px !important;
   }
 }
+
+/* =========================================================
+   v6.0 STEP3.4 — 태블릿 가로 로드뷰 실측 크기 강제 보정
+   ========================================================= */
+@media (min-width: 769px) and (max-width: 1366px) {
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    top: var(--aiv-roadview-dialog-top, 10px) !important;
+    left: var(--aiv-roadview-dialog-left, 8px) !important;
+    width: var(--aiv-roadview-dialog-width, calc(100vw - 16px)) !important;
+    height: var(--aiv-roadview-dialog-height, calc(100dvh - 20px)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    flex: 0 0 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+    box-sizing: border-box !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-tab-content {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-modal-header {
+    flex-basis: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    padding: 3px 8px !important;
+  }
+}
