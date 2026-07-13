@@ -309,3 +309,10 @@ body.aiv-workspace-open { overflow: hidden !important; }
   }
   .aiv-roadview-emergency-close small { display: none; }
 }
+
+
+/* STEP2.5 태블릿 로드뷰 닫기 및 이어가기 선택창 */
+.aiv-resume-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.aiv-roadview-emergency-close{position:fixed!important;top:max(12px,env(safe-area-inset-top))!important;right:max(12px,env(safe-area-inset-right))!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;min-width:96px!important;height:48px!important;padding:0 15px!important;border:1px solid rgba(15,23,42,.18)!important;border-radius:14px!important;background:#fff!important;color:#172033!important;box-shadow:0 10px 30px rgba(15,23,42,.28)!important;z-index:2147483000!important;font-weight:900!important}
+.aiv-roadview-emergency-close span{font-size:25px;line-height:1}.aiv-roadview-emergency-close small{font-size:13px}
+@media(max-width:640px){.aiv-roadview-emergency-close{min-width:50px!important;width:50px!important;padding:0!important}.aiv-roadview-emergency-close small{display:none}.aiv-resume-actions{grid-template-columns:1fr}}
