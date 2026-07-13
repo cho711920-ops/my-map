@@ -1645,9 +1645,9 @@ function resetFilter() {
   selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.remove("on");
-  document.getElementById("hideDoneBtn").innerText = "완료숨김";
+  document.getElementById("hideDoneBtn").innerText = "계약완료매물숨김";
   document.getElementById("hideDoneBtn").classList.remove("on");
-  document.getElementById("gongsilOnlyBtn").innerText = "임장가자";
+  document.getElementById("gongsilOnlyBtn").innerText = "임장할매물만보기";
   document.getElementById("gongsilOnlyBtn").classList.remove("on");
   updateMultiClusterButton();
   updateMultiClusterStatus();
