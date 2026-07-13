@@ -5,6 +5,8 @@
   var routeMap = null;
   var routeOverlays = [];
   var lastLocation = null;
+  var lastEntries = [];
+  var lastRouteSignature = "";
 
   function getItem(key) {
     if (window.JSV6ListStore && typeof window.JSV6ListStore.getItem === "function") {
@@ -154,6 +156,8 @@
       return;
     }
 
+    var routeSignature = (session.itemKeys || []).join("|");
+    var shouldFitAll = !routeMap || routeSignature !== lastRouteSignature;
     if (!routeMap) {
       routeMap = new kakao.maps.Map(container, {
         center: new kakao.maps.LatLng(entries[0].coords.lat, entries[0].coords.lng),
@@ -163,6 +167,8 @@
       routeMap.relayout();
     }
     clearRouteMap();
+    lastEntries = entries.slice();
+    lastRouteSignature = routeSignature;
     var bounds = new kakao.maps.LatLngBounds();
     var statuses = session.statuses || {};
 
@@ -176,8 +182,44 @@
       routeOverlays.push(overlay);
       bounds.extend(position);
     });
-    if (entries.length === 1) routeMap.setCenter(new kakao.maps.LatLng(entries[0].coords.lat, entries[0].coords.lng));
-    else routeMap.setBounds(bounds, 45, 45, 45, 45);
+    if (shouldFitAll) {
+      if (entries.length === 1) {
+        routeMap.setCenter(new kakao.maps.LatLng(entries[0].coords.lat, entries[0].coords.lng));
+        routeMap.setLevel(4);
+      } else {
+        routeMap.setBounds(bounds, 50, 50, 50, 50);
+      }
+    }
+  }
+
+  function fitAll(session) {
+    if (!routeMap || !window.kakao || !kakao.maps) return;
+    var entries = (session && session.itemKeys ? session.itemKeys : []).map(function (key, index) {
+      var item = getItem(key);
+      return { key: key, index: index, coords: getCoords(item) };
+    }).filter(function (entry) { return entry.coords; });
+    if (!entries.length) entries = lastEntries.slice();
+    if (!entries.length) return;
+    routeMap.relayout();
+    if (entries.length === 1) {
+      routeMap.setCenter(new kakao.maps.LatLng(entries[0].coords.lat, entries[0].coords.lng));
+      routeMap.setLevel(4);
+      return;
+    }
+    var bounds = new kakao.maps.LatLngBounds();
+    entries.forEach(function (entry) { bounds.extend(new kakao.maps.LatLng(entry.coords.lat, entry.coords.lng)); });
+    routeMap.setBounds(bounds, 50, 50, 50, 50);
+  }
+
+  function focusIndex(session, index) {
+    if (!routeMap || !session || !Array.isArray(session.itemKeys)) return;
+    var key = session.itemKeys[Number(index) || 0];
+    var item = getItem(key);
+    var coords = getCoords(item);
+    if (!coords) return;
+    routeMap.relayout();
+    routeMap.panTo(new kakao.maps.LatLng(coords.lat, coords.lng));
+    routeMap.setLevel(3);
   }
 
   function nextPendingIndex(session, fromIndex) {
@@ -196,6 +238,8 @@
     prepare: prepare,
     recalculate: recalculate,
     renderMap: renderMap,
+    fitAll: fitAll,
+    focusIndex: focusIndex,
     clear: clearRouteMap,
     nextPendingIndex: nextPendingIndex,
     distanceMeters: distanceMeters,
