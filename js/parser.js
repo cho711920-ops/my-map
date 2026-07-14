@@ -784,6 +784,72 @@ function quickDuplicateSummaryV61(item) {
   return line1 + "\n" + line2;
 }
 
+function requestQuickDuplicateCheckV61(values) {
+  return new Promise(function(resolve, reject) {
+    if (!saveApiURL) {
+      reject(new Error("자동등록 URL이 연결되지 않았습니다."));
+      return;
+    }
+
+    var callbackName = "__jsQuickDuplicate_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+    var script = document.createElement("script");
+    var timer = setTimeout(function() {
+      cleanup();
+      reject(new Error("중복검사 응답 시간이 초과되었습니다."));
+    }, 12000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[callbackName] = function(response) {
+      cleanup();
+      resolve(response || {});
+    };
+
+    script.onerror = function() {
+      cleanup();
+      reject(new Error("중복검사 서버에 연결하지 못했습니다."));
+    };
+
+    script.src = saveApiURL +
+      "?action=checkDuplicate" +
+      "&values=" + encodeURIComponent(JSON.stringify(values)) +
+      "&callback=" + encodeURIComponent(callbackName) +
+      "&_=" + Date.now();
+
+    document.head.appendChild(script);
+  });
+}
+
+function sendQuickAddRequestV61(values, forceDuplicate, btn, oldText) {
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action: "quickAdd",
+      values: values,
+      forceDuplicate: !!forceDuplicate
+    })
+  }).then(function() {
+    alert("매물 등록 요청을 보냈습니다.\n잠시 후 지도에 반영됩니다.");
+    closeQuickAddModal();
+    clearQuickAddForm();
+    setTimeout(function() { loadSheet(true); }, 1800);
+  }).catch(function(err) {
+    console.error(err);
+    alert("자동등록 요청 중 오류가 발생했습니다.\n연결 URL을 확인해주세요.");
+  }).finally(function() {
+    if (btn) {
+      btn.innerText = oldText;
+      btn.disabled = false;
+    }
+  });
+}
+
 function saveQuickAddToSheet() {
   if (!validateQuickAdd()) return;
   if (!saveApiURL) {
@@ -792,44 +858,55 @@ function saveQuickAddToSheet() {
   }
 
   var values = getQuickAddRowValues();
-  var duplicate = findQuickDuplicateV61(values);
-  var forceDuplicate = false;
-
-  if (duplicate && duplicate.type === "exact") {
-    alert("이미 등록된 매물입니다.\n\n" + quickDuplicateSummaryV61(duplicate.item));
-    return;
-  }
-
-  if (duplicate && duplicate.type === "similar") {
-    forceDuplicate = confirm(
-      "같은 주소의 유사 매물이 이미 있습니다.\n\n" +
-      quickDuplicateSummaryV61(duplicate.item) +
-      "\n\n그래도 등록할까요?"
-    );
-    if (!forceDuplicate) return;
-  }
-
   var btn = document.querySelector(".auto-save-btn");
   var oldText = btn ? btn.innerText : "";
+
   if (btn) {
-    btn.innerText = "등록중...";
+    btn.innerText = "중복확인중...";
     btn.disabled = true;
   }
 
-  fetch(saveApiURL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action: "quickAdd", values: values, forceDuplicate: forceDuplicate })
-  }).then(function() {
-    alert("자동등록 요청을 보냈습니다.\n잠시 후 지도에 반영됩니다.");
-    closeQuickAddModal();
-    clearQuickAddForm();
-    setTimeout(function() { loadSheet(true); }, 1800);
-  }).catch(function(err) {
-    console.error(err);
-    alert("자동등록 요청 중 오류가 발생했습니다.\n연결 URL을 확인해주세요.");
-  }).finally(function() {
+  requestQuickDuplicateCheckV61(values).then(function(response) {
+    if (!response || response.ok === false) {
+      throw new Error((response && response.message) || "중복검사에 실패했습니다.");
+    }
+
+    if (response.duplicateType === "exact") {
+      var exactSummary = quickDuplicateSummaryV61(response.existing || {});
+      alert("이미 등록된 매물입니다." + (exactSummary ? "\n\n" + exactSummary : ""));
+      if (btn) {
+        btn.innerText = oldText;
+        btn.disabled = false;
+      }
+      return;
+    }
+
+    if (response.duplicateType === "similar") {
+      var similarSummary = quickDuplicateSummaryV61(response.existing || {});
+      var proceed = confirm(
+        "같은 주소의 유사 매물이 있습니다." +
+        (similarSummary ? "\n\n기존 매물\n" + similarSummary : "") +
+        "\n\n그래도 등록할까요?"
+      );
+
+      if (!proceed) {
+        if (btn) {
+          btn.innerText = oldText;
+          btn.disabled = false;
+        }
+        return;
+      }
+
+      if (btn) btn.innerText = "등록중...";
+      sendQuickAddRequestV61(values, true, btn, oldText);
+      return;
+    }
+
+    if (btn) btn.innerText = "등록중...";
+    sendQuickAddRequestV61(values, false, btn, oldText);
+  }).catch(function(error) {
+    console.error(error);
+    alert("중복등록 확인 중 오류가 발생했습니다.\n" + (error && error.message ? error.message : error));
     if (btn) {
       btn.innerText = oldText;
       btn.disabled = false;
