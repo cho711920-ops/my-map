@@ -913,3 +913,141 @@ function saveQuickAddToSheet() {
     }
   });
 }
+
+
+/* =========================================================
+   v6.1.2 조조 실사용 한줄 파서 최종 우선 규칙
+   형식 예:
+   서구 둔산동 2088 상가주택 101호 상가 20평 월500에55
+   권1000 임010-... 세010-... @메모
+   ========================================================= */
+function parseQuickAddText() {
+  var rawEl = document.getElementById("qaRaw");
+  if (!rawEl) return;
+
+  var raw = String(rawEl.value || "").trim();
+  if (!raw) {
+    alert("외부 매물 내용을 먼저 붙여넣어 주세요.");
+    return;
+  }
+
+  setQuickAddNow();
+  detectSourceFromRaw(raw);
+
+  /* @ 뒤는 다른 항목으로 분석하지 않고 메모로만 사용 */
+  var atIndex = raw.indexOf("@");
+  var dataText = atIndex >= 0 ? raw.slice(0, atIndex) : raw;
+  var atMemo = atIndex >= 0 ? raw.slice(atIndex + 1).trim() : "";
+  var compact = dataText.replace(/\s+/g, " ").trim();
+  var lines = dataText.split(/\n+/).map(function(v) { return v.trim(); }).filter(Boolean);
+
+  var addressPatterns = [
+    /((?:대전(?:광역시)?\s*)?(?:동구|중구|서구|유성구|대덕구)\s+[가-힣0-9]+동\s*\d+(?:-\d+)?)/,
+    /((?:대전(?:광역시)?\s*)?[가-힣0-9]+동\s*\d+(?:-\d+)?)/,
+    /((?:대전(?:광역시)?\s*)?(?:동구|중구|서구|유성구|대덕구)\s+[가-힣0-9]+(?:로|길)\s*\d+(?:-\d+)?)/
+  ];
+
+  var address = "";
+  var addressEnd = -1;
+  for (var ai = 0; ai < addressPatterns.length; ai++) {
+    var am = compact.match(addressPatterns[ai]);
+    if (am && am[1]) {
+      address = am[1].replace(/\s+/g, " ").trim();
+      addressEnd = (am.index || 0) + am[0].length;
+      break;
+    }
+  }
+
+  /* 호실: B101/B01/B1, 101호, 1층 모두 지원 */
+  var roomRegex = /((?:[Bb]\s*\d{1,4}|(?:지하|지)\s*\d{1,2}(?:층)?|-\d{1,2}(?:층)?|\d{1,4}\s*호|\d{1,2}\s*층))/;
+  var roomSearchText = addressEnd >= 0 ? compact.slice(addressEnd).trim() : compact;
+  var roomMatch = roomSearchText.match(roomRegex);
+  var room = roomMatch ? roomMatch[1].replace(/\s+/g, "") : "";
+
+  /* 실제 사용 순서에서 주소와 호실 사이 문자열을 건물이름으로 우선 인식 */
+  var title = "";
+  if (addressEnd >= 0 && roomMatch && typeof roomMatch.index === "number") {
+    title = roomSearchText.slice(0, roomMatch.index).trim();
+  }
+  if (!title) title = pickTitleLine(lines);
+  title = String(title || "")
+    .replace(/^(?:대전(?:광역시)?\s*)?(?:동구|중구|서구|유성구|대덕구)?\s*[가-힣0-9]+동\s*\d+(?:-\d+)?\s*/, "")
+    .trim();
+
+  /* 호실 뒤부터 평수 앞까지를 구분으로 우선 인식 */
+  var type = "";
+  if (roomMatch) {
+    var afterRoom = roomSearchText.slice((roomMatch.index || 0) + roomMatch[0].length).trim();
+    var beforeArea = afterRoom.split(/\d+(?:\.\d+)?\s*(?:평|py|PY)/i)[0].trim();
+    var typeToken = beforeArea.match(/^(상가|사무실|오피스|점포|창고|주택|아파트|원룸|투룸|다가구|상가주택|매매|전세|월세|임대)/);
+    if (typeToken) type = typeToken[1];
+  }
+  if (!type) {
+    if (/사무실|오피스|업무/.test(compact)) type = "사무실";
+    else if (/상가|점포|가게|권리|무권/.test(compact)) type = "상가";
+    else if (/매매/.test(compact)) type = "매매";
+    else if (/전세/.test(compact)) type = "전세";
+    else if (/월세|임대/.test(compact)) type = "월세";
+  }
+
+  /* 조조식 월500에55 / 월500/55 */
+  var monthlyPair = compact.match(/(?:^|\s)월\s*([0-9,.]+)\s*(?:에|\/|\-)\s*([0-9,.]+)(?=\s|$)/);
+  var deposit = monthlyPair ? normalizeKoreanNumber(monthlyPair[1]) : moneyValueFromLabel(compact, "보증금|보");
+  if (!deposit) deposit = slashPriceValue(compact, 1);
+
+  var rent = monthlyPair ? normalizeKoreanNumber(monthlyPair[2]) : moneyValueFromLabel(compact, "월세|월");
+  if (!rent) rent = slashPriceValue(compact, 2);
+
+  var fee = "";
+  if (/관리비\s*(없음|무|무료|0원|0만원|0만)|관\s*(없음|무|무료)/.test(compact)) fee = "0";
+  else fee = moneyValueFromLabel(compact, "관리비|관리|관");
+
+  var premium = "";
+  if (/무권|무권리|권무|권리금\s*(없음|무|0원|0만원|0만)|권\s*(없음|무|0원|0만원|0만)/.test(compact)) {
+    premium = "0";
+  } else if (!/권리금\s*협의|권리\s*협의|권\s*협의/.test(compact)) {
+    premium = moneyValueFromLabel(compact, "권리금|권리|권");
+  }
+
+  var areaMatch = compact.match(/(?:약\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:평|py|PY)/i);
+
+  /* 임/세 라벨 전화번호를 우선 분리 */
+  var phonePattern = "(01[016789][\\-\\s\\.]?[0-9]{3,4}[\\-\\s\\.]?[0-9]{4})";
+  var landlordMatch = compact.match(new RegExp("(?:임대인|임)\\s*[:：]?\\s*" + phonePattern, "i"));
+  var tenantMatch = compact.match(new RegExp("(?:세입자|세)\\s*[:：]?\\s*" + phonePattern, "i"));
+  var phones = compact.match(/01[016789][\-\s\.]?[0-9]{3,4}[\-\s\.]?[0-9]{4}/g) || [];
+  var landlordPhone = landlordMatch ? landlordMatch[1] : (phones[0] || "");
+  var tenantPhone = tenantMatch ? tenantMatch[1] : (phones[1] || "");
+
+  setFieldValue("qaAddress", address, true);
+  setFieldValue("qaName", title, true);
+  setFieldValue("qaRoom", room, true);
+  setFieldValue("qaType", type || "상가", true);
+  setFieldValue("qaDeposit", deposit, true);
+  setFieldValue("qaRent", rent, true);
+  setFieldValue("qaFee", fee, true);
+  setFieldValue("qaPremium", premium, true);
+  setFieldValue("qaArea", areaMatch ? areaMatch[1] : "", true);
+  setFieldValue("qaLandlordPhone", landlordPhone ? normalizePhone(landlordPhone.replace(/\./g, "-")) : "", true);
+  setFieldValue("qaTenantPhone", tenantPhone ? normalizePhone(tenantPhone.replace(/\./g, "-")) : "", true);
+
+  var memoEl = document.getElementById("qaMemo");
+  if (memoEl) {
+    if (atIndex >= 0) {
+      memoEl.value = atMemo;
+    } else if (!memoEl.value) {
+      /* 출처는 O열에 저장하므로 메모 앞에 출처를 붙이지 않음 */
+      memoEl.value = String(dataText || "")
+        .replace(/\r/g, "")
+        .split(/\n+/)
+        .map(function(v) { return v.trim(); })
+        .filter(Boolean)
+        .join(" / ")
+        .replace(/\s+/g, " ")
+        .slice(0, 320);
+    }
+  }
+
+  updateQuickAddWarning();
+  updateQuickAddPreview();
+}
