@@ -4963,3 +4963,179 @@ body,
     display: none !important;
   }
 }
+
+
+/* =========================================================
+   v6.1.3 태블릿 전용 초소형 HOTFIX
+   수정 범위:
+   1) 태블릿 가로모드 로드뷰 크기 복구
+   2) 태블릿 세로모드 상단 메뉴 정렬
+   PC / 스마트폰 / 기존 기능은 변경하지 않음
+   ========================================================= */
+
+/* 태블릿 가로모드: 로드뷰를 화면 중앙의 큰 팝업으로 복구 */
+@media (orientation: landscape) and (hover: none) and (pointer: coarse)
+       and (min-width: 900px) and (max-width: 1600px) {
+  #roadviewModal.roadview-modal {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-dialog {
+    position: relative !important;
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+
+    width: min(1280px, 86vw) !important;
+    height: min(760px, 80dvh) !important;
+    max-width: 86vw !important;
+    max-height: 80dvh !important;
+
+    margin: auto !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-modal-header {
+    flex: 0 0 48px !important;
+    min-height: 48px !important;
+    height: 48px !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-tab-content {
+    height: calc(100% - 48px) !important;
+    min-height: 0 !important;
+  }
+
+  #roadviewModal.roadview-modal .roadview-pane,
+  #roadviewModal.roadview-modal .roadview-container,
+  #roadviewModal.roadview-modal .roadview-full-map {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+}
+
+/* 태블릿 세로모드: 상단 메뉴만 3행으로 안정 배치 */
+@media (orientation: portrait) and (hover: none) and (pointer: coarse)
+       and (min-width: 769px) and (max-width: 1100px) {
+  #wrap {
+    padding-top: 184px !important;
+  }
+
+  .header {
+    top: 0 !important;
+    left: 0 !important;
+    width: 174px !important;
+    height: 184px !important;
+    min-height: 184px !important;
+    padding: 0 10px !important;
+    justify-content: center !important;
+    font-size: 18px !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .filters {
+    top: 0 !important;
+    left: 174px !important;
+    right: 0 !important;
+    width: auto !important;
+    height: 184px !important;
+    min-height: 184px !important;
+    padding: 8px 10px !important;
+
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: 48px 48px 48px !important;
+    align-content: start !important;
+    gap: 8px !important;
+
+    overflow: visible !important;
+    white-space: normal !important;
+  }
+
+  .v6-toolbar-primary {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 76px 76px !important;
+    gap: 8px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  .v6-toolbar-primary .search-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 62px !important;
+    gap: 6px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  .v6-toolbar-primary .search-row input,
+  .v6-toolbar-primary .search-btn,
+  .v6-toolbar-primary .top-reset-btn,
+  .v6-toolbar-primary .detail-btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+  }
+
+  .v6-toolbar-primary .search-btn {
+    width: 62px !important;
+    min-width: 62px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    display: grid !important;
+    grid-template-columns: 96px 96px minmax(150px, 1fr) minmax(150px, 1fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .v6-toolbar-secondary .v6-command-menu,
+  .v6-toolbar-secondary .v6-command-trigger,
+  .v6-toolbar-secondary .v6-primary-action {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+  }
+
+  .v6-toolbar-secondary .v6-primary-action.ai {
+    grid-column: 3 !important;
+  }
+
+  .v6-toolbar-secondary .quick-add-btn {
+    grid-column: 4 !important;
+  }
+
+  #multiClusterStatus {
+    min-height: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #sidebar {
+    width: 380px !important;
+  }
+
+  #listToolbar.list-toolbar {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
