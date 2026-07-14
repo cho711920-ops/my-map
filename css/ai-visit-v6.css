@@ -863,3 +863,154 @@ body.aiv-workspace-open { overflow: hidden !important; }
   position: relative !important;
   z-index: 2147483001 !important;
 }
+
+/* =========================================================
+   v6.0 STEP4 — 현장 완료/보류 UI
+   ========================================================= */
+.aiv-current-card {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.aiv-travel-strip,
+.aiv-next-preview,
+.aiv-route-actions,
+.aiv-primary-actions,
+.aiv-step-actions {
+  display: none !important;
+}
+
+.aiv-memo-editor-wrap {
+  display: block;
+  margin-top: 18px;
+}
+.aiv-memo-editor-wrap .aiv-memo-title {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--aiv-muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.aiv-memo-editor {
+  width: 100%;
+  min-height: 94px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border: 1px solid var(--aiv-line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--aiv-ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  outline: none;
+}
+.aiv-memo-editor:focus {
+  border-color: #8eb8f6;
+  box-shadow: 0 0 0 3px rgba(23,105,232,.12);
+}
+
+.aiv-field-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+.aiv-field-actions button {
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #273449;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.aiv-field-actions .nav,
+.aiv-field-actions .roadview {
+  border-color: #b9d2f6;
+  background: #edf5ff;
+  color: #155fc2;
+}
+.aiv-field-actions .hold {
+  border-color: #f1c56a;
+  background: #fff7df;
+  color: #965600;
+}
+.aiv-field-actions .complete {
+  border-color: #1769e8;
+  background: #1769e8;
+  color: #fff;
+}
+
+.aiv-complete-confirm {
+  width: min(92vw, 380px);
+  padding: 26px 22px 20px;
+  text-align: center;
+}
+.aiv-complete-message {
+  color: var(--aiv-ink);
+  font-size: 19px;
+  font-weight: 900;
+}
+.aiv-complete-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.aiv-route-item {
+  position: relative;
+}
+.aiv-route-state-icon {
+  width: 20px;
+  flex: 0 0 20px;
+  text-align: center;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 900;
+}
+.aiv-route-item.active .aiv-route-state-icon { color: #1769e8; }
+.aiv-route-item.hold .aiv-route-state-icon { color: #e87800; }
+.aiv-route-item.done .aiv-route-state-icon { color: #1769e8; }
+.aiv-route-item.hold { background: #fff8e8; }
+.aiv-route-item.hold .aiv-route-number { background: #f59e0b; color: #fff; }
+.aiv-route-item.done { background: #f3f7fc; }
+.aiv-route-item.done .aiv-route-number { background: #1769e8; color: #fff; }
+
+/* 임장센터 지도 상태색: 예정 노랑 / 보류 주황 / 완료 파랑 */
+.aiv-number-marker.pending {
+  background: #f7c928 !important;
+  color: #3c3300 !important;
+}
+.aiv-number-marker.current {
+  width: 42px !important;
+  height: 42px !important;
+  background: #f7c928 !important;
+  color: #302800 !important;
+  border-color: #1769e8 !important;
+  box-shadow: 0 0 0 5px rgba(23,105,232,.18), 0 6px 18px rgba(15,30,55,.32) !important;
+}
+.aiv-number-marker.hold {
+  background: #f59e0b !important;
+  color: #fff !important;
+}
+.aiv-number-marker.done {
+  background: #1769e8 !important;
+  color: #fff !important;
+}
+
+@media (max-width: 640px) {
+  .aiv-memo-editor { min-height: 82px; }
+  .aiv-field-actions { gap: 6px; }
+  .aiv-field-actions button {
+    min-height: 44px;
+    padding: 0 4px;
+    font-size: 12px;
+  }
+}
