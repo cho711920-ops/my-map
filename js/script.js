@@ -1892,13 +1892,12 @@ function markSelectedAsVisited() {
 
   var skippedCount = selectedItems.length - targetItems.length;
 
-  var confirmText =
-    "선택한 임장 대상 매물 " + targetItems.length +
-    "개의 임장 처리를 완료할까요?\n\n" +
-    "메모의 (임장가자)가 삭제되고 클러스터가 기본색으로 바뀝니다.";
+  var confirmText = targetItems.length === 1
+    ? "임장을 완료할까요?"
+    : "선택한 " + targetItems.length + "개 매물의 임장을 완료할까요?";
 
   if (skippedCount > 0) {
-    confirmText += "\n\n임장 대상이 아닌 " + skippedCount + "개 매물은 제외됩니다.";
+    confirmText += "\n임장 대상이 아닌 " + skippedCount + "개 매물은 제외됩니다.";
   }
 
   if (!confirm(confirmText)) return;
@@ -1996,7 +1995,7 @@ function completeSelectedItems() {
     return;
   }
 
-  if (!confirm("선택한 " + selectedItems.length + "개 매물을 거래완료로 처리할까요?")) {
+  if (!confirm(selectedItems.length === 1 ? "정말 거래완료 하시겠습니까?" : "선택한 " + selectedItems.length + "개 매물을 정말 거래완료 하시겠습니까?")) {
     return;
   }
 
