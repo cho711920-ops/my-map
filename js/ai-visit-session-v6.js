@@ -75,6 +75,17 @@
         '</section>' +
       '</div>' +
 
+      '<div id="aiVisitCompleteModal" class="aiv-modal" aria-hidden="true">' +
+        '<div class="aiv-backdrop" onclick="JSAiVisitV6.closeCompleteConfirm()"></div>' +
+        '<section class="aiv-confirm aiv-complete-confirm" role="dialog" aria-modal="true" aria-labelledby="aivCompleteTitle">' +
+          '<div class="aiv-complete-message" id="aivCompleteTitle">임장을 완료할까요?</div>' +
+          '<div class="aiv-complete-actions">' +
+            '<button type="button" class="aiv-btn secondary" onclick="JSAiVisitV6.closeCompleteConfirm()">취소</button>' +
+            '<button type="button" class="aiv-btn primary" id="aivCompleteConfirmBtn">완료</button>' +
+          '</div>' +
+        '</section>' +
+      '</div>' +
+
       '<section id="aiVisitWorkspace" class="aiv-workspace" aria-hidden="true">' +
         '<header class="aiv-workspace-header">' +
           '<div class="aiv-heading-wrap">' +
@@ -179,6 +190,7 @@
       openModal("aiVisitConfirmModal");
       document.getElementById("aivResumeBtn").onclick = function () {
         closeModal("aiVisitConfirmModal");
+        closeModal("aiVisitCompleteModal");
         waitForItemsReady(function () { restoreStoredSession(stored); });
       };
       document.getElementById("aivStartFreshBtn").onclick = function () {
@@ -252,6 +264,7 @@
         listId: list.id,
         listName: list.name,
         itemKeys: orderedKeys,
+        originalItemKeys: orderedKeys.slice(),
         currentIndex: 0,
         statuses: {},
         routeOptimized: !!(result && result.optimized),
@@ -336,8 +349,7 @@
       moneyLabel("보증금", item.deposit),
       moneyLabel("월세", item.rent),
       moneyLabel("관리비", item.fee),
-      moneyLabel("권리금", item.premium),
-      moneyLabel("평수", item.area || item.pyeong)
+      moneyLabel("권리금", item.premium)
     ].filter(Boolean).join("");
 
     var dealLabel = getDealLabel(item);
@@ -348,20 +360,6 @@
     }).map(function (value) {
       return '<span>' + escapeHtml(value) + '</span>';
     }).join("");
-
-    var travel = window.JSAiVisitUiV6 && typeof window.JSAiVisitUiV6.estimate === "function"
-      ? window.JSAiVisitUiV6.estimate(item)
-      : null;
-    var travelHtml = travel
-      ? '<div class="aiv-travel-strip"><span>도보 <strong>' + travel.walkMinutes + '분</strong> <small>(' + escapeHtml(travel.distanceText) + ')</small></span><span>차량 <strong>' + travel.carMinutes + '분</strong> <small>(' + escapeHtml(travel.distanceText) + ')</small></span></div>'
-      : '<div class="aiv-travel-strip pending"><span>도보·차량 예상시간 계산 중</span></div>';
-
-    var next = window.JSAiVisitUiV6 && typeof window.JSAiVisitUiV6.nextItem === "function"
-      ? window.JSAiVisitUiV6.nextItem(activeSession)
-      : null;
-    var nextHtml = next
-      ? '<div class="aiv-next-preview"><span>다음</span><strong>' + escapeHtml(next.name || next.address || "다음 매물") + '</strong><small>' + escapeHtml(buildAddressWithRoom(next)) + '</small></div>'
-      : '<div class="aiv-next-preview last"><span>마지막 매물</span></div>';
 
     return '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
       '<div class="aiv-current-top">' +
@@ -374,26 +372,22 @@
           '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
         '</div>' +
       '</div>' +
-      travelHtml +
       (priceBits ? '<div class="aiv-price-grid">' + priceBits + '</div>' : '') +
-      '<div class="aiv-compact-contact">' +
+      '<div class="aiv-detail-grid">' +
+        fieldLine("평수", item.area || item.pyeong) +
         fieldLine("임대인", item.landlordPhone) +
         fieldLine("세입자", item.tenantPhone) +
+        fieldLine("등록일", item.regDate) +
       '</div>' +
-      '<div id="aivMemoBox" class="aiv-memo-box"><div class="aiv-memo-title">메모</div><div class="aiv-memo-text">' + escapeHtml(item.memo || "메모가 없습니다.") + '</div></div>' +
-      '<div class="aiv-primary-actions">' +
-        '<button type="button" onclick="JSAiVisitV6.openNavigation()">내비</button>' +
-        '<button type="button" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
-        '<button type="button" onclick="JSAiVisitV6.toggleMemo()">메모</button>' +
-      '</div>' +
-      '<div class="aiv-route-actions">' +
-        '<button type="button" class="recalc" onclick="JSAiVisitV6.recalculateRoute()">현위치 재계산</button>' +
+      '<label class="aiv-memo-editor-wrap" for="aivMemoEditor">' +
+        '<span class="aiv-memo-title">메모</span>' +
+        '<textarea id="aivMemoEditor" class="aiv-memo-editor" placeholder="현장 메모를 입력하세요">' + escapeHtml(item.memo || "") + '</textarea>' +
+      '</label>' +
+      '<div class="aiv-field-actions">' +
+        '<button type="button" class="nav" onclick="JSAiVisitV6.openNavigation()">내비</button>' +
+        '<button type="button" class="roadview" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
         '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
-      '</div>' +
-      nextHtml +
-      '<div class="aiv-step-actions">' +
-        '<button type="button" ' + (index === 0 ? 'disabled' : '') + ' onclick="JSAiVisitV6.goPrevious()">이전</button>' +
-        '<button type="button" ' + (index >= total - 1 ? 'disabled' : '') + ' onclick="JSAiVisitV6.goNext()">다음</button>' +
+        '<button type="button" class="complete" onclick="JSAiVisitV6.requestComplete()">임장완료</button>' +
       '</div>';
   }
 
@@ -425,9 +419,12 @@
     document.getElementById("aivCurrentCard").innerHTML = renderCurrentCard(current, activeSession.currentIndex, items.length);
     document.getElementById("aivRouteList").innerHTML = items.map(function (item, index) {
       var state = statuses[item.key] || "";
-      return '<button type="button" class="aiv-route-item ' + (index === activeSession.currentIndex ? 'active ' : '') + (state ? state : '') + '" onclick="JSAiVisitV6.goTo(' + index + ')">' +
+      var icon = state === "done" ? "✓" : state === "hold" ? "⏸" : index === activeSession.currentIndex ? "▶" : "";
+      var action = state === "hold" ? "JSAiVisitV6.requestUnhold(" + index + ")" : "JSAiVisitV6.goTo(" + index + ")";
+      return '<button type="button" class="aiv-route-item ' + (index === activeSession.currentIndex ? 'active ' : '') + (state ? state : '') + '" onclick="' + action + '">' +
+        '<span class="aiv-route-state-icon" aria-hidden="true">' + icon + '</span>' +
         '<span class="aiv-route-number">' + (index + 1) + '</span>' +
-        '<span class="aiv-route-copy"><strong>' + escapeHtml(item.name || item.address || "매물") + '</strong><small>' + escapeHtml(item.address || "") + (state === "hold" ? ' · 보류' : '') + '</small></span>' +
+        '<span class="aiv-route-copy"><strong>' + escapeHtml(item.name || item.address || "매물") + '</strong><small>' + escapeHtml(item.address || "") + (state === "hold" ? ' · 보류' : state === "done" ? ' · 완료' : '') + '</small></span>' +
       '</button>';
     }).join("");
 
@@ -780,9 +777,124 @@
     window.setTimeout(syncRoadviewViewport, 300);
   }
 
-  function toggleMemo() {
-    var box = document.getElementById("aivMemoBox");
-    if (box) box.classList.toggle("open");
+  function currentMemoValue() {
+    var editor = document.getElementById("aivMemoEditor");
+    return editor ? editor.value.trim() : String((currentItem() && currentItem().memo) || "").trim();
+  }
+
+  function cleanVisitMemo(value) {
+    if (typeof window.removeFieldVisitMarkerFromMemo === "function") {
+      return window.removeFieldVisitMarkerFromMemo(value);
+    }
+    return String(value || "")
+      .replace(/\(\s*임장가자\s*\)/gi, "")
+      .replace(/\(\s*공실박스\s*\)/gi, "")
+      .replace(/\s*\/\s*\/\s*/g, " / ")
+      .replace(/^\s*\/\s*/, "")
+      .replace(/\s*\/\s*$/, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function saveMemoToSheet(item, memo, callback) {
+    if (!item) return callback(false);
+    if (!window.saveApiURL) {
+      alert("구글시트 쓰기 연결 URL을 확인해주세요.");
+      callback(false);
+      return;
+    }
+    var previousMemo = item.memo || "";
+    item.memo = memo;
+    var payload = {
+      action: "toggleDone",
+      key: {
+        name: item.name || "",
+        address: item.address || "",
+        room: item.room || "",
+        type: item.type || ""
+      },
+      state: item.state || "",
+      memo: memo
+    };
+    fetch(window.saveApiURL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    }).then(function () {
+      callback(true);
+      window.setTimeout(function () {
+        if (typeof window.loadSheet === "function") window.loadSheet(true);
+      }, 1400);
+    }).catch(function (error) {
+      console.error(error);
+      item.memo = previousMemo;
+      callback(false);
+    });
+  }
+
+  function requestComplete() {
+    var modal = document.getElementById("aiVisitCompleteModal");
+    var button = document.getElementById("aivCompleteConfirmBtn");
+    if (!modal || !button) return;
+    button.disabled = false;
+    button.textContent = "완료";
+    button.onclick = completeCurrent;
+    openModal("aiVisitCompleteModal");
+  }
+
+  function closeCompleteConfirm() {
+    closeModal("aiVisitCompleteModal");
+  }
+
+  function completeCurrent() {
+    if (!activeSession) return;
+    var item = currentItem();
+    if (!item) return;
+    var button = document.getElementById("aivCompleteConfirmBtn");
+    if (button) { button.disabled = true; button.textContent = "저장중..."; }
+    var nextMemo = cleanVisitMemo(currentMemoValue());
+    saveMemoToSheet(item, nextMemo, function (ok) {
+      if (!ok) {
+        if (button) { button.disabled = false; button.textContent = "완료"; }
+        alert("메모 저장에 실패했습니다. 다시 시도해주세요.");
+        return;
+      }
+      activeSession.statuses = activeSession.statuses || {};
+      activeSession.statuses[item.key] = "done";
+      activeSession.updatedAt = new Date().toISOString();
+      closeCompleteConfirm();
+      var nextIndex = window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.nextPendingIndex === "function"
+        ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, activeSession.currentIndex)
+        : -1;
+      if (nextIndex >= 0) activeSession.currentIndex = nextIndex;
+      saveSession();
+      renderWorkspace();
+      if (nextIndex < 0) alert("모든 매물의 임장 처리가 끝났습니다.");
+    });
+  }
+
+  function requestUnhold(index) {
+    if (!activeSession) return;
+    var key = activeSession.itemKeys[index];
+    if (!key || (activeSession.statuses || {})[key] !== "hold") return goTo(index);
+    if (!confirm("보류를 해제할까요?")) return;
+    delete activeSession.statuses[key];
+    var currentKey = currentItem() && currentItem().key;
+    var baseOrder = Array.isArray(activeSession.originalItemKeys) && activeSession.originalItemKeys.length
+      ? activeSession.originalItemKeys.slice()
+      : activeSession.itemKeys.slice();
+    var present = {};
+    activeSession.itemKeys.forEach(function (itemKey) { present[itemKey] = true; });
+    activeSession.itemKeys = baseOrder.filter(function (itemKey) { return present[itemKey] && activeSession.statuses[itemKey] !== "hold"; })
+      .concat(activeSession.itemKeys.filter(function (itemKey) { return activeSession.statuses[itemKey] === "hold"; }));
+    activeSession.currentIndex = Math.max(0, activeSession.itemKeys.indexOf(key));
+    if (currentKey && currentKey !== key && activeSession.itemKeys.indexOf(currentKey) >= 0) {
+      /* 사용자가 보류 해제 항목을 선택했으므로 해제한 매물을 현재 대상으로 엽니다. */
+      activeSession.currentIndex = activeSession.itemKeys.indexOf(key);
+    }
+    saveSession();
+    renderWorkspace();
   }
 
   function goTo(index) {
@@ -826,14 +938,21 @@
     if (!item) return;
     activeSession.statuses = activeSession.statuses || {};
     activeSession.statuses[item.key] = "hold";
+    var key = item.key;
+    var currentPosition = activeSession.itemKeys.indexOf(key);
+    if (currentPosition >= 0) {
+      activeSession.itemKeys.splice(currentPosition, 1);
+      activeSession.itemKeys.push(key);
+    }
     activeSession.updatedAt = new Date().toISOString();
     var nextIndex = window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.nextPendingIndex === "function"
-      ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, activeSession.currentIndex)
-      : activeSession.currentIndex + 1;
-    if (nextIndex >= 0 && nextIndex < activeSession.itemKeys.length) activeSession.currentIndex = nextIndex;
+      ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, Math.max(-1, currentPosition - 1))
+      : 0;
+    if (nextIndex >= 0) activeSession.currentIndex = nextIndex;
+    else activeSession.currentIndex = Math.max(0, activeSession.itemKeys.length - 1);
     saveSession();
     renderWorkspace();
-    if (nextIndex < 0) alert("모든 매물을 확인했습니다. 보류 매물은 임장목록에 그대로 유지됩니다.");
+    if (nextIndex < 0) alert("방문 예정 매물을 모두 확인했습니다. 보류 매물은 목록 맨 아래에 남아 있습니다.");
   }
 
   function requestExit() {
@@ -887,6 +1006,7 @@
       listId: stored.listId,
       listName: stored.listName,
       itemKeys: Array.isArray(stored.itemKeys) ? stored.itemKeys.slice() : [],
+      originalItemKeys: Array.isArray(stored.originalItemKeys) ? stored.originalItemKeys.slice() : (Array.isArray(stored.itemKeys) ? stored.itemKeys.slice() : []),
       currentIndex: Number(stored.currentIndex) || 0,
       statuses: stored.statuses && typeof stored.statuses === "object" ? stored.statuses : {},
       routeOptimized: !!stored.routeOptimized,
@@ -920,7 +1040,6 @@
     closeConfirm: function () { closeModal("aiVisitConfirmModal"); },
     openNavigation: openNavigation,
     openRoadview: openRoadview,
-    toggleMemo: toggleMemo,
     goPrevious: function () { if (activeSession) goTo(activeSession.currentIndex - 1); },
     goNext: function () {
       if (!activeSession) return;
@@ -933,6 +1052,9 @@
     showAllOnMap: showAllOnMap,
     focusCurrentOnRouteMap: focusCurrentOnRouteMap,
     holdCurrent: holdCurrent,
+    requestUnhold: requestUnhold,
+    requestComplete: requestComplete,
+    closeCompleteConfirm: closeCompleteConfirm,
     goTo: goTo,
     requestExit: requestExit,
     getSavedProgress: function (listId) {
