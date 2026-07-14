@@ -4484,3 +4484,74 @@ body,
   .list-master-label { display: none !important; }
   .quick-add-phone-row { grid-template-columns: 1fr !important; }
 }
+
+/* =========================================================
+   v6.0 STEP4.3 — 매물리스트 고정 헤더 최종 크기/노출 보정
+   ========================================================= */
+#listToolbar.list-toolbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 8500 !important;
+  display: grid !important;
+  grid-template-columns: 34px 88px minmax(0, 1fr) minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 5px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  margin: 0 !important;
+  padding: 5px 6px !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  background: rgba(255,255,255,.99) !important;
+  border-bottom: 1px solid #dfe6ef !important;
+  box-shadow: 0 2px 8px rgba(15,23,42,.08) !important;
+}
+
+#listToolbar .list-master-select {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  gap: 0 !important;
+}
+
+#listToolbar .list-master-label {
+  display: none !important;
+}
+
+#listToolbar .list-master-checkmark {
+  width: 17px !important;
+  height: 17px !important;
+  margin: 0 !important;
+}
+
+#listToolbar .list-toolbar-btn,
+#listToolbar .list-toolbar-control,
+#listToolbar .list-toolbar-control select,
+#listToolbar .list-toolbar-control .sort-dropdown-btn {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  margin: 0 !important;
+  font-size: 11.5px !important;
+  white-space: nowrap !important;
+}
+
+#listToolbar .list-toolbar-btn {
+  padding: 0 7px !important;
+}
+
+#sidebar {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+#list {
+  margin-top: 0 !important;
+  padding-top: 6px !important;
+}
