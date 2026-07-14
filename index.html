@@ -42,7 +42,7 @@
             <span>보기</span><span class="v6-command-caret" aria-hidden="true"></span>
           </button>
           <div id="v6ActionMenu_view" class="v6-command-dropdown" role="menu">
-            <button id="hideDoneBtn" class="hide-done-btn" type="button" onclick="toggleHideDone(); closeV6ActionMenus()">전체매물보기</button>
+            <button id="hideDoneBtn" class="hide-done-btn on" type="button" role="menuitemcheckbox" aria-checked="true" onclick="toggleHideDone(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>계약완료 숨김</span></button>
             <button id="gongsilOnlyBtn" class="gongsil-only-btn" type="button" onclick="toggleGongsilOnly(); closeV6ActionMenus()">임장할매물만보기</button>
             <div class="v6-command-divider"></div>
             <button id="favoriteBtn" class="favorite-filter-btn" type="button" onclick="openListManager('favorite'); closeV6ActionMenus()">찜목록</button>
