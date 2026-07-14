@@ -386,3 +386,59 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary .v6-primary-action.ai { grid-column: 1 !important; margin-left: 0 !important; }
   .v6-toolbar-secondary .quick-add-btn.v6-secondary-action { grid-column: 2 !important; margin-left: 0 !important; }
 }
+
+
+/* === v6.0 STEP4.2: 데스크톱 상단 한 줄 정렬 + 주요 버튼 분리 === */
+@media (min-width: 1100px) {
+  .filters {
+    display: grid !important;
+    grid-template-columns: minmax(560px, 760px) max-content !important;
+    align-items: center !important;
+    justify-content: start !important;
+    column-gap: 18px !important;
+    row-gap: 0 !important;
+    min-height: 50px !important;
+    padding: 5px 14px !important;
+  }
+  .filters .filter-title { display: none !important; }
+  .v6-toolbar-primary {
+    grid-column: 1 !important;
+    display: grid !important;
+    grid-template-columns: minmax(360px, 1fr) 68px 72px !important;
+    align-items: center !important;
+    gap: 7px !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  .v6-toolbar-primary .search-row {
+    grid-column: 1 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 64px !important;
+    gap: 6px !important;
+  }
+  .top-reset-btn { grid-column: 2 !important; }
+  .detail-btn { grid-column: 3 !important; }
+  .v6-toolbar-secondary {
+    grid-column: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    flex-wrap: nowrap !important;
+    gap: 9px !important;
+    width: auto !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .v6-toolbar-secondary .v6-primary-action.ai {
+    margin-left: 10px !important;
+    margin-right: 7px !important;
+  }
+  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+    margin-left: 0 !important;
+  }
+  #detailFilter,
+  #multiClusterStatus {
+    grid-column: 1 / -1 !important;
+  }
+  #wrap { top: 60px !important; }
+}
