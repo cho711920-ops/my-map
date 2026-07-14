@@ -207,15 +207,19 @@
     requestLocation(function (location, locationError) {
       if (!location) return callback({ ok: false, reason: "location", locationError: locationError || null });
       var statuses = session.statuses || {};
-      var processed = [];
+      var done = [];
       var pending = [];
+      var held = [];
       (session.itemKeys || []).forEach(function (key) {
-        if (statuses[key] === "hold" || statuses[key] === "done") processed.push(key);
+        if (statuses[key] === "hold") held.push(key);
+        else if (statuses[key] === "done") done.push(key);
         else pending.push(key);
       });
       var optimizedPending = optimizeKeys(pending, location);
-      session.itemKeys = processed.concat(optimizedPending);
-      session.currentIndex = processed.length < session.itemKeys.length ? processed.length : Math.max(0, session.itemKeys.length - 1);
+      session.itemKeys = done.concat(optimizedPending, held);
+      session.currentIndex = done.length < done.length + optimizedPending.length
+        ? done.length
+        : Math.max(0, session.itemKeys.length - 1);
       session.routeStartLocation = location;
       session.routeOptimized = true;
       callback({ ok: true, session: session });
