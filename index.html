@@ -99,7 +99,7 @@
       <label class="list-master-select" title="현재 보이는 매물 전체선택/해제">
         <input id="listMasterCheckbox" type="checkbox" onchange="toggleVisibleSelection(this.checked)">
         <span class="list-master-checkmark" aria-hidden="true"></span>
-        <span class="list-master-label">전체</span>
+        <span class="list-master-label">전체선택/해제</span>
       </label>
 
       <button id="multiClusterBtn" class="list-toolbar-btn multi-cluster-btn" type="button" onclick="toggleMultiClusterMode()">
@@ -195,11 +195,6 @@
       </div>
 
       <div>
-        <label>등록일</label>
-        <input id="qaRegDate" placeholder="자동입력">
-      </div>
-
-      <div>
         <label>건물이름</label>
         <input id="qaName" placeholder="건물이름 또는 제목">
       </div>
@@ -245,16 +240,6 @@
       </div>
 
       <div>
-        <label>임대인전화</label>
-        <input id="qaLandlordPhone" placeholder="010-0000-0000">
-      </div>
-
-      <div>
-        <label>세입자전화</label>
-        <input id="qaTenantPhone" placeholder="010-0000-0000">
-      </div>
-
-      <div>
         <label>상태</label>
         <select id="qaState">
           <option value="">공란/계약가능</option>
@@ -262,7 +247,23 @@
         </select>
       </div>
 
-      <div class="full">
+      <div class="quick-add-phone-row full">
+        <div>
+          <label>임대인전화</label>
+          <input id="qaLandlordPhone" placeholder="010-0000-0000">
+        </div>
+        <div>
+          <label>세입자전화</label>
+          <input id="qaTenantPhone" placeholder="010-0000-0000">
+        </div>
+      </div>
+
+      <div class="quick-add-regdate-last">
+        <label>등록일</label>
+        <input id="qaRegDate" placeholder="자동입력">
+      </div>
+
+      <div class="full quick-add-memo-row">
         <label>메모</label>
         <textarea id="qaMemo" placeholder="특징과 확인사항을 적어두세요. 출처는 별도 열에 저장됩니다."></textarea>
       </div>
