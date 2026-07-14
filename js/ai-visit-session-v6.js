@@ -372,12 +372,16 @@
           '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
         '</div>' +
       '</div>' +
-      (priceBits ? '<div class="aiv-price-grid">' + priceBits + '</div>' : '') +
-      '<div class="aiv-detail-grid">' +
-        fieldLine("평수", item.area || item.pyeong) +
-        fieldLine("임대인", item.landlordPhone) +
-        fieldLine("세입자", item.tenantPhone) +
-        fieldLine("등록일", item.regDate) +
+      '<div class="aiv-condition-line">' +
+        '<span class="deposit">보증금 ' + escapeHtml(item.deposit || 0) + '</span>' +
+        '<span class="rent">월세 ' + escapeHtml(item.rent || 0) + '</span>' +
+        '<span class="fee">관리비 ' + escapeHtml(item.fee || 0) + '</span>' +
+        '<span class="premium">권리금 ' + escapeHtml(item.premium || 0) + '</span>' +
+        '<span class="area">' + escapeHtml(item.area || item.pyeong || 0) + '평</span>' +
+      '</div>' +
+      '<div class="aiv-contact-line">' +
+        (item.landlordPhone ? '<a href="tel:' + escapeHtml(String(item.landlordPhone).replace(/[^0-9+]/g, "")) + '">임대인 ' + escapeHtml(item.landlordPhone) + '</a>' : '') +
+        (item.tenantPhone ? '<a href="tel:' + escapeHtml(String(item.tenantPhone).replace(/[^0-9+]/g, "")) + '">세입자 ' + escapeHtml(item.tenantPhone) + '</a>' : '') +
       '</div>' +
       '<label class="aiv-memo-editor-wrap" for="aivMemoEditor">' +
         '<span class="aiv-memo-title">메모</span>' +
