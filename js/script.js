@@ -797,6 +797,7 @@ function showList(items) {
   });
 
   updatePrintSelectedButton();
+  syncListMasterCheckbox();
 }
 
 
@@ -1437,11 +1438,15 @@ function addListItem(item) {
       '</span>' +
     '</div>' +
 
-    '<div class="price-line">보증금 ' + item.deposit +
-      ' / 월세 ' + item.rent +
-      ' | 관리비 ' + item.fee +
-      ' | 권리금 ' + item.premium +
-      ' | ' + item.area + '평</div>' +
+    '<div class="price-line">' +
+      '<span class="price-main">보' + escapeHtml(item.deposit) + '/월' + escapeHtml(item.rent) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-fee">관' + escapeHtml(item.fee) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-premium">권' + escapeHtml(item.premium) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-area">' + escapeHtml(item.area) + '평</span>' +
+    '</div>' +
 
     '<div class="item-contact-date-row">' +
       '<div class="info-line-compact">임대인 ' +
@@ -1825,6 +1830,32 @@ function clearSelectedPrintItems() {
   showList(visibleListItems);
 }
 
+function toggleVisibleSelection(shouldSelect) {
+  if (shouldSelect) {
+    selectAllVisibleItems();
+  } else {
+    clearSelectedPrintItems();
+  }
+}
+
+function syncListMasterCheckbox() {
+  var checkbox = document.getElementById("listMasterCheckbox");
+  if (!checkbox) return;
+
+  var visibleKeys = (visibleListItems || []).map(function(item) { return item.key; });
+  var selectedCount = visibleKeys.filter(function(key) {
+    return selectedPrintKeys.includes(key);
+  }).length;
+
+  checkbox.checked = visibleKeys.length > 0 && selectedCount === visibleKeys.length;
+  checkbox.indeterminate = selectedCount > 0 && selectedCount < visibleKeys.length;
+
+  var label = document.querySelector(".list-master-label");
+  if (label) {
+    label.textContent = selectedCount > 0 ? "선택 " + selectedCount : "전체";
+  }
+}
+
 
 function updatePrintSelectedButton() {
   var printBtn = document.getElementById("printSelectedBtn");
@@ -1833,12 +1864,12 @@ function updatePrintSelectedButton() {
   var count = selectedPrintKeys.length;
 
   if (printBtn) {
-    printBtn.innerText = count > 0 ? "인쇄 " + count : "인쇄";
+    printBtn.innerText = count > 0 ? "선택인쇄 " + count : "선택인쇄";
     printBtn.disabled = count === 0;
   }
 
   if (completeBtn) {
-    completeBtn.innerText = count > 0 ? "완료 " + count : "완료";
+    completeBtn.innerText = count > 0 ? "계약완료 " + count : "계약완료";
     completeBtn.disabled = count === 0;
   }
 
@@ -2117,8 +2148,8 @@ function updateMultiClusterButton() {
   if (!btn) return;
 
   btn.innerHTML = multiClusterMode
-    ? "<span>다중</span><span>O</span>"
-    : "<span>다중</span><span>X</span>";
+    ? "<span>다중해제</span>"
+    : "<span>다중선택</span>";
 
   btn.classList.toggle("on", multiClusterMode);
 }
