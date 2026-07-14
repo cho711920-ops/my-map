@@ -722,3 +722,117 @@ function parseQuickAddText() {
   updateQuickAddWarning();
   updateQuickAddPreview();
 }
+
+
+/* =========================================================
+   v6.1 빠른등록 출처 O열 + 중복등록 방지
+   ========================================================= */
+function getQuickAddRowValues() {
+  var o = getQuickAddObject();
+  return [
+    o.name, o.address, o.room, o.type,
+    o.deposit, o.rent, o.fee, o.premium, o.area,
+    o.landlordPhone, o.tenantPhone, o.memo, o.state, o.regDate, o.source
+  ];
+}
+
+function normalizeQuickDuplicateTextV61(value) {
+  return String(value == null ? "" : value).toLowerCase().replace(/\s+/g, "").replace(/대전광역시|대전시/g, "").replace(/[,()\[\]{}]/g, "");
+}
+
+function normalizeQuickDuplicateRoomV61(value) {
+  return normalizeQuickDuplicateTextV61(value).replace(/호$/, "");
+}
+
+function normalizeQuickDuplicateNumberV61(value) {
+  return String(value == null ? "" : value).replace(/[,만원원\s]/g, "");
+}
+
+function findQuickDuplicateV61(values) {
+  var target = {
+    name: normalizeQuickDuplicateTextV61(values[0]),
+    address: normalizeQuickDuplicateTextV61(values[1]),
+    room: normalizeQuickDuplicateRoomV61(values[2]),
+    type: normalizeQuickDuplicateTextV61(values[3]),
+    deposit: normalizeQuickDuplicateNumberV61(values[4]),
+    rent: normalizeQuickDuplicateNumberV61(values[5])
+  };
+  var similar = null;
+  for (var i = 0; i < (allItems || []).length; i++) {
+    var item = allItems[i] || {};
+    var current = {
+      name: normalizeQuickDuplicateTextV61(item.name),
+      address: normalizeQuickDuplicateTextV61(item.address),
+      room: normalizeQuickDuplicateRoomV61(item.room),
+      type: normalizeQuickDuplicateTextV61(item.type),
+      deposit: normalizeQuickDuplicateNumberV61(item.deposit),
+      rent: normalizeQuickDuplicateNumberV61(item.rent)
+    };
+    if (!target.address || target.address !== current.address) continue;
+    var exactByRoom = target.room && current.room && target.room === current.room && target.type === current.type;
+    var exactWithoutRoom = !target.room && !current.room && target.name === current.name && target.deposit === current.deposit && target.rent === current.rent;
+    if (exactByRoom || exactWithoutRoom) return { type: "exact", item: item };
+    if (!similar) similar = item;
+  }
+  return similar ? { type: "similar", item: similar } : null;
+}
+
+function quickDuplicateSummaryV61(item) {
+  if (!item) return "";
+  var line1 = [item.address, item.room].filter(Boolean).join(" · ");
+  var line2 = "보증금 " + (item.deposit || 0) + " / 월세 " + (item.rent || 0);
+  return line1 + "\n" + line2;
+}
+
+function saveQuickAddToSheet() {
+  if (!validateQuickAdd()) return;
+  if (!saveApiURL) {
+    alert("자동등록 URL이 아직 연결되지 않았습니다.");
+    return;
+  }
+
+  var values = getQuickAddRowValues();
+  var duplicate = findQuickDuplicateV61(values);
+  var forceDuplicate = false;
+
+  if (duplicate && duplicate.type === "exact") {
+    alert("이미 등록된 매물입니다.\n\n" + quickDuplicateSummaryV61(duplicate.item));
+    return;
+  }
+
+  if (duplicate && duplicate.type === "similar") {
+    forceDuplicate = confirm(
+      "같은 주소의 유사 매물이 이미 있습니다.\n\n" +
+      quickDuplicateSummaryV61(duplicate.item) +
+      "\n\n그래도 등록할까요?"
+    );
+    if (!forceDuplicate) return;
+  }
+
+  var btn = document.querySelector(".auto-save-btn");
+  var oldText = btn ? btn.innerText : "";
+  if (btn) {
+    btn.innerText = "등록중...";
+    btn.disabled = true;
+  }
+
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "quickAdd", values: values, forceDuplicate: forceDuplicate })
+  }).then(function() {
+    alert("자동등록 요청을 보냈습니다.\n잠시 후 지도에 반영됩니다.");
+    closeQuickAddModal();
+    clearQuickAddForm();
+    setTimeout(function() { loadSheet(true); }, 1800);
+  }).catch(function(err) {
+    console.error(err);
+    alert("자동등록 요청 중 오류가 발생했습니다.\n연결 URL을 확인해주세요.");
+  }).finally(function() {
+    if (btn) {
+      btn.innerText = oldText;
+      btn.disabled = false;
+    }
+  });
+}
