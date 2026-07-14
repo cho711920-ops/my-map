@@ -33,42 +33,6 @@
 
         <button id="topResetBtn" class="top-reset-btn" type="button" onclick="resetFilter()">초기화</button>
         <button id="detailBtn" class="detail-btn" type="button" onclick="toggleDetailFilter()">상세</button>
-
-        <div class="v6-filter-control v6-type-control">
-          <select id="typeFilter" onchange="applyFilter()">
-            <option value="">구분</option>
-          </select>
-        </div>
-
-        <div id="sortDropdown" class="sort-dropdown v6-filter-control">
-          <input id="sortFilter" type="hidden" value="latest">
-          <button
-            id="sortDropdownBtn"
-            type="button"
-            class="sort-dropdown-btn"
-            onclick="toggleSortDropdown(event)"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          ><span class="v6-sort-label">정렬</span><span class="v6-filter-caret" aria-hidden="true"></span></button>
-
-          <div id="sortDropdownMenu" class="sort-dropdown-menu" role="listbox">
-            <button type="button" data-sort-value="latest" onclick="selectSortOption('latest')">최신등록순</button>
-            <button type="button" data-sort-value="oldest" onclick="selectSortOption('oldest')">등록일 오래된순</button>
-            <button type="button" data-sort-value="aiScoreHigh" onclick="selectSortOption('aiScoreHigh')">AI점수 높은순</button>
-            <button type="button" data-sort-value="pyeongHigh" onclick="selectSortOption('pyeongHigh')">평당 높은순</button>
-            <button type="button" data-sort-value="pyeongLow" onclick="selectSortOption('pyeongLow')">평당 낮은순</button>
-            <button type="button" data-sort-value="depositHigh" onclick="selectSortOption('depositHigh')">보증금 높은순</button>
-            <button type="button" data-sort-value="depositLow" onclick="selectSortOption('depositLow')">보증금 낮은순</button>
-            <button type="button" data-sort-value="rentHigh" onclick="selectSortOption('rentHigh')">월세 높은순</button>
-            <button type="button" data-sort-value="rentLow" onclick="selectSortOption('rentLow')">월세 낮은순</button>
-            <button type="button" data-sort-value="premiumHigh" onclick="selectSortOption('premiumHigh')">권리금 높은순</button>
-            <button type="button" data-sort-value="premiumLow" onclick="selectSortOption('premiumLow')">권리금 낮은순</button>
-            <button type="button" data-sort-value="areaHigh" onclick="selectSortOption('areaHigh')">평수 큰순</button>
-            <button type="button" data-sort-value="areaLow" onclick="selectSortOption('areaLow')">평수 작은순</button>
-            <button type="button" data-sort-value="name" onclick="selectSortOption('name')">건물이름 가나다순</button>
-            <button type="button" data-sort-value="address" onclick="selectSortOption('address')">주소 가나다순</button>
-          </div>
-        </div>
       </div>
 
       <div class="v6-toolbar-secondary extra-action-row v6-command-bar">
@@ -92,20 +56,14 @@
             <span>작업</span><span class="v6-command-caret" aria-hidden="true"></span>
           </button>
           <div id="v6ActionMenu_work" class="v6-command-dropdown" role="menu">
-            <button id="printSelectedBtn" class="print-btn" type="button" onclick="printSelectedList(); closeV6ActionMenus()">선택인쇄하기</button>
-            <button id="completeSelectedBtn" class="complete-selected-btn" type="button" onclick="completeSelectedItems(); closeV6ActionMenus()">거래완료등록</button>
+            <button id="printSelectedBtn" class="print-btn" type="button" onclick="printSelectedList(); closeV6ActionMenus()">선택인쇄</button>
+            <button id="completeSelectedBtn" class="complete-selected-btn" type="button" onclick="completeSelectedItems(); closeV6ActionMenus()">계약완료</button>
             <button id="fieldVisitBtn" class="field-visit-btn" type="button" onclick="markSelectedAsVisited(); closeV6ActionMenus()">임장완료</button>
-            <div class="v6-command-divider v6-mobile-only"></div>
-            <button class="v6-mobile-only" type="button" onclick="selectAllVisibleItems(); closeV6ActionMenus()">전체선택</button>
-            <button class="v6-mobile-only" type="button" onclick="clearSelectedPrintItems(); closeV6ActionMenus()">선택해제</button>
           </div>
         </div>
 
-        <button class="select-all-btn" type="button" onclick="selectAllVisibleItems()">전체선택</button>
-        <button class="clear-selected-btn" type="button" onclick="clearSelectedPrintItems()">선택해제</button>
-        <button id="multiClusterBtn" class="multi-cluster-btn compact-two-line" type="button" onclick="toggleMultiClusterMode()"><span>다중</span><span>X</span></button>
         <button class="v6-primary-action ai" type="button" onclick="startAiVisitPreview()">AI임장하기</button>
-        <button class="quick-add-btn quick-add-with-sync v6-primary-action" type="button" onclick="openQuickAddModal()">
+        <button class="quick-add-btn quick-add-with-sync v6-primary-action v6-secondary-action" type="button" onclick="openQuickAddModal()">
           <span>빠른등록</span>
           <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
         </button>
@@ -134,6 +92,48 @@
         </div>
 
         <button class="apply-btn" onclick="applyFilter()">필터 적용</button>
+      </div>
+    </div>
+
+    <div id="listToolbar" class="list-toolbar" aria-label="매물목록 도구">
+      <label class="list-master-select" title="현재 보이는 매물 전체선택/해제">
+        <input id="listMasterCheckbox" type="checkbox" onchange="toggleVisibleSelection(this.checked)">
+        <span class="list-master-checkmark" aria-hidden="true"></span>
+        <span class="list-master-label">전체</span>
+      </label>
+
+      <button id="multiClusterBtn" class="list-toolbar-btn multi-cluster-btn" type="button" onclick="toggleMultiClusterMode()">
+        <span>다중선택</span>
+      </button>
+
+      <div class="list-toolbar-control list-type-control">
+        <select id="typeFilter" onchange="applyFilter()">
+          <option value="">구분</option>
+        </select>
+      </div>
+
+      <div id="sortDropdown" class="sort-dropdown list-toolbar-control list-sort-control">
+        <input id="sortFilter" type="hidden" value="latest">
+        <button id="sortDropdownBtn" type="button" class="sort-dropdown-btn" onclick="toggleSortDropdown(event)" aria-haspopup="listbox" aria-expanded="false">
+          <span class="v6-sort-label">정렬</span><span class="v6-filter-caret" aria-hidden="true"></span>
+        </button>
+        <div id="sortDropdownMenu" class="sort-dropdown-menu" role="listbox">
+          <button type="button" data-sort-value="latest" onclick="selectSortOption('latest')">최신등록순</button>
+          <button type="button" data-sort-value="oldest" onclick="selectSortOption('oldest')">등록일 오래된순</button>
+          <button type="button" data-sort-value="aiScoreHigh" onclick="selectSortOption('aiScoreHigh')">AI점수 높은순</button>
+          <button type="button" data-sort-value="pyeongHigh" onclick="selectSortOption('pyeongHigh')">평당 높은순</button>
+          <button type="button" data-sort-value="pyeongLow" onclick="selectSortOption('pyeongLow')">평당 낮은순</button>
+          <button type="button" data-sort-value="depositHigh" onclick="selectSortOption('depositHigh')">보증금 높은순</button>
+          <button type="button" data-sort-value="depositLow" onclick="selectSortOption('depositLow')">보증금 낮은순</button>
+          <button type="button" data-sort-value="rentHigh" onclick="selectSortOption('rentHigh')">월세 높은순</button>
+          <button type="button" data-sort-value="rentLow" onclick="selectSortOption('rentLow')">월세 낮은순</button>
+          <button type="button" data-sort-value="premiumHigh" onclick="selectSortOption('premiumHigh')">권리금 높은순</button>
+          <button type="button" data-sort-value="premiumLow" onclick="selectSortOption('premiumLow')">권리금 낮은순</button>
+          <button type="button" data-sort-value="areaHigh" onclick="selectSortOption('areaHigh')">평수 큰순</button>
+          <button type="button" data-sort-value="areaLow" onclick="selectSortOption('areaLow')">평수 작은순</button>
+          <button type="button" data-sort-value="name" onclick="selectSortOption('name')">건물이름 가나다순</button>
+          <button type="button" data-sort-value="address" onclick="selectSortOption('address')">주소 가나다순</button>
+        </div>
       </div>
     </div>
 
