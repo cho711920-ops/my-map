@@ -1661,8 +1661,7 @@ function resetFilter() {
   selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.remove("on");
-  document.getElementById("hideDoneBtn").innerText = "전체매물보기";
-  document.getElementById("hideDoneBtn").classList.add("on");
+  updateHideDoneMenuUI();
   document.getElementById("gongsilOnlyBtn").innerText = "임장할매물만보기";
   document.getElementById("gongsilOnlyBtn").classList.remove("on");
   updateMultiClusterButton();
@@ -1884,7 +1883,7 @@ function updatePrintSelectedButton() {
   }
 
   if (fieldVisitBtn) {
-    fieldVisitBtn.innerText = count > 0 ? "임장 ON " + count : "임장 ON";
+    fieldVisitBtn.innerText = count > 0 ? "임장완료 " + count : "임장완료";
     fieldVisitBtn.disabled = count === 0;
   }
 }
@@ -2286,19 +2285,20 @@ function initSyncIndicator() {
 setTimeout(initSyncIndicator, 0);
 
 
+function updateHideDoneMenuUI() {
+  var btn = document.getElementById("hideDoneBtn");
+  if (!btn) return;
+
+  btn.classList.toggle("on", !!hideDone);
+  btn.setAttribute("aria-checked", hideDone ? "true" : "false");
+
+  var check = btn.querySelector(".view-toggle-check");
+  if (check) check.textContent = hideDone ? "✓" : "";
+}
+
 function toggleHideDone() {
   hideDone = !hideDone;
-
-  var btn = document.getElementById("hideDoneBtn");
-
-  if (hideDone) {
-    btn.innerText = "전체매물보기";
-    btn.classList.add("on");
-  } else {
-    btn.innerText = "계약완료숨김";
-    btn.classList.remove("on");
-  }
-
+  updateHideDoneMenuUI();
   selectedGroupKey = null;
   selectedItemKey = null;
   applyFilter();
@@ -2351,9 +2351,6 @@ function showAddressErrors() {
 
 /* v6.1 기본 계약완료 숨김 UI 초기화 */
 setTimeout(function() {
-  var hideBtn = document.getElementById("hideDoneBtn");
-  if (hideBtn) {
-    hideBtn.innerText = hideDone ? "전체매물보기" : "계약완료숨김";
-    hideBtn.classList.toggle("on", hideDone);
-  }
+  hideDone = true;
+  updateHideDoneMenuUI();
 }, 0);
