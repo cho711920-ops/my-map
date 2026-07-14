@@ -2354,3 +2354,76 @@ setTimeout(function() {
   hideDone = true;
   updateHideDoneMenuUI();
 }, 0);
+
+
+/* =========================================================
+   v6.1.2 층수 필터 표준화
+   B1/B01/B101/지1/지하1/-1 => -1
+   B201 => -2, 101호 => 1, 502호 => 5
+   ========================================================= */
+function parseFloorNotationV612(value, allowRoomInference) {
+  var text = String(value == null ? "" : value).trim();
+  if (!text) return null;
+
+  var compact = text.toUpperCase().replace(/\s+/g, "");
+
+  /* B 표기는 무조건 지하. B101은 지하1층, B201은 지하2층 */
+  var basementB = compact.match(/B(\d{1,4})/);
+  if (basementB) {
+    var bDigits = basementB[1];
+    var bFloor;
+    if (bDigits.length <= 2) {
+      bFloor = Number(bDigits);
+    } else {
+      bFloor = Number(bDigits.slice(0, -2));
+      if (!bFloor) bFloor = Number(bDigits.slice(-2));
+    }
+    return bFloor > 0 ? -bFloor : -1;
+  }
+
+  var koreanBasement = compact.match(/(?:지하|지)(\d{1,2})/);
+  if (koreanBasement) return -Math.max(1, Number(koreanBasement[1]) || 1);
+
+  var negativeFloor = compact.match(/(?:^|[^0-9])-(\d{1,2})(?:층|F|$)/);
+  if (negativeFloor) return -Math.max(1, Number(negativeFloor[1]) || 1);
+
+  var explicitFloor = compact.match(/(?:^|[^0-9])(\d{1,2})(?:층|F)(?:[^0-9]|$)/);
+  if (explicitFloor) return Number(explicitFloor[1]) || null;
+
+  if (allowRoomInference !== false) {
+    var room = compact.match(/(?:^|[^0-9])(\d{3,4})호?(?:[^0-9]|$)/);
+    if (room) {
+      var digits = room[1];
+      var floor = digits.length === 3 ? Number(digits.charAt(0)) : Number(digits.slice(0, -2));
+      return floor > 0 ? floor : null;
+    }
+  }
+
+  /* 필터 입력칸의 일반 숫자 */
+  if (/^-?\d+(?:\.\d+)?$/.test(compact)) {
+    var n = Number(compact);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  return null;
+}
+
+function getItemFloorNumber(item) {
+  var room = String((item && item.room) || "").trim();
+  var fromRoom = parseFloorNotationV612(room, true);
+  if (fromRoom !== null) return fromRoom;
+
+  /* 호실에 정보가 없을 때만 건물명·메모를 보조로 확인 */
+  var name = String((item && item.name) || "").trim();
+  var memo = String((item && item.memo) || "").trim();
+  var fromText = parseFloorNotationV612(name + " " + memo, false);
+  return fromText;
+}
+
+function readOptionalNumberInput(id) {
+  var el = document.getElementById(id);
+  if (!el) return null;
+  var value = String(el.value || "").trim();
+  if (!value) return null;
+  return parseFloorNotationV612(value, false);
+}
