@@ -4826,3 +4826,77 @@ body,
     font-size: 10.5px !important;
   }
 }
+\n\n/* =========================================================\n   v6.1 화면 정리\n   ========================================================= */\n.industry-filter-row { grid-template-columns: 1fr !important; }\n.industry-filter-input { width: 100% !important; }\n.quick-add-contact-row { display:grid !important; grid-template-columns: 1fr 1fr minmax(150px,.72fr) !important; gap:10px !important; }\n.quick-add-contact-row > div { min-width:0; }\n@media (max-width: 767px) {\n  #map, #wrap, #sidebar { border-color: transparent !important; box-shadow:none !important; outline:none !important; }\n  #map { border:0 !important; }\n  .quick-add-contact-row { grid-template-columns:1fr !important; }\n}\n
+
+/* =========================================================
+   v6.1.1 최종 안정화: 보기 토글 / 모바일 지도 프레임 제거
+   ========================================================= */
+#hideDoneBtn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+#hideDoneBtn .view-toggle-check {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
+  border: 1.5px solid #94a3b8 !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+  color: transparent !important;
+  font-size: 13px !important;
+  font-weight: 1000 !important;
+  line-height: 1 !important;
+}
+#hideDoneBtn.on .view-toggle-check {
+  border-color: #1769e8 !important;
+  background: #1769e8 !important;
+  color: #fff !important;
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #wrap,
+  #sidebar,
+  #map,
+  #map > div,
+  #map > div > div,
+  #map canvas {
+    border: 0 !important;
+    border-width: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+
+  html,
+  body,
+  #wrap {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  #wrap {
+    gap: 0 !important;
+  }
+
+  #map {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    overflow: hidden !important;
+    -webkit-clip-path: inset(0) !important;
+    clip-path: inset(0) !important;
+  }
+
+  #sidebar {
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
+  }
+}
