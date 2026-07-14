@@ -426,32 +426,53 @@ function readOptionalNumberInput(id) {
 }
 
 
+/*
+ * 검색 비교용 정규화
+ * - 띄어쓰기 무시
+ * - 대전광역시 / 대전시 표기 차이 무시
+ * - 전화번호 하이픈, 괄호 등 일부 기호 무시
+ * - 한글·영문·숫자·주소 하이픈은 유지
+ */
+function normalizeSearchValue(value) {
+  return String(value == null ? "" : value)
+    .toLowerCase()
+    .replace(/대한민국/g, "")
+    .replace(/대전광역시/g, "")
+    .replace(/대전시/g, "")
+    .replace(/[\s,._()\[\]{}'"`]/g, "")
+    .replace(/[‐‑‒–—―]/g, "-")
+    .trim();
+}
+
+
 function buildSearchText(item) {
   return [
     item && item.name,
     item && item.address,
     item && item.room,
     item && item.type,
-    item && item.memo
+    item && item.memo,
+    item && item.landlordPhone,
+    item && item.tenantPhone
   ].map(function(value) {
-    return String(value || "").toLowerCase();
-  }).join(" ");
+    return normalizeSearchValue(value);
+  }).join("|");
 }
 
 
 /*
  * 쉼표(,) = OR 검색
- * 각 쉼표 그룹 안의 공백 = AND 검색
+ * 각 검색어는 띄어쓰기 유무와 관계없이 비교합니다.
  *
  * 예:
- * 괴정,탄방,월평
- * → 괴정 OR 탄방 OR 월평
+ * 괴정동,탄방동
+ * → 괴정동 OR 탄방동
  *
- * 괴정 1층,탄방 1층
- * → (괴정 AND 1층) OR (탄방 AND 1층)
+ * 둔산동2088, 갈마동 294-7
+ * → 둔산동 2088 OR 갈마동 294-7
  */
 function matchesMultiKeyword(item, rawKeyword) {
-  var keyword = String(rawKeyword || "").trim().toLowerCase();
+  var keyword = String(rawKeyword || "").trim();
 
   if (!keyword) return true;
 
@@ -460,23 +481,14 @@ function matchesMultiKeyword(item, rawKeyword) {
   var orGroups = keyword
     .split(",")
     .map(function(group) {
-      return group.trim();
+      return normalizeSearchValue(group);
     })
     .filter(Boolean);
 
   if (!orGroups.length) return true;
 
   return orGroups.some(function(group) {
-    var andWords = group
-      .split(/\s+/)
-      .map(function(word) {
-        return word.trim();
-      })
-      .filter(Boolean);
-
-    return andWords.every(function(word) {
-      return searchText.includes(word);
-    });
+    return searchText.includes(group);
   });
 }
 
