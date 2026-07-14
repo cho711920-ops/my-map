@@ -4826,7 +4826,21 @@ body,
     font-size: 10.5px !important;
   }
 }
-\n\n/* =========================================================\n   v6.1 화면 정리\n   ========================================================= */\n.industry-filter-row { grid-template-columns: 1fr !important; }\n.industry-filter-input { width: 100% !important; }\n.quick-add-contact-row { display:grid !important; grid-template-columns: 1fr 1fr minmax(150px,.72fr) !important; gap:10px !important; }\n.quick-add-contact-row > div { min-width:0; }\n@media (max-width: 767px) {\n  #map, #wrap, #sidebar { border-color: transparent !important; box-shadow:none !important; outline:none !important; }\n  #map { border:0 !important; }\n  .quick-add-contact-row { grid-template-columns:1fr !important; }\n}\n
+
+
+/* =========================================================
+   v6.1 화면 정리
+   ========================================================= */
+.industry-filter-row { grid-template-columns: 1fr !important; }
+.industry-filter-input { width: 100% !important; }
+.quick-add-contact-row { display:grid !important; grid-template-columns: 1fr 1fr minmax(150px,.72fr) !important; gap:10px !important; }
+.quick-add-contact-row > div { min-width:0; }
+@media (max-width: 767px) {
+  #map, #wrap, #sidebar { border-color: transparent !important; box-shadow:none !important; outline:none !important; }
+  #map { border:0 !important; }
+  .quick-add-contact-row { grid-template-columns:1fr !important; }
+}
+
 
 /* =========================================================
    v6.1.1 최종 안정화: 보기 토글 / 모바일 지도 프레임 제거
@@ -4898,5 +4912,54 @@ body,
     border-left: 0 !important;
     border-right: 0 !important;
     border-radius: 0 !important;
+  }
+}
+
+
+/* =========================================================
+   v6.1.2 빠른등록 마지막줄 + 모바일 지도 프레임 최종
+   ========================================================= */
+.quick-add-grid > .quick-add-contact-row.full {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(145px, .72fr) !important;
+  align-items: end !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+.quick-add-grid > .quick-add-contact-row.full > div {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+.quick-add-grid > .quick-add-contact-row.full input {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 767px) {
+  .quick-add-grid > .quick-add-contact-row.full {
+    grid-template-columns: 1fr !important;
+  }
+
+  html, body, #wrap, #sidebar, #map,
+  #map > div, #map > div > div, #map canvas,
+  .map-wrap, .map-container, .main-map-wrap, .main-map-container {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+  #map, .map-wrap, .map-container, .main-map-wrap, .main-map-container {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  #map::before, #map::after,
+  .map-wrap::before, .map-wrap::after,
+  .map-container::before, .map-container::after {
+    content: none !important;
+    display: none !important;
   }
 }
