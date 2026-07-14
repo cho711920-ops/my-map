@@ -1,6 +1,6 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
-var saveApiURL = "https://script.google.com/macros/s/AKfycbzEpXbBWlz2bR7OmobH4AOYe7HgsrCLPNfJdGeVaH_xFj2atFJk-OiyHVZBsKom5o4k/exec"; // JS부동산 구글시트 쓰기용 Apps Script 웹앱 URL
+var saveApiURL = "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec"; // JS부동산 구글시트 쓰기용 Apps Script 웹앱 URL
 
 var map, geocoder;
 var allItems = [];
@@ -9,7 +9,7 @@ var overlays = [];
 var selectedGroupKey = null;
 var selectedItemKey = null;
 var favoriteOnly = false;
-var hideDone = false;
+var hideDone = true;
 var gongsilOnly = false;
 var multiClusterMode = false;
 var selectedGroupKeys = [];
@@ -581,6 +581,7 @@ function getFilteredItems() {
   var keyword = document.getElementById("keyword").value.trim();
   var selectedType = document.getElementById("typeFilter").value;
   var sortType = document.getElementById("sortFilter").value;
+  var industryKeyword = String((document.getElementById("industryFilter") || {}).value || "").trim().toLowerCase();
 
   var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
   var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
@@ -606,6 +607,14 @@ function getFilteredItems() {
 
     var matchType = !selectedType || item.type === selectedType;
 
+    var industryTerms = industryKeyword.split(",").map(function(term) {
+      return term.trim();
+    }).filter(Boolean);
+    var memoTextForIndustry = String(item.memo || "").toLowerCase();
+    var matchIndustry = !industryTerms.length || industryTerms.some(function(term) {
+      return memoTextForIndustry.indexOf(term) !== -1;
+    });
+
     var matchPrice =
       item.deposit >= minDeposit &&
       item.deposit <= maxDeposit &&
@@ -630,7 +639,7 @@ function getFilteredItems() {
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var inMap = item.latlng && bounds.contain(item.latlng);
 
-    return matchKeyword && matchType && matchPrice && matchFloor &&
+    return matchKeyword && matchType && matchIndustry && matchPrice && matchFloor &&
       matchFavorite && matchDone && matchGongsil && inMap;
   });
 
@@ -1642,16 +1651,18 @@ function resetFilter() {
   document.getElementById("maxArea").value = "";
   document.getElementById("minFloor").value = "";
   document.getElementById("maxFloor").value = "";
+  var industryInput = document.getElementById("industryFilter");
+  if (industryInput) industryInput.value = "";
 
   favoriteOnly = false;
-  hideDone = false;
+  hideDone = true;
   gongsilOnly = false;
   multiClusterMode = false;
   selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.remove("on");
-  document.getElementById("hideDoneBtn").innerText = "계약완료매물숨김";
-  document.getElementById("hideDoneBtn").classList.remove("on");
+  document.getElementById("hideDoneBtn").innerText = "전체매물보기";
+  document.getElementById("hideDoneBtn").classList.add("on");
   document.getElementById("gongsilOnlyBtn").innerText = "임장할매물만보기";
   document.getElementById("gongsilOnlyBtn").classList.remove("on");
   updateMultiClusterButton();
@@ -1659,8 +1670,7 @@ function resetFilter() {
   selectedGroupKey = null;
   selectedItemKey = null;
 
-  drawItems(allItems);
-  document.getElementById("status").innerHTML = "전체 매물 " + allItems.length + "개";
+  applyFilter();
 }
 
 
@@ -2282,10 +2292,10 @@ function toggleHideDone() {
   var btn = document.getElementById("hideDoneBtn");
 
   if (hideDone) {
-    btn.innerText = "전체보기";
+    btn.innerText = "전체매물보기";
     btn.classList.add("on");
   } else {
-    btn.innerText = "완료숨김";
+    btn.innerText = "계약완료숨김";
     btn.classList.remove("on");
   }
 
@@ -2337,3 +2347,13 @@ function showAddressErrors() {
 
 
 /* === v3.2.2.1 AI 투자리포트 A4 인쇄 수정본 === */
+
+
+/* v6.1 기본 계약완료 숨김 UI 초기화 */
+setTimeout(function() {
+  var hideBtn = document.getElementById("hideDoneBtn");
+  if (hideBtn) {
+    hideBtn.innerText = hideDone ? "전체매물보기" : "계약완료숨김";
+    hideBtn.classList.toggle("on", hideDone);
+  }
+}, 0);
