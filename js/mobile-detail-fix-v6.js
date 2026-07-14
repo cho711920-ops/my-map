@@ -57,7 +57,7 @@
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minDeposit" inputmode="numeric" placeholder="보증금 최소"><input id="v6DetailSheet_maxDeposit" inputmode="numeric" placeholder="보증금 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minRent" inputmode="numeric" placeholder="월세 최소"><input id="v6DetailSheet_maxRent" inputmode="numeric" placeholder="월세 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minArea" inputmode="decimal" placeholder="평수 최소"><input id="v6DetailSheet_maxArea" inputmode="decimal" placeholder="평수 최대"></div>' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="numeric" placeholder="층수 최소 (지하 -1)"><input id="v6DetailSheet_maxFloor" inputmode="numeric" placeholder="층수 최대"></div>' +
+          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="numeric" placeholder="층수 최소 (예: B1 또는 -1)"><input id="v6DetailSheet_maxFloor" inputmode="numeric" placeholder="층수 최대 (예: 3)"></div>' +
           '<button type="button" class="v6-detail-sheet-apply">필터 적용</button>' +
         '</div>' +
       '</section>';
