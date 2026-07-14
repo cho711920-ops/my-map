@@ -327,3 +327,62 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary > * { min-width: 0 !important; }
   #wrap { top: 96px !important; }
 }
+
+
+/* === v6.0 UI 리팩토링: 상단은 공통 기능만 유지 === */
+.v6-toolbar-primary {
+  grid-template-columns: minmax(300px, 620px) 76px 76px !important;
+  justify-content: start !important;
+}
+
+.v6-toolbar-secondary {
+  justify-content: flex-start !important;
+  gap: 12px !important;
+}
+
+.v6-toolbar-secondary .v6-primary-action.ai {
+  margin-left: 8px !important;
+}
+
+.v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+  margin-left: 4px !important;
+  border-color: #159447 !important;
+  background: #fff !important;
+  color: #137a3d !important;
+  box-shadow: none !important;
+}
+
+.v6-toolbar-secondary .quick-add-btn.v6-secondary-action:hover {
+  background: #edf9f1 !important;
+}
+
+@media (min-width: 900px) {
+  .v6-toolbar-primary { grid-template-columns: minmax(360px, 620px) 76px 76px !important; }
+  .v6-toolbar-primary .search-row { grid-column: 1 !important; }
+  .v6-toolbar-secondary { flex-wrap: nowrap !important; }
+}
+
+@media (max-width: 899px) {
+  .v6-toolbar-primary {
+    display: grid !important;
+    grid-template-columns: 1fr 78px 78px !important;
+    grid-template-rows: auto auto !important;
+    gap: 6px !important;
+  }
+  .v6-toolbar-primary .search-row {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+  }
+  .top-reset-btn { grid-column: 1 / 2 !important; grid-row: 2 !important; }
+  .detail-btn { grid-column: 2 / 3 !important; grid-row: 2 !important; }
+  .v6-toolbar-secondary {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin-top: 7px !important;
+  }
+  .v6-command-menu[data-command-menu="view"] { grid-column: 1 !important; }
+  .v6-command-menu[data-command-menu="work"] { grid-column: 2 !important; }
+  .v6-toolbar-secondary .v6-primary-action.ai { grid-column: 1 !important; margin-left: 0 !important; }
+  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action { grid-column: 2 !important; margin-left: 0 !important; }
+}
