@@ -352,35 +352,27 @@
       moneyLabel("권리금", item.premium)
     ].filter(Boolean).join("");
 
-    var dealLabel = getDealLabel(item);
-    var meta = [item.type].filter(function (value) {
-      if (!value) return false;
-      var normalized = String(value).replace(/\s+/g, "").trim();
-      return !/^(임대|월세|전세|매매)$/.test(normalized) && normalized !== String(dealLabel).replace(/\s+/g, "");
-    }).map(function (value) {
-      return '<span>' + escapeHtml(value) + '</span>';
-    }).join("");
+    var typeLabel = String(item.type || "").trim();
 
     return '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
       '<div class="aiv-current-top">' +
         '<div>' +
           '<div class="aiv-current-title-line">' +
-            (dealLabel ? '<span class="aiv-deal-badge ' + (dealLabel === "매매" ? "sale" : dealLabel === "전세" ? "jeonse" : "lease") + '">' + escapeHtml(dealLabel) + '</span>' : '') +
+            (typeLabel ? '<span class="aiv-type-badge">' + escapeHtml(typeLabel) + '</span>' : '') +
             '<h2>' + escapeHtml(item.name || item.address || "매물") + '</h2>' +
           '</div>' +
-          '<div class="aiv-current-meta">' + meta + '</div>' +
           '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="aiv-condition-line">' +
-        '<span class="deposit">보증금 ' + escapeHtml(item.deposit || 0) + '</span>' +
-        '<span class="rent">월세 ' + escapeHtml(item.rent || 0) + '</span>' +
+        '<span class="price-main">보증금 ' + escapeHtml(item.deposit || 0) + ' / 월세 ' + escapeHtml(item.rent || 0) + '</span>' +
         '<span class="fee">관리비 ' + escapeHtml(item.fee || 0) + '</span>' +
         '<span class="premium">권리금 ' + escapeHtml(item.premium || 0) + '</span>' +
         '<span class="area">' + escapeHtml(item.area || item.pyeong || 0) + '평</span>' +
       '</div>' +
       '<div class="aiv-contact-line">' +
         (item.landlordPhone ? '<a href="tel:' + escapeHtml(String(item.landlordPhone).replace(/[^0-9+]/g, "")) + '">임대인 ' + escapeHtml(item.landlordPhone) + '</a>' : '') +
+        (item.landlordPhone && item.tenantPhone ? '<span class="aiv-contact-dot" aria-hidden="true">·</span>' : '') +
         (item.tenantPhone ? '<a href="tel:' + escapeHtml(String(item.tenantPhone).replace(/[^0-9+]/g, "")) + '">세입자 ' + escapeHtml(item.tenantPhone) + '</a>' : '') +
       '</div>' +
       '<label class="aiv-memo-editor-wrap" for="aivMemoEditor">' +
