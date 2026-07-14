@@ -1439,11 +1439,11 @@ function addListItem(item) {
     '</div>' +
 
     '<div class="price-line">' +
-      '<span class="price-main">보' + escapeHtml(item.deposit) + '/월' + escapeHtml(item.rent) + '</span>' +
+      '<span class="price-main">보증금 ' + escapeHtml(item.deposit) + ' / 월세 ' + escapeHtml(item.rent) + '</span>' +
       '<span class="price-separator">·</span>' +
-      '<span class="price-fee">관' + escapeHtml(item.fee) + '</span>' +
+      '<span class="price-fee">관리비 ' + escapeHtml(item.fee) + '</span>' +
       '<span class="price-separator">·</span>' +
-      '<span class="price-premium">권' + escapeHtml(item.premium) + '</span>' +
+      '<span class="price-premium">권리금 ' + escapeHtml(item.premium) + '</span>' +
       '<span class="price-separator">·</span>' +
       '<span class="price-area">' + escapeHtml(item.area) + '평</span>' +
     '</div>' +
