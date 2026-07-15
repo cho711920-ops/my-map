@@ -2453,63 +2453,57 @@ function readOptionalNumberInput(id) {
 })();
 
 
+
+
 /* =========================================================
-   v6.1.6 태블릿 필터 입력 유지 최종 보정
-   - 필터 내부 터치/클릭/포커스 시 열린 상태 유지
-   - 가상키보드가 열려도 필터 유지
+   v6.1.6.1 태블릿 필터 입력 수정
+   - 입력 요소의 기본 터치/포커스 동작은 절대 막지 않음
+   - 필터 내부 클릭은 바깥 클릭으로 오인되지 않게만 처리
    ========================================================= */
 (function() {
-  function keepDetailFilterOpenV616() {
+  function bindTabletFilterInputFixV6161() {
     var panel = document.getElementById("detailFilter");
-    var button = document.getElementById("detailBtn");
+    if (!panel || panel.dataset.v6161Bound === "1") return;
 
-    if (!panel) return;
+    panel.dataset.v6161Bound = "1";
 
-    panel.classList.add("open");
+    /*
+     * click 이벤트만 전파 차단합니다.
+     * pointerdown/touchstart/mousedown은 건드리지 않아
+     * 태블릿 가상키보드와 입력 포커스가 정상 작동합니다.
+     */
+    panel.addEventListener("click", function(event) {
+      event.stopPropagation();
+    }, false);
 
-    if (button) {
-      button.classList.add("on");
-      button.setAttribute("aria-expanded", "true");
-    }
-  }
+    /*
+     * 입력/선택 중 패널 열린 상태를 유지합니다.
+     * preventDefault는 사용하지 않습니다.
+     */
+    panel.addEventListener("focusin", function() {
+      panel.classList.add("open");
 
-  function bindDetailFilterV616() {
-    var panel = document.getElementById("detailFilter");
+      var button = document.getElementById("detailBtn");
+      if (button) {
+        button.classList.add("on");
+        button.setAttribute("aria-expanded", "true");
+      }
+    }, false);
 
-    if (!panel || panel.dataset.v616FilterBound === "1") {
-      return;
-    }
+    panel.addEventListener("input", function() {
+      panel.classList.add("open");
+    }, false);
 
-    panel.dataset.v616FilterBound = "1";
-
-    [
-      "pointerdown",
-      "touchstart",
-      "mousedown",
-      "click",
-      "focusin",
-      "input",
-      "change"
-    ].forEach(function(type) {
-      panel.addEventListener(type, function(event) {
-        event.stopPropagation();
-        keepDetailFilterOpenV616();
-      }, false);
-    });
-
-    panel.querySelectorAll("input, select, textarea, button, label").forEach(function(element) {
-      element.addEventListener("focus", keepDetailFilterOpenV616, false);
-      element.addEventListener("touchstart", keepDetailFilterOpenV616, false);
-      element.addEventListener("click", keepDetailFilterOpenV616, false);
-    });
+    panel.addEventListener("change", function() {
+      panel.classList.add("open");
+    }, false);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bindDetailFilterV616);
+    document.addEventListener("DOMContentLoaded", bindTabletFilterInputFixV6161);
   } else {
-    bindDetailFilterV616();
+    bindTabletFilterInputFixV6161();
   }
 
-  setTimeout(bindDetailFilterV616, 400);
-  setTimeout(bindDetailFilterV616, 1200);
+  setTimeout(bindTabletFilterInputFixV6161, 500);
 })();
