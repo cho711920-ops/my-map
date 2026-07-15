@@ -6,7 +6,8 @@
     "minDeposit", "maxDeposit",
     "minRent", "maxRent",
     "minArea", "maxArea",
-    "minFloor", "maxFloor"
+    "minFloor", "maxFloor",
+    "industryFilter"
   ];
 
   function isPhone() {
@@ -18,11 +19,28 @@
       Number(window.innerWidth) || 0,
       Number(document.documentElement && document.documentElement.clientWidth) || 0
     );
-    var hasTouch =
-      (navigator && Number(navigator.maxTouchPoints) > 0) ||
-      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    var touchPoints = Number((navigator && navigator.maxTouchPoints) || 0);
+    var coarsePointer = !!(
+      window.matchMedia &&
+      window.matchMedia("(pointer: coarse)").matches
+    );
+    var noHover = !!(
+      window.matchMedia &&
+      window.matchMedia("(hover: none)").matches
+    );
 
-    return hasTouch && width >= 769 && width <= 1199;
+    /*
+     * 삼성 태블릿 가로모드는 CSS viewport가 1200~1400px까지 올라갈 수 있습니다.
+     * 기존 1199px 제한 때문에 태블릿이 PC 필터로 잘못 분류됐습니다.
+     * 터치 + 굵은 포인터(또는 hover 없음)인 기기만 태블릿으로 인정하므로
+     * 일반 PC에는 적용되지 않습니다.
+     */
+    return (
+      width >= 769 &&
+      width <= 1800 &&
+      touchPoints > 0 &&
+      (coarsePointer || noHover)
+    );
   }
 
   function useDetailSheet() {
@@ -73,15 +91,31 @@
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minDeposit" inputmode="numeric" placeholder="보증금 최소"><input id="v6DetailSheet_maxDeposit" inputmode="numeric" placeholder="보증금 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minRent" inputmode="numeric" placeholder="월세 최소"><input id="v6DetailSheet_maxRent" inputmode="numeric" placeholder="월세 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minArea" inputmode="decimal" placeholder="평수 최소"><input id="v6DetailSheet_maxArea" inputmode="decimal" placeholder="평수 최대"></div>' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="numeric" placeholder="층수 최소 (예: B1 또는 -1)"><input id="v6DetailSheet_maxFloor" inputmode="numeric" placeholder="층수 최대 (예: 3)"></div>' +
+          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="text" placeholder="층수 최소 (예: B1 또는 -1)"><input id="v6DetailSheet_maxFloor" inputmode="text" placeholder="층수 최대 (예: 3)"></div>' +
+          '<div class="v6-detail-sheet-row v6-detail-sheet-row-single"><input id="v6DetailSheet_industryFilter" inputmode="text" placeholder="업종구분 (예: 식당, 카페)"></div>' +
           '<button type="button" class="v6-detail-sheet-apply">필터 적용</button>' +
         '</div>' +
       '</section>';
 
-    root.addEventListener("click", function (event) {
-      if (event.target.closest("[data-v6-detail-close]")) close();
-      if (event.target.closest(".v6-detail-sheet-apply")) apply();
+    ["pointerdown", "touchstart", "mousedown"].forEach(function (type) {
+      root.addEventListener(type, function (event) {
+        /* 기본 입력 동작은 유지하고 다른 필터 제어 코드로만 전달되지 않게 합니다. */
+        event.stopPropagation();
+      }, false);
     });
+
+    root.addEventListener("click", function (event) {
+      var closeTarget = event.target.closest("[data-v6-detail-close]");
+      var applyTarget = event.target.closest(".v6-detail-sheet-apply");
+
+      if (closeTarget) {
+        close();
+      } else if (applyTarget) {
+        apply();
+      }
+
+      event.stopPropagation();
+    }, false);
 
     root.addEventListener("keydown", function (event) {
       if (event.key === "Enter" && event.target.matches("input")) {
@@ -118,6 +152,7 @@
     syncToSheet();
     root.classList.add("open");
     root.setAttribute("aria-hidden", "false");
+    document.documentElement.setAttribute("data-v6-detail-mode", isPhone() ? "phone" : "tablet");
     document.body.classList.add("v6-detail-sheet-open");
     var button = document.getElementById("detailBtn");
     if (button) {
@@ -133,6 +168,7 @@
       root.setAttribute("aria-hidden", "true");
     }
     document.body.classList.remove("v6-detail-sheet-open");
+    document.documentElement.removeAttribute("data-v6-detail-mode");
     var button = document.getElementById("detailBtn");
     if (button) {
       button.classList.remove("on");
