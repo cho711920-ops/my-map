@@ -1,23 +1,22 @@
 /* JS부동산 v6.0 STEP3.3 - 모바일 상세필터를 정렬과 같은 독립 하단 시트로 표시 */
-@media (max-width: 768px) {
-  #detailFilter,
-  #detailFilter.open,
-  #detailFilter.v6-detail-dropdown-open,
-  #detailFilter.v6-detail-portal-open,
-  #detailFilter.v6-detail-stable-open {
+  html.v6-detail-sheet-device #detailFilter,
+  html.v6-detail-sheet-device #detailFilter.open,
+  html.v6-detail-sheet-device #detailFilter.v6-detail-dropdown-open,
+  html.v6-detail-sheet-device #detailFilter.v6-detail-portal-open,
+  html.v6-detail-sheet-device #detailFilter.v6-detail-stable-open {
     display: none !important;
     visibility: hidden !important;
     pointer-events: none !important;
   }
 
-  #v6DetailPortalDim,
-  #v6DetailStableDim,
-  #v6DetailDim {
+  html.v6-detail-sheet-device #v6DetailPortalDim,
+  html.v6-detail-sheet-device #v6DetailStableDim,
+  html.v6-detail-sheet-device #v6DetailDim {
     display: none !important;
     pointer-events: none !important;
   }
 
-  .v6-detail-sheet-portal {
+  html.v6-detail-sheet-device .v6-detail-sheet-portal {
     position: fixed;
     inset: 0;
     z-index: 2147483300;
@@ -25,18 +24,18 @@
     pointer-events: none;
   }
 
-  .v6-detail-sheet-portal.open {
+  html.v6-detail-sheet-device .v6-detail-sheet-portal.open {
     display: block;
     pointer-events: auto;
   }
 
-  .v6-detail-sheet-dim {
+  html.v6-detail-sheet-device .v6-detail-sheet-dim {
     position: absolute;
     inset: 0;
     background: rgba(15, 23, 42, .52);
   }
 
-  .v6-detail-sheet {
+  html.v6-detail-sheet-device .v6-detail-sheet {
     position: absolute;
     left: 10px;
     right: 10px;
@@ -51,7 +50,7 @@
     box-shadow: 0 24px 80px rgba(15, 23, 42, .34);
   }
 
-  .v6-detail-sheet-handle {
+  html.v6-detail-sheet-device .v6-detail-sheet-handle {
     width: 48px;
     height: 5px;
     margin: 10px auto 2px;
@@ -59,7 +58,7 @@
     background: #d6dde8;
   }
 
-  .v6-detail-sheet-head {
+  html.v6-detail-sheet-device .v6-detail-sheet-head {
     min-height: 58px;
     display: flex;
     align-items: center;
@@ -68,13 +67,13 @@
     border-bottom: 1px solid #edf1f6;
   }
 
-  .v6-detail-sheet-head strong {
+  html.v6-detail-sheet-device .v6-detail-sheet-head strong {
     font-size: 20px;
     font-weight: 900;
     color: #172033;
   }
 
-  .v6-detail-sheet-close {
+  html.v6-detail-sheet-device .v6-detail-sheet-close {
     width: 42px;
     height: 42px;
     border: 0;
@@ -85,19 +84,19 @@
     line-height: 1;
   }
 
-  .v6-detail-sheet-body {
+  html.v6-detail-sheet-device .v6-detail-sheet-body {
     padding: 14px 14px max(16px, env(safe-area-inset-bottom));
     overflow-y: auto;
   }
 
-  .v6-detail-sheet-row {
+  html.v6-detail-sheet-device .v6-detail-sheet-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 9px;
     margin-bottom: 9px;
   }
 
-  .v6-detail-sheet-row input {
+  html.v6-detail-sheet-device .v6-detail-sheet-row input {
     width: 100%;
     min-width: 0;
     height: 46px;
@@ -111,7 +110,7 @@
     box-sizing: border-box;
   }
 
-  .v6-detail-sheet-apply {
+  html.v6-detail-sheet-device .v6-detail-sheet-apply {
     width: 100%;
     min-height: 48px;
     margin-top: 3px;
@@ -123,7 +122,6 @@
     font-weight: 900;
   }
 
-  body.v6-detail-sheet-open {
+  html.v6-detail-sheet-device body.v6-detail-sheet-open {
     overflow: hidden !important;
   }
-}
