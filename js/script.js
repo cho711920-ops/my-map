@@ -426,53 +426,32 @@ function readOptionalNumberInput(id) {
 }
 
 
-/*
- * 검색 비교용 정규화
- * - 띄어쓰기 무시
- * - 대전광역시 / 대전시 표기 차이 무시
- * - 전화번호 하이픈, 괄호 등 일부 기호 무시
- * - 한글·영문·숫자·주소 하이픈은 유지
- */
-function normalizeSearchValue(value) {
-  return String(value == null ? "" : value)
-    .toLowerCase()
-    .replace(/대한민국/g, "")
-    .replace(/대전광역시/g, "")
-    .replace(/대전시/g, "")
-    .replace(/[\s,._()\[\]{}'"`]/g, "")
-    .replace(/[‐‑‒–—―]/g, "-")
-    .trim();
-}
-
-
 function buildSearchText(item) {
   return [
     item && item.name,
     item && item.address,
     item && item.room,
     item && item.type,
-    item && item.memo,
-    item && item.landlordPhone,
-    item && item.tenantPhone
+    item && item.memo
   ].map(function(value) {
-    return normalizeSearchValue(value);
-  }).join("|");
+    return String(value || "").toLowerCase();
+  }).join(" ");
 }
 
 
 /*
  * 쉼표(,) = OR 검색
- * 각 검색어는 띄어쓰기 유무와 관계없이 비교합니다.
+ * 각 쉼표 그룹 안의 공백 = AND 검색
  *
  * 예:
- * 괴정동,탄방동
- * → 괴정동 OR 탄방동
+ * 괴정,탄방,월평
+ * → 괴정 OR 탄방 OR 월평
  *
- * 둔산동2088, 갈마동 294-7
- * → 둔산동 2088 OR 갈마동 294-7
+ * 괴정 1층,탄방 1층
+ * → (괴정 AND 1층) OR (탄방 AND 1층)
  */
 function matchesMultiKeyword(item, rawKeyword) {
-  var keyword = String(rawKeyword || "").trim();
+  var keyword = String(rawKeyword || "").trim().toLowerCase();
 
   if (!keyword) return true;
 
@@ -481,14 +460,23 @@ function matchesMultiKeyword(item, rawKeyword) {
   var orGroups = keyword
     .split(",")
     .map(function(group) {
-      return normalizeSearchValue(group);
+      return group.trim();
     })
     .filter(Boolean);
 
   if (!orGroups.length) return true;
 
   return orGroups.some(function(group) {
-    return searchText.includes(group);
+    var andWords = group
+      .split(/\s+/)
+      .map(function(word) {
+        return word.trim();
+      })
+      .filter(Boolean);
+
+    return andWords.every(function(word) {
+      return searchText.includes(word);
+    });
   });
 }
 
@@ -2439,3 +2427,89 @@ function readOptionalNumberInput(id) {
   if (!value) return null;
   return parseFloorNotationV612(value, false);
 }
+
+
+/* v6.1.5 태블릿 상세필터 내부 입력 시 닫힘 방지 */
+(function () {
+  function bindDetailFilterStability() {
+    var panel = document.getElementById("detailFilter");
+    var button = document.getElementById("detailBtn");
+    if (!panel || panel.dataset.v615StableBound === "1") return;
+    panel.dataset.v615StableBound = "1";
+    ["pointerdown","pointerup","touchstart","touchend","mousedown","mouseup","click"].forEach(function(type) {
+      panel.addEventListener(type, function(event) { event.stopPropagation(); }, true);
+    });
+    panel.addEventListener("focusin", function() {
+      panel.classList.add("open");
+      if (button) { button.classList.add("on"); button.setAttribute("aria-expanded","true"); }
+    }, true);
+    panel.addEventListener("input", function() { panel.classList.add("open"); }, true);
+    panel.addEventListener("change", function() { panel.classList.add("open"); }, true);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindDetailFilterStability);
+  else bindDetailFilterStability();
+  setTimeout(bindDetailFilterStability, 500);
+  setTimeout(bindDetailFilterStability, 1500);
+})();
+
+
+/* =========================================================
+   v6.1.6 태블릿 필터 입력 유지 최종 보정
+   - 필터 내부 터치/클릭/포커스 시 열린 상태 유지
+   - 가상키보드가 열려도 필터 유지
+   ========================================================= */
+(function() {
+  function keepDetailFilterOpenV616() {
+    var panel = document.getElementById("detailFilter");
+    var button = document.getElementById("detailBtn");
+
+    if (!panel) return;
+
+    panel.classList.add("open");
+
+    if (button) {
+      button.classList.add("on");
+      button.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  function bindDetailFilterV616() {
+    var panel = document.getElementById("detailFilter");
+
+    if (!panel || panel.dataset.v616FilterBound === "1") {
+      return;
+    }
+
+    panel.dataset.v616FilterBound = "1";
+
+    [
+      "pointerdown",
+      "touchstart",
+      "mousedown",
+      "click",
+      "focusin",
+      "input",
+      "change"
+    ].forEach(function(type) {
+      panel.addEventListener(type, function(event) {
+        event.stopPropagation();
+        keepDetailFilterOpenV616();
+      }, false);
+    });
+
+    panel.querySelectorAll("input, select, textarea, button, label").forEach(function(element) {
+      element.addEventListener("focus", keepDetailFilterOpenV616, false);
+      element.addEventListener("touchstart", keepDetailFilterOpenV616, false);
+      element.addEventListener("click", keepDetailFilterOpenV616, false);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindDetailFilterV616);
+  } else {
+    bindDetailFilterV616();
+  }
+
+  setTimeout(bindDetailFilterV616, 400);
+  setTimeout(bindDetailFilterV616, 1200);
+})();
