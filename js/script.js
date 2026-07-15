@@ -196,15 +196,45 @@ function toggleSidebar() {
 
 
 function setupEnterSearch() {
-  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minArea, #maxArea, #minFloor, #maxFloor");
+  var inputs = document.querySelectorAll(
+    "#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, " +
+    "#minArea, #maxArea, #minFloor, #maxFloor, #industryFilter"
+  );
 
   inputs.forEach(function(input) {
+    if (input.dataset.filterEnterBound === "1") return;
+    input.dataset.filterEnterBound = "1";
+
     input.addEventListener("keydown", function(e) {
-      if (e.key === "Enter") {
-        applyFilter();
-      }
+      if (e.key !== "Enter") return;
+
+      e.preventDefault();
+      applyFilter();
     });
   });
+
+  var panel = document.getElementById("detailFilter");
+  var applyButton = panel ? panel.querySelector(".apply-btn") : null;
+
+  if (panel && panel.dataset.stableFilterBound !== "1") {
+    panel.dataset.stableFilterBound = "1";
+
+    /*
+     * 버블 단계의 click만 막습니다.
+     * 입력칸의 터치·포커스·가상키보드 기본동작은 그대로 유지됩니다.
+     */
+    panel.addEventListener("click", function(event) {
+      event.stopPropagation();
+    }, false);
+  }
+
+  if (applyButton && applyButton.dataset.filterApplyBound !== "1") {
+    applyButton.dataset.filterApplyBound = "1";
+    applyButton.addEventListener("click", function(e) {
+      e.preventDefault();
+      applyFilter();
+    }, false);
+  }
 }
 
 
@@ -2429,81 +2459,7 @@ function readOptionalNumberInput(id) {
 }
 
 
-/* v6.1.5 태블릿 상세필터 내부 입력 시 닫힘 방지 */
-(function () {
-  function bindDetailFilterStability() {
-    var panel = document.getElementById("detailFilter");
-    var button = document.getElementById("detailBtn");
-    if (!panel || panel.dataset.v615StableBound === "1") return;
-    panel.dataset.v615StableBound = "1";
-    ["pointerdown","pointerup","touchstart","touchend","mousedown","mouseup","click"].forEach(function(type) {
-      panel.addEventListener(type, function(event) { event.stopPropagation(); }, true);
-    });
-    panel.addEventListener("focusin", function() {
-      panel.classList.add("open");
-      if (button) { button.classList.add("on"); button.setAttribute("aria-expanded","true"); }
-    }, true);
-    panel.addEventListener("input", function() { panel.classList.add("open"); }, true);
-    panel.addEventListener("change", function() { panel.classList.add("open"); }, true);
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindDetailFilterStability);
-  else bindDetailFilterStability();
-  setTimeout(bindDetailFilterStability, 500);
-  setTimeout(bindDetailFilterStability, 1500);
-})();
 
 
 
 
-/* =========================================================
-   v6.1.6.1 태블릿 필터 입력 수정
-   - 입력 요소의 기본 터치/포커스 동작은 절대 막지 않음
-   - 필터 내부 클릭은 바깥 클릭으로 오인되지 않게만 처리
-   ========================================================= */
-(function() {
-  function bindTabletFilterInputFixV6161() {
-    var panel = document.getElementById("detailFilter");
-    if (!panel || panel.dataset.v6161Bound === "1") return;
-
-    panel.dataset.v6161Bound = "1";
-
-    /*
-     * click 이벤트만 전파 차단합니다.
-     * pointerdown/touchstart/mousedown은 건드리지 않아
-     * 태블릿 가상키보드와 입력 포커스가 정상 작동합니다.
-     */
-    panel.addEventListener("click", function(event) {
-      event.stopPropagation();
-    }, false);
-
-    /*
-     * 입력/선택 중 패널 열린 상태를 유지합니다.
-     * preventDefault는 사용하지 않습니다.
-     */
-    panel.addEventListener("focusin", function() {
-      panel.classList.add("open");
-
-      var button = document.getElementById("detailBtn");
-      if (button) {
-        button.classList.add("on");
-        button.setAttribute("aria-expanded", "true");
-      }
-    }, false);
-
-    panel.addEventListener("input", function() {
-      panel.classList.add("open");
-    }, false);
-
-    panel.addEventListener("change", function() {
-      panel.classList.add("open");
-    }, false);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bindTabletFilterInputFixV6161);
-  } else {
-    bindTabletFilterInputFixV6161();
-  }
-
-  setTimeout(bindTabletFilterInputFixV6161, 500);
-})();
