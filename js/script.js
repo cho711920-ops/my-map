@@ -196,45 +196,15 @@ function toggleSidebar() {
 
 
 function setupEnterSearch() {
-  var inputs = document.querySelectorAll(
-    "#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, " +
-    "#minArea, #maxArea, #minFloor, #maxFloor, #industryFilter"
-  );
+  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minArea, #maxArea, #minFloor, #maxFloor");
 
   inputs.forEach(function(input) {
-    if (input.dataset.filterEnterBound === "1") return;
-    input.dataset.filterEnterBound = "1";
-
     input.addEventListener("keydown", function(e) {
-      if (e.key !== "Enter") return;
-
-      e.preventDefault();
-      applyFilter();
+      if (e.key === "Enter") {
+        applyFilter();
+      }
     });
   });
-
-  var panel = document.getElementById("detailFilter");
-  var applyButton = panel ? panel.querySelector(".apply-btn") : null;
-
-  if (panel && panel.dataset.stableFilterBound !== "1") {
-    panel.dataset.stableFilterBound = "1";
-
-    /*
-     * 버블 단계의 click만 막습니다.
-     * 입력칸의 터치·포커스·가상키보드 기본동작은 그대로 유지됩니다.
-     */
-    panel.addEventListener("click", function(event) {
-      event.stopPropagation();
-    }, false);
-  }
-
-  if (applyButton && applyButton.dataset.filterApplyBound !== "1") {
-    applyButton.dataset.filterApplyBound = "1";
-    applyButton.addEventListener("click", function(e) {
-      e.preventDefault();
-      applyFilter();
-    }, false);
-  }
 }
 
 
@@ -2458,8 +2428,34 @@ function readOptionalNumberInput(id) {
   return parseFloorNotationV612(value, false);
 }
 
+/* =========================================================
+   v6.2 상세필터 안정화
+   - 필터 내부 입력/버튼의 기본 동작 보존
+   - 내부 클릭이 외부 닫기 로직으로 전달되는 것만 방지
+   - Enter 즉시 필터 적용
+   ========================================================= */
+function setupStableDetailFilterV62() {
+  var panel = document.getElementById("detailFilter");
+  if (!panel || panel.dataset.v62StableBound === "1") return;
 
+  panel.dataset.v62StableBound = "1";
 
+  panel.addEventListener("click", function(event) {
+    event.stopPropagation();
+  }, false);
 
+  panel.addEventListener("keydown", function(event) {
+    if (event.key !== "Enter") return;
+    if (!event.target || !event.target.matches("input, select")) return;
 
+    event.preventDefault();
+    applyFilter();
+  }, false);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupStableDetailFilterV62);
+} else {
+  setupStableDetailFilterV62();
+}
 
