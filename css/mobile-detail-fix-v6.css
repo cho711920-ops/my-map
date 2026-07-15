@@ -137,7 +137,7 @@
 }
 
 /* =========================================================
-   v6.2.3 태블릿 전용 앵커 팝업
+   v6.2.4 태블릿 전용 앵커 팝업
    - 스마트폰 하단시트는 기존 그대로 유지
    - 터치 태블릿만 상단 필터 버튼 바로 아래 작은 팝업 사용
    ========================================================= */
@@ -158,8 +158,8 @@
     right: auto;
     top: var(--v6-tablet-popup-top, 88px);
     bottom: auto;
-    width: var(--v6-tablet-popup-width, min(680px, calc(100vw - 24px)));
-    max-width: calc(100vw - 24px);
+    width: var(--v6-tablet-popup-width, min(480px, calc(100vw - 24px)));
+    max-width: min(480px, calc(100vw - 24px));
     max-height: min(470px, calc(100dvh - var(--v6-tablet-popup-top, 88px) - 12px));
     border-radius: 15px;
     box-shadow: 0 14px 42px rgba(15, 23, 42, .26);
