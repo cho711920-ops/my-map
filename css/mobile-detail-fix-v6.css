@@ -1,5 +1,8 @@
 /* JS부동산 v6.0 STEP3.3 - 모바일 상세필터를 정렬과 같은 독립 하단 시트로 표시 */
-@media (max-width: 1199px) {
+/* 스마트폰 또는 실제 터치 태블릿에서만 독립 하단 필터를 사용합니다. */
+@media (max-width: 768px),
+       (min-width: 769px) and (max-width: 1800px) and (pointer: coarse),
+       (min-width: 769px) and (max-width: 1800px) and (hover: none) {
   #detailFilter,
   #detailFilter.open,
   #detailFilter.v6-detail-dropdown-open,
@@ -95,6 +98,11 @@
     grid-template-columns: 1fr 1fr;
     gap: 9px;
     margin-bottom: 9px;
+  }
+
+
+  .v6-detail-sheet-row-single {
+    grid-template-columns: 1fr;
   }
 
   .v6-detail-sheet-row input {
