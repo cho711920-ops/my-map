@@ -1,4 +1,4 @@
-/* JS부동산 v6.0 STEP3.3 - 모바일 상세필터를 정렬과 같은 독립 시트로 표시 */
+/* JS부동산 v6.2.3 - 스마트폰 하단시트 유지 + 태블릿 앵커 팝업 */
 (function () {
   "use strict";
 
@@ -145,6 +145,46 @@
     document.body.classList.remove("v6-detail-portal-lock", "v6-detail-stable-lock");
   }
 
+  function positionTabletPopup(root) {
+    if (!root || isPhone()) return;
+
+    var button = document.getElementById("detailBtn");
+    var sheet = root.querySelector(".v6-detail-sheet");
+    if (!button || !sheet) return;
+
+    var rect = button.getBoundingClientRect();
+    var viewportWidth = Math.max(
+      Number(window.innerWidth) || 0,
+      Number(document.documentElement && document.documentElement.clientWidth) || 0
+    );
+    var viewportHeight = Math.max(
+      Number(window.innerHeight) || 0,
+      Number(document.documentElement && document.documentElement.clientHeight) || 0
+    );
+
+    var margin = 12;
+    var gap = 8;
+    var popupWidth = Math.min(680, Math.max(520, viewportWidth - (margin * 2)));
+    var left = rect.right - popupWidth;
+
+    if (left < margin) left = margin;
+    if (left + popupWidth > viewportWidth - margin) {
+      left = viewportWidth - popupWidth - margin;
+    }
+
+    var top = rect.bottom + gap;
+    var estimatedHeight = Math.min(430, viewportHeight - top - margin);
+
+    /* 아래 공간이 부족하면 버튼 위쪽에 표시합니다. */
+    if (estimatedHeight < 300 && rect.top > 320) {
+      top = Math.max(margin, rect.top - 420 - gap);
+    }
+
+    root.style.setProperty("--v6-tablet-popup-left", Math.round(left) + "px");
+    root.style.setProperty("--v6-tablet-popup-top", Math.round(top) + "px");
+    root.style.setProperty("--v6-tablet-popup-width", Math.round(popupWidth) + "px");
+  }
+
   function open() {
     if (!useDetailSheet()) return;
     removeLegacyDetailState();
@@ -153,6 +193,7 @@
     root.classList.add("open");
     root.setAttribute("aria-hidden", "false");
     document.documentElement.setAttribute("data-v6-detail-mode", isPhone() ? "phone" : "tablet");
+    if (!isPhone()) positionTabletPopup(root);
     document.body.classList.add("v6-detail-sheet-open");
     var button = document.getElementById("detailBtn");
     if (button) {
@@ -202,7 +243,24 @@
   }, true);
 
   window.addEventListener("resize", function () {
-    if (!useDetailSheet()) close();
+    if (!useDetailSheet()) {
+      close();
+      return;
+    }
+
+    var root = document.getElementById("v6DetailSheetPortal");
+    if (root && root.classList.contains("open") && !isPhone()) {
+      positionTabletPopup(root);
+    }
+  });
+
+  window.addEventListener("orientationchange", function () {
+    setTimeout(function () {
+      var root = document.getElementById("v6DetailSheetPortal");
+      if (root && root.classList.contains("open") && !isPhone()) {
+        positionTabletPopup(root);
+      }
+    }, 120);
   });
 
   window.toggleDetailFilter = function () {
