@@ -9,29 +9,24 @@
     "minFloor", "maxFloor"
   ];
 
-  function isDetailSheetDevice() {
-    var width = Math.max(
-      document.documentElement ? document.documentElement.clientWidth : 0,
-      window.innerWidth || 0
-    );
-
-    var touchCapable =
-      (navigator.maxTouchPoints || 0) > 0 ||
-      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
-
-    /*
-     * 스마트폰은 기존처럼 항상 전용 하단 시트를 사용하고,
-     * 769~1200px 구간은 터치 태블릿일 때만 전용 시트를 사용합니다.
-     * PC의 기존 필터 동작은 변경하지 않습니다.
-     */
-    return width <= 768 || (width <= 1200 && touchCapable);
+  function isPhone() {
+    return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
   }
 
-  function syncDeviceClass() {
-    document.documentElement.classList.toggle(
-      "v6-detail-sheet-device",
-      isDetailSheetDevice()
+  function isTouchTablet() {
+    var width = Math.max(
+      Number(window.innerWidth) || 0,
+      Number(document.documentElement && document.documentElement.clientWidth) || 0
     );
+    var hasTouch =
+      (navigator && Number(navigator.maxTouchPoints) > 0) ||
+      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+
+    return hasTouch && width >= 769 && width <= 1199;
+  }
+
+  function useDetailSheet() {
+    return isPhone() || isTouchTablet();
   }
 
   function originalField(id) {
@@ -117,7 +112,7 @@
   }
 
   function open() {
-    if (!isDetailSheetDevice()) return;
+    if (!useDetailSheet()) return;
     removeLegacyDetailState();
     var root = ensureSheet();
     syncToSheet();
@@ -147,7 +142,7 @@
   }
 
   function toggle() {
-    if (!isDetailSheetDevice()) return;
+    if (!useDetailSheet()) return;
     var root = ensureSheet();
     if (root.classList.contains("open")) close();
     else open();
@@ -159,11 +154,9 @@
     close();
   }
 
-  syncDeviceClass();
-
   /* 기존 인라인 onclick/중복 보완 이벤트보다 먼저 가로챕니다. */
   document.addEventListener("click", function (event) {
-    if (!isDetailSheetDevice()) return;
+    if (!useDetailSheet()) return;
     var trigger = event.target && event.target.closest ? event.target.closest("#detailBtn") : null;
     if (!trigger) return;
     event.preventDefault();
@@ -173,12 +166,11 @@
   }, true);
 
   window.addEventListener("resize", function () {
-    syncDeviceClass();
-    if (!isDetailSheetDevice()) close();
+    if (!useDetailSheet()) close();
   });
 
   window.toggleDetailFilter = function () {
-    if (isDetailSheetDevice()) {
+    if (useDetailSheet()) {
       toggle();
       return;
     }
