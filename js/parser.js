@@ -544,29 +544,87 @@ function updateQuickAddPreview() {
 function updateQuickAddWarning() {
   var box = document.getElementById("quickAddWarning");
   if (!box) return;
-  var address = (document.getElementById("qaAddress").value || "").trim();
-  var room = (document.getElementById("qaRoom").value || "").trim();
+
+  var addressEl = document.getElementById("qaAddress");
+  var address = addressEl
+    ? String(addressEl.value || "").trim()
+    : "";
+
   if (!address) {
     box.style.display = "none";
+    box.innerHTML = "";
     updateQuickAddPreview();
     return;
   }
 
-  var same = allItems.filter(function(item) {
-    var sameAddress = item.address && address && item.address.replace(/\s+/g, "") === address.replace(/\s+/g, "");
-    var sameRoom = !room || !item.room || item.room.replace(/\s+/g, "") === room.replace(/\s+/g, "");
-    return sameAddress && sameRoom;
+  var normalizedAddress =
+    typeof normalizeQuickDuplicateAddressV616 === "function"
+      ? normalizeQuickDuplicateAddressV616(address)
+      : address.replace(/\s+/g, "").toLowerCase();
+
+  /*
+   * 경고창은 정확한 중복 차단과 별개입니다.
+   * 같은 주소의 기존 매물을 전부 보여줘 사용자가 호실·가격을 직접 비교할 수 있게 합니다.
+   */
+  var same = (allItems || []).filter(function(item) {
+    var itemAddress =
+      typeof normalizeQuickDuplicateAddressV616 === "function"
+        ? normalizeQuickDuplicateAddressV616(item && item.address)
+        : String(item && item.address || "").replace(/\s+/g, "").toLowerCase();
+
+    return Boolean(
+      normalizedAddress &&
+      itemAddress &&
+      normalizedAddress === itemAddress
+    );
   });
 
-  if (same.length > 0) {
-    var first = same[0];
-    box.style.display = "block";
-    box.innerHTML = "⚠ 이미 비슷한 주소가 " + same.length + "개 있습니다. " +
-      "첫 매물: " + escapeHtml(first.name || "") + " / 보" + first.deposit + " / 월" + first.rent + " / " + escapeHtml(first.room || "") +
-      "<br>중복등록인지 확인 후 진행하세요.";
-  } else {
+  if (!same.length) {
     box.style.display = "none";
+    box.innerHTML = "";
+    updateQuickAddPreview();
+    return;
   }
+
+  var maxVisible = 5;
+  var visibleItems = same.slice(0, maxVisible);
+
+  var lines = visibleItems.map(function(item, index) {
+    var name = escapeHtml(item && item.name || "건물이름 없음");
+    var room = escapeHtml(item && item.room || "호실 없음");
+    var deposit = escapeHtml(
+      item && item.deposit !== undefined && item.deposit !== null && item.deposit !== ""
+        ? item.deposit
+        : "-"
+    );
+    var rent = escapeHtml(
+      item && item.rent !== undefined && item.rent !== null && item.rent !== ""
+        ? item.rent
+        : "-"
+    );
+
+    return (
+      '<div style="margin-top:8px; line-height:1.45;">' +
+        '<b>' + (index + 1) + '.</b> ' + name + '<br>' +
+        '<span style="padding-left:18px;">' + room + '</span><br>' +
+        '<span style="padding-left:18px;">' + deposit + ' / ' + rent + '</span>' +
+      '</div>'
+    );
+  });
+
+  var remainder = same.length - visibleItems.length;
+
+  box.style.display = "block";
+  box.innerHTML =
+    '<div><b>⚠ 비슷한 주소 ' + same.length + '건 발견</b></div>' +
+    lines.join("") +
+    (
+      remainder > 0
+        ? '<div style="margin-top:8px;">...외 ' + remainder + '건</div>'
+        : ''
+    ) +
+    '<div style="margin-top:10px;">중복등록인지 확인 후 진행하세요.</div>';
+
   updateQuickAddPreview();
 }
 
