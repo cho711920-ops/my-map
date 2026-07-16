@@ -17,6 +17,61 @@
    ========================================================= */
 
 /* JS부동산 지도/마커/클러스터/시트 로딩 전용 스크립트 */
+var jsCurrentLocationOverlayV630 = null;
+var jsCurrentLocationWatchIdV630 = null;
+
+
+function updateCurrentLocationOverlayV630(position) {
+  if (!position || !position.coords || !map || !window.kakao) return;
+
+  var lat = Number(position.coords.latitude);
+  var lng = Number(position.coords.longitude);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+  var coords = new kakao.maps.LatLng(lat, lng);
+
+  if (!jsCurrentLocationOverlayV630) {
+    var content = document.createElement("div");
+    content.className = "js-current-location-dot-v630";
+    content.setAttribute("title", "현재 위치");
+
+    jsCurrentLocationOverlayV630 = new kakao.maps.CustomOverlay({
+      position: coords,
+      content: content,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      zIndex: 20000
+    });
+
+    jsCurrentLocationOverlayV630.setMap(map);
+  } else {
+    jsCurrentLocationOverlayV630.setPosition(coords);
+  }
+}
+
+
+function startCurrentLocationTrackingV630() {
+  if (!navigator.geolocation || jsCurrentLocationWatchIdV630 !== null) return;
+
+  try {
+    jsCurrentLocationWatchIdV630 = navigator.geolocation.watchPosition(
+      updateCurrentLocationOverlayV630,
+      function(error) {
+        console.warn("현재 위치 표시 실패", error);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 8000,
+        timeout: 15000
+      }
+    );
+  } catch (error) {
+    console.warn("현재 위치 추적 시작 실패", error);
+  }
+}
+
+
 function groupByAddress(items) {
   var grouped = {};
 
@@ -106,6 +161,11 @@ kakao.maps.load(function() {
   });
 
   geocoder = new kakao.maps.services.Geocoder();
+
+  /*
+   * v6.3 현장모드: 지도 이동을 방해하지 않고 현재 위치만 보라색 점으로 표시합니다.
+   */
+  startCurrentLocationTrackingV630();
 
   kakao.maps.event.addListener(map, "idle", function() {
     if (isRendering) return;
