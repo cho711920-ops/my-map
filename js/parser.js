@@ -1238,7 +1238,7 @@ function saveQuickAddToSheet() {
     var summary = quickDuplicateSummaryV61(localDuplicate.item || {});
     alert(
       "이미 등록된 매물입니다.\n\n" +
-      "주소와 호실 또는 임대조건이 동일합니다." +
+      "주소·호실·보증금·월세가 모두 동일합니다." +
       (summary ? "\n\n기존 매물\n" + summary : "")
     );
     return;
@@ -1337,5 +1337,188 @@ function saveQuickAddToSheet() {
     if (typeof updateQuickAddPreview === "function") {
       updateQuickAddPreview();
     }
+  };
+})();
+
+
+/* =========================================================
+   v6.2.6 빠른등록 중복 기준 + 출처별 임장가자 최종 보정
+
+   중복 기준:
+   - 호실 있음: 주소 + 호실 + 보증금 + 월세 모두 동일할 때만 중복
+   - 양쪽 호실 없음: 주소 + 보증금 + 월세 모두 동일할 때만 중복
+   - 서로 다른 호실: 별도 매물
+   - 보증금 또는 월세가 다름: 별도 매물
+   - 평수: 중복 판정에서 제외
+
+   임장가자:
+   - 공실박스 / 네이버 / 당근 출처는 메모에 (임장가자) 자동 추가
+   - 이미 있으면 중복 추가하지 않음
+   ========================================================= */
+
+function isFieldVisitQuickAddSourceV626(source) {
+  return /^(?:공실박스|네이버|당근)$/i.test(
+    String(source || "").trim()
+  );
+}
+
+
+function ensureQuickAddFieldVisitMemoV626() {
+  var sourceEl = document.getElementById("qaSource");
+  var memoEl = document.getElementById("qaMemo");
+
+  if (!sourceEl || !memoEl) return;
+
+  var source = String(sourceEl.value || "").trim();
+
+  if (!isFieldVisitQuickAddSourceV626(source)) {
+    return;
+  }
+
+  var memo = String(memoEl.value || "").trim();
+
+  if (/\(\s*임장가자\s*\)/i.test(memo)) {
+    return;
+  }
+
+  memoEl.value = memo
+    ? "(임장가자) / " + memo
+    : "(임장가자)";
+}
+
+
+function getQuickDuplicateComparableV616(values) {
+  return {
+    address: normalizeQuickDuplicateAddressV616(values[1]),
+    room: normalizeQuickDuplicateRoomV616(values[2]),
+    deposit: normalizeQuickDuplicateNumberV616(values[4]),
+    rent: normalizeQuickDuplicateNumberV616(values[5])
+  };
+}
+
+
+function findQuickDuplicateV61(values) {
+  var target = getQuickDuplicateComparableV616(values);
+
+  if (!target.address) return null;
+
+  for (var i = 0; i < (allItems || []).length; i++) {
+    var item = allItems[i] || {};
+
+    var current = {
+      address: normalizeQuickDuplicateAddressV616(item.address),
+      room: normalizeQuickDuplicateRoomV616(item.room),
+      deposit: normalizeQuickDuplicateNumberV616(item.deposit),
+      rent: normalizeQuickDuplicateNumberV616(item.rent)
+    };
+
+    if (
+      !current.address ||
+      target.address !== current.address
+    ) {
+      continue;
+    }
+
+    var targetHasRoom = Boolean(target.room);
+    var currentHasRoom = Boolean(current.room);
+
+    /*
+     * 양쪽 모두 호실이 있는 경우:
+     * 주소·호실·보증금·월세가 전부 같을 때만 중복입니다.
+     */
+    if (targetHasRoom && currentHasRoom) {
+      if (
+        target.room === current.room &&
+        target.deposit === current.deposit &&
+        target.rent === current.rent
+      ) {
+        return {
+          type: "exact",
+          item: item
+        };
+      }
+
+      continue;
+    }
+
+    /*
+     * 양쪽 모두 호실이 없는 경우:
+     * 주소·보증금·월세가 전부 같을 때만 중복입니다.
+     */
+    if (!targetHasRoom && !currentHasRoom) {
+      if (
+        target.deposit === current.deposit &&
+        target.rent === current.rent
+      ) {
+        return {
+          type: "exact",
+          item: item
+        };
+      }
+    }
+
+    /*
+     * 한쪽만 호실이 있으면 별도 매물로 허용합니다.
+     */
+  }
+
+  return null;
+}
+
+
+function quickAddFingerprintV616(values) {
+  var target = getQuickDuplicateComparableV616(values);
+
+  return [
+    target.address,
+    target.room ? "room:" + target.room : "no-room",
+    "deposit:" + target.deposit,
+    "rent:" + target.rent
+  ].join("|");
+}
+
+
+/*
+ * 저장 직전에도 출처를 다시 확인하여 (임장가자)를 보장합니다.
+ */
+(function() {
+  var previousSaveQuickAddToSheetV626 = saveQuickAddToSheet;
+
+  saveQuickAddToSheet = function() {
+    ensureQuickAddFieldVisitMemoV626();
+
+    if (typeof updateQuickAddWarning === "function") {
+      updateQuickAddWarning();
+    }
+
+    if (typeof updateQuickAddPreview === "function") {
+      updateQuickAddPreview();
+    }
+
+    return previousSaveQuickAddToSheetV626.apply(this, arguments);
+  };
+})();
+
+
+/*
+ * AI 분석 직후에도 메모에 즉시 표시되도록 보정합니다.
+ */
+(function() {
+  var previousParseQuickAddTextV626 = parseQuickAddText;
+
+  parseQuickAddText = function() {
+    var result = previousParseQuickAddTextV626.apply(this, arguments);
+
+    ensureQuickAddFieldVisitMemoV626();
+
+    if (typeof updateQuickAddWarning === "function") {
+      updateQuickAddWarning();
+    }
+
+    if (typeof updateQuickAddPreview === "function") {
+      updateQuickAddPreview();
+    }
+
+    return result;
   };
 })();
