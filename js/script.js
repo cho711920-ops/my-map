@@ -1436,6 +1436,8 @@ function addListItem(item) {
           'onclick="event.stopPropagation(); openItemListPicker(\'favorite\',\'' + encodedKey + '\')">찜추가</button>' +
         '<button type="button" class="item-list-add-btn visit" ' +
           'onclick="event.stopPropagation(); openItemListPicker(\'visit\',\'' + encodedKey + '\')">임장추가</button>' +
+        '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
+          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedKey + '\')">수정</button>' +
       '</div>' +
       '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
         'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
@@ -2470,5 +2472,230 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", setupStableDetailFilterV62);
 } else {
   setupStableDetailFilterV62();
+}
+
+
+
+/* =========================================================
+   v6.3.0 현장모드 - 매물 임대조건 수정
+   - 임장추가 버튼 옆 '수정'
+   - 기존 행을 새 행으로 추가하지 않고 정확히 찾아 수정
+   - 주소/건물이름/구분은 식별 기준으로 유지하고 편집 대상에서 제외
+   ========================================================= */
+
+var propertyEditTargetV630 = null;
+var propertyEditSavingV630 = false;
+
+
+function getPropertyByEncodedKeyV630(encodedKey) {
+  var key = decodeURIComponent(String(encodedKey || ""));
+
+  return (allItems || []).find(function(item) {
+    return item && item.key === key;
+  }) || null;
+}
+
+
+function ensurePropertyEditModalV630() {
+  if (document.getElementById("propertyEditModalV630")) return;
+
+  var modal = document.createElement("div");
+  modal.id = "propertyEditModalV630";
+  modal.className = "property-edit-modal-v630";
+  modal.setAttribute("aria-hidden", "true");
+
+  modal.innerHTML =
+    '<div class="property-edit-backdrop-v630" onclick="closePropertyEditModalV630()"></div>' +
+    '<div class="property-edit-dialog-v630" role="dialog" aria-modal="true" aria-labelledby="propertyEditTitleV630">' +
+      '<div class="property-edit-header-v630">' +
+        '<div>' +
+          '<strong id="propertyEditTitleV630">매물 임대조건 수정</strong>' +
+          '<div id="propertyEditIdentityV630" class="property-edit-identity-v630"></div>' +
+        '</div>' +
+        '<button type="button" class="property-edit-close-v630" onclick="closePropertyEditModalV630()" aria-label="닫기">×</button>' +
+      '</div>' +
+
+      '<div class="property-edit-grid-v630">' +
+        '<label>호실<input id="peRoomV630" type="text"></label>' +
+        '<label>보증금<input id="peDepositV630" type="number" inputmode="numeric"></label>' +
+        '<label>월세<input id="peRentV630" type="number" inputmode="numeric"></label>' +
+        '<label>관리비<input id="peFeeV630" type="number" inputmode="numeric"></label>' +
+        '<label>권리금<input id="pePremiumV630" type="number" inputmode="numeric"></label>' +
+        '<label>평수<input id="peAreaV630" type="number" inputmode="decimal" step="0.1"></label>' +
+        '<label class="property-edit-wide-v630">상태' +
+          '<select id="peStateV630">' +
+            '<option value="">계약가능</option>' +
+            '<option value="계약완료">계약완료</option>' +
+          '</select>' +
+        '</label>' +
+        '<label class="property-edit-wide-v630">메모' +
+          '<textarea id="peMemoV630" rows="5"></textarea>' +
+        '</label>' +
+      '</div>' +
+
+      '<div id="propertyEditStatusV630" class="property-edit-status-v630"></div>' +
+
+      '<div class="property-edit-actions-v630">' +
+        '<button type="button" class="property-edit-cancel-v630" onclick="closePropertyEditModalV630()">취소</button>' +
+        '<button type="button" id="propertyEditSaveBtnV630" class="property-edit-save-v630" onclick="savePropertyEditV630()">저장</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") {
+      closePropertyEditModalV630();
+    }
+  });
+}
+
+
+function openPropertyEditModalV630(encodedKey) {
+  ensurePropertyEditModalV630();
+
+  var item = getPropertyByEncodedKeyV630(encodedKey);
+
+  if (!item) {
+    alert("수정할 매물을 찾지 못했습니다.");
+    return;
+  }
+
+  propertyEditTargetV630 = item;
+  propertyEditSavingV630 = false;
+
+  document.getElementById("propertyEditIdentityV630").textContent =
+    [item.name, item.address, item.type].filter(Boolean).join(" · ");
+
+  document.getElementById("peRoomV630").value = item.room || "";
+  document.getElementById("peDepositV630").value = item.deposit || 0;
+  document.getElementById("peRentV630").value = item.rent || 0;
+  document.getElementById("peFeeV630").value = item.fee || 0;
+  document.getElementById("pePremiumV630").value = item.premium || 0;
+  document.getElementById("peAreaV630").value = item.area || 0;
+  document.getElementById("peStateV630").value = item.state || "";
+  document.getElementById("peMemoV630").value = item.memo || "";
+  document.getElementById("propertyEditStatusV630").textContent = "";
+
+  var modal = document.getElementById("propertyEditModalV630");
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+
+  setTimeout(function() {
+    var first = document.getElementById("peRoomV630");
+    if (first) first.focus();
+  }, 50);
+}
+
+
+function closePropertyEditModalV630() {
+  if (propertyEditSavingV630) return;
+
+  var modal = document.getElementById("propertyEditModalV630");
+  if (!modal) return;
+
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+  propertyEditTargetV630 = null;
+}
+
+
+function numberFromEditV630(id) {
+  var element = document.getElementById(id);
+  var value = Number(element && element.value);
+
+  return Number.isFinite(value) ? value : 0;
+}
+
+
+function buildOriginalPropertyValuesV630(item) {
+  return [
+    item.name || "",
+    item.address || "",
+    item.room || "",
+    item.type || "",
+    item.deposit || 0,
+    item.rent || 0,
+    item.fee || 0,
+    item.premium || 0,
+    item.area || 0,
+    item.landlordPhone || "",
+    item.tenantPhone || "",
+    item.memo || "",
+    item.state || "",
+    item.regDate || "",
+    item.source || ""
+  ];
+}
+
+
+function savePropertyEditV630() {
+  if (propertyEditSavingV630 || !propertyEditTargetV630) return;
+
+  if (!saveApiURL) {
+    alert("Apps Script 저장 주소가 설정되지 않았습니다.");
+    return;
+  }
+
+  var item = propertyEditTargetV630;
+  var saveButton = document.getElementById("propertyEditSaveBtnV630");
+  var status = document.getElementById("propertyEditStatusV630");
+
+  var updated = {
+    room: String(document.getElementById("peRoomV630").value || "").trim(),
+    deposit: numberFromEditV630("peDepositV630"),
+    rent: numberFromEditV630("peRentV630"),
+    fee: numberFromEditV630("peFeeV630"),
+    premium: numberFromEditV630("pePremiumV630"),
+    area: numberFromEditV630("peAreaV630"),
+    memo: String(document.getElementById("peMemoV630").value || "").trim(),
+    state: String(document.getElementById("peStateV630").value || "").trim()
+  };
+
+  propertyEditSavingV630 = true;
+  saveButton.disabled = true;
+  saveButton.textContent = "저장 중...";
+  status.textContent = "시트1 수정 요청 중...";
+
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "updateProperty",
+      originalValues: buildOriginalPropertyValuesV630(item),
+      updated: updated
+    })
+  }).then(function() {
+    /*
+     * no-cors 요청은 서버 본문을 읽을 수 없으므로,
+     * 시트를 다시 불러와 실제 반영 결과를 화면에 갱신합니다.
+     */
+    status.textContent = "수정 요청 완료 · 최신 시트를 불러오는 중...";
+
+    setTimeout(function() {
+      propertyEditSavingV630 = false;
+      saveButton.disabled = false;
+      saveButton.textContent = "저장";
+
+      var modal = document.getElementById("propertyEditModalV630");
+      if (modal) {
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+      }
+
+      propertyEditTargetV630 = null;
+      loadSheet(true);
+    }, 1800);
+  }).catch(function(error) {
+    console.error(error);
+    propertyEditSavingV630 = false;
+    saveButton.disabled = false;
+    saveButton.textContent = "저장";
+    status.textContent = "수정 요청에 실패했습니다.";
+    alert("매물 수정 중 오류가 발생했습니다.");
+  });
 }
 
