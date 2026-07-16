@@ -426,6 +426,13 @@ function readOptionalNumberInput(id) {
 }
 
 
+function normalizeSearchComparableText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+
 function buildSearchText(item) {
   return [
     item && item.name,
@@ -456,6 +463,7 @@ function matchesMultiKeyword(item, rawKeyword) {
   if (!keyword) return true;
 
   var searchText = buildSearchText(item);
+  var compactSearchText = normalizeSearchComparableText(searchText);
 
   var orGroups = keyword
     .split(",")
@@ -475,7 +483,12 @@ function matchesMultiKeyword(item, rawKeyword) {
       .filter(Boolean);
 
     return andWords.every(function(word) {
-      return searchText.includes(word);
+      var compactWord = normalizeSearchComparableText(word);
+
+      return (
+        searchText.includes(word) ||
+        (compactWord && compactSearchText.includes(compactWord))
+      );
     });
   });
 }
