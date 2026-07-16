@@ -1273,9 +1273,28 @@ function saveQuickAddToSheet() {
       forceDuplicate: false
     })
   }).then(function() {
-    alert("매물 등록 요청을 보냈습니다.\n잠시 후 지도에 반영됩니다.");
-    closeQuickAddModal();
+    alert(
+      "매물 등록 요청을 보냈습니다.\n" +
+      "다음 매물을 계속 붙여넣을 수 있습니다."
+    );
+
+    /*
+     * 연속 등록을 위해 빠른등록창은 닫지 않습니다.
+     * 입력값만 비우고 붙여넣기 칸으로 포커스를 돌립니다.
+     * 창은 사용자가 '닫기' 버튼 또는 ESC를 눌렀을 때만 닫힙니다.
+     */
     clearQuickAddForm();
+
+    var modal = document.getElementById("quickAddModal");
+    var raw = document.getElementById("qaRaw");
+
+    if (modal) {
+      modal.style.display = "block";
+    }
+
+    setTimeout(function() {
+      if (raw) raw.focus();
+    }, 80);
 
     setTimeout(function() {
       loadSheet(true);
