@@ -5139,3 +5139,220 @@ body,
     max-width: 100% !important;
   }
 }
+
+
+/* =========================================================
+   v6.3.0 현장모드: 현재 위치 + 매물 수정
+   ========================================================= */
+
+.js-current-location-dot-v630 {
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #7b2cff;
+  box-shadow:
+    0 0 0 2px rgba(123, 44, 255, .22),
+    0 2px 7px rgba(35, 17, 70, .38);
+  pointer-events: none;
+}
+
+.item-edit-btn-v630 {
+  height: 23px;
+  padding: 0 8px;
+  border: 1px solid #6d28d9;
+  border-radius: 6px;
+  background: #f2eaff;
+  color: #5b21b6;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 21px;
+  cursor: pointer;
+}
+
+.item-edit-btn-v630:hover {
+  background: #e7d8ff;
+}
+
+.property-edit-modal-v630 {
+  position: fixed;
+  inset: 0;
+  z-index: 26000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.property-edit-modal-v630.open {
+  display: flex;
+}
+
+.property-edit-backdrop-v630 {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .45);
+}
+
+.property-edit-dialog-v630 {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid #d7dce5;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 22px 70px rgba(15, 23, 42, .28);
+}
+
+.property-edit-header-v630 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 13px;
+  border-bottom: 1px solid #e7eaf0;
+  background: #ffffff;
+}
+
+.property-edit-header-v630 strong {
+  display: block;
+  font-size: 17px;
+  color: #111827;
+}
+
+.property-edit-identity-v630 {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.property-edit-close-v630 {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: #f2f4f7;
+  color: #344054;
+  font-size: 24px;
+  line-height: 28px;
+  cursor: pointer;
+}
+
+.property-edit-grid-v630 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 18px 8px;
+}
+
+.property-edit-grid-v630 label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.property-edit-grid-v630 input,
+.property-edit-grid-v630 select,
+.property-edit-grid-v630 textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cfd5df;
+  border-radius: 9px;
+  background: #ffffff;
+  padding: 10px 11px;
+  color: #111827;
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+}
+
+.property-edit-grid-v630 input:focus,
+.property-edit-grid-v630 select:focus,
+.property-edit-grid-v630 textarea:focus {
+  border-color: #7b2cff;
+  box-shadow: 0 0 0 3px rgba(123, 44, 255, .12);
+}
+
+.property-edit-grid-v630 textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.property-edit-wide-v630 {
+  grid-column: 1 / -1;
+}
+
+.property-edit-status-v630 {
+  min-height: 18px;
+  padding: 2px 18px 4px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.property-edit-actions-v630 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 12px 18px 18px;
+}
+
+.property-edit-actions-v630 button {
+  min-width: 82px;
+  height: 38px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.property-edit-cancel-v630 {
+  border: 1px solid #d0d5dd;
+  background: #ffffff;
+  color: #344054;
+}
+
+.property-edit-save-v630 {
+  border: 1px solid #6d28d9;
+  background: #7b2cff;
+  color: #ffffff;
+}
+
+.property-edit-save-v630:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+@media (max-width: 680px) {
+  .property-edit-modal-v630 {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .property-edit-dialog-v630 {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .property-edit-grid-v630 {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 14px 14px 6px;
+  }
+
+  .property-edit-header-v630,
+  .property-edit-actions-v630 {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
