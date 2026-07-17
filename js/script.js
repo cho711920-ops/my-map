@@ -2486,6 +2486,13 @@ if (document.readyState === "loading") {
 var propertyEditTargetV630 = null;
 var propertyEditSavingV630 = false;
 
+/*
+ * v6.3.2 QA2
+ * 건물이름 또는 호실을 수정하면 item.key도 바뀝니다.
+ * 시트를 다시 불러온 뒤 새 key를 찾아 선택·리스트를 복원하기 위한 임시 상태입니다.
+ */
+var pendingPropertyEditRestoreV632 = null;
+
 
 function getPropertyByEncodedKeyV630(encodedKey) {
   var key = decodeURIComponent(String(encodedKey || ""));
@@ -2516,6 +2523,12 @@ function ensurePropertyEditModalV630() {
       '</div>' +
 
       '<div class="property-edit-grid-v630">' +
+        '<label class="property-edit-wide-v630">건물이름 (변경가능)' +
+          '<input id="peNameV630" type="text">' +
+        '</label>' +
+        '<label class="property-edit-wide-v630 property-edit-readonly-label-v631">주소 (변경불가)' +
+          '<input id="peAddressV630" type="text" readonly aria-readonly="true">' +
+        '</label>' +
         '<label>호실<input id="peRoomV630" type="text"></label>' +
         '<label>보증금<input id="peDepositV630" type="number" inputmode="numeric"></label>' +
         '<label>월세<input id="peRentV630" type="number" inputmode="numeric"></label>' +
@@ -2567,6 +2580,8 @@ function openPropertyEditModalV630(encodedKey) {
   document.getElementById("propertyEditIdentityV630").textContent =
     [item.name, item.address, item.type].filter(Boolean).join(" · ");
 
+  document.getElementById("peNameV630").value = item.name || "";
+  document.getElementById("peAddressV630").value = item.address || "";
   document.getElementById("peRoomV630").value = item.room || "";
   document.getElementById("peDepositV630").value = item.deposit || 0;
   document.getElementById("peRentV630").value = item.rent || 0;
@@ -2582,7 +2597,7 @@ function openPropertyEditModalV630(encodedKey) {
   modal.setAttribute("aria-hidden", "false");
 
   setTimeout(function() {
-    var first = document.getElementById("peRoomV630");
+    var first = document.getElementById("peNameV630");
     if (first) first.focus();
   }, 50);
 }
@@ -2629,6 +2644,182 @@ function buildOriginalPropertyValuesV630(item) {
 }
 
 
+
+function sameEditNumberV632(a, b) {
+  return Number(a || 0) === Number(b || 0);
+}
+
+
+function findUpdatedPropertyV632(pending) {
+  if (!pending || !pending.updated || !pending.original) return null;
+
+  var updated = pending.updated;
+  var original = pending.original;
+
+  return (allItems || []).find(function(item) {
+    return (
+      item &&
+      String(item.address || "").trim() === String(original.address || "").trim() &&
+      String(item.type || "").trim() === String(original.type || "").trim() &&
+      String(item.name || "").trim() === String(updated.name || "").trim() &&
+      String(item.room || "").trim() === String(updated.room || "").trim() &&
+      sameEditNumberV632(item.deposit, updated.deposit) &&
+      sameEditNumberV632(item.rent, updated.rent) &&
+      sameEditNumberV632(item.fee, updated.fee) &&
+      sameEditNumberV632(item.premium, updated.premium) &&
+      sameEditNumberV632(item.area, updated.area) &&
+      String(item.memo || "").trim() === String(updated.memo || "").trim() &&
+      String(item.state || "").trim() === String(updated.state || "").trim()
+    );
+  }) || null;
+}
+
+
+function finishPropertyEditUiV632(message) {
+  propertyEditSavingV630 = false;
+
+  var saveButton = document.getElementById("propertyEditSaveBtnV630");
+  if (saveButton) {
+    saveButton.disabled = false;
+    saveButton.textContent = "저장";
+  }
+
+  var status = document.getElementById("propertyEditStatusV630");
+  if (status) status.textContent = message || "";
+}
+
+
+function restorePropertyEditAfterReloadV632() {
+  var pending = pendingPropertyEditRestoreV632;
+  if (!pending) return false;
+
+  var updatedItem = findUpdatedPropertyV632(pending);
+
+  /*
+   * Google gviz CSV가 잠시 이전 캐시를 보여줄 수 있어 최대 3회 재확인합니다.
+   * 서버 응답을 읽을 수 없는 no-cors 환경에서도 실제 반영 여부를 확인합니다.
+   */
+  if (!updatedItem) {
+    pending.verifyAttempts = Number(pending.verifyAttempts || 0) + 1;
+
+    if (pending.verifyAttempts < 3) {
+      var status = document.getElementById("propertyEditStatusV630");
+      if (status) {
+        status.textContent =
+          "시트 반영 확인 중... (" + pending.verifyAttempts + "/3)";
+      }
+
+      setTimeout(function() {
+        if (!isLoadingSheet) {
+          loadSheet(true);
+        } else {
+          reloadAfterPropertyEditV632();
+        }
+      }, 1200);
+
+      return true;
+    }
+
+    pendingPropertyEditRestoreV632 = null;
+    finishPropertyEditUiV632(
+      "저장 반영을 확인하지 못했습니다. 입력값을 확인한 뒤 다시 저장해주세요."
+    );
+    alert(
+      "수정 요청은 전송됐지만 시트 반영을 확인하지 못했습니다.\n" +
+      "수정창은 닫지 않았습니다."
+    );
+    return true;
+  }
+
+  /*
+   * 기존 리스트 순서를 유지하면서 수정 전 key 자리에 새 item을 넣습니다.
+   */
+  var restoredList = [];
+  var seen = {};
+
+  (pending.visibleKeys || []).forEach(function(key) {
+    var candidate = key === pending.originalKey
+      ? updatedItem
+      : (allItems || []).find(function(item) {
+          return item && item.key === key;
+        }) || null;
+
+    if (candidate && !seen[candidate.key]) {
+      seen[candidate.key] = true;
+      restoredList.push(candidate);
+    }
+  });
+
+  if (!restoredList.length) restoredList = [updatedItem];
+
+  selectedItemKey = updatedItem.key;
+  visibleListItems = restoredList.slice();
+  showList(restoredList);
+
+  var matchedOverlay = (overlays || []).find(function(overlay) {
+    return (
+      overlay &&
+      overlay.__cluster &&
+      overlay.__cluster.items.some(function(item) {
+        return item && item.key === updatedItem.key;
+      })
+    );
+  });
+
+  if (!multiClusterMode) {
+    selectedGroupKey =
+      matchedOverlay && matchedOverlay.__cluster
+        ? matchedOverlay.__cluster.key
+        : null;
+    selectedGroupKeys = [];
+  }
+
+  if (typeof redrawSelectedMarkers === "function") {
+    redrawSelectedMarkers();
+  }
+
+  pendingPropertyEditRestoreV632 = null;
+  finishPropertyEditUiV632("");
+
+  var modal = document.getElementById("propertyEditModalV630");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  propertyEditTargetV630 = null;
+
+  var statusElement = document.getElementById("status");
+  if (statusElement) {
+    statusElement.innerHTML = "매물 수정 완료 · 지도와 리스트 갱신";
+  }
+
+  return true;
+}
+
+
+function reloadAfterPropertyEditV632() {
+  if (!pendingPropertyEditRestoreV632) return;
+
+  if (isLoadingSheet) {
+    setTimeout(reloadAfterPropertyEditV632, 300);
+    return;
+  }
+
+  loadSheet(true);
+}
+
+
+function handlePropertyEditReloadFailureV632() {
+  if (!pendingPropertyEditRestoreV632) return;
+
+  pendingPropertyEditRestoreV632 = null;
+  finishPropertyEditUiV632(
+    "최신 시트를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 저장해주세요."
+  );
+}
+
+
 function savePropertyEditV630() {
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
 
@@ -2642,6 +2833,7 @@ function savePropertyEditV630() {
   var status = document.getElementById("propertyEditStatusV630");
 
   var updated = {
+    name: String(document.getElementById("peNameV630").value || "").trim(),
     room: String(document.getElementById("peRoomV630").value || "").trim(),
     deposit: numberFromEditV630("peDepositV630"),
     rent: numberFromEditV630("peRentV630"),
@@ -2670,27 +2862,31 @@ function savePropertyEditV630() {
     })
   }).then(function() {
     /*
-     * no-cors 요청은 서버 본문을 읽을 수 없으므로,
-     * 시트를 다시 불러와 실제 반영 결과를 화면에 갱신합니다.
+     * no-cors 요청은 HTTP 성공 여부와 서버 JSON을 읽을 수 없습니다.
+     * 따라서 창을 즉시 닫지 않고, 최신 시트에서 수정값을 실제로 확인한 뒤
+     * 성공 처리합니다.
      */
-    status.textContent = "수정 요청 완료 · 최신 시트를 불러오는 중...";
+    status.textContent = "수정 요청 완료 · 실제 반영 확인 중...";
 
-    setTimeout(function() {
-      propertyEditSavingV630 = false;
-      saveButton.disabled = false;
-      saveButton.textContent = "저장";
+    pendingPropertyEditRestoreV632 = {
+      originalKey: item.key,
+      original: {
+        name: item.name || "",
+        address: item.address || "",
+        room: item.room || "",
+        type: item.type || ""
+      },
+      updated: updated,
+      visibleKeys: (visibleListItems || []).map(function(visibleItem) {
+        return visibleItem.key;
+      }),
+      verifyAttempts: 0
+    };
 
-      var modal = document.getElementById("propertyEditModalV630");
-      if (modal) {
-        modal.classList.remove("open");
-        modal.setAttribute("aria-hidden", "true");
-      }
-
-      propertyEditTargetV630 = null;
-      loadSheet(true);
-    }, 1800);
+    setTimeout(reloadAfterPropertyEditV632, 1800);
   }).catch(function(error) {
     console.error(error);
+    pendingPropertyEditRestoreV632 = null;
     propertyEditSavingV630 = false;
     saveButton.disabled = false;
     saveButton.textContent = "저장";
