@@ -391,17 +391,61 @@ function loadSheet(isAuto) {
         applyFilter();
 
         /*
-         * 그다음 자동업데이트 직전의 리스트·스크롤·선택·AI패널을 복원합니다.
+         * 수정 직후에는 저장 직전 화면 상태를 우선 복원합니다.
          */
-        if (isAuto && autoUpdateViewState) {
-          restoreAutoUpdateViewState(autoUpdateViewState);
-        }
+        if (
+          typeof pendingPropertyEditStateV634 !== "undefined" &&
+          pendingPropertyEditStateV634
+        ) {
+          var editPendingV634 = pendingPropertyEditStateV634;
+          var aliasesV634 = editPendingV634.aliases || [];
+          var preferredKeyV634 = editPendingV634.newKey || "";
+          var availableKeyV634 = "";
 
-        /*
-         * 수정 저장 직후라면 기존 key 복원보다 새 key 복원을 마지막에 적용합니다.
-         */
-        if (typeof restorePropertyEditAfterReloadV632 === "function") {
-          restorePropertyEditAfterReloadV632();
+          if (
+            preferredKeyV634 &&
+            (allItems || []).some(function(item) {
+              return item && item.key === preferredKeyV634;
+            })
+          ) {
+            availableKeyV634 = preferredKeyV634;
+          } else {
+            aliasesV634.some(function(aliasKey) {
+              var exists = (allItems || []).some(function(item) {
+                return item && item.key === aliasKey;
+              });
+
+              if (exists) {
+                availableKeyV634 = aliasKey;
+                return true;
+              }
+
+              return false;
+            });
+          }
+
+          var editRestoreStateV634 = remapEditViewStateV634(
+            editPendingV634.viewState,
+            aliasesV634,
+            availableKeyV634 || preferredKeyV634
+          );
+
+          editRestoreStateV634 =
+            keepOnlyFilteredEditKeysV634(editRestoreStateV634);
+
+          if (editRestoreStateV634) {
+            restoreAutoUpdateViewState(editRestoreStateV634);
+          }
+
+          /*
+           * 최신 key가 확인될 때만 임시 상태를 종료합니다.
+           */
+          if (availableKeyV634 === preferredKeyV634) {
+            pendingPropertyEditStateV634 = null;
+            pendingPropertyEditNewKeyV633 = null;
+          }
+        } else if (isAuto && autoUpdateViewState) {
+          restoreAutoUpdateViewState(autoUpdateViewState);
         }
 
         preserveActionSelectionDuringRender = false;
@@ -416,11 +460,6 @@ function loadSheet(isAuto) {
     .catch(function(err) {
       isLoadingSheet = false;
       document.getElementById("status").innerHTML = "시트 오류";
-
-      if (typeof handlePropertyEditReloadFailureV632 === "function") {
-        handlePropertyEditReloadFailureV632();
-      }
-
       console.error(err);
     });
 }
