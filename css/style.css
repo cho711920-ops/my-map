@@ -70,6 +70,50 @@
   }
 }
 
+/* v6.3.16 스마트폰 상단 메뉴: 읽기 쉬운 2줄 배열 */
+@media (max-width: 640px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-rows: 38px 38px !important;
+    gap: 4px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > *,
+  .v6-toolbar-secondary .v6-command-menu,
+  .v6-toolbar-secondary .v6-command-trigger,
+  .v6-toolbar-secondary .v6-primary-action,
+  .v6-toolbar-secondary .quick-add-btn {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+    margin: 0 !important;
+    font-size: 11px !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column: 1 / span 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2) { grid-column: 3 / span 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column: 5 / span 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 1 / span 3 !important; grid-row: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 4 / span 3 !important; grid-row: 2 !important; }
+  .v6-toolbar-secondary .map-roadview-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .v6-toolbar-secondary .map-roadview-select svg {
+    width: 25px !important;
+    height: 25px !important;
+  }
+}
+
 /* v6.3.15 PC 상단 겹침 제거 + 카카오형 로드뷰 버튼 */
 @media (min-width: 1101px) {
   .filters {
@@ -6171,6 +6215,50 @@ body,
   .v6-toolbar-secondary .map-roadview-select svg {
     width: 27px !important;
     height: 27px !important;
+  }
+}
+
+/* v6.3.16 final: 스마트폰 버튼을 불필요하게 늘리지 않는 촘촘한 2줄 배열 */
+@media (max-width: 640px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    display: grid !important;
+    grid-template-columns: repeat(6, 30px) !important;
+    grid-template-rows: 34px 34px !important;
+    gap: 4px !important;
+    justify-content: start !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > *,
+  .v6-toolbar-secondary .v6-command-menu,
+  .v6-toolbar-secondary .v6-command-trigger,
+  .v6-toolbar-secondary .v6-primary-action,
+  .v6-toolbar-secondary .quick-add-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    margin: 0 !important;
+    padding: 0 3px !important;
+    font-size: 10px !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column: 1 / span 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2) { grid-column: 3 / span 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column: 5 / span 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 1 / span 3 !important; grid-row: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 4 / span 3 !important; grid-row: 2 !important; }
+  .v6-toolbar-secondary .map-roadview-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .v6-toolbar-secondary .map-roadview-select svg {
+    width: 23px !important;
+    height: 23px !important;
   }
 }
 
