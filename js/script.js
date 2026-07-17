@@ -196,7 +196,7 @@ function toggleSidebar() {
 
 
 function setupEnterSearch() {
-  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minArea, #maxArea, #minFloor, #maxFloor");
+  var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minPremium, #maxPremium, #minArea, #maxArea, #minFloor, #maxFloor");
 
   inputs.forEach(function(input) {
     input.addEventListener("keydown", function(e) {
@@ -602,6 +602,9 @@ function getFilteredItems() {
   var minRent = Number(document.getElementById("minRent").value) || 0;
   var maxRent = Number(document.getElementById("maxRent").value) || 999999999;
 
+  var minPremium = Number(document.getElementById("minPremium").value) || 0;
+  var maxPremium = Number(document.getElementById("maxPremium").value) || 999999999;
+
   var minArea = Number(document.getElementById("minArea").value) || 0;
   var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
 
@@ -633,6 +636,8 @@ function getFilteredItems() {
       item.deposit <= maxDeposit &&
       item.rent >= minRent &&
       item.rent <= maxRent &&
+      (Number(item.premium) || 0) >= minPremium &&
+      (Number(item.premium) || 0) <= maxPremium &&
       item.area >= minArea &&
       item.area <= maxArea;
 
@@ -1693,6 +1698,8 @@ function resetFilter() {
   document.getElementById("maxDeposit").value = "";
   document.getElementById("minRent").value = "";
   document.getElementById("maxRent").value = "";
+  document.getElementById("minPremium").value = "";
+  document.getElementById("maxPremium").value = "";
   document.getElementById("minArea").value = "";
   document.getElementById("maxArea").value = "";
   document.getElementById("minFloor").value = "";

@@ -5,6 +5,7 @@
   var FIELD_IDS = [
     "minDeposit", "maxDeposit",
     "minRent", "maxRent",
+    "minPremium", "maxPremium",
     "minArea", "maxArea",
     "minFloor", "maxFloor",
     "industryFilter"
@@ -90,6 +91,7 @@
         '<div class="v6-detail-sheet-body">' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minDeposit" inputmode="numeric" placeholder="보증금 최소"><input id="v6DetailSheet_maxDeposit" inputmode="numeric" placeholder="보증금 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minRent" inputmode="numeric" placeholder="월세 최소"><input id="v6DetailSheet_maxRent" inputmode="numeric" placeholder="월세 최대"></div>' +
+          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minPremium" inputmode="numeric" placeholder="권리금 최소"><input id="v6DetailSheet_maxPremium" inputmode="numeric" placeholder="권리금 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minArea" inputmode="decimal" placeholder="평수 최소"><input id="v6DetailSheet_maxArea" inputmode="decimal" placeholder="평수 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="text" placeholder="층수 최소 (예: B1 또는 -1)"><input id="v6DetailSheet_maxFloor" inputmode="text" placeholder="층수 최대 (예: 3)"></div>' +
           '<div class="v6-detail-sheet-row v6-detail-sheet-row-single"><input id="v6DetailSheet_industryFilter" inputmode="text" placeholder="업종구분 (예: 식당, 카페)"></div>' +
