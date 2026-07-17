@@ -166,6 +166,20 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:5!important; }
 }
 
+/* v6.3.29 mobile first row: JS + shorter search + search button + free space */
+@media (max-width: 768px) {
+  .header::after {
+    width:48px!important;
+  }
+  .v6-toolbar-primary .search-row {
+    left:59px!important;
+    width:60vw!important;
+    max-width:240px!important;
+    grid-template-columns:minmax(0,1fr) 48px!important;
+    gap:5px!important;
+  }
+}
+
 /* v6.3.28 mobile property-list header: slightly taller than the 23px Navi button */
 @media (max-width: 768px) {
   #listToolbar.list-toolbar {
@@ -1069,7 +1083,7 @@ body.v6-menu-open{overflow:auto!important}
   }
   .header::after {
     content:"J S"!important; display:flex!important; align-items:center!important; justify-content:center!important;
-    width:42px!important; height:34px!important; color:#fff!important; background:#1677e8!important;
+    width:48px!important; height:34px!important; color:#fff!important; background:#1677e8!important;
     border-radius:8px!important; font-size:14px!important; font-weight:900!important;
     box-shadow:0 1px 3px rgba(0,0,0,.12)!important;
   }
@@ -1079,9 +1093,9 @@ body.v6-menu-open{overflow:auto!important}
   }
   .v6-toolbar-primary { position:static!important; display:block!important; width:auto!important; min-width:0!important; height:34px!important; }
   .v6-toolbar-primary .search-row {
-    position:absolute!important; left:52px!important; top:-38px!important;
-    width:calc(100vw - 58px)!important; max-width:none!important; height:34px!important;
-    display:grid!important; grid-template-columns:minmax(0,1fr) 48px!important; gap:4px!important;
+    position:absolute!important; left:59px!important; top:-38px!important;
+    width:60vw!important; max-width:240px!important; height:34px!important;
+    display:grid!important; grid-template-columns:minmax(0,1fr) 48px!important; gap:5px!important;
   }
   .v6-toolbar-primary .top-reset-btn,
   .v6-toolbar-primary .detail-btn {
