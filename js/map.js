@@ -21,6 +21,7 @@ var jsCurrentLocationOverlayV630 = null;
 var jsCurrentLocationWatchIdV630 = null;
 var jsMapIdleTimerV638 = null;
 var jsLastIdleViewportKeyV638 = "";
+var jsLastRenderedItemsV639 = [];
 
 
 function updateCurrentLocationOverlayV630(position) {
@@ -247,7 +248,7 @@ function scheduleMapIdleRefreshV638() {
     if (viewportKey && viewportKey === jsLastIdleViewportKeyV638) return;
 
     jsLastIdleViewportKeyV638 = viewportKey;
-    applyFilter();
+    drawMapClustersOnlyV639(jsLastRenderedItemsV639);
   }, 120);
 }
 
@@ -688,6 +689,34 @@ function clearMap() {
 }
 
 
+function clearMapOverlaysOnlyV639() {
+  overlays.forEach(function(o) { o.setMap(null); });
+  overlays = [];
+}
+
+
+function getVisibleAddressGroupsV639(items) {
+  var groups = groupByAddress(items || []);
+  if (!map || !map.getProjection) return groups;
+
+  var projection = map.getProjection();
+  var mapElement = document.getElementById("map");
+  if (!projection || !mapElement) return groups;
+
+  var margin = 120;
+  var width = mapElement.clientWidth;
+  var height = mapElement.clientHeight;
+
+  return groups.filter(function(group) {
+    if (!group || !group.latlng) return false;
+    var point = projection.containerPointFromCoords(group.latlng);
+    return point &&
+      point.x >= -margin && point.x <= width + margin &&
+      point.y >= -margin && point.y <= height + margin;
+  });
+}
+
+
 /* =========================================================
    v6.3.5 Premium Cluster UI — 수량별 크기 클래스
    ========================================================= */
@@ -699,11 +728,11 @@ function getPremiumClusterSizeClassV635(count) {
   return " cluster-size-sm";
 }
 
-function drawItems(items) {
+function drawMapClustersOnlyV639(items) {
   isRendering = true;
-  clearMap();
+  clearMapOverlaysOnlyV639();
 
-  var addressGroups = groupByAddress(items);
+  var addressGroups = getVisibleAddressGroupsV639(items);
   var clusters = createDynamicClusters(addressGroups);
 
   clusters.forEach(function(cluster) {
@@ -737,8 +766,14 @@ function drawItems(items) {
     overlays.push(overlay);
   });
 
-  showList(items);
   isRendering = false;
+}
+
+
+function drawItems(items) {
+  jsLastRenderedItemsV639 = (items || []).slice();
+  drawMapClustersOnlyV639(jsLastRenderedItemsV639);
+  showList(jsLastRenderedItemsV639);
 }
 
 
