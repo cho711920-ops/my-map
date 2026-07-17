@@ -1330,7 +1330,9 @@ function saveItemMemo(encodedKey) {
       name: item.name || "",
       address: item.address || "",
       room: item.room || "",
-      type: item.type || ""
+      type: item.type || "",
+      deposit: item.deposit == null ? "" : item.deposit,
+      rent: item.rent == null ? "" : item.rent
     },
     state: item.state || "",
     memo: newMemo
@@ -1789,7 +1791,9 @@ function toggleDoneStatus(encodedKey, checked) {
       name: item.name || "",
       address: item.address || "",
       room: item.room || "",
-      type: item.type || ""
+      type: item.type || "",
+      deposit: item.deposit == null ? "" : item.deposit,
+      rent: item.rent == null ? "" : item.rent
     },
     state: nextState,
     memo: nextMemo
@@ -1982,7 +1986,9 @@ function markSelectedAsVisited() {
         name: item.name || "",
         address: item.address || "",
         room: item.room || "",
-        type: item.type || ""
+        type: item.type || "",
+        deposit: item.deposit == null ? "" : item.deposit,
+        rent: item.rent == null ? "" : item.rent
       },
       state: item.state || "",
       memo: item.memo || ""
@@ -2074,7 +2080,9 @@ function completeSelectedItems() {
         name: item.name || "",
         address: item.address || "",
         room: item.room || "",
-        type: item.type || ""
+        type: item.type || "",
+        deposit: item.deposit == null ? "" : item.deposit,
+        rent: item.rent == null ? "" : item.rent
       },
       state: "계약완료",
       memo: item.memo || ""
