@@ -1154,6 +1154,6 @@
   });
 
   ensureUi();
-  watchRoadviewCloseButton();
+  watchRoadviewViewport();
   warmCurrentLocation();
 })();
