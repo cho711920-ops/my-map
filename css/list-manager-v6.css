@@ -784,3 +784,19 @@ body.v6-menu-open{overflow:auto!important}
     width:124px!important; min-width:124px!important; max-width:124px!important; margin:0!important;
   }
 }
+
+/* v6.3.21 property-card first-row buttons: use the Navi button as the height standard */
+.item-action-row .item-nav-btn,
+.item-action-row .item-roadview-btn,
+.item-action-row .item-list-add-btn,
+.item-action-row .item-edit-btn-v630,
+.item-action-row .item-memo-toggle {
+  height:23px!important;
+  min-height:23px!important;
+  max-height:23px!important;
+  padding-top:0!important;
+  padding-bottom:0!important;
+  line-height:21px!important;
+  box-sizing:border-box!important;
+  align-self:center!important;
+}
