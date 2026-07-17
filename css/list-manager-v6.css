@@ -57,6 +57,115 @@ body.v6-menu-open{overflow:auto!important}
   #map{top:88px!important;height:calc(100vh - 88px)!important}
 }
 
+/* v6.3.27 mobile: compact JS button + guaranteed seven-button command row */
+@media (max-width: 768px) {
+  .header {
+    position:relative!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:4px 6px!important;
+    background:#fff!important;
+    box-sizing:border-box!important;
+  }
+  .header::after {
+    content:"J S"!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:42px!important;
+    height:34px!important;
+    color:#fff!important;
+    background:#1677e8!important;
+    border-radius:8px!important;
+    font-size:14px!important;
+    font-weight:900!important;
+    box-shadow:0 1px 3px rgba(0,0,0,.12)!important;
+  }
+
+  .filters {
+    position:relative!important;
+    display:block!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:4px 6px!important;
+    overflow:visible!important;
+    box-sizing:border-box!important;
+  }
+  .v6-toolbar-primary {
+    position:static!important;
+    display:block!important;
+    width:auto!important;
+    min-width:0!important;
+    height:34px!important;
+  }
+  .v6-toolbar-primary .search-row {
+    position:absolute!important;
+    left:52px!important;
+    top:-38px!important;
+    width:calc(100vw - 58px)!important;
+    max-width:none!important;
+    height:34px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 48px!important;
+    gap:4px!important;
+  }
+  .v6-toolbar-primary .top-reset-btn,
+  .v6-toolbar-primary .detail-btn {
+    position:absolute!important;
+    top:4px!important;
+    width:40px!important;
+    min-width:40px!important;
+    max-width:40px!important;
+    height:34px!important;
+  }
+  .v6-toolbar-primary .top-reset-btn { left:6px!important; }
+  .v6-toolbar-primary .detail-btn { left:50px!important; }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    position:absolute!important;
+    left:94px!important;
+    right:6px!important;
+    top:4px!important;
+    display:grid!important;
+    grid-template-columns:minmax(34px,.78fr) minmax(34px,.78fr) 34px minmax(51px,1.15fr) minmax(56px,1.25fr)!important;
+    grid-template-rows:34px!important;
+    gap:3px!important;
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:34px!important;
+    overflow:visible!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1),
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2),
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select,
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai,
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    position:relative!important;
+    top:auto!important;
+    left:auto!important;
+    right:auto!important;
+    bottom:auto!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:34px!important;
+    min-height:34px!important;
+    max-height:34px!important;
+    margin:0!important;
+    padding:0 1px!important;
+    font-size:9px!important;
+    white-space:nowrap!important;
+    box-sizing:border-box!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column:1!important; }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2) { grid-column:2!important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column:3!important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column:4!important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:5!important; }
+}
+
 /* =========================================================
    v6.3.17 smartphone compact header
    Samsung Internet처럼 화면 폭이 좁은 브라우저에서도 버튼이 겹치지 않도록
@@ -924,4 +1033,59 @@ body.v6-menu-open{overflow:auto!important}
 
   #multiClusterStatus,
   #detailFilter { grid-column:1/-1!important; }
+}
+
+/* v6.3.27 final mobile override (must remain last) */
+@media (max-width: 768px) {
+  .header {
+    position:relative!important; height:42px!important; min-height:42px!important;
+    padding:4px 6px!important; background:#fff!important; font-size:0!important;
+    box-sizing:border-box!important;
+  }
+  .header::after {
+    content:"J S"!important; display:flex!important; align-items:center!important; justify-content:center!important;
+    width:42px!important; height:34px!important; color:#fff!important; background:#1677e8!important;
+    border-radius:8px!important; font-size:14px!important; font-weight:900!important;
+    box-shadow:0 1px 3px rgba(0,0,0,.12)!important;
+  }
+  .filters {
+    position:relative!important; display:block!important; height:42px!important; min-height:42px!important;
+    padding:4px 6px!important; overflow:visible!important; box-sizing:border-box!important;
+  }
+  .v6-toolbar-primary { position:static!important; display:block!important; width:auto!important; min-width:0!important; height:34px!important; }
+  .v6-toolbar-primary .search-row {
+    position:absolute!important; left:52px!important; top:-38px!important;
+    width:calc(100vw - 58px)!important; max-width:none!important; height:34px!important;
+    display:grid!important; grid-template-columns:minmax(0,1fr) 48px!important; gap:4px!important;
+  }
+  .v6-toolbar-primary .top-reset-btn,
+  .v6-toolbar-primary .detail-btn {
+    position:absolute!important; top:4px!important; width:40px!important; min-width:40px!important;
+    max-width:40px!important; height:34px!important; min-height:34px!important; max-height:34px!important;
+    padding:0 1px!important; font-size:10px!important;
+  }
+  .v6-toolbar-primary .top-reset-btn { left:6px!important; }
+  .v6-toolbar-primary .detail-btn { left:50px!important; }
+  .v6-toolbar-secondary.v6-command-bar {
+    position:absolute!important; left:94px!important; right:6px!important; top:4px!important;
+    display:grid!important;
+    grid-template-columns:minmax(34px,.78fr) minmax(34px,.78fr) 34px minmax(51px,1.15fr) minmax(56px,1.25fr)!important;
+    grid-template-rows:34px!important; gap:3px!important; width:auto!important; min-width:0!important;
+    max-width:none!important; height:34px!important; overflow:visible!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1),
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2),
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select,
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai,
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    position:relative!important; top:auto!important; left:auto!important; right:auto!important; bottom:auto!important;
+    grid-row:1!important; width:100%!important; min-width:0!important; max-width:none!important;
+    height:34px!important; min-height:34px!important; max-height:34px!important; margin:0!important;
+    padding:0 1px!important; font-size:9px!important; white-space:nowrap!important; box-sizing:border-box!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column:1!important; }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2) { grid-column:2!important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column:3!important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column:4!important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:5!important; }
 }
