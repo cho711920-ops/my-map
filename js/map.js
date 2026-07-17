@@ -577,6 +577,22 @@ function loadSheet(isAuto) {
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+      }, function(progressItems, remainingCount) {
+        /*
+         * 첫 접속에서는 좌표 캐시가 있는 매물을 먼저 보여 줍니다.
+         * 캐시에 없는 주소는 뒤에서 변환하면서 묶음 단위로 지도에 추가합니다.
+         */
+        if (!progressItems || !progressItems.length) return;
+
+        allItems = progressItems;
+        updateTypeOptions(allItems);
+        preserveActionSelectionDuringRender = !!isAuto;
+        applyFilter();
+        preserveActionSelectionDuringRender = false;
+
+        document.getElementById("status").innerHTML =
+          "저장된 좌표 " + progressItems.length + "개 먼저 표시 / 나머지 " +
+          Math.max(0, Number(remainingCount) || 0) + "개 처리 중...";
       });
     })
     .catch(function(err) {
@@ -587,7 +603,7 @@ function loadSheet(isAuto) {
 }
 
 
-function geocodeItems(items, callback) {
+function geocodeItems(items, callback, progressCallback) {
   var done = [];
   var total = items.length;
   var index = 0;
@@ -601,10 +617,34 @@ function geocodeItems(items, callback) {
   var requestDelay = 170;
   var retryDelay = 450;
   var maxRetry = 1;
+  var lastProgressCount = 0;
 
   if (total === 0) {
     callback([]);
     return;
+  }
+
+  /*
+   * 기존 방식은 캐시 확인도 한 행씩 처리해서 마지막 행이 끝날 때까지
+   * 클러스터가 전혀 보이지 않았습니다. 먼저 전체 캐시를 한 번에 읽어
+   * 좌표가 준비된 매물을 즉시 표시합니다.
+   */
+  items.forEach(function(item) {
+    if (!item || !item.address) return;
+
+    var addressKey = normalizeAddressForCache(item.address);
+    var cached = geocodeCache[addressKey];
+
+    if (cached && cached.lat && cached.lng) {
+      item.latlng = new kakao.maps.LatLng(cached.lat, cached.lng);
+      done.push(item);
+      cachedCount++;
+    }
+  });
+
+  if (cachedCount > 0 && cachedCount < total && typeof progressCallback === "function") {
+    lastProgressCount = done.length;
+    progressCallback(done.slice(), total - done.length);
   }
 
   function updateProgress(mode) {
@@ -633,6 +673,16 @@ function geocodeItems(items, callback) {
       saveGeocodeCache();
       callback(done);
       return;
+    }
+
+    /* 새 좌표마다 전체 DOM을 다시 만들지 않고 8개 단위로 추가 표시합니다. */
+    if (
+      typeof progressCallback === "function" &&
+      done.length > lastProgressCount &&
+      done.length - lastProgressCount >= 8
+    ) {
+      lastProgressCount = done.length;
+      progressCallback(done.slice(), total - index);
     }
 
     setTimeout(processNext, delay || 0);
@@ -686,9 +736,12 @@ function geocodeItems(items, callback) {
     var cached = geocodeCache[addressKey];
 
     if (cached && cached.lat && cached.lng) {
-      item.latlng = new kakao.maps.LatLng(cached.lat, cached.lng);
-      done.push(item);
-      cachedCount++;
+      /* 시작 시 캐시에서 이미 넣은 행은 중복 추가하지 않습니다. */
+      if (!item.latlng) {
+        item.latlng = new kakao.maps.LatLng(cached.lat, cached.lng);
+        done.push(item);
+        cachedCount++;
+      }
       updateProgress("cache");
 
       // 캐시된 주소는 기다리지 않고 빠르게 넘김.
