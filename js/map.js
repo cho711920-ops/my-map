@@ -248,6 +248,19 @@ function scheduleMapIdleRefreshV638() {
     if (viewportKey && viewportKey === jsLastIdleViewportKeyV638) return;
 
     jsLastIdleViewportKeyV638 = viewportKey;
+
+    /*
+     * 이전 화면에서 필터링된 일부 매물만 재사용하면 크게 축소했다가
+     * 확대할 때 빠진 매물이 생깁니다. 지도 범위가 바뀔 때마다 전체
+     * allItems 기준 필터 결과를 다시 계산하되, 무거운 목록 HTML은
+     * 다시 만들지 않고 지도 클러스터만 갱신합니다.
+     */
+    var latestMapItems = typeof getFilteredItems === "function"
+      ? getFilteredItems()
+      : jsLastRenderedItemsV639;
+
+    currentItems = latestMapItems;
+    jsLastRenderedItemsV639 = latestMapItems.slice();
     drawMapClustersOnlyV639(jsLastRenderedItemsV639);
   }, 120);
 }
