@@ -1,12 +1,16 @@
 (function () {
   "use strict";
 
-  var CACHE_PREFIX = "jsPublicCommerceV2:";
+  var CACHE_PREFIX = "jsPublicCommerceV3:";
   var CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   var ANALYSIS_RADIUS = 500;
   var requestSequence = 0;
   var currentDataByItemKey = {};
   var currentAnalysisByItemKey = {};
+  var competitorMapObjects = [];
+  var competitorMapLegend = null;
+  var activeCompetitionItemKey = "";
+  var activeCompetitionSectorId = "";
 
   var SECTORS = [
     { id:"medical", name:"의원·클리닉", pattern:/의료|의원|병원|치과|한의|약국|클리닉/i, floorType:"purpose", minArea:18, maxArea:120 },
@@ -18,6 +22,17 @@
     { id:"retail", name:"소매·편의", pattern:/소매|편의점|슈퍼|의류|화장품|안경|휴대폰|전자|문구|식료품/i, floorType:"storefront", minArea:5, maxArea:80 },
     { id:"life", name:"생활서비스", pattern:/세탁|수리|개인 서비스|반려|애완|사진|인쇄|택배/i, floorType:"flex", minArea:5, maxArea:60 }
   ];
+
+  var SYNERGY_RULES = {
+    medical:[{name:"약국",pattern:/약국/i},{name:"카페",pattern:/카페|커피/i},{name:"뷰티·미용",pattern:/미용|피부 관리|뷰티/i}],
+    education:[{name:"카페",pattern:/카페|커피/i},{name:"문구·서점",pattern:/문구|서점/i},{name:"외식",pattern:/한식|분식|패스트푸드|음식/i}],
+    office:[{name:"카페",pattern:/카페|커피/i},{name:"외식",pattern:/한식|음식|식당/i},{name:"인쇄·사진",pattern:/인쇄|사진/i}],
+    fitness:[{name:"의료",pattern:/의원|의료|병원/i},{name:"뷰티·미용",pattern:/미용|피부 관리|뷰티/i},{name:"카페",pattern:/카페|커피/i}],
+    beauty:[{name:"의료",pattern:/의원|의료|병원/i},{name:"카페",pattern:/카페|커피/i},{name:"화장품·의류",pattern:/화장품|의류/i}],
+    food:[{name:"카페",pattern:/카페|커피/i},{name:"소매",pattern:/편의점|슈퍼|소매/i},{name:"숙박",pattern:/숙박|호텔/i}],
+    retail:[{name:"외식",pattern:/한식|음식|식당/i},{name:"생활서비스",pattern:/세탁|수리|개인 서비스/i},{name:"뷰티·미용",pattern:/미용|피부 관리/i}],
+    life:[{name:"소매",pattern:/편의점|슈퍼|소매/i},{name:"외식",pattern:/한식|음식|식당/i},{name:"뷰티·미용",pattern:/미용|피부 관리/i}]
+  };
 
   function safeNumber(value) {
     var number = Number(value);
@@ -184,6 +199,50 @@
     return result;
   }
 
+  function sectorDefinition(sectorId) {
+    for (var i = 0; i < SECTORS.length; i += 1) {
+      if (SECTORS[i].id === sectorId) return SECTORS[i];
+    }
+    return SECTORS[0];
+  }
+
+  function storesForSector(data, sectorId) {
+    var definition = sectorDefinition(sectorId);
+    return (data && Array.isArray(data.stores) ? data.stores : [])
+      .filter(function (store) {
+        return definition.pattern.test(String(store.medium || ""));
+      })
+      .sort(function (a, b) {
+        return safeNumber(a.distance) - safeNumber(b.distance);
+      });
+  }
+
+  function directionalCompetition(stores, item) {
+    var coords = getCoordinates(item);
+    var counts = { north:0, east:0, south:0, west:0 };
+    if (!coords) return { counts:counts, gap:"확인 불가", dense:"확인 불가" };
+    (stores || []).forEach(function (store) {
+      var dLat = safeNumber(store.lat) - coords.lat;
+      var dLng = safeNumber(store.lng) - coords.lng;
+      if (Math.abs(dLat) >= Math.abs(dLng)) {
+        counts[dLat >= 0 ? "north" : "south"] += 1;
+      } else {
+        counts[dLng >= 0 ? "east" : "west"] += 1;
+      }
+    });
+    var labels = { north:"북쪽", east:"동쪽", south:"남쪽", west:"서쪽" };
+    var keys = Object.keys(counts).sort(function (a, b) { return counts[a] - counts[b]; });
+    return { counts:counts, gap:labels[keys[0]], dense:labels[keys[keys.length - 1]] };
+  }
+
+  function synergyRows(data, sectorId) {
+    var rules = SYNERGY_RULES[sectorId] || [];
+    return rules.map(function (rule) {
+      var metric = aggregateSectorMetric(data, rule.pattern);
+      return { name:rule.name, count300:metric.count300, count100:metric.count100 };
+    }).sort(function (a, b) { return b.count300 - a.count300; });
+  }
+
   function floorFitScore(definition, floor) {
     if (floor.value === null) return 18;
     if (floor.value < 0) {
@@ -345,13 +404,42 @@
   function recommendationHtml(rows) {
     return rows.map(function (row, index) {
       var risk = row.risks.length ? row.risks[0] : "추가 현장조건 확인 필요";
-      return '<article class="commerce-recommend-card">' +
+      return '<article class="commerce-recommend-card" data-sector-id="' + esc(row.id) + '">' +
         '<div class="commerce-recommend-rank"><span>' + (index + 1) + '순위</span><strong>' + esc(row.name) + '</strong><b>' + row.score + '점</b></div>' +
         '<div class="commerce-score-track"><i style="width:' + row.score + '%"></i></div>' +
         '<ul><li>' + esc(row.reasons[0]) + '</li><li>' + esc(row.reasons[1]) + '</li><li>공식 업소: 100m ' + row.metric.count100 + '개 · 300m ' + row.metric.count300 + '개</li></ul>' +
         '<div class="commerce-risk"><span>' + esc(row.competition) + '</span>' + esc(risk) + '</div>' +
+        '<button type="button" onclick="showPublicSectorCompetition(\'' + esc(row.id) + '\')">지도 경쟁업체 보기</button>' +
       '</article>';
     }).join("");
+  }
+
+  function sectorSelectOptions(selectedId) {
+    return SECTORS.map(function (definition) {
+      return '<option value="' + esc(definition.id) + '"' + (definition.id === selectedId ? ' selected' : '') + '>' + esc(definition.name) + '</option>';
+    }).join("");
+  }
+
+  function sectorDetailHtml(data, item, analysis, sectorId) {
+    var definition = sectorDefinition(sectorId);
+    var sector = analysis.sectors.filter(function (row) { return row.id === definition.id; })[0] || analysis.sectors[0];
+    var stores = storesForSector(data, definition.id);
+    var nearest = stores.slice(0, 5);
+    var direction = directionalCompetition(stores, item);
+    var synergy = synergyRows(data, definition.id);
+    var directionCounts = direction.counts;
+    var nearestHtml = nearest.length ? nearest.map(function (store, index) {
+      return '<div class="commerce-nearest-row"><b>' + (index + 1) + '</b><span><strong>' + esc(store.name || store.small || "업소명 미등록") + '</strong><small>' + esc(store.small || store.medium || "") + (store.address ? ' · ' + esc(store.address) : '') + '</small></span><em>' + safeNumber(store.distance) + 'm</em></div>';
+    }).join("") : '<div class="public-commerce-empty">해당 업종군의 개별 업소 위치가 없습니다.</div>';
+    var synergyHtml = synergy.map(function (row) {
+      return '<span><b>' + esc(row.name) + '</b>100m ' + row.count100 + '개 · 300m ' + row.count300 + '개</span>';
+    }).join("");
+
+    return '<div class="commerce-sector-toolbar"><label>상세 분석 업종<select id="commerceSectorSelect" onchange="showPublicSectorCompetition(this.value)">' + sectorSelectOptions(definition.id) + '</select></label><button type="button" onclick="showPublicSectorCompetition(\'' + esc(definition.id) + '\')">지도에 표시</button></div>' +
+      '<div class="commerce-sector-summary"><div><span>100m</span><strong>' + sector.metric.count100 + '개</strong></div><div><span>300m</span><strong>' + sector.metric.count300 + '개</strong></div><div><span>500m</span><strong>' + sector.metric.count500 + '개</strong></div><div><span>최근접</span><strong>' + (sector.metric.nearestDistance === null ? '-' : sector.metric.nearestDistance + 'm') + '</strong></div></div>' +
+      '<div class="commerce-direction"><div><span>상대적 공백 방향</span><strong>' + esc(direction.gap) + '</strong></div><div><span>밀집 방향</span><strong>' + esc(direction.dense) + '</strong></div><small>북 ' + directionCounts.north + ' · 동 ' + directionCounts.east + ' · 남 ' + directionCounts.south + ' · 서 ' + directionCounts.west + '</small></div>' +
+      '<div class="commerce-detail-columns"><section><h5>최근접 경쟁업체</h5>' + nearestHtml + '</section><section><h5>연관 업종 생태계</h5><div class="commerce-synergy-list">' + synergyHtml + '</div></section></div>' +
+      '<p class="commerce-sector-note">지도에는 성능 보호를 위해 가까운 업체부터 업종군별 최대 40개를 표시합니다. 전체 경쟁 수치는 모든 공식 업소를 반영합니다.</p>';
   }
 
   function categoryTableHtml(data) {
@@ -365,8 +453,8 @@
   }
 
   function renderSuccess(target, data, item) {
-    if (safeNumber(data.version) < 2 || !Array.isArray(data.radii)) {
-      target.innerHTML = '<div class="public-commerce-error"><b>전문 분석용 Apps Script 업데이트 필요</b><span>v6.3.36 전체 코드로 교체·배포하면 100·300·500m 비교 분석이 표시됩니다.</span></div>';
+    if (safeNumber(data.version) < 3 || !Array.isArray(data.radii) || !Array.isArray(data.stores)) {
+      target.innerHTML = '<div class="public-commerce-error"><b>경쟁업체 지도용 Apps Script 업데이트 필요</b><span>v6.3.37 전체 코드로 교체·배포하면 업종별 경쟁업체 위치가 표시됩니다.</span></div>';
       return;
     }
 
@@ -375,6 +463,7 @@
     currentDataByItemKey[itemKey] = data;
     currentAnalysisByItemKey[itemKey] = analysis;
     var profileNames = analysis.profiles.slice(0, 2).map(function (row) { return row.name; });
+    var initialSectorId = analysis.recommendations[0] ? analysis.recommendations[0].id : SECTORS[0].id;
     var unsuitable = analysis.unsuitable.map(function (row) {
       var reason = row.floorScore <= 5 ? "층수 유입방식 불일치" : "비교 적합도 낮음";
       return '<span><b>' + esc(row.name) + '</b>' + esc(reason) + '</span>';
@@ -394,10 +483,156 @@
         '<div><span>매물 조건</span><strong>' + esc(analysis.floor.label) + ' · ' + (safeNumber(item && item.area) ? safeNumber(item.area) + '평' : '면적 미입력') + '</strong><small>' + (analysis.perArea ? '평당 월고정비 ' + analysis.perArea + '만원' : '고정비 계산자료 부족') + '</small></div>' +
       '</div>' +
       '<section class="commerce-section"><div class="commerce-section-title"><div><span>매물조건+공식업소 분석</span><h4>우선 제안 임차 타깃</h4></div><small>성공확률이 아닌 비교 적합도</small></div><div class="commerce-recommend-grid">' + recommendationHtml(analysis.recommendations) + '</div></section>' +
+      '<section class="commerce-section commerce-sector-detail"><div class="commerce-section-title"><div><span>업종별 위치 분석</span><h4>경쟁업체 지도·최근접 분석</h4></div><small>버튼을 누르면 지도에 표시</small></div><div id="commerceSectorDetailBody">' + sectorDetailHtml(data, item, analysis, initialSectorId) + '</div></section>' +
       '<section class="commerce-section commerce-unsuitable"><div class="commerce-section-title"><div><span>층수·면적 기준</span><h4>우선순위가 낮은 업종</h4></div></div><div>' + unsuitable + '</div></section>' +
       '<section class="commerce-section"><div class="commerce-section-title"><div><span>공식데이터</span><h4>주요 업종 경쟁·집적 현황</h4></div><small>거리별 영업 업소 수</small></div>' + categoryTableHtml(data) + '</section>' +
       '<div class="public-commerce-evidence">출처: 소상공인시장진흥공단 상가(상권)정보 API · 분석시각 ' + esc(data.generatedAt || "-") + (data.cached ? ' · 캐시 사용' : '') + '<br>업소 수는 공식 데이터의 현재 등록 현황입니다. 상권 유형·임차 타깃·적합도는 매물 층수·면적과 업소 구성을 결합한 JS부동산 분석이며 매출·유동인구 추정값은 포함하지 않습니다.</div>';
   }
+
+  function removeCompetitorLegend() {
+    if (competitorMapLegend && competitorMapLegend.parentNode) {
+      competitorMapLegend.parentNode.removeChild(competitorMapLegend);
+    }
+    competitorMapLegend = null;
+  }
+
+  window.clearPublicCompetitorMap = function () {
+    competitorMapObjects.forEach(function (object) {
+      try { object.setMap(null); } catch (_) {}
+    });
+    competitorMapObjects = [];
+    removeCompetitorLegend();
+    activeCompetitionItemKey = "";
+    activeCompetitionSectorId = "";
+    document.querySelectorAll(".commerce-recommend-card.active").forEach(function (card) {
+      card.classList.remove("active");
+    });
+  };
+
+  function updateLegendStore(store) {
+    if (!competitorMapLegend) return;
+    var detail = competitorMapLegend.querySelector(".commerce-map-legend-detail");
+    if (detail) {
+      detail.textContent = (store.name || store.small || "업소명 미등록") + " · " + safeNumber(store.distance) + "m · " + (store.address || store.small || "");
+    }
+  }
+
+  function createCompetitorLegend(definition, stores, shownCount) {
+    removeCompetitorLegend();
+    var legend = document.createElement("div");
+    legend.className = "commerce-map-legend";
+    legend.innerHTML = '<div><span>경쟁업체 지도</span><strong>' + esc(definition.name) + '</strong><small>전체 ' + stores.length + '개 · 가까운 순 ' + shownCount + '개 표시</small><em class="commerce-map-legend-detail">마커를 누르면 업체 정보가 표시됩니다.</em></div><div class="commerce-map-legend-actions"><button type="button" onclick="restorePublicCompetitionPanel()">카드보기</button><button type="button" onclick="clearPublicCompetitorMap()">표시해제</button></div>';
+    document.body.appendChild(legend);
+    competitorMapLegend = legend;
+  }
+
+  window.restorePublicCompetitionPanel = function () {
+    var panel = document.getElementById("aiSidePanel");
+    if (!panel || !activeCompetitionItemKey) return;
+    panel.setAttribute("aria-hidden", "false");
+    document.body.classList.add("ai-side-panel-open");
+    if (typeof window.relayoutMapAfterAiPanel === "function") window.relayoutMapAfterAiPanel();
+    else if (typeof map !== "undefined" && map && typeof map.relayout === "function") setTimeout(function () { map.relayout(); }, 250);
+  };
+
+  function hidePanelForMobileMap() {
+    if (window.innerWidth > 768) return;
+    var panel = document.getElementById("aiSidePanel");
+    document.body.classList.remove("ai-side-panel-open");
+    if (panel) panel.setAttribute("aria-hidden", "true");
+    if (typeof map !== "undefined" && map && typeof map.relayout === "function") {
+      setTimeout(function () { map.relayout(); }, 220);
+    }
+  }
+
+  function addCompetitionCircles(center) {
+    [100, 300, 500].forEach(function (radius, index) {
+      var colors = ["#0a78ff", "#25a56a", "#7b61ff"];
+      var circle = new kakao.maps.Circle({
+        center:center,
+        radius:radius,
+        strokeWeight:index === 1 ? 2 : 1,
+        strokeColor:colors[index],
+        strokeOpacity:index === 1 ? 0.65 : 0.35,
+        strokeStyle:index === 1 ? "solid" : "dash",
+        fillColor:colors[index],
+        fillOpacity:0.015,
+        zIndex:9000 + index
+      });
+      circle.setMap(map);
+      competitorMapObjects.push(circle);
+    });
+  }
+
+  window.showPublicSectorCompetition = function (sectorId) {
+    var item = getCurrentItem();
+    if (!item) {
+      alert("먼저 매물을 선택해주세요.");
+      return;
+    }
+    var itemKey = String(item.key || "");
+    var data = currentDataByItemKey[itemKey];
+    var analysis = currentAnalysisByItemKey[itemKey];
+    if (!data || safeNumber(data.version) < 3 || !analysis) {
+      alert("경쟁업체 위치 데이터를 불러온 뒤 다시 눌러주세요.");
+      return;
+    }
+    var definition = sectorDefinition(sectorId);
+    var stores = storesForSector(data, definition.id);
+    var detail = document.getElementById("commerceSectorDetailBody");
+    if (detail) detail.innerHTML = sectorDetailHtml(data, item, analysis, definition.id);
+
+    window.clearPublicCompetitorMap();
+    activeCompetitionItemKey = itemKey;
+    activeCompetitionSectorId = definition.id;
+    document.querySelectorAll(".commerce-recommend-card[data-sector-id]").forEach(function (card) {
+      card.classList.toggle("active", card.getAttribute("data-sector-id") === definition.id);
+    });
+
+    if (typeof map === "undefined" || !map || !window.kakao || !kakao.maps) {
+      alert("지도가 준비된 뒤 다시 눌러주세요.");
+      return;
+    }
+    var coords = getCoordinates(item);
+    if (!coords) {
+      alert("매물 좌표가 없어 지도에 표시할 수 없습니다.");
+      return;
+    }
+    var center = new kakao.maps.LatLng(coords.lat, coords.lng);
+    addCompetitionCircles(center);
+
+    var centerContent = document.createElement("div");
+    centerContent.className = "commerce-property-center-marker";
+    centerContent.innerHTML = '<span>매물</span>';
+    var centerOverlay = new kakao.maps.CustomOverlay({ position:center, content:centerContent, xAnchor:0.5, yAnchor:0.5, zIndex:12000 });
+    centerOverlay.setMap(map);
+    competitorMapObjects.push(centerOverlay);
+
+    var markerLimit = 40;
+    var visibleStores = stores.slice(0, markerLimit);
+    visibleStores.forEach(function (store, index) {
+      var markerContent = document.createElement("button");
+      markerContent.type = "button";
+      markerContent.className = "commerce-competitor-marker" + (index < 10 ? " nearest" : "");
+      markerContent.title = (store.name || store.small || definition.name) + " · " + safeNumber(store.distance) + "m";
+      markerContent.setAttribute("aria-label", markerContent.title);
+      markerContent.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        updateLegendStore(store);
+      });
+      var position = new kakao.maps.LatLng(safeNumber(store.lat), safeNumber(store.lng));
+      var overlay = new kakao.maps.CustomOverlay({ position:position, content:markerContent, xAnchor:0.5, yAnchor:0.5, zIndex:10000 - index });
+      overlay.setMap(map);
+      competitorMapObjects.push(overlay);
+    });
+
+    createCompetitorLegend(definition, stores, visibleStores.length);
+    map.setCenter(center);
+    map.setLevel(window.innerWidth <= 768 ? 6 : 5);
+    if (typeof map.relayout === "function") setTimeout(function () { map.relayout(); map.setCenter(center); }, 240);
+    hidePanelForMobileMap();
+  };
 
   function renderError(target, message) {
     target.innerHTML = '<div class="public-commerce-error"><b>공식 상권 브리핑 준비 중</b><span>' + esc(message || "데이터를 불러오지 못했습니다.") + '</span></div>';
@@ -418,7 +653,7 @@
 
     var key = cacheKey(item, coords);
     var cached = readCache(key);
-    if (cached && cached.ok && safeNumber(cached.version) >= 2) {
+    if (cached && cached.ok && safeNumber(cached.version) >= 3) {
       renderSuccess(target, cached, item);
       return;
     }
@@ -437,7 +672,7 @@
         if (!data || !data.ok || data.action !== "commercialArea") {
           throw new Error((data && data.message) || "공식 상권정보 API 설정을 확인해주세요.");
         }
-        if (safeNumber(data.version) >= 2) writeCache(key, data);
+        if (safeNumber(data.version) >= 3) writeCache(key, data);
         renderSuccess(target, data, item);
       })
       .catch(function (error) {
@@ -505,6 +740,18 @@
       lines.push("", "[주요 업종 경쟁·집적]", metricRows(data, "medium").slice(0, 8).map(function (row) {
         return row.name + " 100m " + row.count100 + "개·300m " + row.count300 + "개·500m " + row.count500 + "개";
       }).join(" / "));
+      var selectedSectorId = activeCompetitionItemKey === String((item && item.key) || "") && activeCompetitionSectorId
+        ? activeCompetitionSectorId
+        : (analysis.recommendations[0] ? analysis.recommendations[0].id : SECTORS[0].id);
+      var selectedDefinition = sectorDefinition(selectedSectorId);
+      var selectedStores = storesForSector(data, selectedSectorId);
+      var selectedDirection = directionalCompetition(selectedStores, item);
+      var selectedSynergy = synergyRows(data, selectedSectorId);
+      lines.push("", "[" + selectedDefinition.name + " 경쟁업체 상세]", "전체 500m " + selectedStores.length + "개 / 상대적 공백 " + selectedDirection.gap + " / 밀집 " + selectedDirection.dense);
+      lines.push("최근접 업체: " + selectedStores.slice(0, 5).map(function (store) {
+        return (store.name || store.small || "업소명 미등록") + " " + store.distance + "m";
+      }).join(" / "));
+      lines.push("연관 업종: " + selectedSynergy.map(function (row) { return row.name + " 300m " + row.count300 + "개"; }).join(" / "));
       lines.push("", "분석시각: " + (data.generatedAt || "-"));
     } else {
       lines.push("", "공식 상권 데이터가 아직 준비되지 않았습니다.");

@@ -1976,6 +1976,10 @@ function relayoutMapAfterAiPanel() {
 function openAiSidePanel(item) {
   if (!item) return;
 
+  if (typeof clearPublicCompetitorMap === "function") {
+    clearPublicCompetitorMap();
+  }
+
   var panel = document.getElementById("aiSidePanel");
   var body = document.getElementById("aiSidePanelBody");
   var subtitle = document.getElementById("aiSidePanelSubtitle");
@@ -2013,6 +2017,10 @@ function closeAiSidePanel() {
   var panel = document.getElementById("aiSidePanel");
   var body = document.getElementById("aiSidePanelBody");
   var subtitle = document.getElementById("aiSidePanelSubtitle");
+
+  if (typeof clearPublicCompetitorMap === "function") {
+    clearPublicCompetitorMap();
+  }
 
   document.body.classList.remove("ai-side-panel-open");
 
