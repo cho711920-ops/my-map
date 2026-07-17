@@ -22,6 +22,258 @@ var jsCurrentLocationWatchIdV630 = null;
 var jsMapIdleTimerV638 = null;
 var jsLastIdleViewportKeyV638 = "";
 var jsLastRenderedItemsV639 = [];
+var jsClusterSelectionMemoryV638 = {
+  singleItemIds: [],
+  multiItemIdGroups: []
+};
+
+
+function getStableItemIdentityV638(item) {
+  if (!item) return "";
+
+  var propertyId = String(item.propertyId || "").trim();
+  if (propertyId) return "property:" + propertyId;
+
+  var itemKeyValue = String(item.key || "").trim();
+  if (itemKeyValue) return "key:" + itemKeyValue;
+
+  return "location:" + [
+    item.address || "",
+    item.room || "",
+    item.type || ""
+  ].map(function(value) {
+    return String(value).trim();
+  }).join("|");
+}
+
+
+function getItemsDataSignatureV638(items) {
+  var hash = 2166136261;
+  var count = 0;
+
+  (items || []).forEach(function(item) {
+    count += 1;
+    [
+      item.propertyId,
+      item.key,
+      item.name,
+      item.address,
+      item.room,
+      item.type,
+      item.deposit,
+      item.rent,
+      item.fee,
+      item.premium,
+      item.area,
+      item.landlordPhone,
+      item.tenantPhone,
+      item.memo,
+      item.state,
+      item.regDate,
+      item.source,
+      item.sheetRow
+    ].forEach(function(value) {
+      var textValue = String(value == null ? "" : value) + "\u001f";
+      for (var i = 0; i < textValue.length; i++) {
+        hash ^= textValue.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+    });
+  });
+
+  return count + ":" + (hash >>> 0).toString(16);
+}
+
+
+function getClusterItemIdentitiesV638(cluster) {
+  var seen = Object.create(null);
+
+  return ((cluster && cluster.items) || []).map(function(item) {
+    return getStableItemIdentityV638(item);
+  }).filter(function(identity) {
+    if (!identity || seen[identity]) return false;
+    seen[identity] = true;
+    return true;
+  });
+}
+
+
+function findClusterOverlayByKeyV638(groupKey) {
+  if (!groupKey) return null;
+
+  return (overlays || []).find(function(overlay) {
+    return overlay && overlay.__cluster && overlay.__cluster.key === groupKey;
+  }) || null;
+}
+
+
+function findItemByStableIdentityV638(identity) {
+  if (!identity) return null;
+
+  var currentItem = (allItems || []).find(function(item) {
+    return getStableItemIdentityV638(item) === identity;
+  }) || null;
+
+  if (currentItem) return currentItem;
+
+  for (var i = 0; i < (overlays || []).length; i++) {
+    var cluster = overlays[i] && overlays[i].__cluster;
+    var items = cluster && cluster.items ? cluster.items : [];
+    var matched = items.find(function(item) {
+      return getStableItemIdentityV638(item) === identity;
+    });
+
+    if (matched) return matched;
+  }
+
+  return null;
+}
+
+
+function findBestClusterOverlayV638(itemIdentities, preferredIdentity, usedKeys) {
+  var identitySet = Object.create(null);
+  (itemIdentities || []).forEach(function(identity) {
+    if (identity) identitySet[identity] = true;
+  });
+
+  var bestOverlay = null;
+  var bestScore = 0;
+
+  (overlays || []).forEach(function(overlay) {
+    if (!overlay || !overlay.__cluster) return;
+    if (usedKeys && usedKeys[overlay.__cluster.key]) return;
+
+    var overlapCount = 0;
+    var hasPreferredItem = false;
+
+    (overlay.__cluster.items || []).forEach(function(item) {
+      var identity = getStableItemIdentityV638(item);
+      if (identitySet[identity]) overlapCount += 1;
+      if (preferredIdentity && identity === preferredIdentity) {
+        hasPreferredItem = true;
+      }
+    });
+
+    var score = overlapCount + (hasPreferredItem ? 100000 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestOverlay = overlay;
+    }
+  });
+
+  return bestScore > 0 ? bestOverlay : null;
+}
+
+
+function captureClusterSelectionSnapshotV638() {
+  var selectedItem = selectedItemKey
+    ? (allItems || []).find(function(item) {
+        return item && item.key === selectedItemKey;
+      }) || null
+    : null;
+
+  if (!selectedItem && selectedItemKey) {
+    (overlays || []).some(function(overlay) {
+      selectedItem = ((overlay && overlay.__cluster && overlay.__cluster.items) || []).find(function(item) {
+        return item && item.key === selectedItemKey;
+      }) || null;
+      return !!selectedItem;
+    });
+  }
+
+  var selectedItemIdentity = getStableItemIdentityV638(selectedItem);
+  var singleItemIds = [];
+  var singleOverlay = findClusterOverlayByKeyV638(selectedGroupKey);
+
+  if (singleOverlay) {
+    singleItemIds = getClusterItemIdentitiesV638(singleOverlay.__cluster);
+    jsClusterSelectionMemoryV638.singleItemIds = singleItemIds.slice();
+  } else if (selectedItemIdentity) {
+    singleItemIds = jsClusterSelectionMemoryV638.singleItemIds.length
+      ? jsClusterSelectionMemoryV638.singleItemIds.slice()
+      : [selectedItemIdentity];
+  } else if (selectedGroupKey) {
+    singleItemIds = jsClusterSelectionMemoryV638.singleItemIds.slice();
+  } else {
+    jsClusterSelectionMemoryV638.singleItemIds = [];
+  }
+
+  var multiItemIdGroups = [];
+  if (multiClusterMode && (selectedGroupKeys || []).length) {
+    selectedGroupKeys.forEach(function(groupKey) {
+      var selectedOverlay = findClusterOverlayByKeyV638(groupKey);
+      if (selectedOverlay) {
+        multiItemIdGroups.push(getClusterItemIdentitiesV638(selectedOverlay.__cluster));
+      }
+    });
+
+    if (multiItemIdGroups.length) {
+      jsClusterSelectionMemoryV638.multiItemIdGroups = multiItemIdGroups.map(function(group) {
+        return group.slice();
+      });
+    } else {
+      multiItemIdGroups = jsClusterSelectionMemoryV638.multiItemIdGroups.map(function(group) {
+        return group.slice();
+      });
+    }
+  } else {
+    jsClusterSelectionMemoryV638.multiItemIdGroups = [];
+  }
+
+  return {
+    selectedItemIdentity: selectedItemIdentity,
+    singleItemIds: singleItemIds,
+    multiItemIdGroups: multiItemIdGroups,
+    multiClusterMode: !!multiClusterMode
+  };
+}
+
+
+function restoreClusterSelectionSnapshotV638(snapshot) {
+  if (!snapshot) return;
+
+  var preferredIdentity = snapshot.selectedItemIdentity || "";
+  var restoredItem = findItemByStableIdentityV638(preferredIdentity);
+  if (restoredItem) selectedItemKey = restoredItem.key;
+
+  if (snapshot.multiClusterMode) {
+    var usedKeys = Object.create(null);
+    var restoredGroupKeys = [];
+
+    (snapshot.multiItemIdGroups || []).forEach(function(itemIdentities) {
+      var matchedOverlay = findBestClusterOverlayV638(itemIdentities, "", usedKeys);
+      if (!matchedOverlay || !matchedOverlay.__cluster) return;
+
+      var matchedKey = matchedOverlay.__cluster.key;
+      usedKeys[matchedKey] = true;
+      restoredGroupKeys.push(matchedKey);
+    });
+
+    selectedGroupKey = null;
+    selectedGroupKeys = restoredGroupKeys;
+    jsClusterSelectionMemoryV638.multiItemIdGroups = (snapshot.multiItemIdGroups || []).map(function(group) {
+      return group.slice();
+    });
+    return;
+  }
+
+  selectedGroupKeys = [];
+
+  var singleIds = (snapshot.singleItemIds || []).slice();
+  if (!singleIds.length && preferredIdentity) singleIds.push(preferredIdentity);
+
+  var matchedSingleOverlay = findBestClusterOverlayV638(
+    singleIds,
+    preferredIdentity,
+    null
+  );
+
+  selectedGroupKey = matchedSingleOverlay && matchedSingleOverlay.__cluster
+    ? matchedSingleOverlay.__cluster.key
+    : null;
+
+  jsClusterSelectionMemoryV638.singleItemIds = singleIds;
+}
 
 
 function updateCurrentLocationOverlayV630(position) {
@@ -320,12 +572,14 @@ function captureAutoUpdateViewState() {
   var sidebar = document.getElementById("sidebar");
   var aiBody = document.getElementById("aiSidePanelBody");
   var aiOpen = document.body.classList.contains("ai-side-panel-open");
+  var clusterSelection = captureClusterSelectionSnapshotV638();
 
   return {
     selectedItemKey: selectedItemKey || "",
     selectedGroupKey: selectedGroupKey || "",
     selectedGroupKeys: (selectedGroupKeys || []).slice(),
     multiClusterMode: !!multiClusterMode,
+    clusterSelection: clusterSelection,
     visibleKeys: (visibleListItems || []).map(function(item) {
       return item.key;
     }),
@@ -368,11 +622,16 @@ function restoreAutoUpdateViewState(state) {
   var aiBody = document.getElementById("aiSidePanelBody");
 
   var restoredList = findItemsBySavedKeys(state.visibleKeys);
+  var clusterSelection = state.clusterSelection || null;
   var selectedItem = state.selectedItemKey
     ? (allItems || []).find(function(item) {
         return item.key === state.selectedItemKey;
       }) || null
     : null;
+
+  if (!selectedItem && clusterSelection && clusterSelection.selectedItemIdentity) {
+    selectedItem = findItemByStableIdentityV638(clusterSelection.selectedItemIdentity);
+  }
 
   /*
    * 자동업데이트 전에 보고 있던 리스트가 남아 있으면
@@ -389,21 +648,25 @@ function restoreAutoUpdateViewState(state) {
    * 클러스터 키가 새 렌더링 후에도 존재하면 선택 상태를 유지합니다.
    * 없으면 리스트는 유지하되 클러스터 선택 테두리만 해제합니다.
    */
-  var sameClusterExists = state.selectedGroupKey && overlays.some(function(overlay) {
-    return overlay.__cluster && overlay.__cluster.key === state.selectedGroupKey;
-  });
+  multiClusterMode = !!state.multiClusterMode;
 
-  selectedGroupKey = sameClusterExists ? state.selectedGroupKey : null;
-
-  if (state.multiClusterMode) {
-    multiClusterMode = true;
-    selectedGroupKeys = (state.selectedGroupKeys || []).filter(function(groupKey) {
-      return overlays.some(function(overlay) {
-        return overlay.__cluster && overlay.__cluster.key === groupKey;
-      });
-    });
+  if (clusterSelection) {
+    clusterSelection.multiClusterMode = !!state.multiClusterMode;
+    if (selectedItem && !clusterSelection.selectedItemIdentity) {
+      clusterSelection.selectedItemIdentity = getStableItemIdentityV638(selectedItem);
+    }
+    restoreClusterSelectionSnapshotV638(clusterSelection);
   } else {
-    selectedGroupKeys = [];
+    var sameClusterExists = state.selectedGroupKey && overlays.some(function(overlay) {
+      return overlay.__cluster && overlay.__cluster.key === state.selectedGroupKey;
+    });
+
+    selectedGroupKey = sameClusterExists ? state.selectedGroupKey : null;
+    selectedGroupKeys = state.multiClusterMode
+      ? (state.selectedGroupKeys || []).filter(function(groupKey) {
+          return !!findClusterOverlayByKeyV638(groupKey);
+        })
+      : [];
   }
 
   if (typeof updateMultiClusterButton === "function") {
@@ -457,6 +720,9 @@ function loadSheet(isAuto) {
    * 최초 로딩과 수동 필터 동작에는 영향을 주지 않습니다.
    */
   var autoUpdateViewState = isAuto ? captureAutoUpdateViewState() : null;
+  var autoUpdateDataSignatureV638 = isAuto
+    ? getItemsDataSignatureV638(allItems || [])
+    : "";
 
   isLoadingSheet = true;
   errorItems = [];
@@ -498,7 +764,29 @@ function loadSheet(isAuto) {
       }
 
       geocodeItems(rawItems, function(doneItems) {
+        var hasPendingPropertyEditV638 =
+          typeof pendingPropertyEditStateV634 !== "undefined" &&
+          !!pendingPropertyEditStateV634;
+        var canKeepCurrentRenderV638 =
+          !!isAuto &&
+          !hasPendingPropertyEditV638 &&
+          autoUpdateDataSignatureV638 === getItemsDataSignatureV638(doneItems);
+
         allItems = doneItems;
+
+        /*
+         * 시트 내용이 바뀌지 않은 자동 확인은 기존 DOM과 클러스터를 그대로 둡니다.
+         * 데이터 변경이 있을 때만 아래의 필터/지도/목록 렌더링을 한 번 수행합니다.
+         */
+        if (canKeepCurrentRenderV638) {
+          updateErrorStatus();
+          pendingAutoUpdate = false;
+          isLoadingSheet = false;
+          document.getElementById("status").innerHTML =
+            "자동 업데이트 확인 완료 " + allItems.length + "개";
+          return;
+        }
+
         updateTypeOptions(allItems);
 
         /*
@@ -582,7 +870,7 @@ function loadSheet(isAuto) {
          * 첫 접속에서는 좌표 캐시가 있는 매물을 먼저 보여 줍니다.
          * 캐시에 없는 주소는 뒤에서 변환하면서 묶음 단위로 지도에 추가합니다.
          */
-        if (!progressItems || !progressItems.length) return;
+        if (!progressItems || !progressItems.length || isAuto) return;
 
         allItems = progressItems;
         updateTypeOptions(allItems);
@@ -805,6 +1093,7 @@ function getPremiumClusterSizeClassV635(count) {
 }
 
 function drawMapClustersOnlyV639(items) {
+  var selectionSnapshotV638 = captureClusterSelectionSnapshotV638();
   isRendering = true;
   clearMapOverlaysOnlyV639();
 
@@ -842,7 +1131,12 @@ function drawMapClustersOnlyV639(items) {
     overlays.push(overlay);
   });
 
+  restoreClusterSelectionSnapshotV638(selectionSnapshotV638);
   isRendering = false;
+
+  if (typeof redrawSelectedMarkers === "function") {
+    redrawSelectedMarkers();
+  }
 }
 
 window.mapRoadviewSelectionActive = false;

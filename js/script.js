@@ -2732,6 +2732,7 @@ function remapEditViewStateV634(state, aliases, nextKey) {
     selectedGroupKey: state.selectedGroupKey || "",
     selectedGroupKeys: (state.selectedGroupKeys || []).slice(),
     multiClusterMode: !!state.multiClusterMode,
+    clusterSelection: state.clusterSelection || null,
     visibleKeys: (state.visibleKeys || []).map(function(key) {
       return replaceEditKeyV634(key, aliases, nextKey);
     }),
