@@ -5378,110 +5378,95 @@ body,
 
 
 /* =========================================================
-   v6.3.2 마커 고급화 최종안
-   - 기존 42px 크기 유지
-   - 단일 DOM 마커만 사용
-   - 기본 파랑 / 임장가자 노랑 / 계약완료 어두운 회색
-   - 선택 시 내부색 유지 + 빨간 테두리
+   v6.3.5 Premium Cluster UI
+   - 절제된 플랫 디자인
+   - 수량별 4단계 크기
+   - 기본 파랑 / 임장가자 골드 / 계약완료 차콜
+   - 선택 시 내부색 유지 + 얇은 레드 링
    ========================================================= */
-
 .circle-marker {
-  width: 42px !important;
-  height: 42px !important;
+  --cluster-size: 38px;
+  --cluster-font-size: 14px;
+  --cluster-fill: #2878d8;
+  --cluster-border: #175da9;
+  --cluster-text: #ffffff;
+  width: var(--cluster-size) !important;
+  height: var(--cluster-size) !important;
   box-sizing: border-box !important;
-  border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-
-  border: 2px solid #145fb9 !important;
-  background:
-    radial-gradient(
-      circle at 43% 35%,
-      #62acff 0%,
-      #348bf0 54%,
-      #1769c9 100%
-    ) !important;
-
-  color: #ffffff !important;
-  font-size: 16px !important;
-  font-weight: 900 !important;
+  border: 1.5px solid var(--cluster-border) !important;
+  border-radius: 50% !important;
+  background: var(--cluster-fill) !important;
+  color: var(--cluster-text) !important;
+  font-family: Arial, "Noto Sans KR", sans-serif !important;
+  font-size: var(--cluster-font-size) !important;
+  font-weight: 800 !important;
   line-height: 1 !important;
-  letter-spacing: -0.35px !important;
+  letter-spacing: -0.45px !important;
   text-align: center !important;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.24) !important;
-
-  box-shadow:
-    0 2px 5px rgba(15, 23, 42, 0.24),
-    inset 0 1px 1px rgba(255, 255, 255, 0.34) !important;
-
-  transform: none;
+  text-shadow: 0 1px 1px rgba(9,30,66,.18) !important;
+  box-shadow: 0 2px 5px rgba(15,23,42,.18), 0 1px 1px rgba(15,23,42,.08) !important;
   opacity: 1 !important;
-  cursor: pointer;
-  transition:
-    transform 0.13s ease,
-    border-color 0.13s ease,
-    box-shadow 0.13s ease;
+  transform: translateZ(0) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-font-smoothing: antialiased !important;
+  transition: border-color .16s ease, box-shadow .16s ease, filter .16s ease !important;
 }
+.circle-marker.cluster-size-sm { --cluster-size: 38px; --cluster-font-size: 14px; }
+.circle-marker.cluster-size-md { --cluster-size: 41px; --cluster-font-size: 14.5px; }
+.circle-marker.cluster-size-lg { --cluster-size: 44px; --cluster-font-size: 15px; }
+.circle-marker.cluster-size-xl { --cluster-size: 47px; --cluster-font-size: 15px; letter-spacing: -.7px !important; }
 
-/* 임장가자 */
 .circle-marker.source-gongsil:not(.done) {
-  border-color: #c89c00 !important;
-  background:
-    radial-gradient(
-      circle at 43% 35%,
-      #fff080 0%,
-      #ffdb3f 55%,
-      #d7a900 100%
-    ) !important;
-  color: #27220d !important;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.62) !important;
+  --cluster-fill: #f4c84a;
+  --cluster-border: #c49618;
+  --cluster-text: #3c310f;
+  text-shadow: 0 1px 0 rgba(255,255,255,.48) !important;
 }
-
-/* 계약완료 — 임장가자보다 우선 */
 .circle-marker.done,
 .circle-marker.source-gongsil.done {
-  border-color: #30343a !important;
-  background:
-    radial-gradient(
-      circle at 43% 35%,
-      #737983 0%,
-      #50555d 55%,
-      #2d3137 100%
-    ) !important;
-  color: #ffffff !important;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28) !important;
-  opacity: 0.9 !important;
+  --cluster-fill: #555d68;
+  --cluster-border: #343a43;
+  --cluster-text: #ffffff;
+  opacity: .88 !important;
 }
-
-/* 선택 — 내부 색상은 그대로 두고 테두리만 빨간색 */
 .circle-marker.selected,
 .circle-marker.done.selected,
 .circle-marker.source-gongsil.selected,
 .circle-marker.source-gongsil.done.selected {
-  border: 3px solid #ef3038 !important;
-  background-clip: padding-box !important;
-  box-shadow:
-    0 0 0 2px rgba(239, 48, 56, 0.17),
-    0 3px 8px rgba(15, 23, 42, 0.30),
-    inset 0 1px 1px rgba(255, 255, 255, 0.34) !important;
-  transform: none !important;
+  border-color: #e83f4a !important;
+  box-shadow: 0 0 0 2px rgba(232,63,74,.20), 0 3px 8px rgba(15,23,42,.22) !important;
   opacity: 1 !important;
+  animation: clusterSelectPulseV635 .18s ease-out 1 !important;
 }
-
-/* 기존 출처별 클래스가 남아 있어도 기본 파랑으로 통일 */
+@keyframes clusterSelectPulseV635 {
+  0% { transform: scale(1) translateZ(0); }
+  55% { transform: scale(1.045) translateZ(0); }
+  100% { transform: scale(1) translateZ(0); }
+}
 .circle-marker.source-unknown:not(.source-gongsil):not(.done),
 .circle-marker.source-naver:not(.source-gongsil):not(.done),
 .circle-marker.source-danggeun:not(.source-gongsil):not(.done),
 .circle-marker.source-direct:not(.source-gongsil):not(.done),
 .circle-marker.source-mixed:not(.source-gongsil):not(.done) {
-  border-color: #145fb9 !important;
-  background:
-    radial-gradient(
-      circle at 43% 35%,
-      #62acff 0%,
-      #348bf0 54%,
-      #1769c9 100%
-    ) !important;
-  color: #ffffff !important;
+  --cluster-fill: #2878d8;
+  --cluster-border: #175da9;
+  --cluster-text: #ffffff;
 }
+@media (hover:hover) and (pointer:fine) {
+  .circle-marker:hover {
+    filter: brightness(1.035) saturate(1.02) !important;
+    box-shadow: 0 3px 8px rgba(15,23,42,.22), 0 1px 1px rgba(15,23,42,.08) !important;
+  }
+  .circle-marker.selected:hover {
+    box-shadow: 0 0 0 2px rgba(232,63,74,.22), 0 4px 9px rgba(15,23,42,.24) !important;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .circle-marker { transition:none !important; }
+  .circle-marker.selected { animation:none !important; }
+}
+
