@@ -10,6 +10,7 @@
   var lastKnownLocation = null;
   var locationWarmupStarted = false;
   var roadviewCloseObserver = null;
+  var completionSaving = false;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -893,6 +894,7 @@
   }
 
   function requestComplete() {
+    if (completionSaving) return;
     var modal = document.getElementById("aiVisitCompleteModal");
     if (!modal) return;
     var message = document.getElementById("aivCompleteTitle");
@@ -926,30 +928,44 @@
   }
 
   function completeCurrent(convertToChecked) {
-    if (!activeSession) return;
+    if (!activeSession || completionSaving) return;
     var item = currentItem();
     if (!item) return;
+    if (!convertToChecked) {
+      closeCompleteConfirm();
+      finishCurrentCompletion(item);
+      return;
+    }
+    completionSaving = true;
     var buttons = document.querySelectorAll("#aiVisitCompleteModal .aiv-complete-actions button");
-    buttons.forEach(function (entry) { entry.disabled = true; });
-    var nextMemo = convertToChecked ? cleanVisitMemo(currentMemoValue()) : currentMemoValue();
+    buttons.forEach(function (entry) { entry.disabled = true; entry.textContent = "시트 반영 중..."; });
+    var message = document.getElementById("aivCompleteTitle");
+    if (message) message.textContent = "선택한 매물의 메모를 변경하고 있습니다.";
+    var nextMemo = cleanVisitMemo(currentMemoValue());
     saveMemoToSheet(item, nextMemo, function (ok, message) {
+      completionSaving = false;
       if (!ok) {
-        buttons.forEach(function (entry) { entry.disabled = false; });
+        closeCompleteConfirm();
         alert(message || "메모 저장에 실패했습니다. 다시 시도해주세요.");
         return;
       }
-      activeSession.statuses = activeSession.statuses || {};
-      activeSession.statuses[item.key] = "done";
-      activeSession.updatedAt = new Date().toISOString();
       closeCompleteConfirm();
-      var nextIndex = window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.nextPendingIndex === "function"
-        ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, activeSession.currentIndex)
-        : -1;
-      if (nextIndex >= 0) activeSession.currentIndex = nextIndex;
-      saveSession();
-      renderWorkspace();
-      if (nextIndex < 0) alert("모든 매물의 임장 처리가 끝났습니다.");
+      finishCurrentCompletion(item);
     });
+  }
+
+  function finishCurrentCompletion(item) {
+    if (!activeSession || !item) return;
+    activeSession.statuses = activeSession.statuses || {};
+    activeSession.statuses[item.key] = "done";
+    activeSession.updatedAt = new Date().toISOString();
+    var nextIndex = window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.nextPendingIndex === "function"
+      ? window.JSAiVisitRouteV6.nextPendingIndex(activeSession, activeSession.currentIndex)
+      : -1;
+    if (nextIndex >= 0) activeSession.currentIndex = nextIndex;
+    saveSession();
+    renderWorkspace();
+    if (nextIndex < 0) alert("모든 매물의 임장 처리가 끝났습니다.");
   }
 
   function requestUnhold(index) {
