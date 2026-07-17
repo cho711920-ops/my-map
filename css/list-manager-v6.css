@@ -1097,6 +1097,12 @@ body.v6-menu-open{overflow:auto!important}
     width:calc(100vw - 65px)!important; max-width:none!important; height:34px!important;
     display:grid!important; grid-template-columns:minmax(0,1fr) 48px!important; gap:5px!important;
   }
+  .v6-toolbar-primary .search-btn {
+    width:48px!important;
+    min-width:48px!important;
+    max-width:48px!important;
+    padding:0!important;
+  }
   .v6-toolbar-primary .top-reset-btn,
   .v6-toolbar-primary .detail-btn {
     position:absolute!important; top:4px!important; width:40px!important; min-width:40px!important;
