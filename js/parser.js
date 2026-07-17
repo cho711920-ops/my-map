@@ -2080,8 +2080,11 @@ function updateQuickAddWarning() {
     return;
   }
 
-  var maxVisible = 6;
-  var visibleItems = same.slice(0, maxVisible);
+  /*
+   * v6.3.6.2: 같은 주소의 중복 후보를 개수 제한 없이 전부 표시합니다.
+   * 목록 자체가 빠른등록 창 안에서 스크롤되므로 매물이 많아도 확인할 수 있습니다.
+   */
+  var visibleItems = same.slice();
 
   var rows = visibleItems.map(function(item, index) {
     var type = escapeHtml((item && item.type) || (item && item.name) || "구분 없음");
@@ -2111,8 +2114,6 @@ function updateQuickAddWarning() {
     );
   });
 
-  var remainder = same.length - visibleItems.length;
-
   box.style.display = "block";
   box.innerHTML =
     '<div class="quick-duplicate-head-v6351">' +
@@ -2120,11 +2121,6 @@ function updateQuickAddWarning() {
       '<span>구분·호실·임대조건·평수를 비교하세요.</span>' +
     '</div>' +
     '<div class="quick-duplicate-list-v6351">' + rows.join("") + '</div>' +
-    (
-      remainder > 0
-        ? '<div class="quick-duplicate-more-v6351">외 ' + remainder + '건이 더 있습니다.</div>'
-        : ""
-    ) +
     '<div class="quick-duplicate-foot-v6351">완전 중복은 차단되며, 평수만 다르면 확인 후 등록할 수 있습니다.</div>';
 
   updateQuickAddPreview();
