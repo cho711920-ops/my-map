@@ -1094,7 +1094,7 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-primary { position:static!important; display:block!important; width:auto!important; min-width:0!important; height:34px!important; }
   .v6-toolbar-primary .search-row {
     position:absolute!important; left:59px!important; top:-38px!important;
-    width:63vw!important; max-width:260px!important; height:34px!important;
+    width:calc(100vw - 65px)!important; max-width:none!important; height:34px!important;
     display:grid!important; grid-template-columns:minmax(0,1fr) 48px!important; gap:5px!important;
   }
   .v6-toolbar-primary .top-reset-btn,
