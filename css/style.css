@@ -5636,3 +5636,258 @@ body,
   }
 }
 
+/* =========================================================
+   v6.3.6 빠른등록 중복목록 압축 / 평수 인라인 / 확인창 / 토스트
+   ========================================================= */
+.quick-add-warning {
+  max-height: 330px !important;
+}
+
+.quick-duplicate-head-v6351 {
+  margin-bottom: 6px !important;
+}
+
+.quick-duplicate-list-v6351 {
+  gap: 4px !important;
+}
+
+.quick-duplicate-row-v6351 {
+  grid-template-columns: 28px minmax(105px, .72fr) minmax(280px, 2.28fr) !important;
+  gap: 7px !important;
+  min-height: 38px !important;
+  padding: 5px 8px !important;
+  border-radius: 8px !important;
+}
+
+.quick-duplicate-no-v6351 {
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+
+.quick-duplicate-type-v6351 strong {
+  font-size: 11.5px !important;
+  line-height: 1.2 !important;
+}
+
+.quick-duplicate-type-v6351 strong span {
+  display: inline !important;
+  margin: 0 !important;
+  color: #5f6b7a !important;
+  font-size: 10.5px !important;
+  font-weight: 750 !important;
+}
+
+.quick-duplicate-condition-v6351 {
+  padding-left: 9px !important;
+  font-size: 11.5px !important;
+  line-height: 1.25 !important;
+}
+
+.quick-duplicate-area-v6351 {
+  display: none !important;
+}
+
+.quick-duplicate-more-v6351,
+.quick-duplicate-foot-v6351 {
+  margin-top: 6px !important;
+  font-size: 10.5px !important;
+}
+
+/* 평수 차이 확인창 */
+.quick-area-confirm-v636 {
+  position: fixed;
+  inset: 0;
+  z-index: 310000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.quick-area-confirm-v636.open {
+  display: flex;
+}
+
+.quick-area-confirm-backdrop-v636 {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .46);
+  backdrop-filter: blur(2px);
+}
+
+.quick-area-confirm-dialog-v636 {
+  position: relative;
+  width: min(440px, 100%);
+  padding: 20px;
+  border: 1px solid #d9e2ee;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 22px 70px rgba(15, 23, 42, .28);
+  text-align: center;
+}
+
+.quick-area-confirm-icon-v636 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: #fff4df;
+  color: #c56a00;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.quick-area-confirm-title-v636 {
+  color: #172033;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.quick-area-confirm-desc-v636 {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.quick-area-confirm-compare-v636 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.quick-area-confirm-compare-v636 > div {
+  padding: 11px 8px;
+  border: 1px solid #dce5f0;
+  border-radius: 11px;
+  background: #f8fafc;
+}
+
+.quick-area-confirm-compare-v636 span,
+.quick-area-confirm-compare-v636 strong {
+  display: block;
+}
+
+.quick-area-confirm-compare-v636 span {
+  color: #7a8697;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.quick-area-confirm-compare-v636 strong {
+  margin-top: 4px;
+  color: #1769d2;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.quick-area-confirm-note-v636 {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #fff9ed;
+  color: #8a5a19;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.quick-area-confirm-actions-v636 {
+  display: grid;
+  grid-template-columns: 1fr 1.55fr;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.quick-area-confirm-actions-v636 button {
+  min-height: 40px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.quick-area-cancel-v636 {
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #475467;
+}
+
+.quick-area-continue-v636 {
+  border: 1px solid #1769d2;
+  background: #1f78e5;
+  color: #fff;
+}
+
+/* 등록 요청 즉시 안내 */
+.quick-add-toast-v636 {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  z-index: 320000;
+  max-width: min(520px, calc(100vw - 28px));
+  padding: 11px 15px;
+  border: 1px solid #b8ddc5;
+  border-radius: 11px;
+  background: rgba(239, 253, 244, .98);
+  color: #067647;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .20);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -12px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.quick-add-toast-v636.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.quick-add-toast-v636.error {
+  border-color: #fecaca;
+  background: rgba(254, 242, 242, .98);
+  color: #b42318;
+}
+
+@media (max-width: 700px) {
+  .quick-duplicate-row-v6351 {
+    grid-template-columns: 24px minmax(0, 1fr) !important;
+    min-height: 42px !important;
+    padding: 5px 7px !important;
+  }
+
+  .quick-duplicate-condition-v6351 {
+    grid-column: 2 !important;
+    padding-left: 0 !important;
+    border-left: 0 !important;
+    white-space: normal !important;
+  }
+
+  .quick-area-confirm-dialog-v636 {
+    padding: 17px 14px;
+  }
+
+  .quick-area-confirm-actions-v636 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .quick-add-toast-v636 {
+    top: 14px;
+    font-size: 11.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-add-toast-v636 {
+    transition: none;
+  }
+}
+
