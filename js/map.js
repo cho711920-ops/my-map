@@ -806,6 +806,14 @@ function setMapRoadviewSelection(active) {
       : "지도에서 로드뷰 선택";
   }
   if (mapElement) mapElement.classList.toggle("roadview-pick-mode", window.mapRoadviewSelectionActive);
+
+  if (map && kakao && kakao.maps && kakao.maps.MapTypeId) {
+    if (window.mapRoadviewSelectionActive) {
+      map.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+    } else {
+      map.removeOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+    }
+  }
 }
 
 function toggleMapRoadviewSelection() {
