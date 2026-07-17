@@ -590,6 +590,17 @@ function clearMap() {
 }
 
 
+/* =========================================================
+   v6.3.5 Premium Cluster UI — 수량별 크기 클래스
+   ========================================================= */
+function getPremiumClusterSizeClassV635(count) {
+  var value = Number(count) || 0;
+  if (value >= 100) return " cluster-size-xl";
+  if (value >= 50) return " cluster-size-lg";
+  if (value >= 10) return " cluster-size-md";
+  return " cluster-size-sm";
+}
+
 function drawItems(items) {
   isRendering = true;
   clearMap();
@@ -614,7 +625,7 @@ function drawItems(items) {
      * 클러스터 안의 모든 매물이 거래완료일 때만 done 클래스가 붙어 회색이 됩니다.
      */
     var overlayContent =
-      '<div class="circle-marker' + gongsilClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
       position: cluster.latlng,
@@ -733,7 +744,7 @@ function redrawSelectedMarkers() {
      * 일반 클러스터는 파란색, 전부 거래완료인 클러스터만 회색을 유지합니다.
      */
     var content =
-      '<div class="circle-marker' + gongsilClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     o.setContent(content);
   });
