@@ -734,3 +734,52 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:4/span 3!important; grid-row:2!important; }
   .v6-toolbar-secondary .map-roadview-select svg { width:25px!important; height:25px!important; }
 }
+
+/* v6.3.19 tablet/desktop command bar: match the View button height and prevent overlap */
+@media (min-width: 769px) {
+  .v6-toolbar-secondary.v6-command-bar > *,
+  .v6-toolbar-secondary .v6-command-menu,
+  .v6-toolbar-secondary .v6-command-trigger,
+  .v6-toolbar-secondary .v6-primary-action,
+  .v6-toolbar-secondary .quick-add-btn {
+    height:42px!important;
+    min-height:42px!important;
+    margin-top:0!important;
+    margin-bottom:0!important;
+    box-sizing:border-box!important;
+  }
+  .v6-toolbar-secondary .map-roadview-select {
+    width:42px!important;
+    min-width:42px!important;
+    max-width:42px!important;
+    padding:0!important;
+  }
+}
+
+@media (min-width: 1100px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    display:grid!important;
+    grid-template-columns:88px 88px 50px 112px 124px!important;
+    grid-template-rows:42px!important;
+    gap:8px!important;
+    width:494px!important;
+    min-width:494px!important;
+    max-width:494px!important;
+    margin:0!important;
+    overflow:visible!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column:1!important; grid-row:1!important; width:88px!important; }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2) { grid-column:2!important; grid-row:1!important; width:88px!important; margin:0!important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select {
+    grid-column:3!important; grid-row:1!important;
+    width:50px!important; min-width:50px!important; max-width:50px!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai {
+    grid-column:4!important; grid-row:1!important;
+    width:112px!important; min-width:112px!important; max-width:112px!important; margin:0!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    grid-column:5!important; grid-row:1!important;
+    width:124px!important; min-width:124px!important; max-width:124px!important; margin:0!important;
+  }
+}
