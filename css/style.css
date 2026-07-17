@@ -5423,7 +5423,7 @@ body,
 .circle-marker.source-gongsil:not(.done) {
   --cluster-fill: rgba(255, 207, 38, .72);
   --cluster-border: transparent;
-  --cluster-text: #332900;
+  --cluster-text: #ffffff;
   text-shadow: none !important;
 }
 .circle-marker.done,
