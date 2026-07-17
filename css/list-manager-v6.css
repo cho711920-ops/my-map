@@ -678,15 +678,15 @@ body.v6-menu-open{overflow:auto!important}
   }
 }
 
-/* v6.3.18 final smartphone override - keep this block last */
+/* v6.3.20 final smartphone override */
 @media (max-width: 768px) {
-  .header { min-height:42px!important; height:42px!important; padding:0 14px!important; font-size:19px!important; }
+  .header { min-height:36px!important; height:36px!important; padding:0 14px!important; font-size:18px!important; }
   .filters { height:auto!important; min-height:0!important; padding:7px 10px 8px!important; gap:5px!important; overflow:visible!important; }
 
   .v6-toolbar-primary {
     display:grid!important;
     grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
-    grid-template-rows:44px 44px!important;
+    grid-template-rows:34px 34px!important;
     gap:5px!important;
     width:100%!important;
     margin:0!important;
@@ -697,10 +697,11 @@ body.v6-menu-open{overflow:auto!important}
     gap:5px!important; width:100%!important; margin:0!important;
   }
   .v6-toolbar-primary .search-row input,
+  .v6-toolbar-primary .search-row #keyword,
   .v6-toolbar-primary .search-btn,
   .v6-toolbar-primary .top-reset-btn,
   .v6-toolbar-primary .detail-btn {
-    height:100%!important; min-height:0!important; margin:0!important;
+    height:34px!important; min-height:34px!important; max-height:34px!important; margin:0!important;
     padding:0 9px!important; border-radius:9px!important; font-size:13px!important;
     box-sizing:border-box!important;
   }
@@ -710,7 +711,7 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary.v6-command-bar {
     display:grid!important;
     grid-template-columns:repeat(6,minmax(0,1fr))!important;
-    grid-template-rows:44px 44px!important;
+    grid-template-rows:34px 34px!important;
     gap:5px!important;
     width:100%!important; max-width:none!important; min-width:0!important;
     margin:0!important; overflow:visible!important; box-sizing:border-box!important;
@@ -722,9 +723,9 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary .quick-add-btn {
     position:relative!important;
     width:100%!important; min-width:0!important; max-width:none!important;
-    height:44px!important; min-height:44px!important;
+    height:34px!important; min-height:34px!important; max-height:34px!important;
     margin:0!important; padding:0 5px!important;
-    border-radius:10px!important; font-size:13px!important; line-height:1!important;
+    border-radius:8px!important; font-size:12px!important; line-height:1!important;
     box-sizing:border-box!important;
   }
   .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column:1/span 2!important; grid-row:1!important; }
@@ -732,7 +733,7 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column:5/span 2!important; grid-row:1!important; padding:0!important; }
   .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column:1/span 3!important; grid-row:2!important; }
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:4/span 3!important; grid-row:2!important; }
-  .v6-toolbar-secondary .map-roadview-select svg { width:25px!important; height:25px!important; }
+  .v6-toolbar-secondary .map-roadview-select svg { width:22px!important; height:22px!important; }
 }
 
 /* v6.3.19 tablet/desktop command bar: match the View button height and prevent overlap */
