@@ -405,11 +405,10 @@
     document.getElementById("aivWorkspaceTitle").textContent = "AI임장 · " + activeSession.listName;
     var statuses = activeSession.statuses || {};
     var holdCount = Object.keys(statuses).filter(function (key) { return statuses[key] === "hold"; }).length;
-    var percent = window.JSAiVisitUiV6 && typeof window.JSAiVisitUiV6.progress === "function"
-      ? window.JSAiVisitUiV6.progress(activeSession.currentIndex, items.length)
-      : Math.round(((activeSession.currentIndex + 1) / Math.max(1, items.length)) * 100);
+    var doneCount = Object.keys(statuses).filter(function (key) { return statuses[key] === "done"; }).length;
+    var percent = Math.round((doneCount / Math.max(1, items.length)) * 100);
     document.getElementById("aivWorkspaceProgress").innerHTML =
-      '<span class="aiv-progress-text">' + (activeSession.currentIndex + 1) + ' / ' + items.length + ' 진행 중' + (holdCount ? ' · 보류 ' + holdCount : '') + '</span>' +
+      '<span class="aiv-progress-text">완료 ' + doneCount + ' / ' + items.length + ' · 현재 ' + (activeSession.currentIndex + 1) + '번' + (holdCount ? ' · 보류 ' + holdCount : '') + '</span>' +
       '<span class="aiv-progress-track"><i style="width:' + percent + '%"></i></span>';
     document.getElementById("aivRouteCount").textContent = items.length + "개";
     document.getElementById("aivCurrentCard").innerHTML = renderCurrentCard(current, activeSession.currentIndex, items.length);
@@ -578,6 +577,16 @@
       var intentUrl = "intent://route?ep=" + encodeURIComponent(ep) +
         "&by=CAR&ename=" + destinationName +
         "#Intent;scheme=kakaomap;package=net.daum.android.map;end";
+      var fallbackTimer = window.setTimeout(function () {
+        window.location.href = "https://map.kakao.com/link/to/" + destinationName + "," + endLat.toFixed(7) + "," + endLng.toFixed(7);
+      }, 1800);
+      var cancelFallback = function () {
+        if (document.hidden) {
+          window.clearTimeout(fallbackTimer);
+          document.removeEventListener("visibilitychange", cancelFallback);
+        }
+      };
+      document.addEventListener("visibilitychange", cancelFallback);
       window.location.href = intentUrl;
       return;
     }
@@ -799,6 +808,42 @@
       .trim();
   }
 
+  function createMutationRequestId() {
+    return "aiv-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function pollMutationResult(requestId, callback, attempt) {
+    var currentAttempt = Number(attempt) || 0;
+    if (currentAttempt >= 18) return callback(false, "서버 저장 결과 확인 시간이 초과되었습니다.");
+    var callbackName = "__aivMutation_" + Date.now() + "_" + currentAttempt;
+    var script = document.createElement("script");
+    var settled = false;
+    function cleanup() {
+      if (script.parentNode) script.parentNode.removeChild(script);
+      try { delete window[callbackName]; } catch (error) { window[callbackName] = undefined; }
+    }
+    window[callbackName] = function (response) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (!response || !response.ready) {
+        return window.setTimeout(function () { pollMutationResult(requestId, callback, currentAttempt + 1); }, 450);
+      }
+      var result = response.result || {};
+      callback(result.ok === true, result.message || "");
+    };
+    script.onerror = function () {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      window.setTimeout(function () { pollMutationResult(requestId, callback, currentAttempt + 1); }, 450);
+    };
+    script.src = window.saveApiURL + (window.saveApiURL.indexOf("?") >= 0 ? "&" : "?") +
+      "action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
+      "&callback=" + encodeURIComponent(callbackName) + "&_=" + Date.now();
+    document.head.appendChild(script);
+  }
+
   function saveMemoToSheet(item, memo, callback) {
     if (!item) return callback(false);
     if (!window.saveApiURL) {
@@ -808,9 +853,13 @@
     }
     var previousMemo = item.memo || "";
     item.memo = memo;
+    var requestId = createMutationRequestId();
     var payload = {
       action: "toggleDone",
+      requestId: requestId,
+      row: item.sheetRow || 0,
       key: {
+        propertyId: item.propertyId || "",
         name: item.name || "",
         address: item.address || "",
         room: item.room || "",
@@ -825,10 +874,17 @@
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     }).then(function () {
-      callback(true);
-      window.setTimeout(function () {
-        if (typeof window.loadSheet === "function") window.loadSheet(true);
-      }, 1400);
+      pollMutationResult(requestId, function (ok, message) {
+        if (!ok) {
+          item.memo = previousMemo;
+          callback(false, message);
+          return;
+        }
+        callback(true, message);
+        window.setTimeout(function () {
+          if (typeof window.loadSheet === "function") window.loadSheet(true);
+        }, 500);
+      });
     }).catch(function (error) {
       console.error(error);
       item.memo = previousMemo;
@@ -838,29 +894,48 @@
 
   function requestComplete() {
     var modal = document.getElementById("aiVisitCompleteModal");
+    if (!modal) return;
+    var message = document.getElementById("aivCompleteTitle");
+    var actions = modal.querySelector(".aiv-complete-actions");
+    if (!message || !actions) return;
+    message.textContent = "임장을 완료할까요?";
+    actions.innerHTML =
+      '<button type="button" class="aiv-btn secondary" onclick="JSAiVisitV6.closeCompleteConfirm()">취소</button>' +
+      '<button type="button" class="aiv-btn primary" id="aivCompleteConfirmBtn">완료</button>';
     var button = document.getElementById("aivCompleteConfirmBtn");
-    if (!modal || !button) return;
     button.disabled = false;
     button.textContent = "완료";
-    button.onclick = completeCurrent;
+    button.onclick = askVisitConversion;
     openModal("aiVisitCompleteModal");
+  }
+
+  function askVisitConversion() {
+    var message = document.getElementById("aivCompleteTitle");
+    var actions = document.querySelector("#aiVisitCompleteModal .aiv-complete-actions");
+    if (!message || !actions) return;
+    message.textContent = "해당 매물을 임장확인 매물로 변경하시겠습니까?";
+    actions.innerHTML =
+      '<button type="button" class="aiv-btn secondary" id="aivKeepVisitBtn">아니오</button>' +
+      '<button type="button" class="aiv-btn primary" id="aivConvertVisitBtn">예</button>';
+    document.getElementById("aivKeepVisitBtn").onclick = function () { completeCurrent(false); };
+    document.getElementById("aivConvertVisitBtn").onclick = function () { completeCurrent(true); };
   }
 
   function closeCompleteConfirm() {
     closeModal("aiVisitCompleteModal");
   }
 
-  function completeCurrent() {
+  function completeCurrent(convertToChecked) {
     if (!activeSession) return;
     var item = currentItem();
     if (!item) return;
-    var button = document.getElementById("aivCompleteConfirmBtn");
-    if (button) { button.disabled = true; button.textContent = "저장중..."; }
-    var nextMemo = cleanVisitMemo(currentMemoValue());
-    saveMemoToSheet(item, nextMemo, function (ok) {
+    var buttons = document.querySelectorAll("#aiVisitCompleteModal .aiv-complete-actions button");
+    buttons.forEach(function (entry) { entry.disabled = true; });
+    var nextMemo = convertToChecked ? cleanVisitMemo(currentMemoValue()) : currentMemoValue();
+    saveMemoToSheet(item, nextMemo, function (ok, message) {
       if (!ok) {
-        if (button) { button.disabled = false; button.textContent = "완료"; }
-        alert("메모 저장에 실패했습니다. 다시 시도해주세요.");
+        buttons.forEach(function (entry) { entry.disabled = false; });
+        alert(message || "메모 저장에 실패했습니다. 다시 시도해주세요.");
         return;
       }
       activeSession.statuses = activeSession.statuses || {};

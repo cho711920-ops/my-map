@@ -49,6 +49,7 @@
     var watchIds = [];
     var timers = [];
     var errors = [];
+    var bestLocation = null;
 
     function clearAll() {
       watchIds.forEach(function (id) {
@@ -88,8 +89,16 @@
     function accept(position, source) {
       var location = normalize(position, source);
       if (!location) return false;
-      saveLocation(location);
-      finish(location, null);
+      var age = Math.max(0, Date.now() - Number(location.timestamp || 0));
+      if (age > 5 * 60 * 1000) return false;
+      if (!bestLocation || (!location.accuracy && bestLocation.accuracy) ||
+          (location.accuracy && location.accuracy < bestLocation.accuracy)) {
+        bestLocation = location;
+      }
+      if (location.accuracy > 0 && location.accuracy <= 60) {
+        saveLocation(location);
+        finish(location, null);
+      }
       return true;
     }
 
@@ -107,7 +116,7 @@
       var lowWatch = navigator.geolocation.watchPosition(
         function (position) { accept(position, "watch-low"); },
         function (error) { recordError("watch-low", error); },
-        { enableHighAccuracy: false, maximumAge: Infinity, timeout: 20000 }
+        { enableHighAccuracy: false, maximumAge: 300000, timeout: 15000 }
       );
       watchIds.push(lowWatch);
     } catch (error) { recordError("watch-low", error); }
@@ -116,7 +125,7 @@
       navigator.geolocation.getCurrentPosition(
         function (position) { accept(position, "current-low"); },
         function (error) { recordError("current-low", error); },
-        { enableHighAccuracy: false, timeout: 12000, maximumAge: Infinity }
+        { enableHighAccuracy: false, timeout: 9000, maximumAge: 300000 }
       );
     } catch (error) { recordError("current-low", error); }
 
@@ -139,6 +148,15 @@
         watchIds.push(highWatch);
       } catch (error) { recordError("watch-high", error); }
     }, 1200));
+
+    /* 빠른 저정밀 응답을 곧바로 확정하지 않고 잠시 더 정확한 GPS를 기다립니다. */
+    timers.push(window.setTimeout(function () {
+      if (finished || !bestLocation) return;
+      saveLocation(bestLocation);
+      finish(bestLocation, bestLocation.accuracy > 150
+        ? { code: "LOW_ACCURACY", message: "위치 정확도가 낮아 근사 위치를 사용했습니다." }
+        : null);
+    }, 4200));
 
     /* 기기 위치가 늦게 도착할 때를 고려해 최대 25초 기다립니다.
        그래도 실패하면 30분 이내 저장 위치를 마지막 안전장치로 사용합니다. */
@@ -188,6 +206,27 @@
       var next = valid.splice(nearestIndex, 1)[0];
       result.push(next.key);
       cursor = next.coords;
+    }
+    /* 최근접 순서에 2-opt를 적용해 불필요하게 교차하는 동선을 줄입니다. */
+    var improved = true;
+    var passes = 0;
+    while (improved && passes < 8 && result.length > 3) {
+      improved = false;
+      passes += 1;
+      for (var i = 0; i < result.length - 2; i += 1) {
+        for (var j = i + 1; j < result.length - 1; j += 1) {
+          var beforeKey = i === 0 ? null : result[i - 1];
+          var a = beforeKey ? getCoords(getItem(beforeKey)) : startLocation;
+          var b = getCoords(getItem(result[i]));
+          var c = getCoords(getItem(result[j]));
+          var d = getCoords(getItem(result[j + 1]));
+          if (distanceMeters(a, b) + distanceMeters(c, d) >
+              distanceMeters(a, c) + distanceMeters(b, d) + 1) {
+            result.splice.apply(result, [i, j - i + 1].concat(result.slice(i, j + 1).reverse()));
+            improved = true;
+          }
+        }
+      }
     }
     return result.concat(invalid);
   }
