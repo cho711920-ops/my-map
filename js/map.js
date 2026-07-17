@@ -397,6 +397,13 @@ function loadSheet(isAuto) {
           restoreAutoUpdateViewState(autoUpdateViewState);
         }
 
+        /*
+         * 수정 저장 직후라면 기존 key 복원보다 새 key 복원을 마지막에 적용합니다.
+         */
+        if (typeof restorePropertyEditAfterReloadV632 === "function") {
+          restorePropertyEditAfterReloadV632();
+        }
+
         preserveActionSelectionDuringRender = false;
 
         updateErrorStatus();
@@ -409,6 +416,11 @@ function loadSheet(isAuto) {
     .catch(function(err) {
       isLoadingSheet = false;
       document.getElementById("status").innerHTML = "시트 오류";
+
+      if (typeof handlePropertyEditReloadFailureV632 === "function") {
+        handlePropertyEditReloadFailureV632();
+      }
+
       console.error(err);
     });
 }
@@ -691,14 +703,40 @@ function redrawSelectedMarkers() {
 
 function openItem(item) {
   selectedItemKey = item.key;
-  selectedGroupKey = null;
+
+  /*
+   * 일반 선택 모드에서 리스트 매물을 누르면 해당 클러스터만 표시합니다.
+   * 다중선택 모드에서는 기존 누적 선택을 건드리지 않아 상태가 꼬이지 않게 합니다.
+   */
+  if (!multiClusterMode) {
+    var matchedOverlay = overlays.find(function(overlay) {
+      return (
+        overlay &&
+        overlay.__cluster &&
+        overlay.__cluster.items.some(function(clusterItem) {
+          return clusterItem && clusterItem.key === item.key;
+        })
+      );
+    });
+
+    selectedGroupKey =
+      matchedOverlay && matchedOverlay.__cluster
+        ? matchedOverlay.__cluster.key
+        : null;
+
+    if (typeof redrawSelectedMarkers === "function") {
+      redrawSelectedMarkers();
+    }
+  }
 
   /*
    * 리스트 안에 AI카드를 펼치지 않고,
    * 선택 상태만 다시 표시한 뒤 독립 AI 패널을 엽니다.
    */
   showList(visibleListItems && visibleListItems.length ? visibleListItems : [item]);
-  document.getElementById("status").innerHTML = "선택 매물 1개 · AI 분석 패널 표시";
+  document.getElementById("status").innerHTML = multiClusterMode
+    ? "다중 클러스터 선택 유지 · 현재 매물 AI 분석"
+    : "선택 매물 1개 · AI 분석 패널 표시";
 
   if (typeof openAiSidePanel === "function") {
     openAiSidePanel(item);
