@@ -1580,3 +1580,113 @@ function quickAddFingerprintV616(values) {
     return result;
   };
 })();
+
+/* =========================================================
+   v6.3.5.1 빠른등록 중복매물 비교 UI
+   - 최대 6건 표시
+   - 번호 / 구분·호실 / 임대조건 / 평수만 표시
+   - 전화번호 / 상태 / 등록일 / 주소 제외
+   - 홀수 연한 파랑, 짝수 연한 녹색 교차 카드
+   ========================================================= */
+function formatQuickDuplicateNumberV6351(value) {
+  var text = String(value == null ? "" : value).replace(/,/g, "").trim();
+  if (text === "") return "-";
+
+  var number = Number(text);
+  if (!Number.isFinite(number)) return escapeHtml(text);
+
+  return number.toLocaleString("ko-KR", {
+    maximumFractionDigits: 1
+  });
+}
+
+function updateQuickAddWarning() {
+  var box = document.getElementById("quickAddWarning");
+  if (!box) return;
+
+  var addressEl = document.getElementById("qaAddress");
+  var address = addressEl ? String(addressEl.value || "").trim() : "";
+
+  if (!address) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    updateQuickAddPreview();
+    return;
+  }
+
+  var normalizedAddress =
+    typeof normalizeQuickDuplicateAddressV616 === "function"
+      ? normalizeQuickDuplicateAddressV616(address)
+      : address.replace(/\s+/g, "").toLowerCase();
+
+  var same = (allItems || []).filter(function(item) {
+    var itemAddress =
+      typeof normalizeQuickDuplicateAddressV616 === "function"
+        ? normalizeQuickDuplicateAddressV616(item && item.address)
+        : String((item && item.address) || "").replace(/\s+/g, "").toLowerCase();
+
+    return Boolean(
+      normalizedAddress &&
+      itemAddress &&
+      normalizedAddress === itemAddress
+    );
+  });
+
+  if (!same.length) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    updateQuickAddPreview();
+    return;
+  }
+
+  var maxVisible = 6;
+  var visibleItems = same.slice(0, maxVisible);
+
+  var rows = visibleItems.map(function(item, index) {
+    var type = escapeHtml((item && item.type) || (item && item.name) || "구분 없음");
+    var room = escapeHtml((item && item.room) || "호실 없음");
+    var area = formatQuickDuplicateNumberV6351(item && item.area);
+
+    var condition = [
+      "보 " + formatQuickDuplicateNumberV6351(item && item.deposit),
+      "월 " + formatQuickDuplicateNumberV6351(item && item.rent),
+      "관 " + formatQuickDuplicateNumberV6351(item && item.fee),
+      "권 " + formatQuickDuplicateNumberV6351(item && item.premium)
+    ].join(" / ");
+
+    var toneClass = index % 2 === 0
+      ? " quick-duplicate-row-blue-v6351"
+      : " quick-duplicate-row-green-v6351";
+
+    return (
+      '<div class="quick-duplicate-row-v6351' + toneClass + '">' +
+        '<div class="quick-duplicate-no-v6351">' + (index + 1) + '</div>' +
+        '<div class="quick-duplicate-type-v6351">' +
+          '<strong>' + type + '</strong>' +
+          '<span>' + room + '</span>' +
+        '</div>' +
+        '<div class="quick-duplicate-condition-v6351">' + condition + '</div>' +
+        '<div class="quick-duplicate-area-v6351">' + area + '평</div>' +
+      '</div>'
+    );
+  });
+
+  var remainder = same.length - visibleItems.length;
+
+  box.style.display = "block";
+  box.innerHTML =
+    '<div class="quick-duplicate-head-v6351">' +
+      '<strong>⚠ 비슷한 주소 ' + same.length + '건 발견</strong>' +
+      '<span>구분·호실과 임대조건을 비교하세요.</span>' +
+    '</div>' +
+    '<div class="quick-duplicate-list-v6351">' + rows.join("") + '</div>' +
+    (
+      remainder > 0
+        ? '<div class="quick-duplicate-more-v6351">외 ' + remainder + '건이 더 있습니다.</div>'
+        : ''
+    ) +
+    '<div class="quick-duplicate-foot-v6351">중복등록인지 확인 후 진행하세요.</div>';
+
+  updateQuickAddPreview();
+}
+
