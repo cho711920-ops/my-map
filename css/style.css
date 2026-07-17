@@ -5421,9 +5421,9 @@ body,
 .circle-marker.cluster-size-xl { --cluster-size: 47px; --cluster-font-size: 15px; letter-spacing: -.7px !important; }
 
 .circle-marker.source-gongsil:not(.done) {
-  --cluster-fill: #ff873f;
+  --cluster-fill: #ffd43b;
   --cluster-border: transparent;
-  --cluster-text: #ffffff;
+  --cluster-text: #332900;
   text-shadow: none !important;
 }
 .circle-marker.done,
