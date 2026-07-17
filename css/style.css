@@ -5387,8 +5387,8 @@ body,
 .circle-marker {
   --cluster-size: 38px;
   --cluster-font-size: 14px;
-  --cluster-fill: radial-gradient(circle at 46% 39%, rgba(111,181,255,.84) 0%, rgba(49,139,239,.86) 58%, rgba(16,96,198,.90) 100%);
-  --cluster-border: rgba(13,84,181,.82);
+  --cluster-fill: #ff873f;
+  --cluster-border: transparent;
   --cluster-text: #ffffff;
   width: var(--cluster-size) !important;
   height: var(--cluster-size) !important;
@@ -5396,7 +5396,7 @@ body,
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border: 1.5px solid var(--cluster-border) !important;
+  border: 0 !important;
   border-radius: 50% !important;
   background: var(--cluster-fill) !important;
   color: var(--cluster-text) !important;
@@ -5406,8 +5406,8 @@ body,
   line-height: 1 !important;
   letter-spacing: -0.45px !important;
   text-align: center !important;
-  text-shadow: 0 1px 1px rgba(9,30,66,.18) !important;
-  box-shadow: 0 2px 6px rgba(15,23,42,.16), inset 0 1px 1px rgba(255,255,255,.30) !important;
+  text-shadow: none !important;
+  box-shadow: 0 2px 5px rgba(160,72,18,.18) !important;
   opacity: 1 !important;
   transform: translateZ(0) !important;
   cursor: pointer !important;
@@ -5421,15 +5421,15 @@ body,
 .circle-marker.cluster-size-xl { --cluster-size: 47px; --cluster-font-size: 15px; letter-spacing: -.7px !important; }
 
 .circle-marker.source-gongsil:not(.done) {
-  --cluster-fill: radial-gradient(circle at 46% 39%, rgba(255,241,129,.86) 0%, rgba(255,215,55,.88) 58%, rgba(207,160,0,.91) 100%);
-  --cluster-border: rgba(186,145,0,.82);
-  --cluster-text: #3a3218;
-  text-shadow: 0 1px 0 rgba(255,255,255,.48) !important;
+  --cluster-fill: #ff873f;
+  --cluster-border: transparent;
+  --cluster-text: #ffffff;
+  text-shadow: none !important;
 }
 .circle-marker.done,
 .circle-marker.source-gongsil.done {
-  --cluster-fill: radial-gradient(circle at 46% 39%, rgba(126,133,143,.84) 0%, rgba(74,80,89,.88) 58%, rgba(38,42,48,.92) 100%);
-  --cluster-border: rgba(39,43,49,.84);
+  --cluster-fill: #9ca3af;
+  --cluster-border: transparent;
   --cluster-text: #ffffff;
   opacity: 1 !important;
 }
@@ -5437,8 +5437,7 @@ body,
 .circle-marker.done.selected,
 .circle-marker.source-gongsil.selected,
 .circle-marker.source-gongsil.done.selected {
-  border-color: #e83f4a !important;
-  box-shadow: 0 0 0 2px rgba(232,63,74,.20), 0 3px 8px rgba(15,23,42,.22) !important;
+  box-shadow: 0 0 0 3px rgba(232,63,74,.34), 0 2px 5px rgba(160,72,18,.18) !important;
   opacity: 1 !important;
   animation: clusterSelectPulseV635 .18s ease-out 1 !important;
 }
@@ -5452,8 +5451,8 @@ body,
 .circle-marker.source-danggeun:not(.source-gongsil):not(.done),
 .circle-marker.source-direct:not(.source-gongsil):not(.done),
 .circle-marker.source-mixed:not(.source-gongsil):not(.done) {
-  --cluster-fill: radial-gradient(circle at 46% 39%, rgba(111,181,255,.84) 0%, rgba(49,139,239,.86) 58%, rgba(16,96,198,.90) 100%);
-  --cluster-border: rgba(13,84,181,.82);
+  --cluster-fill: #ff873f;
+  --cluster-border: transparent;
   --cluster-text: #ffffff;
 }
 @media (hover:hover) and (pointer:fine) {
