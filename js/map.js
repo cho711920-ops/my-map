@@ -284,6 +284,14 @@ kakao.maps.load(function() {
     scheduleMapIdleRefreshV638();
   });
 
+  kakao.maps.event.addListener(map, "click", function(mouseEvent) {
+    if (!window.mapRoadviewSelectionActive || !mouseEvent || !mouseEvent.latLng) return;
+    setMapRoadviewSelection(false);
+    if (typeof openKakaoRoadviewAtPosition === "function") {
+      openKakaoRoadviewAtPosition(mouseEvent.latLng.getLat(), mouseEvent.latLng.getLng());
+    }
+  });
+
   setupEnterSearch();
   setupMobilePanelDrag();
   setupQuickAddShortcuts();
@@ -782,6 +790,26 @@ function drawMapClustersOnlyV639(items) {
   });
 
   isRendering = false;
+}
+
+window.mapRoadviewSelectionActive = false;
+
+function setMapRoadviewSelection(active) {
+  window.mapRoadviewSelectionActive = !!active;
+  var button = document.getElementById("mapRoadviewSelectBtn");
+  var mapElement = document.getElementById("map");
+  if (button) {
+    button.classList.toggle("active", window.mapRoadviewSelectionActive);
+    button.setAttribute("aria-pressed", window.mapRoadviewSelectionActive ? "true" : "false");
+    button.title = window.mapRoadviewSelectionActive
+      ? "지도에서 위치를 누르세요 (다시 누르면 취소)"
+      : "지도에서 로드뷰 선택";
+  }
+  if (mapElement) mapElement.classList.toggle("roadview-pick-mode", window.mapRoadviewSelectionActive);
+}
+
+function toggleMapRoadviewSelection() {
+  setMapRoadviewSelection(!window.mapRoadviewSelectionActive);
 }
 
 

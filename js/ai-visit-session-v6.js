@@ -632,7 +632,7 @@
     /* STEP3.6: 태블릿 가로모드는 브라우저가 PC형 viewport 값을 주는 경우가 있어
        flex 높이 계산 대신, 실제 웹 표시영역 안에 헤더와 본문을 절대 배치합니다.
        position:fixed의 기준은 이미 웹 콘텐츠 viewport이므로 offsetTop을 다시 더하지 않습니다. */
-    var gap = isTabletLandscape ? 8 : 6;
+    var gap = isTabletLandscape ? 0 : 6;
     var headerHeight = isTabletLandscape ? 48 : 52;
     var visibleWidth = Math.max(320, Math.min(
       Number(window.innerWidth || metrics.width || 0),
@@ -772,6 +772,13 @@
     window.setTimeout(syncRoadviewViewport, 60);
     window.setTimeout(syncRoadviewViewport, 300);
   }
+
+  window.prepareRoadviewViewport = function () {
+    watchRoadviewViewport();
+    window.setTimeout(syncRoadviewViewport, 0);
+    window.setTimeout(syncRoadviewViewport, 120);
+    window.setTimeout(syncRoadviewViewport, 360);
+  };
 
   function currentMemoValue() {
     var editor = document.getElementById("aivMemoEditor");

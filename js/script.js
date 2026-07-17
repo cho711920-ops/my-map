@@ -1074,6 +1074,11 @@ function openKakaoRoadview(encodedKey) {
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("roadview-modal-open");
 
+  /* 일반 매물목록과 AI 임장 모두 동일한 태블릿 전체화면 보정을 사용합니다. */
+  if (typeof window.prepareRoadviewViewport === "function") {
+    window.prepareRoadviewViewport();
+  }
+
   if (
     typeof kakao === "undefined" ||
     !kakao.maps ||
@@ -1149,6 +1154,29 @@ function openKakaoRoadview(encodedKey) {
       updateRoadviewTargetPin();
     }, 100);
   });
+}
+
+function openKakaoRoadviewAtPosition(lat, lng) {
+  lat = Number(lat);
+  lng = Number(lng);
+  if (!isFinite(lat) || !isFinite(lng) || !window.kakao || !kakao.maps) return;
+
+  var temporaryKey = "__map_roadview_" + Date.now();
+  var temporaryItem = {
+    key: temporaryKey,
+    name: "지도 선택 위치",
+    address: "선택한 지점의 가장 가까운 로드뷰",
+    room: "",
+    latlng: new kakao.maps.LatLng(lat, lng)
+  };
+
+  allItems.push(temporaryItem);
+  try {
+    openKakaoRoadview(encodeURIComponent(temporaryKey));
+  } finally {
+    var temporaryIndex = allItems.indexOf(temporaryItem);
+    if (temporaryIndex >= 0) allItems.splice(temporaryIndex, 1);
+  }
 }
 
 function closeRoadviewModal() {
