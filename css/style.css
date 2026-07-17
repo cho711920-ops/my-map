@@ -5356,3 +5356,132 @@ body,
     padding-right: 14px;
   }
 }
+
+
+/* v6.3.1 건물이름 변경 가능 / 주소 변경 불가 */
+.property-edit-readonly-label-v631 {
+  color: #7a8392 !important;
+}
+
+.property-edit-grid-v630 input[readonly] {
+  border-color: #d8dde6;
+  background: #eef1f5;
+  color: #7a8392;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.property-edit-grid-v630 input[readonly]:focus {
+  border-color: #d8dde6;
+  box-shadow: none;
+}
+
+
+/* =========================================================
+   v6.3.2 마커 고급화 최종안
+   - 기존 42px 크기 유지
+   - 단일 DOM 마커만 사용
+   - 기본 파랑 / 임장가자 노랑 / 계약완료 어두운 회색
+   - 선택 시 내부색 유지 + 빨간 테두리
+   ========================================================= */
+
+.circle-marker {
+  width: 42px !important;
+  height: 42px !important;
+  box-sizing: border-box !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border: 2px solid #145fb9 !important;
+  background:
+    radial-gradient(
+      circle at 43% 35%,
+      #62acff 0%,
+      #348bf0 54%,
+      #1769c9 100%
+    ) !important;
+
+  color: #ffffff !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.35px !important;
+  text-align: center !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.24) !important;
+
+  box-shadow:
+    0 2px 5px rgba(15, 23, 42, 0.24),
+    inset 0 1px 1px rgba(255, 255, 255, 0.34) !important;
+
+  transform: none;
+  opacity: 1 !important;
+  cursor: pointer;
+  transition:
+    transform 0.13s ease,
+    border-color 0.13s ease,
+    box-shadow 0.13s ease;
+}
+
+/* 임장가자 */
+.circle-marker.source-gongsil:not(.done) {
+  border-color: #c89c00 !important;
+  background:
+    radial-gradient(
+      circle at 43% 35%,
+      #fff080 0%,
+      #ffdb3f 55%,
+      #d7a900 100%
+    ) !important;
+  color: #27220d !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.62) !important;
+}
+
+/* 계약완료 — 임장가자보다 우선 */
+.circle-marker.done,
+.circle-marker.source-gongsil.done {
+  border-color: #30343a !important;
+  background:
+    radial-gradient(
+      circle at 43% 35%,
+      #737983 0%,
+      #50555d 55%,
+      #2d3137 100%
+    ) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28) !important;
+  opacity: 0.9 !important;
+}
+
+/* 선택 — 내부 색상은 그대로 두고 테두리만 빨간색 */
+.circle-marker.selected,
+.circle-marker.done.selected,
+.circle-marker.source-gongsil.selected,
+.circle-marker.source-gongsil.done.selected {
+  border: 3px solid #ef3038 !important;
+  background-clip: padding-box !important;
+  box-shadow:
+    0 0 0 2px rgba(239, 48, 56, 0.17),
+    0 3px 8px rgba(15, 23, 42, 0.30),
+    inset 0 1px 1px rgba(255, 255, 255, 0.34) !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* 기존 출처별 클래스가 남아 있어도 기본 파랑으로 통일 */
+.circle-marker.source-unknown:not(.source-gongsil):not(.done),
+.circle-marker.source-naver:not(.source-gongsil):not(.done),
+.circle-marker.source-danggeun:not(.source-gongsil):not(.done),
+.circle-marker.source-direct:not(.source-gongsil):not(.done),
+.circle-marker.source-mixed:not(.source-gongsil):not(.done) {
+  border-color: #145fb9 !important;
+  background:
+    radial-gradient(
+      circle at 43% 35%,
+      #62acff 0%,
+      #348bf0 54%,
+      #1769c9 100%
+    ) !important;
+  color: #ffffff !important;
+}
