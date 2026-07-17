@@ -70,6 +70,76 @@
   }
 }
 
+/* v6.3.15 PC 상단 겹침 제거 + 카카오형 로드뷰 버튼 */
+@media (min-width: 1101px) {
+  .filters {
+    display: grid !important;
+    grid-template-columns: minmax(420px, 1fr) auto !important;
+    grid-template-rows: 42px !important;
+    align-items: center !important;
+    column-gap: 8px !important;
+    overflow: visible !important;
+  }
+  .v6-toolbar-primary {
+    display: grid !important;
+    grid-template-columns: minmax(250px, 1fr) 72px 72px !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    gap: 8px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  .v6-toolbar-primary .search-row {
+    display: grid !important;
+    grid-template-columns: minmax(180px, 1fr) 64px !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 88px 88px 50px 112px 124px !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    gap: 8px !important;
+    margin: 0 !important;
+  }
+}
+
+.v6-toolbar-secondary .map-roadview-select {
+  width: 50px !important;
+  min-width: 50px !important;
+  max-width: 50px !important;
+  background: #1889f5 !important;
+  border: 1px solid #0f73d8 !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  box-shadow: 0 2px 6px rgba(24,137,245,.28) !important;
+}
+.v6-toolbar-secondary .map-roadview-select svg {
+  width: 31px !important;
+  height: 31px !important;
+  overflow: visible;
+  stroke: none !important;
+}
+.v6-toolbar-secondary .map-roadview-select .roadview-pin-shape {
+  fill: #fff !important;
+}
+.v6-toolbar-secondary .map-roadview-select .roadview-pin-hole {
+  fill: #1889f5 !important;
+}
+.v6-toolbar-secondary .map-roadview-select.active {
+  background: #0875dc !important;
+  border-color: #005db6 !important;
+  box-shadow: 0 0 0 3px rgba(24,137,245,.25) !important;
+}
+.v6-toolbar-secondary .map-roadview-select.active .roadview-pin-hole {
+  fill: #0875dc !important;
+}
+
 /* 태블릿 가로모드에서는 로드뷰 창을 시각 viewport 전체에 고정합니다. */
 @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
   #roadviewModal.roadview-modal.open .roadview-modal-dialog {
@@ -6029,6 +6099,85 @@ body,
   .v6-toolbar-secondary .map-roadview-select svg {
     width: 21px !important;
     height: 21px !important;
+  }
+}
+
+/* v6.3.15 final overrides */
+@media (min-width: 1101px) {
+  .filters {
+    display: grid !important;
+    grid-template-columns: minmax(420px, 1fr) auto !important;
+    grid-template-rows: 42px !important;
+    align-items: center !important;
+    column-gap: 8px !important;
+    overflow: visible !important;
+  }
+  .v6-toolbar-primary {
+    display: grid !important;
+    grid-template-columns: minmax(250px, 1fr) 72px 72px !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    gap: 8px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  .v6-toolbar-primary .search-row {
+    display: grid !important;
+    grid-template-columns: minmax(180px, 1fr) 64px !important;
+    gap: 6px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 88px 88px 50px 112px 124px !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    gap: 8px !important;
+    margin: 0 !important;
+  }
+}
+
+.v6-toolbar-secondary .map-roadview-select {
+  width: 50px !important;
+  min-width: 50px !important;
+  max-width: 50px !important;
+  background: #1889f5 !important;
+  border: 1px solid #0f73d8 !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  box-shadow: 0 2px 6px rgba(24,137,245,.28) !important;
+}
+.v6-toolbar-secondary .map-roadview-select svg {
+  width: 31px !important;
+  height: 31px !important;
+  overflow: visible;
+  stroke: none !important;
+}
+.v6-toolbar-secondary .map-roadview-select .roadview-pin-shape { fill: #fff !important; }
+.v6-toolbar-secondary .map-roadview-select .roadview-pin-hole { fill: #1889f5 !important; }
+.v6-toolbar-secondary .map-roadview-select.active {
+  background: #0875dc !important;
+  border-color: #005db6 !important;
+  box-shadow: 0 0 0 3px rgba(24,137,245,.25) !important;
+}
+.v6-toolbar-secondary .map-roadview-select.active .roadview-pin-hole { fill: #0875dc !important; }
+
+@media (max-width: 768px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: minmax(48px,.7fr) minmax(48px,.7fr) 42px minmax(72px,.95fr) minmax(82px,1.05fr) !important;
+  }
+  .v6-toolbar-secondary .map-roadview-select {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+  }
+  .v6-toolbar-secondary .map-roadview-select svg {
+    width: 27px !important;
+    height: 27px !important;
   }
 }
 
