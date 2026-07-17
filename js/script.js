@@ -2542,7 +2542,7 @@ function ensurePropertyEditModalV630() {
 
       '<div class="property-edit-grid-v630">' +
         '<label class="property-edit-wide-v630">건물이름 (변경가능)' +
-          '<input id="peNameV630" type="text">' +
+          '<input id="peNameV630" type="text" inputmode="text" autocomplete="off" maxlength="120" spellcheck="false">' +
         '</label>' +
         '<label class="property-edit-wide-v630 property-edit-readonly-label-v631">주소 (변경불가)' +
           '<input id="peAddressV630" type="text" readonly aria-readonly="true">' +
@@ -2638,6 +2638,14 @@ function numberFromEditV630(id) {
   var value = Number(element && element.value);
 
   return Number.isFinite(value) ? value : 0;
+}
+
+
+function normalizeBuildingNameV638(value) {
+  return String(value == null ? "" : value)
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 
@@ -2804,7 +2812,9 @@ function savePropertyEditV630() {
       : null;
 
   var updated = {
-    name: String(document.getElementById("peNameV630").value || "").trim(),
+    name: normalizeBuildingNameV638(
+      document.getElementById("peNameV630").value
+    ),
     room: String(document.getElementById("peRoomV630").value || "").trim(),
     deposit: numberFromEditV630("peDepositV630"),
     rent: numberFromEditV630("peRentV630"),

@@ -19,6 +19,8 @@
 /* JS부동산 지도/마커/클러스터/시트 로딩 전용 스크립트 */
 var jsCurrentLocationOverlayV630 = null;
 var jsCurrentLocationWatchIdV630 = null;
+var jsMapIdleTimerV638 = null;
+var jsLastIdleViewportKeyV638 = "";
 
 
 function updateCurrentLocationOverlayV630(position) {
@@ -105,45 +107,124 @@ function getClusterDistance() {
 }
 
 
+function getMapViewportKeyV638() {
+  if (!map) return "";
+
+  var center = map.getCenter();
+  var mapElement = document.getElementById("map");
+
+  return [
+    map.getLevel(),
+    center ? center.getLat().toFixed(6) : "",
+    center ? center.getLng().toFixed(6) : "",
+    mapElement ? mapElement.clientWidth : 0,
+    mapElement ? mapElement.clientHeight : 0
+  ].join("|");
+}
+
+
 function createDynamicClusters(addressGroups) {
   var projection = map.getProjection();
   var distance = getClusterDistance();
   var clusters = [];
+  var buckets = Object.create(null);
+
+  function getCell(point) {
+    return {
+      x: Math.floor(point.x / distance),
+      y: Math.floor(point.y / distance)
+    };
+  }
+
+  function bucketKey(cellX, cellY) {
+    return cellX + ":" + cellY;
+  }
+
+  function addClusterToBucket(clusterIndex, point) {
+    var cell = getCell(point);
+    var key = bucketKey(cell.x, cell.y);
+
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(clusterIndex);
+    clusters[clusterIndex].bucketX = cell.x;
+    clusters[clusterIndex].bucketY = cell.y;
+  }
+
+  function removeClusterFromBucket(clusterIndex, cluster) {
+    var key = bucketKey(cluster.bucketX, cluster.bucketY);
+    var list = buckets[key];
+
+    if (!list) return;
+
+    var position = list.indexOf(clusterIndex);
+    if (position !== -1) list.splice(position, 1);
+    if (!list.length) delete buckets[key];
+  }
 
   addressGroups.forEach(function(group) {
     var point = projection.containerPointFromCoords(group.latlng);
-    var added = false;
+    var cell = getCell(point);
+    var candidateSeen = Object.create(null);
+    var candidateIndexes = [];
 
-    for (var i = 0; i < clusters.length; i++) {
-      var cluster = clusters[i];
+    for (var offsetX = -1; offsetX <= 1; offsetX++) {
+      for (var offsetY = -1; offsetY <= 1; offsetY++) {
+        var nearby = buckets[bucketKey(cell.x + offsetX, cell.y + offsetY)] || [];
+
+        nearby.forEach(function(clusterIndex) {
+          if (candidateSeen[clusterIndex] === true) return;
+          candidateSeen[clusterIndex] = true;
+          candidateIndexes.push(clusterIndex);
+        });
+      }
+    }
+
+    /* 기존 전체 순회와 동일하게 먼저 생성된 클러스터를 우선합니다. */
+    candidateIndexes.sort(function(a, b) { return a - b; });
+    var matchedIndex = -1;
+
+    for (var i = 0; i < candidateIndexes.length; i++) {
+      var clusterIndex = candidateIndexes[i];
+      var cluster = clusters[clusterIndex];
       var dx = point.x - cluster.point.x;
       var dy = point.y - cluster.point.y;
-      var gap = Math.sqrt(dx * dx + dy * dy);
 
-      if (gap <= distance) {
-        cluster.groups.push(group);
-        cluster.items = cluster.items.concat(group.items);
-
-        var n = cluster.groups.length;
-        cluster.point = new kakao.maps.Point(
-          (cluster.point.x * (n - 1) + point.x) / n,
-          (cluster.point.y * (n - 1) + point.y) / n
-        );
-
-        cluster.latlng = projection.coordsFromContainerPoint(cluster.point);
-        added = true;
+      if ((dx * dx) + (dy * dy) <= distance * distance) {
+        matchedIndex = clusterIndex;
         break;
       }
     }
 
-    if (!added) {
-      clusters.push({
-        point: point,
-        latlng: group.latlng,
-        groups: [group],
-        items: group.items.slice()
-      });
+    if (matchedIndex !== -1) {
+      var matchedCluster = clusters[matchedIndex];
+      removeClusterFromBucket(matchedIndex, matchedCluster);
+
+      matchedCluster.groups.push(group);
+      matchedCluster.items = matchedCluster.items.concat(group.items);
+
+      var n = matchedCluster.groups.length;
+      matchedCluster.point = new kakao.maps.Point(
+        (matchedCluster.point.x * (n - 1) + point.x) / n,
+        (matchedCluster.point.y * (n - 1) + point.y) / n
+      );
+      matchedCluster.latlng = projection.coordsFromContainerPoint(
+        matchedCluster.point
+      );
+
+      addClusterToBucket(matchedIndex, matchedCluster.point);
+      return;
     }
+
+    var newIndex = clusters.length;
+    clusters.push({
+      point: point,
+      latlng: group.latlng,
+      groups: [group],
+      items: group.items.slice(),
+      bucketX: 0,
+      bucketY: 0
+    });
+    addClusterToBucket(newIndex, point);
   });
 
   clusters.forEach(function(cluster, index) {
@@ -151,6 +232,23 @@ function createDynamicClusters(addressGroups) {
   });
 
   return clusters;
+}
+
+
+function scheduleMapIdleRefreshV638() {
+  if (jsMapIdleTimerV638) clearTimeout(jsMapIdleTimerV638);
+
+  jsMapIdleTimerV638 = setTimeout(function() {
+    jsMapIdleTimerV638 = null;
+
+    if (isRendering) return;
+
+    var viewportKey = getMapViewportKeyV638();
+    if (viewportKey && viewportKey === jsLastIdleViewportKeyV638) return;
+
+    jsLastIdleViewportKeyV638 = viewportKey;
+    applyFilter();
+  }, 120);
 }
 
 
@@ -169,7 +267,7 @@ kakao.maps.load(function() {
 
   kakao.maps.event.addListener(map, "idle", function() {
     if (isRendering) return;
-    applyFilter();
+    scheduleMapIdleRefreshV638();
   });
 
   setupEnterSearch();
