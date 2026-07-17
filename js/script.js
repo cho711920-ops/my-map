@@ -2838,6 +2838,12 @@ function savePropertyEditV630() {
     },
     body: JSON.stringify({
       action: "updateProperty",
+      key: {
+        name: item.name || "",
+        address: item.address || "",
+        room: item.room || "",
+        type: item.type || ""
+      },
       originalValues: buildOriginalPropertyValuesV630(item),
       updated: updated
     })
