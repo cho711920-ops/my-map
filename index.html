@@ -64,11 +64,10 @@
 
         <button id="mapRoadviewSelectBtn" class="v6-primary-action map-roadview-select" type="button"
           onclick="toggleMapRoadviewSelection()" title="지도에서 로드뷰 선택" aria-label="지도에서 로드뷰 선택" aria-pressed="false"
-          style="width:42px!important;min-width:42px!important;max-width:42px!important">
+          style="width:50px!important;min-width:50px!important;max-width:50px!important">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3.2a4.1 4.1 0 1 1 0 8.2 4.1 4.1 0 0 1 0-8.2Z"></path>
-            <path d="M5.2 20.8c.5-4.2 2.8-6.7 6.8-6.7s6.3 2.5 6.8 6.7"></path>
-            <path d="M3.2 8.4 1.5 6.7m19.3 1.7 1.7-1.7M12 1V.3"></path>
+            <path class="roadview-pin-shape" d="M12 2.1c-4 0-7.2 3.1-7.2 7 0 5.3 7.2 12.8 7.2 12.8s7.2-7.5 7.2-12.8c0-3.9-3.2-7-7.2-7Z"></path>
+            <circle class="roadview-pin-hole" cx="12" cy="9" r="2.7"></circle>
           </svg>
         </button>
         <button class="v6-primary-action ai" type="button" onclick="startAiVisitPreview()">AI임장하기</button>
