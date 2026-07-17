@@ -1690,3 +1690,443 @@ function updateQuickAddWarning() {
   updateQuickAddPreview();
 }
 
+/* =========================================================
+   v6.3.6 빠른등록 중복판정 / 압축목록 / 즉시 안내
+
+   중복 기준
+   - 주소 + 호실 + 보증금 + 월세 + 평수 동일: 완전 중복 차단
+   - 주소 + 호실 + 보증금 + 월세 동일, 평수 다름: 사용자 확인 후 등록
+   - 같은 주소이지만 호실 또는 임대조건 다름: 참고 목록만 표시
+
+   등록 UX
+   - Apps Script 응답을 기다리지 않고 요청 직후 토스트 표시
+   - 기존 확인형 성공 alert 제거
+   ========================================================= */
+function normalizeQuickDuplicateAreaV636(value) {
+  var text = String(value == null ? "" : value)
+    .replace(/,/g, "")
+    .replace(/평(?:방미터|방미터제곱)?|㎡|m2|m²/gi, "")
+    .trim();
+
+  if (!text) return "";
+
+  var number = Number(text);
+  if (!Number.isFinite(number)) {
+    return text.toLowerCase().replace(/\s+/g, "");
+  }
+
+  /* 빠른등록 데이터에서 공란이 0으로 읽히는 경우를 공란으로 통일 */
+  if (Math.abs(number) < 0.000001) return "";
+
+  return String(Math.round(number * 1000) / 1000);
+}
+
+function getQuickDuplicateComparableV636(values) {
+  return {
+    address: normalizeQuickDuplicateAddressV616(values[1]),
+    room: normalizeQuickDuplicateRoomV616(values[2]),
+    deposit: normalizeQuickDuplicateNumberV616(values[4]),
+    rent: normalizeQuickDuplicateNumberV616(values[5]),
+    area: normalizeQuickDuplicateAreaV636(values[8])
+  };
+}
+
+function isSameQuickDuplicateUnitV636(target, current) {
+  var targetHasRoom = Boolean(target.room);
+  var currentHasRoom = Boolean(current.room);
+
+  if (targetHasRoom && currentHasRoom) {
+    return (
+      target.room === current.room &&
+      target.deposit === current.deposit &&
+      target.rent === current.rent
+    );
+  }
+
+  if (!targetHasRoom && !currentHasRoom) {
+    return (
+      target.deposit === current.deposit &&
+      target.rent === current.rent
+    );
+  }
+
+  /* 한쪽만 호실이 있으면 별도 매물 */
+  return false;
+}
+
+/*
+ * 마지막 선언이 기존 중복 함수를 대체합니다.
+ * 완전 중복을 우선 탐색하고, 없을 때만 평수 차이 매물을 반환합니다.
+ */
+function findQuickDuplicateV61(values) {
+  var target = getQuickDuplicateComparableV636(values);
+  var areaMismatch = null;
+
+  if (!target.address) return null;
+
+  for (var i = 0; i < (allItems || []).length; i++) {
+    var item = allItems[i] || {};
+    var current = {
+      address: normalizeQuickDuplicateAddressV616(item.address),
+      room: normalizeQuickDuplicateRoomV616(item.room),
+      deposit: normalizeQuickDuplicateNumberV616(item.deposit),
+      rent: normalizeQuickDuplicateNumberV616(item.rent),
+      area: normalizeQuickDuplicateAreaV636(item.area)
+    };
+
+    if (!current.address || target.address !== current.address) continue;
+    if (!isSameQuickDuplicateUnitV636(target, current)) continue;
+
+    if (target.area === current.area) {
+      return {
+        type: "exact",
+        item: item
+      };
+    }
+
+    if (!areaMismatch) {
+      areaMismatch = {
+        type: "areaMismatch",
+        item: item
+      };
+    }
+  }
+
+  return areaMismatch;
+}
+
+function quickAddFingerprintV616(values) {
+  var target = getQuickDuplicateComparableV636(values);
+
+  return [
+    target.address,
+    target.room ? "room:" + target.room : "no-room",
+    "deposit:" + target.deposit,
+    "rent:" + target.rent,
+    "area:" + (target.area || "blank")
+  ].join("|");
+}
+
+function formatQuickAreaV636(value) {
+  var normalized = normalizeQuickDuplicateAreaV636(value);
+  if (!normalized) return "-";
+
+  var number = Number(normalized);
+  if (!Number.isFinite(number)) return normalized;
+
+  return number.toLocaleString("ko-KR", {
+    maximumFractionDigits: 3
+  });
+}
+
+function ensureQuickAreaConfirmV636() {
+  var modal = document.getElementById("quickAreaConfirmV636");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "quickAreaConfirmV636";
+  modal.className = "quick-area-confirm-v636";
+  modal.setAttribute("aria-hidden", "true");
+  modal.innerHTML =
+    '<div class="quick-area-confirm-backdrop-v636"></div>' +
+    '<div class="quick-area-confirm-dialog-v636" role="dialog" aria-modal="true" aria-labelledby="quickAreaConfirmTitleV636">' +
+      '<div class="quick-area-confirm-icon-v636">!</div>' +
+      '<div id="quickAreaConfirmTitleV636" class="quick-area-confirm-title-v636">평수가 다른 기존 매물이 있습니다</div>' +
+      '<div class="quick-area-confirm-desc-v636">주소·호실·보증금·월세는 같지만 평수가 다릅니다.</div>' +
+      '<div class="quick-area-confirm-compare-v636">' +
+        '<div><span>기존 매물</span><strong id="quickAreaExistingV636">-</strong></div>' +
+        '<div><span>등록 매물</span><strong id="quickAreaNewV636">-</strong></div>' +
+      '</div>' +
+      '<div class="quick-area-confirm-note-v636">다른 호실·분할상가·평수 변경 매물인지 확인한 뒤 진행하세요.</div>' +
+      '<div class="quick-area-confirm-actions-v636">' +
+        '<button type="button" class="quick-area-cancel-v636">취소</button>' +
+        '<button type="button" class="quick-area-continue-v636">평수 다름 · 그래도 등록</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function confirmQuickAreaDifferenceV636(existingItem, values) {
+  return new Promise(function(resolve) {
+    var modal = ensureQuickAreaConfirmV636();
+    var existing = modal.querySelector("#quickAreaExistingV636");
+    var incoming = modal.querySelector("#quickAreaNewV636");
+    var cancelBtn = modal.querySelector(".quick-area-cancel-v636");
+    var continueBtn = modal.querySelector(".quick-area-continue-v636");
+    var backdrop = modal.querySelector(".quick-area-confirm-backdrop-v636");
+    var settled = false;
+
+    if (existing) existing.textContent = formatQuickAreaV636(existingItem && existingItem.area) + "평";
+    if (incoming) incoming.textContent = formatQuickAreaV636(values && values[8]) + "평";
+
+    function finish(result) {
+      if (settled) return;
+      settled = true;
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      document.removeEventListener("keydown", onKeydown);
+      resolve(result);
+    }
+
+    function onKeydown(event) {
+      if (event.key === "Escape") finish(false);
+    }
+
+    cancelBtn.onclick = function() { finish(false); };
+    continueBtn.onclick = function() { finish(true); };
+    backdrop.onclick = function() { finish(false); };
+
+    document.addEventListener("keydown", onKeydown);
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+
+    setTimeout(function() {
+      if (continueBtn) continueBtn.focus();
+    }, 30);
+  });
+}
+
+function showQuickAddToastV636(message, type) {
+  var toast = document.getElementById("quickAddToastV636");
+
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "quickAddToastV636";
+    toast.className = "quick-add-toast-v636";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    document.body.appendChild(toast);
+  }
+
+  clearTimeout(toast.__hideTimerV636);
+  toast.className = "quick-add-toast-v636 " + (type || "success");
+  toast.textContent = message;
+
+  requestAnimationFrame(function() {
+    toast.classList.add("show");
+  });
+
+  toast.__hideTimerV636 = setTimeout(function() {
+    toast.classList.remove("show");
+  }, type === "error" ? 3800 : 2400);
+}
+
+function focusQuickAddRawV636() {
+  var modal = document.getElementById("quickAddModal");
+  var raw = document.getElementById("qaRaw");
+
+  if (modal) modal.style.display = "block";
+
+  setTimeout(function() {
+    if (raw) raw.focus();
+  }, 60);
+}
+
+function submitQuickAddRequestV636(values, forceDuplicate, fingerprint, btn, oldText) {
+  /*
+   * 사용자에게는 요청을 시작한 즉시 알려줍니다.
+   * Apps Script의 실제 처리는 백그라운드에서 계속됩니다.
+   */
+  showQuickAddToastV636(
+    "매물 등록 요청을 보냈습니다. 다음 매물을 계속 등록할 수 있습니다.",
+    "success"
+  );
+
+  clearQuickAddForm();
+  focusQuickAddRawV636();
+
+  if (btn) {
+    setTimeout(function() {
+      btn.innerText = oldText;
+      btn.disabled = false;
+    }, 180);
+  }
+
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "quickAdd",
+      values: values,
+      forceDuplicate: !!forceDuplicate
+    })
+  }).then(function() {
+    /* 서버 처리가 끝난 뒤 지도만 조용히 갱신 */
+    setTimeout(function() {
+      loadSheet(true);
+    }, 500);
+  }).catch(function(error) {
+    console.error(error);
+    delete quickAddPendingFingerprintsV616[fingerprint];
+    showQuickAddToastV636(
+      "자동등록 요청 중 오류가 발생했습니다. 연결 URL을 확인해주세요.",
+      "error"
+    );
+  }).finally(function() {
+    setTimeout(function() {
+      delete quickAddPendingFingerprintsV616[fingerprint];
+    }, 8000);
+  });
+}
+
+function continueQuickAddSubmissionV636(values, forceDuplicate) {
+  var fingerprint = quickAddFingerprintV616(values);
+
+  if (quickAddPendingFingerprintsV616[fingerprint]) {
+    alert("이미 등록 요청 중인 매물입니다.\n잠시 후 다시 확인해주세요.");
+    return;
+  }
+
+  quickAddPendingFingerprintsV616[fingerprint] = true;
+
+  var btn = document.querySelector(".auto-save-btn");
+  var oldText = btn ? btn.innerText : "";
+
+  if (btn) {
+    btn.innerText = "요청중...";
+    btn.disabled = true;
+  }
+
+  submitQuickAddRequestV636(
+    values,
+    forceDuplicate,
+    fingerprint,
+    btn,
+    oldText
+  );
+}
+
+/* 마지막 선언으로 기존 저장 함수를 대체 */
+function saveQuickAddToSheet() {
+  ensureQuickAddFieldVisitMemoV626();
+  normalizeQuickAddAddressFieldV616();
+
+  if (!validateQuickAdd()) return;
+
+  if (!saveApiURL) {
+    alert("자동등록 URL이 아직 연결되지 않았습니다.");
+    return;
+  }
+
+  var values = getQuickAddRowValues();
+  values[1] = sanitizeQuickAddressV616(values[1]);
+
+  var localDuplicate = findQuickDuplicateV61(values);
+
+  if (localDuplicate && localDuplicate.type === "exact") {
+    var exactSummary = quickDuplicateSummaryV61(localDuplicate.item || {});
+    alert(
+      "이미 등록된 매물입니다.\n\n" +
+      "주소·호실·보증금·월세·평수가 모두 동일합니다." +
+      (exactSummary ? "\n\n기존 매물\n" + exactSummary : "")
+    );
+    return;
+  }
+
+  if (localDuplicate && localDuplicate.type === "areaMismatch") {
+    confirmQuickAreaDifferenceV636(localDuplicate.item || {}, values)
+      .then(function(approved) {
+        if (!approved) return;
+        continueQuickAddSubmissionV636(values, true);
+      });
+    return;
+  }
+
+  continueQuickAddSubmissionV636(values, false);
+}
+
+/* 중복매물 비교표: 평수를 임대조건 끝에 합치고 높이를 압축 */
+function updateQuickAddWarning() {
+  var box = document.getElementById("quickAddWarning");
+  if (!box) return;
+
+  var addressEl = document.getElementById("qaAddress");
+  var address = addressEl ? String(addressEl.value || "").trim() : "";
+
+  if (!address) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    updateQuickAddPreview();
+    return;
+  }
+
+  var normalizedAddress =
+    typeof normalizeQuickDuplicateAddressV616 === "function"
+      ? normalizeQuickDuplicateAddressV616(address)
+      : address.replace(/\s+/g, "").toLowerCase();
+
+  var same = (allItems || []).filter(function(item) {
+    var itemAddress =
+      typeof normalizeQuickDuplicateAddressV616 === "function"
+        ? normalizeQuickDuplicateAddressV616(item && item.address)
+        : String((item && item.address) || "").replace(/\s+/g, "").toLowerCase();
+
+    return Boolean(
+      normalizedAddress &&
+      itemAddress &&
+      normalizedAddress === itemAddress
+    );
+  });
+
+  if (!same.length) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    updateQuickAddPreview();
+    return;
+  }
+
+  var maxVisible = 6;
+  var visibleItems = same.slice(0, maxVisible);
+
+  var rows = visibleItems.map(function(item, index) {
+    var type = escapeHtml((item && item.type) || (item && item.name) || "구분 없음");
+    var room = escapeHtml((item && item.room) || "호실 없음");
+    var area = escapeHtml(formatQuickAreaV636(item && item.area));
+
+    var condition = [
+      "보 " + formatQuickDuplicateNumberV6351(item && item.deposit),
+      "월 " + formatQuickDuplicateNumberV6351(item && item.rent),
+      "관 " + formatQuickDuplicateNumberV6351(item && item.fee),
+      "권 " + formatQuickDuplicateNumberV6351(item && item.premium),
+      "평 " + area
+    ].join(" / ");
+
+    var toneClass = index % 2 === 0
+      ? " quick-duplicate-row-blue-v6351"
+      : " quick-duplicate-row-green-v6351";
+
+    return (
+      '<div class="quick-duplicate-row-v6351' + toneClass + '">' +
+        '<div class="quick-duplicate-no-v6351">' + (index + 1) + '</div>' +
+        '<div class="quick-duplicate-type-v6351">' +
+          '<strong>' + type + ' <span>· ' + room + '</span></strong>' +
+        '</div>' +
+        '<div class="quick-duplicate-condition-v6351">' + condition + '</div>' +
+      '</div>'
+    );
+  });
+
+  var remainder = same.length - visibleItems.length;
+
+  box.style.display = "block";
+  box.innerHTML =
+    '<div class="quick-duplicate-head-v6351">' +
+      '<strong>⚠ 비슷한 주소 ' + same.length + '건 발견</strong>' +
+      '<span>구분·호실·임대조건·평수를 비교하세요.</span>' +
+    '</div>' +
+    '<div class="quick-duplicate-list-v6351">' + rows.join("") + '</div>' +
+    (
+      remainder > 0
+        ? '<div class="quick-duplicate-more-v6351">외 ' + remainder + '건이 더 있습니다.</div>'
+        : ""
+    ) +
+    '<div class="quick-duplicate-foot-v6351">완전 중복은 차단되며, 평수만 다르면 확인 후 등록할 수 있습니다.</div>';
+
+  updateQuickAddPreview();
+}
+
