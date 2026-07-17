@@ -997,6 +997,7 @@ function buildSmartItemCardHtml(item) {
         '<div class="ai-section"><div class="ai-section-title">주의점</div><ul class="ai-list">' + buildAiList(ai.cons) + '</ul></div>' +
         '<div class="ai-section"><div class="ai-section-title">추천업종</div><div class="ai-tags">' + buildAiTags(ai.businesses) + '</div></div>' +
         '<div class="ai-section"><div class="ai-section-title">키워드</div><div class="ai-tags">' + buildAiTags(ai.tags) + '</div></div>' +
+        '<div class="ai-section full public-commerce-card"><div id="publicCommercialBrief"><div class="public-commerce-loading">공식 상권 브리핑 준비 중…</div></div></div>' +
         buildMarketAnalysisHtml(ai.marketAnalysis) +
         '<div class="ai-section full ai-commerce-section"><div class="ai-section-title">AI 상권분석 반경 선택</div><div id="' + getCommercialBoxId(item) + '"><div class="ai-commerce-loading">상권분석 준비중...</div></div></div>' +
         '<div class="ai-section full"><div class="ai-section-title">업종별 적합도 / 추천사유</div><div class="ai-business-fit">' + buildAiBusinessFitHtml(ai.businessFits) + '</div></div>' +
@@ -1999,6 +2000,7 @@ function openAiSidePanel(item) {
    * 카드 DOM이 만들어진 뒤 실행해야 정상적으로 결과가 들어갑니다.
    */
   setTimeout(function() {
+    if (typeof loadPublicCommercialBrief === "function") loadPublicCommercialBrief(item);
     loadCommercialAreaAnalysis(item);
     JS_V40_LAST_SIG = "";
     jsV40Render();
