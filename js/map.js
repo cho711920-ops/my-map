@@ -466,6 +466,8 @@ function loadSheet(isAuto) {
           state: clean(c[12]),
           regDate: clean(c[13]),
           source: clean(c[14]),
+          propertyId: clean(c[15]),
+          sheetRow: i + 1,
           latlng: null
         };
 

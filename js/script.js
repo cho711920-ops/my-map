@@ -1326,6 +1326,7 @@ function saveItemMemo(encodedKey) {
 
   var payload = {
     action: "toggleDone",
+    row: item.sheetRow || 0,
     key: {
       name: item.name || "",
       address: item.address || "",
@@ -1787,7 +1788,9 @@ function toggleDoneStatus(encodedKey, checked) {
 
   var payload = {
     action: "toggleDone",
+    row: item.sheetRow || 0,
     key: {
+      propertyId: item.propertyId || "",
       name: item.name || "",
       address: item.address || "",
       room: item.room || "",
@@ -1982,7 +1985,9 @@ function markSelectedAsVisited() {
        * 상태는 그대로 두고 메모만 최신값으로 저장합니다.
        */
       action: "toggleDone",
+      row: item.sheetRow || 0,
       key: {
+        propertyId: item.propertyId || "",
         name: item.name || "",
         address: item.address || "",
         room: item.room || "",
@@ -2076,7 +2081,9 @@ function completeSelectedItems() {
   var requests = selectedItems.map(function(item) {
     var payload = {
       action: "toggleDone",
+      row: item.sheetRow || 0,
       key: {
+        propertyId: item.propertyId || "",
         name: item.name || "",
         address: item.address || "",
         room: item.room || "",
@@ -2838,7 +2845,9 @@ function savePropertyEditV630() {
     },
     body: JSON.stringify({
       action: "updateProperty",
+      row: item.sheetRow || 0,
       key: {
+        propertyId: item.propertyId || "",
         name: item.name || "",
         address: item.address || "",
         room: item.room || "",
