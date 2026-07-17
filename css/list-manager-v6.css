@@ -166,6 +166,31 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:5!important; }
 }
 
+/* v6.3.28 mobile property-list header: slightly taller than the 23px Navi button */
+@media (max-width: 768px) {
+  #listToolbar.list-toolbar {
+    height:34px!important;
+    min-height:34px!important;
+    padding:3px 5px!important;
+    gap:4px!important;
+  }
+  #listToolbar > .list-master-select,
+  #listToolbar > #multiClusterBtn,
+  #listToolbar > .list-type-control,
+  #listToolbar > .list-sort-control,
+  #listToolbar > .list-type-control > #typeFilter,
+  #listToolbar > .list-sort-control > #sortDropdownBtn {
+    height:28px!important;
+    min-height:28px!important;
+    max-height:28px!important;
+  }
+  #listToolbar > #multiClusterBtn,
+  #listToolbar > .list-type-control > #typeFilter,
+  #listToolbar > .list-sort-control > #sortDropdownBtn {
+    font-size:11px!important;
+  }
+}
+
 /* =========================================================
    v6.3.17 smartphone compact header
    Samsung Internet처럼 화면 폭이 좁은 브라우저에서도 버튼이 겹치지 않도록
