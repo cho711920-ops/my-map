@@ -800,3 +800,128 @@ body.v6-menu-open{overflow:auto!important}
   box-sizing:border-box!important;
   align-self:center!important;
 }
+
+/* v6.3.26 smartphone-only compact two-row header */
+@media (max-width: 768px) {
+  .header {
+    height:38px!important;
+    min-height:38px!important;
+    padding:0 8px!important;
+    font-size:0!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+  }
+  .header::after {
+    content:"J S"!important;
+    display:block!important;
+    font-size:16px!important;
+    font-weight:900!important;
+    line-height:1!important;
+  }
+
+  .filters {
+    position:relative!important;
+    display:grid!important;
+    grid-template-columns:84px minmax(0,1fr)!important;
+    grid-template-rows:34px!important;
+    align-items:stretch!important;
+    gap:4px!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:4px 6px!important;
+    box-sizing:border-box!important;
+    overflow:visible!important;
+  }
+
+  .v6-toolbar-primary {
+    display:grid!important;
+    grid-template-columns:40px 40px!important;
+    grid-template-rows:34px!important;
+    gap:4px!important;
+    width:84px!important;
+    min-width:84px!important;
+    height:34px!important;
+    margin:0!important;
+  }
+
+  .v6-toolbar-primary .search-row {
+    position:absolute!important;
+    left:48px!important;
+    right:auto!important;
+    top:-36px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 44px!important;
+    grid-template-rows:34px!important;
+    gap:4px!important;
+    width:50vw!important;
+    max-width:210px!important;
+    height:34px!important;
+    margin:0!important;
+    z-index:2!important;
+  }
+
+  .v6-toolbar-primary .search-row #keyword,
+  .v6-toolbar-primary .search-btn,
+  .v6-toolbar-primary .top-reset-btn,
+  .v6-toolbar-primary .detail-btn {
+    height:34px!important;
+    min-height:34px!important;
+    max-height:34px!important;
+    margin:0!important;
+    padding:0 5px!important;
+    border-radius:8px!important;
+    font-size:11px!important;
+    line-height:1!important;
+    box-sizing:border-box!important;
+  }
+  .v6-toolbar-primary .top-reset-btn {
+    grid-column:1!important; grid-row:1!important;
+    width:40px!important; min-width:40px!important; max-width:40px!important;
+  }
+  .v6-toolbar-primary .detail-btn {
+    grid-column:2!important; grid-row:1!important;
+    width:40px!important; min-width:40px!important; max-width:40px!important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    display:grid!important;
+    grid-template-columns:minmax(36px,.8fr) minmax(36px,.8fr) 34px minmax(58px,1.35fr) minmax(62px,1.45fr)!important;
+    grid-template-rows:34px!important;
+    gap:4px!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:34px!important;
+    margin:0!important;
+    overflow:visible!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > *,
+  .v6-toolbar-secondary .v6-command-menu,
+  .v6-toolbar-secondary .v6-command-trigger,
+  .v6-toolbar-secondary .v6-primary-action,
+  .v6-toolbar-secondary .quick-add-btn {
+    position:relative!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:34px!important;
+    min-height:34px!important;
+    max-height:34px!important;
+    margin:0!important;
+    padding:0 2px!important;
+    border-radius:8px!important;
+    font-size:10px!important;
+    line-height:1!important;
+    box-sizing:border-box!important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(1) { grid-column:1!important; }
+  .v6-toolbar-secondary.v6-command-bar > :nth-child(2) { grid-column:2!important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column:3!important; padding:0!important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column:4!important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:5!important; }
+  .v6-toolbar-secondary .map-roadview-select svg { width:20px!important; height:20px!important; }
+
+  #multiClusterStatus,
+  #detailFilter { grid-column:1/-1!important; }
+}
