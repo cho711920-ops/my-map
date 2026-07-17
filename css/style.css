@@ -5387,7 +5387,7 @@ body,
 .circle-marker {
   --cluster-size: 38px;
   --cluster-font-size: 14px;
-  --cluster-fill: #ff873f;
+  --cluster-fill: rgba(255, 112, 42, .72);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
   width: var(--cluster-size) !important;
@@ -5407,7 +5407,7 @@ body,
   letter-spacing: -0.45px !important;
   text-align: center !important;
   text-shadow: none !important;
-  box-shadow: 0 2px 5px rgba(160,72,18,.18) !important;
+  box-shadow: none !important;
   opacity: 1 !important;
   transform: translateZ(0) !important;
   cursor: pointer !important;
@@ -5421,14 +5421,14 @@ body,
 .circle-marker.cluster-size-xl { --cluster-size: 47px; --cluster-font-size: 15px; letter-spacing: -.7px !important; }
 
 .circle-marker.source-gongsil:not(.done) {
-  --cluster-fill: #ffd43b;
+  --cluster-fill: rgba(255, 207, 38, .72);
   --cluster-border: transparent;
   --cluster-text: #332900;
   text-shadow: none !important;
 }
 .circle-marker.done,
 .circle-marker.source-gongsil.done {
-  --cluster-fill: #9ca3af;
+  --cluster-fill: rgba(31, 41, 55, .78);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
   opacity: 1 !important;
@@ -5437,7 +5437,7 @@ body,
 .circle-marker.done.selected,
 .circle-marker.source-gongsil.selected,
 .circle-marker.source-gongsil.done.selected {
-  box-shadow: 0 0 0 3px rgba(232,63,74,.34), 0 2px 5px rgba(160,72,18,.18) !important;
+  box-shadow: 0 0 0 3px rgba(232,63,74,.30) !important;
   opacity: 1 !important;
   animation: clusterSelectPulseV635 .18s ease-out 1 !important;
 }
@@ -5451,7 +5451,7 @@ body,
 .circle-marker.source-danggeun:not(.source-gongsil):not(.done),
 .circle-marker.source-direct:not(.source-gongsil):not(.done),
 .circle-marker.source-mixed:not(.source-gongsil):not(.done) {
-  --cluster-fill: #ff873f;
+  --cluster-fill: rgba(255, 112, 42, .72);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
 }
