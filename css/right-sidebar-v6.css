@@ -1,0 +1,71 @@
+/* v6.4.4 desktop/tablet layout: map left, property list right */
+@media (min-width:769px){
+  #wrap{
+    flex-direction:row-reverse!important;
+  }
+
+  #sidebar{
+    border-right:0!important;
+    border-left:1px solid #d8e1ef!important;
+    box-shadow:-3px 0 12px rgba(15,23,42,.08)!important;
+  }
+
+  .header{
+    left:auto!important;
+    right:0!important;
+  }
+
+  #aiSidePanel{
+    left:0!important;
+    right:auto!important;
+    border-right:1px solid #d8e1ef!important;
+    border-left:0!important;
+    box-shadow:8px 0 28px rgba(15,23,42,.16)!important;
+    transform:translateX(-105%)!important;
+  }
+
+  body.ai-side-panel-open #aiSidePanel{
+    transform:translateX(0)!important;
+  }
+
+  body.ai-side-panel-open #map{
+    margin-right:0!important;
+    margin-left:480px!important;
+  }
+}
+
+@media (min-width:1100px){
+  .filters{
+    left:0!important;
+    right:243px!important;
+  }
+
+  #aiSidePanel{
+    top:60px!important;
+  }
+}
+
+@media (min-width:769px) and (max-width:1099px){
+  .filters{
+    left:0!important;
+    right:190px!important;
+  }
+}
+
+@media (min-width:769px) and (max-width:1099px) and (orientation:landscape){
+  #aiSidePanel{
+    top:96px!important;
+  }
+}
+
+@media (min-width:769px) and (max-width:1099px) and (orientation:portrait){
+  #aiSidePanel{
+    top:184px!important;
+  }
+}
+
+@media (min-width:769px) and (max-width:1300px){
+  body.ai-side-panel-open #map{
+    margin-left:420px!important;
+  }
+}

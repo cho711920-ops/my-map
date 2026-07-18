@@ -350,6 +350,72 @@
       '</h3><div class="building-register-grid">' + rows.join("") + '</div></section>';
   }
 
+  function registerValue(value) {
+    if (value == null || value === "" || value === "정보 없음") return "-";
+    return String(value);
+  }
+
+  function registerTableRow(leftLabel, leftValue, rightLabel, rightValue) {
+    var html = '<tr><th>' + esc(leftLabel) + '</th><td' + (rightLabel ? '' : ' colspan="3"') + '>' +
+      esc(registerValue(leftValue)) + '</td>';
+    if (rightLabel) {
+      html += '<th>' + esc(rightLabel) + '</th><td>' + esc(registerValue(rightValue)) + '</td>';
+    }
+    return html + '</tr>';
+  }
+
+  function uniquePush(list, value) {
+    value = String(value || "").trim();
+    if (!value || value === "정보 없음" || list.indexOf(value) >= 0) return;
+    list.push(value);
+  }
+
+  function sumKnown(values) {
+    var numbers = (values || []).map(asNumber).filter(function (value) { return value != null; });
+    return numbers.length ? numbers.reduce(function (sum, value) { return sum + value; }, 0) : null;
+  }
+
+  function countPair(firstLabel, firstValue, secondLabel, secondValue) {
+    return firstLabel + " " + registerValue(asNumber(firstValue) == null ? null : numberText(firstValue, "대")) +
+      " / " + secondLabel + " " + registerValue(asNumber(secondValue) == null ? null : numberText(secondValue, "대"));
+  }
+
+  function groupedFloorRows(floors, listingFloor) {
+    var groups = {};
+    (floors || []).forEach(function (row, index) {
+      var signed = signedFloor(row);
+      var label = String(row.floorName || floorLabel(signed) || "층 정보 없음").trim();
+      var key = signed == null ? "name:" + label + ":" + index : "floor:" + signed;
+      if (!groups[key]) {
+        groups[key] = {
+          signed: signed,
+          label: label,
+          area: 0,
+          uses: [],
+          structures: []
+        };
+      }
+      groups[key].area += asNumber(row.area) || 0;
+      uniquePush(groups[key].uses, joinText(row.mainUse, row.otherUse));
+      uniquePush(groups[key].structures, joinText(row.structure, row.otherStructure));
+    });
+
+    return Object.keys(groups).map(function (key) { return groups[key]; }).sort(function (a, b) {
+      if (a.signed == null && b.signed == null) return a.label.localeCompare(b.label, "ko");
+      if (a.signed == null) return 1;
+      if (b.signed == null) return -1;
+      return b.signed - a.signed;
+    }).map(function (group) {
+      var matched = listingFloor != null && group.signed === listingFloor;
+      return '<tr' + (matched ? ' class="matched-floor"' : '') + '>' +
+        '<th scope="row">' + esc(group.label) + (matched ? '<small>매물층</small>' : '') + '</th>' +
+        '<td>' + esc(registerValue(group.uses.join(" · "))) + '</td>' +
+        '<td>' + esc(group.area ? numberText(group.area, "㎡") : "-") + '</td>' +
+        '<td>' + esc(registerValue(group.structures.join(" · "))) + '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
   function buildingOptionLabel(building, index) {
     return joinText(building.buildingName, building.dongName, building.mainAnnex) === "정보 없음"
       ? "건축물 " + (index + 1)
@@ -371,16 +437,12 @@
     if (state.buildingIndex >= buildings.length) state.buildingIndex = 0;
     var building = buildings[state.buildingIndex];
     var listingFloor = extractListingFloor(state.item && state.item.room);
-    var matchedFloors = (building.floors || []).filter(function (row) {
-      return listingFloor != null && signedFloor(row) === listingFloor;
-    });
-    var matchedArea = matchedFloors.reduce(function (sum, row) { return sum + (asNumber(row.area) || 0); }, 0);
-    var parkingTotal = [
+    var parkingTotal = sumKnown([
       building.indoorMechanicalParking,
       building.outdoorMechanicalParking,
       building.indoorSelfParking,
       building.outdoorSelfParking
-    ].reduce(function (sum, value) { return sum + (asNumber(value) || 0); }, 0);
+    ]);
     var zones = (building.zones || []).map(function (zone) {
       return joinText(zone.type, zone.name, zone.detail);
     }).filter(function (value, index, values) {
@@ -395,65 +457,44 @@
         }).join("") +
       '</select></label>' : "";
 
-    var basicRows = [
-      rowHtml("건물명", esc(building.buildingName || building.dongName || "정보 없음")),
-      rowHtml("대장 종류", esc(building.registerType || "정보 없음")),
-      rowHtml("주용도", esc(joinText(building.mainUse, building.otherUse))),
-      rowHtml("구조", esc(joinText(building.structure, building.otherStructure))),
-      rowHtml("지붕", esc(joinText(building.roof, building.otherRoof))),
-      rowHtml("층수", esc("지상 " + numberText(building.groundFloors, "층") + " · 지하 " + numberText(building.undergroundFloors, "층"))),
-      rowHtml("높이", esc(numberText(building.height, "m"))),
-      rowHtml("사용승인", esc(dateText(building.approvalDate))),
-      rowHtml("건축물 연령", esc(ageText(building.approvalDate)))
-    ];
-    var floorRows = [
-      rowHtml("매물 입력층", esc(floorLabel(listingFloor))),
-      rowHtml("대장 층 확인", esc(matchedFloors.length ? matchedFloors.map(function (row) {
-        return row.floorName || floorLabel(signedFloor(row));
-      }).join(" · ") : "일치 자료 없음")),
-      rowHtml("층 공식 용도", esc(uniqueText(matchedFloors, "mainUse"))),
-      rowHtml("기타 용도", esc(uniqueText(matchedFloors, "otherUse"))),
-      rowHtml("층 구조", esc(uniqueText(matchedFloors, "structure"))),
-      rowHtml("층 면적", esc(matchedFloors.length ? areaText(matchedArea) : "정보 없음"))
-    ];
-    var areaRows = [
-      rowHtml("대지면적", esc(areaText(building.siteArea))),
-      rowHtml("건축면적", esc(areaText(building.buildingArea))),
-      rowHtml("연면적", esc(areaText(building.totalArea))),
-      rowHtml("용적률 산정면적", esc(areaText(building.floorArea))),
-      rowHtml("건폐율", esc(numberText(building.buildingCoverageRatio, "%"))),
-      rowHtml("용적률", esc(numberText(building.floorAreaRatio, "%")))
-    ];
-    var facilityRows = [
-      rowHtml("승용 승강기", esc(numberText(building.passengerElevators, "대"))),
-      rowHtml("비상용 승강기", esc(numberText(building.emergencyElevators, "대"))),
-      rowHtml("주차 합계", esc(numberText(parkingTotal, "대"))),
-      rowHtml("옥내 자주식", esc(numberText(building.indoorSelfParking, "대"))),
-      rowHtml("옥외 자주식", esc(numberText(building.outdoorSelfParking, "대"))),
-      rowHtml("옥내 기계식", esc(numberText(building.indoorMechanicalParking, "대"))),
-      rowHtml("옥외 기계식", esc(numberText(building.outdoorMechanicalParking, "대")))
-    ];
-    var permitRows = [
-      rowHtml("허가일", esc(dateText(building.permitDate))),
-      rowHtml("착공일", esc(dateText(building.startDate))),
-      rowHtml("사용승인일", esc(dateText(building.approvalDate))),
-      rowHtml("내진설계 적용", esc(building.seismicDesign || "정보 없음")),
-      rowHtml("내진능력", esc(building.seismicAbility || "정보 없음"))
-    ];
+    var mechanicalParking = sumKnown([building.indoorMechanicalParking, building.outdoorMechanicalParking]);
+    var selfParking = sumKnown([building.indoorSelfParking, building.outdoorSelfParking]);
+    var zoneText = zones.length ? zones.join(" / ") : "정보 없음";
+    var buildingName = joinText(building.buildingName, building.dongName);
+    var floorTableRows = groupedFloorRows(building.floors || [], listingFloor);
+    var summaryRows = [
+      registerTableRow("소재지", building.lotAddress || state.parcel.lotAddress || state.item.address),
+      registerTableRow("도로명", building.roadAddress),
+      registerTableRow("건물명", buildingName, "건축물대장구분", building.registerType),
+      registerTableRow("용도지역", zoneText, "사용승인일", dateText(building.approvalDate)),
+      registerTableRow("주용도", building.mainUse, "기타용도", building.otherUse),
+      registerTableRow("주구조", joinText(building.structure, building.otherStructure), "지붕구조", joinText(building.roof, building.otherRoof)),
+      registerTableRow("대지면적", areaText(building.siteArea), "건축면적", areaText(building.buildingArea)),
+      registerTableRow("연면적", areaText(building.totalArea), "(용적률산정용)연면적", areaText(building.floorArea)),
+      registerTableRow("건폐율", numberText(building.buildingCoverageRatio, "%"), "용적률", numberText(building.floorAreaRatio, "%")),
+      registerTableRow("세대수", numberText(building.householdCount, "세대"), "가구수", numberText(building.familyCount, "가구")),
+      registerTableRow("지상층수", numberText(building.groundFloors, "층"), "지하층수", numberText(building.undergroundFloors, "층")),
+      registerTableRow("엘리베이터", countPair("승용", building.passengerElevators, "비상용", building.emergencyElevators), "주차", countPair("기계식", mechanicalParking, "자주식", selfParking) + " / 합계 " + registerValue(parkingTotal == null ? null : numberText(parkingTotal, "대"))),
+      registerTableRow("허가일", dateText(building.permitDate), "착공일", dateText(building.startDate)),
+      registerTableRow("내진능력", building.seismicAbility, "내진설계 적용 여부", building.seismicDesign)
+    ].join("");
 
     body.innerHTML = '' +
-      '<div class="building-register-address">' +
-        '<div><span>지번 주소</span><strong>' + esc(building.lotAddress || state.parcel.lotAddress || state.item.address || "정보 없음") + '</strong></div>' +
-        '<div><span>도로명 주소</span><strong>' + esc(building.roadAddress || "정보 없음") + '</strong></div>' +
-      '</div>' + selector +
-      '<div class="building-register-sections">' +
-        sectionHtml("기본 현황", basicRows) +
-        sectionHtml("매물층 대장 확인", floorRows, matchedFloors.length ? "floor-match" : "floor-warning") +
-        sectionHtml("면적·비율", areaRows) +
-        sectionHtml("승강기·주차", facilityRows) +
-        sectionHtml("허가·안전", permitRows) +
-        sectionHtml("지역·지구", [rowHtml("지정 현황", esc(zones.length ? zones.join(" / ") : "정보 없음"), true)]) +
-      '</div>' +
+      selector +
+      '<section class="building-register-sheet-section">' +
+        '<h3>건축물대장 기본정보</h3>' +
+        '<div class="building-register-table-wrap"><table class="building-register-summary-table"><tbody>' +
+          summaryRows +
+        '</tbody></table></div>' +
+      '</section>' +
+      '<p class="building-register-reference">* 공공데이터 참고용 자료로 실제 발급본과 차이가 있을 수 있습니다.</p>' +
+      '<section class="building-register-floor-section">' +
+        '<h3>층별내역</h3>' +
+        '<div class="building-register-table-wrap"><table class="building-register-floor-table">' +
+          '<thead><tr><th>층</th><th>용도</th><th>면적</th><th>구조</th></tr></thead>' +
+          '<tbody>' + (floorTableRows || '<tr><td colspan="4" class="empty-floor">조회된 층별내역이 없습니다.</td></tr>') + '</tbody>' +
+        '</table></div>' +
+      '</section>' +
       '<div class="building-register-notice"><strong>위반건축물 여부 안내</strong><p>공공 건축물대장 API에는 위반건축물 표시 항목이 제공되지 않습니다. 계약·중개 전 정부24 발급본 또는 관할 행정기관에서 별도 확인하세요.</p></div>' +
       '<div class="building-register-source">' +
         '<img src="assets/molit-logo.png" alt="국토교통부">' +
