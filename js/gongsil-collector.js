@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.3";
+  var VERSION = "1.0.4";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -701,6 +701,7 @@
 
       var phone = normalizePhone(pick(candidate, ["Tel", "tel", "Phone", "phone"]));
       var label = text(pick(candidate, ["Type2", "Ty", "Type", "Label", "Name"]));
+      var tenantHint = isTenantLabel(label);
 
       if (!phone && tidx) {
         var response = await fetchPhone(item, candidate, requestBody, addressData);
@@ -719,8 +720,8 @@
       if (!phone) continue;
       contacts.push({
         phone: phone,
-        label: contactLabel(label),
-        tenant: isTenantLabel(label)
+        label: contactLabel(tenantHint ? "S" : label),
+        tenant: tenantHint || isTenantLabel(label)
       });
     }
 
