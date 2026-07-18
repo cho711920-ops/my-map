@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.0";
+  var VERSION = "1.0.1";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -263,6 +263,13 @@
       );
 
       var result = await sendToAppsScript(transformed);
+      if (!result || result.ok !== true) {
+        throw new Error(
+          result && result.message
+            ? result.message
+            : "Apps Script에서 저장 성공 응답을 받지 못했습니다."
+        );
+      }
       var message = result && result.message
         ? result.message
         : "공실박스 매물 전송을 완료했습니다.";
@@ -734,7 +741,7 @@
   async function sendToAppsScript(records) {
     var requestId =
       "gongsil-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
-    await fetch(APPS_SCRIPT_URL, {
+    await originalFetch(APPS_SCRIPT_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "content-type": "text/plain;charset=utf-8" },
@@ -748,12 +755,11 @@
     try {
       return await pollMutationStatus(requestId);
     } catch (error) {
-      return {
-        ok: true,
-        message:
-          "전송은 완료했습니다. 결과 확인이 지연되면 5초 후 시트1을 확인해 주세요. " +
-          "(새 Apps Script 배포가 먼저 필요합니다.)"
-      };
+      throw new Error(
+        "시트 저장 결과를 확인하지 못했습니다. " +
+        "Apps Script Code.gs가 v6.4.6인지, 새 버전으로 배포했는지 확인해 주세요. " +
+        "요청번호: " + requestId
+      );
     }
   }
 
