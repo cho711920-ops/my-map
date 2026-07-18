@@ -442,12 +442,19 @@
 
   function buildLotAddress(item, decrypted) {
     var full = cleanAddress(decrypted.addr);
-    if (full && /\d/.test(full) && !/로|길\s*\d/.test(full)) return full;
-
     var province = text(pick(item, ["AddrDo", "Do", "addrdo"]));
     var city = text(pick(item, ["AddrSi", "AddrCity", "City", "addrcity"]));
     var dong = text(pick(item, ["AddrDong", "Dong", "addrdong"]));
     var lee = text(pick(item, ["AddrLee", "Lee", "addrlee"]));
+    var district = getDistrict(item, city);
+
+    if (full && /\d/.test(full) && !/로|길\s*\d/.test(full)) {
+      if (district && !/(?:^|\s)[가-힣]+구(?:\s|$)/.test(full)) {
+        full = district + " " + full;
+      }
+      return cleanAddress(full);
+    }
+
     var mountain = truthy(pick(item, ["AddrSan", "San", "addrsan"])) ? "산 " : "";
     var bun1 = text(decrypted.bun1).replace(/[^0-9]/g, "");
     var bun2 = text(decrypted.bun2).replace(/[^0-9]/g, "");
@@ -457,6 +464,21 @@
 
     if (composed && /\d/.test(composed)) return composed;
     if (full && /\d/.test(full)) return full;
+    return "";
+  }
+
+  function getDistrict(item, city) {
+    var candidates = [
+      city,
+      pick(item, ["AddrCity", "City", "addrcity"]),
+      pick(item, ["AddrSi", "Si", "addrsi"]),
+      pick(item, ["Sigungu", "Gu", "District"])
+    ].map(text);
+
+    for (var index = 0; index < candidates.length; index += 1) {
+      var match = candidates[index].match(/(?:^|\s)([가-힣]+구)(?:\s|$)/);
+      if (match) return match[1];
+    }
     return "";
   }
 
