@@ -295,6 +295,18 @@
     return "경쟁 낮음";
   }
 
+  function competitionPenalty(label) {
+    if (label === "경쟁 밀집") return 12;
+    if (label === "경쟁 보통") return 5;
+    return 0;
+  }
+
+  function proposalLevel(score) {
+    if (score >= 72) return "우선 제안";
+    if (score >= 55) return "조건부 제안";
+    return "보완 후 검토";
+  }
+
   function buildSectorAnalyses(data, item, floor) {
     var area = safeNumber(item && item.area);
     var total300 = radiusSummary(data, 300).totalCount;
@@ -302,14 +314,21 @@
       var metric = aggregateSectorMetric(data, definition.pattern);
       var floorScore = floorFitScore(definition, floor);
       var areaScore = areaFitScore(definition, area);
-      var share = total300 > 0 ? metric.count300 / total300 : 0;
-      var ecosystemScore = Math.min(30, Math.round(Math.sqrt(Math.max(0, share) * 100) * 6));
-      var localScore = metric.count100 > 0 ? Math.min(10, 4 + metric.count100) : 0;
+      var ecosystemScore = metric.count300 > 0
+        ? Math.min(25, 8 + Math.round(Math.log(metric.count300 + 1) * 4))
+        : 0;
+      var localScore = metric.count100 > 0
+        ? Math.min(8, 2 + Math.round(Math.sqrt(metric.count100) * 2))
+        : (metric.nearestDistance !== null && metric.nearestDistance <= 250 ? 3 : 0);
       var evidenceScore = metric.count500 > 0 ? 5 : 0;
-      var score = Math.min(100, floorScore + areaScore + ecosystemScore + localScore + evidenceScore);
+      var competition = competitionLabel(metric, total300);
+      var penalty = competitionPenalty(competition);
+      var score = Math.max(0, Math.min(100,
+        floorScore + areaScore + ecosystemScore + localScore + evidenceScore - penalty
+      ));
       var risks = [];
       if (floorScore <= 5) risks.push("층수와 업종 유입방식 불일치");
-      if (competitionLabel(metric, total300) === "경쟁 밀집") risks.push("유사업종 밀집으로 차별화 필요");
+      if (competition === "경쟁 밀집") risks.push("유사업종 밀집으로 차별화 필요");
       if (areaScore <= 4) risks.push("일반적인 운영면적과 차이 큼");
       if (!metric.count300) risks.push("300m 내 동종 생태계 확인 부족");
       return {
@@ -319,7 +338,19 @@
         metric:metric,
         floorScore:floorScore,
         areaScore:areaScore,
-        competition:competitionLabel(metric, total300),
+        ecosystemScore:ecosystemScore,
+        localScore:localScore,
+        evidenceScore:evidenceScore,
+        competitionPenalty:penalty,
+        competition:competition,
+        proposalLevel:proposalLevel(score),
+        components:{
+          propertyFit:floorScore + areaScore,
+          ecosystem:ecosystemScore,
+          proximity:localScore,
+          evidence:evidenceScore,
+          competitionPenalty:penalty
+        },
         reasons:[
           floorReason(definition, floor),
           areaReason(definition, area),
@@ -360,6 +391,80 @@
     return { score:score, label:label };
   }
 
+  function analysisConfidence(data, item, floor) {
+    var score = 30;
+    var missing = [];
+    var area = safeNumber(item && item.area);
+    var total300 = safeNumber(radiusSummary(data, 300).totalCount);
+    var mediumRows = metricRows(data, "medium");
+
+    if (floor.value !== null) score += 20;
+    else missing.push("층수");
+    if (area > 0) score += 20;
+    else missing.push("면적");
+    if (total300 > 0) score += 15;
+    if (mediumRows.length >= 5) score += 10;
+    if (safeNumber(data && data.version) >= 3) score += 5;
+    if (data && data.truncated) {
+      score -= 15;
+      missing.push("공식 업소 전체 조회");
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    return {
+      score:score,
+      label:score >= 85 ? "높음" : score >= 65 ? "보통" : "제한적",
+      missing:missing
+    };
+  }
+
+  function buildDecisionBrief(data, item, analysis) {
+    var top = analysis.recommendations[0] || analysis.sectors[0];
+    var total300 = safeNumber(radiusSummary(data, 300).totalCount);
+    var strengths = [];
+    var cautions = (top && top.risks ? top.risks.slice(0, 2) : []);
+
+    if (top) {
+      strengths.push(top.reasons[0]);
+      strengths.push(top.reasons[1]);
+      strengths.push("300m 내 " + top.name + " 관련 업소 " + top.metric.count300 + "개");
+    }
+    if (analysis.concentration && analysis.concentration.label) {
+      strengths.push("입지 집중도 " + analysis.concentration.label + " · 반경 300m 전체 업소 " + total300 + "개");
+    }
+
+    if (!cautions.length && top) {
+      cautions.push(top.competition === "경쟁 낮음"
+        ? "동종 업소가 적어 실제 수요와 공백 원인 확인 필요"
+        : "동종 업소와의 가격·서비스 차별화 확인 필요");
+    }
+    if (analysis.confidence.missing.length) {
+      cautions.push(analysis.confidence.missing.join("·") + " 입력 시 분석 정밀도 향상");
+    }
+
+    var summary = top
+      ? top.name + "을 " + top.proposalLevel + " 대상으로 판단합니다. 매물조건 적합도 " +
+        top.components.propertyFit + "/55점, 상권 형성도 " + top.components.ecosystem +
+        "/25점이며 경쟁 부담 " + top.components.competitionPenalty + "점을 차감한 비교 결과입니다."
+      : "비교 가능한 임차 업종 근거가 부족합니다.";
+
+    return {
+      summary:summary,
+      strengths:strengths.slice(0, 3),
+      cautions:cautions.slice(0, 3),
+      excluded:["코너·전면 노출", "도로 폭·접근성", "주차·엘리베이터", "유동인구·매출"]
+    };
+  }
+
+  function sectorSmallCategoryRows(data, sectorId, limit) {
+    var definition = sectorDefinition(sectorId);
+    return metricRows(data, "small").filter(function (row) {
+      return definition.pattern.test(String(row.name || ""));
+    }).sort(function (a, b) {
+      return safeNumber(b.count300) - safeNumber(a.count300);
+    }).slice(0, limit || 3);
+  }
+
   function buildAnalysis(data, item) {
     var floor = parseFloor(item);
     var sectors = buildSectorAnalyses(data, item, floor);
@@ -381,7 +486,7 @@
     summary += floor.label + (area ? "·" + area + "평" : "") + " 조건에서는 " + topNames + " 임차군을 우선 제안하는 편이 합리적입니다.";
     if (perArea) summary += " 월세와 관리비를 합친 평당 월 고정비는 " + perArea + "만원입니다.";
 
-    return {
+    var analysis = {
       floor:floor,
       sectors:sectors,
       profiles:profiles,
@@ -390,8 +495,12 @@
       recommendations:recommendations,
       unsuitable:unsuitable,
       perArea:perArea,
-      summary:summary
+      summary:summary,
+      confidence:analysisConfidence(data, item, floor)
     };
+
+    analysis.decision = buildDecisionBrief(data, item, analysis);
+    return analysis;
   }
 
   function radiusCardsHtml(data) {
@@ -401,13 +510,38 @@
     }).join("");
   }
 
-  function recommendationHtml(rows) {
+  function decisionBriefHtml(analysis) {
+    var decision = analysis.decision;
+    var confidence = analysis.confidence;
+    return '<section class="commerce-decision-brief">' +
+      '<div class="commerce-decision-head"><div><span>중개 브리핑 결론</span><h4>' + esc(decision.summary) + '</h4></div>' +
+        '<b class="commerce-confidence confidence-' + esc(confidence.label) + '">근거 충실도 ' + esc(confidence.label) + ' ' + confidence.score + '점</b></div>' +
+      '<div class="commerce-decision-columns"><div><strong>설명할 핵심 근거</strong><ul>' + decision.strengths.map(function (text) {
+        return '<li>' + esc(text) + '</li>';
+      }).join("") + '</ul></div><div><strong>함께 설명할 주의점</strong><ul>' + decision.cautions.map(function (text) {
+        return '<li>' + esc(text) + '</li>';
+      }).join("") + '</ul></div></div>' +
+      '<div class="commerce-not-evaluated"><span>현재 데이터로 단정하지 않음</span>' + decision.excluded.map(function (text) {
+        return '<b>' + esc(text) + '</b>';
+      }).join("") + '</div>' +
+    '</section>';
+  }
+
+  function recommendationHtml(rows, data) {
     return rows.map(function (row, index) {
       var risk = row.risks.length ? row.risks[0] : "추가 현장조건 확인 필요";
+      var smallRows = sectorSmallCategoryRows(data, row.id, 3);
+      var smallHtml = smallRows.length
+        ? '<div class="commerce-subcategory-line"><span>세부 구성</span>' + smallRows.map(function (smallRow) {
+            return '<b>' + esc(smallRow.name) + ' ' + safeNumber(smallRow.count300) + '</b>';
+          }).join("") + '</div>'
+        : '';
       return '<article class="commerce-recommend-card" data-sector-id="' + esc(row.id) + '">' +
-        '<div class="commerce-recommend-rank"><span>' + (index + 1) + '순위</span><strong>' + esc(row.name) + '</strong><b>' + row.score + '점</b></div>' +
+        '<div class="commerce-recommend-rank"><span>' + (index + 1) + '순위 · ' + esc(row.proposalLevel) + '</span><strong>' + esc(row.name) + '</strong><b>' + row.score + '점</b></div>' +
         '<div class="commerce-score-track"><i style="width:' + row.score + '%"></i></div>' +
+        '<div class="commerce-score-breakdown"><span>매물<b>' + row.components.propertyFit + '/55</b></span><span>상권<b>' + row.components.ecosystem + '/25</b></span><span>근접<b>' + row.components.proximity + '/8</b></span><span>경쟁<b>' + (row.components.competitionPenalty ? '-' + row.components.competitionPenalty : '0') + '</b></span></div>' +
         '<ul><li>' + esc(row.reasons[0]) + '</li><li>' + esc(row.reasons[1]) + '</li><li>공식 업소: 100m ' + row.metric.count100 + '개 · 300m ' + row.metric.count300 + '개</li></ul>' +
+        smallHtml +
         '<div class="commerce-risk"><span>' + esc(row.competition) + '</span>' + esc(risk) + '</div>' +
         '<button type="button" onclick="showPublicSectorCompetition(\'' + esc(row.id) + '\')">지도 경쟁업체 보기</button>' +
       '</article>';
@@ -427,6 +561,7 @@
     var nearest = stores.slice(0, 5);
     var direction = directionalCompetition(stores, item);
     var synergy = synergyRows(data, definition.id);
+    var smallCategories = sectorSmallCategoryRows(data, definition.id, 5);
     var directionCounts = direction.counts;
     var nearestHtml = nearest.length ? nearest.map(function (store, index) {
       return '<div class="commerce-nearest-row"><b>' + (index + 1) + '</b><span><strong>' + esc(store.name || store.small || "업소명 미등록") + '</strong><small>' + esc(store.small || store.medium || "") + (store.address ? ' · ' + esc(store.address) : '') + '</small></span><em>' + safeNumber(store.distance) + 'm</em></div>';
@@ -434,10 +569,16 @@
     var synergyHtml = synergy.map(function (row) {
       return '<span><b>' + esc(row.name) + '</b>100m ' + row.count100 + '개 · 300m ' + row.count300 + '개</span>';
     }).join("");
+    var smallCategoryHtml = smallCategories.length
+      ? '<div class="commerce-sector-subcategories"><span>세부 업종 구성</span>' + smallCategories.map(function (row) {
+          return '<b>' + esc(row.name) + ' <em>' + safeNumber(row.count300) + '개</em></b>';
+        }).join("") + '</div>'
+      : '';
 
     return '<div class="commerce-sector-toolbar"><label>상세 분석 업종<select id="commerceSectorSelect" onchange="showPublicSectorCompetition(this.value)">' + sectorSelectOptions(definition.id) + '</select></label><button type="button" onclick="showPublicSectorCompetition(\'' + esc(definition.id) + '\')">지도에 표시</button></div>' +
       '<div class="commerce-sector-summary"><div><span>100m</span><strong>' + sector.metric.count100 + '개</strong></div><div><span>300m</span><strong>' + sector.metric.count300 + '개</strong></div><div><span>500m</span><strong>' + sector.metric.count500 + '개</strong></div><div><span>최근접</span><strong>' + (sector.metric.nearestDistance === null ? '-' : sector.metric.nearestDistance + 'm') + '</strong></div></div>' +
       '<div class="commerce-direction"><div><span>상대적 공백 방향</span><strong>' + esc(direction.gap) + '</strong></div><div><span>밀집 방향</span><strong>' + esc(direction.dense) + '</strong></div><small>북 ' + directionCounts.north + ' · 동 ' + directionCounts.east + ' · 남 ' + directionCounts.south + ' · 서 ' + directionCounts.west + '</small></div>' +
+      smallCategoryHtml +
       '<div class="commerce-detail-columns"><section><h5>최근접 경쟁업체</h5>' + nearestHtml + '</section><section><h5>연관 업종 생태계</h5><div class="commerce-synergy-list">' + synergyHtml + '</div></section></div>' +
       '<p class="commerce-sector-note">지도에는 성능 보호를 위해 가까운 업체부터 업종군별 최대 40개를 표시합니다. 전체 경쟁 수치는 모든 공식 업소를 반영합니다.</p>';
   }
@@ -471,22 +612,23 @@
 
     target.innerHTML = '' +
       '<div class="public-commerce-head">' +
-        '<div><span class="public-commerce-source">공식데이터 · 소상공인시장진흥공단</span><h3>매물 맞춤 전문 브리핑</h3></div>' +
+        '<div><span class="public-commerce-source">출처: 소상공인365 · 소상공인시장진흥공단</span><h3>매물 맞춤 전문 브리핑</h3></div>' +
         '<div class="public-commerce-count"><strong>' + safeNumber(radiusSummary(data, 300).totalCount).toLocaleString("ko-KR") + '</strong><span>반경 300m 영업 업소</span></div>' +
       '</div>' +
       '<div class="commerce-profile-line"><span>상권 유형 추정</span>' + profileNames.map(function (name) { return '<b>' + esc(name) + '</b>'; }).join("") + '</div>' +
       '<div class="public-commerce-brief"><span class="commerce-inference-tag">업소구성 기반 해석</span>' + esc(analysis.summary) + '</div>' +
+      decisionBriefHtml(analysis) +
       '<div class="commerce-radius-grid">' + radiusCardsHtml(data) + '</div>' +
       '<div class="commerce-signal-grid">' +
         '<div><span>입지 집중도</span><strong>' + esc(analysis.concentration.label) + '</strong><small>100m/300m 밀도비 ' + analysis.concentration.ratio + '</small></div>' +
         '<div><span>업종 다양성</span><strong>' + esc(analysis.diversity.label) + '</strong><small>구성지수 ' + analysis.diversity.score + '/100</small></div>' +
         '<div><span>매물 조건</span><strong>' + esc(analysis.floor.label) + ' · ' + (safeNumber(item && item.area) ? safeNumber(item.area) + '평' : '면적 미입력') + '</strong><small>' + (analysis.perArea ? '평당 월고정비 ' + analysis.perArea + '만원' : '고정비 계산자료 부족') + '</small></div>' +
       '</div>' +
-      '<section class="commerce-section"><div class="commerce-section-title"><div><span>매물조건+공식업소 분석</span><h4>우선 제안 임차 타깃</h4></div><small>성공확률이 아닌 비교 적합도</small></div><div class="commerce-recommend-grid">' + recommendationHtml(analysis.recommendations) + '</div></section>' +
+      '<section class="commerce-section"><div class="commerce-section-title"><div><span>매물조건+공식업소 분석</span><h4>우선 제안 임차 타깃</h4></div><small>성공확률이 아닌 비교 적합도</small></div><div class="commerce-recommend-grid">' + recommendationHtml(analysis.recommendations, data) + '</div></section>' +
       '<section class="commerce-section commerce-sector-detail"><div class="commerce-section-title"><div><span>업종별 위치 분석</span><h4>경쟁업체 지도·최근접 분석</h4></div><small>버튼을 누르면 지도에 표시</small></div><div id="commerceSectorDetailBody">' + sectorDetailHtml(data, item, analysis, initialSectorId) + '</div></section>' +
       '<section class="commerce-section commerce-unsuitable"><div class="commerce-section-title"><div><span>층수·면적 기준</span><h4>우선순위가 낮은 업종</h4></div></div><div>' + unsuitable + '</div></section>' +
       '<section class="commerce-section"><div class="commerce-section-title"><div><span>공식데이터</span><h4>주요 업종 경쟁·집적 현황</h4></div><small>거리별 영업 업소 수</small></div>' + categoryTableHtml(data) + '</section>' +
-      '<div class="public-commerce-evidence">출처: 소상공인시장진흥공단 상가(상권)정보 API · 분석시각 ' + esc(data.generatedAt || "-") + (data.cached ? ' · 캐시 사용' : '') + '<br>업소 수는 공식 데이터의 현재 등록 현황입니다. 상권 유형·임차 타깃·적합도는 매물 층수·면적과 업소 구성을 결합한 JS부동산 분석이며 매출·유동인구 추정값은 포함하지 않습니다.</div>';
+      '<div class="public-commerce-evidence">출처: 소상공인365 · 소상공인시장진흥공단 상가(상권)정보 API · 분석시각 ' + esc(data.generatedAt || "-") + (data.cached ? ' · 캐시 사용' : '') + '<br>업소 수는 공식 데이터의 현재 등록 현황입니다. 상권 유형·임차 타깃·적합도는 매물 층수·면적과 업소 구성을 결합한 JS부동산 분석이며 매출·유동인구 추정값은 포함하지 않습니다.</div>';
   }
 
   function removeCompetitorLegend() {
@@ -707,7 +849,7 @@
   window.buildSmartItemCardHtml = function (item) {
     return '' +
       '<article class="ai-professional-card" onclick="event.stopPropagation();">' +
-        '<header class="professional-card-head"><div><span>JS부동산</span><h2>상가 매물 전문 브리핑</h2></div><b>공식데이터 연동</b></header>' +
+        '<header class="professional-card-head"><div><span>JS부동산</span><h2>상가 매물 전문 브리핑</h2></div><b>출처: 소상공인365</b></header>' +
         propertyFactsHtml(item) +
         '<section class="public-commerce-card professional-commerce-wrap"><div id="publicCommercialBrief"><div class="public-commerce-loading">공식 상권 브리핑 준비 중…</div></div></section>' +
       '</article>';
@@ -727,6 +869,11 @@
 
     if (data && data.ok && analysis) {
       lines.push("", "[핵심 브리핑]", analysis.summary);
+      lines.push("", "[중개 브리핑 결론]", analysis.decision.summary);
+      lines.push("근거 충실도: " + analysis.confidence.label + " " + analysis.confidence.score + "점");
+      lines.push("핵심 근거: " + analysis.decision.strengths.join(" / "));
+      lines.push("주의점: " + analysis.decision.cautions.join(" / "));
+      lines.push("현재 데이터로 단정하지 않음: " + analysis.decision.excluded.join(" / "));
       lines.push("", "[거리별 공식 업소]", [100, 300, 500].map(function (radius) {
         var row = radiusSummary(data, radius);
         return radius + "m " + row.totalCount + "개(㏊당 " + round1(row.densityPerHa) + "개)";
@@ -734,7 +881,9 @@
       lines.push("입지 집중도: " + analysis.concentration.label + " / 업종 다양성: " + analysis.diversity.label + " " + analysis.diversity.score + "점");
       lines.push("", "[우선 제안 임차 타깃]");
       analysis.recommendations.forEach(function (row, index) {
-        lines.push((index + 1) + ". " + row.name + " " + row.score + "점 · " + row.reasons.join(" · ") + " · " + row.competition);
+        lines.push((index + 1) + ". " + row.name + " " + row.score + "점(" + row.proposalLevel + ") · " +
+          "매물 " + row.components.propertyFit + "/55 · 상권 " + row.components.ecosystem + "/25 · 근접 " + row.components.proximity + "/8 · 경쟁 " + (row.components.competitionPenalty ? '-' + row.components.competitionPenalty : '0') + " · " +
+          row.reasons.join(" · ") + " · " + row.competition);
       });
       lines.push("", "[우선순위가 낮은 업종]", analysis.unsuitable.map(function (row) { return row.name; }).join(" / "));
       lines.push("", "[주요 업종 경쟁·집적]", metricRows(data, "medium").slice(0, 8).map(function (row) {
@@ -756,7 +905,7 @@
     } else {
       lines.push("", "공식 상권 데이터가 아직 준비되지 않았습니다.");
     }
-    lines.push("출처: 소상공인시장진흥공단 상가(상권)정보 API");
+    lines.push("출처: 소상공인365 · 소상공인시장진흥공단 상가(상권)정보 API");
     lines.push("안내: 상권 유형·임차 타깃·적합도는 공식 업소 현황과 매물조건을 결합한 분석이며 매출·유동인구 추정값은 포함하지 않습니다.");
     return lines.join("\n");
   }
@@ -782,14 +931,15 @@
 
     var report = reportText(item, data, analysis);
     var html = '<!doctype html><html><head><meta charset="utf-8"><title>JS부동산 상가 매물 브리핑</title><style>' +
-      '@page{size:A4;margin:13mm}body{font-family:Arial,"Malgun Gothic",sans-serif;color:#172033;margin:0}.report{max-width:780px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #1671e8;padding-bottom:12px}.head h1{margin:0;font-size:24px;color:#1467d8}.source{font-size:10px;color:#667085}.property{padding:15px 0}.property h2{margin:0 0 5px}.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.fact,.section{border:1px solid #dbe6f4;border-radius:9px;padding:10px}.fact span{display:block;font-size:10px;color:#667085}.fact b{display:block;margin-top:4px;font-size:13px}.section{margin-top:11px;page-break-inside:avoid}.section h3{margin:0 0 8px;color:#1467d8}.brief{line-height:1.7;font-weight:700}.targets{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.target{border:1px solid #dbe6f4;border-radius:8px;padding:9px}.target strong{display:block}.target b{color:#1467d8}.target small{display:block;margin-top:5px;line-height:1.45;color:#526174}.pre{white-space:pre-wrap;font-size:11px;line-height:1.6}.foot{margin-top:13px;font-size:9px;color:#667085}</style></head><body><div class="report">' +
-      '<div class="head"><h1>상가 매물 전문 브리핑</h1><div class="source">공식데이터 · 소상공인시장진흥공단</div></div>' +
+      '@page{size:A4;margin:13mm}body{font-family:Arial,"Malgun Gothic",sans-serif;color:#172033;margin:0}.report{max-width:780px;margin:auto}.head{display:flex;justify-content:space-between;border-bottom:3px solid #1671e8;padding-bottom:12px}.head h1{margin:0;font-size:24px;color:#1467d8}.source{font-size:10px;color:#667085}.property{padding:15px 0}.property h2{margin:0 0 5px}.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.fact,.section{border:1px solid #dbe6f4;border-radius:9px;padding:10px}.fact span{display:block;font-size:10px;color:#667085}.fact b{display:block;margin-top:4px;font-size:13px}.section{margin-top:11px;page-break-inside:avoid}.section h3{margin:0 0 8px;color:#1467d8}.brief{line-height:1.7;font-weight:700}.decision-meta{margin-top:6px;color:#1467d8;font-weight:800}.decision-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.decision-grid div{padding:8px;border-radius:7px;background:#f7faff}.decision-grid strong{font-size:11px}.decision-grid ul{margin:5px 0 0;padding-left:16px;font-size:10px;line-height:1.5}.targets{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.target{border:1px solid #dbe6f4;border-radius:8px;padding:9px}.target strong{display:block}.target b{color:#1467d8}.target small{display:block;margin-top:5px;line-height:1.45;color:#526174}.pre{white-space:pre-wrap;font-size:11px;line-height:1.6}.foot{margin-top:13px;font-size:9px;color:#667085}</style></head><body><div class="report">' +
+      '<div class="head"><h1>상가 매물 전문 브리핑</h1><div class="source">출처: 소상공인365 · 소상공인시장진흥공단</div></div>' +
       '<div class="property"><h2>' + esc(item.name || "매물") + '</h2><div>' + esc([item.address,item.room].filter(Boolean).join(" · ")) + '</div></div>' +
       '<div class="facts"><div class="fact"><span>층수</span><b>' + esc(analysis.floor.label) + '</b></div><div class="fact"><span>면적</span><b>' + (safeNumber(item.area) ? safeNumber(item.area) + '평' : '-') + '</b></div><div class="fact"><span>보증금 / 월세</span><b>' + money(item.deposit) + ' / ' + money(item.rent) + '</b></div><div class="fact"><span>평당 월고정비</span><b>' + (analysis.perArea ? analysis.perArea + '만원' : '-') + '</b></div></div>' +
       '<section class="section"><h3>핵심 브리핑</h3><div class="brief">' + esc(analysis.summary) + '</div></section>' +
+      '<section class="section"><h3>중개 브리핑 결론</h3><div class="brief">' + esc(analysis.decision.summary) + '</div><div class="decision-meta">근거 충실도 ' + esc(analysis.confidence.label) + ' ' + analysis.confidence.score + '점</div><div class="decision-grid"><div><strong>핵심 근거</strong><ul>' + analysis.decision.strengths.map(function(text){return '<li>'+esc(text)+'</li>';}).join('') + '</ul></div><div><strong>주의점</strong><ul>' + analysis.decision.cautions.map(function(text){return '<li>'+esc(text)+'</li>';}).join('') + '</ul></div></div></section>' +
       '<section class="section"><h3>우선 제안 임차 타깃</h3><div class="targets">' + analysis.recommendations.map(function(row){return '<div class="target"><strong>'+esc(row.name)+'</strong><b>'+row.score+'점</b><small>'+esc(row.reasons.join(' · '))+'</small></div>';}).join('') + '</div></section>' +
       '<section class="section"><h3>상권 상세 근거</h3><div class="pre">' + esc(report) + '</div></section>' +
-      '<div class="foot">출처: 소상공인시장진흥공단 상가(상권)정보 API · 분석시각 ' + esc(data.generatedAt || "-") + '<br>상권 유형·임차 타깃·적합도는 공식 업소 현황과 매물 조건을 결합한 분석이며 매출·유동인구 추정값은 포함하지 않습니다.</div>' +
+      '<div class="foot">출처: 소상공인365 · 소상공인시장진흥공단 상가(상권)정보 API · 분석시각 ' + esc(data.generatedAt || "-") + '<br>상권 유형·임차 타깃·적합도는 공식 업소 현황과 매물 조건을 결합한 분석이며 매출·유동인구 추정값은 포함하지 않습니다.</div>' +
       '</div></body></html>';
 
     var win = window.open("", "_blank", "width=900,height=1000");
