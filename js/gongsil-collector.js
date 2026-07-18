@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.7";
+  var VERSION = "1.0.8";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -878,7 +878,11 @@
       pidx: ""
     });
 
-    if (!payload.bidx || !payload.bfidx || !payload.adidx) {
+    if (
+      isMissingIdentifier(payload.bidx) ||
+      isMissingIdentifier(payload.bfidx) ||
+      isMissingIdentifier(payload.adidx)
+    ) {
       throw new Error(
         "상세조회 식별값 누락 (bidx=" + text(payload.bidx) +
         ", bfidx=" + text(payload.bfidx) +
@@ -1055,6 +1059,10 @@
       .slice(0, 3)
       .map(function (reason) { return "- " + reason + " " + counts[reason] + "개"; });
     return entries.length ? entries.join("\n") : "- 원인을 확인하지 못했습니다.";
+  }
+
+  function isMissingIdentifier(value) {
+    return value === undefined || value === null || value === "";
   }
 
   async function mapWithConcurrency(items, concurrency, worker) {
