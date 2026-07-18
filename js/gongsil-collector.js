@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.8";
+  var VERSION = "1.0.9";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -922,7 +922,7 @@
 
   function isTenantLabel(value) {
     var label = text(value).toUpperCase();
-    return label === "S" || /세입자|임차인/.test(label);
+    return label === "S" || /세입자|임차(?:인)?/.test(label);
   }
 
   function contactLabel(value) {
@@ -938,7 +938,7 @@
       "S": "세입자"
     };
     if (labels[code]) return labels[code];
-    if (/세입자|임차인/.test(raw)) return "세입자";
+    if (/세입자|임차(?:인)?/.test(raw)) return "세입자";
     if (/임대인|건물주|소유자|주인/.test(raw)) return "주인";
     if (/관리/.test(raw)) return "관리업체";
     if (/부동산|중개/.test(raw)) return "부동산";
