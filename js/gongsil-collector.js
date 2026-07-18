@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.5";
+  var VERSION = "1.0.6";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -22,7 +22,9 @@
     active: true,
     busy: false,
     capture: null,
-    capturedAt: 0
+    capturedAt: 0,
+    detailAuth: null,
+    detailCache: {}
   };
 
   var panel = createPanel();
@@ -57,6 +59,9 @@
     },
     getCapture: function () {
       return state.capture;
+    },
+    setDetailAuth: function (auth) {
+      state.detailAuth = auth || null;
     },
     transformItem: transformItem,
     decryptText: decryptText
@@ -127,6 +132,11 @@
           console.warn("[JS 공실박스] 목록 포착 실패", error);
         });
       }
+      if (state.active && isDetailRequest(input)) {
+        captureDetailRequest(input, init, response.clone()).catch(function (error) {
+          console.warn("[JS 공실박스] 상세정보 포착 실패", error);
+        });
+      }
       return response;
     };
     wrappedFetch.__jsGongsilPatched = true;
@@ -141,6 +151,47 @@
         ? input.url
         : "";
     return /\/api\/maps\/lists(?:\?|$)/i.test(url);
+  }
+
+  function isDetailRequest(input) {
+    var url = typeof input === "string"
+      ? input
+      : input && input.url
+        ? input.url
+        : "";
+    return /\/maps\/mmview(?:\?|$)/i.test(url);
+  }
+
+  async function captureDetailRequest(input, init, response) {
+    var source = "";
+    if (init && typeof init.body === "string") {
+      source = init.body;
+    } else if (input && typeof input.clone === "function") {
+      try {
+        source = await input.clone().text();
+      } catch (_) {}
+    }
+    if (!source) return;
+
+    var body;
+    var result;
+    try {
+      body = JSON.parse(source);
+      result = await response.json();
+    } catch (_) {
+      return;
+    }
+
+    if (body && body.mid) {
+      state.detailAuth = {
+        mid: body.mid,
+        guest: body.guest === true
+      };
+    }
+
+    if (result && result.res === "success" && result.data) {
+      state.detailCache[detailKey(body)] = result.data;
+    }
   }
 
   async function captureListRequest(input, init, response) {
@@ -216,6 +267,8 @@
       if (!items.length) {
         throw new Error("선택한 클러스터에서 매물을 찾지 못했습니다.");
       }
+
+      await ensureDetailAuth();
 
       setStatus(
         "지번주소와 전화번호를 확인하는 중입니다.",
@@ -328,6 +381,30 @@
     }
 
     return Object.keys(byId).map(function (key) { return byId[key]; });
+  }
+
+  async function ensureDetailAuth() {
+    if (state.detailAuth && state.detailAuth.mid) return state.detailAuth;
+
+    setStatus(
+      "상세 연락처 연결이 한 번 필요합니다.",
+      "매물 목록에서 아무 매물의 호실 또는 매물번호를 한 번 눌러 상세창을 열어 주세요.\n연결되는 즉시 전체 수집을 자동으로 계속합니다."
+    );
+    saveButton.textContent = "상세창 연결 대기 중";
+
+    for (var attempt = 0; attempt < 360; attempt += 1) {
+      if (state.detailAuth && state.detailAuth.mid) return state.detailAuth;
+      await delay(250);
+    }
+    throw new Error(
+      "상세 연락처 연결 시간이 초과되었습니다. 매물 상세창을 한 번 연 뒤 다시 저장해 주세요."
+    );
+  }
+
+  function delay(milliseconds) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, milliseconds);
+    });
   }
 
   function addItems(target, items) {
@@ -681,6 +758,14 @@
     var contacts = [];
     var candidates = [];
 
+    var detail = await fetchDetailData(item);
+    if (detail && detail.bilinfo && Array.isArray(detail.bilinfo.tels)) {
+      candidates = candidates.concat(detail.bilinfo.tels);
+    }
+    if (detail && detail.floorinfo && Array.isArray(detail.floorinfo.Tels)) {
+      candidates = candidates.concat(detail.floorinfo.Tels);
+    }
+
     ["Btel", "Ftel", "Tels", "TelList", "Phones"].forEach(function (key) {
       var value = item[key];
       if (Array.isArray(value)) candidates = candidates.concat(value);
@@ -702,20 +787,6 @@
       var phone = normalizePhone(pick(candidate, ["Tel", "tel", "Phone", "phone"]));
       var label = text(pick(candidate, ["Type2", "Ty", "Type", "Label", "Name"]));
       var tenantHint = isTenantLabel(label);
-
-      if (!phone && tidx) {
-        var response = await fetchPhone(item, candidate, requestBody, addressData);
-        phone = normalizePhone(
-          response && response.data
-            ? pick(response.data, ["Tel", "tel", "Phone"])
-            : pick(response, ["Tel", "tel", "Phone"])
-        );
-        label = text(
-          response && response.data
-            ? pick(response.data, ["Type2", "Ty", "Type", "Label"])
-            : pick(response, ["Type2", "Ty", "Type", "Label"])
-        ) || label;
-      }
 
       if (!phone) continue;
       contacts.push({
@@ -774,28 +845,46 @@
     };
   }
 
-  async function fetchPhone(item, tel, requestBody, addressData) {
+  function detailKey(source) {
+    return [
+      text(pick(source, ["Bidx", "bidx"])),
+      text(pick(source, ["Bfidx", "bfidx"])),
+      text(pick(source, ["Admidx", "adidx", "admidx"]))
+    ].join(":");
+  }
+
+  async function fetchDetailData(item) {
+    var key = detailKey(item);
+    if (state.detailCache[key]) return state.detailCache[key];
+    if (!state.detailAuth || !state.detailAuth.mid) return null;
+
     var payload = {
+      mid: state.detailAuth.mid,
+      guest: state.detailAuth.guest === true,
       bidx: pick(item, ["Bidx", "bidx"]),
       bfidx: pick(item, ["Bfidx", "bfidx"]),
-      tidx: pick(tel, ["Tidx", "tidx", "Tid", "id"]),
-      tittype: text(requestBody.lndTitleType),
-      sort: text(requestBody.ordersch1),
-      do: pick(item, ["AddrDo", "Do", "addrdo"]),
-      dong: pick(item, ["AddrDong", "Dong", "addrdong"]),
-      lee: pick(item, ["AddrLee", "Lee", "addrlee"]),
-      san: pick(item, ["AddrSan", "San", "addrsan"]),
-      bun1: addressData.bun1,
-      bun2: addressData.bun2
+      adidx: pick(item, ["Admidx", "adidx", "admidx"]),
+      pidx: ""
     };
-    var response = await originalFetch("/api/maps/mmtel", {
+
+    var response = await originalFetch("/maps/mmview", {
       method: "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     });
-    if (!response.ok) return null;
-    return response.json();
+    if (!response.ok) {
+      throw new Error("상세정보 조회 실패 (HTTP " + response.status + ")");
+    }
+
+    var result = await response.json();
+    if (!result || result.res !== "success" || !result.data) {
+      throw new Error(
+        result && result.message ? result.message : "상세정보에서 연락처를 가져오지 못했습니다."
+      );
+    }
+    state.detailCache[key] = result.data;
+    return result.data;
   }
 
   function isTenantLabel(value) {
