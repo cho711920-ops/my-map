@@ -1470,10 +1470,10 @@ function addListItem(item) {
           'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
         '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
-        '<button type="button" class="item-list-add-btn favorite" ' +
-          'onclick="event.stopPropagation(); openItemListPicker(\'favorite\',\'' + encodedKey + '\')">찜추가</button>' +
-        '<button type="button" class="item-list-add-btn visit" ' +
-          'onclick="event.stopPropagation(); openItemListPicker(\'visit\',\'' + encodedKey + '\')">임장추가</button>' +
+        '<button type="button" class="item-list-add-btn favorite" title="찜목록에 추가" ' +
+          'onclick="event.stopPropagation(); openItemListPicker(\'favorite\',\'' + encodedKey + '\')">찜⭐</button>' +
+        '<button type="button" class="item-list-add-btn visit" title="임장목록에 추가" ' +
+          'onclick="event.stopPropagation(); openItemListPicker(\'visit\',\'' + encodedKey + '\')">임장⭐</button>' +
         '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedKey + '\')">수정</button>' +
       '</div>' +
