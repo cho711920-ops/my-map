@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.2";
+  var VERSION = "1.0.3";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -361,7 +361,7 @@
     }
 
     var phones = await collectPhones(item, requestBody, addressData);
-    var memo = buildMemo(item);
+    var memo = appendPhoneMemo(buildMemo(item), phones.extraMemo);
     var pyeong = getPyeong(item);
     var values = [
       getBuildingName(item),
@@ -373,7 +373,7 @@
       getManagementFee(item),
       getPremium(item),
       pyeong,
-      phones.landlord.join(" / "),
+      phones.landlordPrimary,
       phones.tenant.join(" / "),
       memo,
       "",
@@ -569,6 +569,11 @@
     );
     if (direct) return direct;
 
+    var gongsilPremium = text(pick(item, ["Gul", "gul"]));
+    if (/^\d[\d,]*(?:\.\d+)?\s*(?:만\s*원|만원|원)?$/.test(gongsilPremium)) {
+      return numberValue(gongsilPremium);
+    }
+
     var note = [
       pick(item, ["Memo", "BfMemo"]),
       pick(item, ["Note", "BfAdnote2"]),
@@ -615,7 +620,7 @@
       pick(item, ["Memo", "BfMemo"]),
       pick(item, ["Note", "BfAdnote2"]),
       pick(item, ["Hoetc"]),
-      pick(item, ["Gul"])
+      gongsilMemoValue(pick(item, ["Gul", "gul"]))
     ].forEach(function (value) {
       addMemoPart(parts, value);
     });
@@ -645,6 +650,14 @@
     parts.push(part);
   }
 
+  function gongsilMemoValue(value) {
+    var source = text(value);
+    if (/^\d[\d,]*(?:\.\d+)?\s*(?:만\s*원|만원|원)?$/.test(source)) {
+      return "";
+    }
+    return source;
+  }
+
   function cleanMemoFinancialTokens(value) {
     return text(value)
       .replace(
@@ -665,8 +678,7 @@
   }
 
   async function collectPhones(item, requestBody, addressData) {
-    var landlord = [];
-    var tenant = [];
+    var contacts = [];
     var candidates = [];
 
     ["Btel", "Ftel", "Tels", "TelList", "Phones"].forEach(function (key) {
@@ -705,13 +717,53 @@
       }
 
       if (!phone) continue;
-      if (isTenantLabel(label)) tenant.push(phone);
-      else landlord.push(phone);
+      contacts.push({
+        phone: phone,
+        label: contactLabel(label),
+        tenant: isTenantLabel(label)
+      });
     }
 
+    var byPhone = {};
+    contacts.forEach(function (contact) {
+      var existing = byPhone[contact.phone];
+      if (!existing || (!existing.tenant && contact.tenant)) {
+        byPhone[contact.phone] = contact;
+      } else if (
+        existing &&
+        existing.label === "기타연락처" &&
+        contact.label !== "기타연락처"
+      ) {
+        existing.label = contact.label;
+      }
+    });
+
+    var uniqueContacts = Object.keys(byPhone).map(function (phone) {
+      return byPhone[phone];
+    });
+    var tenant = uniqueContacts
+      .filter(function (contact) { return contact.tenant; })
+      .map(function (contact) { return contact.phone; });
+    var landlordContacts = uniqueContacts.filter(function (contact) {
+      return !contact.tenant;
+    });
+    landlordContacts.sort(function (left, right) {
+      return landlordPriority(right.label) - landlordPriority(left.label);
+    });
+
+    var primary = landlordContacts.length ? landlordContacts[0] : null;
+    var extras = landlordContacts.slice(1).map(function (contact, index) {
+      var label = contact.label;
+      if (label === "주인" && primary && primary.label === "주인") {
+        label = "주인 추가번호" + (index > 0 ? " " + (index + 1) : "");
+      }
+      return label + ": " + contact.phone;
+    });
+
     return {
-      landlord: unique(landlord),
-      tenant: unique(tenant)
+      landlordPrimary: primary ? primary.phone : "",
+      tenant: unique(tenant),
+      extraMemo: extras
     };
   }
 
@@ -742,6 +794,44 @@
   function isTenantLabel(value) {
     var label = text(value).toUpperCase();
     return label === "S" || /세입자|임차인/.test(label);
+  }
+
+  function contactLabel(value) {
+    var raw = text(value);
+    var code = raw.toUpperCase();
+    var labels = {
+      "1": "남성",
+      "2": "여성",
+      "5": "가족",
+      "G": "관리업체",
+      "B": "부동산",
+      "J": "주인",
+      "S": "세입자"
+    };
+    if (labels[code]) return labels[code];
+    if (/세입자|임차인/.test(raw)) return "세입자";
+    if (/임대인|건물주|소유자|주인/.test(raw)) return "주인";
+    if (/관리/.test(raw)) return "관리업체";
+    if (/부동산|중개/.test(raw)) return "부동산";
+    if (/남성|남자/.test(raw)) return "남성";
+    if (/여성|여자/.test(raw)) return "여성";
+    if (/가족/.test(raw)) return "가족";
+    return raw || "기타연락처";
+  }
+
+  function landlordPriority(label) {
+    if (label === "주인") return 100;
+    if (label === "가족") return 60;
+    if (label === "남성" || label === "여성") return 50;
+    if (label === "관리업체") return 30;
+    if (label === "부동산") return 20;
+    return 10;
+  }
+
+  function appendPhoneMemo(memo, extraMemo) {
+    var parts = Array.isArray(extraMemo) ? extraMemo.filter(Boolean) : [];
+    if (!parts.length) return memo;
+    return text(memo) + " · " + parts.join(" · ");
   }
 
   async function sendToAppsScript(records) {
