@@ -1422,6 +1422,11 @@ function addListItem(item) {
     : "";
 
   var encodedKey = encodeURIComponent(item.key);
+  var encodedEditTargetV648 = encodeURIComponent(
+    item.propertyId
+      ? "id:" + String(item.propertyId).trim()
+      : "key:" + item.key
+  );
   var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
   var regDateLabel = formatListRegistrationDate(item.regDate);
@@ -1475,7 +1480,7 @@ function addListItem(item) {
         '<button type="button" class="item-list-add-btn visit" title="임장목록에 추가" ' +
           'onclick="event.stopPropagation(); openItemListPicker(\'visit\',\'' + encodedKey + '\')">임장⭐</button>' +
         '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
-          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedKey + '\')">수정</button>' +
+          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
       '</div>' +
       '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
         'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
@@ -2557,7 +2562,24 @@ var pendingPropertyEditStateV634 = null;
 
 
 function getPropertyByEncodedKeyV630(encodedKey) {
-  var key = decodeURIComponent(String(encodedKey || ""));
+  var locator = decodeURIComponent(String(encodedKey || ""));
+
+  if (locator.indexOf("id:") === 0) {
+    var propertyId = locator.slice(3).trim();
+    var matches = (allItems || []).filter(function(item) {
+      return item && String(item.propertyId || "").trim() === propertyId;
+    });
+
+    /*
+     * ID가 없거나 둘 이상이면 어떤 매물도 대신 선택하지 않습니다.
+     * 동일 주소·동일 호실 매물의 첫 번째 항목으로 넘어가는 것을 방지합니다.
+     */
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  var key = locator.indexOf("key:") === 0
+    ? locator.slice(4)
+    : locator;
 
   return (allItems || []).find(function(item) {
     return item && item.key === key;
@@ -2611,8 +2633,11 @@ function ensurePropertyEditModalV630() {
       '<div id="propertyEditStatusV630" class="property-edit-status-v630"></div>' +
 
       '<div class="property-edit-actions-v630">' +
-        '<button type="button" class="property-edit-cancel-v630" onclick="closePropertyEditModalV630()">취소</button>' +
-        '<button type="button" id="propertyEditSaveBtnV630" class="property-edit-save-v630" onclick="savePropertyEditV630()">저장</button>' +
+        '<button type="button" id="propertyEditDeleteBtnV648" class="property-edit-delete-v648" onclick="deletePropertyV648()">매물삭제</button>' +
+        '<div class="property-edit-actions-right-v648">' +
+          '<button type="button" class="property-edit-cancel-v630" onclick="closePropertyEditModalV630()">취소</button>' +
+          '<button type="button" id="propertyEditSaveBtnV630" class="property-edit-save-v630" onclick="savePropertyEditV630()">저장</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
 
@@ -2638,6 +2663,19 @@ function openPropertyEditModalV630(encodedKey) {
 
   propertyEditTargetV630 = item;
   propertyEditSavingV630 = false;
+
+  var deleteButtonV648 = document.getElementById("propertyEditDeleteBtnV648");
+  var saveButtonV648 = document.getElementById("propertyEditSaveBtnV630");
+
+  if (deleteButtonV648) {
+    deleteButtonV648.disabled = false;
+    deleteButtonV648.textContent = "매물삭제";
+  }
+
+  if (saveButtonV648) {
+    saveButtonV648.disabled = false;
+    saveButtonV648.textContent = "저장";
+  }
 
   document.getElementById("propertyEditIdentityV630").textContent =
     [item.name, item.address, item.type].filter(Boolean).join(" · ");
@@ -2846,6 +2884,7 @@ function savePropertyEditV630() {
 
   var item = propertyEditTargetV630;
   var saveButton = document.getElementById("propertyEditSaveBtnV630");
+  var deleteButton = document.getElementById("propertyEditDeleteBtnV648");
   var status = document.getElementById("propertyEditStatusV630");
 
   /*
@@ -2872,6 +2911,7 @@ function savePropertyEditV630() {
 
   propertyEditSavingV630 = true;
   saveButton.disabled = true;
+  if (deleteButton) deleteButton.disabled = true;
   saveButton.textContent = "저장 중...";
   status.textContent = "시트1 수정 요청 중...";
 
@@ -2938,6 +2978,7 @@ function savePropertyEditV630() {
 
     propertyEditSavingV630 = false;
     saveButton.disabled = false;
+    if (deleteButton) deleteButton.disabled = false;
     saveButton.textContent = "저장";
     status.textContent = "";
 
@@ -2970,9 +3011,216 @@ function savePropertyEditV630() {
     pendingPropertyEditStateV634 = null;
     propertyEditSavingV630 = false;
     saveButton.disabled = false;
+    if (deleteButton) deleteButton.disabled = false;
     saveButton.textContent = "저장";
     status.textContent = "수정 요청에 실패했습니다.";
     alert("매물 수정 중 오류가 발생했습니다.");
+  });
+}
+
+
+/* =========================================================
+   v6.4.8 매물삭제
+   - 수정 팝업 하단 좌측의 빨간 삭제 버튼
+   - P열 매물ID가 유일하게 일치할 때만 서버에서 삭제
+   - 행번호·주소·호실을 이용한 대체 삭제 금지
+   - Apps Script의 실제 처리 결과 확인 후에만 완료 처리
+   ========================================================= */
+
+function buildPropertyDeleteLabelV648(item) {
+  return [
+    item && item.name ? item.name : "건물이름 없음",
+    item && item.address ? item.address : "주소 없음",
+    item && item.room ? item.room : "호실 없음",
+    "보증금 " + (Number(item && item.deposit) || 0) +
+      " / 월세 " + (Number(item && item.rent) || 0)
+  ].join("\n");
+}
+
+
+function createPropertyDeleteRequestIdV648() {
+  return "property-delete-" + Date.now() + "-" +
+    Math.random().toString(36).slice(2, 12);
+}
+
+
+function readMutationStatusJsonpV648(requestId) {
+  return new Promise(function(resolve, reject) {
+    var callbackName = "__propertyDeleteStatusV648_" +
+      Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+    var script = document.createElement("script");
+    var settled = false;
+    var timeout = setTimeout(function() {
+      finish(new Error("삭제 결과 확인 시간이 초과되었습니다."));
+    }, 7000);
+
+    function cleanup() {
+      clearTimeout(timeout);
+      try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    function finish(error, value) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(value || {});
+    }
+
+    window[callbackName] = function(payload) {
+      finish(null, payload);
+    };
+
+    script.onerror = function() {
+      finish(new Error("삭제 결과를 확인하지 못했습니다."));
+    };
+
+    script.src = saveApiURL +
+      "?action=mutationStatus" +
+      "&requestId=" + encodeURIComponent(requestId) +
+      "&callback=" + encodeURIComponent(callbackName) +
+      "&_=" + Date.now();
+
+    document.head.appendChild(script);
+  });
+}
+
+
+function waitForPropertyDeleteResultV648(requestId, attempt) {
+  var currentAttempt = Number(attempt) || 0;
+
+  return readMutationStatusJsonpV648(requestId).then(function(status) {
+    if (status && status.ready) {
+      return status.result || {
+        ok: false,
+        message: "삭제 결과가 비어 있습니다."
+      };
+    }
+
+    if (currentAttempt >= 19) {
+      throw new Error(
+        "삭제 결과 확인 시간이 초과되었습니다. 시트에서 삭제 여부를 확인해주세요."
+      );
+    }
+
+    return new Promise(function(resolve) {
+      setTimeout(resolve, 400);
+    }).then(function() {
+      return waitForPropertyDeleteResultV648(requestId, currentAttempt + 1);
+    });
+  });
+}
+
+
+function deletePropertyV648() {
+  if (propertyEditSavingV630 || !propertyEditTargetV630) return;
+
+  if (!saveApiURL) {
+    alert("Apps Script 저장 주소가 설정되지 않았습니다.");
+    return;
+  }
+
+  var item = propertyEditTargetV630;
+  var propertyId = String(item.propertyId || "").trim();
+
+  if (!propertyId) {
+    alert(
+      "이 매물에는 P열 매물ID가 없어 안전하게 삭제할 수 없습니다.\n" +
+      "시트의 매물ID를 생성하고 목록을 새로고침한 뒤 다시 시도해주세요."
+    );
+    return;
+  }
+
+  var confirmed = window.confirm(
+    "정말 이 매물을 삭제하시겠습니까?\n\n" +
+    buildPropertyDeleteLabelV648(item) +
+    "\n\n삭제한 행은 되돌릴 수 없습니다."
+  );
+
+  if (!confirmed) return;
+
+  var deleteButton = document.getElementById("propertyEditDeleteBtnV648");
+  var saveButton = document.getElementById("propertyEditSaveBtnV630");
+  var status = document.getElementById("propertyEditStatusV630");
+  var requestId = createPropertyDeleteRequestIdV648();
+
+  propertyEditSavingV630 = true;
+
+  if (deleteButton) {
+    deleteButton.disabled = true;
+    deleteButton.textContent = "삭제 중...";
+  }
+  if (saveButton) saveButton.disabled = true;
+  if (status) status.textContent = "매물ID 확인 후 시트1에서 삭제 중...";
+
+  fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "deleteProperty",
+      requestId: requestId,
+      key: {
+        propertyId: propertyId
+      },
+      originalValues: buildOriginalPropertyValuesV630(item)
+    })
+  }).then(function() {
+    return waitForPropertyDeleteResultV648(requestId, 0);
+  }).then(function(result) {
+    if (!result || !result.ok) {
+      throw new Error(
+        result && result.message
+          ? result.message
+          : "서버가 매물 삭제를 거부했습니다."
+      );
+    }
+
+    propertyEditSavingV630 = false;
+    propertyEditTargetV630 = null;
+    pendingPropertyEditNewKeyV633 = null;
+    pendingPropertyEditStateV634 = null;
+
+    if (propertyEditReloadTimerV634) {
+      clearTimeout(propertyEditReloadTimerV634);
+      propertyEditReloadTimerV634 = null;
+    }
+
+    var modal = document.getElementById("propertyEditModalV630");
+    if (modal) {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    selectedItemKey = null;
+    selectedGroupKey = null;
+    selectedGroupKeys = [];
+    openMemoKey = null;
+    editingMemoKey = null;
+
+    var mainStatus = document.getElementById("status");
+    if (mainStatus) mainStatus.innerHTML = "매물 삭제 완료 · 최신 시트 불러오는 중";
+
+    loadSheet(false);
+  }).catch(function(error) {
+    console.error(error);
+    propertyEditSavingV630 = false;
+
+    if (deleteButton) {
+      deleteButton.disabled = false;
+      deleteButton.textContent = "매물삭제";
+    }
+    if (saveButton) saveButton.disabled = false;
+
+    var message = error && error.message
+      ? error.message
+      : "매물 삭제 중 오류가 발생했습니다.";
+
+    if (status) status.textContent = message;
+    alert(message);
   });
 }
 
