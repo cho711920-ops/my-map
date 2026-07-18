@@ -32,19 +32,19 @@ body.building-register-open{overflow:hidden!important}
 }
 @media(max-width:380px){.building-register-grid{grid-template-columns:1fr}.building-register-row.wide{grid-column:auto}.building-register-row b{max-width:62%}}
 
-/* v6.4.2 smartphone-only: keep every property action on one line */
+/* v6.4.5 smartphone-only: fill the action row while keeping memo separated */
 @media(max-width:600px){
   .item-action-row{
     flex-wrap:nowrap!important;
-    gap:2px!important;
+    gap:8px!important;
     min-height:23px!important;
   }
   .item-action-left{
     display:flex!important;
-    flex:1 1 auto!important;
+    flex:1 1 0!important;
     flex-wrap:nowrap!important;
     align-items:center!important;
-    gap:2px!important;
+    gap:3px!important;
     min-width:0!important;
   }
   .item-action-select{
@@ -58,7 +58,8 @@ body.building-register-open{overflow:hidden!important}
   .item-action-row .item-building-register-btn,
   .item-action-row .item-list-add-btn,
   .item-action-row .item-edit-btn-v630{
-    flex:0 0 auto!important;
+    flex:1 1 0!important;
+    min-width:0!important;
     height:23px!important;
     min-height:23px!important;
     max-height:23px!important;
@@ -69,7 +70,8 @@ body.building-register-open{overflow:hidden!important}
     white-space:nowrap!important;
   }
   .item-action-row .item-memo-toggle{
-    flex:0 0 auto!important;
+    flex:0 0 48px!important;
+    width:48px!important;
     height:23px!important;
     min-height:23px!important;
     max-height:23px!important;
