@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.1";
+  var VERSION = "1.0.2";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -572,8 +572,11 @@
     var note = [
       pick(item, ["Memo", "BfMemo"]),
       pick(item, ["Note", "BfAdnote2"]),
-      pick(item, ["Hoetc", "Ipkey", "Gul"])
+      pick(item, ["Hoetc", "Gul"])
     ].map(text).join(" ");
+    var pMatch = note.match(/(?:^|[\s,·|/])p\s*[:：]?\s*(\d[\d,]*(?:\.\d+)?)(?=$|[\s,·|/])/i);
+    if (pMatch) return numberValue(pMatch[1]);
+
     var match = note.match(/(?:권리금?|권)\s*[:：]?\s*(?:(\d+(?:\.\d+)?)\s*억)?\s*(\d[\d,]*(?:\.\d+)?)?\s*(?:만\s*원|만원|원)?/);
     if (!match) return "";
 
@@ -592,7 +595,7 @@
     var note = [
       pick(item, ["Memo", "BfMemo"]),
       pick(item, ["Note", "BfAdnote2"]),
-      pick(item, ["Hoetc", "Ipkey", "Gul"])
+      pick(item, ["Hoetc", "Gul"])
     ].map(text).join(" ");
     var match = note.match(/(?:관리비|관)\s*[:：]?\s*(\d[\d,]*(?:\.\d+)?)/);
     return match ? numberValue(match[1]) : "";
@@ -612,7 +615,6 @@
       pick(item, ["Memo", "BfMemo"]),
       pick(item, ["Note", "BfAdnote2"]),
       pick(item, ["Hoetc"]),
-      pick(item, ["Ipkey"]),
       pick(item, ["Gul"])
     ].forEach(function (value) {
       addMemoPart(parts, value);
@@ -651,6 +653,10 @@
       )
       .replace(
         /(?:관리비|관)\s*[:：]?\s*\d[\d,]*(?:\.\d+)?\s*(?:만\s*원|만원|원)?/g,
+        " "
+      )
+      .replace(
+        /(?:^|[\s,·|/])p\s*[:：]?\s*\d[\d,]*(?:\.\d+)?(?=$|[\s,·|/])/gi,
         " "
       )
       .replace(/\s*([,·|/])\s*(?=$|[,·|/])/g, " ")
