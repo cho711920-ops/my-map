@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.6";
+  var VERSION = "1.0.7";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -113,7 +113,7 @@
         '<div class="jsg-detail" data-role="detail"></div>' +
         '<div class="jsg-rule">저장 위치: JS부동산 매물현황<br>' +
         '전화번호: 세입자만 K열 · 나머지는 J열<br>' +
-        '메모: 항상 @(임장가자)로 시작</div>' +
+        '메모: 항상 (임장가자)로 시작</div>' +
         '<button type="button" class="jsg-save" data-action="save" disabled>' +
           '선택 클러스터 전체 저장' +
         '</button>' +
@@ -185,7 +185,9 @@
     if (body && body.mid) {
       state.detailAuth = {
         mid: body.mid,
-        guest: body.guest === true
+        guest: body.guest === true,
+        endpoint: requestUrl(input) || "/maps/mmview",
+        template: Object.assign({}, body)
       };
     }
 
@@ -278,7 +280,9 @@
       var transformed = [];
       var rejected = [];
       var completed = 0;
-      var queueResult = await mapWithConcurrency(items, 4, async function (item) {
+      // 공실박스 상세조회는 화면에서 한 건씩 여는 흐름을 기준으로 동작합니다.
+      // 동시에 여러 건을 요청하면 정상 세션에서도 일부 상세 응답이 누락될 수 있습니다.
+      var queueResult = await mapWithConcurrency(items, 1, async function (item) {
         var result;
         try {
           result = await transformItem(item, state.capture.body);
@@ -306,7 +310,7 @@
 
       if (!transformed.length) {
         throw new Error(
-          "저장 가능한 임대 매물이 없습니다. 매매 전용이거나 지번주소를 확인하지 못했습니다."
+          "저장 가능한 매물이 없습니다.\n" + rejectedSummary(rejected)
         );
       }
 
@@ -329,7 +333,9 @@
 
       setStatus(
         "저장 완료",
-        message + (rejected.length ? "\n변환 제외 " + rejected.length + "개" : "")
+        message + (rejected.length
+          ? "\n변환 제외 " + rejected.length + "개\n" + rejectedSummary(rejected)
+          : "")
       );
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
     } catch (error) {
@@ -707,7 +713,7 @@
         return text(part).replace(/\s+/g, " ");
       }).filter(Boolean)
     ).join(" · ").slice(0, 880);
-    return "@(임장가자)" + (detail ? " " + detail : "");
+    return "(임장가자)" + (detail ? " " + detail : "");
   }
 
   function addMemoPart(parts, value) {
@@ -853,23 +859,39 @@
     ].join(":");
   }
 
+  function requestUrl(input) {
+    if (typeof input === "string") return input;
+    return input && input.url ? input.url : "";
+  }
+
   async function fetchDetailData(item) {
     var key = detailKey(item);
     if (state.detailCache[key]) return state.detailCache[key];
     if (!state.detailAuth || !state.detailAuth.mid) return null;
 
-    var payload = {
+    var payload = Object.assign({}, state.detailAuth.template || {}, {
       mid: state.detailAuth.mid,
       guest: state.detailAuth.guest === true,
       bidx: pick(item, ["Bidx", "bidx"]),
       bfidx: pick(item, ["Bfidx", "bfidx"]),
       adidx: pick(item, ["Admidx", "adidx", "admidx"]),
       pidx: ""
-    };
+    });
 
-    var response = await originalFetch("/maps/mmview", {
+    if (!payload.bidx || !payload.bfidx || !payload.adidx) {
+      throw new Error(
+        "상세조회 식별값 누락 (bidx=" + text(payload.bidx) +
+        ", bfidx=" + text(payload.bfidx) +
+        ", adidx=" + text(payload.adidx) + ")"
+      );
+    }
+
+    var endpoint = state.detailAuth.endpoint || "/maps/mmview";
+    var response = await originalFetch(endpoint, {
       method: "POST",
-      credentials: "same-origin",
+      mode: "cors",
+      credentials: "include",
+      redirect: "follow",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     });
@@ -877,10 +899,17 @@
       throw new Error("상세정보 조회 실패 (HTTP " + response.status + ")");
     }
 
-    var result = await response.json();
+    var result;
+    try {
+      result = await response.json();
+    } catch (_) {
+      throw new Error("상세정보 응답 형식을 확인하지 못했습니다.");
+    }
     if (!result || result.res !== "success" || !result.data) {
       throw new Error(
-        result && result.message ? result.message : "상세정보에서 연락처를 가져오지 못했습니다."
+        result && (result.message || result.msg)
+          ? result.message || result.msg
+          : "상세정보 조회 거절 (res=" + text(result && result.res) + ")"
       );
     }
     state.detailCache[key] = result.data;
@@ -949,7 +978,7 @@
     } catch (error) {
       throw new Error(
         "시트 저장 결과를 확인하지 못했습니다. " +
-        "Apps Script Code.gs가 v6.4.6인지, 새 버전으로 배포했는지 확인해 주세요. " +
+        "Apps Script Code.gs가 v6.4.7인지, 새 버전으로 배포했는지 확인해 주세요. " +
         "요청번호: " + requestId
       );
     }
@@ -1013,6 +1042,19 @@
   function setStatus(title, detail) {
     statusElement.textContent = title || "";
     detailElement.textContent = detail || "";
+  }
+
+  function rejectedSummary(reasons) {
+    var counts = {};
+    (reasons || []).forEach(function (reason) {
+      var label = text(reason) || "변환 실패";
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    var entries = Object.keys(counts)
+      .sort(function (left, right) { return counts[right] - counts[left]; })
+      .slice(0, 3)
+      .map(function (reason) { return "- " + reason + " " + counts[reason] + "개"; });
+    return entries.length ? entries.join("\n") : "- 원인을 확인하지 못했습니다.";
   }
 
   async function mapWithConcurrency(items, concurrency, worker) {
