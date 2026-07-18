@@ -1468,6 +1468,8 @@ function addListItem(item) {
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
         '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
           'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
+        '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
+          'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
         '<button type="button" class="item-list-add-btn favorite" ' +
           'onclick="event.stopPropagation(); openItemListPicker(\'favorite\',\'' + encodedKey + '\')">찜추가</button>' +
         '<button type="button" class="item-list-add-btn visit" ' +

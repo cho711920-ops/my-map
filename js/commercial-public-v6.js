@@ -612,7 +612,7 @@
 
     target.innerHTML = '' +
       '<div class="public-commerce-head">' +
-        '<div><span class="public-commerce-source">출처: 소상공인365 · 소상공인시장진흥공단</span><h3>매물 맞춤 전문 브리핑</h3></div>' +
+        '<div><span class="public-commerce-source"><img src="assets/semas-logo.png" alt="소상공인시장진흥공단"><em>상가(상권)정보 OpenAPI</em></span><h3>매물 맞춤 전문 브리핑</h3></div>' +
         '<div class="public-commerce-count"><strong>' + safeNumber(radiusSummary(data, 300).totalCount).toLocaleString("ko-KR") + '</strong><span>반경 300m 영업 업소</span></div>' +
       '</div>' +
       '<div class="commerce-profile-line"><span>상권 유형 추정</span>' + profileNames.map(function (name) { return '<b>' + esc(name) + '</b>'; }).join("") + '</div>' +
@@ -849,7 +849,7 @@
   window.buildSmartItemCardHtml = function (item) {
     return '' +
       '<article class="ai-professional-card" onclick="event.stopPropagation();">' +
-        '<header class="professional-card-head"><div><span>JS부동산</span><h2>상가 매물 전문 브리핑</h2></div><b>출처: 소상공인365</b></header>' +
+        '<header class="professional-card-head"><div><span>JS부동산</span><h2>상가 매물 전문 브리핑</h2></div><b class="professional-source-brand"><img src="assets/semas-logo.png" alt="소상공인시장진흥공단"><em>공식 상권정보</em></b></header>' +
         propertyFactsHtml(item) +
         '<section class="public-commerce-card professional-commerce-wrap"><div id="publicCommercialBrief"><div class="public-commerce-loading">공식 상권 브리핑 준비 중…</div></div></section>' +
       '</article>';
