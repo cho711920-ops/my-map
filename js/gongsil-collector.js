@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.4";
+  var VERSION = "1.0.5";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -374,7 +374,7 @@
       getPremium(item),
       pyeong,
       phones.landlordPrimary,
-      phones.tenant.join(" / "),
+      phones.tenantPrimary,
       memo,
       "",
       "",
@@ -742,9 +742,9 @@
     var uniqueContacts = Object.keys(byPhone).map(function (phone) {
       return byPhone[phone];
     });
-    var tenant = uniqueContacts
-      .filter(function (contact) { return contact.tenant; })
-      .map(function (contact) { return contact.phone; });
+    var tenantContacts = uniqueContacts.filter(function (contact) {
+      return contact.tenant;
+    });
     var landlordContacts = uniqueContacts.filter(function (contact) {
       return !contact.tenant;
     });
@@ -760,10 +760,16 @@
       }
       return label + ": " + contact.phone;
     });
+    tenantContacts.slice(1).forEach(function (contact, index) {
+      extras.push(
+        "세입자 추가번호" + (index > 0 ? " " + (index + 1) : "") +
+        ": " + contact.phone
+      );
+    });
 
     return {
       landlordPrimary: primary ? primary.phone : "",
-      tenant: unique(tenant),
+      tenantPrimary: tenantContacts.length ? tenantContacts[0].phone : "",
       extraMemo: extras
     };
   }
