@@ -33,6 +33,8 @@ var geocodeCache = loadGeocodeCache();
 var geocodeCacheDirty = false;
 var selectedPrintKeys = [];
 var visibleListItems = [];
+var listRenderLimit = 0;
+var listRenderScrollBound = false;
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
 var doneTogglePendingKeys = {};
@@ -795,6 +797,48 @@ function getClusterSourceType(items) {
 }
 
 
+function getListRenderChunkSize() {
+  return window.innerWidth <= 768 ? 36 : 80;
+}
+
+
+function renderNextListChunk(targetLimit) {
+  var list = document.getElementById("list");
+  if (!list || listRenderLimit >= visibleListItems.length) return;
+
+  var chunkSize = getListRenderChunkSize();
+  var nextLimit = Math.min(
+    visibleListItems.length,
+    Math.max(listRenderLimit + chunkSize, Number(targetLimit) || 0)
+  );
+  var fragment = document.createDocumentFragment();
+
+  for (var index = listRenderLimit; index < nextLimit; index++) {
+    addListItem(visibleListItems[index], fragment);
+  }
+
+  list.appendChild(fragment);
+  listRenderLimit = nextLimit;
+  list.setAttribute("data-rendered-count", String(listRenderLimit));
+  list.setAttribute("data-total-count", String(visibleListItems.length));
+}
+
+
+function bindIncrementalListRendering() {
+  if (listRenderScrollBound) return;
+
+  var sidebar = document.getElementById("sidebar");
+  if (!sidebar) return;
+
+  listRenderScrollBound = true;
+  sidebar.addEventListener("scroll", function() {
+    if (sidebar.scrollHeight - sidebar.scrollTop - sidebar.clientHeight < 900) {
+      renderNextListChunk();
+    }
+  }, { passive: true });
+}
+
+
 function showList(items) {
   var previousSignature = (visibleListItems || []).map(function(item) {
     return item.key;
@@ -816,12 +860,19 @@ function showList(items) {
     selectedPrintKeys = [];
   }
 
+  var previousRenderLimit = listRenderLimit;
+  var sameList = previousSignature === nextSignature;
+
   visibleListItems = items.slice();
   document.getElementById("list").innerHTML = "";
+  listRenderLimit = 0;
+  bindIncrementalListRendering();
 
-  items.forEach(function(item) {
-    addListItem(item);
-  });
+  renderNextListChunk(
+    sameList
+      ? Math.max(previousRenderLimit, getListRenderChunkSize())
+      : getListRenderChunkSize()
+  );
 
   updatePrintSelectedButton();
   syncListMasterCheckbox();
@@ -1396,7 +1447,7 @@ function saveItemMemo(encodedKey) {
 }
 
 
-function addListItem(item) {
+function addListItem(item, appendTarget) {
   var div = document.createElement("div");
   var printSelected = selectedPrintKeys.includes(item.key);
   var memoOpen = openMemoKey === item.key;
@@ -1532,7 +1583,7 @@ function addListItem(item) {
     openItem(item);
   };
 
-  document.getElementById("list").appendChild(div);
+  (appendTarget || document.getElementById("list")).appendChild(div);
 
   if (memoEditing) {
     requestAnimationFrame(function() {
