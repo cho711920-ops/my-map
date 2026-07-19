@@ -1,6 +1,6 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = "https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/gviz/tq?tqx=out:csv";
-var saveApiURL = "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec"; // JS부동산 구글시트 쓰기용 Apps Script 웹앱 URL
+var saveApiURL = "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec"; // JS부동산 구글시트 쓰기용 Apps Script 웹앱 URL
 
 var map, geocoder;
 var allItems = [];
