@@ -45,3 +45,69 @@
 .commerce-subcategory-line{display:flex;gap:3px;align-items:center;flex-wrap:wrap;margin-top:7px}.commerce-subcategory-line span{color:#667085;font-size:8.5px;font-weight:900}.commerce-subcategory-line b{padding:3px 5px;border-radius:5px;background:#edf5ff;color:#345b88;font-size:8px}
 .commerce-sector-subcategories{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:7px;padding:7px;border-radius:8px;background:#f7faff}.commerce-sector-subcategories>span{margin-right:2px;color:#667085;font-size:9px;font-weight:900}.commerce-sector-subcategories b{padding:3px 5px;border:1px solid #dce8f7;border-radius:5px;background:#fff;color:#344054;font-size:8.5px}.commerce-sector-subcategories em{color:#1467d8;font-style:normal}
 @media(max-width:768px){.commerce-decision-head{display:block}.commerce-confidence{display:inline-block;margin-top:7px}.commerce-decision-columns{grid-template-columns:1fr}.commerce-decision-head h4{font-size:12px}.commerce-decision-columns ul{font-size:10px}.commerce-score-breakdown span{font-size:8.5px}.commerce-score-breakdown b{font-size:9.5px}}
+
+/* v6.4.15: 스마트 매물카드 브리핑 가독성 향상 */
+.ai-professional-card{font-size:14px}
+.ai-side-panel-subtitle{font-size:13px}
+.professional-property-address{font-size:13px;line-height:1.5}
+.professional-facts span{font-size:11px}
+.professional-facts strong{font-size:14px;line-height:1.35}
+.public-commerce-source,.professional-card-head span{font-size:12px}
+.professional-source-brand em{font-size:10px}
+.public-commerce-count span{font-size:11px}
+.commerce-profile-line span,.commerce-profile-line b{font-size:12px}
+.public-commerce-brief{font-size:14px;line-height:1.78}
+.commerce-inference-tag{font-size:11px}
+.commerce-radius-card span{font-size:12px}
+.commerce-radius-card small{font-size:11px;line-height:1.4}
+.commerce-signal-grid span{font-size:11px}
+.commerce-signal-grid strong{font-size:13px}
+.commerce-signal-grid small{font-size:10.5px;line-height:1.45}
+.commerce-section-title span{font-size:11px}
+.commerce-section-title h4{font-size:15px}
+.commerce-section-title>small{font-size:10px;line-height:1.4}
+.commerce-recommend-rank span{font-size:10px}
+.commerce-recommend-rank strong,.commerce-recommend-rank b{font-size:13px}
+.commerce-recommend-card ul{font-size:11px;line-height:1.55}
+.commerce-risk{font-size:10px;line-height:1.5}
+.commerce-recommend-card>button{font-size:11px}
+.commerce-sector-toolbar label{font-size:10px}
+.commerce-sector-toolbar select{font-size:12px}
+.commerce-sector-toolbar>button{font-size:11px}
+.commerce-sector-summary span{font-size:10px}
+.commerce-sector-summary strong{font-size:14px}
+.commerce-direction span,.commerce-direction small{font-size:10px}
+.commerce-direction strong{font-size:11px}
+.commerce-detail-columns h5{font-size:11px}
+.commerce-nearest-row strong{font-size:10.5px}
+.commerce-nearest-row small{font-size:9.5px}
+.commerce-nearest-row em{font-size:10px}
+.commerce-synergy-list span{font-size:10px;line-height:1.5}
+.commerce-synergy-list b{font-size:11px}
+.commerce-sector-note{font-size:9.5px;line-height:1.55}
+.commerce-unsuitable span{font-size:10.5px}
+.commerce-unsuitable span b{font-size:12px}
+.commerce-category-row{font-size:10.5px}
+.commerce-category-head span,.commerce-category-head b{font-size:9.5px}
+.public-commerce-evidence{font-size:10.5px;line-height:1.65}
+.public-commerce-error span{font-size:12px}
+.commerce-decision-head span{font-size:11px}
+.commerce-decision-head h4{font-size:14px}
+.commerce-confidence{font-size:10px}
+.commerce-decision-columns strong{font-size:11px}
+.commerce-decision-columns ul{font-size:11px;line-height:1.6}
+.commerce-not-evaluated span{font-size:10px}
+.commerce-not-evaluated b,.commerce-subcategory-line b{font-size:9.5px}
+.commerce-score-breakdown span{font-size:9.5px}
+.commerce-score-breakdown b{font-size:10.5px}
+.commerce-subcategory-line span,.commerce-sector-subcategories>span{font-size:10px}
+.commerce-sector-subcategories b{font-size:9.5px}
+
+@media(max-width:768px){
+  .ai-professional-card{font-size:13px}
+  .professional-facts span{font-size:10.5px}
+  .professional-facts strong{font-size:13.5px}
+  .public-commerce-brief{font-size:13px}
+  .commerce-recommend-card ul,.commerce-decision-columns ul{font-size:10.5px}
+  .commerce-category-row{font-size:10px}
+}

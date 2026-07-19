@@ -31,6 +31,12 @@ var pendingAutoUpdate = false;
 var geocodeCacheKey = "JS_REAL_ESTATE_GEOCODE_CACHE_V1";
 var geocodeCache = loadGeocodeCache();
 var geocodeCacheDirty = false;
+var sharedGeocodeCacheLoadPromise = null;
+var sharedGeocodeCacheReady = false;
+var pendingSharedGeocodeEntries = Object.create(null);
+var sharedGeocodeFlushTimer = null;
+var sharedGeocodeFlushInProgress = false;
+var sharedGeocodeFlushFailures = 0;
 var selectedPrintKeys = [];
 var visibleListItems = [];
 var listRenderLimit = 0;
@@ -64,6 +70,145 @@ function saveGeocodeCache() {
 
 function normalizeAddressForCache(address) {
   return String(address || "").replace(/\s+/g, " ").trim();
+}
+
+
+function queueSharedGeocodeEntry(address, value) {
+  var normalizedAddress = normalizeAddressForCache(address);
+  var lat = Number(value && value.lat);
+  var lng = Number(value && value.lng);
+
+  if (!normalizedAddress || !isFinite(lat) || !isFinite(lng)) return;
+
+  pendingSharedGeocodeEntries[normalizedAddress] = {
+    address: normalizedAddress,
+    lat: lat,
+    lng: lng
+  };
+
+  scheduleSharedGeocodeFlush();
+}
+
+
+function scheduleSharedGeocodeFlush(delay) {
+  if (!sharedGeocodeCacheReady || sharedGeocodeFlushInProgress) return;
+  if (sharedGeocodeFlushTimer) clearTimeout(sharedGeocodeFlushTimer);
+
+  sharedGeocodeFlushTimer = setTimeout(function() {
+    sharedGeocodeFlushTimer = null;
+    flushSharedGeocodeCache();
+  }, Number(delay) || 800);
+}
+
+
+function flushSharedGeocodeCache() {
+  if (!sharedGeocodeCacheReady || sharedGeocodeFlushInProgress) return;
+
+  var keys = Object.keys(pendingSharedGeocodeEntries).slice(0, 500);
+  if (!keys.length) return;
+
+  var entries = keys.map(function(key) {
+    return pendingSharedGeocodeEntries[key];
+  });
+
+  sharedGeocodeFlushInProgress = true;
+
+  fetch(saveApiURL, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "saveGeocodeCache",
+      entries: entries
+    })
+  })
+    .then(function(response) {
+      if (!response.ok) throw new Error("공용 좌표 캐시 저장 실패");
+      return response.json();
+    })
+    .then(function(result) {
+      if (!result || result.ok === false) {
+        throw new Error((result && result.message) || "공용 좌표 캐시 저장 실패");
+      }
+
+      keys.forEach(function(key) {
+        delete pendingSharedGeocodeEntries[key];
+      });
+      sharedGeocodeFlushFailures = 0;
+    })
+    .catch(function(error) {
+      sharedGeocodeFlushFailures += 1;
+      console.warn("공용 좌표 캐시 저장을 다음 접속 때 다시 시도합니다.", error);
+    })
+    .finally(function() {
+      sharedGeocodeFlushInProgress = false;
+      if (
+        Object.keys(pendingSharedGeocodeEntries).length &&
+        sharedGeocodeFlushFailures < 3
+      ) {
+        scheduleSharedGeocodeFlush(
+          Math.min(12000, 1200 * Math.pow(2, sharedGeocodeFlushFailures))
+        );
+      }
+    });
+}
+
+
+function loadSharedGeocodeCache() {
+  if (sharedGeocodeCacheLoadPromise) return sharedGeocodeCacheLoadPromise;
+
+  sharedGeocodeCacheLoadPromise = fetch(saveApiURL + "?action=geocodeCache", {
+    credentials: "same-origin",
+    cache: "no-store"
+  })
+    .then(function(response) {
+      if (!response.ok) throw new Error("공용 좌표 캐시 조회 실패");
+      return response.json();
+    })
+    .then(function(result) {
+      if (!result || result.ok === false) {
+        throw new Error((result && result.message) || "공용 좌표 캐시 조회 실패");
+      }
+
+      var sharedEntries = result.entries || {};
+      var localEntries = Object.assign({}, geocodeCache || {});
+
+      Object.keys(sharedEntries).forEach(function(address) {
+        var normalizedAddress = normalizeAddressForCache(address);
+        var entry = sharedEntries[address] || {};
+        var lat = Number(entry.lat);
+        var lng = Number(entry.lng);
+        if (!normalizedAddress || !isFinite(lat) || !isFinite(lng)) return;
+
+        geocodeCache[normalizedAddress] = {
+          lat: lat,
+          lng: lng,
+          savedAt: entry.savedAt || "shared"
+        };
+        geocodeCacheDirty = true;
+      });
+
+      saveGeocodeCache();
+      sharedGeocodeCacheReady = true;
+
+      /* 기존 PC의 로컬 좌표를 최초 한 번 중앙 캐시에 올려 다른 기기와 공유합니다. */
+      Object.keys(localEntries).forEach(function(address) {
+        if (!sharedEntries[address]) {
+          queueSharedGeocodeEntry(address, localEntries[address]);
+        }
+      });
+
+      scheduleSharedGeocodeFlush();
+      return result;
+    })
+    .catch(function(error) {
+      /* 서버 캐시가 잠시 실패해도 기존 로컬 캐시와 카카오 주소검색으로 계속 동작합니다. */
+      console.warn("공용 좌표 캐시를 불러오지 못해 로컬 좌표로 계속합니다.", error);
+      sharedGeocodeCacheReady = false;
+      return { ok: false, count: 0, entries: {} };
+    });
+
+  return sharedGeocodeCacheLoadPromise;
 }
 
 

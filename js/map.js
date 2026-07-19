@@ -728,7 +728,7 @@ function loadSheet(isAuto) {
   errorItems = [];
   document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "시트 읽는중...";
 
-  fetch(sheetURL)
+  var sheetRequest = fetch(sheetURL)
     .then(function(res) {
       if (res.ok) return res.text();
       return res.text().then(function(body) {
@@ -739,8 +739,16 @@ function loadSheet(isAuto) {
         } catch (_) {}
         throw new Error(message);
       });
-    })
-    .then(function(data) {
+    });
+
+  Promise.all([
+    sheetRequest,
+    typeof loadSharedGeocodeCache === "function"
+      ? loadSharedGeocodeCache()
+      : Promise.resolve({ ok: false, entries: {} })
+  ])
+    .then(function(results) {
+      var data = results[0];
       var rows = data.trim().split("\n");
       var rawItems = [];
 
@@ -1000,6 +1008,9 @@ function geocodeItems(items, callback, progressCallback) {
           savedAt: new Date().toISOString()
         };
         geocodeCacheDirty = true;
+        if (typeof queueSharedGeocodeEntry === "function") {
+          queueSharedGeocodeEntry(addressKey, geocodeCache[addressKey]);
+        }
 
         item.latlng = new kakao.maps.LatLng(lat, lng);
         done.push(item);

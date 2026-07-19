@@ -337,3 +337,44 @@
   .regional-market-metric { padding: 8px; }
   .regional-market-metric strong { font-size: 14px; }
 }
+
+/* v1.0.5: 배후수요·임대시장 브리핑 가독성 향상 */
+.regional-market-head span { font-size: 12px; }
+.regional-market-head h3 { font-size: 22px; }
+.regional-market-head > b { font-size: 12px; }
+.regional-combined > span { font-size: 12px; }
+.regional-combined p { font-size: 15px; line-height: 1.72; }
+.regional-combined small,
+.regional-evidence,
+.regional-foot { font-size: 11.5px; line-height: 1.6; }
+.regional-title h4 { font-size: 17px; }
+.regional-title > span { font-size: 11px; }
+.regional-demand-type span,
+.regional-market-basis span { font-size: 11px; }
+.regional-demand-type strong,
+.regional-market-basis strong { font-size: 16px; line-height: 1.35; }
+.regional-demand-type p { font-size: 13px; line-height: 1.65; }
+.regional-metric > span { font-size: 10px; }
+.regional-metric strong { font-size: 15px; }
+.regional-metric strong small { font-size: 10px; }
+.regional-market-basis small { font-size: 10px; line-height: 1.5; }
+.regional-market-metric > span { font-size: 10px; }
+.regional-market-metric strong { font-size: 17px; }
+.regional-market-metric strong small,
+.regional-market-metric em { font-size: 10px; }
+.regional-block-setup p,
+.regional-block-error p { font-size: 12px; line-height: 1.65; }
+.regional-block-setup small { font-size: 10px; }
+.regional-loading b,
+.regional-error b { font-size: 14px; }
+.regional-loading span,
+.regional-error span { font-size: 11px; }
+
+@media (max-width: 520px) {
+  .regional-market-head h3 { font-size: 19px; }
+  .regional-combined p { font-size: 13.5px; }
+  .regional-title h4 { font-size: 15px; }
+  .regional-demand-type p { font-size: 12px; }
+  .regional-metric strong { font-size: 13px; }
+  .regional-market-metric strong { font-size: 15px; }
+}

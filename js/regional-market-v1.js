@@ -355,8 +355,8 @@
     popup.document.open();
     popup.document.write('<!doctype html><html><head><meta charset="utf-8"><base href="' +
       escapeHtml(location.href) + '"><title>JS부동산 상가 매물 전문 브리핑</title>' +
-      '<link rel="stylesheet" href="css/commercial-public-v6.css?v=6.4.0">' +
-      '<link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.3">' +
+      '<link rel="stylesheet" href="css/commercial-public-v6.css?v=6.4.15-readable">' +
+      '<link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">' +
       '<link rel="stylesheet" href="css/ai-report-print-v1.css?v=1.0.0">' +
       '</head><body><main class="print-wrap">' + card.outerHTML + '</main></body></html>');
     popup.document.close();
