@@ -1,14 +1,14 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.2.1";
+  var VERSION = "3.2.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 100;
   var BATCH_SIZE = 15;
   var APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
-  var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key_v2";
+    "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
+  var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
 
   function getCollectorKey() {
     var saved = "";
@@ -581,14 +581,12 @@
   }
 
   async function postBatch(items) {
-    var collectorKey = getCollectorKey();
     var response = await nativeFetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
         action: "saveNaverBatch",
-        collectorKey: collectorKey,
-        accessKey: collectorKey,
+        accessKey: NAVER_ACCESS_KEY,
         data: items
       })
     });

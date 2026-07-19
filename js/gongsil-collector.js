@@ -1,14 +1,14 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.1";
+  var VERSION = "1.1.2";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
   // Invalidate keys saved during the initial security rollout. Some browsers
   // saved the instruction line instead of the actual collector key.
-  var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key_v2";
+  var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key_v3";
 
   if (!/gongsilbox\.com$/i.test(location.hostname)) {
     alert("공실박스 지도에서 실행해 주세요.");
