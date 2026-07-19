@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.1.1";
+  var VERSION = "3.2.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 100;
@@ -29,6 +29,8 @@
   var state = {
     active: true,
     busy: false,
+    preparing: false,
+    prepareId: 0,
     capture: null,
     collected: [],
     capturedAt: 0,
@@ -343,7 +345,8 @@
 
     var responseExpected = expectedCount(json);
     var clickedExpected = Number(state.clickedClusterCount) || 0;
-    var expected = Math.max(responseExpected, clickedExpected, articles.length);
+    var expected = Math.max(responseExpected, clickedExpected);
+    if (expected > 0) expected = Math.max(expected, articles.length);
     state.capture = {
       articles: articles,
       json: json,
@@ -355,23 +358,54 @@
     };
     state.collected = articles.slice();
     state.capturedAt = Date.now();
+    state.prepareId += 1;
     showCapture(state.capture);
+    prepareFullCapture(state.capture, state.prepareId);
     return true;
   }
 
   function showCapture(capture) {
     var count = capture.articles.length;
     var expected = capture.expected;
+    if (!capture.prepared) {
+      setStatus(
+        "클러스터 전체 개수 확인 중",
+        "첫 페이지 " + count + "개 확인 · 나머지 페이지를 자동으로 확인하고 있습니다."
+      );
+      saveButton.disabled = true;
+      saveButton.textContent = "전체 목록 확인 중";
+      return;
+    }
     setStatus(
-      expected && expected > count
-        ? "클러스터 전체 " + expected + "개를 감지했습니다."
-        : "네이버 매물 " + count + "개를 감지했습니다.",
-      expected && expected > count
-        ? "첫 페이지 " + count + "개 확인 · 저장하면 나머지 페이지까지 자동 수집합니다."
-        : "저장 버튼을 누르면 전체 페이지 확인과 중복검사를 한 번에 진행합니다."
+      "클러스터 전체 " + count + "개 확인 완료",
+      "전체 페이지 확인이 끝났습니다. 저장 버튼을 누르면 중복검사 후 NAVER_IMPORT에 저장합니다."
     );
     saveButton.disabled = false;
     saveButton.textContent = "클러스터 전체 저장";
+  }
+
+  async function prepareFullCapture(capture, prepareId) {
+    if (!capture || state.busy) return;
+    state.preparing = true;
+    try {
+      var articles = await collectAll(capture);
+      if (prepareId !== state.prepareId || state.capture !== capture) return;
+      capture.articles = articles.slice();
+      capture.expected = articles.length;
+      capture.hasMore = false;
+      capture.prepared = true;
+      state.collected = articles.slice();
+      setProgress(articles.length, articles.length || 1);
+      showCapture(capture);
+    } catch (error) {
+      if (prepareId !== state.prepareId || state.capture !== capture) return;
+      setProgress(0, 0);
+      setStatus("클러스터 전체 확인 오류", String(error && error.message ? error.message : error));
+      saveButton.disabled = true;
+      saveButton.textContent = "클러스터를 다시 클릭해 주세요";
+    } finally {
+      if (prepareId === state.prepareId) state.preparing = false;
+    }
   }
 
   async function discoverExistingRequest() {
@@ -548,7 +582,7 @@
   }
 
   async function collectAndSave() {
-    if (state.busy || !state.capture) return;
+    if (state.busy || state.preparing || !state.capture || !state.capture.prepared) return;
     state.busy = true;
     saveButton.disabled = true;
     retryButton.disabled = true;
