@@ -1,11 +1,12 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.9";
+  var VERSION = "1.1.0";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
+  var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key";
 
   if (!/gongsilbox\.com$/i.test(location.hostname)) {
     alert("공실박스 지도에서 실행해 주세요.");
@@ -66,6 +67,24 @@
     transformItem: transformItem,
     decryptText: decryptText
   };
+
+  function getCollectorKey() {
+    var saved = "";
+    try {
+      saved = String(localStorage.getItem(COLLECTOR_KEY_STORAGE) || "").trim();
+    } catch (_) {}
+    if (saved) return saved;
+
+    var entered = String(window.prompt(
+      "공실박스 수집기 보안키를 입력하세요.\n(이 PC에서는 최초 1회만 입력합니다.)",
+      ""
+    ) || "").trim();
+    if (!entered) throw new Error("공실박스 수집기 보안키가 필요합니다.");
+    try {
+      localStorage.setItem(COLLECTOR_KEY_STORAGE, entered);
+    } catch (_) {}
+    return entered;
+  }
 
   function createPanel() {
     var old = document.getElementById(PANEL_ID);
@@ -964,6 +983,7 @@
   }
 
   async function sendToAppsScript(records) {
+    var collectorKey = getCollectorKey();
     var requestId =
       "gongsil-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
     await originalFetch(APPS_SCRIPT_URL, {
@@ -973,12 +993,13 @@
       body: JSON.stringify({
         action: "gongsilImportBatch",
         requestId: requestId,
+        collectorKey: collectorKey,
         records: records
       })
     });
 
     try {
-      return await pollMutationStatus(requestId);
+      return await pollMutationStatus(requestId, collectorKey);
     } catch (error) {
       throw new Error(
         "시트 저장 결과를 확인하지 못했습니다. " +
@@ -988,7 +1009,7 @@
     }
   }
 
-  function pollMutationStatus(requestId) {
+  function pollMutationStatus(requestId, collectorKey) {
     return new Promise(function (resolve, reject) {
       var attempts = 0;
 
@@ -1029,6 +1050,7 @@
         script.src =
           APPS_SCRIPT_URL +
           "?action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
+          "&collectorKey=" + encodeURIComponent(collectorKey) +
           "&callback=" + encodeURIComponent(callbackName) +
           "&_=" + Date.now();
         document.head.appendChild(script);

@@ -1,0 +1,11 @@
+{
+  "name": "js-realestate-map",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.3.0"
+  }
+}
