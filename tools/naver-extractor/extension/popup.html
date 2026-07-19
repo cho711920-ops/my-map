@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>JS부동산 네이버 추출기 v2.1.1</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<main class="panel">
+  <header class="title-row">
+    <div>
+      <h1>JS부동산 네이버 추출기</h1>
+      <span class="version">v2.1.1</span>
+    </div>
+    <span class="mode-badge">대형 클러스터</span>
+  </header>
+
+  <details class="settings">
+    <summary>설정</summary>
+    <label>
+      <span>Apps Script 웹앱 URL</span>
+      <input id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    </label>
+    <label>
+      <span>접근키</span>
+      <input id="accessKey" value="JS_NAVER_EXTRACT_2026">
+    </label>
+    <button id="settingsBtn" class="secondary full">설정 저장</button>
+  </details>
+
+  <section class="status" aria-live="polite">
+    <strong id="statusTitle">매물을 선택해주세요.</strong>
+    <p id="statusText">네이버부동산에서 원하는 마커 또는 클러스터를 클릭하세요.</p>
+    <div id="progressWrap" class="progress-wrap hidden">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+  </section>
+
+  <section class="actions">
+    <button id="collectAllBtn" class="secondary" disabled>클러스터 전체 불러오기</button>
+    <button id="saveAllBtn" class="primary" disabled>감지된 전체 저장</button>
+  </section>
+
+  <section id="summary" class="summary hidden"></section>
+
+  <section id="listWrap" class="list-wrap hidden">
+    <div class="list-head">
+      <strong>선택된 마커의 매물</strong>
+      <span id="count"></span>
+    </div>
+    <div id="list" class="list"></div>
+  </section>
+
+  <button id="clearBtn" class="ghost full">현재 탭 감지 내용 지우기</button>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>

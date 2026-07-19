@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "JS부동산 네이버 추출기 v2.1.1",
+  "version": "2.1.1",
+  "description": "네이버부동산의 선택 매물을 개별 저장하거나 대형 클러스터 전체를 분할 저장합니다.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://new.land.naver.com/*",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JS부동산 네이버 추출"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://new.land.naver.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "page-hook.js"
+      ],
+      "matches": [
+        "https://new.land.naver.com/*"
+      ]
+    }
+  ]
+}
