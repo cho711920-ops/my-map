@@ -201,12 +201,15 @@
     var metrics = Array.isArray(rone.metrics) ? rone.metrics : [];
     var market = metrics.length ? metrics[0].market : "";
     var exact = metrics.some(function (row) { return row.exactMarketMatch; });
+    var basisText = exact
+      ? "매물 주소와 일치하는 R-ONE 조사시장"
+      : (market && market !== "전국" ? "세부 조사시장 미일치 · 시도 기준" : "세부 조사시장 없음 · 전국 기준");
     return '<section class="regional-block">' +
       '<div class="regional-title"><div>' + sourceBadge("rone", "한국부동산원 R-ONE") +
       '<h4>임대시장 분석</h4></div><span>' + escapeHtml(rone.period || "최신 분기") + '</span></div>' +
       '<div class="regional-market-basis"><span>비교시장</span><strong>' +
         escapeHtml(market || "전국") + '</strong><small>' +
-        (exact ? "매물 주소와 가장 가까운 조사시장" : "일치 조사시장 없음 · 전국 기준") + '</small></div>' +
+        escapeHtml(basisText) + '</small></div>' +
       '<div class="regional-market-grid">' + metrics.map(marketMetric).join("") + '</div>' +
       '<div class="regional-evidence">' + escapeHtml(rone.note || "") + '</div>' +
       '</section>';

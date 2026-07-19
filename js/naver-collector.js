@@ -7,7 +7,7 @@
   var MAX_PAGES = 100;
   var BATCH_SIZE = 15;
   var APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
+    "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
   var ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
 
   if (!/(^|\.)new\.land\.naver\.com$/i.test(location.hostname)) {
