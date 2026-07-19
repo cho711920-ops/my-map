@@ -729,7 +729,17 @@ function loadSheet(isAuto) {
   document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "시트 읽는중...";
 
   fetch(sheetURL)
-    .then(function(res) { return res.text(); })
+    .then(function(res) {
+      if (res.ok) return res.text();
+      return res.text().then(function(body) {
+        var message = "시트 데이터를 불러오지 못했습니다. (HTTP " + res.status + ")";
+        try {
+          var parsed = JSON.parse(body);
+          if (parsed && parsed.message) message += " " + parsed.message;
+        } catch (_) {}
+        throw new Error(message);
+      });
+    })
     .then(function(data) {
       var rows = data.trim().split("\n");
       var rawItems = [];

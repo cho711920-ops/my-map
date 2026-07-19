@@ -1,12 +1,14 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.0";
+  var VERSION = "1.1.1";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
-  var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key";
+  // Invalidate keys saved during the initial security rollout. Some browsers
+  // saved the instruction line instead of the actual collector key.
+  var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key_v2";
 
   if (!/gongsilbox\.com$/i.test(location.hostname)) {
     alert("공실박스 지도에서 실행해 주세요.");
@@ -340,6 +342,14 @@
 
       var result = await sendToAppsScript(transformed);
       if (!result || result.ok !== true) {
+        if (
+          result &&
+          String(result.message || "").indexOf("승인되지 않은 요청") !== -1
+        ) {
+          try {
+            localStorage.removeItem(COLLECTOR_KEY_STORAGE);
+          } catch (_) {}
+        }
         throw new Error(
           result && result.message
             ? result.message

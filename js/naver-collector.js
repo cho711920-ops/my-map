@@ -1,14 +1,34 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.2.0";
+  var VERSION = "3.2.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 100;
   var BATCH_SIZE = 15;
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
-  var ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
+  var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key_v2";
+
+  function getCollectorKey() {
+    var saved = "";
+    try {
+      saved = String(localStorage.getItem(COLLECTOR_KEY_STORAGE) || "").trim();
+    } catch (_) {}
+    if (saved) return saved;
+
+    var entered = String(
+      window.prompt(
+        "네이버 수집기 보안키를 입력하세요.\n(이 PC에서는 최초 1회만 입력합니다.)",
+        ""
+      ) || ""
+    ).trim();
+    if (!entered) throw new Error("보안키가 입력되지 않아 저장을 취소했습니다.");
+    try {
+      localStorage.setItem(COLLECTOR_KEY_STORAGE, entered);
+    } catch (_) {}
+    return entered;
+  }
 
   if (!/(^|\.)new\.land\.naver\.com$/i.test(location.hostname)) {
     alert("네이버페이 부동산(new.land.naver.com) 지도에서 실행해 주세요.");
@@ -561,12 +581,14 @@
   }
 
   async function postBatch(items) {
+    var collectorKey = getCollectorKey();
     var response = await nativeFetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
         action: "saveNaverBatch",
-        accessKey: ACCESS_KEY,
+        collectorKey: collectorKey,
+        accessKey: collectorKey,
         data: items
       })
     });
