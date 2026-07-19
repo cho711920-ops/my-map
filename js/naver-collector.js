@@ -1,11 +1,11 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.0.0";
+  var VERSION = "3.1.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 100;
-  var BATCH_SIZE = 30;
+  var BATCH_SIZE = 15;
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
@@ -25,6 +25,7 @@
     : null;
   var nativeXhrOpen = XMLHttpRequest.prototype.open;
   var nativeXhrSend = XMLHttpRequest.prototype.send;
+  var nativeXhrSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
   var state = {
     active: true,
     busy: false,
@@ -166,7 +167,7 @@
     if (nativeFetch && !window.fetch.__jsNaverCollectorPatched) {
       var wrappedFetch = async function (input, init) {
         var response = await nativeFetch(input, init);
-        inspectFetchResponse(input, response.clone()).catch(function () {});
+        inspectFetchResponse(input, response.clone(), init).catch(function () {});
         return response;
       };
       wrappedFetch.__jsNaverCollectorPatched = true;
@@ -177,10 +178,18 @@
     if (!XMLHttpRequest.prototype.open.__jsNaverCollectorPatched) {
       var wrappedOpen = function (method, url) {
         this.__jsNaverCollectorUrl = absoluteNaverUrl(url);
+        this.__jsNaverCollectorMethod = String(method || "GET").toUpperCase();
+        this.__jsNaverCollectorHeaders = {};
         return nativeXhrOpen.apply(this, arguments);
       };
       wrappedOpen.__jsNaverCollectorPatched = true;
       XMLHttpRequest.prototype.open = wrappedOpen;
+
+      XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+        if (!this.__jsNaverCollectorHeaders) this.__jsNaverCollectorHeaders = {};
+        this.__jsNaverCollectorHeaders[String(name || "").toLowerCase()] = String(value || "");
+        return nativeXhrSetRequestHeader.apply(this, arguments);
+      };
 
       XMLHttpRequest.prototype.send = function () {
         this.addEventListener("load", function () {
@@ -189,7 +198,11 @@
             var json = this.responseType === "json"
               ? this.response
               : JSON.parse(this.responseText || "{}");
-            capturePayload(json, this.__jsNaverCollectorUrl);
+            capturePayload(json, this.__jsNaverCollectorUrl, {
+              method: this.__jsNaverCollectorMethod || "GET",
+              headers: this.__jsNaverCollectorHeaders || {},
+              credentials: "include"
+            });
           } catch (_) {}
         }, {once: true});
         return nativeXhrSend.apply(this, arguments);
@@ -197,12 +210,44 @@
     }
   }
 
-  async function inspectFetchResponse(input, response) {
+  async function inspectFetchResponse(input, response, init) {
     if (!state.active) return;
     var url = response.url || requestUrl(input);
     if (!isArticleRequest(url)) return;
     var json = await response.json();
-    capturePayload(json, url);
+    capturePayload(json, url, requestOptionsFromFetch(input, init));
+  }
+
+  function requestOptionsFromFetch(input, init) {
+    var options = init || {};
+    var headers = {};
+    try {
+      if (typeof Request !== "undefined" && input instanceof Request) {
+        input.headers.forEach(function (value, name) {
+          headers[String(name).toLowerCase()] = value;
+        });
+      }
+      new Headers(options.headers || {}).forEach(function (value, name) {
+        headers[String(name).toLowerCase()] = value;
+      });
+    } catch (_) {}
+    return {
+      method: String(options.method || (input && input.method) || "GET").toUpperCase(),
+      headers: headers,
+      credentials: options.credentials || (input && input.credentials) || "include"
+    };
+  }
+
+  function replayOptions(capture) {
+    var source = capture && capture.requestOptions ? capture.requestOptions : {};
+    var headers = Object.assign({}, source.headers || {});
+    if (!headers.accept) headers.accept = "application/json, text/plain, */*";
+    return {
+      method: "GET",
+      credentials: source.credentials || "include",
+      headers: headers,
+      cache: "no-store"
+    };
   }
 
   function requestUrl(input) {
@@ -269,7 +314,7 @@
     }
   }
 
-  function capturePayload(json, sourceUrl) {
+  function capturePayload(json, sourceUrl, requestOptions) {
     var articles = articleList(json).filter(function (article) {
       return article && article.articleNo;
     });
@@ -282,7 +327,8 @@
       responseUrl: responseUrl,
       page: pageNumber(responseUrl),
       expected: expectedCount(json),
-      hasMore: hasMore(json)
+      hasMore: hasMore(json),
+      requestOptions: requestOptions || null
     };
     state.collected = articles.slice();
     state.capturedAt = Date.now();
@@ -324,7 +370,11 @@
           });
           if (!response.ok) continue;
           var json = await response.json();
-          if (capturePayload(json, response.url || urls[i])) return;
+          if (capturePayload(json, response.url || urls[i], {
+            method: "GET",
+            headers: {Accept: "application/json, text/plain, */*"},
+            credentials: "include"
+          })) return;
         } catch (_) {}
       }
 
@@ -349,6 +399,7 @@
     var expected = capture.expected || 0;
     var lastJson = capture.json || {};
     var baseUrl = new URL(capture.responseUrl);
+    var requestOptions = replayOptions(capture);
     var noNewCount = 0;
 
     firstArticles.forEach(function (article) {
@@ -368,11 +419,11 @@
         nextPage + "페이지 · 현재 " + found.size + (expected ? "/" + expected : "") + "개"
       );
 
-      var response = await nativeFetch(target.href, {
-        credentials: "include",
-        headers: {Accept: "application/json, text/plain, */*"}
-      });
+      var response = await fetchPageWithRetry(target.href, requestOptions, 3);
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("네이버 인증이 만료되었습니다. 수집기를 연 상태에서 클러스터를 다시 클릭한 뒤 저장해 주세요. (HTTP " + response.status + ")");
+        }
         throw new Error("네이버 목록 조회 실패(HTTP " + response.status + ")");
       }
 
@@ -397,6 +448,24 @@
 
     state.collected = Array.from(found.values());
     return state.collected;
+  }
+
+  async function fetchPageWithRetry(url, options, attempts) {
+    var lastResponse = null;
+    var lastError = null;
+    for (var attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        lastResponse = await nativeFetch(url, options);
+        if (lastResponse.ok || (lastResponse.status !== 429 && lastResponse.status < 500)) {
+          return lastResponse;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      await delay(350 * attempt);
+    }
+    if (lastResponse) return lastResponse;
+    throw lastError || new Error("네이버 목록을 불러오지 못했습니다.");
   }
 
   function clean(value) {
@@ -470,10 +539,10 @@
         var batch = items.slice(index, index + BATCH_SIZE);
         setStatus(
           "NAVER_IMPORT 저장 중",
-          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 30개씩 안전하게 저장합니다."
+          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 15개씩 안전하게 저장합니다."
         );
         setProgress(index, items.length);
-        var result = await postBatch(batch);
+        var result = await postBatchWithRetry(batch, 3);
         totals.saved += Number(result.saved) || 0;
         totals.duplicate += Number(result.duplicate) || 0;
         totals.failed += Number(result.failed) || 0;
@@ -495,6 +564,19 @@
       saveButton.disabled = !state.capture;
       retryButton.disabled = false;
     }
+  }
+
+  async function postBatchWithRetry(batch, attempts) {
+    var lastError = null;
+    for (var attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await postBatch(batch);
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts) await delay(500 * attempt);
+      }
+    }
+    throw lastError || new Error("NAVER_IMPORT 저장에 실패했습니다.");
   }
 
   function delay(ms) {
