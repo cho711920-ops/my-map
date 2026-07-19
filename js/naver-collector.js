@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.1.0";
+  var VERSION = "3.1.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 100;
@@ -31,7 +31,8 @@
     busy: false,
     capture: null,
     collected: [],
-    capturedAt: 0
+    capturedAt: 0,
+    clickedClusterCount: 0
   };
 
   var panel = createPanel();
@@ -128,9 +129,28 @@
   function bindEvents() {
     saveButton.addEventListener("click", collectAndSave);
     retryButton.addEventListener("click", discoverExistingRequest);
+    document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
       panel.style.display = "none";
     });
+  }
+
+  function rememberClusterCount(event) {
+    var node = event && event.target;
+    if (!node || (panel.contains && panel.contains(node))) return;
+
+    for (var depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+      var text = String(node.textContent || "").replace(/,/g, "").trim();
+      if (!/^\d{1,4}$/.test(text)) continue;
+      var count = Number(text);
+      if (!Number.isFinite(count) || count < 1) continue;
+      state.clickedClusterCount = count;
+      setStatus(
+        "클러스터 " + count + "개를 선택했습니다.",
+        "네이버 첫 페이지 응답을 기다리고 있습니다."
+      );
+      return;
+    }
   }
 
   function reopen() {
@@ -321,12 +341,15 @@
     var responseUrl = absoluteNaverUrl(sourceUrl);
     if (!articles.length || !isArticleRequest(responseUrl)) return false;
 
+    var responseExpected = expectedCount(json);
+    var clickedExpected = Number(state.clickedClusterCount) || 0;
+    var expected = Math.max(responseExpected, clickedExpected, articles.length);
     state.capture = {
       articles: articles,
       json: json,
       responseUrl: responseUrl,
       page: pageNumber(responseUrl),
-      expected: expectedCount(json),
+      expected: expected,
       hasMore: hasMore(json),
       requestOptions: requestOptions || null
     };
@@ -340,9 +363,11 @@
     var count = capture.articles.length;
     var expected = capture.expected;
     setStatus(
-      "네이버 매물 " + count + "개를 감지했습니다.",
       expected && expected > count
-        ? "전체 " + expected + "개로 예상됩니다. 저장 버튼을 누르면 다음 페이지까지 자동 수집합니다."
+        ? "클러스터 전체 " + expected + "개를 감지했습니다."
+        : "네이버 매물 " + count + "개를 감지했습니다.",
+      expected && expected > count
+        ? "첫 페이지 " + count + "개 확인 · 저장하면 나머지 페이지까지 자동 수집합니다."
         : "저장 버튼을 누르면 전체 페이지 확인과 중복검사를 한 번에 진행합니다."
     );
     saveButton.disabled = false;
