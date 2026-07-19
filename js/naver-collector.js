@@ -1,0 +1,505 @@
+(function () {
+  "use strict";
+
+  var VERSION = "3.0.0";
+  var PANEL_ID = "js-naver-collector-panel";
+  var STYLE_ID = "js-naver-collector-style";
+  var MAX_PAGES = 100;
+  var BATCH_SIZE = 30;
+  var APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
+  var ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
+
+  if (!/(^|\.)new\.land\.naver\.com$/i.test(location.hostname)) {
+    alert("네이버페이 부동산(new.land.naver.com) 지도에서 실행해 주세요.");
+    return;
+  }
+
+  if (window.__JS_NAVER_COLLECTOR__) {
+    window.__JS_NAVER_COLLECTOR__.reopen();
+    return;
+  }
+
+  var nativeFetch = typeof window.fetch === "function"
+    ? window.fetch.bind(window)
+    : null;
+  var nativeXhrOpen = XMLHttpRequest.prototype.open;
+  var nativeXhrSend = XMLHttpRequest.prototype.send;
+  var state = {
+    active: true,
+    busy: false,
+    capture: null,
+    collected: [],
+    capturedAt: 0
+  };
+
+  var panel = createPanel();
+  var statusElement = panel.querySelector("[data-role=status]");
+  var detailElement = panel.querySelector("[data-role=detail]");
+  var progressElement = panel.querySelector("[data-role=progress]");
+  var progressBarElement = panel.querySelector("[data-role=progress-bar]");
+  var saveButton = panel.querySelector("[data-action=save]");
+  var retryButton = panel.querySelector("[data-action=retry]");
+  var closeButton = panel.querySelector("[data-action=close]");
+
+  patchNetwork();
+  bindEvents();
+  setStatus(
+    "원하는 숫자 클러스터를 눌러주세요.",
+    "클러스터를 누르면 매물을 자동 감지합니다. 이미 눌렀다면 ‘현재 목록 다시 감지’를 눌러주세요."
+  );
+  discoverExistingRequest();
+
+  window.__JS_NAVER_COLLECTOR__ = {
+    version: VERSION,
+    reopen: reopen,
+    getState: function () {
+      return state;
+    },
+    capturePayload: capturePayload,
+    collectAll: collectAll,
+    normalize: normalize
+  };
+
+  function createPanel() {
+    var old = document.getElementById(PANEL_ID);
+    if (old) old.remove();
+
+    if (!document.getElementById(STYLE_ID)) {
+      var style = document.createElement("style");
+      style.id = STYLE_ID;
+      style.textContent =
+        "#" + PANEL_ID + "{" +
+        "position:fixed;right:16px;bottom:18px;z-index:2147483647;" +
+        "width:min(380px,calc(100vw - 24px));box-sizing:border-box;" +
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;" +
+        "background:#fff;border:1px solid #cfe8d9;border-radius:16px;" +
+        "box-shadow:0 16px 45px rgba(15,23,42,.24);overflow:hidden;color:#172033}" +
+        "#" + PANEL_ID + " *{box-sizing:border-box}" +
+        "#" + PANEL_ID + " .jsn-head{display:flex;align-items:center;justify-content:space-between;" +
+        "padding:13px 15px;background:linear-gradient(135deg,#03c75a,#00a94f);color:#fff}" +
+        "#" + PANEL_ID + " .jsn-title{font-size:16px;font-weight:850;letter-spacing:-.3px}" +
+        "#" + PANEL_ID + " .jsn-version{font-size:10px;opacity:.8;margin-left:6px}" +
+        "#" + PANEL_ID + " .jsn-close{width:32px;height:32px;border:0;border-radius:9px;" +
+        "background:rgba(255,255,255,.18);color:#fff;font-size:22px;line-height:30px;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsn-body{padding:15px}" +
+        "#" + PANEL_ID + " .jsn-status{font-size:15px;font-weight:850;line-height:1.45;color:#172033}" +
+        "#" + PANEL_ID + " .jsn-detail{margin-top:7px;color:#667085;font-size:12px;line-height:1.55;" +
+        "white-space:pre-line;max-height:116px;overflow:auto}" +
+        "#" + PANEL_ID + " .jsn-progress{height:7px;margin-top:12px;border-radius:99px;" +
+        "background:#e7efe9;overflow:hidden;display:none}" +
+        "#" + PANEL_ID + " .jsn-progress>i{display:block;width:0;height:100%;background:#03c75a;transition:width .18s}" +
+        "#" + PANEL_ID + " .jsn-rule{margin-top:12px;padding:10px 11px;background:#f0fbf5;" +
+        "border-radius:10px;color:#3d6250;font-size:11px;line-height:1.55}" +
+        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:12px}" +
+        "#" + PANEL_ID + " button.jsn-btn{height:46px;border-radius:11px;font-size:14px;font-weight:850;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
+        "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
+        "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled{" +
+        "cursor:not-allowed;background:#d2ded7;color:#f8faf9;border-color:#d2ded7}" +
+        "@media(max-width:640px){#" + PANEL_ID + "{right:8px;bottom:8px;width:calc(100vw - 16px)}}";
+      document.head.appendChild(style);
+    }
+
+    var element = document.createElement("section");
+    element.id = PANEL_ID;
+    element.innerHTML =
+      '<div class="jsn-head">' +
+        '<div class="jsn-title">JS 네이버 수집기<span class="jsn-version">v' + VERSION + '</span></div>' +
+        '<button type="button" class="jsn-close" data-action="close" aria-label="닫기">×</button>' +
+      '</div>' +
+      '<div class="jsn-body">' +
+        '<div class="jsn-status" data-role="status"></div>' +
+        '<div class="jsn-detail" data-role="detail"></div>' +
+        '<div class="jsn-progress" data-role="progress"><i data-role="progress-bar"></i></div>' +
+        '<div class="jsn-rule">저장 위치: <b>NAVER_IMPORT</b><br>' +
+        '중복검사: 지번주소 + 층/호실 + 보증금 + 월세 + 평수<br>' +
+        '확장 프로그램 없이 이 북마크 버튼 하나로 사용합니다.</div>' +
+        '<div class="jsn-actions">' +
+          '<button type="button" class="jsn-btn jsn-retry" data-action="retry">현재 목록 다시 감지</button>' +
+          '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>클러스터 전체 저장</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(element);
+    return element;
+  }
+
+  function bindEvents() {
+    saveButton.addEventListener("click", collectAndSave);
+    retryButton.addEventListener("click", discoverExistingRequest);
+    closeButton.addEventListener("click", function () {
+      panel.style.display = "none";
+    });
+  }
+
+  function reopen() {
+    state.active = true;
+    panel.style.display = "block";
+    patchNetwork();
+    if (state.capture) {
+      showCapture(state.capture);
+    } else {
+      setStatus(
+        "원하는 숫자 클러스터를 눌러주세요.",
+        "클러스터를 누르면 매물을 자동 감지합니다."
+      );
+      discoverExistingRequest();
+    }
+  }
+
+  function setStatus(title, detail) {
+    statusElement.textContent = title || "";
+    detailElement.textContent = detail || "";
+  }
+
+  function setProgress(done, total) {
+    if (!total) {
+      progressElement.style.display = "none";
+      progressBarElement.style.width = "0%";
+      return;
+    }
+    progressElement.style.display = "block";
+    progressBarElement.style.width = Math.min(100, Math.round(done / total * 100)) + "%";
+  }
+
+  function patchNetwork() {
+    if (nativeFetch && !window.fetch.__jsNaverCollectorPatched) {
+      var wrappedFetch = async function (input, init) {
+        var response = await nativeFetch(input, init);
+        inspectFetchResponse(input, response.clone()).catch(function () {});
+        return response;
+      };
+      wrappedFetch.__jsNaverCollectorPatched = true;
+      wrappedFetch.__jsNaverCollectorOriginal = nativeFetch;
+      window.fetch = wrappedFetch;
+    }
+
+    if (!XMLHttpRequest.prototype.open.__jsNaverCollectorPatched) {
+      var wrappedOpen = function (method, url) {
+        this.__jsNaverCollectorUrl = absoluteNaverUrl(url);
+        return nativeXhrOpen.apply(this, arguments);
+      };
+      wrappedOpen.__jsNaverCollectorPatched = true;
+      XMLHttpRequest.prototype.open = wrappedOpen;
+
+      XMLHttpRequest.prototype.send = function () {
+        this.addEventListener("load", function () {
+          if (!state.active || !isArticleRequest(this.__jsNaverCollectorUrl)) return;
+          try {
+            var json = this.responseType === "json"
+              ? this.response
+              : JSON.parse(this.responseText || "{}");
+            capturePayload(json, this.__jsNaverCollectorUrl);
+          } catch (_) {}
+        }, {once: true});
+        return nativeXhrSend.apply(this, arguments);
+      };
+    }
+  }
+
+  async function inspectFetchResponse(input, response) {
+    if (!state.active) return;
+    var url = response.url || requestUrl(input);
+    if (!isArticleRequest(url)) return;
+    var json = await response.json();
+    capturePayload(json, url);
+  }
+
+  function requestUrl(input) {
+    if (typeof input === "string") return input;
+    if (input && typeof input.url === "string") return input.url;
+    return "";
+  }
+
+  function absoluteNaverUrl(value) {
+    try {
+      var url = new URL(String(value || ""), location.origin);
+      return url.origin === location.origin ? url.href : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function isArticleRequest(value) {
+    var url = absoluteNaverUrl(value);
+    return !!url && /\/api\/(?:articles|articleList)(?:\/|\?|$)/i.test(url);
+  }
+
+  function articleList(json) {
+    if (!json || typeof json !== "object") return [];
+    if (Array.isArray(json.articleList)) return json.articleList;
+    if (json.body && Array.isArray(json.body.articleList)) return json.body.articleList;
+    if (json.result && Array.isArray(json.result.articleList)) return json.result.articleList;
+    return [];
+  }
+
+  function expectedCount(json) {
+    var candidates = [
+      json && json.totalCount,
+      json && json.articleCount,
+      json && json.total,
+      json && json.pageInfo && json.pageInfo.totalCount
+    ];
+    for (var i = 0; i < candidates.length; i += 1) {
+      var value = Number(candidates[i]);
+      if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
+  }
+
+  function hasMore(json) {
+    var candidates = [
+      json && json.isMoreData,
+      json && json.hasMore,
+      json && json.moreData,
+      json && json.pageInfo && json.pageInfo.hasNext
+    ];
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (typeof candidates[i] === "boolean") return candidates[i];
+    }
+    return null;
+  }
+
+  function pageNumber(url) {
+    try {
+      var value = Number(new URL(url).searchParams.get("page"));
+      return Number.isFinite(value) && value > 0 ? value : 1;
+    } catch (_) {
+      return 1;
+    }
+  }
+
+  function capturePayload(json, sourceUrl) {
+    var articles = articleList(json).filter(function (article) {
+      return article && article.articleNo;
+    });
+    var responseUrl = absoluteNaverUrl(sourceUrl);
+    if (!articles.length || !isArticleRequest(responseUrl)) return false;
+
+    state.capture = {
+      articles: articles,
+      json: json,
+      responseUrl: responseUrl,
+      page: pageNumber(responseUrl),
+      expected: expectedCount(json),
+      hasMore: hasMore(json)
+    };
+    state.collected = articles.slice();
+    state.capturedAt = Date.now();
+    showCapture(state.capture);
+    return true;
+  }
+
+  function showCapture(capture) {
+    var count = capture.articles.length;
+    var expected = capture.expected;
+    setStatus(
+      "네이버 매물 " + count + "개를 감지했습니다.",
+      expected && expected > count
+        ? "전체 " + expected + "개로 예상됩니다. 저장 버튼을 누르면 다음 페이지까지 자동 수집합니다."
+        : "저장 버튼을 누르면 전체 페이지 확인과 중복검사를 한 번에 진행합니다."
+    );
+    saveButton.disabled = false;
+    saveButton.textContent = "클러스터 전체 저장";
+  }
+
+  async function discoverExistingRequest() {
+    if (state.busy) return;
+    retryButton.disabled = true;
+    setStatus("현재 네이버 목록을 확인 중입니다.", "최근에 연 클러스터 요청을 찾고 있습니다.");
+
+    try {
+      var entries = window.performance && window.performance.getEntriesByType
+        ? window.performance.getEntriesByType("resource")
+        : [];
+      var urls = entries.map(function (entry) {
+        return entry && entry.name ? entry.name : "";
+      }).filter(isArticleRequest).slice(-20).reverse();
+
+      for (var i = 0; i < urls.length; i += 1) {
+        try {
+          var response = await nativeFetch(urls[i], {
+            credentials: "include",
+            headers: {Accept: "application/json, text/plain, */*"}
+          });
+          if (!response.ok) continue;
+          var json = await response.json();
+          if (capturePayload(json, response.url || urls[i])) return;
+        } catch (_) {}
+      }
+
+      if (state.capture) {
+        showCapture(state.capture);
+      } else {
+        setStatus(
+          "아직 매물을 감지하지 못했습니다.",
+          "지도에서 원하는 숫자 클러스터를 한 번 눌러주세요. 누르는 즉시 자동 감지됩니다."
+        );
+      }
+    } finally {
+      retryButton.disabled = false;
+    }
+  }
+
+  async function collectAll(capture) {
+    if (!nativeFetch) throw new Error("현재 브라우저에서 목록을 불러올 수 없습니다.");
+    var found = new Map();
+    var firstArticles = capture.articles || [];
+    var currentPage = capture.page || pageNumber(capture.responseUrl);
+    var expected = capture.expected || 0;
+    var lastJson = capture.json || {};
+    var baseUrl = new URL(capture.responseUrl);
+    var noNewCount = 0;
+
+    firstArticles.forEach(function (article) {
+      found.set(String(article.articleNo), article);
+    });
+    setProgress(found.size, expected || Math.max(found.size + 1, 1));
+
+    for (var step = 1; step < MAX_PAGES; step += 1) {
+      if (hasMore(lastJson) === false) break;
+      if (expected && found.size >= expected) break;
+
+      var nextPage = currentPage + 1;
+      var target = new URL(baseUrl.href);
+      target.searchParams.set("page", String(nextPage));
+      setStatus(
+        "클러스터 전체 목록 수집 중",
+        nextPage + "페이지 · 현재 " + found.size + (expected ? "/" + expected : "") + "개"
+      );
+
+      var response = await nativeFetch(target.href, {
+        credentials: "include",
+        headers: {Accept: "application/json, text/plain, */*"}
+      });
+      if (!response.ok) {
+        throw new Error("네이버 목록 조회 실패(HTTP " + response.status + ")");
+      }
+
+      var json = await response.json();
+      var items = articleList(json);
+      var before = found.size;
+      items.forEach(function (article) {
+        if (article && article.articleNo) {
+          found.set(String(article.articleNo), article);
+        }
+      });
+
+      currentPage = nextPage;
+      lastJson = json;
+      expected = expected || expectedCount(json);
+      noNewCount = found.size === before ? noNewCount + 1 : 0;
+      setProgress(found.size, expected || Math.max(found.size + 1, 1));
+
+      if (!items.length || noNewCount >= 1 || hasMore(json) === false) break;
+      await delay(120);
+    }
+
+    state.collected = Array.from(found.values());
+    return state.collected;
+  }
+
+  function clean(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
+  function normalize(article) {
+    var price = article && article.price ? article.price : {};
+    return {
+      articleNo: clean(article && article.articleNo),
+      buildingName: clean(article && (article.buildingName || article.articleName)),
+      category: clean(article && (article.articleRealEstateTypeName || article.realEstateTypeName)),
+      tradeType: clean(article && article.tradeTypeName),
+      deposit: clean(article && (
+        article.dealOrWarrantPrc != null ? article.dealOrWarrantPrc :
+        article.depositPrice != null ? article.depositPrice : price.deposit
+      )),
+      monthly: clean(article && (
+        article.rentPrc != null ? article.rentPrc :
+        article.monthlyPrice != null ? article.monthlyPrice : price.monthly
+      )),
+      areaSquareMeter: article && (article.area2 != null ? article.area2 : article.area1),
+      floorInfo: clean(article && article.floorInfo),
+      roomInfo: clean(article && (article.roomInfo || article.roomName || article.unitInfo)),
+      direction: clean(article && article.direction),
+      description: clean(article && article.articleFeatureDesc),
+      tags: Array.isArray(article && article.tagList) ? article.tagList : [],
+      latitude: article && article.latitude || "",
+      longitude: article && article.longitude || "",
+      realtorName: clean(article && article.realtorName),
+      providerUrl: clean(article && (article.cpPcArticleUrl || article.cpMobileArticleUrl)),
+      currentUrl: location.href
+    };
+  }
+
+  async function postBatch(items) {
+    var response = await nativeFetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({
+        action: "saveNaverBatch",
+        accessKey: ACCESS_KEY,
+        data: items
+      })
+    });
+    var text = await response.text();
+    var result;
+    try {
+      result = JSON.parse(text);
+    } catch (_) {
+      throw new Error("시트 저장 서버 응답을 읽지 못했습니다.");
+    }
+    if (!result.ok) throw new Error(result.message || "시트 저장에 실패했습니다.");
+    return result;
+  }
+
+  async function collectAndSave() {
+    if (state.busy || !state.capture) return;
+    state.busy = true;
+    saveButton.disabled = true;
+    retryButton.disabled = true;
+    var totals = {saved: 0, duplicate: 0, failed: 0};
+
+    try {
+      var rawItems = await collectAll(state.capture);
+      var items = rawItems.map(normalize).filter(function (item) {
+        return item.articleNo;
+      });
+
+      for (var index = 0; index < items.length; index += BATCH_SIZE) {
+        var batch = items.slice(index, index + BATCH_SIZE);
+        setStatus(
+          "NAVER_IMPORT 저장 중",
+          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 30개씩 안전하게 저장합니다."
+        );
+        setProgress(index, items.length);
+        var result = await postBatch(batch);
+        totals.saved += Number(result.saved) || 0;
+        totals.duplicate += Number(result.duplicate) || 0;
+        totals.failed += Number(result.failed) || 0;
+        await delay(160);
+      }
+
+      setProgress(items.length, items.length || 1);
+      setStatus(
+        "네이버 수집 완료",
+        "전체 " + items.length + "개 · 신규 " + totals.saved + "개 · 중복 " + totals.duplicate + "개 · 실패 " + totals.failed + "개"
+      );
+      saveButton.textContent = "저장 완료 · 다시 수집 가능";
+    } catch (error) {
+      setProgress(0, 0);
+      setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
+      saveButton.textContent = "다시 저장";
+    } finally {
+      state.busy = false;
+      saveButton.disabled = !state.capture;
+      retryButton.disabled = false;
+    }
+  }
+
+  function delay(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+})();
