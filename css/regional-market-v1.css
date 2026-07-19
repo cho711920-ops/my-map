@@ -117,15 +117,13 @@
   gap: 5px;
 }
 
-.regional-source b {
-  display: inline-grid;
-  width: 23px;
+.regional-source img {
+  display: block;
+  width: auto;
+  max-width: 72px;
   height: 23px;
-  place-items: center;
-  border-radius: 7px;
-  color: #fff;
-  font-size: 13px;
-  font-style: normal;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .regional-source em {
@@ -134,9 +132,6 @@
   font-style: normal;
   font-weight: 800;
 }
-
-.regional-source-sgis b { background: #116ac5; }
-.regional-source-rone b { background: #dc4a2f; }
 
 .regional-demand-type {
   padding: 12px;
@@ -320,6 +315,7 @@
   .regional-blocks { padding: 0 10px 10px; gap: 9px; }
   .regional-block { padding: 12px; }
   .regional-title h4 { font-size: 14px; }
+  .regional-source img { max-width: 56px; height: 20px; }
   .regional-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .regional-metric { padding: 8px 5px; }
   .regional-metric strong { font-size: 12px; }

@@ -123,8 +123,11 @@
   }
 
   function sourceBadge(type, label) {
+    var logo = type === "sgis"
+      ? "https://sgis.mods.go.kr/mobile/resources/m2021/img/img2022/logo2022.png"
+      : "https://www.reb.or.kr/r-one/images/rone/portal/logo@2x.png";
     return '<span class="regional-source regional-source-' + type + '">' +
-      '<b>' + (type === "sgis" ? "S" : "R") + '</b>' +
+      '<img src="' + logo + '" alt="' + escapeHtml(label) + ' 공식 로고" referrerpolicy="no-referrer">' +
       '<em>' + escapeHtml(label) + '</em></span>';
   }
 
@@ -350,7 +353,7 @@
     popup.document.write('<!doctype html><html><head><meta charset="utf-8"><base href="' +
       escapeHtml(location.href) + '"><title>JS부동산 상가 매물 전문 브리핑</title>' +
       '<link rel="stylesheet" href="css/commercial-public-v6.css?v=6.4.0">' +
-      '<link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.0">' +
+      '<link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.1">' +
       '<style>@page{size:A4;margin:10mm}body{font-family:Arial,"Malgun Gothic",sans-serif;background:#fff;margin:0;color:#172033}.print-wrap{max-width:900px;margin:auto}.commerce-sector-toolbar,button,select{display:none!important}.ai-professional-card{box-shadow:none!important;border:0!important}.regional-block,.commerce-section{break-inside:avoid}</style>' +
       '</head><body><main class="print-wrap">' + card.outerHTML + '</main></body></html>');
     popup.document.close();
