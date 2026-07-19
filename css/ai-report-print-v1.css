@@ -1,0 +1,123 @@
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  color: #172033;
+  font-family: Arial, "Malgun Gothic", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.print-wrap {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+}
+
+.commerce-sector-toolbar,
+button,
+select {
+  display: none !important;
+}
+
+.ai-professional-card,
+.professional-commerce-wrap,
+.public-commerce-card,
+.regional-market-card,
+.regional-blocks,
+.regional-block,
+.commerce-section {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+.ai-professional-card {
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.professional-card-head,
+.professional-property-title,
+.professional-property-address,
+.professional-facts > div,
+.public-commerce-head,
+.public-commerce-brief,
+.commerce-section-title,
+.commerce-radius-card,
+.commerce-signal-grid > div,
+.commerce-recommend-card,
+.commerce-decision-brief,
+.commerce-decision-columns > div,
+.commerce-detail-columns > section,
+.commerce-category-row,
+.regional-market-head,
+.regional-combined,
+.regional-title,
+.regional-demand-type,
+.regional-metric,
+.regional-market-basis,
+.regional-market-metric,
+.regional-evidence,
+.regional-foot {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.commerce-section-title,
+.regional-title {
+  break-after: avoid-page;
+  page-break-after: avoid;
+}
+
+.commerce-category-table {
+  overflow: visible !important;
+}
+
+.commerce-category-row {
+  min-height: 0;
+}
+
+.public-commerce-brief,
+.commerce-section,
+.regional-block {
+  orphans: 3;
+  widows: 3;
+}
+
+@media print {
+  body {
+    width: auto;
+  }
+
+  .ai-professional-card,
+  .professional-commerce-wrap,
+  .public-commerce-card,
+  .regional-market-card {
+    break-before: auto;
+    page-break-before: auto;
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .regional-blocks {
+    display: block !important;
+  }
+
+  .regional-block + .regional-block {
+    margin-top: 10px;
+  }
+}

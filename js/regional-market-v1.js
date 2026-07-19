@@ -357,9 +357,23 @@
       escapeHtml(location.href) + '"><title>JS부동산 상가 매물 전문 브리핑</title>' +
       '<link rel="stylesheet" href="css/commercial-public-v6.css?v=6.4.0">' +
       '<link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.3">' +
-      '<style>@page{size:A4;margin:10mm}body{font-family:Arial,"Malgun Gothic",sans-serif;background:#fff;margin:0;color:#172033}.print-wrap{max-width:900px;margin:auto}.commerce-sector-toolbar,button,select{display:none!important}.ai-professional-card{box-shadow:none!important;border:0!important}.regional-block,.commerce-section{break-inside:avoid}</style>' +
+      '<link rel="stylesheet" href="css/ai-report-print-v1.css?v=1.0.0">' +
       '</head><body><main class="print-wrap">' + card.outerHTML + '</main></body></html>');
     popup.document.close();
-    setTimeout(function () { popup.focus(); popup.print(); }, 500);
+    var printed = false;
+    function startPrint() {
+      if (printed || popup.closed) return;
+      printed = true;
+      popup.focus();
+      popup.print();
+    }
+    if (popup.document.readyState === "complete") {
+      setTimeout(startPrint, 250);
+    } else {
+      popup.addEventListener("load", function () {
+        setTimeout(startPrint, 250);
+      }, { once: true });
+    }
+    setTimeout(startPrint, 3000);
   };
 })();
