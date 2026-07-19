@@ -1,0 +1,329 @@
+.regional-market-card {
+  margin: 14px 0 0;
+  border: 1px solid #cfe0f8;
+  border-radius: 16px;
+  background: #f8fbff;
+  overflow: hidden;
+  color: #18243a;
+}
+
+.regional-market-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #0b6fe8, #0757bd);
+  color: #fff;
+}
+
+.regional-market-head span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: .78;
+}
+
+.regional-market-head h3 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -.4px;
+}
+
+.regional-market-head > b {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid rgba(255,255,255,.45);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.regional-combined {
+  margin: 14px;
+  padding: 15px 16px;
+  border: 1px solid #c7ddff;
+  border-left: 5px solid #0b6fe8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.regional-combined > span {
+  color: #0863cc;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.regional-combined p {
+  margin: 7px 0 4px;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.68;
+}
+
+.regional-combined small,
+.regional-evidence,
+.regional-foot {
+  color: #69758a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.regional-blocks {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.regional-block {
+  padding: 15px;
+  border: 1px solid #d9e5f5;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.regional-title,
+.regional-title > div,
+.regional-source {
+  display: flex;
+  align-items: center;
+}
+
+.regional-title {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.regional-title > div {
+  gap: 9px;
+  min-width: 0;
+}
+
+.regional-title h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.regional-title > span {
+  flex: 0 0 auto;
+  color: #66758d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.regional-source {
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.regional-source b {
+  display: inline-grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.regional-source em {
+  display: none;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.regional-source-sgis b { background: #116ac5; }
+.regional-source-rone b { background: #dc4a2f; }
+
+.regional-demand-type {
+  padding: 12px;
+  border-radius: 10px;
+  background: #eef6ff;
+}
+
+.regional-demand-type span,
+.regional-market-basis span {
+  display: block;
+  color: #64728a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.regional-demand-type strong,
+.regional-market-basis strong {
+  display: block;
+  margin-top: 3px;
+  color: #075cbe;
+  font-size: 15px;
+}
+
+.regional-demand-type p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.regional-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.regional-metric {
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid #e1e9f4;
+  border-radius: 9px;
+  background: #fbfdff;
+}
+
+.regional-metric > span {
+  display: block;
+  color: #6b778c;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.regional-metric strong {
+  display: block;
+  margin-top: 3px;
+  color: #14233d;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.regional-metric strong small {
+  margin-left: 2px;
+  color: #65738a;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.regional-evidence {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed #d9e3ef;
+}
+
+.regional-market-basis {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff6f3;
+}
+
+.regional-market-basis strong { color: #bb3a25; }
+
+.regional-market-basis small {
+  display: block;
+  margin-top: 3px;
+  color: #7c6d68;
+  font-size: 9px;
+}
+
+.regional-market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.regional-market-metric {
+  padding: 10px;
+  border: 1px solid #ebe1df;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.regional-market-metric > span {
+  display: block;
+  color: #786e6b;
+  font-size: 9px;
+}
+
+.regional-market-metric strong {
+  display: block;
+  margin: 3px 0;
+  font-size: 16px;
+}
+
+.regional-market-metric strong small {
+  margin-left: 2px;
+  color: #756d6b;
+  font-size: 9px;
+}
+
+.regional-market-metric em {
+  display: block;
+  color: #a13b2a;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.regional-block-setup {
+  border-style: dashed;
+  background: #f9fbfe;
+}
+
+.regional-block-setup p,
+.regional-block-error p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.regional-block-setup small {
+  display: block;
+  margin-top: 5px;
+  color: #758198;
+  font-size: 9px;
+}
+
+.regional-block-error {
+  border-color: #f0c5bd;
+  background: #fff8f7;
+}
+
+.regional-foot {
+  padding: 10px 15px 13px;
+  border-top: 1px solid #dce7f5;
+  background: #f4f8fe;
+}
+
+.regional-loading,
+.regional-error {
+  display: grid;
+  gap: 5px;
+  padding: 18px;
+}
+
+.regional-loading b,
+.regional-error b { font-size: 13px; }
+.regional-loading span,
+.regional-error span { color: #68758a; font-size: 10px; }
+.regional-error { color: #b63421; }
+
+@media (min-width: 760px) {
+  .regional-blocks { grid-template-columns: 1fr 1fr; }
+  .regional-source em { display: inline; }
+}
+
+@media (max-width: 520px) {
+  .regional-market-head { padding: 13px 14px; }
+  .regional-market-head h3 { font-size: 17px; }
+  .regional-combined { margin: 10px; padding: 12px; }
+  .regional-combined p { font-size: 12px; }
+  .regional-blocks { padding: 0 10px 10px; gap: 9px; }
+  .regional-block { padding: 12px; }
+  .regional-title h4 { font-size: 14px; }
+  .regional-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .regional-metric { padding: 8px 5px; }
+  .regional-metric strong { font-size: 12px; }
+  .regional-market-grid { gap: 5px; }
+  .regional-market-metric { padding: 8px; }
+  .regional-market-metric strong { font-size: 14px; }
+}
