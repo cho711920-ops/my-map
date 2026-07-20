@@ -1,7 +1,9 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.2";
+  var VERSION = "1.2.0";
+  var MAX_ITEMS = 5000;
+  var SAVE_BATCH_SIZE = 250;
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -47,6 +49,7 @@
 
   window.__JS_GONGSIL_COLLECTOR__ = {
     version: VERSION,
+    maxItems: MAX_ITEMS,
     reopen: function () {
       state.active = true;
       panel.style.display = "block";
@@ -258,16 +261,18 @@
 
   function showCapture(capture) {
     var items = getListItems(capture.response);
-    var selectedCount = unique(
-      (capture.body.bfidxs || []).map(String)
-    ).length;
+    var selectedCount = getSelectedItemCount(capture);
     var countText = selectedCount
       ? "선택된 매물번호 " + selectedCount + "개"
       : "목록 " + items.length + "개";
+    var limitText = selectedCount > MAX_ITEMS
+      ? " · 1회 최대 " + MAX_ITEMS.toLocaleString("ko-KR") + "개"
+      : "";
 
     setStatus(
       "클러스터를 확인했습니다.",
-      countText + " · 화면 목록 " + items.length + "개\n아래 버튼을 누르면 전체 목록과 전화번호를 저장합니다."
+      countText + " · 화면 목록 " + items.length + "개" + limitText +
+      "\n아래 버튼을 누르면 전체 목록과 전화번호를 저장합니다."
     );
     saveButton.disabled = false;
     saveButton.textContent = "선택 클러스터 전체 저장";
@@ -284,6 +289,16 @@
     saveButton.disabled = true;
 
     try {
+      var selectedCount = getSelectedItemCount(state.capture);
+      if (selectedCount > MAX_ITEMS) {
+        throw new Error(
+          "선택한 클러스터가 " + selectedCount.toLocaleString("ko-KR") +
+          "개입니다. 공실박스 수집은 한 번에 최대 " +
+          MAX_ITEMS.toLocaleString("ko-KR") +
+          "개까지 가능합니다. 지도를 한 단계 확대해 나누어 수집해 주세요."
+        );
+      }
+
       setStatus("클러스터 전체 목록을 읽는 중입니다.", "잠시만 기다려 주세요.");
       var items = await loadAllCapturedItems(state.capture);
 
@@ -383,12 +398,37 @@
   async function loadAllCapturedItems(capture) {
     var byId = {};
     addItems(byId, getListItems(capture.response));
+    var selectedCount = getSelectedItemCount(capture);
 
-    if (!capture.response.more) {
-      return Object.keys(byId).map(function (key) { return byId[key]; });
+    if (selectedCount > MAX_ITEMS) {
+      throw new Error(
+        "선택한 매물이 1회 최대 수집 한도 " +
+        MAX_ITEMS.toLocaleString("ko-KR") + "개를 초과했습니다."
+      );
     }
 
-    var sizes = [500, 1000, 2000, 5000, 10000];
+    if (Object.keys(byId).length > MAX_ITEMS) {
+      throw new Error(
+        "공실박스 목록 응답이 1회 최대 수집 한도 " +
+        MAX_ITEMS.toLocaleString("ko-KR") + "개를 초과했습니다."
+      );
+    }
+
+    if (!capture.response.more) {
+      return validateCapturedItems(byId, selectedCount);
+    }
+
+    var targetLimit = selectedCount > 0
+      ? Math.min(selectedCount, MAX_ITEMS)
+      : MAX_ITEMS;
+    var sizes = unique([500, 1000, 2000, targetLimit, MAX_ITEMS])
+      .map(Number)
+      .filter(function (size) {
+        return size > Object.keys(byId).length && size <= targetLimit;
+      })
+      .sort(function (a, b) { return a - b; });
+
+    var hasMore = Boolean(capture.response.more);
     for (var index = 0; index < sizes.length; index += 1) {
       var body = Object.assign({}, capture.body, {
         mxline: sizes[index],
@@ -406,16 +446,55 @@
         throw new Error(data && data.message ? data.message : "공실박스 목록 조회에 실패했습니다.");
       }
 
+      hasMore = Boolean(data.more);
       addItems(byId, getListItems(data));
+      if (Object.keys(byId).length > MAX_ITEMS) {
+        throw new Error(
+          "공실박스 목록이 1회 최대 수집 한도 " +
+          MAX_ITEMS.toLocaleString("ko-KR") + "개를 초과했습니다."
+        );
+      }
       setStatus(
         "클러스터 전체 목록을 읽는 중입니다.",
-        Object.keys(byId).length + "개 확인"
+        Object.keys(byId).length.toLocaleString("ko-KR") +
+        " / " + (selectedCount || targetLimit).toLocaleString("ko-KR") + "개 확인"
       );
 
-      if (!data.more) break;
+      if (!data.more || (selectedCount && Object.keys(byId).length >= selectedCount)) break;
     }
 
-    return Object.keys(byId).map(function (key) { return byId[key]; });
+    if (!selectedCount && hasMore) {
+      throw new Error(
+        "선택한 클러스터가 1회 최대 수집 한도 " +
+        MAX_ITEMS.toLocaleString("ko-KR") +
+        "개를 초과했습니다. 지도를 확대해 나누어 수집해 주세요."
+      );
+    }
+    return validateCapturedItems(byId, selectedCount);
+  }
+
+  function getSelectedItemCount(capture) {
+    return unique(
+      (((capture || {}).body || {}).bfidxs || []).map(String)
+    ).length;
+  }
+
+  function validateCapturedItems(byId, selectedCount) {
+    var keys = Object.keys(byId);
+    if (keys.length > MAX_ITEMS) {
+      throw new Error(
+        "공실박스 목록이 1회 최대 수집 한도 " +
+        MAX_ITEMS.toLocaleString("ko-KR") + "개를 초과했습니다."
+      );
+    }
+    if (selectedCount && keys.length < selectedCount) {
+      throw new Error(
+        "선택 매물 " + selectedCount.toLocaleString("ko-KR") +
+        "개 중 " + keys.length.toLocaleString("ko-KR") +
+        "개만 확인되어 저장을 중단했습니다. 클러스터를 다시 누른 뒤 재시도해 주세요."
+      );
+    }
+    return keys.map(function (key) { return byId[key]; });
   }
 
   async function ensureDetailAuth() {
@@ -994,8 +1073,56 @@
 
   async function sendToAppsScript(records) {
     var collectorKey = getCollectorKey();
+    var totals = {
+      received: 0,
+      inserted: 0,
+      updated: 0,
+      unchanged: 0,
+      duplicates: 0,
+      rejected: 0
+    };
+    var batchCount = Math.ceil(records.length / SAVE_BATCH_SIZE);
+
+    for (var offset = 0, batchIndex = 0; offset < records.length; offset += SAVE_BATCH_SIZE) {
+      batchIndex += 1;
+      var batch = records.slice(offset, offset + SAVE_BATCH_SIZE);
+      setStatus(
+        "JS부동산 매물현황으로 전송 중입니다.",
+        Math.min(offset + batch.length, records.length).toLocaleString("ko-KR") +
+        " / " + records.length.toLocaleString("ko-KR") + "개" +
+        (batchCount > 1 ? " · 저장 묶음 " + batchIndex + "/" + batchCount : "")
+      );
+
+      var result = await sendAppsScriptBatch(batch, collectorKey, batchIndex);
+      if (!result || result.ok !== true) return result;
+
+      Object.keys(totals).forEach(function (key) {
+        totals[key] += Number(result[key] || 0);
+      });
+    }
+
+    return {
+      ok: true,
+      action: "gongsilImportBatch",
+      received: totals.received,
+      inserted: totals.inserted,
+      updated: totals.updated,
+      unchanged: totals.unchanged,
+      duplicates: totals.duplicates,
+      rejected: totals.rejected,
+      message:
+        "공실박스 매물 저장 완료: 신규 " + totals.inserted +
+        "개, 갱신 " + totals.updated +
+        "개, 기존 동일 " + totals.unchanged +
+        "개, 중복 제외 " + totals.duplicates +
+        "개, 제외 " + totals.rejected + "개"
+    };
+  }
+
+  async function sendAppsScriptBatch(records, collectorKey, batchIndex) {
     var requestId =
-      "gongsil-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+      "gongsil-" + Date.now() + "-" + batchIndex + "-" +
+      Math.random().toString(36).slice(2, 10);
     await originalFetch(APPS_SCRIPT_URL, {
       method: "POST",
       mode: "no-cors",
@@ -1013,7 +1140,7 @@
     } catch (error) {
       throw new Error(
         "시트 저장 결과를 확인하지 못했습니다. " +
-        "Apps Script Code.gs가 v6.4.7인지, 새 버전으로 배포했는지 확인해 주세요. " +
+        "Apps Script가 최신 버전으로 배포되었는지 확인해 주세요. " +
         "요청번호: " + requestId
       );
     }
