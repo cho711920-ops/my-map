@@ -550,6 +550,16 @@
         body.appendChild(divider);
         return;
       }
+      if (type === "sort" && child.classList && child.classList.contains("sort-menu-row")) {
+        var sortRow = child.cloneNode(true);
+        sortRow.classList.add("v6-mobile-sort-row");
+        Array.prototype.forEach.call(sortRow.querySelectorAll("button"), function (sortButton) {
+          sortButton.classList.add("v6-mobile-sort-choice");
+          sortButton.addEventListener("click", function () { window.setTimeout(closeMobileSheet, 0); });
+        });
+        body.appendChild(sortRow);
+        return;
+      }
       if (child.tagName !== "BUTTON") return;
       var clone = child.cloneNode(true);
       clone.removeAttribute("id");

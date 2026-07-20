@@ -2884,6 +2884,8 @@ function ensurePropertyEditModalV630() {
         '<label>관리비<input id="peFeeV630" type="number" inputmode="numeric"></label>' +
         '<label>권리금<input id="pePremiumV630" type="number" inputmode="numeric"></label>' +
         '<label>평수<input id="peAreaV630" type="number" inputmode="decimal" step="0.1"></label>' +
+        '<label>임대인 전화번호<input id="peLandlordPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
+        '<label>세입자 전화번호<input id="peTenantPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
         '<label class="property-edit-wide-v630">상태' +
           '<select id="peStateV630">' +
             '<option value="">계약가능</option>' +
@@ -2953,6 +2955,8 @@ function openPropertyEditModalV630(encodedKey) {
   document.getElementById("peFeeV630").value = item.fee || 0;
   document.getElementById("pePremiumV630").value = item.premium || 0;
   document.getElementById("peAreaV630").value = item.area || 0;
+  document.getElementById("peLandlordPhoneV630").value = item.landlordPhone || "";
+  document.getElementById("peTenantPhoneV630").value = item.tenantPhone || "";
   document.getElementById("peStateV630").value = item.state || "";
   document.getElementById("peMemoV630").value = item.memo || "";
   document.getElementById("propertyEditStatusV630").textContent = "";
@@ -3170,6 +3174,8 @@ function savePropertyEditV630() {
     fee: numberFromEditV630("peFeeV630"),
     premium: numberFromEditV630("pePremiumV630"),
     area: numberFromEditV630("peAreaV630"),
+    landlordPhone: String(document.getElementById("peLandlordPhoneV630").value || "").trim(),
+    tenantPhone: String(document.getElementById("peTenantPhoneV630").value || "").trim(),
     memo: String(document.getElementById("peMemoV630").value || "").trim(),
     state: String(document.getElementById("peStateV630").value || "").trim()
   };
@@ -3214,6 +3220,8 @@ function savePropertyEditV630() {
     item.fee = updated.fee;
     item.premium = updated.premium;
     item.area = updated.area;
+    item.landlordPhone = updated.landlordPhone;
+    item.tenantPhone = updated.tenantPhone;
     item.memo = updated.memo;
     item.state = updated.state;
     item.key = itemKey(item);

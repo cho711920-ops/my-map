@@ -1,0 +1,25 @@
+{
+  "name": "JS부동산 매물지도",
+  "short_name": "JS부동산",
+  "description": "JS부동산 매물지도",
+  "lang": "ko-KR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0568e8",
+  "icons": [
+    {
+      "src": "/icons/js-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/js-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
