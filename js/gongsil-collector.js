@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.2.1";
+  var VERSION = "1.2.2";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -76,7 +76,8 @@
       state.detailAuth = auth || null;
     },
     transformItem: transformItem,
-    decryptText: decryptText
+    decryptText: decryptText,
+    loadAllCapturedItems: loadAllCapturedItems
   };
 
   function getCollectorKey() {
@@ -274,14 +275,22 @@
     var limitText = selectedCount > MAX_ITEMS
       ? " · 1회 최대 " + MAX_ITEMS.toLocaleString("ko-KR") + "개"
       : "";
+    var remainingCount = Math.max(0, selectedCount - items.length);
+    var accumulationText = remainingCount
+      ? "\n화면 밖 " + remainingCount.toLocaleString("ko-KR") +
+        "개도 300개씩 나눠 누적 수집합니다."
+      : "";
 
     setStatus(
       "클러스터를 확인했습니다.",
       countText + " · 화면 목록 " + items.length + "개" + limitText +
+      accumulationText +
       "\n아래 버튼을 누르면 전체 목록과 전화번호를 저장합니다."
     );
     saveButton.disabled = false;
-    saveButton.textContent = "선택 클러스터 전체 저장";
+    saveButton.textContent = selectedCount
+      ? "전체 " + selectedCount.toLocaleString("ko-KR") + "개 분할 수집·저장"
+      : "선택 클러스터 전체 저장";
   }
 
   async function collectAndSave() {
@@ -498,18 +507,31 @@
     var secondaryName = primaryName === "bfidxs" ? "bidxs" : "bfidxs";
     var secondaryValues = secondaryName === "bfidxs" ? bfidxs : bidxs;
     var entries = [];
+    var secondaryRequestValues = [];
     var seen = Object.create(null);
+    var secondarySeen = Object.create(null);
 
     primaryValues.forEach(function (value, index) {
       var id = String(value == null ? "" : value).trim();
       if (!id || seen[id]) return;
       seen[id] = true;
       entries.push({
-        value: value,
-        secondary: secondaryValues.length === primaryValues.length
-          ? secondaryValues[index]
-          : undefined
+        value: value
       });
+    });
+
+    /*
+     * Gongsilbox does not treat bfidxs and bidxs as parallel arrays. A floor
+     * cluster can contain a different number of building IDs, and the list
+     * endpoint needs the complete building-ID context even while bfidxs are
+     * requested in chunks. Clearing or slicing bidxs made large clusters stop
+     * at the 20 rows already rendered on screen.
+     */
+    secondaryValues.forEach(function (value) {
+      var id = String(value == null ? "" : value).trim();
+      if (!id || secondarySeen[id]) return;
+      secondarySeen[id] = true;
+      secondaryRequestValues.push(value);
     });
 
     if (!entries.length) return;
@@ -517,7 +539,9 @@
     for (var offset = 0; offset < entries.length; offset += LIST_REQUEST_CHUNK_SIZE) {
       var chunk = entries.slice(offset, offset + LIST_REQUEST_CHUNK_SIZE);
       var requestBody = Object.assign({}, sourceBody, {
-        mxline: chunk.length,
+        // The endpoint caps one response at 400. Leave headroom because the
+        // complete secondary context can add a few related rows.
+        mxline: 400,
         key: Number(sourceBody.key || 0) + Math.floor(offset / LIST_REQUEST_CHUNK_SIZE) + 1001
       });
 
@@ -525,13 +549,7 @@
         return entry.value;
       });
 
-      if (secondaryValues.length === primaryValues.length) {
-        requestBody[secondaryName] = chunk.map(function (entry) {
-          return entry.secondary;
-        });
-      } else if (Array.isArray(requestBody[secondaryName])) {
-        requestBody[secondaryName] = [];
-      }
+      requestBody[secondaryName] = secondaryRequestValues.slice();
 
       var response = await originalFetch("/api/maps/lists", {
         method: "POST",
@@ -549,7 +567,14 @@
         );
       }
 
-      addItems(byId, getListItems(data));
+      var chunkIds = Object.create(null);
+      chunk.forEach(function (entry) {
+        chunkIds[String(entry.value)] = true;
+      });
+      var filteredItems = getListItems(data).filter(function (item) {
+        return itemMatchesPrimaryId(item, primaryName, chunkIds);
+      });
+      addItems(byId, filteredItems);
 
       if (Object.keys(byId).length > MAX_ITEMS) {
         throw new Error(
@@ -565,6 +590,14 @@
         Object.keys(byId).length.toLocaleString("ko-KR") + "개 확인"
       );
     }
+  }
+
+  function itemMatchesPrimaryId(item, primaryName, idSet) {
+    var aliases = primaryName === "bfidxs"
+      ? ["Bfidx", "bfidx", "BfIdx"]
+      : ["Bidx", "bidx", "BIdx"];
+    var id = text(pick(item, aliases));
+    return Boolean(id && idSet[id]);
   }
 
   function getSelectedItemCount(capture) {
