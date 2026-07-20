@@ -909,6 +909,147 @@ function loadSheet(isAuto) {
 }
 
 
+function uniqueGeocodeValuesV6417(values) {
+  var seen = {};
+
+  return (values || []).filter(function(value) {
+    var normalized = String(value || "").replace(/\s+/g, " ").trim();
+    if (!normalized || seen[normalized]) return false;
+    seen[normalized] = true;
+    return true;
+  });
+}
+
+
+function buildAddressCandidatesV6417(address) {
+  var normalized = normalizeAddressForCache(address);
+  if (!normalized) return [];
+
+  var candidates = [normalized];
+  if (!/^(?:대전|대전광역시)\s/.test(normalized)) {
+    candidates.push("대전 " + normalized);
+    candidates.push("대전광역시 " + normalized);
+  }
+
+  return uniqueGeocodeValuesV6417(candidates);
+}
+
+
+function compactGeocodeTextV6417(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^0-9a-z가-힣]/g, "");
+}
+
+
+function simplifyBuildingNameV6417(name) {
+  var simplified = String(name || "").replace(/\s+/g, " ").trim();
+  var previous = "";
+
+  while (simplified && simplified !== previous) {
+    previous = simplified;
+    simplified = simplified
+      .replace(/\s*(?:단지내)?(?:오피스텔|아파트|주상복합|OT)?\s*(?:상가|점포|판매시설)$/i, "")
+      .replace(/\s*(?:아파트|오피스텔|주상복합)$/i, "")
+      .trim();
+  }
+
+  return simplified || String(name || "").trim();
+}
+
+
+function isSpecificBuildingNameV6417(name) {
+  var compact = compactGeocodeTextV6417(name);
+  var genericNames = {
+    "": true,
+    "상가": true,
+    "점포": true,
+    "상가점포": true,
+    "일반상가": true,
+    "집합상가": true,
+    "상가주택": true,
+    "상가건물": true,
+    "근린생활시설": true,
+    "사무실": true,
+    "공장": true,
+    "창고": true,
+    "주택": true,
+    "건물": true,
+    "토지": true,
+    "기타": true
+  };
+
+  return compact.length >= 4 && !genericNames[compact];
+}
+
+
+function getAddressRegionTokensV6417(address) {
+  return uniqueGeocodeValuesV6417(
+    String(address || "")
+      .replace(/[(),]/g, " ")
+      .split(/\s+/)
+      .filter(function(token) {
+        return /^[가-힣0-9]+(?:구|동|읍|면|리)$/.test(token);
+      })
+  );
+}
+
+
+function buildPlaceKeywordsV6417(item) {
+  var originalName = String((item && item.name) || "").replace(/\s+/g, " ").trim();
+  var simpleName = simplifyBuildingNameV6417(originalName);
+  if (!isSpecificBuildingNameV6417(simpleName)) return [];
+
+  var regionText = getAddressRegionTokensV6417(item && item.address).join(" ");
+  return uniqueGeocodeValuesV6417([
+    ["대전", regionText, originalName].filter(Boolean).join(" "),
+    ["대전", regionText, simpleName].filter(Boolean).join(" "),
+    ["대전", simpleName].filter(Boolean).join(" "),
+    simpleName
+  ]);
+}
+
+
+function pickPlaceResultV6417(results, item) {
+  var buildingKey = compactGeocodeTextV6417(simplifyBuildingNameV6417(item && item.name));
+  var regionTokens = getAddressRegionTokensV6417(item && item.address);
+  var best = null;
+  var bestScore = -1;
+
+  (results || []).forEach(function(result) {
+    var candidateNameKey = compactGeocodeTextV6417(simplifyBuildingNameV6417(result && result.place_name));
+    var addressText = [result && result.address_name, result && result.road_address_name]
+      .filter(Boolean)
+      .join(" ");
+    var addressKey = compactGeocodeTextV6417(addressText);
+    var nameMatched =
+      buildingKey &&
+      candidateNameKey &&
+      (candidateNameKey.indexOf(buildingKey) >= 0 || buildingKey.indexOf(candidateNameKey) >= 0);
+
+    if (!nameMatched) return;
+
+    var regionMatches = regionTokens.filter(function(token) {
+      return addressKey.indexOf(compactGeocodeTextV6417(token)) >= 0;
+    }).length;
+
+    /* 같은 건물명이 다른 지역에도 있을 수 있으므로, 주소에 구/동 중 하나는 일치해야 합니다. */
+    if (regionTokens.length && regionMatches === 0) return;
+
+    var score = candidateNameKey === buildingKey ? 30 : 20;
+    score += regionMatches * 5;
+    if (result && result.category_group_code) score += 1;
+
+    if (score > bestScore) {
+      best = result;
+      bestScore = score;
+    }
+  });
+
+  return best;
+}
+
+
 function geocodeItems(items, callback, progressCallback) {
   var done = [];
   var total = items.length;
@@ -919,10 +1060,12 @@ function geocodeItems(items, callback, progressCallback) {
   // 성능 핵심:
   // 1) 이미 변환했던 주소는 localStorage 캐시에서 즉시 사용
   // 2) 캐시에 없는 새 주소만 카카오 주소검색으로 순차 변환
-  // 3) 실패한 주소는 1회 재시도 후에만 주소오류 처리
+  // 3) 주소 DB에 없는 옛 지번은 건물명으로 한 번 더 찾아 현재 좌표를 사용
+  // 4) 카카오 일시 오류는 최대 3회 재시도한 뒤에만 오류 처리
   var requestDelay = 170;
   var retryDelay = 450;
-  var maxRetry = 1;
+  var maxRetry = 3;
+  var places = new kakao.maps.services.Places();
   var lastProgressCount = 0;
 
   if (total === 0) {
@@ -994,42 +1137,113 @@ function geocodeItems(items, callback, progressCallback) {
     setTimeout(processNext, delay || 0);
   }
 
-  function searchAddress(item, retryCount) {
-    var addressKey = normalizeAddressForCache(item.address);
+  function saveGeocodeSuccess(item, addressKey, lat, lng, metadata) {
+    geocodeCache[addressKey] = {
+      lat: lat,
+      lng: lng,
+      savedAt: new Date().toISOString(),
+      source: (metadata && metadata.source) || "address",
+      matchedAddress: (metadata && metadata.matchedAddress) || ""
+    };
+    geocodeCacheDirty = true;
+    if (typeof queueSharedGeocodeEntry === "function") {
+      queueSharedGeocodeEntry(addressKey, geocodeCache[addressKey]);
+    }
 
-    geocoder.addressSearch(addressKey, function(result, status) {
+    item.latlng = new kakao.maps.LatLng(lat, lng);
+    item.geocodeFallback = (metadata && metadata.source) || "address";
+    done.push(item);
+    finishOne(requestDelay);
+  }
+
+  function finishGeocodeError(item, hadTransientError) {
+    item.geocodeErrorReason = hadTransientError
+      ? "카카오 지도 일시 오류 또는 검색 결과 없음"
+      : "주소·건물명 검색 결과 없음";
+    errorItems.push(item);
+    finishOne(requestDelay);
+  }
+
+  function searchPlaceFallback(item, keywords, keywordIndex, retryCount, hadTransientError) {
+    if (!keywords || keywordIndex >= keywords.length) {
+      finishGeocodeError(item, hadTransientError);
+      return;
+    }
+
+    var keyword = keywords[keywordIndex];
+    places.keywordSearch(keyword, function(result, status) {
       if (status === kakao.maps.services.Status.OK && result && result.length > 0) {
-        var lat = result[0].y;
-        var lng = result[0].x;
-
-        geocodeCache[addressKey] = {
-          lat: lat,
-          lng: lng,
-          savedAt: new Date().toISOString()
-        };
-        geocodeCacheDirty = true;
-        if (typeof queueSharedGeocodeEntry === "function") {
-          queueSharedGeocodeEntry(addressKey, geocodeCache[addressKey]);
+        var matched = pickPlaceResultV6417(result, item);
+        if (matched && matched.y && matched.x) {
+          saveGeocodeSuccess(
+            item,
+            normalizeAddressForCache(item.address),
+            matched.y,
+            matched.x,
+            {
+              source: "building",
+              matchedAddress: matched.road_address_name || matched.address_name || keyword
+            }
+          );
+          return;
         }
+      }
 
-        item.latlng = new kakao.maps.LatLng(lat, lng);
-        done.push(item);
-        finishOne(requestDelay);
+      if (status === kakao.maps.services.Status.ERROR && retryCount < 2) {
+        updateProgress("retry");
+        setTimeout(function() {
+          searchPlaceFallback(item, keywords, keywordIndex, retryCount + 1, true);
+        }, retryDelay * Math.pow(2, retryCount));
         return;
       }
 
-      if (retryCount < maxRetry) {
+      setTimeout(function() {
+        searchPlaceFallback(
+          item,
+          keywords,
+          keywordIndex + 1,
+          0,
+          hadTransientError || status === kakao.maps.services.Status.ERROR
+        );
+      }, 120);
+    }, { size: 15 });
+  }
+
+  function searchAddress(item, candidates, candidateIndex, retryCount, hadTransientError) {
+    var addressKey = normalizeAddressForCache(item.address);
+    if (!candidates || candidateIndex >= candidates.length) {
+      searchPlaceFallback(item, buildPlaceKeywordsV6417(item), 0, 0, hadTransientError);
+      return;
+    }
+
+    geocoder.addressSearch(candidates[candidateIndex], function(result, status) {
+      if (status === kakao.maps.services.Status.OK && result && result.length > 0) {
+        saveGeocodeSuccess(item, addressKey, result[0].y, result[0].x, {
+          source: "address",
+          matchedAddress: result[0].address_name || candidates[candidateIndex]
+        });
+        return;
+      }
+
+      if (status === kakao.maps.services.Status.ERROR && retryCount < maxRetry) {
         updateProgress("retry");
 
         setTimeout(function() {
-          searchAddress(item, retryCount + 1);
-        }, retryDelay);
+          searchAddress(item, candidates, candidateIndex, retryCount + 1, true);
+        }, retryDelay * Math.pow(2, retryCount));
 
         return;
       }
 
-      errorItems.push(item);
-      finishOne(requestDelay);
+      setTimeout(function() {
+        searchAddress(
+          item,
+          candidates,
+          candidateIndex + 1,
+          0,
+          hadTransientError || status === kakao.maps.services.Status.ERROR
+        );
+      }, 120);
     });
   }
 
@@ -1060,7 +1274,7 @@ function geocodeItems(items, callback, progressCallback) {
     }
 
     updateProgress("search");
-    searchAddress(item, 0);
+    searchAddress(item, buildAddressCandidatesV6417(item.address), 0, 0, false);
   }
 
   processNext();

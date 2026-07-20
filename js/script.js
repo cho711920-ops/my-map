@@ -2649,7 +2649,8 @@ function showAddressErrors() {
   if (!errorItems || errorItems.length === 0) return;
 
   var lines = errorItems.map(function(item, index) {
-    return (index + 1) + ". " + item.name + " / " + item.address + " / " + item.room;
+    var reason = item.geocodeErrorReason ? " (" + item.geocodeErrorReason + ")" : "";
+    return (index + 1) + ". " + item.name + " / " + item.address + " / " + item.room + reason;
   });
 
   alert("지도에 표시되지 않은 주소 오류 매물입니다.\\n\\n" + lines.join("\\n"));
