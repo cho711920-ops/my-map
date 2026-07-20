@@ -1,10 +1,10 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.3.0";
+  var VERSION = "3.4.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
-  var MAX_PAGES = 100;
+  var MAX_PAGES = 500;
   var BATCH_SIZE = 15;
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
@@ -523,6 +523,17 @@
 
       if (!items.length || noNewCount >= 1 || hasMore(json) === false) break;
       await delay(120);
+    }
+
+    if (
+      step >= MAX_PAGES &&
+      hasMore(lastJson) !== false &&
+      (!expected || found.size < expected)
+    ) {
+      throw new Error(
+        "클러스터가 최대 조회 범위(" + MAX_PAGES + "페이지)를 넘었습니다. " +
+        "일부만 저장하지 않도록 중단했습니다. 지도를 한 단계 확대해 클러스터를 나눠 주세요."
+      );
     }
 
     state.collected = Array.from(found.values());
