@@ -62,6 +62,46 @@ function normalizePhone(value) {
 }
 
 
+function splitQuickAddPhonesByRole(text) {
+  var source = String(text || "");
+  var phonePattern = "(0(?:1[016789]|[2-6][0-9]?)[\\-\\s\\.]?[0-9]{3,4}[\\-\\s\\.]?[0-9]{4})";
+  var allPhones = source.match(/0(?:1[016789]|[2-6][0-9]?)[\-\s\.]?[0-9]{3,4}[\-\s\.]?[0-9]{4}/g) || [];
+  var landlordMatch = source.match(new RegExp("(?:임대인|건물주|소유자|주인|임)(?:\\s*전화(?:번호)?|\\s*번호)?\\s*[:：=\\-) ]*" + phonePattern, "i"));
+  var tenantMatch = source.match(new RegExp("(?:세입자|임차인|임차|세)(?:\\s*전화(?:번호)?|\\s*번호)?\\s*[:：=\\-) ]*" + phonePattern, "i"));
+  var landlordPhone = landlordMatch ? landlordMatch[1] : "";
+  var tenantPhone = tenantMatch ? tenantMatch[1] : "";
+  var used = {};
+
+  function phoneKey(value) {
+    return String(value || "").replace(/[^0-9]/g, "");
+  }
+
+  if (landlordPhone) used[phoneKey(landlordPhone)] = true;
+  if (tenantPhone) used[phoneKey(tenantPhone)] = true;
+
+  var remaining = allPhones.filter(function(value) {
+    var key = phoneKey(value);
+    if (!key || used[key]) return false;
+    used[key] = true;
+    return true;
+  });
+
+  /* 역할 표기가 전혀 없을 때만 기존 순서(임대인 → 세입자)를 사용합니다. */
+  if (!landlordPhone && !tenantPhone) {
+    landlordPhone = remaining.shift() || "";
+    tenantPhone = remaining.shift() || "";
+  } else {
+    if (!landlordPhone) landlordPhone = remaining.shift() || "";
+    if (!tenantPhone) tenantPhone = remaining.shift() || "";
+  }
+
+  return {
+    landlordPhone: landlordPhone ? normalizePhone(landlordPhone.replace(/\./g, "-")) : "",
+    tenantPhone: tenantPhone ? normalizePhone(tenantPhone.replace(/\./g, "-")) : ""
+  };
+}
+
+
 function findFirstMatch(text, patterns) {
   for (var i = 0; i < patterns.length; i++) {
     var m = text.match(patterns[i]);
@@ -134,7 +174,7 @@ function parseQuickAddText() {
 
   var areaMatch = compact.match(/([0-9]+(?:\.[0-9]+)?)\s*평/);
   var roomMatch = compact.match(/((?:지하\s*)?\d+층|\d+호|[Bb]\d+)/);
-  var phones = compact.match(/01[016789][-\s]?[0-9]{3,4}[-\s]?[0-9]{4}/g) || [];
+  var phoneRoles = splitQuickAddPhonesByRole(compact);
 
   setFieldIfEmpty("qaDeposit", deposit);
   setFieldIfEmpty("qaRent", rent);
@@ -142,8 +182,8 @@ function parseQuickAddText() {
   setFieldIfEmpty("qaPremium", premium);
   setFieldIfEmpty("qaArea", areaMatch ? areaMatch[1] : "");
   setFieldIfEmpty("qaRoom", roomMatch ? roomMatch[1].replace(/\s+/g, "") : "");
-  setFieldIfEmpty("qaLandlordPhone", phones[0] ? normalizePhone(phones[0]) : "");
-  setFieldIfEmpty("qaTenantPhone", phones[1] ? normalizePhone(phones[1]) : "");
+  setFieldIfEmpty("qaLandlordPhone", phoneRoles.landlordPhone);
+  setFieldIfEmpty("qaTenantPhone", phoneRoles.tenantPhone);
 
   var memoEl = document.getElementById("qaMemo");
   if (memoEl && !memoEl.value) memoEl.value = "출처:" + source + " / " + compact.slice(0, 260);
@@ -478,7 +518,7 @@ function parseQuickAddText() {
 
   var areaMatch = compact.match(/([0-9]+(?:\.[0-9]+)?)\s*(?:평|py|PY)/i);
   var roomMatch = compact.match(/((?:지하\s*)?\d+\s*층|[Bb]\s?\d+|\d+\s*호|[0-9]+F|[0-9]+층\s*[0-9]+호)/);
-  var phones = compact.match(/01[016789][\-\s\.]?[0-9]{3,4}[\-\s\.]?[0-9]{4}/g) || [];
+  var phoneRoles = splitQuickAddPhonesByRole(compact);
 
   setFieldValue("qaAddress", address, false);
   setFieldValue("qaName", title, false);
@@ -489,8 +529,8 @@ function parseQuickAddText() {
   setFieldValue("qaPremium", premium, false);
   setFieldValue("qaArea", areaMatch ? areaMatch[1] : "", false);
   setFieldValue("qaRoom", roomMatch ? roomMatch[1].replace(/\s+/g, "") : "", false);
-  setFieldValue("qaLandlordPhone", phones[0] ? normalizePhone(phones[0].replace(/\./g, "-")) : "", false);
-  setFieldValue("qaTenantPhone", phones[1] ? normalizePhone(phones[1].replace(/\./g, "-")) : "", false);
+  setFieldValue("qaLandlordPhone", phoneRoles.landlordPhone, false);
+  setFieldValue("qaTenantPhone", phoneRoles.tenantPhone, false);
 
   var memoEl = document.getElementById("qaMemo");
   if (memoEl && !memoEl.value) memoEl.value = buildCleanMemo(raw, source);
@@ -766,7 +806,7 @@ function parseQuickAddText() {
 
   var areaMatch = compact.match(/(?:약\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:평|py|PY)/i);
   var roomMatch = compact.match(/((?:지하\s*)?\d+\s*층|[Bb]\s?\d+|\d+\s*호|[0-9]+F|[0-9]+층\s*[0-9]+호)/);
-  var phones = compact.match(/01[016789][\-\s\.]?[0-9]{3,4}[\-\s\.]?[0-9]{4}|0[2-6][0-9]?[\-\s\.]?[0-9]{3,4}[\-\s\.]?[0-9]{4}/g) || [];
+  var phoneRoles = splitQuickAddPhonesByRole(compact);
 
   setFieldValue("qaAddress", address, false);
   setFieldValue("qaName", title, false);
@@ -777,8 +817,8 @@ function parseQuickAddText() {
   setFieldValue("qaPremium", premium, false);
   setFieldValue("qaArea", areaMatch ? areaMatch[1] : "", false);
   setFieldValue("qaRoom", roomMatch ? roomMatch[1].replace(/\s+/g, "") : "", false);
-  setFieldValue("qaLandlordPhone", phones[0] ? normalizePhone(phones[0].replace(/\./g, "-")) : "", false);
-  setFieldValue("qaTenantPhone", phones[1] ? normalizePhone(phones[1].replace(/\./g, "-")) : "", false);
+  setFieldValue("qaLandlordPhone", phoneRoles.landlordPhone, false);
+  setFieldValue("qaTenantPhone", phoneRoles.tenantPhone, false);
 
   var memoEl = document.getElementById("qaMemo");
   if (memoEl && !memoEl.value) memoEl.value = buildCleanMemo(raw, source);
@@ -1077,13 +1117,8 @@ function parseQuickAddText() {
 
   var areaMatch = compact.match(/(?:약\s*)?([0-9]+(?:\.[0-9]+)?)\s*(?:평|py|PY)/i);
 
-  /* 임/세 라벨 전화번호를 우선 분리 */
-  var phonePattern = "(01[016789][\\-\\s\\.]?[0-9]{3,4}[\\-\\s\\.]?[0-9]{4})";
-  var landlordMatch = compact.match(new RegExp("(?:임대인|임)\\s*[:：]?\\s*" + phonePattern, "i"));
-  var tenantMatch = compact.match(new RegExp("(?:세입자|세)\\s*[:：]?\\s*" + phonePattern, "i"));
-  var phones = compact.match(/01[016789][\-\s\.]?[0-9]{3,4}[\-\s\.]?[0-9]{4}/g) || [];
-  var landlordPhone = landlordMatch ? landlordMatch[1] : (phones[0] || "");
-  var tenantPhone = tenantMatch ? tenantMatch[1] : (phones[1] || "");
+  /* 역할 라벨을 우선 적용하고 같은 번호가 양쪽에 중복되는 것을 막습니다. */
+  var phoneRoles = splitQuickAddPhonesByRole(compact);
 
   setFieldValue("qaAddress", address, true);
   setFieldValue("qaName", title, true);
@@ -1094,8 +1129,8 @@ function parseQuickAddText() {
   setFieldValue("qaFee", fee, true);
   setFieldValue("qaPremium", premium, true);
   setFieldValue("qaArea", areaMatch ? areaMatch[1] : "", true);
-  setFieldValue("qaLandlordPhone", landlordPhone ? normalizePhone(landlordPhone.replace(/\./g, "-")) : "", true);
-  setFieldValue("qaTenantPhone", tenantPhone ? normalizePhone(tenantPhone.replace(/\./g, "-")) : "", true);
+  setFieldValue("qaLandlordPhone", phoneRoles.landlordPhone, true);
+  setFieldValue("qaTenantPhone", phoneRoles.tenantPhone, true);
 
   var memoEl = document.getElementById("qaMemo");
   if (memoEl) {
