@@ -1,4 +1,4 @@
-/* JS부동산 v6.2.4 - 태블릿 필터 버튼 아래, 매물목록 비가림 팝업 */
+/* JS부동산 v6.4.19 - 데스크톱/터치 태블릿/모바일 상세필터 위치 안정화 */
 (function () {
   "use strict";
 
@@ -36,11 +36,14 @@
      * 터치 + 굵은 포인터(또는 hover 없음)인 기기만 태블릿으로 인정하므로
      * 일반 PC에는 적용되지 않습니다.
      */
+    var tabletUserAgent = /Android|Tablet|SM-T|SM-X|Galaxy Tab/i.test(
+      String((navigator && navigator.userAgent) || "")
+    );
+
     return (
       width >= 769 &&
       width <= 1800 &&
-      touchPoints > 0 &&
-      (coarsePointer || noHover)
+      (touchPoints > 0 || coarsePointer || noHover || tabletUserAgent)
     );
   }
 
@@ -166,32 +169,12 @@
 
     var margin = 12;
     var gap = 6;
-    var sidebar = document.getElementById("sidebar");
-    var sidebarRight = sidebar
-      ? Math.max(0, sidebar.getBoundingClientRect().right)
-      : 0;
-
-    /*
-     * 태블릿 팝업은 매물목록 오른쪽에서 시작하고,
-     * 가능한 한 필터 버튼의 왼쪽 선에 맞춥니다.
-     */
-    var availableRightWidth = Math.max(
-      320,
-      viewportWidth - Math.max(sidebarRight + 8, margin) - margin
+    /* 우측 사이드바에서도 화면 밖으로 밀리지 않도록 버튼 기준으로 고정합니다. */
+    var popupWidth = Math.min(440, Math.max(320, viewportWidth - margin * 2));
+    var left = Math.max(
+      margin,
+      Math.min(rect.left, viewportWidth - popupWidth - margin)
     );
-    var popupWidth = Math.min(
-      480,
-      Math.max(420, availableRightWidth)
-    );
-
-    /* 좁은 세로 화면에서는 남은 지도 폭에 맞춰 자동 축소 */
-    if (popupWidth > availableRightWidth) {
-      popupWidth = availableRightWidth;
-    }
-
-    var minimumLeft = Math.max(sidebarRight + 8, margin);
-    var maximumLeft = Math.max(minimumLeft, viewportWidth - popupWidth - margin);
-    var left = Math.max(minimumLeft, Math.min(rect.left, maximumLeft));
 
     var top = rect.bottom + gap;
     var estimatedHeight = Math.min(430, viewportHeight - top - margin);

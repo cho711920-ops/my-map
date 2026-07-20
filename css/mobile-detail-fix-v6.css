@@ -137,6 +137,193 @@
 }
 
 /* =========================================================
+   v6.4.19 최종 반응형 보정
+   - 기기에서 pointer/hover 미디어 정보가 부정확해도 JS 판정과 동일하게 표시
+   - 태블릿은 필터 버튼 아래 팝업, 스마트폰은 하단 시트 유지
+   ========================================================= */
+.v6-detail-sheet-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483300;
+  display: none;
+  pointer-events: none;
+}
+
+.v6-detail-sheet-portal.open {
+  display: block;
+  pointer-events: auto;
+}
+
+.v6-detail-sheet-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .52);
+}
+
+.v6-detail-sheet {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  max-height: min(72dvh, 620px);
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 22px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .34);
+}
+
+.v6-detail-sheet-handle {
+  width: 48px;
+  height: 5px;
+  margin: 10px auto 2px;
+  border-radius: 999px;
+  background: #d6dde8;
+}
+
+.v6-detail-sheet-head {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 8px 20px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.v6-detail-sheet-head strong {
+  color: #172033;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.v6-detail-sheet-close {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #172033;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.v6-detail-sheet-body {
+  padding: 14px 14px max(16px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.v6-detail-sheet-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+
+.v6-detail-sheet-row-single {
+  grid-template-columns: 1fr;
+}
+
+.v6-detail-sheet-row input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  margin: 0;
+  padding: 0 11px;
+  border: 1px solid #cfd8e6;
+  border-radius: 10px;
+  background: #fff;
+  color: #172033;
+  font-size: 14px;
+}
+
+.v6-detail-sheet-apply {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 3px;
+  border: 0;
+  border-radius: 11px;
+  background: #1769e8;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+body.v6-detail-sheet-open {
+  overflow: hidden !important;
+}
+
+html[data-v6-detail-mode] #detailFilter,
+html[data-v6-detail-mode] #detailFilter.open {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-dim {
+  background: transparent;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet {
+  position: fixed;
+  left: var(--v6-tablet-popup-left, 12px);
+  right: auto;
+  top: var(--v6-tablet-popup-top, 88px);
+  bottom: auto;
+  width: var(--v6-tablet-popup-width, min(440px, calc(100vw - 24px)));
+  max-width: min(440px, calc(100vw - 24px));
+  max-height: min(470px, calc(100dvh - var(--v6-tablet-popup-top, 88px) - 12px));
+  border-radius: 15px;
+  box-shadow: 0 14px 42px rgba(15, 23, 42, .26);
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-handle {
+  display: none;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-head {
+  min-height: 48px;
+  padding: 6px 8px 6px 16px;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-head strong {
+  font-size: 16px;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  font-size: 23px;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-body {
+  padding: 11px 12px 12px;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-row {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-row input {
+  height: 42px;
+  font-size: 13px;
+}
+
+html[data-v6-detail-mode="tablet"] .v6-detail-sheet-apply {
+  min-height: 44px;
+  margin-top: 1px;
+  font-size: 14px;
+}
+
+html[data-v6-detail-mode="tablet"] body.v6-detail-sheet-open {
+  overflow: auto !important;
+}
+
+/* =========================================================
    v6.2.4 태블릿 전용 앵커 팝업
    - 스마트폰 하단시트는 기존 그대로 유지
    - 터치 태블릿만 상단 필터 버튼 바로 아래 작은 팝업 사용

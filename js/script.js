@@ -287,31 +287,55 @@ function toggleFavoriteOnly() {
 
 function positionDetailFilter() {
   var panel = document.getElementById("detailFilter");
-  var sidebar = document.getElementById("sidebar");
   var detailBtn = document.getElementById("detailBtn");
 
-  if (!panel || !sidebar || !detailBtn) return;
+  if (!panel || !detailBtn) return;
 
-  if (window.innerWidth <= 768) {
+  var viewportWidth = Math.max(
+    Number(window.innerWidth) || 0,
+    Number(document.documentElement && document.documentElement.clientWidth) || 0
+  );
+  var viewportHeight = Math.max(
+    Number(window.innerHeight) || 0,
+    Number(document.documentElement && document.documentElement.clientHeight) || 0
+  );
+  var btnRect = detailBtn.getBoundingClientRect();
+  var margin = 12;
+  var gap = 8;
+
+  if (viewportWidth <= 768) {
     panel.style.left = "8px";
     panel.style.right = "8px";
-    panel.style.top = Math.max(8, detailBtn.getBoundingClientRect().bottom + 6) + "px";
+    panel.style.top = Math.max(8, btnRect.bottom + 6) + "px";
     panel.style.width = "auto";
     return;
   }
 
-  var sidebarRect = sidebar.getBoundingClientRect();
-  var btnRect = detailBtn.getBoundingClientRect();
-  var panelWidth = Math.min(360, Math.max(300, window.innerWidth - sidebarRect.right - 30));
-  var left = Math.min(
-    window.innerWidth - panelWidth - 12,
-    Math.max(sidebarRect.right + 12, btnRect.left)
+  /*
+   * 매물목록이 좌/우 어느 쪽에 있더라도 필터 버튼 자체를 기준으로 배치합니다.
+   * 이전 코드는 사이드바 오른쪽 끝을 기준으로 계산해, 우측 사이드바에서는
+   * 팝업이 매물목록 위에 붙는 문제가 있었습니다.
+   */
+  var panelWidth = Math.min(360, Math.max(300, viewportWidth - margin * 2));
+  var left = Math.max(
+    margin,
+    Math.min(btnRect.left, viewportWidth - panelWidth - margin)
   );
+  var top = btnRect.bottom + gap;
 
   panel.style.left = left + "px";
   panel.style.right = "auto";
-  panel.style.top = Math.max(12, btnRect.bottom + 8) + "px";
   panel.style.width = panelWidth + "px";
+
+  var panelHeight = Math.max(0, panel.offsetHeight || 0);
+  if (panelHeight && top + panelHeight > viewportHeight - margin) {
+    if (btnRect.top - panelHeight - gap >= margin) {
+      top = btnRect.top - panelHeight - gap;
+    } else {
+      top = Math.max(margin, viewportHeight - panelHeight - margin);
+    }
+  }
+  panel.style.top = Math.max(margin, top) + "px";
 }
 
 
