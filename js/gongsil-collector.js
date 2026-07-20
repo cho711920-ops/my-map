@@ -1,8 +1,14 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.2.0";
+  var VERSION = "1.2.1";
   var MAX_ITEMS = 5000;
+  /*
+   * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
+   * 잘라 반환합니다. 서버 상한보다 여유 있게 나눠 조회해야
+   * 2천~5천 개짜리 클러스터도 누락 없이 합칠 수 있습니다.
+   */
+  var LIST_REQUEST_CHUNK_SIZE = 300;
   var SAVE_BATCH_SIZE = 250;
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
@@ -414,6 +420,16 @@
       );
     }
 
+    /*
+     * 큰 클러스터는 mxline을 키워도 공실박스가 약 400개까지만
+     * 반환합니다. 선택된 bfidx/bidx 자체를 300개씩 분할해서
+     * 각각 조회한 다음 매물번호 기준으로 합칩니다.
+     */
+    if (selectedCount && Object.keys(byId).length < selectedCount) {
+      await loadSelectedItemsInChunks(capture, byId, selectedCount);
+      return validateCapturedItems(byId, selectedCount);
+    }
+
     if (!capture.response.more) {
       return validateCapturedItems(byId, selectedCount);
     }
@@ -473,10 +489,91 @@
     return validateCapturedItems(byId, selectedCount);
   }
 
+  async function loadSelectedItemsInChunks(capture, byId, selectedCount) {
+    var sourceBody = (capture && capture.body) || {};
+    var bfidxs = Array.isArray(sourceBody.bfidxs) ? sourceBody.bfidxs : [];
+    var bidxs = Array.isArray(sourceBody.bidxs) ? sourceBody.bidxs : [];
+    var primaryName = bfidxs.length ? "bfidxs" : "bidxs";
+    var primaryValues = primaryName === "bfidxs" ? bfidxs : bidxs;
+    var secondaryName = primaryName === "bfidxs" ? "bidxs" : "bfidxs";
+    var secondaryValues = secondaryName === "bfidxs" ? bfidxs : bidxs;
+    var entries = [];
+    var seen = Object.create(null);
+
+    primaryValues.forEach(function (value, index) {
+      var id = String(value == null ? "" : value).trim();
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      entries.push({
+        value: value,
+        secondary: secondaryValues.length === primaryValues.length
+          ? secondaryValues[index]
+          : undefined
+      });
+    });
+
+    if (!entries.length) return;
+
+    for (var offset = 0; offset < entries.length; offset += LIST_REQUEST_CHUNK_SIZE) {
+      var chunk = entries.slice(offset, offset + LIST_REQUEST_CHUNK_SIZE);
+      var requestBody = Object.assign({}, sourceBody, {
+        mxline: chunk.length,
+        key: Number(sourceBody.key || 0) + Math.floor(offset / LIST_REQUEST_CHUNK_SIZE) + 1001
+      });
+
+      requestBody[primaryName] = chunk.map(function (entry) {
+        return entry.value;
+      });
+
+      if (secondaryValues.length === primaryValues.length) {
+        requestBody[secondaryName] = chunk.map(function (entry) {
+          return entry.secondary;
+        });
+      } else if (Array.isArray(requestBody[secondaryName])) {
+        requestBody[secondaryName] = [];
+      }
+
+      var response = await originalFetch("/api/maps/lists", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(requestBody)
+      });
+      var data = await response.json();
+
+      if (!data || data.res !== "success") {
+        throw new Error(
+          data && data.message
+            ? data.message
+            : "공실박스 분할 목록 조회에 실패했습니다."
+        );
+      }
+
+      addItems(byId, getListItems(data));
+
+      if (Object.keys(byId).length > MAX_ITEMS) {
+        throw new Error(
+          "공실박스 목록이 1회 최대 수집 한도 " +
+          MAX_ITEMS.toLocaleString("ko-KR") + "개를 초과했습니다."
+        );
+      }
+
+      setStatus(
+        "클러스터 전체 목록을 나눠 읽는 중입니다.",
+        Math.min(offset + chunk.length, entries.length).toLocaleString("ko-KR") +
+        " / " + selectedCount.toLocaleString("ko-KR") + "개 요청 · " +
+        Object.keys(byId).length.toLocaleString("ko-KR") + "개 확인"
+      );
+    }
+  }
+
   function getSelectedItemCount(capture) {
-    return unique(
-      (((capture || {}).body || {}).bfidxs || []).map(String)
-    ).length;
+    var body = ((capture || {}).body || {});
+    var selectedIds = Array.isArray(body.bfidxs) && body.bfidxs.length
+      ? body.bfidxs
+      : (Array.isArray(body.bidxs) ? body.bidxs : []);
+
+    return unique(selectedIds.map(String)).length;
   }
 
   function validateCapturedItems(byId, selectedCount) {
