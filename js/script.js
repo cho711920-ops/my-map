@@ -1439,6 +1439,23 @@ function openKakaoRoadview(encodedKey) {
   });
 }
 
+
+function openPropertySourceLink(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var item = allItems.find(function(currentItem) {
+    return currentItem.key === key;
+  });
+  var url = String(item && item.sourceLink || "").trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    alert("이 매물에는 원본 링크가 없습니다.");
+    return;
+  }
+
+  var opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (opened) opened.opener = null;
+}
+
 function openKakaoRoadviewAtPosition(lat, lng) {
   lat = Number(lat);
   lng = Number(lng);
@@ -1708,6 +1725,11 @@ function addListItem(item, appendTarget) {
   var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
   var regDateLabel = formatListRegistrationDate(item.regDate);
+  var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
+  var sourceLinkButton = hasSourceLink
+    ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
+        'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedKey + '\')">링크</button>'
+    : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
 
   var memoPanel = "";
 
@@ -1753,10 +1775,9 @@ function addListItem(item, appendTarget) {
           'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
         '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
-        '<button type="button" class="item-list-add-btn favorite" title="찜목록에 추가" ' +
-          'onclick="event.stopPropagation(); openItemListPicker(\'favorite\',\'' + encodedKey + '\')">찜⭐</button>' +
-        '<button type="button" class="item-list-add-btn visit" title="임장목록에 추가" ' +
-          'onclick="event.stopPropagation(); openItemListPicker(\'visit\',\'' + encodedKey + '\')">임장⭐</button>' +
+        '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
+          'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜★</button>' +
+        sourceLinkButton +
         '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
       '</div>' +

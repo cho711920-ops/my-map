@@ -158,7 +158,7 @@
             '<button class="lm-close" type="button" onclick="closeItemListPicker()">×</button>' +
           '</div>' +
           '<div id="lmPickerBody" class="lm-body"></div>' +
-          '<div class="lm-footer"><button class="lm-primary" type="button" onclick="applyItemListSelection()">적용</button></div>' +
+          '<div id="lmPickerFooter" class="lm-footer"><button class="lm-primary" type="button" onclick="applyItemListSelection()">적용</button></div>' +
         '</div>' +
       '</div>';
     while (wrapper.firstChild) document.body.appendChild(wrapper.firstChild);
@@ -382,10 +382,37 @@
     openModal("itemListPickerModal");
   };
 
+  window.openItemListDestinationPicker = function (encodedKey) {
+    ensureModal();
+    currentItemKey = decodeURIComponent(encodedKey);
+    var item = getItem(currentItemKey);
+    document.getElementById("lmPickerTitle").textContent = "찜·임장 추가";
+    document.getElementById("lmPickerSubtitle").textContent = item
+      ? (item.address || item.name || "선택 매물")
+      : "선택 매물";
+    document.getElementById("lmPickerBody").innerHTML =
+      '<div class="lm-destination-grid">' +
+        '<button class="lm-destination favorite" type="button" onclick="selectItemListDestination(\'favorite\')">' +
+          '<strong>찜목록</strong><span>관심 매물로 분류</span>' +
+        '</button>' +
+        '<button class="lm-destination visit" type="button" onclick="selectItemListDestination(\'visit\')">' +
+          '<strong>임장목록</strong><span>현장 확인 매물로 분류</span>' +
+        '</button>' +
+      '</div>';
+    document.getElementById("lmPickerFooter").style.display = "none";
+    openModal("itemListPickerModal");
+  };
+
+  window.selectItemListDestination = function (type) {
+    currentManagerType = type === "visit" ? "visit" : "favorite";
+    renderPicker();
+  };
+
   function renderPicker() {
     var item = getItem(currentItemKey);
     var lists = loadLists(currentManagerType);
     var label = typeLabel(currentManagerType);
+    document.getElementById("lmPickerFooter").style.display = "flex";
     document.getElementById("lmPickerTitle").textContent = label + "추가";
     document.getElementById("lmPickerSubtitle").textContent = item ? (item.address || item.name || "선택 매물") : "선택 매물";
     var html = '<button class="lm-new-inline" type="button" onclick="createPickerList()">+ 새 ' + label + '목록 만들기</button>';
@@ -428,6 +455,8 @@
 
   window.closeItemListPicker = function () {
     currentItemKey = "";
+    var footer = document.getElementById("lmPickerFooter");
+    if (footer) footer.style.display = "flex";
     closeModal("itemListPickerModal");
   };
 

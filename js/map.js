@@ -71,6 +71,7 @@ function getItemsDataSignatureV638(items) {
       item.state,
       item.regDate,
       item.source,
+      item.sourceLink,
       item.sheetRow
     ].forEach(function(value) {
       var textValue = String(value == null ? "" : value) + "\u001f";
@@ -772,6 +773,7 @@ function loadSheet(isAuto) {
           regDate: clean(c[13]),
           source: clean(c[14]),
           propertyId: clean(c[15]),
+          sourceLink: clean(c[16]),
           sheetRow: i + 1,
           latlng: null
         };

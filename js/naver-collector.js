@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.4.0";
+  var VERSION = "3.5.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -9,6 +9,7 @@
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
+  var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
 
   function getCollectorKey() {
     var saved = "";
@@ -562,10 +563,24 @@
     return String(value == null ? "" : value).trim();
   }
 
+  function naverListingUrl(articleNo, currentUrl) {
+    var id = clean(articleNo);
+    if (!id) return "";
+
+    try {
+      var url = new URL(clean(currentUrl) || "https://new.land.naver.com/offices");
+      url.searchParams.set("articleNo", id);
+      return url.toString();
+    } catch (_) {
+      return "https://new.land.naver.com/offices?articleNo=" + encodeURIComponent(id);
+    }
+  }
+
   function normalize(article) {
     var price = article && article.price ? article.price : {};
+    var articleNo = clean(article && article.articleNo);
     return {
-      articleNo: clean(article && article.articleNo),
+      articleNo: articleNo,
       buildingName: clean(article && (article.buildingName || article.articleName)),
       category: clean(article && (article.articleRealEstateTypeName || article.realEstateTypeName)),
       tradeType: clean(article && article.tradeTypeName),
@@ -583,11 +598,16 @@
       direction: clean(article && article.direction),
       description: clean(article && article.articleFeatureDesc),
       tags: Array.isArray(article && article.tagList) ? article.tagList : [],
-      latitude: article && article.latitude || "",
-      longitude: article && article.longitude || "",
+      latitude: article && (article.latitude || article.lat || article.mapY) || "",
+      longitude: article && (article.longitude || article.lng || article.lon || article.mapX) || "",
+      jibunAddress: clean(article && (
+        article.jibunAddress || article.jibunAddr || article.articleAddress ||
+        article.address || article.cortarAddress || article.locationAddress
+      )),
       realtorName: clean(article && article.realtorName),
       providerUrl: clean(article && (article.cpPcArticleUrl || article.cpMobileArticleUrl)),
-      currentUrl: location.href
+      currentUrl: location.href,
+      sourceLink: naverListingUrl(articleNo, location.href)
     };
   }
 
@@ -618,6 +638,7 @@
     saveButton.disabled = true;
     retryButton.disabled = true;
     var totals = {saved: 0, duplicate: 0, failed: 0};
+    var firstFailure = "";
 
     try {
       var rawItems = await collectAll(state.capture);
@@ -636,13 +657,17 @@
         totals.saved += Number(result.saved) || 0;
         totals.duplicate += Number(result.duplicate) || 0;
         totals.failed += Number(result.failed) || 0;
+        if (!firstFailure && Array.isArray(result.errors) && result.errors.length) {
+          firstFailure = clean(result.errors[0] && result.errors[0].message);
+        }
         await delay(160);
       }
 
       setProgress(items.length, items.length || 1);
       setStatus(
         "네이버 수집 완료",
-        "전체 " + items.length + "개 · 신규 " + totals.saved + "개 · 중복 " + totals.duplicate + "개 · 실패 " + totals.failed + "개"
+        "전체 " + items.length + "개 · 신규 " + totals.saved + "개 · 중복 " + totals.duplicate + "개 · 실패 " + totals.failed + "개" +
+          (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
       );
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
     } catch (error) {
