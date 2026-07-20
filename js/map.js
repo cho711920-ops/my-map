@@ -1053,6 +1053,8 @@ function pickPlaceResultV6417(results, item) {
 function geocodeItems(items, callback, progressCallback) {
   var done = [];
   var total = items.length;
+  var pendingItems = [];
+  var pendingTotal = 0;
   var index = 0;
   var convertedCount = 0;
   var cachedCount = 0;
@@ -1088,16 +1090,25 @@ function geocodeItems(items, callback, progressCallback) {
       item.latlng = new kakao.maps.LatLng(cached.lat, cached.lng);
       done.push(item);
       cachedCount++;
+    } else {
+      pendingItems.push(item);
     }
   });
 
+  pendingTotal = pendingItems.length;
+
+  if (pendingTotal === 0) {
+    callback(done);
+    return;
+  }
+
   if (cachedCount > 0 && cachedCount < total && typeof progressCallback === "function") {
     lastProgressCount = done.length;
-    progressCallback(done.slice(), total - done.length);
+    progressCallback(done.slice(), pendingTotal);
   }
 
   function updateProgress(mode) {
-    var text = "주소 처리중 " + Math.min(index + 1, total) + " / " + total;
+    var text = "새 주소 처리중 " + Math.min(index + 1, pendingTotal) + " / " + pendingTotal;
 
     if (mode === "cache") {
       text += " · 저장좌표 " + cachedCount + "개 사용";
@@ -1108,7 +1119,7 @@ function geocodeItems(items, callback, progressCallback) {
     }
 
     if (mode === "retry") {
-      text = "주소 재시도중 " + (index + 1) + " / " + total;
+      text = "주소 재시도중 " + (index + 1) + " / " + pendingTotal;
     }
 
     document.getElementById("status").innerHTML = text;
@@ -1118,7 +1129,7 @@ function geocodeItems(items, callback, progressCallback) {
     convertedCount++;
     index++;
 
-    if (index >= total) {
+    if (index >= pendingTotal) {
       saveGeocodeCache();
       callback(done);
       return;
@@ -1131,7 +1142,7 @@ function geocodeItems(items, callback, progressCallback) {
       done.length - lastProgressCount >= 8
     ) {
       lastProgressCount = done.length;
-      progressCallback(done.slice(), total - index);
+      progressCallback(done.slice(), pendingTotal - index);
     }
 
     setTimeout(processNext, delay || 0);
@@ -1248,7 +1259,7 @@ function geocodeItems(items, callback, progressCallback) {
   }
 
   function processNext() {
-    var item = items[index];
+    var item = pendingItems[index];
 
     if (!item || !item.address) {
       finishOne(0);
