@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.2.2";
+  var VERSION = "3.3.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 100;
@@ -136,8 +136,8 @@
         '<div class="jsn-status" data-role="status"></div>' +
         '<div class="jsn-detail" data-role="detail"></div>' +
         '<div class="jsn-progress" data-role="progress"><i data-role="progress-bar"></i></div>' +
-        '<div class="jsn-rule">저장 위치: <b>NAVER_IMPORT</b><br>' +
-        '중복검사: 지번주소 + 층/호실 + 보증금 + 월세 + 평수<br>' +
+        '<div class="jsn-rule">저장 위치: <b>JS부동산 매물현황</b><br>' +
+        '중복검사: 매물ID 우선 · 지번주소 + 층/호실 + 보증금 + 월세 + 평수<br>' +
         '확장 프로그램 없이 이 북마크 버튼 하나로 사용합니다.</div>' +
         '<div class="jsn-actions">' +
           '<button type="button" class="jsn-btn jsn-retry" data-action="retry">현재 목록 다시 감지</button>' +
@@ -398,7 +398,7 @@
     }
     setStatus(
       "클러스터 전체 " + count + "개 확인 완료",
-      "전체 페이지 확인이 끝났습니다. 저장 버튼을 누르면 중복검사 후 NAVER_IMPORT에 저장합니다."
+      "전체 페이지 확인이 끝났습니다. 저장 버튼을 누르면 시트1 기존 매물과 중복검사 후 저장합니다."
     );
     saveButton.disabled = false;
     saveButton.textContent = "클러스터 전체 저장";
@@ -617,7 +617,7 @@
       for (var index = 0; index < items.length; index += BATCH_SIZE) {
         var batch = items.slice(index, index + BATCH_SIZE);
         setStatus(
-          "NAVER_IMPORT 저장 중",
+          "JS부동산 매물현황 저장 중",
           (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 15개씩 안전하게 저장합니다."
         );
         setProgress(index, items.length);
@@ -655,7 +655,7 @@
         if (attempt < attempts) await delay(500 * attempt);
       }
     }
-    throw lastError || new Error("NAVER_IMPORT 저장에 실패했습니다.");
+    throw lastError || new Error("JS부동산 매물현황 저장에 실패했습니다.");
   }
 
   function delay(ms) {
