@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.5.0";
+  var VERSION = "3.6.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;

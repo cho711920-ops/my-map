@@ -505,8 +505,11 @@ function scheduleMapIdleRefreshV638() {
     /*
      * 이전 화면에서 필터링된 일부 매물만 재사용하면 크게 축소했다가
      * 확대할 때 빠진 매물이 생깁니다. 지도 범위가 바뀔 때마다 전체
-     * allItems 기준 필터 결과를 다시 계산하되, 무거운 목록 HTML은
-     * 다시 만들지 않고 지도 클러스터만 갱신합니다.
+     * allItems 기준 필터 결과를 다시 계산합니다.
+     *
+     * 일반 탐색 중에는 매물리스트도 현재 지도 화면에 맞춰 갱신합니다.
+     * 사용자가 클러스터를 열어 비교·수정 중인 경우에는 그 목록을
+     * 유지해 지도 이동이나 패널 재배치로 선택이 풀리지 않게 합니다.
      */
     var latestMapItems = typeof getFilteredItems === "function"
       ? getFilteredItems()
@@ -515,6 +518,20 @@ function scheduleMapIdleRefreshV638() {
     currentItems = latestMapItems;
     jsLastRenderedItemsV639 = latestMapItems.slice();
     drawMapClustersOnlyV639(jsLastRenderedItemsV639);
+
+    var hasPinnedClusterList = !!selectedGroupKey || (
+      !!multiClusterMode && (selectedGroupKeys || []).length > 0
+    );
+
+    if (!hasPinnedClusterList && typeof showList === "function") {
+      showList(jsLastRenderedItemsV639);
+
+      var statusElement = document.getElementById("status");
+      if (statusElement) {
+        statusElement.innerHTML =
+          "현재 지도 매물 " + jsLastRenderedItemsV639.length + "개";
+      }
+    }
   }, 120);
 }
 
