@@ -26,16 +26,7 @@ function status(message) {
 function unlock(email) {
   document.documentElement.classList.remove("auth-pending");
   document.getElementById("jsAuthGate")?.remove();
-  let badge = document.getElementById("jsAuthUser");
-  if (!badge) {
-    badge = document.createElement("div");
-    badge.id = "jsAuthUser";
-    badge.className = "js-auth-user";
-    badge.innerHTML = `<span></span><button type="button">로그아웃</button>`;
-    badge.querySelector("button").addEventListener("click", logout);
-    document.body.appendChild(badge);
-  }
-  badge.querySelector("span").textContent = email || "로그인됨";
+  document.getElementById("jsAuthUser")?.remove();
 }
 
 async function sessionRequest(credential) {

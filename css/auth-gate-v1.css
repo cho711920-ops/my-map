@@ -70,44 +70,6 @@ html.auth-pending body > *:not(#jsAuthGate) {
   font-size: 13px !important;
 }
 
-.js-auth-user {
-  position: fixed;
-  right: 10px;
-  bottom: 10px;
-  z-index: 9000;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  max-width: calc(100vw - 20px);
-  padding: 6px 7px 6px 11px;
-  border: 1px solid #d9e4f2;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .94);
-  box-shadow: 0 7px 25px rgba(15, 23, 42, .13);
-  color: #526075;
-  font-size: 11px;
-}
-
-.js-auth-user span {
-  overflow: hidden;
-  max-width: 170px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.js-auth-user button {
-  height: 28px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 999px;
-  background: #eef3f9;
-  color: #344054;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
 @media (max-width: 768px) {
   .js-auth-card { padding: 28px 22px 24px; }
-  .js-auth-user { bottom: 66px; }
 }
