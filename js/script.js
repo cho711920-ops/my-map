@@ -580,6 +580,55 @@ function normalizeSearchComparableText(value) {
 }
 
 
+function getSearchComparableFields(item) {
+  return [
+    item && item.name,
+    item && item.address,
+    item && item.room,
+    item && item.type,
+    item && item.memo
+  ].map(function(value) {
+    var text = String(value || "").toLowerCase();
+
+    return {
+      text: text,
+      compact: normalizeSearchComparableText(text)
+    };
+  });
+}
+
+
+function parseExactJibunKeyword(value) {
+  var compact = normalizeSearchComparableText(value);
+  var match = compact.match(/([가-힣]+(?:동|읍|면|리))(\d+(?:-\d+)?)$/);
+
+  if (!match) return null;
+
+  return {
+    compact: match[1] + match[2]
+  };
+}
+
+
+function matchesExactJibunAddress(item, parsedKeyword) {
+  if (!parsedKeyword || !parsedKeyword.compact) return false;
+
+  var compactAddress = normalizeSearchComparableText(item && item.address);
+  var startIndex = compactAddress.indexOf(parsedKeyword.compact);
+
+  while (startIndex !== -1) {
+    var nextCharacter = compactAddress.charAt(startIndex + parsedKeyword.compact.length);
+
+    /* 753 검색이 753-1 또는 7530까지 포함하지 않도록 지번 끝 경계를 확인한다. */
+    if (!nextCharacter || !/[0-9-]/.test(nextCharacter)) return true;
+
+    startIndex = compactAddress.indexOf(parsedKeyword.compact, startIndex + 1);
+  }
+
+  return false;
+}
+
+
 function buildSearchText(item) {
   return [
     item && item.name,
@@ -610,7 +659,7 @@ function matchesMultiKeyword(item, rawKeyword) {
   if (!keyword) return true;
 
   var searchText = buildSearchText(item);
-  var compactSearchText = normalizeSearchComparableText(searchText);
+  var comparableFields = getSearchComparableFields(item);
 
   var orGroups = keyword
     .split(",")
@@ -622,6 +671,13 @@ function matchesMultiKeyword(item, rawKeyword) {
   if (!orGroups.length) return true;
 
   return orGroups.some(function(group) {
+    var exactJibunKeyword = parseExactJibunKeyword(group);
+
+    /* 월평동753 / 월평동 753처럼 주소와 지번만 입력한 경우 주소 열만 정확히 검색한다. */
+    if (exactJibunKeyword) {
+      return matchesExactJibunAddress(item, exactJibunKeyword);
+    }
+
     var andWords = group
       .split(/\s+/)
       .map(function(word) {
@@ -634,7 +690,9 @@ function matchesMultiKeyword(item, rawKeyword) {
 
       return (
         searchText.includes(word) ||
-        (compactWord && compactSearchText.includes(compactWord))
+        (compactWord && comparableFields.some(function(field) {
+          return field.compact.includes(compactWord);
+        }))
       );
     });
   });
