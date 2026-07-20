@@ -3969,6 +3969,44 @@ body.roadview-modal-open {
   font-weight:900;
 }
 
+.sort-dropdown-menu .sort-menu-single {
+  min-height:34px;
+}
+
+.sort-menu-row {
+  display:grid;
+  grid-template-columns:minmax(70px, 1fr) auto auto;
+  align-items:center;
+  gap:4px;
+  min-height:38px;
+  padding:3px 4px;
+  border-top:1px solid #edf0f5;
+}
+
+.sort-menu-row > span {
+  padding-left:6px;
+  color:#344054;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.sort-dropdown-menu .sort-menu-row > button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:auto;
+  min-height:28px;
+  padding:4px 7px;
+  border:1px solid #dce3ed;
+  background:#fff;
+  text-align:center;
+}
+
+.sort-dropdown-menu .sort-menu-row > button.selected {
+  border-color:#8db9f5;
+}
+
 /* 선택 매물 빨간 표시 */
 .roadview-target-marker {
   display:flex;

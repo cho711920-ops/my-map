@@ -551,52 +551,6 @@ function updateTypeOptions(items) {
 }
 
 
-/* === v4.3.1 층수 범위 필터 === */
-function getItemFloorNumber(item) {
-  var room = String((item && item.room) || "").trim();
-  var memo = String((item && item.memo) || "").trim();
-  var name = String((item && item.name) || "").trim();
-  var text = [room, name, memo].join(" ");
-
-  // 지하층: -1로 통일
-  if (/지하|地下|\bB\s*1\b|\bB1\b|비\s*1\s*층/i.test(text)) return -1;
-
-  // "3층", "10 층"처럼 층이 명시된 경우를 최우선 사용
-  var explicitFloor = text.match(/(?:^|[^0-9])(\d{1,2})\s*층/);
-  if (explicitFloor) return Number(explicitFloor[1]) || 0;
-
-  // "3F", "10F" 표기
-  var floorF = text.match(/(?:^|[^0-9])(\d{1,2})\s*F(?:[^A-Z]|$)/i);
-  if (floorF) return Number(floorF[1]) || 0;
-
-  // 호실만 있는 경우: 101호→1층, 201호→2층, 1001호→10층
-  var roomNumber = room.match(/(?:^|[^0-9])(\d{3,4})\s*호/);
-  if (roomNumber) {
-    var value = roomNumber[1];
-    var inferred = value.length === 3
-      ? Number(value.charAt(0))
-      : Number(value.slice(0, value.length - 2));
-
-    if (inferred > 0) return inferred;
-  }
-
-  // 층수 정보가 없으면 null
-  return null;
-}
-
-
-function readOptionalNumberInput(id) {
-  var el = document.getElementById(id);
-  if (!el) return null;
-
-  var value = String(el.value || "").trim();
-  if (value === "") return null;
-
-  var number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-
 function normalizeSearchComparableText(value) {
   return String(value || "")
     .toLowerCase()
@@ -725,21 +679,53 @@ function matchesMultiKeyword(item, rawKeyword) {
 
 var SORT_LABELS = {
   latest: "최신",
-  oldest: "오래된순",
-  aiScoreHigh: "AI점수",
-  pyeongHigh: "평당↓",
-  pyeongLow: "평당↑",
+  address: "주소순",
+  floorLow: "층수↑",
+  floorHigh: "층수↓",
   depositHigh: "보증금↓",
   depositLow: "보증금↑",
   rentHigh: "월세↓",
-  rentLow: "월세↑",
-  premiumHigh: "권리금↓",
-  premiumLow: "권리금↑",
-  areaHigh: "평수↓",
-  areaLow: "평수↑",
-  name: "건물명",
-  address: "주소순"
+  rentLow: "월세↑"
 };
+
+var NATURAL_ADDRESS_COLLATOR = typeof Intl !== "undefined" && Intl.Collator
+  ? new Intl.Collator("ko-KR", { numeric: true, sensitivity: "base" })
+  : null;
+
+function compareNaturalAddress(a, b) {
+  var addressA = String((a && a.address) || "").replace(/\s+/g, " ").trim();
+  var addressB = String((b && b.address) || "").replace(/\s+/g, " ").trim();
+
+  if (NATURAL_ADDRESS_COLLATOR) {
+    return NATURAL_ADDRESS_COLLATOR.compare(addressA, addressB);
+  }
+
+  return addressA.localeCompare(addressB, "ko");
+}
+
+function getSortFloorNumber(item) {
+  var room = String((item && item.room) || "").trim();
+  if (!room) return null;
+  return parseFloorNotationV612(room, true);
+}
+
+function compareFloorItems(a, b, highFirst) {
+  var floorA = getSortFloorNumber(a);
+  var floorB = getSortFloorNumber(b);
+  var blankA = floorA === null || !Number.isFinite(Number(floorA));
+  var blankB = floorB === null || !Number.isFinite(Number(floorB));
+
+  // 층수 공란은 정렬 방향과 관계없이 항상 가장 낮은 위치(목록 맨 앞)로 둡니다.
+  if (blankA && !blankB) return -1;
+  if (!blankA && blankB) return 1;
+  if (!blankA && !blankB && Number(floorA) !== Number(floorB)) {
+    return highFirst
+      ? Number(floorB) - Number(floorA)
+      : Number(floorA) - Number(floorB);
+  }
+
+  return compareNaturalAddress(a, b);
+}
 
 
 function toggleSortDropdown(event) {
@@ -895,35 +881,14 @@ function getFilteredItems() {
     var dateB = new Date((b.regDate || "").replace(/\./g, "-")).getTime() || 0;
 
     if (sortType === "latest") return dateB - dateA;
-    if (sortType === "oldest") return dateA - dateB;
 
-    if (sortType === "name") {
-      return (a.name || "").localeCompare((b.name || ""), "ko");
-    }
-
-    if (sortType === "address") {
-      return (a.address || "").localeCompare((b.address || ""), "ko");
-    }
-
-    if (sortType === "aiScoreHigh") {
-      var aiA = getSmartItemAnalysis(a).score || 0;
-      var aiB = getSmartItemAnalysis(b).score || 0;
-      return aiB - aiA;
-    }
-
-    var pyeongA = Number(a.area) > 0 ? Number(a.rent || 0) / Number(a.area) : 0;
-    var pyeongB = Number(b.area) > 0 ? Number(b.rent || 0) / Number(b.area) : 0;
-
-    if (sortType === "pyeongHigh") return pyeongB - pyeongA;
-    if (sortType === "pyeongLow") return pyeongA - pyeongB;
-    if (sortType === "depositLow") return a.deposit - b.deposit;
-    if (sortType === "depositHigh") return b.deposit - a.deposit;
-    if (sortType === "rentLow") return a.rent - b.rent;
-    if (sortType === "rentHigh") return b.rent - a.rent;
-    if (sortType === "premiumLow") return a.premium - b.premium;
-    if (sortType === "premiumHigh") return b.premium - a.premium;
-    if (sortType === "areaHigh") return b.area - a.area;
-    if (sortType === "areaLow") return a.area - b.area;
+    if (sortType === "address") return compareNaturalAddress(a, b);
+    if (sortType === "floorLow") return compareFloorItems(a, b, false);
+    if (sortType === "floorHigh") return compareFloorItems(a, b, true);
+    if (sortType === "depositLow") return Number(a.deposit || 0) - Number(b.deposit || 0) || compareNaturalAddress(a, b);
+    if (sortType === "depositHigh") return Number(b.deposit || 0) - Number(a.deposit || 0) || compareNaturalAddress(a, b);
+    if (sortType === "rentLow") return Number(a.rent || 0) - Number(b.rent || 0) || compareNaturalAddress(a, b);
+    if (sortType === "rentHigh") return Number(b.rent || 0) - Number(a.rent || 0) || compareNaturalAddress(a, b);
 
     return 0;
   });
