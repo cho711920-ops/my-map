@@ -1,13 +1,14 @@
 (function () {
   "use strict";
 
-  var LOCAL_CACHE_PREFIX = "js-building-register-v1:";
+  var LOCAL_CACHE_PREFIX = "js-building-register-v2:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var state = {
     item: null,
     parcel: null,
     data: null,
     buildingIndex: 0,
+    unitIndex: 0,
     loading: false,
     requestToken: 0
   };
@@ -119,7 +120,7 @@
     if (body) {
       body.innerHTML = '<div class="building-register-loading"><i></i><b>' +
         esc(message || "건축물대장을 조회하고 있습니다") +
-        '</b><span>표제부·층별개요·지역지구구역을 확인합니다.</span></div>';
+        '</b><span>표제부·전유부·전유공용면적·층별개요를 확인합니다.</span></div>';
     }
     updateRefreshButton();
   }
@@ -280,6 +281,7 @@
       if (requestToken !== state.requestToken) return Promise.resolve(null);
       state.data = cached;
       state.buildingIndex = 0;
+      state.unitIndex = bestUnitIndex(cached.units || [], state.item && state.item.room);
       render();
       return Promise.resolve(cached);
     }
@@ -294,6 +296,7 @@
       }
       state.data = data;
       state.buildingIndex = 0;
+      state.unitIndex = bestUnitIndex(data.units || [], state.item && state.item.room);
       writeCache(state.parcel, data);
       render();
       return data;
@@ -313,6 +316,30 @@
     match = text.match(/^(\d{3,4})\s*호/);
     if (match) return Math.floor(Number(match[1]) / 100);
     return null;
+  }
+
+  function roomKey(value) {
+    var text = String(value || "").toUpperCase().replace(/\s+/g, "");
+    if (!text) return "";
+    var basement = text.match(/B(\d{1,4})(?:호|실)?/) || text.match(/지하\s*(\d{1,2})층?\s*(\d{1,4})호/);
+    if (basement) return "B" + String(basement[basement.length - 1]).replace(/^0+/, "");
+    var room = text.match(/(\d{2,5})호/) || text.match(/^(\d{3,5})$/);
+    return room ? String(room[1]).replace(/^0+/, "") : "";
+  }
+
+  function bestUnitIndex(units, listingRoom) {
+    var target = roomKey(listingRoom);
+    if (!target || !Array.isArray(units) || !units.length) return 0;
+    var exact = units.findIndex(function (unit) {
+      return roomKey(unit && unit.roomName) === target;
+    });
+    return exact >= 0 ? exact : 0;
+  }
+
+  function unitOptionLabel(unit, index) {
+    var floor = joinText(unit && unit.floorType, unit && (unit.floorName || floorLabel(unit.floorNo)));
+    var label = joinText(unit && unit.dongName, unit && unit.roomName, floor);
+    return label === "정보 없음" ? "전유부 " + (index + 1) : label;
   }
 
   function signedFloor(row) {
@@ -427,6 +454,7 @@
     updateRefreshButton();
     var data = state.data || {};
     var buildings = Array.isArray(data.buildings) ? data.buildings : [];
+    var units = Array.isArray(data.units) ? data.units : [];
     var body = bodyElement();
     if (!body) return;
     if (!buildings.length) {
@@ -436,6 +464,20 @@
 
     if (state.buildingIndex >= buildings.length) state.buildingIndex = 0;
     var building = buildings[state.buildingIndex];
+    var visibleUnits = units.map(function (row, index) {
+      return {row: row, index: index};
+    }).filter(function (entry) {
+      return !building.managementKey || !entry.row.managementKey || entry.row.managementKey === building.managementKey;
+    });
+    if (!visibleUnits.length) {
+      visibleUnits = units.map(function (row, index) { return {row: row, index: index}; });
+    }
+    var selectedVisibleIndex = visibleUnits.findIndex(function (entry) { return entry.index === state.unitIndex; });
+    if (selectedVisibleIndex < 0 && visibleUnits.length) {
+      selectedVisibleIndex = bestUnitIndex(visibleUnits.map(function (entry) { return entry.row; }), state.item && state.item.room);
+      state.unitIndex = visibleUnits[selectedVisibleIndex].index;
+    }
+    var unit = units.length ? units[state.unitIndex] : null;
     var listingFloor = extractListingFloor(state.item && state.item.room);
     var parkingTotal = sumKnown([
       building.indoorMechanicalParking,
@@ -456,6 +498,28 @@
             esc(buildingOptionLabel(row, index)) + '</option>';
         }).join("") +
       '</select></label>' : "";
+
+    var unitSelector = visibleUnits.length ? '' +
+      '<section class="building-register-unit-browser">' +
+        '<div class="building-register-unit-browser-head"><b>집합건물 전유부(호실) 선택</b><span>호실을 누르면 전유·공용면적을 바로 확인합니다.</span></div>' +
+        '<div class="building-register-unit-grid">' +
+          visibleUnits.map(function (entry, visibleIndex) {
+            var row = entry.row || {};
+            var areas = Array.isArray(row.areas) ? row.areas : [];
+            var exclusive = sumKnown(areas.filter(function (area) { return /전유/.test(String(area && area.areaType || "")); }).map(function (area) { return area.area; }));
+            var shared = sumKnown(areas.filter(function (area) { return /공용/.test(String(area && area.areaType || "")); }).map(function (area) { return area.area; }));
+            var use = uniqueText(areas.map(function (area) { return {value: joinText(area.mainUse, area.otherUse)}; }), "value");
+            var floor = joinText(row.floorType, row.floorName || floorLabel(row.floorNo));
+            var label = joinText(row.roomName, floor);
+            var tooltip = '[' + registerValue(label) + ' ' + registerValue(use) + '] 전유 ' + areaText(exclusive) + ' / 공용 ' + areaText(shared);
+            return '<button type="button" class="building-register-unit-card' + (entry.index === state.unitIndex ? ' selected' : '') + '" data-unit-index="' + entry.index + '" data-tooltip="' + esc(tooltip) + '">' +
+              '<strong>' + esc(row.roomName || ('전유부 ' + (visibleIndex + 1))) + '</strong>' +
+              '<span>' + esc(floor) + '</span>' +
+              '<small>전유 ' + esc(areaText(exclusive)) + '</small>' +
+            '</button>';
+          }).join("") +
+        '</div>' +
+      '</section>' : "";
 
     var mechanicalParking = sumKnown([building.indoorMechanicalParking, building.outdoorMechanicalParking]);
     var selfParking = sumKnown([building.indoorSelfParking, building.outdoorSelfParking]);
@@ -479,14 +543,61 @@
       registerTableRow("내진능력", building.seismicAbility, "내진설계 적용 여부", building.seismicDesign)
     ].join("");
 
+    var unitSection = "";
+    if (unit) {
+      var unitAreas = Array.isArray(unit.areas) ? unit.areas : [];
+      var exclusiveArea = sumKnown(unitAreas.filter(function (row) {
+        return /전유/.test(String(row && row.areaType || ""));
+      }).map(function (row) { return row.area; }));
+      var publicArea = sumKnown(unitAreas.filter(function (row) {
+        return /공용/.test(String(row && row.areaType || ""));
+      }).map(function (row) { return row.area; }));
+      var totalUnitArea = sumKnown(unitAreas.map(function (row) { return row.area; }));
+      var unitUses = uniqueText(unitAreas.map(function (row) {
+        return {value: joinText(row.mainUse, row.otherUse)};
+      }), "value");
+      var unitStructures = uniqueText(unitAreas.map(function (row) {
+        return {value: joinText(row.structure, row.otherStructure)};
+      }), "value");
+      var unitSummaryRows = [
+        registerTableRow("동", unit.dongName, "호실", unit.roomName),
+        registerTableRow("층", joinText(unit.floorType, unit.floorName || floorLabel(unit.floorNo)), "대장구분", unit.registerType),
+        registerTableRow("전유면적", areaText(exclusiveArea), "공용면적", areaText(publicArea)),
+        registerTableRow("전유+공용 합계", areaText(totalUnitArea), "주용도", unitUses),
+        registerTableRow("구조", unitStructures)
+      ].join("");
+      var unitAreaRows = unitAreas.map(function (row) {
+        return '<tr><th scope="row">' + esc(row.areaType || "구분 없음") + '</th>' +
+          '<td>' + esc(joinText(row.mainUse, row.otherUse)) + '</td>' +
+          '<td>' + esc(areaText(row.area)) + '</td>' +
+          '<td>' + esc(joinText(row.structure, row.otherStructure)) + '</td></tr>';
+      }).join("");
+      unitSection = '' +
+        '<section class="building-register-sheet-section building-register-exclusive-section">' +
+          '<h3>집합건물 전유부</h3>' +
+          '<div class="building-register-table-wrap"><table class="building-register-summary-table"><tbody>' +
+            unitSummaryRows +
+          '</tbody></table></div>' +
+        '</section>' +
+        '<section class="building-register-floor-section building-register-exclusive-area-section">' +
+          '<h3>전유·공용면적 내역</h3>' +
+          '<div class="building-register-table-wrap"><table class="building-register-floor-table">' +
+            '<thead><tr><th>구분</th><th>용도</th><th>면적</th><th>구조</th></tr></thead>' +
+            '<tbody>' + (unitAreaRows || '<tr><td colspan="4" class="empty-floor">조회된 전유·공용면적 내역이 없습니다.</td></tr>') + '</tbody>' +
+          '</table></div>' +
+        '</section>';
+    }
+
     body.innerHTML = '' +
       selector +
+      unitSelector +
       '<section class="building-register-sheet-section">' +
         '<h3>건축물대장 기본정보</h3>' +
         '<div class="building-register-table-wrap"><table class="building-register-summary-table"><tbody>' +
           summaryRows +
         '</tbody></table></div>' +
       '</section>' +
+      unitSection +
       '<p class="building-register-reference">* 공공데이터 참고용 자료로 실제 발급본과 차이가 있을 수 있습니다.</p>' +
       '<section class="building-register-floor-section">' +
         '<h3>층별내역</h3>' +
@@ -511,6 +622,12 @@
         render();
       });
     }
+    Array.prototype.forEach.call(body.querySelectorAll(".building-register-unit-card"), function (button) {
+      button.addEventListener("click", function () {
+        state.unitIndex = Number(this.getAttribute("data-unit-index")) || 0;
+        render();
+      });
+    });
   }
 
   window.openBuildingRegisterV640 = function (encodedKey) {
@@ -523,6 +640,7 @@
     state.parcel = null;
     state.data = null;
     state.buildingIndex = 0;
+    state.unitIndex = 0;
     var requestToken = ++state.requestToken;
     openModal();
     setLoading("매물의 지번을 확인하고 있습니다");
