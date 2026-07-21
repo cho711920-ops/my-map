@@ -289,7 +289,7 @@
     setLoading(force ? "최신 건축물대장을 다시 조회하고 있습니다" : "건축물대장을 조회하고 있습니다");
     var url;
     try { url = requestUrl(force); } catch (error) { setError(error.message); return Promise.resolve(null); }
-    return jsonp(url, 35000).then(function (data) {
+    return jsonp(url, 60000).then(function (data) {
       if (requestToken !== state.requestToken) return null;
       if (!data || !data.ok || data.action !== "buildingRegister") {
         throw new Error((data && data.message) || "건축물대장 API 설정을 확인해주세요.");
