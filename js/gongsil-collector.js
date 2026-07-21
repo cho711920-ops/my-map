@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.2.2";
+  var VERSION = "1.2.3";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -77,7 +77,8 @@
     },
     transformItem: transformItem,
     decryptText: decryptText,
-    loadAllCapturedItems: loadAllCapturedItems
+    loadAllCapturedItems: loadAllCapturedItems,
+    addImportResult: addImportResult
   };
 
   function getCollectorKey() {
@@ -1205,11 +1206,12 @@
     var collectorKey = getCollectorKey();
     var totals = {
       received: 0,
-      inserted: 0,
+      created: 0,
+      merged: 0,
       updated: 0,
-      unchanged: 0,
-      duplicates: 0,
-      rejected: 0
+      review: 0,
+      duplicate: 0,
+      failed: 0
     };
     var batchCount = Math.ceil(records.length / SAVE_BATCH_SIZE);
 
@@ -1226,27 +1228,48 @@
       var result = await sendAppsScriptBatch(batch, collectorKey, batchIndex);
       if (!result || result.ok !== true) return result;
 
-      Object.keys(totals).forEach(function (key) {
-        totals[key] += Number(result[key] || 0);
-      });
+      addImportResult(totals, result);
     }
 
     return {
       ok: true,
       action: "gongsilImportBatch",
       received: totals.received,
-      inserted: totals.inserted,
+      created: totals.created,
+      merged: totals.merged,
       updated: totals.updated,
-      unchanged: totals.unchanged,
-      duplicates: totals.duplicates,
-      rejected: totals.rejected,
+      review: totals.review,
+      duplicate: totals.duplicate,
+      failed: totals.failed,
       message:
-        "공실박스 매물 저장 완료: 신규 " + totals.inserted +
-        "개, 갱신 " + totals.updated +
-        "개, 기존 동일 " + totals.unchanged +
-        "개, 중복 제외 " + totals.duplicates +
-        "개, 제외 " + totals.rejected + "개"
+        "공실박스 처리 완료: 총 " + totals.received +
+        "개 중 신규 " + totals.created +
+        "개, 기존매물 통합 " + totals.merged +
+        "개, 조건변경 " + totals.updated +
+        "개, 검증대기 " + totals.review +
+        "개, 중복 " + totals.duplicate +
+        "개, 실패 " + totals.failed + "개"
     };
+  }
+
+  function addImportResult(totals, result) {
+    result = result || {};
+    totals.received += Number(result.received || 0);
+    totals.created += Number(
+      result.created !== undefined ? result.created : result.inserted || 0
+    );
+    totals.merged += Number(result.merged || 0);
+    totals.updated += Number(result.updated || 0);
+    totals.review += Number(result.review || 0);
+    totals.duplicate += Number(
+      result.duplicate !== undefined
+        ? Number(result.duplicate || 0) + Number(result.duplicateSnapshots || 0)
+        : Number(result.duplicates || 0) + Number(result.unchanged || 0)
+    );
+    totals.failed += Number(
+      result.failed !== undefined ? result.failed : result.rejected || 0
+    );
+    return totals;
   }
 
   async function sendAppsScriptBatch(records, collectorKey, batchIndex) {

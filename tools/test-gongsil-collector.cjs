@@ -94,7 +94,36 @@ vm.runInContext(
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.2.2");
+assert.strictEqual(api.version, "1.2.3");
+
+const importTotals = {
+  received: 0,
+  created: 0,
+  merged: 0,
+  updated: 0,
+  review: 0,
+  duplicate: 0,
+  failed: 0
+};
+api.addImportResult(importTotals, {
+  received: 250,
+  created: 210,
+  merged: 20,
+  updated: 5,
+  review: 3,
+  duplicate: 4,
+  duplicateSnapshots: 7,
+  failed: 1
+});
+assert.deepStrictEqual(JSON.parse(JSON.stringify(importTotals)), {
+  received: 250,
+  created: 210,
+  merged: 20,
+  updated: 5,
+  review: 3,
+  duplicate: 11,
+  failed: 1
+});
 
 const bfidxs = Array.from({ length: 2500 }, (_, index) => `floor-${index + 1}`);
 const bidxs = Array.from({ length: 1800 }, (_, index) => `building-${index + 1}`);
