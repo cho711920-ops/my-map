@@ -1,11 +1,13 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.6.0";
+  var VERSION = "3.6.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
-  var BATCH_SIZE = 15;
+  // Apps Script 서버의 요청당 최대치는 100건이다. 75건씩 처리하면
+  // 대량 수집 속도를 높이면서 재시도 시의 부담과 실행시간 여유를 남긴다.
+  var BATCH_SIZE = 75;
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
@@ -650,7 +652,7 @@
         var batch = items.slice(index, index + BATCH_SIZE);
         setStatus(
           "JS부동산 매물현황 저장 중",
-          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 15개씩 안전하게 저장합니다."
+          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + BATCH_SIZE + "개씩 안전하게 저장합니다."
         );
         setProgress(index, items.length);
         var result = await postBatchWithRetry(batch, 3);
