@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.4.19-collective-register">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.4-right-layout">
+<link rel="stylesheet" href="css/operations-center-v7.css?v=7.0.0">
 </head>
 
 <body>
@@ -71,6 +72,9 @@
             <button id="printSelectedBtn" class="print-btn" type="button" onclick="printSelectedList(); closeV6ActionMenus()">선택인쇄</button>
             <button id="completeSelectedBtn" class="complete-selected-btn" type="button" onclick="completeSelectedItems(); closeV6ActionMenus()">계약완료</button>
             <button id="fieldVisitBtn" class="field-visit-btn" type="button" onclick="markSelectedAsVisited(); closeV6ActionMenus()">임장완료</button>
+            <div class="v6-command-divider"></div>
+            <button type="button" onclick="openOperationsCenter('dashboard'); closeV6ActionMenus()">운영현황</button>
+            <button type="button" onclick="openOperationsCenter('customers'); closeV6ActionMenus()">고객매칭</button>
           </div>
         </div>
 
@@ -88,6 +92,10 @@
         </button>
       </div>
       <div id="multiClusterStatus" class="multi-cluster-status"></div>
+      <div id="customerMatchMapStatus" class="customer-match-map-status" hidden>
+        <span id="customerMatchMapStatusText"></span>
+        <button type="button" onclick="clearCustomerMatchMapFilter()">전체 매물 보기</button>
+      </div>
 
       <div id="detailFilter" class="detail-filter">
         <div class="row">
@@ -195,6 +203,41 @@
 
 <div id="errorStatus" onclick="showAddressErrors()">주소 오류 0개</div>
 
+</div>
+
+<div id="operationsCenter" class="operations-center" aria-hidden="true">
+  <div class="operations-center-backdrop" onclick="closeOperationsCenter()"></div>
+  <section class="operations-center-dialog" role="dialog" aria-modal="true" aria-labelledby="operationsCenterTitle">
+    <header class="operations-center-header">
+      <div>
+        <div class="operations-center-eyebrow">JS 통합 운영 시스템</div>
+        <h2 id="operationsCenterTitle">매물관리 · 고객매칭</h2>
+      </div>
+      <button class="operations-center-close" type="button" onclick="closeOperationsCenter()" aria-label="운영센터 닫기">×</button>
+    </header>
+    <nav class="operations-center-tabs" aria-label="운영센터 메뉴">
+      <button id="operationsTabDashboard" type="button" onclick="switchOperationsTab('dashboard')">운영현황</button>
+      <button id="operationsTabCustomers" type="button" onclick="switchOperationsTab('customers')">고객매칭</button>
+    </nav>
+    <div id="operationsCenterMessage" class="operations-center-message" aria-live="polite"></div>
+    <div id="operationsDashboardPanel" class="operations-panel"></div>
+    <div id="operationsCustomersPanel" class="operations-panel" hidden>
+      <div class="customer-match-toolbar">
+        <div>
+          <strong>고객 조건 자동매칭</strong>
+          <span>고객문의 시트에 조건을 입력하면 자동으로 갱신됩니다.</span>
+        </div>
+        <div class="customer-match-toolbar-actions">
+          <button type="button" onclick="rebuildCustomerMatchesNow()">지금 다시 계산</button>
+          <a href="https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/edit" target="_blank" rel="noopener">고객문의 시트</a>
+        </div>
+      </div>
+      <div class="customer-match-layout">
+        <aside id="operationsCustomerList" class="operations-customer-list"></aside>
+        <main id="operationsMatchList" class="operations-match-list"></main>
+      </div>
+    </div>
+  </section>
 </div>
 
 
@@ -388,5 +431,6 @@
 <script src="js/ai-visit-ui-v6.js"></script>
 <script src="js/ai-visit-session-v6.js"></script>
 <script src="js/map.js?v=6.4.21-viewport-list"></script>
+<script src="js/operations-center-v7.js?v=7.0.0"></script>
 </body>
 </html>

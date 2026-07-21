@@ -834,6 +834,8 @@ function getFilteredItems() {
   }
 
   var filtered = allItems.filter(function(item) {
+    var operationsMatchIds = window.operationsMatchPropertyIds;
+    var matchCustomerSelection = !operationsMatchIds || operationsMatchIds.has(String(item.propertyId || "").trim());
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || item.type === selectedType;
@@ -872,7 +874,7 @@ function getFilteredItems() {
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var inMap = item.latlng && bounds.contain(item.latlng);
 
-    return matchKeyword && matchType && matchIndustry && matchPrice && matchFloor &&
+    return matchCustomerSelection && matchKeyword && matchType && matchIndustry && matchPrice && matchFloor &&
       matchFavorite && matchDone && matchGongsil && inMap;
   });
 
