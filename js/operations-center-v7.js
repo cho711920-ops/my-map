@@ -218,6 +218,7 @@
       state.loaded = true;
       renderDashboard();
       renderCustomers();
+      renderMatches(state.selectedCustomerId);
       setMessage("자동화 자료가 최신 상태로 연결되었습니다.", "success");
     }).catch(function(error) {
       setMessage(error.message || "운영자료 조회 중 오류가 발생했습니다.", "error");
