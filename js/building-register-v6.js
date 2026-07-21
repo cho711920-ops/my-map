@@ -28,6 +28,13 @@
     return isFinite(number) ? number : null;
   }
 
+  function parseNumber(value) {
+    var match = String(value == null ? "" : value)
+      .replace(/,/g, "")
+      .match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
   function numberText(value, suffix, digits) {
     var number = asNumber(value);
     if (number == null) return "정보 없음";
@@ -449,6 +456,28 @@
       : joinText(building.buildingName, building.dongName, building.mainAnnex);
   }
 
+  function unitFloorSortValue(row) {
+    var floorNo = asNumber(row && row.floorNo);
+    if (floorNo == null) floorNo = parseNumber(row && row.floorName);
+    if (floorNo == null) return Number.MAX_SAFE_INTEGER;
+    return /지하|地下|B/i.test(String(row && (row.floorType || row.floorName) || ""))
+      ? -Math.abs(floorNo)
+      : floorNo;
+  }
+
+  function compareUnitEntries(a, b) {
+    var floorDifference = unitFloorSortValue(a.row) - unitFloorSortValue(b.row);
+    if (floorDifference) return floorDifference;
+    var aRoom = parseNumber(a.row && a.row.roomName);
+    var bRoom = parseNumber(b.row && b.row.roomName);
+    if (aRoom != null && bRoom != null && aRoom !== bRoom) return aRoom - bRoom;
+    return String(a.row && a.row.roomName || "").localeCompare(
+      String(b.row && b.row.roomName || ""),
+      "ko",
+      { numeric: true }
+    );
+  }
+
   function render() {
     state.loading = false;
     updateRefreshButton();
@@ -468,9 +497,11 @@
       return {row: row, index: index};
     }).filter(function (entry) {
       return !building.managementKey || !entry.row.managementKey || entry.row.managementKey === building.managementKey;
-    });
+    }).sort(compareUnitEntries);
     if (!visibleUnits.length) {
-      visibleUnits = units.map(function (row, index) { return {row: row, index: index}; });
+      visibleUnits = units.map(function (row, index) {
+        return {row: row, index: index};
+      }).sort(compareUnitEntries);
     }
     var selectedVisibleIndex = visibleUnits.findIndex(function (entry) { return entry.index === state.unitIndex; });
     if (selectedVisibleIndex < 0 && visibleUnits.length) {
