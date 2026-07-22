@@ -1,13 +1,17 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.6.3";
+  var VERSION = "4.0.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
   // Apps Script 서버의 요청당 안전 상한인 100건까지 한 번에 저장한다.
   // 실패한 묶음은 기존 재시도 로직이 같은 범위를 다시 전송한다.
   var BATCH_SIZE = 100;
+  var CITY_PROGRESS_KEY = "js_naver_daejeon_progress_v1";
+  var CITY_TILE_MAX_PAGES = 80;
+  var CITY_MAX_SPLIT_DEPTH = 4;
+  var DAEJEON_BOUNDS = {left: 127.20, right: 127.57, bottom: 36.18, top: 36.50};
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
@@ -67,6 +71,7 @@
   var progressBarElement = panel.querySelector("[data-role=progress-bar]");
   var saveButton = panel.querySelector("[data-action=save]");
   var retryButton = panel.querySelector("[data-action=retry]");
+  var cityButton = panel.querySelector("[data-action=city]");
   var closeButton = panel.querySelector("[data-action=close]");
 
   patchNetwork();
@@ -85,7 +90,11 @@
     },
     capturePayload: capturePayload,
     collectAll: collectAll,
-    normalize: normalize
+    normalize: normalize,
+    getBoundsSchema: getBoundsSchema,
+    buildTileUrl: buildTileUrl,
+    createInitialCityTiles: createInitialCityTiles,
+    collectCityTile: collectCityTile
   };
 
   function createPanel() {
@@ -122,7 +131,8 @@
         "#" + PANEL_ID + " button.jsn-btn{height:46px;border-radius:11px;font-size:14px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
-        "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled{" +
+        "#" + PANEL_ID + " .jsn-city{grid-column:1/-1;border:1px solid #1687e8;background:#eaf5ff;color:#0963b5}" +
+        "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled,#" + PANEL_ID + " .jsn-city:disabled{" +
         "cursor:not-allowed;background:#d2ded7;color:#f8faf9;border-color:#d2ded7}" +
         "@media(max-width:640px){#" + PANEL_ID + "{right:8px;bottom:8px;width:calc(100vw - 16px)}}";
       document.head.appendChild(style);
@@ -145,6 +155,7 @@
         '<div class="jsn-actions">' +
           '<button type="button" class="jsn-btn jsn-retry" data-action="retry">현재 목록 다시 감지</button>' +
           '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>클러스터 전체 저장</button>' +
+          '<button type="button" class="jsn-btn jsn-city" data-action="city" disabled>대전 전체 이어서 수집</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(element);
@@ -154,6 +165,7 @@
   function bindEvents() {
     saveButton.addEventListener("click", collectAndSave);
     retryButton.addEventListener("click", discoverExistingRequest);
+    cityButton.addEventListener("click", collectDaejeonAll);
     document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
       panel.style.display = "none";
@@ -191,6 +203,7 @@
       );
       discoverExistingRequest();
     }
+    updateCityButton();
   }
 
   function setStatus(title, detail) {
@@ -390,6 +403,8 @@
   function showCapture(capture) {
     var count = capture.articles.length;
     var expected = capture.expected;
+    cityButton.disabled = !getBoundsSchema(capture.responseUrl);
+    updateCityButton();
     if (!capture.prepared) {
       setStatus(
         "클러스터 전체 개수 확인 중",
@@ -405,6 +420,16 @@
     );
     saveButton.disabled = false;
     saveButton.textContent = "클러스터 전체 저장";
+  }
+
+  function updateCityButton() {
+    if (!cityButton || state.busy) return;
+    var progress = loadCityProgress();
+    if (progress && Array.isArray(progress.queue) && progress.queue.length) {
+      cityButton.textContent = "대전 전체 이어서 · 남은 구역 " + progress.queue.length + "개";
+    } else {
+      cityButton.textContent = "대전 전체 이어서 수집";
+    }
   }
 
   async function prepareFullCapture(capture, prepareId) {
@@ -541,6 +566,218 @@
 
     state.collected = Array.from(found.values());
     return state.collected;
+  }
+
+  function getBoundsSchema(value) {
+    var url;
+    try { url = new URL(value); } catch (_) { return null; }
+    var schemas = [
+      {left: "leftLon", right: "rightLon", bottom: "bottomLat", top: "topLat"},
+      {left: "lft", right: "rgt", bottom: "btm", top: "top"},
+      {left: "left", right: "right", bottom: "bottom", top: "top"}
+    ];
+    for (var i = 0; i < schemas.length; i += 1) {
+      var schema = schemas[i];
+      if ([schema.left, schema.right, schema.bottom, schema.top].every(function(key) {
+        return url.searchParams.has(key);
+      })) return schema;
+    }
+    return null;
+  }
+
+  function createInitialCityTiles() {
+    var tiles = [];
+    var columns = 5;
+    var rows = 5;
+    var width = (DAEJEON_BOUNDS.right - DAEJEON_BOUNDS.left) / columns;
+    var height = (DAEJEON_BOUNDS.top - DAEJEON_BOUNDS.bottom) / rows;
+    for (var row = 0; row < rows; row += 1) {
+      for (var column = 0; column < columns; column += 1) {
+        tiles.push({
+          left: DAEJEON_BOUNDS.left + column * width,
+          right: DAEJEON_BOUNDS.left + (column + 1) * width,
+          bottom: DAEJEON_BOUNDS.bottom + row * height,
+          top: DAEJEON_BOUNDS.bottom + (row + 1) * height,
+          depth: 0,
+          key: row + "-" + column
+        });
+      }
+    }
+    return tiles;
+  }
+
+  function splitCityTile(tile) {
+    var middleLon = (tile.left + tile.right) / 2;
+    var middleLat = (tile.bottom + tile.top) / 2;
+    var nextDepth = (tile.depth || 0) + 1;
+    return [
+      {left: tile.left, right: middleLon, bottom: tile.bottom, top: middleLat},
+      {left: middleLon, right: tile.right, bottom: tile.bottom, top: middleLat},
+      {left: tile.left, right: middleLon, bottom: middleLat, top: tile.top},
+      {left: middleLon, right: tile.right, bottom: middleLat, top: tile.top}
+    ].map(function(part, index) {
+      part.depth = nextDepth;
+      part.key = tile.key + "." + index;
+      return part;
+    });
+  }
+
+  function buildTileUrl(templateUrl, schema, tile, page) {
+    var url = new URL(templateUrl);
+    ["markerId", "markerid", "cluster", "clusterId", "clusterid"].forEach(function(key) {
+      url.searchParams.delete(key);
+    });
+    url.searchParams.set(schema.left, tile.left.toFixed(6));
+    url.searchParams.set(schema.right, tile.right.toFixed(6));
+    url.searchParams.set(schema.bottom, tile.bottom.toFixed(6));
+    url.searchParams.set(schema.top, tile.top.toFixed(6));
+    if (url.searchParams.has("cortarNo")) url.searchParams.set("cortarNo", "3000000000");
+    url.searchParams.set("page", String(page || 1));
+    return url.href;
+  }
+
+  function loadCityProgress() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(CITY_PROGRESS_KEY) || "null");
+      return parsed && parsed.version === 1 ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveCityProgress(progress) {
+    try { localStorage.setItem(CITY_PROGRESS_KEY, JSON.stringify(progress)); } catch (_) {}
+  }
+
+  function clearCityProgress() {
+    try { localStorage.removeItem(CITY_PROGRESS_KEY); } catch (_) {}
+  }
+
+  async function collectCityTile(templateUrl, schema, tile, requestOptions) {
+    var found = new Map();
+    var lastJson = {};
+    var truncated = false;
+    for (var page = 1; page <= CITY_TILE_MAX_PAGES; page += 1) {
+      var url = buildTileUrl(templateUrl, schema, tile, page);
+      var response = await fetchPageWithRetry(url, requestOptions, 3);
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) throw new Error("네이버 로그인이 만료되었습니다. 다시 로그인한 뒤 이어서 수집해 주세요.");
+        throw new Error("대전 구역 조회 실패(HTTP " + response.status + ")");
+      }
+      lastJson = await response.json();
+      var items = articleList(lastJson);
+      var before = found.size;
+      items.forEach(function(article) {
+        if (article && article.articleNo) found.set(String(article.articleNo), article);
+      });
+      if (!items.length || found.size === before || hasMore(lastJson) === false) break;
+      var expected = expectedCount(lastJson);
+      if (expected && found.size >= expected) break;
+      if (page === CITY_TILE_MAX_PAGES) truncated = hasMore(lastJson) !== false;
+      await delay(180);
+    }
+    return {articles: Array.from(found.values()), truncated: truncated};
+  }
+
+  async function saveCityArticles(rawArticles, progress) {
+    var items = rawArticles.map(normalize).filter(function(item) { return item.articleNo; });
+    var seen = new Set(progress.seenIds || []);
+    items = items.filter(function(item) { return !seen.has(String(item.articleNo)); });
+    for (var index = 0; index < items.length; index += BATCH_SIZE) {
+      var batch = items.slice(index, index + BATCH_SIZE);
+      var result = await postBatchWithRetry(batch, 3);
+      var failed = Number(result.failed) || 0;
+      if (failed) throw new Error("일부 매물 저장에 실패했습니다. 같은 구역부터 다시 이어서 처리합니다.");
+      progress.saved += Number(result.saved) || 0;
+      progress.duplicate += Number(result.duplicate) || 0;
+      batch.forEach(function(item) { seen.add(String(item.articleNo)); });
+      progress.seenIds = Array.from(seen);
+      saveCityProgress(progress);
+      await delay(220);
+    }
+    return items.length;
+  }
+
+  async function collectDaejeonAll() {
+    if (state.busy) return;
+    if (!state.capture) {
+      return setStatus("대전 전체 수집 준비 필요", "네이버 지도에서 대전 지역을 연 뒤 ‘현재 목록 다시 감지’를 눌러주세요.");
+    }
+    var schema = getBoundsSchema(state.capture.responseUrl);
+    if (!schema) {
+      return setStatus(
+        "대전 전체 범위 요청을 찾지 못했습니다.",
+        "숫자 클러스터를 누르지 말고 대전 지도가 보이는 상태에서 ‘현재 목록 다시 감지’를 눌러주세요."
+      );
+    }
+
+    var progress = loadCityProgress();
+    if (!progress || !Array.isArray(progress.queue) || !progress.queue.length) {
+      progress = {
+        version: 1,
+        startedAt: new Date().toISOString(),
+        queue: createInitialCityTiles(),
+        completed: 0,
+        seenIds: [],
+        saved: 0,
+        duplicate: 0,
+        failed: 0
+      };
+      saveCityProgress(progress);
+    }
+
+    state.busy = true;
+    state.prepareId += 1;
+    saveButton.disabled = true;
+    retryButton.disabled = true;
+    cityButton.disabled = true;
+    var templateUrl = state.capture.responseUrl;
+    var requestOptions = replayOptions(state.capture);
+
+    try {
+      while (progress.queue.length) {
+        var tile = progress.queue[0];
+        var totalTiles = progress.completed + progress.queue.length;
+        setStatus(
+          "대전 전체 구역 수집 중",
+          "완료 " + progress.completed + "/" + totalTiles + "구역 · 고유매물 " + progress.seenIds.length + "개\n중단돼도 이 구역부터 이어집니다."
+        );
+        setProgress(progress.completed, totalTiles);
+        var tileResult = await collectCityTile(templateUrl, schema, tile, requestOptions);
+        if (tileResult.truncated) {
+          if ((tile.depth || 0) >= CITY_MAX_SPLIT_DEPTH) {
+            throw new Error("매물이 매우 많은 구역의 세분화 한도에 도달했습니다. 해당 구역부터 다시 이어집니다.");
+          }
+          progress.queue.shift();
+          progress.queue = splitCityTile(tile).concat(progress.queue);
+          saveCityProgress(progress);
+          continue;
+        }
+        await saveCityArticles(tileResult.articles, progress);
+        progress.queue.shift();
+        progress.completed += 1;
+        saveCityProgress(progress);
+        await delay(260);
+      }
+
+      if (!progress.seenIds.length) throw new Error("대전 전체에서 감지된 매물이 없습니다. 네이버의 매물 종류와 거래방식 필터를 확인해 주세요.");
+      setProgress(1, 1);
+      setStatus(
+        "대전 전체 수집 완료",
+        "고유매물 " + progress.seenIds.length + "개 · 신규 " + progress.saved + "개 · 중복 " + progress.duplicate + "개\n모든 대전 구역의 조회가 완료됐습니다."
+      );
+      clearCityProgress();
+    } catch (error) {
+      progress.failed += 1;
+      saveCityProgress(progress);
+      setStatus("대전 전체 수집 일시정지", String(error && error.message ? error.message : error) + "\n다시 누르면 남은 구역부터 이어집니다.");
+    } finally {
+      state.busy = false;
+      retryButton.disabled = false;
+      saveButton.disabled = !(state.capture && state.capture.prepared);
+      cityButton.disabled = !getBoundsSchema(state.capture && state.capture.responseUrl);
+      updateCityButton();
+    }
   }
 
   async function fetchPageWithRetry(url, options, attempts) {
