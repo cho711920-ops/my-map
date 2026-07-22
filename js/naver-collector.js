@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.1.2";
+  var VERSION = "4.1.3";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -12,6 +12,8 @@
   var CITY_FAILED_KEY = "js_naver_daejeon_failed_v1";
   var CITY_TILE_MAX_PAGES = 80;
   var CITY_DISTRICT_MAX_PAGES = 500;
+  var CITY_PAGE_DELAY = 70;
+  var CITY_SAVE_DELAY = 90;
   var CITY_MAX_SPLIT_DEPTH = 4;
   var DAEJEON_BOUNDS = {left: 127.20, right: 127.57, bottom: 36.18, top: 36.50};
   var DAEJEON_DISTRICTS = [
@@ -783,7 +785,7 @@
       progress.seenIds = Array.from(seen);
       saveCityProgress(progress);
       saveCityFailedItems(progress.failedItems);
-      await delay(220);
+      await delay(CITY_SAVE_DELAY);
     }
     return items.length;
   }
@@ -817,10 +819,12 @@
 
   async function collectCityDistrict(templateUrl, district, requestOptions, progress) {
     var startPage = Math.max(1, Number(district.nextPage) || 1);
+    var bufferedArticles = [];
+    var previousSignature = district.lastPageSignature || "";
     for (var page = startPage; page <= CITY_DISTRICT_MAX_PAGES; page += 1) {
       setStatus(
         "대전 5개 구 자동 수집 중",
-        "현재 " + district.name + " " + page + "페이지 · 완료 구역 " + progress.completed + "/5 · 고유매물 " + progress.seenIds.length + "개\n페이지마다 바로 저장하므로 중단돼도 다음 페이지부터 이어집니다."
+        "현재 " + district.name + " " + page + "페이지 · 저장대기 " + bufferedArticles.length + "/100개 · 완료 구역 " + progress.completed + "/5\n최대 100개씩 묶어 빠르게 저장하며, 중단 시 마지막 저장 묶음부터 안전하게 다시 시작합니다."
       );
       var url = buildDistrictUrl(templateUrl, district, page);
       var response = await fetchPageWithRetry(url, requestOptions, 3);
@@ -830,17 +834,35 @@
       }
       var json = await response.json();
       var items = articleList(json);
-      if (!items.length) return {complete: true, pages: page - 1};
+      if (!items.length) {
+        if (bufferedArticles.length) await saveCityArticles(bufferedArticles, progress, {district: district.name, page: page - 1});
+        district.nextPage = page;
+        district.lastPageSignature = previousSignature;
+        saveCityProgress(progress);
+        return {complete: true, pages: page - 1};
+      }
       var signature = items.map(function(article) { return article && article.articleNo; }).filter(Boolean).join(",");
-      if (signature && signature === district.lastPageSignature) return {complete: true, pages: page - 1};
+      if (signature && signature === previousSignature) {
+        if (bufferedArticles.length) await saveCityArticles(bufferedArticles, progress, {district: district.name, page: page - 1});
+        district.nextPage = page;
+        district.lastPageSignature = previousSignature;
+        saveCityProgress(progress);
+        return {complete: true, pages: page - 1};
+      }
 
-      await saveCityArticles(items, progress, {district: district.name, page: page});
-      district.lastPageSignature = signature;
-      district.nextPage = page + 1;
-      saveCityProgress(progress);
+      bufferedArticles = bufferedArticles.concat(items);
+      previousSignature = signature;
+      var isLastPage = hasMore(json) === false;
+      if (bufferedArticles.length >= BATCH_SIZE || isLastPage) {
+        await saveCityArticles(bufferedArticles, progress, {district: district.name, page: page});
+        bufferedArticles = [];
+        district.lastPageSignature = signature;
+        district.nextPage = page + 1;
+        saveCityProgress(progress);
+      }
 
-      if (hasMore(json) === false) return {complete: true, pages: page};
-      await delay(180);
+      if (isLastPage) return {complete: true, pages: page};
+      await delay(CITY_PAGE_DELAY);
     }
     throw new Error(district.name + "가 500페이지를 넘었습니다. 저장된 다음 페이지부터 이어지도록 일시정지했습니다.");
   }
