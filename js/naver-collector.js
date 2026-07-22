@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.0.0";
+  var VERSION = "4.1.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -12,6 +12,13 @@
   var CITY_TILE_MAX_PAGES = 80;
   var CITY_MAX_SPLIT_DEPTH = 4;
   var DAEJEON_BOUNDS = {left: 127.20, right: 127.57, bottom: 36.18, top: 36.50};
+  var DAEJEON_DISTRICTS = [
+    {name: "동구", cortarNo: "3011000000"},
+    {name: "중구", cortarNo: "3014000000"},
+    {name: "서구", cortarNo: "3017000000"},
+    {name: "유성구", cortarNo: "3020000000"},
+    {name: "대덕구", cortarNo: "3023000000"}
+  ];
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
@@ -92,8 +99,11 @@
     collectAll: collectAll,
     normalize: normalize,
     getBoundsSchema: getBoundsSchema,
+    getCityStrategy: getCityStrategy,
     buildTileUrl: buildTileUrl,
+    buildDistrictUrl: buildDistrictUrl,
     createInitialCityTiles: createInitialCityTiles,
+    createInitialDistricts: createInitialDistricts,
     collectCityTile: collectCityTile
   };
 
@@ -403,7 +413,7 @@
   function showCapture(capture) {
     var count = capture.articles.length;
     var expected = capture.expected;
-    cityButton.disabled = !getBoundsSchema(capture.responseUrl);
+    cityButton.disabled = !getCityStrategy(capture.responseUrl);
     updateCityButton();
     if (!capture.prepared) {
       setStatus(
@@ -585,6 +595,27 @@
     return null;
   }
 
+  function getCityStrategy(value) {
+    var schema = getBoundsSchema(value);
+    if (schema) return {mode: "bounds", schema: schema};
+    try {
+      var url = new URL(value);
+      if (url.searchParams.has("cortarNo")) return {mode: "district", schema: null};
+    } catch (_) {}
+    return null;
+  }
+
+  function createInitialDistricts() {
+    return DAEJEON_DISTRICTS.map(function(district) {
+      return {
+        name: district.name,
+        cortarNo: district.cortarNo,
+        depth: 0,
+        key: "gu-" + district.cortarNo
+      };
+    });
+  }
+
   function createInitialCityTiles() {
     var tiles = [];
     var columns = 5;
@@ -636,6 +667,16 @@
     return url.href;
   }
 
+  function buildDistrictUrl(templateUrl, district, page) {
+    var url = new URL(templateUrl);
+    ["markerId", "markerid", "cluster", "clusterId", "clusterid"].forEach(function(key) {
+      url.searchParams.delete(key);
+    });
+    url.searchParams.set("cortarNo", district.cortarNo);
+    url.searchParams.set("page", String(page || 1));
+    return url.href;
+  }
+
   function loadCityProgress() {
     try {
       var parsed = JSON.parse(localStorage.getItem(CITY_PROGRESS_KEY) || "null");
@@ -653,12 +694,16 @@
     try { localStorage.removeItem(CITY_PROGRESS_KEY); } catch (_) {}
   }
 
-  async function collectCityTile(templateUrl, schema, tile, requestOptions) {
+  async function collectCityTile(templateUrl, strategy, tile, requestOptions) {
+    // v4.0 테스트/기존 호출의 bounds 스키마 인자도 계속 허용합니다.
+    if (strategy && !strategy.mode) strategy = {mode: "bounds", schema: strategy};
     var found = new Map();
     var lastJson = {};
     var truncated = false;
     for (var page = 1; page <= CITY_TILE_MAX_PAGES; page += 1) {
-      var url = buildTileUrl(templateUrl, schema, tile, page);
+      var url = strategy.mode === "district"
+        ? buildDistrictUrl(templateUrl, tile, page)
+        : buildTileUrl(templateUrl, strategy.schema, tile, page);
       var response = await fetchPageWithRetry(url, requestOptions, 3);
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) throw new Error("네이버 로그인이 만료되었습니다. 다시 로그인한 뒤 이어서 수집해 주세요.");
@@ -703,20 +748,21 @@
     if (!state.capture) {
       return setStatus("대전 전체 수집 준비 필요", "네이버 지도에서 대전 지역을 연 뒤 ‘현재 목록 다시 감지’를 눌러주세요.");
     }
-    var schema = getBoundsSchema(state.capture.responseUrl);
-    if (!schema) {
+    var strategy = getCityStrategy(state.capture.responseUrl);
+    if (!strategy) {
       return setStatus(
-        "대전 전체 범위 요청을 찾지 못했습니다.",
-        "숫자 클러스터를 누르지 말고 대전 지도가 보이는 상태에서 ‘현재 목록 다시 감지’를 눌러주세요."
+        "대전 지역 요청을 찾지 못했습니다.",
+        "지도 상단에서 대전의 아무 구나 선택한 뒤 ‘현재 목록 다시 감지’를 눌러주세요. 클러스터나 동은 누르지 않아도 됩니다."
       );
     }
 
     var progress = loadCityProgress();
-    if (!progress || !Array.isArray(progress.queue) || !progress.queue.length) {
+    if (!progress || progress.mode !== strategy.mode || !Array.isArray(progress.queue) || !progress.queue.length) {
       progress = {
         version: 1,
+        mode: strategy.mode,
         startedAt: new Date().toISOString(),
-        queue: createInitialCityTiles(),
+        queue: strategy.mode === "district" ? createInitialDistricts() : createInitialCityTiles(),
         completed: 0,
         seenIds: [],
         saved: 0,
@@ -739,12 +785,15 @@
         var tile = progress.queue[0];
         var totalTiles = progress.completed + progress.queue.length;
         setStatus(
-          "대전 전체 구역 수집 중",
-          "완료 " + progress.completed + "/" + totalTiles + "구역 · 고유매물 " + progress.seenIds.length + "개\n중단돼도 이 구역부터 이어집니다."
+          strategy.mode === "district" ? "대전 5개 구 자동 수집 중" : "대전 전체 구역 수집 중",
+          (tile.name ? "현재 " + tile.name + " · " : "") + "완료 " + progress.completed + "/" + totalTiles + "구역 · 고유매물 " + progress.seenIds.length + "개\n중단돼도 이 구역부터 이어집니다."
         );
         setProgress(progress.completed, totalTiles);
-        var tileResult = await collectCityTile(templateUrl, schema, tile, requestOptions);
+        var tileResult = await collectCityTile(templateUrl, strategy, tile, requestOptions);
         if (tileResult.truncated) {
+          if (strategy.mode === "district") {
+            throw new Error(tile.name + "의 조회량이 한도를 넘었습니다. 해당 구의 매물 종류나 거래방식 필터를 나눠 수집해 주세요.");
+          }
           if ((tile.depth || 0) >= CITY_MAX_SPLIT_DEPTH) {
             throw new Error("매물이 매우 많은 구역의 세분화 한도에 도달했습니다. 해당 구역부터 다시 이어집니다.");
           }
@@ -775,7 +824,7 @@
       state.busy = false;
       retryButton.disabled = false;
       saveButton.disabled = !(state.capture && state.capture.prepared);
-      cityButton.disabled = !getBoundsSchema(state.capture && state.capture.responseUrl);
+      cityButton.disabled = !getCityStrategy(state.capture && state.capture.responseUrl);
       updateCityButton();
     }
   }

@@ -1681,6 +1681,40 @@ function saveItemMemo(encodedKey) {
 }
 
 
+function getCustomerMatchStatus(item) {
+  var propertyId = String(item && item.propertyId || "").trim();
+  return propertyId && window.operationsMatchStatusByPropertyId
+    ? String(window.operationsMatchStatusByPropertyId[propertyId] || "").trim()
+    : "";
+}
+
+function buildCustomerMatchInlineControls(item) {
+  var propertyId = String(item && item.propertyId || "").trim();
+  var status = getCustomerMatchStatus(item);
+  if (!propertyId || !status) return "";
+  var encodedId = encodeURIComponent(propertyId);
+  var visualLabel = status === "소개" ? "소개한 매물" : (status === "보류" ? "보류한 매물" : (status === "신규" ? "신규매물" : ""));
+  return '<div class="customer-match-inline-actions" onclick="event.stopPropagation()">' +
+    (visualLabel ? '<span class="customer-match-inline-badge status-' + (status === "소개" ? "introduced" : (status === "보류" ? "held" : "new")) + '">' + visualLabel + '</span>' : '<span class="customer-match-inline-badge status-contacted">연락 기록됨</span>') +
+    (status === "신규" ? '<button type="button" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'연락\')">연락함</button>' : '') +
+    (status !== "소개" ? '<button type="button" class="introduce" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'소개\')">소개함</button>' : '') +
+    (status !== "보류" ? '<button type="button" class="hold" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'보류\')">보류함</button>' : '') +
+  '</div>';
+}
+
+window.handleCustomerMatchListAction = function(button, encodedPropertyId, nextStatus) {
+  var propertyId = decodeURIComponent(encodedPropertyId || "");
+  if (!propertyId || typeof window.updateCustomerMatchFromMap !== "function") return;
+  button.disabled = true;
+  var oldText = button.textContent;
+  button.textContent = "저장 중…";
+  window.updateCustomerMatchFromMap(propertyId, nextStatus).catch(function(error) {
+    button.disabled = false;
+    button.textContent = oldText;
+    alert((error && error.message) || "고객 매칭 상태를 저장하지 못했습니다.");
+  });
+};
+
 function addListItem(item, appendTarget) {
   var div = document.createElement("div");
   var printSelected = selectedPrintKeys.includes(item.key);
@@ -1692,7 +1726,10 @@ function addListItem(item, appendTarget) {
     (selectedItemKey === item.key ? " selected" : "") +
     (isDone(item) ? " done" : "") +
     (printSelected ? " print-selected" : "") +
-    (memoOpen ? " memo-open" : "");
+    (memoOpen ? " memo-open" : "") +
+    (getCustomerMatchStatus(item) === "신규" ? " customer-match-new" : "") +
+    (getCustomerMatchStatus(item) === "소개" ? " customer-match-introduced" : "") +
+    (getCustomerMatchStatus(item) === "보류" ? " customer-match-held" : "");
 
   var doneLabel = isDone(item)
     ? '<span class="done-badge">계약완료</span>'
@@ -1720,6 +1757,7 @@ function addListItem(item, appendTarget) {
     ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
         'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedKey + '\')">링크</button>'
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
+  var customerMatchControls = buildCustomerMatchInlineControls(item);
 
   var memoPanel = "";
 
@@ -1776,6 +1814,8 @@ function addListItem(item, appendTarget) {
         (memoOpen ? '메모 ▲' : '메모 ▼') +
       '</button>' +
     '</div>' +
+
+    customerMatchControls +
 
     '<div class="item-identity-row">' +
       doneLabel +

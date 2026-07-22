@@ -9,10 +9,14 @@
     customers: [],
     matchHeaders: [],
     matches: [],
-    selectedCustomerId: ""
+    selectedCustomerId: "",
+    customerSearch: "",
+    matchStatusFilter: "all"
   };
 
   window.operationsMatchPropertyIds = null;
+  window.operationsMatchStatusByPropertyId = {};
+  window.operationsMatchContextByPropertyId = {};
 
   function text(value) {
     return String(value == null ? "" : value).trim();
@@ -141,6 +145,7 @@
       total: rows.length,
       fresh: rows.filter(function(row) { return matchStatus(row) === "신규"; }).length,
       introduced: rows.filter(function(row) { return matchStatus(row) === "소개"; }).length,
+      held: rows.filter(function(row) { return matchStatus(row) === "보류"; }).length,
       overdue: rows.filter(isOverdueMatch).length
     };
   }
@@ -153,7 +158,15 @@
       renderMatches("");
       return;
     }
-    list.innerHTML = state.customers.map(function(row) {
+    var search = text(state.customerSearch).toLowerCase();
+    var filteredCustomers = state.customers.filter(function(row) {
+      if (!search) return true;
+      return ["고객명/상호", "희망지역", "연락처", "상태"].some(function(header) {
+        return field(row, state.customerHeaders, header).toLowerCase().indexOf(search) >= 0;
+      });
+    });
+    list.innerHTML = '<div class="operations-customer-tools"><input id="operationsCustomerSearch" type="search" placeholder="고객명·지역 검색" value="' + escape(state.customerSearch) + '"><span>총 ' + state.customers.length.toLocaleString("ko-KR") + '명</span></div>' +
+      '<div class="operations-customer-grid">' + filteredCustomers.map(function(row) {
       var id = field(row, state.customerHeaders, "고객ID");
       var name = field(row, state.customerHeaders, "고객명/상호") || "이름 미입력";
       var status = field(row, state.customerHeaders, "상태") || "상담중";
@@ -168,13 +181,22 @@
         '<span>' + escape(region) + '</span>' +
         (request ? '<small>' + escape(request) + '</small>' : '') +
         '<b>' + stats.total.toLocaleString("ko-KR") + '건 매칭 · 신규 ' + stats.fresh.toLocaleString("ko-KR") + '건</b>' +
-        (stats.introduced ? '<em>소개함 ' + stats.introduced.toLocaleString("ko-KR") + '건</em>' : '') +
+        (stats.introduced ? '<em>소개 ' + stats.introduced.toLocaleString("ko-KR") + '</em>' : '') +
+        (stats.held ? '<u>보류 ' + stats.held.toLocaleString("ko-KR") + '</u>' : '') +
         (stats.overdue ? '<i>미연락 경고 ' + stats.overdue.toLocaleString("ko-KR") + '건</i>' : '') +
       '</button>';
-    }).join("");
+    }).join("") + '</div>';
+    var searchInput = document.getElementById("operationsCustomerSearch");
+    if (searchInput) searchInput.addEventListener("input", function() {
+      state.customerSearch = searchInput.value || "";
+      renderCustomers();
+      var next = document.getElementById("operationsCustomerSearch");
+      if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+    });
     Array.prototype.forEach.call(list.querySelectorAll("[data-customer-id]"), function(button) {
       button.addEventListener("click", function() {
         state.selectedCustomerId = button.getAttribute("data-customer-id") || "";
+        state.matchStatusFilter = "all";
         renderCustomers();
         renderMatches(state.selectedCustomerId);
       });
@@ -199,22 +221,41 @@
       list.innerHTML = '<div class="operations-empty"><b>고객을 선택해 주세요.</b><span>선택한 고객의 조건에 맞는 대표매물을 점수순으로 보여드립니다.</span></div>';
       return;
     }
-    var rows = state.matches.filter(function(row) {
+    var allRows = state.matches.filter(function(row) {
       return field(row, state.matchHeaders, "고객ID") === customerId;
     }).sort(function(a, b) {
       return number(field(b, state.matchHeaders, "점수")) - number(field(a, state.matchHeaders, "점수"));
+    });
+    var counts = {
+      all: allRows.length,
+      fresh: allRows.filter(function(row) { return matchStatus(row) === "신규"; }).length,
+      introduced: allRows.filter(function(row) { return matchStatus(row) === "소개"; }).length,
+      held: allRows.filter(function(row) { return matchStatus(row) === "보류"; }).length
+    };
+    var rows = allRows.filter(function(row) {
+      if (state.matchStatusFilter === "fresh") return matchStatus(row) === "신규";
+      if (state.matchStatusFilter === "introduced") return matchStatus(row) === "소개";
+      if (state.matchStatusFilter === "held") return matchStatus(row) === "보류";
+      return true;
     });
     var customerRow = state.customers.find(function(row) {
       return field(row, state.customerHeaders, "고객ID") === customerId;
     });
     var customerName = customerRow ? field(customerRow, state.customerHeaders, "고객명/상호") : "선택 고객";
-    var overdueCount = rows.filter(isOverdueMatch).length;
-    var newCount = rows.filter(function(row) { return matchStatus(row) === "신규"; }).length;
+    var overdueCount = allRows.filter(isOverdueMatch).length;
     var header = (overdueCount ? '<div class="operations-customer-alert"><b>연락 확인 필요</b><span>소개 가능한 신규매물 중 ' + overdueCount.toLocaleString("ko-KR") + '건이 ' + (number(state.dashboard && state.dashboard.contactReminderDays) || 3) + '일 이상 미연락 상태입니다.</span></div>' : '') +
-      '<div class="operations-match-heading"><div><span>' + escape(customerName) + '</span><b>' + rows.length.toLocaleString("ko-KR") + '건 추천 · 신규 ' + newCount.toLocaleString("ko-KR") + '건</b></div>' +
-      '<button type="button" onclick="showSelectedCustomerMatchesOnMap()"' + (rows.length ? '' : ' disabled') + '>이 매물만 지도에 표시</button></div>';
-    if (!rows.length) {
+      '<div class="operations-match-heading"><div><span>' + escape(customerName) + '</span><b>' + counts.all.toLocaleString("ko-KR") + '건 추천</b></div>' +
+      '<button type="button" onclick="showSelectedCustomerMatchesOnMap()"' + (allRows.length ? '' : ' disabled') + '>이 매물만 지도에 표시</button></div>' +
+      '<div class="operations-match-filters">' +
+        matchFilterButton("all", "전체", counts.all) + matchFilterButton("fresh", "신규", counts.fresh) +
+        matchFilterButton("introduced", "소개", counts.introduced) + matchFilterButton("held", "보류", counts.held) +
+      '</div>';
+    if (!allRows.length) {
       list.innerHTML = header + '<div class="operations-empty"><b>현재 조건에 맞는 매물이 없습니다.</b><span>조건을 수정하거나 새 매물이 들어오면 자동으로 다시 비교됩니다.</span></div>';
+      return;
+    }
+    if (!rows.length) {
+      list.innerHTML = header + '<div class="operations-empty"><b>이 상태의 매물이 없습니다.</b><span>위의 다른 상태를 눌러 확인해 주세요.</span></div>';
       return;
     }
     list.innerHTML = header + '<div class="operations-match-cards">' + rows.map(function(row) {
@@ -229,7 +270,8 @@
       var address = property ? [property.address, property.room].filter(Boolean).join(" · ") : "지도 데이터를 새로고침하면 상세정보가 연결됩니다.";
       var price = property ? "보증금 " + number(property.deposit).toLocaleString("ko-KR") + " / 월세 " + number(property.rent).toLocaleString("ko-KR") + " · " + number(property.area) + "평" : "";
       var introduced = status === "소개";
-      return '<article class="operations-match-card' + (introduced ? ' introduced' : '') + (isOverdueMatch(row) ? ' overdue' : '') + '">' +
+      var held = status === "보류";
+      return '<article class="operations-match-card' + (introduced ? ' introduced' : '') + (held ? ' held' : '') + (isOverdueMatch(row) ? ' overdue' : '') + '">' +
         '<div class="operations-match-score"><b>' + escape(score) + '</b><span>점</span></div>' +
         '<div class="operations-match-body"><div class="operations-match-title"><strong>' + escape(title) + '</strong><span>' + escape(status) + '</span></div><span>' + escape(address) + '</span>' +
           (price ? '<b>' + escape(price) + '</b>' : '') +
@@ -238,6 +280,7 @@
           '<div class="operations-match-actions">' +
             (status === "신규" ? '<button type="button" data-match-action="연락" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">연락함</button>' : (status === "연락" ? '<span>✓ 연락 기록됨</span>' : '')) +
             (introduced ? '<span class="introduced-label">✓ 소개한 매물</span>' : '<button type="button" class="introduce" data-match-action="소개" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">소개함</button>') +
+            (held ? '<span class="held-label">보류한 매물</span>' : (introduced ? '' : '<button type="button" class="hold" data-match-action="보류" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">보류함</button>')) +
           '</div>' +
         '</div>' +
       '</article>';
@@ -246,6 +289,15 @@
       button.addEventListener("click", function() { updateCustomerMatchStatus(button); });
     });
   }
+
+  function matchFilterButton(key, label, count) {
+    return '<button type="button" class="' + (state.matchStatusFilter === key ? 'active' : '') + '" onclick="setCustomerMatchStatusFilter(\'' + key + '\')">' + label + ' <b>' + Number(count || 0).toLocaleString("ko-KR") + '</b></button>';
+  }
+
+  window.setCustomerMatchStatusFilter = function(filter) {
+    state.matchStatusFilter = filter || "all";
+    renderMatches(state.selectedCustomerId);
+  };
 
   function updateCustomerMatchStatus(button) {
     var status = button.getAttribute("data-match-action") || "";
@@ -346,6 +398,19 @@
       return field(row, state.matchHeaders, "대표매물ID");
     }).filter(Boolean);
     window.operationsMatchPropertyIds = new Set(ids);
+    window.operationsMatchStatusByPropertyId = {};
+    window.operationsMatchContextByPropertyId = {};
+    rows.forEach(function(row) {
+      var propertyId = field(row, state.matchHeaders, "대표매물ID");
+      if (!propertyId) return;
+      window.operationsMatchStatusByPropertyId[propertyId] = matchStatus(row);
+      window.operationsMatchContextByPropertyId[propertyId] = {
+        matchId: field(row, state.matchHeaders, "매칭ID"),
+        customerId: customerId,
+        propertyId: propertyId,
+        status: matchStatus(row)
+      };
+    });
 
     var customerRow = state.customers.find(function(row) {
       return field(row, state.customerHeaders, "고객ID") === customerId;
@@ -354,7 +419,8 @@
     var status = document.getElementById("customerMatchMapStatus");
     var statusText = document.getElementById("customerMatchMapStatusText");
     if (status) status.hidden = false;
-    if (statusText) statusText.textContent = name + " · 매칭 " + ids.length + "건만 표시 중";
+    var stats = customerMatchStats(customerId);
+    if (statusText) statusText.textContent = name + " · 신규 " + stats.fresh + " · 소개 " + stats.introduced + " · 보류 " + stats.held;
 
     var matched = (window.allItems || []).filter(function(item) {
       return window.operationsMatchPropertyIds.has(text(item.propertyId));
@@ -377,9 +443,33 @@
 
   window.clearCustomerMatchMapFilter = function() {
     window.operationsMatchPropertyIds = null;
+    window.operationsMatchStatusByPropertyId = {};
+    window.operationsMatchContextByPropertyId = {};
     var status = document.getElementById("customerMatchMapStatus");
     if (status) status.hidden = true;
     if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  window.updateCustomerMatchFromMap = function(propertyId, nextStatus) {
+    var context = window.operationsMatchContextByPropertyId[text(propertyId)];
+    if (!context || !context.matchId) return Promise.reject(new Error("고객 매칭정보를 찾지 못했습니다."));
+    return apiPost("updateCustomerMatch", {
+      matchId: context.matchId,
+      customerId: context.customerId,
+      masterId: context.propertyId,
+      status: nextStatus
+    }).then(function() {
+      context.status = nextStatus;
+      window.operationsMatchStatusByPropertyId[text(propertyId)] = nextStatus;
+      state.loaded = false;
+      var matchedRow = state.matches.find(function(row) {
+        return field(row, state.matchHeaders, "매칭ID") === context.matchId;
+      });
+      var statusIndex = headerIndex(state.matchHeaders, "진행상태");
+      if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = nextStatus;
+      if (typeof window.applyFilter === "function") window.applyFilter();
+      return nextStatus;
+    });
   };
 
   function refreshCustomerAlertBadge() {
