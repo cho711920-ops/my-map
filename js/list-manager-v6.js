@@ -7,6 +7,8 @@
   var LEGACY_MIGRATION_KEY = "js_favorite_lists_v6_migrated";
   var currentManagerType = "favorite";
   var currentItemKey = "";
+  var cloudSaveTimers = {};
+  var cloudSyncReady = false;
 
   function getSelectedItemKeys() {
     var keys = Array.isArray(window.selectedPrintKeys) ? window.selectedPrintKeys : [];
@@ -62,6 +64,62 @@
   function saveLists(type, lists) {
     localStorage.setItem(storageKey(type), JSON.stringify(lists));
     if (type === "favorite") syncLegacyFavoriteKeys(lists);
+    scheduleCloudSave(type, lists);
+  }
+
+  function cloudScope(type) {
+    return type === "visit" ? "visitLists" : "favorites";
+  }
+
+  function scheduleCloudSave(type, lists) {
+    if (!cloudSyncReady) return;
+    window.clearTimeout(cloudSaveTimers[type]);
+    cloudSaveTimers[type] = window.setTimeout(function () {
+      fetch(window.saveApiURL || "/api/apps-script", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "saveCloudState",
+          scope: cloudScope(type),
+          recordKey: "default",
+          data: lists,
+          version: Date.now()
+        })
+      }).catch(function(error) {
+        console.warn(typeLabel(type) + "목록 동기화 실패", error);
+      });
+    }, 350);
+  }
+
+  async function loadCloudLists(type) {
+    var url = (window.saveApiURL || "/api/apps-script") +
+      "?action=loadCloudState&scope=" + encodeURIComponent(cloudScope(type)) +
+      "&recordKey=default&_=" + Date.now();
+    var response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) throw new Error("로그인 계정의 목록을 불러오지 못했습니다.");
+    var result = await response.json();
+    if (!result.ok) throw new Error(result.message || "목록 동기화에 실패했습니다.");
+    var local = loadLists(type);
+    if (result.found && Array.isArray(result.data)) {
+      localStorage.setItem(storageKey(type), JSON.stringify(result.data));
+      if (type === "favorite") syncLegacyFavoriteKeys(result.data);
+      return true;
+    }
+    return false;
+  }
+
+  async function syncListsFromCloud() {
+    try {
+      var found = await Promise.all([loadCloudLists("favorite"), loadCloudLists("visit")]);
+      cloudSyncReady = true;
+      if (!found[0] && loadLists("favorite").length) scheduleCloudSave("favorite", loadLists("favorite"));
+      if (!found[1] && loadLists("visit").length) scheduleCloudSave("visit", loadLists("visit"));
+      if (typeof window.applyFilter === "function") window.applyFilter();
+    } catch (error) {
+      cloudSyncReady = true;
+      console.warn("로그인 계정 목록 동기화 실패", error);
+    }
   }
 
   function syncLegacyFavoriteKeys(lists) {
@@ -745,5 +803,6 @@
   }, 100);
 
   migrateLegacyFavorites();
+  syncListsFromCloud();
   ensureModal();
 })();

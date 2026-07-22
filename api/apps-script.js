@@ -14,13 +14,13 @@ function upstreamUrl(query) {
 
 export default async function handler(req, res) {
   try {
-    await requireSession(req);
+    const user = await requireSession(req);
     if (req.method !== "GET" && req.method !== "POST") return res.status(405).end();
     if (req.method === "POST") requireSameOrigin(req);
 
     let response;
     if (req.method === "GET") {
-      response = await fetch(upstreamUrl(req.query), { redirect: "follow", cache: "no-store" });
+      response = await fetch(upstreamUrl({ ...req.query, owner: user.email || "" }), { redirect: "follow", cache: "no-store" });
     } else {
       const secret = process.env.APPS_SCRIPT_PROXY_SECRET;
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
         method: "POST",
         redirect: "follow",
         headers: { "content-type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ ...body, proxySecret: secret })
+        body: JSON.stringify({ ...body, owner: user.email || "", proxySecret: secret })
       });
     }
 

@@ -57,6 +57,7 @@
           <div id="v6ActionMenu_view" class="v6-command-dropdown" role="menu">
             <button id="hideDoneBtn" class="hide-done-btn on" type="button" role="menuitemcheckbox" aria-checked="true" onclick="toggleHideDone(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>계약완료 숨김</span></button>
             <button id="gongsilOnlyBtn" class="gongsil-only-btn" type="button" onclick="toggleGongsilOnly(); closeV6ActionMenus()">임장할매물만보기</button>
+            <button id="todayNewBtn" type="button" role="menuitemcheckbox" aria-checked="false" onclick="toggleTodayNewOnly(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>오늘 신규만 보기</span></button>
             <div class="v6-command-divider"></div>
             <button id="favoriteBtn" class="favorite-filter-btn" type="button" onclick="openListManager('favorite'); closeV6ActionMenus()">찜목록</button>
             <button type="button" onclick="openListManager('visit'); closeV6ActionMenus()">임장목록</button>
@@ -416,7 +417,7 @@
 </div>
 
 
-<script src="js/script.js?v=6.4.22-phone-edit"></script>
+<script src="js/script.js?v=6.4.23-today-new"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
 <script src="js/print.js"></script>
@@ -425,7 +426,7 @@
 <script src="js/commercial-public-v6.js?v=6.4.0"></script>
 <script src="js/regional-market-v1.js?v=1.0.4"></script>
 <script src="js/building-register-v6.js?v=6.4.19-collective-register"></script>
-<script src="js/list-manager-v6.js?v=6.4.22-mobile-sort-phone-edit"></script>
+<script src="js/list-manager-v6.js?v=6.4.23-account-sync"></script>
 <script src="js/mobile-detail-fix-v6.js?v=6.4.19-filter-anchor"></script>
 <script src="js/ai-visit-route-v6.js"></script>
 <script src="js/ai-visit-ui-v6.js"></script>

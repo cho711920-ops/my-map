@@ -11,6 +11,7 @@ var selectedItemKey = null;
 var favoriteOnly = false;
 var hideDone = true;
 var gongsilOnly = false;
+var todayNewOnly = false;
 var multiClusterMode = false;
 var selectedGroupKeys = [];
 var preserveActionSelectionDuringRender = false;
@@ -872,10 +873,11 @@ function getFilteredItems() {
     var matchFavorite = !favoriteOnly || isFavorite(item);
     var matchDone = !hideDone || !isDone(item);
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
+    var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
     var inMap = item.latlng && bounds.contain(item.latlng);
 
     return matchCustomerSelection && matchKeyword && matchType && matchIndustry && matchPrice && matchFloor &&
-      matchFavorite && matchDone && matchGongsil && inMap;
+      matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
   });
 
   filtered.sort(function(a, b) {
@@ -993,6 +995,27 @@ function getClusterSourceType(items) {
 
 function getListRenderChunkSize() {
   return window.innerWidth <= 768 ? 36 : 80;
+}
+
+function isTodayRegistration(value) {
+  var text = String(value || "").trim();
+  var match = text.match(/(\d{2,4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (!match) return false;
+  var year = Number(match[1]);
+  if (year < 100) year += 2000;
+  var today = new Date();
+  return year === today.getFullYear() && Number(match[2]) === today.getMonth() + 1 &&
+    Number(match[3]) === today.getDate();
+}
+
+function toggleTodayNewOnly() {
+  todayNewOnly = !todayNewOnly;
+  var button = document.getElementById("todayNewBtn");
+  if (button) {
+    button.classList.toggle("on", todayNewOnly);
+    button.setAttribute("aria-checked", todayNewOnly ? "true" : "false");
+  }
+  applyFilter();
 }
 
 
@@ -1983,6 +2006,7 @@ function resetFilter() {
   favoriteOnly = false;
   hideDone = true;
   gongsilOnly = false;
+  todayNewOnly = false;
   multiClusterMode = false;
   selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜목록";
@@ -1990,6 +2014,11 @@ function resetFilter() {
   updateHideDoneMenuUI();
   document.getElementById("gongsilOnlyBtn").innerText = "임장할매물만보기";
   document.getElementById("gongsilOnlyBtn").classList.remove("on");
+  var todayNewButton = document.getElementById("todayNewBtn");
+  if (todayNewButton) {
+    todayNewButton.classList.remove("on");
+    todayNewButton.setAttribute("aria-checked", "false");
+  }
   updateMultiClusterButton();
   updateMultiClusterStatus();
   selectedGroupKey = null;
