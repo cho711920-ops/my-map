@@ -313,10 +313,10 @@
       state.loaded = false;
       return loadOperationsData(true);
     }).then(function() {
-      setMessage(status === "소개" ? "소개한 매물로 표시했습니다." : "고객 연락 기록을 저장했습니다.", "success");
+      setMessage(status === "소개" ? "소개한 매물로 표시했습니다." : (status === "보류" ? "보류한 매물로 표시했습니다." : "고객 연락 기록을 저장했습니다."), "success");
     }).catch(function(error) {
       button.disabled = false;
-      button.textContent = status === "소개" ? "소개함" : "연락함";
+      button.textContent = status === "소개" ? "소개함" : (status === "보류" ? "보류함" : "연락함");
       setMessage(error.message || "고객매칭 상태 저장에 실패했습니다.", "error");
     });
   }
