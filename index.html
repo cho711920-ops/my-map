@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.4.19-collective-register">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.4-right-layout">
-<link rel="stylesheet" href="css/operations-center-v7.css?v=7.0.0">
+<link rel="stylesheet" href="css/operations-center-v7.css?v=7.3.0-customer-alerts">
 </head>
 
 <body>
@@ -75,7 +75,7 @@
             <button id="fieldVisitBtn" class="field-visit-btn" type="button" onclick="markSelectedAsVisited(); closeV6ActionMenus()">임장완료</button>
             <div class="v6-command-divider"></div>
             <button type="button" onclick="openOperationsCenter('dashboard'); closeV6ActionMenus()">운영현황</button>
-            <button type="button" onclick="openOperationsCenter('customers'); closeV6ActionMenus()">고객매칭</button>
+            <button id="operationsCustomerMenuBtn" type="button" onclick="openOperationsCenter('customers'); closeV6ActionMenus()">고객매칭</button>
           </div>
         </div>
 
@@ -430,8 +430,8 @@
 <script src="js/mobile-detail-fix-v6.js?v=6.4.19-filter-anchor"></script>
 <script src="js/ai-visit-route-v6.js"></script>
 <script src="js/ai-visit-ui-v6.js"></script>
-<script src="js/ai-visit-session-v6.js"></script>
+<script src="js/ai-visit-session-v6.js?v=6.4.25-account-sync"></script>
 <script src="js/map.js?v=6.4.21-viewport-list"></script>
-<script src="js/operations-center-v7.js?v=7.0.1"></script>
+<script src="js/operations-center-v7.js?v=7.3.0-customer-alerts"></script>
 </body>
 </html>

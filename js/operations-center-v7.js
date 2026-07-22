@@ -95,7 +95,9 @@
         dashboardCard("검증 대기", reviewCount, "사람의 판단이 필요한 원본", reviewCount ? "warning" : "success") +
         dashboardCard("수집 원본", data.raw, "출처별 원본 스냅샷", "") +
         dashboardCard("고객 문의", data.openCustomers != null ? data.openCustomers : data.customers, "진행 중인 고객 조건", "") +
-        dashboardCard("자동 매칭", data.newMatches != null ? data.newMatches : data.matches, "현재 추천 후보", "") +
+        dashboardCard("신규 고객매칭", data.newMatches != null ? data.newMatches : data.matches, "아직 소개 처리하지 않은 추천", data.newMatches ? "primary" : "") +
+        dashboardCard("미연락 경고", data.overdueMatches, (data.contactReminderDays || 3) + "일 이상 연락기록 없는 신규 추천", data.overdueMatches ? "warning" : "success") +
+        dashboardCard("소개한 매물", data.introducedMatches, "고객에게 이미 소개한 추천", "success") +
         dashboardCard("변경 이력", data.history, "수정·통합·상태변경 기록", "") +
       '</div>' +
       '<div class="operations-workflow-card">' +
@@ -114,6 +116,35 @@
     }).length;
   }
 
+  function matchStatus(row) {
+    return field(row, state.matchHeaders, "진행상태") || "신규";
+  }
+
+  function parseMatchDate(value) {
+    var normalized = text(value).replace(/\./g, "-").replace(/\s+/, "T");
+    var parsed = normalized ? new Date(normalized) : null;
+    return parsed && !isNaN(parsed.getTime()) ? parsed : null;
+  }
+
+  function isOverdueMatch(row) {
+    if (matchStatus(row) !== "신규" || field(row, state.matchHeaders, "연락일시")) return false;
+    var firstMatched = parseMatchDate(field(row, state.matchHeaders, "최초매칭일시"));
+    var days = number(state.dashboard && state.dashboard.contactReminderDays) || 3;
+    return !!firstMatched && Date.now() - firstMatched.getTime() >= days * 24 * 60 * 60 * 1000;
+  }
+
+  function customerMatchStats(customerId) {
+    var rows = state.matches.filter(function(row) {
+      return field(row, state.matchHeaders, "고객ID") === customerId;
+    });
+    return {
+      total: rows.length,
+      fresh: rows.filter(function(row) { return matchStatus(row) === "신규"; }).length,
+      introduced: rows.filter(function(row) { return matchStatus(row) === "소개"; }).length,
+      overdue: rows.filter(isOverdueMatch).length
+    };
+  }
+
   function renderCustomers() {
     var list = document.getElementById("operationsCustomerList");
     if (!list) return;
@@ -128,14 +159,17 @@
       var status = field(row, state.customerHeaders, "상태") || "상담중";
       var region = field(row, state.customerHeaders, "희망지역") || "지역 전체";
       var request = field(row, state.customerHeaders, "요청사항");
-      var count = matchCountForCustomer(id);
+      var stats = customerMatchStats(id);
       var selected = id === state.selectedCustomerId ? " selected" : "";
-      return '<button type="button" class="operations-customer-card' + selected + '" data-customer-id="' + escape(id) + '">' +
+      var alertClass = stats.overdue ? " has-overdue" : "";
+      return '<button type="button" class="operations-customer-card' + selected + alertClass + '" data-customer-id="' + escape(id) + '">' +
         '<span class="operations-customer-status">' + escape(status) + '</span>' +
         '<strong>' + escape(name) + '</strong>' +
         '<span>' + escape(region) + '</span>' +
         (request ? '<small>' + escape(request) + '</small>' : '') +
-        '<b>' + count.toLocaleString("ko-KR") + '건 매칭</b>' +
+        '<b>' + stats.total.toLocaleString("ko-KR") + '건 매칭 · 신규 ' + stats.fresh.toLocaleString("ko-KR") + '건</b>' +
+        (stats.introduced ? '<em>소개함 ' + stats.introduced.toLocaleString("ko-KR") + '건</em>' : '') +
+        (stats.overdue ? '<i>미연락 경고 ' + stats.overdue.toLocaleString("ko-KR") + '건</i>' : '') +
       '</button>';
     }).join("");
     Array.prototype.forEach.call(list.querySelectorAll("[data-customer-id]"), function(button) {
@@ -174,7 +208,10 @@
       return field(row, state.customerHeaders, "고객ID") === customerId;
     });
     var customerName = customerRow ? field(customerRow, state.customerHeaders, "고객명/상호") : "선택 고객";
-    var header = '<div class="operations-match-heading"><div><span>' + escape(customerName) + '</span><b>' + rows.length.toLocaleString("ko-KR") + '건 추천</b></div>' +
+    var overdueCount = rows.filter(isOverdueMatch).length;
+    var newCount = rows.filter(function(row) { return matchStatus(row) === "신규"; }).length;
+    var header = (overdueCount ? '<div class="operations-customer-alert"><b>연락 확인 필요</b><span>소개 가능한 신규매물 중 ' + overdueCount.toLocaleString("ko-KR") + '건이 ' + (number(state.dashboard && state.dashboard.contactReminderDays) || 3) + '일 이상 미연락 상태입니다.</span></div>' : '') +
+      '<div class="operations-match-heading"><div><span>' + escape(customerName) + '</span><b>' + rows.length.toLocaleString("ko-KR") + '건 추천 · 신규 ' + newCount.toLocaleString("ko-KR") + '건</b></div>' +
       '<button type="button" onclick="showSelectedCustomerMatchesOnMap()"' + (rows.length ? '' : ' disabled') + '>이 매물만 지도에 표시</button></div>';
     if (!rows.length) {
       list.innerHTML = header + '<div class="operations-empty"><b>현재 조건에 맞는 매물이 없습니다.</b><span>조건을 수정하거나 새 매물이 들어오면 자동으로 다시 비교됩니다.</span></div>';
@@ -186,18 +223,50 @@
       var score = field(row, state.matchHeaders, "점수");
       var reasons = field(row, state.matchHeaders, "추천이유");
       var warnings = field(row, state.matchHeaders, "주의사항");
+      var status = matchStatus(row);
+      var matchId = field(row, state.matchHeaders, "매칭ID");
       var title = property ? (property.name || property.type || "매물") : propertyId;
       var address = property ? [property.address, property.room].filter(Boolean).join(" · ") : "지도 데이터를 새로고침하면 상세정보가 연결됩니다.";
       var price = property ? "보증금 " + number(property.deposit).toLocaleString("ko-KR") + " / 월세 " + number(property.rent).toLocaleString("ko-KR") + " · " + number(property.area) + "평" : "";
-      return '<article class="operations-match-card">' +
+      var introduced = status === "소개";
+      return '<article class="operations-match-card' + (introduced ? ' introduced' : '') + (isOverdueMatch(row) ? ' overdue' : '') + '">' +
         '<div class="operations-match-score"><b>' + escape(score) + '</b><span>점</span></div>' +
-        '<div class="operations-match-body"><strong>' + escape(title) + '</strong><span>' + escape(address) + '</span>' +
+        '<div class="operations-match-body"><div class="operations-match-title"><strong>' + escape(title) + '</strong><span>' + escape(status) + '</span></div><span>' + escape(address) + '</span>' +
           (price ? '<b>' + escape(price) + '</b>' : '') +
           '<p>' + escape(reasons || "기본 조건 충족") + '</p>' +
           (warnings ? '<small>확인: ' + escape(warnings) + '</small>' : '') +
+          '<div class="operations-match-actions">' +
+            (status === "신규" ? '<button type="button" data-match-action="연락" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">연락함</button>' : (status === "연락" ? '<span>✓ 연락 기록됨</span>' : '')) +
+            (introduced ? '<span class="introduced-label">✓ 소개한 매물</span>' : '<button type="button" class="introduce" data-match-action="소개" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">소개함</button>') +
+          '</div>' +
         '</div>' +
       '</article>';
     }).join("") + '</div>';
+    Array.prototype.forEach.call(list.querySelectorAll("[data-match-action]"), function(button) {
+      button.addEventListener("click", function() { updateCustomerMatchStatus(button); });
+    });
+  }
+
+  function updateCustomerMatchStatus(button) {
+    var status = button.getAttribute("data-match-action") || "";
+    button.disabled = true;
+    button.textContent = "저장 중…";
+    setMessage(status + " 상태를 저장하고 있습니다…", "loading");
+    apiPost("updateCustomerMatch", {
+      matchId: button.getAttribute("data-match-id") || "",
+      customerId: button.getAttribute("data-customer-id") || "",
+      masterId: button.getAttribute("data-master-id") || "",
+      status: status
+    }).then(function() {
+      state.loaded = false;
+      return loadOperationsData(true);
+    }).then(function() {
+      setMessage(status === "소개" ? "소개한 매물로 표시했습니다." : "고객 연락 기록을 저장했습니다.", "success");
+    }).catch(function(error) {
+      button.disabled = false;
+      button.textContent = status === "소개" ? "소개함" : "연락함";
+      setMessage(error.message || "고객매칭 상태 저장에 실패했습니다.", "error");
+    });
   }
 
   function loadOperationsData(force) {
@@ -313,7 +382,18 @@
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
 
+  function refreshCustomerAlertBadge() {
+    apiGet("operationsDashboard").then(function(data) {
+      var button = document.getElementById("operationsCustomerMenuBtn");
+      if (!button) return;
+      var alerts = Math.max(number(data.newMatches), number(data.overdueMatches));
+      button.textContent = alerts ? "고객매칭 · 알림 " + alerts.toLocaleString("ko-KR") : "고객매칭";
+      button.classList.toggle("has-alert", alerts > 0);
+    }).catch(function() {});
+  }
+
   document.addEventListener("keydown", function(event) {
     if (event.key === "Escape") window.closeOperationsCenter();
   });
+  window.setTimeout(refreshCustomerAlertBadge, 1200);
 })();

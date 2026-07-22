@@ -22,8 +22,15 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       response = await fetch(upstreamUrl({ ...req.query, owner: user.email || "" }), { redirect: "follow", cache: "no-store" });
     } else {
+      const contentLength = Number(req.headers["content-length"] || 0);
+      if (contentLength > 2 * 1024 * 1024) {
+        throw Object.assign(new Error("한 번에 보낼 수 있는 요청 크기를 초과했습니다."), { statusCode: 413 });
+      }
       const secret = process.env.APPS_SCRIPT_PROXY_SECRET;
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        throw Object.assign(new Error("잘못된 요청 형식입니다."), { statusCode: 400 });
+      }
       response = await fetch(upstreamUrl({}), {
         method: "POST",
         redirect: "follow",

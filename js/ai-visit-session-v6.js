@@ -11,6 +11,9 @@
   var locationWarmupStarted = false;
   var roadviewCloseObserver = null;
   var completionSaving = false;
+  var cloudSessionReady = false;
+  var cloudSessionLoading = null;
+  var cloudSessionSaveTimer = 0;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -151,8 +154,12 @@
 
   function openLauncher() {
     ensureUi();
-    renderLauncher();
-    openModal("aiVisitLauncherModal");
+    syncSessionMapFromCloud().then(function() {
+      renderLauncher();
+      openModal("aiVisitLauncherModal");
+    }).catch(function(error) {
+      alert((error && error.message) || "AI임장 진행상태를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    });
   }
 
   function showStartConfirmation(list, items) {
@@ -206,6 +213,69 @@
     showStartConfirmation(list, items);
   }
 
+  function clearDeviceSessionCache() {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(LEGACY_SESSION_KEY);
+    } catch (error) {}
+  }
+
+  function syncSessionMapFromCloud() {
+    if (cloudSessionReady) return Promise.resolve();
+    if (cloudSessionLoading) return cloudSessionLoading;
+
+    var url = (window.saveApiURL || "/api/apps-script") +
+      "?action=loadCloudState&scope=visitSession&recordKey=default&_=" + Date.now();
+    cloudSessionLoading = fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store"
+    }).then(function(response) {
+      if (!response.ok) throw new Error("AI임장 진행상태를 불러오지 못했습니다.");
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) throw new Error((result && result.message) || "AI임장 동기화에 실패했습니다.");
+      var sessions = result.found && result.data && typeof result.data === "object" && !Array.isArray(result.data)
+        ? result.data : {};
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      cloudSessionReady = true;
+      cloudSessionLoading = null;
+    }).catch(function(error) {
+      clearDeviceSessionCache();
+      cloudSessionReady = false;
+      cloudSessionLoading = null;
+      console.warn("로그인 계정 AI임장 동기화 실패", error);
+      throw error;
+    });
+    return cloudSessionLoading;
+  }
+
+  function scheduleCloudSessionSave(sessions) {
+    if (!cloudSessionReady) return;
+    var snapshot = JSON.parse(JSON.stringify(sessions || {}));
+    window.clearTimeout(cloudSessionSaveTimer);
+    cloudSessionSaveTimer = window.setTimeout(function() {
+      fetch(window.saveApiURL || "/api/apps-script", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "saveCloudState",
+          scope: "visitSession",
+          recordKey: "default",
+          data: snapshot,
+          version: Date.now()
+        })
+      }).then(function(response) {
+        if (!response.ok) throw new Error("AI임장 진행상태를 저장하지 못했습니다.");
+        return response.json();
+      }).then(function(result) {
+        if (!result || result.ok === false) throw new Error((result && result.message) || "AI임장 저장에 실패했습니다.");
+      }).catch(function(error) {
+        console.warn("로그인 계정 AI임장 저장 실패", error);
+      });
+    }, 350);
+  }
+
   function loadSessionMap() {
     var sessions = {};
     try {
@@ -231,6 +301,7 @@
       var sessions = loadSessionMap();
       sessions[activeSession.listId] = activeSession;
       localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      scheduleCloudSessionSave(sessions);
     } catch (error) {
       console.error("AI임장 세션 저장 실패", error);
     }
@@ -247,6 +318,7 @@
       var sessions = loadSessionMap();
       delete sessions[listId];
       localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      scheduleCloudSessionSave(sessions);
     } catch (error) {}
   }
 
@@ -1170,6 +1242,8 @@
   });
 
   ensureUi();
+  clearDeviceSessionCache();
+  syncSessionMapFromCloud().catch(function() {});
   watchRoadviewViewport();
   warmCurrentLocation();
 })();
