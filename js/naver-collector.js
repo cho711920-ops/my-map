@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.1.0";
+  var VERSION = "4.1.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -10,6 +10,7 @@
   var BATCH_SIZE = 100;
   var CITY_PROGRESS_KEY = "js_naver_daejeon_progress_v1";
   var CITY_TILE_MAX_PAGES = 80;
+  var CITY_DISTRICT_MAX_PAGES = 500;
   var CITY_MAX_SPLIT_DEPTH = 4;
   var DAEJEON_BOUNDS = {left: 127.20, right: 127.57, bottom: 36.18, top: 36.50};
   var DAEJEON_DISTRICTS = [
@@ -104,7 +105,8 @@
     buildDistrictUrl: buildDistrictUrl,
     createInitialCityTiles: createInitialCityTiles,
     createInitialDistricts: createInitialDistricts,
-    collectCityTile: collectCityTile
+    collectCityTile: collectCityTile,
+    collectCityDistrict: collectCityDistrict
   };
 
   function createPanel() {
@@ -743,6 +745,36 @@
     return items.length;
   }
 
+  async function collectCityDistrict(templateUrl, district, requestOptions, progress) {
+    var startPage = Math.max(1, Number(district.nextPage) || 1);
+    for (var page = startPage; page <= CITY_DISTRICT_MAX_PAGES; page += 1) {
+      setStatus(
+        "대전 5개 구 자동 수집 중",
+        "현재 " + district.name + " " + page + "페이지 · 완료 구역 " + progress.completed + "/5 · 고유매물 " + progress.seenIds.length + "개\n페이지마다 바로 저장하므로 중단돼도 다음 페이지부터 이어집니다."
+      );
+      var url = buildDistrictUrl(templateUrl, district, page);
+      var response = await fetchPageWithRetry(url, requestOptions, 3);
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) throw new Error("네이버 로그인이 만료되었습니다. 다시 로그인한 뒤 같은 버튼을 눌러주세요.");
+        throw new Error(district.name + " " + page + "페이지 조회 실패(HTTP " + response.status + ")");
+      }
+      var json = await response.json();
+      var items = articleList(json);
+      if (!items.length) return {complete: true, pages: page - 1};
+      var signature = items.map(function(article) { return article && article.articleNo; }).filter(Boolean).join(",");
+      if (signature && signature === district.lastPageSignature) return {complete: true, pages: page - 1};
+
+      await saveCityArticles(items, progress);
+      district.lastPageSignature = signature;
+      district.nextPage = page + 1;
+      saveCityProgress(progress);
+
+      if (hasMore(json) === false) return {complete: true, pages: page};
+      await delay(180);
+    }
+    throw new Error(district.name + "가 500페이지를 넘었습니다. 저장된 다음 페이지부터 이어지도록 일시정지했습니다.");
+  }
+
   async function collectDaejeonAll() {
     if (state.busy) return;
     if (!state.capture) {
@@ -789,11 +821,16 @@
           (tile.name ? "현재 " + tile.name + " · " : "") + "완료 " + progress.completed + "/" + totalTiles + "구역 · 고유매물 " + progress.seenIds.length + "개\n중단돼도 이 구역부터 이어집니다."
         );
         setProgress(progress.completed, totalTiles);
+        if (strategy.mode === "district") {
+          await collectCityDistrict(templateUrl, tile, requestOptions, progress);
+          progress.queue.shift();
+          progress.completed += 1;
+          saveCityProgress(progress);
+          await delay(260);
+          continue;
+        }
         var tileResult = await collectCityTile(templateUrl, strategy, tile, requestOptions);
         if (tileResult.truncated) {
-          if (strategy.mode === "district") {
-            throw new Error(tile.name + "의 조회량이 한도를 넘었습니다. 해당 구의 매물 종류나 거래방식 필터를 나눠 수집해 주세요.");
-          }
           if ((tile.depth || 0) >= CITY_MAX_SPLIT_DEPTH) {
             throw new Error("매물이 매우 많은 구역의 세분화 한도에 도달했습니다. 해당 구역부터 다시 이어집니다.");
           }
