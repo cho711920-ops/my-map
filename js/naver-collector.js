@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.1.1";
+  var VERSION = "4.1.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -9,6 +9,7 @@
   // 실패한 묶음은 기존 재시도 로직이 같은 범위를 다시 전송한다.
   var BATCH_SIZE = 100;
   var CITY_PROGRESS_KEY = "js_naver_daejeon_progress_v1";
+  var CITY_FAILED_KEY = "js_naver_daejeon_failed_v1";
   var CITY_TILE_MAX_PAGES = 80;
   var CITY_DISTRICT_MAX_PAGES = 500;
   var CITY_MAX_SPLIT_DEPTH = 4;
@@ -106,7 +107,8 @@
     createInitialCityTiles: createInitialCityTiles,
     createInitialDistricts: createInitialDistricts,
     collectCityTile: collectCityTile,
-    collectCityDistrict: collectCityDistrict
+    collectCityDistrict: collectCityDistrict,
+    retryFailedCityArticles: retryFailedCityArticles
   };
 
   function createPanel() {
@@ -696,6 +698,22 @@
     try { localStorage.removeItem(CITY_PROGRESS_KEY); } catch (_) {}
   }
 
+  function loadCityFailedItems() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(CITY_FAILED_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveCityFailedItems(items) {
+    try {
+      if (items && items.length) localStorage.setItem(CITY_FAILED_KEY, JSON.stringify(items));
+      else localStorage.removeItem(CITY_FAILED_KEY);
+    } catch (_) {}
+  }
+
   async function collectCityTile(templateUrl, strategy, tile, requestOptions) {
     // v4.0 테스트/기존 호출의 bounds 스키마 인자도 계속 허용합니다.
     if (strategy && !strategy.mode) strategy = {mode: "bounds", schema: strategy};
@@ -726,23 +744,75 @@
     return {articles: Array.from(found.values()), truncated: truncated};
   }
 
-  async function saveCityArticles(rawArticles, progress) {
+  async function saveCityArticles(rawArticles, progress, context) {
     var items = rawArticles.map(normalize).filter(function(item) { return item.articleNo; });
     var seen = new Set(progress.seenIds || []);
+    progress.failedItems = Array.isArray(progress.failedItems) ? progress.failedItems : loadCityFailedItems();
     items = items.filter(function(item) { return !seen.has(String(item.articleNo)); });
     for (var index = 0; index < items.length; index += BATCH_SIZE) {
       var batch = items.slice(index, index + BATCH_SIZE);
       var result = await postBatchWithRetry(batch, 3);
       var failed = Number(result.failed) || 0;
-      if (failed) throw new Error("일부 매물 저장에 실패했습니다. 같은 구역부터 다시 이어서 처리합니다.");
+      var errors = Array.isArray(result.errors) ? result.errors : [];
+      var failedIds = {};
+      errors.forEach(function(error) {
+        if (error && error.articleNo) failedIds[String(error.articleNo)] = String(error.message || "저장 실패");
+      });
+      if (failed && !Object.keys(failedIds).length) {
+        batch.slice(0, failed).forEach(function(item) { failedIds[String(item.articleNo)] = "저장 실패"; });
+      }
+      var batchIds = {};
+      batch.forEach(function(item) { batchIds[String(item.articleNo)] = true; });
+      progress.failedItems = progress.failedItems.filter(function(entry) {
+        return !batchIds[String(entry.articleNo)];
+      });
+      batch.forEach(function(item) {
+        var articleNo = String(item.articleNo);
+        if (!failedIds[articleNo]) return;
+        progress.failedItems.push({
+          articleNo: articleNo,
+          message: failedIds[articleNo],
+          district: context && context.district || "",
+          page: context && context.page || "",
+          item: item
+        });
+      });
       progress.saved += Number(result.saved) || 0;
       progress.duplicate += Number(result.duplicate) || 0;
       batch.forEach(function(item) { seen.add(String(item.articleNo)); });
       progress.seenIds = Array.from(seen);
       saveCityProgress(progress);
+      saveCityFailedItems(progress.failedItems);
       await delay(220);
     }
     return items.length;
+  }
+
+  async function retryFailedCityArticles(progress) {
+    var pending = (progress.failedItems || loadCityFailedItems()).slice();
+    var remaining = [];
+    for (var index = 0; index < pending.length; index += 1) {
+      var entry = pending[index];
+      try {
+        var result = await postBatchWithRetry([entry.item], 2);
+        if (Number(result.failed) || !result.ok) {
+          var error = Array.isArray(result.errors) && result.errors[0];
+          entry.message = error && error.message || entry.message || "저장 실패";
+          remaining.push(entry);
+        } else {
+          progress.saved += Number(result.saved) || 0;
+          progress.duplicate += Number(result.duplicate) || 0;
+        }
+      } catch (error) {
+        entry.message = String(error && error.message ? error.message : error);
+        remaining.push(entry);
+      }
+      await delay(180);
+    }
+    progress.failedItems = remaining;
+    saveCityFailedItems(remaining);
+    saveCityProgress(progress);
+    return remaining;
   }
 
   async function collectCityDistrict(templateUrl, district, requestOptions, progress) {
@@ -764,7 +834,7 @@
       var signature = items.map(function(article) { return article && article.articleNo; }).filter(Boolean).join(",");
       if (signature && signature === district.lastPageSignature) return {complete: true, pages: page - 1};
 
-      await saveCityArticles(items, progress);
+      await saveCityArticles(items, progress, {district: district.name, page: page});
       district.lastPageSignature = signature;
       district.nextPage = page + 1;
       saveCityProgress(progress);
@@ -799,7 +869,8 @@
         seenIds: [],
         saved: 0,
         duplicate: 0,
-        failed: 0
+        failed: 0,
+        failedItems: loadCityFailedItems()
       };
       saveCityProgress(progress);
     }
@@ -847,10 +918,13 @@
       }
 
       if (!progress.seenIds.length) throw new Error("대전 전체에서 감지된 매물이 없습니다. 네이버의 매물 종류와 거래방식 필터를 확인해 주세요.");
+      setStatus("저장 실패 매물 마지막 재시도 중", "주소 확인이 늦었던 매물을 한 번 더 저장하고 있습니다.");
+      var remainingFailures = await retryFailedCityArticles(progress);
       setProgress(1, 1);
       setStatus(
         "대전 전체 수집 완료",
-        "고유매물 " + progress.seenIds.length + "개 · 신규 " + progress.saved + "개 · 중복 " + progress.duplicate + "개\n모든 대전 구역의 조회가 완료됐습니다."
+        "고유매물 " + progress.seenIds.length + "개 · 신규 " + progress.saved + "개 · 중복 " + progress.duplicate + "개 · 주소미확인 " + remainingFailures.length + "개\n" +
+          (remainingFailures.length ? "주소미확인 매물은 보관했으며 다음 전체 수집 때 다시 시도합니다." : "모든 대전 구역의 조회와 저장이 완료됐습니다.")
       );
       clearCityProgress();
     } catch (error) {
