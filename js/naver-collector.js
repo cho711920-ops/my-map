@@ -1,13 +1,13 @@
 (function () {
   "use strict";
 
-  var VERSION = "3.6.2";
+  var VERSION = "3.6.3";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
-  // Apps Script 서버의 요청당 최대치는 100건이다. 75건씩 처리하면
-  // 대량 수집 속도를 높이면서 재시도 시의 부담과 실행시간 여유를 남긴다.
-  var BATCH_SIZE = 75;
+  // Apps Script 서버의 요청당 안전 상한인 100건까지 한 번에 저장한다.
+  // 실패한 묶음은 기존 재시도 로직이 같은 범위를 다시 전송한다.
+  var BATCH_SIZE = 100;
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";

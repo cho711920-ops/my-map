@@ -2012,8 +2012,11 @@ function resetFilter() {
   document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.remove("on");
   updateHideDoneMenuUI();
-  document.getElementById("gongsilOnlyBtn").innerText = "임장할매물만보기";
-  document.getElementById("gongsilOnlyBtn").classList.remove("on");
+  var gongsilOnlyButton = document.getElementById("gongsilOnlyBtn");
+  if (gongsilOnlyButton) {
+    gongsilOnlyButton.classList.remove("on");
+    gongsilOnlyButton.setAttribute("aria-checked", "false");
+  }
   var todayNewButton = document.getElementById("todayNewBtn");
   if (todayNewButton) {
     todayNewButton.classList.remove("on");
@@ -2482,13 +2485,9 @@ function toggleGongsilOnly() {
   gongsilOnly = !gongsilOnly;
 
   var btn = document.getElementById("gongsilOnlyBtn");
-
-  if (gongsilOnly) {
-    btn.innerText = "전체보기";
-    btn.classList.add("on");
-  } else {
-    btn.innerText = "임장가자";
-    btn.classList.remove("on");
+  if (btn) {
+    btn.classList.toggle("on", gongsilOnly);
+    btn.setAttribute("aria-checked", gongsilOnly ? "true" : "false");
   }
 
   selectedGroupKey = null;
