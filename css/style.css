@@ -5061,12 +5061,14 @@ body,
 /* =========================================================
    v6.1.1 최종 안정화: 보기 토글 / 모바일 지도 프레임 제거
    ========================================================= */
-#hideDoneBtn {
+#hideDoneBtn,
+#todayNewBtn {
   display: flex !important;
   align-items: center !important;
   gap: 9px !important;
 }
-#hideDoneBtn .view-toggle-check {
+#hideDoneBtn .view-toggle-check,
+#todayNewBtn .view-toggle-check {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -5081,7 +5083,8 @@ body,
   font-weight: 1000 !important;
   line-height: 1 !important;
 }
-#hideDoneBtn.on .view-toggle-check {
+#hideDoneBtn.on .view-toggle-check,
+#todayNewBtn.on .view-toggle-check {
   border-color: #1769e8 !important;
   background: #1769e8 !important;
   color: #fff !important;
