@@ -200,6 +200,15 @@ body {
   background:#f5f7fb;
 }
 
+/* 모바일 지도·숨김 패널이 문서 폭을 늘려 화면이 옆으로 밀리는 현상 방지 */
+@media (max-width:768px) {
+  html,
+  body {
+    max-width:100% !important;
+    overflow-x:hidden !important;
+  }
+}
+
 #wrap {
   display:flex;
   height:100vh;
