@@ -19,7 +19,11 @@
     matchStatusFilter: "all",
     customerView: "active",
     editingCustomerId: "",
-    viewingMemoCustomerId: ""
+    viewingMemoCustomerId: "",
+    activeTab: "dashboard",
+    customerLoaded: false,
+    dashboardLoaded: false,
+    rebuilding: false
   };
 
   window.operationsMatchPropertyIds = null;
@@ -410,55 +414,83 @@
 
   function updateCustomerMatchStatus(button) {
     var status = button.getAttribute("data-match-action") || "";
-    button.disabled = true;
-    button.textContent = "저장 중…";
-    setMessage(status + " 상태를 저장하고 있습니다…", "loading");
+    var matchId = button.getAttribute("data-match-id") || "";
+    var customerId = button.getAttribute("data-customer-id") || "";
+    var matchedRow = state.matches.find(function(row) {
+      return field(row, state.matchHeaders, "매칭ID") === matchId;
+    });
+    var statusIndex = headerIndex(state.matchHeaders, "진행상태");
+    var oldStatus = matchedRow ? matchStatus(matchedRow) : "신규";
+    if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = status;
+    adjustMatchSummary(customerId, oldStatus, status);
+    renderCustomers();
+    renderMatches(customerId);
+    setMessage(status === "소개" ? "후보로 표시하고 저장 중입니다…" : "보류로 표시하고 저장 중입니다…", "loading");
     apiPost("updateCustomerMatch", {
-      matchId: button.getAttribute("data-match-id") || "",
-      customerId: button.getAttribute("data-customer-id") || "",
+      matchId: matchId,
+      customerId: customerId,
       masterId: button.getAttribute("data-master-id") || "",
       status: status
     }).then(function() {
-      state.loaded = false;
-      return loadOperationsData(true);
-    }).then(function() {
       setMessage(status === "소개" ? "후보 매물로 표시했습니다." : "보류한 매물로 표시했습니다.", "success");
     }).catch(function(error) {
-      button.disabled = false;
-      button.textContent = status === "소개" ? "후보등록" : "보류함";
+      if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = oldStatus;
+      adjustMatchSummary(customerId, status, oldStatus);
+      renderCustomers();
+      renderMatches(customerId);
       setMessage(error.message || "고객매칭 상태 저장에 실패했습니다.", "error");
     });
   }
 
+  function applyCustomerWorkspace(result) {
+    state.dashboard = Object.assign({}, state.dashboard || {}, {
+      contactReminderDays: number(result.contactReminderDays) || 3
+    });
+    state.customerHeaders = result.customerHeaders || [];
+    state.customers = result.customers || [];
+    state.matchSummary = {};
+    (result.matchSummary || []).forEach(function(item) {
+      state.matchSummary[text(item.customerId)] = item;
+    });
+    state.activityHeaders = result.activityHeaders || [];
+    state.activities = result.activities || [];
+    state.matchHeaders = result.matchHeaders || [];
+    state.matches = result.matches || [];
+    state.selectedCustomerId = text(result.selectedCustomerId) || state.selectedCustomerId;
+    state.loadedMatchCustomerId = state.selectedCustomerId;
+    state.customerLoaded = true;
+    state.loaded = true;
+    renderCustomers();
+    renderMatches(state.selectedCustomerId);
+  }
+
   function loadOperationsData(force) {
     if (state.loading) return Promise.resolve();
-    if (state.loaded && !force) return Promise.resolve();
+    var customersMode = state.activeTab === "customers";
+    if (!force && (customersMode ? state.customerLoaded : state.dashboardLoaded)) {
+      if (customersMode) {
+        renderCustomers();
+        renderMatches(state.selectedCustomerId);
+      } else {
+        renderDashboard();
+      }
+      return Promise.resolve();
+    }
     state.loading = true;
     setMessage("운영자료를 불러오는 중입니다…", "loading");
-    return Promise.all([
-      apiGet("operationsDashboard"),
-      apiGet("customerList"),
-      apiGet("customerMatchSummary"),
-      apiGet("customerActivities")
-    ]).then(function(results) {
-      state.dashboard = results[0];
-      state.customerHeaders = results[1].headers || [];
-      state.customers = results[1].rows || [];
-      state.matchSummary = {};
-      (results[2].customers || []).forEach(function(item) {
-        state.matchSummary[text(item.customerId)] = item;
-      });
-      state.matches = [];
-      state.loadedMatchCustomerId = "";
-      state.activityHeaders = results[3].headers || [];
-      state.activities = results[3].rows || [];
-      state.loaded = true;
-      renderDashboard();
-      renderCustomers();
-      renderMatches(state.selectedCustomerId);
-      return loadCustomerMatches(state.selectedCustomerId).then(function() {
-        setMessage("자동화 자료가 최신 상태로 연결되었습니다.", "success");
-      });
+    var request = customersMode
+      ? apiGet("customerWorkspace", { customerId: state.selectedCustomerId })
+      : apiGet("operationsDashboard");
+    return request.then(function(result) {
+      if (customersMode) {
+        applyCustomerWorkspace(result);
+      } else {
+        state.dashboard = result;
+        state.dashboardLoaded = true;
+        state.loaded = true;
+        renderDashboard();
+      }
+      setMessage("자동화 자료가 최신 상태로 연결되었습니다.", "success");
     }).catch(function(error) {
       setMessage(error.message || "운영자료 조회 중 오류가 발생했습니다.", "error");
     }).finally(function() {
@@ -494,7 +526,7 @@
     center.setAttribute("aria-hidden", "false");
     document.body.classList.add("operations-center-open");
     window.switchOperationsTab(tab || "dashboard");
-    loadOperationsData(true);
+    loadOperationsData(false);
   };
 
   window.closeOperationsCenter = function() {
@@ -507,6 +539,7 @@
 
   window.switchOperationsTab = function(tab) {
     var isCustomers = tab === "customers";
+    state.activeTab = isCustomers ? "customers" : "dashboard";
     var dashboardPanel = document.getElementById("operationsDashboardPanel");
     var customerPanel = document.getElementById("operationsCustomersPanel");
     var dashboardButton = document.getElementById("operationsTabDashboard");
@@ -515,16 +548,23 @@
     if (customerPanel) customerPanel.hidden = !isCustomers;
     if (dashboardButton) dashboardButton.classList.toggle("active", !isCustomers);
     if (customerButton) customerButton.classList.toggle("active", isCustomers);
+    if (document.getElementById("operationsCenter").classList.contains("open")) loadOperationsData(false);
   };
 
   window.rebuildCustomerMatchesNow = function() {
+    if (state.rebuilding) return;
+    state.rebuilding = true;
     setMessage("전체 고객 조건과 활성 매물을 다시 비교하는 중입니다…", "loading");
     apiPost("rebuildCustomerMatches").then(function(result) {
       state.loaded = false;
-      setMessage("재계산 완료: " + number(result.matches).toLocaleString("ko-KR") + "건이 매칭되었습니다.", "success");
+      state.customerLoaded = false;
       return loadOperationsData(true);
+    }).then(function() {
+      setMessage("재계산과 화면 갱신이 완료되었습니다.", "success");
     }).catch(function(error) {
       setMessage(error.message || "고객 매칭 재계산에 실패했습니다.", "error");
+    }).finally(function() {
+      state.rebuilding = false;
     });
   };
 
@@ -646,9 +686,13 @@
       nextContactDate: text(document.getElementById("customerNextContactDate") && document.getElementById("customerNextContactDate").value)
     }).then(function(result) {
       state.selectedCustomerId = result.customerId || state.selectedCustomerId;
-      state.loaded = false;
       window.closeCustomerEditor();
-      return loadOperationsData(true);
+      if (result.workspace) {
+        applyCustomerWorkspace(result.workspace);
+      } else {
+        state.customerLoaded = false;
+        return loadOperationsData(true);
+      }
     }).then(function() {
       state.customerView = "active";
       renderCustomers();
@@ -696,32 +740,12 @@
     if (!customer) return;
     state.viewingMemoCustomerId = id;
     var name = field(customer, state.customerHeaders, "고객명/상호") || "고객";
-    var request = field(customer, state.customerHeaders, "요청사항");
     var title = document.getElementById("customerMemoTitle");
-    var content = document.getElementById("customerMemoContent");
-    if (title) title.textContent = name + " 상담 메모";
-    var activities = state.activities.filter(function(row) {
-      return field(row, state.activityHeaders, "고객ID") === id;
-    });
-    if (content) {
-      content.innerHTML =
-        '<section class="customer-memo-request"><b>고객 요청사항</b><p>' +
-          escape(request || "입력된 요청사항이 없습니다.") + '</p></section>' +
-        '<section class="customer-memo-history"><div class="customer-memo-history-title"><b>상담이력</b><span>' +
-          activities.length.toLocaleString("ko-KR") + '건</span></div>' +
-          (activities.length ? activities.map(function(row) {
-            var at = field(row, state.activityHeaders, "일시");
-            var memo = field(row, state.activityHeaders, "상담내용") || "기록 내용 없음";
-            return '<article class="customer-memo-entry"><time>상담일자: ' +
-              escape(at) + '</time><p>' + escape(memo) + '</p></article>';
-          }).join("") : '<div class="customer-memo-empty">아직 저장된 상담메모가 없습니다.</div>') +
-        '</section>';
-    }
+    if (title) title.textContent = name + " 메모 작성";
     var quickMemo = document.getElementById("customerQuickMemoInput");
     if (quickMemo) quickMemo.value = "";
     var modal = document.getElementById("customerMemoModal");
     if (modal) modal.hidden = false;
-    if (content) content.scrollTop = content.scrollHeight;
     document.body.classList.add("customer-crm-open");
   };
 
@@ -749,12 +773,9 @@
       stage: "상담",
       memo: memo,
       nextContactDate: ""
-    }).then(function() {
-      return apiGet("customerActivities");
     }).then(function(result) {
-      state.activityHeaders = result.headers || [];
-      state.activities = result.rows || [];
-      window.openCustomerMemo(customerId);
+      if (result.activityRow) state.activities.push(result.activityRow);
+      window.closeCustomerMemo();
       setMessage("상담일자와 메모를 저장했습니다.", "success");
     }).catch(function(error) {
       setMessage(error.message || "메모 저장에 실패했습니다.", "error");
@@ -777,11 +798,19 @@
       stage: text(document.getElementById("customerActivityStage") && document.getElementById("customerActivityStage").value),
       memo: text(document.getElementById("customerActivityMemo") && document.getElementById("customerActivityMemo").value),
       nextContactDate: text(document.getElementById("customerActivityNextDate") && document.getElementById("customerActivityNextDate").value)
-    }).then(function() {
-      state.loaded = false;
+    }).then(function(result) {
+      if (result.activityRow) state.activities.push(result.activityRow);
+      var stage = text(result.stage);
+      if (stage === "미팅완료" || stage === "임장") {
+        var customer = state.customers.find(function(row) {
+          return field(row, state.customerHeaders, "고객ID") === state.selectedCustomerId;
+        });
+        var statusIndex = headerIndex(state.customerHeaders, "상태");
+        if (customer && statusIndex >= 0) customer[statusIndex] = "미팅후";
+      }
       window.closeCustomerActivity();
-      return loadOperationsData(true);
-    }).then(function() {
+      renderCustomers();
+      renderMatches(state.selectedCustomerId);
       setMessage("상담기록과 다음 연락·미팅일을 저장했습니다.", "success");
     }).catch(function(error) {
       setMessage(error.message || "상담기록 저장에 실패했습니다.", "error");
