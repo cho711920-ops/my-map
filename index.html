@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.4.19-collective-register">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.4-right-layout">
-<link rel="stylesheet" href="css/operations-center-v7.css?v=7.6.4-customer-colors">
+<link rel="stylesheet" href="css/operations-center-v7.css?v=7.7.0-customer-memo">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.0">
 </head>
 
@@ -293,6 +293,25 @@
   </form>
 </div>
 
+<div id="customerMemoModal" class="customer-crm-modal" hidden>
+  <div class="customer-crm-backdrop" onclick="closeCustomerMemo()"></div>
+  <section class="customer-crm-dialog customer-memo-dialog" role="dialog" aria-modal="true" aria-labelledby="customerMemoTitle">
+    <header>
+      <div><small>고객 상담이력</small><h3 id="customerMemoTitle">고객 메모</h3></div>
+      <button type="button" onclick="closeCustomerMemo()" aria-label="닫기">×</button>
+    </header>
+    <div id="customerMemoContent" class="customer-memo-content"></div>
+    <div class="customer-quick-memo">
+      <label for="customerQuickMemoInput">새 메모 <span>상담일자는 저장 시 자동입력</span></label>
+      <textarea id="customerQuickMemoInput" placeholder="고객 반응이나 기억할 내용을 적어주세요."></textarea>
+    </div>
+    <footer>
+      <button type="button" onclick="closeCustomerMemo()">닫기</button>
+      <button id="customerQuickMemoSaveBtn" class="primary" type="button" onclick="saveCustomerQuickMemo()">메모 저장</button>
+    </footer>
+  </section>
+</div>
+
 
 
 <div id="quickAddModal">
@@ -484,7 +503,7 @@
 <script src="js/ai-visit-ui-v6.js"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.25-account-sync"></script>
 <script src="js/map.js?v=6.4.22-customer-cluster-colors"></script>
-<script src="js/operations-center-v7.js?v=7.6.2-customer-lazy-load"></script>
+<script src="js/operations-center-v7.js?v=7.7.0-customer-memo"></script>
 <script src="js/announcement-v1.js?v=1.0.0"></script>
 </body>
 </html>
