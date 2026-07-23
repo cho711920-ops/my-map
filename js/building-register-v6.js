@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var LOCAL_CACHE_PREFIX = "js-building-register-v7:";
+  var LOCAL_CACHE_PREFIX = "js-building-register-v8:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -262,7 +262,7 @@
       if (!raw) return null;
       var wrapper = JSON.parse(raw);
       if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > LOCAL_CACHE_TTL) return null;
-      if (!wrapper.data || Number(wrapper.data.version || 0) < 7) return null;
+      if (!wrapper.data || Number(wrapper.data.version || 0) < 8) return null;
       return wrapper.data;
     } catch (_) {
       return null;
@@ -327,7 +327,7 @@
 
   function requestRegister(force, mode) {
     var url = requestUrl(force, mode);
-    return jsonp(url, 60000).then(function (data) {
+    return jsonp(url, 120000).then(function (data) {
       if (!data || !data.ok || data.action !== "buildingRegister") {
         throw new Error((data && data.message) || "건축물대장 API 설정을 확인해주세요.");
       }
