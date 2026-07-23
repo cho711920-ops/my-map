@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var LOCAL_CACHE_PREFIX = "js-building-register-v6:";
+  var LOCAL_CACHE_PREFIX = "js-building-register-v7:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -262,7 +262,7 @@
       if (!raw) return null;
       var wrapper = JSON.parse(raw);
       if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > LOCAL_CACHE_TTL) return null;
-      if (!wrapper.data || Number(wrapper.data.version || 0) < 6) return null;
+      if (!wrapper.data || Number(wrapper.data.version || 0) < 7) return null;
       return wrapper.data;
     } catch (_) {
       return null;
