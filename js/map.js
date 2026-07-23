@@ -1357,6 +1357,21 @@ function getPremiumClusterSizeClassV635(count) {
   return " cluster-size-sm";
 }
 
+function getCustomerMatchClusterClassV764(cluster) {
+  if (!window.operationsMatchPropertyIds || !window.operationsMatchStatusByPropertyId) return "";
+  var hasCandidate = false;
+  var hasHeld = false;
+  ((cluster && cluster.items) || []).forEach(function(item) {
+    var propertyId = String(item && item.propertyId || "").trim();
+    var status = propertyId ? String(window.operationsMatchStatusByPropertyId[propertyId] || "").trim() : "";
+    if (status === "소개") hasCandidate = true;
+    if (status === "보류") hasHeld = true;
+  });
+  if (hasCandidate) return " customer-match-candidate";
+  if (hasHeld) return " customer-match-held";
+  return "";
+}
+
 function drawMapClustersOnlyV639(items) {
   var selectionSnapshotV638 = captureClusterSelectionSnapshotV638();
   isRendering = true;
@@ -1373,6 +1388,7 @@ function drawMapClustersOnlyV639(items) {
 
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
+    var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
     var gongsilClass = !allDone && cluster.items.some(function(item) {
       return typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item);
     }) ? " source-gongsil" : "";
@@ -1382,7 +1398,7 @@ function drawMapClustersOnlyV639(items) {
      * 클러스터 안의 모든 매물이 거래완료일 때만 done 클래스가 붙어 회색이 됩니다.
      */
     var overlayContent =
-      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + customerMatchClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     var overlay = new kakao.maps.CustomOverlay({
       position: cluster.latlng,
@@ -1531,6 +1547,7 @@ function redrawSelectedMarkers() {
 
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
+    var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
     var gongsilClass = !allDone && cluster.items.some(function(item) {
       return typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item);
     }) ? " source-gongsil" : "";
@@ -1540,7 +1557,7 @@ function redrawSelectedMarkers() {
      * 일반 클러스터는 파란색, 전부 거래완료인 클러스터만 회색을 유지합니다.
      */
     var content =
-      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + customerMatchClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 
     o.setContent(content);
   });
