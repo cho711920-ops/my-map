@@ -11,6 +11,9 @@
     matches: [],
     activityHeaders: [],
     activities: [],
+    matchSummary: {},
+    loadedMatchCustomerId: "",
+    matchLoading: false,
     selectedCustomerId: "",
     customerSearch: "",
     matchStatusFilter: "all",
@@ -150,6 +153,7 @@
   }
 
   function customerMatchStats(customerId) {
+    if (state.matchSummary[customerId]) return state.matchSummary[customerId];
     var rows = state.matches.filter(function(row) {
       return field(row, state.matchHeaders, "고객ID") === customerId;
     });
@@ -160,6 +164,18 @@
       held: rows.filter(function(row) { return matchStatus(row) === "보류"; }).length,
       overdue: rows.filter(isOverdueMatch).length
     };
+  }
+
+  function adjustMatchSummary(customerId, oldStatus, newStatus) {
+    var stats = state.matchSummary[customerId];
+    if (!stats || oldStatus === newStatus) return;
+    function change(status, amount) {
+      if (status === "신규") stats.fresh = Math.max(0, number(stats.fresh) + amount);
+      if (status === "소개") stats.introduced = Math.max(0, number(stats.introduced) + amount);
+      if (status === "보류") stats.held = Math.max(0, number(stats.held) + amount);
+    }
+    change(oldStatus, -1);
+    change(newStatus, 1);
   }
 
   function latestCustomerActivity(customerId) {
@@ -259,8 +275,11 @@
       button.addEventListener("click", function() {
         state.selectedCustomerId = button.getAttribute("data-customer-id") || "";
         state.matchStatusFilter = "all";
+        state.matches = [];
+        state.loadedMatchCustomerId = "";
         renderCustomers();
         renderMatches(state.selectedCustomerId);
+        loadCustomerMatches(state.selectedCustomerId);
       });
     });
     if ((!state.selectedCustomerId || !filteredCustomers.some(function(row) {
@@ -269,6 +288,7 @@
       state.selectedCustomerId = field(filteredCustomers[0], state.customerHeaders, "고객ID");
       renderCustomers();
       renderMatches(state.selectedCustomerId);
+      loadCustomerMatches(state.selectedCustomerId);
     }
   }
 
@@ -330,6 +350,10 @@
         matchFilterButton("introduced", "후보", counts.introduced) + matchFilterButton("held", "보류", counts.held) +
       '</div>';
     if (!allRows.length) {
+      if (state.matchLoading && state.loadedMatchCustomerId !== customerId) {
+        list.innerHTML = header + '<div class="operations-empty"><b>이 고객의 추천매물을 불러오는 중입니다…</b><span>고객이 많아져도 선택한 고객 자료만 빠르게 불러옵니다.</span></div>';
+        return;
+      }
       list.innerHTML = header + '<div class="operations-empty"><b>현재 조건에 맞는 매물이 없습니다.</b><span>조건을 수정하거나 새 매물이 들어오면 자동으로 다시 비교됩니다.</span></div>';
       return;
     }
@@ -408,25 +432,52 @@
     return Promise.all([
       apiGet("operationsDashboard"),
       apiGet("customerList"),
-      apiGet("customerMatches"),
+      apiGet("customerMatchSummary"),
       apiGet("customerActivities")
     ]).then(function(results) {
       state.dashboard = results[0];
       state.customerHeaders = results[1].headers || [];
       state.customers = results[1].rows || [];
-      state.matchHeaders = results[2].headers || [];
-      state.matches = results[2].rows || [];
+      state.matchSummary = {};
+      (results[2].customers || []).forEach(function(item) {
+        state.matchSummary[text(item.customerId)] = item;
+      });
+      state.matches = [];
+      state.loadedMatchCustomerId = "";
       state.activityHeaders = results[3].headers || [];
       state.activities = results[3].rows || [];
       state.loaded = true;
       renderDashboard();
       renderCustomers();
       renderMatches(state.selectedCustomerId);
-      setMessage("자동화 자료가 최신 상태로 연결되었습니다.", "success");
+      return loadCustomerMatches(state.selectedCustomerId).then(function() {
+        setMessage("자동화 자료가 최신 상태로 연결되었습니다.", "success");
+      });
     }).catch(function(error) {
       setMessage(error.message || "운영자료 조회 중 오류가 발생했습니다.", "error");
     }).finally(function() {
       state.loading = false;
+    });
+  }
+
+  function loadCustomerMatches(customerId) {
+    customerId = text(customerId);
+    if (!customerId) return Promise.resolve();
+    if (state.loadedMatchCustomerId === customerId && !state.matchLoading) return Promise.resolve();
+    state.matchLoading = true;
+    renderMatches(customerId);
+    return apiGet("customerMatches", { customerId: customerId }).then(function(result) {
+      if (state.selectedCustomerId !== customerId) return;
+      state.matchHeaders = result.headers || [];
+      state.matches = result.rows || [];
+      state.loadedMatchCustomerId = customerId;
+      renderCustomers();
+      renderMatches(customerId);
+    }).catch(function(error) {
+      setMessage(error.message || "선택 고객의 추천매물을 불러오지 못했습니다.", "error");
+    }).finally(function() {
+      state.matchLoading = false;
+      if (state.selectedCustomerId === customerId) renderMatches(customerId);
     });
   }
 
@@ -665,6 +716,7 @@
       masterId: context.propertyId,
       status: nextStatus
     }).then(function() {
+      var oldStatus = context.status;
       context.status = nextStatus;
       window.operationsMatchStatusByPropertyId[text(propertyId)] = nextStatus;
       state.loaded = false;
@@ -673,6 +725,7 @@
       });
       var statusIndex = headerIndex(state.matchHeaders, "진행상태");
       if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = nextStatus;
+      adjustMatchSummary(context.customerId, oldStatus, nextStatus);
       if (typeof window.applyFilter === "function") window.applyFilter();
       return nextStatus;
     });
