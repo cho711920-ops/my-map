@@ -13,6 +13,7 @@
     unitIndex: 0,
     loading: false,
     detailsLoading: false,
+    previewShown: false,
     requestToken: 0
   };
 
@@ -128,9 +129,18 @@
     state.loading = true;
     var body = bodyElement();
     if (body) {
-      body.innerHTML = '<div class="building-register-loading"><i></i><b>' +
+      var loading = '<div class="building-register-loading"><i></i><b>' +
         esc(message || "건축물대장을 조회하고 있습니다") +
-        '</b><span>표제부·전유부·전유공용면적·층별개요를 확인합니다.</span></div>';
+        '</b><span>기본정보를 먼저 표시하고 상세자료를 이어서 불러옵니다.</span></div>';
+      if (state.previewShown && state.item) {
+        body.innerHTML = '<section class="building-register-preview">' +
+          '<span>매물정보로 먼저 확인</span><strong>' +
+          esc(state.item.name || state.item.type || "건물명 확인 중") +
+          '</strong><p>' + esc([state.item.address, state.item.room].filter(Boolean).join(" · ")) +
+          '</p></section>' + loading;
+      } else {
+        body.innerHTML = loading;
+      }
     }
     updateRefreshButton();
   }
@@ -537,6 +547,7 @@
 
   function render() {
     state.loading = false;
+    state.previewShown = false;
     updateRefreshButton();
     var data = state.data || {};
     var buildings = Array.isArray(data.buildings) ? data.buildings : [];
@@ -730,6 +741,7 @@
     state.buildingIndex = 0;
     state.unitIndex = 0;
     state.detailsLoading = false;
+    state.previewShown = true;
     var requestToken = ++state.requestToken;
     openModal();
     var cachedParcel = readParcelCache(item);
