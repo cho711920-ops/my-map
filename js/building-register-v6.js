@@ -724,6 +724,14 @@
     var zoneText = zones.length ? zones.join(" / ") : "정보 없음";
     var buildingName = joinText(building.buildingName, building.dongName);
     var floorTableRows = groupedFloorRows(building.floors || [], listingFloor);
+    var floorSection = visibleUnits.length ? "" : '' +
+      '<section class="building-register-floor-section">' +
+        '<h3>층별내역</h3>' +
+        '<div class="building-register-table-wrap"><table class="building-register-floor-table">' +
+          '<thead><tr><th>층</th><th>용도</th><th>면적</th><th>구조</th></tr></thead>' +
+          '<tbody>' + (floorTableRows || '<tr><td colspan="4" class="empty-floor">조회된 층별내역이 없습니다.</td></tr>') + '</tbody>' +
+        '</table></div>' +
+      '</section>';
     var summaryRows = [
       registerTableRow("소재지", building.lotAddress || state.parcel.lotAddress || state.item.address),
       registerTableRow("도로명", building.roadAddress),
@@ -790,13 +798,7 @@
       '</section>' +
       unitSection +
       '<p class="building-register-reference">* 공공데이터 참고용 자료로 실제 발급본과 차이가 있을 수 있습니다.</p>' +
-      '<section class="building-register-floor-section">' +
-        '<h3>층별내역</h3>' +
-        '<div class="building-register-table-wrap"><table class="building-register-floor-table">' +
-          '<thead><tr><th>층</th><th>용도</th><th>면적</th><th>구조</th></tr></thead>' +
-          '<tbody>' + (floorTableRows || '<tr><td colspan="4" class="empty-floor">조회된 층별내역이 없습니다.</td></tr>') + '</tbody>' +
-        '</table></div>' +
-      '</section>' +
+      floorSection +
       '<div class="building-register-notice"><strong>위반건축물 여부 안내</strong><p>공공 건축물대장 API에는 위반건축물 표시 항목이 제공되지 않습니다. 계약·중개 전 정부24 발급본 또는 관할 행정기관에서 별도 확인하세요.</p></div>' +
       '<div class="building-register-source">' +
         '<img src="assets/molit-logo.png" alt="국토교통부">' +
