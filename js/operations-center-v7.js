@@ -93,6 +93,11 @@
     var data = state.dashboard || {};
     var reviewCount = data.pendingReview != null ? data.pendingReview : data.review;
     var activeCount = data.activeMaster != null ? data.activeMaster : data.master;
+    var cleanup = data.lastCompaction || {};
+    var cleanupRemoved = number(cleanup.rawRemoved) + number(cleanup.reviewRemoved);
+    var cleanupHint = cleanup.at
+      ? cleanup.at + " · 원본 " + number(cleanup.rawRemaining).toLocaleString("ko-KR") + "건 유지"
+      : "매일 새벽 4시 자동 중복정리";
     panel.innerHTML =
       '<div class="operations-stat-grid">' +
         dashboardCard("활성 대표매물", activeCount, "JS웹에 표시되는 운영 매물", "primary") +
@@ -101,8 +106,10 @@
         dashboardCard("고객 문의", data.openCustomers != null ? data.openCustomers : data.customers, "진행 중인 고객 조건", "") +
         dashboardCard("신규 고객매칭", data.newMatches != null ? data.newMatches : data.matches, "아직 소개 처리하지 않은 추천", data.newMatches ? "primary" : "") +
         dashboardCard("미연락 경고", data.overdueMatches, (data.contactReminderDays || 3) + "일 이상 연락기록 없는 신규 추천", data.overdueMatches ? "warning" : "success") +
+        dashboardCard("거래확인 후보", data.transactionCheckCandidates, "전체수집 3회 연속 미노출된 보류매물", data.transactionCheckCandidates ? "warning" : "success") +
         dashboardCard("소개한 매물", data.introducedMatches, "고객에게 이미 소개한 추천", "success") +
         dashboardCard("변경 이력", data.history, "수정·통합·상태변경 기록", "") +
+        dashboardCard("최근 자동정리", cleanupRemoved, cleanupHint, cleanup.at ? "success" : "") +
       '</div>' +
       '<div class="operations-workflow-card">' +
         '<div><b>자동 처리 흐름</b><span>수집원본 → 자동 중복판정 → 대표매물/검증대기 → 고객 재매칭</span></div>' +
