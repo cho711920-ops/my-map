@@ -1693,10 +1693,10 @@ function buildCustomerMatchInlineControls(item) {
   var status = getCustomerMatchStatus(item);
   if (!propertyId || !status) return "";
   var encodedId = encodeURIComponent(propertyId);
-  var visualLabel = status === "소개" ? "소개한 매물" : (status === "보류" ? "보류한 매물" : (status === "신규" ? "신규매물" : ""));
+  var visualLabel = status === "소개" ? "후보 매물" : (status === "보류" ? "보류한 매물" : (status === "신규" ? "신규매물" : ""));
   return '<div class="customer-match-inline-actions" onclick="event.stopPropagation()">' +
     (visualLabel ? '<span class="customer-match-inline-badge status-' + (status === "소개" ? "introduced" : (status === "보류" ? "held" : "new")) + '">' + visualLabel + '</span>' : '<span class="customer-match-inline-spacer" aria-hidden="true"></span>') +
-    (status !== "소개" ? '<button type="button" class="introduce" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'소개\')">소개함</button>' : '') +
+    (status !== "소개" ? '<button type="button" class="introduce" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'소개\')">후보등록</button>' : '') +
     (status !== "보류" ? '<button type="button" class="hold" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'보류\')">보류함</button>' : '') +
   '</div>';
 }

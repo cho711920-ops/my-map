@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.4.19-collective-register">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.4-right-layout">
-<link rel="stylesheet" href="css/operations-center-v7.css?v=7.4.1-customer-workflow">
+<link rel="stylesheet" href="css/operations-center-v7.css?v=7.6.0-customer-crm">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.0">
 </head>
 
@@ -227,9 +227,10 @@
       <div class="customer-match-toolbar">
         <div>
           <strong>고객 조건 자동매칭</strong>
-          <span>고객문의 시트에 조건을 입력하면 자동으로 갱신됩니다.</span>
+          <span>상담 내용을 웹에서 저장하면 즉시 고객매칭이 갱신됩니다.</span>
         </div>
         <div class="customer-match-toolbar-actions">
+          <button type="button" onclick="openCustomerEditor()">+ 신규 고객</button>
           <button type="button" onclick="rebuildCustomerMatchesNow()">지금 다시 계산</button>
           <a href="https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/edit" target="_blank" rel="noopener">고객문의 시트</a>
         </div>
@@ -240,6 +241,56 @@
       </div>
     </div>
   </section>
+</div>
+
+<div id="customerEditorModal" class="customer-crm-modal" hidden>
+  <div class="customer-crm-backdrop" onclick="closeCustomerEditor()"></div>
+  <form id="customerEditorForm" class="customer-crm-dialog customer-crm-dialog-wide" onsubmit="saveCustomerFromWeb(event)">
+    <header>
+      <div><small>고객상담 입력</small><h3 id="customerEditorTitle">신규 고객 등록</h3></div>
+      <button type="button" onclick="closeCustomerEditor()" aria-label="닫기">×</button>
+    </header>
+    <div class="customer-crm-grid">
+      <label><span>고객명/상호 *</span><input data-customer-field="고객명/상호" required></label>
+      <label><span>연락처</span><input data-customer-field="연락처" inputmode="tel" placeholder="010-0000-0000"></label>
+      <label><span>진행상태</span><select data-customer-field="상태"><option>미팅전</option><option>미팅후</option><option>보류</option><option>계약완료</option><option>종료</option></select></label>
+      <label><span>희망지역</span><input data-customer-field="희망지역" placeholder="괴정동, 탄방동"></label>
+      <label><span>희망구분</span><input data-customer-field="희망구분" placeholder="상가, 사무실"></label>
+      <label><span>권리금 최대</span><input data-customer-field="권리금최대" inputmode="numeric"></label>
+      <label><span>보증금 최소</span><input data-customer-field="보증금최소" inputmode="numeric"></label>
+      <label><span>보증금 최대</span><input data-customer-field="보증금최대" inputmode="numeric"></label>
+      <label><span>월세 최소</span><input data-customer-field="월세최소" inputmode="numeric"></label>
+      <label><span>월세 최대</span><input data-customer-field="월세최대" inputmode="numeric"></label>
+      <label><span>평수 최소</span><input data-customer-field="평수최소" inputmode="decimal"></label>
+      <label><span>평수 최대</span><input data-customer-field="평수최대" inputmode="decimal"></label>
+      <label><span>최저층</span><input data-customer-field="최저층" inputmode="numeric"></label>
+      <label><span>최고층</span><input data-customer-field="최고층" inputmode="numeric"></label>
+      <label class="customer-crm-span-2"><span>필수태그</span><input data-customer-field="필수태그" placeholder="반드시 있어야 할 조건만 쉼표로 구분"></label>
+      <label class="customer-crm-span-2"><span>선호태그</span><input data-customer-field="선호태그" placeholder="있으면 좋은 조건을 쉼표로 구분"></label>
+      <label class="customer-crm-span-2"><span>제외태그</span><input data-customer-field="제외태그" placeholder="제외할 조건을 쉼표로 구분"></label>
+      <label class="customer-crm-span-2"><span>요청사항</span><textarea data-customer-field="요청사항" placeholder="업종, 주차, 노출, 시설 등 상담 내용을 적어주세요."></textarea></label>
+      <label class="customer-crm-span-2"><span>이번 상담 메모</span><textarea id="customerConsultationMemo" placeholder="고객 반응, 미팅 제안 내용 등을 적어주세요."></textarea></label>
+      <label><span>다음 연락/미팅일</span><input id="customerNextContactDate" type="datetime-local"></label>
+      <label><span>담당자</span><input data-customer-field="담당자"></label>
+    </div>
+    <footer><button type="button" onclick="closeCustomerEditor()">취소</button><button id="customerEditorSaveBtn" class="primary" type="submit">저장 후 바로 매칭</button></footer>
+  </form>
+</div>
+
+<div id="customerActivityModal" class="customer-crm-modal" hidden>
+  <div class="customer-crm-backdrop" onclick="closeCustomerActivity()"></div>
+  <form class="customer-crm-dialog" onsubmit="saveCustomerActivity(event)">
+    <header>
+      <div><small>후속관리</small><h3 id="customerActivityTitle">상담·미팅 기록</h3></div>
+      <button type="button" onclick="closeCustomerActivity()" aria-label="닫기">×</button>
+    </header>
+    <div class="customer-crm-grid customer-crm-grid-single">
+      <label><span>진행 단계</span><select id="customerActivityStage"><option>상담</option><option>미팅제안</option><option>미팅예약</option><option>미팅완료</option><option>임장</option><option>후속연락</option></select></label>
+      <label><span>다음 연락/미팅일</span><input id="customerActivityNextDate" type="datetime-local"></label>
+      <label><span>상담내용</span><textarea id="customerActivityMemo" placeholder="고객 반응과 다음에 확인할 내용을 적어주세요."></textarea></label>
+    </div>
+    <footer><button type="button" onclick="closeCustomerActivity()">취소</button><button id="customerActivitySaveBtn" class="primary" type="submit">기록 저장</button></footer>
+  </form>
 </div>
 
 
@@ -418,7 +469,7 @@
 </div>
 
 
-<script src="js/script.js?v=6.4.27-customer-actions"></script>
+<script src="js/script.js?v=6.4.28-customer-candidates"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
 <script src="js/print.js"></script>
@@ -433,7 +484,7 @@
 <script src="js/ai-visit-ui-v6.js"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.25-account-sync"></script>
 <script src="js/map.js?v=6.4.21-viewport-list"></script>
-<script src="js/operations-center-v7.js?v=7.5.0-maintenance"></script>
+<script src="js/operations-center-v7.js?v=7.6.0-customer-crm"></script>
 <script src="js/announcement-v1.js?v=1.0.0"></script>
 </body>
 </html>
