@@ -189,15 +189,12 @@
     change(newStatus, 1);
   }
 
-  function latestCustomerActivity(customerId) {
-    var rows = state.activities.filter(function(row) {
-      return field(row, state.activityHeaders, "고객ID") === customerId;
-    });
-    return rows.length ? rows[rows.length - 1] : null;
-  }
-
   function customerFollowup(customerId) {
-    var row = latestCustomerActivity(customerId);
+    var rows = state.activities.filter(function(row) {
+      return field(row, state.activityHeaders, "고객ID") === customerId &&
+        field(row, state.activityHeaders, "다음연락일");
+    });
+    var row = rows.length ? rows[rows.length - 1] : null;
     var next = row ? field(row, state.activityHeaders, "다음연락일") : "";
     var date = parseMatchDate(next);
     return {
@@ -342,6 +339,48 @@
     loadOperationsData(false);
   };
 
+  window.updateCustomerStatusFromWeb = function(nextStatus) {
+    var customerId = state.selectedCustomerId;
+    var customer = state.customers.find(function(row) {
+      return field(row, state.customerHeaders, "고객ID") === customerId;
+    });
+    var allowed = ["미팅전", "미팅후", "보류", "계약완료", "종료"];
+    if (!customer || allowed.indexOf(nextStatus) < 0) return;
+    var previousStatus = field(customer, state.customerHeaders, "상태") || "미팅전";
+    if (previousStatus === nextStatus) return;
+    var input = {};
+    state.customerHeaders.slice(0, 19).forEach(function(header, index) {
+      input[header] = customer[index];
+    });
+    input["상태"] = nextStatus;
+    var select = document.querySelector(".customer-status-quick select");
+    if (select) select.disabled = true;
+    setMessage("고객 상태를 " + nextStatus + "(으)로 변경하고 있습니다…", "loading");
+    apiPost("saveCustomer", {
+      customerId: customerId,
+      customer: input,
+      consultationMemo: "고객 상태 변경: " + previousStatus + " → " + nextStatus,
+      nextContactDate: ""
+    }).then(function(result) {
+      if (result.workspace) applyCustomerWorkspace(result.workspace);
+      state.customerView = ["계약완료", "종료"].indexOf(nextStatus) >= 0 ? "archived" : "active";
+      state.selectedCustomerId = result.customerId || customerId;
+      renderCustomers();
+      renderMatches(state.selectedCustomerId);
+      setMessage(nextStatus === "종료"
+        ? "고객을 종료 보관함으로 이동했습니다. 후보·보류 기록은 유지됩니다."
+        : nextStatus === "계약완료"
+          ? "계약완료 고객으로 보관했습니다. 필요하면 다시 진행 상태로 바꿀 수 있습니다."
+          : "고객 상태를 " + nextStatus + "(으)로 변경했습니다.", "success");
+    }).catch(function(error) {
+      if (select) {
+        select.value = previousStatus;
+        select.disabled = false;
+      }
+      setMessage(error.message || "고객 상태 변경에 실패했습니다.", "error");
+    });
+  };
+
   function getProperty(propertyId) {
     return (window.allItems || []).find(function(item) {
       return text(item.propertyId) === text(propertyId);
@@ -377,6 +416,7 @@
     });
     var customerName = customerRow ? field(customerRow, state.customerHeaders, "고객명/상호") : "선택 고객";
     var customerPhone = customerRow ? field(customerRow, state.customerHeaders, "연락처") : "";
+    var customerStatus = customerRow ? field(customerRow, state.customerHeaders, "상태") || "미팅전" : "미팅전";
     var phoneHref = customerPhone ? "tel:" + customerPhone.replace(/[^0-9+]/g, "") : "";
     var overdueCount = allRows.filter(isOverdueMatch).length;
     var followup = customerFollowup(customerId);
@@ -385,6 +425,11 @@
       '<div class="operations-match-heading"><div><span>' + escape(customerName) + '</span><b>' + counts.all.toLocaleString("ko-KR") + '건 추천</b></div>' +
       '<div class="operations-match-heading-actions">' +
       (phoneHref ? '<a class="customer-call-link" href="' + escape(phoneHref) + '" aria-label="' + escape(customerName + "에게 전화") + '">☎ ' + escape(customerPhone) + '</a>' : '') +
+      '<label class="customer-status-quick"><span>고객상태</span><select onchange="updateCustomerStatusFromWeb(this.value)">' +
+        ["미팅전", "미팅후", "보류", "계약완료", "종료"].map(function(status) {
+          return '<option value="' + status + '"' + (status === customerStatus ? ' selected' : '') + '>' + status + '</option>';
+        }).join("") +
+      '</select></label>' +
       '<button type="button" onclick="openCustomerMemo(\'' + escape(customerId) + '\')">메모</button>' +
       '<button type="button" onclick="openCustomerEditor(\'' + escape(customerId) + '\')">조건 수정</button>' +
       '<button type="button" onclick="openCustomerActivity(\'' + escape(customerId) + '\')">상담·미팅 기록</button>' +
