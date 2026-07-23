@@ -23,7 +23,9 @@
     activeTab: "dashboard",
     customerLoaded: false,
     dashboardLoaded: false,
-    rebuilding: false
+    rebuilding: false,
+    alertPollTimer: null,
+    alertFingerprint: ""
   };
 
   window.operationsMatchPropertyIds = null;
@@ -333,6 +335,7 @@
   };
 
   window.openCustomerWorkQueue = function(view) {
+    window.closeCustomerWorkAlert();
     state.customerView = view || "active";
     state.activeTab = "customers";
     window.switchOperationsTab("customers");
@@ -942,13 +945,113 @@
     });
   };
 
-  function refreshCustomerAlertBadge() {
+  function customerAlertCount(data) {
+    data = data || {};
+    return number(data.newMatchCustomers != null ? data.newMatchCustomers : data.newMatches) +
+      number(data.overdueCustomers != null ? data.overdueCustomers : data.overdueMatches) +
+      number(data.dueFollowups);
+  }
+
+  function customerAlertFingerprint(data) {
+    data = data || {};
+    return [
+      number(data.newMatchCustomers != null ? data.newMatchCustomers : data.newMatches),
+      number(data.overdueCustomers != null ? data.overdueCustomers : data.overdueMatches),
+      number(data.dueFollowups)
+    ].join("-");
+  }
+
+  function customerAlertStorageKey() {
+    var today = new Date();
+    var dateKey = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0")
+    ].join("");
+    return "js_customer_work_alert_" + dateKey;
+  }
+
+  function ensureCustomerWorkAlert() {
+    var modal = document.getElementById("customerWorkAlert");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "customerWorkAlert";
+    modal.className = "customer-work-alert";
+    modal.hidden = true;
+    modal.innerHTML =
+      '<div class="customer-work-alert-backdrop" onclick="closeCustomerWorkAlert()"></div>' +
+      '<section class="customer-work-alert-dialog" role="dialog" aria-modal="true" aria-labelledby="customerWorkAlertTitle">' +
+        '<header><div><small>6단계 자동 업무 알림</small><h2 id="customerWorkAlertTitle">지금 확인할 고객 업무</h2></div>' +
+        '<button type="button" onclick="closeCustomerWorkAlert()" aria-label="알림 닫기">×</button></header>' +
+        '<div id="customerWorkAlertBody" class="customer-work-alert-body"></div>' +
+        '<footer><button type="button" onclick="closeCustomerWorkAlert()">나중에</button>' +
+        '<button type="button" class="primary" onclick="openCustomerWorkQueue(\'active\')">고객 업무 열기</button></footer>' +
+      '</section>';
+    document.body.appendChild(modal);
+    return modal;
+  }
+
+  function alertQueueButton(view, label, count, description, tone) {
+    return '<button type="button" class="customer-work-alert-item ' + tone +
+      '" onclick="openCustomerWorkQueue(\'' + view + '\')">' +
+      '<span><b>' + escape(label) + '</b><small>' + escape(description) + '</small></span>' +
+      '<strong>' + number(count).toLocaleString("ko-KR") + '명</strong><em>바로 보기 →</em></button>';
+  }
+
+  function showCustomerWorkAlert(data, force) {
+    var total = customerAlertCount(data);
+    if (!total) return;
+    var fingerprint = customerAlertFingerprint(data);
+    var key = customerAlertStorageKey();
+    if (!force) {
+      try {
+        if (localStorage.getItem(key) === fingerprint) return;
+      } catch (_) {}
+    }
+    var modal = ensureCustomerWorkAlert();
+    var body = document.getElementById("customerWorkAlertBody");
+    var newCustomers = number(data.newMatchCustomers != null ? data.newMatchCustomers : data.newMatches);
+    var overdueCustomers = number(data.overdueCustomers != null ? data.overdueCustomers : data.overdueMatches);
+    var dueCustomers = number(data.dueFollowups);
+    if (body) {
+      body.innerHTML =
+        '<p>매물을 새로 소개하거나 다시 연락해야 할 고객을 모았습니다.</p>' +
+        '<div class="customer-work-alert-summary"><b>확인할 업무 ' + total.toLocaleString("ko-KR") + '건</b>' +
+        '<span>항목이 겹치는 고객은 각 목록에서 함께 표시될 수 있습니다.</span></div>' +
+        '<div class="customer-work-alert-items">' +
+          (newCustomers ? alertQueueButton("new", "신규 매물 안내", newCustomers, "조건에 맞는 새 매물이 생긴 고객", "new") : '') +
+          (overdueCustomers ? alertQueueButton("overdue", "미연락 경고", overdueCustomers, (number(data.contactReminderDays) || 3) + "일 이상 안내하지 않은 고객", "overdue") : '') +
+          (dueCustomers ? alertQueueButton("due", "오늘 후속관리", dueCustomers, "연락·미팅 예정일이 된 고객", "due") : '') +
+        '</div>';
+    }
+    state.alertFingerprint = fingerprint;
+    modal.hidden = false;
+    document.body.classList.add("customer-work-alert-open");
+    try { localStorage.setItem(key, fingerprint); } catch (_) {}
+  }
+
+  window.closeCustomerWorkAlert = function() {
+    var modal = document.getElementById("customerWorkAlert");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("customer-work-alert-open");
+  };
+
+  window.openCustomerWorkAlert = function() {
+    if (state.dashboard) showCustomerWorkAlert(state.dashboard, true);
+    else refreshCustomerAlertBadge(true);
+  };
+
+  function refreshCustomerAlertBadge(forcePopup) {
     apiGet("operationsDashboard").then(function(data) {
+      state.dashboard = data;
+      state.dashboardLoaded = true;
       var button = document.getElementById("operationsCustomerMenuBtn");
       if (!button) return;
-      var alerts = number(data.newMatches) + number(data.dueFollowups);
+      var alerts = customerAlertCount(data);
       button.textContent = alerts ? "고객매칭 · 알림 " + alerts.toLocaleString("ko-KR") : "고객매칭";
       button.classList.toggle("has-alert", alerts > 0);
+      button.setAttribute("aria-label", alerts ? "고객매칭, 확인할 업무 " + alerts + "건" : "고객매칭");
+      if (alerts) showCustomerWorkAlert(data, !!forcePopup);
     }).catch(function() {});
   }
 
@@ -960,5 +1063,15 @@
       window.closeOperationsCenter();
     }
   });
-  window.setTimeout(refreshCustomerAlertBadge, 1200);
+  window.setTimeout(function() {
+    refreshCustomerAlertBadge(false);
+    if (!state.alertPollTimer) {
+      state.alertPollTimer = window.setInterval(function() {
+        if (document.visibilityState === "visible") refreshCustomerAlertBadge(false);
+      }, 180000);
+    }
+  }, 1200);
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible") refreshCustomerAlertBadge(false);
+  });
 })();

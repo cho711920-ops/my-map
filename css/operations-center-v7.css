@@ -42,6 +42,46 @@ body.operations-center-open{overflow:hidden}
 .operations-match-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.operations-match-actions button,.operations-match-actions>span{min-height:30px;padding:6px 9px;border:1px solid #cfdbea;border-radius:9px;background:#fff;color:#40516a;font-size:11px;font-weight:800}
 .operations-match-actions button{cursor:pointer}.operations-match-actions button.introduce{border-color:#ef4444;color:#b91c1c}.operations-match-actions .introduced-label{border-color:#f87171;background:#fee2e2;color:#b91c1c}
 #operationsCustomerMenuBtn.has-alert{color:#c23b32;font-weight:900}
+.customer-work-alert[hidden]{display:none!important}
+.customer-work-alert{position:fixed;inset:0;z-index:100080;display:grid;place-items:center;padding:20px}
+.customer-work-alert-backdrop{position:absolute;inset:0;background:rgba(15,32,55,.55);backdrop-filter:blur(3px)}
+.customer-work-alert-dialog{position:relative;width:min(560px,100%);max-height:min(760px,calc(100dvh - 32px));overflow:auto;border:1px solid #d8e4f2;border-radius:24px;background:#fff;box-shadow:0 28px 80px rgba(11,39,76,.28)}
+.customer-work-alert-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:24px 26px 18px;border-bottom:1px solid #e8eef6}
+.customer-work-alert-dialog header small{display:block;margin-bottom:5px;color:#0b6fe8;font-size:12px;font-weight:800}
+.customer-work-alert-dialog header h2{margin:0;color:#102a4c;font-size:23px}
+.customer-work-alert-dialog header>button{width:42px;height:42px;border:0;border-radius:14px;background:#eef4fb;color:#183b64;font-size:25px;font-weight:700;cursor:pointer}
+.customer-work-alert-body{padding:22px 26px}
+.customer-work-alert-body>p{margin:0 0 14px;color:#536b87;font-size:14px}
+.customer-work-alert-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;padding:14px 16px;border-radius:14px;background:#f2f7fd;color:#17375e}
+.customer-work-alert-summary b{font-size:16px}
+.customer-work-alert-summary span{color:#71849b;font-size:11px;text-align:right}
+.customer-work-alert-items{display:grid;gap:10px}
+.customer-work-alert-item{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 14px;width:100%;padding:15px 16px;border:1px solid #dbe6f2;border-radius:15px;background:#fff;text-align:left;cursor:pointer}
+.customer-work-alert-item:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(28,71,120,.1)}
+.customer-work-alert-item span{display:grid;gap:4px}
+.customer-work-alert-item b{color:#17375e;font-size:15px}
+.customer-work-alert-item small{color:#6f8299;font-size:12px}
+.customer-work-alert-item strong{grid-row:1 / span 2;grid-column:2;color:#0b6fe8;font-size:21px}
+.customer-work-alert-item em{color:#3973ad;font-size:11px;font-style:normal;font-weight:700}
+.customer-work-alert-item.overdue{border-color:#efc6c3;background:#fff8f7}
+.customer-work-alert-item.overdue strong{color:#c23b32}
+.customer-work-alert-item.due{border-color:#f0d39a;background:#fffaf0}
+.customer-work-alert-item.due strong{color:#a56a00}
+.customer-work-alert-dialog footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 26px 22px;border-top:1px solid #e8eef6}
+.customer-work-alert-dialog footer button{min-height:44px;padding:0 18px;border:1px solid #cfdbea;border-radius:12px;background:#fff;color:#23476f;font-weight:800;cursor:pointer}
+.customer-work-alert-dialog footer button.primary{border-color:#0b6fe8;background:#0b6fe8;color:#fff}
+body.customer-work-alert-open{overflow:hidden}
+@media(max-width:600px){
+  .customer-work-alert{padding:12px}
+  .customer-work-alert-dialog{border-radius:20px}
+  .customer-work-alert-dialog header{padding:20px 18px 15px}
+  .customer-work-alert-dialog header h2{font-size:20px}
+  .customer-work-alert-body{padding:17px 18px}
+  .customer-work-alert-summary{align-items:flex-start;flex-direction:column}
+  .customer-work-alert-summary span{text-align:left}
+  .customer-work-alert-item{padding:13px 14px}
+  .customer-work-alert-dialog footer{padding:14px 18px 18px}
+}
 
 /* v7.4 고객 대량관리·상태별 처리 */
 .operations-customer-card u{display:inline-block;margin:7px 6px 0 0;padding:4px 7px;border-radius:999px;background:#f1f3f6;color:#5d6675;font-size:11px;font-weight:850;text-decoration:none}
