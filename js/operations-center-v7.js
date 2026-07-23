@@ -745,7 +745,7 @@
     if (title) title.textContent = name + " 메모 작성";
     var memos = state.activities.filter(function(row) {
       return field(row, state.activityHeaders, "고객ID") === id &&
-        !field(row, state.activityHeaders, "대표매물ID") &&
+        field(row, state.activityHeaders, "단계") === "메모" &&
         field(row, state.activityHeaders, "상담내용");
     });
     if (content) {
@@ -789,6 +789,7 @@
     apiPost("addCustomerActivity", {
       customerId: customerId,
       stage: "상담",
+      source: "customerMemo",
       memo: memo,
       nextContactDate: ""
     }).then(function(result) {
