@@ -105,6 +105,12 @@
               '<div id="aivRouteMap" class="aiv-route-map"></div>' +
             '</div>' +
             '<div id="aivCurrentCard" class="aiv-current-card"></div>' +
+            '<div class="aiv-field-actions aiv-field-actions-dock" aria-label="현장 작업">' +
+              '<button type="button" class="nav" onclick="JSAiVisitV6.openNavigation()">내비</button>' +
+              '<button type="button" class="roadview" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
+              '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
+              '<button type="button" class="complete" onclick="JSAiVisitV6.requestComplete()">임장완료</button>' +
+            '</div>' +
           '</main>' +
           '<aside class="aiv-route-panel">' +
             '<div class="aiv-route-head"><strong>방문 예정 목록</strong><span id="aivRouteCount"></span></div>' +
@@ -451,13 +457,7 @@
       '<label class="aiv-memo-editor-wrap" for="aivMemoEditor">' +
         '<span class="aiv-memo-title">메모</span>' +
         '<textarea id="aivMemoEditor" class="aiv-memo-editor" placeholder="현장 메모를 입력하세요">' + escapeHtml(item.memo || "") + '</textarea>' +
-      '</label>' +
-      '<div class="aiv-field-actions">' +
-        '<button type="button" class="nav" onclick="JSAiVisitV6.openNavigation()">내비</button>' +
-        '<button type="button" class="roadview" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
-        '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
-        '<button type="button" class="complete" onclick="JSAiVisitV6.requestComplete()">임장완료</button>' +
-      '</div>';
+      '</label>';
   }
 
   function renderWorkspace() {
