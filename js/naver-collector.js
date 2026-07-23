@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.1.3";
+  var VERSION = "4.2.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -696,6 +696,10 @@
     try { localStorage.setItem(CITY_PROGRESS_KEY, JSON.stringify(progress)); } catch (_) {}
   }
 
+  function createCollectionSessionId() {
+    return "S-NAVER-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
   function clearCityProgress() {
     try { localStorage.removeItem(CITY_PROGRESS_KEY); } catch (_) {}
   }
@@ -753,7 +757,11 @@
     items = items.filter(function(item) { return !seen.has(String(item.articleNo)); });
     for (var index = 0; index < items.length; index += BATCH_SIZE) {
       var batch = items.slice(index, index + BATCH_SIZE);
-      var result = await postBatchWithRetry(batch, 3);
+      var result = await postBatchWithRetry(batch, 3, {
+        sessionId: progress.sessionId,
+        scope: "대전 전체(5개 구)",
+        startedAt: progress.startedAt
+      });
       var failed = Number(result.failed) || 0;
       var errors = Array.isArray(result.errors) ? result.errors : [];
       var failedIds = {};
@@ -796,7 +804,11 @@
     for (var index = 0; index < pending.length; index += 1) {
       var entry = pending[index];
       try {
-        var result = await postBatchWithRetry([entry.item], 2);
+        var result = await postBatchWithRetry([entry.item], 2, {
+          sessionId: progress.sessionId,
+          scope: "대전 전체(5개 구)",
+          startedAt: progress.startedAt
+        });
         if (Number(result.failed) || !result.ok) {
           var error = Array.isArray(result.errors) && result.errors[0];
           entry.message = error && error.message || entry.message || "저장 실패";
@@ -894,8 +906,9 @@
         failed: 0,
         failedItems: loadCityFailedItems()
       };
-      saveCityProgress(progress);
     }
+    if (!progress.sessionId) progress.sessionId = createCollectionSessionId();
+    saveCityProgress(progress);
 
     state.busy = true;
     state.prepareId += 1;
@@ -942,6 +955,14 @@
       if (!progress.seenIds.length) throw new Error("대전 전체에서 감지된 매물이 없습니다. 네이버의 매물 종류와 거래방식 필터를 확인해 주세요.");
       setStatus("저장 실패 매물 마지막 재시도 중", "주소 확인이 늦었던 매물을 한 번 더 저장하고 있습니다.");
       var remainingFailures = await retryFailedCityArticles(progress);
+      await finalizeNaverSession({
+        sessionId: progress.sessionId,
+        scope: "대전 전체(5개 구)",
+        complete: false,
+        note: remainingFailures.length
+          ? "대전 전체 수집 완료 · 주소미확인 " + remainingFailures.length + "건은 다음 실행 시 재시도"
+          : "대전 전체 수집 완료"
+      });
       setProgress(1, 1);
       setStatus(
         "대전 전체 수집 완료",
@@ -1032,14 +1053,18 @@
     };
   }
 
-  async function postBatch(items) {
+  async function postBatch(items, metadata) {
+    metadata = metadata || {};
     var response = await nativeFetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
         action: "saveNaverBatch",
         accessKey: NAVER_ACCESS_KEY,
-        data: items
+        data: items,
+        sessionId: metadata.sessionId || "",
+        scope: metadata.scope || "선택 클러스터",
+        startedAt: metadata.startedAt || ""
       })
     });
     var text = await response.text();
@@ -1053,6 +1078,32 @@
     return result;
   }
 
+  async function finalizeNaverSession(metadata) {
+    metadata = metadata || {};
+    if (!metadata.sessionId) return {ok: true};
+    var response = await nativeFetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({
+        action: "finalizeNaverSession",
+        accessKey: NAVER_ACCESS_KEY,
+        sessionId: metadata.sessionId,
+        scope: metadata.scope || "선택 클러스터",
+        complete: Boolean(metadata.complete),
+        note: metadata.note || ""
+      })
+    });
+    var text = await response.text();
+    var result;
+    try {
+      result = JSON.parse(text);
+    } catch (_) {
+      throw new Error("수집회차 완료 응답을 읽지 못했습니다.");
+    }
+    if (!result.ok) throw new Error(result.message || "수집회차 완료 기록에 실패했습니다.");
+    return result;
+  }
+
   async function collectAndSave() {
     if (state.busy || state.preparing || !state.capture || !state.capture.prepared) return;
     state.busy = true;
@@ -1060,6 +1111,11 @@
     retryButton.disabled = true;
     var totals = {saved: 0, duplicate: 0, failed: 0};
     var firstFailure = "";
+    var session = {
+      sessionId: createCollectionSessionId(),
+      scope: "선택 클러스터",
+      startedAt: new Date().toISOString()
+    };
 
     try {
       var rawItems = await collectAll(state.capture);
@@ -1074,7 +1130,7 @@
           (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + BATCH_SIZE + "개씩 안전하게 저장합니다."
         );
         setProgress(index, items.length);
-        var result = await postBatchWithRetry(batch, 3);
+        var result = await postBatchWithRetry(batch, 3, session);
         totals.saved += Number(result.saved) || 0;
         totals.duplicate += Number(result.duplicate) || 0;
         totals.failed += Number(result.failed) || 0;
@@ -1084,6 +1140,12 @@
         await delay(160);
       }
 
+      await finalizeNaverSession({
+        sessionId: session.sessionId,
+        scope: session.scope,
+        complete: false,
+        note: "선택 클러스터 수집 완료"
+      });
       setProgress(items.length, items.length || 1);
       setStatus(
         "네이버 수집 완료",
@@ -1102,11 +1164,11 @@
     }
   }
 
-  async function postBatchWithRetry(batch, attempts) {
+  async function postBatchWithRetry(batch, attempts, metadata) {
     var lastError = null;
     for (var attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        return await postBatch(batch);
+        return await postBatch(batch, metadata);
       } catch (error) {
         lastError = error;
         if (attempt < attempts) await delay(500 * attempt);

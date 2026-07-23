@@ -278,9 +278,8 @@
           '<p>' + escape(reasons || "기본 조건 충족") + '</p>' +
           (warnings ? '<small>확인: ' + escape(warnings) + '</small>' : '') +
           '<div class="operations-match-actions">' +
-            (status === "신규" ? '<button type="button" data-match-action="연락" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">연락함</button>' : (status === "연락" ? '<span>✓ 연락 기록됨</span>' : '')) +
             (introduced ? '<span class="introduced-label">✓ 소개한 매물</span>' : '<button type="button" class="introduce" data-match-action="소개" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">소개함</button>') +
-            (held ? '<span class="held-label">보류한 매물</span>' : (introduced ? '' : '<button type="button" class="hold" data-match-action="보류" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">보류함</button>')) +
+            (held ? '<span class="held-label">보류한 매물</span>' : '<button type="button" class="hold" data-match-action="보류" data-match-id="' + escape(matchId) + '" data-customer-id="' + escape(customerId) + '" data-master-id="' + escape(propertyId) + '">보류함</button>') +
           '</div>' +
         '</div>' +
       '</article>';
@@ -316,7 +315,7 @@
       setMessage(status === "소개" ? "소개한 매물로 표시했습니다." : (status === "보류" ? "보류한 매물로 표시했습니다." : "고객 연락 기록을 저장했습니다."), "success");
     }).catch(function(error) {
       button.disabled = false;
-      button.textContent = status === "소개" ? "소개함" : (status === "보류" ? "보류함" : "연락함");
+      button.textContent = status === "소개" ? "소개함" : "보류함";
       setMessage(error.message || "고객매칭 상태 저장에 실패했습니다.", "error");
     });
   }
