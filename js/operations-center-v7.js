@@ -338,8 +338,13 @@
     window.closeCustomerWorkAlert();
     state.customerView = view || "active";
     state.activeTab = "customers";
-    window.switchOperationsTab("customers");
-    loadOperationsData(false);
+    var center = document.getElementById("operationsCenter");
+    if (center && center.classList.contains("open")) {
+      window.switchOperationsTab("customers");
+      loadOperationsData(false);
+    } else {
+      window.openOperationsCenter("customers");
+    }
   };
 
   window.updateCustomerStatusFromWeb = function(nextStatus) {
@@ -968,7 +973,7 @@
       String(today.getMonth() + 1).padStart(2, "0"),
       String(today.getDate()).padStart(2, "0")
     ].join("");
-    return "js_customer_work_alert_" + dateKey;
+    return "js_customer_work_alert_v711_" + dateKey;
   }
 
   function ensureCustomerWorkAlert() {
