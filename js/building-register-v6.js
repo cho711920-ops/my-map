@@ -802,6 +802,8 @@
         '<img src="assets/molit-logo.png" alt="국토교통부">' +
         '<div><b>출처: ' + esc(data.source || "국토교통부 건축HUB 건축물대장정보 서비스") + '</b>' +
           '<span>조회 ' + esc(data.queriedAt || "-") + ' · 제공기관 갱신주기 ' + esc(data.updateCycle || "월간") +
+          (data.recordCounts ? ' · 호실 ' + esc(data.recordCounts.exclusiveUnits || 0) +
+            '건 / 면적 ' + esc(data.recordCounts.exclusiveAreas || 0) + '건' : '') +
           (data.cached ? ' · 서버 캐시' : '') + '</span></div>' +
         '<a href="' + esc(data.sourcePage || "https://www.data.go.kr/data/15134735/openapi.do") + '" target="_blank" rel="noopener">공식 API</a>' +
       '</div>';
