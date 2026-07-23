@@ -741,11 +741,28 @@
     state.viewingMemoCustomerId = id;
     var name = field(customer, state.customerHeaders, "고객명/상호") || "고객";
     var title = document.getElementById("customerMemoTitle");
+    var content = document.getElementById("customerMemoContent");
     if (title) title.textContent = name + " 메모 작성";
+    var memos = state.activities.filter(function(row) {
+      return field(row, state.activityHeaders, "고객ID") === id &&
+        field(row, state.activityHeaders, "상담내용");
+    });
+    if (content) {
+      content.innerHTML = '<section class="customer-memo-history">' +
+        '<div class="customer-memo-history-title"><b>저장된 메모</b><span>' +
+        memos.length.toLocaleString("ko-KR") + '건</span></div>' +
+        (memos.length ? memos.map(function(row) {
+          return '<article class="customer-memo-entry"><time>' +
+            escape(field(row, state.activityHeaders, "일시")) + '</time><p>' +
+            escape(field(row, state.activityHeaders, "상담내용")) + '</p></article>';
+        }).join("") : '<div class="customer-memo-empty">저장된 메모가 없습니다.</div>') +
+        '</section>';
+    }
     var quickMemo = document.getElementById("customerQuickMemoInput");
     if (quickMemo) quickMemo.value = "";
     var modal = document.getElementById("customerMemoModal");
     if (modal) modal.hidden = false;
+    if (content) content.scrollTop = content.scrollHeight;
     document.body.classList.add("customer-crm-open");
   };
 
