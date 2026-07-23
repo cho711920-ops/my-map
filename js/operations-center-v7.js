@@ -91,12 +91,18 @@
     element.className = "operations-center-message" + (type ? " " + type : "");
   }
 
-  function dashboardCard(label, value, hint, tone) {
-    return '<article class="operations-stat-card ' + (tone || "") + '">' +
+  function dashboardCard(label, value, hint, tone, customerView) {
+    var tag = customerView ? "button" : "article";
+    var action = customerView
+      ? ' type="button" onclick="openCustomerWorkQueue(\'' + escape(customerView) + '\')"'
+      : "";
+    return '<' + tag + action + ' class="operations-stat-card ' + (tone || "") +
+      (customerView ? ' actionable' : '') + '">' +
       '<span>' + escape(label) + '</span>' +
       '<strong>' + number(value).toLocaleString("ko-KR") + '</strong>' +
       '<small>' + escape(hint) + '</small>' +
-      '</article>';
+      (customerView ? '<em>해당 고객 바로 보기 →</em>' : '') +
+      '</' + tag + '>';
   }
 
   function renderDashboard() {
@@ -115,10 +121,10 @@
         dashboardCard("활성 대표매물", activeCount, "JS웹에 표시되는 운영 매물", "primary") +
         dashboardCard("검증 대기", reviewCount, "사람의 판단이 필요한 원본", reviewCount ? "warning" : "success") +
         dashboardCard("수집 원본", data.raw, "출처별 원본 스냅샷", "") +
-        dashboardCard("고객 문의", data.openCustomers != null ? data.openCustomers : data.customers, "진행 중인 고객 조건", "") +
-        dashboardCard("신규 고객매칭", data.newMatches != null ? data.newMatches : data.matches, "아직 후보·보류로 정하지 않은 추천", data.newMatches ? "primary" : "") +
-        dashboardCard("미연락 경고", data.overdueMatches, (data.contactReminderDays || 3) + "일 이상 연락기록 없는 신규 추천", data.overdueMatches ? "warning" : "success") +
-        dashboardCard("오늘 후속관리", data.dueFollowups, "다음 연락·미팅일이 된 고객", data.dueFollowups ? "warning" : "success") +
+        dashboardCard("고객 문의", data.openCustomers != null ? data.openCustomers : data.customers, "진행 중인 고객 조건", "", "active") +
+        dashboardCard("신규 고객매칭", data.newMatches != null ? data.newMatches : data.matches, "아직 후보·보류로 정하지 않은 추천", data.newMatches ? "primary" : "", "new") +
+        dashboardCard("미연락 경고", data.overdueMatches, (data.contactReminderDays || 3) + "일 이상 연락기록 없는 신규 추천", data.overdueMatches ? "warning" : "success", "overdue") +
+        dashboardCard("오늘 후속관리", data.dueFollowups, "다음 연락·미팅일이 된 고객", data.dueFollowups ? "warning" : "success", "due") +
         dashboardCard("거래확인 후보", data.transactionCheckCandidates, "전체수집 3회 연속 미노출된 보류매물", data.transactionCheckCandidates ? "warning" : "success") +
         dashboardCard("후보 매물", data.introducedMatches, "고객이 후보로 선택한 매물", "success") +
         dashboardCard("변경 이력", data.history, "수정·통합·상태변경 기록", "") +
@@ -219,12 +225,27 @@
     var beforeMeetingCount = state.customers.filter(function(row) { return field(row, state.customerHeaders, "상태") === "미팅전"; }).length;
     var afterMeetingCount = state.customers.filter(function(row) { return field(row, state.customerHeaders, "상태") === "미팅후"; }).length;
     var pausedCount = state.customers.filter(function(row) { return field(row, state.customerHeaders, "상태") === "보류"; }).length;
+    var newCustomerCount = state.customers.filter(function(row) {
+      return !isArchivedCustomer(row) && customerMatchStats(field(row, state.customerHeaders, "고객ID")).fresh > 0;
+    }).length;
+    var overdueCustomerCount = state.customers.filter(function(row) {
+      return !isArchivedCustomer(row) && customerMatchStats(field(row, state.customerHeaders, "고객ID")).overdue > 0;
+    }).length;
+    var dueCustomerCount = state.customers.filter(function(row) {
+      return !isArchivedCustomer(row) && customerFollowup(field(row, state.customerHeaders, "고객ID")).due;
+    }).length;
     var filteredCustomers = state.customers.filter(function(row) {
       if (state.customerView === "active" && isArchivedCustomer(row)) return false;
       if (state.customerView === "before" && field(row, state.customerHeaders, "상태") !== "미팅전") return false;
       if (state.customerView === "after" && field(row, state.customerHeaders, "상태") !== "미팅후") return false;
       if (state.customerView === "paused" && field(row, state.customerHeaders, "상태") !== "보류") return false;
       if (state.customerView === "archived" && !isArchivedCustomer(row)) return false;
+      if (state.customerView === "new" &&
+          (isArchivedCustomer(row) || customerMatchStats(field(row, state.customerHeaders, "고객ID")).fresh <= 0)) return false;
+      if (state.customerView === "overdue" &&
+          (isArchivedCustomer(row) || customerMatchStats(field(row, state.customerHeaders, "고객ID")).overdue <= 0)) return false;
+      if (state.customerView === "due" &&
+          (isArchivedCustomer(row) || !customerFollowup(field(row, state.customerHeaders, "고객ID")).due)) return false;
       if (!search) return true;
       return ["고객명/상호", "희망지역", "연락처", "상태"].some(function(header) {
         return field(row, state.customerHeaders, header).toLowerCase().indexOf(search) >= 0;
@@ -241,13 +262,16 @@
     });
     list.innerHTML = '<div class="operations-customer-tools"><input id="operationsCustomerSearch" type="search" placeholder="고객명·지역·연락처 검색" value="' + escape(state.customerSearch) + '"><span>' + filteredCustomers.length.toLocaleString("ko-KR") + '명</span></div>' +
       '<div class="operations-customer-views">' +
+        customerViewButton("due", "오늘 후속", dueCustomerCount) +
+        customerViewButton("overdue", "미연락", overdueCustomerCount) +
+        customerViewButton("new", "신규 안내", newCustomerCount) +
         customerViewButton("active", "진행 전체", activeCount) +
         customerViewButton("before", "미팅전", beforeMeetingCount) +
         customerViewButton("after", "미팅후", afterMeetingCount) +
         customerViewButton("paused", "보류", pausedCount) +
         customerViewButton("archived", "종료 보관함", archivedCount) +
       '</div>' +
-      '<div class="operations-customer-grid">' + filteredCustomers.map(function(row) {
+      '<div class="operations-customer-grid">' + (filteredCustomers.length ? filteredCustomers.map(function(row) {
       var id = field(row, state.customerHeaders, "고객ID");
       var name = field(row, state.customerHeaders, "고객명/상호") || "이름 미입력";
       var status = field(row, state.customerHeaders, "상태") || "미팅전";
@@ -268,7 +292,7 @@
         (stats.overdue ? '<i>미연락 경고 ' + stats.overdue.toLocaleString("ko-KR") + '건</i>' : '') +
         (followup.next ? '<i class="' + (followup.due ? "due" : "scheduled") + '">다음 ' + escape(followup.next) + '</i>' : '') +
       '</button>';
-    }).join("") + '</div>';
+    }).join("") : '<div class="operations-customer-view-empty">이 업무에 해당하는 고객이 없습니다.</div>') + '</div>';
     var searchInput = document.getElementById("operationsCustomerSearch");
     if (searchInput) searchInput.addEventListener("input", function() {
       state.customerSearch = searchInput.value || "";
@@ -287,9 +311,12 @@
         loadCustomerMatches(state.selectedCustomerId);
       });
     });
-    if ((!state.selectedCustomerId || !filteredCustomers.some(function(row) {
+    if (!filteredCustomers.length) {
+      state.selectedCustomerId = "";
+      renderMatches("");
+    } else if ((!state.selectedCustomerId || !filteredCustomers.some(function(row) {
       return field(row, state.customerHeaders, "고객ID") === state.selectedCustomerId;
-    })) && filteredCustomers.length) {
+    }))) {
       state.selectedCustomerId = field(filteredCustomers[0], state.customerHeaders, "고객ID");
       renderCustomers();
       renderMatches(state.selectedCustomerId);
@@ -306,6 +333,13 @@
   window.setCustomerView = function(view) {
     state.customerView = view || "active";
     renderCustomers();
+  };
+
+  window.openCustomerWorkQueue = function(view) {
+    state.customerView = view || "active";
+    state.activeTab = "customers";
+    window.switchOperationsTab("customers");
+    loadOperationsData(false);
   };
 
   function getProperty(propertyId) {
