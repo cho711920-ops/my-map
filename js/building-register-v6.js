@@ -3,6 +3,8 @@
 
   var LOCAL_CACHE_PREFIX = "js-building-register-v2:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+  var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
+  var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
   var state = {
     item: null,
     parcel: null,
@@ -10,6 +12,7 @@
     buildingIndex: 0,
     unitIndex: 0,
     loading: false,
+    detailsLoading: false,
     requestToken: 0
   };
 
@@ -149,8 +152,8 @@
   function updateRefreshButton() {
     var button = document.getElementById("buildingRegisterRefreshV640");
     if (!button) return;
-    button.disabled = state.loading;
-    button.textContent = state.loading ? "조회 중" : "최신조회";
+    button.disabled = state.loading || state.detailsLoading;
+    button.textContent = state.detailsLoading ? "상세조회 중" : (state.loading ? "조회 중" : "최신조회");
   }
 
   function findItem(encodedKey) {
@@ -214,6 +217,35 @@
     return [parcel.sigunguCd, parcel.bjdongCd, parcel.platGbCd, parcel.bun, parcel.ji].join("-");
   }
 
+  function itemParcelKey(item) {
+    return String(item && (item.propertyId || item.id || item.key || item.address) || "").trim();
+  }
+
+  function readParcelCache(item) {
+    try {
+      var key = itemParcelKey(item);
+      if (!key) return null;
+      var raw = localStorage.getItem(PARCEL_CACHE_PREFIX + key);
+      if (!raw) return null;
+      var wrapper = JSON.parse(raw);
+      if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > PARCEL_CACHE_TTL) return null;
+      return wrapper.parcel || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeParcelCache(item, parcel) {
+    try {
+      var key = itemParcelKey(item);
+      if (!key || !parcel) return;
+      localStorage.setItem(PARCEL_CACHE_PREFIX + key, JSON.stringify({
+        savedAt: Date.now(),
+        parcel: parcel
+      }));
+    } catch (_) {}
+  }
+
   function readCache(parcel) {
     try {
       var raw = localStorage.getItem(LOCAL_CACHE_PREFIX + parcelKey(parcel));
@@ -263,7 +295,7 @@
     });
   }
 
-  function requestUrl(force) {
+  function requestUrl(force, mode) {
     if (typeof saveApiURL === "undefined" || !saveApiURL) {
       throw new Error("Apps Script 주소가 설정되지 않았습니다.");
     }
@@ -278,7 +310,28 @@
       "propertyId=" + encodeURIComponent(state.item.propertyId || state.item.id || state.item.key || "")
     ];
     if (force) params.push("force=1");
+    if (mode) params.push("mode=" + encodeURIComponent(mode));
     return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
+  }
+
+  function requestRegister(force, mode) {
+    var url = requestUrl(force, mode);
+    return jsonp(url, 60000).then(function (data) {
+      if (!data || !data.ok || data.action !== "buildingRegister") {
+        throw new Error((data && data.message) || "건축물대장 API 설정을 확인해주세요.");
+      }
+      return data;
+    });
+  }
+
+  function applyRegisterData(data, requestToken, writeLocalCache) {
+    if (requestToken !== state.requestToken) return null;
+    state.data = data;
+    state.buildingIndex = 0;
+    state.unitIndex = bestUnitIndex(data.units || [], state.item && state.item.room);
+    if (writeLocalCache) writeCache(state.parcel, data);
+    render();
+    return data;
   }
 
   function fetchRegister(force) {
@@ -294,21 +347,25 @@
     }
 
     setLoading(force ? "최신 건축물대장을 다시 조회하고 있습니다" : "건축물대장을 조회하고 있습니다");
-    var url;
-    try { url = requestUrl(force); } catch (error) { setError(error.message); return Promise.resolve(null); }
-    return jsonp(url, 60000).then(function (data) {
+    var firstMode = force ? "full" : "summary";
+    return requestRegister(force, firstMode).then(function (data) {
       if (requestToken !== state.requestToken) return null;
-      if (!data || !data.ok || data.action !== "buildingRegister") {
-        throw new Error((data && data.message) || "건축물대장 API 설정을 확인해주세요.");
-      }
-      state.data = data;
-      state.buildingIndex = 0;
-      state.unitIndex = bestUnitIndex(data.units || [], state.item && state.item.room);
-      writeCache(state.parcel, data);
-      render();
-      return data;
+      applyRegisterData(data, requestToken, !data.partial);
+      if (!data.partial || force) return data;
+
+      state.detailsLoading = true;
+      updateRefreshButton();
+      return requestRegister(false, "full").then(function (fullData) {
+        state.detailsLoading = false;
+        return applyRegisterData(fullData, requestToken, true);
+      }).catch(function () {
+        state.detailsLoading = false;
+        updateRefreshButton();
+        return data;
+      });
     }).catch(function (error) {
       if (requestToken !== state.requestToken) return null;
+      state.detailsLoading = false;
       setError(error && error.message);
       return null;
     });
@@ -672,12 +729,20 @@
     state.data = null;
     state.buildingIndex = 0;
     state.unitIndex = 0;
+    state.detailsLoading = false;
     var requestToken = ++state.requestToken;
     openModal();
+    var cachedParcel = readParcelCache(item);
+    if (cachedParcel) {
+      state.parcel = cachedParcel;
+      fetchRegister(false);
+      return;
+    }
     setLoading("매물의 지번을 확인하고 있습니다");
     resolveParcel(item).then(function (parcel) {
       if (requestToken !== state.requestToken) return null;
       state.parcel = parcel;
+      writeParcelCache(item, parcel);
       return fetchRegister(false);
     }).catch(function (error) {
       if (requestToken !== state.requestToken) return;
