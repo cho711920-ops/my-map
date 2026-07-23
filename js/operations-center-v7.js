@@ -288,7 +288,7 @@
       state.selectedCustomerId = field(filteredCustomers[0], state.customerHeaders, "고객ID");
       renderCustomers();
       renderMatches(state.selectedCustomerId);
-      loadCustomerMatches(state.selectedCustomerId);
+      if (!state.loading) loadCustomerMatches(state.selectedCustomerId);
     }
   }
 
