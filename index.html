@@ -26,6 +26,7 @@
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.4.27-unit-room-normalize">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.4-right-layout">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.11.1-work-alerts">
+<link rel="stylesheet" href="css/operations-collection-v8.css?v=7.12.0">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.0">
 </head>
 
@@ -219,10 +220,14 @@
     </header>
     <nav class="operations-center-tabs" aria-label="운영센터 메뉴">
       <button id="operationsTabDashboard" type="button" onclick="switchOperationsTab('dashboard')">운영현황</button>
+      <button id="operationsTabCollections" type="button" onclick="switchOperationsTab('collections')">수집현황</button>
+      <button id="operationsTabReviews" type="button" onclick="switchOperationsTab('reviews')">매물검증</button>
       <button id="operationsTabCustomers" type="button" onclick="switchOperationsTab('customers')">고객매칭</button>
     </nav>
     <div id="operationsCenterMessage" class="operations-center-message" aria-live="polite"></div>
     <div id="operationsDashboardPanel" class="operations-panel"></div>
+    <div id="operationsCollectionsPanel" class="operations-panel" hidden></div>
+    <div id="operationsReviewsPanel" class="operations-panel" hidden></div>
     <div id="operationsCustomersPanel" class="operations-panel" hidden>
       <div class="customer-match-toolbar">
         <div>
@@ -504,6 +509,7 @@
 <script src="js/ai-visit-session-v6.js?v=6.4.31-fixed-actions"></script>
 <script src="js/map.js?v=6.4.22-customer-cluster-colors"></script>
 <script src="js/operations-center-v7.js?v=7.11.1-work-alerts"></script>
+<script src="js/operations-collection-v8.js?v=7.12.0"></script>
 <script src="js/announcement-v1.js?v=1.0.0"></script>
 </body>
 </html>

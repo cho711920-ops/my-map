@@ -1,13 +1,15 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.2.0";
+  var VERSION = "4.3.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
   // Apps Script 서버의 요청당 안전 상한인 100건까지 한 번에 저장한다.
   // 실패한 묶음은 기존 재시도 로직이 같은 범위를 다시 전송한다.
   var BATCH_SIZE = 100;
+  var MIN_BATCH_SIZE = 50;
+  var MAX_BATCH_SIZE = 250;
   var CITY_PROGRESS_KEY = "js_naver_daejeon_progress_v1";
   var CITY_FAILED_KEY = "js_naver_daejeon_failed_v1";
   var CITY_TILE_MAX_PAGES = 80;
@@ -235,6 +237,29 @@
     }
     progressElement.style.display = "block";
     progressBarElement.style.width = Math.min(100, Math.round(done / total * 100)) + "%";
+  }
+
+  function adjustBatchSize(elapsedMs, failed) {
+    if (failed || elapsedMs > 12000) {
+      BATCH_SIZE = Math.max(MIN_BATCH_SIZE, Math.floor(BATCH_SIZE * 0.7 / 10) * 10);
+    } else if (elapsedMs < 4500) {
+      BATCH_SIZE = Math.min(MAX_BATCH_SIZE, BATCH_SIZE + 25);
+    }
+    return BATCH_SIZE;
+  }
+
+  function addResultTotals(target, result) {
+    result = result || {};
+    target.created = Number(target.created || 0) + Number(
+      result.created !== undefined ? result.created : result.saved || 0
+    );
+    target.merged = Number(target.merged || 0) + Number(result.merged || 0);
+    target.updated = Number(target.updated || 0) + Number(result.updated || 0);
+    target.review = Number(target.review || 0) + Number(result.review || 0);
+    target.duplicate = Number(target.duplicate || 0) + Number(result.duplicate || 0) +
+      Number(result.duplicateSnapshots || 0);
+    target.failed = Number(target.failed || 0) + Number(result.failed || 0);
+    target.saved = target.created;
   }
 
   function patchNetwork() {
@@ -755,8 +780,9 @@
     var seen = new Set(progress.seenIds || []);
     progress.failedItems = Array.isArray(progress.failedItems) ? progress.failedItems : loadCityFailedItems();
     items = items.filter(function(item) { return !seen.has(String(item.articleNo)); });
-    for (var index = 0; index < items.length; index += BATCH_SIZE) {
+    for (var index = 0; index < items.length;) {
       var batch = items.slice(index, index + BATCH_SIZE);
+      var batchStartedAt = Date.now();
       var result = await postBatchWithRetry(batch, 3, {
         sessionId: progress.sessionId,
         scope: "대전 전체(5개 구)",
@@ -787,12 +813,13 @@
           item: item
         });
       });
-      progress.saved += Number(result.saved) || 0;
-      progress.duplicate += Number(result.duplicate) || 0;
+      addResultTotals(progress, result);
       batch.forEach(function(item) { seen.add(String(item.articleNo)); });
       progress.seenIds = Array.from(seen);
       saveCityProgress(progress);
       saveCityFailedItems(progress.failedItems);
+      adjustBatchSize(Date.now() - batchStartedAt, failed);
+      index += batch.length;
       await delay(CITY_SAVE_DELAY);
     }
     return items.length;
@@ -814,8 +841,7 @@
           entry.message = error && error.message || entry.message || "저장 실패";
           remaining.push(entry);
         } else {
-          progress.saved += Number(result.saved) || 0;
-          progress.duplicate += Number(result.duplicate) || 0;
+          addResultTotals(progress, result);
         }
       } catch (error) {
         entry.message = String(error && error.message ? error.message : error);
@@ -904,6 +930,10 @@
         saved: 0,
         duplicate: 0,
         failed: 0,
+        created: 0,
+        merged: 0,
+        updated: 0,
+        review: 0,
         failedItems: loadCityFailedItems()
       };
     }
@@ -958,7 +988,8 @@
       await finalizeNaverSession({
         sessionId: progress.sessionId,
         scope: "대전 전체(5개 구)",
-        complete: false,
+        source: "네이버",
+        complete: remainingFailures.length === 0,
         note: remainingFailures.length
           ? "대전 전체 수집 완료 · 주소미확인 " + remainingFailures.length + "건은 다음 실행 시 재시도"
           : "대전 전체 수집 완료"
@@ -966,7 +997,10 @@
       setProgress(1, 1);
       setStatus(
         "대전 전체 수집 완료",
-        "고유매물 " + progress.seenIds.length + "개 · 신규 " + progress.saved + "개 · 중복 " + progress.duplicate + "개 · 주소미확인 " + remainingFailures.length + "개\n" +
+        "고유매물 " + progress.seenIds.length + "개 · 신규 " + Number(progress.created || progress.saved || 0) +
+          "개 · 통합 " + Number(progress.merged || 0) + "개 · 갱신 " + Number(progress.updated || 0) +
+          "개 · 검증대기 " + Number(progress.review || 0) + "개 · 중복 " + Number(progress.duplicate || 0) +
+          "개 · 주소미확인 " + remainingFailures.length + "개\n" +
           (remainingFailures.length ? "주소미확인 매물은 보관했으며 다음 전체 수집 때 다시 시도합니다." : "모든 대전 구역의 조회와 저장이 완료됐습니다.")
       );
       clearCityProgress();
@@ -1090,6 +1124,7 @@
         sessionId: metadata.sessionId,
         scope: metadata.scope || "선택 클러스터",
         complete: Boolean(metadata.complete),
+        source: metadata.source || "네이버",
         note: metadata.note || ""
       })
     });
@@ -1109,7 +1144,7 @@
     state.busy = true;
     saveButton.disabled = true;
     retryButton.disabled = true;
-    var totals = {saved: 0, duplicate: 0, failed: 0};
+    var totals = {saved: 0, created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0};
     var firstFailure = "";
     var session = {
       sessionId: createCollectionSessionId(),
@@ -1123,20 +1158,21 @@
         return item.articleNo;
       });
 
-      for (var index = 0; index < items.length; index += BATCH_SIZE) {
+      for (var index = 0; index < items.length;) {
         var batch = items.slice(index, index + BATCH_SIZE);
         setStatus(
           "JS부동산 매물현황 저장 중",
           (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + BATCH_SIZE + "개씩 안전하게 저장합니다."
         );
         setProgress(index, items.length);
+        var batchStartedAt = Date.now();
         var result = await postBatchWithRetry(batch, 3, session);
-        totals.saved += Number(result.saved) || 0;
-        totals.duplicate += Number(result.duplicate) || 0;
-        totals.failed += Number(result.failed) || 0;
+        addResultTotals(totals, result);
         if (!firstFailure && Array.isArray(result.errors) && result.errors.length) {
           firstFailure = clean(result.errors[0] && result.errors[0].message);
         }
+        adjustBatchSize(Date.now() - batchStartedAt, Number(result.failed || 0));
+        index += batch.length;
         await delay(160);
       }
 
@@ -1149,7 +1185,9 @@
       setProgress(items.length, items.length || 1);
       setStatus(
         "네이버 수집 완료",
-        "전체 " + items.length + "개 · 신규 " + totals.saved + "개 · 중복 " + totals.duplicate + "개 · 실패 " + totals.failed + "개" +
+        "전체 " + items.length + "개 · 신규 " + totals.created + "개 · 통합 " + totals.merged +
+          "개 · 갱신 " + totals.updated + "개 · 검증대기 " + totals.review +
+          "개 · 중복 " + totals.duplicate + "개 · 실패 " + totals.failed + "개" +
           (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
       );
       saveButton.textContent = "저장 완료 · 다시 수집 가능";

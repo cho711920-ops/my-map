@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.2.3";
+  var VERSION = "1.3.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -10,6 +10,9 @@
    */
   var LIST_REQUEST_CHUNK_SIZE = 300;
   var SAVE_BATCH_SIZE = 250;
+  var MIN_SAVE_BATCH_SIZE = 100;
+  var MAX_SAVE_BATCH_SIZE = 400;
+  var SAVE_PROGRESS_KEY = "js_gongsil_save_progress_v1";
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -1204,7 +1207,7 @@
 
   async function sendToAppsScript(records) {
     var collectorKey = getCollectorKey();
-    var totals = {
+    var emptyTotals = {
       received: 0,
       created: 0,
       merged: 0,
@@ -1213,23 +1216,58 @@
       duplicate: 0,
       failed: 0
     };
-    var batchCount = Math.ceil(records.length / SAVE_BATCH_SIZE);
+    var first = records[0] || {};
+    var last = records[records.length - 1] || {};
+    var signature = [
+      records.length,
+      first.sourceId || first.propertyId || first.id || first.address || "",
+      last.sourceId || last.propertyId || last.id || last.address || ""
+    ].join("|");
+    var savedProgress = null;
+    try { savedProgress = JSON.parse(localStorage.getItem(SAVE_PROGRESS_KEY) || "null"); } catch (_) {}
+    var totals = savedProgress && savedProgress.signature === signature
+      ? Object.assign(emptyTotals, savedProgress.totals || {})
+      : emptyTotals;
+    var offset = savedProgress && savedProgress.signature === signature
+      ? Math.max(0, Math.min(Number(savedProgress.offset) || 0, records.length))
+      : 0;
+    var batchIndex = savedProgress && savedProgress.signature === signature
+      ? Number(savedProgress.batchIndex) || 0
+      : 0;
 
-    for (var offset = 0, batchIndex = 0; offset < records.length; offset += SAVE_BATCH_SIZE) {
+    while (offset < records.length) {
       batchIndex += 1;
       var batch = records.slice(offset, offset + SAVE_BATCH_SIZE);
+      var batchStartedAt = Date.now();
       setStatus(
         "JS부동산 매물현황으로 전송 중입니다.",
         Math.min(offset + batch.length, records.length).toLocaleString("ko-KR") +
-        " / " + records.length.toLocaleString("ko-KR") + "개" +
-        (batchCount > 1 ? " · 저장 묶음 " + batchIndex + "/" + batchCount : "")
+        " / " + records.length.toLocaleString("ko-KR") + "개 · 자동 묶음 " +
+        batch.length.toLocaleString("ko-KR") + "개"
       );
 
       var result = await sendAppsScriptBatch(batch, collectorKey, batchIndex);
       if (!result || result.ok !== true) return result;
 
       addImportResult(totals, result);
+      offset += batch.length;
+      var elapsed = Date.now() - batchStartedAt;
+      if (Number(result.failed || 0) || elapsed > 14000) {
+        SAVE_BATCH_SIZE = Math.max(MIN_SAVE_BATCH_SIZE, Math.floor(SAVE_BATCH_SIZE * 0.7 / 25) * 25);
+      } else if (elapsed < 5000) {
+        SAVE_BATCH_SIZE = Math.min(MAX_SAVE_BATCH_SIZE, SAVE_BATCH_SIZE + 50);
+      }
+      try {
+        localStorage.setItem(SAVE_PROGRESS_KEY, JSON.stringify({
+          signature: signature,
+          offset: offset,
+          batchIndex: batchIndex,
+          totals: totals,
+          updatedAt: new Date().toISOString()
+        }));
+      } catch (_) {}
     }
+    try { localStorage.removeItem(SAVE_PROGRESS_KEY); } catch (_) {}
 
     return {
       ok: true,
