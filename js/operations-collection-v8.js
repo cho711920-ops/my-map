@@ -47,7 +47,19 @@
     node.textContent = value || "";
     node.className = "operations-center-message" + (tone ? " " + tone : "");
   }
-  function formatAt(value) { return text(value) || "-"; }
+  function formatAt(value) {
+    var raw = text(value);
+    if (!raw) return "-";
+    var date = new Date(raw);
+    if (isNaN(date.getTime())) return raw;
+    var parts = new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }).formatToParts(date).reduce(function(result, part) {
+      result[part.type] = part.value; return result;
+    }, {});
+    return [parts.year, parts.month, parts.day].join(".") + " " + parts.hour + ":" + parts.minute;
+  }
 
   function resultCells(result) {
     result = result || {};
