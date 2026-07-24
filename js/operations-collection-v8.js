@@ -280,12 +280,12 @@
   window.repairRoomlessExactReviews = function() {
     if (extraState.loading) return;
     extraState.loading = true;
-    message("호실 공란 동일조건 매물을 자동통합하는 중입니다…", "loading");
+    message("주소·층/호실·가격이 같고 평수 차이가 1평 미만인 매물을 자동통합하는 중입니다…", "loading");
     apiPost("repairRoomlessExactReviews", {}).then(function(result) {
       extraState.reviews = null;
       sessionStorage.removeItem(REVIEW_CACHE_KEY);
       showReviewDecisionModal("자동중복 정리 완료",
-        "주소·보증금·월세·평수가 같고 호실이 비어 있던 검증매물 " +
+        "주소·층/호실·보증금·월세가 같고 평수 차이가 1평 미만인 검증매물 " +
         number(result.merged).toLocaleString("ko-KR") + "건을 기존 매물에 통합했습니다.", "", true);
       return loadReviews(true, true);
     }).then(function() {
