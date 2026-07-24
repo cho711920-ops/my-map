@@ -1,6 +1,8 @@
 (function() {
   "use strict";
 
+  var OPERATIONS_CACHE_KEY = "js_operations_fast_cache_v1";
+  var OPERATIONS_CACHE_MAX_AGE = 10 * 60 * 1000;
   var state = {
     loaded: false,
     loading: false,
@@ -25,7 +27,9 @@
     dashboardLoaded: false,
     rebuilding: false,
     alertPollTimer: null,
-    alertFingerprint: ""
+    alertFingerprint: "",
+    lastCustomerWorkspace: null,
+    customerPrefetchPromise: null
   };
 
   window.operationsMatchPropertyIds = null;
@@ -91,6 +95,16 @@
     if (!element) return;
     element.textContent = message || "";
     element.className = "operations-center-message" + (type ? " " + type : "");
+  }
+
+  function persistOperationsCache() {
+    try {
+      sessionStorage.setItem(OPERATIONS_CACHE_KEY, JSON.stringify({
+        at: Date.now(),
+        dashboard: state.dashboard,
+        customerWorkspace: state.lastCustomerWorkspace
+      }));
+    } catch (_) {}
   }
 
   function dashboardCard(label, value, hint, tone, customerView) {
@@ -530,6 +544,7 @@
   }
 
   function applyCustomerWorkspace(result) {
+    state.lastCustomerWorkspace = result;
     state.dashboard = Object.assign({}, state.dashboard || {}, {
       contactReminderDays: number(result.contactReminderDays) || 3
     });
@@ -549,6 +564,7 @@
     state.loaded = true;
     renderCustomers();
     renderMatches(state.selectedCustomerId);
+    persistOperationsCache();
   }
 
   function loadOperationsData(force) {
@@ -563,6 +579,14 @@
       }
       return Promise.resolve();
     }
+    if (customersMode && !force && state.customerPrefetchPromise) {
+      setMessage("고객목록을 준비하는 중입니다…", "loading");
+      return state.customerPrefetchPromise.then(function() {
+        renderCustomers();
+        renderMatches(state.selectedCustomerId);
+        setMessage("고객목록을 불러왔습니다.", "success");
+      });
+    }
     state.loading = true;
     setMessage("운영자료를 불러오는 중입니다…", "loading");
     var request = customersMode
@@ -576,6 +600,7 @@
         state.dashboardLoaded = true;
         state.loaded = true;
         renderDashboard();
+        persistOperationsCache();
       }
       setMessage("자동화 자료가 최신 상태로 연결되었습니다.", "success");
     }).catch(function(error) {
@@ -612,8 +637,9 @@
     center.classList.add("open");
     center.setAttribute("aria-hidden", "false");
     document.body.classList.add("operations-center-open");
-    window.switchOperationsTab(tab || "dashboard");
-    loadOperationsData(false);
+    var targetTab = tab || "dashboard";
+    window.switchOperationsTab(targetTab);
+    if (targetTab === "dashboard" || targetTab === "customers") loadOperationsData(false);
   };
 
   window.closeOperationsCenter = function() {
@@ -1050,6 +1076,7 @@
     apiGet("operationsDashboard").then(function(data) {
       state.dashboard = data;
       state.dashboardLoaded = true;
+      persistOperationsCache();
       var button = document.getElementById("operationsCustomerMenuBtn");
       if (!button) return;
       var alerts = customerAlertCount(data);
@@ -1068,6 +1095,24 @@
       window.closeOperationsCenter();
     }
   });
+  try {
+    var fastCache = JSON.parse(sessionStorage.getItem(OPERATIONS_CACHE_KEY) || "null");
+    if (fastCache && Date.now() - Number(fastCache.at || 0) <= OPERATIONS_CACHE_MAX_AGE) {
+      if (fastCache.dashboard) {
+        state.dashboard = fastCache.dashboard;
+        state.dashboardLoaded = true;
+      }
+      if (fastCache.customerWorkspace) applyCustomerWorkspace(fastCache.customerWorkspace);
+    }
+  } catch (_) {}
+  window.setTimeout(function() {
+    if (!state.customerLoaded) {
+      state.customerPrefetchPromise = apiGet("customerWorkspace", { customerId: state.selectedCustomerId })
+        .then(applyCustomerWorkspace)
+        .catch(function() {})
+        .finally(function() { state.customerPrefetchPromise = null; });
+    }
+  }, 2200);
   window.setTimeout(function() {
     refreshCustomerAlertBadge(false);
     if (!state.alertPollTimer) {

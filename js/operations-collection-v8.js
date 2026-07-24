@@ -2,13 +2,17 @@
   "use strict";
 
   var originalSwitch = window.switchOperationsTab;
+  var REVIEW_CACHE_KEY = "js_operations_review_cache_v1";
+  var REVIEW_CACHE_MAX_AGE = 10 * 60 * 1000;
   var extraState = {
     tab: "",
     collection: null,
     reviews: null,
     selectedGroupKey: "",
     risk: "all",
-    loading: false
+    loading: false,
+    refreshing: false,
+    collectionLoading: false
   };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
@@ -46,6 +50,22 @@
     if (!node) return;
     node.textContent = value || "";
     node.className = "operations-center-message" + (tone ? " " + tone : "");
+  }
+  function saveReviewCache() {
+    if (!extraState.reviews) return;
+    try {
+      sessionStorage.setItem(REVIEW_CACHE_KEY, JSON.stringify({
+        at: Date.now(),
+        data: extraState.reviews
+      }));
+    } catch (_) {}
+  }
+  function restoreReviewCache() {
+    try {
+      var cached = JSON.parse(sessionStorage.getItem(REVIEW_CACHE_KEY) || "null");
+      if (!cached || Date.now() - Number(cached.at || 0) > REVIEW_CACHE_MAX_AGE) return;
+      extraState.reviews = cached.data || null;
+    } catch (_) {}
   }
   function formatAt(value) {
     var raw = text(value);
@@ -172,27 +192,33 @@
   }
 
   function loadCollection(force) {
-    if (extraState.loading || (!force && extraState.collection)) return Promise.resolve(renderCollections());
-    extraState.loading = true;
+    if (extraState.collectionLoading || (!force && extraState.collection)) return Promise.resolve(renderCollections());
+    extraState.collectionLoading = true;
     message("수집현황을 불러오는 중입니다…", "loading");
     return apiGet("collectionStatus").then(function(data) {
       extraState.collection = data; renderCollections();
       message("수집현황을 최신 상태로 불러왔습니다.", "success");
     }).catch(function(error) { message(error.message, "error"); })
-      .finally(function() { extraState.loading = false; });
+      .finally(function() { extraState.collectionLoading = false; });
   }
-  function loadReviews(force) {
-    if (extraState.loading || (!force && extraState.reviews)) return Promise.resolve(renderReviews());
-    extraState.loading = true;
-    message("매물검증 묶음을 만드는 중입니다…", "loading");
+  function loadReviews(force, silent) {
+    if (extraState.refreshing || (!force && extraState.reviews)) return Promise.resolve(renderReviews());
+    extraState.refreshing = true;
+    if (!silent) message("매물검증 묶음을 만드는 중입니다…", "loading");
     return apiGet("reviewWorkspace").then(function(data) {
       extraState.reviews = data;
       if (!selectedGroup()) extraState.selectedGroupKey = "";
       renderReviews();
-      message("검증대상 " + number(data.total).toLocaleString("ko-KR") + "건을 " +
-        number(data.groupCount).toLocaleString("ko-KR") + "개 묶음으로 정리했습니다.", "success");
-    }).catch(function(error) { message(error.message, "error"); })
-      .finally(function() { extraState.loading = false; });
+      saveReviewCache();
+      if (!silent) {
+        message("검증대상 " + number(data.total).toLocaleString("ko-KR") + "건을 " +
+          number(data.groupCount).toLocaleString("ko-KR") + "개 묶음으로 정리했습니다. · 우선 " +
+          number(data.loadedGroupCount || (data.groups || []).length).toLocaleString("ko-KR") +
+          "개 묶음 표시", "success");
+      }
+    }).catch(function(error) {
+      if (!silent) message(error.message, "error");
+    }).finally(function() { extraState.refreshing = false; });
   }
 
   window.switchOperationsTab = function(tab) {
@@ -245,10 +271,28 @@
     apiPost("applyReviewDecision", {
       reviewId: item.reviewId, reviewAction: action, masterId: masterId
     }).then(function(result) {
-      extraState.reviews = null;
+      var current = selectedGroup();
+      if (current) {
+        current.items = current.items.filter(function(entry) { return entry.reviewId !== item.reviewId; });
+        current.count = current.items.length;
+        if (extraState.reviews) {
+          extraState.reviews.total = Math.max(0, number(extraState.reviews.total) - 1);
+          if (!current.items.length) {
+            extraState.reviews.groups = (extraState.reviews.groups || []).filter(function(entry) {
+              return entry.groupKey !== current.groupKey;
+            });
+            extraState.reviews.groupCount = Math.max(0, number(extraState.reviews.groupCount) - 1);
+          }
+        }
+      }
       extraState.selectedGroupKey = "";
-      message(result.message || "검증결정을 저장했습니다.", "success");
-      return loadReviews(true);
+      saveReviewCache();
+      renderReviews();
+      extraState.loading = false;
+      message((result.message || "검증결정을 저장했습니다.") + " · 남은 검증 " +
+        number(result.remaining !== undefined ? result.remaining : extraState.reviews && extraState.reviews.total)
+          .toLocaleString("ko-KR") + "건", "success");
+      return loadReviews(true, true);
     }).catch(function(error) { message(error.message, "error"); })
       .finally(function() { extraState.loading = false; });
   };
@@ -296,4 +340,8 @@
     if (event.key === "3") window.decideCurrentReview("hold");
     if (event.key === "Escape") window.closePropertyTimeline();
   });
+  restoreReviewCache();
+  setTimeout(function() {
+    if (!extraState.refreshing) loadReviews(true, true);
+  }, 5000);
 })();
