@@ -202,7 +202,15 @@
       .finally(function() { extraState.collectionLoading = false; });
   }
   function loadReviews(force, silent) {
-    if (extraState.refreshing || (!force && extraState.reviews)) return Promise.resolve(renderReviews());
+    if (extraState.refreshing) return Promise.resolve(renderReviews());
+    if (!force && extraState.reviews) {
+      renderReviews();
+      if (!silent) {
+        message("검증대상 " + number(extraState.reviews.total).toLocaleString("ko-KR") +
+          "건 · 우선순위 목록을 바로 표시했습니다.", "success");
+      }
+      return Promise.resolve();
+    }
     extraState.refreshing = true;
     if (!silent) message("매물검증 묶음을 만드는 중입니다…", "loading");
     return apiGet("reviewWorkspace").then(function(data) {
