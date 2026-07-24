@@ -433,15 +433,23 @@
 
     var typeLabel = String(item.type || "").trim();
 
-    return '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
-      '<div class="aiv-current-top">' +
-        '<div>' +
-          '<div class="aiv-current-title-line">' +
-            (typeLabel ? '<span class="aiv-type-badge">' + escapeHtml(typeLabel) + '</span>' : '') +
-            '<h2>' + escapeHtml(item.name || item.address || "매물") + '</h2>' +
+    return '<div class="aiv-current-summary-row">' +
+        '<div class="aiv-current-top">' +
+          '<div>' +
+            '<div class="aiv-current-title-line">' +
+              (typeLabel ? '<span class="aiv-type-badge">' + escapeHtml(typeLabel) + '</span>' : '') +
+              '<h2>' + escapeHtml(item.name || item.address || "매물") + '</h2>' +
+            '</div>' +
+            '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
           '</div>' +
-          '<div class="aiv-current-address">' + escapeHtml(buildAddressWithRoom(item)) + '</div>' +
         '</div>' +
+        '<div class="aiv-field-actions aiv-field-actions-inline" aria-label="현장 작업">' +
+          '<button type="button" class="nav" onclick="JSAiVisitV6.openNavigation()">내비</button>' +
+          '<button type="button" class="roadview" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
+          '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
+          '<button type="button" class="complete" onclick="JSAiVisitV6.requestComplete()">임장완료</button>' +
+        '</div>' +
+        '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
       '</div>' +
       '<div class="aiv-condition-line">' +
         '<span class="price-main">보증금 ' + escapeHtml(item.deposit || 0) + ' / 월세 ' + escapeHtml(item.rent || 0) + '</span>' +
