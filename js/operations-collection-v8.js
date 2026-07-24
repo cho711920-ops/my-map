@@ -9,6 +9,7 @@
     collection: null,
     reviews: null,
     selectedGroupKey: "",
+    selectedReviewId: "",
     risk: "all",
     loading: false,
     refreshing: false,
@@ -132,6 +133,12 @@
     var groups = filteredGroups();
     return groups.filter(function(group) { return group.groupKey === extraState.selectedGroupKey; })[0] || groups[0] || null;
   }
+  function selectedReviewItem(group) {
+    if (!group || !group.items || !group.items.length) return null;
+    return group.items.filter(function(item) {
+      return item.reviewId === extraState.selectedReviewId;
+    })[0] || group.items[0];
+  }
   function values(item) {
     return '<div class="review-values">' +
       '<div><small>보증금</small><b>' + escape(item.deposit) + '</b></div>' +
@@ -151,7 +158,8 @@
     if (group) extraState.selectedGroupKey = group.groupKey;
     var filters = ["all", "높음", "중간", "낮음"];
     panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>위험도와 차이값을 확인하고 통합·별도등록·보류만 선택하세요. 처리 후 다음 항목이 자동으로 열립니다.</span></div>' +
-      '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div>' +
+      '<div class="review-toolbar-actions"><button type="button" onclick="repairRoomlessExactReviews()">자동중복 정리</button>' +
+      '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-filter-buttons">' +
       filters.map(function(filter) {
         return '<button type="button" class="' + (extraState.risk === filter ? "active" : "") +
@@ -169,15 +177,23 @@
   }
   function renderReviewDetail(group) {
     if (!group) return '<div class="operations-empty"><b>처리할 항목이 없습니다.</b></div>';
-    var item = group.items[0];
+    var item = selectedReviewItem(group);
+    if (!item) return '<div class="operations-empty"><b>처리할 항목이 없습니다.</b></div>';
+    extraState.selectedReviewId = item.reviewId;
     var candidates = group.candidates || [];
     return '<div class="review-summary"><div><h3>' + escape(group.address || "주소 확인 필요") + '</h3><p>' +
       escape(group.room || "호실 없음") + ' · 중복후보 ' + candidates.length + '개 · 수집원본 ' +
       group.items.length + '개</p></div><span class="review-risk">' + escape(group.risk) + ' 위험 · ' +
       number(group.score) + '점</span></div><div class="review-compare-grid">' +
-      '<article class="review-item"><header><h4>새로 수집된 매물</h4><span>' + escape(item.type) + '</span></header>' +
-      '<p>' + escape(item.address) + ' ' + escape(item.room) + '<br>' + escape(item.comparison || item.memo) + '</p>' +
-      values(item) + '</article>' +
+      group.items.map(function(entry, index) {
+        var selected = entry.reviewId === item.reviewId;
+        return '<button type="button" class="review-item review-item-select' + (selected ? ' selected' : '') +
+          '" onclick="selectReviewItem(\'' + escape(entry.reviewId) + '\')"><header><h4>' +
+          (selected ? '현재 처리할 신규매물' : '같은 묶음 신규매물 ' + (index + 1)) +
+          '</h4><span>' + escape(entry.type) + '</span></header><p>' + escape(entry.address) + ' ' +
+          escape(entry.room) + '<br>' + escape(entry.comparison || entry.memo) + '</p>' +
+          values(entry) + '</button>';
+      }).join("") +
       (candidates.length ? candidates.map(function(candidate) {
         return '<article class="review-candidate"><header><h4>' + escape(candidate.buildingName || "기존 대표매물") +
           '</h4><span>' + escape(candidate.source) + '</span></header><p>' + escape(candidate.address) + ' ' +
@@ -261,14 +277,100 @@
 
   window.refreshCollectionStatus = function() { extraState.collection = null; return loadCollection(true); };
   window.refreshReviewWorkspace = function() { extraState.reviews = null; return loadReviews(true); };
-  window.setReviewRiskFilter = function(filter) {
-    extraState.risk = filter || "all"; extraState.selectedGroupKey = ""; renderReviews();
+  window.repairRoomlessExactReviews = function() {
+    if (extraState.loading) return;
+    extraState.loading = true;
+    message("호실 공란 동일조건 매물을 자동통합하는 중입니다…", "loading");
+    apiPost("repairRoomlessExactReviews", {}).then(function(result) {
+      extraState.reviews = null;
+      sessionStorage.removeItem(REVIEW_CACHE_KEY);
+      showReviewDecisionModal("자동중복 정리 완료",
+        "주소·보증금·월세·평수가 같고 호실이 비어 있던 검증매물 " +
+        number(result.merged).toLocaleString("ko-KR") + "건을 기존 매물에 통합했습니다.", "", true);
+      return loadReviews(true, true);
+    }).then(function() {
+      message("자동중복 정리와 검증목록 갱신을 완료했습니다.", "success");
+    }).catch(function(error) {
+      message(error.message, "error");
+      showReviewDecisionModal("자동중복 정리 실패", error.message || "다시 시도해 주세요.", "", true);
+    }).finally(function() {
+      extraState.loading = false;
+    });
   };
-  window.selectReviewGroup = function(key) { extraState.selectedGroupKey = text(key); renderReviews(); };
+  window.setReviewRiskFilter = function(filter) {
+    extraState.risk = filter || "all"; extraState.selectedGroupKey = ""; extraState.selectedReviewId = ""; renderReviews();
+  };
+  window.selectReviewGroup = function(key) {
+    extraState.selectedGroupKey = text(key);
+    extraState.selectedReviewId = "";
+    renderReviews();
+  };
+  window.selectReviewItem = function(reviewId) {
+    extraState.selectedReviewId = text(reviewId);
+    renderReviews();
+  };
+  function reviewDecisionModal() {
+    var modal = document.getElementById("reviewDecisionModal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "reviewDecisionModal";
+    modal.className = "review-decision-modal";
+    modal.hidden = true;
+    modal.innerHTML = '<div class="review-decision-backdrop" onclick="closeReviewDecisionModal()"></div>' +
+      '<section class="review-decision-dialog" role="dialog" aria-modal="true">' +
+        '<header><h3 id="reviewDecisionTitle"></h3><p id="reviewDecisionText"></p></header>' +
+        '<div class="review-decision-actions">' +
+          '<button id="reviewDecisionCancel" type="button" onclick="closeReviewDecisionModal()">취소</button>' +
+          '<button id="reviewDecisionConfirm" class="primary" type="button">확인</button>' +
+        '</div>' +
+      '</section>';
+    document.body.appendChild(modal);
+    return modal;
+  }
+  function showReviewDecisionModal(title, description, action, resultOnly) {
+    var modal = reviewDecisionModal();
+    document.getElementById("reviewDecisionTitle").textContent = title;
+    document.getElementById("reviewDecisionText").textContent = description;
+    var cancel = document.getElementById("reviewDecisionCancel");
+    var confirm = document.getElementById("reviewDecisionConfirm");
+    cancel.hidden = !!resultOnly;
+    confirm.textContent = resultOnly ? "닫기" : "처리하기";
+    confirm.onclick = resultOnly
+      ? window.closeReviewDecisionModal
+      : function() {
+          window.closeReviewDecisionModal();
+          executeReviewDecision(action);
+        };
+    modal.hidden = false;
+  }
+  window.closeReviewDecisionModal = function() {
+    var modal = document.getElementById("reviewDecisionModal");
+    if (modal) modal.hidden = true;
+  };
   window.decideCurrentReview = function(action) {
+    var labels = {
+      merge: {
+        title: "기존 매물과 통합할까요?",
+        description: "신규 원본은 기존 매물의 출처이력으로 통합됩니다.\n기존 임대조건은 그대로 유지하고, 비어 있는 값·연락처·메모·출처 링크만 보강합니다."
+      },
+      create: {
+        title: "별도 신규매물로 등록할까요?",
+        description: "기존 매물과 합치지 않고 새로운 매물ID를 만들어 JS통합매물현황에 신규 등록합니다."
+      },
+      hold: {
+        title: "이 매물을 보류할까요?",
+        description: "매물검증에서는 제거하고 ‘검증보류’ 시트에 보관합니다.\n같은 출처 매물과 주소·임대조건이 같은 매물은 다음 수집에서도 자동 제외됩니다."
+      }
+    };
+    var info = labels[action];
+    if (!info) return;
+    showReviewDecisionModal(info.title, info.description, action, false);
+  };
+  function executeReviewDecision(action) {
     var group = selectedGroup();
     if (!group || !group.items.length || extraState.loading) return;
-    var item = group.items[0];
+    var item = selectedReviewItem(group);
+    if (!item) return;
     var masterId = group.candidateIds && group.candidateIds[0] || item.masterId || "";
     if (action === "merge" && !masterId) {
       message("통합할 기존 대표매물이 없어 별도 신규등록을 선택해 주세요.", "error");
@@ -293,17 +395,23 @@
           }
         }
       }
-      extraState.selectedGroupKey = "";
+      extraState.selectedReviewId = "";
+      if (!current || !current.items.length) extraState.selectedGroupKey = "";
       saveReviewCache();
       renderReviews();
       extraState.loading = false;
-      message((result.message || "검증결정을 저장했습니다.") + " · 남은 검증 " +
-        number(result.remaining !== undefined ? result.remaining : extraState.reviews && extraState.reviews.total)
-          .toLocaleString("ko-KR") + "건", "success");
+      var remaining = number(result.remaining !== undefined ? result.remaining : extraState.reviews && extraState.reviews.total)
+        .toLocaleString("ko-KR");
+      var resultMessage = (result.message || "검증결정을 저장했습니다.") + "\n남은 검증 " + remaining + "건";
+      message(resultMessage.replace("\n", " · "), "success");
+      showReviewDecisionModal("처리가 완료되었습니다", resultMessage, "", true);
       return loadReviews(true, true);
-    }).catch(function(error) { message(error.message, "error"); })
+    }).catch(function(error) {
+      message(error.message, "error");
+      showReviewDecisionModal("처리하지 못했습니다", error.message || "다시 시도해 주세요.", "", true);
+    })
       .finally(function() { extraState.loading = false; });
-  };
+  }
 
   function timelineModal() {
     var modal = document.getElementById("propertyTimelineModal");

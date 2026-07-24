@@ -30,7 +30,9 @@
     alertPollTimer: null,
     alertFingerprint: "",
     lastCustomerWorkspace: null,
-    customerPrefetchPromise: null
+    customerPrefetchPromise: null,
+    loadPromise: null,
+    customerWorkspaceEpoch: 0
   };
 
   window.operationsMatchPropertyIds = null;
@@ -544,7 +546,8 @@
     });
   }
 
-  function applyCustomerWorkspace(result) {
+  function applyCustomerWorkspace(result, requestEpoch) {
+    if (requestEpoch != null && requestEpoch !== state.customerWorkspaceEpoch) return false;
     state.lastCustomerWorkspace = result;
     state.dashboard = Object.assign({}, state.dashboard || {}, {
       contactReminderDays: number(result.contactReminderDays) || 3
@@ -567,6 +570,7 @@
     renderCustomers();
     renderMatches(state.selectedCustomerId);
     persistOperationsCache();
+    return true;
   }
 
   function applyCustomerList(result) {
@@ -587,7 +591,12 @@
   }
 
   function loadOperationsData(force) {
-    if (state.loading) return Promise.resolve();
+    if (state.loading) {
+      if (!force) return state.loadPromise || Promise.resolve();
+      return (state.loadPromise || Promise.resolve()).then(function() {
+        return loadOperationsData(true);
+      });
+    }
     var customersMode = state.activeTab === "customers";
     if (!force && (customersMode ? state.customerLoaded : state.dashboardLoaded)) {
       if (customersMode) {
@@ -608,12 +617,13 @@
     }
     state.loading = true;
     setMessage("운영자료를 불러오는 중입니다…", "loading");
+    var workspaceEpoch = customersMode ? ++state.customerWorkspaceEpoch : null;
     var request = customersMode
       ? apiGet("customerWorkspace", { customerId: state.selectedCustomerId })
       : apiGet("operationsDashboard");
-    return request.then(function(result) {
+    state.loadPromise = request.then(function(result) {
       if (customersMode) {
-        applyCustomerWorkspace(result);
+        applyCustomerWorkspace(result, workspaceEpoch);
       } else {
         state.dashboard = result;
         state.dashboardLoaded = true;
@@ -626,7 +636,9 @@
       setMessage(error.message || "운영자료 조회 중 오류가 발생했습니다.", "error");
     }).finally(function() {
       state.loading = false;
+      state.loadPromise = null;
     });
+    return state.loadPromise;
   }
 
   function loadCustomerMatches(customerId) {
@@ -658,7 +670,11 @@
     document.body.classList.add("operations-center-open");
     var targetTab = tab || "dashboard";
     window.switchOperationsTab(targetTab);
-    if (targetTab === "dashboard" || targetTab === "customers") loadOperationsData(false);
+    if (targetTab === "customers") {
+      loadOperationsData(state.customerLoaded);
+    } else if (targetTab === "dashboard") {
+      loadOperationsData(false);
+    }
   };
 
   window.closeOperationsCenter = function() {
@@ -688,8 +704,15 @@
     state.rebuilding = true;
     setMessage("전체 고객 조건과 활성 매물을 다시 비교하는 중입니다…", "loading");
     apiPost("rebuildCustomerMatches").then(function(result) {
+      state.customerWorkspaceEpoch += 1;
+      state.customerPrefetchPromise = null;
       state.loaded = false;
       state.customerLoaded = false;
+      state.loadedMatchCustomerId = "";
+      state.matches = [];
+      state.matchSummary = {};
+      state.lastCustomerWorkspace = null;
+      try { sessionStorage.removeItem(OPERATIONS_CACHE_KEY); } catch (_) {}
       return loadOperationsData(true);
     }).then(function() {
       setMessage("재계산과 화면 갱신이 완료되었습니다.", "success");
@@ -1130,9 +1153,10 @@
     }
   }, 100);
   window.setTimeout(function() {
-    if (!state.customerLoaded) {
+    if (!state.customerPrefetchPromise) {
+      var prefetchEpoch = ++state.customerWorkspaceEpoch;
       state.customerPrefetchPromise = apiGet("customerWorkspace", { customerId: state.selectedCustomerId })
-        .then(applyCustomerWorkspace)
+        .then(function(result) { applyCustomerWorkspace(result, prefetchEpoch); })
         .catch(function() {})
         .finally(function() { state.customerPrefetchPromise = null; });
     }
