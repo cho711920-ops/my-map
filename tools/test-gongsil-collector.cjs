@@ -94,7 +94,7 @@ vm.runInContext(
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.2.3");
+assert.strictEqual(api.version, "1.3.0");
 
 const importTotals = {
   received: 0,
