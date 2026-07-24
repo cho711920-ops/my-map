@@ -680,7 +680,9 @@ function matchesMultiKeyword(item, rawKeyword) {
 
 var SORT_LABELS = {
   latest: "최신",
-  address: "주소순",
+  address: "주소 오름순",
+  addressAsc: "주소 오름순",
+  addressDesc: "주소 내림순",
   floorLow: "층수↑",
   floorHigh: "층수↓",
   depositHigh: "보증금↓",
@@ -765,7 +767,12 @@ function updateSortDropdownUI() {
    * 첫 접속 기본값은 최신등록순이지만 버튼에는 정렬로 표시합니다.
    * 사용자가 다른 기준을 선택한 뒤에는 현재 기준을 짧게 표시합니다.
    */
-  button.textContent = value === "latest" ? "정렬" : (SORT_LABELS[value] || "정렬");
+  var buttonLabel = button.querySelector(".v6-sort-label");
+  if (buttonLabel) {
+    buttonLabel.textContent = value === "latest" ? "정렬" : (SORT_LABELS[value] || "정렬");
+  } else {
+    button.textContent = value === "latest" ? "정렬" : (SORT_LABELS[value] || "정렬");
+  }
 
   Array.prototype.forEach.call(
     menu.querySelectorAll("[data-sort-value]"),
@@ -886,7 +893,8 @@ function getFilteredItems() {
 
     if (sortType === "latest") return dateB - dateA;
 
-    if (sortType === "address") return compareNaturalAddress(a, b);
+    if (sortType === "address" || sortType === "addressAsc") return compareNaturalAddress(a, b);
+    if (sortType === "addressDesc") return compareNaturalAddress(b, a);
     if (sortType === "floorLow") return compareFloorItems(a, b, false);
     if (sortType === "floorHigh") return compareFloorItems(a, b, true);
     if (sortType === "depositLow") return Number(a.deposit || 0) - Number(b.deposit || 0) || compareNaturalAddress(a, b);
@@ -1803,7 +1811,7 @@ function addListItem(item, appendTarget) {
         '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
         '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
-          'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜★</button>' +
+          'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>' +
         sourceLinkButton +
         '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +

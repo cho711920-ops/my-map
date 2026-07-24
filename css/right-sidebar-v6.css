@@ -11,8 +11,8 @@
   }
 
   .header{
-    left:auto!important;
-    right:0!important;
+    left:0!important;
+    right:auto!important;
   }
 
   #aiSidePanel{
@@ -36,8 +36,8 @@
 
 @media (min-width:1100px){
   .filters{
-    left:0!important;
-    right:243px!important;
+    left:243px!important;
+    right:0!important;
   }
 
   #aiSidePanel{
@@ -47,8 +47,8 @@
 
 @media (min-width:769px) and (max-width:1099px){
   .filters{
-    left:0!important;
-    right:190px!important;
+    left:190px!important;
+    right:0!important;
   }
 }
 

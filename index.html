@@ -18,13 +18,13 @@
 
 <link rel="stylesheet" href="css/style.css?v=6.4.33-mobile-root-overflow">
 <link rel="stylesheet" href="css/print-v2.css">
-<link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.22-mobile-sort-phone-edit">
+<link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.23-sort-controls">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.31-fixed-actions">
 <link rel="stylesheet" href="css/mobile-detail-fix-v6.css?v=6.4.19-filter-anchor">
 <link rel="stylesheet" href="css/commercial-public-v6.css?v=6.4.15-readable">
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.4.27-unit-room-normalize">
-<link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.4-right-layout">
+<link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.5-left-title">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.11.1-work-alerts">
 <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.12.0">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.0">
@@ -157,8 +157,14 @@
           <span class="v6-sort-label">정렬</span><span class="v6-filter-caret" aria-hidden="true"></span>
         </button>
         <div id="sortDropdownMenu" class="sort-dropdown-menu" role="listbox">
-          <button class="sort-menu-single" type="button" data-sort-value="latest" onclick="selectSortOption('latest')">최신등록순</button>
-          <button class="sort-menu-single" type="button" data-sort-value="address" onclick="selectSortOption('address')">주소순</button>
+          <button class="sort-menu-single sort-menu-check" type="button" role="option" data-sort-value="latest" onclick="selectSortOption('latest')">
+            <span class="sort-choice-check" aria-hidden="true"></span><span>최신등록순</span>
+          </button>
+          <div class="sort-menu-row sort-address-row">
+            <span>주소순</span>
+            <button type="button" role="option" data-sort-value="addressAsc" onclick="selectSortOption('addressAsc')">오름순</button>
+            <button type="button" role="option" data-sort-value="addressDesc" onclick="selectSortOption('addressDesc')">내림순</button>
+          </div>
           <div class="sort-menu-row">
             <span>층수순서</span>
             <button type="button" data-sort-value="floorLow" onclick="selectSortOption('floorLow')">낮은층부터</button>
@@ -493,7 +499,7 @@
 </div>
 
 
-<script src="js/script.js?v=6.4.28-customer-candidates"></script>
+<script src="js/script.js?v=6.4.29-sort-controls"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
 <script src="js/print.js"></script>
