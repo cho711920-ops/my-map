@@ -275,7 +275,7 @@
       document.getElementById("propertyTimelineList").innerHTML = data.items && data.items.length
         ? data.items.map(function(item) {
           return '<article class="property-timeline-item"><b>' + escape(item.action) + '</b><span>' +
-            escape(item.reason || "자동 기록") + '</span><small>' + escape(item.at) + ' · ' +
+            escape(item.reason || "자동 기록") + '</span><small>' + escape(formatAt(item.at)) + ' · ' +
             escape(item.source) + '</small></article>';
         }).join("")
         : '<div class="operations-empty"><b>저장된 변경이력이 없습니다.</b></div>';
