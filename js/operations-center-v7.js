@@ -24,6 +24,7 @@
     viewingMemoCustomerId: "",
     activeTab: "dashboard",
     customerLoaded: false,
+    customerListLoaded: false,
     dashboardLoaded: false,
     rebuilding: false,
     alertPollTimer: null,
@@ -561,10 +562,28 @@
     state.selectedCustomerId = text(result.selectedCustomerId) || state.selectedCustomerId;
     state.loadedMatchCustomerId = state.selectedCustomerId;
     state.customerLoaded = true;
+    state.customerListLoaded = true;
     state.loaded = true;
     renderCustomers();
     renderMatches(state.selectedCustomerId);
     persistOperationsCache();
+  }
+
+  function applyCustomerList(result) {
+    if (!result || !result.rows) return;
+    state.customerHeaders = result.headers || [];
+    state.customers = result.rows || [];
+    state.customerListLoaded = true;
+    if (!state.selectedCustomerId && state.customers.length) {
+      var idIndex = headerIndex(state.customerHeaders, "고객ID");
+      var statusIndex = headerIndex(state.customerHeaders, "상태");
+      for (var index = 0; index < state.customers.length; index += 1) {
+        if (["계약완료", "종료"].indexOf(text(state.customers[index][statusIndex])) >= 0) continue;
+        state.selectedCustomerId = text(state.customers[index][idIndex]);
+        if (state.selectedCustomerId) break;
+      }
+    }
+    renderCustomers();
   }
 
   function loadOperationsData(force) {
@@ -1106,13 +1125,18 @@
     }
   } catch (_) {}
   window.setTimeout(function() {
+    if (!state.customerListLoaded) {
+      apiGet("customerList").then(applyCustomerList).catch(function() {});
+    }
+  }, 100);
+  window.setTimeout(function() {
     if (!state.customerLoaded) {
       state.customerPrefetchPromise = apiGet("customerWorkspace", { customerId: state.selectedCustomerId })
         .then(applyCustomerWorkspace)
         .catch(function() {})
         .finally(function() { state.customerPrefetchPromise = null; });
     }
-  }, 2200);
+  }, 450);
   window.setTimeout(function() {
     refreshCustomerAlertBadge(false);
     if (!state.alertPollTimer) {
