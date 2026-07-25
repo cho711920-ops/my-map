@@ -5420,6 +5420,386 @@ body,
   display: flex;
 }
 
+/* =========================================================
+   v6.5.0 매물카드 3줄 압축 + 역할별 전화 + 건축물대장 요약
+   ========================================================= */
+#list .item {
+  padding: 7px 8px !important;
+}
+
+.item-card-grid-v650 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+}
+
+.item-card-grid-v650 > .item-compact-main-v650:first-child {
+  grid-column: 1 / -1;
+}
+
+.item-compact-main-v650 {
+  display: grid;
+  grid-template-rows: minmax(21px, auto) minmax(21px, auto) minmax(23px, auto);
+  gap: 3px;
+  min-width: 0;
+}
+
+.item-contact-rail-v650 {
+  display: grid;
+  grid-auto-rows: minmax(18px, 1fr);
+  align-self: stretch;
+  width: 23px;
+  gap: 2px;
+}
+
+.item-contact-call-v650 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 23px;
+  min-height: 18px;
+  padding: 0;
+  border: 1px solid #637083;
+  border-radius: 5px;
+  background: #334155;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.item-contact-call-v650:hover,
+.item-contact-call-v650:focus-visible {
+  filter: brightness(.92);
+  outline: 2px solid rgba(37, 99, 235, .3);
+  outline-offset: 1px;
+}
+
+.item-contact-call-v650.role-주,
+.item-contact-call-v650.role-임 { background: #334155; border-color: #1f2937; }
+.item-contact-call-v650.role-남 { background: #2563eb; border-color: #1d4ed8; }
+.item-contact-call-v650.role-여 { background: #db2777; border-color: #be185d; }
+.item-contact-call-v650.role-관 { background: #7c3aed; border-color: #6d28d9; }
+.item-contact-call-v650.role-부 { background: #d97706; border-color: #b45309; }
+.item-contact-call-v650.role-세 { background: #059669; border-color: #047857; }
+.item-contact-call-v650.role-가 { background: #0891b2; border-color: #0e7490; }
+
+.item-compact-head-v650 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.item-head-select-v650 {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.item-head-select-v650 .action-select-check {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+}
+
+.item-building-year-v650 {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border: 1px solid #d7dee8;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #7a8798;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.item-building-year-v650.verified {
+  border-color: #aebed2;
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.item-compact-head-v650 .done-badge,
+.item-compact-head-v650 .gongsil-source-badge {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 2px 4px !important;
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+}
+
+.item-compact-head-v650 .item-building-name {
+  flex: 0 1 auto;
+  max-width: 105px;
+  min-width: 30px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 950;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-address-room-v650 {
+  display: flex;
+  align-items: center;
+  flex: 1 1 90px;
+  gap: 4px;
+  min-width: 46px;
+  overflow: hidden;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.item-address-room-v650 .item-address-text {
+  display: block !important;
+  flex: 1 1 auto !important;
+  min-width: 20px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-address-room-v650 .item-room-badge {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 1px 4px !important;
+  font-size: 9px !important;
+}
+
+.item-address-room-v650 .item-room-badge.empty {
+  border-style: dashed;
+  color: #94a3b8;
+  background: #fff;
+}
+
+.item-elevator-v650 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  border: 1px solid #8a94a3;
+  border-radius: 4px;
+  color: #4b5563;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.item-elevator-v650[hidden] {
+  display: none !important;
+}
+
+.item-elevator-v650 svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.item-compact-head-v650 .item-reg-date {
+  flex: 0 0 auto;
+  font-size: 9px !important;
+  line-height: 1;
+}
+
+.item-compact-price-v650.price-line {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 3px !important;
+  min-width: 0;
+  margin: 0 !important;
+  overflow: hidden !important;
+  font-size: 10.5px !important;
+  line-height: 21px !important;
+  white-space: nowrap !important;
+}
+
+.item-compact-price-v650 .pyeong-mini-badge,
+.item-compact-price-v650 .type-badge {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 2px 4px !important;
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+}
+
+.item-compact-price-v650 > span {
+  flex: 0 0 auto;
+}
+
+.item-compact-price-v650 b {
+  font-weight: 950;
+}
+
+.price-label-full-v650 {
+  display: none;
+}
+
+.price-label-short-v650 {
+  display: inline;
+}
+
+.item-compact-actions-v650 {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  min-width: 0;
+  min-height: 23px !important;
+  margin: 0 !important;
+  padding: 0 1px 1px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.item-compact-actions-v650::-webkit-scrollbar {
+  display: none;
+}
+
+.item-compact-actions-v650 .item-action-left {
+  display: flex !important;
+  align-items: center !important;
+  flex: 0 0 auto;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+}
+
+.item-compact-actions-v650 .customer-match-inline-actions {
+  display: flex !important;
+  align-items: center !important;
+  flex: 0 0 auto;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.item-compact-actions-v650 .customer-match-inline-badge {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 3px 5px !important;
+  font-size: 9px !important;
+}
+
+.item-compact-actions-v650 .customer-match-inline-actions button,
+.item-compact-actions-v650 .item-nav-btn,
+.item-compact-actions-v650 .item-roadview-btn,
+.item-compact-actions-v650 .item-building-register-btn,
+.item-compact-actions-v650 .item-list-add-btn,
+.item-compact-actions-v650 .item-source-link-btn,
+.item-compact-actions-v650 .item-edit-btn-v630,
+.item-compact-actions-v650 .item-memo-toggle {
+  flex: 0 0 auto;
+  height: 22px !important;
+  min-height: 22px !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
+  font-size: 9.5px !important;
+  line-height: 20px !important;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.item-compact-actions-v650 .item-memo-toggle {
+  margin-left: auto;
+}
+
+@media (max-width: 520px) {
+  #list .item {
+    padding: 6px !important;
+  }
+
+  .item-card-grid-v650 {
+    gap: 4px;
+  }
+
+  .item-contact-rail-v650 {
+    width: 21px;
+  }
+
+  .item-contact-call-v650 {
+    min-width: 21px;
+    font-size: 9px;
+  }
+
+  .item-compact-main-v650 {
+    gap: 2px;
+  }
+
+  .item-compact-head-v650 {
+    gap: 3px;
+  }
+
+  .item-compact-head-v650 .item-building-name {
+    max-width: 74px;
+    font-size: 11.5px;
+  }
+
+  .item-address-room-v650 {
+    flex-basis: 60px;
+    gap: 3px;
+    font-size: 9.5px;
+  }
+
+  .item-building-year-v650,
+  .item-compact-head-v650 .item-reg-date {
+    font-size: 8px !important;
+  }
+
+  .item-compact-head-v650 .item-reg-date {
+    max-width: 54px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-compact-price-v650.price-line {
+    gap: 2px !important;
+    font-size: 9.2px !important;
+    letter-spacing: -.35px !important;
+  }
+
+  .item-compact-price-v650 .pyeong-mini-badge {
+    display: none !important;
+  }
+
+  .item-compact-price-v650 .type-badge {
+    max-width: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    padding: 0 5px !important;
+    font-size: 9px !important;
+  }
+}
+
 .property-edit-backdrop-v630 {
   position: absolute;
   inset: 0;

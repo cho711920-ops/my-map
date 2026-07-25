@@ -773,16 +773,28 @@ function loadSheet(isAuto) {
       for (var i = 1; i < rows.length; i++) {
         var c = parseCSVLine(rows[i]);
 
+        var rawDeposit = clean(c[4]);
+        var rawRent = clean(c[5]);
+        var rawFee = clean(c[6]);
+        var rawPremium = clean(c[7]);
+        var rawArea = clean(c[8]);
         var item = {
           name: clean(c[0]),
           address: clean(c[1]),
           room: clean(c[2]),
           type: clean(c[3]),
-          deposit: Number(clean(c[4])) || 0,
-          rent: Number(clean(c[5])) || 0,
-          fee: Number(clean(c[6])) || 0,
-          premium: Number(clean(c[7])) || 0,
-          area: Number(clean(c[8])) || 0,
+          deposit: Number(rawDeposit) || 0,
+          rent: Number(rawRent) || 0,
+          fee: Number(rawFee) || 0,
+          premium: Number(rawPremium) || 0,
+          area: Number(rawArea) || 0,
+          displayValuePresence: {
+            deposit: rawDeposit !== "",
+            rent: rawRent !== "",
+            fee: rawFee !== "",
+            premium: rawPremium !== "",
+            area: rawArea !== ""
+          },
           landlordPhone: clean(c[9]),
           tenantPhone: clean(c[10]),
           memo: clean(c[11]),

@@ -1722,6 +1722,131 @@ window.handleCustomerMatchListAction = function(button, encodedPropertyId, nextS
   });
 };
 
+var LIST_CONTACT_ROLE_META_V650 = {
+  "주": { short: "주", name: "주인", priority: 90 },
+  "임": { short: "임", name: "임대인", priority: 40 },
+  "남": { short: "남", name: "사장", priority: 80 },
+  "여": { short: "여", name: "사모", priority: 80 },
+  "관": { short: "관", name: "관리", priority: 70 },
+  "부": { short: "부", name: "부동산", priority: 70 },
+  "세": { short: "세", name: "세입자", priority: 70 },
+  "가": { short: "가", name: "가족", priority: 70 }
+};
+
+function normalizeListPhoneV650(value) {
+  var digits = String(value == null ? "" : value).replace(/\D/g, "");
+  if (digits.length === 11 && digits.slice(0, 3) === "010") {
+    return {
+      key: digits,
+      tel: digits,
+      display: digits.slice(0, 3) + "-" + digits.slice(3, 7) + "-" + digits.slice(7)
+    };
+  }
+  if (digits.length === 10 && digits.slice(0, 2) === "02") {
+    return {
+      key: digits,
+      tel: digits,
+      display: digits.slice(0, 2) + "-" + digits.slice(2, 6) + "-" + digits.slice(6)
+    };
+  }
+  if (digits.length === 9 && digits.slice(0, 2) === "02") {
+    return {
+      key: digits,
+      tel: digits,
+      display: digits.slice(0, 2) + "-" + digits.slice(2, 5) + "-" + digits.slice(5)
+    };
+  }
+  if (digits.length === 10 && digits.charAt(0) === "0") {
+    return {
+      key: digits,
+      tel: digits,
+      display: digits.slice(0, 3) + "-" + digits.slice(3, 6) + "-" + digits.slice(6)
+    };
+  }
+  return null;
+}
+
+function listContactRoleV650(value) {
+  var label = String(value || "").replace(/\s+/g, "");
+  if (/^(주인|건물주|소유자|주)$/.test(label)) return "주";
+  if (/^(임대인|임)$/.test(label)) return "임";
+  if (/^(사장|남성|남자|남)$/.test(label)) return "남";
+  if (/^(사모|여성|여자|여)$/.test(label)) return "여";
+  if (/^(관리업체|관리인|관리|관)$/.test(label)) return "관";
+  if (/^(부동산|중개사|중개|부)$/.test(label)) return "부";
+  if (/^(세입자|임차인|임차|세)$/.test(label)) return "세";
+  if (/^(가족|가)$/.test(label)) return "가";
+  return "";
+}
+
+function extractListContactsV650(item) {
+  var contacts = [];
+  var byPhone = Object.create(null);
+
+  function add(role, phoneValue) {
+    role = listContactRoleV650(role);
+    var phone = normalizeListPhoneV650(phoneValue);
+    if (!role || !phone) return;
+    var existing = byPhone[phone.key];
+    if (existing) {
+      var existingMeta = LIST_CONTACT_ROLE_META_V650[existing.role];
+      var nextMeta = LIST_CONTACT_ROLE_META_V650[role];
+      if (nextMeta && existingMeta && nextMeta.priority > existingMeta.priority) {
+        existing.role = role;
+      }
+      return;
+    }
+    var contact = { role: role, phone: phone };
+    byPhone[phone.key] = contact;
+    contacts.push(contact);
+  }
+
+  add("임", item && item.landlordPhone);
+  add("세", item && item.tenantPhone);
+
+  var memo = String(item && item.memo || "");
+  var rolePattern = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
+  var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
+  var matcher = new RegExp(rolePattern + "(?:\\s*(?:추가번호)?\\s*\\d*)?\\s*[\\)\\(\\]:：=.-]?\\s*" + phonePattern, "g");
+  var match;
+  while ((match = matcher.exec(memo))) {
+    add(match[1], match[2]);
+  }
+
+  return contacts.slice(0, 4);
+}
+
+function buildListContactRailV650(item) {
+  var contacts = extractListContactsV650(item);
+  if (!contacts.length) return "";
+  return '<div class="item-contact-rail-v650" onclick="event.stopPropagation()" aria-label="연락처">' +
+    contacts.map(function(contact) {
+      var meta = LIST_CONTACT_ROLE_META_V650[contact.role];
+      var accessible = meta.name + " " + contact.phone.display + " 전화걸기";
+      return '<a class="item-contact-call-v650 role-' + contact.role +
+        '" href="tel:' + contact.phone.tel + '" title="' + escapeHtml(accessible) +
+        '" aria-label="' + escapeHtml(accessible) + '">' + meta.short + '</a>';
+    }).join("") +
+  '</div>';
+}
+
+function listDisplayValueV650(item, field) {
+  var presence = item && item.displayValuePresence;
+  var value = item ? item[field] : "";
+  if (presence && presence[field] === false) return "-";
+  if (value == null || String(value).trim() === "") return "-";
+  var number = Number(value);
+  if (isFinite(number)) return number.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  return String(value).trim();
+}
+
+function buildListElevatorIconV650() {
+  return '<span class="item-elevator-v650" hidden title="건축물대장 엘리베이터 확인" aria-label="엘리베이터 있음">' +
+    '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.25" y="2.25" width="13.5" height="15.5" rx="2"></rect>' +
+    '<path d="M10 4.5v11M6.3 7.1 8 5.4l1.7 1.7M10.3 12.9 12 14.6l1.7-1.7"></path></svg>' +
+  '</span>';
+}
+
 function addListItem(item, appendTarget) {
   var div = document.createElement("div");
   var printSelected = selectedPrintKeys.includes(item.key);
@@ -1765,6 +1890,12 @@ function addListItem(item, appendTarget) {
         'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedKey + '\')">링크</button>'
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
   var customerMatchControls = buildCustomerMatchInlineControls(item);
+  var contactRail = buildListContactRailV650(item);
+  var depositDisplay = listDisplayValueV650(item, "deposit");
+  var rentDisplay = listDisplayValueV650(item, "rent");
+  var feeDisplay = listDisplayValueV650(item, "fee");
+  var premiumDisplay = listDisplayValueV650(item, "premium");
+  var areaDisplay = listDisplayValueV650(item, "area");
 
   var memoPanel = "";
 
@@ -1796,72 +1927,70 @@ function addListItem(item, appendTarget) {
     }
   }
 
+  div.setAttribute("data-listing-key", item.key);
   div.innerHTML =
-    '<div class="item-action-row">' +
-      '<div class="item-action-left">' +
-        '<label class="item-action-select" title="이 매물을 작업 대상으로 선택">' +
-          '<input type="checkbox" class="action-select-check" ' +
-            (printSelected ? 'checked' : '') +
-            ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
-        '</label>' +
-        '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
+    '<div class="item-card-grid-v650">' +
+      contactRail +
+      '<div class="item-compact-main-v650">' +
+        '<div class="item-compact-head-v650">' +
+          '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
+            '<input type="checkbox" class="action-select-check" ' +
+              (printSelected ? 'checked' : '') +
+              ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+          '</label>' +
+          '<span class="item-building-year-v650" title="건축물대장 사용승인일">준공 -</span>' +
+          doneLabel +
+          sourceLabel +
+          '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
+          '<span class="item-address-room-v650">' +
+            '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
+            (item.room
+              ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>'
+              : '<span class="item-room-badge empty">호실 -</span>') +
+            buildListElevatorIconV650() +
+          '</span>' +
+          (customerMatchControls && regDateLabel
+            ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>'
+            : '') +
+        '</div>' +
+
+        '<div class="price-line item-compact-price-v650">' +
+          pyeongMiniBadge +
+          typeLabel +
+          '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
+          '<span class="price-separator">·</span>' +
+          '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
+          '<span class="price-separator">·</span>' +
+          '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
+          '<span class="price-separator">·</span>' +
+          '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>' +
+        '</div>' +
+
+        '<div class="item-action-row item-compact-actions-v650">' +
+          customerMatchControls +
+          '<div class="item-action-left">' +
+            '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
-        '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
+            '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
           'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
-        '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
+            '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
-        '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
+            '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
           'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>' +
-        sourceLinkButton +
-        '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
+            sourceLinkButton +
+            '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
+          '</div>' +
+          (!customerMatchControls && regDateLabel
+            ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>'
+            : '') +
+          '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
+            'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
+            (memoOpen ? '메모 ▲' : '메모 ▼') +
+          '</button>' +
+        '</div>' +
       '</div>' +
-      '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
-        'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
-        (memoOpen ? '메모 ▲' : '메모 ▼') +
-      '</button>' +
     '</div>' +
-
-    customerMatchControls +
-
-    '<div class="item-identity-row">' +
-      doneLabel +
-      sourceLabel +
-      pyeongMiniBadge +
-      typeLabel +
-      '<span class="item-building-name">' + escapeHtml(item.name) + '</span>' +
-    '</div>' +
-
-    '<div class="item-address-room">' +
-      '<span class="item-address-inline">' +
-        '<span class="item-address-text">' + escapeHtml(item.address) + '</span>' +
-        (item.room
-          ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>'
-          : '') +
-      '</span>' +
-    '</div>' +
-
-    '<div class="price-line">' +
-      '<span class="price-main">보증금 ' + escapeHtml(item.deposit) + ' / 월세 ' + escapeHtml(item.rent) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      '<span class="price-fee">관리비 ' + escapeHtml(item.fee) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      '<span class="price-premium">권리금 ' + escapeHtml(item.premium) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      '<span class="price-area">' + escapeHtml(item.area) + '평</span>' +
-    '</div>' +
-
-    '<div class="item-contact-date-row">' +
-      '<div class="info-line-compact">임대인 ' +
-        escapeHtml(item.landlordPhone) +
-        ' | 세입자 ' +
-        escapeHtml(item.tenantPhone) +
-      '</div>' +
-      (regDateLabel
-        ? '<div class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</div>'
-        : '') +
-    '</div>' +
-
     memoPanel;
 
   div.onclick = function() {
@@ -1869,6 +1998,9 @@ function addListItem(item, appendTarget) {
   };
 
   (appendTarget || document.getElementById("list")).appendChild(div);
+  if (window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
+    window.JSBuildingRegisterBadges.bind(div, item);
+  }
 
   if (memoEditing) {
     requestAnimationFrame(function() {
@@ -3256,6 +3388,13 @@ function savePropertyEditV630() {
     memo: String(document.getElementById("peMemoV630").value || "").trim(),
     state: String(document.getElementById("peStateV630").value || "").trim()
   };
+  var updatedValuePresenceV650 = {
+    deposit: String(document.getElementById("peDepositV630").value || "").trim() !== "",
+    rent: String(document.getElementById("peRentV630").value || "").trim() !== "",
+    fee: String(document.getElementById("peFeeV630").value || "").trim() !== "",
+    premium: String(document.getElementById("pePremiumV630").value || "").trim() !== "",
+    area: String(document.getElementById("peAreaV630").value || "").trim() !== ""
+  };
 
   propertyEditSavingV630 = true;
   saveButton.disabled = true;
@@ -3297,6 +3436,7 @@ function savePropertyEditV630() {
     item.fee = updated.fee;
     item.premium = updated.premium;
     item.area = updated.area;
+    item.displayValuePresence = updatedValuePresenceV650;
     item.landlordPhone = updated.landlordPhone;
     item.tenantPhone = updated.tenantPhone;
     item.memo = updated.memo;

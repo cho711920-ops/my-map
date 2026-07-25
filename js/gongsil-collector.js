@@ -1072,18 +1072,17 @@
     });
 
     var primary = landlordContacts.length ? landlordContacts[0] : null;
-    var extras = landlordContacts.slice(1).map(function (contact, index) {
-      var label = contact.label;
-      if (label === "주인" && primary && primary.label === "주인") {
-        label = "주인 추가번호" + (index > 0 ? " " + (index + 1) : "");
-      }
-      return label + ": " + contact.phone;
+
+    /*
+     * 시트의 임대인/세입자 열에는 대표번호만 들어가므로 역할 정보가 사라질 수
+     * 있습니다. 매물카드가 주·남·여·관·부·세·가를 정확히 구분할 수 있도록
+     * 공실박스가 제공한 모든 번호의 역할을 메모에도 함께 보존합니다.
+     */
+    var extras = landlordContacts.map(function (contact) {
+      return contact.label + ": " + contact.phone;
     });
-    tenantContacts.slice(1).forEach(function (contact, index) {
-      extras.push(
-        "세입자 추가번호" + (index > 0 ? " " + (index + 1) : "") +
-        ": " + contact.phone
-      );
+    tenantContacts.forEach(function (contact) {
+      extras.push("세입자: " + contact.phone);
     });
 
     return {

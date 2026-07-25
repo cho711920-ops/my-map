@@ -5,6 +5,12 @@
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+  var BADGE_CACHE_PREFIX = "js-building-badge-v1:";
+  var BADGE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+  var badgeRequests = Object.create(null);
+  var badgeQueue = [];
+  var badgeActive = 0;
+  var badgeObserver = null;
   var state = {
     item: null,
     parcel: null,
@@ -278,6 +284,200 @@
     } catch (_) {}
   }
 
+  function readBadgeCache(parcel) {
+    try {
+      var raw = localStorage.getItem(BADGE_CACHE_PREFIX + parcelKey(parcel));
+      if (!raw) return null;
+      var wrapper = JSON.parse(raw);
+      if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > BADGE_CACHE_TTL) return null;
+      return wrapper.data || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeBadgeCache(parcel, data) {
+    if (!parcel || !data) return;
+    try {
+      localStorage.setItem(BADGE_CACHE_PREFIX + parcelKey(parcel), JSON.stringify({
+        savedAt: Date.now(),
+        data: data
+      }));
+    } catch (_) {}
+  }
+
+  function normalizedName(value) {
+    return String(value || "").replace(/[\s()[\]{}·.,_-]+/g, "").toLowerCase();
+  }
+
+  function buildingForBadge(data, item) {
+    var buildings = Array.isArray(data && data.buildings) ? data.buildings : [];
+    var units = Array.isArray(data && data.units) ? data.units : [];
+    if (!buildings.length) return null;
+
+    var unitIndex = bestUnitIndex(units, item && item.room);
+    var unit = units[unitIndex] || null;
+    if (unit && unit.managementKey) {
+      var byManagementKey = buildings.find(function(building) {
+        return building && building.managementKey === unit.managementKey;
+      });
+      if (byManagementKey) return byManagementKey;
+    }
+
+    var itemName = normalizedName(item && item.name);
+    if (itemName && !/^(일반상가|집합상가|상가|상가점포|사무실|공장창고)$/.test(itemName)) {
+      var byName = buildings.find(function(building) {
+        var buildingName = normalizedName(joinText(building && building.buildingName, building && building.dongName));
+        return buildingName && (buildingName.indexOf(itemName) >= 0 || itemName.indexOf(buildingName) >= 0);
+      });
+      if (byName) return byName;
+    }
+    return buildings[0];
+  }
+
+  function badgeFromData(data, item) {
+    var building = buildingForBadge(data, item);
+    if (!building) return { year: "", elevators: 0, verified: false };
+    var dateDigits = String(building.approvalDate || "").replace(/\D/g, "");
+    var passenger = asNumber(building.passengerElevators);
+    var emergency = asNumber(building.emergencyElevators);
+    return {
+      year: dateDigits.length >= 4 ? dateDigits.slice(0, 4) : "",
+      elevators: Math.max(0, Number(passenger || 0) + Number(emergency || 0)),
+      verified: true
+    };
+  }
+
+  function applyBadgeToCard(card, badge) {
+    if (!card || !badge) return;
+    var year = card.querySelector(".item-building-year-v650");
+    var elevator = card.querySelector(".item-elevator-v650");
+    if (year) {
+      year.textContent = badge.year ? "준" + badge.year : "준공 -";
+      year.classList.toggle("verified", !!badge.verified);
+    }
+    if (elevator) {
+      elevator.hidden = !(badge.verified && badge.elevators > 0);
+      if (!elevator.hidden) {
+        elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대";
+        elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대");
+      }
+    }
+  }
+
+  function refreshBadgeCards(parcel, data) {
+    var key = parcelKey(parcel);
+    Array.prototype.forEach.call(document.querySelectorAll(".item[data-building-parcel-key]"), function(card) {
+      if (card.getAttribute("data-building-parcel-key") !== key || !card.__buildingBadgeItemV650) return;
+      applyBadgeToCard(card, badgeFromData(data, card.__buildingBadgeItemV650));
+    });
+  }
+
+  function badgeRequestUrl(item, parcel) {
+    if (typeof saveApiURL === "undefined" || !saveApiURL) {
+      throw new Error("Apps Script 주소가 설정되지 않았습니다.");
+    }
+    var params = [
+      "action=buildingRegister",
+      "mode=summary",
+      "sigunguCd=" + encodeURIComponent(parcel.sigunguCd),
+      "bjdongCd=" + encodeURIComponent(parcel.bjdongCd),
+      "platGbCd=" + encodeURIComponent(parcel.platGbCd),
+      "bun=" + encodeURIComponent(parcel.bun),
+      "ji=" + encodeURIComponent(parcel.ji),
+      "propertyId=" + encodeURIComponent(item && (item.propertyId || item.id || item.key) || "")
+    ];
+    return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
+  }
+
+  function requestBadgeData(item, parcel) {
+    var key = parcelKey(parcel);
+    var fullCached = readCache(parcel);
+    if (fullCached && fullCached.ok) return Promise.resolve(fullCached);
+    var cached = readBadgeCache(parcel);
+    if (cached && cached.ok) return Promise.resolve(cached);
+    if (badgeRequests[key]) return badgeRequests[key];
+
+    badgeRequests[key] = jsonp(badgeRequestUrl(item, parcel), 60000).then(function(data) {
+      if (!data || !data.ok || data.action !== "buildingRegister") {
+        throw new Error((data && data.message) || "건축물대장 요약정보를 확인하지 못했습니다.");
+      }
+      writeBadgeCache(parcel, data);
+      return data;
+    }).finally(function() {
+      delete badgeRequests[key];
+    });
+    return badgeRequests[key];
+  }
+
+  function ensureBadgeForCard(card, item) {
+    var cachedParcel = readParcelCache(item);
+    var parcelPromise = cachedParcel ? Promise.resolve(cachedParcel) : resolveParcel(item).then(function(parcel) {
+      writeParcelCache(item, parcel);
+      return parcel;
+    });
+    return parcelPromise.then(function(parcel) {
+      if (!card.isConnected) return null;
+      card.setAttribute("data-building-parcel-key", parcelKey(parcel));
+      return requestBadgeData(item, parcel).then(function(data) {
+        if (card.isConnected) applyBadgeToCard(card, badgeFromData(data, item));
+        return data;
+      });
+    }).catch(function() {
+      if (card.isConnected) applyBadgeToCard(card, { year: "", elevators: 0, verified: false });
+      return null;
+    });
+  }
+
+  function runBadgeQueue() {
+    while (badgeActive < 2 && badgeQueue.length) {
+      var entry = badgeQueue.shift();
+      if (!entry.card.isConnected || entry.card.getAttribute("data-building-badge-loading") === "1") continue;
+      badgeActive += 1;
+      entry.card.setAttribute("data-building-badge-loading", "1");
+      ensureBadgeForCard(entry.card, entry.item).finally(function() {
+        badgeActive -= 1;
+        runBadgeQueue();
+      });
+    }
+  }
+
+  function queueBadge(card, item) {
+    if (!card || !item || card.getAttribute("data-building-badge-loading") === "1") return;
+    if (badgeQueue.some(function(entry) { return entry.card === card; })) return;
+    badgeQueue.push({ card: card, item: item });
+    runBadgeQueue();
+  }
+
+  function bindBadge(card, item) {
+    if (!card || !item) return;
+    card.__buildingBadgeItemV650 = item;
+    var cachedParcel = readParcelCache(item);
+    if (cachedParcel) {
+      card.setAttribute("data-building-parcel-key", parcelKey(cachedParcel));
+      var cachedData = readCache(cachedParcel) || readBadgeCache(cachedParcel);
+      if (cachedData && cachedData.ok) {
+        applyBadgeToCard(card, badgeFromData(cachedData, item));
+        return;
+      }
+    }
+
+    if ("IntersectionObserver" in window) {
+      if (!badgeObserver) {
+        badgeObserver = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (!entry.isIntersecting) return;
+            badgeObserver.unobserve(entry.target);
+            queueBadge(entry.target, entry.target.__buildingBadgeItemV650);
+          });
+        }, { root: document.getElementById("sidebar") || null, rootMargin: "500px 0px" });
+      }
+      badgeObserver.observe(card);
+      return;
+    }
+    queueBadge(card, item);
+  }
+
   function jsonp(url, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var callbackName = "__buildingRegisterCallback" + Date.now() + Math.floor(Math.random() * 100000);
@@ -341,6 +541,8 @@
     state.buildingIndex = 0;
     state.unitIndex = bestUnitIndex(data.units || [], state.item && state.item.room);
     if (writeLocalCache) writeCache(state.parcel, data);
+    writeBadgeCache(state.parcel, data);
+    refreshBadgeCards(state.parcel, data);
     render();
     return data;
   }
@@ -861,5 +1063,13 @@
   window.closeBuildingRegisterV640 = closeModal;
   window.refreshBuildingRegisterV640 = function () {
     if (state.parcel) fetchRegister(true);
+  };
+  window.JSBuildingRegisterBadges = {
+    bind: bindBadge,
+    refreshVisible: function() {
+      Array.prototype.forEach.call(document.querySelectorAll(".item[data-listing-key]"), function(card) {
+        if (card.__buildingBadgeItemV650) bindBadge(card, card.__buildingBadgeItemV650);
+      });
+    }
   };
 })();
