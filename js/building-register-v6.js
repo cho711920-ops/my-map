@@ -903,18 +903,22 @@
         : "floor:" + entry.signed;
       floorCounts[key] = (floorCounts[key] || 0) + 1;
     });
-    var floorOrders = {};
     return sorted.map(function (entry) {
       var row = entry.row;
       var key = entry.signed == null
         ? "name:" + String(row.floorName || "")
         : "floor:" + entry.signed;
-      floorOrders[key] = (floorOrders[key] || 0) + 1;
       var label = String(row.floorName || floorLabel(entry.signed) || "층 정보 없음").trim();
-      if (floorCounts[key] > 1) label += " · 세부 " + floorOrders[key];
+      var roomName = String(
+        row.roomName || row.hoNm || row.unitName || ""
+      ).trim();
+      if (roomName && roomName !== "정보 없음") label += " · " + roomName;
+      var roomUnavailable = !roomName && floorCounts[key] > 1;
       var matched = listingFloor != null && entry.signed === listingFloor;
       return '<tr' + (matched ? ' class="matched-floor"' : '') + '>' +
-        '<th scope="row">' + esc(label) + (matched ? '<small>매물층</small>' : '') + '</th>' +
+        '<th scope="row">' + esc(label) +
+          (roomUnavailable ? '<small class="floor-room-unavailable">호실 미제공</small>' : '') +
+          (matched ? '<small>매물층</small>' : '') + '</th>' +
         '<td>' + esc(joinText(row.mainUse, row.otherUse)) + '</td>' +
         '<td>' + esc(areaText(row.area)) + '</td>' +
         '<td>' + esc(joinText(row.structure, row.otherStructure)) + '</td>' +
@@ -942,8 +946,8 @@
         '건은 섞이지 않도록 제외했습니다. 건물·동 선택에서 다른 동을 선택할 수 있습니다.</span></div>';
     }
     if (isGeneralRegister(building)) {
-      return '<div class="building-register-unit-notice"><strong>일반건축물은 법정 호실 전유부가 제공되지 않을 수 있습니다.</strong>' +
-        '<span>공식 API에 101호·102호가 따로 등록되어 있으면 배치도로 표시하고, 없으면 아래 층별 세부 용도·면적을 각각 표시합니다. 없는 호실 정보는 임의로 만들지 않습니다.</span></div>';
+      return '<div class="building-register-unit-notice"><strong>공식 호실 번호가 없는 일반건축물입니다.</strong>' +
+        '<span>아래 행은 101호·102호를 뜻하지 않습니다. 같은 층에 별도로 등록된 용도·면적 항목이며, 공식 데이터에 호실 번호가 있는 건물만 층별 호실 배치도로 표시합니다.</span></div>';
     }
     return '<div class="building-register-unit-notice"><strong>선택한 ' + esc(category) + '의 호실 상세자료가 없습니다.</strong>' +
       '<span>최신조회를 눌러 다시 확인할 수 있으며, 공공데이터에 전유부가 없으면 기본정보만 표시됩니다.</span></div>';
@@ -1147,7 +1151,7 @@
       '<section class="building-register-floor-section">' +
         '<h3>층별내역</h3>' +
         '<div class="building-register-table-wrap"><table class="building-register-floor-table">' +
-          '<thead><tr><th>층</th><th>용도</th><th>면적</th><th>구조</th></tr></thead>' +
+          '<thead><tr><th>층·호실</th><th>용도</th><th>면적</th><th>구조</th></tr></thead>' +
           '<tbody>' + (floorTableRows || '<tr><td colspan="4" class="empty-floor">조회된 층별내역이 없습니다.</td></tr>') + '</tbody>' +
         '</table></div>' +
       '</section>';
