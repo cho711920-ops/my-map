@@ -1819,7 +1819,8 @@ function extractListContactsV650(item) {
 function buildListContactRailV650(item) {
   var contacts = extractListContactsV650(item);
   if (!contacts.length) return "";
-  return '<div class="item-contact-rail-v650" onclick="event.stopPropagation()" aria-label="연락처">' +
+  return '<div class="item-contact-rail-v650 contact-count-' + contacts.length +
+    '" onclick="event.stopPropagation()" aria-label="연락처">' +
     contacts.map(function(contact) {
       var meta = LIST_CONTACT_ROLE_META_V650[contact.role];
       var accessible = meta.name + " " + contact.phone.display + " 전화걸기";
@@ -1842,8 +1843,7 @@ function listDisplayValueV650(item, field) {
 
 function buildListElevatorIconV650() {
   return '<span class="item-elevator-v650" hidden title="건축물대장 엘리베이터 확인" aria-label="엘리베이터 있음">' +
-    '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.25" y="2.25" width="13.5" height="15.5" rx="2"></rect>' +
-    '<path d="M10 4.5v11M6.3 7.1 8 5.4l1.7 1.7M10.3 12.9 12 14.6l1.7-1.7"></path></svg>' +
+    '<span class="item-elevator-glyph-v651" aria-hidden="true">🛗</span>' +
   '</span>';
 }
 
@@ -1949,8 +1949,10 @@ function addListItem(item, appendTarget) {
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV650() +
           '</span>' +
-          (customerMatchControls && regDateLabel
-            ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>'
+          (regDateLabel
+            ? '<span class="item-reg-date item-reg-date-head-v651' +
+                (!customerMatchControls ? ' standard-card-v651' : '') +
+                '">등록 ' + escapeHtml(regDateLabel) + '</span>'
             : '') +
         '</div>' +
 
@@ -1982,7 +1984,7 @@ function addListItem(item, appendTarget) {
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
           '</div>' +
           (!customerMatchControls && regDateLabel
-            ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>'
+            ? '<span class="item-reg-date item-reg-date-mobile-v651">등록 ' + escapeHtml(regDateLabel) + '</span>'
             : '') +
           '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
             'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +

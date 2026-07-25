@@ -5448,10 +5448,14 @@ body,
 
 .item-contact-rail-v650 {
   display: grid;
-  grid-auto-rows: minmax(18px, 1fr);
-  align-self: stretch;
+  grid-auto-rows: 21px;
+  align-self: start;
   width: 23px;
   gap: 2px;
+}
+
+.item-contact-rail-v650.contact-count-1 {
+  grid-auto-rows: 45px;
 }
 
 .item-contact-call-v650 {
@@ -5550,8 +5554,9 @@ body,
 .item-address-room-v650 {
   display: flex;
   align-items: center;
-  flex: 1 1 90px;
-  gap: 4px;
+  justify-content: flex-start;
+  flex: 1 1 auto;
+  gap: .35em;
   min-width: 46px;
   overflow: hidden;
   color: #334155;
@@ -5561,7 +5566,7 @@ body,
 
 .item-address-room-v650 .item-address-text {
   display: block !important;
-  flex: 1 1 auto !important;
+  flex: 0 1 auto !important;
   min-width: 20px !important;
   overflow: hidden !important;
   text-overflow: ellipsis;
@@ -5589,10 +5594,9 @@ body,
   width: 18px;
   height: 18px;
   margin-left: 2px;
-  border: 1px solid #8a94a3;
-  border-radius: 4px;
-  color: #4b5563;
-  background: #fff;
+  border: 0;
+  color: #334155;
+  background: transparent;
   box-sizing: border-box;
 }
 
@@ -5600,20 +5604,23 @@ body,
   display: none !important;
 }
 
-.item-elevator-v650 svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.item-elevator-glyph-v651 {
+  display: inline-block;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(.25px);
 }
 
 .item-compact-head-v650 .item-reg-date {
   flex: 0 0 auto;
   font-size: 9px !important;
   line-height: 1;
+}
+
+.item-reg-date-mobile-v651 {
+  display: none;
 }
 
 .item-compact-price-v650.price-line {
@@ -5736,6 +5743,10 @@ body,
     width: 21px;
   }
 
+  .item-contact-rail-v650.contact-count-1 {
+    grid-auto-rows: 43px;
+  }
+
   .item-contact-call-v650 {
     min-width: 21px;
     font-size: 9px;
@@ -5756,13 +5767,21 @@ body,
 
   .item-address-room-v650 {
     flex-basis: 60px;
-    gap: 3px;
+    gap: .35em;
     font-size: 9.5px;
   }
 
   .item-building-year-v650,
   .item-compact-head-v650 .item-reg-date {
     font-size: 8px !important;
+  }
+
+  .item-reg-date-head-v651.standard-card-v651 {
+    display: none;
+  }
+
+  .item-reg-date-mobile-v651 {
+    display: inline-flex;
   }
 
   .item-compact-head-v650 .item-reg-date {
@@ -5773,8 +5792,9 @@ body,
 
   .item-compact-price-v650.price-line {
     gap: 2px !important;
-    font-size: 9.2px !important;
-    letter-spacing: -.35px !important;
+    font-size: 10.3px !important;
+    line-height: 22px !important;
+    letter-spacing: -.25px !important;
   }
 
   .item-compact-price-v650 .pyeong-mini-badge {
@@ -5796,7 +5816,138 @@ body,
   .item-compact-actions-v650 .item-edit-btn-v630,
   .item-compact-actions-v650 .item-memo-toggle {
     padding: 0 5px !important;
-    font-size: 9px !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    font-size: 9.5px !important;
+    line-height: 22px !important;
+  }
+}
+
+/* =========================================================
+   v6.5.1 태블릿·데스크톱 리스트 가독성 보강
+   - 모바일 레이아웃 폭은 유지
+   - 호실은 주소 바로 뒤, 등록일은 첫째 줄
+   - 한 개 연락처는 카드 전체가 아니라 두 줄 높이만 사용
+   ========================================================= */
+@media (min-width: 521px) and (max-width: 1199px) {
+  #sidebar {
+    width: min(560px, calc(100vw - 16px)) !important;
+    min-width: min(560px, calc(100vw - 16px)) !important;
+    max-width: 560px !important;
+  }
+
+  .item-compact-main-v650 {
+    grid-template-rows: minmax(23px, auto) minmax(22px, auto) minmax(27px, auto);
+  }
+
+  .item-compact-head-v650 .item-building-name {
+    max-width: 118px;
+    font-size: 13.5px;
+  }
+
+  .item-address-room-v650 {
+    font-size: 12px;
+  }
+
+  .item-address-room-v650 .item-room-badge,
+  .item-building-year-v650,
+  .item-compact-head-v650 .done-badge,
+  .item-compact-head-v650 .gongsil-source-badge {
+    font-size: 9.5px !important;
+  }
+
+  .item-compact-head-v650 .item-reg-date {
+    font-size: 9.5px !important;
+  }
+
+  .item-compact-price-v650.price-line {
+    font-size: 11.5px !important;
+    line-height: 22px !important;
+  }
+
+  .item-compact-price-v650 .pyeong-mini-badge,
+  .item-compact-price-v650 .type-badge {
+    font-size: 9.5px !important;
+  }
+
+  .item-compact-actions-v650 {
+    min-height: 27px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 27px !important;
+    min-height: 27px !important;
+    padding: 0 8px !important;
+    font-size: 10.5px !important;
+    line-height: 25px !important;
+  }
+}
+
+@media (min-width: 1200px) {
+  #sidebar {
+    width: 580px !important;
+    min-width: 580px !important;
+    max-width: 580px !important;
+  }
+
+  .item-compact-main-v650 {
+    grid-template-rows: minmax(24px, auto) minmax(23px, auto) minmax(28px, auto);
+  }
+
+  .item-compact-head-v650 .item-building-name {
+    max-width: 140px;
+    font-size: 14px;
+  }
+
+  .item-address-room-v650 {
+    font-size: 12.5px;
+  }
+
+  .item-address-room-v650 .item-room-badge,
+  .item-building-year-v650,
+  .item-compact-head-v650 .done-badge,
+  .item-compact-head-v650 .gongsil-source-badge {
+    font-size: 10px !important;
+  }
+
+  .item-compact-head-v650 .item-reg-date {
+    font-size: 10px !important;
+  }
+
+  .item-compact-price-v650.price-line {
+    font-size: 12px !important;
+    line-height: 23px !important;
+  }
+
+  .item-compact-price-v650 .pyeong-mini-badge,
+  .item-compact-price-v650 .type-badge {
+    font-size: 10px !important;
+  }
+
+  .item-compact-actions-v650 {
+    min-height: 28px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding: 0 9px !important;
+    font-size: 11px !important;
+    line-height: 26px !important;
   }
 }
 
