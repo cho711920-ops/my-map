@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var LOCAL_CACHE_PREFIX = "js-building-register-v9:";
+  var LOCAL_CACHE_PREFIX = "js-building-register-v10:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -268,7 +268,7 @@
       if (!raw) return null;
       var wrapper = JSON.parse(raw);
       if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > LOCAL_CACHE_TTL) return null;
-      if (!wrapper.data || Number(wrapper.data.version || 0) < 9) return null;
+      if (!wrapper.data || Number(wrapper.data.version || 0) < 10) return null;
       return wrapper.data;
     } catch (_) {
       return null;
@@ -310,29 +310,184 @@
     return String(value || "").replace(/[\s()[\]{}·.,_-]+/g, "").toLowerCase();
   }
 
-  function buildingForBadge(data, item) {
+  function compatibleName(first, second) {
+    first = normalizedName(first);
+    second = normalizedName(second);
+    if (!first || !second) return true;
+    return first === second || first.indexOf(second) >= 0 || second.indexOf(first) >= 0;
+  }
+
+  function compatibleDong(first, second) {
+    first = normalizedName(first);
+    second = normalizedName(second);
+    if (!first || !second) return true;
+    if (first === second) return true;
+    var firstWithoutSuffix = first.length > 1 ? first.replace(/동$/, "") : first;
+    var secondWithoutSuffix = second.length > 1 ? second.replace(/동$/, "") : second;
+    return firstWithoutSuffix === secondWithoutSuffix;
+  }
+
+  function buildingIdentityText(row) {
+    row = row || {};
+    return [
+      row.buildingName,
+      row.dongName,
+      row.mainUse,
+      row.otherUse,
+      row.registerType
+    ].filter(Boolean).join(" ");
+  }
+
+  function isCommercialBuilding(building) {
+    return /상가|상업|점포|근린생활|판매시설|업무시설|복리시설|생활편익/i.test(
+      buildingIdentityText(building)
+    );
+  }
+
+  function isApartmentBuilding(building) {
+    return /아파트|공동주택/i.test(buildingIdentityText(building));
+  }
+
+  function buildingCategory(building) {
+    var text = buildingIdentityText(building);
+    var apartment = /아파트|공동주택/i.test(text);
+    var commercial = /상가|상업|점포|근린생활|판매시설|업무시설|복리시설|생활편익/i.test(text);
+    if (apartment && commercial) return "단지내상가";
+    if (/집합/i.test(String(building && building.registerType || "")) && commercial) return "집합상가";
+    if (commercial) return "상가건물";
+    if (apartment) return "아파트 주동";
+    return "일반건물";
+  }
+
+  function isGeneralRegister(building) {
+    var registerType = String(building && building.registerType || "");
+    return /일반/.test(registerType) && !/집합/.test(registerType);
+  }
+
+  function unitMatchesBuilding(unit, building, buildings) {
+    unit = unit || {};
+    building = building || {};
+    buildings = Array.isArray(buildings) ? buildings : [];
+
+    if (unit.managementKey && building.managementKey &&
+        unit.managementKey === building.managementKey) {
+      return true;
+    }
+
+    var unitName = normalizedName(unit.buildingName);
+    var buildingName = normalizedName(building.buildingName);
+    var unitDong = normalizedName(unit.dongName);
+    var buildingDong = normalizedName(building.dongName);
+
+    if (unitDong && buildingDong && !compatibleDong(unitDong, buildingDong)) return false;
+    if (unitName && buildingName && !compatibleName(unitName, buildingName)) return false;
+
+    if (unitDong && buildingDong) return true;
+    if (buildingDong && !unitDong) {
+      /*
+       * 같은 아파트 지번에 101동·102동·상가동이 함께 있을 때 동명이 없는
+       * 호실을 임의로 섞지 않습니다. 한 동뿐인 지번에서만 안전하게 허용합니다.
+       */
+      return Boolean(
+        unitName &&
+        compatibleName(unitName, buildingName) &&
+        unitName.indexOf(buildingDong) >= 0
+      ) || (buildings.length === 1 && (!unitName || compatibleName(unitName, buildingName)));
+    }
+    if (unitDong && !buildingDong) {
+      return Boolean(
+        unitName &&
+        buildingName &&
+        compatibleName(unitName, buildingName) &&
+        (buildings.length === 1 || buildingName.indexOf(unitDong) >= 0)
+      );
+    }
+    if (unitName && buildingName) {
+      var sameNameBuildings = buildings.filter(function (row) {
+        return compatibleName(row && row.buildingName, building.buildingName);
+      });
+      return compatibleName(unitName, buildingName) && sameNameBuildings.length <= 1;
+    }
+    return buildings.length === 1;
+  }
+
+  function unitEntriesForBuilding(building, units, buildings) {
+    return (Array.isArray(units) ? units : []).map(function (row, index) {
+      return { row: row, index: index };
+    }).filter(function (entry) {
+      return unitMatchesBuilding(entry.row, building, buildings);
+    });
+  }
+
+  function listingLooksCommercial(item) {
+    return /상가|점포|사무|업무|근린|공장|창고|토지/i.test(
+      [item && item.type, item && item.name].filter(Boolean).join(" ")
+    );
+  }
+
+  function buildingScore(data, item, building) {
     var buildings = Array.isArray(data && data.buildings) ? data.buildings : [];
     var units = Array.isArray(data && data.units) ? data.units : [];
-    if (!buildings.length) return null;
-
-    var unitIndex = bestUnitIndex(units, item && item.room);
-    var unit = units[unitIndex] || null;
-    if (unit && unit.managementKey) {
-      var byManagementKey = buildings.find(function(building) {
-        return building && building.managementKey === unit.managementKey;
-      });
-      if (byManagementKey) return byManagementKey;
-    }
-
+    var score = 0;
     var itemName = normalizedName(item && item.name);
-    if (itemName && !/^(일반상가|집합상가|상가|상가점포|사무실|공장창고)$/.test(itemName)) {
-      var byName = buildings.find(function(building) {
-        var buildingName = normalizedName(joinText(building && building.buildingName, building && building.dongName));
-        return buildingName && (buildingName.indexOf(itemName) >= 0 || itemName.indexOf(buildingName) >= 0);
-      });
-      if (byName) return byName;
+    var buildingName = normalizedName([
+      building && building.buildingName,
+      building && building.dongName
+    ].filter(Boolean).join(" "));
+    var genericItemName = /^(일반상가|집합상가|상가|상가점포|사무실|공장창고)$/;
+
+    if (itemName && !genericItemName.test(itemName) && buildingName &&
+        compatibleName(itemName, buildingName)) {
+      score += 140;
     }
-    return buildings[0];
+
+    var commercialListing = listingLooksCommercial(item);
+    var commercialBuilding = isCommercialBuilding(building);
+    if (commercialListing && commercialBuilding) score += 120;
+    if (commercialListing && /상가동|단지내상가|아파트단지내상가/i.test(buildingIdentityText(building))) {
+      score += 150;
+    }
+    if (commercialListing && isApartmentBuilding(building) && !commercialBuilding) score -= 130;
+    if (/집합/i.test(String(building && building.registerType || "")) && commercialListing) score += 25;
+
+    var matchingEntries = unitEntriesForBuilding(building, units, buildings);
+    score += Math.min(60, matchingEntries.length);
+    var targetRoom = roomKey(item && item.room);
+    if (targetRoom && matchingEntries.some(function (entry) {
+      return roomKey(entry.row && entry.row.roomName) === targetRoom;
+    })) {
+      score += 180;
+    }
+    return score;
+  }
+
+  function bestBuildingIndex(data, item) {
+    var buildings = Array.isArray(data && data.buildings) ? data.buildings : [];
+    if (!buildings.length) return 0;
+    var bestIndex = 0;
+    var bestScore = -Infinity;
+    buildings.forEach(function (building, index) {
+      var score = buildingScore(data, item, building);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+    return bestIndex;
+  }
+
+  function bestVisibleUnitGlobalIndex(entries, listingRoom) {
+    if (!entries.length) return 0;
+    var localIndex = bestUnitIndex(entries.map(function (entry) {
+      return entry.row;
+    }), listingRoom);
+    return entries[localIndex] ? entries[localIndex].index : entries[0].index;
+  }
+
+  function buildingForBadge(data, item) {
+    var buildings = Array.isArray(data && data.buildings) ? data.buildings : [];
+    if (!buildings.length) return null;
+    return buildings[bestBuildingIndex(data, item)] || buildings[0];
   }
 
   function badgeFromData(data, item) {
@@ -538,8 +693,14 @@
   function applyRegisterData(data, requestToken, writeLocalCache) {
     if (requestToken !== state.requestToken) return null;
     state.data = data;
-    state.buildingIndex = 0;
-    state.unitIndex = bestUnitIndex(data.units || [], state.item && state.item.room);
+    state.buildingIndex = bestBuildingIndex(data, state.item);
+    var buildings = Array.isArray(data.buildings) ? data.buildings : [];
+    var entries = unitEntriesForBuilding(
+      buildings[state.buildingIndex],
+      data.units || [],
+      buildings
+    );
+    state.unitIndex = bestVisibleUnitGlobalIndex(entries, state.item && state.item.room);
     if (writeLocalCache) writeCache(state.parcel, data);
     writeBadgeCache(state.parcel, data);
     refreshBadgeCards(state.parcel, data);
@@ -553,8 +714,14 @@
     if (cached && cached.ok) {
       if (requestToken !== state.requestToken) return Promise.resolve(null);
       state.data = cached;
-      state.buildingIndex = 0;
-      state.unitIndex = bestUnitIndex(cached.units || [], state.item && state.item.room);
+      state.buildingIndex = bestBuildingIndex(cached, state.item);
+      var buildings = Array.isArray(cached.buildings) ? cached.buildings : [];
+      var entries = unitEntriesForBuilding(
+        buildings[state.buildingIndex],
+        cached.units || [],
+        buildings
+      );
+      state.unitIndex = bestVisibleUnitGlobalIndex(entries, state.item && state.item.room);
       render();
       return Promise.resolve(cached);
     }
@@ -720,10 +887,66 @@
     }).join("");
   }
 
+  function detailedFloorRows(floors, listingFloor) {
+    var sorted = (floors || []).map(function (row, index) {
+      return { row: row || {}, index: index, signed: signedFloor(row) };
+    }).sort(function (a, b) {
+      if (a.signed == null && b.signed == null) return a.index - b.index;
+      if (a.signed == null) return 1;
+      if (b.signed == null) return -1;
+      return b.signed - a.signed || a.index - b.index;
+    });
+    var floorCounts = {};
+    sorted.forEach(function (entry) {
+      var key = entry.signed == null
+        ? "name:" + String(entry.row.floorName || "")
+        : "floor:" + entry.signed;
+      floorCounts[key] = (floorCounts[key] || 0) + 1;
+    });
+    var floorOrders = {};
+    return sorted.map(function (entry) {
+      var row = entry.row;
+      var key = entry.signed == null
+        ? "name:" + String(row.floorName || "")
+        : "floor:" + entry.signed;
+      floorOrders[key] = (floorOrders[key] || 0) + 1;
+      var label = String(row.floorName || floorLabel(entry.signed) || "층 정보 없음").trim();
+      if (floorCounts[key] > 1) label += " · 세부 " + floorOrders[key];
+      var matched = listingFloor != null && entry.signed === listingFloor;
+      return '<tr' + (matched ? ' class="matched-floor"' : '') + '>' +
+        '<th scope="row">' + esc(label) + (matched ? '<small>매물층</small>' : '') + '</th>' +
+        '<td>' + esc(joinText(row.mainUse, row.otherUse)) + '</td>' +
+        '<td>' + esc(areaText(row.area)) + '</td>' +
+        '<td>' + esc(joinText(row.structure, row.otherStructure)) + '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
   function buildingOptionLabel(building, index) {
-    return joinText(building.buildingName, building.dongName, building.mainAnnex) === "정보 없음"
-      ? "건축물 " + (index + 1)
-      : joinText(building.buildingName, building.dongName, building.mainAnnex);
+    var label = joinText(building.buildingName, building.dongName, building.mainAnnex);
+    if (label === "정보 없음") label = "건축물 " + (index + 1);
+    return "[" + buildingCategory(building) + "] " + label;
+  }
+
+  function unitAvailabilityNotice(data, building, units, visibleUnits) {
+    if (visibleUnits.length) return "";
+    var category = buildingCategory(building);
+    var totalUnits = Array.isArray(units) ? units.length : 0;
+    if (data && data.partial) {
+      return '<div class="building-register-unit-notice loading"><strong>호실 상세자료를 불러오는 중입니다.</strong>' +
+        '<span>잠시 후 선택한 건물·동의 배치도가 자동으로 표시됩니다.</span></div>';
+    }
+    if (totalUnits > 0) {
+      return '<div class="building-register-unit-notice"><strong>선택한 건물·동의 호실만 표시합니다.</strong>' +
+        '<span>같은 번지의 다른 아파트 동 호실 ' + esc(totalUnits) +
+        '건은 섞이지 않도록 제외했습니다. 건물·동 선택에서 다른 동을 선택할 수 있습니다.</span></div>';
+    }
+    if (isGeneralRegister(building)) {
+      return '<div class="building-register-unit-notice"><strong>일반건축물은 법정 호실 전유부가 제공되지 않을 수 있습니다.</strong>' +
+        '<span>공식 API에 101호·102호가 따로 등록되어 있으면 배치도로 표시하고, 없으면 아래 층별 세부 용도·면적을 각각 표시합니다. 없는 호실 정보는 임의로 만들지 않습니다.</span></div>';
+    }
+    return '<div class="building-register-unit-notice"><strong>선택한 ' + esc(category) + '의 호실 상세자료가 없습니다.</strong>' +
+      '<span>최신조회를 눌러 다시 확인할 수 있으며, 공공데이터에 전유부가 없으면 기본정보만 표시됩니다.</span></div>';
   }
 
   function unitFloorSortValue(row) {
@@ -882,22 +1105,13 @@
 
     if (state.buildingIndex >= buildings.length) state.buildingIndex = 0;
     var building = buildings[state.buildingIndex];
-    var visibleUnits = units.map(function (row, index) {
-      return {row: row, index: index};
-    }).filter(function (entry) {
-      return !building.managementKey || !entry.row.managementKey || entry.row.managementKey === building.managementKey;
-    }).sort(compareUnitEntries);
-    if (!visibleUnits.length) {
-      visibleUnits = units.map(function (row, index) {
-        return {row: row, index: index};
-      }).sort(compareUnitEntries);
-    }
+    var visibleUnits = unitEntriesForBuilding(building, units, buildings).sort(compareUnitEntries);
     var selectedVisibleIndex = visibleUnits.findIndex(function (entry) { return entry.index === state.unitIndex; });
     if (selectedVisibleIndex < 0 && visibleUnits.length) {
-      selectedVisibleIndex = bestUnitIndex(visibleUnits.map(function (entry) { return entry.row; }), state.item && state.item.room);
-      state.unitIndex = visibleUnits[selectedVisibleIndex].index;
+      state.unitIndex = bestVisibleUnitGlobalIndex(visibleUnits, state.item && state.item.room);
+      selectedVisibleIndex = visibleUnits.findIndex(function (entry) { return entry.index === state.unitIndex; });
     }
-    var unit = units.length ? units[state.unitIndex] : null;
+    var unit = selectedVisibleIndex >= 0 ? visibleUnits[selectedVisibleIndex].row : null;
     var listingFloor = extractListingFloor(state.item && state.item.room);
     var parkingTotal = sumKnown([
       building.indoorMechanicalParking,
@@ -920,12 +1134,15 @@
       '</select></label>' : "";
 
     var unitSelector = unitBrowserHtml(visibleUnits, unit);
+    var unitNotice = unitAvailabilityNotice(data, building, units, visibleUnits);
 
     var mechanicalParking = sumKnown([building.indoorMechanicalParking, building.outdoorMechanicalParking]);
     var selfParking = sumKnown([building.indoorSelfParking, building.outdoorSelfParking]);
     var zoneText = zones.length ? zones.join(" / ") : "정보 없음";
     var buildingName = joinText(building.buildingName, building.dongName);
-    var floorTableRows = groupedFloorRows(building.floors || [], listingFloor);
+    var floorTableRows = isGeneralRegister(building)
+      ? detailedFloorRows(building.floors || [], listingFloor)
+      : groupedFloorRows(building.floors || [], listingFloor);
     var floorSection = visibleUnits.length ? "" : '' +
       '<section class="building-register-floor-section">' +
         '<h3>층별내역</h3>' +
@@ -992,6 +1209,7 @@
     body.innerHTML = '' +
       selector +
       unitSelector +
+      unitNotice +
       '<section class="building-register-sheet-section">' +
         '<h3>건축물대장 기본정보</h3>' +
         '<div class="building-register-table-wrap"><table class="building-register-summary-table"><tbody>' +
@@ -1016,10 +1234,13 @@
     if (select) {
       select.addEventListener("change", function () {
         state.buildingIndex = Number(this.value) || 0;
+        var nextBuilding = buildings[state.buildingIndex];
+        var nextEntries = unitEntriesForBuilding(nextBuilding, units, buildings);
+        state.unitIndex = bestVisibleUnitGlobalIndex(nextEntries, state.item && state.item.room);
         render();
       });
     }
-    Array.prototype.forEach.call(body.querySelectorAll(".building-register-unit-card"), function (button) {
+    Array.prototype.forEach.call(body.querySelectorAll(".building-register-unit-card, .building-register-unit-cell"), function (button) {
       button.addEventListener("click", function () {
         state.unitIndex = Number(this.getAttribute("data-unit-index")) || 0;
         render();
@@ -1071,5 +1292,11 @@
         if (card.__buildingBadgeItemV650) bindBadge(card, card.__buildingBadgeItemV650);
       });
     }
+  };
+  window.JSBuildingRegisterDiagnosticsV652 = {
+    buildingCategory: buildingCategory,
+    bestBuildingIndex: bestBuildingIndex,
+    unitEntriesForBuilding: unitEntriesForBuilding,
+    bestVisibleUnitGlobalIndex: bestVisibleUnitGlobalIndex
   };
 })();
