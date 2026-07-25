@@ -46,17 +46,21 @@ body.building-register-open{overflow:hidden!important}
 @media(max-width:600px){
   .item-action-row{
     flex-wrap:nowrap!important;
-    gap:8px!important;
-    min-height:23px!important;
+    gap:4px!important;
+    min-height:27px!important;
   }
-  .item-action-left{
+  .item-compact-actions-v650 .item-action-left{
     display:flex!important;
     flex:1 1 0!important;
     flex-wrap:nowrap!important;
     align-items:center!important;
     gap:3px!important;
     min-width:0!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scrollbar-width:none!important;
   }
+  .item-compact-actions-v650 .item-action-left::-webkit-scrollbar{display:none!important}
   .item-action-select{
     flex:0 0 20px!important;
     min-width:20px!important;
@@ -70,26 +74,29 @@ body.building-register-open{overflow:hidden!important}
   .item-action-row .item-source-link-btn,
   .item-action-row .item-edit-btn-v630{
     flex:1 1 0!important;
-    min-width:0!important;
-    height:23px!important;
-    min-height:23px!important;
-    max-height:23px!important;
-    padding:0 4px!important;
-    font-size:9px!important;
-    line-height:21px!important;
+    min-width:38px!important;
+    height:27px!important;
+    min-height:27px!important;
+    max-height:27px!important;
+    padding:0 5px!important;
+    font-size:10px!important;
+    line-height:25px!important;
     letter-spacing:-.25px!important;
     white-space:nowrap!important;
+  }
+  .item-action-row .item-roadview-btn{
+    min-width:46px!important;
   }
   .item-action-row .item-memo-toggle{
     flex:0 0 48px!important;
     width:48px!important;
-    height:23px!important;
-    min-height:23px!important;
-    max-height:23px!important;
+    height:27px!important;
+    min-height:27px!important;
+    max-height:27px!important;
     margin-left:0!important;
     padding:0 4px!important;
-    font-size:9px!important;
-    line-height:21px!important;
+    font-size:10px!important;
+    line-height:25px!important;
     letter-spacing:-.25px!important;
     white-space:nowrap!important;
   }

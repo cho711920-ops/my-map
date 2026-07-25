@@ -1938,7 +1938,7 @@ function addListItem(item, appendTarget) {
               (printSelected ? 'checked' : '') +
               ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
           '</label>' +
-          '<span class="item-building-year-v650" title="건축물대장 사용승인일">준공 -</span>' +
+          '<span class="item-building-year-v650 item-building-year-head-v652" title="건축물대장 사용승인일">준공 -</span>' +
           doneLabel +
           sourceLabel +
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
@@ -1958,14 +1958,20 @@ function addListItem(item, appendTarget) {
 
         '<div class="price-line item-compact-price-v650">' +
           pyeongMiniBadge +
+          '<span class="item-building-year-v650 item-building-year-mobile-v652" title="건축물대장 사용승인일">준공 -</span>' +
           typeLabel +
-          '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
-          '<span class="price-separator">·</span>' +
-          '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
-          '<span class="price-separator">·</span>' +
-          '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
-          '<span class="price-separator">·</span>' +
-          '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>' +
+          '<span class="item-price-values-v652">' +
+            '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
+            '<span class="price-separator">·</span>' +
+            '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
+            '<span class="price-separator">·</span>' +
+            '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
+            '<span class="price-separator">·</span>' +
+            '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>' +
+          '</span>' +
+          (!customerMatchControls && regDateLabel
+            ? '<span class="item-reg-date item-reg-date-price-mobile-v652">등록 ' + escapeHtml(regDateLabel) + '</span>'
+            : '') +
         '</div>' +
 
         '<div class="item-action-row item-compact-actions-v650">' +
@@ -1983,9 +1989,6 @@ function addListItem(item, appendTarget) {
             '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
           '</div>' +
-          (!customerMatchControls && regDateLabel
-            ? '<span class="item-reg-date item-reg-date-mobile-v651">등록 ' + escapeHtml(regDateLabel) + '</span>'
-            : '') +
           '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
             'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
             (memoOpen ? '메모 ▲' : '메모 ▼') +

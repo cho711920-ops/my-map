@@ -505,12 +505,12 @@
 
   function applyBadgeToCard(card, badge) {
     if (!card || !badge) return;
-    var year = card.querySelector(".item-building-year-v650");
+    var years = card.querySelectorAll(".item-building-year-v650");
     var elevator = card.querySelector(".item-elevator-v650");
-    if (year) {
+    Array.prototype.forEach.call(years, function(year) {
       year.textContent = badge.year ? "준" + badge.year : "준공 -";
       year.classList.toggle("verified", !!badge.verified);
-    }
+    });
     if (elevator) {
       elevator.hidden = !(badge.verified && badge.elevators > 0);
       if (!elevator.hidden) {

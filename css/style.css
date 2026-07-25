@@ -5623,6 +5623,11 @@ body,
   display: none;
 }
 
+.item-building-year-mobile-v652,
+.item-reg-date-price-mobile-v652 {
+  display: none;
+}
+
 .item-compact-price-v650.price-line {
   display: flex !important;
   align-items: center !important;
@@ -5646,6 +5651,20 @@ body,
 }
 
 .item-compact-price-v650 > span {
+  flex: 0 0 auto;
+}
+
+.item-price-values-v652 {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.item-price-values-v652 > span {
   flex: 0 0 auto;
 }
 
@@ -5771,23 +5790,36 @@ body,
     font-size: 9.5px;
   }
 
-  .item-building-year-v650,
-  .item-compact-head-v650 .item-reg-date {
-    font-size: 8px !important;
-  }
-
-  .item-reg-date-head-v651.standard-card-v651 {
+  .item-building-year-head-v652,
+  .item-reg-date-head-v651 {
     display: none;
   }
 
-  .item-reg-date-mobile-v651 {
+  .item-building-year-mobile-v652 {
     display: inline-flex;
+    margin-right: 1px;
+    font-size: 9px !important;
   }
 
-  .item-compact-head-v650 .item-reg-date {
-    max-width: 54px;
+  .item-reg-date-price-mobile-v652 {
+    display: inline-flex;
+    flex: 0 0 auto !important;
+    align-items: center;
+    align-self: stretch;
+    margin-left: auto;
+    padding-left: 4px;
+    background: #fff;
+    color: #94a3b8;
+    font-size: 8.5px !important;
+    line-height: 22px !important;
+    white-space: nowrap;
+  }
+
+  .item-compact-price-v650 .item-price-values-v652 {
+    flex: 1 1 auto;
+    gap: 2px;
+    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .item-compact-price-v650.price-line {
@@ -5861,13 +5893,13 @@ body,
   }
 
   .item-compact-price-v650.price-line {
-    font-size: 11.5px !important;
-    line-height: 22px !important;
+    font-size: 12.5px !important;
+    line-height: 24px !important;
   }
 
   .item-compact-price-v650 .pyeong-mini-badge,
   .item-compact-price-v650 .type-badge {
-    font-size: 9.5px !important;
+    font-size: 10.5px !important;
   }
 
   .item-compact-actions-v650 {
@@ -5887,6 +5919,18 @@ body,
     padding: 0 8px !important;
     font-size: 10.5px !important;
     line-height: 25px !important;
+  }
+
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630 {
+    min-width: 44px !important;
+  }
+
+  .item-compact-actions-v650 .item-roadview-btn {
+    min-width: 54px !important;
   }
 }
 
@@ -5948,6 +5992,18 @@ body,
     padding: 0 9px !important;
     font-size: 11px !important;
     line-height: 26px !important;
+  }
+
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630 {
+    min-width: 46px !important;
+  }
+
+  .item-compact-actions-v650 .item-roadview-btn {
+    min-width: 56px !important;
   }
 }
 
