@@ -2008,7 +2008,6 @@ function addListItem(item, appendTarget) {
           '</label>' +
           '<span class="item-building-year-v650 item-building-year-head-v652" title="건축물대장 사용승인일">준공 -</span>' +
           doneLabel +
-          sourceLabel +
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
@@ -2025,6 +2024,7 @@ function addListItem(item, appendTarget) {
         '</div>' +
 
         '<div class="price-line item-compact-price-v650">' +
+          sourceLabel +
           pyeongMiniBadge +
           '<span class="item-building-year-v650 item-building-year-mobile-v652" title="건축물대장 사용승인일">준공 -</span>' +
           typeLabel +

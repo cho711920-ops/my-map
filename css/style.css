@@ -5531,7 +5531,7 @@ body,
 }
 
 .item-compact-head-v650 .done-badge,
-.item-compact-head-v650 .gongsil-source-badge {
+.item-compact-price-v650 .gongsil-source-badge {
   flex: 0 0 auto;
   margin: 0 !important;
   padding: 2px 4px !important;
@@ -5863,9 +5863,9 @@ body,
    ========================================================= */
 @media (min-width: 521px) and (max-width: 1199px) {
   #sidebar {
-    width: min(620px, calc(100vw - 16px)) !important;
-    min-width: min(620px, calc(100vw - 16px)) !important;
-    max-width: 620px !important;
+    width: min(570px, calc(100vw - 16px)) !important;
+    min-width: min(570px, calc(100vw - 16px)) !important;
+    max-width: 570px !important;
   }
 
   .item-compact-main-v650 {
@@ -5884,7 +5884,7 @@ body,
   .item-address-room-v650 .item-room-badge,
   .item-building-year-v650,
   .item-compact-head-v650 .done-badge,
-  .item-compact-head-v650 .gongsil-source-badge {
+  .item-compact-price-v650 .gongsil-source-badge {
     font-size: 10.5px !important;
   }
 
@@ -5936,9 +5936,9 @@ body,
 
 @media (min-width: 1200px) {
   #sidebar {
-    width: 650px !important;
-    min-width: 650px !important;
-    max-width: 650px !important;
+    width: clamp(570px, 34vw, 600px) !important;
+    min-width: clamp(570px, 34vw, 600px) !important;
+    max-width: 600px !important;
   }
 
   .item-compact-main-v650 {
@@ -5957,7 +5957,7 @@ body,
   .item-address-room-v650 .item-room-badge,
   .item-building-year-v650,
   .item-compact-head-v650 .done-badge,
-  .item-compact-head-v650 .gongsil-source-badge {
+  .item-compact-price-v650 .gongsil-source-badge {
     font-size: 11px !important;
   }
 
@@ -6012,9 +6012,9 @@ body,
        (min-width: 769px) and (any-pointer: coarse),
        (min-width: 769px) and (hover: none) {
   #sidebar {
-    width: min(760px, calc(100vw - 16px)) !important;
-    min-width: min(760px, calc(100vw - 16px)) !important;
-    max-width: 760px !important;
+    width: min(640px, calc(100vw - 16px)) !important;
+    min-width: min(640px, calc(100vw - 16px)) !important;
+    max-width: 640px !important;
   }
 
   #list .item {
@@ -6056,7 +6056,7 @@ body,
   .item-address-room-v650 .item-room-badge,
   .item-building-year-v650,
   .item-compact-head-v650 .done-badge,
-  .item-compact-head-v650 .gongsil-source-badge,
+  .item-compact-price-v650 .gongsil-source-badge,
   .item-compact-head-v650 .item-reg-date {
     font-size: 12.5px !important;
   }
