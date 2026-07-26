@@ -7664,3 +7664,10 @@ body,
   }
 }
 
+/* v6.5.10 태블릿/데스크탑 지도 도구: 매물목록 경계를 침범하지 않도록 최종 고정 */
+@media (min-width: 769px) {
+  .map-quick-tools {
+    right: calc(var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) + 14px) !important;
+  }
+}
+

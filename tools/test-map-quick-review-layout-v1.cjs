@@ -103,5 +103,10 @@ assert(
   "mobile review card layout recovery is missing"
 );
 assert(quickTools.includes("syncMapQuickToolGeometryV659"), "tablet map-tool geometry sync is missing");
+assert(
+  style.includes("v6.5.10 태블릿/데스크탑 지도 도구") &&
+    style.includes("right: calc(var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) + 14px) !important"),
+  "tablet map tools must stay fully on the map side"
+);
 
 console.log("Map quick tools and compact review layout tests: OK");

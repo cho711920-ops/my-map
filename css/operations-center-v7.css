@@ -341,3 +341,10 @@ body.customer-crm-open{overflow:hidden}
   #operationsCustomersPanel .operations-customer-card{min-height:58px}
   #operationsCustomersPanel .operations-match-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* v7.17.1 넓은 데스크탑 고객매칭: 한 화면에 더 많은 매물을 보는 3열 배열 */
+@media(min-width:1400px){
+  #operationsCustomersPanel .operations-match-cards{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+}

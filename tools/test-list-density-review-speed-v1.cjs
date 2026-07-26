@@ -51,7 +51,16 @@ assert(
 assert(css.includes("width: min(570px, calc(100vw - 16px)) !important;"));
 assert(css.includes("width: clamp(570px, 34vw, 600px) !important;"));
 assert(css.includes("width: min(640px, calc(100vw - 16px)) !important;"));
-assert(index.includes("style.css?v=6.5.9-tablet-map-tools"));
+assert(index.includes("style.css?v=6.5.10-tablet-map-tools-position"));
+const operationsCss = fs.readFileSync(
+  path.join(repo, "css", "operations-center-v7.css"),
+  "utf8"
+);
+assert(
+  operationsCss.includes("v7.17.1 넓은 데스크탑 고객매칭") &&
+    operationsCss.includes("grid-template-columns:repeat(3,minmax(0,1fr))"),
+  "wide desktop customer matches must use a three-column grid"
+);
 
 [
   "mmForceCreateReviewItem_",
