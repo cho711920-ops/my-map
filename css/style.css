@@ -5863,47 +5863,47 @@ body,
    ========================================================= */
 @media (min-width: 521px) and (max-width: 1199px) {
   #sidebar {
-    width: min(560px, calc(100vw - 16px)) !important;
-    min-width: min(560px, calc(100vw - 16px)) !important;
-    max-width: 560px !important;
+    width: min(620px, calc(100vw - 16px)) !important;
+    min-width: min(620px, calc(100vw - 16px)) !important;
+    max-width: 620px !important;
   }
 
   .item-compact-main-v650 {
-    grid-template-rows: minmax(23px, auto) minmax(22px, auto) minmax(27px, auto);
+    grid-template-rows: minmax(25px, auto) minmax(26px, auto) minmax(31px, auto);
   }
 
   .item-compact-head-v650 .item-building-name {
-    max-width: 118px;
-    font-size: 13.5px;
+    max-width: 145px;
+    font-size: 14.5px;
   }
 
   .item-address-room-v650 {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .item-address-room-v650 .item-room-badge,
   .item-building-year-v650,
   .item-compact-head-v650 .done-badge,
   .item-compact-head-v650 .gongsil-source-badge {
-    font-size: 9.5px !important;
+    font-size: 10.5px !important;
   }
 
   .item-compact-head-v650 .item-reg-date {
-    font-size: 9.5px !important;
+    font-size: 10.5px !important;
   }
 
   .item-compact-price-v650.price-line {
-    font-size: 12.5px !important;
-    line-height: 24px !important;
+    font-size: 13.2px !important;
+    line-height: 26px !important;
   }
 
   .item-compact-price-v650 .pyeong-mini-badge,
   .item-compact-price-v650 .type-badge {
-    font-size: 10.5px !important;
+    font-size: 11px !important;
   }
 
   .item-compact-actions-v650 {
-    min-height: 27px !important;
+    min-height: 31px !important;
   }
 
   .item-compact-actions-v650 .customer-match-inline-actions button,
@@ -5914,11 +5914,11 @@ body,
   .item-compact-actions-v650 .item-source-link-btn,
   .item-compact-actions-v650 .item-edit-btn-v630,
   .item-compact-actions-v650 .item-memo-toggle {
-    height: 27px !important;
-    min-height: 27px !important;
-    padding: 0 8px !important;
-    font-size: 10.5px !important;
-    line-height: 25px !important;
+    height: 31px !important;
+    min-height: 31px !important;
+    padding: 0 10px !important;
+    font-size: 11.5px !important;
+    line-height: 29px !important;
   }
 
   .item-compact-actions-v650 .item-nav-btn,
@@ -5926,57 +5926,57 @@ body,
   .item-compact-actions-v650 .item-list-add-btn,
   .item-compact-actions-v650 .item-source-link-btn,
   .item-compact-actions-v650 .item-edit-btn-v630 {
-    min-width: 44px !important;
+    min-width: 50px !important;
   }
 
   .item-compact-actions-v650 .item-roadview-btn {
-    min-width: 54px !important;
+    min-width: 62px !important;
   }
 }
 
 @media (min-width: 1200px) {
   #sidebar {
-    width: 580px !important;
-    min-width: 580px !important;
-    max-width: 580px !important;
+    width: 650px !important;
+    min-width: 650px !important;
+    max-width: 650px !important;
   }
 
   .item-compact-main-v650 {
-    grid-template-rows: minmax(24px, auto) minmax(23px, auto) minmax(28px, auto);
+    grid-template-rows: minmax(26px, auto) minmax(27px, auto) minmax(32px, auto);
   }
 
   .item-compact-head-v650 .item-building-name {
-    max-width: 140px;
-    font-size: 14px;
+    max-width: 165px;
+    font-size: 15px;
   }
 
   .item-address-room-v650 {
-    font-size: 12.5px;
+    font-size: 13.5px;
   }
 
   .item-address-room-v650 .item-room-badge,
   .item-building-year-v650,
   .item-compact-head-v650 .done-badge,
   .item-compact-head-v650 .gongsil-source-badge {
-    font-size: 10px !important;
+    font-size: 11px !important;
   }
 
   .item-compact-head-v650 .item-reg-date {
-    font-size: 10px !important;
+    font-size: 10.5px !important;
   }
 
   .item-compact-price-v650.price-line {
-    font-size: 12px !important;
-    line-height: 23px !important;
+    font-size: 13.5px !important;
+    line-height: 27px !important;
   }
 
   .item-compact-price-v650 .pyeong-mini-badge,
   .item-compact-price-v650 .type-badge {
-    font-size: 10px !important;
+    font-size: 11px !important;
   }
 
   .item-compact-actions-v650 {
-    min-height: 28px !important;
+    min-height: 32px !important;
   }
 
   .item-compact-actions-v650 .customer-match-inline-actions button,
@@ -5987,11 +5987,11 @@ body,
   .item-compact-actions-v650 .item-source-link-btn,
   .item-compact-actions-v650 .item-edit-btn-v630,
   .item-compact-actions-v650 .item-memo-toggle {
-    height: 28px !important;
-    min-height: 28px !important;
-    padding: 0 9px !important;
-    font-size: 11px !important;
-    line-height: 26px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 11px !important;
+    font-size: 12px !important;
+    line-height: 30px !important;
   }
 
   .item-compact-actions-v650 .item-nav-btn,
@@ -5999,11 +5999,107 @@ body,
   .item-compact-actions-v650 .item-list-add-btn,
   .item-compact-actions-v650 .item-source-link-btn,
   .item-compact-actions-v650 .item-edit-btn-v630 {
-    min-width: 46px !important;
+    min-width: 52px !important;
   }
 
   .item-compact-actions-v650 .item-roadview-btn {
-    min-width: 56px !important;
+    min-width: 64px !important;
+  }
+}
+
+/* v6.5.5 태블릿이 넓은 데스크톱 화면으로 인식돼도 터치 크기를 유지 */
+@media (min-width: 769px) and (pointer: coarse),
+       (min-width: 769px) and (any-pointer: coarse),
+       (min-width: 769px) and (hover: none) {
+  #sidebar {
+    width: min(760px, calc(100vw - 16px)) !important;
+    min-width: min(760px, calc(100vw - 16px)) !important;
+    max-width: 760px !important;
+  }
+
+  #list .item {
+    padding: 9px 10px !important;
+  }
+
+  .item-card-grid-v650 {
+    gap: 7px;
+  }
+
+  .item-contact-rail-v650 {
+    width: 27px;
+    grid-auto-rows: 25px;
+  }
+
+  .item-contact-rail-v650.contact-count-1 {
+    grid-auto-rows: 54px;
+  }
+
+  .item-contact-call-v650 {
+    min-width: 27px;
+    font-size: 11.5px;
+  }
+
+  .item-compact-main-v650 {
+    grid-template-rows: minmax(30px, auto) minmax(31px, auto) minmax(38px, auto);
+    gap: 4px;
+  }
+
+  .item-compact-head-v650 .item-building-name {
+    max-width: 195px;
+    font-size: 17px;
+  }
+
+  .item-address-room-v650 {
+    font-size: 15px;
+  }
+
+  .item-address-room-v650 .item-room-badge,
+  .item-building-year-v650,
+  .item-compact-head-v650 .done-badge,
+  .item-compact-head-v650 .gongsil-source-badge,
+  .item-compact-head-v650 .item-reg-date {
+    font-size: 12.5px !important;
+  }
+
+  .item-compact-price-v650.price-line {
+    font-size: 15.5px !important;
+    line-height: 31px !important;
+  }
+
+  .item-compact-price-v650 .pyeong-mini-badge,
+  .item-compact-price-v650 .type-badge {
+    font-size: 12.8px !important;
+  }
+
+  .item-compact-actions-v650 {
+    min-height: 38px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 14px !important;
+    font-size: 13.5px !important;
+    line-height: 36px !important;
+  }
+
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630 {
+    min-width: 60px !important;
+  }
+
+  .item-compact-actions-v650 .item-roadview-btn {
+    min-width: 74px !important;
   }
 }
 
