@@ -96,6 +96,12 @@ assert(
     operationsCss.includes("min-height:62px"),
   "multi-select high-density review grid is missing"
 );
+assert(
+  operationsCss.includes("v7.17.1 모바일 검증카드") &&
+    operationsCss.includes("grid-template-columns:22px 26px minmax(0,1fr)!important") &&
+    operationsCss.includes("grid-column:1/-1"),
+  "mobile review card layout recovery is missing"
+);
 assert(quickTools.includes("syncMapQuickToolGeometryV659"), "tablet map-tool geometry sync is missing");
 
 console.log("Map quick tools and compact review layout tests: OK");

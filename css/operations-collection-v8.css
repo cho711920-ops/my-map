@@ -321,3 +321,141 @@
     padding:3px 6px!important;
   }
 }
+
+/* v7.17.1 모바일 검증카드: 체크박스 추가 후 세로로 찌그러지는 배열 복구 */
+@media(max-width:768px){
+  #operationsReviewsPanel .review-toolbar{
+    gap:7px;
+    padding:9px 10px;
+  }
+  #operationsReviewsPanel .review-toolbar span{
+    margin-top:3px;
+    font-size:11px;
+    line-height:1.45;
+  }
+  #operationsReviewsPanel .review-workspace{
+    display:block;
+    margin-top:7px;
+  }
+  #operationsReviewsPanel .review-queue{
+    max-height:170px;
+    padding:7px;
+  }
+  #operationsReviewsPanel .review-detail{
+    margin-top:7px;
+    padding:8px;
+    overflow:visible;
+  }
+  #operationsReviewsPanel .review-summary{
+    margin-bottom:6px;
+    padding:8px 9px;
+  }
+  #operationsReviewsPanel .review-summary h3{font-size:16px}
+  #operationsReviewsPanel .review-summary p{font-size:11px}
+  #operationsReviewsPanel .review-existing-panel{
+    padding:7px;
+    border-left-width:5px;
+  }
+  #operationsReviewsPanel .review-existing-list{
+    max-height:none;
+  }
+  #operationsReviewsPanel .review-candidate-compact{
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:6px;
+    padding:7px!important;
+  }
+  #operationsReviewsPanel .review-candidate-compact .review-compact-values{
+    grid-column:1/-1;
+  }
+  #operationsReviewsPanel .review-new-panel{
+    min-height:0;
+    margin-top:7px;
+    padding:7px;
+  }
+  #operationsReviewsPanel .review-new-panel .review-section-heading{
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  #operationsReviewsPanel .review-select-all{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    margin-left:auto;
+    color:#40536d;
+    font-size:11px;
+    font-weight:850;
+  }
+  #operationsReviewsPanel .review-select-all input{
+    width:18px;
+    height:18px;
+    margin:0;
+    accent-color:#0568e8;
+  }
+  #operationsReviewsPanel .review-new-list{
+    display:block;
+    margin-top:7px;
+    overflow:visible;
+  }
+  #operationsReviewsPanel .review-item-compact{
+    box-sizing:border-box;
+    width:100%;
+    grid-template-columns:22px 26px minmax(0,1fr)!important;
+    grid-template-rows:auto auto;
+    align-items:center;
+    gap:6px;
+    min-height:112px;
+    margin:0 0 7px;
+    padding:8px!important;
+  }
+  #operationsReviewsPanel .review-item-checkbox{
+    grid-column:1;
+    grid-row:1;
+    width:18px;
+    height:18px;
+    margin:0;
+    accent-color:#0568e8;
+  }
+  #operationsReviewsPanel .review-item-number{
+    grid-column:2;
+    grid-row:1;
+    width:25px;
+    height:25px;
+  }
+  #operationsReviewsPanel .review-item-compact>.review-compact-main{
+    grid-column:3;
+    grid-row:1;
+    width:100%;
+    min-width:0;
+  }
+  #operationsReviewsPanel .review-compact-title strong{font-size:12px}
+  #operationsReviewsPanel .review-compact-address{font-size:11px}
+  #operationsReviewsPanel .review-compact-note{font-size:9.5px}
+  #operationsReviewsPanel .review-item-compact>.review-compact-values{
+    grid-column:1/-1;
+    grid-row:2;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    width:100%;
+  }
+  #operationsReviewsPanel .review-compact-values span{
+    padding:5px;
+    font-size:10.5px;
+  }
+  #operationsReviewsPanel .review-action-buttons{
+    position:sticky;
+    bottom:0;
+    z-index:3;
+    align-items:center;
+    gap:5px;
+    margin:7px -8px -8px;
+    padding:8px;
+  }
+  #operationsReviewsPanel .review-action-buttons>strong{
+    flex:1 0 100%;
+    font-size:11px;
+  }
+  #operationsReviewsPanel .review-action-buttons button{
+    min-height:40px;
+    padding:0 7px;
+    font-size:11px;
+  }
+}
