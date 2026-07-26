@@ -10,6 +10,7 @@
     reviews: null,
     selectedGroupKey: "",
     selectedReviewId: "",
+    selectedReviewIds: [],
     risk: "all",
     loading: false,
     refreshing: false,
@@ -139,6 +140,18 @@
       return item.reviewId === extraState.selectedReviewId;
     })[0] || group.items[0];
   }
+  function selectedReviewItems(group) {
+    if (!group || !group.items || !group.items.length) return [];
+    var selected = {};
+    (extraState.selectedReviewIds || []).forEach(function(reviewId) {
+      selected[text(reviewId)] = true;
+    });
+    return group.items.filter(function(item) { return !!selected[text(item.reviewId)]; });
+  }
+  function clearReviewSelection() {
+    extraState.selectedReviewId = "";
+    extraState.selectedReviewIds = [];
+  }
   function values(item) {
     return '<div class="review-values">' +
       '<div><small>보증금</small><b>' + escape(item.deposit) + '</b></div>' +
@@ -185,9 +198,15 @@
   }
   function renderReviewDetail(group) {
     if (!group) return '<div class="operations-empty"><b>처리할 항목이 없습니다.</b></div>';
-    var item = selectedReviewItem(group);
-    if (!item) return '<div class="operations-empty"><b>처리할 항목이 없습니다.</b></div>';
-    extraState.selectedReviewId = item.reviewId;
+    if (!group.items || !group.items.length) return '<div class="operations-empty"><b>처리할 항목이 없습니다.</b></div>';
+    var validIds = {};
+    group.items.forEach(function(entry) { validIds[text(entry.reviewId)] = true; });
+    extraState.selectedReviewIds = (extraState.selectedReviewIds || []).filter(function(reviewId) {
+      return !!validIds[text(reviewId)];
+    });
+    var selectedIds = {};
+    extraState.selectedReviewIds.forEach(function(reviewId) { selectedIds[text(reviewId)] = true; });
+    var selectedCount = extraState.selectedReviewIds.length;
     var candidates = group.candidates || [];
     return '<div class="review-summary"><div><h3>' + escape(group.address || "주소 확인 필요") + '</h3><p>' +
       escape(group.room || "호실 없음") + ' · 중복후보 ' + candidates.length + '개 · 수집원본 ' +
@@ -213,25 +232,32 @@
       '</div></section>' +
       '<section class="review-new-panel"><header class="review-section-heading">' +
         '<div><span class="review-new-badge">신규수집</span><strong>' + group.items.length +
-          '건</strong></div><small>처리할 매물을 눌러 선택하세요.</small>' +
+          '건</strong></div><label class="review-select-all"><input type="checkbox" onchange="toggleReviewGroupSelection(this.checked)"' +
+          (selectedCount === group.items.length ? ' checked' : '') + '><span>전체선택</span></label>' +
+          '<small>체크한 매물을 한 번에 처리합니다.</small>' +
       '</header><div id="reviewNewItemList" class="review-new-list">' +
       group.items.map(function(entry, index) {
-        var selected = entry.reviewId === item.reviewId;
-        return '<button type="button" class="review-item review-item-select review-item-compact' +
-          (selected ? ' selected' : '') + '" data-review-id="' + escape(entry.reviewId) +
-          '" onclick="selectReviewItem(\'' + escape(entry.reviewId) + '\')">' +
+        var selected = !!selectedIds[text(entry.reviewId)];
+        return '<label class="review-item review-item-select review-item-compact' +
+          (selected ? ' selected' : '') + '" data-review-id="' + escape(entry.reviewId) + '">' +
+          '<input class="review-item-checkbox" type="checkbox"' + (selected ? ' checked' : '') +
+          ' onchange="toggleReviewItemSelection(\'' + escape(entry.reviewId) + '\', this.checked)">' +
           '<span class="review-item-number">' + (index + 1) + '</span>' +
           '<span class="review-compact-main"><span class="review-compact-title"><strong>' +
-            (selected ? '현재 처리할 신규매물' : '같은 묶음 신규매물') +
+            (selected ? '선택한 신규매물' : '같은 묶음 신규매물') +
           '</strong><em>' + escape(entry.type) + '</em></span><span class="review-compact-address">' +
             escape(entry.address) + ' ' + escape(entry.room) + '</span><span class="review-compact-note">' +
             escape(entry.comparison || entry.memo || "비교 메모 없음") + '</span></span>' +
-          '<span class="review-compact-values">' + compactValues(entry) + '</span></button>';
+          '<span class="review-compact-values">' + compactValues(entry) + '</span></label>';
       }).join("") +
       '</div></section><div class="review-action-buttons">' +
-      '<button class="merge" type="button" onclick="decideCurrentReview(\'merge\')">1 · 기존과 통합</button>' +
-      '<button class="create" type="button" onclick="decideCurrentReview(\'create\')">2 · 별도 신규등록</button>' +
-      '<button class="hold" type="button" onclick="decideCurrentReview(\'hold\')">3 · 보류</button>' +
+      '<strong>선택 <b>' + selectedCount + '</b>건</strong>' +
+      '<button class="merge" type="button" onclick="decideCurrentReview(\'merge\')"' +
+        (!selectedCount || !candidates.length ? ' disabled' : '') + '>기존과 통합</button>' +
+      '<button class="create" type="button" onclick="decideCurrentReview(\'create\')"' +
+        (!selectedCount ? ' disabled' : '') + '>별도 신규등록</button>' +
+      '<button class="hold" type="button" onclick="decideCurrentReview(\'hold\')"' +
+        (!selectedCount ? ' disabled' : '') + '>보류</button>' +
       '</div>';
   }
 
@@ -326,27 +352,45 @@
     });
   };
   window.setReviewRiskFilter = function(filter) {
-    extraState.risk = filter || "all"; extraState.selectedGroupKey = ""; extraState.selectedReviewId = ""; renderReviews();
+    extraState.risk = filter || "all"; extraState.selectedGroupKey = ""; clearReviewSelection(); renderReviews();
   };
   window.selectReviewGroup = function(key) {
     extraState.selectedGroupKey = text(key);
-    extraState.selectedReviewId = "";
+    clearReviewSelection();
     renderReviews();
   };
-  window.selectReviewItem = function(reviewId) {
-    var list = document.getElementById("reviewNewItemList");
-    var scrollTop = list ? list.scrollTop : 0;
-    extraState.selectedReviewId = text(reviewId);
-    renderReviews();
+  function renderReviewDetailOnly(scrollTop) {
+    var detail = document.querySelector("#operationsReviewsPanel .review-detail");
+    if (!detail) return renderReviews();
+    detail.innerHTML = renderReviewDetail(selectedGroup());
     window.requestAnimationFrame(function() {
-      var nextList = document.getElementById("reviewNewItemList");
-      var selected = nextList && nextList.querySelector('[data-review-id="' +
-        String(reviewId).replace(/"/g, '\\"') + '"]');
-      if (nextList) nextList.scrollTop = scrollTop;
-      if (selected && typeof selected.scrollIntoView === "function") {
-        selected.scrollIntoView({ block: "nearest" });
-      }
+      var list = document.getElementById("reviewNewItemList");
+      if (list && isFinite(scrollTop)) list.scrollTop = scrollTop;
     });
+  }
+  window.toggleReviewItemSelection = function(reviewId, checked) {
+    reviewId = text(reviewId);
+    var selected = (extraState.selectedReviewIds || []).filter(function(id) {
+      return text(id) !== reviewId;
+    });
+    if (checked) selected.push(reviewId);
+    extraState.selectedReviewIds = selected;
+    extraState.selectedReviewId = selected[0] || "";
+    var list = document.getElementById("reviewNewItemList");
+    renderReviewDetailOnly(list ? list.scrollTop : 0);
+  };
+  window.toggleReviewGroupSelection = function(checked) {
+    var group = selectedGroup();
+    extraState.selectedReviewIds = checked && group
+      ? group.items.map(function(item) { return text(item.reviewId); })
+      : [];
+    extraState.selectedReviewId = extraState.selectedReviewIds[0] || "";
+    var list = document.getElementById("reviewNewItemList");
+    renderReviewDetailOnly(list ? list.scrollTop : 0);
+  };
+  window.selectReviewItem = function(reviewId) {
+    var id = text(reviewId);
+    window.toggleReviewItemSelection(id, (extraState.selectedReviewIds || []).indexOf(id) < 0);
   };
   function reviewDecisionModal() {
     var modal = document.getElementById("reviewDecisionModal");
@@ -387,18 +431,24 @@
     if (modal) modal.hidden = true;
   };
   window.decideCurrentReview = function(action) {
+    var group = selectedGroup();
+    var selectedCount = selectedReviewItems(group).length;
+    if (!selectedCount) {
+      message("먼저 처리할 신규매물을 체크해 주세요.", "error");
+      return;
+    }
     var labels = {
       merge: {
-        title: "기존 매물과 통합할까요?",
-        description: "신규 원본은 기존 매물의 출처이력으로 통합됩니다.\n기존 임대조건은 그대로 유지하고, 비어 있는 값·연락처·메모·출처 링크만 보강합니다."
+        title: selectedCount + "건을 기존 매물과 통합할까요?",
+        description: "선택한 신규 원본을 한 번에 기존 매물의 출처이력으로 통합합니다.\n기존 임대조건은 그대로 유지하고, 비어 있는 값·연락처·메모·출처 링크만 보강합니다."
       },
       create: {
-        title: "별도 신규매물로 등록할까요?",
-        description: "기존 매물과 합치지 않고 새로운 매물ID를 만들어 JS통합매물현황에 신규 등록합니다."
+        title: selectedCount + "건을 별도 신규매물로 등록할까요?",
+        description: "선택한 매물마다 새로운 매물ID를 만들어 JS통합매물현황에 일괄 등록합니다."
       },
       hold: {
-        title: "이 매물을 보류할까요?",
-        description: "매물검증에서는 제거하고 ‘검증보류’ 시트에 보관합니다.\n같은 출처 매물과 주소·임대조건이 같은 매물은 다음 수집에서도 자동 제외됩니다."
+        title: selectedCount + "건을 보류할까요?",
+        description: "선택한 매물을 검증목록에서 제거하고 ‘검증보류’ 시트에 일괄 보관합니다.\n같은 출처 매물과 주소·임대조건이 같은 매물은 다음 수집에서도 자동 제외됩니다."
       }
     };
     var info = labels[action];
@@ -408,24 +458,30 @@
   function executeReviewDecision(action) {
     var group = selectedGroup();
     if (!group || !group.items.length || extraState.loading) return;
-    var item = selectedReviewItem(group);
-    if (!item) return;
-    var masterId = group.candidateIds && group.candidateIds[0] || item.masterId || "";
+    var items = selectedReviewItems(group);
+    if (!items.length) return;
+    var reviewIds = items.map(function(item) { return item.reviewId; });
+    var masterId = group.candidateIds && group.candidateIds[0] || items[0].masterId || "";
     if (action === "merge" && !masterId) {
       message("통합할 기존 대표매물이 없어 별도 신규등록을 선택해 주세요.", "error");
       return;
     }
     extraState.loading = true;
-    message("검증결정을 저장하는 중입니다…", "loading");
-    apiPost("applyReviewDecision", {
-      reviewId: item.reviewId, reviewAction: action, masterId: masterId
+    message("선택한 " + reviewIds.length + "건을 한 번에 처리하는 중입니다…", "loading");
+    apiPost("applyReviewBatch", {
+      reviewIds: reviewIds, reviewAction: action, masterId: masterId
     }).then(function(result) {
       var current = selectedGroup();
+      var processedIds = result.processedReviewIds && result.processedReviewIds.length
+        ? result.processedReviewIds.map(text)
+        : reviewIds.slice(0, number(result.processed || reviewIds.length));
+      var processedMap = {};
+      processedIds.forEach(function(reviewId) { processedMap[reviewId] = true; });
       if (current) {
-        current.items = current.items.filter(function(entry) { return entry.reviewId !== item.reviewId; });
+        current.items = current.items.filter(function(entry) { return !processedMap[text(entry.reviewId)]; });
         current.count = current.items.length;
         if (extraState.reviews) {
-          extraState.reviews.total = Math.max(0, number(extraState.reviews.total) - 1);
+          extraState.reviews.total = Math.max(0, number(extraState.reviews.total) - processedIds.length);
           if (!current.items.length) {
             extraState.reviews.groups = (extraState.reviews.groups || []).filter(function(entry) {
               return entry.groupKey !== current.groupKey;
@@ -434,17 +490,20 @@
           }
         }
       }
-      extraState.selectedReviewId = "";
+      clearReviewSelection();
       if (!current || !current.items.length) extraState.selectedGroupKey = "";
       saveReviewCache();
       renderReviews();
       extraState.loading = false;
       var remaining = number(result.remaining !== undefined ? result.remaining : extraState.reviews && extraState.reviews.total)
         .toLocaleString("ko-KR");
-      var resultMessage = (result.message || "검증결정을 저장했습니다.") + "\n남은 검증 " + remaining + "건";
-      message(resultMessage.replace("\n", " · "), "success");
-      showReviewDecisionModal("처리가 완료되었습니다", resultMessage, "", true);
-      return loadReviews(true, true);
+      var failed = number(result.failed);
+      var resultMessage = processedIds.length.toLocaleString("ko-KR") + "건 처리 완료" +
+        (failed ? " · 실패 " + failed.toLocaleString("ko-KR") + "건" : "") +
+        "\n남은 검증 " + remaining + "건";
+      message(resultMessage.replace("\n", " · "), failed ? "error" : "success");
+      showReviewDecisionModal(failed ? "일부 처리가 완료되었습니다" : "일괄 처리가 완료되었습니다",
+        resultMessage, "", true);
     }).catch(function(error) {
       message(error.message, "error");
       showReviewDecisionModal("처리하지 못했습니다", error.message || "다시 시도해 주세요.", "", true);

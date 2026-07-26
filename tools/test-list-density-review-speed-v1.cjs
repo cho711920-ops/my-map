@@ -9,11 +9,17 @@ const operationsPath = path.join(
   "outputs",
   "JS부동산_통합운영시스템_v7.gs"
 );
+const codePath = path.join(
+  workspace,
+  "outputs",
+  "JS부동산_Code.gs_v6.4.19_집합건물표제부_전유부_보강_최종본.gs"
+);
 
 const script = fs.readFileSync(path.join(repo, "js", "script.js"), "utf8");
 const css = fs.readFileSync(path.join(repo, "css", "style.css"), "utf8");
 const index = fs.readFileSync(path.join(repo, "index.html"), "utf8");
 const operations = fs.readFileSync(operationsPath, "utf8");
+const code = fs.readFileSync(codePath, "utf8");
 
 function functionBody(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -45,7 +51,7 @@ assert(
 assert(css.includes("width: min(570px, calc(100vw - 16px)) !important;"));
 assert(css.includes("width: clamp(570px, 34vw, 600px) !important;"));
 assert(css.includes("width: min(640px, calc(100vw - 16px)) !important;"));
-assert(index.includes("style.css?v=6.5.8-map-overlay-tools"));
+assert(index.includes("style.css?v=6.5.9-tablet-map-tools"));
 
 [
   "mmForceCreateReviewItem_",
@@ -62,6 +68,10 @@ assert(applyBody.includes("mmDeleteReviewRowFast_"));
 const deleteBody = functionBody(operations, "mmDeleteReviewRowFast_");
 assert(deleteBody.includes("clearContent()"));
 assert(deleteBody.includes("setValues(lastValues)"));
-assert(operations.includes('var MM_VERSION = "7.16.3";'));
+const batchBody = functionBody(operations, "mmApplyReviewBatchFromWeb_");
+assert(batchBody.includes("processedReviewIds"));
+assert(batchBody.includes("mmApplyReviewFromWeb_"));
+assert(code.includes('case "applyReviewBatch"'));
+assert(operations.includes('var MM_VERSION = "7.17.0";'));
 
 console.log("List density and review speed tests: OK");

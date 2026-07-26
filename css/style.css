@@ -6246,6 +6246,24 @@ body,
   }
 }
 
+/* v6.5.9 태블릿에서도 지도 도구를 목록 밖, 지도 안쪽에 고정 */
+@media (min-width: 769px) {
+  .map-quick-tools {
+    right: var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) !important;
+  }
+
+  .map-quick-heart-btn {
+    gap: 0 !important;
+    color: #8f245d !important;
+    font-size: 11px !important;
+    letter-spacing: -.04em;
+  }
+
+  .map-quick-heart-btn svg {
+    display: none !important;
+  }
+}
+
 /* =========================================================
    v6.5.1 태블릿·데스크톱 리스트 가독성 보강
    - 모바일 레이아웃 폭은 유지

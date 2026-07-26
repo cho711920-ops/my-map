@@ -126,3 +126,198 @@
   #operationsReviewsPanel:not([hidden]){overflow:auto}
   #operationsReviewsPanel .review-workspace{flex:0 0 auto}
 }
+
+/* v7.17 다중검증·고밀도 작업화면 */
+@media(min-width:769px){
+  #operationsReviewsPanel .review-toolbar{
+    padding:7px 10px;
+  }
+  #operationsReviewsPanel .review-toolbar strong{font-size:14px}
+  #operationsReviewsPanel .review-toolbar span{
+    max-width:760px;
+    margin-top:2px;
+    font-size:11px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #operationsReviewsPanel .review-toolbar button{
+    min-height:31px;
+    padding:0 10px;
+    font-size:11px;
+  }
+  #operationsReviewsPanel .review-workspace{
+    grid-template-columns:280px minmax(0,1fr);
+    gap:8px;
+    margin-top:7px;
+  }
+  #operationsReviewsPanel .review-queue{
+    padding:7px;
+    border-radius:13px;
+  }
+  #operationsReviewsPanel .review-filter-buttons{margin-bottom:6px}
+  #operationsReviewsPanel .review-filter-buttons button{
+    height:29px;
+    padding:0 8px;
+    font-size:10.5px;
+  }
+  #operationsReviewsPanel .review-group-button{
+    min-height:61px;
+    margin-bottom:5px;
+    padding:8px 9px;
+    border-radius:10px;
+  }
+  #operationsReviewsPanel .review-group-button b,
+  #operationsReviewsPanel .review-group-button strong{font-size:12.5px}
+  #operationsReviewsPanel .review-group-button span{margin-top:2px;font-size:10.5px}
+  #operationsReviewsPanel .review-group-button small{
+    margin-top:3px;
+    font-size:10px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #operationsReviewsPanel .review-detail{
+    padding:8px;
+    border-radius:13px;
+  }
+  #operationsReviewsPanel .review-summary{
+    min-height:45px;
+    margin-bottom:5px;
+    padding:7px 10px;
+    border-radius:10px;
+  }
+  #operationsReviewsPanel .review-summary h3{font-size:16px}
+  #operationsReviewsPanel .review-summary p{margin-top:2px;font-size:11px}
+  #operationsReviewsPanel .review-risk{padding:4px 7px;font-size:10.5px}
+  #operationsReviewsPanel .review-existing-panel{
+    padding:6px 7px;
+    border-left-width:6px;
+    border-radius:10px;
+  }
+  #operationsReviewsPanel .review-section-heading strong{font-size:12px}
+  #operationsReviewsPanel .review-section-heading small{font-size:9.5px}
+  #operationsReviewsPanel .review-existing-badge,
+  #operationsReviewsPanel .review-new-badge{
+    min-height:20px;
+    padding:0 7px;
+    font-size:9.5px;
+  }
+  #operationsReviewsPanel .review-existing-list{
+    max-height:82px;
+    margin-top:4px;
+    gap:4px;
+  }
+  #operationsReviewsPanel .review-candidate-compact{
+    grid-template-columns:minmax(135px,.9fr) minmax(260px,1.8fr) auto;
+    min-height:48px;
+    gap:6px;
+    padding:5px 7px!important;
+  }
+  #operationsReviewsPanel .review-candidate-compact h4{font-size:12px}
+  #operationsReviewsPanel .review-candidate-compact p{font-size:10px}
+  #operationsReviewsPanel .review-candidate-compact>button{
+    min-height:27px!important;
+    font-size:9.5px;
+  }
+  #operationsReviewsPanel .review-new-panel{
+    margin-top:5px;
+    padding:6px;
+    border-radius:10px;
+  }
+  #operationsReviewsPanel .review-new-panel .review-section-heading{
+    min-height:25px;
+    justify-content:flex-start;
+  }
+  #operationsReviewsPanel .review-new-panel .review-section-heading>small{margin-left:auto}
+  #operationsReviewsPanel .review-select-all{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    margin-left:6px;
+    color:#40536d;
+    font-size:10.5px;
+    font-weight:850;
+    cursor:pointer;
+  }
+  #operationsReviewsPanel .review-select-all input{
+    width:15px;
+    height:15px;
+    margin:0;
+    accent-color:#0568e8;
+  }
+  #operationsReviewsPanel .review-new-list{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-content:start;
+    gap:5px;
+    margin-top:4px;
+    padding-right:2px;
+  }
+  #operationsReviewsPanel .review-item-compact{
+    box-sizing:border-box;
+    width:100%;
+    grid-template-columns:18px 24px minmax(125px,1fr) minmax(165px,1.15fr);
+    min-height:62px;
+    gap:5px;
+    margin:0;
+    padding:5px 6px!important;
+    border-radius:9px!important;
+    cursor:pointer;
+  }
+  #operationsReviewsPanel .review-item-checkbox{
+    width:16px;
+    height:16px;
+    margin:0;
+    accent-color:#0568e8;
+    cursor:pointer;
+  }
+  #operationsReviewsPanel .review-item-number{
+    width:22px;
+    height:22px;
+    border-radius:7px;
+    font-size:10px;
+  }
+  #operationsReviewsPanel .review-compact-title strong{font-size:11px}
+  #operationsReviewsPanel .review-compact-title em{font-size:8.5px}
+  #operationsReviewsPanel .review-compact-address{font-size:10px}
+  #operationsReviewsPanel .review-compact-note{font-size:8.5px}
+  #operationsReviewsPanel .review-compact-values{gap:3px}
+  #operationsReviewsPanel .review-compact-values span{
+    padding:3px 4px;
+    font-size:9.5px;
+  }
+  #operationsReviewsPanel .review-compact-values b{font-size:8px}
+  #operationsReviewsPanel .review-action-buttons{
+    align-items:center;
+    gap:6px;
+    margin:6px -8px -8px;
+    padding:7px 8px;
+  }
+  #operationsReviewsPanel .review-action-buttons>strong{
+    flex:0 0 auto;
+    min-width:72px;
+    color:#3f526c;
+    font-size:11px;
+  }
+  #operationsReviewsPanel .review-action-buttons>strong b{color:#0568e8;font-size:15px}
+  #operationsReviewsPanel .review-action-buttons button{
+    min-height:34px;
+    padding:0 9px;
+    font-size:11.5px;
+  }
+  #operationsReviewsPanel .review-action-buttons button:disabled{
+    opacity:.38;
+    cursor:not-allowed;
+  }
+}
+
+@media(min-width:769px) and (max-width:1249px){
+  #operationsReviewsPanel .review-workspace{grid-template-columns:245px minmax(0,1fr)}
+  #operationsReviewsPanel .review-new-list{grid-template-columns:1fr}
+  #operationsReviewsPanel .review-item-compact{
+    grid-template-columns:18px 24px minmax(150px,1fr) minmax(230px,1.35fr);
+    min-height:54px;
+    padding:3px 6px!important;
+  }
+}

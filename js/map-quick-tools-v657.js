@@ -305,20 +305,37 @@
     kakao.maps.event.addListener(map, "mousemove", handleMapMouseMove);
   }
 
+  function syncMapQuickToolGeometryV659() {
+    var root = document.documentElement;
+    var sidebar = document.getElementById("sidebar");
+    if (!root || !sidebar || !isDesktopToolLayout()) {
+      if (root) root.style.removeProperty("--map-sidebar-width-v659");
+      return;
+    }
+    var sidebarLeft = sidebar.getBoundingClientRect().left;
+    var sidebarWidth = Math.max(0, window.innerWidth - sidebarLeft);
+    root.style.setProperty("--map-sidebar-width-v659", Math.round(sidebarWidth) + "px");
+  }
+  window.syncMapQuickToolGeometryV659 = syncMapQuickToolGeometryV659;
+
   document.addEventListener("click", function (event) {
     if (!event.target.closest("#mapQuickTools")) closePopovers("");
   });
 
   window.addEventListener("resize", function () {
+    syncMapQuickToolGeometryV659();
     if (!isDesktopToolLayout()) {
       closePopovers("");
       window.clearMapMeasurementsV657();
     }
   });
+  window.addEventListener("load", syncMapQuickToolGeometryV659);
 
   window.setTimeout(function () {
     bindMapEvents();
+    syncMapQuickToolGeometryV659();
     window.syncMapQuickToolStateV657();
     window.syncSelectionActionBarV657((window.selectedPrintKeys || []).length);
   }, 0);
+  window.setTimeout(syncMapQuickToolGeometryV659, 500);
 })();

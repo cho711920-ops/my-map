@@ -26,6 +26,7 @@ const operationsCss = read("css", "operations-collection-v8.css");
   "오늘 신규만",
   "임장할매물만",
   "계약완료 숨김",
+  "찜❤️",
   "찜목록",
   "임장목록",
   "100m",
@@ -78,7 +79,9 @@ assert(
   "review-new-panel",
   "review-new-list",
   "review-item-compact",
-  "현재 처리할 신규매물"
+  "review-item-checkbox",
+  "toggleReviewGroupSelection",
+  "applyReviewBatch"
 ].forEach((needle) => assert(operations.includes(needle), `review UI is missing ${needle}`));
 
 assert(
@@ -88,5 +91,11 @@ assert(
 );
 assert(operationsCss.includes(".review-new-list{min-height:0"), "scrollable new-property list is missing");
 assert(operationsCss.includes("min-height:61px"), "compact review rows are missing");
+assert(
+  operationsCss.includes("grid-template-columns:repeat(2,minmax(0,1fr))") &&
+    operationsCss.includes("min-height:62px"),
+  "multi-select high-density review grid is missing"
+);
+assert(quickTools.includes("syncMapQuickToolGeometryV659"), "tablet map-tool geometry sync is missing");
 
 console.log("Map quick tools and compact review layout tests: OK");

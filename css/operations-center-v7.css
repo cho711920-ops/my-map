@@ -118,3 +118,226 @@ body.customer-crm-open{overflow:hidden}
 .circle-marker.customer-match-candidate,.circle-marker.source-gongsil.customer-match-candidate,.circle-marker.done.customer-match-candidate{--cluster-fill:rgba(220,38,38,.88)!important;--cluster-text:#fff!important}
 .circle-marker.customer-match-held,.circle-marker.source-gongsil.customer-match-held,.circle-marker.done.customer-match-held{--cluster-fill:rgba(31,41,55,.90)!important;--cluster-text:#fff!important}
 @media(max-width:768px){.operations-match-heading{display:block}.operations-match-heading-actions{justify-content:flex-start;margin-top:8px;overflow-x:auto}.operations-match-heading-actions button,.operations-match-heading-actions a{flex:0 0 auto;max-width:none}.customer-crm-modal{align-items:flex-end;padding:0}.customer-crm-dialog,.customer-crm-dialog-wide,.customer-memo-dialog{width:100vw;max-height:92vh;border-radius:22px 22px 0 0}.customer-crm-grid{grid-template-columns:1fr;padding:14px}.customer-crm-span-2{grid-column:auto}.customer-crm-dialog footer{padding:12px 14px}.customer-match-toolbar-actions{flex-wrap:wrap}.customer-match-toolbar-actions>*{flex:1 1 45%}}
+
+/* v7.17 운영·고객매칭 고밀도 작업화면 */
+@media(min-width:769px){
+  .operations-center-dialog{
+    width:min(1580px,calc(100vw - 20px));
+    height:min(940px,calc(100vh - 20px));
+  }
+  .operations-stat-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:9px;
+  }
+  .operations-stat-card{
+    min-height:90px;
+    padding:12px 14px;
+    border-radius:14px;
+  }
+  .operations-stat-card strong{margin:5px 0 3px;font-size:26px}
+  .operations-stat-card.actionable em{margin-top:5px}
+  .operations-workflow-card,.operations-guidance{
+    margin-top:10px;
+    padding:12px 15px;
+    border-radius:14px;
+  }
+  #operationsCustomersPanel:not([hidden]){
+    display:flex;
+    min-height:0;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  #operationsCustomersPanel[hidden]{display:none!important}
+  #operationsCustomersPanel .customer-match-toolbar{
+    flex:0 0 auto;
+    margin-bottom:7px;
+    padding:8px 11px;
+    border-radius:13px;
+  }
+  #operationsCustomersPanel .customer-match-toolbar strong{font-size:14px}
+  #operationsCustomersPanel .customer-match-toolbar span{margin-top:2px;font-size:11px}
+  #operationsCustomersPanel .customer-match-toolbar-actions{gap:5px}
+  #operationsCustomersPanel .customer-match-toolbar-actions button,
+  #operationsCustomersPanel .customer-match-toolbar-actions a{
+    min-height:32px;
+    padding:0 10px;
+    border-radius:9px;
+    font-size:11.5px;
+  }
+  #operationsCustomersPanel .customer-match-layout{
+    grid-template-columns:360px minmax(0,1fr);
+    min-height:0;
+    flex:1 1 auto;
+    gap:8px;
+  }
+  #operationsCustomersPanel .operations-customer-list,
+  #operationsCustomersPanel .operations-match-list{
+    height:auto;
+    border-radius:13px;
+  }
+  #operationsCustomersPanel .operations-customer-list{padding:7px}
+  #operationsCustomersPanel .operations-customer-tools{
+    top:-7px;
+    gap:5px;
+    margin:-7px -7px 5px;
+    padding:6px 7px;
+  }
+  #operationsCustomersPanel .operations-customer-tools input{
+    height:31px;
+    padding:0 9px;
+    border-radius:8px;
+    font-size:11.5px;
+  }
+  #operationsCustomersPanel .operations-customer-views{
+    flex-wrap:nowrap;
+    gap:4px;
+    margin-bottom:5px;
+    overflow-x:auto;
+    scrollbar-width:thin;
+  }
+  #operationsCustomersPanel .operations-customer-views button{
+    flex:0 0 auto;
+    height:27px;
+    padding:0 7px;
+    border-radius:7px;
+    font-size:9.5px;
+  }
+  #operationsCustomersPanel .operations-customer-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:5px;
+  }
+  #operationsCustomersPanel .operations-customer-card{
+    min-height:69px;
+    padding:7px 8px;
+    border-radius:10px;
+  }
+  #operationsCustomersPanel .operations-customer-card strong{
+    max-width:105px;
+    margin:0 0 2px;
+    font-size:12.5px;
+  }
+  #operationsCustomersPanel .operations-customer-card>span:not(.operations-customer-status){font-size:10.5px}
+  #operationsCustomersPanel .operations-customer-card>b{
+    margin-top:3px;
+    font-size:9.5px;
+  }
+  #operationsCustomersPanel .operations-customer-status{
+    right:6px;
+    top:6px;
+    padding:2px 5px;
+    font-size:8.5px;
+  }
+  #operationsCustomersPanel .operations-customer-card em,
+  #operationsCustomersPanel .operations-customer-card u,
+  #operationsCustomersPanel .operations-customer-card i{
+    margin:3px 3px 0 0;
+    padding:2px 4px;
+    font-size:8.5px;
+  }
+  #operationsCustomersPanel .operations-match-list{padding:7px}
+  #operationsCustomersPanel .operations-customer-alert{
+    gap:6px;
+    margin-bottom:5px;
+    padding:6px 8px;
+    border-radius:9px;
+  }
+  #operationsCustomersPanel .operations-customer-alert b{font-size:10.5px}
+  #operationsCustomersPanel .operations-customer-alert span{font-size:10px}
+  #operationsCustomersPanel .operations-match-heading{
+    top:-7px;
+    gap:7px;
+    margin:-7px -7px 5px;
+    padding:7px 9px;
+  }
+  #operationsCustomersPanel .operations-match-heading span{font-size:10px}
+  #operationsCustomersPanel .operations-match-heading b{margin-top:1px;font-size:16px}
+  #operationsCustomersPanel .operations-match-heading-actions{gap:4px}
+  #operationsCustomersPanel .operations-match-heading-actions button,
+  #operationsCustomersPanel .operations-match-heading-actions a{
+    min-height:29px;
+    padding:0 7px;
+    border-radius:8px;
+    font-size:10px;
+  }
+  #operationsCustomersPanel .customer-status-quick{
+    min-height:29px;
+    gap:3px;
+    padding:0 4px 0 6px;
+    border-radius:8px;
+  }
+  #operationsCustomersPanel .customer-status-quick span{font-size:8.5px!important}
+  #operationsCustomersPanel .customer-status-quick select{height:24px;font-size:10px}
+  #operationsCustomersPanel .operations-match-filters{
+    top:43px;
+    gap:4px;
+    margin:-5px -7px 6px;
+    padding:5px 7px;
+  }
+  #operationsCustomersPanel .operations-match-filters button{
+    height:28px;
+    padding:0 8px;
+    border-radius:7px;
+    font-size:10px;
+  }
+  #operationsCustomersPanel .operations-match-cards{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-content:start;
+    gap:6px;
+  }
+  #operationsCustomersPanel .operations-match-card{
+    display:grid;
+    grid-template-columns:43px minmax(0,1fr);
+    gap:7px;
+    min-height:104px;
+    padding:8px;
+    border-radius:11px;
+  }
+  #operationsCustomersPanel .operations-match-score{
+    width:43px;
+    height:43px;
+    padding-top:8px;
+    border-radius:10px;
+  }
+  #operationsCustomersPanel .operations-match-score b{font-size:17px}
+  #operationsCustomersPanel .operations-match-body strong{font-size:12.5px}
+  #operationsCustomersPanel .operations-match-body>span{margin-top:1px;font-size:10px}
+  #operationsCustomersPanel .operations-match-body>b{margin-top:3px;font-size:11px}
+  #operationsCustomersPanel .operations-match-body p{
+    display:-webkit-box;
+    margin:4px 0 0;
+    overflow:hidden;
+    font-size:9.5px;
+    line-height:1.35;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:1;
+  }
+  #operationsCustomersPanel .operations-match-body small{
+    margin-top:3px;
+    overflow:hidden;
+    font-size:9px;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+  }
+  #operationsCustomersPanel .operations-match-title>span{
+    padding:2px 5px;
+    font-size:8.5px;
+  }
+  #operationsCustomersPanel .operations-match-actions{
+    gap:4px;
+    margin-top:5px;
+  }
+  #operationsCustomersPanel .operations-match-actions button,
+  #operationsCustomersPanel .operations-match-actions>span{
+    min-height:24px;
+    padding:4px 6px;
+    border-radius:7px;
+    font-size:9px;
+  }
+}
+
+@media(min-width:769px) and (max-width:1100px){
+  #operationsCustomersPanel .customer-match-layout{grid-template-columns:285px minmax(0,1fr)}
+  #operationsCustomersPanel .operations-customer-grid{grid-template-columns:1fr}
+  #operationsCustomersPanel .operations-customer-card{min-height:58px}
+  #operationsCustomersPanel .operations-match-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
