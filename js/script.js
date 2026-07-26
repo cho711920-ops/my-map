@@ -1532,12 +1532,71 @@ function formatListRegistrationDate(value) {
 }
 
 
+function captureMemoListScrollPosition(anchorKey) {
+  var sidebar = document.getElementById("sidebar");
+  var anchor = anchorKey
+    ? document.querySelector('[data-listing-key="' + CSS.escape(anchorKey) + '"]')
+    : null;
+
+  return {
+    anchorKey: anchorKey || "",
+    anchorTop: anchor && sidebar
+      ? anchor.getBoundingClientRect().top - sidebar.getBoundingClientRect().top
+      : null,
+    sidebarTop: sidebar ? sidebar.scrollTop : 0,
+    windowX: window.scrollX || 0,
+    windowY: window.scrollY || 0
+  };
+}
+
+
+function restoreMemoListScrollPosition(position) {
+  if (!position) return;
+
+  function restore() {
+    var sidebar = document.getElementById("sidebar");
+
+    if (sidebar) {
+      var anchor = position.anchorKey
+        ? document.querySelector('[data-listing-key="' + CSS.escape(position.anchorKey) + '"]')
+        : null;
+
+      if (anchor && position.anchorTop != null) {
+        var currentTop =
+          anchor.getBoundingClientRect().top - sidebar.getBoundingClientRect().top;
+        sidebar.scrollTop += currentTop - position.anchorTop;
+      } else {
+        sidebar.scrollTop = position.sidebarTop;
+      }
+    }
+
+    if (
+      window.scrollX !== position.windowX ||
+      window.scrollY !== position.windowY
+    ) {
+      window.scrollTo(position.windowX, position.windowY);
+    }
+  }
+
+  requestAnimationFrame(function() {
+    restore();
+    requestAnimationFrame(restore);
+  });
+}
+
+
+function showMemoListKeepingPosition(anchorKey) {
+  var position = captureMemoListScrollPosition(anchorKey);
+  showList(visibleListItems);
+  restoreMemoListScrollPosition(position);
+}
+
 function toggleItemMemo(encodedKey) {
   var key = decodeURIComponent(encodedKey);
 
   openMemoKey = openMemoKey === key ? null : key;
   editingMemoKey = null;
-  showList(visibleListItems);
+  showMemoListKeepingPosition(key);
 }
 
 
@@ -1545,13 +1604,17 @@ function beginMemoEdit(encodedKey) {
   editingMemoKey = decodeURIComponent(encodedKey);
   memoEditMode = "replace";
   openMemoKey = editingMemoKey;
-  showList(visibleListItems);
+  showMemoListKeepingPosition(editingMemoKey);
 
   requestAnimationFrame(function() {
     var editor = document.querySelector('[data-memo-editor-key="' + CSS.escape(editingMemoKey) + '"]');
 
     if (editor) {
-      editor.focus();
+      try {
+        editor.focus({ preventScroll: true });
+      } catch (_) {
+        editor.focus();
+      }
       editor.style.height = "auto";
       editor.style.height = editor.scrollHeight + "px";
     }
@@ -1563,7 +1626,7 @@ function beginMemoAdd(encodedKey) {
   editingMemoKey = decodeURIComponent(encodedKey);
   memoEditMode = "append";
   openMemoKey = editingMemoKey;
-  showList(visibleListItems);
+  showMemoListKeepingPosition(editingMemoKey);
 
   requestAnimationFrame(function() {
     var editor = document.querySelector(
@@ -1573,7 +1636,11 @@ function beginMemoAdd(encodedKey) {
     if (editor) {
       editor.value = "";
       editor.placeholder = "추가할 메모를 입력하세요.";
-      editor.focus();
+      try {
+        editor.focus({ preventScroll: true });
+      } catch (_) {
+        editor.focus();
+      }
       autoResizeMemoEditor(editor);
     }
   });
@@ -1592,9 +1659,10 @@ function memoDateLabel() {
 
 
 function cancelMemoEdit() {
+  var key = editingMemoKey || openMemoKey;
   editingMemoKey = null;
   memoEditMode = "replace";
-  showList(visibleListItems);
+  showMemoListKeepingPosition(key);
 }
 
 
@@ -1648,7 +1716,7 @@ function saveItemMemo(encodedKey) {
   item.memo = newMemo;
   editingMemoKey = null;
   memoEditMode = "replace";
-  showList(visibleListItems);
+  showMemoListKeepingPosition(key);
 
   var payload = {
     action: "toggleDone",
@@ -1683,7 +1751,7 @@ function saveItemMemo(encodedKey) {
     item.memo = previousMemo;
     editingMemoKey = key;
     memoEditMode = "replace";
-    showList(visibleListItems);
+    showMemoListKeepingPosition(key);
     alert("메모 저장 중 오류가 발생했습니다.");
   });
 }
