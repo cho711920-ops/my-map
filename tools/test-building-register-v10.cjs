@@ -112,6 +112,87 @@ assert.strictEqual(
   "collective mall title with the listing room must beat a general title"
 );
 
+const generalBuildingWithRecapElevator = {
+  buildings: [{
+    managementKey: "general-title",
+    buildingName: "한빛빌딩",
+    registerType: "일반 · 일반건축물",
+    approvalDate: "20060718",
+    passengerElevators: 0,
+    emergencyElevators: 0
+  }],
+  recaps: [{
+    managementKey: "general-recap",
+    buildingName: "한빛빌딩",
+    registerType: "일반 · 총괄표제부",
+    passengerElevators: 1,
+    emergencyElevators: 1
+  }]
+};
+const generalBuildingBadge = diagnostic.badgeFromData(
+  generalBuildingWithRecapElevator,
+  { name: "한빛빌딩", type: "일반상가" }
+);
+assert.strictEqual(generalBuildingBadge.year, "2006");
+assert.strictEqual(generalBuildingBadge.elevators, 2);
+assert.strictEqual(
+  generalBuildingBadge.verified,
+  true,
+  "a single building must use the matching recap elevator total when its title row is zero"
+);
+
+const apartmentRetailWithoutElevator = {
+  buildings: [
+    {
+      ...apartmentBuildings[0],
+      passengerElevators: 4,
+      emergencyElevators: 1
+    },
+    {
+      ...apartmentBuildings[1],
+      passengerElevators: 0,
+      emergencyElevators: 0
+    }
+  ],
+  recaps: [{
+    buildingName: "은하수아파트",
+    passengerElevators: 5,
+    emergencyElevators: 1
+  }],
+  units: apartmentUnits
+};
+assert.strictEqual(
+  diagnostic.badgeFromData(apartmentRetailWithoutElevator, commercialItem).elevators,
+  0,
+  "a separate apartment retail building must not inherit the apartment complex elevator total"
+);
+
+const singleRetailTitleWithApartmentRecap = {
+  buildings: [{
+    ...apartmentBuildings[1],
+    passengerElevators: 0,
+    emergencyElevators: 0
+  }],
+  recaps: [{
+    buildingName: "은하수아파트",
+    mainUse: "공동주택",
+    passengerElevators: 5,
+    emergencyElevators: 1
+  }],
+  units: apartmentUnits.filter((row) => row.dongName === "상가동")
+};
+assert.strictEqual(
+  diagnostic.badgeFromData(singleRetailTitleWithApartmentRecap, commercialItem).elevators,
+  0,
+  "a lone retail title must not inherit a residential apartment recap elevator total"
+);
+
+assert.strictEqual(
+  diagnostic.elevatorCount({ rideUseElvtCnt: "2", emgenUseElvtCnt: "1" }),
+  3,
+  "legacy/raw official API elevator field names must remain supported"
+);
+
 const backendPath = path.resolve(
   root,
   "..",

@@ -5,8 +5,10 @@
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-  var BADGE_CACHE_PREFIX = "js-building-badge-v1:";
+  var BADGE_CACHE_PREFIX = "js-building-badge-v2:";
   var BADGE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+  var BADGE_MAX_CONCURRENCY = 4;
+  var BADGE_MAX_RETRIES = 2;
   var badgeRequests = Object.create(null);
   var badgeQueue = [];
   var badgeActive = 0;
@@ -490,15 +492,100 @@
     return buildings[bestBuildingIndex(data, item)] || buildings[0];
   }
 
+  function firstNumber(row, fields) {
+    row = row || {};
+    for (var i = 0; i < fields.length; i += 1) {
+      var value = asNumber(row[fields[i]]);
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  function elevatorCount(row) {
+    if (!row) return null;
+    var passenger = firstNumber(row, [
+      "passengerElevators",
+      "rideUseElvtCnt",
+      "rideUseElevatorCount"
+    ]);
+    var emergency = firstNumber(row, [
+      "emergencyElevators",
+      "emgenUseElvtCnt",
+      "emergencyElevatorCount"
+    ]);
+    if (passenger == null && emergency == null) {
+      var total = firstNumber(row, ["elevators", "elevatorCount", "totalElevators"]);
+      return total == null ? null : Math.max(0, total);
+    }
+    return Math.max(0, Number(passenger || 0) + Number(emergency || 0));
+  }
+
+  function sameBuildingForBadge(selected, candidate, buildingCount) {
+    if (!selected || !candidate) return false;
+    if (selected === candidate) return true;
+
+    var selectedKey = String(selected.managementKey || "").trim();
+    var candidateKey = String(candidate.managementKey || "").trim();
+    if (selectedKey && candidateKey && selectedKey === candidateKey) return true;
+
+    var selectedName = normalizedName(selected.buildingName);
+    var candidateName = normalizedName(candidate.buildingName);
+    var selectedDong = normalizedName(selected.dongName);
+    var candidateDong = normalizedName(candidate.dongName);
+
+    if (selectedDong && candidateDong) {
+      return compatibleDong(selectedDong, candidateDong) &&
+        (!selectedName || !candidateName || compatibleName(selectedName, candidateName));
+    }
+    if (
+      isCommercialBuilding(selected) &&
+      isApartmentBuilding(candidate) &&
+      !isCommercialBuilding(candidate)
+    ) {
+      return false;
+    }
+    if (Number(buildingCount || 0) === 1) {
+      return !selectedName || !candidateName || compatibleName(selectedName, candidateName);
+    }
+    return Boolean(
+      selectedName &&
+      candidateName &&
+      selectedName === candidateName &&
+      !selectedDong &&
+      !candidateDong
+    );
+  }
+
+  function relatedBadgeRows(data, selected) {
+    var buildings = Array.isArray(data && data.buildings) ? data.buildings : [];
+    var recaps = Array.isArray(data && data.recaps) ? data.recaps : [];
+    var rows = [selected];
+    buildings.concat(recaps).forEach(function(row) {
+      if (!row || rows.indexOf(row) >= 0) return;
+      if (sameBuildingForBadge(selected, row, buildings.length)) rows.push(row);
+    });
+    return rows;
+  }
+
   function badgeFromData(data, item) {
     var building = buildingForBadge(data, item);
     if (!building) return { year: "", elevators: 0, verified: false };
-    var dateDigits = String(building.approvalDate || "").replace(/\D/g, "");
-    var passenger = asNumber(building.passengerElevators);
-    var emergency = asNumber(building.emergencyElevators);
+    var rows = relatedBadgeRows(data, building);
+    var dateDigits = "";
+    var elevators = 0;
+    rows.forEach(function(row) {
+      if (!dateDigits) {
+        var rowDateDigits = String(
+          row.approvalDate || row.useAprDay || row.useApprovalDate || ""
+        ).replace(/\D/g, "");
+        if (rowDateDigits.length >= 4) dateDigits = rowDateDigits;
+      }
+      var rowElevators = elevatorCount(row);
+      if (rowElevators != null) elevators = Math.max(elevators, rowElevators);
+    });
     return {
       year: dateDigits.length >= 4 ? dateDigits.slice(0, 4) : "",
-      elevators: Math.max(0, Number(passenger || 0) + Number(emergency || 0)),
+      elevators: elevators,
       verified: true
     };
   }
@@ -584,16 +671,33 @@
     });
   }
 
+  function startBadgeRequest(entry) {
+    if (!entry || !entry.card || !entry.card.isConnected) return;
+    badgeActive += 1;
+    entry.card.setAttribute("data-building-badge-loading", "1");
+    ensureBadgeForCard(entry.card, entry.item).then(function(data) {
+      if (data || !entry.card.isConnected) {
+        entry.card.removeAttribute("data-building-badge-retries");
+        return;
+      }
+      var retries = Number(entry.card.getAttribute("data-building-badge-retries") || 0);
+      if (retries >= BADGE_MAX_RETRIES) return;
+      entry.card.setAttribute("data-building-badge-retries", String(retries + 1));
+      setTimeout(function() {
+        queueBadge(entry.card, entry.item);
+      }, 1200 * (retries + 1));
+    }).finally(function() {
+      if (entry.card) entry.card.removeAttribute("data-building-badge-loading");
+      badgeActive -= 1;
+      runBadgeQueue();
+    });
+  }
+
   function runBadgeQueue() {
-    while (badgeActive < 2 && badgeQueue.length) {
+    while (badgeActive < BADGE_MAX_CONCURRENCY && badgeQueue.length) {
       var entry = badgeQueue.shift();
       if (!entry.card.isConnected || entry.card.getAttribute("data-building-badge-loading") === "1") continue;
-      badgeActive += 1;
-      entry.card.setAttribute("data-building-badge-loading", "1");
-      ensureBadgeForCard(entry.card, entry.item).finally(function() {
-        badgeActive -= 1;
-        runBadgeQueue();
-      });
+      startBadgeRequest(entry);
     }
   }
 
@@ -1301,6 +1405,8 @@
     buildingCategory: buildingCategory,
     bestBuildingIndex: bestBuildingIndex,
     unitEntriesForBuilding: unitEntriesForBuilding,
-    bestVisibleUnitGlobalIndex: bestVisibleUnitGlobalIndex
+    bestVisibleUnitGlobalIndex: bestVisibleUnitGlobalIndex,
+    elevatorCount: elevatorCount,
+    badgeFromData: badgeFromData
   };
 })();
