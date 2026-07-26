@@ -24,3 +24,52 @@
 .property-timeline-modal{position:fixed;inset:0;z-index:15000;display:grid;place-items:center;padding:18px}.property-timeline-modal[hidden]{display:none}.property-timeline-backdrop{position:absolute;inset:0;background:rgba(12,23,42,.5)}.property-timeline-dialog{position:relative;width:min(620px,100%);max-height:min(760px,calc(100vh - 36px));overflow:auto;border-radius:22px;background:#fff;box-shadow:0 28px 80px rgba(9,33,73,.28)}.property-timeline-dialog header{position:sticky;top:0;display:flex;justify-content:space-between;padding:20px;border-bottom:1px solid #e3eaf3;background:#fff}.property-timeline-dialog h3{margin:0}.property-timeline-dialog header button{width:40px;height:40px;border:0;border-radius:12px;background:#edf3fa;font-size:24px}.property-timeline-list{padding:18px}.property-timeline-item{position:relative;margin-left:8px;padding:0 0 18px 23px;border-left:2px solid #cfe0f5}.property-timeline-item:before{position:absolute;left:-7px;top:3px;width:12px;height:12px;border-radius:50%;background:#0568e8;content:""}.property-timeline-item b,.property-timeline-item span,.property-timeline-item small{display:block}.property-timeline-item span{margin-top:4px;color:#5d7088;font-size:12px}.property-timeline-item small{margin-top:4px;color:#8997a8;font-size:10px}
 @media(max-width:900px){.collection-source-grid{grid-template-columns:1fr}.review-workspace{grid-template-columns:1fr;height:auto}.review-queue{max-height:230px}.review-compare-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.collection-toolbar,.review-toolbar{align-items:flex-start;flex-direction:column}.collection-result-grid{grid-template-columns:repeat(4,minmax(55px,1fr))}.review-action-buttons{flex-wrap:wrap}.review-action-buttons button{flex:1 1 45%}}
+
+/* v7.15.2 검증 20건도 한눈에 보는 압축 비교 화면 */
+.review-detail{display:flex;flex-direction:column;overflow:hidden}
+.review-summary{flex:0 0 auto;margin-bottom:8px;padding:10px 12px}
+.review-summary h3{font-size:17px}.review-summary p{margin-top:3px}
+.review-section-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.review-section-heading>div{display:flex;align-items:center;gap:7px}
+.review-section-heading strong{color:#253c59;font-size:13px}.review-section-heading small{color:#74839a;font-size:10px}
+.review-existing-badge,.review-new-badge{display:inline-flex;align-items:center;min-height:23px;padding:0 8px;border-radius:999px;font-size:10px;font-weight:950}
+.review-existing-badge{background:#c81e1e;color:#fff}.review-new-badge{background:#e9f3ff;color:#0568e8}
+.review-existing-panel{flex:0 0 auto;padding:10px;border:2px solid #dc2626;border-left-width:7px;border-radius:13px;background:#fff7f7}
+.review-existing-list{display:grid;grid-template-columns:1fr;gap:7px;margin-top:7px;max-height:164px;overflow:auto}
+.review-candidate-compact{display:grid;grid-template-columns:minmax(165px,1.1fr) minmax(310px,1.8fr) auto;align-items:center;gap:9px;padding:8px 9px!important;border-color:#f0b2b2!important;background:#fff!important}
+.review-candidate-compact header{align-items:center}.review-candidate-compact h4{color:#9f1717;font-size:13px}
+.review-candidate-compact p{margin:3px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.review-candidate-compact>button{min-height:30px!important;padding:0 9px!important;font-size:10px}
+.review-candidate-empty{grid-column:1/-1;padding:10px!important;border-color:#efb4b4!important;background:#fff!important}
+.review-candidate-empty h4,.review-candidate-empty p{margin:0}.review-candidate-empty p{margin-top:3px}
+.review-new-panel{display:flex;min-height:0;flex:1 1 auto;flex-direction:column;margin-top:9px;padding:9px;border:1px solid #dce6f1;border-radius:13px;background:#f8fbff}
+.review-new-list{min-height:0;margin-top:7px;overflow:auto}
+.review-item-compact{display:grid!important;grid-template-columns:30px minmax(210px,1.25fr) minmax(330px,1.75fr);align-items:center;gap:9px;min-height:61px;margin-bottom:6px;padding:7px 9px!important;border:1px solid #dce6f1!important;border-radius:11px!important;background:#fff!important}
+.review-item-compact.selected{border:2px solid #0568e8!important;background:#eef6ff!important;box-shadow:inset 5px 0 0 #0568e8!important}
+.review-item-number{display:grid;width:25px;height:25px;place-items:center;border-radius:8px;background:#edf3fa;color:#52677f;font-size:11px;font-weight:950}
+.review-item-compact.selected .review-item-number{background:#0568e8;color:#fff}
+.review-compact-main{display:block;min-width:0}.review-compact-title{display:flex;align-items:center;gap:7px}
+.review-compact-title strong{color:#17385f;font-size:12px}.review-compact-title em{color:#6d7d91;font-size:9px;font-style:normal;font-weight:850}
+.review-compact-address,.review-compact-note{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.review-compact-address{margin-top:2px;color:#354a65;font-size:11px;font-weight:800}.review-compact-note{margin-top:2px;color:#79879a;font-size:9px}
+.review-compact-values{display:grid;grid-template-columns:repeat(3,minmax(76px,1fr));gap:4px}
+.review-compact-values span{display:block;min-width:0;padding:5px 6px;border-radius:7px;background:#f3f6fa;color:#33475f;font-size:10px;white-space:nowrap}
+.review-existing-panel .review-compact-values span{background:#fff1f1}.review-compact-values b{color:#6d7c8f;font-size:8px}
+.review-action-buttons{flex:0 0 auto;bottom:auto;margin:9px -16px -16px}
+@media(max-width:1100px){
+  .review-existing-list{grid-template-columns:1fr}
+  .review-candidate-compact{grid-template-columns:minmax(150px,1fr) minmax(260px,1.5fr) auto}
+  .review-item-compact{grid-template-columns:28px minmax(175px,1fr) minmax(270px,1.5fr)}
+}
+@media(max-width:900px){
+  .review-detail{overflow:auto}
+  .review-new-panel{min-height:420px}
+}
+@media(max-width:650px){
+  .review-section-heading small{display:none}
+  .review-candidate-compact{grid-template-columns:1fr auto}
+  .review-candidate-compact .review-compact-values{grid-column:1/-1}
+  .review-item-compact{grid-template-columns:26px minmax(0,1fr)}
+  .review-item-compact>.review-compact-values{grid-column:1/-1}
+  .review-compact-values{grid-template-columns:repeat(3,minmax(0,1fr))}
+}

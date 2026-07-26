@@ -353,11 +353,16 @@ function groupByAddress(items) {
 function getClusterDistance() {
   var level = map.getLevel();
 
-  if (level <= 3) return 25;
-  if (level <= 5) return 45;
-  if (level <= 7) return 65;
-  if (level <= 9) return 85;
-  return 110;
+  /*
+   * 화면을 일정한 격자로 나눌 때 사용하는 한 칸의 크기입니다.
+   * 확대 단계에서도 클러스터 원보다 충분히 넓게 유지해 겹침을 막고,
+   * 축소할수록 한 칸을 넓혀 더 많은 매물을 한 묶음으로 표시합니다.
+   */
+  if (level <= 3) return 64;
+  if (level <= 5) return 72;
+  if (level <= 7) return 80;
+  if (level <= 9) return 88;
+  return 96;
 }
 
 
@@ -379,113 +384,52 @@ function getMapViewportKeyV638() {
 
 function createDynamicClusters(addressGroups) {
   var projection = map.getProjection();
-  var distance = getClusterDistance();
-  var clusters = [];
-  var buckets = Object.create(null);
-
-  function getCell(point) {
-    return {
-      x: Math.floor(point.x / distance),
-      y: Math.floor(point.y / distance)
-    };
-  }
-
-  function bucketKey(cellX, cellY) {
-    return cellX + ":" + cellY;
-  }
-
-  function addClusterToBucket(clusterIndex, point) {
-    var cell = getCell(point);
-    var key = bucketKey(cell.x, cell.y);
-
-    if (!buckets[key]) buckets[key] = [];
-    buckets[key].push(clusterIndex);
-    clusters[clusterIndex].bucketX = cell.x;
-    clusters[clusterIndex].bucketY = cell.y;
-  }
-
-  function removeClusterFromBucket(clusterIndex, cluster) {
-    var key = bucketKey(cluster.bucketX, cluster.bucketY);
-    var list = buckets[key];
-
-    if (!list) return;
-
-    var position = list.indexOf(clusterIndex);
-    if (position !== -1) list.splice(position, 1);
-    if (!list.length) delete buckets[key];
-  }
+  var gridSize = getClusterDistance();
+  var cells = Object.create(null);
+  var mapElement = document.getElementById("map");
+  var mapWidth = mapElement ? mapElement.clientWidth : 0;
+  var mapHeight = mapElement ? mapElement.clientHeight : 0;
 
   addressGroups.forEach(function(group) {
     var point = projection.containerPointFromCoords(group.latlng);
-    var cell = getCell(point);
-    var candidateSeen = Object.create(null);
-    var candidateIndexes = [];
+    if (!point) return;
+    var cellX = Math.floor(point.x / gridSize);
+    var cellY = Math.floor(point.y / gridSize);
+    var cellKey = cellX + ":" + cellY;
 
-    for (var offsetX = -1; offsetX <= 1; offsetX++) {
-      for (var offsetY = -1; offsetY <= 1; offsetY++) {
-        var nearby = buckets[bucketKey(cell.x + offsetX, cell.y + offsetY)] || [];
-
-        nearby.forEach(function(clusterIndex) {
-          if (candidateSeen[clusterIndex] === true) return;
-          candidateSeen[clusterIndex] = true;
-          candidateIndexes.push(clusterIndex);
-        });
-      }
+    if (!cells[cellKey]) {
+      cells[cellKey] = {
+        cellX: cellX,
+        cellY: cellY,
+        groups: [],
+        items: []
+      };
     }
 
-    /* 기존 전체 순회와 동일하게 먼저 생성된 클러스터를 우선합니다. */
-    candidateIndexes.sort(function(a, b) { return a - b; });
-    var matchedIndex = -1;
-
-    for (var i = 0; i < candidateIndexes.length; i++) {
-      var clusterIndex = candidateIndexes[i];
-      var cluster = clusters[clusterIndex];
-      var dx = point.x - cluster.point.x;
-      var dy = point.y - cluster.point.y;
-
-      if ((dx * dx) + (dy * dy) <= distance * distance) {
-        matchedIndex = clusterIndex;
-        break;
-      }
-    }
-
-    if (matchedIndex !== -1) {
-      var matchedCluster = clusters[matchedIndex];
-      removeClusterFromBucket(matchedIndex, matchedCluster);
-
-      matchedCluster.groups.push(group);
-      matchedCluster.items = matchedCluster.items.concat(group.items);
-
-      var n = matchedCluster.groups.length;
-      matchedCluster.point = new kakao.maps.Point(
-        (matchedCluster.point.x * (n - 1) + point.x) / n,
-        (matchedCluster.point.y * (n - 1) + point.y) / n
-      );
-      matchedCluster.latlng = projection.coordsFromContainerPoint(
-        matchedCluster.point
-      );
-
-      addClusterToBucket(matchedIndex, matchedCluster.point);
-      return;
-    }
-
-    var newIndex = clusters.length;
-    clusters.push({
-      point: point,
-      latlng: group.latlng,
-      groups: [group],
-      items: group.items.slice(),
-      bucketX: 0,
-      bucketY: 0
-    });
-    addClusterToBucket(newIndex, point);
+    cells[cellKey].groups.push(group);
+    cells[cellKey].items = cells[cellKey].items.concat(group.items);
   });
 
-  clusters.forEach(function(cluster, index) {
-    cluster.key = cluster.groups.map(function(g) { return g.key; }).join("||") + "|" + index;
-  });
+  return Object.keys(cells).sort(function(a, b) {
+    var first = cells[a];
+    var second = cells[b];
+    return first.cellY - second.cellY || first.cellX - second.cellX;
+  }).map(function(cell) {
+    var cluster = cells[cell];
+    var halfMarker = 24;
+    var centerX = (cluster.cellX + 0.5) * gridSize;
+    var centerY = (cluster.cellY + 0.5) * gridSize;
 
-  return clusters;
+    if (mapWidth) centerX = Math.max(halfMarker, Math.min(mapWidth - halfMarker, centerX));
+    if (mapHeight) centerY = Math.max(halfMarker, Math.min(mapHeight - halfMarker, centerY));
+
+    cluster.point = new kakao.maps.Point(centerX, centerY);
+    cluster.latlng = projection.coordsFromContainerPoint(cluster.point);
+    cluster.key = cluster.groups.map(function(group) {
+      return group.key;
+    }).join("||") + "|grid:" + cluster.cellX + ":" + cluster.cellY;
+    return cluster;
+  });
 }
 
 
@@ -1359,13 +1303,12 @@ function getVisibleAddressGroupsV639(items) {
 
 
 /* =========================================================
-   v6.3.5 Premium Cluster UI — 수량별 크기 클래스
+   v6.5.7 클러스터 UI — 수량별 3단계 크기 클래스
    ========================================================= */
 function getPremiumClusterSizeClassV635(count) {
   var value = Number(count) || 0;
-  if (value >= 100) return " cluster-size-xl";
-  if (value >= 50) return " cluster-size-lg";
-  if (value >= 10) return " cluster-size-md";
+  if (value >= 100) return " cluster-size-lg";
+  if (value >= 20) return " cluster-size-md";
   return " cluster-size-sm";
 }
 

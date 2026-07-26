@@ -114,6 +114,397 @@
   }
 }
 
+/* =========================================================
+   v6.5.7 데스크탑·태블릿 지도 빠른 도구 / 선택 작업줄 / 클러스터 정리
+   ========================================================= */
+.desktop-main-action {
+  display: none;
+}
+
+.map-quick-tools {
+  display: none;
+}
+
+.selection-action-bar[hidden] {
+  display: none !important;
+}
+
+.selection-action-bar {
+  position: sticky;
+  top: 42px;
+  z-index: 8400;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #c9d8ec;
+  background: #eef6ff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, .09);
+}
+
+.selection-action-bar strong {
+  margin-right: auto;
+  color: #075bc7;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.selection-action-bar button {
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid #b9cce3;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.selection-action-bar .selection-contract-btn {
+  border-color: #1769e8;
+  background: #1769e8;
+  color: #fff;
+}
+
+.selection-action-bar .selection-visit-btn {
+  border-color: #e2a828;
+  background: #fff8df;
+  color: #8a5a00;
+}
+
+.selection-action-bar .selection-clear-btn {
+  color: #64748b;
+}
+
+#listToolbar > #listPrintSelectedBtn {
+  flex: 0 0 92px !important;
+  width: 92px !important;
+  min-width: 92px !important;
+  max-width: 92px !important;
+  height: 31px !important;
+  padding: 0 7px !important;
+  margin: 0 !important;
+}
+
+#listToolbar > #listPrintSelectedBtn:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+@media (min-width: 769px) {
+  .v6-toolbar-secondary.v6-command-bar > .v6-command-menu {
+    display: none !important;
+  }
+
+  .desktop-main-action {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 96px;
+    border: 1px solid #b9d3f5 !important;
+    border-radius: 8px !important;
+    background: #edf5ff !important;
+    color: #075bc7 !important;
+    font-weight: 900 !important;
+  }
+
+  .desktop-customer-action {
+    border-color: #b8ddc5 !important;
+    background: #eefbf3 !important;
+    color: #087747 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 96px 96px 50px 112px 124px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action {
+    grid-column: 1 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action {
+    grid-column: 2 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select {
+    grid-column: 3 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai {
+    grid-column: 4 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    grid-column: 5 !important;
+  }
+
+  .map-quick-tools {
+    position: relative;
+    z-index: 9100;
+    display: flex;
+    flex: 0 0 54px;
+    width: 54px;
+    min-width: 54px;
+    height: 100%;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 14px;
+    border-right: 1px solid #dce4ee;
+    border-left: 1px solid #dce4ee;
+    background: rgba(255, 255, 255, .97);
+    box-sizing: border-box;
+    box-shadow: -2px 0 7px rgba(15, 23, 42, .05);
+  }
+
+  .map-quick-tools-inner {
+    display: flex;
+    width: 44px;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .map-quick-tool-wrap {
+    position: relative;
+  }
+
+  .map-quick-tool-btn {
+    display: flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #d4deea;
+    border-radius: 12px;
+    background: #fff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: -.4px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, .07);
+    cursor: pointer;
+  }
+
+  .map-quick-tool-btn:hover {
+    border-color: #8db8ed;
+    background: #f5f9ff;
+  }
+
+  .map-quick-tool-btn.on,
+  .map-quick-tool-btn.multi-cluster-btn.on {
+    border-color: #1769e8 !important;
+    background: #1769e8 !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(23, 105, 232, .15);
+  }
+
+  .map-quick-heart-btn {
+    color: #cc3366;
+  }
+
+  .map-quick-popover {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 10px);
+    width: 184px;
+    padding: 8px;
+    border: 1px solid #d9e2ee;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 15px 38px rgba(15, 23, 42, .2);
+  }
+
+  .map-quick-popover[hidden] {
+    display: none !important;
+  }
+
+  .map-quick-popover > button,
+  .map-quick-view-popover > button {
+    display: flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff;
+    color: #25364d;
+    font-size: 13px;
+    font-weight: 850;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .map-quick-popover > button:hover {
+    background: #f1f6fd;
+  }
+
+  .map-quick-check {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid #9aabc0;
+    border-radius: 5px;
+    color: #fff;
+    font-size: 13px;
+  }
+
+  .map-quick-view-popover button.on .map-quick-check {
+    border-color: #1769e8;
+    background: #1769e8;
+  }
+
+  .map-radius-popover {
+    width: 210px;
+  }
+
+  .map-radius-popover > strong {
+    display: block;
+    padding: 4px 5px 8px;
+    color: #40546d;
+    font-size: 12px;
+  }
+
+  .map-radius-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .map-radius-options button {
+    min-height: 38px;
+    border: 1px solid #c7d9ef;
+    border-radius: 8px;
+    background: #f6faff;
+    color: #075bc7;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .map-measure-status-v657 {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: min(520px, calc(100vw - 80px));
+    padding: 9px 10px 9px 14px;
+    border: 1px solid #b7cde9;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .97);
+    color: #24405f;
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .22);
+    transform: translateX(-50%);
+  }
+
+  .map-measure-status-v657[hidden] {
+    display: none !important;
+  }
+
+  .map-measure-status-v657 button {
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 50%;
+    background: #e9eff7;
+    color: #344054;
+    font-size: 19px;
+    cursor: pointer;
+  }
+
+  .map-measure-label-v657 {
+    min-width: 58px;
+    padding: 7px 10px;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: #e53935;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 950;
+    text-align: center;
+    box-shadow: 0 4px 13px rgba(15, 23, 42, .25);
+  }
+
+  .map-measure-label-v657.radius {
+    background: #1769e8;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1099px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 88px 88px 44px minmax(104px, 1fr) minmax(110px, 1fr) !important;
+  }
+
+  .desktop-main-action {
+    min-width: 0 !important;
+    font-size: 11px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-main-action,
+  .map-quick-tools {
+    display: none !important;
+  }
+
+  #listToolbar > #listPrintSelectedBtn {
+    flex-basis: 82px !important;
+    width: 82px !important;
+    min-width: 82px !important;
+    max-width: 82px !important;
+    padding: 0 4px !important;
+    font-size: 10.5px !important;
+  }
+
+  .selection-action-bar {
+    top: 42px;
+    gap: 4px;
+    min-height: 42px;
+    padding: 5px;
+    overflow-x: auto;
+  }
+
+  .selection-action-bar strong {
+    font-size: 11px;
+  }
+
+  .selection-action-bar button {
+    min-height: 30px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+}
+
+/* 기존 출처·상태 색상은 유지하고 수량에 따른 크기만 3단계로 정리 */
+.circle-marker.cluster-size-sm {
+  --cluster-size: 36px;
+  --cluster-font-size: 13.5px;
+}
+
+.circle-marker.cluster-size-md {
+  --cluster-size: 40px;
+  --cluster-font-size: 14px;
+}
+
+.circle-marker.cluster-size-lg,
+.circle-marker.cluster-size-xl {
+  --cluster-size: 44px;
+  --cluster-font-size: 14.5px;
+}
+
+
 /* v6.3.15 PC 상단 겹침 제거 + 카카오형 로드뷰 버튼 */
 @media (min-width: 1101px) {
   .filters {
@@ -7029,5 +7420,67 @@ body,
     width: 23px !important;
     height: 23px !important;
   }
+}
+
+/* v6.5.7 최종 우선순위: 뒤쪽 구버전 상단바·클러스터 규칙보다 우선 */
+@media (min-width: 769px) {
+  .v6-toolbar-secondary.v6-command-bar > .v6-command-menu {
+    display: none !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .desktop-main-action {
+    display: inline-flex !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 42px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 96px 96px 50px 112px 124px !important;
+    grid-template-rows: 42px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action { grid-column: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column: 3 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 5 !important; grid-row: 1 !important; }
+
+  #listToolbar > #listPrintSelectedBtn {
+    flex: 0 0 92px !important;
+    width: 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1099px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 88px 88px 44px minmax(104px, 1fr) minmax(110px, 1fr) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
+  .map-quick-tools {
+    display: none !important;
+  }
+}
+
+.circle-marker.cluster-size-sm {
+  --cluster-size: 36px !important;
+  --cluster-font-size: 13.5px !important;
+}
+
+.circle-marker.cluster-size-md {
+  --cluster-size: 40px !important;
+  --cluster-font-size: 14px !important;
+}
+
+.circle-marker.cluster-size-lg,
+.circle-marker.cluster-size-xl {
+  --cluster-size: 44px !important;
+  --cluster-font-size: 14.5px !important;
 }
 

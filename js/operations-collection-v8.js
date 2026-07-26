@@ -149,6 +149,14 @@
       '<div><small>출처</small><b>' + escape(item.source || "-") + '</b></div>' +
     '</div>';
   }
+  function compactValues(item) {
+    return '<span><b>보</b> ' + escape(item.deposit || "-") + '</span>' +
+      '<span><b>월</b> ' + escape(item.rent || "-") + '</span>' +
+      '<span><b>평</b> ' + escape(item.area || "-") + '</span>' +
+      '<span><b>층·호</b> ' + escape(item.room || "-") + '</span>' +
+      '<span><b>구분</b> ' + escape(item.category || "-") + '</span>' +
+      '<span><b>출처</b> ' + escape(item.source || "-") + '</span>';
+  }
   function renderReviews() {
     var panel = document.getElementById("operationsReviewsPanel");
     if (!panel) return;
@@ -184,23 +192,43 @@
     return '<div class="review-summary"><div><h3>' + escape(group.address || "주소 확인 필요") + '</h3><p>' +
       escape(group.room || "호실 없음") + ' · 중복후보 ' + candidates.length + '개 · 수집원본 ' +
       group.items.length + '개</p></div><span class="review-risk">' + escape(group.risk) + ' 위험 · ' +
-      number(group.score) + '점</span></div><div class="review-compare-grid">' +
+      number(group.score) + '점</span></div>' +
+      '<section class="review-existing-panel"><header class="review-section-heading">' +
+        '<div><span class="review-existing-badge">기존매물</span><strong>통합 대상 ' +
+          candidates.length + '건</strong></div>' +
+        '<small>빨간 표시가 현재 JS매물현황에 등록된 매물입니다.</small>' +
+      '</header><div class="review-existing-list">' +
+      (candidates.length ? candidates.map(function(candidate) {
+        return '<article class="review-candidate review-candidate-compact">' +
+          '<div class="review-compact-main"><header><h4>' +
+            escape(candidate.buildingName || "기존 대표매물") +
+          '</h4><span>' + escape(candidate.source) + '</span></header>' +
+          '<p>' + escape(candidate.address) + ' ' + escape(candidate.room) +
+          (candidate.memo ? ' · ' + escape(candidate.memo) : '') + '</p></div>' +
+          '<div class="review-compact-values">' + compactValues(candidate) + '</div>' +
+          '<button type="button" onclick="openPropertyTimeline(\'' +
+            escape(candidate.propertyId) + '\')">변경이력</button></article>';
+      }).join("") : '<article class="review-candidate review-candidate-empty"><h4>연결된 기존 매물 없음</h4>' +
+        '<p>비교할 기존 매물이 없으므로 별도 신규등록이 권장됩니다.</p></article>') +
+      '</div></section>' +
+      '<section class="review-new-panel"><header class="review-section-heading">' +
+        '<div><span class="review-new-badge">신규수집</span><strong>' + group.items.length +
+          '건</strong></div><small>처리할 매물을 눌러 선택하세요.</small>' +
+      '</header><div id="reviewNewItemList" class="review-new-list">' +
       group.items.map(function(entry, index) {
         var selected = entry.reviewId === item.reviewId;
-        return '<button type="button" class="review-item review-item-select' + (selected ? ' selected' : '') +
-          '" onclick="selectReviewItem(\'' + escape(entry.reviewId) + '\')"><header><h4>' +
-          (selected ? '현재 처리할 신규매물' : '같은 묶음 신규매물 ' + (index + 1)) +
-          '</h4><span>' + escape(entry.type) + '</span></header><p>' + escape(entry.address) + ' ' +
-          escape(entry.room) + '<br>' + escape(entry.comparison || entry.memo) + '</p>' +
-          values(entry) + '</button>';
+        return '<button type="button" class="review-item review-item-select review-item-compact' +
+          (selected ? ' selected' : '') + '" data-review-id="' + escape(entry.reviewId) +
+          '" onclick="selectReviewItem(\'' + escape(entry.reviewId) + '\')">' +
+          '<span class="review-item-number">' + (index + 1) + '</span>' +
+          '<span class="review-compact-main"><span class="review-compact-title"><strong>' +
+            (selected ? '현재 처리할 신규매물' : '같은 묶음 신규매물') +
+          '</strong><em>' + escape(entry.type) + '</em></span><span class="review-compact-address">' +
+            escape(entry.address) + ' ' + escape(entry.room) + '</span><span class="review-compact-note">' +
+            escape(entry.comparison || entry.memo || "비교 메모 없음") + '</span></span>' +
+          '<span class="review-compact-values">' + compactValues(entry) + '</span></button>';
       }).join("") +
-      (candidates.length ? candidates.map(function(candidate) {
-        return '<article class="review-candidate"><header><h4>' + escape(candidate.buildingName || "기존 대표매물") +
-          '</h4><span>' + escape(candidate.source) + '</span></header><p>' + escape(candidate.address) + ' ' +
-          escape(candidate.room) + '<br>' + escape(candidate.memo) + '</p>' + values(candidate) +
-          '<button type="button" onclick="openPropertyTimeline(\'' + escape(candidate.propertyId) + '\')">변경 타임라인</button></article>';
-      }).join("") : '<article class="review-candidate"><h4>연결된 기존 매물 없음</h4><p>별도 신규등록이 권장됩니다.</p></article>') +
-      '</div><div class="review-action-buttons">' +
+      '</div></section><div class="review-action-buttons">' +
       '<button class="merge" type="button" onclick="decideCurrentReview(\'merge\')">1 · 기존과 통합</button>' +
       '<button class="create" type="button" onclick="decideCurrentReview(\'create\')">2 · 별도 신규등록</button>' +
       '<button class="hold" type="button" onclick="decideCurrentReview(\'hold\')">3 · 보류</button>' +
@@ -306,8 +334,19 @@
     renderReviews();
   };
   window.selectReviewItem = function(reviewId) {
+    var list = document.getElementById("reviewNewItemList");
+    var scrollTop = list ? list.scrollTop : 0;
     extraState.selectedReviewId = text(reviewId);
     renderReviews();
+    window.requestAnimationFrame(function() {
+      var nextList = document.getElementById("reviewNewItemList");
+      var selected = nextList && nextList.querySelector('[data-review-id="' +
+        String(reviewId).replace(/"/g, '\\"') + '"]');
+      if (nextList) nextList.scrollTop = scrollTop;
+      if (selected && typeof selected.scrollIntoView === "function") {
+        selected.scrollIntoView({ block: "nearest" });
+      }
+    });
   };
   function reviewDecisionModal() {
     var modal = document.getElementById("reviewDecisionModal");

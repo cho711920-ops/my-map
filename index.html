@@ -26,7 +26,7 @@
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.5-left-title">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.11.1-work-alerts">
-  <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.15.0-full-review-groups">
+  <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.15.2-compact-review">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.0">
 </head>
 
@@ -80,6 +80,11 @@
             <button id="operationsCustomerMenuBtn" type="button" onclick="openOperationsCenter('customers'); closeV6ActionMenus()">고객매칭</button>
           </div>
         </div>
+
+        <button class="v6-primary-action desktop-main-action desktop-operations-action" type="button"
+          onclick="openOperationsCenter('dashboard')">운영현황</button>
+        <button class="v6-primary-action desktop-main-action desktop-customer-action" type="button"
+          onclick="openOperationsCenter('customers')">고객매칭</button>
 
         <button id="mapRoadviewSelectBtn" class="v6-primary-action map-roadview-select" type="button"
           onclick="toggleMapRoadviewSelection()" title="지도에서 로드뷰 선택" aria-label="지도에서 로드뷰 선택" aria-pressed="false">
@@ -141,8 +146,8 @@
         <span class="list-master-label">전체선택/해제</span>
       </label>
 
-      <button id="multiClusterBtn" class="list-toolbar-btn multi-cluster-btn" type="button" onclick="toggleMultiClusterMode()">
-        <span>다중선택</span>
+      <button id="listPrintSelectedBtn" class="list-toolbar-btn list-print-selected-btn" type="button" onclick="printSelectedList()" disabled>
+        <span>선택인쇄</span>
       </button>
 
       <div class="list-toolbar-control list-type-control">
@@ -184,8 +189,72 @@
       </div>
     </div>
 
+    <div id="selectionActionBar" class="selection-action-bar" hidden aria-live="polite">
+      <strong id="selectionActionCount">0건 선택</strong>
+      <button type="button" class="selection-contract-btn" onclick="completeSelectedItems()">계약완료</button>
+      <button type="button" class="selection-visit-btn" onclick="markSelectedAsVisited()">임장완료</button>
+      <button type="button" onclick="printSelectedList()">선택인쇄</button>
+      <button type="button" class="selection-clear-btn" onclick="clearSelectedPrintItems()">선택해제</button>
+    </div>
+
     <div id="list"></div>
   </div>
+
+  <aside id="mapQuickTools" class="map-quick-tools" aria-label="지도 빠른 도구">
+    <div class="map-quick-tools-inner">
+      <div class="map-quick-tool-wrap">
+        <button id="mapQuickViewBtn" class="map-quick-tool-btn" type="button"
+          onclick="toggleMapQuickPopoverV657('view', event)" aria-expanded="false">보기</button>
+        <div id="mapQuickPopoverView" class="map-quick-popover map-quick-view-popover" hidden>
+          <button id="mapQuickTodayBtn" type="button" role="menuitemcheckbox" aria-checked="false"
+            onclick="toggleTodayNewOnly(); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>오늘 신규만</span>
+          </button>
+          <button id="mapQuickVisitOnlyBtn" type="button" role="menuitemcheckbox" aria-checked="false"
+            onclick="toggleGongsilOnly(); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>임장할매물만</span>
+          </button>
+          <button id="mapQuickHideDoneBtn" type="button" role="menuitemcheckbox" aria-checked="true"
+            onclick="toggleHideDone(); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>계약완료 숨김</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="map-quick-tool-wrap">
+        <button id="mapQuickListBtn" class="map-quick-tool-btn map-quick-heart-btn" type="button"
+          onclick="toggleMapQuickPopoverV657('lists', event)" aria-expanded="false">♥찜</button>
+        <div id="mapQuickPopoverLists" class="map-quick-popover" hidden>
+          <button type="button" onclick="openListManager('favorite'); closeMapQuickPopoversV657()">찜목록</button>
+          <button type="button" onclick="openListManager('visit'); closeMapQuickPopoversV657()">임장목록</button>
+        </div>
+      </div>
+
+      <button id="multiClusterBtn" class="map-quick-tool-btn multi-cluster-btn" type="button"
+        onclick="toggleMultiClusterMode()"><span>다중</span></button>
+      <button id="mapDistanceBtn" class="map-quick-tool-btn" type="button"
+        onclick="toggleDistanceMeasureV657()">거리</button>
+
+      <div class="map-quick-tool-wrap">
+        <button id="mapRadiusBtn" class="map-quick-tool-btn" type="button"
+          onclick="toggleMapQuickPopoverV657('radius', event)" aria-expanded="false">반경</button>
+        <div id="mapQuickPopoverRadius" class="map-quick-popover map-radius-popover" hidden>
+          <strong>반경 선택</strong>
+          <div class="map-radius-options">
+            <button type="button" onclick="startRadiusMeasureV657(100)">100m</button>
+            <button type="button" onclick="startRadiusMeasureV657(300)">300m</button>
+            <button type="button" onclick="startRadiusMeasureV657(500)">500m</button>
+            <button type="button" onclick="startRadiusMeasureV657(1000)">1km</button>
+            <button type="button" onclick="startRadiusMeasureV657(2000)">2km</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="mapMeasureStatusV657" class="map-measure-status-v657" hidden>
+      <span id="mapMeasureStatusTextV657"></span>
+      <button type="button" onclick="clearMapMeasurementsV657()" aria-label="측정 지우기">×</button>
+    </div>
+  </aside>
 
   <div id="map"></div>
 </div>
@@ -499,7 +568,7 @@
 </div>
 
 
-<script src="js/script.js?v=6.5.6-memo-scroll-fix"></script>
+<script src="js/script.js?v=6.5.7-map-quick-tools"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
 <script src="js/print.js"></script>
@@ -513,9 +582,10 @@
 <script src="js/ai-visit-route-v6.js"></script>
 <script src="js/ai-visit-ui-v6.js"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.33-hold-toggle"></script>
-<script src="js/map.js?v=6.5.0-value-presence"></script>
+<script src="js/map.js?v=6.5.7-cluster-layout"></script>
+<script src="js/map-quick-tools-v657.js?v=6.5.7"></script>
   <script src="js/operations-center-v7.js?v=7.15.1-review-card-nav"></script>
-  <script src="js/operations-collection-v8.js?v=7.15.0-full-review-groups"></script>
+  <script src="js/operations-collection-v8.js?v=7.15.2-compact-review"></script>
 <script src="js/announcement-v1.js?v=1.0.0"></script>
 </body>
 </html>

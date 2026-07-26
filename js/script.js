@@ -2482,6 +2482,7 @@ function syncListMasterCheckbox() {
 
 function updatePrintSelectedButton() {
   var printBtn = document.getElementById("printSelectedBtn");
+  var listPrintBtn = document.getElementById("listPrintSelectedBtn");
   var completeBtn = document.getElementById("completeSelectedBtn");
   var fieldVisitBtn = document.getElementById("fieldVisitBtn");
   var count = selectedPrintKeys.length;
@@ -2489,6 +2490,11 @@ function updatePrintSelectedButton() {
   if (printBtn) {
     printBtn.innerText = count > 0 ? "선택인쇄 " + count : "선택인쇄";
     printBtn.disabled = count === 0;
+  }
+
+  if (listPrintBtn) {
+    listPrintBtn.innerText = count > 0 ? "선택인쇄 " + count : "선택인쇄";
+    listPrintBtn.disabled = count === 0;
   }
 
   if (completeBtn) {
@@ -2499,6 +2505,10 @@ function updatePrintSelectedButton() {
   if (fieldVisitBtn) {
     fieldVisitBtn.innerText = count > 0 ? "임장완료 " + count : "임장완료";
     fieldVisitBtn.disabled = count === 0;
+  }
+
+  if (typeof window.syncSelectionActionBarV657 === "function") {
+    window.syncSelectionActionBarV657(count);
   }
 }
 
@@ -2775,8 +2785,8 @@ function updateMultiClusterButton() {
   if (!btn) return;
 
   btn.innerHTML = multiClusterMode
-    ? "<span>다중해제</span>"
-    : "<span>다중선택</span>";
+    ? "<span>해제</span>"
+    : "<span>다중</span>";
 
   btn.classList.toggle("on", multiClusterMode);
 }
