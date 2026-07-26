@@ -320,6 +320,15 @@
     min-height:54px;
     padding:3px 6px!important;
   }
+  #operationsReviewsPanel .review-action-buttons{
+    position:relative;
+    bottom:auto;
+    z-index:5;
+    box-sizing:border-box;
+    margin:6px -8px 0;
+    padding:8px 8px max(10px,env(safe-area-inset-bottom));
+    box-shadow:0 -7px 16px rgba(17,48,88,.08);
+  }
 }
 
 /* v7.17.1 모바일 검증카드: 체크박스 추가 후 세로로 찌그러지는 배열 복구 */
