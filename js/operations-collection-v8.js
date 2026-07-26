@@ -166,7 +166,7 @@
     if (group) extraState.selectedGroupKey = group.groupKey;
     var filters = ["all", "높음", "중간", "낮음"];
     panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>위험도와 차이값을 확인하고 통합·별도등록·보류만 선택하세요. 처리 후 다음 항목이 자동으로 열립니다.</span></div>' +
-      '<div class="review-toolbar-actions"><button type="button" onclick="repairRoomlessExactReviews()">자동중복 정리</button>' +
+      '<div class="review-toolbar-actions"><button type="button" title="전체 검증대상을 검사하고 주소·층/호실·가격·평수가 정확히 맞는 항목만 자동통합합니다." onclick="repairRoomlessExactReviews()">자동중복 정리</button>' +
       '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-filter-buttons">' +
       filters.map(function(filter) {

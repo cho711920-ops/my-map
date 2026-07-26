@@ -9,6 +9,7 @@ const index = read("index.html");
 const style = read("css", "style.css");
 const map = read("js", "map.js");
 const quickTools = read("js", "map-quick-tools-v657.js");
+const script = read("js", "script.js");
 const operations = read("js", "operations-collection-v8.js");
 const operationsCss = read("css", "operations-collection-v8.css");
 
@@ -19,8 +20,9 @@ const operationsCss = read("css", "operations-collection-v8.css");
   'id="multiClusterBtn"',
   'id="mapDistanceBtn"',
   'id="mapRadiusBtn"',
-  'id="listPrintSelectedBtn"',
   'id="selectionActionBar"',
+  'id="sourceFilter"',
+  'id="floorQuickFilter"',
   "오늘 신규만",
   "임장할매물만",
   "계약완료 숨김",
@@ -33,6 +35,7 @@ const operationsCss = read("css", "operations-collection-v8.css");
   "2km"
 ].forEach((needle) => assert(index.includes(needle), `index is missing ${needle}`));
 
+assert(!index.includes('id="listPrintSelectedBtn"'), "duplicate list-header print button must be removed");
 assert(index.includes("desktop-operations-action"), "desktop operations shortcut is missing");
 assert(index.includes("desktop-customer-action"), "desktop customer shortcut is missing");
 assert(index.includes("completeSelectedItems()"), "contract completion action is missing");
@@ -51,7 +54,13 @@ assert(quickTools.includes("toggleDistanceMeasureV657"), "distance measuring is 
 assert(quickTools.includes("startRadiusMeasureV657"), "radius measuring is missing");
 assert(quickTools.includes("kakao.maps.Polyline"), "distance line rendering is missing");
 assert(quickTools.includes("kakao.maps.Circle"), "radius circle rendering is missing");
+assert(quickTools.includes("distancePoints.push(event.latLng)"), "multi-point distance measuring is missing");
+assert(quickTools.includes("distanceLine.setPath(distancePoints)"), "distance route extension is missing");
+assert(quickTools.includes("window.mapRadiusFilterV658 = {"), "radius list filter state is missing");
 assert(!quickTools.includes("preventMap"), "measurement cleanup must not block later map input");
+assert(script.includes("isItemWithinMapRadiusV658(item, radiusFilter)"), "radius filtering is not connected to the list");
+assert(script.includes("matchSource") && script.includes("matchQuickFloor"), "source/floor quick filters are missing");
+assert(style.includes("position: absolute !important") && style.includes("background: transparent !important"), "map tools must overlay the map");
 
 assert(map.includes("Math.floor(point.x / gridSize)"), "grid-cluster X bucketing is missing");
 assert(map.includes("Math.floor(point.y / gridSize)"), "grid-cluster Y bucketing is missing");

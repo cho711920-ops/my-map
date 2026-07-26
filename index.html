@@ -16,7 +16,7 @@
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.5.7-map-quick-tools">
+<link rel="stylesheet" href="css/style.css?v=6.5.8-map-overlay-tools">
 <link rel="stylesheet" href="css/print-v2.css">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.23-sort-controls">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.33-hold-toggle">
@@ -25,8 +25,8 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.5-left-title">
-<link rel="stylesheet" href="css/operations-center-v7.css?v=7.11.1-work-alerts">
-  <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.15.2-compact-review">
+<link rel="stylesheet" href="css/operations-center-v7.css?v=7.16.0-compact-header">
+  <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.16.0-readable-review">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.0">
 </head>
 
@@ -146,13 +146,30 @@
         <span class="list-master-label">전체선택/해제</span>
       </label>
 
-      <button id="listPrintSelectedBtn" class="list-toolbar-btn list-print-selected-btn" type="button" onclick="printSelectedList()" disabled>
-        <span>선택인쇄</span>
-      </button>
+      <div class="list-toolbar-control list-source-control">
+        <select id="sourceFilter" onchange="applyFilter()" aria-label="출처 필터">
+          <option value="">출처</option>
+          <option value="direct">직접등록</option>
+          <option value="danggeun">당근</option>
+          <option value="gongsil">공실박스</option>
+          <option value="naver">네이버</option>
+          <option value="unknown">출처미확인</option>
+        </select>
+      </div>
 
       <div class="list-toolbar-control list-type-control">
         <select id="typeFilter" onchange="applyFilter()">
           <option value="">구분</option>
+        </select>
+      </div>
+
+      <div class="list-toolbar-control list-floor-control">
+        <select id="floorQuickFilter" onchange="applyFilter()" aria-label="층 필터">
+          <option value="">층</option>
+          <option value="basement">지하</option>
+          <option value="first">1층</option>
+          <option value="upper">2층 이상</option>
+          <option value="unknown">층 미확인</option>
         </select>
       </div>
 
@@ -190,11 +207,11 @@
     </div>
 
     <div id="selectionActionBar" class="selection-action-bar" hidden aria-live="polite">
-      <strong id="selectionActionCount">0건 선택</strong>
       <button type="button" class="selection-contract-btn" onclick="completeSelectedItems()">계약완료</button>
       <button type="button" class="selection-visit-btn" onclick="markSelectedAsVisited()">임장완료</button>
       <button type="button" onclick="printSelectedList()">선택인쇄</button>
       <button type="button" class="selection-clear-btn" onclick="clearSelectedPrintItems()">선택해제</button>
+      <strong id="selectionActionCount">0건 선택</strong>
     </div>
 
     <div id="list"></div>
@@ -223,7 +240,10 @@
 
       <div class="map-quick-tool-wrap">
         <button id="mapQuickListBtn" class="map-quick-tool-btn map-quick-heart-btn" type="button"
-          onclick="toggleMapQuickPopoverV657('lists', event)" aria-expanded="false">♥찜</button>
+          onclick="toggleMapQuickPopoverV657('lists', event)" aria-expanded="false" aria-label="찜 목록">
+          <span>찜</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.2 4.4 13A5.2 5.2 0 0 1 12 5.9 5.2 5.2 0 0 1 19.6 13Z"></path></svg>
+        </button>
         <div id="mapQuickPopoverLists" class="map-quick-popover" hidden>
           <button type="button" onclick="openListManager('favorite'); closeMapQuickPopoversV657()">찜목록</button>
           <button type="button" onclick="openListManager('visit'); closeMapQuickPopoversV657()">임장목록</button>
@@ -568,7 +588,7 @@
 </div>
 
 
-<script src="js/script.js?v=6.5.7-map-quick-tools"></script>
+<script src="js/script.js?v=6.5.8-radius-filter"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
 <script src="js/print.js"></script>
@@ -583,9 +603,9 @@
 <script src="js/ai-visit-ui-v6.js"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.33-hold-toggle"></script>
 <script src="js/map.js?v=6.5.7-cluster-layout"></script>
-<script src="js/map-quick-tools-v657.js?v=6.5.7"></script>
+<script src="js/map-quick-tools-v657.js?v=6.5.8-route-radius-filter"></script>
   <script src="js/operations-center-v7.js?v=7.15.1-review-card-nav"></script>
-  <script src="js/operations-collection-v8.js?v=7.15.2-compact-review"></script>
+  <script src="js/operations-collection-v8.js?v=7.16.0-readable-review"></script>
 <script src="js/announcement-v1.js?v=1.0.0"></script>
 </body>
 </html>

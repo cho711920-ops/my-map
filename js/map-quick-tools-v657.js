@@ -3,7 +3,9 @@
 
   var toolMode = "";
   var radiusMeters = 0;
-  var distanceStart = null;
+  var distancePoints = [];
+  var distanceLine = null;
+  var distanceLabel = null;
   var distancePreview = null;
   var measurementOverlays = [];
 
@@ -53,15 +55,17 @@
       if (overlay && typeof overlay.setMap === "function") overlay.setMap(null);
     });
     measurementOverlays = [];
+    distancePoints = [];
+    distanceLine = null;
+    distanceLabel = null;
   }
 
   function finishToolMode(keepStatus) {
     toolMode = "";
     radiusMeters = 0;
-    distanceStart = null;
     clearPreview();
     setPressed("mapDistanceBtn", false);
-    setPressed("mapRadiusBtn", false);
+    setPressed("mapRadiusBtn", !!window.mapRadiusFilterV658);
     if (!keepStatus) setStatus("");
   }
 
@@ -121,7 +125,7 @@
     });
 
     setPressed("mapDistanceBtn", toolMode === "distance");
-    setPressed("mapRadiusBtn", toolMode === "radius");
+    setPressed("mapRadiusBtn", toolMode === "radius" || !!window.mapRadiusFilterV658);
   };
 
   window.syncSelectionActionBarV657 = function (count) {
@@ -140,14 +144,23 @@
       window.setMapRoadviewSelection(false);
     }
     if (toolMode === "distance") {
-      window.clearMapMeasurementsV657();
+      finishToolMode(true);
+      if (distanceLine) {
+        setStatus("거리 측정 일시정지 · 누적 " + formatDistance(distanceLine.getLength()) +
+          " · ×를 누르면 지워집니다.");
+      } else {
+        setStatus("거리 측정을 취소했습니다.");
+      }
       return;
     }
+    var hadRadiusFilter = !!window.mapRadiusFilterV658;
+    window.mapRadiusFilterV658 = null;
     removeMeasurementOverlays();
     finishToolMode();
+    if (hadRadiusFilter && typeof window.applyFilter === "function") window.applyFilter();
     toolMode = "distance";
     setPressed("mapDistanceBtn", true);
-    setStatus("지도에서 시작점과 끝점을 차례로 누르세요.");
+    setStatus("지도에서 이동 경로를 차례로 누르세요. 계속 누르면 누적됩니다.");
   };
 
   window.startRadiusMeasureV657 = function (meters) {
@@ -155,8 +168,11 @@
     if (typeof window.setMapRoadviewSelection === "function") {
       window.setMapRoadviewSelection(false);
     }
+    var hadRadiusFilter = !!window.mapRadiusFilterV658;
+    window.mapRadiusFilterV658 = null;
     removeMeasurementOverlays();
     finishToolMode();
+    if (hadRadiusFilter && typeof window.applyFilter === "function") window.applyFilter();
     toolMode = "radius";
     radiusMeters = Number(meters) || 0;
     closePopovers("");
@@ -164,39 +180,58 @@
     setStatus("지도에서 " + formatDistance(radiusMeters) + " 반경의 중심을 누르세요.");
   };
 
-  window.clearMapMeasurementsV657 = function () {
+  window.clearMapMeasurementsV657 = function (skipFilterRefresh) {
+    var hadRadiusFilter = !!window.mapRadiusFilterV658;
+    window.mapRadiusFilterV658 = null;
     removeMeasurementOverlays();
     finishToolMode(false);
+    window.syncMapQuickToolStateV657();
+    if (hadRadiusFilter && !skipFilterRefresh && typeof window.applyFilter === "function") {
+      window.applyFilter();
+    }
   };
 
-  function addDistanceResult(start, end) {
-    var line = new kakao.maps.Polyline({
-      path: [start, end],
-      strokeWeight: 4,
-      strokeColor: "#e53935",
-      strokeOpacity: 0.9,
-      strokeStyle: "solid"
-    });
-    line.setMap(map);
-    measurementOverlays.push(line);
+  function updateDistanceResult() {
+    if (distancePoints.length < 2) return;
+    if (!distanceLine) {
+      distanceLine = new kakao.maps.Polyline({
+        path: distancePoints,
+        strokeWeight: 4,
+        strokeColor: "#e53935",
+        strokeOpacity: 0.9,
+        strokeStyle: "solid"
+      });
+      distanceLine.setMap(map);
+      measurementOverlays.push(distanceLine);
+    } else {
+      distanceLine.setPath(distancePoints);
+    }
 
-    var meters = line.getLength();
-    var label = new kakao.maps.CustomOverlay({
-      position: end,
-      xAnchor: 0.5,
-      yAnchor: 1.35,
-      content: '<div class="map-measure-label-v657">' + formatDistance(meters) + "</div>"
-    });
-    label.setMap(map);
-    measurementOverlays.push(label);
-    setStatus("측정 거리 " + formatDistance(meters) + " · ×를 누르면 지워집니다.");
-    finishToolMode(true);
+    var meters = distanceLine.getLength();
+    var end = distancePoints[distancePoints.length - 1];
+    var content = '<div class="map-measure-label-v657">' + formatDistance(meters) + "</div>";
+    if (!distanceLabel) {
+      distanceLabel = new kakao.maps.CustomOverlay({
+        position: end,
+        xAnchor: 0.5,
+        yAnchor: 1.35,
+        content: content
+      });
+      distanceLabel.setMap(map);
+      measurementOverlays.push(distanceLabel);
+    } else {
+      distanceLabel.setPosition(end);
+      distanceLabel.setContent(content);
+    }
+    setStatus("경유점 " + distancePoints.length + "개 · 누적 " + formatDistance(meters) +
+      " · 다음 지점을 계속 누르세요.");
   }
 
   function addRadiusResult(center) {
+    var selectedRadius = radiusMeters;
     var circle = new kakao.maps.Circle({
       center: center,
-      radius: radiusMeters,
+      radius: selectedRadius,
       strokeWeight: 3,
       strokeColor: "#1769e8",
       strokeOpacity: 0.9,
@@ -211,12 +246,21 @@
       position: center,
       xAnchor: 0.5,
       yAnchor: 0.5,
-      content: '<div class="map-measure-label-v657 radius">' + formatDistance(radiusMeters) + "</div>"
+      content: '<div class="map-measure-label-v657 radius">' + formatDistance(selectedRadius) + "</div>"
     });
     label.setMap(map);
     measurementOverlays.push(label);
-    setStatus(formatDistance(radiusMeters) + " 반경 표시 · ×를 누르면 지워집니다.");
+    window.mapRadiusFilterV658 = {
+      lat: center.getLat(),
+      lng: center.getLng(),
+      meters: selectedRadius
+    };
     finishToolMode(true);
+    if (typeof window.applyFilter === "function") window.applyFilter();
+    var itemCount = Array.isArray(window.currentItems) ? window.currentItems.length : 0;
+    setStatus(formatDistance(selectedRadius) + " 반경 안 매물 " +
+      itemCount.toLocaleString("ko-KR") + "개만 표시 중 · ×를 누르면 해제됩니다.");
+    window.syncMapQuickToolStateV657();
   }
 
   function handleMapClick(event) {
@@ -225,19 +269,20 @@
       addRadiusResult(event.latLng);
       return;
     }
-    if (!distanceStart) {
-      distanceStart = event.latLng;
-      setStatus("끝점을 누르세요.");
+    distancePoints.push(event.latLng);
+    if (distancePoints.length === 1) {
+      setStatus("시작점 지정 · 이동 경로의 다음 지점을 누르세요.");
       return;
     }
-    addDistanceResult(distanceStart, event.latLng);
+    updateDistanceResult();
   }
 
   function handleMapMouseMove(event) {
-    if (toolMode !== "distance" || !distanceStart || !event || !event.latLng) return;
+    if (toolMode !== "distance" || !distancePoints.length || !event || !event.latLng) return;
+    var lastPoint = distancePoints[distancePoints.length - 1];
     if (!distancePreview) {
       distancePreview = new kakao.maps.Polyline({
-        path: [distanceStart, event.latLng],
+        path: [lastPoint, event.latLng],
         strokeWeight: 3,
         strokeColor: "#e53935",
         strokeOpacity: 0.65,
@@ -245,7 +290,7 @@
       });
       distancePreview.setMap(map);
     } else {
-      distancePreview.setPath([distanceStart, event.latLng]);
+      distancePreview.setPath([lastPoint, event.latLng]);
     }
   }
 

@@ -816,8 +816,11 @@ function getFilteredItems() {
 
   var keyword = document.getElementById("keyword").value.trim();
   var selectedType = document.getElementById("typeFilter").value;
+  var selectedSource = String((document.getElementById("sourceFilter") || {}).value || "");
+  var selectedFloorQuick = String((document.getElementById("floorQuickFilter") || {}).value || "");
   var sortType = document.getElementById("sortFilter").value;
   var industryKeyword = String((document.getElementById("industryFilter") || {}).value || "").trim().toLowerCase();
+  var radiusFilter = window.mapRadiusFilterV658 || null;
 
   var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
   var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
@@ -847,6 +850,7 @@ function getFilteredItems() {
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || item.type === selectedType;
+    var matchSource = !selectedSource || getItemSourceType(item) === selectedSource;
 
     var industryTerms = industryKeyword.split(",").map(function(term) {
       return term.trim();
@@ -868,6 +872,12 @@ function getFilteredItems() {
 
     var itemFloor = getItemFloorNumber(item);
     var matchFloor = true;
+    var matchQuickFloor =
+      !selectedFloorQuick ||
+      (selectedFloorQuick === "basement" && itemFloor !== null && itemFloor < 0) ||
+      (selectedFloorQuick === "first" && itemFloor === 1) ||
+      (selectedFloorQuick === "upper" && itemFloor !== null && itemFloor >= 2) ||
+      (selectedFloorQuick === "unknown" && itemFloor === null);
 
     if (hasFloorFilter) {
       // 층수 범위를 사용하면 층수 미확인 매물은 제외
@@ -881,9 +891,12 @@ function getFilteredItems() {
     var matchDone = !hideDone || !isDone(item);
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
-    var inMap = item.latlng && bounds.contain(item.latlng);
+    var inMap = radiusFilter
+      ? isItemWithinMapRadiusV658(item, radiusFilter)
+      : item.latlng && bounds.contain(item.latlng);
 
-    return matchCustomerSelection && matchKeyword && matchType && matchIndustry && matchPrice && matchFloor &&
+    return matchCustomerSelection && matchKeyword && matchType && matchSource && matchIndustry && matchPrice &&
+      matchFloor && matchQuickFloor &&
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
   });
 
@@ -908,13 +921,37 @@ function getFilteredItems() {
   return filtered;
 }
 
+function getCoordinateDistanceMetersV658(first, second) {
+  if (!first || !second) return Infinity;
+  var earthRadius = 6371000;
+  var toRadians = function(value) { return Number(value) * Math.PI / 180; };
+  var lat1 = toRadians(first.lat);
+  var lat2 = toRadians(second.lat);
+  var deltaLat = toRadians(second.lat - first.lat);
+  var deltaLng = toRadians(second.lng - first.lng);
+  var haversine =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) *
+    Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+  return earthRadius * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function isItemWithinMapRadiusV658(item, radiusFilter) {
+  var coords = getItemCoordinates(item);
+  if (!coords || !radiusFilter) return false;
+  return getCoordinateDistanceMetersV658(coords, radiusFilter) <= Number(radiusFilter.meters || 0);
+}
+
 
 function applyFilter() {
   var filtered = getFilteredItems();
   currentItems = filtered;
 
   drawItems(filtered);
-  document.getElementById("status").innerHTML = "검색 결과 " + filtered.length + "개";
+  var radiusFilter = window.mapRadiusFilterV658 || null;
+  document.getElementById("status").innerHTML = radiusFilter
+    ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"
+    : "검색 결과 " + filtered.length + "개";
 }
 
 
@@ -2240,6 +2277,10 @@ function buildOpportunityHtml(analysis) {
 function resetFilter() {
   document.getElementById("keyword").value = "";
   document.getElementById("typeFilter").value = "";
+  var sourceFilter = document.getElementById("sourceFilter");
+  var floorQuickFilter = document.getElementById("floorQuickFilter");
+  if (sourceFilter) sourceFilter.value = "";
+  if (floorQuickFilter) floorQuickFilter.value = "";
   document.getElementById("sortFilter").value = "latest";
   updateSortDropdownUI();
   document.getElementById("minDeposit").value = "";
@@ -2276,6 +2317,11 @@ function resetFilter() {
   }
   updateMultiClusterButton();
   updateMultiClusterStatus();
+  if (typeof window.clearMapMeasurementsV657 === "function") {
+    window.clearMapMeasurementsV657(true);
+  } else {
+    window.mapRadiusFilterV658 = null;
+  }
   selectedGroupKey = null;
   selectedItemKey = null;
 
@@ -2482,7 +2528,6 @@ function syncListMasterCheckbox() {
 
 function updatePrintSelectedButton() {
   var printBtn = document.getElementById("printSelectedBtn");
-  var listPrintBtn = document.getElementById("listPrintSelectedBtn");
   var completeBtn = document.getElementById("completeSelectedBtn");
   var fieldVisitBtn = document.getElementById("fieldVisitBtn");
   var count = selectedPrintKeys.length;
@@ -2490,11 +2535,6 @@ function updatePrintSelectedButton() {
   if (printBtn) {
     printBtn.innerText = count > 0 ? "선택인쇄 " + count : "선택인쇄";
     printBtn.disabled = count === 0;
-  }
-
-  if (listPrintBtn) {
-    listPrintBtn.innerText = count > 0 ? "선택인쇄 " + count : "선택인쇄";
-    listPrintBtn.disabled = count === 0;
   }
 
   if (completeBtn) {
@@ -2784,9 +2824,7 @@ function updateMultiClusterButton() {
   var btn = document.getElementById("multiClusterBtn");
   if (!btn) return;
 
-  btn.innerHTML = multiClusterMode
-    ? "<span>해제</span>"
-    : "<span>다중</span>";
+  btn.innerHTML = "<span>다중</span>";
 
   btn.classList.toggle("on", multiClusterMode);
 }
