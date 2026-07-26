@@ -45,7 +45,7 @@ assert(
 assert(css.includes("width: min(570px, calc(100vw - 16px)) !important;"));
 assert(css.includes("width: clamp(570px, 34vw, 600px) !important;"));
 assert(css.includes("width: min(640px, calc(100vw - 16px)) !important;"));
-assert(index.includes("style.css?v=6.5.6-list-density"));
+assert(index.includes("style.css?v=6.5.7-map-quick-tools"));
 
 [
   "mmForceCreateReviewItem_",
