@@ -941,6 +941,11 @@ body.aiv-workspace-open { overflow: hidden !important; }
   background: #fff7df;
   color: #965600;
 }
+.aiv-field-actions .hold.unhold {
+  border-color: #d97706;
+  background: #f59e0b;
+  color: #fff;
+}
 .aiv-field-actions .complete {
   border-color: #1769e8;
   background: #1769e8;

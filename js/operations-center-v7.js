@@ -110,17 +110,21 @@
     } catch (_) {}
   }
 
-  function dashboardCard(label, value, hint, tone, customerView) {
-    var tag = customerView ? "button" : "article";
-    var action = customerView
-      ? ' type="button" onclick="openCustomerWorkQueue(\'' + escape(customerView) + '\')"'
+  function dashboardCard(label, value, hint, tone, actionTarget) {
+    var actionable = Boolean(actionTarget);
+    var reviews = actionTarget === "reviews";
+    var tag = actionable ? "button" : "article";
+    var action = actionable
+      ? (reviews
+        ? ' type="button" onclick="switchOperationsTab(\'reviews\')"'
+        : ' type="button" onclick="openCustomerWorkQueue(\'' + escape(actionTarget) + '\')"')
       : "";
     return '<' + tag + action + ' class="operations-stat-card ' + (tone || "") +
-      (customerView ? ' actionable' : '') + '">' +
+      (actionable ? ' actionable' : '') + '">' +
       '<span>' + escape(label) + '</span>' +
       '<strong>' + number(value).toLocaleString("ko-KR") + '</strong>' +
       '<small>' + escape(hint) + '</small>' +
-      (customerView ? '<em>해당 고객 바로 보기 →</em>' : '') +
+      (actionable ? '<em>' + (reviews ? '매물검증 바로 보기 →' : '해당 고객 바로 보기 →') + '</em>' : '') +
       '</' + tag + '>';
   }
 
@@ -138,7 +142,7 @@
     panel.innerHTML =
       '<div class="operations-stat-grid">' +
         dashboardCard("활성 대표매물", activeCount, "JS웹에 표시되는 운영 매물", "primary") +
-        dashboardCard("검증 대기", reviewCount, "사람의 판단이 필요한 원본", reviewCount ? "warning" : "success") +
+        dashboardCard("검증 대기", reviewCount, "사람의 판단이 필요한 원본", reviewCount ? "warning" : "success", "reviews") +
         dashboardCard("수집 원본", data.raw, "출처별 원본 스냅샷", "") +
         dashboardCard("고객 문의", data.openCustomers != null ? data.openCustomers : data.customers, "진행 중인 고객 조건", "", "active") +
         dashboardCard("신규 고객매칭", data.newMatches != null ? data.newMatches : data.matches, "아직 후보·보류로 정하지 않은 추천", data.newMatches ? "primary" : "", "new") +
@@ -158,6 +162,9 @@
         '<p>매물검증의 애매한 중복만 결정하세요. 고객 등록·조건수정·후속관리는 이 화면에서 처리하고, 대표매물 갱신·이력·재매칭은 자동으로 처리됩니다.</p>' +
       '</div>';
   }
+  window.JSOperationsDiagnosticsV7151 = {
+    dashboardCard: dashboardCard
+  };
 
   function matchCountForCustomer(customerId) {
     return state.matches.filter(function(row) {

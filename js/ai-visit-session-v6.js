@@ -423,6 +423,31 @@
     return room ? address + " · " + room : address;
   }
 
+  function visitHoldControl(isHeld, index) {
+    return {
+      className: isHeld ? "hold unhold" : "hold",
+      action: isHeld
+        ? "JSAiVisitV6.requestUnhold(" + Number(index || 0) + ")"
+        : "JSAiVisitV6.holdCurrent()",
+      label: isHeld ? "보류해제" : "보류"
+    };
+  }
+
+  function syncDockHoldControl(item, index) {
+    var button = document.querySelector(".aiv-field-actions-dock .hold");
+    if (!button) return;
+    var isHeld = Boolean(
+      activeSession &&
+      activeSession.statuses &&
+      activeSession.statuses[item && item.key] === "hold"
+    );
+    var control = visitHoldControl(isHeld, index);
+    button.className = control.className;
+    button.setAttribute("onclick", control.action);
+    button.textContent = control.label;
+    button.setAttribute("aria-label", control.label);
+  }
+
   function renderCurrentCard(item, index, total) {
     var priceBits = [
       moneyLabel("보증금", item.deposit),
@@ -432,6 +457,12 @@
     ].filter(Boolean).join("");
 
     var typeLabel = String(item.type || "").trim();
+    var isHeld = Boolean(
+      activeSession &&
+      activeSession.statuses &&
+      activeSession.statuses[item.key] === "hold"
+    );
+    var holdControl = visitHoldControl(isHeld, index);
 
     return '<div class="aiv-current-summary-row">' +
         '<div class="aiv-current-top">' +
@@ -446,7 +477,8 @@
         '<div class="aiv-field-actions aiv-field-actions-inline" aria-label="현장 작업">' +
           '<button type="button" class="nav" onclick="JSAiVisitV6.openNavigation()">내비</button>' +
           '<button type="button" class="roadview" onclick="JSAiVisitV6.openRoadview()">로드뷰</button>' +
-          '<button type="button" class="hold" onclick="JSAiVisitV6.holdCurrent()">보류</button>' +
+          '<button type="button" class="' + holdControl.className + '" onclick="' +
+            holdControl.action + '">' + holdControl.label + '</button>' +
           '<button type="button" class="complete" onclick="JSAiVisitV6.requestComplete()">임장완료</button>' +
         '</div>' +
         '<div class="aiv-current-index">' + (index + 1) + '<small>/ ' + total + '</small></div>' +
@@ -493,6 +525,7 @@
       '<span class="aiv-progress-track"><i style="width:' + percent + '%"></i></span>';
     document.getElementById("aivRouteCount").textContent = items.length + "개";
     document.getElementById("aivCurrentCard").innerHTML = renderCurrentCard(current, activeSession.currentIndex, items.length);
+    syncDockHoldControl(current, activeSession.currentIndex);
     document.getElementById("aivRouteList").innerHTML = items.map(function (item, index) {
       var state = statuses[item.key] || "";
       var icon = state === "done" ? "✓" : state === "hold" ? "⏸" : index === activeSession.currentIndex ? "▶" : "";
@@ -1111,6 +1144,10 @@
     var item = currentItem();
     if (!item) return;
     activeSession.statuses = activeSession.statuses || {};
+    if (activeSession.statuses[item.key] === "hold") {
+      requestUnhold(activeSession.currentIndex);
+      return;
+    }
     activeSession.statuses[item.key] = "hold";
     var key = item.key;
     var currentPosition = activeSession.itemKeys.indexOf(key);
@@ -1236,6 +1273,9 @@
       if (!stored) return null;
       return { current: Number(stored.currentIndex || 0) + 1, total: (stored.itemKeys || []).length, updatedAt: stored.updatedAt || "" };
     }
+  };
+  window.JSAiVisitDiagnosticsV6433 = {
+    visitHoldControl: visitHoldControl
   };
 
   document.addEventListener("keydown", function (event) {
