@@ -1,12 +1,13 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.5";
+  var VERSION = "1.0.6";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
     "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
   var COLLECTOR_KEY_STORAGE = "js_daangn_collector_access_key_v1";
+  var POST_RETRY_DELAYS = [0, 1200, 3000, 6000];
 
   if (!/(^|\.)realty\.daangn\.com$/i.test(location.hostname)) {
     alert("당근부동산 지도에서 실행해 주세요.");
@@ -35,6 +36,7 @@
     pendingSelectionAt: 0,
     pendingOriginalClusterId: "",
     lastLocationClusterId: clusterIdFromUrl(location.href),
+    selectionChanged: false,
     job: null
   };
 
@@ -164,28 +166,39 @@
   }
 
   function handleMapMarkerClick(event) {
-    if (state.busy || !event || !event.target || panel.contains(event.target)) return;
-    var clickable = event.target.closest
-      ? event.target.closest('button,[role="button"],[aria-label="Map marker"]')
+    if (!event || !event.target || panel.contains(event.target)) return;
+    var marker = event.target.closest
+      ? event.target.closest('.maplibregl-marker,[aria-label="Map marker"]')
       : null;
-    if (!clickable) return;
-    var marker = clickable.matches && clickable.matches('[aria-label="Map marker"]')
-      ? clickable
-      : (clickable.closest ? clickable.closest('[aria-label="Map marker"]') : null);
-    var text = String(clickable.textContent || clickable.getAttribute("aria-label") || "")
+    if (!marker) return;
+    var clickable = event.target.closest
+      ? event.target.closest('button,[role="button"]')
+      : null;
+    if (!clickable || !marker.contains(clickable)) {
+      clickable = marker.querySelector
+        ? marker.querySelector('button,[role="button"]')
+        : null;
+    }
+    var textSource = clickable || marker;
+    var text = String(textSource.textContent || textSource.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
       .trim();
     var district = districtFromMarkerText(text);
-    var individualCluster = Boolean(marker && isClusterMarkerText(text));
+    var individualCluster = isClusterMarkerText(text);
     if (!district && !individualCluster) return;
 
     state.pendingDistrict = district;
     state.pendingSelectionType = district ? "district" : "cluster";
     state.pendingSelectionAt = Date.now();
     state.pendingOriginalClusterId = clusterIdFromUrl(location.href);
+    if (state.busy && state.job && state.job.status === "running") {
+      state.stopRequested = true;
+    }
     setStatus(
       district ? "대전 " + district + " 구클러스터 확인 중" : "개별 클러스터 확인 중",
-      "당근 지도가 선택 정보를 주소에 반영하는 중입니다. 잠시만 기다려 주세요."
+      state.busy
+        ? "현재 저장 묶음까지만 마친 뒤 새 선택으로 전환합니다."
+        : "당근 지도가 선택 정보를 주소에 반영하는 중입니다. 잠시만 기다려 주세요."
     );
     scheduleSelectionChecks();
   }
@@ -197,7 +210,6 @@
   }
 
   function syncSelectionFromLocation(force) {
-    if (state.busy) return;
     var clusterId = clusterIdFromUrl(location.href);
     if (!clusterId) return;
     var hintAge = Date.now() - Number(state.pendingSelectionAt || 0);
@@ -288,9 +300,18 @@
   }
 
   function captureSelectedCluster(url, district) {
-    if (!url || state.busy) return;
+    if (!url) return;
+    var changed = clusterIdFromUrl(url) !== clusterIdFromUrl(state.selectedUrl) ||
+      (district || "") !== (state.selectedDistrict || "");
+    if (!changed) return;
     state.selectedUrl = url;
     state.selectedDistrict = district || districtFromUrl(url);
+    state.selectionChanged = changed && Boolean(
+      state.job && state.job.url && state.job.url !== state.selectedUrl
+    );
+    if (state.selectionChanged && state.busy && state.job && state.job.status === "running") {
+      state.stopRequested = true;
+    }
     renderSelection();
   }
 
@@ -350,6 +371,8 @@
       ? clusterId.slice(0, 27) + "..."
       : clusterId;
     var rule = panel.querySelector("[data-role=rule]");
+    clearMetrics();
+    setProgress(0);
     if (!state.selectedUrl) {
       setStatus(
         "지도에서 구 또는 숫자 클러스터를 클릭하세요.",
@@ -359,7 +382,7 @@
       rule.textContent = "대전 5개 구 가운데 원하는 구 지도로 들어간 뒤 숫자 클러스터를 한 번 클릭하세요.";
       return;
     }
-    startButton.disabled = false;
+    startButton.disabled = state.busy;
     setStatus(
       district ? "대전 " + district + " 클러스터 선택 완료" : "개별 클러스터 선택 완료",
       district
@@ -379,12 +402,27 @@
       startButton.disabled = true;
       stopButton.disabled = false;
       stopButton.textContent = "안전중단";
+      if (
+        state.job &&
+        state.job.status !== "complete" &&
+        state.job.url &&
+        state.selectedUrl &&
+        state.job.url !== state.selectedUrl
+      ) {
+        setStatus(
+          "이전 수집을 안전중단하는 중입니다.",
+          "저장된 자료는 유지하고 새 클러스터로 전환합니다."
+        );
+        var pausedResult = await callServer("danggeunPauseJob", {});
+        state.job = pausedResult.job || state.job;
+      }
       var action = state.job && state.job.status === "paused" &&
         (!state.selectedUrl || state.job.url === state.selectedUrl)
         ? "danggeunResumeJob"
         : "danggeunStartJob";
       var result = await callServer(action, {url: state.selectedUrl});
       state.job = result.job || null;
+      state.selectionChanged = false;
       renderJob();
       state.busy = false;
       scheduleNextChunk();
@@ -407,11 +445,14 @@
     try {
       var result = await callServer("danggeunRunJobChunk", {});
       state.job = result.job || state.job;
-      renderJob();
       state.busy = false;
-      if (state.stopRequested) {
+      if (
+        state.stopRequested ||
+        (state.selectedUrl && state.job.url && state.selectedUrl !== state.job.url)
+      ) {
         await pauseNow();
       } else {
+        renderJob();
         scheduleNextChunk();
       }
     } catch (error) {
@@ -435,11 +476,21 @@
     try {
       var result = await callServer("danggeunPauseJob", {});
       state.job = result.job || state.job;
-      renderJob();
-      setStatus(
-        "당근 안전중단 완료",
-        "현재 저장 지점까지 보존했습니다. 같은 버튼을 다시 누르면 이어서 수집합니다."
-      );
+      state.stopRequested = false;
+      if (state.selectedUrl && state.job && state.job.url !== state.selectedUrl) {
+        state.selectionChanged = true;
+        renderSelection();
+        setStatus(
+          "새 클러스터 선택 완료",
+          "이전 작업은 안전하게 중단했습니다. 수집 시작을 누르면 새 선택을 수집합니다."
+        );
+      } else {
+        renderJob();
+        setStatus(
+          "당근 안전중단 완료",
+          "현재 저장 지점까지 보존했습니다. 같은 버튼을 다시 누르면 이어서 수집합니다."
+        );
+      }
     } catch (error) {
       showError(error);
     }
@@ -449,7 +500,17 @@
     try {
       var result = await callServer("danggeunJobStatus", {});
       state.job = result.job || null;
-      if (state.job) renderJob();
+      if (
+        state.job &&
+        state.selectedUrl &&
+        state.job.url &&
+        state.job.url !== state.selectedUrl
+      ) {
+        state.selectionChanged = true;
+        renderSelection();
+      } else if (state.job) {
+        renderJob();
+      }
     } catch (_) {}
   }
 
@@ -477,6 +538,14 @@
     stopButton.disabled = complete || paused || job.status !== "running";
   }
 
+  function clearMetrics() {
+    ["found","processed","remaining","inserted","review","duplicates","addressMissing","failed","page"]
+      .forEach(function (key) {
+        var node = panel.querySelector('[data-metric="' + key + '"]');
+        if (node) node.textContent = "0";
+      });
+  }
+
   function setStatus(title, detail) {
     statusElement.textContent = title || "";
     detailElement.textContent = detail || "";
@@ -490,9 +559,26 @@
 
   function showError(error) {
     state.busy = false;
+    if (state.job && state.job.status === "running") {
+      state.job.status = "paused";
+      state.job.message = "통신이 끊겨 화면에서 일시중단했습니다. 저장 지점은 서버에 보존됩니다.";
+    }
+    if (state.selectionChanged) {
+      renderSelection();
+      setStatus(
+        "새 클러스터 선택 완료",
+        "이전 연결 오류와 관계없이 새 선택을 시작할 수 있습니다."
+      );
+      return;
+    }
     startButton.disabled = false;
     stopButton.disabled = true;
-    setStatus("당근 수집 오류", String(error && error.message ? error.message : error));
+    startButton.textContent = state.job ? "이어서 수집" : "수집 시작";
+    setStatus(
+      "연결이 일시중단되었습니다.",
+      String(error && error.message ? error.message : error) +
+      "\n저장 지점은 유지됩니다. 이어서 수집을 누르면 계속합니다."
+    );
   }
 
   function isUnauthorizedError(error) {
@@ -512,13 +598,9 @@
       requestId: requestId,
       collectorKey: collectorKey
     });
-    await nativeFetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {"content-type": "text/plain;charset=utf-8"},
-      body: JSON.stringify(body)
-    });
     try {
+      var earlyResult = await postServerWithRetry(body, collectorKey);
+      if (earlyResult) return earlyResult;
       return await pollMutationStatus(requestId, collectorKey);
     } catch (error) {
       if (!authRetried && isUnauthorizedError(error)) {
@@ -533,9 +615,58 @@
     }
   }
 
-  function pollMutationStatus(requestId, collectorKey) {
+  async function postServerWithRetry(body, collectorKey) {
+    var lastError = null;
+    for (var attempt = 0; attempt < POST_RETRY_DELAYS.length; attempt += 1) {
+      if (POST_RETRY_DELAYS[attempt]) {
+        await delay(POST_RETRY_DELAYS[attempt]);
+      }
+      try {
+        await nativeFetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {"content-type": "text/plain;charset=utf-8"},
+          body: JSON.stringify(body)
+        });
+        return null;
+      } catch (error) {
+        lastError = error;
+        var existing = null;
+        try {
+          existing = await pollMutationStatus(
+            body.requestId,
+            collectorKey,
+            {maxAttempts: 3, initialDelay: 300, quiet: true}
+          );
+        } catch (probeError) {
+          var probeMessage = String(
+            probeError && probeError.message ? probeError.message : probeError
+          );
+          if (probeMessage !== "not-ready" && probeMessage !== "status-blocked") {
+            throw probeError;
+          }
+        }
+        if (existing) return existing;
+        if (attempt + 1 < POST_RETRY_DELAYS.length) {
+          setStatus(
+            "네트워크 연결을 자동 복구 중입니다.",
+            "저장 지점은 유지됩니다. 재연결 " +
+            (attempt + 1) + "/" + (POST_RETRY_DELAYS.length - 1)
+          );
+        }
+      }
+    }
+    throw new Error(
+      "서버 연결을 여러 번 시도했지만 복구하지 못했습니다. " +
+      (lastError && lastError.message ? lastError.message : "Failed to fetch")
+    );
+  }
+
+  function pollMutationStatus(requestId, collectorKey, options) {
+    options = options || {};
     return new Promise(function (resolve, reject) {
       var attempts = 0;
+      var maxAttempts = Number(options.maxAttempts) || 90;
       function check() {
         attempts += 1;
         var callbackName = "__jsDaangnStatus_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -549,23 +680,26 @@
             var result = payload.result || payload;
             if (result && result.ok === false) reject(new Error(result.message || "당근 수집 서버 오류"));
             else resolve(result);
-          } else if (attempts < 90) {
+          } else if (attempts < maxAttempts) {
             setTimeout(check, 900);
           } else {
-            reject(new Error("당근 수집 결과 확인 시간 초과"));
+            reject(new Error(options.quiet ? "not-ready" : "당근 수집 결과 확인 시간 초과"));
           }
         };
         timer = setTimeout(function () {
           delete window[callbackName];
           script.remove();
-          if (attempts < 90) setTimeout(check, 900);
-          else reject(new Error("당근 수집 결과 확인 시간 초과"));
+          if (attempts < maxAttempts) setTimeout(check, 900);
+          else reject(new Error(options.quiet ? "not-ready" : "당근 수집 결과 확인 시간 초과"));
         }, 3500);
         script.onerror = function () {
           clearTimeout(timer);
           delete window[callbackName];
           script.remove();
-          reject(new Error("당근 수집 결과 확인이 차단되었습니다."));
+          if (attempts < maxAttempts) setTimeout(check, 900);
+          else reject(new Error(
+            options.quiet ? "status-blocked" : "당근 수집 결과 확인이 일시적으로 차단되었습니다."
+          ));
         };
         script.src = APPS_SCRIPT_URL +
           "?action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
@@ -574,7 +708,13 @@
           "&_=" + Date.now();
         document.head.appendChild(script);
       }
-      setTimeout(check, 900);
+      setTimeout(check, Number(options.initialDelay) || 900);
+    });
+  }
+
+  function delay(milliseconds) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, milliseconds);
     });
   }
 })();
