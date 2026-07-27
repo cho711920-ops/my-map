@@ -7684,3 +7684,44 @@ body,
   }
 }
 
+/* v6.5.12 데스크톱·태블릿 매물카드 작업 버튼 높이 보정 (모바일 제외) */
+@media (min-width: 769px) {
+  .item-compact-actions-v650 {
+    min-height: 29px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 29px !important;
+    min-height: 29px !important;
+    line-height: 27px !important;
+  }
+}
+
+/* 터치 태블릿은 클릭 여유를 조금 더 남깁니다. */
+@media (min-width: 769px) and (pointer: coarse),
+       (min-width: 769px) and (hover: none) {
+  .item-compact-actions-v650 {
+    min-height: 34px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 34px !important;
+    min-height: 34px !important;
+    line-height: 32px !important;
+  }
+}
+
