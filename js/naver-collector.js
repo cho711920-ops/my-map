@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.0.0";
+  var VERSION = "5.0.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -26,7 +26,7 @@
     {name: "대덕구", cortarNo: "3023000000"}
   ];
   var APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
+    "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
   var FIN_NAVER_HOST = "fin.land.naver.com";
@@ -140,7 +140,8 @@
     buildFinDistrictRequest: buildFinDistrictRequest,
     collectFinDistrictRaw: collectFinDistrictRaw,
     discoverFinContext: discoverFinContext,
-    createEmptyDashboard: createEmptyDashboard
+    createEmptyDashboard: createEmptyDashboard,
+    finKrwToManwon: finKrwToManwon
   };
 
   function createPanel() {
@@ -1753,8 +1754,21 @@
     return clean(floor);
   }
 
+  function finKrwToManwon(value) {
+    if (value === "" || value == null) return "";
+    var number = typeof value === "number"
+      ? value
+      : Number(String(value).replace(/,/g, "").replace(/[^0-9.-]/g, ""));
+    if (!Number.isFinite(number)) return clean(value);
+    return Math.round(number / 1000) / 10;
+  }
+
   function normalize(article) {
     article = article && article.representativeArticleInfo || article || {};
+    var isFinPrice = !!(
+      article.priceInfo &&
+      typeof article.priceInfo === "object"
+    );
     var price = article.priceInfo || article.price || {};
     var address = article.address || {};
     var coordinates = address.coordinates || {};
@@ -1764,15 +1778,28 @@
     var articleNo = articleId(article);
     var tradeCode = clean(article.tradeType);
     var categoryCode = clean(article.realEstateType);
-    var deposit = article.dealOrWarrantPrc != null
-      ? article.dealOrWarrantPrc
-      : article.depositPrice != null
-        ? article.depositPrice
-        : price.warrantyPrice != null
+    var deposit = isFinPrice
+      ? finKrwToManwon(
+        price.warrantyPrice != null
           ? price.warrantyPrice
           : price.dealPrice != null
             ? price.dealPrice
-            : price.deposit;
+            : price.deposit
+      )
+      : article.dealOrWarrantPrc != null
+        ? article.dealOrWarrantPrc
+        : article.depositPrice != null
+          ? article.depositPrice
+          : price.deposit;
+    var monthly = isFinPrice
+      ? finKrwToManwon(
+        price.rentPrice != null ? price.rentPrice : price.monthly
+      )
+      : article.rentPrc != null
+        ? article.rentPrc
+        : article.monthlyPrice != null
+          ? article.monthlyPrice
+          : price.monthly;
     var areaSquareMeter =
       space.exclusiveSpace != null ? space.exclusiveSpace :
       space.contractSpace != null ? space.contractSpace :
@@ -1793,11 +1820,7 @@
         article.tradeTypeName || TRADE_TYPE_LABELS[tradeCode] || tradeCode
       ),
       deposit: clean(deposit),
-      monthly: clean(
-        article.rentPrc != null ? article.rentPrc :
-        article.monthlyPrice != null ? article.monthlyPrice :
-        price.rentPrice != null ? price.rentPrice : price.monthly
-      ),
+      monthly: clean(monthly),
       areaSquareMeter: areaSquareMeter,
       floorInfo: finFloorInfo(article),
       roomInfo: clean(

@@ -46,8 +46,8 @@ function makeArticle(index) {
       realEstateType: "D02",
       tradeType: "B2",
       priceInfo: {
-        warrantyPrice: 1000,
-        rentPrice: 80
+        warrantyPrice: 10000000,
+        rentPrice: 800000
       },
       spaceInfo: {
         exclusiveSpace: 49.5
@@ -173,7 +173,7 @@ vm.runInContext(source, context, {filename: collectorPath});
 (async () => {
   const api = window.__JS_NAVER_COLLECTOR__;
   assert(api, "collector API missing");
-  assert.strictEqual(api.version, "5.0.0");
+  assert.strictEqual(api.version, "5.0.1");
   assert.strictEqual(api.isFinNaver(), true);
 
   const filters = api.parseFinFilters(location.href);
@@ -213,6 +213,16 @@ vm.runInContext(source, context, {filename: collectorPath});
     normalized.sourceLink,
     "https://fin.land.naver.com/articles/7000000001"
   );
+  assert.strictEqual(api.finKrwToManwon(126000000), 12600);
+  assert.strictEqual(api.finKrwToManwon("9,300,000원"), 930);
+
+  const legacyNormalized = api.normalize({
+    articleNo: "1234",
+    dealOrWarrantPrc: 3000,
+    rentPrc: 250
+  });
+  assert.strictEqual(legacyNormalized.deposit, "3000");
+  assert.strictEqual(legacyNormalized.monthly, "250");
 
   assert(source.includes("left:50%;top:50%;transform:translate(-50%,-50%)"));
   assert(source.includes('data-metric="review"'));
