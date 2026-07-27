@@ -1,6 +1,7 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 const repo = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(repo, ...parts), "utf8");
@@ -115,5 +116,39 @@ assert(
     style.includes("right: calc(var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) + 14px) !important"),
   "tablet map tools must stay fully on the map side"
 );
+
+let openedRoadviewKey = "";
+let roadviewAlert = "";
+const operationsContext = {
+  window: {
+    openKakaoRoadview(encodedKey) {
+      openedRoadviewKey = decodeURIComponent(encodedKey);
+    }
+  },
+  allItems: [
+    {propertyId: "P-ROADVIEW-1", key: "기존매물|서구 테스트 1층"}
+  ],
+  document: {
+    addEventListener() {},
+    getElementById() { return null; }
+  },
+  sessionStorage: {
+    getItem() { return null; },
+    setItem() {}
+  },
+  setTimeout() {},
+  URLSearchParams,
+  fetch() {
+    return Promise.reject(new Error("unexpected request"));
+  },
+  alert(message) {
+    roadviewAlert = message;
+  },
+  console
+};
+vm.runInNewContext(operations, operationsContext);
+operationsContext.window.openReviewCandidateRoadview(encodeURIComponent("P-ROADVIEW-1"));
+assert.strictEqual(openedRoadviewKey, "기존매물|서구 테스트 1층", "review roadview must open the exact property");
+assert.strictEqual(roadviewAlert, "", "review roadview must not alert for a valid property");
 
 console.log("Map quick tools and compact review layout tests: OK");
