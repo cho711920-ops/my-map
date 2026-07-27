@@ -95,7 +95,7 @@ vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.5.0");
+assert.strictEqual(api.version, "1.6.0");
 assert(
   collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")
 );
@@ -104,6 +104,19 @@ assert(collectorSource.includes("주소·변환 제외"));
 assert(collectorSource.includes('data-action="stop"'));
 assert(collectorSource.includes("공실박스 2000개 이상 전체클러스터"));
 assert(collectorSource.includes("finalizeCollectionSession"));
+assert(collectorSource.includes("네트워크 연결을 자동으로 복구 중입니다."));
+assert(collectorSource.includes("저장 중단 지점부터 이어갑니다."));
+assert(collectorSource.includes("전송 묶음을 줄여 자동 복구 중입니다."));
+assert(collectorSource.includes("이전 오류 화면을 새 수집기로 복구했습니다."));
+assert(collectorSource.includes("window.fetch.__jsGongsilOriginal"));
+assert.strictEqual(
+  api.collectionSignature([
+    { externalId: "GB-100", values: ["상가", "서구 둔산동 1"] },
+    { externalId: "GB-200", values: ["상가", "서구 둔산동 2"] }
+  ]),
+  "2|GB-100|GB-200",
+  "resume signature must identify the actual first and last listings"
+);
 
 const importTotals = {
   received: 0,
