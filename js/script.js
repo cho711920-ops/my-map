@@ -1948,7 +1948,11 @@ function listDisplayValueV650(item, field) {
 
 function buildListElevatorIconV650() {
   return '<span class="item-elevator-v650" hidden title="건축물대장 엘리베이터 확인" aria-label="엘리베이터 있음">' +
-    '<span class="item-elevator-glyph-v651" aria-hidden="true">🛗</span>' +
+    '<svg class="item-elevator-glyph-v651" viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
+      '<rect x="1.75" y="1.75" width="16.5" height="16.5" rx="3"></rect>' +
+      '<path class="item-elevator-arrows-v660" d="M5 6.8 7.25 4.55 9.5 6.8M10.5 4.55l2.25 2.25L15 4.55"></path>' +
+      '<path class="item-elevator-doors-v660" d="M4.75 8.5h10.5v7.25H4.75zM10 8.5v7.25"></path>' +
+    '</svg>' +
   '</span>';
 }
 

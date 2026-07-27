@@ -1,11 +1,11 @@
 (function () {
   "use strict";
 
-  var LOCAL_CACHE_PREFIX = "js-building-register-v10:";
+  var LOCAL_CACHE_PREFIX = "js-building-register-v11:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-  var BADGE_CACHE_PREFIX = "js-building-badge-v2:";
+  var BADGE_CACHE_PREFIX = "js-building-badge-v3:";
   var BADGE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
   var BADGE_MAX_CONCURRENCY = 4;
   var BADGE_MAX_RETRIES = 2;

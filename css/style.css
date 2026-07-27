@@ -5996,12 +5996,25 @@ body,
 }
 
 .item-elevator-glyph-v651 {
-  display: inline-block;
-  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 1;
-  transform: translateY(.25px);
+  display: block;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+}
+
+.item-elevator-glyph-v651 > rect {
+  fill: #e8f2ff;
+  stroke: #2478e8;
+  stroke-width: 1.5;
+}
+
+.item-elevator-arrows-v660,
+.item-elevator-doors-v660 {
+  fill: none;
+  stroke: #1769c9;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .item-compact-head-v650 .item-reg-date {
