@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.1.1";
+  var VERSION = "5.2.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -166,48 +166,48 @@
       style.textContent =
         "#" + PANEL_ID + "{" +
         "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;" +
-        "width:min(720px,calc(100vw - 28px));max-height:calc(100vh - 28px);box-sizing:border-box;" +
+        "width:min(460px,calc(100vw - 24px));max-height:min(620px,calc(100vh - 24px));box-sizing:border-box;" +
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;" +
         "background:#fff;border:1px solid #cfe8d9;border-radius:16px;" +
         "box-shadow:0 24px 80px rgba(15,23,42,.32);overflow:auto;color:#172033}" +
         "#" + PANEL_ID + " *{box-sizing:border-box}" +
         "#" + PANEL_ID + " .jsn-head{display:flex;align-items:center;justify-content:space-between;" +
-        "padding:16px 18px;background:linear-gradient(135deg,#03c75a,#00a94f);color:#fff}" +
-        "#" + PANEL_ID + " .jsn-brand{display:flex;align-items:center;gap:11px}" +
-        "#" + PANEL_ID + " .jsn-logo{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;" +
-        "background:#fff;color:#03a94f;font-size:21px;font-weight:950}" +
-        "#" + PANEL_ID + " .jsn-title{font-size:18px;font-weight:900;letter-spacing:-.3px}" +
-        "#" + PANEL_ID + " .jsn-sub{font-size:11px;opacity:.88;margin-top:2px}" +
+        "padding:10px 12px;background:linear-gradient(135deg,#03c75a,#00a94f);color:#fff}" +
+        "#" + PANEL_ID + " .jsn-brand{display:flex;align-items:center;gap:8px}" +
+        "#" + PANEL_ID + " .jsn-logo{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;" +
+        "background:#fff;color:#03a94f;font-size:16px;font-weight:950}" +
+        "#" + PANEL_ID + " .jsn-title{font-size:15px;font-weight:900;letter-spacing:-.3px}" +
+        "#" + PANEL_ID + " .jsn-sub{font-size:10px;opacity:.88;margin-top:1px}" +
         "#" + PANEL_ID + " .jsn-version{font-size:10px;opacity:.8;margin-left:6px}" +
-        "#" + PANEL_ID + " .jsn-close{width:32px;height:32px;border:0;border-radius:9px;" +
-        "background:rgba(255,255,255,.18);color:#fff;font-size:22px;line-height:30px;cursor:pointer}" +
-        "#" + PANEL_ID + " .jsn-body{padding:16px;background:#f4f8f6}" +
-        "#" + PANEL_ID + " .jsn-card{padding:14px;background:#fff;border:1px solid #e0ebe5;border-radius:13px;" +
-        "box-shadow:0 4px 14px rgba(25,55,40,.05);margin-bottom:11px}" +
-        "#" + PANEL_ID + " .jsn-status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
-        "#" + PANEL_ID + " .jsn-status{font-size:17px;font-weight:900;line-height:1.45;color:#172033}" +
-        "#" + PANEL_ID + " .jsn-percent{font-size:20px;font-weight:950;color:#03a94f;white-space:nowrap}" +
-        "#" + PANEL_ID + " .jsn-detail{margin-top:7px;color:#667085;font-size:12px;line-height:1.55;" +
-        "white-space:pre-line;max-height:90px;overflow:auto}" +
-        "#" + PANEL_ID + " .jsn-progress{height:11px;margin-top:12px;border-radius:99px;" +
+        "#" + PANEL_ID + " .jsn-close{width:28px;height:28px;border:0;border-radius:8px;" +
+        "background:rgba(255,255,255,.18);color:#fff;font-size:19px;line-height:26px;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsn-body{padding:9px;background:#f4f8f6}" +
+        "#" + PANEL_ID + " .jsn-card{padding:9px;background:#fff;border:1px solid #e0ebe5;border-radius:10px;" +
+        "box-shadow:0 3px 10px rgba(25,55,40,.05);margin-bottom:7px}" +
+        "#" + PANEL_ID + " .jsn-status-line{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
+        "#" + PANEL_ID + " .jsn-status{font-size:14px;font-weight:900;line-height:1.35;color:#172033}" +
+        "#" + PANEL_ID + " .jsn-percent{font-size:16px;font-weight:950;color:#03a94f;white-space:nowrap}" +
+        "#" + PANEL_ID + " .jsn-detail{margin-top:5px;color:#667085;font-size:10.5px;line-height:1.4;" +
+        "white-space:pre-line;max-height:60px;overflow:auto}" +
+        "#" + PANEL_ID + " .jsn-progress{height:8px;margin-top:8px;border-radius:99px;" +
         "background:#e7efe9;overflow:hidden}" +
         "#" + PANEL_ID + " .jsn-progress>i{display:block;width:0;height:100%;background:linear-gradient(90deg,#27d572,#03a94f);transition:width .2s}" +
-        "#" + PANEL_ID + " .jsn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}" +
-        "#" + PANEL_ID + " .jsn-metric{padding:11px;background:#f5faf7;border-radius:11px;min-width:0}" +
-        "#" + PANEL_ID + " .jsn-metric span{display:block;font-size:11px;color:#718078;margin-bottom:5px}" +
-        "#" + PANEL_ID + " .jsn-metric b{font-size:18px;font-weight:900;color:#172033}" +
-        "#" + PANEL_ID + " .jsn-rule{padding:10px 11px;background:#eef9f3;" +
-        "border-radius:10px;color:#3d6250;font-size:11px;line-height:1.55}" +
-        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:11px}" +
-        "#" + PANEL_ID + " button.jsn-btn{height:46px;border-radius:11px;font-size:14px;font-weight:850;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}" +
+        "#" + PANEL_ID + " .jsn-metric{padding:7px;background:#f5faf7;border-radius:8px;min-width:0}" +
+        "#" + PANEL_ID + " .jsn-metric span{display:block;font-size:9.5px;color:#718078;margin-bottom:3px}" +
+        "#" + PANEL_ID + " .jsn-metric b{font-size:15px;font-weight:900;color:#172033}" +
+        "#" + PANEL_ID + " .jsn-rule{padding:7px 8px;background:#eef9f3;" +
+        "border-radius:8px;color:#3d6250;font-size:9.5px;line-height:1.4}" +
+        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-top:8px}" +
+        "#" + PANEL_ID + " button.jsn-btn{height:38px;border-radius:9px;font-size:12px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
         "#" + PANEL_ID + " .jsn-city{grid-column:1/-1;border:1px solid #1687e8;background:#eaf5ff;color:#0963b5}" +
         "#" + PANEL_ID + " .jsn-stop{grid-column:1/-1;border:1px solid #ef4444;background:#fff1f2;color:#be123c}" +
         "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled,#" + PANEL_ID + " .jsn-city:disabled,#" + PANEL_ID + " .jsn-stop:disabled{" +
         "cursor:not-allowed;background:#d2ded7;color:#f8faf9;border-color:#d2ded7}" +
-        "@media(max-width:640px){#" + PANEL_ID + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}" +
-        "#" + PANEL_ID + " .jsn-body{padding:11px}#" + PANEL_ID + " .jsn-grid{grid-template-columns:repeat(2,1fr)}}" ;
+        "@media(max-width:520px){#" + PANEL_ID + "{width:calc(100vw - 12px);max-height:calc(100vh - 12px)}" +
+        "#" + PANEL_ID + " .jsn-body{padding:7px}}" ;
       document.head.appendChild(style);
     }
 
@@ -229,7 +229,7 @@
           '<div class="jsn-detail" data-role="detail"></div>' +
         '</div>' +
         '<div class="jsn-card jsn-grid">' +
-          '<div class="jsn-metric"><span>찾은 매물</span><b data-metric="found">0</b></div>' +
+          '<div class="jsn-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsn-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
           '<div class="jsn-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
           '<div class="jsn-metric"><span>JS 신규</span><b data-metric="created">0</b></div>' +
@@ -772,12 +772,11 @@
 
     if (selected) {
       setStatus(
-        selected.name + " 수집 준비 완료",
-        (targetCount ? "표시 매물 " + formatNumber(targetCount) + "개 · " : "") +
-        "선택 구 전체 수집을 누르면 마지막 페이지까지 자동 확인하고 저장합니다."
+        selected.name + " 선택 클러스터 합계 " + formatNumber(targetCount) + "개",
+        "표시된 수량을 확인한 뒤 선택 구 전체 수집을 눌러주세요. 마지막 페이지까지 자동 확인하고 저장합니다."
       );
       saveButton.disabled = false;
-      saveButton.textContent = selected.name + " 전체 수집";
+      saveButton.textContent = (targetCount ? formatNumber(targetCount) + "개 " : "") + selected.name + " 전체 수집";
     } else {
       setStatus(
         "대전 5개 구 클러스터를 선택하세요.",
@@ -841,8 +840,8 @@
       return;
     }
     setStatus(
-      "클러스터 전체 " + count + "개 확인 완료",
-      "전체 페이지 확인이 끝났습니다. 저장 버튼을 누르면 시트1 기존 매물과 중복검사 후 저장합니다."
+      "선택 클러스터 합계 " + count + "개 확인 완료",
+      "전체 페이지 확인이 끝났습니다. 수량을 확인한 뒤 저장 버튼을 누르면 기존 매물과 중복검사 후 저장합니다."
     );
     saveButton.disabled = false;
     saveButton.textContent = "클러스터 전체 저장";

@@ -16,8 +16,9 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.0\.6"/);
+assert.match(collector, /VERSION = "1\.1\.0"/);
 assert.match(collector, /version === VERSION/);
+assert.match(collector, /width:min\(460px/);
 assert.match(collector, /stalePanel\.remove/);
 assert.match(collector, /__jsDaangnCollectorVersion !== VERSION/);
 assert.match(collector, /cluster_id/);
@@ -52,6 +53,7 @@ const districtFromMarkerText = loadFunction("districtFromMarkerText");
 const isClusterMarkerText = loadFunction("isClusterMarkerText");
 const clusterIdFromUrl = loadFunction("clusterIdFromUrl");
 const findClusterIdDeep = loadFunction("findClusterIdDeep");
+const markerCountFromText = loadFunction("markerCountFromText");
 
 assert.equal(districtFromMarkerText("동구 매물 541"), "동구");
 assert.equal(districtFromMarkerText("유성구매물 1,902"), "유성구");
@@ -60,6 +62,9 @@ assert.equal(isClusterMarkerText("516"), true);
 assert.equal(isClusterMarkerText("덕명동 매물 59"), true);
 assert.equal(isClusterMarkerText("엄사면 매물 9"), true);
 assert.equal(isClusterMarkerText("확대"), false);
+assert.equal(markerCountFromText("동구 매물 617"), 617);
+assert.equal(markerCountFromText("1,492"), 1492);
+assert.equal(markerCountFromText("확대"), 0);
 assert.equal(
   clusterIdFromUrl("https://realty.daangn.com/map/x?cluster_id=REGION%3A1112&mv=1"),
   "REGION:1112"

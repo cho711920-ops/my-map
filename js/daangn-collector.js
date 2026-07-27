@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.6";
+  var VERSION = "1.1.0";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -35,7 +35,9 @@
     pendingSelectionType: "",
     pendingSelectionAt: 0,
     pendingOriginalClusterId: "",
+    pendingSelectionCount: 0,
     lastLocationClusterId: clusterIdFromUrl(location.href),
+    selectedCount: 0,
     selectionChanged: false,
     job: null
   };
@@ -97,37 +99,36 @@
       style.id = STYLE_ID;
       style.textContent =
         "#" + PANEL_ID + "{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;" +
-        "width:min(720px,calc(100vw - 28px));max-height:calc(100vh - 28px);overflow:auto;box-sizing:border-box;" +
+        "width:min(460px,calc(100vw - 24px));max-height:min(620px,calc(100vh - 24px));overflow:auto;box-sizing:border-box;" +
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;background:#fff;" +
         "border:1px solid #ffd9c2;border-radius:16px;box-shadow:0 24px 80px rgba(35,25,18,.32);color:#172033}" +
         "#" + PANEL_ID + " *{box-sizing:border-box}" +
-        "#" + PANEL_ID + " .jsd-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;" +
+        "#" + PANEL_ID + " .jsd-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;" +
         "background:linear-gradient(135deg,#ff8a3d,#ff6f0f);color:#fff}" +
-        "#" + PANEL_ID + " .jsd-brand{display:flex;align-items:center;gap:11px}" +
-        "#" + PANEL_ID + " .jsd-logo{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;" +
-        "background:#fff;color:#ff6f0f;font-size:19px;font-weight:950}" +
-        "#" + PANEL_ID + " .jsd-title{font-size:18px;font-weight:900}.jsd-sub{font-size:11px;opacity:.9;margin-top:2px}" +
-        "#" + PANEL_ID + " .jsd-close{width:32px;height:32px;border:0;border-radius:9px;background:rgba(255,255,255,.18);" +
-        "color:#fff;font-size:22px;cursor:pointer}" +
-        "#" + PANEL_ID + " .jsd-body{padding:16px;background:#fff7f2}" +
-        "#" + PANEL_ID + " .jsd-card{padding:14px;background:#fff;border:1px solid #ffe1ce;border-radius:13px;" +
-        "box-shadow:0 4px 14px rgba(80,40,15,.05);margin-bottom:11px}" +
-        "#" + PANEL_ID + " .jsd-status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
-        "#" + PANEL_ID + " .jsd-status{font-size:17px;font-weight:900;line-height:1.45}" +
-        "#" + PANEL_ID + " .jsd-percent{font-size:20px;font-weight:950;color:#ff6f0f;white-space:nowrap}" +
-        "#" + PANEL_ID + " .jsd-detail{margin-top:7px;color:#667085;font-size:12px;line-height:1.55;white-space:pre-line}" +
-        "#" + PANEL_ID + " .jsd-progress{height:11px;margin-top:12px;border-radius:99px;background:#f5e5da;overflow:hidden}" +
+        "#" + PANEL_ID + " .jsd-brand{display:flex;align-items:center;gap:8px}" +
+        "#" + PANEL_ID + " .jsd-logo{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;" +
+        "background:#fff;color:#ff6f0f;font-size:15px;font-weight:950}" +
+        "#" + PANEL_ID + " .jsd-title{font-size:15px;font-weight:900}.jsd-sub{font-size:10px;opacity:.9;margin-top:1px}" +
+        "#" + PANEL_ID + " .jsd-close{width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.18);" +
+        "color:#fff;font-size:19px;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsd-body{padding:9px;background:#fff7f2}" +
+        "#" + PANEL_ID + " .jsd-card{padding:9px;background:#fff;border:1px solid #ffe1ce;border-radius:10px;" +
+        "box-shadow:0 3px 10px rgba(80,40,15,.05);margin-bottom:7px}" +
+        "#" + PANEL_ID + " .jsd-status-line{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
+        "#" + PANEL_ID + " .jsd-status{font-size:14px;font-weight:900;line-height:1.35}" +
+        "#" + PANEL_ID + " .jsd-percent{font-size:16px;font-weight:950;color:#ff6f0f;white-space:nowrap}" +
+        "#" + PANEL_ID + " .jsd-detail{margin-top:5px;color:#667085;font-size:10.5px;line-height:1.4;white-space:pre-line;max-height:60px;overflow:auto}" +
+        "#" + PANEL_ID + " .jsd-progress{height:8px;margin-top:8px;border-radius:99px;background:#f5e5da;overflow:hidden}" +
         "#" + PANEL_ID + " .jsd-progress>i{display:block;width:0;height:100%;background:linear-gradient(90deg,#ffad76,#ff6f0f);transition:width .2s}" +
-        "#" + PANEL_ID + " .jsd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}" +
-        "#" + PANEL_ID + " .jsd-metric{padding:11px;background:#fff7f2;border-radius:11px}.jsd-metric span{display:block;" +
-        "font-size:11px;color:#806f65;margin-bottom:5px}.jsd-metric b{font-size:18px;font-weight:900}" +
-        "#" + PANEL_ID + " .jsd-rule{padding:10px 11px;background:#fff2e9;border-radius:10px;color:#694836;font-size:11px;line-height:1.55}" +
-        "#" + PANEL_ID + " .jsd-actions{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:11px}" +
-        "#" + PANEL_ID + " .jsd-btn{height:46px;border-radius:11px;font-size:14px;font-weight:850;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}" +
+        "#" + PANEL_ID + " .jsd-metric{padding:7px;background:#fff7f2;border-radius:8px}.jsd-metric span{display:block;" +
+        "font-size:9.5px;color:#806f65;margin-bottom:3px}.jsd-metric b{font-size:15px;font-weight:900}" +
+        "#" + PANEL_ID + " .jsd-rule{padding:7px 8px;background:#fff2e9;border-radius:8px;color:#694836;font-size:9.5px;line-height:1.4}" +
+        "#" + PANEL_ID + " .jsd-actions{display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-top:8px}" +
+        "#" + PANEL_ID + " .jsd-btn{height:38px;border-radius:9px;font-size:12px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsd-start{border:0;background:#ff6f0f;color:#fff}.jsd-stop{border:1px solid #ef4444;background:#fff1f2;color:#be123c}" +
         "#" + PANEL_ID + " .jsd-btn:disabled{cursor:not-allowed;background:#ddd;color:#fff;border-color:#ddd}" +
-        "@media(max-width:640px){#" + PANEL_ID + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}" +
-        "#" + PANEL_ID + " .jsd-grid{grid-template-columns:repeat(2,1fr)}}" ;
+        "@media(max-width:520px){#" + PANEL_ID + "{width:calc(100vw - 12px);max-height:calc(100vh - 12px)}}" ;
       document.head.appendChild(style);
     }
     var element = document.createElement("section");
@@ -141,7 +142,7 @@
       '<div class="jsd-status" data-role="status"></div><div class="jsd-percent" data-role="percent">0%</div></div>' +
       '<div class="jsd-progress"><i data-role="progress-bar"></i></div><div class="jsd-detail" data-role="detail"></div></div>' +
       '<div class="jsd-card jsd-grid">' +
-      metric("found","찾은 매물") + metric("processed","처리 완료") + metric("remaining","남은 매물") +
+      metric("found","선택·찾은 매물") + metric("processed","처리 완료") + metric("remaining","남은 매물") +
       metric("inserted","신규·통합") + metric("review","검증대기") + metric("duplicates","기존 중복") +
       metric("addressMissing","주소 미확인") + metric("failed","조회 실패") + metric("page","목록 페이지") +
       '</div><div class="jsd-card"><div class="jsd-rule" data-role="rule"></div>' +
@@ -191,6 +192,7 @@
     state.pendingSelectionType = district ? "district" : "cluster";
     state.pendingSelectionAt = Date.now();
     state.pendingOriginalClusterId = clusterIdFromUrl(location.href);
+    state.pendingSelectionCount = markerCountFromText(text);
     if (state.busy && state.job && state.job.status === "running") {
       state.stopRequested = true;
     }
@@ -236,6 +238,7 @@
       state.pendingSelectionType = "";
       state.pendingSelectionAt = 0;
       state.pendingOriginalClusterId = "";
+      state.pendingSelectionCount = 0;
     }
   }
 
@@ -301,11 +304,19 @@
 
   function captureSelectedCluster(url, district) {
     if (!url) return;
+    var pendingCount = Number(state.pendingSelectionCount) || 0;
     var changed = clusterIdFromUrl(url) !== clusterIdFromUrl(state.selectedUrl) ||
       (district || "") !== (state.selectedDistrict || "");
-    if (!changed) return;
+    if (!changed) {
+      if (pendingCount && pendingCount !== state.selectedCount) {
+        state.selectedCount = pendingCount;
+        renderSelection();
+      }
+      return;
+    }
     state.selectedUrl = url;
     state.selectedDistrict = district || districtFromUrl(url);
+    state.selectedCount = pendingCount;
     state.selectionChanged = changed && Boolean(
       state.job && state.job.url && state.job.url !== state.selectedUrl
     );
@@ -354,6 +365,13 @@
       /(?:^|\s)매물\s*[\d,]+(?:개)?$/.test(text);
   }
 
+  function markerCountFromText(text) {
+    text = String(text || "").replace(/\s+/g, " ").trim();
+    var match = text.match(/(?:^|\s)매물\s*([\d,]+)(?:개)?$/) ||
+      text.match(/^([\d,]+)$/);
+    return match ? Number(match[1].replace(/,/g, "")) || 0 : 0;
+  }
+
   function districtFromUrl(url) {
     var text = "";
     try { text = decodeURIComponent(String(url || "")); } catch (_) { text = String(url || ""); }
@@ -370,9 +388,14 @@
     var clusterLabel = clusterId.length > 30
       ? clusterId.slice(0, 27) + "..."
       : clusterId;
+    var selectedCount = Number(state.selectedCount) || 0;
     var rule = panel.querySelector("[data-role=rule]");
     clearMetrics();
     setProgress(0);
+    if (selectedCount) {
+      setMetric("found", selectedCount);
+      setMetric("remaining", selectedCount);
+    }
     if (!state.selectedUrl) {
       setStatus(
         "지도에서 구 또는 숫자 클러스터를 클릭하세요.",
@@ -386,9 +409,14 @@
     setStatus(
       district ? "대전 " + district + " 클러스터 선택 완료" : "개별 클러스터 선택 완료",
       district
-        ? "선택번호 " + clusterLabel + " · 이 구 전체 범위로 수집하고, 오류 없이 끝난 경우만 완전수집으로 인정합니다."
-        : "선택번호 " + clusterLabel + " · 작은 클러스터는 안전을 위해 완전수집으로 인정하지 않습니다."
+        ? (selectedCount ? "선택 매물 " + selectedCount.toLocaleString("ko-KR") + "개 · " : "") +
+          "선택번호 " + clusterLabel + " · 수량을 확인한 뒤 수집 시작을 눌러주세요."
+        : (selectedCount ? "선택 매물 " + selectedCount.toLocaleString("ko-KR") + "개 · " : "") +
+          "선택번호 " + clusterLabel + " · 수량을 확인한 뒤 수집 시작을 눌러주세요."
     );
+    startButton.textContent = selectedCount
+      ? selectedCount.toLocaleString("ko-KR") + "개 수집 시작"
+      : "수집 시작";
     rule.textContent =
       "저장: 기존 통합 중복검사 사용 · 101호와 102호는 별도 · 당근 링크 최우선 유지 · " +
       (district ? district + " 완전수집 가능" : "개별클러스터 완전수집 제외");
@@ -544,6 +572,11 @@
         var node = panel.querySelector('[data-metric="' + key + '"]');
         if (node) node.textContent = "0";
       });
+  }
+
+  function setMetric(key, value) {
+    var node = panel.querySelector('[data-metric="' + key + '"]');
+    if (node) node.textContent = Number(value || 0).toLocaleString("ko-KR");
   }
 
   function setStatus(title, detail) {

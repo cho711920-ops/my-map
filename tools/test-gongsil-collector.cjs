@@ -95,15 +95,18 @@ vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.6.0");
+assert.strictEqual(api.version, "1.7.0");
 assert(
   collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")
 );
+assert(collectorSource.includes("width:min(460px"));
 assert(collectorSource.includes('data-metric="review"'));
 assert(collectorSource.includes("주소·변환 제외"));
 assert(collectorSource.includes('data-action="stop"'));
 assert(collectorSource.includes("공실박스 2000개 이상 전체클러스터"));
 assert(collectorSource.includes("finalizeCollectionSession"));
+assert(collectorSource.includes("observedSourceIds"));
+assert(!collectorSource.includes("rejected.length === 0"));
 assert(collectorSource.includes("네트워크 연결을 자동으로 복구 중입니다."));
 assert(collectorSource.includes("저장 중단 지점부터 이어갑니다."));
 assert(collectorSource.includes("전송 묶음을 줄여 자동 복구 중입니다."));
@@ -116,6 +119,17 @@ assert.strictEqual(
   ]),
   "2|GB-100|GB-200",
   "resume signature must identify the actual first and last listings"
+);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(api.observedSourceIds([
+    { Bfidx: "GB-A" },
+    { bfidx: "GB-B" },
+    { BfIdx: "GB-A" },
+    { id: "GB-C" },
+    {}
+  ]))),
+  ["GB-A", "GB-B", "GB-C"],
+  "all visible source IDs must be retained for safe full-collection reconciliation"
 );
 
 const importTotals = {

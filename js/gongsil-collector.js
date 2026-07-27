@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.6.0";
+  var VERSION = "1.7.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -37,8 +37,6 @@
 
     try {
       migratedCapture = window.__JS_GONGSIL_COLLECTOR__.getCapture();
-      migratedTransformItem =
-        window.__JS_GONGSIL_COLLECTOR__.transformItem || null;
     } catch (_) {}
     if (window.fetch && window.fetch.__jsGongsilOriginal) {
       window.fetch = window.fetch.__jsGongsilOriginal;
@@ -78,8 +76,8 @@
     showCapture(state.capture);
     setStatus(
       "이전 오류 화면을 새 수집기로 복구했습니다.",
-      "선택했던 클러스터와 상세조회 캐시를 이어받았습니다.\n" +
-      "아래 버튼을 누르면 저장된 지점부터 계속합니다."
+      "선택했던 클러스터를 이어받았습니다. 최신 변환 규칙으로 다시 확인합니다.\n" +
+      "수량을 확인한 뒤 아래 버튼을 누르면 계속합니다."
     );
   } else {
     setStatus(
@@ -119,6 +117,7 @@
     loadAllCapturedItems: loadAllCapturedItems,
     addImportResult: addImportResult,
     collectionSignature: collectionSignature,
+    observedSourceIds: observedSourceIds,
     getPendingSave: function () {
       return state.pendingSave;
     }
@@ -152,48 +151,48 @@
       style.textContent =
         "#" + PANEL_ID + "{" +
         "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;" +
-        "width:min(720px,calc(100vw - 28px));max-height:calc(100vh - 28px);box-sizing:border-box;" +
+        "width:min(460px,calc(100vw - 24px));max-height:min(620px,calc(100vh - 24px));box-sizing:border-box;" +
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;" +
         "background:#fff;border:1px solid #d7e3f4;border-radius:16px;" +
         "box-shadow:0 24px 80px rgba(15,23,42,.32);overflow:auto;color:#172033}" +
         "#" + PANEL_ID + " *{box-sizing:border-box}" +
         "#" + PANEL_ID + " .jsg-head{display:flex;align-items:center;justify-content:space-between;" +
-        "padding:16px 18px;background:linear-gradient(135deg,#1677ff,#075fe4);color:#fff}" +
-        "#" + PANEL_ID + " .jsg-brand{display:flex;align-items:center;gap:11px}" +
-        "#" + PANEL_ID + " .jsg-logo{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;" +
-        "background:#fff;color:#1268e8;font-size:20px;font-weight:950}" +
-        "#" + PANEL_ID + " .jsg-title{font-size:18px;font-weight:900;letter-spacing:-.3px}" +
-        "#" + PANEL_ID + " .jsg-sub{font-size:11px;opacity:.88;margin-top:2px}" +
+        "padding:10px 12px;background:linear-gradient(135deg,#1677ff,#075fe4);color:#fff}" +
+        "#" + PANEL_ID + " .jsg-brand{display:flex;align-items:center;gap:8px}" +
+        "#" + PANEL_ID + " .jsg-logo{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;" +
+        "background:#fff;color:#1268e8;font-size:16px;font-weight:950}" +
+        "#" + PANEL_ID + " .jsg-title{font-size:15px;font-weight:900;letter-spacing:-.3px}" +
+        "#" + PANEL_ID + " .jsg-sub{font-size:10px;opacity:.88;margin-top:1px}" +
         "#" + PANEL_ID + " .jsg-version{font-size:10px;opacity:.8;margin-left:6px}" +
-        "#" + PANEL_ID + " .jsg-close{width:32px;height:32px;border:0;border-radius:9px;" +
-        "background:rgba(255,255,255,.16);color:#fff;font-size:22px;line-height:30px;cursor:pointer}" +
-        "#" + PANEL_ID + " .jsg-body{padding:16px;background:#f4f7fc}" +
-        "#" + PANEL_ID + " .jsg-card{padding:14px;background:#fff;border:1px solid #dee7f4;border-radius:13px;" +
-        "box-shadow:0 4px 14px rgba(25,55,90,.05);margin-bottom:11px}" +
-        "#" + PANEL_ID + " .jsg-status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
-        "#" + PANEL_ID + " .jsg-status{font-size:17px;font-weight:900;line-height:1.45;color:#172033}" +
-        "#" + PANEL_ID + " .jsg-percent{font-size:20px;font-weight:950;color:#1268e8;white-space:nowrap}" +
-        "#" + PANEL_ID + " .jsg-detail{margin-top:7px;color:#667085;font-size:12px;line-height:1.55;" +
-        "white-space:pre-line;max-height:90px;overflow:auto}" +
-        "#" + PANEL_ID + " .jsg-progress{height:11px;margin-top:12px;border-radius:99px;" +
+        "#" + PANEL_ID + " .jsg-close{width:28px;height:28px;border:0;border-radius:8px;" +
+        "background:rgba(255,255,255,.16);color:#fff;font-size:19px;line-height:26px;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsg-body{padding:9px;background:#f4f7fc}" +
+        "#" + PANEL_ID + " .jsg-card{padding:9px;background:#fff;border:1px solid #dee7f4;border-radius:10px;" +
+        "box-shadow:0 3px 10px rgba(25,55,90,.05);margin-bottom:7px}" +
+        "#" + PANEL_ID + " .jsg-status-line{display:flex;align-items:center;justify-content:space-between;gap:8px}" +
+        "#" + PANEL_ID + " .jsg-status{font-size:14px;font-weight:900;line-height:1.35;color:#172033}" +
+        "#" + PANEL_ID + " .jsg-percent{font-size:16px;font-weight:950;color:#1268e8;white-space:nowrap}" +
+        "#" + PANEL_ID + " .jsg-detail{margin-top:5px;color:#667085;font-size:10.5px;line-height:1.4;" +
+        "white-space:pre-line;max-height:60px;overflow:auto}" +
+        "#" + PANEL_ID + " .jsg-progress{height:8px;margin-top:8px;border-radius:99px;" +
         "background:#e4ebf6;overflow:hidden}" +
         "#" + PANEL_ID + " .jsg-progress>i{display:block;width:0;height:100%;" +
         "background:linear-gradient(90deg,#4d98ff,#1268e8);transition:width .2s}" +
-        "#" + PANEL_ID + " .jsg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}" +
-        "#" + PANEL_ID + " .jsg-metric{padding:11px;background:#f3f7fd;border-radius:11px;min-width:0}" +
-        "#" + PANEL_ID + " .jsg-metric span{display:block;font-size:11px;color:#728198;margin-bottom:5px}" +
-        "#" + PANEL_ID + " .jsg-metric b{font-size:18px;font-weight:900;color:#172033}" +
-        "#" + PANEL_ID + " .jsg-rule{padding:10px 11px;background:#eef4fd;" +
-        "border-radius:10px;color:#3e536f;font-size:11px;line-height:1.55}" +
-        "#" + PANEL_ID + " .jsg-actions{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:12px}" +
-        "#" + PANEL_ID + " .jsg-save{width:100%;height:46px;border:0;border-radius:11px;" +
-        "font-size:15px;font-weight:800;color:#fff;background:#1677ff;cursor:pointer}" +
-        "#" + PANEL_ID + " .jsg-stop{height:46px;border:1px solid #ef4444;border-radius:11px;" +
-        "font-size:14px;font-weight:850;color:#be123c;background:#fff1f2;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}" +
+        "#" + PANEL_ID + " .jsg-metric{padding:7px;background:#f3f7fd;border-radius:8px;min-width:0}" +
+        "#" + PANEL_ID + " .jsg-metric span{display:block;font-size:9.5px;color:#728198;margin-bottom:3px}" +
+        "#" + PANEL_ID + " .jsg-metric b{font-size:15px;font-weight:900;color:#172033}" +
+        "#" + PANEL_ID + " .jsg-rule{padding:7px 8px;background:#eef4fd;" +
+        "border-radius:8px;color:#3e536f;font-size:9.5px;line-height:1.4}" +
+        "#" + PANEL_ID + " .jsg-actions{display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-top:8px}" +
+        "#" + PANEL_ID + " .jsg-save{width:100%;height:38px;border:0;border-radius:9px;" +
+        "font-size:12px;font-weight:800;color:#fff;background:#1677ff;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsg-stop{height:38px;border:1px solid #ef4444;border-radius:9px;" +
+        "font-size:12px;font-weight:850;color:#be123c;background:#fff1f2;cursor:pointer}" +
         "#" + PANEL_ID + " .jsg-save:disabled{cursor:not-allowed;background:#c7d2e3;color:#f7f9fc}" +
         "#" + PANEL_ID + " .jsg-stop:disabled{cursor:not-allowed;border-color:#d8dee8;color:#9aa4b2;background:#f2f4f7}" +
-        "@media(max-width:640px){#" + PANEL_ID + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}" +
-        "#" + PANEL_ID + " .jsg-body{padding:11px}#" + PANEL_ID + " .jsg-grid{grid-template-columns:repeat(2,1fr)}}" ;
+        "@media(max-width:520px){#" + PANEL_ID + "{width:calc(100vw - 12px);max-height:calc(100vh - 12px)}" +
+        "#" + PANEL_ID + " .jsg-body{padding:7px}}" ;
       document.head.appendChild(style);
     }
 
@@ -215,7 +214,7 @@
           '<div class="jsg-detail" data-role="detail"></div>' +
         '</div>' +
         '<div class="jsg-card jsg-grid">' +
-          '<div class="jsg-metric"><span>찾은 매물</span><b data-metric="found">0</b></div>' +
+          '<div class="jsg-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsg-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
           '<div class="jsg-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
           '<div class="jsg-metric"><span>JS 신규</span><b data-metric="created">0</b></div>' +
@@ -391,10 +390,10 @@
       : "";
 
     setStatus(
-      "클러스터를 확인했습니다.",
-      countText + " · 화면 목록 " + items.length + "개" + limitText +
+      "선택 클러스터 합계 " + foundCount.toLocaleString("ko-KR") + "개",
+      countText + " · 현재 화면 " + items.length + "개" + limitText +
       accumulationText +
-      "\n아래 버튼을 누르면 전체 목록과 전화번호를 저장합니다."
+      "\n수량을 확인한 뒤 아래 수집 버튼을 눌러주세요."
     );
     updateDashboard({
       found: foundCount,
@@ -538,9 +537,10 @@
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
         complete: selectedCount >= 2000 &&
-          items.length === selectedCount &&
-          rejected.length === 0,
-        found: items.length
+          items.length === selectedCount,
+        found: items.length,
+        rejectedCount: rejected.length,
+        observedSourceIds: observedSourceIds(items)
       };
       state.pendingSave = {
         records: transformed,
@@ -1686,6 +1686,15 @@
     );
   }
 
+  function observedSourceIds(items) {
+    var seen = Object.create(null);
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      var id = text(pick(item || {}, ["Bfidx", "bfidx", "BfIdx", "id"]));
+      if (id) seen[id] = true;
+    });
+    return Object.keys(seen);
+  }
+
   function collectionSignature(records) {
     records = Array.isArray(records) ? records : [];
     return [
@@ -1775,10 +1784,16 @@
       source: "공실박스",
       complete: Boolean(complete),
       stopped: Boolean(stopped),
+      observedSourceIds: Array.isArray(metadata.observedSourceIds)
+        ? metadata.observedSourceIds
+        : [],
       note: stopped
         ? "사용자 안전중단 · 저장된 묶음 보존"
         : (complete
-          ? "2000개 이상 전체클러스터 완전수집 완료"
+          ? "2000개 이상 전체클러스터 완전수집 완료" +
+            (Number(metadata.rejectedCount || 0)
+              ? " · 변환 제외 " + Number(metadata.rejectedCount) + "개 노출ID 보호"
+              : "")
           : "선택클러스터 수집 완료")
     }, {
       label: "수집 완료 상태 저장"
