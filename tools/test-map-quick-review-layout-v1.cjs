@@ -81,7 +81,9 @@ assert(
   "review-item-compact",
   "review-item-checkbox",
   "toggleReviewGroupSelection",
-  "applyReviewBatch"
+  "applyReviewBatch",
+  "openReviewCandidateRoadview",
+  "기존매물 카카오 로드뷰"
 ].forEach((needle) => assert(operations.includes(needle), `review UI is missing ${needle}`));
 
 assert(
@@ -91,6 +93,11 @@ assert(
 );
 assert(operationsCss.includes(".review-new-list{min-height:0"), "scrollable new-property list is missing");
 assert(operationsCss.includes("min-height:61px"), "compact review rows are missing");
+assert(
+  operationsCss.includes(".review-candidate-actions") &&
+    operationsCss.includes("button.roadview"),
+  "existing-property roadview action styling is missing"
+);
 assert(
   operationsCss.includes("grid-template-columns:repeat(2,minmax(0,1fr))") &&
     operationsCss.includes("min-height:62px"),

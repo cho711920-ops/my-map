@@ -218,6 +218,7 @@
         '<small>빨간 표시가 현재 JS매물현황에 등록된 매물입니다.</small>' +
       '</header><div class="review-existing-list">' +
       (candidates.length ? candidates.map(function(candidate) {
+        var encodedPropertyId = encodeURIComponent(text(candidate.propertyId));
         return '<article class="review-candidate review-candidate-compact">' +
           '<div class="review-compact-main"><header><h4>' +
             escape(candidate.buildingName || "기존 대표매물") +
@@ -225,8 +226,12 @@
           '<p>' + escape(candidate.address) + ' ' + escape(candidate.room) +
           (candidate.memo ? ' · ' + escape(candidate.memo) : '') + '</p></div>' +
           '<div class="review-compact-values">' + compactValues(candidate) + '</div>' +
-          '<button type="button" onclick="openPropertyTimeline(\'' +
-            escape(candidate.propertyId) + '\')">변경이력</button></article>';
+          '<div class="review-candidate-actions">' +
+            '<button type="button" class="roadview" title="기존매물 카카오 로드뷰" ' +
+              'onclick="openReviewCandidateRoadview(\'' + encodedPropertyId + '\')">로드뷰</button>' +
+            '<button type="button" onclick="openPropertyTimeline(\'' +
+              escape(candidate.propertyId) + '\')">변경이력</button>' +
+          '</div></article>';
       }).join("") : '<article class="review-candidate review-candidate-empty"><h4>연결된 기존 매물 없음</h4>' +
         '<p>비교할 기존 매물이 없으므로 별도 신규등록이 권장됩니다.</p></article>') +
       '</div></section>' +
@@ -551,6 +556,24 @@
   window.closePropertyTimeline = function() {
     var modal = document.getElementById("propertyTimelineModal");
     if (modal) modal.hidden = true;
+  };
+  window.openReviewCandidateRoadview = function(encodedPropertyId) {
+    var propertyId = decodeURIComponent(text(encodedPropertyId));
+    var items = typeof allItems !== "undefined" && Array.isArray(allItems) ? allItems : [];
+    var matches = items.filter(function(item) {
+      return text(item && item.propertyId) === propertyId;
+    });
+    if (matches.length !== 1) {
+      alert(matches.length
+        ? "같은 매물ID가 여러 개여서 로드뷰 대상을 특정하지 못했습니다."
+        : "기존매물의 지도 좌표를 찾지 못했습니다. 메인 지도를 새로고침한 뒤 다시 시도해 주세요.");
+      return;
+    }
+    if (typeof window.openKakaoRoadview !== "function") {
+      alert("로드뷰 기능을 불러오지 못했습니다.");
+      return;
+    }
+    window.openKakaoRoadview(encodeURIComponent(matches[0].key));
   };
   document.addEventListener("keydown", function(event) {
     if (extraState.tab !== "reviews" || !document.getElementById("operationsCenter").classList.contains("open")) return;

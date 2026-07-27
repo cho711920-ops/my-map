@@ -39,7 +39,9 @@
 .review-candidate-compact{display:grid;grid-template-columns:minmax(165px,1.1fr) minmax(310px,1.8fr) auto;align-items:center;gap:9px;padding:8px 9px!important;border-color:#f0b2b2!important;background:#fff!important}
 .review-candidate-compact header{align-items:center}.review-candidate-compact h4{color:#9f1717;font-size:13px}
 .review-candidate-compact p{margin:3px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.review-candidate-compact>button{min-height:30px!important;padding:0 9px!important;font-size:10px}
+.review-candidate-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px}
+.review-candidate-actions button{min-height:30px!important;padding:0 9px!important;font-size:10px;white-space:nowrap}
+.review-candidate-actions button.roadview{border-color:#83aee5;background:#edf6ff;color:#075fbd}
 .review-candidate-empty{grid-column:1/-1;padding:10px!important;border-color:#efb4b4!important;background:#fff!important}
 .review-candidate-empty h4,.review-candidate-empty p{margin:0}.review-candidate-empty p{margin-top:3px}
 .review-new-panel{display:flex;min-height:0;flex:1 1 auto;flex-direction:column;margin-top:9px;padding:9px;border:1px solid #dce6f1;border-radius:13px;background:#f8fbff}
@@ -113,7 +115,7 @@
 .review-existing-badge,.review-new-badge{font-size:11px}
 .review-candidate-compact h4{font-size:14px}
 .review-candidate-compact p{font-size:11.5px}
-.review-candidate-compact>button{font-size:11px}
+.review-candidate-actions button{font-size:11px}
 .review-compact-title strong{font-size:13px}
 .review-compact-title em{font-size:10px}
 .review-compact-address{font-size:12px}
@@ -216,7 +218,7 @@
   }
   #operationsReviewsPanel .review-candidate-compact h4{font-size:12px}
   #operationsReviewsPanel .review-candidate-compact p{font-size:10px}
-  #operationsReviewsPanel .review-candidate-compact>button{
+  #operationsReviewsPanel .review-candidate-actions button{
     min-height:27px!important;
     font-size:9.5px;
   }
