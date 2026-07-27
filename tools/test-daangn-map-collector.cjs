@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.0\.4"/);
+assert.match(collector, /VERSION = "1\.0\.5"/);
 assert.match(collector, /version === VERSION/);
 assert.match(collector, /stalePanel\.remove/);
 assert.match(collector, /__jsDaangnCollectorVersion !== VERSION/);
@@ -32,6 +32,9 @@ assert.match(collector, /button,\[role="button"\],\[aria-label="Map marker"\]/);
 assert.match(collector, /danggeunStartJob/);
 assert.match(collector, /danggeunRunJobChunk/);
 assert.match(collector, /danggeunPauseJob/);
+assert.match(collector, /isUnauthorizedError/);
+assert.match(collector, /clearCollectorKey/);
+assert.match(collector, /저장된 인증값이 만료되어 한 번만 다시 입력/);
 assert.match(collector, /안전중단/);
 assert.match(collector, /완전수집/);
 assert.match(collector, /101호와 102호는 별도/);

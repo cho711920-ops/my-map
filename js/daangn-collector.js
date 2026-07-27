@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.4";
+  var VERSION = "1.0.5";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -495,7 +495,16 @@
     setStatus("당근 수집 오류", String(error && error.message ? error.message : error));
   }
 
-  async function callServer(action, values) {
+  function isUnauthorizedError(error) {
+    return String(error && error.message ? error.message : error)
+      .indexOf("승인되지 않은 요청") !== -1;
+  }
+
+  function clearCollectorKey() {
+    try { localStorage.removeItem(COLLECTOR_KEY_STORAGE); } catch (_) {}
+  }
+
+  async function callServer(action, values, authRetried) {
     var collectorKey = getCollectorKey();
     var requestId = "daangn-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
     var body = Object.assign({}, values || {}, {
@@ -509,7 +518,19 @@
       headers: {"content-type": "text/plain;charset=utf-8"},
       body: JSON.stringify(body)
     });
-    return pollMutationStatus(requestId, collectorKey);
+    try {
+      return await pollMutationStatus(requestId, collectorKey);
+    } catch (error) {
+      if (!authRetried && isUnauthorizedError(error)) {
+        clearCollectorKey();
+        setStatus(
+          "당근 수집기 인증을 다시 확인합니다.",
+          "저장된 인증값이 만료되어 한 번만 다시 입력한 뒤 자동으로 이어갑니다."
+        );
+        return callServer(action, values, true);
+      }
+      throw error;
+    }
   }
 
   function pollMutationStatus(requestId, collectorKey) {

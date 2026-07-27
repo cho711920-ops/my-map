@@ -173,7 +173,7 @@ vm.runInContext(source, context, {filename: collectorPath});
 (async () => {
   const api = window.__JS_NAVER_COLLECTOR__;
   assert(api, "collector API missing");
-  assert.strictEqual(api.version, "5.1.0");
+  assert.strictEqual(api.version, "5.1.1");
   assert.strictEqual(api.isFinNaver(), true);
 
   const filters = api.parseFinFilters(location.href);
@@ -198,6 +198,38 @@ vm.runInContext(source, context, {filename: collectorPath});
   assert.strictEqual(requestBodies[2].articlePagingRequest.lastInfo[0].cursor, 60);
   assert.strictEqual(requestBodies[1].articlePagingRequest.seed, "seed-1");
 
+  requestBodies.length = 0;
+  const clusterFirstBody = api.buildFinDistrictRequest(district, {});
+  const clusterFirstResponse = await fakeFetch(
+    "/front-api/v1/article/legalDivisionArticleList",
+    {
+      method: "POST",
+      body: JSON.stringify(clusterFirstBody)
+    }
+  );
+  const clusterFirstJson = await clusterFirstResponse.json();
+  const capturedClusterArticles = clusterFirstJson.result.list.map(
+    (item) => item.representativeArticleInfo
+  );
+  const capturedClusterRaw = await api.collectAll({
+    articles: capturedClusterArticles,
+    json: clusterFirstJson,
+    responseUrl:
+      "https://fin.land.naver.com/front-api/v1/article/legalDivisionArticleList",
+    expected: 65,
+    requestOptions: {
+      method: "POST",
+      credentials: "include",
+      headers: {"content-type": "application/json"},
+      requestBody: clusterFirstBody
+    }
+  });
+  assert.strictEqual(capturedClusterRaw.length, 65);
+  assert.strictEqual(requestBodies.length, 3);
+  assert.strictEqual(requestBodies[1].articlePagingRequest.lastInfo[0].cursor, 30);
+  assert.strictEqual(requestBodies[2].articlePagingRequest.lastInfo[0].cursor, 60);
+  assert.strictEqual(requestBodies[1].articlePagingRequest.seed, "seed-1");
+
   const normalized = api.normalize(allArticles[0].representativeArticleInfo);
   assert.strictEqual(normalized.articleNo, "7000000001");
   assert.strictEqual(normalized.buildingName, "JS빌딩");
@@ -215,6 +247,19 @@ vm.runInContext(source, context, {filename: collectorPath});
   );
   assert.strictEqual(api.finKrwToManwon(126000000), 12600);
   assert.strictEqual(api.finKrwToManwon("9,300,000원"), 930);
+  assert.strictEqual(api.clusterCountFromText("가양동 매물 37"), 37);
+  assert.strictEqual(api.clusterCountFromText("861 개의 매물"), 861);
+  assert.strictEqual(api.clusterCountFromText("1,492"), 1492);
+  assert.strictEqual(api.clusterCountFromText("상가점포 72㎡ 월 35만"), 0);
+  assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(api.parseRequestBody(
+      '{"filter":{"legalDivisionNumbers":["3011000000"]},"articlePagingRequest":{"size":30}}'
+    ))),
+    {
+      filter: {legalDivisionNumbers: ["3011000000"]},
+      articlePagingRequest: {size: 30}
+    }
+  );
 
   const legacyNormalized = api.normalize({
     articleNo: "1234",
@@ -225,9 +270,13 @@ vm.runInContext(source, context, {filename: collectorPath});
   assert.strictEqual(legacyNormalized.monthly, "250");
 
   assert(source.includes("left:50%;top:50%;transform:translate(-50%,-50%)"));
+  assert(source.includes("version === VERSION"));
+  assert(source.includes("__jsNaverCollectorVersion !== VERSION"));
   assert(source.includes('data-metric="review"'));
   assert(source.includes("대전 5개 구 전체 이어서 수집"));
   assert(source.includes('data-action="stop"'));
+  assert(source.includes("__jsNaverCollectorRequestBody"));
+  assert(source.includes("requestBody: this.__jsNaverCollectorRequestBody || null"));
   assert(source.includes('"대전 " + district.name + " 전체"'));
   assert(source.includes("complete: true"));
 

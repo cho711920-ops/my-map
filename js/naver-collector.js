@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.1.0";
+  var VERSION = "5.1.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -71,8 +71,16 @@
   }
 
   if (window.__JS_NAVER_COLLECTOR__) {
-    window.__JS_NAVER_COLLECTOR__.reopen();
-    return;
+    if (window.__JS_NAVER_COLLECTOR__.version === VERSION) {
+      window.__JS_NAVER_COLLECTOR__.reopen();
+      return;
+    }
+    try {
+      window.__JS_NAVER_COLLECTOR__.getState().active = false;
+    } catch (_) {}
+    var stalePanel = document.getElementById(PANEL_ID);
+    if (stalePanel) stalePanel.remove();
+    window.__JS_NAVER_COLLECTOR__ = null;
   }
 
   var nativeFetch = typeof window.fetch === "function"
@@ -143,6 +151,8 @@
     collectFinDistrictRaw: collectFinDistrictRaw,
     discoverFinContext: discoverFinContext,
     createEmptyDashboard: createEmptyDashboard,
+    clusterCountFromText: clusterCountFromText,
+    parseRequestBody: parseRequestBody,
     finKrwToManwon: finKrwToManwon
   };
 
@@ -317,13 +327,11 @@
         cityButton.disabled = false;
         return;
       }
-      var text = originalText.replace(/,/g, "");
-      if (!/^\d{1,4}$/.test(text)) continue;
-      var count = Number(text);
+      var count = clusterCountFromText(originalText);
       if (!Number.isFinite(count) || count < 1) continue;
       state.clickedClusterCount = count;
       setStatus(
-        "클러스터 " + count + "개를 선택했습니다.",
+        "동·숫자 클러스터 " + formatNumber(count) + "개를 선택했습니다.",
         "네이버 첫 페이지 응답을 기다리고 있습니다."
       );
       return;
@@ -444,13 +452,14 @@
   }
 
   function patchNetwork() {
-    if (nativeFetch && !window.fetch.__jsNaverCollectorPatched) {
+    if (nativeFetch && window.fetch.__jsNaverCollectorVersion !== VERSION) {
       var wrappedFetch = async function (input, init) {
         var response = await nativeFetch(input, init);
         inspectFetchResponse(input, response.clone(), init).catch(function () {});
         return response;
       };
       wrappedFetch.__jsNaverCollectorPatched = true;
+      wrappedFetch.__jsNaverCollectorVersion = VERSION;
       wrappedFetch.__jsNaverCollectorOriginal = nativeFetch;
       window.fetch = wrappedFetch;
     }
@@ -471,7 +480,11 @@
         return nativeXhrSetRequestHeader.apply(this, arguments);
       };
 
-      XMLHttpRequest.prototype.send = function () {
+    }
+
+    if (XMLHttpRequest.prototype.send.__jsNaverCollectorVersion !== VERSION) {
+      var wrappedSend = function (body) {
+        this.__jsNaverCollectorRequestBody = parseRequestBody(body);
         this.addEventListener("load", function () {
           if (!state.active || !isArticleRequest(this.__jsNaverCollectorUrl)) return;
           try {
@@ -481,12 +494,16 @@
             capturePayload(json, this.__jsNaverCollectorUrl, {
               method: this.__jsNaverCollectorMethod || "GET",
               headers: this.__jsNaverCollectorHeaders || {},
-              credentials: "include"
+              credentials: "include",
+              requestBody: this.__jsNaverCollectorRequestBody || null
             });
           } catch (_) {}
         }, {once: true});
         return nativeXhrSend.apply(this, arguments);
       };
+      wrappedSend.__jsNaverCollectorPatched = true;
+      wrappedSend.__jsNaverCollectorVersion = VERSION;
+      XMLHttpRequest.prototype.send = wrappedSend;
     }
   }
 
@@ -513,12 +530,12 @@
       });
     } catch (_) {}
     try {
-      var rawBody = typeof options.body === "string"
+      var rawBody = options.body !== undefined
         ? options.body
         : input && typeof input.clone === "function"
           ? await input.clone().text()
           : "";
-      requestBody = rawBody ? JSON.parse(rawBody) : null;
+      requestBody = parseRequestBody(rawBody);
     } catch (_) {}
     return {
       method: String(options.method || (input && input.method) || "GET").toUpperCase(),
@@ -645,8 +662,32 @@
   }
 
   function clusterCountFromText(value) {
-    var match = String(value || "").replace(/\s+/g, "").match(/매물([\d,]+)/);
+    var compact = String(value || "").replace(/\s+/g, "");
+    var match =
+      compact.match(/매물([\d,]+)/) ||
+      compact.match(/^([\d,]+)개의매물$/) ||
+      compact.match(/^([\d,]+)$/);
     return match ? Number(match[1].replace(/,/g, "")) || 0 : 0;
+  }
+
+  function parseRequestBody(value) {
+    if (!value) return null;
+    if (typeof value === "object" && !Array.isArray(value)) {
+      if (
+        typeof FormData !== "undefined" && value instanceof FormData ||
+        typeof URLSearchParams !== "undefined" && value instanceof URLSearchParams
+      ) {
+        return null;
+      }
+      return value;
+    }
+    if (typeof value !== "string") return null;
+    try {
+      var parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   function splitFinQuery(value) {
