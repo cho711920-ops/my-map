@@ -1837,9 +1837,14 @@
         sessionId: metadata.sessionId,
         scope: metadata.scope,
         entries: chunk.map(function(item) {
+          var rental = getRentalTerms(item) || {};
           return {
             sourceId: recordSourceId(item),
-            listSnapshot: gongsilListSnapshot(item)
+            listSnapshot: gongsilListSnapshot(item),
+            deposit: rental.deposit,
+            rent: rental.rent,
+            area: getPyeong(item),
+            room: getRoom(item)
           };
         })
       }, {label: "기존 매물 빠른 비교"});

@@ -2016,9 +2016,17 @@
           scope: metadata.scope,
           startedAt: metadata.startedAt,
           entries: chunk.map(function(item) {
+            var squareMeters = Number(item.areaSquareMeter) || 0;
             return {
               sourceId: "네이버-" + clean(item.articleNo),
-              listSnapshot: item.listSnapshot
+              listSnapshot: item.listSnapshot,
+              deposit: item.deposit,
+              rent: item.monthly,
+              area: squareMeters > 0
+                ? Math.round((squareMeters / 3.305785) * 10) / 10
+                : "",
+              address: item.jibunAddress,
+              room: item.roomInfo || item.floorInfo
             };
           })
         })
