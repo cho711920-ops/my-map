@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.0";
+  var VERSION = "1.0.1";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -23,7 +23,13 @@
   var state = {
     busy: false,
     stopRequested: false,
-    selectedUrl: selectedClusterUrl(location.href),
+    selectedUrl: selectedClusterUrl(location.href, districtFromUrl(location.href)),
+    selectedDistrict: districtFromUrl(location.href),
+    pendingDistrict: "",
+    pendingSelectionType: "",
+    pendingSelectionAt: 0,
+    pendingOriginalClusterId: "",
+    lastLocationClusterId: clusterIdFromUrl(location.href),
     job: null
   };
 
@@ -45,7 +51,18 @@
     version: VERSION,
     reopen: function () {
       panel.style.display = "block";
-      state.selectedUrl = selectedClusterUrl(location.href) || state.selectedUrl;
+      var locationDistrict = districtFromUrl(location.href);
+      var locationSelection = selectedClusterUrl(location.href, locationDistrict);
+      if (locationSelection) {
+        var currentClusterId = clusterIdFromUrl(locationSelection);
+        var previousClusterId = clusterIdFromUrl(state.selectedUrl);
+        if (currentClusterId === previousClusterId && state.selectedDistrict) {
+          locationDistrict = state.selectedDistrict;
+          locationSelection = buildClusterUrl(currentClusterId, locationDistrict);
+        }
+        state.selectedUrl = locationSelection;
+        state.selectedDistrict = locationDistrict;
+      }
       renderSelection();
       refreshJobStatus();
     },
@@ -135,12 +152,73 @@
     startButton.addEventListener("click", startOrResume);
     stopButton.addEventListener("click", requestSafeStop);
     closeButton.addEventListener("click", function () { panel.style.display = "none"; });
-    document.addEventListener("click", function () {
-      window.setTimeout(function () {
-        var next = selectedClusterUrl(location.href);
-        if (next) captureSelectedCluster(next);
-      }, 0);
-    }, true);
+    document.addEventListener("click", handleMapMarkerClick, true);
+    window.addEventListener("popstate", function () { scheduleSelectionChecks(); });
+    window.addEventListener("hashchange", function () { scheduleSelectionChecks(); });
+    window.setInterval(function () { syncSelectionFromLocation(false); }, 300);
+  }
+
+  function handleMapMarkerClick(event) {
+    if (state.busy || !event || !event.target || panel.contains(event.target)) return;
+    var button = event.target.closest ? event.target.closest("button") : null;
+    if (!button) return;
+    var marker = button.closest ? button.closest('[aria-label="Map marker"]') : null;
+    var text = String(button.textContent || button.getAttribute("aria-label") || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    var district = districtFromMarkerText(text);
+    var numericCluster = Boolean(marker && (
+      /^\d[\d,]*$/.test(text) ||
+      /^매물\s*\d[\d,]*(?:개)?$/.test(text)
+    ));
+    if (!district && !numericCluster) return;
+
+    state.pendingDistrict = district;
+    state.pendingSelectionType = district ? "district" : "cluster";
+    state.pendingSelectionAt = Date.now();
+    state.pendingOriginalClusterId = clusterIdFromUrl(location.href);
+    setStatus(
+      district ? "대전 " + district + " 구클러스터 확인 중" : "개별 클러스터 확인 중",
+      "당근 지도가 선택 정보를 주소에 반영하는 중입니다. 잠시만 기다려 주세요."
+    );
+    scheduleSelectionChecks();
+  }
+
+  function scheduleSelectionChecks() {
+    [0, 80, 220, 500, 900, 1500, 2500].forEach(function (delay) {
+      window.setTimeout(function () { syncSelectionFromLocation(true); }, delay);
+    });
+  }
+
+  function syncSelectionFromLocation(force) {
+    if (state.busy) return;
+    var clusterId = clusterIdFromUrl(location.href);
+    if (!clusterId) return;
+    var hintAge = Date.now() - Number(state.pendingSelectionAt || 0);
+    var freshHint = hintAge < 4000;
+    var changed = clusterId !== state.lastLocationClusterId;
+    if (!changed && !force && !freshHint) return;
+    if (
+      freshHint &&
+      !changed &&
+      clusterId === state.pendingOriginalClusterId &&
+      hintAge < 1200
+    ) return;
+
+    var district = districtFromUrl(location.href);
+    if (freshHint) {
+      district = state.pendingSelectionType === "district" ? state.pendingDistrict : "";
+    } else if (clusterId === clusterIdFromUrl(state.selectedUrl) && state.selectedDistrict) {
+      district = state.selectedDistrict;
+    }
+    captureSelectedCluster(buildClusterUrl(clusterId, district), district);
+    state.lastLocationClusterId = clusterId;
+    if (freshHint) {
+      state.pendingDistrict = "";
+      state.pendingSelectionType = "";
+      state.pendingSelectionAt = 0;
+      state.pendingOriginalClusterId = "";
+    }
   }
 
   function patchNetwork() {
@@ -168,28 +246,75 @@
     if (typeof body !== "string" || body.indexOf("clusterId") < 0) return;
     try {
       var json = JSON.parse(body);
-      var clusterId = json && json.variables && json.variables.input && json.variables.input.clusterId;
+      var clusterId = findClusterIdDeep(json, 0);
       if (!clusterId) return;
-      captureSelectedCluster(buildClusterUrl(clusterId));
+      var freshHint = Date.now() - Number(state.pendingSelectionAt || 0) < 4000;
+      var district = freshHint && state.pendingSelectionType === "district"
+        ? state.pendingDistrict
+        : "";
+      captureSelectedCluster(buildClusterUrl(clusterId, district), district);
     } catch (_) {}
   }
 
-  function captureSelectedCluster(url) {
+  function findClusterIdDeep(value, depth) {
+    if (!value || depth > 7) return "";
+    if (Array.isArray(value)) {
+      for (var index = 0; index < value.length; index += 1) {
+        var arrayResult = findClusterIdDeep(value[index], depth + 1);
+        if (arrayResult) return arrayResult;
+      }
+      return "";
+    }
+    if (typeof value !== "object") return "";
+    if (value.clusterId != null && String(value.clusterId).trim()) {
+      return String(value.clusterId).trim();
+    }
+    var keys = Object.keys(value);
+    for (var keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      var objectResult = findClusterIdDeep(value[keys[keyIndex]], depth + 1);
+      if (objectResult) return objectResult;
+    }
+    return "";
+  }
+
+  function captureSelectedCluster(url, district) {
     if (!url || state.busy) return;
     state.selectedUrl = url;
+    state.selectedDistrict = district || districtFromUrl(url);
     renderSelection();
   }
 
-  function selectedClusterUrl(url) {
+  function selectedClusterUrl(url, district) {
     var match = String(url || "").match(/[?&]cluster_id=([^&#]+)/i);
     if (!match) return "";
-    return buildClusterUrl(decodeURIComponent(match[1]).replace(/^['"]|['"]$/g, ""));
+    return buildClusterUrl(
+      decodeURIComponent(match[1]).replace(/^['"]|['"]$/g, ""),
+      district || districtFromUrl(url)
+    );
   }
 
-  function buildClusterUrl(clusterId) {
+  function clusterIdFromUrl(url) {
+    var match = String(url || "").match(/[?&]cluster_id=([^&#]+)/i);
+    if (!match) return "";
+    try {
+      return decodeURIComponent(match[1] || "").replace(/^['"]|['"]$/g, "").trim();
+    } catch (_) {
+      return String(match[1] || "").replace(/^['"]|['"]$/g, "").trim();
+    }
+  }
+
+  function buildClusterUrl(clusterId, district) {
     var url = new URL(location.href);
     url.searchParams.set("cluster_id", String(clusterId || ""));
+    if (district) url.searchParams.set("js_district", district);
+    else url.searchParams.delete("js_district");
     return url.toString();
+  }
+
+  function districtFromMarkerText(text) {
+    var match = String(text || "").replace(/\s+/g, " ").trim()
+      .match(/^(유성구|대덕구|동구|중구|서구)\s*매물\s*[\d,]+/);
+    return match ? match[1] : "";
   }
 
   function districtFromUrl(url) {
@@ -203,7 +328,11 @@
   }
 
   function renderSelection() {
-    var district = districtFromUrl(state.selectedUrl || location.href);
+    var district = state.selectedDistrict || districtFromUrl(state.selectedUrl || location.href);
+    var clusterId = clusterIdFromUrl(state.selectedUrl);
+    var clusterLabel = clusterId.length > 30
+      ? clusterId.slice(0, 27) + "..."
+      : clusterId;
     var rule = panel.querySelector("[data-role=rule]");
     if (!state.selectedUrl) {
       setStatus(
@@ -218,8 +347,8 @@
     setStatus(
       district ? "대전 " + district + " 클러스터 선택 완료" : "개별 클러스터 선택 완료",
       district
-        ? "수집 시작을 누르면 이 구 전체 범위로 수집하고, 오류 없이 끝난 경우만 완전수집으로 인정합니다."
-        : "구가 확인되지 않은 작은 클러스터는 안전을 위해 완전수집으로 인정하지 않습니다."
+        ? "선택번호 " + clusterLabel + " · 이 구 전체 범위로 수집하고, 오류 없이 끝난 경우만 완전수집으로 인정합니다."
+        : "선택번호 " + clusterLabel + " · 작은 클러스터는 안전을 위해 완전수집으로 인정하지 않습니다."
     );
     rule.textContent =
       "저장: 기존 통합 중복검사 사용 · 101호와 102호는 별도 · 당근 링크 최우선 유지 · " +
