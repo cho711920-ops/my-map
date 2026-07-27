@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.1";
+  var VERSION = "1.0.2";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -160,10 +160,14 @@
 
   function handleMapMarkerClick(event) {
     if (state.busy || !event || !event.target || panel.contains(event.target)) return;
-    var button = event.target.closest ? event.target.closest("button") : null;
-    if (!button) return;
-    var marker = button.closest ? button.closest('[aria-label="Map marker"]') : null;
-    var text = String(button.textContent || button.getAttribute("aria-label") || "")
+    var clickable = event.target.closest
+      ? event.target.closest('button,[role="button"],[aria-label="Map marker"]')
+      : null;
+    if (!clickable) return;
+    var marker = clickable.matches && clickable.matches('[aria-label="Map marker"]')
+      ? clickable
+      : (clickable.closest ? clickable.closest('[aria-label="Map marker"]') : null);
+    var text = String(clickable.textContent || clickable.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
       .trim();
     var district = districtFromMarkerText(text);

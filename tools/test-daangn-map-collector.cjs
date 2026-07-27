@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.0\.1"/);
+assert.match(collector, /VERSION = "1\.0\.2"/);
 assert.match(collector, /cluster_id/);
 assert.match(collector, /clusterId/);
 assert.match(collector, /js_district/);
@@ -25,6 +25,7 @@ assert.match(collector, /syncSelectionFromLocation/);
 assert.match(collector, /setInterval\(function \(\) \{ syncSelectionFromLocation\(false\); \}, 300\)/);
 assert.match(collector, /\[0, 80, 220, 500, 900, 1500, 2500\]/);
 assert.match(collector, /\[aria-label="Map marker"\]/);
+assert.match(collector, /button,\[role="button"\],\[aria-label="Map marker"\]/);
 assert.match(collector, /danggeunStartJob/);
 assert.match(collector, /danggeunRunJobChunk/);
 assert.match(collector, /danggeunPauseJob/);
