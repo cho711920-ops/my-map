@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.3";
+  var VERSION = "1.0.4";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -13,8 +13,13 @@
     return;
   }
   if (window.__JS_DAANGN_COLLECTOR__) {
-    window.__JS_DAANGN_COLLECTOR__.reopen();
-    return;
+    if (window.__JS_DAANGN_COLLECTOR__.version === VERSION) {
+      window.__JS_DAANGN_COLLECTOR__.reopen();
+      return;
+    }
+    var stalePanel = document.getElementById(PANEL_ID);
+    if (stalePanel) stalePanel.remove();
+    window.__JS_DAANGN_COLLECTOR__ = null;
   }
 
   var nativeFetch = window.fetch.bind(window);
@@ -223,12 +228,13 @@
   }
 
   function patchNetwork() {
-    if (!window.fetch.__jsDaangnCollectorPatched) {
+    if (window.fetch.__jsDaangnCollectorVersion !== VERSION) {
       var wrappedFetch = async function (input, init) {
         inspectGraphqlBody(init && init.body);
         return nativeFetch(input, init);
       };
       wrappedFetch.__jsDaangnCollectorPatched = true;
+      wrappedFetch.__jsDaangnCollectorVersion = VERSION;
       window.fetch = wrappedFetch;
     }
     if (!XMLHttpRequest.prototype.open.__jsDaangnCollectorPatched) {
@@ -236,10 +242,13 @@
         return nativeXhrOpen.apply(this, arguments);
       };
       XMLHttpRequest.prototype.open.__jsDaangnCollectorPatched = true;
+    }
+    if (XMLHttpRequest.prototype.send.__jsDaangnCollectorVersion !== VERSION) {
       XMLHttpRequest.prototype.send = function (body) {
         inspectGraphqlBody(body);
         return nativeXhrSend.apply(this, arguments);
       };
+      XMLHttpRequest.prototype.send.__jsDaangnCollectorVersion = VERSION;
     }
   }
 

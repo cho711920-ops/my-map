@@ -16,7 +16,10 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.0\.3"/);
+assert.match(collector, /VERSION = "1\.0\.4"/);
+assert.match(collector, /version === VERSION/);
+assert.match(collector, /stalePanel\.remove/);
+assert.match(collector, /__jsDaangnCollectorVersion !== VERSION/);
 assert.match(collector, /cluster_id/);
 assert.match(collector, /clusterId/);
 assert.match(collector, /js_district/);
