@@ -95,7 +95,7 @@ vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.8.0");
+assert.strictEqual(api.version, "1.8.1");
 assert(collectorSource.includes("classifySourceManifest"));
 assert(
   collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")

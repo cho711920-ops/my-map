@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.1";
+  var VERSION = "1.1.2";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -180,10 +180,7 @@
         ? marker.querySelector('button,[role="button"]')
         : null;
     }
-    var textSource = clickable || marker;
-    var text = String(textSource.textContent || textSource.getAttribute("aria-label") || "")
-      .replace(/\s+/g, " ")
-      .trim();
+    var text = markerSelectionText(marker, clickable);
     var district = districtFromMarkerText(text);
     var individualCluster = isClusterMarkerText(text);
     if (!district && !individualCluster) return;
@@ -203,6 +200,15 @@
         : "당근 지도가 선택 정보를 주소에 반영하는 중입니다. 잠시만 기다려 주세요."
     );
     scheduleSelectionChecks();
+  }
+
+  function markerSelectionText(marker, clickable) {
+    return [
+      clickable && clickable.textContent,
+      clickable && clickable.getAttribute && clickable.getAttribute("aria-label"),
+      marker && marker.textContent,
+      marker && marker.getAttribute && marker.getAttribute("aria-label")
+    ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   }
 
   function scheduleSelectionChecks() {
@@ -510,7 +516,7 @@
     }
     var processed = Number(state.job.processed) || 0;
     var total = Number(state.job.total) || Number(state.job.found) || 0;
-    var chunkSize = Math.max(1, Number(state.job.chunkSize) || 15);
+    var chunkSize = Math.max(1, Number(state.job.chunkSize) || 100);
     var chunkEnd = Math.min(total, processed + chunkSize);
     var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
     setStatus(
@@ -589,11 +595,17 @@
     var paused = job.status === "paused";
     var percent = listing ? 0 : (job.total ? Math.min(100, Math.round(job.processed / job.total * 100)) : 0);
     setProgress(percent);
+    var timing = Number(job.lastChunkMs || 0) > 0
+      ? "\n최근 " + Number(job.lastChunkSize || 0).toLocaleString("ko-KR") +
+        "건 · 상세 " + (Number(job.lastFetchMs || 0) / 1000).toFixed(1) +
+        "초 · 저장 " + (Number(job.lastWriteMs || 0) / 1000).toFixed(1) +
+        "초 · 합계 " + (Number(job.lastChunkMs || 0) / 1000).toFixed(1) + "초"
+      : "";
     setStatus(
       complete ? "당근 수집 완료" : (listing ? "클러스터 목록 수집 중" : (paused ? "안전중단됨" : "상세조회·저장 중")),
       (job.message || "") + (job.district
         ? "\n대전 " + job.district + " · 오류 없이 완료 시 구 완전수집"
-        : "\n개별클러스터 · 완전수집 제외")
+        : "\n개별클러스터 · 완전수집 제외") + timing
     );
     startButton.disabled = job.status === "running";
     startButton.textContent = complete ? "새 클러스터 수집" : (paused ? "이어서 수집" : "수집 중");

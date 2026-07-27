@@ -173,7 +173,7 @@ vm.runInContext(source, context, {filename: collectorPath});
 (async () => {
   const api = window.__JS_NAVER_COLLECTOR__;
   assert(api, "collector API missing");
-  assert.strictEqual(api.version, "5.3.1");
+  assert.strictEqual(api.version, "5.3.2");
   assert.strictEqual(api.isFinNaver(), true);
 
   const filters = api.parseFinFilters(location.href);

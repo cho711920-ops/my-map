@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.3.1";
+  var VERSION = "5.3.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -113,7 +113,10 @@
   var progressBarElement = panel.querySelector("[data-role=progress-bar]");
   var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
-  var retryButton = panel.querySelector("[data-action=retry]");
+  var retryButton = panel.querySelector("[data-action=retry]") || {
+    disabled: false,
+    addEventListener: function () {}
+  };
   // 이전 5개 구 연속수집 기능은 제거했습니다. 구·동·숫자 클러스터를
   // 하나씩 확인한 뒤 사용자가 수집을 시작하는 흐름만 유지합니다.
   var cityButton = panel.querySelector("[data-action=city]") || document.createElement("button");
@@ -203,7 +206,7 @@
         "#" + PANEL_ID + " .jsn-metric b{font-size:15px;font-weight:900;color:#172033}" +
         "#" + PANEL_ID + " .jsn-rule{padding:7px 8px;background:#eef9f3;" +
         "border-radius:8px;color:#3d6250;font-size:9.5px;line-height:1.4}" +
-        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-top:8px}" +
+        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px}" +
         "#" + PANEL_ID + " button.jsn-btn{height:38px;border-radius:9px;font-size:12px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
@@ -249,7 +252,6 @@
           '중복검사: 매물ID 우선 · 지번주소 + 층/호실 + 보증금 + 월세 + 평수 1평 미만<br>' +
           '같은 주소라도 임대조건이 다르면 별도 매물로 유지합니다.</div>' +
           '<div class="jsn-actions">' +
-            '<button type="button" class="jsn-btn jsn-retry" data-action="retry">선택 구 다시 확인</button>' +
             '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>선택 구 전체 수집</button>' +
             '<button type="button" class="jsn-btn jsn-stop" data-action="stop" disabled>안전중단</button>' +
           '</div>' +

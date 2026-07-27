@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.8.0";
+  var VERSION = "1.8.1";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -603,6 +603,15 @@
         selectedCount: selectedCount
       };
 
+      updateDashboard({
+        found: items.length,
+        processed: classification.unchanged + rejected.length,
+        remaining: transformed.length
+      });
+      setProgress(
+        classification.unchanged + rejected.length,
+        items.length
+      );
       var result = await sendToAppsScript(transformed, saveMetadata, collectorKey);
       if (!result || result.ok !== true) {
         if (
@@ -1671,7 +1680,13 @@
       addImportResult(totals, result);
       offset += batch.length;
       updateDashboard({
-        processed: offset,
+        found: itemsLength,
+        processed: Math.min(
+          itemsLength,
+          Number(metadata.unchanged || 0) +
+          Number(metadata.rejectedCount || 0) +
+          offset
+        ),
         remaining: Math.max(0, records.length - offset),
         created: totals.created,
         merged: totals.merged,
