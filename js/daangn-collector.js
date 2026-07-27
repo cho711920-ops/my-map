@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.0.2";
+  var VERSION = "1.0.3";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -171,11 +171,8 @@
       .replace(/\s+/g, " ")
       .trim();
     var district = districtFromMarkerText(text);
-    var numericCluster = Boolean(marker && (
-      /^\d[\d,]*$/.test(text) ||
-      /^매물\s*\d[\d,]*(?:개)?$/.test(text)
-    ));
-    if (!district && !numericCluster) return;
+    var individualCluster = Boolean(marker && isClusterMarkerText(text));
+    if (!district && !individualCluster) return;
 
     state.pendingDistrict = district;
     state.pendingSelectionType = district ? "district" : "cluster";
@@ -319,6 +316,12 @@
     var match = String(text || "").replace(/\s+/g, " ").trim()
       .match(/^(유성구|대덕구|동구|중구|서구)\s*매물\s*[\d,]+/);
     return match ? match[1] : "";
+  }
+
+  function isClusterMarkerText(text) {
+    text = String(text || "").replace(/\s+/g, " ").trim();
+    return /^\d[\d,]*$/.test(text) ||
+      /(?:^|\s)매물\s*[\d,]+(?:개)?$/.test(text);
   }
 
   function districtFromUrl(url) {
