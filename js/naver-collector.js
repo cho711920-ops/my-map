@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.3.0";
+  var VERSION = "5.3.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -31,7 +31,9 @@
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
   var FIN_NAVER_HOST = "fin.land.naver.com";
   var FIN_ARTICLE_LIST_PATH = "/front-api/v1/article/legalDivisionArticleList";
-  var FIN_PAGE_SIZE = 100;
+  // 새 네이버 목록 API는 실제 화면과 동일한 30건 단위에서만 다음 페이지
+  // lastInfo/seed 조합을 안정적으로 받아들입니다. 100건으로 올리면 2페이지부터 400이 납니다.
+  var FIN_PAGE_SIZE = 30;
   var FIN_MAX_PAGES = 500;
   var TRADE_TYPE_LABELS = {
     A1: "매매",
