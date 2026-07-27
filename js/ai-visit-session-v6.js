@@ -674,25 +674,40 @@
   }
 
   function launchKakaoRoute(location, destination) {
+    if (
+      window.JSKakaoNavigation &&
+      typeof window.JSKakaoNavigation.launchRoute === "function"
+    ) {
+      window.JSKakaoNavigation.launchRoute(location, destination);
+      return;
+    }
+
     var endLat = Number(destination && destination.lat);
     var endLng = Number(destination && destination.lng);
-    if (![endLat, endLng].every(isFinite)) {
+    if (!destination || ![endLat, endLng].every(isFinite)) {
       alert("목적지 좌표를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
     var ep = endLat.toFixed(7) + "," + endLng.toFixed(7);
+    var startLat = Number(location && location.lat);
+    var startLng = Number(location && location.lng);
+    var hasStart = !!location && [startLat, startLng].every(isFinite);
+    var sp = hasStart ? startLat.toFixed(7) + "," + startLng.toFixed(7) : "";
     var destinationName = encodeURIComponent((destination && destination.name) || "임장 매물");
+    var webUrl = hasStart
+      ? "https://map.kakao.com/link/by/car/" +
+        encodeURIComponent("현재 위치") + "," + sp + "/" +
+        destinationName + "," + ep
+      : "https://map.kakao.com/link/to/" + destinationName + "," + ep;
 
     if (isAndroidDevice()) {
-      /* Android 휴대폰·태블릿은 카카오맵 앱이 기기 GPS를 출발지로 직접 사용하게 합니다.
-         브라우저에서 출발지를 억지로 전달하지 않아 태블릿의 빈 출발지 문제를 피하고,
-         웹 새창 fallback도 넣지 않아 앱 실행을 방해하지 않습니다. */
-      var intentUrl = "intent://route?ep=" + encodeURIComponent(ep) +
-        "&by=CAR&ename=" + destinationName +
-        "#Intent;scheme=kakaomap;package=net.daum.android.map;end";
+      var routeQuery = (hasStart ? "sp=" + sp + "&" : "") + "ep=" + ep + "&by=car";
+      var intentUrl = "intent://route?" + routeQuery +
+        "#Intent;scheme=kakaomap;package=net.daum.android.map;" +
+        "S.browser_fallback_url=" + encodeURIComponent(webUrl) + ";end";
       var fallbackTimer = window.setTimeout(function () {
-        window.location.href = "https://map.kakao.com/link/to/" + destinationName + "," + endLat.toFixed(7) + "," + endLng.toFixed(7);
+        window.location.href = webUrl;
       }, 1800);
       var cancelFallback = function () {
         if (document.hidden) {
@@ -705,7 +720,6 @@
       return;
     }
 
-    var webUrl = "https://map.kakao.com/link/to/" + destinationName + "," + endLat.toFixed(7) + "," + endLng.toFixed(7);
     window.open(webUrl, "_blank", "noopener,noreferrer");
   }
 
@@ -717,12 +731,29 @@
       return alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
     }
 
-    /* Android에서는 앱 자체의 현 위치를 출발지로 사용하므로 GPS 대기 없이 즉시 실행합니다. */
-    launchKakaoRoute(null, {
+    var destination = {
       lat: Number(coords.lat),
       lng: Number(coords.lng),
       name: item.building || item.name || item.address || "임장 매물"
-    });
+    };
+
+    if (
+      window.JSKakaoNavigation &&
+      typeof window.JSKakaoNavigation.open === "function"
+    ) {
+      window.JSKakaoNavigation.open(destination);
+      return;
+    }
+
+    requestCurrentLocation(
+      function (location) {
+        launchKakaoRoute(location, destination);
+      },
+      function () {
+        alert("현재 위치를 가져오지 못했습니다. 카카오맵에서 출발지를 현재 위치로 선택해주세요.");
+        launchKakaoRoute(null, destination);
+      }
+    );
   }
 
   function roadviewViewportMetrics() {

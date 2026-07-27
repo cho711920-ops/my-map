@@ -278,6 +278,13 @@ function restoreClusterSelectionSnapshotV638(snapshot) {
 
 
 function updateCurrentLocationOverlayV630(position) {
+  if (
+    window.JSKakaoNavigation &&
+    typeof window.JSKakaoNavigation.rememberPosition === "function"
+  ) {
+    window.JSKakaoNavigation.rememberPosition(position);
+  }
+
   if (!position || !position.coords || !map || !window.kakao) return;
 
   var lat = Number(position.coords.latitude);

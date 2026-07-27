@@ -1198,19 +1198,25 @@ function openKakaoNavigation(encodedKey) {
     destinationName = "대전 " + destinationName;
   }
 
-  /*
-   * 카카오맵 공식 링크 형식:
-   * /link/to/이름,위도,경도
-   * 모바일에서는 카카오맵 앱 연결을 지원하고,
-   * 앱이 없거나 PC이면 카카오맵 웹으로 열립니다.
-   */
-  var url =
+  if (
+    window.JSKakaoNavigation &&
+    typeof window.JSKakaoNavigation.open === "function"
+  ) {
+    window.JSKakaoNavigation.open({
+      lat: coords.lat,
+      lng: coords.lng,
+      name: destinationName
+    });
+    return;
+  }
+
+  var fallbackUrl =
     "https://map.kakao.com/link/to/" +
     encodeURIComponent(destinationName) + "," +
     coords.lat + "," +
     coords.lng;
 
-  window.open(url, "_blank", "noopener,noreferrer");
+  window.open(fallbackUrl, "_blank", "noopener,noreferrer");
 }
 
 
