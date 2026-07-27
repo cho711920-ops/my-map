@@ -471,27 +471,33 @@
     apiPost("applyReviewBatch", {
       reviewIds: reviewIds, reviewAction: action, masterId: masterId
     }).then(function(result) {
-      var current = selectedGroup();
       var processedIds = result.processedReviewIds && result.processedReviewIds.length
         ? result.processedReviewIds.map(text)
         : reviewIds.slice(0, number(result.processed || reviewIds.length));
       var processedMap = {};
       processedIds.forEach(function(reviewId) { processedMap[reviewId] = true; });
-      if (current) {
-        current.items = current.items.filter(function(entry) { return !processedMap[text(entry.reviewId)]; });
-        current.count = current.items.length;
-        if (extraState.reviews) {
-          extraState.reviews.total = Math.max(0, number(extraState.reviews.total) - processedIds.length);
-          if (!current.items.length) {
-            extraState.reviews.groups = (extraState.reviews.groups || []).filter(function(entry) {
-              return entry.groupKey !== current.groupKey;
-            });
-            extraState.reviews.groupCount = Math.max(0, number(extraState.reviews.groupCount) - 1);
-          }
-        }
+      if (extraState.reviews) {
+        var removedGroups = 0;
+        (extraState.reviews.groups || []).forEach(function(entry) {
+          entry.items = (entry.items || []).filter(function(item) {
+            return !processedMap[text(item.reviewId)];
+          });
+          entry.count = entry.items.length;
+          if (!entry.count) removedGroups += 1;
+        });
+        extraState.reviews.groups = (extraState.reviews.groups || []).filter(function(entry) {
+          return entry.count > 0;
+        });
+        extraState.reviews.total = result.remaining !== undefined
+          ? number(result.remaining)
+          : Math.max(0, number(extraState.reviews.total) - processedIds.length);
+        extraState.reviews.groupCount = Math.max(
+          0, number(extraState.reviews.groupCount) - removedGroups
+        );
+        extraState.reviews.loadedGroupCount = extraState.reviews.groups.length;
       }
       clearReviewSelection();
-      if (!current || !current.items.length) extraState.selectedGroupKey = "";
+      if (!selectedGroup()) extraState.selectedGroupKey = "";
       saveReviewCache();
       renderReviews();
       extraState.loading = false;

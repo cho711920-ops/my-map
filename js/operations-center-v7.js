@@ -677,11 +677,6 @@
     document.body.classList.add("operations-center-open");
     var targetTab = tab || "dashboard";
     window.switchOperationsTab(targetTab);
-    if (targetTab === "customers") {
-      loadOperationsData(state.customerLoaded);
-    } else if (targetTab === "dashboard") {
-      loadOperationsData(false);
-    }
   };
 
   window.closeOperationsCenter = function() {
@@ -710,14 +705,18 @@
     if (state.rebuilding) return;
     state.rebuilding = true;
     setMessage("전체 고객 조건과 활성 매물을 다시 비교하는 중입니다…", "loading");
-    apiPost("rebuildCustomerMatches").then(function(result) {
-      state.customerWorkspaceEpoch += 1;
+    apiPost("rebuildCustomerMatches", {
+      customerId: state.selectedCustomerId
+    }).then(function(result) {
+      var rebuildEpoch = ++state.customerWorkspaceEpoch;
       state.customerPrefetchPromise = null;
+      if (result && result.workspace) {
+        applyCustomerWorkspace(result.workspace, rebuildEpoch);
+        return;
+      }
       state.loaded = false;
       state.customerLoaded = false;
       state.loadedMatchCustomerId = "";
-      state.matches = [];
-      state.matchSummary = {};
       state.lastCustomerWorkspace = null;
       try { sessionStorage.removeItem(OPERATIONS_CACHE_KEY); } catch (_) {}
       return loadOperationsData(true);
@@ -1155,11 +1154,6 @@
     }
   } catch (_) {}
   window.setTimeout(function() {
-    if (!state.customerListLoaded) {
-      apiGet("customerList").then(applyCustomerList).catch(function() {});
-    }
-  }, 100);
-  window.setTimeout(function() {
     if (!state.customerPrefetchPromise) {
       var prefetchEpoch = ++state.customerWorkspaceEpoch;
       state.customerPrefetchPromise = apiGet("customerWorkspace", { customerId: state.selectedCustomerId })
@@ -1167,7 +1161,7 @@
         .catch(function() {})
         .finally(function() { state.customerPrefetchPromise = null; });
     }
-  }, 450);
+  }, 80);
   window.setTimeout(function() {
     refreshCustomerAlertBadge(false);
     if (!state.alertPollTimer) {
