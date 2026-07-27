@@ -173,7 +173,7 @@ vm.runInContext(source, context, {filename: collectorPath});
 (async () => {
   const api = window.__JS_NAVER_COLLECTOR__;
   assert(api, "collector API missing");
-  assert.strictEqual(api.version, "5.0.1");
+  assert.strictEqual(api.version, "5.1.0");
   assert.strictEqual(api.isFinNaver(), true);
 
   const filters = api.parseFinFilters(location.href);
@@ -227,6 +227,9 @@ vm.runInContext(source, context, {filename: collectorPath});
   assert(source.includes("left:50%;top:50%;transform:translate(-50%,-50%)"));
   assert(source.includes('data-metric="review"'));
   assert(source.includes("대전 5개 구 전체 이어서 수집"));
+  assert(source.includes('data-action="stop"'));
+  assert(source.includes('"대전 " + district.name + " 전체"'));
+  assert(source.includes("complete: true"));
 
   console.log("naver fin collector tests: ok");
 })().catch((error) => {

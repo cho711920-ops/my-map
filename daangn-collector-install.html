@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>JS 당근부동산 수집 버튼 설치</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;padding:32px 18px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#fff5ee;color:#172033}
+    main{width:min(760px,100%);margin:0 auto;padding:28px;background:#fff;border:1px solid #ffd9c2;border-radius:20px;box-shadow:0 14px 36px rgba(160,71,15,.12)}
+    h1{margin:0 0 8px;font-size:27px;letter-spacing:-.7px}.sub{margin:0 0 24px;color:#68758a;line-height:1.65}
+    .bookmark{display:inline-flex;align-items:center;min-height:54px;padding:0 24px;border-radius:13px;color:#fff;background:#ff6f0f;box-shadow:0 8px 18px rgba(255,111,15,.24);font-size:17px;font-weight:850;text-decoration:none;cursor:grab}
+    button{margin-left:8px;min-height:44px;padding:0 15px;border:1px solid #d6b9a7;border-radius:10px;background:#fff;color:#6d4026;font-weight:750;cursor:pointer}
+    #copied{display:inline-block;margin-left:8px;color:#bd4e09;font-size:13px}.steps{margin:25px 0 0;padding:20px 22px;border-radius:14px;background:#fff8f3;line-height:1.8}.steps li+li{margin-top:8px}
+    .rule{margin-top:20px;padding:15px 17px;border-left:4px solid #ff6f0f;background:#fff1e8;border-radius:10px;line-height:1.75}
+    code{padding:2px 6px;border-radius:6px;background:#ffe1ce;color:#bd4e09;font-weight:750}
+    @media(max-width:560px){body{padding:14px 10px}main{padding:22px 16px}.bookmark{width:100%;justify-content:center}button{width:100%;margin:10px 0 0}}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🟠 JS 당근부동산 수집 버튼</h1>
+    <p class="sub">당근 지도에서 원하는 대전 구·숫자 클러스터를 클릭한 뒤, URL 복사 없이 <strong>JS부동산 매물현황</strong>으로 수집합니다.</p>
+    <a id="bookmark" class="bookmark" href="javascript:(()=>{const s=document.createElement('script');s.src='https://my-map-ten-roan.vercel.app/js/daangn-collector.js?v='+Date.now();document.head.appendChild(s)})()">🟠 당근 수집</a>
+    <button type="button" id="copy">버튼 코드 복사</button><span id="copied"></span>
+    <ol class="steps">
+      <li>위 <strong>🟠 당근 수집</strong> 버튼을 북마크바로 끌어놓습니다.</li>
+      <li><strong>realty.daangn.com</strong>의 대전 지도에서 서구·중구·유성구·대덕구·동구 중 원하는 구로 들어갑니다.</li>
+      <li>지도에 보이는 숫자 클러스터를 한 번 클릭한 뒤 북마크바의 <strong>🟠 당근 수집</strong>을 누릅니다.</li>
+      <li>중앙 진행창에서 선택 구를 확인하고 <strong>수집 시작</strong>을 누릅니다.</li>
+      <li>멈출 때는 <strong>안전중단</strong>을 누르면 현재 묶음까지 저장하고 이어가기 지점을 보존합니다.</li>
+    </ol>
+    <div class="rule">저장 위치: <code>JS부동산 매물현황</code><br>
+      구가 정확히 확인되고 조회·주소 오류 없이 끝난 경우만 구 완전수집<br>
+      기존 통합 중복검사 유지 · 101호/102호 별도 · 당근 원본링크 최우선 유지
+    </div>
+  </main>
+  <script>
+    document.getElementById("copy").addEventListener("click",async function(){
+      var code=document.getElementById("bookmark").href;
+      try{await navigator.clipboard.writeText(code);document.getElementById("copied").textContent="복사 완료"}
+      catch(_){window.prompt("아래 코드를 복사해 북마크 주소에 붙여넣으세요.",code)}
+    });
+  </script>
+</body>
+</html>

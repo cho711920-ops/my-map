@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.0.1";
+  var VERSION = "5.1.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -85,6 +85,7 @@
     active: true,
     busy: false,
     preparing: false,
+    stopRequested: false,
     prepareId: 0,
     capture: null,
     collected: [],
@@ -103,6 +104,7 @@
   var saveButton = panel.querySelector("[data-action=save]");
   var retryButton = panel.querySelector("[data-action=retry]");
   var cityButton = panel.querySelector("[data-action=city]");
+  var stopButton = panel.querySelector("[data-action=stop]");
   var closeButton = panel.querySelector("[data-action=close]");
 
   patchNetwork();
@@ -191,7 +193,8 @@
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
         "#" + PANEL_ID + " .jsn-city{grid-column:1/-1;border:1px solid #1687e8;background:#eaf5ff;color:#0963b5}" +
-        "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled,#" + PANEL_ID + " .jsn-city:disabled{" +
+        "#" + PANEL_ID + " .jsn-stop{grid-column:1/-1;border:1px solid #ef4444;background:#fff1f2;color:#be123c}" +
+        "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled,#" + PANEL_ID + " .jsn-city:disabled,#" + PANEL_ID + " .jsn-stop:disabled{" +
         "cursor:not-allowed;background:#d2ded7;color:#f8faf9;border-color:#d2ded7}" +
         "@media(max-width:640px){#" + PANEL_ID + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}" +
         "#" + PANEL_ID + " .jsn-body{padding:11px}#" + PANEL_ID + " .jsn-grid{grid-template-columns:repeat(2,1fr)}}" ;
@@ -234,6 +237,7 @@
             '<button type="button" class="jsn-btn jsn-retry" data-action="retry">선택 구 다시 확인</button>' +
             '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>선택 구 전체 수집</button>' +
             '<button type="button" class="jsn-btn jsn-city" data-action="city" disabled>대전 5개 구 전체 이어서 수집</button>' +
+            '<button type="button" class="jsn-btn jsn-stop" data-action="stop" disabled>안전중단</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -251,10 +255,40 @@
       else discoverExistingRequest();
     });
     cityButton.addEventListener("click", collectDaejeonAll);
+    stopButton.addEventListener("click", requestSafeStop);
     document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
       panel.style.display = "none";
     });
+  }
+
+  function requestSafeStop() {
+    if (!state.busy && !state.preparing) return;
+    state.stopRequested = true;
+    stopButton.disabled = true;
+    stopButton.textContent = "안전중단 요청됨";
+    setStatus(
+      "안전중단 요청을 받았습니다.",
+      "현재 조회 또는 저장 중인 한 묶음까지만 안전하게 마친 뒤 멈춥니다. 이미 저장된 매물은 유지됩니다."
+    );
+  }
+
+  function throwIfStopRequested() {
+    if (!state.stopRequested) return;
+    var error = new Error("사용자 안전중단");
+    error.safeStop = true;
+    throw error;
+  }
+
+  function beginCollectorRun() {
+    state.stopRequested = false;
+    stopButton.disabled = false;
+    stopButton.textContent = "안전중단";
+  }
+
+  function finishCollectorRun() {
+    stopButton.disabled = true;
+    stopButton.textContent = "안전중단";
   }
 
   function rememberClusterCount(event) {
@@ -1173,6 +1207,7 @@
     progress.failedItems = Array.isArray(progress.failedItems) ? progress.failedItems : loadCityFailedItems();
     items = items.filter(function(item) { return !seen.has(String(item.articleNo)); });
     for (var index = 0; index < items.length;) {
+      throwIfStopRequested();
       var batch = items.slice(index, index + BATCH_SIZE);
       var batchStartedAt = Date.now();
       var result = await postBatchWithRetry(batch, 3, {
@@ -1217,6 +1252,7 @@
       saveCityFailedItems(progress.failedItems);
       adjustBatchSize(Date.now() - batchStartedAt, failed);
       index += batch.length;
+      throwIfStopRequested();
       await delay(CITY_SAVE_DELAY);
     }
     return items.length;
@@ -1226,6 +1262,7 @@
     var pending = (progress.failedItems || loadCityFailedItems()).slice();
     var remaining = [];
     for (var index = 0; index < pending.length; index += 1) {
+      throwIfStopRequested();
       var entry = pending[index];
       try {
         var result = await postBatchWithRetry([entry.item], 2, {
@@ -1313,6 +1350,7 @@
       (cursor.key ? 0 : Number(state.clickedClusterCount)) || 0;
 
     for (; page <= FIN_MAX_PAGES; page += 1) {
+      throwIfStopRequested();
       var body = buildFinDistrictRequest(district, {
         seed: seed,
         lastInfo: lastInfo
@@ -1339,6 +1377,7 @@
       }
 
       var json = await response.json();
+      throwIfStopRequested();
       var result = json && json.result || {};
       var items = articleList(json).filter(function (article) {
         return !!articleId(article);
@@ -1396,6 +1435,7 @@
       return;
     }
     state.preparing = true;
+    beginCollectorRun();
     saveButton.disabled = true;
     retryButton.disabled = true;
     cityButton.disabled = true;
@@ -1405,20 +1445,32 @@
       var articles = await collectFinDistrictRaw(district, {});
       if (!articles.length) throw new Error(district.name + "에서 매물을 찾지 못했습니다.");
       state.preparing = false;
-      await collectAndSave(articles, "대전 " + district.name);
+      await collectAndSave(articles, "대전 " + district.name + " 전체", {
+        complete: true,
+        source: "네이버"
+      });
     } catch (error) {
       state.preparing = false;
-      setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
-      updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
+      if (error && error.safeStop) {
+        setStatus(
+          "네이버 안전중단 완료",
+          "아직 서버 저장을 시작하기 전 단계에서 중단했습니다. 기존 저장자료에는 영향이 없습니다."
+        );
+      } else {
+        setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
+        updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
+      }
       saveButton.disabled = false;
       retryButton.disabled = false;
       cityButton.disabled = false;
       saveButton.textContent = district.name + " 다시 수집";
+      finishCollectorRun();
     }
   }
 
   async function collectFinDaejeonAll() {
     if (state.busy) return;
+    beginCollectorRun();
     var progress = loadCityProgress();
     if (
       !progress ||
@@ -1457,6 +1509,7 @@
 
     try {
       while (progress.queue.length) {
+        throwIfStopRequested();
         var district = progress.queue[0];
         setStatus(
           "대전 5개 구 자동 수집 중",
@@ -1534,12 +1587,28 @@
       );
       clearCityProgress();
     } catch (error) {
-      progress.failed = Number(progress.failed || 0) + 1;
+      if (error && error.safeStop && progress.sessionId && progress.seenIds.length) {
+        try {
+          await finalizeNaverSession({
+            sessionId: progress.sessionId,
+            scope: progress.scope,
+            source: "네이버",
+            complete: false,
+            stopped: true,
+            note: "사용자 안전중단 · 이어가기 상태 보존"
+          });
+        } catch (_) {}
+      }
+      if (!(error && error.safeStop)) {
+        progress.failed = Number(progress.failed || 0) + 1;
+      }
       saveCityProgress(progress);
       updateDashboard({failed: progress.failed});
       setStatus(
-        "대전 5개 구 수집 일시정지",
-        String(error && error.message ? error.message : error) +
+        error && error.safeStop ? "네이버 안전중단 완료" : "대전 5개 구 수집 일시정지",
+        (error && error.safeStop
+          ? "현재 저장 묶음까지 보존했습니다. 완전수집으로 처리하지 않았습니다."
+          : String(error && error.message ? error.message : error)) +
         "\n같은 버튼을 다시 누르면 저장된 다음 페이지부터 이어집니다."
       );
     } finally {
@@ -1548,6 +1617,7 @@
       saveButton.disabled = !state.selectedDistrict;
       cityButton.disabled = false;
       updateCityButton();
+      finishCollectorRun();
     }
   }
 
@@ -1892,6 +1962,7 @@
         sessionId: metadata.sessionId,
         scope: metadata.scope || "선택 클러스터",
         complete: Boolean(metadata.complete),
+        stopped: Boolean(metadata.stopped),
         source: metadata.source || "네이버",
         note: metadata.note || ""
       })
@@ -1969,13 +2040,15 @@
     return latest;
   }
 
-  async function collectAndSave(rawOverride, scopeOverride) {
+  async function collectAndSave(rawOverride, scopeOverride, runOptions) {
+    runOptions = runOptions || {};
     var hasOverride = Array.isArray(rawOverride);
     if (
       state.busy ||
       state.preparing ||
       (!hasOverride && (!state.capture || !state.capture.prepared))
     ) return;
+    if (!runOptions.complete) beginCollectorRun();
     state.busy = true;
     saveButton.disabled = true;
     retryButton.disabled = true;
@@ -2008,6 +2081,7 @@
       });
 
       for (var index = 0; index < items.length;) {
+        if (state.stopRequested) break;
         var batch = items.slice(index, index + BATCH_SIZE);
         setStatus(
           "JS부동산 매물현황 저장 중",
@@ -2023,15 +2097,40 @@
         adjustBatchSize(Date.now() - batchStartedAt, Number(result.failed || 0));
         index += batch.length;
         dashboardFromTotals(items.length, index, totals);
+        if (state.stopRequested) break;
         await delay(160);
       }
 
+      var safelyStopped = state.stopRequested;
+      if (safelyStopped && index === 0) {
+        setStatus(
+          "네이버 안전중단 완료",
+          "서버 저장을 시작하기 전에 중단했습니다. 기존 저장자료에는 영향이 없습니다."
+        );
+        saveButton.textContent = "다시 수집";
+        return;
+      }
       await finalizeNaverSession({
         sessionId: session.sessionId,
         scope: session.scope,
-        complete: false,
-        note: "선택 클러스터 수집 완료"
+        source: runOptions.source || "네이버",
+        complete: Boolean(runOptions.complete) && !safelyStopped &&
+          Number(totals.failed || 0) === 0 && index >= items.length,
+        stopped: safelyStopped,
+        note: safelyStopped
+          ? "사용자 안전중단 · 저장 완료 " + index + "/" + items.length
+          : (runOptions.complete ? session.scope + " 완전수집 완료" : "선택 클러스터 수집 완료")
       });
+      if (safelyStopped) {
+        dashboardFromTotals(items.length, index, totals);
+        setStatus(
+          "네이버 안전중단 완료",
+          "현재 저장 묶음까지 " + index + "/" + items.length +
+          "개를 보존했습니다. 완전수집으로 처리하지 않았으므로 미노출 판정은 실행되지 않습니다."
+        );
+        saveButton.textContent = "중단 지점부터 다시 수집";
+        return;
+      }
       var accepted = Number(totals.accepted || totals.saved || 0);
       setStatus(
         "네이버 수집 완료",
@@ -2083,14 +2182,31 @@
       }
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
     } catch (error) {
+      if (Number(totals.accepted || 0) > 0) {
+        try {
+          await finalizeNaverSession({
+            sessionId: session.sessionId,
+            scope: session.scope,
+            source: runOptions.source || "네이버",
+            complete: false,
+            stopped: Boolean(error && error.safeStop),
+            note: error && error.safeStop ? "사용자 안전중단" : "수집 중 오류 · 부분저장 보존"
+          });
+        } catch (_) {}
+      }
       setProgress(0, 0);
-      updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
-      setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
+      if (error && error.safeStop) {
+        setStatus("네이버 안전중단 완료", "이미 저장된 매물은 유지되며 완전수집 판정은 실행하지 않았습니다.");
+      } else {
+        updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
+        setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
+      }
       saveButton.textContent = "다시 저장";
     } finally {
       state.busy = false;
       saveButton.disabled = isFinNaver() ? !state.selectedDistrict : !state.capture;
       retryButton.disabled = false;
+      finishCollectorRun();
     }
   }
 

@@ -95,12 +95,15 @@ vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.4.0");
+assert.strictEqual(api.version, "1.5.0");
 assert(
   collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")
 );
 assert(collectorSource.includes('data-metric="review"'));
 assert(collectorSource.includes("주소·변환 제외"));
+assert(collectorSource.includes('data-action="stop"'));
+assert(collectorSource.includes("공실박스 2000개 이상 전체클러스터"));
+assert(collectorSource.includes("finalizeCollectionSession"));
 
 const importTotals = {
   received: 0,
