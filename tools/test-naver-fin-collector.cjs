@@ -173,7 +173,7 @@ vm.runInContext(source, context, {filename: collectorPath});
 (async () => {
   const api = window.__JS_NAVER_COLLECTOR__;
   assert(api, "collector API missing");
-  assert.strictEqual(api.version, "5.2.1");
+  assert.strictEqual(api.version, "5.3.0");
   assert.strictEqual(api.isFinNaver(), true);
 
   const filters = api.parseFinFilters(location.href);
@@ -193,7 +193,7 @@ vm.runInContext(source, context, {filename: collectorPath});
     ["3017000000"]
   );
   assert.strictEqual(requestBodies[0].filter.legalDivisionType, "GUN");
-  assert.strictEqual(requestBodies[0].articlePagingRequest.size, 30);
+  assert.strictEqual(requestBodies[0].articlePagingRequest.size, 100);
   assert.strictEqual(requestBodies[1].articlePagingRequest.lastInfo[0].cursor, 30);
   assert.strictEqual(requestBodies[2].articlePagingRequest.lastInfo[0].cursor, 60);
   assert.strictEqual(requestBodies[1].articlePagingRequest.seed, "seed-1");
@@ -277,7 +277,8 @@ vm.runInContext(source, context, {filename: collectorPath});
   assert(source.includes("version === VERSION"));
   assert(source.includes("__jsNaverCollectorVersion !== VERSION"));
   assert(source.includes('data-metric="review"'));
-  assert(source.includes("대전 5개 구 전체 이어서 수집"));
+  assert(!source.includes('data-action="city"'));
+  assert(source.includes("classifySourceManifest"));
   assert(source.includes('data-action="stop"'));
   assert(source.includes("__jsNaverCollectorRequestBody"));
   assert(source.includes("requestBody: this.__jsNaverCollectorRequestBody || null"));

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.2.1";
+  var VERSION = "5.3.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -31,7 +31,7 @@
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
   var FIN_NAVER_HOST = "fin.land.naver.com";
   var FIN_ARTICLE_LIST_PATH = "/front-api/v1/article/legalDivisionArticleList";
-  var FIN_PAGE_SIZE = 30;
+  var FIN_PAGE_SIZE = 100;
   var FIN_MAX_PAGES = 500;
   var TRADE_TYPE_LABELS = {
     A1: "매매",
@@ -100,6 +100,7 @@
     capturedAt: 0,
     clickedClusterCount: 0,
     selectedDistrict: null,
+    selectionMode: "",
     dashboard: createEmptyDashboard()
   };
 
@@ -111,7 +112,9 @@
   var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
   var retryButton = panel.querySelector("[data-action=retry]");
-  var cityButton = panel.querySelector("[data-action=city]");
+  // 이전 5개 구 연속수집 기능은 제거했습니다. 구·동·숫자 클러스터를
+  // 하나씩 확인한 뒤 사용자가 수집을 시작하는 흐름만 유지합니다.
+  var cityButton = panel.querySelector("[data-action=city]") || document.createElement("button");
   var stopButton = panel.querySelector("[data-action=stop]");
   var closeButton = panel.querySelector("[data-action=close]");
 
@@ -217,7 +220,7 @@
       '<div class="jsn-head">' +
         '<div class="jsn-brand"><div class="jsn-logo">N</div><div>' +
           '<div class="jsn-title">네이버 매물 수집<span class="jsn-version">v' + VERSION + '</span></div>' +
-          '<div class="jsn-sub">새 네이버부동산 · 대전 5개 구 선택형 수집</div>' +
+          '<div class="jsn-sub">새 네이버부동산 · 구·동·숫자 클러스터 선택형 수집</div>' +
         '</div></div>' +
         '<button type="button" class="jsn-close" data-action="close" aria-label="닫기">×</button>' +
       '</div>' +
@@ -246,7 +249,6 @@
           '<div class="jsn-actions">' +
             '<button type="button" class="jsn-btn jsn-retry" data-action="retry">선택 구 다시 확인</button>' +
             '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>선택 구 전체 수집</button>' +
-            '<button type="button" class="jsn-btn jsn-city" data-action="city" disabled>대전 5개 구 전체 이어서 수집</button>' +
             '<button type="button" class="jsn-btn jsn-stop" data-action="stop" disabled>안전중단</button>' +
           '</div>' +
         '</div>' +
@@ -257,14 +259,13 @@
 
   function bindEvents() {
     saveButton.addEventListener("click", function () {
-      if (isFinNaver()) collectFinSelectedAndSave();
+      if (isFinNaver() && state.selectionMode === "district") collectFinSelectedAndSave();
       else collectAndSave();
     });
     retryButton.addEventListener("click", function () {
       if (isFinNaver()) discoverFinContext();
       else discoverExistingRequest();
     });
-    cityButton.addEventListener("click", collectDaejeonAll);
     stopButton.addEventListener("click", requestSafeStop);
     document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
@@ -311,6 +312,8 @@
       var districtCount = clusterCountFromText(originalText);
       if (district) {
         state.selectedDistrict = district;
+        state.selectionMode = "district";
+        state.capture = null;
         state.clickedClusterCount = districtCount;
         updateDashboard({
           found: districtCount,
@@ -324,12 +327,13 @@
         );
         saveButton.disabled = false;
         saveButton.textContent = district.name + " 전체 수집";
-        cityButton.disabled = false;
         return;
       }
       var count = clusterCountFromText(originalText);
       if (!Number.isFinite(count) || count < 1) continue;
       state.clickedClusterCount = count;
+      state.selectedDistrict = null;
+      state.selectionMode = "cluster";
       setStatus(
         "동·숫자 클러스터 " + formatNumber(count) + "개를 선택했습니다.",
         "네이버 첫 페이지 응답을 기다리고 있습니다."
@@ -760,16 +764,17 @@
       });
     }
 
-    state.selectedDistrict = selected || null;
+    if (state.selectionMode !== "cluster") {
+      state.selectedDistrict = selected || null;
+      state.selectionMode = selected ? "district" : "";
+    }
     state.clickedClusterCount = targetCount;
-    state.capture = null;
+    if (state.selectionMode !== "cluster") state.capture = null;
     updateDashboard(Object.assign(createEmptyDashboard(), {
       found: targetCount,
       remaining: targetCount
     }));
     setProgress(0, targetCount || 1);
-    cityButton.disabled = false;
-
     if (selected) {
       setStatus(
         selected.name + " 선택 클러스터 합계 " + formatNumber(targetCount) + "개",
@@ -779,8 +784,8 @@
       saveButton.textContent = (targetCount ? formatNumber(targetCount) + "개 " : "") + selected.name + " 전체 수집";
     } else {
       setStatus(
-        "대전 5개 구 클러스터를 선택하세요.",
-        "서구·중구·유성구·대덕구·동구 중 하나를 누르거나, 아래의 대전 5개 구 전체 수집을 이용하세요."
+        "수집할 구·동·숫자 클러스터를 선택하세요.",
+        "선택 수량을 확인한 뒤 수집 버튼을 눌러주세요."
       );
       saveButton.disabled = true;
       saveButton.textContent = "선택 구 전체 수집";
@@ -808,6 +813,7 @@
       hasMore: hasMore(json),
       requestOptions: requestOptions || null
     };
+    if (state.selectionMode !== "district") state.selectionMode = "cluster";
     state.collected = articles.slice();
     state.capturedAt = Date.now();
     state.prepareId += 1;
@@ -824,8 +830,6 @@
   function showCapture(capture) {
     var count = capture.articles.length;
     var expected = capture.expected;
-    cityButton.disabled = !getCityStrategy(capture.responseUrl);
-    updateCityButton();
     updateDashboard({
       found: count,
       remaining: Math.max(0, Number(expected || count) - count)
@@ -1917,7 +1921,7 @@
       space.floorSpace != null ? space.floorSpace :
       space.landSpace != null ? space.landSpace :
       article.area2 != null ? article.area2 : article.area1;
-    return {
+    var normalized = {
       articleNo: articleNo,
       buildingName: clean(
         article.complexName || article.buildingName || article.articleName
@@ -1963,6 +1967,87 @@
       currentUrl: location.href,
       sourceLink: naverListingUrl(articleNo, location.href)
     };
+    normalized.listSnapshot = naverListSnapshot(normalized);
+    return normalized;
+  }
+
+  function naverListSnapshot(item) {
+    item = item || {};
+    return JSON.stringify([
+      clean(item.articleNo),
+      clean(item.buildingName),
+      clean(item.category),
+      clean(item.tradeType),
+      clean(item.deposit),
+      clean(item.monthly),
+      clean(item.areaSquareMeter),
+      clean(item.floorInfo),
+      clean(item.roomInfo),
+      clean(item.jibunAddress),
+      clean(item.description),
+      Array.isArray(item.tags) ? item.tags.map(clean).sort() : []
+    ]);
+  }
+
+  async function classifyNaverManifest(items, metadata) {
+    var need = Object.create(null);
+    var unchanged = 0;
+    var changed = 0;
+    var unknown = 0;
+    var chunkSize = 2500;
+    for (var offset = 0; offset < items.length; offset += chunkSize) {
+      throwIfStopRequested();
+      var chunk = items.slice(offset, offset + chunkSize);
+      setStatus(
+        "기존 매물 빠른 비교 중",
+        Math.min(offset + chunk.length, items.length).toLocaleString("ko-KR") +
+        " / " + items.length.toLocaleString("ko-KR") +
+        "개 · 신규·변경 매물만 상세 저장합니다."
+      );
+      setProgress(offset, items.length || 1);
+      var response = await nativeFetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: {"Content-Type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({
+          action: "classifySourceManifest",
+          accessKey: NAVER_ACCESS_KEY,
+          source: "네이버",
+          sessionId: metadata.sessionId,
+          scope: metadata.scope,
+          startedAt: metadata.startedAt,
+          entries: chunk.map(function(item) {
+            return {
+              sourceId: "네이버-" + clean(item.articleNo),
+              listSnapshot: item.listSnapshot
+            };
+          })
+        })
+      });
+      var text = await response.text();
+      var result;
+      try { result = JSON.parse(text); } catch (_) {
+        throw new Error("기존 매물 비교 응답을 읽지 못했습니다.");
+      }
+      if (!result.ok) throw new Error(result.message || "기존 매물 비교에 실패했습니다.");
+      (Array.isArray(result.needsDetail) ? result.needsDetail : []).forEach(function(id) {
+        need[String(id).replace(/^네이버-/, "")] = true;
+      });
+      unchanged += Number(result.unchanged || 0);
+      changed += Number(result.changed || 0);
+      unknown += Number(result.unknown || 0);
+      updateDashboard({
+        found: items.length,
+        processed: Math.min(offset + chunk.length, items.length),
+        remaining: Math.max(0, items.length - offset - chunk.length),
+        duplicate: unchanged
+      });
+    }
+    return {
+      items: items.filter(function(item) { return need[clean(item.articleNo)]; }),
+      unchanged: unchanged,
+      changed: changed,
+      unknown: unknown
+    };
   }
 
   async function postBatch(items, metadata) {
@@ -1976,7 +2061,8 @@
         data: items,
         sessionId: metadata.sessionId || "",
         scope: metadata.scope || "선택 클러스터",
-        startedAt: metadata.startedAt || ""
+        startedAt: metadata.startedAt || "",
+        manifestRegistered: Boolean(metadata.manifestRegistered)
       })
     });
     var text = await response.text();
@@ -2004,6 +2090,8 @@
         complete: Boolean(metadata.complete),
         stopped: Boolean(metadata.stopped),
         source: metadata.source || "네이버",
+        observedSourceIds: Array.isArray(metadata.observedSourceIds)
+          ? metadata.observedSourceIds : [],
         note: metadata.note || ""
       })
     });
@@ -2049,7 +2137,7 @@
 
   async function waitForNaverSessionResult(metadata, found, accepted, failed) {
     var latest = null;
-    for (var attempt = 0; attempt < 12; attempt += 1) {
+    for (var attempt = 0; attempt < 2; attempt += 1) {
       try {
         latest = await getNaverSessionResult(metadata);
       } catch (_) {
@@ -2075,7 +2163,7 @@
             Number(latest.pending || 0) + "개 · 실패 " + failed + "개"
         );
       }
-      await wait(3000);
+      await wait(800);
     }
     return latest;
   }
@@ -2111,13 +2199,21 @@
 
     try {
       var rawItems = hasOverride ? rawOverride : await collectAll(state.capture);
-      var items = rawItems.map(normalize).filter(function (item) {
+      var allItems = rawItems.map(normalize).filter(function (item) {
         return item.articleNo;
       });
+      session.observedSourceIds = allItems.map(function(item) {
+        return "네이버-" + clean(item.articleNo);
+      });
+      var classification = await classifyNaverManifest(allItems, session);
+      var items = classification.items;
+      session.manifestRegistered = true;
+      totals.duplicate = classification.unchanged;
       updateDashboard({
-        found: items.length,
-        processed: 0,
-        remaining: items.length
+        found: allItems.length,
+        processed: classification.unchanged,
+        remaining: items.length,
+        duplicate: classification.unchanged
       });
 
       for (var index = 0; index < items.length;) {
@@ -2132,7 +2228,7 @@
           "JS부동산 매물현황 저장 중",
           (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + BATCH_SIZE + "개씩 안전하게 저장합니다."
         );
-        setProgress(index, items.length);
+        setProgress(classification.unchanged + index, allItems.length || 1);
         var batchStartedAt = Date.now();
         var result;
         try {
@@ -2146,13 +2242,31 @@
         }
         adjustBatchSize(Date.now() - batchStartedAt, Number(result.failed || 0));
         index += batch.length;
-        dashboardFromTotals(items.length, index, totals);
+        updateDashboard({
+          found: allItems.length,
+          processed: classification.unchanged + index,
+          remaining: Math.max(0, items.length - index),
+          created: totals.created,
+          merged: totals.merged,
+          review: totals.review,
+          duplicate: totals.duplicate,
+          failed: totals.failed
+        });
         if (state.stopRequested) break;
         await delay(160);
       }
 
       var safelyStopped = state.stopRequested;
       if (safelyStopped && index === 0) {
+        await finalizeNaverSession({
+          sessionId: session.sessionId,
+          scope: session.scope,
+          source: runOptions.source || "네이버",
+          complete: false,
+          stopped: true,
+          observedSourceIds: session.observedSourceIds,
+          note: "사용자 안전중단 · 완전수집 미적용"
+        });
         setStatus(
           "네이버 안전중단 완료",
           "서버 저장을 시작하기 전에 중단했습니다. 기존 저장자료에는 영향이 없습니다."
@@ -2160,19 +2274,26 @@
         saveButton.textContent = "다시 수집";
         return;
       }
-      await finalizeNaverSession({
+      var finalResult = await finalizeNaverSession({
         sessionId: session.sessionId,
         scope: session.scope,
         source: runOptions.source || "네이버",
         complete: Boolean(runOptions.complete) && !safelyStopped &&
           Number(totals.failed || 0) === 0 && index >= items.length,
         stopped: safelyStopped,
+        observedSourceIds: session.observedSourceIds,
         note: safelyStopped
           ? "사용자 안전중단 · 저장 완료 " + index + "/" + items.length
           : (runOptions.complete ? session.scope + " 완전수집 완료" : "선택 클러스터 수집 완료")
       });
       if (safelyStopped) {
-        dashboardFromTotals(items.length, index, totals);
+        updateDashboard({
+          found: allItems.length,
+          processed: classification.unchanged + index,
+          remaining: Math.max(0, items.length - index),
+          duplicate: totals.duplicate,
+          failed: totals.failed
+        });
         setStatus(
           "네이버 안전중단 완료",
           "현재 저장 묶음까지 " + index + "/" + items.length +
@@ -2184,43 +2305,43 @@
       var accepted = Number(totals.accepted || totals.saved || 0);
       setStatus(
         "네이버 수집 완료",
-        "전체 " + items.length + "개 · 정상접수 " + accepted +
+        "전체 " + allItems.length + "개 · 기존 동일 " + classification.unchanged +
+          "개 · 신규·변경 접수 " + accepted +
           "개 · JS매물 반영 결과 확인 중 · 실패 " + totals.failed + "개" +
           (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
       );
-      var sessionResult = await waitForNaverSessionResult(
-        session,
-        items.length,
-        accepted,
-        totals.failed
-      );
-      setProgress(items.length, items.length || 1);
+      var sessionResult = finalResult && finalResult.totals
+        ? Object.assign({finished: true}, finalResult.totals)
+        : null;
+      setProgress(allItems.length, allItems.length || 1);
       if (sessionResult && sessionResult.finished) {
         updateDashboard({
-          found: items.length,
-          processed: items.length,
+          found: allItems.length,
+          processed: allItems.length,
           remaining: 0,
           created: sessionResult.created,
           merged: sessionResult.merged,
           review: sessionResult.review,
-          duplicate: sessionResult.duplicate,
+          duplicate: Number(sessionResult.duplicate || 0) + classification.unchanged,
           failed: Number(sessionResult.failed || totals.failed || 0)
         });
         setStatus(
           "네이버 수집 완료",
-          "전체 " + items.length + "개 · JS신규 " + Number(sessionResult.created || 0) +
+          "전체 " + allItems.length + "개 · 기존 동일 " + classification.unchanged +
+            "개 · JS신규 " + Number(sessionResult.created || 0) +
             "개 · 기존통합 " + Number(sessionResult.merged || 0) +
             "개 · 조건갱신 " + Number(sessionResult.updated || 0) +
             "개 · 검증대기 " + Number(sessionResult.review || 0) +
-            "개 · 중복 " + Number(sessionResult.duplicate || 0) +
+            "개 · 중복 " + (Number(sessionResult.duplicate || 0) + classification.unchanged) +
             "개 · 실패 " + Number(sessionResult.failed || totals.failed || 0) + "개" +
             (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
         );
       } else {
-        dashboardFromTotals(items.length, items.length, totals);
+        dashboardFromTotals(allItems.length, allItems.length, totals);
         setStatus(
           "네이버 수집 완료",
-          "전체 " + items.length + "개 · 정상접수 " + accepted +
+          "전체 " + allItems.length + "개 · 기존 동일 " + classification.unchanged +
+            "개 · 신규·변경 접수 " + accepted +
             "개 · JS신규/통합 판정은 자동 진행 중입니다." +
             (sessionResult
               ? " 현재 반영 " + Number(sessionResult.processed || 0) +
@@ -2254,7 +2375,9 @@
       saveButton.textContent = "다시 저장";
     } finally {
       state.busy = false;
-      saveButton.disabled = isFinNaver() ? !state.selectedDistrict : !state.capture;
+      saveButton.disabled = isFinNaver()
+        ? (state.selectionMode === "district" ? !state.selectedDistrict : !state.capture)
+        : !state.capture;
       retryButton.disabled = false;
       finishCollectorRun();
     }

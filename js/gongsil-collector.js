@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.7.1";
+  var VERSION = "1.8.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -21,6 +21,7 @@
   // Invalidate keys saved during the initial security rollout. Some browsers
   // saved the instruction line instead of the actual collector key.
   var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key_v3";
+  var DETAIL_AUTH_STORAGE = "js_gongsil_detail_auth_v1";
 
   if (!/gongsilbox\.com$/i.test(location.hostname)) {
     alert("공실박스 지도에서 실행해 주세요.");
@@ -55,7 +56,7 @@
     stopRequested: false,
     capture: migratedCapture,
     capturedAt: 0,
-    detailAuth: null,
+    detailAuth: loadDetailAuth(),
     detailCache: {},
     migratedTransformItem: migratedTransformItem,
     pendingSave: null,
@@ -111,6 +112,7 @@
     },
     setDetailAuth: function (auth) {
       state.detailAuth = auth || null;
+      saveDetailAuth(state.detailAuth);
     },
     transformItem: transformItem,
     decryptText: decryptText,
@@ -139,6 +141,25 @@
       localStorage.setItem(COLLECTOR_KEY_STORAGE, entered);
     } catch (_) {}
     return entered;
+  }
+
+  function loadDetailAuth() {
+    try {
+      var value = JSON.parse(sessionStorage.getItem(DETAIL_AUTH_STORAGE) || "null");
+      return value && value.mid ? value : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveDetailAuth(value) {
+    try {
+      if (value && value.mid) {
+        sessionStorage.setItem(DETAIL_AUTH_STORAGE, JSON.stringify(value));
+      } else {
+        sessionStorage.removeItem(DETAIL_AUTH_STORAGE);
+      }
+    } catch (_) {}
   }
 
   function createPanel() {
@@ -327,6 +348,7 @@
         endpoint: requestUrl(input) || "/maps/mmview",
         template: Object.assign({}, body)
       };
+      saveDetailAuth(state.detailAuth);
     }
 
     if (result && result.res === "success" && result.data) {
@@ -459,13 +481,43 @@
       });
       setProgress(0, items.length);
 
-      if (!state.migratedTransformItem) {
+      var collectorKey = getCollectorKey();
+      var saveMetadata = {
+        sessionId: createCollectionSessionId(),
+        scope: selectedCount >= 2000
+          ? "공실박스 2000개 이상 전체클러스터"
+          : "공실박스 선택클러스터",
+        complete: selectedCount >= 2000 &&
+          items.length === selectedCount,
+        found: items.length,
+        rejectedCount: 0,
+        observedSourceIds: observedSourceIds(items),
+        manifestRegistered: true
+      };
+      var classification = await classifyGongsilManifest(
+        items,
+        saveMetadata,
+        collectorKey
+      );
+      var detailItems = items.filter(function(item) {
+        return classification.needs[recordSourceId(item)];
+      });
+      updateDashboard({
+        found: items.length,
+        processed: classification.unchanged,
+        remaining: detailItems.length,
+        duplicate: classification.unchanged
+      });
+      setProgress(classification.unchanged, items.length);
+
+      if (detailItems.length && !state.migratedTransformItem) {
         await ensureDetailAuth();
       }
 
       setStatus(
-        "지번주소와 전화번호를 확인하는 중입니다.",
-        "전체 " + items.length + "개 · 공실박스에 보이는 번호를 자동 분류합니다."
+        detailItems.length ? "신규·변경 매물 상세정보 확인 중" : "기존 매물 빠른 확인 완료",
+        "전체 " + items.length + "개 · 기존 동일 " + classification.unchanged +
+        "개 · 상세조회 필요 " + detailItems.length + "개"
       );
 
       var transformed = [];
@@ -473,14 +525,14 @@
       var completed = 0;
       var detailWaitStartedAt = Date.now();
       var detailWaitTimer = window.setInterval(function () {
-        showGongsilDetailWait(completed, items.length, detailWaitStartedAt);
+        showGongsilDetailWait(completed, detailItems.length, detailWaitStartedAt);
       }, 1000);
       var transformWorker = state.migratedTransformItem || transformItem;
       // 공실박스 상세조회는 화면에서 한 건씩 여는 흐름을 기준으로 동작합니다.
       // 동시에 여러 건을 요청하면 정상 세션에서도 일부 상세 응답이 누락될 수 있습니다.
       var queueResult;
       try {
-        queueResult = await mapWithConcurrency(items, 1, async function (item) {
+        queueResult = await mapWithConcurrency(detailItems, 1, async function (item) {
           if (state.stopRequested) return {stopped: true};
           var result;
           try {
@@ -495,14 +547,15 @@
           completed += 1;
           updateDashboard({
             found: items.length,
-            processed: completed,
-            remaining: Math.max(0, items.length - completed)
+            processed: classification.unchanged + completed,
+            remaining: Math.max(0, detailItems.length - completed)
           });
-          setProgress(completed, items.length);
-          if (completed === items.length || completed % 5 === 0) {
+          setProgress(classification.unchanged + completed, items.length);
+          if (completed === detailItems.length || completed % 5 === 0) {
             setStatus(
-              "지번주소와 전화번호를 확인하는 중입니다.",
-              completed + " / " + items.length + "개 처리"
+              "신규·변경 매물 상세정보 확인 중",
+              completed + " / " + detailItems.length + "개 상세확인 · 기존 동일 " +
+              classification.unchanged + "개는 생략"
             );
           }
           return result;
@@ -516,7 +569,7 @@
         else if (result && result.stopped) return;
         else rejected.push(result && result.reason ? result.reason : "변환 실패");
       });
-      if (!state.stopRequested && completed >= items.length) {
+      if (!state.stopRequested && completed >= detailItems.length) {
         state.migratedTransformItem = null;
       }
       updateDashboard({addressMissing: rejected.length});
@@ -524,12 +577,12 @@
       if (state.stopRequested) {
         setStatus(
           "공실박스 안전중단 완료",
-          completed + "/" + items.length +
+          completed + "/" + detailItems.length +
           "개 상세확인 뒤 멈췄습니다. 상세조회 캐시는 유지되어 같은 화면에서 다시 실행하면 더 빠르게 이어집니다."
         );
         return;
       }
-      if (!transformed.length) {
+      if (!transformed.length && detailItems.length) {
         throw new Error(
           "저장 가능한 매물이 없습니다.\n" + rejectedSummary(rejected)
         );
@@ -540,17 +593,8 @@
         transformed.length + "개 저장 · 변환 제외 " + rejected.length + "개"
       );
 
-      var saveMetadata = {
-        sessionId: createCollectionSessionId(),
-        scope: selectedCount >= 2000
-          ? "공실박스 2000개 이상 전체클러스터"
-          : "공실박스 선택클러스터",
-        complete: selectedCount >= 2000 &&
-          items.length === selectedCount,
-        found: items.length,
-        rejectedCount: rejected.length,
-        observedSourceIds: observedSourceIds(items)
-      };
+      saveMetadata.rejectedCount = rejected.length;
+      saveMetadata.unchanged = classification.unchanged;
       state.pendingSave = {
         records: transformed,
         metadata: saveMetadata,
@@ -559,7 +603,7 @@
         selectedCount: selectedCount
       };
 
-      var result = await sendToAppsScript(transformed, saveMetadata);
+      var result = await sendToAppsScript(transformed, saveMetadata, collectorKey);
       if (!result || result.ok !== true) {
         if (
           result &&
@@ -578,6 +622,8 @@
       var message = result && result.message
         ? result.message
         : "공실박스 매물 전송을 완료했습니다.";
+      message += "\n전체 " + items.length + "개 중 기존 동일 " +
+        classification.unchanged + "개는 상세조회를 생략했습니다.";
       updateDashboard({
         found: items.length,
         processed: items.length,
@@ -585,7 +631,7 @@
         created: result.created,
         merged: result.merged,
         review: result.review,
-        duplicate: result.duplicate,
+        duplicate: Number(result.duplicate || 0) + classification.unchanged,
         addressMissing: rejected.length,
         failed: result.failed
       });
@@ -980,7 +1026,7 @@
     );
     saveButton.textContent = "상세창 연결 대기 중";
 
-    for (var attempt = 0; attempt < 360; attempt += 1) {
+    for (var attempt = 0; attempt < 60; attempt += 1) {
       if (state.stopRequested) {
         throw new Error("사용자 안전중단");
       }
@@ -1053,6 +1099,7 @@
       ok: true,
       record: {
         externalId: text(pick(item, ["Bfidx", "bfidx", "BfIdx"])),
+        listSnapshot: gongsilListSnapshot(item),
         values: values
       }
     };
@@ -1547,9 +1594,9 @@
     return text(memo) + " · " + parts.join(" · ");
   }
 
-  async function sendToAppsScript(records, metadata) {
+  async function sendToAppsScript(records, metadata, suppliedCollectorKey) {
     metadata = metadata || {};
-    var collectorKey = getCollectorKey();
+    var collectorKey = suppliedCollectorKey || getCollectorKey();
     var emptyTotals = {
       received: 0,
       created: 0,
@@ -1653,7 +1700,7 @@
       if (state.stopRequested) break;
     }
     var stopped = state.stopRequested || offset < records.length;
-    if (offset > 0) {
+    if (offset > 0 || metadata.manifestRegistered) {
       await finalizeGongsilSession(
         metadata,
         collectorKey,
@@ -1726,6 +1773,97 @@
     );
   }
 
+  function recordSourceId(item) {
+    return text(pick(item || {}, ["Bfidx", "bfidx", "BfIdx", "id"]));
+  }
+
+  function gongsilListSnapshot(item) {
+    item = item || {};
+    var projection = {};
+    [
+      "Bo", "Deposit", "MmDeposit", "Mm", "Monthly", "MmMonthly", "Rent",
+      "Jun", "JeonseDeposit", "Jmm", "JeonseMonthly", "Moneys", "moneys",
+      "Bilname", "BilName", "Bname", "BuildingName",
+      "TypeView", "ViewType", "LndType", "Type", "Ckhus", "Collective", "IsCollective",
+      "Ho", "BfHo", "Room", "Honame", "Ff", "BfFloor", "Floor", "floor",
+      "Area", "Pyeong", "Py", "AreaPy", "BfArea", "AreaM2", "Areatxt",
+      "Premium", "Gwon", "Gwonri", "BfPremium", "RightMoney", "Gul", "gul",
+      "Gal", "BfGalMoney", "ManagementFee", "ManageFee",
+      "MoveDate", "BfMoveDate", "MoveInDate", "CurrentBusiness",
+      "CurrentIndustry", "NowBusiness", "Uptype", "BusinessType",
+      "Memo", "BfMemo", "Note", "BfAdnote2", "Hoetc", "Status", "State"
+    ].forEach(function(key) {
+      var value = item[key];
+      if (value == null || typeof value === "function") return;
+      projection[key] = value;
+    });
+    return stableSnapshotJson(projection);
+  }
+
+  function stableSnapshotJson(value) {
+    if (Array.isArray(value)) {
+      return "[" + value.map(stableSnapshotJson).join(",") + "]";
+    }
+    if (value && typeof value === "object") {
+      return "{" + Object.keys(value).sort().map(function(key) {
+        return JSON.stringify(key) + ":" + stableSnapshotJson(value[key]);
+      }).join(",") + "}";
+    }
+    return JSON.stringify(value == null ? null : value);
+  }
+
+  async function classifyGongsilManifest(items, metadata, collectorKey) {
+    var needs = Object.create(null);
+    var unchanged = 0;
+    var changed = 0;
+    var unknown = 0;
+    var chunkSize = 2500;
+    for (var offset = 0; offset < items.length; offset += chunkSize) {
+      if (state.stopRequested) throw new Error("사용자 안전중단");
+      var chunk = items.slice(offset, offset + chunkSize);
+      setStatus(
+        "기존 매물 빠른 비교 중",
+        Math.min(offset + chunk.length, items.length).toLocaleString("ko-KR") +
+        " / " + items.length.toLocaleString("ko-KR") +
+        "개 · 신규·변경만 상세조회합니다."
+      );
+      var requestId =
+        "gongsil-manifest-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+      await postAppsScriptWithRetry({
+        action: "classifySourceManifest",
+        requestId: requestId,
+        collectorKey: collectorKey,
+        source: "공실박스",
+        sessionId: metadata.sessionId,
+        scope: metadata.scope,
+        entries: chunk.map(function(item) {
+          return {
+            sourceId: recordSourceId(item),
+            listSnapshot: gongsilListSnapshot(item)
+          };
+        })
+      }, {label: "기존 매물 빠른 비교"});
+      var result = await pollMutationStatus(requestId, collectorKey);
+      if (!result || result.ok !== true) {
+        throw new Error(result && result.message ? result.message : "기존 매물 비교에 실패했습니다.");
+      }
+      (Array.isArray(result.needsDetail) ? result.needsDetail : []).forEach(function(id) {
+        needs[text(id)] = true;
+      });
+      unchanged += Number(result.unchanged || 0);
+      changed += Number(result.changed || 0);
+      unknown += Number(result.unknown || 0);
+      updateDashboard({
+        found: items.length,
+        processed: Math.min(offset + chunk.length, items.length),
+        remaining: Math.max(0, items.length - offset - chunk.length),
+        duplicate: unchanged
+      });
+      setProgress(Math.min(offset + chunk.length, items.length), items.length);
+    }
+    return {needs: needs, unchanged: unchanged, changed: changed, unknown: unknown};
+  }
+
   function observedSourceIds(items) {
     var seen = Object.create(null);
     (Array.isArray(items) ? items : []).forEach(function (item) {
@@ -1796,6 +1934,7 @@
       sessionId: metadata && metadata.sessionId || "",
       scope: metadata && metadata.scope || "공실박스 선택클러스터",
       complete: false,
+      manifestRegistered: Boolean(metadata && metadata.manifestRegistered),
       records: records
     }, {
       label: "매물 " + records.length.toLocaleString("ko-KR") + "개 저장"
@@ -1906,8 +2045,8 @@
 
           if (payload && payload.ready) {
             resolve(payload.result || payload);
-          } else if (attempts < 24) {
-            setTimeout(check, 900);
+          } else if (attempts < 18) {
+            setTimeout(check, 650);
           } else {
             reject(new Error("저장 결과 확인 시간 초과"));
           }
@@ -1916,15 +2055,15 @@
         timer = setTimeout(function () {
           delete window[callbackName];
           script.remove();
-          if (attempts < 24) setTimeout(check, 900);
+          if (attempts < 18) setTimeout(check, 650);
           else reject(new Error("저장 결과 확인 시간 초과"));
-        }, 3500);
+        }, 2500);
 
         script.onerror = function () {
           clearTimeout(timer);
           delete window[callbackName];
           script.remove();
-          if (attempts < 24) setTimeout(check, 900);
+          if (attempts < 18) setTimeout(check, 650);
           else reject(new Error("저장 결과 확인 차단"));
         };
         script.src =
@@ -1936,7 +2075,7 @@
         document.head.appendChild(script);
       }
 
-      setTimeout(check, 1100);
+      setTimeout(check, 500);
     });
   }
 
