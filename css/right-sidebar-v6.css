@@ -69,3 +69,72 @@
     margin-left:420px!important;
   }
 }
+
+/* v6.4.6 desktop/tablet property-card height correction */
+@media (min-width:769px){
+  #list .item{
+    padding-top:5px!important;
+    padding-bottom:5px!important;
+  }
+
+  .item-compact-main-v650{
+    grid-template-rows:minmax(25px,auto) minmax(25px,auto) minmax(27px,auto)!important;
+    gap:2px!important;
+  }
+
+  .item-compact-actions-v650{
+    min-height:27px!important;
+    padding-bottom:0!important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle{
+    height:27px!important;
+    min-height:27px!important;
+    max-height:27px!important;
+    padding-top:0!important;
+    padding-bottom:0!important;
+    line-height:25px!important;
+  }
+}
+
+@media (min-width:769px) and (pointer:coarse),
+       (min-width:769px) and (any-pointer:coarse),
+       (min-width:769px) and (hover:none){
+  #list .item{
+    padding-top:6px!important;
+    padding-bottom:6px!important;
+  }
+
+  .item-compact-main-v650{
+    grid-template-rows:minmax(28px,auto) minmax(28px,auto) minmax(30px,auto)!important;
+    gap:3px!important;
+  }
+
+  .item-compact-actions-v650{
+    min-height:30px!important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle{
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    padding-top:0!important;
+    padding-bottom:0!important;
+    font-size:12.5px!important;
+    line-height:28px!important;
+  }
+}
