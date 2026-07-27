@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.3.0";
+  var VERSION = "1.4.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -38,12 +38,15 @@
     capture: null,
     capturedAt: 0,
     detailAuth: null,
-    detailCache: {}
+    detailCache: {},
+    dashboard: createEmptyDashboard()
   };
 
   var panel = createPanel();
   var statusElement = panel.querySelector("[data-role=status]");
   var detailElement = panel.querySelector("[data-role=detail]");
+  var progressBarElement = panel.querySelector("[data-role=progress-bar]");
+  var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
   var closeButton = panel.querySelector("[data-action=close]");
 
@@ -111,28 +114,45 @@
       style.id = STYLE_ID;
       style.textContent =
         "#" + PANEL_ID + "{" +
-        "position:fixed;right:16px;bottom:18px;z-index:2147483647;" +
-        "width:min(360px,calc(100vw - 24px));box-sizing:border-box;" +
+        "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;" +
+        "width:min(720px,calc(100vw - 28px));max-height:calc(100vh - 28px);box-sizing:border-box;" +
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;" +
         "background:#fff;border:1px solid #d7e3f4;border-radius:16px;" +
-        "box-shadow:0 16px 45px rgba(15,23,42,.24);overflow:hidden;color:#172033}" +
+        "box-shadow:0 24px 80px rgba(15,23,42,.32);overflow:auto;color:#172033}" +
         "#" + PANEL_ID + " *{box-sizing:border-box}" +
         "#" + PANEL_ID + " .jsg-head{display:flex;align-items:center;justify-content:space-between;" +
-        "padding:13px 15px;background:linear-gradient(135deg,#1677ff,#075fe4);color:#fff}" +
-        "#" + PANEL_ID + " .jsg-title{font-size:16px;font-weight:800;letter-spacing:-.3px}" +
-        "#" + PANEL_ID + " .jsg-version{font-size:10px;opacity:.75;margin-left:6px}" +
+        "padding:16px 18px;background:linear-gradient(135deg,#1677ff,#075fe4);color:#fff}" +
+        "#" + PANEL_ID + " .jsg-brand{display:flex;align-items:center;gap:11px}" +
+        "#" + PANEL_ID + " .jsg-logo{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;" +
+        "background:#fff;color:#1268e8;font-size:20px;font-weight:950}" +
+        "#" + PANEL_ID + " .jsg-title{font-size:18px;font-weight:900;letter-spacing:-.3px}" +
+        "#" + PANEL_ID + " .jsg-sub{font-size:11px;opacity:.88;margin-top:2px}" +
+        "#" + PANEL_ID + " .jsg-version{font-size:10px;opacity:.8;margin-left:6px}" +
         "#" + PANEL_ID + " .jsg-close{width:32px;height:32px;border:0;border-radius:9px;" +
         "background:rgba(255,255,255,.16);color:#fff;font-size:22px;line-height:30px;cursor:pointer}" +
-        "#" + PANEL_ID + " .jsg-body{padding:15px}" +
-        "#" + PANEL_ID + " .jsg-status{font-size:15px;font-weight:800;line-height:1.45;color:#172033}" +
+        "#" + PANEL_ID + " .jsg-body{padding:16px;background:#f4f7fc}" +
+        "#" + PANEL_ID + " .jsg-card{padding:14px;background:#fff;border:1px solid #dee7f4;border-radius:13px;" +
+        "box-shadow:0 4px 14px rgba(25,55,90,.05);margin-bottom:11px}" +
+        "#" + PANEL_ID + " .jsg-status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
+        "#" + PANEL_ID + " .jsg-status{font-size:17px;font-weight:900;line-height:1.45;color:#172033}" +
+        "#" + PANEL_ID + " .jsg-percent{font-size:20px;font-weight:950;color:#1268e8;white-space:nowrap}" +
         "#" + PANEL_ID + " .jsg-detail{margin-top:7px;color:#667085;font-size:12px;line-height:1.55;" +
-        "white-space:pre-line;max-height:116px;overflow:auto}" +
-        "#" + PANEL_ID + " .jsg-rule{margin-top:12px;padding:10px 11px;background:#f3f7fd;" +
+        "white-space:pre-line;max-height:90px;overflow:auto}" +
+        "#" + PANEL_ID + " .jsg-progress{height:11px;margin-top:12px;border-radius:99px;" +
+        "background:#e4ebf6;overflow:hidden}" +
+        "#" + PANEL_ID + " .jsg-progress>i{display:block;width:0;height:100%;" +
+        "background:linear-gradient(90deg,#4d98ff,#1268e8);transition:width .2s}" +
+        "#" + PANEL_ID + " .jsg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}" +
+        "#" + PANEL_ID + " .jsg-metric{padding:11px;background:#f3f7fd;border-radius:11px;min-width:0}" +
+        "#" + PANEL_ID + " .jsg-metric span{display:block;font-size:11px;color:#728198;margin-bottom:5px}" +
+        "#" + PANEL_ID + " .jsg-metric b{font-size:18px;font-weight:900;color:#172033}" +
+        "#" + PANEL_ID + " .jsg-rule{padding:10px 11px;background:#eef4fd;" +
         "border-radius:10px;color:#3e536f;font-size:11px;line-height:1.55}" +
         "#" + PANEL_ID + " .jsg-save{width:100%;height:46px;margin-top:12px;border:0;border-radius:11px;" +
         "font-size:15px;font-weight:800;color:#fff;background:#1677ff;cursor:pointer}" +
         "#" + PANEL_ID + " .jsg-save:disabled{cursor:not-allowed;background:#c7d2e3;color:#f7f9fc}" +
-        "@media(max-width:640px){#" + PANEL_ID + "{right:8px;bottom:8px;width:calc(100vw - 16px)}}" ;
+        "@media(max-width:640px){#" + PANEL_ID + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}" +
+        "#" + PANEL_ID + " .jsg-body{padding:11px}#" + PANEL_ID + " .jsg-grid{grid-template-columns:repeat(2,1fr)}}" ;
       document.head.appendChild(style);
     }
 
@@ -140,18 +160,38 @@
     element.id = PANEL_ID;
     element.innerHTML =
       '<div class="jsg-head">' +
-        '<div class="jsg-title">JS 공실박스 수집기 <span class="jsg-version">v' + VERSION + '</span></div>' +
+        '<div class="jsg-brand"><div class="jsg-logo">공</div><div>' +
+          '<div class="jsg-title">공실박스 매물 수집<span class="jsg-version">v' + VERSION + '</span></div>' +
+          '<div class="jsg-sub">선택 클러스터 전체 목록 · 상세정보 · 저장 현황</div>' +
+        '</div></div>' +
         '<button type="button" class="jsg-close" data-action="close" aria-label="닫기">×</button>' +
       '</div>' +
       '<div class="jsg-body">' +
-        '<div class="jsg-status" data-role="status"></div>' +
-        '<div class="jsg-detail" data-role="detail"></div>' +
-        '<div class="jsg-rule">저장 위치: JS부동산 매물현황<br>' +
-        '전화번호: 세입자만 K열 · 나머지는 J열<br>' +
-        '메모: 항상 (임장가자)로 시작</div>' +
-        '<button type="button" class="jsg-save" data-action="save" disabled>' +
-          '선택 클러스터 전체 저장' +
-        '</button>' +
+        '<div class="jsg-card">' +
+          '<div class="jsg-status-line"><div class="jsg-status" data-role="status"></div>' +
+          '<div class="jsg-percent" data-role="percent">0%</div></div>' +
+          '<div class="jsg-progress"><i data-role="progress-bar"></i></div>' +
+          '<div class="jsg-detail" data-role="detail"></div>' +
+        '</div>' +
+        '<div class="jsg-card jsg-grid">' +
+          '<div class="jsg-metric"><span>찾은 매물</span><b data-metric="found">0</b></div>' +
+          '<div class="jsg-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
+          '<div class="jsg-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
+          '<div class="jsg-metric"><span>JS 신규</span><b data-metric="created">0</b></div>' +
+          '<div class="jsg-metric"><span>기존 통합</span><b data-metric="merged">0</b></div>' +
+          '<div class="jsg-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
+          '<div class="jsg-metric"><span>기존 중복</span><b data-metric="duplicate">0</b></div>' +
+          '<div class="jsg-metric"><span>주소·변환 제외</span><b data-metric="addressMissing">0</b></div>' +
+          '<div class="jsg-metric"><span>조회·저장 실패</span><b data-metric="failed">0</b></div>' +
+        '</div>' +
+        '<div class="jsg-card">' +
+          '<div class="jsg-rule">저장 위치: <b>JS부동산 매물현황</b><br>' +
+          '중복검사: 매물ID 우선 · 지번주소 + 층·호실 + 보증금·월세 + 평수 1평 미만<br>' +
+          '전화번호 역할과 메모는 기존 공실박스 규칙대로 유지합니다.</div>' +
+          '<button type="button" class="jsg-save" data-action="save" disabled>' +
+            '선택 클러스터 전체 저장' +
+          '</button>' +
+        '</div>' +
       '</div>';
     document.body.appendChild(element);
     return element;
@@ -273,6 +313,7 @@
   function showCapture(capture) {
     var items = getListItems(capture.response);
     var selectedCount = getSelectedItemCount(capture);
+    var foundCount = selectedCount || items.length;
     var countText = selectedCount
       ? "선택된 매물번호 " + selectedCount + "개"
       : "목록 " + items.length + "개";
@@ -291,6 +332,12 @@
       accumulationText +
       "\n아래 버튼을 누르면 전체 목록과 전화번호를 저장합니다."
     );
+    updateDashboard({
+      found: foundCount,
+      processed: 0,
+      remaining: foundCount
+    });
+    setProgress(0, foundCount);
     saveButton.disabled = false;
     saveButton.textContent = selectedCount
       ? "전체 " + selectedCount.toLocaleString("ko-KR") + "개 분할 수집·저장"
@@ -306,6 +353,8 @@
 
     state.busy = true;
     saveButton.disabled = true;
+    state.dashboard = createEmptyDashboard();
+    updateDashboard(state.dashboard);
 
     try {
       var selectedCount = getSelectedItemCount(state.capture);
@@ -324,6 +373,12 @@
       if (!items.length) {
         throw new Error("선택한 클러스터에서 매물을 찾지 못했습니다.");
       }
+      updateDashboard({
+        found: items.length,
+        processed: 0,
+        remaining: items.length
+      });
+      setProgress(0, items.length);
 
       await ensureDetailAuth();
 
@@ -349,6 +404,12 @@
         }
 
         completed += 1;
+        updateDashboard({
+          found: items.length,
+          processed: completed,
+          remaining: Math.max(0, items.length - completed)
+        });
+        setProgress(completed, items.length);
         if (completed === items.length || completed % 5 === 0) {
           setStatus(
             "지번주소와 전화번호를 확인하는 중입니다.",
@@ -362,6 +423,7 @@
         if (result && result.ok) transformed.push(result.record);
         else rejected.push(result && result.reason ? result.reason : "변환 실패");
       });
+      updateDashboard({addressMissing: rejected.length});
 
       if (!transformed.length) {
         throw new Error(
@@ -393,6 +455,18 @@
       var message = result && result.message
         ? result.message
         : "공실박스 매물 전송을 완료했습니다.";
+      updateDashboard({
+        found: items.length,
+        processed: items.length,
+        remaining: 0,
+        created: result.created,
+        merged: result.merged,
+        review: result.review,
+        duplicate: result.duplicate,
+        addressMissing: rejected.length,
+        failed: result.failed
+      });
+      setProgress(items.length, items.length);
 
       setStatus(
         "저장 완료",
@@ -403,6 +477,7 @@
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
     } catch (error) {
       console.error("[JS 공실박스] 수집 오류", error);
+      updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
       setStatus(
         "수집 중 오류가 발생했습니다.",
         error && error.message ? error.message : String(error)
@@ -1250,6 +1325,16 @@
 
       addImportResult(totals, result);
       offset += batch.length;
+      updateDashboard({
+        processed: offset,
+        remaining: Math.max(0, records.length - offset),
+        created: totals.created,
+        merged: totals.merged,
+        review: totals.review,
+        duplicate: totals.duplicate,
+        failed: totals.failed
+      });
+      setProgress(offset, records.length);
       var elapsed = Date.now() - batchStartedAt;
       if (Number(result.failed || 0) || elapsed > 14000) {
         SAVE_BATCH_SIZE = Math.max(MIN_SAVE_BATCH_SIZE, Math.floor(SAVE_BATCH_SIZE * 0.7 / 25) * 25);
@@ -1395,6 +1480,42 @@
   function setStatus(title, detail) {
     statusElement.textContent = title || "";
     detailElement.textContent = detail || "";
+  }
+
+  function createEmptyDashboard() {
+    return {
+      found: 0,
+      processed: 0,
+      remaining: 0,
+      created: 0,
+      merged: 0,
+      review: 0,
+      duplicate: 0,
+      addressMissing: 0,
+      failed: 0
+    };
+  }
+
+  function formatNumber(value) {
+    var number = Number(value || 0);
+    return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "0";
+  }
+
+  function updateDashboard(values) {
+    values = values || {};
+    Object.keys(state.dashboard).forEach(function (key) {
+      if (values[key] !== undefined) state.dashboard[key] = Number(values[key]) || 0;
+      var node = panel.querySelector('[data-metric="' + key + '"]');
+      if (node) node.textContent = formatNumber(state.dashboard[key]);
+    });
+  }
+
+  function setProgress(done, total) {
+    var percent = total
+      ? Math.min(100, Math.max(0, Math.round(Number(done || 0) / Number(total) * 100)))
+      : 0;
+    if (progressPercentElement) progressPercentElement.textContent = percent + "%";
+    if (progressBarElement) progressBarElement.style.width = percent + "%";
   }
 
   function rejectedSummary(reasons) {

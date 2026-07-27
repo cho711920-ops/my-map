@@ -11,17 +11,17 @@
 <body>
   <main>
     <h1>🟢 JS 네이버부동산 수집 버튼</h1>
-    <p class="sub">확장 프로그램 없이 선택한 네이버 클러스터 전체를 <strong>JS부동산 매물현황</strong>으로 저장합니다.</p>
+    <p class="sub">새 네이버페이 부동산에서 선택한 구 또는 대전 5개 구 전체를 <strong>JS부동산 매물현황</strong>으로 저장합니다.</p>
     <a id="bookmark" class="bookmark" href="javascript:(()=>{const s=document.createElement('script');s.src='https://my-map-ten-roan.vercel.app/js/naver-collector.js?v='+Date.now();document.head.appendChild(s)})()">🟢 네이버 수집</a>
     <button type="button" id="copy">버튼 코드 복사</button><span id="copied"></span>
     <ol class="steps">
       <li>위의 <strong>🟢 네이버 수집</strong> 버튼을 북마크바로 끌어놓습니다.</li>
-      <li>네이버페이 부동산 상가 지도에서 북마크 버튼을 누릅니다.</li>
-      <li>수집할 숫자 클러스터를 누릅니다.</li>
-      <li>오른쪽 아래의 <strong>클러스터 전체 저장</strong>을 누릅니다.</li>
+      <li><strong>fin.land.naver.com</strong> 지도에서 북마크 버튼을 누릅니다.</li>
+      <li>서구·중구·유성구·대덕구·동구 중 원하는 구를 누릅니다.</li>
+      <li>중앙 진행창에서 <strong>선택 구 전체 수집</strong> 또는 <strong>대전 5개 구 전체 이어서 수집</strong>을 누릅니다.</li>
       <li>신규·중복·실패 개수를 확인하면 완료입니다.</li>
     </ol>
-    <div class="rule">저장 위치: <code>JS부동산 매물현황</code><br>최대 500페이지 조회 · 15개씩 안전하게 분할 저장<br>중복검사: 매물ID 우선 · 지번주소 + 층/호실 + 보증금 + 월세 + 평수<br>Q열 <code>원본링크</code> 자동 저장</div>
+    <div class="rule">저장 위치: <code>JS부동산 매물현황</code><br>구별 최대 500페이지 조회 · 중단 시 마지막 페이지부터 이어서 수집<br>중복검사: 매물ID 우선 · 지번주소 + 층/호실 + 보증금 + 월세 + 평수 1평 미만<br>Q열 <code>원본링크</code> 자동 저장</div>
   </main>
   <script>
     document.getElementById("copy").addEventListener("click",async function(){var code=document.getElementById("bookmark").href;try{await navigator.clipboard.writeText(code);document.getElementById("copied").textContent="복사 완료"}catch(_){window.prompt("아래 코드를 복사해 북마크 주소에 붙여넣으세요.",code)}});

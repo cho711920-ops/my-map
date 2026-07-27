@@ -87,14 +87,20 @@ const context = {
 };
 
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(require.resolve("../js/gongsil-collector.js"), "utf8"),
-  context
+const collectorSource = fs.readFileSync(
+  require.resolve("../js/gongsil-collector.js"),
+  "utf8"
 );
+vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.3.0");
+assert.strictEqual(api.version, "1.4.0");
+assert(
+  collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")
+);
+assert(collectorSource.includes('data-metric="review"'));
+assert(collectorSource.includes("주소·변환 제외"));
 
 const importTotals = {
   received: 0,

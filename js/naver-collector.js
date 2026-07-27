@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.3.1";
+  var VERSION = "5.0.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -29,6 +29,21 @@
     "https://script.google.com/macros/s/AKfycbyDfWBkgb5J6belfk0aFUkjvuBXlyqZ1g8JLf3Ge0cg7JOeevRfMs3ZZF3QC-Hc-qkw/exec";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
+  var FIN_NAVER_HOST = "fin.land.naver.com";
+  var FIN_ARTICLE_LIST_PATH = "/front-api/v1/article/legalDivisionArticleList";
+  var FIN_PAGE_SIZE = 30;
+  var FIN_MAX_PAGES = 500;
+  var TRADE_TYPE_LABELS = {
+    A1: "매매",
+    B1: "전세",
+    B2: "월세",
+    B3: "단기임대"
+  };
+  var REAL_ESTATE_TYPE_LABELS = {
+    D01: "사무실",
+    D02: "상가점포",
+    E02: "공장/창고"
+  };
 
   function getCollectorKey() {
     var saved = "";
@@ -50,8 +65,8 @@
     return entered;
   }
 
-  if (!/(^|\.)new\.land\.naver\.com$/i.test(location.hostname)) {
-    alert("네이버페이 부동산(new.land.naver.com) 지도에서 실행해 주세요.");
+  if (!/(^|\.)(?:new|fin)\.land\.naver\.com$/i.test(location.hostname)) {
+    alert("네이버페이 부동산 지도에서 실행해 주세요.");
     return;
   }
 
@@ -74,7 +89,9 @@
     capture: null,
     collected: [],
     capturedAt: 0,
-    clickedClusterCount: 0
+    clickedClusterCount: 0,
+    selectedDistrict: null,
+    dashboard: createEmptyDashboard()
   };
 
   var panel = createPanel();
@@ -82,6 +99,7 @@
   var detailElement = panel.querySelector("[data-role=detail]");
   var progressElement = panel.querySelector("[data-role=progress]");
   var progressBarElement = panel.querySelector("[data-role=progress-bar]");
+  var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
   var retryButton = panel.querySelector("[data-action=retry]");
   var cityButton = panel.querySelector("[data-action=city]");
@@ -89,11 +107,15 @@
 
   patchNetwork();
   bindEvents();
-  setStatus(
-    "원하는 숫자 클러스터를 눌러주세요.",
-    "클러스터를 누르면 매물을 자동 감지합니다. 이미 눌렀다면 ‘현재 목록 다시 감지’를 눌러주세요."
-  );
-  discoverExistingRequest();
+  if (isFinNaver()) {
+    discoverFinContext();
+  } else {
+    setStatus(
+      "원하는 숫자 클러스터를 눌러주세요.",
+      "클러스터를 누르면 매물을 자동 감지합니다. 이미 눌렀다면 ‘현재 목록 다시 감지’를 눌러주세요."
+    );
+    discoverExistingRequest();
+  }
 
   window.__JS_NAVER_COLLECTOR__ = {
     version: VERSION,
@@ -112,7 +134,13 @@
     createInitialDistricts: createInitialDistricts,
     collectCityTile: collectCityTile,
     collectCityDistrict: collectCityDistrict,
-    retryFailedCityArticles: retryFailedCityArticles
+    retryFailedCityArticles: retryFailedCityArticles,
+    isFinNaver: isFinNaver,
+    parseFinFilters: parseFinFilters,
+    buildFinDistrictRequest: buildFinDistrictRequest,
+    collectFinDistrictRaw: collectFinDistrictRaw,
+    discoverFinContext: discoverFinContext,
+    createEmptyDashboard: createEmptyDashboard
   };
 
   function createPanel() {
@@ -124,35 +152,48 @@
       style.id = STYLE_ID;
       style.textContent =
         "#" + PANEL_ID + "{" +
-        "position:fixed;right:16px;bottom:18px;z-index:2147483647;" +
-        "width:min(380px,calc(100vw - 24px));box-sizing:border-box;" +
+        "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;" +
+        "width:min(720px,calc(100vw - 28px));max-height:calc(100vh - 28px);box-sizing:border-box;" +
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;" +
         "background:#fff;border:1px solid #cfe8d9;border-radius:16px;" +
-        "box-shadow:0 16px 45px rgba(15,23,42,.24);overflow:hidden;color:#172033}" +
+        "box-shadow:0 24px 80px rgba(15,23,42,.32);overflow:auto;color:#172033}" +
         "#" + PANEL_ID + " *{box-sizing:border-box}" +
         "#" + PANEL_ID + " .jsn-head{display:flex;align-items:center;justify-content:space-between;" +
-        "padding:13px 15px;background:linear-gradient(135deg,#03c75a,#00a94f);color:#fff}" +
-        "#" + PANEL_ID + " .jsn-title{font-size:16px;font-weight:850;letter-spacing:-.3px}" +
+        "padding:16px 18px;background:linear-gradient(135deg,#03c75a,#00a94f);color:#fff}" +
+        "#" + PANEL_ID + " .jsn-brand{display:flex;align-items:center;gap:11px}" +
+        "#" + PANEL_ID + " .jsn-logo{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;" +
+        "background:#fff;color:#03a94f;font-size:21px;font-weight:950}" +
+        "#" + PANEL_ID + " .jsn-title{font-size:18px;font-weight:900;letter-spacing:-.3px}" +
+        "#" + PANEL_ID + " .jsn-sub{font-size:11px;opacity:.88;margin-top:2px}" +
         "#" + PANEL_ID + " .jsn-version{font-size:10px;opacity:.8;margin-left:6px}" +
         "#" + PANEL_ID + " .jsn-close{width:32px;height:32px;border:0;border-radius:9px;" +
         "background:rgba(255,255,255,.18);color:#fff;font-size:22px;line-height:30px;cursor:pointer}" +
-        "#" + PANEL_ID + " .jsn-body{padding:15px}" +
-        "#" + PANEL_ID + " .jsn-status{font-size:15px;font-weight:850;line-height:1.45;color:#172033}" +
+        "#" + PANEL_ID + " .jsn-body{padding:16px;background:#f4f8f6}" +
+        "#" + PANEL_ID + " .jsn-card{padding:14px;background:#fff;border:1px solid #e0ebe5;border-radius:13px;" +
+        "box-shadow:0 4px 14px rgba(25,55,40,.05);margin-bottom:11px}" +
+        "#" + PANEL_ID + " .jsn-status-line{display:flex;align-items:center;justify-content:space-between;gap:12px}" +
+        "#" + PANEL_ID + " .jsn-status{font-size:17px;font-weight:900;line-height:1.45;color:#172033}" +
+        "#" + PANEL_ID + " .jsn-percent{font-size:20px;font-weight:950;color:#03a94f;white-space:nowrap}" +
         "#" + PANEL_ID + " .jsn-detail{margin-top:7px;color:#667085;font-size:12px;line-height:1.55;" +
-        "white-space:pre-line;max-height:116px;overflow:auto}" +
-        "#" + PANEL_ID + " .jsn-progress{height:7px;margin-top:12px;border-radius:99px;" +
-        "background:#e7efe9;overflow:hidden;display:none}" +
-        "#" + PANEL_ID + " .jsn-progress>i{display:block;width:0;height:100%;background:#03c75a;transition:width .18s}" +
-        "#" + PANEL_ID + " .jsn-rule{margin-top:12px;padding:10px 11px;background:#f0fbf5;" +
+        "white-space:pre-line;max-height:90px;overflow:auto}" +
+        "#" + PANEL_ID + " .jsn-progress{height:11px;margin-top:12px;border-radius:99px;" +
+        "background:#e7efe9;overflow:hidden}" +
+        "#" + PANEL_ID + " .jsn-progress>i{display:block;width:0;height:100%;background:linear-gradient(90deg,#27d572,#03a94f);transition:width .2s}" +
+        "#" + PANEL_ID + " .jsn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}" +
+        "#" + PANEL_ID + " .jsn-metric{padding:11px;background:#f5faf7;border-radius:11px;min-width:0}" +
+        "#" + PANEL_ID + " .jsn-metric span{display:block;font-size:11px;color:#718078;margin-bottom:5px}" +
+        "#" + PANEL_ID + " .jsn-metric b{font-size:18px;font-weight:900;color:#172033}" +
+        "#" + PANEL_ID + " .jsn-rule{padding:10px 11px;background:#eef9f3;" +
         "border-radius:10px;color:#3d6250;font-size:11px;line-height:1.55}" +
-        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:12px}" +
+        "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:11px}" +
         "#" + PANEL_ID + " button.jsn-btn{height:46px;border-radius:11px;font-size:14px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
         "#" + PANEL_ID + " .jsn-city{grid-column:1/-1;border:1px solid #1687e8;background:#eaf5ff;color:#0963b5}" +
         "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled,#" + PANEL_ID + " .jsn-city:disabled{" +
         "cursor:not-allowed;background:#d2ded7;color:#f8faf9;border-color:#d2ded7}" +
-        "@media(max-width:640px){#" + PANEL_ID + "{right:8px;bottom:8px;width:calc(100vw - 16px)}}";
+        "@media(max-width:640px){#" + PANEL_ID + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}" +
+        "#" + PANEL_ID + " .jsn-body{padding:11px}#" + PANEL_ID + " .jsn-grid{grid-template-columns:repeat(2,1fr)}}" ;
       document.head.appendChild(style);
     }
 
@@ -160,20 +201,39 @@
     element.id = PANEL_ID;
     element.innerHTML =
       '<div class="jsn-head">' +
-        '<div class="jsn-title">JS 네이버 수집기<span class="jsn-version">v' + VERSION + '</span></div>' +
+        '<div class="jsn-brand"><div class="jsn-logo">N</div><div>' +
+          '<div class="jsn-title">네이버 매물 수집<span class="jsn-version">v' + VERSION + '</span></div>' +
+          '<div class="jsn-sub">새 네이버부동산 · 대전 5개 구 선택형 수집</div>' +
+        '</div></div>' +
         '<button type="button" class="jsn-close" data-action="close" aria-label="닫기">×</button>' +
       '</div>' +
       '<div class="jsn-body">' +
-        '<div class="jsn-status" data-role="status"></div>' +
-        '<div class="jsn-detail" data-role="detail"></div>' +
-        '<div class="jsn-progress" data-role="progress"><i data-role="progress-bar"></i></div>' +
-        '<div class="jsn-rule">저장 위치: <b>JS부동산 매물현황</b><br>' +
-        '중복검사: 매물ID 우선 · 지번주소 + 층/호실 + 보증금 + 월세 + 평수<br>' +
-        '확장 프로그램 없이 이 북마크 버튼 하나로 사용합니다.</div>' +
-        '<div class="jsn-actions">' +
-          '<button type="button" class="jsn-btn jsn-retry" data-action="retry">현재 목록 다시 감지</button>' +
-          '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>클러스터 전체 저장</button>' +
-          '<button type="button" class="jsn-btn jsn-city" data-action="city" disabled>대전 전체 이어서 수집</button>' +
+        '<div class="jsn-card">' +
+          '<div class="jsn-status-line"><div class="jsn-status" data-role="status"></div>' +
+          '<div class="jsn-percent" data-role="percent">0%</div></div>' +
+          '<div class="jsn-progress" data-role="progress"><i data-role="progress-bar"></i></div>' +
+          '<div class="jsn-detail" data-role="detail"></div>' +
+        '</div>' +
+        '<div class="jsn-card jsn-grid">' +
+          '<div class="jsn-metric"><span>찾은 매물</span><b data-metric="found">0</b></div>' +
+          '<div class="jsn-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
+          '<div class="jsn-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
+          '<div class="jsn-metric"><span>JS 신규</span><b data-metric="created">0</b></div>' +
+          '<div class="jsn-metric"><span>기존 통합</span><b data-metric="merged">0</b></div>' +
+          '<div class="jsn-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
+          '<div class="jsn-metric"><span>기존 중복</span><b data-metric="duplicate">0</b></div>' +
+          '<div class="jsn-metric"><span>주소·변환 제외</span><b data-metric="addressMissing">0</b></div>' +
+          '<div class="jsn-metric"><span>조회·저장 실패</span><b data-metric="failed">0</b></div>' +
+        '</div>' +
+        '<div class="jsn-card">' +
+          '<div class="jsn-rule">저장 위치: <b>JS부동산 매물현황</b><br>' +
+          '중복검사: 매물ID 우선 · 지번주소 + 층/호실 + 보증금 + 월세 + 평수 1평 미만<br>' +
+          '같은 주소라도 임대조건이 다르면 별도 매물로 유지합니다.</div>' +
+          '<div class="jsn-actions">' +
+            '<button type="button" class="jsn-btn jsn-retry" data-action="retry">선택 구 다시 확인</button>' +
+            '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>선택 구 전체 수집</button>' +
+            '<button type="button" class="jsn-btn jsn-city" data-action="city" disabled>대전 5개 구 전체 이어서 수집</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
     document.body.appendChild(element);
@@ -181,8 +241,14 @@
   }
 
   function bindEvents() {
-    saveButton.addEventListener("click", collectAndSave);
-    retryButton.addEventListener("click", discoverExistingRequest);
+    saveButton.addEventListener("click", function () {
+      if (isFinNaver()) collectFinSelectedAndSave();
+      else collectAndSave();
+    });
+    retryButton.addEventListener("click", function () {
+      if (isFinNaver()) discoverFinContext();
+      else discoverExistingRequest();
+    });
     cityButton.addEventListener("click", collectDaejeonAll);
     document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
@@ -195,7 +261,28 @@
     if (!node || (panel.contains && panel.contains(node))) return;
 
     for (var depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
-      var text = String(node.textContent || "").replace(/,/g, "").trim();
+      var originalText = String(node.textContent || "").replace(/\s+/g, " ").trim();
+      var district = findDistrictByText(originalText);
+      var districtCount = clusterCountFromText(originalText);
+      if (district) {
+        state.selectedDistrict = district;
+        state.clickedClusterCount = districtCount;
+        updateDashboard({
+          found: districtCount,
+          processed: 0,
+          remaining: districtCount
+        });
+        setStatus(
+          district.name + " 클러스터를 선택했습니다.",
+          (districtCount ? "표시 매물 " + formatNumber(districtCount) + "개 · " : "") +
+          "선택 구 전체 수집을 누르면 모든 페이지를 자동 확인합니다."
+        );
+        saveButton.disabled = false;
+        saveButton.textContent = district.name + " 전체 수집";
+        cityButton.disabled = false;
+        return;
+      }
+      var text = originalText.replace(/,/g, "");
       if (!/^\d{1,4}$/.test(text)) continue;
       var count = Number(text);
       if (!Number.isFinite(count) || count < 1) continue;
@@ -212,6 +299,11 @@
     state.active = true;
     panel.style.display = "block";
     patchNetwork();
+    if (isFinNaver()) {
+      discoverFinContext();
+      updateCityButton();
+      return;
+    }
     if (state.capture) {
       showCapture(state.capture);
     } else {
@@ -229,14 +321,60 @@
     detailElement.textContent = detail || "";
   }
 
+  function createEmptyDashboard() {
+    return {
+      found: 0,
+      processed: 0,
+      remaining: 0,
+      created: 0,
+      merged: 0,
+      review: 0,
+      duplicate: 0,
+      addressMissing: 0,
+      failed: 0
+    };
+  }
+
+  function formatNumber(value) {
+    var number = Number(value || 0);
+    return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "0";
+  }
+
+  function updateDashboard(values) {
+    values = values || {};
+    Object.keys(state.dashboard).forEach(function (key) {
+      if (values[key] !== undefined) state.dashboard[key] = Number(values[key]) || 0;
+      var node = panel.querySelector('[data-metric="' + key + '"]');
+      if (node) node.textContent = formatNumber(state.dashboard[key]);
+    });
+  }
+
+  function dashboardFromTotals(found, processed, totals) {
+    totals = totals || {};
+    updateDashboard({
+      found: found,
+      processed: processed,
+      remaining: Math.max(0, Number(found || 0) - Number(processed || 0)),
+      created: totals.created,
+      merged: totals.merged,
+      review: totals.review,
+      duplicate: totals.duplicate,
+      failed: totals.failed
+    });
+  }
+
   function setProgress(done, total) {
+    var percent = total
+      ? Math.min(100, Math.max(0, Math.round(done / total * 100)))
+      : 0;
+    if (progressPercentElement) {
+      progressPercentElement.textContent = percent + "%";
+    }
     if (!total) {
-      progressElement.style.display = "none";
       progressBarElement.style.width = "0%";
       return;
     }
-    progressElement.style.display = "block";
-    progressBarElement.style.width = Math.min(100, Math.round(done / total * 100)) + "%";
+    progressBarElement.style.width = percent + "%";
   }
 
   function adjustBatchSize(elapsedMs, failed) {
@@ -322,12 +460,13 @@
     var url = response.url || requestUrl(input);
     if (!isArticleRequest(url)) return;
     var json = await response.json();
-    capturePayload(json, url, requestOptionsFromFetch(input, init));
+    capturePayload(json, url, await requestOptionsFromFetch(input, init));
   }
 
-  function requestOptionsFromFetch(input, init) {
+  async function requestOptionsFromFetch(input, init) {
     var options = init || {};
     var headers = {};
+    var requestBody = null;
     try {
       if (typeof Request !== "undefined" && input instanceof Request) {
         input.headers.forEach(function (value, name) {
@@ -338,10 +477,19 @@
         headers[String(name).toLowerCase()] = value;
       });
     } catch (_) {}
+    try {
+      var rawBody = typeof options.body === "string"
+        ? options.body
+        : input && typeof input.clone === "function"
+          ? await input.clone().text()
+          : "";
+      requestBody = rawBody ? JSON.parse(rawBody) : null;
+    } catch (_) {}
     return {
       method: String(options.method || (input && input.method) || "GET").toUpperCase(),
       headers: headers,
-      credentials: options.credentials || (input && input.credentials) || "include"
+      credentials: options.credentials || (input && input.credentials) || "include",
+      requestBody: requestBody
     };
   }
 
@@ -349,12 +497,17 @@
     var source = capture && capture.requestOptions ? capture.requestOptions : {};
     var headers = Object.assign({}, source.headers || {});
     if (!headers.accept) headers.accept = "application/json, text/plain, */*";
-    return {
-      method: "GET",
+    var options = {
+      method: source.method || "GET",
       credentials: source.credentials || "include",
       headers: headers,
       cache: "no-store"
     };
+    if (source.requestBody) {
+      if (!options.headers["content-type"]) options.headers["content-type"] = "application/json";
+      options.body = JSON.stringify(source.requestBody);
+    }
+    return options;
   }
 
   function requestUrl(input) {
@@ -374,7 +527,10 @@
 
   function isArticleRequest(value) {
     var url = absoluteNaverUrl(value);
-    return !!url && /\/api\/(?:articles|articleList)(?:\/|\?|$)/i.test(url);
+    return !!url && (
+      /\/api\/(?:articles|articleList)(?:\/|\?|$)/i.test(url) ||
+      /\/front-api\/v1\/article\/(?:legalDivisionArticleList|clusteredArticles|boundedArticles)(?:\/|\?|$)/i.test(url)
+    );
   }
 
   function articleList(json) {
@@ -382,6 +538,13 @@
     if (Array.isArray(json.articleList)) return json.articleList;
     if (json.body && Array.isArray(json.body.articleList)) return json.body.articleList;
     if (json.result && Array.isArray(json.result.articleList)) return json.result.articleList;
+    if (json.result && Array.isArray(json.result.list)) {
+      return json.result.list.map(function (item) {
+        return item && item.representativeArticleInfo
+          ? item.representativeArticleInfo
+          : item;
+      }).filter(Boolean);
+    }
     return [];
   }
 
@@ -390,7 +553,8 @@
       json && json.totalCount,
       json && json.articleCount,
       json && json.total,
-      json && json.pageInfo && json.pageInfo.totalCount
+      json && json.pageInfo && json.pageInfo.totalCount,
+      json && json.result && json.result.totalCount
     ];
     for (var i = 0; i < candidates.length; i += 1) {
       var value = Number(candidates[i]);
@@ -404,7 +568,8 @@
       json && json.isMoreData,
       json && json.hasMore,
       json && json.moreData,
-      json && json.pageInfo && json.pageInfo.hasNext
+      json && json.pageInfo && json.pageInfo.hasNext,
+      json && json.result && json.result.hasNextPage
     ];
     for (var i = 0; i < candidates.length; i += 1) {
       if (typeof candidates[i] === "boolean") return candidates[i];
@@ -421,9 +586,136 @@
     }
   }
 
+  function isFinNaver() {
+    return String(location.hostname || "").toLowerCase() === FIN_NAVER_HOST;
+  }
+
+  function articleId(article) {
+    return clean(article && (article.articleNo || article.articleNumber));
+  }
+
+  function findDistrictByText(value) {
+    var compact = String(value || "").replace(/\s+/g, "");
+    for (var i = 0; i < DAEJEON_DISTRICTS.length; i += 1) {
+      var district = DAEJEON_DISTRICTS[i];
+      if (
+        compact === district.name ||
+        compact.indexOf("대전시" + district.name) === 0 ||
+        compact.indexOf(district.name + "매물") === 0
+      ) {
+        return district;
+      }
+    }
+    return null;
+  }
+
+  function clusterCountFromText(value) {
+    var match = String(value || "").replace(/\s+/g, "").match(/매물([\d,]+)/);
+    return match ? Number(match[1].replace(/,/g, "")) || 0 : 0;
+  }
+
+  function splitFinQuery(value) {
+    return String(value || "")
+      .split(/[-,|]/)
+      .map(function (item) { return item.trim(); })
+      .filter(Boolean);
+  }
+
+  function parseFinFilters(value) {
+    var url;
+    try {
+      url = new URL(value || location.href);
+    } catch (_) {
+      url = new URL(location.href);
+    }
+    return {
+      tradeTypes: splitFinQuery(url.searchParams.get("tradeTypes")),
+      realEstateTypes: splitFinQuery(url.searchParams.get("realEstateTypes"))
+    };
+  }
+
+  function buildFinDistrictRequest(district, cursor) {
+    cursor = cursor || {};
+    var parsed = parseFinFilters(location.href);
+    var filter = {
+      tradeTypes: parsed.tradeTypes,
+      realEstateTypes: parsed.realEstateTypes,
+      legalDivisionNumbers: [String(district.cortarNo)],
+      legalDivisionType: "GUN"
+    };
+    var paging = {
+      size: FIN_PAGE_SIZE,
+      userChannelType: "PC",
+      articleSortType: "RANKING_DESC",
+      lastInfo: Array.isArray(cursor.lastInfo) ? cursor.lastInfo : []
+    };
+    if (cursor.seed) paging.seed = String(cursor.seed);
+    return {
+      filter: filter,
+      articlePagingRequest: paging
+    };
+  }
+
+  function discoverFinContext() {
+    if (!isFinNaver() || state.busy) return;
+    var buttons = [];
+    try {
+      buttons = Array.prototype.slice.call(document.querySelectorAll("button"));
+    } catch (_) {}
+    var selected = state.selectedDistrict;
+    var targetCount = Number(state.clickedClusterCount) || 0;
+
+    buttons.some(function (button) {
+      var text = String(button.textContent || "").replace(/\s+/g, " ").trim();
+      var district = findDistrictByText(text);
+      if (!district || text.indexOf("대전시") !== 0) return false;
+      selected = district;
+      return true;
+    });
+
+    if (selected) {
+      buttons.some(function (button) {
+        var text = String(button.textContent || "").replace(/\s+/g, " ").trim();
+        if (findDistrictByText(text) !== selected) return false;
+        var count = clusterCountFromText(text);
+        if (!count) return false;
+        targetCount = count;
+        return true;
+      });
+    }
+
+    state.selectedDistrict = selected || null;
+    state.clickedClusterCount = targetCount;
+    state.capture = null;
+    updateDashboard(Object.assign(createEmptyDashboard(), {
+      found: targetCount,
+      remaining: targetCount
+    }));
+    setProgress(0, targetCount || 1);
+    cityButton.disabled = false;
+
+    if (selected) {
+      setStatus(
+        selected.name + " 수집 준비 완료",
+        (targetCount ? "표시 매물 " + formatNumber(targetCount) + "개 · " : "") +
+        "선택 구 전체 수집을 누르면 마지막 페이지까지 자동 확인하고 저장합니다."
+      );
+      saveButton.disabled = false;
+      saveButton.textContent = selected.name + " 전체 수집";
+    } else {
+      setStatus(
+        "대전 5개 구 클러스터를 선택하세요.",
+        "서구·중구·유성구·대덕구·동구 중 하나를 누르거나, 아래의 대전 5개 구 전체 수집을 이용하세요."
+      );
+      saveButton.disabled = true;
+      saveButton.textContent = "선택 구 전체 수집";
+    }
+    updateCityButton();
+  }
+
   function capturePayload(json, sourceUrl, requestOptions) {
     var articles = articleList(json).filter(function (article) {
-      return article && article.articleNo;
+      return !!articleId(article);
     });
     var responseUrl = absoluteNaverUrl(sourceUrl);
     if (!articles.length || !isArticleRequest(responseUrl)) return false;
@@ -444,6 +736,11 @@
     state.collected = articles.slice();
     state.capturedAt = Date.now();
     state.prepareId += 1;
+    updateDashboard({
+      found: articles.length,
+      processed: 0,
+      remaining: Math.max(0, expected - articles.length)
+    });
     showCapture(state.capture);
     prepareFullCapture(state.capture, state.prepareId);
     return true;
@@ -454,6 +751,10 @@
     var expected = capture.expected;
     cityButton.disabled = !getCityStrategy(capture.responseUrl);
     updateCityButton();
+    updateDashboard({
+      found: count,
+      remaining: Math.max(0, Number(expected || count) - count)
+    });
     if (!capture.prepared) {
       setStatus(
         "클러스터 전체 개수 확인 중",
@@ -475,10 +776,11 @@
     if (!cityButton || state.busy) return;
     var progress = loadCityProgress();
     if (progress && Array.isArray(progress.queue) && progress.queue.length) {
-      cityButton.textContent = "대전 전체 이어서 · 남은 구역 " + progress.queue.length + "개";
+      cityButton.textContent = "대전 5개 구 이어서 · 남은 구역 " + progress.queue.length + "개";
     } else {
-      cityButton.textContent = "대전 전체 이어서 수집";
+      cityButton.textContent = "대전 5개 구 전체 이어서 수집";
     }
+    if (isFinNaver()) cityButton.disabled = false;
   }
 
   async function prepareFullCapture(capture, prepareId) {
@@ -549,6 +851,13 @@
 
   async function collectAll(capture) {
     if (!nativeFetch) throw new Error("현재 브라우저에서 목록을 불러올 수 없습니다.");
+    if (
+      /\/front-api\/v1\/article\//i.test(capture.responseUrl || "") &&
+      capture.requestOptions &&
+      capture.requestOptions.requestBody
+    ) {
+      return collectFinCapturedRequest(capture);
+    }
     var found = new Map();
     var firstArticles = capture.articles || [];
     var currentPage = capture.page || pageNumber(capture.responseUrl);
@@ -559,9 +868,13 @@
     var noNewCount = 0;
 
     firstArticles.forEach(function (article) {
-      found.set(String(article.articleNo), article);
+      found.set(articleId(article), article);
     });
     setProgress(found.size, expected || Math.max(found.size + 1, 1));
+    updateDashboard({
+      found: found.size,
+      remaining: Math.max(0, Number(expected || found.size) - found.size)
+    });
 
     for (var step = 1; step < MAX_PAGES; step += 1) {
       if (hasMore(lastJson) === false) break;
@@ -587,8 +900,9 @@
       var items = articleList(json);
       var before = found.size;
       items.forEach(function (article) {
-        if (article && article.articleNo) {
-          found.set(String(article.articleNo), article);
+        var id = articleId(article);
+        if (id) {
+          found.set(id, article);
         }
       });
 
@@ -597,6 +911,10 @@
       expected = expected || expectedCount(json);
       noNewCount = found.size === before ? noNewCount + 1 : 0;
       setProgress(found.size, expected || Math.max(found.size + 1, 1));
+      updateDashboard({
+        found: found.size,
+        remaining: Math.max(0, Number(expected || found.size) - found.size)
+      });
 
       if (!items.length || noNewCount >= 1 || hasMore(json) === false) break;
       await delay(120);
@@ -613,6 +931,71 @@
       );
     }
 
+    state.collected = Array.from(found.values());
+    return state.collected;
+  }
+
+  async function collectFinCapturedRequest(capture) {
+    var found = new Map();
+    (capture.articles || []).forEach(function (article) {
+      var id = articleId(article);
+      if (id) found.set(id, article);
+    });
+    var json = capture.json || {};
+    var expected = capture.expected || expectedCount(json);
+    var body = JSON.parse(JSON.stringify(capture.requestOptions.requestBody || {}));
+    var page = 1;
+    var previousSignature = "";
+
+    while (hasMore(json) !== false && page < FIN_MAX_PAGES) {
+      var result = json && json.result || {};
+      body.articlePagingRequest = Object.assign(
+        {},
+        body.articlePagingRequest || {},
+        {
+          size: FIN_PAGE_SIZE,
+          userChannelType: "PC",
+          articleSortType: (body.articlePagingRequest || {}).articleSortType || "RANKING_DESC",
+          lastInfo: Array.isArray(result.lastInfo) ? result.lastInfo : []
+        }
+      );
+      if (result.seed) body.articlePagingRequest.seed = result.seed;
+      page += 1;
+      setStatus(
+        "새 네이버 클러스터 전체 목록 수집 중",
+        page + "페이지 · 현재 " + formatNumber(found.size) +
+        (expected ? "/" + formatNumber(expected) : "") + "개"
+      );
+      var response = await fetchPageWithRetry(capture.responseUrl, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      }, 3);
+      if (!response.ok) throw new Error("새 네이버 목록 조회 실패(HTTP " + response.status + ")");
+      json = await response.json();
+      var items = articleList(json);
+      var signature = items.map(articleId).filter(Boolean).join(",");
+      if (!items.length || (signature && signature === previousSignature)) break;
+      previousSignature = signature;
+      items.forEach(function (article) {
+        var id = articleId(article);
+        if (id) found.set(id, article);
+      });
+      expected = expected || expectedCount(json);
+      setProgress(found.size, expected || Math.max(found.size + 1, 1));
+      updateDashboard({
+        found: found.size,
+        remaining: Math.max(0, Number(expected || found.size) - found.size)
+      });
+      await delay(CITY_PAGE_DELAY);
+    }
+    if (page >= FIN_MAX_PAGES && hasMore(json) !== false) {
+      throw new Error("새 네이버 목록이 500페이지를 넘었습니다. 선택 범위를 나눠 주세요.");
+    }
     state.collected = Array.from(found.values());
     return state.collected;
   }
@@ -793,7 +1176,7 @@
       var batchStartedAt = Date.now();
       var result = await postBatchWithRetry(batch, 3, {
         sessionId: progress.sessionId,
-        scope: "대전 전체(5개 구)",
+        scope: progress.scope || "대전 전체(5개 구)",
         startedAt: progress.startedAt
       });
       var failed = Number(result.failed) || 0;
@@ -824,6 +1207,11 @@
       addResultTotals(progress, result);
       batch.forEach(function(item) { seen.add(String(item.articleNo)); });
       progress.seenIds = Array.from(seen);
+      dashboardFromTotals(
+        progress.seenIds.length,
+        progress.seenIds.length,
+        progress
+      );
       saveCityProgress(progress);
       saveCityFailedItems(progress.failedItems);
       adjustBatchSize(Date.now() - batchStartedAt, failed);
@@ -841,7 +1229,7 @@
       try {
         var result = await postBatchWithRetry([entry.item], 2, {
           sessionId: progress.sessionId,
-          scope: "대전 전체(5개 구)",
+          scope: progress.scope || "대전 전체(5개 구)",
           startedAt: progress.startedAt
         });
         if (Number(result.failed) || !result.ok) {
@@ -913,7 +1301,257 @@
     throw new Error(district.name + "가 500페이지를 넘었습니다. 저장된 다음 페이지부터 이어지도록 일시정지했습니다.");
   }
 
+  async function collectFinDistrictRaw(district, cursor, onPage, onCursorSaved) {
+    cursor = cursor || {};
+    var found = new Map();
+    var page = Math.max(1, Number(cursor.nextPage) || 1);
+    var seed = clean(cursor.seed);
+    var lastInfo = Array.isArray(cursor.lastInfo) ? cursor.lastInfo : [];
+    var previousSignature = clean(cursor.lastPageSignature);
+    var expected = Number(cursor.expected) ||
+      (cursor.key ? 0 : Number(state.clickedClusterCount)) || 0;
+
+    for (; page <= FIN_MAX_PAGES; page += 1) {
+      var body = buildFinDistrictRequest(district, {
+        seed: seed,
+        lastInfo: lastInfo
+      });
+      setStatus(
+        district.name + " 전체 목록 수집 중",
+        page + "페이지 · 찾은 매물 " + formatNumber(found.size) +
+        (expected ? "/" + formatNumber(expected) : "") + "개"
+      );
+      var response = await fetchPageWithRetry(FIN_ARTICLE_LIST_PATH, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      }, 3);
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("네이버 로그인이 만료되었습니다. 로그인 후 같은 버튼을 다시 눌러주세요.");
+        }
+        throw new Error(district.name + " 목록 조회 실패(HTTP " + response.status + ")");
+      }
+
+      var json = await response.json();
+      var result = json && json.result || {};
+      var items = articleList(json).filter(function (article) {
+        return !!articleId(article);
+      });
+      var signature = items.map(articleId).join(",");
+      if (signature && signature === previousSignature) break;
+      previousSignature = signature;
+      items.forEach(function (article) {
+        found.set(articleId(article), article);
+      });
+      expected = Number(result.totalCount || expected) || found.size;
+      seed = clean(result.seed || seed);
+      lastInfo = Array.isArray(result.lastInfo) ? result.lastInfo : [];
+
+      updateDashboard({
+        found: found.size,
+        remaining: Math.max(0, expected - found.size)
+      });
+      setProgress(found.size, expected || Math.max(found.size + 1, 1));
+      if (typeof onPage === "function" && items.length) {
+        await onPage(items, {
+          page: page,
+          expected: expected,
+          found: found.size,
+          seed: seed,
+          lastInfo: lastInfo
+        });
+      }
+      cursor.seed = seed;
+      cursor.lastInfo = lastInfo;
+      cursor.lastPageSignature = signature;
+      cursor.nextPage = page + 1;
+      cursor.expected = expected;
+      if (typeof onCursorSaved === "function") {
+        await onCursorSaved(cursor);
+      }
+
+      if (!items.length || result.hasNextPage === false) {
+        return Array.from(found.values());
+      }
+      await delay(CITY_PAGE_DELAY);
+    }
+
+    if (page > FIN_MAX_PAGES) {
+      throw new Error(district.name + " 목록이 500페이지를 넘었습니다. 저장된 다음 페이지부터 이어집니다.");
+    }
+    return Array.from(found.values());
+  }
+
+  async function collectFinSelectedAndSave() {
+    if (state.busy || state.preparing) return;
+    var district = state.selectedDistrict;
+    if (!district) {
+      discoverFinContext();
+      return;
+    }
+    state.preparing = true;
+    saveButton.disabled = true;
+    retryButton.disabled = true;
+    cityButton.disabled = true;
+    state.dashboard = createEmptyDashboard();
+    updateDashboard(state.dashboard);
+    try {
+      var articles = await collectFinDistrictRaw(district, {});
+      if (!articles.length) throw new Error(district.name + "에서 매물을 찾지 못했습니다.");
+      state.preparing = false;
+      await collectAndSave(articles, "대전 " + district.name);
+    } catch (error) {
+      state.preparing = false;
+      setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
+      updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
+      saveButton.disabled = false;
+      retryButton.disabled = false;
+      cityButton.disabled = false;
+      saveButton.textContent = district.name + " 다시 수집";
+    }
+  }
+
+  async function collectFinDaejeonAll() {
+    if (state.busy) return;
+    var progress = loadCityProgress();
+    if (
+      !progress ||
+      progress.mode !== "fin-district" ||
+      !Array.isArray(progress.queue) ||
+      !progress.queue.length
+    ) {
+      progress = {
+        version: 1,
+        mode: "fin-district",
+        scope: "대전 전체(5개 구)",
+        startedAt: new Date().toISOString(),
+        queue: createInitialDistricts(),
+        completed: 0,
+        seenIds: [],
+        saved: 0,
+        accepted: 0,
+        duplicate: 0,
+        failed: 0,
+        created: 0,
+        merged: 0,
+        updated: 0,
+        review: 0,
+        failedItems: loadCityFailedItems()
+      };
+    }
+    if (!progress.sessionId) progress.sessionId = createCollectionSessionId();
+    saveCityProgress(progress);
+    state.busy = true;
+    state.prepareId += 1;
+    saveButton.disabled = true;
+    retryButton.disabled = true;
+    cityButton.disabled = true;
+    state.dashboard = createEmptyDashboard();
+    updateDashboard(state.dashboard);
+
+    try {
+      while (progress.queue.length) {
+        var district = progress.queue[0];
+        setStatus(
+          "대전 5개 구 자동 수집 중",
+          "현재 " + district.name + " · 완료 " + progress.completed + "/5개 구 · " +
+          "저장 반영 " + formatNumber(progress.seenIds.length) + "개\n" +
+          "창을 닫거나 중단돼도 현재 구의 마지막 페이지부터 이어집니다."
+        );
+        await collectFinDistrictRaw(
+          district,
+          district,
+          async function (items, pageInfo) {
+            await saveCityArticles(items, progress, {
+              district: district.name,
+              page: pageInfo.page
+            });
+            dashboardFromTotals(
+              progress.seenIds.length,
+              progress.seenIds.length,
+              progress
+            );
+          },
+          function () {
+            saveCityProgress(progress);
+          }
+        );
+        progress.queue.shift();
+        progress.completed += 1;
+        saveCityProgress(progress);
+        setProgress(progress.completed, 5);
+        await delay(260);
+      }
+
+      if (!progress.seenIds.length) {
+        throw new Error("대전 5개 구에서 감지된 매물이 없습니다. 네이버 필터를 확인해 주세요.");
+      }
+      setStatus("저장 실패 매물 마지막 재시도 중", "주소 확인이 늦었던 매물을 한 번 더 저장하고 있습니다.");
+      var remainingFailures = await retryFailedCityArticles(progress);
+      await finalizeNaverSession({
+        sessionId: progress.sessionId,
+        scope: progress.scope,
+        source: "네이버",
+        complete: remainingFailures.length === 0,
+        note: remainingFailures.length
+          ? "대전 전체 수집 완료 · 주소미확인 " + remainingFailures.length + "건"
+          : "대전 전체 수집 완료"
+      });
+      var accepted = Number(progress.accepted || progress.saved || 0);
+      var sessionResult = await waitForNaverSessionResult(
+        progress,
+        progress.seenIds.length,
+        accepted,
+        remainingFailures.length
+      );
+      var finalResult = sessionResult && sessionResult.finished ? sessionResult : progress;
+      updateDashboard({
+        found: progress.seenIds.length,
+        processed: progress.seenIds.length,
+        remaining: 0,
+        created: finalResult.created,
+        merged: finalResult.merged,
+        review: finalResult.review,
+        duplicate: finalResult.duplicate,
+        addressMissing: remainingFailures.length,
+        failed: finalResult.failed
+      });
+      setProgress(1, 1);
+      setStatus(
+        "대전 5개 구 수집 완료",
+        "고유매물 " + formatNumber(progress.seenIds.length) +
+        "개 · JS신규 " + formatNumber(finalResult.created) +
+        "개 · 기존통합 " + formatNumber(finalResult.merged) +
+        "개 · 검증대기 " + formatNumber(finalResult.review) +
+        "개 · 중복 " + formatNumber(finalResult.duplicate) +
+        "개 · 주소미확인 " + formatNumber(remainingFailures.length) + "개"
+      );
+      clearCityProgress();
+    } catch (error) {
+      progress.failed = Number(progress.failed || 0) + 1;
+      saveCityProgress(progress);
+      updateDashboard({failed: progress.failed});
+      setStatus(
+        "대전 5개 구 수집 일시정지",
+        String(error && error.message ? error.message : error) +
+        "\n같은 버튼을 다시 누르면 저장된 다음 페이지부터 이어집니다."
+      );
+    } finally {
+      state.busy = false;
+      retryButton.disabled = false;
+      saveButton.disabled = !state.selectedDistrict;
+      cityButton.disabled = false;
+      updateCityButton();
+    }
+  }
+
   async function collectDaejeonAll() {
+    if (isFinNaver()) return collectFinDaejeonAll();
     if (state.busy) return;
     if (!state.capture) {
       return setStatus("대전 전체 수집 준비 필요", "네이버 지도에서 대전 지역을 연 뒤 ‘현재 목록 다시 감지’를 눌러주세요.");
@@ -1076,6 +1714,9 @@
     if (!id) return "";
 
     try {
+      if (/fin\.land\.naver\.com$/i.test(new URL(clean(currentUrl) || location.href).hostname)) {
+        return "https://fin.land.naver.com/articles/" + encodeURIComponent(id);
+      }
       var url = new URL(clean(currentUrl) || "https://new.land.naver.com/offices");
       url.searchParams.set("articleNo", id);
       return url.toString();
@@ -1084,36 +1725,108 @@
     }
   }
 
+  function finAddressText(address) {
+    if (!address || typeof address !== "object") return clean(address);
+    var parts = [
+      address.city,
+      address.division,
+      address.sector,
+      address.jibun
+    ].map(clean).filter(Boolean);
+    return parts.filter(function(value, index) {
+      return parts.indexOf(value) === index;
+    }).join(" ");
+  }
+
+  function finFloorInfo(article) {
+    var detail = article && article.articleDetail || {};
+    var space = article && article.spaceInfo || {};
+    var floor = article && article.floorInfo || detail.floorInfo || space.floorInfo;
+    if (floor && typeof floor === "object") {
+      var current = clean(
+        floor.currentFloor || floor.floor || floor.targetFloor || floor.floorName
+      );
+      var total = clean(floor.totalFloor || floor.highFloor || floor.maxFloor);
+      if (current && total) return current + "/" + total + "층";
+      return current || total;
+    }
+    return clean(floor);
+  }
+
   function normalize(article) {
-    var price = article && article.price ? article.price : {};
-    var articleNo = clean(article && article.articleNo);
+    article = article && article.representativeArticleInfo || article || {};
+    var price = article.priceInfo || article.price || {};
+    var address = article.address || {};
+    var coordinates = address.coordinates || {};
+    var space = article.spaceInfo || {};
+    var detail = article.articleDetail || {};
+    var broker = article.brokerInfo || {};
+    var articleNo = articleId(article);
+    var tradeCode = clean(article.tradeType);
+    var categoryCode = clean(article.realEstateType);
+    var deposit = article.dealOrWarrantPrc != null
+      ? article.dealOrWarrantPrc
+      : article.depositPrice != null
+        ? article.depositPrice
+        : price.warrantyPrice != null
+          ? price.warrantyPrice
+          : price.dealPrice != null
+            ? price.dealPrice
+            : price.deposit;
+    var areaSquareMeter =
+      space.exclusiveSpace != null ? space.exclusiveSpace :
+      space.contractSpace != null ? space.contractSpace :
+      space.supplySpace != null ? space.supplySpace :
+      space.floorSpace != null ? space.floorSpace :
+      space.landSpace != null ? space.landSpace :
+      article.area2 != null ? article.area2 : article.area1;
     return {
       articleNo: articleNo,
-      buildingName: clean(article && (article.buildingName || article.articleName)),
-      category: clean(article && (article.articleRealEstateTypeName || article.realEstateTypeName)),
-      tradeType: clean(article && article.tradeTypeName),
-      deposit: clean(article && (
-        article.dealOrWarrantPrc != null ? article.dealOrWarrantPrc :
-        article.depositPrice != null ? article.depositPrice : price.deposit
-      )),
-      monthly: clean(article && (
+      buildingName: clean(
+        article.complexName || article.buildingName || article.articleName
+      ),
+      category: clean(
+        article.articleRealEstateTypeName || article.realEstateTypeName ||
+        REAL_ESTATE_TYPE_LABELS[categoryCode] || categoryCode
+      ),
+      tradeType: clean(
+        article.tradeTypeName || TRADE_TYPE_LABELS[tradeCode] || tradeCode
+      ),
+      deposit: clean(deposit),
+      monthly: clean(
         article.rentPrc != null ? article.rentPrc :
-        article.monthlyPrice != null ? article.monthlyPrice : price.monthly
-      )),
-      areaSquareMeter: article && (article.area2 != null ? article.area2 : article.area1),
-      floorInfo: clean(article && article.floorInfo),
-      roomInfo: clean(article && (article.roomInfo || article.roomName || article.unitInfo)),
-      direction: clean(article && article.direction),
-      description: clean(article && article.articleFeatureDesc),
-      tags: Array.isArray(article && article.tagList) ? article.tagList : [],
-      latitude: article && (article.latitude || article.lat || article.mapY) || "",
-      longitude: article && (article.longitude || article.lng || article.lon || article.mapX) || "",
-      jibunAddress: clean(article && (
+        article.monthlyPrice != null ? article.monthlyPrice :
+        price.rentPrice != null ? price.rentPrice : price.monthly
+      ),
+      areaSquareMeter: areaSquareMeter,
+      floorInfo: finFloorInfo(article),
+      roomInfo: clean(
+        article.roomInfo || article.roomName || article.unitInfo ||
+        detail.roomInfo || article.dongName
+      ),
+      direction: clean(article.direction || detail.direction),
+      description: clean(
+        article.articleFeatureDesc || article.articleFeatureDescription ||
+        detail.articleFeatureDescription || detail.description
+      ),
+      tags: Array.isArray(article.tagList)
+        ? article.tagList
+        : Array.isArray(detail.tagList) ? detail.tagList : [],
+      latitude: article.latitude || article.lat || article.mapY ||
+        coordinates.yCoordinate || "",
+      longitude: article.longitude || article.lng || article.lon || article.mapX ||
+        coordinates.xCoordinate || "",
+      jibunAddress: clean(
         article.jibunAddress || article.jibunAddr || article.articleAddress ||
-        article.address || article.cortarAddress || article.locationAddress
-      )),
-      realtorName: clean(article && article.realtorName),
-      providerUrl: clean(article && (article.cpPcArticleUrl || article.cpMobileArticleUrl)),
+        (typeof article.address === "string" ? article.address : "") ||
+        finAddressText(address) || article.cortarAddress || article.locationAddress
+      ),
+      realtorName: clean(
+        article.realtorName || broker.brokerageName || broker.realtorName
+      ),
+      providerUrl: clean(
+        article.cpPcArticleUrl || article.cpMobileArticleUrl || article.providerUrl
+      ),
       currentUrl: location.href,
       sourceLink: naverListingUrl(articleNo, location.href)
     };
@@ -1210,6 +1923,17 @@
       }
       if (latest && latest.finished) return latest;
       if (latest) {
+        updateDashboard({
+          found: found,
+          processed: Number(latest.processed || 0),
+          remaining: Number(latest.pending || 0),
+          created: latest.created,
+          merged: latest.merged,
+          review: latest.review,
+          duplicate: latest.duplicate,
+          failed: Number(latest.failed || failed || 0)
+        });
+        setProgress(Number(latest.processed || 0), found || 1);
         setStatus(
           "JS매물 반영 확인 중",
           "전체 " + found + "개 · 정상접수 " + accepted + "개 · 반영완료 " +
@@ -1222,8 +1946,13 @@
     return latest;
   }
 
-  async function collectAndSave() {
-    if (state.busy || state.preparing || !state.capture || !state.capture.prepared) return;
+  async function collectAndSave(rawOverride, scopeOverride) {
+    var hasOverride = Array.isArray(rawOverride);
+    if (
+      state.busy ||
+      state.preparing ||
+      (!hasOverride && (!state.capture || !state.capture.prepared))
+    ) return;
     state.busy = true;
     saveButton.disabled = true;
     retryButton.disabled = true;
@@ -1240,14 +1969,19 @@
     var firstFailure = "";
     var session = {
       sessionId: createCollectionSessionId(),
-      scope: "선택 클러스터",
+      scope: scopeOverride || "선택 클러스터",
       startedAt: new Date().toISOString()
     };
 
     try {
-      var rawItems = await collectAll(state.capture);
+      var rawItems = hasOverride ? rawOverride : await collectAll(state.capture);
       var items = rawItems.map(normalize).filter(function (item) {
         return item.articleNo;
+      });
+      updateDashboard({
+        found: items.length,
+        processed: 0,
+        remaining: items.length
       });
 
       for (var index = 0; index < items.length;) {
@@ -1265,6 +1999,7 @@
         }
         adjustBatchSize(Date.now() - batchStartedAt, Number(result.failed || 0));
         index += batch.length;
+        dashboardFromTotals(items.length, index, totals);
         await delay(160);
       }
 
@@ -1289,6 +2024,16 @@
       );
       setProgress(items.length, items.length || 1);
       if (sessionResult && sessionResult.finished) {
+        updateDashboard({
+          found: items.length,
+          processed: items.length,
+          remaining: 0,
+          created: sessionResult.created,
+          merged: sessionResult.merged,
+          review: sessionResult.review,
+          duplicate: sessionResult.duplicate,
+          failed: Number(sessionResult.failed || totals.failed || 0)
+        });
         setStatus(
           "네이버 수집 완료",
           "전체 " + items.length + "개 · JS신규 " + Number(sessionResult.created || 0) +
@@ -1300,6 +2045,7 @@
             (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
         );
       } else {
+        dashboardFromTotals(items.length, items.length, totals);
         setStatus(
           "네이버 수집 완료",
           "전체 " + items.length + "개 · 정상접수 " + accepted +
@@ -1315,11 +2061,12 @@
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
     } catch (error) {
       setProgress(0, 0);
+      updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
       setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
       saveButton.textContent = "다시 저장";
     } finally {
       state.busy = false;
-      saveButton.disabled = !state.capture;
+      saveButton.disabled = isFinNaver() ? !state.selectedDistrict : !state.capture;
       retryButton.disabled = false;
     }
   }
