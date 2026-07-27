@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.1\.0"/);
+assert.match(collector, /VERSION = "1\.1\.1"/);
 assert.match(collector, /version === VERSION/);
 assert.match(collector, /width:min\(460px/);
 assert.match(collector, /stalePanel\.remove/);
@@ -44,6 +44,8 @@ assert.match(collector, /안전중단/);
 assert.match(collector, /완전수집/);
 assert.match(collector, /101호와 102호는 별도/);
 assert.match(collector, /당근 링크 최우선 유지/);
+assert.match(collector, /showActiveChunkWait/);
+assert.match(collector, /고객매칭은 자동으로 별도 갱신/);
 assert.match(install, /js\/daangn-collector\.js/);
 assert.match(install, /URL을 복사하거나 붙여넣을 필요가 없습니다|URL 복사 없이/);
 assert.match(install, /당근 수집<\/strong>을 먼저 누릅니다/);

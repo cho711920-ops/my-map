@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.0";
+  var VERSION = "1.1.1";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -470,8 +470,17 @@
   async function runChunk() {
     if (state.busy || !state.job || state.job.status !== "running") return;
     state.busy = true;
+    var waitStartedAt = Date.now();
+    var waitTimer = null;
+    if (state.job.phase === "details") {
+      showActiveChunkWait(waitStartedAt);
+      waitTimer = window.setInterval(function () {
+        showActiveChunkWait(waitStartedAt);
+      }, 1000);
+    }
     try {
       var result = await callServer("danggeunRunJobChunk", {});
+      if (waitTimer) window.clearInterval(waitTimer);
       state.job = result.job || state.job;
       state.busy = false;
       if (
@@ -484,9 +493,34 @@
         scheduleNextChunk();
       }
     } catch (error) {
+      if (waitTimer) window.clearInterval(waitTimer);
       state.busy = false;
       showError(error);
     }
+  }
+
+  function showActiveChunkWait(startedAt) {
+    if (
+      !state.busy ||
+      !state.job ||
+      state.job.phase !== "details" ||
+      state.stopRequested
+    ) {
+      return;
+    }
+    var processed = Number(state.job.processed) || 0;
+    var total = Number(state.job.total) || Number(state.job.found) || 0;
+    var chunkSize = Math.max(1, Number(state.job.chunkSize) || 15);
+    var chunkEnd = Math.min(total, processed + chunkSize);
+    var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    setStatus(
+      "상세조회·중복검사·저장 중",
+      (processed + 1).toLocaleString("ko-KR") + "~" +
+      chunkEnd.toLocaleString("ko-KR") + " / " +
+      total.toLocaleString("ko-KR") + "개 · " +
+      seconds.toLocaleString("ko-KR") + "초 경과\n" +
+      "매물 저장을 먼저 끝내고 고객매칭은 자동으로 별도 갱신합니다."
+    );
   }
 
   async function requestSafeStop() {

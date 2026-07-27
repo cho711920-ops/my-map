@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.2.0";
+  var VERSION = "5.2.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2123,13 +2123,23 @@
       for (var index = 0; index < items.length;) {
         if (state.stopRequested) break;
         var batch = items.slice(index, index + BATCH_SIZE);
+        var saveWaitStartedAt = Date.now();
+        var saveWaitTimer = window.setInterval(function () {
+          showNaverSaveWait(index, batch.length, items.length, saveWaitStartedAt);
+        }, 1000);
+        showNaverSaveWait(index, batch.length, items.length, saveWaitStartedAt);
         setStatus(
           "JS부동산 매물현황 저장 중",
           (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + BATCH_SIZE + "개씩 안전하게 저장합니다."
         );
         setProgress(index, items.length);
         var batchStartedAt = Date.now();
-        var result = await postBatchWithRetry(batch, 3, session);
+        var result;
+        try {
+          result = await postBatchWithRetry(batch, 3, session);
+        } finally {
+          window.clearInterval(saveWaitTimer);
+        }
         addResultTotals(totals, result);
         if (!firstFailure && Array.isArray(result.errors) && result.errors.length) {
           firstFailure = clean(result.errors[0] && result.errors[0].message);
@@ -2248,6 +2258,19 @@
       retryButton.disabled = false;
       finishCollectorRun();
     }
+  }
+
+  function showNaverSaveWait(index, batchLength, total, startedAt) {
+    if (!state.busy || state.stopRequested) return;
+    var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    setStatus(
+      "상세조회·중복검사·저장 중",
+      (index + 1).toLocaleString("ko-KR") + "~" +
+      (index + batchLength).toLocaleString("ko-KR") + " / " +
+      total.toLocaleString("ko-KR") + "개 · " +
+      seconds.toLocaleString("ko-KR") + "초 경과\n" +
+      "매물 저장을 먼저 끝내고 고객매칭은 자동으로 별도 갱신합니다."
+    );
   }
 
   async function postBatchWithRetry(batch, attempts, metadata) {

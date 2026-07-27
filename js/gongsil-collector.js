@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.7.0";
+  var VERSION = "1.7.1";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -471,36 +471,45 @@
       var transformed = [];
       var rejected = [];
       var completed = 0;
+      var detailWaitStartedAt = Date.now();
+      var detailWaitTimer = window.setInterval(function () {
+        showGongsilDetailWait(completed, items.length, detailWaitStartedAt);
+      }, 1000);
       var transformWorker = state.migratedTransformItem || transformItem;
       // 공실박스 상세조회는 화면에서 한 건씩 여는 흐름을 기준으로 동작합니다.
       // 동시에 여러 건을 요청하면 정상 세션에서도 일부 상세 응답이 누락될 수 있습니다.
-      var queueResult = await mapWithConcurrency(items, 1, async function (item) {
-        if (state.stopRequested) return {stopped: true};
-        var result;
-        try {
-          result = await transformWorker(item, state.capture.body);
-        } catch (error) {
-          result = {
-            ok: false,
-            reason: error && error.message ? error.message : String(error)
-          };
-        }
+      var queueResult;
+      try {
+        queueResult = await mapWithConcurrency(items, 1, async function (item) {
+          if (state.stopRequested) return {stopped: true};
+          var result;
+          try {
+            result = await transformWorker(item, state.capture.body);
+          } catch (error) {
+            result = {
+              ok: false,
+              reason: error && error.message ? error.message : String(error)
+            };
+          }
 
-        completed += 1;
-        updateDashboard({
-          found: items.length,
-          processed: completed,
-          remaining: Math.max(0, items.length - completed)
+          completed += 1;
+          updateDashboard({
+            found: items.length,
+            processed: completed,
+            remaining: Math.max(0, items.length - completed)
+          });
+          setProgress(completed, items.length);
+          if (completed === items.length || completed % 5 === 0) {
+            setStatus(
+              "지번주소와 전화번호를 확인하는 중입니다.",
+              completed + " / " + items.length + "개 처리"
+            );
+          }
+          return result;
         });
-        setProgress(completed, items.length);
-        if (completed === items.length || completed % 5 === 0) {
-          setStatus(
-            "지번주소와 전화번호를 확인하는 중입니다.",
-            completed + " / " + items.length + "개 처리"
-          );
-        }
-        return result;
-      });
+      } finally {
+        window.clearInterval(detailWaitTimer);
+      }
 
       queueResult.forEach(function (result) {
         if (result && result.ok) transformed.push(result.record);
@@ -1572,6 +1581,10 @@
       batchIndex += 1;
       var batch = records.slice(offset, offset + SAVE_BATCH_SIZE);
       var batchStartedAt = Date.now();
+      var saveWaitTimer = window.setInterval(function () {
+        showGongsilSaveWait(offset, batch.length, records.length, batchStartedAt);
+      }, 1000);
+      showGongsilSaveWait(offset, batch.length, records.length, batchStartedAt);
       setStatus(
         "JS부동산 매물현황으로 전송 중입니다.",
         Math.min(offset + batch.length, records.length).toLocaleString("ko-KR") +
@@ -1588,6 +1601,7 @@
           metadata
         );
       } catch (error) {
+        window.clearInterval(saveWaitTimer);
         if (batch.length > MIN_SAVE_BATCH_SIZE) {
           SAVE_BATCH_SIZE = Math.max(
             MIN_SAVE_BATCH_SIZE,
@@ -1604,6 +1618,7 @@
         }
         throw error;
       }
+      window.clearInterval(saveWaitTimer);
       if (!result || result.ok !== true) return result;
 
       addImportResult(totals, result);
@@ -1670,6 +1685,31 @@
         "개, 중복 " + totals.duplicate +
         "개, 실패 " + totals.failed + "개"
     };
+  }
+
+  function showGongsilDetailWait(completed, total, startedAt) {
+    if (!state.busy || state.stopRequested) return;
+    var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    setStatus(
+      "상세조회·연락처 확인 중",
+      completed.toLocaleString("ko-KR") + " / " +
+      total.toLocaleString("ko-KR") + "개 · " +
+      seconds.toLocaleString("ko-KR") + "초 경과\n" +
+      "공실박스 상세정보는 누락 방지를 위해 한 건씩 안전하게 확인합니다."
+    );
+  }
+
+  function showGongsilSaveWait(offset, batchLength, total, startedAt) {
+    if (!state.busy || state.stopRequested) return;
+    var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    setStatus(
+      "중복검사·저장 중",
+      (offset + 1).toLocaleString("ko-KR") + "~" +
+      Math.min(offset + batchLength, total).toLocaleString("ko-KR") +
+      " / " + total.toLocaleString("ko-KR") + "개 · " +
+      seconds.toLocaleString("ko-KR") + "초 경과\n" +
+      "매물 저장을 먼저 끝내고 고객매칭은 자동으로 별도 갱신합니다."
+    );
   }
 
   function recordSignatureId(record) {

@@ -173,7 +173,7 @@ vm.runInContext(source, context, {filename: collectorPath});
 (async () => {
   const api = window.__JS_NAVER_COLLECTOR__;
   assert(api, "collector API missing");
-  assert.strictEqual(api.version, "5.2.0");
+  assert.strictEqual(api.version, "5.2.1");
   assert.strictEqual(api.isFinNaver(), true);
 
   const filters = api.parseFinFilters(location.href);
@@ -272,6 +272,8 @@ vm.runInContext(source, context, {filename: collectorPath});
   assert(source.includes("left:50%;top:50%;transform:translate(-50%,-50%)"));
   assert(source.includes("width:min(460px"));
   assert(source.includes("선택 클러스터 합계"));
+  assert(source.includes("showNaverSaveWait"));
+  assert(source.includes("고객매칭은 자동으로 별도 갱신"));
   assert(source.includes("version === VERSION"));
   assert(source.includes("__jsNaverCollectorVersion !== VERSION"));
   assert(source.includes('data-metric="review"'));
