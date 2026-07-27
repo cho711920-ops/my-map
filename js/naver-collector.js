@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "4.3.0";
+  var VERSION = "4.3.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -250,16 +250,24 @@
 
   function addResultTotals(target, result) {
     result = result || {};
-    target.created = Number(target.created || 0) + Number(
-      result.created !== undefined ? result.created : result.saved || 0
+    var hasClassifiedResult =
+      result.created !== undefined ||
+      result.merged !== undefined ||
+      result.updated !== undefined ||
+      result.review !== undefined;
+    target.accepted = Number(target.accepted || 0) + Number(
+      hasClassifiedResult
+        ? Math.max(0, Number(result.received || 0) - Number(result.failed || 0))
+        : result.saved || result.inserted || 0
     );
+    target.created = Number(target.created || 0) + Number(result.created || 0);
     target.merged = Number(target.merged || 0) + Number(result.merged || 0);
     target.updated = Number(target.updated || 0) + Number(result.updated || 0);
     target.review = Number(target.review || 0) + Number(result.review || 0);
     target.duplicate = Number(target.duplicate || 0) + Number(result.duplicate || 0) +
       Number(result.duplicateSnapshots || 0);
     target.failed = Number(target.failed || 0) + Number(result.failed || 0);
-    target.saved = target.created;
+    target.saved = target.accepted;
   }
 
   function patchNetwork() {
@@ -928,6 +936,7 @@
         completed: 0,
         seenIds: [],
         saved: 0,
+        accepted: 0,
         duplicate: 0,
         failed: 0,
         created: 0,
@@ -994,15 +1003,38 @@
           ? "대전 전체 수집 완료 · 주소미확인 " + remainingFailures.length + "건은 다음 실행 시 재시도"
           : "대전 전체 수집 완료"
       });
-      setProgress(1, 1);
-      setStatus(
-        "대전 전체 수집 완료",
-        "고유매물 " + progress.seenIds.length + "개 · 신규 " + Number(progress.created || progress.saved || 0) +
-          "개 · 통합 " + Number(progress.merged || 0) + "개 · 갱신 " + Number(progress.updated || 0) +
-          "개 · 검증대기 " + Number(progress.review || 0) + "개 · 중복 " + Number(progress.duplicate || 0) +
-          "개 · 주소미확인 " + remainingFailures.length + "개\n" +
-          (remainingFailures.length ? "주소미확인 매물은 보관했으며 다음 전체 수집 때 다시 시도합니다." : "모든 대전 구역의 조회와 저장이 완료됐습니다.")
+      var cityAccepted = Number(progress.accepted || progress.saved || 0);
+      var cityResult = await waitForNaverSessionResult(
+        progress,
+        progress.seenIds.length,
+        cityAccepted,
+        remainingFailures.length
       );
+      setProgress(1, 1);
+      if (cityResult && cityResult.finished) {
+        setStatus(
+          "대전 전체 수집 완료",
+          "고유매물 " + progress.seenIds.length +
+            "개 · JS신규 " + Number(cityResult.created || 0) +
+            "개 · 기존통합 " + Number(cityResult.merged || 0) +
+            "개 · 조건갱신 " + Number(cityResult.updated || 0) +
+            "개 · 검증대기 " + Number(cityResult.review || 0) +
+            "개 · 중복 " + Number(cityResult.duplicate || 0) +
+            "개 · 주소미확인 " + remainingFailures.length + "개"
+        );
+      } else {
+        setStatus(
+          "대전 전체 수집 완료",
+          "고유매물 " + progress.seenIds.length +
+            "개 · 정상접수 " + cityAccepted +
+            "개 · JS신규/통합 판정은 자동 진행 중입니다." +
+            (cityResult
+              ? " 현재 반영 " + Number(cityResult.processed || 0) +
+                "개 · 처리중 " + Number(cityResult.pending || 0) + "개"
+              : "") +
+            " · 주소미확인 " + remainingFailures.length + "개"
+        );
+      }
       clearCityProgress();
     } catch (error) {
       progress.failed += 1;
@@ -1139,12 +1171,72 @@
     return result;
   }
 
+  async function getNaverSessionResult(metadata) {
+    metadata = metadata || {};
+    if (!metadata.sessionId) return null;
+    var response = await nativeFetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify({
+        action: "getNaverSessionResult",
+        accessKey: NAVER_ACCESS_KEY,
+        sessionId: metadata.sessionId
+      })
+    });
+    var text = await response.text();
+    var result;
+    try {
+      result = JSON.parse(text);
+    } catch (_) {
+      throw new Error("JS매물 반영 결과를 읽지 못했습니다.");
+    }
+    if (!result.ok) throw new Error(result.message || "JS매물 반영 결과 확인에 실패했습니다.");
+    return result;
+  }
+
+  function wait(milliseconds) {
+    return new Promise(function(resolve) {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+
+  async function waitForNaverSessionResult(metadata, found, accepted, failed) {
+    var latest = null;
+    for (var attempt = 0; attempt < 12; attempt += 1) {
+      try {
+        latest = await getNaverSessionResult(metadata);
+      } catch (_) {
+        break;
+      }
+      if (latest && latest.finished) return latest;
+      if (latest) {
+        setStatus(
+          "JS매물 반영 확인 중",
+          "전체 " + found + "개 · 정상접수 " + accepted + "개 · 반영완료 " +
+            Number(latest.processed || 0) + "개 · 처리중 " +
+            Number(latest.pending || 0) + "개 · 실패 " + failed + "개"
+        );
+      }
+      await wait(3000);
+    }
+    return latest;
+  }
+
   async function collectAndSave() {
     if (state.busy || state.preparing || !state.capture || !state.capture.prepared) return;
     state.busy = true;
     saveButton.disabled = true;
     retryButton.disabled = true;
-    var totals = {saved: 0, created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0};
+    var totals = {
+      saved: 0,
+      accepted: 0,
+      created: 0,
+      merged: 0,
+      updated: 0,
+      review: 0,
+      duplicate: 0,
+      failed: 0
+    };
     var firstFailure = "";
     var session = {
       sessionId: createCollectionSessionId(),
@@ -1182,14 +1274,44 @@
         complete: false,
         note: "선택 클러스터 수집 완료"
       });
-      setProgress(items.length, items.length || 1);
+      var accepted = Number(totals.accepted || totals.saved || 0);
       setStatus(
         "네이버 수집 완료",
-        "전체 " + items.length + "개 · 신규 " + totals.created + "개 · 통합 " + totals.merged +
-          "개 · 갱신 " + totals.updated + "개 · 검증대기 " + totals.review +
-          "개 · 중복 " + totals.duplicate + "개 · 실패 " + totals.failed + "개" +
+        "전체 " + items.length + "개 · 정상접수 " + accepted +
+          "개 · JS매물 반영 결과 확인 중 · 실패 " + totals.failed + "개" +
           (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
       );
+      var sessionResult = await waitForNaverSessionResult(
+        session,
+        items.length,
+        accepted,
+        totals.failed
+      );
+      setProgress(items.length, items.length || 1);
+      if (sessionResult && sessionResult.finished) {
+        setStatus(
+          "네이버 수집 완료",
+          "전체 " + items.length + "개 · JS신규 " + Number(sessionResult.created || 0) +
+            "개 · 기존통합 " + Number(sessionResult.merged || 0) +
+            "개 · 조건갱신 " + Number(sessionResult.updated || 0) +
+            "개 · 검증대기 " + Number(sessionResult.review || 0) +
+            "개 · 중복 " + Number(sessionResult.duplicate || 0) +
+            "개 · 실패 " + Number(sessionResult.failed || totals.failed || 0) + "개" +
+            (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
+        );
+      } else {
+        setStatus(
+          "네이버 수집 완료",
+          "전체 " + items.length + "개 · 정상접수 " + accepted +
+            "개 · JS신규/통합 판정은 자동 진행 중입니다." +
+            (sessionResult
+              ? " 현재 반영 " + Number(sessionResult.processed || 0) +
+                "개 · 처리중 " + Number(sessionResult.pending || 0) + "개"
+              : "") +
+            " · 실패 " + totals.failed + "개" +
+            (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
+        );
+      }
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
     } catch (error) {
       setProgress(0, 0);
