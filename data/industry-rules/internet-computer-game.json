@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-28-pcroom-v1",
+  "verifiedAt": "2026-07-28",
+  "industryId": "internet-computer-game",
+  "officialName": "인터넷컴퓨터게임시설제공업",
+  "commonName": "PC방",
+  "registrationType": "등록",
+  "requiredBuildingUse": {
+    "underThreshold": "같은 건축물 내 관련 용도 바닥면적 합계 500㎡ 미만: 제2종 근린생활시설",
+    "atOrOverThreshold": "500㎡ 이상: 판매시설 해당 여부 및 용도변경 절차 검토",
+    "important": "전용면적만으로 판정하지 않고 같은 건축물의 관련 용도 합계를 확인해야 합니다."
+  },
+  "generalProcess": [
+    "운영 형태와 공식 업종 확정",
+    "건축물대장상 층·호실 용도 및 같은 건축물 면적 합계 확인",
+    "교육환경보호구역·도시계획·위반건축물 여부 확인",
+    "다중이용업소·소방·피난·전기·환기 시설 검토",
+    "필요한 용도·기재 변경 및 시설 보완",
+    "관할 시·군·구에 영업 등록"
+  ],
+  "sources": [
+    {
+      "id": "game-rule-16",
+      "title": "게임산업진흥에 관한 법률 시행규칙 제16조",
+      "summary": "인터넷컴퓨터게임시설제공업 등록 신청과 교육환경 심의 확인",
+      "url": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029199851"
+    },
+    {
+      "id": "building-appendix-1",
+      "title": "건축법 시행령 별표 1",
+      "summary": "같은 건축물의 관련 바닥면적 합계 500㎡ 미만인 게임 관련 시설은 제2종 근린생활시설",
+      "url": "https://law.go.kr/flDownload.do?bylClsCd=110201&flSeq=125139207&gubun="
+    },
+    {
+      "id": "education-9",
+      "title": "교육환경 보호에 관한 법률 제9조",
+      "summary": "교육환경보호구역 내 게임제공업 관련 제한과 상대보호구역 심의",
+      "url": "https://law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1010088785"
+    },
+    {
+      "id": "multiuse-2",
+      "title": "다중이용업소의 안전관리에 관한 특별법 시행령 제2조",
+      "summary": "인터넷컴퓨터게임시설제공업의 다중이용업 해당 여부와 구조별 예외",
+      "url": "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284711"
+    },
+    {
+      "id": "indoor-air-2",
+      "title": "실내공기질 관리법 시행령 제2조",
+      "summary": "연면적 300㎡ 이상 인터넷컴퓨터게임시설제공업 영업시설",
+      "url": "https://law.go.kr/LSW/LsiJoLinkP.do?docType=JO&joNo=000200002&languageType=KO&lsNm=%EC%8B%A4%EB%82%B4%EA%B3%B5%EA%B8%B0%EC%A7%88+%EA%B4%80%EB%A6%AC%EB%B2%95+%EC%8B%9C%ED%96%89%EB%A0%B9&paras=1"
+    }
+  ],
+  "checkGroups": [
+    {
+      "id": "business",
+      "title": "업종·등록",
+      "checks": [
+        {"id":"official-industry","label":"공식 업종 확정","note":"성인 전용이라는 설명만으로 일반게임제공업으로 바꾸지 않습니다.","severity":"critical","sourceIds":["game-rule-16"]},
+        {"id":"registration-office","label":"관할 구청 등록부서 확인","note":"등록 서류와 현장 확인 순서를 담당부서에 확인합니다.","severity":"high","sourceIds":["game-rule-16"]},
+        {"id":"food-operation","label":"음식·음료 판매방식 확정","note":"단순 포장판매인지 조리판매인지에 따라 별도 식품영업 신고를 검토합니다.","severity":"high","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "building",
+      "title": "건축·용도",
+      "checks": [
+        {"id":"building-ledger-use","label":"해당 층·호실의 건축물대장 용도","note":"제2종 근린생활시설 또는 판매시설 해당 여부를 확인합니다.","severity":"critical","sourceIds":["building-appendix-1"]},
+        {"id":"same-building-area","label":"같은 건축물 관련 용도 면적 합계","note":"전용면적이 아니라 같은 건축물 합계가 500㎡ 미만인지 확인합니다.","severity":"critical","sourceIds":["building-appendix-1"]},
+        {"id":"actual-plan-match","label":"건축물 현황도와 실제 구조 일치","note":"불법 증축·무단 확장·임의 구획 여부를 현장에서 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"entrance-exit","label":"적법한 출입구·피난통로·직통계단","note":"층수·면적·구조에 따른 피난 조건은 도면과 현장 확인이 필요합니다.","severity":"critical","sourceIds":[]},
+        {"id":"parking-accessibility","label":"추가 주차·장애인 편의시설 기준","note":"용도변경과 면적 증가 여부에 따라 관할 건축부서 검토가 필요합니다.","severity":"high","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "location",
+      "title": "입지·교육환경",
+      "checks": [
+        {"id":"education-zone","label":"교육환경보호구역 해당 여부","note":"주소 조회 후 절대·상대보호구역 및 심의 필요 여부를 구분합니다.","severity":"critical","sourceIds":["education-9"]},
+        {"id":"land-restriction","label":"용도지역·지구단위계획·행위제한","note":"토지이용 공공데이터와 관할 도시계획부서 확인이 필요합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "fire",
+      "title": "소방·피난",
+      "checks": [
+        {"id":"multiuse-business","label":"다중이용업소 해당 여부","note":"지상층·외부 직통 출입 구조 등 예외 조건까지 확인합니다.","severity":"critical","sourceIds":["multiuse-2"]},
+        {"id":"fire-certificate","label":"안전시설등 완비증명 필요 여부","note":"다중이용업 해당 시 관할 소방서 사전 확인이 필요합니다.","severity":"critical","sourceIds":["multiuse-2"]},
+        {"id":"fire-equipment","label":"소화기·감지기·유도등·비상조명","note":"필요 수량과 설치 위치는 면적·구획·소방도면으로 확인합니다.","severity":"critical","sourceIds":["multiuse-2"]},
+        {"id":"emergency-exit","label":"비상구·방화문·방염·스프링클러","note":"건물과 영업장 조건에 따른 적용 여부를 확인합니다.","severity":"critical","sourceIds":["multiuse-2"]}
+      ]
+    },
+    {
+      "id": "electric",
+      "title": "전기",
+      "checks": [
+        {"id":"pc-count-load","label":"PC 대수·예상 소비전력 산정","note":"PC·모니터·냉난방·조리기기를 함께 계산합니다.","severity":"high","sourceIds":[]},
+        {"id":"contract-power","label":"계약전력·분전반 용량","note":"현재 계약전력과 차단기·배선 용량을 전기 전문가가 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"power-expansion","label":"전력 증설 가능 여부·접지","note":"한전 인입 여유와 건물 전기실 조건을 확인합니다.","severity":"high","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "environment",
+      "title": "환기·냉난방·위생",
+      "checks": [
+        {"id":"indoor-air-threshold","label":"영업시설 연면적 300㎡ 이상 여부","note":"300㎡ 이상이면 실내공기질법 적용 항목을 추가 검토합니다.","severity":"high","sourceIds":["indoor-air-2"]},
+        {"id":"ventilation-cooling","label":"환기량·냉방용량·실외기 위치","note":"장시간 영업과 발열량을 고려해 현장에서 확인합니다.","severity":"high","sourceIds":[]},
+        {"id":"smoking","label":"금연 및 흡연실 운영 기준","note":"실내 흡연 가능으로 임의 안내하지 않고 현행 금연 규정을 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"water-drain","label":"급수·배수·세척·조리시설","note":"음식 조리판매를 병행할 때 별도 위생시설 기준을 확인합니다.","severity":"high","sourceIds":[]}
+      ]
+    }
+  ],
+  "disclaimer": "이 결과는 사전진단이며 허가·등록 가능성을 보장하지 않습니다. 최종 행정판단은 관할 구청·소방서 등 담당기관에 확인해야 합니다."
+}

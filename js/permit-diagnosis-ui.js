@@ -156,6 +156,9 @@
         state.catalog.notice
       );
     byId("permitApplyIndustryV1").textContent = entry.industry.officialName;
+    document.dispatchEvent(new CustomEvent("permit:industry-selected-v1", {
+      detail: { industry: entry.industry }
+    }));
   }
 
   function fillLocation(data) {
