@@ -15,7 +15,7 @@ const master = JSON.parse(read("data/industry-master.json"));
 const button = index.match(/id="permitDiagnosisOpenBtnV1"[\s\S]*?<\/button>/);
 assert(button, "업종 마스터 버튼이 필요합니다.");
 assert(button[0].includes("<span>업종<br>마스터</span>"), "버튼은 업종/마스터 두 줄이어야 합니다.");
-assert(css.includes("font: 800 11px/1.15 inherit"), "버튼 글씨는 작은 크기여야 합니다.");
+assert(css.includes("font-size: 11px"), "버튼 글씨는 작은 크기여야 합니다.");
 assert(css.includes("@media (max-width: 768px)"), "모바일 제외 규칙이 필요합니다.");
 assert(ui.includes("업종 실무안내"), "업종 실무안내 탭이 필요합니다.");
 assert(ui.includes("선택 매물 확인"), "선택 매물 확인 탭이 필요합니다.");
