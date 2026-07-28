@@ -919,6 +919,159 @@ body.permit-diagnosis-open-v1 {
   font-size: 10px;
 }
 
+.permit-step5-v1 {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #ddd6fe;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.permit-step5-head-v1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px;
+  color: #fff;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+}
+
+.permit-step5-head-v1 h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.permit-step5-head-v1 p {
+  margin: 3px 0 0;
+  color: #ede9fe;
+  font-size: 10px;
+}
+
+.permit-step5-notice-v1 {
+  margin: 12px 13px 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  color: #6b4d00;
+  background: #fff8dc;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.permit-agency-grid-v1 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 13px;
+}
+
+.permit-agency-card-v1 {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e9e4f3;
+  border-radius: 11px;
+  background: #fbfaff;
+}
+
+.permit-agency-title-v1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.permit-agency-title-v1 small,
+.permit-agency-title-v1 strong {
+  display: block;
+}
+
+.permit-agency-title-v1 small {
+  color: #7c3aed;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.permit-agency-title-v1 strong {
+  margin-top: 2px;
+  color: #312a3f;
+  font-size: 12px;
+}
+
+.permit-agency-title-v1 a {
+  flex: 0 0 auto;
+  color: #6d28d9;
+  font-size: 9px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.permit-agency-card-v1 dl {
+  margin: 9px 0;
+  color: #544b60;
+  font-size: 9px;
+}
+
+.permit-agency-card-v1 dl div {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.permit-agency-card-v1 dt {
+  color: #7c7187;
+}
+
+.permit-agency-card-v1 dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.permit-agency-card-v1 pre {
+  max-height: 120px;
+  margin: 9px 0;
+  padding: 9px;
+  overflow: auto;
+  border-radius: 8px;
+  color: #4b4256;
+  background: #f2eef8;
+  font: inherit;
+  font-size: 9px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.permit-agency-actions-v1 {
+  display: flex;
+  gap: 5px;
+}
+
+.permit-agency-actions-v1 button,
+.permit-agency-actions-v1 a {
+  flex: 1;
+  padding: 7px 5px;
+  border: 1px solid #d8cef0;
+  border-radius: 7px;
+  color: #5b21b6;
+  background: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.permit-agency-actions-v1 button.done {
+  color: #166534;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.permit-step5-status-v1 {
+  padding: 10px 13px;
+  border-top: 1px solid #eee9f5;
+  color: #6f657b;
+  font-size: 10px;
+}
+
 @media (min-width: 769px) and (max-width: 1120px) {
   .permit-diagnosis-dialog-v1 {
     width: 95vw;
@@ -943,6 +1096,10 @@ body.permit-diagnosis-open-v1 {
 
   .permit-rule-summary-v1 {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .permit-agency-grid-v1 {
+    grid-template-columns: 1fr;
   }
 
   .permit-check-row-v1 {

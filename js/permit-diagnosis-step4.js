@@ -74,6 +74,9 @@
       var old = document.getElementById("permitStep4V1");
       if (old) old.remove();
       host.insertAdjacentHTML("beforeend", render(result));
+      document.dispatchEvent(new CustomEvent("permit:procedure-diagnosed-v1", {
+        detail: { result: result }
+      }));
     }).catch(function (error) {
       var host = document.getElementById("permitPublicDataResultsV1");
       if (host) host.insertAdjacentHTML("beforeend",
