@@ -17,7 +17,7 @@ assert(index.includes("building-data-adapter.js"), "건축물대장 어댑터를
 assert(ui.includes("permitPublicDataBtnV1"), "공공데이터 조회 버튼이 필요합니다.");
 assert(ui.includes("permitPublicDataResultsV1"), "공공데이터 결과 영역이 필요합니다.");
 assert(css.includes(".permit-industry-detail-host-v1"), "상세진단 전체너비 영역이 필요합니다.");
-assert(step2.includes('status === "YES" ? "충족"'), "확인 대신 충족을 표시해야 합니다.");
+assert(step2.includes('["YES", "확인"]'), "현장 체크 버튼은 확인으로 표시해야 합니다.");
 assert(step2.includes("permit:public-data-v1"), "공공데이터 자동판정 연동이 필요합니다.");
 
 const context = {

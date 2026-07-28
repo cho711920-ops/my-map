@@ -26,7 +26,7 @@
     color: #fff;
     background: linear-gradient(145deg, #7c3aed, #5b21b6);
     box-shadow: 0 5px 16px rgba(91, 33, 182, .34);
-    font: 800 13px/1.1 inherit;
+    font: 800 11px/1.15 inherit;
     white-space: nowrap;
     cursor: pointer;
     transition: transform .15s ease, box-shadow .15s ease;
@@ -1336,6 +1336,65 @@ body.permit-diagnosis-open-v1 {
   font-size: 8px;
 }
 
+.permit-broker-guide-v2 { margin-top: 18px; color: #30283d; }
+.permit-broker-hero-v2 { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:22px 24px; border-radius:18px 18px 0 0; color:#fff; background:linear-gradient(120deg,#5b21b6,#7c3aed); }
+.permit-broker-hero-v2 small { font-size:13px; font-weight:800; opacity:.88; }
+.permit-broker-hero-v2 h3 { margin:4px 0; font-size:24px; }
+.permit-broker-hero-v2 p { margin:0; font-size:13px; }
+.permit-broker-hero-v2 > span { flex:0 0 auto; padding:9px 13px; border-radius:999px; color:#6b2100; background:#ffedd5; font-size:12px; font-weight:900; }
+.permit-broker-alert-v2 { padding:16px 22px; border:1px solid #ddd6fe; border-top:0; color:#4c1d95; background:#f5f3ff; font-size:14px; line-height:1.65; }
+.permit-broker-alert-v2 strong { margin-right:8px; }
+.permit-broker-grid-v2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
+.permit-broker-grid-v2 > article,.permit-broker-section-v2,.permit-broker-footer-v2 { position:relative; padding:20px; border:1px solid #e4ddf2; border-radius:15px; background:#fff; }
+.permit-broker-grid-v2 > article > b { position:absolute; top:17px; right:18px; display:grid; width:28px; height:28px; place-items:center; border-radius:50%; color:#fff; background:#7c3aed; font-size:13px; }
+.permit-broker-grid-v2 h4,.permit-broker-section-v2 h4 { margin:0 0 14px; color:#4c1d95; font-size:18px; }
+.permit-broker-list-v2,.permit-broker-detail-list-v2,.permit-broker-timeline-v2 { margin:0; padding-left:21px; font-size:14px; line-height:1.65; }
+.permit-broker-detail-list-v2 { padding:0; list-style:none; }
+.permit-broker-detail-list-v2 li { padding:10px 0; border-bottom:1px solid #eeeaf5; }
+.permit-broker-detail-list-v2 li:last-child { border-bottom:0; }
+.permit-broker-detail-list-v2 strong,.permit-broker-detail-list-v2 span { display:block; }
+.permit-broker-detail-list-v2 strong { color:#352d43; font-size:14px; }
+.permit-broker-detail-list-v2 span { margin-top:3px; color:#6f6879; font-size:13px; line-height:1.55; }
+.permit-broker-warning-v2 { margin-top:12px; padding:11px 13px; border-radius:10px; color:#8a3a00; background:#fff7ed; font-size:13px; font-weight:700; line-height:1.5; }
+.permit-broker-section-v2 { margin-top:14px; }
+.permit-broker-check-columns-v2 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.permit-broker-check-columns-v2 h5 { margin:0; padding:10px 12px; border-radius:9px; color:#5b21b6; background:#f5f3ff; font-size:14px; }
+.permit-broker-departments-v2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.permit-broker-departments-v2 > div { padding:14px; border-radius:11px; background:#f8f7fb; }
+.permit-broker-departments-v2 strong,.permit-broker-departments-v2 span { display:block; }
+.permit-broker-departments-v2 strong { color:#5b21b6; font-size:14px; }
+.permit-broker-departments-v2 span { margin-top:5px; color:#625b70; font-size:13px; line-height:1.55; }
+.permit-broker-help-v2 { margin:12px 0 0; color:#6d28d9; font-size:13px; font-weight:700; }
+.permit-broker-timeline-v2 { counter-reset:broker-step; padding:0; list-style:none; }
+.permit-broker-timeline-v2 li { position:relative; min-height:34px; padding:5px 0 10px 38px; border-left:2px solid #ddd6fe; }
+.permit-broker-timeline-v2 li::before { position:absolute; top:2px; left:-14px; display:grid; width:26px; height:26px; place-items:center; border-radius:50%; color:#fff; background:#7c3aed; counter-increment:broker-step; content:counter(broker-step); font-size:11px; font-weight:900; }
+.permit-broker-contract-v2 { border-color:#fed7aa; background:#fffaf5; }
+.permit-broker-contract-v2 h4 { color:#9a3412; }
+.permit-broker-contract-v2 > p { margin:12px 0 0; color:#7c2d12; font-size:12px; }
+.permit-broker-footer-v2 { margin-top:14px; background:#faf9fc; }
+.permit-broker-footer-v2 > strong { display:block; color:#4c1d95; font-size:14px; }
+.permit-broker-footer-v2 > div { display:flex; flex-wrap:wrap; gap:7px; margin-top:9px; }
+.permit-broker-footer-v2 a { padding:7px 9px; border:1px solid #ddd6fe; border-radius:8px; color:#5b21b6; background:#fff; font-size:12px; font-weight:700; text-decoration:none; }
+.permit-broker-footer-v2 p { margin:12px 0 0; color:#6f6879; font-size:12px; line-height:1.55; }
+.permit-apply-checklist-v2 { margin:16px 0; }
+.permit-broker-empty-v2 { color:#777083; font-size:13px; }
+.permit-broker-briefing-v2 { margin-top:16px; overflow:hidden; border:1px solid #bfdbfe; border-radius:15px; background:#fff; }
+.permit-broker-briefing-v2 > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:17px 19px; color:#fff; background:linear-gradient(120deg,#0369a1,#0284c7); }
+.permit-broker-briefing-v2 > header small { font-size:11px; font-weight:800; opacity:.85; }
+.permit-broker-briefing-v2 > header h4 { margin:2px 0 0; font-size:18px; }
+.permit-broker-briefing-v2 > header button { padding:9px 13px; border:1px solid rgba(255,255,255,.6); border-radius:9px; color:#075985; background:#fff; font-size:12px; font-weight:900; cursor:pointer; }
+.permit-broker-briefing-summary-v2 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; background:#dbeafe; }
+.permit-broker-briefing-summary-v2 > div { padding:14px; background:#f8fbff; }
+.permit-broker-briefing-summary-v2 span,.permit-broker-briefing-summary-v2 strong { display:block; }
+.permit-broker-briefing-summary-v2 span { color:#64748b; font-size:11px; }
+.permit-broker-briefing-summary-v2 strong { margin-top:4px; color:#0c4a6e; font-size:14px; }
+.permit-broker-briefing-v2 > ul,.permit-broker-briefing-v2 > ol { margin:16px 20px; padding-left:22px; color:#334155; font-size:13px; line-height:1.65; }
+.permit-broker-briefing-v2 > h5 { margin:17px 20px 0; color:#075985; font-size:15px; }
+.permit-broker-briefing-wait-v2 { margin:17px 20px; color:#64748b; font-size:13px; }
+.permit-broker-briefing-notice-v2 { margin:0; padding:12px 18px; color:#7c2d12; background:#fff7ed; font-size:12px; }
+.permit-candidate-meta-v1 .is-verified { color:#047857; background:#ecfdf5; }
+.permit-candidate-meta-v1 .needs-confirm { color:#9a3412; background:#fff7ed; }
+
 @media (min-width: 769px) and (max-width: 1120px) {
   .permit-diagnosis-dialog-v1 {
     width: 95vw;
@@ -1374,4 +1433,7 @@ body.permit-diagnosis-open-v1 {
   .permit-check-row-v1 {
     grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) auto;
   }
+
+  .permit-broker-check-columns-v2 { grid-template-columns:1fr; }
+  .permit-broker-departments-v2 { grid-template-columns:1fr; }
 }
