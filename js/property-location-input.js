@@ -5,10 +5,86 @@
     return String(value == null ? "" : value).trim();
   }
 
-  function getSelectedItem() {
+  function getCheckedItems() {
+    if (typeof global.getSelectedPrintItems === "function") {
+      try {
+        var selected = global.getSelectedPrintItems();
+        if (Array.isArray(selected)) return selected.filter(Boolean);
+      } catch (_) {}
+    }
+
+    var keys = Array.isArray(global.selectedPrintKeys) ? global.selectedPrintKeys : [];
+    var items = Array.isArray(global.allItems) ? global.allItems : [];
+    return items.filter(function (item) {
+      return item && keys.indexOf(item.key) !== -1;
+    });
+  }
+
+  function getSelectedItemResult() {
+    var checkedItems = getCheckedItems();
+    if (checkedItems.length > 1) {
+      return {
+        item: null,
+        count: checkedItems.length,
+        source: "checked",
+        message: "체크된 매물이 " + checkedItems.length + "개입니다. 진단할 매물 1개만 체크해주세요."
+      };
+    }
+    if (checkedItems.length === 1) {
+      return { item: checkedItems[0], count: 1, source: "checked", message: "" };
+    }
+
     var key = global.selectedItemKey;
     var items = Array.isArray(global.allItems) ? global.allItems : [];
-    if (!key) return null;
+    if (!key) {
+      return {
+        item: null,
+        count: 0,
+        source: "",
+        message: "매물카드를 누르거나 진단할 매물 1개를 체크해주세요."
+      };
+    }
+    var item = items.find(function (candidate) {
+      return candidate && candidate.key === key;
+    }) || null;
+    return {
+      item: item,
+      count: item ? 1 : 0,
+      source: item ? "active" : "",
+      message: item ? "" : "선택한 매물을 현재 목록에서 찾지 못했습니다. 매물카드를 다시 눌러주세요."
+    };
+  }
+
+  function getSelectedItem() {
+    return getSelectedItemResult().item;
+  }
+
+  function normalizeFloor(value) {
+    var raw = text(value);
+    if (!raw) return "";
+    var parsed = parseRoom(raw);
+    if (parsed.floor) return parsed.floor;
+    return /^-?\d+$/.test(raw) ? raw + "층" : raw;
+  }
+
+  function normalizeUnit(value) {
+    var raw = text(value);
+    if (!raw) return "";
+    var match = raw.match(/B?\s*\d+\s*호/i);
+    if (match) return match[0].replace(/\s+/g, "");
+    return /^\d+$/.test(raw) ? raw + "호" : raw;
+  }
+
+  function firstValue(item, fields) {
+    for (var i = 0; i < fields.length; i++) {
+      var value = item && item[fields[i]];
+      if (value != null && text(value) !== "") return value;
+    }
+    return "";
+  }
+
+  function findByKey(key) {
+    var items = Array.isArray(global.allItems) ? global.allItems : [];
     return items.find(function (item) {
       return item && item.key === key;
     }) || null;
@@ -32,15 +108,18 @@
 
   function fromItem(item) {
     if (!item) return null;
-    var room = parseRoom(item.room);
+    var room = parseRoom(firstValue(item, ["room", "roomInfo", "floorInfo"]));
+    var directFloor = firstValue(item, ["floor", "floorName"]);
+    var directUnit = firstValue(item, ["unit", "ho", "unitName"]);
+    var areaPyeong = firstValue(item, ["area", "pyeong", "exclusiveAreaPyeong"]);
     return {
-      address: text(item.address),
-      floor: room.floor,
-      unit: room.unit,
-      area: pyeongToSquareMeters(item.area),
-      areaSourcePyeong: text(item.area),
-      listingId: text(item.propertyId),
-      listingName: text(item.name)
+      address: text(firstValue(item, ["address", "lotAddress", "roadAddress"])),
+      floor: room.floor || normalizeFloor(directFloor),
+      unit: room.unit || normalizeUnit(directUnit),
+      area: pyeongToSquareMeters(areaPyeong),
+      areaSourcePyeong: text(areaPyeong),
+      listingId: text(firstValue(item, ["propertyId", "listingId", "propertyNumber", "listingNo", "id"])),
+      listingName: text(firstValue(item, ["name", "buildingName"])) || "선택 매물"
     };
   }
 
@@ -87,6 +166,9 @@
 
   global.PermitPropertyLocationInputV1 = {
     getSelectedItem: getSelectedItem,
+    getSelectedItemResult: getSelectedItemResult,
+    getCheckedItems: getCheckedItems,
+    findByKey: findByKey,
     parseRoom: parseRoom,
     pyeongToSquareMeters: pyeongToSquareMeters,
     fromItem: fromItem,

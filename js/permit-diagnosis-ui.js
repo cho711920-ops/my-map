@@ -172,10 +172,11 @@
   }
 
   function loadSelectedItem() {
-    var item = global.PermitPropertyLocationInputV1.getSelectedItem();
+    var selection = global.PermitPropertyLocationInputV1.getSelectedItemResult();
+    var item = selection.item;
     var status = byId("permitLocationStatusV1");
     if (!item) {
-      status.textContent = "먼저 지도 또는 매물목록에서 매물 1개를 선택해주세요.";
+      status.textContent = selection.message;
       return;
     }
     var data = global.PermitPropertyLocationInputV1.fromItem(item);
