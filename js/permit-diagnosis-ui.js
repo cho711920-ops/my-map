@@ -60,9 +60,9 @@
                 '<p class="permit-diagnosis-help-v1">AI가 임의 확정하지 않습니다. 설명을 비교한 뒤 사용자가 최종 업종을 선택합니다.</p>' +
                 '<div id="permitCandidateResultsV1"><div class="permit-candidate-empty-v1">' +
                   '<div><strong>운영 내용을 입력해주세요.</strong><br>해석 후 공식 업종 후보가 이곳에 표시됩니다.</div></div></div>' +
-                '<div id="permitIndustryDetailV1"></div>' +
               '</article>' +
             '</div>' +
+            '<div id="permitIndustryDetailV1" class="permit-industry-detail-host-v1"></div>' +
           '</section>' +
           '<section id="permitPanelApplyV1" class="permit-diagnosis-panel-v1" data-permit-panel="apply" hidden>' +
             '<article class="permit-diagnosis-card-v1">' +
@@ -78,11 +78,12 @@
               '<div class="permit-location-actions-v1">' +
                 '<button id="permitLoadSelectedV1" class="permit-diagnosis-primary-v1" type="button">현재 선택 매물 불러오기</button>' +
                 '<button id="permitSearchAddressV1" class="permit-diagnosis-secondary-v1" type="button">주소 직접 검색</button>' +
-                '<button class="permit-diagnosis-secondary-v1" type="button" disabled title="STEP 3에서 연결">공공데이터 조회 · STEP 3</button>' +
+                '<button id="permitPublicDataBtnV1" class="permit-diagnosis-secondary-v1" type="button">공공데이터 조회</button>' +
               '</div>' +
               '<div id="permitLocationStatusV1" class="permit-location-status-v1" aria-live="polite"></div>' +
               '<div class="permit-step-note-v1"><strong>선택 업종:</strong> <span id="permitApplyIndustryV1">아직 선택하지 않음</span><br>' +
-                '다음 단계에서 건축물대장·토지이용·인허가 데이터를 조회하고 현재 용도와 목표 용도를 비교합니다.</div>' +
+                '공공데이터에 없는 현장 구조·전기·소방 정보는 임의 추정하지 않고 미확인으로 유지합니다.</div>' +
+              '<div id="permitPublicDataResultsV1"></div>' +
             '</article>' +
           '</section>' +
         '</div>' +
@@ -198,6 +199,54 @@
       });
   }
 
+  function publicDataInput() {
+    return {
+      address: byId("permitAddressV1").value.trim(),
+      floor: byId("permitFloorV1").value.trim(),
+      unit: byId("permitUnitV1").value.trim(),
+      area: byId("permitAreaV1").value.trim(),
+      listingId: byId("permitListingIdV1").value.trim(),
+      industryId: state.selectedIndustryId
+    };
+  }
+
+  function queryPublicData() {
+    var button = byId("permitPublicDataBtnV1");
+    var status = byId("permitLocationStatusV1");
+    var results = byId("permitPublicDataResultsV1");
+    var input = publicDataInput();
+    if (!input.industryId) {
+      status.textContent = "먼저 업종 알아보기에서 최종 업종을 선택해주세요.";
+      return;
+    }
+    if (!input.address) {
+      status.textContent = "조회할 주소를 입력하거나 선택 매물을 불러와주세요.";
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "공공데이터 조회 중";
+    status.textContent = "지번을 확인하고 건축물대장·용도지역 자료를 조회하고 있습니다.";
+    results.innerHTML = '<div class="permit-public-loading-v1">공식 공공데이터를 조회하고 있습니다.</div>';
+
+    global.PermitBuildingDataAdapterV1.query(input)
+      .then(function (diagnosis) {
+        results.innerHTML = global.PermitBuildingDataAdapterV1.render(diagnosis);
+        status.textContent = "공공데이터 조회가 완료되었습니다. 자료가 없는 항목은 미확인으로 유지했습니다.";
+        document.dispatchEvent(new CustomEvent("permit:public-data-v1", {
+          detail: { diagnosis: diagnosis }
+        }));
+      })
+      .catch(function (error) {
+        results.innerHTML = '<div class="permit-public-error-v1"><strong>조회하지 못했습니다.</strong><br>' +
+          global.PermitIndustryCandidateSelectorV1.escapeHtml(error.message) + '</div>';
+        status.textContent = error.message;
+      })
+      .finally(function () {
+        button.disabled = false;
+        button.textContent = "공공데이터 조회";
+      });
+  }
+
   function closeModal() {
     var modal = byId("permitDiagnosisModalV1");
     if (!modal || modal.hidden) return;
@@ -226,6 +275,7 @@
     });
     byId("permitLoadSelectedV1").addEventListener("click", loadSelectedItem);
     byId("permitSearchAddressV1").addEventListener("click", searchDirectAddress);
+    byId("permitPublicDataBtnV1").addEventListener("click", queryPublicData);
   }
 
   function openModal() {

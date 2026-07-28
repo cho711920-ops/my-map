@@ -63,13 +63,23 @@
           return;
         }
         var first = result[0];
+        var lot = first.address || {};
+        var legalCode = text(lot.b_code).replace(/\D/g, "");
         resolve({
           address: text(first.address && first.address.address_name) ||
             text(first.road_address && first.road_address.address_name) ||
             query,
           roadAddress: text(first.road_address && first.road_address.address_name),
           x: Number(first.x),
-          y: Number(first.y)
+          y: Number(first.y),
+          parcel: legalCode.length === 10 ? {
+            sigunguCd: legalCode.slice(0, 5),
+            bjdongCd: legalCode.slice(5, 10),
+            platGbCd: text(lot.mountain_yn).toUpperCase() === "Y" ? "1" : "0",
+            bun: ("0000" + (text(lot.main_address_no).replace(/\D/g, "") || "0")).slice(-4),
+            ji: ("0000" + (text(lot.sub_address_no).replace(/\D/g, "") || "0")).slice(-4),
+            lotAddress: text(lot.address_name)
+          } : null
         });
       });
     });

@@ -19,7 +19,7 @@
     return '<div class="permit-check-controls-v1" role="group" aria-label="' +
       escapeHtml(check.label) + ' 확인 상태">' +
       ["YES", "NO", "UNKNOWN"].map(function (status) {
-        var label = status === "YES" ? "확인" : status === "NO" ? "불충족" : "미확인";
+        var label = status === "YES" ? "충족" : status === "NO" ? "불충족" : "미확인";
         var on = checkState[check.id] === status ? " on" : "";
         return '<button type="button" class="' + on + '" data-check-id="' +
           escapeHtml(check.id) + '" data-status="' + status + '">' + label + '</button>';
@@ -111,6 +111,18 @@
 
   document.addEventListener("permit:industry-selected-v1", function (event) {
     showForIndustry(event.detail.industry);
+  });
+
+  document.addEventListener("permit:public-data-v1", function (event) {
+    var diagnosis = event.detail && event.detail.diagnosis;
+    if (!activeRule || !checkState || !diagnosis || !diagnosis.autoChecks) return;
+    Object.keys(diagnosis.autoChecks).forEach(function (checkId) {
+      var status = diagnosis.autoChecks[checkId];
+      if (status === "YES" || status === "NO") {
+        global.PermitFacilityCheckEngineV1.setStatus(checkState, checkId, status);
+      }
+    });
+    refresh();
   });
 
   document.addEventListener("click", function (event) {
