@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2025-10-01-environment-2025-165",
+  "effectiveDate": "2025-10-01",
+  "source": {
+    "title": "건축물의 용도별 오수발생량 및 정화조 처리대상인원 산정방법",
+    "authority": "환경부고시 제2025-165호",
+    "url": "https://www.law.go.kr/LSW/flDownload.do?bylClsCd=200201&flNm=%5B%EB%B3%84%ED%91%9C%5D+%EA%B1%B4%EC%B6%95%EB%AC%BC%EC%9D%98+%EC%9A%A9%EB%8F%84%EB%B3%84+%EC%98%A4%EC%88%98%EB%B0%9C%EC%83%9D%EB%9F%89+%EB%B0%8F+%EC%A0%95%ED%99%94%EC%A1%B0+%EC%B2%98%EB%A6%AC%EB%8C%80%EC%83%81%EC%9D%B8%EC%9B%90+%EC%82%B0%EC%A0%95%EA%B8%B0%EC%A4%80&flSeq=157950723"
+  },
+  "variables": {
+    "A": "해당 용도로 사용하는 연면적(㎡). 공용면적을 포함하고 부설주차장과 오수가 발생하지 않는 기계실·공조실·캐노피는 제외",
+    "N": "정화조 처리대상인원(인)",
+    "Q": "1일 오수발생량(L/일)"
+  },
+  "industries": {
+    "rest-restaurant": {
+      "label": "휴게음식점",
+      "personsPerSquareMeter": 0.175,
+      "litersPerSquareMeterDay": 35,
+      "formulaN": "N = 0.175 × A",
+      "formulaQ": "Q = 35 × A"
+    },
+    "general-restaurant": {
+      "label": "일반음식점",
+      "personsPerSquareMeter": 0.175,
+      "litersPerSquareMeterDay": 60,
+      "formulaN": "N = 0.175 × A",
+      "formulaQ": "Q = 60 × A",
+      "bodMgL": {
+        "한식·분식": 330,
+        "중식": 550,
+        "일식·주점·뷔페": 200,
+        "양식": 150
+      }
+    }
+  }
+}

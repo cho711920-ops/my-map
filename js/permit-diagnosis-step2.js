@@ -31,6 +31,92 @@
     }).join("");
   }
 
+  function wastewaterSupported(rule) {
+    return rule && (rule.industryId === "general-restaurant" || rule.industryId === "rest-restaurant");
+  }
+
+  function wastewaterAreaValue() {
+    var input = document.getElementById("permitAreaV1");
+    return input ? String(input.value || "").trim() : "";
+  }
+
+  function formatNumber(value, digits) {
+    if (value == null || !Number.isFinite(Number(value))) return "-";
+    return Number(value).toLocaleString("ko-KR", {
+      maximumFractionDigits: digits == null ? 2 : digits
+    });
+  }
+
+  function renderWastewaterResult(result) {
+    if (!result || !result.supported || result.area == null) {
+      return '<div class="permit-wastewater-empty-v1">' +
+        escapeHtml(result && result.message || "연면적을 입력하면 자동 계산됩니다.") + '</div>';
+    }
+    var statusLabel = result.status === "ENOUGH" ? "입력값상 여유 있음" :
+      result.status === "SHORT" ? "입력값상 용량 부족" : "건물 용량 확인 필요";
+    var remaining = result.remaining == null ? "총용량·현재 사용량 입력 필요" :
+      (result.remaining >= 0
+        ? formatNumber(result.remaining, 2) + "인분 여유"
+        : formatNumber(Math.abs(result.remaining), 2) + "인분 부족");
+
+    return '<div class="permit-wastewater-result-v1" data-status="' + result.status + '">' +
+      '<div><span>필요 처리인원 N</span><strong>' + formatNumber(result.targetPersons, 2) + '인</strong>' +
+        '<small>' + escapeHtml(result.rule.formulaN) + '</small></div>' +
+      '<div><span>하루 오수량 Q</span><strong>' + formatNumber(result.dailyLiters, 0) + 'L</strong>' +
+        '<small>' + formatNumber(result.dailyTons, 2) + '톤/일 · ' + escapeHtml(result.rule.formulaQ) + '</small></div>' +
+      '<div><span>건물 정화조 여유</span><strong>' + escapeHtml(remaining) + '</strong>' +
+        '<small>' + escapeHtml(statusLabel) + '</small></div>' +
+      '<p>' + escapeHtml(result.message) + '</p></div>';
+  }
+
+  function renderWastewaterCalculator(rule) {
+    if (!wastewaterSupported(rule) || !global.PermitWastewaterCapacityEngineV1) return "";
+    var area = wastewaterAreaValue();
+    var result = global.PermitWastewaterCapacityEngineV1.calculate(rule.industryId, { area: area });
+    var source = global.PermitWastewaterCapacityEngineV1.source;
+
+    return '<section id="permitWastewaterCalculatorV1" class="permit-wastewater-card-v1" ' +
+      'data-industry-id="' + escapeHtml(rule.industryId) + '">' +
+      '<header><div><small>공식 계산식으로 미리 확인</small><h4>정화조·오수 처리용량 계산</h4></div>' +
+        '<span>' + escapeHtml(rule.commonName || rule.officialName) + '</span></header>' +
+      '<div class="permit-wastewater-guide-v1">' +
+        '<strong>A = 공용면적을 포함한 해당 용도 연면적(㎡)</strong>' +
+        '<span>선택 매물의 전용면적이 참고로 자동 입력됩니다. 계산 전 건축물대장이나 관리주체를 통해 공용면적을 포함한 실제 A로 고쳐주세요.</span>' +
+      '</div>' +
+      '<div class="permit-wastewater-inputs-v1">' +
+        '<label><span>계산할 연면적 A(㎡)</span><input id="permitWastewaterAreaV1" type="number" min="0" step="0.01" ' +
+          'inputmode="decimal" value="' + escapeHtml(area) + '" placeholder="예: 100"></label>' +
+        '<label><span>건물 정화조 총용량(인)</span><input id="permitWastewaterTotalV1" type="number" min="0" step="0.01" ' +
+          'inputmode="decimal" placeholder="대장·관리실 확인"></label>' +
+        '<label><span>다른 점포 현재 사용량(인)</span><input id="permitWastewaterExistingV1" type="number" min="0" step="0.01" ' +
+          'inputmode="decimal" placeholder="관리실·구청 확인"></label>' +
+      '</div>' +
+      '<div id="permitWastewaterResultV1">' + renderWastewaterResult(result) + '</div>' +
+      '<footer><div><b>N</b> 필요한 정화조 처리대상인원 <b>Q</b> 하루에 발생하는 예상 오수량</div>' +
+        '<p>정화조를 함께 쓰는 다른 점포의 사용량과 공공하수도 연결 상태까지 확인해야 최종 판단할 수 있습니다.</p>' +
+        '<a href="' + escapeHtml(source.url) + '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(source.authority + " · " + source.title) + '</a></footer>' +
+      '</section>';
+  }
+
+  function refreshWastewaterCalculator() {
+    var card = document.getElementById("permitWastewaterCalculatorV1");
+    var resultHost = document.getElementById("permitWastewaterResultV1");
+    if (!card || !resultHost || !global.PermitWastewaterCapacityEngineV1) return;
+    var area = document.getElementById("permitWastewaterAreaV1");
+    var total = document.getElementById("permitWastewaterTotalV1");
+    var existing = document.getElementById("permitWastewaterExistingV1");
+    var result = global.PermitWastewaterCapacityEngineV1.calculate(
+      card.getAttribute("data-industry-id"),
+      {
+        area: area && area.value,
+        totalCapacity: total && total.value,
+        existingLoad: existing && existing.value
+      }
+    );
+    resultHost.innerHTML = renderWastewaterResult(result);
+  }
+
   function departmentGuide(industryId) {
     if (industryId === "general-restaurant" || industryId === "rest-restaurant") {
       return [
@@ -164,6 +250,7 @@
           '<div><h5>영업장 시설</h5><ul class="permit-broker-detail-list-v2">' + checkDescriptions(facility.checks) + '</ul></div>' +
           '<div><h5>설비·안전</h5><ul class="permit-broker-detail-list-v2">' + checkDescriptions(equipment.checks) + '</ul></div>' +
         '</div></section>' +
+      renderWastewaterCalculator(rule) +
 
       '<section class="permit-broker-section-v2"><h4>구청·기관에 전화해서 확인할 곳</h4>' +
         renderDepartments(rule) +
@@ -317,6 +404,11 @@
       button.getAttribute("data-status")
     );
     refreshChecklist();
+  });
+
+  document.addEventListener("input", function (event) {
+    if (!event.target.closest("#permitWastewaterCalculatorV1")) return;
+    refreshWastewaterCalculator();
   });
 
   global.PermitDiagnosisStep2V1 = {

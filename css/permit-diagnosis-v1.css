@@ -1381,6 +1381,35 @@ body.permit-diagnosis-open-v1 {
 .permit-broker-footer-v2 p { margin:12px 0 0; color:#6f6879; font-size:12px; line-height:1.55; }
 .permit-apply-checklist-v2 { margin:16px 0; }
 .permit-broker-empty-v2 { color:#777083; font-size:13px; }
+.permit-wastewater-card-v1 { margin-top:14px; overflow:hidden; border:1px solid #a7f3d0; border-radius:16px; background:#fff; }
+.permit-wastewater-card-v1 > header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 20px; color:#fff; background:linear-gradient(120deg,#047857,#059669); }
+.permit-wastewater-card-v1 > header small { display:block; font-size:12px; font-weight:800; opacity:.86; }
+.permit-wastewater-card-v1 > header h4 { margin:3px 0 0; color:#fff; font-size:20px; }
+.permit-wastewater-card-v1 > header > span { flex:0 0 auto; padding:7px 11px; border-radius:999px; color:#065f46; background:#d1fae5; font-size:12px; font-weight:900; }
+.permit-wastewater-guide-v1 { display:flex; align-items:center; gap:18px; padding:14px 20px; border-bottom:1px solid #d1fae5; color:#064e3b; background:#ecfdf5; }
+.permit-wastewater-guide-v1 strong { flex:0 0 auto; font-size:14px; }
+.permit-wastewater-guide-v1 span { font-size:13px; line-height:1.5; }
+.permit-wastewater-inputs-v1 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:18px 20px 10px; }
+.permit-wastewater-inputs-v1 label,.permit-wastewater-inputs-v1 span { display:block; }
+.permit-wastewater-inputs-v1 span { margin-bottom:6px; color:#374151; font-size:13px; font-weight:800; }
+.permit-wastewater-inputs-v1 input { width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid #d1d5db; border-radius:9px; color:#111827; background:#fff; font-size:15px; }
+.permit-wastewater-inputs-v1 input:focus { border-color:#10b981; outline:3px solid rgba(16,185,129,.15); }
+.permit-wastewater-result-v1 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; padding:10px 20px 18px; }
+.permit-wastewater-result-v1 > div { padding:14px; border:1px solid #d1fae5; border-radius:11px; background:#f0fdf4; }
+.permit-wastewater-result-v1 span,.permit-wastewater-result-v1 strong,.permit-wastewater-result-v1 small { display:block; }
+.permit-wastewater-result-v1 span { color:#64748b; font-size:12px; font-weight:700; }
+.permit-wastewater-result-v1 strong { margin-top:5px; color:#065f46; font-size:20px; }
+.permit-wastewater-result-v1 small { margin-top:4px; color:#64748b; font-size:11px; }
+.permit-wastewater-result-v1 > p { grid-column:1/-1; margin:0; padding:11px 13px; border-radius:9px; color:#065f46; background:#ecfdf5; font-size:13px; font-weight:700; }
+.permit-wastewater-result-v1[data-status="SHORT"] > div:last-of-type { border-color:#fecaca; background:#fef2f2; }
+.permit-wastewater-result-v1[data-status="SHORT"] > div:last-of-type strong { color:#b91c1c; }
+.permit-wastewater-result-v1[data-status="SHORT"] > p { color:#991b1b; background:#fef2f2; }
+.permit-wastewater-empty-v1 { margin:10px 20px 18px; padding:16px; border:1px dashed #a7f3d0; border-radius:10px; color:#047857; background:#f0fdf4; font-size:14px; font-weight:700; text-align:center; }
+.permit-wastewater-card-v1 > footer { padding:14px 20px 18px; border-top:1px solid #d1fae5; color:#4b5563; background:#f9fafb; font-size:12px; line-height:1.55; }
+.permit-wastewater-card-v1 > footer div { display:flex; flex-wrap:wrap; gap:5px 9px; }
+.permit-wastewater-card-v1 > footer b { display:inline-grid; min-width:22px; height:22px; place-items:center; border-radius:6px; color:#fff; background:#059669; }
+.permit-wastewater-card-v1 > footer p { margin:8px 0; }
+.permit-wastewater-card-v1 > footer a { color:#047857; font-weight:800; }
 .permit-broker-briefing-v2 { margin-top:16px; overflow:hidden; border:1px solid #bfdbfe; border-radius:15px; background:#fff; }
 .permit-broker-briefing-v2 > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:17px 19px; color:#fff; background:linear-gradient(120deg,#0369a1,#0284c7); }
 .permit-broker-briefing-v2 > header small { font-size:11px; font-weight:800; opacity:.85; }
@@ -1439,4 +1468,6 @@ body.permit-diagnosis-open-v1 {
 
   .permit-broker-check-columns-v2 { grid-template-columns:1fr; }
   .permit-broker-departments-v2 { grid-template-columns:1fr; }
+  .permit-wastewater-guide-v1 { align-items:flex-start; flex-direction:column; gap:5px; }
+  .permit-wastewater-inputs-v1,.permit-wastewater-result-v1 { grid-template-columns:1fr; }
 }
