@@ -262,16 +262,23 @@
 
     function landUseSection(result) {
       var rows = result && Array.isArray(result.records) ? result.records : [];
+      var uniqueRows = rows.filter(function (row, index, source) {
+        var key = String(row.name || "") + "|" + String(row.code || "");
+        return source.findIndex(function (candidate) {
+          return String(candidate.name || "") + "|" + String(candidate.code || "") === key;
+        }) === index;
+      });
       return '<section class="permit-history-section-v1 permit-land-use-section-v1"><header><div><h5>토지이용행위 규제 확인</h5>' +
         '<p>' + escapeHtml(statusLabel(result)) + '</p></div>' +
         (result && result.sourcePage
           ? '<a href="' + escapeHtml(result.sourcePage) + '" target="_blank" rel="noopener noreferrer">공식 출처</a>'
           : '') + '</header>' +
         '<div class="permit-history-empty-v1">' +
-          (rows.length
-            ? '<strong>공식 행위명</strong> ' + rows.map(function (row) {
-              return escapeHtml(row.name) + (row.code ? " (" + escapeHtml(row.code) + ")" : "");
-            }).join(", ") + '<br>'
+          (uniqueRows.length
+            ? '<strong>공식 행위명</strong><div class="permit-land-use-tags-v1">' + uniqueRows.map(function (row) {
+              return '<span>' + escapeHtml(row.name) +
+                (row.code ? ' <small>' + escapeHtml(row.code) + '</small>' : '') + '</span>';
+            }).join("") + '</div>'
             : '') +
           escapeHtml(result && result.message ? result.message : "현재 자료로 확인할 수 없습니다.") +
         '</div></section>';

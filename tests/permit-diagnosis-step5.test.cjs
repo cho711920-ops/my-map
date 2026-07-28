@@ -43,6 +43,7 @@ Object.keys(expected).forEach((jurisdiction) => {
   assert.strictEqual(building.representativePhone, expected[jurisdiction], "다른 구청 번호를 섞으면 안 됩니다.");
 });
 
+assert.strictEqual(resolver.detectJurisdiction("서구 괴정동 1-1"), "대전 서구", "대전 5개 구 주소는 시·도 생략도 판별해야 합니다.");
 assert.strictEqual(resolver.detectJurisdiction("서울 서구 테스트동 1-1"), null, "대전 외 주소를 대전 서구로 오인하면 안 됩니다.");
 assert.strictEqual(resolver.resolve("대전 테스트동 1-1", roleMap).contacts.length, 0, "관할 미확인 시 임의 기관을 만들면 안 됩니다.");
 

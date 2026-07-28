@@ -33,7 +33,10 @@
         '<div><small>동일 건물 합계 ' + escapeHtml(target.threshold) + '㎡ 이상이면</small><strong>' +
           escapeHtml(target.alternative.label) + '</strong><span>' +
           escapeHtml(result.alternativeComparison.procedure.label) + '</span></div>' +
-      '</div>';
+      '</div>' +
+      '<div class="permit-step4-threshold-help-v1"><strong>왜 자동판정이 안 되나요?</strong>' +
+        '호실 하나의 면적만 보는 기준이 아니라, 같은 건물 안에서 해당 업종과 관련된 용도로 쓰는 면적의 합계를 확인해야 하기 때문입니다. ' +
+        '건축물대장 전유부·층별 현황과 실제 도면을 대조한 뒤 건축사 또는 관할 구청에 확인하면 확정할 수 있습니다.</div>';
     }
 
     return '<section id="permitStep4V1" class="permit-step4-v1">' +

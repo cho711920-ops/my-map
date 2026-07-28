@@ -9,18 +9,25 @@ const vm = require("vm");
     .replace(/export const permitOpenDataInternals[\s\S]*$/m, "");
   const context = {
     URL,
+    TextDecoder,
     console,
     process: { env: {} },
     setTimeout,
     clearTimeout
   };
   vm.createContext(context);
-  vm.runInContext(moduleSource + "\nthis.__test={parseXmlRows,compactAddress,normalizePermit,normalizeBusiness,INDUSTRY_ENDPOINTS};", context);
+  vm.runInContext(moduleSource + "\nthis.__test={parseXmlRows,decodePublicXml,compactAddress,normalizePermit,normalizeBusiness,INDUSTRY_ENDPOINTS};", context);
 
   const api = context.__test;
   assert.strictEqual(api.compactAddress("대전 서구 둔산동 123-4"), "대전서구둔산동1234");
   assert.ok(api.INDUSTRY_ENDPOINTS["internet-computer-game"].path.includes("pc_bangs"));
-  assert.ok(api.INDUSTRY_ENDPOINTS["mixed-game-provider"].path.includes("mixed_game_providers"));
+  assert.ok(api.INDUSTRY_ENDPOINTS["combined-game-distribution"].path.includes("mixed_game_providers"));
+  assert.ok(api.INDUSTRY_ENDPOINTS["general-restaurant"].path.includes("general_restaurants"));
+  assert.ok(api.INDUSTRY_ENDPOINTS["rest-restaurant"].path.includes("rest_cafes"));
+  assert.ok(api.INDUSTRY_ENDPOINTS["beauty-nail"].path.includes("beauty_salons"));
+
+  const utf8Xml = new TextEncoder().encode('<?xml version="1.0" encoding="utf-8"?><name>미용업</name>');
+  assert(api.decodePublicXml(utf8Xml.buffer, "application/xml; charset=utf-8").includes("미용업"));
 
   const permit = api.normalizePermit({
     platPlc: "대전 서구 둔산동 1",

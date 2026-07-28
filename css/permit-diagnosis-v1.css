@@ -988,6 +988,45 @@ body.permit-diagnosis-open-v1 {
   font-weight: 800;
 }
 
+.permit-step4-threshold-help-v1 {
+  margin: 0 13px 12px;
+  padding: 11px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.permit-step4-threshold-help-v1 strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.permit-land-use-tags-v1 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.permit-land-use-tags-v1 > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  background: #faf5ff;
+  color: #4c1d95;
+}
+
+.permit-land-use-tags-v1 small {
+  color: #7c3aed;
+  font-size: 10px;
+}
+
 .permit-step4-sources-v1 {
   margin-bottom: 0;
   border-radius: 0;

@@ -24,7 +24,12 @@
   function detectJurisdiction(address) {
     var source = text(address).replace(/^대전광역시/, "대전").replace(/^대전시/, "대전");
     var match = source.match(districtPattern);
-    if (!match || source.indexOf("대전") === -1) return null;
+    if (!match) return null;
+    // 매물 입력값이 "서구 괴정동 …"처럼 시·도명이 생략되어도
+    // 서비스 범위인 대전 5개 구는 안전하게 관할을 확정할 수 있다.
+    if (source.indexOf("대전") === -1 && !/^(동구|중구|서구|유성구|대덕구)(\s|$)/.test(source)) {
+      return null;
+    }
     return "대전 " + match[1];
   }
 

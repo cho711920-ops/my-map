@@ -79,7 +79,15 @@
       return Promise.resolve(null);
     }
     setStatus("기존 진단을 불러오고 있습니다.");
-    return global.PermitDiagnosisStorageV1.load(key).then(function (record) {
+    var timeout = new Promise(function (resolve) {
+      global.setTimeout(function () {
+        resolve(global.PermitDiagnosisStorageV1.loadLocal(key));
+      }, 5000);
+    });
+    return Promise.race([
+      global.PermitDiagnosisStorageV1.load(key),
+      timeout
+    ]).then(function (record) {
       state.loadedRecord = record;
       var report = document.getElementById("permitStep6ReportV1");
       if (report) report.innerHTML = record
@@ -95,6 +103,9 @@
         setStatus("저장된 진단이 없습니다.");
       }
       return record;
+    }).catch(function (error) {
+      setStatus("저장된 진단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", true);
+      return null;
     });
   }
 

@@ -160,13 +160,18 @@
   }
 
   function request(url, options) {
-    return fetch(url, options).then(function (response) {
+    var controller = new AbortController();
+    var timer = global.setTimeout(function () { controller.abort(); }, 5000);
+    var requestOptions = Object.assign({}, options || {}, { signal: controller.signal });
+    return fetch(url, requestOptions).then(function (response) {
       return response.json().then(function (result) {
         if (!response.ok || !result || result.ok === false) {
           throw new Error(result && result.message || "진단 저장 서버가 응답하지 않았습니다.");
         }
         return result;
       });
+    }).finally(function () {
+      global.clearTimeout(timer);
     });
   }
 

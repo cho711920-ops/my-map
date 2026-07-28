@@ -7,20 +7,48 @@ const INDUSTRY_ENDPOINTS = {
     label: "인터넷컴퓨터게임시설제공업",
     sourcePage: "https://www.data.go.kr/data/15154951/openapi.do"
   },
-  "general-game-provider": {
+  "general-game": {
     path: "/1741000/general_game_providers/info",
     label: "일반게임제공업",
     sourcePage: "https://www.data.go.kr/data/15154955/openapi.do"
   },
-  "mixed-game-provider": {
+  "combined-game-distribution": {
     path: "/1741000/mixed_game_providers/info",
     label: "복합유통게임제공업",
     sourcePage: "https://www.data.go.kr/data/15154945/openapi.do"
   },
-  "youth-game-provider": {
+  "youth-game": {
     path: "/1741000/youth_game_providers/info",
     label: "청소년게임제공업",
     sourcePage: "https://www.data.go.kr/data/15154958/openapi.do"
+  },
+  "general-restaurant": {
+    path: "/1741000/general_restaurants/info",
+    label: "일반음식점영업",
+    sourcePage: "https://www.data.go.kr/data/15154916/openapi.do"
+  },
+  "rest-restaurant": {
+    path: "/1741000/rest_cafes/info",
+    label: "휴게음식점영업",
+    sourcePage: "https://www.data.go.kr/data/15154921/openapi.do"
+  },
+  "beauty-hair": {
+    path: "/1741000/beauty_salons/info",
+    label: "미용업(일반)",
+    businessType: "일반미용업",
+    sourcePage: "https://www.data.go.kr/data/15154918/openapi.do"
+  },
+  "beauty-nail": {
+    path: "/1741000/beauty_salons/info",
+    label: "미용업(손톱·발톱)",
+    businessType: "네일미용업",
+    sourcePage: "https://www.data.go.kr/data/15154918/openapi.do"
+  },
+  "beauty-skin": {
+    path: "/1741000/beauty_salons/info",
+    label: "미용업(피부)",
+    businessType: "피부미용업",
+    sourcePage: "https://www.data.go.kr/data/15154918/openapi.do"
   }
 };
 
@@ -30,7 +58,10 @@ const LAND_USE_NAMES = {
   "mixed-game-provider": "복합유통게임제공업",
   "youth-game-provider": "청소년게임제공업",
   "general-restaurant": "일반음식점",
-  "rest-restaurant": "휴게음식점"
+  "rest-restaurant": "휴게음식점",
+  "beauty-hair": "미용업",
+  "beauty-nail": "미용업",
+  "beauty-skin": "미용업"
 };
 
 function text(value) {
@@ -96,7 +127,8 @@ async function fetchText(url) {
       cache: "no-store",
       headers: { Accept: "application/xml,text/xml" }
     });
-    const raw = await response.text();
+    const bytes = await response.arrayBuffer();
+    const raw = decodePublicXml(bytes, response.headers.get("content-type"));
     if (!response.ok) throw new Error("공공데이터 서버 응답 오류");
     const resultCode = text(raw.match(/<resultCode>([\s\S]*?)<\/resultCode>/i)?.[1]);
     if (resultCode && !["00", "0", "NORMAL_SERVICE"].includes(resultCode)) {
@@ -171,7 +203,10 @@ function normalizeBusiness(item, config) {
     closureDate: text(first(item, ["CLSBIZ_YMD", "dcbYmd", "closureDate", "폐업일자"])),
     lotAddress: text(first(item, ["LOTNO_ADDR", "siteWhlAddr", "siteAddress", "소재지전체주소"])),
     roadAddress: text(first(item, ["ROAD_NM_ADDR", "rdnWhlAddr", "roadAddress", "도로명전체주소"])),
-    phone: text(first(item, ["TELNO", "siteTel", "phone", "소재지전화"]))
+    phone: text(first(item, ["TELNO", "siteTel", "phone", "소재지전화"])),
+    businessType: text(first(item, [
+      "UPTAE_NM", "SNT_UPTAE_NM", "xKXxNm", "uptaeNm", "businessType", "업태구분명"
+    ]))
   };
 }
 
@@ -184,7 +219,7 @@ export async function fetchIndustryPermitHistory(industryId, addresses) {
       message: "선택 업종에 연결된 영업 인허가 이력 API가 없습니다."
     };
   }
-  const keyName = industryId === "youth-game-provider"
+  const keyName = industryId === "youth-game"
     ? "YOUTH_GAME_SERVICE_KEY"
     : "LOCALDATA_GAME_SERVICE_KEY";
   const url = baseUrl(config.path, keyName);
@@ -193,6 +228,8 @@ export async function fetchIndustryPermitHistory(industryId, addresses) {
   const records = listFromResponse(payload)
     .map((item) => normalizeBusiness(item, config))
     .filter((item) => {
+      if (config.businessType && item.businessType &&
+          item.businessType.indexOf(config.businessType) === -1) return false;
       if (!targets.length) return false;
       const source = compactAddress(item.lotAddress + " " + item.roadAddress);
       return Boolean(source) && targets.some((target) => source.includes(target) || target.includes(source));
@@ -272,6 +309,18 @@ export function parseXmlRows(xml) {
     rows.push(row);
   }
   return rows;
+}
+
+export function decodePublicXml(bytes, contentType = "") {
+  const type = text(contentType).toLowerCase();
+  let encoding = /euc-kr|ks_c_5601|cp949/.test(type) ? "euc-kr" : "utf-8";
+  let raw = new TextDecoder(encoding).decode(bytes);
+  const declaration = text(raw.slice(0, 160)).toLowerCase();
+  if (encoding === "utf-8" && /encoding\s*=\s*["'](?:euc-kr|ks_c_5601|cp949)/.test(declaration)) {
+    encoding = "euc-kr";
+    raw = new TextDecoder(encoding).decode(bytes);
+  }
+  return raw;
 }
 
 export const permitOpenDataInternals = {

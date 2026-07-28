@@ -8,6 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const storageSource = read("js/diagnosis-storage.js");
 const step2Source = read("js/permit-diagnosis-step2.js");
 const step5Source = read("js/permit-diagnosis-step5.js");
+const step6Source = read("js/permit-diagnosis-step6.js");
 const index = read("index.html");
 
 assert(index.includes("diagnosis-storage.js"), "진단 저장 모듈을 연결해야 합니다.");
@@ -16,6 +17,8 @@ assert(index.includes("permit-diagnosis-step6.js"), "STEP 6 UI를 연결해야 �
 assert(step2Source.includes("permit:facility-checks-updated-v1"), "시설 체크결과를 저장 단계로 전달해야 합니다.");
 assert(step2Source.includes("permit:diagnosis-loaded-v1"), "저장된 시설 체크결과를 복원해야 합니다.");
 assert(step5Source.includes("permit:call-result-updated-v1"), "통화 결과를 저장 단계로 전달해야 합니다.");
+assert(step6Source.includes("Promise.race"), "클라우드 응답 지연 시 로컬 진단으로 종료해야 합니다.");
+assert(step6Source.includes("loadLocal(key)"), "응답 지연 시 로컬 저장본을 사용해야 합니다.");
 
 const store = new Map();
 const context = {

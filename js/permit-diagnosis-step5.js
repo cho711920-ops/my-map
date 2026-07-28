@@ -43,7 +43,8 @@
     if (!selectedIndustry || !lastDiagnosis || !lastProcedure) return;
     global.PermitAgencyContactResolverV1.load().then(function (data) {
       var input = publicInput();
-      var resolved = global.PermitAgencyContactResolverV1.resolve(input.address, data);
+      var resolvedAddress = lastDiagnosis.lotAddress || lastDiagnosis.roadAddress || input.address;
+      var resolved = global.PermitAgencyContactResolverV1.resolve(resolvedAddress, data);
       var host = document.getElementById("permitPublicDataResultsV1");
       if (!host) return;
       var old = document.getElementById("permitStep5V1");
