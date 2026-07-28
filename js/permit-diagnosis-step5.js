@@ -26,6 +26,8 @@
         '<div><dt>' + phoneLabel + '</dt><dd>' + escapeHtml(phone || "UNKNOWN") + '</dd></div>' +
         '<div><dt>확인일</dt><dd>' + escapeHtml(contact.verifiedAt) + '</dd></div></dl>' +
       '<pre>' + escapeHtml(script) + '</pre>' +
+      '<textarea class="permit-call-note-v1" data-permit-call-note="' + escapeHtml(contact.id) +
+        '" placeholder="통화 담당자·답변·확인사항 메모"></textarea>' +
       '<div class="permit-agency-actions-v1">' +
         '<button type="button" data-permit-copy-call="' + escapeHtml(contact.id) + '">질문 복사</button>' +
         (phone ? '<a href="tel:' + cleanPhone(phone) + '">전화 걸기</a>' : '') +
@@ -67,6 +69,9 @@
           '<div id="permitStep5StatusV1" class="permit-step5-status-v1" aria-live="polite">' +
             '통화 결과의 영구 저장과 재진단 이력은 STEP 6에서 연결됩니다.</div>' +
         '</section>');
+      document.dispatchEvent(new CustomEvent("permit:agency-rendered-v1", {
+        detail: { contacts: resolved.contacts }
+      }));
     }).catch(function (error) {
       var host = document.getElementById("permitPublicDataResultsV1");
       if (host) host.insertAdjacentHTML("beforeend",
@@ -98,7 +103,32 @@
       doneButton.classList.toggle("done");
       doneButton.textContent = doneButton.classList.contains("done") ? "확인완료 ✓" : "확인완료 기록";
       if (status) status.textContent = "이 화면에서 확인 상태를 표시했습니다. 영구 저장은 STEP 6에서 연결됩니다.";
+      var contactId = doneButton.getAttribute("data-permit-call-done");
+      var note = document.querySelector('[data-permit-call-note="' + contactId + '"]');
+      document.dispatchEvent(new CustomEvent("permit:call-result-updated-v1", {
+        detail: {
+          contactId: contactId,
+          confirmed: doneButton.classList.contains("done"),
+          note: note ? note.value : "",
+          updatedAt: new Date().toISOString()
+        }
+      }));
     }
+  });
+
+  document.addEventListener("input", function (event) {
+    var note = event.target.closest("[data-permit-call-note]");
+    if (!note) return;
+    var contactId = note.getAttribute("data-permit-call-note");
+    var done = document.querySelector('[data-permit-call-done="' + contactId + '"]');
+    document.dispatchEvent(new CustomEvent("permit:call-result-updated-v1", {
+      detail: {
+        contactId: contactId,
+        confirmed: Boolean(done && done.classList.contains("done")),
+        note: note.value,
+        updatedAt: new Date().toISOString()
+      }
+    }));
   });
 
   document.addEventListener("permit:industry-selected-v1", function (event) {

@@ -4,6 +4,18 @@
   var activeRule = null;
   var checkState = null;
 
+  function emitCheckState() {
+    if (!activeRule || !checkState) return;
+    document.dispatchEvent(new CustomEvent("permit:facility-checks-updated-v1", {
+      detail: {
+        industryId: activeRule.industryId,
+        ruleVersion: activeRule.ruleVersion,
+        checks: Object.assign({}, checkState),
+        summary: global.PermitFacilityCheckEngineV1.summarize(activeRule, checkState)
+      }
+    }));
+  }
+
   function escapeHtml(value) {
     return global.PermitIndustryCandidateSelectorV1.escapeHtml(value);
   }
@@ -79,6 +91,7 @@
     var container = document.getElementById("permitStep2V1");
     if (!container || !activeRule) return;
     container.outerHTML = renderRule(activeRule);
+    emitCheckState();
   }
 
   function showForIndustry(industry) {
@@ -101,6 +114,7 @@
         activeRule = rule;
         checkState = global.PermitFacilityCheckEngineV1.createState(rule);
         loading.outerHTML = renderRule(rule);
+        emitCheckState();
       })
       .catch(function (error) {
         var loading = document.getElementById("permitStep2LoadingV1");
@@ -119,6 +133,18 @@
     Object.keys(diagnosis.autoChecks).forEach(function (checkId) {
       var status = diagnosis.autoChecks[checkId];
       if (status === "YES" || status === "NO") {
+        global.PermitFacilityCheckEngineV1.setStatus(checkState, checkId, status);
+      }
+    });
+    refresh();
+  });
+
+  document.addEventListener("permit:diagnosis-loaded-v1", function (event) {
+    var record = event.detail && event.detail.record;
+    if (!record || !activeRule || record.industryId !== activeRule.industryId) return;
+    Object.keys(record.facilityChecks || {}).forEach(function (checkId) {
+      var status = record.facilityChecks[checkId];
+      if (status === "YES" || status === "NO" || status === "UNKNOWN") {
         global.PermitFacilityCheckEngineV1.setStatus(checkState, checkId, status);
       }
     });
