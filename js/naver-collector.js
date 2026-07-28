@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.4.0";
+  var VERSION = "5.4.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -1851,15 +1851,57 @@
 
   function finAddressText(address) {
     if (!address || typeof address !== "object") return clean(address);
+    var jibun = clean(
+      address.jibun || address.landNumber || address.jibunNumber ||
+      address.lotNumber
+    );
     var parts = [
-      address.city,
-      address.division,
-      address.sector,
-      address.jibun
+      address.city || address.cityName || address.sidoName,
+      address.division || address.divisionName || address.sigunguName,
+      address.sector || address.sectorName || address.emdName,
+      address.li || address.liName,
+      jibun
     ].map(clean).filter(Boolean);
     return parts.filter(function(value, index) {
       return parts.indexOf(value) === index;
     }).join(" ");
+  }
+
+  function finExactAddressText(fallbackAddress, keyAddress, basicAddress) {
+    var candidates = [
+      finAddressText(basicAddress),
+      finAddressText(keyAddress),
+      clean(fallbackAddress)
+    ];
+    for (var index = 0; index < 2; index += 1) {
+      if (
+        hasExactNaverJibun(candidates[index]) &&
+        (candidates[index].split(/\s+/).length >= 3 || !clean(fallbackAddress))
+      ) {
+        return candidates[index];
+      }
+    }
+    if (hasExactNaverJibun(candidates[2])) return candidates[2];
+
+    var key = keyAddress && typeof keyAddress === "object" ? keyAddress : {};
+    var basic = basicAddress && typeof basicAddress === "object" ? basicAddress : {};
+    var jibun = clean(
+      key.jibun || key.landNumber || key.jibunNumber || key.lotNumber ||
+      basic.jibun || basic.landNumber || basic.jibunNumber || basic.lotNumber
+    );
+    if (!/^(?:산\s*)?\d+(?:-\d+)?$/.test(jibun)) return clean(fallbackAddress);
+
+    var base = clean(fallbackAddress)
+      .replace(/\s+(?:산\s*)?\d+(?:-\d+)?(?:\s|$).*$/, "")
+      .trim();
+    var localName = clean(
+      key.li || key.liName || key.sector || key.sectorName || key.emdName ||
+      basic.li || basic.liName || basic.sector || basic.sectorName || basic.emdName
+    );
+    if (localName && base.indexOf(localName) < 0) {
+      base = [base, localName].filter(Boolean).join(" ");
+    }
+    return [base, jibun].filter(Boolean).join(" ");
   }
 
   function finFloorInfo(article) {
@@ -2077,12 +2119,14 @@
     var realEstateType = clean(item.realEstateTypeCode);
     var tradeType = clean(item.tradeTypeCode);
 
+    // 목록 응답에는 동까지만 있고 지번이 생략되는 경우가 있으므로,
+    // 유형이 이미 있어도 key API를 항상 조회해 정확한 지번을 확보합니다.
+    var keyUrl = new URL(FIN_ARTICLE_KEY_PATH, location.origin);
+    keyUrl.searchParams.set("articleNumber", articleNumber);
+    var keyJson = await fetchFinJson(keyUrl.href, 4);
+    var keyResult = keyJson && keyJson.result || {};
+    var type = keyResult.type || {};
     if (!realEstateType || !tradeType) {
-      var keyUrl = new URL(FIN_ARTICLE_KEY_PATH, location.origin);
-      keyUrl.searchParams.set("articleNumber", articleNumber);
-      var keyJson = await fetchFinJson(keyUrl.href, 4);
-      var keyResult = keyJson && keyJson.result || {};
-      var type = keyResult.type || {};
       realEstateType = clean(type.realEstateType || keyResult.realEstateType);
       tradeType = clean(type.tradeType || keyResult.tradeType);
     }
@@ -2098,7 +2142,11 @@
     var detailResult = basicJson && basicJson.result || {};
     var address = detailResult.address ||
       (detailResult.detailInfo && detailResult.detailInfo.address) || {};
-    var exactAddress = finAddressText(address);
+    var exactAddress = finExactAddressText(
+      item.jibunAddress,
+      keyResult.address,
+      address
+    );
     var detailed = Object.assign({}, item, {
       realEstateTypeCode: realEstateType,
       tradeTypeCode: tradeType,
