@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.8.1";
+  var VERSION = "1.8.2";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -1603,8 +1603,21 @@
     return text(memo) + " · " + parts.join(" · ");
   }
 
+  function importItemTotal(records, metadata) {
+    records = Array.isArray(records) ? records : [];
+    metadata = metadata || {};
+    return Math.max(
+      records.length,
+      Number(metadata.found || 0),
+      Number(metadata.unchanged || 0) +
+        Number(metadata.rejectedCount || 0) +
+        records.length
+    );
+  }
+
   async function sendToAppsScript(records, metadata, suppliedCollectorKey) {
     metadata = metadata || {};
+    var itemsLength = importItemTotal(records, metadata);
     var collectorKey = suppliedCollectorKey || getCollectorKey();
     var emptyTotals = {
       received: 0,
@@ -1679,6 +1692,17 @@
 
       addImportResult(totals, result);
       offset += batch.length;
+      try {
+        localStorage.setItem(SAVE_PROGRESS_KEY, JSON.stringify({
+          signature: signature,
+          sessionId: metadata.sessionId,
+          scope: metadata.scope,
+          offset: offset,
+          batchIndex: batchIndex,
+          totals: totals,
+          updatedAt: new Date().toISOString()
+        }));
+      } catch (_) {}
       updateDashboard({
         found: itemsLength,
         processed: Math.min(
@@ -1694,24 +1718,21 @@
         duplicate: totals.duplicate,
         failed: totals.failed
       });
-      setProgress(offset, records.length);
+      setProgress(
+        Math.min(
+          itemsLength,
+          Number(metadata.unchanged || 0) +
+            Number(metadata.rejectedCount || 0) +
+            offset
+        ),
+        itemsLength
+      );
       var elapsed = Date.now() - batchStartedAt;
       if (Number(result.failed || 0) || elapsed > 14000) {
         SAVE_BATCH_SIZE = Math.max(MIN_SAVE_BATCH_SIZE, Math.floor(SAVE_BATCH_SIZE * 0.7 / 25) * 25);
       } else if (elapsed < 5000) {
         SAVE_BATCH_SIZE = Math.min(MAX_SAVE_BATCH_SIZE, SAVE_BATCH_SIZE + 50);
       }
-      try {
-        localStorage.setItem(SAVE_PROGRESS_KEY, JSON.stringify({
-          signature: signature,
-          sessionId: metadata.sessionId,
-          scope: metadata.scope,
-          offset: offset,
-          batchIndex: batchIndex,
-          totals: totals,
-          updatedAt: new Date().toISOString()
-        }));
-      } catch (_) {}
       if (state.stopRequested) break;
     }
     var stopped = state.stopRequested || offset < records.length;
