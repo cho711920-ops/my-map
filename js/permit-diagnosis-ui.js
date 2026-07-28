@@ -98,20 +98,49 @@
     if (state.catalog) return Promise.resolve(state.catalog);
     return Promise.all([
       fetch("data/industry-catalog.json?v=20260729-master1", { cache: "no-store" }),
-      fetch("data/industry-master.json?v=20260729-master1", { cache: "no-store" })
+      fetch("data/industry-master.json?v=20260729-master1", { cache: "no-store" }),
+      fetch("data/industry-critical-guidance.json?v=20260729-critical1", { cache: "no-store" })
     ]).then(function (responses) {
-      if (!responses[0].ok || !responses[1].ok) {
+      if (!responses[0].ok || !responses[1].ok || !responses[2].ok) {
         throw new Error("업종 마스터를 불러오지 못했습니다.");
       }
       return Promise.all(responses.map(function (response) { return response.json(); }));
     }).then(function (catalogs) {
       var detailed = catalogs[0];
       var master = catalogs[1];
+      var critical = catalogs[2];
       var seen = {};
       var industries = [];
+      function unique(items) {
+        return (items || []).filter(function (item, index, all) {
+          return item && all.indexOf(item) === index;
+        });
+      }
+      function criticalGuidanceFor(industryId) {
+        var profile = critical.industries && critical.industries[industryId];
+        if (!profile) return null;
+        var template = critical.templates && critical.templates[profile.template] || {};
+        var sourceIds = unique((template.sourceIds || []).concat(profile.sourceIds || []));
+        return {
+          version: critical.version,
+          template: profile.template,
+          mustAsk: unique((template.mustAsk || []).concat(profile.mustAsk || [])),
+          site: unique((template.site || []).concat(profile.site || [])),
+          facility: unique((template.facility || []).concat(profile.facility || [])),
+          safety: unique((template.safety || []).concat(profile.safety || [])),
+          specific: unique(profile.specific || []),
+          contractBlockers: unique((template.contractBlockers || []).concat(profile.contractBlockers || [])),
+          agencies: unique((template.agencies || []).concat(profile.agencies || [])),
+          sources: sourceIds.map(function (sourceId) {
+            return critical.sources && critical.sources[sourceId];
+          }).filter(Boolean),
+          notice: critical.notice
+        };
+      }
       (detailed.industries || []).concat(master.industries || []).forEach(function (industry) {
         if (!industry || !industry.id || seen[industry.id]) return;
         seen[industry.id] = true;
+        industry.criticalGuidance = criticalGuidanceFor(industry.id);
         industries.push(industry);
       });
       state.catalog = {

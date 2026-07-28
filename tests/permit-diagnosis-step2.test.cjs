@@ -21,7 +21,7 @@ assert(css.includes(".permit-education-zone-card-v1"));
 
 assert(index.includes("wastewater-capacity-engine.js?v=1.0.0"));
 assert(index.includes("industry-administration-type.js?v=1.0.0"));
-assert(index.includes("permit-diagnosis-step2.js?v=2.4.0"));
+assert(index.includes("permit-diagnosis-step2.js?v=2.5.0"));
 assert(index.includes("permit-broker-briefing.js?v=2.1.0"));
 assert(css.includes(".permit-broker-guide-v2"));
 assert(step2.includes("고객에게 먼저 물어볼 것"));

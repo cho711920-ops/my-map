@@ -163,7 +163,14 @@
     if (rule.industryId === "internet-computer-game") {
       clauses.push("교육환경보호구역 확인 및 상대보호구역 심의가 필요한 경우, 불인정 시 계약 해제·계약금 반환과 심의 지연 시 잔금 일정을 명시");
     }
-    return clauses;
+    if (rule.criticalGuidance && rule.criticalGuidance.contractBlockers) {
+      clauses = clauses.concat(rule.criticalGuidance.contractBlockers.map(function (item) {
+        return "계약 차단조건 확인: " + item;
+      }));
+    }
+    return clauses.filter(function (item, index, all) {
+      return item && all.indexOf(item) === index;
+    });
   }
 
   function fallbackRule(industry) {
@@ -177,7 +184,9 @@
         };
       });
     }
-    return {
+    var critical = industry.criticalGuidance || {};
+    var criticalSources = critical.sources || [];
+    var rule = {
       industryId: industry.id,
       officialName: industry.officialName,
       commonName: industry.commonName,
@@ -191,25 +200,29 @@
       },
       generalProcess: industry.process || [],
       checkGroups: [
-        { id: "industry", title: "고객 영업내용", checks: checks("industry", industry.extraChecks || []) },
+        { id: "industry", title: "고객 영업내용", checks: checks("industry",
+          (industry.extraChecks || []).concat(critical.mustAsk || [])) },
         { id: "building", title: "건축·입지", checks: checks("building", [
           "해당 층·호실 건축물대장 용도",
           "용도지역·지구와 건물 관리규약",
           "불법 증축·무단 용도변경 여부",
           "피난통로·출입구·주차 조건"
-        ], "critical") },
-        { id: "facility", title: "영업 시설", checks: checks("facility", industry.facilities || []) },
+        ].concat(critical.site || []), "critical") },
+        { id: "facility", title: "영업 시설", checks: checks("facility",
+          (industry.facilities || []).concat(critical.facility || []).concat(critical.specific || [])) },
         { id: "equipment", title: "설비·안전", checks: checks("equipment", [
           "전기 계약용량과 증설 가능 여부",
           "급·배수와 환기·배기 가능 여부",
           "소방시설과 비상구 적합 여부",
           "소음·냄새·진동 민원 가능성"
-        ]) },
+        ].concat(critical.safety || [])) },
         { id: "filing", title: "계약 후 등록 준비", checks: checks("filing", industry.process || []) }
       ],
-      sources: [],
-      disclaimer: "이 업종은 상세 규칙 연결 전입니다. 안내된 항목을 기준으로 관할기관에 확인한 뒤 계약해야 합니다."
+      sources: criticalSources,
+      criticalGuidance: critical,
+      disclaimer: critical.notice || "안내된 항목을 기준으로 관할기관에 확인한 뒤 계약해야 합니다."
     };
+    return rule;
   }
 
   function renderDepartments(rule) {
@@ -233,6 +246,37 @@
       '<p class="permit-administration-notice-v1">사업자등록과 영업 허가·등록·신고는 서로 다른 절차입니다. ' +
         '복합·조건확인 업종은 메뉴·시설·서비스를 확정한 뒤 공식 업종부터 정합니다.</p>' +
       '</section>';
+  }
+
+  function renderCriticalGuidanceCard(rule) {
+    var critical = rule && rule.criticalGuidance;
+    if (!critical) return "";
+    function column(title, items) {
+      return '<div><h5>' + escapeHtml(title) + '</h5>' + list(items || []) + '</div>';
+    }
+    var sources = (critical.sources || []).map(function (source) {
+      return '<a href="' + escapeHtml(source.url) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(source.title) + '</a>';
+    }).join("");
+    return '<section class="permit-critical-guidance-v1">' +
+      '<header><div><small>업종별 누락 방지표 · ' + escapeHtml(critical.version || "") + '</small>' +
+        '<h4>이 업종에서 빠뜨리면 안 되는 핵심 확인</h4></div>' +
+        '<span>계약 전 확인</span></header>' +
+      '<div class="permit-critical-specific-v1"><strong>이 업종 고유 확인</strong>' +
+        list(critical.specific || []) + '</div>' +
+      '<div class="permit-critical-grid-v1">' +
+        column("고객에게 물어볼 것", critical.mustAsk) +
+        column("입지·건축", critical.site) +
+        column("시설·설비", critical.facility) +
+        column("안전·소방", critical.safety) +
+      '</div>' +
+      '<div class="permit-critical-bottom-v1">' +
+        '<div><h5>하나라도 해결 전이면 계약 보류</h5>' + list(critical.contractBlockers || []) + '</div>' +
+        '<div><h5>확인 기관</h5>' + list(critical.agencies || []) + '</div>' +
+      '</div>' +
+      '<footer><strong>공식 근거</strong><div>' + sources + '</div>' +
+        '<p>' + escapeHtml(critical.notice || "") + '</p></footer>' +
+    '</section>';
   }
 
   function renderEducationEnvironmentCard(rule) {
@@ -285,6 +329,7 @@
       '<div class="permit-broker-alert-v2"><strong>중개사가 먼저 할 일</strong>' +
         ' 고객의 실제 영업방식을 확정한 뒤, 그 업종에 맞는 용도의 매물만 찾고 시설공사 가능 여부를 계약 전에 확인합니다.</div>' +
       renderAdministrationCard(rule) +
+      renderCriticalGuidanceCard(rule) +
       renderEducationEnvironmentCard(rule) +
 
       '<div class="permit-broker-grid-v2">' +
@@ -398,6 +443,12 @@
     global.PermitIndustryRuleLoaderV1.load(industry.id).then(function (rule) {
       var loading = document.getElementById("permitStep2LoadingV1");
       if (!loading || !rule) return;
+      rule.criticalGuidance = industry.criticalGuidance || null;
+      if (rule.criticalGuidance && rule.criticalGuidance.sources) {
+        rule.sources = (rule.sources || []).concat(rule.criticalGuidance.sources).filter(function (source, index, all) {
+          return source && all.findIndex(function (entry) { return entry.url === source.url; }) === index;
+        });
+      }
       activeRule = rule;
       checkState = global.PermitFacilityCheckEngineV1.createState(rule);
       loading.outerHTML = renderBrokerGuide(rule);
