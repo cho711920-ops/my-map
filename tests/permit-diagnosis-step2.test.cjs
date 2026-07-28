@@ -14,7 +14,8 @@ const briefing = read("js/permit-broker-briefing.js");
 const rule = JSON.parse(read("data/industry-rules/internet-computer-game.json"));
 
 assert(index.includes("wastewater-capacity-engine.js?v=1.0.0"));
-assert(index.includes("permit-diagnosis-step2.js?v=2.2.0"));
+assert(index.includes("industry-administration-type.js?v=1.0.0"));
+assert(index.includes("permit-diagnosis-step2.js?v=2.3.0"));
 assert(index.includes("permit-broker-briefing.js?v=2.1.0"));
 assert(css.includes(".permit-broker-guide-v2"));
 assert(step2.includes("고객에게 먼저 물어볼 것"));
@@ -23,6 +24,7 @@ assert(step2.includes("계약 전 권장 확인"));
 assert(step2.includes("fallbackRule"));
 assert(step2.includes("관할확인형 안내"));
 assert(step2.includes("정화조·오수 처리용량 계산"));
+assert(step2.includes("이 업종의 행정유형"));
 assert(briefing.includes("고객 설명용"));
 assert(briefing.includes("업종·매물 사전 브리핑"));
 assert(loader.includes("general-restaurant"));

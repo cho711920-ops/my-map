@@ -1347,6 +1347,25 @@ body.permit-diagnosis-open-v1 {
 .permit-broker-hero-v2 > span { flex:0 0 auto; padding:9px 13px; border-radius:999px; color:#6b2100; background:#ffedd5; font-size:12px; font-weight:900; }
 .permit-broker-alert-v2 { padding:16px 22px; border:1px solid #ddd6fe; border-top:0; color:#4c1d95; background:#f5f3ff; font-size:14px; line-height:1.65; }
 .permit-broker-alert-v2 strong { margin-right:8px; }
+.permit-administration-card-v1 { display:grid; grid-template-columns:minmax(180px,.75fr) repeat(2,minmax(0,1fr)); gap:1px; margin-top:14px; overflow:hidden; border:1px solid #ddd6fe; border-radius:15px; background:#ddd6fe; }
+.permit-administration-card-v1 > div { padding:16px 18px; background:#fff; }
+.permit-administration-card-v1 h4 { margin:0 0 7px; color:#4c1d95; font-size:14px; }
+.permit-administration-card-v1 p { margin:0; color:#625b70; font-size:13px; line-height:1.55; }
+.permit-administration-type-v1 small,.permit-administration-type-v1 strong,.permit-administration-type-v1 span { display:block; }
+.permit-administration-type-v1 small { color:#6b7280; font-size:11px; font-weight:800; }
+.permit-administration-type-v1 strong { margin-top:5px; color:#6d28d9; font-size:22px; }
+.permit-administration-type-v1 span { margin-top:4px; color:#4b5563; font-size:12px; }
+.permit-administration-notice-v1 { grid-column:1/-1; margin:0 !important; padding:11px 16px; color:#78350f !important; background:#fffbeb; font-size:12px !important; font-weight:700; }
+.permit-administration-card-v1[data-admin-type="PERMIT"] .permit-administration-type-v1 { background:#fff1f2; }
+.permit-administration-card-v1[data-admin-type="PERMIT"] .permit-administration-type-v1 strong { color:#be123c; }
+.permit-administration-card-v1[data-admin-type="REGISTRATION"] .permit-administration-type-v1 { background:#eff6ff; }
+.permit-administration-card-v1[data-admin-type="REGISTRATION"] .permit-administration-type-v1 strong { color:#1d4ed8; }
+.permit-administration-card-v1[data-admin-type="REPORT"] .permit-administration-type-v1 { background:#ecfdf5; }
+.permit-administration-card-v1[data-admin-type="REPORT"] .permit-administration-type-v1 strong { color:#047857; }
+.permit-administration-card-v1[data-admin-type="FREE"] .permit-administration-type-v1 { background:#f0fdfa; }
+.permit-administration-card-v1[data-admin-type="FREE"] .permit-administration-type-v1 strong { color:#0f766e; }
+.permit-administration-card-v1[data-admin-type="CONDITIONAL"] .permit-administration-type-v1 { background:#fff7ed; }
+.permit-administration-card-v1[data-admin-type="CONDITIONAL"] .permit-administration-type-v1 strong { color:#c2410c; }
 .permit-broker-grid-v2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
 .permit-broker-grid-v2 > article,.permit-broker-section-v2,.permit-broker-footer-v2 { position:relative; padding:20px; border:1px solid #e4ddf2; border-radius:15px; background:#fff; }
 .permit-broker-grid-v2 > article > b { position:absolute; top:17px; right:18px; display:grid; width:28px; height:28px; place-items:center; border-radius:50%; color:#fff; background:#7c3aed; font-size:13px; }
@@ -1426,6 +1445,11 @@ body.permit-diagnosis-open-v1 {
 .permit-broker-briefing-notice-v2 { margin:0; padding:12px 18px; color:#7c2d12; background:#fff7ed; font-size:12px; }
 .permit-candidate-meta-v1 .is-verified { color:#047857; background:#ecfdf5; }
 .permit-candidate-meta-v1 .needs-confirm { color:#9a3412; background:#fff7ed; }
+.permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="PERMIT"] { color:#be123c; background:#fff1f2; }
+.permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="REGISTRATION"] { color:#1d4ed8; background:#eff6ff; }
+.permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="REPORT"] { color:#047857; background:#ecfdf5; }
+.permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="FREE"] { color:#0f766e; background:#f0fdfa; }
+.permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="CONDITIONAL"] { color:#c2410c; background:#fff7ed; }
 
 @media (min-width: 769px) and (max-width: 1120px) {
   .permit-diagnosis-dialog-v1 {
@@ -1468,6 +1492,8 @@ body.permit-diagnosis-open-v1 {
 
   .permit-broker-check-columns-v2 { grid-template-columns:1fr; }
   .permit-broker-departments-v2 { grid-template-columns:1fr; }
+  .permit-administration-card-v1 { grid-template-columns:1fr; }
+  .permit-administration-notice-v1 { grid-column:auto; }
   .permit-wastewater-guide-v1 { align-items:flex-start; flex-direction:column; gap:5px; }
   .permit-wastewater-inputs-v1,.permit-wastewater-result-v1 { grid-template-columns:1fr; }
 }

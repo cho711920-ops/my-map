@@ -22,10 +22,16 @@
       var selected = industry.id === selectedId ? " selected" : "";
       var verified = industry.ruleStatus !== "AGENCY_CONFIRM";
       var statusText = verified ? "상세규칙 연결" : "관할확인 필요";
+      var administration = global.PermitIndustryAdministrationTypeV1.resolve(
+        industry.permitType,
+        industry.id
+      );
       return '<article class="permit-candidate-card-v1' + selected + '">' +
         '<div><h4>' + (index + 1) + '. ' + escapeHtml(industry.officialName) + '</h4>' +
         '<p>' + escapeHtml(industry.description) + '</p>' +
         '<div class="permit-candidate-meta-v1">' +
+          '<span class="permit-admin-badge-v1" data-admin-type="' + administration.code + '">' +
+            escapeHtml(administration.label) + '</span>' +
           '<span>' + escapeHtml(industry.permitType) + '</span>' +
           '<span>' + escapeHtml(industry.expectedBuildingUse) + '</span>' +
           '<span>' + escapeHtml(industry.legalArea) + '</span>' +
@@ -45,11 +51,20 @@
 
   function renderIndustryDetail(industry, catalogNotice) {
     if (!industry) return "";
+    var administration = global.PermitIndustryAdministrationTypeV1.resolve(
+      industry.permitType,
+      industry.id
+    );
     return '<section class="permit-industry-detail-v1">' +
       '<h4>' + escapeHtml(industry.officialName) + ' 중개 준비 요약</h4>' +
       '<div class="permit-detail-columns-v1">' +
         '<div class="permit-detail-box-v1"><strong>영업 구분·예상 용도</strong>' +
-          renderList([industry.permitType, industry.expectedBuildingUse, industry.legalArea]) + '</div>' +
+          renderList([
+            administration.label + " — " + administration.description,
+            "세부 표시: " + industry.permitType,
+            industry.expectedBuildingUse,
+            industry.legalArea
+          ]) + '</div>' +
         '<div class="permit-detail-box-v1"><strong>일반적인 진행 순서</strong>' +
           renderList(industry.process) + '</div>' +
         '<div class="permit-detail-box-v1"><strong>매물에서 먼저 볼 시설</strong>' +

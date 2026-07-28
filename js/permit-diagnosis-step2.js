@@ -215,6 +215,23 @@
     }).join("") + '</div>';
   }
 
+  function renderAdministrationCard(rule) {
+    if (!global.PermitIndustryAdministrationTypeV1) return "";
+    var administration = global.PermitIndustryAdministrationTypeV1.resolve(
+      rule.registrationType,
+      rule.industryId
+    );
+    return '<section class="permit-administration-card-v1" data-admin-type="' + administration.code + '">' +
+      '<div class="permit-administration-type-v1"><small>이 업종의 행정유형</small>' +
+        '<strong>' + escapeHtml(administration.label) + '</strong>' +
+        '<span>세부 구분: ' + escapeHtml(rule.registrationType) + '</span></div>' +
+      '<div><h4>무슨 뜻인가요?</h4><p>' + escapeHtml(administration.description) + '</p></div>' +
+      '<div><h4>언제 처리하나요?</h4><p>' + escapeHtml(administration.timing) + '</p></div>' +
+      '<p class="permit-administration-notice-v1">사업자등록과 영업 허가·등록·신고는 서로 다른 절차입니다. ' +
+        '복합·조건확인 업종은 메뉴·시설·서비스를 확정한 뒤 공식 업종부터 정합니다.</p>' +
+      '</section>';
+  }
+
   function renderBrokerGuide(rule) {
     var industry = group(rule, "industry");
     var building = group(rule, "building");
@@ -236,6 +253,7 @@
 
       '<div class="permit-broker-alert-v2"><strong>중개사가 먼저 할 일</strong>' +
         ' 고객의 실제 영업방식을 확정한 뒤, 그 업종에 맞는 용도의 매물만 찾고 시설공사 가능 여부를 계약 전에 확인합니다.</div>' +
+      renderAdministrationCard(rule) +
 
       '<div class="permit-broker-grid-v2">' +
         '<article><b>1</b><h4>고객에게 먼저 물어볼 것</h4>' +
