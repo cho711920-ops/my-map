@@ -25,6 +25,7 @@ const vm = require("vm");
   assert.ok(api.INDUSTRY_ENDPOINTS["general-restaurant"].path.includes("general_restaurants"));
   assert.ok(api.INDUSTRY_ENDPOINTS["rest-restaurant"].path.includes("rest_cafes"));
   assert.ok(api.INDUSTRY_ENDPOINTS["beauty-nail"].path.includes("beauty_salons"));
+  assert.ok(api.INDUSTRY_ENDPOINTS["beauty-makeup"].path.includes("beauty_salons"));
 
   const utf8Xml = new TextEncoder().encode('<?xml version="1.0" encoding="utf-8"?><name>미용업</name>');
   assert(api.decodePublicXml(utf8Xml.buffer, "application/xml; charset=utf-8").includes("미용업"));

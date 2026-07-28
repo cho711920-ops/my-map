@@ -17,7 +17,7 @@
   function load() {
     if (cache) return Promise.resolve(cache);
     return Promise.all([
-      loadJson("data/building-use-rules.json?v=20260729-step4"),
+      loadJson("data/building-use-rules.json?v=20260729-step9"),
       loadJson("data/permit-procedure-rules.json?v=20260729-step4")
     ]).then(function (results) {
       cache = { useRules: results[0], procedureRules: results[1] };
@@ -99,7 +99,7 @@
         target: targetRule.atOrAbove,
         sameBuildingArea: null,
         threshold: threshold,
-        reason: "해당 영업장 면적만으로도 500㎡ 이상입니다."
+        reason: "해당 영업장 면적만으로도 " + threshold + "㎡ 이상입니다."
       };
     }
     return {

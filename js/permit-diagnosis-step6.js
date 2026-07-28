@@ -123,8 +123,12 @@
       var report = document.getElementById("permitStep6ReportV1");
       if (report) report.innerHTML = global.PermitDiagnosisReportV1.render(result.record);
       setStatus(result.cloudSaved
-        ? "계정 클라우드에 진단을 저장했습니다."
-        : "이 기기에 저장했습니다. 계정 클라우드 저장은 로그인 상태를 확인해 주세요.");
+        ? (result.localSaved
+          ? "계정 클라우드와 이 기기에 진단을 저장했습니다."
+          : "계정 클라우드에 진단을 저장했습니다. 브라우저 저장공간은 가득 찼지만 진단 불러오기는 가능합니다.")
+        : (result.localSaved
+          ? "이 기기에 저장했습니다. 계정 클라우드 저장은 로그인 상태를 확인해 주세요."
+          : result.warning), !result.cloudSaved && !result.localSaved);
     }).catch(function (error) {
       setStatus(error.message, true);
     });

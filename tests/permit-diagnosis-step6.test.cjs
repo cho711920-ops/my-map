@@ -101,4 +101,25 @@ assert(second.lastChanges.some((change) => change.field === "expectedProcedure.c
 assert(second.lastChanges.some((change) => change.field === "publicDataSnapshot.parking"), "공공데이터 변경을 비교해야 합니다.");
 assert(!JSON.stringify(second).includes("proxySecret"), "보안키를 진단 데이터에 저장하면 안 됩니다.");
 
+const quotaContext = {
+  window: {
+    localStorage: {
+      setItem: () => { throw new Error("QuotaExceededError"); },
+      getItem: () => null
+    }
+  },
+  fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
+};
+vm.createContext(quotaContext);
+vm.runInContext(storageSource, quotaContext);
+assert.strictEqual(
+  quotaContext.window.PermitDiagnosisStorageV1.saveLocal(first),
+  false,
+  "Local storage quota must not block diagnosis cloud saving."
+);
+assert(storageSource.indexOf("var localSaved = saveLocal(record)") <
+  storageSource.indexOf("return request(global.saveApiURL"),
+  "Cloud save must still run after a local storage quota failure."
+);
+
 console.log("permit diagnosis step6 tests: ok");

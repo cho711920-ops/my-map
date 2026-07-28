@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-beauty-nail-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "beauty-nail",
+  "officialName": "미용업(손톱·발톱)",
+  "commonName": "네일숍",
+  "registrationType": "신고",
+  "requiredBuildingUse": {"fixed":"제1종 근린생활시설(미용원) 검토","important":"해당 층·호실의 세부 용도와 실제 구조가 일치하는지 확인합니다."},
+  "generalProcess": ["손톱·발톱 손질과 화장 범위 확정","미용사(네일) 면허와 위생교육 확인","건축물대장 층·호실 용도 확인","독립·분리된 영업장과 세척·소독·환기시설 확인","관할 구청 공중위생부서에 영업신고","사업자등록과 위생관리 의무 확인"],
+  "sources": [
+    {"id":"beauty-definition","title":"공중위생관리법 제2조 및 시행령 제4조","summary":"네일미용업은 손톱과 발톱을 손질·화장하는 영업","url":"https://www.law.go.kr/LSW/lsLawLinkInfo.do?chrClsCd=010202&lsJoLnkSeq=900611718"},
+    {"id":"beauty-facility","title":"공중위생관리법 시행규칙 별표 1","summary":"미용업 시설 및 설비기준","url":"https://www.law.go.kr/LSW/flDownload.do?flNm=%5B%EB%B3%84%ED%91%9C+1%5D+%EA%B3%B5%EC%A4%91%EC%9C%84%EC%83%9D%EC%98%81%EC%97%85%EC%9D%98+%EC%A2%85%EB%A5%98%EB%B3%84+%EC%8B%9C%EC%84%A4+%EB%B0%8F+%EC%84%A4%EB%B9%84%EA%B8%B0%EC%A4%80%28%EC%A0%9C2%EC%A1%B0+%EA%B4%80%EB%A0%A8%29&flSeq=66360217&gubun="},
+    {"id":"beauty-report","title":"공중위생관리법 시행규칙 제3조","summary":"시설기준을 갖춘 후 영업신고","url":"https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=256393"},
+    {"id":"building-use","title":"건축법 시행령 별표 1","summary":"미용원은 제1종 근린생활시설 범위 검토","url":"https://www.law.go.kr/LSW/flDownload.do?flSeq=156922891&bylClsCd=110201"}
+  ],
+  "checkGroups": [
+    {"id":"scope","title":"업종·자격","checks":[
+      {"id":"service-scope","label":"손톱·발톱 손질·화장 범위","note":"피부를 절개하거나 의료행위와 유사한 시술은 포함하지 않습니다.","severity":"critical","sourceIds":["beauty-definition"]},
+      {"id":"license","label":"미용사(네일) 면허","note":"개설자와 종사자의 면허·업무범위를 확인합니다.","severity":"critical","sourceIds":["beauty-definition"]},
+      {"id":"hygiene-education","label":"공중위생교육","note":"신규 영업 전 교육 대상과 이수방법을 확인합니다.","severity":"critical","sourceIds":["beauty-report"]}
+    ]},
+    {"id":"building","title":"건축·영업장","checks":[
+      {"id":"building-ledger-use","label":"해당 층·호실 제1종 근린생활시설 확인","note":"대장 세부용도가 미용원에 적합한지 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+      {"id":"actual-plan-match","label":"대장 도면과 실제 구조 일치","note":"무단확장·불법구획 여부를 확인합니다.","severity":"critical","sourceIds":[]},
+      {"id":"business-separation","label":"다른 용도 시설과 분리·구획","note":"복합 미용업이면 각 시설기준과 공동신고 가능 여부를 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]}
+    ]},
+    {"id":"facility","title":"시설·위생","checks":[
+      {"id":"washing","label":"손·도구 세척시설","note":"시술자 손과 재사용 도구를 위생적으로 세척할 수 있어야 합니다.","severity":"critical","sourceIds":["beauty-facility"]},
+      {"id":"sterilization","label":"소독장비·소독약·밀폐 보관","note":"파일·니퍼 등 재사용 도구의 소독과 청결 보관을 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]},
+      {"id":"single-use","label":"일회용품 재사용 방지","note":"일회용 파일·버퍼 등 사용품의 분리와 폐기를 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]},
+      {"id":"ventilation","label":"젤·리무버·아크릴 환기","note":"분진과 휘발성 제품에 맞는 국소·전체 환기를 확인합니다.","severity":"high","sourceIds":[]}
+    ]},
+    {"id":"filing","title":"신고 전 확인","checks":[
+      {"id":"department-check","label":"관할 공중위생부서 사전확인","note":"평면도와 시술범위, 사용제품을 설명해 신고서류를 확인합니다.","severity":"critical","sourceIds":["beauty-report"]},
+      {"id":"onsite-readiness","label":"시설 완비 후 영업신고","note":"공사와 장비 설치 후 신고 순서를 확인합니다.","severity":"critical","sourceIds":["beauty-report"]}
+    ]}
+  ],
+  "disclaimer": "사전진단이며 영업신고 수리나 입점 가능성을 보장하지 않습니다. 침습행위나 의료기기·의약품 사용은 별도 법적 문제가 될 수 있습니다."
+}

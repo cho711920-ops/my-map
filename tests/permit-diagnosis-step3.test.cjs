@@ -60,6 +60,52 @@ assert.strictEqual(noGuess.level, "층", "없는 호실을 임의 생성하거�
 assert.strictEqual(adapter.sumKnown([null, null]), null, "미제공 숫자를 0으로 바꾸면 안 됩니다.");
 assert.strictEqual(adapter.sumKnown([0, 0]), 0, "공식 API의 명시적 0은 0대로 표시해야 합니다.");
 
+const aggregateSample = {
+  buildings: [{ managementKey: "B2", mainUse: "근린생활시설" }],
+  units: [
+    {
+      managementKey: "B2", roomName: "101호", floorNo: 1, mainUse: "사무소",
+      areas: [{ areaType: "전유", area: 40, mainUse: "사무소" }]
+    },
+    {
+      managementKey: "B2", roomName: "102호", floorNo: 1, mainUse: "휴게음식점",
+      areas: [{ areaType: "전유", area: 100, mainUse: "휴게음식점" }]
+    },
+    {
+      managementKey: "B2", roomName: "201호", floorNo: 2, mainUse: "일반음식점",
+      areas: [{ areaType: "전유", area: 80, mainUse: "일반음식점" }]
+    }
+  ]
+};
+const proposedRecord = adapter.selectRecord(aggregateSample, { floor: "1층", unit: "101호" });
+const proposedTotal = adapter.relatedUseArea(
+  aggregateSample,
+  { floor: "1층", unit: "101호", area: "40", industryId: "rest-restaurant" },
+  proposedRecord
+);
+assert.strictEqual(proposedTotal.status, "EXACT");
+assert.strictEqual(proposedTotal.value, 140, "기존 휴게음식점 합계에 새 호실 면적만 더해야 합니다.");
+const existingRecord = adapter.selectRecord(aggregateSample, { floor: "1층", unit: "102호" });
+const existingTotal = adapter.relatedUseArea(
+  aggregateSample,
+  { floor: "1층", unit: "102호", area: "100", industryId: "rest-restaurant" },
+  existingRecord
+);
+assert.strictEqual(existingTotal.value, 100, "이미 관련 용도인 선택 호실을 중복 합산하면 안 됩니다.");
+const incompleteSample = JSON.parse(JSON.stringify(aggregateSample));
+incompleteSample.units[2].mainUse = "제1종 근린생활시설";
+incompleteSample.units[2].areas[0].mainUse = "제1종 근린생활시설";
+const incompleteRecord = adapter.selectRecord(incompleteSample, { floor: "1층", unit: "101호" });
+assert.strictEqual(
+  adapter.relatedUseArea(
+    incompleteSample,
+    { floor: "1층", unit: "101호", area: "40", industryId: "rest-restaurant" },
+    incompleteRecord
+  ).status,
+  "UNKNOWN",
+  "세부 용도가 빠진 호실이 있으면 자동합계를 확정하면 안 됩니다."
+);
+
 let checks = adapter.automaticChecks(exact, { area: "150" });
 assert.strictEqual(checks["building-ledger-use"], "YES");
 assert.strictEqual(checks["indoor-air-threshold"], undefined, "전용면적으로 영업시설 연면적을 추정하면 안 됩니다.");

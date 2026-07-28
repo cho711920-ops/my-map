@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-beauty-makeup-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "beauty-makeup",
+  "officialName": "미용업(화장·분장)",
+  "commonName": "메이크업숍·속눈썹숍",
+  "registrationType": "신고",
+  "requiredBuildingUse": {"fixed":"제1종 근린생활시설(미용원) 검토","important":"속눈썹 시술은 구체적인 시술방식과 사용제품을 관할부서에 설명해 세부업종을 확인합니다."},
+  "generalProcess": ["메이크업·분장·눈썹·속눈썹의 실제 시술방식 확정","미용업(화장·분장) 해당 여부 관할 확인","미용사(메이크업) 면허와 위생교육 확인","건축물 용도와 시설·소독·환기 확인","관할 구청 공중위생부서 영업신고","사업자등록과 위생관리 의무 확인"],
+  "sources": [
+    {"id":"beauty-definition","title":"공중위생관리법 제2조 및 시행령 제4조","summary":"화장·분장 미용업의 공식 업무범위","url":"https://www.law.go.kr/LSW/lsLawLinkInfo.do?chrClsCd=010202&lsJoLnkSeq=900611718"},
+    {"id":"beauty-work","title":"공중위생관리법 시행규칙 제14조","summary":"미용사 면허별 업무범위","url":"https://www.law.go.kr/LSW/lsLawLinkInfo.do?chrClsCd=010202&lsJoLnkSeq=1000359889"},
+    {"id":"beauty-facility","title":"공중위생관리법 시행규칙 별표 1","summary":"미용업 시설 및 설비기준","url":"https://www.law.go.kr/LSW/flDownload.do?flNm=%5B%EB%B3%84%ED%91%9C+1%5D+%EA%B3%B5%EC%A4%91%EC%9C%84%EC%83%9D%EC%98%81%EC%97%85%EC%9D%98+%EC%A2%85%EB%A5%98%EB%B3%84+%EC%8B%9C%EC%84%A4+%EB%B0%8F+%EC%84%A4%EB%B9%84%EA%B8%B0%EC%A4%80%28%EC%A0%9C2%EC%A1%B0+%EA%B4%80%EB%A0%A8%29&flSeq=66360217&gubun="},
+    {"id":"beauty-report","title":"공중위생관리법 시행규칙 제3조","summary":"시설기준을 갖춘 후 영업신고","url":"https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=256393"},
+    {"id":"building-use","title":"건축법 시행령 별표 1","summary":"미용원은 제1종 근린생활시설 범위 검토","url":"https://www.law.go.kr/LSW/flDownload.do?flSeq=156922891&bylClsCd=110201"}
+  ],
+  "checkGroups": [
+    {"id":"scope","title":"업종·시술범위","checks":[
+      {"id":"service-scope","label":"화장·분장·눈썹·속눈썹 시술방식","note":"명칭만으로 단정하지 않고 접착제·기구·시술부위를 포함해 관할부서에 확인합니다.","severity":"critical","sourceIds":["beauty-definition","beauty-work"]},
+      {"id":"medical-boundary","label":"의료기기·의약품·침습행위 배제","note":"피부를 손상하거나 의료행위와 유사한 시술이 없는지 확인합니다.","severity":"critical","sourceIds":["beauty-definition"]},
+      {"id":"license","label":"미용사(메이크업) 면허","note":"실제 업무범위에 맞는 면허인지 확인합니다.","severity":"critical","sourceIds":["beauty-work"]},
+      {"id":"hygiene-education","label":"공중위생교육","note":"신규 영업 전 교육 대상과 이수방법을 확인합니다.","severity":"critical","sourceIds":["beauty-report"]}
+    ]},
+    {"id":"building","title":"건축·영업장","checks":[
+      {"id":"building-ledger-use","label":"해당 층·호실 제1종 근린생활시설 확인","note":"대장 세부용도가 미용원에 적합한지 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+      {"id":"actual-plan-match","label":"대장 도면과 실제 구조 일치","note":"무단확장·불법구획 여부를 확인합니다.","severity":"critical","sourceIds":[]},
+      {"id":"business-separation","label":"다른 용도 시설과 분리·구획","note":"복합 미용업이면 공동신고와 시설 구분 기준을 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]}
+    ]},
+    {"id":"facility","title":"시설·위생","checks":[
+      {"id":"washing","label":"손·도구 세척시설","note":"눈 주변에 사용하는 손과 도구의 세척환경을 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]},
+      {"id":"sterilization","label":"소독장비·소독약·도구 보관","note":"핀셋 등 재사용 도구의 소독과 청결 보관을 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]},
+      {"id":"single-use","label":"일회용품 분리·폐기","note":"소모품의 재사용 방지와 폐기방법을 확인합니다.","severity":"critical","sourceIds":["beauty-facility"]},
+      {"id":"ventilation","label":"접착제·화장품 환기와 보관","note":"휘발성 제품의 환기·온습도·유효기간 관리를 확인합니다.","severity":"high","sourceIds":[]}
+    ]},
+    {"id":"filing","title":"신고 전 확인","checks":[
+      {"id":"department-check","label":"관할 공중위생부서 사전확인","note":"시술단계·제품·기구·평면도를 제시해 정확한 신고업종을 확인합니다.","severity":"critical","sourceIds":["beauty-report"]},
+      {"id":"onsite-readiness","label":"시설 완비 후 영업신고","note":"공사와 장비 설치 후 신고·현장확인 순서를 확인합니다.","severity":"critical","sourceIds":["beauty-report"]}
+    ]}
+  ],
+  "disclaimer": "사전진단이며 영업신고 수리나 입점 가능성을 보장하지 않습니다. 속눈썹 시술은 구체적인 방식에 따라 관할기관의 세부업종 확인이 필요합니다."
+}

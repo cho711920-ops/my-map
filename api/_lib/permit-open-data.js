@@ -49,6 +49,12 @@ const INDUSTRY_ENDPOINTS = {
     label: "미용업(피부)",
     businessType: "피부미용업",
     sourcePage: "https://www.data.go.kr/data/15154918/openapi.do"
+  },
+  "beauty-makeup": {
+    path: "/1741000/beauty_salons/info",
+    label: "미용업(화장·분장)",
+    businessType: "화장ㆍ분장 미용업",
+    sourcePage: "https://www.data.go.kr/data/15154918/openapi.do"
   }
 };
 
@@ -61,7 +67,8 @@ const LAND_USE_NAMES = {
   "rest-restaurant": "휴게음식점",
   "beauty-hair": "미용업",
   "beauty-nail": "미용업",
-  "beauty-skin": "미용업"
+  "beauty-skin": "미용업",
+  "beauty-makeup": "미용업"
 };
 
 function text(value) {

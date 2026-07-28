@@ -72,6 +72,10 @@
       var result = global.PermitDiagnosisEngineV1.evaluate({
         industryId: selectedIndustry.id,
         diagnosis: lastDiagnosis,
+        sameBuildingRelevantUseArea: lastDiagnosis.relatedUseArea &&
+          lastDiagnosis.relatedUseArea.status === "EXACT"
+          ? lastDiagnosis.relatedUseArea.value
+          : null,
         useRules: rules.useRules,
         procedureRules: rules.procedureRules
       });

@@ -126,6 +126,69 @@
     return result;
   }
 
+  var RELATED_USE_PATTERNS = {
+    "internet-computer-game": /인터넷컴퓨터게임시설제공업|PC방|피시방/i,
+    "rest-restaurant": /휴게음식점|제과점/i
+  };
+
+  function isGenericNeighborhoodUse(value) {
+    var normalized = text(value).replace(/[\s·,()]/g, "");
+    return /^(?:제[12]종)?근린생활시설$/.test(normalized);
+  }
+
+  function relatedUseArea(data, input, record) {
+    var pattern = RELATED_USE_PATTERNS[text(input && input.industryId)];
+    if (!pattern) {
+      return { status: "NOT_APPLICABLE", value: null, reason: "이 업종은 면적 합계 분기 기준을 사용하지 않습니다." };
+    }
+    if (!record || record.level !== "호실" || !record.building) {
+      return { status: "UNKNOWN", value: null, reason: "정확한 동·호실 전유부가 확인되지 않았습니다." };
+    }
+    var managementKey = text(record.building.managementKey);
+    var units = (Array.isArray(data.units) ? data.units : []).filter(function (unit) {
+      return !managementKey || text(unit && unit.managementKey) === managementKey;
+    });
+    if (!units.length) {
+      return { status: "UNKNOWN", value: null, reason: "같은 건물의 전유부 목록이 제공되지 않았습니다." };
+    }
+    var incomplete = units.some(function (unit) {
+      var use = uses(unit);
+      return !use || isGenericNeighborhoodUse(use) || areaOf(unit) == null;
+    });
+    if (incomplete) {
+      return {
+        status: "UNKNOWN",
+        value: null,
+        reason: "일부 호실의 세부 용도 또는 전유면적이 없어 전체 합계를 확정할 수 없습니다."
+      };
+    }
+    var matched = units.filter(function (unit) { return pattern.test(uses(unit)); });
+    var sum = matched.reduce(function (total, unit) { return total + Number(areaOf(unit) || 0); }, 0);
+    var selectedAlreadyIncluded = matched.some(function (unit) {
+      return normalizeRoom(unit && unit.roomName) === normalizeRoom(record.unit) &&
+        rowFloor(unit) === record.floor;
+    });
+    if (!selectedAlreadyIncluded) {
+      var proposedArea = Number(input && input.area);
+      if (!Number.isFinite(proposedArea) || proposedArea <= 0) {
+        return {
+          status: "UNKNOWN",
+          value: null,
+          reason: "새로 입점할 호실의 전용면적이 없어 변경 후 합계를 계산할 수 없습니다."
+        };
+      }
+      sum += proposedArea;
+    }
+    return {
+      status: "EXACT",
+      value: Math.round(sum * 100) / 100,
+      reason: "같은 동의 전유부 " + units.length + "개를 모두 확인해 관련 용도 면적을 합산했습니다.",
+      unitCount: units.length,
+      matchedUnitCount: matched.length,
+      proposedAreaAdded: !selectedAlreadyIncluded
+    };
+  }
+
   function buildDiagnosis(data, input, addressResult) {
     var record = selectRecord(data, input);
     var building = record.building || {};
@@ -167,6 +230,7 @@
       buildingPermitHistory: data.buildingPermitHistory || { status: "UNKNOWN", records: [] },
       industryPermitHistory: data.industryPermitHistory || { status: "UNKNOWN", records: [] },
       landUseActivities: data.landUseActivities || { status: "UNKNOWN", records: [] },
+      relatedUseArea: relatedUseArea(data, input, record),
       autoChecks: automaticChecks(record, input)
     };
   }
@@ -301,6 +365,13 @@
         field("건축물대장 구분", building.registerType) +
         field("주용도", building.mainUse) +
         field("용도지역·지구", diagnosis.zones, zoneReason) +
+        field(
+          "같은 건물 관련 용도 합계",
+          diagnosis.relatedUseArea && diagnosis.relatedUseArea.status === "EXACT"
+            ? diagnosis.relatedUseArea.value + "㎡"
+            : "",
+          diagnosis.relatedUseArea && diagnosis.relatedUseArea.reason
+        ) +
         field("위반건축물", "UNKNOWN · 발급본 확인") +
       '</div>' +
       (diagnosis.scopeReason
@@ -325,6 +396,7 @@
     sumKnown: sumKnown,
     selectRecord: selectRecord,
     automaticChecks: automaticChecks,
+    relatedUseArea: relatedUseArea,
     buildDiagnosis: buildDiagnosis,
     query: query,
     render: render

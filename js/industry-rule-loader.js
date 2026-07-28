@@ -5,7 +5,11 @@
   var supported = {
     "internet-computer-game": "data/industry-rules/internet-computer-game.json",
     "general-restaurant": "data/industry-rules/general-restaurant.json",
-    "rest-restaurant": "data/industry-rules/rest-restaurant.json"
+    "rest-restaurant": "data/industry-rules/rest-restaurant.json",
+    "beauty-hair": "data/industry-rules/beauty-hair.json",
+    "beauty-nail": "data/industry-rules/beauty-nail.json",
+    "beauty-skin": "data/industry-rules/beauty-skin.json",
+    "beauty-makeup": "data/industry-rules/beauty-makeup.json"
   };
 
   function validate(rule, industryId) {
@@ -18,7 +22,7 @@
   function load(industryId) {
     if (!supported[industryId]) return Promise.resolve(null);
     if (cache[industryId]) return Promise.resolve(cache[industryId]);
-    return fetch(supported[industryId] + "?v=20260729-step7", { cache: "no-store" })
+    return fetch(supported[industryId] + "?v=20260729-step9", { cache: "no-store" })
       .then(function (response) {
         if (!response.ok) throw new Error("업종별 점검 규칙을 불러오지 못했습니다.");
         return response.json();

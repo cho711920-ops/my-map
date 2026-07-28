@@ -44,6 +44,34 @@
       },
       "doNotInferFromExclusiveArea": true
     },
+    "beauty-hair": {
+      "fixed": {
+        "useTypeId": "neighborhood-1",
+        "label": "제1종 근린생활시설",
+        "condition": "미용원"
+      }
+    },
+    "beauty-nail": {
+      "fixed": {
+        "useTypeId": "neighborhood-1",
+        "label": "제1종 근린생활시설",
+        "condition": "미용원"
+      }
+    },
+    "beauty-skin": {
+      "fixed": {
+        "useTypeId": "neighborhood-1",
+        "label": "제1종 근린생활시설",
+        "condition": "미용원"
+      }
+    },
+    "beauty-makeup": {
+      "fixed": {
+        "useTypeId": "neighborhood-1",
+        "label": "제1종 근린생활시설",
+        "condition": "미용원"
+      }
+    },
     "internet-computer-game": {
       "thresholdMetric": "sameBuildingRelevantUseArea",
       "thresholdSquareMeters": 500,

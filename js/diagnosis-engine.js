@@ -105,7 +105,7 @@
     }
     if (!target.thresholdKnown) {
       finalProcedure = procedure("UNDETERMINED", procedureRules);
-      risks.push("같은 건물의 게임 관련 시설 면적 합계가 확인되지 않았습니다.");
+      risks.push("같은 건물의 관련 용도 면적 합계가 확인되지 않았습니다.");
     }
     if (diagnosis.zones === "") {
       risks.push("용도지역·지구 자료가 없어 도시계획상 허용 여부를 별도 확인해야 합니다.");

@@ -14,6 +14,18 @@ const parserSource = read("js/industry-intent-parser.js");
 const useEngineSource = read("js/building-use-engine.js");
 const diagnosisSource = read("js/diagnosis-engine.js");
 const loaderSource = read("js/industry-rule-loader.js");
+const beautyIds = ["beauty-hair", "beauty-nail", "beauty-skin", "beauty-makeup"];
+
+beautyIds.forEach((industryId) => {
+  const rule = JSON.parse(read(`data/industry-rules/${industryId}.json`));
+  const checks = rule.checkGroups.flatMap((group) => group.checks);
+  assert(checks.length >= 12, `${industryId} must provide a practical field checklist.`);
+  assert(rule.sources.length >= 2, `${industryId} must include official legal sources.`);
+  assert(useRules.industryTargets[industryId], `${industryId} must have a building-use rule.`);
+  assert(loaderSource.includes(`"${industryId}"`), `${industryId} must be connected to the rule loader.`);
+  assert(catalog.industries.some((industry) => industry.id === industryId),
+    `${industryId} must be selectable from the industry catalog.`);
+});
 
 [generalRule, restRule].forEach((rule) => {
   assert(rule.checkGroups.length >= 5, `${rule.officialName} 체크분야가 충분해야 합니다.`);

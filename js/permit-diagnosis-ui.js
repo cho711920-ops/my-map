@@ -95,7 +95,7 @@
 
   function loadCatalog() {
     if (state.catalog) return Promise.resolve(state.catalog);
-    return fetch("data/industry-catalog.json?v=20260728-step1", { cache: "no-store" })
+    return fetch("data/industry-catalog.json?v=20260729-step9", { cache: "no-store" })
       .then(function (response) {
         if (!response.ok) throw new Error("업종 카탈로그를 불러오지 못했습니다.");
         return response.json();

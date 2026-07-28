@@ -147,7 +147,12 @@
   }
 
   function saveLocal(record) {
-    global.localStorage.setItem(localKey(record.recordKey), JSON.stringify(record));
+    try {
+      global.localStorage.setItem(localKey(record.recordKey), JSON.stringify(record));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function loadLocal(recordKey) {
@@ -182,7 +187,9 @@
     return request(url, { credentials: "same-origin", cache: "no-store" })
       .then(function (result) {
         if (result.found && result.data) {
-          global.localStorage.setItem(localKey(recordKey), JSON.stringify(result.data));
+          try {
+            global.localStorage.setItem(localKey(recordKey), JSON.stringify(result.data));
+          } catch (_) {}
           return result.data;
         }
         return loadLocal(recordKey);
@@ -193,7 +200,7 @@
   }
 
   function save(record) {
-    saveLocal(record);
+    var localSaved = saveLocal(record);
     return request(global.saveApiURL || "/api/apps-script", {
       method: "POST",
       credentials: "same-origin",
@@ -206,9 +213,16 @@
         version: Date.now()
       })
     }).then(function () {
-      return { record: record, cloudSaved: true };
+      return { record: record, cloudSaved: true, localSaved: localSaved };
     }).catch(function (error) {
-      return { record: record, cloudSaved: false, warning: error.message };
+      return {
+        record: record,
+        cloudSaved: false,
+        localSaved: localSaved,
+        warning: localSaved
+          ? error.message
+          : "브라우저 저장공간과 계정 클라우드 저장을 모두 사용할 수 없습니다."
+      };
     });
   }
 
@@ -219,6 +233,7 @@
     buildRecord: buildRecord,
     load: load,
     save: save,
-    loadLocal: loadLocal
+    loadLocal: loadLocal,
+    saveLocal: saveLocal
   };
 })(window);
