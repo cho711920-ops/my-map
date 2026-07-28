@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.3.3";
+  var VERSION = "5.4.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -31,6 +31,9 @@
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
   var FIN_NAVER_HOST = "fin.land.naver.com";
   var FIN_ARTICLE_LIST_PATH = "/front-api/v1/article/legalDivisionArticleList";
+  var FIN_ARTICLE_KEY_PATH = "/front-api/v1/article/key";
+  var FIN_ARTICLE_BASIC_PATH = "/front-api/v1/article/basicInfo";
+  var FIN_DETAIL_CONCURRENCY = 5;
   // 새 네이버 목록 API는 실제 화면과 동일한 30건 단위에서만 다음 페이지
   // lastInfo/seed 조합을 안정적으로 받아들입니다. 100건으로 올리면 2페이지부터 400이 납니다.
   var FIN_PAGE_SIZE = 30;
@@ -453,6 +456,8 @@
     target.merged = Number(target.merged || 0) + Number(result.merged || 0);
     target.updated = Number(target.updated || 0) + Number(result.updated || 0);
     target.review = Number(target.review || 0) + Number(result.review || 0);
+    target.addressMissing = Number(target.addressMissing || 0) +
+      Number(result.addressMissing || 0);
     target.duplicate = Number(target.duplicate || 0) + Number(result.duplicate || 0) +
       Number(result.duplicateSnapshots || 0);
     target.failed = Number(target.failed || 0) + Number(result.failed || 0);
@@ -1934,9 +1939,11 @@
         article.articleRealEstateTypeName || article.realEstateTypeName ||
         REAL_ESTATE_TYPE_LABELS[categoryCode] || categoryCode
       ),
+      realEstateTypeCode: categoryCode,
       tradeType: clean(
         article.tradeTypeName || TRADE_TYPE_LABELS[tradeCode] || tradeCode
       ),
+      tradeTypeCode: tradeCode,
       deposit: clean(deposit),
       monthly: clean(monthly),
       areaSquareMeter: areaSquareMeter,
@@ -1973,6 +1980,161 @@
     };
     normalized.listSnapshot = naverListSnapshot(normalized);
     return normalized;
+  }
+
+  function finDetailFloor(detailResult, fallback) {
+    detailResult = detailResult || {};
+    var detailInfo = detailResult.detailInfo || {};
+    var articleDetail = detailInfo.articleDetailInfo ||
+      detailResult.articleDetailInfo || detailResult.articleDetail || {};
+    var floorDetail = articleDetail.floorDetailInfo || detailInfo.floorDetailInfo || {};
+    var current = clean(
+      floorDetail.currentFloor || floorDetail.floor || floorDetail.targetFloor ||
+      articleDetail.floorInfo || detailInfo.floorInfo
+    );
+    var total = clean(
+      floorDetail.totalFloor || floorDetail.highFloor || floorDetail.maxFloor ||
+      articleDetail.totalFloor || detailInfo.totalFloor
+    );
+    if (current && total && current.indexOf("/") < 0) return current + "/" + total + "층";
+    return current || clean(fallback);
+  }
+
+  function finDetailRoom(detailResult, fallback) {
+    detailResult = detailResult || {};
+    var detailInfo = detailResult.detailInfo || {};
+    var articleDetail = detailInfo.articleDetailInfo ||
+      detailResult.articleDetailInfo || detailResult.articleDetail || {};
+    var registration = detailResult.registration || {};
+    return clean(
+      articleDetail.hoNumber || articleDetail.roomInfo || detailInfo.hoNumber ||
+      detailInfo.roomInfo || registration.hoNumber || fallback
+    );
+  }
+
+  function finDetailArea(detailResult, fallback) {
+    detailResult = detailResult || {};
+    var detailInfo = detailResult.detailInfo || {};
+    var space = detailInfo.spaceInfo || detailResult.spaceInfo || {};
+    var size = detailInfo.sizeInfo || detailResult.sizeInfo || {};
+    var value =
+      space.exclusiveSpace != null ? space.exclusiveSpace :
+      space.contractSpace != null ? space.contractSpace :
+      space.supplySpace != null ? space.supplySpace :
+      space.floorSpace != null ? space.floorSpace :
+      space.landSpace != null ? space.landSpace :
+      size.exclusiveSpace != null ? size.exclusiveSpace :
+      size.contractSpace != null ? size.contractSpace :
+      fallback;
+    return value == null ? "" : value;
+  }
+
+  function hasExactNaverJibun(value) {
+    var text = clean(value).replace(/\s+/g, " ");
+    return /(?:동|가|리|읍|면)\s+(?:산\s*)?\d+(?:-\d+)?(?:\s|$)/.test(text);
+  }
+
+  function hasExactNaverFloorOrRoom(item) {
+    var value = clean(item && (item.roomInfo || item.floorInfo))
+      .replace(/\s+/g, "");
+    if (!value || /^(?:0층?|0호)$/.test(value)) return false;
+    if (/^(?:지하|B)\d+층?(?:\/|$)/i.test(value)) return true;
+    if (/^-?[1-9]\d*층?(?:\/|$)/.test(value)) return true;
+    return /(?:^|\D)[1-9]\d*호(?:\D|$)/.test(value);
+  }
+
+  function isCompleteNaverLocation(item) {
+    return hasExactNaverJibun(item && item.jibunAddress) &&
+      hasExactNaverFloorOrRoom(item);
+  }
+
+  async function fetchFinJson(url, attempts) {
+    var lastError = null;
+    for (var attempt = 1; attempt <= (attempts || 4); attempt += 1) {
+      throwIfStopRequested();
+      try {
+        var response = await nativeFetch(url, {
+          method: "GET",
+          credentials: "include",
+          headers: {Accept: "application/json, text/plain, */*"}
+        });
+        if (response.ok) return await response.json();
+        if (response.status !== 429 && response.status < 500) {
+          throw new Error("HTTP " + response.status);
+        }
+        lastError = new Error("HTTP " + response.status);
+      } catch (error) {
+        lastError = error;
+      }
+      await delay(Math.min(2500, 250 * attempt * attempt));
+    }
+    throw lastError || new Error("네이버 상세조회 실패");
+  }
+
+  async function enrichNaverDetail(item) {
+    var articleNumber = clean(item && item.articleNo);
+    if (!articleNumber) return {item: item, valid: false, reason: "매물번호 없음"};
+    var realEstateType = clean(item.realEstateTypeCode);
+    var tradeType = clean(item.tradeTypeCode);
+
+    if (!realEstateType || !tradeType) {
+      var keyUrl = new URL(FIN_ARTICLE_KEY_PATH, location.origin);
+      keyUrl.searchParams.set("articleNumber", articleNumber);
+      var keyJson = await fetchFinJson(keyUrl.href, 4);
+      var keyResult = keyJson && keyJson.result || {};
+      var type = keyResult.type || {};
+      realEstateType = clean(type.realEstateType || keyResult.realEstateType);
+      tradeType = clean(type.tradeType || keyResult.tradeType);
+    }
+    if (!realEstateType || !tradeType) {
+      throw new Error("네이버 상세유형 확인 실패(" + articleNumber + ")");
+    }
+
+    var basicUrl = new URL(FIN_ARTICLE_BASIC_PATH, location.origin);
+    basicUrl.searchParams.set("articleNumber", articleNumber);
+    basicUrl.searchParams.set("realEstateType", realEstateType);
+    basicUrl.searchParams.set("tradeType", tradeType);
+    var basicJson = await fetchFinJson(basicUrl.href, 5);
+    var detailResult = basicJson && basicJson.result || {};
+    var address = detailResult.address ||
+      (detailResult.detailInfo && detailResult.detailInfo.address) || {};
+    var exactAddress = finAddressText(address);
+    var detailed = Object.assign({}, item, {
+      realEstateTypeCode: realEstateType,
+      tradeTypeCode: tradeType,
+      jibunAddress: exactAddress || item.jibunAddress,
+      floorInfo: finDetailFloor(detailResult, item.floorInfo),
+      roomInfo: finDetailRoom(detailResult, item.roomInfo),
+      areaSquareMeter: finDetailArea(detailResult, item.areaSquareMeter)
+    });
+    return {
+      item: detailed,
+      valid: isCompleteNaverLocation(detailed),
+      reason: hasExactNaverJibun(detailed.jibunAddress)
+        ? "정확한 층·호실 없음"
+        : "정확한 지번주소 없음"
+    };
+  }
+
+  async function enrichNaverDetailBatch(items, onProgress) {
+    var results = new Array(items.length);
+    var cursor = 0;
+    var completed = 0;
+    async function worker() {
+      while (cursor < items.length) {
+        var index = cursor;
+        cursor += 1;
+        results[index] = await enrichNaverDetail(items[index]);
+        completed += 1;
+        if (onProgress) onProgress(completed, items.length);
+      }
+    }
+    var workers = [];
+    for (var index = 0; index < Math.min(FIN_DETAIL_CONCURRENCY, items.length); index += 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+    return results;
   }
 
   function naverListSnapshot(item) {
@@ -2200,6 +2362,7 @@
       updated: 0,
       review: 0,
       duplicate: 0,
+      addressMissing: 0,
       failed: 0
     };
     var firstFailure = "";
@@ -2230,7 +2393,46 @@
 
       for (var index = 0; index < items.length;) {
         if (state.stopRequested) break;
-        var batch = items.slice(index, index + BATCH_SIZE);
+        var candidateBatch = items.slice(index, index + BATCH_SIZE);
+        setStatus(
+          "네이버 상세주소·층 확인 중",
+          (index + 1) + "~" + (index + candidateBatch.length) + "/" + items.length +
+          "개 · 정확한 지번과 실제 층을 확인한 매물만 중복검사에 전달합니다."
+        );
+        var detailResults = await enrichNaverDetailBatch(
+          candidateBatch,
+          function(completed, total) {
+            setProgress(
+              classification.unchanged + index + completed,
+              allItems.length || 1
+            );
+            setStatus(
+              "네이버 상세주소·층 확인 중",
+              (index + completed).toLocaleString("ko-KR") + " / " +
+              items.length.toLocaleString("ko-KR") + "개 · 현재 묶음 " +
+              completed + "/" + total + "개"
+            );
+          }
+        );
+        var batch = detailResults.filter(function(result) {
+          return result && result.valid;
+        }).map(function(result) {
+          return result.item;
+        });
+        var incompleteCount = candidateBatch.length - batch.length;
+        totals.addressMissing += incompleteCount;
+        if (!batch.length) {
+          index += candidateBatch.length;
+          updateDashboard({
+            found: allItems.length,
+            processed: classification.unchanged + index,
+            remaining: Math.max(0, items.length - index),
+            duplicate: totals.duplicate,
+            addressMissing: totals.addressMissing,
+            failed: totals.failed
+          });
+          continue;
+        }
         var saveWaitStartedAt = Date.now();
         var saveWaitTimer = window.setInterval(function () {
           showNaverSaveWait(index, batch.length, items.length, saveWaitStartedAt);
@@ -2253,7 +2455,7 @@
           firstFailure = clean(result.errors[0] && result.errors[0].message);
         }
         adjustBatchSize(Date.now() - batchStartedAt, Number(result.failed || 0));
-        index += batch.length;
+        index += candidateBatch.length;
         updateDashboard({
           found: allItems.length,
           processed: classification.unchanged + index,
@@ -2262,6 +2464,7 @@
           merged: totals.merged,
           review: totals.review,
           duplicate: totals.duplicate,
+          addressMissing: totals.addressMissing,
           failed: totals.failed
         });
         if (state.stopRequested) break;
@@ -2290,7 +2493,7 @@
         sessionId: session.sessionId,
         scope: session.scope,
         source: runOptions.source || "네이버",
-        complete: Boolean(runOptions.complete) && !safelyStopped &&
+          complete: Boolean(runOptions.complete) && !safelyStopped &&
           Number(totals.failed || 0) === 0 && index >= items.length,
         stopped: safelyStopped,
         observedSourceIds: session.observedSourceIds,
@@ -2335,6 +2538,7 @@
           merged: sessionResult.merged,
           review: sessionResult.review,
           duplicate: Number(sessionResult.duplicate || 0) + classification.unchanged,
+          addressMissing: totals.addressMissing,
           failed: Number(sessionResult.failed || totals.failed || 0)
         });
         setStatus(
@@ -2345,6 +2549,7 @@
             "개 · 조건갱신 " + Number(sessionResult.updated || 0) +
             "개 · 검증대기 " + Number(sessionResult.review || 0) +
             "개 · 중복 " + (Number(sessionResult.duplicate || 0) + classification.unchanged) +
+            "개 · 주소·층 제외 " + Number(totals.addressMissing || 0) +
             "개 · 실패 " + Number(sessionResult.failed || totals.failed || 0) + "개" +
             (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
         );
