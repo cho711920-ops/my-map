@@ -80,12 +80,15 @@ body.permit-diagnosis-open-v1 {
   display: flex;
   flex-direction: column;
   width: min(1500px, 94vw);
+  max-width: 94vw;
+  min-width: 0;
   height: min(900px, 92vh);
   overflow: hidden;
   border: 1px solid rgba(124, 58, 237, .24);
   border-radius: 22px;
   background: #f7f7fc;
   box-shadow: 0 25px 80px rgba(15, 23, 42, .34);
+  box-sizing: border-box;
 }
 
 .permit-diagnosis-header-v1 {
@@ -185,6 +188,7 @@ body.permit-diagnosis-open-v1 {
 }
 
 .permit-diagnosis-card-v1 {
+  min-width: 0;
   padding: 18px;
   border: 1px solid #e3e1ed;
   border-radius: 17px;
@@ -397,8 +401,12 @@ body.permit-diagnosis-open-v1 {
 
 .permit-location-grid-v1 {
   display: grid;
-  grid-template-columns: 2fr .7fr .8fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, .7fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
+}
+
+.permit-diagnosis-field-v1 {
+  min-width: 0;
 }
 
 .permit-diagnosis-field-v1 label {
