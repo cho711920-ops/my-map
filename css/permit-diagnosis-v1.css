@@ -723,6 +723,83 @@ body.permit-diagnosis-open-v1 {
   line-height: 1.55;
 }
 
+.permit-history-grid-v1 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.permit-history-section-v1 {
+  overflow: hidden;
+  border: 1px solid #e8ddff;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.permit-history-section-v1 > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f6f1ff;
+}
+
+.permit-history-section-v1 h5,
+.permit-history-section-v1 p {
+  margin: 0;
+}
+
+.permit-history-section-v1 h5 {
+  color: #452084;
+  font-size: 14px;
+}
+
+.permit-history-section-v1 p,
+.permit-history-section-v1 a {
+  margin-top: 3px;
+  color: #735b9f;
+  font-size: 11px;
+}
+
+.permit-history-list-v1 {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.permit-history-list-v1 article {
+  display: grid;
+  gap: 3px;
+  padding: 11px 14px;
+  border-top: 1px solid #f0eafa;
+}
+
+.permit-history-list-v1 article:first-child {
+  border-top: 0;
+}
+
+.permit-history-list-v1 strong {
+  color: #2d2440;
+  font-size: 13px;
+}
+
+.permit-history-list-v1 span,
+.permit-history-list-v1 small {
+  color: #6b627b;
+  font-size: 11px;
+}
+
+.permit-history-empty-v1 {
+  padding: 18px 14px;
+  color: #766d82;
+  font-size: 12px;
+}
+
+.permit-land-use-section-v1 {
+  grid-column: 1 / -1;
+}
+
 .permit-public-scope-notice-v1 {
   margin: 0 16px 14px;
   padding: 11px 13px;

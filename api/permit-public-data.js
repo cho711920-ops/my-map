@@ -1,4 +1,10 @@
 import { requireSession, sendError } from "./_lib/security.js";
+import {
+  fetchBuildingPermitHistory,
+  fetchIndustryPermitHistory,
+  fetchLandUseActivities,
+  unavailableResult
+} from "./_lib/permit-open-data.js";
 
 const DIGIT_RULES = {
   sigunguCd: /^\d{5}$/,
@@ -46,6 +52,11 @@ export function normalizeBuildingResponse(data) {
   };
 }
 
+function safeIndustryId(value) {
+  const industryId = String(value || "").trim();
+  return /^[a-z0-9-]{1,60}$/.test(industryId) ? industryId : "";
+}
+
 function upstreamUrl(parcel, propertyId) {
   const base = process.env.APPS_SCRIPT_URL;
   const secret = process.env.APPS_SCRIPT_PROXY_SECRET;
@@ -78,8 +89,43 @@ export default async function handler(req, res) {
     if (!response.ok) {
       throw Object.assign(new Error("공공데이터 서버가 응답하지 않았습니다."), { statusCode: 502 });
     }
+    const normalized = normalizeBuildingResponse(data);
+    const addresses = [
+      normalized.parcel && normalized.parcel.address,
+      normalized.parcel && normalized.parcel.roadAddress,
+      ...(normalized.buildings || []).map((item) => item && (item.address || item.roadAddress))
+    ].filter(Boolean);
+    const industryId = safeIndustryId(req.query.industryId);
+    const [buildingPermits, industryPermits, landUseActivities] = await Promise.allSettled([
+      fetchBuildingPermitHistory(parcel),
+      fetchIndustryPermitHistory(industryId, addresses),
+      fetchLandUseActivities(industryId)
+    ]);
+
+    normalized.buildingPermitHistory = buildingPermits.status === "fulfilled"
+      ? buildingPermits.value
+      : unavailableResult(
+        buildingPermits.reason,
+        "국토교통부 건축HUB 건축인허가정보 서비스",
+        "https://www.data.go.kr/data/15136267/openapi.do"
+      );
+    normalized.industryPermitHistory = industryPermits.status === "fulfilled"
+      ? industryPermits.value
+      : unavailableResult(
+        industryPermits.reason,
+        "행정안전부 지방행정 인허가 조회서비스",
+        ""
+      );
+    normalized.landUseActivities = landUseActivities.status === "fulfilled"
+      ? landUseActivities.value
+      : unavailableResult(
+        landUseActivities.reason,
+        "국토교통부 토지이용규제정보서비스",
+        "https://www.data.go.kr/data/15058410/openapi.do"
+      );
+
     res.setHeader("Cache-Control", "no-store, private");
-    return res.status(200).json(normalizeBuildingResponse(data));
+    return res.status(200).json(normalized);
   } catch (error) {
     return sendError(res, error);
   }

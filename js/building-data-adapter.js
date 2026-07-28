@@ -164,6 +164,9 @@
       sourcePage: data.sourcePage,
       cached: data.cached,
       limitations: data.limitations || [],
+      buildingPermitHistory: data.buildingPermitHistory || { status: "UNKNOWN", records: [] },
+      industryPermitHistory: data.industryPermitHistory || { status: "UNKNOWN", records: [] },
+      landUseActivities: data.landUseActivities || { status: "UNKNOWN", records: [] },
       autoChecks: automaticChecks(record, input)
     };
   }
@@ -174,6 +177,7 @@
         if (!addressResult.parcel) throw new Error("주소에서 지번 코드를 확인하지 못했습니다.");
         var params = new URLSearchParams(addressResult.parcel);
         if (input.listingId) params.set("propertyId", input.listingId);
+        if (input.industryId) params.set("industryId", input.industryId);
         return fetch("/api/permit-public-data?" + params.toString(), {
           credentials: "same-origin",
           cache: "no-store"
@@ -214,6 +218,65 @@
     var zoneReason = Number(diagnosis.recordCounts && diagnosis.recordCounts.zones) === 0
       ? "해당 주소 API 자료 없음"
       : "건물 연결 자료 없음";
+    function statusLabel(result) {
+      if (result && result.status === "CONNECTED") return "조회 완료";
+      if (result && result.status === "NOT_APPLICABLE") return "해당 없음";
+      return "UNKNOWN";
+    }
+
+    function permitRows(result, type) {
+      var rows = result && Array.isArray(result.records) ? result.records : [];
+      if (!rows.length) {
+        return '<div class="permit-history-empty-v1">' +
+          escapeHtml(result && result.message
+            ? result.message
+            : (result && result.status === "CONNECTED"
+              ? "해당 주소에서 확인된 이력이 없습니다."
+              : "현재 자료로 확인할 수 없습니다.")) +
+          '</div>';
+      }
+      return '<div class="permit-history-list-v1">' + rows.map(function (row) {
+        if (type === "business") {
+          return '<article><strong>' + escapeHtml(row.businessName || row.industry || "영업 인허가") + '</strong>' +
+            '<span>' + escapeHtml([row.status, dateText(row.permitDate)].filter(Boolean).join(" · ")) + '</span>' +
+            '<small>' + escapeHtml(row.roadAddress || row.lotAddress || "") + '</small></article>';
+        }
+        return '<article><strong>' + escapeHtml(row.permitType || row.buildingName || "건축 인허가") + '</strong>' +
+          '<span>' + escapeHtml([
+            row.mainUse,
+            row.permitDate ? "허가 " + dateText(row.permitDate) : "",
+            row.startDate ? "착공 " + dateText(row.startDate) : "",
+            row.approvalDate ? "사용승인 " + dateText(row.approvalDate) : ""
+          ].filter(Boolean).join(" · ")) + '</span>' +
+          '<small>' + escapeHtml(row.siteAddress || "") + '</small></article>';
+      }).join("") + '</div>';
+    }
+
+    function historySection(title, result, type) {
+      return '<section class="permit-history-section-v1"><header><div><h5>' + escapeHtml(title) + '</h5>' +
+        '<p>' + escapeHtml(statusLabel(result)) + '</p></div>' +
+        (result && result.sourcePage
+          ? '<a href="' + escapeHtml(result.sourcePage) + '" target="_blank" rel="noopener noreferrer">공식 출처</a>'
+          : '') + '</header>' + permitRows(result, type) + '</section>';
+    }
+
+    function landUseSection(result) {
+      var rows = result && Array.isArray(result.records) ? result.records : [];
+      return '<section class="permit-history-section-v1 permit-land-use-section-v1"><header><div><h5>토지이용행위 규제 확인</h5>' +
+        '<p>' + escapeHtml(statusLabel(result)) + '</p></div>' +
+        (result && result.sourcePage
+          ? '<a href="' + escapeHtml(result.sourcePage) + '" target="_blank" rel="noopener noreferrer">공식 출처</a>'
+          : '') + '</header>' +
+        '<div class="permit-history-empty-v1">' +
+          (rows.length
+            ? '<strong>공식 행위명</strong> ' + rows.map(function (row) {
+              return escapeHtml(row.name) + (row.code ? " (" + escapeHtml(row.code) + ")" : "");
+            }).join(", ") + '<br>'
+            : '') +
+          escapeHtml(result && result.message ? result.message : "현재 자료로 확인할 수 없습니다.") +
+        '</div></section>';
+    }
+
     return '<section class="permit-public-result-v1">' +
       '<header class="permit-public-result-head-v1"><div><h4>주소 기반 공공데이터</h4>' +
         '<p>' + escapeHtml(diagnosis.queriedAt || "조회 시각 미제공") +
@@ -241,6 +304,11 @@
         '<a href="' + escapeHtml(diagnosis.sourcePage) + '" target="_blank" rel="noopener noreferrer">' +
         escapeHtml(diagnosis.source) + '</a><br>' +
         diagnosis.limitations.map(escapeHtml).join("<br>") +
+      '</div>' +
+      '<div class="permit-history-grid-v1">' +
+        historySection("건축 인허가 이력", diagnosis.buildingPermitHistory, "building") +
+        historySection("동일 주소 영업 인허가 이력", diagnosis.industryPermitHistory, "business") +
+        landUseSection(diagnosis.landUseActivities) +
       '</div></section>';
   }
 
