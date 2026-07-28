@@ -62,6 +62,20 @@
       }));
     } catch (_) {}
   }
+  function clearReviewCache() {
+    extraState.reviews = null;
+    try { sessionStorage.removeItem(REVIEW_CACHE_KEY); } catch (_) {}
+  }
+  function loadFreshReviews(silent) {
+    clearReviewCache();
+    var panel = document.getElementById("operationsReviewsPanel");
+    if (panel) {
+      panel.innerHTML =
+        '<div class="operations-empty"><b>최신 검증자료를 확인하는 중입니다.</b>' +
+        '<span>초기화·수집 결과를 현재 시트 기준으로 다시 불러옵니다.</span></div>';
+    }
+    return loadReviews(true, !!silent);
+  }
   function restoreReviewCache() {
     try {
       var cached = JSON.parse(sessionStorage.getItem(REVIEW_CACHE_KEY) || "null");
@@ -331,11 +345,11 @@
     if (dashboardButton) dashboardButton.classList.remove("active");
     if (customerButton) customerButton.classList.remove("active");
     if (tab === "collections") loadCollection(false);
-    else loadReviews(false);
+    else loadFreshReviews(false);
   };
 
   window.refreshCollectionStatus = function() { extraState.collection = null; return loadCollection(true); };
-  window.refreshReviewWorkspace = function() { extraState.reviews = null; return loadReviews(true); };
+  window.refreshReviewWorkspace = function() { return loadFreshReviews(false); };
   window.repairRoomlessExactReviews = function() {
     if (extraState.loading) return;
     extraState.loading = true;
@@ -582,6 +596,19 @@
     if (event.key === "2") window.decideCurrentReview("create");
     if (event.key === "3") window.decideCurrentReview("hold");
     if (event.key === "Escape") window.closePropertyTimeline();
+  });
+  document.addEventListener("visibilitychange", function() {
+    var center = document.getElementById("operationsCenter");
+    if (
+      document.visibilityState === "visible" &&
+      extraState.tab === "reviews" &&
+      center &&
+      center.classList.contains("open") &&
+      !extraState.refreshing &&
+      !extraState.loading
+    ) {
+      loadFreshReviews(true);
+    }
   });
   restoreReviewCache();
   setTimeout(function() {
