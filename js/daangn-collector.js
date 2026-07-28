@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.2";
+  var VERSION = "1.1.3";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -185,11 +185,18 @@
     var individualCluster = isClusterMarkerText(text);
     if (!district && !individualCluster) return;
 
+    var selectedCount = markerCountFromText(text);
     state.pendingDistrict = district;
     state.pendingSelectionType = district ? "district" : "cluster";
     state.pendingSelectionAt = Date.now();
     state.pendingOriginalClusterId = clusterIdFromUrl(location.href);
-    state.pendingSelectionCount = markerCountFromText(text);
+    state.pendingSelectionCount = selectedCount;
+    if (selectedCount) {
+      clearMetrics();
+      setProgress(0);
+      setMetric("found", selectedCount);
+      setMetric("remaining", selectedCount);
+    }
     if (state.busy && state.job && state.job.status === "running") {
       state.stopRequested = true;
     }
@@ -203,12 +210,19 @@
   }
 
   function markerSelectionText(marker, clickable) {
+    var seen = {};
     return [
       clickable && clickable.textContent,
       clickable && clickable.getAttribute && clickable.getAttribute("aria-label"),
       marker && marker.textContent,
       marker && marker.getAttribute && marker.getAttribute("aria-label")
-    ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    ].map(function (value) {
+      return String(value || "").replace(/\s+/g, " ").trim();
+    }).filter(function (value) {
+      if (!value || /^Map marker$/i.test(value) || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    }).join(" ");
   }
 
   function scheduleSelectionChecks() {
@@ -361,20 +375,20 @@
 
   function districtFromMarkerText(text) {
     var match = String(text || "").replace(/\s+/g, " ").trim()
-      .match(/^(유성구|대덕구|동구|중구|서구)\s*매물\s*[\d,]+/);
+      .match(/(?:^|\s)(유성구|대덕구|동구|중구|서구)\s*매물\s*[\d,]+/);
     return match ? match[1] : "";
   }
 
   function isClusterMarkerText(text) {
     text = String(text || "").replace(/\s+/g, " ").trim();
-    return /^\d[\d,]*$/.test(text) ||
-      /(?:^|\s)매물\s*[\d,]+(?:개)?$/.test(text);
+    return /^\d[\d,]*(?:개)?$/.test(text) ||
+      /매물\s*[\d,]+(?:개)?(?:\s|$)/.test(text);
   }
 
   function markerCountFromText(text) {
     text = String(text || "").replace(/\s+/g, " ").trim();
-    var match = text.match(/(?:^|\s)매물\s*([\d,]+)(?:개)?$/) ||
-      text.match(/^([\d,]+)$/);
+    var match = text.match(/매물\s*([\d,]+)(?:개)?(?:\s|$)/) ||
+      text.match(/^([\d,]+)(?:개)?$/);
     return match ? Number(match[1].replace(/,/g, "")) || 0 : 0;
   }
 

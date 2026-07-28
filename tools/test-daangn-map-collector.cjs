@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.1\.2"/);
+assert.match(collector, /VERSION = "1\.1\.3"/);
 assert.match(collector, /version === VERSION/);
 assert.match(collector, /width:min\(460px/);
 assert.match(collector, /stalePanel\.remove/);
@@ -60,21 +60,27 @@ const markerSelectionText = loadFunction("markerSelectionText");
 
 assert.equal(districtFromMarkerText("동구 매물 541"), "동구");
 assert.equal(districtFromMarkerText("유성구매물 1,902"), "유성구");
+assert.equal(districtFromMarkerText("Map marker 동구 매물 621 Map marker"), "동구");
 assert.equal(districtFromMarkerText("516"), "");
 assert.equal(isClusterMarkerText("516"), true);
 assert.equal(isClusterMarkerText("덕명동 매물 59"), true);
 assert.equal(isClusterMarkerText("엄사면 매물 9"), true);
+assert.equal(isClusterMarkerText("덕명동 매물 59 Map marker"), true);
+assert.equal(isClusterMarkerText("가장동매물37"), true);
 assert.equal(isClusterMarkerText("확대"), false);
 assert.equal(markerCountFromText("동구 매물 617"), 617);
+assert.equal(markerCountFromText("동구매물621"), 621);
 assert.equal(markerCountFromText("1,492"), 1492);
 assert.equal(
   markerSelectionText(
-    {textContent: "Jeongnim-dong \ub9e4\ubb3c 134", getAttribute() { return ""; }},
+    {textContent: "Jeongnim-dong \ub9e4\ubb3c 134", getAttribute() { return "Map marker"; }},
     {textContent: "Jeongnim-dong", getAttribute() { return ""; }}
   ),
   "Jeongnim-dong Jeongnim-dong \ub9e4\ubb3c 134"
 );
 assert.equal(markerCountFromText("Jeongnim-dong \ub9e4\ubb3c 134"), 134);
+assert.equal(markerCountFromText("동구 매물 621 Map marker"), 621);
+assert.equal(markerCountFromText("가장동 매물 37 가장동"), 37);
 assert.equal(markerCountFromText("확대"), 0);
 assert.equal(
   clusterIdFromUrl("https://realty.daangn.com/map/x?cluster_id=REGION%3A1112&mv=1"),
