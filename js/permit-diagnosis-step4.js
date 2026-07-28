@@ -11,9 +11,12 @@
   function render(result) {
     var target = result.target || {};
     var targetLabel = target.target ? target.target.label : "UNKNOWN";
-    var thresholdText = target.thresholdKnown
-      ? (target.branch === "below" ? "500㎡ 미만 확인" : "500㎡ 이상 확인")
-      : "동일 건물 합계 미확인";
+    var threshold = target.threshold || "";
+    var thresholdText = target.branch === "fixed"
+      ? (target.reason || "고정 용도 기준")
+      : target.thresholdKnown
+        ? (target.branch === "below" ? threshold + "㎡ 미만 확인" : threshold + "㎡ 이상 확인")
+        : "동일 건물 합계 미확인";
     var sourceLinks = (result.sources || []).map(function (source) {
       return '<a href="' + escapeHtml(source.url) + '" target="_blank" rel="noopener noreferrer">' +
         escapeHtml(source.title) + '</a>';
@@ -24,10 +27,10 @@
     var branches = "";
     if (!target.thresholdKnown && result.alternativeComparison) {
       branches = '<div class="permit-step4-branches-v1">' +
-        '<div><small>동일 건물 합계 500㎡ 미만이면</small><strong>' +
+        '<div><small>동일 건물 합계 ' + escapeHtml(target.threshold) + '㎡ 미만이면</small><strong>' +
           escapeHtml(target.target.label) + '</strong><span>' +
           escapeHtml(result.comparison.procedure.label) + '</span></div>' +
-        '<div><small>동일 건물 합계 500㎡ 이상이면</small><strong>' +
+        '<div><small>동일 건물 합계 ' + escapeHtml(target.threshold) + '㎡ 이상이면</small><strong>' +
           escapeHtml(target.alternative.label) + '</strong><span>' +
           escapeHtml(result.alternativeComparison.procedure.label) + '</span></div>' +
       '</div>';

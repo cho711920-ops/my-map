@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-rest-restaurant-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "rest-restaurant",
+  "officialName": "휴게음식점영업",
+  "commonName": "휴게음식점·분식점·카페",
+  "registrationType": "신고",
+  "requiredBuildingUse": {
+    "underThreshold": "같은 건축물 내 해당 용도 합계 300㎡ 미만: 제1종 근린생활시설 검토",
+    "atOrOverThreshold": "300㎡ 이상: 제2종 근린생활시설 검토",
+    "important": "영업장 전용면적만으로 단정하지 않고 같은 건축물 내 해당 용도 바닥면적 합계를 확인합니다. 음주행위가 허용되는 운영이면 일반음식점 후보를 다시 확인합니다."
+  },
+  "generalProcess": [
+    "메뉴·조리방식과 영업장 내 음주 허용 여부 확정",
+    "일반음식점/휴게음식점 공식 업종을 관할 위생부서에 확인",
+    "건축물대장 층·호실 용도와 같은 건축물 해당 용도 면적 합계 확인",
+    "입지·정화조·주차·위반건축물·건물 관리규약 확인",
+    "조리장·급수·배수·세척·환기·냉장·방충 시설 확보",
+    "가스·전기·소방·피난 시설과 배기 민원 가능성 확인",
+    "위생교육·건강진단·구비서류 준비 후 관할 구청 영업신고"
+  ],
+  "sources": [
+    {"id":"food-definition","title":"식품위생법 시행령 제21조 식품접객업 정의","summary":"휴게음식점은 분식점 형태 등을 포함하여 음식류를 조리·판매하되 음주행위가 허용되지 않는 영업","url":"https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=92109"},
+    {"id":"food-report","title":"식품위생법 시행령 제25조 영업신고 대상","summary":"휴게음식점과 일반음식점은 관할 신고 대상 업종","url":"https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1026749185"},
+    {"id":"food-facility","title":"식품위생법 시행규칙 별표 14 업종별 시설기준","summary":"식품접객업의 영업장·조리장·급수·화장실 등 시설기준","url":"https://www.law.go.kr/flDownload.do?flNm=%5B%EB%B3%84%ED%91%9C+14%5D+%EC%97%85%EC%A2%85%EB%B3%84%EC%8B%9C%EC%84%A4%EA%B8%B0%EC%A4%80%28%EC%A0%9C36%EC%A1%B0+%EA%B4%80%EB%A0%A8%29%0A&flSeq=50629977"},
+    {"id":"food-filing","title":"식품위생법 시행규칙 제42조 영업의 신고","summary":"시설을 갖춘 후 영업신고서와 해당 구비서류를 신고관청에 제출","url":"https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1026748255"},
+    {"id":"food-education","title":"식품위생법 제41조 식품위생교육","summary":"영업 전 위생교육과 기존 영업자의 정기 교육","url":"https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029485451"},
+    {"id":"food-health","title":"식품위생 분야 종사자의 건강진단 규칙","summary":"식품을 직접 취급하는 영업자·종업원의 건강진단 항목과 주기","url":"https://www.law.go.kr/LSW/LsiJoLinkP.do?docType=JO&joNo=000500000&languageType=KO&lsNm=%EC%8B%9D%ED%92%88%EC%9C%84%EC%83%9D+%EB%B6%84%EC%95%BC+%EC%A2%85%EC%82%AC%EC%9E%90%EC%9D%98+%EA%B1%B4%EA%B0%95%EC%A7%84%EB%8B%A8+%EA%B7%9C%EC%B9%99&paras=1"},
+    {"id":"building-appendix-1","title":"건축법 시행령 별표 1 용도별 건축물의 종류","summary":"휴게음식점의 같은 건축물 내 해당 용도 면적 합계 300㎡ 기준","url":"https://www.law.go.kr/flDownload.do%3Fgubun%3D%26flSeq%3D156922891%26bylClsCd%3D110201"}
+  ],
+  "checkGroups": [
+    {
+      "id": "industry",
+      "title": "업종·영업형태 확정",
+      "checks": [
+        {"id":"food-menu","label":"메뉴·조리방식 확정","note":"김밥·분식·다류·디저트 등 실제 판매 메뉴와 조리범위를 정리합니다.","severity":"critical","sourceIds":["food-definition"]},
+        {"id":"alcohol-policy","label":"영업장 내 음주행위 금지 운영","note":"휴게음식점은 음주행위가 허용되지 않는 영업이므로 운영계획을 확인합니다.","severity":"critical","sourceIds":["food-definition"]},
+        {"id":"industry-confirmation","label":"휴게음식점/일반음식점 최종 확인","note":"김밥집·분식집이라는 명칭만으로 단정하지 않고 메뉴와 운영방식을 관할 위생부서에 설명해 확인합니다.","severity":"critical","sourceIds":["food-definition","food-report"]},
+        {"id":"same-building-area","label":"같은 건축물 해당 용도 면적 합계","note":"300㎡ 기준은 전용면적이 아니라 같은 건축물의 해당 용도 합계로 확인합니다.","severity":"critical","sourceIds":["building-appendix-1"]}
+      ]
+    },
+    {
+      "id": "building",
+      "title": "건축·입지",
+      "checks": [
+        {"id":"building-ledger-use","label":"해당 층·호실 건축물대장 용도","note":"300㎡ 미만 제1종, 이상 제2종 근린생활시설 해당 여부를 확인합니다.","severity":"critical","sourceIds":["building-appendix-1"]},
+        {"id":"actual-plan-match","label":"대장 도면과 실제 구조 일치","note":"불법 증축·무단확장·복층·가설물·임의 구획 여부를 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"land-restriction","label":"용도지역·지구단위계획·건물 규약","note":"입지 제한과 건물 내 음식점 제한 여부를 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"sewage-capacity","label":"정화조·하수도 처리용량","note":"좌석·면적·조리형태에 맞는 오수 처리 가능 여부를 확인합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "facility",
+      "title": "조리장·위생시설",
+      "checks": [
+        {"id":"business-separation","label":"영업장 분리·구획·구분","note":"다른 용도의 시설과 적법하게 구분되는지 확인합니다.","severity":"critical","sourceIds":["food-facility"]},
+        {"id":"kitchen","label":"조리장과 위생적 구조","note":"오염 방지, 청소와 소독이 가능한 조리공간인지 확인합니다.","severity":"critical","sourceIds":["food-facility"]},
+        {"id":"water-supply","label":"급수와 수질검사 대상","note":"수돗물 외 용수를 사용하면 수질검사성적서 대상인지 확인합니다.","severity":"critical","sourceIds":["food-facility","food-filing"]},
+        {"id":"washing-drain","label":"세척시설·급배수·바닥배수","note":"식기·조리도구 세척과 오수 배출 시설을 확인합니다.","severity":"critical","sourceIds":["food-facility"]},
+        {"id":"storage-cold","label":"냉장·냉동·식재료 보관","note":"교차오염 방지와 적정 온도 유지가 가능한지 확인합니다.","severity":"high","sourceIds":["food-facility"]},
+        {"id":"pest-waste","label":"방충·방서·폐기물 관리","note":"해충 유입 차단과 음식물쓰레기 보관·배출 동선을 확인합니다.","severity":"high","sourceIds":["food-facility"]},
+        {"id":"toilet","label":"화장실·손씻기 시설","note":"공용화장실 사용 가능 여부를 포함해 관할 기준을 확인합니다.","severity":"critical","sourceIds":["food-facility"]}
+      ]
+    },
+    {
+      "id": "equipment",
+      "title": "환기·가스·전기·소방",
+      "checks": [
+        {"id":"hood-duct","label":"후드·덕트·배기구","note":"외벽·옥상 배출 가능 여부와 냄새·연기 민원 가능성을 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"gas","label":"가스·화기 안전","note":"배관·용기·검사·환기 기준을 전문기관에 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"electric","label":"조리기기·냉난방 전력","note":"계약전력과 분전반·배선 증설 가능 여부를 확인합니다.","severity":"high","sourceIds":[]},
+        {"id":"fire","label":"소화기·감지기·피난시설","note":"면적·층·구조·화기 사용에 따른 소방시설을 확인합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "filing",
+      "title": "신고·개업 준비",
+      "checks": [
+        {"id":"hygiene-education","label":"식품위생교육 이수","note":"신규 영업자는 원칙적으로 영업 전 교육을 준비합니다.","severity":"critical","sourceIds":["food-education","food-filing"]},
+        {"id":"health-check","label":"식품 취급자 건강진단","note":"직접 조리·판매 종사자의 대상과 유효기간을 확인합니다.","severity":"critical","sourceIds":["food-health"]},
+        {"id":"filing-documents","label":"영업신고서·구비서류","note":"교육이수증과 조건별 수질검사 등 필요한 서류를 확인합니다.","severity":"critical","sourceIds":["food-filing"]},
+        {"id":"onsite-check","label":"공사 전 관할부서 사전확인","note":"메뉴·평면도·배기·가스 계획을 가지고 위생·건축·소방부서에 확인합니다.","severity":"critical","sourceIds":["food-filing"]},
+        {"id":"business-registration","label":"신고 후 사업자등록·표시사항","note":"세무·가격·원산지·광고물 등 개업 후 의무를 확인합니다.","severity":"high","sourceIds":[]}
+      ]
+    }
+  ],
+  "disclaimer": "이 결과는 사전진단이며 영업신고 수리나 입점 가능성을 보장하지 않습니다. 메뉴와 운영방식에 따라 일반음식점으로 분류될 수 있으므로 공사·계약 전 관할 구청에 확인해야 합니다."
+}

@@ -15,7 +15,8 @@ const index = read("index.html");
 assert(index.includes("building-use-engine.js"), "건축물 용도 엔진을 연결해야 합니다.");
 assert(index.includes("diagnosis-engine.js"), "행정절차 판정 엔진을 연결해야 합니다.");
 assert(index.includes("permit-diagnosis-step4.js"), "STEP 4 결과 UI를 연결해야 합니다.");
-assert(step4Source.includes("동일 건물 합계 500㎡ 미만이면"), "면적 미확인 시 두 절차 분기를 표시해야 합니다.");
+assert(step4Source.includes("동일 건물 합계 ") && step4Source.includes("㎡ 미만이면"),
+  "업종별 면적 기준 미확인 시 두 절차 분기를 표시해야 합니다.");
 
 const context = {
   window: {},

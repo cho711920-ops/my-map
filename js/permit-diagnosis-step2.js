@@ -40,7 +40,8 @@
 
   function renderSummary(rule) {
     var result = global.PermitFacilityCheckEngineV1.summarize(rule, checkState);
-    return '<div class="permit-step2-head-v1"><div><h4>PC방 업종 규칙·시설 체크</h4>' +
+    return '<div class="permit-step2-head-v1"><div><h4>' + escapeHtml(rule.commonName || rule.officialName) +
+      ' 업종 규칙·시설 체크</h4>' +
       '<p>규칙 버전 ' + escapeHtml(rule.ruleVersion) + ' · 법령 확인 ' +
       escapeHtml(rule.verifiedAt) + '</p></div>' +
       '<span class="permit-step2-status-v1" data-result="' + result.status + '">' +
@@ -100,8 +101,8 @@
 
     if (!global.PermitIndustryRuleLoaderV1.supports(industry.id)) {
       host.insertAdjacentHTML("beforeend",
-        '<div class="permit-step2-pending-v1">이 업종의 상세 법령 규칙은 후속 단계에서 추가됩니다. ' +
-        '현재 STEP 2 상세 체크는 인터넷컴퓨터게임시설제공업부터 제공합니다.</div>');
+        '<div class="permit-step2-pending-v1">이 업종의 상세 법령 규칙은 순차적으로 추가됩니다. ' +
+        '현재 상세 체크는 PC방·일반음식점·휴게음식점을 제공합니다.</div>');
       return;
     }
 

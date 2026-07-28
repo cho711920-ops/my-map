@@ -22,6 +22,28 @@
     {"id":"office","label":"업무시설","groupId":"residential","patterns":["업무시설"]}
   ],
   "industryTargets": {
+    "general-restaurant": {
+      "fixed": {
+        "useTypeId": "neighborhood-2",
+        "label": "제2종 근린생활시설",
+        "condition": "일반음식점"
+      }
+    },
+    "rest-restaurant": {
+      "thresholdMetric": "sameBuildingRelevantUseArea",
+      "thresholdSquareMeters": 300,
+      "below": {
+        "useTypeId": "neighborhood-1",
+        "label": "제1종 근린생활시설",
+        "condition": "같은 건축물에서 해당 용도로 쓰는 바닥면적 합계 300㎡ 미만"
+      },
+      "atOrAbove": {
+        "useTypeId": "neighborhood-2",
+        "label": "제2종 근린생활시설",
+        "condition": "같은 건축물에서 해당 용도로 쓰는 바닥면적 합계 300㎡ 이상"
+      },
+      "doNotInferFromExclusiveArea": true
+    },
     "internet-computer-game": {
       "thresholdMetric": "sameBuildingRelevantUseArea",
       "thresholdSquareMeters": 500,

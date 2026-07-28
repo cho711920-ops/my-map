@@ -67,6 +67,17 @@
   function targetForIndustry(industryId, proposedArea, sameBuildingArea, rules) {
     var targetRule = rules.industryTargets && rules.industryTargets[industryId];
     if (!targetRule) return { known: false, reason: "선택 업종의 건축물 용도 규칙이 없습니다." };
+    if (targetRule.fixed) {
+      return {
+        known: true,
+        thresholdKnown: true,
+        branch: "fixed",
+        target: targetRule.fixed,
+        sameBuildingArea: null,
+        threshold: null,
+        reason: targetRule.fixed.condition || "고정 용도 기준"
+      };
+    }
     var threshold = Number(targetRule.thresholdSquareMeters);
     var proposed = Number(proposedArea);
     var total = Number(sameBuildingArea);
