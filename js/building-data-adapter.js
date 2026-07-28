@@ -168,6 +168,13 @@
       escapeHtml(value || "UNKNOWN") + '</strong></div>';
   }
 
+  function dateText(value) {
+    var digits = text(value).replace(/\D/g, "");
+    return digits.length === 8
+      ? digits.slice(0, 4) + "." + digits.slice(4, 6) + "." + digits.slice(6, 8)
+      : text(value);
+  }
+
   function render(diagnosis) {
     var record = diagnosis.record || {};
     var building = diagnosis.building || {};
@@ -182,8 +189,8 @@
         field("도로명주소", diagnosis.roadAddress) +
         field("대장 확인 범위", record.level + (floor ? " · " + floor : "") + (record.unit ? " · " + record.unit : "")) +
         field("현재 건축물 용도", record.use) +
-        field("대장 면적", record.area ? record.area + "㎡" : "") +
-        field("사용승인일", building.approvalDate) +
+        field("확인 범위 면적", record.area ? record.area + "㎡" : "") +
+        field("사용승인일", dateText(building.approvalDate)) +
         field("주차대수", diagnosis.parking ? diagnosis.parking + "대" : "") +
         field("승강기", (Number(building.passengerElevators) || 0) + (Number(building.emergencyElevators) || 0) ?
           ((Number(building.passengerElevators) || 0) + (Number(building.emergencyElevators) || 0)) + "대" : "") +

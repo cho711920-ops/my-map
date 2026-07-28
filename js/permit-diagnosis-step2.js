@@ -36,7 +36,7 @@
       '<div class="permit-rule-summary-v1">' +
         '<div>영업 구분<strong>' + escapeHtml(rule.registrationType) + '</strong></div>' +
         '<div>현재 자료상 판정<strong>' + result.status + '</strong></div>' +
-        '<div>확인 / 불충족<strong>' + result.YES + ' / ' + result.NO + '</strong></div>' +
+        '<div>충족 / 불충족<strong>' + result.YES + ' / ' + result.NO + '</strong></div>' +
         '<div>미확인<strong>' + result.UNKNOWN + '개</strong></div>' +
       '</div>';
   }
