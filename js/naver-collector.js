@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.3.2";
+  var VERSION = "5.3.3";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2244,7 +2244,7 @@
         var batchStartedAt = Date.now();
         var result;
         try {
-          result = await postBatchWithRetry(batch, 3, session);
+          result = await postBatchWithRetry(batch, 6, session);
         } finally {
           window.clearInterval(saveWaitTimer);
         }
@@ -2415,7 +2415,11 @@
         return await postBatch(batch, metadata);
       } catch (error) {
         lastError = error;
-        if (attempt < attempts) await delay(500 * attempt);
+        if (attempt < attempts) {
+          var message = String(error && error.message ? error.message : error);
+          var lockBusy = /다른 수집 (?:작업|저장)이 진행 중/.test(message);
+          await delay(lockBusy ? Math.min(10000, 2000 * attempt) : 500 * attempt);
+        }
       }
     }
     throw lastError || new Error("JS부동산 매물현황 저장에 실패했습니다.");
