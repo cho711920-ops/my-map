@@ -1366,6 +1366,28 @@ body.permit-diagnosis-open-v1 {
 .permit-administration-card-v1[data-admin-type="FREE"] .permit-administration-type-v1 strong { color:#0f766e; }
 .permit-administration-card-v1[data-admin-type="CONDITIONAL"] .permit-administration-type-v1 { background:#fff7ed; }
 .permit-administration-card-v1[data-admin-type="CONDITIONAL"] .permit-administration-type-v1 strong { color:#c2410c; }
+.permit-education-zone-card-v1 { margin-top:14px; overflow:hidden; border:1px solid #fdba74; border-radius:16px; background:#fff; }
+.permit-education-zone-card-v1 > header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 20px; color:#fff; background:linear-gradient(120deg,#c2410c,#ea580c); }
+.permit-education-zone-card-v1 > header small { display:block; font-size:12px; font-weight:800; opacity:.9; }
+.permit-education-zone-card-v1 > header h4 { margin:3px 0 0; color:#fff; font-size:20px; }
+.permit-education-zone-card-v1 > header span { padding:7px 11px; border-radius:999px; color:#9a3412; background:#ffedd5; font-size:12px; font-weight:900; }
+.permit-education-zone-grid-v1 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:#fed7aa; }
+.permit-education-zone-grid-v1 article { padding:17px 20px; background:#fff; }
+.permit-education-zone-grid-v1 strong,.permit-education-zone-grid-v1 b,.permit-education-zone-grid-v1 em { display:block; }
+.permit-education-zone-grid-v1 strong { color:#7c2d12; font-size:14px; }
+.permit-education-zone-grid-v1 b { margin-top:5px; color:#1f2937; font-size:17px; }
+.permit-education-zone-grid-v1 em { margin-top:8px; font-size:14px; font-style:normal; font-weight:900; }
+.permit-education-zone-grid-v1 article[data-zone="absolute"] em { color:#b91c1c; }
+.permit-education-zone-grid-v1 article[data-zone="relative"] em { color:#c2410c; }
+.permit-education-zone-grid-v1 p { margin:7px 0 0; color:#625b70; font-size:13px; line-height:1.55; }
+.permit-education-zone-exception-v1 { display:flex; gap:12px; padding:13px 20px; color:#713f12; background:#fffbeb; font-size:13px; line-height:1.55; }
+.permit-education-zone-exception-v1 strong { flex:0 0 auto; }
+.permit-education-zone-actions-v1 { padding:18px 20px; }
+.permit-education-zone-actions-v1 h5 { margin:0 0 8px; color:#9a3412; font-size:15px; }
+.permit-education-zone-actions-v1 > div { margin-top:13px; padding:12px 14px; border-radius:10px; background:#fff7ed; }
+.permit-education-zone-actions-v1 > div strong { color:#9a3412; font-size:13px; }
+.permit-education-zone-actions-v1 > div p { margin:5px 0 0; color:#4b5563; font-size:13px; line-height:1.55; }
+.permit-education-zone-card-v1 > footer { padding:12px 20px; color:#7c2d12; background:#fffaf5; border-top:1px solid #fed7aa; font-size:12px; font-weight:700; }
 .permit-broker-grid-v2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px; }
 .permit-broker-grid-v2 > article,.permit-broker-section-v2,.permit-broker-footer-v2 { position:relative; padding:20px; border:1px solid #e4ddf2; border-radius:15px; background:#fff; }
 .permit-broker-grid-v2 > article > b { position:absolute; top:17px; right:18px; display:grid; width:28px; height:28px; place-items:center; border-radius:50%; color:#fff; background:#7c3aed; font-size:13px; }
@@ -1493,6 +1515,7 @@ body.permit-diagnosis-open-v1 {
   .permit-broker-check-columns-v2 { grid-template-columns:1fr; }
   .permit-broker-departments-v2 { grid-template-columns:1fr; }
   .permit-administration-card-v1 { grid-template-columns:1fr; }
+  .permit-education-zone-grid-v1 { grid-template-columns:1fr; }
   .permit-administration-notice-v1 { grid-column:auto; }
   .permit-wastewater-guide-v1 { align-items:flex-start; flex-direction:column; gap:5px; }
   .permit-wastewater-inputs-v1,.permit-wastewater-result-v1 { grid-template-columns:1fr; }

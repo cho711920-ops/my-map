@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "ruleVersion": "2026-07-28-pcroom-v1",
-  "verifiedAt": "2026-07-28",
+  "ruleVersion": "2026-07-29-pcroom-v2",
+  "verifiedAt": "2026-07-29",
   "industryId": "internet-computer-game",
   "officialName": "인터넷컴퓨터게임시설제공업",
   "commonName": "PC방",
@@ -10,6 +10,30 @@
     "underThreshold": "같은 건축물 내 관련 용도 바닥면적 합계 500㎡ 미만: 제2종 근린생활시설",
     "atOrOverThreshold": "500㎡ 이상: 판매시설 해당 여부 및 용도변경 절차 검토",
     "important": "전용면적만으로 판정하지 않고 같은 건축물의 관련 용도 합계를 확인해야 합니다."
+  },
+  "educationEnvironment": {
+    "title": "교육환경보호구역 50m·200m 사전확인",
+    "absoluteZone": {
+      "label": "절대보호구역",
+      "distance": "학교 출입문부터 직선거리 50m",
+      "result": "인터넷컴퓨터게임시설제공업 설치 불가",
+      "note": "학교설립예정지는 학교 경계부터 50m입니다. 상대보호구역 심의 예외를 적용할 수 없습니다."
+    },
+    "relativeZone": {
+      "label": "상대보호구역",
+      "distance": "학교 경계부터 직선거리 200m 중 절대보호구역 제외",
+      "result": "교육지원청 심의·인정 전에는 설치 불가",
+      "note": "지역교육환경보호위원회 심의를 거쳐 학습과 교육환경에 나쁜 영향을 주지 않는다고 인정받은 경우에만 가능합니다."
+    },
+    "schoolExceptions": "인터넷컴퓨터게임시설제공업 제한은 유치원 및 대학교 등 고등교육법상 학교의 교육환경보호구역에는 적용되지 않습니다. 초·중·고 및 그 밖의 적용 학교는 반드시 확인합니다.",
+    "brokerChecks": [
+      "교육환경정보시스템 또는 관할 교육지원청에서 해당 주소의 보호구역 포함 여부와 대상 학교 종류 확인",
+      "지도상 대략적인 거리만 믿지 말고 학교 출입문·학교 경계 기준의 공식 구역 확인",
+      "상대보호구역이면 계약 전에 심의 필요 여부·신청 주체·처리기간·필요서류 확인",
+      "심의 대상이면 인정 결과를 받기 전 무조건 계약하지 말고 불인정 시 계약 해제·계약금 반환 특약 협의"
+    ],
+    "contactQuestion": "이 주소에서 인터넷컴퓨터게임시설제공업을 등록하려고 합니다. 어느 학교의 절대·상대보호구역에 해당하는지, 학교 종류상 법 적용 대상인지, 상대보호구역 심의가 필요한지와 신청 절차를 확인해 주세요.",
+    "sourceIds": ["education-8", "education-9"]
   },
   "generalProcess": [
     "운영 형태와 공식 업종 확정",
@@ -33,10 +57,16 @@
       "url": "https://law.go.kr/flDownload.do?bylClsCd=110201&flSeq=125139207&gubun="
     },
     {
+      "id": "education-8",
+      "title": "교육환경 보호에 관한 법률 제8조",
+      "summary": "절대보호구역 50m와 상대보호구역 200m의 거리 및 측정 기준",
+      "url": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029599041"
+    },
+    {
       "id": "education-9",
       "title": "교육환경 보호에 관한 법률 제9조",
       "summary": "교육환경보호구역 내 게임제공업 관련 제한과 상대보호구역 심의",
-      "url": "https://law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1010088785"
+      "url": "https://www.law.go.kr/LSW/LsiJoLinkP.do?docType=JO&joNo=000900000&languageType=KO&lsNm=%EA%B5%90%EC%9C%A1%ED%99%98%EA%B2%BD+%EB%B3%B4%ED%98%B8%EC%97%90+%EA%B4%80%ED%95%9C+%EB%B2%95%EB%A5%A0&paras=1"
     },
     {
       "id": "multiuse-2",
@@ -76,7 +106,7 @@
       "id": "location",
       "title": "입지·교육환경",
       "checks": [
-        {"id":"education-zone","label":"교육환경보호구역 해당 여부","note":"주소 조회 후 절대·상대보호구역 및 심의 필요 여부를 구분합니다.","severity":"critical","sourceIds":["education-9"]},
+        {"id":"education-zone","label":"교육환경보호구역 50m·200m 해당 여부","note":"절대구역은 설치 불가, 상대구역은 교육지원청 심의·인정 전 설치 불가로 구분합니다. 유치원·대학교 예외와 대상 학교 종류도 확인합니다.","severity":"critical","sourceIds":["education-8","education-9"]},
         {"id":"land-restriction","label":"용도지역·지구단위계획·행위제한","note":"토지이용 공공데이터와 관할 도시계획부서 확인이 필요합니다.","severity":"critical","sourceIds":[]}
       ]
     },

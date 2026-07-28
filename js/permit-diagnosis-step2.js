@@ -160,6 +160,9 @@
     if (rule.industryId === "general-restaurant" || rule.industryId === "rest-restaurant") {
       clauses.push("냄새·연기·소음 민원 및 음식물쓰레기 배출 장소, 정화조·하수 용량 부족 시 공사비 부담 주체를 명시");
     }
+    if (rule.industryId === "internet-computer-game") {
+      clauses.push("교육환경보호구역 확인 및 상대보호구역 심의가 필요한 경우, 불인정 시 계약 해제·계약금 반환과 심의 지연 시 잔금 일정을 명시");
+    }
     return clauses;
   }
 
@@ -232,6 +235,34 @@
       '</section>';
   }
 
+  function renderEducationEnvironmentCard(rule) {
+    var education = rule && rule.educationEnvironment;
+    if (!education) return "";
+    var absoluteZone = education.absoluteZone || {};
+    var relativeZone = education.relativeZone || {};
+
+    return '<section class="permit-education-zone-card-v1">' +
+      '<header><div><small>PC방 계약 전 필수 입지 확인</small><h4>' +
+        escapeHtml(education.title) + '</h4></div><span>핵심 제한</span></header>' +
+      '<div class="permit-education-zone-grid-v1">' +
+        '<article data-zone="absolute"><strong>' + escapeHtml(absoluteZone.label) + '</strong>' +
+          '<b>' + escapeHtml(absoluteZone.distance) + '</b>' +
+          '<em>' + escapeHtml(absoluteZone.result) + '</em>' +
+          '<p>' + escapeHtml(absoluteZone.note) + '</p></article>' +
+        '<article data-zone="relative"><strong>' + escapeHtml(relativeZone.label) + '</strong>' +
+          '<b>' + escapeHtml(relativeZone.distance) + '</b>' +
+          '<em>' + escapeHtml(relativeZone.result) + '</em>' +
+          '<p>' + escapeHtml(relativeZone.note) + '</p></article>' +
+      '</div>' +
+      '<div class="permit-education-zone-exception-v1"><strong>학교 종류 예외</strong><span>' +
+        escapeHtml(education.schoolExceptions) + '</span></div>' +
+      '<div class="permit-education-zone-actions-v1"><h5>중개사가 계약 전에 할 일</h5>' +
+        list(education.brokerChecks) +
+        '<div><strong>교육지원청 질문</strong><p>' + escapeHtml(education.contactQuestion) + '</p></div></div>' +
+      '<footer>지도 거리는 사전 참고용입니다. 최종 구역·심의 여부는 관할 교육지원청의 공식 확인 결과를 기준으로 합니다.</footer>' +
+    '</section>';
+  }
+
   function renderBrokerGuide(rule) {
     var industry = group(rule, "industry");
     var building = group(rule, "building");
@@ -254,6 +285,7 @@
       '<div class="permit-broker-alert-v2"><strong>중개사가 먼저 할 일</strong>' +
         ' 고객의 실제 영업방식을 확정한 뒤, 그 업종에 맞는 용도의 매물만 찾고 시설공사 가능 여부를 계약 전에 확인합니다.</div>' +
       renderAdministrationCard(rule) +
+      renderEducationEnvironmentCard(rule) +
 
       '<div class="permit-broker-grid-v2">' +
         '<article><b>1</b><h4>고객에게 먼저 물어볼 것</h4>' +
@@ -431,6 +463,7 @@
 
   global.PermitDiagnosisStep2V1 = {
     renderBrokerGuide: renderBrokerGuide,
+    renderEducationEnvironmentCard: renderEducationEnvironmentCard,
     renderChecklist: renderChecklist,
     departmentGuide: departmentGuide,
     contractGuide: contractGuide,
