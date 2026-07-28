@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-procedure-v1",
+  "verifiedAt": "2026-07-29",
+  "procedures": {
+    "NO_CHANGE": {
+      "label": "변경 불필요 가능",
+      "status": "GREEN",
+      "description": "현재 대장 용도와 목표 용도가 일치하거나 법령상 별도 기재변경 예외에 해당할 가능성이 있습니다."
+    },
+    "LEDGER_CHANGE": {
+      "label": "건축물대장 기재내용 변경 검토",
+      "status": "YELLOW",
+      "description": "같은 시설군 안의 용도변경으로 기재내용 변경 신청 대상인지 확인합니다."
+    },
+    "REPORT": {
+      "label": "용도변경 신고 검토",
+      "status": "ORANGE",
+      "description": "현재 시설군에서 하위 시설군으로 변경하는 경우에 해당하는지 관할 건축부서에 확인합니다."
+    },
+    "PERMIT": {
+      "label": "용도변경 허가 검토",
+      "status": "ORANGE",
+      "description": "현재 시설군에서 상위 시설군으로 변경하는 경우에 해당하는지 관할 건축부서에 확인합니다."
+    },
+    "ARCHITECT": {
+      "label": "건축사 검토 필요",
+      "status": "ORANGE",
+      "description": "면적·대수선·도면·피난·주차 조건을 포함해 건축사 검토가 필요합니다."
+    },
+    "UNDETERMINED": {
+      "label": "자동판정 불가",
+      "status": "YELLOW",
+      "description": "현재 층·호실 용도 또는 동일 건물 면적 합계가 확인되지 않아 절차를 확정할 수 없습니다."
+    },
+    "DIFFICULT": {
+      "label": "현재 자료상 입점 곤란",
+      "status": "RED",
+      "description": "용도지역·위반건축물·구조 등 핵심 제한이 확인된 경우 관할 기관의 사전 확인 없이는 진행하기 어렵습니다."
+    }
+  },
+  "exceptions": [
+    {
+      "id": "same-appendix-item",
+      "fromUseTypeIds": ["neighborhood-2"],
+      "toUseTypeIds": ["neighborhood-2"],
+      "procedure": "NO_CHANGE",
+      "note": "건축법 시행령 제14조제4항제1호의 같은 별표 1 호 내부 변경 검토"
+    },
+    {
+      "id": "neighborhood-mutual",
+      "fromUseTypeIds": ["neighborhood-1","neighborhood-2"],
+      "toUseTypeIds": ["neighborhood-1","neighborhood-2"],
+      "procedure": "NO_CHANGE",
+      "note": "국토계획법 등 관계 법령의 용도제한에 적합한 범위에서 제1종·제2종 근린생활시설 상호 변경"
+    }
+  ],
+  "architectReview": {
+    "permitAreaSquareMeters": 500,
+    "note": "허가 대상 용도변경 부분이 500㎡ 이상이면 건축법 제19조제6항에 따른 설계자 검토 대상 여부를 확인합니다."
+  },
+  "sources": [
+    {
+      "id": "building-act-19",
+      "title": "건축법 제19조",
+      "summary": "시설군 상향은 허가, 하향은 신고, 같은 시설군은 기재내용 변경을 기본으로 규정",
+      "url": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1026442229"
+    },
+    {
+      "id": "building-decree-14",
+      "title": "건축법 시행령 제14조",
+      "summary": "시설군별 세부 용도와 제1종·제2종 근린생활시설 상호 변경 예외",
+      "url": "https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1028691345"
+    },
+    {
+      "id": "building-decree-appendix-1",
+      "title": "건축법 시행령 별표 1",
+      "summary": "인터넷컴퓨터게임시설제공업소의 500㎡ 미만 제2종 근린생활시설 기준",
+      "url": "https://law.go.kr/flDownload.do?bylClsCd=110201&flSeq=125139207&gubun="
+    }
+  ],
+  "disclaimer": "이 결과는 공식 공공데이터와 구조화된 법령 규칙에 따른 사전진단입니다. 최종 용도변경·허가·신고·등록 가능 여부는 관할 구청과 관계기관이 판단합니다."
+}

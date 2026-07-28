@@ -739,6 +739,186 @@ body.permit-diagnosis-open-v1 {
   margin-bottom: 2px;
 }
 
+.permit-step4-v1 {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid #c4b5fd;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.permit-step4-head-v1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 15px;
+  color: #fff;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+}
+
+.permit-step4-head-v1 h4,
+.permit-step4-head-v1 p {
+  margin: 0;
+}
+
+.permit-step4-head-v1 h4 {
+  font-size: 16px;
+}
+
+.permit-step4-head-v1 p {
+  margin-top: 4px;
+  color: rgba(255,255,255,.82);
+  font-size: 10px;
+}
+
+.permit-step4-head-v1 > span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #4c1d95;
+  background: #f3e8ff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.permit-step4-head-v1 > span[data-status="GREEN"] {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.permit-step4-head-v1 > span[data-status="ORANGE"] {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.permit-step4-head-v1 > span[data-status="RED"] {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.permit-step4-flow-v1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 7px;
+  padding: 13px;
+  background: #faf9fd;
+}
+
+.permit-step4-flow-v1 > div {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid #ebe7f4;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.permit-step4-flow-v1 > b {
+  align-self: center;
+  color: #8b5cf6;
+  text-align: center;
+}
+
+.permit-step4-flow-v1 small,
+.permit-step4-flow-v1 strong,
+.permit-step4-flow-v1 em {
+  display: block;
+}
+
+.permit-step4-flow-v1 small {
+  color: #797184;
+  font-size: 10px;
+}
+
+.permit-step4-flow-v1 strong {
+  margin-top: 4px;
+  color: #342d45;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.permit-step4-flow-v1 em {
+  margin-top: 5px;
+  color: #6d647b;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.permit-step4-flow-v1 .procedure {
+  border-color: #d8b4fe;
+  background: #faf5ff;
+}
+
+.permit-step4-reason-v1,
+.permit-step4-risks-v1,
+.permit-step4-sources-v1 {
+  margin: 0 13px 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  color: #51475f;
+  background: #f8f6fb;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.permit-step4-reason-v1 strong,
+.permit-step4-risks-v1 > strong {
+  margin-right: 7px;
+  color: #4c1d95;
+}
+
+.permit-step4-risks-v1 ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.permit-step4-branches-v1 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 13px 12px;
+}
+
+.permit-step4-branches-v1 > div {
+  padding: 11px 12px;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  background: #faf9ff;
+}
+
+.permit-step4-branches-v1 small,
+.permit-step4-branches-v1 strong,
+.permit-step4-branches-v1 span {
+  display: block;
+}
+
+.permit-step4-branches-v1 small {
+  color: #6d647b;
+  font-size: 10px;
+}
+
+.permit-step4-branches-v1 strong {
+  margin-top: 3px;
+  color: #342d45;
+  font-size: 12px;
+}
+
+.permit-step4-branches-v1 span {
+  margin-top: 5px;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.permit-step4-sources-v1 {
+  margin-bottom: 0;
+  border-radius: 0;
+  border-top: 1px solid #ebe7f4;
+  background: #fff;
+  font-size: 10px;
+}
+
 @media (min-width: 769px) and (max-width: 1120px) {
   .permit-diagnosis-dialog-v1 {
     width: 95vw;

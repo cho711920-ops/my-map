@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-building-use-v1",
+  "verifiedAt": "2026-07-29",
+  "facilityGroups": [
+    {"id":"automobile","order":1,"label":"자동차 관련 시설군","patterns":["자동차 관련 시설"]},
+    {"id":"industrial","order":2,"label":"산업 등 시설군","patterns":["운수시설","창고시설","공장","위험물저장","위험물 저장","자원순환","묘지 관련","장례시설"]},
+    {"id":"telecom","order":3,"label":"전기통신시설군","patterns":["방송통신시설","발전시설"]},
+    {"id":"culture","order":4,"label":"문화집회시설군","patterns":["문화 및 집회시설","종교시설","위락시설","관광휴게시설"]},
+    {"id":"business","order":5,"label":"영업시설군","patterns":["판매시설","운동시설","숙박시설","다중생활시설"]},
+    {"id":"education","order":6,"label":"교육 및 복지시설군","patterns":["의료시설","교육연구시설","노유자시설","수련시설","야영장 시설"]},
+    {"id":"neighborhood","order":7,"label":"근린생활시설군","patterns":["제1종 근린생활시설","제1종근린생활시설","제2종 근린생활시설","제2종근린생활시설"]},
+    {"id":"residential","order":8,"label":"주거업무시설군","patterns":["단독주택","공동주택","업무시설","교정시설","국방·군사시설","국방군사시설"]},
+    {"id":"other","order":9,"label":"그 밖의 시설군","patterns":["동물 및 식물 관련 시설"]}
+  ],
+  "useTypes": [
+    {"id":"neighborhood-1","label":"제1종 근린생활시설","groupId":"neighborhood","patterns":["제1종 근린생활시설","제1종근린생활시설"]},
+    {"id":"neighborhood-2","label":"제2종 근린생활시설","groupId":"neighborhood","patterns":["제2종 근린생활시설","제2종근린생활시설"]},
+    {"id":"sales","label":"판매시설","groupId":"business","patterns":["판매시설"]},
+    {"id":"detached-house","label":"단독주택","groupId":"residential","patterns":["단독주택"]},
+    {"id":"apartment-house","label":"공동주택","groupId":"residential","patterns":["공동주택"]},
+    {"id":"office","label":"업무시설","groupId":"residential","patterns":["업무시설"]}
+  ],
+  "industryTargets": {
+    "internet-computer-game": {
+      "thresholdMetric": "sameBuildingRelevantUseArea",
+      "thresholdSquareMeters": 500,
+      "below": {
+        "useTypeId": "neighborhood-2",
+        "label": "제2종 근린생활시설",
+        "condition": "같은 건축물에서 해당 용도로 쓰는 바닥면적 합계 500㎡ 미만"
+      },
+      "atOrAbove": {
+        "useTypeId": "sales",
+        "label": "판매시설 검토",
+        "condition": "같은 건축물에서 해당 용도로 쓰는 바닥면적 합계 500㎡ 이상"
+      },
+      "doNotInferFromExclusiveArea": true
+    }
+  }
+}
