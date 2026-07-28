@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.4.1";
+  var VERSION = "5.4.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -1867,7 +1867,17 @@
     }).join(" ");
   }
 
-  function finExactAddressText(fallbackAddress, keyAddress, basicAddress) {
+  function finJibunFromPnu(value) {
+    var pnu = clean(value).replace(/\D/g, "");
+    if (!/^\d{19}$/.test(pnu)) return "";
+    var mountain = pnu.charAt(10) === "2" ? "산 " : "";
+    var main = parseInt(pnu.slice(11, 15), 10);
+    var sub = parseInt(pnu.slice(15, 19), 10);
+    if (!main) return "";
+    return mountain + main + (sub ? "-" + sub : "");
+  }
+
+  function finExactAddressText(fallbackAddress, keyAddress, basicAddress, pnu) {
     var candidates = [
       finAddressText(basicAddress),
       finAddressText(keyAddress),
@@ -1887,7 +1897,8 @@
     var basic = basicAddress && typeof basicAddress === "object" ? basicAddress : {};
     var jibun = clean(
       key.jibun || key.landNumber || key.jibunNumber || key.lotNumber ||
-      basic.jibun || basic.landNumber || basic.jibunNumber || basic.lotNumber
+      basic.jibun || basic.landNumber || basic.jibunNumber || basic.lotNumber ||
+      finJibunFromPnu(pnu)
     );
     if (!/^(?:산\s*)?\d+(?:-\d+)?$/.test(jibun)) return clean(fallbackAddress);
 
@@ -2145,7 +2156,8 @@
     var exactAddress = finExactAddressText(
       item.jibunAddress,
       keyResult.address,
-      address
+      address,
+      (keyResult.key && keyResult.key.pnu) || keyResult.pnu
     );
     var detailed = Object.assign({}, item, {
       realEstateTypeCode: realEstateType,

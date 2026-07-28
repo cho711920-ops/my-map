@@ -14,6 +14,7 @@ assert.match(source, /async function enrichNaverDetailBatch/);
 assert.match(source, /hasExactNaverJibun/);
 assert.match(source, /hasExactNaverFloorOrRoom/);
 assert.match(source, /function finExactAddressText/);
+assert.match(source, /function finJibunFromPnu/);
 assert.match(source, /keyResult\.address/);
 assert.match(source, /유형이 이미 있어도 key API를 항상 조회/);
 assert.match(source, /정확한 지번과 실제 층을 확인한 매물만 중복검사에 전달합니다/);
@@ -38,11 +39,14 @@ vm.runInContext(
     "function clean(value) { return String(value == null ? '' : value).trim(); }",
     functionSource("hasExactNaverJibun"),
     functionSource("finAddressText"),
+    functionSource("finJibunFromPnu"),
     functionSource("finExactAddressText"),
     "result = {",
     "  keyOnly: finExactAddressText('대전광역시 서구 둔산동', {jibun:'1000'}, {}),",
     "  fullKey: finExactAddressText('', {city:'대전광역시', division:'서구', sector:'둔산동', jibun:'1000-1'}, {}),",
-    "  liKey: finExactAddressText('대전광역시 유성구', {li:'봉명동', jibun:'12-3'}, {})",
+    "  liKey: finExactAddressText('대전광역시 유성구', {li:'봉명동', jibun:'12-3'}, {}),",
+    "  pnuMain: finExactAddressText('대전광역시 유성구 도안동', {}, {}, '3020012300100120003'),",
+    "  pnuMountain: finExactAddressText('대전광역시 유성구 도안동', {}, {}, '3020012300200120000')",
     "};"
   ].join("\n"),
   addressContext
@@ -50,5 +54,7 @@ vm.runInContext(
 assert.equal(addressContext.result.keyOnly, "대전광역시 서구 둔산동 1000");
 assert.equal(addressContext.result.fullKey, "대전광역시 서구 둔산동 1000-1");
 assert.equal(addressContext.result.liKey, "대전광역시 유성구 봉명동 12-3");
+assert.equal(addressContext.result.pnuMain, "대전광역시 유성구 도안동 12-3");
+assert.equal(addressContext.result.pnuMountain, "대전광역시 유성구 도안동 산 12");
 
 console.log("naver detail location tests passed");
