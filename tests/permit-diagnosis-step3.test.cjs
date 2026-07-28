@@ -57,6 +57,8 @@ assert(exact.use.includes("제2종근린생활시설"));
 
 const noGuess = adapter.selectRecord(sample, { floor: "2층", unit: "999호" });
 assert.strictEqual(noGuess.level, "층", "없는 호실을 임의 생성하거나 일치시키면 안 됩니다.");
+assert.strictEqual(adapter.sumKnown([null, null]), null, "미제공 숫자를 0으로 바꾸면 안 됩니다.");
+assert.strictEqual(adapter.sumKnown([0, 0]), 0, "공식 API의 명시적 0은 0대로 표시해야 합니다.");
 
 let checks = adapter.automaticChecks(exact, { area: "150" });
 assert.strictEqual(checks["building-ledger-use"], "YES");
@@ -83,6 +85,30 @@ assert.strictEqual(checks["education-zone"], undefined, "교육환경은 자료 
   });
   assert.strictEqual(normalized.action, "permitPublicData");
   assert.strictEqual(normalized.units.length, 1);
+  const generalDiagnosis = adapter.buildDiagnosis({
+    buildings: [{
+      mainUse: "단독주택",
+      indoorSelfParking: 0,
+      outdoorSelfParking: 0,
+      passengerElevators: 0,
+      emergencyElevators: 0,
+      floors: [],
+      zones: []
+    }],
+    units: [],
+    recordCounts: { zones: 0 }
+  }, {
+    floor: "",
+    unit: "101호"
+  }, {
+    parcel: {},
+    address: "대전 서구 탄방동 1283",
+    roadAddress: "대전 서구 유등로669번길 58"
+  });
+  assert.strictEqual(generalDiagnosis.record.level, "건물");
+  assert.strictEqual(generalDiagnosis.parking, 0);
+  assert.strictEqual(generalDiagnosis.elevators, 0);
+  assert(generalDiagnosis.scopeReason.includes("층 정보가 없어"));
   console.log("permit diagnosis step3 tests: ok");
 })().catch((error) => {
   console.error(error);

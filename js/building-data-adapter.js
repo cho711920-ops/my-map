@@ -50,6 +50,16 @@
     return exclusive || Number(unit && unit.area) || null;
   }
 
+  function sumKnown(values) {
+    var known = (values || []).filter(function (value) {
+      return value !== "" && value != null && Number.isFinite(Number(value));
+    });
+    if (!known.length) return null;
+    return known.reduce(function (sum, value) {
+      return sum + Number(value);
+    }, 0);
+  }
+
   function selectRecord(data, input) {
     var units = Array.isArray(data.units) ? data.units : [];
     var buildings = Array.isArray(data.buildings) ? data.buildings : [];
@@ -119,12 +129,24 @@
   function buildDiagnosis(data, input, addressResult) {
     var record = selectRecord(data, input);
     var building = record.building || {};
-    var parking = [
+    var parking = sumKnown([
       building.indoorMechanicalParking,
       building.outdoorMechanicalParking,
       building.indoorSelfParking,
       building.outdoorSelfParking
-    ].reduce(function (sum, value) { return sum + (Number(value) || 0); }, 0);
+    ]);
+    var elevators = sumKnown([
+      building.passengerElevators,
+      building.emergencyElevators
+    ]);
+    var scopeReason = "";
+    if (record.level === "건물" && !text(input.floor)) {
+      scopeReason = "선택 매물에 층 정보가 없어 건물 전체 자료까지만 확인했습니다. 층을 입력하면 층별 용도와 면적을 다시 조회합니다.";
+    } else if (record.level === "건물" && text(input.unit) && !(data.units || []).length) {
+      scopeReason = "일반건축물 대장에는 호실별 전유부가 없어 입력한 " + text(input.unit) + "를 직접 확인할 수 없습니다.";
+    } else if (record.level === "건물" && text(input.floor)) {
+      scopeReason = "공식 API에 입력한 층과 일치하는 층별 자료가 없어 건물 전체 자료까지만 확인했습니다.";
+    }
     return {
       input: input,
       parcel: addressResult.parcel,
@@ -134,6 +156,9 @@
       building: building,
       zones: zoneText(building),
       parking: parking,
+      elevators: elevators,
+      scopeReason: scopeReason,
+      recordCounts: data.recordCounts || {},
       queriedAt: data.queriedAt,
       source: data.source,
       sourcePage: data.sourcePage,
@@ -163,9 +188,13 @@
       });
   }
 
-  function field(label, value) {
+  function field(label, value, unknownReason) {
+    var display = value;
+    if (display === "" || display == null) {
+      display = "UNKNOWN" + (unknownReason ? " · " + unknownReason : "");
+    }
     return '<div class="permit-public-field-v1"><span>' + escapeHtml(label) + '</span><strong>' +
-      escapeHtml(value || "UNKNOWN") + '</strong></div>';
+      escapeHtml(display) + '</strong></div>';
   }
 
   function dateText(value) {
@@ -179,6 +208,12 @@
     var record = diagnosis.record || {};
     var building = diagnosis.building || {};
     var floor = record.floor == null ? "" : (record.floor < 0 ? "지하 " + Math.abs(record.floor) + "층" : record.floor + "층");
+    var areaReason = record.level === "건물"
+      ? (!text(diagnosis.input && diagnosis.input.floor) ? "층 입력 필요" : "일치 층 자료 없음")
+      : "대장 면적 미제공";
+    var zoneReason = Number(diagnosis.recordCounts && diagnosis.recordCounts.zones) === 0
+      ? "해당 주소 API 자료 없음"
+      : "건물 연결 자료 없음";
     return '<section class="permit-public-result-v1">' +
       '<header class="permit-public-result-head-v1"><div><h4>주소 기반 공공데이터</h4>' +
         '<p>' + escapeHtml(diagnosis.queriedAt || "조회 시각 미제공") +
@@ -189,16 +224,19 @@
         field("도로명주소", diagnosis.roadAddress) +
         field("대장 확인 범위", record.level + (floor ? " · " + floor : "") + (record.unit ? " · " + record.unit : "")) +
         field("현재 건축물 용도", record.use) +
-        field("확인 범위 면적", record.area ? record.area + "㎡" : "") +
+        field("확인 범위 면적", record.area != null ? record.area + "㎡" : "", areaReason) +
         field("사용승인일", dateText(building.approvalDate)) +
-        field("주차대수", diagnosis.parking ? diagnosis.parking + "대" : "") +
-        field("승강기", (Number(building.passengerElevators) || 0) + (Number(building.emergencyElevators) || 0) ?
-          ((Number(building.passengerElevators) || 0) + (Number(building.emergencyElevators) || 0)) + "대" : "") +
+        field("주차대수", diagnosis.parking != null ? diagnosis.parking + "대" : "", "공공대장 미제공") +
+        field("승강기", diagnosis.elevators != null ? diagnosis.elevators + "대" : "", "공공대장 미제공") +
         field("건축물대장 구분", building.registerType) +
         field("주용도", building.mainUse) +
-        field("용도지역·지구", diagnosis.zones) +
+        field("용도지역·지구", diagnosis.zones, zoneReason) +
         field("위반건축물", "UNKNOWN · 발급본 확인") +
       '</div>' +
+      (diagnosis.scopeReason
+        ? '<div class="permit-public-scope-notice-v1"><strong>확인 범위 안내</strong>' +
+          escapeHtml(diagnosis.scopeReason) + '</div>'
+        : '') +
       '<div class="permit-public-notices-v1"><strong>출처:</strong> ' +
         '<a href="' + escapeHtml(diagnosis.sourcePage) + '" target="_blank" rel="noopener noreferrer">' +
         escapeHtml(diagnosis.source) + '</a><br>' +
@@ -209,6 +247,7 @@
   global.PermitBuildingDataAdapterV1 = {
     normalizeRoom: normalizeRoom,
     normalizeFloor: normalizeFloor,
+    sumKnown: sumKnown,
     selectRecord: selectRecord,
     automaticChecks: automaticChecks,
     buildDiagnosis: buildDiagnosis,

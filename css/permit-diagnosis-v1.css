@@ -723,6 +723,22 @@ body.permit-diagnosis-open-v1 {
   line-height: 1.55;
 }
 
+.permit-public-scope-notice-v1 {
+  margin: 0 16px 14px;
+  padding: 11px 13px;
+  border: 1px solid #f2c56b;
+  border-radius: 12px;
+  background: #fff8e8;
+  color: #704a00;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.permit-public-scope-notice-v1 strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
 @media (min-width: 769px) and (max-width: 1120px) {
   .permit-diagnosis-dialog-v1 {
     width: 95vw;
