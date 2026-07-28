@@ -22,6 +22,8 @@ assert(ui.includes("업종 알아보기"), "기본 업종 알아보기 탭이 �
 assert(ui.includes("고객·매물에 대입"), "고객·매물 대입 탭이 필요합니다.");
 assert(ui.includes("현재 선택 매물 불러오기"), "선택 매물 불러오기가 필요합니다.");
 assert(ui.includes('id="permitPublicDataBtnV1"'), "공공데이터 조회 버튼이 필요합니다.");
+assert(ui.includes("function resetModal()"), "팝업을 다시 열 때 이전 입력과 결과를 초기화해야 합니다.");
+assert(ui.includes('new CustomEvent("permit:reset-v1")'), "하위 진단 상태도 함께 초기화해야 합니다.");
 assert(property.includes("3.305785"), "평을 제곱미터로 안전하게 변환해야 합니다.");
 assert(property.includes('(floorMatch ? "" : room)'), "층만 있는 값을 호실로 잘못 입력하면 안 됩니다.");
 assert(property.includes("getSelectedPrintItems"), "목록 체크박스로 선택한 매물도 불러와야 합니다.");

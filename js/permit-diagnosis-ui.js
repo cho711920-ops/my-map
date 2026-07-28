@@ -211,6 +211,39 @@
     };
   }
 
+  function resetModal() {
+    state.candidates = [];
+    state.selectedIndustryId = "";
+    [
+      "permitIndustryRequestV1",
+      "permitAddressV1",
+      "permitFloorV1",
+      "permitUnitV1",
+      "permitAreaV1",
+      "permitListingIdV1"
+    ].forEach(function (id) {
+      var input = byId(id);
+      if (input) input.value = "";
+    });
+    var candidates = byId("permitCandidateResultsV1");
+    if (candidates) {
+      candidates.innerHTML = '<div class="permit-candidate-empty-v1"><div>' +
+        '<strong>운영 내용을 입력해주세요.</strong><br>해석 후 공식 업종 후보가 이곳에 표시됩니다.' +
+        '</div></div>';
+    }
+    if (byId("permitIndustryDetailV1")) byId("permitIndustryDetailV1").innerHTML = "";
+    if (byId("permitApplyIndustryV1")) byId("permitApplyIndustryV1").textContent = "아직 선택하지 않음";
+    if (byId("permitLocationStatusV1")) byId("permitLocationStatusV1").textContent = "";
+    if (byId("permitPublicDataResultsV1")) byId("permitPublicDataResultsV1").innerHTML = "";
+    var queryButton = byId("permitPublicDataBtnV1");
+    if (queryButton) {
+      queryButton.disabled = false;
+      queryButton.textContent = "공공데이터 조회";
+    }
+    setTab("learn");
+    document.dispatchEvent(new CustomEvent("permit:reset-v1"));
+  }
+
   function queryPublicData() {
     var button = byId("permitPublicDataBtnV1");
     var status = byId("permitLocationStatusV1");
@@ -284,10 +317,10 @@
     buildModal();
     var modal = byId("permitDiagnosisModalV1");
     state.lastFocus = document.activeElement;
+    resetModal();
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("permit-diagnosis-open-v1");
-    setTab("learn");
     loadCatalog().catch(function () {});
     global.setTimeout(function () {
       var input = byId("permitIndustryRequestV1");
@@ -306,6 +339,7 @@
   global.PermitDiagnosisUIV1 = {
     open: openModal,
     close: closeModal,
-    setTab: setTab
+    setTab: setTab,
+    reset: resetModal
   };
 })(window, document);

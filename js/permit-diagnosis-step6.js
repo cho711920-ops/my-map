@@ -173,6 +173,17 @@
     };
   });
 
+  document.addEventListener("permit:reset-v1", function () {
+    state.industry = null;
+    state.diagnosis = null;
+    state.procedure = null;
+    state.facilityChecks = null;
+    state.diagnosisStatus = "UNKNOWN";
+    state.agencyContacts = [];
+    state.callResults = {};
+    state.loadedRecord = null;
+  });
+
   global.PermitDiagnosisStep6V1 = {
     renderPanel: renderPanel,
     buildRecord: buildRecord
