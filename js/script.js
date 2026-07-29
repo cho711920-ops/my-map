@@ -948,6 +948,15 @@ function applyFilter() {
   currentItems = filtered;
 
   drawItems(filtered);
+  var pinnedItems = typeof getPinnedClusterItemsV6515 === "function"
+    ? getPinnedClusterItemsV6515()
+    : [];
+  if (pinnedItems.length) {
+    document.getElementById("status").innerHTML = multiClusterMode
+      ? "선택 클러스터 " + (selectedGroupKeys || []).length + "개 · 매물 " + pinnedItems.length + "개"
+      : "선택 매물 " + pinnedItems.length + "개";
+    return;
+  }
   var radiusFilter = window.mapRadiusFilterV658 || null;
   document.getElementById("status").innerHTML = radiusFilter
     ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"

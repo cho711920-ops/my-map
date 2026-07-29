@@ -20,6 +20,10 @@ assert.match(
 );
 assert.match(scriptSource, /function resetFilter\(\)[\s\S]*?clearPinnedClusterSelectionV6515\(false\)/);
 assert.match(
+  scriptSource,
+  /function applyFilter\(\)[\s\S]*?getPinnedClusterItemsV6515\(\)[\s\S]*?선택 매물/
+);
+assert.match(
   operationsSource,
   /window\.showSelectedCustomerMatchesOnMap = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
@@ -28,7 +32,7 @@ assert.match(
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
 assert.match(htmlSource, /js\/map\.js\?v=6\.5\.15-cluster-selection-pin/);
-assert.match(htmlSource, /js\/script\.js\?v=6\.5\.15-cluster-selection-pin/);
+assert.match(htmlSource, /js\/script\.js\?v=6\.5\.16-cluster-selection-pin-status/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.18\.1-cluster-selection-pin/);
 
 console.log("cluster selection pin tests passed");
