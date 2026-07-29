@@ -483,12 +483,29 @@
 .review-existing-footer button{min-height:32px;padding:0 11px;border:1px solid #c81e1e;border-radius:9px;background:#fff;color:#a91515;font-size:11px;font-weight:900;cursor:pointer}
 .review-existing-footer button:disabled{opacity:.38;cursor:not-allowed}
 .review-action-buttons .condition{border-color:#e07700;background:#fff4df;color:#ae5700}
-.review-compact-values .review-value-deposit{border:1px solid #a9caff;background:#eaf3ff!important;color:#075db6;font-weight:950}
-.review-compact-values .review-value-rent{border:1px solid #ffc286;background:#fff1df!important;color:#b94e00;font-weight:950}
-.review-compact-values .review-value-area{border:1px solid #9bdcb9;background:#eafaf1!important;color:#08754a;font-weight:950}
-.review-compact-values .review-value-deposit b{color:#075db6}
-.review-compact-values .review-value-rent b{color:#b94e00}
-.review-compact-values .review-value-area b{color:#08754a}
+.review-compact-values .review-rental-values{
+  display:grid;grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;
+  padding:3px;border:1px solid #cfd8e6;border-radius:9px;background:#f7f9fc;color:#23364c
+}
+.review-compact-values .review-rental-values>span{
+  padding:4px 6px;background:transparent!important;font-weight:950
+}
+.review-match-number{
+  display:inline-flex;padding:2px 6px;border-radius:999px;background:#eef2f7;color:#32455c;
+  font-size:10px;font-weight:950;vertical-align:1px
+}
+.review-match-group-0 .review-rental-values{border-color:#8bbcff;background:#eaf4ff;color:#075db6}
+.review-match-group-1 .review-rental-values{border-color:#ffbd76;background:#fff2e2;color:#a94b00}
+.review-match-group-2 .review-rental-values{border-color:#86d7ac;background:#eaf9f1;color:#08754a}
+.review-match-group-3 .review-rental-values{border-color:#c8a5ff;background:#f4edff;color:#6330aa}
+.review-match-ambiguous .review-rental-values{border:2px dashed #d29a18;background:#fff8df;color:#8a5b00}
+.review-match-different .review-rental-values{border-color:#cfd8e6;background:#f7f9fc;color:#33475f}
+.review-item-compact.review-match-group-0{border-left:5px solid #4d9aff}
+.review-item-compact.review-match-group-1{border-left:5px solid #f59a3d}
+.review-item-compact.review-match-group-2{border-left:5px solid #31a66d}
+.review-item-compact.review-match-group-3{border-left:5px solid #9061d8}
+.review-item-compact.review-match-ambiguous{border-left:5px dashed #d29a18}
+.review-item-compact.review-match-different{border-left:5px solid #aeb8c5}
 
 @media(min-width:769px){
   #operationsReviewsPanel .review-candidate-compact{

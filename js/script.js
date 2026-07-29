@@ -2048,6 +2048,7 @@ function addListItem(item, appendTarget) {
   }
 
   div.setAttribute("data-listing-key", item.key);
+  div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   div.innerHTML =
     '<div class="item-card-grid-v650">' +
       contactRail +

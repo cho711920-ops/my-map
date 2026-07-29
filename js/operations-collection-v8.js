@@ -2,7 +2,7 @@
   "use strict";
 
   var originalSwitch = window.switchOperationsTab;
-  var REVIEW_CACHE_KEY = "js_operations_review_cache_v1";
+  var REVIEW_CACHE_KEY = "js_operations_review_cache_v2";
   var REVIEW_CACHE_MAX_AGE = 10 * 60 * 1000;
   var extraState = {
     tab: "",
@@ -181,12 +181,43 @@
     '</div>';
   }
   function compactValues(item) {
-    return '<span class="review-value-deposit"><b>보</b> ' + escape(item.deposit || "-") + '</span>' +
-      '<span class="review-value-rent"><b>월</b> ' + escape(item.rent || "-") + '</span>' +
-      '<span class="review-value-area"><b>평</b> ' + escape(item.area || "-") + '</span>' +
+    return '<span class="review-rental-values">' +
+      '<span><b>보</b> ' + escape(item.deposit || "-") + '</span>' +
+      '<span><b>월</b> ' + escape(item.rent || "-") + '</span>' +
+      '<span><b>평</b> ' + escape(item.area || "-") + '</span></span>' +
       '<span><b>층·호</b> ' + escape(item.room || "-") + '</span>' +
       '<span><b>구분</b> ' + escape(item.category || "-") + '</span>' +
       '<span><b>출처</b> ' + escape(item.source || "-") + '</span>';
+  }
+  function candidateGroupIndex(candidates, propertyId) {
+    return Math.max(0, candidates.map(function(candidate) {
+      return text(candidate.propertyId);
+    }).indexOf(text(propertyId)));
+  }
+  function itemMatchInfo(item, candidates) {
+    var safeIds = (item.safeCandidateIds || []).map(text).filter(Boolean);
+    if (!safeIds.length) return {className: "review-match-different", label: "조건 다름 · 별도 확인"};
+    if (safeIds.length > 1) {
+      return {className: "review-match-ambiguous", label: "복수 후보 · 대표를 직접 선택"};
+    }
+    var matchedId = safeIds[0];
+    var index = candidateGroupIndex(candidates, matchedId);
+    var candidate = candidates[index] || {};
+    var areaDiff = Math.abs(number(candidate.area) - number(item.area));
+    var exact = areaDiff < 0.0001;
+    return {
+      className: "review-match-group-" + (index % 4),
+      label: "기존 " + (index + 1) + "번과 " +
+        (exact ? "임대조건 일치" : "유사조건 · 평수차 " + areaDiff.toFixed(1))
+    };
+  }
+  function selectedItemsMatchMaster(group) {
+    var masterId = text(extraState.selectedMasterId);
+    if (!masterId) return false;
+    var items = selectedReviewItems(group);
+    return !!items.length && items.every(function(item) {
+      return (item.safeCandidateIds || []).map(text).indexOf(masterId) >= 0;
+    });
   }
   function renderReviews() {
     var panel = document.getElementById("operationsReviewsPanel");
@@ -243,6 +274,7 @@
       duplicateSelection[propertyId] = true;
     });
     var selectedMasterId = text(extraState.selectedMasterId);
+    var safeMerge = selectedItemsMatchMaster(group);
     return '<div class="review-summary"><div><h3>' + escape(group.address || "주소 확인 필요") + '</h3><p>' +
       escape(group.room || "호실 없음") + ' · 중복후보 ' + candidates.length + '개 · 수집원본 ' +
       group.items.length + '개</p></div><span class="review-risk">' + escape(group.risk) + ' 위험 · ' +
@@ -252,11 +284,12 @@
           candidates.length + '건</strong></div>' +
         '<small>대표 1건을 선택해야 통합됩니다. 다른 기존매물은 별도로 중복 정리합니다.</small>' +
       '</header><div class="review-existing-list">' +
-      (candidates.length ? candidates.map(function(candidate) {
+      (candidates.length ? candidates.map(function(candidate, candidateIndex) {
         var propertyId = text(candidate.propertyId);
         var isMaster = propertyId === selectedMasterId;
         var encodedPropertyId = encodeURIComponent(text(candidate.propertyId));
-        return '<article class="review-candidate review-candidate-compact' +
+        return '<article class="review-candidate review-candidate-compact review-match-group-' +
+          (candidateIndex % 4) +
           (isMaster ? ' selected-master' : '') + '">' +
           '<div class="review-master-controls">' +
             '<label><input type="radio" name="reviewMasterTarget" value="' + escape(propertyId) + '"' +
@@ -269,7 +302,8 @@
                 escape(propertyId) + '\', this.checked)"><span>중복정리</span></label>'
               : '') +
           '</div>' +
-          '<div class="review-compact-main"><header><h4>' +
+          '<div class="review-compact-main"><header><h4><span class="review-match-number">기존 ' +
+            (candidateIndex + 1) + '</span> ' +
             escape(candidate.buildingName || "기존 대표매물") +
           '</h4><span>' + escape(candidate.source) + '</span></header>' +
           '<p>' + escape(candidate.address) + ' ' + escape(candidate.room) +
@@ -301,13 +335,15 @@
       '</header><div id="reviewNewItemList" class="review-new-list">' +
       group.items.map(function(entry, index) {
         var selected = !!selectedIds[text(entry.reviewId)];
-        return '<label class="review-item review-item-select review-item-compact' +
+        var matchInfo = itemMatchInfo(entry, candidates);
+        return '<label class="review-item review-item-select review-item-compact ' +
+          matchInfo.className +
           (selected ? ' selected' : '') + '" data-review-id="' + escape(entry.reviewId) + '">' +
           '<input class="review-item-checkbox" type="checkbox"' + (selected ? ' checked' : '') +
           ' onchange="toggleReviewItemSelection(\'' + escape(entry.reviewId) + '\', this.checked)">' +
           '<span class="review-item-number">' + (index + 1) + '</span>' +
           '<span class="review-compact-main"><span class="review-compact-title"><strong>' +
-            (selected ? '선택한 신규매물' : '같은 묶음 신규매물') +
+            escape(matchInfo.label) +
           '</strong><em>' + escape(entry.type) + '</em></span><span class="review-compact-address">' +
             escape(entry.address) + ' ' + escape(entry.room) + '</span><span class="review-compact-note">' +
             escape(entry.comparison || entry.memo || "비교 메모 없음") + '</span></span>' +
@@ -316,7 +352,8 @@
       '</div></section><div class="review-action-buttons">' +
       '<strong>선택 <b>' + selectedCount + '</b>건</strong>' +
       '<button class="merge" type="button" onclick="decideCurrentReview(\'merge\')"' +
-        (!selectedCount || !selectedMasterId ? ' disabled' : '') + '>조건유지 통합</button>' +
+        (!selectedCount || !selectedMasterId || !safeMerge ? ' disabled' : '') +
+        '>조건유지 통합</button>' +
       '<button class="condition" type="button" onclick="decideCurrentReview(\'condition\')"' +
         (selectedCount !== 1 || !selectedMasterId ? ' disabled' : '') + '>신규조건 갱신</button>' +
       '<button class="create" type="button" onclick="decideCurrentReview(\'create\')"' +
@@ -457,6 +494,15 @@
     if (checked) selected.push(reviewId);
     extraState.selectedReviewIds = selected;
     extraState.selectedReviewId = selected[0] || "";
+    if (checked) {
+      var group = selectedGroup();
+      var item = group && group.items.filter(function(entry) {
+        return text(entry.reviewId) === reviewId;
+      })[0];
+      if (item && (item.safeCandidateIds || []).length === 1) {
+        extraState.selectedMasterId = text(item.safeCandidateIds[0]);
+      }
+    }
     var list = document.getElementById("reviewNewItemList");
     renderReviewDetailOnly(list ? list.scrollTop : 0);
   };
@@ -540,6 +586,10 @@
     if (!info) return;
     if ((action === "merge" || action === "condition") && !text(extraState.selectedMasterId)) {
       message("통합할 대표 기존매물을 먼저 선택해 주세요.", "error");
+      return;
+    }
+    if (action === "merge" && !selectedItemsMatchMaster(group)) {
+      message("선택한 신규매물이 모두 같은 기존매물의 안전 중복조건과 일치해야 합니다.", "error");
       return;
     }
     if (action === "condition" && selectedCount !== 1) {
