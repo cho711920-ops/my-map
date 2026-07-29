@@ -24,6 +24,7 @@ assert.match(css, /review-match-group-0/);
 assert.match(css, /review-match-ambiguous/);
 assert.match(css, /review-match-different/);
 assert.match(css, /review-rental-values/);
+assert.match(css, /review-compact-values>span:not\(\.review-rental-values\)/);
 assert.match(css, /max-width:1366px/);
 assert.match(css, /env\(safe-area-inset-bottom\)/);
 assert.match(css, /height:auto/);

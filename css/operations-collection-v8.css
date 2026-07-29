@@ -490,6 +490,9 @@
 .review-compact-values .review-rental-values>span{
   padding:4px 6px;background:transparent!important;font-weight:950
 }
+.review-existing-panel .review-compact-values>span:not(.review-rental-values){
+  background:#f3f6fa!important;color:#33475f
+}
 .review-match-number{
   display:inline-flex;padding:2px 6px;border-radius:999px;background:#eef2f7;color:#32455c;
   font-size:10px;font-weight:950;vertical-align:1px
