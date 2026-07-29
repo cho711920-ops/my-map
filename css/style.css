@@ -6153,12 +6153,69 @@ body,
   margin-left: auto;
 }
 
-/* 고객매칭 지도목록에서는 메모를 상태버튼 바로 뒤에 둬 태블릿에서도 항상 보이게 합니다. */
-.item-compact-actions-v650 .customer-match-inline-actions + .item-memo-toggle {
+/* 고객매칭 지도목록은 모든 작업버튼을 한 줄 너비 안에서 압축하고 메모를 맨 뒤에 유지합니다. */
+.customer-match-card-actions-v653 {
+  gap: 3px !important;
+  overflow-x: hidden !important;
+}
+
+.customer-match-card-actions-v653 .customer-match-inline-actions {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  gap: 3px !important;
+}
+
+.customer-match-card-actions-v653 .customer-match-inline-actions button {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.customer-match-card-actions-v653 .customer-match-inline-badge {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-match-card-actions-v653 .item-action-left {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  gap: 3px !important;
+}
+
+.customer-match-card-actions-v653 .item-action-left > button {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+
+.customer-match-card-actions-v653 .item-memo-toggle {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
   margin-left: 0;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
   border-color: #c9a7f5;
   background: #f4ecff;
   color: #6321ad;
+}
+
+@media (max-width: 1199px) {
+  .customer-match-card-actions-v653 .customer-match-inline-actions button,
+  .customer-match-card-actions-v653 .item-action-left > button,
+  .customer-match-card-actions-v653 .item-memo-toggle {
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+    font-size: 10px !important;
+  }
+
+  .customer-match-card-actions-v653 .customer-match-inline-badge {
+    padding-left: 3px !important;
+    padding-right: 3px !important;
+    font-size: 8.5px !important;
+  }
 }
 
 @media (max-width: 520px) {

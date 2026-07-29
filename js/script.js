@@ -2094,9 +2094,9 @@ function addListItem(item, appendTarget) {
             : '') +
         '</div>' +
 
-        '<div class="item-action-row item-compact-actions-v650">' +
+        '<div class="item-action-row item-compact-actions-v650' +
+          (customerMatchControls ? ' customer-match-card-actions-v653' : '') + '">' +
           customerMatchControls +
-          (customerMatchControls ? memoToggleButton : '') +
           '<div class="item-action-left">' +
             '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
@@ -2110,7 +2110,7 @@ function addListItem(item, appendTarget) {
             '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
           '</div>' +
-          (!customerMatchControls ? memoToggleButton : '') +
+          memoToggleButton +
         '</div>' +
       '</div>' +
     '</div>' +
