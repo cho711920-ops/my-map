@@ -2037,6 +2037,15 @@ function closeAiSidePanel() {
   aiSidePanelCurrentKey = "";
   JS_V40_LAST_SIG = "";
 
+  if (typeof getPinnedClusterItemsV6515 === "function") {
+    var pinnedItemsAfterAiCloseV6518 = getPinnedClusterItemsV6515();
+    var mapStatusAfterAiCloseV6518 = document.getElementById("status");
+    if (mapStatusAfterAiCloseV6518 && pinnedItemsAfterAiCloseV6518.length) {
+      mapStatusAfterAiCloseV6518.textContent =
+        "선택 매물 " + pinnedItemsAfterAiCloseV6518.length + "개";
+    }
+  }
+
   /*
    * 닫기 버튼은 AI 패널만 닫습니다.
    * 지도 마커와 매물 선택 상태는 그대로 유지합니다.

@@ -26,6 +26,10 @@ assert.match(
   /function relayoutMapAfterAiPanel\(\) \{[\s\S]*?preservePinnedClusterSelectionDuringRelayoutV6517\(1500\)[\s\S]*?map\.relayout\(\)/
 );
 assert.match(
+  analysisSource,
+  /function closeAiSidePanel\(\) \{[\s\S]*?getPinnedClusterItemsV6515\(\)[\s\S]*?선택 매물/
+);
+assert.match(
   mapSource,
   /addListener\(map, "dragstart"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
@@ -33,7 +37,7 @@ assert.match(
   mapSource,
   /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
-assert.match(htmlSource, /analysis\.js\?v=6\.3\.39-smart-card-cluster-pin/);
+assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
 assert.match(htmlSource, /map\.js\?v=6\.5\.18-smart-card-cluster-pin/);
 
 console.log("smart card cluster pin tests passed");
