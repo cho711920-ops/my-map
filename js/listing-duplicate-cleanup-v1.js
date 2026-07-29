@@ -1,7 +1,7 @@
 (function() {
   "use strict";
 
-  var state = { active: false, primaryId: "", duplicateIds: [] };
+  var state = { active: false, primaryId: "", duplicateIds: [], manualOverride: false };
   var originalAddListItem = window.addListItem;
 
   function text(value) { return String(value == null ? "" : value).trim(); }
@@ -46,6 +46,7 @@
     state.active = !!active;
     state.primaryId = "";
     state.duplicateIds = [];
+    state.manualOverride = false;
     document.body.classList.toggle("listing-duplicate-cleanup-mode", state.active);
     var button = document.getElementById("listingDuplicateCleanupButton");
     if (button) button.classList.toggle("on", state.active);
@@ -130,7 +131,15 @@
       '<ul><li>대표매물의 임대조건은 그대로 유지됩니다.</li>' +
       '<li>중복매물의 출처·링크·연락처는 대표매물로 이전됩니다.</li>' +
       '<li>주소·층/호실·보증금·월세가 같고 평수 차 1평 미만일 때만 서버가 허용합니다.</li>' +
-      '<li>101호와 102호처럼 호실이 다르면 정리되지 않습니다.</li></ul>';
+      '<li>자동 기준과 달라도 실제 같은 매물임을 확인한 경우에만 아래 수동 확인을 선택하세요.</li></ul>' +
+      '<label class="listing-duplicate-manual-override">' +
+        '<input type="checkbox" data-manual-override>' +
+        '<span>층·호실·임대조건·평수가 다르게 표시되어도 현장에서 같은 매물임을 직접 확인했습니다. ' +
+        '대표매물의 임대조건을 유지하고 중복매물을 정리합니다.</span></label>';
+    state.manualOverride = false;
+    node.querySelector("[data-manual-override]").onchange = function(event) {
+      state.manualOverride = !!event.currentTarget.checked;
+    };
     node.hidden = false;
   }
   function closeConfirmation() {
@@ -147,7 +156,9 @@
       body: JSON.stringify({
         action: "consolidateExistingMasters",
         primaryMasterId: state.primaryId,
-        duplicateMasterIds: state.duplicateIds
+        duplicateMasterIds: state.duplicateIds,
+        manualOverride: state.manualOverride,
+        manualOverrideReason: state.manualOverride ? "사용자 동일매물 직접 확인" : ""
       })
     }).then(function(response) { return response.json(); }).then(function(result) {
       if (!result || result.ok === false) throw new Error(result && result.message || "중복정리에 실패했습니다.");

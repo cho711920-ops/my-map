@@ -1,4 +1,9 @@
-.listing-duplicate-cleanup-button{margin-left:auto;border-color:#ef4444!important;color:#c62828!important}
+.listing-duplicate-cleanup-button{margin-left:0;border-color:#ef4444!important;color:#c62828!important}
+#listToolbar > .listing-duplicate-cleanup-button{
+  flex:0 0 72px!important;width:72px!important;min-width:72px!important;max-width:72px!important;
+  height:31px!important;min-height:31px!important;padding:0 6px!important;font-size:11px!important;
+  white-space:nowrap!important
+}
 .listing-duplicate-cleanup-button.on{background:#d92737!important;color:#fff!important;border-color:#d92737!important}
 .listing-duplicate-cleanup-bar{
   display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;
@@ -31,12 +36,21 @@
 .listing-duplicate-confirm-modal article{margin-top:12px;padding:12px;border:1px solid #d8e2ee;border-radius:11px}
 .listing-duplicate-confirm-modal article.primary{border-color:#80baff;background:#eff7ff}
 .listing-duplicate-confirm-modal article.duplicates{border-color:#f1a1a8;background:#fff4f5}
+.listing-duplicate-manual-override{
+  display:flex;align-items:flex-start;gap:8px;margin:12px 0;padding:11px;border:1px solid #f2b6bc;
+  border-radius:10px;background:#fff8f8;color:#8d1d29;font-size:12px;font-weight:800;line-height:1.45
+}
+.listing-duplicate-manual-override input{flex:0 0 auto;width:17px;height:17px;margin:1px 0 0;accent-color:#d92737}
 .listing-duplicate-confirm-modal article p{margin:5px 0;font-size:12px;line-height:1.45}
 .listing-duplicate-confirm-modal ul{padding-left:20px;font-size:12px;line-height:1.7}
 .listing-duplicate-confirm-modal footer{display:flex;gap:8px}
 .listing-duplicate-confirm-modal footer button{flex:1;min-height:42px;border:1px solid #cfd8e3;border-radius:9px;background:#fff;font-weight:900}
 .listing-duplicate-confirm-modal footer .execute{border-color:#d92737;background:#d92737;color:#fff}
 @media(max-width:900px){
+  #listToolbar > .listing-duplicate-cleanup-button{
+    flex-basis:62px!important;width:62px!important;min-width:62px!important;max-width:62px!important;
+    padding:0 3px!important;font-size:10px!important
+  }
   .listing-duplicate-cleanup-bar{font-size:10px}
   .listing-duplicate-cleanup-bar button{padding:0 8px;font-size:10px}
 }

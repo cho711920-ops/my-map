@@ -15,11 +15,16 @@ assert.match(ui, /대표로 유지/);
 assert.match(ui, /중복으로 정리/);
 assert.match(ui, /consolidateExistingMasters/);
 assert.match(ui, /주소·층\/호실·보증금·월세가 같고 평수 차 1평 미만/);
+assert.match(ui, /manualOverride/);
+assert.match(ui, /사용자 동일매물 직접 확인/);
 assert.match(css, /duplicate-cleanup-primary/);
 assert.match(css, /duplicate-cleanup-target/);
+assert.match(css, /flex:0 0 72px!important/);
 
 assert.match(backend, /MM_DUPLICATE_ARCHIVE_SHEET = "중복통합이력"/);
 assert.match(backend, /mmIsNearDuplicate_\(primary, duplicateForCheck\)/);
+assert.match(backend, /manualOverride/);
+assert.match(backend, /자동 중복기준 예외/);
 assert.match(backend, /mmRewriteDuplicateReferences_/);
 assert.match(backend, /mmArchiveAndRemoveDuplicateMasters_/);
 assert.match(backend, /masterSheet\.deleteRow\(rowNumber\)/);
