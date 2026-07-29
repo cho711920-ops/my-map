@@ -6,6 +6,258 @@
   --text:#222;
 }
 
+/* =========================================================
+   v6.5.4 연락처 6개 팝업
+   - 세로 연락처 레일 제거
+   - 기본 목록: 버튼줄 첫 칸
+   - 고객 매물지도: 등록일 바로 앞
+   ========================================================= */
+.item-card-grid-v650 {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+
+.item-contact-rail-v650 {
+  display: none !important;
+}
+
+.item-contact-button-v654 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px !important;
+  width: 24px;
+  min-width: 24px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  border: 1px solid transparent;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.item-contact-button-v654.has-contacts {
+  border-color: #047857;
+  background: #10b981;
+  box-shadow: 0 1px 3px rgba(4, 120, 87, .28);
+}
+
+.item-contact-button-v654.no-contacts {
+  border-color: #263244;
+  background: #334155;
+  filter: grayscale(1);
+  opacity: .82;
+}
+
+.item-contact-button-v654:hover,
+.item-contact-button-v654:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  outline: 2px solid rgba(16, 185, 129, .24);
+  outline-offset: 1px;
+}
+
+.item-contact-button-v654.header-placement {
+  flex: 0 0 24px !important;
+  margin-left: 2px;
+}
+
+.item-compact-head-v650 .item-contact-button-v654.header-placement +
+.item-reg-date {
+  margin-left: 0 !important;
+}
+
+.list-contact-modal-open-v654 {
+  overflow: hidden !important;
+}
+
+.list-contact-modal-v654 {
+  position: fixed;
+  inset: 0;
+  z-index: 31000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.list-contact-modal-v654.open {
+  display: flex;
+}
+
+.list-contact-backdrop-v654 {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .56);
+  backdrop-filter: blur(2px);
+}
+
+.list-contact-dialog-v654 {
+  position: relative;
+  width: min(430px, calc(100vw - 28px));
+  max-height: min(680px, calc(100vh - 36px));
+  overflow: hidden;
+  border: 1px solid #dbe3ed;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+}
+
+.list-contact-dialog-v654 > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid #e7edf4;
+}
+
+.list-contact-dialog-v654 > header strong {
+  color: #0f172a;
+  font-size: 19px;
+  font-weight: 950;
+}
+
+#listContactAddressV654 {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.list-contact-close-v654 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.list-contact-body-v654 {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  padding: 14px 18px;
+  overflow-y: auto;
+}
+
+.list-contact-row-v654 {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid #d8e2ee;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.list-contact-row-v654:hover,
+.list-contact-row-v654:focus-visible {
+  border-color: #10b981;
+  background: #ecfdf5;
+  outline: 2px solid rgba(16, 185, 129, .18);
+}
+
+.list-contact-role-v654 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border-radius: 8px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.list-contact-row-v654 strong {
+  font-size: 17px;
+  letter-spacing: .01em;
+}
+
+.list-contact-call-label-v654 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border-radius: 8px;
+  background: #10b981;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.list-contact-empty-v654 {
+  padding: 34px 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #64748b;
+  text-align: center;
+}
+
+.list-contact-note-v654 {
+  margin: 0;
+  padding: 0 18px 16px;
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+}
+
+.async-mutation-status-v1 {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 24000;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  box-shadow: 0 6px 22px rgba(15, 23, 42, .18);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.async-mutation-status-v1.working {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.async-mutation-status-v1.failed {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+@media (max-width: 700px) {
+  .async-mutation-status-v1 {
+    right: 10px;
+    bottom: 10px;
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+}
+
 /* v6.3.14 상단 로드뷰 선택 아이콘 + 작업 버튼 소형화 */
 .v6-toolbar-secondary .map-roadview-select {
   display: inline-flex !important;

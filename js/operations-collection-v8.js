@@ -40,6 +40,16 @@
       });
   }
   function apiPost(action, payload) {
+    if (
+      action === "applyReviewBatch" &&
+      window.JSAsyncMutations &&
+      typeof window.JSAsyncMutations.enqueue === "function"
+    ) {
+      return window.JSAsyncMutations.enqueue(
+        action,
+        Object.assign({}, payload || {}, {action: action})
+      );
+    }
     return fetch(saveApiURL, {
       method: "POST", credentials: "same-origin",
       headers: {"Content-Type": "application/json"},
@@ -49,6 +59,17 @@
       return result;
     });
   }
+
+  window.addEventListener("js-async-mutation-finished", function(event) {
+    var detail = event && event.detail || {};
+    if (detail.action !== "applyReviewBatch") return;
+    extraState.reviews = null;
+    sessionStorage.removeItem(REVIEW_CACHE_KEY);
+    if (!detail.ok) {
+      message(detail.error || "매물검증 백그라운드 저장에 실패했습니다.", "error");
+    }
+    loadReviews(true, true);
+  });
   function message(value, tone) {
     var node = document.getElementById("operationsCenterMessage");
     if (!node) return;

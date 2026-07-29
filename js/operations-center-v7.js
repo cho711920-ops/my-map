@@ -83,6 +83,16 @@
   }
 
   function apiPost(action, payload) {
+    if (
+      window.JSAsyncMutations &&
+      typeof window.JSAsyncMutations.enqueue === "function" &&
+      ["updateCustomerMatch", "addCustomerActivity"].indexOf(action) >= 0
+    ) {
+      return window.JSAsyncMutations.enqueue(
+        action,
+        Object.assign({}, payload || {}, { action: action })
+      );
+    }
     return fetch(saveApiURL, {
       method: "POST",
       credentials: "same-origin",
@@ -103,6 +113,23 @@
     element.textContent = message || "";
     element.className = "operations-center-message" + (type ? " " + type : "");
   }
+
+  window.addEventListener("js-async-mutation-finished", function(event) {
+    var detail = event && event.detail || {};
+    if (["updateCustomerMatch", "addCustomerActivity"].indexOf(detail.action) < 0) return;
+    if (!detail.ok) {
+      setMessage(
+        (detail.error || "백그라운드 고객 저장에 실패했습니다.") +
+          " 작업상태에서 다시 시도할 수 있습니다.",
+        "error"
+      );
+      state.loaded = false;
+      loadOperationsData(true);
+      return;
+    }
+    state.loaded = false;
+    loadOperationsData(true);
+  });
 
   function persistOperationsCache() {
     try {

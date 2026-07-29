@@ -40,6 +40,37 @@ var sharedGeocodeFlushInProgress = false;
 var sharedGeocodeFlushFailures = 0;
 var selectedPrintKeys = [];
 var visibleListItems = [];
+
+function postSafeMutationV654(action, payload) {
+  var body = Object.assign({}, payload || {}, { action: action });
+  if (window.JSAsyncMutations && typeof window.JSAsyncMutations.enqueue === "function") {
+    return window.JSAsyncMutations.enqueue(action, body);
+  }
+  return fetch(saveApiURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(body)
+  }).then(function() {
+    return { ok: true, queued: false };
+  });
+}
+
+var asyncMutationSheetReloadTimerV654 = null;
+window.addEventListener("js-async-mutation-finished", function(event) {
+  var detail = event && event.detail || {};
+  if (["toggleDone", "updateProperty", "deleteProperty"].indexOf(detail.action) < 0) return;
+  if (!detail.ok) {
+    var status = document.getElementById("status");
+    if (status) status.textContent = "백그라운드 저장 실패 · 상태 버튼에서 확인";
+    return;
+  }
+  if (asyncMutationSheetReloadTimerV654) clearTimeout(asyncMutationSheetReloadTimerV654);
+  asyncMutationSheetReloadTimerV654 = setTimeout(function() {
+    asyncMutationSheetReloadTimerV654 = null;
+    loadSheet(true);
+  }, 250);
+});
 var listRenderLimit = 0;
 var listRenderScrollBound = false;
 var listCardReusePoolV6521 = null;
@@ -1800,6 +1831,7 @@ function saveItemMemo(encodedKey) {
     action: "toggleDone",
     row: item.sheetRow || 0,
     key: {
+      propertyId: item.propertyId || "",
       name: item.name || "",
       address: item.address || "",
       room: item.room || "",
@@ -1808,22 +1840,18 @@ function saveItemMemo(encodedKey) {
       rent: item.rent == null ? "" : item.rent
     },
     state: item.state || "",
-    memo: newMemo
+    memo: newMemo,
+    contacts: extractListContactsV650(item).map(function(contact) {
+      return { role: contact.role, phone: contact.phone.display };
+    })
   };
 
-  fetch(saveApiURL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify(payload)
-  }).then(function() {
+  postSafeMutationV654("toggleDone", payload).then(function(result) {
     document.getElementById("status").innerHTML = "메모 저장 요청 완료";
 
-    setTimeout(function() {
-      loadSheet(true);
-    }, 1800);
+    if (!result || !result.queued) {
+      setTimeout(function() { loadSheet(true); }, 1800);
+    }
   }).catch(function(error) {
     console.error(error);
     item.memo = previousMemo;
@@ -1876,7 +1904,8 @@ var LIST_CONTACT_ROLE_META_V650 = {
   "관": { short: "관", name: "관리", priority: 70 },
   "부": { short: "부", name: "부동산", priority: 70 },
   "세": { short: "세", name: "세입자", priority: 70 },
-  "가": { short: "가", name: "가족", priority: 70 }
+  "가": { short: "가", name: "가족", priority: 70 },
+  "기": { short: "기", name: "기타", priority: 10 }
 };
 
 function normalizeListPhoneV650(value) {
@@ -1922,7 +1951,8 @@ function listContactRoleV650(value) {
   if (/^(부동산|중개사|중개|부)$/.test(label)) return "부";
   if (/^(세입자|임차인|임차|세)$/.test(label)) return "세";
   if (/^(가족|가)$/.test(label)) return "가";
-  return "";
+  if (/^(기타|기)$/.test(label)) return "기";
+  return "기";
 }
 
 function extractListContactsV650(item) {
@@ -1950,6 +1980,20 @@ function extractListContactsV650(item) {
   add("임", item && item.landlordPhone);
   add("세", item && item.tenantPhone);
 
+  var storedContacts = item && item.contactListRaw;
+  if (typeof storedContacts === "string" && storedContacts.trim()) {
+    try {
+      storedContacts = JSON.parse(storedContacts);
+    } catch (_) {
+      storedContacts = [];
+    }
+  }
+  if (Array.isArray(storedContacts)) {
+    storedContacts.forEach(function(contact) {
+      add(contact && contact.role, contact && (contact.phone || contact.number));
+    });
+  }
+
   var memo = String(item && item.memo || "");
   var rolePattern = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
   var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
@@ -1959,23 +2003,80 @@ function extractListContactsV650(item) {
     add(match[1], match[2]);
   }
 
-  return contacts.slice(0, 4);
+  var everyPhoneMatcher = new RegExp(phonePattern, "g");
+  while ((match = everyPhoneMatcher.exec(memo))) {
+    var prefix = memo.slice(Math.max(0, match.index - 18), match.index);
+    var roleMatch = prefix.match(new RegExp(rolePattern + "\\s*[\\)\\(\\]:：=.-]?\\s*$"));
+    add(roleMatch ? roleMatch[1] : "기", match[1]);
+  }
+
+  return contacts.slice(0, 6);
 }
 
-function buildListContactRailV650(item) {
+function buildListContactButtonV654(item, encodedKey, headerPlacement) {
   var contacts = extractListContactsV650(item);
-  if (!contacts.length) return "";
-  return '<div class="item-contact-rail-v650 contact-count-' + contacts.length +
-    '" onclick="event.stopPropagation()" aria-label="연락처">' +
-    contacts.map(function(contact) {
-      var meta = LIST_CONTACT_ROLE_META_V650[contact.role];
-      var accessible = meta.name + " " + contact.phone.display + " 전화걸기";
-      return '<a class="item-contact-call-v650 role-' + contact.role +
-        '" href="tel:' + contact.phone.tel + '" title="' + escapeHtml(accessible) +
-        '" aria-label="' + escapeHtml(accessible) + '">' + meta.short + '</a>';
-    }).join("") +
-  '</div>';
+  var hasContacts = contacts.length > 0;
+  return '<button type="button" class="item-contact-button-v654 ' +
+    (hasContacts ? 'has-contacts' : 'no-contacts') +
+    (headerPlacement ? ' header-placement' : '') +
+    '" title="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
+    '" aria-label="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
+    '" onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedKey + '\')">📞</button>';
 }
+
+function closeListContactPopupV654() {
+  var modal = document.getElementById("listContactModalV654");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("list-contact-modal-open-v654");
+}
+
+function openListContactPopupV654(encodedKey) {
+  var key = decodeURIComponent(encodedKey || "");
+  var item = allItems.find(function(currentItem) {
+    return currentItem.key === key;
+  });
+  if (!item) return;
+
+  var contacts = extractListContactsV650(item);
+  var modal = document.getElementById("listContactModalV654");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "listContactModalV654";
+    modal.className = "list-contact-modal-v654";
+    modal.setAttribute("aria-hidden", "true");
+    modal.innerHTML =
+      '<div class="list-contact-backdrop-v654" onclick="closeListContactPopupV654()"></div>' +
+      '<section class="list-contact-dialog-v654" role="dialog" aria-modal="true" aria-labelledby="listContactTitleV654">' +
+        '<header><div><strong id="listContactTitleV654">매물 연락처</strong><p id="listContactAddressV654"></p></div>' +
+          '<button type="button" class="list-contact-close-v654" onclick="closeListContactPopupV654()" aria-label="닫기">×</button></header>' +
+        '<div id="listContactBodyV654" class="list-contact-body-v654"></div>' +
+        '<p class="list-contact-note-v654">번호를 누르면 기기의 전화 앱으로 연결됩니다.</p>' +
+      '</section>';
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById("listContactAddressV654").textContent =
+    [item.name, item.address, item.room].filter(Boolean).join(" · ");
+  document.getElementById("listContactBodyV654").innerHTML = contacts.length
+    ? contacts.map(function(contact) {
+        var meta = LIST_CONTACT_ROLE_META_V650[contact.role] || LIST_CONTACT_ROLE_META_V650["기"];
+        return '<a class="list-contact-row-v654 role-' + escapeHtml(contact.role || "기") +
+          '" href="tel:' + contact.phone.tel + '" onclick="event.stopPropagation()">' +
+          '<span class="list-contact-role-v654">' + escapeHtml(meta.name) + '</span>' +
+          '<strong>' + escapeHtml(contact.phone.display) + '</strong>' +
+          '<span class="list-contact-call-label-v654">전화</span></a>';
+      }).join("")
+    : '<div class="list-contact-empty-v654">등록된 연락처가 없습니다.</div>';
+
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("list-contact-modal-open-v654");
+}
+
+window.openListContactPopupV654 = openListContactPopupV654;
+window.closeListContactPopupV654 = closeListContactPopupV654;
 
 function listDisplayValueV650(item, field) {
   var presence = item && item.displayValuePresence;
@@ -2053,7 +2154,8 @@ function addListItem(item, appendTarget) {
         'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedKey + '\')">링크</button>'
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
   var customerMatchControls = buildCustomerMatchInlineControls(item);
-  var contactRail = buildListContactRailV650(item);
+  var actionContactButtonV654 = buildListContactButtonV654(item, encodedKey, false);
+  var headerContactButtonV654 = buildListContactButtonV654(item, encodedKey, true);
   var depositDisplay = listDisplayValueV650(item, "deposit");
   var rentDisplay = listDisplayValueV650(item, "rent");
   var feeDisplay = listDisplayValueV650(item, "fee");
@@ -2100,7 +2202,6 @@ function addListItem(item, appendTarget) {
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
     '<div class="item-card-grid-v650">' +
-      contactRail +
       '<div class="item-compact-main-v650">' +
         '<div class="item-compact-head-v650">' +
           '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
@@ -2122,6 +2223,7 @@ function addListItem(item, appendTarget) {
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV650() +
           '</span>' +
+          (customerMatchControls ? headerContactButtonV654 : '') +
           (regDateLabel
             ? '<span class="item-reg-date item-reg-date-head-v651' +
                 (!customerMatchControls ? ' standard-card-v651' : '') +
@@ -2156,6 +2258,7 @@ function addListItem(item, appendTarget) {
           (customerMatchControls ? ' customer-match-card-actions-v653' : '') + '">' +
           customerMatchControls +
           '<div class="item-action-left">' +
+            (!customerMatchControls ? actionContactButtonV654 : '') +
             '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
             '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
@@ -2520,12 +2623,7 @@ function toggleDoneStatus(encodedKey, checked) {
     memo: nextMemo
   };
 
-  fetch(saveApiURL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload)
-  }).then(function() {
+  postSafeMutationV654("toggleDone", payload).then(function(result) {
     delete doneTogglePendingKeys[key];
     refreshDoneStatusUI(true);
 
@@ -2533,9 +2631,9 @@ function toggleDoneStatus(encodedKey, checked) {
       checked ? "거래완료 저장 요청 완료" : "계약가능 복구 요청 완료";
 
     // 시트 반영값을 다시 읽어 실제 저장 상태를 확인
-    setTimeout(function() {
-      loadSheet(true);
-    }, 1800);
+    if (!result || !result.queued) {
+      setTimeout(function() { loadSheet(true); }, 1800);
+    }
   }).catch(function(error) {
     console.error(error);
 
@@ -2721,17 +2819,10 @@ function markSelectedAsVisited() {
       memo: item.memo || ""
     };
 
-    return fetch(saveApiURL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
-      body: JSON.stringify(payload)
-    });
+    return postSafeMutationV654("toggleDone", payload);
   });
 
-  Promise.all(requests).then(function() {
+  Promise.all(requests).then(function(results) {
     targetItems.forEach(function(item) {
       delete doneTogglePendingKeys[item.key];
     });
@@ -2746,9 +2837,9 @@ function markSelectedAsVisited() {
     document.getElementById("status").innerHTML =
       "임장 처리 " + targetItems.length + "개 저장 요청 완료";
 
-    setTimeout(function() {
-      loadSheet(true);
-    }, 1800);
+    if (!(results || []).some(function(result) { return result && result.queued; })) {
+      setTimeout(function() { loadSheet(true); }, 1800);
+    }
   }).catch(function(error) {
     console.error(error);
 
@@ -2817,15 +2908,10 @@ function completeSelectedItems() {
       memo: item.memo || ""
     };
 
-    return fetch(saveApiURL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    });
+    return postSafeMutationV654("toggleDone", payload);
   });
 
-  Promise.all(requests).then(function() {
+  Promise.all(requests).then(function(results) {
     selectedItems.forEach(function(item) {
       delete doneTogglePendingKeys[item.key];
     });
@@ -2840,9 +2926,9 @@ function completeSelectedItems() {
     document.getElementById("status").innerHTML =
       "선택 매물 " + selectedItems.length + "개 거래완료 요청 완료";
 
-    setTimeout(function() {
-      loadSheet(true);
-    }, 1800);
+    if (!(results || []).some(function(result) { return result && result.queued; })) {
+      setTimeout(function() { loadSheet(true); }, 1800);
+    }
   }).catch(function(error) {
     console.error(error);
 
@@ -3596,7 +3682,10 @@ function savePropertyEditV630() {
     landlordPhone: String(document.getElementById("peLandlordPhoneV630").value || "").trim(),
     tenantPhone: String(document.getElementById("peTenantPhoneV630").value || "").trim(),
     memo: String(document.getElementById("peMemoV630").value || "").trim(),
-    state: String(document.getElementById("peStateV630").value || "").trim()
+    state: String(document.getElementById("peStateV630").value || "").trim(),
+    contacts: extractListContactsV650(item).map(function(contact) {
+      return { role: contact.role, phone: contact.phone.display };
+    })
   };
   var updatedValuePresenceV650 = {
     deposit: String(document.getElementById("peDepositV630").value || "").trim() !== "",
@@ -3612,14 +3701,7 @@ function savePropertyEditV630() {
   saveButton.textContent = "저장 중...";
   status.textContent = "시트1 수정 요청 중...";
 
-  fetch(saveApiURL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "updateProperty",
+  postSafeMutationV654("updateProperty", {
       row: item.sheetRow || 0,
       key: {
         propertyId: item.propertyId || "",
@@ -3630,8 +3712,7 @@ function savePropertyEditV630() {
       },
       originalValues: buildOriginalPropertyValuesV630(item),
       updated: updated
-    })
-  }).then(function() {
+  }).then(function(queueResult) {
     /*
      * QA3 안정화:
      * gviz 캐시를 이용한 성공/실패 판정은 제거합니다.
@@ -3651,6 +3732,7 @@ function savePropertyEditV630() {
     item.tenantPhone = updated.tenantPhone;
     item.memo = updated.memo;
     item.state = updated.state;
+    item.contactListRaw = JSON.stringify(updated.contacts || []);
     item.key = itemKey(item);
 
     var editAliasesV634 = mergeEditAliasesV634(
@@ -3704,7 +3786,7 @@ function savePropertyEditV630() {
       mainStatus.innerHTML = "매물 수정 요청 완료 · 최신 시트 동기화 중";
     }
 
-    schedulePropertyEditReloadV634();
+    if (!queueResult || !queueResult.queued) schedulePropertyEditReloadV634();
   }).catch(function(error) {
     console.error(error);
     pendingPropertyEditNewKeyV633 = null;
