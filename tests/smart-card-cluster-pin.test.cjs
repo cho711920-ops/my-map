@@ -3,6 +3,7 @@ const fs = require("node:fs");
 
 const mapSource = fs.readFileSync("js/map.js", "utf8");
 const analysisSource = fs.readFileSync("js/analysis.js", "utf8");
+const scriptSource = fs.readFileSync("js/script.js", "utf8");
 const htmlSource = fs.readFileSync("index.html", "utf8");
 
 assert.match(
@@ -39,5 +40,15 @@ assert.match(
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
 assert.match(htmlSource, /map\.js\?v=6\.5\.18-smart-card-cluster-pin/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.17-smart-card-double-click/);
+assert.match(scriptSource, /더블클릭하면 스마트 매물카드 열기/);
+assert.match(
+  scriptSource,
+  /div\.ondblclick = function\(event\) \{[\s\S]*?event\.target\.closest\("button, input, label, a, textarea, select, \.item-memo-panel"\)[\s\S]*?openItem\(item\)/
+);
+assert.doesNotMatch(
+  scriptSource,
+  /div\.onclick = function\(\) \{\s*openItem\(item\)/
+);
 
 console.log("smart card cluster pin tests passed");

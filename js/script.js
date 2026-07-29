@@ -2058,6 +2058,7 @@ function addListItem(item, appendTarget) {
 
   div.setAttribute("data-listing-key", item.key);
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
+  div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
     '<div class="item-card-grid-v650">' +
       contactRail +
@@ -2126,7 +2127,13 @@ function addListItem(item, appendTarget) {
     '</div>' +
     memoPanel;
 
-  div.onclick = function() {
+  div.ondblclick = function(event) {
+    if (
+      event &&
+      event.target &&
+      event.target.closest &&
+      event.target.closest("button, input, label, a, textarea, select, .item-memo-panel")
+    ) return;
     openItem(item);
   };
 
