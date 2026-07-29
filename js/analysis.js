@@ -1966,8 +1966,14 @@ jsV40Style();
 var aiSidePanelCurrentKey = "";
 
 function relayoutMapAfterAiPanel() {
+  if (typeof preservePinnedClusterSelectionDuringRelayoutV6517 === "function") {
+    preservePinnedClusterSelectionDuringRelayoutV6517(1500);
+  }
   setTimeout(function() {
     if (typeof map !== "undefined" && map && typeof map.relayout === "function") {
+      if (typeof preservePinnedClusterSelectionDuringRelayoutV6517 === "function") {
+        preservePinnedClusterSelectionDuringRelayoutV6517(1500);
+      }
       map.relayout();
     }
   }, 280);

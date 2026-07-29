@@ -16,7 +16,7 @@ assert.match(mapSource, /addListener\(map, "dragstart"[\s\S]*?clearPinnedCluster
 assert.match(mapSource, /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/);
 assert.match(
   mapSource,
-  /jsPinnedClusterSelectionV6515\.spatialKey !== getMapSpatialKeyV6515\(\)[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
+  /jsPinnedClusterSelectionV6515\.spatialKey !== getMapSpatialKeyV6515\(\)[\s\S]*?jsPinnedClusterSpatialChangeIgnoreUntilV6517[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
 assert.match(scriptSource, /function resetFilter\(\)[\s\S]*?clearPinnedClusterSelectionV6515\(false\)/);
 assert.match(
@@ -31,7 +31,7 @@ assert.match(
   operationsSource,
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
-assert.match(htmlSource, /js\/map\.js\?v=6\.5\.15-cluster-selection-pin/);
+assert.match(htmlSource, /js\/map\.js\?v=6\.5\.17-smart-card-cluster-pin/);
 assert.match(htmlSource, /js\/script\.js\?v=6\.5\.16-cluster-selection-pin-status/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.18\.2-alert-dismissal/);
 

@@ -27,6 +27,7 @@ var jsClusterSelectionMemoryV638 = {
   multiItemIdGroups: []
 };
 var jsPinnedClusterSelectionV6515 = null;
+var jsPinnedClusterSpatialChangeIgnoreUntilV6517 = 0;
 
 
 function getMapSpatialKeyV6515() {
@@ -85,12 +86,23 @@ function pinCurrentClusterSelectionV6515() {
 
 function clearPinnedClusterSelectionV6515(clearSelection) {
   jsPinnedClusterSelectionV6515 = null;
+  jsPinnedClusterSpatialChangeIgnoreUntilV6517 = 0;
   if (!clearSelection) return;
   selectedGroupKey = null;
   selectedGroupKeys = [];
   selectedItemKey = null;
   jsClusterSelectionMemoryV638.singleItemIds = [];
   jsClusterSelectionMemoryV638.multiItemIdGroups = [];
+}
+
+
+function preservePinnedClusterSelectionDuringRelayoutV6517(durationMs) {
+  if (!jsPinnedClusterSelectionV6515) return;
+  var keepMs = Math.max(600, Number(durationMs) || 1200);
+  jsPinnedClusterSpatialChangeIgnoreUntilV6517 = Math.max(
+    jsPinnedClusterSpatialChangeIgnoreUntilV6517,
+    Date.now() + keepMs
+  );
 }
 
 
@@ -523,7 +535,11 @@ function scheduleMapIdleRefreshV638() {
       jsPinnedClusterSelectionV6515 &&
       jsPinnedClusterSelectionV6515.spatialKey !== getMapSpatialKeyV6515()
     ) {
-      clearPinnedClusterSelectionV6515(true);
+      if (Date.now() <= jsPinnedClusterSpatialChangeIgnoreUntilV6517) {
+        jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
+      } else {
+        clearPinnedClusterSelectionV6515(true);
+      }
     }
 
     /*
@@ -1614,6 +1630,7 @@ function redrawSelectedMarkers() {
 
 function openItem(item) {
   selectedItemKey = item.key;
+  preservePinnedClusterSelectionDuringRelayoutV6517(1500);
 
   /*
    * 일반 선택 모드에서 리스트 매물을 누르면 해당 클러스터만 표시합니다.

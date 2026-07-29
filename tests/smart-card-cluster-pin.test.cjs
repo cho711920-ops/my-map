@@ -1,0 +1,35 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+
+const mapSource = fs.readFileSync("js/map.js", "utf8");
+const analysisSource = fs.readFileSync("js/analysis.js", "utf8");
+const htmlSource = fs.readFileSync("index.html", "utf8");
+
+assert.match(
+  mapSource,
+  /function preservePinnedClusterSelectionDuringRelayoutV6517\(durationMs\)[\s\S]*?Date\.now\(\) \+ keepMs/
+);
+assert.match(
+  mapSource,
+  /function openItem\(item\) \{[\s\S]*?preservePinnedClusterSelectionDuringRelayoutV6517\(1500\)/
+);
+assert.match(
+  mapSource,
+  /Date\.now\(\) <= jsPinnedClusterSpatialChangeIgnoreUntilV6517[\s\S]*?jsPinnedClusterSelectionV6515\.spatialKey = getMapSpatialKeyV6515\(\)/
+);
+assert.match(
+  analysisSource,
+  /function relayoutMapAfterAiPanel\(\) \{[\s\S]*?preservePinnedClusterSelectionDuringRelayoutV6517\(1500\)[\s\S]*?map\.relayout\(\)/
+);
+assert.match(
+  mapSource,
+  /addListener\(map, "dragstart"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
+);
+assert.match(
+  mapSource,
+  /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
+);
+assert.match(htmlSource, /analysis\.js\?v=6\.3\.39-smart-card-cluster-pin/);
+assert.match(htmlSource, /map\.js\?v=6\.5\.17-smart-card-cluster-pin/);
+
+console.log("smart card cluster pin tests passed");
