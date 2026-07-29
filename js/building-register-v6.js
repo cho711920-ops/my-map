@@ -737,6 +737,15 @@
     queueBadge(card, item);
   }
 
+  function getCachedBadge(item) {
+    if (!item) return null;
+    var cachedParcel = readParcelCache(item);
+    if (!cachedParcel) return null;
+    var cachedData = readCache(cachedParcel) || readBadgeCache(cachedParcel);
+    if (!cachedData || !cachedData.ok) return null;
+    return badgeFromData(cachedData, item);
+  }
+
   function jsonp(url, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var callbackName = "__buildingRegisterCallback" + Date.now() + Math.floor(Math.random() * 100000);
@@ -1395,6 +1404,7 @@
   };
   window.JSBuildingRegisterBadges = {
     bind: bindBadge,
+    getCached: getCachedBadge,
     refreshVisible: function() {
       Array.prototype.forEach.call(document.querySelectorAll(".item[data-listing-key]"), function(card) {
         if (card.__buildingBadgeItemV650) bindBadge(card, card.__buildingBadgeItemV650);

@@ -1976,6 +1976,19 @@ function addListItem(item, appendTarget) {
   var printSelected = selectedPrintKeys.includes(item.key);
   var memoOpen = openMemoKey === item.key;
   var memoEditing = editingMemoKey === item.key;
+  var cachedBuildingBadgeV6519 =
+    window.JSBuildingRegisterBadges &&
+    typeof window.JSBuildingRegisterBadges.getCached === "function"
+      ? window.JSBuildingRegisterBadges.getCached(item)
+      : null;
+  var cachedBuildingYearTextV6519 =
+    cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.year
+      ? "준" + cachedBuildingBadgeV6519.year
+      : "준공 -";
+  var cachedBuildingYearClassV6519 =
+    cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.verified
+      ? " verified"
+      : "";
 
   div.className =
     "item" +
@@ -2069,7 +2082,11 @@ function addListItem(item, appendTarget) {
               (printSelected ? 'checked' : '') +
               ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
           '</label>' +
-          '<span class="item-building-year-v650 item-building-year-head-v652" title="건축물대장 사용승인일">준공 -</span>' +
+          '<span class="item-building-year-v650 item-building-year-head-v652' +
+            cachedBuildingYearClassV6519 +
+            '" title="건축물대장 사용승인일">' +
+            escapeHtml(cachedBuildingYearTextV6519) +
+          '</span>' +
           doneLabel +
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
           '<span class="item-address-room-v650">' +
@@ -2089,7 +2106,11 @@ function addListItem(item, appendTarget) {
         '<div class="price-line item-compact-price-v650">' +
           sourceLabel +
           pyeongMiniBadge +
-          '<span class="item-building-year-v650 item-building-year-mobile-v652" title="건축물대장 사용승인일">준공 -</span>' +
+          '<span class="item-building-year-v650 item-building-year-mobile-v652' +
+            cachedBuildingYearClassV6519 +
+            '" title="건축물대장 사용승인일">' +
+            escapeHtml(cachedBuildingYearTextV6519) +
+          '</span>' +
           typeLabel +
           '<span class="item-price-values-v652">' +
             '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +

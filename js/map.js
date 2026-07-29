@@ -467,7 +467,28 @@ function getMapViewportKeyV638() {
 }
 
 
+function createExactAddressClustersV6519(addressGroups) {
+  return (addressGroups || []).map(function(group) {
+    return {
+      groups: [group],
+      items: (group.items || []).slice(),
+      latlng: group.latlng,
+      key: group.key + "|exact-address",
+      exactAddress: true
+    };
+  });
+}
+
+
 function createDynamicClusters(addressGroups) {
+  /*
+   * 카카오맵 최대 확대(level 1)에서는 화면 격자로 서로 다른 지번을 합치지 않습니다.
+   * 같은 지번의 매물만 하나의 클러스터로 유지하여 인접 건물 매물이 섞이는 것을 막습니다.
+   */
+  if (map && Number(map.getLevel()) <= 1) {
+    return createExactAddressClustersV6519(addressGroups);
+  }
+
   var projection = map.getProjection();
   var gridSize = getClusterDistance();
   var cells = Object.create(null);
