@@ -57,6 +57,7 @@
               '<article class="permit-diagnosis-card-v1">' +
                 '<h3>가능한 공식 업종</h3>' +
                 '<p class="permit-diagnosis-help-v1">후보를 비교해 선택하면 중개사가 알아야 할 매물조건·시설·절차·전화질문·계약사항이 펼쳐집니다.</p>' +
+                '<div id="permitBrandEvidenceV1"></div>' +
                 '<div id="permitCandidateResultsV1"><div class="permit-candidate-empty-v1">' +
                   '<div><strong>운영 내용을 입력해주세요.</strong><br>해석 후 공식 업종 후보가 이곳에 표시됩니다.</div></div></div>' +
               '</article>' +
@@ -164,17 +165,43 @@
   function interpretIndustry() {
     var request = byId("permitIndustryRequestV1").value;
     var results = byId("permitCandidateResultsV1");
+    var brandEvidenceHost = byId("permitBrandEvidenceV1");
     if (!request.trim()) {
       results.innerHTML = '<div class="permit-candidate-empty-v1"><div>영업 내용을 먼저 입력해주세요.</div></div>';
+      if (brandEvidenceHost) brandEvidenceHost.innerHTML = "";
       return;
     }
 
-    loadCatalog().then(function (catalog) {
-      state.candidates = global.PermitIndustryIntentParserV1.interpret(
+    results.innerHTML = '<div class="permit-candidate-empty-v1"><div><strong>업종·업태를 확인하고 있습니다.</strong><br>' +
+      '브랜드 사전과 실제 등록 업소 카테고리를 함께 살펴봅니다.</div></div>';
+    if (brandEvidenceHost) brandEvidenceHost.innerHTML = "";
+
+    Promise.all([
+      loadCatalog(),
+      global.PermitBrandIndustryResolverV1
+        ? global.PermitBrandIndustryResolverV1.resolve(request)
+        : Promise.resolve(null)
+    ]).then(function (resolved) {
+      var catalog = resolved[0];
+      var brandEvidence = resolved[1];
+      var interpreted = global.PermitIndustryIntentParserV1.interpret(
         request,
         catalog.industries,
         6
       );
+      if (brandEvidence && brandEvidence.industryIds && brandEvidence.industryIds.length) {
+        var brandEntries = [];
+        brandEvidence.industryIds.forEach(function (industryId) {
+          var industry = catalog.industries.find(function (entry) { return entry.id === industryId; });
+          if (!industry) return;
+          brandEntries.push({ industry: industry, score: 100 });
+        });
+        interpreted = brandEntries.concat(interpreted.filter(function (entry) {
+          return brandEvidence.industryIds.indexOf(entry.industry.id) < 0;
+        })).slice(0, 6);
+      }
+      state.candidates = interpreted;
+      renderBrandEvidence(brandEvidence);
       if (!state.candidates.length) {
         state.candidates = [{
           score: 1,
@@ -205,6 +232,31 @@
       results.innerHTML = '<div class="permit-candidate-empty-v1"><div>' +
         global.PermitIndustryCandidateSelectorV1.escapeHtml(error.message) + '</div></div>';
     });
+  }
+
+  function renderBrandEvidence(evidence) {
+    var host = byId("permitBrandEvidenceV1");
+    if (!host) return;
+    if (!evidence || !evidence.matched) {
+      host.innerHTML = '<div class="permit-brand-evidence-v1 is-empty"><strong>브랜드 일치 없음</strong>' +
+        '<span>입력한 메뉴·서비스·운영방식으로 업종 후보를 만들었습니다.</span></div>';
+      return;
+    }
+    var escapeHtml = global.PermitIndustryCandidateSelectorV1.escapeHtml;
+    var labels = (evidence.categoryEvidence || []).slice(0, 3).map(function (entry) {
+      return '<li><b>' + escapeHtml(entry.name) + '</b><span>' +
+        escapeHtml(entry.category) + '</span></li>';
+    }).join("");
+    host.innerHTML = '<section class="permit-brand-evidence-v1" data-confidence="' +
+      escapeHtml(evidence.confidence || "MEDIUM") + '">' +
+      '<header><div><small>' + escapeHtml(evidence.source) + '</small><strong>' +
+        escapeHtml(evidence.brandName) + '</strong></div><span>' +
+        escapeHtml(evidence.confidence === "HIGH" ? "브랜드 일치" : "업소 카테고리 확인") +
+      '</span></header>' +
+      '<p><b>확인된 업종·업태</b> ' + escapeHtml(evidence.businessType) + '</p>' +
+      (labels ? '<ul>' + labels + '</ul>' : '') +
+      '<footer>' + escapeHtml(evidence.notice || "") + '</footer>' +
+      '</section>';
   }
 
   function selectIndustry(industryId) {
