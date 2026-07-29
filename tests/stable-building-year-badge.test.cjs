@@ -10,6 +10,15 @@ assert.match(
   /function getCachedBadge\(item\) \{[\s\S]*?readParcelCache\(item\)[\s\S]*?readCache\(cachedParcel\) \|\| readBadgeCache\(cachedParcel\)[\s\S]*?badgeFromData\(cachedData, item\)/
 );
 assert.match(building, /getCached: getCachedBadge/);
+assert.match(building, /var badgeMemoryV6520 = Object\.create\(null\)/);
+assert.match(
+  building,
+  /function applyBadgeToCard\(card, badge\) \{[\s\S]*?badgeMemoryV6520\[badgeItemKey\] =/
+);
+assert.match(
+  building,
+  /function getCachedBadge\(item\) \{[\s\S]*?badgeMemoryV6520\[itemKey\][\s\S]*?return badgeMemoryV6520\[itemKey\]/
+);
 assert.match(
   script,
   /var cachedBuildingBadgeV6519 =[\s\S]*?JSBuildingRegisterBadges\.getCached\(item\)/
@@ -22,7 +31,7 @@ assert.equal(
   (script.match(/escapeHtml\(cachedBuildingYearTextV6519\)/g) || []).length,
   2
 );
-assert.match(html, /building-register-v6\.js\?v=6\.5\.19-stable-list-badge/);
+assert.match(html, /building-register-v6\.js\?v=6\.5\.20-instant-list-badge/);
 assert.match(html, /script\.js\?v=6\.5\.19-stable-list-badge/);
 
 console.log("stable building year badge tests passed");

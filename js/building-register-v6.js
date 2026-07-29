@@ -10,6 +10,7 @@
   var BADGE_MAX_CONCURRENCY = 4;
   var BADGE_MAX_RETRIES = 2;
   var badgeRequests = Object.create(null);
+  var badgeMemoryV6520 = Object.create(null);
   var badgeQueue = [];
   var badgeActive = 0;
   var badgeObserver = null;
@@ -592,6 +593,15 @@
 
   function applyBadgeToCard(card, badge) {
     if (!card || !badge) return;
+    var badgeItem = card.__buildingBadgeItemV650;
+    var badgeItemKey = stableBadgeItemKeyV6520(badgeItem);
+    if (badgeItemKey) {
+      badgeMemoryV6520[badgeItemKey] = {
+        year: String(badge.year || ""),
+        elevators: Number(badge.elevators || 0),
+        verified: !!badge.verified
+      };
+    }
     var years = card.querySelectorAll(".item-building-year-v650");
     var elevator = card.querySelector(".item-elevator-v650");
     Array.prototype.forEach.call(years, function(year) {
@@ -737,13 +747,26 @@
     queueBadge(card, item);
   }
 
+  function stableBadgeItemKeyV6520(item) {
+    if (!item) return "";
+    return String(
+      item.propertyId || item.id || item.key || ""
+    ).trim();
+  }
+
   function getCachedBadge(item) {
     if (!item) return null;
+    var itemKey = stableBadgeItemKeyV6520(item);
+    if (itemKey && badgeMemoryV6520[itemKey]) {
+      return badgeMemoryV6520[itemKey];
+    }
     var cachedParcel = readParcelCache(item);
     if (!cachedParcel) return null;
     var cachedData = readCache(cachedParcel) || readBadgeCache(cachedParcel);
     if (!cachedData || !cachedData.ok) return null;
-    return badgeFromData(cachedData, item);
+    var badge = badgeFromData(cachedData, item);
+    if (itemKey) badgeMemoryV6520[itemKey] = badge;
+    return badge;
   }
 
   function jsonp(url, timeoutMs) {
