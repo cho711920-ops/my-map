@@ -6153,6 +6153,14 @@ body,
   margin-left: auto;
 }
 
+/* 고객매칭 지도목록에서는 메모를 상태버튼 바로 뒤에 둬 태블릿에서도 항상 보이게 합니다. */
+.item-compact-actions-v650 .customer-match-inline-actions + .item-memo-toggle {
+  margin-left: 0;
+  border-color: #c9a7f5;
+  background: #f4ecff;
+  color: #6321ad;
+}
+
 @media (max-width: 520px) {
   #list .item {
     padding: 6px !important;

@@ -2011,6 +2011,11 @@ function addListItem(item, appendTarget) {
   var feeDisplay = listDisplayValueV650(item, "fee");
   var premiumDisplay = listDisplayValueV650(item, "premium");
   var areaDisplay = listDisplayValueV650(item, "area");
+  var memoToggleButton =
+    '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
+      'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
+      (memoOpen ? '메모 ▲' : '메모 ▼') +
+    '</button>';
 
   var memoPanel = "";
 
@@ -2091,6 +2096,7 @@ function addListItem(item, appendTarget) {
 
         '<div class="item-action-row item-compact-actions-v650">' +
           customerMatchControls +
+          (customerMatchControls ? memoToggleButton : '') +
           '<div class="item-action-left">' +
             '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
@@ -2104,10 +2110,7 @@ function addListItem(item, appendTarget) {
             '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
           '</div>' +
-          '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
-            'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
-            (memoOpen ? '메모 ▲' : '메모 ▼') +
-          '</button>' +
+          (!customerMatchControls ? memoToggleButton : '') +
         '</div>' +
       '</div>' +
     '</div>' +
