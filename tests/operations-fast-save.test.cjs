@@ -15,10 +15,9 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.23\.7"/);
+assert.match(backend, /MM_VERSION = "7\.23\.8"/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
-assert.match(backend, /mmLoadState_\(\[\], \{ skipReviewRows: true, skipReviewHold: true \}\)/);
 assert.match(
   backend,
   /function mmLoadState_[\s\S]*?var sourceSheetRowNumbers = null;[\s\S]*?sourceSheetRowNumbers: sourceSheetRowNumbers/
@@ -30,6 +29,19 @@ assert.ok(reconcileBody);
 assert.doesNotMatch(reconcileBody[1], /options\.sourceKeys/);
 assert.match(backend, /mmRemoveSheetRowsFast_/);
 assert.match(backend, /createTextFinder\(rawId\)\.matchEntireCell\(true\)\.findNext\(\)/);
+assert.match(backend, /function mmFindRowsByTextFast_/);
+assert.match(backend, /function mmRewriteDuplicateSourceReferencesFast_/);
+assert.match(backend, /function mmRewriteReviewDuplicateReferencesFast_/);
+assert.match(
+  backend,
+  /function mmConsolidateExistingMastersFromWeb_[\s\S]*?createTextFinder\(primaryMasterId\)[\s\S]*?mmRewriteDuplicateSourceReferencesFast_[\s\S]*?mmRewriteReviewDuplicateReferencesFast_/
+);
+const consolidateBody = backend.match(
+  /function mmConsolidateExistingMastersFromWeb_\(body\) \{([\s\S]*?)\n\}\n\nfunction mmFindRowsByTextFast_/
+);
+assert.ok(consolidateBody);
+assert.doesNotMatch(consolidateBody[1], /mmLoadState_/);
+assert.doesNotMatch(consolidateBody[1], /reviewSheet\.getRange\(\s*2,\s*1,\s*reviewSheet\.getLastRow\(\) - 1/);
 
 const context = {};
 vm.createContext(context);

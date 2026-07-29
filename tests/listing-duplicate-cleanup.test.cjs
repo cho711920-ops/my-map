@@ -34,10 +34,24 @@ assert.match(backend, /자동판정 미적용/);
 assert.match(backend, /!manualSelectionOverride &&\s+mmAddressKey_/);
 assert.match(backend, /!manualSelectionOverride &&\s+!mmRoomsCanRepresentSameSpace_/);
 assert.match(backend, /mmRewriteDuplicateReferences_/);
+assert.match(backend, /mmRewriteDuplicateSourceReferencesFast_/);
+assert.match(backend, /mmRewriteReviewDuplicateReferencesFast_/);
+assert.match(backend, /mmFindRowsByTextFast_/);
 assert.match(backend, /mmArchiveAndRemoveDuplicateMasters_/);
 assert.match(backend, /mmRemoveSheetRowsFast_/);
 assert.doesNotMatch(backend, /masterSheet\.deleteRow\(rowNumber\)/);
-assert.match(backend, /mmWriteDirtyExisting_\(sheet, rows, dirty, rows\.length, config\.width, 3\)/);
+assert.match(
+  backend,
+  /mmFindRowsByTextFast_\(sheet, config\.propertyIndex \+ 1, duplicateMasterIds, true\)/
+);
+const rewriteReferencesBody = backend.match(
+  /function mmRewriteDuplicateReferences_\(spreadsheet, primaryMasterId, duplicateMasterIds\) \{([\s\S]*?)\n\}\n\nfunction mmArchiveAndRemoveDuplicateMasters_/
+);
+assert.ok(rewriteReferencesBody);
+assert.doesNotMatch(
+  rewriteReferencesBody[1],
+  /sheet\.getRange\(2, 1, sheet\.getLastRow\(\) - 1/
+);
 assert.match(backend, /rawIdList\.length <= 10/);
 assert.match(backend, /mmIsNearDuplicate_\(master, item\)/);
 assert.match(backend, /mmRoomsCanRepresentSameSpace_\(master\[2\], item\.room\)/);
