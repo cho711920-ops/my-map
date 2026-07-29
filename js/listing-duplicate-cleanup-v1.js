@@ -138,6 +138,19 @@
     var node = document.getElementById("listingDuplicateConfirmModal");
     if (node) node.hidden = true;
   }
+  function removeDuplicatesFromCurrentView(duplicateIds) {
+    var duplicateMap = {};
+    (duplicateIds || []).forEach(function(id) { duplicateMap[text(id)] = true; });
+    ["allItems", "currentItems", "visibleListItems"].forEach(function(name) {
+      if (!Array.isArray(window[name])) return;
+      window[name] = window[name].filter(function(item) {
+        return !duplicateMap[text(item && item.propertyId)];
+      });
+    });
+    if (typeof window.showList === "function") {
+      window.showList((window.visibleListItems || []).slice());
+    }
+  }
   function executeCleanup() {
     var confirmButton = modal().querySelector("[data-confirm]");
     confirmButton.disabled = true;
@@ -154,16 +167,30 @@
       })
     }).then(function(response) { return response.json(); }).then(function(result) {
       if (!result || result.ok === false) throw new Error(result && result.message || "중복정리에 실패했습니다.");
+      var removedIds = state.duplicateIds.slice();
       closeConfirmation();
       setActive(false);
-      if (typeof window.loadSheet === "function") return window.loadSheet(false);
-      window.location.reload();
+      removeDuplicatesFromCurrentView(removedIds);
+      if (typeof window.showQuickAddToastV636 === "function") {
+        window.showQuickAddToastV636(
+          numberOrZero(result.consolidated) + "건 중복정리 완료 · 목록을 최신화합니다.",
+          "success"
+        );
+      }
+      setTimeout(function() {
+        if (typeof window.loadSheet === "function") window.loadSheet(true);
+        else window.location.reload();
+      }, 0);
     }).catch(function(error) {
       window.alert(error.message || "중복정리에 실패했습니다.");
     }).finally(function() {
       confirmButton.disabled = false;
       confirmButton.textContent = "중복정리 실행";
     });
+  }
+  function numberOrZero(value) {
+    var parsed = Number(value);
+    return isFinite(parsed) ? parsed : 0;
   }
 
   if (typeof originalAddListItem === "function") {

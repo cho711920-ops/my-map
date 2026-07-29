@@ -18,6 +18,8 @@ assert.match(ui, /임대조건이 달라도 사용자가 같은 매물로 직접
 assert.match(ui, /manualOverride/);
 assert.match(ui, /사용자 임대조건 차이 동일매물 확인/);
 assert.match(ui, /101호와 102호처럼 다른 공간은 차단/);
+assert.match(ui, /removeDuplicatesFromCurrentView/);
+assert.match(ui, /window\.loadSheet\(true\)/);
 assert.match(css, /duplicate-cleanup-primary/);
 assert.match(css, /duplicate-cleanup-target/);
 assert.match(css, /flex:0 0 72px!important/);
@@ -30,7 +32,10 @@ assert.match(backend, /사용자 임대조건 차이 동일매물 확인/);
 assert.match(backend, /if \(!mmRoomsCanRepresentSameSpace_\(primary\[2\], duplicate\[2\]\)\)/);
 assert.match(backend, /mmRewriteDuplicateReferences_/);
 assert.match(backend, /mmArchiveAndRemoveDuplicateMasters_/);
-assert.match(backend, /masterSheet\.deleteRow\(rowNumber\)/);
+assert.match(backend, /mmRemoveSheetRowsFast_/);
+assert.doesNotMatch(backend, /masterSheet\.deleteRow\(rowNumber\)/);
+assert.match(backend, /mmWriteDirtyExisting_\(sheet, rows, dirty, rows\.length, config\.width, 3\)/);
+assert.match(backend, /rawIdList\.length <= 10/);
 assert.match(backend, /mmIsNearDuplicate_\(master, item\)/);
 assert.match(backend, /mmRoomsCanRepresentSameSpace_\(master\[2\], item\.room\)/);
 

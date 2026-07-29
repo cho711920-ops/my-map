@@ -613,17 +613,16 @@
         extraState.reviews = null;
         sessionStorage.removeItem(REVIEW_CACHE_KEY);
         clearReviewSelection();
-        return loadReviews(true, true).then(function() {
-          message(number(result.consolidated).toLocaleString("ko-KR") + "건의 기존 중복매물을 정리했습니다.", "success");
-          showReviewDecisionModal(
-            "기존 중복 정리 완료",
-            "대표매물의 임대조건은 유지하고 중복 " +
-              number(result.consolidated).toLocaleString("ko-KR") +
-              "건의 출처·링크·연락처를 이전했습니다.",
-            "",
-            true
-          );
-        });
+        var consolidated = number(result.consolidated).toLocaleString("ko-KR");
+        message(consolidated + "건의 기존 중복매물을 정리했습니다. 검증목록을 최신화합니다.", "success");
+        showReviewDecisionModal(
+          "기존 중복 정리 완료",
+          "대표매물의 임대조건은 유지하고 중복 " + consolidated +
+            "건의 출처·링크·연락처를 이전했습니다.",
+          "",
+          true
+        );
+        setTimeout(function() { loadReviews(true, true); }, 0);
       }).catch(function(error) {
         message(error.message, "error");
         showReviewDecisionModal("기존 중복 정리 실패", error.message || "다시 시도해 주세요.", "", true);
