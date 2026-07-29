@@ -470,3 +470,91 @@
     font-size:11px;
   }
 }
+
+/* v7.22 매물검증 안전 통합 · 임대조건 강조 */
+.review-master-controls{display:flex;align-items:center;gap:6px}
+.review-master-controls label{display:inline-flex;align-items:center;gap:4px;padding:4px 6px;border:1px solid #d9e3ef;border-radius:8px;background:#fff;color:#52657d;font-size:11px;font-weight:900;white-space:nowrap;cursor:pointer}
+.review-master-controls input{width:16px;height:16px;margin:0;accent-color:#0568e8}
+.review-master-controls .review-duplicate-check input{accent-color:#c81e1e}
+.review-candidate-compact.selected-master{border:2px solid #0568e8!important;background:#eef6ff!important;box-shadow:inset 5px 0 0 #0568e8}
+.review-existing-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:7px;padding-top:7px;border-top:1px solid #f2caca}
+.review-existing-footer span{margin-right:auto;color:#5a687c;font-size:12px;font-weight:800}
+.review-existing-footer b{color:#c81e1e;font-size:14px}
+.review-existing-footer button{min-height:32px;padding:0 11px;border:1px solid #c81e1e;border-radius:9px;background:#fff;color:#a91515;font-size:11px;font-weight:900;cursor:pointer}
+.review-existing-footer button:disabled{opacity:.38;cursor:not-allowed}
+.review-action-buttons .condition{border-color:#e07700;background:#fff4df;color:#ae5700}
+.review-compact-values .review-value-deposit{border:1px solid #a9caff;background:#eaf3ff!important;color:#075db6;font-weight:950}
+.review-compact-values .review-value-rent{border:1px solid #ffc286;background:#fff1df!important;color:#b94e00;font-weight:950}
+.review-compact-values .review-value-area{border:1px solid #9bdcb9;background:#eafaf1!important;color:#08754a;font-weight:950}
+.review-compact-values .review-value-deposit b{color:#075db6}
+.review-compact-values .review-value-rent b{color:#b94e00}
+.review-compact-values .review-value-area b{color:#08754a}
+
+@media(min-width:769px){
+  #operationsReviewsPanel .review-candidate-compact{
+    grid-template-columns:auto minmax(150px,1fr) minmax(310px,1.7fr) auto;
+  }
+  #operationsReviewsPanel .review-compact-title strong{font-size:13px}
+  #operationsReviewsPanel .review-compact-title em{font-size:10px}
+  #operationsReviewsPanel .review-compact-address{font-size:11.5px}
+  #operationsReviewsPanel .review-compact-note{font-size:10px}
+  #operationsReviewsPanel .review-compact-values span{font-size:11.5px}
+  #operationsReviewsPanel .review-compact-values b{font-size:9.5px}
+}
+
+/* 태블릿: 실제 보이는 화면 안에 모달을 고정하고 가운데 내용만 스크롤 */
+@media(min-width:769px) and (max-width:1366px){
+  .operations-center-dialog{
+    top:max(6px,env(safe-area-inset-top));
+    bottom:max(6px,env(safe-area-inset-bottom));
+    width:calc(100vw - 12px);
+    height:auto;
+    max-height:none;
+    transform:translateX(-50%);
+    border-radius:16px;
+  }
+  .operations-center-header{padding:9px 14px 7px}
+  .operations-center-header h2{font-size:19px}
+  .operations-center-tabs{padding:5px 14px 0}
+  .operations-center-tabs button{height:34px;font-size:13px}
+  .operations-center-message{padding:3px 14px}
+  #operationsReviewsPanel:not([hidden]){min-height:0;overflow:hidden}
+  #operationsReviewsPanel .review-toolbar{padding:7px 9px}
+  #operationsReviewsPanel .review-workspace{
+    min-height:0;
+    grid-template-columns:220px minmax(0,1fr);
+  }
+  #operationsReviewsPanel .review-queue,
+  #operationsReviewsPanel .review-detail{min-height:0;overflow:auto}
+  #operationsReviewsPanel .review-summary h3{font-size:17px}
+  #operationsReviewsPanel .review-section-heading strong{font-size:13px}
+  #operationsReviewsPanel .review-candidate-compact{
+    grid-template-columns:auto minmax(130px,.8fr) minmax(260px,1.6fr) auto;
+  }
+  #operationsReviewsPanel .review-existing-list{max-height:130px}
+  #operationsReviewsPanel .review-new-list{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    overflow:auto;
+  }
+  #operationsReviewsPanel .review-item-compact{
+    grid-template-columns:18px 24px minmax(130px,1fr) minmax(180px,1.2fr);
+    min-height:66px;
+    padding:6px!important;
+  }
+  #operationsReviewsPanel .review-action-buttons{
+    position:sticky;
+    bottom:0;
+    z-index:8;
+    margin:7px -8px -8px;
+    padding:8px max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+    background:#fff;
+  }
+}
+
+@media(min-width:769px) and (max-width:1050px){
+  #operationsReviewsPanel .review-new-list{grid-template-columns:1fr}
+  #operationsReviewsPanel .review-candidate-compact{
+    grid-template-columns:auto minmax(150px,1fr) minmax(230px,1.35fr);
+  }
+  #operationsReviewsPanel .review-candidate-actions{grid-column:2/-1}
+}
