@@ -130,7 +130,9 @@
       '<ul><li><b>임대조건이 달라도 사용자가 같은 매물로 직접 선택하면 정리할 수 있습니다.</b></li>' +
       '<li>대표매물의 임대조건은 그대로 유지됩니다.</li>' +
       '<li>중복매물의 출처·링크·연락처는 대표매물로 이전됩니다.</li>' +
-      '<li>같은 지번주소의 동일 층·호실만 정리되며, 101호와 102호처럼 다른 공간은 차단됩니다.</li>' +
+      '<li><b>호실이 달라도 같은 지번주소·같은 층이면 사용자가 직접 선택하여 정리할 수 있습니다.</b></li>' +
+      '<li>101호와 102호는 자동으로는 별도 매물이지만, 선택중복에서는 수동 확인 이력을 남기고 통합됩니다.</li>' +
+      '<li>서로 다른 층이거나 층을 확인할 수 없는 매물은 계속 차단됩니다.</li>' +
       '<li>이 실행은 자동 중복판정이 아니라 사용자가 현장에서 같은 매물임을 직접 확인한 수동 정리로 기록됩니다.</li></ul>';
     node.hidden = false;
   }
@@ -163,7 +165,7 @@
         primaryMasterId: state.primaryId,
         duplicateMasterIds: state.duplicateIds,
         manualOverride: true,
-        manualOverrideReason: "사용자 임대조건 차이 동일매물 확인"
+        manualOverrideReason: "사용자 임대조건·호실차이 동일매물 확인"
       })
     }).then(function(response) { return response.json(); }).then(function(result) {
       if (!result || result.ok === false) throw new Error(result && result.message || "중복정리에 실패했습니다.");
