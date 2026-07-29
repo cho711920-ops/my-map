@@ -237,11 +237,18 @@
   function dedupeOfficialCandidates(entries) {
     var results = [];
     var positions = {};
+    var equivalentIndustryGroups = {
+      cafe: "rest-restaurant",
+      "rest-restaurant": "rest-restaurant"
+    };
     (entries || []).forEach(function (entry) {
       var industry = entry && entry.industry;
       if (!industry) return;
-      var key = String(industry.officialName || industry.id).replace(/\s+/g, "") +
-        "|" + String(industry.permitType || "");
+      var equivalentId = equivalentIndustryGroups[industry.id];
+      var key = equivalentId
+        ? "industry-group|" + equivalentId
+        : String(industry.officialName || industry.id).replace(/\s+/g, "") +
+          "|" + String(industry.permitType || "");
       if (positions[key] === undefined) {
         positions[key] = results.length;
         results.push(entry);
