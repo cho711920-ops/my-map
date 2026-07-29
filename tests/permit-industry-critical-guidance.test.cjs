@@ -12,7 +12,7 @@ const guidance = readJson("industry-critical-guidance.json");
 const industries = [...catalog.industries, ...master.industries];
 const ids = [...new Set(industries.map((industry) => industry.id))];
 
-assert.strictEqual(ids.length, 48, "업종 마스터의 고유 업종 수가 변경되었습니다.");
+assert.strictEqual(ids.length, 50, "업종 마스터의 고유 업종 수가 변경되었습니다.");
 assert.strictEqual(
   Object.keys(guidance.industries).length,
   ids.length,
@@ -61,4 +61,4 @@ assert(step2.includes("renderCriticalGuidanceCard"));
 assert(step2.includes("계약 차단조건 확인"));
 assert(ui.includes("industry-critical-guidance.json"));
 
-console.log("permit industry critical guidance tests: ok (48/48)");
+console.log("permit industry critical guidance tests: ok (50/50)");

@@ -1,5 +1,5 @@
 {
-  "version": "2026-07-29-critical-guidance-v1",
+  "version": "2026-07-30-critical-guidance-v2",
   "notice": "계약 전 중개 검토용 핵심 확인표입니다. 법령·조례·시설 현황에 따라 달라지는 값은 관할기관의 공식 확인 전까지 미확인으로 처리합니다.",
   "sources": {
     "building": {"title": "건축법 시행령 별표 1 용도별 건축물의 종류", "url": "https://www.law.go.kr/법령/건축법시행령"},
@@ -160,6 +160,8 @@
     "fitness": {"template":"sports","specific":["같은 건축물 내 체력단련장 용도 면적 합계가 500㎡ 미만이면 제2종 근린생활시설, 500㎡ 이상이면 운동시설에 해당하는지 대장으로 확인","체력단련장업 신고 대상과 운동전용면적·기구배치 기준 확인","중량기구 바닥하중·충격흡수·층간진동과 샤워실 급배수 확인"],"sourceIds":["building","sports"]},
     "bakery": {"template":"food","specific":["제과점영업과 즉석판매제조가공업의 제조·판매 범위 구분","오븐·발효기 전력, 가스, 후드·배기와 제조실 구획 확인"],"sourceIds":["food","foodFacility"]},
     "bar": {"template":"entertainment","specific":["일반음식점·단란주점·유흥주점 중 접객·춤·주류 운영형태로 업종 확정","단란·유흥주점은 허가와 위락시설 용도·입지 제한을 계약 전 확인"],"sourceIds":["food","foodFacility"]},
+    "danran-bar": {"template":"entertainment","specific":["단란주점은 손님이 노래를 부를 수 있으나 유흥종사자를 두거나 접객행위를 하는 유흥주점과 구분","같은 건축물 내 단란주점 바닥면적 합계가 150㎡ 미만이면 제2종 근린생활시설, 150㎡ 이상이면 위락시설인지 확인","식품영업허가 전에 다중이용업소 안전시설등 완비증명과 식품접객업 시설기준 확인"],"sourceIds":["building","food","foodFacility","fire"]},
+    "entertainment-bar": {"template":"entertainment","specific":["유흥종사자를 두거나 손님의 노래·춤이 허용되는 실제 운영형태를 확정","유흥주점은 면적과 관계없이 건축물대장상 위락시설 및 용도지역상 입지 가능 여부 확인","식품영업허가 전에 다중이용업소 안전시설등 완비증명과 식품접객업 시설기준 확인"],"sourceIds":["building","food","foodFacility","fire"]},
     "food-manufacturing": {"template":"food","specific":["즉석판매제조가공업의 제조품목·판매범위와 식품제조가공업 해당 여부 구분","원료·완제품·포장재 보관과 제조공간 교차오염 방지"],"sourceIds":["food","foodFacility"]},
     "cafe": {"template":"food","specific":["휴게음식점 기준으로 주류 판매 금지와 조리범위 확인","로스팅·제과제빵·브런치 조리 시 추가 업종·배기·전력 확인"],"sourceIds":["food","foodFacility"]},
     "billiards": {"template":"sports","specific":["당구장업 신고와 당구대 간 안전거리·조명 확인","흡연실은 실내 금연 원칙과 별도 기준을 관할기관에 확인"],"sourceIds":["sports"]},

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "ruleVersion": "2026-07-29-building-use-v1",
-  "verifiedAt": "2026-07-29",
+  "ruleVersion": "2026-07-30-building-use-v2",
+  "verifiedAt": "2026-07-30",
   "facilityGroups": [
     {"id":"automobile","order":1,"label":"자동차 관련 시설군","patterns":["자동차 관련 시설"]},
     {"id":"industrial","order":2,"label":"산업 등 시설군","patterns":["운수시설","창고시설","공장","위험물저장","위험물 저장","자원순환","묘지 관련","장례시설"]},
@@ -17,6 +17,7 @@
     {"id":"neighborhood-1","label":"제1종 근린생활시설","groupId":"neighborhood","patterns":["제1종 근린생활시설","제1종근린생활시설"]},
     {"id":"neighborhood-2","label":"제2종 근린생활시설","groupId":"neighborhood","patterns":["제2종 근린생활시설","제2종근린생활시설"]},
     {"id":"sales","label":"판매시설","groupId":"business","patterns":["판매시설"]},
+    {"id":"amusement","label":"위락시설","groupId":"culture","patterns":["위락시설"]},
     {"id":"detached-house","label":"단독주택","groupId":"residential","patterns":["단독주택"]},
     {"id":"apartment-house","label":"공동주택","groupId":"residential","patterns":["공동주택"]},
     {"id":"office","label":"업무시설","groupId":"residential","patterns":["업무시설"]}
@@ -86,6 +87,28 @@
         "condition": "같은 건축물에서 해당 용도로 쓰는 바닥면적 합계 500㎡ 이상"
       },
       "doNotInferFromExclusiveArea": true
+    },
+    "danran-bar": {
+      "thresholdMetric": "sameBuildingRelevantUseArea",
+      "thresholdSquareMeters": 150,
+      "below": {
+        "useTypeId": "neighborhood-2",
+        "label": "제2종 근린생활시설",
+        "condition": "같은 건축물 내 단란주점 용도 바닥면적 합계 150㎡ 미만"
+      },
+      "atOrAbove": {
+        "useTypeId": "amusement",
+        "label": "위락시설",
+        "condition": "같은 건축물 내 단란주점 용도 바닥면적 합계 150㎡ 이상"
+      },
+      "doNotInferFromExclusiveArea": true
+    },
+    "entertainment-bar": {
+      "fixed": {
+        "useTypeId": "amusement",
+        "label": "위락시설",
+        "condition": "유흥주점은 면적과 관계없이 위락시설"
+      }
     }
   }
 }

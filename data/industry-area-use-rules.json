@@ -1,6 +1,6 @@
 {
-  "version": "2026-07-29-building-area-use-v1",
-  "verifiedAt": "2026-07-29",
+  "version": "2026-07-30-building-area-use-v2",
+  "verifiedAt": "2026-07-30",
   "source": {
     "title": "건축법 시행령 별표 1 용도별 건축물의 종류",
     "url": "https://www.law.go.kr/LSW/flDownload.do?bylClsCd=110201&flSeq=156922891",
@@ -153,6 +153,8 @@
     "fitness": "sports500",
     "bakery": "food300",
     "bar": "danran150",
+    "danran-bar": "danran150",
+    "entertainment-bar": "fixedSpecial",
     "food-manufacturing": "repair500",
     "cafe": "food300",
     "billiards": "sports500",

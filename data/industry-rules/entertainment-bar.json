@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-30-entertainment-bar-v1",
+  "verifiedAt": "2026-07-30",
+  "industryId": "entertainment-bar",
+  "officialName": "유흥주점영업",
+  "commonName": "유흥주점·클럽",
+  "registrationType": "허가",
+  "requiredBuildingUse": {
+    "underThreshold": "면적과 관계없이 위락시설",
+    "atOrOverThreshold": "면적과 관계없이 위락시설",
+    "important": "유흥주점은 전용면적이 작아도 제2종 근린생활시설로 보지 않습니다. 건축물대장상 위락시설과 용도지역상 입지 가능 여부를 모두 확인합니다."
+  },
+  "generalProcess": [
+    "유흥종사자·접객·노래·춤 등 실제 영업형태를 확정",
+    "용도지역·지구단위계획상 위락시설 입지 가능 여부 확인",
+    "해당 층·호실 건축물대장상 위락시설 확인",
+    "임대인에게 방음·환기·소방·간판 공사 동의를 서면으로 확보",
+    "관할 소방서 안전시설등 완비증명 준비",
+    "식품접객업 시설·위생요건과 교육·건강진단 준비",
+    "관할 구청 식품위생 담당부서에 유흥주점영업 허가 신청",
+    "허가 후 사업자등록·화재배상책임보험·세무사항 확인"
+  ],
+  "sources": [
+    {"id":"building-use","title":"건축법 시행령 별표 1","summary":"유흥주점은 위락시설","url":"https://www.law.go.kr/법령/건축법시행령"},
+    {"id":"food-definition","title":"식품위생법 시행령 제21조","summary":"유흥주점영업의 공식 영업 정의","url":"https://www.law.go.kr/법령/식품위생법시행령"},
+    {"id":"food-permit","title":"식품위생법 시행령 제23조","summary":"유흥주점영업은 영업허가 대상","url":"https://www.law.go.kr/법령/식품위생법시행령"},
+    {"id":"food-facility","title":"식품위생법 시행규칙 별표 14","summary":"식품접객업 및 유흥주점영업 시설기준","url":"https://www.law.go.kr/법령/식품위생법시행규칙"},
+    {"id":"fire","title":"다중이용업소의 안전관리에 관한 특별법","summary":"안전시설등 완비증명·방염·피난·화재배상책임보험 검토","url":"https://www.law.go.kr/법령/다중이용업소의안전관리에관한특별법"}
+  ],
+  "checkGroups": [
+    {
+      "id": "industry",
+      "title": "업종·영업형태 확정",
+      "checks": [
+        {"id":"operation","label":"유흥주점 영업형태 확인","note":"유흥종사자, 접객, 노래, 춤의 허용 범위를 구체적으로 확정합니다.","severity":"critical","sourceIds":["food-definition"]},
+        {"id":"industry-boundary","label":"일반음식점·단란주점과 구분","note":"실제 운영이 신고업인 일반음식점이나 단란주점 허가 범위를 벗어나지 않는지 확인합니다.","severity":"critical","sourceIds":["food-definition"]}
+      ]
+    },
+    {
+      "id": "building",
+      "title": "건축·입지",
+      "checks": [
+        {"id":"ledger-use","label":"해당 층·호실 위락시설 확인","note":"유흥주점은 면적과 관계없이 건축물대장상 위락시설을 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"land-use","label":"용도지역·지구단위계획 입지 제한","note":"위락시설 설치가 가능한 지역인지 토지이용계획과 조례를 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"actual-plan","label":"대장 도면과 실제 구조 일치","note":"객실·복도·출입구·무대 등의 무단 변경과 불법 증축을 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"parking-access","label":"주차·피난·직통계단 추가기준","note":"층·면적·수용인원에 따른 건축·피난·주차 기준을 건축부서에 확인합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "facility",
+      "title": "시설·위생",
+      "checks": [
+        {"id":"layout","label":"객실·영업장·조리장 구획","note":"허가 도면과 시설기준에 맞는 객실·영업장·조리장·통로를 확보합니다.","severity":"critical","sourceIds":["food-facility"]},
+        {"id":"kitchen-water","label":"조리장·급수·세척·배수","note":"식품접객업 시설기준에 맞는 급수·세척·보관·배수시설을 확인합니다.","severity":"critical","sourceIds":["food-facility"]},
+        {"id":"sound-vent","label":"방음·환기·배기 공사 가능","note":"심야 소음과 냄새 민원, 외벽·옥상 공사 동의를 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"toilet","label":"화장실·위생시설","note":"영업장 구조와 규모에 적용되는 화장실·손씻기 기준을 확인합니다.","severity":"high","sourceIds":["food-facility"]}
+      ]
+    },
+    {
+      "id": "fire",
+      "title": "소방·안전",
+      "checks": [
+        {"id":"completion-certificate","label":"안전시설등 완비증명","note":"영업허가 전에 관할 소방서의 완비증명을 준비합니다.","severity":"critical","sourceIds":["fire","food-permit"]},
+        {"id":"escape","label":"비상구·피난통로·방화문","note":"객실과 영업장의 피난 동선과 비상구·방화문 기준을 확인합니다.","severity":"critical","sourceIds":["fire"]},
+        {"id":"flameproof","label":"방염·소방시설·피난안내","note":"실내장식물 방염, 감지기·유도등·소화기 등 적용시설을 확인합니다.","severity":"critical","sourceIds":["fire"]},
+        {"id":"insurance","label":"화재배상책임보험","note":"영업 전 화재배상책임보험 가입대상과 증빙을 확인합니다.","severity":"high","sourceIds":["fire"]}
+      ]
+    },
+    {
+      "id": "permit",
+      "title": "허가·계약",
+      "checks": [
+        {"id":"preconsult","label":"구청 위생·건축 사전협의","note":"계약 전에 평면도와 운영계획을 가지고 위락시설 입지와 허가 가능성을 확인합니다.","severity":"critical","sourceIds":["food-permit"]},
+        {"id":"permit-documents","label":"영업허가 신청서·구비서류","note":"완비증명, 교육, 건강진단, 수질·가스 등 해당 구비서류를 확인합니다.","severity":"critical","sourceIds":["food-permit"]},
+        {"id":"special-clause","label":"허가 불가 시 계약해제 특약","note":"입지·용도·소방·위생 사유로 허가가 불가능할 때 계약 해제와 계약금 반환 범위를 명시합니다.","severity":"critical","sourceIds":[]}
+      ]
+    }
+  ],
+  "disclaimer": "이 결과는 계약 전 사전검토 자료입니다. 최종 건축물 용도와 영업허가 가능 여부는 관할 구청 건축·식품위생 담당부서와 관할 소방서가 판단합니다."
+}
