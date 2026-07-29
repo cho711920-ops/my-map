@@ -15,10 +15,19 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.23\.5"/);
+assert.match(backend, /MM_VERSION = "7\.23\.7"/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(backend, /mmLoadState_\(\[\], \{ skipReviewRows: true, skipReviewHold: true \}\)/);
+assert.match(
+  backend,
+  /function mmLoadState_[\s\S]*?var sourceSheetRowNumbers = null;[\s\S]*?sourceSheetRowNumbers: sourceSheetRowNumbers/
+);
+const reconcileBody = backend.match(
+  /function mmReconcileCompletedExternalSessions_\(\) \{([\s\S]*?)\n\}/
+);
+assert.ok(reconcileBody);
+assert.doesNotMatch(reconcileBody[1], /options\.sourceKeys/);
 assert.match(backend, /mmRemoveSheetRowsFast_/);
 assert.match(backend, /createTextFinder\(rawId\)\.matchEntireCell\(true\)\.findNext\(\)/);
 
