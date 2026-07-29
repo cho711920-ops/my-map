@@ -11,15 +11,15 @@ const backend = fs.readFileSync(
 );
 
 assert.match(html, /listing-duplicate-cleanup-v1\.css/);
-assert.match(html, /listing-duplicate-cleanup-v1\.js/);
+assert.match(html, /listing-duplicate-cleanup-v1\.js\?v=1\.5\.0-unrestricted-manual-cleanup/);
 assert.match(ui, /대표로 유지/);
 assert.match(ui, /중복으로 정리/);
 assert.match(ui, /consolidateExistingMasters/);
-assert.match(ui, /임대조건이 달라도 사용자가 같은 매물로 직접 선택하면 정리할 수 있습니다/);
+assert.match(ui, /주소·층·호실·임대조건·평수가 달라도 사용자가 선택한 매물을 정리합니다/);
 assert.match(ui, /manualOverride/);
-assert.match(ui, /사용자 임대조건·호실차이 동일매물 확인/);
-assert.match(ui, /101호와 102호는 자동으로는 별도 매물/);
-assert.match(ui, /서로 다른 층이거나 층을 확인할 수 없는 매물은 계속 차단/);
+assert.match(ui, /사용자 선택중복 직접 정리/);
+assert.match(ui, /자동 중복검사 기준과 관계없이 사용자의 선택을 그대로 적용합니다/);
+assert.doesNotMatch(ui, /서로 다른 층이거나 층을 확인할 수 없는 매물은 계속 차단/);
 assert.match(ui, /removeDuplicatesFromCurrentView/);
 assert.match(ui, /window\.loadSheet\(true\)/);
 assert.match(css, /duplicate-cleanup-primary/);
@@ -28,10 +28,11 @@ assert.match(css, /flex:0 0 72px!important/);
 
 assert.match(backend, /MM_DUPLICATE_ARCHIVE_SHEET = "중복통합이력"/);
 assert.match(backend, /mmIsNearDuplicate_\(primary, duplicateForCheck\)/);
-assert.match(backend, /manualOverride/);
-assert.match(backend, /자동 중복기준 예외/);
-assert.match(backend, /사용자 임대조건·호실차이 동일매물 확인/);
-assert.match(backend, /mmManualRoomsShareOneFloor_/);
+assert.match(backend, /manualSelectionOverride/);
+assert.match(backend, /사용자 선택중복 직접 정리/);
+assert.match(backend, /자동판정 미적용/);
+assert.match(backend, /!manualSelectionOverride &&\s+mmAddressKey_/);
+assert.match(backend, /!manualSelectionOverride &&\s+!mmRoomsCanRepresentSameSpace_/);
 assert.match(backend, /mmRewriteDuplicateReferences_/);
 assert.match(backend, /mmArchiveAndRemoveDuplicateMasters_/);
 assert.match(backend, /mmRemoveSheetRowsFast_/);

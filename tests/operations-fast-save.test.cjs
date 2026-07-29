@@ -15,7 +15,7 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.23\.4"/);
+assert.match(backend, /MM_VERSION = "7\.23\.5"/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(backend, /mmLoadState_\(\[\], \{ skipReviewRows: true, skipReviewHold: true \}\)/);
