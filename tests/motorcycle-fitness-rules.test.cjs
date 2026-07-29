@@ -1,6 +1,7 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 const readJson = (file) => JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
@@ -42,6 +43,18 @@ assert(fitnessRule.requiredBuildingUse.underThreshold.includes("제2종 근린�
 assert(fitnessRule.requiredBuildingUse.atOrOverThreshold.includes("운동시설"));
 assert(fitnessRule.checkGroups.some((group) =>
   group.checks.some((check) => check.id === "fitness-area-sum")));
+
+const parserContext = { window: {} };
+vm.createContext(parserContext);
+vm.runInContext(
+  fs.readFileSync(path.join(root, "js/industry-intent-parser.js"), "utf8"),
+  parserContext
+);
+const parser = parserContext.window.PermitIndustryIntentParserV1;
+const bikeMatches = parser.interpret("바이크 판매수리점", master, 6)
+  .map((entry) => entry.industry.id);
+assert(bikeMatches.includes("motorcycle-sales"), "띄어쓴 바이크 판매 검색 실패");
+assert(bikeMatches.includes("motorcycle-repair"), "띄어쓴 바이크 수리 검색 실패");
 
 const css = fs.readFileSync(path.join(root, "css/permit-diagnosis-v1.css"), "utf8");
 assert(css.includes(".permit-critical-bottom-v1 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));"),

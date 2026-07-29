@@ -10,16 +10,23 @@
 
   function scoreIndustry(industry, requestText) {
     var text = normalize(requestText);
+    var compactText = text.replace(/\s+/g, "");
     var score = 0;
 
     (industry.keywords || []).forEach(function (keyword) {
       var normalizedKeyword = normalize(keyword);
-      if (!normalizedKeyword || text.indexOf(normalizedKeyword) < 0) return;
+      var compactKeyword = normalizedKeyword.replace(/\s+/g, "");
+      if (!normalizedKeyword ||
+          (text.indexOf(normalizedKeyword) < 0 && compactText.indexOf(compactKeyword) < 0)) return;
       score += normalizedKeyword.length >= 5 ? 7 : 5;
     });
 
-    if (text.indexOf(normalize(industry.commonName)) >= 0) score += 4;
-    if (text.indexOf(normalize(industry.officialName)) >= 0) score += 9;
+    var commonName = normalize(industry.commonName);
+    var officialName = normalize(industry.officialName);
+    if (text.indexOf(commonName) >= 0 ||
+        compactText.indexOf(commonName.replace(/\s+/g, "")) >= 0) score += 4;
+    if (text.indexOf(officialName) >= 0 ||
+        compactText.indexOf(officialName.replace(/\s+/g, "")) >= 0) score += 9;
 
     if (industry.id === "internet-computer-game") {
       if (/\bpc\s*\d+|컴퓨터\s*\d+|게임/.test(text)) score += 2;
