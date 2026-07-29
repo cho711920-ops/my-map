@@ -497,12 +497,12 @@
   display:inline-flex;padding:2px 6px;border-radius:999px;background:#eef2f7;color:#32455c;
   font-size:10px;font-weight:950;vertical-align:1px
 }
-.review-match-group-0 .review-rental-values{border-color:#8bbcff;background:#eaf4ff;color:#075db6}
-.review-match-group-1 .review-rental-values{border-color:#ffbd76;background:#fff2e2;color:#a94b00}
-.review-match-group-2 .review-rental-values{border-color:#86d7ac;background:#eaf9f1;color:#08754a}
-.review-match-group-3 .review-rental-values{border-color:#c8a5ff;background:#f4edff;color:#6330aa}
+.review-match-group-0 .review-rental-values{border-color:#8bbcff;background:#eaf4ff!important;color:#075db6}
+.review-match-group-1 .review-rental-values{border-color:#ffbd76;background:#fff2e2!important;color:#a94b00}
+.review-match-group-2 .review-rental-values{border-color:#86d7ac;background:#eaf9f1!important;color:#08754a}
+.review-match-group-3 .review-rental-values{border-color:#c8a5ff;background:#f4edff!important;color:#6330aa}
 .review-match-ambiguous .review-rental-values{border:2px dashed #d29a18;background:#fff8df;color:#8a5b00}
-.review-match-different .review-rental-values{border-color:#cfd8e6;background:#f7f9fc;color:#33475f}
+.review-match-different .review-rental-values{border-color:#cfd8e6;background:#f7f9fc!important;color:#33475f}
 .review-item-compact.review-match-group-0{border-left:5px solid #4d9aff}
 .review-item-compact.review-match-group-1{border-left:5px solid #f59a3d}
 .review-item-compact.review-match-group-2{border-left:5px solid #31a66d}
