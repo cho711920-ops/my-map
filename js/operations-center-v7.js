@@ -29,6 +29,10 @@
     rebuilding: false,
     alertPollTimer: null,
     alertFingerprint: "",
+    alertCounts: [0, 0, 0],
+    dismissedAlertKey: "",
+    dismissedAlertFingerprint: "",
+    dismissedAlertCounts: null,
     lastCustomerWorkspace: null,
     customerPrefetchPromise: null,
     loadPromise: null,
@@ -1038,12 +1042,46 @@
   }
 
   function customerAlertFingerprint(data) {
+    return customerAlertCounts(data).join("-");
+  }
+
+  function customerAlertCounts(data) {
     data = data || {};
     return [
       number(data.newMatchCustomers != null ? data.newMatchCustomers : data.newMatches),
       number(data.overdueCustomers != null ? data.overdueCustomers : data.overdueMatches),
       number(data.dueFollowups)
-    ].join("-");
+    ];
+  }
+
+  function readCustomerAlertDismissal(key) {
+    try {
+      var saved = localStorage.getItem(key);
+      if (!saved) return null;
+      if (saved.charAt(0) !== "{") return { fingerprint: saved, counts: null };
+      var parsed = JSON.parse(saved);
+      return parsed && parsed.fingerprint ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function isCustomerAlertDismissed(key, fingerprint, counts) {
+    var dismissed = null;
+    if (state.dismissedAlertKey === key && state.dismissedAlertFingerprint) {
+      dismissed = {
+        fingerprint: state.dismissedAlertFingerprint,
+        counts: state.dismissedAlertCounts
+      };
+    } else {
+      dismissed = readCustomerAlertDismissal(key);
+    }
+    if (!dismissed) return false;
+    if (dismissed.fingerprint === fingerprint) return true;
+    if (!Array.isArray(dismissed.counts)) return false;
+    return counts.every(function(count, index) {
+      return count <= number(dismissed.counts[index]);
+    });
   }
 
   function customerAlertStorageKey() {
@@ -1087,12 +1125,9 @@
     var total = customerAlertCount(data);
     if (!total) return;
     var fingerprint = customerAlertFingerprint(data);
+    var counts = customerAlertCounts(data);
     var key = customerAlertStorageKey();
-    if (!force) {
-      try {
-        if (localStorage.getItem(key) === fingerprint) return;
-      } catch (_) {}
-    }
+    if (!force && isCustomerAlertDismissed(key, fingerprint, counts)) return;
     var modal = ensureCustomerWorkAlert();
     var body = document.getElementById("customerWorkAlertBody");
     var newCustomers = number(data.newMatchCustomers != null ? data.newMatchCustomers : data.newMatches);
@@ -1110,15 +1145,27 @@
         '</div>';
     }
     state.alertFingerprint = fingerprint;
+    state.alertCounts = counts;
     modal.hidden = false;
     document.body.classList.add("customer-work-alert-open");
-    try { localStorage.setItem(key, fingerprint); } catch (_) {}
   }
 
   window.closeCustomerWorkAlert = function() {
     var modal = document.getElementById("customerWorkAlert");
     if (modal) modal.hidden = true;
     document.body.classList.remove("customer-work-alert-open");
+    if (state.alertFingerprint) {
+      var key = customerAlertStorageKey();
+      var payload = {
+        fingerprint: state.alertFingerprint,
+        counts: (state.alertCounts || []).slice(),
+        dismissedAt: new Date().toISOString()
+      };
+      state.dismissedAlertKey = key;
+      state.dismissedAlertFingerprint = payload.fingerprint;
+      state.dismissedAlertCounts = payload.counts;
+      try { localStorage.setItem(key, JSON.stringify(payload)); } catch (_) {}
+    }
   };
 
   window.openCustomerWorkAlert = function() {
