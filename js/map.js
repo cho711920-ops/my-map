@@ -1660,11 +1660,14 @@ function openItem(item) {
   /*
    * 리스트 안에 AI카드를 펼치지 않고,
    * 선택 상태만 다시 표시한 뒤 독립 AI 패널을 엽니다.
-   */
+  */
   showList(visibleListItems && visibleListItems.length ? visibleListItems : [item]);
-  document.getElementById("status").innerHTML = multiClusterMode
-    ? "다중 클러스터 선택 유지 · 현재 매물 AI 분석"
-    : "선택 매물 1개 · AI 분석 패널 표시";
+  var pinnedClusterItemsV6518 = getPinnedClusterItemsV6515();
+  document.getElementById("status").innerHTML = pinnedClusterItemsV6518.length
+    ? "선택 매물 " + pinnedClusterItemsV6518.length + "개 · 스마트 매물카드"
+    : (multiClusterMode
+      ? "다중 클러스터 선택 유지 · 현재 매물 AI 분석"
+      : "선택 매물 1개 · AI 분석 패널 표시");
 
   if (typeof openAiSidePanel === "function") {
     openAiSidePanel(item);

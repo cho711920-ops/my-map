@@ -15,6 +15,10 @@ assert.match(
 );
 assert.match(
   mapSource,
+  /function openItem\(item\) \{[\s\S]*?getPinnedClusterItemsV6515\(\)[\s\S]*?선택 매물 [\s\S]*?스마트 매물카드/
+);
+assert.match(
+  mapSource,
   /Date\.now\(\) <= jsPinnedClusterSpatialChangeIgnoreUntilV6517[\s\S]*?jsPinnedClusterSelectionV6515\.spatialKey = getMapSpatialKeyV6515\(\)/
 );
 assert.match(
@@ -30,6 +34,6 @@ assert.match(
   /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.39-smart-card-cluster-pin/);
-assert.match(htmlSource, /map\.js\?v=6\.5\.17-smart-card-cluster-pin/);
+assert.match(htmlSource, /map\.js\?v=6\.5\.18-smart-card-cluster-pin/);
 
 console.log("smart card cluster pin tests passed");
