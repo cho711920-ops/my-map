@@ -200,7 +200,7 @@
           return brandEvidence.industryIds.indexOf(entry.industry.id) < 0;
         })).slice(0, 6);
       }
-      state.candidates = interpreted;
+      state.candidates = dedupeOfficialCandidates(interpreted);
       renderBrandEvidence(brandEvidence);
       if (!state.candidates.length) {
         state.candidates = [{
@@ -232,6 +232,29 @@
       results.innerHTML = '<div class="permit-candidate-empty-v1"><div>' +
         global.PermitIndustryCandidateSelectorV1.escapeHtml(error.message) + '</div></div>';
     });
+  }
+
+  function dedupeOfficialCandidates(entries) {
+    var results = [];
+    var positions = {};
+    (entries || []).forEach(function (entry) {
+      var industry = entry && entry.industry;
+      if (!industry) return;
+      var key = String(industry.officialName || industry.id).replace(/\s+/g, "") +
+        "|" + String(industry.permitType || "");
+      if (positions[key] === undefined) {
+        positions[key] = results.length;
+        results.push(entry);
+        return;
+      }
+      var current = results[positions[key]];
+      var currentSupported = global.PermitIndustryRuleLoaderV1 &&
+        global.PermitIndustryRuleLoaderV1.supports(current.industry.id);
+      var nextSupported = global.PermitIndustryRuleLoaderV1 &&
+        global.PermitIndustryRuleLoaderV1.supports(industry.id);
+      if (!currentSupported && nextSupported) results[positions[key]] = entry;
+    });
+    return results;
   }
 
   function renderBrandEvidence(evidence) {
