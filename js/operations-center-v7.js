@@ -730,6 +730,9 @@
   };
 
   window.showSelectedCustomerMatchesOnMap = function() {
+    if (typeof window.clearPinnedClusterSelectionV6515 === "function") {
+      window.clearPinnedClusterSelectionV6515(true);
+    }
     var customerId = state.selectedCustomerId;
     var rows = state.matches.filter(function(row) {
       return field(row, state.matchHeaders, "고객ID") === customerId;
@@ -782,6 +785,9 @@
   };
 
   window.clearCustomerMatchMapFilter = function() {
+    if (typeof window.clearPinnedClusterSelectionV6515 === "function") {
+      window.clearPinnedClusterSelectionV6515(true);
+    }
     window.operationsMatchPropertyIds = null;
     window.operationsMatchStatusByPropertyId = {};
     window.operationsMatchContextByPropertyId = {};

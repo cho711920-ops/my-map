@@ -26,6 +26,72 @@ var jsClusterSelectionMemoryV638 = {
   singleItemIds: [],
   multiItemIdGroups: []
 };
+var jsPinnedClusterSelectionV6515 = null;
+
+
+function getMapSpatialKeyV6515() {
+  if (!map) return "";
+  var center = map.getCenter();
+  return [
+    map.getLevel(),
+    center ? center.getLat().toFixed(6) : "",
+    center ? center.getLng().toFixed(6) : ""
+  ].join("|");
+}
+
+
+function getPinnedClusterItemsV6515() {
+  var pin = jsPinnedClusterSelectionV6515;
+  if (!pin || !pin.itemIdentities || !pin.itemIdentities.length) return [];
+  var byIdentity = Object.create(null);
+  (allItems || []).forEach(function(item) {
+    var identity = getStableItemIdentityV638(item);
+    if (identity) byIdentity[identity] = item;
+  });
+  return pin.itemIdentities.map(function(identity) {
+    return byIdentity[identity] || null;
+  }).filter(Boolean);
+}
+
+
+function pinCurrentClusterSelectionV6515() {
+  var snapshot = captureClusterSelectionSnapshotV638();
+  var itemIdentities = [];
+  var seen = Object.create(null);
+  var groups = snapshot.multiClusterMode
+    ? (snapshot.multiItemIdGroups || [])
+    : [snapshot.singleItemIds || []];
+
+  groups.forEach(function(group) {
+    (group || []).forEach(function(identity) {
+      if (!identity || seen[identity]) return;
+      seen[identity] = true;
+      itemIdentities.push(identity);
+    });
+  });
+
+  if (!itemIdentities.length) {
+    jsPinnedClusterSelectionV6515 = null;
+    return;
+  }
+
+  jsPinnedClusterSelectionV6515 = {
+    spatialKey: getMapSpatialKeyV6515(),
+    snapshot: snapshot,
+    itemIdentities: itemIdentities
+  };
+}
+
+
+function clearPinnedClusterSelectionV6515(clearSelection) {
+  jsPinnedClusterSelectionV6515 = null;
+  if (!clearSelection) return;
+  selectedGroupKey = null;
+  selectedGroupKeys = [];
+  selectedItemKey = null;
+  jsClusterSelectionMemoryV638.singleItemIds = [];
+  jsClusterSelectionMemoryV638.multiItemIdGroups = [];
+}
 
 
 function getStableItemIdentityV638(item) {
@@ -453,6 +519,13 @@ function scheduleMapIdleRefreshV638() {
 
     jsLastIdleViewportKeyV638 = viewportKey;
 
+    if (
+      jsPinnedClusterSelectionV6515 &&
+      jsPinnedClusterSelectionV6515.spatialKey !== getMapSpatialKeyV6515()
+    ) {
+      clearPinnedClusterSelectionV6515(true);
+    }
+
     /*
      * 이전 화면에서 필터링된 일부 매물만 재사용하면 크게 축소했다가
      * 확대할 때 빠진 매물이 생깁니다. 지도 범위가 바뀔 때마다 전체
@@ -503,6 +576,14 @@ kakao.maps.load(function() {
   kakao.maps.event.addListener(map, "idle", function() {
     if (isRendering) return;
     scheduleMapIdleRefreshV638();
+  });
+
+  kakao.maps.event.addListener(map, "dragstart", function() {
+    clearPinnedClusterSelectionV6515(true);
+  });
+
+  kakao.maps.event.addListener(map, "zoom_start", function() {
+    clearPinnedClusterSelectionV6515(true);
   });
 
   kakao.maps.event.addListener(map, "click", function(mouseEvent) {
@@ -1335,7 +1416,9 @@ function getCustomerMatchClusterClassV764(cluster) {
 }
 
 function drawMapClustersOnlyV639(items) {
-  var selectionSnapshotV638 = captureClusterSelectionSnapshotV638();
+  var selectionSnapshotV638 = jsPinnedClusterSelectionV6515
+    ? jsPinnedClusterSelectionV6515.snapshot
+    : captureClusterSelectionSnapshotV638();
   isRendering = true;
   clearMapOverlaysOnlyV639();
 
@@ -1414,7 +1497,8 @@ function toggleMapRoadviewSelection() {
 function drawItems(items) {
   jsLastRenderedItemsV639 = (items || []).slice();
   drawMapClustersOnlyV639(jsLastRenderedItemsV639);
-  showList(jsLastRenderedItemsV639);
+  var pinnedItems = getPinnedClusterItemsV6515();
+  showList(pinnedItems.length ? pinnedItems : jsLastRenderedItemsV639);
 }
 
 
@@ -1477,6 +1561,7 @@ function openCluster(encodedKey) {
     if (combinedItems.length) {
       showList(combinedItems);
     } else {
+      clearPinnedClusterSelectionV6515(false);
       applyFilter();
     }
 
@@ -1493,6 +1578,7 @@ function openCluster(encodedKey) {
     document.getElementById("sidebar").classList.add("open");
   }
 
+  pinCurrentClusterSelectionV6515();
   redrawSelectedMarkers();
 }
 

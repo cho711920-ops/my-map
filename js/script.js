@@ -2338,6 +2338,9 @@ function resetFilter() {
   }
   selectedGroupKey = null;
   selectedItemKey = null;
+  if (typeof clearPinnedClusterSelectionV6515 === "function") {
+    clearPinnedClusterSelectionV6515(false);
+  }
 
   applyFilter();
 }
@@ -2808,6 +2811,9 @@ function toggleGongsilOnly() {
 
   selectedGroupKey = null;
   selectedItemKey = null;
+  if (typeof clearPinnedClusterSelectionV6515 === "function") {
+    clearPinnedClusterSelectionV6515(false);
+  }
   applyFilter();
 }
 
@@ -2822,6 +2828,9 @@ function toggleMultiClusterMode() {
     selectedGroupKeys = [];
     selectedGroupKey = null;
     selectedItemKey = null;
+    if (typeof clearPinnedClusterSelectionV6515 === "function") {
+      clearPinnedClusterSelectionV6515(false);
+    }
     applyFilter();
   }
 
@@ -2981,6 +2990,9 @@ function toggleHideDone() {
   updateHideDoneMenuUI();
   selectedGroupKey = null;
   selectedItemKey = null;
+  if (typeof clearPinnedClusterSelectionV6515 === "function") {
+    clearPinnedClusterSelectionV6515(false);
+  }
   applyFilter();
 }
 
@@ -3823,6 +3835,9 @@ function deletePropertyV648() {
     selectedItemKey = null;
     selectedGroupKey = null;
     selectedGroupKeys = [];
+    if (typeof clearPinnedClusterSelectionV6515 === "function") {
+      clearPinnedClusterSelectionV6515(false);
+    }
     openMemoKey = null;
     editingMemoKey = null;
 
