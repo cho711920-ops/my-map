@@ -123,7 +123,7 @@ body.customer-crm-open{overflow:hidden}
 @media(min-width:769px){
   .operations-center-dialog{
     width:min(1580px,calc(100vw - 20px));
-    height:min(940px,calc(100vh - 20px));
+    height:min(940px,calc(100dvh - 20px));
   }
   .operations-stat-grid{
     grid-template-columns:repeat(4,minmax(0,1fr));
@@ -343,6 +343,17 @@ body.customer-crm-open{overflow:hidden}
 }
 
 /* v7.17.1 넓은 데스크탑 고객매칭: 한 화면에 더 많은 매물을 보는 3열 배열 */
+/* v7.17.2 태블릿 브라우저·하단 시스템바에서도 운영창 전체 노출 */
+@media(min-width:769px) and (max-height:900px){
+  .operations-center-dialog{
+    top:max(8px,env(safe-area-inset-top));
+    bottom:max(42px,calc(env(safe-area-inset-bottom) + 12px));
+    height:auto;
+    max-height:none;
+    transform:translateX(-50%);
+  }
+}
+
 @media(min-width:1400px){
   #operationsCustomersPanel .operations-match-cards{
     grid-template-columns:repeat(3,minmax(0,1fr));
