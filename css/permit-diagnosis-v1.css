@@ -1380,6 +1380,25 @@ body.permit-diagnosis-open-v1 {
 .permit-administration-card-v1[data-admin-type="FREE"] .permit-administration-type-v1 strong { color:#0f766e; }
 .permit-administration-card-v1[data-admin-type="CONDITIONAL"] .permit-administration-type-v1 { background:#fff7ed; }
 .permit-administration-card-v1[data-admin-type="CONDITIONAL"] .permit-administration-type-v1 strong { color:#c2410c; }
+.permit-area-use-card-v1 { margin-top:14px; overflow:hidden; border:1px solid #a5b4fc; border-radius:16px; background:#fff; }
+.permit-area-use-card-v1 > header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:17px 20px; color:#fff; background:linear-gradient(120deg,#3730a3,#4f46e5); }
+.permit-area-use-card-v1 > header small { display:block; font-size:12px; font-weight:800; opacity:.9; }
+.permit-area-use-card-v1 > header h4 { margin:4px 0 0; color:#fff; font-size:20px; }
+.permit-area-use-card-v1 > header span { flex:0 0 auto; padding:7px 11px; border-radius:999px; color:#312e81; background:#e0e7ff; font-size:12px; font-weight:900; }
+.permit-area-use-card-v1[data-has-threshold="N"] > header span { color:#475569; background:#f1f5f9; }
+.permit-area-use-bands-v1 { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1px; background:#c7d2fe; }
+.permit-area-use-bands-v1 > div { min-width:0; padding:16px 18px; background:#fff; }
+.permit-area-use-bands-v1 span,.permit-area-use-bands-v1 strong { display:block; }
+.permit-area-use-bands-v1 span { color:#64748b; font-size:13px; font-weight:800; }
+.permit-area-use-bands-v1 strong { margin-top:6px; color:#312e81; font-size:17px; line-height:1.45; }
+.permit-area-use-target-v1 { padding:15px 20px; border-top:1px solid #c7d2fe; background:#eef2ff; }
+.permit-area-use-target-v1 strong { color:#3730a3; font-size:14px; }
+.permit-area-use-target-v1 p { margin:5px 0 0; color:#374151; font-size:14px; font-weight:700; line-height:1.6; }
+.permit-area-use-card-v1 > footer { padding:13px 20px; border-top:1px solid #c7d2fe; background:#fafafa; }
+.permit-area-use-card-v1 > footer strong { margin-right:8px; color:#4338ca; font-size:13px; }
+.permit-area-use-card-v1 > footer span { color:#4b5563; font-size:13px; }
+.permit-area-use-card-v1 > footer p { margin:7px 0; color:#6b7280; font-size:12px; line-height:1.5; }
+.permit-area-use-card-v1 > footer a { color:#4338ca; font-size:12px; font-weight:800; }
 .permit-critical-guidance-v1 { margin-top:14px; overflow:hidden; border:1px solid #c4b5fd; border-radius:16px; background:#fff; }
 .permit-critical-guidance-v1 > header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 20px; color:#fff; background:linear-gradient(120deg,#5b21b6,#7c3aed); }
 .permit-critical-guidance-v1 > header small { display:block; font-size:12px; font-weight:800; opacity:.9; }
@@ -1392,8 +1411,8 @@ body.permit-diagnosis-open-v1 {
 .permit-critical-grid-v1 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:#ddd6fe; }
 .permit-critical-grid-v1 > div { padding:17px 20px; background:#fff; }
 .permit-critical-grid-v1 h5,.permit-critical-bottom-v1 h5 { margin:0 0 8px; color:#5b21b6; font-size:15px; }
-.permit-critical-bottom-v1 { display:grid; grid-template-columns:1.35fr 1fr; gap:1px; border-top:1px solid #ddd6fe; background:#ddd6fe; }
-.permit-critical-bottom-v1 > div { padding:17px 20px; background:#fff; }
+.permit-critical-bottom-v1 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; border-top:1px solid #ddd6fe; background:#ddd6fe; }
+.permit-critical-bottom-v1 > div { min-width:0; padding:17px 20px; background:#fff; }
 .permit-critical-bottom-v1 > div:first-child { background:#fff7ed; }
 .permit-critical-bottom-v1 > div:first-child h5 { color:#c2410c; }
 .permit-critical-guidance-v1 > footer { padding:13px 20px; border-top:1px solid #ddd6fe; background:#fafafa; }

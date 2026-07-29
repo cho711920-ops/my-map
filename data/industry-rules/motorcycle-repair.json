@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-motorcycle-repair-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "motorcycle-repair",
+  "officialName": "모터사이클 수리업",
+  "commonName": "바이크·오토바이 수리점",
+  "registrationType": "자유업·사업자등록",
+  "requiredBuildingUse": {
+    "underThreshold": "제2종 근린생활시설(수리점) 검토",
+    "atOrOverThreshold": "공장·자동차관련시설 등 검토",
+    "important": "500㎡ 기준만으로 자동 확정하지 않습니다. 실제 작업, 같은 건물 면적 합계와 대기·물·소음 배출시설 대상 여부를 관할 건축·환경부서에 확인합니다."
+  },
+  "generalProcess": [
+    "판매·단순교환·분해수리·세척·도장·용접·튜닝 범위 확정",
+    "이륜자동차 정비의 자동차관리사업 등록 제외 여부를 관할 교통부서에 재확인",
+    "층·호실 건축물대장 용도와 수리점·정비공장 분류 확인",
+    "폐유·폐배터리·세척폐수·소음·진동·용제·배기·위험물 검토",
+    "임대인 동의와 환경·소방 보완 후 사업자등록"
+  ],
+  "sources": [
+    {
+      "id": "auto-definition",
+      "title": "자동차관리법 제2조 정의",
+      "summary": "자동차정비업 정의에서 이륜자동차의 점검·정비·튜닝 작업을 제외",
+      "url": "https://www.law.go.kr/법령/자동차관리법/제2조"
+    },
+    {
+      "id": "building-use",
+      "title": "건축법 시행령 별표 1 용도별 건축물의 종류",
+      "summary": "수리점은 면적·배출시설 여부 등에 따라 제2종 근린생활시설 또는 다른 용도를 검토",
+      "url": "https://www.law.go.kr/법령/건축법시행령"
+    },
+    {
+      "id": "water-law",
+      "title": "물환경보전법",
+      "summary": "세척·부품처리 등에서 발생하는 폐수와 배출시설 적용 여부 확인",
+      "url": "https://www.law.go.kr/법령/물환경보전법"
+    },
+    {
+      "id": "waste-law",
+      "title": "폐기물관리법",
+      "summary": "폐유·폐배터리·오염부품·폐타이어 등의 보관·인계 처리 확인",
+      "url": "https://www.law.go.kr/법령/폐기물관리법"
+    },
+    {
+      "id": "noise-law",
+      "title": "소음·진동관리법",
+      "summary": "공회전·공구·압축기·시험운전의 소음·진동과 배출시설 여부 확인",
+      "url": "https://www.law.go.kr/법령/소음ㆍ진동관리법"
+    }
+  ],
+  "checkGroups": [
+    {
+      "id": "business",
+      "title": "수리 범위·행정구분",
+      "checks": [
+        {"id":"work-scope","label":"단순교환·엔진수리·세척·도장·용접 범위","note":"작업별 장비, 배출물과 건축·환경 적용이 달라지므로 실제 작업 목록을 확정합니다.","severity":"critical","sourceIds":[]},
+        {"id":"registration-exclusion","label":"자동차정비업 등록 제외 확인","note":"자동차관리법상 이륜자동차 정비는 자동차정비업 정의에서 제외됩니다. 공사·계약 전 관할 교통부서에 현재 적용을 재확인합니다.","severity":"critical","sourceIds":["auto-definition"]},
+        {"id":"tuning-scope","label":"튜닝·구조변경 작업 병행 여부","note":"구조·장치 변경은 점포 영업 구분과 별개로 차량별 승인·검사를 검토합니다.","severity":"critical","sourceIds":["auto-definition"]}
+      ]
+    },
+    {
+      "id": "building",
+      "title": "건축·동선",
+      "checks": [
+        {"id":"ledger-use","label":"해당 층·호실 수리점 가능 용도","note":"제2종 근린생활시설 수리점, 자동차관련시설 또는 공장 중 적용 용도를 관할 건축부서에 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"area-emission","label":"같은 건물 면적 합계·배출시설 대상","note":"500㎡ 미만 여부만 보지 않고 대기·물·소음 배출시설 허가·신고 대상인지 함께 확인합니다.","severity":"critical","sourceIds":["building-use","water-law","noise-law"]},
+        {"id":"vehicle-route","label":"입고·출고·대기·시험운전 동선","note":"보도와 공용부를 작업·대기 장소로 쓰지 않도록 전용 동선을 확인합니다.","severity":"high","sourceIds":[]},
+        {"id":"owner-consent","label":"바닥·덕트·배수·전기 공사 임대인 동의","note":"유수분리, 환기구, 장비 고정과 전력 증설 가능 여부를 특약으로 확인합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "environment",
+      "title": "폐유·폐수·소음",
+      "checks": [
+        {"id":"waste-oil","label":"폐유·오일필터·오염걸레 보관·인계","note":"누출 방지 용기와 보관장소를 확보하고 허용된 처리업체 인계자료를 관리합니다.","severity":"critical","sourceIds":["waste-law"]},
+        {"id":"battery-tire","label":"폐배터리·폐타이어·교환부품 처리","note":"리튬·납축전지 단락·화재 방지와 폐기물 인계 방법을 확인합니다.","severity":"critical","sourceIds":["waste-law"]},
+        {"id":"wash-water","label":"부품·차량 세척폐수와 유수분리","note":"오일이 섞인 물을 우수관이나 바닥으로 배출하지 않고 폐수·하수 연결 기준을 확인합니다.","severity":"critical","sourceIds":["water-law"]},
+        {"id":"noise-exhaust","label":"공회전·공구·압축기·배기 소음","note":"방음, 영업시간, 시험운전 위치와 인접 주거 민원 가능성을 확인합니다.","severity":"critical","sourceIds":["noise-law"]},
+        {"id":"paint-weld","label":"도장·용접·세척용제 작업","note":"도장부스·집진·환기·방폭·화재와 대기배출시설 해당 여부를 별도로 확인합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "safety",
+      "title": "장비·전기·소방",
+      "checks": [
+        {"id":"lift-tools","label":"리프트·스탠드·압축기 안전과 바닥하중","note":"장비 고정, 전도 방지, 작업반경과 정기 점검을 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"ventilation","label":"배기가스·용제·분진 환기","note":"실내 공회전과 용제 사용 시 작업자·인접 점포로 오염이 확산되지 않도록 합니다.","severity":"critical","sourceIds":[]},
+        {"id":"fire","label":"유류·배터리·용접 화재 대응","note":"위험물 보관량, 소화기 종류·위치, 충전구역과 피난통로를 소방서에 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"electric","label":"전기바이크 고전압·충전 안전","note":"고전압 차단, 절연보호구, 배터리 이상 발열·화재 격리 절차를 준비합니다.","severity":"high","sourceIds":[]}
+      ]
+    }
+  ],
+  "disclaimer": "이 결과는 중개용 사전확인표입니다. 자동차정비업 등록 제외와 별개로 건축물 용도, 환경 배출시설, 폐기물, 소방 및 차량별 튜닝 절차는 적용될 수 있으므로 계약 전 관할부서 확인이 필요합니다."
+}

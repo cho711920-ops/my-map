@@ -55,6 +55,8 @@
       return [place.category_name, place.place_name].join(" ");
     }).join(" ");
     var mappings = [
+      [/바이크|오토바이|이륜차|모터사이클/, ["motorcycle-sales", "motorcycle-repair", "motorcycle-parts"]],
+      [/바이크튜닝|오토바이튜닝|이륜차튜닝|커스텀바이크/, ["motorcycle-tuning"]],
       [/동물병원/, ["animal-hospital"]],
       [/애견|반려동물|동물미용/, ["pet-grooming", "pet-hotel"]],
       [/자동차정비|카센터/, ["auto-repair"]],
@@ -84,6 +86,9 @@
       if (mapping[0].test(text)) ids = ids.concat(mapping[1]);
     });
     ids = unique(ids);
+    if (/바이크|오토바이|이륜차|모터사이클/.test(text)) {
+      ids = ids.filter(function (id) { return id !== "auto-repair"; });
+    }
     if (ids.indexOf("cafe") >= 0 || ids.indexOf("bakery") >= 0) {
       ids = ids.filter(function (id) { return id !== "general-restaurant"; });
     }

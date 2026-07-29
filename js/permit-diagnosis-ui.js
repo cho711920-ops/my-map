@@ -99,10 +99,11 @@
     if (state.catalog) return Promise.resolve(state.catalog);
     return Promise.all([
       fetch("data/industry-catalog.json?v=20260729-master1", { cache: "no-store" }),
-      fetch("data/industry-master.json?v=20260729-master1", { cache: "no-store" }),
-      fetch("data/industry-critical-guidance.json?v=20260729-critical1", { cache: "no-store" })
+      fetch("data/industry-master.json?v=20260729-master2", { cache: "no-store" }),
+      fetch("data/industry-critical-guidance.json?v=20260729-critical2", { cache: "no-store" }),
+      fetch("data/industry-area-use-rules.json?v=20260729-area1", { cache: "no-store" })
     ]).then(function (responses) {
-      if (!responses[0].ok || !responses[1].ok || !responses[2].ok) {
+      if (!responses[0].ok || !responses[1].ok || !responses[2].ok || !responses[3].ok) {
         throw new Error("업종 마스터를 불러오지 못했습니다.");
       }
       return Promise.all(responses.map(function (response) { return response.json(); }));
@@ -110,6 +111,7 @@
       var detailed = catalogs[0];
       var master = catalogs[1];
       var critical = catalogs[2];
+      var areaRules = catalogs[3];
       var seen = {};
       var industries = [];
       function unique(items) {
@@ -138,10 +140,22 @@
           notice: critical.notice
         };
       }
+      function areaUseRuleFor(industryId) {
+        var templateId = areaRules.industries && areaRules.industries[industryId];
+        var template = templateId && areaRules.templates && areaRules.templates[templateId];
+        if (!template) return null;
+        return Object.assign({}, template, {
+          templateId: templateId,
+          version: areaRules.version,
+          verifiedAt: areaRules.verifiedAt,
+          source: areaRules.source
+        });
+      }
       (detailed.industries || []).concat(master.industries || []).forEach(function (industry) {
         if (!industry || !industry.id || seen[industry.id]) return;
         seen[industry.id] = true;
         industry.criticalGuidance = criticalGuidanceFor(industry.id);
+        industry.areaUseRule = areaUseRuleFor(industry.id);
         industries.push(industry);
       });
       state.catalog = {

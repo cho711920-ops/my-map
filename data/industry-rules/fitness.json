@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-fitness-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "fitness",
+  "officialName": "체력단련장업",
+  "commonName": "헬스장·피트니스센터·PT샵",
+  "registrationType": "신고",
+  "requiredBuildingUse": {
+    "underThreshold": "같은 건축물 내 체력단련장 용도 면적 합계 500㎡ 미만: 제2종 근린생활시설",
+    "atOrOverThreshold": "같은 건축물 내 체력단련장 용도 면적 합계 500㎡ 이상: 운동시설",
+    "thresholdSquareMeters": 500,
+    "thresholdBasis": "전용면적 한 호실만이 아니라 같은 건축물 안에서 해당 용도로 쓰는 바닥면적 합계",
+    "important": "500㎡ 판정은 계약 호실 전용면적이 아니라 같은 건축물 내 해당 용도 바닥면적 합계로 확인합니다."
+  },
+  "generalProcess": [
+    "실제 운영형태·운동기구·샤워실·회원 규모 확정",
+    "같은 건축물 내 체력단련장 용도 면적 합계와 해당 층·호실 건축물대장 용도 확인",
+    "구조하중·층간진동·소음·피난·소방·주차 검토",
+    "시설공사 전 임대인 동의와 관할 건축부서·체육시설업 담당부서 확인",
+    "시설기준을 갖춘 뒤 체력단련장업 신고"
+  ],
+  "checkGroups": [
+    {
+      "id": "business",
+      "title": "신고·운영",
+      "checks": [
+        {"id":"fitness-filing","label":"체력단련장업 신고","note":"영업 시작 전 관할 시·군·구 체육시설업 담당부서에 신고합니다.","severity":"critical","sourceIds":["sports-law"]},
+        {"id":"fitness-scope","label":"운영형태 확정","note":"헬스장, PT 전용, 그룹운동, 샤워실, 부대 판매 등 실제 운영범위를 확정합니다.","severity":"critical","sourceIds":["sports-law"]}
+      ]
+    },
+    {
+      "id": "building",
+      "title": "건축·입지",
+      "checks": [
+        {"id":"fitness-area-sum","label":"같은 건축물 관련 용도 면적 합계","note":"500㎡ 기준은 계약 호실 전용면적만이 아니라 같은 건축물 내 체력단련장 용도 바닥면적 합계로 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"fitness-ledger-use","label":"해당 층·호실 건축물대장 용도","note":"500㎡ 미만은 제2종 근린생활시설, 500㎡ 이상은 운동시설 해당 여부를 관할 건축부서와 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"fitness-load","label":"구조하중 검토","note":"중량기구·원판·러닝머신 집중배치에 따른 바닥 구조하중을 건축사 또는 구조기술자에게 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"fitness-access","label":"출입·피난·주차·편의시설","note":"층수, 수용인원, 면적과 용도변경 여부에 따른 피난·주차·장애인 편의시설 기준을 확인합니다.","severity":"critical","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "facility",
+      "title": "시설·설비",
+      "checks": [
+        {"id":"fitness-floor","label":"충격흡수 바닥","note":"운동 중 발생하는 충격을 흡수할 수 있는 바닥을 갖추고 기구 전도·이동을 방지합니다.","severity":"critical","sourceIds":["sports-facility"]},
+        {"id":"fitness-layout","label":"기구 간 안전거리·동선","note":"기구 사용과 이동, 비상대피에 지장이 없도록 배치합니다.","severity":"critical","sourceIds":["sports-facility"]},
+        {"id":"fitness-ventilation","label":"환기·냉난방","note":"이용인원과 장시간 운동에 맞는 환기와 냉난방 용량을 확인합니다.","severity":"warning","sourceIds":[]},
+        {"id":"fitness-shower","label":"탈의·세면·샤워 급배수","note":"설치하는 경우 누수·방수·온수·급배수 용량과 공용배관 연결 가능 여부를 확인합니다.","severity":"warning","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "safety",
+      "title": "안전·소방·민원",
+      "checks": [
+        {"id":"fitness-noise","label":"층간진동·소음 대책","note":"웨이트 투하, 러닝머신, 음악 소음이 인접 호실과 주거층에 미치는 영향을 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"fitness-fire","label":"소방·피난시설","note":"수용인원과 층수에 따른 소화·경보·유도·피난시설을 관할 소방서에 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"fitness-electric","label":"전기용량","note":"냉난방·러닝머신·온수기 등 동시사용 전력과 증설 가능 여부를 확인합니다.","severity":"warning","sourceIds":[]}
+      ]
+    }
+  ],
+  "sources": [
+    {"id":"building-use","title":"건축법 시행령 별표 1 용도별 건축물의 종류","summary":"같은 건축물 내 체력단련장 용도 합계 500㎡ 미만은 제2종 근린생활시설, 이상은 운동시설을 검토","url":"https://www.law.go.kr/법령/건축법시행령/제3조의5"},
+    {"id":"sports-law","title":"체육시설의 설치·이용에 관한 법률","summary":"체력단련장업의 신고와 운영 기준","url":"https://www.law.go.kr/법령/체육시설의설치ㆍ이용에관한법률"},
+    {"id":"sports-facility","title":"체육시설의 설치·이용에 관한 법률 시행규칙 별표 4","summary":"체력단련장업의 시설기준","url":"https://www.law.go.kr/법령/체육시설의설치ㆍ이용에관한법률시행규칙"}
+  ],
+  "caveats": [
+    "500㎡ 판정은 한 호실 전용면적만으로 확정하지 않습니다.",
+    "같은 건축물 내 관련 용도 면적 합계와 실제 건축물대장 기재를 관할 건축부서에서 확인해야 합니다.",
+    "최종 신고 수리와 용도 판단은 관할 행정기관의 현행 기준에 따릅니다."
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "version": "2026-07-29-building-area-use-v1",
+  "verifiedAt": "2026-07-29",
+  "source": {
+    "title": "건축법 시행령 별표 1 용도별 건축물의 종류",
+    "url": "https://www.law.go.kr/LSW/flDownload.do?bylClsCd=110201&flSeq=156922891",
+    "basis": "같은 건축물에 해당 용도로 쓰는 바닥면적의 합계"
+  },
+  "templates": {
+    "game500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 해당 게임·체험 관련 시설 바닥면적 합계",
+      "bands": [
+        {"condition": "500㎡ 미만", "buildingUse": "제2종 근린생활시설"},
+        {"condition": "500㎡ 이상", "buildingUse": "판매시설"}
+      ],
+      "targetUse": "500㎡ 미만이면 제2종 근린생활시설, 500㎡ 이상이면 판매시설 용도의 매물을 우선 검토",
+      "note": "일반게임제공업은 별도 분류될 수 있으므로 영업종류를 먼저 확정합니다."
+    },
+    "food300": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 휴게음식점·제과점 등 해당 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "300㎡ 미만", "buildingUse": "제1종 근린생활시설"},
+        {"condition": "300㎡ 이상", "buildingUse": "제2종 근린생활시설"}
+      ],
+      "targetUse": "예상 합계면적에 맞는 제1종 또는 제2종 근린생활시설 매물을 검토",
+      "note": "일반음식점은 면적과 관계없이 제2종 근린생활시설이며, 실제 메뉴·음주 허용 여부로 업종을 먼저 확정합니다."
+    },
+    "retail1000": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 해당 소매점 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "1,000㎡ 미만", "buildingUse": "제1종 근린생활시설(소매점)"},
+        {"condition": "1,000㎡ 이상", "buildingUse": "판매시설"}
+      ],
+      "targetUse": "1,000㎡ 미만이면 제1종 근린생활시설(소매점), 이상이면 판매시설 매물을 검토",
+      "note": "판매품목·창고비중·조립·수리 작업이 있으면 다른 용도 규칙이 함께 적용될 수 있습니다."
+    },
+    "animal300": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 동물병원·동물미용·동물위탁관리 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "300㎡ 미만", "buildingUse": "제1종 근린생활시설"},
+        {"condition": "300㎡ 이상", "buildingUse": "제2종 근린생활시설"}
+      ],
+      "targetUse": "예상 합계면적에 맞는 제1종 또는 제2종 근린생활시설 매물을 검토",
+      "note": "동물판매·생산·장묘 등 다른 영업은 별도 용도와 시설기준을 확인합니다."
+    },
+    "academy500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 학원·교습소 해당 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "500㎡ 미만", "buildingUse": "제2종 근린생활시설"},
+        {"condition": "500㎡ 이상", "buildingUse": "교육연구시설"}
+      ],
+      "targetUse": "500㎡ 미만이면 제2종 근린생활시설, 이상이면 교육연구시설 매물을 검토",
+      "note": "자동차학원·무도학원·원격교습은 이 기준에서 제외되며 별도 용도를 확인합니다."
+    },
+    "sports500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 해당 체육활동 시설 바닥면적 합계",
+      "bands": [
+        {"condition": "500㎡ 미만", "buildingUse": "제2종 근린생활시설"},
+        {"condition": "500㎡ 이상", "buildingUse": "운동시설"}
+      ],
+      "targetUse": "500㎡ 미만이면 제2종 근린생활시설, 이상이면 운동시설 매물을 검토",
+      "note": "종목과 실제 운영형태를 먼저 확정하고 같은 건물 내 동일·관련 용도 면적을 합산합니다."
+    },
+    "tableSports500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 탁구장·체육도장 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "500㎡ 미만", "buildingUse": "제1종 근린생활시설"},
+        {"condition": "500㎡ 이상", "buildingUse": "운동시설"}
+      ],
+      "targetUse": "500㎡ 미만이면 제1종 근린생활시설, 이상이면 운동시설 매물을 검토",
+      "note": "탁구장 또는 체육도장으로 확정되는 경우 적용합니다."
+    },
+    "office30_500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 사무소·중개사무소 등 일반업무 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "30㎡ 미만", "buildingUse": "제1종 근린생활시설"},
+        {"condition": "30㎡ 이상 500㎡ 미만", "buildingUse": "제2종 근린생활시설"},
+        {"condition": "500㎡ 이상", "buildingUse": "업무시설"}
+      ],
+      "targetUse": "예상 합계면적에 따라 제1종·제2종 근린생활시설 또는 업무시설 매물을 검토",
+      "note": "실제 영업이 사무소 범위를 넘어가면 해당 영업의 별도 용도를 적용합니다."
+    },
+    "repair500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 제조·가공·수리점 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "500㎡ 미만 + 배출시설 요건 충족", "buildingUse": "제2종 근린생활시설"},
+        {"condition": "500㎡ 이상 또는 배출시설 요건 불충족", "buildingUse": "공장 등 실제 작업에 맞는 용도"}
+      ],
+      "targetUse": "소형·비배출 수리점은 제2종 근린생활시설, 그 외에는 공장 등 작업내용에 맞는 매물을 검토",
+      "note": "면적만으로 결정되지 않으며 대기·폐수·소음 배출시설 허가·신고 대상 여부를 함께 확인합니다."
+    },
+    "danran150": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 단란주점 용도 바닥면적 합계",
+      "bands": [
+        {"condition": "150㎡ 미만", "buildingUse": "제2종 근린생활시설"},
+        {"condition": "150㎡ 이상", "buildingUse": "위락시설"}
+      ],
+      "targetUse": "단란주점은 150㎡ 기준에 맞는 제2종 근린생활시설 또는 위락시설을 검토",
+      "note": "유흥주점은 면적과 관계없이 위락시설로 검토합니다."
+    },
+    "fixedFirst": {
+      "hasAreaThreshold": false,
+      "basis": "건축법 시행령 별표 1의 세부용도",
+      "bands": [{"condition": "면적만으로 용도 변경 없음", "buildingUse": "제1종 근린생활시설"}],
+      "targetUse": "제1종 근린생활시설 중 해당 세부용도가 확인되는 매물을 검토",
+      "note": "면적 외에 배출시설·시설기준·실제 영업형태가 용도 판단에 영향을 줄 수 있습니다."
+    },
+    "fixedSecond": {
+      "hasAreaThreshold": false,
+      "basis": "건축법 시행령 별표 1의 세부용도",
+      "bands": [{"condition": "면적만으로 용도 변경 없음", "buildingUse": "제2종 근린생활시설"}],
+      "targetUse": "제2종 근린생활시설 중 해당 세부용도가 확인되는 매물을 검토",
+      "note": "층·피난·주차·소방·교육환경 등 별도 기준은 추가 확인합니다."
+    },
+    "fixedSpecial": {
+      "hasAreaThreshold": false,
+      "basis": "업종의 실제 운영형태와 건축법 시행령 별표 1 세부용도",
+      "bands": [{"condition": "면적보다 업종·운영형태 우선", "buildingUse": "업종별 전용 용도 확인"}],
+      "targetUse": "업종을 확정한 뒤 해당 전용 용도가 기재된 매물을 검토",
+      "note": "면적만으로 용도를 낮추거나 다른 근린생활시설로 판단하지 않습니다."
+    },
+    "composite": {
+      "hasAreaThreshold": false,
+      "basis": "복수 영업 중 실제 주된 영업과 부속 영업을 먼저 확정",
+      "bands": [{"condition": "운영형태 확정 후", "buildingUse": "연결된 각 업종의 면적 기준 적용"}],
+      "targetUse": "고객의 실제 운영형태를 확정한 뒤 해당 업종별 용도 기준을 모두 충족하는 매물을 검토",
+      "note": "복합업종은 한 가지 면적 기준으로 자동 확정하지 않습니다."
+    }
+  },
+  "industries": {
+    "internet-computer-game": "game500",
+    "general-game": "fixedSpecial",
+    "combined-game-distribution": "game500",
+    "youth-game": "game500",
+    "general-restaurant": "fixedSecond",
+    "rest-restaurant": "food300",
+    "beauty-hair": "fixedFirst",
+    "beauty-nail": "fixedFirst",
+    "beauty-skin": "fixedFirst",
+    "beauty-makeup": "fixedFirst",
+    "karaoke": "fixedSecond",
+    "private-academy": "academy500",
+    "fitness": "sports500",
+    "bakery": "food300",
+    "bar": "danran150",
+    "food-manufacturing": "repair500",
+    "cafe": "food300",
+    "billiards": "sports500",
+    "screen-golf": "sports500",
+    "table-tennis": "tableSports500",
+    "yoga-pilates": "sports500",
+    "dance-academy": "composite",
+    "study-room": "composite",
+    "music-art-academy": "academy500",
+    "clinic": "fixedFirst",
+    "pharmacy": "fixedFirst",
+    "animal-hospital": "animal300",
+    "pet-grooming": "animal300",
+    "pet-hotel": "animal300",
+    "lodging": "fixedSpecial",
+    "laundry": "fixedFirst",
+    "bathhouse": "fixedFirst",
+    "convenience-store": "retail1000",
+    "retail-store": "retail1000",
+    "real-estate-office": "office30_500",
+    "office": "office30_500",
+    "warehouse": "fixedSpecial",
+    "auto-repair": "fixedSpecial",
+    "car-wash": "fixedSpecial",
+    "daycare": "fixedSpecial",
+    "elderly-care": "fixedSpecial",
+    "coin-karaoke": "fixedSecond",
+    "board-game-cafe": "composite",
+    "kids-cafe": "composite",
+    "motorcycle-sales": "retail1000",
+    "motorcycle-repair": "repair500",
+    "motorcycle-parts": "retail1000",
+    "motorcycle-tuning": "repair500"
+  }
+}

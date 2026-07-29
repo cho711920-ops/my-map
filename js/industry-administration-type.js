@@ -42,7 +42,11 @@
   var GENERALLY_FREE_IDS = {
     "retail-store": true,
     "office": true,
-    "warehouse": true
+    "warehouse": true,
+    "motorcycle-sales": true,
+    "motorcycle-repair": true,
+    "motorcycle-parts": true,
+    "motorcycle-tuning": true
   };
 
   function resolve(value, industryId) {

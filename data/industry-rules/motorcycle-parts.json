@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-motorcycle-parts-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "motorcycle-parts",
+  "officialName": "이륜자동차 부품·용품 소매업",
+  "commonName": "바이크 부품·용품점",
+  "registrationType": "자유업·사업자등록",
+  "requiredBuildingUse": {
+    "underThreshold": "소매점 등 근린생활시설 검토",
+    "atOrOverThreshold": "판매시설 검토",
+    "important": "현장 장착·오일교환·수리를 하면 단순 소매점이 아니므로 수리점 기준을 함께 확인합니다."
+  },
+  "generalProcess": [
+    "판매 품목과 현장 장착·교환 범위 확정",
+    "해당 층·호실 소매점 용도와 관련 면적 합계 확인",
+    "창고·적재·피난·배터리·오일·에어로졸 보관 확인",
+    "수입제품 인증·온라인판매·폐기물 처리 확인",
+    "사업자등록 후 영업"
+  ],
+  "sources": [
+    {"id":"building-use","title":"건축법 시행령 별표 1","summary":"소매점·판매시설의 용도 분류 확인","url":"https://www.law.go.kr/법령/건축법시행령"},
+    {"id":"waste-law","title":"폐기물관리법","summary":"교환 작업에서 발생하는 폐유·폐배터리·폐타이어 처리 확인","url":"https://www.law.go.kr/법령/폐기물관리법"}
+  ],
+  "checkGroups": [
+    {
+      "id": "business",
+      "title": "판매·서비스 범위",
+      "checks": [
+        {"id":"product-list","label":"헬멧·의류·부품·오일·배터리 품목","note":"보관 위험과 인증 여부를 확인할 수 있도록 판매 품목을 정리합니다.","severity":"high","sourceIds":[]},
+        {"id":"installation","label":"현장 장착·교환·수리 여부","note":"장착이나 오일교환을 하면 수리 작업의 건축·환경·폐기물 기준을 함께 적용합니다.","severity":"critical","sourceIds":["waste-law"]},
+        {"id":"import-online","label":"수입제품·온라인판매 여부","note":"제품별 안전인증·표시와 통신판매 조건을 확인합니다.","severity":"high","sourceIds":[]}
+      ]
+    },
+    {
+      "id": "site",
+      "title": "건축·보관",
+      "checks": [
+        {"id":"ledger-use","label":"해당 층·호실 소매점 용도","note":"같은 건물 관련 면적 합계와 창고 사용을 포함해 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"storage","label":"창고 적재하중·진열대 고정·피난통로","note":"박스·타이어가 넘어지거나 출입구·소방시설을 막지 않도록 합니다.","severity":"critical","sourceIds":[]},
+        {"id":"battery","label":"리튬·납축전지 충전·보관","note":"단락 방지, 불량품 격리, 온도·충전 관리와 화재 대응을 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"oil-aerosol","label":"오일·세정제·에어로졸 보관","note":"보관량, 누출·환기·화기 분리와 폐기 방법을 확인합니다.","severity":"critical","sourceIds":["waste-law"]},
+        {"id":"waste","label":"교환 폐부품·포장재 처리","note":"현장 교환 시 폐유·폐배터리·폐타이어 인계 방법을 확인합니다.","severity":"critical","sourceIds":["waste-law"]}
+      ]
+    }
+  ],
+  "disclaimer": "이 결과는 중개용 사전확인표입니다. 단순 판매를 넘어 장착·교환·수리를 병행하면 모터사이클 수리업 확인표도 함께 적용해야 합니다."
+}

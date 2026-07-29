@@ -198,6 +198,7 @@
         atOrOverThreshold: "면적·층·건물 전체 사용현황에 따라 달라질 수 있습니다.",
         important: "상세 법적 기준 미연결 업종이므로 계약 전에 관할 건축·영업등록 부서의 확인이 필요합니다."
       },
+      areaUseRule: industry.areaUseRule || null,
       generalProcess: industry.process || [],
       checkGroups: [
         { id: "industry", title: "고객 영업내용", checks: checks("industry",
@@ -229,6 +230,27 @@
     return '<div class="permit-broker-departments-v2">' + departmentGuide(rule.industryId).map(function (entry) {
       return '<div><strong>' + escapeHtml(entry[0]) + '</strong><span>' + escapeHtml(entry[1]) + '</span></div>';
     }).join("") + '</div>';
+  }
+
+  function renderAreaUseRule(rule) {
+    var area = rule && rule.areaUseRule;
+    if (!area) return "";
+    var bands = (area.bands || []).map(function (band) {
+      return '<div><span>' + escapeHtml(band.condition) + '</span><strong>' +
+        escapeHtml(band.buildingUse) + '</strong></div>';
+    }).join("");
+    return '<section class="permit-area-use-card-v1" data-has-threshold="' +
+      (area.hasAreaThreshold ? "Y" : "N") + '">' +
+      '<header><div><small>전 업종 공통 면적·용도 확인</small><h4>면적에 따라 찾아야 할 매물 용도</h4></div>' +
+        '<span>' + (area.hasAreaThreshold ? "법정 면적 기준 있음" : "면적 단독 기준 없음") + '</span></header>' +
+      '<div class="permit-area-use-bands-v1">' + bands + '</div>' +
+      '<div class="permit-area-use-target-v1"><strong>중개사가 찾아야 할 매물</strong><p>' +
+        escapeHtml(area.targetUse) + '</p></div>' +
+      '<footer><strong>합산 기준</strong><span>' + escapeHtml(area.basis) + '</span>' +
+        '<p>' + escapeHtml(area.note) + '</p>' +
+        (area.source ? '<a href="' + escapeHtml(area.source.url) +
+          '" target="_blank" rel="noopener noreferrer">' + escapeHtml(area.source.title) + '</a>' : "") +
+      '</footer></section>';
   }
 
   function renderAdministrationCard(rule) {
@@ -329,6 +351,7 @@
       '<div class="permit-broker-alert-v2"><strong>중개사가 먼저 할 일</strong>' +
         ' 고객의 실제 영업방식을 확정한 뒤, 그 업종에 맞는 용도의 매물만 찾고 시설공사 가능 여부를 계약 전에 확인합니다.</div>' +
       renderAdministrationCard(rule) +
+      renderAreaUseRule(rule) +
       renderCriticalGuidanceCard(rule) +
       renderEducationEnvironmentCard(rule) +
 
@@ -444,6 +467,7 @@
       var loading = document.getElementById("permitStep2LoadingV1");
       if (!loading || !rule) return;
       rule.criticalGuidance = industry.criticalGuidance || null;
+      rule.areaUseRule = industry.areaUseRule || null;
       if (rule.criticalGuidance && rule.criticalGuidance.sources) {
         rule.sources = (rule.sources || []).concat(rule.criticalGuidance.sources).filter(function (source, index, all) {
           return source && all.findIndex(function (entry) { return entry.url === source.url; }) === index;

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0.0",
+  "ruleVersion": "2026-07-29-motorcycle-tuning-v1",
+  "verifiedAt": "2026-07-29",
+  "industryId": "motorcycle-tuning",
+  "officialName": "이륜자동차 튜닝 작업",
+  "commonName": "바이크 튜닝·커스텀숍",
+  "registrationType": "자유업 + 차량별 승인·검사",
+  "requiredBuildingUse": {
+    "underThreshold": "제2종 근린생활시설(수리점) 검토",
+    "atOrOverThreshold": "공장·자동차관련시설 등 검토",
+    "important": "점포 영업 구분과 개별 차량의 튜닝 승인은 별개입니다. 작업 전 승인 대상인지 확인하고 승인·작업·검사 순서를 지켜야 합니다."
+  },
+  "generalProcess": [
+    "변경할 구조·장치와 사용 부품 확정",
+    "한국교통안전공단에서 승인 대상·승인기준 확인",
+    "승인 대상이면 작업 전 승인",
+    "승인 내용대로 작업 후 튜닝검사",
+    "수리점 건축용도·소음·배출가스·용접·소방 기준 별도 확인"
+  ],
+  "sources": [
+    {"id":"auto-tuning","title":"자동차관리법 제34조·제52조 및 이륜자동차 튜닝 규정","summary":"이륜자동차 구조·장치 변경의 승인과 검사 절차","url":"https://www.law.go.kr/법령/자동차관리법"},
+    {"id":"auto-rule","title":"자동차관리법 시행규칙 제107조·제108조","summary":"이륜자동차 튜닝 승인 대상·기준과 승인 신청","url":"https://www.law.go.kr/법령/자동차관리법시행규칙"},
+    {"id":"building-use","title":"건축법 시행령 별표 1","summary":"실제 수리·제조 작업 범위에 따른 건축물 용도 확인","url":"https://www.law.go.kr/법령/건축법시행령"},
+    {"id":"noise-law","title":"소음·진동관리법","summary":"소음기·배기와 작업장 소음 기준 확인","url":"https://www.law.go.kr/법령/소음ㆍ진동관리법"}
+  ],
+  "checkGroups": [
+    {
+      "id": "vehicle",
+      "title": "차량별 승인·검사",
+      "checks": [
+        {"id":"change-list","label":"변경 구조·장치·부품 목록","note":"차체, 승차장치, 등화, 소음기, 원동기, 바퀴 등 변경 전후 사양을 정리합니다.","severity":"critical","sourceIds":["auto-tuning","auto-rule"]},
+        {"id":"approval-target","label":"튜닝 승인 대상 여부","note":"승인 제외라고 임의 판단하지 말고 차종·부품·변경방법을 교통안전공단에 확인합니다.","severity":"critical","sourceIds":["auto-rule"]},
+        {"id":"approval-before-work","label":"승인 대상은 작업 전 승인","note":"먼저 작업하고 사후 승인받는 방식으로 안내하지 않습니다.","severity":"critical","sourceIds":["auto-tuning","auto-rule"]},
+        {"id":"inspection","label":"작업 후 튜닝검사·서류","note":"승인 내용과 동일하게 작업했는지 검사하고 관련 자료를 차량 소유자에게 제공합니다.","severity":"critical","sourceIds":["auto-rule"]},
+        {"id":"noise-emission","label":"소음·배출가스·등화 안전기준","note":"머플러·흡배기·등화 변경은 인증부품 여부와 측정·검사 기준을 확인합니다.","severity":"critical","sourceIds":["noise-law","auto-rule"]}
+      ]
+    },
+    {
+      "id": "shop",
+      "title": "점포·작업 안전",
+      "checks": [
+        {"id":"ledger-use","label":"해당 층·호실 수리 작업 가능 용도","note":"수리점·공장·자동차관련시설 중 실제 작업에 맞는 용도를 관할 건축부서에 확인합니다.","severity":"critical","sourceIds":["building-use"]},
+        {"id":"welding-paint","label":"용접·절단·도장·연마 작업","note":"화재·분진·용제·환기·배출시설과 임대인 동의를 확인합니다.","severity":"critical","sourceIds":[]},
+        {"id":"noise-test","label":"시동·배기 시험과 소음민원","note":"실내 공회전, 측정·시험 장소, 방음과 영업시간을 확인합니다.","severity":"critical","sourceIds":["noise-law"]},
+        {"id":"records","label":"승인서·부품·작업·검사 기록","note":"차량별 승인 전후 자료와 사용 부품·작업내역을 남깁니다.","severity":"high","sourceIds":["auto-rule"]}
+      ]
+    }
+  ],
+  "disclaimer": "이 결과는 중개용 사전확인표입니다. 실제 튜닝 승인 대상과 기준은 차종·변경 부품·방법에 따라 달라지므로 작업 전 한국교통안전공단 확인이 필요합니다."
+}

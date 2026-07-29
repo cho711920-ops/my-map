@@ -18,6 +18,8 @@
     "animal": {"title": "동물보호법", "url": "https://www.law.go.kr/법령/동물보호법"},
     "brokerage": {"title": "공인중개사법", "url": "https://www.law.go.kr/법령/공인중개사법"},
     "auto": {"title": "자동차관리법", "url": "https://www.law.go.kr/법령/자동차관리법"},
+    "waste": {"title": "폐기물관리법", "url": "https://www.law.go.kr/법령/폐기물관리법"},
+    "noise": {"title": "소음·진동관리법", "url": "https://www.law.go.kr/법령/소음ㆍ진동관리법"},
     "water": {"title": "물환경보전법", "url": "https://www.law.go.kr/법령/물환경보전법"},
     "childcare": {"title": "영유아보육법", "url": "https://www.law.go.kr/법령/영유아보육법"},
     "elderly": {"title": "노인복지법", "url": "https://www.law.go.kr/법령/노인복지법"},
@@ -155,7 +157,7 @@
     "beauty-makeup": {"template":"beauty","specific":["화장·분장 미용 면허 범위와 반영구·문신 등 의료행위 배제","조명·세척·소독·화장품 보관과 다른 미용업 병행신고 확인"],"sourceIds":["publicHygiene"]},
     "karaoke": {"template":"entertainment","specific":["노래연습장 등록이며 주류 판매·접객행위 금지","업종별 칸막이·통로·비상조명·방음·소방시설 기준 확인"],"sourceIds":["music"]},
     "private-academy": {"template":"academy","specific":["학원 등록 대상 교습과정·정원·시설면적을 교육지원청 기준으로 확정","같은 건물 유해업소와 교육환경·소방 기준 확인"],"sourceIds":["academy"]},
-    "fitness": {"template":"sports","specific":["체력단련장업 신고 대상과 운동전용면적·기구배치 기준 확인","중량기구 바닥하중·충격흡수·층간진동과 샤워실 급배수 확인"],"sourceIds":["sports"]},
+    "fitness": {"template":"sports","specific":["같은 건축물 내 체력단련장 용도 면적 합계가 500㎡ 미만이면 제2종 근린생활시설, 500㎡ 이상이면 운동시설에 해당하는지 대장으로 확인","체력단련장업 신고 대상과 운동전용면적·기구배치 기준 확인","중량기구 바닥하중·충격흡수·층간진동과 샤워실 급배수 확인"],"sourceIds":["building","sports"]},
     "bakery": {"template":"food","specific":["제과점영업과 즉석판매제조가공업의 제조·판매 범위 구분","오븐·발효기 전력, 가스, 후드·배기와 제조실 구획 확인"],"sourceIds":["food","foodFacility"]},
     "bar": {"template":"entertainment","specific":["일반음식점·단란주점·유흥주점 중 접객·춤·주류 운영형태로 업종 확정","단란·유흥주점은 허가와 위락시설 용도·입지 제한을 계약 전 확인"],"sourceIds":["food","foodFacility"]},
     "food-manufacturing": {"template":"food","specific":["즉석판매제조가공업의 제조품목·판매범위와 식품제조가공업 해당 여부 구분","원료·완제품·포장재 보관과 제조공간 교차오염 방지"],"sourceIds":["food","foodFacility"]},
@@ -186,6 +188,10 @@
     "elderly-care": {"template":"welfare","specific":["방문요양·주야간보호·공동생활가정·요양시설 중 유형 확정","정원별 생활실·프로그램실·목욕·조리·인력배치와 장기요양기관 지정 확인"],"sourceIds":["elderly"]},
     "coin-karaoke": {"template":"entertainment","specific":["무인 운영이어도 노래연습장업 등록·주류·청소년 규정 적용 여부 확인","각 부스 방음·비상호출·피난·CCTV·관리자 대응체계 확인"],"sourceIds":["music"]},
     "board-game-cafe": {"template":"entertainment","specific":["보드게임 제공, 방탈출·게임물, 음식 조리 범위로 복수업종 확정","밀실·잠금장치 금지 여부, 객실 피난·비상개방·소방 기준 확인"],"sourceIds":["food","game","fire"]},
-    "kids-cafe": {"template":"entertainment","specific":["휴게음식점과 기타유원시설업·어린이놀이시설 해당 여부를 각각 확인","놀이기구 안전검사·충격흡수 바닥·보호자 동선·급식위생·보험 확인"],"sourceIds":["food","fire"]}
+    "kids-cafe": {"template":"entertainment","specific":["휴게음식점과 기타유원시설업·어린이놀이시설 해당 여부를 각각 확인","놀이기구 안전검사·충격흡수 바닥·보호자 동선·급식위생·보험 확인"],"sourceIds":["food","fire"]},
+    "motorcycle-sales": {"template":"retail","specific":["자동차관리법상 자동차매매업 정의에서 이륜자동차는 제외되므로 자동차매매업 등록으로 잘못 안내하지 않음","신차·중고·수입·제작·위탁판매를 구분하고 전시장·보관·진출입·배터리 충전·시승 조건 확인"],"sourceIds":["auto","building","fire"]},
+    "motorcycle-repair": {"template":"industrial","specific":["자동차관리법상 자동차정비업 정의에서 이륜자동차 정비는 제외되지만 관할 교통부서에 현재 적용을 재확인","수리점·정비공장 건축용도와 폐유·폐배터리·세척폐수·소음·도장·용접·환기·위험물 기준 확인"],"sourceIds":["auto","building","water","waste","noise","fire"]},
+    "motorcycle-parts": {"template":"retail","specific":["부품·용품 단순 판매와 현장 장착·오일교환·수리 작업을 구분","리튬배터리·오일·에어로졸·타이어의 보관량과 화재·폐기물·창고 적재 기준 확인"],"sourceIds":["building","waste","fire"]},
+    "motorcycle-tuning": {"template":"industrial","specific":["점포 영업 구분과 별개로 구조·장치 변경은 차량별 튜닝 승인·작업·검사 순서를 확인","등화·소음기·배기·차체·승차장치 변경의 승인대상과 안전·소음·배출가스 기준 확인"],"sourceIds":["auto","building","noise","fire"]}
   }
 }
