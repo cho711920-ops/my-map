@@ -15,7 +15,7 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.23\.8"/);
+assert.match(backend, /MM_VERSION = "7\.23\.9"/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(
@@ -28,7 +28,14 @@ const reconcileBody = backend.match(
 assert.ok(reconcileBody);
 assert.doesNotMatch(reconcileBody[1], /options\.sourceKeys/);
 assert.match(backend, /mmRemoveSheetRowsFast_/);
-assert.match(backend, /createTextFinder\(rawId\)\.matchEntireCell\(true\)\.findNext\(\)/);
+const rawRowsBody = backend.match(
+  /function mmRawRowsForReviews_\(reviews\) \{([\s\S]*?)\n\}\n\nfunction mmSourceItemFromReviewMap_/
+);
+assert.ok(rawRowsBody);
+assert.doesNotMatch(rawRowsBody[1], /createTextFinder\(rawId\)/);
+assert.match(rawRowsBody[1], /getDisplayValues\(\)/);
+assert.match(backend, /liveCandidatesByAddressPrice/);
+assert.match(backend, /mmRoomsCanRepresentSameSpace_\(master\[2\], group\.room\)/);
 assert.match(backend, /function mmFindRowsByTextFast_/);
 assert.match(backend, /function mmRewriteDuplicateSourceReferencesFast_/);
 assert.match(backend, /function mmRewriteReviewDuplicateReferencesFast_/);

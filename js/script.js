@@ -42,6 +42,7 @@ var selectedPrintKeys = [];
 var visibleListItems = [];
 var listRenderLimit = 0;
 var listRenderScrollBound = false;
+var listCardReusePoolV6521 = null;
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
 var doneTogglePendingKeys = {};
@@ -1085,11 +1086,19 @@ function renderNextListChunk(targetLimit) {
   var fragment = document.createDocumentFragment();
 
   for (var index = listRenderLimit; index < nextLimit; index++) {
-    addListItem(visibleListItems[index], fragment);
+    var item = visibleListItems[index];
+    var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[item.key];
+    if (reusableCard) {
+      fragment.appendChild(reusableCard);
+      delete listCardReusePoolV6521[item.key];
+    } else {
+      addListItem(item, fragment);
+    }
   }
 
   list.appendChild(fragment);
   listRenderLimit = nextLimit;
+  if (listRenderLimit >= visibleListItems.length) listCardReusePoolV6521 = null;
   list.setAttribute("data-rendered-count", String(listRenderLimit));
   list.setAttribute("data-total-count", String(visibleListItems.length));
 }
@@ -1111,6 +1120,7 @@ function bindIncrementalListRendering() {
 
 
 function showList(items) {
+  var list = document.getElementById("list");
   var previousSignature = (visibleListItems || []).map(function(item) {
     return item.key;
   }).join("||");
@@ -1133,9 +1143,25 @@ function showList(items) {
 
   var previousRenderLimit = listRenderLimit;
   var sameList = previousSignature === nextSignature;
+  var reuseExistingCards = !!window.jsReuseListCardsOnNextRenderV6521;
+  window.jsReuseListCardsOnNextRenderV6521 = false;
+  listCardReusePoolV6521 = null;
+
+  if (reuseExistingCards && list) {
+    listCardReusePoolV6521 = Object.create(null);
+    Array.prototype.forEach.call(
+      list.querySelectorAll(".item[data-listing-key]"),
+      function(card) {
+        var key = card.getAttribute("data-listing-key");
+        if (!key || listCardReusePoolV6521[key]) return;
+        listCardReusePoolV6521[key] = card;
+        card.remove();
+      }
+    );
+  }
 
   visibleListItems = items.slice();
-  document.getElementById("list").innerHTML = "";
+  if (list) list.innerHTML = "";
   listRenderLimit = 0;
   bindIncrementalListRendering();
 

@@ -585,6 +585,11 @@ function scheduleMapIdleRefreshV638() {
     );
 
     if (!hasPinnedClusterList && typeof showList === "function") {
+      /*
+       * 지도 이동 때 화면에 이미 있던 카드 DOM을 재사용합니다.
+       * 준공년도 배지가 조회된 카드는 다시 "-"로 돌아가지 않습니다.
+       */
+      window.jsReuseListCardsOnNextRenderV6521 = true;
       showList(jsLastRenderedItemsV639);
 
       var statusElement = document.getElementById("status");

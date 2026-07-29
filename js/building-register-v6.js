@@ -240,15 +240,25 @@
     return String(item && (item.propertyId || item.id || item.key || item.address) || "").trim();
   }
 
+  function itemAddressParcelKey(item) {
+    var address = String(item && item.address || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return address ? "address:" + address : "";
+  }
+
   function readParcelCache(item) {
     try {
-      var key = itemParcelKey(item);
-      if (!key) return null;
-      var raw = localStorage.getItem(PARCEL_CACHE_PREFIX + key);
-      if (!raw) return null;
-      var wrapper = JSON.parse(raw);
-      if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > PARCEL_CACHE_TTL) return null;
-      return wrapper.parcel || null;
+      var keys = [itemParcelKey(item), itemAddressParcelKey(item)].filter(Boolean);
+      for (var index = 0; index < keys.length; index++) {
+        var raw = localStorage.getItem(PARCEL_CACHE_PREFIX + keys[index]);
+        if (!raw) continue;
+        var wrapper = JSON.parse(raw);
+        if (!wrapper || Date.now() - Number(wrapper.savedAt || 0) > PARCEL_CACHE_TTL) continue;
+        if (wrapper.parcel) return wrapper.parcel;
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -256,12 +266,15 @@
 
   function writeParcelCache(item, parcel) {
     try {
-      var key = itemParcelKey(item);
-      if (!key || !parcel) return;
-      localStorage.setItem(PARCEL_CACHE_PREFIX + key, JSON.stringify({
+      var keys = [itemParcelKey(item), itemAddressParcelKey(item)].filter(Boolean);
+      if (!keys.length || !parcel) return;
+      var value = JSON.stringify({
         savedAt: Date.now(),
         parcel: parcel
-      }));
+      });
+      keys.forEach(function(key) {
+        localStorage.setItem(PARCEL_CACHE_PREFIX + key, value);
+      });
     } catch (_) {}
   }
 

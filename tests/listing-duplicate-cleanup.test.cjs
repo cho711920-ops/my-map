@@ -52,7 +52,8 @@ assert.doesNotMatch(
   rewriteReferencesBody[1],
   /sheet\.getRange\(2, 1, sheet\.getLastRow\(\) - 1/
 );
-assert.match(backend, /rawIdList\.length <= 10/);
+assert.doesNotMatch(backend, /rawIdList\.length <= 10/);
+assert.match(backend, /function mmRawRowsForReviews_[\s\S]*?getDisplayValues\(\)/);
 assert.match(backend, /mmIsNearDuplicate_\(master, item\)/);
 assert.match(backend, /mmRoomsCanRepresentSameSpace_\(master\[2\], item\.room\)/);
 
