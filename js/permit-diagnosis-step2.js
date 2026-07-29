@@ -383,6 +383,10 @@
           '<ul class="permit-broker-detail-list-v2">' + checkDescriptions(filing.checks) + '</ul></article>' +
       '</div>' +
 
+      (global.PermitLeaseLegalBriefingV1
+        ? global.PermitLeaseLegalBriefingV1.shell(rule.industryId)
+        : "") +
+
       '<section class="permit-broker-section-v2 permit-broker-contract-v2"><h4>계약 전 권장 확인·특약 주제</h4>' +
         list(contractGuide(rule)) +
         '<p>위 문구는 중개 검토용 주제입니다. 실제 특약은 확인된 사실과 당사자 합의에 맞게 작성해야 합니다.</p></section>' +
@@ -456,6 +460,9 @@
         '상세 법령 규칙 연결 전이므로 중개사가 놓치면 안 되는 공통 확인항목을 제공합니다. ' +
         '용도·등록·시설기준은 계약 전에 관할기관에 확인합니다.</div>' +
         renderBrokerGuide(activeRule));
+      if (global.PermitLeaseLegalBriefingV1) {
+        global.PermitLeaseLegalBriefingV1.hydrate(activeRule.industryId);
+      }
       checklistHost.innerHTML = renderChecklist(activeRule);
       emitCheckState();
       return;
@@ -476,6 +483,9 @@
       activeRule = rule;
       checkState = global.PermitFacilityCheckEngineV1.createState(rule);
       loading.outerHTML = renderBrokerGuide(rule);
+      if (global.PermitLeaseLegalBriefingV1) {
+        global.PermitLeaseLegalBriefingV1.hydrate(rule.industryId);
+      }
       checklistHost.innerHTML = renderChecklist(rule);
       emitCheckState();
     }).catch(function (error) {

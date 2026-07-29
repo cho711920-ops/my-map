@@ -1527,6 +1527,41 @@ body.permit-diagnosis-open-v1 {
 .permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="FREE"] { color:#0f766e; background:#f0fdfa; }
 .permit-candidate-meta-v1 .permit-admin-badge-v1[data-admin-type="CONDITIONAL"] { color:#c2410c; background:#fff7ed; }
 
+.permit-lease-legal-v1 { margin:18px 20px; border:1px solid #c4b5fd; border-radius:16px; overflow:hidden; background:#fff; }
+.permit-lease-legal-v1 > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; color:#fff; background:linear-gradient(135deg,#4c1d95,#7c3aed); }
+.permit-lease-legal-v1 > header small { display:block; margin-bottom:3px; color:#ddd6fe; font-size:12px; }
+.permit-lease-legal-v1 > header h4 { margin:0; font-size:18px; }
+.permit-lease-legal-v1 > header > span { padding:7px 10px; border-radius:999px; color:#4c1d95; background:#f5f3ff; font-size:12px; font-weight:800; }
+.permit-lease-loading-v1,.permit-lease-error-v1 { margin:14px; padding:15px; border-radius:10px; background:#f5f3ff; color:#5b21b6; font-size:13px; }
+.permit-lease-error-v1 { color:#991b1b; background:#fef2f2; }
+.permit-lease-notice-v1 { display:flex; gap:10px; align-items:flex-start; padding:13px 16px; background:#fffbeb; color:#78350f; font-size:13px; }
+.permit-lease-notice-v1 strong { flex:0 0 auto; }
+.permit-lease-topic-list-v1 { padding:12px 14px 4px; }
+.permit-lease-topic-v1 { margin-bottom:8px; border:1px solid #e9d5ff; border-radius:11px; overflow:hidden; }
+.permit-lease-topic-v1 summary { display:flex; justify-content:space-between; gap:12px; padding:13px 14px; cursor:pointer; background:#faf5ff; color:#3b0764; font-size:14px; }
+.permit-lease-topic-v1 summary span { color:#7c3aed; font-size:12px; }
+.permit-lease-topic-body-v1 { padding:13px 14px; color:#475569; font-size:13px; line-height:1.55; }
+.permit-lease-topic-body-v1 > p { margin:0 0 11px; }
+.permit-lease-topic-body-v1 > div { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.permit-lease-topic-body-v1 h5 { margin:0 0 6px; color:#4c1d95; font-size:13px; }
+.permit-lease-topic-body-v1 ul { margin:0; padding-left:19px; }
+.permit-mediation-examples-v1,.permit-precedent-search-v1 { margin:12px 14px; padding:14px; border-radius:12px; background:#f8fafc; }
+.permit-mediation-examples-v1 h5,.permit-precedent-search-v1 h5 { margin:0 0 5px; color:#334155; font-size:15px; }
+.permit-mediation-examples-v1 > p,.permit-precedent-search-v1 p { margin:0 0 10px; color:#64748b; font-size:12px; line-height:1.5; }
+.permit-mediation-examples-v1 > div,.permit-precedent-results-v1 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.permit-mediation-examples-v1 a,.permit-precedent-results-v1 a { display:flex; flex-direction:column; gap:4px; padding:11px; border:1px solid #e2e8f0; border-radius:9px; color:#334155; background:#fff; text-decoration:none; }
+.permit-mediation-examples-v1 a small,.permit-precedent-results-v1 a small { color:#7c3aed; }
+.permit-mediation-examples-v1 a span,.permit-precedent-results-v1 a span { color:#64748b; font-size:12px; }
+.permit-precedent-results-v1 a em { color:#475569; font-size:11px; font-style:normal; }
+.permit-precedent-search-v1 > button { padding:9px 13px; border:0; border-radius:8px; color:#fff; background:#6d28d9; font-weight:800; cursor:pointer; }
+.permit-precedent-search-v1 > button:disabled { opacity:.55; cursor:wait; }
+.permit-precedent-unknown-v1 { display:flex; flex-direction:column; gap:4px; margin-top:10px; padding:12px; border-radius:9px; color:#92400e; background:#fffbeb; font-size:12px; }
+.permit-precedent-caution-v1 { margin-top:10px!important; color:#9a3412!important; }
+.permit-lease-legal-v1 > div > footer { padding:12px 14px; border-top:1px solid #ede9fe; background:#fafafa; }
+.permit-lease-legal-v1 > div > footer > div { display:flex; flex-wrap:wrap; gap:7px; }
+.permit-lease-legal-v1 > div > footer a { display:flex; gap:5px; padding:5px 8px; border-radius:7px; color:#5b21b6; background:#f5f3ff; font-size:11px; text-decoration:none; }
+.permit-lease-legal-v1 > div > footer p { margin:9px 0 0; color:#64748b; font-size:11px; line-height:1.45; }
+
 @media (min-width: 769px) and (max-width: 1120px) {
   .permit-diagnosis-dialog-v1 {
     width: 95vw;
@@ -1574,4 +1609,5 @@ body.permit-diagnosis-open-v1 {
   .permit-administration-notice-v1 { grid-column:auto; }
   .permit-wastewater-guide-v1 { align-items:flex-start; flex-direction:column; gap:5px; }
   .permit-wastewater-inputs-v1,.permit-wastewater-result-v1 { grid-template-columns:1fr; }
+  .permit-lease-topic-body-v1 > div,.permit-mediation-examples-v1 > div,.permit-precedent-results-v1 { grid-template-columns:1fr; }
 }

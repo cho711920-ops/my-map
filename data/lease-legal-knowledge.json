@@ -1,0 +1,106 @@
+{
+  "version": "2026-07-30-lease-legal-v1",
+  "verifiedAt": "2026-07-30",
+  "notice": "법령·판례·조정사례는 효력이 서로 다릅니다. 이 자료는 계약 위험을 찾기 위한 중개 실무 참고자료이며 개별 사건의 최종 법률판단을 대신하지 않습니다.",
+  "sources": {
+    "civil": {"type":"법령","title":"민법","authority":"국가법령정보센터","url":"https://www.law.go.kr/법령/민법"},
+    "commercialLease": {"type":"법령","title":"상가건물 임대차보호법","authority":"국가법령정보센터","url":"https://www.law.go.kr/법령/상가건물임대차보호법"},
+    "precedentApi": {"type":"판례 API","title":"판례 목록·본문 OPEN API","authority":"국가법령정보 공동활용","url":"https://open.law.go.kr/LSO/openApi/guideList.do"},
+    "mediation": {"type":"조정사례","title":"상가건물 임대차 분쟁조정사례","authority":"한국부동산원·LH 임대차분쟁조정위원회","url":"https://adrhome.reb.or.kr/adrhome/reb/main"},
+    "prevention": {"type":"예방자료","title":"상가건물 임대차 분쟁예방조치","authority":"한국부동산원·LH 임대차분쟁조정위원회","url":"https://adrhome.reb.or.kr/adrhome/reb/LO010100/04/10403000000002022101718"}
+  },
+  "topics": {
+    "contract-party": {
+      "title":"계약 당사자·대리권",
+      "why":"소유자·공동소유자·대리인의 권한과 보증금 수령권한이 불명확하면 계약 이행과 보증금 반환에서 분쟁이 생길 수 있습니다.",
+      "questions":["등기상 소유자와 임대인이 같은지","공동소유라면 필요한 동의와 보증금 수령계좌가 확인됐는지","대리계약이면 위임장·인감증명서·위임 범위가 확인됐는지"],
+      "contractPoints":["임대 권한과 보증금 수령권한 확인","대리권 흠결이 확인될 때 계약 효력과 지급금 반환 처리"],
+      "precedentQueries":["임대차 대리권 보증금 반환"],
+      "sourceIds":["civil","prevention"]
+    },
+    "permit-cooperation": {
+      "title":"인허가·용도와 임대인 협조",
+      "why":"영업 인허가나 용도변경이 필요한 업종은 임대인의 서류·공사 협조가 없으면 개업이 지연되거나 불가능할 수 있습니다.",
+      "questions":["계약할 층·호실의 건축물대장 용도가 업종에 맞는지","용도변경·소방·위생·교육환경 등 선행 절차가 있는지","임대인이 사용승낙서·도면·공사동의서 제공에 동의하는지"],
+      "contractPoints":["기한 내 인허가 불가가 공식 확인되면 해제·계약금 반환 여부","임대인의 서류 제공과 시설공사 협조 범위","인허가 확인 전 잔금·인도·공사 착수 시점"],
+      "precedentQueries":["상가 임대차 영업허가 불가 계약 해제","임대차 목적물 사용수익 의무"],
+      "sourceIds":["civil","commercialLease"]
+    },
+    "repair": {
+      "title":"하자·수선의무",
+      "why":"누수·전기·급배수·냉난방·구조 하자와 영업용 추가공사의 책임을 구분하지 않으면 공사비 분쟁이 발생할 수 있습니다.",
+      "questions":["계약 당시 이미 존재하는 하자와 고장 설비가 무엇인지","건물 기본설비 수선과 업종 맞춤 추가공사를 누가 부담하는지","수선 중 영업을 못 할 때 차임 처리와 해제 기준이 있는지"],
+      "contractPoints":["기존 하자 목록·사진과 수선 완료기한","건물 기본설비와 임차인 영업시설의 수선비 부담 구분","중대한 하자 미수선 시 차임·해제·손해 처리"],
+      "precedentQueries":["임대인 수선의무 임차 목적물 사용수익","상가 누수 임대차 손해배상"],
+      "sourceIds":["civil","mediation"]
+    },
+    "renewal-rent": {
+      "title":"계약갱신·차임 증감",
+      "why":"갱신요구 행사기간, 갱신거절 사유, 묵시적 갱신과 차임 증액 조건은 계약 종료·재계약 분쟁의 핵심입니다.",
+      "questions":["현재 계약기간과 종전 갱신 내역이 확인됐는지","차임 연체·무단전대 등 갱신거절 쟁점이 있는지","재계약 임대료 산정 특약이 구체적이고 객관적인지"],
+      "contractPoints":["갱신·종료 통지방법과 수신주소","재계약 시 차임 조정기준을 불명확한 주변 시세 표현만으로 두지 않기","관리비 항목과 인상 기준을 차임과 구분"],
+      "precedentQueries":["상가건물 임대차 계약갱신요구","상가 임대차 묵시적 갱신 차임 증액"],
+      "sourceIds":["commercialLease","mediation"]
+    },
+    "deposit-restoration": {
+      "title":"보증금 반환·원상복구",
+      "why":"종료 시 원상복구 범위, 철거기간 차임, 보증금 공제 근거가 불명확하면 빈번한 분쟁으로 이어집니다.",
+      "questions":["인수한 기존 시설과 임차인이 새로 설치할 시설을 구분했는지","원상복구 기준시점을 최초 임대 상태·인도 상태 중 무엇으로 할지 합의했는지","보증금 공제 전 견적·증빙·협의 절차가 있는지"],
+      "contractPoints":["시설목록·사진을 첨부하고 철거·존치 대상을 구분","종료 후 철거기간의 사용·수익 여부와 차임 처리","보증금 반환일·목적물 인도·원상복구 확인의 순서"],
+      "precedentQueries":["상가 임대차 원상회복 보증금 반환","임대차 종료 점유 부당이득 원상복구"],
+      "sourceIds":["civil","mediation"]
+    },
+    "goodwill": {
+      "title":"권리금·신규임차인 주선",
+      "why":"권리금은 보증금과 별개이며 시설·영업·입지 권리금의 대상과 임대인의 신규임차인 계약 거절 문제를 구분해야 합니다.",
+      "questions":["권리금 지급대상과 시설·영업자료·집기의 실제 인도 범위가 무엇인지","신규임차인의 업종을 임대인과 관리규약이 허용하는지","임대인이 신규임차인과의 계약을 거절할 구체적 사유가 있는지"],
+      "contractPoints":["권리금계약과 임대차계약의 조건·해제 관계","시설·집기·영업자료의 목록과 하자","신규임차인 주선과 임대인 협의·통지 기록"],
+      "precedentQueries":["상가 권리금 회수기회 방해 신규임차인 주선"],
+      "sourceIds":["commercialLease","mediation"]
+    },
+    "business-transfer": {
+      "title":"영업양도·행정처분·시설 승계",
+      "why":"기존 영업을 인수하더라도 영업자 지위승계, 시설 양수도, 행정처분 이력은 서로 다른 절차이므로 각각 확인해야 합니다.",
+      "questions":["신규허가·신고인지 영업자 지위승계인지","최근 행정처분·영업정지·과징금·체납의 승계 영향을 관할부서에 확인했는지","시설·집기·상호·전화번호 중 실제 양도대상이 무엇인지"],
+      "contractPoints":["행정처분·체납·영업정지 이력의 고지와 사실 불일치 시 처리","영업자 지위승계 불가 시 계약·권리금계약 해제 관계","시설별 소유권·리스·담보·정상작동 확인"],
+      "precedentQueries":["영업양도 행정처분 승계 임대차","영업허가 지위승계 계약 해제"],
+      "sourceIds":["civil"]
+    },
+    "management-nuisance": {
+      "title":"관리규약·소음·냄새·민원",
+      "why":"법령상 가능한 업종도 관리규약, 독점업종 약정, 배기경로와 반복 민원 때문에 실제 영업이 제한될 수 있습니다.",
+      "questions":["관리규약·업종제한·독점영업 약정이 있는지","덕트·외벽·옥상·공용부 공사에 필요한 동의가 있는지","기존 소음·냄새·진동 민원과 사용시간 제한이 있었는지"],
+      "contractPoints":["관리규약과 업종제한 확인 결과","공용부 공사·간판·배기·실외기 설치 동의","민원 발생 시 개선기한·비용과 영업불가 수준일 때 처리"],
+      "precedentQueries":["집합건물 업종제한 관리규약 임대차","상가 소음 냄새 임대차 해지"],
+      "sourceIds":["civil"]
+    },
+    "tax-cost": {
+      "title":"세금·관리비·이행강제금",
+      "why":"중과세, 관리비, 공용전기, 이행강제금은 명칭만으로 부담주체가 정해지는 것이 아니므로 발생원인과 합의를 확인해야 합니다.",
+      "questions":["관리비 세부항목·정산방식·부가세가 확인됐는지","해당 업종이나 시설로 추가되는 세금·공과금이 있는지","위반사항과 이행강제금의 원인·납부의무자·체납이 확인됐는지"],
+      "contractPoints":["관리비 포함·별도 항목과 증빙 열람","시설·업종 때문에 증가하는 공과금의 부담 합의","기존 위반사항과 신규 위반행위의 책임 구분"],
+      "precedentQueries":["상가 임대차 관리비 부담 특약","위반건축물 이행강제금 임대차"],
+      "sourceIds":["civil"]
+    }
+  },
+  "mediationExamples": [
+    {"topicId":"renewal-rent","title":"차임 또는 보증금의 증액","summary":"묵시적 갱신기간과 차임 증액 요구가 다투어진 상가건물 조정사례입니다.","publishedAt":"2022-07-15","url":"https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10404000000002022101718&boardIdx=58&boardNo=11"},
+    {"topicId":"renewal-rent","title":"재계약 성립 관련 당사자 사이 의사합치의 부존재","summary":"재계약 특약의 편입과 갱신 의사표시가 쟁점이 된 상가건물 조정사례입니다.","publishedAt":"2022-07-15","url":"https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10307000000002022101716&boardIdx=63&boardNo=11"},
+    {"topicId":"deposit-restoration","title":"보증금반환의무 및 원상회복의무의 성부 및 범위","summary":"임대차 종료 후 차임 공제와 원상복구 비용이 함께 다투어진 상가건물 조정사례입니다.","publishedAt":"2022-07-15","url":"https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10404000000002022101718&boardIdx=61&boardNo=11"},
+    {"topicId":"goodwill","title":"권리금 회수기회와 원상회복 범위","summary":"신규임차인 주선과 권리금 회수기회 보호가 검토된 상가건물 조정사례입니다.","publishedAt":"2022-07-15","url":"https://adrhome.reb.or.kr/adrhome/reb/LO010100/bbs/View.do?Key=10307000000002022101716&boardIdx=62&boardNo=11"}
+  ],
+  "profiles": {
+    "default":["contract-party","permit-cooperation","repair","renewal-rent","deposit-restoration","goodwill","management-nuisance"],
+    "transfer":["business-transfer","management-nuisance"],
+    "highRisk":["business-transfer","management-nuisance","tax-cost"],
+    "propertyRisk":["management-nuisance","tax-cost"]
+  },
+  "industryProfiles": {
+    "general-restaurant":"transfer","rest-restaurant":"transfer","bakery":"transfer","cafe":"transfer","food-manufacturing":"transfer",
+    "bar":"highRisk","danran-bar":"highRisk","entertainment-bar":"highRisk","karaoke":"highRisk","coin-karaoke":"highRisk",
+    "internet-computer-game":"transfer","general-game":"transfer","combined-game-distribution":"transfer","youth-game":"transfer",
+    "beauty-hair":"transfer","beauty-nail":"transfer","beauty-skin":"transfer","beauty-makeup":"transfer",
+    "clinic":"transfer","pharmacy":"transfer","animal-hospital":"transfer","lodging":"transfer","bathhouse":"transfer",
+    "warehouse":"propertyRisk","auto-repair":"propertyRisk","car-wash":"propertyRisk","motorcycle-repair":"propertyRisk","motorcycle-tuning":"propertyRisk"
+  }
+}
