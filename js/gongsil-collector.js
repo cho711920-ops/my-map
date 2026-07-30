@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.0";
+  var VERSION = "1.9.1";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -1421,10 +1421,14 @@
   async function collectPhones(item, requestBody, addressData) {
     var contacts = [];
     var listingCandidates = [];
+    var buildingCandidates = [];
 
     var detail = await fetchDetailData(item);
     if (detail && detail.floorinfo && Array.isArray(detail.floorinfo.Tels)) {
       listingCandidates = listingCandidates.concat(detail.floorinfo.Tels);
+    }
+    if (detail && detail.bilinfo && Array.isArray(detail.bilinfo.tels)) {
+      buildingCandidates = buildingCandidates.concat(detail.bilinfo.tels);
     }
 
     ["Ftel", "Tels", "TelList", "Phones"].forEach(function (key) {
@@ -1432,13 +1436,17 @@
       if (Array.isArray(value)) listingCandidates = listingCandidates.concat(value);
       else if (value && typeof value === "object") listingCandidates.push(value);
     });
+    if (Array.isArray(item.Btel)) buildingCandidates = buildingCandidates.concat(item.Btel);
+    else if (item.Btel && typeof item.Btel === "object") buildingCandidates.push(item.Btel);
 
     /*
-     * floorinfo/Ftel은 해당 층·호실 매물 연락처입니다. bilinfo/Btel은
-     * 건물 공용 연락처일 수 있어 다른 매물 번호가 섞일 위험이 있으므로
-     * 연락처 교체 자료로 절대 사용하지 않습니다.
+     * floorinfo/Ftel은 해당 층·호실 매물 연락처입니다.
+     * bilinfo/Btel은 일반·다가구 건물의 건물 연락처로 사용하되,
+     * 호실별 소유자가 다른 집합건물에는 섞지 않습니다.
      */
-    var candidates = listingCandidates;
+    var candidates = isCollectiveItem(item, detail)
+      ? listingCandidates
+      : listingCandidates.concat(buildingCandidates);
 
     if (!candidates.length) {
       var direct = pick(item, ["Tel", "Phone", "OwnerTel"]);
@@ -1453,7 +1461,10 @@
       if (tidx) seenTidx[tidx] = true;
 
       var phone = normalizePhone(pick(candidate, ["Tel", "tel", "Phone", "phone"]));
-      var label = text(pick(candidate, ["Type2", "Ty", "Type", "Label", "Name"]));
+      var label = text(pick(candidate, [
+        "Type2", "type2", "Role", "role", "Label", "label",
+        "Type1", "type1", "Ty", "Type", "Name"
+      ]));
       var tenantHint = isTenantLabel(label);
       var resolvedLabel = contactLabel(tenantHint ? "S" : label);
 
@@ -1487,6 +1498,12 @@
     var uniqueContacts = Object.keys(byPhone).map(function (phone) {
       return byPhone[phone];
     });
+    if (!uniqueContacts.length) {
+      throw new Error(
+        "공실박스 상세 연락처 없음: 매물번호 " +
+        text(pick(item, ["Bfidx", "bfidx", "BfIdx", "id"]))
+      );
+    }
     var tenantContacts = uniqueContacts.filter(function (contact) {
       return contact.tenant;
     });
@@ -1522,6 +1539,16 @@
         };
       })
     };
+  }
+
+  function isCollectiveItem(item, detail) {
+    var building = detail && detail.bilinfo ? detail.bilinfo : {};
+    return truthy(pick(item || {}, ["Ckhus", "Collective", "IsCollective"])) ||
+      truthy(pick(building, ["Ckhus", "Collective", "IsCollective"])) ||
+      /집합/.test([
+        text(pick(item || {}, ["TypeView", "ViewType", "LndType", "Type"])),
+        text(pick(building, ["TypeView", "ViewType", "LndType", "Type", "Btype"]))
+      ].join(" "));
   }
 
   function detailKey(source) {

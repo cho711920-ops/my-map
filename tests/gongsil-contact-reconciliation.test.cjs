@@ -18,13 +18,13 @@ const collectPhones = collector.slice(
 );
 assert.match(
   collectPhones,
-  /var candidates = listingCandidates;/,
-  "해당 매물 상세 연락처만 교체 자료로 사용해야 합니다."
+  /var candidates = isCollectiveItem\(item,\s*detail\)\s*\?\s*listingCandidates\s*:\s*listingCandidates\.concat\(buildingCandidates\);/,
+  "일반건물과 집합건물의 연락처 범위를 분리해야 합니다."
 );
-assert.doesNotMatch(
+assert.match(
   collectPhones,
-  /bilinfo\.tels|item\.Btel|buildingCandidates/,
-  "건물 공용 연락처는 다른 매물 번호가 섞일 수 있어 사용하면 안 됩니다."
+  /bilinfo\.tels[\s\S]*?item\.Btel[\s\S]*?buildingCandidates/,
+  "일반·다가구 건물은 공실박스 건물 연락처도 복구해야 합니다."
 );
 assert.match(
   collector,
@@ -63,6 +63,16 @@ assert.match(
   backend,
   /row\[18\] = mmGongsilContactListJson_\(contacts\);/,
   "역할 연락처는 연락처목록 열에 원본 역할 그대로 저장해야 합니다."
+);
+assert.match(
+  backend,
+  /function mmMergeExactGongsilContacts_\(row, item\)[\s\S]*?mmMasterSource_\(row\) === "직접등록"[\s\S]*?row\[18\] = mmGongsilContactListJson_\(contacts\);/,
+  "부분수집에서도 출처ID로 연결된 매물 자신의 연락처만 안전하게 보강해야 합니다."
+);
+assert.match(
+  backend,
+  /if \(Array\.isArray\(body\.observedSourceIds\) && body\.observedSourceIds\.length\) \{[\s\S]*?row\[5\] = mmMergeSourceIds_\(body\.observedSourceIds\)\.length;/,
+  "수집회차 건수는 최종 고유 목록 수로 바로잡아 중복 집계를 막아야 합니다."
 );
 assert.match(
   backend,

@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.0";/);
+assert.match(source, /var VERSION = "1\.9\.1";/);
 assert.match(
   source,
   /var detailItems = saveMetadata\.complete\s*\?\s*items\.slice\(\)\s*:\s*items\.filter/
@@ -17,8 +17,14 @@ const collectPhonesSource = source.slice(
   source.indexOf("function isTenantLabel(")
 );
 assert.ok(
-  !/bilinfo\.tels|item\.Btel/.test(collectPhonesSource),
-  "건물 공용 연락처는 다른 호실 번호가 섞일 수 있어 매물 연락처로 사용하면 안 됩니다."
+  /bilinfo\.tels|item\.Btel/.test(collectPhonesSource) &&
+    /isCollectiveItem\(item,\s*detail\)\s*\?\s*listingCandidates\s*:\s*listingCandidates\.concat\(buildingCandidates\)/.test(collectPhonesSource),
+  "일반건물은 건물 연락처를 사용하고 집합건물은 해당 호실 연락처만 사용해야 합니다."
+);
+assert.match(
+  collectPhonesSource,
+  /if \(!uniqueContacts\.length\) \{\s*throw new Error\(/,
+  "공실박스 연락처가 비어 있으면 빈 매물을 저장하지 말고 제외 사유를 남겨야 합니다."
 );
 assert.match(
   source,
