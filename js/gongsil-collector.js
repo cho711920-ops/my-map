@@ -1582,8 +1582,14 @@
     if (/임대인|건물주|소유자|주인/.test(raw)) return "주인";
     if (/관리/.test(raw)) return "관리업체";
     if (/부동산|중개/.test(raw)) return "부동산";
-    if (/남성|남자/.test(raw)) return "남성";
-    if (/여성|여자/.test(raw)) return "여성";
+    /*
+     * 공실박스 보안 연락처는 화면/응답 버전에 따라
+     * "남성·여성"뿐 아니라 한 글자 "남·여"로도 내려옵니다.
+     * 한 글자 값을 그대로 메모에 넘기지 않고 역할을 확정해 두어
+     * 후속 연락처 JSON 저장에서도 기타로 떨어지지 않게 합니다.
+     */
+    if (/^(?:남|남성|남자|사장)$/.test(raw)) return "남성";
+    if (/^(?:여|여성|여자|사모)$/.test(raw)) return "여성";
     if (/가족/.test(raw)) return "가족";
     return raw || "기타연락처";
   }

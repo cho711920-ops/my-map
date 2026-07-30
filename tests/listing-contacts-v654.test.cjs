@@ -63,6 +63,8 @@ const explicitRoleCases = [
   ["\uC8FC\uC778", "\uC8FC"],
   ["\uC0AC\uC7A5", "\uB0A8"],
   ["\uC0AC\uBAA8", "\uC5EC"],
+  ["\uB0A8", "\uB0A8"],
+  ["\uC5EC", "\uC5EC"],
   ["\uAC00\uC871", "\uAC00"],
   ["\uBD80\uB3D9\uC0B0", "\uBD80"],
   ["\uAD00\uB9AC", "\uAD00"],
