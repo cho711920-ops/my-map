@@ -120,4 +120,15 @@ assert.match(
   "연결된 공실박스 매물의 현재 역할 연락처로 정확히 교체해야 합니다."
 );
 
+assert.match(
+  backend,
+  /function mmRestoreAllGongsilContactsFromHistory\(\) \{[\s\S]*?useHistoryFallback: true[\s\S]*?console\.log\(JSON\.stringify\(result\)\)/,
+  "historical recovery must restore roles missing from the latest session"
+);
+assert.match(
+  backend,
+  /if \(!useHistoryFallback && mmText_\(row\[5\]\) !== sessionId\) return;[\s\S]*?contactsBySourceId\[sourceId\] = contacts;/,
+  "the latest valid contacts for each GongSil source id must win"
+);
+
 console.log("gongsil contact reconciliation tests passed");
