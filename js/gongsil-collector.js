@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.8.2";
+  var VERSION = "1.9.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -499,9 +499,16 @@
         saveMetadata,
         collectorKey
       );
-      var detailItems = items.filter(function(item) {
-        return classification.needs[recordSourceId(item)];
-      });
+      /*
+       * 완전수집은 매물 조건이 같아도 공실박스의 최신 역할 연락처로
+       * 재정리해야 합니다. 따라서 전체 매물의 상세 연락처를 다시 읽습니다.
+       * 선택수집은 기존처럼 신규·변경 매물만 상세조회합니다.
+       */
+      var detailItems = saveMetadata.complete
+        ? items.slice()
+        : items.filter(function(item) {
+            return classification.needs[recordSourceId(item)];
+          });
       updateDashboard({
         found: items.length,
         processed: classification.unchanged,
@@ -1084,7 +1091,7 @@
     }
 
     var phones = await collectPhones(item, requestBody, addressData);
-    var memo = appendPhoneMemo(buildMemo(item), phones.extraMemo);
+    var memo = buildMemo(item);
     var pyeong = getPyeong(item);
     var values = [
       getBuildingName(item),
@@ -1109,6 +1116,7 @@
       record: {
         externalId: text(pick(item, ["Bfidx", "bfidx", "BfIdx"])),
         listSnapshot: gongsilListSnapshot(item),
+        contactList: phones.contacts,
         values: values
       }
     };
@@ -1403,21 +1411,25 @@
 
   async function collectPhones(item, requestBody, addressData) {
     var contacts = [];
-    var candidates = [];
+    var listingCandidates = [];
 
     var detail = await fetchDetailData(item);
-    if (detail && detail.bilinfo && Array.isArray(detail.bilinfo.tels)) {
-      candidates = candidates.concat(detail.bilinfo.tels);
-    }
     if (detail && detail.floorinfo && Array.isArray(detail.floorinfo.Tels)) {
-      candidates = candidates.concat(detail.floorinfo.Tels);
+      listingCandidates = listingCandidates.concat(detail.floorinfo.Tels);
     }
 
-    ["Btel", "Ftel", "Tels", "TelList", "Phones"].forEach(function (key) {
+    ["Ftel", "Tels", "TelList", "Phones"].forEach(function (key) {
       var value = item[key];
-      if (Array.isArray(value)) candidates = candidates.concat(value);
-      else if (value && typeof value === "object") candidates.push(value);
+      if (Array.isArray(value)) listingCandidates = listingCandidates.concat(value);
+      else if (value && typeof value === "object") listingCandidates.push(value);
     });
+
+    /*
+     * floorinfo/Ftel은 해당 층·호실 매물 연락처입니다. bilinfo/Btel은
+     * 건물 공용 연락처일 수 있어 다른 매물 번호가 섞일 위험이 있으므로
+     * 연락처 교체 자료로 절대 사용하지 않습니다.
+     */
+    var candidates = listingCandidates;
 
     if (!candidates.length) {
       var direct = pick(item, ["Tel", "Phone", "OwnerTel"]);
@@ -1434,11 +1446,18 @@
       var phone = normalizePhone(pick(candidate, ["Tel", "tel", "Phone", "phone"]));
       var label = text(pick(candidate, ["Type2", "Ty", "Type", "Label", "Name"]));
       var tenantHint = isTenantLabel(label);
+      var resolvedLabel = contactLabel(tenantHint ? "S" : label);
 
       if (!phone) continue;
+      if (!resolvedLabel) {
+        throw new Error(
+          "공실박스 연락처 역할 확인 실패: " +
+          (label || "빈 역할") + " / " + phone
+        );
+      }
       contacts.push({
         phone: phone,
-        label: contactLabel(tenantHint ? "S" : label),
+        label: resolvedLabel,
         tenant: tenantHint || isTenantLabel(label)
       });
     }
@@ -1448,12 +1467,11 @@
       var existing = byPhone[contact.phone];
       if (!existing || (!existing.tenant && contact.tenant)) {
         byPhone[contact.phone] = contact;
-      } else if (
-        existing &&
-        existing.label === "기타연락처" &&
-        contact.label !== "기타연락처"
-      ) {
-        existing.label = contact.label;
+      } else if (existing && existing.label !== contact.label) {
+        throw new Error(
+          "공실박스 동일 전화번호 역할 충돌: " +
+          contact.phone + " (" + existing.label + " / " + contact.label + ")"
+        );
       }
     });
 
@@ -1487,7 +1505,13 @@
     return {
       landlordPrimary: primary ? primary.phone : "",
       tenantPrimary: tenantContacts.length ? tenantContacts[0].phone : "",
-      extraMemo: extras
+      extraMemo: extras,
+      contacts: uniqueContacts.map(function(contact) {
+        return {
+          role: contactRoleCode(contact.label),
+          phone: contact.phone
+        };
+      })
     };
   }
 
@@ -1591,7 +1615,20 @@
     if (/^(?:남|남성|남자|사장)$/.test(raw)) return "남성";
     if (/^(?:여|여성|여자|사모)$/.test(raw)) return "여성";
     if (/가족/.test(raw)) return "가족";
-    return raw || "기타연락처";
+    return "";
+  }
+
+  function contactRoleCode(label) {
+    var roles = {
+      "주인": "임",
+      "남성": "남",
+      "여성": "여",
+      "관리업체": "관",
+      "부동산": "부",
+      "세입자": "세",
+      "가족": "가"
+    };
+    return roles[label] || "";
   }
 
   function landlordPriority(label) {
@@ -1746,7 +1783,10 @@
       await finalizeGongsilSession(
         metadata,
         collectorKey,
-        Boolean(metadata.complete) && !stopped && Number(totals.failed || 0) === 0,
+        Boolean(metadata.complete) &&
+          !stopped &&
+          Number(totals.failed || 0) === 0 &&
+          Number(metadata.rejectedCount || 0) === 0,
         stopped
       );
     }

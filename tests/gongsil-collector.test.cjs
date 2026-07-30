@@ -7,7 +7,19 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.8\.2";/);
+assert.match(source, /var VERSION = "1\.9\.0";/);
+assert.match(
+  source,
+  /var detailItems = saveMetadata\.complete\s*\?\s*items\.slice\(\)\s*:\s*items\.filter/
+);
+const collectPhonesSource = source.slice(
+  source.indexOf("async function collectPhones("),
+  source.indexOf("function isTenantLabel(")
+);
+assert.ok(
+  !/bilinfo\.tels|item\.Btel/.test(collectPhonesSource),
+  "건물 공용 연락처는 다른 호실 번호가 섞일 수 있어 매물 연락처로 사용하면 안 됩니다."
+);
 assert.match(
   source,
   /function importItemTotal\(records, metadata\)[\s\S]*?Math\.max\([\s\S]*?Number\(metadata\.found \|\| 0\)/
@@ -59,7 +71,7 @@ assert.ok(checkpointPosition > offsetPosition);
 assert.ok(dashboardPosition > checkpointPosition);
 assert.match(
   saveFunction,
-  /Boolean\(metadata\.complete\) && !stopped && Number\(totals\.failed \|\| 0\) === 0/
+  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0/
 );
 
 console.log("gongsil collector tests passed");
