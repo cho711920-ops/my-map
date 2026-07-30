@@ -32,6 +32,8 @@ ok(queue.includes("<small>완료</small>") && queue.includes("<small>저장중</
 ok(script.includes('postSafeMutationV654("toggleDone"'), "매물 메모·상태 저장 경로가 필요합니다.");
 ok(script.includes('postSafeMutationV654("updateProperty"'), "매물수정 저장 경로가 필요합니다.");
 ok(script.includes("persisted: true"), "매물 저장은 실제 서버 성공을 확인해야 합니다.");
+ok(script.includes('"web-save-" + Date.now()') && script.includes("retryDelays"), "직접 저장에는 고유 요청번호와 제한 재시도가 필요합니다.");
+ok(script.includes("result.retryable === true") && script.includes("networkRetry"), "잠금·일시 네트워크 오류만 재시도해야 합니다.");
 ok(!operations.includes("return window.JSAsyncMutations.enqueue("), "고객 수정은 실제 시트 저장 전 완료 처리하면 안 됩니다.");
 ok(!reviews.includes("return window.JSAsyncMutations.enqueue("), "매물검증은 실제 시트 저장 전 목록에서 제거하면 안 됩니다.");
 ok(reviews.includes('if (!response.ok) throw new Error("매물검증 저장에 실패했습니다.'), "매물검증 HTTP 실패를 사용자에게 알려야 합니다.");
@@ -42,6 +44,8 @@ ok(backend.includes("leaseExpiredBefore"), "중단된 처리중 작업의 자동
 ok(backend.includes("job.storedResult || dispatchQueuedMutationV654_"), "검증 재시도 때 작업을 중복 실행하면 안 됩니다.");
 ok(backend.includes("recordQueueExecutionResultV654_"), "실행 결과를 검증 전에 영구 저장해야 합니다.");
 ok(backend.includes("실제 저장값 확인 완료"), "최종 완료 전 실제 시트 검증이 필요합니다.");
+ok(backend.includes('["toggleDone", "updateProperty", "deleteProperty"].indexOf(action) >= 0'), "직접 저장 재시도 시 성공 요청을 중복 실행하면 안 됩니다.");
+ok(backend.includes("lock.tryLock(4000)") && backend.includes("retryable: true"), "잠금 충돌은 짧게 반환하여 동일 요청으로 재시도해야 합니다.");
 ok(backend.includes("job.attempts < 3"), "실패 작업만 제한적으로 재시도해야 합니다.");
 ok(backend.includes('case "updateCustomerMatch"') && backend.includes("고객매칭 상태 불일치"), "고객매칭 read-back 검증이 필요합니다.");
 ok(backend.includes('case "applyReviewBatch"') && backend.includes("대기행"), "매물검증 read-back 검증이 필요합니다.");

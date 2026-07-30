@@ -134,6 +134,31 @@ assert.strictEqual(plan.contacts.length, 4);
 assert(!/042-123-4567|010-3333-4444/.test(plan.cleanedMemo), "저장할 번호만 메모에서 제거해야 합니다.");
 assert(/문의는|주차 가능|연락/.test(plan.cleanedMemo), "전화번호 외 메모 내용은 보존해야 합니다.");
 
+const legacyTextRow = new Array(19).fill("");
+legacyTextRow[18] = "사모 추가연락처 010-9138-9139";
+const legacyTextPlan = gasContext.buildContactStorageV654_(
+  legacyTextRow,
+  [],
+  legacyTextRow[11]
+);
+assert.strictEqual(legacyTextPlan.ok, true);
+assert.strictEqual(legacyTextPlan.recoveredLegacy, true);
+assert.strictEqual(legacyTextPlan.contacts.length, 1);
+assert.strictEqual(legacyTextPlan.contacts[0].role, "여");
+assert.strictEqual(legacyTextPlan.contacts[0].phone, "010-9138-9139");
+
+const malformedLegacyRow = new Array(19).fill("");
+malformedLegacyRow[18] = "[object Object]";
+const malformedLegacyPlan = gasContext.buildContactStorageV654_(
+  malformedLegacyRow,
+  [],
+  malformedLegacyRow[11]
+);
+assert.strictEqual(malformedLegacyPlan.ok, true);
+assert.strictEqual(malformedLegacyPlan.recoveredLegacy, true);
+assert.strictEqual(malformedLegacyPlan.legacyRaw, "[object Object]");
+assert.strictEqual(malformedLegacyPlan.contacts.length, 0);
+
 const spouseRow = new Array(19).fill("");
 spouseRow[11] = "\uC0AC\uBAA8: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139";
 spouseRow[18] = JSON.stringify([{role: "\uAE30", phone: "010-9138-9139"}]);
@@ -179,6 +204,11 @@ assert.strictEqual(overflowRow[11].includes("010-0000-0007"), true, "6개 초과
 assert(
   /setValue\(contactPlan\.json\)[\s\S]*SpreadsheetApp\.flush\(\)[\s\S]*getDisplayValue\(\)[\s\S]*cleanedMemo/.test(gasSource),
   "연락처 저장 후 재확인한 뒤에만 메모를 정리해야 합니다."
+);
+assert(
+  /contactPlan\.cleanedMemo !== memo \|\| contactPlan\.recoveredLegacy/.test(gasSource) &&
+    /contactPlan\.cleanedMemo !== updatedMemo \|\| contactPlan\.recoveredLegacy/.test(gasSource),
+  "기존 연락처 값이 JSON이 아니면 원문을 백업한 뒤에만 복구 저장해야 합니다."
 );
 assert(
   /CONTACT_MIGRATION_BACKUP_SHEET_NAME\s*=\s*"JS_연락처이전백업"/.test(gasSource),

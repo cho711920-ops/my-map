@@ -42,23 +42,58 @@ var selectedPrintKeys = [];
 var visibleListItems = [];
 
 function postSafeMutationV654(action, payload) {
-  var body = Object.assign({}, payload || {}, { action: action });
-  return fetch(saveApiURL, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  }).then(function(response) {
-    if (!response.ok) {
-      throw new Error("저장 요청을 처리하지 못했습니다. (HTTP " + response.status + ")");
-    }
-    return response.json();
-  }).then(function(result) {
-    if (!result || result.ok === false) {
-      throw new Error((result && result.message) || "실제 시트 저장에 실패했습니다.");
-    }
-    return Object.assign({}, result, { queued: false, persisted: true });
+  var body = Object.assign({}, payload || {}, {
+    action: action,
+    requestId: payload && payload.requestId
+      ? payload.requestId
+      : "web-save-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10)
   });
+  var retryDelays = [0, 500, 1000, 1800, 3000, 5000];
+
+  function isRetryableResult(result) {
+    if (result && result.retryable === true) return true;
+    var message = String(result && result.message || "");
+    return /Lock timeout|holding the lock|잠금|저장 작업과 겹/i.test(message);
+  }
+
+  function send(attempt) {
+    return fetch(saveApiURL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function(response) {
+      if (!response.ok) {
+        var error = new Error("저장 요청을 처리하지 못했습니다. (HTTP " + response.status + ")");
+        error.retryable = response.status >= 500;
+        throw error;
+      }
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) {
+        var error = new Error((result && result.message) || "실제 시트 저장에 실패했습니다.");
+        error.retryable = isRetryableResult(result);
+        throw error;
+      }
+      return Object.assign({}, result, {
+        queued: false,
+        persisted: true,
+        requestId: body.requestId
+      });
+    }).catch(function(error) {
+      var networkRetry = error instanceof TypeError;
+      if (attempt + 1 >= retryDelays.length || (!error.retryable && !networkRetry)) {
+        throw error;
+      }
+      return new Promise(function(resolve) {
+        setTimeout(resolve, retryDelays[attempt + 1]);
+      }).then(function() {
+        return send(attempt + 1);
+      });
+    });
+  }
+
+  return send(0);
 }
 
 var asyncMutationSheetReloadTimerV654 = null;
