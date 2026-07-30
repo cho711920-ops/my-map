@@ -160,6 +160,28 @@ assert.strictEqual(compactSpouseMemoPlan.contacts[0].role, "여");
 assert.strictEqual(compactSpouseMemoPlan.contacts[0].phone, "010-0000-0000");
 assert.strictEqual(compactSpouseMemoPlan.cleanedMemo, "");
 
+const sentenceSpouseMemo = "대로변 앞 유동인구많고 접근성좋은 최적의 상가자리입니다.사모010-4951-8276";
+const sentenceSpouseContacts = frontendContext.extractListContactsV650({
+  memo: sentenceSpouseMemo
+});
+assert.strictEqual(sentenceSpouseContacts.length, 1);
+assert.strictEqual(sentenceSpouseContacts[0].role, "여");
+const sentenceSpouseRow = new Array(19).fill("");
+sentenceSpouseRow[11] = sentenceSpouseMemo;
+const sentenceSpousePlan = gasContext.buildContactStorageV654_(
+  sentenceSpouseRow,
+  [],
+  sentenceSpouseRow[11]
+);
+assert.strictEqual(sentenceSpousePlan.ok, true);
+assert.strictEqual(sentenceSpousePlan.contacts.length, 1);
+assert.strictEqual(sentenceSpousePlan.contacts[0].role, "여");
+assert.strictEqual(sentenceSpousePlan.contacts[0].phone, "010-4951-8276");
+assert.strictEqual(
+  sentenceSpousePlan.cleanedMemo,
+  "대로변 앞 유동인구많고 접근성좋은 최적의 상가자리입니다"
+);
+
 const malformedLegacyRow = new Array(19).fill("");
 malformedLegacyRow[18] = "[object Object]";
 const malformedLegacyPlan = gasContext.buildContactStorageV654_(

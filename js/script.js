@@ -1887,6 +1887,18 @@ function saveItemMemo(encodedKey) {
   };
 
   postSafeMutationV654("toggleDone", payload).then(function(result) {
+    var savedPhoneKeys = Object.create(null);
+    (Array.isArray(result && result.contacts) ? result.contacts : []).forEach(function(contact) {
+      var savedPhone = normalizeListPhoneV650(contact && (contact.phone || contact.number));
+      if (savedPhone) savedPhoneKeys[savedPhone.key] = true;
+    });
+    var missingContact = payload.contacts.find(function(contact) {
+      var expectedPhone = normalizeListPhoneV650(contact && contact.phone);
+      return expectedPhone && !savedPhoneKeys[expectedPhone.key];
+    });
+    if (missingContact) {
+      throw new Error("메모의 연락처가 시트 연락처목록에 저장되지 않아 메모 정리를 중단했습니다.");
+    }
     if (Array.isArray(result && result.contacts)) {
       item.contactListRaw = JSON.stringify(result.contacts);
     }
@@ -2045,7 +2057,7 @@ function extractListContactsV650(item) {
 
   var memo = String(item && item.memo || "");
   var rolePattern = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
-  var roleBoundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\-])";
+  var roleBoundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\.\\-!?。])";
   var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
   var roleBridge = "(?:[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
   var matcher = new RegExp(roleBoundary + rolePattern + roleBridge + phonePattern, "g");
