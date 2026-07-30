@@ -23,7 +23,7 @@ assert.match(
 );
 assert.match(
   collectPhones,
-  /bilinfo\.tels[\s\S]*?item\.Btel[\s\S]*?buildingCandidates/,
+  /appendContactFields\(buildingCandidates,\s*detail && detail\.bilinfo[\s\S]*?appendContactFields\(buildingCandidates,\s*item/,
   "일반·다가구 건물은 공실박스 건물 연락처도 복구해야 합니다."
 );
 assert.match(
@@ -83,6 +83,21 @@ assert.match(
   backend,
   /throw new Error\("공실박스 연락처를 연결할 대표매물을 찾지 못했습니다: " \+ sourceId\);/,
   "원본 연락처가 대표매물에 연결되지 않으면 조용히 누락하지 말고 전체수집을 중단해야 합니다."
+);
+
+const exactMerge = backend.slice(
+  backend.indexOf("function mmMergeExactGongsilContacts_(row, item)"),
+  backend.indexOf("function mmMergeItemIntoMaster_")
+);
+assert.doesNotMatch(
+  exactMerge,
+  /mmNormalizeGongsilContactList_\(row\[18\]\)/,
+  "현재 공실박스 연락처 복구 시 예전의 잘못된 연락처 JSON을 다시 합치면 안 됩니다."
+);
+assert.match(
+  exactMerge,
+  /incoming\.forEach\(function\(contact\)/,
+  "연결된 공실박스 매물의 현재 역할 연락처로 정확히 교체해야 합니다."
 );
 
 console.log("gongsil contact reconciliation tests passed");

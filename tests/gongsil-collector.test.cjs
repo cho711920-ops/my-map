@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.2";/);
+assert.match(source, /var VERSION = "1\.9\.3";/);
 assert.match(
   source,
   /var BUSY_RETRY_DELAYS = \[3000, 6000, 10000, 15000, 20000, 30000\];/
@@ -21,9 +21,21 @@ const collectPhonesSource = source.slice(
   source.indexOf("function isTenantLabel(")
 );
 assert.ok(
-  /bilinfo\.tels|item\.Btel/.test(collectPhonesSource) &&
+  /appendContactFields\(buildingCandidates,\s*detail && detail\.bilinfo/.test(collectPhonesSource) &&
     /isCollectiveItem\(item,\s*detail\)\s*\?\s*listingCandidates\s*:\s*listingCandidates\.concat\(buildingCandidates\)/.test(collectPhonesSource),
   "일반건물은 건물 연락처를 사용하고 집합건물은 해당 호실 연락처만 사용해야 합니다."
+);
+assert.match(
+  source,
+  /function appendContactValue\(target, value\)[\s\S]*?"Mobile", "mobile", "Hp", "hp"/
+);
+assert.match(
+  source,
+  /"Ty2", "ty2", "Ty1", "ty1",\s*"TelType", "telType"/
+);
+assert.match(
+  source,
+  /duplicate: Number\(result\.duplicate \|\| 0\) \+ detailBaseProcessed/
 );
 assert.match(
   collectPhonesSource,

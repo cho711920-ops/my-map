@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.2";
+  var VERSION = "1.9.3";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -243,7 +243,7 @@
           '<div class="jsg-metric"><span>기존 통합</span><b data-metric="merged">0</b></div>' +
           '<div class="jsg-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
           '<div class="jsg-metric"><span>기존 중복</span><b data-metric="duplicate">0</b></div>' +
-          '<div class="jsg-metric"><span>주소·변환 제외</span><b data-metric="addressMissing">0</b></div>' +
+          '<div class="jsg-metric"><span>변환 제외</span><b data-metric="addressMissing">0</b></div>' +
           '<div class="jsg-metric"><span>조회·저장 실패</span><b data-metric="failed">0</b></div>' +
         '</div>' +
         '<div class="jsg-card">' +
@@ -620,11 +620,11 @@
 
       updateDashboard({
         found: items.length,
-        processed: classification.unchanged + rejected.length,
+        processed: detailBaseProcessed + rejected.length,
         remaining: transformed.length
       });
       setProgress(
-        classification.unchanged + rejected.length,
+        detailBaseProcessed + rejected.length,
         items.length
       );
       var result = await sendToAppsScript(transformed, saveMetadata, collectorKey);
@@ -657,7 +657,7 @@
         created: result.created,
         merged: result.merged,
         review: result.review,
-        duplicate: Number(result.duplicate || 0) + classification.unchanged,
+        duplicate: Number(result.duplicate || 0) + detailBaseProcessed,
         addressMissing: rejected.length,
         failed: result.failed
       });
@@ -1419,26 +1419,61 @@
       .trim();
   }
 
+  function appendContactValue(target, value) {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(function (entry) {
+        appendContactValue(target, entry);
+      });
+      return;
+    }
+    if (typeof value === "object") {
+      var directPhone = pick(value, [
+        "Tel", "tel", "Phone", "phone", "Number", "number",
+        "Mobile", "mobile", "Hp", "hp"
+      ]);
+      if (directPhone) {
+        target.push(value);
+        return;
+      }
+      Object.keys(value).forEach(function (key) {
+        appendContactValue(target, value[key]);
+      });
+      return;
+    }
+    if (normalizePhone(value)) target.push({ Tel: value });
+  }
+
+  function appendContactFields(target, source, keys) {
+    if (!source || typeof source !== "object") return;
+    keys.forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        appendContactValue(target, source[key]);
+      }
+    });
+  }
+
   async function collectPhones(item, requestBody, addressData) {
     var contacts = [];
     var listingCandidates = [];
     var buildingCandidates = [];
 
     var detail = await fetchDetailData(item);
-    if (detail && detail.floorinfo && Array.isArray(detail.floorinfo.Tels)) {
-      listingCandidates = listingCandidates.concat(detail.floorinfo.Tels);
-    }
-    if (detail && detail.bilinfo && Array.isArray(detail.bilinfo.tels)) {
-      buildingCandidates = buildingCandidates.concat(detail.bilinfo.tels);
-    }
-
-    ["Ftel", "Tels", "TelList", "Phones"].forEach(function (key) {
-      var value = item[key];
-      if (Array.isArray(value)) listingCandidates = listingCandidates.concat(value);
-      else if (value && typeof value === "object") listingCandidates.push(value);
-    });
-    if (Array.isArray(item.Btel)) buildingCandidates = buildingCandidates.concat(item.Btel);
-    else if (item.Btel && typeof item.Btel === "object") buildingCandidates.push(item.Btel);
+    appendContactFields(listingCandidates, detail && detail.floorinfo, [
+      "Tels", "tels", "FTels", "ftels", "Ftel", "ftel",
+      "TelList", "telList", "Phones", "phones", "Contacts", "contacts"
+    ]);
+    appendContactFields(buildingCandidates, detail && detail.bilinfo, [
+      "Tels", "tels", "BTels", "btels", "Btel", "btel",
+      "TelList", "telList", "Phones", "phones", "Contacts", "contacts"
+    ]);
+    appendContactFields(listingCandidates, item, [
+      "Ftel", "ftel", "FTels", "ftels", "Tels", "tels",
+      "TelList", "telList", "Phones", "phones", "Contacts", "contacts"
+    ]);
+    appendContactFields(buildingCandidates, item, [
+      "Btel", "btel", "BTels", "btels"
+    ]);
 
     /*
      * floorinfo/Ftel은 해당 층·호실 매물 연락처입니다.
@@ -1461,10 +1496,14 @@
       if (tidx && seenTidx[tidx]) continue;
       if (tidx) seenTidx[tidx] = true;
 
-      var phone = normalizePhone(pick(candidate, ["Tel", "tel", "Phone", "phone"]));
+      var phone = normalizePhone(pick(candidate, [
+        "Tel", "tel", "Phone", "phone", "Number", "number",
+        "Mobile", "mobile", "Hp", "hp"
+      ]));
       var label = text(pick(candidate, [
         "Type2", "type2", "Role", "role", "Label", "label",
-        "Type1", "type1", "Ty", "Type", "Name"
+        "Type1", "type1", "Ty2", "ty2", "Ty1", "ty1",
+        "TelType", "telType", "Ty", "Type", "type", "Name", "name"
       ]));
       var tenantHint = isTenantLabel(label);
       var resolvedLabel = contactLabel(tenantHint ? "S" : label);
