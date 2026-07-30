@@ -1887,6 +1887,15 @@ function saveItemMemo(encodedKey) {
   };
 
   postSafeMutationV654("toggleDone", payload).then(function(result) {
+    if (Array.isArray(result && result.contacts)) {
+      item.contactListRaw = JSON.stringify(result.contacts);
+    }
+    if (result && typeof result.memo === "string") {
+      item.memo = result.memo;
+    }
+    editingMemoKey = null;
+    memoEditMode = "replace";
+    showMemoListKeepingPosition(item.key);
     document.getElementById("status").innerHTML = "메모 저장 요청 완료";
 
     if (!result || !result.queued) {

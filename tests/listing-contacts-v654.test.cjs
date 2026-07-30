@@ -147,6 +147,19 @@ assert.strictEqual(legacyTextPlan.contacts.length, 1);
 assert.strictEqual(legacyTextPlan.contacts[0].role, "여");
 assert.strictEqual(legacyTextPlan.contacts[0].phone, "010-9138-9139");
 
+const compactSpouseMemoRow = new Array(19).fill("");
+compactSpouseMemoRow[11] = "사모010-0000-0000";
+const compactSpouseMemoPlan = gasContext.buildContactStorageV654_(
+  compactSpouseMemoRow,
+  [],
+  compactSpouseMemoRow[11]
+);
+assert.strictEqual(compactSpouseMemoPlan.ok, true);
+assert.strictEqual(compactSpouseMemoPlan.contacts.length, 1);
+assert.strictEqual(compactSpouseMemoPlan.contacts[0].role, "여");
+assert.strictEqual(compactSpouseMemoPlan.contacts[0].phone, "010-0000-0000");
+assert.strictEqual(compactSpouseMemoPlan.cleanedMemo, "");
+
 const malformedLegacyRow = new Array(19).fill("");
 malformedLegacyRow[18] = "[object Object]";
 const malformedLegacyPlan = gasContext.buildContactStorageV654_(
@@ -209,6 +222,11 @@ assert(
   /contactPlan\.cleanedMemo !== memo \|\| contactPlan\.recoveredLegacy/.test(gasSource) &&
     /contactPlan\.cleanedMemo !== updatedMemo \|\| contactPlan\.recoveredLegacy/.test(gasSource),
   "기존 연락처 값이 JSON이 아니면 원문을 백업한 뒤에만 복구 저장해야 합니다."
+);
+assert(
+  /item\.contactListRaw\s*=\s*JSON\.stringify\(result\.contacts\)/.test(scriptSource) &&
+    /item\.memo\s*=\s*result\.memo/.test(scriptSource),
+  "메모 저장 성공 직후 서버가 확정한 연락처와 정리된 메모를 카드에 반영해야 합니다."
 );
 assert(
   /CONTACT_MIGRATION_BACKUP_SHEET_NAME\s*=\s*"JS_연락처이전백업"/.test(gasSource),
