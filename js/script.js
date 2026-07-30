@@ -309,7 +309,12 @@ function parseCSVLine(line) {
     var ch = line[i];
 
     if (ch === '"') {
-      insideQuotes = !insideQuotes;
+      if (insideQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
     } else if (ch === "," && !insideQuotes) {
       result.push(current);
       current = "";

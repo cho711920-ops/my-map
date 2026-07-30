@@ -15,6 +15,23 @@ const gasPath = path.resolve(
 );
 const gasSource = fs.readFileSync(gasPath, "utf8");
 
+const csvStart = scriptSource.indexOf("function parseCSVLine");
+const csvEnd = scriptSource.indexOf("function itemKey");
+const csvContext = {};
+vm.createContext(csvContext);
+vm.runInContext(scriptSource.slice(csvStart, csvEnd), csvContext);
+const contactJson = JSON.stringify([
+  { role: "임", phone: "010-2446-8276" },
+  { role: "여", phone: "010-4951-8276" }
+]);
+const csvContactCell = `"${contactJson.replace(/"/g, '""')}"`;
+const parsedContactCsv = csvContext.parseCSVLine(`건물,주소,3층,일반상가,2000,150,0,0,83,,,메모,,,당근,ID,링크,${csvContactCell}`);
+assert.deepStrictEqual(
+  JSON.parse(parsedContactCsv[17]),
+  JSON.parse(contactJson),
+  "자동 새로고침 후에도 S열 연락처 JSON의 따옴표를 보존해야 합니다."
+);
+
 const frontendStart = scriptSource.indexOf("var LIST_CONTACT_ROLE_META_V650");
 const frontendEnd = scriptSource.indexOf("function listDisplayValueV650");
 assert(frontendStart >= 0 && frontendEnd > frontendStart, "연락처 프론트 함수 범위를 찾지 못했습니다.");
