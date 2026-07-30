@@ -59,6 +59,28 @@ assert.strictEqual(
   "사모 추가연락처는 기타가 아니라 사모 역할로 승격해야 합니다."
 );
 
+const explicitRoleCases = [
+  ["\uC8FC\uC778", "\uC8FC"],
+  ["\uC0AC\uC7A5", "\uB0A8"],
+  ["\uC0AC\uBAA8", "\uC5EC"],
+  ["\uAC00\uC871", "\uAC00"],
+  ["\uBD80\uB3D9\uC0B0", "\uBD80"],
+  ["\uAD00\uB9AC", "\uAD00"],
+  ["\uC138\uC785\uC790", "\uC138"]
+];
+explicitRoleCases.forEach(([label, expectedRole], index) => {
+  const phone = `010-8000-${String(index + 1).padStart(4, "0")}`;
+  const contacts = frontendContext.extractListContactsV650({
+    memo: `${label}: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 ${phone}`
+  });
+  assert.strictEqual(contacts.length, 1);
+  assert.strictEqual(
+    contacts[0].role,
+    expectedRole,
+    `${label} \uBA54\uBAA8 \uC5ED\uD560\uC740 \uAE30\uD0C0\uB85C \uBC14\uB00C\uBA74 \uC548 \uB429\uB2C8\uB2E4.`
+  );
+});
+
 const sevenContacts = frontendContext.extractListContactsV650({
   contactListRaw: JSON.stringify([
     ["주", "010-0000-0001"],
@@ -122,6 +144,21 @@ assert.strictEqual(spousePlan.ok, true);
 assert.strictEqual(spousePlan.contacts.length, 1);
 assert.strictEqual(spousePlan.contacts[0].role, "\uC5EC");
 assert.strictEqual(spousePlan.cleanedMemo, "");
+explicitRoleCases.forEach(([label, expectedRole], index) => {
+  const roleRow = new Array(19).fill("");
+  const phone = `010-9000-${String(index + 1).padStart(4, "0")}`;
+  roleRow[11] = `${label}: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 ${phone}`;
+  const rolePlan = gasContext.buildContactStorageV654_(
+    roleRow,
+    [],
+    roleRow[11]
+  );
+  assert.strictEqual(rolePlan.ok, true);
+  assert.strictEqual(rolePlan.contacts.length, 1);
+  assert.strictEqual(rolePlan.contacts[0].role, expectedRole);
+  assert.strictEqual(rolePlan.cleanedMemo, "");
+});
+
 assert(
   !/idCounts\[propertyId\]\s*!==\s*1/.test(gasSource),
   "동일 매물ID 행도 전화번호가 정확히 일치하면 역할 복구 대상에서 제외하면 안 됩니다."
