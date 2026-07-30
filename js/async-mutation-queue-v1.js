@@ -50,13 +50,16 @@
     indicator.type = "button";
     indicator.id = "asyncMutationStatusV1";
     indicator.className = "async-mutation-status-v1 idle";
-    indicator.textContent = "저장 대기 0";
+    indicator.innerHTML =
+      "<span><small>완료</small><b>0</b></span>" +
+      "<span><small>저장중</small><b>0</b></span>" +
+      "<span><small>실패</small><b>0</b></span>";
     indicator.title = "백그라운드 저장 상태";
     indicator.addEventListener("click", refreshStatus);
     indicator.dataset.statusBoundV1 = "1";
     var quickAdd = document.querySelector(".quick-add-with-sync");
     if (quickAdd && quickAdd.parentNode) {
-      quickAdd.insertAdjacentElement("afterend", indicator);
+      quickAdd.insertAdjacentElement("beforebegin", indicator);
     } else {
       document.body.appendChild(indicator);
     }
@@ -72,8 +75,15 @@
     var failed = Number(lastServerStatus.failed || 0);
     indicator.className = "async-mutation-status-v1 " +
       (failed ? "failed" : (pending || processing ? "working" : "idle"));
-    indicator.textContent =
-      "완료 " + completed + " · 저장 중 " + (pending + processing) + " · 실패 " + failed;
+    var saving = pending + processing;
+    indicator.innerHTML =
+      "<span><small>완료</small><b>" + completed + "</b></span>" +
+      "<span><small>저장중</small><b>" + saving + "</b></span>" +
+      "<span><small>실패</small><b>" + failed + "</b></span>";
+    indicator.setAttribute(
+      "aria-label",
+      "완료 " + completed + "건, 저장 중 " + saving + "건, 실패 " + failed + "건"
+    );
     indicator.title = unsent
       ? "서버 전송 대기 " + unsent + "건 포함 · 누르면 새로 확인"
       : "누르면 저장 상태 새로 확인";

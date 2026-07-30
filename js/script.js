@@ -1997,7 +1997,8 @@ function extractListContactsV650(item) {
   var memo = String(item && item.memo || "");
   var rolePattern = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
   var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
-  var matcher = new RegExp(rolePattern + "(?:\\s*(?:추가번호)?\\s*\\d*)?\\s*[\\)\\(\\]:：=.-]?\\s*" + phonePattern, "g");
+  var roleBridge = "(?:\\s*[\\)\\(\\]:：=.,·-]?\\s*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?\\s*\\d*\\s*[\\)\\(\\]:：=.,·-]?\\s*)";
+  var matcher = new RegExp(rolePattern + roleBridge + phonePattern, "g");
   var match;
   while ((match = matcher.exec(memo))) {
     add(match[1], match[2]);
@@ -2006,7 +2007,7 @@ function extractListContactsV650(item) {
   var everyPhoneMatcher = new RegExp(phonePattern, "g");
   while ((match = everyPhoneMatcher.exec(memo))) {
     var prefix = memo.slice(Math.max(0, match.index - 18), match.index);
-    var roleMatch = prefix.match(new RegExp(rolePattern + "\\s*[\\)\\(\\]:：=.-]?\\s*$"));
+    var roleMatch = prefix.match(new RegExp(rolePattern + roleBridge + "$"));
     add(roleMatch ? roleMatch[1] : "기", match[1]);
   }
 

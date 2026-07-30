@@ -46,6 +46,19 @@ assert(
   "역할 없는 메모 번호도 기타 연락처로 보존해야 합니다."
 );
 
+const spouseContact = frontendContext.extractListContactsV650({
+  contactListRaw: JSON.stringify([
+    { role: "\uAE30", phone: "010-9138-9139" }
+  ]),
+  memo: "\uC0AC\uBAA8: \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139"
+});
+assert.strictEqual(spouseContact.length, 1);
+assert.strictEqual(
+  spouseContact[0].role,
+  "\uC5EC",
+  "사모 추가연락처는 기타가 아니라 사모 역할로 승격해야 합니다."
+);
+
 const sevenContacts = frontendContext.extractListContactsV650({
   contactListRaw: JSON.stringify([
     ["주", "010-0000-0001"],
@@ -97,6 +110,19 @@ assert.strictEqual(plan.contacts.length, 4);
 assert(!/042-123-4567|010-3333-4444/.test(plan.cleanedMemo), "저장할 번호만 메모에서 제거해야 합니다.");
 assert(/문의는|주차 가능|연락/.test(plan.cleanedMemo), "전화번호 외 메모 내용은 보존해야 합니다.");
 
+const spouseRow = new Array(19).fill("");
+spouseRow[11] = "\uC0AC\uBAA8: \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139";
+spouseRow[18] = JSON.stringify([{role: "\uAE30", phone: "010-9138-9139"}]);
+const spousePlan = gasContext.buildContactStorageV654_(
+  spouseRow,
+  [],
+  spouseRow[11]
+);
+assert.strictEqual(spousePlan.ok, true);
+assert.strictEqual(spousePlan.contacts.length, 1);
+assert.strictEqual(spousePlan.contacts[0].role, "\uC5EC");
+assert.strictEqual(spousePlan.cleanedMemo, "");
+
 const overflowRow = new Array(19).fill("");
 overflowRow[11] = [
   "010-0000-0001", "010-0000-0002", "010-0000-0003", "010-0000-0004",
@@ -114,6 +140,14 @@ assert(
 assert(
   /CONTACT_MIGRATION_BACKUP_SHEET_NAME\s*=\s*"JS_연락처이전백업"/.test(gasSource),
   "메모 정리 전 복구용 백업 시트를 사용해야 합니다."
+);
+assert(
+  /function contactRoleRecoveryMapV655_[\s\S]*role === "기"[\s\S]*result\[propertyId\]\[phoneKey\]/.test(gasSource),
+  "기타로 잘못 저장된 번호는 백업 원문에서 명시된 역할만 복구해야 합니다."
+);
+assert(
+  /contactRoleRecoveryMapV655_\(spreadsheet\)[\s\S]*buildContactStorageV654_\([\s\S]*recoveryContacts/.test(gasSource),
+  "연락처 재이전 때 매물ID·전화번호가 일치하는 백업 역할을 적용해야 합니다."
 );
 
 console.log("listing contacts v6.5.4 tests passed");
