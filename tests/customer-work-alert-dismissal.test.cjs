@@ -18,6 +18,6 @@ assert.match(
   source,
   /return counts\.every\(function\(count, index\)[\s\S]*?count <= number\(dismissed\.counts\[index\]\)/
 );
-assert.match(html, /operations-center-v7\.js\?v=7\.18\.3-safe-queue/);
+assert.match(html, /operations-center-v7\.js\?v=7\.18\.4-confirmed-sheet-save/);
 
 console.log("customer work alert dismissal tests passed");

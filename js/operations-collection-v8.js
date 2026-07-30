@@ -40,21 +40,14 @@
       });
   }
   function apiPost(action, payload) {
-    if (
-      action === "applyReviewBatch" &&
-      window.JSAsyncMutations &&
-      typeof window.JSAsyncMutations.enqueue === "function"
-    ) {
-      return window.JSAsyncMutations.enqueue(
-        action,
-        Object.assign({}, payload || {}, {action: action})
-      );
-    }
     return fetch(saveApiURL, {
       method: "POST", credentials: "same-origin",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(Object.assign({action: action}, payload || {}))
-    }).then(function(response) { return response.json(); }).then(function(result) {
+    }).then(function(response) {
+      if (!response.ok) throw new Error("매물검증 저장에 실패했습니다. (HTTP " + response.status + ")");
+      return response.json();
+    }).then(function(result) {
       if (!result || result.ok === false) throw new Error(result && result.message || "처리하지 못했습니다.");
       return result;
     });

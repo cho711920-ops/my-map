@@ -83,16 +83,6 @@
   }
 
   function apiPost(action, payload) {
-    if (
-      window.JSAsyncMutations &&
-      typeof window.JSAsyncMutations.enqueue === "function" &&
-      ["updateCustomerMatch", "addCustomerActivity"].indexOf(action) >= 0
-    ) {
-      return window.JSAsyncMutations.enqueue(
-        action,
-        Object.assign({}, payload || {}, { action: action })
-      );
-    }
     return fetch(saveApiURL, {
       method: "POST",
       credentials: "same-origin",

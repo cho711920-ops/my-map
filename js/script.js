@@ -43,16 +43,21 @@ var visibleListItems = [];
 
 function postSafeMutationV654(action, payload) {
   var body = Object.assign({}, payload || {}, { action: action });
-  if (window.JSAsyncMutations && typeof window.JSAsyncMutations.enqueue === "function") {
-    return window.JSAsyncMutations.enqueue(action, body);
-  }
   return fetch(saveApiURL, {
     method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
-  }).then(function() {
-    return { ok: true, queued: false };
+  }).then(function(response) {
+    if (!response.ok) {
+      throw new Error("저장 요청을 처리하지 못했습니다. (HTTP " + response.status + ")");
+    }
+    return response.json();
+  }).then(function(result) {
+    if (!result || result.ok === false) {
+      throw new Error((result && result.message) || "실제 시트 저장에 실패했습니다.");
+    }
+    return Object.assign({}, result, { queued: false, persisted: true });
   });
 }
 

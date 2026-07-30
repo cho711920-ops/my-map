@@ -29,10 +29,12 @@ ok(css.includes("grid-column: 5 !important") && css.includes("@media (max-width:
 ok(css.includes(".v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1") && css.includes("display: none !important"), "모바일에서 저장상태를 숨겨야 합니다.");
 ok(queue.includes("<small>완료</small>") && queue.includes("<small>저장중</small>") && queue.includes("<small>실패</small>"), "좁은 화면에서도 잘리지 않는 3칸 상태 표시가 필요합니다.");
 
-ok(script.includes('postSafeMutationV654("toggleDone"'), "매물 메모·상태 저장은 대기열을 사용해야 합니다.");
-ok(script.includes('postSafeMutationV654("updateProperty"'), "매물수정은 대기열을 사용해야 합니다.");
-ok(operations.includes('"updateCustomerMatch", "addCustomerActivity"'), "고객매칭·상담기록은 대기열을 사용해야 합니다.");
-ok(reviews.includes('action === "applyReviewBatch"'), "매물검증 일괄처리는 대기열을 사용해야 합니다.");
+ok(script.includes('postSafeMutationV654("toggleDone"'), "매물 메모·상태 저장 경로가 필요합니다.");
+ok(script.includes('postSafeMutationV654("updateProperty"'), "매물수정 저장 경로가 필요합니다.");
+ok(script.includes("persisted: true"), "매물 저장은 실제 서버 성공을 확인해야 합니다.");
+ok(!operations.includes("return window.JSAsyncMutations.enqueue("), "고객 수정은 실제 시트 저장 전 완료 처리하면 안 됩니다.");
+ok(!reviews.includes("return window.JSAsyncMutations.enqueue("), "매물검증은 실제 시트 저장 전 목록에서 제거하면 안 됩니다.");
+ok(reviews.includes('if (!response.ok) throw new Error("매물검증 저장에 실패했습니다.'), "매물검증 HTTP 실패를 사용자에게 알려야 합니다.");
 
 ok(backend.includes('const WORK_QUEUE_SHEET_NAME = "JS_작업대기열"'), "영구 작업대기열 시트가 필요합니다.");
 ok(backend.includes('["대기", "처리중", "재시도"]'), "같은 대상의 순서 보장이 필요합니다.");
