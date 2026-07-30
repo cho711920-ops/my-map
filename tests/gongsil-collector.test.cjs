@@ -7,7 +7,12 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.3";/);
+assert.match(source, /var VERSION = "1\.9\.4";/);
+assert.match(
+  source,
+  /function pollMutationStatus\(requestId, collectorKey\)[\s\S]*?var maxWaitMs = 7 \* 60 \* 1000;[\s\S]*?function canRetry\(\)[\s\S]*?if \(canRetry\(\)\)/,
+  "공실박스 대량 저장은 Apps Script 장기 처리 결과를 충분히 기다려야 합니다."
+);
 assert.match(
   source,
   /var BUSY_RETRY_DELAYS = \[3000, 6000, 10000, 15000, 20000, 30000\];/

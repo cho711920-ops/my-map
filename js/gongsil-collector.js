@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.3";
+  var VERSION = "1.9.4";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -2133,8 +2133,8 @@
     } catch (error) {
       if (error && error.isCollectorBusy) throw error;
       throw new Error(
-        "시트 저장 결과를 확인하지 못했습니다. " +
-        "Apps Script가 최신 버전으로 배포되었는지 확인해 주세요. " +
+        "시트 저장 결과 확인이 오래 걸리고 있습니다. " +
+        "저장 지점은 보존되며 다시 시도하면 같은 매물을 만들지 않고 이어갑니다. " +
         "요청번호: " + requestId
       );
     }
@@ -2254,6 +2254,18 @@
   function pollMutationStatus(requestId, collectorKey) {
     return new Promise(function (resolve, reject) {
       var attempts = 0;
+      /*
+       * 공실박스 연락처 원상복구는 기존 매물 100~250건을 한 번에 대조하므로
+       * Apps Script 처리 시간이 1분을 넘을 수 있습니다. POST 요청은 이미
+       * 서버에서 계속 실행 중이므로 짧은 확인 제한으로 새 요청을 만들지 않고,
+       * 동일 requestId의 결과를 최대 약 7분 동안 기다립니다.
+       */
+      var pollStartedAt = Date.now();
+      var maxWaitMs = 7 * 60 * 1000;
+
+      function canRetry() {
+        return Date.now() - pollStartedAt < maxWaitMs;
+      }
 
       function check() {
         attempts += 1;
@@ -2269,7 +2281,7 @@
 
           if (payload && payload.ready) {
             resolve(payload.result || payload);
-          } else if (attempts < 18) {
+          } else if (canRetry()) {
             setTimeout(check, 650);
           } else {
             reject(new Error("저장 결과 확인 시간 초과"));
@@ -2279,7 +2291,7 @@
         timer = setTimeout(function () {
           delete window[callbackName];
           script.remove();
-          if (attempts < 18) setTimeout(check, 650);
+          if (canRetry()) setTimeout(check, 650);
           else reject(new Error("저장 결과 확인 시간 초과"));
         }, 2500);
 
@@ -2287,7 +2299,7 @@
           clearTimeout(timer);
           delete window[callbackName];
           script.remove();
-          if (attempts < 18) setTimeout(check, 650);
+          if (canRetry()) setTimeout(check, 650);
           else reject(new Error("저장 결과 확인 차단"));
         };
         script.src =
