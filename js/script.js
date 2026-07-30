@@ -2583,6 +2583,9 @@ function resetFilter() {
   if (typeof clearPinnedClusterSelectionV6515 === "function") {
     clearPinnedClusterSelectionV6515(false);
   }
+  if (typeof window.resetToDaejeonOverviewV6524 === "function") {
+    window.resetToDaejeonOverviewV6524();
+  }
 
   applyFilter();
 }

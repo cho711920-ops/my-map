@@ -28,6 +28,24 @@ var jsClusterSelectionMemoryV638 = {
 };
 var jsPinnedClusterSelectionV6515 = null;
 var jsPinnedClusterSpatialChangeIgnoreUntilV6517 = 0;
+var jsDefaultMapCenterV6524 = {
+  lat: 36.3504,
+  lng: 127.3845
+};
+var jsDefaultMapLevelV6524 = 7;
+
+
+function resetToDaejeonOverviewV6524() {
+  if (!map || !window.kakao || !kakao.maps) return;
+  map.setLevel(jsDefaultMapLevelV6524);
+  map.setCenter(new kakao.maps.LatLng(
+    jsDefaultMapCenterV6524.lat,
+    jsDefaultMapCenterV6524.lng
+  ));
+}
+
+
+window.resetToDaejeonOverviewV6524 = resetToDaejeonOverviewV6524;
 
 
 function getMapSpatialKeyV6515() {
@@ -604,8 +622,11 @@ function scheduleMapIdleRefreshV638() {
 
 kakao.maps.load(function() {
   map = new kakao.maps.Map(document.getElementById("map"), {
-    center: new kakao.maps.LatLng(36.3504, 127.3845),
-    level: 5
+    center: new kakao.maps.LatLng(
+      jsDefaultMapCenterV6524.lat,
+      jsDefaultMapCenterV6524.lng
+    ),
+    level: jsDefaultMapLevelV6524
   });
 
   geocoder = new kakao.maps.services.Geocoder();
