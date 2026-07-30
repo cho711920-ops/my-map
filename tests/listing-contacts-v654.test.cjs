@@ -129,7 +129,19 @@ assert(
   /\.item-contact-button-v654\.no-contacts[\s\S]*background:\s*#334155/.test(cssSource),
   "연락처가 없으면 어두운 배경이어야 합니다."
 );
-assert(/contactListRaw:\s*clean\(c\[17\]\)/.test(mapSource), "S열 연락처 JSON을 읽어야 합니다.");
+assert(
+  /contactListRaw:\s*String\(c\[17\][\s\S]*?\)\.trim\(\)/.test(mapSource) &&
+    !/contactListRaw:\s*clean\(c\[17\]\)/.test(mapSource),
+  "S열 연락처 JSON의 따옴표를 제거하지 않고 읽어야 합니다."
+);
+const reloadedContactListRaw = String(
+  parsedContactCsv[17] == null ? "" : parsedContactCsv[17]
+).trim();
+assert.deepStrictEqual(
+  JSON.parse(reloadedContactListRaw),
+  JSON.parse(contactJson),
+  "메모의 전화번호를 정리한 뒤 자동 새로고침해도 S열 연락처 JSON이 그대로 복원되어야 합니다."
+);
 
 const gasStart = gasSource.indexOf("function normalizeText_");
 const gasEnd = gasSource.indexOf("function normalizeBuildingNameV638_");

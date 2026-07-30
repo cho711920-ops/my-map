@@ -877,7 +877,7 @@ function loadSheet(isAuto) {
           source: clean(c[14]),
           propertyId: clean(c[15]),
           sourceLink: clean(c[16]),
-          contactListRaw: clean(c[17]),
+          contactListRaw: String(c[17] == null ? "" : c[17]).trim(),
           sheetRow: i + 1,
           latlng: null
         };
