@@ -43,13 +43,23 @@ assert.match(
 );
 assert.match(
   backend,
-  /function mmReconcileGongsilContactsForSession_\(sessionId\)/,
-  "완전수집 연락처 재정리 함수가 필요합니다."
+  /function mmReconcileGongsilContactsForSession_\(sessionId, options\)/,
+  "수집회차별 연락처 재정리 함수가 필요합니다."
 );
 assert.match(
   backend,
-  /if \(complete && source === "공실박스"\) \{\s*contactReconciliation = mmReconcileGongsilContactsForSession_\(sessionId\);/,
-  "오류 없는 공실박스 완전수집에서만 연락처를 교체해야 합니다."
+  /if \(source === "공실박스" && !body\.stopped\) \{[\s\S]*?contactReconciliation = mmReconcileGongsilContactsForSession_\(sessionId, \{[\s\S]*?requireAllLinked: complete/,
+  "공실박스 연락처 복구는 거래완료용 완전수집과 분리해야 합니다."
+);
+assert.match(
+  backend,
+  /function mmRestoreGongsilContactsForSession\(sessionId\) \{[\s\S]*?requireAllLinked: false/,
+  "완전수집 여부와 무관하게 정상 원본만 안전 복구하는 실행 함수가 필요합니다."
+);
+assert.match(
+  backend,
+  /function mmRestoreLatestGongsilContacts\(\) \{[\s\S]*?mmIsExternalCollectionActive_\(\)[\s\S]*?mmRestoreGongsilContactsForSession\(sessionId\)/,
+  "진행 중 수집을 건드리지 않고 최신 완료 회차를 복구하는 실행 함수가 필요합니다."
 );
 assert.doesNotMatch(
   backend.slice(
@@ -81,8 +91,18 @@ assert.match(
 );
 assert.match(
   backend,
-  /throw new Error\("공실박스 연락처를 연결할 대표매물을 찾지 못했습니다: " \+ sourceId\);/,
-  "원본 연락처가 대표매물에 연결되지 않으면 조용히 누락하지 말고 전체수집을 중단해야 합니다."
+  /if \(skippedUnlinked\.length && options\.requireAllLinked === true\) \{[\s\S]*?throw new Error\("공실박스 연락처를 연결할 대표매물을 찾지 못했습니다:/,
+  "완전수집에서는 원본 연락처가 대표매물에 연결되지 않으면 중단해야 합니다."
+);
+assert.match(
+  backend,
+  /skippedEmpty\.push\(sourceId\);[\s\S]*?skippedUnlinked: skippedUnlinked\.length/,
+  "부분 복구에서는 빈 원본과 미연결 건을 보존하고 결과에 집계해야 합니다."
+);
+assert.match(
+  backend,
+  /"공실박스연락처재구축"[\s\S]*?historyRows\.length[\s\S]*?MM_HISTORY_HEADERS\.length/,
+  "대량 연락처 교체 전후 값은 매물이력에 남겨 복구 가능해야 합니다."
 );
 
 const exactMerge = backend.slice(
