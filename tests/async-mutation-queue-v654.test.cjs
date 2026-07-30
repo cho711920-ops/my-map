@@ -46,6 +46,16 @@ ok(backend.includes("recordQueueExecutionResultV654_"), "실행 결과를 검증
 ok(backend.includes("실제 저장값 확인 완료"), "최종 완료 전 실제 시트 검증이 필요합니다.");
 ok(backend.includes('["toggleDone", "updateProperty", "deleteProperty"].indexOf(action) >= 0'), "직접 저장 재시도 시 성공 요청을 중복 실행하면 안 됩니다.");
 ok(backend.includes("lock.tryLock(4000)") && backend.includes("retryable: true"), "잠금 충돌은 짧게 반환하여 동일 요청으로 재시도해야 합니다.");
+const toggleDoneFunction = backend.slice(
+  backend.indexOf("function updateDoneStatus_(body)"),
+  backend.indexOf("function applyPropertyDoneFontColor_")
+);
+ok(
+  toggleDoneFunction.includes("lock.tryLock(4000)") &&
+    toggleDoneFunction.includes("retryable: true") &&
+    !toggleDoneFunction.includes("lock.waitLock("),
+  "메모·연락처 저장 자체가 긴 잠금 대기로 끝나지 않고 안전 재시도되어야 합니다."
+);
 ok(backend.includes("job.attempts < 3"), "실패 작업만 제한적으로 재시도해야 합니다.");
 ok(backend.includes('case "updateCustomerMatch"') && backend.includes("고객매칭 상태 불일치"), "고객매칭 read-back 검증이 필요합니다.");
 ok(backend.includes('case "applyReviewBatch"') && backend.includes("대기행"), "매물검증 read-back 검증이 필요합니다.");
