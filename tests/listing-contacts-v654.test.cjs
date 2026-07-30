@@ -50,7 +50,7 @@ const spouseContact = frontendContext.extractListContactsV650({
   contactListRaw: JSON.stringify([
     { role: "\uAE30", phone: "010-9138-9139" }
   ]),
-  memo: "\uC0AC\uBAA8: \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139"
+  memo: "\uC0AC\uBAA8: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139"
 });
 assert.strictEqual(spouseContact.length, 1);
 assert.strictEqual(
@@ -111,7 +111,7 @@ assert(!/042-123-4567|010-3333-4444/.test(plan.cleanedMemo), "저장할 번호�
 assert(/문의는|주차 가능|연락/.test(plan.cleanedMemo), "전화번호 외 메모 내용은 보존해야 합니다.");
 
 const spouseRow = new Array(19).fill("");
-spouseRow[11] = "\uC0AC\uBAA8: \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139";
+spouseRow[11] = "\uC0AC\uBAA8: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139";
 spouseRow[18] = JSON.stringify([{role: "\uAE30", phone: "010-9138-9139"}]);
 const spousePlan = gasContext.buildContactStorageV654_(
   spouseRow,
@@ -122,6 +122,10 @@ assert.strictEqual(spousePlan.ok, true);
 assert.strictEqual(spousePlan.contacts.length, 1);
 assert.strictEqual(spousePlan.contacts[0].role, "\uC5EC");
 assert.strictEqual(spousePlan.cleanedMemo, "");
+assert(
+  !/idCounts\[propertyId\]\s*!==\s*1/.test(gasSource),
+  "동일 매물ID 행도 전화번호가 정확히 일치하면 역할 복구 대상에서 제외하면 안 됩니다."
+);
 
 const overflowRow = new Array(19).fill("");
 overflowRow[11] = [
