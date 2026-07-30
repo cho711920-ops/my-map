@@ -764,6 +764,7 @@
     window.operationsMatchPropertyIds = new Set(ids);
     window.operationsMatchStatusByPropertyId = {};
     window.operationsMatchContextByPropertyId = {};
+    window.customerMatchHeldVisibleV1 = false;
     rows.forEach(function(row) {
       var propertyId = field(row, state.matchHeaders, "대표매물ID");
       if (!propertyId) return;
@@ -785,9 +786,12 @@
     if (status) status.hidden = false;
     var stats = customerMatchStats(customerId);
     if (statusText) statusText.textContent = name + " · 신규 " + stats.fresh + " · 후보 " + stats.introduced + " · 보류 " + stats.held;
+    syncCustomerMatchHeldToggleV1();
 
     var matched = (window.allItems || []).filter(function(item) {
-      return window.operationsMatchPropertyIds.has(text(item.propertyId));
+      var propertyId = text(item.propertyId);
+      return window.operationsMatchPropertyIds.has(propertyId) &&
+        window.operationsMatchStatusByPropertyId[propertyId] !== "보류";
     });
     if (window.map && window.kakao && matched.length) {
       var bounds = new kakao.maps.LatLngBounds();
@@ -812,8 +816,31 @@
     window.operationsMatchPropertyIds = null;
     window.operationsMatchStatusByPropertyId = {};
     window.operationsMatchContextByPropertyId = {};
+    window.customerMatchHeldVisibleV1 = false;
+    syncCustomerMatchHeldToggleV1();
     var status = document.getElementById("customerMatchMapStatus");
     if (status) status.hidden = true;
+    if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  function syncCustomerMatchHeldToggleV1() {
+    var button = document.getElementById("customerMatchHeldToggleV1");
+    if (!button) return;
+    var customerMapActive = !!window.operationsMatchPropertyIds;
+    var active = customerMapActive && !!window.customerMatchHeldVisibleV1;
+    button.hidden = !customerMapActive;
+    button.classList.toggle("on", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+    button.setAttribute("title", active ? "보류 매물 숨기기" : "보류 매물 보기");
+  }
+
+  window.toggleCustomerMatchHeldV1 = function() {
+    if (!window.operationsMatchPropertyIds) return;
+    window.customerMatchHeldVisibleV1 = !window.customerMatchHeldVisibleV1;
+    if (typeof window.clearPinnedClusterSelectionV6515 === "function") {
+      window.clearPinnedClusterSelectionV6515(true);
+    }
+    syncCustomerMatchHeldToggleV1();
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
 

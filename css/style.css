@@ -605,6 +605,23 @@
     box-shadow: 0 0 0 3px rgba(23, 105, 232, .15);
   }
 
+  .customer-match-held-toggle-v1[hidden] {
+    display: none !important;
+  }
+
+  .customer-match-held-toggle-v1 {
+    border-color: #1e293b !important;
+    background: #334155 !important;
+    color: #fff !important;
+  }
+
+  .customer-match-held-toggle-v1.on {
+    border-color: #d97706 !important;
+    background: #f59e0b !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, .22) !important;
+  }
+
   .map-quick-heart-btn {
     color: #cc3366;
   }

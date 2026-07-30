@@ -924,6 +924,13 @@ function getFilteredItems() {
   var filtered = allItems.filter(function(item) {
     var operationsMatchIds = window.operationsMatchPropertyIds;
     var matchCustomerSelection = !operationsMatchIds || operationsMatchIds.has(String(item.propertyId || "").trim());
+    var customerMatchStatus = operationsMatchIds
+      ? String((window.operationsMatchStatusByPropertyId || {})[String(item.propertyId || "").trim()] || "").trim()
+      : "";
+    var matchCustomerHeldVisibility =
+      !operationsMatchIds ||
+      customerMatchStatus !== "보류" ||
+      !!window.customerMatchHeldVisibleV1;
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || item.type === selectedType;
@@ -972,7 +979,8 @@ function getFilteredItems() {
       ? isItemWithinMapRadiusV658(item, radiusFilter)
       : item.latlng && bounds.contain(item.latlng);
 
-    return matchCustomerSelection && matchKeyword && matchType && matchSource && matchIndustry && matchPrice &&
+    return matchCustomerSelection && matchCustomerHeldVisibility &&
+      matchKeyword && matchType && matchSource && matchIndustry && matchPrice &&
       matchFloor && matchQuickFloor &&
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
   });
