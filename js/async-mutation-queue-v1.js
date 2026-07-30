@@ -53,7 +53,13 @@
     indicator.textContent = "저장 대기 0";
     indicator.title = "백그라운드 저장 상태";
     indicator.addEventListener("click", refreshStatus);
-    document.body.appendChild(indicator);
+    indicator.dataset.statusBoundV1 = "1";
+    var quickAdd = document.querySelector(".quick-add-with-sync");
+    if (quickAdd && quickAdd.parentNode) {
+      quickAdd.insertAdjacentElement("afterend", indicator);
+    } else {
+      document.body.appendChild(indicator);
+    }
     return indicator;
   }
 
@@ -212,7 +218,11 @@
   }
 
   function start() {
-    ensureIndicator();
+    var indicator = ensureIndicator();
+    if (!indicator.dataset.statusBoundV1) {
+      indicator.addEventListener("click", refreshStatus);
+      indicator.dataset.statusBoundV1 = "1";
+    }
     renderStatus();
     sendOutbox();
     refreshStatus();

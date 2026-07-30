@@ -16,7 +16,7 @@
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.5.22-contact-popup">
+<link rel="stylesheet" href="css/style.css?v=6.5.23-header-save-status">
 <link rel="stylesheet" href="css/print-v2.css">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.23-sort-controls">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.33-hold-toggle">
@@ -100,6 +100,8 @@
           <span>빠른등록</span>
           <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
         </button>
+        <button id="asyncMutationStatusV1" class="async-mutation-status-v1 idle" type="button"
+          title="백그라운드 저장 상태">완료 0 · 저장 중 0 · 실패 0</button>
       </div>
       <div id="multiClusterStatus" class="multi-cluster-status"></div>
       <div id="customerMatchMapStatus" class="customer-match-map-status" hidden>
@@ -596,8 +598,8 @@
 </div>
 
 
-<script src="js/async-mutation-queue-v1.js?v=1.0.1-safe-verify"></script>
-<script src="js/script.js?v=6.5.22-contact-popup"></script>
+<script src="js/async-mutation-queue-v1.js?v=1.0.2-header-status"></script>
+<script src="js/script.js?v=6.5.23-header-save-status"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
