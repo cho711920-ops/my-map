@@ -865,6 +865,38 @@ body.aiv-workspace-open { overflow: hidden !important; }
 }
 
 /* =========================================================
+   v6.0 STEP3.7 — 데스크탑·태블릿 로드뷰 실화면 완전 맞춤
+   - 넓은 데스크탑의 94vw 제한 제거
+   - 태블릿 브라우저 확대/PC모드에서도 우측·하단 잘림 방지
+   ========================================================= */
+@media (min-width: 769px) {
+  #roadviewModal.roadview-modal.open {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #roadviewModal.roadview-modal.open .roadview-modal-dialog {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+}
+
+/* =========================================================
    v6.0 STEP4 — 현장 완료/보류 UI
    ========================================================= */
 .aiv-current-card {

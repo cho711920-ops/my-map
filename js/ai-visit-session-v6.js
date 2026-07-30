@@ -757,16 +757,18 @@
   }
 
   function roadviewViewportMetrics() {
-    var viewport = window.visualViewport;
-    var width = viewport ? Number(viewport.width) : Number(window.innerWidth || document.documentElement.clientWidth || 0);
-    var height = viewport ? Number(viewport.height) : Number(window.innerHeight || document.documentElement.clientHeight || 0);
-    var top = viewport ? Number(viewport.offsetTop || 0) : 0;
-    var left = viewport ? Number(viewport.offsetLeft || 0) : 0;
+    /*
+     * 로드뷰는 position:fixed로 배치되므로 실제 기준은 레이아웃 viewport입니다.
+     * visualViewport 폭을 그대로 사용하면 브라우저 확대나 태블릿 PC모드에서
+     * 다이얼로그만 작아져 오른쪽 여백과 하단 잘림이 생길 수 있습니다.
+     */
+    var width = Number(document.documentElement.clientWidth || window.innerWidth || 0);
+    var height = Number(document.documentElement.clientHeight || window.innerHeight || 0);
     return {
       width: Math.max(0, Math.round(width)),
       height: Math.max(0, Math.round(height)),
-      top: Math.max(0, Math.round(top)),
-      left: Math.max(0, Math.round(left))
+      top: 0,
+      left: 0
     };
   }
 
@@ -786,16 +788,10 @@
     /* STEP3.6: 태블릿 가로모드는 브라우저가 PC형 viewport 값을 주는 경우가 있어
        flex 높이 계산 대신, 실제 웹 표시영역 안에 헤더와 본문을 절대 배치합니다.
        position:fixed의 기준은 이미 웹 콘텐츠 viewport이므로 offsetTop을 다시 더하지 않습니다. */
-    var gap = isTabletLandscape ? 0 : 6;
+    var gap = metrics.width >= 769 ? 0 : 6;
     var headerHeight = isTabletLandscape ? 48 : 52;
-    var visibleWidth = Math.max(320, Math.min(
-      Number(window.innerWidth || metrics.width || 0),
-      Number(metrics.width || window.innerWidth || 0)
-    ));
-    var visibleHeight = Math.max(260, Math.min(
-      Number(window.innerHeight || metrics.height || 0),
-      Number(metrics.height || window.innerHeight || 0)
-    ));
+    var visibleWidth = Math.max(320, Number(metrics.width || window.innerWidth || 0));
+    var visibleHeight = Math.max(260, Number(metrics.height || window.innerHeight || 0));
     var dialogWidth = Math.max(320, visibleWidth - gap * 2);
     var dialogHeight = Math.max(260, visibleHeight - gap * 2);
 
