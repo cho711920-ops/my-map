@@ -509,22 +509,27 @@
         : items.filter(function(item) {
             return classification.needs[recordSourceId(item)];
           });
+      var detailBaseProcessed = saveMetadata.complete
+        ? 0
+        : classification.unchanged;
       updateDashboard({
         found: items.length,
-        processed: classification.unchanged,
+        processed: detailBaseProcessed,
         remaining: detailItems.length,
-        duplicate: classification.unchanged
+        duplicate: saveMetadata.complete ? 0 : classification.unchanged
       });
-      setProgress(classification.unchanged, items.length);
+      setProgress(detailBaseProcessed, items.length);
 
       if (detailItems.length && !state.migratedTransformItem) {
         await ensureDetailAuth();
       }
 
       setStatus(
-        detailItems.length ? "신규·변경 매물 상세정보 확인 중" : "기존 매물 빠른 확인 완료",
-        "전체 " + items.length + "개 · 기존 동일 " + classification.unchanged +
-        "개 · 상세조회 필요 " + detailItems.length + "개"
+        detailItems.length ? "매물별 상세정보·역할 연락처 확인 중" : "기존 매물 빠른 확인 완료",
+        saveMetadata.complete
+          ? "완전수집 " + items.length + "개 · 기존 여부와 관계없이 전체 연락처를 다시 확인합니다."
+          : "전체 " + items.length + "개 · 기존 동일 " + classification.unchanged +
+            "개 · 상세조회 필요 " + detailItems.length + "개"
       );
 
       var transformed = [];
@@ -554,15 +559,17 @@
           completed += 1;
           updateDashboard({
             found: items.length,
-            processed: classification.unchanged + completed,
+            processed: detailBaseProcessed + completed,
             remaining: Math.max(0, detailItems.length - completed)
           });
-          setProgress(classification.unchanged + completed, items.length);
+          setProgress(detailBaseProcessed + completed, items.length);
           if (completed === detailItems.length || completed % 5 === 0) {
             setStatus(
-              "신규·변경 매물 상세정보 확인 중",
-              completed + " / " + detailItems.length + "개 상세확인 · 기존 동일 " +
-              classification.unchanged + "개는 생략"
+              "매물별 상세정보·역할 연락처 확인 중",
+              completed + " / " + detailItems.length + "개 상세확인" +
+              (saveMetadata.complete
+                ? " · 완전수집 전체 연락처 갱신"
+                : " · 기존 동일 " + classification.unchanged + "개는 생략")
             );
           }
           return result;
@@ -601,7 +608,7 @@
       );
 
       saveMetadata.rejectedCount = rejected.length;
-      saveMetadata.unchanged = classification.unchanged;
+      saveMetadata.unchanged = saveMetadata.complete ? 0 : classification.unchanged;
       state.pendingSave = {
         records: transformed,
         metadata: saveMetadata,
@@ -638,8 +645,10 @@
       var message = result && result.message
         ? result.message
         : "공실박스 매물 전송을 완료했습니다.";
-      message += "\n전체 " + items.length + "개 중 기존 동일 " +
-        classification.unchanged + "개는 상세조회를 생략했습니다.";
+      message += saveMetadata.complete
+        ? "\n완전수집 " + items.length + "개의 역할 연락처를 모두 다시 확인했습니다."
+        : "\n전체 " + items.length + "개 중 기존 동일 " +
+          classification.unchanged + "개는 상세조회를 생략했습니다.";
       updateDashboard({
         found: items.length,
         processed: items.length,
