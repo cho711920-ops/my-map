@@ -7,7 +7,11 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.1";/);
+assert.match(source, /var VERSION = "1\.9\.2";/);
+assert.match(
+  source,
+  /var BUSY_RETRY_DELAYS = \[3000, 6000, 10000, 15000, 20000, 30000\];/
+);
 assert.match(
   source,
   /var detailItems = saveMetadata\.complete\s*\?\s*items\.slice\(\)\s*:\s*items\.filter/
@@ -78,6 +82,22 @@ assert.ok(dashboardPosition > checkpointPosition);
 assert.match(
   saveFunction,
   /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0/
+);
+assert.match(
+  source,
+  /function isBusyMutationResult\(result\)[\s\S]*?function isBusyMutationError\(error\)/
+);
+assert.match(
+  source,
+  /async function classifyGongsilManifest\([\s\S]*?if \(isBusyMutationResult\(result\)\)[\s\S]*?offset -= chunkSize;[\s\S]*?continue;/
+);
+assert.match(
+  source,
+  /async function sendAppsScriptBatch\([\s\S]*?busyError\.isCollectorBusy = true/
+);
+assert.match(
+  source,
+  /async function finalizeGongsilSession\([\s\S]*?return finalizeGongsilSession\(metadata, collectorKey, complete, stopped\);/
 );
 
 console.log("gongsil collector tests passed");

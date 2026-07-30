@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.1";
+  var VERSION = "1.9.2";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -14,6 +14,7 @@
   var MAX_SAVE_BATCH_SIZE = 400;
   var SAVE_PROGRESS_KEY = "js_gongsil_save_progress_v1";
   var POST_RETRY_DELAYS = [0, 1200, 3000];
+  var BUSY_RETRY_DELAYS = [3000, 6000, 10000, 15000, 20000, 30000];
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
   var APPS_SCRIPT_URL =
@@ -1750,6 +1751,15 @@
         );
       } catch (error) {
         window.clearInterval(saveWaitTimer);
+        if (isBusyMutationError(error)) {
+          setStatus(
+            "이전 저장 작업이 끝나기를 기다리는 중",
+            "현재 매물 묶음은 그대로 보존됩니다.\n" +
+            "창을 닫지 않아도 저장 순서가 오면 자동으로 계속됩니다."
+          );
+          await delay(5000);
+          continue;
+        }
         if (batch.length > MIN_SAVE_BATCH_SIZE) {
           SAVE_BATCH_SIZE = Math.max(
             MIN_SAVE_BATCH_SIZE,
@@ -1967,6 +1977,16 @@
         })
       }, {label: "기존 매물 빠른 비교"});
       var result = await pollMutationStatus(requestId, collectorKey);
+      if (isBusyMutationResult(result)) {
+        setStatus(
+          "이전 저장 작업이 끝나기를 기다리는 중",
+          "기존 매물 비교를 자동으로 다시 시도합니다.\n" +
+          "선택한 2,490개 매물은 그대로 보존됩니다."
+        );
+        await delay(5000);
+        offset -= chunkSize;
+        continue;
+      }
       if (!result || result.ok !== true) {
         throw new Error(result && result.message ? result.message : "기존 매물 비교에 실패했습니다.");
       }
@@ -2064,8 +2084,15 @@
     });
 
     try {
-      return await pollMutationStatus(requestId, collectorKey);
+      var saveResult = await pollMutationStatus(requestId, collectorKey);
+      if (isBusyMutationResult(saveResult)) {
+        var busyError = new Error(saveResult.message || "다른 수집 저장이 진행 중입니다.");
+        busyError.isCollectorBusy = true;
+        throw busyError;
+      }
+      return saveResult;
     } catch (error) {
+      if (error && error.isCollectorBusy) throw error;
       throw new Error(
         "시트 저장 결과를 확인하지 못했습니다. " +
         "Apps Script가 최신 버전으로 배포되었는지 확인해 주세요. " +
@@ -2100,7 +2127,42 @@
     }, {
       label: "수집 완료 상태 저장"
     });
-    return pollMutationStatus(requestId, collectorKey);
+    var finalizeResult = await pollMutationStatus(requestId, collectorKey);
+    if (isBusyMutationResult(finalizeResult)) {
+      setStatus(
+        "마지막 저장 작업 순서를 기다리는 중",
+        "수집 결과는 보존되어 있으며 완료 처리를 자동으로 다시 시도합니다."
+      );
+      await delay(5000);
+      return finalizeGongsilSession(metadata, collectorKey, complete, stopped);
+    }
+    if (!finalizeResult || finalizeResult.ok !== true) {
+      throw new Error(
+        finalizeResult && finalizeResult.message
+          ? finalizeResult.message
+          : "수집 완료 상태 저장에 실패했습니다."
+      );
+    }
+    return finalizeResult;
+  }
+
+  function isBusyMutationResult(result) {
+    var message = text(result && result.message);
+    return Boolean(
+      result &&
+      result.ok !== true &&
+      /다른\s*(?:수집\s*)?(?:저장|작업)|진행\s*중|잠시\s*후|busy|lock/i.test(message)
+    );
+  }
+
+  function isBusyMutationError(error) {
+    return Boolean(
+      error &&
+      (error.isCollectorBusy ||
+        /다른\s*(?:수집\s*)?(?:저장|작업)|진행\s*중|잠시\s*후|busy|lock/i.test(
+          text(error.message)
+        ))
+    );
   }
 
   async function postAppsScriptWithRetry(payload, options) {
