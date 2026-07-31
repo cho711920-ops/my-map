@@ -21,7 +21,7 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.8"/);
+assert.match(backend, /MM_VERSION = "7\.26\.10"/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
 assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
@@ -83,7 +83,11 @@ assert.doesNotMatch(consolidateBody[1], /reviewSheet\.getRange\(\s*2,\s*1,\s*rev
 
 const context = {
   Utilities: {
-    formatDate() { return "2026-07-31 15:00:00"; }
+    formatDate() { return "2026-07-31 15:00:00"; },
+    getUuid() { return "test-uuid"; },
+    DigestAlgorithm: { SHA_256: "SHA_256" },
+    Charset: { UTF_8: "UTF_8" },
+    computeDigest() { return Array(32).fill(1); }
   },
   Session: {
     getScriptTimeZone() { return "Asia/Seoul"; }
@@ -165,6 +169,64 @@ assert.equal(
   true
 );
 assert.equal(recoveredSourceItem.link, incomingDaangn.link);
+assert.equal(
+  context.mmNormalizeSourceItem_("당근", {
+    sourceId: "D-LINK",
+    link: incomingDaangn.link
+  }).link,
+  incomingDaangn.link
+);
+
+const retryMaster = Array(31).fill("");
+retryMaster[1] = "서구 가장동 55";
+retryMaster[2] = "1층";
+retryMaster[4] = 500;
+retryMaster[5] = 55;
+retryMaster[8] = 8.9;
+retryMaster[15] = "M-RETRY";
+retryMaster[17] = "활성";
+retryMaster[30] = "당근";
+const retrySource = Array(19).fill("");
+retrySource[0] = "M-RETRY";
+retrySource[1] = "당근";
+retrySource[2] = "3930784";
+retrySource[3] = incomingDaangn.link;
+const retrySourceItem = {
+  ...incomingDaangn,
+  source: "당근",
+  sourceId: "3930784",
+  address: "서구 가장동 55",
+  room: "1층",
+  deposit: 500,
+  rent: 55,
+  area: 8.9
+};
+const retryState = {
+  masterRows: [retryMaster],
+  sourceRows: [retrySource],
+  masterById: { "M-RETRY": 0 },
+  sourceByKey: { "당근|3930784": 0 },
+  dirtyMaster: {},
+  dirtySource: {}
+};
+const retryReview = Array(28).fill("");
+retryReview[23] = "R-RETRY";
+const retryHistory = [];
+const retryResult = context.mmApplyReviewActionToState_(
+  retryState,
+  retryReview,
+  retrySourceItem,
+  "각각등록",
+  retryHistory,
+  []
+);
+assert.equal(retryResult.masterId, "M-RETRY");
+assert.equal(retryResult.recovered, true);
+assert.equal(retryState.masterRows.length, 1);
+assert.equal(retryState.masterRows[0][16], incomingDaangn.link);
+assert.equal(retryState.masterRows[0][26], incomingDaangn.link);
+assert.equal(retryHistory.length, 1);
+assert.equal(retryHistory[0][3], "대표링크복구");
 
 const storedLinkColumns = Array(14).fill("");
 storedLinkColumns[0] = "M-MANUAL";
