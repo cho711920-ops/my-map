@@ -7,7 +7,10 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.4";/);
+assert.match(source, /var VERSION = "1\.9\.5";/);
+assert.match(source, /data-metric="updated"/);
+assert.match(source, /data-metric="detailedDuplicates"/);
+assert.match(source, /data-metric="skippedUnchanged"/);
 assert.match(
   source,
   /function pollMutationStatus\(requestId, collectorKey\)[\s\S]*?var maxWaitMs = 7 \* 60 \* 1000;[\s\S]*?function canRetry\(\)[\s\S]*?if \(canRetry\(\)\)/,
@@ -40,7 +43,11 @@ assert.match(
 );
 assert.match(
   source,
-  /duplicate: Number\(result\.duplicate \|\| 0\) \+ detailBaseProcessed/
+  /detailedDuplicates: result\.detailedDuplicates !== undefined[\s\S]*?skippedUnchanged: detailBaseProcessed/
+);
+assert.match(
+  source,
+  /"개, 상세중복 " \+ totals\.duplicate \+[\s\S]*?"개, 기존 동일 생략 " \+ Number\(metadata\.unchanged \|\| 0\)/
 );
 assert.match(
   collectPhonesSource,

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.4";
+  var VERSION = "1.9.5";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -239,10 +239,12 @@
           '<div class="jsg-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsg-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
           '<div class="jsg-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
-          '<div class="jsg-metric"><span>JS 신규</span><b data-metric="created">0</b></div>' +
-          '<div class="jsg-metric"><span>기존 통합</span><b data-metric="merged">0</b></div>' +
+          '<div class="jsg-metric"><span>신규 등록</span><b data-metric="created">0</b></div>' +
+          '<div class="jsg-metric"><span>자동 통합</span><b data-metric="merged">0</b></div>' +
+          '<div class="jsg-metric"><span>조건 변경</span><b data-metric="updated">0</b></div>' +
           '<div class="jsg-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
-          '<div class="jsg-metric"><span>기존 중복</span><b data-metric="duplicate">0</b></div>' +
+          '<div class="jsg-metric"><span>상세 중복</span><b data-metric="detailedDuplicates">0</b></div>' +
+          '<div class="jsg-metric"><span>기존 동일 생략</span><b data-metric="skippedUnchanged">0</b></div>' +
           '<div class="jsg-metric"><span>변환 제외</span><b data-metric="addressMissing">0</b></div>' +
           '<div class="jsg-metric"><span>조회·저장 실패</span><b data-metric="failed">0</b></div>' +
         '</div>' +
@@ -517,7 +519,9 @@
         found: items.length,
         processed: detailBaseProcessed,
         remaining: detailItems.length,
-        duplicate: saveMetadata.complete ? 0 : classification.unchanged
+        duplicate: detailBaseProcessed,
+        detailedDuplicates: 0,
+        skippedUnchanged: detailBaseProcessed
       });
       setProgress(detailBaseProcessed, items.length);
 
@@ -656,8 +660,13 @@
         remaining: 0,
         created: result.created,
         merged: result.merged,
+        updated: result.updated,
         review: result.review,
         duplicate: Number(result.duplicate || 0) + detailBaseProcessed,
+        detailedDuplicates: result.detailedDuplicates !== undefined
+          ? result.detailedDuplicates
+          : result.duplicate,
+        skippedUnchanged: detailBaseProcessed,
         addressMissing: rejected.length,
         failed: result.failed
       });
@@ -739,12 +748,22 @@
       merged: savedProgress && savedProgress.totals
         ? savedProgress.totals.merged
         : 0,
+      updated: savedProgress && savedProgress.totals
+        ? savedProgress.totals.updated
+        : 0,
       review: savedProgress && savedProgress.totals
         ? savedProgress.totals.review
         : 0,
       duplicate: savedProgress && savedProgress.totals
+        ? Number(savedProgress.totals.duplicate || 0) +
+          Number(pending.metadata && pending.metadata.unchanged || 0)
+        : Number(pending.metadata && pending.metadata.unchanged || 0),
+      detailedDuplicates: savedProgress && savedProgress.totals
         ? savedProgress.totals.duplicate
         : 0,
+      skippedUnchanged: Number(
+        pending.metadata && pending.metadata.unchanged || 0
+      ),
       addressMissing: rejected.length,
       failed: savedProgress && savedProgress.totals
         ? savedProgress.totals.failed
@@ -778,8 +797,16 @@
         remaining: 0,
         created: result.created,
         merged: result.merged,
+        updated: result.updated,
         review: result.review,
-        duplicate: result.duplicate,
+        duplicate: Number(result.duplicate || 0) +
+          Number(pending.metadata && pending.metadata.unchanged || 0),
+        detailedDuplicates: result.detailedDuplicates !== undefined
+          ? result.detailedDuplicates
+          : result.duplicate,
+        skippedUnchanged: result.skippedUnchanged !== undefined
+          ? result.skippedUnchanged
+          : Number(pending.metadata && pending.metadata.unchanged || 0),
         addressMissing: rejected.length,
         failed: result.failed
       });
@@ -1842,8 +1869,11 @@
         remaining: Math.max(0, records.length - offset),
         created: totals.created,
         merged: totals.merged,
+        updated: totals.updated,
         review: totals.review,
         duplicate: totals.duplicate,
+        detailedDuplicates: totals.duplicate,
+        skippedUnchanged: Number(metadata.unchanged || 0),
         failed: totals.failed
       });
       setProgress(
@@ -1889,14 +1919,17 @@
       updated: totals.updated,
       review: totals.review,
       duplicate: totals.duplicate,
+      detailedDuplicates: totals.duplicate,
+      skippedUnchanged: Number(metadata.unchanged || 0),
       failed: totals.failed,
       message:
-        "공실박스 처리 완료: 총 " + totals.received +
-        "개 중 신규 " + totals.created +
-        "개, 기존매물 통합 " + totals.merged +
-        "개, 조건변경 " + totals.updated +
+        "공실박스 상세저장 판정: 상세확인 " + totals.received +
+        "개 중 신규 등록 " + totals.created +
+        "개, 자동 통합 " + totals.merged +
+        "개, 조건 변경 " + totals.updated +
         "개, 검증대기 " + totals.review +
-        "개, 중복 " + totals.duplicate +
+        "개, 상세중복 " + totals.duplicate +
+        "개, 기존 동일 생략 " + Number(metadata.unchanged || 0) +
         "개, 실패 " + totals.failed + "개"
     };
   }
@@ -2039,7 +2072,9 @@
         found: items.length,
         processed: Math.min(offset + chunk.length, items.length),
         remaining: Math.max(0, items.length - offset - chunk.length),
-        duplicate: unchanged
+        duplicate: unchanged,
+        detailedDuplicates: 0,
+        skippedUnchanged: unchanged
       });
       setProgress(Math.min(offset + chunk.length, items.length), items.length);
     }
@@ -2332,8 +2367,11 @@
       remaining: 0,
       created: 0,
       merged: 0,
+      updated: 0,
       review: 0,
       duplicate: 0,
+      detailedDuplicates: 0,
+      skippedUnchanged: 0,
       addressMissing: 0,
       failed: 0
     };

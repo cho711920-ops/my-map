@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.4.2";
+  var VERSION = "5.4.3";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -243,10 +243,12 @@
           '<div class="jsn-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsn-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
           '<div class="jsn-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
-          '<div class="jsn-metric"><span>JS 신규</span><b data-metric="created">0</b></div>' +
-          '<div class="jsn-metric"><span>기존 통합</span><b data-metric="merged">0</b></div>' +
+          '<div class="jsn-metric"><span>신규 등록</span><b data-metric="created">0</b></div>' +
+          '<div class="jsn-metric"><span>자동 통합</span><b data-metric="merged">0</b></div>' +
+          '<div class="jsn-metric"><span>조건 변경</span><b data-metric="updated">0</b></div>' +
           '<div class="jsn-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
-          '<div class="jsn-metric"><span>기존 중복</span><b data-metric="duplicate">0</b></div>' +
+          '<div class="jsn-metric"><span>상세 중복</span><b data-metric="detailedDuplicates">0</b></div>' +
+          '<div class="jsn-metric"><span>기존 동일 생략</span><b data-metric="skippedUnchanged">0</b></div>' +
           '<div class="jsn-metric"><span>주소·변환 제외</span><b data-metric="addressMissing">0</b></div>' +
           '<div class="jsn-metric"><span>조회·저장 실패</span><b data-metric="failed">0</b></div>' +
         '</div>' +
@@ -382,8 +384,11 @@
       remaining: 0,
       created: 0,
       merged: 0,
+      updated: 0,
       review: 0,
       duplicate: 0,
+      detailedDuplicates: 0,
+      skippedUnchanged: 0,
       addressMissing: 0,
       failed: 0
     };
@@ -411,8 +416,13 @@
       remaining: Math.max(0, Number(found || 0) - Number(processed || 0)),
       created: totals.created,
       merged: totals.merged,
+      updated: totals.updated,
       review: totals.review,
       duplicate: totals.duplicate,
+      detailedDuplicates: totals.detailedDuplicates !== undefined
+        ? totals.detailedDuplicates
+        : totals.duplicate,
+      skippedUnchanged: totals.skippedUnchanged || 0,
       failed: totals.failed
     });
   }
@@ -458,8 +468,11 @@
     target.review = Number(target.review || 0) + Number(result.review || 0);
     target.addressMissing = Number(target.addressMissing || 0) +
       Number(result.addressMissing || 0);
-    target.duplicate = Number(target.duplicate || 0) + Number(result.duplicate || 0) +
-      Number(result.duplicateSnapshots || 0);
+    var detailedDuplicateCount =
+      Number(result.duplicate || 0) + Number(result.duplicateSnapshots || 0);
+    target.detailedDuplicates =
+      Number(target.detailedDuplicates || 0) + detailedDuplicateCount;
+    target.duplicate = Number(target.duplicate || 0) + detailedDuplicateCount;
     target.failed = Number(target.failed || 0) + Number(result.failed || 0);
     target.saved = target.accepted;
   }
@@ -1542,6 +1555,8 @@
         saved: 0,
         accepted: 0,
         duplicate: 0,
+        detailedDuplicates: 0,
+        skippedUnchanged: 0,
         failed: 0,
         created: 0,
         merged: 0,
@@ -1623,8 +1638,13 @@
         remaining: 0,
         created: finalResult.created,
         merged: finalResult.merged,
+        updated: finalResult.updated,
         review: finalResult.review,
         duplicate: finalResult.duplicate,
+        detailedDuplicates: finalResult.detailedDuplicates !== undefined
+          ? finalResult.detailedDuplicates
+          : finalResult.duplicate,
+        skippedUnchanged: finalResult.skippedUnchanged || 0,
         addressMissing: remainingFailures.length,
         failed: finalResult.failed
       });
@@ -1634,8 +1654,14 @@
         "고유매물 " + formatNumber(progress.seenIds.length) +
         "개 · JS신규 " + formatNumber(finalResult.created) +
         "개 · 기존통합 " + formatNumber(finalResult.merged) +
+        "개 · 조건변경 " + formatNumber(finalResult.updated) +
         "개 · 검증대기 " + formatNumber(finalResult.review) +
-        "개 · 중복 " + formatNumber(finalResult.duplicate) +
+        "개 · 상세중복 " + formatNumber(
+          finalResult.detailedDuplicates !== undefined
+            ? finalResult.detailedDuplicates
+            : finalResult.duplicate
+        ) +
+        "개 · 기존동일생략 " + formatNumber(finalResult.skippedUnchanged) +
         "개 · 주소미확인 " + formatNumber(remainingFailures.length) + "개"
       );
       clearCityProgress();
@@ -1700,6 +1726,8 @@
         saved: 0,
         accepted: 0,
         duplicate: 0,
+        detailedDuplicates: 0,
+        skippedUnchanged: 0,
         failed: 0,
         created: 0,
         merged: 0,
@@ -1781,7 +1809,8 @@
             "개 · 기존통합 " + Number(cityResult.merged || 0) +
             "개 · 조건갱신 " + Number(cityResult.updated || 0) +
             "개 · 검증대기 " + Number(cityResult.review || 0) +
-            "개 · 중복 " + Number(cityResult.duplicate || 0) +
+            "개 · 상세중복 " + Number(cityResult.duplicate || 0) +
+            "개 · 기존동일생략 " + Number(progress.skippedUnchanged || 0) +
             "개 · 주소미확인 " + remainingFailures.length + "개"
         );
       } else {
@@ -2273,7 +2302,9 @@
         found: items.length,
         processed: Math.min(offset + chunk.length, items.length),
         remaining: Math.max(0, items.length - offset - chunk.length),
-        duplicate: unchanged
+        duplicate: unchanged,
+        detailedDuplicates: 0,
+        skippedUnchanged: unchanged
       });
     }
     return {
@@ -2385,8 +2416,11 @@
           remaining: Number(latest.pending || 0),
           created: latest.created,
           merged: latest.merged,
+          updated: latest.updated,
           review: latest.review,
           duplicate: latest.duplicate,
+          detailedDuplicates: latest.duplicate,
+          skippedUnchanged: Number(metadata.skippedUnchanged || 0),
           failed: Number(latest.failed || failed || 0)
         });
         setProgress(Number(latest.processed || 0), found || 1);
@@ -2422,6 +2456,8 @@
       updated: 0,
       review: 0,
       duplicate: 0,
+      detailedDuplicates: 0,
+      skippedUnchanged: 0,
       addressMissing: 0,
       failed: 0
     };
@@ -2443,12 +2479,16 @@
       var classification = await classifyNaverManifest(allItems, session);
       var items = classification.items;
       session.manifestRegistered = true;
+      session.skippedUnchanged = classification.unchanged;
+      totals.skippedUnchanged = classification.unchanged;
       totals.duplicate = classification.unchanged;
       updateDashboard({
         found: allItems.length,
         processed: classification.unchanged,
         remaining: items.length,
-        duplicate: classification.unchanged
+        duplicate: classification.unchanged,
+        detailedDuplicates: 0,
+        skippedUnchanged: classification.unchanged
       });
 
       for (var index = 0; index < items.length;) {
@@ -2488,6 +2528,8 @@
             processed: classification.unchanged + index,
             remaining: Math.max(0, items.length - index),
             duplicate: totals.duplicate,
+            detailedDuplicates: totals.detailedDuplicates,
+            skippedUnchanged: totals.skippedUnchanged,
             addressMissing: totals.addressMissing,
             failed: totals.failed
           });
@@ -2522,8 +2564,11 @@
           remaining: Math.max(0, items.length - index),
           created: totals.created,
           merged: totals.merged,
+          updated: totals.updated,
           review: totals.review,
           duplicate: totals.duplicate,
+          detailedDuplicates: totals.detailedDuplicates,
+          skippedUnchanged: totals.skippedUnchanged,
           addressMissing: totals.addressMissing,
           failed: totals.failed
         });
@@ -2567,6 +2612,8 @@
           processed: classification.unchanged + index,
           remaining: Math.max(0, items.length - index),
           duplicate: totals.duplicate,
+          detailedDuplicates: totals.detailedDuplicates,
+          skippedUnchanged: totals.skippedUnchanged,
           failed: totals.failed
         });
         setStatus(
@@ -2596,8 +2643,11 @@
           remaining: 0,
           created: sessionResult.created,
           merged: sessionResult.merged,
+          updated: sessionResult.updated,
           review: sessionResult.review,
           duplicate: Number(sessionResult.duplicate || 0) + classification.unchanged,
+          detailedDuplicates: Number(sessionResult.duplicate || 0),
+          skippedUnchanged: classification.unchanged,
           addressMissing: totals.addressMissing,
           failed: Number(sessionResult.failed || totals.failed || 0)
         });
@@ -2608,7 +2658,8 @@
             "개 · 기존통합 " + Number(sessionResult.merged || 0) +
             "개 · 조건갱신 " + Number(sessionResult.updated || 0) +
             "개 · 검증대기 " + Number(sessionResult.review || 0) +
-            "개 · 중복 " + (Number(sessionResult.duplicate || 0) + classification.unchanged) +
+            "개 · 상세중복 " + Number(sessionResult.duplicate || 0) +
+            "개 · 기존동일생략 " + classification.unchanged +
             "개 · 주소·층 제외 " + Number(totals.addressMissing || 0) +
             "개 · 실패 " + Number(sessionResult.failed || totals.failed || 0) + "개" +
             (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
