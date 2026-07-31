@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.3";
+  var VERSION = "1.1.4";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var APPS_SCRIPT_URL =
@@ -142,8 +142,9 @@
       '<div class="jsd-status" data-role="status"></div><div class="jsd-percent" data-role="percent">0%</div></div>' +
       '<div class="jsd-progress"><i data-role="progress-bar"></i></div><div class="jsd-detail" data-role="detail"></div></div>' +
       '<div class="jsd-card jsd-grid">' +
-      metric("found","선택·찾은 매물") + metric("processed","처리 완료") + metric("remaining","남은 매물") +
-      metric("inserted","신규·통합") + metric("review","검증대기") + metric("duplicates","기존 중복") +
+      metric("found","선택·찾은 매물") + metric("processed","상세 처리") + metric("remaining","남은 매물") +
+      metric("created","신규 등록") + metric("merged","자동 통합") + metric("updated","조건 변경") +
+      metric("review","검증대기") + metric("detailedDuplicates","상세 중복") + metric("skippedUnchanged","기존 동일 생략") +
       metric("addressMissing","주소 미확인") + metric("failed","조회 실패") + metric("page","목록 페이지") +
       '</div><div class="jsd-card"><div class="jsd-rule" data-role="rule"></div>' +
       '<div class="jsd-actions"><button type="button" class="jsd-btn jsd-start" data-action="start">수집 시작</button>' +
@@ -599,7 +600,8 @@
   function renderJob() {
     var job = state.job;
     if (!job) return renderSelection();
-    ["found","processed","remaining","inserted","review","duplicates","addressMissing","failed","page"]
+    ["found","processed","remaining","created","merged","updated","review","detailedDuplicates",
+      "skippedUnchanged","addressMissing","failed","page"]
       .forEach(function (key) {
         var node = panel.querySelector('[data-metric="' + key + '"]');
         if (node) node.textContent = Number(job[key] || 0).toLocaleString("ko-KR");
@@ -627,7 +629,8 @@
   }
 
   function clearMetrics() {
-    ["found","processed","remaining","inserted","review","duplicates","addressMissing","failed","page"]
+    ["found","processed","remaining","created","merged","updated","review","detailedDuplicates",
+      "skippedUnchanged","addressMissing","failed","page"]
       .forEach(function (key) {
         var node = panel.querySelector('[data-metric="' + key + '"]');
         if (node) node.textContent = "0";

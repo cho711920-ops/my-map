@@ -16,7 +16,12 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.1\.3"/);
+assert.match(collector, /VERSION = "1\.1\.4"/);
+assert.match(collector, /metric\("created","신규 등록"\)/);
+assert.match(collector, /metric\("merged","자동 통합"\)/);
+assert.match(collector, /metric\("updated","조건 변경"\)/);
+assert.match(collector, /metric\("detailedDuplicates","상세 중복"\)/);
+assert.match(collector, /metric\("skippedUnchanged","기존 동일 생략"\)/);
 assert.match(collector, /version === VERSION/);
 assert.match(collector, /width:min\(460px/);
 assert.match(collector, /stalePanel\.remove/);
