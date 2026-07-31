@@ -851,8 +851,16 @@
       var remaining = number(result.remaining !== undefined ? result.remaining : extraState.reviews && extraState.reviews.total)
         .toLocaleString("ko-KR");
       var failed = number(result.failed);
+      var verified = number(result.actionWritesVerified);
+      var removedVerified = number(result.reviewRowsRemovedVerified);
+      var elapsedSeconds = number(result.elapsedMs) > 0
+        ? (number(result.elapsedMs) / 1000).toFixed(1)
+        : "";
       var resultMessage = processedIds.length.toLocaleString("ko-KR") + "건 처리 완료" +
         (failed ? " · 실패 " + failed.toLocaleString("ko-KR") + "건" : "") +
+        (elapsedSeconds ? " · " + elapsedSeconds + "초" : "") +
+        "\n실제 시트 저장·재확인 " + verified.toLocaleString("ko-KR") + "건" +
+        " · 검증목록 반영 " + removedVerified.toLocaleString("ko-KR") + "건" +
         "\n남은 검증 " + remaining + "건";
       message(resultMessage.replace("\n", " · "), failed ? "error" : "success");
       showReviewDecisionModal(failed ? "일부 처리가 완료되었습니다" : "일괄 처리가 완료되었습니다",

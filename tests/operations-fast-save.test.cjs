@@ -13,13 +13,15 @@ const apiBackend = fs.readFileSync(
 );
 
 assert.match(ui, /검증목록을 최신화합니다/);
+assert.match(ui, /실제 시트 저장·재확인/);
+assert.match(ui, /reviewRowsRemovedVerified/);
 assert.match(ui, /setTimeout\(function\(\) \{ loadReviews\(true, true\); \}, 0\)/);
 assert.doesNotMatch(
   ui,
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.7"/);
+assert.match(backend, /MM_VERSION = "7\.26\.8"/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
 assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
@@ -29,9 +31,19 @@ assert.match(backend, /searchKey \? 300 : 120/);
 assert.match(apiBackend, /mmReviewWorkspace_\(params\.query\)/);
 assert.match(backend, /function mmRestoreReviewSourceLinkFromState_/);
 assert.match(backend, /function mmVerifyReviewPreferredLinkWrites_/);
+assert.match(backend, /function mmVerifyReviewActionWrites_/);
+assert.match(backend, /function mmVerifyReviewIdsRemoved_/);
+assert.match(backend, /function mmLoadReviewBatchRows_/);
 assert.match(backend, /preferredLinkChecks/);
 assert.match(apiBackend, /mmVerifyReviewPreferredLinkWrites_/);
+assert.match(apiBackend, /actionWritesVerified/);
+assert.match(apiBackend, /reviewRowsRemovedVerified/);
 assert.match(backend, /sourceKeys: sourceKeys/);
+assert.match(backend, /sourceRowsForKeys = action === "각각등록" \? reviewRows : requestedRows/);
+assert.match(backend, /stateOptions\.skipMasterRows = true/);
+assert.match(backend, /stateOptions\.masterIds/);
+assert.match(backend, /masterSheetRowNumbers: masterSheetRowNumbers/);
+assert.match(backend, /loadedReviewRows: reviewRows\.length/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(
   backend,
@@ -44,11 +56,13 @@ assert.ok(reconcileBody);
 assert.doesNotMatch(reconcileBody[1], /options\.sourceKeys/);
 assert.match(backend, /mmRemoveSheetRowsFast_/);
 const rawRowsBody = backend.match(
-  /function mmRawRowsForReviews_\(reviews\) \{([\s\S]*?)\n\}\n\nfunction mmSourceItemFromReviewMap_/
+  /function mmRawRowsForReviews_\(reviews, spreadsheet\) \{([\s\S]*?)\n\}\n\nfunction mmSourceItemFromReviewMap_/
 );
 assert.ok(rawRowsBody);
 assert.doesNotMatch(rawRowsBody[1], /createTextFinder\(rawId\)/);
 assert.match(rawRowsBody[1], /getDisplayValues\(\)/);
+assert.match(backend, /options\.spreadsheet \|\| mmSpreadsheet_\(\)/);
+assert.match(backend, /mmRawRowsForReviews_\(requestedRows, spreadsheet\)/);
 assert.match(backend, /liveCandidatesByAddressPrice/);
 assert.match(backend, /mmRoomsCanRepresentSameSpace_\(master\[2\], group\.room\)/);
 assert.match(backend, /function mmFindRowsByTextFast_/);
@@ -160,8 +174,14 @@ assert.deepEqual(
       getSheetByName() {
         return {
           getLastRow() { return 2; },
-          getRange() {
-            return { getValues() { return [storedLinkColumns]; } };
+          getRange(_start, column) {
+            return {
+              getDisplayValues() {
+                assert.equal(column, 16);
+                return [["M-MANUAL"]];
+              },
+              getValues() { return [storedLinkColumns]; }
+            };
           }
         };
       }
@@ -206,6 +226,192 @@ assert.deepEqual(
   ["M-1", "M-3", "M-4"].sort()
 );
 assert.equal(mockSheet.getLastRow(), 4);
+
+const reviewRowsForTargetedLoad = [
+  Array(28).fill(""),
+  Array(28).fill(""),
+  Array(28).fill("")
+];
+reviewRowsForTargetedLoad[0][23] = "R-1";
+reviewRowsForTargetedLoad[1][23] = "R-2";
+reviewRowsForTargetedLoad[2][23] = "R-3";
+const reviewLoadSheet = {
+  getLastRow() { return 4; },
+  getRange(start, column, count, width) {
+    return {
+      getDisplayValues() {
+        assert.equal(column, 24);
+        assert.equal(width, 1);
+        return reviewRowsForTargetedLoad
+          .slice(start - 2, start - 2 + count)
+          .map((row) => [row[23]]);
+      },
+      getValues() {
+        assert.equal(column, 1);
+        assert.equal(width, 28);
+        return reviewRowsForTargetedLoad
+          .slice(start - 2, start - 2 + count)
+          .map((row) => row.slice());
+      }
+    };
+  }
+};
+const targetedReviewLoad = context.mmLoadReviewBatchRows_(
+  reviewLoadSheet,
+  ["R-2"],
+  false
+);
+assert.equal(targetedReviewLoad.allRowsLoaded, false);
+assert.equal(targetedReviewLoad.rows.length, 1);
+assert.equal(targetedReviewLoad.rows[0][23], "R-2");
+assert.equal(targetedReviewLoad.rowNumberById["R-2"], 3);
+
+assert.equal(
+  context.mmVerifyReviewIdsRemoved_(
+    {
+      getLastRow() { return 2; },
+      getRange() {
+        return { getDisplayValues() { return [["R-OTHER"]]; } };
+      }
+    },
+    ["R-2"]
+  ),
+  1
+);
+assert.throws(
+  () => context.mmVerifyReviewIdsRemoved_(
+    {
+      getLastRow() { return 2; },
+      getRange() {
+        return { getDisplayValues() { return [["R-2"]]; } };
+      }
+    },
+    ["R-2"]
+  ),
+  /대기행 1건/
+);
+
+function gridSheet(rows) {
+  return {
+    getLastRow() { return rows.length + 1; },
+    getRange(start, column, count, width) {
+      const values = rows
+        .slice(start - 2, start - 2 + count)
+        .map((row) => row.slice(column - 1, column - 1 + width));
+      return {
+        getValues() { return values.map((row) => row.slice()); },
+        getDisplayValues() {
+          return values.map((row) => row.map((value) => String(value == null ? "" : value)));
+        }
+      };
+    }
+  };
+}
+
+const scopedMasterOne = Array(31).fill("");
+scopedMasterOne[1] = "서구 도안동 887";
+scopedMasterOne[15] = "M-1";
+scopedMasterOne[17] = "활성";
+const scopedMasterTwo = Array(31).fill("");
+scopedMasterTwo[1] = "서구 가장동 55";
+scopedMasterTwo[15] = "M-2";
+scopedMasterTwo[17] = "활성";
+const scopedMasterSheet = gridSheet([scopedMasterOne, scopedMasterTwo]);
+const emptySourceSheet = gridSheet([]);
+context.SpreadsheetApp = {
+  getActiveSpreadsheet() {
+    return {
+      getSheetByName(name) {
+        if (name === "JS부동산 매물현황") return scopedMasterSheet;
+        if (name === "매물출처이력") return emptySourceSheet;
+        return null;
+      }
+    };
+  }
+};
+const scopedState = context.mmLoadState_([], {
+  masterIds: ["M-2"],
+  sourceKeys: [],
+  skipReviewHold: true
+});
+assert.equal(scopedState.masterRows.length, 1);
+assert.equal(scopedState.masterRows[0][15], "M-2");
+assert.deepEqual(Array.from(scopedState.masterSheetRowNumbers), [3]);
+const holdOnlyState = context.mmLoadState_([], {
+  skipMasterRows: true,
+  sourceKeys: [],
+  skipReviewHold: true
+});
+assert.equal(holdOnlyState.masterRows.length, 0);
+
+const verifyMaster = Array(31).fill("");
+verifyMaster[1] = "서구 도안동 887";
+verifyMaster[2] = "1층";
+verifyMaster[4] = 2000;
+verifyMaster[5] = 60;
+verifyMaster[6] = 10;
+verifyMaster[7] = 0;
+verifyMaster[8] = 9.9;
+verifyMaster[15] = "M-VERIFY";
+verifyMaster[17] = "활성";
+const verifySource = Array(19).fill("");
+verifySource[0] = "M-VERIFY";
+verifySource[1] = "당근";
+verifySource[2] = "D-VERIFY";
+verifySource[3] = incomingDaangn.link;
+verifySource[8] = "Y";
+const verifyHoldSource = Array(19).fill("");
+verifyHoldSource[1] = "네이버";
+verifyHoldSource[2] = "N-HOLD";
+verifyHoldSource[8] = "N";
+verifyHoldSource[17] = "검증보류";
+const verifyHold = Array(28).fill("");
+verifyHold[0] = "보류";
+verifyHold[23] = "R-HOLD";
+const verifySpreadsheet = {
+  getSheetByName(name) {
+    if (name === "JS부동산 매물현황") return gridSheet([verifyMaster]);
+    if (name === "매물출처이력") return gridSheet([verifySource, verifyHoldSource]);
+    if (name === "검증보류") return gridSheet([verifyHold]);
+    return null;
+  }
+};
+assert.deepEqual(
+  JSON.parse(JSON.stringify(context.mmVerifyReviewActionWrites_(
+    verifySpreadsheet,
+    [
+      {
+        reviewId: "R-CONDITION",
+        action: "조건변경승인",
+        masterId: "M-VERIFY",
+        created: false,
+        source: "당근",
+        sourceId: "D-VERIFY",
+        link: incomingDaangn.link,
+        deposit: 2000,
+        rent: 60,
+        fee: 10,
+        premium: 0,
+        area: 9.9
+      },
+      {
+        reviewId: "R-HOLD",
+        action: "보류",
+        masterId: "",
+        created: false,
+        source: "네이버",
+        sourceId: "N-HOLD",
+        link: "",
+        deposit: "",
+        rent: "",
+        fee: "",
+        premium: "",
+        area: ""
+      }
+    ]
+  ))),
+  { checked: 2, sourceChecked: 2, masterChecked: 1, holdChecked: 1 }
+);
 
 const mappedRows = [["S-10", "old"], ["S-80", "changed"]];
 const mappedSheetData = Array.from({ length: 82 }, () => ["", ""]);
