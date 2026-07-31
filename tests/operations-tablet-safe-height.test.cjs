@@ -29,7 +29,7 @@ assert.match(
 );
 assert.match(
   html,
-  /operations-collection-v8\.css\?v=7\.23\.2-rental-colors-only/,
+  /operations-collection-v8\.css\?v=7\.23\.6-manual-merge-address-search/,
   "the collection stylesheet cache key must be updated"
 );
 

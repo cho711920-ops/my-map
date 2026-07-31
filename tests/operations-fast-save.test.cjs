@@ -15,7 +15,10 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.4"/);
+assert.match(backend, /MM_VERSION = "7\.26\.5"/);
+assert.match(backend, /manualMergeConfirmed === true/);
+assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
+assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(
@@ -50,9 +53,60 @@ assert.ok(consolidateBody);
 assert.doesNotMatch(consolidateBody[1], /mmLoadState_/);
 assert.doesNotMatch(consolidateBody[1], /reviewSheet\.getRange\(\s*2,\s*1,\s*reviewSheet\.getLastRow\(\) - 1/);
 
-const context = {};
+const context = {
+  Utilities: {
+    formatDate() { return "2026-07-31 15:00:00"; }
+  },
+  Session: {
+    getScriptTimeZone() { return "Asia/Seoul"; }
+  }
+};
 vm.createContext(context);
 vm.runInContext(backend, context);
+
+const manualMaster = Array(31).fill("");
+manualMaster[0] = "기존 건물";
+manualMaster[1] = "서구 도안동 887";
+manualMaster[2] = "1층";
+manualMaster[3] = "상가";
+manualMaster[4] = 1000;
+manualMaster[5] = 70;
+manualMaster[8] = 10;
+manualMaster[14] = "직접등록";
+manualMaster[15] = "M-MANUAL";
+manualMaster[30] = "직접등록";
+const incomingDaangn = {
+  source: "당근",
+  sourceId: "D-887",
+  address: "서구 도안동 887",
+  room: "1층",
+  buildingName: "",
+  category: "상가",
+  deposit: 2000,
+  rent: 60,
+  fee: "",
+  premium: "",
+  area: 9.9,
+  cleanMemo: "",
+  status: "",
+  tags: [],
+  collectedAt: "2026-07-31 15:00:00",
+  link: "https://www.daangn.com/kr/realty/887"
+};
+assert.equal(context.mmManualConditionKeepMergeAllowed_(manualMaster, incomingDaangn), true);
+assert.equal(
+  context.mmManualConditionKeepMergeAllowed_(
+    manualMaster,
+    { ...incomingDaangn, room: "2층" }
+  ),
+  false
+);
+context.mmMergeItemIntoMaster_(manualMaster, incomingDaangn, false, true);
+assert.equal(manualMaster[4], 1000);
+assert.equal(manualMaster[5], 70);
+assert.equal(manualMaster[8], 10);
+assert.equal(manualMaster[16], incomingDaangn.link);
+assert.equal(manualMaster[26], incomingDaangn.link);
 
 const sheetRows = [
   ["header"],
