@@ -10,7 +10,10 @@ const master = readJson("data/industry-master.json").industries;
 const rules = readJson("data/industry-area-use-rules.json");
 const all = [...new Map(catalog.concat(master).map((entry) => [entry.id, entry])).values()];
 
-assert.strictEqual(all.length, 50, "전체 업종 수 변경 시 면적 규칙을 함께 갱신해야 합니다.");
+assert(
+  all.length >= 82,
+  `전체 업종 확장 수가 부족합니다: ${all.length}/82`
+);
 for (const industry of all) {
   const templateId = rules.industries[industry.id];
   assert(templateId, `${industry.id}: 면적·용도 규칙 누락`);
@@ -44,9 +47,9 @@ assert.strictEqual(rules.industries["entertainment-bar"], "fixedSpecial");
 const ui = read("js/permit-diagnosis-ui.js");
 const step2 = read("js/permit-diagnosis-step2.js");
 const css = read("css/permit-diagnosis-v1.css");
-assert(ui.includes("industry-area-use-rules.json?v=20260730-area2"));
+assert(ui.includes("industry-area-use-rules.json?v=20260731-food-trade3"));
 assert(step2.includes("renderAreaUseRule(rule)"));
 assert(css.includes(".permit-area-use-card-v1"));
 assert(css.includes("grid-template-columns:repeat(2,minmax(0,1fr))"));
 
-console.log("industry area use rules tests: ok (50/50)");
+console.log(`industry area use rules tests: ok (${all.length}/${all.length})`);

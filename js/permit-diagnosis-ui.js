@@ -99,9 +99,9 @@
     if (state.catalog) return Promise.resolve(state.catalog);
     return Promise.all([
       fetch("data/industry-catalog.json?v=20260729-master1", { cache: "no-store" }),
-      fetch("data/industry-master.json?v=20260730-master3", { cache: "no-store" }),
-      fetch("data/industry-critical-guidance.json?v=20260730-critical3", { cache: "no-store" }),
-      fetch("data/industry-area-use-rules.json?v=20260730-area2", { cache: "no-store" })
+      fetch("data/industry-master.json?v=20260731-food-trade4", { cache: "no-store" }),
+      fetch("data/industry-critical-guidance.json?v=20260731-food-trade4", { cache: "no-store" }),
+      fetch("data/industry-area-use-rules.json?v=20260731-food-trade3", { cache: "no-store" })
     ]).then(function (responses) {
       if (!responses[0].ok || !responses[1].ok || !responses[2].ok || !responses[3].ok) {
         throw new Error("업종 마스터를 불러오지 못했습니다.");

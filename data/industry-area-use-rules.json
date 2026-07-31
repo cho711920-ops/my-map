@@ -1,6 +1,6 @@
 {
-  "version": "2026-07-30-building-area-use-v2",
-  "verifiedAt": "2026-07-30",
+  "version": "2026-07-31-building-area-use-v3-food-trade",
+  "verifiedAt": "2026-07-31",
   "source": {
     "title": "건축법 시행령 별표 1 용도별 건축물의 종류",
     "url": "https://www.law.go.kr/LSW/flDownload.do?bylClsCd=110201&flSeq=156922891",
@@ -98,6 +98,16 @@
       "targetUse": "소형·비배출 수리점은 제2종 근린생활시설, 그 외에는 공장 등 작업내용에 맞는 매물을 검토",
       "note": "면적만으로 결정되지 않으며 대기·폐수·소음 배출시설 허가·신고 대상 여부를 함께 확인합니다."
     },
+    "manufacturing500": {
+      "hasAreaThreshold": true,
+      "basis": "같은 건축물 내 제조·가공·소분·포장 작업장 용도 바닥면적 합계와 배출시설 해당 여부",
+      "bands": [
+        {"condition": "500㎡ 미만 + 배출시설 요건 충족", "buildingUse": "제2종 근린생활시설(제조업소 등) 검토"},
+        {"condition": "500㎡ 이상 또는 배출시설 요건 불충족", "buildingUse": "공장 등 실제 제조공정에 맞는 용도"}
+      ],
+      "targetUse": "소형·비배출 제조업소는 제2종 근린생활시설 가능 여부를, 그 외에는 공장 등 제조공정에 맞는 매물을 검토",
+      "note": "면적만으로 확정하지 않으며 제조품목·공정과 대기·폐수·소음·진동 배출시설 허가·신고 대상을 관할 건축·환경부서에서 확인합니다."
+    },
     "danran150": {
       "hasAreaThreshold": true,
       "basis": "같은 건축물 내 단란주점 용도 바닥면적 합계",
@@ -138,6 +148,38 @@
     }
   },
   "industries": {
+    "food-processing-manufacturing": "manufacturing500",
+    "food-additive-manufacturing": "manufacturing500",
+    "food-transport": "composite",
+    "food-subdivision": "manufacturing500",
+    "edible-ice-sales": "composite",
+    "food-vending-machine": "composite",
+    "food-private-label-distribution": "composite",
+    "institutional-food-sales": "composite",
+    "large-food-retail": "retail1000",
+    "food-cold-storage": "fixedSpecial",
+    "food-container-packaging": "manufacturing500",
+    "food-earthenware-manufacturing": "manufacturing500",
+    "contract-food-service": "composite",
+    "shared-kitchen": "composite",
+    "food-irradiation": "fixedSpecial",
+    "group-cafeteria": "fixedSpecial",
+    "health-functional-general-sales": "retail1000",
+    "health-functional-private-label": "composite",
+    "custom-health-functional-sales": "composite",
+    "imported-food-sales": "composite",
+    "imported-food-purchase-agent": "office30_500",
+    "imported-food-storage": "fixedSpecial",
+    "imported-food-declaration-agency": "office30_500",
+    "meat-sales": "retail1000",
+    "meat-byproduct-sales": "retail1000",
+    "milk-sales": "retail1000",
+    "livestock-private-label": "composite",
+    "edible-egg-sales": "retail1000",
+    "meat-instant-processing": "composite",
+    "meat-packaging-processing": "manufacturing500",
+    "livestock-storage": "fixedSpecial",
+    "livestock-transport": "composite",
     "internet-computer-game": "game500",
     "general-game": "fixedSpecial",
     "combined-game-distribution": "game500",
