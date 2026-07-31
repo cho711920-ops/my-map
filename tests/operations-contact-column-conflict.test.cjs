@@ -20,11 +20,11 @@ assert.match(
 );
 assert.match(
   backend,
-  /function mmReviewWorkspace_\(\)[\s\S]*area: row\[8\], source: mmMasterSource_\(row\)/
+  /function mmReviewWorkspace_\(query\)[\s\S]*area: row\[8\], source: mmMasterSource_\(row\)/
 );
 assert.doesNotMatch(
   backend,
-  /function mmReviewWorkspace_\(\)[\s\S]*?source:\s*mmText_\(row\[18\]\s*\|\|\s*row\[14\]\)/
+  /function mmReviewWorkspace_\(query\)[\s\S]*?source:\s*mmText_\(row\[18\]\s*\|\|\s*row\[14\]\)/
 );
 assert.match(
   backend,

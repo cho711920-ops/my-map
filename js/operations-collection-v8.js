@@ -8,6 +8,7 @@
     tab: "",
     collection: null,
     reviews: null,
+    reviewBase: null,
     selectedGroupKey: "",
     selectedReviewId: "",
     selectedReviewIds: [],
@@ -17,8 +18,11 @@
     reviewQuery: "",
     loading: false,
     refreshing: false,
+    reviewSearchLoading: false,
     collectionLoading: false
   };
+  var reviewSearchTimer = 0;
+  var reviewSearchRequestId = 0;
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function number(value) {
@@ -71,16 +75,19 @@
     node.className = "operations-center-message" + (tone ? " " + tone : "");
   }
   function saveReviewCache() {
-    if (!extraState.reviews) return;
+    var data = extraState.reviewBase ||
+      (!normalizedReviewQuery(extraState.reviewQuery) ? extraState.reviews : null);
+    if (!data) return;
     try {
       sessionStorage.setItem(REVIEW_CACHE_KEY, JSON.stringify({
         at: Date.now(),
-        data: extraState.reviews
+        data: data
       }));
     } catch (_) {}
   }
   function clearReviewCache() {
     extraState.reviews = null;
+    extraState.reviewBase = null;
     try { sessionStorage.removeItem(REVIEW_CACHE_KEY); } catch (_) {}
   }
   function loadFreshReviews(silent) {
@@ -98,6 +105,7 @@
       var cached = JSON.parse(sessionStorage.getItem(REVIEW_CACHE_KEY) || "null");
       if (!cached || Date.now() - Number(cached.at || 0) > REVIEW_CACHE_MAX_AGE) return;
       extraState.reviews = cached.data || null;
+      extraState.reviewBase = extraState.reviews;
     } catch (_) {}
   }
   function formatAt(value) {
@@ -179,6 +187,61 @@
     return riskFilteredGroups().filter(function(group) {
       return !query || reviewGroupSearchText(group).indexOf(query) >= 0;
     });
+  }
+  function focusReviewAddressSearch() {
+    window.requestAnimationFrame(function() {
+      var input = document.getElementById("reviewAddressSearch");
+      if (!input) return;
+      input.focus();
+      var length = input.value.length;
+      if (typeof input.setSelectionRange === "function") input.setSelectionRange(length, length);
+    });
+  }
+  function searchAllReviews(query) {
+    query = text(query);
+    var normalized = normalizedReviewQuery(query);
+    reviewSearchRequestId += 1;
+    var requestId = reviewSearchRequestId;
+    if (reviewSearchTimer) window.clearTimeout(reviewSearchTimer);
+    reviewSearchTimer = 0;
+    if (!normalized) {
+      extraState.reviewSearchLoading = false;
+      if (extraState.reviewBase) {
+        extraState.reviews = extraState.reviewBase;
+        extraState.selectedGroupKey = "";
+        clearReviewSelection();
+        renderReviews();
+        focusReviewAddressSearch();
+      } else {
+        loadReviews(true, true).then(focusReviewAddressSearch);
+      }
+      return;
+    }
+    if (normalized.length < 2) return;
+    message("전체 검증매물에서 ‘" + query + "’ 주소를 검색하는 중입니다…", "loading");
+    reviewSearchTimer = window.setTimeout(function() {
+      extraState.reviewSearchLoading = true;
+      apiGet("reviewWorkspace", {query: query}).then(function(data) {
+        if (requestId !== reviewSearchRequestId ||
+            normalizedReviewQuery(extraState.reviewQuery) !== normalized) return;
+        extraState.reviews = data;
+        extraState.selectedGroupKey = "";
+        clearReviewSelection();
+        renderReviews();
+        focusReviewAddressSearch();
+        message(
+          "전체 검증 " + number(data.allPendingTotal || data.total).toLocaleString("ko-KR") +
+          "건에서 ‘" + query + "’ 검색 · " +
+          number(data.groupCount).toLocaleString("ko-KR") + "개 주소 · " +
+          number(data.total).toLocaleString("ko-KR") + "건",
+          "success"
+        );
+      }).catch(function(error) {
+        if (requestId === reviewSearchRequestId) message(error.message, "error");
+      }).finally(function() {
+        if (requestId === reviewSearchRequestId) extraState.reviewSearchLoading = false;
+      });
+    }, 350);
   }
   function selectedGroup() {
     var groups = filteredGroups();
@@ -438,12 +501,14 @@
       return Promise.resolve();
     }
     extraState.refreshing = true;
+    var activeQuery = text(extraState.reviewQuery);
     if (!silent) message("매물검증 묶음을 만드는 중입니다…", "loading");
-    return apiGet("reviewWorkspace").then(function(data) {
+    return apiGet("reviewWorkspace", activeQuery ? {query: activeQuery} : {}).then(function(data) {
       extraState.reviews = data;
+      if (!activeQuery) extraState.reviewBase = data;
       if (!selectedGroup()) extraState.selectedGroupKey = "";
       renderReviews();
-      saveReviewCache();
+      if (!activeQuery) saveReviewCache();
       if (!silent) {
         message("검증대상 " + number(data.total).toLocaleString("ko-KR") + "건을 " +
           number(data.groupCount).toLocaleString("ko-KR") + "개 묶음으로 정리했습니다. · 우선 " +
@@ -540,6 +605,7 @@
         : "<b>검증할 매물이 없습니다.</b><span>확실한 신규와 중복은 자동처리되었습니다.</span>";
     }
     renderReviewDetailOnly();
+    searchAllReviews(extraState.reviewQuery);
   };
   window.clearReviewAddressSearch = function() {
     var input = document.getElementById("reviewAddressSearch");
@@ -772,6 +838,10 @@
           0, number(extraState.reviews.groupCount) - removedGroups
         );
         extraState.reviews.loadedGroupCount = extraState.reviews.groups.length;
+      }
+      if (normalizedReviewQuery(extraState.reviewQuery)) {
+        extraState.reviewBase = null;
+        sessionStorage.removeItem(REVIEW_CACHE_KEY);
       }
       clearReviewSelection();
       if (!selectedGroup()) extraState.selectedGroupKey = "";

@@ -7,6 +7,10 @@ const backend = fs.readFileSync(
   "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_통합운영시스템_v7.gs",
   "utf8"
 );
+const apiBackend = fs.readFileSync(
+  "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_Code.gs_v6.5.4_연락처6개_안전작업대기열_최종본.gs",
+  "utf8"
+);
 
 assert.match(ui, /검증목록을 최신화합니다/);
 assert.match(ui, /setTimeout\(function\(\) \{ loadReviews\(true, true\); \}, 0\)/);
@@ -15,10 +19,14 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.5"/);
+assert.match(backend, /MM_VERSION = "7\.26\.6"/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
 assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
+assert.match(backend, /function mmReviewWorkspace_\(query\)/);
+assert.match(backend, /allPendingTotal/);
+assert.match(backend, /searchKey \? 300 : 120/);
+assert.match(apiBackend, /mmReviewWorkspace_\(params\.query\)/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(
@@ -63,6 +71,17 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(backend, context);
+
+assert.equal(context.mmReviewSearchKey_("서구 가장동 55"), "서구가장동55");
+assert.equal(
+  context.mmReviewSearchKey_("가장동55"),
+  "가장동55"
+);
+assert.ok(
+  context.mmReviewSearchKey_("서구 가장동 55").includes(
+    context.mmReviewSearchKey_("가장동55")
+  )
+);
 
 const manualMaster = Array(31).fill("");
 manualMaster[0] = "기존 건물";
