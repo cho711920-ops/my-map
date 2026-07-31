@@ -28,6 +28,6 @@ assert.match(
   /\.customer-match-card-actions-v653 \.item-action-left > button\s*\{[^}]*flex:\s*1 1 0/s,
   "일반 작업버튼은 가용 너비에 맞춰 함께 줄어들어야 합니다."
 );
-assert.match(html, /script\.js\?v=6\.5\.31-customer-held-toggle/);
+assert.match(html, /script\.js\?v=6\.5\.33-fast-inline-memo/);
 
 console.log("customer map memo visibility tests passed");

@@ -18,6 +18,9 @@ var preserveActionSelectionDuringRender = false;
 var openMemoKey = null;
 var editingMemoKey = null;
 var memoEditMode = "replace";
+var memoSavePendingKeysV655 = Object.create(null);
+var memoDraftValuesV655 = Object.create(null);
+var memoStatusMessagesV655 = Object.create(null);
 var roadviewFullMap = null;
 var roadviewFullMapMarker = null;
 var roadviewTargetPosition = null;
@@ -1748,64 +1751,56 @@ function restoreMemoListScrollPosition(position) {
 
 
 function showMemoListKeepingPosition(anchorKey) {
-  var position = captureMemoListScrollPosition(anchorKey);
-  showList(visibleListItems);
-  restoreMemoListScrollPosition(position);
+  refreshMemoCardV655(anchorKey, false);
 }
 
 function toggleItemMemo(encodedKey) {
   var key = decodeURIComponent(encodedKey);
+  var previousOpenKey = openMemoKey;
 
   openMemoKey = openMemoKey === key ? null : key;
   editingMemoKey = null;
-  showMemoListKeepingPosition(key);
+  memoEditMode = "replace";
+  delete memoDraftValuesV655[key];
+
+  if (previousOpenKey && previousOpenKey !== key) {
+    refreshMemoCardV655(previousOpenKey, false);
+  }
+  refreshMemoCardV655(key, false);
 }
 
 
 function beginMemoEdit(encodedKey) {
-  editingMemoKey = decodeURIComponent(encodedKey);
+  var key = decodeURIComponent(encodedKey);
+  var previousOpenKey = openMemoKey;
+
+  editingMemoKey = key;
   memoEditMode = "replace";
-  openMemoKey = editingMemoKey;
-  showMemoListKeepingPosition(editingMemoKey);
+  openMemoKey = key;
+  delete memoDraftValuesV655[key];
+  delete memoStatusMessagesV655[key];
 
-  requestAnimationFrame(function() {
-    var editor = document.querySelector('[data-memo-editor-key="' + CSS.escape(editingMemoKey) + '"]');
-
-    if (editor) {
-      try {
-        editor.focus({ preventScroll: true });
-      } catch (_) {
-        editor.focus();
-      }
-      editor.style.height = "auto";
-      editor.style.height = editor.scrollHeight + "px";
-    }
-  });
+  if (previousOpenKey && previousOpenKey !== key) {
+    refreshMemoCardV655(previousOpenKey, false);
+  }
+  refreshMemoCardV655(key, true);
 }
 
 
 function beginMemoAdd(encodedKey) {
-  editingMemoKey = decodeURIComponent(encodedKey);
+  var key = decodeURIComponent(encodedKey);
+  var previousOpenKey = openMemoKey;
+
+  editingMemoKey = key;
   memoEditMode = "append";
-  openMemoKey = editingMemoKey;
-  showMemoListKeepingPosition(editingMemoKey);
+  openMemoKey = key;
+  memoDraftValuesV655[key] = "";
+  delete memoStatusMessagesV655[key];
 
-  requestAnimationFrame(function() {
-    var editor = document.querySelector(
-      '[data-memo-editor-key="' + CSS.escape(editingMemoKey) + '"]'
-    );
-
-    if (editor) {
-      editor.value = "";
-      editor.placeholder = "추가할 메모를 입력하세요.";
-      try {
-        editor.focus({ preventScroll: true });
-      } catch (_) {
-        editor.focus();
-      }
-      autoResizeMemoEditor(editor);
-    }
-  });
+  if (previousOpenKey && previousOpenKey !== key) {
+    refreshMemoCardV655(previousOpenKey, false);
+  }
+  refreshMemoCardV655(key, true);
 }
 
 
@@ -1824,7 +1819,9 @@ function cancelMemoEdit() {
   var key = editingMemoKey || openMemoKey;
   editingMemoKey = null;
   memoEditMode = "replace";
-  showMemoListKeepingPosition(key);
+  delete memoDraftValuesV655[key];
+  delete memoStatusMessagesV655[key];
+  refreshMemoCardV655(key, false);
 }
 
 
@@ -1835,11 +1832,146 @@ function autoResizeMemoEditor(element) {
 }
 
 
+function getMemoItemV655(key) {
+  return (allItems || []).find(function(item) {
+    return item && item.key === key;
+  }) || (visibleListItems || []).find(function(item) {
+    return item && item.key === key;
+  }) || null;
+}
+
+
+function getMemoCardV655(key) {
+  if (!key) return null;
+  return document.querySelector(
+    '.item[data-listing-key="' + CSS.escape(key) + '"]'
+  );
+}
+
+
+function memoStatusMarkupV655(key) {
+  var status = memoStatusMessagesV655[key];
+  if (!status || !status.text) return "";
+  return '<span class="memo-inline-status ' +
+    escapeHtml(status.tone || "info") + '">' +
+    escapeHtml(status.text) +
+  '</span>';
+}
+
+
+function buildMemoPanelMarkupV655(item) {
+  if (!item) return "";
+  var key = item.key;
+  var encodedKey = encodeURIComponent(key);
+  var safeKey = escapeHtml(key);
+  var saving = !!memoSavePendingKeysV655[key];
+  var statusMarkup = memoStatusMarkupV655(key);
+
+  if (editingMemoKey === key) {
+    var hasDraft = Object.prototype.hasOwnProperty.call(memoDraftValuesV655, key);
+    var editorValue = hasDraft
+      ? memoDraftValuesV655[key]
+      : (memoEditMode === "append" ? "" : item.memo || "");
+    var placeholder = memoEditMode === "append"
+      ? "추가할 메모를 입력하세요."
+      : "메모를 입력하세요.";
+
+    return '<div class="item-memo-panel editing" onclick="event.stopPropagation()">' +
+      '<textarea class="item-memo-editor" data-memo-editor-key="' + safeKey + '" ' +
+        'placeholder="' + escapeHtml(placeholder) + '" ' +
+        'oninput="memoDraftValuesV655[decodeURIComponent(\'' + encodedKey +
+          '\')]=this.value; autoResizeMemoEditor(this)">' +
+        escapeHtml(editorValue) +
+      '</textarea>' +
+      '<div class="item-memo-actions">' +
+        statusMarkup +
+        '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
+          (saving ? 'disabled ' : '') +
+          'onclick="saveItemMemo(\'' + encodedKey + '\')">' +
+          (saving ? "저장중" : "저장") +
+        '</button>' +
+        '<button type="button" class="memo-cancel-btn" ' +
+          (saving ? 'disabled ' : '') +
+          'onclick="cancelMemoEdit()">취소</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  return '<div class="item-memo-panel" onclick="event.stopPropagation()">' +
+    '<div class="item-memo-content">' +
+      (item.memo
+        ? escapeHtml(item.memo)
+        : '<span class="memo-empty">메모가 없습니다.</span>') +
+    '</div>' +
+    '<div class="item-memo-actions">' +
+      statusMarkup +
+      '<button type="button" class="memo-edit-btn" ' +
+        (saving ? 'disabled ' : '') +
+        'onclick="beginMemoEdit(\'' + encodedKey + '\')">수정</button>' +
+      '<button type="button" class="memo-add-btn" ' +
+        (saving ? 'disabled ' : '') +
+        'onclick="beginMemoAdd(\'' + encodedKey + '\')">추가하기</button>' +
+    '</div>' +
+  '</div>';
+}
+
+
+function focusMemoEditorV655(key) {
+  requestAnimationFrame(function() {
+    var editor = document.querySelector(
+      '[data-memo-editor-key="' + CSS.escape(key) + '"]'
+    );
+    if (!editor) return;
+    try {
+      editor.focus({ preventScroll: true });
+    } catch (_) {
+      editor.focus();
+    }
+    autoResizeMemoEditor(editor);
+  });
+}
+
+
+function refreshMemoCardV655(key, focusEditor) {
+  var card = getMemoCardV655(key);
+  if (!card) return;
+  var item = getMemoItemV655(key);
+  var isOpen = openMemoKey === key;
+  var toggle = card.querySelector(".item-memo-toggle");
+  var panel = card.querySelector(".item-memo-panel");
+
+  card.classList.toggle("memo-open", isOpen);
+  if (toggle) {
+    toggle.classList.toggle("on", isOpen);
+    toggle.textContent = isOpen ? "메모 ▲" : "메모 ▼";
+  }
+  if (panel) panel.remove();
+  if (isOpen && item) {
+    card.insertAdjacentHTML("beforeend", buildMemoPanelMarkupV655(item));
+  }
+  if (focusEditor && isOpen) focusMemoEditorV655(key);
+}
+
+
+function showMemoStatusV655(key, text, tone, clearAfter) {
+  memoStatusMessagesV655[key] = {
+    text: String(text || ""),
+    tone: String(tone || "info")
+  };
+  refreshMemoCardV655(key, false);
+  if (!clearAfter) return;
+  setTimeout(function() {
+    var current = memoStatusMessagesV655[key];
+    if (!current || current.text !== text || memoSavePendingKeysV655[key]) return;
+    delete memoStatusMessagesV655[key];
+    refreshMemoCardV655(key, false);
+  }, clearAfter);
+}
+
+
 function saveItemMemo(encodedKey) {
   var key = decodeURIComponent(encodedKey);
-  var item = allItems.find(function(currentItem) {
-    return currentItem.key === key;
-  });
+  var item = getMemoItemV655(key);
 
   var editor = document.querySelector('[data-memo-editor-key="' + CSS.escape(key) + '"]');
 
@@ -1853,13 +1985,21 @@ function saveItemMemo(encodedKey) {
     return;
   }
 
+  if (memoSavePendingKeysV655[key]) return;
+
+  if (!String(item.propertyId || "").trim()) {
+    showMemoStatusV655(key, "매물ID가 없어 저장할 수 없습니다.", "error", 0);
+    return;
+  }
+
   var enteredMemo = editor.value.trim();
   var previousMemo = item.memo || "";
   var newMemo = enteredMemo;
+  var savingMode = memoEditMode;
 
-  if (memoEditMode === "append") {
+  if (savingMode === "append") {
     if (!enteredMemo) {
-      alert("추가할 메모를 입력해주세요.");
+      showMemoStatusV655(key, "추가할 메모를 입력해주세요.", "error", 0);
       return;
     }
 
@@ -1868,38 +2008,33 @@ function saveItemMemo(encodedKey) {
       ? previousMemo.replace(/\s+$/, "") + "\n" + addedLine
       : addedLine;
   }
-  var saveButton = document.querySelector('[data-memo-save-key="' + CSS.escape(key) + '"]');
 
-  if (saveButton) {
-    saveButton.disabled = true;
-    saveButton.textContent = "저장중";
-  }
-
+  memoSavePendingKeysV655[key] = {
+    previousMemo: previousMemo,
+    enteredMemo: enteredMemo,
+    mode: savingMode
+  };
   item.memo = newMemo;
   editingMemoKey = null;
   memoEditMode = "replace";
-  showMemoListKeepingPosition(key);
+  delete memoDraftValuesV655[key];
+  memoStatusMessagesV655[key] = { text: "저장 중…", tone: "saving" };
+  refreshMemoCardV655(key, false);
 
   var payload = {
-    action: "toggleDone",
-    row: item.sheetRow || 0,
     key: {
-      propertyId: item.propertyId || "",
-      name: item.name || "",
-      address: item.address || "",
-      room: item.room || "",
-      type: item.type || "",
-      deposit: item.deposit == null ? "" : item.deposit,
-      rent: item.rent == null ? "" : item.rent
+      propertyId: item.propertyId || ""
     },
-    state: item.state || "",
     memo: newMemo,
     contacts: extractListContactsV650(item).map(function(contact) {
       return { role: contact.role, phone: contact.phone.display };
     })
   };
 
-  postSafeMutationV654("toggleDone", payload).then(function(result) {
+  postSafeMutationV654("updatePropertyMemo", payload).then(function(result) {
+    if (!result || result.persisted !== true) {
+      throw new Error("메모 저장값을 시트에서 재확인하지 못했습니다.");
+    }
     var savedPhoneKeys = Object.create(null);
     (Array.isArray(result && result.contacts) ? result.contacts : []).forEach(function(contact) {
       var savedPhone = normalizeListPhoneV650(contact && (contact.phone || contact.number));
@@ -1918,21 +2053,35 @@ function saveItemMemo(encodedKey) {
     if (result && typeof result.memo === "string") {
       item.memo = result.memo;
     }
+    delete memoSavePendingKeysV655[key];
+    delete memoDraftValuesV655[key];
     editingMemoKey = null;
     memoEditMode = "replace";
-    showMemoListKeepingPosition(item.key);
-    document.getElementById("status").innerHTML = "메모 저장 요청 완료";
-
-    if (!result || !result.queued) {
-      setTimeout(function() { loadSheet(true); }, 1800);
-    }
+    memoStatusMessagesV655[key] = { text: "저장완료", tone: "success" };
+    refreshMemoCardV655(key, false);
+    showMemoStatusV655(key, "저장완료", "success", 1400);
+    document.getElementById("status").innerHTML = "메모 저장완료";
   }).catch(function(error) {
     console.error(error);
-    item.memo = previousMemo;
+    var pending = memoSavePendingKeysV655[key] || {
+      previousMemo: previousMemo,
+      enteredMemo: enteredMemo,
+      mode: savingMode
+    };
+    item.memo = pending.previousMemo;
+    delete memoSavePendingKeysV655[key];
+    memoDraftValuesV655[key] = pending.enteredMemo;
+    memoStatusMessagesV655[key] = {
+      text: error && error.message
+        ? error.message
+        : "메모 저장에 실패했습니다.",
+      tone: "error"
+    };
+    openMemoKey = key;
     editingMemoKey = key;
-    memoEditMode = "replace";
-    showMemoListKeepingPosition(key);
-    alert("메모 저장 중 오류가 발생했습니다.");
+    memoEditMode = pending.mode || "replace";
+    refreshMemoCardV655(key, true);
+    document.getElementById("status").innerHTML = "메모 저장 실패 · 입력내용 유지";
   });
 }
 
@@ -2221,7 +2370,6 @@ function addListItem(item, appendTarget) {
       ? "id:" + String(item.propertyId).trim()
       : "key:" + item.key
   );
-  var safeKey = escapeHtml(item.key);
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
   var regDateLabel = formatListRegistrationDate(item.regDate);
   var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
@@ -2243,35 +2391,7 @@ function addListItem(item, appendTarget) {
       (memoOpen ? '메모 ▲' : '메모 ▼') +
     '</button>';
 
-  var memoPanel = "";
-
-  if (memoOpen) {
-    if (memoEditing) {
-      memoPanel =
-        '<div class="item-memo-panel editing" onclick="event.stopPropagation()">' +
-          '<textarea class="item-memo-editor" data-memo-editor-key="' + safeKey + '" ' +
-            'oninput="autoResizeMemoEditor(this)">' +
-            (memoEditMode === "append" ? "" : escapeHtml(item.memo || "")) +
-          '</textarea>' +
-          '<div class="item-memo-actions">' +
-            '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
-              'onclick="saveItemMemo(\'' + encodedKey + '\')">저장</button>' +
-            '<button type="button" class="memo-cancel-btn" onclick="cancelMemoEdit()">취소</button>' +
-          '</div>' +
-        '</div>';
-    } else {
-      memoPanel =
-        '<div class="item-memo-panel" onclick="event.stopPropagation()">' +
-          '<div class="item-memo-content">' +
-            (item.memo ? escapeHtml(item.memo) : '<span class="memo-empty">메모가 없습니다.</span>') +
-          '</div>' +
-          '<div class="item-memo-actions">' +
-            '<button type="button" class="memo-edit-btn" onclick="beginMemoEdit(\'' + encodedKey + '\')">수정</button>' +
-            '<button type="button" class="memo-add-btn" onclick="beginMemoAdd(\'' + encodedKey + '\')">추가하기</button>' +
-          '</div>' +
-        '</div>';
-    }
-  }
+  var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
 
   div.setAttribute("data-listing-key", item.key);
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());

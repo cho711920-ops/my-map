@@ -3974,6 +3974,7 @@ body.roadview-modal-open {
 
 .item-memo-actions {
   display:flex;
+  align-items:center;
   justify-content:flex-end;
   gap:6px;
   margin-top:7px;
@@ -3986,6 +3987,33 @@ body.roadview-modal-open {
   font-size:11px;
   font-weight:900;
   cursor:pointer;
+}
+
+.item-memo-actions button:disabled {
+  cursor:default;
+  opacity:.55;
+}
+
+.memo-inline-status {
+  min-width:0;
+  margin-right:auto;
+  color:#526174;
+  font-size:11px;
+  font-weight:850;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+
+.memo-inline-status.saving {
+  color:#155fc2;
+}
+
+.memo-inline-status.success {
+  color:#16803d;
+}
+
+.memo-inline-status.error {
+  color:#c0342b;
 }
 
 .memo-edit-btn,

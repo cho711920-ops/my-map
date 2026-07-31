@@ -280,6 +280,10 @@ assert(
   "메모 저장 성공 직후 서버가 확정한 연락처와 정리된 메모를 카드에 반영해야 합니다."
 );
 assert(
+  /postSafeMutationV654\("updatePropertyMemo", payload\)/.test(scriptSource),
+  "카드 메모는 상태변경과 분리된 메모 전용 저장을 사용해야 합니다."
+);
+assert(
   /CONTACT_MIGRATION_BACKUP_SHEET_NAME\s*=\s*"JS_연락처이전백업"/.test(gasSource),
   "메모 정리 전 복구용 백업 시트를 사용해야 합니다."
 );
