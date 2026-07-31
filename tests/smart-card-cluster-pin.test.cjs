@@ -39,8 +39,8 @@ assert.match(
   /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
-assert.match(htmlSource, /map\.js\?v=6\.5\.24-daejeon-overview/);
-assert.match(htmlSource, /script\.js\?v=6\.5\.33-fast-inline-memo/);
+assert.match(htmlSource, /map\.js\?v=6\.5\.25-multiline-memo/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.34-multiline-memo/);
 assert.match(scriptSource, /더블클릭하면 스마트 매물카드 열기/);
 assert.match(
   scriptSource,

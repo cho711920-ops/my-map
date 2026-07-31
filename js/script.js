@@ -331,6 +331,62 @@ function parseCSVLine(line) {
 }
 
 
+function parseCSVRecordsV655(data) {
+  var source = String(data == null ? "" : data).replace(/^\uFEFF/, "");
+  var rows = [];
+  var row = [];
+  var current = "";
+  var insideQuotes = false;
+
+  function finishCell() {
+    row.push(current);
+    current = "";
+  }
+
+  function finishRow() {
+    finishCell();
+    rows.push(row);
+    row = [];
+  }
+
+  for (var i = 0; i < source.length; i++) {
+    var ch = source[i];
+
+    if (ch === '"') {
+      if (insideQuotes && source[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+      continue;
+    }
+
+    if (ch === "," && !insideQuotes) {
+      finishCell();
+      continue;
+    }
+
+    if ((ch === "\r" || ch === "\n") && !insideQuotes) {
+      if (ch === "\r" && source[i + 1] === "\n") i += 1;
+      finishRow();
+      continue;
+    }
+
+    if (ch === "\r" && insideQuotes && source[i + 1] === "\n") {
+      current += "\n";
+      i += 1;
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current || row.length) finishRow();
+  return rows;
+}
+
+
 function itemKey(item) {
   return item.name + "|" + item.address + "|" + item.room + "|" + item.type;
 }

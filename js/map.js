@@ -862,11 +862,11 @@ function loadSheet(isAuto) {
   ])
     .then(function(results) {
       var data = results[0];
-      var rows = data.trim().split("\n");
+      var rows = parseCSVRecordsV655(data);
       var rawItems = [];
 
       for (var i = 1; i < rows.length; i++) {
-        var c = parseCSVLine(rows[i]);
+        var c = rows[i];
 
         var rawDeposit = clean(c[4]);
         var rawRent = clean(c[5]);
