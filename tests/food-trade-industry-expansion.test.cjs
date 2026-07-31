@@ -86,6 +86,6 @@ const ui = read("js/permit-diagnosis-ui.js");
 const index = read("index.html");
 assert(ui.includes("20260731-food-trade4"));
 assert(ui.includes("20260731-food-trade3"));
-assert(index.includes("permit-diagnosis-ui.js?v=2.7.0-food-trade"));
+assert(index.includes("permit-diagnosis-ui.js?v=2.8.0-ksic11"));
 
 console.log("food trade industry expansion tests passed (32 new industries)");

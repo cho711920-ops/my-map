@@ -42,7 +42,7 @@
             '<div class="permit-diagnosis-grid-v1">' +
               '<article class="permit-diagnosis-card-v1">' +
                 '<h3>고객이 어떤 업종을 원하나요?</h3>' +
-                '<p class="permit-diagnosis-help-v1">“김밥집”, “네일숍”처럼 편하게 적어도 됩니다. 후보 차이와 고객에게 다시 물어볼 내용을 안내합니다.</p>' +
+                '<p class="permit-diagnosis-help-v1">“김밥집”, “네일숍” 같은 생활표현부터 공식 업종명·KSIC 코드까지 검색됩니다. 후보 차이와 고객에게 다시 물어볼 내용을 안내합니다.</p>' +
                 '<textarea id="permitIndustryRequestV1" class="permit-diagnosis-textarea-v1" ' +
                   'placeholder="예: 손님이 작은 김밥집을 하려고 합니다. 홀 테이블도 몇 개 놓을 예정입니다."></textarea>' +
                 '<div class="permit-diagnosis-quick-v1">' +
@@ -52,10 +52,10 @@
                   '<button type="button" data-permit-example="손톱과 발톱을 관리하는 네일숍을 운영하려고 합니다.">네일숍</button>' +
                 '</div>' +
                 '<button id="permitInterpretBtnV1" class="permit-diagnosis-primary-v1 permit-diagnosis-wide-v1" type="button">업종 찾아보기</button>' +
-                '<div class="permit-step-note-v1">공식 업종은 상호만으로 확정하지 않습니다. 실제 메뉴·운영방식·시설을 확인한 뒤 사용자가 선택합니다.</div>' +
+                '<div class="permit-step-note-v1">한국표준산업분류 제11차 21개 대분류(업태)·1,205개 세세분류와 정밀 실무업종을 함께 검색합니다. 실제 메뉴·운영방식·시설을 확인한 뒤 사용자가 선택합니다.</div>' +
               '</article>' +
               '<article class="permit-diagnosis-card-v1">' +
-                '<h3>가능한 공식 업종</h3>' +
+                '<h3>공식·표준산업분류 업종 후보</h3>' +
                 '<p class="permit-diagnosis-help-v1">후보를 비교해 선택하면 중개사가 알아야 할 매물조건·시설·절차·전화질문·계약사항이 펼쳐집니다.</p>' +
                 '<div id="permitBrandEvidenceV1"></div>' +
                 '<div id="permitCandidateResultsV1"><div class="permit-candidate-empty-v1">' +
@@ -101,9 +101,10 @@
       fetch("data/industry-catalog.json?v=20260729-master1", { cache: "no-store" }),
       fetch("data/industry-master.json?v=20260731-food-trade4", { cache: "no-store" }),
       fetch("data/industry-critical-guidance.json?v=20260731-food-trade4", { cache: "no-store" }),
-      fetch("data/industry-area-use-rules.json?v=20260731-food-trade3", { cache: "no-store" })
+      fetch("data/industry-area-use-rules.json?v=20260731-food-trade3", { cache: "no-store" }),
+      fetch("data/industry-ksic11-catalog.json?v=20260731-universal1", { cache: "no-store" })
     ]).then(function (responses) {
-      if (!responses[0].ok || !responses[1].ok || !responses[2].ok || !responses[3].ok) {
+      if (responses.some(function (response) { return !response.ok; })) {
         throw new Error("업종 마스터를 불러오지 못했습니다.");
       }
       return Promise.all(responses.map(function (response) { return response.json(); }));
@@ -112,6 +113,7 @@
       var master = catalogs[1];
       var critical = catalogs[2];
       var areaRules = catalogs[3];
+      var ksic = catalogs[4];
       var seen = {};
       var industries = [];
       function unique(items) {
@@ -154,13 +156,22 @@
       (detailed.industries || []).concat(master.industries || []).forEach(function (industry) {
         if (!industry || !industry.id || seen[industry.id]) return;
         seen[industry.id] = true;
-        industry.criticalGuidance = criticalGuidanceFor(industry.id);
-        industry.areaUseRule = areaUseRuleFor(industry.id);
+        var detailedIndustry = Object.assign({}, industry, {
+          criticalGuidance: criticalGuidanceFor(industry.id),
+          areaUseRule: areaUseRuleFor(industry.id),
+          searchPriority: 30
+        });
+        industries.push(detailedIndustry);
+      });
+      global.PermitKsicIndustryAdapterV1.expandAll(ksic).forEach(function (industry) {
+        if (!industry.id || !industry.officialName || seen[industry.id]) return;
+        seen[industry.id] = true;
         industries.push(industry);
       });
       state.catalog = {
-        version: master.version,
-        notice: master.notice,
+        version: master.version + "+" + ksic.version,
+        notice: master.notice + " " + ksic.notice,
+        ksicCount: (ksic.industries || []).length,
         industries: industries
       };
       return state.catalog;

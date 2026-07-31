@@ -34,6 +34,7 @@
       if (/음식|음료|카페/.test(text)) score += 1;
     }
 
+    if (score > 0) score += Math.max(0, Number(industry.searchPriority) || 0);
     return score;
   }
 

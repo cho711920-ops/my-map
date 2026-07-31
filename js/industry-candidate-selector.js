@@ -32,6 +32,7 @@
         '<div class="permit-candidate-meta-v1">' +
           '<span class="permit-admin-badge-v1" data-admin-type="' + administration.code + '">' +
             escapeHtml(administration.label) + '</span>' +
+          (industry.ksicCode ? '<span>KSIC ' + escapeHtml(industry.ksicCode) + '</span>' : '') +
           '<span>' + escapeHtml(industry.permitType) + '</span>' +
           '<span>' + escapeHtml(industry.expectedBuildingUse) + '</span>' +
           '<span>' + escapeHtml(industry.legalArea) + '</span>' +
@@ -62,9 +63,12 @@
           renderList([
             administration.label + " — " + administration.description,
             "세부 표시: " + industry.permitType,
+            industry.ksicCode
+              ? "한국표준산업분류 제11차 " + industry.ksicCode + " · " + industry.ksicSectionName
+              : "",
             industry.expectedBuildingUse,
             industry.legalArea
-          ]) + '</div>' +
+          ].filter(Boolean)) + '</div>' +
         '<div class="permit-detail-box-v1"><strong>일반적인 진행 순서</strong>' +
           renderList(industry.process) + '</div>' +
         '<div class="permit-detail-box-v1"><strong>매물에서 먼저 볼 시설</strong>' +
@@ -72,7 +76,13 @@
       '</div>' +
       '<div class="permit-precheck-v1"><strong>고객에게 추가로 확인:</strong> ' +
         escapeHtml((industry.extraChecks || []).join(" · ")) + '<br>' +
-        escapeHtml(catalogNotice || "") + '</div>' +
+        escapeHtml(catalogNotice || "") +
+        (industry.classificationSource
+          ? '<br><a href="' + escapeHtml(industry.classificationSource.url) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtml(industry.classificationSource.authority + " · " +
+              industry.classificationSource.title) + '</a>'
+          : '') + '</div>' +
     '</section>';
   }
 

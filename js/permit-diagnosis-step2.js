@@ -186,6 +186,9 @@
     }
     var critical = industry.criticalGuidance || {};
     var criticalSources = critical.sources || [];
+    var classificationSources = industry.classificationSource
+      ? [industry.classificationSource]
+      : [];
     var rule = {
       industryId: industry.id,
       officialName: industry.officialName,
@@ -219,9 +222,14 @@
         ].concat(critical.safety || [])) },
         { id: "filing", title: "계약 후 등록 준비", checks: checks("filing", industry.process || []) }
       ],
-      sources: criticalSources,
+      sources: criticalSources.concat(classificationSources).filter(function (source, index, all) {
+        return source && source.url && all.findIndex(function (entry) {
+          return entry && entry.url === source.url;
+        }) === index;
+      }),
       criticalGuidance: critical,
-      disclaimer: critical.notice || "안내된 항목을 기준으로 관할기관에 확인한 뒤 계약해야 합니다."
+      disclaimer: critical.notice || industry.classificationNotice ||
+        "안내된 항목을 기준으로 관할기관에 확인한 뒤 계약해야 합니다."
     };
     return rule;
   }
