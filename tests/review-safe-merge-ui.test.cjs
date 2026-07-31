@@ -44,5 +44,9 @@ assert.match(css, /env\(safe-area-inset-bottom\)/);
 assert.match(css, /height:auto/);
 assert.match(css, /review-address-search/);
 assert.match(css, /manual-ready/);
+assert.match(
+  css,
+  /\.review-action-buttons \.merge\.manual-ready\{border-color:#0568e8;background:#0568e8;color:#fff\}/
+);
 
 console.log("review safe merge UI tests passed");
