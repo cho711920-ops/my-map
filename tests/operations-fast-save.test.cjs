@@ -19,7 +19,7 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.6"/);
+assert.match(backend, /MM_VERSION = "7\.26\.7"/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
 assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
@@ -27,6 +27,10 @@ assert.match(backend, /function mmReviewWorkspace_\(query\)/);
 assert.match(backend, /allPendingTotal/);
 assert.match(backend, /searchKey \? 300 : 120/);
 assert.match(apiBackend, /mmReviewWorkspace_\(params\.query\)/);
+assert.match(backend, /function mmRestoreReviewSourceLinkFromState_/);
+assert.match(backend, /function mmVerifyReviewPreferredLinkWrites_/);
+assert.match(backend, /preferredLinkChecks/);
+assert.match(apiBackend, /mmVerifyReviewPreferredLinkWrites_/);
 assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
 assert.match(
@@ -126,6 +130,46 @@ assert.equal(manualMaster[5], 70);
 assert.equal(manualMaster[8], 10);
 assert.equal(manualMaster[16], incomingDaangn.link);
 assert.equal(manualMaster[26], incomingDaangn.link);
+
+const recoveredSourceItem = {
+  source: "당근",
+  sourceId: "D-887",
+  link: ""
+};
+assert.equal(
+  context.mmRestoreReviewSourceLinkFromState_(
+    {
+      sourceByKey: { "당근|D-887": 0 },
+      sourceRows: [[
+        "M-MANUAL", "당근", "D-887", incomingDaangn.link
+      ]]
+    },
+    recoveredSourceItem
+  ),
+  true
+);
+assert.equal(recoveredSourceItem.link, incomingDaangn.link);
+
+const storedLinkColumns = Array(14).fill("");
+storedLinkColumns[0] = "M-MANUAL";
+storedLinkColumns[1] = incomingDaangn.link;
+storedLinkColumns[11] = incomingDaangn.link;
+assert.deepEqual(
+  JSON.parse(JSON.stringify(context.mmVerifyReviewPreferredLinkWrites_(
+    {
+      getSheetByName() {
+        return {
+          getLastRow() { return 2; },
+          getRange() {
+            return { getValues() { return [storedLinkColumns]; } };
+          }
+        };
+      }
+    },
+    [{ masterId: "M-MANUAL", source: "당근" }]
+  ))),
+  { checked: 1, daangnPreferred: 1 }
+);
 
 const sheetRows = [
   ["header"],
