@@ -584,6 +584,7 @@
 @media(min-width:769px){
   #operationsReviewsPanel .review-detail{
     display:grid;
+    min-width:0;
     min-height:0;
     grid-template-columns:repeat(2,minmax(0,1fr));
     grid-template-rows:auto minmax(0,1fr) auto;

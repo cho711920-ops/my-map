@@ -6,7 +6,7 @@ const html = fs.readFileSync("index.html", "utf8");
 
 assert.match(
   css,
-  /@media\(min-width:769px\)\{[\s\S]*?#operationsReviewsPanel \.review-detail\{[\s\S]*?display:grid;[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\);[\s\S]*?grid-template-rows:auto minmax\(0,1fr\) auto;/,
+  /@media\(min-width:769px\)\{[\s\S]*?#operationsReviewsPanel \.review-detail\{[\s\S]*?display:grid;[\s\S]*?min-width:0;[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\);[\s\S]*?grid-template-rows:auto minmax\(0,1fr\) auto;/,
   "desktop and tablet review detail must use two side-by-side panes"
 );
 assert.match(
@@ -31,7 +31,7 @@ assert.match(
 );
 assert.match(
   html,
-  /operations-collection-v8\.css\?v=7\.23\.10-review-split-panes/,
+  /operations-collection-v8\.css\?v=7\.23\.11-review-split-panes/,
   "the split-pane stylesheet cache key must be deployed"
 );
 
