@@ -579,3 +579,110 @@
   }
   #operationsReviewsPanel .review-candidate-actions{grid-column:2/-1}
 }
+
+/* v7.23.10 desktop/tablet review split panes; mobile layout remains unchanged */
+@media(min-width:769px){
+  #operationsReviewsPanel .review-detail{
+    display:grid;
+    min-height:0;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:auto minmax(0,1fr) auto;
+    gap:7px 9px;
+    overflow:hidden;
+  }
+  #operationsReviewsPanel .review-summary{
+    grid-column:1/-1;
+    grid-row:1;
+    margin-bottom:0;
+  }
+  #operationsReviewsPanel .review-existing-panel,
+  #operationsReviewsPanel .review-new-panel{
+    display:flex;
+    min-width:0;
+    min-height:0;
+    flex-direction:column;
+    margin-top:0;
+    overflow:hidden;
+  }
+  #operationsReviewsPanel .review-existing-panel{
+    grid-column:1;
+    grid-row:2;
+  }
+  #operationsReviewsPanel .review-new-panel{
+    grid-column:2;
+    grid-row:2;
+  }
+  #operationsReviewsPanel .review-existing-list,
+  #operationsReviewsPanel .review-new-list{
+    min-height:0;
+    flex:1 1 auto;
+    max-height:none;
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-gutter:stable;
+  }
+  #operationsReviewsPanel .review-existing-list{
+    display:block;
+    padding-right:3px;
+  }
+  #operationsReviewsPanel .review-new-list{
+    display:grid;
+    grid-template-columns:1fr;
+    align-content:start;
+    padding-right:3px;
+  }
+  #operationsReviewsPanel .review-existing-panel .review-candidate-compact{
+    grid-template-columns:auto minmax(0,1fr)!important;
+    grid-template-rows:auto auto auto;
+    align-items:center;
+    margin-bottom:5px;
+  }
+  #operationsReviewsPanel .review-existing-panel .review-master-controls{
+    grid-column:1;
+    grid-row:1;
+  }
+  #operationsReviewsPanel .review-existing-panel .review-compact-main{
+    grid-column:2;
+    grid-row:1;
+  }
+  #operationsReviewsPanel .review-existing-panel .review-compact-values{
+    grid-column:1/-1;
+    grid-row:2;
+  }
+  #operationsReviewsPanel .review-existing-panel .review-candidate-actions{
+    grid-column:1/-1;
+    grid-row:3;
+  }
+  #operationsReviewsPanel .review-existing-footer{
+    flex:0 0 auto;
+  }
+  #operationsReviewsPanel .review-new-panel .review-item-compact{
+    grid-template-columns:18px 24px minmax(0,1fr)!important;
+    grid-template-rows:auto auto;
+    min-height:0;
+    margin:0 0 6px;
+    padding:7px!important;
+  }
+  #operationsReviewsPanel .review-new-panel .review-item-checkbox{
+    grid-column:1;
+    grid-row:1;
+  }
+  #operationsReviewsPanel .review-new-panel .review-item-number{
+    grid-column:2;
+    grid-row:1;
+  }
+  #operationsReviewsPanel .review-new-panel .review-compact-main{
+    grid-column:3;
+    grid-row:1;
+  }
+  #operationsReviewsPanel .review-new-panel .review-compact-values{
+    grid-column:1/-1;
+    grid-row:2;
+  }
+  #operationsReviewsPanel .review-action-buttons{
+    grid-column:1/-1;
+    grid-row:3;
+    align-self:end;
+  }
+}
