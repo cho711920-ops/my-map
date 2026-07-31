@@ -1659,11 +1659,8 @@ function openKakaoRoadview(encodedKey) {
 }
 
 
-function openPropertySourceLink(encodedKey) {
-  var key = decodeURIComponent(encodedKey);
-  var item = allItems.find(function(currentItem) {
-    return currentItem.key === key;
-  });
+function openPropertySourceLink(encodedTarget) {
+  var item = getPropertyByEncodedKeyV630(encodedTarget);
   var url = String(item && item.sourceLink || "").trim();
 
   if (!/^https?:\/\//i.test(url)) {
@@ -2294,7 +2291,7 @@ function extractListContactsV650(item) {
   return contacts.slice(0, 6);
 }
 
-function buildListContactButtonV654(item, encodedKey, headerPlacement) {
+function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
   var contacts = extractListContactsV650(item);
   var hasContacts = contacts.length > 0;
   return '<button type="button" class="item-contact-button-v654 ' +
@@ -2302,7 +2299,7 @@ function buildListContactButtonV654(item, encodedKey, headerPlacement) {
     (headerPlacement ? ' header-placement' : '') +
     '" title="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
     '" aria-label="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
-    '" onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedKey + '\')">📞</button>';
+    '" onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedTarget + '\')">📞</button>';
 }
 
 function closeListContactPopupV654() {
@@ -2313,11 +2310,8 @@ function closeListContactPopupV654() {
   document.body.classList.remove("list-contact-modal-open-v654");
 }
 
-function openListContactPopupV654(encodedKey) {
-  var key = decodeURIComponent(encodedKey || "");
-  var item = allItems.find(function(currentItem) {
-    return currentItem.key === key;
-  });
+function openListContactPopupV654(encodedTarget) {
+  var item = getPropertyByEncodedKeyV630(encodedTarget);
   if (!item) return;
 
   var contacts = extractListContactsV650(item);
@@ -2431,11 +2425,11 @@ function addListItem(item, appendTarget) {
   var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
   var sourceLinkButton = hasSourceLink
     ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
-        'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedKey + '\')">링크</button>'
+        'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedEditTargetV648 + '\')">링크</button>'
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
   var customerMatchControls = buildCustomerMatchInlineControls(item);
-  var actionContactButtonV654 = buildListContactButtonV654(item, encodedKey, false);
-  var headerContactButtonV654 = buildListContactButtonV654(item, encodedKey, true);
+  var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
+  var headerContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, true);
   var depositDisplay = listDisplayValueV650(item, "deposit");
   var rentDisplay = listDisplayValueV650(item, "rent");
   var feeDisplay = listDisplayValueV650(item, "fee");
