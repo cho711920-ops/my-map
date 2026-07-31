@@ -99,9 +99,9 @@
     if (state.catalog) return Promise.resolve(state.catalog);
     return Promise.all([
       fetch("data/industry-catalog.json?v=20260729-master1", { cache: "no-store" }),
-      fetch("data/industry-master.json?v=20260731-food-trade4", { cache: "no-store" }),
-      fetch("data/industry-critical-guidance.json?v=20260731-food-trade4", { cache: "no-store" }),
-      fetch("data/industry-area-use-rules.json?v=20260731-food-trade3", { cache: "no-store" }),
+      fetch("data/industry-master.json?v=20260731-health-functional1", { cache: "no-store" }),
+      fetch("data/industry-critical-guidance.json?v=20260731-health-functional1", { cache: "no-store" }),
+      fetch("data/industry-area-use-rules.json?v=20260731-health-functional1", { cache: "no-store" }),
       fetch("data/industry-ksic11-catalog.json?v=20260731-universal1", { cache: "no-store" })
     ]).then(function (responses) {
       if (responses.some(function (response) { return !response.ok; })) {

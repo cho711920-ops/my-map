@@ -101,7 +101,8 @@ const detailedWithPriority = detailed.concat(master).map((industry) =>
   Object.assign({}, industry, { searchPriority: 30 })
 );
 const all = detailedWithPriority.concat(adapter.expandAll(catalog));
-assert.strictEqual(all.length, 1308, "정밀업종 82개와 KSIC 대분류 21개·세세분류 1,205개가 함께 검색되어야 합니다.");
+assert.strictEqual(detailedWithPriority.length, 84, "정밀 브리핑 업종 84개가 있어야 합니다.");
+assert.strictEqual(all.length, 1310, "정밀업종 84개와 KSIC 대분류 21개·세세분류 1,205개가 함께 검색되어야 합니다.");
 assert.strictEqual(
   parser.interpret("식품소분업", all, 6)[0].industry.id,
   "food-subdivision",
@@ -128,6 +129,6 @@ assert(index.includes("ksic-industry-adapter.js?v=1.0.0"));
 assert(index.includes("industry-intent-parser.js?v=1.2.0-ksic11"));
 assert(index.includes("industry-candidate-selector.js?v=2.3.0-ksic11"));
 assert(index.includes("permit-diagnosis-step2.js?v=2.8.0-ksic11"));
-assert(index.includes("permit-diagnosis-ui.js?v=2.8.0-ksic11"));
+assert(index.includes("permit-diagnosis-ui.js?v=2.8.1-health-functional"));
 
-console.log("KSIC universal industry search tests passed (1,205 + 21 + 82 = 1,308)");
+console.log("KSIC universal industry search tests passed (1,205 + 21 + 84 = 1,310)");

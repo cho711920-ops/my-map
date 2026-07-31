@@ -1,5 +1,5 @@
 {
-  "version": "2026-07-31-building-area-use-v3-food-trade",
+  "version": "2026-07-31-building-area-use-v4-health-functional",
   "verifiedAt": "2026-07-31",
   "source": {
     "title": "건축법 시행령 별표 1 용도별 건축물의 종류",
@@ -164,6 +164,8 @@
     "shared-kitchen": "composite",
     "food-irradiation": "fixedSpecial",
     "group-cafeteria": "fixedSpecial",
+    "health-functional-specialized-manufacturing": "manufacturing500",
+    "health-functional-venture-manufacturing": "office30_500",
     "health-functional-general-sales": "retail1000",
     "health-functional-private-label": "composite",
     "custom-health-functional-sales": "composite",

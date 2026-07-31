@@ -47,7 +47,7 @@ assert.strictEqual(rules.industries["entertainment-bar"], "fixedSpecial");
 const ui = read("js/permit-diagnosis-ui.js");
 const step2 = read("js/permit-diagnosis-step2.js");
 const css = read("css/permit-diagnosis-v1.css");
-assert(ui.includes("industry-area-use-rules.json?v=20260731-food-trade3"));
+assert(ui.includes("industry-area-use-rules.json?v=20260731-health-functional1"));
 assert(step2.includes("renderAreaUseRule(rule)"));
 assert(css.includes(".permit-area-use-card-v1"));
 assert(css.includes("grid-template-columns:repeat(2,minmax(0,1fr))"));

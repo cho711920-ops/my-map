@@ -84,8 +84,7 @@ assert.equal(topId("정육점 양념육 즉석가공"), "meat-instant-processing
 
 const ui = read("js/permit-diagnosis-ui.js");
 const index = read("index.html");
-assert(ui.includes("20260731-food-trade4"));
-assert(ui.includes("20260731-food-trade3"));
-assert(index.includes("permit-diagnosis-ui.js?v=2.8.0-ksic11"));
+assert(ui.includes("20260731-health-functional1"));
+assert(index.includes("permit-diagnosis-ui.js?v=2.8.1-health-functional"));
 
 console.log("food trade industry expansion tests passed (32 new industries)");

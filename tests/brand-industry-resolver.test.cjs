@@ -68,7 +68,7 @@ assert.deepStrictEqual(
 const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const ui = fs.readFileSync(path.join(root, "js", "permit-diagnosis-ui.js"), "utf8");
 assert(index.includes("brand-industry-resolver.js?v=1.1.0"));
-assert(index.includes("permit-diagnosis-ui.js?v=2.8.0-ksic11"));
+assert(index.includes("permit-diagnosis-ui.js?v=2.8.1-health-functional"));
 assert(ui.includes("permitBrandEvidenceV1"));
 assert(ui.includes("업종·업태를 확인하고 있습니다."));
 assert(ui.includes("dedupeOfficialCandidates"));
