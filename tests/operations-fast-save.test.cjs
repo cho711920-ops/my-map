@@ -42,6 +42,8 @@ assert.match(backend, /sourceKeys: sourceKeys/);
 assert.match(backend, /sourceRowsForKeys = action === "각각등록" \? reviewRows : requestedRows/);
 assert.match(backend, /stateOptions\.skipMasterRows = true/);
 assert.match(backend, /stateOptions\.masterIds/);
+assert.match(backend, /stateOptions\.masterAddresses = requestedRows\.map/);
+assert.match(backend, /reviewLoad\.rows\.map\(function\(review\) \{ return review\[6\]; \}\)/);
 assert.match(backend, /masterSheetRowNumbers: masterSheetRowNumbers/);
 assert.match(backend, /loadedReviewRows: reviewRows\.length/);
 assert.match(backend, /mmWriteDirtyMappedExisting_/);
@@ -235,16 +237,19 @@ const reviewRowsForTargetedLoad = [
 reviewRowsForTargetedLoad[0][23] = "R-1";
 reviewRowsForTargetedLoad[1][23] = "R-2";
 reviewRowsForTargetedLoad[2][23] = "R-3";
+reviewRowsForTargetedLoad[0][6] = "서구 도안동 887";
+reviewRowsForTargetedLoad[1][6] = "서구 도안동 887";
+reviewRowsForTargetedLoad[2][6] = "서구 가장동 55";
 const reviewLoadSheet = {
   getLastRow() { return 4; },
   getRange(start, column, count, width) {
     return {
       getDisplayValues() {
-        assert.equal(column, 24);
         assert.equal(width, 1);
+        assert.ok(column === 24 || column === 7);
         return reviewRowsForTargetedLoad
           .slice(start - 2, start - 2 + count)
-          .map((row) => [row[23]]);
+          .map((row) => [row[column - 1]]);
       },
       getValues() {
         assert.equal(column, 1);
@@ -265,6 +270,17 @@ assert.equal(targetedReviewLoad.allRowsLoaded, false);
 assert.equal(targetedReviewLoad.rows.length, 1);
 assert.equal(targetedReviewLoad.rows[0][23], "R-2");
 assert.equal(targetedReviewLoad.rowNumberById["R-2"], 3);
+const addressExpandedReviewLoad = context.mmLoadReviewBatchRows_(
+  reviewLoadSheet,
+  ["R-1"],
+  false,
+  ["서구 도안동 887"]
+);
+assert.equal(addressExpandedReviewLoad.rows.length, 2);
+assert.deepEqual(
+  Array.from(addressExpandedReviewLoad.rows, (row) => row[23]),
+  ["R-1", "R-2"]
+);
 
 assert.equal(
   context.mmVerifyReviewIdsRemoved_(
