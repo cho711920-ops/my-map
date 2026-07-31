@@ -18,6 +18,6 @@ assert.match(
   source,
   /return counts\.every\(function\(count, index\)[\s\S]*?count <= number\(dismissed\.counts\[index\]\)/
 );
-assert.match(html, /operations-center-v7\.js\?v=7\.18\.5-customer-held-toggle/);
+assert.match(html, /operations-center-v7\.js\?v=7\.18\.6-stale-match-id-recovery/);
 
 console.log("customer work alert dismissal tests passed");

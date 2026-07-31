@@ -177,6 +177,16 @@
           "success"
         );
       }
+      if (typeof window.refreshCustomerMatchesAfterDuplicateMergeV7186 === "function") {
+        Promise.resolve(
+          window.refreshCustomerMatchesAfterDuplicateMergeV7186(
+            result.primaryMasterId || "",
+            removedIds
+          )
+        ).catch(function(error) {
+          console.warn("중복정리 후 고객매칭 새로고침 실패", error);
+        });
+      }
       setTimeout(function() {
         if (typeof window.loadSheet === "function") window.loadSheet(true);
         else window.location.reload();

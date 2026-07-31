@@ -563,7 +563,10 @@
       customerId: customerId,
       masterId: button.getAttribute("data-master-id") || "",
       status: status
-    }).then(function() {
+    }).then(function(result) {
+      var resolvedMatchId = text(result && result.matchId) || matchId;
+      var matchIdIndex = headerIndex(state.matchHeaders, "매칭ID");
+      if (matchedRow && matchIdIndex >= 0) matchedRow[matchIdIndex] = resolvedMatchId;
       setMessage(status === "소개" ? "후보 매물로 표시했습니다." : "보류한 매물로 표시했습니다.", "success");
     }).catch(function(error) {
       if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = oldStatus;
@@ -689,6 +692,44 @@
       if (state.selectedCustomerId === customerId) renderMatches(customerId);
     });
   }
+
+  window.refreshCustomerMatchesAfterDuplicateMergeV7186 = function() {
+    var customerId = text(state.selectedCustomerId);
+    if (!customerId) return Promise.resolve({ ok: true, skipped: true });
+    state.loadedMatchCustomerId = "";
+    return apiGet("customerMatches", { customerId: customerId }).then(function(result) {
+      if (state.selectedCustomerId !== customerId) return result;
+      state.matchHeaders = result.headers || [];
+      state.matches = result.rows || [];
+      state.loadedMatchCustomerId = customerId;
+      renderCustomers();
+      renderMatches(customerId);
+
+      if (window.operationsMatchPropertyIds instanceof Set) {
+        var rows = state.matches.filter(function(row) {
+          return field(row, state.matchHeaders, "고객ID") === customerId;
+        });
+        window.operationsMatchPropertyIds = new Set();
+        window.operationsMatchStatusByPropertyId = {};
+        window.operationsMatchContextByPropertyId = {};
+        rows.forEach(function(row) {
+          var propertyId = field(row, state.matchHeaders, "대표매물ID");
+          if (!propertyId) return;
+          window.operationsMatchPropertyIds.add(propertyId);
+          window.operationsMatchStatusByPropertyId[propertyId] = matchStatus(row);
+          window.operationsMatchContextByPropertyId[propertyId] = {
+            matchId: field(row, state.matchHeaders, "매칭ID"),
+            customerId: customerId,
+            propertyId: propertyId,
+            status: matchStatus(row)
+          };
+        });
+        syncCustomerMatchHeldToggleV1();
+        if (typeof window.applyFilter === "function") window.applyFilter();
+      }
+      return result;
+    });
+  };
 
   window.openOperationsCenter = function(tab) {
     var center = document.getElementById("operationsCenter");
@@ -1062,15 +1103,21 @@
       customerId: context.customerId,
       masterId: context.propertyId,
       status: nextStatus
-    }).then(function() {
+    }).then(function(result) {
+      var previousMatchId = context.matchId;
+      var resolvedMatchId = text(result && result.matchId) || previousMatchId;
       var oldStatus = context.status;
+      context.matchId = resolvedMatchId;
       context.status = nextStatus;
       window.operationsMatchStatusByPropertyId[text(propertyId)] = nextStatus;
       state.loaded = false;
       var matchedRow = state.matches.find(function(row) {
-        return field(row, state.matchHeaders, "매칭ID") === context.matchId;
+        var rowMatchId = field(row, state.matchHeaders, "매칭ID");
+        return rowMatchId === previousMatchId || rowMatchId === resolvedMatchId;
       });
       var statusIndex = headerIndex(state.matchHeaders, "진행상태");
+      var matchIdIndex = headerIndex(state.matchHeaders, "매칭ID");
+      if (matchedRow && matchIdIndex >= 0) matchedRow[matchIdIndex] = resolvedMatchId;
       if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = nextStatus;
       adjustMatchSummary(context.customerId, oldStatus, nextStatus);
       if (typeof window.applyFilter === "function") window.applyFilter();

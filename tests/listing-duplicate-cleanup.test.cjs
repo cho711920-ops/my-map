@@ -11,7 +11,7 @@ const backend = fs.readFileSync(
 );
 
 assert.match(html, /listing-duplicate-cleanup-v1\.css/);
-assert.match(html, /listing-duplicate-cleanup-v1\.js\?v=1\.5\.0-unrestricted-manual-cleanup/);
+assert.match(html, /listing-duplicate-cleanup-v1\.js\?v=1\.5\.1-customer-match-refresh/);
 assert.match(ui, /대표로 유지/);
 assert.match(ui, /중복으로 정리/);
 assert.match(ui, /consolidateExistingMasters/);
@@ -22,6 +22,7 @@ assert.match(ui, /자동 중복검사 기준과 관계없이 사용자의 선택
 assert.doesNotMatch(ui, /서로 다른 층이거나 층을 확인할 수 없는 매물은 계속 차단/);
 assert.match(ui, /removeDuplicatesFromCurrentView/);
 assert.match(ui, /window\.loadSheet\(true\)/);
+assert.match(ui, /refreshCustomerMatchesAfterDuplicateMergeV7186/);
 assert.match(css, /duplicate-cleanup-primary/);
 assert.match(css, /duplicate-cleanup-target/);
 assert.match(css, /flex:0 0 72px!important/);
