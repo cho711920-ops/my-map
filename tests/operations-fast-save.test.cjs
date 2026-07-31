@@ -21,7 +21,7 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.10"/);
+assert.match(backend, /MM_VERSION = "7\.26\.11"/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
 assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
