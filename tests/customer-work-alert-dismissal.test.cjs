@@ -18,6 +18,14 @@ assert.match(
   source,
   /return counts\.every\(function\(count, index\)[\s\S]*?count <= number\(dismissed\.counts\[index\]\)/
 );
-assert.match(html, /operations-center-v7\.js\?v=7\.18\.6-stale-match-id-recovery/);
+assert.match(
+  source,
+  /if \(alerts && forcePopup === true\) showCustomerWorkAlert\(data, true\);/
+);
+assert.match(source, /refreshCustomerAlertBadge\(false\);/);
+assert.match(
+  html,
+  /operations-center-v7\.js\?v=7\.18\.7-customer-alert-manual-only/
+);
 
 console.log("customer work alert dismissal tests passed");

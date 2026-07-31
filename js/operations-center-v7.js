@@ -1275,7 +1275,9 @@
       button.textContent = alerts ? "고객매칭 · 알림 " + alerts.toLocaleString("ko-KR") : "고객매칭";
       button.classList.toggle("has-alert", alerts > 0);
       button.setAttribute("aria-label", alerts ? "고객매칭, 확인할 업무 " + alerts + "건" : "고객매칭");
-      if (alerts) showCustomerWorkAlert(data, !!forcePopup);
+      // 고객업무 알림 수는 버튼에 유지하되 자동 팝업은 띄우지 않습니다.
+      // 나중에 보완할 때 window.openCustomerWorkAlert()의 수동 호출만 다시 활용할 수 있습니다.
+      if (alerts && forcePopup === true) showCustomerWorkAlert(data, true);
     }).catch(function() {});
   }
 
