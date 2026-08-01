@@ -67,6 +67,9 @@
       item.unifiedOriginalCountV8 = originals.length || 1;
       item.thumbnailV8 = originals.length && originals[0].thumbnail || "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });
+      item.gongsilContactCountV8 = originals.reduce(function(total, original) {
+        return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
+      }, 0);
     });
     return items;
   }
@@ -296,6 +299,12 @@
     }).catch(function(error) { console.error(error); });
   }
 
+  function loadContacts(propertyId) {
+    propertyId = text(propertyId);
+    if (!propertyId) return Promise.resolve({ok: true, propertyId: "", contactCount: 0, contacts: []});
+    return apiGet("unifiedListingContacts", {propertyId: propertyId});
+  }
+
   function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (!drawer) return;
@@ -512,6 +521,7 @@
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, open: open, close: closeDetail, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
+    loadContacts: loadContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError
   };

@@ -81,8 +81,8 @@ assert(
   "메모 변경 전후 이력을 남긴 뒤에만 저장완료를 응답해야 합니다."
 );
 assert(
-  html.includes("style.css?v=6.5.27-fast-inline-memo") &&
-    html.includes("script.js?v=6.5.37-gongsil-source-relations"),
+  html.includes("style.css?v=6.5.28-linked-gongsil-contact") &&
+    html.includes("script.js?v=6.5.38-linked-gongsil-contact"),
   "운영 브라우저가 새 메모 UI를 즉시 받도록 캐시 버전을 올려야 합니다."
 );
 assert(

@@ -2303,9 +2303,67 @@ function extractListContactsV650(item) {
   return contacts.slice(0, 6);
 }
 
+function normalizeLinkedGongsilContactsV8(rawContacts) {
+  var contacts = [];
+  var seen = Object.create(null);
+  (Array.isArray(rawContacts) ? rawContacts : []).forEach(function(contact) {
+    var phone = normalizeListPhoneV650(contact && contact.phone);
+    if (!phone || seen[phone.key]) return;
+    seen[phone.key] = true;
+    contacts.push({
+      role: listContactRoleV650(contact && contact.role),
+      phone: phone,
+      origin: "gongsil",
+      source: "공실박스",
+      sourceId: String(contact && contact.sourceId || "").trim(),
+      room: String(contact && contact.room || "").trim(),
+      buildingName: String(contact && contact.buildingName || "").trim()
+    });
+  });
+  return contacts;
+}
+
+function mergePopupContactsV8(primaryContacts, linkedContacts) {
+  var merged = [];
+  var seen = Object.create(null);
+  (primaryContacts || []).concat(linkedContacts || []).forEach(function(contact) {
+    if (!contact || !contact.phone || seen[contact.phone.key]) return;
+    seen[contact.phone.key] = true;
+    merged.push(contact);
+  });
+  return merged.slice(0, 6);
+}
+
+function renderListContactPopupV8(item, primaryContacts, options) {
+  options = options || {};
+  var body = document.getElementById("listContactBodyV654");
+  if (!body) return;
+  var linked = normalizeLinkedGongsilContactsV8(options.linkedContacts || []);
+  var contacts = mergePopupContactsV8(primaryContacts, linked);
+  var markup = contacts.map(function(contact) {
+    var meta = LIST_CONTACT_ROLE_META_V650[contact.role] || LIST_CONTACT_ROLE_META_V650["기"];
+    var sourceNote = contact.origin === "gongsil"
+      ? '<small class="list-contact-source-v8">공실박스 원본' +
+          (contact.room ? ' · ' + escapeHtml(contact.room) : '') + '</small>'
+      : '';
+    return '<a class="list-contact-row-v654 role-' + escapeHtml(contact.role || "기") +
+      '" href="tel:' + contact.phone.tel + '" onclick="event.stopPropagation()">' +
+      '<span class="list-contact-role-v654">' + escapeHtml(meta.name) + '</span>' +
+      '<span class="list-contact-number-v8"><strong>' + escapeHtml(contact.phone.display) + '</strong>' +
+        sourceNote + '</span>' +
+      '<span class="list-contact-call-label-v654">전화</span></a>';
+  }).join("");
+  if (options.loading) {
+    markup += '<div class="list-contact-loading-v8">연결된 공실박스 원본 연락처 확인 중…</div>';
+  } else if (options.error) {
+    markup += '<div class="list-contact-error-v8">' + escapeHtml(options.error) + '</div>';
+  }
+  body.innerHTML = markup || '<div class="list-contact-empty-v654">등록된 연락처가 없습니다.</div>';
+}
+
 function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
   var contacts = extractListContactsV650(item);
-  var hasContacts = contacts.length > 0;
+  var hasContacts = contacts.length > 0 || Number(item && item.gongsilContactCountV8) > 0;
   return '<button type="button" class="item-contact-button-v654 ' +
     (hasContacts ? 'has-contacts' : 'no-contacts') +
     (headerPlacement ? ' header-placement' : '') +
@@ -2339,27 +2397,40 @@ function openListContactPopupV654(encodedTarget) {
         '<header><div><strong id="listContactTitleV654">매물 연락처</strong><p id="listContactAddressV654"></p></div>' +
           '<button type="button" class="list-contact-close-v654" onclick="closeListContactPopupV654()" aria-label="닫기">×</button></header>' +
         '<div id="listContactBodyV654" class="list-contact-body-v654"></div>' +
-        '<p class="list-contact-note-v654">번호를 누르면 기기의 전화 앱으로 연결됩니다.</p>' +
+        '<p class="list-contact-note-v654">공실박스 번호는 JS_연락처원본에서 연결된 원본매물ID로만 조회합니다.</p>' +
       '</section>';
     document.body.appendChild(modal);
   }
 
   document.getElementById("listContactAddressV654").textContent =
     [item.name, item.address, item.room].filter(Boolean).join(" · ");
-  document.getElementById("listContactBodyV654").innerHTML = contacts.length
-    ? contacts.map(function(contact) {
-        var meta = LIST_CONTACT_ROLE_META_V650[contact.role] || LIST_CONTACT_ROLE_META_V650["기"];
-        return '<a class="list-contact-row-v654 role-' + escapeHtml(contact.role || "기") +
-          '" href="tel:' + contact.phone.tel + '" onclick="event.stopPropagation()">' +
-          '<span class="list-contact-role-v654">' + escapeHtml(meta.name) + '</span>' +
-          '<strong>' + escapeHtml(contact.phone.display) + '</strong>' +
-          '<span class="list-contact-call-label-v654">전화</span></a>';
-      }).join("")
-    : '<div class="list-contact-empty-v654">등록된 연락처가 없습니다.</div>';
+  var propertyId = String(item.propertyId || "").trim();
+  modal._contactPropertyIdV8 = propertyId;
+  var hasLinkedContacts = Number(item.gongsilContactCountV8) > 0;
+  renderListContactPopupV8(item, contacts, {
+    linkedContacts: item.gongsilContactsLoadedV8 ? item.gongsilContactsV8 : [],
+    loading: hasLinkedContacts && !item.gongsilContactsLoadedV8
+  });
 
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("list-contact-modal-open-v654");
+
+  if (hasLinkedContacts && !item.gongsilContactsLoadedV8 && propertyId &&
+      window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.loadContacts === "function") {
+    window.JSUnifiedListingsV8.loadContacts(propertyId).then(function(result) {
+      item.gongsilContactsV8 = Array.isArray(result && result.contacts) ? result.contacts : [];
+      item.gongsilContactsLoadedV8 = true;
+      item.gongsilContactCountV8 = Number(result && result.contactCount) || item.gongsilContactsV8.length;
+      if (modal._contactPropertyIdV8 !== propertyId) return;
+      renderListContactPopupV8(item, contacts, {linkedContacts: item.gongsilContactsV8});
+    }).catch(function(error) {
+      if (modal._contactPropertyIdV8 !== propertyId) return;
+      renderListContactPopupV8(item, contacts, {
+        error: (error && error.message) || "공실박스 원본 연락처를 불러오지 못했습니다."
+      });
+    });
+  }
 }
 
 window.openListContactPopupV654 = openListContactPopupV654;

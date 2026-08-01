@@ -42,7 +42,7 @@ assert(
   "list contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.37-gongsil-source-relations"),
+  html.includes("script.js?v=6.5.38-linked-gongsil-contact"),
   "the production page must load the fixed script cache version"
 );
 
