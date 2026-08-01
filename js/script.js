@@ -2016,7 +2016,7 @@ function refreshMemoCardV655(key, focusEditor) {
     toggle.setAttribute("aria-label", "메모 " + (isOpen ? "닫기" : "열기"));
     toggle.innerHTML = '<span class="item-action-text-v661">' +
       (isOpen ? '메모 ▲' : '메모 ▼') +
-      '</span>' + buildCardActionIconV662('memo');
+      '</span>' + buildMemoEmojiIconV664();
   }
   if (panel) panel.remove();
   if (isOpen && item) {
@@ -2374,10 +2374,13 @@ function buildCardActionIconV662(type) {
     phone: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7.1 2.8c.5-.3 1.2-.1 1.5.4l2 3.7c.3.5.2 1.1-.2 1.5L8.8 10a13 13 0 0 0 5.2 5.2l1.6-1.6c.4-.4 1-.5 1.5-.2l3.7 2c.5.3.7 1 .4 1.5l-1.4 2.7c-.3.6-.9.9-1.5.9C10.1 19.9 4.1 13.9 3.5 5.7c0-.6.3-1.2.9-1.5l2.7-1.4Z"/></svg>',
     roadview: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect width="30" height="30" rx="7" fill="#ffd154"/><path fill="#168bd2" d="M15 5.2a7.2 7.2 0 0 0-7.2 7.2c0 5 7.2 12.4 7.2 12.4s7.2-7.4 7.2-12.4A7.2 7.2 0 0 0 15 5.2Zm0 10.2a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>',
     navigation: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect width="30" height="30" rx="7" fill="#ffe100"/><path fill="#2677c9" d="M15 4.3 25 10v11.5L15 27.2 5 21.5V10L15 4.3Z"/><path fill="#ffe100" d="M10 20.5v-6.4c0-1.5 1.2-2.7 2.7-2.7h3.5V8l6.1 5-6.1 5v-3.2h-2.7v5.7H10Z"/></svg>',
-    settings: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#d8e0e6" stroke="#40515e" stroke-width="1.4"/><path fill="#40515e" d="m16.8 6 .6 2.1c.5.2 1 .5 1.4.8l2.1-.5 1.7 2.9-1.5 1.6v1.7l1.5 1.6-1.7 2.9-2.1-.5c-.4.3-.9.6-1.4.8l-.6 2.1h-3.4l-.6-2.1c-.5-.2-1-.5-1.4-.8l-2.1.5-1.7-2.9 1.5-1.6v-1.7l-1.5-1.6 1.7-2.9 2.1.5c.4-.3.9-.6 1.4-.8l.6-2.1h3.4Zm-1.7 5.1a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2Z"/></svg>',
-    memo: '<svg viewBox="0 0 30 30" aria-hidden="true"><path fill="none" stroke="#6b7280" stroke-linejoin="round" stroke-width="2" d="M5.5 6.5h15v12h-7l-4.5 4v-4H5.5v-12Z"/><path fill="none" stroke="#6b7280" stroke-linecap="round" stroke-width="1.8" d="M9 10.5h8m-8 4h6"/><path fill="#f8fafc" stroke="#6b7280" stroke-linejoin="round" stroke-width="1.6" d="M18 9.5h7v10h-3.5L18 22v-12.5Z"/></svg>'
+    settings: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#d8e0e6" stroke="#40515e" stroke-width="1.4"/><path fill="#40515e" d="m16.8 6 .6 2.1c.5.2 1 .5 1.4.8l2.1-.5 1.7 2.9-1.5 1.6v1.7l1.5 1.6-1.7 2.9-2.1-.5c-.4.3-.9.6-1.4.8l-.6 2.1h-3.4l-.6-2.1c-.5-.2-1-.5-1.4-.8l-2.1.5-1.7-2.9 1.5-1.6v-1.7l-1.5-1.6 1.7-2.9 2.1.5c.4-.3.9-.6 1.4-.8l.6-2.1h3.4Zm-1.7 5.1a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2Z"/></svg>'
   };
   return '<span class="item-action-icon-v662 item-action-icon-' + type + '-v662">' + (icons[type] || '') + '</span>';
+}
+
+function buildMemoEmojiIconV664() {
+  return '<span class="item-action-emoji-v664" aria-hidden="true">📝</span>';
 }
 
 function buildFavoriteStarIconV663(active) {
@@ -2567,7 +2570,7 @@ function addListItem(item, appendTarget) {
       'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
       'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
       '<span class="item-action-text-v661">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
-      buildCardActionIconV662('memo') +
+      buildMemoEmojiIconV664() +
     '</button>';
 
   var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";

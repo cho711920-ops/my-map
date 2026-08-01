@@ -1270,7 +1270,7 @@
   }
 
   .standard-card-main-v661 .item-compact-actions-v650 {
-    grid-template-columns: max-content 32px !important;
+    grid-template-columns: minmax(0, 1fr) 32px !important;
     gap: 6px !important;
     justify-content: start !important;
     min-height: 30px !important;
@@ -1316,5 +1316,15 @@
     padding: 0 7px !important;
     font-size: 10.5px !important;
     text-align: center !important;
+  }
+
+  .standard-card-main-v661 .item-memo-toggle .item-action-emoji-v664 {
+    display: inline-flex !important;
+    width: 22px !important;
+    height: 22px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
   }
 }
