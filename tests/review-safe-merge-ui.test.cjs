@@ -6,8 +6,8 @@ const css = fs.readFileSync("css/operations-collection-v8.css", "utf8");
 
 assert.match(ui, /selectedMasterId/);
 assert.match(ui, /name="reviewMasterTarget"/);
-assert.match(ui, />동일매물<\/button>/);
-assert.match(ui, />다른매물<\/button>/);
+assert.match(ui, /동일매물<\/button>/);
+assert.match(ui, /다른매물<\/button>/);
 assert.doesNotMatch(ui, /같은 공간 = 동일매물/);
 assert.doesNotMatch(ui, /다른 공간 = 다른매물/);
 assert.match(ui, /reviewAction: action,[\s\S]*?masterId: masterId/);
