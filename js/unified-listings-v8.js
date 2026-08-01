@@ -15,7 +15,17 @@
     return Number.isFinite(parsed) ? parsed.toLocaleString("ko-KR", {maximumFractionDigits: 2}) : "-";
   }
   function desktop() { return global.innerWidth > 768; }
-  function group(propertyId) { return state.groups[text(propertyId)] || []; }
+  function sourcePriority(original) {
+    return sourceKey(original && original.source) === "danggeun" ? 0 : 1;
+  }
+  function orderOriginals(originals) {
+    return (originals || []).map(function(original, index) {
+      return {original: original, index: index};
+    }).sort(function(left, right) {
+      return sourcePriority(left.original) - sourcePriority(right.original) || left.index - right.index;
+    }).map(function(entry) { return entry.original; });
+  }
+  function group(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }
   function originalImage(original) {
     return text(original && (original.thumbnail || (original.images && original.images[0])));
   }
@@ -173,6 +183,7 @@
   }
 
   function renderDetail(propertyId, originals, selectedOriginalId) {
+    originals = orderOriginals(originals);
     var selected = originals.filter(function(original) {
       return text(original.originalId) === text(selectedOriginalId);
     })[0] || originals[0];
