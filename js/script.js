@@ -2665,6 +2665,13 @@ function addListItem(item, appendTarget) {
     }
   };
 
+  div.onpointerenter = function() {
+    if (window.JSUnifiedListingsV8 &&
+        typeof window.JSUnifiedListingsV8.prefetch === "function") {
+      window.JSUnifiedListingsV8.prefetch(encodeURIComponent(String(item && item.propertyId || "")));
+    }
+  };
+
   div.ondblclick = function(event) {
     if (
       event &&

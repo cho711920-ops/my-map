@@ -16,6 +16,8 @@ assert.match(script, /buildFavoriteStarIconV663\(isFavorite\(item\)\)/);
 assert.match(script, /buildCardActionIconV662\('roadview'\)/);
 assert.match(script, /buildCardActionIconV662\('settings'\)/);
 assert.match(script, /buildMemoEmojiIconV664\(\)/);
+assert.match(script, /div\.onpointerenter = function\(\)/);
+assert.match(script, /JSUnifiedListingsV8\.prefetch/);
 assert.match(script, /toggle\.innerHTML = '<span class="item-action-text-v661">'/);
 assert.match(script, /toggle\.setAttribute\("aria-label", "메모 " \+ \(isOpen \? "닫기" : "열기"\)\)/);
 
@@ -41,6 +43,6 @@ assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*d
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.21-photo-prefetch/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.12-photo-prefetch/);
-assert.match(html, /script\.js\?v=6\.5\.44-memo-emoji/);
+assert.match(html, /script\.js\?v=6\.5\.45-photo-prefetch/);
 
 console.log("main listing three-line v6.6.1 tests passed");
