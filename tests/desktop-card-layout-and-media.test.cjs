@@ -16,6 +16,7 @@ const daangn = fs.readFileSync(
 
 assert.match(html, /<title>J S 부 동 산<\/title>/);
 assert.match(html, /<div class="header">J S 부 동 산<\/div>/);
+assert.ok(html.indexOf('id="detailBtn"') < html.indexOf('id="topResetBtn"'), "filter must appear before reset");
 assert.match(auth, /<h1>J S 부 동 산<\/h1>/);
 assert.match(unifiedCss, /grid-template-columns:\s*92px minmax\(0, 1fr\) !important/);
 assert.match(unifiedCss, /grid-template-columns:\s*minmax\(500px, 600px\) max-content !important/);
@@ -38,10 +39,26 @@ assert.match(script, /navigation: '<svg/);
 assert.match(script, /settings: '<svg/);
 assert.match(script, /memo: '<svg/);
 assert.match(script, /item-elevator-person-v662/);
+assert.match(script, /function buildFavoriteStarIconV663\(active\)/);
+assert.match(script, /var quickTools = document\.getElementById\("mapQuickTools"\)/);
+assert.match(script, /favorite-star-icon-v663/);
+assert.ok(
+  script.indexOf("item-edit-btn-v630") < script.indexOf("sourceLinkButton +", script.indexOf("item-edit-btn-v630")),
+  "edit button must appear before the same-listing button"
+);
 assert.match(listManager, /id="lmNewPickerListName"/);
 assert.match(listManager, /createList\(currentManagerType, itemKey, nameInput && nameInput\.value\)/);
+assert.match(listManager, /id="lmNewManagedListName"/);
+assert.match(listManager, /window\.togglePickerListItem = function \(input\)/);
+assert.match(listManager, /onchange="togglePickerListItem\(this\)"/);
+assert.match(listManager, /onclick="closeItemListPicker\(\)">완료/);
 assert.match(listManagerCss, /\.lm-new-inline-form/);
+assert.match(listManagerCss, /\.lm-manager-create-form/);
 assert.match(listManager, /response\.json\(\)/);
 assert.match(listManager, /js_list_sync_dirty_v6_/);
+assert.match(unifiedCss, /grid-template-rows:\s*108px !important/);
+assert.match(unifiedCss, /\.unified-expand-btn-v8 \{[\s\S]*?width:\s*88px !important/);
+assert.match(unifiedCss, /\.source-danggeun \{[\s\S]*?color:\s*#f26119 !important/);
+assert.match(unifiedCss, /\.source-naver \{[\s\S]*?color:\s*#03a94f !important/);
 
 console.log("desktop card layout and media normalization tests passed");

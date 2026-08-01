@@ -454,10 +454,14 @@ function positionDetailFilter() {
    * 팝업이 매물목록 위에 붙는 문제가 있었습니다.
    */
   var panelWidth = Math.min(360, Math.max(300, viewportWidth - margin * 2));
-  var left = Math.max(
-    margin,
-    Math.min(btnRect.left, viewportWidth - panelWidth - margin)
-  );
+  var quickTools = document.getElementById("mapQuickTools");
+  var quickToolsRect = quickTools ? quickTools.getBoundingClientRect() : null;
+  var rightLimit = viewportWidth - margin;
+  if (quickToolsRect && quickToolsRect.left > panelWidth + margin) {
+    rightLimit = Math.min(rightLimit, quickToolsRect.left - gap);
+  }
+  var maxLeft = Math.max(margin, rightLimit - panelWidth);
+  var left = Math.max(margin, Math.min(btnRect.left, maxLeft));
   var top = btnRect.bottom + gap;
 
   panel.style.left = left + "px";
@@ -2376,6 +2380,14 @@ function buildCardActionIconV662(type) {
   return '<span class="item-action-icon-v662 item-action-icon-' + type + '-v662">' + (icons[type] || '') + '</span>';
 }
 
+function buildFavoriteStarIconV663(active) {
+  return '<svg class="favorite-star-icon-v663" viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M12 3.3 14.7 8.8l6 .9-4.35 4.25 1.03 6L12 17.1l-5.38 2.85 1.03-6L3.3 9.7l6-.9L12 3.3Z" ' +
+      'fill="' + (active ? '#f7c928' : 'none') + '" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>';
+}
+
 function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
   var contacts = extractListContactsV650(item);
   var hasContacts = contacts.length > 0 || Number(item && item.gongsilContactCountV8) > 0;
@@ -2540,7 +2552,7 @@ function addListItem(item, appendTarget) {
         (isFavorite(item) ? ' on' : '') + '" title="찜 또는 임장목록에 추가" aria-label="' +
         (isFavorite(item) ? '즐겨찾기된 매물' : '즐겨찾기에 추가') + '" ' +
         'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">' +
-        (isFavorite(item) ? '★' : '☆') +
+        buildFavoriteStarIconV663(isFavorite(item)) +
       '</button>'
     : "";
   var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
@@ -2633,9 +2645,9 @@ function addListItem(item, appendTarget) {
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
             '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
           'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>' +
-            sourceLinkButton +
             '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
           'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>' +
+            sourceLinkButton +
           '</div>' +
           memoToggleButton +
         '</div>' +

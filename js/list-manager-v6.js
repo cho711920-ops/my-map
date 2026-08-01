@@ -294,7 +294,7 @@
             '<button class="lm-close" type="button" onclick="closeItemListPicker()">×</button>' +
           '</div>' +
           '<div id="lmPickerBody" class="lm-body"></div>' +
-          '<div id="lmPickerFooter" class="lm-footer"><button class="lm-primary" type="button" onclick="applyItemListSelection()">적용</button></div>' +
+          '<div id="lmPickerFooter" class="lm-footer"><button class="lm-primary" type="button" onclick="closeItemListPicker()">완료</button></div>' +
         '</div>' +
       '</div>';
     while (wrapper.firstChild) document.body.appendChild(wrapper.firstChild);
@@ -364,7 +364,11 @@
       '<div class="lm-selection-summary ' + (selectedCount ? 'active' : '') + '">' +
         (selectedCount ? '<strong>' + selectedCount + '개 선택됨</strong><span>아래 목록의 “선택 매물 추가”를 누르세요.</span>' : '<span>매물카드에서 여러 매물을 체크하면 한 번에 추가할 수 있습니다.</span>') +
       '</div>' +
-      '<button class="lm-primary" type="button" onclick="createManagedList()">+ 새 ' + label + '목록</button>' +
+      '<div class="lm-manager-create-form">' +
+        '<input id="lmNewManagedListName" type="text" maxlength="30" placeholder="새 ' + label + '목록 이름" ' +
+          'onkeydown="if(event.key===\'Enter\'){event.preventDefault();createManagedList();}">' +
+        '<button class="lm-primary" type="button" onclick="createManagedList()">새 목록 만들기</button>' +
+      '</div>' +
     '</div>';
     if (!lists.length) {
       html += '<div class="lm-empty">아직 만든 ' + label + '목록이 없습니다.</div>';
@@ -402,7 +406,13 @@
   window.closeListManager = function () { closeModal("listManagerModal"); };
 
   window.createManagedList = function () {
-    if (createList(currentManagerType)) renderManager();
+    var nameInput = document.getElementById("lmNewManagedListName");
+    var list = createList(currentManagerType, "", nameInput && nameInput.value);
+    if (!list) return;
+    renderManager();
+    showListToast('"' + list.name + '" 목록을 만들었습니다.', "success");
+    var nextInput = document.getElementById("lmNewManagedListName");
+    if (nextInput) nextInput.focus();
   };
 
   window.renameManagedList = function (id) {
@@ -566,7 +576,9 @@
       html += '<div class="lm-check-list">';
       lists.forEach(function (list) {
         var checked = (list.itemKeys || []).indexOf(currentItemKey) !== -1;
-        html += '<label class="lm-check-row"><input type="checkbox" data-list-id="' + list.id + '" ' + (checked ? 'checked' : '') + '><span>' + escapeHtml(list.name) + '</span><strong>' + (list.itemKeys || []).length + '개</strong></label>';
+        html += '<label class="lm-check-row"><input type="checkbox" data-list-id="' + list.id + '" ' +
+          (checked ? 'checked' : '') + ' onchange="togglePickerListItem(this)"><span>' +
+          escapeHtml(list.name) + '</span><strong>' + (list.itemKeys || []).length + '개</strong></label>';
       });
       html += '</div>';
     }
@@ -580,6 +592,26 @@
     if (!list) return;
     showListToast('"' + list.name + '" 목록을 만들고 매물을 추가했습니다.', "success");
     window.closeItemListPicker();
+    if (typeof window.applyFilter === "function") window.applyFilter();
+  };
+
+  window.togglePickerListItem = function (input) {
+    if (!input) return;
+    var listId = input.getAttribute("data-list-id");
+    var lists = loadLists(currentManagerType);
+    var list = lists.find(function (entry) { return entry.id === listId; });
+    if (!list || !currentItemKey) return;
+    var keys = Array.isArray(list.itemKeys) ? list.itemKeys.slice() : [];
+    var has = keys.indexOf(currentItemKey) !== -1;
+    if (input.checked && !has) keys.push(currentItemKey);
+    if (!input.checked && has) keys = keys.filter(function (key) { return key !== currentItemKey; });
+    if (input.checked === has) return;
+    list.itemKeys = keys;
+    list.updatedAt = nowIso();
+    saveLists(currentManagerType, lists);
+    showListToast('"' + list.name + '" 목록에 ' +
+      (input.checked ? "매물을 추가했습니다." : "매물을 제외했습니다."), "success");
+    renderPicker();
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
 

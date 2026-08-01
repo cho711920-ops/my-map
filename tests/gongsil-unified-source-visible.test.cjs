@@ -11,7 +11,7 @@ assert.match(
 );
 assert.match(
   html,
-  /script\.js\?v=6\.5\.42-card-icons/,
+  /script\.js\?v=6\.5\.43-card-layout-detail/,
   "the production page must load the relation-aware Gongsil filter"
 );
 
