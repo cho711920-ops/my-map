@@ -29,7 +29,7 @@ assert.match(
 );
 assert.match(
   html,
-  /operations-collection-v8\.css\?v=7\.23\.11-review-split-panes/,
+  /operations-collection-v8\.css\?v=7\.23\.12-review-card-overlap/,
   "the collection stylesheet cache key must be updated"
 );
 

@@ -84,12 +84,14 @@
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.open(\'' + encodedId + '\')">' +
       (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy">' : '<span>사진 없음</span>') +
       '</button>';
-    var badge = count > 1 ? '<span class="unified-badge-v8">통합매물</span>' : '';
+    var badge = count > 1
+      ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
+      : '';
     var button;
     if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +
-        '동일매물 ' + count + '</button>';
+        '원본 ' + count + '개 펼치기</button>';
     } else {
       var link = originals.length ? text(originals[0].link) : text(item && item.sourceLink);
       button = link
@@ -129,7 +131,7 @@
     if (existing) {
       existing.remove();
       card.classList.remove("unified-expanded-v8");
-      button.textContent = "동일매물 " + group(propertyId).length;
+      button.textContent = "원본 " + group(propertyId).length + "개 펼치기";
       return;
     }
     var wrapper = document.createElement("div");
@@ -148,8 +150,13 @@
     drawer.className = "unified-detail-drawer-v8";
     drawer.setAttribute("aria-hidden", "true");
     drawer.innerHTML = '<header><div><strong id="unifiedDetailTitleV8">매물 상세</strong><span id="unifiedDetailSubtitleV8"></span></div>' +
-      '<button type="button" onclick="JSUnifiedListingsV8.close()" aria-label="닫기">×</button></header>' +
+      '<button type="button" aria-label="상세매물보기 닫기">×</button></header>' +
       '<div id="unifiedDetailBodyV8" class="unified-detail-body-v8"></div>';
+    drawer.querySelector("header button").onclick = function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDetail();
+    };
     document.body.appendChild(drawer);
     return drawer;
   }
@@ -212,7 +219,7 @@
     }).catch(function(error) { console.error(error); });
   }
 
-  function close() {
+  function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (!drawer) return;
     drawer.classList.remove("open");
@@ -243,7 +250,7 @@
       state.loaded = false;
       state.detailCache = {};
       state.pendingMove = null;
-      close();
+      closeDetail();
       return load(true).then(function() {
         if (typeof global.loadSheet === "function") global.loadSheet(true);
         return result;
@@ -263,7 +270,7 @@
 
   function startMove(encodedOriginalId, revision) {
     state.pendingMove = {originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision};
-    close();
+    closeDetail();
     var banner = ensureMoveBanner();
     banner.hidden = false;
   }
@@ -305,15 +312,52 @@
       modal = document.createElement("div");
       modal.id = "unifiedGalleryV8";
       modal.className = "unified-gallery-modal-v8";
-      modal.innerHTML = '<button class="close" type="button" aria-label="닫기">×</button><img alt="매물 사진"><span></span>';
-      modal.querySelector(".close").onclick = function() { modal.classList.remove("open"); };
-      modal.onclick = function(event) { if (event.target === modal) modal.classList.remove("open"); };
+      modal.innerHTML = '<button class="close" type="button" aria-label="사진 크게 보기 닫기">×</button>' +
+        '<button class="unified-gallery-nav-v8 prev" type="button" aria-label="이전 사진">‹</button>' +
+        '<img alt="매물 사진">' +
+        '<button class="unified-gallery-nav-v8 next" type="button" aria-label="다음 사진">›</button>' +
+        '<span></span>';
+      modal.querySelector(".close").onclick = function(event) {
+        event.stopPropagation();
+        closeGallery();
+      };
+      modal.querySelector(".prev").onclick = function(event) {
+        event.stopPropagation();
+        stepGallery(-1);
+      };
+      modal.querySelector(".next").onclick = function(event) {
+        event.stopPropagation();
+        stepGallery(1);
+      };
+      modal.onclick = function(event) { if (event.target === modal) closeGallery(); };
       document.body.appendChild(modal);
     }
     var index = Math.max(0, Math.min(Number(startIndex) || 0, images.length - 1));
-    modal.querySelector("img").src = images[index];
-    modal.querySelector("span").textContent = (index + 1) + " / " + images.length;
+    modal._imagesV8 = images.slice();
+    renderGalleryImage(modal, index);
     modal.classList.add("open");
+  }
+
+  function renderGalleryImage(modal, index) {
+    var images = modal && modal._imagesV8 || [];
+    if (!modal || !images.length) return;
+    var safeIndex = Math.max(0, Math.min(Number(index) || 0, images.length - 1));
+    modal._indexV8 = safeIndex;
+    modal.querySelector("img").src = images[safeIndex];
+    modal.querySelector("span").textContent = (safeIndex + 1) + " / " + images.length;
+    modal.querySelector(".prev").disabled = safeIndex === 0;
+    modal.querySelector(".next").disabled = safeIndex === images.length - 1;
+  }
+
+  function stepGallery(direction) {
+    var modal = document.getElementById("unifiedGalleryV8");
+    if (!modal || !modal.classList.contains("open")) return;
+    renderGalleryImage(modal, Number(modal._indexV8 || 0) + Number(direction || 0));
+  }
+
+  function closeGallery() {
+    var modal = document.getElementById("unifiedGalleryV8");
+    if (modal) modal.classList.remove("open");
   }
 
   function openTell() {
@@ -355,9 +399,20 @@
     if (drawer && drawer.classList.contains("open")) positionDrawer(drawer);
   });
 
+  global.addEventListener("keydown", function(event) {
+    var gallery = document.getElementById("unifiedGalleryV8");
+    if (gallery && gallery.classList.contains("open")) {
+      if (event.key === "ArrowLeft") stepGallery(-1);
+      if (event.key === "ArrowRight") stepGallery(1);
+      if (event.key === "Escape") closeGallery();
+      return;
+    }
+    if (event.key === "Escape") closeDetail();
+  });
+
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
-    toggle: toggle, open: open, close: close, handleCardClick: handleCardClick,
+    toggle: toggle, open: open, close: closeDetail, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell
   };
 })(window);

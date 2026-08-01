@@ -30,8 +30,13 @@ assert.match(
   "review actions must remain below both panes"
 );
 assert.match(
+  css,
+  /v7\.23\.12[\s\S]*?#operationsReviewsPanel \.review-new-list\{[\s\S]*?grid-auto-rows:max-content;[\s\S]*?#operationsReviewsPanel \.review-new-panel \.review-item-compact\{[\s\S]*?height:auto!important;[\s\S]*?min-height:76px!important;/,
+  "new review cards must keep their own height instead of overlapping"
+);
+assert.match(
   html,
-  /operations-collection-v8\.css\?v=7\.23\.11-review-split-panes/,
+  /operations-collection-v8\.css\?v=7\.23\.12-review-card-overlap/,
   "the split-pane stylesheet cache key must be deployed"
 );
 

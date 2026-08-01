@@ -687,3 +687,17 @@
     align-self:end;
   }
 }
+
+/* v7.23.12 신규 원본카드가 행 높이보다 커져 겹치지 않도록 독립 스크롤 행을 고정 */
+@media(min-width:769px){
+  #operationsReviewsPanel .review-new-list{
+    grid-auto-rows:max-content;
+    align-items:start;
+  }
+  #operationsReviewsPanel .review-new-panel .review-item-compact{
+    height:auto!important;
+    min-height:76px!important;
+    overflow:hidden;
+    align-self:start;
+  }
+}
