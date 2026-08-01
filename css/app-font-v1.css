@@ -1,0 +1,26 @@
+:root {
+  --js-app-font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", sans-serif;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+option,
+.building-register-modal,
+.operations-center,
+.unified-detail-drawer-v8,
+.circle-marker {
+  font-family: var(--js-app-font) !important;
+}
+
+body {
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
