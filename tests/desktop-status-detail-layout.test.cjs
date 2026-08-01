@@ -37,5 +37,7 @@ assert.equal(html.match(/id="mapRoadviewSelectBtn"/g).length, 1);
 assert.match(css, /\.map-roadview-vertical-v8 \{/);
 assert.match(css, /grid-template-columns: 80px 80px 58px 94px 104px/);
 assert.match(css, /grid-template-columns: 48px 48px 42px 66px 74px/);
+assert.match(css, /grid-template-columns: minmax\(230px, 1fr\) 64px 64px/);
+assert.match(css, /v6-toolbar-primary \.search-row #keyword,[\s\S]*?width: 100% !important/);
 
 console.log("desktop status/detail layout tests passed");
