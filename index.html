@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.12-white-cluster-text">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.13-customer-card-layout">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.17.2-tablet-safe-height">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
   <link rel="stylesheet" href="css/listing-duplicate-cleanup-v1.css?v=1.1.0">
@@ -105,6 +105,10 @@
           <span>빠른등록</span>
           <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
         </button>
+        <div id="customerMatchMapStatusCompactV2" class="customer-match-map-status-compact-v2" hidden>
+          <span id="customerMatchMapStatusCompactTextV2"></span>
+          <button type="button" title="고객매칭 필터 해제 후 전체 매물 보기" onclick="clearCustomerMatchMapFilter()">전체</button>
+        </div>
       </div>
       <div id="multiClusterStatus" class="multi-cluster-status"></div>
       <div id="customerMatchMapStatus" class="customer-match-map-status" hidden>
@@ -620,7 +624,7 @@
 
 <script src="js/async-mutation-queue-v1.js?v=1.0.5-hard-hidden-status"></script>
 <script src="js/unified-listings-v8.js?v=8.0.9-stable-photo-count"></script>
-<script src="js/script.js?v=6.5.38-linked-gongsil-contact"></script>
+<script src="js/script.js?v=6.5.39-customer-card-layout"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
@@ -637,7 +641,7 @@
 <script src="js/ai-visit-session-v6.js?v=6.4.35-roadview-viewport"></script>
 <script src="js/map.js?v=6.5.26-immediate-list"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.9-tablet-map-tools"></script>
-  <script src="js/operations-center-v7.js?v=7.18.7-customer-alert-manual-only"></script>
+  <script src="js/operations-center-v7.js?v=7.18.8-compact-map-status"></script>
   <script src="js/operations-collection-v8.js?v=7.23.9-review-fast-safe"></script>
   <script src="js/listing-duplicate-cleanup-v1.js?v=1.5.1-customer-match-refresh"></script>
 <script src="js/announcement-v1.js?v=1.0.0"></script>

@@ -2535,9 +2535,9 @@ function addListItem(item, appendTarget) {
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
-    '<div class="item-card-grid-v650">' +
+    '<div class="item-card-grid-v650' + (customerMatchControls ? ' customer-match-card-grid-v654' : '') + '">' +
       unifiedCardPartsV8.thumbnail +
-      '<div class="item-compact-main-v650">' +
+      '<div class="item-compact-main-v650' + (customerMatchControls ? ' customer-match-card-main-v654' : '') + '">' +
         '<div class="item-compact-head-v650">' +
           '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
             '<input type="checkbox" class="action-select-check" ' +

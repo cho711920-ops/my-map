@@ -826,9 +826,15 @@
     var name = customerRow ? field(customerRow, state.customerHeaders, "고객명/상호") : "선택 고객";
     var status = document.getElementById("customerMatchMapStatus");
     var statusText = document.getElementById("customerMatchMapStatusText");
+    var compactStatus = document.getElementById("customerMatchMapStatusCompactV2");
+    var compactStatusText = document.getElementById("customerMatchMapStatusCompactTextV2");
     if (status) status.hidden = false;
+    if (compactStatus) compactStatus.hidden = false;
     var stats = customerMatchStats(customerId);
-    if (statusText) statusText.textContent = name + " · 신규 " + stats.fresh + " · 후보 " + stats.introduced + " · 보류 " + stats.held;
+    var statusLabel = name + " · 신규 " + stats.fresh + " · 후보 " + stats.introduced + " · 보류 " + stats.held;
+    if (statusText) statusText.textContent = statusLabel;
+    if (compactStatusText) compactStatusText.textContent = statusLabel;
+    if (compactStatus) compactStatus.title = statusLabel;
     syncCustomerMatchHeldToggleV1();
 
     var matched = (window.allItems || []).filter(function(item) {
@@ -862,7 +868,9 @@
     window.customerMatchHeldVisibleV1 = false;
     syncCustomerMatchHeldToggleV1();
     var status = document.getElementById("customerMatchMapStatus");
+    var compactStatus = document.getElementById("customerMatchMapStatusCompactV2");
     if (status) status.hidden = true;
+    if (compactStatus) compactStatus.hidden = true;
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
 

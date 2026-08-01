@@ -25,7 +25,7 @@ assert.match(
 assert.match(source, /refreshCustomerAlertBadge\(false\);/);
 assert.match(
   html,
-  /operations-center-v7\.js\?v=7\.18\.7-customer-alert-manual-only/
+  /operations-center-v7\.js\?v=7\.18\.8-compact-map-status/
 );
 
 console.log("customer work alert dismissal tests passed");
