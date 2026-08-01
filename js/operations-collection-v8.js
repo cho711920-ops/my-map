@@ -339,7 +339,7 @@
     var group = selectedGroup();
     if (group) extraState.selectedGroupKey = group.groupKey;
     var filters = ["all", "높음", "중간", "낮음"];
-    panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>왼쪽 기존 통합매물과 오른쪽 신규 원본매물을 비교해 같은 공간·다른 공간·보류만 선택하세요.</span></div>' +
+    panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>왼쪽 기존 통합매물과 오른쪽 신규 원본매물을 비교해 동일매물·다른매물·보류만 선택하세요.</span></div>' +
       '<div class="review-toolbar-actions"><button type="button" title="전체 검증대상을 검사하고 주소·층/호실·가격·평수가 정확히 맞는 항목만 자동통합합니다." onclick="repairRoomlessExactReviews()">자동중복 정리</button>' +
       '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-queue-tools">' +
@@ -470,9 +470,9 @@
           ? '자동 중복조건은 다르지만 주소와 층·호실을 확인한 뒤 기존 임대조건을 유지하며 통합합니다.'
           : '기존 임대조건을 유지하고 신규 출처·링크를 통합합니다.') + '"' +
         (!selectedCount || !selectedMasterId ? ' disabled' : '') + '>' +
-        '같은 공간 = 동일매물</button>' +
+        '동일매물</button>' +
       '<button class="create" type="button" onclick="decideCurrentReview(\'create\')"' +
-        (!selectedCount ? ' disabled' : '') + '>다른 공간 = 다른매물</button>' +
+        (!selectedCount ? ' disabled' : '') + '>다른매물</button>' +
       '<button class="hold" type="button" onclick="decideCurrentReview(\'hold\')"' +
         (!selectedCount ? ' disabled' : '') + '>보류</button>' +
       '</div>';
@@ -741,7 +741,7 @@
     var info = labels[action];
     if (!info) return;
     if ((action === "merge" || action === "condition") && !text(extraState.selectedMasterId)) {
-      message("같은 공간으로 연결할 기존 통합매물을 먼저 선택해 주세요.", "error");
+      message("동일매물로 연결할 기존 통합매물을 먼저 선택해 주세요.", "error");
       return;
     }
     if (action === "condition" && selectedCount !== 1) {
