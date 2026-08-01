@@ -17,6 +17,14 @@
     return "js_notice_closed_" + text(notice.id) + "_" + text(notice.updatedAt);
   }
 
+  function formatAnnouncementContent(value) {
+    return escapeHtml(value)
+      .replace(/\r?\n/g, "<br>")
+      .replace(/(^| )([1-9][0-9]*)\. ([^:]{2,24}):/g, function(_, prefix, number, heading) {
+        return (prefix ? "<br><br>" : "") + '<strong class="js-announcement-step">' + number + ". " + heading + "</strong>:";
+      });
+  }
+
   function closeAnnouncement() {
     var modal = document.getElementById("jsAnnouncementModal");
     if (modal) modal.hidden = true;
@@ -43,7 +51,7 @@
         '<button type="button" class="js-announcement-close" aria-label="공지 닫기">×</button>' +
         '<span class="js-announcement-label">JS부동산 공지사항</span>' +
         '<h2 id="jsAnnouncementTitle">' + escapeHtml(notice.title || "공지사항") + '</h2>' +
-        '<div class="js-announcement-content">' + escapeHtml(notice.content).replace(/\r?\n/g, "<br>") + '</div>' +
+        '<div class="js-announcement-content">' + formatAnnouncementContent(notice.content) + '</div>' +
         '<button type="button" class="js-announcement-confirm">확인</button>' +
       '</section>';
     modal.hidden = false;
