@@ -9,7 +9,7 @@ function authGate() {
   gate.innerHTML = `
     <div class="js-auth-card">
       <div class="js-auth-logo">J S</div>
-      <h1>JS부동산 매물지도</h1>
+      <h1>J S 부 동 산</h1>
       <p>승인된 Google 계정으로 로그인해야<br>매물 정보를 확인할 수 있습니다.</p>
       <div id="jsGoogleLogin" class="js-auth-google"></div>
       <p id="jsAuthStatus" class="js-auth-status" role="alert"></p>

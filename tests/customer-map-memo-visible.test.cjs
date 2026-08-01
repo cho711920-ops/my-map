@@ -20,8 +20,8 @@ assert.match(
 );
 assert.match(
   css,
-  /\.customer-match-card-actions-v653\s*\{[^}]*overflow-x:\s*hidden/s,
-  "고객매칭 작업줄은 확대·축소 시 가로 스크롤 뒤로 버튼이 숨지 않아야 합니다."
+  /\.customer-match-card-actions-v653\s*\{[^}]*display:\s*grid\s*!important[^}]*grid-template-rows:\s*22px 22px[^}]*overflow:\s*visible/s,
+  "고객매칭 작업줄은 두 줄로 분리되어 사진을 가리지 않고 모든 버튼이 보여야 합니다."
 );
 assert.match(
   css,

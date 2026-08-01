@@ -6545,12 +6545,20 @@ body,
 
 /* 고객매칭 지도목록은 모든 작업버튼을 한 줄 너비 안에서 압축하고 메모를 맨 뒤에 유지합니다. */
 .customer-match-card-actions-v653 {
-  gap: 3px !important;
-  overflow-x: hidden !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 22px 22px;
+  gap: 4px !important;
+  min-height: 48px !important;
+  overflow: visible !important;
 }
 
 .customer-match-card-actions-v653 .customer-match-inline-actions {
-  flex: 0 1 auto !important;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex !important;
+  width: 100%;
+  flex: 0 0 auto !important;
   min-width: 0 !important;
   gap: 3px !important;
 }
@@ -6569,6 +6577,9 @@ body,
 }
 
 .customer-match-card-actions-v653 .item-action-left {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex !important;
   flex: 1 1 auto !important;
   min-width: 0 !important;
   gap: 3px !important;
@@ -6582,6 +6593,8 @@ body,
 }
 
 .customer-match-card-actions-v653 .item-memo-toggle {
+  grid-column: 2;
+  grid-row: 2;
   flex: 0 1 auto !important;
   min-width: 0 !important;
   margin-left: 0;
@@ -7211,7 +7224,7 @@ body,
 .circle-marker {
   --cluster-size: 38px;
   --cluster-font-size: 14px;
-  --cluster-fill: rgba(35, 132, 245, .70);
+  --cluster-fill: rgba(35, 132, 245, .52);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
   width: var(--cluster-size) !important;
@@ -7245,14 +7258,14 @@ body,
 .circle-marker.cluster-size-xl { --cluster-size: 47px; --cluster-font-size: 15px; letter-spacing: -.7px !important; }
 
 .circle-marker.source-gongsil:not(.done) {
-  --cluster-fill: rgba(255, 207, 38, .72);
+  --cluster-fill: rgba(255, 190, 0, .58);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
   text-shadow: none !important;
 }
 .circle-marker.done,
 .circle-marker.source-gongsil.done {
-  --cluster-fill: rgba(31, 41, 55, .78);
+  --cluster-fill: rgba(31, 41, 55, .66);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
   opacity: 1 !important;
@@ -7275,7 +7288,7 @@ body,
 .circle-marker.source-danggeun:not(.source-gongsil):not(.done),
 .circle-marker.source-direct:not(.source-gongsil):not(.done),
 .circle-marker.source-mixed:not(.source-gongsil):not(.done) {
-  --cluster-fill: rgba(35, 132, 245, .70);
+  --cluster-fill: rgba(35, 132, 245, .52);
   --cluster-border: transparent;
   --cluster-text: #ffffff;
 }

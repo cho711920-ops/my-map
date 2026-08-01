@@ -2071,12 +2071,36 @@
     var urls = [];
     var seen = Object.create(null);
     var imageKey = /(?:image|images|photo|photos|thumbnail|thumb|picture|pictures|media)/i;
+    function variantKey(url) {
+      try {
+        var parsed = new URL(url, location.href);
+        if (/\.pstatic\.net$/i.test(parsed.hostname) ||
+            /(?:thumb|image|photo)/i.test(parsed.hostname)) {
+          return parsed.origin + parsed.pathname;
+        }
+      } catch (_) {}
+      return url;
+    }
+    function variantScore(url) {
+      var score = 0;
+      if (/[?&](?:type|t)=crop(?:&|$)/i.test(url)) score -= 100;
+      if (/(?:thumbnail|thumb)/i.test(url)) score -= 30;
+      var size = url.match(/[?&]s=(\d+)x(\d+)/i);
+      if (size) score += Math.min(Number(size[1]), Number(size[2])) / 100;
+      return score;
+    }
     function add(value) {
       var url = clean(value);
-      if (!/^https?:\/\//i.test(url) || seen[url]) return;
+      if (!/^https?:\/\//i.test(url)) return;
       if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(url) &&
           !/(?:image|photo|thumb|pstatic|naver|cdn)/i.test(url)) return;
-      seen[url] = true;
+      var key = variantKey(url);
+      if (seen[key] != null) {
+        var index = seen[key];
+        if (variantScore(url) > variantScore(urls[index])) urls[index] = url;
+        return;
+      }
+      seen[key] = urls.length;
       urls.push(url);
     }
     function walk(value, key, depth) {
@@ -2223,9 +2247,10 @@
       (keyResult.key && keyResult.key.pnu) || keyResult.pnu
     );
     var detailImages = finImageUrls(detailResult);
-    var mergedImages = (item.imageUrls || []).concat(detailImages).filter(function(url, index, list) {
-      return url && list.indexOf(url) === index;
-    }).slice(0, 30);
+    var mergedImages = finImageUrls({
+      listImages: item.imageUrls || [],
+      detailImages: detailImages
+    });
     var detailed = Object.assign({}, item, {
       realEstateTypeCode: realEstateType,
       tradeTypeCode: tradeType,

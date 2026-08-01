@@ -10,15 +10,17 @@
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 6 !important; }
 
   #list .item .item-card-grid-v650 {
-    grid-template-columns: 76px minmax(0, 1fr);
-    gap: 7px;
+    grid-template-columns: 92px minmax(0, 1fr) !important;
+    column-gap: 8px !important;
+    row-gap: 5px !important;
   }
 
   .unified-thumb-v8 {
     grid-column: 1;
     grid-row: 1;
-    width: 76px;
-    min-height: 82px;
+    width: 92px;
+    min-width: 92px;
+    min-height: 88px;
     padding: 0;
     overflow: hidden;
     border: 1px solid #d8e1ed;
@@ -31,13 +33,13 @@
   .unified-thumb-v8 img {
     width: 100%;
     height: 100%;
-    min-height: 82px;
+    min-height: 88px;
     object-fit: cover;
   }
 
   .unified-thumb-v8 span {
     display: flex;
-    height: 82px;
+    height: 88px;
     align-items: center;
     justify-content: center;
     font-size: 10px;
@@ -46,6 +48,8 @@
 
   #list .item .item-compact-main-v650 {
     grid-column: 2;
+    width: 100%;
+    min-width: 0;
   }
 
   .unified-badge-v8 {
@@ -331,7 +335,8 @@
 @media (min-width: 769px) {
   .filters {
     display: grid !important;
-    grid-template-columns: minmax(500px, 1fr) max-content !important;
+    grid-template-columns: minmax(500px, 600px) max-content !important;
+    justify-content: start !important;
     align-items: center !important;
     column-gap: 10px !important;
   }
@@ -447,7 +452,7 @@
 }
 
 @media (min-width: 769px) and (max-width: 1199px) {
-  .filters { grid-template-columns: minmax(360px, 1fr) max-content !important; }
+  .filters { grid-template-columns: minmax(360px, 500px) max-content !important; }
   .v6-toolbar-secondary.v6-command-bar {
     grid-template-columns: 48px 48px 42px 66px 74px !important;
     gap: 4px !important;
