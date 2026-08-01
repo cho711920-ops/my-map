@@ -328,8 +328,12 @@
     return name;
   }
 
-  function createList(type, initialItemKey) {
-    var name = promptListName(type, "");
+  function createList(type, initialItemKey, providedName) {
+    var name = providedName == null ? promptListName(type, "") : String(providedName || "").trim();
+    if (providedName != null && !name) {
+      showListToast("목록 이름을 입력해주세요.", "warning");
+      return null;
+    }
     if (!name) return null;
     var lists = loadLists(type);
     if (lists.some(function (list) { return list.name === name; })) {
@@ -551,7 +555,11 @@
     document.getElementById("lmPickerFooter").style.display = "flex";
     document.getElementById("lmPickerTitle").textContent = label + "추가";
     document.getElementById("lmPickerSubtitle").textContent = item ? (item.address || item.name || "선택 매물") : "선택 매물";
-    var html = '<button class="lm-new-inline" type="button" onclick="createPickerList()">+ 새 ' + label + '목록 만들기</button>';
+    var html = '<div class="lm-new-inline-form">' +
+      '<input id="lmNewPickerListName" type="text" maxlength="30" placeholder="새 ' + label + '목록 이름" ' +
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();createPickerList();}">' +
+      '<button class="lm-new-inline" type="button" onclick="createPickerList()">목록 만들고 매물 추가</button>' +
+    '</div>';
     if (!lists.length) {
       html += '<div class="lm-empty">목록을 먼저 만들어주세요.</div>';
     } else {
@@ -567,7 +575,8 @@
 
   window.createPickerList = function () {
     var itemKey = currentItemKey;
-    var list = createList(currentManagerType, itemKey);
+    var nameInput = document.getElementById("lmNewPickerListName");
+    var list = createList(currentManagerType, itemKey, nameInput && nameInput.value);
     if (!list) return;
     showListToast('"' + list.name + '" 목록을 만들고 매물을 추가했습니다.', "success");
     window.closeItemListPicker();

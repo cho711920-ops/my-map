@@ -63,6 +63,42 @@ body.v6-menu-open{overflow:auto!important}
   #map{top:88px!important;height:calc(100vh - 88px)!important}
 }
 
+/* v6.4.25 새 목록을 브라우저 기본 입력창 없이 팝업 안에서 생성 */
+.lm-new-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.lm-new-inline-form input {
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #c9d8ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.lm-new-inline-form input:focus {
+  border-color: #1976e8;
+  box-shadow: 0 0 0 3px rgba(25, 118, 232, .12);
+}
+
+.lm-new-inline-form .lm-new-inline {
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .lm-new-inline-form { grid-template-columns: 1fr; }
+}
+
 /* v6.4.20: one compact button chooses either the favorite or visit list */
 .lm-destination-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .lm-destination{display:flex;min-height:118px;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;padding:18px;border-radius:14px;cursor:pointer;text-align:left}

@@ -7,6 +7,7 @@ const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 const css = fs.readFileSync("css/style.css", "utf8");
 const script = fs.readFileSync("js/script.js", "utf8");
 const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
+const listManagerCss = fs.readFileSync("css/list-manager-v6.css", "utf8");
 const naver = fs.readFileSync("js/naver-collector.js", "utf8");
 const daangn = fs.readFileSync(
   "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_당근수집기_v2_개별및클러스터.gs",
@@ -37,7 +38,9 @@ assert.match(script, /navigation: '<svg/);
 assert.match(script, /settings: '<svg/);
 assert.match(script, /memo: '<svg/);
 assert.match(script, /item-elevator-person-v662/);
-assert.match(listManager, /createList\(currentManagerType, itemKey\)/);
+assert.match(listManager, /id="lmNewPickerListName"/);
+assert.match(listManager, /createList\(currentManagerType, itemKey, nameInput && nameInput\.value\)/);
+assert.match(listManagerCss, /\.lm-new-inline-form/);
 assert.match(listManager, /response\.json\(\)/);
 assert.match(listManager, /js_list_sync_dirty_v6_/);
 
