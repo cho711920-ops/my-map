@@ -1201,7 +1201,7 @@
 @media (min-width: 1200px) {
   .filters {
     grid-template-columns: minmax(540px, 640px) max-content !important;
-    column-gap: 14px !important;
+    column-gap: 12px !important;
   }
 
   .v6-toolbar-primary {
@@ -1211,7 +1211,7 @@
 
   .v6-toolbar-primary .search-row {
     grid-template-columns: minmax(0, 1fr) 64px !important;
-    column-gap: 10px !important;
+    column-gap: 12px !important;
   }
 
   .v6-toolbar-primary .search-row .search-btn {
@@ -1236,7 +1236,7 @@
 
   .v6-toolbar-secondary.v6-command-bar {
     grid-template-columns: 84px 84px 62px 100px 110px !important;
-    column-gap: 10px !important;
+    column-gap: 12px !important;
   }
 }
 
