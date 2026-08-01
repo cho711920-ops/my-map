@@ -339,33 +339,34 @@
 }
 
 .item-elevator-v650 {
-  width: 20px !important;
-  height: 20px !important;
-  color: #6b7280 !important;
+  width: 22px !important;
+  height: 22px !important;
+  color: #475569 !important;
 }
 
 .item-elevator-glyph-v651 {
-  width: 20px !important;
-  height: 20px !important;
+  width: 22px !important;
+  height: 22px !important;
 }
 
 .item-elevator-glyph-v651 > rect {
-  fill: #f4f5f6 !important;
-  stroke: #6b7280 !important;
-  stroke-width: 1.7 !important;
+  fill: #eef4fb !important;
+  stroke: #475569 !important;
+  stroke-width: 1.8 !important;
 }
 
 .item-elevator-arrows-v660,
+.item-elevator-divider-v665,
 .item-elevator-person-v662 {
   fill: none !important;
-  stroke: #6b7280 !important;
-  stroke-width: 1.55 !important;
+  stroke: #334155 !important;
+  stroke-width: 1.7 !important;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .item-elevator-person-v662[cx] {
-  fill: #6b7280 !important;
+  fill: #334155 !important;
   stroke: none !important;
 }
 

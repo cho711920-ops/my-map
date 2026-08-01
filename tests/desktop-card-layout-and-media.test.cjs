@@ -40,6 +40,8 @@ assert.match(script, /settings: '<svg/);
 assert.match(script, /function buildMemoEmojiIconV664\(\)/);
 assert.match(script, /item-action-emoji-v664[^>]*>📝<\/span>/);
 assert.match(script, /item-elevator-person-v662/);
+assert.match(script, /item-elevator-divider-v665/);
+assert.match(script, /M7 10V5m-2 2 2-2 2 2m-2 7v5/);
 assert.match(script, /function buildFavoriteStarIconV663\(active\)/);
 assert.match(script, /var quickTools = document\.getElementById\("mapQuickTools"\)/);
 assert.match(script, /favorite-star-icon-v663/);

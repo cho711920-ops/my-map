@@ -2481,9 +2481,10 @@ function buildListElevatorIconV650() {
   return '<span class="item-elevator-v650" hidden title="건축물대장 엘리베이터 확인" aria-label="엘리베이터 있음">' +
     '<svg class="item-elevator-glyph-v651" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<rect x="2" y="2" width="20" height="20" rx="2"></rect>' +
-      '<path class="item-elevator-arrows-v660" d="m4.5 8 2-2 2 2m-4 8 2 2 2-2m7-8 2-2 2 2m-4 8 2 2 2-2"></path>' +
-      '<circle class="item-elevator-person-v662" cx="12" cy="8" r="1.5"></circle>' +
-      '<path class="item-elevator-person-v662" d="M12 10v4m-2 4 2-4 2 4m-4-6 2-2 2 2"></path>' +
+      '<path class="item-elevator-divider-v665" d="M11 4.5v15"></path>' +
+      '<path class="item-elevator-arrows-v660" d="M7 10V5m-2 2 2-2 2 2m-2 7v5m-2-2 2 2 2-2"></path>' +
+      '<circle class="item-elevator-person-v662" cx="16" cy="8" r="1.6"></circle>' +
+      '<path class="item-elevator-person-v662" d="M16 10.5v4.5m-2.7-2.6 2.7-1.9 2.7 1.9M16 15l-2.4 3.8M16 15l2.4 3.8"></path>' +
     '</svg>' +
   '</span>';
 }

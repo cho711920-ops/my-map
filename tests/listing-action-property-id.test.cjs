@@ -42,7 +42,7 @@ assert(
   "list contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.45-photo-prefetch"),
+  html.includes("script.js?v=6.5.46-elevator-icon"),
   "the production page must load the fixed script cache version"
 );
 

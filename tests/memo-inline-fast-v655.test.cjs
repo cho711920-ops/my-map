@@ -82,7 +82,7 @@ assert(
 );
 assert(
   html.includes("style.css?v=6.5.30-card-cluster-layout") &&
-  html.includes("script.js?v=6.5.45-photo-prefetch"),
+  html.includes("script.js?v=6.5.46-elevator-icon"),
   "운영 브라우저가 새 메모 UI를 즉시 받도록 캐시 버전을 올려야 합니다."
 );
 assert(
