@@ -330,9 +330,17 @@
 /* v8.0.4 데스크탑 상단 정리 · 세로 로드뷰 · 상세창 안전영역 · 작업상태 자동숨김 */
 @media (min-width: 769px) {
   .filters {
+    display: grid !important;
     grid-template-columns: minmax(500px, 1fr) max-content !important;
+    align-items: center !important;
     column-gap: 10px !important;
   }
+
+  .v6-toolbar-primary { grid-column: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar { grid-column: 2 !important; }
+  #detailFilter,
+  #multiClusterStatus,
+  #customerMatchMapStatus { grid-column: 1 / -1 !important; }
 
   .v6-toolbar-primary {
     display: grid !important;
