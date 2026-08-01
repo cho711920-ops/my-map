@@ -5,6 +5,8 @@ const html = fs.readFileSync("index.html", "utf8");
 const auth = fs.readFileSync("js/auth-gate-v1.js", "utf8");
 const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 const css = fs.readFileSync("css/style.css", "utf8");
+const script = fs.readFileSync("js/script.js", "utf8");
+const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
 const naver = fs.readFileSync("js/naver-collector.js", "utf8");
 const daangn = fs.readFileSync(
   "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_당근수집기_v2_개별및클러스터.gs",
@@ -28,5 +30,15 @@ assert.match(daangn, /return urls\.slice\(0, 20\)/);
 assert.match(naver, /function variantKey\(url\)/);
 assert.match(naver, /return parsed\.origin \+ parsed\.pathname/);
 assert.match(naver, /var mergedImages = finImageUrls\(/);
+assert.match(script, /function buildCardActionIconV662\(type\)/);
+assert.match(script, /phone: '<svg/);
+assert.match(script, /roadview: '<svg/);
+assert.match(script, /navigation: '<svg/);
+assert.match(script, /settings: '<svg/);
+assert.match(script, /memo: '<svg/);
+assert.match(script, /item-elevator-person-v662/);
+assert.match(listManager, /createList\(currentManagerType, itemKey\)/);
+assert.match(listManager, /response\.json\(\)/);
+assert.match(listManager, /js_list_sync_dirty_v6_/);
 
 console.log("desktop card layout and media normalization tests passed");

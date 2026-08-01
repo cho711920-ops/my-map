@@ -34,8 +34,26 @@
     }).map(function(entry) { return entry.original; });
   }
   function group(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }
+  function originalImages(original) {
+    var values = [];
+    if (original && Array.isArray(original.images)) values = original.images.slice();
+    if (original && original.thumbnail && values.indexOf(original.thumbnail) < 0) values.unshift(original.thumbnail);
+    values = values.map(text).filter(function(url, index, all) {
+      return url && !/\/origin\/profile\//i.test(url) && !/[?&]service=karrotauth(?:&|$)/i.test(url) &&
+        all.indexOf(url) === index;
+    });
+    if (sourceKey(original && original.source) === "danggeun") {
+      var hasInside = values.some(function(url) {
+        return /\/realty\/realty\/articles\//i.test(url) && /[?&]t=inside(?:&|$)/i.test(url);
+      });
+      if (hasInside) values = values.filter(function(url) {
+        return !(/\/realty\/realty\/articles\//i.test(url) && /[?&]t=crop(?:&|$)/i.test(url));
+      });
+    }
+    return values;
+  }
   function originalImage(original) {
-    return text(original && (original.thumbnail || (original.images && original.images[0])));
+    return text(originalImages(original)[0]);
   }
 
   function apiGet(action, params) {
@@ -77,7 +95,7 @@
       };
       item.unifiedOriginalsV8 = originals;
       item.unifiedOriginalCountV8 = originals.length || 1;
-      item.thumbnailV8 = originals.length && originals[0].thumbnail || "";
+      item.thumbnailV8 = originals.length ? originalImage(originals[0]) : "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });
       item.gongsilContactCountV8 = originals.reduce(function(total, original) {
         return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
@@ -105,7 +123,7 @@
     if (!desktop()) return {thumbnail: "", badge: "", sourceButton: ""};
     var originals = group(item && item.propertyId);
     var count = originals.length || 1;
-    var thumbnail = originals.length ? text(originals[0].thumbnail) : "";
+    var thumbnail = originals.length ? originalImage(originals[0]) : "";
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
       (thumbnail ? 'has-photo' : 'no-photo') + '" title="사진 크게 보기" ' +
@@ -212,7 +230,7 @@
       ? (selected.buildingName || selected.address || "매물 상세") : "매물 상세";
     document.getElementById("unifiedDetailSubtitleV8").textContent = originals.length > 1
       ? "동일 공간 원본 " + originals.length + "개" : "원본매물 1개";
-    var images = selected && selected.images || (selected && selected.thumbnail ? [selected.thumbnail] : []);
+    var images = originalImages(selected);
     var body = document.getElementById("unifiedDetailBodyV8");
     body.innerHTML = !selected ? '<div class="unified-empty-v8">원본매물 정보가 없습니다.</div>' :
       '<section class="unified-detail-gallery-v8">' +
@@ -248,7 +266,7 @@
     var detailGallery = body.querySelector(".unified-detail-gallery-v8");
     if (detailGallery && images.length) {
       detailGallery._imagesV8 = images.slice();
-      detailGallery._photoCountV8 = Math.max(images.length, Number(selected.photoCount) || 0);
+      detailGallery._photoCountV8 = images.length;
       detailGallery._propertyIdV8 = propertyId;
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._failedImagesV8 = {};
@@ -445,8 +463,7 @@
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var originals = state.detailCache[propertyId] || group(propertyId);
     var original = originals.filter(function(entry) { return entry.originalId === originalId; })[0];
-    var images = original && original.images || [];
-    if (!images.length && original && original.thumbnail) images = [original.thumbnail];
+    var images = originalImages(original);
     if (!images.length) return;
     var modal = document.getElementById("unifiedGalleryV8");
     if (!modal) {

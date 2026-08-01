@@ -13,9 +13,9 @@ assert.match(script, /standard-card-main-v661/);
 assert.match(script, /customerMatchControls \? unifiedCardPartsV8\.badge : ''/);
 assert.match(script, /item-head-favorite-v661/);
 assert.match(script, /isFavorite\(item\) \? '★' : '☆'/);
-assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">🛣️/);
-assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">✏️/);
-assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">📝/);
+assert.match(script, /buildCardActionIconV662\('roadview'\)/);
+assert.match(script, /buildCardActionIconV662\('settings'\)/);
+assert.match(script, /buildCardActionIconV662\('memo'\)/);
 assert.match(script, /toggle\.innerHTML = '<span class="item-action-text-v661">'/);
 assert.match(script, /toggle\.setAttribute\("aria-label", "메모 " \+ \(isOpen \? "닫기" : "열기"\)\)/);
 
@@ -39,8 +39,8 @@ assert.match(css, /\.standard-card-main-v661 \.item-head-favorite-v661\.on\s*\{[
 assert.match(css, /\.standard-card-main-v661 \.item-action-text-v661\s*\{[^}]*display:\s*none/s);
 assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*display:\s*inline/s);
 
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.14-main-card-three-line/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.0\.10-main-card-three-line/);
-assert.match(html, /script\.js\?v=6\.5\.41-main-card-memo-state/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.15-card-icons/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.0\.11-listing-photos-only/);
+assert.match(html, /script\.js\?v=6\.5\.42-card-icons/);
 
 console.log("main listing three-line v6.6.1 tests passed");

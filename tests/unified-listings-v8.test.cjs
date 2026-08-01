@@ -17,7 +17,7 @@ const daangn = fs.readFileSync(
   "utf8"
 );
 
-assert.match(backend, /MM_VERSION = "8\.0\.1"/);
+assert.match(backend, /MM_VERSION = "8\.0\.2"/);
 assert.match(backend, /var MM_V8_ORIGINAL_SHEET = "JS_원본매물"/);
 assert.match(backend, /var MM_V8_RELATION_SHEET = "JS_통합매물연결"/);
 assert.match(backend, /var MM_V8_MEDIA_SHEET = "JS_원본미디어"/);
@@ -185,6 +185,24 @@ assert.deepEqual(Array.from(daangnLogicalPhotos), [
   "https://img.kr.gcp-karroter.net/realty/realty/articles/a.jpeg?q=95&s=1440x1440&t=inside",
   "https://img.kr.gcp-karroter.net/realty/realty/articles/b.jpeg?q=95&s=1440x1440&t=inside"
 ]);
+const listingOnlyPhotos = context.mmV8ExtractMedia_({
+  primaryImage: "https://img.kr.gcp-karroter.net/realty/realty/articles/listing.jpeg?q=95&s=1440x1440&t=inside&service=realty",
+  imageUrls: [
+    "https://img.kr.gcp-karroter.net/realty/realty/articles/listing.jpeg?q=95&s=1440x1440&t=inside&service=realty",
+    "https://img.kr.gcp-karroter.net/realty/realty/articles/broker.jpeg?q=82&s=300x300&t=crop&service=realty"
+  ],
+  raw: {
+    profileImage: "https://img.kr.gcp-karroter.net/origin/profile/202607/broker.webp?q=82&s=640x640&t=crop&service=karrotauth"
+  }
+});
+assert.deepEqual(Array.from(listingOnlyPhotos.urls), [
+  "https://img.kr.gcp-karroter.net/realty/realty/articles/listing.jpeg?q=95&s=1440x1440&t=inside&service=realty"
+]);
+assert.equal(context.mmV8ImageUrl_(
+  "https://img.kr.gcp-karroter.net/origin/profile/202607/broker.webp?q=82&s=640x640&t=crop&service=karrotauth"
+), "");
+assert.match(ui, /function originalImages\(original\)/);
+assert.match(ui, /service=karrotauth/);
 assert.match(backend, /function mmRepairV8ImageVariants\(\)/);
 assert.match(backend, /원본사진중복정리백업/);
 

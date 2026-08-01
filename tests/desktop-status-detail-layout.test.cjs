@@ -27,7 +27,7 @@ assert.doesNotMatch(backend, /if \(index > 0\) delete original\.images/);
 assert.match(backend, /leftPriority - rightPriority/);
 assert.match(unified, /Array\.isArray\(selected\.images\)[\s\S]*?selected\.images\.length >=/);
 assert.match(unified, /var preload = new Image\(\)/);
-assert.match(unified, /_photoCountV8 = Math\.max\(images\.length, Number\(selected\.photoCount\) \|\| 0\)/);
+assert.match(unified, /_photoCountV8 = images\.length/);
 assert.match(unified, /Math\.max\(images\.length, Number\(gallery\._photoCountV8\) \|\| 0\)/);
 assert.match(unified, /if \(!originalId && initial\[0\]\) originalId = text\(initial\[0\]\.originalId\)/);
 assert.match(unified, /detailRequestToken: 0/);

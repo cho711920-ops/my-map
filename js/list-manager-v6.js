@@ -8,6 +8,9 @@
   var currentManagerType = "favorite";
   var currentItemKey = "";
   var cloudSaveTimers = {};
+  var cloudSaveRetries = {};
+  var cloudRevisions = { favorite: 0, visit: 0 };
+  var pendingCloudSave = { favorite: false, visit: false };
   var cloudSyncReady = false;
 
   function getSelectedItemKeys() {
@@ -61,9 +64,21 @@
     }
   }
 
-  function saveLists(type, lists) {
+  function dirtyKey(type) {
+    return "js_list_sync_dirty_v6_" + type;
+  }
+
+  function isCloudDirty(type) {
+    return localStorage.getItem(dirtyKey(type)) === "1";
+  }
+
+  function saveLists(type, lists, options) {
+    options = options || {};
     localStorage.setItem(storageKey(type), JSON.stringify(lists));
     if (type === "favorite") syncLegacyFavoriteKeys(lists);
+    if (options.remote) return;
+    cloudRevisions[type] = Number(cloudRevisions[type] || 0) + 1;
+    localStorage.setItem(dirtyKey(type), "1");
     scheduleCloudSave(type, lists);
   }
 
@@ -71,11 +86,38 @@
     return type === "visit" ? "visitLists" : "favorites";
   }
 
+  function mergeCloudAndLocalLists(remoteLists, localLists) {
+    var mergedById = {};
+    var order = [];
+    function put(list, preferOnTie) {
+      if (!list || !list.id) return;
+      var id = String(list.id);
+      var current = mergedById[id];
+      if (!current) order.push(id);
+      var currentTime = current ? Date.parse(current.updatedAt || current.createdAt || 0) || 0 : -1;
+      var incomingTime = Date.parse(list.updatedAt || list.createdAt || 0) || 0;
+      if (!current || incomingTime > currentTime || (preferOnTie && incomingTime === currentTime)) {
+        mergedById[id] = list;
+      }
+    }
+    (remoteLists || []).forEach(function(list) { put(list, false); });
+    (localLists || []).forEach(function(list) { put(list, true); });
+    return order.map(function(id) { return mergedById[id]; }).filter(Boolean);
+  }
+
   function scheduleCloudSave(type, lists) {
+    pendingCloudSave[type] = true;
     if (!cloudSyncReady) return;
     window.clearTimeout(cloudSaveTimers[type]);
     cloudSaveTimers[type] = window.setTimeout(function () {
-      fetch(window.saveApiURL || "/api/apps-script", {
+      flushCloudSave(type, Array.isArray(lists) ? lists : loadLists(type), 0);
+    }, 250);
+  }
+
+  function flushCloudSave(type, lists, attempt) {
+    var snapshot = JSON.stringify(lists || []);
+    var revision = Number(cloudRevisions[type] || 0);
+    fetch(window.saveApiURL || "/api/apps-script", {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
@@ -86,13 +128,41 @@
           data: lists,
           version: Date.now()
         })
+      }).then(function(response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.json();
+      }).then(function(result) {
+        if (!result || result.ok === false) throw new Error(result && result.message || "저장 응답 오류");
+        cloudSaveRetries[type] = 0;
+        pendingCloudSave[type] = false;
+        if (revision === Number(cloudRevisions[type] || 0) && snapshot === JSON.stringify(loadLists(type))) {
+          localStorage.removeItem(dirtyKey(type));
+          return;
+        }
+        scheduleCloudSave(type, loadLists(type));
       }).catch(function(error) {
         console.warn(typeLabel(type) + "목록 동기화 실패", error);
+        var nextAttempt = Math.min(Number(attempt || 0) + 1, 4);
+        cloudSaveRetries[type] = nextAttempt;
+        pendingCloudSave[type] = true;
+        if (nextAttempt < 4) {
+          window.clearTimeout(cloudSaveTimers[type]);
+          cloudSaveTimers[type] = window.setTimeout(function() {
+            flushCloudSave(type, loadLists(type), nextAttempt);
+          }, [0, 900, 2500, 6000][nextAttempt]);
+        } else {
+          showListToast(typeLabel(type) + "목록은 이 기기에 안전하게 저장됐습니다. 계정 동기화는 자동 재시도합니다.", "warning");
+          window.clearTimeout(cloudSaveTimers[type]);
+          cloudSaveTimers[type] = window.setTimeout(function() {
+            flushCloudSave(type, loadLists(type), 0);
+          }, 30000);
+        }
       });
-    }, 350);
   }
 
   async function loadCloudLists(type) {
+    var revisionAtStart = Number(cloudRevisions[type] || 0);
+    var dirtyAtStart = isCloudDirty(type);
     var url = (window.saveApiURL || "/api/apps-script") +
       "?action=loadCloudState&scope=" + encodeURIComponent(cloudScope(type)) +
       "&recordKey=default&_=" + Date.now();
@@ -102,23 +172,30 @@
     if (!result.ok) throw new Error(result.message || "목록 동기화에 실패했습니다.");
     var local = loadLists(type);
     if (result.found && Array.isArray(result.data)) {
-      localStorage.setItem(storageKey(type), JSON.stringify(result.data));
-      if (type === "favorite") syncLegacyFavoriteKeys(result.data);
-      return true;
+      if (dirtyAtStart || revisionAtStart !== Number(cloudRevisions[type] || 0)) {
+        var merged = mergeCloudAndLocalLists(result.data, local);
+        saveLists(type, merged, { remote: true });
+        localStorage.setItem(dirtyKey(type), "1");
+        return { found: true, needsPush: true };
+      }
+      saveLists(type, result.data, { remote: true });
+      return { found: true, needsPush: false };
     }
-    return false;
+    return { found: false, needsPush: local.length > 0 };
   }
 
   async function syncListsFromCloud() {
     try {
       var found = await Promise.all([loadCloudLists("favorite"), loadCloudLists("visit")]);
       cloudSyncReady = true;
-      if (!found[0] && loadLists("favorite").length) scheduleCloudSave("favorite", loadLists("favorite"));
-      if (!found[1] && loadLists("visit").length) scheduleCloudSave("visit", loadLists("visit"));
+      if (found[0].needsPush || pendingCloudSave.favorite || isCloudDirty("favorite")) scheduleCloudSave("favorite", loadLists("favorite"));
+      if (found[1].needsPush || pendingCloudSave.visit || isCloudDirty("visit")) scheduleCloudSave("visit", loadLists("visit"));
       if (typeof window.applyFilter === "function") window.applyFilter();
     } catch (error) {
       cloudSyncReady = true;
       console.warn("로그인 계정 목록 동기화 실패", error);
+      if (pendingCloudSave.favorite || isCloudDirty("favorite")) scheduleCloudSave("favorite", loadLists("favorite"));
+      if (pendingCloudSave.visit || isCloudDirty("visit")) scheduleCloudSave("visit", loadLists("visit"));
     }
   }
 
@@ -166,7 +243,8 @@
       defaultList.updatedAt = nowIso();
     }
 
-    saveLists("favorite", lists);
+    if (legacy.length) saveLists("favorite", lists);
+    else syncLegacyFavoriteKeys(lists);
     localStorage.setItem(LEGACY_MIGRATION_KEY, "1");
   }
 
@@ -250,7 +328,7 @@
     return name;
   }
 
-  function createList(type) {
+  function createList(type, initialItemKey) {
     var name = promptListName(type, "");
     if (!name) return null;
     var lists = loadLists(type);
@@ -261,7 +339,7 @@
     var list = {
       id: uid(type === "visit" ? "visit" : "fav"),
       name: name,
-      itemKeys: [],
+      itemKeys: initialItemKey ? [initialItemKey] : [],
       createdAt: nowIso(),
       updatedAt: nowIso()
     };
@@ -488,7 +566,12 @@
   }
 
   window.createPickerList = function () {
-    if (createList(currentManagerType)) renderPicker();
+    var itemKey = currentItemKey;
+    var list = createList(currentManagerType, itemKey);
+    if (!list) return;
+    showListToast('"' + list.name + '" 목록을 만들고 매물을 추가했습니다.', "success");
+    window.closeItemListPicker();
+    if (typeof window.applyFilter === "function") window.applyFilter();
   };
 
   window.applyItemListSelection = function () {
@@ -497,16 +580,20 @@
     document.querySelectorAll("#lmPickerBody input[data-list-id]").forEach(function (input) {
       checkedById[input.getAttribute("data-list-id")] = input.checked;
     });
+    var changed = 0;
     lists.forEach(function (list) {
       var keys = Array.isArray(list.itemKeys) ? list.itemKeys.slice() : [];
       var has = keys.indexOf(currentItemKey) !== -1;
       var shouldHave = !!checkedById[list.id];
       if (shouldHave && !has) keys.push(currentItemKey);
       if (!shouldHave && has) keys = keys.filter(function (key) { return key !== currentItemKey; });
+      if (shouldHave === has) return;
       list.itemKeys = keys;
       list.updatedAt = nowIso();
+      changed += 1;
     });
-    saveLists(currentManagerType, lists);
+    if (changed) saveLists(currentManagerType, lists);
+    showListToast(changed ? "목록 저장을 완료했습니다." : "변경된 목록이 없습니다.", changed ? "success" : "info");
     closeItemListPicker();
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
@@ -774,6 +861,11 @@
     closeDesktopSort();
     closeMobileSheet();
     closeDetailPopup();
+  });
+
+  window.addEventListener("online", function() {
+    if (isCloudDirty("favorite")) scheduleCloudSave("favorite", loadLists("favorite"));
+    if (isCloudDirty("visit")) scheduleCloudSave("visit", loadLists("visit"));
   });
 
   function bindMobileDetailButtonFix() {

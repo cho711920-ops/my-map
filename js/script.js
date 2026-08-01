@@ -2012,7 +2012,7 @@ function refreshMemoCardV655(key, focusEditor) {
     toggle.setAttribute("aria-label", "메모 " + (isOpen ? "닫기" : "열기"));
     toggle.innerHTML = '<span class="item-action-text-v661">' +
       (isOpen ? '메모 ▲' : '메모 ▼') +
-      '</span><span class="item-action-emoji-v661" aria-hidden="true">📝</span>';
+      '</span>' + buildCardActionIconV662('memo');
   }
   if (panel) panel.remove();
   if (isOpen && item) {
@@ -2365,15 +2365,27 @@ function renderListContactPopupV8(item, primaryContacts, options) {
   body.innerHTML = markup || '<div class="list-contact-empty-v654">등록된 연락처가 없습니다.</div>';
 }
 
+function buildCardActionIconV662(type) {
+  var icons = {
+    phone: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7.1 2.8c.5-.3 1.2-.1 1.5.4l2 3.7c.3.5.2 1.1-.2 1.5L8.8 10a13 13 0 0 0 5.2 5.2l1.6-1.6c.4-.4 1-.5 1.5-.2l3.7 2c.5.3.7 1 .4 1.5l-1.4 2.7c-.3.6-.9.9-1.5.9C10.1 19.9 4.1 13.9 3.5 5.7c0-.6.3-1.2.9-1.5l2.7-1.4Z"/></svg>',
+    roadview: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect width="30" height="30" rx="7" fill="#ffd154"/><path fill="#168bd2" d="M15 5.2a7.2 7.2 0 0 0-7.2 7.2c0 5 7.2 12.4 7.2 12.4s7.2-7.4 7.2-12.4A7.2 7.2 0 0 0 15 5.2Zm0 10.2a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>',
+    navigation: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect width="30" height="30" rx="7" fill="#ffe100"/><path fill="#2677c9" d="M15 4.3 25 10v11.5L15 27.2 5 21.5V10L15 4.3Z"/><path fill="#ffe100" d="M10 20.5v-6.4c0-1.5 1.2-2.7 2.7-2.7h3.5V8l6.1 5-6.1 5v-3.2h-2.7v5.7H10Z"/></svg>',
+    settings: '<svg viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#d8e0e6" stroke="#40515e" stroke-width="1.4"/><path fill="#40515e" d="m16.8 6 .6 2.1c.5.2 1 .5 1.4.8l2.1-.5 1.7 2.9-1.5 1.6v1.7l1.5 1.6-1.7 2.9-2.1-.5c-.4.3-.9.6-1.4.8l-.6 2.1h-3.4l-.6-2.1c-.5-.2-1-.5-1.4-.8l-2.1.5-1.7-2.9 1.5-1.6v-1.7l-1.5-1.6 1.7-2.9 2.1.5c.4-.3.9-.6 1.4-.8l.6-2.1h3.4Zm-1.7 5.1a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2Z"/></svg>',
+    memo: '<svg viewBox="0 0 30 30" aria-hidden="true"><path fill="none" stroke="#6b7280" stroke-linejoin="round" stroke-width="2" d="M5.5 6.5h15v12h-7l-4.5 4v-4H5.5v-12Z"/><path fill="none" stroke="#6b7280" stroke-linecap="round" stroke-width="1.8" d="M9 10.5h8m-8 4h6"/><path fill="#f8fafc" stroke="#6b7280" stroke-linejoin="round" stroke-width="1.6" d="M18 9.5h7v10h-3.5L18 22v-12.5Z"/></svg>'
+  };
+  return '<span class="item-action-icon-v662 item-action-icon-' + type + '-v662">' + (icons[type] || '') + '</span>';
+}
+
 function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
   var contacts = extractListContactsV650(item);
   var hasContacts = contacts.length > 0 || Number(item && item.gongsilContactCountV8) > 0;
   return '<button type="button" class="item-contact-button-v654 ' +
     (hasContacts ? 'has-contacts' : 'no-contacts') +
-    (headerPlacement ? ' header-placement' : '') +
+    (headerPlacement ? ' header-placement' : ' action-placement') +
     '" title="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
     '" aria-label="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
-    '" onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedTarget + '\')">📞</button>';
+    '" onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedTarget + '\')">' +
+    buildCardActionIconV662('phone') + '</button>';
 }
 
 function closeListContactPopupV654() {
@@ -2452,10 +2464,11 @@ function listDisplayValueV650(item, field) {
 
 function buildListElevatorIconV650() {
   return '<span class="item-elevator-v650" hidden title="건축물대장 엘리베이터 확인" aria-label="엘리베이터 있음">' +
-    '<svg class="item-elevator-glyph-v651" viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
-      '<rect x="1.75" y="1.75" width="16.5" height="16.5" rx="3"></rect>' +
-      '<path class="item-elevator-arrows-v660" d="M5 6.8 7.25 4.55 9.5 6.8M10.5 4.55l2.25 2.25L15 4.55"></path>' +
-      '<path class="item-elevator-doors-v660" d="M4.75 8.5h10.5v7.25H4.75zM10 8.5v7.25"></path>' +
+    '<svg class="item-elevator-glyph-v651" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<rect x="2" y="2" width="20" height="20" rx="2"></rect>' +
+      '<path class="item-elevator-arrows-v660" d="m4.5 8 2-2 2 2m-4 8 2 2 2-2m7-8 2-2 2 2m-4 8 2 2 2-2"></path>' +
+      '<circle class="item-elevator-person-v662" cx="12" cy="8" r="1.5"></circle>' +
+      '<path class="item-elevator-person-v662" d="M12 10v4m-2 4 2-4 2 4m-4-6 2-2 2 2"></path>' +
     '</svg>' +
   '</span>';
 }
@@ -2542,7 +2555,7 @@ function addListItem(item, appendTarget) {
       'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
       'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
       '<span class="item-action-text-v661">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
-      '<span class="item-action-emoji-v661" aria-hidden="true">📝</span>' +
+      buildCardActionIconV662('memo') +
     '</button>';
 
   var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
@@ -2612,17 +2625,17 @@ function addListItem(item, appendTarget) {
           customerMatchControls +
           '<div class="item-action-left">' +
             (!customerMatchControls ? actionContactButtonV654 : '') +
-            '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
-          'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
+            '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
+          'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>' +
             '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
-          'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span><span class="item-action-emoji-v661" aria-hidden="true">🛣️</span></button>' +
+          'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span>' + buildCardActionIconV662('roadview') + '</button>' +
             '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
             '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
           'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>' +
             sourceLinkButton +
             '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
-          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span><span class="item-action-emoji-v661" aria-hidden="true">✏️</span></button>' +
+          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>' +
           '</div>' +
           memoToggleButton +
         '</div>' +
