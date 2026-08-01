@@ -26,10 +26,10 @@
 
   function getVisitLists() {
     if (window.JSV6ListStore && typeof window.JSV6ListStore.load === "function") {
-      return window.JSV6ListStore.load("visit");
+      return window.JSV6ListStore.load("favorite");
     }
     try {
-      var parsed = JSON.parse(localStorage.getItem("js_visit_lists_v6") || "[]");
+      var parsed = JSON.parse(localStorage.getItem("js_favorite_lists_v6") || "[]");
       return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
       return [];

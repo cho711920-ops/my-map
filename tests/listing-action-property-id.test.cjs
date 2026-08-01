@@ -42,7 +42,7 @@ assert(
   "list contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.47-contact-speed-text-actions"),
+  html.includes("script.js?v=6.5.48-unified-favorites"),
   "the production page must load the fixed script cache version"
 );
 

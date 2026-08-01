@@ -11,8 +11,8 @@ assert.match(script, /verification-done-v661">확인/);
 assert.match(script, /standard-card-grid-v661/);
 assert.match(script, /standard-card-main-v661/);
 assert.match(script, /customerMatchControls \? unifiedCardPartsV8\.badge : ''/);
-assert.match(script, /item-head-favorite-v661/);
-assert.match(script, /buildFavoriteStarIconV663\(isFavorite\(item\)\)/);
+assert.match(script, /var favoriteHeaderButtonV661 = "";/);
+assert.doesNotMatch(script, /favoriteHeaderButtonV661 = !customerMatchControls/);
 assert.match(script, /buildCardActionIconV662\('roadview'\)/);
 assert.match(script, /buildCardActionIconV662\('settings'\)/);
 assert.match(script, /buildMemoEmojiIconV664\(\)/);
@@ -46,6 +46,6 @@ assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !impo
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.24-readable-text-actions/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.13-contact-cache/);
-assert.match(html, /script\.js\?v=6\.5\.47-contact-speed-text-actions/);
+assert.match(html, /script\.js\?v=6\.5\.48-unified-favorites/);
 
 console.log("main listing three-line v6.6.1 tests passed");

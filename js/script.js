@@ -398,7 +398,8 @@ function isDone(item) {
 
 
 function isFavorite(item) {
-  return favoriteKeys.includes(item.key);
+  var propertyRef = item && item.propertyId ? "property:" + String(item.propertyId) : "";
+  return favoriteKeys.includes(item.key) || (!!propertyRef && favoriteKeys.includes(propertyRef));
 }
 
 
@@ -2589,14 +2590,7 @@ function addListItem(item, appendTarget) {
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
   if (unifiedCardPartsV8.sourceButton) sourceLinkButton = unifiedCardPartsV8.sourceButton;
   var customerMatchControls = buildCustomerMatchInlineControls(item);
-  var favoriteHeaderButtonV661 = !customerMatchControls
-    ? '<button type="button" class="item-list-add-btn favorite item-head-favorite-v661' +
-        (isFavorite(item) ? ' on' : '') + '" title="찜 또는 임장목록에 추가" aria-label="' +
-        (isFavorite(item) ? '즐겨찾기된 매물' : '즐겨찾기에 추가') + '" ' +
-        'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">' +
-        buildFavoriteStarIconV663(isFavorite(item)) +
-      '</button>'
-    : "";
+  var favoriteHeaderButtonV661 = "";
   var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
   var headerContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, true);
   var depositDisplay = listDisplayValueV650(item, "deposit");

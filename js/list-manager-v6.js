@@ -259,6 +259,15 @@
 
   function getItem(key) {
     if (!Array.isArray(window.allItems)) return null;
+    var propertyPrefix = "property:";
+    var propertyId = String(key || "").indexOf(propertyPrefix) === 0
+      ? String(key).slice(propertyPrefix.length)
+      : "";
+    if (propertyId) {
+      return window.allItems.find(function (item) {
+        return String(item && item.propertyId || "") === propertyId;
+      }) || null;
+    }
     return window.allItems.find(function (item) { return item.key === key; }) || null;
   }
 
