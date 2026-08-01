@@ -40,9 +40,12 @@ assert.match(css, /\.verification-done-v661\s*\{[^}]*color:\s*#c32020/s);
 assert.match(css, /\.standard-card-main-v661 \.item-head-favorite-v661\.on\s*\{[^}]*color:\s*#f1b900/s);
 assert.match(css, /\.standard-card-main-v661 \.item-action-text-v661\s*\{[^}]*display:\s*none/s);
 assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*display:\s*inline/s);
+assert.match(css, /grid-template-columns:\s*32px 44px 56px 44px 44px 104px/);
+assert.match(css, /\.item-nav-btn \.item-action-text-v661,[\s\S]*?display:\s*inline !important/);
+assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !important;[\s\S]*?font-size:\s*12\.5px !important/);
 
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.22-elevator-icon/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.0\.12-photo-prefetch/);
-assert.match(html, /script\.js\?v=6\.5\.46-elevator-icon/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.23-text-actions/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.0\.13-contact-cache/);
+assert.match(html, /script\.js\?v=6\.5\.47-contact-speed-text-actions/);
 
 console.log("main listing three-line v6.6.1 tests passed");

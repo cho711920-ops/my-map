@@ -67,7 +67,14 @@ window.JSUnifiedListingsV8.attach(items, {groups: {"M-101": [
 assert.equal(items[0].gongsilContactCountV8, 1);
 
 assert.match(listing, /Number\(item && item\.gongsilContactCountV8\) > 0/);
-assert.match(listing, /JSUnifiedListingsV8\.loadContacts\(propertyId\)/);
+assert.match(listing, /api\.loadContacts\(propertyId\)/);
+assert.match(listing, /function prefetchListContactPopupV654\(encodedTarget\)/);
+assert.match(listing, /getCachedContacts\(propertyId\)/);
+assert.match(listing, /onpointerenter="prefetchListContactPopupV654/);
+assert.match(ui, /contactPending:\s*\{\}/);
+assert.match(ui, /function scheduleContactWarmup\(items\)/);
+assert.match(ui, /function getCachedContacts\(propertyId\)/);
+assert.match(ui, /if \(state\.contactPending\[propertyId\]\) return state\.contactPending\[propertyId\]/);
 assert.match(listing, /공실박스 원본[\s\S]*?contact\.room/);
 assert.doesNotMatch(listing, /contactListRaw\s*=\s*JSON\.stringify\(result && result\.contacts\)/,
   "조회한 공실박스 연락처를 메인 매물 연락처 JSON으로 복사하면 안 됩니다.");

@@ -40,7 +40,7 @@ assert.match(
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
 assert.match(htmlSource, /map\.js\?v=6\.5\.26-immediate-list/);
-assert.match(htmlSource, /script\.js\?v=6\.5\.46-elevator-icon/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.47-contact-speed-text-actions/);
 assert.match(scriptSource, /더블클릭하면 스마트 매물카드 열기/);
 assert.match(
   scriptSource,

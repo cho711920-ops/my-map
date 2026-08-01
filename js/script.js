@@ -2399,8 +2399,42 @@ function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
     (headerPlacement ? ' header-placement' : ' action-placement') +
     '" title="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
     '" aria-label="' + (hasContacts ? '연락처 열기' : '등록된 연락처 없음') +
-    '" onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedTarget + '\')">' +
+    '" onpointerenter="prefetchListContactPopupV654(\'' + encodedTarget + '\')"' +
+    ' onfocus="prefetchListContactPopupV654(\'' + encodedTarget + '\')"' +
+    ' onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedTarget + '\')">' +
     buildCardActionIconV662('phone') + '</button>';
+}
+
+function applyLinkedContactResultV8(item, result) {
+  if (!item) return;
+  item.gongsilContactsV8 = Array.isArray(result && result.contacts) ? result.contacts : [];
+  item.gongsilContactsLoadedV8 = true;
+  item.gongsilContactCountV8 = Number(result && result.contactCount) || item.gongsilContactsV8.length;
+}
+
+function prefetchListContactPopupV654(encodedTarget) {
+  var item = getPropertyByEncodedKeyV630(encodedTarget);
+  if (!item || Number(item.gongsilContactCountV8) <= 0 || item.gongsilContactsLoadedV8) {
+    return Promise.resolve(item || null);
+  }
+  var propertyId = String(item.propertyId || "").trim();
+  var api = window.JSUnifiedListingsV8;
+  if (!propertyId || !api || typeof api.loadContacts !== "function") return Promise.resolve(item);
+  var cached = typeof api.getCachedContacts === "function" ? api.getCachedContacts(propertyId) : null;
+  if (cached) {
+    applyLinkedContactResultV8(item, cached);
+    return Promise.resolve(item);
+  }
+  if (item.gongsilContactsPendingV8) return item.gongsilContactsPendingV8;
+  item.gongsilContactsPendingV8 = api.loadContacts(propertyId).then(function(result) {
+    applyLinkedContactResultV8(item, result);
+    item.gongsilContactsPendingV8 = null;
+    return item;
+  }, function(error) {
+    item.gongsilContactsPendingV8 = null;
+    throw error;
+  });
+  return item.gongsilContactsPendingV8;
 }
 
 function closeListContactPopupV654() {
@@ -2414,6 +2448,13 @@ function closeListContactPopupV654() {
 function openListContactPopupV654(encodedTarget) {
   var item = getPropertyByEncodedKeyV630(encodedTarget);
   if (!item) return;
+
+  var propertyId = String(item.propertyId || "").trim();
+  var contactApi = window.JSUnifiedListingsV8;
+  var cachedContacts = propertyId && contactApi && typeof contactApi.getCachedContacts === "function"
+    ? contactApi.getCachedContacts(propertyId)
+    : null;
+  if (cachedContacts) applyLinkedContactResultV8(item, cachedContacts);
 
   var contacts = extractListContactsV650(item);
   var modal = document.getElementById("listContactModalV654");
@@ -2435,7 +2476,6 @@ function openListContactPopupV654(encodedTarget) {
 
   document.getElementById("listContactAddressV654").textContent =
     [item.name, item.address, item.room].filter(Boolean).join(" · ");
-  var propertyId = String(item.propertyId || "").trim();
   modal._contactPropertyIdV8 = propertyId;
   var hasLinkedContacts = Number(item.gongsilContactCountV8) > 0;
   renderListContactPopupV8(item, contacts, {
@@ -2449,10 +2489,7 @@ function openListContactPopupV654(encodedTarget) {
 
   if (hasLinkedContacts && !item.gongsilContactsLoadedV8 && propertyId &&
       window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.loadContacts === "function") {
-    window.JSUnifiedListingsV8.loadContacts(propertyId).then(function(result) {
-      item.gongsilContactsV8 = Array.isArray(result && result.contacts) ? result.contacts : [];
-      item.gongsilContactsLoadedV8 = true;
-      item.gongsilContactCountV8 = Number(result && result.contactCount) || item.gongsilContactsV8.length;
+    prefetchListContactPopupV654(encodedTarget).then(function() {
       if (modal._contactPropertyIdV8 !== propertyId) return;
       renderListContactPopupV8(item, contacts, {linkedContacts: item.gongsilContactsV8});
     }).catch(function(error) {
@@ -2466,6 +2503,7 @@ function openListContactPopupV654(encodedTarget) {
 
 window.openListContactPopupV654 = openListContactPopupV654;
 window.closeListContactPopupV654 = closeListContactPopupV654;
+window.prefetchListContactPopupV654 = prefetchListContactPopupV654;
 
 function listDisplayValueV650(item, field) {
   var presence = item && item.displayValuePresence;
@@ -2670,6 +2708,9 @@ function addListItem(item, appendTarget) {
     if (window.JSUnifiedListingsV8 &&
         typeof window.JSUnifiedListingsV8.prefetch === "function") {
       window.JSUnifiedListingsV8.prefetch(encodeURIComponent(String(item && item.propertyId || "")));
+    }
+    if (Number(item && item.gongsilContactCountV8) > 0) {
+      prefetchListContactPopupV654(encodedEditTargetV648).catch(function() {});
     }
   };
 

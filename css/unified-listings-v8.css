@@ -1330,3 +1330,89 @@
     line-height: 1 !important;
   }
 }
+
+/* v8.0.23 PC 매물카드 3번째 줄: 연락처·메모만 아이콘, 나머지는 읽기 쉬운 글자 버튼 */
+@media (min-width: 769px) {
+  .standard-card-main-v661 .item-compact-actions-v650 {
+    grid-template-columns: minmax(0, 1fr) 32px !important;
+    gap: 6px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left {
+    display: grid !important;
+    grid-template-columns: 32px 44px 56px 44px 44px 104px !important;
+    gap: 6px !important;
+    width: max-content !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-nav-btn,
+  .standard-card-main-v661 .item-action-left > .item-roadview-btn,
+  .standard-card-main-v661 .item-action-left > .item-building-register-btn,
+  .standard-card-main-v661 .item-action-left > .item-edit-btn-v630,
+  .standard-card-main-v661 .item-action-left > .item-source-link-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 5px !important;
+    border-radius: 7px !important;
+    font-family: "Pretendard Variable", Pretendard, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+    line-height: 28px !important;
+    letter-spacing: -.2px !important;
+  }
+
+  .standard-card-main-v661 .item-nav-btn .item-action-icon-v662,
+  .standard-card-main-v661 .item-roadview-btn .item-action-icon-v662,
+  .standard-card-main-v661 .item-edit-btn-v630 .item-action-icon-v662 {
+    display: none !important;
+  }
+
+  .standard-card-main-v661 .item-nav-btn .item-action-text-v661,
+  .standard-card-main-v661 .item-roadview-btn .item-action-text-v661,
+  .standard-card-main-v661 .item-edit-btn-v630 .item-action-text-v661 {
+    display: inline !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-nav-btn {
+    border: 1px solid #e5bd2d !important;
+    background: #ffe476 !important;
+    color: #5d4900 !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-roadview-btn {
+    border: 1px solid #91c2e8 !important;
+    background: #edf7ff !important;
+    color: #176495 !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-building-register-btn {
+    border: 1px solid #69c6bc !important;
+    background: #eafaf7 !important;
+    color: #126d66 !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-edit-btn-v630 {
+    border: 1px solid #b59ae4 !important;
+    background: #f4efff !important;
+    color: #6841a5 !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .unified-expand-btn-v8 {
+    border: 1px solid #86d2a1 !important;
+    background: #e7f8ed !important;
+    color: #176c3b !important;
+    font-size: 12.5px !important;
+    font-weight: 900 !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 > .item-memo-toggle {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+  }
+}

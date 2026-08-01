@@ -2,9 +2,11 @@
   "use strict";
 
   var API = "/api/apps-script";
-  var state = { groups: {}, detailCache: {}, detailPending: {}, masterMeta: {}, pendingMove: null,
+  var state = { groups: {}, detailCache: {}, detailPending: {}, contactCache: {}, contactPending: {},
+    tellCache: {}, tellPending: {}, masterMeta: {}, pendingMove: null,
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
-    detailWarmupTimer: 0, detailWarmupIds: [] };
+    detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
+    contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0 };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function esc(value) {
@@ -151,6 +153,35 @@
     }, 250);
   }
 
+  function scheduleContactWarmup(items) {
+    var seen = {};
+    state.contactWarmupIds = (items || []).filter(function(item) {
+      var propertyId = text(item && item.propertyId);
+      if (!propertyId || seen[propertyId] || Number(item && item.gongsilContactCountV8) <= 0 ||
+          state.contactCache[propertyId] || state.contactPending[propertyId]) return false;
+      seen[propertyId] = true;
+      return true;
+    }).map(function(item) { return text(item.propertyId); }).slice(0, 4);
+    if (typeof global.setTimeout !== "function") return;
+    if (state.contactWarmupTimer && typeof global.clearTimeout === "function") {
+      global.clearTimeout(state.contactWarmupTimer);
+    }
+    if (!state.contactWarmupIds.length) return;
+    state.contactWarmupTimer = global.setTimeout(function() {
+      var ids = state.contactWarmupIds.slice();
+      var cursor = 0;
+      function worker() {
+        if (cursor >= ids.length) return;
+        var propertyId = ids[cursor++];
+        loadContacts(propertyId).catch(function(error) {
+          console.warn("연락처 유휴 조회 실패", propertyId, error);
+        }).then(worker);
+      }
+      worker();
+      if (ids.length > 1) global.setTimeout(worker, 140);
+    }, 450);
+  }
+
   function load(force) {
     if (state.loaded && !force) return Promise.resolve({groups: state.groups});
     return apiGet("unifiedListings").then(function(result) {
@@ -185,6 +216,7 @@
       }, 0);
     });
     scheduleDetailWarmup(items);
+    scheduleContactWarmup(items);
     return items;
   }
 
@@ -452,7 +484,74 @@
   function loadContacts(propertyId) {
     propertyId = text(propertyId);
     if (!propertyId) return Promise.resolve({ok: true, propertyId: "", contactCount: 0, contacts: []});
-    return apiGet("unifiedListingContacts", {propertyId: propertyId});
+    if (Object.prototype.hasOwnProperty.call(state.contactCache, propertyId)) {
+      return Promise.resolve(state.contactCache[propertyId]);
+    }
+    if (state.contactPending[propertyId]) return state.contactPending[propertyId];
+    var request = apiGet("unifiedListingContacts", {propertyId: propertyId}).then(function(result) {
+      state.contactCache[propertyId] = result;
+      delete state.contactPending[propertyId];
+      return result;
+    }, function(error) {
+      delete state.contactPending[propertyId];
+      throw error;
+    });
+    state.contactPending[propertyId] = request;
+    return request;
+  }
+
+  function getCachedContacts(propertyId) {
+    propertyId = text(propertyId);
+    return Object.prototype.hasOwnProperty.call(state.contactCache, propertyId)
+      ? state.contactCache[propertyId]
+      : null;
+  }
+
+  function tellCacheKey(query) {
+    return text(query).toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function getCachedTellContacts(query) {
+    var key = tellCacheKey(query);
+    var cached = state.tellCache[key];
+    if (!cached || Date.now() - cached.at > 300000) {
+      if (cached) delete state.tellCache[key];
+      return null;
+    }
+    return cached.result;
+  }
+
+  function loadTellContacts(query) {
+    query = text(query);
+    var key = tellCacheKey(query);
+    if (!key) return Promise.resolve({ok: true, query: "", contacts: []});
+    var cached = getCachedTellContacts(query);
+    if (cached) return Promise.resolve(cached);
+    if (state.tellPending[key]) return state.tellPending[key];
+    var request = apiGet("tellContacts", {query: query}).then(function(result) {
+      state.tellCache[key] = {at: Date.now(), result: result};
+      delete state.tellPending[key];
+      var keys = Object.keys(state.tellCache);
+      if (keys.length > 20) {
+        keys.sort(function(left, right) { return state.tellCache[left].at - state.tellCache[right].at; })
+          .slice(0, keys.length - 20).forEach(function(oldKey) { delete state.tellCache[oldKey]; });
+      }
+      return result;
+    }, function(error) {
+      delete state.tellPending[key];
+      throw error;
+    });
+    state.tellPending[key] = request;
+    return request;
+  }
+
+  function renderTellResults(results, result) {
+    var contacts = result && result.contacts || [];
+    results.innerHTML = contacts.length ? contacts.map(function(contact) {
+      return '<a href="tel:' + esc(contact.phone) + '"><span><b>' + esc(contact.address) + ' ' +
+        esc(contact.room) + '</b><small>' + esc(contact.buildingName) + ' · ' + esc(contact.role) +
+        '</small></span><strong>' + esc(contact.phone) + '</strong></a>';
+    }).join("") : '<p>검색되는 연락처가 없습니다.</p>';
   }
 
   function closeDetail() {
@@ -623,20 +722,31 @@
         '<div class="tell-results-v8"><p>주소를 입력해 주세요.</p></div></section>';
       modal.querySelector("header button").onclick = function() { modal.classList.remove("open"); };
       modal.querySelector(".tell-backdrop-v8").onclick = function() { modal.classList.remove("open"); };
+      modal.querySelector("input").oninput = function() {
+        var query = text(this.value);
+        if (state.tellInputTimer && typeof global.clearTimeout === "function") {
+          global.clearTimeout(state.tellInputTimer);
+        }
+        if (query.length < 2 || typeof global.setTimeout !== "function") return;
+        state.tellInputTimer = global.setTimeout(function() {
+          loadTellContacts(query).catch(function() {});
+        }, 320);
+      };
       modal.querySelector("form").onsubmit = function(event) {
         event.preventDefault();
         var query = text(modal.querySelector("input").value);
         var results = modal.querySelector(".tell-results-v8");
         if (!query) return;
-        results.innerHTML = '<p>조회 중…</p>';
-        apiGet("tellContacts", {query: query}).then(function(result) {
-          var contacts = result.contacts || [];
-          results.innerHTML = contacts.length ? contacts.map(function(contact) {
-            return '<a href="tel:' + esc(contact.phone) + '"><span><b>' + esc(contact.address) + ' ' +
-              esc(contact.room) + '</b><small>' + esc(contact.buildingName) + ' · ' + esc(contact.role) +
-              '</small></span><strong>' + esc(contact.phone) + '</strong></a>';
-          }).join("") : '<p>검색되는 연락처가 없습니다.</p>';
-        }).catch(function(error) { results.innerHTML = '<p>' + esc(error.message) + '</p>'; });
+        var cached = getCachedTellContacts(query);
+        var requestToken = ++state.tellRequestToken;
+        if (cached) renderTellResults(results, cached);
+        else results.innerHTML = '<p>조회 중…</p>';
+        loadTellContacts(query).then(function(result) {
+          if (requestToken !== state.tellRequestToken || text(modal.querySelector("input").value) !== query) return;
+          renderTellResults(results, result);
+        }).catch(function(error) {
+          if (requestToken === state.tellRequestToken) results.innerHTML = '<p>' + esc(error.message) + '</p>';
+        });
       };
       document.body.appendChild(modal);
     }
@@ -675,7 +785,7 @@
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, open: open, prefetch: prefetch, close: closeDetail, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
-    loadContacts: loadContacts,
+    loadContacts: loadContacts, getCachedContacts: getCachedContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError
   };
