@@ -1,0 +1,44 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+
+const script = fs.readFileSync("js/script.js", "utf8");
+const unified = fs.readFileSync("js/unified-listings-v8.js", "utf8");
+const css = fs.readFileSync("css/unified-listings-v8.css", "utf8");
+const html = fs.readFileSync("index.html", "utf8");
+
+assert.match(script, /verification-pending-v661">미확인/);
+assert.match(script, /verification-done-v661">확인/);
+assert.match(script, /standard-card-grid-v661/);
+assert.match(script, /standard-card-main-v661/);
+assert.match(script, /customerMatchControls \? unifiedCardPartsV8\.badge : ''/);
+assert.match(script, /item-head-favorite-v661/);
+assert.match(script, /isFavorite\(item\) \? '★' : '☆'/);
+assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">🛣️/);
+assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">✏️/);
+assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">📝/);
+
+assert.match(unified, /masterMeta:\s*\{\}/);
+assert.match(unified, /regDate:\s*text\(item\.regDate\)/);
+assert.match(unified, /unified-detail-meta-v8/);
+assert.match(unified, /동일매물 ' \+ count \+ '개/);
+assert.doesNotMatch(unified, /원본 ' \+ count \+ '개 펼치기/);
+
+assert.match(
+  css,
+  /\.standard-card-main-v661\s*\{[^}]*grid-template-rows:\s*minmax\(26px, auto\) minmax\(30px, auto\) 29px/s
+);
+assert.match(
+  css,
+  /\.standard-card-main-v661 \.item-compact-actions-v650\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 34px[^}]*overflow:\s*visible/s
+);
+assert.match(css, /\.verification-pending-v661\s*\{[^}]*background:\s*#ffe476/s);
+assert.match(css, /\.verification-done-v661\s*\{[^}]*color:\s*#c32020/s);
+assert.match(css, /\.standard-card-main-v661 \.item-head-favorite-v661\.on\s*\{[^}]*color:\s*#f1b900/s);
+assert.match(css, /\.standard-card-main-v661 \.item-action-text-v661\s*\{[^}]*display:\s*none/s);
+assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*display:\s*inline/s);
+
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.14-main-card-three-line/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.0\.10-main-card-three-line/);
+assert.match(html, /script\.js\?v=6\.5\.40-main-card-three-line/);
+
+console.log("main listing three-line v6.6.1 tests passed");

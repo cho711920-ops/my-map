@@ -2,7 +2,7 @@
   "use strict";
 
   var API = "/api/apps-script";
-  var state = { groups: {}, detailCache: {}, pendingMove: null, loaded: false,
+  var state = { groups: {}, detailCache: {}, masterMeta: {}, pendingMove: null, loaded: false,
     openPropertyId: "", openOriginalId: "", detailRequestToken: 0 };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
@@ -14,6 +14,13 @@
   function number(value) {
     var parsed = Number(value);
     return Number.isFinite(parsed) ? parsed.toLocaleString("ko-KR", {maximumFractionDigits: 2}) : "-";
+  }
+  function detailDate(value) {
+    var raw = text(value);
+    if (!raw) return "";
+    return typeof global.formatListRegistrationDate === "function"
+      ? text(global.formatListRegistrationDate(raw))
+      : raw;
   }
   function desktop() { return global.innerWidth > 768; }
   function sourcePriority(original) {
@@ -64,6 +71,10 @@
     }
     (items || []).forEach(function(item) {
       var originals = group(item.propertyId);
+      state.masterMeta[text(item.propertyId)] = {
+        regDate: text(item.regDate),
+        buildingYear: text(item.buildingYear || item.approvalYear)
+      };
       item.unifiedOriginalsV8 = originals;
       item.unifiedOriginalCountV8 = originals.length || 1;
       item.thumbnailV8 = originals.length && originals[0].thumbnail || "";
@@ -109,7 +120,7 @@
     if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +
-        '원본 ' + count + '개 펼치기</button>';
+        '동일매물 ' + count + '개</button>';
     } else {
       var link = originals.length ? text(originals[0].link) : text(item && item.sourceLink);
       button = link
@@ -151,7 +162,7 @@
     if (existing) {
       existing.remove();
       card.classList.remove("unified-expanded-v8");
-      button.textContent = "원본 " + group(propertyId).length + "개 펼치기";
+      button.textContent = "동일매물 " + group(propertyId).length + "개";
       return;
     }
     var wrapper = document.createElement("div");
@@ -159,7 +170,7 @@
     wrapper.innerHTML = group(propertyId).map(function(original) { return originalRow(original, false); }).join("");
     card.appendChild(wrapper);
     card.classList.add("unified-expanded-v8");
-    button.textContent = "원본 닫기";
+    button.textContent = "동일매물 닫기";
   }
 
   function ensureDrawer() {
@@ -193,6 +204,8 @@
     var selected = originals.filter(function(original) {
       return text(original.originalId) === text(selectedOriginalId);
     })[0] || originals[0];
+    var masterMeta = state.masterMeta[text(propertyId)] || {};
+    var registrationDate = detailDate(masterMeta.regDate);
     var drawer = ensureDrawer();
     positionDrawer(drawer);
     document.getElementById("unifiedDetailTitleV8").textContent = selected
@@ -218,6 +231,7 @@
       '<section class="unified-detail-summary-v8"><div><span class="source-' + sourceKey(selected.source) + '">' +
         esc(selected.source) + '</span><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
         '<p>' + conditionLine(selected) + '</p>' +
+        (registrationDate ? '<div class="unified-detail-meta-v8"><span>등록일</span><b>' + esc(registrationDate) + '</b></div>' : '') +
         '<div class="unified-detail-actions-v8">' +
           (selected.link ? '<button type="button" onclick="window.open(\'' + esc(selected.link) +
             '\', \'_blank\', \'noopener,noreferrer\')">이 원본 링크 열기</button>' : '') +

@@ -2494,8 +2494,10 @@ function addListItem(item, appendTarget) {
     : "";
 
   var sourceLabel = isFieldVisitItem(item)
-    ? '<span class="gongsil-source-badge">임장가자</span>'
-    : "";
+    ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
+    : (isGongsilBoxItem(item)
+      ? '<span class="gongsil-source-badge verification-done-v661">확인</span>'
+      : "");
 
   var encodedKey = encodeURIComponent(item.key);
   var encodedEditTargetV648 = encodeURIComponent(
@@ -2516,6 +2518,14 @@ function addListItem(item, appendTarget) {
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
   if (unifiedCardPartsV8.sourceButton) sourceLinkButton = unifiedCardPartsV8.sourceButton;
   var customerMatchControls = buildCustomerMatchInlineControls(item);
+  var favoriteHeaderButtonV661 = !customerMatchControls
+    ? '<button type="button" class="item-list-add-btn favorite item-head-favorite-v661' +
+        (isFavorite(item) ? ' on' : '') + '" title="찜 또는 임장목록에 추가" aria-label="' +
+        (isFavorite(item) ? '즐겨찾기된 매물' : '즐겨찾기에 추가') + '" ' +
+        'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">' +
+        (isFavorite(item) ? '★' : '☆') +
+      '</button>'
+    : "";
   var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
   var headerContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, true);
   var depositDisplay = listDisplayValueV650(item, "deposit");
@@ -2525,8 +2535,10 @@ function addListItem(item, appendTarget) {
   var areaDisplay = listDisplayValueV650(item, "area");
   var memoToggleButton =
     '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
+      'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
       'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
-      (memoOpen ? '메모 ▲' : '메모 ▼') +
+      '<span class="item-action-text-v661">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
+      '<span class="item-action-emoji-v661" aria-hidden="true">📝</span>' +
     '</button>';
 
   var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
@@ -2535,9 +2547,9 @@ function addListItem(item, appendTarget) {
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
-    '<div class="item-card-grid-v650' + (customerMatchControls ? ' customer-match-card-grid-v654' : '') + '">' +
+    '<div class="item-card-grid-v650' + (customerMatchControls ? ' customer-match-card-grid-v654' : ' standard-card-grid-v661') + '">' +
       unifiedCardPartsV8.thumbnail +
-      '<div class="item-compact-main-v650' + (customerMatchControls ? ' customer-match-card-main-v654' : '') + '">' +
+      '<div class="item-compact-main-v650' + (customerMatchControls ? ' customer-match-card-main-v654' : ' standard-card-main-v661') + '">' +
         '<div class="item-compact-head-v650">' +
           '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
             '<input type="checkbox" class="action-select-check" ' +
@@ -2550,7 +2562,7 @@ function addListItem(item, appendTarget) {
             escapeHtml(cachedBuildingYearTextV6519) +
           '</span>' +
           doneLabel +
-          unifiedCardPartsV8.badge +
+          (customerMatchControls ? unifiedCardPartsV8.badge : '') +
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
@@ -2560,7 +2572,8 @@ function addListItem(item, appendTarget) {
             buildListElevatorIconV650() +
           '</span>' +
           (customerMatchControls ? headerContactButtonV654 : '') +
-          (regDateLabel
+          favoriteHeaderButtonV661 +
+          (customerMatchControls && regDateLabel
             ? '<span class="item-reg-date item-reg-date-head-v651' +
                 (!customerMatchControls ? ' standard-card-v651' : '') +
                 '">등록 ' + escapeHtml(regDateLabel) + '</span>'
@@ -2597,15 +2610,15 @@ function addListItem(item, appendTarget) {
             (!customerMatchControls ? actionContactButtonV654 : '') +
             '<button type="button" class="item-nav-btn" title="카카오맵 길찾기" ' +
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')">내비</button>' +
-            '<button type="button" class="item-roadview-btn" title="카카오 로드뷰" ' +
-          'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')">로드뷰</button>' +
+            '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
+          'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span><span class="item-action-emoji-v661" aria-hidden="true">🛣️</span></button>' +
             '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
           'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
             '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
           'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>' +
             sourceLinkButton +
-            '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" ' +
-          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')">수정</button>' +
+            '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
+          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span><span class="item-action-emoji-v661" aria-hidden="true">✏️</span></button>' +
           '</div>' +
           memoToggleButton +
         '</div>' +

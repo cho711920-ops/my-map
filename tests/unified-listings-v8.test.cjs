@@ -30,7 +30,7 @@ assert.match(backend, /101호와 102호/);
 assert.match(backend, /row\[16\] = ""/);
 
 assert.match(ui, /동일매물 ' \+ count \+ '개/);
-assert.match(ui, /원본 ' \+ count \+ '개 펼치기/);
+assert.match(ui, /동일매물 ' \+ count \+ '개/);
 assert.match(ui, /다른 공간으로 분리/);
 assert.match(ui, /다른 통합매물로 이동/);
 assert.match(ui, /이동할 통합매물 카드를 클릭하세요/);

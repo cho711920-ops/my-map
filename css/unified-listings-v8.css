@@ -669,3 +669,238 @@
     display: none !important;
   }
 }
+
+/* v8.0.14 PC 메인 매물카드 3줄 리뉴얼 */
+.item-action-emoji-v661,
+.item-head-favorite-v661 {
+  display: none !important;
+}
+
+@media (min-width: 769px) {
+  .standard-card-main-v661 {
+    grid-template-rows: minmax(26px, auto) minmax(30px, auto) 29px !important;
+    gap: 3px !important;
+  }
+
+  .standard-card-grid-v661 .unified-thumb-v8,
+  .standard-card-grid-v661 .unified-thumb-v8 img,
+  .standard-card-grid-v661 .unified-thumb-v8 > span {
+    min-height: 96px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-head-v650 {
+    min-height: 26px;
+    gap: 5px;
+  }
+
+  .standard-card-main-v661 .item-compact-head-v650 .item-building-name {
+    flex: 0 1 auto;
+    max-width: 142px;
+    min-width: 42px;
+    color: #0f172a;
+    font-size: 14.5px !important;
+    font-weight: 950 !important;
+    letter-spacing: -.02em;
+  }
+
+  .standard-card-main-v661 .item-address-room-v650 {
+    gap: 5px;
+    color: #25354a;
+    font-size: 13px !important;
+    font-weight: 850 !important;
+  }
+
+  .standard-card-main-v661 .item-address-room-v650 .item-room-badge {
+    padding: 2px 5px !important;
+    border-color: #b8cbe3;
+    background: #eff6ff;
+    color: #1e4f86;
+    font-size: 10.5px !important;
+    font-weight: 950;
+  }
+
+  .standard-card-main-v661 .item-reg-date-head-v651,
+  .standard-card-main-v661 .unified-badge-v8 {
+    display: none !important;
+  }
+
+  .standard-card-main-v661 .item-head-favorite-v661 {
+    display: inline-flex !important;
+    flex: 0 0 31px !important;
+    width: 31px !important;
+    min-width: 31px !important;
+    height: 27px !important;
+    min-height: 27px !important;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    padding: 0 !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: #8795a8 !important;
+    font-size: 23px !important;
+    line-height: 1 !important;
+    cursor: pointer;
+  }
+
+  .standard-card-main-v661 .item-head-favorite-v661:hover {
+    border-color: #f3d169 !important;
+    background: #fffbea !important;
+    color: #dca900 !important;
+  }
+
+  .standard-card-main-v661 .item-head-favorite-v661.on {
+    border-color: #f5cf51 !important;
+    background: #fff8d5 !important;
+    color: #f1b900 !important;
+  }
+
+  .standard-card-main-v661 .item-compact-price-v650.price-line {
+    min-height: 30px !important;
+    gap: 4px !important;
+    padding: 1px 5px !important;
+    border-radius: 7px;
+    background: #f7fbff;
+    font-size: 12.5px !important;
+    line-height: 26px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-price-v650 .price-main {
+    color: #075fbd !important;
+    font-size: 14.5px !important;
+    font-weight: 950 !important;
+  }
+
+  .standard-card-main-v661 .item-compact-price-v650 .price-fee,
+  .standard-card-main-v661 .item-compact-price-v650 .price-premium,
+  .standard-card-main-v661 .item-compact-price-v650 .price-area {
+    font-size: 12.5px !important;
+    font-weight: 850;
+  }
+
+  .standard-card-main-v661 .gongsil-source-badge {
+    padding: 4px 6px !important;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    font-size: 10px !important;
+    font-weight: 950 !important;
+  }
+
+  .verification-pending-v661 {
+    border-color: #e2b72a !important;
+    background: #ffe476 !important;
+    color: #624600 !important;
+  }
+
+  .verification-done-v661 {
+    border-color: #ee7777 !important;
+    background: #fff0f0 !important;
+    color: #c32020 !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 34px !important;
+    gap: 4px !important;
+    width: 100%;
+    min-height: 29px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left {
+    display: flex !important;
+    width: 100%;
+    min-width: 0 !important;
+    align-items: center;
+    gap: 3px !important;
+    overflow: hidden;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > button,
+  .standard-card-main-v661 .item-compact-actions-v650 > .item-memo-toggle {
+    height: 29px !important;
+    min-height: 29px !important;
+    padding: 0 7px !important;
+    font-size: 10px !important;
+    line-height: 27px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-list-add-btn {
+    display: none !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-nav-btn,
+  .standard-card-main-v661 .item-action-left > .item-building-register-btn {
+    flex: 0 0 auto !important;
+    min-width: 43px !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-roadview-btn,
+  .standard-card-main-v661 .item-action-left > .item-edit-btn-v630 {
+    flex: 0 0 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    padding: 0 !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-source-link-btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 48px !important;
+    max-width: 118px !important;
+    padding-right: 8px !important;
+    padding-left: 8px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px !important;
+    font-weight: 950 !important;
+  }
+
+  .standard-card-main-v661 .item-contact-button-v654.action-placement {
+    flex: 0 0 30px !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    padding: 0 !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 > .item-memo-toggle {
+    display: inline-flex !important;
+    grid-column: 2;
+    align-items: center;
+    justify-content: center;
+    width: 34px !important;
+    min-width: 34px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .standard-card-main-v661 .item-action-text-v661 {
+    display: none !important;
+  }
+
+  .standard-card-main-v661 .item-action-emoji-v661 {
+    display: inline !important;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .unified-detail-meta-v8 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 2px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    background: #f3f6fa;
+    color: #617187;
+    font-size: 11px;
+  }
+
+  .unified-detail-meta-v8 b {
+    color: #26384f;
+    font-size: 12px;
+  }
+}
