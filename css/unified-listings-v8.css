@@ -1345,11 +1345,11 @@
     width: max-content !important;
   }
 
-  .standard-card-main-v661 .item-action-left > .item-nav-btn,
-  .standard-card-main-v661 .item-action-left > .item-roadview-btn,
-  .standard-card-main-v661 .item-action-left > .item-building-register-btn,
-  .standard-card-main-v661 .item-action-left > .item-edit-btn-v630,
-  .standard-card-main-v661 .item-action-left > .item-source-link-btn {
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-nav-btn,
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-roadview-btn,
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-building-register-btn,
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-edit-btn-v630,
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-source-link-btn {
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
@@ -1402,7 +1402,7 @@
     color: #6841a5 !important;
   }
 
-  .standard-card-main-v661 .item-action-left > .unified-expand-btn-v8 {
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > .item-source-link-btn.unified-expand-btn-v8 {
     border: 1px solid #86d2a1 !important;
     background: #e7f8ed !important;
     color: #176c3b !important;
