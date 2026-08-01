@@ -24,7 +24,9 @@ ok(queue.includes('keepalive: true'), "페이지 종료 중에도 접수 요청�
 ok(queue.includes('js-async-mutation-finished'), "실제 완료·실패 이벤트가 필요합니다.");
 ok(queue.includes("완료 ") && queue.includes("저장 중") && queue.includes("실패 "), "상태 건수 표시가 필요합니다.");
 ok(html.indexOf('id="asyncMutationStatusV1"') < html.indexOf('class="quick-add-btn'), "저장상태는 빠른등록 바로 왼쪽에 있어야 합니다.");
-ok(html.includes("async-mutation-queue-v1.js?v=1.0.3-compact-status"), "새 저장상태 UI 캐시 버전이 필요합니다.");
+ok(html.includes("async-mutation-queue-v1.js?v=1.0.4-auto-hide-status"), "새 저장상태 UI 캐시 버전이 필요합니다.");
+ok(queue.includes('indicator.className = "async-mutation-status-v1 completed"') && queue.includes("}, 3000);"), "완료 표시는 3초 후 자동으로 숨겨야 합니다.");
+ok(queue.includes("setExternalState: setExternalState"), "통합매물 직접 저장도 동일한 상태 표시 흐름을 사용해야 합니다.");
 ok(css.includes("grid-column: 5 !important") && css.includes("@media (max-width: 768px)"), "태블릿·PC 상단 배치와 모바일 숨김 규칙이 필요합니다.");
 ok(css.includes(".v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1") && css.includes("display: none !important"), "모바일에서 저장상태를 숨겨야 합니다.");
 ok(queue.includes("<small>완료</small>") && queue.includes("<small>저장중</small>") && queue.includes("<small>실패</small>"), "좁은 화면에서도 잘리지 않는 3칸 상태 표시가 필요합니다.");

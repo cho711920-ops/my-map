@@ -325,3 +325,88 @@
   .unified-move-banner-v8,
   .desktop-tell-v8 { display: none !important; }
 }
+
+/* v8.0.4 데스크탑 상단 정리 · 세로 로드뷰 · 상세창 안전영역 · 작업상태 자동숨김 */
+@media (min-width: 769px) {
+  .filters {
+    grid-template-columns: minmax(500px, 1fr) max-content !important;
+    column-gap: 10px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 80px 80px 58px 94px 104px !important;
+    gap: 7px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action { grid-column: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-tell-v8 { grid-column: 3 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 5 !important; }
+
+  .map-roadview-vertical-v8 {
+    display: flex !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    height: 50px !important;
+    min-height: 50px !important;
+    flex-direction: column;
+    gap: 0;
+    padding: 3px 0 2px !important;
+    border-color: #8fc2f7 !important;
+    background: rgba(239, 247, 255, .97) !important;
+    color: #0875dc !important;
+  }
+
+  .map-roadview-vertical-v8 svg {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+  }
+
+  .map-roadview-vertical-v8 span {
+    font-size: 9px;
+    font-weight: 950;
+    line-height: 1;
+  }
+
+  .map-roadview-vertical-v8.active,
+  .map-roadview-vertical-v8[aria-pressed="true"] {
+    border-color: #0875dc !important;
+    background: #0875dc !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(8,117,220,.18) !important;
+  }
+
+  .unified-detail-drawer-v8 {
+    top: 68px;
+    bottom: 0;
+    height: auto;
+  }
+
+  .async-mutation-status-v1 {
+    top: 76px !important;
+    left: calc((100vw - clamp(570px, 34vw, 600px)) / 2) !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: 0 1px 2px rgba(255,255,255,.95), 0 0 5px rgba(255,255,255,.9);
+  }
+
+  .async-mutation-status-v1.idle { display: none !important; }
+  .async-mutation-status-v1.working,
+  .async-mutation-status-v1.completed,
+  .async-mutation-status-v1.failed { display: grid !important; }
+}
+
+@media (min-width: 769px) and (max-width: 1199px) {
+  .filters { grid-template-columns: minmax(390px, 1fr) max-content !important; }
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 68px 68px 52px 78px 90px !important;
+    gap: 5px !important;
+  }
+}

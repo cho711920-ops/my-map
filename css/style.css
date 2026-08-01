@@ -265,9 +265,9 @@
   min-height: 42px;
   height: 42px;
   padding: 3px 4px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: #fff;
+  background: transparent;
   color: #334155;
   box-shadow: none;
   font-size: 10px;
@@ -305,15 +305,25 @@
 }
 
 .async-mutation-status-v1.working {
-  border-color: #2563eb;
-  background: #eff6ff;
+  border-color: transparent;
+  background: transparent;
   color: #1d4ed8;
 }
 
+.async-mutation-status-v1.completed {
+  border-color: transparent;
+  background: transparent;
+  color: #047857;
+}
+
 .async-mutation-status-v1.failed {
-  border-color: #dc2626;
-  background: #fef2f2;
+  border-color: transparent;
+  background: transparent;
   color: #b91c1c;
+}
+
+.async-mutation-status-v1.idle {
+  display: none !important;
 }
 
 @media (min-width: 769px) {

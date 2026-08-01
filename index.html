@@ -16,7 +16,7 @@
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.5.28-linked-gongsil-contact">
+<link rel="stylesheet" href="css/style.css?v=6.5.29-clean-work-status">
 <link rel="stylesheet" href="css/print-v2.css">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.23-sort-controls">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.34-roadview-viewport">
@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.3-detail-hero-font">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.4-toolbar-detail-offset">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.17.2-tablet-safe-height">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
   <link rel="stylesheet" href="css/listing-duplicate-cleanup-v1.css?v=1.1.0">
@@ -91,13 +91,6 @@
         <button class="v6-primary-action desktop-main-action desktop-tell-v8" type="button"
           onclick="JSUnifiedListingsV8.openTell()">Tell</button>
 
-        <button id="mapRoadviewSelectBtn" class="v6-primary-action map-roadview-select" type="button"
-          onclick="toggleMapRoadviewSelection()" title="지도에서 로드뷰 선택" aria-label="지도에서 로드뷰 선택" aria-pressed="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path class="roadview-pin-shape" d="M12 2.1c-4 0-7.2 3.1-7.2 7 0 5.3 7.2 12.8 7.2 12.8s7.2-7.5 7.2-12.8c0-3.9-3.2-7-7.2-7Z"></path>
-            <circle class="roadview-pin-hole" cx="12" cy="9" r="2.7"></circle>
-          </svg>
-        </button>
         <button class="v6-primary-action ai" type="button" onclick="startAiVisitPreview()">AI임장하기</button>
         <button id="asyncMutationStatusV1" class="async-mutation-status-v1 idle" type="button"
           title="백그라운드 저장 상태" aria-label="완료 0건, 저장 중 0건, 실패 0건">
@@ -248,6 +241,15 @@
           </button>
         </div>
       </div>
+
+      <button id="mapRoadviewSelectBtn" class="map-quick-tool-btn map-roadview-select map-roadview-vertical-v8" type="button"
+        onclick="toggleMapRoadviewSelection()" title="지도에서 로드뷰 선택" aria-label="지도에서 로드뷰 선택" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="roadview-pin-shape" d="M12 2.1c-4 0-7.2 3.1-7.2 7 0 5.3 7.2 12.8 7.2 12.8s7.2-7.5 7.2-12.8c0-3.9-3.2-7-7.2-7Z"></path>
+          <circle class="roadview-pin-hole" cx="12" cy="9" r="2.7"></circle>
+        </svg>
+        <span>로드뷰</span>
+      </button>
 
       <div class="map-quick-tool-wrap">
         <button id="mapQuickListBtn" class="map-quick-tool-btn map-quick-heart-btn" type="button"
@@ -613,8 +615,8 @@
 </div>
 
 
-<script src="js/async-mutation-queue-v1.js?v=1.0.3-compact-status"></script>
-<script src="js/unified-listings-v8.js?v=8.0.5-linked-gongsil-contact"></script>
+<script src="js/async-mutation-queue-v1.js?v=1.0.4-auto-hide-status"></script>
+<script src="js/unified-listings-v8.js?v=8.0.6-fast-photo-detail"></script>
 <script src="js/script.js?v=6.5.38-linked-gongsil-contact"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>

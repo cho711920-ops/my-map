@@ -6,6 +6,10 @@
   var API_URL = "/api/apps-script";
   var sending = false;
   var pollTimer = null;
+  var hideTimer = null;
+  var lastSavingCount = 0;
+  var externalSavingCount = 0;
+  var externalFailedCount = 0;
   var lastServerStatus = {completed: 0, processing: 0, pending: 0, failed: 0};
 
   function readOutbox() {
@@ -72,10 +76,24 @@
     var pending = Number(lastServerStatus.pending || 0) + unsent;
     var processing = Number(lastServerStatus.processing || 0);
     var completed = Number(lastServerStatus.completed || 0);
-    var failed = Number(lastServerStatus.failed || 0);
-    indicator.className = "async-mutation-status-v1 " +
-      (failed ? "failed" : (pending || processing ? "working" : "idle"));
-    var saving = pending + processing;
+    var failed = Number(lastServerStatus.failed || 0) + externalFailedCount;
+    var saving = pending + processing + externalSavingCount;
+    var justCompleted = lastSavingCount > 0 && saving === 0 && failed === 0;
+    if (saving || failed) {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = null;
+      indicator.className = "async-mutation-status-v1 " + (failed ? "failed" : "working");
+    } else if (justCompleted) {
+      indicator.className = "async-mutation-status-v1 completed";
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(function() {
+        hideTimer = null;
+        if (externalSavingCount || externalFailedCount || readOutbox().length) return renderStatus();
+        indicator.className = "async-mutation-status-v1 idle";
+      }, 3000);
+    } else if (!indicator.classList.contains("completed") || !hideTimer) {
+      indicator.className = "async-mutation-status-v1 idle";
+    }
     indicator.innerHTML =
       "<span><small>완료</small><b>" + completed + "</b></span>" +
       "<span><small>저장중</small><b>" + saving + "</b></span>" +
@@ -87,6 +105,13 @@
     indicator.title = unsent
       ? "서버 전송 대기 " + unsent + "건 포함 · 누르면 새로 확인"
       : "누르면 저장 상태 새로 확인";
+    lastSavingCount = saving;
+  }
+
+  function setExternalState(active, failed) {
+    externalSavingCount = active ? 1 : 0;
+    externalFailedCount = failed ? 1 : 0;
+    renderStatus();
   }
 
   function sendOutbox() {
@@ -245,6 +270,7 @@
     enqueue: enqueue,
     refreshStatus: refreshStatus,
     retry: sendOutbox,
+    setExternalState: setExternalState,
     pendingCount: function() {
       return readOutbox().length + readActive().length;
     }

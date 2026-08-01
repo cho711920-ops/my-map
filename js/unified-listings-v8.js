@@ -182,7 +182,9 @@
 
   function positionDrawer(drawer) {
     var sidebar = document.getElementById("sidebar");
+    var toolbar = document.querySelector(".filters");
     drawer.style.right = (sidebar ? Math.round(sidebar.getBoundingClientRect().width) : 620) + "px";
+    drawer.style.top = Math.max(0, toolbar ? Math.round(toolbar.getBoundingClientRect().bottom) : 68) + "px";
   }
 
   function renderDetail(propertyId, originals, selectedOriginalId) {
@@ -256,6 +258,12 @@
     gallery.querySelectorAll(".unified-detail-photo-nav-v8").forEach(function(button) {
       button.hidden = images.length < 2;
     });
+    [1, 2].forEach(function(offset) {
+      if (images.length <= offset) return;
+      var preload = new Image();
+      preload.referrerPolicy = "no-referrer";
+      preload.src = images[(safeIndex + offset) % images.length];
+    });
   }
 
   function stepDetailPhoto(button, direction) {
@@ -292,7 +300,13 @@
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var cached = state.detailCache[propertyId];
     if (cached) return renderDetail(propertyId, cached, originalId);
-    renderDetail(propertyId, group(propertyId), originalId);
+    var initial = group(propertyId);
+    var selected = initial.filter(function(original) {
+      return text(original.originalId) === text(originalId);
+    })[0] || initial[0];
+    renderDetail(propertyId, initial, originalId);
+    if (selected && Array.isArray(selected.images) && selected.images.length &&
+        selected.images.length >= Math.max(1, Number(selected.photoCount) || 0)) return;
     apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
       state.detailCache[propertyId] = result.originals || [];
       renderDetail(propertyId, state.detailCache[propertyId], originalId);
@@ -323,11 +337,13 @@
   }
 
   function setSaving(active, failed) {
+    if (global.JSAsyncMutations && typeof global.JSAsyncMutations.setExternalState === "function") {
+      global.JSAsyncMutations.setExternalState(!!active, !!failed);
+      return;
+    }
     var indicator = document.getElementById("asyncMutationStatusV1");
-    if (!indicator) return;
-    indicator.classList.toggle("working", !!active && !failed);
-    indicator.classList.toggle("failed", !!failed);
-    indicator.classList.toggle("idle", !active && !failed);
+    if (indicator) indicator.className = "async-mutation-status-v1 " +
+      (failed ? "failed" : (active ? "working" : "idle"));
   }
 
   function move(originalId, targetMasterId, revision) {
