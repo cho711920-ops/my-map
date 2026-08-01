@@ -219,6 +219,7 @@
   .unified-detail-photo-nav-v8.prev { left: 12px; }
   .unified-detail-photo-nav-v8.next { right: 12px; }
   .unified-detail-photo-nav-v8:hover { background: rgba(15,23,42,.72); }
+  .unified-detail-photo-nav-v8:disabled { opacity: .48; cursor: wait; }
   .unified-detail-photo-nav-v8[hidden] { display: none; }
   .unified-gallery-empty-v8 { display: grid; min-height: 250px; place-items: center; padding: 30px 15px; color: #6b7280; font-size: 15px; text-align: center; }
   .unified-detail-summary-v8 { padding: 19px 18px; border-bottom: 1px solid #e2e8f0; }

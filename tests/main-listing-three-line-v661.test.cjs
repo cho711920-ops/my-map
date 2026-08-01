@@ -39,8 +39,8 @@ assert.match(css, /\.standard-card-main-v661 \.item-head-favorite-v661\.on\s*\{[
 assert.match(css, /\.standard-card-main-v661 \.item-action-text-v661\s*\{[^}]*display:\s*none/s);
 assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*display:\s*inline/s);
 
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.20-memo-right/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.0\.11-listing-photos-only/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.21-photo-prefetch/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.0\.12-photo-prefetch/);
 assert.match(html, /script\.js\?v=6\.5\.44-memo-emoji/);
 
 console.log("main listing three-line v6.6.1 tests passed");

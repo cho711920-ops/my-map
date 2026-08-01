@@ -2,8 +2,9 @@
   "use strict";
 
   var API = "/api/apps-script";
-  var state = { groups: {}, detailCache: {}, masterMeta: {}, pendingMove: null, loaded: false,
-    openPropertyId: "", openOriginalId: "", detailRequestToken: 0 };
+  var state = { groups: {}, detailCache: {}, detailPending: {}, masterMeta: {}, pendingMove: null,
+    loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
+    detailWarmupTimer: 0, detailWarmupIds: [] };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function esc(value) {
@@ -68,6 +69,88 @@
       });
   }
 
+  function needsDetail(originals, originalId) {
+    originals = orderOriginals(originals);
+    var selected = originals.filter(function(original) {
+      return text(original.originalId) === text(originalId);
+    })[0] || originals[0];
+    if (!selected) return false;
+    var imageCount = originalImages(selected).length;
+    return imageCount < Math.max(1, Number(selected.photoCount) || 0);
+  }
+
+  function primeDetailImages(originals) {
+    if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
+    var selected = orderOriginals(originals)[0];
+    originalImages(selected).slice(0, 2).forEach(function(url) {
+      var preload = new Image();
+      preload.decoding = "async";
+      preload.referrerPolicy = "no-referrer";
+      preload.src = url;
+    });
+  }
+
+  function loadDetail(propertyId) {
+    propertyId = text(propertyId);
+    if (!propertyId) return Promise.resolve([]);
+    if (Object.prototype.hasOwnProperty.call(state.detailCache, propertyId)) {
+      return Promise.resolve(state.detailCache[propertyId]);
+    }
+    if (state.detailPending[propertyId]) return state.detailPending[propertyId];
+    var request = apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
+      var originals = result.originals || [];
+      state.detailCache[propertyId] = originals;
+      delete state.detailPending[propertyId];
+      primeDetailImages(originals);
+      return originals;
+    }, function(error) {
+      delete state.detailPending[propertyId];
+      throw error;
+    });
+    state.detailPending[propertyId] = request;
+    return request;
+  }
+
+  function prefetch(encodedPropertyId, encodedOriginalId) {
+    if (!desktop()) return Promise.resolve([]);
+    var propertyId = decodeURIComponent(encodedPropertyId || "");
+    var originalId = decodeURIComponent(encodedOriginalId || "");
+    var originals = group(propertyId);
+    if (!needsDetail(originals, originalId)) return Promise.resolve(originals);
+    return loadDetail(propertyId).catch(function(error) {
+      console.warn("상세 사진 선행 조회 실패", propertyId, error);
+      return [];
+    });
+  }
+
+  function scheduleDetailWarmup(items) {
+    var seen = {};
+    state.detailWarmupIds = (items || []).map(function(item) { return text(item && item.propertyId); })
+      .filter(function(propertyId) {
+        if (!propertyId || seen[propertyId] || state.detailCache[propertyId] || state.detailPending[propertyId]) return false;
+        seen[propertyId] = true;
+        return needsDetail(group(propertyId), "");
+      }).slice(0, 4);
+    if (typeof global.setTimeout !== "function") return;
+    if (state.detailWarmupTimer && typeof global.clearTimeout === "function") {
+      global.clearTimeout(state.detailWarmupTimer);
+    }
+    if (!state.detailWarmupIds.length) return;
+    state.detailWarmupTimer = global.setTimeout(function() {
+      var ids = state.detailWarmupIds.slice();
+      var cursor = 0;
+      function worker() {
+        if (cursor >= ids.length) return;
+        var propertyId = ids[cursor++];
+        loadDetail(propertyId).catch(function(error) {
+          console.warn("상세 사진 유휴 조회 실패", propertyId, error);
+        }).then(worker);
+      }
+      worker();
+      if (ids.length > 1) global.setTimeout(worker, 120);
+    }, 250);
+  }
+
   function load(force) {
     if (state.loaded && !force) return Promise.resolve({groups: state.groups});
     return apiGet("unifiedListings").then(function(result) {
@@ -101,6 +184,7 @@
         return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
       }, 0);
     });
+    scheduleDetailWarmup(items);
     return items;
   }
 
@@ -127,6 +211,9 @@
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
       (thumbnail ? 'has-photo' : 'no-photo') + '" title="사진 크게 보기" ' +
+      'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
+      'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
+      'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.open(\'' + encodedId + '\')">' +
       (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
         'onerror="JSUnifiedListingsV8.imageError(this, true)">' : '<span>사진 없음</span>') +
@@ -160,7 +247,10 @@
     var encodedOriginalId = encodeURIComponent(text(original.originalId));
     var thumbnail = originalImage(original);
     return '<button type="button" class="unified-original-row-v8' + (selected ? ' selected' : '') + '" ' +
-      'data-original-id="' + esc(original.originalId) + '" onclick="event.stopPropagation(); ' +
+      'data-original-id="' + esc(original.originalId) + '" ' +
+      'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedPropertyId + '\', \'' + encodedOriginalId + '\')" ' +
+      'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedPropertyId + '\', \'' + encodedOriginalId + '\')" ' +
+      'onclick="event.stopPropagation(); ' +
       'JSUnifiedListingsV8.open(\'' + encodedPropertyId + '\', \'' + encodedOriginalId + '\')">' +
       '<span class="unified-original-thumb-v8 ' + (thumbnail ? 'has-photo' : 'no-photo') + '">' +
         (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
@@ -231,6 +321,7 @@
     document.getElementById("unifiedDetailSubtitleV8").textContent = originals.length > 1
       ? "동일 공간 원본 " + originals.length + "개" : "원본매물 1개";
     var images = originalImages(selected);
+    var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
     var body = document.getElementById("unifiedDetailBodyV8");
     body.innerHTML = !selected ? '<div class="unified-empty-v8">원본매물 정보가 없습니다.</div>' :
       '<section class="unified-detail-gallery-v8">' +
@@ -266,7 +357,7 @@
     var detailGallery = body.querySelector(".unified-detail-gallery-v8");
     if (detailGallery && images.length) {
       detailGallery._imagesV8 = images.slice();
-      detailGallery._photoCountV8 = images.length;
+      detailGallery._photoCountV8 = photoCount;
       detailGallery._propertyIdV8 = propertyId;
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._failedImagesV8 = {};
@@ -290,8 +381,10 @@
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");
     if (counter) counter.textContent = (safeIndex + 1) + " / " +
       Math.max(images.length, Number(gallery._photoCountV8) || 0);
+    var photoCount = Math.max(images.length, Number(gallery._photoCountV8) || 0);
     gallery.querySelectorAll(".unified-detail-photo-nav-v8").forEach(function(button) {
-      button.hidden = images.length < 2;
+      button.hidden = photoCount < 2;
+      button.disabled = images.length < 2;
     });
     [1, 2].forEach(function(offset) {
       if (images.length <= offset) return;
@@ -349,11 +442,10 @@
     renderDetail(propertyId, initial, originalId);
     if (selected && Array.isArray(selected.images) && selected.images.length &&
         selected.images.length >= Math.max(1, Number(selected.photoCount) || 0)) return;
-    apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
-      state.detailCache[propertyId] = result.originals || [];
+    loadDetail(propertyId).then(function(originals) {
       if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
           state.openOriginalId !== originalId) return;
-      renderDetail(propertyId, state.detailCache[propertyId], originalId);
+      renderDetail(propertyId, originals, originalId);
     }).catch(function(error) { console.error(error); });
   }
 
@@ -581,7 +673,7 @@
 
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
-    toggle: toggle, open: open, close: closeDetail, handleCardClick: handleCardClick,
+    toggle: toggle, open: open, prefetch: prefetch, close: closeDetail, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
     loadContacts: loadContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
