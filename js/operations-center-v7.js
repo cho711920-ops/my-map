@@ -175,8 +175,8 @@
         dashboardCard("최근 자동정리", cleanupRemoved, cleanupHint, cleanup.at ? "success" : "") +
       '</div>' +
       '<div class="operations-workflow-card">' +
-        '<div><b>자동 처리 흐름</b><span>수집원본 → 자동 중복판정 → 대표매물/검증대기 → 고객 재매칭</span></div>' +
-        '<div class="operations-source-priority"><span>대표출처 우선순위</span><b>직접등록 › 당근 › 공실박스 › 네이버</b></div>' +
+        '<div><b>자동 처리 흐름</b><span>출처별 원본 보존 → 동일 공간 연결/검증 → 통합매물 표시 → 고객 재매칭</span></div>' +
+        '<div class="operations-source-priority"><span>원본 보존 방식</span><b>당근 · 네이버 · 공실박스 링크와 조건을 각각 보존</b></div>' +
       '</div>' +
       '<div class="operations-guidance">' +
         '<b>사람이 확인할 일은 두 가지뿐입니다.</b>' +
