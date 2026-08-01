@@ -1981,6 +1981,7 @@
     var detail = article.articleDetail || {};
     var broker = article.brokerInfo || {};
     var articleNo = articleId(article);
+    var listImages = finImageUrls(article);
     var tradeCode = clean(article.tradeType);
     var categoryCode = clean(article.realEstateType);
     var deposit = isFinPrice
@@ -2058,10 +2059,43 @@
         article.cpPcArticleUrl || article.cpMobileArticleUrl || article.providerUrl
       ),
       currentUrl: location.href,
-      sourceLink: naverListingUrl(articleNo, location.href)
+      sourceLink: naverListingUrl(articleNo, location.href),
+      primaryImage: listImages[0] || "",
+      imageUrls: listImages
     };
     normalized.listSnapshot = naverListSnapshot(normalized);
     return normalized;
+  }
+
+  function finImageUrls(input) {
+    var urls = [];
+    var seen = Object.create(null);
+    var imageKey = /(?:image|images|photo|photos|thumbnail|thumb|picture|pictures|media)/i;
+    function add(value) {
+      var url = clean(value);
+      if (!/^https?:\/\//i.test(url) || seen[url]) return;
+      if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(url) &&
+          !/(?:image|photo|thumb|pstatic|naver|cdn)/i.test(url)) return;
+      seen[url] = true;
+      urls.push(url);
+    }
+    function walk(value, key, depth) {
+      if (value == null || depth > 5) return;
+      if (typeof value === "string") {
+        if (imageKey.test(key || "") || /^https?:\/\//i.test(value)) add(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.slice(0, 40).forEach(function(entry) { walk(entry, key, depth + 1); });
+        return;
+      }
+      if (typeof value !== "object") return;
+      Object.keys(value).slice(0, 100).forEach(function(childKey) {
+        if (imageKey.test(childKey) || depth < 3) walk(value[childKey], childKey, depth + 1);
+      });
+    }
+    walk(input, "", 0);
+    return urls.slice(0, 30);
   }
 
   function finDetailFloor(detailResult, fallback) {
@@ -2188,13 +2222,19 @@
       address,
       (keyResult.key && keyResult.key.pnu) || keyResult.pnu
     );
+    var detailImages = finImageUrls(detailResult);
+    var mergedImages = (item.imageUrls || []).concat(detailImages).filter(function(url, index, list) {
+      return url && list.indexOf(url) === index;
+    }).slice(0, 30);
     var detailed = Object.assign({}, item, {
       realEstateTypeCode: realEstateType,
       tradeTypeCode: tradeType,
       jibunAddress: exactAddress || item.jibunAddress,
       floorInfo: finDetailFloor(detailResult, item.floorInfo),
       roomInfo: finDetailRoom(detailResult, item.roomInfo),
-      areaSquareMeter: finDetailArea(detailResult, item.areaSquareMeter)
+      areaSquareMeter: finDetailArea(detailResult, item.areaSquareMeter),
+      primaryImage: mergedImages[0] || item.primaryImage || "",
+      imageUrls: mergedImages
     });
     return {
       item: detailed,
@@ -2240,6 +2280,7 @@
       clean(item.roomInfo),
       clean(item.jibunAddress),
       clean(item.description),
+      Array.isArray(item.imageUrls) ? item.imageUrls.map(clean).sort() : [],
       Array.isArray(item.tags) ? item.tags.map(clean).sort() : []
     ]);
   }

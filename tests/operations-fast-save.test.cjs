@@ -21,10 +21,10 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "7\.26\.11"/);
+assert.match(backend, /MM_VERSION = "8\.0\.0"/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
-assert.match(backend, /사용자 확인 조건차이 통합 · 기존 임대조건 유지/);
+assert.match(backend, /사용자가 같은 실제 공간으로 확인/);
 assert.match(backend, /function mmReviewWorkspace_\(query\)/);
 assert.match(backend, /allPendingTotal/);
 assert.match(backend, /searchKey \? 300 : 120/);
@@ -148,8 +148,8 @@ context.mmMergeItemIntoMaster_(manualMaster, incomingDaangn, false, true);
 assert.equal(manualMaster[4], 1000);
 assert.equal(manualMaster[5], 70);
 assert.equal(manualMaster[8], 10);
-assert.equal(manualMaster[16], incomingDaangn.link);
-assert.equal(manualMaster[26], incomingDaangn.link);
+assert.equal(manualMaster[16], "");
+assert.equal(manualMaster[26], "");
 
 const recoveredSourceItem = {
   source: "당근",
@@ -221,12 +221,11 @@ const retryResult = context.mmApplyReviewActionToState_(
   []
 );
 assert.equal(retryResult.masterId, "M-RETRY");
-assert.equal(retryResult.recovered, true);
+assert.equal(retryResult.recovered, false);
 assert.equal(retryState.masterRows.length, 1);
-assert.equal(retryState.masterRows[0][16], incomingDaangn.link);
-assert.equal(retryState.masterRows[0][26], incomingDaangn.link);
-assert.equal(retryHistory.length, 1);
-assert.equal(retryHistory[0][3], "대표링크복구");
+assert.equal(retryState.masterRows[0][16], "");
+assert.equal(retryState.masterRows[0][26], "");
+assert.equal(retryHistory.length, 0);
 
 const storedLinkColumns = Array(14).fill("");
 storedLinkColumns[0] = "M-MANUAL";

@@ -993,7 +993,10 @@ function getFilteredItems() {
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || item.type === selectedType;
-    var matchSource = !selectedSource || getItemSourceType(item) === selectedSource;
+    var matchSource = !selectedSource ||
+      (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.matchesSource === "function"
+        ? window.JSUnifiedListingsV8.matchesSource(item, selectedSource)
+        : getItemSourceType(item) === selectedSource);
 
     var industryTerms = industryKeyword.split(",").map(function(term) {
       return term.trim();
@@ -2422,11 +2425,16 @@ function addListItem(item, appendTarget) {
   );
   var pyeongMiniBadge = buildPyeongMiniBadge(item);
   var regDateLabel = formatListRegistrationDate(item.regDate);
+  var unifiedCardPartsV8 = window.JSUnifiedListingsV8 &&
+    typeof window.JSUnifiedListingsV8.cardParts === "function"
+      ? window.JSUnifiedListingsV8.cardParts(item)
+      : { thumbnail: "", badge: "", sourceButton: "" };
   var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
   var sourceLinkButton = hasSourceLink
     ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
         'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedEditTargetV648 + '\')">링크</button>'
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
+  if (unifiedCardPartsV8.sourceButton) sourceLinkButton = unifiedCardPartsV8.sourceButton;
   var customerMatchControls = buildCustomerMatchInlineControls(item);
   var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
   var headerContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, true);
@@ -2448,6 +2456,7 @@ function addListItem(item, appendTarget) {
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
     '<div class="item-card-grid-v650">' +
+      unifiedCardPartsV8.thumbnail +
       '<div class="item-compact-main-v650">' +
         '<div class="item-compact-head-v650">' +
           '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
@@ -2461,6 +2470,7 @@ function addListItem(item, appendTarget) {
             escapeHtml(cachedBuildingYearTextV6519) +
           '</span>' +
           doneLabel +
+          unifiedCardPartsV8.badge +
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
@@ -2522,6 +2532,13 @@ function addListItem(item, appendTarget) {
       '</div>' +
     '</div>' +
     memoPanel;
+
+  div.onclick = function(event) {
+    if (window.JSUnifiedListingsV8 &&
+        typeof window.JSUnifiedListingsV8.handleCardClick === "function") {
+      window.JSUnifiedListingsV8.handleCardClick(item, event);
+    }
+  };
 
   div.ondblclick = function(event) {
     if (

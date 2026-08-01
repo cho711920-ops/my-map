@@ -32,11 +32,13 @@ assert.match(
 );
 assert.match(
   backend,
-  /function mmMergeItemIntoMaster_[\s\S]*row\[MM_MASTER_REPRESENTATIVE_SOURCE_COLUMN - 1\] = item\.source;/
+  /function mmMergeItemIntoMaster_[\s\S]*v8 통합매물은 물리공간의 껍데기[\s\S]*row\[16\] = "";/
 );
 assert.doesNotMatch(
   backend,
-  /function mmMergeItemIntoMaster_[\s\S]*?row\[18\] = item\.source;/
+  /function mmMergeItemIntoMaster_[\s\S]*?mmMergeExactGongsilContacts_\(row, item\)/
 );
+assert.match(backend, /var MM_V8_TELL_SHEET = "JS_연락처원본"/);
+assert.match(backend, /v8부터 공실박스 연락처는 JS_연락처원본\(Tell\)에만 보관/);
 
 console.log("operations contact-column conflict tests: ok");

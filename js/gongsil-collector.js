@@ -1127,7 +1127,17 @@
       return { ok: false, reason: "임대조건 없음" };
     }
 
-    var phones = await collectPhones(item, requestBody, addressData);
+    var detail = await fetchDetailData(item);
+    var phones;
+    var contactError = "";
+    try {
+      phones = await collectPhones(item, requestBody, addressData, detail);
+    } catch (error) {
+      /* 연락처 확인 실패가 매물·사진 수집 전체를 막지 않게 분리합니다. */
+      contactError = text(error && error.message || error);
+      phones = { landlordPrimary: "", tenantPrimary: "", extraMemo: [], contacts: [] };
+    }
+    var imageUrls = collectMediaUrls(item, detail);
     var memo = buildMemo(item);
     var pyeong = getPyeong(item);
     var values = [
@@ -1154,9 +1164,44 @@
         externalId: text(pick(item, ["Bfidx", "bfidx", "BfIdx"])),
         listSnapshot: gongsilListSnapshot(item),
         contactList: phones.contacts,
+        primaryImage: imageUrls[0] || "",
+        imageUrls: imageUrls,
+        contactError: contactError,
+        raw: { list: item, detail: detail },
         values: values
       }
     };
+  }
+
+  function collectMediaUrls() {
+    var urls = [];
+    var seen = Object.create(null);
+    var imageKey = /(?:image|images|photo|photos|thumbnail|thumb|picture|pictures|media)/i;
+    function add(value) {
+      var url = text(value);
+      if (!/^https?:\/\//i.test(url) || seen[url]) return;
+      if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(url) &&
+          !/(?:image|photo|thumb|cdn|gongsil)/i.test(url)) return;
+      seen[url] = true;
+      urls.push(url);
+    }
+    function walk(value, key, depth) {
+      if (value == null || depth > 5) return;
+      if (typeof value === "string") {
+        if (imageKey.test(key || "") || /^https?:\/\//i.test(value)) add(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.slice(0, 40).forEach(function(entry) { walk(entry, key, depth + 1); });
+        return;
+      }
+      if (typeof value !== "object") return;
+      Object.keys(value).slice(0, 100).forEach(function(childKey) {
+        if (imageKey.test(childKey) || depth < 3) walk(value[childKey], childKey, depth + 1);
+      });
+    }
+    Array.prototype.slice.call(arguments).forEach(function(value) { walk(value, "", 0); });
+    return urls.slice(0, 30);
   }
 
   async function decryptAddressData(item, requestId) {
@@ -1480,12 +1525,12 @@
     });
   }
 
-  async function collectPhones(item, requestBody, addressData) {
+  async function collectPhones(item, requestBody, addressData, providedDetail) {
     var contacts = [];
     var listingCandidates = [];
     var buildingCandidates = [];
 
-    var detail = await fetchDetailData(item);
+    var detail = providedDetail || await fetchDetailData(item);
     appendContactFields(listingCandidates, detail && detail.floorinfo, [
       "Tels", "tels", "FTels", "ftels", "Ftel", "ftel",
       "TelList", "telList", "Phones", "phones", "Contacts", "contacts"

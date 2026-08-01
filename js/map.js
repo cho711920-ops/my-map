@@ -858,7 +858,10 @@ function loadSheet(isAuto) {
     sheetRequest,
     typeof loadSharedGeocodeCache === "function"
       ? loadSharedGeocodeCache()
-      : Promise.resolve({ ok: false, entries: {} })
+      : Promise.resolve({ ok: false, entries: {} }),
+    window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function"
+      ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
+      : Promise.resolve({ ok: false, groups: {} })
   ])
     .then(function(results) {
       var data = results[0];
@@ -906,6 +909,10 @@ function loadSheet(isAuto) {
         item.key = itemKey(item);
 
         if (item.address) rawItems.push(item);
+      }
+
+      if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+        window.JSUnifiedListingsV8.attach(rawItems, results[2]);
       }
 
       geocodeItems(rawItems, function(doneItems) {

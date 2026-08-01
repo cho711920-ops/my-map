@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.0">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.17.2-tablet-safe-height">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.11-review-split-panes">
   <link rel="stylesheet" href="css/listing-duplicate-cleanup-v1.css?v=1.1.0">
@@ -87,6 +88,8 @@
           onclick="openOperationsCenter('dashboard')">운영현황</button>
         <button class="v6-primary-action desktop-main-action desktop-customer-action" type="button"
           onclick="openOperationsCenter('customers')">고객매칭</button>
+        <button class="v6-primary-action desktop-main-action desktop-tell-v8" type="button"
+          onclick="JSUnifiedListingsV8.openTell()">Tell</button>
 
         <button id="mapRoadviewSelectBtn" class="v6-primary-action map-roadview-select" type="button"
           onclick="toggleMapRoadviewSelection()" title="지도에서 로드뷰 선택" aria-label="지도에서 로드뷰 선택" aria-pressed="false">
@@ -611,6 +614,7 @@
 
 
 <script src="js/async-mutation-queue-v1.js?v=1.0.3-compact-status"></script>
+<script src="js/unified-listings-v8.js?v=8.0.0"></script>
 <script src="js/script.js?v=6.5.35-list-actions-by-id"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>

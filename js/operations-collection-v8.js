@@ -325,7 +325,7 @@
     var group = selectedGroup();
     if (group) extraState.selectedGroupKey = group.groupKey;
     var filters = ["all", "높음", "중간", "낮음"];
-    panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>위험도와 차이값을 확인하고 통합·별도등록·보류만 선택하세요. 처리 후 다음 항목이 자동으로 열립니다.</span></div>' +
+    panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>왼쪽 기존 통합매물과 오른쪽 신규 원본매물을 비교해 같은 공간·다른 공간·보류만 선택하세요.</span></div>' +
       '<div class="review-toolbar-actions"><button type="button" title="전체 검증대상을 검사하고 주소·층/호실·가격·평수가 정확히 맞는 항목만 자동통합합니다." onclick="repairRoomlessExactReviews()">자동중복 정리</button>' +
       '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-queue-tools">' +
@@ -395,7 +395,7 @@
       '<section class="review-existing-panel"><header class="review-section-heading">' +
         '<div><span class="review-existing-badge">기존매물</span><strong>통합 대상 ' +
           candidates.length + '건</strong></div>' +
-        '<small>대표 1건을 선택해야 통합됩니다. 다른 기존매물은 별도로 중복 정리합니다.</small>' +
+        '<small>동일한 실제 공간 1건을 선택해야 연결됩니다. 다른 기존매물은 별도로 정리합니다.</small>' +
       '</header><div class="review-existing-list">' +
       (candidates.length ? candidates.map(function(candidate, candidateIndex) {
         var propertyId = text(candidate.propertyId);
@@ -407,13 +407,7 @@
           '<div class="review-master-controls">' +
             '<label><input type="radio" name="reviewMasterTarget" value="' + escape(propertyId) + '"' +
               (isMaster ? ' checked' : '') + ' onchange="selectReviewMaster(\'' +
-              escape(propertyId) + '\')"><span>대표</span></label>' +
-            (candidates.length > 1
-              ? '<label class="review-duplicate-check"><input type="checkbox" value="' +
-                escape(propertyId) + '"' + (duplicateSelection[propertyId] ? ' checked' : '') +
-                (isMaster ? ' disabled' : '') + ' onchange="toggleReviewDuplicateMaster(\'' +
-                escape(propertyId) + '\', this.checked)"><span>중복정리</span></label>'
-              : '') +
+              escape(propertyId) + '\')"><span>동일 공간</span></label>' +
           '</div>' +
           '<div class="review-compact-main"><header><h4><span class="review-match-number">기존 ' +
             (candidateIndex + 1) + '</span> ' +
@@ -431,14 +425,6 @@
       }).join("") : '<article class="review-candidate review-candidate-empty"><h4>연결된 기존 매물 없음</h4>' +
         '<p>비교할 기존 매물이 없으므로 별도 신규등록이 권장됩니다.</p></article>') +
       '</div>' +
-      (candidates.length > 1
-        ? '<div class="review-existing-footer"><span>대표 <b>' +
-          (selectedMasterId ? '1' : '0') + '</b>건 · 정리대상 <b>' +
-          extraState.selectedDuplicateMasterIds.length + '</b>건</span>' +
-          '<button type="button" onclick="consolidateSelectedExistingMasters()"' +
-          (!selectedMasterId || !extraState.selectedDuplicateMasterIds.length ? ' disabled' : '') +
-          '>선택 기존중복 정리</button></div>'
-        : '') +
       '</section>' +
       '<section class="review-new-panel"><header class="review-section-heading">' +
         '<div><span class="review-new-badge">신규수집</span><strong>' + group.items.length +
@@ -459,7 +445,7 @@
             escape(matchInfo.label) +
           '</strong><em>' + escape(entry.type) + '</em></span><span class="review-compact-address">' +
             escape(entry.address) + ' ' + escape(entry.room) + '</span><span class="review-compact-note">' +
-            escape(entry.comparison || entry.memo || "비교 메모 없음") + '</span></span>' +
+            escape(entry.memo || "원본 메모 없음") + '</span></span>' +
           '<span class="review-compact-values">' + compactValues(entry) + '</span></label>';
       }).join("") +
       '</div></section><div class="review-action-buttons">' +
@@ -470,11 +456,9 @@
           ? '자동 중복조건은 다르지만 주소와 층·호실을 확인한 뒤 기존 임대조건을 유지하며 통합합니다.'
           : '기존 임대조건을 유지하고 신규 출처·링크를 통합합니다.') + '"' +
         (!selectedCount || !selectedMasterId ? ' disabled' : '') + '>' +
-        (manualMergeReady ? '확인 후 조건유지 통합' : '조건유지 통합') + '</button>' +
-      '<button class="condition" type="button" onclick="decideCurrentReview(\'condition\')"' +
-        (selectedCount !== 1 || !selectedMasterId ? ' disabled' : '') + '>신규조건 갱신</button>' +
+        '같은 공간 = 동일매물</button>' +
       '<button class="create" type="button" onclick="decideCurrentReview(\'create\')"' +
-        (!selectedCount ? ' disabled' : '') + '>별도 신규등록</button>' +
+        (!selectedCount ? ' disabled' : '') + '>다른 공간 = 다른매물</button>' +
       '<button class="hold" type="button" onclick="decideCurrentReview(\'hold\')"' +
         (!selectedCount ? ' disabled' : '') + '>보류</button>' +
       '</div>';
@@ -724,20 +708,16 @@
     var manualMerge = action === "merge" && !selectedItemsMatchMaster(group);
     var labels = {
       merge: {
-        title: manualMerge
-          ? selectedCount + "건의 조건 차이를 확인하고 통합할까요?"
-          : selectedCount + "건을 선택한 대표매물에 통합할까요?",
-        description: manualMerge
-          ? "자동 중복조건은 일치하지 않습니다. 같은 주소와 층·호실의 동일 매물임을 확인한 경우에만 진행해 주세요.\n기존 보증금·월세·평수는 유지하고 신규 출처·당근 링크·연락처·메모만 보강하며, 수동 통합 사실은 변경이력에 남습니다."
-          : "선택한 신규 원본을 한 번에 기존 매물의 출처이력으로 통합합니다.\n기존 임대조건은 그대로 유지하고, 비어 있는 값·연락처·메모·출처 링크만 보강합니다."
+        title: selectedCount + "건을 같은 실제 공간으로 연결할까요?",
+        description: "선택한 신규 원본매물을 왼쪽 통합매물에 연결합니다.\n각 원본의 보증금·월세·평수·사진·링크는 서로 섞지 않고 그대로 보존합니다."
       },
       condition: {
         title: "신규매물의 임대조건으로 갱신할까요?",
         description: "선택한 신규매물 1건의 보증금·월세·관리비·권리금·평수만 대표 기존매물에 반영합니다.\n주소·층·호실·건물명은 바꾸지 않으며, 이전 조건은 변경이력에 남습니다."
       },
       create: {
-        title: selectedCount + "건을 별도 신규매물로 등록할까요?",
-        description: "선택한 매물마다 새로운 매물ID를 만들어 JS통합매물현황에 일괄 등록합니다."
+        title: selectedCount + "건을 서로 다른 실제 공간으로 등록할까요?",
+        description: "선택한 원본매물마다 별도의 통합매물ID를 만들어 지도에 각각 표시합니다."
       },
       hold: {
         title: selectedCount + "건을 보류할까요?",
@@ -747,7 +727,7 @@
     var info = labels[action];
     if (!info) return;
     if ((action === "merge" || action === "condition") && !text(extraState.selectedMasterId)) {
-      message("통합할 대표 기존매물을 먼저 선택해 주세요.", "error");
+      message("같은 공간으로 연결할 기존 통합매물을 먼저 선택해 주세요.", "error");
       return;
     }
     if (action === "condition" && selectedCount !== 1) {
@@ -812,7 +792,7 @@
       reviewAction: action,
       masterId: masterId,
       manualMergeConfirmed: manualMerge,
-      manualMergeReason: manualMerge ? "사용자 조건차이 확인 후 조건유지 통합" : ""
+      manualMergeReason: manualMerge ? "사용자가 같은 실제 공간으로 확인" : ""
     }).then(function(result) {
       var processedIds = result.processedReviewIds && result.processedReviewIds.length
         ? result.processedReviewIds.map(text)

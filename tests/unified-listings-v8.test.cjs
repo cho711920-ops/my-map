@@ -1,0 +1,134 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+
+const backend = fs.readFileSync(
+  "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_통합운영시스템_v7.gs",
+  "utf8"
+);
+const ui = fs.readFileSync("js/unified-listings-v8.js", "utf8");
+const css = fs.readFileSync("css/unified-listings-v8.css", "utf8");
+const naver = fs.readFileSync("js/naver-collector.js", "utf8");
+const gongsil = fs.readFileSync("js/gongsil-collector.js", "utf8");
+const daangn = fs.readFileSync(
+  "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_당근수집기_v2_개별및클러스터.gs",
+  "utf8"
+);
+
+assert.match(backend, /MM_VERSION = "8\.0\.0"/);
+assert.match(backend, /var MM_V8_ORIGINAL_SHEET = "JS_원본매물"/);
+assert.match(backend, /var MM_V8_RELATION_SHEET = "JS_통합매물연결"/);
+assert.match(backend, /var MM_V8_MEDIA_SHEET = "JS_원본미디어"/);
+assert.match(backend, /var MM_V8_TELL_SHEET = "JS_연락처원본"/);
+assert.match(backend, /function mmV8MoveOriginal_/);
+assert.match(backend, /expectedRevision/);
+assert.match(backend, /verifiedOriginal !== targetMasterId \|\| verifiedSource !== targetMasterId/);
+assert.match(backend, /지번주소·층호실 동일 · 원본매물 연결/);
+assert.match(backend, /101호와 102호/);
+assert.match(backend, /row\[16\] = ""/);
+
+assert.match(ui, /동일매물 /);
+assert.match(ui, /다른 공간으로 분리/);
+assert.match(ui, /다른 통합매물로 이동/);
+assert.match(ui, /이동할 통합매물 카드를 클릭하세요/);
+assert.match(ui, /openGallery/);
+assert.match(ui, /openTell/);
+assert.match(css, /unified-expanded-v8/);
+assert.match(css, /border: 1px solid #93c5fd/);
+assert.match(css, /async-mutation-status-v1\.idle \{ display: none/);
+assert.match(naver, /function finImageUrls/);
+assert.match(gongsil, /function collectMediaUrls/);
+assert.match(gongsil, /연락처 확인 실패가 매물·사진 수집 전체를 막지 않게 분리/);
+assert.match(daangn, /articleByOriginalArticleId/);
+assert.match(daangn, /raw: article/);
+assert.match(daangn, /function dgImageUrls_/);
+assert.match(daangn, /primaryImage: record\.primaryImage/);
+
+const context = {
+  Utilities: {
+    formatDate() { return "2026-08-01 10:00:00"; },
+    getUuid() { return "uuid"; },
+    DigestAlgorithm: {SHA_256: "SHA_256"},
+    Charset: {UTF_8: "UTF_8"},
+    computeDigest() { return Array(32).fill(7); }
+  },
+  Session: {getScriptTimeZone() { return "Asia/Seoul"; }}
+};
+vm.createContext(context);
+vm.runInContext(backend, context);
+
+const master = Array(31).fill("");
+master[0] = "테스트상가";
+master[1] = "서구 용문동 219-8";
+master[2] = "101호";
+master[3] = "일반상가";
+master[4] = 1000;
+master[5] = 50;
+master[8] = 9;
+master[15] = "M-SPACE-1";
+master[17] = "활성";
+master[19] = context.mmPhysicalKey_(master[1], master[2]);
+master[20] = context.mmConditionKey_(master[4], master[5], master[8]);
+
+function baseState() {
+  const physical = context.mmPhysicalKey_(master[1], master[2]);
+  const floor = context.mmAddressFloorKey_(master[1], master[2]);
+  return {
+    masterRows: [master.slice()],
+    sourceRows: [],
+    sourceByKey: {},
+    heldSourceKeys: {},
+    heldFingerprints: {},
+    masterById: {"M-SPACE-1": 0},
+    masterByPhysical: {[physical]: [0]},
+    masterByExact: {},
+    masterByAddressOffer: {},
+    masterByAddressPrice: {},
+    masterByAddressFloor: {[floor]: [0]},
+    masterByAddressFloorPrice: {}
+  };
+}
+
+function raw(room, deposit, rent, area, sourceId) {
+  const row = Array(29).fill("");
+  row[0] = "R-" + sourceId;
+  row[1] = "snapshot";
+  row[2] = "2026-08-01 10:00:00";
+  row[3] = "당근";
+  row[4] = sourceId;
+  row[7] = "https://realty.daangn.com/item/" + sourceId;
+  row[8] = "테스트상가";
+  row[9] = "대전광역시 서구 용문동 219-8";
+  row[10] = "서구 용문동 219-8";
+  row[11] = room;
+  row[12] = "일반상가";
+  row[13] = deposit;
+  row[14] = rent;
+  row[17] = area;
+  row[22] = JSON.stringify({
+    imageUrls: ["https://cdn.example.com/listing-" + sourceId + ".jpg"]
+  });
+  return row;
+}
+
+const differentTermsSameSpace = context.mmPlanRaw_(raw("101호", 3000, 180, 23.8, "D-1"), baseState());
+assert.equal(differentTermsSameSpace.type, "merge");
+assert.equal(differentTermsSameSpace.masterId, "M-SPACE-1");
+
+const differentRoom = context.mmPlanRaw_(raw("102호", 1000, 50, 9, "D-2"), baseState());
+assert.equal(differentRoom.type, "create");
+
+const ambiguousFloor = context.mmPlanRaw_(raw("1층", 1000, 50, 9, "D-3"), baseState());
+assert.equal(ambiguousFloor.type, "review");
+assert.equal(ambiguousFloor.reviewType, "층호실표기확인");
+
+const media = context.mmV8ExtractMedia_({
+  images: [{url: "https://cdn.example.com/a.jpg"}, {thumbnail: "https://cdn.example.com/b.webp"}]
+});
+assert.equal(media.primary, "https://cdn.example.com/a.jpg");
+assert.deepEqual(Array.from(media.urls), [
+  "https://cdn.example.com/a.jpg",
+  "https://cdn.example.com/b.webp"
+]);
+
+console.log("unified listings v8 tests passed");
