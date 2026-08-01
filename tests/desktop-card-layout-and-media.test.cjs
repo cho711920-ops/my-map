@@ -60,5 +60,11 @@ assert.match(unifiedCss, /grid-template-rows:\s*108px !important/);
 assert.match(unifiedCss, /\.unified-expand-btn-v8 \{[\s\S]*?width:\s*88px !important/);
 assert.match(unifiedCss, /\.source-danggeun \{[\s\S]*?color:\s*#f26119 !important/);
 assert.match(unifiedCss, /\.source-naver \{[\s\S]*?color:\s*#03a94f !important/);
+assert.match(unifiedCss, /column-gap:\s*12px !important/);
+assert.match(unifiedCss, /column-gap:\s*10px !important/);
+assert.match(unifiedCss, /grid-template-columns:\s*32px 32px 32px 32px 32px 94px !important/);
+assert.match(unifiedCss, /gap:\s*6px !important/);
+assert.match(unifiedCss, /font-size:\s*15\.5px !important/);
+assert.match(unifiedCss, /font-size:\s*14px !important/);
 
 console.log("desktop card layout and media normalization tests passed");

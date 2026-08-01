@@ -1196,3 +1196,124 @@
     height: 23px !important;
   }
 }
+
+/* v8.0.17 PC 상단 메뉴 정렬 · 카드 제목 강조 · 3줄 버튼 고정 규격 */
+@media (min-width: 1200px) {
+  .filters {
+    grid-template-columns: minmax(540px, 640px) max-content !important;
+    column-gap: 14px !important;
+  }
+
+  .v6-toolbar-primary {
+    grid-template-columns: minmax(260px, 1fr) 72px 72px !important;
+    column-gap: 12px !important;
+  }
+
+  .v6-toolbar-primary .search-row {
+    grid-template-columns: minmax(0, 1fr) 64px !important;
+    column-gap: 10px !important;
+  }
+
+  .v6-toolbar-primary .search-row .search-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  .v6-toolbar-primary .search-row #keyword,
+  .v6-toolbar-primary .search-row .search-btn,
+  .v6-toolbar-primary .detail-btn,
+  .v6-toolbar-primary .top-reset-btn,
+  .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai,
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    border-radius: 10px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 84px 84px 62px 100px 110px !important;
+    column-gap: 10px !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .standard-card-main-v661 {
+    grid-template-rows: 28px 30px 30px !important;
+    row-gap: 3px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-head-v650 {
+    min-height: 28px !important;
+    gap: 6px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-head-v650 .item-building-name {
+    max-width: 154px !important;
+    font-size: 15.5px !important;
+    font-weight: 950 !important;
+    line-height: 1.15 !important;
+  }
+
+  .standard-card-main-v661 .item-address-room-v650 {
+    gap: 5px !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    line-height: 1.15 !important;
+  }
+
+  .standard-card-main-v661 .item-address-room-v650 .item-room-badge {
+    font-size: 11px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 {
+    grid-template-columns: minmax(0, 1fr) 32px !important;
+    gap: 6px !important;
+    min-height: 30px !important;
+    max-height: 30px !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left {
+    display: grid !important;
+    grid-template-columns: 32px 32px 32px 32px 32px 94px !important;
+    gap: 6px !important;
+    width: max-content !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    overflow: visible !important;
+  }
+
+  .standard-card-main-v661 .item-compact-actions-v650 .item-action-left > button,
+  .standard-card-main-v661 .item-compact-actions-v650 > .item-memo-toggle {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    max-height: 30px !important;
+    margin: 0 !important;
+    padding: 1px !important;
+    border-radius: 7px !important;
+    box-sizing: border-box !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-building-register-btn {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    padding: 0 2px !important;
+  }
+
+  .standard-card-main-v661 .item-action-left > .item-source-link-btn,
+  .standard-card-main-v661 .item-action-left > .unified-expand-btn-v8 {
+    width: 94px !important;
+    min-width: 94px !important;
+    max-width: 94px !important;
+    padding: 0 7px !important;
+    font-size: 10.5px !important;
+    text-align: center !important;
+  }
+}
