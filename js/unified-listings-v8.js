@@ -234,6 +234,7 @@
     var detailGallery = body.querySelector(".unified-detail-gallery-v8");
     if (detailGallery && images.length) {
       detailGallery._imagesV8 = images.slice();
+      detailGallery._photoCountV8 = Math.max(images.length, Number(selected.photoCount) || 0);
       detailGallery._propertyIdV8 = propertyId;
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._failedImagesV8 = {};
@@ -255,7 +256,8 @@
       image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
     }
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");
-    if (counter) counter.textContent = (safeIndex + 1) + " / " + images.length;
+    if (counter) counter.textContent = (safeIndex + 1) + " / " +
+      Math.max(images.length, Number(gallery._photoCountV8) || 0);
     gallery.querySelectorAll(".unified-detail-photo-nav-v8").forEach(function(button) {
       button.hidden = images.length < 2;
     });
