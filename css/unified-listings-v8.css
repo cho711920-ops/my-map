@@ -405,9 +405,16 @@
 }
 
 @media (min-width: 769px) and (max-width: 1199px) {
-  .filters { grid-template-columns: minmax(390px, 1fr) max-content !important; }
+  .filters { grid-template-columns: minmax(360px, 1fr) max-content !important; }
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 68px 68px 52px 78px 90px !important;
-    gap: 5px !important;
+    grid-template-columns: 48px 48px 42px 66px 74px !important;
+    gap: 4px !important;
+  }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai,
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    padding-right: 3px !important;
+    padding-left: 3px !important;
+    font-size: 10px !important;
   }
 }

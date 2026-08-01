@@ -36,5 +36,6 @@ assert.ok(roadview > quickToolsStart && roadview < quickToolsEnd, "로드뷰 선
 assert.equal(html.match(/id="mapRoadviewSelectBtn"/g).length, 1);
 assert.match(css, /\.map-roadview-vertical-v8 \{/);
 assert.match(css, /grid-template-columns: 80px 80px 58px 94px 104px/);
+assert.match(css, /grid-template-columns: 48px 48px 42px 66px 74px/);
 
 console.log("desktop status/detail layout tests passed");
