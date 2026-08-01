@@ -1270,8 +1270,9 @@
   }
 
   .standard-card-main-v661 .item-compact-actions-v650 {
-    grid-template-columns: minmax(0, 1fr) 32px !important;
+    grid-template-columns: max-content 32px !important;
     gap: 6px !important;
+    justify-content: start !important;
     min-height: 30px !important;
     max-height: 30px !important;
   }
