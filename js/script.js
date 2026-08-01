@@ -945,7 +945,8 @@ document.addEventListener("click", function(event) {
 setTimeout(updateSortDropdownUI, 0);
 
 
-function getFilteredItems() {
+function getFilteredItems(options) {
+  var includeUnlocated = !!(options && options.includeUnlocated);
   if (!map) return allItems;
 
   var bounds = map.getBounds();
@@ -1039,7 +1040,7 @@ function getFilteredItems() {
     var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
     var inMap = radiusFilter
       ? isItemWithinMapRadiusV658(item, radiusFilter)
-      : item.latlng && bounds.contain(item.latlng);
+      : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng));
 
     return matchCustomerSelection && matchCustomerHeldVisibility &&
       matchKeyword && matchType && matchSource && matchIndustry && matchPrice &&

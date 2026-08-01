@@ -915,6 +915,18 @@ function loadSheet(isAuto) {
         window.JSUnifiedListingsV8.attach(rawItems, results[2]);
       }
 
+      /*
+       * 시트 초기화 직후에는 좌표 캐시가 비어 있어 수백 건의 주소 변환이 필요합니다.
+       * 좌표가 준비될 때까지 목록까지 0건으로 숨기지 않고, 시트에서 읽은 매물 카드를
+       * 먼저 보여 준 뒤 지도 마커만 순차적으로 추가합니다.
+       */
+      allItems = rawItems;
+      updateTypeOptions(allItems);
+      currentItems = getFilteredItems({ includeUnlocated: true });
+      showList(currentItems);
+      document.getElementById("status").innerHTML =
+        "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
+
       geocodeItems(rawItems, function(doneItems) {
         var hasPendingPropertyEditV638 =
           typeof pendingPropertyEditStateV634 !== "undefined" &&
