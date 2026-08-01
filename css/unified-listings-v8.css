@@ -304,7 +304,8 @@
     border-radius: 999px !important; box-shadow: 0 6px 18px rgba(15,23,42,.18) !important;
     transform: translateX(-50%);
   }
-  .async-mutation-status-v1.idle { display: none !important; }
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1[hidden],
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1.idle { display: none !important; }
   .async-mutation-status-v1.working,
   .async-mutation-status-v1.failed { display: grid !important; }
 }

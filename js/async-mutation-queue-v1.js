@@ -54,6 +54,7 @@
     indicator.type = "button";
     indicator.id = "asyncMutationStatusV1";
     indicator.className = "async-mutation-status-v1 idle";
+    indicator.hidden = true;
     indicator.innerHTML =
       "<span><small>완료</small><b>0</b></span>" +
       "<span><small>저장중</small><b>0</b></span>" +
@@ -83,16 +84,20 @@
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = null;
       indicator.className = "async-mutation-status-v1 " + (failed ? "failed" : "working");
+      indicator.hidden = false;
     } else if (justCompleted) {
       indicator.className = "async-mutation-status-v1 completed";
+      indicator.hidden = false;
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = setTimeout(function() {
         hideTimer = null;
         if (externalSavingCount || externalFailedCount || readOutbox().length) return renderStatus();
         indicator.className = "async-mutation-status-v1 idle";
+        indicator.hidden = true;
       }, 3000);
     } else if (!indicator.classList.contains("completed") || !hideTimer) {
       indicator.className = "async-mutation-status-v1 idle";
+      indicator.hidden = true;
     }
     indicator.innerHTML =
       "<span><small>완료</small><b>" + completed + "</b></span>" +

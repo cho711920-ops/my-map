@@ -13,7 +13,10 @@ const backend = fs.readFileSync(
 assert.match(queue, /lastSavingCount > 0 && saving === 0 && failed === 0/);
 assert.match(queue, /async-mutation-status-v1 completed/);
 assert.match(queue, /setTimeout\(function\(\) \{[\s\S]*?async-mutation-status-v1 idle[\s\S]*?\}, 3000\)/);
+assert.match(queue, /indicator\.hidden = true/);
+assert.match(html, /id="asyncMutationStatusV1"[^>]*hidden/);
 assert.match(css, /\.async-mutation-status-v1 \{[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;/);
+assert.match(css, /v6-toolbar-secondary\.v6-command-bar > \.async-mutation-status-v1\[hidden\]/);
 
 assert.match(unified, /document\.querySelector\("\.filters"\)/);
 assert.match(unified, /toolbar\.getBoundingClientRect\(\)\.bottom/);
