@@ -132,10 +132,10 @@
     font-weight: 950;
   }
 
-  .source-danggeun { color: #ea580c !important; }
-  .source-naver { color: #059669 !important; }
-  .source-gongsil { color: #7c3aed !important; }
-  .source-direct { color: #1d4ed8 !important; }
+  .unified-original-head-v8 .source-danggeun { color: #ea580c !important; }
+  .unified-original-head-v8 .source-naver { color: #059669 !important; }
+  .unified-original-head-v8 .source-gongsil { color: #7c3aed !important; }
+  .unified-original-head-v8 .source-direct { color: #1d4ed8 !important; }
 
   .unified-original-head-v8 em {
     color: #64748b;

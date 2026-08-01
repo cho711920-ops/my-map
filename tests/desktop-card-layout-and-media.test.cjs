@@ -21,6 +21,7 @@ assert.match(css, /\.customer-match-card-actions-v653 \.customer-match-inline-ac
 assert.match(css, /\.customer-match-card-actions-v653 \.item-action-left \{[\s\S]*?grid-row:\s*2/);
 assert.match(css, /--cluster-fill:\s*rgba\(35, 132, 245, \.52\)/);
 assert.match(css, /--cluster-text:\s*#ffffff/);
+assert.doesNotMatch(unifiedCss, /^\s*\.source-gongsil\s*\{[^}]*color:/m);
 assert.match(daangn, /image\.url \|\| image\.watermark \|\| image\.thumbnail/);
 assert.doesNotMatch(daangn, /add\(image && image\.thumbnail\)/);
 assert.match(daangn, /return urls\.slice\(0, 20\)/);
