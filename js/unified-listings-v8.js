@@ -2,7 +2,8 @@
   "use strict";
 
   var API = "/api/apps-script";
-  var state = { groups: {}, detailCache: {}, pendingMove: null, loaded: false };
+  var state = { groups: {}, detailCache: {}, pendingMove: null, loaded: false,
+    openPropertyId: "", openOriginalId: "", detailRequestToken: 0 };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function esc(value) {
@@ -298,10 +299,16 @@
     if (!desktop()) return;
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
+    var requestToken = ++state.detailRequestToken;
+    state.openPropertyId = propertyId;
     var cached = state.detailCache[propertyId];
-    if (cached) return renderDetail(propertyId, cached, originalId);
+    if (cached) {
+      state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
+      return renderDetail(propertyId, cached, state.openOriginalId);
+    }
     var initial = group(propertyId);
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
+    state.openOriginalId = originalId;
     var selected = initial.filter(function(original) {
       return text(original.originalId) === text(originalId);
     })[0] || initial[0];
@@ -310,6 +317,8 @@
         selected.images.length >= Math.max(1, Number(selected.photoCount) || 0)) return;
     apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
       state.detailCache[propertyId] = result.originals || [];
+      if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
+          state.openOriginalId !== originalId) return;
       renderDetail(propertyId, state.detailCache[propertyId], originalId);
     }).catch(function(error) { console.error(error); });
   }
@@ -325,6 +334,9 @@
     if (!drawer) return;
     drawer.classList.remove("open");
     drawer.setAttribute("aria-hidden", "true");
+    state.openPropertyId = "";
+    state.openOriginalId = "";
+    state.detailRequestToken += 1;
   }
 
   function imageError(image, showLabel) {

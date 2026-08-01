@@ -28,6 +28,10 @@ assert.match(backend, /leftPriority - rightPriority/);
 assert.match(unified, /Array\.isArray\(selected\.images\)[\s\S]*?selected\.images\.length >=/);
 assert.match(unified, /var preload = new Image\(\)/);
 assert.match(unified, /if \(!originalId && initial\[0\]\) originalId = text\(initial\[0\]\.originalId\)/);
+assert.match(unified, /detailRequestToken: 0/);
+assert.match(unified, /requestToken !== state\.detailRequestToken/);
+assert.match(unified, /state\.openPropertyId !== propertyId/);
+assert.match(unified, /state\.detailRequestToken \+= 1/);
 const detailFunction = backend.slice(
   backend.indexOf("function mmV8UnifiedListingDetail_"),
   backend.indexOf("function mmV8TellContacts_")
