@@ -2008,7 +2008,11 @@ function refreshMemoCardV655(key, focusEditor) {
   card.classList.toggle("memo-open", isOpen);
   if (toggle) {
     toggle.classList.toggle("on", isOpen);
-    toggle.textContent = isOpen ? "메모 ▲" : "메모 ▼";
+    toggle.setAttribute("title", "메모 " + (isOpen ? "닫기" : "열기"));
+    toggle.setAttribute("aria-label", "메모 " + (isOpen ? "닫기" : "열기"));
+    toggle.innerHTML = '<span class="item-action-text-v661">' +
+      (isOpen ? '메모 ▲' : '메모 ▼') +
+      '</span><span class="item-action-emoji-v661" aria-hidden="true">📝</span>';
   }
   if (panel) panel.remove();
   if (isOpen && item) {

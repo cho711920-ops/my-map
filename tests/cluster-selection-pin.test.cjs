@@ -32,7 +32,7 @@ assert.match(
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
 assert.match(htmlSource, /js\/map\.js\?v=6\.5\.26-immediate-list/);
-assert.match(htmlSource, /js\/script\.js\?v=6\.5\.40-main-card-three-line/);
+assert.match(htmlSource, /js\/script\.js\?v=6\.5\.41-main-card-memo-state/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.18\.8-compact-map-status/);
 
 console.log("cluster selection pin tests passed");

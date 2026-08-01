@@ -16,6 +16,8 @@ assert.match(script, /isFavorite\(item\) \? '★' : '☆'/);
 assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">🛣️/);
 assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">✏️/);
 assert.match(script, /item-action-emoji-v661[^>]*aria-hidden="true">📝/);
+assert.match(script, /toggle\.innerHTML = '<span class="item-action-text-v661">'/);
+assert.match(script, /toggle\.setAttribute\("aria-label", "메모 " \+ \(isOpen \? "닫기" : "열기"\)\)/);
 
 assert.match(unified, /masterMeta:\s*\{\}/);
 assert.match(unified, /regDate:\s*text\(item\.regDate\)/);
@@ -39,6 +41,6 @@ assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*d
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.14-main-card-three-line/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.10-main-card-three-line/);
-assert.match(html, /script\.js\?v=6\.5\.40-main-card-three-line/);
+assert.match(html, /script\.js\?v=6\.5\.41-main-card-memo-state/);
 
 console.log("main listing three-line v6.6.1 tests passed");

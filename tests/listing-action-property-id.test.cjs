@@ -42,7 +42,7 @@ assert(
   "list contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.40-main-card-three-line"),
+  html.includes("script.js?v=6.5.41-main-card-memo-state"),
   "the production page must load the fixed script cache version"
 );
 
