@@ -92,6 +92,20 @@
   }
   function loadFreshReviews(silent) {
     clearReviewCache();
+    var dashboardApi = window.JSOperationsDiagnosticsV7151;
+    var dashboard = dashboardApi && typeof dashboardApi.getDashboard === "function"
+      ? dashboardApi.getDashboard() : null;
+    var dashboardReviewCount = dashboard && dashboard.pendingReview != null
+      ? number(dashboard.pendingReview) : number(dashboard && dashboard.review);
+    var dashboardMasterCount = dashboard && dashboard.activeMaster != null
+      ? number(dashboard.activeMaster) : number(dashboard && dashboard.master);
+    if (dashboard && !dashboardReviewCount && !dashboardMasterCount && !number(dashboard.raw)) {
+      extraState.reviews = {ok: true, total: 0, groupCount: 0, loadedGroupCount: 0, groups: []};
+      extraState.reviewBase = extraState.reviews;
+      renderReviews();
+      if (!silent) message("검증대상 0건 · 현재 시트가 비어 있습니다.", "success");
+      return Promise.resolve();
+    }
     var panel = document.getElementById("operationsReviewsPanel");
     if (panel) {
       panel.innerHTML =

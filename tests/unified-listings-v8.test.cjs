@@ -10,6 +10,8 @@ const ui = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 const css = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 const naver = fs.readFileSync("js/naver-collector.js", "utf8");
 const gongsil = fs.readFileSync("js/gongsil-collector.js", "utf8");
+const operationsCenter = fs.readFileSync("js/operations-center-v7.js", "utf8");
+const operationsReview = fs.readFileSync("js/operations-collection-v8.js", "utf8");
 const daangn = fs.readFileSync(
   "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_당근수집기_v2_개별및클러스터.gs",
   "utf8"
@@ -43,6 +45,11 @@ assert.match(daangn, /articleByOriginalArticleId/);
 assert.match(daangn, /raw: article/);
 assert.match(daangn, /function dgImageUrls_/);
 assert.match(daangn, /primaryImage: record\.primaryImage/);
+assert.match(operationsCenter, /getDashboard: function\(\) \{ return state\.dashboard; \}/);
+assert.match(operationsCenter, /활성 통합매물/);
+assert.doesNotMatch(operationsCenter, /대표출처 우선순위/);
+assert.match(operationsReview, /현재 시트가 비어 있습니다/);
+assert.match(operationsReview, /!dashboardReviewCount && !dashboardMasterCount && !number\(dashboard\.raw\)/);
 
 const context = {
   Utilities: {

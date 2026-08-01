@@ -185,7 +185,8 @@
       '</div>';
   }
   window.JSOperationsDiagnosticsV7151 = {
-    dashboardCard: dashboardCard
+    dashboardCard: dashboardCard,
+    getDashboard: function() { return state.dashboard; }
   };
 
   function matchCountForCustomer(customerId) {
