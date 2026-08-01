@@ -16,6 +16,9 @@
   }
   function desktop() { return global.innerWidth > 768; }
   function group(propertyId) { return state.groups[text(propertyId)] || []; }
+  function originalImage(original) {
+    return text(original && (original.thumbnail || (original.images && original.images[0])));
+  }
 
   function apiGet(action, params) {
     var query = new URLSearchParams(Object.assign({action: action, _: Date.now()}, params || {}));
@@ -82,7 +85,8 @@
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
       (thumbnail ? 'has-photo' : 'no-photo') + '" title="사진 크게 보기" ' +
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.open(\'' + encodedId + '\')">' +
-      (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy">' : '<span>사진 없음</span>') +
+      (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
+        'onerror="JSUnifiedListingsV8.imageError(this, true)">' : '<span>사진 없음</span>') +
       '</button>';
     var badge = count > 1
       ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
@@ -111,11 +115,13 @@
   function originalRow(original, selected) {
     var encodedPropertyId = encodeURIComponent(text(original.propertyId));
     var encodedOriginalId = encodeURIComponent(text(original.originalId));
+    var thumbnail = originalImage(original);
     return '<button type="button" class="unified-original-row-v8' + (selected ? ' selected' : '') + '" ' +
       'data-original-id="' + esc(original.originalId) + '" onclick="event.stopPropagation(); ' +
       'JSUnifiedListingsV8.open(\'' + encodedPropertyId + '\', \'' + encodedOriginalId + '\')">' +
-      '<span class="unified-original-thumb-v8 ' + (original.thumbnail ? 'has-photo' : 'no-photo') + '">' +
-        (original.thumbnail ? '<img src="' + esc(original.thumbnail) + '" alt="" loading="lazy">' : '') + '</span>' +
+      '<span class="unified-original-thumb-v8 ' + (thumbnail ? 'has-photo' : 'no-photo') + '">' +
+        (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
+          'onerror="JSUnifiedListingsV8.imageError(this, false)">' : '') + '</span>' +
       '<span class="unified-original-body-v8"><span class="unified-original-head-v8"><b class="source-' +
         sourceKey(original.source) + '">' + esc(original.source) + '</b><em>' + esc(original.room || '호실 -') + '</em></span>' +
         conditionLine(original) + '<small>' + esc(original.buildingName || original.address) + '</small></span>' +
@@ -183,7 +189,8 @@
         (images.length ? images.slice(0, 6).map(function(url, index) {
           return '<button type="button" onclick="JSUnifiedListingsV8.openGallery(\'' +
             encodeURIComponent(propertyId) + '\', \'' + encodeURIComponent(selected.originalId) + '\', ' + index + ')">' +
-            '<img src="' + esc(url) + '" alt="매물 사진 ' + (index + 1) + '"></button>';
+            '<img src="' + esc(url) + '" alt="매물 사진 ' + (index + 1) + '" referrerpolicy="no-referrer" ' +
+            'onerror="JSUnifiedListingsV8.imageError(this, false)"></button>';
         }).join("") : '<div class="unified-gallery-empty-v8">등록된 사진 없음</div>') +
       '</section>' +
       '<section class="unified-detail-summary-v8"><div><span class="source-' + sourceKey(selected.source) + '">' +
@@ -224,6 +231,16 @@
     if (!drawer) return;
     drawer.classList.remove("open");
     drawer.setAttribute("aria-hidden", "true");
+  }
+
+  function imageError(image, showLabel) {
+    if (!image) return;
+    var parent = image.parentElement;
+    image.remove();
+    if (!parent) return;
+    parent.classList.remove("has-photo");
+    parent.classList.add("no-photo");
+    if (showLabel && !parent.querySelector("span")) parent.insertAdjacentHTML("beforeend", "<span>사진 없음</span>");
   }
 
   function setSaving(active, failed) {
@@ -314,7 +331,7 @@
       modal.className = "unified-gallery-modal-v8";
       modal.innerHTML = '<button class="close" type="button" aria-label="사진 크게 보기 닫기">×</button>' +
         '<button class="unified-gallery-nav-v8 prev" type="button" aria-label="이전 사진">‹</button>' +
-        '<img alt="매물 사진">' +
+        '<img alt="매물 사진" referrerpolicy="no-referrer">' +
         '<button class="unified-gallery-nav-v8 next" type="button" aria-label="다음 사진">›</button>' +
         '<span></span>';
       modal.querySelector(".close").onclick = function(event) {
@@ -413,6 +430,7 @@
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, open: open, close: closeDetail, handleCardClick: handleCardClick,
-    openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell
+    openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
+    imageError: imageError
   };
 })(window);

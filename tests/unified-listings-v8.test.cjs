@@ -148,4 +148,22 @@ assert.deepEqual(Array.from(media.urls), [
   "https://cdn.example.com/b.webp"
 ]);
 
+const daangnMedia = context.mmV8ExtractMedia_({
+  link: "https://realty.daangn.com/?article_id=12345",
+  images: [
+    "https://realty.daangn.com/?article_id=12345",
+    "https://example.cloudfront.net/listings/12345/photo"
+  ]
+});
+assert.equal(daangnMedia.primary, "https://example.cloudfront.net/listings/12345/photo");
+assert.deepEqual(Array.from(daangnMedia.urls), [
+  "https://example.cloudfront.net/listings/12345/photo"
+]);
+assert.equal(context.mmV8ImageUrl_("https://realty.daangn.com/?article_id=12345"), "");
+assert.equal(context.mmV8ImageUrl_("https://landthumb-phinf.pstatic.net/example.jpg"),
+  "https://landthumb-phinf.pstatic.net/example.jpg");
+
+assert.match(ui, /referrerpolicy="no-referrer"/);
+assert.match(ui, /imageError: imageError/);
+
 console.log("unified listings v8 tests passed");
