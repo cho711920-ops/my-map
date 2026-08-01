@@ -27,6 +27,14 @@ assert.match(backend, /if \(index > 0\) delete original\.images/);
 assert.match(backend, /leftPriority - rightPriority/);
 assert.match(unified, /Array\.isArray\(selected\.images\)[\s\S]*?selected\.images\.length >=/);
 assert.match(unified, /var preload = new Image\(\)/);
+assert.match(unified, /if \(!originalId && initial\[0\]\) originalId = text\(initial\[0\]\.originalId\)/);
+const detailFunction = backend.slice(
+  backend.indexOf("function mmV8UnifiedListingDetail_"),
+  backend.indexOf("function mmV8TellContacts_")
+);
+assert.doesNotMatch(detailFunction, /mmV8UnifiedListings_\(\)/);
+assert.match(detailFunction, /var originals = \[\]/);
+assert.match(detailFunction, /masterId !== propertyId/);
 
 const quickToolsStart = html.indexOf('<aside id="mapQuickTools"');
 const quickToolsEnd = html.indexOf("</aside>", quickToolsStart);

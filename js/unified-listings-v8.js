@@ -301,6 +301,7 @@
     var cached = state.detailCache[propertyId];
     if (cached) return renderDetail(propertyId, cached, originalId);
     var initial = group(propertyId);
+    if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     var selected = initial.filter(function(original) {
       return text(original.originalId) === text(originalId);
     })[0] || initial[0];
