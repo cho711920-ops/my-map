@@ -82,7 +82,7 @@ assert(
 );
 assert(
   html.includes("style.css?v=6.5.27-fast-inline-memo") &&
-    html.includes("script.js?v=6.5.36-immediate-list"),
+    html.includes("script.js?v=6.5.37-gongsil-source-relations"),
   "운영 브라우저가 새 메모 UI를 즉시 받도록 캐시 버전을 올려야 합니다."
 );
 assert(

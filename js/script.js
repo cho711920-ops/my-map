@@ -1147,7 +1147,15 @@ function isFieldVisitItem(item) {
 
 
 function isGongsilBoxItem(item) {
-  return isFieldVisitItem(item);
+  var unifiedSources = item && Array.isArray(item.sourceTypesV8)
+    ? item.sourceTypesV8
+    : [];
+
+  /*
+   * v8에서는 대표카드의 메모가 네이버·당근 원본에서 왔더라도
+   * 연결된 원본 중 공실박스가 하나라도 있으면 공실박스 매물로 표시합니다.
+   */
+  return unifiedSources.indexOf("gongsil") >= 0 || isFieldVisitItem(item);
 }
 
 
