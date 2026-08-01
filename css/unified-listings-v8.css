@@ -378,6 +378,15 @@
   .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; }
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 5 !important; }
 
+  .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai,
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
   .map-roadview-vertical-v8 {
     display: flex !important;
     width: 44px !important;
