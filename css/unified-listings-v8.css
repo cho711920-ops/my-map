@@ -160,8 +160,8 @@
     top: 0;
     bottom: 0;
     z-index: 9400;
-    width: min(470px, calc(100vw - 650px));
-    min-width: 360px;
+    width: min(520px, calc(100vw - 650px));
+    min-width: 400px;
     overflow: hidden;
     border-right: 1px solid #d8e1ed;
     background: #fff;
@@ -192,30 +192,53 @@
 
   .unified-detail-drawer-v8 > header strong,
   .unified-detail-drawer-v8 > header span { display: block; }
-  .unified-detail-drawer-v8 > header strong { font-size: 17px; }
-  .unified-detail-drawer-v8 > header span { margin-top: 2px; color: #64748b; font-size: 11px; }
+  .unified-detail-drawer-v8 > header strong { font-size: 19px; line-height: 1.3; }
+  .unified-detail-drawer-v8 > header span { margin-top: 3px; color: #64748b; font-size: 13px; }
   .unified-detail-drawer-v8 > header button {
     width: 36px; height: 36px; border: 0; border-radius: 10px; background: #eff6ff;
     color: #1e3a8a; font-size: 25px; cursor: pointer;
   }
 
-  .unified-detail-body-v8 { height: calc(100% - 66px); overflow: auto; }
-  .unified-detail-gallery-v8 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; background: #d1d5db; }
-  .unified-detail-gallery-v8 button { height: 148px; padding: 0; border: 0; background: #d1d5db; cursor: zoom-in; }
-  .unified-detail-gallery-v8 img { width: 100%; height: 100%; object-fit: cover; }
-  .unified-gallery-empty-v8 { grid-column: 1 / -1; padding: 72px 15px; color: #6b7280; text-align: center; }
-  .unified-detail-summary-v8 { padding: 16px; border-bottom: 1px solid #e2e8f0; }
-  .unified-detail-summary-v8 > div:first-child { display: flex; flex-direction: column; gap: 5px; }
-  .unified-detail-summary-v8 > div:first-child strong { font-size: 16px; }
-  .unified-detail-summary-v8 > p { margin: 13px 0; color: #1e3a8a; font-size: 14px; font-weight: 850; }
-  .unified-detail-actions-v8 { display: flex; flex-wrap: wrap; gap: 6px; }
-  .unified-detail-actions-v8 button { min-height: 34px; padding: 0 10px; border: 1px solid #93c5fd; border-radius: 8px; background: #eff6ff; color: #1d4ed8; font-weight: 900; cursor: pointer; }
+  .unified-detail-body-v8 { height: calc(100% - 66px); overflow: auto; font-size: 15px; }
+  .unified-detail-gallery-v8 { position: relative; height: 330px; overflow: hidden; background: #d1d5db; }
+  .unified-detail-hero-v8 { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: #d1d5db; cursor: zoom-in; }
+  .unified-detail-hero-v8 img { width: 100%; height: 100%; object-fit: cover; }
+  .unified-detail-photo-count-v8 {
+    position: absolute; right: 14px; bottom: 13px; padding: 6px 11px; border-radius: 999px;
+    background: rgba(15,23,42,.78); color: #fff; font-size: 14px; font-weight: 900; letter-spacing: .02em;
+  }
+  .unified-detail-photo-nav-v8 {
+    position: absolute; top: 50%; z-index: 2; display: grid; width: 42px; height: 54px; place-items: center;
+    padding: 0; border: 1px solid rgba(255,255,255,.62); border-radius: 12px; background: rgba(15,23,42,.46);
+    color: #fff; font-size: 37px; line-height: 1; cursor: pointer; transform: translateY(-50%);
+  }
+  .unified-detail-photo-nav-v8.prev { left: 12px; }
+  .unified-detail-photo-nav-v8.next { right: 12px; }
+  .unified-detail-photo-nav-v8:hover { background: rgba(15,23,42,.72); }
+  .unified-detail-photo-nav-v8[hidden] { display: none; }
+  .unified-gallery-empty-v8 { display: grid; min-height: 250px; place-items: center; padding: 30px 15px; color: #6b7280; font-size: 15px; text-align: center; }
+  .unified-detail-summary-v8 { padding: 19px 18px; border-bottom: 1px solid #e2e8f0; }
+  .unified-detail-summary-v8 > div:first-child { display: flex; flex-direction: column; gap: 7px; }
+  .unified-detail-summary-v8 > div:first-child strong { font-size: 19px; line-height: 1.35; }
+  .unified-detail-summary-v8 > p { margin: 16px 0; color: #1e3a8a; font-size: 17px; font-weight: 850; line-height: 1.45; }
+  .unified-detail-summary-v8 .source-danggeun,
+  .unified-detail-summary-v8 .source-naver,
+  .unified-detail-summary-v8 .source-gongsil,
+  .unified-detail-summary-v8 .source-direct { font-size: 14px; }
+  .unified-detail-actions-v8 { display: flex; flex-wrap: wrap; gap: 8px; }
+  .unified-detail-actions-v8 button { min-height: 40px; padding: 0 13px; border: 1px solid #93c5fd; border-radius: 9px; background: #eff6ff; color: #1d4ed8; font-size: 14px; font-weight: 900; cursor: pointer; }
   .unified-detail-actions-v8 .separate { border-color: #fca5a5; background: #fff1f2; color: #be123c; }
   .unified-detail-actions-v8 .move { border-color: #c4b5fd; background: #f5f3ff; color: #6d28d9; }
-  .unified-detail-memo-v8 { margin-top: 13px; padding: 10px; border-radius: 8px; background: #f8fafc; color: #475569; font-size: 12px; line-height: 1.55; }
-  .unified-detail-originals-v8 { padding: 14px; }
-  .unified-detail-originals-v8 h4 { margin: 0 0 8px; }
-  .unified-detail-originals-v8 .unified-original-row-v8 + .unified-original-row-v8 { margin-top: 6px; }
+  .unified-detail-memo-v8 { margin-top: 15px; padding: 13px; border-radius: 9px; background: #f8fafc; color: #475569; font-size: 15px; line-height: 1.6; }
+  .unified-detail-originals-v8 { padding: 17px; }
+  .unified-detail-originals-v8 h4 { margin: 0 0 11px; font-size: 17px; }
+  .unified-detail-originals-v8 .unified-original-row-v8 { grid-template-columns: 64px minmax(0,1fr); gap: 10px; padding: 8px; }
+  .unified-detail-originals-v8 .unified-original-thumb-v8 { width: 64px; height: 58px; }
+  .unified-detail-originals-v8 .unified-original-head-v8 b { font-size: 14px; }
+  .unified-detail-originals-v8 .unified-original-head-v8 em { font-size: 13px; }
+  .unified-detail-originals-v8 .unified-original-body-v8 > span:nth-child(2) { margin-top: 4px; font-size: 14px; line-height: 1.4; }
+  .unified-detail-originals-v8 .unified-original-body-v8 small { margin-top: 4px; font-size: 12px; }
+  .unified-detail-originals-v8 .unified-original-row-v8 + .unified-original-row-v8 { margin-top: 8px; }
 
   .unified-move-banner-v8 {
     position: fixed; top: 82px; left: 50%; z-index: 10020; display: flex; align-items: center; gap: 12px;
@@ -291,7 +314,8 @@
     grid-template-columns: 68px 68px 52px 40px 78px 90px !important;
     gap: 5px !important;
   }
-  .unified-detail-drawer-v8 { width: min(420px, calc(100vw - 520px)); min-width: 330px; }
+  .unified-detail-drawer-v8 { width: min(450px, calc(100vw - 500px)); min-width: 360px; }
+  .unified-detail-gallery-v8 { height: 290px; }
 }
 
 @media (max-width: 768px) {

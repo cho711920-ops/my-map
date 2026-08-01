@@ -186,12 +186,17 @@
     var body = document.getElementById("unifiedDetailBodyV8");
     body.innerHTML = !selected ? '<div class="unified-empty-v8">원본매물 정보가 없습니다.</div>' :
       '<section class="unified-detail-gallery-v8">' +
-        (images.length ? images.slice(0, 6).map(function(url, index) {
-          return '<button type="button" onclick="JSUnifiedListingsV8.openGallery(\'' +
-            encodeURIComponent(propertyId) + '\', \'' + encodeURIComponent(selected.originalId) + '\', ' + index + ')">' +
-            '<img src="' + esc(url) + '" alt="매물 사진 ' + (index + 1) + '" referrerpolicy="no-referrer" ' +
-            'onerror="JSUnifiedListingsV8.imageError(this, false)"></button>';
-        }).join("") : '<div class="unified-gallery-empty-v8">등록된 사진 없음</div>') +
+        (images.length ? '<button type="button" class="unified-detail-hero-v8" ' +
+          'onclick="JSUnifiedListingsV8.openDetailGallery(this)">' +
+            '<img alt="매물 대표 사진" referrerpolicy="no-referrer" ' +
+              'onerror="JSUnifiedListingsV8.detailImageError(this)">' +
+            '<span class="unified-detail-photo-count-v8" aria-live="polite"></span>' +
+          '</button>' +
+          '<button type="button" class="unified-detail-photo-nav-v8 prev" aria-label="이전 사진" ' +
+            'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, -1)">‹</button>' +
+          '<button type="button" class="unified-detail-photo-nav-v8 next" aria-label="다음 사진" ' +
+            'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, 1)">›</button>' :
+          '<div class="unified-gallery-empty-v8">등록된 사진 없음</div>') +
       '</section>' +
       '<section class="unified-detail-summary-v8"><div><span class="source-' + sourceKey(selected.source) + '">' +
         esc(selected.source) + '</span><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
@@ -209,8 +214,62 @@
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +
       '</section>' : '');
+    var detailGallery = body.querySelector(".unified-detail-gallery-v8");
+    if (detailGallery && images.length) {
+      detailGallery._imagesV8 = images.slice();
+      detailGallery._propertyIdV8 = propertyId;
+      detailGallery._originalIdV8 = selected.originalId;
+      detailGallery._failedImagesV8 = {};
+      renderDetailPhoto(detailGallery, 0);
+    }
     drawer.classList.add("open");
     drawer.setAttribute("aria-hidden", "false");
+  }
+
+  function renderDetailPhoto(gallery, index) {
+    var images = gallery && gallery._imagesV8 || [];
+    if (!gallery || !images.length) return;
+    var safeIndex = ((Number(index) || 0) % images.length + images.length) % images.length;
+    gallery._indexV8 = safeIndex;
+    var image = gallery.querySelector(".unified-detail-hero-v8 img");
+    if (image) {
+      image.style.display = "block";
+      image.src = images[safeIndex];
+      image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
+    }
+    var counter = gallery.querySelector(".unified-detail-photo-count-v8");
+    if (counter) counter.textContent = (safeIndex + 1) + " / " + images.length;
+    gallery.querySelectorAll(".unified-detail-photo-nav-v8").forEach(function(button) {
+      button.hidden = images.length < 2;
+    });
+  }
+
+  function stepDetailPhoto(button, direction) {
+    var gallery = button && button.closest(".unified-detail-gallery-v8");
+    if (!gallery) return;
+    renderDetailPhoto(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0));
+  }
+
+  function openDetailGallery(button) {
+    var gallery = button && button.closest(".unified-detail-gallery-v8");
+    if (!gallery) return;
+    openGallery(encodeURIComponent(text(gallery._propertyIdV8)),
+      encodeURIComponent(text(gallery._originalIdV8)), Number(gallery._indexV8 || 0));
+  }
+
+  function detailImageError(image) {
+    var gallery = image && image.closest(".unified-detail-gallery-v8");
+    var images = gallery && gallery._imagesV8 || [];
+    if (!gallery || !images.length) return imageError(image, false);
+    var failed = gallery._failedImagesV8 || (gallery._failedImagesV8 = {});
+    failed[images[Number(gallery._indexV8 || 0)]] = true;
+    var nextIndex = -1;
+    for (var step = 1; step <= images.length; step += 1) {
+      var candidate = (Number(gallery._indexV8 || 0) + step) % images.length;
+      if (!failed[images[candidate]]) { nextIndex = candidate; break; }
+    }
+    if (nextIndex >= 0) return renderDetailPhoto(gallery, nextIndex);
+    gallery.innerHTML = '<div class="unified-gallery-empty-v8">사진을 불러오지 못했습니다.</div>';
   }
 
   function open(encodedPropertyId, encodedOriginalId) {
@@ -424,6 +483,17 @@
       if (event.key === "Escape") closeGallery();
       return;
     }
+    var detailDrawer = document.getElementById("unifiedDetailDrawerV8");
+    if (detailDrawer && detailDrawer.classList.contains("open") &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      var detailGallery = detailDrawer.querySelector(".unified-detail-gallery-v8");
+      if (detailGallery && detailGallery._imagesV8 && detailGallery._imagesV8.length > 1) {
+        event.preventDefault();
+        renderDetailPhoto(detailGallery, Number(detailGallery._indexV8 || 0) +
+          (event.key === "ArrowLeft" ? -1 : 1));
+      }
+      return;
+    }
     if (event.key === "Escape") closeDetail();
   });
 
@@ -431,6 +501,7 @@
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, open: open, close: closeDetail, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
-    imageError: imageError
+    imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
+    openDetailGallery: openDetailGallery, detailImageError: detailImageError
   };
 })(window);
