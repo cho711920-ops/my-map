@@ -157,12 +157,13 @@
     var activeCount = data.activeMaster != null ? data.activeMaster : data.master;
     var cleanup = data.lastCompaction || {};
     var cleanupRemoved = number(cleanup.rawRemoved) + number(cleanup.reviewRemoved);
-    var cleanupHint = cleanup.at
+    var hasCurrentListings = number(activeCount) > 0 || number(data.raw) > 0;
+    var cleanupHint = cleanup.at && hasCurrentListings
       ? cleanup.at + " · 원본 " + number(cleanup.rawRemaining).toLocaleString("ko-KR") + "건 유지"
-      : "매일 새벽 4시 자동 중복정리";
+      : (hasCurrentListings ? "매일 새벽 4시 자동 중복정리" : "현재 초기화된 빈 상태");
     panel.innerHTML =
       '<div class="operations-stat-grid">' +
-        dashboardCard("활성 대표매물", activeCount, "JS웹에 표시되는 운영 매물", "primary") +
+        dashboardCard("활성 통합매물", activeCount, "JS웹에 표시되는 실제 공간", "primary") +
         dashboardCard("검증 대기", reviewCount, "사람의 판단이 필요한 원본", reviewCount ? "warning" : "success", "reviews") +
         dashboardCard("수집 원본", data.raw, "출처별 원본 스냅샷", "") +
         dashboardCard("고객 문의", data.openCustomers != null ? data.openCustomers : data.customers, "진행 중인 고객 조건", "", "active") +
@@ -172,7 +173,7 @@
         dashboardCard("거래확인 후보", data.transactionCheckCandidates, "전체수집 3회 연속 미노출된 보류매물", data.transactionCheckCandidates ? "warning" : "success") +
         dashboardCard("후보 매물", data.introducedMatches, "고객이 후보로 선택한 매물", "success") +
         dashboardCard("변경 이력", data.history, "수정·통합·상태변경 기록", "") +
-        dashboardCard("최근 자동정리", cleanupRemoved, cleanupHint, cleanup.at ? "success" : "") +
+        dashboardCard("최근 자동정리", cleanupRemoved, cleanupHint, cleanup.at && hasCurrentListings ? "success" : "") +
       '</div>' +
       '<div class="operations-workflow-card">' +
         '<div><b>자동 처리 흐름</b><span>출처별 원본 보존 → 동일 공간 연결/검증 → 통합매물 표시 → 고객 재매칭</span></div>' +
@@ -180,7 +181,7 @@
       '</div>' +
       '<div class="operations-guidance">' +
         '<b>사람이 확인할 일은 두 가지뿐입니다.</b>' +
-        '<p>매물검증의 애매한 중복만 결정하세요. 고객 등록·조건수정·후속관리는 이 화면에서 처리하고, 대표매물 갱신·이력·재매칭은 자동으로 처리됩니다.</p>' +
+        '<p>매물검증의 애매한 동일 공간만 결정하세요. 고객 등록·조건수정·후속관리는 이 화면에서 처리하고, 통합매물 연결·이력·재매칭은 자동으로 처리됩니다.</p>' +
       '</div>';
   }
   window.JSOperationsDiagnosticsV7151 = {
