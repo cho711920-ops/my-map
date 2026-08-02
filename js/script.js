@@ -1871,10 +1871,6 @@ function markNaverRoadviewReadyV658() {
   naverRoadviewLastTargetKeyV658 = naverRoadviewActiveTargetKeyV658;
   clearNaverRoadviewTimersV658();
 
-  try {
-    naverRoadviewInstanceV653.setVisible(true);
-  } catch (error) {}
-
   status.textContent = "네이버 거리뷰 연결 완료";
   status.className = "roadview-inline-status success";
   updateNaverPanoramaInfoV653();
@@ -2068,9 +2064,6 @@ function startNaverRoadviewV653(sequence) {
         window.setTimeout(markNaverRoadviewReadyV658, 0);
       } else {
         bindNaverRoadviewEventsV658();
-        try {
-          naverRoadviewInstanceV653.setVisible(true);
-        } catch (error) {}
         syncNaverRoadviewLayoutV654();
 
         if (
@@ -2088,7 +2081,10 @@ function startNaverRoadviewV653(sequence) {
 
       window.setTimeout(syncNaverRoadviewLayoutV654, 30);
     })
-    .catch(function() {
+    .catch(function(error) {
+      if (window.console && typeof window.console.error === "function") {
+        window.console.error("[JS roadview] NAVER panorama failed", error);
+      }
       fallbackNaverRoadviewToKakaoV653(
         "네이버 거리뷰를 불러오지 못해 카카오맵으로 전환합니다.",
         sequence
@@ -2517,10 +2513,6 @@ function closeRoadviewModal() {
   clearNaverRoadviewTimersV658();
   naverRoadviewRequestReadyV658 = false;
   naverRoadviewRequestSequenceV658 = roadviewOpenSequenceV653;
-  try {
-    if (naverRoadviewInstanceV653) naverRoadviewInstanceV653.setVisible(false);
-  } catch (error) {}
-
   roadviewInstance = null;
   naverRoadviewLoadingV653 = false;
   kakaoRoadviewLoadingV653 = false;
