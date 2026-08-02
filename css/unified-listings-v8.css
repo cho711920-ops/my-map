@@ -164,8 +164,8 @@
     top: 0;
     bottom: 0;
     z-index: 9400;
-    width: min(520px, calc(100vw - 650px));
-    min-width: 400px;
+    width: min(420px, calc(100vw - 650px));
+    min-width: 360px;
     overflow: hidden;
     border-right: 1px solid #d8e1ed;
     background: #fff;
@@ -226,6 +226,12 @@
   .unified-detail-summary-v8 > div:first-child { display: flex; flex-direction: column; gap: 7px; }
   .unified-detail-summary-v8 > div:first-child strong { font-size: 19px; line-height: 1.35; }
   .unified-detail-summary-v8 > p { margin: 16px 0; color: #1e3a8a; font-size: 17px; font-weight: 850; line-height: 1.45; }
+  .unified-detail-utility-actions-v8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: -2px 0 13px; }
+  .unified-detail-utility-actions-v8 button {
+    min-width: 0; height: 38px; padding: 0 8px; border: 1px solid #b8c9dd; border-radius: 9px;
+    background: #fff; color: #263b52; font-size: 14px; font-weight: 900; cursor: pointer;
+  }
+  .unified-detail-utility-actions-v8 button:hover { border-color: #2484e8; background: #eff7ff; color: #075bb7; }
   .unified-detail-summary-v8 .source-danggeun,
   .unified-detail-summary-v8 .source-naver,
   .unified-detail-summary-v8 .source-gongsil,
@@ -540,7 +546,7 @@
     grid-template-columns: 68px 68px 52px 40px 78px 90px !important;
     gap: 5px !important;
   }
-  .unified-detail-drawer-v8 { width: min(450px, calc(100vw - 500px)); min-width: 360px; }
+  .unified-detail-drawer-v8 { width: min(360px, calc(100vw - 500px)); min-width: 330px; }
   .unified-detail-gallery-v8 { height: 290px; }
 }
 

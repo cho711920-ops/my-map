@@ -21,6 +21,15 @@ assert.match(css, /v6-toolbar-secondary\.v6-command-bar > \.async-mutation-statu
 assert.match(unified, /document\.querySelector\("\.filters"\)/);
 assert.match(unified, /toolbar\.getBoundingClientRect\(\)\.bottom/);
 assert.match(css, /\.unified-detail-drawer-v8 \{[\s\S]*?top: 68px;[\s\S]*?bottom: 0;/);
+assert.match(css, /width: min\(420px, calc\(100vw - 650px\)\)/);
+assert.match(css, /\.unified-detail-utility-actions-v8 \{[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+assert.match(unified, /function runDetailAction\(action, encodedPropertyId\)/);
+assert.match(unified, /action === "navigation"/);
+assert.match(unified, /action === "roadview"/);
+assert.match(unified, /action === "register"/);
+assert.match(unified, /action === "edit"/);
+assert.match(unified, /text\(item && item\.propertyId\) === propertyId/);
+assert.match(unified, /openPropertyEditModalV630\(encodeURIComponent\("id:" \+ propertyId\)\)/);
 
 assert.match(backend, /thumbnail: imageUrls\[0\] \|\| "", photoCount: imageUrls\.length/);
 assert.doesNotMatch(backend, /if \(index > 0\) delete original\.images/);

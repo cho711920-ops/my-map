@@ -274,6 +274,41 @@
       ' · <b>평</b> ' + number(original.area) + '</span>';
   }
 
+  function resolveMasterItem(propertyId) {
+    propertyId = text(propertyId);
+    var items = Array.isArray(global.allItems) ? global.allItems : [];
+    return items.filter(function(item) {
+      return text(item && item.propertyId) === propertyId;
+    })[0] || null;
+  }
+
+  function runDetailAction(action, encodedPropertyId) {
+    var propertyId = decodeURIComponent(encodedPropertyId || "");
+    var item = resolveMasterItem(propertyId);
+    if (!item) {
+      alert("현재 매물목록에서 해당 매물ID를 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.");
+      return;
+    }
+    var encodedKey = encodeURIComponent(text(item.key));
+    if (action === "navigation" && typeof global.openKakaoNavigation === "function") {
+      global.openKakaoNavigation(encodedKey);
+      return;
+    }
+    if (action === "roadview" && typeof global.openKakaoRoadview === "function") {
+      global.openKakaoRoadview(encodedKey);
+      return;
+    }
+    if (action === "register" && typeof global.openBuildingRegisterV640 === "function") {
+      global.openBuildingRegisterV640(encodedKey);
+      return;
+    }
+    if (action === "edit" && typeof global.openPropertyEditModalV630 === "function") {
+      global.openPropertyEditModalV630(encodeURIComponent("id:" + propertyId));
+      return;
+    }
+    alert("선택한 기능을 아직 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+
   function originalRow(original, selected) {
     var encodedPropertyId = encodeURIComponent(text(original.propertyId));
     var encodedOriginalId = encodeURIComponent(text(original.originalId));
@@ -354,6 +389,7 @@
       ? "동일 공간 원본 " + originals.length + "개" : "원본매물 1개";
     var images = originalImages(selected);
     var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
+    var encodedActionPropertyId = encodeURIComponent(text(propertyId));
     var body = document.getElementById("unifiedDetailBodyV8");
     body.innerHTML = !selected ? '<div class="unified-empty-v8">원본매물 정보가 없습니다.</div>' :
       '<section class="unified-detail-gallery-v8">' +
@@ -372,6 +408,12 @@
       '<section class="unified-detail-summary-v8"><div><span class="source-' + sourceKey(selected.source) + '">' +
         esc(selected.source) + '</span><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
         '<p>' + conditionLine(selected) + '</p>' +
+        '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
+          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
+          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'roadview\', \'' + encodedActionPropertyId + '\')">로드뷰</button>' +
+          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'register\', \'' + encodedActionPropertyId + '\')">대장</button>' +
+          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' +
+        '</div>' +
         (registrationDate ? '<div class="unified-detail-meta-v8"><span>등록일</span><b>' + esc(registrationDate) + '</b></div>' : '') +
         '<div class="unified-detail-actions-v8">' +
           (selected.link ? '<button type="button" onclick="window.open(\'' + esc(selected.link) +
@@ -818,6 +860,7 @@
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
-    openDetailGallery: openDetailGallery, detailImageError: detailImageError
+    openDetailGallery: openDetailGallery, detailImageError: detailImageError,
+    runDetailAction: runDetailAction
   };
 })(window);
