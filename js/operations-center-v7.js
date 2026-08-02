@@ -581,7 +581,7 @@
     });
     var header = (overdueCount ? '<div class="operations-customer-alert"><b>새 매물 안내 필요</b><span>신규매물 ' + overdueCount.toLocaleString("ko-KR") + '건이 ' + (number(state.dashboard && state.dashboard.contactReminderDays) || 3) + '일 이상 확인되지 않았습니다.</span></div>' : '') +
       (followup.due ? '<div class="operations-customer-alert"><b>후속관리 예정일</b><span>' + escape(followup.next) + ' · ' + escape(followup.stage || "상담") + '</span></div>' : '') +
-      '<div class="operations-match-heading"><div class="operations-match-customer-v719"><span class="operations-match-avatar-v719">' + escape(customerName.charAt(0) || "고") + '</span><div><b>② ' + escape(customerName) + ' 고객 매칭매물</b><span>' + escape(customerConditionTextV719(customerRow || [])) + '</span></div></div>' +
+      '<div class="operations-match-heading"><div class="operations-match-customer-v719"><span class="operations-match-avatar-v719">' + escape(customerName.charAt(0) || "고") + '</span><div><b>② ' + escape(customerName) + ' 고객 매칭매물</b></div></div>' +
       '<div class="operations-match-heading-actions">' +
       (phoneHref ? '<a class="customer-call-link" href="' + escape(phoneHref) + '" aria-label="' + escape(customerName + "에게 전화") + '">☎ ' + escape(customerPhone) + '</a>' : '') +
       '<label class="customer-status-quick"><span>고객상태</span><select onchange="updateCustomerStatusFromWeb(this.value)">' +
@@ -723,6 +723,53 @@
     renderMatches(state.selectedCustomerId);
     persistOperationsCache();
     return true;
+  }
+
+  function applyCompactCustomerSaveV723(result, fallbackCustomerId) {
+    var customerId = text(result && result.customerId) || text(fallbackCustomerId);
+    if (!customerId || !result || !result.customerRow) return false;
+    var rowIndex = state.customers.findIndex(function(row) {
+      return field(row, state.customerHeaders, "고객ID") === customerId;
+    });
+    if (rowIndex >= 0) state.customers[rowIndex] = result.customerRow;
+    else state.customers.push(result.customerRow);
+    if (result.matchHeaders) state.matchHeaders = result.matchHeaders;
+    if (result.matches) {
+      state.matches = result.matches;
+      state.loadedMatchCustomerId = customerId;
+    }
+    if (result.matchSummary) {
+      state.matchSummary = {};
+      result.matchSummary.forEach(function(item) {
+        state.matchSummary[text(item.customerId)] = item;
+      });
+    }
+    if (result.activityRow) state.activities.push(result.activityRow);
+    state.selectedCustomerId = customerId;
+    return true;
+  }
+
+  function updateCustomerRowOptimisticallyV723(customerId, customer) {
+    var id = text(customerId);
+    if (!id) return null;
+    var rowIndex = state.customers.findIndex(function(row) {
+      return field(row, state.customerHeaders, "고객ID") === id;
+    });
+    if (rowIndex < 0) return null;
+    var previous = state.customers[rowIndex].slice();
+    var next = previous.slice();
+    state.customerHeaders.slice(0, 19).forEach(function(header, index) {
+      if (Object.prototype.hasOwnProperty.call(customer, header)) next[index] = customer[header];
+    });
+    state.customers[rowIndex] = next;
+    return { rowIndex: rowIndex, previous: previous };
+  }
+
+  function restoreCustomerEditorAfterFailureV723(customerId) {
+    state.editingCustomerId = text(customerId);
+    var modal = document.getElementById("customerEditorModal");
+    if (modal) modal.hidden = false;
+    document.body.classList.add("customer-crm-open");
   }
 
   function applyCustomerList(result) {
@@ -1082,19 +1129,30 @@
     Array.prototype.forEach.call(form.querySelectorAll("[data-customer-field]"), function(input) {
       customer[input.getAttribute("data-customer-field")] = input.value;
     });
+    var editingCustomerId = text(state.editingCustomerId);
+    var optimisticUpdate = updateCustomerRowOptimisticallyV723(editingCustomerId, customer);
+    var consultationMemo = text(document.getElementById("customerConsultationMemo") && document.getElementById("customerConsultationMemo").value);
+    var nextContactDate = text(document.getElementById("customerNextContactDate") && document.getElementById("customerNextContactDate").value);
     button.disabled = true;
-    button.textContent = "저장·매칭 중…";
-    setMessage("고객정보를 저장하고 전체 매물과 바로 비교하고 있습니다…", "loading");
+    button.textContent = "저장 확인 중…";
+    if (optimisticUpdate) {
+      renderCustomers();
+      renderMatches(editingCustomerId);
+    }
+    window.closeCustomerEditor();
+    setMessage("조건을 바로 반영했습니다. 실제 시트 저장과 재매칭을 확인하고 있습니다…", "loading");
     apiPost("saveCustomer", {
-      customerId: state.editingCustomerId,
+      customerId: editingCustomerId,
       customer: customer,
-      consultationMemo: text(document.getElementById("customerConsultationMemo") && document.getElementById("customerConsultationMemo").value),
-      nextContactDate: text(document.getElementById("customerNextContactDate") && document.getElementById("customerNextContactDate").value)
+      consultationMemo: consultationMemo,
+      nextContactDate: nextContactDate,
+      compactResponse: true
     }).then(function(result) {
       state.selectedCustomerId = result.customerId || state.selectedCustomerId;
-      window.closeCustomerEditor();
       if (result.workspace) {
         applyCustomerWorkspace(result.workspace);
+      } else if (applyCompactCustomerSaveV723(result, editingCustomerId)) {
+        state.customerLoaded = true;
       } else {
         state.customerLoaded = false;
         return loadOperationsData(true);
@@ -1103,8 +1161,12 @@
       state.customerView = "before";
       renderCustomers();
       renderMatches(state.selectedCustomerId);
-      setMessage("고객정보 저장과 즉시 재매칭이 완료됐습니다.", "success");
+      setMessage("고객정보가 시트에 저장되고 재매칭까지 확인됐습니다.", "success");
     }).catch(function(error) {
+      if (optimisticUpdate) state.customers[optimisticUpdate.rowIndex] = optimisticUpdate.previous;
+      renderCustomers();
+      renderMatches(editingCustomerId || state.selectedCustomerId);
+      restoreCustomerEditorAfterFailureV723(editingCustomerId);
       setMessage(error.message || "고객정보 저장에 실패했습니다.", "error");
     }).finally(function() {
       button.disabled = false;
@@ -1190,8 +1252,10 @@
     }
     if (button) {
       button.disabled = true;
-      button.textContent = "저장 중…";
+      button.textContent = "저장 확인 중…";
     }
+    window.closeCustomerMemo();
+    setMessage("메모를 바로 접수했습니다. 실제 시트 저장을 확인하고 있습니다…", "loading");
     apiPost("addCustomerActivity", {
       customerId: customerId,
       stage: "상담",
@@ -1200,9 +1264,14 @@
       nextContactDate: ""
     }).then(function(result) {
       if (result.activityRow) state.activities.push(result.activityRow);
-      window.closeCustomerMemo();
-      setMessage("상담일자와 메모를 저장했습니다.", "success");
+      if (input) input.value = "";
+      setMessage("상담·미팅 메모가 시트에 저장된 것을 확인했습니다.", "success");
     }).catch(function(error) {
+      state.viewingMemoCustomerId = customerId;
+      var modal = document.getElementById("customerMemoModal");
+      if (modal) modal.hidden = false;
+      if (input) input.value = memo;
+      document.body.classList.add("customer-crm-open");
       setMessage(error.message || "메모 저장에 실패했습니다.", "error");
     }).finally(function() {
       if (button) {

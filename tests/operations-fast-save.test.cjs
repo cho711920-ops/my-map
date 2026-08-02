@@ -21,7 +21,11 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "8\.0\.2"/);
+assert.match(backend, /MM_VERSION = "8\.0\.3"/);
+assert.match(backend, /function mmEnsureCustomerSystemReady_\(\)/);
+assert.match(backend, /function mmSaveCustomer_\(body\)[\s\S]*?mmEnsureCustomerSystemReady_\(\)/);
+assert.match(backend, /function mmAddCustomerActivity_\(body\)[\s\S]*?mmEnsureCustomerSystemReady_\(\)/);
+assert.match(backend, /body\.compactResponse === true/);
 assert.match(backend, /manualMergeConfirmed === true/);
 assert.match(backend, /function mmManualConditionKeepMergeAllowed_/);
 assert.match(backend, /사용자가 같은 실제 공간으로 확인/);
