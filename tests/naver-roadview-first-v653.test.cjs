@@ -38,7 +38,7 @@ assert.match(api, /Cache-Control", "no-store/);
 
 assert.match(css, /#naverRoadviewTabBtn\.active/);
 assert.match(css, /\.naver-roadview-capture-info-v653/);
-assert.match(html, /script\.js\?v=6\.5\.59-stable-naver-roadview/);
+assert.match(html, /script\.js\?v=6\.5\.60-reliable-naver-roadview/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.34-naver-roadview-split/);
 
 console.log("NAVER-first roadview v6.5.53 tests passed");

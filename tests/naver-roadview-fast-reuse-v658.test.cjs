@@ -30,16 +30,21 @@ assert.doesNotMatch(openBody, /destroyNaverRoadviewMapV654\(/);
 
 const closeBody = functionBody("closeRoadviewModal", "formatListRegistrationDate");
 assert.doesNotMatch(closeBody, /naverRoadviewInstanceV653\.setVisible\(false\)/);
-assert.doesNotMatch(closeBody, /naverRoadviewInstanceV653\s*=\s*null/);
+assert.match(closeBody, /naverRoadviewInstanceV653\.destroy\(\)/);
+assert.match(closeBody, /naverRoadviewInstanceV653\s*=\s*null/);
 assert.doesNotMatch(closeBody, /destroyNaverRoadviewMapV654\(/);
+
+const loadSdkBody = functionBody("loadNaverMapsSdkV653", "formatNaverPanoramaDateV653");
+assert.match(loadSdkBody, /staleSdk\.remove\(\)/);
+assert.match(loadSdkBody, /maps-panorama\.js/);
 
 assert.match(script, /requestIdleCallback\(warmNaverRoadviewSdkV658/);
 assert.match(script, /if \(mapActive && !roadviewFullMap && roadviewTargetPosition\)/);
 assert.match(script, /if \(panoramaPosition\) setupNaverRoadviewMapV654\(panoramaPosition\)/);
 assert.match(script, /\}, 6500\);/);
 assert.ok(
-  html.includes("script.js?v=6.5.59-stable-naver-roadview"),
+  html.includes("script.js?v=6.5.60-reliable-naver-roadview"),
   "빠른 네이버 거리뷰 캐시 버전이 적용되어야 합니다."
 );
 
-console.log("naver roadview fast reuse v6.5.58 tests passed");
+console.log("naver roadview reliable reopen v6.5.60 tests passed");

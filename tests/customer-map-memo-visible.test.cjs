@@ -50,6 +50,6 @@ assert.match(operations, /compactStatus\.hidden = false/);
 assert.match(operations, /compactStatus\.hidden = true/);
 assert.match(unifiedCss, /\.map-quick-tools\s*\{[^}]*\+ 2px\)/s);
 assert.match(unifiedCss, /\.header\s*\{[^}]*justify-content:\s*center\s*!important[^}]*font-size:\s*27px\s*!important/s);
-assert.match(html, /script\.js\?v=6\.5\.59-stable-naver-roadview/);
+assert.match(html, /script\.js\?v=6\.5\.60-reliable-naver-roadview/);
 
 console.log("customer map card layout tests passed");

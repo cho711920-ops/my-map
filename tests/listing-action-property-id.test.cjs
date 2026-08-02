@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.59-stable-naver-roadview"),
+  html.includes("script.js?v=6.5.60-reliable-naver-roadview"),
   "the production page must load the fixed script cache version"
 );
 

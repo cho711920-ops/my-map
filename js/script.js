@@ -1656,7 +1656,32 @@ function loadNaverMapsSdkV653() {
     return Promise.resolve(window.naver.maps);
   }
 
-  if (naverRoadviewSdkPromiseV653) return naverRoadviewSdkPromiseV653;
+  if (naverRoadviewSdkPromiseV653) {
+    return naverRoadviewSdkPromiseV653.then(function() {
+      if (
+        window.naver &&
+        window.naver.maps &&
+        window.naver.maps.Panorama
+      ) {
+        return window.naver.maps;
+      }
+
+      /*
+       * Panorama가 닫히는 순간 네이버 SDK 내부 상태가 손상된 경우
+       * 이미 완료된 Promise를 다시 쓰지 않고 SDK를 깨끗하게 재요청한다.
+       */
+      naverRoadviewSdkPromiseV653 = null;
+      var staleSdk = document.getElementById("naverMapsSdkV653");
+      if (staleSdk) staleSdk.remove();
+      document.querySelectorAll('script[src*="maps-panorama.js"]').forEach(function(script) {
+        script.remove();
+      });
+      return loadNaverMapsSdkV653();
+    }, function() {
+      naverRoadviewSdkPromiseV653 = null;
+      return loadNaverMapsSdkV653();
+    });
+  }
 
   naverRoadviewSdkPromiseV653 = fetch("/api/naver-maps-config", {
     method: "GET",
@@ -2492,9 +2517,29 @@ function openKakaoRoadviewAtPosition(lat, lng) {
 function closeRoadviewModal() {
   var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
+  var naverContainer = document.getElementById("naverRoadviewContainer");
   var naverInfo = document.getElementById("naverRoadviewCaptureInfo");
 
   if (!modal) return;
+
+  /*
+   * 네이버 Panorama는 display:none 상태로 보관했다가 다시 setPosition하면
+   * SDK 내부 타이머가 끊길 수 있다. SDK 파일과 보조 지도는 재사용하되,
+   * Panorama 인스턴스만 닫을 때 정상 종료하고 다음 매물에서 새로 만든다.
+   */
+  if (naverRoadviewInstanceV653) {
+    try {
+      if (window.naver && window.naver.maps && window.naver.maps.Event) {
+        window.naver.maps.Event.clearInstanceListeners(naverRoadviewInstanceV653);
+      }
+      if (typeof naverRoadviewInstanceV653.destroy === "function") {
+        naverRoadviewInstanceV653.destroy();
+      }
+    } catch (error) {}
+    naverRoadviewInstanceV653 = null;
+    naverRoadviewListenersBoundV658 = false;
+  }
+  if (naverContainer) naverContainer.innerHTML = "";
 
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
