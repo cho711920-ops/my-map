@@ -14,7 +14,7 @@ assert.match(html, /고객별 매칭매물 관리/);
 assert.match(html, /메인 매물리스트가 그대로 열립니다/);
 assert.match(html, /operations-center-v7\.css\?v=7\.20\.0-balanced-customer-match/);
 assert.match(html, /operations-center-v7\.js\?v=7\.20\.0-balanced-customer-match/);
-assert.match(html, /script\.js\?v=6\.5\.49-customer-match-cards/);
+assert.match(html, /script\.js\?v=6\.5\.50-customer-match-map-menu/);
 
 assert.match(operations, /customerView:\s*"before"/);
 assert.match(operations, /① 고객 목록/);

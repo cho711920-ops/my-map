@@ -16,7 +16,7 @@ assert.match(
 );
 assert.match(
   script,
-  /'<\/div>' \+\s*memoToggleButton \+\s*'<\/div>'/,
+  /customerMatchMapActionsV721 =[\s\S]*?memoToggleButton \+ customerMatchControls/,
   "메모 버튼은 일반 작업 도구와 같은 카드 안에 있어야 합니다."
 );
 assert.match(
@@ -50,6 +50,6 @@ assert.match(operations, /compactStatus\.hidden = false/);
 assert.match(operations, /compactStatus\.hidden = true/);
 assert.match(unifiedCss, /\.map-quick-tools\s*\{[^}]*\+ 2px\)/s);
 assert.match(unifiedCss, /\.header\s*\{[^}]*justify-content:\s*center\s*!important[^}]*font-size:\s*27px\s*!important/s);
-assert.match(html, /script\.js\?v=6\.5\.49-customer-match-cards/);
+assert.match(html, /script\.js\?v=6\.5\.50-customer-match-map-menu/);
 
 console.log("customer map card layout tests passed");

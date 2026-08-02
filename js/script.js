@@ -1248,6 +1248,9 @@ function renderNextListChunk(targetLimit) {
   for (var index = listRenderLimit; index < nextLimit; index++) {
     var item = visibleListItems[index];
     var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[item.key];
+    if (reusableCard && reusableCard.classList.contains("customer-match-map-card-v721") !== isCustomerMatchMapCardV721(item)) {
+      reusableCard = null;
+    }
     if (reusableCard) {
       fragment.appendChild(reusableCard);
       delete listCardReusePoolV6521[item.key];
@@ -2533,8 +2536,49 @@ function buildListElevatorIconV650() {
   '</span>';
 }
 
+window.closeCustomerMatchCardMenusV721 = function(exceptPanel) {
+  document.querySelectorAll(".customer-match-menu-panel-v721").forEach(function(panel) {
+    if (panel === exceptPanel) return;
+    panel.hidden = true;
+    var card = panel.closest && panel.closest(".customer-match-map-card-v721");
+    if (card) card.classList.remove("customer-match-menu-open-v721");
+    var toggle = panel.parentElement && panel.parentElement.querySelector(".customer-match-menu-toggle-v721");
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+  });
+};
+
+window.toggleCustomerMatchCardMenuV721 = function(button, event) {
+  if (event) event.stopPropagation();
+  var wrapper = button && button.closest ? button.closest(".customer-match-card-menu-v721") : null;
+  var panel = wrapper ? wrapper.querySelector(".customer-match-menu-panel-v721") : null;
+  if (!panel) return;
+  var willOpen = panel.hidden;
+  window.closeCustomerMatchCardMenusV721(willOpen ? panel : null);
+  panel.hidden = !willOpen;
+  var card = wrapper.closest && wrapper.closest(".customer-match-map-card-v721");
+  if (card) card.classList.toggle("customer-match-menu-open-v721", willOpen);
+  button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+};
+
+if (!window.customerMatchMenuOutsideBoundV721) {
+  window.customerMatchMenuOutsideBoundV721 = true;
+  document.addEventListener("click", function(event) {
+    if (event && event.target && event.target.closest && event.target.closest(".customer-match-card-menu-v721")) return;
+    window.closeCustomerMatchCardMenusV721();
+  });
+}
+
+function isCustomerMatchMapCardV721(item, customerMatchContextV719) {
+  var customerMatchPropertyIdV721 = String(item && item.propertyId || "").trim();
+  return !customerMatchContextV719 &&
+    window.operationsMatchPropertyIds instanceof Set &&
+    window.operationsMatchPropertyIds.has(customerMatchPropertyIdV721) &&
+    (!window.matchMedia || window.matchMedia("(min-width: 769px)").matches);
+}
+
 function addListItem(item, appendTarget, customerMatchContextV719) {
   var div = document.createElement("div");
+  var customerMatchMapCardV721 = isCustomerMatchMapCardV721(item, customerMatchContextV719);
   var printSelected = selectedPrintKeys.includes(item.key);
   var memoOpen = openMemoKey === item.key;
   var memoEditing = editingMemoKey === item.key;
@@ -2562,7 +2606,8 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     (customerMatchStatusV719 === "신규" ? " customer-match-new" : "") +
     (customerMatchStatusV719 === "소개" ? " customer-match-introduced" : "") +
     (customerMatchStatusV719 === "보류" ? " customer-match-held" : "") +
-    (customerMatchContextV719 ? " operations-match-listing-card-v719" : "");
+    (customerMatchContextV719 ? " operations-match-listing-card-v719" : "") +
+    (customerMatchMapCardV721 ? " customer-match-map-card-v721" : "");
 
   var doneLabel = isDone(item)
     ? '<span class="done-badge">계약완료</span>'
@@ -2613,14 +2658,54 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     '</button>';
 
   var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
+  var navButtonV721 =
+    '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
+      'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>';
+  var roadviewButtonV721 =
+    '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
+      'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span>' + buildCardActionIconV662('roadview') + '</button>';
+  var registerButtonV721 =
+    '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
+      'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>';
+  var favoriteButtonV721 =
+    '<button type="button" class="item-list-add-btn favorite" title="찜 목록에 추가" ' +
+      'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>';
+  var editButtonV721 =
+    '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
+      'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';
+  var regularActionButtonsV721 = actionContactButtonV654 + navButtonV721 + roadviewButtonV721 +
+    registerButtonV721 + favoriteButtonV721 + editButtonV721 + sourceLinkButton;
+  var menuContactButtonV721 = actionContactButtonV654.replace(
+    '</button>',
+    '<span class="customer-match-menu-label-v721">연락처</span></button>'
+  );
+  var customerMatchMenuV721 =
+    '<div class="customer-match-card-menu-v721" onclick="event.stopPropagation()">' +
+      '<button type="button" class="customer-match-menu-toggle-v721" aria-expanded="false" ' +
+        'onclick="toggleCustomerMatchCardMenuV721(this,event)">메뉴</button>' +
+      '<div class="customer-match-menu-panel-v721" hidden>' +
+        menuContactButtonV721 + navButtonV721 + roadviewButtonV721 + registerButtonV721 + editButtonV721 +
+      '</div>' +
+    '</div>';
+  var customerMatchMapActionsV721 =
+    '<div class="item-action-left">' + customerMatchMenuV721 + sourceLinkButton + '</div>' +
+    memoToggleButton + customerMatchControls;
+  var standardActionsV721 =
+    customerMatchControls + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;
 
   div.setAttribute("data-listing-key", item.key);
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
-    '<div class="item-card-grid-v650' + (customerMatchControls ? ' customer-match-card-grid-v654' : ' standard-card-grid-v661') + '">' +
+    '<div class="item-card-grid-v650' +
+      (customerMatchMapCardV721
+        ? ' standard-card-grid-v661 customer-match-map-card-grid-v721'
+        : (customerMatchControls ? ' customer-match-card-grid-v654' : ' standard-card-grid-v661')) + '">' +
       unifiedCardPartsV8.thumbnail +
-      '<div class="item-compact-main-v650' + (customerMatchControls ? ' customer-match-card-main-v654' : ' standard-card-main-v661') + '">' +
+      '<div class="item-compact-main-v650' +
+        (customerMatchMapCardV721
+          ? ' standard-card-main-v661 customer-match-map-card-main-v721'
+          : (customerMatchControls ? ' customer-match-card-main-v654' : ' standard-card-main-v661')) + '">' +
         '<div class="item-compact-head-v650">' +
           '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
             '<input type="checkbox" class="action-select-check" ' +
@@ -2674,23 +2759,10 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
         '</div>' +
 
         '<div class="item-action-row item-compact-actions-v650' +
-          (customerMatchControls ? ' customer-match-card-actions-v653' : '') + '">' +
-          customerMatchControls +
-          '<div class="item-action-left">' +
-            actionContactButtonV654 +
-            '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
-          'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>' +
-            '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
-          'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span>' + buildCardActionIconV662('roadview') + '</button>' +
-            '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
-          'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>' +
-            '<button type="button" class="item-list-add-btn favorite" title="찜 또는 임장목록에 추가" ' +
-          'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>' +
-            '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
-          'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>' +
-            sourceLinkButton +
-          '</div>' +
-          memoToggleButton +
+          (customerMatchMapCardV721
+            ? ' customer-match-map-actions-v721'
+            : (customerMatchControls ? ' customer-match-card-actions-v653' : '')) + '">' +
+          (customerMatchMapCardV721 ? customerMatchMapActionsV721 : standardActionsV721) +
         '</div>' +
       '</div>' +
     '</div>' +
