@@ -417,11 +417,11 @@
         (registrationDate ? '<div class="unified-detail-meta-v8"><span>등록일</span><b>' + esc(registrationDate) + '</b></div>' : '') +
         '<div class="unified-detail-actions-v8">' +
           (selected.link ? '<button type="button" onclick="window.open(\'' + esc(selected.link) +
-            '\', \'_blank\', \'noopener,noreferrer\')">이 원본 링크 열기</button>' : '') +
+            '\', \'_blank\', \'noopener,noreferrer\')">원본 링크 열기</button>' : '') +
           (originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">다른 공간으로 분리</button>' : '') +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
           '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">다른 통합매물로 이동</button>' +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">다른 매물에 통합</button>' +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
