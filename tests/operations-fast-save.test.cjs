@@ -21,7 +21,7 @@ assert.doesNotMatch(
   /return loadReviews\(true, true\)\.then\(function\(\) \{\s*message\(number\(result\.consolidated\)/
 );
 
-assert.match(backend, /MM_VERSION = "8\.1\.0"/);
+assert.match(backend, /MM_VERSION = "8\.1\.1"/);
 assert.match(backend, /function mmEnsureCustomerSystemReady_\(\)/);
 assert.match(backend, /function mmSaveCustomer_\(body\)[\s\S]*?mmEnsureCustomerSystemReady_\(\)/);
 assert.match(backend, /function mmAddCustomerActivity_\(body\)[\s\S]*?mmEnsureCustomerSystemReady_\(\)/);

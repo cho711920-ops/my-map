@@ -46,7 +46,7 @@ assert.equal(context.mmAddressMatchesDesiredRegions_("중구 문화동 10", dist
 assert.equal(context.mmAddressMatchesDesiredRegions_("서구 괴정동 괴정상가", ["괴정"]), true);
 assert.equal(context.mmAddressMatchesDesiredRegions_("서구 둔산동 괴정빌딩", ["괴정"]), false);
 
-assert.match(source, /var MM_VERSION = "8\.1\.0"/);
+assert.match(source, /var MM_VERSION = "8\.1\.1"/);
 assert.match(source, /regions: mmDesiredRegionTokens_\(customer\[3\]\)/);
 assert.match(source, /mmAddressMatchesDesiredRegions_\(masterProfile\.address, regions\)/);
 

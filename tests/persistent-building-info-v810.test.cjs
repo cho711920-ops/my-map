@@ -15,7 +15,7 @@ const integrated = fs.readFileSync(
   "utf8"
 );
 
-assert.match(integrated, /var MM_VERSION = "8\.1\.0"/);
+assert.match(integrated, /var MM_VERSION = "8\.1\.1"/);
 assert.match(integrated, /var MM_BUILDING_INFO_SHEET = "JS_건물정보"/);
 assert.match(integrated, /"지번주소키",\s*"지번주소"[\s\S]*?"준공년도"[\s\S]*?"승강기합계"[\s\S]*?"확인일시"/);
 assert.match(integrated, /function mmCacheBuildingRegisterSummary_\(result, request\)/);
