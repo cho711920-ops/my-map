@@ -26,6 +26,6 @@ assert.match(
   /@media \(min-width: 769px\)[\s\S]*?#roadviewModal\.roadview-modal\.open \.roadview-modal-dialog[\s\S]*?inset: 0 !important;[\s\S]*?width: 100vw !important;[\s\S]*?height: 100dvh !important;/
 );
 assert.match(indexSource, /css\/ai-visit-v6\.css\?v=6\.4\.34-roadview-viewport/);
-assert.match(indexSource, /js\/ai-visit-session-v6\.js\?v=6\.4\.36-unified-favorites/);
+assert.match(indexSource, /js\/ai-visit-session-v6\.js\?v=6\.4\.37-confirmed-visit/);
 
 console.log("roadview viewport fit tests passed");

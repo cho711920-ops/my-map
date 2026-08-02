@@ -1326,9 +1326,9 @@
   }
 
   .verification-done-v661 {
-    border-color: #ee7777 !important;
-    background: #fff0f0 !important;
-    color: #c32020 !important;
+    border-color: #62c78b !important;
+    background: #dff7e8 !important;
+    color: #08783d !important;
   }
 
   .standard-card-main-v661 .item-compact-actions-v650 {
@@ -1721,6 +1721,53 @@
     color: #176c3b !important;
     font-size: 12.5px !important;
     font-weight: 900 !important;
+  }
+
+  .unified-expand-btn-v8 {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .unified-expand-btn-v8::after {
+    position: absolute;
+    top: -45%;
+    bottom: -45%;
+    left: -55%;
+    width: 34%;
+    content: "";
+    pointer-events: none;
+    transform: skewX(-18deg);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .9), transparent);
+    opacity: 0;
+  }
+
+  .unified-expand-btn-v8.duplicate-shimmer-visible-v812::after {
+    animation: duplicate-button-shimmer-v812 2.8s ease-in-out infinite;
+  }
+
+  @keyframes duplicate-button-shimmer-v812 {
+    0%, 58% {
+      left: -55%;
+      opacity: 0;
+    }
+    64% {
+      opacity: .95;
+    }
+    84% {
+      left: 125%;
+      opacity: .55;
+    }
+    100% {
+      left: 125%;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .unified-expand-btn-v8.duplicate-shimmer-visible-v812::after {
+      animation: none;
+    }
   }
 
   .standard-card-main-v661 .item-compact-actions-v650 > .item-memo-toggle {

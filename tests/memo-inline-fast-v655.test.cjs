@@ -81,8 +81,8 @@ assert(
   "메모 변경 전후 이력을 남긴 뒤에만 저장완료를 응답해야 합니다."
 );
 assert(
-  html.includes("style.css?v=6.5.32-compact-admin-clusters") &&
-  html.includes("script.js?v=6.5.60-reliable-naver-roadview"),
+  html.includes("style.css?v=6.5.33-admin-count-confirmed") &&
+  html.includes("script.js?v=6.5.61-confirmed-visit-shimmer"),
   "운영 브라우저가 새 메모 UI를 즉시 받도록 캐시 버전을 올려야 합니다."
 );
 assert(

@@ -8,6 +8,8 @@ const html = fs.readFileSync("index.html", "utf8");
 
 assert.match(script, /verification-pending-v661">미확인/);
 assert.match(script, /verification-done-v661">확인/);
+assert.match(script, /function isConfirmedVisitItem\(item\)/);
+assert.match(script, /item\.memo = markFieldVisitConfirmedInMemo\(item\.memo \|\| ""\)/);
 assert.match(script, /standard-card-grid-v661/);
 assert.match(script, /standard-card-main-v661/);
 assert.match(script, /customerMatchControls \? unifiedCardPartsV8\.badge : ''/);
@@ -36,7 +38,7 @@ assert.match(
   /\.standard-card-main-v661 \.item-compact-actions-v650\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 34px[^}]*overflow:\s*visible/s
 );
 assert.match(css, /\.verification-pending-v661\s*\{[^}]*background:\s*#ffe476/s);
-assert.match(css, /\.verification-done-v661\s*\{[^}]*color:\s*#c32020/s);
+assert.match(css, /\.verification-done-v661\s*\{[^}]*background:\s*#dff7e8/s);
 assert.match(css, /\.standard-card-main-v661 \.item-head-favorite-v661\.on\s*\{[^}]*color:\s*#f1b900/s);
 assert.match(css, /\.standard-card-main-v661 \.item-action-text-v661\s*\{[^}]*display:\s*none/s);
 assert.match(css, /\.standard-card-main-v661 \.item-action-emoji-v661\s*\{[^}]*display:\s*inline/s);
@@ -44,8 +46,8 @@ assert.match(css, /grid-template-columns:\s*32px 44px 56px 44px 44px 104px/);
 assert.match(css, /\.item-nav-btn \.item-action-text-v661,[\s\S]*?display:\s*inline !important/);
 assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !important;[\s\S]*?font-size:\s*12\.5px !important/);
 
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.34-naver-roadview-split/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.35-visible-shimmer-confirmed/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.17-detail-drawer-motion/);
-assert.match(html, /script\.js\?v=6\.5\.60-reliable-naver-roadview/);
+assert.match(html, /script\.js\?v=6\.5\.61-confirmed-visit-shimmer/);
 
 console.log("main listing three-line v6.6.1 tests passed");

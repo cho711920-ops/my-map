@@ -936,17 +936,20 @@
   }
 
   function cleanVisitMemo(value) {
-    if (typeof window.removeFieldVisitMarkerFromMemo === "function") {
-      return window.removeFieldVisitMarkerFromMemo(value);
+    if (typeof window.markFieldVisitConfirmedInMemo === "function") {
+      return window.markFieldVisitConfirmedInMemo(value);
     }
-    return String(value || "")
+    var text = String(value || "")
       .replace(/\(\s*임장가자\s*\)/gi, "")
       .replace(/\(\s*공실박스\s*\)/gi, "")
+      .replace(/\(\s*확인매물\s*\)/gi, "")
       .replace(/\s*\/\s*\/\s*/g, " / ")
       .replace(/^\s*\/\s*/, "")
       .replace(/\s*\/\s*$/, "")
       .replace(/\s{2,}/g, " ")
       .trim();
+
+    return text ? "(확인매물) / " + text : "(확인매물)";
   }
 
   function createMutationRequestId() {

@@ -90,7 +90,7 @@ assert.equal(context.getPremiumClusterSizeClassV635(1).trim(), "cluster-size-sm"
 assert.equal(context.getPremiumClusterSizeClassV635(10).trim(), "cluster-size-md");
 assert.equal(context.getPremiumClusterSizeClassV635(600).trim(), "cluster-size-xxl");
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /admin-region-cluster-v655/);
-assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /매물 3/);
+assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /<span>매물 <b>3<\/b><\/span>/);
 assert.equal(context.estimateAdministrativeClusterBoxV656({ regionLabel: "괴정동", items: Array(9999) }).height, 40);
 assert.equal(
   context.administrativeBoxesOverlapV656(
@@ -166,7 +166,8 @@ assert.match(source, /function openAdministrativeClusterV655[\s\S]*?targetLevel 
 assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
-assert.ok(html.includes("map.js?v=8.1.1-compact-admin-clusters"));
-assert.ok(html.includes("style.css?v=6.5.32-compact-admin-clusters"));
+assert.match(css, /admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
+assert.ok(html.includes("map.js?v=8.1.2-admin-count-blue"));
+assert.ok(html.includes("style.css?v=6.5.33-admin-count-confirmed"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");

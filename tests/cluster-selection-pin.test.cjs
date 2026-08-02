@@ -31,8 +31,8 @@ assert.match(
   operationsSource,
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
-assert.match(htmlSource, /js\/map\.js\?v=8\.1\.1-compact-admin-clusters/);
-assert.match(htmlSource, /js\/script\.js\?v=6\.5\.60-reliable-naver-roadview/);
+assert.match(htmlSource, /js\/map\.js\?v=8\.1\.2-admin-count-blue/);
+assert.match(htmlSource, /js\/script\.js\?v=6\.5\.61-confirmed-visit-shimmer/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.20\.4-condition-refresh-motion/);
 
 console.log("cluster selection pin tests passed");

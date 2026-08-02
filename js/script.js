@@ -1152,6 +1152,13 @@ function isFieldVisitItem(item) {
 }
 
 
+function isConfirmedVisitItem(item) {
+  var memo = String((item && item.memo) ? item.memo : "");
+
+  return /\(\s*확인매물\s*\)/i.test(memo);
+}
+
+
 function isGongsilBoxItem(item) {
   var unifiedSources = item && Array.isArray(item.sourceTypesV8)
     ? item.sourceTypesV8
@@ -1261,6 +1268,12 @@ function renderNextListChunk(targetLimit) {
   }
 
   list.appendChild(fragment);
+  Array.prototype.forEach.call(
+    list.querySelectorAll(".unified-expand-btn-v8:not([data-shimmer-observed-v812])"),
+    function(button) {
+      observeUnifiedDuplicateShimmerV812(button.closest(".item"));
+    }
+  );
   listRenderLimit = nextLimit;
   if (listRenderLimit >= visibleListItems.length) listCardReusePoolV6521 = null;
   list.setAttribute("data-rendered-count", String(listRenderLimit));
@@ -1283,8 +1296,54 @@ function bindIncrementalListRendering() {
 }
 
 
+var unifiedDuplicateShimmerObserverV812 = null;
+
+function resetUnifiedDuplicateShimmerObserverV812() {
+  if (unifiedDuplicateShimmerObserverV812) {
+    unifiedDuplicateShimmerObserverV812.disconnect();
+  }
+  Array.prototype.forEach.call(
+    document.querySelectorAll(".unified-expand-btn-v8[data-shimmer-observed-v812]"),
+    function(button) {
+      button.classList.remove("duplicate-shimmer-visible-v812");
+      button.removeAttribute("data-shimmer-observed-v812");
+    }
+  );
+  unifiedDuplicateShimmerObserverV812 = null;
+}
+
+
+function observeUnifiedDuplicateShimmerV812(card) {
+  if (!card || typeof card.querySelector !== "function") return;
+  var button = card.querySelector(".unified-expand-btn-v8");
+  if (!button) return;
+  if (button.hasAttribute("data-shimmer-observed-v812")) return;
+  button.setAttribute("data-shimmer-observed-v812", "1");
+
+  if (!("IntersectionObserver" in window)) {
+    button.classList.add("duplicate-shimmer-visible-v812");
+    return;
+  }
+
+  if (!unifiedDuplicateShimmerObserverV812) {
+    unifiedDuplicateShimmerObserverV812 = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        entry.target.classList.toggle("duplicate-shimmer-visible-v812", entry.isIntersecting);
+      });
+    }, {
+      root: null,
+      rootMargin: "80px 0px",
+      threshold: 0.01
+    });
+  }
+
+  unifiedDuplicateShimmerObserverV812.observe(button);
+}
+
+
 function showList(items) {
   var list = document.getElementById("list");
+  resetUnifiedDuplicateShimmerObserverV812();
   var previousSignature = (visibleListItems || []).map(function(item) {
     return item.key;
   }).join("||");
@@ -3501,7 +3560,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
 
   var sourceLabel = isFieldVisitItem(item)
     ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
-    : (isGongsilBoxItem(item)
+    : (isConfirmedVisitItem(item) || isGongsilBoxItem(item)
       ? '<span class="gongsil-source-badge verification-done-v661">확인</span>'
       : "");
 
@@ -3675,6 +3734,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   };
 
   (appendTarget || document.getElementById("list")).appendChild(div);
+  observeUnifiedDuplicateShimmerV812(div);
   if (window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
     window.JSBuildingRegisterBadges.bind(div, item);
   }
@@ -4142,6 +4202,22 @@ function removeFieldVisitMarkerFromMemo(memo) {
 }
 
 
+function markFieldVisitConfirmedInMemo(memo) {
+  var text = removeFieldVisitMarkerFromMemo(memo)
+    .replace(/\(\s*확인매물\s*\)/gi, "")
+    .replace(/\s*\/\s*\/\s*/g, " / ")
+    .replace(/^\s*\/\s*/, "")
+    .replace(/\s*\/\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return text ? "(확인매물) / " + text : "(확인매물)";
+}
+
+window.removeFieldVisitMarkerFromMemo = removeFieldVisitMarkerFromMemo;
+window.markFieldVisitConfirmedInMemo = markFieldVisitConfirmedInMemo;
+
+
 function removeGongsilBoxMarkerFromMemo(memo) {
   return removeFieldVisitMarkerFromMemo(memo);
 }
@@ -4186,7 +4262,7 @@ function markSelectedAsVisited() {
   targetItems.forEach(function(item) {
     previousValues[item.key] = item.memo || "";
     doneTogglePendingKeys[item.key] = true;
-    item.memo = removeFieldVisitMarkerFromMemo(item.memo || "");
+    item.memo = markFieldVisitConfirmedInMemo(item.memo || "");
   });
 
   refreshDoneStatusUI(true);

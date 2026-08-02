@@ -1755,7 +1755,7 @@ function buildClusterOverlayContentV655(cluster, classNames) {
     return '<button type="button" class="' + classes + ' admin-region-cluster-v655"' +
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
       ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 확대">' +
-      '<strong>' + cluster.regionLabel + '</strong><span>매물 ' + count.toLocaleString("ko-KR") + '</span></button>';
+      '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span></button>';
   }
 
   return '<div class="' + classes + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
