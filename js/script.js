@@ -1431,6 +1431,14 @@ var naverRoadviewLoadingV653 = false;
 var kakaoRoadviewLoadingV653 = false;
 var roadviewOpenSequenceV653 = 0;
 var currentRoadviewCoords = null;
+var naverRoadviewRequestSequenceV658 = 0;
+var naverRoadviewRequestReadyV658 = false;
+var naverRoadviewCandidateIndexV658 = 0;
+var naverRoadviewCandidatesV658 = [];
+var naverRoadviewRetryTimerV658 = null;
+var naverRoadviewListenersBoundV658 = false;
+var naverRoadviewActiveTargetKeyV658 = "";
+var naverRoadviewLastTargetKeyV658 = "";
 
 
 function buildNaverRoadviewDirectionIconV654(pan) {
@@ -1501,6 +1509,24 @@ function setupNaverRoadviewMapV654(position) {
   var mapContainer = document.getElementById("naverRoadviewMapV654");
   if (!mapContainer || !window.naver || !window.naver.maps || !position) return;
 
+  var targetPosition = currentRoadviewCoords
+    ? new window.naver.maps.LatLng(
+        currentRoadviewCoords.lat,
+        currentRoadviewCoords.lng
+      )
+    : position;
+
+  if (naverRoadviewMapV654) {
+    try {
+      if (naverRoadviewTargetMarkerV654) {
+        naverRoadviewTargetMarkerV654.setPosition(targetPosition);
+      }
+      naverRoadviewMapV654.panTo(position);
+    } catch (error) {}
+    updateNaverRoadviewMapV654(true);
+    return;
+  }
+
   mapContainer.innerHTML = "";
   naverRoadviewMapV654 = new window.naver.maps.Map(mapContainer, {
     center: position,
@@ -1528,10 +1554,6 @@ function setupNaverRoadviewMapV654(position) {
     icon: buildNaverRoadviewDirectionIconV654(0)
   });
 
-  var targetPosition = new window.naver.maps.LatLng(
-    currentRoadviewCoords.lat,
-    currentRoadviewCoords.lng
-  );
   naverRoadviewTargetMarkerV654 = new window.naver.maps.Marker({
     map: naverRoadviewMapV654,
     position: targetPosition,
@@ -1756,6 +1778,49 @@ function updateNaverPanoramaInfoV653() {
 }
 
 
+function clearNaverRoadviewTimersV658() {
+  if (naverRoadviewFallbackTimerV653) {
+    clearTimeout(naverRoadviewFallbackTimerV653);
+    naverRoadviewFallbackTimerV653 = null;
+  }
+  if (naverRoadviewRetryTimerV658) {
+    clearTimeout(naverRoadviewRetryTimerV658);
+    naverRoadviewRetryTimerV658 = null;
+  }
+}
+
+
+function getNaverRoadviewTargetKeyV658(coords) {
+  if (!coords) return "";
+  return Number(coords.lat).toFixed(6) + "," + Number(coords.lng).toFixed(6);
+}
+
+
+function buildNaverRoadviewCandidatesV658(coords) {
+  var lat = Number(coords && coords.lat);
+  var lng = Number(coords && coords.lng);
+  if (!isFinite(lat) || !isFinite(lng)) return [];
+
+  /*
+   * 네이버 Panorama.setPosition은 공식적으로 반경 300m의 가장 가까운
+   * 거리뷰를 찾습니다. 건물 중심 좌표가 큰 필지 안쪽에 있는 경우를 위해
+   * 110m 바깥 네 방향도 순차 확인하되, 첫 좌표를 항상 최우선으로 둡니다.
+   */
+  var radiusMeters = 110;
+  var latDelta = radiusMeters / 111320;
+  var lngScale = Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  var lngDelta = radiusMeters / (111320 * lngScale);
+
+  return [
+    { lat: lat, lng: lng },
+    { lat: lat + latDelta, lng: lng },
+    { lat: lat, lng: lng + lngDelta },
+    { lat: lat - latDelta, lng: lng },
+    { lat: lat, lng: lng - lngDelta }
+  ];
+}
+
+
 function fallbackNaverRoadviewToKakaoV653(message, sequence) {
   if (sequence !== roadviewOpenSequenceV653) return;
 
@@ -1764,13 +1829,10 @@ function fallbackNaverRoadviewToKakaoV653(message, sequence) {
   if (!modal || !modal.classList.contains("open")) return;
 
   naverRoadviewLoadingV653 = false;
-  if (naverRoadviewFallbackTimerV653) {
-    clearTimeout(naverRoadviewFallbackTimerV653);
-    naverRoadviewFallbackTimerV653 = null;
-  }
+  clearNaverRoadviewTimersV658();
 
   if (status) {
-    status.textContent = message || "네이버 거리뷰가 없어 카카오맵으로 전환합니다.";
+    status.textContent = message || "주변에서 네이버 거리뷰를 찾지 못해 카카오맵으로 전환합니다.";
     status.className = "roadview-inline-status error";
   }
 
@@ -1778,11 +1840,180 @@ function fallbackNaverRoadviewToKakaoV653(message, sequence) {
     if (
       sequence === roadviewOpenSequenceV653 &&
       modal.classList.contains("open") &&
-      currentRoadviewMode === "naver"
+      currentRoadviewMode === "naver" &&
+      !naverRoadviewRequestReadyV658
     ) {
       switchRoadviewMode("kakao");
     }
-  }, 450);
+  }, 250);
+}
+
+
+function markNaverRoadviewReadyV658() {
+  var sequence = naverRoadviewRequestSequenceV658;
+  if (
+    sequence !== roadviewOpenSequenceV653 ||
+    currentRoadviewMode !== "naver"
+  ) return;
+
+  var modal = document.querySelector("#roadviewModal.roadview-modal.open");
+  var status = document.getElementById("naverRoadviewModalStatus");
+  if (!modal || !status || !naverRoadviewInstanceV653) return;
+
+  var panoId = "";
+  try {
+    panoId = String(naverRoadviewInstanceV653.getPanoId() || "");
+  } catch (error) {}
+  if (!panoId) return;
+
+  naverRoadviewRequestReadyV658 = true;
+  naverRoadviewLoadingV653 = false;
+  naverRoadviewLastTargetKeyV658 = naverRoadviewActiveTargetKeyV658;
+  clearNaverRoadviewTimersV658();
+
+  try {
+    naverRoadviewInstanceV653.setVisible(true);
+  } catch (error) {}
+
+  status.textContent = "네이버 거리뷰 연결 완료";
+  status.className = "roadview-inline-status success";
+  updateNaverPanoramaInfoV653();
+
+  var panoramaPosition = getNaverRoadviewPositionV654();
+  if (panoramaPosition) setupNaverRoadviewMapV654(panoramaPosition);
+  updateNaverRoadviewMapV654(true);
+  window.setTimeout(syncNaverRoadviewLayoutV654, 30);
+  window.setTimeout(syncNaverRoadviewLayoutV654, 120);
+  setTimeout(function() {
+    if (sequence === roadviewOpenSequenceV653) status.classList.add("hidden");
+  }, 650);
+}
+
+
+function tryNextNaverRoadviewCandidateV658() {
+  var sequence = naverRoadviewRequestSequenceV658;
+  if (
+    naverRoadviewRequestReadyV658 ||
+    sequence !== roadviewOpenSequenceV653 ||
+    currentRoadviewMode !== "naver"
+  ) return;
+
+  var nextIndex = naverRoadviewCandidateIndexV658 + 1;
+  if (nextIndex >= naverRoadviewCandidatesV658.length) {
+    fallbackNaverRoadviewToKakaoV653(
+      "주변 4방향까지 확인했지만 네이버 거리뷰가 없어 카카오맵으로 전환합니다.",
+      sequence
+    );
+    return;
+  }
+
+  naverRoadviewCandidateIndexV658 = nextIndex;
+  var next = naverRoadviewCandidatesV658[nextIndex];
+  var status = document.getElementById("naverRoadviewModalStatus");
+  if (status) {
+    status.textContent = "주변 네이버 거리뷰를 확인하고 있습니다. " + nextIndex + "/4";
+    status.className = "roadview-inline-status loading";
+  }
+
+  if (naverRoadviewRetryTimerV658) clearTimeout(naverRoadviewRetryTimerV658);
+  naverRoadviewRetryTimerV658 = setTimeout(function() {
+    if (
+      !naverRoadviewInstanceV653 ||
+      sequence !== roadviewOpenSequenceV653 ||
+      naverRoadviewRequestReadyV658
+    ) return;
+    try {
+      naverRoadviewInstanceV653.setPosition(
+        new window.naver.maps.LatLng(next.lat, next.lng)
+      );
+    } catch (error) {
+      tryNextNaverRoadviewCandidateV658();
+    }
+  }, 70);
+}
+
+
+function bindNaverRoadviewEventsV658() {
+  if (
+    naverRoadviewListenersBoundV658 ||
+    !naverRoadviewInstanceV653 ||
+    !window.naver ||
+    !window.naver.maps
+  ) return;
+
+  naverRoadviewListenersBoundV658 = true;
+  window.naver.maps.Event.addListener(
+    naverRoadviewInstanceV653,
+    "pano_status",
+    function(panoStatus) {
+      var statusValue = String(
+        panoStatus && (panoStatus.status || panoStatus.data) || panoStatus || ""
+      ).toUpperCase();
+      if (statusValue === "OK") {
+        markNaverRoadviewReadyV658();
+      } else if (statusValue === "ERROR") {
+        if (naverRoadviewRequestReadyV658) {
+          var status = document.getElementById("naverRoadviewModalStatus");
+          if (status) {
+            status.textContent = "선택한 위치에는 네이버 거리뷰가 없습니다.";
+            status.className = "roadview-inline-status error";
+          }
+          return;
+        }
+        tryNextNaverRoadviewCandidateV658();
+      }
+    }
+  );
+
+  window.naver.maps.Event.addListener(
+    naverRoadviewInstanceV653,
+    "pano_changed",
+    function() {
+      markNaverRoadviewReadyV658();
+      updateNaverPanoramaInfoV653();
+      updateNaverRoadviewMapV654(true);
+    }
+  );
+
+  window.naver.maps.Event.addListener(
+    naverRoadviewInstanceV653,
+    "pov_changed",
+    function() {
+      updateNaverRoadviewDirectionV654();
+    }
+  );
+
+  window.naver.maps.Event.addListener(
+    naverRoadviewInstanceV653,
+    "init",
+    function() {
+      markNaverRoadviewReadyV658();
+      updateNaverPanoramaInfoV653();
+      updateNaverRoadviewMapV654(true);
+    }
+  );
+}
+
+
+function prepareNaverRoadviewRequestV658(sequence) {
+  naverRoadviewRequestSequenceV658 = sequence;
+  naverRoadviewRequestReadyV658 = false;
+  naverRoadviewCandidateIndexV658 = 0;
+  naverRoadviewCandidatesV658 = buildNaverRoadviewCandidatesV658(currentRoadviewCoords);
+  naverRoadviewActiveTargetKeyV658 = getNaverRoadviewTargetKeyV658(currentRoadviewCoords);
+  clearNaverRoadviewTimersV658();
+
+  naverRoadviewFallbackTimerV653 = setTimeout(function() {
+    if (
+      sequence === roadviewOpenSequenceV653 &&
+      !naverRoadviewRequestReadyV658
+    ) {
+      fallbackNaverRoadviewToKakaoV653(
+        "네이버 거리뷰 응답이 지연되어 카카오맵으로 전환합니다.",
+        sequence
+      );
+    }
+  }, 6500);
 }
 
 
@@ -1800,20 +2031,11 @@ function startNaverRoadviewV653(sequence) {
     sequence !== roadviewOpenSequenceV653
   ) return;
 
-  if (naverRoadviewInstanceV653) {
-    setTimeout(function() {
-      if (!naverRoadviewMapV654) {
-        setupNaverRoadviewMapV654(getNaverRoadviewPositionV654());
-      }
-      syncNaverRoadviewLayoutV654();
-    }, 60);
-    return;
-  }
-
-  if (naverRoadviewLoadingV653) return;
+  if (naverRoadviewLoadingV653 && naverRoadviewRequestSequenceV658 === sequence) return;
   naverRoadviewLoadingV653 = true;
   status.textContent = "네이버 최신 거리뷰를 찾고 있습니다.";
   status.className = "roadview-inline-status loading";
+  prepareNaverRoadviewRequestV658(sequence);
 
   loadNaverMapsSdkV653()
     .then(function() {
@@ -1826,101 +2048,45 @@ function startNaverRoadviewV653(sequence) {
         return;
       }
 
-      container.innerHTML = "";
       var position = new window.naver.maps.LatLng(
         currentRoadviewCoords.lat,
         currentRoadviewCoords.lng
       );
 
-      setupNaverRoadviewMapV654(position);
+      if (!naverRoadviewInstanceV653) {
+        container.innerHTML = "";
+        naverRoadviewListenersBoundV658 = false;
+        naverRoadviewInstanceV653 = new window.naver.maps.Panorama(container, {
+          position: position,
+          pov: { pan: 0, tilt: -7, fov: 95 },
+          flightSpot: true,
+          aroundControl: true,
+          zoomControl: true,
+          visible: true
+        });
+        bindNaverRoadviewEventsV658();
+        window.setTimeout(markNaverRoadviewReadyV658, 0);
+      } else {
+        bindNaverRoadviewEventsV658();
+        try {
+          naverRoadviewInstanceV653.setVisible(true);
+        } catch (error) {}
+        syncNaverRoadviewLayoutV654();
 
-      naverRoadviewInstanceV653 = new window.naver.maps.Panorama(container, {
-        position: position,
-        pov: { pan: 0, tilt: -7, fov: 95 },
-        flightSpot: true,
-        aroundControl: true,
-        zoomControl: true
-      });
-
-      var panoramaReady = false;
-
-      function markReady() {
-        if (panoramaReady || sequence !== roadviewOpenSequenceV653) return;
-        panoramaReady = true;
-        naverRoadviewLoadingV653 = false;
-        if (naverRoadviewFallbackTimerV653) {
-          clearTimeout(naverRoadviewFallbackTimerV653);
-          naverRoadviewFallbackTimerV653 = null;
-        }
-        status.textContent = "네이버 거리뷰 연결 완료";
-        status.className = "roadview-inline-status success";
-        updateNaverPanoramaInfoV653();
-        updateNaverRoadviewMapV654(true);
-        window.setTimeout(syncNaverRoadviewLayoutV654, 60);
-        window.setTimeout(syncNaverRoadviewLayoutV654, 220);
-        setTimeout(function() {
-          if (sequence === roadviewOpenSequenceV653) status.classList.add("hidden");
-        }, 900);
-      }
-
-      window.naver.maps.Event.addListener(
-        naverRoadviewInstanceV653,
-        "pano_status",
-        function(panoStatus) {
-          var statusValue = String(
-            panoStatus && (panoStatus.status || panoStatus.data) || panoStatus || ""
-          ).toUpperCase();
-          if (statusValue === "OK") {
-            markReady();
-          } else if (statusValue === "ERROR") {
-            fallbackNaverRoadviewToKakaoV653(
-              "이 위치에는 네이버 거리뷰가 없어 카카오맵으로 전환합니다.",
-              sequence
-            );
+        if (
+          naverRoadviewLastTargetKeyV658 === naverRoadviewActiveTargetKeyV658
+        ) {
+          markNaverRoadviewReadyV658();
+        } else {
+          try {
+            naverRoadviewInstanceV653.setPosition(position);
+          } catch (error) {
+            tryNextNaverRoadviewCandidateV658();
           }
         }
-      );
+      }
 
-      window.naver.maps.Event.addListener(
-        naverRoadviewInstanceV653,
-        "pano_changed",
-        function() {
-          markReady();
-          updateNaverPanoramaInfoV653();
-          updateNaverRoadviewMapV654(true);
-        }
-      );
-
-      window.naver.maps.Event.addListener(
-        naverRoadviewInstanceV653,
-        "pov_changed",
-        function() {
-          updateNaverRoadviewDirectionV654();
-        }
-      );
-
-      window.naver.maps.Event.addListener(
-        naverRoadviewInstanceV653,
-        "init",
-        function() {
-          var panoId = "";
-          try {
-            panoId = String(naverRoadviewInstanceV653.getPanoId() || "");
-          } catch (error) {}
-          if (panoId) markReady();
-          updateNaverPanoramaInfoV653();
-          updateNaverRoadviewMapV654(true);
-        }
-      );
-
-      naverRoadviewFallbackTimerV653 = setTimeout(function() {
-        if (!panoramaReady) {
-          fallbackNaverRoadviewToKakaoV653(
-            "네이버 거리뷰 연결이 지연되어 카카오맵으로 전환합니다.",
-            sequence
-          );
-        }
-      }, 10000);
+      window.setTimeout(syncNaverRoadviewLayoutV654, 30);
     })
     .catch(function() {
       fallbackNaverRoadviewToKakaoV653(
@@ -1928,6 +2094,25 @@ function startNaverRoadviewV653(sequence) {
         sequence
       );
     });
+}
+
+
+function warmNaverRoadviewSdkV658() {
+  loadNaverMapsSdkV653().catch(function() {
+    /* 첫 클릭에서 다시 시도하므로 사전 준비 실패는 화면에 노출하지 않습니다. */
+  });
+}
+
+
+if (!window.__jsNaverRoadviewWarmupBoundV658) {
+  window.addEventListener("load", function() {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(warmNaverRoadviewSdkV658, { timeout: 1200 });
+    } else {
+      window.setTimeout(warmNaverRoadviewSdkV658, 500);
+    }
+  }, { once: true });
+  window.__jsNaverRoadviewWarmupBoundV658 = true;
 }
 
 
@@ -2066,6 +2251,10 @@ function switchRoadviewMode(mode) {
 
   if (kakaoActive) {
     startKakaoRoadviewV653(roadviewOpenSequenceV653);
+  }
+
+  if (mapActive && !roadviewFullMap && roadviewTargetPosition) {
+    setupRoadviewFullMap(roadviewTargetPosition);
   }
 
   if (mapActive && roadviewFullMap && roadviewTargetPosition) {
@@ -2209,7 +2398,6 @@ function openKakaoRoadview(encodedKey) {
   var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
   var naverContainer = document.getElementById("naverRoadviewContainer");
-  var naverMapContainer = document.getElementById("naverRoadviewMapV654");
   var title = document.getElementById("roadviewModalTitle");
   var address = document.getElementById("roadviewModalAddress");
   var status = document.getElementById("roadviewModalStatus");
@@ -2243,21 +2431,14 @@ function openKakaoRoadview(encodedKey) {
   naverStatus.className = "roadview-inline-status loading";
 
   container.innerHTML = "";
-  naverContainer.innerHTML = "";
-  destroyNaverRoadviewMapV654();
-  if (naverMapContainer) naverMapContainer.innerHTML = "";
   if (naverInfo) {
     naverInfo.hidden = true;
     naverInfo.textContent = "";
   }
   roadviewInstance = null;
-  naverRoadviewInstanceV653 = null;
   naverRoadviewLoadingV653 = false;
   kakaoRoadviewLoadingV653 = false;
-  if (naverRoadviewFallbackTimerV653) {
-    clearTimeout(naverRoadviewFallbackTimerV653);
-    naverRoadviewFallbackTimerV653 = null;
-  }
+  clearNaverRoadviewTimersV658();
 
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
@@ -2272,7 +2453,6 @@ function openKakaoRoadview(encodedKey) {
   roadviewCameraPosition = currentRoadviewPosition;
   currentRoadviewPan = 0;
   currentRoadviewMode = "naver";
-  setupRoadviewFullMap(currentRoadviewPosition);
   switchRoadviewMode("naver");
 }
 
@@ -2316,8 +2496,6 @@ function openKakaoRoadviewAtPosition(lat, lng) {
 function closeRoadviewModal() {
   var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
-  var naverContainer = document.getElementById("naverRoadviewContainer");
-  var naverMapContainer = document.getElementById("naverRoadviewMapV654");
   var naverInfo = document.getElementById("naverRoadviewCaptureInfo");
 
   if (!modal) return;
@@ -2330,37 +2508,20 @@ function closeRoadviewModal() {
     container.innerHTML = "";
   }
 
-  if (naverContainer) {
-    naverContainer.innerHTML = "";
-  }
-
-  destroyNaverRoadviewMapV654();
-  if (naverMapContainer) {
-    naverMapContainer.innerHTML = "";
-  }
-
   if (naverInfo) {
     naverInfo.hidden = true;
     naverInfo.textContent = "";
   }
 
   roadviewOpenSequenceV653 += 1;
-  if (naverRoadviewFallbackTimerV653) {
-    clearTimeout(naverRoadviewFallbackTimerV653);
-    naverRoadviewFallbackTimerV653 = null;
-  }
-
-  if (
-    naverRoadviewInstanceV653 &&
-    typeof naverRoadviewInstanceV653.destroy === "function"
-  ) {
-    try {
-      naverRoadviewInstanceV653.destroy();
-    } catch (error) {}
-  }
+  clearNaverRoadviewTimersV658();
+  naverRoadviewRequestReadyV658 = false;
+  naverRoadviewRequestSequenceV658 = roadviewOpenSequenceV653;
+  try {
+    if (naverRoadviewInstanceV653) naverRoadviewInstanceV653.setVisible(false);
+  } catch (error) {}
 
   roadviewInstance = null;
-  naverRoadviewInstanceV653 = null;
   naverRoadviewLoadingV653 = false;
   kakaoRoadviewLoadingV653 = false;
   roadviewFullMap = null;

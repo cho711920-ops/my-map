@@ -20,7 +20,7 @@ assert.match(
   scriptSource,
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
-assert.match(indexSource, /js\/script\.js\?v=6\.5\.57-naver-roadview-split/);
+assert.match(indexSource, /js\/script\.js\?v=6\.5\.58-fast-naver-roadview/);
 assert.match(indexSource, /js\/map\.js\?v=8\.1\.1-compact-admin-clusters/);
 
 console.log("default Daejeon map view tests passed");
