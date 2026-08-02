@@ -14,7 +14,7 @@ assert.match(html, /고객별 매칭매물 관리/);
 assert.match(html, /메인 매물리스트가 그대로 열립니다/);
 assert.match(html, /operations-center-v7\.css\?v=7\.20\.3-customer-save-fast-feedback/);
 assert.match(html, /operations-center-v7\.js\?v=7\.20\.3-customer-save-fast-feedback/);
-assert.match(html, /script\.js\?v=6\.5\.53-naver-streetview-first/);
+assert.match(html, /script\.js\?v=6\.5\.54-naver-panorama-ready/);
 assert.match(operations, /syncCustomerMatchMapStatusV722/);
 
 assert.match(operations, /customerView:\s*"before"/);

@@ -1454,7 +1454,10 @@ function loadNaverMapsSdkV653() {
 
       return new Promise(function(resolve, reject) {
         var existing = document.getElementById("naverMapsSdkV653");
+        var pollId = null;
+        var pollStarted = false;
         var timeoutId = setTimeout(function() {
+          if (pollId) clearInterval(pollId);
           reject(new Error("NAVER_MAPS_SDK_TIMEOUT"));
         }, 12000);
 
@@ -1465,16 +1468,26 @@ function loadNaverMapsSdkV653() {
             window.naver.maps.Panorama
           ) {
             clearTimeout(timeoutId);
+            if (pollId) clearInterval(pollId);
             resolve(window.naver.maps);
             return true;
           }
           return false;
         }
 
+        function waitForPanoramaModule() {
+          if (finish() || pollStarted) return;
+          pollStarted = true;
+          pollId = setInterval(finish, 80);
+        }
+
+        window.__jsNaverMapsReadyV653 = waitForPanoramaModule;
+
         if (existing) {
           if (finish()) return;
+          waitForPanoramaModule();
           existing.addEventListener("load", function() {
-            if (!finish()) reject(new Error("NAVER_PANORAMA_MODULE_MISSING"));
+            waitForPanoramaModule();
           }, { once: true });
           existing.addEventListener("error", function() {
             clearTimeout(timeoutId);
@@ -1490,9 +1503,9 @@ function loadNaverMapsSdkV653() {
         script.src =
           "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" +
           encodeURIComponent(ncpKeyId) +
-          "&submodules=panorama";
+          "&submodules=panorama&callback=__jsNaverMapsReadyV653";
         script.onload = function() {
-          if (!finish()) reject(new Error("NAVER_PANORAMA_MODULE_MISSING"));
+          waitForPanoramaModule();
         };
         script.onerror = function() {
           clearTimeout(timeoutId);
