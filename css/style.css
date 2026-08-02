@@ -8248,3 +8248,80 @@ body,
   }
 }
 
+/* v6.5.31 행정구역 단계형 클러스터와 수량별 크기 변화 */
+.circle-marker.cluster-size-sm {
+  --cluster-size: 36px !important;
+  --cluster-font-size: 13.5px !important;
+}
+
+.circle-marker.cluster-size-md {
+  --cluster-size: 44px !important;
+  --cluster-font-size: 14.5px !important;
+}
+
+.circle-marker.cluster-size-lg {
+  --cluster-size: 52px !important;
+  --cluster-font-size: 16px !important;
+}
+
+.circle-marker.cluster-size-xl {
+  --cluster-size: 62px !important;
+  --cluster-font-size: 17px !important;
+}
+
+.circle-marker.cluster-size-xxl {
+  --cluster-size: 74px !important;
+  --cluster-font-size: 19px !important;
+}
+
+.circle-marker.admin-region-cluster-v655 {
+  width: auto !important;
+  min-width: 76px !important;
+  height: auto !important;
+  min-height: 56px !important;
+  padding: 9px 13px !important;
+  display: grid !important;
+  gap: 4px !important;
+  border: 1px solid rgba(148, 163, 184, .38) !important;
+  border-radius: 13px !important;
+  background: rgba(255, 255, 255, .94) !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .18) !important;
+  font-family: var(--js-app-font) !important;
+  letter-spacing: -.3px !important;
+  white-space: nowrap !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.circle-marker.admin-region-cluster-v655 strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.circle-marker.admin-region-cluster-v655 span {
+  display: block;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.circle-marker.admin-region-cluster-v655.cluster-size-xl,
+.circle-marker.admin-region-cluster-v655.cluster-size-xxl {
+  min-width: 88px !important;
+  min-height: 62px !important;
+  padding: 10px 15px !important;
+}
+
+.circle-marker.admin-region-cluster-v655.cluster-size-xl strong,
+.circle-marker.admin-region-cluster-v655.cluster-size-xxl strong {
+  font-size: 17px;
+}
+
+.circle-marker.admin-region-cluster-v655.cluster-size-xl span,
+.circle-marker.admin-region-cluster-v655.cluster-size-xxl span {
+  font-size: 13px;
+}
+

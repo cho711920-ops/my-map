@@ -17,7 +17,7 @@ const daangn = fs.readFileSync(
   "utf8"
 );
 
-assert.match(backend, /MM_VERSION = "8\.0\.3"/);
+assert.match(backend, /MM_VERSION = "8\.0\.4"/);
 assert.match(backend, /var MM_V8_ORIGINAL_SHEET = "JS_원본매물"/);
 assert.match(backend, /var MM_V8_RELATION_SHEET = "JS_통합매물연결"/);
 assert.match(backend, /var MM_V8_MEDIA_SHEET = "JS_원본미디어"/);

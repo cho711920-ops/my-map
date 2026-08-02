@@ -498,6 +498,97 @@ function createExactAddressClustersV6519(addressGroups) {
 }
 
 
+/*
+ * v6.5.27 행정구역 단계형 클러스터
+ * - level 7 이상: 구 단위
+ * - level 5~6: 동 단위
+ * - level 4 이하: 기존 화면 격자 숫자 클러스터
+ */
+function getAddressAdminRegionV655(address) {
+  var tokens = String(address || "")
+    .replace(/[(),]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  var districts = ["동구", "중구", "서구", "유성구", "대덕구"];
+  var district = "";
+  var neighborhood = "";
+
+  tokens.forEach(function(token) {
+    if (!district && districts.indexOf(token) >= 0) district = token;
+    if (!neighborhood && /^[가-힣]+\d*(?:동|가)$/.test(token)) neighborhood = token;
+  });
+
+  return {
+    district: district,
+    neighborhood: neighborhood
+  };
+}
+
+
+function getAdministrativeClusterModeV655(level) {
+  var value = Number(level) || 0;
+  if (value >= 7) return "district";
+  if (value >= 5) return "neighborhood";
+  return "";
+}
+
+
+function createAdministrativeClustersV655(addressGroups, mode) {
+  var cells = Object.create(null);
+
+  (addressGroups || []).forEach(function(group) {
+    if (!group || !group.latlng) return;
+    var region = getAddressAdminRegionV655(group.address || group.key);
+    var label = mode === "district" ? region.district : region.neighborhood;
+    if (!label) label = mode === "district" ? "기타" : (region.district || "기타");
+    var regionKey = mode === "district"
+      ? label
+      : (region.district || "기타") + ":" + label;
+
+    if (!cells[regionKey]) {
+      cells[regionKey] = {
+        groups: [],
+        items: [],
+        weightedLat: 0,
+        weightedLng: 0,
+        totalWeight: 0,
+        regionMode: mode,
+        regionLabel: label,
+        districtLabel: region.district || ""
+      };
+    }
+
+    var weight = Math.max(1, (group.items || []).length);
+    cells[regionKey].groups.push(group);
+    cells[regionKey].items = cells[regionKey].items.concat(group.items || []);
+    cells[regionKey].weightedLat += Number(group.latlng.getLat()) * weight;
+    cells[regionKey].weightedLng += Number(group.latlng.getLng()) * weight;
+    cells[regionKey].totalWeight += weight;
+  });
+
+  return Object.keys(cells).sort().map(function(regionKey) {
+    var cluster = cells[regionKey];
+    var weight = cluster.totalWeight || 1;
+    cluster.latlng = new kakao.maps.LatLng(
+      cluster.weightedLat / weight,
+      cluster.weightedLng / weight
+    );
+    cluster.key = "admin:" + mode + ":" + regionKey;
+    return cluster;
+  });
+}
+
+
+function createClustersForCurrentZoomV655(addressGroups) {
+  var mode = getAdministrativeClusterModeV655(map && map.getLevel ? map.getLevel() : 0);
+  return mode
+    ? createAdministrativeClustersV655(addressGroups, mode)
+    : createDynamicClusters(addressGroups);
+}
+
+
 function createDynamicClusters(addressGroups) {
   /*
    * 카카오맵 최대 확대(level 1)에서는 화면 격자로 서로 다른 지번을 합치지 않습니다.
@@ -1478,9 +1569,25 @@ function getVisibleAddressGroupsV639(items) {
    ========================================================= */
 function getPremiumClusterSizeClassV635(count) {
   var value = Number(count) || 0;
-  if (value >= 100) return " cluster-size-lg";
-  if (value >= 20) return " cluster-size-md";
+  if (value >= 500) return " cluster-size-xxl";
+  if (value >= 120) return " cluster-size-xl";
+  if (value >= 30) return " cluster-size-lg";
+  if (value >= 8) return " cluster-size-md";
   return " cluster-size-sm";
+}
+
+function buildClusterOverlayContentV655(cluster, classNames) {
+  var count = ((cluster && cluster.items) || []).length;
+  var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
+
+  if (cluster && cluster.regionMode) {
+    return '<button type="button" class="' + classes + ' admin-region-cluster-v655"' +
+      ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
+      ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 확대">' +
+      '<strong>' + cluster.regionLabel + '</strong><span>매물 ' + count.toLocaleString("ko-KR") + '</span></button>';
+  }
+
+  return '<div class="' + classes + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 }
 
 function getCustomerMatchClusterClassV764(cluster) {
@@ -1506,7 +1613,7 @@ function drawMapClustersOnlyV639(items) {
   clearMapOverlaysOnlyV639();
 
   var addressGroups = getVisibleAddressGroupsV639(items);
-  var clusters = createDynamicClusters(addressGroups);
+  var clusters = createClustersForCurrentZoomV655(addressGroups);
 
   clusters.forEach(function(cluster) {
     var count = cluster.items.length;
@@ -1525,8 +1632,10 @@ function drawMapClustersOnlyV639(items) {
      * 클러스터는 출처와 무관하게 기본 파란색을 사용합니다.
      * 클러스터 안의 모든 매물이 거래완료일 때만 done 클래스가 붙어 회색이 됩니다.
      */
-    var overlayContent =
-      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + customerMatchClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+    var overlayContent = buildClusterOverlayContentV655(
+      cluster,
+      gongsilClass + doneClass + customerMatchClass + selectedClass
+    );
 
     var overlay = new kakao.maps.CustomOverlay({
       position: cluster.latlng,
@@ -1666,6 +1775,21 @@ function openCluster(encodedKey) {
 }
 
 
+function openAdministrativeClusterV655(encodedKey) {
+  var key = decodeURIComponent(encodedKey);
+  var overlay = overlays.find(function(currentOverlay) {
+    return currentOverlay.__cluster && currentOverlay.__cluster.key === key;
+  });
+  if (!overlay || !overlay.__cluster || !map) return;
+
+  var cluster = overlay.__cluster;
+  var targetLevel = cluster.regionMode === "district" ? 6 : 4;
+  clearPinnedClusterSelectionV6515(true);
+  map.setLevel(targetLevel, { anchor: cluster.latlng });
+  map.panTo(cluster.latlng);
+}
+
+
 function redrawSelectedMarkers() {
   overlays.forEach(function(o) {
     if (!o.__cluster) return;
@@ -1687,8 +1811,10 @@ function redrawSelectedMarkers() {
      * 선택 상태가 바뀌어 다시 그릴 때도
      * 일반 클러스터는 파란색, 전부 거래완료인 클러스터만 회색을 유지합니다.
      */
-    var content =
-      '<div class="circle-marker' + getPremiumClusterSizeClassV635(count) + gongsilClass + doneClass + customerMatchClass + selectedClass + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+    var content = buildClusterOverlayContentV655(
+      cluster,
+      gongsilClass + doneClass + customerMatchClass + selectedClass
+    );
 
     o.setContent(content);
   });
