@@ -348,8 +348,6 @@
       var request = field(row, state.customerHeaders, "요청사항");
       var stats = customerMatchStats(id);
       var followup = customerFollowup(id);
-      var phone = field(row, state.customerHeaders, "연락처");
-      var phoneHref = phone ? "tel:" + phone.replace(/[^0-9+]/g, "") : "";
       var selected = id === state.selectedCustomerId ? " selected" : "";
       var alertClass = stats.overdue || followup.due ? " has-overdue" : "";
       return '<article tabindex="0" role="button" class="operations-customer-card' + selected + alertClass + '" data-customer-id="' + escape(id) + '">' +
@@ -357,7 +355,6 @@
         '<span class="operations-customer-status">' + escape(status) + '</span>' +
         '<strong>' + escape(name) + ' <small>' + escape(region) + '</small></strong>' +
         '<div class="operations-customer-meta-v720">' +
-          (phoneHref ? '<a class="operations-customer-phone-v719" href="' + escape(phoneHref) + '" onclick="event.stopPropagation()">☎ ' + escape(phone) + '</a>' : '<span class="operations-customer-phone-v719 empty">연락처 없음</span>') +
           '<span class="operations-customer-condition-v719">' + escape(customerConditionTextV719(row)) + '</span>' +
         '</div>' +
         (request ? '<small>' + escape(request) + '</small>' : '') +
@@ -592,9 +589,8 @@
           return '<option value="' + status + '"' + (status === customerStatus ? ' selected' : '') + '>' + status + '</option>';
         }).join("") +
       '</select></label>' +
-      '<button type="button" onclick="openCustomerMemo(\'' + escape(customerId) + '\')">메모</button>' +
+      '<button type="button" onclick="openCustomerMemo(\'' + escape(customerId) + '\')">상담·미팅 메모</button>' +
       '<button type="button" onclick="openCustomerEditor(\'' + escape(customerId) + '\')">조건 수정</button>' +
-      '<button type="button" onclick="openCustomerActivity(\'' + escape(customerId) + '\')">상담·미팅 기록</button>' +
       '<button type="button" onclick="showSelectedCustomerMatchesOnMap()"' + (allRows.length ? '' : ' disabled') + '>지도에서 보기</button></div></div>' +
       '<div class="operations-match-listing-toolbar-v719">' +
         '<select aria-label="출처 필터" onchange="setCustomerMatchListingFilterV719(\'source\',this.value)">' + matchSelectOptionsV719([["","출처"],["danggeun","당근"],["naver","네이버"],["gongsil","공실박스"],["direct","직접등록"]], state.matchSourceFilter) + '</select>' +

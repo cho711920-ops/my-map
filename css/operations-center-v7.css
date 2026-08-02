@@ -441,9 +441,9 @@ body.customer-crm-open{overflow:hidden}
 
   #operationsCustomersPanel .operations-customer-card{
     grid-template-rows:auto auto auto!important;
-    min-height:94px!important;
-    padding:9px 11px!important;
-    row-gap:5px!important;
+    min-height:90px!important;
+    padding:8px 11px!important;
+    row-gap:3px!important;
   }
   #operationsCustomersPanel .operations-customer-avatar-v719{grid-row:1!important}
   #operationsCustomersPanel .operations-customer-card>strong{font-size:15px!important}
@@ -455,20 +455,13 @@ body.customer-crm-open{overflow:hidden}
     grid-row:2;
     min-width:0;
     align-items:center;
-    gap:10px;
-  }
-  #operationsCustomersPanel .operations-customer-phone-v719{
-    grid-column:auto!important;
-    grid-row:auto!important;
-    flex:0 0 auto;
-    font-size:11.5px!important;
   }
   #operationsCustomersPanel .operations-customer-condition-v719{
     grid-column:auto!important;
     grid-row:auto!important;
     min-width:0;
     flex:1 1 auto;
-    font-size:11px!important;
+    font-size:11.5px!important;
   }
   #operationsCustomersPanel .operations-customer-stats-v719{
     grid-row:3!important;

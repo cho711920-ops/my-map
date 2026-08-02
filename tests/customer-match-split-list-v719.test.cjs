@@ -12,8 +12,8 @@ const backend = fs.readFileSync(
 
 assert.match(html, /고객별 매칭매물 관리/);
 assert.match(html, /메인 매물리스트가 그대로 열립니다/);
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.0-balanced-customer-match/);
-assert.match(html, /operations-center-v7\.js\?v=7\.20\.0-balanced-customer-match/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.1-customer-card-three-line/);
+assert.match(html, /operations-center-v7\.js\?v=7\.20\.1-customer-card-three-line/);
 assert.match(html, /script\.js\?v=6\.5\.50-customer-match-map-menu/);
 
 assert.match(operations, /customerView:\s*"before"/);
@@ -23,6 +23,9 @@ assert.match(operations, /customerViewButton\("before", "미팅전"/);
 assert.match(operations, /customerViewButton\("after", "미팅후"/);
 assert.match(operations, /customerViewButton\("paused", "보류"/);
 assert.match(operations, /operations-customer-stats-v719/);
+assert.doesNotMatch(operations, /operations-customer-phone-v719/);
+assert.match(operations, />상담·미팅 메모<\/button>/);
+assert.doesNotMatch(operations, />상담·미팅 기록<\/button>/);
 assert.match(operations, /operations-match-listing-toolbar-v719/);
 assert.match(operations, /출처 필터/);
 assert.match(operations, /구분 필터/);

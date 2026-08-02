@@ -33,6 +33,6 @@ assert.match(
 );
 assert.match(htmlSource, /js\/map\.js\?v=6\.5\.26-immediate-list/);
 assert.match(htmlSource, /js\/script\.js\?v=6\.5\.50-customer-match-map-menu/);
-assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.20\.0-balanced-customer-match/);
+assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.20\.1-customer-card-three-line/);
 
 console.log("cluster selection pin tests passed");
