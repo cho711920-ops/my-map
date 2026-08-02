@@ -114,12 +114,8 @@ const sevenContacts = frontendContext.extractListContactsV650({
 assert.strictEqual(sevenContacts.length, 6, "화면에는 최대 6개까지만 표시해야 합니다.");
 
 assert(
-  /customerMatchControls \? headerContactButtonV654 : ''/.test(scriptSource),
-  "고객 매물지도 연락처 버튼은 등록일 앞 헤더에 배치해야 합니다."
-);
-assert(
-  /\(!customerMatchControls \? actionContactButtonV654 : ''\)/.test(scriptSource),
-  "기본 매물목록 연락처 버튼은 작업 버튼줄 첫 칸에 배치해야 합니다."
+  /actionContactButtonV654 \+\s*'<button type="button" class="item-nav-btn"/.test(scriptSource),
+  "기본·고객매칭 매물카드 모두 연락처를 작업 버튼줄 첫 칸에 배치해야 합니다."
 );
 assert(
   /\.item-contact-button-v654\.has-contacts[\s\S]*background:\s*#10b981/.test(cssSource),

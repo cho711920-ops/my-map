@@ -37,12 +37,11 @@ assert(
   "list link buttons must carry the property ID target"
 );
 assert(
-  script.includes("buildListContactButtonV654(item, encodedEditTargetV648, false)") &&
-    script.includes("buildListContactButtonV654(item, encodedEditTargetV648, true)"),
-  "list contact buttons must carry the property ID target"
+  script.includes("buildListContactButtonV654(item, encodedEditTargetV648, false)"),
+  "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.48-unified-favorites"),
+  html.includes("script.js?v=6.5.49-customer-match-cards"),
   "the production page must load the fixed script cache version"
 );
 

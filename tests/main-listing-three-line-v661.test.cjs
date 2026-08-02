@@ -46,6 +46,6 @@ assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !impo
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.27-action-labels/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.16-action-labels/);
-assert.match(html, /script\.js\?v=6\.5\.48-unified-favorites/);
+assert.match(html, /script\.js\?v=6\.5\.49-customer-match-cards/);
 
 console.log("main listing three-line v6.6.1 tests passed");

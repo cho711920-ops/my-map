@@ -2160,35 +2160,40 @@ function saveItemMemo(encodedKey) {
 }
 
 
-function getCustomerMatchStatus(item) {
+function getCustomerMatchStatus(item, cardContext) {
+  if (cardContext && cardContext.status) return String(cardContext.status).trim();
   var propertyId = String(item && item.propertyId || "").trim();
   return propertyId && window.operationsMatchStatusByPropertyId
     ? String(window.operationsMatchStatusByPropertyId[propertyId] || "").trim()
     : "";
 }
 
-function buildCustomerMatchInlineControls(item) {
+function buildCustomerMatchInlineControls(item, cardContext) {
   var propertyId = String(item && item.propertyId || "").trim();
-  var status = getCustomerMatchStatus(item);
+  var status = getCustomerMatchStatus(item, cardContext);
   if (!propertyId || !status) return "";
   var encodedId = encodeURIComponent(propertyId);
-  var visualLabel = status === "소개" ? "후보 매물" : (status === "보류" ? "보류한 매물" : (status === "신규" ? "신규매물" : ""));
+  var introduced = status === "소개";
+  var held = status === "보류";
+  var operationHandler = cardContext
+    ? "handleOperationsCustomerMatchToggleV719(this,'" + encodeURIComponent(cardContext.matchId || "") + "','" + encodeURIComponent(cardContext.customerId || "") + "','" + encodeURIComponent(cardContext.propertyId || propertyId) + "',"
+    : "handleCustomerMatchListAction(this,'" + encodedId + "',";
   return '<div class="customer-match-inline-actions" onclick="event.stopPropagation()">' +
-    (visualLabel ? '<span class="customer-match-inline-badge status-' + (status === "소개" ? "introduced" : (status === "보류" ? "held" : "new")) + '">' + visualLabel + '</span>' : '<span class="customer-match-inline-spacer" aria-hidden="true"></span>') +
-    (status !== "소개" ? '<button type="button" class="introduce" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'소개\')">후보등록</button>' : '') +
-    (status !== "보류" ? '<button type="button" class="hold" onclick="handleCustomerMatchListAction(this,\'' + encodedId + '\',\'보류\')">보류함</button>' : '') +
+    '<label class="customer-match-choice-v719 introduce' + (introduced ? ' checked' : '') + '"><input type="checkbox"' + (introduced ? ' checked' : '') + ' onchange="' + operationHandler + '\'소개\')"><span>후보</span></label>' +
+    '<label class="customer-match-choice-v719 hold' + (held ? ' checked' : '') + '"><input type="checkbox"' + (held ? ' checked' : '') + ' onchange="' + operationHandler + '\'보류\')"><span>보류</span></label>' +
   '</div>';
 }
 
-window.handleCustomerMatchListAction = function(button, encodedPropertyId, nextStatus) {
+window.handleCustomerMatchListAction = function(button, encodedPropertyId, selectedStatus) {
   var propertyId = decodeURIComponent(encodedPropertyId || "");
   if (!propertyId || typeof window.updateCustomerMatchFromMap !== "function") return;
+  var currentStatus = getCustomerMatchStatus({propertyId: propertyId});
+  var nextStatus = button && button.checked ? selectedStatus : (currentStatus === selectedStatus ? "신규" : currentStatus);
+  if (!nextStatus || nextStatus === currentStatus) return;
   button.disabled = true;
-  var oldText = button.textContent;
-  button.textContent = "저장 중…";
   window.updateCustomerMatchFromMap(propertyId, nextStatus).catch(function(error) {
     button.disabled = false;
-    button.textContent = oldText;
+    button.checked = currentStatus === selectedStatus;
     alert((error && error.message) || "고객 매칭 상태를 저장하지 못했습니다.");
   });
 };
@@ -2528,7 +2533,7 @@ function buildListElevatorIconV650() {
   '</span>';
 }
 
-function addListItem(item, appendTarget) {
+function addListItem(item, appendTarget, customerMatchContextV719) {
   var div = document.createElement("div");
   var printSelected = selectedPrintKeys.includes(item.key);
   var memoOpen = openMemoKey === item.key;
@@ -2547,15 +2552,17 @@ function addListItem(item, appendTarget) {
       ? " verified"
       : "";
 
+  var customerMatchStatusV719 = getCustomerMatchStatus(item, customerMatchContextV719);
   div.className =
     "item" +
     (selectedItemKey === item.key ? " selected" : "") +
     (isDone(item) ? " done" : "") +
     (printSelected ? " print-selected" : "") +
     (memoOpen ? " memo-open" : "") +
-    (getCustomerMatchStatus(item) === "신규" ? " customer-match-new" : "") +
-    (getCustomerMatchStatus(item) === "소개" ? " customer-match-introduced" : "") +
-    (getCustomerMatchStatus(item) === "보류" ? " customer-match-held" : "");
+    (customerMatchStatusV719 === "신규" ? " customer-match-new" : "") +
+    (customerMatchStatusV719 === "소개" ? " customer-match-introduced" : "") +
+    (customerMatchStatusV719 === "보류" ? " customer-match-held" : "") +
+    (customerMatchContextV719 ? " operations-match-listing-card-v719" : "");
 
   var doneLabel = isDone(item)
     ? '<span class="done-badge">계약완료</span>'
@@ -2589,10 +2596,9 @@ function addListItem(item, appendTarget) {
         'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedEditTargetV648 + '\')">링크</button>'
     : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
   if (unifiedCardPartsV8.sourceButton) sourceLinkButton = unifiedCardPartsV8.sourceButton;
-  var customerMatchControls = buildCustomerMatchInlineControls(item);
+  var customerMatchControls = buildCustomerMatchInlineControls(item, customerMatchContextV719);
   var favoriteHeaderButtonV661 = "";
   var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
-  var headerContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, true);
   var depositDisplay = listDisplayValueV650(item, "deposit");
   var rentDisplay = listDisplayValueV650(item, "rent");
   var feeDisplay = listDisplayValueV650(item, "fee");
@@ -2636,7 +2642,6 @@ function addListItem(item, appendTarget) {
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV650() +
           '</span>' +
-          (customerMatchControls ? headerContactButtonV654 : '') +
           favoriteHeaderButtonV661 +
           (customerMatchControls && regDateLabel
             ? '<span class="item-reg-date item-reg-date-head-v651' +
@@ -2672,7 +2677,7 @@ function addListItem(item, appendTarget) {
           (customerMatchControls ? ' customer-match-card-actions-v653' : '') + '">' +
           customerMatchControls +
           '<div class="item-action-left">' +
-            (!customerMatchControls ? actionContactButtonV654 : '') +
+            actionContactButtonV654 +
             '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
           'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>' +
             '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
@@ -2732,6 +2737,7 @@ function addListItem(item, appendTarget) {
       }
     });
   }
+  return div;
 }
 
 
@@ -3163,6 +3169,10 @@ function updatePrintSelectedButton() {
     window.syncSelectionActionBarV657(count);
   }
 }
+
+window.renderCustomerMatchListingCardV719 = function(target, item, context) {
+  return addListItem(item, target, context || {});
+};
 
 
 function removeFieldVisitMarkerFromMemo(memo) {
