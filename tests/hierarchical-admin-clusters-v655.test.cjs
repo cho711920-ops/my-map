@@ -76,7 +76,7 @@ assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /매물 3
 
 assert.match(source, /function openAdministrativeClusterV655[\s\S]*?targetLevel = cluster\.regionMode === "district" \? 6 : 4/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.94\)/);
-assert.ok(html.includes("map.js?v=6.5.27-hierarchical-admin-clusters"));
+assert.ok(html.includes("map.js?v=8.1.0-persistent-building-info"));
 assert.ok(html.includes("style.css?v=6.5.31-hierarchical-admin-clusters"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");

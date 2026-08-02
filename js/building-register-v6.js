@@ -11,9 +11,14 @@
   var BADGE_MAX_RETRIES = 2;
   var badgeRequests = Object.create(null);
   var badgeMemoryV6520 = Object.create(null);
+  var badgeAddressMemoryV810 = Object.create(null);
   var badgeQueue = [];
   var badgeActive = 0;
   var badgeObserver = null;
+  var buildingInfoPrefetchQueueV810 = [];
+  var buildingInfoPrefetchSeenV810 = Object.create(null);
+  var buildingInfoPrefetchActiveV810 = 0;
+  var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
   var state = {
     item: null,
     parcel: null,
@@ -75,6 +80,48 @@
       return value != null && String(value).trim();
     });
     return values.length ? values.join(" · ") : "정보 없음";
+  }
+
+  function normalizedBuildingAddressKeyV810(value) {
+    return String(value || "")
+      .replace(/대한민국|대전광역시|대전시/g, "")
+      .replace(/\([^)]*\)/g, "")
+      .replace(/번지/g, "")
+      .replace(/\s+/g, "")
+      .trim()
+      .toLowerCase();
+  }
+
+  function persistentBadgeFromItemV810(item) {
+    if (!item || String(item.buildingInfoStatus || "").trim() !== "확인완료") return null;
+    return {
+      year: String(item.buildingYear || "").replace(/\D/g, "").slice(0, 4),
+      elevators: Number(item.buildingElevators || 0),
+      verified: true,
+      persistent: true
+    };
+  }
+
+  function rememberBadgeV810(item, badge) {
+    if (!item || !badge) return;
+    var normalized = {
+      year: String(badge.year || ""),
+      elevators: Number(badge.elevators || 0),
+      verified: !!badge.verified,
+      persistent: !!badge.persistent
+    };
+    var itemKey = stableBadgeItemKeyV6520(item);
+    var addressKey = normalizedBuildingAddressKeyV810(item.address);
+    if (itemKey) badgeMemoryV6520[itemKey] = normalized;
+    if (addressKey) badgeAddressMemoryV810[addressKey] = normalized;
+    if (typeof allItems !== "undefined" && Array.isArray(allItems) && addressKey) {
+      allItems.forEach(function(candidate) {
+        if (normalizedBuildingAddressKeyV810(candidate && candidate.address) !== addressKey) return;
+        candidate.buildingYear = normalized.year;
+        candidate.buildingElevators = normalized.elevators;
+        if (normalized.verified) candidate.buildingInfoStatus = "확인완료";
+      });
+    }
   }
 
   function ensureModal() {
@@ -607,27 +654,27 @@
   function applyBadgeToCard(card, badge) {
     if (!card || !badge) return;
     var badgeItem = card.__buildingBadgeItemV650;
-    var badgeItemKey = stableBadgeItemKeyV6520(badgeItem);
-    if (badgeItemKey) {
-      badgeMemoryV6520[badgeItemKey] = {
-        year: String(badge.year || ""),
-        elevators: Number(badge.elevators || 0),
-        verified: !!badge.verified
-      };
-    }
-    var years = card.querySelectorAll(".item-building-year-v650");
-    var elevator = card.querySelector(".item-elevator-v650");
-    Array.prototype.forEach.call(years, function(year) {
-      year.textContent = badge.year ? "준" + badge.year : "준공 -";
-      year.classList.toggle("verified", !!badge.verified);
-    });
-    if (elevator) {
-      elevator.hidden = !(badge.verified && badge.elevators > 0);
-      if (!elevator.hidden) {
-        elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대";
-        elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대");
+    rememberBadgeV810(badgeItem, badge);
+    var addressKey = normalizedBuildingAddressKeyV810(badgeItem && badgeItem.address);
+    var targetCards = addressKey
+      ? document.querySelectorAll(".item[data-building-address-key]")
+      : [card];
+    Array.prototype.forEach.call(targetCards, function(targetCard) {
+      if (addressKey && targetCard.getAttribute("data-building-address-key") !== addressKey) return;
+      var years = targetCard.querySelectorAll(".item-building-year-v650");
+      var elevator = targetCard.querySelector(".item-elevator-v650");
+      Array.prototype.forEach.call(years, function(year) {
+        year.textContent = badge.year ? "준" + badge.year : "준공 -";
+        year.classList.toggle("verified", !!badge.verified);
+      });
+      if (elevator) {
+        elevator.hidden = !(badge.verified && badge.elevators > 0);
+        if (!elevator.hidden) {
+          elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대";
+          elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대");
+        }
       }
-    }
+    });
   }
 
   function refreshBadgeCards(parcel, data) {
@@ -650,22 +697,32 @@
       "platGbCd=" + encodeURIComponent(parcel.platGbCd),
       "bun=" + encodeURIComponent(parcel.bun),
       "ji=" + encodeURIComponent(parcel.ji),
-      "propertyId=" + encodeURIComponent(item && (item.propertyId || item.id || item.key) || "")
+      "propertyId=" + encodeURIComponent(item && (item.propertyId || item.id || item.key) || ""),
+      "address=" + encodeURIComponent(item && item.address || parcel.lotAddress || "")
     ];
     return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
   }
 
-  function requestBadgeData(item, parcel) {
-    var key = parcelKey(parcel);
-    var fullCached = readCache(parcel);
-    if (fullCached && fullCached.ok) return Promise.resolve(fullCached);
-    var cached = readBadgeCache(parcel);
-    if (cached && cached.ok) return Promise.resolve(cached);
+  function requestBadgeData(item, parcel, persistToServer) {
+    var key = parcelKey(parcel) + (persistToServer ? ":persist" : "");
+    if (!persistToServer) {
+      var fullCached = readCache(parcel);
+      if (fullCached && fullCached.ok) return Promise.resolve(fullCached);
+      var cached = readBadgeCache(parcel);
+      if (cached && cached.ok) return Promise.resolve(cached);
+    }
     if (badgeRequests[key]) return badgeRequests[key];
 
     badgeRequests[key] = jsonp(badgeRequestUrl(item, parcel), 60000).then(function(data) {
       if (!data || !data.ok || data.action !== "buildingRegister") {
         throw new Error((data && data.message) || "건축물대장 요약정보를 확인하지 못했습니다.");
+      }
+      if (persistToServer && (!data.buildingInfoCache || !data.buildingInfoCache.ok)) {
+        throw new Error(
+          data.buildingInfoCache && data.buildingInfoCache.message
+            ? data.buildingInfoCache.message
+            : "주소별 건물정보를 시트에 저장하지 못했습니다."
+        );
       }
       writeBadgeCache(parcel, data);
       return data;
@@ -734,6 +791,13 @@
   function bindBadge(card, item) {
     if (!card || !item) return;
     card.__buildingBadgeItemV650 = item;
+    card.setAttribute("data-building-address-key", normalizedBuildingAddressKeyV810(item.address));
+    var persistentBadge = persistentBadgeFromItemV810(item);
+    var addressBadge = badgeAddressMemoryV810[normalizedBuildingAddressKeyV810(item.address)];
+    if (persistentBadge || addressBadge) {
+      applyBadgeToCard(card, persistentBadge || addressBadge);
+      return;
+    }
     var cachedParcel = readParcelCache(item);
     if (cachedParcel) {
       card.setAttribute("data-building-parcel-key", parcelKey(cachedParcel));
@@ -769,6 +833,13 @@
 
   function getCachedBadge(item) {
     if (!item) return null;
+    var persistentBadge = persistentBadgeFromItemV810(item);
+    if (persistentBadge) {
+      rememberBadgeV810(item, persistentBadge);
+      return persistentBadge;
+    }
+    var addressKey = normalizedBuildingAddressKeyV810(item.address);
+    if (addressKey && badgeAddressMemoryV810[addressKey]) return badgeAddressMemoryV810[addressKey];
     var itemKey = stableBadgeItemKeyV6520(item);
     if (itemKey && badgeMemoryV6520[itemKey]) {
       return badgeMemoryV6520[itemKey];
@@ -778,8 +849,62 @@
     var cachedData = readCache(cachedParcel) || readBadgeCache(cachedParcel);
     if (!cachedData || !cachedData.ok) return null;
     var badge = badgeFromData(cachedData, item);
-    if (itemKey) badgeMemoryV6520[itemKey] = badge;
+    rememberBadgeV810(item, badge);
     return badge;
+  }
+
+  function runBuildingInfoPrefetchV810() {
+    while (
+      buildingInfoPrefetchActiveV810 < BUILDING_INFO_PREFETCH_CONCURRENCY_V810 &&
+      buildingInfoPrefetchQueueV810.length
+    ) {
+      (function(entry) {
+        var item = entry.item;
+        buildingInfoPrefetchActiveV810 += 1;
+        var cachedParcel = readParcelCache(item);
+        var parcelPromise = cachedParcel
+          ? Promise.resolve(cachedParcel)
+          : resolveParcel(item).then(function(parcel) {
+              writeParcelCache(item, parcel);
+              return parcel;
+            });
+        parcelPromise.then(function(parcel) {
+          return requestBadgeData(item, parcel, true).then(function(data) {
+            var badge = badgeFromData(data, item);
+            badge.persistent = true;
+            rememberBadgeV810(item, badge);
+            applyBadgeToCard(
+              Array.prototype.find.call(document.querySelectorAll(".item[data-building-address-key]"), function(card) {
+                return card.getAttribute("data-building-address-key") === normalizedBuildingAddressKeyV810(item.address);
+              }),
+              badge
+            );
+          });
+        }).catch(function() {
+          if (entry.retries < 2) {
+            setTimeout(function() {
+              buildingInfoPrefetchQueueV810.push({ item: item, retries: entry.retries + 1 });
+              runBuildingInfoPrefetchV810();
+            }, 1500 * (entry.retries + 1));
+          }
+          return null;
+        }).finally(function() {
+          buildingInfoPrefetchActiveV810 -= 1;
+          runBuildingInfoPrefetchV810();
+        });
+      })(buildingInfoPrefetchQueueV810.shift());
+    }
+  }
+
+  function prefetchMissingBuildingInfoV810(items) {
+    (items || []).forEach(function(item) {
+      if (!item || persistentBadgeFromItemV810(item)) return;
+      var addressKey = normalizedBuildingAddressKeyV810(item.address);
+      if (!addressKey || buildingInfoPrefetchSeenV810[addressKey]) return;
+      buildingInfoPrefetchSeenV810[addressKey] = true;
+      buildingInfoPrefetchQueueV810.push({ item: item, retries: 0 });
+    });
+    runBuildingInfoPrefetchV810();
   }
 
   function jsonp(url, timeoutMs) {
@@ -822,7 +947,8 @@
       "platGbCd=" + encodeURIComponent(parcel.platGbCd),
       "bun=" + encodeURIComponent(parcel.bun),
       "ji=" + encodeURIComponent(parcel.ji),
-      "propertyId=" + encodeURIComponent(state.item.propertyId || state.item.id || state.item.key || "")
+      "propertyId=" + encodeURIComponent(state.item.propertyId || state.item.id || state.item.key || ""),
+      "address=" + encodeURIComponent(state.item.address || parcel.lotAddress || "")
     ];
     if (force) params.push("force=1");
     if (mode) params.push("mode=" + encodeURIComponent(mode));
@@ -1441,6 +1567,7 @@
   window.JSBuildingRegisterBadges = {
     bind: bindBadge,
     getCached: getCachedBadge,
+    prefetchMissing: prefetchMissingBuildingInfoV810,
     refreshVisible: function() {
       Array.prototype.forEach.call(document.querySelectorAll(".item[data-listing-key]"), function(card) {
         if (card.__buildingBadgeItemV650) bindBadge(card, card.__buildingBadgeItemV650);

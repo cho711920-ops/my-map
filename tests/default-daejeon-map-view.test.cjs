@@ -21,6 +21,6 @@ assert.match(
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
 assert.match(indexSource, /js\/script\.js\?v=6\.5\.57-naver-roadview-split/);
-assert.match(indexSource, /js\/map\.js\?v=6\.5\.27-hierarchical-admin-clusters/);
+assert.match(indexSource, /js\/map\.js\?v=8\.1\.0-persistent-building-info/);
 
 console.log("default Daejeon map view tests passed");

@@ -993,6 +993,11 @@ function loadSheet(isAuto) {
           propertyId: clean(c[15]),
           sourceLink: clean(c[16]),
           contactListRaw: String(c[17] == null ? "" : c[17]).trim(),
+          buildingYear: clean(c[18]),
+          buildingElevators: Number(clean(c[19])) || 0,
+          buildingApprovalDate: clean(c[20]),
+          buildingInfoCheckedAt: clean(c[21]),
+          buildingInfoStatus: clean(c[22]),
           sheetRow: i + 1,
           latlng: null
         };
@@ -1015,6 +1020,14 @@ function loadSheet(isAuto) {
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
       showList(currentItems);
+      if (
+        window.JSBuildingRegisterBadges &&
+        typeof window.JSBuildingRegisterBadges.prefetchMissing === "function"
+      ) {
+        setTimeout(function() {
+          window.JSBuildingRegisterBadges.prefetchMissing(rawItems);
+        }, 800);
+      }
       document.getElementById("status").innerHTML =
         "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
 

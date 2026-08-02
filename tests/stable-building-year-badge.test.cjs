@@ -18,7 +18,7 @@ assert.match(building, /getCached: getCachedBadge/);
 assert.match(building, /var badgeMemoryV6520 = Object\.create\(null\)/);
 assert.match(
   building,
-  /function applyBadgeToCard\(card, badge\) \{[\s\S]*?badgeMemoryV6520\[badgeItemKey\] =/
+  /function applyBadgeToCard\(card, badge\) \{[\s\S]*?rememberBadgeV810\(badgeItem, badge\)/
 );
 assert.match(
   building,
@@ -38,7 +38,7 @@ assert.equal(
 );
 assert.match(script, /var listCardReusePoolV6521 = null/);
 assert.match(script, /fragment\.appendChild\(reusableCard\)/);
-assert.match(html, /building-register-v6\.js\?v=6\.5\.21-address-badge-cache/);
+assert.match(html, /building-register-v6\.js\?v=8\.1\.0-persistent-building-info/);
 assert.match(html, /script\.js\?v=6\.5\.57-naver-roadview-split/);
 
 console.log("stable building year badge tests passed");
