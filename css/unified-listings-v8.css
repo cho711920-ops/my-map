@@ -252,6 +252,8 @@
   }
   .unified-move-banner-v8[hidden] { display: none; }
   .unified-move-banner-v8 button { border: 0; background: transparent; color: #475569; font-weight: 900; cursor: pointer; }
+  .unified-move-banner-v8.saving { border-color: #0f766e; background: #ecfdf5; color: #0f766e; }
+  .unified-move-banner-v8 button:disabled { opacity: .45; cursor: wait; }
 
   .unified-gallery-modal-v8 {
     position: fixed; inset: 0; z-index: 11000; display: none; align-items: center; justify-content: center;

@@ -600,6 +600,9 @@
       state.loaded = false;
       state.detailCache = {};
       state.pendingMove = null;
+      setMoveBannerSaving(false);
+      var moveBanner = document.getElementById("unifiedMoveBannerV8");
+      if (moveBanner) moveBanner.hidden = true;
       closeDetail();
       return load(true).then(function() {
         if (typeof global.loadSheet === "function") global.loadSheet(true);
@@ -607,6 +610,7 @@
       });
     }).catch(function(error) {
       setSaving(false, true);
+      setMoveBannerSaving(false);
       alert(error.message || "통합매물 변경에 실패했습니다.");
       throw error;
     });
@@ -619,10 +623,24 @@
   }
 
   function startMove(encodedOriginalId, revision) {
-    state.pendingMove = {originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision};
+    state.pendingMove = {originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision,
+      sourcePropertyId: text(state.openPropertyId)};
     closeDetail();
     var banner = ensureMoveBanner();
+    setMoveBannerSaving(false);
     banner.hidden = false;
+  }
+
+  function setMoveBannerSaving(saving) {
+    var banner = document.getElementById("unifiedMoveBannerV8");
+    if (!banner) return;
+    var message = banner.querySelector("strong");
+    var cancel = banner.querySelector("button");
+    banner.classList.toggle("saving", !!saving);
+    if (message) message.textContent = saving
+      ? "통합 저장·시트 확인 중입니다."
+      : "이동할 통합매물 카드 또는 체크박스를 클릭하세요.";
+    if (cancel) cancel.disabled = !!saving;
   }
 
   function ensureMoveBanner() {
@@ -631,20 +649,33 @@
     banner = document.createElement("div");
     banner.id = "unifiedMoveBannerV8";
     banner.className = "unified-move-banner-v8";
-    banner.innerHTML = '<strong>이동할 통합매물 카드를 클릭하세요.</strong><button type="button">취소</button>';
+    banner.innerHTML = '<strong>이동할 통합매물 카드 또는 체크박스를 클릭하세요.</strong><button type="button">취소</button>';
     banner.querySelector("button").onclick = function() { state.pendingMove = null; banner.hidden = true; };
     document.body.appendChild(banner);
     return banner;
   }
 
   function handleCardClick(item, event) {
-    if (!desktop() || (event && event.target && event.target.closest("button,input,label,a,textarea,select"))) return false;
+    if (!desktop()) return false;
     var propertyId = text(item && item.propertyId);
     if (state.pendingMove) {
       var pending = state.pendingMove;
-      if (confirm("선택한 원본매물을 이 통합매물로 이동할까요?")) move(pending.originalId, propertyId, pending.revision);
+      if (!propertyId) return false;
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (pending.sourcePropertyId && pending.sourcePropertyId === propertyId) {
+        alert("이미 이 통합매물에 연결된 원본입니다. 다른 통합매물을 선택해 주세요.");
+        return true;
+      }
+      if (confirm("선택한 원본매물을 이 통합매물로 이동할까요?")) {
+        setMoveBannerSaving(true);
+        move(pending.originalId, propertyId, pending.revision);
+      }
       return true;
     }
+    if (event && event.target && event.target.closest("button,input,label,a,textarea,select")) return false;
     open(encodeURIComponent(propertyId));
     return true;
   }
