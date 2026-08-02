@@ -10,8 +10,8 @@ const backend = fs.readFileSync(
   "utf8"
 );
 
-assert.match(html, /listing-duplicate-cleanup-v1\.css/);
-assert.match(html, /listing-duplicate-cleanup-v1\.js\?v=1\.5\.1-customer-match-refresh/);
+assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.css/);
+assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.js/);
 assert.match(ui, /대표로 유지/);
 assert.match(ui, /중복으로 정리/);
 assert.match(ui, /consolidateExistingMasters/);

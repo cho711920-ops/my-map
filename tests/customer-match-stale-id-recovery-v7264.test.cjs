@@ -80,6 +80,6 @@ assert.match(
 );
 assert.match(duplicateUi, /refreshCustomerMatchesAfterDuplicateMergeV7186/);
 assert.match(html, /operations-center-v7\.js\?v=7\.18\.8-compact-map-status/);
-assert.match(html, /listing-duplicate-cleanup-v1\.js\?v=1\.5\.1-customer-match-refresh/);
+assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.js/);
 
 console.log("customer match stale ID recovery tests passed");
