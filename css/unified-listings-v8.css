@@ -239,7 +239,7 @@
   .unified-detail-actions-v8 { display: flex; flex-wrap: wrap; gap: 8px; }
   .unified-detail-actions-v8 button { min-height: 40px; padding: 0 13px; border: 1px solid #93c5fd; border-radius: 9px; background: #eff6ff; color: #1d4ed8; font-size: 14px; font-weight: 900; cursor: pointer; }
   .unified-detail-actions-v8 .separate,
-  .unified-detail-actions-v8 .move { min-height: 30px; padding: 0 9px; border-radius: 7px; font-size: 12px; }
+  .unified-detail-actions-v8 .move { align-self: flex-start; min-height: 30px; height: 30px; padding: 0 9px; border-radius: 7px; font-size: 12px; }
   .unified-detail-actions-v8 .separate { border-color: #fca5a5; background: #fff1f2; color: #be123c; }
   .unified-detail-actions-v8 .move { border-color: #c4b5fd; background: #f5f3ff; color: #6d28d9; }
   .unified-detail-memo-v8 { margin-top: 15px; padding: 13px; border-radius: 9px; background: #f8fafc; color: #475569; font-size: 15px; line-height: 1.6; }
