@@ -367,6 +367,26 @@
     return drawer;
   }
 
+  var detailCloseTimerV827 = null;
+
+  function showDetailDrawerV827(drawer) {
+    if (!drawer) return;
+    if (detailCloseTimerV827) {
+      global.clearTimeout(detailCloseTimerV827);
+      detailCloseTimerV827 = null;
+    }
+    drawer.classList.remove("closing-v827");
+    drawer.setAttribute("aria-hidden", "false");
+    if (drawer.classList.contains("open") || drawer.classList.contains("opening-v827")) return;
+    drawer.classList.add("opening-v827");
+    void drawer.offsetWidth;
+    global.requestAnimationFrame(function() {
+      if (!drawer.classList.contains("opening-v827") || !state.openPropertyId) return;
+      drawer.classList.add("open");
+      drawer.classList.remove("opening-v827");
+    });
+  }
+
   function positionDrawer(drawer) {
     var sidebar = document.getElementById("sidebar");
     var toolbar = document.querySelector(".filters");
@@ -437,8 +457,7 @@
       detailGallery._failedImagesV8 = {};
       renderDetailPhoto(detailGallery, 0);
     }
-    drawer.classList.add("open");
-    drawer.setAttribute("aria-hidden", "false");
+    showDetailDrawerV827(drawer);
   }
 
   function renderDetailPhoto(gallery, index) {
@@ -599,8 +618,15 @@
   function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (!drawer) return;
+    if (detailCloseTimerV827) global.clearTimeout(detailCloseTimerV827);
+    drawer.classList.remove("opening-v827");
+    drawer.classList.add("closing-v827");
     drawer.classList.remove("open");
     drawer.setAttribute("aria-hidden", "true");
+    detailCloseTimerV827 = global.setTimeout(function() {
+      drawer.classList.remove("closing-v827");
+      detailCloseTimerV827 = null;
+    }, 300);
     state.openPropertyId = "";
     state.openOriginalId = "";
     state.detailRequestToken += 1;

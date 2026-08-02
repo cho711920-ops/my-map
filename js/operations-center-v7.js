@@ -40,7 +40,10 @@
     lastCustomerWorkspace: null,
     customerPrefetchPromise: null,
     loadPromise: null,
-    customerWorkspaceEpoch: 0
+    customerWorkspaceEpoch: 0,
+    customerConditionRefreshV727: { customerId: "", status: "idle" },
+    customerEditorCloseTimerV727: null,
+    customerEditorCloseResolveV727: null
   };
 
   window.operationsMatchPropertyIds = null;
@@ -592,6 +595,7 @@
       '<button type="button" onclick="openCustomerMemo(\'' + escape(customerId) + '\')">상담·미팅 메모</button>' +
       '<button type="button" onclick="openCustomerEditor(\'' + escape(customerId) + '\')">조건 수정</button>' +
       '<button type="button" onclick="showSelectedCustomerMatchesOnMap()"' + (allRows.length ? '' : ' disabled') + '>지도에서 보기</button></div></div>' +
+      customerConditionRefreshHtmlV727(customerId) +
       '<div class="operations-match-listing-toolbar-v719">' +
         '<select aria-label="출처 필터" onchange="setCustomerMatchListingFilterV719(\'source\',this.value)">' + matchSelectOptionsV719([["","출처"],["danggeun","당근"],["naver","네이버"],["gongsil","공실박스"],["direct","직접등록"]], state.matchSourceFilter) + '</select>' +
         '<select aria-label="구분 필터" onchange="setCustomerMatchListingFilterV719(\'type\',this.value)">' + matchSelectOptionsV719([["","구분"]].concat(Object.keys(typeOptions).sort().map(function(type) { return [type, type]; })), state.matchTypeFilter) + '</select>' +
@@ -749,6 +753,66 @@
     return true;
   }
 
+  function customerConditionRefreshHtmlV727(customerId) {
+    var refresh = state.customerConditionRefreshV727 || {};
+    if (!customerId || text(refresh.customerId) !== text(customerId) || refresh.status === "idle") return "";
+    if (refresh.status === "error") {
+      return '<div class="customer-condition-refresh-v727 is-error" role="status" aria-live="assertive">' +
+        '<strong>조건변경 저장을 확인하지 못했습니다. 조건 창을 다시 확인해 주세요.</strong></div>';
+    }
+    return '<div class="customer-condition-refresh-v727 is-active" role="status" aria-live="polite">' +
+      '<span class="customer-condition-refresh-pulse-v727" aria-hidden="true"><i></i><i></i><i></i></span>' +
+      '<strong>조건변경 저장 후 새로운 매물 업데이트 중</strong></div>';
+  }
+
+  function setCustomerConditionRefreshV727(customerId, status) {
+    state.customerConditionRefreshV727 = {
+      customerId: text(customerId),
+      status: status || "idle"
+    };
+  }
+
+  function cancelCustomerEditorCloseAnimationV727() {
+    if (state.customerEditorCloseTimerV727) {
+      window.clearTimeout(state.customerEditorCloseTimerV727);
+      state.customerEditorCloseTimerV727 = null;
+    }
+    var modal = document.getElementById("customerEditorModal");
+    if (modal) modal.classList.remove("customer-crm-modal-closing-v727");
+    if (state.customerEditorCloseResolveV727) {
+      state.customerEditorCloseResolveV727();
+      state.customerEditorCloseResolveV727 = null;
+    }
+  }
+
+  function closeCustomerEditorAnimatedV727() {
+    var modal = document.getElementById("customerEditorModal");
+    if (!modal || modal.hidden) return Promise.resolve();
+    cancelCustomerEditorCloseAnimationV727();
+    modal.classList.add("customer-crm-modal-closing-v727");
+    state.editingCustomerId = "";
+    document.body.classList.remove("customer-crm-open");
+    return new Promise(function(resolve) {
+      state.customerEditorCloseResolveV727 = resolve;
+      state.customerEditorCloseTimerV727 = window.setTimeout(function() {
+        state.customerEditorCloseTimerV727 = null;
+        modal.hidden = true;
+        modal.classList.remove("customer-crm-modal-closing-v727");
+        if (state.customerEditorCloseResolveV727) {
+          state.customerEditorCloseResolveV727();
+          state.customerEditorCloseResolveV727 = null;
+        }
+      }, 240);
+    });
+  }
+
+  function waitForCustomerConditionFeedbackV727(closePromise, startedAt) {
+    return Promise.resolve(closePromise).then(function() {
+      var remaining = Math.max(0, 650 - (Date.now() - startedAt));
+      return new Promise(function(resolve) { window.setTimeout(resolve, remaining); });
+    });
+  }
+
   function updateCustomerRowOptimisticallyV723(customerId, customer) {
     var id = text(customerId);
     if (!id) return null;
@@ -766,9 +830,13 @@
   }
 
   function restoreCustomerEditorAfterFailureV723(customerId) {
+    cancelCustomerEditorCloseAnimationV727();
     state.editingCustomerId = text(customerId);
     var modal = document.getElementById("customerEditorModal");
-    if (modal) modal.hidden = false;
+    if (modal) {
+      modal.classList.remove("customer-crm-modal-closing-v727");
+      modal.hidden = false;
+    }
     document.body.classList.add("customer-crm-open");
   }
 
@@ -1087,6 +1155,11 @@
     var form = document.getElementById("customerEditorForm");
     if (!modal || !form) return;
     var id = text(customerId);
+    cancelCustomerEditorCloseAnimationV727();
+    if (text(state.customerConditionRefreshV727 && state.customerConditionRefreshV727.customerId) === id &&
+        state.customerConditionRefreshV727.status === "error") {
+      setCustomerConditionRefreshV727("", "idle");
+    }
     var row = id ? state.customers.find(function(customer) {
       return field(customer, state.customerHeaders, "고객ID") === id;
     }) : null;
@@ -1115,6 +1188,7 @@
 
   window.closeCustomerEditor = function() {
     var modal = document.getElementById("customerEditorModal");
+    cancelCustomerEditorCloseAnimationV727();
     if (modal) modal.hidden = true;
     state.editingCustomerId = "";
     document.body.classList.remove("customer-crm-open");
@@ -1130,16 +1204,21 @@
       customer[input.getAttribute("data-customer-field")] = input.value;
     });
     var editingCustomerId = text(state.editingCustomerId);
+    var isConditionUpdate = !!editingCustomerId;
+    var feedbackStartedAt = Date.now();
     var optimisticUpdate = updateCustomerRowOptimisticallyV723(editingCustomerId, customer);
     var consultationMemo = text(document.getElementById("customerConsultationMemo") && document.getElementById("customerConsultationMemo").value);
     var nextContactDate = text(document.getElementById("customerNextContactDate") && document.getElementById("customerNextContactDate").value);
     button.disabled = true;
     button.textContent = "저장 확인 중…";
+    if (isConditionUpdate) setCustomerConditionRefreshV727(editingCustomerId, "active");
     if (optimisticUpdate) {
       renderCustomers();
       renderMatches(editingCustomerId);
+    } else if (isConditionUpdate) {
+      renderMatches(editingCustomerId);
     }
-    window.closeCustomerEditor();
+    var closeAnimation = closeCustomerEditorAnimatedV727();
     setMessage("조건을 바로 반영했습니다. 실제 시트 저장과 재매칭을 확인하고 있습니다…", "loading");
     apiPost("saveCustomer", {
       customerId: editingCustomerId,
@@ -1153,17 +1232,29 @@
         applyCustomerWorkspace(result.workspace);
       } else if (applyCompactCustomerSaveV723(result, editingCustomerId)) {
         state.customerLoaded = true;
+        if (!Array.isArray(result.matches)) {
+          state.loadedMatchCustomerId = "";
+          return loadCustomerMatches(state.selectedCustomerId);
+        }
       } else {
         state.customerLoaded = false;
         return loadOperationsData(true);
       }
     }).then(function() {
+      if (isConditionUpdate && state.loadedMatchCustomerId !== state.selectedCustomerId) {
+        throw new Error("새 매칭 결과를 확인하지 못했습니다.");
+      }
       state.customerView = "before";
       renderCustomers();
+      renderMatches(state.selectedCustomerId);
+      return waitForCustomerConditionFeedbackV727(closeAnimation, feedbackStartedAt);
+    }).then(function() {
+      if (isConditionUpdate) setCustomerConditionRefreshV727("", "idle");
       renderMatches(state.selectedCustomerId);
       setMessage("고객정보가 시트에 저장되고 재매칭까지 확인됐습니다.", "success");
     }).catch(function(error) {
       if (optimisticUpdate) state.customers[optimisticUpdate.rowIndex] = optimisticUpdate.previous;
+      if (isConditionUpdate) setCustomerConditionRefreshV727(editingCustomerId, "error");
       renderCustomers();
       renderMatches(editingCustomerId || state.selectedCustomerId);
       restoreCustomerEditorAfterFailureV723(editingCustomerId);

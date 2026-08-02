@@ -173,16 +173,22 @@
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    transform: translateX(24px);
-    transition: transform .18s ease, opacity .18s ease, visibility 0s linear .18s;
+    transform: translateX(44px) scale(.992);
+    transform-origin: right center;
+    will-change: transform, opacity;
+    transition: transform .28s cubic-bezier(.2,.75,.25,1), opacity .22s ease, visibility 0s linear .28s;
   }
 
   .unified-detail-drawer-v8.open {
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
     transition-delay: 0s;
+  }
+
+  .unified-detail-drawer-v8.closing-v827 {
+    transition-duration: .24s, .2s, 0s;
   }
 
   .unified-detail-drawer-v8 > header {
@@ -689,6 +695,12 @@
   .tell-modal-v8,
   .unified-move-banner-v8,
   .desktop-tell-v8 { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unified-detail-drawer-v8,
+  .unified-detail-drawer-v8.open,
+  .unified-detail-drawer-v8.closing-v827 { transition-duration: 0s !important; }
 }
 
 /* v8.0.4 데스크탑 상단 정리 · 세로 로드뷰 · 상세창 안전영역 · 작업상태 자동숨김 */

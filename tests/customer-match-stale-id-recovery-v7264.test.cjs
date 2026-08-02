@@ -79,7 +79,7 @@ assert.match(
   /var resolvedMatchId = text\(result && result\.matchId\) \|\| previousMatchId;[\s\S]*?context\.matchId = resolvedMatchId/
 );
 assert.match(duplicateUi, /refreshCustomerMatchesAfterDuplicateMergeV7186/);
-assert.match(html, /operations-center-v7\.js\?v=7\.20\.3-customer-save-fast-feedback/);
+assert.match(html, /operations-center-v7\.js\?v=7\.20\.4-condition-refresh-motion/);
 assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.js/);
 
 console.log("customer match stale ID recovery tests passed");
