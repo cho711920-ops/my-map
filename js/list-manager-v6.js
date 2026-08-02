@@ -11,6 +11,7 @@
   var cloudSaveRetries = {};
   var cloudRevisions = { favorite: 0, visit: 0 };
   var pendingCloudSave = { favorite: false, visit: false };
+  var memoryLists = { favorite: null, visit: null };
   var cloudSyncReady = false;
 
   function getSelectedItemKeys() {
@@ -55,12 +56,16 @@
   }
 
   function loadLists(type) {
+    type = type === "visit" ? "visit" : "favorite";
+    if (Array.isArray(memoryLists[type])) return memoryLists[type];
     try {
       var parsed = JSON.parse(localStorage.getItem(storageKey(type)) || "[]");
-      return Array.isArray(parsed) ? parsed : [];
+      memoryLists[type] = Array.isArray(parsed) ? parsed : [];
+      return memoryLists[type];
     } catch (error) {
       console.error("목록 불러오기 실패", error);
-      return [];
+      memoryLists[type] = [];
+      return memoryLists[type];
     }
   }
 
@@ -69,18 +74,23 @@
   }
 
   function isCloudDirty(type) {
-    return localStorage.getItem(dirtyKey(type)) === "1";
+    try {
+      return pendingCloudSave[type] || localStorage.getItem(dirtyKey(type)) === "1";
+    } catch (_) {
+      return !!pendingCloudSave[type];
+    }
   }
 
   function saveLists(type, lists, options) {
     options = options || {};
+    type = type === "visit" ? "visit" : "favorite";
+    lists = Array.isArray(lists) ? lists : [];
+    memoryLists[type] = lists;
     try {
       localStorage.setItem(storageKey(type), JSON.stringify(lists));
       if (type === "favorite") syncLegacyFavoriteKeys(lists);
     } catch (error) {
-      console.error(typeLabel(type) + "목록 기기 저장 실패", error);
-      showListToast(typeLabel(type) + "목록을 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "warning");
-      return false;
+      console.warn(typeLabel(type) + "목록 기기 저장을 건너뛰고 계정 동기화를 계속합니다.", error);
     }
     try {
       window.dispatchEvent(new CustomEvent("js-v6-list-store-change", {
@@ -89,7 +99,7 @@
     } catch (_) {}
     if (options.remote) return true;
     cloudRevisions[type] = Number(cloudRevisions[type] || 0) + 1;
-    localStorage.setItem(dirtyKey(type), "1");
+    try { localStorage.setItem(dirtyKey(type), "1"); } catch (_) {}
     scheduleCloudSave(type, lists);
     return true;
   }
@@ -148,7 +158,7 @@
         cloudSaveRetries[type] = 0;
         pendingCloudSave[type] = false;
         if (revision === Number(cloudRevisions[type] || 0) && snapshot === JSON.stringify(loadLists(type))) {
-          localStorage.removeItem(dirtyKey(type));
+          try { localStorage.removeItem(dirtyKey(type)); } catch (_) {}
           return;
         }
         scheduleCloudSave(type, loadLists(type));
@@ -174,7 +184,7 @@
 
   async function loadCloudLists(type) {
     var revisionAtStart = Number(cloudRevisions[type] || 0);
-    var dirtyAtStart = isCloudDirty(type);
+    var dirtyAtStart = isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0;
     var url = (window.saveApiURL || "/api/apps-script") +
       "?action=loadCloudState&scope=" + encodeURIComponent(cloudScope(type)) +
       "&recordKey=default&_=" + Date.now();
@@ -187,7 +197,7 @@
       if (dirtyAtStart || revisionAtStart !== Number(cloudRevisions[type] || 0)) {
         var merged = mergeCloudAndLocalLists(result.data, local);
         saveLists(type, merged, { remote: true });
-        localStorage.setItem(dirtyKey(type), "1");
+        try { localStorage.setItem(dirtyKey(type), "1"); } catch (_) {}
         return { found: true, needsPush: true };
       }
       saveLists(type, result.data, { remote: true });
@@ -219,11 +229,17 @@
       });
     });
     window.favoriteKeys = union;
-    localStorage.setItem("favoriteKeys", JSON.stringify(union));
+    try {
+      localStorage.setItem("favoriteKeys", JSON.stringify(union));
+    } catch (error) {
+      console.warn("기존 찜 표시용 기기 저장을 건너뜁니다.", error);
+    }
   }
 
   function migrateLegacyFavorites() {
-    if (localStorage.getItem(LEGACY_MIGRATION_KEY) === "1") {
+    var migrationComplete = false;
+    try { migrationComplete = localStorage.getItem(LEGACY_MIGRATION_KEY) === "1"; } catch (_) {}
+    if (migrationComplete) {
       syncLegacyFavoriteKeys(loadLists("favorite"));
       return;
     }
@@ -257,7 +273,7 @@
 
     if (legacy.length) saveLists("favorite", lists);
     else syncLegacyFavoriteKeys(lists);
-    localStorage.setItem(LEGACY_MIGRATION_KEY, "1");
+    try { localStorage.setItem(LEGACY_MIGRATION_KEY, "1"); } catch (_) {}
   }
 
   function escapeHtml(value) {

@@ -445,7 +445,7 @@
       if (item && item.key && filterKeys.indexOf(item.key) < 0) filterKeys.push(item.key);
     });
     global.favoriteKeys = filterKeys;
-    localStorage.setItem("favoriteKeys", JSON.stringify(filterKeys));
+    try { localStorage.setItem("favoriteKeys", JSON.stringify(filterKeys)); } catch (_) {}
     global.favoriteOnly = true;
     var button = document.getElementById("favoriteBtn");
     if (button) button.classList.add("on");
