@@ -39,7 +39,7 @@ assert.match(
   /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
-assert.match(htmlSource, /map\.js\?v=8\.1\.0-persistent-building-info/);
+assert.match(htmlSource, /map\.js\?v=8\.1\.1-compact-admin-clusters/);
 assert.match(htmlSource, /script\.js\?v=6\.5\.57-naver-roadview-split/);
 assert.match(scriptSource, /더블클릭하면 스마트 매물카드 열기/);
 assert.match(

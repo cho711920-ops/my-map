@@ -553,24 +553,27 @@ function createAdministrativeClustersV655(addressGroups, mode) {
         items: [],
         weightedLat: 0,
         weightedLng: 0,
-        totalWeight: 0,
+        addressPointCount: 0,
         regionMode: mode,
         regionLabel: label,
         districtLabel: region.district || ""
       };
     }
 
-    var weight = Math.max(1, (group.items || []).length);
+    /*
+     * 행정동 이름표의 위치는 매물 수가 아니라 서로 다른 지번주소의 중심으로 잡습니다.
+     * 한 주소에 원본매물이 많이 붙어도 이름표가 그 주소 쪽으로 쏠리지 않게 합니다.
+     */
     cells[regionKey].groups.push(group);
     cells[regionKey].items = cells[regionKey].items.concat(group.items || []);
-    cells[regionKey].weightedLat += Number(group.latlng.getLat()) * weight;
-    cells[regionKey].weightedLng += Number(group.latlng.getLng()) * weight;
-    cells[regionKey].totalWeight += weight;
+    cells[regionKey].weightedLat += Number(group.latlng.getLat());
+    cells[regionKey].weightedLng += Number(group.latlng.getLng());
+    cells[regionKey].addressPointCount += 1;
   });
 
   return Object.keys(cells).sort().map(function(regionKey) {
     var cluster = cells[regionKey];
-    var weight = cluster.totalWeight || 1;
+    var weight = cluster.addressPointCount || 1;
     cluster.latlng = new kakao.maps.LatLng(
       cluster.weightedLat / weight,
       cluster.weightedLng / weight
@@ -581,11 +584,166 @@ function createAdministrativeClustersV655(addressGroups, mode) {
 }
 
 
+function estimateAdministrativeClusterBoxV656(cluster) {
+  var label = String(cluster && cluster.regionLabel || "");
+  var count = String(((cluster && cluster.items) || []).length || 0);
+  var contentWidth = Math.max(label.length * 12, (count.length + 3) * 6.2);
+
+  return {
+    width: Math.max(54, Math.min(72, Math.ceil(contentWidth + 14))),
+    height: 40
+  };
+}
+
+
+function administrativeBoxesOverlapV656(first, second, gap) {
+  var spacing = Number(gap) || 0;
+  return first.left < second.right + spacing &&
+    first.right + spacing > second.left &&
+    first.top < second.bottom + spacing &&
+    first.bottom + spacing > second.top;
+}
+
+
+/*
+ * 동 이름표가 많은 화면에서도 서로 가리지 않도록 화면 좌표에서 가까운 빈자리를 찾습니다.
+ * 실제 행정동 중심(cluster.latlng)은 그대로 두고 표시 위치(displayLatlng)만 소폭 이동하므로,
+ * 이름표를 눌렀을 때 확대되는 중심은 원래 위치를 유지합니다.
+ */
+function resolveAdministrativeClusterPositionsV656(clusters) {
+  if (!map || typeof map.getProjection !== "function" || typeof document === "undefined") {
+    return clusters || [];
+  }
+
+  var projection = map.getProjection();
+  var mapElement = document.getElementById("map");
+  var width = mapElement ? Number(mapElement.clientWidth) || 0 : 0;
+  var height = mapElement ? Number(mapElement.clientHeight) || 0 : 0;
+  if (!projection || !width || !height) return clusters || [];
+
+  var candidates = [];
+  var step = 10;
+  var maxRing = 14;
+
+  for (var offsetX = -maxRing; offsetX <= maxRing; offsetX += 1) {
+    for (var offsetY = -maxRing; offsetY <= maxRing; offsetY += 1) {
+      candidates.push({
+        x: offsetX * step,
+        y: offsetY * step,
+        distance: offsetX * offsetX + offsetY * offsetY
+      });
+    }
+  }
+
+  candidates.sort(function(first, second) {
+    return first.distance - second.distance ||
+      Math.abs(first.y) - Math.abs(second.y) ||
+      Math.abs(first.x) - Math.abs(second.x) ||
+      first.y - second.y ||
+      first.x - second.x;
+  });
+
+  var rows = (clusters || []).map(function(cluster) {
+    return {
+      cluster: cluster,
+      point: projection.containerPointFromCoords(cluster.latlng)
+    };
+  }).filter(function(row) {
+    return !!row.point;
+  }).sort(function(first, second) {
+    return first.point.y - second.point.y ||
+      first.point.x - second.point.x ||
+      String(first.cluster.regionLabel || "").localeCompare(String(second.cluster.regionLabel || ""), "ko");
+  });
+
+  var placedBoxes = [];
+  rows.forEach(function(row) {
+    var boxSize = estimateAdministrativeClusterBoxV656(row.cluster);
+    var halfWidth = boxSize.width / 2;
+    var halfHeight = boxSize.height / 2;
+    var chosen = null;
+
+    for (var candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+      var candidate = candidates[candidateIndex];
+      var centerX = Math.max(halfWidth + 4, Math.min(width - halfWidth - 4, row.point.x + candidate.x));
+      var centerY = Math.max(halfHeight + 4, Math.min(height - halfHeight - 4, row.point.y + candidate.y));
+      var box = {
+        left: centerX - halfWidth,
+        right: centerX + halfWidth,
+        top: centerY - halfHeight,
+        bottom: centerY + halfHeight
+      };
+      var overlaps = placedBoxes.some(function(placed) {
+        return administrativeBoxesOverlapV656(box, placed, 4);
+      });
+
+      if (!overlaps) {
+        chosen = { point: new kakao.maps.Point(centerX, centerY), box: box };
+        break;
+      }
+    }
+
+    /*
+     * 밀집도가 아주 높은 화면에서는 가까운 후보가 모두 찰 수 있습니다.
+     * 그때는 화면 전체의 소형 격자 중 원래 위치와 가장 가까운 빈칸을 사용합니다.
+     */
+    if (!chosen) {
+      var fallbackCandidates = [];
+      var fallbackStepX = boxSize.width + 4;
+      var fallbackStepY = boxSize.height + 4;
+
+      for (var fallbackY = halfHeight + 4; fallbackY <= height - halfHeight - 4; fallbackY += fallbackStepY) {
+        for (var fallbackX = halfWidth + 4; fallbackX <= width - halfWidth - 4; fallbackX += fallbackStepX) {
+          fallbackCandidates.push({
+            x: fallbackX,
+            y: fallbackY,
+            distance: Math.pow(fallbackX - row.point.x, 2) + Math.pow(fallbackY - row.point.y, 2)
+          });
+        }
+      }
+
+      fallbackCandidates.sort(function(first, second) {
+        return first.distance - second.distance || first.y - second.y || first.x - second.x;
+      });
+
+      for (var fallbackIndex = 0; fallbackIndex < fallbackCandidates.length; fallbackIndex += 1) {
+        var fallback = fallbackCandidates[fallbackIndex];
+        var fallbackBox = {
+          left: fallback.x - halfWidth,
+          right: fallback.x + halfWidth,
+          top: fallback.y - halfHeight,
+          bottom: fallback.y + halfHeight
+        };
+        var fallbackOverlaps = placedBoxes.some(function(placed) {
+          return administrativeBoxesOverlapV656(fallbackBox, placed, 4);
+        });
+
+        if (!fallbackOverlaps) {
+          chosen = {
+            point: new kakao.maps.Point(fallback.x, fallback.y),
+            box: fallbackBox
+          };
+          break;
+        }
+      }
+    }
+
+    if (!chosen) return;
+    placedBoxes.push(chosen.box);
+    row.cluster.displayLatlng = projection.coordsFromContainerPoint(chosen.point);
+  });
+
+  return clusters || [];
+}
+
+
 function createClustersForCurrentZoomV655(addressGroups) {
   var mode = getAdministrativeClusterModeV655(map && map.getLevel ? map.getLevel() : 0);
-  return mode
-    ? createAdministrativeClustersV655(addressGroups, mode)
-    : createDynamicClusters(addressGroups);
+  if (!mode) return createDynamicClusters(addressGroups);
+
+  return resolveAdministrativeClusterPositionsV656(
+    createAdministrativeClustersV655(addressGroups, mode)
+  );
 }
 
 
@@ -1651,7 +1809,7 @@ function drawMapClustersOnlyV639(items) {
     );
 
     var overlay = new kakao.maps.CustomOverlay({
-      position: cluster.latlng,
+      position: cluster.displayLatlng || cluster.latlng,
       content: overlayContent,
       yAnchor: 0.5,
       xAnchor: 0.5

@@ -8248,7 +8248,7 @@ body,
   }
 }
 
-/* v6.5.31 행정구역 단계형 클러스터와 수량별 크기 변화 */
+/* v6.5.32 대량 수집용 소형 행정구역 클러스터 */
 .circle-marker.cluster-size-sm {
   --cluster-size: 36px !important;
   --cluster-font-size: 13.5px !important;
@@ -8276,52 +8276,47 @@ body,
 
 .circle-marker.admin-region-cluster-v655 {
   width: auto !important;
-  min-width: 76px !important;
+  min-width: 54px !important;
+  max-width: 72px !important;
   height: auto !important;
-  min-height: 56px !important;
-  padding: 9px 13px !important;
+  min-height: 40px !important;
+  padding: 6px 7px !important;
   display: grid !important;
-  gap: 4px !important;
-  border: 1px solid rgba(148, 163, 184, .38) !important;
-  border-radius: 13px !important;
-  background: rgba(255, 255, 255, .94) !important;
+  gap: 2px !important;
+  border: 1px solid rgba(148, 163, 184, .34) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, .91) !important;
   color: #0f172a !important;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, .18) !important;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, .15) !important;
   font-family: var(--js-app-font) !important;
-  letter-spacing: -.3px !important;
+  letter-spacing: -.2px !important;
   white-space: nowrap !important;
-  backdrop-filter: blur(4px) !important;
+  backdrop-filter: blur(2px) !important;
 }
 
 .circle-marker.admin-region-cluster-v655 strong {
   display: block;
-  font-size: 15px;
+  font-size: 12.5px !important;
   font-weight: 900;
-  line-height: 1.05;
+  line-height: 1 !important;
 }
 
 .circle-marker.admin-region-cluster-v655 span {
   display: block;
   color: #334155;
-  font-size: 12px;
+  font-size: 10.5px !important;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1 !important;
 }
 
+.circle-marker.admin-region-cluster-v655.cluster-size-sm,
+.circle-marker.admin-region-cluster-v655.cluster-size-md,
+.circle-marker.admin-region-cluster-v655.cluster-size-lg,
 .circle-marker.admin-region-cluster-v655.cluster-size-xl,
 .circle-marker.admin-region-cluster-v655.cluster-size-xxl {
-  min-width: 88px !important;
-  min-height: 62px !important;
-  padding: 10px 15px !important;
-}
-
-.circle-marker.admin-region-cluster-v655.cluster-size-xl strong,
-.circle-marker.admin-region-cluster-v655.cluster-size-xxl strong {
-  font-size: 17px;
-}
-
-.circle-marker.admin-region-cluster-v655.cluster-size-xl span,
-.circle-marker.admin-region-cluster-v655.cluster-size-xxl span {
-  font-size: 13px;
+  min-width: 54px !important;
+  max-width: 72px !important;
+  min-height: 40px !important;
+  padding: 6px 7px !important;
 }
 

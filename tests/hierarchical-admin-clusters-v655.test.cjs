@@ -30,8 +30,15 @@ class LatLng {
   getLng() { return this.lng; }
 }
 
+class Point {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
 const context = {
-  kakao: { maps: { LatLng } },
+  kakao: { maps: { LatLng, Point } },
   encodeURIComponent,
   console
 };
@@ -40,6 +47,9 @@ vm.runInContext([
   extractFunction("getAddressAdminRegionV655"),
   extractFunction("getAdministrativeClusterModeV655"),
   extractFunction("createAdministrativeClustersV655"),
+  extractFunction("estimateAdministrativeClusterBoxV656"),
+  extractFunction("administrativeBoxesOverlapV656"),
+  extractFunction("resolveAdministrativeClusterPositionsV656"),
   extractFunction("getPremiumClusterSizeClassV635"),
   extractFunction("buildClusterOverlayContentV655")
 ].join("\n"), context);
@@ -63,6 +73,14 @@ assert.equal(districts.length, 2);
 assert.equal(districts.find((item) => item.regionLabel === "서구").items.length, 3);
 assert.equal(districts.find((item) => item.regionLabel === "유성구").items.length, 3);
 
+const duplicateHeavyGroups = [
+  { key: "heavy", address: "서구 괴정동 1", latlng: new LatLng(36.30, 127.38), items: Array.from({ length: 100 }, () => ({})) },
+  { key: "light", address: "서구 괴정동 2", latlng: new LatLng(36.40, 127.40), items: [{}] }
+];
+const balancedCenter = context.createAdministrativeClustersV655(duplicateHeavyGroups, "neighborhood")[0];
+assert.equal(balancedCenter.latlng.getLat().toFixed(2), "36.35");
+assert.equal(balancedCenter.latlng.getLng().toFixed(2), "127.39");
+
 const neighborhoods = context.createAdministrativeClustersV655(groups, "neighborhood");
 assert.equal(neighborhoods.length, 3);
 assert.ok(neighborhoods.some((item) => item.regionLabel === "괴정동"));
@@ -73,10 +91,82 @@ assert.equal(context.getPremiumClusterSizeClassV635(10).trim(), "cluster-size-md
 assert.equal(context.getPremiumClusterSizeClassV635(600).trim(), "cluster-size-xxl");
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /admin-region-cluster-v655/);
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /매물 3/);
+assert.equal(context.estimateAdministrativeClusterBoxV656({ regionLabel: "괴정동", items: Array(9999) }).height, 40);
+assert.equal(
+  context.administrativeBoxesOverlapV656(
+    { left: 0, right: 54, top: 0, bottom: 40 },
+    { left: 60, right: 114, top: 0, bottom: 40 },
+    4
+  ),
+  false
+);
+
+context.document = {
+  getElementById() {
+    return { clientWidth: 400, clientHeight: 300 };
+  }
+};
+context.map = {
+  getProjection() {
+    return {
+      containerPointFromCoords(latlng) {
+        return new Point(latlng.getLng(), latlng.getLat());
+      },
+      coordsFromContainerPoint(point) {
+        return new LatLng(point.y, point.x);
+      }
+    };
+  }
+};
+const collidingLabels = [
+  { regionLabel: "괴정동", items: Array(120), latlng: new LatLng(150, 200) },
+  { regionLabel: "용문동", items: Array(80), latlng: new LatLng(150, 200) },
+  { regionLabel: "탄방동", items: Array(60), latlng: new LatLng(150, 200) }
+];
+context.resolveAdministrativeClusterPositionsV656(collidingLabels);
+const displayPoints = collidingLabels.map((cluster) => [
+  cluster.displayLatlng.getLng(),
+  cluster.displayLatlng.getLat()
+].join(":"));
+assert.equal(new Set(displayPoints).size, 3);
+
+context.document.getElementById = function() {
+  return { clientWidth: 1000, clientHeight: 700 };
+};
+const denseDaejeonLabels = Array.from({ length: 80 }, (_, index) => ({
+  regionLabel: `동${index + 1}`,
+  items: Array(index + 1),
+  latlng: new LatLng(350, 500)
+}));
+context.resolveAdministrativeClusterPositionsV656(denseDaejeonLabels);
+assert.equal(denseDaejeonLabels.filter((cluster) => cluster.displayLatlng).length, 80);
+
+const denseBoxes = denseDaejeonLabels.map((cluster) => {
+  const size = context.estimateAdministrativeClusterBoxV656(cluster);
+  const centerX = cluster.displayLatlng.getLng();
+  const centerY = cluster.displayLatlng.getLat();
+  return {
+    left: centerX - size.width / 2,
+    right: centerX + size.width / 2,
+    top: centerY - size.height / 2,
+    bottom: centerY + size.height / 2
+  };
+});
+for (let firstIndex = 0; firstIndex < denseBoxes.length; firstIndex += 1) {
+  for (let secondIndex = firstIndex + 1; secondIndex < denseBoxes.length; secondIndex += 1) {
+    assert.equal(
+      context.administrativeBoxesOverlapV656(denseBoxes[firstIndex], denseBoxes[secondIndex], 4),
+      false,
+      `대량 동 클러스터 ${firstIndex + 1}/${secondIndex + 1}가 겹치면 안 됩니다.`
+    );
+  }
+}
 
 assert.match(source, /function openAdministrativeClusterV655[\s\S]*?targetLevel = cluster\.regionMode === "district" \? 6 : 4/);
-assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.94\)/);
-assert.ok(html.includes("map.js?v=8.1.0-persistent-building-info"));
-assert.ok(html.includes("style.css?v=6.5.31-hierarchical-admin-clusters"));
+assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
+assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
+assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
+assert.ok(html.includes("map.js?v=8.1.1-compact-admin-clusters"));
+assert.ok(html.includes("style.css?v=6.5.32-compact-admin-clusters"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");

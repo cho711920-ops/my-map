@@ -52,6 +52,6 @@ assert.match(mapSource, /var rows = parseCSVRecordsV655\(data\);/);
 assert.match(mapSource, /var c = rows\[i\];/);
 assert.doesNotMatch(mapSource, /data\.trim\(\)\.split\("\\n"\)/);
 assert.match(indexSource, /js\/script\.js\?v=6\.5\.57-naver-roadview-split/);
-assert.match(indexSource, /js\/map\.js\?v=8\.1\.0-persistent-building-info/);
+assert.match(indexSource, /js\/map\.js\?v=8\.1\.1-compact-admin-clusters/);
 
 console.log("multiline memo CSV tests passed");
