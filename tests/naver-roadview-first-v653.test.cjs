@@ -35,10 +35,13 @@ assert.match(script, /location\.photodate \|\| location\.photoDate/);
 assert.match(api, /process\.env\.NAVER_MAPS_NCP_KEY_ID/);
 assert.doesNotMatch(api, /CLIENT_SECRET|NAVER_MAPS_NCP_KEY_ID\s*=\s*["']/);
 assert.match(api, /Cache-Control", "no-store/);
+assert.match(api, /NAVER_MAPS_INVALID_CONFIG/);
+assert.match(api, /X-NCP-APIGW-API-KEY-ID/);
+assert.match(script, /function isInvalidNaverMapsKeyV662/);
 
 assert.match(css, /#naverRoadviewTabBtn\.active/);
 assert.match(css, /\.naver-roadview-capture-info-v653/);
-assert.match(html, /script\.js\?v=6\.5\.61-confirmed-visit-shimmer/);
+assert.match(html, /script\.js\?v=6\.5\.62-naver-map-auth-guard/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.35-visible-shimmer-confirmed/);
 
 console.log("NAVER-first roadview v6.5.53 tests passed");

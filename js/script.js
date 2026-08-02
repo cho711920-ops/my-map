@@ -1706,6 +1706,19 @@ if (!window.__jsNaverRoadviewResizeBoundV654) {
 }
 
 
+function isInvalidNaverMapsKeyV662(value) {
+  var normalized = String(value || "").trim().toUpperCase();
+  return !normalized || [
+    "X-NCP-APIGW-API-KEY-ID",
+    "YOUR_CLIENT_ID",
+    "YOUR_NCP_KEY_ID",
+    "NAVER_MAPS_NCP_KEY_ID",
+    "PLACEHOLDER",
+    "UNDEFINED",
+    "NULL"
+  ].indexOf(normalized) >= 0;
+}
+
 function loadNaverMapsSdkV653() {
   if (
     window.naver &&
@@ -1753,7 +1766,9 @@ function loadNaverMapsSdkV653() {
     })
     .then(function(config) {
       var ncpKeyId = String(config && config.ncpKeyId || "").trim();
-      if (!ncpKeyId) throw new Error("NAVER_MAPS_KEY_MISSING");
+      if (isInvalidNaverMapsKeyV662(ncpKeyId)) {
+        throw new Error("NAVER_MAPS_KEY_INVALID");
+      }
 
       return new Promise(function(resolve, reject) {
         var existing = document.getElementById("naverMapsSdkV653");

@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.61-confirmed-visit-shimmer"),
+  html.includes("script.js?v=6.5.62-naver-map-auth-guard"),
   "the production page must load the fixed script cache version"
 );
 
