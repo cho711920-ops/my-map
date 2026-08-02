@@ -38,6 +38,7 @@
 .sort-choice-check{position:relative;display:inline-flex;width:17px;height:17px;flex:0 0 17px;align-items:center;justify-content:center;border:1.5px solid #9aabc0;border-radius:5px;background:#fff}
 .sort-menu-check.selected .sort-choice-check{border-color:#1677e8;background:#1677e8}
 .sort-menu-check.selected .sort-choice-check::after{content:"";width:7px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:translateY(-1px) rotate(-45deg)}
+.sort-dropdown-menu .sort-menu-check.selected::before,.v6-mobile-menu-body .sort-menu-check.selected::before{display:none!important;content:none!important}
 .sort-address-row>span{min-width:54px!important}
 .sort-address-row>button{min-width:68px!important;text-align:center!important}
 .v6-command-divider{height:1px;background:#e8edf3;margin:4px}
