@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.54-naver-panorama-ready"),
+  html.includes("script.js?v=6.5.55-unified-memo-toggle"),
   "the production page must load the fixed script cache version"
 );
 

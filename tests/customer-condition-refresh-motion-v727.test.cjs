@@ -7,7 +7,7 @@ const operationsCss = fs.readFileSync("css/operations-center-v7.css", "utf8");
 const unified = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.4-condition-refresh-motion/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.5-unified-memo-toggle/);
 assert.match(html, /operations-center-v7\.js\?v=7\.20\.4-condition-refresh-motion/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.33-detail-drawer-motion/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.17-detail-drawer-motion/);

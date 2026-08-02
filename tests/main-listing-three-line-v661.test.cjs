@@ -15,10 +15,10 @@ assert.match(script, /var favoriteHeaderButtonV661 = "";/);
 assert.doesNotMatch(script, /favoriteHeaderButtonV661 = !customerMatchControls/);
 assert.match(script, /buildCardActionIconV662\('roadview'\)/);
 assert.match(script, /buildCardActionIconV662\('settings'\)/);
-assert.match(script, /buildMemoEmojiIconV664\(\)/);
+assert.doesNotMatch(script, /buildMemoEmojiIconV664\(\)/);
 assert.match(script, /div\.onpointerenter = function\(\)/);
 assert.match(script, /JSUnifiedListingsV8\.prefetch/);
-assert.match(script, /toggle\.innerHTML = '<span class="item-action-text-v661">'/);
+assert.match(script, /toggle\.innerHTML = '<span class="item-memo-label-v728">'/);
 assert.match(script, /toggle\.setAttribute\("aria-label", "메모 " \+ \(isOpen \? "닫기" : "열기"\)\)/);
 
 assert.match(unified, /masterMeta:\s*\{\}/);
@@ -46,6 +46,6 @@ assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !impo
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.33-detail-drawer-motion/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.17-detail-drawer-motion/);
-assert.match(html, /script\.js\?v=6\.5\.54-naver-panorama-ready/);
+assert.match(html, /script\.js\?v=6\.5\.55-unified-memo-toggle/);
 
 console.log("main listing three-line v6.6.1 tests passed");

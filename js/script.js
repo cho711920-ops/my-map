@@ -2436,9 +2436,9 @@ function refreshMemoCardV655(key, focusEditor) {
     toggle.classList.toggle("on", isOpen);
     toggle.setAttribute("title", "메모 " + (isOpen ? "닫기" : "열기"));
     toggle.setAttribute("aria-label", "메모 " + (isOpen ? "닫기" : "열기"));
-    toggle.innerHTML = '<span class="item-action-text-v661">' +
+    toggle.innerHTML = '<span class="item-memo-label-v728">' +
       (isOpen ? '메모 ▲' : '메모 ▼') +
-      '</span>' + buildMemoEmojiIconV664();
+      '</span>';
   }
   if (panel) panel.remove();
   if (isOpen && item) {
@@ -2825,10 +2825,6 @@ function buildCardActionIconV662(type) {
   return '<span class="item-action-icon-v662 item-action-icon-' + type + '-v662">' + (icons[type] || '') + '</span>';
 }
 
-function buildMemoEmojiIconV664() {
-  return '<span class="item-action-emoji-v664" aria-hidden="true">📝</span>';
-}
-
 function buildFavoriteStarIconV663(active) {
   return '<svg class="favorite-star-icon-v663" viewBox="0 0 24 24" aria-hidden="true">' +
     '<path d="M12 3.3 14.7 8.8l6 .9-4.35 4.25 1.03 6L12 17.1l-5.38 2.85 1.03-6L3.3 9.7l6-.9L12 3.3Z" ' +
@@ -3101,8 +3097,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
       'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
       'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
-      '<span class="item-action-text-v661">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
-      buildMemoEmojiIconV664() +
+      '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
     '</button>';
 
   var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";

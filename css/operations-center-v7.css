@@ -551,3 +551,59 @@ body.customer-crm-open{overflow:hidden}
     font-weight:900;
   }
 }
+
+/* v7.20.5 메인·고객매칭·고객지도 메모 버튼 공통 규격 */
+.item-memo-toggle .item-memo-label-v728{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  white-space:nowrap!important;
+  font-family:"Pretendard Variable",Pretendard,sans-serif!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  line-height:1!important;
+  letter-spacing:-.2px!important;
+}
+.item-memo-toggle .item-action-emoji-v664{display:none!important}
+.item-memo-toggle:after{content:none!important;display:none!important}
+
+@media(min-width:769px){
+  .standard-card-main-v661 .item-compact-actions-v650{
+    grid-template-columns:minmax(0,1fr) 52px!important;
+  }
+  .customer-match-map-card-main-v721 .item-compact-actions-v650.customer-match-map-actions-v721{
+    grid-template-columns:minmax(181px,1fr) 52px auto!important;
+  }
+  .standard-card-main-v661 .item-compact-actions-v650>.item-memo-toggle,
+  #list .customer-match-map-card-main-v721 .customer-match-map-actions-v721>.item-memo-toggle,
+  #operationsCustomersPanel .operations-match-listing-cards-v719 .customer-match-card-actions-v653 .item-memo-toggle{
+    display:inline-flex!important;
+    width:52px!important;
+    min-width:52px!important;
+    max-width:52px!important;
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    align-items:center!important;
+    justify-content:center!important;
+    margin:0!important;
+    padding:0 7px!important;
+    border:1px solid #c9a7f5!important;
+    border-radius:7px!important;
+    background:#f4ecff!important;
+    color:#6321ad!important;
+    box-sizing:border-box!important;
+    font-size:12px!important;
+    line-height:28px!important;
+  }
+  .standard-card-main-v661 .item-compact-actions-v650>.item-memo-toggle.on,
+  #list .customer-match-map-card-main-v721 .customer-match-map-actions-v721>.item-memo-toggle.on,
+  #operationsCustomersPanel .operations-match-listing-cards-v719 .customer-match-card-actions-v653 .item-memo-toggle.on{
+    border-color:#9a6de0!important;
+    background:#eadcff!important;
+    color:#4f168f!important;
+  }
+  #operationsCustomersPanel .operations-match-listing-cards-v719 .customer-match-card-actions-v653 .item-memo-toggle .item-memo-label-v728{
+    display:inline-flex!important;
+  }
+}

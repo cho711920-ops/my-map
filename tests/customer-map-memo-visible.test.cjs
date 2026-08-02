@@ -50,6 +50,6 @@ assert.match(operations, /compactStatus\.hidden = false/);
 assert.match(operations, /compactStatus\.hidden = true/);
 assert.match(unifiedCss, /\.map-quick-tools\s*\{[^}]*\+ 2px\)/s);
 assert.match(unifiedCss, /\.header\s*\{[^}]*justify-content:\s*center\s*!important[^}]*font-size:\s*27px\s*!important/s);
-assert.match(html, /script\.js\?v=6\.5\.54-naver-panorama-ready/);
+assert.match(html, /script\.js\?v=6\.5\.55-unified-memo-toggle/);
 
 console.log("customer map card layout tests passed");
