@@ -12,6 +12,7 @@
   var cloudRevisions = { favorite: 0, visit: 0 };
   var pendingCloudSave = { favorite: false, visit: false };
   var memoryLists = { favorite: null, visit: null };
+  var deletedListIds = { favorite: null, visit: null };
   var cloudSyncReady = false;
 
   function getSelectedItemKeys() {
@@ -71,6 +72,54 @@
 
   function dirtyKey(type) {
     return "js_list_sync_dirty_v6_" + type;
+  }
+
+  function deletedKey(type) {
+    return "js_list_deleted_ids_v6_" + type;
+  }
+
+  function loadDeletedIds(type) {
+    type = type === "visit" ? "visit" : "favorite";
+    if (deletedListIds[type] && typeof deletedListIds[type] === "object") return deletedListIds[type];
+    try {
+      var parsed = JSON.parse(localStorage.getItem(deletedKey(type)) || "{}");
+      deletedListIds[type] = parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      deletedListIds[type] = {};
+    }
+    return deletedListIds[type];
+  }
+
+  function persistDeletedIds(type) {
+    try { localStorage.setItem(deletedKey(type), JSON.stringify(loadDeletedIds(type))); } catch (_) {}
+  }
+
+  function markDeletedListId(type, id) {
+    id = String(id || "").trim();
+    if (!id) return;
+    loadDeletedIds(type)[id] = Date.now();
+    persistDeletedIds(type);
+  }
+
+  function hasDeletedListIds(type) {
+    return Object.keys(loadDeletedIds(type)).length > 0;
+  }
+
+  function excludeDeletedLists(type, lists) {
+    var deleted = loadDeletedIds(type);
+    return (Array.isArray(lists) ? lists : []).filter(function(list) {
+      return !list || !list.id || !deleted[String(list.id)];
+    });
+  }
+
+  function clearSyncedDeletedIds(type, lists) {
+    var active = {};
+    (lists || []).forEach(function(list) { if (list && list.id) active[String(list.id)] = true; });
+    var deleted = loadDeletedIds(type);
+    Object.keys(deleted).forEach(function(id) {
+      if (!active[id]) delete deleted[id];
+    });
+    persistDeletedIds(type);
   }
 
   function isCloudDirty(type) {
@@ -158,6 +207,7 @@
         cloudSaveRetries[type] = 0;
         pendingCloudSave[type] = false;
         if (revision === Number(cloudRevisions[type] || 0) && snapshot === JSON.stringify(loadLists(type))) {
+          clearSyncedDeletedIds(type, lists);
           try { localStorage.removeItem(dirtyKey(type)); } catch (_) {}
           return;
         }
@@ -184,7 +234,7 @@
 
   async function loadCloudLists(type) {
     var revisionAtStart = Number(cloudRevisions[type] || 0);
-    var dirtyAtStart = isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0;
+    var dirtyAtStart = isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0 || hasDeletedListIds(type);
     var url = (window.saveApiURL || "/api/apps-script") +
       "?action=loadCloudState&scope=" + encodeURIComponent(cloudScope(type)) +
       "&recordKey=default&_=" + Date.now();
@@ -194,13 +244,14 @@
     if (!result.ok) throw new Error(result.message || "목록 동기화에 실패했습니다.");
     var local = loadLists(type);
     if (result.found && Array.isArray(result.data)) {
+      var remoteLists = excludeDeletedLists(type, result.data);
       if (dirtyAtStart || revisionAtStart !== Number(cloudRevisions[type] || 0)) {
-        var merged = mergeCloudAndLocalLists(result.data, local);
+        var merged = mergeCloudAndLocalLists(remoteLists, local);
         saveLists(type, merged, { remote: true });
         try { localStorage.setItem(dirtyKey(type), "1"); } catch (_) {}
         return { found: true, needsPush: true };
       }
-      saveLists(type, result.data, { remote: true });
+      saveLists(type, remoteLists, { remote: true });
       return { found: true, needsPush: false };
     }
     return { found: false, needsPush: local.length > 0 };
@@ -702,6 +753,11 @@
   window.JSV6ListStore = {
     load: function (type) { return loadLists(type === "visit" ? "visit" : "favorite"); },
     save: function (type, lists) { return saveLists(type === "visit" ? "visit" : "favorite", lists); },
+    remove: function (type, id, lists) {
+      type = type === "visit" ? "visit" : "favorite";
+      markDeletedListId(type, id);
+      return saveLists(type, lists);
+    },
     getItem: getItem
   };
 

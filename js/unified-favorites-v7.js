@@ -183,8 +183,28 @@
       }
     });
 
-    if (changed) save(favorites);
+    if (changed && !save(favorites)) return false;
+    var api = store();
+    if (api && typeof api.remove === "function") {
+      visits.forEach(function (visit) {
+        if (visit && visit.id) api.remove("visit", visit.id, []);
+      });
+    } else if (api && typeof api.save === "function") {
+      try {
+        if (api.save("visit", []) === false) return changed;
+      } catch (error) {
+        console.warn("이전 임장목록 정리 실패", error);
+      }
+    }
     return changed;
+  }
+
+  function clearSavedSelection() {
+    if (state.source !== "selection" || !state.pendingRefs.length) return;
+    state.pendingRefs = [];
+    if (typeof global.clearSelectedPrintItems === "function") {
+      global.clearSelectedPrintItems();
+    }
   }
 
   function ensureModal() {
@@ -348,6 +368,7 @@
       showToast("같은 이름의 찜폴더가 이미 있습니다.", "warning");
       return;
     }
+    var addedCount = state.pendingRefs.length;
     var list = {id: uid(), name: name, itemKeys: state.pendingRefs.slice(), createdAt: nowIso(), updatedAt: nowIso()};
     lists.push(list);
     if (!save(lists)) {
@@ -357,8 +378,9 @@
     }
     state.expanded[list.id] = true;
     if (input) input.value = "";
+    clearSavedSelection();
     render();
-    showToast('"' + name + '" 폴더를 만들었습니다.' + (state.pendingRefs.length ? " 선택매물도 담았습니다." : ""));
+    showToast('"' + name + '" 폴더를 만들었습니다.' + (addedCount ? " 선택매물도 담았습니다." : ""));
     reconcileSavedFolder(list);
     if (typeof global.applyFilter === "function") global.applyFilter();
   };
@@ -383,6 +405,7 @@
     }
     reconcileSavedFolder(list);
     state.expanded[id] = true;
+    clearSavedSelection();
     render();
     showToast((merged.length - before.length) + "개 매물을 찜폴더에 담았습니다.", merged.length > before.length ? "success" : "info");
     if (typeof global.applyFilter === "function") global.applyFilter();
@@ -425,7 +448,11 @@
     var list = lists.find(function (entry) { return String(entry.id) === String(id); });
     if (!list) return;
     lists = lists.filter(function (entry) { return String(entry.id) !== String(id); });
-    if (!save(lists)) {
+    var api = store();
+    var saved = api && typeof api.remove === "function"
+      ? api.remove("favorite", id, lists) !== false
+      : save(lists);
+    if (!saved) {
       showToast("찜폴더를 삭제하지 못했습니다. 다시 시도해 주세요.", "warning");
       return;
     }
