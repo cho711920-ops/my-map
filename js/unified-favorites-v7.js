@@ -87,6 +87,40 @@
     });
   }
 
+  function reconcileSavedFolder(savedFolder) {
+    global.setTimeout(function () {
+      var latest = load("favorite");
+      var current = latest.find(function (entry) {
+        return String(entry.id) === String(savedFolder.id);
+      });
+      var expectedRefs = uniqueRefs(savedFolder.itemKeys || []);
+      var changed = false;
+      if (!current) {
+        latest.push({
+          id: savedFolder.id,
+          name: savedFolder.name,
+          itemKeys: expectedRefs,
+          createdAt: savedFolder.createdAt || nowIso(),
+          updatedAt: savedFolder.updatedAt || nowIso()
+        });
+        changed = true;
+      } else {
+        var mergedRefs = uniqueRefs((current.itemKeys || []).concat(expectedRefs));
+        if (JSON.stringify(mergedRefs) !== JSON.stringify(uniqueRefs(current.itemKeys || []))) {
+          current.itemKeys = mergedRefs;
+          current.updatedAt = nowIso();
+          changed = true;
+        }
+      }
+      if (changed && !save(latest)) {
+        showToast("찜폴더 저장을 다시 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "warning");
+        return;
+      }
+      var modal = document.getElementById("unifiedFavoriteModalV7");
+      if (modal && modal.classList.contains("open")) render();
+    }, 450);
+  }
+
   function getSelectedRefs() {
     var selectedItems = typeof global.getSelectedPrintItems === "function"
       ? global.getSelectedPrintItems()
@@ -170,23 +204,18 @@
             '<button type="button" aria-label="찜목록 닫기" onclick="closeUnifiedFavoritesV7()">×</button>' +
           '</div>' +
         '</header>' +
-        '<div class="unified-favorite-create-v7">' +
+        '<form id="unifiedFavoriteCreateFormV7" class="unified-favorite-create-v7">' +
           '<label for="unifiedFavoriteNameV7">찜폴더명</label>' +
           '<input id="unifiedFavoriteNameV7" type="text" maxlength="30" placeholder="새 찜폴더 이름">' +
-          '<button id="unifiedFavoriteAddV7" type="button">폴더 추가</button>' +
-        '</div>' +
+          '<button id="unifiedFavoriteAddV7" type="submit">폴더 추가</button>' +
+        '</form>' +
         '<div id="unifiedFavoriteBodyV7" class="unified-favorite-body-v7"></div>' +
       '</section>';
     document.body.appendChild(modal);
-    var input = document.getElementById("unifiedFavoriteNameV7");
-    var addButton = document.getElementById("unifiedFavoriteAddV7");
-    if (input) input.addEventListener("keydown", function (event) {
-      if (event.key !== "Enter" || event.isComposing) return;
+    var createForm = document.getElementById("unifiedFavoriteCreateFormV7");
+    if (createForm) createForm.addEventListener("submit", function (event) {
       event.preventDefault();
-      global.createUnifiedFavoriteFolderV7();
-    });
-    if (addButton) addButton.addEventListener("click", function () {
-      global.createUnifiedFavoriteFolderV7();
+      global.createUnifiedFavoriteFolderV7(event);
     });
   }
 
@@ -305,7 +334,8 @@
     open({source: "selection", refs: refs});
   };
 
-  global.createUnifiedFavoriteFolderV7 = function () {
+  global.createUnifiedFavoriteFolderV7 = function (event) {
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
     var input = document.getElementById("unifiedFavoriteNameV7");
     var name = String(input && input.value || "").trim();
     if (!name) {
@@ -329,18 +359,7 @@
     if (input) input.value = "";
     render();
     showToast('"' + name + '" 폴더를 만들었습니다.' + (state.pendingRefs.length ? " 선택매물도 담았습니다." : ""));
-    global.setTimeout(function () {
-      var latest = load("favorite");
-      if (!latest.some(function (entry) { return String(entry.id) === String(list.id); })) {
-        latest.push(list);
-        if (!save(latest)) {
-          showToast("찜폴더 계정 동기화를 확인하지 못했습니다. 다시 시도해 주세요.", "warning");
-          return;
-        }
-      }
-      var modal = document.getElementById("unifiedFavoriteModalV7");
-      if (modal && modal.classList.contains("open")) render();
-    }, 400);
+    reconcileSavedFolder(list);
     if (typeof global.applyFilter === "function") global.applyFilter();
   };
 
@@ -358,7 +377,11 @@
     var merged = uniqueRefs(before.concat(state.pendingRefs));
     list.itemKeys = merged;
     list.updatedAt = nowIso();
-    save(lists);
+    if (!save(lists)) {
+      showToast("선택매물을 찜폴더에 저장하지 못했습니다. 다시 시도해 주세요.", "warning");
+      return;
+    }
+    reconcileSavedFolder(list);
     state.expanded[id] = true;
     render();
     showToast((merged.length - before.length) + "개 매물을 찜폴더에 담았습니다.", merged.length > before.length ? "success" : "info");
@@ -401,9 +424,11 @@
     var lists = load("favorite");
     var list = lists.find(function (entry) { return String(entry.id) === String(id); });
     if (!list) return;
-    if (!global.confirm('"' + list.name + '" 찜폴더를 삭제할까요?\n매물 원본은 삭제되지 않습니다.')) return;
     lists = lists.filter(function (entry) { return String(entry.id) !== String(id); });
-    save(lists);
+    if (!save(lists)) {
+      showToast("찜폴더를 삭제하지 못했습니다. 다시 시도해 주세요.", "warning");
+      return;
+    }
     delete state.expanded[id];
     render();
     showToast("찜폴더를 삭제했습니다.");
