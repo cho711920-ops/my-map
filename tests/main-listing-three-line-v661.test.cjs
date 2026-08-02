@@ -44,8 +44,8 @@ assert.match(css, /grid-template-columns:\s*32px 44px 56px 44px 44px 104px/);
 assert.match(css, /\.item-nav-btn \.item-action-text-v661,[\s\S]*?display:\s*inline !important/);
 assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !important;[\s\S]*?font-size:\s*12\.5px !important/);
 
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.28-customer-match-map-menu/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.29-customer-match-map-fixes/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.16-action-labels/);
-assert.match(html, /script\.js\?v=6\.5\.50-customer-match-map-menu/);
+assert.match(html, /script\.js\?v=6\.5\.51-customer-match-map-fixes/);
 
 console.log("main listing three-line v6.6.1 tests passed");

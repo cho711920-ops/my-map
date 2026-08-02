@@ -912,6 +912,27 @@
     });
   };
 
+  function syncCustomerMatchMapStatusV722(customerId, customerName) {
+    var id = text(customerId || window.customerMatchMapCustomerIdV722);
+    if (!id) return;
+    var name = text(customerName || window.customerMatchMapCustomerNameV722) || "선택 고객";
+    var stats = customerMatchStats(id);
+    var statusLabel = name + " · 신규 " + stats.fresh + " · 후보 " + stats.introduced + " · 보류 " + stats.held;
+    var statusText = document.getElementById("customerMatchMapStatusText");
+    var compactStatus = document.getElementById("customerMatchMapStatusCompactV2");
+    var compactStatusText = document.getElementById("customerMatchMapStatusCompactTextV2");
+    var overlayStatus = document.getElementById("customerMatchMapStatusOverlayV722");
+    var overlayStatusText = document.getElementById("customerMatchMapStatusOverlayTextV722");
+    if (statusText) statusText.textContent = statusLabel;
+    if (compactStatusText) compactStatusText.textContent = statusLabel;
+    if (compactStatus) compactStatus.title = statusLabel;
+    if (overlayStatusText) overlayStatusText.textContent = statusLabel;
+    if (overlayStatus) {
+      overlayStatus.hidden = false;
+      overlayStatus.title = statusLabel;
+    }
+  }
+
   window.showSelectedCustomerMatchesOnMap = function() {
     if (typeof window.clearPinnedClusterSelectionV6515 === "function") {
       window.clearPinnedClusterSelectionV6515(true);
@@ -944,16 +965,12 @@
     });
     var name = customerRow ? field(customerRow, state.customerHeaders, "고객명/상호") : "선택 고객";
     var status = document.getElementById("customerMatchMapStatus");
-    var statusText = document.getElementById("customerMatchMapStatusText");
     var compactStatus = document.getElementById("customerMatchMapStatusCompactV2");
-    var compactStatusText = document.getElementById("customerMatchMapStatusCompactTextV2");
     if (status) status.hidden = false;
     if (compactStatus) compactStatus.hidden = false;
-    var stats = customerMatchStats(customerId);
-    var statusLabel = name + " · 신규 " + stats.fresh + " · 후보 " + stats.introduced + " · 보류 " + stats.held;
-    if (statusText) statusText.textContent = statusLabel;
-    if (compactStatusText) compactStatusText.textContent = statusLabel;
-    if (compactStatus) compactStatus.title = statusLabel;
+    window.customerMatchMapCustomerIdV722 = customerId;
+    window.customerMatchMapCustomerNameV722 = name;
+    syncCustomerMatchMapStatusV722(customerId, name);
     syncCustomerMatchHeldToggleV1();
 
     var matched = (window.allItems || []).filter(function(item) {
@@ -988,8 +1005,12 @@
     syncCustomerMatchHeldToggleV1();
     var status = document.getElementById("customerMatchMapStatus");
     var compactStatus = document.getElementById("customerMatchMapStatusCompactV2");
+    var overlayStatus = document.getElementById("customerMatchMapStatusOverlayV722");
     if (status) status.hidden = true;
     if (compactStatus) compactStatus.hidden = true;
+    if (overlayStatus) overlayStatus.hidden = true;
+    window.customerMatchMapCustomerIdV722 = "";
+    window.customerMatchMapCustomerNameV722 = "";
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
 
@@ -1249,6 +1270,7 @@
       if (matchedRow && matchIdIndex >= 0) matchedRow[matchIdIndex] = resolvedMatchId;
       if (matchedRow && statusIndex >= 0) matchedRow[statusIndex] = nextStatus;
       adjustMatchSummary(context.customerId, oldStatus, nextStatus);
+      syncCustomerMatchMapStatusV722(context.customerId);
       if (typeof window.applyFilter === "function") window.applyFilter();
       return nextStatus;
     });

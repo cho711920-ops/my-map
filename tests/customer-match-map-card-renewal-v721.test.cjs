@@ -23,6 +23,9 @@ assert.match(
 assert.match(script, /customer-match-choice-v719 introduce/);
 assert.match(script, /customer-match-choice-v719 hold/);
 assert.match(script, /closeCustomerMatchCardMenusV721/);
+assert.match(script, /applyCardStatusVisualV722\(nextStatus\)/);
+assert.match(script, /applyCardStatusVisualV722\(currentStatus\)/);
+assert.match(script, /open-upward-v722/);
 assert.match(script, /reusableCard\.classList\.contains\("customer-match-map-card-v721"\) !== isCustomerMatchMapCardV721\(item\)/);
 
 assert.match(
@@ -34,7 +37,11 @@ assert.match(css, /customer-match-menu-panel-v721\[hidden\][\s\S]*?display:\s*no
 assert.match(css, /item-source-link-btn\.active:not\(\.unified-expand-btn-v8\)[\s\S]*?background:\s*#0877dc !important/);
 assert.match(css, /item-source-link-btn\.unified-expand-btn-v8[\s\S]*?background:\s*#e7f8ed !important/);
 assert.match(css, /customer-match-map-actions-v721 \.customer-match-choice-v719[\s\S]*?width:\s*54px !important/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.28-customer-match-map-menu/);
-assert.match(html, /script\.js\?v=6\.5\.50-customer-match-map-menu/);
+assert.match(css, /customer-match-map-status-overlay-v722[\s\S]*?background:\s*rgba\(246, 251, 255, \.82\)/);
+assert.match(css, /customer-match-map-card-v721\.customer-match-introduced[\s\S]*?border-left-color:\s*#dc2626 !important/);
+assert.match(css, /customer-match-map-card-v721\.customer-match-held[\s\S]*?border-left-color:\s*#1f2937 !important/);
+assert.match(html, /id="customerMatchMapStatusOverlayV722"/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.29-customer-match-map-fixes/);
+assert.match(html, /script\.js\?v=6\.5\.51-customer-match-map-fixes/);
 
 console.log("customer match map card renewal v7.21 tests passed");

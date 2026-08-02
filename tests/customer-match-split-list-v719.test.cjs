@@ -12,9 +12,10 @@ const backend = fs.readFileSync(
 
 assert.match(html, /고객별 매칭매물 관리/);
 assert.match(html, /메인 매물리스트가 그대로 열립니다/);
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.1-customer-card-three-line/);
-assert.match(html, /operations-center-v7\.js\?v=7\.20\.1-customer-card-three-line/);
-assert.match(html, /script\.js\?v=6\.5\.50-customer-match-map-menu/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.2-customer-map-overlay/);
+assert.match(html, /operations-center-v7\.js\?v=7\.20\.2-customer-map-overlay/);
+assert.match(html, /script\.js\?v=6\.5\.51-customer-match-map-fixes/);
+assert.match(operations, /syncCustomerMatchMapStatusV722/);
 
 assert.match(operations, /customerView:\s*"before"/);
 assert.match(operations, /① 고객 목록/);

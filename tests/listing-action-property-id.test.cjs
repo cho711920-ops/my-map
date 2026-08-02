@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.50-customer-match-map-menu"),
+  html.includes("script.js?v=6.5.51-customer-match-map-fixes"),
   "the production page must load the fixed script cache version"
 );
 

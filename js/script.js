@@ -2193,12 +2193,31 @@ window.handleCustomerMatchListAction = function(button, encodedPropertyId, selec
   var currentStatus = getCustomerMatchStatus({propertyId: propertyId});
   var nextStatus = button && button.checked ? selectedStatus : (currentStatus === selectedStatus ? "신규" : currentStatus);
   if (!nextStatus || nextStatus === currentStatus) return;
+  var card = button && button.closest ? button.closest(".customer-match-map-card-v721") : null;
+  function applyCardStatusVisualV722(status) {
+    if (!card) return;
+    card.classList.toggle("customer-match-new", status === "신규");
+    card.classList.toggle("customer-match-introduced", status === "소개");
+    card.classList.toggle("customer-match-held", status === "보류");
+    card.querySelectorAll(".customer-match-choice-v719").forEach(function(label) {
+      var input = label.querySelector('input[type="checkbox"]');
+      var labelStatus = label.classList.contains("introduce") ? "소개" : "보류";
+      var checked = labelStatus === status;
+      if (input) input.checked = checked;
+      label.classList.toggle("checked", checked);
+    });
+  }
+  applyCardStatusVisualV722(nextStatus);
   button.disabled = true;
-  window.updateCustomerMatchFromMap(propertyId, nextStatus).catch(function(error) {
-    button.disabled = false;
-    button.checked = currentStatus === selectedStatus;
-    alert((error && error.message) || "고객 매칭 상태를 저장하지 못했습니다.");
-  });
+  window.updateCustomerMatchFromMap(propertyId, nextStatus)
+    .then(function() {
+      if (button && button.isConnected) button.disabled = false;
+    })
+    .catch(function(error) {
+      applyCardStatusVisualV722(currentStatus);
+      if (button && button.isConnected) button.disabled = false;
+      alert((error && error.message) || "고객 매칭 상태를 저장하지 못했습니다.");
+    });
 };
 
 var LIST_CONTACT_ROLE_META_V650 = {
@@ -2540,6 +2559,7 @@ window.closeCustomerMatchCardMenusV721 = function(exceptPanel) {
   document.querySelectorAll(".customer-match-menu-panel-v721").forEach(function(panel) {
     if (panel === exceptPanel) return;
     panel.hidden = true;
+    panel.classList.remove("open-upward-v722");
     var card = panel.closest && panel.closest(".customer-match-map-card-v721");
     if (card) card.classList.remove("customer-match-menu-open-v721");
     var toggle = panel.parentElement && panel.parentElement.querySelector(".customer-match-menu-toggle-v721");
@@ -2558,6 +2578,16 @@ window.toggleCustomerMatchCardMenuV721 = function(button, event) {
   var card = wrapper.closest && wrapper.closest(".customer-match-map-card-v721");
   if (card) card.classList.toggle("customer-match-menu-open-v721", willOpen);
   button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  if (willOpen) {
+    panel.classList.remove("open-upward-v722");
+    window.requestAnimationFrame(function() {
+      if (panel.hidden) return;
+      var panelRect = panel.getBoundingClientRect();
+      if (panelRect.bottom > window.innerHeight - 8) panel.classList.add("open-upward-v722");
+    });
+  } else {
+    panel.classList.remove("open-upward-v722");
+  }
 };
 
 if (!window.customerMatchMenuOutsideBoundV721) {
