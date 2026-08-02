@@ -19,7 +19,7 @@ assert.match(
 );
 assert.match(
   html,
-  /operations-center-v7\.css\?v=7\.19\.0-customer-split-list/,
+  /operations-center-v7\.css\?v=7\.20\.0-balanced-customer-match/,
   "the operations stylesheet cache key must be updated"
 );
 assert.match(

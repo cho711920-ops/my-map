@@ -12,8 +12,8 @@ const backend = fs.readFileSync(
 
 assert.match(html, /고객별 매칭매물 관리/);
 assert.match(html, /메인 매물리스트가 그대로 열립니다/);
-assert.match(html, /operations-center-v7\.css\?v=7\.19\.0-customer-split-list/);
-assert.match(html, /operations-center-v7\.js\?v=7\.19\.0-customer-split-list/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.0-balanced-customer-match/);
+assert.match(html, /operations-center-v7\.js\?v=7\.20\.0-balanced-customer-match/);
 assert.match(html, /script\.js\?v=6\.5\.49-customer-match-cards/);
 
 assert.match(operations, /customerView:\s*"before"/);
@@ -38,7 +38,12 @@ assert.match(script, /customer-match-choice-v719 introduce/);
 assert.match(script, /customer-match-choice-v719 hold/);
 assert.match(script, /actionContactButtonV654 \+/);
 
-assert.match(css, /grid-template-columns:430px minmax\(0,1fr\)!important/);
+assert.match(css, /grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)!important/);
+assert.match(css, /operations-customer-meta-v720/);
+assert.match(css, /grid-template-rows:auto auto auto!important/);
+assert.match(css, /item-source-link-btn\.active:not\(\.unified-expand-btn-v8\)/);
+assert.match(css, /item-source-link-btn\.unified-expand-btn-v8/);
+assert.match(css, /content:"메모"/);
 assert.match(css, /operations-customer-grid\{display:grid;grid-template-columns:1fr!important/);
 assert.match(css, /operations-match-listing-cards-v719\{display:grid;grid-template-columns:1fr/);
 assert.match(css, /operations-match-listing-cards-v719 \.item-card-grid-v650\{grid-template-columns:96px minmax\(0,1fr\)!important/);

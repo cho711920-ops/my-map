@@ -356,8 +356,10 @@
         '<span class="operations-customer-avatar-v719">' + escape(name.charAt(0) || "고") + '</span>' +
         '<span class="operations-customer-status">' + escape(status) + '</span>' +
         '<strong>' + escape(name) + ' <small>' + escape(region) + '</small></strong>' +
-        (phoneHref ? '<a class="operations-customer-phone-v719" href="' + escape(phoneHref) + '" onclick="event.stopPropagation()">☎ ' + escape(phone) + '</a>' : '<span class="operations-customer-phone-v719 empty">연락처 없음</span>') +
-        '<span class="operations-customer-condition-v719">' + escape(customerConditionTextV719(row)) + '</span>' +
+        '<div class="operations-customer-meta-v720">' +
+          (phoneHref ? '<a class="operations-customer-phone-v719" href="' + escape(phoneHref) + '" onclick="event.stopPropagation()">☎ ' + escape(phone) + '</a>' : '<span class="operations-customer-phone-v719 empty">연락처 없음</span>') +
+          '<span class="operations-customer-condition-v719">' + escape(customerConditionTextV719(row)) + '</span>' +
+        '</div>' +
         (request ? '<small>' + escape(request) + '</small>' : '') +
         '<div class="operations-customer-stats-v719"><b>매칭 ' + stats.total.toLocaleString("ko-KR") + '</b><span>신규 ' + stats.fresh.toLocaleString("ko-KR") + '</span><em>후보 ' + stats.introduced.toLocaleString("ko-KR") + '</em><u>보류 ' + stats.held.toLocaleString("ko-KR") + '</u></div>' +
         (stats.overdue ? '<i>미연락 경고 ' + stats.overdue.toLocaleString("ko-KR") + '건</i>' : '') +
