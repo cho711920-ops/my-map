@@ -1800,3 +1800,97 @@
     z-index: 200 !important;
   }
 }
+/* v8.0.32 - 네이버 최신 거리뷰 우선 + 네이버/카카오/지도 전환 */
+.roadview-view-tabs {
+  flex: 0 0 auto;
+  gap: 4px !important;
+}
+
+.roadview-view-tab {
+  min-width: 74px !important;
+  padding: 0 10px !important;
+  white-space: nowrap;
+}
+
+#naverRoadviewTabBtn.active {
+  border-color: #03a94d !important;
+  background: #03c75a !important;
+  color: #fff !important;
+}
+
+#roadviewTabBtn.active {
+  border-color: #f0b400 !important;
+  background: #fee500 !important;
+  color: #191919 !important;
+}
+
+#roadviewMapTabBtn.active {
+  border-color: #1877f2 !important;
+  background: #1877f2 !important;
+  color: #fff !important;
+}
+
+.naver-roadview-container-v653 {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  background: #e9eef5;
+}
+
+.naver-roadview-capture-info-v653 {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 35;
+  display: flex;
+  min-width: 210px;
+  max-width: min(360px, calc(100% - 36px));
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 16px;
+  border: 1px solid rgba(17, 24, 39, .14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .94);
+  color: #111827;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, .18);
+  pointer-events: none;
+}
+
+.naver-roadview-capture-info-v653[hidden] {
+  display: none !important;
+}
+
+.naver-roadview-capture-title-v653 {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.naver-roadview-capture-date-v653 {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+@media (max-width: 768px) {
+  .roadview-view-tab {
+    min-width: 64px !important;
+    padding: 0 7px !important;
+    font-size: 11px !important;
+  }
+
+  .naver-roadview-capture-info-v653 {
+    left: 10px;
+    bottom: 10px;
+    min-width: 180px;
+    max-width: calc(100% - 20px);
+    padding: 10px 12px;
+  }
+}

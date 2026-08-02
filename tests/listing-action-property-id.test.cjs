@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.52-customer-contact-return"),
+  html.includes("script.js?v=6.5.53-naver-streetview-first"),
   "the production page must load the fixed script cache version"
 );
 

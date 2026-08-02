@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.31-customer-contact-return-glow">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.32-naver-streetview-tabs">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.20.3-customer-save-fast-feedback">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.1-readable-steps">
@@ -555,15 +555,24 @@
 
   <div class="roadview-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="roadviewModalTitle">
     <div class="roadview-modal-header">
-      <div class="roadview-view-tabs" role="tablist" aria-label="로드뷰와 지도 전환">
+      <div class="roadview-view-tabs" role="tablist" aria-label="네이버 거리뷰, 카카오 로드뷰, 지도 전환">
+        <button
+          id="naverRoadviewTabBtn"
+          type="button"
+          class="roadview-view-tab active"
+          onclick="switchRoadviewMode('naver')"
+          role="tab"
+          aria-selected="true"
+        >네이버맵</button>
+
         <button
           id="roadviewTabBtn"
           type="button"
-          class="roadview-view-tab active"
-          onclick="switchRoadviewMode('roadview')"
+          class="roadview-view-tab"
+          onclick="switchRoadviewMode('kakao')"
           role="tab"
-          aria-selected="true"
-        >로드뷰</button>
+          aria-selected="false"
+        >카카오맵</button>
 
         <button
           id="roadviewMapTabBtn"
@@ -576,7 +585,7 @@
       </div>
 
       <div class="roadview-modal-heading">
-        <div id="roadviewModalTitle" class="roadview-modal-title">카카오 로드뷰</div>
+        <div id="roadviewModalTitle" class="roadview-modal-title">네이버 거리뷰</div>
         <div id="roadviewModalAddress" class="roadview-modal-address"></div>
       </div>
 
@@ -584,12 +593,18 @@
         type="button"
         class="roadview-modal-close"
         onclick="closeRoadviewModal()"
-        aria-label="로드뷰 닫기"
+        aria-label="거리뷰 닫기"
       >×</button>
     </div>
 
     <div class="roadview-tab-content">
-      <section id="roadviewPane" class="roadview-pane active" role="tabpanel">
+      <section id="naverRoadviewPane" class="roadview-pane active" role="tabpanel">
+        <div id="naverRoadviewContainer" class="roadview-container naver-roadview-container-v653"></div>
+        <div id="naverRoadviewCaptureInfo" class="naver-roadview-capture-info-v653" hidden></div>
+        <div id="naverRoadviewModalStatus" class="roadview-inline-status loading">네이버 최신 거리뷰를 준비하고 있습니다.</div>
+      </section>
+
+      <section id="roadviewPane" class="roadview-pane" role="tabpanel">
         <div id="roadviewContainer" class="roadview-container"></div>
         <div id="roadviewTargetPin" class="roadview-screen-pin" aria-label="매물 위치"></div>
         <div id="roadviewModalStatus" class="roadview-inline-status">로드뷰를 준비하고 있습니다.</div>
@@ -605,7 +620,7 @@
 
 <script src="js/async-mutation-queue-v1.js?v=1.0.5-hard-hidden-status"></script>
 <script src="js/unified-listings-v8.js?v=8.0.16-action-labels"></script>
-<script src="js/script.js?v=6.5.52-customer-contact-return"></script>
+<script src="js/script.js?v=6.5.53-naver-streetview-first"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
