@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.5-card-readability">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.33-detail-drawer-motion">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.34-naver-roadview-split">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.20.5-unified-memo-toggle">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.1-readable-steps">
@@ -599,9 +599,17 @@
 
     <div class="roadview-tab-content">
       <section id="naverRoadviewPane" class="roadview-pane active" role="tabpanel">
-        <div id="naverRoadviewContainer" class="roadview-container naver-roadview-container-v653"></div>
-        <div id="naverRoadviewCaptureInfo" class="naver-roadview-capture-info-v653" hidden></div>
-        <div id="naverRoadviewModalStatus" class="roadview-inline-status loading">네이버 최신 거리뷰를 준비하고 있습니다.</div>
+        <div class="naver-roadview-split-v654">
+          <div class="naver-roadview-panorama-panel-v654">
+            <div id="naverRoadviewContainer" class="roadview-container naver-roadview-container-v653"></div>
+            <div id="naverRoadviewCaptureInfo" class="naver-roadview-capture-info-v653" hidden></div>
+            <div id="naverRoadviewModalStatus" class="roadview-inline-status loading">네이버 최신 거리뷰를 준비하고 있습니다.</div>
+          </div>
+          <aside class="naver-roadview-map-panel-v654" aria-label="네이버 거리뷰 연동 지도">
+            <div id="naverRoadviewMapV654" class="naver-roadview-map-v654"></div>
+            <div class="naver-roadview-map-help-v654">파란 도로를 누르면 해당 위치의 거리뷰로 이동합니다.</div>
+          </aside>
+        </div>
       </section>
 
       <section id="roadviewPane" class="roadview-pane" role="tabpanel">
@@ -620,7 +628,7 @@
 
 <script src="js/async-mutation-queue-v1.js?v=1.0.5-hard-hidden-status"></script>
 <script src="js/unified-listings-v8.js?v=8.0.17-detail-drawer-motion"></script>
-<script src="js/script.js?v=6.5.56-memo-card-context"></script>
+<script src="js/script.js?v=6.5.57-naver-roadview-split"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
