@@ -38,8 +38,13 @@
 
   function save(lists) {
     var api = store();
-    if (!api || typeof api.save !== "function") return;
-    api.save("favorite", lists);
+    if (!api || typeof api.save !== "function") return false;
+    try {
+      return api.save("favorite", lists) !== false;
+    } catch (error) {
+      console.error("찜폴더 저장 실패", error);
+      return false;
+    }
   }
 
   function resolveItem(ref) {
@@ -167,13 +172,22 @@
         '</header>' +
         '<div class="unified-favorite-create-v7">' +
           '<label for="unifiedFavoriteNameV7">찜폴더명</label>' +
-          '<input id="unifiedFavoriteNameV7" type="text" maxlength="30" placeholder="새 찜폴더 이름" ' +
-            'onkeydown="if(event.key===\'Enter\'){event.preventDefault();createUnifiedFavoriteFolderV7();}">' +
-          '<button type="button" onclick="createUnifiedFavoriteFolderV7()">폴더 추가</button>' +
+          '<input id="unifiedFavoriteNameV7" type="text" maxlength="30" placeholder="새 찜폴더 이름">' +
+          '<button id="unifiedFavoriteAddV7" type="button">폴더 추가</button>' +
         '</div>' +
         '<div id="unifiedFavoriteBodyV7" class="unified-favorite-body-v7"></div>' +
       '</section>';
     document.body.appendChild(modal);
+    var input = document.getElementById("unifiedFavoriteNameV7");
+    var addButton = document.getElementById("unifiedFavoriteAddV7");
+    if (input) input.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      global.createUnifiedFavoriteFolderV7();
+    });
+    if (addButton) addButton.addEventListener("click", function () {
+      global.createUnifiedFavoriteFolderV7();
+    });
   }
 
   function positionModal() {
@@ -182,10 +196,16 @@
     var map = document.getElementById("map");
     if (!modal || !dialog || !map || global.innerWidth <= 768) return;
     var rect = map.getBoundingClientRect();
-    dialog.style.left = Math.max(12, rect.left + 16) + "px";
-    dialog.style.top = Math.max(74, rect.top + 14) + "px";
-    dialog.style.width = Math.max(520, rect.width - 32) + "px";
-    dialog.style.maxHeight = Math.max(420, rect.height - 28) + "px";
+    var width = Math.min(1040, Math.max(520, rect.width - 68));
+    var left = rect.left + ((rect.width - width) / 2) + 18;
+    left = Math.min(left, rect.right - width - 16);
+    var top = Math.max(68, rect.top + 10);
+    var height = Math.max(500, Math.min(rect.height - 20, global.innerHeight - top - 10));
+    dialog.style.left = Math.max(rect.left + 24, left) + "px";
+    dialog.style.top = top + "px";
+    dialog.style.width = width + "px";
+    dialog.style.height = height + "px";
+    dialog.style.maxHeight = height + "px";
   }
 
   function itemPhoto(item) {
@@ -300,11 +320,27 @@
     }
     var list = {id: uid(), name: name, itemKeys: state.pendingRefs.slice(), createdAt: nowIso(), updatedAt: nowIso()};
     lists.push(list);
-    save(lists);
+    if (!save(lists)) {
+      showToast("찜폴더를 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "warning");
+      if (input) input.focus();
+      return;
+    }
     state.expanded[list.id] = true;
     if (input) input.value = "";
     render();
     showToast('"' + name + '" 폴더를 만들었습니다.' + (state.pendingRefs.length ? " 선택매물도 담았습니다." : ""));
+    global.setTimeout(function () {
+      var latest = load("favorite");
+      if (!latest.some(function (entry) { return String(entry.id) === String(list.id); })) {
+        latest.push(list);
+        if (!save(latest)) {
+          showToast("찜폴더 계정 동기화를 확인하지 못했습니다. 다시 시도해 주세요.", "warning");
+          return;
+        }
+      }
+      var modal = document.getElementById("unifiedFavoriteModalV7");
+      if (modal && modal.classList.contains("open")) render();
+    }, 400);
     if (typeof global.applyFilter === "function") global.applyFilter();
   };
 
@@ -413,6 +449,12 @@
   global.addEventListener("resize", function () {
     var modal = document.getElementById("unifiedFavoriteModalV7");
     if (modal && modal.classList.contains("open")) positionModal();
+  });
+
+  global.addEventListener("js-v6-list-store-change", function (event) {
+    if (!event || !event.detail || event.detail.type !== "favorite") return;
+    var modal = document.getElementById("unifiedFavoriteModalV7");
+    if (modal && modal.classList.contains("open")) render();
   });
 
   global.setTimeout(function () { migrateVisitFolders(); }, 2800);

@@ -74,12 +74,24 @@
 
   function saveLists(type, lists, options) {
     options = options || {};
-    localStorage.setItem(storageKey(type), JSON.stringify(lists));
-    if (type === "favorite") syncLegacyFavoriteKeys(lists);
-    if (options.remote) return;
+    try {
+      localStorage.setItem(storageKey(type), JSON.stringify(lists));
+      if (type === "favorite") syncLegacyFavoriteKeys(lists);
+    } catch (error) {
+      console.error(typeLabel(type) + "목록 기기 저장 실패", error);
+      showListToast(typeLabel(type) + "목록을 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "warning");
+      return false;
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("js-v6-list-store-change", {
+        detail: { type: type, remote: !!options.remote }
+      }));
+    } catch (_) {}
+    if (options.remote) return true;
     cloudRevisions[type] = Number(cloudRevisions[type] || 0) + 1;
     localStorage.setItem(dirtyKey(type), "1");
     scheduleCloudSave(type, lists);
+    return true;
   }
 
   function cloudScope(type) {
@@ -673,7 +685,7 @@
 
   window.JSV6ListStore = {
     load: function (type) { return loadLists(type === "visit" ? "visit" : "favorite"); },
-    save: function (type, lists) { saveLists(type === "visit" ? "visit" : "favorite", lists); },
+    save: function (type, lists) { return saveLists(type === "visit" ? "visit" : "favorite", lists); },
     getItem: getItem
   };
 
