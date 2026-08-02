@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.5";
+  var VERSION = "1.9.6";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -147,7 +147,7 @@
   function loadDetailAuth() {
     try {
       var value = JSON.parse(sessionStorage.getItem(DETAIL_AUTH_STORAGE) || "null");
-      return value && value.mid ? value : null;
+      return value && value.mid && value.guest !== true ? value : null;
     } catch (_) {
       return null;
     }
@@ -345,11 +345,11 @@
     }
 
     if (body && body.mid) {
-      state.detailAuth = {
+      state.detailAuth = body.guest === true ? null : {
         mid: body.mid,
-        guest: body.guest === true,
+        guest: false,
         endpoint: requestUrl(input) || "/maps/mmview",
-        template: Object.assign({}, body)
+        template: Object.assign({}, body, {guest: false})
       };
       saveDetailAuth(state.detailAuth);
     }
@@ -534,7 +534,7 @@
         saveMetadata.complete
           ? "완전수집 " + items.length + "개 · 기존 여부와 관계없이 전체 연락처를 다시 확인합니다."
           : "전체 " + items.length + "개 · 기존 동일 " + classification.unchanged +
-            "개 · 상세조회 필요 " + detailItems.length + "개"
+            "개 · 신규·변경·연락처 누락 상세조회 " + detailItems.length + "개"
       );
 
       var transformed = [];
@@ -1071,7 +1071,11 @@
   }
 
   async function ensureDetailAuth() {
-    if (state.detailAuth && state.detailAuth.mid) return state.detailAuth;
+    if (state.detailAuth && state.detailAuth.mid && state.detailAuth.guest !== true) {
+      return state.detailAuth;
+    }
+    state.detailAuth = null;
+    saveDetailAuth(null);
 
     setStatus(
       "상세 연락처 연결이 한 번 필요합니다.",
@@ -1083,7 +1087,9 @@
       if (state.stopRequested) {
         throw new Error("사용자 안전중단");
       }
-      if (state.detailAuth && state.detailAuth.mid) return state.detailAuth;
+      if (state.detailAuth && state.detailAuth.mid && state.detailAuth.guest !== true) {
+        return state.detailAuth;
+      }
       await delay(250);
     }
     throw new Error(
@@ -1128,15 +1134,12 @@
     }
 
     var detail = await fetchDetailData(item);
-    var phones;
-    var contactError = "";
-    try {
-      phones = await collectPhones(item, requestBody, addressData, detail);
-    } catch (error) {
-      /* 연락처 확인 실패가 매물·사진 수집 전체를 막지 않게 분리합니다. */
-      contactError = text(error && error.message || error);
-      phones = { landlordPrimary: "", tenantPrimary: "", extraMemo: [], contacts: [] };
-    }
+    /*
+     * 공실박스 원본매물의 연락처는 해당 출처매물ID에 반드시 함께 저장합니다.
+     * 상세조회·역할 확인이 실패하면 빈 연락처로 덮지 않고 이 원본만 실패 처리해
+     * 기존 번호를 보존합니다.
+     */
+    var phones = await collectPhones(item, requestBody, addressData, detail);
     var imageUrls = collectMediaUrls(item, detail);
     var memo = buildMemo(item);
     var pyeong = getPyeong(item);
@@ -1166,7 +1169,6 @@
         contactList: phones.contacts,
         primaryImage: imageUrls[0] || "",
         imageUrls: imageUrls,
-        contactError: contactError,
         raw: { list: item, detail: detail },
         values: values
       }
@@ -1491,29 +1493,67 @@
       .trim();
   }
 
-  function appendContactValue(target, value) {
+  var CONTACT_PHONE_KEYS = [
+    "Tel", "tel", "TelNo", "telNo", "Phone", "phone",
+    "PhoneNumber", "phoneNumber", "Number", "number",
+    "Mobile", "mobile", "MobileNo", "mobileNo", "Hp", "hp", "HpNo", "hpNo"
+  ];
+
+  var CONTACT_ROLE_KEYS = [
+    "Type2", "type2", "Role", "role", "Label", "label",
+    "Type1", "type1", "Ty2", "ty2", "Ty1", "ty1",
+    "TelType", "telType", "Ty", "Type", "type", "Name", "name"
+  ];
+
+  function appendContactValue(target, value, inheritedRole) {
     if (!value) return;
     if (Array.isArray(value)) {
       value.forEach(function (entry) {
-        appendContactValue(target, entry);
+        appendContactValue(target, entry, inheritedRole);
       });
       return;
     }
     if (typeof value === "object") {
-      var directPhone = pick(value, [
-        "Tel", "tel", "Phone", "phone", "Number", "number",
-        "Mobile", "mobile", "Hp", "hp"
-      ]);
+      var role = text(pick(value, CONTACT_ROLE_KEYS)) || inheritedRole;
+      var directPhone = pick(value, CONTACT_PHONE_KEYS);
       if (directPhone) {
-        target.push(value);
+        if (role && !pick(value, CONTACT_ROLE_KEYS)) {
+          target.push(Object.assign({}, value, {Role: role}));
+        } else {
+          target.push(value);
+        }
         return;
       }
       Object.keys(value).forEach(function (key) {
-        appendContactValue(target, value[key]);
+        appendContactValue(target, value[key], role);
       });
       return;
     }
-    if (normalizePhone(value)) target.push({ Tel: value });
+    if (normalizePhone(value)) target.push({Tel: value, Role: inheritedRole || ""});
+  }
+
+  function appendNestedContactFields(target, source, inheritedRole, depth) {
+    if (!source || depth > 10) return;
+    if (Array.isArray(source)) {
+      source.forEach(function(entry) {
+        appendNestedContactFields(target, entry, inheritedRole, depth + 1);
+      });
+      return;
+    }
+    if (typeof source !== "object") return;
+
+    var role = text(pick(source, CONTACT_ROLE_KEYS)) || inheritedRole;
+    var directPhone = pick(source, CONTACT_PHONE_KEYS);
+    if (directPhone) appendContactValue(target, source, role);
+
+    Object.keys(source).forEach(function(key) {
+      var child = source[key];
+      if (child && typeof child === "object") {
+        appendNestedContactFields(target, child, role, depth + 1);
+      } else if (/(?:tel|phone|mobile|hp|contact|number)/i.test(key)) {
+        appendContactValue(target, child, role);
+      }
+    });
   }
 
   function appendContactFields(target, source, keys) {
@@ -1531,10 +1571,12 @@
     var buildingCandidates = [];
 
     var detail = providedDetail || await fetchDetailData(item);
+    appendNestedContactFields(listingCandidates, detail && detail.floorinfo, "", 0);
     appendContactFields(listingCandidates, detail && detail.floorinfo, [
       "Tels", "tels", "FTels", "ftels", "Ftel", "ftel",
       "TelList", "telList", "Phones", "phones", "Contacts", "contacts"
     ]);
+    appendNestedContactFields(buildingCandidates, detail && detail.bilinfo, "", 0);
     appendContactFields(buildingCandidates, detail && detail.bilinfo, [
       "Tels", "tels", "BTels", "btels", "Btel", "btel",
       "TelList", "telList", "Phones", "phones", "Contacts", "contacts"
@@ -1568,15 +1610,8 @@
       if (tidx && seenTidx[tidx]) continue;
       if (tidx) seenTidx[tidx] = true;
 
-      var phone = normalizePhone(pick(candidate, [
-        "Tel", "tel", "Phone", "phone", "Number", "number",
-        "Mobile", "mobile", "Hp", "hp"
-      ]));
-      var label = text(pick(candidate, [
-        "Type2", "type2", "Role", "role", "Label", "label",
-        "Type1", "type1", "Ty2", "ty2", "Ty1", "ty1",
-        "TelType", "telType", "Ty", "Type", "type", "Name", "name"
-      ]));
+      var phone = normalizePhone(pick(candidate, CONTACT_PHONE_KEYS));
+      var label = text(pick(candidate, CONTACT_ROLE_KEYS));
       var tenantHint = isTenantLabel(label);
       var resolvedLabel = contactLabel(tenantHint ? "S" : label);
 
@@ -1679,11 +1714,13 @@
   async function fetchDetailData(item) {
     var key = detailKey(item);
     if (state.detailCache[key]) return state.detailCache[key];
-    if (!state.detailAuth || !state.detailAuth.mid) return null;
+    if (!state.detailAuth || !state.detailAuth.mid || state.detailAuth.guest === true) {
+      throw new Error("로그인된 공실박스 상세 연락처 연결이 없습니다.");
+    }
 
     var payload = Object.assign({}, state.detailAuth.template || {}, {
       mid: state.detailAuth.mid,
-      guest: state.detailAuth.guest === true,
+      guest: false,
       bidx: pick(item, ["Bidx", "bidx"]),
       bfidx: pick(item, ["Bfidx", "bfidx"]),
       adidx: pick(item, ["Admidx", "adidx", "admidx"]),
@@ -1703,33 +1740,43 @@
     }
 
     var endpoint = state.detailAuth.endpoint || "/maps/mmview";
-    var response = await originalFetch(endpoint, {
-      method: "POST",
-      mode: "cors",
-      credentials: "include",
-      redirect: "follow",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      throw new Error("상세정보 조회 실패 (HTTP " + response.status + ")");
-    }
+    var retryDelays = [0, 600, 1600];
+    var lastError;
+    for (var attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt]) await delay(retryDelays[attempt]);
+      try {
+        var response = await originalFetch(endpoint, {
+          method: "POST",
+          mode: "cors",
+          credentials: "include",
+          redirect: "follow",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          throw new Error("상세정보 조회 실패 (HTTP " + response.status + ")");
+        }
 
-    var result;
-    try {
-      result = await response.json();
-    } catch (_) {
-      throw new Error("상세정보 응답 형식을 확인하지 못했습니다.");
+        var result;
+        try {
+          result = await response.json();
+        } catch (_) {
+          throw new Error("상세정보 응답 형식을 확인하지 못했습니다.");
+        }
+        if (!result || result.res !== "success" || !result.data) {
+          throw new Error(
+            result && (result.message || result.msg)
+              ? result.message || result.msg
+              : "상세정보 조회 거절 (res=" + text(result && result.res) + ")"
+          );
+        }
+        state.detailCache[key] = result.data;
+        return result.data;
+      } catch (error) {
+        lastError = error;
+      }
     }
-    if (!result || result.res !== "success" || !result.data) {
-      throw new Error(
-        result && (result.message || result.msg)
-          ? result.message || result.msg
-          : "상세정보 조회 거절 (res=" + text(result && result.res) + ")"
-      );
-    }
-    state.detailCache[key] = result.data;
-    return result.data;
+    throw lastError || new Error("공실박스 상세정보 조회 실패");
   }
 
   function isTenantLabel(value) {
@@ -2070,7 +2117,7 @@
         "기존 매물 빠른 비교 중",
         Math.min(offset + chunk.length, items.length).toLocaleString("ko-KR") +
         " / " + items.length.toLocaleString("ko-KR") +
-        "개 · 신규·변경만 상세조회합니다."
+        "개 · 신규·변경·연락처 누락만 상세조회합니다."
       );
       var requestId =
         "gongsil-manifest-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);

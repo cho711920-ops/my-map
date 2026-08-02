@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.5";/);
+assert.match(source, /var VERSION = "1\.9\.6";/);
 assert.match(source, /data-metric="updated"/);
 assert.match(source, /data-metric="detailedDuplicates"/);
 assert.match(source, /data-metric="skippedUnchanged"/);
@@ -35,8 +35,60 @@ assert.ok(
 );
 assert.match(
   source,
-  /function appendContactValue\(target, value\)[\s\S]*?"Mobile", "mobile", "Hp", "hp"/
+  /var CONTACT_PHONE_KEYS = \[[\s\S]*?"MobileNo", "mobileNo"[\s\S]*?function appendContactValue\(target, value, inheritedRole\)/
 );
+assert.match(
+  source,
+  /appendNestedContactFields\(listingCandidates, detail && detail\.floorinfo, "", 0\)/,
+  "해당 공실박스 원본의 floorinfo 내부 연락처를 중첩 구조에서도 찾아야 합니다."
+);
+assert.match(
+  source,
+  /async function ensureDetailAuth\(\)[\s\S]*?state\.detailAuth\.guest !== true[\s\S]*?saveDetailAuth\(null\)/,
+  "비로그인 guest 상세응답으로 연락처 없는 매물을 저장하면 안 됩니다."
+);
+assert.match(
+  source,
+  /var phones = await collectPhones\(item, requestBody, addressData, detail\);/,
+  "공실박스 원본 연락처 확인 실패를 빈 목록으로 바꾸지 않아야 합니다."
+);
+assert.doesNotMatch(
+  source.slice(source.indexOf("async function transformItem("), source.indexOf("function collectMediaUrls(")),
+  /phones = \{[^}]*contacts: \[\]/,
+  "연락처 실패 시 빈 contactList로 정상 저장하면 안 됩니다."
+);
+assert.match(
+  source,
+  /var retryDelays = \[0, 600, 1600\];/,
+  "일시적인 상세조회 오류는 제한적으로 재시도해야 합니다."
+);
+
+const nestedContactSource = source.slice(
+  source.indexOf("var CONTACT_PHONE_KEYS"),
+  source.indexOf("async function collectPhones(")
+);
+const appendNestedContactFields = new Function(`
+  function text(value) { return value == null ? "" : String(value).trim(); }
+  function pick(source, keys) {
+    source = source || {};
+    for (const key of keys) if (source[key] !== undefined && source[key] !== null) return source[key];
+    return "";
+  }
+  function normalizePhone(value) {
+    const digits = text(value).replace(/\\D/g, "");
+    return digits.length >= 9 && digits.length <= 12 ? digits : "";
+  }
+  ${nestedContactSource}
+  return appendNestedContactFields;
+`)();
+const nestedContacts = [];
+appendNestedContactFields(nestedContacts, {
+  wrapper: { Ty: "J", contacts: [{ telNo: "010-1111-2222" }] }
+}, "", 0);
+assert.ok(nestedContacts.length >= 1);
+assert.ok(nestedContacts.some(contact =>
+  contact.telNo === "010-1111-2222" && contact.Role === "J"
+));
 assert.match(
   source,
   /"Ty2", "ty2", "Ty1", "ty1",\s*"TelType", "telType"/

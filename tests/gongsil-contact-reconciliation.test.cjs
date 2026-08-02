@@ -91,6 +91,11 @@ assert.match(
 );
 assert.match(
   backend,
+  /var activeGongsilContactSources = \{\};[\s\S]*?mmV8TellContactIndex_\(tellRows\)[\s\S]*?!activeGongsilContactSources\[mmSourceKey_\(source, sourceId\)\][\s\S]*?contactMissing \+= 1;[\s\S]*?needsDetail\.push\(sourceId\);/,
+  "활성 연락처가 없는 정확한 공실박스 출처매물ID는 기존매물이어도 상세 재조회해야 합니다."
+);
+assert.match(
+  backend,
   /if \(skippedUnlinked\.length && options\.requireAllLinked === true\) \{[\s\S]*?throw new Error\("공실박스 연락처를 연결할 대표매물을 찾지 못했습니다:/,
   "완전수집에서는 원본 연락처가 대표매물에 연결되지 않으면 중단해야 합니다."
 );
