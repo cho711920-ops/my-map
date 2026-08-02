@@ -2705,20 +2705,18 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
       'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';
   var regularActionButtonsV721 = actionContactButtonV654 + navButtonV721 + roadviewButtonV721 +
     registerButtonV721 + favoriteButtonV721 + editButtonV721 + sourceLinkButton;
-  var menuContactButtonV721 = actionContactButtonV654.replace(
-    '</button>',
-    '<span class="customer-match-menu-label-v721">연락처</span></button>'
-  );
+  var menuRegisterButtonV721 = registerButtonV721.replace('>대장</button>', '>건축물대장</button>');
+  var menuEditButtonV721 = editButtonV721.replace('>수정</span>', '>수정하기</span>');
   var customerMatchMenuV721 =
     '<div class="customer-match-card-menu-v721" onclick="event.stopPropagation()">' +
       '<button type="button" class="customer-match-menu-toggle-v721" aria-expanded="false" ' +
         'onclick="toggleCustomerMatchCardMenuV721(this,event)">메뉴</button>' +
       '<div class="customer-match-menu-panel-v721" hidden>' +
-        menuContactButtonV721 + navButtonV721 + roadviewButtonV721 + registerButtonV721 + editButtonV721 +
+        navButtonV721 + roadviewButtonV721 + menuRegisterButtonV721 + menuEditButtonV721 +
       '</div>' +
     '</div>';
   var customerMatchMapActionsV721 =
-    '<div class="item-action-left">' + customerMatchMenuV721 + sourceLinkButton + '</div>' +
+    '<div class="item-action-left">' + actionContactButtonV654 + customerMatchMenuV721 + sourceLinkButton + '</div>' +
     memoToggleButton + customerMatchControls;
   var standardActionsV721 =
     customerMatchControls + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;

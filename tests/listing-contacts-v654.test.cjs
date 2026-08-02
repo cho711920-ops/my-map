@@ -115,8 +115,9 @@ assert.strictEqual(sevenContacts.length, 6, "화면에는 최대 6개까지만 �
 
 assert(
   /regularActionButtonsV721 = actionContactButtonV654 \+ navButtonV721/.test(scriptSource) &&
-    /menuContactButtonV721 = actionContactButtonV654\.replace/.test(scriptSource),
-  "기본 매물카드는 연락처를 첫 칸에, 고객매칭 지도카드는 메뉴 안에 보존해야 합니다."
+    /customerMatchMapActionsV721 =[\s\S]*?actionContactButtonV654 \+ customerMatchMenuV721 \+ sourceLinkButton/.test(scriptSource) &&
+    !/menuContactButtonV721/.test(scriptSource),
+  "기본 매물카드와 고객매칭 지도카드는 연락처를 3번째 줄 첫 칸에 표시해야 합니다."
 );
 assert(
   /\.item-contact-button-v654\.has-contacts[\s\S]*background:\s*#10b981/.test(cssSource),

@@ -325,9 +325,32 @@
   .async-mutation-status-v1.failed { display: grid !important; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .customer-match-map-status-overlay-v722 > button,
+  .customer-match-map-status-overlay-v722 > button::after {
+    animation: none !important;
+  }
+}
+
 /* v8.0.29 고객매칭 지도: 중앙 요약 · 상태선 즉시 구분 · 카드 메뉴 표시 보강 */
 .customer-match-map-status-overlay-v722 {
   display: none;
+}
+
+@keyframes customer-map-return-sparkle-v8031 {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0), 0 2px 7px rgba(8, 119, 220, .24);
+    filter: brightness(1);
+  }
+  45% {
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, .34), 0 0 18px rgba(62, 180, 255, .82);
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes customer-map-return-shine-v8031 {
+  0%, 32% { left: -72%; }
+  66%, 100% { left: 128%; }
 }
 
 @media (min-width: 769px) {
@@ -373,6 +396,7 @@
   }
 
   .customer-match-map-status-overlay-v722 > button {
+    position: relative;
     flex: 0 0 auto;
     height: 28px;
     padding: 0 9px;
@@ -383,6 +407,23 @@
     font: inherit;
     font-size: 10.5px;
     cursor: pointer;
+    overflow: hidden;
+    isolation: isolate;
+    animation: customer-map-return-sparkle-v8031 1.45s ease-in-out infinite;
+  }
+
+  .customer-match-map-status-overlay-v722 > button::after {
+    position: absolute;
+    top: -65%;
+    left: -72%;
+    z-index: 0;
+    width: 34%;
+    height: 230%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .92), transparent);
+    content: "";
+    pointer-events: none;
+    transform: rotate(18deg);
+    animation: customer-map-return-shine-v8031 1.45s ease-in-out infinite;
   }
 
   #list .item.customer-match-map-card-v721 {
@@ -1540,7 +1581,7 @@
   .customer-match-map-card-main-v721 .item-compact-actions-v650.customer-match-map-actions-v721 {
     position: relative;
     display: grid !important;
-    grid-template-columns: minmax(146px, 1fr) 50px auto !important;
+    grid-template-columns: minmax(181px, 1fr) 50px auto !important;
     grid-template-rows: 30px !important;
     align-items: center !important;
     gap: 5px !important;
@@ -1554,7 +1595,7 @@
     display: grid !important;
     grid-column: 1 !important;
     grid-row: 1 !important;
-    grid-template-columns: 54px minmax(86px, 104px) !important;
+    grid-template-columns: 30px 54px minmax(86px, 104px) !important;
     align-items: center !important;
     gap: 5px !important;
     width: 100% !important;
@@ -1638,12 +1679,6 @@
     cursor: pointer;
   }
 
-  .customer-match-map-actions-v721 .customer-match-menu-panel-v721 > .item-contact-button-v654.has-contacts {
-    border-color: #37c984 !important;
-    background: #eafbf2 !important;
-    color: #087844 !important;
-  }
-
   .customer-match-map-actions-v721 .customer-match-menu-panel-v721 .item-action-icon-v662 {
     display: inline-flex !important;
     width: 16px !important;
@@ -1655,8 +1690,7 @@
     height: 16px !important;
   }
 
-  .customer-match-map-actions-v721 .customer-match-menu-panel-v721 .item-action-text-v661,
-  .customer-match-map-actions-v721 .customer-match-menu-label-v721 {
+  .customer-match-map-actions-v721 .customer-match-menu-panel-v721 .item-action-text-v661 {
     display: inline !important;
     font: inherit !important;
   }
