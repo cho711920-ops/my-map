@@ -16,6 +16,7 @@ var multiClusterMode = false;
 var selectedGroupKeys = [];
 var preserveActionSelectionDuringRender = false;
 var openMemoKey = null;
+var activeMemoCardV728 = null;
 var editingMemoKey = null;
 var memoEditMode = "replace";
 var memoSavePendingKeysV655 = Object.create(null);
@@ -2245,19 +2246,29 @@ function showMemoListKeepingPosition(anchorKey) {
   refreshMemoCardV655(anchorKey, false);
 }
 
-function toggleItemMemo(encodedKey) {
+function toggleItemMemo(encodedKey, sourceButton) {
   var key = decodeURIComponent(encodedKey);
   var previousOpenKey = openMemoKey;
+  var previousOpenCard = activeMemoCardV728;
+  var clickedCard = sourceButton && sourceButton.closest
+    ? sourceButton.closest('.item[data-listing-key]')
+    : null;
+  var closingCurrent = openMemoKey === key &&
+    (!clickedCard || !previousOpenCard || clickedCard === previousOpenCard);
 
-  openMemoKey = openMemoKey === key ? null : key;
+  openMemoKey = closingCurrent ? null : key;
+  activeMemoCardV728 = closingCurrent ? null : clickedCard;
   editingMemoKey = null;
   memoEditMode = "replace";
   delete memoDraftValuesV655[key];
 
-  if (previousOpenKey && previousOpenKey !== key) {
-    refreshMemoCardV655(previousOpenKey, false);
+  if (previousOpenKey && previousOpenCard &&
+      (previousOpenKey !== key || previousOpenCard !== clickedCard || closingCurrent)) {
+    refreshMemoCardV655(previousOpenKey, false, previousOpenCard, false);
   }
-  refreshMemoCardV655(key, false);
+  if (!closingCurrent) {
+    refreshMemoCardV655(key, false, clickedCard, true);
+  }
 }
 
 
@@ -2332,11 +2343,20 @@ function getMemoItemV655(key) {
 }
 
 
-function getMemoCardV655(key) {
+function getMemoCardV655(key, preferredCard) {
   if (!key) return null;
-  return document.querySelector(
+  if (preferredCard && preferredCard.isConnected &&
+      preferredCard.getAttribute("data-listing-key") === key) {
+    return preferredCard;
+  }
+  if (activeMemoCardV728 && activeMemoCardV728.isConnected &&
+      activeMemoCardV728.getAttribute("data-listing-key") === key) {
+    return activeMemoCardV728;
+  }
+  var cards = Array.from(document.querySelectorAll(
     '.item[data-listing-key="' + CSS.escape(key) + '"]'
-  );
+  ));
+  return cards.find(function(card) { return card.offsetParent !== null; }) || cards[0] || null;
 }
 
 
@@ -2409,7 +2429,8 @@ function buildMemoPanelMarkupV655(item) {
 
 function focusMemoEditorV655(key) {
   requestAnimationFrame(function() {
-    var editor = document.querySelector(
+    var card = getMemoCardV655(key);
+    var editor = card && card.querySelector(
       '[data-memo-editor-key="' + CSS.escape(key) + '"]'
     );
     if (!editor) return;
@@ -2423,11 +2444,13 @@ function focusMemoEditorV655(key) {
 }
 
 
-function refreshMemoCardV655(key, focusEditor) {
-  var card = getMemoCardV655(key);
+function refreshMemoCardV655(key, focusEditor, preferredCard, forceOpen) {
+  var card = getMemoCardV655(key, preferredCard);
   if (!card) return;
   var item = getMemoItemV655(key);
-  var isOpen = openMemoKey === key;
+  var isOpen = typeof forceOpen === "boolean"
+    ? forceOpen
+    : openMemoKey === key && (!activeMemoCardV728 || card === activeMemoCardV728);
   var toggle = card.querySelector(".item-memo-toggle");
   var panel = card.querySelector(".item-memo-panel");
 
@@ -2468,7 +2491,10 @@ function saveItemMemo(encodedKey) {
   var key = decodeURIComponent(encodedKey);
   var item = getMemoItemV655(key);
 
-  var editor = document.querySelector('[data-memo-editor-key="' + CSS.escape(key) + '"]');
+  var memoCard = getMemoCardV655(key);
+  var editor = memoCard && memoCard.querySelector(
+    '[data-memo-editor-key="' + CSS.escape(key) + '"]'
+  );
 
   if (!item || !editor) {
     alert("메모 수정 대상을 찾지 못했습니다.");
@@ -3096,7 +3122,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var memoToggleButton =
     '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
       'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
-      'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\')">' +
+      'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\', this)">' +
       '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
     '</button>';
 
