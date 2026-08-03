@@ -66,6 +66,7 @@ assert.deepEqual(
 );
 assert.equal(context.getAdministrativeClusterModeV655(7), "district");
 assert.equal(context.getAdministrativeClusterModeV655(6), "neighborhood");
+assert.equal(context.getAdministrativeClusterModeV655(5), "");
 assert.equal(context.getAdministrativeClusterModeV655(4), "");
 
 const groups = [
@@ -183,7 +184,9 @@ for (let firstIndex = 0; firstIndex < denseBoxes.length; firstIndex += 1) {
   }
 }
 
-assert.match(source, /function openAdministrativeClusterV655[\s\S]*?targetLevel = cluster\.regionMode === "district" \? 6 : 4[\s\S]*?setAdministrativeListSelectionV6570\(cluster\)[\s\S]*?showList\(cluster\.items \|\| \[\]\)/);
+assert.match(source, /function openAdministrativeClusterV655[\s\S]*?setAdministrativeListSelectionV6570\(cluster\)[\s\S]*?showList\(cluster\.items \|\| \[\]\)/);
+assert.doesNotMatch(source, /function openAdministrativeClusterV655[\s\S]*?map\.setLevel\(/);
+assert.doesNotMatch(source, /function openAdministrativeClusterV655[\s\S]*?map\.panTo\(/);
 assert.match(source, /scheduleMapIdleRefreshV638[\s\S]*?getAdministrativeListItemsV6570\(jsLastRenderedItemsV639\)/);
 assert.match(source, /getFilteredItems\(\{\s*includeUnlocated: true,\s*ignoreMapBounds: true\s*\}\)/);
 assert.match(scriptSource, /var ignoreMapBounds = !!\(options && options\.ignoreMapBounds\)/);
@@ -192,7 +195,7 @@ assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
 assert.match(css, /admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.1.3-admin-list-filter"));
+assert.ok(html.includes("map.js?v=8.1.4-admin-cluster-list-only-photo-speed"));
 assert.ok(html.includes("style.css?v=6.5.33-admin-count-confirmed"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");

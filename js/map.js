@@ -502,8 +502,8 @@ function createExactAddressClustersV6519(addressGroups) {
 /*
  * v6.5.27 행정구역 단계형 클러스터
  * - level 7 이상: 구 단위
- * - level 5~6: 동 단위
- * - level 4 이하: 기존 화면 격자 숫자 클러스터
+ * - level 6: 동 단위
+ * - level 5 이하: 기존 화면 격자 숫자 클러스터
  */
 function getAddressAdminRegionV655(address) {
   var tokens = String(address || "")
@@ -587,7 +587,7 @@ window.clearAdministrativeListSelectionV6570 = clearAdministrativeListSelectionV
 function getAdministrativeClusterModeV655(level) {
   var value = Number(level) || 0;
   if (value >= 7) return "district";
-  if (value >= 5) return "neighborhood";
+  if (value >= 6) return "neighborhood";
   return "";
 }
 
@@ -1830,7 +1830,7 @@ function buildClusterOverlayContentV655(cluster, classNames) {
   if (cluster && cluster.regionMode) {
     return '<button type="button" class="' + classes + ' admin-region-cluster-v655"' +
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
-      ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 확대">' +
+      ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기">' +
       '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span></button>';
   }
 
@@ -2032,7 +2032,6 @@ function openAdministrativeClusterV655(encodedKey) {
   if (!overlay || !overlay.__cluster || !map) return;
 
   var cluster = overlay.__cluster;
-  var targetLevel = cluster.regionMode === "district" ? 6 : 4;
   clearPinnedClusterSelectionV6515(true);
   setAdministrativeListSelectionV6570(cluster);
   showList(cluster.items || []);
@@ -2040,8 +2039,6 @@ function openAdministrativeClusterV655(encodedKey) {
   if (statusElement) {
     statusElement.innerHTML = getAdministrativeListStatusV6570(cluster.items || []);
   }
-  map.setLevel(targetLevel, { anchor: cluster.latlng });
-  map.panTo(cluster.latlng);
 }
 
 

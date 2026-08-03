@@ -6,7 +6,8 @@
     tellCache: {}, tellPending: {}, masterMeta: {}, pendingMove: null,
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
-    contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0 };
+    contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
+    photoPreloads: {}, photoPreloadOrder: [] };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function esc(value) {
@@ -59,6 +60,38 @@
     return text(originalImages(original)[0]);
   }
 
+  /*
+   * 상세창 폭보다 훨씬 큰 당근 1440px 원본은 전환할 때마다 수신 시간이 길었습니다.
+   * 상세/확대 보기에는 선명도가 충분한 960px 이미지를 사용하고 원본 링크는 그대로 보존합니다.
+   */
+  function detailDisplayImageUrl(url) {
+    var value = text(url);
+    if (!value) return "";
+    if (/img\.kr\.gcp-karroter\.net/i.test(value)) {
+      value = value.replace(/([?&])q=\d+/i, "$1q=88");
+      value = value.replace(/([?&])s=\d+x\d+/i, "$1s=960x960");
+    }
+    return value;
+  }
+
+  function preloadDetailImage(url, highPriority) {
+    var source = detailDisplayImageUrl(url);
+    if (!source) return null;
+    if (state.photoPreloads[source]) return state.photoPreloads[source];
+
+    var preload = new Image();
+    preload.decoding = "async";
+    preload.referrerPolicy = "no-referrer";
+    try { preload.fetchPriority = highPriority ? "high" : "low"; } catch (ignore) {}
+    state.photoPreloads[source] = preload;
+    state.photoPreloadOrder.push(source);
+    while (state.photoPreloadOrder.length > 80) {
+      delete state.photoPreloads[state.photoPreloadOrder.shift()];
+    }
+    preload.src = source;
+    return preload;
+  }
+
   function apiGet(action, params) {
     var query = new URLSearchParams(Object.assign({action: action, _: Date.now()}, params || {}));
     return fetch(API + "?" + query.toString(), {credentials: "same-origin", cache: "no-store"})
@@ -84,11 +117,8 @@
   function primeDetailImages(originals) {
     if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
     var selected = orderOriginals(originals)[0];
-    originalImages(selected).slice(0, 2).forEach(function(url) {
-      var preload = new Image();
-      preload.decoding = "async";
-      preload.referrerPolicy = "no-referrer";
-      preload.src = url;
+    originalImages(selected).slice(0, 6).forEach(function(url, index) {
+      preloadDetailImage(url, index < 2);
     });
   }
 
@@ -468,7 +498,9 @@
     var image = gallery.querySelector(".unified-detail-hero-v8 img");
     if (image) {
       image.style.display = "block";
-      image.src = images[safeIndex];
+      var displaySource = detailDisplayImageUrl(images[safeIndex]);
+      try { image.fetchPriority = "high"; } catch (ignore) {}
+      if (image.getAttribute("src") !== displaySource) image.src = displaySource;
       image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
     }
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");
@@ -479,11 +511,9 @@
       button.hidden = photoCount < 2;
       button.disabled = images.length < 2;
     });
-    [1, 2].forEach(function(offset) {
+    [1, 2, 3, 4, 5].forEach(function(offset) {
       if (images.length <= offset) return;
-      var preload = new Image();
-      preload.referrerPolicy = "no-referrer";
-      preload.src = images[(safeIndex + offset) % images.length];
+      preloadDetailImage(images[(safeIndex + offset) % images.length], offset <= 2);
     });
   }
 
@@ -791,10 +821,17 @@
     if (!modal || !images.length) return;
     var safeIndex = Math.max(0, Math.min(Number(index) || 0, images.length - 1));
     modal._indexV8 = safeIndex;
-    modal.querySelector("img").src = images[safeIndex];
+    var displaySource = detailDisplayImageUrl(images[safeIndex]);
+    var modalImage = modal.querySelector("img");
+    try { modalImage.fetchPriority = "high"; } catch (ignore) {}
+    if (modalImage.getAttribute("src") !== displaySource) modalImage.src = displaySource;
     modal.querySelector("span").textContent = (safeIndex + 1) + " / " + images.length;
     modal.querySelector(".prev").disabled = safeIndex === 0;
     modal.querySelector(".next").disabled = safeIndex === images.length - 1;
+    [1, 2, 3].forEach(function(offset) {
+      if (safeIndex + offset >= images.length) return;
+      preloadDetailImage(images[safeIndex + offset], offset === 1);
+    });
   }
 
   function stepGallery(direction) {

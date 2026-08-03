@@ -38,6 +38,6 @@ assert.match(
   mapSource,
   /if \(map && Number\(map\.getLevel\(\)\) <= 1\) \{\s*return createExactAddressClustersV6519\(addressGroups\);/
 );
-assert.match(htmlSource, /js\/map\.js\?v=8\.1\.3-admin-list-filter/);
+assert.match(htmlSource, /js\/map\.js\?v=8\.1\.4-admin-cluster-list-only-photo-speed/);
 
 console.log("max zoom address cluster tests passed");

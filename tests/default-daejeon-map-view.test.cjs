@@ -21,6 +21,6 @@ assert.match(
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
 assert.match(indexSource, /js\/script\.js\?v=6\.5\.63-admin-list-filter/);
-assert.match(indexSource, /js\/map\.js\?v=8\.1\.3-admin-list-filter/);
+assert.match(indexSource, /js\/map\.js\?v=8\.1\.4-admin-cluster-list-only-photo-speed/);
 
 console.log("default Daejeon map view tests passed");
