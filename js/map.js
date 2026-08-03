@@ -34,6 +34,7 @@ var jsDefaultMapCenterV6524 = {
 };
 var jsDefaultMapLevelV6524 = 7;
 var jsAdministrativeListSelectionV6570 = null;
+var jsAutomaticDataRefreshIntervalV681 = 5 * 60 * 1000;
 
 
 function resetToDaejeonOverviewV6524() {
@@ -981,7 +982,7 @@ kakao.maps.load(function() {
     }
 
     loadSheet(true, false);
-  }, 60000);
+  }, jsAutomaticDataRefreshIntervalV681);
 });
 
 

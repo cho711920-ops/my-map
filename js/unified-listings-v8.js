@@ -245,8 +245,9 @@
         return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
       }, 0);
     });
+    /* 자주 여는 상단 매물 사진은 기존처럼 선조회해 첫 클릭 속도를 유지합니다. */
     scheduleDetailWarmup(items);
-    scheduleContactWarmup(items);
+    /* 연락처는 사용자가 카드나 전화 버튼을 가리킬 때만 선조회합니다. */
     return items;
   }
 

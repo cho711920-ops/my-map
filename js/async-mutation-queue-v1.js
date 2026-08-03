@@ -6,6 +6,7 @@
   var API_URL = "/api/apps-script";
   var sending = false;
   var pollTimer = null;
+  var POLL_INTERVAL_MS = 5000;
   var hideTimer = null;
   var lastSavingCount = 0;
   var externalSavingCount = 0;
@@ -119,6 +120,31 @@
     renderStatus();
   }
 
+  function hasQueuedWork() {
+    return !!(
+      sending ||
+      readOutbox().length ||
+      readActive().length ||
+      Number(lastServerStatus.processing || 0) ||
+      Number(lastServerStatus.pending || 0)
+    );
+  }
+
+  function stopStatusPolling() {
+    if (!pollTimer) return;
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+
+  function scheduleStatusPolling(delay) {
+    stopStatusPolling();
+    if (!hasQueuedWork() || document.visibilityState === "hidden") return;
+    pollTimer = setTimeout(function() {
+      pollTimer = null;
+      refreshStatus();
+    }, Math.max(250, Number(delay) || POLL_INTERVAL_MS));
+  }
+
   function sendOutbox() {
     if (sending) return;
     var tasks = readOutbox();
@@ -162,7 +188,10 @@
       sending = false;
       renderStatus();
       if (latest.length) setTimeout(sendOutbox, 80);
-      else refreshStatus();
+      else {
+        scheduleStatusPolling(250);
+        refreshStatus();
+      }
     }).catch(function(error) {
       sending = false;
       task.lastError = String(error && error.message || error);
@@ -192,6 +221,7 @@
       writeOutbox(tasks);
     }
     renderStatus();
+    scheduleStatusPolling(250);
     setTimeout(sendOutbox, 0);
     return Promise.resolve({
       ok: true,
@@ -250,9 +280,11 @@
       if (result && result.ok !== false) lastServerStatus = result;
       publishFinishedJobs(result);
       renderStatus();
+      scheduleStatusPolling();
       return result;
     }).catch(function() {
       renderStatus();
+      scheduleStatusPolling();
       return lastServerStatus;
     });
   }
@@ -266,9 +298,14 @@
     renderStatus();
     sendOutbox();
     refreshStatus();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(refreshStatus, 5000);
     global.addEventListener("online", sendOutbox);
+    global.addEventListener("visibilitychange", function() {
+      if (document.visibilityState === "hidden") {
+        stopStatusPolling();
+      } else if (hasQueuedWork()) {
+        refreshStatus();
+      }
+    });
   }
 
   global.JSAsyncMutations = {

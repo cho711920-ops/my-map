@@ -41,6 +41,8 @@ assert.match(unified, /Math\.max\(images\.length, Number\(gallery\._photoCountV8
 assert.match(unified, /function loadDetail\(propertyId\)/);
 assert.match(unified, /if \(state\.detailPending\[propertyId\]\) return state\.detailPending\[propertyId\]/);
 assert.match(unified, /function scheduleDetailWarmup\(items\)/);
+assert.match(unified, /^\s*scheduleDetailWarmup\(items\);/m);
+assert.doesNotMatch(unified, /^\s*scheduleContactWarmup\(items\);/m);
 assert.match(unified, /onpointerenter="JSUnifiedListingsV8\.prefetch/);
 assert.match(unified, /button\.disabled = images\.length < 2/);
 assert.match(unified, /if \(!originalId && initial\[0\]\) originalId = text\(initial\[0\]\.originalId\)/);
