@@ -16,6 +16,10 @@ ok(!queue.includes("Number(lastServerStatus.processing || 0) ||"), "another job 
 ok(proxy.includes("STATUS_CACHE_TTL_MS = 15000"), "work queue status requests need a short upstream cache");
 ok(proxy.includes("statusInFlight"), "concurrent status requests must share one upstream request");
 ok(proxy.includes("UPSTREAM_TIMEOUT_MS = 20000"), "an Apps Script wait must not hold Vercel memory indefinitely");
-ok(html.includes("1.0.7-stale-poll-guard"), "the browser cache key must be updated");
+ok(proxy.includes("sendLegacyQueueGuard"), "old browser tabs must not reach Apps Script status polling");
+ok(proxy.includes("sendLegacyBuildingGuard"), "old bulk building prefetch must be stopped server-side");
+ok(proxy.includes("response = await fetchWithTimeout(upstreamUrl(query)"), "all read-only Apps Script calls need a bounded timeout");
+ok(queue.includes("client="), "the current queue client must identify itself to the server guard");
+ok(html.includes("1.0.8-legacy-server-guard"), "the browser cache key must be updated");
 
 console.log("vercel cost guard tests passed");

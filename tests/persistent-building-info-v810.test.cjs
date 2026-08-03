@@ -33,7 +33,7 @@ assert.match(code, /const buildingInfo = buildingInfoByAddress\[addressKey\] \|\
 assert.match(map, /buildingYear: clean\(c\[18\]\)/);
 assert.match(map, /buildingElevators: Number\(clean\(c\[19\]\)\) \|\| 0/);
 assert.match(map, /buildingInfoStatus: clean\(c\[22\]\)/);
-assert.match(map, /JSBuildingRegisterBadges\.prefetchMissing\(rawItems\)/);
+assert.doesNotMatch(map, /JSBuildingRegisterBadges\.prefetchMissing\(rawItems\)/);
 
 assert.match(building, /function persistentBadgeFromItemV810\(item\)/);
 assert.match(building, /String\(item\.buildingInfoStatus \|\| ""\)\.trim\(\) !== "확인완료"/);
@@ -42,5 +42,6 @@ assert.match(building, /requestBadgeData\(item, parcel, true\)/);
 assert.match(building, /if \(persistToServer && \(!data\.buildingInfoCache \|\| !data\.buildingInfoCache\.ok\)\)/);
 assert.match(building, /"address=" \+ encodeURIComponent\(item && item\.address \|\| parcel\.lotAddress \|\| ""\)/);
 assert.match(building, /prefetchMissing: prefetchMissingBuildingInfoV810/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.1\.1"/);
 
 console.log("persistent building info v8.1.0 tests passed");

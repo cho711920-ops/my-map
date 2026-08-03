@@ -19,6 +19,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
+  var BUILDING_CLIENT_VERSION_V811 = "8.1.1";
   var state = {
     item: null,
     parcel: null,
@@ -691,6 +692,7 @@
     }
     var params = [
       "action=buildingRegister",
+      "client=" + encodeURIComponent(BUILDING_CLIENT_VERSION_V811),
       "mode=summary",
       "sigunguCd=" + encodeURIComponent(parcel.sigunguCd),
       "bjdongCd=" + encodeURIComponent(parcel.bjdongCd),
@@ -942,6 +944,7 @@
     var parcel = state.parcel;
     var params = [
       "action=buildingRegister",
+      "client=" + encodeURIComponent(BUILDING_CLIENT_VERSION_V811),
       "sigunguCd=" + encodeURIComponent(parcel.sigunguCd),
       "bjdongCd=" + encodeURIComponent(parcel.bjdongCd),
       "platGbCd=" + encodeURIComponent(parcel.platGbCd),

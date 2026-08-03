@@ -1255,14 +1255,11 @@ function loadSheet(isAuto, forceRefresh) {
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
       showList(currentItems);
-      if (
-        window.JSBuildingRegisterBadges &&
-        typeof window.JSBuildingRegisterBadges.prefetchMissing === "function"
-      ) {
-        setTimeout(function() {
-          window.JSBuildingRegisterBadges.prefetchMissing(rawItems);
-        }, 800);
-      }
+      /*
+       * Missing building data is resolved only for cards that enter the visible
+       * list. Bulk-prefetching every address kept server functions alive long
+       * after the map was left idle and generated unnecessary hosting cost.
+       */
       document.getElementById("status").innerHTML =
         "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
 

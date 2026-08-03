@@ -4,6 +4,7 @@
   var STORAGE_KEY = "js_async_mutation_outbox_v1";
   var ACTIVE_KEY = "js_async_mutation_active_v1";
   var API_URL = "/api/apps-script";
+  var STATUS_CLIENT_VERSION = "1.0.8";
   var sending = false;
   var pollTimer = null;
   var POLL_INTERVAL_MS = 5000;
@@ -284,7 +285,7 @@
   }
 
   function refreshStatus() {
-    return fetch(API_URL + "?action=workQueueStatus&_=" + Date.now(), {
+    return fetch(API_URL + "?action=workQueueStatus&client=" + encodeURIComponent(STATUS_CLIENT_VERSION) + "&_=" + Date.now(), {
       credentials: "same-origin",
       cache: "no-store"
     }).then(function(response) {

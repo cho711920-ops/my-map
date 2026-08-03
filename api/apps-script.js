@@ -2,6 +2,8 @@ import { requireSameOrigin, requireSession, sendError } from "./_lib/security.js
 
 const STATUS_CACHE_TTL_MS = 15000;
 const UPSTREAM_TIMEOUT_MS = 20000;
+const QUEUE_CLIENT_VERSION = "1.0.8";
+const BUILDING_CLIENT_VERSION = "8.1.1";
 const statusCache = new Map();
 const statusInFlight = new Map();
 
@@ -48,6 +50,49 @@ async function fetchWorkQueueStatus(url, owner) {
   }
 }
 
+function sendJsonp(res, callback, payload, extraHeaders = {}) {
+  const safeCallback = /^[A-Za-z_$][\w$]{0,127}$/.test(String(callback || ""))
+    ? String(callback)
+    : "";
+  const body = safeCallback
+    ? `${safeCallback}(${JSON.stringify(payload)});`
+    : JSON.stringify(payload);
+  res.setHeader("Content-Type", safeCallback
+    ? "application/javascript; charset=utf-8"
+    : "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "private, no-store");
+  Object.entries(extraHeaders).forEach(([key, value]) => res.setHeader(key, value));
+  return res.status(200).send(body);
+}
+
+function sendLegacyQueueGuard(res) {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-JS-Legacy-Poll-Guard", "1");
+  return res.status(200).send(JSON.stringify({
+    ok: true,
+    action: "workQueueStatus",
+    completed: 0,
+    processing: 0,
+    pending: 0,
+    failed: 0,
+    jobs: [],
+    legacyGuard: true
+  }));
+}
+
+function sendLegacyBuildingGuard(res, query) {
+  return sendJsonp(res, query.callback, {
+    ok: true,
+    action: "buildingRegister",
+    buildings: [],
+    recaps: [],
+    units: [],
+    buildingInfoCache: { ok: true, skipped: true },
+    legacyGuard: true
+  }, { "X-JS-Legacy-Building-Guard": "1" });
+}
+
 function upstreamUrl(query) {
   const base = process.env.APPS_SCRIPT_URL;
   const secret = process.env.APPS_SCRIPT_PROXY_SECRET;
@@ -71,13 +116,26 @@ export default async function handler(req, res) {
       const query = { ...req.query, owner: user.email || "" };
       delete query._;
       if (String(query.action || "") === "workQueueStatus") {
+        if (String(query.client || "") !== QUEUE_CLIENT_VERSION) {
+          return sendLegacyQueueGuard(res);
+        }
         const value = await fetchWorkQueueStatus(upstreamUrl(query), user.email || "");
         res.setHeader("Content-Type", value.contentType);
         res.setHeader("Cache-Control", "private, no-store");
         res.setHeader("X-JS-Status-Cache", value.cacheHit ? "HIT" : "MISS");
         return res.status(value.status).send(value.text);
       }
-      response = await fetch(upstreamUrl(query), { redirect: "follow", cache: "no-store" });
+      if (
+        String(query.action || "") === "buildingRegister" &&
+        String(query.mode || "") === "summary" &&
+        String(query.client || "") !== BUILDING_CLIENT_VERSION
+      ) {
+        return sendLegacyBuildingGuard(res, query);
+      }
+      response = await fetchWithTimeout(upstreamUrl(query), {
+        redirect: "follow",
+        cache: "no-store"
+      });
     } else {
       const contentLength = Number(req.headers["content-length"] || 0);
       if (contentLength > 2 * 1024 * 1024) {
