@@ -970,13 +970,17 @@ kakao.maps.load(function() {
   loadSheet();
 
   setInterval(function() {
+    if (document.visibilityState === "hidden") {
+      return;
+    }
+
     if (isLoadingSheet) {
       pendingAutoUpdate = true;
       console.log("주소 변환중이라 자동 업데이트를 건너뜁니다.");
       return;
     }
 
-    loadSheet(true);
+    loadSheet(true, false);
   }, 60000);
 });
 
@@ -1128,7 +1132,7 @@ function restoreAutoUpdateViewState(state) {
 }
 
 
-function loadSheet(isAuto) {
+function loadSheet(isAuto, forceRefresh) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
     document.getElementById("status").innerHTML = "주소 변환중... 자동 업데이트 대기";
@@ -1148,7 +1152,19 @@ function loadSheet(isAuto) {
   errorItems = [];
   document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "시트 읽는중...";
 
-  var sheetRequest = fetch(sheetURL)
+  /*
+   * 저장 직후의 loadSheet(true)는 운영 시트를 강제로 다시 읽습니다.
+   * 1분 자동 확인만 loadSheet(true, false)로 호출하여 ETag 재검증을 사용합니다.
+   */
+  var shouldForceRefresh = arguments.length >= 2
+    ? !!forceRefresh
+    : !!isAuto;
+  var sheetRequest = fetch(sheetURL, shouldForceRefresh ? {
+    cache: "reload",
+    headers: { "X-JS-Force-Refresh": "1" }
+  } : {
+    cache: "default"
+  })
     .then(function(res) {
       if (res.ok) return res.text();
       return res.text().then(function(body) {
