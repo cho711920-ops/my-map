@@ -155,6 +155,15 @@ assert.equal(isCompleteGongsilCapture(2490, 2504), true);
 assert.equal(isCompleteGongsilCapture(2504, 2490), false);
 assert.equal(isCompleteGongsilCapture(1999, 2504), false);
 
+assert.match(
+  source,
+  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0,/
+);
+assert.doesNotMatch(
+  source,
+  /Number\(metadata\.rejectedCount \|\| 0\) === 0,/
+);
+
 const saveFunction = source.slice(
   source.indexOf("async function sendToAppsScript("),
   source.indexOf("async function sendAppsScriptBatch(")
@@ -173,7 +182,7 @@ assert.ok(checkpointPosition > offsetPosition);
 assert.ok(dashboardPosition > checkpointPosition);
 assert.match(
   saveFunction,
-  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0/
+  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0/
 );
 assert.match(
   source,

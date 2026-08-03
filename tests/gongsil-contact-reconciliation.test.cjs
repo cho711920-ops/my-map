@@ -48,7 +48,7 @@ assert.match(
 );
 assert.match(
   backend,
-  /if \(source === "공실박스" && !body\.stopped\) \{[\s\S]*?contactReconciliation = mmReconcileGongsilContactsForSession_\(sessionId, \{[\s\S]*?requireAllLinked: complete/,
+  /if \(source === "공실박스" && !body\.stopped\) \{[\s\S]*?contactReconciliation = mmReconcileGongsilContactsForSession_\(sessionId, \{[\s\S]*?requireAllLinked: false/,
   "공실박스 연락처 복구는 거래완료용 완전수집과 분리해야 합니다."
 );
 assert.match(

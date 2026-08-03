@@ -2003,8 +2003,7 @@
         collectorKey,
         Boolean(metadata.complete) &&
           !stopped &&
-          Number(totals.failed || 0) === 0 &&
-          Number(metadata.rejectedCount || 0) === 0,
+          Number(totals.failed || 0) === 0,
         stopped
       );
     }

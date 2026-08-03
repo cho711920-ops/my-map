@@ -1058,10 +1058,11 @@ function getFilteredItems(options) {
   });
 
   filtered.sort(function(a, b) {
-    var dateA = new Date((a.regDate || "").replace(/\./g, "-")).getTime() || 0;
-    var dateB = new Date((b.regDate || "").replace(/\./g, "-")).getTime() || 0;
-
-    if (sortType === "latest") return dateB - dateA;
+    if (sortType === "latest") {
+      var latestDifference = listingRegistrationTime(b) - listingRegistrationTime(a);
+      if (latestDifference) return latestDifference;
+      return (Number(b.sheetRow) || 0) - (Number(a.sheetRow) || 0);
+    }
 
     if (sortType === "address" || sortType === "addressAsc") return compareNaturalAddress(a, b);
     if (sortType === "addressDesc") return compareNaturalAddress(b, a);
@@ -1076,6 +1077,25 @@ function getFilteredItems(options) {
   });
 
   return filtered;
+}
+
+function listingRegistrationTime(item) {
+  var raw = String((item && (item.registrationAt || item.regDate)) || "").trim();
+  if (!raw) return 0;
+  var matched = raw.match(
+    /^(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+  );
+  if (matched) {
+    return new Date(
+      Number(matched[1]),
+      Number(matched[2]) - 1,
+      Number(matched[3]),
+      Number(matched[4] || 0),
+      Number(matched[5] || 0),
+      Number(matched[6] || 0)
+    ).getTime();
+  }
+  return Date.parse(raw.replace(/\./g, "-")) || 0;
 }
 
 function getCoordinateDistanceMetersV658(first, second) {

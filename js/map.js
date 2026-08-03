@@ -1214,6 +1214,8 @@ function loadSheet(isAuto) {
           buildingApprovalDate: clean(c[20]),
           buildingInfoCheckedAt: clean(c[21]),
           buildingInfoStatus: clean(c[22]),
+          registrationAt: clean(c[23]),
+          lastCollectedAt: clean(c[24]),
           sheetRow: i + 1,
           latlng: null
         };
