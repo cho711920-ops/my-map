@@ -1,5 +1,53 @@
 import { requireSameOrigin, requireSession, sendError } from "./_lib/security.js";
 
+const STATUS_CACHE_TTL_MS = 15000;
+const UPSTREAM_TIMEOUT_MS = 20000;
+const statusCache = new Map();
+const statusInFlight = new Map();
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchWorkQueueStatus(url, owner) {
+  const key = String(owner || "anonymous").toLowerCase();
+  const cached = statusCache.get(key);
+  if (cached && Date.now() - cached.savedAt < STATUS_CACHE_TTL_MS) {
+    return { ...cached, cacheHit: true };
+  }
+  if (statusInFlight.has(key)) return statusInFlight.get(key);
+
+  const pending = (async () => {
+    const response = await fetchWithTimeout(url, {
+      redirect: "follow",
+      cache: "no-store"
+    });
+    const value = {
+      savedAt: Date.now(),
+      cacheHit: false,
+      status: response.ok ? 200 : 502,
+      contentType: response.headers.get("content-type") || "application/json; charset=utf-8",
+      text: await response.text()
+    };
+    statusCache.set(key, value);
+    if (statusCache.size > 50) statusCache.delete(statusCache.keys().next().value);
+    return value;
+  })();
+
+  statusInFlight.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    statusInFlight.delete(key);
+  }
+}
+
 function upstreamUrl(query) {
   const base = process.env.APPS_SCRIPT_URL;
   const secret = process.env.APPS_SCRIPT_PROXY_SECRET;
@@ -20,7 +68,16 @@ export default async function handler(req, res) {
 
     let response;
     if (req.method === "GET") {
-      response = await fetch(upstreamUrl({ ...req.query, owner: user.email || "" }), { redirect: "follow", cache: "no-store" });
+      const query = { ...req.query, owner: user.email || "" };
+      delete query._;
+      if (String(query.action || "") === "workQueueStatus") {
+        const value = await fetchWorkQueueStatus(upstreamUrl(query), user.email || "");
+        res.setHeader("Content-Type", value.contentType);
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("X-JS-Status-Cache", value.cacheHit ? "HIT" : "MISS");
+        return res.status(value.status).send(value.text);
+      }
+      response = await fetch(upstreamUrl(query), { redirect: "follow", cache: "no-store" });
     } else {
       const contentLength = Number(req.headers["content-length"] || 0);
       if (contentLength > 2 * 1024 * 1024) {

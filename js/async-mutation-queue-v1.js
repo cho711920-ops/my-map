@@ -7,6 +7,7 @@
   var sending = false;
   var pollTimer = null;
   var POLL_INTERVAL_MS = 5000;
+  var statusPollingSuspended = false;
   var hideTimer = null;
   var lastSavingCount = 0;
   var externalSavingCount = 0;
@@ -121,12 +122,13 @@
   }
 
   function hasQueuedWork() {
+    var unsent = readOutbox().length;
+    if (statusPollingSuspended && !sending && !unsent) return false;
     return !!(
       sending ||
-      readOutbox().length ||
+      unsent ||
       readActive().length ||
-      Number(lastServerStatus.processing || 0) ||
-      Number(lastServerStatus.pending || 0)
+      externalSavingCount
     );
   }
 
@@ -185,6 +187,7 @@
         });
         writeActive(active);
       }
+      statusPollingSuspended = false;
       sending = false;
       renderStatus();
       if (latest.length) setTimeout(sendOutbox, 80);
@@ -208,6 +211,7 @@
   }
 
   function enqueue(action, payload) {
+    statusPollingSuspended = false;
     var requestId = String(payload && payload.requestId || createRequestId(action));
     var taskPayload = Object.assign({}, payload || {}, {requestId: requestId});
     var tasks = readOutbox();
@@ -241,7 +245,6 @@
 
   function publishFinishedJobs(result) {
     var jobs = result && Array.isArray(result.jobs) ? result.jobs : [];
-    if (!jobs.length) return;
     var jobById = {};
     jobs.forEach(function(job) { jobById[String(job.id || "")] = job; });
     var active = readActive();
@@ -267,6 +270,17 @@
       }));
     });
     writeActive(remaining);
+    // The server returns only a bounded recent-job window. An old browser tab can
+    // therefore retain a completed request id forever and poll every five seconds.
+    // When the owner's queue is actually idle, keep the unresolved id for audit
+    // purposes but suspend automatic polling until a new mutation is submitted.
+    if (
+      remaining.length &&
+      !Number(result && result.processing || 0) &&
+      !Number(result && result.pending || 0)
+    ) {
+      statusPollingSuspended = true;
+    }
   }
 
   function refreshStatus() {
@@ -297,7 +311,7 @@
     }
     renderStatus();
     sendOutbox();
-    refreshStatus();
+    if (hasQueuedWork()) refreshStatus();
     global.addEventListener("online", sendOutbox);
     global.addEventListener("visibilitychange", function() {
       if (document.visibilityState === "hidden") {
