@@ -953,6 +953,7 @@ setTimeout(updateSortDropdownUI, 0);
 
 function getFilteredItems(options) {
   var includeUnlocated = !!(options && options.includeUnlocated);
+  var ignoreMapBounds = !!(options && options.ignoreMapBounds);
   if (!map) return allItems;
 
   var bounds = map.getBounds();
@@ -1044,9 +1045,11 @@ function getFilteredItems(options) {
     var matchDone = !hideDone || !isDone(item);
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
-    var inMap = radiusFilter
-      ? isItemWithinMapRadiusV658(item, radiusFilter)
-      : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng));
+    var inMap = ignoreMapBounds
+      ? true
+      : (radiusFilter
+        ? isItemWithinMapRadiusV658(item, radiusFilter)
+        : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng)));
 
     return matchCustomerSelection && matchCustomerHeldVisibility &&
       matchKeyword && matchType && matchSource && matchIndustry && matchPrice &&
@@ -3969,6 +3972,9 @@ function resetFilter() {
   selectedItemKey = null;
   if (typeof clearPinnedClusterSelectionV6515 === "function") {
     clearPinnedClusterSelectionV6515(false);
+  }
+  if (typeof window.clearAdministrativeListSelectionV6570 === "function") {
+    window.clearAdministrativeListSelectionV6570();
   }
   if (typeof window.resetToDaejeonOverviewV6524 === "function") {
     window.resetToDaejeonOverviewV6524();

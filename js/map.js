@@ -33,6 +33,7 @@ var jsDefaultMapCenterV6524 = {
   lng: 127.3845
 };
 var jsDefaultMapLevelV6524 = 7;
+var jsAdministrativeListSelectionV6570 = null;
 
 
 function resetToDaejeonOverviewV6524() {
@@ -527,6 +528,62 @@ function getAddressAdminRegionV655(address) {
 }
 
 
+function setAdministrativeListSelectionV6570(cluster) {
+  if (!cluster || !cluster.regionMode || !cluster.regionLabel) {
+    jsAdministrativeListSelectionV6570 = null;
+    return;
+  }
+
+  jsAdministrativeListSelectionV6570 = {
+    mode: cluster.regionMode,
+    regionLabel: String(cluster.regionLabel || "").trim(),
+    districtLabel: String(cluster.districtLabel || "").trim()
+  };
+}
+
+
+function clearAdministrativeListSelectionV6570() {
+  jsAdministrativeListSelectionV6570 = null;
+}
+
+
+function getAdministrativeListItemsV6570(items) {
+  var selection = jsAdministrativeListSelectionV6570;
+  var sourceItems = (items || []).slice();
+  if (!selection || !selection.regionLabel) return sourceItems;
+
+  /*
+   * 동 이름표를 누르면 확대된 현재 화면 안의 일부만 남기지 않고,
+   * 현재 검색·출처·가격 조건을 만족하는 해당 동 전체를 목록에 유지합니다.
+   */
+  if (typeof getFilteredItems === "function") {
+    sourceItems = getFilteredItems({
+      includeUnlocated: true,
+      ignoreMapBounds: true
+    });
+  }
+
+  return sourceItems.filter(function(item) {
+    var region = getAddressAdminRegionV655(item && (item.address || item.rawAddress || ""));
+    if (selection.mode === "district") {
+      return region.district === selection.regionLabel;
+    }
+    return region.neighborhood === selection.regionLabel &&
+      (!selection.districtLabel || region.district === selection.districtLabel);
+  });
+}
+
+
+function getAdministrativeListStatusV6570(items) {
+  var selection = jsAdministrativeListSelectionV6570;
+  if (!selection) return "";
+  return selection.regionLabel + " 매물 " + ((items || []).length) + "개";
+}
+
+
+window.clearAdministrativeListSelectionV6570 = clearAdministrativeListSelectionV6570;
+
+
 function getAdministrativeClusterModeV655(level) {
   var value = Number(level) || 0;
   if (value >= 7) return "district";
@@ -857,12 +914,13 @@ function scheduleMapIdleRefreshV638() {
        * 준공년도 배지가 조회된 카드는 다시 "-"로 돌아가지 않습니다.
        */
       window.jsReuseListCardsOnNextRenderV6521 = true;
-      showList(jsLastRenderedItemsV639);
+      var administrativeItems = getAdministrativeListItemsV6570(jsLastRenderedItemsV639);
+      showList(administrativeItems);
 
       var statusElement = document.getElementById("status");
       if (statusElement) {
-        statusElement.innerHTML =
-          "현재 지도 매물 " + jsLastRenderedItemsV639.length + "개";
+        statusElement.innerHTML = getAdministrativeListStatusV6570(administrativeItems) ||
+          ("현재 지도 매물 " + jsLastRenderedItemsV639.length + "개");
       }
     }
   }, 120);
@@ -1861,7 +1919,9 @@ function drawItems(items) {
   jsLastRenderedItemsV639 = (items || []).slice();
   drawMapClustersOnlyV639(jsLastRenderedItemsV639);
   var pinnedItems = getPinnedClusterItemsV6515();
-  showList(pinnedItems.length ? pinnedItems : jsLastRenderedItemsV639);
+  showList(pinnedItems.length
+    ? pinnedItems
+    : getAdministrativeListItemsV6570(jsLastRenderedItemsV639));
 }
 
 
@@ -1956,6 +2016,12 @@ function openAdministrativeClusterV655(encodedKey) {
   var cluster = overlay.__cluster;
   var targetLevel = cluster.regionMode === "district" ? 6 : 4;
   clearPinnedClusterSelectionV6515(true);
+  setAdministrativeListSelectionV6570(cluster);
+  showList(cluster.items || []);
+  var statusElement = document.getElementById("status");
+  if (statusElement) {
+    statusElement.innerHTML = getAdministrativeListStatusV6570(cluster.items || []);
+  }
   map.setLevel(targetLevel, { anchor: cluster.latlng });
   map.panTo(cluster.latlng);
 }

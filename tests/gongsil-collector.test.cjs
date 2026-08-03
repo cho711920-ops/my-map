@@ -7,7 +7,12 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.6";/);
+assert.match(source, /var VERSION = "1\.9\.7";/);
+assert.match(
+  source,
+  /complete: isCompleteGongsilCapture\(selectedCount, items\.length\)/,
+  "공실박스 완전수집 판정은 선택 수와 최종 목록 수가 정확히 같을 때만 인정하면 안 됩니다."
+);
 assert.match(source, /data-metric="updated"/);
 assert.match(source, /data-metric="detailedDuplicates"/);
 assert.match(source, /data-metric="skippedUnchanged"/);
@@ -138,6 +143,17 @@ assert.equal(
   }),
   2486
 );
+
+const completeCaptureSource = source.match(
+  /function isCompleteGongsilCapture\(selectedCount, capturedCount\) \{[\s\S]*?\n  \}/
+)[0];
+const isCompleteGongsilCapture = new Function(
+  `${completeCaptureSource}\nreturn isCompleteGongsilCapture;`
+)();
+
+assert.equal(isCompleteGongsilCapture(2490, 2504), true);
+assert.equal(isCompleteGongsilCapture(2504, 2490), false);
+assert.equal(isCompleteGongsilCapture(1999, 2504), false);
 
 const saveFunction = source.slice(
   source.indexOf("async function sendToAppsScript("),

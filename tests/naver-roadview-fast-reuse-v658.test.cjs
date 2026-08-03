@@ -43,7 +43,7 @@ assert.match(script, /if \(mapActive && !roadviewFullMap && roadviewTargetPositi
 assert.match(script, /if \(panoramaPosition\) setupNaverRoadviewMapV654\(panoramaPosition\)/);
 assert.match(script, /\}, 6500\);/);
 assert.ok(
-  html.includes("script.js?v=6.5.62-naver-map-auth-guard"),
+  html.includes("script.js?v=6.5.63-admin-list-filter"),
   "빠른 네이버 거리뷰 캐시 버전이 적용되어야 합니다."
 );
 

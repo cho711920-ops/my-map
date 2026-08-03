@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.6";
+  var VERSION = "1.9.7";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -490,8 +490,7 @@
         scope: selectedCount >= 2000
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
-        complete: selectedCount >= 2000 &&
-          items.length === selectedCount,
+        complete: isCompleteGongsilCapture(selectedCount, items.length),
         found: items.length,
         rejectedCount: 0,
         observedSourceIds: observedSourceIds(items),
@@ -1050,6 +1049,18 @@
       : (Array.isArray(body.bidxs) ? body.bidxs : []);
 
     return unique(selectedIds.map(String)).length;
+  }
+
+  function isCompleteGongsilCapture(selectedCount, capturedCount) {
+    selectedCount = Number(selectedCount) || 0;
+    capturedCount = Number(capturedCount) || 0;
+    /*
+     * 공실박스 목록 응답에는 선택한 ID 외의 같은 클러스터 매물이 함께
+     * 포함될 수 있습니다. 누락은 중단하되, 최종 확인 건수가 선택 건수보다
+     * 많은 정상 전체수집은 완전수집으로 인정해야 기존 매물 연락처도
+     * 빠짐없이 다시 상세조회합니다.
+     */
+    return selectedCount >= 2000 && capturedCount >= selectedCount;
   }
 
   function validateCapturedItems(byId, selectedCount) {

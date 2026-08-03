@@ -48,6 +48,6 @@ assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !impo
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.35-visible-shimmer-confirmed/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.17-detail-drawer-motion/);
-assert.match(html, /script\.js\?v=6\.5\.62-naver-map-auth-guard/);
+assert.match(html, /script\.js\?v=6\.5\.63-admin-list-filter/);
 
 console.log("main listing three-line v6.6.1 tests passed");

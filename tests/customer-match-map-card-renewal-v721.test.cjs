@@ -47,6 +47,6 @@ assert.match(css, /customer-match-map-card-v721\.customer-match-held[\s\S]*?bord
 assert.match(html, /id="customerMatchMapStatusOverlayV722"/);
 assert.match(html, /id="customerMatchMapStatusOverlayV722"[\s\S]*?>메인화면으로 돌아가기<\/button>/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.35-visible-shimmer-confirmed/);
-assert.match(html, /script\.js\?v=6\.5\.62-naver-map-auth-guard/);
+assert.match(html, /script\.js\?v=6\.5\.63-admin-list-filter/);
 
 console.log("customer match map card renewal v7.21 tests passed");

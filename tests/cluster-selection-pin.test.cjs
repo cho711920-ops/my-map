@@ -10,7 +10,7 @@ assert.match(mapSource, /var jsPinnedClusterSelectionV6515 = null;/);
 assert.match(mapSource, /pinCurrentClusterSelectionV6515\(\);\s*redrawSelectedMarkers\(\);/);
 assert.match(
   mapSource,
-  /var pinnedItems = getPinnedClusterItemsV6515\(\);\s*showList\(pinnedItems\.length \? pinnedItems : jsLastRenderedItemsV639\);/
+  /var pinnedItems = getPinnedClusterItemsV6515\(\);\s*showList\(pinnedItems\.length\s*\? pinnedItems\s*:\s*getAdministrativeListItemsV6570\(jsLastRenderedItemsV639\)\);/
 );
 assert.match(mapSource, /addListener\(map, "dragstart"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/);
 assert.match(mapSource, /addListener\(map, "zoom_start"[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/);
@@ -31,8 +31,8 @@ assert.match(
   operationsSource,
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
-assert.match(htmlSource, /js\/map\.js\?v=8\.1\.2-admin-count-blue/);
-assert.match(htmlSource, /js\/script\.js\?v=6\.5\.62-naver-map-auth-guard/);
+assert.match(htmlSource, /js\/map\.js\?v=8\.1\.3-admin-list-filter/);
+assert.match(htmlSource, /js\/script\.js\?v=6\.5\.63-admin-list-filter/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.20\.4-condition-refresh-motion/);
 
 console.log("cluster selection pin tests passed");

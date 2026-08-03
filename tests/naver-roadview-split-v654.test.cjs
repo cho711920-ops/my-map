@@ -38,7 +38,7 @@ assert.match(
   /@media \(max-width: 768px\)[\s\S]*?\.naver-roadview-map-panel-v654\s*\{[\s\S]*?display:\s*none/
 );
 
-assert.match(html, /script\.js\?v=6\.5\.62-naver-map-auth-guard/);
+assert.match(html, /script\.js\?v=6\.5\.63-admin-list-filter/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.35-visible-shimmer-confirmed/);
 
 console.log("NAVER split roadview v6.5.54 tests passed");

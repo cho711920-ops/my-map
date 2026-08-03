@@ -20,7 +20,7 @@ assert.match(
   scriptSource,
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
-assert.match(indexSource, /js\/script\.js\?v=6\.5\.62-naver-map-auth-guard/);
-assert.match(indexSource, /js\/map\.js\?v=8\.1\.2-admin-count-blue/);
+assert.match(indexSource, /js\/script\.js\?v=6\.5\.63-admin-list-filter/);
+assert.match(indexSource, /js\/map\.js\?v=8\.1\.3-admin-list-filter/);
 
 console.log("default Daejeon map view tests passed");

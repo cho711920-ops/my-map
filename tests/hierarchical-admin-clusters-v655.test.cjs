@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const source = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
+const scriptSource = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "style.css"), "utf8");
 
@@ -45,6 +46,9 @@ const context = {
 vm.createContext(context);
 vm.runInContext([
   extractFunction("getAddressAdminRegionV655"),
+  extractFunction("setAdministrativeListSelectionV6570"),
+  extractFunction("clearAdministrativeListSelectionV6570"),
+  extractFunction("getAdministrativeListItemsV6570"),
   extractFunction("getAdministrativeClusterModeV655"),
   extractFunction("createAdministrativeClustersV655"),
   extractFunction("estimateAdministrativeClusterBoxV656"),
@@ -53,6 +57,8 @@ vm.runInContext([
   extractFunction("getPremiumClusterSizeClassV635"),
   extractFunction("buildClusterOverlayContentV655")
 ].join("\n"), context);
+
+context.jsAdministrativeListSelectionV6570 = null;
 
 assert.deepEqual(
   JSON.parse(JSON.stringify(context.getAddressAdminRegionV655("대전광역시 서구 괴정동 95-19"))),
@@ -85,6 +91,21 @@ const neighborhoods = context.createAdministrativeClustersV655(groups, "neighbor
 assert.equal(neighborhoods.length, 3);
 assert.ok(neighborhoods.some((item) => item.regionLabel === "괴정동"));
 assert.ok(neighborhoods.some((item) => item.regionLabel === "용문동"));
+
+context.setAdministrativeListSelectionV6570(
+  neighborhoods.find((item) => item.regionLabel === "괴정동")
+);
+assert.equal(
+  context.getAdministrativeListItemsV6570([
+    { address: "대전광역시 서구 괴정동 95-19" },
+    { address: "대전광역시 서구 용문동 219-8" },
+    { address: "대전광역시 대덕구 법동 1" }
+  ]).length,
+  1,
+  "동 클러스터를 누른 뒤 목록은 지도 범위가 아니라 선택한 동으로 고정되어야 합니다."
+);
+context.clearAdministrativeListSelectionV6570();
+assert.equal(context.getAdministrativeListItemsV6570(groups).length, groups.length);
 
 assert.equal(context.getPremiumClusterSizeClassV635(1).trim(), "cluster-size-sm");
 assert.equal(context.getPremiumClusterSizeClassV635(10).trim(), "cluster-size-md");
@@ -162,12 +183,16 @@ for (let firstIndex = 0; firstIndex < denseBoxes.length; firstIndex += 1) {
   }
 }
 
-assert.match(source, /function openAdministrativeClusterV655[\s\S]*?targetLevel = cluster\.regionMode === "district" \? 6 : 4/);
+assert.match(source, /function openAdministrativeClusterV655[\s\S]*?targetLevel = cluster\.regionMode === "district" \? 6 : 4[\s\S]*?setAdministrativeListSelectionV6570\(cluster\)[\s\S]*?showList\(cluster\.items \|\| \[\]\)/);
+assert.match(source, /scheduleMapIdleRefreshV638[\s\S]*?getAdministrativeListItemsV6570\(jsLastRenderedItemsV639\)/);
+assert.match(source, /getFilteredItems\(\{\s*includeUnlocated: true,\s*ignoreMapBounds: true\s*\}\)/);
+assert.match(scriptSource, /var ignoreMapBounds = !!\(options && options\.ignoreMapBounds\)/);
+assert.match(scriptSource, /var inMap = ignoreMapBounds\s*\? true\s*:/);
 assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
 assert.match(css, /admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.1.2-admin-count-blue"));
+assert.ok(html.includes("map.js?v=8.1.3-admin-list-filter"));
 assert.ok(html.includes("style.css?v=6.5.33-admin-count-confirmed"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");
