@@ -18,7 +18,12 @@ ok(proxy.includes("statusInFlight"), "concurrent status requests must share one 
 ok(proxy.includes("UPSTREAM_TIMEOUT_MS = 20000"), "an Apps Script wait must not hold Vercel memory indefinitely");
 ok(proxy.includes("sendLegacyQueueGuard"), "old browser tabs must not reach Apps Script status polling");
 ok(proxy.includes("sendLegacyBuildingGuard"), "old bulk building prefetch must be stopped server-side");
-ok(proxy.includes("response = await fetchWithTimeout(upstreamUrl(query)"), "all read-only Apps Script calls need a bounded timeout");
+ok(proxy.includes('String(query.action || "") === "buildingRegister"'), "automatic building reads need an action-specific guard");
+ok(proxy.includes('? await fetchWithTimeout(upstreamUrl(query), requestOptions)') &&
+  proxy.includes(': await fetch(upstreamUrl(query), requestOptions)'),
+  "interactive listing, photo, contact, memo, and save-verification reads must not inherit the building timeout");
+ok(!proxy.includes('response = await fetchWithTimeout(upstreamUrl(query), {'),
+  "the twenty-second timeout must not wrap every read-only Apps Script action");
 ok(queue.includes("client="), "the current queue client must identify itself to the server guard");
 ok(html.includes("1.0.8-legacy-server-guard"), "the browser cache key must be updated");
 

@@ -132,10 +132,23 @@ export default async function handler(req, res) {
       ) {
         return sendLegacyBuildingGuard(res, query);
       }
-      response = await fetchWithTimeout(upstreamUrl(query), {
+      const requestOptions = {
         redirect: "follow",
         cache: "no-store"
-      });
+      };
+      /*
+       * Only the automatic building-summary lookup is cost-bounded here.
+       * Listing originals/photos, linked contacts, Tell, mutation read-back,
+       * announcements, and cloud state can legitimately take longer than
+       * twenty seconds in Apps Script. Applying the building timeout to every
+       * GET made those user-facing features appear empty or revert after save.
+       */
+      response = (
+        String(query.action || "") === "buildingRegister" &&
+        String(query.mode || "") === "summary"
+      )
+        ? await fetchWithTimeout(upstreamUrl(query), requestOptions)
+        : await fetch(upstreamUrl(query), requestOptions);
     } else {
       const contentLength = Number(req.headers["content-length"] || 0);
       if (contentLength > 2 * 1024 * 1024) {
