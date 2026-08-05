@@ -46,8 +46,8 @@ assert.match(css, /grid-template-columns:\s*32px 44px 56px 44px 44px 104px/);
 assert.match(css, /\.item-nav-btn \.item-action-text-v661,[\s\S]*?display:\s*inline !important/);
 assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !important;[\s\S]*?font-size:\s*12\.5px !important/);
 
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.35-visible-shimmer-confirmed/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.36-naver-map-auth-fallback/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.19-contact-intent-only/);
-assert.match(html, /script\.js\?v=6\.5\.63-admin-list-filter/);
+assert.match(html, /script\.js\?v=6\.5\.64-naver-map-auth-fallback/);
 
 console.log("main listing three-line v6.6.1 tests passed");

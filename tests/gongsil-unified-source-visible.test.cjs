@@ -11,7 +11,7 @@ assert.match(
 );
 assert.match(
   html,
-  /script\.js\?v=6\.5\.63-admin-list-filter/,
+  /script\.js\?v=6\.5\.64-naver-map-auth-fallback/,
   "the production page must load the relation-aware Gongsil filter"
 );
 

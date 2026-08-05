@@ -82,7 +82,7 @@ assert(
 );
 assert(
   html.includes("style.css?v=6.5.33-admin-count-confirmed") &&
-  html.includes("script.js?v=6.5.63-admin-list-filter"),
+  html.includes("script.js?v=6.5.64-naver-map-auth-fallback"),
   "운영 브라우저가 새 메모 UI를 즉시 받도록 캐시 버전을 올려야 합니다."
 );
 assert(

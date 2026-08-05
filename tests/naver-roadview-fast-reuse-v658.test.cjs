@@ -40,10 +40,10 @@ assert.match(loadSdkBody, /maps-panorama\.js/);
 
 assert.match(script, /requestIdleCallback\(warmNaverRoadviewSdkV658/);
 assert.match(script, /if \(mapActive && !roadviewFullMap && roadviewTargetPosition\)/);
-assert.match(script, /if \(panoramaPosition\) setupNaverRoadviewMapV654\(panoramaPosition\)/);
+assert.match(script, /if \(panoramaPosition && !naverMapsAuthFailedV663\)[\s\S]*?setupNaverRoadviewMapV654\(panoramaPosition\)/);
 assert.match(script, /\}, 6500\);/);
 assert.ok(
-  html.includes("script.js?v=6.5.63-admin-list-filter"),
+  html.includes("script.js?v=6.5.64-naver-map-auth-fallback"),
   "빠른 네이버 거리뷰 캐시 버전이 적용되어야 합니다."
 );
 

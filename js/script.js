@@ -1521,6 +1521,9 @@ var naverRoadviewRetryTimerV658 = null;
 var naverRoadviewListenersBoundV658 = false;
 var naverRoadviewActiveTargetKeyV658 = "";
 var naverRoadviewLastTargetKeyV658 = "";
+var naverMapsAuthFailedV663 = false;
+var previousNaverMapsAuthFailureV663 = null;
+var naverMapsNamespaceV663 = null;
 
 
 function buildNaverRoadviewDirectionIconV654(pan) {
@@ -1589,7 +1592,13 @@ function updateNaverRoadviewMapV654(moveCenter) {
 
 function setupNaverRoadviewMapV654(position) {
   var mapContainer = document.getElementById("naverRoadviewMapV654");
-  if (!mapContainer || !window.naver || !window.naver.maps || !position) return;
+  if (
+    naverMapsAuthFailedV663 ||
+    !mapContainer ||
+    !window.naver ||
+    !window.naver.maps ||
+    !position
+  ) return;
 
   var targetPosition = currentRoadviewCoords
     ? new window.naver.maps.LatLng(
@@ -1669,15 +1678,17 @@ function setupNaverRoadviewMapV654(position) {
 
 function syncNaverRoadviewLayoutV654() {
   var panoramaContainer = document.getElementById("naverRoadviewContainer");
+  var mapsNamespace = window.naver && window.naver.maps
+    ? window.naver.maps
+    : naverMapsNamespaceV663;
   if (
     panoramaContainer &&
     naverRoadviewInstanceV653 &&
-    window.naver &&
-    window.naver.maps
+    mapsNamespace
   ) {
     try {
       naverRoadviewInstanceV653.setSize(
-        new window.naver.maps.Size(
+        new mapsNamespace.Size(
           panoramaContainer.clientWidth,
           panoramaContainer.clientHeight
         )
@@ -1685,9 +1696,9 @@ function syncNaverRoadviewLayoutV654() {
     } catch (error) {}
   }
 
-  if (naverRoadviewMapV654 && window.naver && window.naver.maps) {
+  if (naverRoadviewMapV654 && mapsNamespace) {
     try {
-      window.naver.maps.Event.trigger(naverRoadviewMapV654, "resize");
+      mapsNamespace.Event.trigger(naverRoadviewMapV654, "resize");
     } catch (error) {}
     updateNaverRoadviewMapV654(false);
   }
@@ -1695,10 +1706,13 @@ function syncNaverRoadviewLayoutV654() {
 
 
 function destroyNaverRoadviewMapV654() {
-  if (window.naver && window.naver.maps && window.naver.maps.Event) {
+  var mapsNamespace = window.naver && window.naver.maps
+    ? window.naver.maps
+    : naverMapsNamespaceV663;
+  if (mapsNamespace && mapsNamespace.Event) {
     try {
       if (naverRoadviewMapV654) {
-        window.naver.maps.Event.clearInstanceListeners(naverRoadviewMapV654);
+        mapsNamespace.Event.clearInstanceListeners(naverRoadviewMapV654);
       }
     } catch (error) {}
   }
@@ -1716,6 +1730,52 @@ function destroyNaverRoadviewMapV654() {
 
   var mapContainer = document.getElementById("naverRoadviewMapV654");
   if (mapContainer) mapContainer.innerHTML = "";
+}
+
+
+function showNaverMapsAuthFallbackV663() {
+  naverMapsAuthFailedV663 = true;
+  naverRoadviewSdkPromiseV653 = null;
+
+  var split = document.querySelector(
+    "#naverRoadviewPane .naver-roadview-split-v654"
+  );
+  var mapPanel = document.querySelector(
+    "#naverRoadviewPane .naver-roadview-map-panel-v654"
+  );
+  var status = document.getElementById("naverRoadviewModalStatus");
+
+  if (split) split.classList.add("naver-map-auth-failed-v663");
+  if (mapPanel) mapPanel.setAttribute("aria-hidden", "true");
+
+  destroyNaverRoadviewMapV654();
+
+  if (status) {
+    status.textContent =
+      "\uB124\uC774\uBC84 \uC9C0\uB3C4 \uC778\uC99D\uC744 \uD655\uC778\uD558\uB294 \uB3D9\uC548 \uAC70\uB9AC\uBDF0\uB9CC \uD45C\uC2DC\uD569\uB2C8\uB2E4. \uC9C0\uB3C4 \uD0ED\uC740 \uC815\uC0C1\uC801\uC73C\uB85C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.";
+    status.className = "roadview-inline-status error";
+  }
+
+  window.setTimeout(syncNaverRoadviewLayoutV654, 30);
+}
+
+
+if (!window.__jsNaverMapsAuthFailureBoundV663) {
+  previousNaverMapsAuthFailureV663 =
+    typeof window.navermap_authFailure === "function"
+      ? window.navermap_authFailure
+      : null;
+
+  window.navermap_authFailure = function() {
+    showNaverMapsAuthFallbackV663();
+    if (previousNaverMapsAuthFailureV663) {
+      try {
+        previousNaverMapsAuthFailureV663();
+      } catch (error) {}
+    }
+  };
+
+  window.__jsNaverMapsAuthFailureBoundV663 = true;
 }
 
 
@@ -1748,6 +1808,7 @@ function loadNaverMapsSdkV653() {
     window.naver.maps &&
     window.naver.maps.Panorama
   ) {
+    naverMapsNamespaceV663 = window.naver.maps;
     return Promise.resolve(window.naver.maps);
   }
 
@@ -1758,6 +1819,7 @@ function loadNaverMapsSdkV653() {
         window.naver.maps &&
         window.naver.maps.Panorama
       ) {
+        naverMapsNamespaceV663 = window.naver.maps;
         return window.naver.maps;
       }
 
@@ -1808,6 +1870,7 @@ function loadNaverMapsSdkV653() {
             window.naver.maps &&
             window.naver.maps.Panorama
           ) {
+            naverMapsNamespaceV663 = window.naver.maps;
             clearTimeout(timeoutId);
             if (pollId) clearInterval(pollId);
             resolve(window.naver.maps);
@@ -1998,12 +2061,17 @@ function markNaverRoadviewReadyV658() {
   updateNaverPanoramaInfoV653();
 
   var panoramaPosition = getNaverRoadviewPositionV654();
-  if (panoramaPosition) setupNaverRoadviewMapV654(panoramaPosition);
+  if (panoramaPosition && !naverMapsAuthFailedV663) {
+    setupNaverRoadviewMapV654(panoramaPosition);
+  }
   updateNaverRoadviewMapV654(true);
   window.setTimeout(syncNaverRoadviewLayoutV654, 30);
   window.setTimeout(syncNaverRoadviewLayoutV654, 120);
   setTimeout(function() {
-    if (sequence === roadviewOpenSequenceV653) status.classList.add("hidden");
+    if (
+      sequence === roadviewOpenSequenceV653 &&
+      !naverMapsAuthFailedV663
+    ) status.classList.add("hidden");
   }, 650);
 }
 

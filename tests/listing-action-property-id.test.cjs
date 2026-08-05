@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.63-admin-list-filter"),
+  html.includes("script.js?v=6.5.64-naver-map-auth-fallback"),
   "the production page must load the fixed script cache version"
 );
 

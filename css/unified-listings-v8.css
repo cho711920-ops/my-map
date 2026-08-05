@@ -1043,6 +1043,18 @@
   background: #eef3f8;
 }
 
+#naverRoadviewPane .naver-roadview-split-v654.naver-map-auth-failed-v663 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#naverRoadviewPane .naver-map-auth-failed-v663 > .naver-roadview-panorama-panel-v654 {
+  border-right: 0;
+}
+
+#naverRoadviewPane .naver-map-auth-failed-v663 > .naver-roadview-map-panel-v654 {
+  display: none;
+}
+
 .naver-roadview-map-v654 {
   position: absolute;
   inset: 0;

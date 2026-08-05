@@ -7,7 +7,7 @@
 - GitHub: https://github.com/cho711920-ops/my-map
 - 작업 브랜치: `codex/cloudflare-js-map`
 - Cloudflare Worker: `js-map`
-- 현재 배포 버전: `1c722344-3e10-487f-9a00-5ba55a5a788b`
+- 현재 배포 버전: `9633abe5-f3cd-44d0-81ce-08866e8147fe`
 
 ## 현재 구조
 
@@ -80,3 +80,11 @@
 6. Vercel `my-map` 프로젝트 영구 삭제나 기존 Google 자료 삭제는 사용자 승인 없이 하지 않는다. Pro 구독 해지는 완료됐다.
 7. 비용은 `outputs/JS_MAP_MONTHLY_COST.md`의 무료·유료 시나리오를 기준으로 판단한다.
 8. 사용자가 “기존데이터 전체확인 후 빠진 것 체크해서 복구해줘”라고 요청하면 위 누락 항목에 한정하지 말고 전체 사용자 데이터 정합성 감사를 먼저 수행한다.
+
+## 2026-08-05 네이버 지도 인증 오류 수정
+
+- 배포 버전은 `9633abe5-f3cd-44d0-81ce-08866e8147fe`이다.
+- 원인은 새 운영 도메인이 네이버 Maps 애플리케이션의 Web 서비스 URL 허용 목록에 아직 등록되지 않아 Dynamic Map 인증이 거절되는 것이다.
+- 네이버 SDK의 공식 `window.navermap_authFailure` 콜백을 처리했다. 인증 오류가 발생하면 반복되는 오류 타일을 제거하고, 정상 작동하는 네이버 거리뷰를 전체 너비로 확장하며, 별도 지도 탭은 계속 사용할 수 있다.
+- `https://js-map.com` 운영 화면에서 거리뷰 유지와 오류 타일 제거를 확인했다.
+- 영구 설정은 네이버 클라우드 로그인 후 Web Dynamic Map을 활성화하고 Web 서비스 URL에 `https://js-map.com`, `https://www.js-map.com` 두 주소를 등록해야 완료된다. 포트와 하위 경로는 넣지 않는다.
