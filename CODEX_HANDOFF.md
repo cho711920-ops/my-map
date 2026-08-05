@@ -16,7 +16,7 @@
 - R2 `js-map-media`가 실제 열어 본 외부 사진과 다음 사진을 7일간 캐시한다.
 - Google은 OAuth 로그인에만 사용한다. 허용된 Gmail 계정만 접속할 수 있다.
 - Google Sheet와 Apps Script는 운영 런타임에서 호출하지 않는다. 기존 자료는 백업으로 보존한다.
-- Vercel은 운영 런타임에서 사용하지 않지만 Pro 구독은 아직 해지하지 않았다.
+- Vercel은 운영 런타임에서 사용하지 않는다. 2026-08-05 Pro 구독을 해지하고 Hobby 무료 플랜으로 전환했다.
 
 ## 이전 완료 데이터
 
@@ -66,5 +66,5 @@
 3. 키는 propertyId, customerId, sourceListingId를 사용한다. 화면 행번호로 수정하지 않는다.
 4. 배포 전 `pnpm run test:cloudflare`와 `pnpm run cf:check`를 실행한다.
 5. 배포는 `pnpm run build:cloudflare` 후 `pnpm exec wrangler deploy`로 한다.
-6. Vercel 구독 해지나 기존 Google 자료 삭제는 사용자 승인 없이 하지 않는다.
+6. Vercel `my-map` 프로젝트 영구 삭제나 기존 Google 자료 삭제는 사용자 승인 없이 하지 않는다. Pro 구독 해지는 완료됐다.
 7. 비용은 `outputs/JS_MAP_MONTHLY_COST.md`의 무료·유료 시나리오를 기준으로 판단한다.
