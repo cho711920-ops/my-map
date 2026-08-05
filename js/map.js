@@ -28,6 +28,7 @@ var jsClusterSelectionMemoryV638 = {
 };
 var jsPinnedClusterSelectionV6515 = null;
 var jsPinnedClusterSpatialChangeIgnoreUntilV6517 = 0;
+var jsMapUserNavigationIntentUntilV6525 = 0;
 var jsDefaultMapCenterV6524 = {
   lat: 36.3504,
   lng: 127.3845
@@ -124,6 +125,76 @@ function preservePinnedClusterSelectionDuringRelayoutV6517(durationMs) {
     Date.now() + keepMs
   );
 }
+
+
+function keepPinnedClusterSelectionAcrossTransientUiV6525(durationMs) {
+  if (!jsPinnedClusterSelectionV6515) return;
+
+  jsPinnedClusterSelectionV6515.snapshot = captureClusterSelectionSnapshotV638();
+  jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
+  preservePinnedClusterSelectionDuringRelayoutV6517(durationMs || 2400);
+}
+
+
+function restorePinnedClusterSelectionAfterTransientUiV6525() {
+  if (!jsPinnedClusterSelectionV6515) return;
+
+  jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
+  restoreClusterSelectionSnapshotV638(jsPinnedClusterSelectionV6515.snapshot);
+
+  var pinnedItems = getPinnedClusterItemsV6515();
+  if (pinnedItems.length && typeof showList === "function") {
+    showList(pinnedItems);
+  }
+
+  var statusElement = document.getElementById("status");
+  if (statusElement && pinnedItems.length) {
+    statusElement.textContent = "선택 매물 " + pinnedItems.length + "개";
+  }
+
+  if (typeof redrawSelectedMarkers === "function") {
+    redrawSelectedMarkers();
+  }
+}
+
+
+function markMapUserNavigationIntentV6525(event) {
+  var target = event && event.target;
+  if (target && target.closest && target.closest(".circle-marker")) return;
+  jsMapUserNavigationIntentUntilV6525 = Date.now() + 1800;
+}
+
+
+function shouldClearPinnedClusterForMapNavigationV6525() {
+  if (!jsPinnedClusterSelectionV6515) return true;
+  if (document.visibilityState === "hidden") return false;
+  if (document.body.classList.contains("roadview-modal-open")) return false;
+  if (Date.now() <= jsPinnedClusterSpatialChangeIgnoreUntilV6517) return false;
+  return Date.now() <= jsMapUserNavigationIntentUntilV6525;
+}
+
+
+function closeOpenListingDetailsForMapSelectionV6525() {
+  if (
+    window.JSUnifiedListingsV8 &&
+    typeof window.JSUnifiedListingsV8.close === "function"
+  ) {
+    window.JSUnifiedListingsV8.close();
+  }
+
+  if (
+    document.body.classList.contains("ai-side-panel-open") &&
+    typeof window.closeAiSidePanel === "function"
+  ) {
+    window.closeAiSidePanel();
+  }
+}
+
+
+window.keepPinnedClusterSelectionAcrossTransientUiV6525 =
+  keepPinnedClusterSelectionAcrossTransientUiV6525;
+window.restorePinnedClusterSelectionAfterTransientUiV6525 =
+  restorePinnedClusterSelectionAfterTransientUiV6525;
 
 
 function getStableItemIdentityV638(item) {
@@ -883,8 +954,10 @@ function scheduleMapIdleRefreshV638() {
     ) {
       if (Date.now() <= jsPinnedClusterSpatialChangeIgnoreUntilV6517) {
         jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
-      } else {
+      } else if (shouldClearPinnedClusterForMapNavigationV6525()) {
         clearPinnedClusterSelectionV6515(true);
+      } else {
+        jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
       }
     }
 
@@ -939,6 +1012,19 @@ kakao.maps.load(function() {
 
   geocoder = new kakao.maps.services.Geocoder();
 
+  var mapElementV6525 = document.getElementById("map");
+  if (mapElementV6525) {
+    mapElementV6525.addEventListener("pointerdown", markMapUserNavigationIntentV6525, true);
+    mapElementV6525.addEventListener("touchstart", markMapUserNavigationIntentV6525, {
+      capture: true,
+      passive: true
+    });
+    mapElementV6525.addEventListener("wheel", markMapUserNavigationIntentV6525, {
+      capture: true,
+      passive: true
+    });
+  }
+
   /*
    * v6.3 현장모드: 지도 이동을 방해하지 않고 현재 위치만 보라색 점으로 표시합니다.
    */
@@ -950,11 +1036,19 @@ kakao.maps.load(function() {
   });
 
   kakao.maps.event.addListener(map, "dragstart", function() {
-    clearPinnedClusterSelectionV6515(true);
+    if (shouldClearPinnedClusterForMapNavigationV6525()) {
+      clearPinnedClusterSelectionV6515(true);
+    } else {
+      keepPinnedClusterSelectionAcrossTransientUiV6525(2400);
+    }
   });
 
   kakao.maps.event.addListener(map, "zoom_start", function() {
-    clearPinnedClusterSelectionV6515(true);
+    if (shouldClearPinnedClusterForMapNavigationV6525()) {
+      clearPinnedClusterSelectionV6515(true);
+    } else {
+      keepPinnedClusterSelectionAcrossTransientUiV6525(2400);
+    }
   });
 
   kakao.maps.event.addListener(map, "click", function(mouseEvent) {
@@ -983,6 +1077,18 @@ kakao.maps.load(function() {
 
     loadSheet(true, false);
   }, jsAutomaticDataRefreshIntervalV681);
+
+  document.addEventListener("visibilitychange", function() {
+    if (!jsPinnedClusterSelectionV6515) return;
+
+    keepPinnedClusterSelectionAcrossTransientUiV6525(3000);
+    if (document.visibilityState !== "visible") return;
+
+    window.setTimeout(function() {
+      keepPinnedClusterSelectionAcrossTransientUiV6525(2200);
+      restorePinnedClusterSelectionAfterTransientUiV6525();
+    }, 120);
+  });
 });
 
 
@@ -1975,6 +2081,9 @@ function openCluster(encodedKey) {
 
   if (!overlay) return;
 
+  jsMapUserNavigationIntentUntilV6525 = 0;
+  closeOpenListingDetailsForMapSelectionV6525();
+
   selectedItemKey = null;
 
   /*
@@ -2055,6 +2164,8 @@ function openAdministrativeClusterV655(encodedKey) {
   if (!overlay || !overlay.__cluster || !map) return;
 
   var cluster = overlay.__cluster;
+  jsMapUserNavigationIntentUntilV6525 = 0;
+  closeOpenListingDetailsForMapSelectionV6525();
   clearPinnedClusterSelectionV6515(true);
   setAdministrativeListSelectionV6570(cluster);
   showList(cluster.items || []);

@@ -48,6 +48,6 @@ assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !impo
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.36-naver-map-auth-fallback/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.0\.19-contact-intent-only/);
-assert.match(html, /script\.js\?v=6\.5\.64-naver-map-auth-fallback/);
+assert.match(html, /script\.js\?v=6\.5\.65-cluster-transient-state/);
 
 console.log("main listing three-line v6.6.1 tests passed");

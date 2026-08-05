@@ -195,7 +195,7 @@ assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
 assert.match(css, /admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.1.5-five-minute-auto-refresh"));
+assert.ok(html.includes("map.js?v=8.1.6-cluster-transient-state"));
 assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 5 \* 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
 assert.ok(html.includes("style.css?v=6.5.33-admin-count-confirmed"));

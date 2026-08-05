@@ -2603,6 +2603,12 @@ function openKakaoRoadview(encodedKey) {
     return;
   }
 
+  if (typeof window.keepPinnedClusterSelectionAcrossTransientUiV6525 === "function") {
+    window.keepPinnedClusterSelectionAcrossTransientUiV6525(4000);
+  } else if (typeof preservePinnedClusterSelectionDuringRelayoutV6517 === "function") {
+    preservePinnedClusterSelectionDuringRelayoutV6517(4000);
+  }
+
   roadviewOpenSequenceV653 += 1;
   currentRoadviewItemKey = item.key;
   currentRoadviewCoords = coords;
@@ -2687,6 +2693,10 @@ function closeRoadviewModal() {
 
   if (!modal) return;
 
+  if (typeof window.keepPinnedClusterSelectionAcrossTransientUiV6525 === "function") {
+    window.keepPinnedClusterSelectionAcrossTransientUiV6525(4000);
+  }
+
   /*
    * 네이버 Panorama는 display:none 상태로 보관했다가 다시 setPosition하면
    * SDK 내부 타이머가 끊길 수 있다. SDK 파일과 보조 지도는 재사용하되,
@@ -2735,6 +2745,12 @@ function closeRoadviewModal() {
   currentRoadviewItemKey = null;
   currentRoadviewCoords = null;
   currentRoadviewPosition = null;
+
+  if (typeof window.restorePinnedClusterSelectionAfterTransientUiV6525 === "function") {
+    window.setTimeout(function() {
+      window.restorePinnedClusterSelectionAfterTransientUiV6525();
+    }, 80);
+  }
 }
 
 
