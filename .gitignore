@@ -1,5 +1,9 @@
 node_modules/
 .vercel/
+.wrangler/
+.cloudflare-assets/
+.dev.vars
 .env
 .env.*
 !.env.example
+!.dev.vars.example

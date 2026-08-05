@@ -5,7 +5,16 @@
   "engines": {
     "node": ">=20"
   },
+  "scripts": {
+    "build:cloudflare": "node tools/build-cloudflare-assets.mjs",
+    "cf:dev": "pnpm run build:cloudflare && wrangler dev",
+    "cf:check": "pnpm run build:cloudflare && wrangler deploy --dry-run",
+    "test:cloudflare": "node --test tests/cloudflare-*.test.mjs"
+  },
   "dependencies": {
     "google-auth-library": "^10.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
   }
 }

@@ -1,0 +1,28 @@
+name = "js-map"
+main = "cloudflare/src/worker.js"
+compatibility_date = "2026-08-05"
+workers_dev = true
+
+[assets]
+directory = ".cloudflare-assets"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "js-map-primary"
+migrations_dir = "cloudflare/migrations"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "js-map-media"
+
+[vars]
+SESSION_MAX_AGE_SECONDS = "432000"
+SHEET_MEMORY_CACHE_MS = "120000"
+
+[observability]
+enabled = true
+
