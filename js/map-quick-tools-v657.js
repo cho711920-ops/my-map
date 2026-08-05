@@ -114,7 +114,8 @@
     [
       ["mapQuickTodayBtn", !!window.todayNewOnly],
       ["mapQuickVisitOnlyBtn", !!window.gongsilOnly],
-      ["mapQuickHideDoneBtn", !!window.hideDone]
+      ["mapQuickHideDoneBtn", !!window.hideDone],
+      ["mapQuickDoneOnlyBtn", !!window.doneOnly]
     ].forEach(function (entry) {
       var button = byId(entry[0]);
       if (!button) return;

@@ -412,7 +412,14 @@ async function operationsDashboard(env) {
         AND datetime(created_at) <= datetime('now','-3 days')) AS overdue_matches,
       (SELECT COUNT(*) FROM customer_activities WHERE next_contact_date <> ''
         AND date(next_contact_date) <= date('now')) AS due_followups,
-      (SELECT COUNT(*) FROM listing_sources WHERE active=1 AND missing_count >= 3) AS transaction_candidates,
+      (SELECT COUNT(*) FROM (
+        SELECT s.listing_id FROM listing_sources s
+        JOIN listings l ON l.id=s.listing_id
+        WHERE l.status NOT IN ('deleted','계약완료')
+        GROUP BY s.listing_id
+        HAVING SUM(CASE WHEN active=1 THEN 1 ELSE 0 END)=0
+          AND MAX(missing_count) >= 3
+      )) AS transaction_candidates,
       (SELECT COUNT(*) FROM listing_history) AS history_count`).first();
   const customerSummary = await env.DB.prepare(`SELECT customer_id,
       SUM(CASE WHEN state IN ('candidate','신규') THEN 1 ELSE 0 END) AS fresh,

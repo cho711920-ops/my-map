@@ -9,7 +9,17 @@ var overlays = [];
 var selectedGroupKey = null;
 var selectedItemKey = null;
 var favoriteOnly = false;
+var doneViewStorageKeyV656 = "JS_REAL_ESTATE_DONE_VIEW_V1";
 var hideDone = true;
+var doneOnly = false;
+try {
+  var savedDoneViewModeV656 = localStorage.getItem(doneViewStorageKeyV656);
+  if (savedDoneViewModeV656 === "all") hideDone = false;
+  if (savedDoneViewModeV656 === "only") {
+    hideDone = false;
+    doneOnly = true;
+  }
+} catch (_) {}
 var gongsilOnly = false;
 var todayNewOnly = false;
 var multiClusterMode = false;
@@ -1042,7 +1052,7 @@ function getFilteredItems(options) {
     }
 
     var matchFavorite = !favoriteOnly || isFavorite(item);
-    var matchDone = !hideDone || !isDone(item);
+    var matchDone = doneOnly ? isDone(item) : (!hideDone || !isDone(item));
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
     var inMap = ignoreMapBounds
@@ -4048,6 +4058,8 @@ function resetFilter() {
 
   favoriteOnly = false;
   hideDone = true;
+  doneOnly = false;
+  saveDoneViewModeV656();
   gongsilOnly = false;
   todayNewOnly = false;
   multiClusterMode = false;
@@ -4721,17 +4733,37 @@ setTimeout(initSyncIndicator, 0);
 
 function updateHideDoneMenuUI() {
   var btn = document.getElementById("hideDoneBtn");
-  if (!btn) return;
+  if (btn) {
+    btn.classList.toggle("on", !!hideDone);
+    btn.setAttribute("aria-checked", hideDone ? "true" : "false");
 
-  btn.classList.toggle("on", !!hideDone);
-  btn.setAttribute("aria-checked", hideDone ? "true" : "false");
+    var check = btn.querySelector(".view-toggle-check");
+    if (check) check.textContent = hideDone ? "✓" : "";
+  }
 
-  var check = btn.querySelector(".view-toggle-check");
-  if (check) check.textContent = hideDone ? "✓" : "";
+  var doneOnlyBtn = document.getElementById("doneOnlyBtn");
+  if (doneOnlyBtn) {
+    doneOnlyBtn.classList.toggle("on", !!doneOnly);
+    doneOnlyBtn.setAttribute("aria-checked", doneOnly ? "true" : "false");
+
+    var doneOnlyCheck = doneOnlyBtn.querySelector(".view-toggle-check");
+    if (doneOnlyCheck) doneOnlyCheck.textContent = doneOnly ? "✓" : "";
+  }
+
+  if (typeof window.syncMapQuickToolStateV657 === "function") {
+    window.syncMapQuickToolStateV657();
+  }
 }
 
-function toggleHideDone() {
-  hideDone = !hideDone;
+function saveDoneViewModeV656() {
+  var mode = doneOnly ? "only" : (hideDone ? "hide" : "all");
+  try {
+    localStorage.setItem(doneViewStorageKeyV656, mode);
+  } catch (_) {}
+}
+
+function refreshDoneViewFilterV656() {
+  saveDoneViewModeV656();
   updateHideDoneMenuUI();
   selectedGroupKey = null;
   selectedItemKey = null;
@@ -4739,6 +4771,18 @@ function toggleHideDone() {
     clearPinnedClusterSelectionV6515(false);
   }
   applyFilter();
+}
+
+function toggleHideDone() {
+  hideDone = !hideDone;
+  if (hideDone) doneOnly = false;
+  refreshDoneViewFilterV656();
+}
+
+function toggleDoneOnly() {
+  doneOnly = !doneOnly;
+  if (doneOnly) hideDone = false;
+  refreshDoneViewFilterV656();
 }
 
 
@@ -4789,7 +4833,6 @@ function showAddressErrors() {
 
 /* v6.1 기본 계약완료 숨김 UI 초기화 */
 setTimeout(function() {
-  hideDone = true;
   updateHideDoneMenuUI();
 }, 0);
 

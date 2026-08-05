@@ -462,6 +462,15 @@ async function ingestRecords(env, source, values, metadata = {}) {
     inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
 }
 
+export function nextCollectorSourceVisibilityState(current, observed, countMissing) {
+  const active = Number(current?.active) !== 0;
+  const missingCount = Math.max(0, Number(current?.missingCount ?? current?.missing_count) || 0);
+  if (observed) return { active: 1, missingCount: 0 };
+  if (!countMissing || !active) return { active: active ? 1 : 0, missingCount };
+  const nextMissingCount = missingCount + 1;
+  return { active: nextMissingCount >= 3 ? 0 : 1, missingCount: nextMissingCount };
+}
+
 async function finalizeSession(env, body) {
   const source = sourceName(body.source);
   const sessionId = await ensureSession(env, body.sessionId, source);
@@ -469,31 +478,55 @@ async function finalizeSession(env, body) {
   const state = body.stopped ? "paused" : complete ? "completed" : "partial";
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
+  let presenceReset = 0;
   let missingMarked = 0;
   let deactivated = 0;
   const scope = clean(body.scope);
   const districtMatch = scope.match(/(동구|중구|서구|유성구|대덕구)/);
-  if (complete && observed.length >= 100 && /전체|완전수집/.test(`${scope} ${clean(body.note)}`)) {
+  const tracksMissing = complete && observed.length >= 100 &&
+    /전체|완전수집/.test(`${scope} ${clean(body.note)}`);
+  if (tracksMissing) {
     const observedSet = new Set(observed);
-    const rows = await env.DB.prepare(`SELECT s.id, s.source_listing_id, s.missing_count, l.address
+    const rows = await env.DB.prepare(`SELECT s.id, s.source_listing_id, s.active, s.missing_count, l.address
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
-      WHERE s.source=?1 AND s.active=1`).bind(source).all();
+      WHERE s.source=?1`).bind(source).all();
     const changes = [];
+    const changedAt = nowIso();
     for (const row of rows?.results || []) {
+      if (observedSet.has(clean(row.source_listing_id))) {
+        if (Number(row.active) === 1 && Number(row.missing_count || 0) === 0) continue;
+        changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
+          last_collected_at=?1, updated_at=?1 WHERE id=?2`).bind(changedAt, row.id));
+        presenceReset += 1;
+        continue;
+      }
       if (districtMatch && !clean(row.address).startsWith(districtMatch[1])) continue;
-      if (observedSet.has(clean(row.source_listing_id))) continue;
-      const nextMissing = Number(row.missing_count || 0) + 1;
+      if (Number(row.active) !== 1) continue;
+      const nextState = nextCollectorSourceVisibilityState(row, false, true);
+      const nextMissing = nextState.missingCount;
       changes.push(env.DB.prepare(`UPDATE listing_sources SET missing_count=?1,
-        active=CASE WHEN ?1>=3 THEN 0 ELSE active END, updated_at=?2 WHERE id=?3`)
-        .bind(nextMissing, nowIso(), row.id));
+        active=?2, updated_at=?3 WHERE id=?4`)
+        .bind(nextMissing, nextState.active, changedAt, row.id));
       missingMarked += 1;
-      if (nextMissing >= 3) deactivated += 1;
+      if (!nextState.active) deactivated += 1;
     }
     for (let offset = 0; offset < changes.length; offset += 80) await env.DB.batch(changes.slice(offset, offset + 80));
+  } else if (observed.length) {
+    const seenAt = nowIso();
+    for (let offset = 0; offset < observed.length; offset += 75) {
+      const ids = observed.slice(offset, offset + 75);
+      const placeholders = ids.map((_, index) => `?${index + 3}`).join(",");
+      const result = await env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
+        last_collected_at=?1, updated_at=?1
+        WHERE source=?2 AND source_listing_id IN (${placeholders})
+          AND (active=0 OR missing_count<>0)`).bind(seenAt, source, ...ids).run();
+      presenceReset += Number(result?.meta?.changes || 0);
+    }
   }
   const row = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(row?.totals_json, {});
   totals.observed = observed.length;
+  totals.presenceReset = presenceReset;
   totals.missingMarked = missingMarked;
   totals.deactivated = deactivated;
   totals.note = clean(body.note);
@@ -501,7 +534,7 @@ async function finalizeSession(env, body) {
     finished_at=CASE WHEN ?1 IN ('completed','partial') THEN ?3 ELSE finished_at END, updated_at=?3 WHERE id=?4`)
     .bind(state, JSON.stringify(totals), nowIso(), sessionId).run();
   return { ok: true, action: "finalizeCollectionSession", sessionId, state, complete,
-    observed: observed.length, missingMarked, deactivated, ...totals, sourceBackend: "D1" };
+    observed: observed.length, presenceReset, missingMarked, deactivated, ...totals, sourceBackend: "D1" };
 }
 
 function collectorHostAllowed(request) {
