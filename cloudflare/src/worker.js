@@ -6,13 +6,36 @@ import {
   sessionCookieHeader,
   verifyGoogleCredential
 } from "./security.js";
+import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js";
+import { getBuildingRegister } from "./building-register-api.js";
+import { getCommercialArea } from "./commercial-area-api.js";
+import { getRegionalMarket } from "./regional-market-api.js";
+import {
+  handleCollectorAdminGet,
+  handleCollectorAdminPost,
+  handleCollectorApi
+} from "./collector-api.js";
+import {
+  buildD1SheetCsv,
+  handleD1GetAction,
+  handleD1PostAction
+} from "./d1-api.js";
 
 const QUEUE_CLIENT_VERSION = "1.0.8";
-const BUILDING_CLIENT_VERSION = "8.1.1";
 const UPSTREAM_TIMEOUT_MS = 20_000;
-let sheetCache = { body: "", etag: "", fetchedAt: 0 };
-const statusCache = new Map();
-const statusInFlight = new Map();
+const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet.csv";
+const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
+const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings.json";
+const UNIFIED_COMPACT_FIELDS = [
+  "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
+  "thumbnail", "photoCount", "contactCount", "revision"
+];
+const IMAGE_CACHE_HOSTS = new Set([
+  "img.kr.gcp-karroter.net",
+  "landthumb-phinf.pstatic.net",
+  "dnvefa72aowie.cloudfront.net"
+]);
+let sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
 
 function json(value, status = 200, headers = {}) {
   return new Response(JSON.stringify(value), {
@@ -43,18 +66,6 @@ function withSecurityHeaders(response, request) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function upstreamUrl(env, query = {}) {
-  if (!env.APPS_SCRIPT_URL || !env.APPS_SCRIPT_PROXY_SECRET) {
-    throw new Error("Apps Script 연결 환경 변수가 설정되지 않았습니다.");
-  }
-  const url = new URL(env.APPS_SCRIPT_URL);
-  for (const [key, value] of Object.entries(query)) {
-    if (value != null && !Array.isArray(value)) url.searchParams.set(key, String(value));
-  }
-  url.searchParams.set("proxySecret", env.APPS_SCRIPT_PROXY_SECRET);
-  return url;
-}
-
 async function fetchWithTimeout(url, options = {}, timeout = UPSTREAM_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -71,6 +82,181 @@ async function sha256Etag(body) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return `"${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")}"`;
+}
+
+async function sha256Key(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  const bytes = new Uint8Array(digest);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function reserveImageCacheBudget(env, bytes) {
+  if (!env.DB || typeof env.DB.prepare !== "function") return true;
+  const hardMaximum = 8 * 1024 * 1024 * 1024;
+  const configured = Number(env.IMAGE_CACHE_7D_BUDGET_BYTES || 6 * 1024 * 1024 * 1024);
+  const budget = Math.min(hardMaximum, Math.max(64 * 1024 * 1024, configured));
+  const cutoff = new Date(Date.now() - 6 * 24 * 60 * 60_000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const prefix = "image-cache-bytes-";
+  const statement = env.DB.prepare(
+    `SELECT COALESCE(SUM(value), 0) AS total
+       FROM usage_counters
+      WHERE counter_key LIKE 'image-cache-bytes-%' AND counter_key >= ?1`
+  ).bind(prefix + cutoff);
+  const row = typeof statement.first === "function"
+    ? await statement.first()
+    : (await statement.all())?.results?.[0];
+  const current = Math.max(0, Number(row?.total || 0));
+  if (current + Math.max(0, Number(bytes) || 0) > budget) return false;
+  await env.DB.prepare(
+    `INSERT INTO usage_counters (counter_key, value, updated_at)
+     VALUES (?1, ?2, ?3)
+     ON CONFLICT(counter_key) DO UPDATE SET
+       value = usage_counters.value + excluded.value,
+       updated_at = excluded.updated_at`
+  ).bind(prefix + today, Math.max(0, Number(bytes) || 0), new Date().toISOString()).run();
+  return true;
+}
+
+function cacheAgeMs(object) {
+  const savedAt = Number(object?.customMetadata?.savedAt || 0);
+  return savedAt > 0 ? Date.now() - savedAt : Number.POSITIVE_INFINITY;
+}
+
+async function readR2TextCache(env, key, maxAgeMs) {
+  if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
+  const object = await env.MEDIA.get(key);
+  if (!object || cacheAgeMs(object) > maxAgeMs) return null;
+  return {
+    body: await object.text(),
+    contentType: object.httpMetadata?.contentType || "application/json; charset=utf-8"
+  };
+}
+
+function writeR2TextCache(env, context, key, body, contentType) {
+  if (!env.MEDIA || typeof env.MEDIA.put !== "function") return;
+  const task = env.MEDIA.put(key, body, {
+    httpMetadata: { contentType: contentType || "application/json; charset=utf-8" },
+    customMetadata: { savedAt: String(Date.now()) }
+  });
+  if (context && typeof context.waitUntil === "function") context.waitUntil(task);
+}
+
+function deleteR2Cache(env, context, keys) {
+  if (!env.MEDIA || typeof env.MEDIA.delete !== "function" || !keys.length) return;
+  const task = env.MEDIA.delete(keys);
+  if (context && typeof context.waitUntil === "function") context.waitUntil(task);
+}
+
+function unifiedDetailCacheKey(propertyId) {
+  const safe = String(propertyId || "").trim();
+  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail/${safe}.json` : "";
+}
+
+function compactUnifiedListingsBody(body) {
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return body;
+  }
+  if (!payload || payload.format === "compact-v2" || !payload.groups || typeof payload.groups !== "object") {
+    return body;
+  }
+  const sourceFields = payload.format === "compact-v1" && Array.isArray(payload.fields)
+    ? payload.fields
+    : null;
+  const groups = {};
+  for (const [propertyId, originals] of Object.entries(payload.groups)) {
+    groups[propertyId] = (Array.isArray(originals) ? originals : []).map((original) => {
+      const values = UNIFIED_COMPACT_FIELDS.map((field) => {
+        if (sourceFields && Array.isArray(original)) {
+          const index = sourceFields.indexOf(field);
+          return index >= 0 ? original[index] ?? "" : "";
+        }
+        return original?.[field] ?? "";
+      });
+      while (values.length && values[values.length - 1] === "") values.pop();
+      return values;
+    });
+  }
+  return JSON.stringify({
+    ok: payload.ok !== false,
+    version: payload.version || 1,
+    format: "compact-v2",
+    fields: UNIFIED_COMPACT_FIELDS,
+    groups,
+    originalCount: Number(payload.originalCount || 0)
+  });
+}
+
+async function handleListingImage(request, env, context) {
+  await requireSession(request, env);
+  if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
+  const sourceValue = new URL(request.url).searchParams.get("url") || "";
+  let source;
+  try {
+    source = new URL(sourceValue);
+  } catch {
+    throw Object.assign(new Error("Invalid image URL."), { statusCode: 400 });
+  }
+  if (source.protocol !== "https:" || !IMAGE_CACHE_HOSTS.has(source.hostname.toLowerCase())) {
+    throw Object.assign(new Error("Image host is not allowed."), { statusCode: 403 });
+  }
+
+  const key = `images/external/${await sha256Key(source.toString())}`;
+  if (env.MEDIA && typeof env.MEDIA.get === "function") {
+    const cached = await env.MEDIA.get(key);
+    if (cached) {
+      const headers = new Headers();
+      if (typeof cached.writeHttpMetadata === "function") cached.writeHttpMetadata(headers);
+      if (!headers.get("content-type") && cached.httpMetadata?.contentType) {
+        headers.set("content-type", cached.httpMetadata.contentType);
+      }
+      headers.set("cache-control", "private, max-age=86400");
+      headers.set("x-js-image-cache", "HIT");
+      if (cached.httpEtag) headers.set("etag", cached.httpEtag);
+      return new Response(cached.body, { headers });
+    }
+  }
+
+  const response = await fetchWithTimeout(source, {
+    redirect: "follow",
+    cache: "no-store",
+    headers: { Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8" }
+  }, 25_000);
+  const finalUrl = new URL(response.url || source);
+  const contentType = String(response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  const declaredSize = Number(response.headers.get("content-length") || 0);
+  if (!response.ok || !IMAGE_CACHE_HOSTS.has(finalUrl.hostname.toLowerCase()) || !contentType.startsWith("image/")) {
+    throw Object.assign(new Error("The source image could not be loaded."), { statusCode: 502 });
+  }
+  if (declaredSize > 12 * 1024 * 1024) {
+    throw Object.assign(new Error("The source image is too large."), { statusCode: 413 });
+  }
+  const body = await response.arrayBuffer();
+  if (body.byteLength > 12 * 1024 * 1024) {
+    throw Object.assign(new Error("The source image is too large."), { statusCode: 413 });
+  }
+  const mayStore = env.MEDIA && typeof env.MEDIA.put === "function"
+    ? await reserveImageCacheBudget(env, body.byteLength)
+    : false;
+  if (mayStore) {
+    const task = env.MEDIA.put(key, body, {
+      httpMetadata: { contentType, cacheControl: "private, max-age=86400" },
+      customMetadata: { savedAt: String(Date.now()), sourceHost: finalUrl.hostname.toLowerCase() }
+    });
+    if (context && typeof context.waitUntil === "function") context.waitUntil(task);
+  }
+  return new Response(body, {
+    headers: {
+      "content-type": contentType,
+      "cache-control": "private, max-age=86400",
+      "x-js-image-cache": mayStore ? "MISS" : "MISS-NOSTORE"
+    }
+  });
 }
 
 async function handleSession(request, env) {
@@ -95,20 +281,24 @@ async function handleSession(request, env) {
   });
 }
 
-async function handleSheet(request, env) {
+async function handleSheet(request, env, context) {
   await requireSession(request, env);
   if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
   const now = Date.now();
   const ttl = Math.max(5_000, Number(env.SHEET_MEMORY_CACHE_MS || 120_000));
+  const r2Ttl = Math.max(ttl, Number(env.SHEET_R2_CACHE_MS || 5 * 60_000));
   const forceFresh = request.headers.get("x-js-force-refresh") === "1";
-  if (forceFresh || !sheetCache.body || now - sheetCache.fetchedAt >= ttl) {
-    const response = await fetch(upstreamUrl(env, { action: "sheetCsv" }), {
-      redirect: "follow",
-      cache: "no-store"
-    });
-    const body = await response.text();
-    if (!response.ok) throw Object.assign(new Error("시트 데이터를 불러오지 못했습니다."), { statusCode: 502 });
-    sheetCache = { body, etag: await sha256Etag(body), fetchedAt: Date.now() };
+  if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
+  const cacheKey = D1_SHEET_CACHE_KEY;
+  if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl) {
+    const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl);
+    if (cached) {
+      sheetCache = { body: cached.body, etag: await sha256Etag(cached.body), fetchedAt: Date.now(), key: cacheKey };
+    } else {
+      const body = await buildD1SheetCsv(env);
+      sheetCache = { body, etag: await sha256Etag(body), fetchedAt: Date.now(), key: cacheKey };
+      writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8");
+    }
   }
   if (request.headers.get("if-none-match") === sheetCache.etag) {
     return new Response(null, { status: 304, headers: { etag: sheetCache.etag } });
@@ -118,7 +308,8 @@ async function handleSheet(request, env) {
       "content-type": "text/csv; charset=utf-8",
       "cache-control": "private, max-age=0, must-revalidate",
       vary: "Cookie, Accept-Encoding",
-      etag: sheetCache.etag
+      etag: sheetCache.etag,
+      "x-js-data-source": "D1"
     }
   });
 }
@@ -147,33 +338,7 @@ function jsonp(callback, payload, headers = {}) {
   });
 }
 
-async function workQueueStatus(url, owner) {
-  const key = String(owner || "anonymous").toLowerCase();
-  const cached = statusCache.get(key);
-  if (cached && Date.now() - cached.savedAt < 15_000) return { ...cached, cacheHit: true };
-  if (statusInFlight.has(key)) return statusInFlight.get(key);
-  const pending = (async () => {
-    const response = await fetchWithTimeout(url, { redirect: "follow", cache: "no-store" });
-    const result = {
-      savedAt: Date.now(),
-      cacheHit: false,
-      status: response.ok ? 200 : 502,
-      contentType: response.headers.get("content-type") || "application/json; charset=utf-8",
-      text: await response.text()
-    };
-    statusCache.set(key, result);
-    if (statusCache.size > 50) statusCache.delete(statusCache.keys().next().value);
-    return result;
-  })();
-  statusInFlight.set(key, pending);
-  try {
-    return await pending;
-  } finally {
-    statusInFlight.delete(key);
-  }
-}
-
-async function handleAppsScript(request, env) {
+async function handleDataApi(request, env, context) {
   const user = await requireSession(request, env);
   if (request.method !== "GET" && request.method !== "POST") {
     return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
@@ -185,40 +350,79 @@ async function handleAppsScript(request, env) {
     const query = Object.fromEntries(incoming.searchParams.entries());
     delete query._;
     query.owner = user.email || "";
-    if (query.action === "workQueueStatus" && query.client !== QUEUE_CLIENT_VERSION) return legacyQueueGuard();
-    if (query.action === "buildingRegister" && query.mode === "summary" && query.client !== BUILDING_CLIENT_VERSION) {
-      return jsonp(query.callback, {
-        ok: true,
-        action: "buildingRegister",
-        buildings: [],
-        recaps: [],
-        units: [],
-        buildingInfoCache: { ok: true, skipped: true },
-        legacyGuard: true
-      }, { "x-js-legacy-building-guard": "1" });
-    }
-    const url = upstreamUrl(env, query);
-    if (query.action === "workQueueStatus") {
-      const value = await workQueueStatus(url, user.email);
-      return new Response(value.text, {
-        status: value.status,
-        headers: {
-          "content-type": value.contentType,
-          "cache-control": "private, no-store",
-          "x-js-status-cache": value.cacheHit ? "HIT" : "MISS"
-        }
+    const collectorAdmin = await handleCollectorAdminGet(env, user, query);
+    if (collectorAdmin) {
+      return jsonp(query.callback, collectorAdmin, {
+        "cache-control": "private, no-store",
+        "x-js-data-source": "D1"
       });
     }
-    const options = { redirect: "follow", cache: "no-store" };
-    const response = query.action === "buildingRegister" && query.mode === "summary"
-      ? await fetchWithTimeout(url, options)
-      : await fetch(url, options);
-    return new Response(await response.text(), {
-      status: response.ok ? 200 : 502,
-      headers: {
-        "content-type": response.headers.get("content-type") || "application/json; charset=utf-8",
-        "cache-control": "no-store"
+    if (query.action === "buildingRegister") {
+      return jsonp(query.callback, await getBuildingRegister(env, query), {
+        "cache-control": "private, no-store",
+        "x-js-data-source": "D1+PUBLIC-DATA"
+      });
+    }
+    if (query.action === "commercialArea") {
+      return jsonp(query.callback, await getCommercialArea(env, query), {
+        "cache-control": "private, no-store",
+        "x-js-data-source": "PUBLIC-DATA"
+      });
+    }
+    if (query.action === "regionalMarket") {
+      return jsonp(query.callback, await getRegionalMarket(env, query), {
+        "cache-control": "private, no-store",
+        "x-js-data-source": "SGIS+R-ONE"
+      });
+    }
+    if (query.action === "workQueueStatus" && query.client !== QUEUE_CLIENT_VERSION) return legacyQueueGuard();
+    const detailCacheKey = query.action === "unifiedListingDetail"
+      ? unifiedDetailCacheKey(query.propertyId)
+      : "";
+    const r2CacheKey = query.action === "unifiedListings"
+      ? UNIFIED_LISTINGS_CACHE_KEY
+      : query.action === "geocodeCache"
+        ? GEOCODE_CACHE_KEY
+        : detailCacheKey;
+    if (r2CacheKey) {
+      const defaultTtl = query.action === "unifiedListings"
+        ? 5 * 60_000
+        : query.action === "geocodeCache"
+          ? 60 * 60_000
+          : 60 * 60_000;
+      const configuredTtl = query.action === "unifiedListings"
+        ? Number(env.UNIFIED_LISTINGS_CACHE_MS || defaultTtl)
+        : query.action === "geocodeCache"
+          ? Number(env.GEOCODE_CACHE_MS || defaultTtl)
+          : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
+      const cached = await readR2TextCache(env, r2CacheKey, Math.max(30_000, configuredTtl));
+      if (cached) {
+        const cachedBody = query.action === "unifiedListings"
+          ? compactUnifiedListingsBody(cached.body)
+          : cached.body;
+        if (cachedBody !== cached.body) {
+          writeR2TextCache(env, context, r2CacheKey, cachedBody, cached.contentType);
+        }
+        return new Response(cachedBody, {
+          headers: {
+            "content-type": cached.contentType,
+            "cache-control": "private, no-store",
+            "x-js-data-cache": "HIT"
+          }
+        });
       }
+    }
+    const payload = await handleD1GetAction(env, user, query);
+    if (!payload) {
+      return jsonp(query.callback, { ok: false, action: query.action, message: "지원하지 않는 서버 작업입니다." }, {
+        "x-js-data-source": "D1"
+      });
+    }
+    const responseText = JSON.stringify(payload);
+    if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8");
+    return jsonp(query.callback, payload, {
+      "x-js-data-source": "D1",
+      ...(r2CacheKey ? { "x-js-data-cache": "MISS" } : {})
     });
   }
 
@@ -230,34 +434,39 @@ async function handleAppsScript(request, env) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw Object.assign(new Error("잘못된 요청 형식입니다."), { statusCode: 400 });
   }
-  const response = await fetch(upstreamUrl(env), {
-    method: "POST",
-    redirect: "follow",
-    headers: { "content-type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({
-      ...body,
-      owner: user.email || "",
-      proxySecret: env.APPS_SCRIPT_PROXY_SECRET
-    })
-  });
-  return new Response(await response.text(), {
-    status: response.ok ? 200 : 502,
-    headers: {
-      "content-type": response.headers.get("content-type") || "application/json; charset=utf-8",
-      "cache-control": "no-store"
-    }
-  });
+  const collectorAdmin = await handleCollectorAdminPost(env, user, body);
+  if (collectorAdmin) {
+    deleteR2Cache(env, context, [D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY]);
+    return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
+  }
+  const d1Result = await handleD1PostAction(env, user, body);
+  if (!d1Result) return json({ ok: false, action: body.action, message: "지원하지 않는 저장 작업입니다." }, 400);
+  sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+  const propertyId = String(
+    body?.key?.propertyId || body?.propertyId || body?.listingId || body?.payload?.propertyId || ""
+  );
+  deleteR2Cache(env, context, [
+    D1_SHEET_CACHE_KEY,
+    UNIFIED_LISTINGS_CACHE_KEY,
+    unifiedDetailCacheKey(propertyId),
+    body.action === "saveGeocodeCache" ? GEOCODE_CACHE_KEY : ""
+  ].filter(Boolean));
+  return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
 }
 
-async function handleApi(request, env) {
+async function handleApi(request, env, context) {
   const url = new URL(request.url);
   if (url.pathname === "/api/auth-config") {
     if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
     return json({ googleClientId: String(env.GOOGLE_CLIENT_ID || "") }, 200, { "cache-control": "no-store" });
   }
   if (url.pathname === "/api/session") return handleSession(request, env);
-  if (url.pathname === "/api/sheet") return handleSheet(request, env);
-  if (url.pathname === "/api/apps-script") return handleAppsScript(request, env);
+  if (url.pathname === "/api/sheet") return handleSheet(request, env, context);
+  if (url.pathname === "/api/collector") return handleCollectorApi(request, env);
+  if (url.pathname === "/api/data") return handleDataApi(request, env, context);
+  if (url.pathname === "/api/listing-image") return handleListingImage(request, env, context);
+  if (url.pathname === "/api/permit-public-data") return handlePermitPublicData(request, env);
+  if (url.pathname === "/api/permit-lease-legal") return handlePermitLeaseLegal(request, env);
   if (url.pathname === "/api/naver-maps-config") {
     if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
     const key = String(env.NAVER_MAPS_NCP_KEY_ID || "").trim();
@@ -269,11 +478,11 @@ async function handleApi(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, context) {
     try {
       const url = new URL(request.url);
       const response = url.pathname.startsWith("/api/")
-        ? await handleApi(request, env)
+        ? await handleApi(request, env, context)
         : await env.ASSETS.fetch(request);
       return withSecurityHeaders(response, request);
     } catch (error) {
@@ -281,4 +490,3 @@ export default {
     }
   }
 };
-

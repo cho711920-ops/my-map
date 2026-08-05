@@ -230,7 +230,7 @@
     if (cloudSessionReady) return Promise.resolve();
     if (cloudSessionLoading) return cloudSessionLoading;
 
-    var url = (window.saveApiURL || "/api/apps-script") +
+    var url = (window.saveApiURL || "/api/data") +
       "?action=loadCloudState&scope=visitSession&recordKey=default&_=" + Date.now();
     cloudSessionLoading = fetch(url, {
       credentials: "same-origin",
@@ -260,7 +260,7 @@
     var snapshot = JSON.parse(JSON.stringify(sessions || {}));
     window.clearTimeout(cloudSessionSaveTimer);
     cloudSessionSaveTimer = window.setTimeout(function() {
-      fetch(window.saveApiURL || "/api/apps-script", {
+      fetch(window.saveApiURL || "/api/data", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },

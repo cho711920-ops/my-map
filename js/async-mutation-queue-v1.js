@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "js_async_mutation_outbox_v1";
   var ACTIVE_KEY = "js_async_mutation_active_v1";
-  var API_URL = "/api/apps-script";
+  var API_URL = "/api/data";
   var STATUS_CLIENT_VERSION = "1.0.8";
   var sending = false;
   var pollTimer = null;

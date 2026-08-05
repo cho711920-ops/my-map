@@ -9,8 +9,7 @@
   ],
   "host_permissions": [
     "https://new.land.naver.com/*",
-    "https://script.google.com/*",
-    "https://script.googleusercontent.com/*"
+    "https://js-map.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

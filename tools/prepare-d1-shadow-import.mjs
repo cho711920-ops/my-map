@@ -112,17 +112,15 @@ export function prepareShadowImport(csvText, options = {}) {
   ].map(sqlValue).join(", ");
 
   const batchSize = Math.max(1, Math.min(Number(options.batchSize) || 50, 100));
-  const statements = [
-    "PRAGMA foreign_keys = ON;",
-    "BEGIN TRANSACTION;"
-  ];
+  const statements = ["PRAGMA foreign_keys = ON;"];
+  if (options.transaction === true) statements.push("BEGIN TRANSACTION;");
   for (let index = 0; index < listings.length; index += batchSize) {
     const batch = listings.slice(index, index + batchSize);
     statements.push(
       `INSERT OR IGNORE INTO listings (${columns.join(", ")}) VALUES\n${batch.map((item) => `  (${values(item)})`).join(",\n")};`
     );
   }
-  statements.push("COMMIT;");
+  if (options.transaction === true) statements.push("COMMIT;");
   statements.push("SELECT COUNT(*) AS shadow_listing_count FROM listings;");
 
   return {

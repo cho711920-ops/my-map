@@ -17,8 +17,7 @@
   var BUSY_RETRY_DELAYS = [3000, 6000, 10000, 15000, 20000, 30000];
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
-  var APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
+  var COLLECTOR_API_URL = "https://js-map.com/api/collector";
   // Invalidate keys saved during the initial security rollout. Some browsers
   // saved the instruction line instead of the actual collector key.
   var COLLECTOR_KEY_STORAGE = "js_gongsil_collector_access_key_v3";
@@ -643,7 +642,7 @@
         throw new Error(
           result && result.message
             ? result.message
-            : "Apps Script에서 저장 성공 응답을 받지 못했습니다."
+            : "JS부동산 D1에서 저장 성공 응답을 받지 못했습니다."
         );
       }
       var message = result && result.message
@@ -785,7 +784,7 @@
         throw new Error(
           result && result.message
             ? result.message
-            : "Apps Script에서 저장 성공 응답을 받지 못했습니다."
+            : "JS부동산 D1에서 저장 성공 응답을 받지 못했습니다."
         );
       }
 
@@ -2270,7 +2269,7 @@
     } catch (error) {
       if (error && error.isCollectorBusy) throw error;
       throw new Error(
-        "시트 저장 결과 확인이 오래 걸리고 있습니다. " +
+        "D1 저장 결과 확인이 오래 걸리고 있습니다. " +
         "저장 지점은 보존되며 다시 시도하면 같은 매물을 만들지 않고 이어갑니다. " +
         "요청번호: " + requestId
       );
@@ -2358,7 +2357,7 @@
       }
 
       try {
-        await originalFetch(APPS_SCRIPT_URL, {
+        await originalFetch(COLLECTOR_API_URL, {
           method: "POST",
           mode: "no-cors",
           headers: {"content-type": "text/plain;charset=utf-8"},
@@ -2370,7 +2369,7 @@
         if (attempt + 1 < POST_RETRY_DELAYS.length) {
           setStatus(
             "네트워크 연결을 자동으로 복구 중입니다.",
-            (options.label || "시트 저장") + " · 재연결 " +
+            (options.label || "D1 저장") + " · 재연결 " +
             (attempt + 1) + "/" + (POST_RETRY_DELAYS.length - 1) +
             "\n창을 닫지 않아도 자동으로 다시 시도합니다."
           );
@@ -2393,7 +2392,7 @@
       var attempts = 0;
       /*
        * 공실박스 연락처 원상복구는 기존 매물 100~250건을 한 번에 대조하므로
-       * Apps Script 처리 시간이 1분을 넘을 수 있습니다. POST 요청은 이미
+       * 대량 D1 처리 시간이 1분을 넘을 수 있습니다. POST 요청은 이미
        * 서버에서 계속 실행 중이므로 짧은 확인 제한으로 새 요청을 만들지 않고,
        * 동일 requestId의 결과를 최대 약 7분 동안 기다립니다.
        */
@@ -2440,7 +2439,7 @@
           else reject(new Error("저장 결과 확인 차단"));
         };
         script.src =
-          APPS_SCRIPT_URL +
+          COLLECTOR_API_URL +
           "?action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
           "&collectorKey=" + encodeURIComponent(collectorKey) +
           "&callback=" + encodeURIComponent(callbackName) +

@@ -735,7 +735,7 @@
       },
       hold: {
         title: selectedCount + "건을 보류할까요?",
-        description: "선택한 매물을 검증목록에서 제거하고 ‘검증보류’ 시트에 일괄 보관합니다.\n같은 출처 매물과 주소·임대조건이 같은 매물은 다음 수집에서도 자동 제외됩니다."
+        description: "선택한 매물을 검증목록에서 제거하고 D1 검증보류 상태로 보관합니다.\n같은 출처 매물과 주소·임대조건이 같은 매물은 다음 수집에서도 자동 제외됩니다."
       }
     };
     var info = labels[action];
@@ -853,7 +853,7 @@
       var resultMessage = processedIds.length.toLocaleString("ko-KR") + "건 처리 완료" +
         (failed ? " · 실패 " + failed.toLocaleString("ko-KR") + "건" : "") +
         (elapsedSeconds ? " · " + elapsedSeconds + "초" : "") +
-        "\n실제 시트 저장·재확인 " + verified.toLocaleString("ko-KR") + "건" +
+        "\n실제 D1 저장·재확인 " + verified.toLocaleString("ko-KR") + "건" +
         " · 검증목록 반영 " + removedVerified.toLocaleString("ko-KR") + "건" +
         "\n남은 검증 " + remaining + "건";
       message(resultMessage.replace("\n", " · "), failed ? "error" : "success");

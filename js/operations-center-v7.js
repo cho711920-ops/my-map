@@ -291,7 +291,7 @@
     var list = document.getElementById("operationsCustomerList");
     if (!list) return;
     if (!state.customers.length) {
-      list.innerHTML = '<div class="operations-empty"><b>등록된 고객이 없습니다.</b><span>고객문의 시트에 한 행을 입력하면 고객ID와 조건버전이 자동 생성됩니다.</span></div>';
+      list.innerHTML = '<div class="operations-empty"><b>등록된 고객이 없습니다.</b><span>고객 추가 버튼으로 첫 고객을 등록해주세요.</span></div>';
       renderMatches("");
       return;
     }
@@ -1219,7 +1219,7 @@
       renderMatches(editingCustomerId);
     }
     var closeAnimation = closeCustomerEditorAnimatedV727();
-    setMessage("조건을 바로 반영했습니다. 실제 시트 저장과 재매칭을 확인하고 있습니다…", "loading");
+    setMessage("조건을 바로 반영했습니다. D1 저장과 재매칭을 확인하고 있습니다…", "loading");
     apiPost("saveCustomer", {
       customerId: editingCustomerId,
       customer: customer,
@@ -1251,7 +1251,7 @@
     }).then(function() {
       if (isConditionUpdate) setCustomerConditionRefreshV727("", "idle");
       renderMatches(state.selectedCustomerId);
-      setMessage("고객정보가 시트에 저장되고 재매칭까지 확인됐습니다.", "success");
+      setMessage("고객정보가 D1에 저장되고 재매칭까지 확인됐습니다.", "success");
     }).catch(function(error) {
       if (optimisticUpdate) state.customers[optimisticUpdate.rowIndex] = optimisticUpdate.previous;
       if (isConditionUpdate) setCustomerConditionRefreshV727(editingCustomerId, "error");
@@ -1346,7 +1346,7 @@
       button.textContent = "저장 확인 중…";
     }
     window.closeCustomerMemo();
-    setMessage("메모를 바로 접수했습니다. 실제 시트 저장을 확인하고 있습니다…", "loading");
+    setMessage("메모를 바로 접수했습니다. D1 저장을 확인하고 있습니다…", "loading");
     apiPost("addCustomerActivity", {
       customerId: customerId,
       stage: "상담",
@@ -1356,7 +1356,7 @@
     }).then(function(result) {
       if (result.activityRow) state.activities.push(result.activityRow);
       if (input) input.value = "";
-      setMessage("상담·미팅 메모가 시트에 저장된 것을 확인했습니다.", "success");
+      setMessage("상담·미팅 메모가 D1에 저장된 것을 확인했습니다.", "success");
     }).catch(function(error) {
       state.viewingMemoCustomerId = customerId;
       var modal = document.getElementById("customerMemoModal");

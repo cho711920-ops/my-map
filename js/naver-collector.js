@@ -5,7 +5,7 @@
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
-  // Apps Script 서버의 요청당 안전 상한인 100건까지 한 번에 저장한다.
+  // JS부동산 D1 서버의 요청당 안전 상한인 100건까지 한 번에 저장한다.
   // 실패한 묶음은 기존 재시도 로직이 같은 범위를 다시 전송한다.
   var BATCH_SIZE = 100;
   var MIN_BATCH_SIZE = 50;
@@ -25,8 +25,7 @@
     {name: "유성구", cortarNo: "3020000000"},
     {name: "대덕구", cortarNo: "3023000000"}
   ];
-  var APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
+  var COLLECTOR_API_URL = "https://js-map.com/api/collector";
   var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
   var FIN_NAVER_HOST = "fin.land.naver.com";
@@ -2326,7 +2325,7 @@
         "개 · 신규·변경 매물만 상세 저장합니다."
       );
       setProgress(offset, items.length || 1);
-      var response = await nativeFetch(APPS_SCRIPT_URL, {
+      var response = await nativeFetch(COLLECTOR_API_URL, {
         method: "POST",
         headers: {"Content-Type": "text/plain;charset=utf-8"},
         body: JSON.stringify({
@@ -2383,7 +2382,7 @@
 
   async function postBatch(items, metadata) {
     metadata = metadata || {};
-    var response = await nativeFetch(APPS_SCRIPT_URL, {
+    var response = await nativeFetch(COLLECTOR_API_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
@@ -2401,16 +2400,16 @@
     try {
       result = JSON.parse(text);
     } catch (_) {
-      throw new Error("시트 저장 서버 응답을 읽지 못했습니다.");
+      throw new Error("JS부동산 저장 서버 응답을 읽지 못했습니다.");
     }
-    if (!result.ok) throw new Error(result.message || "시트 저장에 실패했습니다.");
+    if (!result.ok) throw new Error(result.message || "D1 저장에 실패했습니다.");
     return result;
   }
 
   async function finalizeNaverSession(metadata) {
     metadata = metadata || {};
     if (!metadata.sessionId) return {ok: true};
-    var response = await nativeFetch(APPS_SCRIPT_URL, {
+    var response = await nativeFetch(COLLECTOR_API_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
@@ -2440,7 +2439,7 @@
   async function getNaverSessionResult(metadata) {
     metadata = metadata || {};
     if (!metadata.sessionId) return null;
-    var response = await nativeFetch(APPS_SCRIPT_URL, {
+    var response = await nativeFetch(COLLECTOR_API_URL, {
       method: "POST",
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({

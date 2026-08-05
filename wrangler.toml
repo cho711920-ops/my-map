@@ -2,6 +2,10 @@ name = "js-map"
 main = "cloudflare/src/worker.js"
 compatibility_date = "2026-08-05"
 workers_dev = true
+routes = [
+  { pattern = "js-map.com", custom_domain = true },
+  { pattern = "www.js-map.com", custom_domain = true }
+]
 
 [assets]
 directory = ".cloudflare-assets"
@@ -13,6 +17,7 @@ not_found_handling = "none"
 [[d1_databases]]
 binding = "DB"
 database_name = "js-map-primary"
+database_id = "e5b41e5f-8929-4c10-948e-178a17ee5f18"
 migrations_dir = "cloudflare/migrations"
 
 [[r2_buckets]]
@@ -22,7 +27,14 @@ bucket_name = "js-map-media"
 [vars]
 SESSION_MAX_AGE_SECONDS = "432000"
 SHEET_MEMORY_CACHE_MS = "120000"
+SHEET_R2_CACHE_MS = "300000"
+GEOCODE_CACHE_MS = "3600000"
+UNIFIED_LISTINGS_CACHE_MS = "300000"
+UNIFIED_DETAIL_CACHE_MS = "3600000"
+IMAGE_CACHE_7D_BUDGET_BYTES = "6442450944"
+D1_PRIMARY_READS = "1"
+D1_PRIMARY_WRITES = "1"
+D1_DETAIL_READS = "1"
 
 [observability]
 enabled = true
-

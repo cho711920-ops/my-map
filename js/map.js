@@ -1178,17 +1178,39 @@ function loadSheet(isAuto, forceRefresh) {
       });
     });
 
-  Promise.all([
-    sheetRequest,
-    typeof loadSharedGeocodeCache === "function"
-      ? loadSharedGeocodeCache()
-      : Promise.resolve({ ok: false, entries: {} }),
-    window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function"
-      ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
-      : Promise.resolve({ ok: false, groups: {} })
-  ])
-    .then(function(results) {
-      var data = results[0];
+  var unifiedResult = null;
+  var renderedItemsAwaitingUnified = null;
+  var unifiedRequest = window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function"
+    ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
+    : Promise.resolve({ ok: false, groups: {} });
+
+  unifiedRequest.then(function(result) {
+    unifiedResult = result || { ok: false, groups: {} };
+    if (!renderedItemsAwaitingUnified || !window.JSUnifiedListingsV8 ||
+        typeof window.JSUnifiedListingsV8.attach !== "function") return;
+
+    var targetItems = allItems && allItems.length ? allItems : renderedItemsAwaitingUnified;
+    var list = document.getElementById("list");
+    var scrollTop = list ? list.scrollTop : 0;
+    window.JSUnifiedListingsV8.attach(targetItems, unifiedResult);
+    currentItems = getFilteredItems({ includeUnlocated: true });
+    window.jsReuseListCardsOnNextRenderV6521 = true;
+    showList(currentItems);
+    if (list) list.scrollTop = scrollTop;
+  }).catch(function(error) {
+    console.warn("Unified listing background load failed", error);
+  });
+
+  /*
+   * 공용 좌표 캐시는 지도 마커에만 필요합니다. 큰 좌표 응답을 기다리느라
+   * 매물목록까지 늦어지지 않도록 시트와 동시에 시작하되 목록은 시트만 오면 표시합니다.
+   */
+  var sharedGeocodeRequest = typeof loadSharedGeocodeCache === "function"
+    ? loadSharedGeocodeCache()
+    : Promise.resolve({ ok: false, entries: {} });
+
+  sheetRequest
+    .then(function(data) {
       var rows = parseCSVRecordsV655(data);
       var rawItems = [];
 
@@ -1242,8 +1264,9 @@ function loadSheet(isAuto, forceRefresh) {
         if (item.address) rawItems.push(item);
       }
 
-      if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
-        window.JSUnifiedListingsV8.attach(rawItems, results[2]);
+      renderedItemsAwaitingUnified = rawItems;
+      if (unifiedResult && window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+        window.JSUnifiedListingsV8.attach(rawItems, unifiedResult);
       }
 
       /*
@@ -1263,7 +1286,8 @@ function loadSheet(isAuto, forceRefresh) {
       document.getElementById("status").innerHTML =
         "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
 
-      geocodeItems(rawItems, function(doneItems) {
+      sharedGeocodeRequest.then(function() {
+        geocodeItems(rawItems, function(doneItems) {
         var hasPendingPropertyEditV638 =
           typeof pendingPropertyEditStateV634 !== "undefined" &&
           !!pendingPropertyEditStateV634;
@@ -1365,7 +1389,7 @@ function loadSheet(isAuto, forceRefresh) {
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
         pendingAutoUpdate = false;
         isLoadingSheet = false;
-      }, function(progressItems, remainingCount) {
+        }, function(progressItems, remainingCount) {
         /*
          * 첫 접속에서는 좌표 캐시가 있는 매물을 먼저 보여 줍니다.
          * 캐시에 없는 주소는 뒤에서 변환하면서 묶음 단위로 지도에 추가합니다.
@@ -1381,6 +1405,7 @@ function loadSheet(isAuto, forceRefresh) {
         document.getElementById("status").innerHTML =
           "저장된 좌표 " + progressItems.length + "개 먼저 표시 / 나머지 " +
           Math.max(0, Number(remainingCount) || 0) + "개 처리 중...";
+        });
       });
     })
     .catch(function(err) {

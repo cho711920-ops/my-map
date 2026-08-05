@@ -1,47 +1,63 @@
-# JS부동산 Cloudflare 이전
+# JS부동산 Cloudflare 전환
 
-## 목표
+## 목표와 결과
 
-- `js-map.com`에서 기존 JS부동산 화면과 수집기를 그대로 사용한다.
-- Google 로그인 후 허용된 이메일만 데이터 API에 접근한다.
-- 기존 Google Sheet와 Apps Script를 중단하지 않고 호환 프록시로 먼저 이전한다.
-- 검증된 기능부터 D1로 옮기고, 허용된 사진만 R2에 저장한다.
-- 데이터 변경은 행 번호가 아니라 `propertyId`, `customerId`, `sourceListingId`로 식별한다.
+`js-map.com`에서 기존 JS부동산 화면과 수집기를 그대로 사용하면서 Google Sheet, Apps Script, Vercel을 운영 런타임에서 제거했다. Google은 허용된 Gmail 계정의 OAuth 로그인에만 사용한다.
 
-## 단계적 전환
+## 운영 구조
 
-1. **호환 단계**: Worker가 기존 `/api/session`, `/api/sheet`, `/api/apps-script` 응답 형태를 유지한다.
-2. **그림자 읽기**: Sheet 원본을 D1에 복제하고 두 저장소의 레코드 수와 식별자를 비교한다.
-3. **이중 검증**: 저장 후 Apps Script와 D1을 각각 다시 읽어 결과가 같은지 확인한다.
-4. **D1 읽기 전환**: 목록·검색·상세·연락처를 인덱스 기반 D1 조회로 바꾼다.
-5. **D1 쓰기 전환**: 메모·고객·수집기·작업 큐를 기능별로 전환한다.
-6. **사진 전환**: 권한이 확인된 사진만 R2에 복제하고 썸네일과 다음 사진을 미리 준비한다.
-7. **운영 전환**: 시험 주소 검증 후 `js-map.com`을 연결한다. 기존 사이트는 안정화 기간 후에만 종료한다.
-
-## 로컬 실행
-
-1. `.dev.vars.example`을 `.dev.vars`로 복사하고 실제 비밀값을 입력한다.
-2. `pnpm run test:cloudflare`
-3. `pnpm run cf:dev`
-
-비밀값과 사용자 데이터는 Git에 커밋하지 않는다.
-
-## 시트 그림자 가져오기
-
-운영 시트 CSV를 받은 뒤 아래 도구로 무손실 SQL과 검증 보고서를 만든다.
-
-```powershell
-node tools/prepare-d1-shadow-import.mjs sheet.csv shadow-import.sql shadow-import.report.json
-wrangler d1 execute js-map-primary --local --file shadow-import.sql
+```text
+브라우저
+  ├─ 정적 사이트 ─ Cloudflare Assets
+  ├─ 로그인·데이터 API ─ Cloudflare Worker
+  ├─ 매물·고객·메모·수집 데이터 ─ D1
+  ├─ 외부 사진 7일 캐시 ─ R2
+  └─ 건축물대장·상권·지역통계 ─ Worker가 공식 API 직접 호출
 ```
 
-도구는 `propertyId`가 없는 행과 중복 행을 보고서에 분리하고, `INSERT OR IGNORE`만 사용한다. 기존 D1 레코드를 수정하거나 삭제하지 않는다. 실제 원격 D1 적용 전에는 보고서의 전체 식별자 수를 운영 시트와 비교한다.
+## 데이터 전환
 
-## Cloudflare 리소스
+- 통합매물 8,754개
+- 활성 원본매물 23,077개
+- 사진 URL 112,456개
+- 연락처 3,151개
+- 고객, 고객매칭, 메모, 임대조건, 변경이력
+- D1 현재 크기 약 141.5MB
 
-- Worker: `js-map`
-- D1: `js-map-primary`
-- R2: `js-map-media`
-- Custom domain: 안정화 후 `js-map.com`
+## API
 
-`wrangler.toml`에는 실제 도메인 route를 아직 넣지 않는다. 시험 배포와 Google OAuth 허용 출처 등록이 끝난 뒤 연결한다.
+- `/api/session`: Google 로그인 세션
+- `/api/sheet`: 기존 CSV 소비 코드를 위한 D1 CSV 응답
+- `/api/data`: 로그인 사용자의 조회·저장 API
+- `/api/collector`: 네이버·당근·공실박스 수집 API
+- `/api/listing-image`: 허용된 외부 사진 프록시와 R2 캐시
+- `/api/permit-public-data`: 건축물대장 직접 조회
+
+과거 `/api/apps-script`는 제거되었고 1분 예약 동기화도 제거되었다. Google Sheet와 Apps Script는 백업 자료로만 보존한다.
+
+## 비용 보호
+
+- Workers Free를 기본으로 사용한다.
+- R2는 실제 본 사진과 다음 사진만 저장하고 7일 뒤 삭제한다.
+- R2 7일 사진 저장 예산을 6GB로 제한한다.
+- 목록·상세·좌표 응답은 R2 캐시로 D1 반복 조회를 줄인다.
+- D1 인덱스로 검색 시 읽는 행 수를 줄인다.
+- 자세한 계산은 `outputs/JS_MAP_MONTHLY_COST.md`를 참고한다.
+
+## 배포와 검증
+
+```powershell
+pnpm run test:cloudflare
+pnpm run cf:check
+pnpm run build:cloudflare
+pnpm exec wrangler d1 migrations apply js-map-primary --remote
+pnpm exec wrangler deploy
+```
+
+배포 후 로그인 화면, 매물 수, 상세 사진, 메모·임대조건 저장, 고객매칭, 운영현황, 수집기, 건축물대장을 실제 도메인에서 확인한다.
+
+## 주의
+
+- Secret 값을 코드, 문서, 로그, 커밋에 넣지 않는다.
+- 운영 수정은 D1을 기준으로 한다.
+- Vercel 해지와 기존 Google 자료 삭제는 사용자 승인 후 별도로 한다.

@@ -688,7 +688,7 @@
 
   function badgeRequestUrl(item, parcel) {
     if (typeof saveApiURL === "undefined" || !saveApiURL) {
-      throw new Error("Apps Script 주소가 설정되지 않았습니다.");
+      throw new Error("JS부동산 서버 주소가 설정되지 않았습니다.");
     }
     var params = [
       "action=buildingRegister",
@@ -723,7 +723,7 @@
         throw new Error(
           data.buildingInfoCache && data.buildingInfoCache.message
             ? data.buildingInfoCache.message
-            : "주소별 건물정보를 시트에 저장하지 못했습니다."
+            : "주소별 건물정보를 D1에 저장하지 못했습니다."
         );
       }
       writeBadgeCache(parcel, data);
@@ -930,7 +930,7 @@
       };
       script.onerror = function () {
         cleanup();
-        reject(new Error("Apps Script와 연결하지 못했습니다."));
+        reject(new Error("JS부동산 서버와 연결하지 못했습니다."));
       };
       script.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "callback=" + encodeURIComponent(callbackName);
       document.head.appendChild(script);
@@ -939,7 +939,7 @@
 
   function requestUrl(force, mode) {
     if (typeof saveApiURL === "undefined" || !saveApiURL) {
-      throw new Error("Apps Script 주소가 설정되지 않았습니다.");
+      throw new Error("JS부동산 서버 주소가 설정되지 않았습니다.");
     }
     var parcel = state.parcel;
     var params = [

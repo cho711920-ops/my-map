@@ -21,6 +21,6 @@ test("shadow import is keyed by property id and never overwrites", () => {
   assert.equal(result.report.skipped.duplicatePropertyId, 1);
   assert.match(result.sql, /INSERT OR IGNORE INTO listings/);
   assert.doesNotMatch(result.sql, /INSERT OR REPLACE|UPDATE listings|DELETE FROM listings/);
+  assert.doesNotMatch(result.sql, /BEGIN TRANSACTION|COMMIT/);
   assert.match(result.sql, /M-100/);
 });
-

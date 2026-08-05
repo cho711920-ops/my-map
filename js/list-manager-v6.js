@@ -188,7 +188,7 @@
   function flushCloudSave(type, lists, attempt) {
     var snapshot = JSON.stringify(lists || []);
     var revision = Number(cloudRevisions[type] || 0);
-    fetch(window.saveApiURL || "/api/apps-script", {
+    fetch(window.saveApiURL || "/api/data", {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
@@ -235,7 +235,7 @@
   async function loadCloudLists(type) {
     var revisionAtStart = Number(cloudRevisions[type] || 0);
     var dirtyAtStart = isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0 || hasDeletedListIds(type);
-    var url = (window.saveApiURL || "/api/apps-script") +
+    var url = (window.saveApiURL || "/api/data") +
       "?action=loadCloudState&scope=" + encodeURIComponent(cloudScope(type)) +
       "&recordKey=default&_=" + Date.now();
     var response = await fetch(url, { credentials: "same-origin", cache: "no-store" });

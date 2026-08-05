@@ -148,15 +148,21 @@ async function fetchText(url) {
   }
 }
 
-function keyOrThrow(name) {
-  const value = text(process.env[name] || process.env.DATA_GO_KR_SERVICE_KEY);
+function runtimeSecrets(env) {
+  if (env && typeof env === "object") return env;
+  return typeof process !== "undefined" && process.env ? process.env : {};
+}
+
+function keyOrThrow(name, env) {
+  const secrets = runtimeSecrets(env);
+  const value = text(secrets[name] || secrets.DATA_GO_KR_SERVICE_KEY);
   if (!value) throw new Error("서버 공공데이터 인증키가 연결되지 않았습니다.");
   return value;
 }
 
-function baseUrl(path, keyName) {
+function baseUrl(path, keyName, env) {
   const url = new URL(path, DATA_GO_BASE);
-  url.searchParams.set("serviceKey", keyOrThrow(keyName));
+  url.searchParams.set("serviceKey", keyOrThrow(keyName, env));
   url.searchParams.set("_type", "json");
   url.searchParams.set("type", "json");
   url.searchParams.set("pageNo", "1");
@@ -179,10 +185,11 @@ function normalizePermit(item) {
   };
 }
 
-export async function fetchBuildingPermitHistory(parcel) {
+export async function fetchBuildingPermitHistory(parcel, env) {
   const url = baseUrl(
     "/1613000/ArchPmsHubService/getApBasisOulnInfo",
-    "BUILDING_HUB_PERMIT_SERVICE_KEY"
+    "BUILDING_HUB_PERMIT_SERVICE_KEY",
+    env
   );
   Object.entries(parcel).forEach(([name, value]) => url.searchParams.set(name, value));
   const payload = await fetchJson(url);
@@ -217,7 +224,7 @@ function normalizeBusiness(item, config) {
   };
 }
 
-export async function fetchIndustryPermitHistory(industryId, addresses) {
+export async function fetchIndustryPermitHistory(industryId, addresses, env) {
   const config = INDUSTRY_ENDPOINTS[industryId];
   if (!config) {
     return {
@@ -229,7 +236,7 @@ export async function fetchIndustryPermitHistory(industryId, addresses) {
   const keyName = industryId === "youth-game"
     ? "YOUTH_GAME_SERVICE_KEY"
     : "LOCALDATA_GAME_SERVICE_KEY";
-  const url = baseUrl(config.path, keyName);
+  const url = baseUrl(config.path, keyName, env);
   const payload = await fetchJson(url);
   const targets = (addresses || []).map(compactAddress).filter(Boolean);
   const records = listFromResponse(payload)
@@ -251,7 +258,7 @@ export async function fetchIndustryPermitHistory(industryId, addresses) {
   };
 }
 
-export async function fetchLandUseActivities(industryId) {
+export async function fetchLandUseActivities(industryId, env) {
   const landUseName = LAND_USE_NAMES[industryId];
   if (!landUseName) {
     return {
@@ -262,7 +269,8 @@ export async function fetchLandUseActivities(industryId) {
   }
   const url = baseUrl(
     "/1613000/arLandUseInfoService/DTsearchLunCd",
-    "LAND_USE_RESTRICTION_SERVICE_KEY"
+    "LAND_USE_RESTRICTION_SERVICE_KEY",
+    env
   );
   url.searchParams.delete("_type");
   url.searchParams.delete("type");

@@ -595,7 +595,7 @@
 
   function renderSuccess(target, data, item) {
     if (safeNumber(data.version) < 3 || !Array.isArray(data.radii) || !Array.isArray(data.stores)) {
-      target.innerHTML = '<div class="public-commerce-error"><b>경쟁업체 지도용 Apps Script 업데이트 필요</b><span>v6.3.37 전체 코드로 교체·배포하면 업종별 경쟁업체 위치가 표시됩니다.</span></div>';
+      target.innerHTML = '<div class="public-commerce-error"><b>상권 데이터 형식을 확인해주세요</b><span>새로고침 후에도 계속되면 JS부동산 서버 상태를 확인해주세요.</span></div>';
       return;
     }
 
@@ -789,7 +789,7 @@
       return;
     }
     if (!window.saveApiURL) {
-      renderError(target, "Apps Script 주소가 설정되지 않았습니다.");
+      renderError(target, "JS부동산 서버 주소가 설정되지 않았습니다.");
       return;
     }
 

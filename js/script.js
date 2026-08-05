@@ -1,6 +1,6 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = "/api/sheet";
-var saveApiURL = "/api/apps-script"; // 로그인 세션을 검사하는 Vercel 보안 프록시
+var saveApiURL = "/api/data"; // 로그인 세션을 검사하는 Cloudflare D1 API
 
 var map, geocoder;
 var allItems = [];
@@ -75,13 +75,13 @@ function postSafeMutationV654(action, payload) {
       return response.json();
     }).then(function(result) {
       if (!result || result.ok === false) {
-        var error = new Error((result && result.message) || "실제 시트 저장에 실패했습니다.");
+        var error = new Error((result && result.message) || "실제 D1 저장에 실패했습니다.");
         error.retryable = isRetryableResult(result);
         throw error;
       }
       return Object.assign({}, result, {
-        queued: false,
-        persisted: true,
+        queued: result && result.queued === true,
+        persisted: !result || result.persisted !== false,
         requestId: body.requestId
       });
     }).catch(function(error) {
@@ -3011,7 +3011,7 @@ function saveItemMemo(encodedKey) {
   }
 
   if (!saveApiURL) {
-    alert("구글시트 쓰기 연결 URL을 확인해주세요.");
+    alert("JS부동산 D1 서버 연결을 확인해주세요.");
     return;
   }
 
@@ -3063,7 +3063,7 @@ function saveItemMemo(encodedKey) {
 
   postSafeMutationV654("updatePropertyMemo", payload).then(function(result) {
     if (!result || result.persisted !== true) {
-      throw new Error("메모 저장값을 시트에서 재확인하지 못했습니다.");
+      throw new Error("메모 저장값을 D1에서 재확인하지 못했습니다.");
     }
     var savedPhoneKeys = Object.create(null);
     (Array.isArray(result && result.contacts) ? result.contacts : []).forEach(function(contact) {
@@ -3075,7 +3075,7 @@ function saveItemMemo(encodedKey) {
       return expectedPhone && !savedPhoneKeys[expectedPhone.key];
     });
     if (missingContact) {
-      throw new Error("메모의 연락처가 시트 연락처목록에 저장되지 않아 메모 정리를 중단했습니다.");
+      throw new Error("메모의 연락처가 D1 연락처목록에 저장되지 않아 메모 정리를 중단했습니다.");
     }
     if (Array.isArray(result && result.contacts)) {
       item.contactListRaw = JSON.stringify(result.contacts);
@@ -4009,7 +4009,7 @@ function resetFilter() {
    - 화면 즉시 반영
    - 상태 열: 계약완료 / 공란
    - 메모 열: 거래완료 날짜 자동 기록
-   - 구글시트 Apps Script로 기존 행 수정
+   - Cloudflare D1 API로 기존 매물 수정
    ========================================================= */
 function getItemByKeyForStatus(key) {
   return (allItems || []).find(function(item) {
@@ -4078,8 +4078,8 @@ function toggleDoneStatus(encodedKey, checked) {
 
   if (!saveApiURL) {
     alert(
-      "구글시트 자동수정 URL이 아직 연결되지 않았습니다.\n\n" +
-      "구글시트 쓰기 연결 URL을 확인해주세요."
+      "JS부동산 D1 서버가 아직 연결되지 않았습니다.\n\n" +
+      "서버 연결 상태를 확인해주세요."
     );
     showList(visibleListItems);
     return;
@@ -4270,7 +4270,7 @@ function markSelectedAsVisited() {
   }
 
   if (!saveApiURL) {
-    alert("구글시트 자동수정 URL이 아직 연결되지 않았습니다.");
+    alert("JS부동산 D1 서버가 아직 연결되지 않았습니다.");
     return;
   }
 
@@ -4313,7 +4313,7 @@ function markSelectedAsVisited() {
   var requests = targetItems.map(function(item) {
     var payload = {
       /*
-       * 기존 Apps Script의 toggleDone 수정 기능을 재사용합니다.
+       * 기존 toggleDone 수정 기능을 D1 API에서 재사용합니다.
        * 상태는 그대로 두고 메모만 최신값으로 저장합니다.
        */
       action: "toggleDone",
@@ -4382,7 +4382,7 @@ function completeSelectedItems() {
   }
 
   if (!saveApiURL) {
-    alert("구글시트 자동수정 URL이 아직 연결되지 않았습니다.");
+    alert("JS부동산 D1 서버가 아직 연결되지 않았습니다.");
     return;
   }
 
@@ -5164,7 +5164,7 @@ function savePropertyEditV630() {
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
 
   if (!saveApiURL) {
-    alert("Apps Script 저장 주소가 설정되지 않았습니다.");
+    alert("JS부동산 D1 서버 주소가 설정되지 않았습니다.");
     return;
   }
 
@@ -5318,7 +5318,7 @@ function savePropertyEditV630() {
    - 수정 팝업 하단 좌측의 빨간 삭제 버튼
    - P열 매물ID가 유일하게 일치할 때만 서버에서 삭제
    - 행번호·주소·호실을 이용한 대체 삭제 금지
-   - Apps Script의 실제 처리 결과 확인 후에만 완료 처리
+   - D1 API의 실제 처리 결과 확인 후에만 완료 처리
    ========================================================= */
 
 function buildPropertyDeleteLabelV648(item) {
@@ -5394,7 +5394,7 @@ function waitForPropertyDeleteResultV648(requestId, attempt) {
 
     if (currentAttempt >= 19) {
       throw new Error(
-        "삭제 결과 확인 시간이 초과되었습니다. 시트에서 삭제 여부를 확인해주세요."
+        "삭제 결과 확인 시간이 초과되었습니다. 새로고침 후 삭제 여부를 확인해주세요."
       );
     }
 
@@ -5411,7 +5411,7 @@ function deletePropertyV648() {
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
 
   if (!saveApiURL) {
-    alert("Apps Script 저장 주소가 설정되지 않았습니다.");
+    alert("JS부동산 D1 서버 주소가 설정되지 않았습니다.");
     return;
   }
 

@@ -274,7 +274,7 @@ async function postBatch(items) {
   const accessKey = $("accessKey").value.trim();
 
   if (!webhookUrl) {
-    throw new Error("설정에서 Apps Script 웹앱 URL을 먼저 저장해주세요.");
+    throw new Error("설정에서 JS부동산 D1 API URL을 먼저 저장해주세요.");
   }
 
   const controller = new AbortController();
@@ -298,7 +298,7 @@ async function postBatch(items) {
     try {
       result = JSON.parse(text);
     } catch (_) {
-      throw new Error("Apps Script 응답을 읽지 못했습니다.");
+      throw new Error("JS부동산 D1 응답을 읽지 못했습니다.");
     }
 
     if (!result.ok) {
@@ -321,7 +321,7 @@ async function saveOne(index, button) {
 
     if (Number(result.saved) > 0) {
       button.textContent = "저장 완료";
-      setStatus("저장 완료", "선택한 매물을 NAVER_IMPORT에 저장했습니다.");
+      setStatus("저장 완료", "선택한 매물을 JS부동산 D1에 저장했습니다.");
     } else if (Number(result.duplicate) > 0) {
       button.textContent = "이미 저장됨";
       setStatus("중복 매물", "기존 매물과 조건이 같아 저장하지 않았습니다.");
@@ -477,7 +477,7 @@ async function init() {
     RESUME_KEY
   ]);
 
-  $("webhookUrl").value = stored.naverWebhookUrl || "";
+  $("webhookUrl").value = stored.naverWebhookUrl || "https://js-map.com/api/collector";
   $("accessKey").value = stored.naverAccessKey || "JS_NAVER_EXTRACT_2026";
 
   await loadState();

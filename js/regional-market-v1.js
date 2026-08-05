@@ -136,7 +136,7 @@
       '<div class="regional-title"><div>' + sourceBadge(type, source) +
       '<h4>' + escapeHtml(title) + '</h4></div><span>연결 준비</span></div>' +
       '<p>' + escapeHtml(message) + '</p>' +
-      '<small>인증정보는 웹 코드가 아니라 Apps Script의 스크립트 속성에 보관합니다.</small>' +
+      '<small>인증정보는 웹 코드가 아니라 Cloudflare 비밀 변수에 보관합니다.</small>' +
       '</section>';
   }
 
@@ -279,7 +279,7 @@
     if (!slot) return;
     var coords = coordinates(item);
     if (!coords || !window.saveApiURL) {
-      renderError(slot, !coords ? "매물 좌표가 없습니다." : "Apps Script 주소가 설정되지 않았습니다.");
+      renderError(slot, !coords ? "매물 좌표가 없습니다." : "JS부동산 서버 주소가 설정되지 않았습니다.");
       return;
     }
     var key = cacheKey(item, coords);

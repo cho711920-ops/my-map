@@ -4,8 +4,7 @@
   var VERSION = "1.1.4";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
-  var APPS_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbzPedWbaT4yaLNxqrvKI9F3L4JVZ0Q8wVnsSyLEELmaW2h9QuyfGYsESW_7rDxbdqNw/exec";
+  var COLLECTOR_API_URL = "https://js-map.com/api/collector";
   var COLLECTOR_KEY_STORAGE = "js_daangn_collector_access_key_v1";
   var POST_RETRY_DELAYS = [0, 1200, 3000, 6000];
 
@@ -718,7 +717,7 @@
         await delay(POST_RETRY_DELAYS[attempt]);
       }
       try {
-        await nativeFetch(APPS_SCRIPT_URL, {
+        await nativeFetch(COLLECTOR_API_URL, {
           method: "POST",
           mode: "no-cors",
           headers: {"content-type": "text/plain;charset=utf-8"},
@@ -797,7 +796,7 @@
             options.quiet ? "status-blocked" : "당근 수집 결과 확인이 일시적으로 차단되었습니다."
           ));
         };
-        script.src = APPS_SCRIPT_URL +
+        script.src = COLLECTOR_API_URL +
           "?action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
           "&collectorKey=" + encodeURIComponent(collectorKey) +
           "&callback=" + encodeURIComponent(callbackName) +

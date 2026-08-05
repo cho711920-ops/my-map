@@ -181,7 +181,7 @@
   }
 
   function load(recordKey) {
-    var url = (global.saveApiURL || "/api/apps-script") +
+    var url = (global.saveApiURL || "/api/data") +
       "?action=loadCloudState&scope=" + encodeURIComponent(SCOPE) +
       "&recordKey=" + encodeURIComponent(recordKey) + "&_=" + Date.now();
     return request(url, { credentials: "same-origin", cache: "no-store" })
@@ -201,7 +201,7 @@
 
   function save(record) {
     var localSaved = saveLocal(record);
-    return request(global.saveApiURL || "/api/apps-script", {
+    return request(global.saveApiURL || "/api/data", {
       method: "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json" },

@@ -1,13 +1,13 @@
 (function(global) {
   "use strict";
 
-  var API = "/api/apps-script";
+  var API = "/api/data";
   var state = { groups: {}, detailCache: {}, detailPending: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, pendingMove: null,
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
-    photoPreloads: {}, photoPreloadOrder: [] };
+    photoPreloads: {}, photoPreloadOrder: [], photoWarmupTimer: 0 };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function esc(value) {
@@ -71,6 +71,12 @@
       value = value.replace(/([?&])q=\d+/i, "$1q=88");
       value = value.replace(/([?&])s=\d+x\d+/i, "$1s=960x960");
     }
+    try {
+      var parsed = new URL(value, global.location && global.location.href || undefined);
+      if (parsed.protocol === "https:" && /^(?:img\.kr\.gcp-karroter\.net|landthumb-phinf\.pstatic\.net|dnvefa72aowie\.cloudfront\.net)$/i.test(parsed.hostname)) {
+        return "/api/listing-image?url=" + encodeURIComponent(parsed.toString());
+      }
+    } catch (ignore) {}
     return value;
   }
 
@@ -88,6 +94,9 @@
     while (state.photoPreloadOrder.length > 80) {
       delete state.photoPreloads[state.photoPreloadOrder.shift()];
     }
+    preload.onload = function() {
+      if (typeof preload.decode === "function") preload.decode().catch(function() {});
+    };
     preload.src = source;
     return preload;
   }
@@ -111,14 +120,18 @@
     })[0] || originals[0];
     if (!selected) return false;
     var imageCount = originalImages(selected).length;
-    return imageCount < Math.max(1, Number(selected.photoCount) || 0);
+    var declaredCount = Math.max(0, Number(selected.photoCount) || 0);
+    if (!imageCount && !declaredCount) return false;
+    return imageCount < Math.max(1, declaredCount);
   }
 
   function primeDetailImages(originals) {
     if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
     var selected = orderOriginals(originals)[0];
-    originalImages(selected).slice(0, 6).forEach(function(url, index) {
-      preloadDetailImage(url, index < 2);
+    /* 첫 장은 목록 썸네일의 브라우저 캐시를 재사용하고 다음 장부터 먼저 받습니다. */
+    originalImages(selected).slice(1, 7).forEach(function(url, index) {
+      if (index < 2) preloadDetailImage(url, true);
+      else global.setTimeout(function() { preloadDetailImage(url, false); }, 700 + (index - 2) * 220);
     });
   }
 
@@ -162,7 +175,7 @@
         if (!propertyId || seen[propertyId] || state.detailCache[propertyId] || state.detailPending[propertyId]) return false;
         seen[propertyId] = true;
         return needsDetail(group(propertyId), "");
-      }).slice(0, 4);
+      }).slice(0, 8);
     if (typeof global.setTimeout !== "function") return;
     if (state.detailWarmupTimer && typeof global.clearTimeout === "function") {
       global.clearTimeout(state.detailWarmupTimer);
@@ -215,6 +228,18 @@
   function load(force) {
     if (state.loaded && !force) return Promise.resolve({groups: state.groups});
     return apiGet("unifiedListings").then(function(result) {
+      if (result && /^compact-v\d+$/.test(result.format || "") && Array.isArray(result.fields)) {
+        var fields = result.fields;
+        var expanded = {};
+        Object.keys(result.groups || {}).forEach(function(propertyId) {
+          expanded[propertyId] = (result.groups[propertyId] || []).map(function(values) {
+            var original = {propertyId: propertyId};
+            fields.forEach(function(field, index) { original[field] = values[index]; });
+            return original;
+          });
+        });
+        result.groups = expanded;
+      }
       state.groups = result.groups || {};
       state.loaded = true;
       return result;
@@ -233,6 +258,11 @@
     }
     (items || []).forEach(function(item) {
       var originals = group(item.propertyId);
+      originals.forEach(function(original) {
+        if (!original.buildingName) original.buildingName = item.name || "";
+        if (!original.address) original.address = item.address || "";
+        if (!original.type) original.type = item.type || "";
+      });
       state.masterMeta[text(item.propertyId)] = {
         regDate: text(item.regDate),
         buildingYear: text(item.buildingYear || item.approvalYear)
@@ -499,7 +529,8 @@
     var image = gallery.querySelector(".unified-detail-hero-v8 img");
     if (image) {
       image.style.display = "block";
-      var displaySource = detailDisplayImageUrl(images[safeIndex]);
+      /* 대표 썸네일은 이미 목록에서 받은 동일 URL을 써서 중복 다운로드를 피합니다. */
+      var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
       try { image.fetchPriority = "high"; } catch (ignore) {}
       if (image.getAttribute("src") !== displaySource) image.src = displaySource;
       image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
@@ -512,10 +543,19 @@
       button.hidden = photoCount < 2;
       button.disabled = images.length < 2;
     });
-    [1, 2, 3, 4, 5].forEach(function(offset) {
+    [1, 2].forEach(function(offset) {
       if (images.length <= offset) return;
-      preloadDetailImage(images[(safeIndex + offset) % images.length], offset <= 2);
+      preloadDetailImage(images[(safeIndex + offset) % images.length], true);
     });
+    if (state.photoWarmupTimer) global.clearTimeout(state.photoWarmupTimer);
+    state.photoWarmupTimer = global.setTimeout(function() {
+      [3, 4, 5].forEach(function(offset, delayedIndex) {
+        if (images.length <= offset) return;
+        global.setTimeout(function() {
+          preloadDetailImage(images[(safeIndex + offset) % images.length], false);
+        }, delayedIndex * 220);
+      });
+    }, 700);
   }
 
   function stepDetailPhoto(button, direction) {
@@ -694,7 +734,7 @@
       if (!response.ok) throw new Error("저장 요청 실패 (HTTP " + response.status + ")");
       return response.json();
     }).then(function(result) {
-      if (!result || result.ok === false || result.persisted !== true) throw new Error(result && result.message || "시트 저장 확인 실패");
+      if (!result || result.ok === false || result.persisted !== true) throw new Error(result && result.message || "D1 저장 확인 실패");
       setSaving(false, false);
       state.loaded = false;
       state.detailCache = {};
@@ -822,16 +862,16 @@
     if (!modal || !images.length) return;
     var safeIndex = Math.max(0, Math.min(Number(index) || 0, images.length - 1));
     modal._indexV8 = safeIndex;
-    var displaySource = detailDisplayImageUrl(images[safeIndex]);
+    var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
     var modalImage = modal.querySelector("img");
     try { modalImage.fetchPriority = "high"; } catch (ignore) {}
     if (modalImage.getAttribute("src") !== displaySource) modalImage.src = displaySource;
     modal.querySelector("span").textContent = (safeIndex + 1) + " / " + images.length;
     modal.querySelector(".prev").disabled = safeIndex === 0;
     modal.querySelector(".next").disabled = safeIndex === images.length - 1;
-    [1, 2, 3].forEach(function(offset) {
+    [1, 2].forEach(function(offset) {
       if (safeIndex + offset >= images.length) return;
-      preloadDetailImage(images[safeIndex + offset], offset === 1);
+      preloadDetailImage(images[safeIndex + offset], true);
     });
   }
 

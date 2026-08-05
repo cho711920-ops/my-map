@@ -287,7 +287,7 @@ function fallbackCopyText(text) {
 function saveQuickAddToSheet() {
   if (!validateQuickAdd()) return;
   if (!saveApiURL) {
-    alert("자동등록 URL이 아직 연결되지 않았습니다.\nApps Script 배포 URL을 HTML의 saveApiURL에 넣어주세요.\n지금은 '시트 행 복사'를 사용할 수 있습니다.");
+    alert("자동등록 서버가 아직 연결되지 않았습니다.\nJS부동산 D1 서버 상태를 확인해주세요.\n지금은 '시트 행 복사'를 사용할 수 있습니다.");
     return;
   }
 
@@ -1161,7 +1161,7 @@ function parseQuickAddText() {
    - 같은 주소 + 같은 호실만 중복
    - 같은 주소 + 다른 호실은 등록 허용
    - 양쪽 모두 호실 공란이면 주소+보증금+월세+평수 동일 시 중복
-   - Apps Script 수정 없이 브라우저에서 차단
+   - D1 API 수정 없이 브라우저에서 차단
    ========================================================= */
 
 var quickAddPendingFingerprintsV616 = {};
@@ -1306,7 +1306,7 @@ function normalizeQuickAddAddressFieldV616() {
 }
 
 /*
- * Apps Script 중복검사 API는 수정하지 않습니다.
+ * D1 중복검사 API는 수정하지 않습니다.
  * 현재 화면의 전체 매물(allItems) + 전송 대기 지문으로 빠른등록만 차단합니다.
  * 공실박스 추출 경로는 변경하지 않습니다.
  */
@@ -1734,7 +1734,7 @@ function updateQuickAddWarning() {
    - 같은 주소이지만 호실 또는 임대조건 다름: 참고 목록만 표시
 
    등록 UX
-   - Apps Script 응답을 기다리지 않고 요청 직후 토스트 표시
+   - D1 API 응답을 기다리지 않고 요청 직후 토스트 표시
    - 기존 확인형 성공 alert 제거
    ========================================================= */
 function normalizeQuickDuplicateAreaV636(value) {
@@ -1962,7 +1962,7 @@ function focusQuickAddRawV636() {
 function submitQuickAddRequestV636(values, forceDuplicate, fingerprint, btn, oldText) {
   /*
    * 사용자에게는 요청을 시작한 즉시 알려줍니다.
-   * Apps Script의 실제 처리는 백그라운드에서 계속됩니다.
+   * D1 API의 실제 처리는 백그라운드에서 계속됩니다.
    */
   showQuickAddToastV636(
     "매물 등록 요청을 보냈습니다. 다음 매물을 계속 등록할 수 있습니다.",

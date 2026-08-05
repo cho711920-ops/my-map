@@ -23,4 +23,3 @@ for (const file of files) {
 }
 
 console.log(`Cloudflare assets prepared in ${output}`);
-
