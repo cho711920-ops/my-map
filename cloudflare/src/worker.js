@@ -28,7 +28,7 @@ const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
 const SHEET_CACHE_ACTIONS = new Set([
-  "deleteProperty", "quickAdd", "toggleDone", "updateProperty", "updatePropertyMemo"
+  "deleteProperty", "moveOriginalListing", "quickAdd", "toggleDone", "updateProperty", "updatePropertyMemo"
 ]);
 const UNIFIED_CACHE_ACTIONS = new Set(["moveOriginalListing"]);
 const OPERATIONS_CACHE_ACTIONS = new Set([

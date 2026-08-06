@@ -1,3 +1,5 @@
+import { canonicalListingRoom, normalizedRoomKey } from "./floor.js";
+
 const COLLECTOR_ORIGINS = [
   /(^|\.)realty\.daangn\.com$/i,
   /(^|\.)fin\.land\.naver\.com$/i,
@@ -76,7 +78,7 @@ function normalizedAddress(value) {
 }
 
 function normalizedRoom(value) {
-  return clean(value).replace(/\s+/g, "").replace(/(층|호실)$/g, (match) => match === "호실" ? "호" : match);
+  return normalizedRoomKey(value);
 }
 
 function stableJson(value) {
@@ -135,7 +137,7 @@ function gongsilRecord(record) {
   if (clean(record?.primaryImage) && !images.includes(clean(record.primaryImage))) images.unshift(clean(record.primaryImage));
   return {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
-    address: normalizedAddress(values[1] || record?.address), room: clean(values[2] || record?.room),
+    address: normalizedAddress(values[1] || record?.address), room: canonicalListingRoom(values[2] || record?.room),
     category: clean(values[3] || record?.category) || "상가점포", deposit: number(values[4] ?? record?.deposit),
     rent: number(values[5] ?? record?.rent), fee: number(values[6] ?? record?.fee),
     premium: number(values[7] ?? record?.premium), area: number(values[8] ?? record?.area),
@@ -152,7 +154,7 @@ function naverRecord(item) {
   return {
     source: "네이버", sourceId, buildingName: clean(item?.buildingName) || "일반상가",
     address: normalizedAddress(item?.jibunAddress || item?.address),
-    room: clean(item?.roomInfo || item?.floorInfo), category: clean(item?.category) || "상가점포",
+    room: canonicalListingRoom(item?.roomInfo || item?.floorInfo), category: clean(item?.category) || "상가점포",
     deposit: number(item?.deposit), rent: number(item?.monthly), fee: number(item?.managementFee || item?.fee),
     premium: number(item?.premium), area: squareMeters && squareMeters > 0
       ? Math.round((squareMeters / 3.305785) * 10) / 10 : number(item?.area),
@@ -199,7 +201,7 @@ function daangnRecord(article, listSnapshot = "") {
     source: "당근", sourceId,
     buildingName: clean(article?.buildingName || article?.complex?.name) || "일반상가",
     address: daangnAddress(article),
-    room: article?.isEntireBuilding ? "전체" : daangnFloor(article?.isAmbiguousFloor ? article?.ambiguousFloor : article?.floor),
+    room: article?.isEntireBuilding ? "전체" : canonicalListingRoom(daangnFloor(article?.isAmbiguousFloor ? article?.ambiguousFloor : article?.floor)),
     category: /OFFICE/.test(salesType) ? "사무실" : /FACTORY/.test(salesType) ? "공장/창고" : "상가점포",
     deposit: number(trade?.deposit ?? trade?.price), rent: number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
     fee: number(article?.totalManageCost) || 0, premium: number(article?.premiumMoney) || 0,

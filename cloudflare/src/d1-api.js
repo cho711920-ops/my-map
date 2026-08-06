@@ -1,3 +1,5 @@
+import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
+
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision"
@@ -505,7 +507,7 @@ async function updateProperty(env, user, body) {
       title=?1, building_name=?1, room=?2, deposit=?3, monthly_rent=?4, maintenance_fee=?5,
       premium=?6, area_m2=?7, landlord_phone=?8, tenant_phone=?9, operating_memo=?10,
       status=?11, contacts_json=?12, version=version+1, updated_at=?13 WHERE property_id=?14`)
-      .bind(clean(value.name), clean(value.room), number(value.deposit), number(value.rent), number(value.fee),
+      .bind(clean(value.name), canonicalListingRoom(value.room), number(value.deposit), number(value.rent), number(value.fee),
         number(value.premium), number(value.area), clean(value.landlordPhone), clean(value.tenantPhone),
         clean(value.memo), clean(value.state) || "active", JSON.stringify(value.contacts || []), now, propertyId),
     env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
@@ -559,7 +561,7 @@ async function quickAdd(env, body) {
   ) VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?4, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
     ?15, ?16, ?17, ?18, ?19, ?20, ?20)`)
     .bind(propertyId, clean(values[12]) || "active", clean(values[14]) || "직접등록", clean(values[0]),
-      clean(values[1]), clean(values[2]), clean(values[3]), number(values[4]), number(values[5]),
+      clean(values[1]), canonicalListingRoom(values[2]), clean(values[3]), number(values[4]), number(values[5]),
       number(values[6]), number(values[7]), number(values[8]), clean(values[9]), clean(values[10]),
       clean(values[11]), clean(values[13]) || now, clean(values[16]), clean(values[17]) || "[]",
       clean(values[23]) || now, clean(values[24]) || now).run();
@@ -597,21 +599,36 @@ async function saveGeocode(env, body) {
   return { ok: true, persisted: true, saved: statements.length, source: "D1" };
 }
 
-async function moveOriginal(env, body) {
+async function moveOriginal(env, user, body) {
   const originalId = clean(body.originalId).slice(0, 160);
   const targetMasterId = clean(body.targetMasterId).slice(0, 100);
   const source = await env.DB.prepare("SELECT listing_id FROM listing_sources WHERE id=?1").bind(originalId).first();
   const target = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 AND status <> 'deleted'").bind(targetMasterId).first();
   if (!source || !target) throw Object.assign(new Error("이동할 원본매물 또는 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
-  await env.DB.batch([
+  const now = new Date().toISOString();
+  const results = await env.DB.batch([
     env.DB.prepare("UPDATE listing_sources SET listing_id=?1, updated_at=?2 WHERE id=?3")
-      .bind(targetMasterId, new Date().toISOString(), originalId),
+      .bind(targetMasterId, now, originalId),
     env.DB.prepare("UPDATE listing_media SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
-      .bind(targetMasterId, new Date().toISOString(), originalId),
+      .bind(targetMasterId, now, originalId),
     env.DB.prepare("UPDATE listing_contacts SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
-      .bind(targetMasterId, new Date().toISOString(), originalId)
+      .bind(targetMasterId, now, originalId),
+    env.DB.prepare(`UPDATE listings SET status='deleted', version=version+1, updated_at=?1
+      WHERE id=?2 AND id<>?3
+        AND NOT EXISTS (SELECT 1 FROM listing_sources WHERE listing_id=?2)`)
+      .bind(now, source.listing_id, targetMasterId)
   ]);
-  return { ok: true, persisted: true, queued: false, originalId, sourceMasterId: source.listing_id, targetMasterId, source: "D1" };
+  const sourceMasterRemoved = Number(results?.[3]?.meta?.changes || 0) > 0;
+  if (sourceMasterRemoved) {
+    await env.DB.prepare(`INSERT INTO listing_history (
+        listing_id, source_id, action, actor_email, before_json, after_json
+      ) VALUES (?1, ?2, 'emptyMasterRemovedAfterMove', ?3, ?4, ?5)`)
+      .bind(source.listing_id, originalId, clean(user?.email) || "web",
+        JSON.stringify({ sourceMasterId: source.listing_id }),
+        JSON.stringify({ targetMasterId, removedAt: now })).run();
+  }
+  return { ok: true, persisted: true, queued: false, originalId, sourceMasterId: source.listing_id,
+    targetMasterId, sourceMasterRemoved, source: "D1" };
 }
 
 function splitRequirement(value) {
@@ -623,14 +640,6 @@ function nullableRequirementNumber(value) {
   if (!valueText) return null;
   const parsed = Number(valueText.replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function listingFloor(row) {
-  const source = clean(row.floor || row.room);
-  const basement = source.match(/B\s*(\d+)|지하\s*(\d*)/i);
-  if (basement) return -(Number(basement[1] || basement[2]) || 1);
-  const matched = source.match(/(-?\d+)\s*층/);
-  return matched ? Number(matched[1]) : null;
 }
 
 function evaluateCustomerListing(requirements, row) {
@@ -669,8 +678,7 @@ function evaluateCustomerListing(requirements, row) {
   if (limits.premiumMax != null && premium > limits.premiumMax) return null;
   if (limits.areaMin != null && area < limits.areaMin) return null;
   if (limits.areaMax != null && area > limits.areaMax) return null;
-  if (limits.floorMin != null && floor != null && floor < limits.floorMin) return null;
-  if (limits.floorMax != null && floor != null && floor > limits.floorMax) return null;
+  if (!floorMatchesBounds(floor, limits.floorMin, limits.floorMax)) return null;
 
   let score = 70;
   if (regions.length) score += 8;
@@ -866,7 +874,7 @@ async function executePost(env, user, body) {
   if (action === "quickAdd") return quickAdd(env, body);
   if (action === "saveCloudState") return saveCloudState(env, user, body);
   if (action === "saveGeocodeCache") return saveGeocode(env, body);
-  if (action === "moveOriginalListing") return moveOriginal(env, body);
+  if (action === "moveOriginalListing") return moveOriginal(env, user, body);
   if (action === "saveCustomer") return saveCustomer(env, user, body);
   if (action === "updateCustomerMatch") return updateCustomerMatch(env, body);
   if (action === "rebuildCustomerMatches") {
