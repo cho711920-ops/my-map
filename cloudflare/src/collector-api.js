@@ -142,7 +142,9 @@ function gongsilRecord(record) {
     rent: number(values[5] ?? record?.rent), fee: number(values[6] ?? record?.fee),
     premium: number(values[7] ?? record?.premium), area: number(values[8] ?? record?.area),
     memo: memoWithVisit(values[11] || record?.memo), link: clean(record?.url || record?.sourceUrl),
-    listSnapshot: clean(record?.listSnapshot), images, contacts, raw: record?.raw || record
+    listSnapshot: clean(record?.listSnapshot), images, contacts, raw: record?.raw || record,
+    latitude: coordinate(record?.latitude ?? record?.lat ?? record?.mapY, -90, 90),
+    longitude: coordinate(record?.longitude ?? record?.lng ?? record?.lon ?? record?.mapX, -180, 180)
   };
 }
 

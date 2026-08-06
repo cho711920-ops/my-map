@@ -13,6 +13,8 @@ test("naver coordinates survive collection and are preferred before address geoc
 
   assert.match(collector, /latitude: item\.latitude,[\s\S]*longitude: item\.longitude/);
   assert.match(api, /latitude: coordinate\(item\?\.latitude/);
+  assert.match(api, /latitude: coordinate\(record\?\.latitude/);
+  assert.match(api, /longitude: coordinate\(record\?\.longitude/);
   assert.match(api, /INSERT INTO listings \([\s\S]*area_m2, latitude, longitude/);
   assert.match(d1, /last_collected_at, latitude, longitude/);
   assert.match(map, /latitude: clean\(c\[25\]\)/);
