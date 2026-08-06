@@ -13,6 +13,7 @@
   var historySyncQueued = false;
   var closingFromBackToken = "";
   var ignoreNextPop = false;
+  var mobileSearchTimer = null;
 
   var MOBILE_LAYER_SELECTORS = [
     "#jsMobileMoreLayerV1.open",
@@ -126,12 +127,36 @@
     var form = chrome.querySelector("#jsMobileSearchFormV1");
     form.addEventListener("submit", function(event) {
       event.preventDefault();
-      var source = document.getElementById("keyword");
-      var input = chrome.querySelector("#jsMobileKeywordV1");
-      if (source) source.value = input.value;
-      if (typeof global.applyFilter === "function") global.applyFilter();
-      setView("list");
+      global.clearTimeout(mobileSearchTimer);
+      applyMobileKeywordSearch({openList: true});
     });
+
+    var mobileInput = chrome.querySelector("#jsMobileKeywordV1");
+    mobileInput.addEventListener("input", queueMobileKeywordSearch);
+    mobileInput.addEventListener("search", function() {
+      global.clearTimeout(mobileSearchTimer);
+      applyMobileKeywordSearch();
+    });
+  }
+
+  function applyMobileKeywordSearch(options) {
+    options = options || {};
+    if (!active || !chrome) return;
+    var source = document.getElementById("keyword");
+    var input = chrome.querySelector("#jsMobileKeywordV1");
+    if (!source || !input) return;
+    source.value = input.value || "";
+    global.jsMobileGlobalKeywordV1 = !!source.value.trim();
+    source.dispatchEvent(new Event("input", {bubbles: true}));
+    if (typeof global.applyFilter === "function") global.applyFilter();
+    if (options.openList) setView("list");
+  }
+
+  function queueMobileKeywordSearch() {
+    global.clearTimeout(mobileSearchTimer);
+    mobileSearchTimer = global.setTimeout(function() {
+      applyMobileKeywordSearch();
+    }, 180);
   }
 
   function syncSearchValue() {
@@ -155,6 +180,14 @@
     if (nextView === "more") {
       openMore();
       return;
+    }
+    if (nextView === "list" && chrome) {
+      var mobileInput = chrome.querySelector("#jsMobileKeywordV1");
+      var sourceInput = document.getElementById("keyword");
+      if (mobileInput && sourceInput && mobileInput.value !== sourceInput.value) {
+        global.clearTimeout(mobileSearchTimer);
+        applyMobileKeywordSearch();
+      }
     }
     var previousView = view;
     view = nextView === "list" ? "list" : "map";
@@ -206,6 +239,7 @@
     }
     if (action === "reset") {
       closeMore();
+      global.jsMobileGlobalKeywordV1 = false;
       if (typeof global.resetFilter === "function") global.resetFilter();
       var mobileInput = chrome.querySelector("#jsMobileKeywordV1");
       if (mobileInput) mobileInput.value = "";
@@ -369,6 +403,8 @@
   function deactivate() {
     if (!active) return;
     active = false;
+    global.clearTimeout(mobileSearchTimer);
+    global.jsMobileGlobalKeywordV1 = false;
     root.classList.remove("js-mobile-app-v1");
     root.removeAttribute("data-jsm-mobile-view");
     document.body.classList.remove("jsm-more-open-v1");

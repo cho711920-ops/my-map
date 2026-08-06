@@ -973,6 +973,9 @@ function getFilteredItems(options) {
   var bounds = map.getBounds();
 
   var keyword = document.getElementById("keyword").value.trim();
+  var mobileGlobalKeywordSearch = !!keyword &&
+    document.documentElement.classList.contains("js-mobile-app-v1") &&
+    !!window.jsMobileGlobalKeywordV1;
   var selectedType = document.getElementById("typeFilter").value;
   var selectedSource = String((document.getElementById("sourceFilter") || {}).value || "");
   var selectedFloorQuick = String((document.getElementById("floorQuickFilter") || {}).value || "");
@@ -1059,7 +1062,7 @@ function getFilteredItems(options) {
     var matchDone = doneOnly ? isDone(item) : (!hideDone || !isDone(item));
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
-    var inMap = ignoreMapBounds
+    var inMap = ignoreMapBounds || mobileGlobalKeywordSearch
       ? true
       : (radiusFilter
         ? isItemWithinMapRadiusV658(item, radiusFilter)
@@ -1595,6 +1598,20 @@ function showList(items) {
   listRenderLimit = 0;
   listVirtualTopHeightV1 = 0;
   bindIncrementalListRendering();
+
+  if (
+    list &&
+    !visibleListItems.length &&
+    document.documentElement.classList.contains("js-mobile-app-v1")
+  ) {
+    list.innerHTML = '<div class="jsm-list-empty-v1"><b>검색 결과가 없습니다.</b><span>검색어를 줄이거나 필터를 초기화해 보세요.</span></div>';
+    syncListVirtualMetadataV1(list);
+    listCardReusePoolV6521 = null;
+    if (sidebar) sidebar.scrollTop = 0;
+    updatePrintSelectedButton();
+    syncListMasterCheckbox();
+    return;
+  }
 
   if (sameList && previousRenderStart < visibleListItems.length) {
     listRenderStart = previousRenderStart;

@@ -221,3 +221,15 @@
 - Desktop verification at 1280px confirmed mobile mode is inactive and the mobile back control remains hidden.
 - Cloudflare tests: 36/36 passed. `cf:check` passed.
 - Production Worker version: `c89c7e62-fd46-4069-beb2-ecd74e82366a`.
+
+## 2026-08-07 Mobile keyword search fix
+
+- Fixed the mobile-only main search so its keyword is synchronized to the existing listing filter while typing and before switching to the listing tab.
+- Mobile keyword searches now scan the full loaded listing dataset instead of intersecting with the current map viewport. Desktop continues to use the existing map-bounds behavior.
+- Added a mobile empty-result message instead of leaving a blank listing panel.
+- Production verification at 390x844: `괴정동` returned 202 listings, retained the query after opening the listing tab, and rendered 14 cards in the virtual window.
+- Verified a nonsense query renders the explicit zero-result message.
+- Verified at 1280x800: mobile mode and mobile search flag are inactive, so desktop behavior is unchanged.
+- The search remains client-side over already loaded listings and adds no D1 requests.
+- Cloudflare tests: 36/36 passed; mobile search tests: 2/2 passed. `cf:check` passed.
+- Production Worker version: `4ab663bb-38c9-44c4-9c11-08195a0bf89c`.
