@@ -211,3 +211,13 @@
 - Verified at 1280x800: mobile mode is inactive, both original desktop panes remain visible, and the mobile back button is hidden.
 - Cloudflare tests: 36/36 passed. `cf:check` passed.
 - Production Worker version: `79b2d8fc-88cb-4aa9-955e-3f1a63f41849`.
+
+## 2026-08-07 Mobile customer card overlap fix
+
+- Fixed a mobile-only layout regression where the matched-listing grid compressed every outer card to 20px while its inner content remained about 110px tall, causing all cards to overlap.
+- The matched-listing container now uses normal block flow; every card has automatic content height with a 126px minimum and an 8px vertical gap.
+- Customer cards now reserve 124px and keep the 24px statistics row visible instead of clipping the bottom content.
+- Production verification at 390x844 used the real signed-in dataset: 41 matched listings rendered at 128-131px each without overlap, and both customer cards showed condition and statistics rows.
+- Desktop verification at 1280px confirmed mobile mode is inactive and the mobile back control remains hidden.
+- Cloudflare tests: 36/36 passed. `cf:check` passed.
+- Production Worker version: `c89c7e62-fd46-4069-beb2-ecd74e82366a`.
