@@ -260,7 +260,7 @@ function copyQuickAddRow() {
   }).join("\t");
 
   function done() {
-    alert("시트에 붙여넣을 한 줄을 복사했습니다.\n구글시트 맨 아래 첫 칸에 붙여넣으면 됩니다.\n\n입력칸은 새 등록을 위해 초기화됩니다.");
+    alert("등록 정보를 한 줄로 복사했습니다.\n필요한 문서나 메모장에 붙여넣을 수 있습니다.\n\n입력칸은 새 등록을 위해 초기화됩니다.");
     clearQuickAddForm();
   }
 
@@ -279,7 +279,7 @@ function fallbackCopyText(text) {
   ta.select();
   document.execCommand("copy");
   document.body.removeChild(ta);
-  alert("시트에 붙여넣을 한 줄을 복사했습니다.\n\n입력칸은 새 등록을 위해 초기화됩니다.");
+  alert("등록 정보를 한 줄로 복사했습니다.\n\n입력칸은 새 등록을 위해 초기화됩니다.");
   clearQuickAddForm();
 }
 
@@ -287,7 +287,7 @@ function fallbackCopyText(text) {
 function saveQuickAddToSheet() {
   if (!validateQuickAdd()) return;
   if (!saveApiURL) {
-    alert("자동등록 서버가 아직 연결되지 않았습니다.\nJS부동산 D1 서버 상태를 확인해주세요.\n지금은 '시트 행 복사'를 사용할 수 있습니다.");
+    alert("자동등록 서버가 아직 연결되지 않았습니다.\nJS부동산 D1 서버 상태를 확인해주세요.\n지금은 '입력값 복사'를 사용할 수 있습니다.");
     return;
   }
 
@@ -355,11 +355,6 @@ function clearQuickAddForm() {
   if (modal && modal.style.display === "block" && raw) {
     setTimeout(function() { raw.focus(); }, 50);
   }
-}
-
-
-function openGoogleSheet() {
-  window.open("https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/edit", "_blank");
 }
 
 
@@ -1398,7 +1393,7 @@ function saveQuickAddToSheet() {
     alert("자동등록 요청 중 오류가 발생했습니다.\n연결 URL을 확인해주세요.");
   }).finally(function() {
     /*
-     * 시트 반영 시간을 고려해 잠시 유지한 뒤 해제합니다.
+     * D1 반영 시간을 고려해 잠시 유지한 뒤 해제합니다.
      * 빠르게 등록 버튼을 연속 누르는 중복도 막습니다.
      */
     setTimeout(function() {

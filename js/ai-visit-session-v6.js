@@ -991,7 +991,7 @@
   function saveMemoToSheet(item, memo, callback) {
     if (!item) return callback(false);
     if (!window.saveApiURL) {
-      alert("구글시트 쓰기 연결 URL을 확인해주세요.");
+      alert("JS부동산 D1 저장 연결 상태를 확인해주세요.");
       callback(false);
       return;
     }
@@ -1081,7 +1081,7 @@
     }
     completionSaving = true;
     var buttons = document.querySelectorAll("#aiVisitCompleteModal .aiv-complete-actions button");
-    buttons.forEach(function (entry) { entry.disabled = true; entry.textContent = "시트 반영 중..."; });
+    buttons.forEach(function (entry) { entry.disabled = true; entry.textContent = "D1 반영 중..."; });
     var message = document.getElementById("aivCompleteTitle");
     if (message) message.textContent = "선택한 매물의 메모를 변경하고 있습니다.";
     var nextMemo = cleanVisitMemo(currentMemoValue());

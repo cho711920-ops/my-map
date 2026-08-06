@@ -787,7 +787,7 @@
     var cancel = banner.querySelector("button");
     banner.classList.toggle("saving", !!saving);
     if (message) message.textContent = saving
-      ? "통합 저장·시트 확인 중입니다."
+      ? "통합 저장·D1 확인 중입니다."
       : "이동할 통합매물 카드 또는 체크박스를 클릭하세요.";
     if (cancel) cancel.disabled = !!saving;
   }

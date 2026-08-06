@@ -126,8 +126,12 @@ window.addEventListener("js-async-mutation-finished", function(event) {
   }, 250);
 });
 var listRenderLimit = 0;
+var listRenderStart = 0;
 var listRenderScrollBound = false;
 var listCardReusePoolV6521 = null;
+var listVirtualTopHeightV1 = 0;
+var listVirtualScrollScheduledV1 = false;
+var listVirtualItemHeightsV1 = Object.create(null);
 var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
 var isRendering = false;
 var doneTogglePendingKeys = {};
@@ -1250,7 +1254,170 @@ function getClusterSourceType(items) {
 
 
 function getListRenderChunkSize() {
-  return window.innerWidth <= 768 ? 36 : 80;
+  return window.innerWidth <= 768 ? 14 : 18;
+}
+
+function getListRenderWindowSizeV1() {
+  return getListRenderChunkSize() * 2;
+}
+
+function getListVirtualItemKeyV1(item, index) {
+  return item && item.key ? String(item.key) : "__list_index_" + index;
+}
+
+function measureListCardOuterHeightV1(card) {
+  if (!card) return 0;
+  var style = window.getComputedStyle ? window.getComputedStyle(card) : null;
+  var marginTop = style ? parseFloat(style.marginTop) || 0 : 0;
+  var marginBottom = style ? parseFloat(style.marginBottom) || 0 : 0;
+  return card.getBoundingClientRect().height + marginTop + marginBottom;
+}
+
+function rememberListCardHeightV1(card) {
+  if (!card) return 0;
+  var index = Number(card.getAttribute("data-list-index-v1"));
+  if (!Number.isFinite(index) || index < 0 || index >= visibleListItems.length) return 0;
+  var height = measureListCardOuterHeightV1(card);
+  if (height > 0) {
+    listVirtualItemHeightsV1[getListVirtualItemKeyV1(visibleListItems[index], index)] = height;
+  }
+  return height;
+}
+
+function cacheRenderedListCardHeightsV1(list) {
+  if (!list) return;
+  Array.prototype.forEach.call(
+    list.querySelectorAll(".item[data-list-index-v1]"),
+    rememberListCardHeightV1
+  );
+}
+
+function ensureListVirtualTopSpacerV1(list) {
+  if (!list) return null;
+  var spacer = list.querySelector(".list-virtual-top-spacer-v1");
+  if (!spacer) {
+    spacer = document.createElement("div");
+    spacer.className = "list-virtual-top-spacer-v1";
+    spacer.setAttribute("aria-hidden", "true");
+    list.insertBefore(spacer, list.firstChild);
+  }
+  spacer.style.height = Math.max(0, listVirtualTopHeightV1) + "px";
+  return spacer;
+}
+
+function unobserveVirtualizedListCardV1(card) {
+  if (!card || !unifiedDuplicateShimmerObserverV812) return;
+  var shimmer = card.querySelector(".unified-expand-btn-v8");
+  if (shimmer) unifiedDuplicateShimmerObserverV812.unobserve(shimmer);
+}
+
+function appendVirtualListItemV1(index, target) {
+  var item = visibleListItems[index];
+  if (!item) return null;
+  var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[item.key];
+  if (reusableCard && reusableCard.classList.contains("customer-match-map-card-v721") !== isCustomerMatchMapCardV721(item)) {
+    reusableCard = null;
+  }
+  if (reusableCard) {
+    reusableCard.setAttribute("data-list-index-v1", String(index));
+    target.appendChild(reusableCard);
+    delete listCardReusePoolV6521[item.key];
+    return reusableCard;
+  }
+  var card = addListItem(item, target);
+  if (card) card.setAttribute("data-list-index-v1", String(index));
+  return card;
+}
+
+function syncListVirtualMetadataV1(list) {
+  if (!list) return;
+  list.setAttribute("data-rendered-start", String(listRenderStart));
+  list.setAttribute("data-rendered-count", String(Math.max(0, listRenderLimit - listRenderStart)));
+  list.setAttribute("data-rendered-end", String(listRenderLimit));
+  list.setAttribute("data-total-count", String(visibleListItems.length));
+}
+
+function trimListWindowFromStartV1(list) {
+  var maximum = getListRenderWindowSizeV1();
+  var rendered = listRenderLimit - listRenderStart;
+  if (!list || rendered <= maximum) return;
+
+  var nextStart = listRenderLimit - maximum;
+  var firstKept = list.querySelector('.item[data-list-index-v1="' + nextStart + '"]');
+  var firstKeptTop = firstKept ? firstKept.getBoundingClientRect().top : null;
+  var removedHeight = 0;
+
+  Array.prototype.forEach.call(
+    list.querySelectorAll(".item[data-list-index-v1]"),
+    function(card) {
+      var index = Number(card.getAttribute("data-list-index-v1"));
+      if (!Number.isFinite(index) || index >= nextStart) return;
+      removedHeight += rememberListCardHeightV1(card);
+      unobserveVirtualizedListCardV1(card);
+      card.remove();
+    }
+  );
+
+  listRenderStart = nextStart;
+  listVirtualTopHeightV1 += removedHeight;
+  ensureListVirtualTopSpacerV1(list);
+
+  if (firstKept && firstKeptTop != null) {
+    var sidebar = document.getElementById("sidebar");
+    var shift = firstKept.getBoundingClientRect().top - firstKeptTop;
+    if (sidebar && Math.abs(shift) > 0.5) sidebar.scrollTop += shift;
+  }
+}
+
+function trimListWindowFromEndV1(list) {
+  var maximum = getListRenderWindowSizeV1();
+  var rendered = listRenderLimit - listRenderStart;
+  if (!list || rendered <= maximum) return;
+
+  var nextEnd = listRenderStart + maximum;
+  Array.prototype.forEach.call(
+    list.querySelectorAll(".item[data-list-index-v1]"),
+    function(card) {
+      var index = Number(card.getAttribute("data-list-index-v1"));
+      if (!Number.isFinite(index) || index < nextEnd) return;
+      rememberListCardHeightV1(card);
+      unobserveVirtualizedListCardV1(card);
+      card.remove();
+    }
+  );
+  listRenderLimit = nextEnd;
+}
+
+function renderPreviousListChunkV1() {
+  var list = document.getElementById("list");
+  if (!list || listRenderStart <= 0) return;
+
+  var spacer = ensureListVirtualTopSpacerV1(list);
+  var previousStart = listRenderStart;
+  var nextStart = Math.max(0, previousStart - getListRenderChunkSize());
+  var oldFirst = list.querySelector('.item[data-list-index-v1="' + previousStart + '"]');
+  var oldFirstTop = oldFirst ? oldFirst.getBoundingClientRect().top : null;
+  var restoredHeight = 0;
+  var fragment = document.createDocumentFragment();
+
+  for (var index = nextStart; index < previousStart; index++) {
+    var cacheKey = getListVirtualItemKeyV1(visibleListItems[index], index);
+    restoredHeight += Number(listVirtualItemHeightsV1[cacheKey]) || 0;
+    appendVirtualListItemV1(index, fragment);
+  }
+
+  list.insertBefore(fragment, spacer.nextSibling);
+  listRenderStart = nextStart;
+  listVirtualTopHeightV1 = Math.max(0, listVirtualTopHeightV1 - restoredHeight);
+  ensureListVirtualTopSpacerV1(list);
+  trimListWindowFromEndV1(list);
+  syncListVirtualMetadataV1(list);
+
+  if (oldFirst && oldFirstTop != null) {
+    var sidebar = document.getElementById("sidebar");
+    var shift = oldFirst.getBoundingClientRect().top - oldFirstTop;
+    if (sidebar && Math.abs(shift) > 0.5) sidebar.scrollTop += shift;
+  }
 }
 
 function isTodayRegistration(value) {
@@ -1279,6 +1446,8 @@ function renderNextListChunk(targetLimit) {
   var list = document.getElementById("list");
   if (!list || listRenderLimit >= visibleListItems.length) return;
 
+  ensureListVirtualTopSpacerV1(list);
+
   var chunkSize = getListRenderChunkSize();
   var nextLimit = Math.min(
     visibleListItems.length,
@@ -1287,17 +1456,7 @@ function renderNextListChunk(targetLimit) {
   var fragment = document.createDocumentFragment();
 
   for (var index = listRenderLimit; index < nextLimit; index++) {
-    var item = visibleListItems[index];
-    var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[item.key];
-    if (reusableCard && reusableCard.classList.contains("customer-match-map-card-v721") !== isCustomerMatchMapCardV721(item)) {
-      reusableCard = null;
-    }
-    if (reusableCard) {
-      fragment.appendChild(reusableCard);
-      delete listCardReusePoolV6521[item.key];
-    } else {
-      addListItem(item, fragment);
-    }
+    appendVirtualListItemV1(index, fragment);
   }
 
   list.appendChild(fragment);
@@ -1308,9 +1467,8 @@ function renderNextListChunk(targetLimit) {
     }
   );
   listRenderLimit = nextLimit;
-  if (listRenderLimit >= visibleListItems.length) listCardReusePoolV6521 = null;
-  list.setAttribute("data-rendered-count", String(listRenderLimit));
-  list.setAttribute("data-total-count", String(visibleListItems.length));
+  trimListWindowFromStartV1(list);
+  syncListVirtualMetadataV1(list);
 }
 
 
@@ -1322,9 +1480,19 @@ function bindIncrementalListRendering() {
 
   listRenderScrollBound = true;
   sidebar.addEventListener("scroll", function() {
-    if (sidebar.scrollHeight - sidebar.scrollTop - sidebar.clientHeight < 900) {
-      renderNextListChunk();
-    }
+    if (listVirtualScrollScheduledV1) return;
+    listVirtualScrollScheduledV1 = true;
+    window.requestAnimationFrame(function() {
+      listVirtualScrollScheduledV1 = false;
+      var list = document.getElementById("list");
+      if (!list) return;
+      var renderedTop = list.offsetTop + listVirtualTopHeightV1;
+      if (listRenderStart > 0 && sidebar.scrollTop - renderedTop < 850) {
+        renderPreviousListChunkV1();
+      } else if (sidebar.scrollHeight - sidebar.scrollTop - sidebar.clientHeight < 850) {
+        renderNextListChunk();
+      }
+    });
   }, { passive: true });
 }
 
@@ -1376,6 +1544,9 @@ function observeUnifiedDuplicateShimmerV812(card) {
 
 function showList(items) {
   var list = document.getElementById("list");
+  var sidebar = document.getElementById("sidebar");
+  var previousSidebarTop = sidebar ? sidebar.scrollTop : 0;
+  cacheRenderedListCardHeightsV1(list);
   resetUnifiedDuplicateShimmerObserverV812();
   var previousSignature = (visibleListItems || []).map(function(item) {
     return item.key;
@@ -1398,6 +1569,8 @@ function showList(items) {
   }
 
   var previousRenderLimit = listRenderLimit;
+  var previousRenderStart = listRenderStart;
+  var previousVirtualTopHeight = listVirtualTopHeightV1;
   var sameList = previousSignature === nextSignature;
   var reuseExistingCards = !!window.jsReuseListCardsOnNextRenderV6521;
   window.jsReuseListCardsOnNextRenderV6521 = false;
@@ -1418,14 +1591,27 @@ function showList(items) {
 
   visibleListItems = items.slice();
   if (list) list.innerHTML = "";
+  listRenderStart = 0;
   listRenderLimit = 0;
+  listVirtualTopHeightV1 = 0;
   bindIncrementalListRendering();
 
+  if (sameList && previousRenderStart < visibleListItems.length) {
+    listRenderStart = previousRenderStart;
+    listRenderLimit = previousRenderStart;
+    listVirtualTopHeightV1 = previousVirtualTopHeight;
+  } else {
+    listVirtualItemHeightsV1 = Object.create(null);
+  }
+  ensureListVirtualTopSpacerV1(list);
   renderNextListChunk(
     sameList
       ? Math.max(previousRenderLimit, getListRenderChunkSize())
       : getListRenderChunkSize()
   );
+  listCardReusePoolV6521 = null;
+
+  if (sidebar) sidebar.scrollTop = sameList ? previousSidebarTop : 0;
 
   updatePrintSelectedButton();
   syncListMasterCheckbox();
@@ -4218,7 +4404,7 @@ function toggleDoneStatus(encodedKey, checked) {
     document.getElementById("status").innerHTML =
       checked ? "거래완료 저장 요청 완료" : "계약가능 복구 요청 완료";
 
-    // 시트 반영값을 다시 읽어 실제 저장 상태를 확인
+    // D1 반영값을 다시 읽어 실제 저장 상태를 확인
     if (!result || !result.queued) {
       setTimeout(function() { loadSheet(true); }, 1800);
     }
@@ -4955,7 +5141,7 @@ var propertyEditSavingV630 = false;
 /*
  * v6.3.2 QA2
  * 건물이름 또는 호실을 수정하면 item.key도 바뀝니다.
- * 시트를 다시 불러온 뒤 새 key를 찾아 선택·리스트를 복원하기 위한 임시 상태입니다.
+ * D1을 다시 불러온 뒤 새 key를 찾아 선택·리스트를 복원하기 위한 임시 상태입니다.
  */
 var pendingPropertyEditNewKeyV633 = null;
 
@@ -5338,7 +5524,7 @@ function savePropertyEditV630() {
   saveButton.disabled = true;
   if (deleteButton) deleteButton.disabled = true;
   saveButton.textContent = "저장 중...";
-  status.textContent = "시트1 수정 요청 중...";
+  status.textContent = "D1에 매물 수정 저장 중...";
 
   postSafeMutationV654("updateProperty", {
       row: item.sheetRow || 0,
@@ -5355,7 +5541,7 @@ function savePropertyEditV630() {
     /*
      * QA3 안정화:
      * gviz 캐시를 이용한 성공/실패 판정은 제거합니다.
-     * 화면에서는 수정값을 즉시 반영하고, 잠시 뒤 최신 시트를 다시 읽습니다.
+     * 화면에서는 수정값을 즉시 반영하고, 잠시 뒤 최신 D1 데이터를 다시 읽습니다.
      */
     var oldKey = item.key;
 
@@ -5422,7 +5608,7 @@ function savePropertyEditV630() {
 
     var mainStatus = document.getElementById("status");
     if (mainStatus) {
-      mainStatus.innerHTML = "매물 수정 요청 완료 · 최신 시트 동기화 중";
+      mainStatus.innerHTML = "매물 수정 요청 완료 · 최신 D1 동기화 중";
     }
 
     if (!queueResult || !queueResult.queued) schedulePropertyEditReloadV634();
@@ -5443,7 +5629,7 @@ function savePropertyEditV630() {
 /* =========================================================
    v6.4.8 매물삭제
    - 수정 팝업 하단 좌측의 빨간 삭제 버튼
-   - P열 매물ID가 유일하게 일치할 때만 서버에서 삭제
+   - 고유 매물ID가 유일하게 일치할 때만 서버에서 삭제
    - 행번호·주소·호실을 이용한 대체 삭제 금지
    - D1 API의 실제 처리 결과 확인 후에만 완료 처리
    ========================================================= */
@@ -5547,8 +5733,8 @@ function deletePropertyV648() {
 
   if (!propertyId) {
     alert(
-      "이 매물에는 P열 매물ID가 없어 안전하게 삭제할 수 없습니다.\n" +
-      "시트의 매물ID를 생성하고 목록을 새로고침한 뒤 다시 시도해주세요."
+      "이 매물에는 고유 매물ID가 없어 안전하게 삭제할 수 없습니다.\n" +
+      "새로고침 후에도 매물ID가 없으면 관리자에게 확인해주세요."
     );
     return;
   }
@@ -5573,7 +5759,7 @@ function deletePropertyV648() {
     deleteButton.textContent = "삭제 중...";
   }
   if (saveButton) saveButton.disabled = true;
-  if (status) status.textContent = "매물ID 확인 후 시트1에서 삭제 중...";
+  if (status) status.textContent = "매물ID 확인 후 D1에서 삭제 중...";
 
   fetch(saveApiURL, {
     method: "POST",
@@ -5626,7 +5812,7 @@ function deletePropertyV648() {
     editingMemoKey = null;
 
     var mainStatus = document.getElementById("status");
-    if (mainStatus) mainStatus.innerHTML = "매물 삭제 완료 · 최신 시트 불러오는 중";
+    if (mainStatus) mainStatus.innerHTML = "매물 삭제 완료 · 최신 D1 불러오는 중";
 
     loadSheet(false);
   }).catch(function(error) {

@@ -1,5 +1,5 @@
 /* =========================================================
-   JS부동산 지도/시트 로딩 스크립트 v4.4.1
+   JS부동산 지도/D1 로딩 스크립트 v4.4.1
    자동업데이트 화면 상태 유지 수정본
    - 매물리스트 초기화 방지
    - 리스트 스크롤 위치 유지
@@ -16,7 +16,7 @@
    - 클러스터 원 크기와 기존 동작은 그대로 유지
    ========================================================= */
 
-/* JS부동산 지도/마커/클러스터/시트 로딩 전용 스크립트 */
+/* JS부동산 지도/마커/클러스터/D1 로딩 전용 스크립트 */
 var jsCurrentLocationOverlayV630 = null;
 var jsCurrentLocationWatchIdV630 = null;
 var jsMapIdleTimerV638 = null;
@@ -1257,10 +1257,10 @@ function loadSheet(isAuto, forceRefresh) {
 
   isLoadingSheet = true;
   errorItems = [];
-  document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "시트 읽는중...";
+  document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "D1 매물 불러오는 중...";
 
   /*
-   * 저장 직후의 loadSheet(true)는 운영 시트를 강제로 다시 읽습니다.
+   * 저장 직후의 loadSheet(true)는 운영 D1 데이터를 강제로 다시 읽습니다.
    * 1분 자동 확인만 loadSheet(true, false)로 호출하여 ETag 재검증을 사용합니다.
    */
   var shouldForceRefresh = arguments.length >= 2
@@ -1275,7 +1275,7 @@ function loadSheet(isAuto, forceRefresh) {
     .then(function(res) {
       if (res.ok) return res.text();
       return res.text().then(function(body) {
-        var message = "시트 데이터를 불러오지 못했습니다. (HTTP " + res.status + ")";
+        var message = "D1 매물 데이터를 불러오지 못했습니다. (HTTP " + res.status + ")";
         try {
           var parsed = JSON.parse(body);
           if (parsed && parsed.message) message += " " + parsed.message;
@@ -1309,7 +1309,7 @@ function loadSheet(isAuto, forceRefresh) {
 
   /*
    * 공용 좌표 캐시는 지도 마커에만 필요합니다. 큰 좌표 응답을 기다리느라
-   * 매물목록까지 늦어지지 않도록 시트와 동시에 시작하되 목록은 시트만 오면 표시합니다.
+   * 매물목록까지 늦어지지 않도록 D1 통합자료와 동시에 시작하되 기본 목록은 D1 CSV가 오면 표시합니다.
    */
   var sharedGeocodeRequest = typeof loadSharedGeocodeCache === "function"
     ? loadSharedGeocodeCache()
@@ -1378,8 +1378,8 @@ function loadSheet(isAuto, forceRefresh) {
       }
 
       /*
-       * 시트 초기화 직후에는 좌표 캐시가 비어 있어 수백 건의 주소 변환이 필요합니다.
-       * 좌표가 준비될 때까지 목록까지 0건으로 숨기지 않고, 시트에서 읽은 매물 카드를
+       * D1 초기화 직후에는 좌표 캐시가 비어 있어 수백 건의 주소 변환이 필요합니다.
+       * 좌표가 준비될 때까지 목록까지 0건으로 숨기지 않고, D1에서 읽은 매물 카드를
        * 먼저 보여 준 뒤 지도 마커만 순차적으로 추가합니다.
        */
       allItems = rawItems;
@@ -1407,7 +1407,7 @@ function loadSheet(isAuto, forceRefresh) {
         allItems = doneItems;
 
         /*
-         * 시트 내용이 바뀌지 않은 자동 확인은 기존 DOM과 클러스터를 그대로 둡니다.
+         * D1 내용이 바뀌지 않은 자동 확인은 기존 DOM과 클러스터를 그대로 둡니다.
          * 데이터 변경이 있을 때만 아래의 필터/지도/목록 렌더링을 한 번 수행합니다.
          */
         if (canKeepCurrentRenderV638) {
@@ -1518,7 +1518,7 @@ function loadSheet(isAuto, forceRefresh) {
     })
     .catch(function(err) {
       isLoadingSheet = false;
-      document.getElementById("status").innerHTML = "시트 오류";
+      document.getElementById("status").innerHTML = "D1 불러오기 오류";
       console.error(err);
     });
 }

@@ -103,14 +103,14 @@
       extraState.reviews = {ok: true, total: 0, groupCount: 0, loadedGroupCount: 0, groups: []};
       extraState.reviewBase = extraState.reviews;
       renderReviews();
-      if (!silent) message("검증대상 0건 · 현재 시트가 비어 있습니다.", "success");
+      if (!silent) message("검증대상 0건 · 현재 D1 데이터가 비어 있습니다.", "success");
       return Promise.resolve();
     }
     var panel = document.getElementById("operationsReviewsPanel");
     if (panel) {
       panel.innerHTML =
         '<div class="operations-empty"><b>최신 검증자료를 확인하는 중입니다.</b>' +
-        '<span>초기화·수집 결과를 현재 시트 기준으로 다시 불러옵니다.</span></div>';
+        '<span>초기화·수집 결과를 현재 D1 기준으로 다시 불러옵니다.</span></div>';
     }
     return loadReviews(true, !!silent);
   }

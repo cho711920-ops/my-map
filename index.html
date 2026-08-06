@@ -22,7 +22,7 @@
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.5.33-admin-count-confirmed">
+<link rel="stylesheet" href="css/style.css?v=6.5.34-virtual-list">
 <link rel="stylesheet" href="css/print-v2.css">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.27-recent-sort-only">
 <link rel="stylesheet" href="css/unified-favorites-v7.css?v=7.0.2-reliable-submit">
@@ -356,7 +356,6 @@
         <div class="customer-match-toolbar-actions">
           <button type="button" onclick="openCustomerEditor()">+ 신규 고객</button>
           <button type="button" onclick="rebuildCustomerMatchesNow()">지금 다시 계산</button>
-          <a href="https://docs.google.com/spreadsheets/d/1zRWqjc7xVkiTnFHFujBNI72qr_aDCgxiQipQlnGgWmU/edit" target="_blank" rel="noopener">고객문의 시트</a>
         </div>
       </div>
       <div class="customer-match-layout">
@@ -443,7 +442,7 @@
     <div class="quick-add-title">JS부동산 AI 등록 v2.0</div>
     <div class="quick-add-desc">
       공실박스·네이버·당근 등에서 본 내용을 붙여넣으면 AI가 주요 항목을 추출합니다.<br>
-      분석 결과는 아래 칸에서 직접 수정한 뒤 시트 행 복사 또는 자동등록으로 넘길 수 있습니다.
+      분석 결과는 아래 칸에서 직접 수정한 뒤 입력값 복사 또는 D1 자동등록으로 넘길 수 있습니다.
     </div>
 
     <div class="quick-add-grid">
@@ -543,15 +542,14 @@
     <div class="quick-add-actions">
       <button class="parse-btn" onclick="parseQuickAddText()">AI 분석</button>
       <button class="auto-save-btn" onclick="saveQuickAddToSheet()">자동등록 준비</button>
-      <button class="copy-row-btn" onclick="copyQuickAddRow()">시트 행 복사</button>
-      <button class="open-sheet-btn" onclick="openGoogleSheet()">시트 열기</button>
+      <button class="copy-row-btn" onclick="copyQuickAddRow()">입력값 복사</button>
       <button class="reset-quick-btn" onclick="clearQuickAddForm()">입력초기화</button>
       <button class="close-quick-btn" onclick="closeQuickAddModal()">닫기</button>
     </div>
 
     <div class="quick-add-tip">
       ※ 자동등록 내용은 JS부동산 D1 데이터베이스에 바로 저장됩니다.<br>
-      ※ <b>시트 행 복사</b>는 필요할 때만 쓰는 수동 복사용 보조 기능입니다.<br>
+      ※ <b>입력값 복사</b>는 필요할 때만 쓰는 수동 백업용 보조 기능입니다.<br>
       ※ 복사/등록 순서: 건물이름 / 주소 / 호실 / 구분 / 보증금 / 월세 / 관리비 / 권리금 / 평수 / 임대인전화 / 세입자전화 / 메모 / 상태 / 등록일 / 출처
     </div>
   </div>
@@ -637,7 +635,7 @@
 
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.6-active-only-polling" src="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard"></script>
 <script src="js/unified-listings-v8.js?v=8.0.19-contact-intent-only"></script>
-<script src="js/script.js?v=6.5.66-done-only-filter"></script>
+<script src="js/script.js?v=6.5.67-virtual-list"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
 <script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
 <script src="js/quickadd-at.js"></script>
