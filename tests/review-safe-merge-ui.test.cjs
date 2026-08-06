@@ -26,6 +26,8 @@ assert.match(ui, /동·지번·도로명·건물명/);
 assert.match(ui, /apiGet\("reviewWorkspace", \{query: query\}\)/);
 assert.match(ui, /전체 검증매물에서/);
 assert.match(ui, /allPendingTotal/);
+assert.match(ui, /전체 검증대기/);
+assert.match(ui, /건 중 현재 작업/);
 assert.match(ui, /reviewBase/);
 assert.match(ui, /기존 " \+ \(index \+ 1\) \+ "번과/);
 assert.match(ui, /복수 후보 · 대표를 직접 선택/);

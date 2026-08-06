@@ -494,8 +494,11 @@
     if (!force && extraState.reviews) {
       renderReviews();
       if (!silent) {
-        message("검증대상 " + number(extraState.reviews.total).toLocaleString("ko-KR") +
-          "건 · 우선순위 목록을 바로 표시했습니다.", "success");
+        message("전체 검증대기 " +
+          number(extraState.reviews.allPendingTotal || extraState.reviews.total).toLocaleString("ko-KR") +
+          "건 중 현재 작업 " + number(extraState.reviews.total).toLocaleString("ko-KR") +
+          "건 · " + number(extraState.reviews.groupCount).toLocaleString("ko-KR") +
+          "개 묶음 표시", "success");
       }
       return Promise.resolve();
     }
@@ -509,10 +512,11 @@
       renderReviews();
       if (!activeQuery) saveReviewCache();
       if (!silent) {
-        message("검증대상 " + number(data.total).toLocaleString("ko-KR") + "건을 " +
-          number(data.groupCount).toLocaleString("ko-KR") + "개 묶음으로 정리했습니다. · 우선 " +
-          number(data.loadedGroupCount || (data.groups || []).length).toLocaleString("ko-KR") +
-          "개 묶음 표시", "success");
+        message("전체 검증대기 " +
+          number(data.allPendingTotal || data.total).toLocaleString("ko-KR") +
+          "건 중 현재 작업 " + number(data.total).toLocaleString("ko-KR") +
+          "건을 " + number(data.groupCount).toLocaleString("ko-KR") +
+          "개 묶음으로 표시합니다.", "success");
       }
     }).catch(function(error) {
       if (!silent) message(error.message, "error");
