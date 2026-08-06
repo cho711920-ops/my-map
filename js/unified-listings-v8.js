@@ -307,7 +307,6 @@
   }
 
   function cardParts(item) {
-    if (!desktop()) return {thumbnail: "", badge: "", sourceButton: ""};
     var originals = group(item && item.propertyId);
     var count = originals.length || 1;
     var thumbnail = originals.length ? originalImage(originals[0]) : "";
@@ -597,7 +596,6 @@
   }
 
   function open(encodedPropertyId, encodedOriginalId) {
-    if (!desktop()) return;
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var requestToken = ++state.detailRequestToken;
@@ -805,7 +803,6 @@
   }
 
   function handleCardClick(item, event) {
-    if (!desktop()) return false;
     var propertyId = text(item && item.propertyId);
     if (state.pendingMove) {
       var pending = state.pendingMove;
