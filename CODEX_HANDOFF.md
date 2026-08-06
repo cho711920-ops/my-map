@@ -200,3 +200,14 @@
 - PC에서는 모바일 모드가 활성화되지 않으므로 기존 동작을 변경하지 않는다.
 - Cloudflare 자동 테스트 36개와 `cf:check`가 통과했다.
 - 운영 Worker 버전은 `e70c5f40-dc41-4144-8934-dd234307bbbe`이다.
+
+## 2026-08-07 Mobile customer matching app UI
+
+- This change is mobile-only (`max-width: 768px`); desktop customer matching layout and behavior are unchanged.
+- The customer workspace now uses a master/detail flow: full-width customer list, then a separate full-width matching-list screen after customer selection.
+- Added a visible `customer list` back button and integrated the matching screen with mobile browser/device back history.
+- Customer cards, selected-customer actions, filters, and matched listing cards were resized and wrapped to prevent horizontal clipping at 390px.
+- Verified at 390x844: no horizontal overflow, list/detail transition works, and browser back returns from matches to the customer list.
+- Verified at 1280x800: mobile mode is inactive, both original desktop panes remain visible, and the mobile back button is hidden.
+- Cloudflare tests: 36/36 passed. `cf:check` passed.
+- Production Worker version: `79b2d8fc-88cb-4aa9-955e-3f1a63f41849`.

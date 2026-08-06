@@ -35,6 +35,7 @@
     "#itemListPickerModal.open",
     "#listManagerModal.open",
     "#operationsCenter.open",
+    "#operationsCustomersPanel[data-mobile-customer-screen='matches']",
     "#unifiedDetailDrawerV8.open"
   ];
 
@@ -243,6 +244,8 @@
       });
     });
     return seen.sort(function(a, b) {
+      if (a.contains(b)) return -1;
+      if (b.contains(a)) return 1;
       var aZ = parseInt(global.getComputedStyle(a).zIndex, 10) || 0;
       var bZ = parseInt(global.getComputedStyle(b).zIndex, 10) || 0;
       if (aZ !== bZ) return aZ - bZ;
@@ -273,6 +276,7 @@
     if (id === "itemListPickerModal" && typeof global.closeItemListPicker === "function") return global.closeItemListPicker();
     if (id === "listManagerModal" && typeof global.closeListManager === "function") return global.closeListManager();
     if (id === "operationsCenter" && typeof global.closeOperationsCenter === "function") return global.closeOperationsCenter();
+    if (id === "operationsCustomersPanel" && typeof global.showMobileCustomerListV1 === "function") return global.showMobileCustomerListV1();
     if (id === "v6DetailSheetPortal" && global.JSV6MobileDetailFix) return global.JSV6MobileDetailFix.close();
     var closeButton = element.querySelector("[aria-label*='닫기'], [data-v6-detail-close], .close");
     if (closeButton) closeButton.click();
@@ -322,7 +326,7 @@
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["class", "hidden", "aria-hidden", "style"]
+      attributeFilter: ["class", "hidden", "aria-hidden", "style", "data-mobile-customer-screen"]
     });
   }
 

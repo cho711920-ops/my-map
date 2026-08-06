@@ -68,6 +68,24 @@
     return isFinite(parsed) ? parsed : 0;
   }
 
+  function isMobileCustomerAppV1() {
+    return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+  }
+
+  function setMobileCustomerScreenV1(screen) {
+    var panel = document.getElementById("operationsCustomersPanel");
+    if (!panel) return;
+    panel.setAttribute("data-mobile-customer-screen", screen === "matches" ? "matches" : "list");
+    var list = document.getElementById("operationsCustomerList");
+    var matches = document.getElementById("operationsMatchList");
+    if (list) list.setAttribute("aria-hidden", screen === "matches" ? "true" : "false");
+    if (matches) matches.setAttribute("aria-hidden", screen === "matches" ? "false" : "true");
+  }
+
+  window.showMobileCustomerListV1 = function() {
+    setMobileCustomerScreenV1("list");
+  };
+
   function headerIndex(headers, name) {
     return (headers || []).indexOf(name);
   }
@@ -384,6 +402,11 @@
         renderCustomers();
         renderMatches(state.selectedCustomerId);
         loadCustomerMatches(state.selectedCustomerId);
+        if (isMobileCustomerAppV1()) {
+          setMobileCustomerScreenV1("matches");
+          var matchList = document.getElementById("operationsMatchList");
+          if (matchList) matchList.scrollTop = 0;
+        }
       });
       button.addEventListener("keydown", function(event) {
         if (event.key === "Enter" || event.key === " ") {
@@ -586,7 +609,7 @@
     });
     var header = (overdueCount ? '<div class="operations-customer-alert"><b>새 매물 안내 필요</b><span>신규매물 ' + overdueCount.toLocaleString("ko-KR") + '건이 ' + (number(state.dashboard && state.dashboard.contactReminderDays) || 3) + '일 이상 확인되지 않았습니다.</span></div>' : '') +
       (followup.due ? '<div class="operations-customer-alert"><b>후속관리 예정일</b><span>' + escape(followup.next) + ' · ' + escape(followup.stage || "상담") + '</span></div>' : '') +
-      '<div class="operations-match-heading"><div class="operations-match-customer-v719"><span class="operations-match-avatar-v719">' + escape(customerName.charAt(0) || "고") + '</span><div><b>② ' + escape(customerName) + ' 고객 매칭매물</b></div></div>' +
+      '<div class="operations-match-heading"><button type="button" class="operations-mobile-customer-back-v1" onclick="showMobileCustomerListV1()" aria-label="고객 목록으로 돌아가기">‹ <span>고객목록</span></button><div class="operations-match-customer-v719"><span class="operations-match-avatar-v719">' + escape(customerName.charAt(0) || "고") + '</span><div><b>' + escape(customerName) + ' 매칭매물</b></div></div>' +
       '<div class="operations-match-heading-actions">' +
       (phoneHref ? '<a class="customer-call-link" href="' + escape(phoneHref) + '" aria-label="' + escape(customerName + "에게 전화") + '">☎ ' + escape(customerPhone) + '</a>' : '') +
       '<label class="customer-status-quick"><span>고객상태</span><select onchange="updateCustomerStatusFromWeb(this.value)">' +
@@ -998,6 +1021,7 @@
     if (customerPanel) customerPanel.hidden = !isCustomers;
     if (dashboardButton) dashboardButton.classList.toggle("active", !isCustomers);
     if (customerButton) customerButton.classList.toggle("active", isCustomers);
+    if (isCustomers && isMobileCustomerAppV1()) setMobileCustomerScreenV1("list");
     if (document.getElementById("operationsCenter").classList.contains("open")) loadOperationsData(false);
   };
 

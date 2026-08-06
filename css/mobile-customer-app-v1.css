@@ -1,0 +1,693 @@
+/* Mobile-only customer matching workspace. Desktop rules intentionally live elsewhere. */
+@media (max-width: 768px) {
+  .js-mobile-app-v1 #operationsCenter .operations-center-backdrop {
+    display: none;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-dialog {
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    background: #f3f7fc;
+    box-shadow: none;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-header {
+    min-height: 58px;
+    flex: 0 0 auto;
+    padding: max(9px, env(safe-area-inset-top)) 14px 9px;
+    border-bottom-color: #e5ecf5;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-eyebrow {
+    display: none;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-header h2 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: -.45px;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-close {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    font-size: 25px;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-tabs {
+    display: grid;
+    flex: 0 0 48px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    padding: 5px 10px 0;
+    border-bottom: 1px solid #e5ecf5;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-tabs button {
+    width: 100%;
+    height: 42px;
+    min-width: 0;
+    padding: 0 4px;
+    border-radius: 11px 11px 0 0;
+    font-size: 0;
+    white-space: nowrap;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-tabs button::after {
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .js-mobile-app-v1 #operationsTabDashboard::after { content: "현황"; }
+  .js-mobile-app-v1 #operationsTabCollections::after { content: "수집"; }
+  .js-mobile-app-v1 #operationsTabReviews::after { content: "검증"; }
+  .js-mobile-app-v1 #operationsTabCustomers::after { content: "고객"; }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-message {
+    min-height: 0;
+    flex: 0 0 auto;
+    padding: 6px 13px;
+    font-size: 11px;
+  }
+
+  .js-mobile-app-v1 #operationsCenter .operations-center-message:empty {
+    display: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel:not([hidden]) {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    padding: 10px;
+    overflow: hidden;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    padding: 9px;
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(42, 75, 116, .07);
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel[data-mobile-customer-screen="matches"] .customer-match-toolbar {
+    display: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar strong {
+    overflow: hidden;
+    color: #163457;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar span {
+    display: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 5px;
+    margin: 0;
+    flex-wrap: nowrap;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar-actions button {
+    width: auto;
+    min-height: 36px;
+    flex: 0 0 auto;
+    padding: 0 10px;
+    border-radius: 11px;
+    font-size: 11px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-toolbar-actions button:last-child {
+    border-color: #d5e2f2;
+    background: #f3f7fc;
+    color: #3b5777;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-match-layout {
+    position: relative;
+    display: block;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-list {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 17px;
+    box-sizing: border-box;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(37, 71, 113, .08);
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel[data-mobile-customer-screen="list"] .operations-match-list,
+  .js-mobile-app-v1 #operationsCustomersPanel:not([data-mobile-customer-screen]) .operations-match-list {
+    display: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel[data-mobile-customer-screen="matches"] .operations-customer-list {
+    display: none;
+  }
+
+  /* Customer list */
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list-heading-v719 {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 13px 14px 8px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list-heading-v719 > div {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list-heading-v719 b {
+    color: #193757;
+    font-size: 16px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list-heading-v719 span {
+    color: #8592a5;
+    font-size: 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-list-heading-v719 strong {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: #eaf3ff;
+    color: #0769d5;
+    font-size: 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-tools {
+    position: static;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 7px;
+    margin: 0;
+    padding: 4px 12px 9px;
+    border: 0;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-tools input {
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: #f7f9fc;
+    font-size: 13px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-tools span {
+    display: grid;
+    min-width: 36px;
+    place-items: center;
+    border-radius: 12px;
+    background: #eef4fb;
+    color: #48617f;
+    font-size: 11px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-views {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0;
+    padding: 0 12px 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-views button {
+    width: 100%;
+    height: 36px;
+    min-width: 0;
+    padding: 0 5px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-grid {
+    display: grid;
+    min-height: 0;
+    flex: 1 1 auto;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 8px;
+    padding: 0 10px calc(84px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-snap-type: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-card {
+    display: grid;
+    width: 100%;
+    min-height: 0;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    column-gap: 9px;
+    row-gap: 5px;
+    padding: 11px 12px;
+    border: 1px solid #dce6f2;
+    border-radius: 14px;
+    box-sizing: border-box;
+    box-shadow: 0 3px 12px rgba(39, 71, 110, .05);
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-card.selected {
+    border: 2px solid #1687e8;
+    background: #f2f8ff;
+    box-shadow: 0 7px 18px rgba(22, 135, 232, .12);
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-avatar-v719 {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    grid-column: 1;
+    grid-row: 1;
+    place-items: center;
+    border-radius: 50%;
+    background: #137be3;
+    color: #fff !important;
+    font-size: 15px !important;
+    font-weight: 950;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-card > strong {
+    display: flex;
+    min-width: 0;
+    max-width: none;
+    grid-column: 2;
+    grid-row: 1;
+    align-items: baseline;
+    gap: 5px;
+    margin: 0;
+    overflow: hidden;
+    color: #1a344f;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-card > strong small {
+    display: inline;
+    min-width: 0;
+    overflow: hidden;
+    color: #728197;
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-status {
+    position: static;
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-meta-v720 {
+    display: block;
+    min-width: 0;
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-condition-v719 {
+    display: -webkit-box !important;
+    overflow: hidden;
+    color: #546b85 !important;
+    font-size: 12px !important;
+    font-weight: 750;
+    line-height: 1.42;
+    white-space: normal !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-stats-v719 {
+    display: flex;
+    min-width: 0;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    align-items: center;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-stats-v719::-webkit-scrollbar { display: none; }
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-stats-v719 > * {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 4px 7px;
+    border-radius: 7px;
+    font-size: 10px;
+    font-style: normal;
+    text-decoration: none;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-card > small,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-card > i {
+    display: none;
+  }
+
+  /* Selected customer match workspace */
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-list {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading {
+    position: static;
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 11px;
+    border-bottom: 1px solid #e3ebf5;
+    background: #fff;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-mobile-customer-back-v1 {
+    display: inline-flex;
+    height: 36px;
+    min-height: 36px;
+    align-items: center;
+    gap: 2px;
+    padding: 0 9px;
+    border: 1px solid #cfdeef;
+    border-radius: 11px;
+    background: #f5f8fc;
+    color: #365575;
+    font-size: 20px;
+    font-weight: 900;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-mobile-customer-back-v1 span {
+    color: inherit;
+    font-size: 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-customer-v719 {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-avatar-v719 {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    place-items: center;
+    border-radius: 50%;
+    background: #137be3;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 950;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-customer-v719 b {
+    margin: 0;
+    overflow: hidden;
+    color: #183451;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading-actions {
+    display: flex;
+    min-width: 0;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+    overflow: visible;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading-actions > a,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading-actions > button,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading-actions > label {
+    min-width: 0;
+    min-height: 35px;
+    flex: 1 1 calc(33.333% - 5px);
+    max-width: none;
+    padding: 0 8px;
+    border-radius: 10px;
+    box-sizing: border-box;
+    font-size: 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading-actions .customer-call-link,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-heading-actions .customer-status-quick {
+    flex-basis: calc(50% - 3px);
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-status-quick {
+    justify-content: space-between;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-status-quick span {
+    font-size: 9px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-status-quick select {
+    min-width: 0;
+    font-size: 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-alert {
+    flex: 0 0 auto;
+    gap: 5px;
+    margin: 8px 9px 0;
+    padding: 8px 10px;
+    border-radius: 11px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-alert b { font-size: 10px; }
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-customer-alert span { font-size: 9.5px; }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .customer-condition-refresh-v727 {
+    min-height: 30px;
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+    gap: 5px;
+    padding: 8px 9px;
+    border-bottom: 1px solid #e3ebf5;
+    background: #f7faff;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 select,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 button {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+    padding: 0 5px;
+    border: 1px solid #cfdaea;
+    border-radius: 9px;
+    background: #fff;
+    color: #415a77;
+    font-size: 9.5px;
+    font-weight: 850;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 button {
+    width: 34px;
+    padding: 0;
+    color: transparent;
+    font-size: 0;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 button::after {
+    content: "↻";
+    color: #1671d9;
+    font-size: 17px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 > strong {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin: 0 0 2px;
+    color: #176fcf;
+    font-size: 12px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-toolbar-v719 > strong span {
+    color: #73839a;
+    font-size: 9.5px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 {
+    display: grid;
+    min-height: 0;
+    flex: 1 1 auto;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 8px;
+    padding: 8px 8px calc(84px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: #f4f8fd;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 > .item {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 9px !important;
+    border: 1px solid #dbe6f2;
+    border-left: 4px solid #1687e8;
+    border-radius: 14px;
+    box-sizing: border-box;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(38, 71, 111, .06);
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-card-grid-v650 {
+    display: grid !important;
+    grid-template-columns: 84px minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .unified-thumb-v8 {
+    width: 84px !important;
+    min-width: 84px !important;
+    height: 96px !important;
+    min-height: 96px !important;
+    border-radius: 12px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-compact-main-v650 {
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-template-rows: auto auto auto !important;
+    gap: 5px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-building-name {
+    max-width: 100% !important;
+    font-size: 13px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-address-room-v650 {
+    font-size: 10.5px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-compact-price-v650.price-line {
+    min-height: 32px !important;
+    padding: 4px 5px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .customer-match-card-actions-v653 {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto auto !important;
+    gap: 5px !important;
+    min-height: 34px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-action-left {
+    display: grid !important;
+    width: 100% !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 5px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .customer-match-inline-actions {
+    display: flex !important;
+    width: auto !important;
+    align-items: center;
+    gap: 3px;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .customer-match-choice-v719 {
+    height: 34px;
+    padding: 0 6px;
+    border-radius: 9px;
+    font-size: 9px;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-listing-cards-v719 .item-memo-toggle {
+    display: inline-flex !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px !important;
+    border-radius: 9px !important;
+  }
+
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-match-missing-v719,
+  .js-mobile-app-v1 #operationsCustomersPanel .operations-empty {
+    margin: 10px;
+    border-radius: 14px;
+  }
+}
+
+@media (min-width: 769px) {
+  .operations-mobile-customer-back-v1 {
+    display: none !important;
+  }
+}
