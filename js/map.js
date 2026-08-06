@@ -36,6 +36,59 @@ var jsDefaultMapCenterV6524 = {
 var jsDefaultMapLevelV6524 = 7;
 var jsAdministrativeListSelectionV6570 = null;
 var jsAutomaticDataRefreshIntervalV681 = 5 * 60 * 1000;
+var jsListingsRevisionV682 = "";
+var jsListingsRevisionPendingV682 = false;
+
+
+function fetchDataRevisionV682(scope) {
+  var api = window.saveApiURL || "/api/data";
+  var query = new URLSearchParams({
+    action: "dataRevision",
+    scope: scope || "listings",
+    _: String(Date.now())
+  });
+  return fetch(api + "?" + query.toString(), {
+    credentials: "same-origin",
+    cache: "no-store"
+  }).then(function(response) {
+    if (!response.ok) throw new Error("Data revision check failed (HTTP " + response.status + ")");
+    return response.json();
+  }).then(function(result) {
+    return String(result && result.revision || "");
+  });
+}
+
+
+function rememberListingsRevisionV682() {
+  return fetchDataRevisionV682("listings").then(function(revision) {
+    if (revision) jsListingsRevisionV682 = revision;
+    return revision;
+  }).catch(function() {
+    return "";
+  });
+}
+
+
+function refreshListingsWhenChangedV682() {
+  if (jsListingsRevisionPendingV682 || isLoadingSheet) return;
+  jsListingsRevisionPendingV682 = true;
+  fetchDataRevisionV682("listings").then(function(revision) {
+    if (!revision) return;
+    if (!jsListingsRevisionV682) {
+      return Promise.resolve(loadSheet(true, false)).then(function(loaded) {
+        if (loaded !== false) jsListingsRevisionV682 = revision;
+      });
+    }
+    if (revision === jsListingsRevisionV682) return;
+    return Promise.resolve(loadSheet(true, false)).then(function(loaded) {
+      if (loaded !== false) jsListingsRevisionV682 = revision;
+    });
+  }).catch(function(error) {
+    console.warn("Listing revision check failed", error);
+  }).then(function() {
+    jsListingsRevisionPendingV682 = false;
+  });
+}
 
 
 function resetToDaejeonOverviewV6524() {
@@ -1062,7 +1115,9 @@ kakao.maps.load(function() {
   setupEnterSearch();
   setupMobilePanelDrag();
   setupQuickAddShortcuts();
-  loadSheet();
+  Promise.resolve(loadSheet()).then(function(loaded) {
+    if (loaded !== false) rememberListingsRevisionV682();
+  });
 
   setInterval(function() {
     if (document.visibilityState === "hidden") {
@@ -1075,7 +1130,7 @@ kakao.maps.load(function() {
       return;
     }
 
-    loadSheet(true, false);
+    refreshListingsWhenChangedV682();
   }, jsAutomaticDataRefreshIntervalV681);
 
   document.addEventListener("visibilitychange", function() {
@@ -1315,7 +1370,7 @@ function loadSheet(isAuto, forceRefresh) {
     ? loadSharedGeocodeCache()
     : Promise.resolve({ ok: false, entries: {} });
 
-  sheetRequest
+  return sheetRequest
     .then(function(data) {
       var rows = parseCSVRecordsV655(data);
       var rawItems = [];
@@ -1515,11 +1570,13 @@ function loadSheet(isAuto, forceRefresh) {
           Math.max(0, Number(remainingCount) || 0) + "개 처리 중...";
         });
       });
+      return true;
     })
     .catch(function(err) {
       isLoadingSheet = false;
       document.getElementById("status").innerHTML = "D1 불러오기 오류";
       console.error(err);
+      return false;
     });
 }
 

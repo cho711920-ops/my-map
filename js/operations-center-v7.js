@@ -34,6 +34,8 @@
     alertPollTimer: null,
     alertFingerprint: "",
     alertCounts: [0, 0, 0],
+    operationsRevision: "",
+    operationsRevisionPending: false,
     dismissedAlertKey: "",
     dismissedAlertFingerprint: "",
     dismissedAlertCounts: null,
@@ -1576,12 +1578,12 @@
   };
 
   function refreshCustomerAlertBadge(forcePopup) {
-    apiGet("operationsDashboard").then(function(data) {
+    return apiGet("operationsDashboard").then(function(data) {
       state.dashboard = data;
       state.dashboardLoaded = true;
       persistOperationsCache();
       var button = document.getElementById("operationsCustomerMenuBtn");
-      if (!button) return;
+      if (!button) return true;
       var alerts = customerAlertCount(data);
       button.textContent = alerts ? "고객매칭 · 알림 " + alerts.toLocaleString("ko-KR") : "고객매칭";
       button.classList.toggle("has-alert", alerts > 0);
@@ -1589,7 +1591,34 @@
       // 고객업무 알림 수는 버튼에 유지하되 자동 팝업은 띄우지 않습니다.
       // 나중에 보완할 때 window.openCustomerWorkAlert()의 수동 호출만 다시 활용할 수 있습니다.
       if (alerts && forcePopup === true) showCustomerWorkAlert(data, true);
-    }).catch(function() {});
+      return true;
+    }).catch(function() { return false; });
+  }
+
+  function refreshCustomerAlertWhenChanged(forceDashboard) {
+    if (state.operationsRevisionPending) return Promise.resolve();
+    state.operationsRevisionPending = true;
+    if (forceDashboard) {
+      var firstRevisionRequest = apiGet("dataRevision", { scope: "operations" })
+        .then(function(result) { return text(result && result.revision); })
+        .catch(function() { return ""; });
+      return Promise.all([firstRevisionRequest, refreshCustomerAlertBadge(false)]).then(function(results) {
+        if (results[1] && results[0]) state.operationsRevision = results[0];
+      }).then(function() {
+        state.operationsRevisionPending = false;
+      });
+    }
+    return apiGet("dataRevision", { scope: "operations" }).then(function(result) {
+      var revision = text(result && result.revision);
+      var changed = !state.operationsRevision || revision !== state.operationsRevision;
+      if (!changed) return;
+      return refreshCustomerAlertBadge(false).then(function(loaded) {
+        if (loaded && revision) state.operationsRevision = revision;
+      });
+    }).catch(function() {
+    }).then(function() {
+      state.operationsRevisionPending = false;
+    });
   }
 
   document.addEventListener("keydown", function(event) {
@@ -1620,14 +1649,14 @@
     }
   }, 80);
   window.setTimeout(function() {
-    refreshCustomerAlertBadge(false);
+    refreshCustomerAlertWhenChanged(true);
     if (!state.alertPollTimer) {
       state.alertPollTimer = window.setInterval(function() {
-        if (document.visibilityState === "visible") refreshCustomerAlertBadge(false);
+        if (document.visibilityState === "visible") refreshCustomerAlertWhenChanged(false);
       }, 180000);
     }
   }, 1200);
   document.addEventListener("visibilitychange", function() {
-    if (document.visibilityState === "visible") refreshCustomerAlertBadge(false);
+    if (document.visibilityState === "visible") refreshCustomerAlertWhenChanged(false);
   });
 })();

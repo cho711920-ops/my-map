@@ -27,6 +27,8 @@ const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
+const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
+const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
 const SHEET_CACHE_ACTIONS = new Set([
   "deleteProperty", "moveOriginalListing", "quickAdd", "toggleDone", "updateProperty", "updatePropertyMemo"
 ]);
@@ -101,34 +103,6 @@ async function sha256Key(value) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-async function reserveImageCacheBudget(env, bytes) {
-  if (!env.DB || typeof env.DB.prepare !== "function") return true;
-  const hardMaximum = 8 * 1024 * 1024 * 1024;
-  const configured = Number(env.IMAGE_CACHE_7D_BUDGET_BYTES || 6 * 1024 * 1024 * 1024);
-  const budget = Math.min(hardMaximum, Math.max(64 * 1024 * 1024, configured));
-  const cutoff = new Date(Date.now() - 6 * 24 * 60 * 60_000).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
-  const prefix = "image-cache-bytes-";
-  const statement = env.DB.prepare(
-    `SELECT COALESCE(SUM(value), 0) AS total
-       FROM usage_counters
-      WHERE counter_key LIKE 'image-cache-bytes-%' AND counter_key >= ?1`
-  ).bind(prefix + cutoff);
-  const row = typeof statement.first === "function"
-    ? await statement.first()
-    : (await statement.all())?.results?.[0];
-  const current = Math.max(0, Number(row?.total || 0));
-  if (current + Math.max(0, Number(bytes) || 0) > budget) return false;
-  await env.DB.prepare(
-    `INSERT INTO usage_counters (counter_key, value, updated_at)
-     VALUES (?1, ?2, ?3)
-     ON CONFLICT(counter_key) DO UPDATE SET
-       value = usage_counters.value + excluded.value,
-       updated_at = excluded.updated_at`
-  ).bind(prefix + today, Math.max(0, Number(bytes) || 0), new Date().toISOString()).run();
-  return true;
-}
-
 function cacheAgeMs(object) {
   const savedAt = Number(object?.customMetadata?.savedAt || 0);
   return savedAt > 0 ? Date.now() - savedAt : Number.POSITIVE_INFINITY;
@@ -153,11 +127,50 @@ function writeR2TextCache(env, context, key, body, contentType) {
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
 }
 
+function revisionKey(scope) {
+  return String(scope || "").trim().toLowerCase() === "operations"
+    ? OPERATIONS_REVISION_KEY
+    : LISTINGS_REVISION_KEY;
+}
+
+async function readDataRevision(env, scope) {
+  const normalizedScope = revisionKey(scope) === OPERATIONS_REVISION_KEY ? "operations" : "listings";
+  const cached = await readR2TextCache(env, revisionKey(normalizedScope), 10 * 365 * 24 * 60 * 60_000);
+  if (cached) {
+    try {
+      const payload = JSON.parse(cached.body);
+      if (payload && payload.revision) return { ok: true, scope: normalizedScope, revision: String(payload.revision) };
+    } catch {}
+  }
+  return { ok: true, scope: normalizedScope, revision: "0" };
+}
+
+function touchDataRevision(env, context, scopes, afterPromise = null) {
+  if (!env.MEDIA || typeof env.MEDIA.put !== "function") return null;
+  const token = `${Date.now()}-${crypto.randomUUID()}`;
+  const task = Promise.resolve(afterPromise).then(() => Promise.all(
+    [...new Set(scopes || [])].map((scope) => {
+      const normalizedScope = scope === "operations" ? "operations" : "listings";
+      return env.MEDIA.put(revisionKey(normalizedScope), JSON.stringify({
+        ok: true,
+        scope: normalizedScope,
+        revision: token
+      }), {
+        httpMetadata: { contentType: "application/json; charset=utf-8" },
+        customMetadata: { savedAt: String(Date.now()) }
+      });
+    })
+  ));
+  if (context && typeof context.waitUntil === "function") context.waitUntil(task);
+  return task;
+}
+
 function deleteR2Cache(env, context, keys) {
   const uniqueKeys = [...new Set(keys.filter(Boolean))];
-  if (!env.MEDIA || typeof env.MEDIA.delete !== "function" || !uniqueKeys.length) return;
+  if (!env.MEDIA || typeof env.MEDIA.delete !== "function" || !uniqueKeys.length) return null;
   const task = env.MEDIA.delete(uniqueKeys);
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
+  return task;
 }
 
 function unifiedDetailCacheKey(propertyId) {
@@ -277,9 +290,9 @@ async function handleListingImage(request, env, context) {
   if (body.byteLength > 12 * 1024 * 1024) {
     throw Object.assign(new Error("The source image is too large."), { statusCode: 413 });
   }
-  const mayStore = env.MEDIA && typeof env.MEDIA.put === "function"
-    ? await reserveImageCacheBudget(env, body.byteLength)
-    : false;
+  // R2 lifecycle expiration bounds storage. Keeping D1 out of this hot path avoids
+  // one aggregate read and one counter write before every newly fetched image.
+  const mayStore = env.MEDIA && typeof env.MEDIA.put === "function";
   if (mayStore) {
     const task = env.MEDIA.put(key, body, {
       httpMetadata: { contentType, cacheControl: "private, max-age=86400" },
@@ -387,6 +400,12 @@ async function handleDataApi(request, env, context) {
     const query = Object.fromEntries(incoming.searchParams.entries());
     delete query._;
     query.owner = user.email || "";
+    if (query.action === "dataRevision") {
+      return jsonp(query.callback, await readDataRevision(env, query.scope), {
+        "cache-control": "private, no-store",
+        "x-js-data-source": "R2-REVISION"
+      });
+    }
     const collectorAdmin = await handleCollectorAdminGet(env, user, query);
     if (collectorAdmin) {
       return jsonp(query.callback, collectorAdmin, {
@@ -478,9 +497,10 @@ async function handleDataApi(request, env, context) {
   const collectorAdmin = await handleCollectorAdminPost(env, user, body);
   if (collectorAdmin) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-    deleteR2Cache(env, context, [
+    const invalidation = deleteR2Cache(env, context, [
       D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
     ]);
+    touchDataRevision(env, context, ["listings", "operations"], invalidation);
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
   }
   const d1Result = await handleD1PostAction(env, user, body);
@@ -488,7 +508,13 @@ async function handleDataApi(request, env, context) {
   if (SHEET_CACHE_ACTIONS.has(mutationAction(body))) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
   }
-  deleteR2Cache(env, context, mutationCacheKeys(body, d1Result));
+  const invalidatedKeys = mutationCacheKeys(body, d1Result);
+  const invalidation = deleteR2Cache(env, context, invalidatedKeys);
+  touchDataRevision(env, context, [
+    ...(invalidatedKeys.some((key) => key === D1_SHEET_CACHE_KEY || key === UNIFIED_LISTINGS_CACHE_KEY)
+      ? ["listings"] : []),
+    ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
+  ], invalidation);
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
 }
 
@@ -510,10 +536,11 @@ async function handleApi(request, env, context) {
       : {};
     if (response.ok && collectorFinalized(String(collectorBody?.action || ""), collectorPayload)) {
       sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-      deleteR2Cache(env, context, [
+      const invalidation = deleteR2Cache(env, context, [
         D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
         GEOCODE_CACHE_KEY
       ]);
+      touchDataRevision(env, context, ["listings", "operations"], invalidation);
     }
     return response;
   }

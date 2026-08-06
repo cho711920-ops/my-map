@@ -105,6 +105,30 @@ test("operations dashboard is served from R2 without repeating full-table counts
   assert.equal(databaseQueries, 0);
 });
 
+test("data revision checks use a tiny R2 object and never query D1", async () => {
+  let databaseQueries = 0;
+  const response = await authenticatedRequest(
+    "/api/data?action=dataRevision&scope=listings",
+    {
+      DB: { prepare() { databaseQueries += 1; throw new Error("revision checks must not query D1"); } },
+      MEDIA: {
+        get: async (key) => {
+          assert.equal(key, "api-cache/revision/listings.json");
+          return {
+            customMetadata: { savedAt: String(Date.now()) },
+            httpMetadata: { contentType: "application/json; charset=utf-8" },
+            text: async () => JSON.stringify({ ok: true, scope: "listings", revision: "rev-123" })
+          };
+        }
+      }
+    }
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-js-data-source"), "R2-REVISION");
+  assert.equal((await response.json()).revision, "rev-123");
+  assert.equal(databaseQueries, 0);
+});
+
 test("review workspace batches candidate lookups instead of querying once per address", async () => {
   let candidateQueries = 0;
   const reviewRows = [
@@ -333,17 +357,10 @@ test("listing images are allowlisted and stored in R2 after the first load", asy
   }
 });
 
-test("listing image writes stop before the seven-day storage budget is exceeded", async () => {
+test("listing image cache misses never query or write D1 usage counters", async () => {
   let writes = 0;
   const db = {
-    prepare(sql) {
-      return {
-        sql,
-        bind() { return this; },
-        async first() { return { total: 64 * 1024 * 1024 }; },
-        async run() { return { meta: { changes: 1 } }; }
-      };
-    }
+    prepare() { throw new Error("image caching must not touch D1"); }
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3]), {
@@ -356,13 +373,12 @@ test("listing image writes stop before the seven-day storage budget is exceeded"
       `/api/listing-image?url=${source}`,
       {
         DB: db,
-        IMAGE_CACHE_7D_BUDGET_BYTES: String(64 * 1024 * 1024),
         MEDIA: { get: async () => null, put: async () => { writes += 1; } }
       }
     );
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get("x-js-image-cache"), "MISS-NOSTORE");
-    assert.equal(writes, 0);
+    assert.equal(response.headers.get("x-js-image-cache"), "MISS");
+    assert.equal(writes, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -534,6 +550,7 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
   const statements = [];
   const pending = [];
   const deletedCacheKeys = [];
+  const writtenCacheKeys = [];
   const db = {
     prepare(sql) {
       return {
@@ -553,7 +570,10 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
       "/api/data",
       {
         DB: db,
-        MEDIA: { delete: async (keys) => deletedCacheKeys.push(...keys) }
+        MEDIA: {
+          delete: async (keys) => deletedCacheKeys.push(...keys),
+          put: async (key) => writtenCacheKeys.push(key)
+        }
       },
       { waitUntil: (promise) => pending.push(promise) },
       {
@@ -579,6 +599,8 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
     assert.ok(!statements.some((entry) => /apps-script-sync/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
     assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings.json"));
+    assert.ok(writtenCacheKeys.includes("api-cache/revision/listings.json"));
+    assert.ok(!writtenCacheKeys.includes("api-cache/revision/operations.json"));
   } finally {
     globalThis.fetch = originalFetch;
   }
