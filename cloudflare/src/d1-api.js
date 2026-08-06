@@ -70,6 +70,24 @@ async function allPages(env, sql, pageSize = 4_000) {
   return rows;
 }
 
+async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000) {
+  const rows = [];
+  let cursor = 0;
+  for (;;) {
+    const result = await env.DB.prepare(`SELECT rowid AS __page_cursor, ${selectSql}
+      FROM ${tableSql} WHERE (${whereSql}) AND rowid > ?1 ORDER BY rowid LIMIT ?2`)
+      .bind(cursor, pageSize).all();
+    const page = result?.results || [];
+    for (const row of page) {
+      const { __page_cursor: pageCursor, ...value } = row;
+      cursor = Math.max(cursor, Number(pageCursor) || 0);
+      rows.push(value);
+    }
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
 export function isD1GetAction(action) {
   return D1_GET_ACTIONS.has(clean(action));
 }
@@ -79,13 +97,12 @@ export function isD1PostAction(action) {
 }
 
 export async function buildD1SheetCsv(env) {
-  const rows = await allPages(env, `SELECT
+  const rows = await allRowidPages(env, `
     title, address, room, listing_type, deposit, monthly_rent, maintenance_fee, premium, area_m2,
     landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
     property_id, source_url, contacts_json, building_year, building_elevators,
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
-    last_collected_at, latitude, longitude
-  FROM listings WHERE status <> 'deleted' ORDER BY rowid`, 3_000);
+    last_collected_at, latitude, longitude`, "listings", "status <> 'deleted'", 3_000);
   const header = [
     "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
     "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
@@ -104,8 +121,7 @@ export async function buildD1SheetCsv(env) {
 }
 
 async function unifiedListings(env) {
-  const rows = await allPages(env, `SELECT listing_id, list_snapshot_json
-    FROM listing_sources WHERE active = 1 ORDER BY listing_id, rowid`, 4_000);
+  const rows = await allRowidPages(env, "listing_id, list_snapshot_json", "listing_sources", "active = 1", 4_000);
   const groups = {};
   for (const row of rows) {
     const original = parseJson(row.list_snapshot_json, {});
@@ -197,8 +213,7 @@ async function tellContacts(env, query) {
 }
 
 async function geocodeCache(env) {
-  const rows = await allPages(env, `SELECT cache_key, address, latitude, longitude, checked_at
-    FROM geocode_cache ORDER BY cache_key`, 4_000);
+  const rows = await allRowidPages(env, "cache_key, address, latitude, longitude, checked_at", "geocode_cache", "1 = 1", 4_000);
   const entries = {};
   for (const row of rows) {
     const key = clean(row.address || row.cache_key);
@@ -335,12 +350,12 @@ async function customerMatchRecords(env, customerId = "") {
   const id = clean(customerId);
   const result = id
     ? await env.DB.prepare(`SELECT m.customer_id, m.listing_id, m.state, m.score, m.memo,
-        m.created_at, m.updated_at, '' AS contacted_at, l.property_id
+        m.created_at, m.updated_at, m.contacted_at, l.property_id
       FROM customer_matches m JOIN listings l ON l.id=m.listing_id
       WHERE m.customer_id=?1 AND l.status <> 'deleted'
       ORDER BY m.score DESC, m.updated_at DESC LIMIT 800`).bind(id).all()
     : await env.DB.prepare(`SELECT m.customer_id, m.listing_id, m.state, m.score, m.memo,
-        m.created_at, m.updated_at, '' AS contacted_at, l.property_id
+        m.created_at, m.updated_at, m.contacted_at, l.property_id
       FROM customer_matches m JOIN listings l ON l.id=m.listing_id
       WHERE l.status <> 'deleted' ORDER BY m.updated_at DESC LIMIT 3000`).all();
   return result?.results || [];

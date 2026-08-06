@@ -26,6 +26,15 @@ const UPSTREAM_TIMEOUT_MS = 20_000;
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings.json";
+const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
+const SHEET_CACHE_ACTIONS = new Set([
+  "deleteProperty", "quickAdd", "toggleDone", "updateProperty", "updatePropertyMemo"
+]);
+const UNIFIED_CACHE_ACTIONS = new Set(["moveOriginalListing"]);
+const OPERATIONS_CACHE_ACTIONS = new Set([
+  "addCustomerActivity", "deleteProperty", "moveOriginalListing", "quickAdd",
+  "rebuildCustomerMatches", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
+]);
 const UNIFIED_COMPACT_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "thumbnail", "photoCount", "contactCount", "revision"
@@ -145,14 +154,42 @@ function writeR2TextCache(env, context, key, body, contentType) {
 }
 
 function deleteR2Cache(env, context, keys) {
-  if (!env.MEDIA || typeof env.MEDIA.delete !== "function" || !keys.length) return;
-  const task = env.MEDIA.delete(keys);
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  if (!env.MEDIA || typeof env.MEDIA.delete !== "function" || !uniqueKeys.length) return;
+  const task = env.MEDIA.delete(uniqueKeys);
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
 }
 
 function unifiedDetailCacheKey(propertyId) {
   const safe = String(propertyId || "").trim();
   return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail/${safe}.json` : "";
+}
+
+function mutationAction(body) {
+  const action = String(body?.action || "").trim();
+  return action === "enqueueMutation" ? String(body?.taskAction || "").trim() : action;
+}
+
+function mutationCacheKeys(body, result = {}) {
+  const action = mutationAction(body);
+  const keys = [];
+  if (SHEET_CACHE_ACTIONS.has(action)) keys.push(D1_SHEET_CACHE_KEY);
+  if (UNIFIED_CACHE_ACTIONS.has(action)) keys.push(UNIFIED_LISTINGS_CACHE_KEY);
+  if (OPERATIONS_CACHE_ACTIONS.has(action)) keys.push(OPERATIONS_DASHBOARD_CACHE_KEY);
+  if (action === "saveGeocodeCache") keys.push(GEOCODE_CACHE_KEY);
+  if (action === "moveOriginalListing") {
+    keys.push(
+      unifiedDetailCacheKey(result?.sourceMasterId),
+      unifiedDetailCacheKey(result?.targetMasterId)
+    );
+  }
+  return keys.filter(Boolean);
+}
+
+function collectorFinalized(action, payload) {
+  if (action === "finalizeNaverSession" || action === "finalizeCollectionSession") return true;
+  return action === "danggeunRunJobChunk" &&
+    (payload?.job?.phase === "complete" || payload?.job?.status === "complete");
 }
 
 function compactUnifiedListingsBody(body) {
@@ -383,10 +420,12 @@ async function handleDataApi(request, env, context) {
       ? UNIFIED_LISTINGS_CACHE_KEY
       : query.action === "geocodeCache"
         ? GEOCODE_CACHE_KEY
-        : detailCacheKey;
+        : query.action === "operationsDashboard"
+          ? OPERATIONS_DASHBOARD_CACHE_KEY
+          : detailCacheKey;
     if (r2CacheKey) {
       const defaultTtl = query.action === "unifiedListings"
-        ? 5 * 60_000
+        ? 60 * 60_000
         : query.action === "geocodeCache"
           ? 60 * 60_000
           : 60 * 60_000;
@@ -394,7 +433,9 @@ async function handleDataApi(request, env, context) {
         ? Number(env.UNIFIED_LISTINGS_CACHE_MS || defaultTtl)
         : query.action === "geocodeCache"
           ? Number(env.GEOCODE_CACHE_MS || defaultTtl)
-          : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
+          : query.action === "operationsDashboard"
+            ? Number(env.OPERATIONS_DASHBOARD_CACHE_MS || defaultTtl)
+            : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
       const cached = await readR2TextCache(env, r2CacheKey, Math.max(30_000, configuredTtl));
       if (cached) {
         const cachedBody = query.action === "unifiedListings"
@@ -436,21 +477,18 @@ async function handleDataApi(request, env, context) {
   }
   const collectorAdmin = await handleCollectorAdminPost(env, user, body);
   if (collectorAdmin) {
-    deleteR2Cache(env, context, [D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY]);
+    sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+    deleteR2Cache(env, context, [
+      D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
+    ]);
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
   }
   const d1Result = await handleD1PostAction(env, user, body);
   if (!d1Result) return json({ ok: false, action: body.action, message: "지원하지 않는 저장 작업입니다." }, 400);
-  sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-  const propertyId = String(
-    body?.key?.propertyId || body?.propertyId || body?.listingId || body?.payload?.propertyId || ""
-  );
-  deleteR2Cache(env, context, [
-    D1_SHEET_CACHE_KEY,
-    UNIFIED_LISTINGS_CACHE_KEY,
-    unifiedDetailCacheKey(propertyId),
-    body.action === "saveGeocodeCache" ? GEOCODE_CACHE_KEY : ""
-  ].filter(Boolean));
+  if (SHEET_CACHE_ACTIONS.has(mutationAction(body))) {
+    sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+  }
+  deleteR2Cache(env, context, mutationCacheKeys(body, d1Result));
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
 }
 
@@ -462,7 +500,23 @@ async function handleApi(request, env, context) {
   }
   if (url.pathname === "/api/session") return handleSession(request, env);
   if (url.pathname === "/api/sheet") return handleSheet(request, env, context);
-  if (url.pathname === "/api/collector") return handleCollectorApi(request, env);
+  if (url.pathname === "/api/collector") {
+    const collectorBody = request.method === "POST"
+      ? await request.clone().json().catch(() => ({}))
+      : {};
+    const response = await handleCollectorApi(request, env);
+    const collectorPayload = response.ok
+      ? await response.clone().json().catch(() => ({}))
+      : {};
+    if (response.ok && collectorFinalized(String(collectorBody?.action || ""), collectorPayload)) {
+      sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+      deleteR2Cache(env, context, [
+        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
+        GEOCODE_CACHE_KEY
+      ]);
+    }
+    return response;
+  }
   if (url.pathname === "/api/data") return handleDataApi(request, env, context);
   if (url.pathname === "/api/listing-image") return handleListingImage(request, env, context);
   if (url.pathname === "/api/permit-public-data") return handlePermitPublicData(request, env);

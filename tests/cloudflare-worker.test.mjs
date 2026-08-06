@@ -81,6 +81,30 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
   }
 });
 
+test("operations dashboard is served from R2 without repeating full-table counts", async () => {
+  let databaseQueries = 0;
+  const response = await authenticatedRequest(
+    "/api/data?action=operationsDashboard",
+    {
+      DB: { prepare() { databaseQueries += 1; throw new Error("cached dashboard must not query D1"); } },
+      MEDIA: {
+        get: async (key) => {
+          assert.equal(key, "api-cache/operations-dashboard.json");
+          return {
+            customMetadata: { savedAt: String(Date.now()) },
+            httpMetadata: { contentType: "application/json; charset=utf-8" },
+            text: async () => JSON.stringify({ ok: true, action: "operationsDashboard", activeMaster: 8754 })
+          };
+        }
+      }
+    }
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-js-data-cache"), "HIT");
+  assert.equal((await response.json()).activeMaster, 8754);
+  assert.equal(databaseQueries, 0);
+});
+
 test("primary sheet reads come directly from D1 without Apps Script", async () => {
   let upstreamCalls = 0;
   const cachedWrites = [];
@@ -92,7 +116,8 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
         args: [],
         bind(...args) { this.args = args; return this; },
         async all() {
-          assert.match(this.sql, /FROM listings WHERE status <> 'deleted'/);
+          assert.match(this.sql, /FROM listings WHERE \(status <> 'deleted'\) AND rowid > \?1/);
+          assert.doesNotMatch(this.sql, /OFFSET/);
           return {
             results: [{
               title: "테스트건물",
@@ -506,6 +531,7 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
     await Promise.all(pending);
     assert.ok(!statements.some((entry) => /apps-script-sync/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings.json"));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -563,8 +589,74 @@ test("primary memo edits persist only in D1 and do not queue a Sheet sync", asyn
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     assert.ok(statements.some((entry) => /INSERT INTO mutation_results/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings.json"));
     assert.ok(!statements.some((entry) => /INSERT INTO jobs/.test(entry.sql)));
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("geocode saves invalidate only the geocode cache", async () => {
+  const deletedCacheKeys = [];
+  const pending = [];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        bind() { return this; },
+        async run() { return { meta: { changes: 1 } }; }
+      };
+    },
+    async batch(items) { return items.map(() => ({ success: true })); }
+  };
+  const response = await authenticatedRequest(
+    "/api/data",
+    { DB: db, MEDIA: { delete: async (keys) => deletedCacheKeys.push(...keys) } },
+    { waitUntil: (promise) => pending.push(promise) },
+    {
+      method: "POST",
+      headers: { origin: "https://js-map.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "saveGeocodeCache",
+        requestId: "geocode-cache-scope",
+        entries: [{ address: "대전광역시 중구 중앙로 1", lat: 36.3, lng: 127.4 }]
+      })
+    }
+  );
+  await Promise.all(pending);
+  assert.equal(response.status, 200);
+  assert.deepEqual(deletedCacheKeys, ["api-cache/geocode-cache.json"]);
+});
+
+test("personal cloud-state saves do not invalidate shared listing caches", async () => {
+  const deletedCacheKeys = [];
+  const pending = [];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        bind() { return this; },
+        async run() { return { meta: { changes: 1 } }; }
+      };
+    }
+  };
+  const response = await authenticatedRequest(
+    "/api/data",
+    { DB: db, MEDIA: { delete: async (keys) => deletedCacheKeys.push(...keys) } },
+    { waitUntil: (promise) => pending.push(promise) },
+    {
+      method: "POST",
+      headers: { origin: "https://js-map.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "saveCloudState",
+        requestId: "cloud-state-cache-scope",
+        scope: "favorites",
+        recordKey: "default",
+        data: { ids: ["M-1"] }
+      })
+    }
+  );
+  await Promise.all(pending);
+  assert.equal(response.status, 200);
+  assert.deepEqual(deletedCacheKeys, []);
 });

@@ -380,7 +380,10 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now)
 
 async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false, actor = "collector") {
   const now = nowIso();
-  const sourceRowId = clean(existingSource?.id) || `O-${crypto.randomUUID()}`;
+  const restoredOriginalId = /^O-[A-Za-z0-9_-]{8,160}$/.test(clean(record?.originalId))
+    ? clean(record.originalId)
+    : "";
+  const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now);
   const snapshotHash = snapshotKey(record.listSnapshot || snapshot);
