@@ -7,6 +7,36 @@
   var active = false;
   var view = "map";
   var sidebarObserver = null;
+  var layerObserver = null;
+  var historyLayers = [];
+  var historySerial = 0;
+  var historySyncQueued = false;
+  var closingFromBackToken = "";
+  var ignoreNextPop = false;
+
+  var MOBILE_LAYER_SELECTORS = [
+    "#jsMobileMoreLayerV1.open",
+    "#unifiedGalleryV8.open",
+    "#listContactModalV654.open",
+    "#propertyEditModalV630.open",
+    "#buildingRegisterModalV640.open",
+    "#permitDiagnosisModalV1:not([hidden])",
+    "#reviewDecisionModal.open",
+    "#customerWorkAlert.open",
+    "#customerEditorModal:not([hidden])",
+    "#customerActivityModal:not([hidden])",
+    "#customerMemoModal:not([hidden])",
+    "#aiVisitCompleteModal.open",
+    "#aiVisitConfirmModal.open",
+    "#aiVisitLauncherModal.open",
+    "#v6DetailSheetPortal.open",
+    "#roadviewModal.open",
+    "#quickAddModal",
+    "#itemListPickerModal.open",
+    "#listManagerModal.open",
+    "#operationsCenter.open",
+    "#unifiedDetailDrawerV8.open"
+  ];
 
   function icon(name) {
     var paths = {
@@ -110,8 +140,9 @@
     if (source && input && input !== document.activeElement) input.value = source.value || "";
   }
 
-  function setView(nextView) {
+  function setView(nextView, options) {
     if (!active) return;
+    options = options || {};
     if (nextView === "visit") {
       if (typeof global.startAiVisitPreview === "function") global.startAiVisitPreview();
       return;
@@ -124,7 +155,18 @@
       openMore();
       return;
     }
+    var previousView = view;
     view = nextView === "list" ? "list" : "map";
+    if (!options.fromHistory && previousView !== view) {
+      if (view === "list") {
+        global.history.pushState(Object.assign({}, global.history.state || {}, {
+          jsmMobileView: "list"
+        }), "", global.location.href);
+      } else if (global.history.state && global.history.state.jsmMobileView === "list") {
+        ignoreNextPop = true;
+        global.history.back();
+      }
+    }
     root.setAttribute("data-jsm-mobile-view", view);
     var sidebar = document.getElementById("sidebar");
     if (sidebar) sidebar.classList.toggle("open", view === "list");
@@ -187,6 +229,119 @@
     global.setTimeout(function() { if (!layer.classList.contains("open")) layer.hidden = true; }, 220);
   }
 
+  function layerIsVisible(element) {
+    if (!element || element.hidden || element.getAttribute("aria-hidden") === "true") return false;
+    var style = global.getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) !== 0;
+  }
+
+  function openMobileLayers() {
+    var seen = [];
+    MOBILE_LAYER_SELECTORS.forEach(function(selector) {
+      document.querySelectorAll(selector).forEach(function(element) {
+        if (seen.indexOf(element) < 0 && layerIsVisible(element)) seen.push(element);
+      });
+    });
+    return seen.sort(function(a, b) {
+      var aZ = parseInt(global.getComputedStyle(a).zIndex, 10) || 0;
+      var bZ = parseInt(global.getComputedStyle(b).zIndex, 10) || 0;
+      if (aZ !== bZ) return aZ - bZ;
+      var position = a.compareDocumentPosition(b);
+      return position & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
+  }
+
+  function closeMobileLayer(element) {
+    if (!element) return;
+    var id = element.id || "";
+    if (id === "jsMobileMoreLayerV1") return closeMore();
+    if (id === "unifiedDetailDrawerV8" && global.JSUnifiedListingsV8) return global.JSUnifiedListingsV8.close();
+    if (id === "listContactModalV654" && typeof global.closeListContactPopupV654 === "function") return global.closeListContactPopupV654();
+    if (id === "propertyEditModalV630" && typeof global.closePropertyEditModalV630 === "function") return global.closePropertyEditModalV630();
+    if (id === "buildingRegisterModalV640" && typeof global.closeBuildingRegisterV640 === "function") return global.closeBuildingRegisterV640();
+    if (id === "permitDiagnosisModalV1" && typeof global.closePermitDiagnosisV1 === "function") return global.closePermitDiagnosisV1();
+    if (id === "reviewDecisionModal" && typeof global.closeReviewDecisionModal === "function") return global.closeReviewDecisionModal();
+    if (id === "customerWorkAlert" && typeof global.closeCustomerWorkAlert === "function") return global.closeCustomerWorkAlert();
+    if (id === "customerEditorModal" && typeof global.closeCustomerEditor === "function") return global.closeCustomerEditor();
+    if (id === "customerActivityModal" && typeof global.closeCustomerActivity === "function") return global.closeCustomerActivity();
+    if (id === "customerMemoModal" && typeof global.closeCustomerMemo === "function") return global.closeCustomerMemo();
+    if (id === "aiVisitCompleteModal" && global.JSAiVisitV6) return global.JSAiVisitV6.closeCompleteConfirm();
+    if (id === "aiVisitConfirmModal" && global.JSAiVisitV6) return global.JSAiVisitV6.closeConfirm();
+    if (id === "aiVisitLauncherModal" && global.JSAiVisitV6) return global.JSAiVisitV6.closeLauncher();
+    if (id === "roadviewModal" && typeof global.closeRoadviewModal === "function") return global.closeRoadviewModal();
+    if (id === "quickAddModal" && typeof global.closeQuickAddModal === "function") return global.closeQuickAddModal();
+    if (id === "itemListPickerModal" && typeof global.closeItemListPicker === "function") return global.closeItemListPicker();
+    if (id === "listManagerModal" && typeof global.closeListManager === "function") return global.closeListManager();
+    if (id === "operationsCenter" && typeof global.closeOperationsCenter === "function") return global.closeOperationsCenter();
+    if (id === "v6DetailSheetPortal" && global.JSV6MobileDetailFix) return global.JSV6MobileDetailFix.close();
+    var closeButton = element.querySelector("[aria-label*='닫기'], [data-v6-detail-close], .close");
+    if (closeButton) closeButton.click();
+  }
+
+  function syncLayerHistory() {
+    historySyncQueued = false;
+    if (!active) return;
+    var openLayers = openMobileLayers();
+    var manuallyClosedCount = 0;
+
+    while (historyLayers.length && openLayers.indexOf(historyLayers[historyLayers.length - 1].element) < 0) {
+      var closed = historyLayers.pop();
+      if (closingFromBackToken === closed.token) {
+        closingFromBackToken = "";
+        continue;
+      }
+      manuallyClosedCount += 1;
+    }
+
+    if (manuallyClosedCount) {
+      ignoreNextPop = true;
+      global.history.go(-manuallyClosedCount);
+    }
+
+    openLayers.forEach(function(element) {
+      var alreadyTracked = historyLayers.some(function(entry) { return entry.element === element; });
+      if (alreadyTracked) return;
+      var token = "jsm-layer-" + (++historySerial);
+      historyLayers.push({element: element, token: token});
+      global.history.pushState(Object.assign({}, global.history.state || {}, {
+        jsmMobileLayerToken: token
+      }), "", global.location.href);
+    });
+  }
+
+  function queueLayerHistorySync() {
+    if (!active || historySyncQueued) return;
+    historySyncQueued = true;
+    global.requestAnimationFrame(syncLayerHistory);
+  }
+
+  function watchMobileLayers() {
+    if (layerObserver) return;
+    layerObserver = new MutationObserver(queueLayerHistorySync);
+    layerObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["class", "hidden", "aria-hidden", "style"]
+    });
+  }
+
+  function handleMobileBack(event) {
+    if (!active) return;
+    if (ignoreNextPop) {
+      ignoreNextPop = false;
+      return;
+    }
+    var top = historyLayers[historyLayers.length - 1];
+    if (top && layerIsVisible(top.element)) {
+      closingFromBackToken = top.token;
+      closeMobileLayer(top.element);
+      queueLayerHistorySync();
+      return;
+    }
+    if (view === "list") setView("map", {fromHistory: true});
+  }
+
   function watchSidebar() {
     var sidebar = document.getElementById("sidebar");
     if (!sidebar || sidebarObserver) return;
@@ -203,6 +358,7 @@
     buildChrome().hidden = false;
     root.classList.add("js-mobile-app-v1");
     watchSidebar();
+    watchMobileLayers();
     setView("map");
   }
 
@@ -233,6 +389,7 @@
     document.addEventListener("input", function(event) {
       if (active && event.target && event.target.id === "keyword") syncSearchValue();
     });
+    global.addEventListener("popstate", handleMobileBack);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, {once: true});
