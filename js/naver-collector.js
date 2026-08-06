@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.6.0";
+  var VERSION = "5.6.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -115,6 +115,7 @@
   var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
   var autoRegisterButton = panel.querySelector("[data-action=auto-register]") || {addEventListener: function () {}};
+  var autoDistrictSelect = panel.querySelector("[data-role=auto-district]") || {value: "", addEventListener: function () {}};
   var retryButton = panel.querySelector("[data-action=retry]") || {
     disabled: false,
     addEventListener: function () {}
@@ -210,6 +211,7 @@
         "#" + PANEL_ID + " .jsn-rule{padding:7px 8px;background:#eef9f3;" +
         "border-radius:8px;color:#3d6250;font-size:9.5px;line-height:1.4}" +
         "#" + PANEL_ID + " .jsn-actions{display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px}" +
+        "#" + PANEL_ID + " .jsn-auto-district{height:38px;border:1px solid #b9c8dd;border-radius:9px;padding:0 10px;background:#fff;color:#16324f;font-size:12px;font-weight:850}" +
         "#" + PANEL_ID + " button.jsn-btn{height:38px;border-radius:9px;font-size:12px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
@@ -259,6 +261,14 @@
           '같은 주소라도 임대조건이 다르면 별도 매물로 유지합니다.</div>' +
           '<div class="jsn-actions">' +
             '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>선택 구 전체 수집</button>' +
+            '<select class="jsn-auto-district" data-role="auto-district" aria-label="자동수집 구 직접 선택">' +
+              '<option value="">자동수집할 구를 직접 선택</option>' +
+              '<option value="3011000000">동구</option>' +
+              '<option value="3014000000">중구</option>' +
+              '<option value="3017000000">서구</option>' +
+              '<option value="3020000000">유성구</option>' +
+              '<option value="3023000000">대덕구</option>' +
+            '</select>' +
             '<button type="button" class="jsn-btn jsn-auto" data-action="auto-register">자동수집 등록</button>' +
             '<button type="button" class="jsn-btn jsn-stop" data-action="stop" disabled>안전중단</button>' +
           '</div>' +
@@ -279,14 +289,34 @@
     });
     stopButton.addEventListener("click", requestSafeStop);
     autoRegisterButton.addEventListener("click", registerAutomaticTarget);
+    autoDistrictSelect.addEventListener("change", selectAutomaticDistrict);
     document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
       panel.style.display = "none";
     });
   }
 
+  function selectAutomaticDistrict() {
+    var cortarNo = String(autoDistrictSelect.value || "");
+    var district = DAEJEON_DISTRICTS.find(function (item) {
+      return String(item.cortarNo) === cortarNo;
+    });
+    if (!district) return;
+    state.selectedDistrict = district;
+    state.selectionMode = "district";
+    state.capture = null;
+    autoRegisterButton.textContent = district.name + " 자동수집 등록";
+    setStatus(
+      district.name + " 자동수집 대상 선택 완료",
+      "지도 클러스터 인식과 관계없이 아래 등록 버튼을 누르면 됩니다."
+    );
+  }
+
   function registerAutomaticTarget() {
-    var district = state.selectedDistrict;
+    var selectedCortarNo = String(autoDistrictSelect.value || "");
+    var district = DAEJEON_DISTRICTS.find(function (item) {
+      return String(item.cortarNo) === selectedCortarNo;
+    }) || state.selectedDistrict;
     if (!district || !district.cortarNo) {
       setStatus("자동수집 등록 준비", "먼저 지도에서 자동수집할 구 클러스터를 선택해주세요.");
       return;
@@ -376,6 +406,8 @@
       if (district) {
         state.selectedDistrict = district;
         state.selectionMode = "district";
+        autoDistrictSelect.value = district.cortarNo;
+        autoRegisterButton.textContent = district.name + " 자동수집 등록";
         state.capture = null;
         state.clickedClusterCount = districtCount;
         updateDashboard({

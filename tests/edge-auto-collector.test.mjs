@@ -40,6 +40,9 @@ test("all three collectors expose registration and unattended execution", () => 
   }
   assert.match(gongsil, /clickScreenLargestCluster/);
   assert.match(gongsil, /현재 화면 전체클러스터 자동수집 등록/);
+  assert.match(naver, /data-role="auto-district"/);
+  assert.match(naver, /function selectAutomaticDistrict\(\)/);
+  assert.match(naver, /지도 클러스터 인식과 관계없이/);
 });
 
 test("Windows installer creates a daily recoverable scheduled task", () => {
