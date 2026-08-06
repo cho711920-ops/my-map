@@ -3,17 +3,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$edgeCandidates = @(
+$edgeCandidates = @(@(
   (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
   (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
   (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\Application\msedge.exe')
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
 
 if (-not $edgeCandidates.Count) {
   throw 'Microsoft Edge를 찾지 못했습니다.'
 }
 
-$edgePath = $edgeCandidates[0]
+$edgePath = $edgeCandidates | Select-Object -First 1
 $automationRoot = Join-Path $env:LOCALAPPDATA 'JSMap\EdgeAutoCollector'
 $extensionPath = Join-Path $automationRoot 'extension'
 $profilePath = Join-Path $automationRoot 'profile'
