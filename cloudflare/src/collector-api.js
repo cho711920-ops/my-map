@@ -912,12 +912,27 @@ async function reviewWorkspace(env, query) {
       safeCandidateIds: Array.isArray(stored.candidateIds) ? stored.candidateIds : []
     });
   }
-  for (const group of groups.values()) {
+
+  const candidatesByAddress = new Map();
+  const addresses = [...new Set([...groups.values()]
+    .map((group) => normalizedAddress(group.address)).filter(Boolean))];
+  for (let offset = 0; offset < addresses.length; offset += 75) {
+    const batch = addresses.slice(offset, offset + 75);
+    const placeholders = batch.map((_, index) => `?${index + 1}`).join(",");
     const candidates = await env.DB.prepare(`SELECT id, property_id, title, address, room, listing_type,
-        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source
-      FROM listings WHERE status <> 'deleted' AND address=?1 ORDER BY updated_at DESC LIMIT 12`)
-      .bind(normalizedAddress(group.address)).all();
-    group.candidates = (candidates?.results || []).map(candidateJson);
+        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source, updated_at
+      FROM listings WHERE status <> 'deleted' AND address IN (${placeholders})
+      ORDER BY updated_at DESC`).bind(...batch).all();
+    for (const row of candidates?.results || []) {
+      const address = normalizedAddress(row.address);
+      if (!candidatesByAddress.has(address)) candidatesByAddress.set(address, []);
+      const items = candidatesByAddress.get(address);
+      if (items.length < 12) items.push(candidateJson(row));
+    }
+  }
+
+  for (const group of groups.values()) {
+    group.candidates = candidatesByAddress.get(normalizedAddress(group.address)) || [];
     const candidateIds = new Set(group.candidates.map((entry) => entry.propertyId));
     group.items.forEach((item) => {
       item.safeCandidateIds = item.safeCandidateIds.filter((id) => candidateIds.has(id));

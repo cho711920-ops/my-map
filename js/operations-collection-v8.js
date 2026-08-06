@@ -18,6 +18,7 @@
     reviewQuery: "",
     loading: false,
     refreshing: false,
+    reviewPromise: null,
     reviewSearchLoading: false,
     collectionLoading: false
   };
@@ -489,7 +490,7 @@
       .finally(function() { extraState.collectionLoading = false; });
   }
   function loadReviews(force, silent) {
-    if (extraState.refreshing) return Promise.resolve(renderReviews());
+    if (extraState.refreshing) return extraState.reviewPromise || Promise.resolve();
     if (!force && extraState.reviews) {
       renderReviews();
       if (!silent) {
@@ -501,7 +502,7 @@
     extraState.refreshing = true;
     var activeQuery = text(extraState.reviewQuery);
     if (!silent) message("매물검증 묶음을 만드는 중입니다…", "loading");
-    return apiGet("reviewWorkspace", activeQuery ? {query: activeQuery} : {}).then(function(data) {
+    extraState.reviewPromise = apiGet("reviewWorkspace", activeQuery ? {query: activeQuery} : {}).then(function(data) {
       extraState.reviews = data;
       if (!activeQuery) extraState.reviewBase = data;
       if (!selectedGroup()) extraState.selectedGroupKey = "";
@@ -515,7 +516,11 @@
       }
     }).catch(function(error) {
       if (!silent) message(error.message, "error");
-    }).finally(function() { extraState.refreshing = false; });
+    }).finally(function() {
+      extraState.refreshing = false;
+      extraState.reviewPromise = null;
+    });
+    return extraState.reviewPromise;
   }
 
   window.switchOperationsTab = function(tab) {

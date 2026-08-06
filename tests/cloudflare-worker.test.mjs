@@ -105,6 +105,53 @@ test("operations dashboard is served from R2 without repeating full-table counts
   assert.equal(databaseQueries, 0);
 });
 
+test("review workspace batches candidate lookups instead of querying once per address", async () => {
+  let candidateQueries = 0;
+  const reviewRows = [
+    { id: "R-1", source: "네이버", source_listing_id: "N-1", created_at: "2026-08-04",
+      payload_json: JSON.stringify({ address: "동구 가양동 1", room: "1층", deposit: 1000, rent: 80 }),
+      result_json: "{}" },
+    { id: "R-2", source: "공실박스", source_listing_id: "G-2", created_at: "2026-08-04",
+      payload_json: JSON.stringify({ address: "서구 둔산동 2", room: "2층", deposit: 2000, rent: 120 }),
+      result_json: "{}" }
+  ];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        args: [],
+        bind(...args) { this.args = args; return this; },
+        async all() {
+          if (/FROM collector_raw WHERE processing_state='review'/.test(this.sql)) {
+            return { results: reviewRows };
+          }
+          if (/FROM listings WHERE status <> 'deleted' AND address IN/.test(this.sql)) {
+            candidateQueries += 1;
+            assert.deepEqual(this.args, ["동구 가양동 1", "서구 둔산동 2"]);
+            return { results: [
+              { id: "M-1", property_id: "M-1", title: "가양상가", address: "동구 가양동 1", room: "1층",
+                listing_type: "상가", deposit: 1000, monthly_rent: 80, updated_at: "2026-08-05" },
+              { id: "M-2", property_id: "M-2", title: "둔산상가", address: "서구 둔산동 2", room: "2층",
+                listing_type: "상가", deposit: 2000, monthly_rent: 120, updated_at: "2026-08-05" }
+            ] };
+          }
+          throw new Error(`Unexpected query: ${this.sql}`);
+        },
+        async first() {
+          if (/COUNT\(\*\).*collector_raw/.test(this.sql)) return { count: reviewRows.length };
+          throw new Error(`Unexpected query: ${this.sql}`);
+        }
+      };
+    }
+  };
+  const response = await authenticatedRequest("/api/data?action=reviewWorkspace", { DB: db });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.total, 2);
+  assert.equal(payload.groupCount, 2);
+  assert.equal(candidateQueries, 1);
+});
+
 test("primary sheet reads come directly from D1 without Apps Script", async () => {
   let upstreamCalls = 0;
   const cachedWrites = [];
