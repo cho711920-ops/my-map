@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>JS 자동수집 설정</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header><div><h1>JS 자동수집</h1><p>Edge가 네이버 → 당근 → 공실박스를 순서대로 실행합니다.</p></div><span id="status">확인 중</span></header>
+    <section class="settings">
+      <label class="toggle"><input id="enabled" type="checkbox"><span>매일 자동수집 사용</span></label>
+      <label>실행 시간 <input id="schedule" type="time" value="06:00"></label>
+      <label class="toggle"><input id="closeTabs" type="checkbox" checked><span>완료한 수집 탭 자동 닫기</span></label>
+      <button id="save" class="primary">설정 저장</button>
+      <button id="run">지금 전체 실행</button>
+    </section>
+    <section><div class="section-title"><h2>등록된 대상</h2><small>각 사이트의 수집기에서 ‘자동수집 등록’을 누르면 추가됩니다.</small></div><div id="targets" class="list"></div></section>
+    <section><div class="section-title"><h2>최근 실행 기록</h2><button id="clear">기록 지우기</button></div><div id="logs" class="list"></div></section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

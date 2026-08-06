@@ -9,7 +9,9 @@
     "build:cloudflare": "node tools/build-cloudflare-assets.mjs",
     "cf:dev": "pnpm run build:cloudflare && wrangler dev",
     "cf:check": "pnpm run build:cloudflare && wrangler deploy --dry-run",
-    "test:cloudflare": "node --test tests/cloudflare-*.test.mjs"
+    "test:cloudflare": "node --test tests/cloudflare-*.test.mjs",
+    "edge:auto:install": "powershell -ExecutionPolicy Bypass -File tools/install-edge-auto-collector.ps1",
+    "edge:auto:setup": "powershell -ExecutionPolicy Bypass -File tools/run-edge-auto-collector.ps1 -Setup"
   },
   "dependencies": {
     "google-auth-library": "^10.3.0"

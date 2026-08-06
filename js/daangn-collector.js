@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.2.0";
+  var VERSION = "1.3.0";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -44,6 +44,7 @@
 
   var panel = createPanel();
   var startButton = panel.querySelector("[data-action=start]");
+  var autoRegisterButton = panel.querySelector("[data-action=auto-register]") || {addEventListener: function () {}};
   var stopButton = panel.querySelector("[data-action=stop]");
   var closeButton = panel.querySelector("[data-action=close]");
   var statusElement = panel.querySelector("[data-role=status]");
@@ -75,7 +76,8 @@
       renderSelection();
       refreshJobStatus();
     },
-    getState: function () { return state; }
+    getState: function () { return state; },
+    runAutomatic: runAutomatic
   };
 
   function getCollectorKey() {
@@ -136,6 +138,7 @@
         "#" + PANEL_ID + " .jsd-actions{display:grid;grid-template-columns:2fr 1fr;gap:6px;margin-top:8px}" +
         "#" + PANEL_ID + " .jsd-btn{height:38px;border-radius:9px;font-size:12px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsd-start{border:0;background:#ff6f0f;color:#fff}.jsd-stop{border:1px solid #ef4444;background:#fff1f2;color:#be123c}" +
+        "#" + PANEL_ID + " .jsd-auto{grid-column:1/-1;border:1px solid #e16a1e;background:#fff3ea;color:#b84b08}" +
         "#" + PANEL_ID + " .jsd-btn:disabled{cursor:not-allowed;background:#ddd;color:#fff;border-color:#ddd}" +
         "@media(max-width:520px){#" + PANEL_ID + "{width:calc(100vw - 12px);max-height:calc(100vh - 12px)}}" ;
       document.head.appendChild(style);
@@ -157,7 +160,8 @@
       metric("addressMissing","주소 미확인") + metric("failed","조회 실패") + metric("page","목록 페이지") +
       '</div><div class="jsd-card"><div class="jsd-rule" data-role="rule"></div>' +
       '<div class="jsd-actions"><button type="button" class="jsd-btn jsd-start" data-action="start">수집 시작</button>' +
-      '<button type="button" class="jsd-btn jsd-stop" data-action="stop" disabled>안전중단</button></div></div></div>';
+      '<button type="button" class="jsd-btn jsd-stop" data-action="stop" disabled>안전중단</button>' +
+      '<button type="button" class="jsd-btn jsd-auto" data-action="auto-register">자동수집 등록</button></div></div></div>';
     document.body.appendChild(element);
     return element;
   }
@@ -168,12 +172,71 @@
 
   function bindEvents() {
     startButton.addEventListener("click", startOrResume);
+    autoRegisterButton.addEventListener("click", registerAutomaticTarget);
     stopButton.addEventListener("click", requestSafeStop);
     closeButton.addEventListener("click", function () { panel.style.display = "none"; });
     document.addEventListener("click", handleMapMarkerClick, true);
     window.addEventListener("popstate", function () { scheduleSelectionChecks(); });
     window.addEventListener("hashchange", function () { scheduleSelectionChecks(); });
     window.setInterval(function () { syncSelectionFromLocation(false); }, 300);
+  }
+
+  function registerAutomaticTarget() {
+    if (!state.selectedUrl) {
+      setStatus("자동수집 등록 준비", "먼저 지도에서 자동수집할 구 또는 숫자 클러스터를 선택해주세요.");
+      return;
+    }
+    try { getCollectorKey(); } catch (error) {
+      setStatus("자동수집 등록 취소", String(error && error.message ? error.message : error));
+      return;
+    }
+    var district = state.selectedDistrict || districtFromUrl(state.selectedUrl);
+    var requestId = "daangn-register-" + Date.now();
+    var onResult = function (event) {
+      if (!event.data || event.data.type !== "JS_COLLECTOR_REGISTER_RESULT" || event.data.requestId !== requestId) return;
+      window.removeEventListener("message", onResult);
+      setStatus(event.data.ok ? "자동수집 등록 완료" : "자동수집 등록 실패", event.data.message || "Edge 자동수집 확장 프로그램을 확인해주세요.");
+    };
+    window.addEventListener("message", onResult);
+    window.postMessage({
+      type: "JS_COLLECTOR_REGISTER_TARGET",
+      requestId: requestId,
+      target: {
+        source: "daangn",
+        key: "daangn-" + (district || clusterIdFromUrl(state.selectedUrl)),
+        label: district ? "당근 " + district : "당근 선택클러스터",
+        url: state.selectedUrl,
+        district: district,
+        selectedCount: Number(state.selectedCount || 0)
+      }
+    }, "*");
+  }
+
+  async function runAutomatic(target) {
+    panel.style.display = "block";
+    var url = selectedClusterUrl(target && target.url, target && target.district);
+    if (!url) throw new Error("자동수집할 당근 클러스터 정보가 없습니다.");
+    state.selectedUrl = url;
+    state.selectedDistrict = String(target.district || districtFromUrl(url) || "");
+    state.selectedCount = Number(target.selectedCount || 0);
+    state.selectionChanged = false;
+    state.job = null;
+    renderSelection();
+    await startOrResume();
+    var startedAt = Date.now();
+    while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
+      if (state.job && state.job.status === "complete") {
+        if (Number(state.job.failed || 0) > 0 || (state.selectedDistrict && state.job.completeCollection === false)) {
+          throw new Error("당근 자동수집이 부분수집 또는 오류로 종료됐습니다.");
+        }
+        return {source: "daangn", district: state.selectedDistrict, version: VERSION, totals: Object.assign({}, state.job)};
+      }
+      if (state.job && state.job.status === "paused" && !state.busy) {
+        throw new Error(state.job.message || "당근 자동수집이 중단됐습니다.");
+      }
+      await new Promise(function (resolve) { window.setTimeout(resolve, 1000); });
+    }
+    throw new Error("당근 자동수집 제한시간을 초과했습니다.");
   }
 
   function handleMapMarkerClick(event) {

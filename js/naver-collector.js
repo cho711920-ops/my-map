@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.5.0";
+  var VERSION = "5.6.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -114,6 +114,7 @@
   var progressBarElement = panel.querySelector("[data-role=progress-bar]");
   var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
+  var autoRegisterButton = panel.querySelector("[data-action=auto-register]") || {addEventListener: function () {}};
   var retryButton = panel.querySelector("[data-action=retry]") || {
     disabled: false,
     addEventListener: function () {}
@@ -162,7 +163,8 @@
     createEmptyDashboard: createEmptyDashboard,
     clusterCountFromText: clusterCountFromText,
     parseRequestBody: parseRequestBody,
-    finKrwToManwon: finKrwToManwon
+    finKrwToManwon: finKrwToManwon,
+    runAutomatic: runAutomatic
   };
 
   function createPanel() {
@@ -211,6 +213,7 @@
         "#" + PANEL_ID + " button.jsn-btn{height:38px;border-radius:9px;font-size:12px;font-weight:850;cursor:pointer}" +
         "#" + PANEL_ID + " .jsn-retry{border:1px solid #b9c9c0;background:#fff;color:#315244}" +
         "#" + PANEL_ID + " .jsn-save{border:0;background:#03c75a;color:#fff}" +
+        "#" + PANEL_ID + " .jsn-auto{border:1px solid #1687e8;background:#eaf5ff;color:#0963b5}" +
         "#" + PANEL_ID + " .jsn-city{grid-column:1/-1;border:1px solid #1687e8;background:#eaf5ff;color:#0963b5}" +
         "#" + PANEL_ID + " .jsn-stop{grid-column:1/-1;border:1px solid #ef4444;background:#fff1f2;color:#be123c}" +
         "#" + PANEL_ID + " .jsn-save:disabled,#" + PANEL_ID + " .jsn-retry:disabled,#" + PANEL_ID + " .jsn-city:disabled,#" + PANEL_ID + " .jsn-stop:disabled{" +
@@ -256,6 +259,7 @@
           '같은 주소라도 임대조건이 다르면 별도 매물로 유지합니다.</div>' +
           '<div class="jsn-actions">' +
             '<button type="button" class="jsn-btn jsn-save" data-action="save" disabled>선택 구 전체 수집</button>' +
+            '<button type="button" class="jsn-btn jsn-auto" data-action="auto-register">자동수집 등록</button>' +
             '<button type="button" class="jsn-btn jsn-stop" data-action="stop" disabled>안전중단</button>' +
           '</div>' +
         '</div>' +
@@ -274,10 +278,62 @@
       else discoverExistingRequest();
     });
     stopButton.addEventListener("click", requestSafeStop);
+    autoRegisterButton.addEventListener("click", registerAutomaticTarget);
     document.addEventListener("click", rememberClusterCount, true);
     closeButton.addEventListener("click", function () {
       panel.style.display = "none";
     });
+  }
+
+  function registerAutomaticTarget() {
+    var district = state.selectedDistrict;
+    if (!district || !district.cortarNo) {
+      setStatus("자동수집 등록 준비", "먼저 지도에서 자동수집할 구 클러스터를 선택해주세요.");
+      return;
+    }
+    try { getCollectorKey(); } catch (error) {
+      setStatus("자동수집 등록 취소", String(error && error.message ? error.message : error));
+      return;
+    }
+    var requestId = "naver-register-" + Date.now();
+    var onResult = function (event) {
+      if (!event.data || event.data.type !== "JS_COLLECTOR_REGISTER_RESULT" || event.data.requestId !== requestId) return;
+      window.removeEventListener("message", onResult);
+      setStatus(event.data.ok ? "자동수집 등록 완료" : "자동수집 등록 실패", event.data.message || "Edge 자동수집 확장 프로그램을 확인해주세요.");
+    };
+    window.addEventListener("message", onResult);
+    window.postMessage({
+      type: "JS_COLLECTOR_REGISTER_TARGET",
+      requestId: requestId,
+      target: {
+        source: "naver",
+        key: "naver-district-" + district.cortarNo,
+        label: "네이버 " + district.name,
+        url: location.href,
+        district: {name: district.name, cortarNo: district.cortarNo},
+        selectionMode: "district"
+      }
+    }, "*");
+  }
+
+  async function runAutomatic(target) {
+    panel.style.display = "block";
+    if (!isFinNaver()) throw new Error("네이버 자동수집은 fin.land.naver.com 지도에서 등록해주세요.");
+    var requested = target && target.district || {};
+    var district = DAEJEON_DISTRICTS.find(function (item) {
+      return String(item.cortarNo) === String(requested.cortarNo || "") || item.name === requested.name;
+    });
+    if (!district) throw new Error("자동수집할 네이버 구 정보가 없습니다.");
+    state.selectedDistrict = district;
+    state.selectionMode = "district";
+    state.clickedClusterCount = 0;
+    state.capture = null;
+    discoverFinContext();
+    await collectFinSelectedAndSave();
+    if (state.stopRequested || Number(state.dashboard.failed || 0) > 0) {
+      throw new Error("네이버 자동수집이 부분수집 또는 오류로 종료됐습니다.");
+    }
+    return {source: "naver", district: district.name, version: VERSION, totals: Object.assign({}, state.dashboard)};
   }
 
   function requestSafeStop() {

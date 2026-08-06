@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.0.0";
+  var VERSION = "2.1.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -69,6 +69,7 @@
   var progressBarElement = panel.querySelector("[data-role=progress-bar]");
   var progressPercentElement = panel.querySelector("[data-role=percent]");
   var saveButton = panel.querySelector("[data-action=save]");
+  var autoRegisterButton = panel.querySelector("[data-action=auto-register]") || {addEventListener: function () {}};
   var stopButton = panel.querySelector("[data-action=stop]");
   var closeButton = panel.querySelector("[data-action=close]");
 
@@ -88,6 +89,7 @@
   }
 
   saveButton.addEventListener("click", collectAndSave);
+  autoRegisterButton.addEventListener("click", registerAutomaticTarget);
   stopButton.addEventListener("click", requestSafeStop);
   closeButton.addEventListener("click", closePanel);
 
@@ -122,7 +124,8 @@
     observedSourceIds: observedSourceIds,
     getPendingSave: function () {
       return state.pendingSave;
-    }
+    },
+    runAutomatic: runAutomatic
   };
 
   function getCollectorKey() {
@@ -145,7 +148,11 @@
 
   function loadDetailAuth() {
     try {
-      var value = JSON.parse(sessionStorage.getItem(DETAIL_AUTH_STORAGE) || "null");
+      var value = JSON.parse(
+        sessionStorage.getItem(DETAIL_AUTH_STORAGE) ||
+        localStorage.getItem(DETAIL_AUTH_STORAGE) ||
+        "null"
+      );
       return value && value.mid && value.guest !== true ? value : null;
     } catch (_) {
       return null;
@@ -156,8 +163,10 @@
     try {
       if (value && value.mid) {
         sessionStorage.setItem(DETAIL_AUTH_STORAGE, JSON.stringify(value));
+        localStorage.setItem(DETAIL_AUTH_STORAGE, JSON.stringify(value));
       } else {
         sessionStorage.removeItem(DETAIL_AUTH_STORAGE);
+        localStorage.removeItem(DETAIL_AUTH_STORAGE);
       }
     } catch (_) {}
   }
@@ -210,6 +219,8 @@
         "font-size:12px;font-weight:800;color:#fff;background:#1677ff;cursor:pointer}" +
         "#" + PANEL_ID + " .jsg-stop{height:38px;border:1px solid #ef4444;border-radius:9px;" +
         "font-size:12px;font-weight:850;color:#be123c;background:#fff1f2;cursor:pointer}" +
+        "#" + PANEL_ID + " .jsg-auto{grid-column:1/-1;height:38px;border:1px solid #1268e8;border-radius:9px;" +
+        "font-size:12px;font-weight:850;color:#0b58bf;background:#eef5ff;cursor:pointer}" +
         "#" + PANEL_ID + " .jsg-save:disabled{cursor:not-allowed;background:#c7d2e3;color:#f7f9fc}" +
         "#" + PANEL_ID + " .jsg-stop:disabled{cursor:not-allowed;border-color:#d8dee8;color:#9aa4b2;background:#f2f4f7}" +
         "@media(max-width:520px){#" + PANEL_ID + "{width:calc(100vw - 12px);max-height:calc(100vh - 12px)}" +
@@ -254,11 +265,95 @@
           '<div class="jsg-actions">' +
             '<button type="button" class="jsg-save" data-action="save" disabled>선택 클러스터 전체 저장</button>' +
             '<button type="button" class="jsg-stop" data-action="stop" disabled>안전중단</button>' +
+            '<button type="button" class="jsg-auto" data-action="auto-register">현재 화면 전체클러스터 자동수집 등록</button>' +
           '</div>' +
         '</div>' +
       '</div>';
     document.body.appendChild(element);
     return element;
+  }
+
+  function registerAutomaticTarget() {
+    if (!state.capture) {
+      setStatus("자동수집 등록 준비", "먼저 현재 지도 화면의 전체 숫자 클러스터를 한 번 클릭해주세요.");
+      return;
+    }
+    try { getCollectorKey(); } catch (error) {
+      setStatus("자동수집 등록 취소", String(error && error.message ? error.message : error));
+      return;
+    }
+    var selectedCount = getSelectedItemCount(state.capture);
+    var requestId = "gongsil-register-" + Date.now();
+    var onResult = function (event) {
+      if (!event.data || event.data.type !== "JS_COLLECTOR_REGISTER_RESULT" || event.data.requestId !== requestId) return;
+      window.removeEventListener("message", onResult);
+      setStatus(event.data.ok ? "자동수집 등록 완료" : "자동수집 등록 실패", event.data.message || "Edge 자동수집 확장 프로그램을 확인해주세요.");
+    };
+    window.addEventListener("message", onResult);
+    window.postMessage({
+      type: "JS_COLLECTOR_REGISTER_TARGET",
+      requestId: requestId,
+      target: {
+        source: "gongsil",
+        key: "gongsil-screen-" + location.pathname + location.search,
+        label: "공실박스 현재화면 전체클러스터",
+        url: location.href,
+        selectedCount: selectedCount,
+        mode: "screen-largest-cluster"
+      }
+    }, "*");
+  }
+
+  function visibleClusterCandidate(element) {
+    if (!element || panel.contains(element)) return null;
+    var textValue = String(element.textContent || "").replace(/\s+/g, " ").trim();
+    var match = textValue.match(/^([\d,]+)(?:\s*개)?$/);
+    if (!match) return null;
+    var count = Number(match[1].replace(/,/g, "")) || 0;
+    if (count < 100) return null;
+    var rect = element.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8 || rect.width > 260 || rect.height > 160) return null;
+    if (rect.bottom < 0 || rect.right < 0 || rect.top > innerHeight || rect.left > innerWidth) return null;
+    var style = getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return null;
+    return {element: element, count: count, area: rect.width * rect.height};
+  }
+
+  function clickScreenLargestCluster() {
+    var candidates = Array.prototype.slice.call(document.querySelectorAll("button,[role=button],.maplibregl-marker,[class*=cluster],[class*=marker]"))
+      .map(visibleClusterCandidate)
+      .filter(Boolean)
+      .sort(function (a, b) { return b.count - a.count || a.area - b.area; });
+    if (!candidates.length) return 0;
+    var element = candidates[0].element;
+    var clickable = element.closest && element.closest("button,[role=button]") || element;
+    clickable.dispatchEvent(new MouseEvent("mousedown", {bubbles: true, cancelable: true, view: window}));
+    clickable.dispatchEvent(new MouseEvent("mouseup", {bubbles: true, cancelable: true, view: window}));
+    clickable.click();
+    return candidates[0].count;
+  }
+
+  async function runAutomatic() {
+    panel.style.display = "block";
+    state.capture = null;
+    state.stopRequested = false;
+    setStatus("화면 전체클러스터 자동 선택 중", "현재 지도 화면에서 가장 큰 숫자 클러스터를 찾고 있습니다.");
+    var startedAt = Date.now();
+    var clickedCount = 0;
+    while (!state.capture && Date.now() - startedAt < 90000) {
+      if (!clickedCount || Date.now() - startedAt > 10000) clickedCount = clickScreenLargestCluster() || clickedCount;
+      await new Promise(function (resolve) { window.setTimeout(resolve, 1000); });
+    }
+    if (!state.capture) throw new Error("공실박스 화면 전체클러스터를 자동으로 선택하지 못했습니다. 지도 화면과 로그인을 확인해주세요.");
+    var selectedCount = getSelectedItemCount(state.capture) || clickedCount;
+    await collectAndSave();
+    if (state.stopRequested || Number(state.dashboard.failed || 0) > 0) {
+      throw new Error("공실박스 자동수집이 부분수집 또는 오류로 종료됐습니다.");
+    }
+    if (selectedCount >= 2000 && Number(state.dashboard.processed || 0) < selectedCount) {
+      throw new Error("공실박스 화면 전체 건수와 실제 처리 건수가 일치하지 않습니다.");
+    }
+    return {source: "gongsil", selectedCount: selectedCount, version: VERSION, totals: Object.assign({}, state.dashboard)};
   }
 
   function requestSafeStop() {

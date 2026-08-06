@@ -7,7 +7,9 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.0\.0";/);
+assert.match(source, /var VERSION = "2\.1\.0";/);
+assert.match(source, /runAutomatic: runAutomatic/);
+assert.match(source, /data-action="auto-register"/);
 assert.match(
   source,
   /complete: isCompleteGongsilCapture\(selectedCount, items\.length\)/,

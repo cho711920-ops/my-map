@@ -4,13 +4,17 @@
   var BASE_URL = "https://js-map.com/js/";
   var hostname = String(location.hostname || "").toLowerCase();
   var filename = "";
+  var runtimeName = "";
 
   if (/(^|\.)(?:new|fin)\.land\.naver\.com$/.test(hostname)) {
     filename = "naver-collector.js";
+    runtimeName = "__JS_NAVER_COLLECTOR__";
   } else if (/(^|\.)realty\.daangn\.com$/.test(hostname)) {
     filename = "daangn-collector.js";
+    runtimeName = "__JS_DAANGN_COLLECTOR__";
   } else if (/(^|\.)gongsilbox\.com$/.test(hostname)) {
     filename = "gongsil-collector.js";
+    runtimeName = "__JS_GONGSIL_COLLECTOR__";
   }
 
   if (!filename) {
@@ -24,6 +28,40 @@
   script.id = "js-realestate-collector-runtime";
   script.async = true;
   script.src = BASE_URL + filename + "?v=" + Date.now();
+  script.onload = function () {
+    var encoded = document.documentElement.getAttribute("data-js-collector-auto-target");
+    if (!encoded) return;
+    document.documentElement.removeAttribute("data-js-collector-auto-target");
+    var target = null;
+    try {
+      target = JSON.parse(decodeURIComponent(encoded));
+    } catch (_) {}
+    var runtime = window[runtimeName];
+    if (!target || !runtime || typeof runtime.runAutomatic !== "function") {
+      window.postMessage({
+        type: "JS_COLLECTOR_AUTOMATION_RESULT",
+        runId: target && target.runId || "",
+        ok: false,
+        message: "자동실행 기능을 불러오지 못했습니다."
+      }, "*");
+      return;
+    }
+    Promise.resolve(runtime.runAutomatic(target)).then(function (result) {
+      window.postMessage({
+        type: "JS_COLLECTOR_AUTOMATION_RESULT",
+        runId: target.runId || "",
+        ok: true,
+        result: result || {}
+      }, "*");
+    }).catch(function (error) {
+      window.postMessage({
+        type: "JS_COLLECTOR_AUTOMATION_RESULT",
+        runId: target.runId || "",
+        ok: false,
+        message: String(error && error.message ? error.message : error)
+      }, "*");
+    });
+  };
   script.onerror = function () {
     alert("JS 수집기 최신 버전을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 눌러 주세요.");
   };
