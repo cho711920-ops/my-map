@@ -157,13 +157,17 @@
     var raw = data.raw || {};
     panel.innerHTML = '<div class="collection-overview">' +
       '<div class="collection-toolbar"><div><strong>매일 수집현황</strong><span>수집기는 응답속도에 따라 묶음 크기를 자동조절하며, 중단되면 마지막 성공 지점부터 이어집니다.</span></div>' +
-      '<button type="button" onclick="refreshCollectionStatus()">새로고침</button></div>' +
+      '<div><button type="button" onclick="window.open(\'/collector-install.html\',\'_blank\',\'noopener\')">통합 수집 버튼 설치</button> ' +
+      '<button type="button" onclick="refreshCollectionStatus()">새로고침</button></div></div>' +
       '<div class="collection-source-grid">' + sources.map(function(source) {
         var statusClass = source.complete ? "complete" : (number(source.lastResult && source.lastResult.failed) ? "error" : "");
         return '<article class="collection-source-card"><header><h3>' + escape(source.source) + '</h3>' +
           '<span class="' + statusClass + '">' + escape(source.lastStatus || "수집 전") + '</span></header>' +
           '<p>' + escape(formatAt(source.lastAt)) + ' · ' + escape(source.lastScope || "수집 기록 없음") +
-          '<br>완전수집 ' + (source.complete ? "Y" : "N") + '</p>' + resultCells(source.lastResult) + '</article>';
+          '<br>완전수집 ' + (source.complete ? "Y" : "N") +
+          (source.collectorVersion ? ' · v' + escape(source.collectorVersion) : '') +
+          (source.completionIssues && source.completionIssues.length ? '<br>확인: ' + escape(source.completionIssues.join(', ')) : '') +
+          '</p>' + resultCells(source.lastResult) + '</article>';
       }).join("") + '</div>' +
       '<div class="collection-toolbar"><div><strong>수집원본 최신상태</strong><span>전체 ' + number(raw.total).toLocaleString("ko-KR") +
       '건 · 처리대기 ' + number(raw.pending).toLocaleString("ko-KR") + '건 · 오류 ' + number(raw.error).toLocaleString("ko-KR") +

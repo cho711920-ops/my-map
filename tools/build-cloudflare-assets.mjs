@@ -8,7 +8,9 @@ const files = [
   "index.html",
   "favicon.svg",
   "manifest.webmanifest",
+  "collector-install.html",
   "daangn-collector-install.html",
+  "gongsil-collector-install.html",
   "naver-collector-install.html"
 ];
 

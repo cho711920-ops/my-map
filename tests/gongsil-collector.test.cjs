@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "1\.9\.7";/);
+assert.match(source, /var VERSION = "2\.0\.0";/);
 assert.match(
   source,
   /complete: isCompleteGongsilCapture\(selectedCount, items\.length\)/,
@@ -27,7 +27,7 @@ assert.match(
 );
 assert.match(
   source,
-  /var detailItems = saveMetadata\.complete\s*\?\s*items\.slice\(\)\s*:\s*items\.filter/
+  /var detailItems = items\.filter\([\s\S]*?classification\.needs\[id\] \|\| classification\.refresh\[id\]/
 );
 const collectPhonesSource = source.slice(
   source.indexOf("async function collectPhones("),
@@ -157,11 +157,7 @@ assert.equal(isCompleteGongsilCapture(1999, 2504), false);
 
 assert.match(
   source,
-  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0,/
-);
-assert.doesNotMatch(
-  source,
-  /Number\(metadata\.rejectedCount \|\| 0\) === 0,/
+  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0 &&[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0,/
 );
 
 const saveFunction = source.slice(
@@ -182,8 +178,10 @@ assert.ok(checkpointPosition > offsetPosition);
 assert.ok(dashboardPosition > checkpointPosition);
 assert.match(
   saveFunction,
-  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0/
+  /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0 &&[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0/
 );
+assert.match(source, /collectorVersion: VERSION/);
+assert.match(source, /validationVersion: 2/);
 assert.match(
   source,
   /function isBusyMutationResult\(result\)[\s\S]*?function isBusyMutationError\(error\)/

@@ -1,11 +1,12 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.1.4";
+  var VERSION = "1.2.0";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
   var COLLECTOR_KEY_STORAGE = "js_daangn_collector_access_key_v1";
+  var CLIENT_ID_STORAGE = "js_daangn_collector_client_id_v1";
   var POST_RETRY_DELAYS = [0, 1200, 3000, 6000];
 
   if (!/(^|\.)realty\.daangn\.com$/i.test(location.hostname)) {
@@ -88,6 +89,15 @@
     if (!entered) throw new Error("당근 수집기 보안키가 필요합니다.");
     try { localStorage.setItem(COLLECTOR_KEY_STORAGE, entered); } catch (_) {}
     return entered;
+  }
+
+  function getClientId() {
+    var saved = "";
+    try { saved = String(localStorage.getItem(CLIENT_ID_STORAGE) || "").trim(); } catch (_) {}
+    if (/^[A-Za-z0-9_-]{8,64}$/.test(saved)) return saved;
+    var created = "browser-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    try { localStorage.setItem(CLIENT_ID_STORAGE, created); } catch (_) {}
+    return created;
   }
 
   function createPanel() {
@@ -620,7 +630,8 @@
       complete ? "당근 수집 완료" : (listing ? "클러스터 목록 수집 중" : (paused ? "안전중단됨" : "상세조회·저장 중")),
       (job.message || "") + (job.district
         ? "\n대전 " + job.district + " · 오류 없이 완료 시 구 완전수집"
-        : "\n개별클러스터 · 완전수집 제외") + timing
+        : "\n개별클러스터 · 완전수집 제외") +
+        "\n수집기 v" + VERSION + " · 자동 묶음 " + Number(job.chunkSize || 20) + "개" + timing
     );
     startButton.disabled = job.status === "running";
     startButton.textContent = complete ? "새 클러스터 수집" : (paused ? "이어서 수집" : "수집 중");
@@ -691,7 +702,9 @@
     var body = Object.assign({}, values || {}, {
       action: action,
       requestId: requestId,
-      collectorKey: collectorKey
+      collectorKey: collectorKey,
+      collectorVersion: VERSION,
+      clientId: getClientId()
     });
     try {
       var earlyResult = await postServerWithRetry(body, collectorKey);

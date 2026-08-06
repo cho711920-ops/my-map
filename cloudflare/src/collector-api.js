@@ -23,7 +23,12 @@ const DAANGN_GRAPHQL_URL = "https://realty.kr.karrotmarket.com/graphql";
 const DAANGN_LIST_FIRST_HASH = "e0cdf7eab9f342cf735fb8951d9dc0b771418964e241bd59ed4bec84d43e019a";
 const DAANGN_LIST_NEXT_HASH = "c0cf343435add09c37d248748eb3762cc86e4be4b5349ae60b2e080cccc4d3c5";
 const DAANGN_DETAIL_HASH = "d374a65ffef31da412d7233ee4740a5379554196b1adf1a08d861048c952d108";
-const DAANGN_JOB_ID = "collector-daangn-active";
+const DAANGN_JOB_PREFIX = "collector-daangn-";
+
+function daangnJobId(body = {}) {
+  const clientId = clean(body.clientId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  return `${DAANGN_JOB_PREFIX}${clientId || "active"}`;
+}
 
 function clean(value) {
   return String(value == null ? "" : value).trim();
@@ -270,7 +275,9 @@ async function mutationStatus(env, requestId) {
 
 async function classifyManifest(env, body) {
   const source = sourceName(body.source);
-  const entries = (Array.isArray(body.entries) ? body.entries : []).slice(0, 3_000).map((entry) => ({
+  const rawEntries = Array.isArray(body.entries) ? body.entries : [];
+  if (rawEntries.length > 10_000) throw new Error("목록 비교는 한 번에 최대 10,000건까지 가능합니다.");
+  const entries = rawEntries.map((entry) => ({
     ...entry, sourceId: sourceIdFor(source, entry?.sourceId)
   })).filter((entry) => entry.sourceId);
   const sessionId = await ensureSession(env, body.sessionId, source);
@@ -279,12 +286,13 @@ async function classifyManifest(env, body) {
     const ids = entries.slice(offset, offset + 80).map((entry) => entry.sourceId);
     const placeholders = ids.map((_, index) => `?${index + 2}`).join(",");
     const result = await env.DB.prepare(`SELECT s.source_listing_id, s.snapshot_hash, s.list_snapshot_json,
-        s.listing_id, l.latitude AS listing_latitude, l.longitude AS listing_longitude
+        s.listing_id, s.last_collected_at, l.latitude AS listing_latitude, l.longitude AS listing_longitude
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
       WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`).bind(source, ...ids).all();
     for (const row of result?.results || []) rows.set(clean(row.source_listing_id), row);
   }
   const needsDetail = [];
+  const refreshDetail = [];
   const coordinateRepairs = new Map();
   const cacheRepairs = new Map();
   let unchanged = 0;
@@ -305,6 +313,12 @@ async function classifyManifest(env, body) {
       needsDetail.push(entry.sourceId);
     } else if (sameManifestEntry(entry, row)) {
       unchanged += 1;
+      if (source === "공실박스") {
+        const checkedAt = Date.parse(clean(row.last_collected_at));
+        if (!Number.isFinite(checkedAt) || Date.now() - checkedAt >= 20 * 60 * 60 * 1000) {
+          refreshDetail.push(entry.sourceId);
+        }
+      }
     } else {
       changed += 1;
       needsDetail.push(entry.sourceId);
@@ -330,20 +344,77 @@ async function classifyManifest(env, body) {
     await env.DB.batch(statements);
   }
   const result = { ok: true, action: "classifySourceManifest", source, sessionId, received: entries.length,
-    needsDetail, unchanged, changed, unknown, coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
+    needsDetail, refreshDetail, unchanged, changed, unknown, coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
+  const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
+  const totals = parseJson(previous?.totals_json, {});
+  totals.manifest = Number(totals.manifest || 0) + entries.length;
+  totals.unchanged = Number(totals.unchanged || 0) + unchanged;
+  totals.changed = Number(totals.changed || 0) + changed;
+  totals.unknown = Number(totals.unknown || 0) + unknown;
+  totals.coordinatesRepaired = Number(totals.coordinatesRepaired || 0) + coordinateRepairs.size;
+  if (clean(body.collectorVersion)) totals.collectorVersion = clean(body.collectorVersion).slice(0, 30);
+  if (clean(body.scope)) totals.scope = clean(body.scope).slice(0, 200);
   await env.DB.prepare("UPDATE collector_sessions SET totals_json=?1, updated_at=?2 WHERE id=?3")
-    .bind(JSON.stringify({ manifest: entries.length, unchanged, changed, unknown,
-      coordinatesRepaired: coordinateRepairs.size }), nowIso(), sessionId).run();
+    .bind(JSON.stringify(totals), nowIso(), sessionId).run();
   return result;
 }
 
+async function loadCandidateListings(env, records, existingSources) {
+  const addresses = [...new Set(records.filter((record) => record?.address && !existingSources.has(record.sourceId))
+    .map((record) => record.address))];
+  const byAddress = new Map(addresses.map((address) => [address, []]));
+  for (let offset = 0; offset < addresses.length; offset += 60) {
+    const chunk = addresses.slice(offset, offset + 60);
+    const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
+    const result = await env.DB.prepare(`SELECT id, property_id, title, address, room, listing_type,
+        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source
+      FROM listings WHERE status <> 'deleted' AND address IN (${placeholders})
+      ORDER BY updated_at DESC`).bind(...chunk).all();
+    for (const row of result?.results || []) {
+      const rows = byAddress.get(clean(row.address));
+      if (rows && rows.length < 20) rows.push(row);
+    }
+  }
+  return byAddress;
+}
+
 async function candidateListings(env, record) {
-  if (!record.address) return [];
-  const result = await env.DB.prepare(`SELECT id, property_id, title, address, room, listing_type,
-      deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source
-    FROM listings WHERE status <> 'deleted' AND address=?1
-    ORDER BY updated_at DESC LIMIT 20`).bind(record.address).all();
-  return result?.results || [];
+  if (!record?.address) return [];
+  const result = await loadCandidateListings(env, [record], new Map());
+  return result.get(record.address) || [];
+}
+
+async function loadExistingSources(env, source, records) {
+  const bySourceId = new Map();
+  const ids = [...new Set(records.map((record) => record?.sourceId).filter(Boolean))];
+  for (let offset = 0; offset < ids.length; offset += 80) {
+    const chunk = ids.slice(offset, offset + 80);
+    const placeholders = chunk.map((_, index) => `?${index + 2}`).join(",");
+    const result = await env.DB.prepare(`SELECT id, listing_id, source_listing_id, source_url,
+        snapshot_hash, list_snapshot_json, raw_json, active, missing_count, last_collected_at
+      FROM listing_sources WHERE source=?1 AND source_listing_id IN (${placeholders})`)
+      .bind(source, ...chunk).all();
+    for (const row of result?.results || []) bySourceId.set(clean(row.source_listing_id), row);
+  }
+  return bySourceId;
+}
+
+async function loadSourceAssets(env, existingSources) {
+  const sourceIds = [...new Set([...existingSources.values()].map((row) => clean(row.id)).filter(Boolean))];
+  const assets = new Map(sourceIds.map((id) => [id, { media: [], contacts: [] }]));
+  for (let offset = 0; offset < sourceIds.length; offset += 60) {
+    const chunk = sourceIds.slice(offset, offset + 60);
+    const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
+    const [media, contacts] = await Promise.all([
+      env.DB.prepare(`SELECT id, source_id, sort_order, external_url, status FROM listing_media
+        WHERE source_id IN (${placeholders})`).bind(...chunk).all(),
+      env.DB.prepare(`SELECT id, source_id, role, name, phone, normalized_phone, status FROM listing_contacts
+        WHERE source_id IN (${placeholders})`).bind(...chunk).all()
+    ]);
+    for (const row of media?.results || []) assets.get(clean(row.source_id))?.media.push(row);
+    for (const row of contacts?.results || []) assets.get(clean(row.source_id))?.contacts.push(row);
+  }
+  return assets;
 }
 
 function exactCandidate(record, candidates) {
@@ -356,29 +427,80 @@ function exactCandidate(record, candidates) {
   return exact.length === 1 ? exact[0] : null;
 }
 
-async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now) {
-  const statements = [
-    env.DB.prepare("DELETE FROM listing_media WHERE source_id=?1").bind(sourceRowId),
-    env.DB.prepare("DELETE FROM listing_contacts WHERE source_id=?1").bind(sourceRowId)
-  ];
-  record.images.forEach((url, index) => statements.push(env.DB.prepare(`INSERT INTO listing_media (
-      id, listing_id, source_id, media_type, sort_order, external_url, status, checked_at, created_at, updated_at
-    ) VALUES (?1, ?2, ?3, 'image', ?4, ?5, 'external', ?6, ?6, ?6)`)
-    .bind(`IMG-${crypto.randomUUID()}`, listingId, sourceRowId, index, url, now)));
-  const seenPhones = new Set();
-  record.contacts.forEach((contact) => {
+async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets = null) {
+  const current = existingAssets || { media: [], contacts: [] };
+  const statements = [];
+  let mediaChanged = 0;
+  let contactsChanged = 0;
+
+  const desiredMedia = new Map(record.images.map((url, index) => [url, index]));
+  const currentMedia = new Map();
+  for (const row of current.media || []) {
+    const url = clean(row.external_url);
+    if (!url || currentMedia.has(url) || !desiredMedia.has(url)) {
+      statements.push(env.DB.prepare("DELETE FROM listing_media WHERE id=?1").bind(row.id));
+      mediaChanged += 1;
+      continue;
+    }
+    currentMedia.set(url, row);
+    const order = desiredMedia.get(url);
+    if (Number(row.sort_order) !== order || clean(row.status) !== "external") {
+      statements.push(env.DB.prepare(`UPDATE listing_media SET sort_order=?1, status='external', updated_at=?2 WHERE id=?3`)
+        .bind(order, now, row.id));
+      mediaChanged += 1;
+    }
+  }
+  for (const [url, order] of desiredMedia) {
+    if (currentMedia.has(url)) continue;
+    statements.push(env.DB.prepare(`INSERT INTO listing_media (
+        id, listing_id, source_id, media_type, sort_order, external_url, status, checked_at, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, 'image', ?4, ?5, 'external', ?6, ?6, ?6)`)
+      .bind(`IMG-${crypto.randomUUID()}`, listingId, sourceRowId, order, url, now));
+    mediaChanged += 1;
+  }
+
+  const desiredContacts = new Map();
+  for (const contact of record.contacts) {
     const normalizedPhone = clean(contact.phone).replace(/\D/g, "");
-    if (!normalizedPhone || seenPhones.has(`${clean(contact.role)}:${normalizedPhone}`)) return;
-    seenPhones.add(`${clean(contact.role)}:${normalizedPhone}`);
+    const key = `${clean(contact.role)}:${normalizedPhone}`;
+    if (!normalizedPhone || desiredContacts.has(key)) continue;
+    desiredContacts.set(key, { ...contact, normalizedPhone });
+  }
+  const currentContacts = new Map();
+  for (const row of current.contacts || []) {
+    const normalizedPhone = clean(row.normalized_phone || row.phone).replace(/\D/g, "");
+    const key = `${clean(row.role)}:${normalizedPhone}`;
+    if (!normalizedPhone || currentContacts.has(key) || !desiredContacts.has(key)) {
+      statements.push(env.DB.prepare("DELETE FROM listing_contacts WHERE id=?1").bind(row.id));
+      contactsChanged += 1;
+      continue;
+    }
+    currentContacts.set(key, row);
+    const desired = desiredContacts.get(key);
+    if (clean(row.name) !== clean(desired.name) || clean(row.phone) !== clean(desired.phone) || clean(row.status) !== "active") {
+      statements.push(env.DB.prepare(`UPDATE listing_contacts SET name=?1, phone=?2, normalized_phone=?3,
+        status='active', last_seen_at=?4, updated_at=?4 WHERE id=?5`)
+        .bind(clean(desired.name), clean(desired.phone), desired.normalizedPhone, now, row.id));
+      contactsChanged += 1;
+    }
+  }
+  for (const [key, contact] of desiredContacts) {
+    if (currentContacts.has(key)) continue;
     statements.push(env.DB.prepare(`INSERT INTO listing_contacts (
         id, listing_id, source_id, role, name, phone, normalized_phone, status, first_seen_at, last_seen_at, created_at, updated_at
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?8, ?8, ?8)`)
-      .bind(`C-${crypto.randomUUID()}`, listingId, sourceRowId, clean(contact.role), clean(contact.name), clean(contact.phone), normalizedPhone, now));
-  });
-  await env.DB.batch(statements);
+      .bind(`C-${crypto.randomUUID()}`, listingId, sourceRowId, clean(contact.role), clean(contact.name),
+        clean(contact.phone), contact.normalizedPhone, now));
+    contactsChanged += 1;
+  }
+  if (statements.length) {
+    for (let offset = 0; offset < statements.length; offset += 80) await env.DB.batch(statements.slice(offset, offset + 80));
+  }
+  return { changed: mediaChanged > 0 || contactsChanged > 0, mediaChanged, contactsChanged };
 }
 
-async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false, actor = "collector") {
+async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false,
+  actor = "collector", existingAssets = null) {
   const now = nowIso();
   const restoredOriginalId = /^O-[A-Za-z0-9_-]{8,160}$/.test(clean(record?.originalId))
     ? clean(record.originalId)
@@ -387,18 +509,32 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now);
   const snapshotHash = snapshotKey(record.listSnapshot || snapshot);
-  await env.DB.prepare(`INSERT INTO listing_sources (
-      id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
-      session_id, active, missing_count, first_collected_at, last_collected_at, created_at, updated_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, 0, ?10, ?10, ?10, ?10)
-    ON CONFLICT(source, source_listing_id) DO UPDATE SET listing_id=excluded.listing_id,
-      source_url=excluded.source_url, snapshot_hash=excluded.snapshot_hash,
-      list_snapshot_json=excluded.list_snapshot_json, raw_json=excluded.raw_json,
-      session_id=excluded.session_id, active=1, missing_count=0,
-      last_collected_at=excluded.last_collected_at, updated_at=excluded.updated_at`)
-    .bind(sourceRowId, listingId, record.source, record.sourceId, record.link, snapshotHash,
-      JSON.stringify(snapshot), JSON.stringify(record.raw || {}), sessionId, now).run();
-  await replaceMediaAndContacts(env, record, sourceRowId, listingId, now);
+  const snapshotJson = JSON.stringify(snapshot);
+  const rawJson = JSON.stringify(record.raw || {});
+  let sourceChanged = !existingSource || clean(existingSource.snapshot_hash) !== snapshotHash ||
+    clean(existingSource.source_url) !== clean(record.link) || Number(existingSource.active) !== 1 ||
+    Number(existingSource.missing_count || 0) !== 0;
+  if (!existingSource) {
+    await env.DB.prepare(`INSERT INTO listing_sources (
+        id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
+        session_id, active, missing_count, first_collected_at, last_collected_at, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, 0, ?10, ?10, ?10, ?10)`)
+      .bind(sourceRowId, listingId, record.source, record.sourceId, record.link, snapshotHash,
+        snapshotJson, rawJson, sessionId, now).run();
+  }
+  const assets = await replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets);
+  if (existingSource) {
+    if (sourceChanged || assets.changed) {
+      await env.DB.prepare(`UPDATE listing_sources SET listing_id=?1, source_url=?2, snapshot_hash=?3,
+          list_snapshot_json=?4, raw_json=?5, session_id=?6, active=1, missing_count=0,
+          last_collected_at=?7, updated_at=?7 WHERE id=?8`)
+        .bind(listingId, record.link, snapshotHash, snapshotJson, rawJson, sessionId, now, sourceRowId).run();
+    } else {
+      await env.DB.prepare(`UPDATE listing_sources SET session_id=?1, last_collected_at=?2
+        WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId).run();
+    }
+  }
+  const listingNeedsTouch = !existingSource || sourceChanged || assets.changed || updateCondition;
   const update = updateCondition
     ? env.DB.prepare(`UPDATE listings SET title=CASE WHEN ?1<>'' THEN ?1 ELSE title END,
         building_name=CASE WHEN ?1<>'' THEN ?1 ELSE building_name END, room=?2, listing_type=?3,
@@ -410,18 +546,20 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         version=version+1, last_collected_at=?13, updated_at=?13 WHERE id=?14`)
       .bind(record.buildingName, record.room, record.category, record.deposit, record.rent, record.fee,
         record.premium, record.area, record.memo, record.link, record.latitude, record.longitude, now, listingId)
-    : env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
+    : listingNeedsTouch ? env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
         source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
         latitude=CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE latitude END,
         longitude=CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE longitude END WHERE id=?5`)
-      .bind(now, record.link, record.latitude, record.longitude, listingId);
-  await env.DB.batch([
-    update,
-    env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
+      .bind(now, record.link, record.latitude, record.longitude, listingId) : null;
+  const historyNeeded = !existingSource || sourceChanged || assets.changed || updateCondition;
+  const finalStatements = [];
+  if (update) finalStatements.push(update);
+  if (historyNeeded) finalStatements.push(env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`).bind(listingId, sourceRowId,
-        existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), JSON.stringify(snapshot))
-  ]);
-  return sourceRowId;
+        existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), snapshotJson));
+  if (finalStatements.length) await env.DB.batch(finalStatements);
+  return { sourceRowId, changed: sourceChanged || assets.changed || updateCondition,
+    sourceChanged, mediaChanged: assets.mediaChanged, contactsChanged: assets.contactsChanged };
 }
 
 async function createListing(env, record, sessionId, actor = "collector") {
@@ -459,36 +597,48 @@ async function queueReview(env, record, sessionId, candidates) {
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0 };
+  const records = [];
+  const errors = [];
   for (const value of values) {
     totals.received += 1;
     try {
       const record = normalizedRecord(source, value);
       if (!record?.sourceId || !record.address) {
         totals.failed += 1;
+        if (errors.length < 20) errors.push({ sourceId: clean(record?.sourceId), message: "원본 ID 또는 지번주소 없음" });
         continue;
       }
-      const existing = await env.DB.prepare(`SELECT id, listing_id, snapshot_hash, list_snapshot_json
-        FROM listing_sources WHERE source=?1 AND source_listing_id=?2 LIMIT 1`)
-        .bind(source, record.sourceId).first();
+      records.push(record);
+    } catch (error) {
+      totals.failed += 1;
+      if (errors.length < 20) errors.push({ sourceId: "", message: clean(error?.message) || "원본 변환 실패" });
+    }
+  }
+  const existingSources = await loadExistingSources(env, source, records);
+  const sourceAssets = await loadSourceAssets(env, existingSources);
+  const candidatesByAddress = await loadCandidateListings(env, records, existingSources);
+  for (const record of records) {
+    try {
+      const existing = existingSources.get(record.sourceId);
       if (existing?.listing_id) {
-        const before = parseJson(existing.list_snapshot_json, {});
-        const changed = !sameManifestEntry({
-          listSnapshot: record.listSnapshot, deposit: record.deposit, rent: record.rent,
-          area: record.area, room: record.room, address: record.address
-        }, existing);
-        await attachSource(env, record, existing.listing_id, sessionId, existing, false);
-        if (changed) totals.updated += 1;
-        else if (before.photoCount !== record.images.length || before.contactCount !== record.contacts.length) totals.updated += 1;
+        const result = await attachSource(env, record, existing.listing_id, sessionId, existing, false,
+          "collector", sourceAssets.get(clean(existing.id)));
+        if (result.changed) totals.updated += 1;
         else totals.duplicate += 1;
         continue;
       }
-      const candidates = await candidateListings(env, record);
+      const candidates = candidatesByAddress.get(record.address) || [];
       const exact = exactCandidate(record, candidates);
       if (exact) {
         await attachSource(env, record, exact.id, sessionId);
         totals.merged += 1;
       } else if (!candidates.length) {
-        await createListing(env, record, sessionId);
+        const listingId = await createListing(env, record, sessionId);
+        candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
+          address: record.address, room: record.room, listing_type: record.category,
+          deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
+          premium: record.premium, area_m2: record.area, operating_memo: record.memo, main_source: record.source });
+        candidatesByAddress.set(record.address, candidates);
         totals.created += 1;
       } else {
         await queueReview(env, record, sessionId, candidates);
@@ -496,6 +646,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
       }
     } catch (error) {
       totals.failed += 1;
+      if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: clean(error?.message) || "D1 저장 실패" });
     }
   }
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
@@ -503,9 +654,11 @@ async function ingestRecords(env, source, values, metadata = {}) {
   for (const key of ["received", "created", "merged", "updated", "review", "duplicate", "failed"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
+  if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
+  if (clean(metadata.scope)) saved.scope = clean(metadata.scope).slice(0, 200);
   await env.DB.prepare("UPDATE collector_sessions SET totals_json=?1, updated_at=?2 WHERE id=?3")
     .bind(JSON.stringify(saved), nowIso(), sessionId).run();
-  return { ok: true, sessionId, ...totals,
+  return { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
     inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
 }
@@ -519,13 +672,61 @@ export function nextCollectorSourceVisibilityState(current, observed, countMissi
   return { active: nextMissingCount >= 3 ? 0 : 1, missingCount: nextMissingCount };
 }
 
+function countValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
+export function collectorCompletionAudit(body, observedCount) {
+  const requested = Boolean(body?.complete) && !body?.stopped;
+  const issues = [];
+  const source = sourceName(body?.source);
+  const scope = clean(body?.scope);
+  const validationVersion = countValue(body?.validationVersion);
+  const observed = countValue(observedCount);
+  const expected = countValue(body?.expectedCount);
+  const manifest = countValue(body?.manifestCount);
+  const processed = countValue(body?.processedCount);
+  const failed = countValue(body?.failed);
+  const addressMissing = countValue(body?.addressMissing);
+
+  if (!requested) issues.push(body?.stopped ? "안전중단" : "부분수집 요청");
+  if (requested && validationVersion < 2) issues.push("최신 수집기 검증정보 없음");
+  if (requested && !/전체|완전수집/.test(`${scope} ${clean(body?.note)}`)) issues.push("전체수집 범위 아님");
+  if (requested && observed < 100) issues.push("관찰 원본 100건 미만");
+  if (requested && expected <= 0) issues.push("예상 매물 수 없음");
+  if (requested && expected > observed) issues.push(`예상 ${expected}건 중 ${observed}건만 확인`);
+  if (requested && manifest !== observed) issues.push(`목록 ${manifest}건·원본 ${observed}건 불일치`);
+  if (requested && processed < observed) issues.push(`처리 ${processed}건·원본 ${observed}건 불일치`);
+  if (requested && failed > 0) issues.push(`실패 ${failed}건`);
+  if (requested && addressMissing > 0) issues.push(`주소·층 오류 ${addressMissing}건`);
+  if (requested && Boolean(body?.truncated)) issues.push("목록 페이지 잘림");
+  if (requested && !clean(body?.collectorVersion)) issues.push("수집기 버전 없음");
+
+  return {
+    requested,
+    complete: requested && issues.length === 0,
+    issues,
+    source,
+    validationVersion,
+    expected,
+    manifest,
+    processed,
+    observed,
+    failed,
+    addressMissing,
+    collectorVersion: clean(body?.collectorVersion).slice(0, 30)
+  };
+}
+
 async function finalizeSession(env, body) {
   const source = sourceName(body.source);
   const sessionId = await ensureSession(env, body.sessionId, source);
-  const complete = Boolean(body.complete) && !body.stopped;
-  const state = body.stopped ? "paused" : complete ? "completed" : "partial";
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
+  const audit = collectorCompletionAudit({ ...body, source }, observed.length);
+  const complete = audit.complete;
+  const state = body.stopped ? "paused" : complete ? "completed" : "partial";
   let presenceReset = 0;
   let missingMarked = 0;
   let deactivated = 0;
@@ -578,10 +779,20 @@ async function finalizeSession(env, body) {
   totals.missingMarked = missingMarked;
   totals.deactivated = deactivated;
   totals.note = clean(body.note);
+  totals.completeRequested = audit.requested;
+  totals.completionValidated = audit.complete;
+  totals.completionIssues = audit.issues;
+  totals.expectedCount = audit.expected;
+  totals.manifestCount = audit.manifest;
+  totals.processedCount = audit.processed;
+  totals.failed = Math.max(Number(totals.failed || 0), audit.failed);
+  totals.addressMissing = Math.max(Number(totals.addressMissing || 0), audit.addressMissing);
+  if (audit.collectorVersion) totals.collectorVersion = audit.collectorVersion;
   await env.DB.prepare(`UPDATE collector_sessions SET state=?1, totals_json=?2,
     finished_at=CASE WHEN ?1 IN ('completed','partial') THEN ?3 ELSE finished_at END, updated_at=?3 WHERE id=?4`)
     .bind(state, JSON.stringify(totals), nowIso(), sessionId).run();
   return { ok: true, action: "finalizeCollectionSession", sessionId, state, complete,
+    completeRequested: audit.requested, completionValidated: audit.complete, completionIssues: audit.issues,
     observed: observed.length, presenceReset, missingMarked, deactivated, ...totals, sourceBackend: "D1" };
 }
 
@@ -668,13 +879,14 @@ function daangnListEntry(article) {
     area: record.area, address: record.address, room: record.room };
 }
 
-async function loadDaangnJob(env) {
+async function loadDaangnJob(env, jobId = `${DAANGN_JOB_PREFIX}active`) {
   const row = await env.DB.prepare("SELECT state, payload_json, progress_json, updated_at FROM jobs WHERE id=?1")
-    .bind(DAANGN_JOB_ID).first();
+    .bind(jobId).first();
   if (!row) return null;
   const payload = parseJson(row.payload_json, {});
   const progress = parseJson(row.progress_json, {});
-  return { ...payload, ...progress, status: row.state === "completed" ? "complete" : row.state, updatedAt: row.updated_at };
+  return { ...payload, ...progress, _jobId: jobId,
+    status: row.state === "completed" ? "complete" : row.state, updatedAt: row.updated_at };
 }
 
 async function saveDaangnJob(env, job) {
@@ -692,12 +904,13 @@ async function saveDaangnJob(env, job) {
   delete progress.clusterId;
   delete progress.cursor;
   delete progress.hasNextPage;
+  delete progress._jobId;
   await env.DB.prepare(`INSERT INTO jobs (
       id, job_type, owner_email, state, priority, payload_json, progress_json, attempts, available_at, created_at, updated_at
     ) VALUES (?1, 'daangn-collector', 'collector', ?2, 20, ?3, ?4, 0, ?5, ?5, ?5)
     ON CONFLICT(id) DO UPDATE SET state=excluded.state, payload_json=excluded.payload_json,
       progress_json=excluded.progress_json, updated_at=excluded.updated_at`)
-    .bind(DAANGN_JOB_ID, state, JSON.stringify(payload), JSON.stringify(progress), nowIso()).run();
+    .bind(job._jobId || `${DAANGN_JOB_PREFIX}active`, state, JSON.stringify(payload), JSON.stringify(progress), nowIso()).run();
 }
 
 function publicDaangnJob(job) {
@@ -710,6 +923,7 @@ function publicDaangnJob(job) {
   delete output.clusterId;
   delete output.cursor;
   delete output.hasNextPage;
+  delete output._jobId;
   return output;
 }
 
@@ -717,7 +931,8 @@ async function startDaangnJob(env, body) {
   const parsed = parseDaangnUrl(body.url);
   const sessionId = await ensureSession(env, `DAANGN-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, "당근");
   const job = {
-    ...parsed, sessionId, ids: [], entries: [], detailIds: [], cursor: "", hasNextPage: true,
+    ...parsed, _jobId: daangnJobId(body), collectorVersion: clean(body.collectorVersion).slice(0, 30),
+    sessionId, ids: [], entries: [], detailIds: [], cursor: "", hasNextPage: true,
     phase: "list", status: "running", page: 0, found: 0, total: 0, processed: 0, remaining: 0,
     created: 0, merged: 0, updated: 0, review: 0, detailedDuplicates: 0,
     skippedUnchanged: 0, addressMissing: 0, failed: 0, chunkSize: 20,
@@ -727,8 +942,43 @@ async function startDaangnJob(env, body) {
   return { ok: true, job: publicDaangnJob(job), sourceBackend: "D1" };
 }
 
-async function runDaangnChunk(env) {
-  const job = await loadDaangnJob(env);
+async function fetchDaangnDetail(articleId) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const payload = await daangnGraphql(DAANGN_DETAIL_HASH, { articleId: String(articleId) });
+      const article = payload?.data?.articleByOriginalArticleId;
+      if (article) return article;
+    } catch {
+      // A short transient failure is retried inside the same resumable server chunk.
+    }
+  }
+  return null;
+}
+
+async function finalizeDaangnJob(env, job) {
+  const result = await finalizeSession(env, {
+    source: "당근", sessionId: job.sessionId,
+    scope: job.district ? `대전 ${job.district} 완전수집` : "당근 선택클러스터",
+    complete: Boolean(job.district), observedSourceIds: job.ids || [],
+    validationVersion: 2, collectorVersion: job.collectorVersion,
+    expectedCount: Number(job.found || 0), manifestCount: (job.ids || []).length,
+    processedCount: Number(job.skippedUnchanged || 0) + Number(job.processed || 0),
+    failed: Number(job.failed || 0), addressMissing: Number(job.addressMissing || 0),
+    truncated: Boolean(job.hasNextPage),
+    note: job.district ? "구 완전수집 완료" : "선택클러스터 수집 완료"
+  });
+  job.completeCollection = Boolean(result.complete);
+  job.completionIssues = Array.isArray(result.completionIssues) ? result.completionIssues : [];
+  job.phase = "complete";
+  job.status = "complete";
+  job.message = result.complete
+    ? `전체 ${job.found}개 확인 · 완전수집 검증 완료`
+    : `전체 ${job.found}개 확인 · 부분수집 보존${job.completionIssues.length ? ` · ${job.completionIssues.join(", ")}` : ""}`;
+  return result;
+}
+
+async function runDaangnChunk(env, body = {}) {
+  const job = await loadDaangnJob(env, daangnJobId(body));
   if (!job) throw new Error("이어갈 당근 수집 작업이 없습니다.");
   if (job.status !== "running") return { ok: true, job: publicDaangnJob(job) };
   const chunkStarted = Date.now();
@@ -758,6 +1008,7 @@ async function runDaangnChunk(env) {
     if (!job.hasNextPage) {
       const classification = await classifyManifest(env, {
         source: "당근", sessionId: job.sessionId, scope: job.district ? `대전 ${job.district} 완전수집` : "당근 선택클러스터",
+        collectorVersion: job.collectorVersion,
         entries: job.entries
       });
       const needed = new Set(classification.needsDetail || []);
@@ -766,22 +1017,16 @@ async function runDaangnChunk(env) {
       job.total = job.detailIds.length;
       job.remaining = job.total;
       job.phase = job.total ? "details" : "complete";
-      if (!job.total) job.status = "complete";
-      job.message = job.total ? `전체 ${job.found}개 중 신규·변경 ${job.total}개를 상세 저장합니다.` : "변경된 매물이 없습니다.";
+      if (!job.total) await finalizeDaangnJob(env, job);
+      else job.message = `전체 ${job.found}개 중 신규·변경 ${job.total}개를 상세 저장합니다.`;
     } else {
       job.message = `${job.page}페이지 · ${job.found}개 목록 확인`;
     }
   } else if (job.phase === "details") {
-    const ids = (job.detailIds || []).slice(job.processed, job.processed + 20);
+    const activeChunkSize = Math.max(10, Math.min(50, Number(job.chunkSize || 20)));
+    const ids = (job.detailIds || []).slice(job.processed, job.processed + activeChunkSize);
     const fetchStarted = Date.now();
-    const responses = await Promise.all(ids.map(async (id) => {
-      try {
-        const payload = await daangnGraphql(DAANGN_DETAIL_HASH, { articleId: String(id) });
-        return payload?.data?.articleByOriginalArticleId || null;
-      } catch {
-        return null;
-      }
-    }));
+    const responses = await Promise.all(ids.map((id) => fetchDaangnDetail(id)));
     job.lastFetchMs = Date.now() - fetchStarted;
     const records = responses.map((article, index) => article
       ? { ...daangnRecord(article, job.entries.find((entry) => entry.sourceId === ids[index])?.listSnapshot || ""), source: "당근" }
@@ -800,17 +1045,14 @@ async function runDaangnChunk(env) {
     job.processed += ids.length;
     job.remaining = Math.max(0, job.total - job.processed);
     job.lastChunkSize = ids.length;
+    const chunkElapsed = Date.now() - chunkStarted;
+    if (ids.length - records.length > 0 || chunkElapsed > 12_000) {
+      job.chunkSize = Math.max(10, activeChunkSize - 5);
+    } else if (chunkElapsed < 5_000) {
+      job.chunkSize = Math.min(50, activeChunkSize + 5);
+    }
     if (job.processed >= job.total) {
-      const observedSourceIds = job.ids || [];
-      await finalizeSession(env, {
-        source: "당근", sessionId: job.sessionId,
-        scope: job.district ? `대전 ${job.district} 완전수집` : "당근 선택클러스터",
-        complete: Boolean(job.district), observedSourceIds,
-        note: job.district ? "구 완전수집 완료" : "선택클러스터 수집 완료"
-      });
-      job.phase = "complete";
-      job.status = "complete";
-      job.message = `전체 ${job.found}개 확인 · ${job.processed}개 상세 처리 완료`;
+      await finalizeDaangnJob(env, job);
     } else {
       job.message = `${job.processed} / ${job.total}개 상세 처리`;
     }
@@ -834,10 +1076,11 @@ async function executeExternalAction(env, body) {
       state: row?.state || "missing", processed: Number(totals.received || 0), pending: 0, ...totals, sourceBackend: "D1" };
   }
   if (action === "danggeunStartJob") return startDaangnJob(env, body);
-  if (action === "danggeunRunJobChunk") return runDaangnChunk(env);
-  if (action === "danggeunJobStatus") return { ok: true, job: publicDaangnJob(await loadDaangnJob(env)), sourceBackend: "D1" };
+  if (action === "danggeunRunJobChunk") return runDaangnChunk(env, body);
+  if (action === "danggeunJobStatus") return { ok: true,
+    job: publicDaangnJob(await loadDaangnJob(env, daangnJobId(body))), sourceBackend: "D1" };
   if (action === "danggeunPauseJob" || action === "danggeunResumeJob") {
-    const job = await loadDaangnJob(env);
+    const job = await loadDaangnJob(env, daangnJobId(body));
     if (!job) return { ok: true, job: null };
     job.status = action === "danggeunPauseJob" ? "paused" : "running";
     job.message = action === "danggeunPauseJob" ? "안전중단됨 · 저장 지점 보존" : "저장 지점부터 이어서 수집합니다.";
@@ -961,13 +1204,48 @@ async function collectionStatus(env) {
     SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS active,
     SUM(CASE WHEN active=0 THEN 1 ELSE 0 END) AS inactive
     FROM listing_sources GROUP BY source ORDER BY source`).all();
+  const raw = await env.DB.prepare(`SELECT COUNT(*) AS total,
+      SUM(CASE WHEN processing_state='pending' THEN 1 ELSE 0 END) AS pending,
+      SUM(CASE WHEN processing_state='review' THEN 1 ELSE 0 END) AS review,
+      SUM(CASE WHEN processing_state='error' THEN 1 ELSE 0 END) AS error
+    FROM collector_raw`).first();
+  const sessionRows = sessions?.results || [];
+  const sourceCounts = new Map((counts?.results || []).map((row) => [sourceName(row.source), row]));
+  const latestBySource = new Map();
+  for (const row of sessionRows) {
+    const name = sourceName(row.source);
+    if (!latestBySource.has(name)) latestBySource.set(name, row);
+  }
+  const sourceCards = ["네이버", "당근", "공실박스"].map((name) => {
+    const row = latestBySource.get(name);
+    const totals = parseJson(row?.totals_json, {});
+    const count = sourceCounts.get(name) || {};
+    return {
+      source: name, total: Number(count.total || 0), active: Number(count.active || 0), inactive: Number(count.inactive || 0),
+      lastStatus: row?.state === "completed" ? "완전수집 완료" : row?.state === "paused" ? "안전중단" : row?.state === "partial" ? "부분수집" : row ? "수집 중" : "수집 전",
+      lastAt: row?.finished_at || row?.updated_at || "", lastScope: clean(totals.note) || clean(totals.scope),
+      complete: row?.state === "completed" && totals.completionValidated !== false,
+      collectorVersion: clean(totals.collectorVersion), completionIssues: Array.isArray(totals.completionIssues) ? totals.completionIssues : [],
+      lastResult: totals
+    };
+  });
+  const recent = sessionRows.map((row) => {
+    const totals = parseJson(row.totals_json, {});
+    return {
+      sessionId: row.id, source: sourceName(row.source), status: row.state, scope: clean(totals.note) || clean(totals.scope),
+      complete: row.state === "completed" && totals.completionValidated !== false,
+      startedAt: row.started_at, endedAt: row.finished_at || row.updated_at, ...totals
+    };
+  });
   return {
     ok: true, action: "collectionStatus",
-    sessions: (sessions?.results || []).map((row) => ({
+    sessions: sessionRows.map((row) => ({
       sessionId: row.id, source: row.source, state: row.state, ...parseJson(row.totals_json, {}),
       startedAt: row.started_at, finishedAt: row.finished_at, updatedAt: row.updated_at
     })),
-    sources: counts?.results || [], source: "D1"
+    sources: sourceCards, recent,
+    raw: { total: Number(raw?.total || 0), pending: Number(raw?.pending || 0), error: Number(raw?.error || 0) },
+    pendingReview: Number(raw?.review || 0), sourceCounts: counts?.results || [], source: "D1"
   };
 }
 

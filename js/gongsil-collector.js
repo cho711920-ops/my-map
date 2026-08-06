@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.9.7";
+  var VERSION = "2.0.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -490,7 +490,9 @@
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
         complete: isCompleteGongsilCapture(selectedCount, items.length),
+        selectedCount: selectedCount,
         found: items.length,
+        manifestCount: items.length,
         rejectedCount: 0,
         observedSourceIds: observedSourceIds(items),
         manifestRegistered: true
@@ -500,19 +502,13 @@
         saveMetadata,
         collectorKey
       );
-      /*
-       * 완전수집은 매물 조건이 같아도 공실박스의 최신 역할 연락처로
-       * 재정리해야 합니다. 따라서 전체 매물의 상세 연락처를 다시 읽습니다.
-       * 선택수집은 기존처럼 신규·변경 매물만 상세조회합니다.
-       */
-      var detailItems = saveMetadata.complete
-        ? items.slice()
-        : items.filter(function(item) {
-            return classification.needs[recordSourceId(item)];
-          });
-      var detailBaseProcessed = saveMetadata.complete
-        ? 0
-        : classification.unchanged;
+      /* 목록은 매번 전수 확인하되 상세·연락처는 신규/변경 또는 마지막 상세확인 후
+       * 20시간이 지난 원본만 갱신합니다. 같은 날 재수집의 중복 요청과 D1 쓰기를 줄입니다. */
+      var detailItems = items.filter(function(item) {
+        var id = recordSourceId(item);
+        return classification.needs[id] || classification.refresh[id];
+      });
+      var detailBaseProcessed = Math.max(0, items.length - detailItems.length);
       updateDashboard({
         found: items.length,
         processed: detailBaseProcessed,
@@ -530,7 +526,7 @@
       setStatus(
         detailItems.length ? "매물별 상세정보·역할 연락처 확인 중" : "기존 매물 빠른 확인 완료",
         saveMetadata.complete
-          ? "완전수집 " + items.length + "개 · 기존 여부와 관계없이 전체 연락처를 다시 확인합니다."
+          ? "완전수집 목록 " + items.length + "개 · 신규·변경 또는 20시간이 지난 연락처 " + detailItems.length + "개를 확인합니다."
           : "전체 " + items.length + "개 · 기존 동일 " + classification.unchanged +
             "개 · 신규·변경·연락처 누락 상세조회 " + detailItems.length + "개"
       );
@@ -571,7 +567,7 @@
               "매물별 상세정보·역할 연락처 확인 중",
               completed + " / " + detailItems.length + "개 상세확인" +
               (saveMetadata.complete
-                ? " · 완전수집 전체 연락처 갱신"
+                ? " · 최신 연락처 차등 갱신"
                 : " · 기존 동일 " + classification.unchanged + "개는 생략")
             );
           }
@@ -611,7 +607,7 @@
       );
 
       saveMetadata.rejectedCount = rejected.length;
-      saveMetadata.unchanged = saveMetadata.complete ? 0 : classification.unchanged;
+      saveMetadata.unchanged = detailBaseProcessed;
       state.pendingSave = {
         records: transformed,
         metadata: saveMetadata,
@@ -649,7 +645,7 @@
         ? result.message
         : "공실박스 매물 전송을 완료했습니다.";
       message += saveMetadata.complete
-        ? "\n완전수집 " + items.length + "개의 역할 연락처를 모두 다시 확인했습니다."
+        ? "\n완전수집 목록 " + items.length + "개를 확인하고 상세·연락처 " + detailItems.length + "개를 차등 갱신했습니다."
         : "\n전체 " + items.length + "개 중 기존 동일 " +
           classification.unchanged + "개는 상세조회를 생략했습니다.";
       updateDashboard({
@@ -1996,13 +1992,17 @@
       if (state.stopRequested) break;
     }
     var stopped = state.stopRequested || offset < records.length;
+    metadata.processedCount = Math.min(itemsLength,
+      Number(metadata.unchanged || 0) + Number(metadata.rejectedCount || 0) + offset);
+    metadata.failed = Number(totals.failed || 0);
     if (offset > 0 || metadata.manifestRegistered) {
       await finalizeGongsilSession(
         metadata,
         collectorKey,
         Boolean(metadata.complete) &&
           !stopped &&
-          Number(totals.failed || 0) === 0,
+          Number(totals.failed || 0) === 0 &&
+          Number(metadata.rejectedCount || 0) === 0,
         stopped
       );
     }
@@ -2115,6 +2115,7 @@
 
   async function classifyGongsilManifest(items, metadata, collectorKey) {
     var needs = Object.create(null);
+    var refresh = Object.create(null);
     var unchanged = 0;
     var changed = 0;
     var unknown = 0;
@@ -2134,6 +2135,7 @@
         action: "classifySourceManifest",
         requestId: requestId,
         collectorKey: collectorKey,
+        collectorVersion: VERSION,
         source: "공실박스",
         sessionId: metadata.sessionId,
         scope: metadata.scope,
@@ -2166,6 +2168,9 @@
       (Array.isArray(result.needsDetail) ? result.needsDetail : []).forEach(function(id) {
         needs[text(id)] = true;
       });
+      (Array.isArray(result.refreshDetail) ? result.refreshDetail : []).forEach(function(id) {
+        refresh[text(id)] = true;
+      });
       unchanged += Number(result.unchanged || 0);
       changed += Number(result.changed || 0);
       unknown += Number(result.unknown || 0);
@@ -2179,7 +2184,7 @@
       });
       setProgress(Math.min(offset + chunk.length, items.length), items.length);
     }
-    return {needs: needs, unchanged: unchanged, changed: changed, unknown: unknown};
+    return {needs: needs, refresh: refresh, unchanged: unchanged, changed: changed, unknown: unknown};
   }
 
   function observedSourceIds(items) {
@@ -2242,13 +2247,12 @@
   }
 
   async function sendAppsScriptBatch(records, collectorKey, batchIndex, metadata) {
-    var requestId =
-      "gongsil-" + Date.now() + "-" + batchIndex + "-" +
-      Math.random().toString(36).slice(2, 10);
+    var requestId = "gongsil-" + text(metadata && metadata.sessionId || "session") + "-batch-" + batchIndex;
     await postAppsScriptWithRetry({
       action: "gongsilImportBatch",
       requestId: requestId,
       collectorKey: collectorKey,
+      collectorVersion: VERSION,
       sessionId: metadata && metadata.sessionId || "",
       scope: metadata && metadata.scope || "공실박스 선택클러스터",
       complete: false,
@@ -2277,12 +2281,13 @@
   }
 
   async function finalizeGongsilSession(metadata, collectorKey, complete, stopped) {
-    var requestId =
-      "gongsil-finalize-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+    var requestId = "gongsil-finalize-" + text(metadata.sessionId || Date.now());
     await postAppsScriptWithRetry({
       action: "finalizeCollectionSession",
       requestId: requestId,
       collectorKey: collectorKey,
+      collectorVersion: VERSION,
+      validationVersion: 2,
       sessionId: metadata.sessionId,
       scope: metadata.scope || "공실박스 선택클러스터",
       source: "공실박스",
@@ -2291,6 +2296,12 @@
       observedSourceIds: Array.isArray(metadata.observedSourceIds)
         ? metadata.observedSourceIds
         : [],
+      expectedCount: Number(metadata.selectedCount || 0),
+      manifestCount: Number(metadata.manifestCount || metadata.found || 0),
+      processedCount: Number(metadata.processedCount || 0),
+      failed: Number(metadata.failed || 0),
+      addressMissing: Number(metadata.rejectedCount || 0),
+      truncated: Boolean(metadata.truncated),
       note: stopped
         ? "사용자 안전중단 · 저장된 묶음 보존"
         : (complete

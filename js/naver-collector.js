@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.4.3";
+  var VERSION = "5.5.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -26,7 +26,6 @@
     {name: "대덕구", cortarNo: "3023000000"}
   ];
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
-  var NAVER_ACCESS_KEY = "JS_NAVER_EXTRACT_2026";
   var COLLECTOR_KEY_STORAGE = "js_naver_collector_access_key";
   var FIN_NAVER_HOST = "fin.land.naver.com";
   var FIN_ARTICLE_LIST_PATH = "/front-api/v1/article/legalDivisionArticleList";
@@ -1278,7 +1277,9 @@
       var result = await postBatchWithRetry(batch, 3, {
         sessionId: progress.sessionId,
         scope: progress.scope || "대전 전체(5개 구)",
-        startedAt: progress.startedAt
+        startedAt: progress.startedAt,
+        requestId: progress.sessionId + "-city-" + clean(context && context.district || "tile") + "-" +
+          clean(context && context.page || "0") + "-" + index
       });
       var failed = Number(result.failed) || 0;
       var errors = Array.isArray(result.errors) ? result.errors : [];
@@ -1333,7 +1334,8 @@
         var result = await postBatchWithRetry([entry.item], 2, {
           sessionId: progress.sessionId,
           scope: progress.scope || "대전 전체(5개 구)",
-          startedAt: progress.startedAt
+          startedAt: progress.startedAt,
+          requestId: progress.sessionId + "-retry-" + clean(entry.articleNo)
         });
         if (Number(result.failed) || !result.ok) {
           var error = Array.isArray(result.errors) && result.errors[0];
@@ -1619,6 +1621,13 @@
         scope: progress.scope,
         source: "네이버",
         complete: remainingFailures.length === 0,
+        observedSourceIds: progress.seenIds,
+        expectedCount: progress.seenIds.length,
+        manifestCount: progress.seenIds.length,
+        processedCount: progress.seenIds.length,
+        failed: remainingFailures.length,
+        addressMissing: remainingFailures.length,
+        truncated: false,
         note: remainingFailures.length
           ? "대전 전체 수집 완료 · 주소미확인 " + remainingFailures.length + "건"
           : "대전 전체 수집 완료"
@@ -1673,6 +1682,10 @@
             source: "네이버",
             complete: false,
             stopped: true,
+            observedSourceIds: progress.seenIds,
+            expectedCount: progress.seenIds.length,
+            manifestCount: progress.seenIds.length,
+            processedCount: progress.seenIds.length,
             note: "사용자 안전중단 · 이어가기 상태 보존"
           });
         } catch (_) {}
@@ -1788,6 +1801,13 @@
         scope: "대전 전체(5개 구)",
         source: "네이버",
         complete: remainingFailures.length === 0,
+        observedSourceIds: progress.seenIds,
+        expectedCount: progress.seenIds.length,
+        manifestCount: progress.seenIds.length,
+        processedCount: progress.seenIds.length,
+        failed: remainingFailures.length,
+        addressMissing: remainingFailures.length,
+        truncated: false,
         note: remainingFailures.length
           ? "대전 전체 수집 완료 · 주소미확인 " + remainingFailures.length + "건은 다음 실행 시 재시도"
           : "대전 전체 수집 완료"
@@ -2330,7 +2350,9 @@
         headers: {"Content-Type": "text/plain;charset=utf-8"},
         body: JSON.stringify({
           action: "classifySourceManifest",
-          accessKey: NAVER_ACCESS_KEY,
+          requestId: metadata.sessionId + "-manifest-" + offset,
+          collectorKey: getCollectorKey(),
+          collectorVersion: VERSION,
           source: "네이버",
           sessionId: metadata.sessionId,
           scope: metadata.scope,
@@ -2389,7 +2411,9 @@
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
         action: "saveNaverBatch",
-        accessKey: NAVER_ACCESS_KEY,
+        requestId: metadata.requestId || "",
+        collectorKey: getCollectorKey(),
+        collectorVersion: VERSION,
         data: items,
         sessionId: metadata.sessionId || "",
         scope: metadata.scope || "선택 클러스터",
@@ -2416,7 +2440,9 @@
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
         action: "finalizeNaverSession",
-        accessKey: NAVER_ACCESS_KEY,
+        collectorKey: getCollectorKey(),
+        collectorVersion: VERSION,
+        validationVersion: 2,
         sessionId: metadata.sessionId,
         scope: metadata.scope || "선택 클러스터",
         complete: Boolean(metadata.complete),
@@ -2424,6 +2450,12 @@
         source: metadata.source || "네이버",
         observedSourceIds: Array.isArray(metadata.observedSourceIds)
           ? metadata.observedSourceIds : [],
+        expectedCount: Number(metadata.expectedCount || 0),
+        manifestCount: Number(metadata.manifestCount || 0),
+        processedCount: Number(metadata.processedCount || 0),
+        failed: Number(metadata.failed || 0),
+        addressMissing: Number(metadata.addressMissing || 0),
+        truncated: Boolean(metadata.truncated),
         note: metadata.note || ""
       })
     });
@@ -2446,7 +2478,7 @@
       headers: {"Content-Type": "text/plain;charset=utf-8"},
       body: JSON.stringify({
         action: "getNaverSessionResult",
-        accessKey: NAVER_ACCESS_KEY,
+        collectorKey: getCollectorKey(),
         sessionId: metadata.sessionId
       })
     });
@@ -2615,7 +2647,9 @@
         var batchStartedAt = Date.now();
         var result;
         try {
-          result = await postBatchWithRetry(batch, 6, session);
+          result = await postBatchWithRetry(batch, 6, Object.assign({}, session, {
+            requestId: session.sessionId + "-batch-" + index
+          }));
         } finally {
           window.clearInterval(saveWaitTimer);
         }
@@ -2669,6 +2703,12 @@
           Number(totals.failed || 0) === 0 && index >= items.length,
         stopped: safelyStopped,
         observedSourceIds: session.observedSourceIds,
+        expectedCount: allItems.length,
+        manifestCount: allItems.length,
+        processedCount: classification.unchanged + index,
+        failed: totals.failed,
+        addressMissing: totals.addressMissing,
+        truncated: false,
         note: safelyStopped
           ? "사용자 안전중단 · 저장 완료 " + index + "/" + items.length
           : (runOptions.complete ? session.scope + " 완전수집 완료" : "선택 클러스터 수집 완료")
