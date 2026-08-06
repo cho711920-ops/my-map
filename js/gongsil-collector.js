@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.0";
+  var VERSION = "2.1.1";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -9,9 +9,12 @@
    * 2천~5천 개짜리 클러스터도 누락 없이 합칠 수 있습니다.
    */
   var LIST_REQUEST_CHUNK_SIZE = 300;
-  var SAVE_BATCH_SIZE = 250;
-  var MIN_SAVE_BATCH_SIZE = 100;
-  var MAX_SAVE_BATCH_SIZE = 400;
+  // A single import request performs several D1 operations per listing. Keep the
+  // batch below the Worker/D1 per-request query ceiling so a HTTP 200 response
+  // cannot hide a mostly-failed import.
+  var SAVE_BATCH_SIZE = 8;
+  var MIN_SAVE_BATCH_SIZE = 1;
+  var MAX_SAVE_BATCH_SIZE = 8;
   var SAVE_PROGRESS_KEY = "js_gongsil_save_progress_v1";
   var POST_RETRY_DELAYS = [0, 1200, 3000];
   var BUSY_RETRY_DELAYS = [3000, 6000, 10000, 15000, 20000, 30000];
@@ -2022,7 +2025,7 @@
         if (batch.length > MIN_SAVE_BATCH_SIZE) {
           SAVE_BATCH_SIZE = Math.max(
             MIN_SAVE_BATCH_SIZE,
-            Math.floor(batch.length * 0.5 / 25) * 25
+            Math.floor(batch.length * 0.5)
           );
           setStatus(
             "전송 묶음을 줄여 자동 복구 중입니다.",
@@ -2037,6 +2040,33 @@
       }
       window.clearInterval(saveWaitTimer);
       if (!result || result.ok !== true) return result;
+
+      var failedInBatch = Number(result.failed || 0);
+      if (failedInBatch > 0) {
+        var firstBatchError = Array.isArray(result.errors) && result.errors.length
+          ? String(result.errors[0] && (result.errors[0].message || result.errors[0].error) || "")
+          : "";
+        if (batch.length > MIN_SAVE_BATCH_SIZE) {
+          SAVE_BATCH_SIZE = Math.max(
+            MIN_SAVE_BATCH_SIZE,
+            Math.floor(batch.length * 0.5)
+          );
+          setStatus(
+            "저장 실패 항목을 작은 묶음으로 다시 확인합니다.",
+            batch.length.toLocaleString("ko-KR") + "개 중 " +
+            failedInBatch.toLocaleString("ko-KR") + "개 실패 · " +
+            SAVE_BATCH_SIZE.toLocaleString("ko-KR") +
+            "개씩 같은 위치부터 다시 저장합니다." +
+            (firstBatchError ? "\n원인: " + firstBatchError : "")
+          );
+          await delay(600);
+          continue;
+        }
+        throw new Error(
+          "매물 1개의 D1 저장이 완료되지 않아 이 위치에서 안전하게 멈췄습니다." +
+          (firstBatchError ? "\n원인: " + firstBatchError : "")
+        );
+      }
 
       addImportResult(totals, result);
       offset += batch.length;
@@ -2079,10 +2109,10 @@
         itemsLength
       );
       var elapsed = Date.now() - batchStartedAt;
-      if (Number(result.failed || 0) || elapsed > 14000) {
-        SAVE_BATCH_SIZE = Math.max(MIN_SAVE_BATCH_SIZE, Math.floor(SAVE_BATCH_SIZE * 0.7 / 25) * 25);
+      if (elapsed > 14000) {
+        SAVE_BATCH_SIZE = Math.max(MIN_SAVE_BATCH_SIZE, Math.floor(SAVE_BATCH_SIZE * 0.7));
       } else if (elapsed < 5000) {
-        SAVE_BATCH_SIZE = Math.min(MAX_SAVE_BATCH_SIZE, SAVE_BATCH_SIZE + 50);
+        SAVE_BATCH_SIZE = Math.min(MAX_SAVE_BATCH_SIZE, SAVE_BATCH_SIZE + 1);
       }
       if (state.stopRequested) break;
     }

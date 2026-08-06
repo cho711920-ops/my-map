@@ -7,7 +7,10 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.1\.0";/);
+assert.match(source, /var VERSION = "2\.1\.1";/);
+assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
+assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
+assert.match(source, /var MAX_SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(
@@ -175,7 +178,12 @@ const dashboardPosition = saveFunction.indexOf(
   "updateDashboard({",
   offsetPosition
 );
+const failedBatchPosition = saveFunction.indexOf(
+  "if (failedInBatch > 0)"
+);
 assert.ok(offsetPosition >= 0);
+assert.ok(failedBatchPosition >= 0);
+assert.ok(failedBatchPosition < offsetPosition);
 assert.ok(checkpointPosition > offsetPosition);
 assert.ok(dashboardPosition > checkpointPosition);
 assert.match(
