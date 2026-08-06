@@ -2,6 +2,9 @@
 
 let state = { config: { targets: [] }, logs: [] };
 
+const SOURCE_ORDER = ["naver", "daangn", "gongsil"];
+const SOURCE_LABELS = { naver: "네이버", daangn: "당근", gongsil: "공실박스" };
+
 function message(value) {
   document.getElementById("status").textContent = value;
 }
@@ -14,18 +17,53 @@ function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
 
+function registeredTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function targetSummary(target) {
+  const registered = registeredTime(target.registeredAt);
+  if (target.source === "gongsil") {
+    let zoom = "";
+    try { zoom = new URL(target.url).searchParams.get("zoom") || ""; } catch (_) {}
+    const count = Number(target.selectedCount || 0);
+    return ["현재 화면 전체클러스터", zoom ? `확대 ${zoom}` : "", count ? `등록 ${count.toLocaleString("ko-KR")}개` : "", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
+  }
+  const district = typeof target.district === "string" ? target.district : target.district && target.district.name;
+  return [district ? `${district} 구 단위` : "구 단위", "매일 자동수집", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
+}
+
+function renderTarget(target, index) {
+  return `<div class="item target-item">
+    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small>${escapeHtml(targetSummary(target))}</small></div>
+    <div class="item-actions"><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>사용</label><button data-remove="${index}">삭제</button></div>
+  </div>`;
+}
+
+function renderTargets(targets) {
+  if (!targets.length) return '<div class="empty">등록된 대상이 없습니다.</div>';
+  const indexed = targets.map((target, index) => ({ target, index }));
+  const sources = SOURCE_ORDER.concat([...new Set(indexed.map(({ target }) => target.source).filter((source) => !SOURCE_ORDER.includes(source)))]);
+  return `<div class="target-groups">${sources.map((source) => {
+    const items = indexed.filter(({ target }) => target.source === source);
+    if (!items.length) return "";
+    return `<div class="target-group"><div class="target-group-title"><h3>${escapeHtml(SOURCE_LABELS[source] || source)}</h3><span>${items.length}개 사용</span></div><div class="target-group-list">${items.map(({ target, index }) => renderTarget(target, index)).join("")}</div></div>`;
+  }).join("")}</div>`;
+}
+
 function render() {
   const config = state.config || {};
   document.getElementById("enabled").checked = Boolean(config.enabled);
   document.getElementById("schedule").value = config.schedule || "06:00";
   document.getElementById("closeTabs").checked = config.closeTabs !== false;
   const targets = Array.isArray(config.targets) ? config.targets : [];
-  document.getElementById("targets").innerHTML = targets.length ? targets.map((target, index) => `
-    <div class="item"><div><b>${escapeHtml(target.label || target.source)}</b><small>${escapeHtml(target.url)}</small></div>
-    <div><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>사용</label> <button data-remove="${index}">삭제</button></div></div>`).join("") : '<div class="empty">등록된 대상이 없습니다.</div>';
+  document.getElementById("targets").innerHTML = renderTargets(targets);
   const logs = Array.isArray(state.logs) ? state.logs.slice(0, 30) : [];
+  document.getElementById("logs").classList.add("log-list");
   document.getElementById("logs").innerHTML = logs.length ? logs.map((log) => `
-    <div class="item"><div><b class="${escapeHtml(log.level)}">${escapeHtml(log.message)}</b><small>${escapeHtml(new Date(log.at).toLocaleString("ko-KR"))}</small></div></div>`).join("") : '<div class="empty">실행 기록이 없습니다.</div>';
+    <div class="item"><div class="item-info"><b class="${escapeHtml(log.level)}">${escapeHtml(log.message)}</b><small>${escapeHtml(new Date(log.at).toLocaleString("ko-KR"))}</small></div></div>`).join("") : '<div class="empty">실행 기록이 없습니다.</div>';
 }
 
 async function load() {

@@ -57,3 +57,14 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /--user-data-dir=/);
   assert.match(launch, /--load-extension=/);
 });
+
+test("automatic collector settings stay compact with long target URLs", () => {
+  const options = read("edge-automation/extension/options.js");
+  const styles = read("edge-automation/extension/options.css");
+  assert.match(options, /function renderTargets\(targets\)/);
+  assert.match(options, /function targetSummary\(target\)/);
+  assert.match(options, /SOURCE_ORDER/);
+  assert.match(styles, /grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(styles, /text-overflow:ellipsis/);
+  assert.match(styles, /\.log-list\{max-height:430px;overflow-y:auto/);
+});
