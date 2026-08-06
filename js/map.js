@@ -1361,6 +1361,8 @@ function loadSheet(isAuto, forceRefresh) {
           buildingInfoStatus: clean(c[22]),
           registrationAt: clean(c[23]),
           lastCollectedAt: clean(c[24]),
+          latitude: clean(c[25]) === "" ? null : Number(c[25]),
+          longitude: clean(c[26]) === "" ? null : Number(c[26]),
           sheetRow: i + 1,
           latlng: null
         };
@@ -1697,9 +1699,16 @@ function geocodeItems(items, callback, progressCallback) {
     if (!item || !item.address) return;
 
     var addressKey = normalizeAddressForCache(item.address);
+    var sourceLat = item.latitude == null || item.latitude === "" ? NaN : Number(item.latitude);
+    var sourceLng = item.longitude == null || item.longitude === "" ? NaN : Number(item.longitude);
     var cached = geocodeCache[addressKey];
 
-    if (cached && cached.lat && cached.lng) {
+    if (Number.isFinite(sourceLat) && Number.isFinite(sourceLng) &&
+        sourceLat >= -90 && sourceLat <= 90 && sourceLng >= -180 && sourceLng <= 180) {
+      item.latlng = new kakao.maps.LatLng(sourceLat, sourceLng);
+      done.push(item);
+      cachedCount++;
+    } else if (cached && cached.lat && cached.lng) {
       item.latlng = new kakao.maps.LatLng(cached.lat, cached.lng);
       done.push(item);
       cachedCount++;

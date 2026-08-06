@@ -2346,7 +2346,9 @@
                 ? Math.round((squareMeters / 3.305785) * 10) / 10
                 : "",
               address: item.jibunAddress,
-              room: item.roomInfo || item.floorInfo
+              room: item.roomInfo || item.floorInfo,
+              latitude: item.latitude,
+              longitude: item.longitude
             };
           })
         })

@@ -119,7 +119,9 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
               building_info_checked_at: "",
               building_info_status: "",
               registration_at: "2026-08-05T00:00:00.000Z",
-              last_collected_at: "2026-08-05T00:00:00.000Z"
+              last_collected_at: "2026-08-05T00:00:00.000Z",
+              latitude: 36.3504,
+              longitude: 127.3845
             }]
           };
         }
@@ -154,6 +156,30 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("primary sheet appends saved listing coordinates for map-first rendering", async () => {
+  const db = {
+    prepare(sql) {
+      return {
+        bind() { return this; },
+        async all() {
+          assert.match(sql, /last_collected_at, latitude, longitude/);
+          return { results: [{
+            title: "좌표건물", address: "대전광역시 동구 천동 556", room: "1층",
+            listing_type: "단지내상가", status: "active", property_id: "M-COORD-1",
+            contacts_json: "[]", latitude: 36.320123, longitude: 127.441234
+          }] };
+        }
+      };
+    }
+  };
+  const response = await authenticatedRequest("/api/sheet", { DB: db, D1_PRIMARY_READS: "1" },
+    { waitUntil() {} }, { headers: { "x-js-force-refresh": "1" } });
+  assert.equal(response.status, 200);
+  const csv = await response.text();
+  assert.match(csv, /최종수집시각,위도,경도/);
+  assert.match(csv, /36\.320123,127\.441234/);
 });
 
 test("full listing details and photos come directly from D1", async () => {
@@ -370,6 +396,66 @@ test("collector manifest comparison runs directly against D1", async () => {
   assert.deepEqual(payload.needsDetail, ["네이버-123"]);
   assert.ok(statements.some((entry) => /collector_sessions/.test(entry.sql)));
   assert.ok(statements.some((entry) => /mutation_results/.test(entry.sql)));
+});
+
+test("naver manifest repairs missing D1 and shared-cache coordinates without a detail fetch", async () => {
+  const statements = [];
+  const batches = [];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        args: [],
+        bind(...args) { this.args = args; return this; },
+        async run() { statements.push({ sql: this.sql, args: this.args }); return { meta: { changes: 1 } }; },
+        async all() {
+          if (/FROM listing_sources s LEFT JOIN listings l/.test(this.sql)) {
+            return { results: [{
+              source_listing_id: "네이버-2637317828",
+              snapshot_hash: "",
+              list_snapshot_json: JSON.stringify({
+                deposit: 3000, rent: 130, area: 11.7, room: "1층", address: "동구 천동 556"
+              }),
+              listing_id: "M-COORD-REPAIR",
+              listing_latitude: null,
+              listing_longitude: null
+            }] };
+          }
+          return { results: [] };
+        },
+        async first() { return null; }
+      };
+    },
+    async batch(items) {
+      batches.push(...items.map((item) => ({ sql: item.sql, args: item.args })));
+      return items.map(() => ({ success: true }));
+    }
+  };
+  const response = await worker.fetch(new Request("https://js-map.com/api/collector", {
+    method: "POST",
+    headers: { origin: "https://fin.land.naver.com", "content-type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action: "classifySourceManifest",
+      requestId: "manifest-coordinate-repair",
+      accessKey: "private-key",
+      source: "네이버",
+      sessionId: "NAVER-COORD-TEST",
+      entries: [{
+        sourceId: "네이버-2637317828", deposit: 3000, rent: 130, area: 11.7,
+        room: "1층", address: "동구 천동 556", latitude: 36.320123, longitude: 127.441234
+      }]
+    })
+  }), { ...env, DB: db, COLLECTOR_ACCESS_KEY: "private-key" });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.coordinatesRepaired, 1);
+  assert.equal(payload.unchanged, 1);
+  assert.deepEqual(payload.needsDetail, []);
+  assert.ok(batches.some((entry) => /UPDATE listings SET latitude/.test(entry.sql) &&
+    entry.args[0] === 36.320123 && entry.args[1] === 127.441234));
+  assert.ok(batches.some((entry) => /INSERT INTO geocode_cache/.test(entry.sql) &&
+    entry.args[0] === "동구 천동 556"));
+  assert.ok(statements.some((entry) => /collector_sessions/.test(entry.sql)));
 });
 
 test("memo edits commit directly to D1 without a Google runtime", async () => {

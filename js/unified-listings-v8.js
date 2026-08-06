@@ -263,6 +263,16 @@
         if (!original.address) original.address = item.address || "";
         if (!original.type) original.type = item.type || "";
       });
+      var locatedOriginal = originals.filter(function(original) {
+        return original.latitude != null && original.latitude !== "" &&
+          original.longitude != null && original.longitude !== "" &&
+          Number.isFinite(Number(original.latitude)) && Number.isFinite(Number(original.longitude));
+      })[0];
+      if (locatedOriginal && (item.latitude == null || item.latitude === "" ||
+          item.longitude == null || item.longitude === "")) {
+        item.latitude = Number(locatedOriginal.latitude);
+        item.longitude = Number(locatedOriginal.longitude);
+      }
       state.masterMeta[text(item.propertyId)] = {
         regDate: text(item.regDate),
         buildingYear: text(item.buildingYear || item.approvalYear)

@@ -35,6 +35,11 @@ function number(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function coordinate(value, minimum, maximum) {
+  const parsed = number(value);
+  return parsed != null && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
 function parseJson(value, fallback) {
   try {
     const parsed = JSON.parse(String(value || ""));
@@ -149,7 +154,9 @@ function naverRecord(item) {
     memo: memoWithVisit(item?.description),
     link: clean(item?.sourceLink || item?.providerUrl || item?.currentUrl) ||
       (sourceId ? `https://fin.land.naver.com/articles/${sourceId.replace(/^네이버-/, "")}` : ""),
-    listSnapshot: clean(item?.listSnapshot), images, contacts: [], raw: item
+    listSnapshot: clean(item?.listSnapshot), images, contacts: [], raw: item,
+    latitude: coordinate(item?.latitude ?? item?.lat ?? item?.mapY, -90, 90),
+    longitude: coordinate(item?.longitude ?? item?.lng ?? item?.lon ?? item?.mapX, -180, 180)
   };
 }
 
@@ -211,7 +218,8 @@ function unifiedSnapshot(record, originalId, propertyId, now) {
     originalId, source: record.source, sourceId: record.sourceId, propertyId,
     link: record.link, buildingName: record.buildingName, address: record.address, room: record.room,
     type: record.category, deposit: record.deposit, rent: record.rent, fee: record.fee,
-    premium: record.premium, area: record.area, memo: record.memo, status: "활성",
+    premium: record.premium, area: record.area, latitude: record.latitude, longitude: record.longitude,
+    memo: record.memo, status: "활성",
     firstSeen: now, lastSeen: now, thumbnail: record.images[0] || "",
     photoCount: record.images.length, contactCount: record.contacts.length, revision: 1
   };
@@ -270,16 +278,28 @@ async function classifyManifest(env, body) {
   for (let offset = 0; offset < entries.length; offset += 80) {
     const ids = entries.slice(offset, offset + 80).map((entry) => entry.sourceId);
     const placeholders = ids.map((_, index) => `?${index + 2}`).join(",");
-    const result = await env.DB.prepare(`SELECT source_listing_id, snapshot_hash, list_snapshot_json
-      FROM listing_sources WHERE source=?1 AND source_listing_id IN (${placeholders})`).bind(source, ...ids).all();
+    const result = await env.DB.prepare(`SELECT s.source_listing_id, s.snapshot_hash, s.list_snapshot_json,
+        s.listing_id, l.latitude AS listing_latitude, l.longitude AS listing_longitude
+      FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
+      WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`).bind(source, ...ids).all();
     for (const row of result?.results || []) rows.set(clean(row.source_listing_id), row);
   }
   const needsDetail = [];
+  const coordinateRepairs = new Map();
+  const cacheRepairs = new Map();
   let unchanged = 0;
   let changed = 0;
   let unknown = 0;
   for (const entry of entries) {
     const row = rows.get(entry.sourceId);
+    const latitude = coordinate(entry.latitude, -90, 90);
+    const longitude = coordinate(entry.longitude, -180, 180);
+    if (row?.listing_id && latitude != null && longitude != null &&
+        (number(row.listing_latitude) == null || number(row.listing_longitude) == null)) {
+      coordinateRepairs.set(clean(row.listing_id), { latitude, longitude });
+      const address = normalizedAddress(entry.address);
+      if (address) cacheRepairs.set(address, { latitude, longitude, sourceId: entry.sourceId });
+    }
     if (!row) {
       unknown += 1;
       needsDetail.push(entry.sourceId);
@@ -290,10 +310,30 @@ async function classifyManifest(env, body) {
       needsDetail.push(entry.sourceId);
     }
   }
+  if (coordinateRepairs.size || cacheRepairs.size) {
+    const repairedAt = nowIso();
+    const statements = [];
+    for (const [listingId, location] of coordinateRepairs) {
+      statements.push(env.DB.prepare(`UPDATE listings SET latitude=?1, longitude=?2, updated_at=?3
+        WHERE id=?4 AND (latitude IS NULL OR longitude IS NULL)`)
+        .bind(location.latitude, location.longitude, repairedAt, listingId));
+    }
+    for (const [address, location] of cacheRepairs) {
+      statements.push(env.DB.prepare(`INSERT INTO geocode_cache (
+          cache_key, address, latitude, longitude, provider, payload_json, checked_at
+        ) VALUES (?1, ?1, ?2, ?3, 'naver', ?4, ?5)
+        ON CONFLICT(cache_key) DO UPDATE SET latitude=excluded.latitude, longitude=excluded.longitude,
+          provider='naver', payload_json=excluded.payload_json, checked_at=excluded.checked_at`)
+        .bind(address, location.latitude, location.longitude,
+          JSON.stringify({ source: "naver-manifest", sourceId: location.sourceId }), repairedAt));
+    }
+    await env.DB.batch(statements);
+  }
   const result = { ok: true, action: "classifySourceManifest", source, sessionId, received: entries.length,
-    needsDetail, unchanged, changed, unknown, sourceBackend: "D1" };
+    needsDetail, unchanged, changed, unknown, coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
   await env.DB.prepare("UPDATE collector_sessions SET totals_json=?1, updated_at=?2 WHERE id=?3")
-    .bind(JSON.stringify({ manifest: entries.length, unchanged, changed, unknown }), nowIso(), sessionId).run();
+    .bind(JSON.stringify({ manifest: entries.length, unchanged, changed, unknown,
+      coordinatesRepaired: coordinateRepairs.size }), nowIso(), sessionId).run();
   return result;
 }
 
@@ -362,11 +402,16 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         deposit=?4, monthly_rent=?5, maintenance_fee=?6, premium=?7, area_m2=?8,
         operating_memo=CASE WHEN ?9<>'' THEN ?9 ELSE operating_memo END,
         source_url=CASE WHEN source_url='' THEN ?10 ELSE source_url END,
-        version=version+1, last_collected_at=?11, updated_at=?11 WHERE id=?12`)
+        latitude=CASE WHEN ?11 IS NOT NULL THEN ?11 ELSE latitude END,
+        longitude=CASE WHEN ?12 IS NOT NULL THEN ?12 ELSE longitude END,
+        version=version+1, last_collected_at=?13, updated_at=?13 WHERE id=?14`)
       .bind(record.buildingName, record.room, record.category, record.deposit, record.rent, record.fee,
-        record.premium, record.area, record.memo, record.link, now, listingId)
+        record.premium, record.area, record.memo, record.link, record.latitude, record.longitude, now, listingId)
     : env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
-        source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END WHERE id=?3`).bind(now, record.link, listingId);
+        source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
+        latitude=CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE latitude END,
+        longitude=CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE longitude END WHERE id=?5`)
+      .bind(now, record.link, record.latitude, record.longitude, listingId);
   await env.DB.batch([
     update,
     env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
@@ -382,13 +427,13 @@ async function createListing(env, record, sessionId, actor = "collector") {
   const contacts = JSON.stringify(record.contacts);
   await env.DB.prepare(`INSERT INTO listings (
       id, property_id, status, main_source, title, address, building_name, room, listing_type,
-      deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, source_url,
+      deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude, operating_memo, source_url,
       contacts_json, first_collected_at, registration_at, last_collected_at, created_at, updated_at
-    ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-      ?14, ?15, ?15, ?15, ?15, ?15)`)
+    ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+      ?16, ?17, ?17, ?17, ?17, ?17)`)
     .bind(id, record.source, record.buildingName || "일반상가", record.address, record.room, record.category,
-      record.deposit, record.rent, record.fee, record.premium, record.area, record.memo, record.link,
-      contacts, now).run();
+      record.deposit, record.rent, record.fee, record.premium, record.area, record.latitude, record.longitude,
+      record.memo, record.link, contacts, now).run();
   await attachSource(env, record, id, sessionId, null, false, actor);
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record)).run();
