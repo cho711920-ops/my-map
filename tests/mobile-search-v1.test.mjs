@@ -9,10 +9,15 @@ const css = fs.readFileSync(new URL("../css/mobile-app-v1.css", import.meta.url)
 
 test("mobile keyword search syncs immediately and searches outside map bounds", () => {
   assert.match(html, /mobile-app-v1\.js\?v=1\.0\.3-mobile-search/);
-  assert.match(html, /mobile-app-v1\.css\?v=1\.0\.1-search-empty/);
+  assert.match(html, /mobile-app-v1\.css\?v=1\.0\.3-sort-row-aligned/);
   assert.match(mobile, /mobileInput\.addEventListener\("input", queueMobileKeywordSearch\)/);
   assert.match(mobile, /global\.jsMobileGlobalKeywordV1 = !!source\.value\.trim\(\)/);
   assert.match(script, /ignoreMapBounds \|\| mobileGlobalKeywordSearch/);
+});
+
+test("mobile sort control stays in the same row as the three listing filters", () => {
+  assert.match(css, /#listToolbar > #sortDropdown\s*\{[\s\S]*?grid-column: auto !important;[\s\S]*?grid-row: auto !important;/);
+  assert.match(css, /#listToolbar > #sortDropdown > #sortDropdownBtn/);
 });
 
 test("mobile list has an explicit empty result state", () => {

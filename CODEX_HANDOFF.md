@@ -233,3 +233,12 @@
 - The search remains client-side over already loaded listings and adds no D1 requests.
 - Cloudflare tests: 36/36 passed; mobile search tests: 2/2 passed. `cf:check` passed.
 - Production Worker version: `4ab663bb-38c9-44c4-9c11-08195a0bf89c`.
+
+## 2026-08-07 Mobile listing sort alignment
+
+- Fixed the mobile-only listing toolbar so `source`, `type`, `floor`, and `sort` stay in one four-column row.
+- Reset a legacy `grid-row: 2` rule on `#sortDropdown` that pushed the sort button over the first listing card.
+- Normalized all four controls to the same 36px height and top coordinate at 390px.
+- Production visual verification confirmed no overlap and a single aligned row; desktop remained in its original flex layout with mobile mode inactive.
+- Mobile tests: 3/3 passed; Cloudflare tests: 36/36 passed. `cf:check` passed.
+- Production Worker version: `4016b362-40d6-4e5a-a6b1-927062d409ed`.

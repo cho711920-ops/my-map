@@ -129,12 +129,27 @@
     display: block !important;
     width: 100% !important;
     height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
   }
 
-  .js-mobile-app-v1 #listToolbar > .list-toolbar-control > select,
-  .js-mobile-app-v1 #listToolbar > .list-sort-control > #sortDropdownBtn {
+  .js-mobile-app-v1 #listToolbar > #sortDropdown {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    top: auto !important;
+    bottom: auto !important;
     height: 36px !important;
     min-height: 36px !important;
+    max-height: 36px !important;
+  }
+
+  .js-mobile-app-v1 #listToolbar > .list-source-control > #sourceFilter,
+  .js-mobile-app-v1 #listToolbar > .list-type-control > #typeFilter,
+  .js-mobile-app-v1 #listToolbar > .list-floor-control > #floorQuickFilter,
+  .js-mobile-app-v1 #listToolbar > #sortDropdown > #sortDropdownBtn {
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
     padding-left: 10px !important;
     border: 1px solid #d5e0ec !important;
     border-radius: 11px !important;
