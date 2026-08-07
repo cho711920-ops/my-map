@@ -26,6 +26,7 @@ const DAANGN_LIST_FIRST_HASH = "e0cdf7eab9f342cf735fb8951d9dc0b771418964e241bd59
 const DAANGN_LIST_NEXT_HASH = "c0cf343435add09c37d248748eb3762cc86e4be4b5349ae60b2e080cccc4d3c5";
 const DAANGN_DETAIL_HASH = "d374a65ffef31da412d7233ee4740a5379554196b1adf1a08d861048c952d108";
 const DAANGN_JOB_PREFIX = "collector-daangn-";
+const GONGSIL_PHOTO_ROOT = "https://file1.gongsilbox.com/file/land_photo/";
 
 function daangnJobId(body = {}) {
   const clientId = clean(body.clientId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
@@ -122,6 +123,36 @@ function uniqueUrls(values) {
   return output;
 }
 
+export function gongsilPhotoUrl(value) {
+  let path = clean(value && typeof value === "object"
+    ? value.Photo || value.photo || value.url || value.Xbfimg || value.xbfimg
+    : value);
+  if (!path) return "";
+  if (/^https:\/\//i.test(path)) return /\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(path) ? path : "";
+  path = path.replace(/^\/+/, "")
+    .replace(/^(?:https?:\/\/)?(?:file1\.)?gongsilbox\.com\/file\/land_photo\//i, "");
+  if (!path || /(?:^|\/)\.\.(?:\/|$)/.test(path) || /\\/.test(path)) return "";
+  if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(path)) return "";
+  return `${GONGSIL_PHOTO_ROOT}${path}`;
+}
+
+export function gongsilImageUrls(record) {
+  const raw = record?.raw || record || {};
+  const list = raw?.list || raw;
+  const detail = raw?.detail || {};
+  const photoRows = [list?.Photos, list?.photos, detail?.Photos, detail?.photos]
+    .flatMap((value) => Array.isArray(value) ? value : []);
+  const rawPhotos = photoRows.map(gongsilPhotoUrl).filter(Boolean);
+  const fallback = rawPhotos.length ? [] : [list?.Xbfimg, list?.xbfimg, detail?.Xbfimg, detail?.xbfimg]
+    .map(gongsilPhotoUrl).filter(Boolean);
+  return uniqueUrls([
+    record?.primaryImage,
+    ...(Array.isArray(record?.imageUrls) ? record.imageUrls : []),
+    ...rawPhotos,
+    ...fallback
+  ]);
+}
+
 function memoWithVisit(value) {
   const memo = clean(value).replace(/^@?\s*\(임장가자\)\s*/i, "").replace(/\s+/g, " ");
   return `(임장가자)${memo ? ` ${memo}` : ""}`.slice(0, 1500);
@@ -137,8 +168,7 @@ function gongsilRecord(record) {
   })).filter((entry) => entry.phone) : [];
   if (clean(values[9])) contacts.push({ role: "임대인", name: "", phone: clean(values[9]) });
   if (clean(values[10])) contacts.push({ role: "임차인", name: "", phone: clean(values[10]) });
-  const images = uniqueUrls(record?.imageUrls || []);
-  if (clean(record?.primaryImage) && !images.includes(clean(record.primaryImage))) images.unshift(clean(record.primaryImage));
+  const images = gongsilImageUrls(record);
   return {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
     address: normalizedAddress(values[1] || record?.address), room: canonicalListingRoom(values[2] || record?.room),

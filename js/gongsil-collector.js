@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.1";
+  var VERSION = "2.1.2";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -1283,9 +1283,21 @@
     var urls = [];
     var seen = Object.create(null);
     var imageKey = /(?:image|images|photo|photos|thumbnail|thumb|picture|pictures|media)/i;
-    function add(value) {
+    var gongsilPhotoRoot = "https://file1.gongsilbox.com/file/land_photo/";
+    function normalizedPhotoUrl(value, key) {
       var url = text(value);
-      if (!/^https?:\/\//i.test(url) || seen[url]) return;
+      if (!url) return "";
+      if (/^https:\/\//i.test(url)) return url;
+      if (!imageKey.test(key || "")) return "";
+      url = url.replace(/^\/+/, "");
+      url = url.replace(/^(?:https?:\/\/)?(?:file1\.)?gongsilbox\.com\/file\/land_photo\//i, "");
+      if (!url || /(?:^|\/)\.\.(?:\/|$)/.test(url) || /\\/.test(url)) return "";
+      if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(url)) return "";
+      return gongsilPhotoRoot + url;
+    }
+    function add(value, key) {
+      var url = normalizedPhotoUrl(value, key);
+      if (!url || seen[url]) return;
       if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(url) &&
           !/(?:image|photo|thumb|cdn|gongsil)/i.test(url)) return;
       seen[url] = true;
@@ -1294,7 +1306,7 @@
     function walk(value, key, depth) {
       if (value == null || depth > 5) return;
       if (typeof value === "string") {
-        if (imageKey.test(key || "") || /^https?:\/\//i.test(value)) add(value);
+        if (imageKey.test(key || "") || /^https?:\/\//i.test(value)) add(value, key);
         return;
       }
       if (Array.isArray(value)) {

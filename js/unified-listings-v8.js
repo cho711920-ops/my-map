@@ -73,7 +73,7 @@
     }
     try {
       var parsed = new URL(value, global.location && global.location.href || undefined);
-      if (parsed.protocol === "https:" && /^(?:img\.kr\.gcp-karroter\.net|landthumb-phinf\.pstatic\.net|dnvefa72aowie\.cloudfront\.net)$/i.test(parsed.hostname)) {
+      if (parsed.protocol === "https:" && /^(?:img\.kr\.gcp-karroter\.net|landthumb-phinf\.pstatic\.net|dnvefa72aowie\.cloudfront\.net|file1\.gongsilbox\.com)$/i.test(parsed.hostname)) {
         return "/api/listing-image?url=" + encodeURIComponent(parsed.toString());
       }
     } catch (ignore) {}

@@ -44,7 +44,8 @@ const UNIFIED_COMPACT_FIELDS = [
 const IMAGE_CACHE_HOSTS = new Set([
   "img.kr.gcp-karroter.net",
   "landthumb-phinf.pstatic.net",
-  "dnvefa72aowie.cloudfront.net"
+  "dnvefa72aowie.cloudfront.net",
+  "file1.gongsilbox.com"
 ]);
 let sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
 

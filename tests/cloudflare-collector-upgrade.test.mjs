@@ -2,7 +2,32 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { collectorCompletionAudit, manifestEntryMatch } from "../cloudflare/src/collector-api.js";
+import {
+  collectorCompletionAudit,
+  gongsilImageUrls,
+  gongsilPhotoUrl,
+  manifestEntryMatch
+} from "../cloudflare/src/collector-api.js";
+
+test("Gongsilbox relative photo paths become cacheable absolute image URLs", () => {
+  const first = "2025/09/20250911_1212163928_00.png";
+  const second = "2025/09/20250911_1212163928_01.jpg";
+  assert.equal(gongsilPhotoUrl(first), `https://file1.gongsilbox.com/file/land_photo/${first}`);
+  assert.equal(gongsilPhotoUrl("../private.png"), "");
+  assert.deepEqual(gongsilImageUrls({
+    raw: { list: { Photos: [{ Photo: first }, { Photo: second }], Xbfimg: "fallback.png" } }
+  }), [
+    `https://file1.gongsilbox.com/file/land_photo/${first}`,
+    `https://file1.gongsilbox.com/file/land_photo/${second}`
+  ]);
+});
+
+test("Gongsilbox representative image is used only when detail photos are absent", () => {
+  const fallback = "2025/08/20250822_1129224858_00.png";
+  assert.deepEqual(gongsilImageUrls({ raw: { list: { Photos: [], Xbfimg: fallback } } }), [
+    `https://file1.gongsilbox.com/file/land_photo/${fallback}`
+  ]);
+});
 
 test("legacy source rows bootstrap from stable listing terms without a detail refetch", () => {
   const row = {
