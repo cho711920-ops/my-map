@@ -38,9 +38,11 @@ if ($Setup) {
     'https://www.gongsilbox.com/maps/sg?lat=36.36012050&lng=127.37906660&zoom=13'
   )
 } else {
+  $runToken = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
   $arguments += @(
     '--start-minimized',
-    'https://js-map.com/collector-install?js_auto_run=1'
+    '--new-tab',
+    "https://js-map.com/collector-install?js_auto_run=1&run=$runToken"
   )
 }
 
@@ -48,4 +50,20 @@ if ($Setup) {
   Start-Process -FilePath $edgePath -ArgumentList $arguments
 } else {
   Start-Process -FilePath $edgePath -ArgumentList $arguments -WindowStyle Hidden
+  Start-Sleep -Seconds 3
+  Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class JSMapWindow {
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+'@
+  Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
+    Where-Object { $_.CommandLine -like "*$profilePath*" -and $_.CommandLine -notlike '*--type=*' } |
+    ForEach-Object {
+      $edgeProcess = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+      if ($edgeProcess -and $edgeProcess.MainWindowHandle -ne 0) {
+        [JSMapWindow]::ShowWindow($edgeProcess.MainWindowHandle, 6) | Out-Null
+      }
+    }
 }

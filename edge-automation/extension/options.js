@@ -111,4 +111,9 @@ document.getElementById("clear").addEventListener("click", async () => {
   await load();
 });
 
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  if (changes.jsAutoCollectorConfigV1 || changes.jsAutoCollectorLogsV1) load();
+});
+
 load();

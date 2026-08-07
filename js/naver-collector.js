@@ -358,7 +358,10 @@
     state.selectionMode = "district";
     state.clickedClusterCount = 0;
     state.capture = null;
-    discoverFinContext();
+    // 자동수집에서는 등록된 대상을 그대로 사용한다. 현재 지도 화면에 선택된
+    // 구를 다시 읽으면 등록 대상이 다른 구로 덮어써질 수 있다.
+    autoDistrictSelect.value = district.cortarNo;
+    autoRegisterButton.textContent = district.name + " 자동수집 등록";
     await collectFinSelectedAndSave();
     if (state.stopRequested || Number(state.dashboard.failed || 0) > 0) {
       throw new Error("네이버 자동수집이 부분수집 또는 오류로 종료됐습니다.");

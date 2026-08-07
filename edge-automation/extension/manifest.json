@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JS 부동산 자동수집",
-  "version": "1.0.0",
+  "version": "1.0.11",
   "description": "Edge에서 네이버·당근·공실박스 수집기를 매일 순서대로 실행합니다.",
   "permissions": ["alarms", "notifications", "storage", "tabs"],
   "host_permissions": [
@@ -22,6 +22,24 @@
   },
   "options_page": "options.html",
   "content_scripts": [
+    {
+      "matches": ["https://new.land.naver.com/*", "https://fin.land.naver.com/*"],
+      "js": ["collectors/naver-collector.js", "auto-bridge.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://realty.daangn.com/*"],
+      "js": ["collectors/daangn-collector.js", "auto-bridge.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://gongsilbox.com/*", "https://*.gongsilbox.com/*"],
+      "js": ["collectors/gongsil-collector.js", "auto-bridge.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
     {
       "matches": [
         "https://js-map.com/*",

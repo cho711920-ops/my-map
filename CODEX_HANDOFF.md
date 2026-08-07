@@ -242,3 +242,15 @@
 - Production visual verification confirmed no overlap and a single aligned row; desktop remained in its original flex layout with mobile mode inactive.
 - Mobile tests: 3/3 passed; Cloudflare tests: 36/36 passed. `cf:check` passed.
 - Production Worker version: `4016b362-40d6-4e5a-a6b1-927062d409ed`.
+
+## 2026-08-07 Edge 자동수집 안정화
+
+- Windows 예약 작업 `JSMap Auto Collector`를 30분 반복이 아닌 매일 오전 11시 1회 실행으로 변경했다. 놓친 실행만 `StartWhenAvailable`로 보완한다.
+- Manifest V3 서비스 워커가 장시간 수집 중 종료되어 두 번째 대상에서 멈추던 문제를 실행 상태 영속화와 대상 완료 메시지 방식으로 수정했다.
+- 대상 완료 메시지가 서비스 워커 재시작 시 유실되지 않도록 최대 12회 재전송한다.
+- 자동수집 대상 탭은 백그라운드로 열고 전용 Edge 창을 대상 전환 전후 최소화하여 창이 앞으로 반복해서 나타나지 않게 했다.
+- 네이버 자동수집이 등록한 구를 현재 지도 화면의 선택 구로 덮어쓰던 문제를 수정했다. 자동실행은 등록된 `cortarNo`를 그대로 사용한다.
+- 공실박스 자동 대상은 사용자 선택에 따라 비활성화했다. 현재 자동 대상은 네이버 5개 구와 당근 5개 구이며 공실박스는 수동 수집한다.
+- 전용 Edge 확장 프로그램 `1.0.11`을 로컬 프로필에 적용했고 기존 로그인·대상 설정은 보존했다.
+- 5분 연속 관찰에서 전용 Edge 프로세스 1개와 최소화 상태가 유지됐고 추가 창/재실행은 없었다. 다음 예약은 `2026-08-08 11:00 KST`다.
+- `tests/edge-auto-collector.test.mjs` 5/5와 확장 프로그램 JavaScript 구문 검사를 통과했다.
