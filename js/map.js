@@ -38,6 +38,7 @@ var jsAdministrativeListSelectionV6570 = null;
 var jsAutomaticDataRefreshIntervalV681 = 5 * 60 * 1000;
 var jsListingsRevisionV682 = "";
 var jsListingsRevisionPendingV682 = false;
+var jsListingsRevisionInfoV683 = null;
 
 
 function fetchDataRevisionV682(scope) {
@@ -54,7 +55,69 @@ function fetchDataRevisionV682(scope) {
     if (!response.ok) throw new Error("Data revision check failed (HTTP " + response.status + ")");
     return response.json();
   }).then(function(result) {
+    if ((scope || "listings") === "listings") jsListingsRevisionInfoV683 = result || null;
     return String(result && result.revision || "");
+  });
+}
+
+function listingChangeRowToItemV683(row, index) {
+  var item = {
+    name: clean(row.title), address: clean(row.address), room: clean(row.room), type: clean(row.listing_type),
+    deposit: Number(row.deposit) || 0, rent: Number(row.monthly_rent) || 0,
+    fee: Number(row.maintenance_fee) || 0, premium: Number(row.premium) || 0, area: Number(row.area_m2) || 0,
+    displayValuePresence: {
+      deposit: row.deposit !== null && row.deposit !== "", rent: row.monthly_rent !== null && row.monthly_rent !== "",
+      fee: row.maintenance_fee !== null && row.maintenance_fee !== "", premium: row.premium !== null && row.premium !== "",
+      area: row.area_m2 !== null && row.area_m2 !== ""
+    },
+    landlordPhone: clean(row.landlord_phone), tenantPhone: clean(row.tenant_phone),
+    memo: clean(row.operating_memo), state: clean(row.status), regDate: clean(row.first_collected_at),
+    source: clean(row.main_source), propertyId: clean(row.property_id), sourceLink: clean(row.source_url),
+    contactListRaw: String(row.contacts_json == null ? "" : row.contacts_json).trim(),
+    buildingYear: clean(row.building_year), buildingElevators: Number(row.building_elevators) || 0,
+    buildingApprovalDate: clean(row.building_approval_date), buildingInfoCheckedAt: clean(row.building_info_checked_at),
+    buildingInfoStatus: clean(row.building_info_status), registrationAt: clean(row.registration_at),
+    lastCollectedAt: clean(row.last_collected_at),
+    latitude: row.latitude === null || row.latitude === "" ? null : Number(row.latitude),
+    longitude: row.longitude === null || row.longitude === "" ? null : Number(row.longitude),
+    sheetRow: Number(index || 0) + 1, latlng: null
+  };
+  if (Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && window.kakao && kakao.maps) {
+    item.latlng = new kakao.maps.LatLng(item.latitude, item.longitude);
+  }
+  item.key = itemKey(item);
+  return item;
+}
+
+function applyListingChangesV683(info) {
+  var ids = info && Array.isArray(info.changeIds) ? info.changeIds.map(clean).filter(Boolean).slice(0, 50) : [];
+  if (!ids.length || info.fullReload) return Promise.resolve(false);
+  var query = new URLSearchParams({ action: "listingChanges", ids: ids.join(","), _: String(Date.now()) });
+  return fetch((window.saveApiURL || "/api/data") + "?" + query.toString(), {
+    credentials: "same-origin", cache: "no-store"
+  }).then(function(response) {
+    if (!response.ok) throw new Error("Listing delta failed (HTTP " + response.status + ")");
+    return response.json();
+  }).then(function(result) {
+    var changed = {};
+    ids.forEach(function(id) { changed[id] = true; });
+    var retained = (allItems || []).filter(function(item) { return !changed[clean(item && item.propertyId)]; });
+    var replacements = (result.items || []).map(listingChangeRowToItemV683).filter(function(item) {
+      return item.address && item.state !== "deleted";
+    });
+    allItems = retained.concat(replacements);
+    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function") {
+      return window.JSUnifiedListingsV8.load(false).then(function(unified) {
+        if (typeof window.JSUnifiedListingsV8.attach === "function") window.JSUnifiedListingsV8.attach(allItems, unified);
+      });
+    }
+  }).then(function() {
+    updateTypeOptions(allItems);
+    applyFilter();
+    updateErrorStatus();
+    var status = document.getElementById("status");
+    if (status) status.textContent = "변경된 매물 " + ids.length + "건만 동기화했습니다.";
+    return true;
   });
 }
 
@@ -80,8 +143,14 @@ function refreshListingsWhenChangedV682() {
       });
     }
     if (revision === jsListingsRevisionV682) return;
-    return Promise.resolve(loadSheet(true, false)).then(function(loaded) {
-      if (loaded !== false) jsListingsRevisionV682 = revision;
+    return applyListingChangesV683(jsListingsRevisionInfoV683).then(function(applied) {
+      if (applied) {
+        jsListingsRevisionV682 = revision;
+        return;
+      }
+      return Promise.resolve(loadSheet(true, false)).then(function(loaded) {
+        if (loaded !== false) jsListingsRevisionV682 = revision;
+      });
     });
   }).catch(function(error) {
     console.warn("Listing revision check failed", error);

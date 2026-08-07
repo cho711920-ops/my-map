@@ -1,4 +1,5 @@
 import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./floor.js";
+import { requireRole } from "./security.js";
 
 const COLLECTOR_ORIGINS = [
   /(^|\.)realty\.daangn\.com$/i,
@@ -1414,7 +1415,9 @@ async function applyReviewBatch(env, user, body) {
   const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM collector_raw WHERE processing_state='review'").first();
   return { ok: true, action: "applyReviewBatch", processed, failed, processedReviewIds,
     remaining: Number(remaining?.count || 0), actionWritesVerified: processed,
-    reviewRowsRemovedVerified: processed, elapsedMs: Date.now() - started, source: "D1" };
+    reviewRowsRemovedVerified: processed, elapsedMs: Date.now() - started,
+    operationAdjustments: { pendingReview: -processed },
+    operationRefresh: Number(remaining?.count || 0) === 0, source: "D1" };
 }
 
 async function consolidateExisting(env, user, body) {
@@ -1437,7 +1440,8 @@ async function consolidateExisting(env, user, body) {
     ]);
     consolidated += 1;
   }
-  return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id, source: "D1" };
+  return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id,
+    operationAdjustments: { activeMaster: -consolidated, history: consolidated }, source: "D1" };
 }
 
 async function repairExactReviews(env, user) {
@@ -1454,12 +1458,14 @@ async function repairExactReviews(env, user) {
       .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: exact.id }), row.id).run();
     merged += 1;
   }
-  return { ok: true, action: "repairRoomlessExactReviews", merged, source: "D1" };
+  return { ok: true, action: "repairRoomlessExactReviews", merged,
+    operationAdjustments: { pendingReview: -merged }, source: "D1" };
 }
 
 export async function handleCollectorAdminPost(env, user, body) {
   const action = clean(body.action);
   if (!isCollectorAdminPostAction(action)) return null;
+  requireRole(user, ["owner", "admin", "member"]);
   if (action === "applyReviewBatch") return applyReviewBatch(env, user, body);
   if (action === "consolidateExistingMasters") return consolidateExisting(env, user, body);
   if (action === "repairRoomlessExactReviews") return repairExactReviews(env, user);

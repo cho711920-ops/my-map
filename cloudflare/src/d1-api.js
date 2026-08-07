@@ -1,4 +1,5 @@
 import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
+import { requireRole } from "./security.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -8,13 +9,15 @@ const UNIFIED_FIELDS = [
 const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
-  "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard"
+  "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard",
+  "listingChanges", "listingHistory", "userManagement", "userProfile"
 ]);
 
 const D1_POST_ACTIONS = new Set([
   "deleteProperty", "enqueueMutation", "moveOriginalListing", "quickAdd", "saveCloudState",
   "saveGeocodeCache", "toggleDone", "updateProperty", "updatePropertyMemo", "saveCustomer",
-  "updateCustomerMatch", "rebuildCustomerMatches", "addCustomerActivity"
+  "updateCustomerMatch", "rebuildCustomerMatches", "addCustomerActivity",
+  "restoreListingHistory", "saveAllowedUser"
 ]);
 
 const CUSTOMER_HEADERS = [
@@ -154,6 +157,21 @@ export async function buildD1SheetCsv(env) {
     row.registration_at, row.last_collected_at, row.latitude, row.longitude
   ])].map((row) => row.map(csvCell).join(",")).join("\r\n");
   return `${body}\r\n`;
+}
+
+async function listingChanges(env, query) {
+  const ids = [...new Set(clean(query.ids).split(",").map((value) => clean(value).slice(0, 100)).filter(Boolean))]
+    .slice(0, 50);
+  if (!ids.length) return { ok: true, action: "listingChanges", items: [], source: "D1" };
+  const placeholders = ids.map((_, index) => `?${index + 1}`).join(",");
+  const result = await env.DB.prepare(`SELECT
+      title, address, room, listing_type, deposit, monthly_rent, maintenance_fee, premium, area_m2,
+      landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
+      property_id, source_url, contacts_json, building_year, building_elevators,
+      building_approval_date, building_info_checked_at, building_info_status, registration_at,
+      last_collected_at, latitude, longitude
+    FROM listings WHERE property_id IN (${placeholders})`).bind(...ids).all();
+  return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
 }
 
 async function unifiedListings(env) {
@@ -461,7 +479,7 @@ async function customerMatches(env, customerId) {
   return { ok: true, action: "customerMatches", headers: MATCH_HEADERS, rows: rows.map(matchRow), source: "D1" };
 }
 
-async function operationsDashboard(env) {
+async function computeOperationsDashboard(env) {
   const result = await env.DB.prepare(`SELECT
       (SELECT COUNT(*) FROM listings WHERE status <> 'deleted') AS active_master,
       (SELECT COUNT(*) FROM listing_sources WHERE active=1) AS raw_count,
@@ -506,8 +524,162 @@ async function operationsDashboard(env) {
     newMatchCustomers: (customerSummary?.results || []).filter((row) => Number(row.fresh) > 0).length,
     overdueCustomers: (customerSummary?.results || []).filter((row) => Number(row.overdue) > 0).length,
     contactReminderDays: 3,
+    calculatedAt: new Date().toISOString(),
+    source: "D1-CALCULATED"
+  };
+}
+
+async function saveOperationsSnapshot(env, payload) {
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO operations_snapshots (
+      snapshot_key, payload_json, calculated_at, updated_at
+    ) VALUES ('main', ?1, ?2, ?2)
+    ON CONFLICT(snapshot_key) DO UPDATE SET
+      payload_json=excluded.payload_json,
+      calculated_at=excluded.calculated_at,
+      updated_at=excluded.updated_at`)
+    .bind(JSON.stringify(payload || {}), now).run();
+  return { ...(payload || {}), calculatedAt: now, source: "D1-SNAPSHOT" };
+}
+
+export async function refreshOperationsDashboard(env) {
+  const payload = await computeOperationsDashboard(env);
+  try {
+    return await saveOperationsSnapshot(env, payload);
+  } catch {
+    return payload;
+  }
+}
+
+export async function adjustOperationsDashboard(env, adjustments = {}) {
+  let row;
+  try {
+    row = await env.DB.prepare(
+      "SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main' LIMIT 1"
+    ).first();
+  } catch {
+    return refreshOperationsDashboard(env);
+  }
+  if (!row) return refreshOperationsDashboard(env);
+  const payload = parseJson(row.payload_json, {});
+  const pairs = [
+    ["activeMaster", "activeMaster"], ["master", "activeMaster"],
+    ["raw", "raw"], ["pendingReview", "pendingReview"], ["review", "pendingReview"],
+    ["history", "history"]
+  ];
+  for (const [target, source] of pairs) {
+    const delta = Number(adjustments[source] || 0);
+    if (delta) payload[target] = Math.max(0, Number(payload[target] || 0) + delta);
+  }
+  return saveOperationsSnapshot(env, payload);
+}
+
+async function operationsDashboard(env) {
+  try {
+    const row = await env.DB.prepare(`SELECT payload_json, calculated_at
+      FROM operations_snapshots WHERE snapshot_key='main' LIMIT 1`).first();
+    if (!row) return refreshOperationsDashboard(env);
+    return {
+      ...parseJson(row.payload_json, {}),
+      calculatedAt: row.calculated_at || "",
+      source: "D1-SNAPSHOT"
+    };
+  } catch {
+    return computeOperationsDashboard(env);
+  }
+}
+
+function historyDiff(beforeValue, afterValue) {
+  const before = beforeValue && typeof beforeValue === "object" ? beforeValue : {};
+  const after = afterValue && typeof afterValue === "object" ? afterValue : {};
+  const ignored = new Set(["updated_at", "created_at", "version", "raw_json", "payload_json"]);
+  const changes = [];
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (ignored.has(key)) continue;
+    const left = before[key];
+    const right = after[key];
+    if (JSON.stringify(left) === JSON.stringify(right)) continue;
+    changes.push({ field: key, before: left ?? "", after: right ?? "" });
+    if (changes.length >= 20) break;
+  }
+  return changes;
+}
+
+async function listingHistory(env, query) {
+  const limit = Math.max(20, Math.min(100, Number(query.limit) || 60));
+  const cursor = Math.max(0, Number(query.cursor) || 0);
+  const propertyId = clean(query.propertyId).slice(0, 100);
+  const result = await env.DB.prepare(`SELECT h.id, h.listing_id, h.action, h.actor_email,
+      h.before_json, h.after_json, h.created_at,
+      COALESCE(l.property_id, h.listing_id) AS property_id,
+      COALESCE(l.title, '') AS title, COALESCE(l.address, '') AS address,
+      COALESCE(l.room, '') AS room
+    FROM listing_history h
+    LEFT JOIN listings l ON l.id=h.listing_id
+    WHERE (?1='' OR h.listing_id=?1 OR l.property_id=?1)
+      AND (?2=0 OR h.id < ?2)
+    ORDER BY h.id DESC LIMIT ?3`)
+    .bind(propertyId, cursor, limit + 1).all();
+  const rows = result?.results || [];
+  const page = rows.slice(0, limit);
+  return {
+    ok: true,
+    action: "listingHistory",
+    items: page.map((row) => {
+      const before = parseJson(row.before_json, {});
+      const after = parseJson(row.after_json, {});
+      return {
+        id: Number(row.id) || 0,
+        propertyId: clean(row.property_id || row.listing_id),
+        title: clean(row.title),
+        address: clean(row.address),
+        room: clean(row.room),
+        changeAction: clean(row.action),
+        actorEmail: clean(row.actor_email),
+        createdAt: clean(row.created_at),
+        changes: historyDiff(before, after),
+        restorable: ["updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(clean(row.action))
+      };
+    }),
+    nextCursor: rows.length > limit ? Number(page[page.length - 1]?.id || 0) : 0,
     source: "D1"
   };
+}
+
+async function userProfile(user) {
+  return {
+    ok: true,
+    action: "userProfile",
+    email: clean(user?.email).toLowerCase(),
+    displayName: clean(user?.displayName),
+    role: clean(user?.role) || "member",
+    canManageUsers: ["owner", "admin"].includes(clean(user?.role)),
+    canEdit: clean(user?.role) !== "viewer",
+    source: "SESSION"
+  };
+}
+
+async function userManagement(env, user) {
+  requireRole(user, ["owner", "admin"]);
+  const result = await env.DB.prepare(`SELECT email, display_name, role, active, created_at, updated_at
+    FROM allowed_users ORDER BY active DESC,
+      CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
+      email`).all();
+  const users = (result?.results || []).map((row) => ({
+    email: clean(row.email).toLowerCase(),
+    displayName: clean(row.display_name),
+    role: clean(row.role) || "member",
+    active: Number(row.active) === 1,
+    createdAt: clean(row.created_at),
+    updatedAt: clean(row.updated_at),
+    source: "D1"
+  }));
+  for (const [index, email] of String(env.ALLOWED_EMAILS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean).entries()) {
+    if (!users.some((entry) => entry.email === email)) {
+      users.push({ email, displayName: "", role: index === 0 ? "owner" : "member", active: true, source: "ENV" });
+    }
+  }
+  return { ok: true, action: "userManagement", users, source: "D1+ENV" };
 }
 
 export async function handleD1GetAction(env, user, query) {
@@ -526,6 +698,10 @@ export async function handleD1GetAction(env, user, query) {
   if (action === "customerWorkspace") return customerWorkspace(env, query.customerId);
   if (action === "customerMatches") return customerMatches(env, query.customerId);
   if (action === "operationsDashboard") return operationsDashboard(env);
+  if (action === "listingChanges") return listingChanges(env, query);
+  if (action === "listingHistory") return listingHistory(env, query);
+  if (action === "userProfile") return userProfile(user);
+  if (action === "userManagement") return userManagement(env, user);
   return null;
 }
 
@@ -556,41 +732,73 @@ async function updateProperty(env, user, body) {
         clean(value.memo), clean(value.state) || "active", JSON.stringify(value.contacts || []), now, propertyId),
     env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
       VALUES (?1, 'updateProperty', ?2, ?3, ?4)`)
-      .bind(propertyId, clean(user?.email), JSON.stringify(before), JSON.stringify(value))
+      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(before), JSON.stringify(value))
   ]);
-  return { ok: true, persisted: true, queued: false, propertyId, updated: value, source: "D1" };
+  return { ok: true, persisted: true, queued: false, propertyId, updated: value,
+    operationAdjustments: { history: 1 }, source: "D1" };
 }
 
 async function updateMemo(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
+    SELECT id, 'updatePropertyMemo', ?1,
+      json_object('property_id', property_id, 'operating_memo', operating_memo, 'contacts_json', contacts_json),
+      json_object('operating_memo', ?2, 'contacts_json', ?3)
+    FROM listings WHERE property_id=?4 LIMIT 1`)
+    .bind(clean(user?.email), clean(body.memo), JSON.stringify(body.contacts || []), propertyId).run();
   const result = await env.DB.prepare(`UPDATE listings SET operating_memo=?1, contacts_json=?2,
     version=version+1, updated_at=?3 WHERE property_id=?4`)
-    .bind(clean(body.memo), JSON.stringify(body.contacts || []), new Date().toISOString(), propertyId).run();
+    .bind(clean(body.memo), JSON.stringify(body.contacts || []), now, propertyId).run();
   if (!Number(result?.meta?.changes || 0)) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
-  return { ok: true, persisted: true, queued: false, propertyId, memo: clean(body.memo), contacts: body.contacts || [], source: "D1" };
+  return { ok: true, persisted: true, queued: false, propertyId, memo: clean(body.memo), contacts: body.contacts || [],
+    operationAdjustments: { history: 1 }, source: "D1" };
 }
 
-async function toggleDone(env, body) {
+async function toggleDone(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
-  const result = await env.DB.prepare(`UPDATE listings SET status=?1, operating_memo=?2,
-    version=version+1, updated_at=?3 WHERE property_id=?4`)
-    .bind(clean(body.state) || "active", clean(body.memo), new Date().toISOString(), propertyId).run();
+  const before = await env.DB.prepare(`SELECT id, property_id, status, operating_memo
+    FROM listings WHERE property_id=?1 LIMIT 1`).bind(propertyId).first();
+  if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const after = { status: clean(body.state) || "active", operating_memo: clean(body.memo) };
+  const now = new Date().toISOString();
+  const results = await env.DB.batch([
+    env.DB.prepare(`UPDATE listings SET status=?1, operating_memo=?2,
+      version=version+1, updated_at=?3 WHERE property_id=?4`)
+      .bind(after.status, after.operating_memo, now, propertyId),
+    env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
+      VALUES (?1, 'toggleDone', ?2, ?3, ?4)`)
+      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(before), JSON.stringify(after))
+  ]);
+  const result = results?.[0];
   if (!Number(result?.meta?.changes || 0)) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
-  return { ok: true, persisted: true, queued: false, propertyId, state: clean(body.state), memo: clean(body.memo), source: "D1" };
+  return { ok: true, persisted: true, queued: false, propertyId, state: after.status, memo: after.operating_memo,
+    operationAdjustments: { history: 1 }, source: "D1" };
 }
 
-async function deleteProperty(env, body) {
+async function deleteProperty(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
-  const result = await env.DB.prepare(`UPDATE listings SET status='deleted', version=version+1, updated_at=?1
-    WHERE property_id=?2`).bind(new Date().toISOString(), propertyId).run();
+  const before = await env.DB.prepare(`SELECT id, property_id, status FROM listings
+    WHERE property_id=?1 LIMIT 1`).bind(propertyId).first();
+  if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const now = new Date().toISOString();
+  const results = await env.DB.batch([
+    env.DB.prepare(`UPDATE listings SET status='deleted', version=version+1, updated_at=?1
+      WHERE property_id=?2`).bind(now, propertyId),
+    env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
+      VALUES (?1, 'deleteProperty', ?2, ?3, ?4)`)
+      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(before), JSON.stringify({ status: "deleted" }))
+  ]);
+  const result = results?.[0];
   if (!Number(result?.meta?.changes || 0)) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
-  return { ok: true, persisted: true, queued: false, deleted: true, propertyId, source: "D1" };
+  return { ok: true, persisted: true, queued: false, deleted: true, propertyId,
+    operationAdjustments: { activeMaster: -1, history: 1 }, source: "D1" };
 }
 
-async function quickAdd(env, body) {
+async function quickAdd(env, user, body) {
   const values = Array.isArray(body.values) ? body.values : [];
   const duplicate = await duplicateCheck(env, values);
   if (duplicate.duplicateType !== "none" && !body.forceDuplicate) {
@@ -609,7 +817,12 @@ async function quickAdd(env, body) {
       number(values[6]), number(values[7]), number(values[8]), clean(values[9]), clean(values[10]),
       clean(values[11]), clean(values[13]) || now, clean(values[16]), clean(values[17]) || "[]",
       clean(values[23]) || now, clean(values[24]) || now).run();
-  return { ok: true, persisted: true, queued: false, propertyId, source: "D1" };
+  await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
+    VALUES (?1, 'quickAdd', ?2, '{}', ?3)`)
+    .bind(propertyId, clean(user?.email), JSON.stringify({ property_id: propertyId, title: clean(values[0]),
+      address: clean(values[1]), room: canonicalListingRoom(values[2]) })).run();
+  return { ok: true, persisted: true, queued: false, propertyId,
+    operationAdjustments: { activeMaster: 1, history: 1 }, source: "D1" };
 }
 
 async function saveCloudState(env, user, body) {
@@ -697,7 +910,8 @@ async function moveOriginal(env, user, body) {
         JSON.stringify({ targetMasterId, removedAt: now })).run();
   }
   return { ok: true, persisted: true, queued: false, originalId, sourceMasterId: source.listing_id,
-    targetMasterId, sourceMasterRemoved, source: "D1" };
+    targetMasterId, sourceMasterRemoved,
+    operationAdjustments: { activeMaster: sourceMasterRemoved ? -1 : 0, history: sourceMasterRemoved ? 1 : 0 }, source: "D1" };
 }
 
 function splitRequirement(value) {
@@ -934,13 +1148,89 @@ async function addCustomerActivity(env, user, body) {
   };
 }
 
+async function saveAllowedUser(env, user, body) {
+  requireRole(user, ["owner", "admin"]);
+  const email = clean(body.email).toLowerCase().slice(0, 254);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw Object.assign(new Error("올바른 이메일 주소를 입력해 주세요."), { statusCode: 400 });
+  }
+  const requestedRole = clean(body.role) || "member";
+  const allowedRoles = clean(user?.role) === "owner"
+    ? new Set(["admin", "member", "viewer"])
+    : new Set(["member", "viewer"]);
+  if (!allowedRoles.has(requestedRole)) {
+    throw Object.assign(new Error("해당 권한을 지정할 수 없습니다."), { statusCode: 403 });
+  }
+  const active = body.active === false ? 0 : 1;
+  if (email === clean(user?.email).toLowerCase() && !active) {
+    throw Object.assign(new Error("현재 로그인한 계정은 비활성화할 수 없습니다."), { statusCode: 400 });
+  }
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO allowed_users (
+      email, display_name, role, active, created_by, created_at, updated_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+    ON CONFLICT(email) DO UPDATE SET
+      display_name=excluded.display_name,
+      role=excluded.role,
+      active=excluded.active,
+      updated_at=excluded.updated_at`)
+    .bind(email, clean(body.displayName).slice(0, 100), requestedRole, active,
+      clean(user?.email).toLowerCase(), now).run();
+  return { ok: true, action: "saveAllowedUser", persisted: true, email,
+    displayName: clean(body.displayName), role: requestedRole, active: Boolean(active), source: "D1" };
+}
+
+async function restoreListingHistory(env, user, body) {
+  requireRole(user, ["owner", "admin"]);
+  const historyId = Math.max(1, Number(body.historyId) || 0);
+  const history = await env.DB.prepare(`SELECT id, listing_id, action, before_json
+    FROM listing_history WHERE id=?1 LIMIT 1`).bind(historyId).first();
+  if (!history || !["updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(clean(history.action))) {
+    throw Object.assign(new Error("복구할 수 있는 변경이력이 아닙니다."), { statusCode: 400 });
+  }
+  const target = parseJson(history.before_json, {});
+  const listing = await env.DB.prepare(`SELECT * FROM listings
+    WHERE id=?1 OR property_id=?1 LIMIT 1`).bind(clean(history.listing_id)).first();
+  if (!listing) throw Object.assign(new Error("복구 대상 매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const fieldMap = {
+    title: "title", building_name: "building_name", room: "room", deposit: "deposit",
+    monthly_rent: "monthly_rent", maintenance_fee: "maintenance_fee", premium: "premium",
+    area_m2: "area_m2", landlord_phone: "landlord_phone", tenant_phone: "tenant_phone",
+    operating_memo: "operating_memo", contacts_json: "contacts_json", status: "status"
+  };
+  const assignments = [];
+  const values = [];
+  for (const [source, column] of Object.entries(fieldMap)) {
+    if (!Object.prototype.hasOwnProperty.call(target, source)) continue;
+    values.push(target[source]);
+    assignments.push(`${column}=?${values.length}`);
+  }
+  if (!assignments.length) throw Object.assign(new Error("복구할 이전 값이 없습니다."), { statusCode: 400 });
+  const now = new Date().toISOString();
+  values.push(now, listing.id);
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE listings SET ${assignments.join(", ")}, version=version+1,
+      updated_at=?${values.length - 1} WHERE id=?${values.length}`).bind(...values),
+    env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
+      VALUES (?1, 'restoreListingHistory', ?2, ?3, ?4)`)
+      .bind(listing.id, clean(user?.email), JSON.stringify(listing), JSON.stringify(target))
+  ]);
+  const activeDelta = clean(listing.status) === "deleted" && clean(target.status) !== "deleted" ? 1
+    : clean(listing.status) !== "deleted" && clean(target.status) === "deleted" ? -1 : 0;
+  return { ok: true, action: "restoreListingHistory", persisted: true,
+    propertyId: clean(listing.property_id || listing.id), historyId,
+    operationAdjustments: { activeMaster: activeDelta, history: 1 }, source: "D1" };
+}
+
 async function executePost(env, user, body) {
   const action = clean(body.action);
+  if (action === "saveAllowedUser") return saveAllowedUser(env, user, body);
+  if (action === "restoreListingHistory") return restoreListingHistory(env, user, body);
   if (action === "updatePropertyMemo") return updateMemo(env, user, body);
   if (action === "updateProperty") return updateProperty(env, user, body);
-  if (action === "toggleDone") return toggleDone(env, body);
-  if (action === "deleteProperty") return deleteProperty(env, body);
-  if (action === "quickAdd") return quickAdd(env, body);
+  if (action === "toggleDone") return toggleDone(env, user, body);
+  if (action === "deleteProperty") return deleteProperty(env, user, body);
+  if (action === "quickAdd") return quickAdd(env, user, body);
   if (action === "saveCloudState") return saveCloudState(env, user, body);
   if (action === "saveGeocodeCache") return saveGeocode(env, body);
   if (action === "moveOriginalListing") return moveOriginal(env, user, body);
@@ -963,6 +1253,8 @@ async function executePost(env, user, body) {
 export async function handleD1PostAction(env, user, body) {
   const action = clean(body?.action);
   if (!env.DB || !isD1PostAction(action)) return null;
+  const effectiveAction = action === "enqueueMutation" ? clean(body.taskAction) : action;
+  if (effectiveAction !== "saveCloudState") requireRole(user, ["owner", "admin", "member"]);
   const requestId = clean(body.requestId || body?.payload?.requestId || `${action}-${crypto.randomUUID()}`).slice(0, 160);
   const result = await executePost(env, user, body);
   if (!result) return null;

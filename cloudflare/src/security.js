@@ -57,6 +57,39 @@ export function envAllowedEmails(env) {
   );
 }
 
+function envAccessRole(email, env) {
+  const normalized = String(email || "").trim().toLowerCase();
+  const configured = String(env.ALLOWED_EMAILS || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const index = configured.indexOf(normalized);
+  if (index < 0) return "";
+  return index === 0 ? "owner" : "member";
+}
+
+export async function accessProfile(email, env) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return null;
+  if (env.DB && typeof env.DB.prepare === "function") {
+    try {
+      const row = await env.DB.prepare(
+        "SELECT email, display_name, role, active FROM allowed_users WHERE email = ?1 LIMIT 1"
+      ).bind(normalized).first();
+      if (row) {
+        if (Number(row.active) !== 1) return null;
+        return {
+          email: normalized,
+          displayName: String(row.display_name || ""),
+          role: String(row.role || "member")
+        };
+      }
+    } catch {}
+  }
+  const role = envAccessRole(normalized, env);
+  return role ? { email: normalized, displayName: "", role } : null;
+}
+
 export async function isAllowedEmail(email, env) {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return false;
@@ -71,6 +104,15 @@ export async function isAllowedEmail(email, env) {
   } catch {
     return false;
   }
+}
+
+export function requireRole(user, roles) {
+  const allowed = new Set(Array.isArray(roles) ? roles : [roles]);
+  const role = String(user?.role || "member");
+  if (!allowed.has(role)) {
+    throw Object.assign(new Error("이 작업을 수행할 권한이 없습니다."), { statusCode: 403 });
+  }
+  return user;
 }
 
 export function parseCookies(request) {
@@ -97,6 +139,8 @@ export async function createSessionToken(user, env, now = Date.now()) {
   const payload = base64UrlEncode(encoder.encode(JSON.stringify({
     sub: String(user.sub || ""),
     email: String(user.email || "").trim().toLowerCase(),
+    role: String(user.role || "member"),
+    displayName: String(user.displayName || user.name || ""),
     iat: now,
     exp: now + sessionMaxAgeSeconds(env) * 1000
   })));
@@ -121,7 +165,9 @@ export async function verifySessionToken(token, env, now = Date.now()) {
   if (!await isAllowedEmail(decoded.email, env)) {
     throw Object.assign(new Error("승인되지 않은 Google 계정입니다."), { statusCode: 403 });
   }
-  return decoded;
+  if (decoded.role) return decoded;
+  const profile = await accessProfile(decoded.email, env);
+  return { ...decoded, role: profile?.role || "member", displayName: profile?.displayName || "" };
 }
 
 export async function requireSession(request, env) {
@@ -186,9 +232,9 @@ export async function verifyGoogleCredential(credential, env, now = Date.now()) 
   if (!valid || !validIssuer || !validAudience || Number(payload.exp || 0) * 1000 <= now) {
     throw Object.assign(new Error("Google 로그인 정보를 확인할 수 없습니다."), { statusCode: 401 });
   }
-  if (!payload.email_verified || !await isAllowedEmail(payload.email, env)) {
+  const profile = payload.email_verified ? await accessProfile(payload.email, env) : null;
+  if (!payload.email_verified || !profile) {
     throw Object.assign(new Error("승인되지 않은 Google 계정입니다."), { statusCode: 403 });
   }
-  return payload;
+  return { ...payload, role: profile.role, displayName: profile.displayName || payload.name || "" };
 }
-

@@ -35,6 +35,7 @@
 <link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.36-naver-map-auth-fallback">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.20.5-unified-memo-toggle">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
+  <link rel="stylesheet" href="css/operations-admin-v1.css?v=1.0.0-history-roles">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.1-readable-steps">
 <link rel="stylesheet" href="css/announcement-readable-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/permit-diagnosis-v1.css?v=2.7.0">
@@ -348,11 +349,15 @@
       <button id="operationsTabCollections" type="button" onclick="switchOperationsTab('collections')">수집현황</button>
       <button id="operationsTabReviews" type="button" onclick="switchOperationsTab('reviews')">매물검증</button>
       <button id="operationsTabCustomers" type="button" onclick="switchOperationsTab('customers')">고객매칭</button>
+      <button id="operationsTabHistory" type="button" onclick="switchOperationsTab('history')">변경이력</button>
+      <button id="operationsTabUsers" type="button" onclick="switchOperationsTab('users')">사용자 관리</button>
     </nav>
     <div id="operationsCenterMessage" class="operations-center-message" aria-live="polite"></div>
     <div id="operationsDashboardPanel" class="operations-panel"></div>
     <div id="operationsCollectionsPanel" class="operations-panel" hidden></div>
     <div id="operationsReviewsPanel" class="operations-panel" hidden></div>
+    <div id="operationsHistoryPanel" class="operations-panel" hidden></div>
+    <div id="operationsUsersPanel" class="operations-panel" hidden></div>
     <div id="operationsCustomersPanel" class="operations-panel" hidden>
       <div class="customer-match-toolbar">
         <div>
@@ -661,6 +666,7 @@
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter"></script>
   <script src="js/operations-center-v7.js?v=7.22.0-mobile-customer-app"></script>
   <script src="js/operations-collection-v8.js?v=7.24.0-collector-upgrade"></script>
+  <script src="js/operations-admin-v1.js?v=1.0.0-history-roles"></script>
 <script src="js/announcement-v1.js?v=1.0.1-readable-steps"></script>
 <script src="js/industry-intent-parser.js?v=1.2.0-ksic11"></script>
 <script src="js/ksic-industry-adapter.js?v=1.0.0"></script>

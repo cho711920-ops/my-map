@@ -16,9 +16,11 @@ import {
   handleCollectorApi
 } from "./collector-api.js";
 import {
+  adjustOperationsDashboard,
   buildD1SheetCsv,
   handleD1GetAction,
-  handleD1PostAction
+  handleD1PostAction,
+  refreshOperationsDashboard
 } from "./d1-api.js";
 
 const QUEUE_CLIENT_VERSION = "1.0.8";
@@ -30,12 +32,12 @@ const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
 const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
 const SHEET_CACHE_ACTIONS = new Set([
-  "deleteProperty", "moveOriginalListing", "quickAdd", "toggleDone", "updateProperty", "updatePropertyMemo"
+  "deleteProperty", "moveOriginalListing", "quickAdd", "restoreListingHistory", "toggleDone", "updateProperty", "updatePropertyMemo"
 ]);
 const UNIFIED_CACHE_ACTIONS = new Set(["moveOriginalListing"]);
 const OPERATIONS_CACHE_ACTIONS = new Set([
   "addCustomerActivity", "deleteProperty", "moveOriginalListing", "quickAdd",
-  "rebuildCustomerMatches", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
+  "rebuildCustomerMatches", "restoreListingHistory", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
 ]);
 const UNIFIED_COMPACT_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -140,13 +142,20 @@ async function readDataRevision(env, scope) {
   if (cached) {
     try {
       const payload = JSON.parse(cached.body);
-      if (payload && payload.revision) return { ok: true, scope: normalizedScope, revision: String(payload.revision) };
+      if (payload && payload.revision) return {
+        ok: true,
+        scope: normalizedScope,
+        revision: String(payload.revision),
+        changeIds: Array.isArray(payload.changeIds) ? payload.changeIds.slice(0, 50) : [],
+        fullReload: payload.fullReload === true,
+        changeAction: String(payload.changeAction || "")
+      };
     } catch {}
   }
   return { ok: true, scope: normalizedScope, revision: "0" };
 }
 
-function touchDataRevision(env, context, scopes, afterPromise = null) {
+function touchDataRevision(env, context, scopes, afterPromise = null, changeInfo = {}) {
   if (!env.MEDIA || typeof env.MEDIA.put !== "function") return null;
   const token = `${Date.now()}-${crypto.randomUUID()}`;
   const task = Promise.resolve(afterPromise).then(() => Promise.all(
@@ -155,7 +164,12 @@ function touchDataRevision(env, context, scopes, afterPromise = null) {
       return env.MEDIA.put(revisionKey(normalizedScope), JSON.stringify({
         ok: true,
         scope: normalizedScope,
-        revision: token
+        revision: token,
+        ...(normalizedScope === "listings" ? {
+          changeIds: Array.isArray(changeInfo.changeIds) ? changeInfo.changeIds.slice(0, 50) : [],
+          fullReload: changeInfo.fullReload === true,
+          changeAction: String(changeInfo.changeAction || "")
+        } : {})
       }), {
         httpMetadata: { contentType: "application/json; charset=utf-8" },
         customMetadata: { savedAt: String(Date.now()) }
@@ -266,7 +280,7 @@ async function handleListingImage(request, env, context) {
       if (!headers.get("content-type") && cached.httpMetadata?.contentType) {
         headers.set("content-type", cached.httpMetadata.contentType);
       }
-      headers.set("cache-control", "private, max-age=86400");
+      headers.set("cache-control", "private, max-age=604800, immutable");
       headers.set("x-js-image-cache", "HIT");
       if (cached.httpEtag) headers.set("etag", cached.httpEtag);
       return new Response(cached.body, { headers });
@@ -296,7 +310,7 @@ async function handleListingImage(request, env, context) {
   const mayStore = env.MEDIA && typeof env.MEDIA.put === "function";
   if (mayStore) {
     const task = env.MEDIA.put(key, body, {
-      httpMetadata: { contentType, cacheControl: "private, max-age=86400" },
+      httpMetadata: { contentType, cacheControl: "private, max-age=604800, immutable" },
       customMetadata: { savedAt: String(Date.now()), sourceHost: finalUrl.hostname.toLowerCase() }
     });
     if (context && typeof context.waitUntil === "function") context.waitUntil(task);
@@ -304,7 +318,7 @@ async function handleListingImage(request, env, context) {
   return new Response(body, {
     headers: {
       "content-type": contentType,
-      "cache-control": "private, max-age=86400",
+      "cache-control": "private, max-age=604800, immutable",
       "x-js-image-cache": mayStore ? "MISS" : "MISS-NOSTORE"
     }
   });
@@ -313,7 +327,8 @@ async function handleListingImage(request, env, context) {
 async function handleSession(request, env) {
   if (request.method === "GET") {
     const user = await requireSession(request, env);
-    return json({ ok: true, email: user.email || "" }, 200, { "cache-control": "no-store" });
+    return json({ ok: true, email: user.email || "", displayName: user.displayName || "",
+      role: user.role || "member" }, 200, { "cache-control": "no-store" });
   }
   requireSameOrigin(request);
   if (request.method === "DELETE") {
@@ -498,10 +513,17 @@ async function handleDataApi(request, env, context) {
   const collectorAdmin = await handleCollectorAdminPost(env, user, body);
   if (collectorAdmin) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-    const invalidation = deleteR2Cache(env, context, [
-      D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
-    ]);
-    touchDataRevision(env, context, ["listings", "operations"], invalidation);
+    const snapshotUpdate = collectorAdmin.operationRefresh
+      ? refreshOperationsDashboard(env)
+      : adjustOperationsDashboard(env, collectorAdmin.operationAdjustments || {});
+    const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
+      return deleteR2Cache(env, null, [
+        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
+      ]);
+    });
+    if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
+    touchDataRevision(env, context, ["listings", "operations"], invalidation, { fullReload: true,
+      changeAction: String(body.action || "collectorAdmin") });
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
   }
   const d1Result = await handleD1PostAction(env, user, body);
@@ -510,12 +532,26 @@ async function handleDataApi(request, env, context) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
   }
   const invalidatedKeys = mutationCacheKeys(body, d1Result);
-  const invalidation = deleteR2Cache(env, context, invalidatedKeys);
+  const operationSnapshot = invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY)
+    ? (d1Result.operationAdjustments
+      ? adjustOperationsDashboard(env, d1Result.operationAdjustments)
+      : refreshOperationsDashboard(env))
+    : null;
+  const invalidation = Promise.resolve(operationSnapshot).catch(() => null).then(() => {
+    return deleteR2Cache(env, null, invalidatedKeys);
+  });
+  if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
+  const changedIds = [d1Result.propertyId, d1Result.sourceMasterId, d1Result.targetMasterId]
+    .map((value) => String(value || "").trim()).filter(Boolean);
   touchDataRevision(env, context, [
     ...(invalidatedKeys.some((key) => key === D1_SHEET_CACHE_KEY || key === UNIFIED_LISTINGS_CACHE_KEY)
       ? ["listings"] : []),
     ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
-  ], invalidation);
+  ], invalidation, {
+    changeIds: [...new Set(changedIds)],
+    fullReload: !changedIds.length || mutationAction(body) === "moveOriginalListing",
+    changeAction: mutationAction(body)
+  });
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
 }
 
@@ -537,11 +573,17 @@ async function handleApi(request, env, context) {
       : {};
     if (response.ok && collectorFinalized(String(collectorBody?.action || ""), collectorPayload)) {
       sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-      const invalidation = deleteR2Cache(env, context, [
-        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
-        GEOCODE_CACHE_KEY
-      ]);
-      touchDataRevision(env, context, ["listings", "operations"], invalidation);
+      const invalidation = Promise.resolve(refreshOperationsDashboard(env)).catch(() => null).then(() => {
+        return deleteR2Cache(env, null, [
+          D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
+          GEOCODE_CACHE_KEY
+        ]);
+      });
+      if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
+      touchDataRevision(env, context, ["listings", "operations"], invalidation, {
+        fullReload: true,
+        changeAction: String(collectorBody?.action || "collectorFinalized")
+      });
     }
     return response;
   }
