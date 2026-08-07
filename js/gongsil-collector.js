@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.2";
+  var VERSION = "2.1.3";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -1710,18 +1710,22 @@
      * bilinfo/Btel은 일반·다가구 건물의 건물 연락처로 사용하되,
      * 호실별 소유자가 다른 집합건물에는 섞지 않습니다.
      */
-    var candidates = isCollectiveItem(item, detail)
-      ? listingCandidates
-      : listingCandidates.concat(buildingCandidates);
+    var collectiveItem = isCollectiveItem(item, detail);
+    var candidates = listingCandidates.map(function(candidate) {
+      return {value: candidate, buildingLevel: false};
+    }).concat(buildingCandidates.map(function(candidate) {
+      return {value: candidate, buildingLevel: true};
+    }));
 
     if (!candidates.length) {
       var direct = pick(item, ["Tel", "Phone", "OwnerTel"]);
-      if (direct) candidates.push({ Tel: direct, Ty: "J" });
+      if (direct) candidates.push({value: { Tel: direct, Ty: "J" }, buildingLevel: false});
     }
 
     var seenTidx = {};
     for (var index = 0; index < candidates.length; index += 1) {
-      var candidate = candidates[index] || {};
+      var candidateInfo = candidates[index] || {};
+      var candidate = candidateInfo.value || {};
       var tidx = text(pick(candidate, ["Tidx", "tidx", "Tid", "id"]));
       if (tidx && seenTidx[tidx]) continue;
       if (tidx) seenTidx[tidx] = true;
@@ -1741,7 +1745,11 @@
       contacts.push({
         phone: phone,
         label: resolvedLabel,
-        tenant: tenantHint || isTenantLabel(label)
+        tenant: tenantHint || isTenantLabel(label),
+        buildingLevel: Boolean(candidateInfo.buildingLevel),
+        sourceRole: candidateInfo.buildingLevel && collectiveItem
+          ? (/^[125GBJS]$/i.test(label) ? resolvedLabel : (label || resolvedLabel))
+          : ""
       });
     }
 
@@ -1767,10 +1775,13 @@
         text(pick(item, ["Bfidx", "bfidx", "BfIdx", "id"]))
       );
     }
-    var tenantContacts = uniqueContacts.filter(function (contact) {
+    var primaryContacts = collectiveItem ? uniqueContacts.filter(function(contact) {
+      return !contact.buildingLevel;
+    }) : uniqueContacts;
+    var tenantContacts = primaryContacts.filter(function (contact) {
       return contact.tenant;
     });
-    var landlordContacts = uniqueContacts.filter(function (contact) {
+    var landlordContacts = primaryContacts.filter(function (contact) {
       return !contact.tenant;
     });
     landlordContacts.sort(function (left, right) {
@@ -1797,7 +1808,7 @@
       extraMemo: extras,
       contacts: uniqueContacts.map(function(contact) {
         return {
-          role: contactRoleCode(contact.label),
+          role: contact.sourceRole || contactRoleCode(contact.label),
           phone: contact.phone
         };
       })

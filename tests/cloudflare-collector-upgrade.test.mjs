@@ -123,3 +123,11 @@ test("collector updates reconcile individual media and contacts instead of repla
   assert.match(source, /loadExistingSources/);
   assert.match(source, /loadCandidateListings/);
 });
+
+test("Gongsilbox collective-building contacts retain the provider role label", async () => {
+  const collector = await readFile(new URL("../js/gongsil-collector.js", import.meta.url), "utf8");
+  const listingUi = await readFile(new URL("../js/script.js", import.meta.url), "utf8");
+  assert.match(collector, /sourceRole:\s*candidateInfo\.buildingLevel && collectiveItem/);
+  assert.match(collector, /role:\s*contact\.sourceRole \|\| contactRoleCode\(contact\.label\)/);
+  assert.match(listingUi, /contact\.roleLabel \|\| meta\.name/);
+});

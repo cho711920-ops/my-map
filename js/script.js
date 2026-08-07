@@ -3598,6 +3598,7 @@ function normalizeLinkedGongsilContactsV8(rawContacts) {
     seen[phone.key] = true;
     contacts.push({
       role: listContactRoleV650(contact && contact.role),
+      roleLabel: String(contact && contact.role || "").trim(),
       phone: phone,
       origin: "gongsil",
       source: "공실박스",
@@ -3634,7 +3635,7 @@ function renderListContactPopupV8(item, primaryContacts, options) {
       : '';
     return '<a class="list-contact-row-v654 role-' + escapeHtml(contact.role || "기") +
       '" href="tel:' + contact.phone.tel + '" onclick="event.stopPropagation()">' +
-      '<span class="list-contact-role-v654">' + escapeHtml(meta.name) + '</span>' +
+      '<span class="list-contact-role-v654">' + escapeHtml(contact.roleLabel || meta.name) + '</span>' +
       '<span class="list-contact-number-v8"><strong>' + escapeHtml(contact.phone.display) + '</strong>' +
         sourceNote + '</span>' +
       '<span class="list-contact-call-label-v654">전화</span></a>';
