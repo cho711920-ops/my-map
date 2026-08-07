@@ -15,7 +15,7 @@ const daangn = fs.readFileSync(
 );
 
 assert.match(html, /<title>J S 부 동 산<\/title>/);
-assert.match(html, /<div class="header">J S 부 동 산<\/div>/);
+assert.match(html, /class="header"[\s\S]*?class="js-brand-mark-v1">JS<\/b><strong class="js-brand-name-v1">JS부동산<\/strong>/);
 assert.ok(html.indexOf('id="detailBtn"') < html.indexOf('id="topResetBtn"'), "filter must appear before reset");
 assert.match(auth, /<h1>J S 부 동 산<\/h1>/);
 assert.match(unifiedCss, /grid-template-columns:\s*92px minmax\(0, 1fr\) !important/);
