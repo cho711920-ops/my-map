@@ -2,7 +2,46 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { collectorCompletionAudit } from "../cloudflare/src/collector-api.js";
+import { collectorCompletionAudit, manifestEntryMatch } from "../cloudflare/src/collector-api.js";
+
+test("legacy source rows bootstrap from stable listing terms without a detail refetch", () => {
+  const row = {
+    snapshot_hash: "",
+    list_snapshot_json: JSON.stringify({
+      deposit: 2000, rent: 80, area: 47.5, room: "2층", address: "유성구 구암동 601-19"
+    })
+  };
+  const entry = {
+    listSnapshot: "current-list-fingerprint",
+    deposit: "2,000", rent: "80", area: 47.4, room: "2층", address: "대전광역시 유성구 구암동 601-19"
+  };
+  assert.equal(manifestEntryMatch(entry, row), "legacy");
+});
+
+test("legacy source rows still refetch when material rental terms change", () => {
+  const row = {
+    snapshot_hash: "",
+    list_snapshot_json: JSON.stringify({
+      deposit: 2000, rent: 80, area: 47.5, room: "2층", address: "유성구 구암동 601-19"
+    })
+  };
+  assert.equal(manifestEntryMatch({
+    listSnapshot: "changed-rent", deposit: 2000, rent: 90, area: 47.5,
+    room: "2층", address: "유성구 구암동 601-19"
+  }, row), "");
+  assert.equal(manifestEntryMatch({
+    listSnapshot: "changed-floor", deposit: 2000, rent: 80, area: 47.5,
+    room: "1층", address: "유성구 구암동 601-19"
+  }, row), "");
+});
+
+test("current fingerprints refetch different list snapshots", () => {
+  const row = {
+    snapshot_hash: "fnv1a-6733d49c",
+    list_snapshot_json: "{}"
+  };
+  assert.equal(manifestEntryMatch({listSnapshot: "same"}, row), "");
+});
 
 test("complete collections require a current verified manifest", () => {
   const valid = collectorCompletionAudit({

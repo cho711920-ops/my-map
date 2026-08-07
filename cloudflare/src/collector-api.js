@@ -1,4 +1,4 @@
-import { canonicalListingRoom, normalizedRoomKey } from "./floor.js";
+import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./floor.js";
 
 const COLLECTOR_ORIGINS = [
   /(^|\.)realty\.daangn\.com$/i,
@@ -58,6 +58,10 @@ function parseJson(value, fallback) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function sourceName(value) {
@@ -240,15 +244,46 @@ function sameNumber(left, right, tolerance = 0) {
   return Math.abs(Number(left) - Number(right)) <= tolerance;
 }
 
-function sameManifestEntry(entry, row) {
-  if (!row) return false;
+function legacyAddressConflicts(left, right) {
+  const first = normalizedAddress(left);
+  const second = normalizedAddress(right);
+  if (!first || !second) return false;
+  const firstDistrict = first.match(/^(동구|중구|서구|유성구|대덕구)\b/);
+  const secondDistrict = second.match(/^(동구|중구|서구|유성구|대덕구)\b/);
+  if (firstDistrict && secondDistrict && firstDistrict[1] !== secondDistrict[1]) return true;
+  const firstLot = first.match(/\b(\d+(?:-\d+)?)$/);
+  const secondLot = second.match(/\b(\d+(?:-\d+)?)$/);
+  return Boolean(firstLot && secondLot && firstLot[1] !== secondLot[1]);
+}
+
+function legacyManifestEntryMatches(entry, row) {
   const saved = parseJson(row.list_snapshot_json, {});
-  if (row.snapshot_hash && row.snapshot_hash === snapshotKey(entry.listSnapshot || entry)) return true;
-  return sameNumber(number(entry.deposit), number(saved.deposit)) &&
-    sameNumber(number(entry.rent), number(saved.rent)) &&
-    sameNumber(number(entry.area), number(saved.area), 0.15) &&
-    normalizedRoom(entry.room) === normalizedRoom(saved.room) &&
-    (!clean(entry.address) || normalizedAddress(entry.address) === normalizedAddress(saved.address));
+  const entryDeposit = number(entry.deposit);
+  const savedDeposit = number(saved.deposit);
+  const entryRent = number(entry.rent);
+  const savedRent = number(saved.rent);
+  if (entryDeposit == null || savedDeposit == null || entryRent == null || savedRent == null) return false;
+  if (!sameNumber(entryDeposit, savedDeposit) || !sameNumber(entryRent, savedRent)) return false;
+
+  const entryArea = number(entry.area);
+  const savedArea = number(saved.area);
+  if (entryArea != null && savedArea != null) {
+    const tolerance = Math.max(1, Math.abs(savedArea) * 0.03);
+    if (!sameNumber(entryArea, savedArea, tolerance)) return false;
+  }
+
+  const entryFloor = parseListingFloor(entry.room, true);
+  const savedFloor = parseListingFloor(saved.room, true);
+  if (entryFloor != null && savedFloor != null && entryFloor !== savedFloor) return false;
+  if (legacyAddressConflicts(entry.address, saved.address)) return false;
+  return true;
+}
+
+export function manifestEntryMatch(entry, row) {
+  if (!row) return "";
+  const incomingHash = snapshotKey(entry.listSnapshot || entry);
+  if (clean(row.snapshot_hash)) return row.snapshot_hash === incomingHash ? "hash" : "";
+  return legacyManifestEntryMatches(entry, row) ? "legacy" : "";
 }
 
 async function ensureSession(env, sessionId, source, owner = "collector") {
@@ -289,7 +324,7 @@ async function classifyManifest(env, body) {
   for (let offset = 0; offset < entries.length; offset += 80) {
     const ids = entries.slice(offset, offset + 80).map((entry) => entry.sourceId);
     const placeholders = ids.map((_, index) => `?${index + 2}`).join(",");
-    const result = await env.DB.prepare(`SELECT s.source_listing_id, s.snapshot_hash, s.list_snapshot_json,
+    const result = await env.DB.prepare(`SELECT s.id, s.source_listing_id, s.snapshot_hash, s.list_snapshot_json,
         s.listing_id, s.last_collected_at, l.latitude AS listing_latitude, l.longitude AS listing_longitude
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
       WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`).bind(source, ...ids).all();
@@ -299,9 +334,11 @@ async function classifyManifest(env, body) {
   const refreshDetail = [];
   const coordinateRepairs = new Map();
   const cacheRepairs = new Map();
+  const legacyBackfills = [];
   let unchanged = 0;
   let changed = 0;
   let unknown = 0;
+  let legacyBootstrapped = 0;
   for (const entry of entries) {
     const row = rows.get(entry.sourceId);
     const latitude = coordinate(entry.latitude, -90, 90);
@@ -315,8 +352,12 @@ async function classifyManifest(env, body) {
     if (!row) {
       unknown += 1;
       needsDetail.push(entry.sourceId);
-    } else if (sameManifestEntry(entry, row)) {
+    } else if (manifestEntryMatch(entry, row)) {
       unchanged += 1;
+      if (!clean(row.snapshot_hash) && clean(entry.listSnapshot)) {
+        legacyBackfills.push({ id: clean(row.id), hash: snapshotKey(entry.listSnapshot) });
+        legacyBootstrapped += 1;
+      }
       if (source === "공실박스") {
         const checkedAt = Date.parse(clean(row.last_collected_at));
         if (!Number.isFinite(checkedAt) || Date.now() - checkedAt >= 20 * 60 * 60 * 1000) {
@@ -347,14 +388,25 @@ async function classifyManifest(env, body) {
     }
     await env.DB.batch(statements);
   }
+  if (legacyBackfills.length) {
+    const backfilledAt = nowIso();
+    const statements = legacyBackfills.map((item) => env.DB.prepare(`UPDATE listing_sources
+      SET snapshot_hash=?1, session_id=?2, last_collected_at=?3, updated_at=?3
+      WHERE id=?4 AND snapshot_hash=''`).bind(item.hash, sessionId, backfilledAt, item.id));
+    for (let offset = 0; offset < statements.length; offset += 80) {
+      await env.DB.batch(statements.slice(offset, offset + 80));
+    }
+  }
   const result = { ok: true, action: "classifySourceManifest", source, sessionId, received: entries.length,
-    needsDetail, refreshDetail, unchanged, changed, unknown, coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
+    needsDetail, refreshDetail, unchanged, changed, unknown, legacyBootstrapped,
+    coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(previous?.totals_json, {});
   totals.manifest = Number(totals.manifest || 0) + entries.length;
   totals.unchanged = Number(totals.unchanged || 0) + unchanged;
   totals.changed = Number(totals.changed || 0) + changed;
   totals.unknown = Number(totals.unknown || 0) + unknown;
+  totals.legacyBootstrapped = Number(totals.legacyBootstrapped || 0) + legacyBootstrapped;
   totals.coordinatesRepaired = Number(totals.coordinatesRepaired || 0) + coordinateRepairs.size;
   if (clean(body.collectorVersion)) totals.collectorVersion = clean(body.collectorVersion).slice(0, 30);
   if (clean(body.scope)) totals.scope = clean(body.scope).slice(0, 200);
@@ -939,7 +991,7 @@ async function startDaangnJob(env, body) {
     sessionId, ids: [], entries: [], detailIds: [], cursor: "", hasNextPage: true,
     phase: "list", status: "running", page: 0, found: 0, total: 0, processed: 0, remaining: 0,
     created: 0, merged: 0, updated: 0, review: 0, detailedDuplicates: 0,
-    skippedUnchanged: 0, addressMissing: 0, failed: 0, chunkSize: 20,
+    skippedUnchanged: 0, addressMissing: 0, failed: 0, chunkSize: 10,
     message: "클러스터 목록을 확인하고 있습니다."
   };
   await saveDaangnJob(env, job);
@@ -947,7 +999,7 @@ async function startDaangnJob(env, body) {
 }
 
 async function fetchDaangnDetail(articleId) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       const payload = await daangnGraphql(DAANGN_DETAIL_HASH, { articleId: String(articleId) });
       const article = payload?.data?.articleByOriginalArticleId;
@@ -955,8 +1007,24 @@ async function fetchDaangnDetail(articleId) {
     } catch {
       // A short transient failure is retried inside the same resumable server chunk.
     }
+    if (attempt < 3) await sleep(300 * (attempt + 1) * (attempt + 1));
   }
   return null;
+}
+
+async function mapWithConcurrency(values, concurrency, mapper) {
+  const output = new Array(values.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < values.length) {
+      const index = cursor;
+      cursor += 1;
+      output[index] = await mapper(values[index], index);
+      if (cursor < values.length) await sleep(100);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
+  return output;
 }
 
 async function finalizeDaangnJob(env, job) {
@@ -1027,10 +1095,10 @@ async function runDaangnChunk(env, body = {}) {
       job.message = `${job.page}페이지 · ${job.found}개 목록 확인`;
     }
   } else if (job.phase === "details") {
-    const activeChunkSize = Math.max(10, Math.min(50, Number(job.chunkSize || 20)));
+    const activeChunkSize = Math.max(5, Math.min(10, Number(job.chunkSize || 10)));
     const ids = (job.detailIds || []).slice(job.processed, job.processed + activeChunkSize);
     const fetchStarted = Date.now();
-    const responses = await Promise.all(ids.map((id) => fetchDaangnDetail(id)));
+    const responses = await mapWithConcurrency(ids, 3, (id) => fetchDaangnDetail(id));
     job.lastFetchMs = Date.now() - fetchStarted;
     const records = responses.map((article, index) => article
       ? { ...daangnRecord(article, job.entries.find((entry) => entry.sourceId === ids[index])?.listSnapshot || ""), source: "당근" }
@@ -1050,11 +1118,8 @@ async function runDaangnChunk(env, body = {}) {
     job.remaining = Math.max(0, job.total - job.processed);
     job.lastChunkSize = ids.length;
     const chunkElapsed = Date.now() - chunkStarted;
-    if (ids.length - records.length > 0 || chunkElapsed > 12_000) {
-      job.chunkSize = Math.max(10, activeChunkSize - 5);
-    } else if (chunkElapsed < 5_000) {
-      job.chunkSize = Math.min(50, activeChunkSize + 5);
-    }
+    if (ids.length - records.length > 0 || chunkElapsed > 20_000) job.chunkSize = Math.max(5, activeChunkSize - 1);
+    else if (chunkElapsed < 6_000) job.chunkSize = Math.min(10, activeChunkSize + 1);
     if (job.processed >= job.total) {
       await finalizeDaangnJob(env, job);
     } else {

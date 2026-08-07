@@ -5,14 +5,25 @@ const LOG_KEY = "jsAutoCollectorLogsV1";
 const RUN_LOCK_KEY = "jsAutoCollectorRunLockV1";
 const RUN_STATE_KEY = "jsAutoCollectorRunStateV2";
 const LAST_SCHEDULE_KEY = "jsAutoCollectorLastScheduleV1";
+const LAST_VERSION_RUN_KEY = "jsAutoCollectorLastVersionRunV1";
 const ALARM_NAME = "js-auto-collector-daily";
 const SOURCE_ORDER = { naver: 1, daangn: 2, gongsil: 3 };
+const MAX_TARGET_ATTEMPTS = 3;
 const DEFAULT_CONFIG = {
   enabled: false,
   schedule: "06:00",
   closeTabs: true,
   targets: []
 };
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function retryableTargetFailure(message) {
+  return !/(?:로그인|보안키|승인되지 않은|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
+    .test(String(message || ""));
+}
 
 async function getConfig() {
   const saved = await chrome.storage.local.get(STORAGE_KEY);
@@ -183,7 +194,7 @@ async function finalizeRun(state) {
   return summary;
 }
 
-async function launchCurrentTarget(state) {
+async function launchCurrentTarget(state, reuseTabId = null) {
   if (!state || !state.active) return { ok: false, message: "실행 중인 자동수집이 없습니다." };
   if (state.index >= state.targets.length) return finalizeRun(state);
 
@@ -193,7 +204,10 @@ async function launchCurrentTarget(state) {
   let tab = null;
   try {
     validateTarget(target);
-    tab = await chrome.tabs.create({ url: target.url, active: false });
+    if (Number.isInteger(reuseTabId)) {
+      tab = await chrome.tabs.update(reuseTabId, { url: target.url, active: false }).catch(() => null);
+    }
+    if (!tab) tab = await chrome.tabs.create({ url: target.url, active: false });
     // 자동 대상 전환 때 전용 Edge 창이 앞으로 튀어나오지 않도록 항상
     // 백그라운드 최소화 상태를 유지한다.
     if (Number.isInteger(tab.windowId)) {
@@ -238,6 +252,25 @@ async function finishCurrentTarget(result, senderTabId) {
   const target = state.targets[state.index];
   const completedTabId = state.currentTabId;
   const elapsedMs = Date.now() - Number(state.targetStartedAt || Date.now());
+  const targetAttempt = Math.max(1, Number(state.targetAttempt || 1));
+  if (result.ok !== true && targetAttempt < MAX_TARGET_ATTEMPTS && retryableTargetFailure(result.message)) {
+    const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
+    await appendLog({
+      level: "warning",
+      source: target.source,
+      target: target.label,
+      elapsedMs,
+      message: `${message} · 같은 대상을 저장 지점부터 재시도 ${targetAttempt + 1}/${MAX_TARGET_ATTEMPTS}`
+    });
+    state.currentTabId = null;
+    state.targetRunId = null;
+    state.targetStartedAt = null;
+    state.targetAttempt = targetAttempt + 1;
+    state.phase = "retrying";
+    await saveRunState(state);
+    await delay(Math.min(10000, targetAttempt * 2500));
+    return launchCurrentTarget(state, completedTabId);
+  }
   if (result.ok === true) {
     state.summary.completed += 1;
     await appendLog({
@@ -259,10 +292,14 @@ async function finishCurrentTarget(result, senderTabId) {
   state.currentTabId = null;
   state.targetRunId = null;
   state.targetStartedAt = null;
+  state.targetAttempt = 1;
   state.phase = "between-targets";
   await saveRunState(state);
-  if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
-  return launchCurrentTarget(state);
+  if (state.index >= state.targets.length) {
+    if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
+    return finalizeRun(state);
+  }
+  return launchCurrentTarget(state, completedTabId);
 }
 
 async function runAll(reason = "manual") {
@@ -287,6 +324,7 @@ async function runAll(reason = "manual") {
     closeTabs: config.closeTabs !== false,
     currentTabId: null,
     targetRunId: null,
+    targetAttempt: 1,
     phase: "starting",
     summary
   };
@@ -299,11 +337,19 @@ async function runAll(reason = "manual") {
 async function runScheduled(reason) {
   const config = await getConfig();
   if (!config.enabled || !scheduleIsDue(config)) return { ok: true, skipped: true, message: "예약 시간이 아직 되지 않았습니다." };
-  const saved = await chrome.storage.local.get(LAST_SCHEDULE_KEY);
+  const saved = await chrome.storage.local.get([LAST_SCHEDULE_KEY, LAST_VERSION_RUN_KEY]);
   const today = localDateKey();
-  if (saved[LAST_SCHEDULE_KEY] === today) return { ok: true, skipped: true, message: "오늘 자동수집은 이미 실행했습니다." };
+  const currentVersion = chrome.runtime.getManifest().version;
+  if (saved[LAST_SCHEDULE_KEY] === today && saved[LAST_VERSION_RUN_KEY] === currentVersion) {
+    return { ok: true, skipped: true, message: "오늘 자동수집은 이미 실행했습니다." };
+  }
   const result = await runAll(reason);
-  if (result && result.started === true) await chrome.storage.local.set({ [LAST_SCHEDULE_KEY]: today });
+  if (result && result.started === true) {
+    await chrome.storage.local.set({
+      [LAST_SCHEDULE_KEY]: today,
+      [LAST_VERSION_RUN_KEY]: currentVersion
+    });
+  }
   return result;
 }
 
@@ -313,7 +359,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   // first run on the new version.
   await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
   await saveConfig(await getConfig());
-  await chrome.runtime.openOptionsPage();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -385,7 +430,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (sender && sender.tab && sender.tab.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
         return { ok: true, resumed: true };
       }
-      runScheduled("windows-schedule").catch(() => {});
+      if (message.forceRun) runAll("manual-verification").catch(() => {});
+      else runScheduled("windows-schedule").catch(() => {});
       if (sender && sender.tab && sender.tab.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
       return { ok: true };
     }

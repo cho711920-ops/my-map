@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.6.1";
+  var VERSION = "5.6.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -349,6 +349,13 @@
   async function runAutomatic(target) {
     panel.style.display = "block";
     if (!isFinNaver()) throw new Error("네이버 자동수집은 fin.land.naver.com 지도에서 등록해주세요.");
+    var readyStartedAt = Date.now();
+    while ((state.busy || state.preparing) && Date.now() - readyStartedAt < 90000) {
+      await delay(300);
+    }
+    if (state.busy || state.preparing) {
+      throw new Error("네이버 수집기 준비가 90초 안에 끝나지 않았습니다.");
+    }
     var requested = target && target.district || {};
     var district = DAEJEON_DISTRICTS.find(function (item) {
       return String(item.cortarNo) === String(requested.cortarNo || "") || item.name === requested.name;
@@ -362,11 +369,17 @@
     // 구를 다시 읽으면 등록 대상이 다른 구로 덮어써질 수 있다.
     autoDistrictSelect.value = district.cortarNo;
     autoRegisterButton.textContent = district.name + " 자동수집 등록";
-    await collectFinSelectedAndSave();
-    if (state.stopRequested || Number(state.dashboard.failed || 0) > 0) {
-      throw new Error("네이버 자동수집이 부분수집 또는 오류로 종료됐습니다.");
+    var runResult = await collectFinSelectedAndSave({automatic: true});
+    if (!runResult || runResult.ok !== true || runResult.complete !== true) {
+      throw new Error(runResult && runResult.message || "네이버 자동수집이 부분수집 또는 오류로 종료됐습니다.");
     }
-    return {source: "naver", district: district.name, version: VERSION, totals: Object.assign({}, state.dashboard)};
+    return {
+      source: "naver",
+      district: district.name,
+      version: VERSION,
+      totals: Object.assign({}, state.dashboard),
+      session: runResult.finalResult || null
+    };
   }
 
   function requestSafeStop() {
@@ -1585,8 +1598,11 @@
     return Array.from(found.values());
   }
 
-  async function collectFinSelectedAndSave() {
-    if (state.busy || state.preparing) return;
+  async function collectFinSelectedAndSave(options) {
+    options = options || {};
+    if (state.busy || state.preparing) {
+      return {ok: false, complete: false, message: "네이버 수집기가 아직 다른 준비 또는 저장 작업을 진행 중입니다."};
+    }
     var district = state.selectedDistrict;
     if (!district) {
       discoverFinContext();
@@ -1603,10 +1619,11 @@
       var articles = await collectFinDistrictRaw(district, {});
       if (!articles.length) throw new Error(district.name + "에서 매물을 찾지 못했습니다.");
       state.preparing = false;
-      await collectAndSave(articles, "대전 " + district.name + " 전체", {
+      var saveResult = await collectAndSave(articles, "대전 " + district.name + " 전체", {
         complete: true,
         source: "네이버"
       });
+      return saveResult || {ok: false, complete: false, message: "네이버 수집 결과를 확인하지 못했습니다."};
     } catch (error) {
       state.preparing = false;
       if (error && error.safeStop) {
@@ -1623,6 +1640,11 @@
       cityButton.disabled = false;
       saveButton.textContent = district.name + " 다시 수집";
       finishCollectorRun();
+      return {
+        ok: false,
+        complete: false,
+        message: String(error && error.message ? error.message : error)
+      };
     }
   }
 
@@ -2633,7 +2655,7 @@
       state.busy ||
       state.preparing ||
       (!hasOverride && (!state.capture || !state.capture.prepared))
-    ) return;
+    ) return {ok: false, complete: false, message: "네이버 수집기가 이미 실행 중입니다."};
     if (!runOptions.complete) beginCollectorRun();
     state.busy = true;
     saveButton.disabled = true;
@@ -2878,8 +2900,20 @@
         );
       }
       saveButton.textContent = "저장 완료 · 다시 수집 가능";
+      var runComplete = !runOptions.complete || Boolean(finalResult && finalResult.complete);
+      return {
+        ok: runComplete,
+        complete: Boolean(finalResult && finalResult.complete),
+        message: runComplete ? "네이버 수집 완료" :
+          ((finalResult && Array.isArray(finalResult.completionIssues) && finalResult.completionIssues.length)
+            ? finalResult.completionIssues.join(", ")
+            : "네이버 수집이 부분수집으로 종료됐습니다."),
+        totals: Object.assign({}, totals),
+        classification: classification,
+        finalResult: finalResult || null
+      };
     } catch (error) {
-      if (Number(totals.accepted || 0) > 0) {
+      if (session.manifestRegistered || Number(totals.accepted || 0) > 0) {
         try {
           await finalizeNaverSession({
             sessionId: session.sessionId,
@@ -2899,6 +2933,12 @@
         setStatus("네이버 수집 오류", String(error && error.message ? error.message : error));
       }
       saveButton.textContent = "다시 저장";
+      return {
+        ok: false,
+        complete: false,
+        message: String(error && error.message ? error.message : error),
+        totals: Object.assign({}, totals)
+      };
     } finally {
       state.busy = false;
       saveButton.disabled = isFinNaver()

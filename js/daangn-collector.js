@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.3.0";
+  var VERSION = "1.3.1";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -224,6 +224,8 @@
     renderSelection();
     await startOrResume();
     var startedAt = Date.now();
+    var recoveryAttempts = 0;
+    var lastProcessed = -1;
     while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
       if (state.job && state.job.status === "complete") {
         if (Number(state.job.failed || 0) > 0 || (state.selectedDistrict && state.job.completeCollection === false)) {
@@ -231,8 +233,23 @@
         }
         return {source: "daangn", district: state.selectedDistrict, version: VERSION, totals: Object.assign({}, state.job)};
       }
-      if (state.job && state.job.status === "paused" && !state.busy) {
-        throw new Error(state.job.message || "당근 자동수집이 중단됐습니다.");
+      var processed = Number(state.job && state.job.processed || 0);
+      if (processed > lastProcessed) {
+        lastProcessed = processed;
+        recoveryAttempts = 0;
+      }
+      if (!state.busy && (!state.job || state.job.status === "paused")) {
+        if (recoveryAttempts >= 5) {
+          throw new Error(state.job && state.job.message || "당근 자동수집 통신을 5회 복구하지 못했습니다.");
+        }
+        recoveryAttempts += 1;
+        setStatus(
+          "당근 자동수집 연결 복구 중",
+          "저장 지점부터 자동으로 다시 연결합니다. " + recoveryAttempts + "/5"
+        );
+        await delay(Math.min(12000, 1500 * recoveryAttempts));
+        await startOrResume();
+        continue;
       }
       await new Promise(function (resolve) { window.setTimeout(resolve, 1000); });
     }

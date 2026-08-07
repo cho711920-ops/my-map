@@ -26,12 +26,12 @@ async function reportTargetFinished(message) {
   return response || { ok: false, message: "자동수집 완료 결과를 전달하지 못했습니다." };
 }
 
-async function signalScheduledRun(autorun) {
+async function signalScheduledRun(autorun, forceRun) {
   let response = null;
   // On a cold Edge start the page can be ready before the Manifest V3 service
   // worker accepts messages. Retry instead of losing the day's only signal.
   for (let attempt = 0; attempt < 12; attempt += 1) {
-    response = await sendRuntimeMessage({ type: "JS_AUTO_PAGE_READY", autorun });
+    response = await sendRuntimeMessage({ type: "JS_AUTO_PAGE_READY", autorun, forceRun });
     if (response && response.ok) return response;
     await delay(1000);
   }
@@ -96,5 +96,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 if (/^https:\/\/(?:www\.)?js-map\.com\/collector-install/i.test(location.href)) {
   const query = new URLSearchParams(location.search);
-  signalScheduledRun(query.get("js_auto_run") === "1");
+  const forceRun = query.get("js_auto_force") === "1";
+  signalScheduledRun(query.get("js_auto_run") === "1" || forceRun, forceRun);
 }
