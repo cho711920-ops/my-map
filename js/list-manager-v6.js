@@ -5,6 +5,8 @@
   var FAVORITE_KEY = "js_favorite_lists_v6";
   var VISIT_KEY = "js_visit_lists_v6";
   var LEGACY_MIGRATION_KEY = "js_favorite_lists_v6_migrated";
+  var ACCOUNT_MARKER_KEY = "js_list_account_email_v6";
+  var accountEmail = "";
   var currentManagerType = "favorite";
   var currentItemKey = "";
   var cloudSaveTimers = {};
@@ -49,7 +51,15 @@
   }
 
   function storageKey(type) {
-    return type === "visit" ? VISIT_KEY : FAVORITE_KEY;
+    return scopedKey(type === "visit" ? VISIT_KEY : FAVORITE_KEY);
+  }
+
+  function scopedKey(base) {
+    return accountEmail ? base + "::" + encodeURIComponent(accountEmail) : base;
+  }
+
+  function migrationKey() {
+    return scopedKey(LEGACY_MIGRATION_KEY);
   }
 
   function typeLabel(type) {
@@ -71,11 +81,71 @@
   }
 
   function dirtyKey(type) {
-    return "js_list_sync_dirty_v6_" + type;
+    return scopedKey("js_list_sync_dirty_v6_" + type);
   }
 
   function deletedKey(type) {
-    return "js_list_deleted_ids_v6_" + type;
+    return scopedKey("js_list_deleted_ids_v6_" + type);
+  }
+
+  function copyLegacyAccountStorage(email) {
+    var previousEmail = "";
+    try { previousEmail = String(localStorage.getItem(ACCOUNT_MARKER_KEY) || "").trim().toLowerCase(); } catch (_) {}
+    accountEmail = email;
+    window.JSListAccountEmail = email;
+
+    if (!previousEmail) {
+      [
+        FAVORITE_KEY,
+        VISIT_KEY,
+        LEGACY_MIGRATION_KEY,
+        "js_list_sync_dirty_v6_favorite",
+        "js_list_sync_dirty_v6_visit",
+        "js_list_deleted_ids_v6_favorite",
+        "js_list_deleted_ids_v6_visit"
+      ].forEach(function(base) {
+        try {
+          if (localStorage.getItem(scopedKey(base)) == null && localStorage.getItem(base) != null) {
+            localStorage.setItem(scopedKey(base), localStorage.getItem(base));
+          }
+        } catch (_) {}
+      });
+
+      // The unscoped cache may contain favorites created on this browser before
+      // account-aware storage was introduced. Mark copied lists dirty so they
+      // are merged with (instead of replaced by) an existing cloud snapshot.
+      ["favorite", "visit"].forEach(function(type) {
+        try {
+          var base = type === "visit" ? VISIT_KEY : FAVORITE_KEY;
+          var copied = JSON.parse(localStorage.getItem(scopedKey(base)) || "[]");
+          if (Array.isArray(copied) && copied.length) {
+            localStorage.setItem(dirtyKey(type), "1");
+          }
+        } catch (_) {}
+      });
+    }
+
+    if (previousEmail && previousEmail !== email) {
+      memoryLists = { favorite: null, visit: null };
+      deletedListIds = { favorite: null, visit: null };
+      cloudRevisions = { favorite: 0, visit: 0 };
+      pendingCloudSave = { favorite: false, visit: false };
+      try { localStorage.setItem("favoriteKeys", "[]"); } catch (_) {}
+      window.favoriteKeys = [];
+    }
+    try { localStorage.setItem(ACCOUNT_MARKER_KEY, email); } catch (_) {}
+  }
+
+  async function prepareAccountStorage() {
+    try {
+      var response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) return;
+      var result = await response.json();
+      var email = String(result && result.email || "").trim().toLowerCase();
+      if (email) copyLegacyAccountStorage(email);
+    } catch (error) {
+      console.warn("계정별 찜 저장소 확인을 건너뜁니다.", error);
+    }
   }
 
   function loadDeletedIds(type) {
@@ -289,7 +359,7 @@
 
   function migrateLegacyFavorites() {
     var migrationComplete = false;
-    try { migrationComplete = localStorage.getItem(LEGACY_MIGRATION_KEY) === "1"; } catch (_) {}
+    try { migrationComplete = localStorage.getItem(migrationKey()) === "1"; } catch (_) {}
     if (migrationComplete) {
       syncLegacyFavoriteKeys(loadLists("favorite"));
       return;
@@ -324,7 +394,7 @@
 
     if (legacy.length) saveLists("favorite", lists);
     else syncLegacyFavoriteKeys(lists);
-    try { localStorage.setItem(LEGACY_MIGRATION_KEY, "1"); } catch (_) {}
+    try { localStorage.setItem(migrationKey(), "1"); } catch (_) {}
   }
 
   function escapeHtml(value) {
@@ -1028,7 +1098,9 @@
     bindMobileDetailButtonFix();
   }, 100);
 
-  migrateLegacyFavorites();
-  syncListsFromCloud();
-  ensureModal();
+  prepareAccountStorage().then(function () {
+    migrateLegacyFavorites();
+    syncListsFromCloud();
+    ensureModal();
+  });
 })();
