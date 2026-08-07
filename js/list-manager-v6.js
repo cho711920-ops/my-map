@@ -16,6 +16,8 @@
   var memoryLists = { favorite: null, visit: null };
   var deletedListIds = { favorite: null, visit: null };
   var cloudSyncReady = false;
+  var cloudSyncRunning = false;
+  var lastCloudSyncAt = 0;
 
   function getSelectedItemKeys() {
     var keys = Array.isArray(window.selectedPrintKeys) ? window.selectedPrintKeys : [];
@@ -328,6 +330,9 @@
   }
 
   async function syncListsFromCloud() {
+    if (cloudSyncRunning) return;
+    cloudSyncRunning = true;
+    lastCloudSyncAt = Date.now();
     try {
       var found = await Promise.all([loadCloudLists("favorite"), loadCloudLists("visit")]);
       cloudSyncReady = true;
@@ -339,7 +344,15 @@
       console.warn("로그인 계정 목록 동기화 실패", error);
       if (pendingCloudSave.favorite || isCloudDirty("favorite")) scheduleCloudSave("favorite", loadLists("favorite"));
       if (pendingCloudSave.visit || isCloudDirty("visit")) scheduleCloudSave("visit", loadLists("visit"));
+    } finally {
+      cloudSyncRunning = false;
     }
+  }
+
+  function syncListsWhenDeviceResumes() {
+    if (document.visibilityState && document.visibilityState !== "visible") return;
+    if (Date.now() - lastCloudSyncAt < 15000) return;
+    syncListsFromCloud();
   }
 
   function syncLegacyFavoriteKeys(lists) {
@@ -1102,5 +1115,8 @@
     migrateLegacyFavorites();
     syncListsFromCloud();
     ensureModal();
+    window.addEventListener("focus", syncListsWhenDeviceResumes);
+    window.addEventListener("pageshow", syncListsWhenDeviceResumes);
+    document.addEventListener("visibilitychange", syncListsWhenDeviceResumes);
   });
 })();
