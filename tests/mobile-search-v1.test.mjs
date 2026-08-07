@@ -8,7 +8,7 @@ const script = fs.readFileSync(new URL("../js/script.js", import.meta.url), "utf
 const css = fs.readFileSync(new URL("../css/mobile-app-v1.css", import.meta.url), "utf8");
 
 test("mobile keyword search syncs immediately and searches outside map bounds", () => {
-  assert.match(html, /mobile-app-v1\.js\?v=1\.0\.4-logo-reload/);
+  assert.match(html, /mobile-app-v1\.js\?v=1\.0\.5-tablet-logo-reload/);
   assert.match(html, /mobile-app-v1\.css\?v=1\.0\.3-sort-row-aligned/);
   assert.match(mobile, /mobileInput\.addEventListener\("input", queueMobileKeywordSearch\)/);
   assert.match(mobile, /global\.jsMobileGlobalKeywordV1 = !!source\.value\.trim\(\)/);

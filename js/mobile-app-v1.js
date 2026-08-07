@@ -66,7 +66,7 @@
     chrome.innerHTML =
       '<header class="jsm-app-header-v1">' +
         '<div class="jsm-title-row-v1">' +
-          '<button type="button" class="jsm-brand-v1" data-mobile-action="reload" aria-label="JS부동산 새로고침"><b>JS</b><span><strong>JS부동산</strong><small>대전 상가 매물지도</small></span></button>' +
+          '<button type="button" class="jsm-brand-v1" onclick="window.location.reload()" aria-label="JS부동산 새로고침"><b>JS</b><span><strong>JS부동산</strong><small>대전 상가 매물지도</small></span></button>' +
           '<button type="button" class="jsm-quick-add-v1" data-mobile-action="quick-add">' + icon("plus") + '<span>빠른등록</span></button>' +
         '</div>' +
         '<form class="jsm-search-v1" id="jsMobileSearchFormV1">' +
@@ -223,7 +223,6 @@
   }
 
   function runAction(action) {
-    if (action === "reload") reloadApp();
     if (action === "quick-add" && typeof global.openQuickAddModal === "function") global.openQuickAddModal();
     if (action === "filter") {
       closeMore();
@@ -248,12 +247,6 @@
     }
     if (action === "close-more") closeMore();
   }
-
-  function reloadApp() {
-    global.location.reload();
-  }
-
-  global.reloadJSMapAppV1 = reloadApp;
 
   function openMore() {
     var layer = chrome && chrome.querySelector("#jsMobileMoreLayerV1");

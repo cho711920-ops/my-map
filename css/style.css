@@ -988,6 +988,13 @@ body {
   color:white;
 }
 
+.header[role="button"] {
+  cursor:pointer;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+
 .filters {
   padding:12px;
   border-bottom:1px solid #eee;
