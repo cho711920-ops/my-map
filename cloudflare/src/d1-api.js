@@ -52,6 +52,40 @@ function parseJson(value, fallback) {
   }
 }
 
+const ACCOUNT_LIST_SCOPES = new Set(["favorites", "visitLists"]);
+
+export function normalizeCloudDeletionIds(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const normalized = {};
+  for (const [rawId, rawDeletedAt] of Object.entries(value).slice(0, 10_000)) {
+    const id = clean(rawId).slice(0, 160);
+    const deletedAt = Number(rawDeletedAt);
+    if (id && Number.isFinite(deletedAt) && deletedAt > 0) normalized[id] = deletedAt;
+  }
+  return normalized;
+}
+
+export function mergeCloudDeletionIds(existing, incoming) {
+  const merged = normalizeCloudDeletionIds(existing);
+  for (const [id, deletedAt] of Object.entries(normalizeCloudDeletionIds(incoming))) {
+    merged[id] = Math.max(Number(merged[id]) || 0, deletedAt);
+  }
+  return merged;
+}
+
+export function filterCloudDeletedLists(lists, deletedIds) {
+  if (!Array.isArray(lists)) return lists;
+  const deleted = normalizeCloudDeletionIds(deletedIds);
+  return lists.filter((list) => {
+    const id = clean(list?.id);
+    return !id || !deleted[id];
+  });
+}
+
+function cloudDeletionScope(scope) {
+  return `${scope}Deleted`;
+}
+
 function propertyIdFrom(body) {
   return clean(body?.key?.propertyId || body?.propertyId || body?.listingId).slice(0, 100);
 }
@@ -228,13 +262,23 @@ async function geocodeCache(env) {
 async function cloudState(env, user, query) {
   const scope = clean(query.scope).slice(0, 100);
   const recordKey = clean(query.recordKey || "default").slice(0, 100);
-  const row = await env.DB.prepare(`SELECT value_json, version, updated_at FROM cloud_state
+  const owner = clean(user?.email).toLowerCase();
+  const rowPromise = env.DB.prepare(`SELECT value_json, version, updated_at FROM cloud_state
     WHERE owner_email = ?1 AND scope = ?2 AND record_key = ?3`)
-    .bind(clean(user?.email).toLowerCase(), scope, recordKey).first();
+    .bind(owner, scope, recordKey).first();
+  const deletedRowPromise = ACCOUNT_LIST_SCOPES.has(scope)
+    ? env.DB.prepare(`SELECT value_json FROM cloud_state
+      WHERE owner_email = ?1 AND scope = ?2 AND record_key = ?3`)
+      .bind(owner, cloudDeletionScope(scope), recordKey).first()
+    : Promise.resolve(null);
+  const [row, deletedRow] = await Promise.all([rowPromise, deletedRowPromise]);
+  const deletedIds = normalizeCloudDeletionIds(parseJson(deletedRow?.value_json, {}));
+  const data = row ? filterCloudDeletedLists(parseJson(row.value_json, null), deletedIds) : null;
   return row
     ? { ok: true, action: "loadCloudState", found: true, scope, recordKey,
-      data: parseJson(row.value_json, null), version: row.version, updatedAt: row.updated_at }
-    : { ok: true, action: "loadCloudState", found: false, scope, recordKey, data: null, version: 0 };
+      data, deletedIds, version: row.version, updatedAt: row.updated_at }
+    : { ok: true, action: "loadCloudState", found: false, scope, recordKey,
+      data: null, deletedIds, version: 0 };
 }
 
 async function announcement(env) {
@@ -574,6 +618,31 @@ async function saveCloudState(env, user, body) {
   const recordKey = clean(body.recordKey || "default").slice(0, 100);
   const version = Math.max(1, Number(body.version) || Date.now());
   const now = new Date().toISOString();
+  if (ACCOUNT_LIST_SCOPES.has(scope) && Array.isArray(body.data)) {
+    const deletionScope = cloudDeletionScope(scope);
+    const existingDeletedRow = await env.DB.prepare(`SELECT value_json FROM cloud_state
+      WHERE owner_email = ?1 AND scope = ?2 AND record_key = ?3`)
+      .bind(owner, deletionScope, recordKey).first();
+    const deletedIds = mergeCloudDeletionIds(
+      parseJson(existingDeletedRow?.value_json, {}),
+      body.deletedIds
+    );
+    const data = filterCloudDeletedLists(body.data, deletedIds);
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(owner_email, scope, record_key) DO UPDATE SET
+          value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at`)
+        .bind(owner, scope, recordKey, JSON.stringify(data), version, now),
+      env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(owner_email, scope, record_key) DO UPDATE SET
+          value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at`)
+        .bind(owner, deletionScope, recordKey, JSON.stringify(deletedIds), version, now)
+    ]);
+    return { ok: true, persisted: true, queued: false, scope, recordKey,
+      data, deletedIds, version, updatedAt: now, source: "D1" };
+  }
   await env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
     ON CONFLICT(owner_email, scope, record_key) DO UPDATE SET

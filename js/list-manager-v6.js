@@ -166,6 +166,16 @@
     try { localStorage.setItem(deletedKey(type), JSON.stringify(loadDeletedIds(type))); } catch (_) {}
   }
 
+  function mergeDeletedIds(type, incoming) {
+    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return;
+    var deleted = loadDeletedIds(type);
+    Object.keys(incoming).forEach(function(id) {
+      var deletedAt = Number(incoming[id]) || 0;
+      if (id && deletedAt > (Number(deleted[id]) || 0)) deleted[id] = deletedAt;
+    });
+    persistDeletedIds(type);
+  }
+
   function markDeletedListId(type, id) {
     id = String(id || "").trim();
     if (!id) return;
@@ -269,6 +279,7 @@
           scope: cloudScope(type),
           recordKey: "default",
           data: lists,
+          deletedIds: loadDeletedIds(type),
           version: Date.now()
         })
       }).then(function(response) {
@@ -279,7 +290,8 @@
         cloudSaveRetries[type] = 0;
         pendingCloudSave[type] = false;
         if (revision === Number(cloudRevisions[type] || 0) && snapshot === JSON.stringify(loadLists(type))) {
-          clearSyncedDeletedIds(type, lists);
+          mergeDeletedIds(type, result.deletedIds);
+          if (Array.isArray(result.data)) saveLists(type, result.data, { remote: true });
           try { localStorage.removeItem(dirtyKey(type)); } catch (_) {}
           return;
         }
@@ -314,7 +326,8 @@
     if (!response.ok) throw new Error("로그인 계정의 목록을 불러오지 못했습니다.");
     var result = await response.json();
     if (!result.ok) throw new Error(result.message || "목록 동기화에 실패했습니다.");
-    var local = loadLists(type);
+    mergeDeletedIds(type, result.deletedIds);
+    var local = excludeDeletedLists(type, loadLists(type));
     if (result.found && Array.isArray(result.data)) {
       var remoteLists = excludeDeletedLists(type, result.data);
       if (dirtyAtStart || revisionAtStart !== Number(cloudRevisions[type] || 0)) {

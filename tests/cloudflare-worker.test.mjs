@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 
 import worker from "../cloudflare/src/worker.js";
 import {
+  filterCloudDeletedLists,
+  mergeCloudDeletionIds
+} from "../cloudflare/src/d1-api.js";
+import {
   createSessionToken,
   SESSION_COOKIE
 } from "../cloudflare/src/security.js";
@@ -13,6 +17,21 @@ const env = {
   SESSION_SECRET: "this-is-a-local-test-secret-longer-than-32-characters",
   ASSETS: { fetch: async () => new Response("asset") }
 };
+
+test("favorite folder deletion tombstones survive stale device uploads", () => {
+  const deletedIds = mergeCloudDeletionIds(
+    { old_folder: 100 },
+    { old_folder: 90, another_deleted_folder: 200 }
+  );
+  assert.deepEqual(deletedIds, { old_folder: 100, another_deleted_folder: 200 });
+  assert.deepEqual(filterCloudDeletedLists([
+    { id: "kept_folder", name: "333" },
+    { id: "old_folder", name: "333" },
+    { id: "another_deleted_folder", name: "찜1" }
+  ], deletedIds), [
+    { id: "kept_folder", name: "333" }
+  ]);
+});
 
 test("auth configuration exposes only the public client id", async () => {
   const response = await worker.fetch(new Request("https://js-map.com/api/auth-config"), env);
