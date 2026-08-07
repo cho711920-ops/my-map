@@ -998,22 +998,22 @@ body {
 
 .header .js-brand-mark-v1 {
   display:grid;
-  width:38px;
-  height:38px;
-  flex:0 0 38px;
+  width:42px;
+  height:42px;
+  flex:0 0 42px;
   place-items:center;
   border-radius:12px;
   background:linear-gradient(145deg,#1489fa,#0562cf);
   color:#fff;
   box-shadow:0 5px 12px rgba(5,104,232,.24);
-  font-size:15px;
+  font-size:17px;
   font-weight:950;
   letter-spacing:.03em;
 }
 
 .header .js-brand-name-v1 {
   color:#15233a;
-  font-size:18px;
+  font-size:22px;
   font-weight:950;
   letter-spacing:-.04em;
   line-height:1.15;
