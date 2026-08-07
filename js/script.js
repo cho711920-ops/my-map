@@ -3596,9 +3596,10 @@ function normalizeLinkedGongsilContactsV8(rawContacts) {
     var phone = normalizeListPhoneV650(contact && contact.phone);
     if (!phone || seen[phone.key]) return;
     seen[phone.key] = true;
+    var sourceRole = String(contact && contact.role || "").trim();
     contacts.push({
-      role: listContactRoleV650(contact && contact.role),
-      roleLabel: String(contact && contact.role || "").trim(),
+      role: listContactRoleV650(sourceRole),
+      roleLabel: /^(?:주인|관리|사장)$/.test(sourceRole) ? sourceRole : "",
       phone: phone,
       origin: "gongsil",
       source: "공실박스",

@@ -129,5 +129,6 @@ test("Gongsilbox collective-building contacts retain the provider role label", a
   const listingUi = await readFile(new URL("../js/script.js", import.meta.url), "utf8");
   assert.match(collector, /sourceRole:\s*candidateInfo\.buildingLevel && collectiveItem/);
   assert.match(collector, /role:\s*contact\.sourceRole \|\| contactRoleCode\(contact\.label\)/);
+  assert.match(listingUi, /\^\(\?:주인\|관리\|사장\)\$/);
   assert.match(listingUi, /contact\.roleLabel \|\| meta\.name/);
 });
