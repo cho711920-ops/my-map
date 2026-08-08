@@ -13,7 +13,8 @@ import { getRegionalMarket } from "./regional-market-api.js";
 import {
   handleCollectorAdminGet,
   handleCollectorAdminPost,
-  handleCollectorApi
+  handleCollectorApi,
+  runScheduledReviewRepair
 } from "./collector-api.js";
 import {
   adjustOperationsDashboard,
@@ -601,6 +602,24 @@ async function handleApi(request, env, context) {
   return json({ ok: false, message: "API 경로를 찾을 수 없습니다." }, 404, { "cache-control": "no-store" });
 }
 
+async function runScheduledMaintenance(env, context) {
+  const result = await runScheduledReviewRepair(env);
+  const changed = Number(result?.merged || 0) + Number(result?.created || 0);
+  if (!changed) return result;
+  const snapshotUpdate = adjustOperationsDashboard(env, result.operationAdjustments || {});
+  const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
+    return deleteR2Cache(env, null, [
+      D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
+    ]);
+  });
+  await invalidation;
+  await touchDataRevision(env, null, ["listings", "operations"], null, {
+    fullReload: true,
+    changeAction: "scheduledReviewRepair"
+  });
+  return result;
+}
+
 export default {
   async fetch(request, env, context) {
     try {
@@ -612,5 +631,8 @@ export default {
     } catch (error) {
       return withSecurityHeaders(errorResponse(error), request);
     }
+  },
+  async scheduled(_event, env, context) {
+    context.waitUntil(runScheduledMaintenance(env, context));
   }
 };

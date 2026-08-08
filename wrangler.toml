@@ -38,3 +38,6 @@ D1_DETAIL_READS = "1"
 
 [observability]
 enabled = true
+
+[triggers]
+crons = ["* * * * *"]

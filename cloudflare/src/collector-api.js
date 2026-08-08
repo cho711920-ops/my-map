@@ -1553,7 +1553,7 @@ async function consolidateExisting(env, user, body) {
     operationAdjustments: { activeMaster: -consolidated, history: consolidated }, customerMatches, source: "D1" };
 }
 
-async function repairExactReviews(env, user) {
+async function repairExactReviews(env, user, options = {}) {
   const decisionVersion = 3;
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json FROM collector_raw
     WHERE processing_state='review'
@@ -1623,13 +1623,25 @@ async function repairExactReviews(env, user) {
     }
   }
   const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
-  const pending = await env.DB.prepare(`SELECT COUNT(*) AS count FROM collector_raw
-    WHERE processing_state='review' AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1`)
-    .bind(decisionVersion).first();
+  const includeRemaining = options.includeRemaining !== false;
+  const pending = includeRemaining
+    ? await env.DB.prepare(`SELECT COUNT(*) AS count FROM collector_raw
+      WHERE processing_state='review' AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1`)
+      .bind(decisionVersion).first()
+    : null;
+  const remainingToScan = includeRemaining ? Number(pending?.count || 0) : null;
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
-    merged, created, ambiguous, failed, hasMore: Number(pending?.count || 0) > 0,
-    remainingToScan: Number(pending?.count || 0), customerMatches,
+    merged, created, ambiguous, failed,
+    hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= 20,
+    remainingToScan, customerMatches,
     operationAdjustments: { pendingReview: -(merged + created) }, source: "D1" };
+}
+
+export async function runScheduledReviewRepair(env) {
+  return repairExactReviews(env, {
+    email: "system-review-repair@js-map.com",
+    role: "owner"
+  }, { includeRemaining: false });
 }
 
 export async function handleCollectorAdminPost(env, user, body) {
