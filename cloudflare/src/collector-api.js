@@ -1558,7 +1558,7 @@ async function repairExactReviews(env, user) {
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json FROM collector_raw
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
-    ORDER BY created_at LIMIT 120`).bind(decisionVersion).all();
+    ORDER BY created_at LIMIT 20`).bind(decisionVersion).all();
   const reviewRows = rows?.results || [];
   const parsedRows = reviewRows.map((row) => ({ row, record: parseJson(row.payload_json, null) }))
     .filter((item) => item.record?.address && item.record?.sourceId);

@@ -584,7 +584,7 @@
           totals.merged.toLocaleString("ko-KR") + " · 별도 " + totals.created.toLocaleString("ko-KR") +
           " · 직접확인 " + totals.ambiguous.toLocaleString("ko-KR") +
           (result.remainingToScan ? " · 남은 검사 " + number(result.remainingToScan).toLocaleString("ko-KR") : ""), "loading");
-        if (result.hasMore && totals.passes < 100) return runNextBatch();
+        if (result.hasMore && totals.passes < 600) return runNextBatch();
         return result;
       });
     }
