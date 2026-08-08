@@ -169,8 +169,22 @@
     if (tab === "history") loadHistory(true); else loadUsers();
   }
 
+  function deactivateAdminTabs() {
+    ["operationsHistoryPanel", "operationsUsersPanel"].forEach(function (id) {
+      var node = document.getElementById(id);
+      if (node) node.hidden = true;
+    });
+    ["operationsTabHistory", "operationsTabUsers"].forEach(function (id) {
+      var button = document.getElementById(id);
+      if (button) button.classList.remove("active");
+    });
+  }
+
   global.switchOperationsTab = function (tab) {
-    if (tab !== "history" && tab !== "users") return previousSwitch(tab);
+    if (tab !== "history" && tab !== "users") {
+      deactivateAdminTabs();
+      return previousSwitch(tab);
+    }
     activateAdminTab(tab);
   };
   global.refreshListingHistoryV1 = function () { return loadHistory(true); };
