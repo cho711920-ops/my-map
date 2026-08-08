@@ -98,7 +98,7 @@
           '</b><span>' + escapeHtml(item.actorEmail || "시스템") + '</span></div>' +
           (changes ? '<ul>' + changes + '</ul>' : '<p>세부 값이 없는 시스템 처리 기록입니다.</p>') +
           (canRestore && item.restorable ? '<footer><button type="button" onclick="restoreListingHistoryV1(' +
-            Number(item.id || 0) + ')">이 값으로 복구</button></footer>' : '') + '</article>';
+            Number(item.id || 0) + ')">이전으로 복구</button></footer>' : '') + '</article>';
       }).join("") : '<div class="operations-admin-empty-v1">저장된 변경이력이 없습니다.</div>') +
       '</div>' + (state.nextCursor ? '<button class="operations-admin-more-v1" type="button" onclick="loadMoreListingHistoryV1()">이전 기록 더 보기</button>' : '');
   }
