@@ -108,6 +108,43 @@ function validateTarget(target) {
   return { source, url: url.toString() };
 }
 
+function normalizePortableConfig(value) {
+  const input = value && value.config && typeof value.config === "object" ? value.config : value;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("자동수집 설정 파일의 형식이 올바르지 않습니다.");
+  }
+  const schedule = String(input.schedule || DEFAULT_CONFIG.schedule);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule)) {
+    throw new Error("실행 시간 형식이 올바르지 않습니다.");
+  }
+  const targets = (Array.isArray(input.targets) ? input.targets : []).slice(0, 40).map((target) => {
+    const validated = validateTarget(target);
+    const district = typeof target.district === "string"
+      ? target.district.slice(0, 80)
+      : target.district && typeof target.district === "object"
+        ? { name: String(target.district.name || "").slice(0, 80), cortarNo: String(target.district.cortarNo || "").slice(0, 20) }
+        : "";
+    return {
+      source: validated.source,
+      url: validated.url,
+      key: targetKey(target) || [validated.source, target && target.district, validated.url].join("|"),
+      label: String(target && target.label || validated.source).slice(0, 120),
+      district,
+      selectionMode: String(target && target.selectionMode || "").slice(0, 40),
+      selectedCount: Math.max(0, Number(target && target.selectedCount || 0)),
+      mode: String(target && target.mode || "").slice(0, 40),
+      enabled: target && target.enabled !== false,
+      registeredAt: target && target.registeredAt || new Date().toISOString()
+    };
+  });
+  return {
+    enabled: Boolean(input.enabled),
+    schedule,
+    closeTabs: input.closeTabs !== false,
+    targets
+  };
+}
+
 async function registerTarget(target) {
   if (!target || !target.source || !target.url) throw new Error("자동수집 대상 정보가 부족합니다.");
   const validated = validateTarget(target);
@@ -494,6 +531,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.type === "JS_AUTO_SAVE_CONFIG") {
       return { ok: true, config: await saveConfig(message.config || {}) };
+    }
+    if (message.type === "JS_AUTO_IMPORT_CONFIG") {
+      return { ok: true, config: await saveConfig(normalizePortableConfig(message.config)) };
     }
     if (message.type === "JS_AUTO_RUN_NOW") {
       return runAll("manual");

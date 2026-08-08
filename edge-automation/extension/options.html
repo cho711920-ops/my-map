@@ -16,6 +16,13 @@
       <button id="save" class="primary">설정 저장</button>
       <button id="run">지금 전체 실행</button>
     </section>
+    <section class="transfer">
+      <div><h2>다른 PC로 설정 옮기기</h2><p>등록 지역·실행 시간만 이동하며 로그인 정보와 보안키는 포함하지 않습니다.</p></div>
+      <div class="transfer-actions">
+        <button id="exportConfig">설정 내보내기</button>
+        <label class="file-button">설정 가져오기<input id="importConfig" type="file" accept=".json,application/json"></label>
+      </div>
+    </section>
     <section><div class="section-title"><h2>등록된 대상</h2><small>각 사이트의 수집기에서 ‘자동수집 등록’을 누르면 추가됩니다.</small></div><div id="targets" class="list"></div></section>
     <section><div class="section-title"><h2>최근 실행 기록</h2><button id="clear">기록 지우기</button></div><div id="logs" class="list"></div></section>
   </main>

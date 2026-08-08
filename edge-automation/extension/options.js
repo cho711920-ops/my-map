@@ -35,6 +35,21 @@ function targetSummary(target) {
   return [district ? `${district} 구 단위` : "구 단위", "매일 자동수집", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
 }
 
+function portableTarget(target) {
+  return {
+    source: target.source,
+    key: target.key,
+    label: target.label,
+    url: target.url,
+    district: target.district,
+    selectionMode: target.selectionMode,
+    selectedCount: target.selectedCount,
+    mode: target.mode,
+    enabled: target.enabled !== false,
+    registeredAt: target.registeredAt
+  };
+}
+
 function renderTarget(target, index) {
   return `<div class="item target-item">
     <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small>${escapeHtml(targetSummary(target))}</small></div>
@@ -109,6 +124,47 @@ document.getElementById("targets").addEventListener("click", async (event) => {
 document.getElementById("clear").addEventListener("click", async () => {
   await runtime({ type: "JS_AUTO_CLEAR_LOGS" });
   await load();
+});
+
+document.getElementById("exportConfig").addEventListener("click", () => {
+  const config = state.config || {};
+  const payload = {
+    format: "js-map-auto-collector",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    config: {
+      enabled: Boolean(config.enabled),
+      schedule: config.schedule || "06:00",
+      closeTabs: config.closeTabs !== false,
+      targets: Array.isArray(config.targets) ? config.targets.map(portableTarget) : []
+    }
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `js-map-auto-collector-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  message("설정 파일 저장 완료");
+});
+
+document.getElementById("importConfig").addEventListener("change", async (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  try {
+    const payload = JSON.parse(await file.text());
+    if (payload.format && payload.format !== "js-map-auto-collector") throw new Error("다른 종류의 설정 파일입니다.");
+    const response = await runtime({ type: "JS_AUTO_IMPORT_CONFIG", config: payload });
+    if (!response.ok) throw new Error(response.message || "설정을 가져오지 못했습니다.");
+    state.config = response.config;
+    render();
+    message(`${state.config.targets.length}개 대상 복원 완료`);
+  } catch (error) {
+    message(error && error.message ? error.message : "설정 파일 오류");
+  } finally {
+    event.target.value = "";
+  }
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {

@@ -106,3 +106,19 @@ test("automatic collector settings stay compact with long target URLs", () => {
   assert.match(styles, /text-overflow:ellipsis/);
   assert.match(styles, /\.log-list\{max-height:430px;overflow-y:auto/);
 });
+
+test("automatic collector settings can move safely to another PC", () => {
+  const background = read("edge-automation/extension/background.js");
+  const options = read("edge-automation/extension/options.js");
+  const page = read("edge-automation/extension/options.html");
+  assert.match(background, /function normalizePortableConfig\(value\)/);
+  assert.match(background, /JS_AUTO_IMPORT_CONFIG/);
+  assert.match(background, /validateTarget\(target\)/);
+  assert.match(options, /js-map-auto-collector/);
+  assert.match(options, /function portableTarget\(target\)/);
+  assert.match(options, /설정 파일 저장 완료/);
+  assert.match(options, /개 대상 복원 완료/);
+  assert.match(page, /id="exportConfig"/);
+  assert.match(page, /id="importConfig"/);
+  assert.doesNotMatch(options, /COLLECTOR_ACCESS_KEY|collectorKey|accessKey|password/);
+});
