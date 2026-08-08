@@ -33,7 +33,9 @@ test("history and role management are isolated from customer matching and notifi
   assert.doesNotMatch(admin, /notification|알림|customerMatches|rebuildCustomer/);
   assert.match(admin, /function deactivateAdminTabs\(\)/);
   assert.match(admin, /deactivateAdminTabs\(\);[\s\S]*return previousSwitch\(tab\)/);
-  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.1-tab-isolation/);
+  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.2-business-history/);
+  assert.match(d1, /businessHistoryDiff/);
+  assert.match(d1, /h\.action IN \('updateProperty', 'updatePropertyMemo', 'restoreListingHistory'\)/);
 });
 
 test("server enforces edit and administrator roles", () => {

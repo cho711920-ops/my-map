@@ -58,7 +58,14 @@
     })[text(value)] || text(value);
   }
   function shortValue(value) {
-    if (value && typeof value === "object") value = JSON.stringify(value);
+    if (Array.isArray(value)) {
+      value = value.map(function (entry) {
+        if (!entry || typeof entry !== "object") return text(entry);
+        return [text(entry.role), text(entry.phone)].filter(Boolean).join(" ");
+      }).filter(Boolean).join(" · ");
+    } else if (value && typeof value === "object") {
+      value = JSON.stringify(value);
+    }
     var result = text(value);
     return result.length > 70 ? result.slice(0, 67) + "…" : result || "없음";
   }

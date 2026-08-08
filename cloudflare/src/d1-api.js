@@ -589,18 +589,89 @@ async function operationsDashboard(env) {
   }
 }
 
-function historyDiff(beforeValue, afterValue) {
-  const before = beforeValue && typeof beforeValue === "object" ? beforeValue : {};
-  const after = afterValue && typeof afterValue === "object" ? afterValue : {};
-  const ignored = new Set(["updated_at", "created_at", "version", "raw_json", "payload_json"]);
+const BUSINESS_HISTORY_FIELDS = [
+  "title", "room", "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2",
+  "landlord_phone", "tenant_phone", "operating_memo", "contacts_json"
+];
+
+const BUSINESS_HISTORY_ALIASES = {
+  name: "title",
+  title: "title",
+  building_name: "title",
+  room: "room",
+  deposit: "deposit",
+  rent: "monthly_rent",
+  monthly_rent: "monthly_rent",
+  fee: "maintenance_fee",
+  maintenance_fee: "maintenance_fee",
+  premium: "premium",
+  area: "area_m2",
+  area_m2: "area_m2",
+  landlordPhone: "landlord_phone",
+  landlord_phone: "landlord_phone",
+  tenantPhone: "tenant_phone",
+  tenant_phone: "tenant_phone",
+  memo: "operating_memo",
+  operating_memo: "operating_memo",
+  contacts: "contacts_json",
+  contacts_json: "contacts_json"
+};
+
+const BUSINESS_HISTORY_NUMBERS = new Set([
+  "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2"
+]);
+
+function historyPhone(value) {
+  const digits = clean(value).replace(/\D/g, "");
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return clean(value);
+}
+
+function historyContacts(value) {
+  let contacts = value;
+  if (typeof contacts === "string") contacts = parseJson(contacts, contacts);
+  if (!Array.isArray(contacts)) return clean(contacts);
+  return contacts.map((contact) => ({
+    role: clean(contact?.role || contact?.type || contact?.label || contact?.name),
+    phone: historyPhone(contact?.phone || contact?.number || contact?.value)
+  })).filter((contact) => contact.phone)
+    .sort((left, right) => `${left.role}|${left.phone}`.localeCompare(`${right.role}|${right.phone}`, "ko"));
+}
+
+function businessHistoryValue(field, value) {
+  if (field === "contacts_json") return historyContacts(value);
+  if (field === "landlord_phone" || field === "tenant_phone") return historyPhone(value);
+  if (BUSINESS_HISTORY_NUMBERS.has(field)) {
+    if (value == null || value === "") return "";
+    const parsed = Number(String(value).replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : clean(value);
+  }
+  return clean(value);
+}
+
+export function businessHistorySnapshot(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const result = {};
+  for (const [key, rawValue] of Object.entries(input)) {
+    const field = BUSINESS_HISTORY_ALIASES[key];
+    if (!field) continue;
+    const normalized = businessHistoryValue(field, rawValue);
+    if (field === "title" && Object.prototype.hasOwnProperty.call(result, field) && key === "building_name") continue;
+    result[field] = normalized;
+  }
+  return result;
+}
+
+export function businessHistoryDiff(beforeValue, afterValue) {
+  const before = businessHistorySnapshot(beforeValue);
+  const after = businessHistorySnapshot(afterValue);
   const changes = [];
-  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    if (ignored.has(key)) continue;
-    const left = before[key];
-    const right = after[key];
-    if (JSON.stringify(left) === JSON.stringify(right)) continue;
-    changes.push({ field: key, before: left ?? "", after: right ?? "" });
-    if (changes.length >= 20) break;
+  for (const field of BUSINESS_HISTORY_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(before, field) ||
+        !Object.prototype.hasOwnProperty.call(after, field)) continue;
+    if (JSON.stringify(before[field]) === JSON.stringify(after[field])) continue;
+    changes.push({ field, before: before[field], after: after[field] });
   }
   return changes;
 }
@@ -617,6 +688,7 @@ async function listingHistory(env, query) {
     FROM listing_history h
     LEFT JOIN listings l ON l.id=h.listing_id
     WHERE (?1='' OR h.listing_id=?1 OR l.property_id=?1)
+      AND h.action IN ('updateProperty', 'updatePropertyMemo', 'restoreListingHistory')
       AND (?2=0 OR h.id < ?2)
     ORDER BY h.id DESC LIMIT ?3`)
     .bind(propertyId, cursor, limit + 1).all();
@@ -637,10 +709,10 @@ async function listingHistory(env, query) {
         changeAction: clean(row.action),
         actorEmail: clean(row.actor_email),
         createdAt: clean(row.created_at),
-        changes: historyDiff(before, after),
+        changes: businessHistoryDiff(before, after),
         restorable: ["updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(clean(row.action))
       };
-    }),
+    }).filter((item) => item.changes.length),
     nextCursor: rows.length > limit ? Number(page[page.length - 1]?.id || 0) : 0,
     source: "D1"
   };
@@ -721,6 +793,19 @@ async function updateProperty(env, user, body) {
   const before = await env.DB.prepare("SELECT * FROM listings WHERE property_id = ?1").bind(propertyId).first();
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
   const value = body.updated && typeof body.updated === "object" ? body.updated : {};
+  const beforeHistory = {
+    title: before.title, room: before.room, deposit: before.deposit, monthly_rent: before.monthly_rent,
+    maintenance_fee: before.maintenance_fee, premium: before.premium, area_m2: before.area_m2,
+    landlord_phone: before.landlord_phone, tenant_phone: before.tenant_phone,
+    operating_memo: before.operating_memo, contacts_json: before.contacts_json
+  };
+  const afterHistory = {
+    title: clean(value.name), room: canonicalListingRoom(value.room), deposit: number(value.deposit),
+    monthly_rent: number(value.rent), maintenance_fee: number(value.fee), premium: number(value.premium),
+    area_m2: number(value.area), landlord_phone: clean(value.landlordPhone),
+    tenant_phone: clean(value.tenantPhone), operating_memo: clean(value.memo),
+    contacts_json: JSON.stringify(value.contacts || [])
+  };
   const now = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare(`UPDATE listings SET
@@ -732,7 +817,7 @@ async function updateProperty(env, user, body) {
         clean(value.memo), clean(value.state) || "active", JSON.stringify(value.contacts || []), now, propertyId),
     env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
       VALUES (?1, 'updateProperty', ?2, ?3, ?4)`)
-      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(before), JSON.stringify(value))
+      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(beforeHistory), JSON.stringify(afterHistory))
   ]);
   return { ok: true, persisted: true, queued: false, propertyId, updated: value,
     operationAdjustments: { history: 1 }, source: "D1" };
@@ -744,7 +829,7 @@ async function updateMemo(env, user, body) {
   const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     SELECT id, 'updatePropertyMemo', ?1,
-      json_object('property_id', property_id, 'operating_memo', operating_memo, 'contacts_json', contacts_json),
+      json_object('operating_memo', operating_memo, 'contacts_json', contacts_json),
       json_object('operating_memo', ?2, 'contacts_json', ?3)
     FROM listings WHERE property_id=?4 LIMIT 1`)
     .bind(clean(user?.email), clean(body.memo), JSON.stringify(body.contacts || []), propertyId).run();
