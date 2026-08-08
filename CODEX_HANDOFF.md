@@ -1,5 +1,16 @@
 # JS부동산 Codex 인수인계
 
+## 노트북에서 작업 이어하기
+
+- GitHub 저장소는 `https://github.com/cho711920-ops/my-map`이고 현재 작업 브랜치는 `codex/cloudflare-js-map`이다.
+- 새 노트북에서는 저장소를 받은 뒤 `git switch codex/cloudflare-js-map`과 `git pull origin codex/cloudflare-js-map`을 실행하고, 이 `CODEX_HANDOFF.md`를 처음부터 끝까지 읽은 뒤 작업을 이어간다.
+- 기존 저장소가 없다면 `git clone https://github.com/cho711920-ops/my-map.git` 후 저장소 폴더에서 위 브랜치로 전환한다.
+- 배포 전 `pnpm run test:cloudflare`, `pnpm run cf:check`, `pnpm run build:cloudflare`를 실행하고, 배포는 `pnpm exec wrangler deploy`를 사용한다.
+- Cloudflare D1·R2·Worker와 등록된 Secret은 원격 계정에 그대로 유지되므로 복사하지 않는다. 새 노트북에서 배포하거나 사용량을 조회할 때만 `pnpm exec wrangler login`으로 같은 Cloudflare 계정에 로그인한다.
+- Edge 확장 프로그램, 사이트별 로그인 세션, Windows 자동수집 예약 작업과 자동수집 대상 프로필은 현재 PC의 로컬 설정이므로 노트북에서 자동수집까지 하려면 별도로 설치·등록해야 한다.
+- 운영 사이트는 `https://js-map.com`, Worker 이름은 `js-map`, D1은 `js-map-primary`, R2는 `js-map-media`다.
+- 작업 시작 시 반드시 `git status`로 사용자 미완료 변경이 없는지 확인하고, 운영 D1 데이터를 삭제하거나 초기화하지 않는다.
+
 ## 2026-08-08 업무 중심 매물 변경이력
 
 - 복구 버튼 문구를 의미가 명확한 `이전으로 복구`로 변경했다. 선택한 이력의 변경 직전 업무값으로 되돌리는 동작은 그대로다.
