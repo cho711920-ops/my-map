@@ -48,3 +48,29 @@ test("business history ignores formatting-only phone and number changes", () => 
   });
   assert.deepEqual(changes, []);
 });
+
+test("manual quick registration is shown as a business history entry", () => {
+  const changes = businessHistoryDiff({}, {
+    property_id: "internal-property-id",
+    title: "일반상가",
+    address: "서구 둔산동 1-1",
+    room: "101호",
+    deposit: 2000,
+    monthly_rent: 80,
+    operating_memo: "직접 등록",
+    contacts_json: '[{"role":"임대인","phone":"01012345678"}]'
+  }, true);
+
+  assert.deepEqual(changes, [
+    { field: "title", before: "", after: "일반상가" },
+    { field: "room", before: "", after: "101호" },
+    { field: "deposit", before: "", after: 2000 },
+    { field: "monthly_rent", before: "", after: 80 },
+    { field: "operating_memo", before: "", after: "직접 등록" },
+    {
+      field: "contacts_json",
+      before: "",
+      after: [{ role: "임대인", phone: "010-1234-5678" }]
+    }
+  ]);
+});

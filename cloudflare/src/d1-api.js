@@ -663,13 +663,19 @@ export function businessHistorySnapshot(value) {
   return result;
 }
 
-export function businessHistoryDiff(beforeValue, afterValue) {
+export function businessHistoryDiff(beforeValue, afterValue, includeCreatedFields = false) {
   const before = businessHistorySnapshot(beforeValue);
   const after = businessHistorySnapshot(afterValue);
   const changes = [];
   for (const field of BUSINESS_HISTORY_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(before, field) ||
-        !Object.prototype.hasOwnProperty.call(after, field)) continue;
+    const hasBefore = Object.prototype.hasOwnProperty.call(before, field);
+    const hasAfter = Object.prototype.hasOwnProperty.call(after, field);
+    if (!hasAfter || (!hasBefore && !includeCreatedFields)) continue;
+    if (!hasBefore && includeCreatedFields) {
+      if (after[field] === "" || (Array.isArray(after[field]) && !after[field].length)) continue;
+      changes.push({ field, before: "", after: after[field] });
+      continue;
+    }
     if (JSON.stringify(before[field]) === JSON.stringify(after[field])) continue;
     changes.push({ field, before: before[field], after: after[field] });
   }
@@ -688,7 +694,7 @@ async function listingHistory(env, query) {
     FROM listing_history h
     LEFT JOIN listings l ON l.id=h.listing_id
     WHERE (?1='' OR h.listing_id=?1 OR l.property_id=?1)
-      AND h.action IN ('updateProperty', 'updatePropertyMemo', 'restoreListingHistory')
+      AND h.action IN ('quickAdd', 'updateProperty', 'updatePropertyMemo', 'restoreListingHistory')
       AND (?2=0 OR h.id < ?2)
     ORDER BY h.id DESC LIMIT ?3`)
     .bind(propertyId, cursor, limit + 1).all();
@@ -709,7 +715,7 @@ async function listingHistory(env, query) {
         changeAction: clean(row.action),
         actorEmail: clean(row.actor_email),
         createdAt: clean(row.created_at),
-        changes: businessHistoryDiff(before, after),
+        changes: businessHistoryDiff(before, after, clean(row.action) === "quickAdd"),
         restorable: ["updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(clean(row.action))
       };
     }).filter((item) => item.changes.length),
@@ -904,8 +910,12 @@ async function quickAdd(env, user, body) {
       clean(values[23]) || now, clean(values[24]) || now).run();
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'quickAdd', ?2, '{}', ?3)`)
-    .bind(propertyId, clean(user?.email), JSON.stringify({ property_id: propertyId, title: clean(values[0]),
-      address: clean(values[1]), room: canonicalListingRoom(values[2]) })).run();
+    .bind(propertyId, clean(user?.email), JSON.stringify({
+      title: clean(values[0]), room: canonicalListingRoom(values[2]), deposit: number(values[4]),
+      monthly_rent: number(values[5]), maintenance_fee: number(values[6]), premium: number(values[7]),
+      area_m2: number(values[8]), landlord_phone: clean(values[9]), tenant_phone: clean(values[10]),
+      operating_memo: clean(values[11]), contacts_json: clean(values[17]) || "[]"
+    })).run();
   return { ok: true, persisted: true, queued: false, propertyId,
     operationAdjustments: { activeMaster: 1, history: 1 }, source: "D1" };
 }
