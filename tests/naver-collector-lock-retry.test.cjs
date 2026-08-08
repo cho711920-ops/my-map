@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "5\.6\.0";/);
+assert.match(source, /var VERSION = "5\.7\.0";/);
 assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(source, /data-metric="updated"/);

@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.1\.1";/);
+assert.match(source, /var VERSION = "2\.1\.3";/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
 assert.match(source, /var MAX_SAVE_BATCH_SIZE = 8;/);
@@ -39,9 +39,10 @@ const collectPhonesSource = source.slice(
   source.indexOf("function isTenantLabel(")
 );
 assert.ok(
-  /appendContactFields\(buildingCandidates,\s*detail && detail\.bilinfo/.test(collectPhonesSource) &&
-    /isCollectiveItem\(item,\s*detail\)\s*\?\s*listingCandidates\s*:\s*listingCandidates\.concat\(buildingCandidates\)/.test(collectPhonesSource),
-  "일반건물은 건물 연락처를 사용하고 집합건물은 해당 호실 연락처만 사용해야 합니다."
+  /appendNestedContactFields\(listingCandidates,\s*detail && detail\.floorinfo/.test(collectPhonesSource) &&
+    /appendNestedContactFields\(buildingCandidates,\s*detail && detail\.bilinfo/.test(collectPhonesSource) &&
+    /contacts:\s*uniqueContacts\.map/.test(collectPhonesSource),
+  "공실박스의 호실·건물 연락처를 모두 수집하고 contactList에 누락 없이 보존해야 합니다."
 );
 assert.match(
   source,
