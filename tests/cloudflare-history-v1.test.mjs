@@ -39,10 +39,14 @@ test("business history hides internal fields and maps edit aliases", () => {
 test("business history ignores formatting-only phone and number changes", () => {
   const changes = businessHistoryDiff({
     deposit: 3000,
+    maintenance_fee: null,
+    premium: null,
     landlord_phone: "01012345678",
     contacts_json: '[{"role":"임대인","phone":"01012345678"}]'
   }, {
     deposit: "3,000",
+    fee: 0,
+    premium: 0,
     landlordPhone: "010-1234-5678",
     contacts: [{ role: "임대인", phone: "010-1234-5678" }]
   });

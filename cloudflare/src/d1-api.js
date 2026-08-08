@@ -643,7 +643,7 @@ function businessHistoryValue(field, value) {
   if (field === "contacts_json") return historyContacts(value);
   if (field === "landlord_phone" || field === "tenant_phone") return historyPhone(value);
   if (BUSINESS_HISTORY_NUMBERS.has(field)) {
-    if (value == null || value === "") return "";
+    if (value == null || value === "") return 0;
     const parsed = Number(String(value).replace(/,/g, ""));
     return Number.isFinite(parsed) ? parsed : clean(value);
   }
@@ -672,7 +672,7 @@ export function businessHistoryDiff(beforeValue, afterValue, includeCreatedField
     const hasAfter = Object.prototype.hasOwnProperty.call(after, field);
     if (!hasAfter || (!hasBefore && !includeCreatedFields)) continue;
     if (!hasBefore && includeCreatedFields) {
-      if (after[field] === "" || (Array.isArray(after[field]) && !after[field].length)) continue;
+      if (after[field] === "" || after[field] === 0 || (Array.isArray(after[field]) && !after[field].length)) continue;
       changes.push({ field, before: "", after: after[field] });
       continue;
     }
