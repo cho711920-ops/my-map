@@ -494,9 +494,9 @@ async function loadSourceAssets(env, existingSources) {
     const chunk = sourceIds.slice(offset, offset + 60);
     const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
     const [media, contacts] = await Promise.all([
-      env.DB.prepare(`SELECT id, source_id, sort_order, external_url, status FROM listing_media
+      env.DB.prepare(`SELECT id, listing_id, source_id, sort_order, external_url, status FROM listing_media
         WHERE source_id IN (${placeholders})`).bind(...chunk).all(),
-      env.DB.prepare(`SELECT id, source_id, role, name, phone, normalized_phone, status FROM listing_contacts
+      env.DB.prepare(`SELECT id, listing_id, source_id, role, name, phone, normalized_phone, status FROM listing_contacts
         WHERE source_id IN (${placeholders})`).bind(...chunk).all()
     ]);
     for (const row of media?.results || []) assets.get(clean(row.source_id))?.media.push(row);
@@ -617,9 +617,9 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now,
     }
     currentMedia.set(url, row);
     const order = desiredMedia.get(url);
-    if (Number(row.sort_order) !== order || clean(row.status) !== "external") {
-      statements.push(env.DB.prepare(`UPDATE listing_media SET sort_order=?1, status='external', updated_at=?2 WHERE id=?3`)
-        .bind(order, now, row.id));
+    if (clean(row.listing_id) !== clean(listingId) || Number(row.sort_order) !== order || clean(row.status) !== "external") {
+      statements.push(env.DB.prepare(`UPDATE listing_media SET listing_id=?1, sort_order=?2,
+        status='external', updated_at=?3 WHERE id=?4`).bind(listingId, order, now, row.id));
       mediaChanged += 1;
     }
   }
@@ -650,10 +650,11 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now,
     }
     currentContacts.set(key, row);
     const desired = desiredContacts.get(key);
-    if (clean(row.name) !== clean(desired.name) || clean(row.phone) !== clean(desired.phone) || clean(row.status) !== "active") {
-      statements.push(env.DB.prepare(`UPDATE listing_contacts SET name=?1, phone=?2, normalized_phone=?3,
-        status='active', last_seen_at=?4, updated_at=?4 WHERE id=?5`)
-        .bind(clean(desired.name), clean(desired.phone), desired.normalizedPhone, now, row.id));
+    if (clean(row.listing_id) !== clean(listingId) || clean(row.name) !== clean(desired.name) ||
+        clean(row.phone) !== clean(desired.phone) || clean(row.status) !== "active") {
+      statements.push(env.DB.prepare(`UPDATE listing_contacts SET listing_id=?1, name=?2, phone=?3, normalized_phone=?4,
+        status='active', last_seen_at=?5, updated_at=?5 WHERE id=?6`)
+        .bind(listingId, clean(desired.name), clean(desired.phone), desired.normalizedPhone, now, row.id));
       contactsChanged += 1;
     }
   }
@@ -735,7 +736,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     sourceChanged, mediaChanged: assets.mediaChanged, contactsChanged: assets.contactsChanged };
 }
 
-async function createListing(env, record, sessionId, actor = "collector") {
+async function createListing(env, record, sessionId, actor = "collector", existingSource = null, existingAssets = null) {
   const id = `M-${crypto.randomUUID()}`;
   const now = nowIso();
   const contacts = JSON.stringify(record.contacts);
@@ -748,7 +749,7 @@ async function createListing(env, record, sessionId, actor = "collector") {
     .bind(id, record.source, record.buildingName || "일반상가", record.address, record.room, record.category,
       record.deposit, record.rent, record.fee, record.premium, record.area, record.latitude, record.longitude,
       record.memo, record.link, contacts, now).run();
-  await attachSource(env, record, id, sessionId, null, false, actor);
+  await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets);
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record)).run();
   return id;
@@ -1484,18 +1485,23 @@ async function applyReviewBatch(env, user, body) {
       if (!row) continue;
       const record = parseJson(row.payload_json, null);
       if (!record) throw new Error("검토 원본이 없습니다.");
+      const existingSourceMap = await loadExistingSources(env, record.source, [record]);
+      const existingSource = existingSourceMap.get(clean(record.sourceId)) || null;
+      const existingAssetsMap = existingSource ? await loadSourceAssets(env, existingSourceMap) : new Map();
+      const existingAssets = existingSource ? existingAssetsMap.get(clean(existingSource.id)) : null;
       if (action === "hold") {
         await env.DB.prepare("UPDATE collector_raw SET processing_state='held', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action, actor: clean(user?.email) }), id).run();
       } else if (action === "create") {
-        const createdId = await createListing(env, record, row.session_id, clean(user?.email));
+        const createdId = await createListing(env, record, row.session_id, clean(user?.email), existingSource, existingAssets);
         affectedListingIds.add(createdId);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action, listingId: createdId }), id).run();
       } else if (action === "merge" || action === "condition") {
         const listing = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1").bind(masterId).first();
         if (!listing) throw new Error("통합할 기존 매물을 찾지 못했습니다.");
-        await attachSource(env, record, listing.id, row.session_id, null, action === "condition", clean(user?.email));
+        await attachSource(env, record, listing.id, row.session_id, existingSource, action === "condition",
+          clean(user?.email), existingAssets);
         if (action === "condition") affectedListingIds.add(listing.id);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action, listingId: listing.id, manual: Boolean(body.manualMergeConfirmed) }), id).run();
@@ -1560,6 +1566,15 @@ async function repairExactReviews(env, user) {
   const invalidRows = reviewRows.filter((row) => !validIds.has(row.id));
   const records = parsedRows.map((item) => item.record);
   const candidatesByAddress = await loadCandidateListings(env, records, new Map());
+  const existingSourcesByKey = new Map();
+  for (const source of [...new Set(records.map((record) => clean(record.source)).filter(Boolean))]) {
+    const sourceRows = await loadExistingSources(env, source,
+      records.filter((record) => clean(record.source) === source));
+    for (const [sourceId, sourceRow] of sourceRows) {
+      existingSourcesByKey.set(`${source}:${sourceId}`, sourceRow);
+    }
+  }
+  const existingAssetsBySource = await loadSourceAssets(env, existingSourcesByKey);
   let merged = 0;
   let created = 0;
   let ambiguous = 0;
@@ -1574,14 +1589,17 @@ async function repairExactReviews(env, user) {
     try {
       const candidates = candidatesByAddress.get(record.address) || [];
       const classified = classifyListingCandidates(record, candidates);
+      const existingSource = existingSourcesByKey.get(`${clean(record.source)}:${clean(record.sourceId)}`) || null;
+      const existingAssets = existingSource ? existingAssetsBySource.get(clean(existingSource.id)) : null;
       if (classified.decision === "merge") {
-        await attachSource(env, record, classified.candidate.id, row.session_id, null, false, clean(user?.email));
+        await attachSource(env, record, classified.candidate.id, row.session_id, existingSource, false,
+          clean(user?.email), existingAssets);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: classified.candidate.id,
             reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
         merged += 1;
       } else if (classified.decision === "create") {
-        const listingId = await createListing(env, record, row.session_id, clean(user?.email));
+        const listingId = await createListing(env, record, row.session_id, clean(user?.email), existingSource, existingAssets);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
           address: record.address, room: record.room, listing_type: record.category,
           deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
@@ -1598,7 +1616,9 @@ async function repairExactReviews(env, user) {
             autoDecision: "review", autoDecisionVersion: decisionVersion }), row.id).run();
         ambiguous += 1;
       }
-    } catch {
+    } catch (error) {
+      await env.DB.prepare("UPDATE collector_raw SET error_text=?1 WHERE id=?2")
+        .bind(clean(error?.message || error).slice(0, 500), row.id).run();
       failed += 1;
     }
   }
