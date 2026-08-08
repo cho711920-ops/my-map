@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { classifyListingCandidates, compareListingSpace } from "../cloudflare/src/collector-api.js";
+import { classifyListingCandidates, compareListingSpace, normalizeReviewRecord } from "../cloudflare/src/collector-api.js";
 
 function incoming(room, deposit = 1000, rent = 50, area = 10) {
   return { room, deposit, rent, area };
@@ -58,3 +58,18 @@ test("different building dongs are separate even with the same unit", () => {
   ]).decision, "create");
 });
 
+test("legacy review rows never bind undefined optional values to D1", () => {
+  const record = normalizeReviewRecord({
+    originalId: "O-legacy", source: "네이버", sourceId: "네이버-1",
+    buildingName: "일반상가", address: "중구 오류동 187-8", room: "1층",
+    category: "상가점포", deposit: 5000, rent: 500, area: 75.7,
+    memo: "(임장가자)", link: "https://fin.land.naver.com/articles/1"
+  });
+  assert.equal(record.latitude, null);
+  assert.equal(record.longitude, null);
+  assert.equal(record.fee, null);
+  assert.equal(record.premium, null);
+  assert.deepEqual(record.images, []);
+  assert.deepEqual(record.contacts, []);
+  assert.ok(Object.values(record).every((value) => value !== undefined));
+});

@@ -595,6 +595,32 @@ export function classifyListingCandidates(record, candidates = []) {
   return { decision: "create", reason: candidates.length ? "기존 매물과 층·호실이 다름" : "같은 주소의 기존 매물 없음", comparisons };
 }
 
+export function normalizeReviewRecord(value = {}) {
+  return {
+    ...value,
+    originalId: clean(value.originalId),
+    source: clean(value.source),
+    sourceId: clean(value.sourceId),
+    buildingName: clean(value.buildingName) || "일반상가",
+    address: normalizedAddress(value.address),
+    room: canonicalListingRoom(value.room),
+    category: clean(value.category) || "상가점포",
+    deposit: number(value.deposit),
+    rent: number(value.rent),
+    fee: number(value.fee),
+    premium: number(value.premium),
+    area: number(value.area),
+    memo: clean(value.memo),
+    link: clean(value.link),
+    listSnapshot: clean(value.listSnapshot),
+    images: Array.isArray(value.images) ? value.images.filter(Boolean) : [],
+    contacts: Array.isArray(value.contacts) ? value.contacts.filter((contact) => contact && typeof contact === "object") : [],
+    raw: value.raw && typeof value.raw === "object" ? value.raw : {},
+    latitude: coordinate(value.latitude ?? value.lat ?? value.mapY, -90, 90),
+    longitude: coordinate(value.longitude ?? value.lng ?? value.lon ?? value.mapX, -180, 180)
+  };
+}
+
 function exactCandidate(record, candidates) {
   const classified = classifyListingCandidates(record, candidates);
   return classified.decision === "merge" ? classified.candidate : null;
@@ -1560,7 +1586,10 @@ async function repairExactReviews(env, user, options = {}) {
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
     ORDER BY created_at LIMIT 20`).bind(decisionVersion).all();
   const reviewRows = rows?.results || [];
-  const parsedRows = reviewRows.map((row) => ({ row, record: parseJson(row.payload_json, null) }))
+  const parsedRows = reviewRows.map((row) => {
+    const parsed = parseJson(row.payload_json, null);
+    return { row, record: parsed ? normalizeReviewRecord(parsed) : null };
+  })
     .filter((item) => item.record?.address && item.record?.sourceId);
   const validIds = new Set(parsedRows.map((item) => item.row.id));
   const invalidRows = reviewRows.filter((row) => !validIds.has(row.id));
