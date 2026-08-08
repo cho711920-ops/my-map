@@ -973,6 +973,49 @@ function evaluateCustomerListing(requirements, row) {
   return Math.min(100, score);
 }
 
+export async function refreshCustomerMatchesForListings(env, listingIds = []) {
+  const ids = [...new Set((Array.isArray(listingIds) ? listingIds : [listingIds]).map(clean).filter(Boolean))].slice(0, 500);
+  if (!ids.length) return { listings: 0, evaluated: 0, matched: 0, removed: 0 };
+  const customers = await allPages(env, `SELECT id, requirements_json FROM customers
+    WHERE status NOT IN ('계약완료','종료') ORDER BY updated_at DESC`, 500);
+  const listings = [];
+  for (let offset = 0; offset < ids.length; offset += 80) {
+    const chunk = ids.slice(offset, offset + 80);
+    const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
+    const page = await env.DB.prepare(`SELECT id, property_id, title, address, road_address, building_name,
+        listing_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags, status
+      FROM listings WHERE id IN (${placeholders})`).bind(...chunk).all();
+    listings.push(...(page?.results || []));
+  }
+  const byId = new Map(listings.map((listing) => [clean(listing.id), listing]));
+  const statements = [];
+  const now = new Date().toISOString();
+  let matched = 0;
+  let removed = 0;
+  for (const listingId of ids) {
+    const listing = byId.get(listingId);
+    for (const customer of customers) {
+      const score = listing && clean(listing.status) !== "deleted"
+        ? evaluateCustomerListing(requirementsFromCustomer(customer), listing)
+        : null;
+      if (score == null) {
+        statements.push(env.DB.prepare(`DELETE FROM customer_matches
+          WHERE customer_id=?1 AND listing_id=?2 AND state IN ('candidate','신규')`).bind(customer.id, listingId));
+        removed += 1;
+      } else {
+        statements.push(env.DB.prepare(`INSERT INTO customer_matches (
+            customer_id, listing_id, state, score, memo, created_at, updated_at
+          ) VALUES (?1, ?2, '신규', ?3, '', ?4, ?4)
+          ON CONFLICT(customer_id, listing_id) DO UPDATE SET score=excluded.score, updated_at=excluded.updated_at`)
+          .bind(customer.id, listingId, score, now));
+        matched += 1;
+      }
+    }
+  }
+  for (let offset = 0; offset < statements.length; offset += 80) await env.DB.batch(statements.slice(offset, offset + 80));
+  return { listings: ids.length, evaluated: ids.length * customers.length, matched, removed };
+}
+
 async function rebuildCustomerMatches(env, customerId = "") {
   const requested = clean(customerId);
   const customers = requested

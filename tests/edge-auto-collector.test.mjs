@@ -21,17 +21,24 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /if \(lock && \(!state \|\| !state\.active\)\)/);
   assert.match(background, /validateTarget\(target\)/);
   assert.match(background, /const result = await runAll\(reason\)/);
-  assert.match(background, /if \(result && result\.started === true\)/);
+  assert.match(background, /LAST_SCHEDULE_KEY\]: localDateKey\(\)/);
   assert.match(background, /runScheduled\("browser-startup"\)/);
   assert.doesNotMatch(background, /chrome\.scripting\.executeScript/);
-  assert.match(background, /async function launchCurrentTarget\(state\)/);
+  assert.match(background, /async function launchCurrentTarget\(state, reuseTabId = null\)/);
   assert.match(background, /async function finishCurrentTarget\(result, senderTabId\)/);
   assert.match(background, /await sendRunMessage\(tab\.id, target, targetRunId, state\.runId\)/);
   assert.match(background, /JS_AUTO_TARGET_FINISHED/);
   assert.match(background, /chrome\.tabs\.onRemoved/);
   assert.match(background, /chrome\.tabs\.create\(\{ url: target\.url, active: false \}\)/);
   assert.match(background, /chrome\.windows\.update\(tab\.windowId, \{ state: "minimized" \}\)/);
-  assert.match(background, /chrome\.storage\.local\.remove\(\[RUN_STATE_KEY, RUN_LOCK_KEY\]\)/);
+  assert.match(background, /async function restartPersistedRun\(state, reason\)/);
+  assert.match(background, /retryQueue/);
+  assert.match(background, /RECOVERY_ALARM_NAME/);
+  assert.match(background, /WATCHDOG_ALARM_NAME/);
+  assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 4/);
+  assert.match(background, /stalledLoading/);
+  assert.match(background, /stalledCollection/);
+  assert.doesNotMatch(background, /onInstalled[\s\S]{0,400}remove\(\[RUN_STATE_KEY, RUN_LOCK_KEY\]\)/);
 });
 
 test("automatic targets and schedules stay in the dedicated Edge profile", () => {
@@ -40,7 +47,7 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(background, /chrome\.storage\.local/);
   assert.doesNotMatch(background, /COLLECTOR_ACCESS_KEY|collectorKey|accessKey/);
   assert.match(content, /JS_COLLECTOR_AUTOMATION_RESULT/);
-  assert.match(content, /async function signalScheduledRun\(autorun\)/);
+  assert.match(content, /async function signalScheduledRun\(autorun, forceRun\)/);
   assert.match(content, /attempt < 12/);
   assert.match(content, /JS_AUTO_START_MAIN/);
   assert.match(content, /JS_AUTO_TARGET_FINISHED/);
@@ -62,6 +69,10 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(gongsil, /현재 화면 전체클러스터 자동수집 등록/);
   assert.match(naver, /data-role="auto-district"/);
   assert.match(naver, /function selectAutomaticDistrict\(\)/);
+  assert.match(naver, /AUTO_DISTRICT_PROGRESS_KEY/);
+  assert.match(naver, /async function collectFinAutomaticDistrict\(district\)/);
+  assert.match(naver, /saveAutoDistrictProgress\(progress\)/);
+  assert.match(naver, /clearAutoDistrictProgress\(district\.cortarNo\)/);
   assert.match(naver, /지도 클러스터 인식과 관계없이/);
   const naverAutomatic = naver.slice(naver.indexOf("async function runAutomatic"), naver.indexOf("function requestSafeStop"));
   assert.doesNotMatch(naverAutomatic, /discoverFinContext\(\)/);

@@ -7,8 +7,12 @@ const RUN_STATE_KEY = "jsAutoCollectorRunStateV2";
 const LAST_SCHEDULE_KEY = "jsAutoCollectorLastScheduleV1";
 const LAST_VERSION_RUN_KEY = "jsAutoCollectorLastVersionRunV1";
 const ALARM_NAME = "js-auto-collector-daily";
+const RECOVERY_ALARM_NAME = "js-auto-collector-recovery";
+const WATCHDOG_ALARM_NAME = "js-auto-collector-watchdog";
 const SOURCE_ORDER = { naver: 1, daangn: 2, gongsil: 3 };
-const MAX_TARGET_ATTEMPTS = 3;
+const MAX_IMMEDIATE_ATTEMPTS = 4;
+const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
+const COLLECTION_STALL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_CONFIG = {
   enabled: false,
   schedule: "06:00",
@@ -55,6 +59,8 @@ function nextAlarmAt(schedule) {
 
 async function resetAlarm(config) {
   await chrome.alarms.clear(ALARM_NAME);
+  await chrome.alarms.clear(WATCHDOG_ALARM_NAME);
+  chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 5 });
   if (!config.enabled) return;
   chrome.alarms.create(ALARM_NAME, {
     when: nextAlarmAt(config.schedule),
@@ -182,6 +188,13 @@ async function finalizeRun(state) {
     message: `자동수집 종료: 성공 ${summary.completed}, 실패 ${summary.failed}`,
     result: summary
   });
+  if (summary.ok) {
+    await chrome.storage.local.set({
+      [LAST_SCHEDULE_KEY]: localDateKey(),
+      [LAST_VERSION_RUN_KEY]: chrome.runtime.getManifest().version
+    });
+  }
+  await chrome.alarms.clear(RECOVERY_ALARM_NAME);
   if (summary.failed) {
     chrome.notifications.create({
       type: "basic",
@@ -192,6 +205,49 @@ async function finalizeRun(state) {
   }
   await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
   return summary;
+}
+
+async function restartPersistedRun(state, reason) {
+  const staleTabId = state.currentTabId;
+  state.currentTabId = null;
+  state.targetRunId = null;
+  state.targetStartedAt = null;
+  state.phase = "resuming";
+  await saveRunState(state);
+  await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
+  if (staleTabId) await chrome.tabs.remove(staleTabId).catch(() => {});
+  await appendLog({ level: "info", message: reason || "중단된 자동수집을 저장 지점부터 이어서 실행합니다." });
+  return launchCurrentTarget(state);
+}
+
+async function scheduleRecovery(state, delayMinutes, message) {
+  state.phase = "retry-wait";
+  state.retryAt = Date.now() + Math.max(1, Number(delayMinutes) || 1) * 60 * 1000;
+  await saveRunState(state);
+  chrome.alarms.create(RECOVERY_ALARM_NAME, { when: state.retryAt });
+  await appendLog({ level: "warning", message });
+  return { ok: true, retryScheduled: true, retryAt: state.retryAt };
+}
+
+async function continueOrRetryCycle(state, completedTabId) {
+  if (state.index < state.targets.length) return launchCurrentTarget(state, completedTabId);
+  const retryQueue = Array.isArray(state.retryQueue) ? state.retryQueue : [];
+  if (!retryQueue.length) {
+    if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
+    return finalizeRun(state);
+  }
+  state.targets = retryQueue;
+  state.retryQueue = [];
+  state.index = 0;
+  state.currentTabId = null;
+  state.targetRunId = null;
+  state.targetStartedAt = null;
+  state.targetAttempt = 1;
+  if (completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
+  const cycle = Math.max(...state.targets.map((target) => Number(target.retryCycle || 1)), 1);
+  const delayMinutes = Math.min(30, 5 * cycle);
+  return scheduleRecovery(state, delayMinutes,
+    `미완료 대상 ${state.targets.length}개를 ${delayMinutes}분 뒤 마지막 저장 지점부터 다시 실행합니다.`);
 }
 
 async function launchCurrentTarget(state, reuseTabId = null) {
@@ -253,14 +309,14 @@ async function finishCurrentTarget(result, senderTabId) {
   const completedTabId = state.currentTabId;
   const elapsedMs = Date.now() - Number(state.targetStartedAt || Date.now());
   const targetAttempt = Math.max(1, Number(state.targetAttempt || 1));
-  if (result.ok !== true && targetAttempt < MAX_TARGET_ATTEMPTS && retryableTargetFailure(result.message)) {
+  if (result.ok !== true && targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
     await appendLog({
       level: "warning",
       source: target.source,
       target: target.label,
       elapsedMs,
-      message: `${message} · 같은 대상을 저장 지점부터 재시도 ${targetAttempt + 1}/${MAX_TARGET_ATTEMPTS}`
+      message: `${message} · 같은 대상을 저장 지점부터 즉시 재시도 ${targetAttempt + 1}/${MAX_IMMEDIATE_ATTEMPTS}`
     });
     state.currentTabId = null;
     state.targetRunId = null;
@@ -283,9 +339,13 @@ async function finishCurrentTarget(result, senderTabId) {
     });
   } else {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
-    state.summary.failed += 1;
-    state.summary.errors.push({ target: target.label || target.key, message });
-    await appendLog({ level: "error", source: target.source, target: target.label, elapsedMs, message });
+    state.summary.retries = Number(state.summary.retries || 0) + 1;
+    state.summary.errors.push({ target: target.label || target.key, message, at: new Date().toISOString() });
+    const retryTarget = { ...target, retryCycle: Number(target.retryCycle || 0) + 1 };
+    state.retryQueue = Array.isArray(state.retryQueue) ? state.retryQueue : [];
+    if (!state.retryQueue.some((item) => targetKey(item) === targetKey(retryTarget))) state.retryQueue.push(retryTarget);
+    await appendLog({ level: "warning", source: target.source, target: target.label, elapsedMs,
+      message: `${message} · 다른 지역을 계속한 뒤 미완료 목록에서 다시 이어서 수집합니다.` });
   }
 
   state.index += 1;
@@ -295,11 +355,7 @@ async function finishCurrentTarget(result, senderTabId) {
   state.targetAttempt = 1;
   state.phase = "between-targets";
   await saveRunState(state);
-  if (state.index >= state.targets.length) {
-    if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
-    return finalizeRun(state);
-  }
-  return launchCurrentTarget(state, completedTabId);
+  return continueOrRetryCycle(state, completedTabId);
 }
 
 async function runAll(reason = "manual") {
@@ -313,7 +369,7 @@ async function runAll(reason = "manual") {
     return { ok: false, started: false, message: "사용 설정된 자동수집 대상이 없습니다." };
   }
 
-  const summary = { ok: true, started: true, reason, total: targets.length, completed: 0, failed: 0, errors: [] };
+  const summary = { ok: true, started: true, reason, total: targets.length, completed: 0, failed: 0, retries: 0, errors: [] };
   const state = {
     active: true,
     runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -321,6 +377,7 @@ async function runAll(reason = "manual") {
     startedAt: Date.now(),
     index: 0,
     targets,
+    retryQueue: [],
     closeTabs: config.closeTabs !== false,
     currentTabId: null,
     targetRunId: null,
@@ -344,21 +401,44 @@ async function runScheduled(reason) {
     return { ok: true, skipped: true, message: "오늘 자동수집은 이미 실행했습니다." };
   }
   const result = await runAll(reason);
-  if (result && result.started === true) {
-    await chrome.storage.local.set({
-      [LAST_SCHEDULE_KEY]: today,
-      [LAST_VERSION_RUN_KEY]: currentVersion
-    });
-  }
   return result;
 }
 
+async function recoverAutomaticRun() {
+  const state = await getRunState();
+  if (!state || !state.active) return { ok: true, skipped: true };
+  if (state.phase === "retry-wait") {
+    if (Date.now() + 1000 < Number(state.retryAt || 0)) return { ok: true, waiting: true };
+    state.retryAt = null;
+    state.phase = "resuming";
+    await saveRunState(state);
+    return launchCurrentTarget(state);
+  }
+  const elapsed = Date.now() - Number(state.targetStartedAt || Date.now());
+  const stalledLoading = state.phase === "loading" && elapsed > LOAD_STALL_TIMEOUT_MS;
+  const stalledCollection = state.phase === "collecting" && elapsed > COLLECTION_STALL_TIMEOUT_MS;
+  if (stalledLoading || stalledCollection) {
+    return finishCurrentTarget({
+      runId: state.runId,
+      targetRunId: state.targetRunId,
+      ok: false,
+      message: stalledLoading
+        ? "수집기 시작 신호가 3분 동안 없어 다시 시작합니다."
+        : "한 대상이 6시간 안에 끝나지 않아 마지막 저장 지점부터 복구합니다."
+    }, state.currentTabId);
+  }
+  return { ok: true, active: true };
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
-  // An extension update replaces the orchestration code. Any lock left by the
-  // previous service worker cannot represent a live run and must not block the
-  // first run on the new version.
-  await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
-  await saveConfig(await getConfig());
+  const config = await getConfig();
+  await resetAlarm(config);
+  const state = await getRunState();
+  if (state && state.active) {
+    await restartPersistedRun(state, "자동수집기 업데이트 후 미완료 대상을 저장 지점부터 복구합니다.");
+  } else {
+    await chrome.storage.local.remove(RUN_LOCK_KEY);
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -366,15 +446,12 @@ chrome.runtime.onStartup.addListener(async () => {
   await resetAlarm(config);
   const state = await getRunState();
   if (state && state.active) {
-    if (state.currentTabId) await chrome.tabs.remove(state.currentTabId).catch(() => {});
-    state.currentTabId = null;
-    state.targetRunId = null;
-    state.targetStartedAt = null;
-    state.phase = "resuming";
-    await saveRunState(state);
-    await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
-    await appendLog({ level: "info", message: "중단된 자동수집을 이어서 실행합니다." });
-    await launchCurrentTarget(state);
+    if (state.phase === "retry-wait" && Date.now() < Number(state.retryAt || 0)) {
+      await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
+      chrome.alarms.create(RECOVERY_ALARM_NAME, { when: Number(state.retryAt) });
+      return;
+    }
+    await restartPersistedRun(state, "Edge 재시작 후 미완료 대상을 저장 지점부터 이어서 실행합니다.");
     return;
   }
   await chrome.storage.local.remove(RUN_LOCK_KEY);
@@ -383,6 +460,7 @@ chrome.runtime.onStartup.addListener(async () => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) runScheduled("schedule").catch(() => {});
+  if (alarm.name === RECOVERY_ALARM_NAME || alarm.name === WATCHDOG_ALARM_NAME) recoverAutomaticRun().catch(() => {});
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {

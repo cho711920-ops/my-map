@@ -312,7 +312,13 @@
   }
   function itemMatchInfo(item, candidates) {
     var safeIds = (item.safeCandidateIds || []).map(text).filter(Boolean);
-    if (!safeIds.length) return {className: "review-match-different", label: "조건 다름 · 별도 확인"};
+    if (item.autoDecision === "create") {
+      return {className: "review-match-different", label: "다른매물 · " + text(item.matchReason || "층·호실이 다름")};
+    }
+    if (item.autoDecision === "review") {
+      return {className: "review-match-ambiguous", label: "직접확인 · " + text(item.matchReason || "식별정보 부족")};
+    }
+    if (!safeIds.length) return {className: "review-match-ambiguous", label: "직접확인 · 식별정보 부족"};
     if (safeIds.length > 1) {
       return {className: "review-match-ambiguous", label: "복수 후보 · 대표를 직접 선택"};
     }
@@ -323,8 +329,8 @@
     var exact = areaDiff < 0.0001;
     return {
       className: "review-match-group-" + (index % 4),
-      label: "기존 " + (index + 1) + "번과 " +
-        (exact ? "임대조건 일치" : "유사조건 · 평수차 " + areaDiff.toFixed(1))
+      label: "같은매물 · 기존 " + (index + 1) + "번 · " +
+        text(item.matchReason || (exact ? "임대조건 일치" : "평수차 " + areaDiff.toFixed(1)))
     };
   }
   function selectedItemsMatchMaster(group) {
@@ -345,7 +351,7 @@
     if (group) extraState.selectedGroupKey = group.groupKey;
     var filters = ["all", "높음", "중간", "낮음"];
     panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>왼쪽 기존 통합매물과 오른쪽 신규 원본매물을 비교해 동일매물·다른매물·보류만 선택하세요.</span></div>' +
-      '<div class="review-toolbar-actions"><button type="button" title="전체 검증대상을 검사하고 주소·층/호실·가격·평수가 정확히 맞는 항목만 자동통합합니다." onclick="repairRoomlessExactReviews()">자동중복 정리</button>' +
+      '<div class="review-toolbar-actions"><button type="button" title="전체 검증대상을 검사해 같은 공간은 통합하고 명확히 다른 층·호실은 별도 매물로 등록하며 애매한 항목만 남깁니다." onclick="repairRoomlessExactReviews()">자동분류 정리</button>' +
       '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-queue-tools">' +
       '<label class="review-address-search"><span>주소검색</span><input id="reviewAddressSearch" type="search" ' +
@@ -566,19 +572,37 @@
   window.repairRoomlessExactReviews = function() {
     if (extraState.loading) return;
     extraState.loading = true;
-    message("주소·층/호실·가격이 같고 평수 차이가 1평 미만인 매물을 자동통합하는 중입니다…", "loading");
-    apiPost("repairRoomlessExactReviews", {}).then(function(result) {
+    var totals = {scanned: 0, merged: 0, created: 0, ambiguous: 0, failed: 0, passes: 0};
+    message("전체 검증대상을 같은매물·다른매물·직접확인으로 자동분류하는 중입니다…", "loading");
+    function runNextBatch() {
+      return apiPost("repairRoomlessExactReviews", {}).then(function(result) {
+        totals.passes += 1;
+        ["scanned", "merged", "created", "ambiguous", "failed"].forEach(function(key) {
+          totals[key] += number(result[key]);
+        });
+        message("자동분류 " + totals.scanned.toLocaleString("ko-KR") + "건 검사 · 동일 " +
+          totals.merged.toLocaleString("ko-KR") + " · 별도 " + totals.created.toLocaleString("ko-KR") +
+          " · 직접확인 " + totals.ambiguous.toLocaleString("ko-KR") +
+          (result.remainingToScan ? " · 남은 검사 " + number(result.remainingToScan).toLocaleString("ko-KR") : ""), "loading");
+        if (result.hasMore && totals.passes < 100) return runNextBatch();
+        return result;
+      });
+    }
+    runNextBatch().then(function() {
       extraState.reviews = null;
       sessionStorage.removeItem(REVIEW_CACHE_KEY);
-      showReviewDecisionModal("자동중복 정리 완료",
-        "주소·층/호실·보증금·월세가 같고 평수 차이가 1평 미만인 검증매물 " +
-        number(result.merged).toLocaleString("ko-KR") + "건을 기존 매물에 통합했습니다.", "", true);
+      showReviewDecisionModal("자동분류 정리 완료",
+        "전체 " + totals.scanned.toLocaleString("ko-KR") + "건 검사\n" +
+        "같은매물 통합 " + totals.merged.toLocaleString("ko-KR") + "건 · 다른매물 신규등록 " +
+        totals.created.toLocaleString("ko-KR") + "건\n직접 확인만 남김 " +
+        totals.ambiguous.toLocaleString("ko-KR") + "건" +
+        (totals.failed ? " · 오류 " + totals.failed.toLocaleString("ko-KR") + "건" : ""), "", true);
       return loadReviews(true, true);
     }).then(function() {
-      message("자동중복 정리와 검증목록 갱신을 완료했습니다.", "success");
+      message("자동분류와 고객매칭 갱신을 완료했습니다.", "success");
     }).catch(function(error) {
       message(error.message, "error");
-      showReviewDecisionModal("자동중복 정리 실패", error.message || "다시 시도해 주세요.", "", true);
+      showReviewDecisionModal("자동분류 정리 실패", error.message || "다시 시도해 주세요.", "", true);
     }).finally(function() {
       extraState.loading = false;
     });

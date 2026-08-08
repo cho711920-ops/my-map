@@ -1,4 +1,5 @@
 import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./floor.js";
+import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
 
 const COLLECTOR_ORIGINS = [
@@ -459,7 +460,7 @@ async function loadCandidateListings(env, records, existingSources) {
       ORDER BY updated_at DESC`).bind(...chunk).all();
     for (const row of result?.results || []) {
       const rows = byAddress.get(clean(row.address));
-      if (rows && rows.length < 20) rows.push(row);
+      if (rows) rows.push(row);
     }
   }
   return byAddress;
@@ -504,14 +505,99 @@ async function loadSourceAssets(env, existingSources) {
   return assets;
 }
 
+function compactRoom(value) {
+  return clean(value).toUpperCase().replace(/\s+/g, "");
+}
+
+function roomIdentity(value) {
+  const text = compactRoom(value);
+  const floor = parseListingFloor(value, true);
+  const dongs = [...text.matchAll(/(?:^|[^0-9A-Z])([0-9]{1,4}|[A-Z])동/g)].map((match) => match[1]);
+  const withoutDongs = text.replace(/(?:^|[^0-9A-Z])(?:[0-9]{1,4}|[A-Z])동/g, " ");
+  const units = /호/.test(withoutDongs)
+    ? [...withoutDongs.matchAll(/(?:^|[^0-9])(\d{3,4})(?=호|[,/·]|$)/g)].map((match) => match[1].replace(/^0+/, "") || "0")
+    : [];
+  return {
+    key: normalizedRoom(value),
+    floor,
+    units: [...new Set(units)],
+    dongs: [...new Set(dongs)],
+    wholeBuilding: /(?:건물전체|전체건물|통건물|전층)/.test(text),
+    wholeFloor: /(?:층전체|전체층)/.test(text)
+  };
+}
+
+function setsDisjoint(left, right) {
+  return left.length > 0 && right.length > 0 && !left.some((value) => right.includes(value));
+}
+
+function sameSet(left, right) {
+  return left.length === right.length && left.every((value) => right.includes(value));
+}
+
+function reliableOfferMatch(record, row) {
+  const leftDeposit = number(row.deposit);
+  const rightDeposit = number(record.deposit);
+  const leftRent = number(row.monthly_rent ?? row.rent);
+  const rightRent = number(record.rent);
+  const leftArea = number(row.area_m2 ?? row.area);
+  const rightArea = number(record.area);
+  return leftDeposit != null && rightDeposit != null && leftRent != null && rightRent != null &&
+    leftArea != null && rightArea != null && sameNumber(leftDeposit, rightDeposit) &&
+    sameNumber(leftRent, rightRent) && Math.abs(leftArea - rightArea) < 1;
+}
+
+export function compareListingSpace(record, row) {
+  const incoming = roomIdentity(record?.room);
+  const existing = roomIdentity(row?.room);
+  const offerMatch = reliableOfferMatch(record || {}, row || {});
+
+  if (incoming.wholeBuilding !== existing.wholeBuilding && (incoming.wholeBuilding || existing.wholeBuilding)) {
+    return { decision: "different", reason: "건물전체와 개별공간 구분" };
+  }
+  if (incoming.dongs.length && existing.dongs.length && setsDisjoint(incoming.dongs, existing.dongs)) {
+    return { decision: "different", reason: "동이 다름" };
+  }
+  if (incoming.floor != null && existing.floor != null && incoming.floor !== existing.floor) {
+    return { decision: "different", reason: "층이 다름" };
+  }
+  if (incoming.units.length && existing.units.length && setsDisjoint(incoming.units, existing.units)) {
+    return { decision: "different", reason: "호실이 다름" };
+  }
+  if (incoming.units.length && existing.units.length && sameSet(incoming.units, existing.units)) {
+    return { decision: "same", reason: "같은 동·층·호실" };
+  }
+
+  const sameKnownFloor = incoming.floor != null && existing.floor != null && incoming.floor === existing.floor;
+  const genericSpecific = sameKnownFloor && (incoming.units.length > 0) !== (existing.units.length > 0);
+  if (genericSpecific && offerMatch && !incoming.wholeFloor && !existing.wholeFloor) {
+    return { decision: "same", reason: "같은 층·임대조건·평수" };
+  }
+  if (sameKnownFloor && !incoming.units.length && !existing.units.length && offerMatch) {
+    return { decision: "same", reason: "같은 층·임대조건·평수" };
+  }
+  if (incoming.floor == null && existing.floor == null && offerMatch) {
+    return { decision: "same", reason: "층 미상·임대조건·평수 일치" };
+  }
+  if (incoming.key && incoming.key === existing.key && offerMatch) {
+    return { decision: "same", reason: "같은 층호실·임대조건·평수" };
+  }
+  return { decision: "review", reason: genericSpecific ? "층 표기와 호실 표기 비교 필요" : "공간 식별정보가 부족함" };
+}
+
+export function classifyListingCandidates(record, candidates = []) {
+  const comparisons = candidates.map((row) => ({ row, ...compareListingSpace(record, row) }));
+  const same = comparisons.filter((item) => item.decision === "same");
+  const review = comparisons.filter((item) => item.decision === "review");
+  if (same.length === 1) return { decision: "merge", candidate: same[0].row, reason: same[0].reason, comparisons };
+  if (same.length > 1) return { decision: "review", reason: "같은 조건의 기존 매물이 여러 개", comparisons };
+  if (review.length) return { decision: "review", reason: review[0].reason, comparisons };
+  return { decision: "create", reason: candidates.length ? "기존 매물과 층·호실이 다름" : "같은 주소의 기존 매물 없음", comparisons };
+}
+
 function exactCandidate(record, candidates) {
-  const exact = candidates.filter((row) =>
-    normalizedRoom(row.room) === normalizedRoom(record.room) &&
-    sameNumber(number(row.deposit), record.deposit) &&
-    sameNumber(number(row.monthly_rent), record.rent) &&
-    sameNumber(number(row.area_m2), record.area, 0.8)
-  );
-  return exact.length === 1 ? exact[0] : null;
+  const classified = classifyListingCandidates(record, candidates);
+  return classified.decision === "merge" ? classified.candidate : null;
 }
 
 async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets = null) {
@@ -668,7 +754,7 @@ async function createListing(env, record, sessionId, actor = "collector") {
   return id;
 }
 
-async function queueReview(env, record, sessionId, candidates) {
+async function queueReview(env, record, sessionId, candidates, reason = "") {
   const reviewId = `R-${crypto.randomUUID()}`;
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json, processing_state, result_json, created_at
@@ -677,7 +763,7 @@ async function queueReview(env, record, sessionId, candidates) {
       snapshot_hash=excluded.snapshot_hash, payload_json=excluded.payload_json,
       processing_state='review', result_json=excluded.result_json, error_text=''`)
     .bind(reviewId, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
-      JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id) }), nowIso()).run();
+      JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).run();
   return reviewId;
 }
 
@@ -686,6 +772,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const totals = { received: 0, created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0 };
   const records = [];
   const errors = [];
+  const affectedListingIds = new Set();
   for (const value of values) {
     totals.received += 1;
     try {
@@ -715,20 +802,21 @@ async function ingestRecords(env, source, values, metadata = {}) {
         continue;
       }
       const candidates = candidatesByAddress.get(record.address) || [];
-      const exact = exactCandidate(record, candidates);
-      if (exact) {
-        await attachSource(env, record, exact.id, sessionId);
+      const classified = classifyListingCandidates(record, candidates);
+      if (classified.decision === "merge") {
+        await attachSource(env, record, classified.candidate.id, sessionId);
         totals.merged += 1;
-      } else if (!candidates.length) {
+      } else if (classified.decision === "create") {
         const listingId = await createListing(env, record, sessionId);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
           address: record.address, room: record.room, listing_type: record.category,
           deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
           premium: record.premium, area_m2: record.area, operating_memo: record.memo, main_source: record.source });
         candidatesByAddress.set(record.address, candidates);
+        affectedListingIds.add(listingId);
         totals.created += 1;
       } else {
-        await queueReview(env, record, sessionId, candidates);
+        await queueReview(env, record, sessionId, candidates, classified.reason);
         totals.review += 1;
       }
     } catch (error) {
@@ -745,9 +833,10 @@ async function ingestRecords(env, source, values, metadata = {}) {
   if (clean(metadata.scope)) saved.scope = clean(metadata.scope).slice(0, 200);
   await env.DB.prepare("UPDATE collector_sessions SET totals_json=?1, updated_at=?2 WHERE id=?3")
     .bind(JSON.stringify(saved), nowIso(), sessionId).run();
+  const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   return { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
-    inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
+    inserted: totals.created + totals.merged + totals.updated, customerMatches, sourceBackend: "D1" };
 }
 
 export function nextCollectorSourceVisibilityState(current, observed, countMissing) {
@@ -1270,25 +1359,29 @@ async function reviewWorkspace(env, query) {
       const address = normalizedAddress(row.address);
       if (!candidatesByAddress.has(address)) candidatesByAddress.set(address, []);
       const items = candidatesByAddress.get(address);
-      if (items.length < 12) items.push(candidateJson(row));
+      items.push(candidateJson(row));
     }
   }
 
   for (const group of groups.values()) {
     group.candidates = candidatesByAddress.get(normalizedAddress(group.address)) || [];
-    const candidateIds = new Set(group.candidates.map((entry) => entry.propertyId));
     group.items.forEach((item) => {
-      item.safeCandidateIds = item.safeCandidateIds.filter((id) => candidateIds.has(id));
-      if (!item.safeCandidateIds.length) {
-        const exact = group.candidates.filter((candidate) => normalizedRoom(candidate.room) === normalizedRoom(item.room) &&
-          sameNumber(candidate.deposit, item.deposit) && sameNumber(candidate.rent, item.rent) && sameNumber(candidate.area, item.area, 0.8));
-        item.safeCandidateIds = exact.map((entry) => entry.propertyId);
-      }
+      const classified = classifyListingCandidates(item, group.candidates.map((candidate) => ({
+        ...candidate, id: candidate.propertyId, monthly_rent: candidate.rent, area_m2: candidate.area
+      })));
+      item.autoDecision = classified.decision;
+      item.matchReason = classified.reason;
+      item.safeCandidateIds = classified.decision === "merge" && classified.candidate
+        ? [clean(classified.candidate.propertyId || classified.candidate.id)]
+        : [];
     });
     group.count = group.items.length;
-    group.score = group.items.some((item) => item.safeCandidateIds.length === 1) ? 85 : group.candidates.length > 1 ? 55 : 70;
+    const decisions = new Set(group.items.map((item) => item.autoDecision));
+    group.score = decisions.size === 1 && decisions.has("merge") ? 95
+      : decisions.size === 1 && decisions.has("create") ? 90 : 55;
     group.risk = group.score >= 80 ? "낮음" : group.score >= 60 ? "중간" : "높음";
-    group.recommendation = group.risk === "낮음" ? "동일매물 후보" : group.candidates.length ? "직접 비교" : "신규등록 후보";
+    group.recommendation = decisions.size === 1 && decisions.has("merge") ? "자동통합 가능"
+      : decisions.size === 1 && decisions.has("create") ? "별도 신규등록 가능" : "직접 비교";
   }
   const ordered = [...groups.values()].sort((left, right) => right.score - left.score);
   const totalRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM collector_raw WHERE processing_state='review'").first();
@@ -1382,6 +1475,7 @@ async function applyReviewBatch(env, user, body) {
   let processed = 0;
   let failed = 0;
   const processedReviewIds = [];
+  const affectedListingIds = new Set();
   const started = Date.now();
   for (const id of ids) {
     try {
@@ -1395,12 +1489,14 @@ async function applyReviewBatch(env, user, body) {
           .bind(nowIso(), JSON.stringify({ action, actor: clean(user?.email) }), id).run();
       } else if (action === "create") {
         const createdId = await createListing(env, record, row.session_id, clean(user?.email));
+        affectedListingIds.add(createdId);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action, listingId: createdId }), id).run();
       } else if (action === "merge" || action === "condition") {
         const listing = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1").bind(masterId).first();
         if (!listing) throw new Error("통합할 기존 매물을 찾지 못했습니다.");
         await attachSource(env, record, listing.id, row.session_id, null, action === "condition", clean(user?.email));
+        if (action === "condition") affectedListingIds.add(listing.id);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action, listingId: listing.id, manual: Boolean(body.manualMergeConfirmed) }), id).run();
       } else {
@@ -1412,12 +1508,13 @@ async function applyReviewBatch(env, user, body) {
       failed += 1;
     }
   }
+  const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM collector_raw WHERE processing_state='review'").first();
   return { ok: true, action: "applyReviewBatch", processed, failed, processedReviewIds,
     remaining: Number(remaining?.count || 0), actionWritesVerified: processed,
     reviewRowsRemovedVerified: processed, elapsedMs: Date.now() - started,
     operationAdjustments: { pendingReview: -processed },
-    operationRefresh: Number(remaining?.count || 0) === 0, source: "D1" };
+    operationRefresh: Number(remaining?.count || 0) === 0, customerMatches, source: "D1" };
 }
 
 async function consolidateExisting(env, user, body) {
@@ -1430,6 +1527,11 @@ async function consolidateExisting(env, user, body) {
     const duplicate = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1").bind(duplicateId).first();
     if (!duplicate || duplicate.id === primary.id) continue;
     await env.DB.batch([
+      env.DB.prepare(`INSERT OR IGNORE INTO customer_matches (
+          customer_id, listing_id, state, score, memo, created_at, updated_at, contacted_at
+        ) SELECT customer_id, ?1, state, score, memo, created_at, updated_at, contacted_at
+          FROM customer_matches WHERE listing_id=?2`).bind(primary.id, duplicate.id),
+      env.DB.prepare("DELETE FROM customer_matches WHERE listing_id=?1").bind(duplicate.id),
       env.DB.prepare("UPDATE listing_sources SET listing_id=?1, updated_at=?2 WHERE listing_id=?3").bind(primary.id, nowIso(), duplicate.id),
       env.DB.prepare("UPDATE listing_media SET listing_id=?1, updated_at=?2 WHERE listing_id=?3").bind(primary.id, nowIso(), duplicate.id),
       env.DB.prepare("UPDATE listing_contacts SET listing_id=?1, updated_at=?2 WHERE listing_id=?3").bind(primary.id, nowIso(), duplicate.id),
@@ -1440,26 +1542,74 @@ async function consolidateExisting(env, user, body) {
     ]);
     consolidated += 1;
   }
+  const customerMatches = await refreshCustomerMatchesForListings(env, [primary.id]);
   return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id,
-    operationAdjustments: { activeMaster: -consolidated, history: consolidated }, source: "D1" };
+    operationAdjustments: { activeMaster: -consolidated, history: consolidated }, customerMatches, source: "D1" };
 }
 
 async function repairExactReviews(env, user) {
-  const rows = await env.DB.prepare(`SELECT id, session_id, payload_json FROM collector_raw
-    WHERE processing_state='review' ORDER BY created_at LIMIT 500`).all();
+  const decisionVersion = 3;
+  const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json FROM collector_raw
+    WHERE processing_state='review'
+      AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
+    ORDER BY created_at LIMIT 120`).bind(decisionVersion).all();
+  const reviewRows = rows?.results || [];
+  const parsedRows = reviewRows.map((row) => ({ row, record: parseJson(row.payload_json, null) }))
+    .filter((item) => item.record?.address && item.record?.sourceId);
+  const validIds = new Set(parsedRows.map((item) => item.row.id));
+  const invalidRows = reviewRows.filter((row) => !validIds.has(row.id));
+  const records = parsedRows.map((item) => item.record);
+  const candidatesByAddress = await loadCandidateListings(env, records, new Map());
   let merged = 0;
-  for (const row of rows?.results || []) {
-    const record = parseJson(row.payload_json, null);
-    if (!record) continue;
-    const exact = exactCandidate(record, await candidateListings(env, record));
-    if (!exact) continue;
-    await attachSource(env, record, exact.id, row.session_id, null, false, clean(user?.email));
-    await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
-      .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: exact.id }), row.id).run();
-    merged += 1;
+  let created = 0;
+  let ambiguous = 0;
+  let failed = reviewRows.length - parsedRows.length;
+  const affectedListingIds = new Set();
+  for (const row of invalidRows) {
+    await env.DB.prepare("UPDATE collector_raw SET result_json=?1, error_text=?2 WHERE id=?3")
+      .bind(JSON.stringify({ autoDecision: "review", autoDecisionVersion: decisionVersion,
+        reason: "주소 또는 원본 ID 확인 필요" }), "주소 또는 원본 ID 확인 필요", row.id).run();
   }
-  return { ok: true, action: "repairRoomlessExactReviews", merged,
-    operationAdjustments: { pendingReview: -merged }, source: "D1" };
+  for (const { row, record } of parsedRows) {
+    try {
+      const candidates = candidatesByAddress.get(record.address) || [];
+      const classified = classifyListingCandidates(record, candidates);
+      if (classified.decision === "merge") {
+        await attachSource(env, record, classified.candidate.id, row.session_id, null, false, clean(user?.email));
+        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
+          .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: classified.candidate.id,
+            reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
+        merged += 1;
+      } else if (classified.decision === "create") {
+        const listingId = await createListing(env, record, row.session_id, clean(user?.email));
+        candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
+          address: record.address, room: record.room, listing_type: record.category,
+          deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
+          premium: record.premium, area_m2: record.area, operating_memo: record.memo, main_source: record.source });
+        candidatesByAddress.set(record.address, candidates);
+        affectedListingIds.add(listingId);
+        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
+          .bind(nowIso(), JSON.stringify({ action: "autoCreate", listingId,
+            reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
+        created += 1;
+      } else {
+        await env.DB.prepare("UPDATE collector_raw SET result_json=?1 WHERE id=?2")
+          .bind(JSON.stringify({ candidateIds: candidates.map((candidate) => candidate.id), reason: classified.reason,
+            autoDecision: "review", autoDecisionVersion: decisionVersion }), row.id).run();
+        ambiguous += 1;
+      }
+    } catch {
+      failed += 1;
+    }
+  }
+  const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
+  const pending = await env.DB.prepare(`SELECT COUNT(*) AS count FROM collector_raw
+    WHERE processing_state='review' AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1`)
+    .bind(decisionVersion).first();
+  return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
+    merged, created, ambiguous, failed, hasMore: Number(pending?.count || 0) > 0,
+    remainingToScan: Number(pending?.count || 0), customerMatches,
+    operationAdjustments: { pendingReview: -(merged + created) }, source: "D1" };
 }
 
 export async function handleCollectorAdminPost(env, user, body) {
