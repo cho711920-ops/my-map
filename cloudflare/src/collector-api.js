@@ -28,6 +28,8 @@ const DAANGN_LIST_FIRST_HASH = "e0cdf7eab9f342cf735fb8951d9dc0b771418964e241bd59
 const DAANGN_LIST_NEXT_HASH = "c0cf343435add09c37d248748eb3762cc86e4be4b5349ae60b2e080cccc4d3c5";
 const DAANGN_DETAIL_HASH = "d374a65ffef31da412d7233ee4740a5379554196b1adf1a08d861048c952d108";
 const DAANGN_JOB_PREFIX = "collector-daangn-";
+const DAANGN_DETAIL_MAX_ATTEMPTS = 8;
+const DAANGN_DETAIL_ERROR_LIMIT = 60;
 const GONGSIL_PHOTO_ROOT = "https://file1.gongsilbox.com/file/land_photo/";
 
 function daangnJobId(body = {}) {
@@ -1088,8 +1090,17 @@ async function loadDaangnJob(env, jobId = `${DAANGN_JOB_PREFIX}active`) {
   if (!row) return null;
   const payload = parseJson(row.payload_json, {});
   const progress = parseJson(row.progress_json, {});
-  return { ...payload, ...progress, _jobId: jobId,
+  const job = { ...payload, ...progress, _jobId: jobId,
     status: row.state === "completed" ? "complete" : row.state, updatedAt: row.updated_at };
+  if (job.phase === "details" && !Array.isArray(job.pendingDetailIds)) {
+    job.pendingDetailIds = (job.detailIds || []).slice(Math.max(0, Number(job.processed || 0)));
+  }
+  if (!job.detailAttempts || typeof job.detailAttempts !== "object" || Array.isArray(job.detailAttempts)) {
+    job.detailAttempts = {};
+  }
+  if (!Array.isArray(job.terminalFailedIds)) job.terminalFailedIds = [];
+  if (!Array.isArray(job.detailErrors)) job.detailErrors = [];
+  return job;
 }
 
 async function saveDaangnJob(env, job) {
@@ -1097,12 +1108,17 @@ async function saveDaangnJob(env, job) {
   const payload = {
     url: job.url, clusterId: job.clusterId, propertyFilter: job.propertyFilter,
     district: job.district, sessionId: job.sessionId, ids: job.ids || [], entries: job.entries || [],
-    detailIds: job.detailIds || [], cursor: job.cursor || "", hasNextPage: Boolean(job.hasNextPage)
+    detailIds: job.detailIds || [], pendingDetailIds: job.pendingDetailIds || [],
+    detailAttempts: job.detailAttempts || {}, terminalFailedIds: job.terminalFailedIds || [],
+    cursor: job.cursor || "", hasNextPage: Boolean(job.hasNextPage)
   };
   const progress = { ...job };
   delete progress.ids;
   delete progress.entries;
   delete progress.detailIds;
+  delete progress.pendingDetailIds;
+  delete progress.detailAttempts;
+  delete progress.terminalFailedIds;
   delete progress.propertyFilter;
   delete progress.clusterId;
   delete progress.cursor;
@@ -1122,6 +1138,9 @@ function publicDaangnJob(job) {
   delete output.ids;
   delete output.entries;
   delete output.detailIds;
+  delete output.pendingDetailIds;
+  delete output.detailAttempts;
+  delete output.terminalFailedIds;
   delete output.propertyFilter;
   delete output.clusterId;
   delete output.cursor;
@@ -1135,10 +1154,12 @@ async function startDaangnJob(env, body) {
   const sessionId = await ensureSession(env, `DAANGN-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, "당근");
   const job = {
     ...parsed, _jobId: daangnJobId(body), collectorVersion: clean(body.collectorVersion).slice(0, 30),
-    sessionId, ids: [], entries: [], detailIds: [], cursor: "", hasNextPage: true,
+    sessionId, ids: [], entries: [], detailIds: [], pendingDetailIds: [],
+    detailAttempts: {}, terminalFailedIds: [], detailErrors: [], cursor: "", hasNextPage: true,
     phase: "list", status: "running", page: 0, found: 0, total: 0, processed: 0, remaining: 0,
     created: 0, merged: 0, updated: 0, review: 0, detailedDuplicates: 0,
-    skippedUnchanged: 0, addressMissing: 0, failed: 0, chunkSize: 10,
+    skippedUnchanged: 0, addressMissing: 0, failed: 0, chunkSize: 8,
+    detailFetchFailures: 0, detailRetryCount: 0,
     message: "클러스터 목록을 확인하고 있습니다."
   };
   await saveDaangnJob(env, job);
@@ -1146,17 +1167,19 @@ async function startDaangnJob(env, body) {
 }
 
 async function fetchDaangnDetail(articleId) {
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  let lastError = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const payload = await daangnGraphql(DAANGN_DETAIL_HASH, { articleId: String(articleId) });
       const article = payload?.data?.articleByOriginalArticleId;
-      if (article) return article;
-    } catch {
-      // A short transient failure is retried inside the same resumable server chunk.
+      if (article) return { article, error: "", attempts: attempt + 1 };
+      lastError = "상세 매물 응답이 비어 있습니다.";
+    } catch (error) {
+      lastError = clean(error?.message || error) || "당근 상세조회 오류";
     }
-    if (attempt < 3) await sleep(300 * (attempt + 1) * (attempt + 1));
+    if (attempt < 2) await sleep(450 * (attempt + 1) * (attempt + 1));
   }
-  return null;
+  return { article: null, error: lastError, attempts: 3 };
 }
 
 async function mapWithConcurrency(values, concurrency, mapper) {
@@ -1232,9 +1255,16 @@ async function runDaangnChunk(env, body = {}) {
       });
       const needed = new Set(classification.needsDetail || []);
       job.detailIds = job.ids.filter((id) => needed.has(id));
+      job.pendingDetailIds = job.detailIds.slice();
+      job.detailAttempts = {};
+      job.terminalFailedIds = [];
+      job.detailErrors = [];
+      job.detailFetchFailures = 0;
+      job.detailRetryCount = 0;
       job.skippedUnchanged = Number(classification.unchanged || 0);
       job.total = job.detailIds.length;
-      job.remaining = job.total;
+      job.processed = 0;
+      job.remaining = job.pendingDetailIds.length;
       job.phase = job.total ? "details" : "complete";
       if (!job.total) await finalizeDaangnJob(env, job);
       else job.message = `전체 ${job.found}개 중 신규·변경 ${job.total}개를 상세 저장합니다.`;
@@ -1242,18 +1272,51 @@ async function runDaangnChunk(env, body = {}) {
       job.message = `${job.page}페이지 · ${job.found}개 목록 확인`;
     }
   } else if (job.phase === "details") {
-    const activeChunkSize = Math.max(5, Math.min(10, Number(job.chunkSize || 10)));
-    const ids = (job.detailIds || []).slice(job.processed, job.processed + activeChunkSize);
+    const pending = Array.isArray(job.pendingDetailIds)
+      ? job.pendingDetailIds.slice()
+      : (job.detailIds || []).slice(Math.max(0, Number(job.processed || 0)));
+    const activeChunkSize = Math.max(3, Math.min(8, Number(job.chunkSize || 8)));
+    const ids = pending.splice(0, activeChunkSize);
+    job.detailAttempts = job.detailAttempts && typeof job.detailAttempts === "object"
+      ? job.detailAttempts : {};
+    job.terminalFailedIds = Array.isArray(job.terminalFailedIds) ? job.terminalFailedIds : [];
+    job.detailErrors = Array.isArray(job.detailErrors) ? job.detailErrors : [];
     const fetchStarted = Date.now();
-    const responses = await mapWithConcurrency(ids, 3, (id) => fetchDaangnDetail(id));
+    const retrying = ids.some((id) => Number(job.detailAttempts[id] || 0) > 0);
+    const responses = await mapWithConcurrency(ids, retrying ? 1 : 2, (id) => fetchDaangnDetail(id));
     job.lastFetchMs = Date.now() - fetchStarted;
-    const records = responses.map((article, index) => article
-      ? { ...daangnRecord(article, job.entries.find((entry) => entry.sourceId === ids[index])?.listSnapshot || ""), source: "당근" }
-      : null).filter(Boolean);
-    job.failed += ids.length - records.length;
+    const records = [];
+    responses.forEach((response, index) => {
+      const id = ids[index];
+      if (response?.article) {
+        records.push({
+          ...daangnRecord(response.article,
+            job.entries.find((entry) => entry.sourceId === id)?.listSnapshot || ""),
+          source: "당근"
+        });
+        return;
+      }
+      const attempts = Number(job.detailAttempts[id] || 0) + 1;
+      const message = clean(response?.error) || "당근 상세조회 응답 없음";
+      job.detailAttempts[id] = attempts;
+      job.detailFetchFailures = Number(job.detailFetchFailures || 0) + 1;
+      job.detailErrors.push({ sourceId: id, attempts, message: message.slice(0, 300), at: nowIso() });
+      job.detailErrors = job.detailErrors.slice(-DAANGN_DETAIL_ERROR_LIMIT);
+      if (attempts < DAANGN_DETAIL_MAX_ATTEMPTS) {
+        pending.push(id);
+        job.detailRetryCount = Number(job.detailRetryCount || 0) + 1;
+      } else {
+        job.terminalFailedIds.push(id);
+        job.failed = Number(job.failed || 0) + 1;
+        job.processed = Number(job.processed || 0) + 1;
+      }
+    });
+    job.pendingDetailIds = pending;
     job.addressMissing += records.filter((record) => !record.address).length;
     const writeStarted = Date.now();
-    const result = await ingestRecords(env, "당근", records, { sessionId: job.sessionId });
+    const result = records.length
+      ? await ingestRecords(env, "당근", records, { sessionId: job.sessionId })
+      : { created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0, errors: [] };
     job.lastWriteMs = Date.now() - writeStarted;
     job.created += Number(result.created || 0);
     job.merged += Number(result.merged || 0);
@@ -1261,16 +1324,19 @@ async function runDaangnChunk(env, body = {}) {
     job.review += Number(result.review || 0);
     job.detailedDuplicates += Number(result.duplicate || 0);
     job.failed += Number(result.failed || 0);
-    job.processed += ids.length;
-    job.remaining = Math.max(0, job.total - job.processed);
+    job.processed = Number(job.processed || 0) + records.length;
+    job.remaining = pending.length;
     job.lastChunkSize = ids.length;
     const chunkElapsed = Date.now() - chunkStarted;
-    if (ids.length - records.length > 0 || chunkElapsed > 20_000) job.chunkSize = Math.max(5, activeChunkSize - 1);
-    else if (chunkElapsed < 6_000) job.chunkSize = Math.min(10, activeChunkSize + 1);
-    if (job.processed >= job.total) {
+    if (ids.length - records.length > 0 || chunkElapsed > 20_000) job.chunkSize = Math.max(3, activeChunkSize - 1);
+    else if (chunkElapsed < 6_000) job.chunkSize = Math.min(8, activeChunkSize + 1);
+    if (!pending.length) {
       await finalizeDaangnJob(env, job);
     } else {
       job.message = `${job.processed} / ${job.total}개 상세 처리`;
+    }
+    if (job.phase === "details") {
+      job.message = `${job.processed} / ${job.total}개 상세 처리 · 남은 ${pending.length}개 · 자동 재시도 ${job.detailRetryCount || 0}회`;
     }
   }
   job.lastChunkMs = Date.now() - chunkStarted;

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.3.1";
+  var VERSION = "1.4.0";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";

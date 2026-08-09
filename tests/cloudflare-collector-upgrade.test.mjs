@@ -124,6 +124,18 @@ test("collector updates reconcile individual media and contacts instead of repla
   assert.match(source, /loadCandidateListings/);
 });
 
+test("Daangn detail failures stay queued with bounded retries and recorded causes", async () => {
+  const source = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
+  assert.match(source, /DAANGN_DETAIL_MAX_ATTEMPTS = 8/);
+  assert.match(source, /pendingDetailIds: job\.pendingDetailIds \|\| \[\]/);
+  assert.match(source, /detailAttempts: job\.detailAttempts \|\| \{\}/);
+  assert.match(source, /pending\.push\(id\)/);
+  assert.match(source, /job\.detailErrors\.push/);
+  assert.match(source, /mapWithConcurrency\(ids, retrying \? 1 : 2/);
+  assert.match(source, /if \(!pending\.length\)/);
+  assert.doesNotMatch(source, /job\.failed \+= ids\.length - records\.length/);
+});
+
 test("Gongsilbox collective-building contacts retain the provider role label", async () => {
   const collector = await readFile(new URL("../js/gongsil-collector.js", import.meta.url), "utf8");
   const listingUi = await readFile(new URL("../js/script.js", import.meta.url), "utf8");

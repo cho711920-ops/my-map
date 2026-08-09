@@ -15,6 +15,7 @@ $automationRoot = Join-Path $env:LOCALAPPDATA 'JSMap\EdgeAutoCollector'
 $installedExtension = Join-Path $automationRoot 'extension'
 $installedCollectors = Join-Path $installedExtension 'collectors'
 $installedLauncher = Join-Path $automationRoot 'run-edge-auto-collector.ps1'
+$profilePath = Join-Path $automationRoot 'profile'
 $taskName = 'JSMap Auto Collector'
 
 if (-not (Test-Path -LiteralPath (Join-Path $sourceExtension 'manifest.json'))) {
@@ -24,6 +25,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $sourceExtension 'manifest.json'))) 
 New-Item -ItemType Directory -Force -Path $automationRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $installedExtension | Out-Null
 New-Item -ItemType Directory -Force -Path $installedCollectors | Out-Null
+
+# Unpacked Manifest V3 service workers can keep the previous background.js in
+# memory even after files are replaced. Stop only the dedicated automation
+# profile before copying so the next launch is guaranteed to load this build.
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -like "*$profilePath*" } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Milliseconds 700
+
 Copy-Item -Path (Join-Path $sourceExtension '*') -Destination $installedExtension -Recurse -Force
 foreach ($collectorFile in @('naver-collector.js', 'daangn-collector.js', 'gongsil-collector.js')) {
   Copy-Item -LiteralPath (Join-Path $repoRoot "js\$collectorFile") -Destination (Join-Path $installedCollectors $collectorFile) -Force

@@ -36,6 +36,10 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /RECOVERY_ALARM_NAME/);
   assert.match(background, /WATCHDOG_ALARM_NAME/);
   assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 4/);
+  assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 8/);
+  assert.match(background, /MAX_RUN_AGE_MS/);
+  assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
+  assert.match(background, /state\.summary\.retryErrors/);
   assert.match(background, /stalledLoading/);
   assert.match(background, /stalledCollection/);
   assert.doesNotMatch(background, /onInstalled[\s\S]{0,400}remove\(\[RUN_STATE_KEY, RUN_LOCK_KEY\]\)/);
@@ -94,6 +98,8 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /JSMapWindow/);
   assert.match(install, /installedCollectors/);
   assert.match(install, /gongsil-collector\.js/);
+  assert.match(install, /Get-CimInstance Win32_Process/);
+  assert.match(install, /Stop-Process -Id \$_.ProcessId/);
 });
 
 test("automatic collector settings stay compact with long target URLs", () => {

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.7.0";
+  var VERSION = "5.8.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -349,12 +349,22 @@
 
   async function runAutomatic(target) {
     panel.style.display = "block";
+    // A fresh Naver tab can discover the visible cluster before the
+    // automation bridge starts. That passive discovery may still be paging
+    // through thousands of rows and must not block the dedicated district
+    // run. Invalidate only passive preparation; an actual save remains busy.
+    if (state.preparing && !state.busy) {
+      state.prepareId += 1;
+      state.preparing = false;
+      state.capture = null;
+      state.collected = [];
+    }
     if (!isFinNaver()) throw new Error("네이버 자동수집은 fin.land.naver.com 지도에서 등록해주세요.");
     var readyStartedAt = Date.now();
-    while ((state.busy || state.preparing) && Date.now() - readyStartedAt < 90000) {
+    while (state.busy && Date.now() - readyStartedAt < 90000) {
       await delay(300);
     }
-    if (state.busy || state.preparing) {
+    if (state.busy) {
       throw new Error("네이버 수집기 준비가 90초 안에 끝나지 않았습니다.");
     }
     var requested = target && target.district || {};

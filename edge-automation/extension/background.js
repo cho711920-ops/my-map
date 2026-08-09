@@ -11,6 +11,8 @@ const RECOVERY_ALARM_NAME = "js-auto-collector-recovery";
 const WATCHDOG_ALARM_NAME = "js-auto-collector-watchdog";
 const SOURCE_ORDER = { naver: 1, daangn: 2, gongsil: 3 };
 const MAX_IMMEDIATE_ATTEMPTS = 4;
+const MAX_DEFERRED_RETRY_CYCLES = 8;
+const MAX_RUN_AGE_MS = 20 * 60 * 60 * 1000;
 const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
 const COLLECTION_STALL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_CONFIG = {
@@ -377,12 +379,26 @@ async function finishCurrentTarget(result, senderTabId) {
   } else {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
     state.summary.retries = Number(state.summary.retries || 0) + 1;
-    state.summary.errors.push({ target: target.label || target.key, message, at: new Date().toISOString() });
     const retryTarget = { ...target, retryCycle: Number(target.retryCycle || 0) + 1 };
+    state.summary.retryErrors = Array.isArray(state.summary.retryErrors) ? state.summary.retryErrors : [];
+    state.summary.retryErrors.push({ target: target.label || target.key, message,
+      cycle: retryTarget.retryCycle, at: new Date().toISOString() });
+    state.summary.retryErrors = state.summary.retryErrors.slice(-40);
+    const canRetry = retryTarget.retryCycle <= MAX_DEFERRED_RETRY_CYCLES &&
+      Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS;
     state.retryQueue = Array.isArray(state.retryQueue) ? state.retryQueue : [];
-    if (!state.retryQueue.some((item) => targetKey(item) === targetKey(retryTarget))) state.retryQueue.push(retryTarget);
-    await appendLog({ level: "warning", source: target.source, target: target.label, elapsedMs,
-      message: `${message} · 다른 지역을 계속한 뒤 미완료 목록에서 다시 이어서 수집합니다.` });
+    if (canRetry && !state.retryQueue.some((item) => targetKey(item) === targetKey(retryTarget))) {
+      state.retryQueue.push(retryTarget);
+    }
+    if (!canRetry) {
+      state.summary.failed = Number(state.summary.failed || 0) + 1;
+      state.summary.errors.push({ target: target.label || target.key, message,
+        attempts: targetAttempt, cycles: retryTarget.retryCycle, at: new Date().toISOString() });
+    }
+    await appendLog({ level: canRetry ? "warning" : "error", source: target.source, target: target.label, elapsedMs,
+      message: canRetry
+        ? `${message} · 다른 지역을 계속한 뒤 미완료 목록에서 다시 이어서 수집합니다.`
+        : `${message} · 자동 재시도 한도를 모두 사용해 최종 실패로 기록했습니다.` });
   }
 
   state.index += 1;
@@ -406,7 +422,8 @@ async function runAll(reason = "manual") {
     return { ok: false, started: false, message: "사용 설정된 자동수집 대상이 없습니다." };
   }
 
-  const summary = { ok: true, started: true, reason, total: targets.length, completed: 0, failed: 0, retries: 0, errors: [] };
+  const summary = { ok: true, started: true, reason, total: targets.length,
+    completed: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
   const state = {
     active: true,
     runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

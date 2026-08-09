@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "5\.7\.0";/);
+assert.match(source, /var VERSION = "5\.8\.0";/);
 assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(source, /data-metric="updated"/);
@@ -23,5 +23,8 @@ assert.match(source, /Math\.min\(10000, 2000 \* attempt\)/);
 assert.match(source, /var BATCH_SIZE = 100;/);
 assert.doesNotMatch(source, /NAVER_ACCESS_KEY/);
 assert.match(source, /validationVersion: 2/);
+assert.match(source, /if \(state\.preparing && !state\.busy\)/);
+assert.match(source, /state\.prepareId \+= 1/);
+assert.match(source, /while \(state\.busy && Date\.now\(\) - readyStartedAt < 90000\)/);
 
 console.log("naver collector lock retry tests passed");
