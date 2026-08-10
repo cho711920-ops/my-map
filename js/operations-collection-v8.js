@@ -20,7 +20,8 @@
     refreshing: false,
     reviewPromise: null,
     reviewSearchLoading: false,
-    collectionLoading: false
+    collectionLoading: false,
+    repairing: false
   };
   var reviewSearchTimer = 0;
   var reviewSearchRequestId = 0;
@@ -570,10 +571,15 @@
   window.refreshCollectionStatus = function() { extraState.collection = null; return loadCollection(true); };
   window.refreshReviewWorkspace = function() { return loadFreshReviews(false); };
   window.repairRoomlessExactReviews = function() {
-    if (extraState.loading) return;
-    extraState.loading = true;
+    if (extraState.repairing) {
+      message("자동분류 정리가 이미 진행 중입니다.", "loading");
+      return;
+    }
+    extraState.repairing = true;
     var totals = {scanned: 0, merged: 0, created: 0, ambiguous: 0, failed: 0, passes: 0};
     message("전체 검증대상을 같은매물·다른매물·직접확인으로 자동분류하는 중입니다…", "loading");
+    showReviewDecisionModal("자동분류 정리 진행 중",
+      "서버에서 20건씩 안전하게 검사하고 있습니다. 잠시만 기다려 주세요.", "", true);
     function runNextBatch() {
       return apiPost("repairRoomlessExactReviews", {}).then(function(result) {
         totals.passes += 1;
@@ -584,6 +590,13 @@
           totals.merged.toLocaleString("ko-KR") + " · 별도 " + totals.created.toLocaleString("ko-KR") +
           " · 직접확인 " + totals.ambiguous.toLocaleString("ko-KR") +
           (result.remainingToScan ? " · 남은 검사 " + number(result.remainingToScan).toLocaleString("ko-KR") : ""), "loading");
+        document.getElementById("reviewDecisionTitle").textContent = "자동분류 정리 진행 중";
+        document.getElementById("reviewDecisionText").textContent =
+          "검사 " + totals.scanned.toLocaleString("ko-KR") + "건 · 같은매물 " +
+          totals.merged.toLocaleString("ko-KR") + "건 · 다른매물 " +
+          totals.created.toLocaleString("ko-KR") + "건 · 직접확인 " +
+          totals.ambiguous.toLocaleString("ko-KR") + "건\n남은 자동검사 " +
+          number(result.remainingToScan).toLocaleString("ko-KR") + "건";
         if (result.hasMore && totals.passes < 600) return runNextBatch();
         return result;
       });
@@ -604,7 +617,7 @@
       message(error.message, "error");
       showReviewDecisionModal("자동분류 정리 실패", error.message || "다시 시도해 주세요.", "", true);
     }).finally(function() {
-      extraState.loading = false;
+      extraState.repairing = false;
     });
   };
   window.setReviewRiskFilter = function(filter) {
