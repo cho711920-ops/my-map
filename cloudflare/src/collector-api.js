@@ -653,6 +653,19 @@ function reliableOfferMatch(record, row) {
     sameNumber(leftRent, rightRent) && Math.abs(leftArea - rightArea) < 1;
 }
 
+function reliableOfferMismatch(record, row) {
+  const leftDeposit = number(row.deposit);
+  const rightDeposit = number(record.deposit);
+  const leftRent = number(row.monthly_rent ?? row.rent);
+  const rightRent = number(record.rent);
+  const leftArea = number(row.area_m2 ?? row.area);
+  const rightArea = number(record.area);
+  if (leftDeposit == null || rightDeposit == null || leftRent == null || rightRent == null ||
+      leftArea == null || rightArea == null) return false;
+  const termsDiffer = !sameNumber(leftDeposit, rightDeposit) || !sameNumber(leftRent, rightRent);
+  return termsDiffer && Math.abs(leftArea - rightArea) >= 1;
+}
+
 export function compareListingSpace(record, row) {
   const incoming = roomIdentity(record?.room);
   const existing = roomIdentity(row?.room);
@@ -687,6 +700,9 @@ export function compareListingSpace(record, row) {
   }
   if (incoming.key && incoming.key === existing.key && offerMatch) {
     return { decision: "same", reason: "같은 층호실·임대조건·평수" };
+  }
+  if ((incoming.floor == null || existing.floor == null) && reliableOfferMismatch(record || {}, row || {})) {
+    return { decision: "different", reason: "층 미확인이지만 임대조건과 평수가 모두 다름" };
   }
   return { decision: "review", reason: genericSpecific ? "층 표기와 호실 표기 비교 필요" : "공간 식별정보가 부족함" };
 }

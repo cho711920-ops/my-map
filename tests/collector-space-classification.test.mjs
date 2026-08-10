@@ -52,6 +52,15 @@ test("multiple equally strong candidates remain for manual verification", () => 
   assert.equal(result.decision, "review");
 });
 
+test("a roomless offer is separate when both terms and area clearly differ", () => {
+  assert.equal(classifyListingCandidates(incoming("", 1000, 70, 32.3), [
+    existing("M-1", "1층", 1500, 150, 10.8)
+  ]).decision, "create");
+  assert.equal(classifyListingCandidates(incoming("", 1000, 70, 10.8), [
+    existing("M-1", "1층", 1500, 150, 10.8)
+  ]).decision, "review");
+});
+
 test("a provider re-post with a new source id reuses the oldest identical pending review", () => {
   const match = choosePendingReviewMatch({
     source: "당근", sourceId: "new-2", room: "1층", deposit: 1000, rent: 50, area: 10.5
