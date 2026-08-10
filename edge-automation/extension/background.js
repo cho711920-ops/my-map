@@ -368,13 +368,17 @@ async function finishCurrentTarget(result, senderTabId) {
   }
   if (result.ok === true) {
     state.summary.completed += 1;
+    const partial = Boolean(result.result && result.result.partial);
+    if (partial) state.summary.partial = Number(state.summary.partial || 0) + 1;
     await appendLog({
-      level: "success",
+      level: partial ? "warning" : "success",
       source: target.source,
       target: target.label,
       elapsedMs,
       result: result.result || {},
-      message: `${target.label || target.source} 자동수집 완료`
+      message: partial
+        ? `${target.label || target.source} 전체 목록 확인 완료 · 제공처 누락 항목은 부분수집으로 기록`
+        : `${target.label || target.source} 자동수집 완료`
     });
   } else {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");

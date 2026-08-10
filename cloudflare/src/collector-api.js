@@ -523,6 +523,31 @@ async function loadCandidateListings(env, records, existingSources) {
   return byAddress;
 }
 
+async function loadPendingReviewsByAddress(env, records) {
+  const addresses = [...new Set(records.map((record) => clean(record?.address)).filter(Boolean))];
+  const byAddress = new Map(addresses.map((address) => [address, []]));
+  for (let offset = 0; offset < addresses.length; offset += 40) {
+    const chunk = addresses.slice(offset, offset + 40);
+    const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
+    const result = await env.DB.prepare(`SELECT id, source, source_listing_id, payload_json, created_at
+      FROM collector_raw
+      WHERE processing_state='review' AND json_extract(payload_json, '$.address') IN (${placeholders})
+      ORDER BY created_at, id`).bind(...chunk).all();
+    for (const row of result?.results || []) {
+      const record = normalizeReviewRecord(parseJson(row.payload_json, {}));
+      const address = clean(record?.address);
+      if (!address || !byAddress.has(address)) continue;
+      byAddress.get(address).push({
+        id: clean(row.id), reviewId: clean(row.id), source: clean(row.source),
+        sourceId: clean(row.source_listing_id), createdAt: clean(row.created_at),
+        room: record.room, deposit: record.deposit, monthly_rent: record.rent,
+        area_m2: record.area, record
+      });
+    }
+  }
+  return byAddress;
+}
+
 async function candidateListings(env, record) {
   if (!record?.address) return [];
   const result = await loadCandidateListings(env, [record], new Map());
@@ -650,6 +675,25 @@ export function classifyListingCandidates(record, candidates = []) {
   if (same.length > 1) return { decision: "review", reason: "같은 조건의 기존 매물이 여러 개", comparisons };
   if (review.length) return { decision: "review", reason: review[0].reason, comparisons };
   return { decision: "create", reason: candidates.length ? "기존 매물과 층·호실이 다름" : "같은 주소의 기존 매물 없음", comparisons };
+}
+
+export function choosePendingReviewMatch(record, candidates = [], currentReview = null) {
+  const currentCreatedAt = clean(currentReview?.createdAt);
+  const currentId = clean(currentReview?.reviewId);
+  return candidates
+    .filter((candidate) => clean(candidate?.reviewId) !== currentId)
+    .filter((candidate) => !(clean(candidate?.source) === clean(record?.source) &&
+      clean(candidate?.sourceId) === clean(record?.sourceId)))
+    .filter((candidate) => {
+      if (!currentCreatedAt) return true;
+      const candidateCreatedAt = clean(candidate?.createdAt);
+      return candidateCreatedAt < currentCreatedAt ||
+        (candidateCreatedAt === currentCreatedAt && clean(candidate?.reviewId) < currentId);
+    })
+    .map((candidate) => ({ candidate, ...compareListingSpace(record, candidate) }))
+    .filter((item) => item.decision === "same")
+    .sort((left, right) => clean(left.candidate?.createdAt).localeCompare(clean(right.candidate?.createdAt)) ||
+      clean(left.candidate?.reviewId).localeCompare(clean(right.candidate?.reviewId)))[0]?.candidate || null;
 }
 
 export function normalizeReviewRecord(value = {}) {
@@ -840,16 +884,38 @@ async function createListing(env, record, sessionId, actor = "collector", existi
 
 async function queueReview(env, record, sessionId, candidates, reason = "") {
   const reviewId = `R-${crypto.randomUUID()}`;
-  await env.DB.prepare(`INSERT INTO collector_raw (
+  const saved = await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json, processing_state, result_json, created_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'review', ?7, ?8)
     ON CONFLICT(source, source_listing_id) WHERE processing_state='review' DO UPDATE SET
       session_id=excluded.session_id, snapshot_hash=excluded.snapshot_hash,
       payload_json=excluded.payload_json, result_json=excluded.result_json,
-      error_text='', processed_at='', created_at=excluded.created_at`)
+      error_text='', processed_at='', created_at=excluded.created_at
+    RETURNING id`)
     .bind(reviewId, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
-      JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).run();
-  return reviewId;
+      JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).first();
+  return clean(saved?.id) || reviewId;
+}
+
+async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
+  const id = `R-${crypto.randomUUID()}`;
+  const compactPayload = {
+    source: record.source, sourceId: record.sourceId, buildingName: record.buildingName,
+    address: record.address, room: record.room, category: record.category,
+    deposit: record.deposit, rent: record.rent, fee: record.fee, premium: record.premium,
+    area: record.area, link: record.link, listSnapshot: record.listSnapshot,
+    latitude: record.latitude, longitude: record.longitude
+  };
+  await env.DB.prepare(`INSERT INTO collector_raw (
+      id, session_id, source, source_listing_id, snapshot_hash, payload_json,
+      processing_state, processed_at, result_json, created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'duplicate', ?7, ?8, ?7)`)
+    .bind(id, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
+      JSON.stringify(compactPayload), nowIso(), JSON.stringify({
+        action: "sameAsPendingReview", canonicalReviewId: clean(pendingReview?.reviewId),
+        reason: "이미 검증대기 중인 동일 매물"
+      })).run();
+  return id;
 }
 
 async function ingestRecords(env, source, values, metadata = {}) {
@@ -876,6 +942,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const existingSources = await loadExistingSources(env, source, records);
   const sourceAssets = await loadSourceAssets(env, existingSources);
   const candidatesByAddress = await loadCandidateListings(env, records, existingSources);
+  const pendingReviewsByAddress = await loadPendingReviewsByAddress(env, records);
   for (const record of records) {
     try {
       const existing = existingSources.get(record.sourceId);
@@ -888,9 +955,14 @@ async function ingestRecords(env, source, values, metadata = {}) {
       }
       const candidates = candidatesByAddress.get(record.address) || [];
       const classified = classifyListingCandidates(record, candidates);
+      const pendingCandidates = pendingReviewsByAddress.get(record.address) || [];
+      const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
       if (classified.decision === "merge") {
         await attachSource(env, record, classified.candidate.id, sessionId);
         totals.merged += 1;
+      } else if (pendingMatch) {
+        await savePendingReviewAlias(env, record, sessionId, pendingMatch);
+        totals.duplicate += 1;
       } else if (classified.decision === "create") {
         const listingId = await createListing(env, record, sessionId);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
@@ -901,7 +973,13 @@ async function ingestRecords(env, source, values, metadata = {}) {
         affectedListingIds.add(listingId);
         totals.created += 1;
       } else {
-        await queueReview(env, record, sessionId, candidates, classified.reason);
+        const reviewId = await queueReview(env, record, sessionId, candidates, classified.reason);
+        pendingCandidates.push({
+          id: reviewId, reviewId, source: record.source, sourceId: record.sourceId,
+          createdAt: nowIso(), room: record.room, deposit: record.deposit,
+          monthly_rent: record.rent, area_m2: record.area, record
+        });
+        pendingReviewsByAddress.set(record.address, pendingCandidates);
         totals.review += 1;
       }
     } catch (error) {
@@ -1726,8 +1804,8 @@ async function consolidateExisting(env, user, body) {
 }
 
 async function repairExactReviews(env, user, options = {}) {
-  const decisionVersion = 3;
-  const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json FROM collector_raw
+  const decisionVersion = 4;
+  const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
     ORDER BY created_at LIMIT 20`).bind(decisionVersion).all();
@@ -1750,8 +1828,10 @@ async function repairExactReviews(env, user, options = {}) {
     }
   }
   const existingAssetsBySource = await loadSourceAssets(env, existingSourcesByKey);
+  const pendingReviewsByAddress = await loadPendingReviewsByAddress(env, records);
   let merged = 0;
   let created = 0;
+  let duplicate = 0;
   let ambiguous = 0;
   let failed = reviewRows.length - parsedRows.length;
   const affectedListingIds = new Set();
@@ -1762,6 +1842,17 @@ async function repairExactReviews(env, user, options = {}) {
   }
   for (const { row, record } of parsedRows) {
     try {
+      const pendingMatch = choosePendingReviewMatch(record, pendingReviewsByAddress.get(record.address) || [], {
+        reviewId: row.id, createdAt: row.created_at
+      });
+      if (pendingMatch) {
+        await env.DB.prepare("UPDATE collector_raw SET processing_state='duplicate', processed_at=?1, result_json=?2 WHERE id=?3")
+          .bind(nowIso(), JSON.stringify({ action: "sameAsPendingReview",
+            canonicalReviewId: pendingMatch.reviewId, reason: "이미 검증대기 중인 동일 매물",
+            autoDecisionVersion: decisionVersion }), row.id).run();
+        duplicate += 1;
+        continue;
+      }
       const candidates = candidatesByAddress.get(record.address) || [];
       const classified = classifyListingCandidates(record, candidates);
       const existingSource = existingSourcesByKey.get(`${clean(record.source)}:${clean(record.sourceId)}`) || null;
@@ -1806,10 +1897,10 @@ async function repairExactReviews(env, user, options = {}) {
     : null;
   const remainingToScan = includeRemaining ? Number(pending?.count || 0) : null;
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
-    merged, created, ambiguous, failed,
+    merged, created, duplicate, ambiguous, failed,
     hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= 20,
     remainingToScan, customerMatches,
-    operationAdjustments: { pendingReview: -(merged + created) }, source: "D1" };
+    operationAdjustments: { pendingReview: -(merged + created + duplicate) }, source: "D1" };
 }
 
 export async function runScheduledReviewRepair(env) {

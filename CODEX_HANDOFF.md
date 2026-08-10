@@ -401,3 +401,15 @@
 - Production Worker version: `d17ba9af-7946-40e8-a5d1-6c3ae69b560d`.
 - Installed Edge automation: extension `1.0.25`, Daangn collector `1.4.5`, daily schedule 11:00 KST.
 - Full Cloudflare/Edge suite: 62/62 passed; Wrangler dry-run also passed.
+
+## 2026-08-10 Pending-review deduplication and collector completion semantics
+
+- Production review audit showed 9,243 active review rows with 9,243 distinct provider IDs: there were no repeated rows for the same provider ID. The growth came from provider re-posts that received new Naver/Daangn IDs.
+- Ingestion now compares a new provider ID with active pending reviews at the same address. If floor/unit, deposit, rent and area satisfy the existing physical-listing rule, it stores a compact alias instead of adding another active review row.
+- Scheduled review repair decision version 4 collapses already queued exact pending duplicates into the oldest canonical review. The first production cycles reduced active reviews from 9,243 to 9,224 and marked 29 aliases while leaving ambiguous listings for manual review.
+- Migration `0013_collector_review_address_index.sql` indexes active review address lookup. Production query planning confirms `idx_collector_raw_review_address` is used, avoiding a full collector table scan on every repair cycle.
+- Daangn collector `1.4.6` reconnects a manual interrupted run from the saved checkpoint up to five times. Automatic runs use the same checkpoint path.
+- A completed scan with provider address/floor omissions now returns a completed partial result with warnings. It is not treated as a crash, so the automation extension does not restart that district from zero.
+- Installed Edge automation is `1.0.26`; Windows task remains daily at 11:00 KST. Gongsilbox remains manual.
+- Production Worker version: `c11ec97b-d825-4d4e-a461-c0af26e5ce99`.
+- Full test suite: 90/90 passed; Wrangler dry-run passed; live asset verification confirmed Daangn `1.4.6`, partial completion mode and manual recovery.

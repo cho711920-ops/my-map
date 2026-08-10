@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.4.5";
+  var VERSION = "1.4.6";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -40,7 +40,10 @@
     selectedCount: 0,
     selectionChanged: false,
     job: null,
-    jobRequestGeneration: 0
+    jobRequestGeneration: 0,
+    automaticRunning: false,
+    manualRecoveryAttempts: 0,
+    manualRecoveryTimer: null
   };
 
   var panel = createPanel();
@@ -179,7 +182,10 @@
   }
 
   function bindEvents() {
-    startButton.addEventListener("click", startOrResume);
+    startButton.addEventListener("click", function () {
+      state.manualRecoveryAttempts = 0;
+      startOrResume();
+    });
     autoRegisterButton.addEventListener("click", registerAutomaticTarget);
     stopButton.addEventListener("click", requestSafeStop);
     closeButton.addEventListener("click", function () { panel.style.display = "none"; });
@@ -221,6 +227,15 @@
   }
 
   async function runAutomatic(target) {
+    state.automaticRunning = true;
+    try {
+      return await runAutomaticTarget(target);
+    } finally {
+      state.automaticRunning = false;
+    }
+  }
+
+  async function runAutomaticTarget(target) {
     panel.style.display = "block";
     var url = selectedClusterUrl(target && target.url, target && target.district);
     if (!url) throw new Error("자동수집할 당근 클러스터 정보가 없습니다.");
@@ -237,11 +252,11 @@
     var lastProcessed = -1;
     while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
       if (state.job && state.job.status === "complete") {
-        if (Number(state.job.failed || 0) > 0 || (state.selectedDistrict && state.job.completeCollection === false)) {
-          var issues = Array.isArray(state.job.completionIssues) ? state.job.completionIssues.filter(Boolean) : [];
-          throw new Error(issues.join(", ") || "당근 자동수집이 부분수집 또는 오류로 종료됐습니다.");
-        }
-        return {source: "daangn", district: state.selectedDistrict, version: VERSION, totals: Object.assign({}, state.job)};
+        var partial = Number(state.job.failed || 0) > 0 ||
+          Boolean(state.selectedDistrict && state.job.completeCollection === false);
+        var issues = Array.isArray(state.job.completionIssues) ? state.job.completionIssues.filter(Boolean) : [];
+        return {source: "daangn", district: state.selectedDistrict, version: VERSION,
+          partial: partial, completionIssues: issues, totals: Object.assign({}, state.job)};
       }
       var processed = Number(state.job && state.job.processed || 0);
       if (processed > lastProcessed) {
@@ -603,6 +618,7 @@
   async function runChunk() {
     if (state.busy || !state.job || state.job.status !== "running") return;
     state.busy = true;
+    var previousProcessed = Number(state.job.processed || 0);
     var waitStartedAt = Date.now();
     var waitTimer = null;
     if (state.job.phase === "details") {
@@ -615,6 +631,9 @@
       var result = await callServer("danggeunRunJobChunk", {});
       if (waitTimer) window.clearInterval(waitTimer);
       state.job = result.job || state.job;
+      if (Number(state.job.processed || 0) > previousProcessed || state.job.status === "complete") {
+        state.manualRecoveryAttempts = 0;
+      }
       state.busy = false;
       if (
         state.stopRequested ||
@@ -658,6 +677,8 @@
 
   async function requestSafeStop() {
     state.stopRequested = true;
+    if (state.manualRecoveryTimer) window.clearTimeout(state.manualRecoveryTimer);
+    state.manualRecoveryTimer = null;
     stopButton.disabled = true;
     stopButton.textContent = "중단 요청됨";
     setStatus(
@@ -794,6 +815,26 @@
       message +
       "\n저장 지점은 유지됩니다. 이어서 수집을 누르면 계속합니다."
     );
+    scheduleManualRecovery(message);
+  }
+
+  function scheduleManualRecovery(message) {
+    if (state.automaticRunning || state.stopRequested || state.selectionChanged) return false;
+    if (/SQLITE_TOOBIG|string or blob too big|인증|보안키|권한|한도|용량/i.test(message)) return false;
+    if (state.manualRecoveryAttempts >= 5) {
+      setStatus("자동 재연결을 멈췄습니다.", message + "\n저장 지점은 보존되어 있습니다. 수집 버튼을 누르면 이어집니다.");
+      return false;
+    }
+    state.manualRecoveryAttempts += 1;
+    if (state.manualRecoveryTimer) window.clearTimeout(state.manualRecoveryTimer);
+    var seconds = Math.min(12, Math.max(2, state.manualRecoveryAttempts * 2));
+    setStatus("연결 복구 대기 중", "저장 지점부터 " + seconds + "초 뒤 자동 재연결합니다. " +
+      state.manualRecoveryAttempts + "/5\n" + message);
+    state.manualRecoveryTimer = window.setTimeout(function () {
+      state.manualRecoveryTimer = null;
+      startOrResume();
+    }, seconds * 1000);
+    return true;
   }
 
   function isUnauthorizedError(error) {

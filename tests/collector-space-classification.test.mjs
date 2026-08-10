@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { classifyListingCandidates, compareListingSpace, normalizeReviewRecord } from "../cloudflare/src/collector-api.js";
+import { choosePendingReviewMatch, classifyListingCandidates, compareListingSpace, normalizeReviewRecord } from "../cloudflare/src/collector-api.js";
 
 function incoming(room, deposit = 1000, rent = 50, area = 10) {
   return { room, deposit, rent, area };
@@ -50,6 +50,26 @@ test("multiple equally strong candidates remain for manual verification", () => 
     existing("M-2", "1층", 1000, 50, 10.1)
   ]);
   assert.equal(result.decision, "review");
+});
+
+test("a provider re-post with a new source id reuses the oldest identical pending review", () => {
+  const match = choosePendingReviewMatch({
+    source: "당근", sourceId: "new-2", room: "1층", deposit: 1000, rent: 50, area: 10.5
+  }, [{
+    reviewId: "R-old", source: "당근", sourceId: "old-1", createdAt: "2026-08-01T00:00:00Z",
+    room: "101호", deposit: 1000, monthly_rent: 50, area_m2: 10
+  }]);
+  assert.equal(match.reviewId, "R-old");
+});
+
+test("the same provider source id updates its pending review instead of becoming an alias", () => {
+  const match = choosePendingReviewMatch({
+    source: "당근", sourceId: "same-1", room: "1층", deposit: 1000, rent: 50, area: 10
+  }, [{
+    reviewId: "R-existing", source: "당근", sourceId: "same-1", createdAt: "2026-08-01T00:00:00Z",
+    room: "1층", deposit: 1000, monthly_rent: 50, area_m2: 10
+  }]);
+  assert.equal(match, null);
 });
 
 test("different building dongs are separate even with the same unit", () => {

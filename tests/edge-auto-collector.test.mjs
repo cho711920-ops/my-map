@@ -79,6 +79,9 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(naver, /saveAutoDistrictProgress\(progress\)/);
   assert.match(naver, /clearAutoDistrictProgress\(district\.cortarNo\)/);
   assert.match(daangn, /state\.job\.completionIssues/);
+  assert.match(daangn, /partial: partial/);
+  assert.match(daangn, /scheduleManualRecovery\(message\)/);
+  assert.match(daangn, /manualRecoveryAttempts >= 5/);
   assert.match(daangn, /function getScopedClientId\(url\)/);
   assert.match(daangn, /jobRequestGeneration/);
   assert.match(daangn, /\{jobUrl: state\.job\.url\}/);
@@ -90,6 +93,13 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(naver, /지도 클러스터 인식과 관계없이/);
   const naverAutomatic = naver.slice(naver.indexOf("async function runAutomatic"), naver.indexOf("function requestSafeStop"));
   assert.doesNotMatch(naverAutomatic, /discoverFinContext\(\)/);
+});
+
+test("provider omissions complete a target with a warning instead of restarting it from zero", () => {
+  const background = read("edge-automation/extension/background.js");
+  assert.match(background, /result\.result && result\.result\.partial/);
+  assert.match(background, /state\.summary\.partial/);
+  assert.match(background, /전체 목록 확인 완료/);
 });
 
 test("Windows installer creates a daily recoverable scheduled task", () => {
