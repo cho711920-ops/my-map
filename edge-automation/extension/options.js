@@ -1,6 +1,6 @@
 "use strict";
 
-let state = { config: { targets: [] }, logs: [] };
+let state = { config: { targets: [] }, logs: [], runState: null, runReport: null };
 document.getElementById("autoVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 
 const SOURCE_ORDER = ["naver", "daangn", "gongsil"];
@@ -36,6 +36,67 @@ function targetSummary(target) {
   return [district ? `${district} 구 단위` : "구 단위", "매일 자동수집", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
 }
 
+const STATUS_TEXT = {
+  pending: "대기",
+  running: "진행 중",
+  retrying: "즉시 재시도",
+  retry_wait: "재시도 대기",
+  completed: "완료",
+  partial: "부분완료",
+  failed: "실패"
+};
+
+function reportItem(target) {
+  const report = state.runReport;
+  if (!report || !Array.isArray(report.items)) return null;
+  const key = String(target.key || [target.source, target.district, target.url].join("|"));
+  return report.items.find((item) => item.key === key) || null;
+}
+
+function countText(item) {
+  const counts = item && item.counts || {};
+  const parts = [];
+  if (Number(counts.expected || 0)) {
+    parts.push(`${Number(counts.processed || 0).toLocaleString("ko-KR")} / ${Number(counts.expected).toLocaleString("ko-KR")}건 확인`);
+  } else if (Number(counts.processed || 0)) {
+    parts.push(`${Number(counts.processed).toLocaleString("ko-KR")}건 확인`);
+  }
+  if (Number(counts.created || 0)) parts.push(`신규 ${Number(counts.created).toLocaleString("ko-KR")}`);
+  if (Number(counts.updated || 0)) parts.push(`변경 ${Number(counts.updated).toLocaleString("ko-KR")}`);
+  if (Number(counts.review || 0)) parts.push(`검증 ${Number(counts.review).toLocaleString("ko-KR")}`);
+  if (Number(counts.failed || 0)) parts.push(`오류 ${Number(counts.failed).toLocaleString("ko-KR")}`);
+  return parts.join(" · ");
+}
+
+function statusDetail(item) {
+  if (!item) return "아직 실행 기록 없음";
+  const counts = countText(item);
+  const at = item.finishedAt || item.startedAt || item.updatedAt;
+  const time = at ? registeredTime(at) : "";
+  return [counts, item.message, time].filter(Boolean).join(" · ");
+}
+
+function renderRunSummary() {
+  const report = state.runReport;
+  if (!report || !Array.isArray(report.items)) {
+    return '<div class="run-summary-empty">다음 실행부터 10개 구의 진행 결과가 이곳에 저장됩니다.</div>';
+  }
+  const counts = report.items.reduce((output, item) => {
+    output[item.status] = Number(output[item.status] || 0) + 1;
+    return output;
+  }, {});
+  const finished = Number(counts.completed || 0) + Number(counts.partial || 0);
+  const running = Number(counts.running || 0) + Number(counts.retrying || 0);
+  const waiting = Number(counts.pending || 0) + Number(counts.retry_wait || 0);
+  const failed = Number(counts.failed || 0);
+  return `<div class="run-summary-grid">
+    <span><b>${report.active ? "수집 실행 중" : "최근 실행 결과"}</b><small>${registeredTime(report.startedAt)}</small></span>
+    <span><b>${finished} / ${report.items.length}개 완료</b><small>부분완료 포함</small></span>
+    <span><b>${running}개 진행</b><small>${waiting}개 대기</small></span>
+    <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed ? "확인 필요" : "정상"}</small></span>
+  </div>`;
+}
+
 function portableTarget(target) {
   return {
     source: target.source,
@@ -52,8 +113,11 @@ function portableTarget(target) {
 }
 
 function renderTarget(target, index) {
+  const item = reportItem(target);
+  const status = item ? item.status : "pending";
   return `<div class="item target-item">
-    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small>${escapeHtml(targetSummary(target))}</small></div>
+    <div class="target-state state-${escapeHtml(status)}"><span>${escapeHtml(STATUS_TEXT[status] || status)}</span></div>
+    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small>${escapeHtml(statusDetail(item))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small></div>
     <div class="item-actions"><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>사용</label><button data-remove="${index}">삭제</button></div>
   </div>`;
 }
@@ -75,6 +139,7 @@ function render() {
   document.getElementById("schedule").value = config.schedule || "06:00";
   document.getElementById("closeTabs").checked = config.closeTabs !== false;
   const targets = Array.isArray(config.targets) ? config.targets : [];
+  document.getElementById("runSummary").innerHTML = renderRunSummary();
   document.getElementById("targets").innerHTML = renderTargets(targets);
   const logs = Array.isArray(state.logs) ? state.logs.slice(0, 30) : [];
   document.getElementById("logs").classList.add("log-list");
@@ -170,7 +235,9 @@ document.getElementById("importConfig").addEventListener("change", async (event)
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
-  if (changes.jsAutoCollectorConfigV1 || changes.jsAutoCollectorLogsV1) load();
+  if (changes.jsAutoCollectorConfigV1 || changes.jsAutoCollectorLogsV1 || changes.jsAutoCollectorRunStateV2 || changes.jsAutoCollectorRunReportV1) load();
 });
+
+window.setInterval(load, 5000);
 
 load();

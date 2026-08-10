@@ -18,6 +18,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /scheduleIsDue/);
   assert.match(background, /RUN_LOCK_KEY/);
   assert.match(background, /RUN_STATE_KEY/);
+  assert.match(background, /RUN_REPORT_KEY/);
   assert.match(background, /if \(lock && \(!state \|\| !state\.active\)\)/);
   assert.match(background, /validateTarget\(target\)/);
   assert.match(background, /const result = await runAll\(reason\)/);
@@ -99,9 +100,10 @@ test("all three collectors expose registration and unattended execution", () => 
 test("provider omissions complete a target with a warning instead of restarting it from zero", () => {
   const background = read("edge-automation/extension/background.js");
   assert.match(background, /function completedTargetWithWarnings\(result\)/);
-  assert.match(background, /result\.result && result\.result\.partial/);
+  assert.match(background, /cleanSource\(payload\.source\) !== "naver"/);
   assert.match(background, /session\.completeRequested === true/);
-  assert.match(background, /result\.ok === true \|\| warningCompletion/);
+  assert.match(background, /const successful = result\.ok === true && !payloadPartial/);
+  assert.match(background, /successful \|\| warningCompletion/);
   assert.match(background, /state\.summary\.partial/);
   assert.match(background, /전체 목록 확인 완료/);
 });
@@ -142,11 +144,29 @@ test("automatic collector settings stay compact with long target URLs", () => {
   assert.match(options, /function renderTargets\(targets\)/);
   assert.match(options, /function targetSummary\(target\)/);
   assert.match(options, /SOURCE_ORDER/);
-  assert.match(styles, /grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(styles, /grid-template-columns:auto minmax\(0,1fr\) auto/);
   assert.match(styles, /text-overflow:ellipsis/);
   assert.match(styles, /\.log-list\{max-height:430px;overflow-y:auto/);
   assert.match(options, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(read("edge-automation/extension/options.html"), /id="autoVersion"/);
+  assert.match(read("edge-automation/extension/options.html"), /id="runSummary"/);
+  assert.match(options, /function renderRunSummary\(\)/);
+  assert.match(options, /부분완료/);
+  assert.match(options, /10개 구/);
+  assert.match(options, /jsAutoCollectorRunReportV1/);
+});
+
+test("automatic collection keeps one visible per-district report", () => {
+  const background = read("edge-automation/extension/background.js");
+  const options = read("edge-automation/extension/options.js");
+  assert.match(background, /async function updateRunReport\(state, target, status/);
+  assert.match(background, /status: "pending"/);
+  assert.match(background, /"running"/);
+  assert.match(background, /partial \? "partial" : "completed"/);
+  assert.match(background, /canRetry \? "retry_wait" : "failed"/);
+  assert.match(options, /STATUS_TEXT/);
+  assert.match(options, /진행 중/);
+  assert.match(options, /실패/);
 });
 
 test("automatic collector settings can move safely to another PC", () => {

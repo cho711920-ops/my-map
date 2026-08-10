@@ -423,3 +423,13 @@
 - Target transitions no longer minimize the Edge window. The scheduled launch starts minimized, but once the user restores the window it remains visible while Naver/Daangn advance between districts.
 - Live verification: Naver completed its five-district first pass and the active run advanced into Daangn; extension state reported `v1.0.29`, 10 total targets and an empty retry queue after cleanup.
 - Edge automation tests: 7/7 passed.
+
+## 2026-08-10 Per-district collection report and partial-run retry v1.0.30
+
+- The Edge automatic-collection settings screen now keeps a single visible report for all 10 registered targets: Naver five districts and Daangn five districts. Each row shows waiting, running, retrying, completed, partial or failed state, timestamps and available counts.
+- The report persists in the dedicated Edge profile and refreshes every five seconds. It adds no D1 reads or writes.
+- A Daangn payload with `partial: true` is no longer accepted as a completed target even when the bridge message itself is technically successful. It is retried from the saved checkpoint and the runner advances only after an actual completion.
+- Naver's fully enumerated provider omissions remain warning-completions so known address/floor omissions do not restart an entire district.
+- Production-data inspection confirmed the user's report: the latest automatic run did not complete all 10 targets. Daangn Yuseong ended partially and Daangn Seo had no completion record. The JS map currently contains only first-floor originals for Yongmun-dong 257-5; the reported second-floor Daangn listing has not yet been ingested.
+- Installed extension files were updated in place to `v1.0.30`. The registered targets and schedule were preserved, and no Edge window was restarted or minimized.
+- Edge automation tests: 8/8 passed; Cloudflare tests: 56/56 passed.

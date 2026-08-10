@@ -4,6 +4,7 @@ const STORAGE_KEY = "jsAutoCollectorConfigV1";
 const LOG_KEY = "jsAutoCollectorLogsV1";
 const RUN_LOCK_KEY = "jsAutoCollectorRunLockV1";
 const RUN_STATE_KEY = "jsAutoCollectorRunStateV2";
+const RUN_REPORT_KEY = "jsAutoCollectorRunReportV1";
 const LAST_SCHEDULE_KEY = "jsAutoCollectorLastScheduleV1";
 const LAST_VERSION_RUN_KEY = "jsAutoCollectorLastVersionRunV1";
 const ALARM_NAME = "js-auto-collector-daily";
@@ -219,6 +220,53 @@ async function saveRunState(state) {
   return state;
 }
 
+async function getRunReport() {
+  const saved = await chrome.storage.local.get(RUN_REPORT_KEY);
+  return saved[RUN_REPORT_KEY] || null;
+}
+
+async function saveRunReport(report) {
+  if (!report) return null;
+  await chrome.storage.local.set({ [RUN_REPORT_KEY]: report });
+  return report;
+}
+
+function resultCounts(result) {
+  const payload = result && result.result || {};
+  const session = payload.session || {};
+  const totals = payload.totals || session.totals || {};
+  const number = (...values) => {
+    for (const value of values) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+    return 0;
+  };
+  return {
+    expected: number(session.expectedCount, session.manifestCount, totals.found, totals.total, payload.expectedCount, payload.selectedCount),
+    processed: number(session.processedCount, session.observed, totals.processed, payload.processedCount, payload.processed, payload.selectedCount),
+    created: number(payload.created, totals.created, session.created),
+    updated: number(payload.updated, totals.updated, session.updated),
+    review: number(payload.review, totals.review, session.review),
+    unchanged: number(payload.unchanged, totals.unchanged, session.unchanged),
+    failed: number(payload.failed, totals.failed, session.failed)
+  };
+}
+
+async function updateRunReport(state, target, status, details = {}) {
+  if (!state || !target) return null;
+  const report = await getRunReport();
+  if (!report || report.runId !== state.runId) return null;
+  const key = targetKey(target);
+  const item = report.items.find((entry) => entry.key === key);
+  if (!item) return report;
+  Object.assign(item, { status, updatedAt: Date.now(), ...details });
+  report.active = Boolean(state.active);
+  report.summary = { ...(state.summary || {}) };
+  report.updatedAt = Date.now();
+  return saveRunReport(report);
+}
+
 async function finalizeRun(state) {
   const summary = state.summary || { completed: 0, failed: 0, errors: [] };
   summary.ok = summary.failed === 0;
@@ -227,6 +275,14 @@ async function finalizeRun(state) {
     message: `자동수집 종료: 성공 ${summary.completed}, 실패 ${summary.failed}`,
     result: summary
   });
+  const report = await getRunReport();
+  if (report && report.runId === state.runId) {
+    report.active = false;
+    report.finishedAt = Date.now();
+    report.updatedAt = Date.now();
+    report.summary = { ...summary };
+    await saveRunReport(report);
+  }
   if (summary.ok) {
     await chrome.storage.local.set({
       [LAST_SCHEDULE_KEY]: localDateKey(),
@@ -298,6 +354,12 @@ async function launchCurrentTarget(state, reuseTabId = null) {
   const targetRunId = `${state.runId}-${state.index}-${Math.random().toString(36).slice(2, 8)}`;
   let tab = null;
   try {
+    await updateRunReport(state, target, "running", {
+      startedAt,
+      finishedAt: null,
+      message: "",
+      attempt: Math.max(1, Number(state.targetAttempt || 1))
+    });
     validateTarget(target);
     if (Number.isInteger(reuseTabId)) {
       tab = await chrome.tabs.update(reuseTabId, { url: target.url, active: false }).catch(() => null);
@@ -329,11 +391,19 @@ async function launchCurrentTarget(state, reuseTabId = null) {
 
 function completedTargetWithWarnings(result) {
   const payload = result && result.result || {};
-  if (payload.partial === true) return true;
+  if (cleanSource(payload.source) !== "naver") return false;
   const session = payload.session || {};
   const expected = Number(session.expectedCount || session.manifestCount || 0);
   const observed = Number(session.processedCount || session.observed || 0);
   return session.completeRequested === true && expected > 0 && observed >= expected;
+}
+
+function cleanSource(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (text.includes("naver") || text.includes("네이버")) return "naver";
+  if (text.includes("daangn") || text.includes("danggeun") || text.includes("당근")) return "daangn";
+  if (text.includes("gongsil") || text.includes("공실")) return "gongsil";
+  return text;
 }
 
 async function finishCurrentTarget(result, senderTabId) {
@@ -350,7 +420,9 @@ async function finishCurrentTarget(result, senderTabId) {
   const elapsedMs = Date.now() - Number(state.targetStartedAt || Date.now());
   const targetAttempt = Math.max(1, Number(state.targetAttempt || 1));
   const warningCompletion = completedTargetWithWarnings(result);
-  if (result.ok !== true && !warningCompletion && targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
+  const payloadPartial = Boolean(result.result && result.result.partial);
+  const successful = result.ok === true && !payloadPartial;
+  if (!successful && !warningCompletion && targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
     await appendLog({
       level: "warning",
@@ -358,6 +430,10 @@ async function finishCurrentTarget(result, senderTabId) {
       target: target.label,
       elapsedMs,
       message: `${message} · 같은 대상을 저장 지점부터 즉시 재시도 ${targetAttempt + 1}/${MAX_IMMEDIATE_ATTEMPTS}`
+    });
+    await updateRunReport(state, target, "retrying", {
+      message,
+      attempt: targetAttempt + 1
     });
     state.currentTabId = null;
     state.targetRunId = null;
@@ -368,7 +444,7 @@ async function finishCurrentTarget(result, senderTabId) {
     await delay(Math.min(10000, targetAttempt * 2500));
     return launchCurrentTarget(state, completedTabId);
   }
-  if (result.ok === true || warningCompletion) {
+  if (successful || warningCompletion) {
     state.summary.completed += 1;
     const partial = result.ok !== true || Boolean(result.result && result.result.partial);
     if (partial) state.summary.partial = Number(state.summary.partial || 0) + 1;
@@ -381,6 +457,12 @@ async function finishCurrentTarget(result, senderTabId) {
       message: partial
         ? `${target.label || target.source} 전체 목록 확인 완료 · 제공처 누락 항목은 부분수집으로 기록`
         : `${target.label || target.source} 자동수집 완료`
+    });
+    await updateRunReport(state, target, partial ? "partial" : "completed", {
+      finishedAt: Date.now(),
+      elapsedMs,
+      message: partial ? "전체 목록 확인 완료 · 일부 제공처 정보 누락" : "수집 완료",
+      counts: resultCounts(result)
     });
   } else {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
@@ -405,6 +487,13 @@ async function finishCurrentTarget(result, senderTabId) {
       message: canRetry
         ? `${message} · 다른 지역을 계속한 뒤 미완료 목록에서 다시 이어서 수집합니다.`
         : `${message} · 자동 재시도 한도를 모두 사용해 최종 실패로 기록했습니다.` });
+    await updateRunReport(state, target, canRetry ? "retry_wait" : "failed", {
+      finishedAt: canRetry ? null : Date.now(),
+      elapsedMs,
+      message,
+      attempt: targetAttempt,
+      counts: resultCounts(result)
+    });
   }
 
   state.index += 1;
@@ -445,6 +534,28 @@ async function runAll(reason = "manual") {
     phase: "starting",
     summary
   };
+  await saveRunReport({
+    runId: state.runId,
+    reason,
+    active: true,
+    startedAt: state.startedAt,
+    updatedAt: state.startedAt,
+    finishedAt: null,
+    total: targets.length,
+    summary: { ...summary },
+    items: targets.map((target) => ({
+      key: targetKey(target),
+      source: target.source,
+      label: target.label || target.source,
+      status: "pending",
+      attempt: 0,
+      startedAt: null,
+      finishedAt: null,
+      updatedAt: state.startedAt,
+      message: "",
+      counts: {}
+    }))
+  });
   await appendLog({ level: "info", message: `자동수집 시작 (${reason}, ${targets.length}개 대상)` });
   await saveRunState(state);
   await launchCurrentTarget(state);
@@ -545,12 +656,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return finishCurrentTarget(message, sender && sender.tab && sender.tab.id);
     }
     if (message.type === "JS_AUTO_GET_STATE") {
-      const [config, stored, runState] = await Promise.all([
+      const [config, stored, runState, runReport] = await Promise.all([
         getConfig(),
         chrome.storage.local.get(LOG_KEY),
-        getRunState()
+        getRunState(),
+        getRunReport()
       ]);
-      return { ok: true, config, logs: stored[LOG_KEY] || [], runState };
+      return { ok: true, config, logs: stored[LOG_KEY] || [], runState, runReport };
     }
     if (message.type === "JS_AUTO_SAVE_CONFIG") {
       return { ok: true, config: await saveConfig(message.config || {}) };
