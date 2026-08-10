@@ -147,11 +147,23 @@ function render() {
     <div class="item"><div class="item-info"><b class="${escapeHtml(log.level)}">${escapeHtml(log.message)}</b><small>${escapeHtml(new Date(log.at).toLocaleString("ko-KR"))}</small></div></div>`).join("") : '<div class="empty">실행 기록이 없습니다.</div>';
 }
 
+function currentRunStatus(response) {
+  const runState = response && response.runState;
+  if (!runState || !runState.active) return "준비됨";
+  const targets = Array.isArray(runState.targets) ? runState.targets : [];
+  const index = Math.max(0, Math.min(Number(runState.index || 0), Math.max(0, targets.length - 1)));
+  const target = targets[index];
+  const label = target && (target.label || SOURCE_LABELS[target.source] || target.source);
+  const position = targets.length ? `${index + 1}/${targets.length}` : "";
+  const phase = runState.phase === "retry-wait" ? "재시도 대기" : "수집 실행 중";
+  return [phase, position, label].filter(Boolean).join(" · ");
+}
+
 async function load() {
   const response = await runtime({ type: "JS_AUTO_GET_STATE" });
   if (response.ok) state = response;
   render();
-  message(response.ok ? "준비됨" : "연결 오류");
+  message(response.ok ? currentRunStatus(response) : "연결 오류");
 }
 
 document.getElementById("save").addEventListener("click", async () => {
@@ -165,10 +177,16 @@ document.getElementById("save").addEventListener("click", async () => {
 });
 
 document.getElementById("run").addEventListener("click", async () => {
-  message("자동수집 실행 중");
-  const response = await runtime({ type: "JS_AUTO_RUN_NOW" });
-  message(response.ok ? "실행 완료" : response.message || "일부 실패");
-  await load();
+  const button = document.getElementById("run");
+  button.disabled = true;
+  message("전체 실행 상태 확인 중");
+  try {
+    const response = await runtime({ type: "JS_AUTO_RUN_NOW" });
+    await load();
+    message(response.message || (response.ok ? `전체 ${Number(response.total || 0)}개 실행 시작` : "실행 실패"));
+  } finally {
+    button.disabled = false;
+  }
 });
 
 document.getElementById("targets").addEventListener("change", async (event) => {

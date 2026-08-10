@@ -34,6 +34,9 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /chrome\.tabs\.create\(\{ url: target\.url, active: false \}\)/);
   assert.doesNotMatch(background, /chrome\.windows\.update\(tab\.windowId, \{ state: "minimized" \}\)/);
   assert.match(background, /async function restartPersistedRun\(state, reason\)/);
+  assert.match(background, /async function resumeOrExtendActiveRun\(state, targets, reason\)/);
+  assert.match(background, /누락 대상 .*개를 추가/);
+  assert.match(background, /chrome\.tabs\.get\(state\.currentTabId\)/);
   assert.match(background, /retryQueue/);
   assert.match(background, /RECOVERY_ALARM_NAME/);
   assert.match(background, /WATCHDOG_ALARM_NAME/);
@@ -151,6 +154,10 @@ test("automatic collector settings stay compact with long target URLs", () => {
   assert.match(read("edge-automation/extension/options.html"), /id="autoVersion"/);
   assert.match(read("edge-automation/extension/options.html"), /id="runSummary"/);
   assert.match(options, /function renderRunSummary\(\)/);
+  assert.match(options, /전체 실행 상태 확인 중/);
+  assert.match(options, /response\.message/);
+  assert.match(options, /function currentRunStatus\(response\)/);
+  assert.match(options, /수집 실행 중/);
   assert.match(options, /부분완료/);
   assert.match(options, /10개 구/);
   assert.match(options, /jsAutoCollectorRunReportV1/);

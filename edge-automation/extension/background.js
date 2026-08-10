@@ -506,16 +506,107 @@ async function finishCurrentTarget(result, senderTabId) {
   return continueOrRetryCycle(state, completedTabId);
 }
 
+async function resumeOrExtendActiveRun(state, targets, reason) {
+  const existingKeys = new Set((state.targets || []).map(targetKey));
+  const addedTargets = targets.filter((target) => !existingKeys.has(targetKey(target)));
+  if (addedTargets.length) {
+    state.targets = (state.targets || []).concat(addedTargets);
+    state.summary = state.summary || { completed: 0, failed: 0, errors: [] };
+    state.summary.total = state.targets.length;
+    await saveRunState(state);
+    await appendLog({
+      level: "info",
+      message: `진행 중인 자동수집에 누락 대상 ${addedTargets.length}개를 추가했습니다. (전체 ${state.targets.length}개)`
+    });
+  }
+
+  let report = await getRunReport();
+  if (!report || report.runId !== state.runId) {
+    report = {
+      runId: state.runId,
+      reason: state.reason || reason,
+      active: true,
+      startedAt: state.startedAt || Date.now(),
+      updatedAt: Date.now(),
+      finishedAt: null,
+      total: state.targets.length,
+      summary: { ...state.summary },
+      items: state.targets.map((target, index) => ({
+        key: targetKey(target),
+        source: target.source,
+        label: target.label || target.source,
+        status: index < state.index ? "completed" : index === state.index ? "running" : "pending",
+        attempt: index === state.index ? Math.max(1, Number(state.targetAttempt || 1)) : 0,
+        startedAt: index === state.index ? Number(state.targetStartedAt || Date.now()) : null,
+        finishedAt: null,
+        updatedAt: Date.now(),
+        message: index < state.index ? "이전 실행에서 완료" : "",
+        counts: {}
+      }))
+    };
+  } else if (addedTargets.length) {
+    const reportKeys = new Set((report.items || []).map((item) => item.key));
+    report.items = (report.items || []).concat(addedTargets
+      .filter((target) => !reportKeys.has(targetKey(target)))
+      .map((target) => ({
+        key: targetKey(target),
+        source: target.source,
+        label: target.label || target.source,
+        status: "pending",
+        attempt: 0,
+        startedAt: null,
+        finishedAt: null,
+        updatedAt: Date.now(),
+        message: "",
+        counts: {}
+      })));
+  }
+  report.active = true;
+  report.total = report.items.length;
+  report.summary = { ...state.summary };
+  report.updatedAt = Date.now();
+  await saveRunReport(report);
+
+  let currentTab = null;
+  if (Number.isInteger(state.currentTabId)) {
+    currentTab = await chrome.tabs.get(state.currentTabId).catch(() => null);
+  }
+  const waitingForRetry = state.phase === "retry-wait" && Date.now() < Number(state.retryAt || 0);
+  if (!currentTab && !waitingForRetry) {
+    await restartPersistedRun(state, "멈춘 실행 지점을 복구해 자동수집을 계속합니다.");
+  } else {
+    await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
+  }
+
+  const currentTarget = (state.targets || [])[Math.min(Number(state.index || 0), Math.max(0, state.targets.length - 1))];
+  return {
+    ok: true,
+    started: true,
+    resumed: true,
+    added: addedTargets.length,
+    total: state.targets.length,
+    currentTarget: currentTarget && (currentTarget.label || currentTarget.source),
+    reason,
+    message: addedTargets.length
+      ? `진행 중인 수집에 ${addedTargets.length}개를 추가해 전체 ${state.targets.length}개를 계속 실행합니다.`
+      : `이미 자동수집이 진행 중입니다.${currentTarget ? ` 현재: ${currentTarget.label || currentTarget.source}` : ""}`
+  };
+}
+
 async function runAll(reason = "manual") {
-  if (!await acquireRunLock()) return { ok: false, message: "이미 자동수집이 실행 중입니다." };
   const config = await getConfig();
   const targets = config.targets
     .filter((target) => target.enabled !== false)
     .sort((a, b) => (SOURCE_ORDER[a.source] || 99) - (SOURCE_ORDER[b.source] || 99));
   if (!targets.length) {
-    await chrome.storage.local.remove(RUN_LOCK_KEY);
     return { ok: false, started: false, message: "사용 설정된 자동수집 대상이 없습니다." };
   }
+
+  const activeState = await getRunState();
+  if (activeState && activeState.active) {
+    return resumeOrExtendActiveRun(activeState, targets, reason);
+  }
+  if (!await acquireRunLock()) return { ok: false, message: "자동수집 실행 상태를 확인하지 못했습니다. 다시 눌러주세요." };
 
   const summary = { ok: true, started: true, reason, total: targets.length,
     completed: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
