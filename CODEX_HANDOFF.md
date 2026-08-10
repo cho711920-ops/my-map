@@ -413,3 +413,13 @@
 - Installed Edge automation is `1.0.26`; Windows task remains daily at 11:00 KST. Gongsilbox remains manual.
 - Production Worker version: `c11ec97b-d825-4d4e-a461-c0af26e5ce99`.
 - Full test suite: 90/90 passed; Wrangler dry-run passed; live asset verification confirmed Daangn `1.4.6`, partial completion mode and manual recovery.
+
+## 2026-08-10 Edge automatic runner v1.0.29
+
+- The Windows launcher now finds the dedicated unpacked-extension ID from its profile and triggers an extension-owned autorun page through the local Edge debugging endpoint. It no longer depends on the signed-in `js-map.com/collector-install` page to deliver the daily start signal.
+- The internal autorun page reloads a stale Manifest V3 background worker once after an extension upgrade, then the launcher sends a second idempotent trigger. Normal daily launches observe an already active run without creating a duplicate.
+- Automatic collection settings show the installed extension version in the header. Installed production profile is `v1.0.29`; the registered targets remain Naver 5 districts plus Daangn 5 districts, with Gongsilbox disabled/manual.
+- Fully enumerated districts with address/floor omissions are now accepted as partial completion warnings. They are not put into the deferred full-district retry queue. Two legacy queued Naver retries were removed from the active run.
+- Target transitions no longer minimize the Edge window. The scheduled launch starts minimized, but once the user restores the window it remains visible while Naver/Daangn advance between districts.
+- Live verification: Naver completed its five-district first pass and the active run advanced into Daangn; extension state reported `v1.0.29`, 10 total targets and an empty retry queue after cleanup.
+- Edge automation tests: 7/7 passed.

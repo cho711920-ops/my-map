@@ -28,9 +28,10 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /async function finishCurrentTarget\(result, senderTabId\)/);
   assert.match(background, /await sendRunMessage\(tab\.id, target, targetRunId, state\.runId\)/);
   assert.match(background, /JS_AUTO_TARGET_FINISHED/);
+  assert.match(background, /JS_AUTO_RUN_REQUEST/);
   assert.match(background, /chrome\.tabs\.onRemoved/);
   assert.match(background, /chrome\.tabs\.create\(\{ url: target\.url, active: false \}\)/);
-  assert.match(background, /chrome\.windows\.update\(tab\.windowId, \{ state: "minimized" \}\)/);
+  assert.doesNotMatch(background, /chrome\.windows\.update\(tab\.windowId, \{ state: "minimized" \}\)/);
   assert.match(background, /async function restartPersistedRun\(state, reason\)/);
   assert.match(background, /retryQueue/);
   assert.match(background, /RECOVERY_ALARM_NAME/);
@@ -97,7 +98,10 @@ test("all three collectors expose registration and unattended execution", () => 
 
 test("provider omissions complete a target with a warning instead of restarting it from zero", () => {
   const background = read("edge-automation/extension/background.js");
+  assert.match(background, /function completedTargetWithWarnings\(result\)/);
   assert.match(background, /result\.result && result\.result\.partial/);
+  assert.match(background, /session\.completeRequested === true/);
+  assert.match(background, /result\.ok === true \|\| warningCompletion/);
   assert.match(background, /state\.summary\.partial/);
   assert.match(background, /전체 목록 확인 완료/);
 });
@@ -114,14 +118,22 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /--user-data-dir=/);
   assert.match(launch, /--load-extension=/);
   assert.match(launch, /--new-tab/);
-  assert.match(launch, /js_auto_run=1/);
-  assert.match(launch, /js_auto_force=1/);
+  assert.match(launch, /chrome-extension:\/\/\$extensionId\/autorun\.html/);
+  assert.match(launch, /jsAutoCollectorConfigV1/);
+  assert.match(launch, /remote-debugging-port=9223/);
+  assert.match(launch, /Invoke-RestMethod -Method Put/);
+  assert.match(launch, /second idempotent trigger/);
   assert.match(launch, /\[switch\]\$Force/);
   assert.match(launch, /JSMapWindow/);
+  assert.match(launch, /if \(-not \$Setup\)/);
+  assert.match(launch, /Stop-Process -Id \$_.ProcessId -Force/);
+  assert.match(launch, /\$stillRunning/);
   assert.match(install, /installedCollectors/);
   assert.match(install, /gongsil-collector\.js/);
   assert.match(install, /Get-CimInstance Win32_Process/);
   assert.match(install, /Stop-Process -Id \$_.ProcessId/);
+  assert.match(read("edge-automation/extension/autorun.js"), /JS_AUTO_RUN_REQUEST/);
+  assert.match(read("edge-automation/extension/autorun.js"), /chrome\.runtime\.reload\(\)/);
 });
 
 test("automatic collector settings stay compact with long target URLs", () => {
@@ -133,6 +145,8 @@ test("automatic collector settings stay compact with long target URLs", () => {
   assert.match(styles, /grid-template-columns:minmax\(0,1fr\) auto/);
   assert.match(styles, /text-overflow:ellipsis/);
   assert.match(styles, /\.log-list\{max-height:430px;overflow-y:auto/);
+  assert.match(options, /chrome\.runtime\.getManifest\(\)\.version/);
+  assert.match(read("edge-automation/extension/options.html"), /id="autoVersion"/);
 });
 
 test("automatic collector settings can move safely to another PC", () => {

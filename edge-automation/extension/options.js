@@ -1,6 +1,7 @@
 "use strict";
 
 let state = { config: { targets: [] }, logs: [] };
+document.getElementById("autoVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 
 const SOURCE_ORDER = ["naver", "daangn", "gongsil"];
 const SOURCE_LABELS = { naver: "네이버", daangn: "당근", gongsil: "공실박스" };

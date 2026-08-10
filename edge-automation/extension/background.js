@@ -303,20 +303,12 @@ async function launchCurrentTarget(state, reuseTabId = null) {
       tab = await chrome.tabs.update(reuseTabId, { url: target.url, active: false }).catch(() => null);
     }
     if (!tab) tab = await chrome.tabs.create({ url: target.url, active: false });
-    // 자동 대상 전환 때 전용 Edge 창이 앞으로 튀어나오지 않도록 항상
-    // 백그라운드 최소화 상태를 유지한다.
-    if (Number.isInteger(tab.windowId)) {
-      await chrome.windows.update(tab.windowId, { state: "minimized" }).catch(() => {});
-    }
     state.currentTabId = tab.id;
     state.targetRunId = targetRunId;
     state.targetStartedAt = startedAt;
     state.phase = "loading";
     await saveRunState(state);
     await waitForTabComplete(tab.id);
-    if (Number.isInteger(tab.windowId)) {
-      await chrome.windows.update(tab.windowId, { state: "minimized" }).catch(() => {});
-    }
     await sendRunMessage(tab.id, target, targetRunId, state.runId);
     const latest = await getRunState();
     if (latest && latest.runId === state.runId && latest.targetRunId === targetRunId) {
@@ -335,6 +327,15 @@ async function launchCurrentTarget(state, reuseTabId = null) {
   }
 }
 
+function completedTargetWithWarnings(result) {
+  const payload = result && result.result || {};
+  if (payload.partial === true) return true;
+  const session = payload.session || {};
+  const expected = Number(session.expectedCount || session.manifestCount || 0);
+  const observed = Number(session.processedCount || session.observed || 0);
+  return session.completeRequested === true && expected > 0 && observed >= expected;
+}
+
 async function finishCurrentTarget(result, senderTabId) {
   const state = await getRunState();
   if (!state || !state.active || result.runId !== state.runId || result.targetRunId !== state.targetRunId) {
@@ -348,7 +349,8 @@ async function finishCurrentTarget(result, senderTabId) {
   const completedTabId = state.currentTabId;
   const elapsedMs = Date.now() - Number(state.targetStartedAt || Date.now());
   const targetAttempt = Math.max(1, Number(state.targetAttempt || 1));
-  if (result.ok !== true && targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
+  const warningCompletion = completedTargetWithWarnings(result);
+  if (result.ok !== true && !warningCompletion && targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
     await appendLog({
       level: "warning",
@@ -366,9 +368,9 @@ async function finishCurrentTarget(result, senderTabId) {
     await delay(Math.min(10000, targetAttempt * 2500));
     return launchCurrentTarget(state, completedTabId);
   }
-  if (result.ok === true) {
+  if (result.ok === true || warningCompletion) {
     state.summary.completed += 1;
-    const partial = Boolean(result.result && result.result.partial);
+    const partial = result.ok !== true || Boolean(result.result && result.result.partial);
     if (partial) state.summary.partial = Number(state.summary.partial || 0) + 1;
     await appendLog({
       level: partial ? "warning" : "success",
@@ -558,6 +560,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.type === "JS_AUTO_RUN_NOW") {
       return runAll("manual");
+    }
+    if (message.type === "JS_AUTO_RUN_REQUEST") {
+      const runState = await getRunState();
+      if (runState && runState.active) return { ok: true, resumed: true, runState };
+      return message.forceRun ? runAll("windows-force") : runScheduled("windows-schedule");
     }
     if (message.type === "JS_AUTO_CLEAR_LOGS") {
       await chrome.storage.local.set({ [LOG_KEY]: [] });
