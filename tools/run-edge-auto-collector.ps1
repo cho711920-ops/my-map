@@ -74,17 +74,18 @@ if ($Setup) {
     throw 'JS 자동수집 확장 프로그램 ID를 찾지 못했습니다. 설치 화면을 한 번 열어주세요.'
   }
   $forceValue = if ($Force) { '1' } else { '0' }
-  $arguments += @(
-    '--start-minimized',
-    '--new-tab',
-    'edge://newtab/'
-  )
+  if (-not $Force) { $arguments += '--start-minimized' }
+  $arguments += @('--new-tab', 'edge://newtab/')
 }
 
 if ($Setup) {
   Start-Process -FilePath $edgePath -ArgumentList $arguments
 } else {
-  Start-Process -FilePath $edgePath -ArgumentList $arguments -WindowStyle Hidden
+  if ($Force) {
+    Start-Process -FilePath $edgePath -ArgumentList $arguments
+  } else {
+    Start-Process -FilePath $edgePath -ArgumentList $arguments -WindowStyle Hidden
+  }
   $debugReady = $false
   for ($attempt = 0; $attempt -lt 30; $attempt += 1) {
     try {
@@ -123,7 +124,8 @@ public static class JSMapWindow {
     ForEach-Object {
       $edgeProcess = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
       if ($edgeProcess -and $edgeProcess.MainWindowHandle -ne 0) {
-        [JSMapWindow]::ShowWindow($edgeProcess.MainWindowHandle, 6) | Out-Null
+        $showMode = if ($Force) { 9 } else { 6 }
+        [JSMapWindow]::ShowWindow($edgeProcess.MainWindowHandle, $showMode) | Out-Null
       }
     }
 }

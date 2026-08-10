@@ -432,6 +432,7 @@
 - Naver's fully enumerated provider omissions remain warning-completions so known address/floor omissions do not restart an entire district.
 - Production-data inspection confirmed the user's report: the latest automatic run did not complete all 10 targets. Daangn Yuseong ended partially and Daangn Seo had no completion record. The JS map currently contains only first-floor originals for Yongmun-dong 257-5; the reported second-floor Daangn listing has not yet been ingested.
 - Installed extension files were updated in place to `v1.0.30`. The registered targets and schedule were preserved, and no Edge window was restarted or minimized.
+- A user-forced/manual launcher run now opens and stays visible; only the unattended Windows scheduled run starts minimized. Target transitions do not change the user's chosen window state.
 - Edge automation tests: 8/8 passed; Cloudflare tests: 56/56 passed.
 
 ## 2026-08-10 Gongsilbox incremental detail refresh v2.1.4
