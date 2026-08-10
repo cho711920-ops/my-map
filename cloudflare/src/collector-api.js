@@ -582,9 +582,11 @@ async function loadExistingSources(env, source, records) {
   for (let offset = 0; offset < ids.length; offset += 80) {
     const chunk = ids.slice(offset, offset + 80);
     const placeholders = chunk.map((_, index) => `?${index + 2}`).join(",");
-    const result = await env.DB.prepare(`SELECT id, listing_id, source_listing_id, source_url,
-        snapshot_hash, list_snapshot_json, raw_json, active, missing_count, last_collected_at
-      FROM listing_sources WHERE source=?1 AND source_listing_id IN (${placeholders})`)
+    const result = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.source_url,
+        s.snapshot_hash, s.list_snapshot_json, s.raw_json, s.active, s.missing_count, s.last_collected_at,
+        l.address AS listing_address, l.room AS listing_room
+      FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
+      WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`)
       .bind(source, ...chunk).all();
     for (const row of result?.results || []) bySourceId.set(clean(row.source_listing_id), row);
   }
@@ -945,26 +947,42 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
-    refreshed: 0, review: 0, duplicate: 0, failed: 0 };
-  const records = [];
+    refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0 };
+  const normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
   for (const value of values) {
     totals.received += 1;
     try {
       const record = normalizedRecord(source, value);
-      if (!record?.sourceId || !record.address) {
+      if (!record?.sourceId) {
         totals.failed += 1;
-        if (errors.length < 20) errors.push({ sourceId: clean(record?.sourceId), message: "원본 ID 또는 지번주소 없음" });
+        if (errors.length < 20) errors.push({ sourceId: "", message: "원본 ID 없음" });
         continue;
       }
-      records.push(record);
+      normalizedRecords.push(record);
     } catch (error) {
       totals.failed += 1;
       if (errors.length < 20) errors.push({ sourceId: "", message: clean(error?.message) || "원본 변환 실패" });
     }
   }
-  const existingSources = await loadExistingSources(env, source, records);
+  const existingSources = await loadExistingSources(env, source, normalizedRecords);
+  const records = [];
+  for (const record of normalizedRecords) {
+    const existing = existingSources.get(record.sourceId);
+    if (!record.address && existing) {
+      const previous = parseJson(existing.list_snapshot_json, {});
+      record.address = normalizedAddress(existing.listing_address || previous.address);
+      if (!record.room) record.room = canonicalListingRoom(existing.listing_room || previous.room);
+    }
+    if (!record.address) {
+      totals.failed += 1;
+      totals.addressMissing += 1;
+      if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "지번주소 없음" });
+      continue;
+    }
+    records.push(record);
+  }
   const sourceAssets = await loadSourceAssets(env, existingSources);
   const candidatesByAddress = await loadCandidateListings(env, records, existingSources);
   const pendingReviewsByAddress = await loadPendingReviewsByAddress(env, records);
@@ -1049,6 +1067,7 @@ function countValue(value) {
 export function collectorCompletionAudit(body, observedCount) {
   const requested = Boolean(body?.complete) && !body?.stopped;
   const issues = [];
+  const blockingIssues = [];
   const source = sourceName(body?.source);
   const scope = clean(body?.scope);
   const validationVersion = countValue(body?.validationVersion);
@@ -1059,23 +1078,28 @@ export function collectorCompletionAudit(body, observedCount) {
   const failed = countValue(body?.failed);
   const addressMissing = countValue(body?.addressMissing);
 
-  if (!requested) issues.push(body?.stopped ? "안전중단" : "부분수집 요청");
-  if (requested && validationVersion < 2) issues.push("최신 수집기 검증정보 없음");
-  if (requested && !/전체|완전수집/.test(`${scope} ${clean(body?.note)}`)) issues.push("전체수집 범위 아님");
-  if (requested && observed < 100) issues.push("관찰 원본 100건 미만");
-  if (requested && expected <= 0) issues.push("예상 매물 수 없음");
-  if (requested && expected > observed) issues.push(`예상 ${expected}건 중 ${observed}건만 확인`);
-  if (requested && manifest !== observed) issues.push(`목록 ${manifest}건·원본 ${observed}건 불일치`);
-  if (requested && processed < observed) issues.push(`처리 ${processed}건·원본 ${observed}건 불일치`);
-  if (requested && failed > 0) issues.push(`실패 ${failed}건`);
+  const block = (message) => { issues.push(message); blockingIssues.push(message); };
+  if (!requested) block(body?.stopped ? "안전중단" : "부분수집 요청");
+  if (requested && validationVersion < 2) block("최신 수집기 검증정보 없음");
+  if (requested && !/전체|완전수집/.test(`${scope} ${clean(body?.note)}`)) block("전체수집 범위 아님");
+  if (requested && observed < 100) block("관찰 원본 100건 미만");
+  if (requested && expected <= 0) block("예상 매물 수 없음");
+  if (requested && expected > observed) block(`예상 ${expected}건 중 ${observed}건만 확인`);
+  if (requested && manifest !== observed) block(`목록 ${manifest}건·원본 ${observed}건 불일치`);
+  if (requested && processed < observed) block(`처리 ${processed}건·원본 ${observed}건 불일치`);
+  if (requested && failed > 0) {
+    issues.push(`실패 ${failed}건`);
+    if (failed > addressMissing) blockingIssues.push(`주소 외 실패 ${failed - addressMissing}건`);
+  }
   if (requested && addressMissing > 0) issues.push(`주소·층 오류 ${addressMissing}건`);
-  if (requested && Boolean(body?.truncated)) issues.push("목록 페이지 잘림");
-  if (requested && !clean(body?.collectorVersion)) issues.push("수집기 버전 없음");
+  if (requested && Boolean(body?.truncated)) block("목록 페이지 잘림");
+  if (requested && !clean(body?.collectorVersion)) block("수집기 버전 없음");
 
   return {
     requested,
-    complete: requested && issues.length === 0,
+    complete: requested && blockingIssues.length === 0,
     issues,
+    blockingIssues,
     source,
     validationVersion,
     expected,
@@ -1494,7 +1518,6 @@ async function runDaangnChunk(env, body = {}) {
       }
     });
     job.pendingDetailIds = pending;
-    job.addressMissing += records.filter((record) => !record.address).length;
     const writeStarted = Date.now();
     const result = records.length
       ? await ingestRecords(env, "당근", records, { sessionId: job.sessionId })
@@ -1506,6 +1529,7 @@ async function runDaangnChunk(env, body = {}) {
     job.review += Number(result.review || 0);
     job.detailedDuplicates += Number(result.duplicate || 0);
     job.failed += Number(result.failed || 0);
+    job.addressMissing += Number(result.addressMissing || 0);
     for (const error of result.errors || []) {
       const sourceId = clean(error?.sourceId);
       job.detailErrors.push({ sourceId, attempts: Number(job.detailAttempts[sourceId] || 1),

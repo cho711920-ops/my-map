@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.9.0";
+  var VERSION = "5.9.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -1791,7 +1791,7 @@
         sessionId: progress.sessionId,
         scope: progress.scope,
         source: "네이버",
-        complete: remainingFailures.length === 0,
+        complete: true,
         observedSourceIds: progress.seenIds,
         expectedCount: progress.seenIds.length,
         manifestCount: progress.seenIds.length,
@@ -1971,7 +1971,7 @@
         sessionId: progress.sessionId,
         scope: "대전 전체(5개 구)",
         source: "네이버",
-        complete: remainingFailures.length === 0,
+        complete: true,
         observedSourceIds: progress.seenIds,
         expectedCount: progress.seenIds.length,
         manifestCount: progress.seenIds.length,
@@ -2870,8 +2870,7 @@
         sessionId: session.sessionId,
         scope: session.scope,
         source: runOptions.source || "네이버",
-          complete: Boolean(runOptions.complete) && !safelyStopped &&
-          Number(totals.failed || 0) === 0 && index >= items.length,
+          complete: Boolean(runOptions.complete) && !safelyStopped && index >= items.length,
         stopped: safelyStopped,
         observedSourceIds: session.observedSourceIds,
         expectedCount: allItems.length,

@@ -187,6 +187,18 @@ test("failed, incomplete, stale or truncated runs never count missing listings",
   assert.match(stale.issues.join(" / "), /최신 수집기 검증정보 없음/);
 });
 
+test("a full manifest with only provider-hidden addresses completes without repeating the district", () => {
+  const result = collectorCompletionAudit({
+    source: "당근", scope: "대전 유성구 완전수집", complete: true,
+    validationVersion: 2, collectorVersion: "1.4.7",
+    expectedCount: 1857, manifestCount: 1857, processedCount: 1857,
+    failed: 22, addressMissing: 22, truncated: false, note: "구 완전수집 완료"
+  }, 1857);
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.blockingIssues, []);
+  assert.match(result.issues.join(" / "), /주소·층 오류 22건/);
+});
+
 test("collector installers always load the current js-map runtime", async () => {
   const files = await Promise.all([
     readFile(new URL("../collector-install.html", import.meta.url), "utf8"),
@@ -247,7 +259,7 @@ test("collector review snapshots refresh in place instead of growing every run",
 
 test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {
   const source = await readFile(new URL("../js/naver-collector.js", import.meta.url), "utf8");
-  assert.match(source, /var VERSION = "5\.9\.0"/);
+  assert.match(source, /var VERSION = "5\.9\.1"/);
   assert.match(source, /if \(options\.automatic\) \{[\s\S]*?clearAutoDistrictProgress\(district\.cortarNo\);[\s\S]*?\}/);
   assert.doesNotMatch(source, /if \(options\.automatic\) return collectFinAutomaticDistrict\(district\)/);
   assert.match(source, /var classification = await classifyNaverManifest\(allItems, session\)/);

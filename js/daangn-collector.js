@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.4.6";
+  var VERSION = "1.4.7";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -252,7 +252,8 @@
     var lastProcessed = -1;
     while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
       if (state.job && state.job.status === "complete") {
-        var partial = Number(state.job.failed || 0) > 0 ||
+        var hardFailed = Math.max(0, Number(state.job.failed || 0) - Number(state.job.addressMissing || 0));
+        var partial = hardFailed > 0 ||
           Boolean(state.selectedDistrict && state.job.completeCollection === false);
         var issues = Array.isArray(state.job.completionIssues) ? state.job.completionIssues.filter(Boolean) : [];
         return {source: "daangn", district: state.selectedDistrict, version: VERSION,

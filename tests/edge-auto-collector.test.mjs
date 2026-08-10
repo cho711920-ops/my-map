@@ -84,6 +84,7 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(naver, /saveAutoDistrictProgress\(progress\)/);
   assert.match(naver, /clearAutoDistrictProgress\(district\.cortarNo\)/);
   assert.match(daangn, /state\.job\.completionIssues/);
+  assert.match(daangn, /hardFailed = Math\.max\(0, Number\(state\.job\.failed/);
   assert.match(daangn, /partial: partial/);
   assert.match(daangn, /scheduleManualRecovery\(message\)/);
   assert.match(daangn, /manualRecoveryAttempts >= 5/);

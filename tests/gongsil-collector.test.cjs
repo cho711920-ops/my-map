@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.1\.3";/);
+assert.match(source, /var VERSION = "2\.1\.4";/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
 assert.match(source, /var MAX_SAVE_BATCH_SIZE = 8;/);
@@ -18,7 +18,8 @@ assert.match(
   /complete: isCompleteGongsilCapture\(selectedCount, items\.length\)/,
   "공실박스 완전수집 판정은 선택 수와 최종 목록 수가 정확히 같을 때만 인정하면 안 됩니다."
 );
-assert.match(source, /data-metric="updated"/);
+assert.match(source, /data-metric="conditionUpdated"/);
+assert.match(source, /data-metric="refreshed"/);
 assert.match(source, /data-metric="detailedDuplicates"/);
 assert.match(source, /data-metric="skippedUnchanged"/);
 assert.match(
