@@ -43,6 +43,19 @@ test("legacy source rows bootstrap from stable listing terms without a detail re
   assert.equal(manifestEntryMatch(entry, row), "legacy");
 });
 
+test("legacy recovery marker is not mistaken for a current list fingerprint", () => {
+  const row = {
+    snapshot_hash: "legacy-recovery",
+    list_snapshot_json: JSON.stringify({
+      deposit: 2000, rent: 80, area: 47.5, room: "2층", address: "유성구 구암동 601-19"
+    })
+  };
+  assert.equal(manifestEntryMatch({
+    listSnapshot: "new-current-fingerprint", deposit: 2000, rent: 80, area: 47.4,
+    room: "2층", address: "대전광역시 유성구 구암동 601-19"
+  }, row), "legacy");
+});
+
 test("legacy source rows still refetch when material rental terms change", () => {
   const row = {
     snapshot_hash: "",
@@ -134,6 +147,17 @@ test("Daangn detail failures stay queued with bounded retries and recorded cause
   assert.match(source, /mapWithConcurrency\(ids, retrying \? 1 : 2/);
   assert.match(source, /if \(!pending\.length\)/);
   assert.doesNotMatch(source, /job\.failed \+= ids\.length - records\.length/);
+});
+
+test("manifest comparison includes unchanged listings still waiting in collector review", async () => {
+  const source = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
+  const migration = await readFile(new URL(
+    "../cloudflare/migrations/0011_collector_raw_source_lookup.sql", import.meta.url
+  ), "utf8");
+  assert.match(source, /WITH ranked AS \([\s\S]*?FROM collector_raw/);
+  assert.match(source, /ROW_NUMBER\(\) OVER \(PARTITION BY source_listing_id ORDER BY created_at DESC\)/);
+  assert.match(source, /if \(id && !rows\.has\(id\)\) rows\.set\(id, row\)/);
+  assert.match(migration, /collector_raw\(source, source_listing_id, created_at DESC\)/);
 });
 
 test("Gongsilbox collective-building contacts retain the provider role label", async () => {

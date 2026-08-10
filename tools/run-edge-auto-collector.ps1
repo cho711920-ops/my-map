@@ -1,5 +1,7 @@
 param(
-  [switch]$Setup
+  [switch]$Setup,
+  [switch]$Force,
+  [switch]$Debug
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +32,10 @@ $arguments = @(
   '--disable-features=msEdgeFirstRunExperience'
 )
 
+if ($Debug) {
+  $arguments += '--remote-debugging-port=9223'
+}
+
 if ($Setup) {
   $arguments += @(
     'https://js-map.com/collector-install?edge_auto_setup=1',
@@ -39,10 +45,11 @@ if ($Setup) {
   )
 } else {
   $runToken = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+  $runMode = if ($Force) { 'js_auto_force=1' } else { 'js_auto_run=1' }
   $arguments += @(
     '--start-minimized',
     '--new-tab',
-    "https://js-map.com/collector-install?js_auto_run=1&run=$runToken"
+    "https://js-map.com/collector-install?$runMode&run=$runToken"
   )
 }
 

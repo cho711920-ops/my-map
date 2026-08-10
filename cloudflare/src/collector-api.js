@@ -316,7 +316,11 @@ function legacyManifestEntryMatches(entry, row) {
 export function manifestEntryMatch(entry, row) {
   if (!row) return "";
   const incomingHash = snapshotKey(entry.listSnapshot || entry);
-  if (clean(row.snapshot_hash)) return row.snapshot_hash === incomingHash ? "hash" : "";
+  const savedHash = clean(row.snapshot_hash).toLowerCase();
+  // Recovery imports used marker values such as `legacy-recovery`, not an
+  // actual list fingerprint. Compare their material rental terms instead of
+  // treating every scheduled collection as a changed listing.
+  if (/^fnv1a-[0-9a-f]{8}$/.test(savedHash)) return savedHash === incomingHash ? "hash" : "";
   return legacyManifestEntryMatches(entry, row) ? "legacy" : "";
 }
 
@@ -363,6 +367,30 @@ async function classifyManifest(env, body) {
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
       WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`).bind(source, ...ids).all();
     for (const row of result?.results || []) rows.set(clean(row.source_listing_id), row);
+
+    // A collected source is not attached to listing_sources until it is either
+    // auto-merged or approved in the review workspace. Include the newest raw
+    // review/pending snapshot as a manifest source as well, otherwise every
+    // scheduled run downloads and queues the same unreviewed listing again.
+    const unresolvedIds = ids.filter((id) => !rows.has(id));
+    if (unresolvedIds.length) {
+      const rawPlaceholders = unresolvedIds.map((_, index) => `?${index + 2}`).join(",");
+      const rawResult = await env.DB.prepare(`WITH ranked AS (
+          SELECT source_listing_id, snapshot_hash,
+            json_extract(payload_json, '$.listSnapshot') AS list_snapshot_json,
+            created_at AS last_collected_at,
+            ROW_NUMBER() OVER (PARTITION BY source_listing_id ORDER BY created_at DESC) AS row_number
+          FROM collector_raw
+          WHERE source=?1 AND source_listing_id IN (${rawPlaceholders})
+        )
+        SELECT source_listing_id, snapshot_hash, list_snapshot_json, last_collected_at,
+          '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude
+        FROM ranked WHERE row_number=1`).bind(source, ...unresolvedIds).all();
+      for (const row of rawResult?.results || []) {
+        const id = clean(row.source_listing_id);
+        if (id && !rows.has(id)) rows.set(id, row);
+      }
+    }
   }
   const needsDetail = [];
   const refreshDetail = [];
@@ -388,7 +416,8 @@ async function classifyManifest(env, body) {
       needsDetail.push(entry.sourceId);
     } else if (manifestEntryMatch(entry, row)) {
       unchanged += 1;
-      if (!clean(row.snapshot_hash) && clean(entry.listSnapshot)) {
+      if (!/^fnv1a-[0-9a-f]{8}$/i.test(clean(row.snapshot_hash)) &&
+          clean(entry.listSnapshot) && clean(row.id)) {
         legacyBackfills.push({ id: clean(row.id), hash: snapshotKey(entry.listSnapshot) });
         legacyBootstrapped += 1;
       }

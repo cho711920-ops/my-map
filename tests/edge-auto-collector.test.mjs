@@ -94,7 +94,9 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /--user-data-dir=/);
   assert.match(launch, /--load-extension=/);
   assert.match(launch, /--new-tab/);
-  assert.match(launch, /js_auto_run=1&run=/);
+  assert.match(launch, /js_auto_run=1/);
+  assert.match(launch, /js_auto_force=1/);
+  assert.match(launch, /\[switch\]\$Force/);
   assert.match(launch, /JSMapWindow/);
   assert.match(install, /installedCollectors/);
   assert.match(install, /gongsil-collector\.js/);

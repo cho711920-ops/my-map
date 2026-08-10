@@ -505,6 +505,106 @@ test("collector manifest comparison runs directly against D1", async () => {
   assert.ok(statements.some((entry) => /mutation_results/.test(entry.sql)));
 });
 
+test("collector manifest skips an unchanged listing that is still waiting for review", async () => {
+  const snapshot = "same-review-snapshot";
+  let hash = 2166136261;
+  for (let index = 0; index < snapshot.length; index += 1) {
+    hash ^= snapshot.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const snapshotHash = `fnv1a-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        args: [],
+        bind(...args) { this.args = args; return this; },
+        async run() { return { meta: { changes: 1 } }; },
+        async all() {
+          if (/FROM collector_raw/.test(this.sql)) {
+            return { results: [{
+              source_listing_id: "네이버-REVIEW-1",
+              snapshot_hash: snapshotHash,
+              list_snapshot_json: snapshot,
+              last_collected_at: "2026-08-09T00:00:00.000Z",
+              listing_id: ""
+            }] };
+          }
+          return { results: [] };
+        },
+        async first() { return null; }
+      };
+    }
+  };
+  const response = await worker.fetch(new Request("https://js-map.com/api/collector", {
+    method: "POST",
+    headers: { origin: "https://fin.land.naver.com", "content-type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action: "classifySourceManifest",
+      requestId: "manifest-review-repeat",
+      accessKey: "private-key",
+      source: "네이버",
+      sessionId: "NAVER-REVIEW-REPEAT",
+      entries: [{ sourceId: "네이버-REVIEW-1", listSnapshot: snapshot }]
+    })
+  }), { ...env, DB: db, COLLECTOR_ACCESS_KEY: "private-key" });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.unchanged, 1);
+  assert.equal(payload.changed, 0);
+  assert.equal(payload.unknown, 0);
+  assert.deepEqual(payload.needsDetail, []);
+});
+
+test("collector manifest compares legacy recovery reviews by material terms", async () => {
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        args: [],
+        bind(...args) { this.args = args; return this; },
+        async run() { return { meta: { changes: 1 } }; },
+        async all() {
+          if (/FROM collector_raw/.test(this.sql)) {
+            return { results: [{
+              source_listing_id: "네이버-LEGACY-1",
+              snapshot_hash: "legacy-recovery",
+              list_snapshot_json: JSON.stringify({
+                deposit: 1000, rent: 55, area: 15, room: "1층", address: "유성구 신성동 253-35"
+              }),
+              last_collected_at: "2026-08-04T00:00:00.000Z",
+              listing_id: ""
+            }] };
+          }
+          return { results: [] };
+        },
+        async first() { return null; }
+      };
+    },
+    async batch(items) { return items.map(() => ({ success: true })); }
+  };
+  const response = await worker.fetch(new Request("https://js-map.com/api/collector", {
+    method: "POST",
+    headers: { origin: "https://fin.land.naver.com", "content-type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action: "classifySourceManifest",
+      requestId: "manifest-legacy-review",
+      accessKey: "private-key",
+      source: "네이버",
+      sessionId: "NAVER-LEGACY-REVIEW",
+      entries: [{
+        sourceId: "네이버-LEGACY-1", listSnapshot: "current-list-snapshot",
+        deposit: 1000, rent: 55, area: 15.1, room: "1층", address: "유성구 신성동 253-35"
+      }]
+    })
+  }), { ...env, DB: db, COLLECTOR_ACCESS_KEY: "private-key" });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.unchanged, 1);
+  assert.equal(payload.legacyBootstrapped, 0);
+  assert.deepEqual(payload.needsDetail, []);
+});
+
 test("naver manifest repairs missing D1 and shared-cache coordinates without a detail fetch", async () => {
   const statements = [];
   const batches = [];
