@@ -31,6 +31,7 @@ const DAANGN_JOB_PREFIX = "collector-daangn-";
 const DAANGN_DETAIL_MAX_ATTEMPTS = 8;
 const DAANGN_DETAIL_ERROR_LIMIT = 60;
 const GONGSIL_PHOTO_ROOT = "https://file1.gongsilbox.com/file/land_photo/";
+const GONGSIL_DETAIL_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 function daangnJobId(body = {}) {
   const clientId = clean(body.clientId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
@@ -342,6 +343,28 @@ export function manifestEntryMatch(entry, row) {
   return manifestMaterialMatches(entry, row) ? "legacy" : "";
 }
 
+export function shouldRefreshGongsilDetail(lastCollectedAt, currentTime = Date.now()) {
+  const checkedAt = Date.parse(clean(lastCollectedAt));
+  return !Number.isFinite(checkedAt) || Number(currentTime) - checkedAt >= GONGSIL_DETAIL_REFRESH_MS;
+}
+
+function conditionSnapshot(value = {}) {
+  return stableJson({
+    room: normalizedRoom(value.room),
+    type: clean(value.type || value.category),
+    deposit: number(value.deposit),
+    rent: number(value.rent),
+    fee: number(value.fee),
+    premium: number(value.premium),
+    area: number(value.area)
+  });
+}
+
+export function sourceConditionChanged(previous, current) {
+  if (!previous || !current) return false;
+  return conditionSnapshot(previous) !== conditionSnapshot(current);
+}
+
 async function ensureSession(env, sessionId, source, owner = "collector") {
   const id = clean(sessionId) || `${source}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const now = nowIso();
@@ -448,8 +471,7 @@ async function classifyManifest(env, body) {
         legacyBootstrapped += 1;
       }
       if (source === "공실박스") {
-        const checkedAt = Date.parse(clean(row.last_collected_at));
-        if (!Number.isFinite(checkedAt) || Date.now() - checkedAt >= 20 * 60 * 60 * 1000) {
+        if (shouldRefreshGongsilDetail(row.last_collected_at)) {
           refreshDetail.push(entry.sourceId);
         }
       }
@@ -812,6 +834,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   const snapshotHash = snapshotKey(record.listSnapshot || snapshot);
   const snapshotJson = JSON.stringify(snapshot);
   const rawJson = JSON.stringify(record.raw || {});
+  const conditionChanged = Boolean(existingSource) && sourceConditionChanged(previous, snapshot);
   let sourceChanged = !existingSource || clean(existingSource.snapshot_hash) !== snapshotHash ||
     clean(existingSource.source_url) !== clean(record.link) || Number(existingSource.active) !== 1 ||
     Number(existingSource.missing_count || 0) !== 0;
@@ -860,6 +883,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), snapshotJson));
   if (finalStatements.length) await env.DB.batch(finalStatements);
   return { sourceRowId, changed: sourceChanged || assets.changed || updateCondition,
+    conditionChanged: conditionChanged || updateCondition,
     sourceChanged, mediaChanged: assets.mediaChanged, contactsChanged: assets.contactsChanged };
 }
 
@@ -920,7 +944,8 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
 
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
-  const totals = { received: 0, created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0 };
+  const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
+    refreshed: 0, review: 0, duplicate: 0, failed: 0 };
   const records = [];
   const errors = [];
   const affectedListingIds = new Set();
@@ -949,7 +974,11 @@ async function ingestRecords(env, source, values, metadata = {}) {
       if (existing?.listing_id) {
         const result = await attachSource(env, record, existing.listing_id, sessionId, existing, false,
           "collector", sourceAssets.get(clean(existing.id)));
-        if (result.changed) totals.updated += 1;
+        if (result.changed) {
+          totals.updated += 1;
+          if (result.conditionChanged) totals.conditionUpdated += 1;
+          else totals.refreshed += 1;
+        }
         else totals.duplicate += 1;
         continue;
       }
@@ -989,7 +1018,8 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
-  for (const key of ["received", "created", "merged", "updated", "review", "duplicate", "failed"]) {
+  for (const key of ["received", "created", "merged", "updated", "conditionUpdated", "refreshed",
+    "review", "duplicate", "failed"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);

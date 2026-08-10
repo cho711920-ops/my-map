@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.3";
+  var VERSION = "2.1.4";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -254,7 +254,8 @@
           '<div class="jsg-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
           '<div class="jsg-metric"><span>신규 등록</span><b data-metric="created">0</b></div>' +
           '<div class="jsg-metric"><span>자동 통합</span><b data-metric="merged">0</b></div>' +
-          '<div class="jsg-metric"><span>조건 변경</span><b data-metric="updated">0</b></div>' +
+          '<div class="jsg-metric"><span>임대조건 변경</span><b data-metric="conditionUpdated">0</b></div>' +
+          '<div class="jsg-metric"><span>정보 최신화</span><b data-metric="refreshed">0</b></div>' +
           '<div class="jsg-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
           '<div class="jsg-metric"><span>상세 중복</span><b data-metric="detailedDuplicates">0</b></div>' +
           '<div class="jsg-metric"><span>기존 동일 생략</span><b data-metric="skippedUnchanged">0</b></div>' +
@@ -753,6 +754,8 @@
         created: result.created,
         merged: result.merged,
         updated: result.updated,
+        conditionUpdated: result.conditionUpdated !== undefined ? result.conditionUpdated : result.updated,
+        refreshed: result.refreshed,
         review: result.review,
         duplicate: Number(result.duplicate || 0) + detailBaseProcessed,
         detailedDuplicates: result.detailedDuplicates !== undefined
@@ -843,6 +846,14 @@
       updated: savedProgress && savedProgress.totals
         ? savedProgress.totals.updated
         : 0,
+      conditionUpdated: savedProgress && savedProgress.totals
+        ? (savedProgress.totals.conditionUpdated !== undefined
+          ? savedProgress.totals.conditionUpdated
+          : savedProgress.totals.updated)
+        : 0,
+      refreshed: savedProgress && savedProgress.totals
+        ? savedProgress.totals.refreshed
+        : 0,
       review: savedProgress && savedProgress.totals
         ? savedProgress.totals.review
         : 0,
@@ -890,6 +901,8 @@
         created: result.created,
         merged: result.merged,
         updated: result.updated,
+        conditionUpdated: result.conditionUpdated !== undefined ? result.conditionUpdated : result.updated,
+        refreshed: result.refreshed,
         review: result.review,
         duplicate: Number(result.duplicate || 0) +
           Number(pending.metadata && pending.metadata.unchanged || 0),
@@ -1989,6 +2002,8 @@
       created: 0,
       merged: 0,
       updated: 0,
+      conditionUpdated: 0,
+      refreshed: 0,
       review: 0,
       duplicate: 0,
       failed: 0
@@ -2116,6 +2131,8 @@
         created: totals.created,
         merged: totals.merged,
         updated: totals.updated,
+        conditionUpdated: totals.conditionUpdated,
+        refreshed: totals.refreshed,
         review: totals.review,
         duplicate: totals.duplicate,
         detailedDuplicates: totals.duplicate,
@@ -2166,6 +2183,8 @@
       created: totals.created,
       merged: totals.merged,
       updated: totals.updated,
+      conditionUpdated: totals.conditionUpdated,
+      refreshed: totals.refreshed,
       review: totals.review,
       duplicate: totals.duplicate,
       detailedDuplicates: totals.duplicate,
@@ -2175,7 +2194,8 @@
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
         "개 중 신규 등록 " + totals.created +
         "개, 자동 통합 " + totals.merged +
-        "개, 조건 변경 " + totals.updated +
+        "개, 임대조건 변경 " + totals.conditionUpdated +
+        "개, 정보 최신화 " + totals.refreshed +
         "개, 검증대기 " + totals.review +
         "개, 상세중복 " + totals.duplicate +
         "개, 기존 동일 생략 " + Number(metadata.unchanged || 0) +
@@ -2382,6 +2402,10 @@
     );
     totals.merged += Number(result.merged || 0);
     totals.updated += Number(result.updated || 0);
+    totals.conditionUpdated += Number(
+      result.conditionUpdated !== undefined ? result.conditionUpdated : result.updated || 0
+    );
+    totals.refreshed += Number(result.refreshed || 0);
     totals.review += Number(result.review || 0);
     totals.duplicate += Number(
       result.duplicate !== undefined
@@ -2628,6 +2652,8 @@
       created: 0,
       merged: 0,
       updated: 0,
+      conditionUpdated: 0,
+      refreshed: 0,
       review: 0,
       duplicate: 0,
       detailedDuplicates: 0,

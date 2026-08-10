@@ -7,7 +7,9 @@ import {
   gongsilImageUrls,
   gongsilPhotoUrl,
   manifestEntryMatch,
-  mergeDaangnDetailWithList
+  mergeDaangnDetailWithList,
+  shouldRefreshGongsilDetail,
+  sourceConditionChanged
 } from "../cloudflare/src/collector-api.js";
 
 test("Daangn detail rows inherit stable list fields when the detail response omits them", () => {
@@ -134,6 +136,23 @@ test("presentation-only fingerprint changes do not refetch unchanged rental term
     room: "2층",
     address: "대전광역시 서구 둔산동 100-1"
   }, row), "material");
+});
+
+test("Gongsilbox unchanged details refresh weekly instead of on every daily collection", () => {
+  const now = Date.parse("2026-08-10T06:00:00.000Z");
+  assert.equal(shouldRefreshGongsilDetail("2026-08-09T06:00:00.000Z", now), false);
+  assert.equal(shouldRefreshGongsilDetail("2026-08-02T06:00:00.000Z", now), true);
+  assert.equal(shouldRefreshGongsilDetail("", now), true);
+});
+
+test("source refreshes are separated from actual rental-condition changes", () => {
+  const previous = { room: "2층", type: "일반상가", deposit: 2000, rent: 90,
+    fee: 10, premium: 0, area: 26, memo: "기존", photoCount: 1, contactCount: 1 };
+  assert.equal(sourceConditionChanged(previous, {
+    ...previous, memo: "새 메모", photoCount: 3, contactCount: 2
+  }), false);
+  assert.equal(sourceConditionChanged(previous, { ...previous, rent: 100 }), true);
+  assert.equal(sourceConditionChanged(previous, { ...previous, room: "3층" }), true);
 });
 
 test("complete collections require a current verified manifest", () => {

@@ -433,3 +433,12 @@
 - Production-data inspection confirmed the user's report: the latest automatic run did not complete all 10 targets. Daangn Yuseong ended partially and Daangn Seo had no completion record. The JS map currently contains only first-floor originals for Yongmun-dong 257-5; the reported second-floor Daangn listing has not yet been ingested.
 - Installed extension files were updated in place to `v1.0.30`. The registered targets and schedule were preserved, and no Edge window was restarted or minimized.
 - Edge automation tests: 8/8 passed; Cloudflare tests: 56/56 passed.
+
+## 2026-08-10 Gongsilbox incremental detail refresh v2.1.4
+
+- Audited a manual Gongsilbox run that selected 2,531 listings, fetched 2,364 details, created 11 listings and took about one hour. The daily slowdown came from refreshing unchanged contact details after only 20 hours and from the provider-safe single-detail request queue.
+- Unchanged Gongsilbox details now refresh every seven days instead of every daily collection. New listings and material rental changes still request details immediately; daily manifest comparison remains intact.
+- Import results now separate actual rental-condition changes from source-information refreshes such as photos, contacts and provider snapshots. The collector UI shows `임대조건 변경` and `정보 최신화` independently instead of labeling all source updates as condition changes.
+- Gongsilbox remains manual-only. Installed collector is `v2.1.4`; Edge automatic runner remains `v1.0.30` for Naver five districts plus Daangn five districts.
+- Full Cloudflare tests: 58/58 passed; Edge automation tests: 8/8 passed; Wrangler dry-run passed.
+- Production Worker version: `35151ebf-834c-4ac8-b96d-edd4da4cea4c`.
