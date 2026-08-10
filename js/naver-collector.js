@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.8.0";
+  var VERSION = "5.9.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -1653,7 +1653,13 @@
       discoverFinContext();
       return;
     }
-    if (options.automatic) return collectFinAutomaticDistrict(district);
+    if (options.automatic) {
+      // Automatic runs used to stream every list page straight into detail
+      // storage. Discard that legacy checkpoint and use the same manifest-first
+      // path as manual collection: list IDs, compare, then detail only new or
+      // materially changed listings.
+      clearAutoDistrictProgress(district.cortarNo);
+    }
     state.preparing = true;
     beginCollectorRun();
     saveButton.disabled = true;
@@ -1695,121 +1701,9 @@
   }
 
   async function collectFinAutomaticDistrict(district) {
-    var progress = loadAutoDistrictProgress(district.cortarNo);
-    if (!progress || String(progress.districtCortarNo) !== String(district.cortarNo)) {
-      progress = {
-        version: 2,
-        autoDistrictKey: String(district.cortarNo),
-        districtCortarNo: String(district.cortarNo),
-        districtName: district.name,
-        scope: "대전 " + district.name + " 전체",
-        startedAt: new Date().toISOString(),
-        sessionId: createCollectionSessionId(),
-        cursor: {nextPage: 1, lastPageSignature: ""},
-        seenIds: [],
-        saved: 0,
-        accepted: 0,
-        duplicate: 0,
-        detailedDuplicates: 0,
-        skippedUnchanged: 0,
-        failed: 0,
-        created: 0,
-        merged: 0,
-        updated: 0,
-        review: 0,
-        failedItems: []
-      };
-    }
-    progress.cursor = progress.cursor || {nextPage: 1, lastPageSignature: ""};
-    state.busy = true;
-    state.preparing = false;
-    beginCollectorRun();
-    saveButton.disabled = true;
-    retryButton.disabled = true;
-    cityButton.disabled = true;
-    state.dashboard = createEmptyDashboard();
-    dashboardFromTotals(progress.seenIds.length, progress.seenIds.length, progress);
-    saveAutoDistrictProgress(progress);
-
-    try {
-      setStatus(
-        district.name + " 자동수집 이어서 진행 중",
-        "저장 완료 " + formatNumber(progress.seenIds.length) + "개 · " +
-        Math.max(1, Number(progress.cursor.nextPage) || 1) + "페이지부터 계속합니다."
-      );
-      await collectFinDistrictRaw(
-        district,
-        progress.cursor,
-        async function(items, pageInfo) {
-          await saveCityArticles(items, progress, {district: district.name, page: pageInfo.page});
-          dashboardFromTotals(progress.seenIds.length, progress.seenIds.length, progress);
-        },
-        function(cursor) {
-          progress.cursor = cursor;
-          saveAutoDistrictProgress(progress);
-        }
-      );
-      if (!progress.seenIds.length) throw new Error(district.name + "에서 매물을 찾지 못했습니다.");
-
-      setStatus("저장 실패 매물 마지막 재시도 중", district.name + "에서 미완료된 저장만 다시 처리합니다.");
-      var remainingFailures = await retryFailedCityArticles(progress);
-      await finalizeNaverSession({
-        sessionId: progress.sessionId,
-        scope: progress.scope,
-        source: "네이버",
-        complete: remainingFailures.length === 0,
-        observedSourceIds: progress.seenIds,
-        expectedCount: progress.seenIds.length,
-        manifestCount: progress.seenIds.length,
-        processedCount: progress.seenIds.length,
-        failed: remainingFailures.length,
-        addressMissing: remainingFailures.length,
-        truncated: false,
-        note: remainingFailures.length
-          ? district.name + " 자동수집 저장미완료 " + remainingFailures.length + "건"
-          : district.name + " 자동수집 완주"
-      });
-      var accepted = Number(progress.accepted || progress.saved || 0);
-      var sessionResult = await waitForNaverSessionResult(
-        progress,
-        progress.seenIds.length,
-        accepted,
-        remainingFailures.length
-      );
-      var finalResult = sessionResult && sessionResult.finished ? sessionResult : progress;
-      dashboardFromTotals(progress.seenIds.length, progress.seenIds.length, finalResult);
-      updateDashboard({addressMissing: remainingFailures.length});
-      setProgress(1, 1);
-      if (remainingFailures.length) {
-        saveAutoDistrictProgress(progress);
-        throw new Error(district.name + " 저장 미완료 " + remainingFailures.length + "건을 다음 재시도에서 이어갑니다.");
-      }
-      clearAutoDistrictProgress(district.cortarNo);
-      setStatus(
-        district.name + " 자동수집 완주",
-        "고유매물 " + formatNumber(progress.seenIds.length) + "개 · 신규 " +
-        formatNumber(finalResult.created) + "개 · 통합 " + formatNumber(finalResult.merged) +
-        "개 · 기존동일생략 " + formatNumber(finalResult.skippedUnchanged) + "개"
-      );
-      return {ok: true, complete: true, finalResult: finalResult};
-    } catch (error) {
-      progress.resumeFailures = Number(progress.resumeFailures || 0) + 1;
-      progress.lastError = String(error && error.message ? error.message : error);
-      progress.lastErrorAt = new Date().toISOString();
-      saveAutoDistrictProgress(progress);
-      setStatus(
-        district.name + " 자동수집 일시중단",
-        progress.lastError + "\n저장 지점은 보존했으며 자동수집기가 다시 이어서 실행합니다."
-      );
-      throw error;
-    } finally {
-      state.busy = false;
-      state.preparing = false;
-      saveButton.disabled = false;
-      retryButton.disabled = false;
-      cityButton.disabled = false;
-      finishCollectorRun();
-    }
+    clearAutoDistrictProgress(district.cortarNo);
+    state.selectedDistrict = district;
+    return collectFinSelectedAndSave({automatic: false});
   }
 
   async function collectFinDaejeonAll() {

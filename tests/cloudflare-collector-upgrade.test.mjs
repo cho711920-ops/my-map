@@ -81,6 +81,26 @@ test("current fingerprints refetch different list snapshots", () => {
   assert.equal(manifestEntryMatch({listSnapshot: "same"}, row), "");
 });
 
+test("presentation-only fingerprint changes do not refetch unchanged rental terms", () => {
+  const row = {
+    snapshot_hash: "fnv1a-00000000",
+    list_snapshot_json: "old provider presentation",
+    saved_deposit: 3000,
+    saved_rent: 120,
+    saved_area: 33,
+    saved_room: "2층",
+    saved_address: "서구 둔산동 100-1"
+  };
+  assert.equal(manifestEntryMatch({
+    listSnapshot: "new title, tags or representative photo",
+    deposit: 3000,
+    rent: 120,
+    area: 33.4,
+    room: "2층",
+    address: "대전광역시 서구 둔산동 100-1"
+  }, row), "material");
+});
+
 test("complete collections require a current verified manifest", () => {
   const valid = collectorCompletionAudit({
     source: "공실박스", scope: "공실박스 2000개 이상 전체클러스터",
@@ -158,6 +178,14 @@ test("manifest comparison includes unchanged listings still waiting in collector
   assert.match(source, /ROW_NUMBER\(\) OVER \(PARTITION BY source_listing_id ORDER BY created_at DESC\)/);
   assert.match(source, /if \(id && !rows\.has\(id\)\) rows\.set\(id, row\)/);
   assert.match(migration, /collector_raw\(source, source_listing_id, created_at DESC\)/);
+});
+
+test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {
+  const source = await readFile(new URL("../js/naver-collector.js", import.meta.url), "utf8");
+  assert.match(source, /var VERSION = "5\.9\.0"/);
+  assert.match(source, /if \(options\.automatic\) \{[\s\S]*?clearAutoDistrictProgress\(district\.cortarNo\);[\s\S]*?\}/);
+  assert.doesNotMatch(source, /if \(options\.automatic\) return collectFinAutomaticDistrict\(district\)/);
+  assert.match(source, /var classification = await classifyNaverManifest\(allItems, session\)/);
 });
 
 test("Gongsilbox collective-building contacts retain the provider role label", async () => {

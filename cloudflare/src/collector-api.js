@@ -290,26 +290,28 @@ function legacyAddressConflicts(left, right) {
   return Boolean(firstLot && secondLot && firstLot[1] !== secondLot[1]);
 }
 
-function legacyManifestEntryMatches(entry, row) {
-  const saved = parseJson(row.list_snapshot_json, {});
+function manifestMaterialMatches(entry, row) {
+  const parsedSnapshot = parseJson(row.list_snapshot_json, {});
+  const saved = parsedSnapshot && !Array.isArray(parsedSnapshot) && typeof parsedSnapshot === "object"
+    ? parsedSnapshot : {};
   const entryDeposit = number(entry.deposit);
-  const savedDeposit = number(saved.deposit);
+  const savedDeposit = number(saved.deposit) ?? number(row.saved_deposit);
   const entryRent = number(entry.rent);
-  const savedRent = number(saved.rent);
+  const savedRent = number(saved.rent) ?? number(row.saved_rent);
   if (entryDeposit == null || savedDeposit == null || entryRent == null || savedRent == null) return false;
   if (!sameNumber(entryDeposit, savedDeposit) || !sameNumber(entryRent, savedRent)) return false;
 
   const entryArea = number(entry.area);
-  const savedArea = number(saved.area);
+  const savedArea = number(saved.area) ?? number(row.saved_area);
   if (entryArea != null && savedArea != null) {
     const tolerance = Math.max(1, Math.abs(savedArea) * 0.03);
     if (!sameNumber(entryArea, savedArea, tolerance)) return false;
   }
 
   const entryFloor = parseListingFloor(entry.room, true);
-  const savedFloor = parseListingFloor(saved.room, true);
+  const savedFloor = parseListingFloor(clean(saved.room) || row.saved_room, true);
   if (entryFloor != null && savedFloor != null && entryFloor !== savedFloor) return false;
-  if (legacyAddressConflicts(entry.address, saved.address)) return false;
+  if (legacyAddressConflicts(entry.address, clean(saved.address) || row.saved_address)) return false;
   return true;
 }
 
@@ -320,8 +322,14 @@ export function manifestEntryMatch(entry, row) {
   // Recovery imports used marker values such as `legacy-recovery`, not an
   // actual list fingerprint. Compare their material rental terms instead of
   // treating every scheduled collection as a changed listing.
-  if (/^fnv1a-[0-9a-f]{8}$/.test(savedHash)) return savedHash === incomingHash ? "hash" : "";
-  return legacyManifestEntryMatches(entry, row) ? "legacy" : "";
+  if (/^fnv1a-[0-9a-f]{8}$/.test(savedHash)) {
+    if (savedHash === incomingHash) return "hash";
+    // Provider titles, descriptions, tags and representative images may
+    // change without changing the rental offer. Those presentation-only
+    // differences must not cause a full detail re-collection.
+    return manifestMaterialMatches(entry, row) ? "material" : "";
+  }
+  return manifestMaterialMatches(entry, row) ? "legacy" : "";
 }
 
 async function ensureSession(env, sessionId, source, owner = "collector") {
@@ -363,7 +371,9 @@ async function classifyManifest(env, body) {
     const ids = entries.slice(offset, offset + 80).map((entry) => entry.sourceId);
     const placeholders = ids.map((_, index) => `?${index + 2}`).join(",");
     const result = await env.DB.prepare(`SELECT s.id, s.source_listing_id, s.snapshot_hash, s.list_snapshot_json,
-        s.listing_id, s.last_collected_at, l.latitude AS listing_latitude, l.longitude AS listing_longitude
+        s.listing_id, s.last_collected_at, l.latitude AS listing_latitude, l.longitude AS listing_longitude,
+        l.deposit AS saved_deposit, l.monthly_rent AS saved_rent, l.area_m2 AS saved_area,
+        l.room AS saved_room, l.address AS saved_address
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
       WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`).bind(source, ...ids).all();
     for (const row of result?.results || []) rows.set(clean(row.source_listing_id), row);
@@ -378,13 +388,19 @@ async function classifyManifest(env, body) {
       const rawResult = await env.DB.prepare(`WITH ranked AS (
           SELECT source_listing_id, snapshot_hash,
             json_extract(payload_json, '$.listSnapshot') AS list_snapshot_json,
+            COALESCE(json_extract(payload_json, '$.record.deposit'), json_extract(payload_json, '$.deposit')) AS saved_deposit,
+            COALESCE(json_extract(payload_json, '$.record.rent'), json_extract(payload_json, '$.rent')) AS saved_rent,
+            COALESCE(json_extract(payload_json, '$.record.area'), json_extract(payload_json, '$.area')) AS saved_area,
+            COALESCE(json_extract(payload_json, '$.record.room'), json_extract(payload_json, '$.room')) AS saved_room,
+            COALESCE(json_extract(payload_json, '$.record.address'), json_extract(payload_json, '$.address')) AS saved_address,
             created_at AS last_collected_at,
             ROW_NUMBER() OVER (PARTITION BY source_listing_id ORDER BY created_at DESC) AS row_number
           FROM collector_raw
           WHERE source=?1 AND source_listing_id IN (${rawPlaceholders})
         )
         SELECT source_listing_id, snapshot_hash, list_snapshot_json, last_collected_at,
-          '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude
+          '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude,
+          saved_deposit, saved_rent, saved_area, saved_room, saved_address
         FROM ranked WHERE row_number=1`).bind(source, ...unresolvedIds).all();
       for (const row of rawResult?.results || []) {
         const id = clean(row.source_listing_id);
