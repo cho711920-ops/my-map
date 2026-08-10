@@ -240,6 +240,9 @@ function daangnRecord(article, listSnapshot = "") {
   const trade = (Array.isArray(article?.trades) ? article.trades : []).find((entry) => entry?.preferred) || article?.trades?.[0] || {};
   const tradeType = clean(trade.type || trade.__typename).toUpperCase();
   const salesType = clean(article?.salesTypeV3?.type || article?.salesTypeV3?.__typename).toUpperCase();
+  const category = /OFFICE/.test(salesType) ? "사무실" : /FACTORY|WAREHOUSE/.test(salesType) ? "공장/창고" : "상가점포";
+  const providerBuildingName = clean(article?.buildingName || article?.complex?.name);
+  const addressLikeBuildingName = /(?:로|길)\s*\d+(?:-\d+)?(?:\s|$)/.test(providerBuildingName);
   const areaM2 = number(article?.area);
   const images = uniqueUrls([...(article?.images || []), ...(article?.floorPlanImages || [])]);
   const sourceId = clean(article?.originalId);
@@ -248,10 +251,12 @@ function daangnRecord(article, listSnapshot = "") {
   const description = [article?.addressInfo, article?.content].filter(Boolean).join(" ").replace(/\s+/g, " ");
   return {
     source: "당근", sourceId,
-    buildingName: clean(article?.buildingName || article?.complex?.name) || "일반상가",
+    buildingName: providerBuildingName && !addressLikeBuildingName
+      ? providerBuildingName
+      : category === "상가점포" ? "일반상가" : category,
     address: daangnAddress(article),
     room: article?.isEntireBuilding ? "전체" : canonicalListingRoom(daangnFloor(article?.isAmbiguousFloor ? article?.ambiguousFloor : article?.floor)),
-    category: /OFFICE/.test(salesType) ? "사무실" : /FACTORY/.test(salesType) ? "공장/창고" : "상가점포",
+    category,
     deposit: number(trade?.deposit ?? trade?.price), rent: number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
     fee: number(article?.totalManageCost) || 0, premium: number(article?.premiumMoney) || 0,
     area: areaM2 && areaM2 > 0 ? Math.floor((areaM2 / 3.305785) * 10 + 0.0000001) / 10 : null,
@@ -429,7 +434,7 @@ async function classifyManifest(env, body) {
             created_at AS last_collected_at,
             ROW_NUMBER() OVER (PARTITION BY source_listing_id ORDER BY created_at DESC) AS row_number
           FROM collector_raw
-          WHERE source=?1 AND source_listing_id IN (${rawPlaceholders})
+          WHERE source=?1 AND processing_state <> 'error' AND source_listing_id IN (${rawPlaceholders})
         )
         SELECT source_listing_id, snapshot_hash, list_snapshot_json, last_collected_at,
           '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude,
@@ -960,6 +965,23 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
   return id;
 }
 
+async function saveCollectorError(env, record, sessionId, message) {
+  const id = `E-${snapshotKey(`${record.source}:${record.sourceId}`)}`;
+  const at = nowIso();
+  await env.DB.prepare(`INSERT INTO collector_raw (
+      id, session_id, source, source_listing_id, snapshot_hash, payload_json,
+      processing_state, processed_at, result_json, error_text, created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'error', ?7, ?8, ?9, ?7)
+    ON CONFLICT(id) DO UPDATE SET
+      session_id=excluded.session_id, snapshot_hash=excluded.snapshot_hash,
+      payload_json=excluded.payload_json, processing_state='error',
+      processed_at=excluded.processed_at, result_json=excluded.result_json,
+      error_text=excluded.error_text, created_at=excluded.created_at`)
+    .bind(id, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
+      JSON.stringify(record), at, JSON.stringify({ action: "collectorError", reason: clean(message) }), clean(message)).run();
+  return id;
+}
+
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
@@ -994,6 +1016,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
     if (!record.address) {
       totals.failed += 1;
       totals.addressMissing += 1;
+      await saveCollectorError(env, record, sessionId, "지번주소 없음");
       if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "지번주소 없음" });
       continue;
     }

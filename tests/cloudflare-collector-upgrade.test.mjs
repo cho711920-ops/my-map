@@ -46,6 +46,31 @@ test("Daangn addressInfo is accepted as a provider address candidate", () => {
   assert.match(record.address, /유성구 봉명동 100-2/);
 });
 
+test("Daangn road-address placeholders use the explicit property category", () => {
+  const store = mergeDaangnDetailWithList({
+    originalId: "4182029",
+    complex: { name: "계룡로 658-4", jibunAddress: "대전광역시 서구 용문동 257-5" },
+    salesTypeV3: { type: "STORE" },
+    trades: [{ preferred: true, type: "MONTHLY_RENT", deposit: 1000, monthlyPay: 70 }]
+  });
+  const office = mergeDaangnDetailWithList({
+    originalId: "office-1",
+    complex: { name: "둔산로 100", jibunAddress: "대전광역시 서구 둔산동 100" },
+    salesTypeV3: { type: "OFFICE" },
+    trades: [{ preferred: true, type: "MONTHLY_RENT", deposit: 1000, monthlyPay: 70 }]
+  });
+  const named = mergeDaangnDetailWithList({
+    originalId: "named-1",
+    buildingName: "테크노월드",
+    complex: { jibunAddress: "대전광역시 유성구 관평동 100" },
+    salesTypeV3: { type: "STORE" },
+    trades: [{ preferred: true, type: "MONTHLY_RENT", deposit: 1000, monthlyPay: 70 }]
+  });
+  assert.equal(store.buildingName, "일반상가");
+  assert.equal(office.buildingName, "사무실");
+  assert.equal(named.buildingName, "테크노월드");
+});
+
 test("Gongsilbox relative photo paths become cacheable absolute image URLs", () => {
   const first = "2025/09/20250911_1212163928_00.png";
   const second = "2025/09/20250911_1212163928_01.jpg";
@@ -197,6 +222,14 @@ test("a full manifest with only provider-hidden addresses completes without repe
   assert.equal(result.complete, true);
   assert.deepEqual(result.blockingIssues, []);
   assert.match(result.issues.join(" / "), /주소·층 오류 22건/);
+});
+
+test("provider-hidden addresses are persisted as retryable collector errors", async () => {
+  const collectorSource = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
+  assert.match(collectorSource, /processing_state <> 'error'/);
+  assert.match(collectorSource, /async function saveCollectorError/);
+  assert.match(collectorSource, /processing_state='error'/);
+  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, "지번주소 없음"\)/);
 });
 
 test("collector installers always load the current js-map runtime", async () => {
