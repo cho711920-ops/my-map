@@ -221,13 +221,17 @@ function daangnAddress(article) {
     article?.publicJibunAddress,
     article?.jibunAddress,
     article?.address,
-    article?.addressInfo,
     article?.location?.jibunAddress,
     article?.location?.address,
     article?.complex?.jibunAddress
   ];
   const edges = article?.complex?.buildingsForAddress?.edges || [];
   for (const edge of edges) candidates.push(edge?.node?.jibunAddress);
+  // addressInfo is descriptive copy such as "봉명동 1층 코너상가".  If it
+  // is checked before the provider's building address, the floor number can
+  // be mistaken for a lot number ("봉명동 1").  Use it only as the last
+  // fallback after every structured address field has been exhausted.
+  candidates.push(article?.addressInfo);
   for (const candidate of candidates) {
     const text = normalizedAddress(candidate);
     const match = text.match(/((?:[가-힣]+(?:시|군|구)\s+)?[가-힣0-9·.]+(?:읍|면|동|가)\s+(?:산\s*)?\d+(?:-\d+)?)/);
@@ -263,8 +267,8 @@ function daangnRecord(article, listSnapshot = "") {
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
     link: sourceId ? `https://realty.daangn.com/?article_id=%22${encodeURIComponent(sourceId)}%22&panel_stack=article` : "",
     listSnapshot: clean(listSnapshot), images, contacts: [], raw: article,
-    latitude: coordinate(article?.latitude ?? article?.lat ?? article?.location?.latitude, -90, 90),
-    longitude: coordinate(article?.longitude ?? article?.lng ?? article?.lon ?? article?.location?.longitude, -180, 180),
+    latitude: coordinate(article?.latitude ?? article?.lat ?? article?.location?.latitude ?? article?.publicCoordinate?.lat, -90, 90),
+    longitude: coordinate(article?.longitude ?? article?.lng ?? article?.lon ?? article?.location?.longitude ?? article?.publicCoordinate?.lon, -180, 180),
     tradeType: /MONTH/.test(tradeType) ? "월세" : /YEAR|BORROW/.test(tradeType) ? "전세" : /BUY/.test(tradeType) ? "매매" : "월세"
   };
 }

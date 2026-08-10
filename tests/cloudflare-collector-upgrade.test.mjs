@@ -46,6 +46,27 @@ test("Daangn addressInfo is accepted as a provider address candidate", () => {
   assert.match(record.address, /유성구 봉명동 100-2/);
 });
 
+test("Daangn structured building address wins over a floor number in addressInfo", () => {
+  const record = mergeDaangnDetailWithList({
+    originalId: "3851563",
+    publicJibunAddress: "대전광역시 유성구 봉명동",
+    addressInfo: "봉명동 1층 코너각지, 식당이었던 자리",
+    complex: {
+      buildingsForAddress: {
+        edges: [{ node: {
+          roadAddress: "대전광역시 유성구 봉명서로 61-3",
+          jibunAddress: "대전광역시 유성구 봉명동 1030-4"
+        } }]
+      }
+    },
+    publicCoordinate: { lat: "36.3578080", lon: "127.3272713" },
+    trades: [{ preferred: true, type: "MONTHLY_RENT", deposit: 3000, monthlyPay: 130 }]
+  });
+  assert.equal(record.address, "유성구 봉명동 1030-4");
+  assert.equal(record.latitude, 36.357808);
+  assert.equal(record.longitude, 127.3272713);
+});
+
 test("Daangn road-address placeholders use the explicit property category", () => {
   const store = mergeDaangnDetailWithList({
     originalId: "4182029",
