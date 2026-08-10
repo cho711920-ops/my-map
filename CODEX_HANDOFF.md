@@ -387,3 +387,17 @@
 - 전용 Edge 확장 프로그램 `1.0.11`을 로컬 프로필에 적용했고 기존 로그인·대상 설정은 보존했다.
 - 5분 연속 관찰에서 전용 Edge 프로세스 1개와 최소화 상태가 유지됐고 추가 창/재실행은 없었다. 다음 예약은 `2026-08-08 11:00 KST`다.
 - `tests/edge-auto-collector.test.mjs` 5/5와 확장 프로그램 JavaScript 구문 검사를 통과했다.
+
+## 2026-08-10 Naver/Daangn automatic collection repair
+
+- Naver v5.9.0 completed a manifest-first revalidation for all five Daejeon districts. Jung-gu completed with no issue; Yuseong-gu, Daedeok-gu, Seo-gu and Dong-gu were retained as partial only for provider rows that expose no usable address/floor (65, 10, 81 and 2 rows respectively). There was no remaining network or storage failure on the final pass.
+- Daangn detail parsing now inherits address, room and rental terms from its list manifest, accepts additional provider address fields, normalizes absent coordinates to null, and stores a compact checkpoint. This removed the prior D1 type error and oversized checkpoint failure.
+- Daangn browser jobs are scoped by district/cluster. A new automatic tab now waits for server job status and resumes a running or paused checkpoint instead of replacing it with a new session.
+- Final live Daangn verification proved manifest skipping: Seo-gu scanned 3,629 IDs but skipped 3,528 unchanged rows and fetched only 101 detail candidates; Dong-gu scanned 592, skipped 563 and fetched only 29.
+- Remaining Daangn failures are provider-data omissions, not collector crashes: Yuseong 22, Seo 25, Daedeok 11, Jung 6 and Dong 20 rows had no usable address/floor. Partial sessions preserve all successful saves and do not mark missing listings as inactive.
+- D1 reached its 500 MB per-database ceiling during Seo-gu. Removed 5,540 superseded collector-review snapshots plus two obsolete job checkpoints; production size fell to about 445.4 MB. Listings, photos, memos, contacts, latest reviews and business history were preserved.
+- Migration `0012_collector_review_dedup.sql` adds one active review row per `(source, source_listing_id)`. Repeated collection now refreshes that row instead of growing D1 indefinitely. Duplicate active review count is 0 after cleanup.
+- Stale `running` collector sessions were marked `paused`; there are no falsely running sessions left.
+- Production Worker version: `d17ba9af-7946-40e8-a5d1-6c3ae69b560d`.
+- Installed Edge automation: extension `1.0.25`, Daangn collector `1.4.5`, daily schedule 11:00 KST.
+- Full Cloudflare/Edge suite: 62/62 passed; Wrangler dry-run also passed.

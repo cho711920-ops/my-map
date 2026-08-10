@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.4.1";
+  var VERSION = "1.4.5";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -39,7 +39,8 @@
     lastLocationClusterId: clusterIdFromUrl(location.href),
     selectedCount: 0,
     selectionChanged: false,
-    job: null
+    job: null,
+    jobRequestGeneration: 0
   };
 
   var panel = createPanel();
@@ -100,6 +101,13 @@
     var created = "browser-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
     try { localStorage.setItem(CLIENT_ID_STORAGE, created); } catch (_) {}
     return created;
+  }
+
+  function getScopedClientId(url) {
+    var clusterId = clusterIdFromUrl(url || state.selectedUrl || location.href)
+      .replace(/[^A-Za-z0-9_-]/g, "")
+      .slice(0, 28);
+    return (getClientId() + (clusterId ? "-" + clusterId : "")).slice(0, 64);
   }
 
   function createPanel() {
@@ -222,6 +230,7 @@
     state.selectionChanged = false;
     state.job = null;
     renderSelection();
+    await refreshJobStatus();
     await startOrResume();
     var startedAt = Date.now();
     var recoveryAttempts = 0;
@@ -552,13 +561,26 @@
           "이전 수집을 안전중단하는 중입니다.",
           "저장된 자료는 유지하고 새 클러스터로 전환합니다."
         );
-        var pausedResult = await callServer("danggeunPauseJob", {});
+        var pausedResult = await callServer("danggeunPauseJob", {jobUrl: state.job.url});
         state.job = pausedResult.job || state.job;
+      }
+      if (
+        state.job &&
+        state.job.status === "running" &&
+        (!state.selectedUrl || state.job.url === state.selectedUrl)
+      ) {
+        state.jobRequestGeneration += 1;
+        state.selectionChanged = false;
+        renderJob();
+        state.busy = false;
+        scheduleNextChunk();
+        return;
       }
       var action = state.job && state.job.status === "paused" &&
         (!state.selectedUrl || state.job.url === state.selectedUrl)
         ? "danggeunResumeJob"
         : "danggeunStartJob";
+      state.jobRequestGeneration += 1;
       var result = await callServer(action, {url: state.selectedUrl});
       state.job = result.job || null;
       state.selectionChanged = false;
@@ -670,8 +692,10 @@
   }
 
   async function refreshJobStatus() {
+    var generation = state.jobRequestGeneration;
     try {
       var result = await callServer("danggeunJobStatus", {});
+      if (generation !== state.jobRequestGeneration) return;
       state.job = result.job || null;
       if (
         state.job &&
@@ -746,6 +770,10 @@
 
   function showError(error) {
     state.busy = false;
+    var message = String(error && error.message ? error.message : error);
+    if (/SQLITE_TOOBIG|string or blob too big/i.test(message)) {
+      state.job = null;
+    }
     if (state.job && state.job.status === "running") {
       state.job.status = "paused";
       state.job.message = "통신이 끊겨 화면에서 일시중단했습니다. 저장 지점은 서버에 보존됩니다.";
@@ -763,7 +791,7 @@
     startButton.textContent = state.job ? "이어서 수집" : "수집 시작";
     setStatus(
       "연결이 일시중단되었습니다.",
-      String(error && error.message ? error.message : error) +
+      message +
       "\n저장 지점은 유지됩니다. 이어서 수집을 누르면 계속합니다."
     );
   }
@@ -780,12 +808,15 @@
   async function callServer(action, values, authRetried) {
     var collectorKey = getCollectorKey();
     var requestId = "daangn-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
-    var body = Object.assign({}, values || {}, {
+    var requestValues = Object.assign({}, values || {});
+    var jobUrl = requestValues.jobUrl || state.selectedUrl || location.href;
+    delete requestValues.jobUrl;
+    var body = Object.assign({}, requestValues, {
       action: action,
       requestId: requestId,
       collectorKey: collectorKey,
       collectorVersion: VERSION,
-      clientId: getClientId()
+      clientId: getScopedClientId(jobUrl)
     });
     try {
       var earlyResult = await postServerWithRetry(body, collectorKey);
@@ -811,12 +842,21 @@
         await delay(POST_RETRY_DELAYS[attempt]);
       }
       try {
-        await nativeFetch(COLLECTOR_API_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {"content-type": "text/plain;charset=utf-8"},
-          body: JSON.stringify(body)
-        });
+        var controller = typeof AbortController === "function" ? new AbortController() : null;
+        var timeoutId = window.setTimeout(function () {
+          if (controller) controller.abort();
+        }, 15000);
+        try {
+          await nativeFetch(COLLECTOR_API_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: {"content-type": "text/plain;charset=utf-8"},
+            body: JSON.stringify(body),
+            signal: controller ? controller.signal : undefined
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
         return null;
       } catch (error) {
         lastError = error;

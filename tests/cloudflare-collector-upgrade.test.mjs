@@ -31,6 +31,17 @@ test("Daangn detail rows inherit stable list fields when the detail response omi
   assert.equal(record.rent, 120);
   assert.equal(record.area, 33.4);
   assert.equal(record.listSnapshot, "list-fingerprint");
+  assert.equal(record.latitude, null);
+  assert.equal(record.longitude, null);
+});
+
+test("Daangn addressInfo is accepted as a provider address candidate", () => {
+  const record = mergeDaangnDetailWithList({
+    originalId: "123456789",
+    addressInfo: "대전광역시 유성구 봉명동 100-2",
+    trades: [{ preferred: true, type: "MONTHLY_RENT", deposit: 1000, monthlyPay: 80 }]
+  });
+  assert.match(record.address, /유성구 봉명동 100-2/);
 });
 
 test("Gongsilbox relative photo paths become cacheable absolute image URLs", () => {
@@ -191,6 +202,10 @@ test("Daangn detail failures stay queued with bounded retries and recorded cause
   assert.match(source, /mapWithConcurrency\(ids, retrying \? 1 : 2/);
   assert.match(source, /if \(!pending\.length\)/);
   assert.doesNotMatch(source, /job\.failed \+= ids\.length - records\.length/);
+  const listEntry = source.slice(source.indexOf("function daangnListEntry"), source.indexOf("async function loadDaangnJob"));
+  assert.match(listEntry, /sourceId: record\.sourceId/);
+  assert.match(listEntry, /category: record\.category/);
+  assert.doesNotMatch(listEntry, /Object\.keys\(article/);
 });
 
 test("manifest comparison includes unchanged listings still waiting in collector review", async () => {
@@ -202,6 +217,13 @@ test("manifest comparison includes unchanged listings still waiting in collector
   assert.match(source, /ROW_NUMBER\(\) OVER \(PARTITION BY source_listing_id ORDER BY created_at DESC\)/);
   assert.match(source, /if \(id && !rows\.has\(id\)\) rows\.set\(id, row\)/);
   assert.match(migration, /collector_raw\(source, source_listing_id, created_at DESC\)/);
+});
+
+test("collector review snapshots refresh in place instead of growing every run", async () => {
+  const source = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
+  assert.match(source, /ON CONFLICT\(source, source_listing_id\) WHERE processing_state='review' DO UPDATE SET/);
+  assert.match(source, /session_id=excluded\.session_id/);
+  assert.match(source, /created_at=excluded\.created_at/);
 });
 
 test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {

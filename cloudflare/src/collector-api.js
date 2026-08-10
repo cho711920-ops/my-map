@@ -216,7 +216,15 @@ function daangnFloor(value) {
 }
 
 function daangnAddress(article) {
-  const candidates = [article?.publicJibunAddress];
+  const candidates = [
+    article?.publicJibunAddress,
+    article?.jibunAddress,
+    article?.address,
+    article?.addressInfo,
+    article?.location?.jibunAddress,
+    article?.location?.address,
+    article?.complex?.jibunAddress
+  ];
   const edges = article?.complex?.buildingsForAddress?.edges || [];
   for (const edge of edges) candidates.push(edge?.node?.jibunAddress);
   for (const candidate of candidates) {
@@ -249,6 +257,8 @@ function daangnRecord(article, listSnapshot = "") {
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
     link: sourceId ? `https://realty.daangn.com/?article_id=%22${encodeURIComponent(sourceId)}%22&panel_stack=article` : "",
     listSnapshot: clean(listSnapshot), images, contacts: [], raw: article,
+    latitude: coordinate(article?.latitude ?? article?.lat ?? article?.location?.latitude, -90, 90),
+    longitude: coordinate(article?.longitude ?? article?.lng ?? article?.lon ?? article?.location?.longitude, -180, 180),
     tradeType: /MONTH/.test(tradeType) ? "월세" : /YEAR|BORROW/.test(tradeType) ? "전세" : /BUY/.test(tradeType) ? "매매" : "월세"
   };
 }
@@ -833,9 +843,10 @@ async function queueReview(env, record, sessionId, candidates, reason = "") {
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json, processing_state, result_json, created_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'review', ?7, ?8)
-    ON CONFLICT(session_id, source, source_listing_id) DO UPDATE SET
-      snapshot_hash=excluded.snapshot_hash, payload_json=excluded.payload_json,
-      processing_state='review', result_json=excluded.result_json, error_text=''`)
+    ON CONFLICT(source, source_listing_id) WHERE processing_state='review' DO UPDATE SET
+      session_id=excluded.session_id, snapshot_hash=excluded.snapshot_hash,
+      payload_json=excluded.payload_json, result_json=excluded.result_json,
+      error_text='', processed_at='', created_at=excluded.created_at`)
     .bind(reviewId, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
       JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).run();
   return reviewId;
@@ -1117,14 +1128,16 @@ function parseDaangnUrl(value) {
 
 function daangnListEntry(article) {
   const record = daangnRecord(article, "");
-  const projection = {};
-  Object.keys(article || {}).sort().forEach((key) => {
-    if (/(?:address|jibun|floor|trade|price|deposit|rent|manage|premium|area|sales|title|name|status|desc)/i.test(key)) {
-      const value = article[key];
-      if (value != null && typeof value !== "function") projection[key] = value;
-    }
+  const listSnapshot = stableJson({
+    sourceId: record.sourceId,
+    address: record.address,
+    room: record.room,
+    category: record.category,
+    tradeType: record.tradeType,
+    deposit: record.deposit,
+    rent: record.rent,
+    area: record.area
   });
-  const listSnapshot = stableJson(projection);
   return { sourceId: record.sourceId, listSnapshot, deposit: record.deposit, rent: record.rent,
     area: record.area, address: record.address, room: record.room };
 }

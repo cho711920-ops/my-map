@@ -79,6 +79,14 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(naver, /saveAutoDistrictProgress\(progress\)/);
   assert.match(naver, /clearAutoDistrictProgress\(district\.cortarNo\)/);
   assert.match(daangn, /state\.job\.completionIssues/);
+  assert.match(daangn, /function getScopedClientId\(url\)/);
+  assert.match(daangn, /jobRequestGeneration/);
+  assert.match(daangn, /\{jobUrl: state\.job\.url\}/);
+  assert.match(daangn, /SQLITE_TOOBIG\|string or blob too big/);
+  assert.match(daangn, /new AbortController\(\)/);
+  assert.match(daangn, /controller\.abort\(\)/);
+  assert.match(daangn, /await refreshJobStatus\(\);[\s\S]*?await startOrResume\(\)/);
+  assert.match(daangn, /state\.job\.status === "running"[\s\S]*?scheduleNextChunk\(\)/);
   assert.match(naver, /지도 클러스터 인식과 관계없이/);
   const naverAutomatic = naver.slice(naver.indexOf("async function runAutomatic"), naver.indexOf("function requestSafeStop"));
   assert.doesNotMatch(naverAutomatic, /discoverFinContext\(\)/);
