@@ -6,8 +6,32 @@ import {
   collectorCompletionAudit,
   gongsilImageUrls,
   gongsilPhotoUrl,
-  manifestEntryMatch
+  manifestEntryMatch,
+  mergeDaangnDetailWithList
 } from "../cloudflare/src/collector-api.js";
+
+test("Daangn detail rows inherit stable list fields when the detail response omits them", () => {
+  const record = mergeDaangnDetailWithList({
+    originalId: "987654321",
+    trades: [{ preferred: true, type: "MONTHLY_RENT" }],
+    content: "detail without address or floor"
+  }, {
+    sourceId: "987654321",
+    listSnapshot: "list-fingerprint",
+    address: "대전광역시 서구 괴정동 100-1",
+    room: "B1층",
+    deposit: 3000,
+    rent: 120,
+    area: 33.4
+  });
+  assert.equal(record.sourceId, "987654321");
+  assert.equal(record.address, "대전광역시 서구 괴정동 100-1");
+  assert.equal(record.room, "B1층");
+  assert.equal(record.deposit, 3000);
+  assert.equal(record.rent, 120);
+  assert.equal(record.area, 33.4);
+  assert.equal(record.listSnapshot, "list-fingerprint");
+});
 
 test("Gongsilbox relative photo paths become cacheable absolute image URLs", () => {
   const first = "2025/09/20250911_1212163928_00.png";

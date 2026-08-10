@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.4.0";
+  var VERSION = "1.4.1";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -229,7 +229,8 @@
     while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
       if (state.job && state.job.status === "complete") {
         if (Number(state.job.failed || 0) > 0 || (state.selectedDistrict && state.job.completeCollection === false)) {
-          throw new Error("당근 자동수집이 부분수집 또는 오류로 종료됐습니다.");
+          var issues = Array.isArray(state.job.completionIssues) ? state.job.completionIssues.filter(Boolean) : [];
+          throw new Error(issues.join(", ") || "당근 자동수집이 부분수집 또는 오류로 종료됐습니다.");
         }
         return {source: "daangn", district: state.selectedDistrict, version: VERSION, totals: Object.assign({}, state.job)};
       }

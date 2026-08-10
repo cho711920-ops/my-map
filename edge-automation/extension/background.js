@@ -27,7 +27,7 @@ function delay(milliseconds) {
 }
 
 function retryableTargetFailure(message) {
-  return !/(?:로그인|보안키|승인되지 않은|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
+  return !/(?:로그인|보안키|승인되지 않은|주소·층 오류|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
     .test(String(message || ""));
 }
 

@@ -1129,6 +1129,22 @@ function daangnListEntry(article) {
     area: record.area, address: record.address, room: record.room };
 }
 
+export function mergeDaangnDetailWithList(article, entry = {}) {
+  const record = daangnRecord(article, entry.listSnapshot || "");
+  const trade = (Array.isArray(article?.trades) ? article.trades : []).find((candidate) => candidate?.preferred) ||
+    article?.trades?.[0] || {};
+  const hasDetailRent = trade.monthlyPay != null || trade.yearlyPay != null;
+  return {
+    ...record,
+    sourceId: record.sourceId || clean(entry.sourceId),
+    address: record.address || clean(entry.address),
+    room: record.room || clean(entry.room),
+    deposit: record.deposit == null ? number(entry.deposit) : record.deposit,
+    rent: !hasDetailRent && number(entry.rent) != null ? number(entry.rent) : record.rent,
+    area: record.area == null ? number(entry.area) : record.area
+  };
+}
+
 async function loadDaangnJob(env, jobId = `${DAANGN_JOB_PREFIX}active`) {
   const row = await env.DB.prepare("SELECT state, payload_json, progress_json, updated_at FROM jobs WHERE id=?1")
     .bind(jobId).first();
@@ -1334,9 +1350,9 @@ async function runDaangnChunk(env, body = {}) {
     responses.forEach((response, index) => {
       const id = ids[index];
       if (response?.article) {
+        const entry = job.entries.find((candidate) => candidate.sourceId === id) || { sourceId: id };
         records.push({
-          ...daangnRecord(response.article,
-            job.entries.find((entry) => entry.sourceId === id)?.listSnapshot || ""),
+          ...mergeDaangnDetailWithList(response.article, entry),
           source: "당근"
         });
         return;
@@ -1369,6 +1385,12 @@ async function runDaangnChunk(env, body = {}) {
     job.review += Number(result.review || 0);
     job.detailedDuplicates += Number(result.duplicate || 0);
     job.failed += Number(result.failed || 0);
+    for (const error of result.errors || []) {
+      const sourceId = clean(error?.sourceId);
+      job.detailErrors.push({ sourceId, attempts: Number(job.detailAttempts[sourceId] || 1),
+        message: clean(error?.message).slice(0, 300), at: nowIso() });
+    }
+    job.detailErrors = job.detailErrors.slice(-DAANGN_DETAIL_ERROR_LIMIT);
     job.processed = Number(job.processed || 0) + records.length;
     job.remaining = pending.length;
     job.lastChunkSize = ids.length;

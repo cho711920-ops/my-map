@@ -38,6 +38,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 4/);
   assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 8/);
   assert.match(background, /MAX_RUN_AGE_MS/);
+  assert.match(background, /주소·층 오류/);
   assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
   assert.match(background, /state\.summary\.retryErrors/);
   assert.match(background, /stalledLoading/);
@@ -77,6 +78,7 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(naver, /async function collectFinAutomaticDistrict\(district\)/);
   assert.match(naver, /saveAutoDistrictProgress\(progress\)/);
   assert.match(naver, /clearAutoDistrictProgress\(district\.cortarNo\)/);
+  assert.match(daangn, /state\.job\.completionIssues/);
   assert.match(naver, /지도 클러스터 인식과 관계없이/);
   const naverAutomatic = naver.slice(naver.indexOf("async function runAutomatic"), naver.indexOf("function requestSafeStop"));
   assert.doesNotMatch(naverAutomatic, /discoverFinContext\(\)/);
