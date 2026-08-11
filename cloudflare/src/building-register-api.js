@@ -206,11 +206,11 @@ async function persistBuildingBadge(env, propertyId, result) {
   const elevators = Number(building.passengerElevators || 0) + Number(building.emergencyElevators || 0);
   const values = [year, elevators, approval, new Date().toISOString(), clean(propertyId)];
   let update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
-    building_approval_date=?3, building_info_checked_at=?4, building_info_status='connected', updated_at=?4
+    building_approval_date=?3, building_info_checked_at=?4, building_info_status='확인완료', updated_at=?4
     WHERE id=?5`).bind(...values).run();
   if (Number(update?.meta?.changes || 0) === 0) {
     update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
-      building_approval_date=?3, building_info_checked_at=?4, building_info_status='connected', updated_at=?4
+      building_approval_date=?3, building_info_checked_at=?4, building_info_status='확인완료', updated_at=?4
       WHERE property_id=?5 AND property_id <> ''`).bind(...values).run();
   }
   return { ok: true, persisted: Number(update?.meta?.changes || 0) > 0, year, elevators, approvalDate: approval };

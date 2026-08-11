@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 const projectRoot = path.resolve(root, "..");
 const building = fs.readFileSync(path.join(root, "js", "building-register-v6.js"), "utf8");
 const map = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
+const buildingApi = fs.readFileSync(path.join(root, "cloudflare", "src", "building-register-api.js"), "utf8");
 const code = fs.readFileSync(
   path.join(projectRoot, "outputs", "JS부동산_Code.gs_v6.5.4_연락처6개_안전작업대기열_최종본.gs"),
   "utf8"
@@ -36,12 +37,14 @@ assert.match(map, /buildingInfoStatus: clean\(c\[22\]\)/);
 assert.doesNotMatch(map, /JSBuildingRegisterBadges\.prefetchMissing\(rawItems\)/);
 
 assert.match(building, /function persistentBadgeFromItemV810\(item\)/);
-assert.match(building, /String\(item\.buildingInfoStatus \|\| ""\)\.trim\(\) !== "확인완료"/);
+assert.match(building, /status !== "확인완료" && status !== "connected"/);
 assert.match(building, /var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2/);
 assert.match(building, /requestBadgeData\(item, parcel, true\)/);
 assert.match(building, /if \(persistToServer && \(!data\.buildingInfoCache \|\| !data\.buildingInfoCache\.ok\)\)/);
 assert.match(building, /"address=" \+ encodeURIComponent\(item && item\.address \|\| parcel\.lotAddress \|\| ""\)/);
 assert.match(building, /prefetchMissing: prefetchMissingBuildingInfoV810/);
-assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.1\.1"/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.1\.2"/);
+assert.doesNotMatch(buildingApi, /building_info_status='connected'/);
+assert.match(buildingApi, /building_info_status='확인완료'/);
 
 console.log("persistent building info v8.1.0 tests passed");

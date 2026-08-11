@@ -19,7 +19,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.1.1";
+  var BUILDING_CLIENT_VERSION_V811 = "8.1.2";
   var state = {
     item: null,
     parcel: null,
@@ -94,7 +94,11 @@
   }
 
   function persistentBadgeFromItemV810(item) {
-    if (!item || String(item.buildingInfoStatus || "").trim() !== "확인완료") return null;
+    var status = String(item && item.buildingInfoStatus || "").trim();
+    // D1 originally persisted successful lookups as "connected", while the
+    // legacy sheet import used "확인완료". Both mean that the values came from
+    // the building register and are safe to reuse after a reload.
+    if (!item || (status !== "확인완료" && status !== "connected")) return null;
     return {
       year: String(item.buildingYear || "").replace(/\D/g, "").slice(0, 4),
       elevators: Number(item.buildingElevators || 0),
