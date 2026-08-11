@@ -298,16 +298,47 @@ export async function getBuildingRegister(env, query) {
   return result;
 }
 
+async function listingElevatorContext(env, propertyId) {
+  if (!env.DB || !propertyId) return null;
+  return env.DB.prepare(`SELECT address, road_address, building_name, building_elevators
+    FROM listings WHERE id=?1 OR (property_id=?1 AND property_id<>'')
+    ORDER BY CASE WHEN id=?1 THEN 0 ELSE 1 END LIMIT 1`).bind(propertyId).first();
+}
+
+async function cachedBuildingLocation(env, parcel, buildingName) {
+  const cached = await readCache(env, `building-register-v10-${cacheKey(parcel)}`, "summary");
+  const rows = [...(cached?.buildings || []), ...(cached?.recaps || [])].filter((row) => clean(row?.roadAddress));
+  if (!rows.length) return null;
+  const targetName = normalizedName(buildingName);
+  return rows.find((row) => {
+    const candidateName = normalizedName(row?.buildingName);
+    return targetName && candidateName &&
+      (targetName === candidateName || targetName.includes(candidateName) || candidateName.includes(targetName));
+  }) || rows[0];
+}
+
 export async function getElevatorCapacityForListing(env, query) {
   const parcel = parcelFrom(query || {});
+  const propertyId = clean(query?.propertyId);
+  const listing = await listingElevatorContext(env, propertyId);
+  const buildingName = clean(query?.buildingName || listing?.building_name);
+  let roadAddress = clean(query?.roadAddress || listing?.road_address);
+  if (!roadAddress) {
+    const cachedBuilding = await cachedBuildingLocation(env, parcel, buildingName);
+    roadAddress = clean(cachedBuilding?.roadAddress);
+  }
+  const locationCacheKey = roadAddress
+    ? roadAddress.replace(/\([^)]*\)/g, " ").replace(/\s+/g, "_").slice(0, 160)
+    : normalizedName(buildingName).slice(0, 120);
   const result = await getElevatorCapacity(env, {
-    address: clean(query?.address),
-    cacheKey: cacheKey(parcel),
-    expectedCount: Number(query?.elevators || 0),
+    address: clean(query?.address || listing?.address),
+    roadAddress,
+    buildingName,
+    cacheKey: [cacheKey(parcel), locationCacheKey].filter(Boolean).join("-"),
+    expectedCount: Math.max(Number(query?.elevators || 0), Number(listing?.building_elevators || 0)),
     force: /^(1|true|yes)$/i.test(clean(query?.force))
   });
   const capacity = Number(result?.maxCapacity || 0);
-  const propertyId = clean(query?.propertyId);
   let persisted = false;
   if (capacity > 0 && propertyId && env.DB) {
     let update = await env.DB.prepare(`UPDATE listings SET building_elevator_capacity=?1,

@@ -472,3 +472,15 @@
 - Elevator-capacity discovery now tries normalized address variants, caches a district-wide operation index in R2 when exact lookup is empty, and enriches matched elevator numbers with the separately approved building-elevator detail API. BuildingHUB and elevator environment variables remain logically separate.
 - Cloudflare tests: 88/88 passed. Targeted elevator tests: 5/5 passed. Wrangler build/dry-run passed.
 - Production Worker version before the secret recovery verification: `1a2dc74d-42af-4bcf-b629-78d93124be8b`.
+
+## 2026-08-11 Elevator maximum-capacity production repair
+
+- Production D1 proved the display path had never succeeded: 935 active listings had a verified elevator count, but 0 had `building_elevator_capacity` before this repair. Every v1-v3 capacity cache entry was either unmatched or timed out.
+- The data.go.kr operation proxy returned zero rows for parcel-address searches. The Elevator Safety Agency source gateway returned the district data normally, but its response identifies buildings by road address rather than parcel address.
+- Capacity lookup now passes the selected BuildingHUB title row's official road address and building name, matches the operation response by normalized road address, and falls back to the official source gateway when the proxy is empty.
+- Operation rows that already contain `ratedCap` are used immediately instead of waiting for a redundant building-detail call. The old detail endpoint remains a fallback only when capacity is missing.
+- Capacity caches are versioned per parcel and road address. A successful D1 persistence now invalidates `api-cache/d1-sheet.csv` and touches the listings revision so the saved value survives reloads instead of waiting for the old one-hour sheet cache.
+- Live official-source verification for `대덕구 송촌동 477-1` / `동춘당로 79` returned elevator `5000593`, maximum 13 persons. That verified value was safely persisted to listing `M-e0d98b9b-e3c7-43da-92c4-04742ea290a7`; no other listing fields were changed.
+- The regenerative R2 object `api-cache/d1-sheet.csv` was removed once after deployment so the next authenticated sheet request rebuilds it from the corrected D1 row.
+- Cloudflare tests: 89/89 passed. Targeted elevator tests: 6/6 passed. Wrangler build/dry-run passed.
+- Production Worker version: `72a7be29-4653-4d12-b781-c5f148f06418`.

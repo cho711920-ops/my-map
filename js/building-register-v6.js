@@ -20,7 +20,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.1";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.3";
   var state = {
     item: null,
     parcel: null,
@@ -667,6 +667,23 @@
     };
   }
 
+  function capacityLocationFromDataV823(data, item) {
+    var building = buildingForBadge(data, item) || {};
+    return {
+      roadAddress: String(
+        building.roadAddress ||
+        data && data.parcel && data.parcel.roadAddress ||
+        item && item.roadAddress ||
+        ""
+      ).trim(),
+      buildingName: String(
+        building.buildingName ||
+        item && (item.buildingName || item.name) ||
+        ""
+      ).trim()
+    };
+  }
+
   function mergeKnownBadgeV821(badge, knownBadge) {
     if (!knownBadge) return badge;
     badge = badge || { year: "", elevators: 0, capacity: 0, verified: false };
@@ -740,7 +757,8 @@
     return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
   }
 
-  function capacityRequestUrl(item, parcel, elevators) {
+  function capacityRequestUrl(item, parcel, elevators, location) {
+    location = location || {};
     var params = [
       "action=elevatorCapacity",
       "client=" + encodeURIComponent(BUILDING_CLIENT_VERSION_V811),
@@ -751,17 +769,19 @@
       "ji=" + encodeURIComponent(parcel.ji),
       "elevators=" + encodeURIComponent(elevators || 0),
       "propertyId=" + encodeURIComponent(item && (item.propertyId || item.id || item.key) || ""),
-      "address=" + encodeURIComponent(item && item.address || parcel.lotAddress || "")
+      "address=" + encodeURIComponent(item && item.address || parcel.lotAddress || ""),
+      "roadAddress=" + encodeURIComponent(location.roadAddress || ""),
+      "buildingName=" + encodeURIComponent(location.buildingName || "")
     ];
     return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
   }
 
-  function requestCapacityData(item, parcel, elevators) {
-    var key = parcelKey(parcel);
+  function requestCapacityData(item, parcel, elevators, location) {
+    var key = parcelKey(parcel) + "|" + String(location && location.roadAddress || "");
     if (capacityRequestsV820[key]) return capacityRequestsV820[key];
     // A district index is built only on the first lookup, then reused from R2.
     // Keep this background enrichment alive without blocking the listing card.
-    capacityRequestsV820[key] = jsonp(capacityRequestUrl(item, parcel, elevators), 60000)
+    capacityRequestsV820[key] = jsonp(capacityRequestUrl(item, parcel, elevators, location), 60000)
       .then(function(data) {
         if (!data || !data.ok || data.action !== "elevatorCapacity") return null;
         return data;
@@ -815,7 +835,12 @@
         var badge = mergeKnownBadgeV821(badgeFromData(data, item), knownBadge);
         if (card.isConnected) applyBadgeToCard(card, badge);
         if (!(badge.elevators > 0 && !(badge.capacity > 0))) return data;
-        return requestCapacityData(item, parcel, badge.elevators).then(function(capacityData) {
+        return requestCapacityData(
+          item,
+          parcel,
+          badge.elevators,
+          capacityLocationFromDataV823(data, item)
+        ).then(function(capacityData) {
           if (capacityData && Number(capacityData.maxCapacity || 0) > 0) {
             badge.capacity = Number(capacityData.maxCapacity);
             badge.persistent = !!capacityData.persisted;

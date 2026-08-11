@@ -439,7 +439,18 @@ async function handleDataApi(request, env, context) {
       });
     }
     if (query.action === "elevatorCapacity") {
-      return jsonp(query.callback, await getElevatorCapacityForListing(env, query), {
+      const result = await getElevatorCapacityForListing(env, query);
+      if (result?.persisted) {
+        sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+        const invalidation = deleteR2Cache(env, null, [D1_SHEET_CACHE_KEY]);
+        const revisionUpdate = touchDataRevision(env, context, ["listings"], invalidation, {
+          changeIds: [result.propertyId].filter(Boolean),
+          changeAction: "elevatorCapacity"
+        });
+        if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
+        else await Promise.all([invalidation, revisionUpdate].filter(Boolean));
+      }
+      return jsonp(query.callback, result, {
         "cache-control": "private, no-store",
         "x-js-data-source": "D1+ELEVATOR-PUBLIC-DATA"
       });
