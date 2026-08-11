@@ -19,7 +19,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.6";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.7";
   var state = {
     item: null,
     parcel: null,
@@ -702,8 +702,8 @@
         if (!elevator.hidden) {
           var capacity = Number(badge.capacity || 0);
           var capacityText = capacity > 0 ? " · 최대 " + capacity + "인승" : " · 최대정원 미확인";
-          elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대" + capacityText;
-          elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대" + capacityText);
+          elevator.title = "공식자료 승강기 " + badge.elevators + "대" + capacityText;
+          elevator.setAttribute("aria-label", "승강기 " + badge.elevators + "대" + capacityText);
           if (elevatorCapacity) {
             elevatorCapacity.textContent = capacity > 0 ? capacity + "인" : "X";
             elevatorCapacity.hidden = false;

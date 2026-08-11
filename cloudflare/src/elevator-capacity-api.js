@@ -332,11 +332,14 @@ async function writeCache(env, key, address, result, expiry = `+${CACHE_DAYS} da
 }
 
 export async function getElevatorCapacity(env, {
-  address, roadAddress = "", buildingName = "", cacheKey, expectedCount = 0, force = false
+  address, roadAddress = "", buildingName = "", cacheKey, force = false
 } = {}) {
   const fullAddress = completeDaejeonAddress(address);
   const targetKey = parcelAddressKey(fullAddress);
-  if (!fullAddress || !targetKey || Number(expectedCount || 0) <= 0) {
+  // Building-HUB occasionally reports zero elevators for a parcel even when
+  // the Elevator Safety Agency has active operation records.  Address validity,
+  // not the Building-HUB count, decides whether the independent registry runs.
+  if (!fullAddress || !targetKey) {
     return { ok: true, available: true, matched: false, maxCapacity: 0, capacities: [], elevators: [] };
   }
   const key = `elevator-capacity-v${CACHE_VERSION}-${clean(cacheKey) || targetKey}`;

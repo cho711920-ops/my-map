@@ -140,7 +140,9 @@ test("source gateway and official road address recover capacity when proxy addre
     const result = await getElevatorCapacity({ ELEVATOR_OPERATION_SERVICE_KEY: "test-key" }, {
       address: "대덕구 송촌동 477-1",
       roadAddress: "대전광역시 대덕구 동춘당로 79 (송촌동)",
-      expectedCount: 1,
+      // Building-HUB can incorrectly report zero. The independent safety
+      // registry must still be queried and allowed to prove the elevator.
+      expectedCount: 0,
       force: true
     });
     assert.equal(result.matched, true);

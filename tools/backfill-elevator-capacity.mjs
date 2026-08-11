@@ -94,25 +94,35 @@ function listingTargets() {
     WHERE b.cache_key LIKE 'building-register-v10-%' AND trim(json_extract(j.value,'$.roadAddress'))<>''
   )
   SELECT l.id, l.address, l.building_name, l.building_elevators,
+    l.building_elevator_capacity, l.building_info_checked_at,
     COALESCE(NULLIF(trim(l.road_address),''), MIN(r.road_address)) AS road_address
   FROM listings l LEFT JOIN register_locations r
     ON r.lot_key=replace(replace(replace(l.address,'대전광역시',''),'번지',''),' ','')
-  WHERE l.status<>'deleted' AND l.building_elevators>0 AND COALESCE(l.building_elevator_capacity,0)=0
+  WHERE l.status<>'deleted'
   GROUP BY l.id HAVING trim(COALESCE(NULLIF(l.road_address,''), MIN(r.road_address)))<>''`;
   return d1(query).results || [];
 }
 
-function capacityIndex(rows) {
+function registryIndex(rows) {
   const index = new Map();
   for (const row of rows) {
     // The operation service names the road-address field `address1`; `address2`
     // is only the parenthesized legal-dong suffix such as "(송촌동)".
     const key = roadKey(row?.address1);
+    const elevatorNo = clean(row?.elevatorNo || row?.elvtrUniqueNo);
+    const status = clean(row?.elvtrSttsNm || row?.elvtrStts);
+    if (/철거|폐지|말소/.test(status)) continue;
     const capacity = Number(clean(row?.ratedCap).replace(/,/g, "")) || 0;
-    if (!key || capacity <= 0) continue;
-    index.set(key, Math.max(index.get(key) || 0, capacity));
+    if (!key || !elevatorNo) continue;
+    const current = index.get(key) || { elevators: new Set(), capacity: 0 };
+    current.elevators.add(elevatorNo);
+    current.capacity = Math.max(current.capacity, capacity);
+    index.set(key, current);
   }
-  return index;
+  return new Map([...index].map(([key, value]) => [key, {
+    count: value.elevators.size,
+    capacity: value.capacity
+  }]));
 }
 
 function applyRows(rows) {
@@ -120,10 +130,14 @@ function applyRows(rows) {
   for (let offset = 0; offset < rows.length; offset += 40) {
     const statements = rows.slice(offset, offset + 40).map((row) => `UPDATE listings SET
       road_address=CASE WHEN trim(COALESCE(road_address,''))='' THEN ${sqlText(row.road_address)} ELSE road_address END,
-      building_elevator_capacity=CASE WHEN COALESCE(building_elevator_capacity,0)=0 AND ${Number(row.capacity || 0)}>0
-        THEN ${Number(row.capacity || 0)} ELSE building_elevator_capacity END,
+      elevator_registry_count=${Number(row.registryCount || 0)},
+      elevator_registry_checked_at=${sqlText(now)},
+      elevator_registry_status=${sqlText(row.registryCount > 0 ? "matched" : "no_match")},
+      building_elevators=MAX(COALESCE(building_register_elevators,building_elevators,0),${Number(row.registryCount || 0)}),
+      building_elevator_capacity=${Number(row.registryCount > 0 ? row.capacity || 0 : 0)},
+      building_info_status=CASE WHEN ${Number(row.registryCount || 0)}>0 THEN '확인완료' ELSE building_info_status END,
       updated_at=${sqlText(now)}
-      WHERE id=${sqlText(row.id)} AND status<>'deleted' AND building_elevators>0;`).join("\n");
+      WHERE id=${sqlText(row.id)} AND status<>'deleted';`).join("\n");
     d1(statements);
     process.stdout.write(`D1 updated: ${Math.min(offset + 40, rows.length)}/${rows.length}\n`);
   }
@@ -131,13 +145,32 @@ function applyRows(rows) {
 
 const apply = process.argv.includes("--apply");
 const targets = listingTargets();
-process.stdout.write(`Listings with an official road-address candidate: ${targets.length}\n`);
+const coverage = d1(`SELECT COUNT(*) AS active_listings,
+  SUM(CASE WHEN trim(COALESCE(building_info_checked_at,''))<>'' AND building_elevators=0 THEN 1 ELSE 0 END) AS checked_zero
+  FROM listings WHERE status<>'deleted'`).results?.[0] || {};
+process.stdout.write(`Active listings: ${Number(coverage.active_listings || 0)}\n`);
+process.stdout.write(`Listings with a verified official road-address: ${targets.length}\n`);
 const operationRows = (await Promise.all(DISTRICTS.map(fetchDistrict))).flat();
-const index = capacityIndex(operationRows);
-const prepared = targets.map((row) => ({ ...row, capacity: index.get(roadKey(row.road_address)) || 0 }));
-const matched = prepared.filter((row) => row.capacity > 0);
-process.stdout.write(`Official capacity matches: ${matched.length}/${prepared.length}\n`);
-process.stdout.write(`Unique official road-address capacities: ${index.size}\n`);
+const index = registryIndex(operationRows);
+const prepared = targets.map((row) => {
+  const registry = index.get(roadKey(row.road_address)) || { count: 0, capacity: 0 };
+  return { ...row, registryCount: registry.count, capacity: registry.capacity };
+});
+const matched = prepared.filter((row) => row.registryCount > 0);
+const mismatchedZero = matched.filter((row) => Number(row.building_elevators || 0) === 0 &&
+  clean(row.building_info_checked_at));
+const newlyVerified = matched.filter((row) => Number(row.building_elevators || 0) === 0 &&
+  !clean(row.building_info_checked_at));
+const newlyCapacitated = matched.filter((row) => Number(row.capacity || 0) > 0 &&
+  Number(row.building_elevator_capacity || 0) !== Number(row.capacity || 0));
+const vehicleOrUnknownOnly = matched.filter((row) => Number(row.capacity || 0) === 0);
+const uniqueMatchedRoads = new Set(matched.map((row) => roadKey(row.road_address))).size;
+process.stdout.write(`Safety-registry matches: ${matched.length}/${prepared.length} listings at ${uniqueMatchedRoads} road addresses\n`);
+process.stdout.write(`Building-HUB zero but safety-registry matched: ${mismatchedZero.length} listings\n`);
+process.stdout.write(`Previously unchecked but safety-registry matched: ${newlyVerified.length} listings\n`);
+process.stdout.write(`Capacity values to add or correct: ${newlyCapacitated.length} listings\n`);
+process.stdout.write(`Elevator exists but person capacity is unknown: ${vehicleOrUnknownOnly.length} listings\n`);
+process.stdout.write(`Unique official elevator road addresses: ${index.size}\n`);
 if (!matched.length && prepared.length) {
   process.stdout.write(`Listing road sample: ${JSON.stringify(prepared.slice(0, 3).map((row) => ({
     roadAddress: row.road_address, key: roadKey(row.road_address)
@@ -153,7 +186,8 @@ if (!apply) {
   applyRows(prepared);
   const verified = d1(`SELECT COUNT(*) AS active_elevator_listings,
     SUM(CASE WHEN COALESCE(building_elevator_capacity,0)>0 THEN 1 ELSE 0 END) AS with_capacity,
-    SUM(CASE WHEN trim(COALESCE(road_address,''))<>'' THEN 1 ELSE 0 END) AS with_road_address
+    SUM(CASE WHEN COALESCE(building_elevator_capacity,0)=0 THEN 1 ELSE 0 END) AS with_unknown_capacity,
+    SUM(CASE WHEN elevator_registry_status='matched' THEN 1 ELSE 0 END) AS safety_registry_matched
     FROM listings WHERE status<>'deleted' AND building_elevators>0`).results?.[0] || {};
   process.stdout.write(`${JSON.stringify(verified)}\n`);
 }

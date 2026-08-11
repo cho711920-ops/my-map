@@ -512,3 +512,14 @@
 - A fresh BuildingHUB modal lookup now refreshes the matching listing card by `property_id` as well as parcel key, so closing the register immediately leaves the icon visible on the list.
 - Direct card-markup execution passed for known, unknown and absent elevator cases. Cloudflare tests: 92/92 passed; Wrangler build/dry-run passed.
 - Production Worker version: `c00ad386-5d3a-4523-ae19-20862fb8ca1e`.
+
+## 2026-08-11 Independent elevator-registry audit and repair
+
+- `서구 용문동 227-1` exposed an official-source discrepancy: BuildingHUB reported passenger/emergency elevators as zero, while the Elevator Safety Agency operation registry reported two active elevators, including a 13-person accessible elevator.
+- Elevator-registry discovery no longer requires a positive BuildingHUB count. Separate D1 fields now preserve the BuildingHUB count, safety-registry count, lookup state and checked time; the effective card count is the maximum of the two official sources so a later BuildingHUB refresh cannot erase a verified safety-registry match.
+- The complete Daejeon five-district operation index contained 28,117 elevator rows across 12,012 road addresses. All 3,017 active listings with a verified road-address link were audited: 1,663 listings matched the safety registry at 792 road addresses.
+- The audit repaired 168 listings where BuildingHUB had already reported zero and 714 previously unchecked listings where the safety registry proved an elevator, for 882 newly visible elevator badges. Four matched listings have no person capacity and therefore correctly display `X`.
+- `서구 용문동 227-1` has 12 active listings; all 12 now persist two elevators and maximum capacity 13. Production invariants confirmed zero registry-matched listings with an effective count of zero and zero source-merge count mismatches.
+- Future automatic and manual listings run the safety-registry check independently after collection/BuildingHUB enrichment. Matches, no-matches and temporary upstream failures use separate refresh windows, preventing the same locations from being queried every minute.
+- Regenerative listing caches were invalidated and the listings revision was advanced for an immediate client refresh. Cloudflare tests: 94/94 passed; targeted elevator tests and Wrangler dry-run passed.
+- Production Worker version: `71dc86fa-a82f-435c-ae8d-d8b51927f308`.

@@ -131,9 +131,17 @@ async function pendingCapacityLocations(env, limit) {
       address, road_address, MIN(building_name) AS building_name,
       MAX(building_elevators) AS building_elevators,
       MAX(COALESCE(NULLIF(last_collected_at,''), updated_at)) AS collected_at
-    FROM listings WHERE status<>'deleted' AND building_elevators>0
-      AND COALESCE(building_elevator_capacity,0)=0 AND trim(COALESCE(address,''))<>''
-    GROUP BY address, road_address ORDER BY road_address='' ASC, datetime(collected_at) DESC LIMIT ?1`)
+    FROM listings WHERE status<>'deleted' AND trim(COALESCE(address,''))<>''
+      AND (trim(COALESCE(road_address,''))<>'' OR building_elevators>0)
+      AND (
+        trim(COALESCE(elevator_registry_checked_at,''))=''
+        OR (elevator_registry_status='unavailable'
+          AND datetime(elevator_registry_checked_at)<datetime('now','-1 day'))
+        OR datetime(elevator_registry_checked_at)<datetime('now','-45 days')
+      )
+    GROUP BY address, road_address
+    ORDER BY road_address='' ASC, datetime(MIN(COALESCE(NULLIF(elevator_registry_checked_at,''),'1970-01-01'))) ASC,
+      datetime(collected_at) DESC LIMIT ?1`)
     .bind(limit).all();
   return resultRows(result);
 }
@@ -146,16 +154,28 @@ function capacityCacheKey(listing) {
     .slice(0, 150);
 }
 
-async function persistCapacityForLocation(env, listing, capacity) {
+async function persistCapacityForLocation(env, listing, registry) {
   const roadAddress = clean(listing.road_address);
   const address = clean(listing.address);
   const now = new Date().toISOString();
-  const result = await env.DB.prepare(`UPDATE listings SET building_elevator_capacity=?1,
-      road_address=CASE WHEN trim(COALESCE(road_address,''))='' AND ?2<>'' THEN ?2 ELSE road_address END,
+  const available = registry?.available !== false;
+  const count = available && registry?.matched && Array.isArray(registry?.elevators)
+    ? registry.elevators.length : 0;
+  const capacity = count > 0 ? Number(registry?.maxCapacity || 0) : 0;
+  const status = available ? (count > 0 ? "matched" : "no_match") : "unavailable";
+  const result = await env.DB.prepare(`UPDATE listings SET
+      elevator_registry_count=CASE WHEN ?1 THEN ?2 ELSE elevator_registry_count END,
+      elevator_registry_checked_at=?3, elevator_registry_status=?4,
+      building_elevators=CASE WHEN ?1 THEN MAX(COALESCE(building_register_elevators,building_elevators,0),?2)
+        ELSE building_elevators END,
+      building_elevator_capacity=CASE WHEN ?1 THEN CASE WHEN ?2>0 THEN ?5 ELSE 0 END
+        ELSE building_elevator_capacity END,
+      building_info_status=CASE WHEN ?2>0 THEN '확인완료' ELSE building_info_status END,
+      road_address=CASE WHEN trim(COALESCE(road_address,''))='' AND ?6<>'' THEN ?6 ELSE road_address END,
       updated_at=?3
-    WHERE status<>'deleted' AND building_elevators>0 AND COALESCE(building_elevator_capacity,0)=0
-      AND (trim(COALESCE(road_address,''))=?2 OR address=?4) RETURNING id`)
-    .bind(capacity, roadAddress, now, address).all();
+    WHERE status<>'deleted'
+      AND ((?6<>'' AND trim(COALESCE(road_address,''))=?6) OR address=?7) RETURNING id`)
+    .bind(available ? 1 : 0, count, now, status, capacity, roadAddress, address).all();
   return resultRows(result).map((row) => clean(row.id)).filter(Boolean);
 }
 
@@ -184,8 +204,7 @@ async function enrichElevatorCapacities(env, { candidateLimit = 40, freshLookupL
     }
     checked += 1;
     if (!result?.cached) freshLookups += 1;
-    const capacity = Number(result?.maxCapacity || 0);
-    if (capacity > 0) changedIds.push(...await persistCapacityForLocation(env, listing, capacity));
+    changedIds.push(...await persistCapacityForLocation(env, listing, result));
     if (freshLookups >= freshLookupLimit) break;
   }
   return { checked, freshLookups, changedIds };

@@ -11,6 +11,10 @@ const worker = fs.readFileSync(new URL("../cloudflare/src/worker.js", import.met
 const collector = fs.readFileSync(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
 const building = fs.readFileSync(new URL("../js/building-register-v6.js", import.meta.url), "utf8");
 const enrichment = fs.readFileSync(new URL("../cloudflare/src/elevator-enrichment.js", import.meta.url), "utf8");
+const elevatorApi = fs.readFileSync(new URL("../cloudflare/src/elevator-capacity-api.js", import.meta.url), "utf8");
+const buildingApi = fs.readFileSync(new URL("../cloudflare/src/building-register-api.js", import.meta.url), "utf8");
+const migration = fs.readFileSync(new URL("../cloudflare/migrations/0015_elevator_registry.sql", import.meta.url), "utf8");
+const audit = fs.readFileSync(new URL("../tools/backfill-elevator-capacity.mjs", import.meta.url), "utf8");
 
 test("future listings are enriched after collection and by the minute scheduler", () => {
   assert.match(worker, /runElevatorEnrichmentMaintenance\(env, context, "collectorElevatorEnrichment"\)/);
@@ -18,6 +22,25 @@ test("future listings are enriched after collection and by the minute scheduler"
   assert.match(collector, /road_address=CASE WHEN road_address='' AND \?13<>''/);
   assert.match(collector, /address, road_address, building_name/);
   assert.match(enrichment, /datetime\(building_info_checked_at\)<datetime\('now','-12 hours'\)/);
+});
+
+test("safety registry independently overrides an incorrect Building-HUB zero", () => {
+  assert.doesNotMatch(elevatorApi, /Number\(expectedCount \|\| 0\) <= 0/);
+  assert.match(enrichment, /elevator_registry_status='unavailable'/);
+  assert.match(enrichment, /elevator_registry_count/);
+  assert.match(enrichment, /MAX\(COALESCE\(building_register_elevators,building_elevators,0\),\?2\)/);
+  assert.match(enrichment, /\(\?6<>'' AND trim\(COALESCE\(road_address,''\)\)=\?6\) OR address=\?7/);
+  assert.match(buildingApi, /building_register_elevators=\?2/);
+  assert.match(buildingApi, /building_elevators=MAX\(\?2, COALESCE\(elevator_registry_count,0\)\)/);
+  assert.match(migration, /building_register_elevators/);
+  assert.match(migration, /elevator_registry_checked_at/);
+});
+
+test("full audit includes register-zero listings and records both matches and no-matches", () => {
+  assert.doesNotMatch(audit, /WHERE l\.status<>'deleted' AND l\.building_elevators>0/);
+  assert.match(audit, /Building-HUB zero but safety-registry matched/);
+  assert.match(audit, /elevator_registry_status=/);
+  assert.match(audit, /building_elevator_capacity=/);
 });
 
 test("card entry never starts an elevator-capacity network request", () => {

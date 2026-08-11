@@ -228,14 +228,16 @@ async function persistBuildingBadge(env, propertyId, result) {
   const elevatorCapacity = Number(result?.elevatorInfo?.maxCapacity || building?.elevatorMaxCapacity || 0);
   const roadAddress = clean(building?.roadAddress) || clean(rows.find((row) => clean(row?.roadAddress))?.roadAddress);
   const values = [year, elevators, elevatorCapacity, approval, roadAddress, new Date().toISOString(), clean(propertyId)];
-  let update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
+  let update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_register_elevators=?2,
+    building_elevators=MAX(?2, COALESCE(elevator_registry_count,0)),
     building_elevator_capacity=CASE WHEN ?3>0 THEN ?3 ELSE building_elevator_capacity END,
     building_approval_date=?4,
     road_address=CASE WHEN trim(COALESCE(road_address,''))='' AND ?5<>'' THEN ?5 ELSE road_address END,
     building_info_checked_at=?6,
     building_info_status='확인완료', updated_at=?6 WHERE id=?7`).bind(...values).run();
   if (Number(update?.meta?.changes || 0) === 0) {
-    update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
+    update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_register_elevators=?2,
+      building_elevators=MAX(?2, COALESCE(elevator_registry_count,0)),
       building_elevator_capacity=CASE WHEN ?3>0 THEN ?3 ELSE building_elevator_capacity END,
       building_approval_date=?4,
       road_address=CASE WHEN trim(COALESCE(road_address,''))='' AND ?5<>'' THEN ?5 ELSE road_address END,
@@ -344,14 +346,25 @@ export async function getElevatorCapacityForListing(env, query) {
     force: /^(1|true|yes)$/i.test(clean(query?.force))
   });
   const capacity = Number(result?.maxCapacity || 0);
+  const registryCount = Array.isArray(result?.elevators) ? result.elevators.length : 0;
+  const registryStatus = result?.available === false ? "unavailable" : result?.matched ? "matched" : "no_match";
   let persisted = false;
-  if (capacity > 0 && propertyId && env.DB) {
-    let update = await env.DB.prepare(`UPDATE listings SET building_elevator_capacity=?1,
-      updated_at=?2 WHERE id=?3`).bind(capacity, new Date().toISOString(), propertyId).run();
+  if (result?.available !== false && propertyId && env.DB) {
+    const now = new Date().toISOString();
+    let update = await env.DB.prepare(`UPDATE listings SET elevator_registry_count=?1,
+      elevator_registry_checked_at=?2, elevator_registry_status=?3,
+      building_elevators=MAX(COALESCE(building_register_elevators,building_elevators,0),?1),
+      building_elevator_capacity=CASE WHEN ?1>0 THEN ?4 ELSE 0 END,
+      building_info_status=CASE WHEN ?1>0 THEN '확인완료' ELSE building_info_status END,
+      updated_at=?2 WHERE id=?5`).bind(registryCount, now, registryStatus, capacity, propertyId).run();
     if (Number(update?.meta?.changes || 0) === 0) {
-      update = await env.DB.prepare(`UPDATE listings SET building_elevator_capacity=?1,
-        updated_at=?2 WHERE property_id=?3 AND property_id<>''`)
-        .bind(capacity, new Date().toISOString(), propertyId).run();
+      update = await env.DB.prepare(`UPDATE listings SET elevator_registry_count=?1,
+        elevator_registry_checked_at=?2, elevator_registry_status=?3,
+        building_elevators=MAX(COALESCE(building_register_elevators,building_elevators,0),?1),
+        building_elevator_capacity=CASE WHEN ?1>0 THEN ?4 ELSE 0 END,
+        building_info_status=CASE WHEN ?1>0 THEN '확인완료' ELSE building_info_status END,
+        updated_at=?2 WHERE property_id=?5 AND property_id<>''`)
+        .bind(registryCount, now, registryStatus, capacity, propertyId).run();
     }
     persisted = Number(update?.meta?.changes || 0) > 0;
   }

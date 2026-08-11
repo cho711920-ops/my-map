@@ -3823,8 +3823,8 @@ function buildListElevatorIconV650(item) {
   var capacityLabel = capacity > 0 ? capacity + "인" : "X";
   var capacityTitle = capacity > 0 ? "최대 " + capacity + "인승" : "최대정원 미확인";
   return '<span class="item-elevator-v650"' + (badge ? '' : ' hidden') +
-    ' title="' + (badge ? '건축물대장 엘리베이터 ' + badge.elevators + '대 · ' + capacityTitle : '건축물대장 엘리베이터 확인') + '"' +
-    ' aria-label="' + (badge ? '엘리베이터 ' + badge.elevators + '대 · ' + capacityTitle : '엘리베이터 확인 전') + '">' +
+    ' title="' + (badge ? '공식자료 승강기 ' + badge.elevators + '대 · ' + capacityTitle : '공식자료 승강기 확인') + '"' +
+    ' aria-label="' + (badge ? '승강기 ' + badge.elevators + '대 · ' + capacityTitle : '승강기 확인 전') + '">' +
     '<svg class="item-elevator-glyph-v651" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<rect x="2" y="2" width="20" height="20" rx="2"></rect>' +
       '<path class="item-elevator-divider-v665" d="M11 4.5v15"></path>' +
