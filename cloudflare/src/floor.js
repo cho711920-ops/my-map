@@ -39,6 +39,20 @@ export function parseListingFloor(value, inferRoom = true) {
   const basement = parseBasementFloor(text);
   if (basement != null) return basement;
 
+  // Provider floor labels use "current floor / total floors" (for example
+  // 1/3 or 6/7).  Only the first value identifies the listing's floor.
+  const currentAndTotal = text.match(/^(-?\d+(?:\.\d+)?)[/／]\d+(?:\.\d+)?$/);
+  if (currentAndTotal) {
+    const current = Number(currentAndTotal[1]);
+    return Number.isFinite(current) && current !== 0 ? current : null;
+  }
+
+  const numericFloor = text.match(/^(-?\d+(?:\.\d+)?)(?:층|F)$/);
+  if (numericFloor) {
+    const current = Number(numericFloor[1]);
+    return Number.isFinite(current) && current !== 0 ? current : null;
+  }
+
   const explicit = text.match(/(?:^|[^0-9])(\d{1,2})(?:층|F)(?:[^0-9]|$)/);
   if (explicit) return Number(explicit[1]) || null;
 
@@ -66,8 +80,25 @@ export function listingFloor(row) {
 export function canonicalListingRoom(value) {
   const text = clean(value);
   if (!text) return "";
+
+  const currentAndTotal = text.replace(/\s+/g, "").match(/^(-?\d+(?:\.\d+)?)[/／](\d+(?:\.\d+)?)$/);
+  if (currentAndTotal) {
+    const current = Number(currentAndTotal[1]);
+    const total = Number(currentAndTotal[2]);
+    if (Number.isFinite(current) && Number.isFinite(total) && current !== 0 && total > 0) {
+      return `${current}/${total}`;
+    }
+  }
+
   const basement = parseBasementFloor(text);
-  return basement == null ? text : `지하${Math.abs(basement)}층`;
+  if (basement != null) return `지하${Math.abs(basement)}층`;
+
+  const decimalFloor = text.replace(/\s+/g, "").match(/^(\d+(?:\.0+)?)(층|F)$/i);
+  if (decimalFloor) {
+    const current = Number(decimalFloor[1]);
+    if (Number.isFinite(current) && current !== 0) return `${current}${decimalFloor[2]}`;
+  }
+  return text;
 }
 
 export function normalizedRoomKey(value) {

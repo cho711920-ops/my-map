@@ -216,6 +216,17 @@ function daangnFloor(value) {
   return text;
 }
 
+function daangnRoom(article) {
+  if (article?.isEntireBuilding) return "전체";
+  const currentText = daangnFloor(article?.isAmbiguousFloor ? article?.ambiguousFloor : article?.floor);
+  const currentFloor = parseListingFloor(currentText, false);
+  const totalFloor = parseListingFloor(article?.topFloor, false);
+  if (currentFloor != null && totalFloor != null && totalFloor > 0) {
+    return canonicalListingRoom(`${currentFloor}/${totalFloor}`);
+  }
+  return canonicalListingRoom(currentText);
+}
+
 function daangnAddress(article) {
   const candidates = [
     article?.publicJibunAddress,
@@ -259,7 +270,7 @@ function daangnRecord(article, listSnapshot = "") {
       ? providerBuildingName
       : category === "상가점포" ? "일반상가" : category,
     address: daangnAddress(article),
-    room: article?.isEntireBuilding ? "전체" : canonicalListingRoom(daangnFloor(article?.isAmbiguousFloor ? article?.ambiguousFloor : article?.floor)),
+    room: daangnRoom(article),
     category,
     deposit: number(trade?.deposit ?? trade?.price), rent: number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
     fee: number(article?.totalManageCost) || 0, premium: number(article?.premiumMoney) || 0,

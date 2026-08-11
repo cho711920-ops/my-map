@@ -68,6 +68,17 @@ test("Daangn structured building address wins over a floor number in addressInfo
   assert.equal(record.longitude, 127.3272713);
 });
 
+test("Daangn stores the current floor and total building floors together", () => {
+  const record = mergeDaangnDetailWithList({
+    originalId: "floor-total-1",
+    publicJibunAddress: "대전광역시 유성구 교촌동 616",
+    floor: "2.0",
+    topFloor: "3",
+    trades: [{ preferred: true, type: "MONTH", deposit: 500, monthlyPay: 35 }]
+  });
+  assert.equal(record.room, "2/3");
+});
+
 test("pre-normalized Daangn rows are repaired again from their raw provider detail", () => {
   const record = normalizedRecord("당근", {
     source: "당근",
@@ -89,12 +100,15 @@ test("pre-normalized Daangn rows are repaired again from their raw provider deta
         }
       },
       publicCoordinate: { lat: "36.3585108", lon: "127.3421884" },
+      floor: "1.0",
+      topFloor: "6",
       trades: [{ preferred: true, type: "MONTH", deposit: 1800, monthlyPay: 60 }]
     }
   });
   assert.equal(record.address, "유성구 봉명동 469-18");
   assert.equal(record.latitude, 36.3585108);
   assert.equal(record.longitude, 127.3421884);
+  assert.equal(record.room, "1/6");
 });
 
 test("Daangn road-address placeholders use the explicit property category", () => {

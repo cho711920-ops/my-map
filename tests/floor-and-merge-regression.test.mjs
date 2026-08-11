@@ -27,6 +27,14 @@ test("room numbers infer floors for strict customer matching", () => {
   assert.equal(listingFloor({ floor: "", room: "49,50호" }), null);
 });
 
+test("current-floor and total-floor labels use the first value for matching", () => {
+  assert.equal(parseListingFloor("1/1"), 1);
+  assert.equal(parseListingFloor("6/7"), 6);
+  assert.equal(parseListingFloor("-1/4"), -1);
+  assert.equal(canonicalListingRoom("2.0/3.0"), "2/3");
+  assert.equal(canonicalListingRoom("2.0층"), "2층");
+});
+
 test("strict first-floor bounds reject basements, upper floors and unknown rooms", () => {
   assert.equal(floorMatchesBounds(1, 1, 1), true);
   assert.equal(floorMatchesBounds(-1, 1, 1), false);
