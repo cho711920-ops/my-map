@@ -458,3 +458,5 @@
 - Balanced-toolbar follow-up widened the desktop search input by about 1.5x, widened Tell, reduced the JS부동산 brand weight, forced the heart icon to remain visible and preserved the multi-select SVG when its active state changes.
 - Live desktop QA at 1794px measured a 348px keyword input, 78px Tell button, zero search seam gap and visible heart/multi-select icons. Landscape-tablet QA at 1024px reported zero toolbar overflow.
 - Final production Worker version: `fdc79bd4-b402-481a-a0c6-3f9c95123738`.
+- Roomier desktop actions increased the 1540px+ header labels to 13px with 8px inter-button gaps and wider action cells; 1200px uses 12px/6px while 900-1024px keeps the compact tablet fit. Mobile remains unchanged.
+- Responsive QA at 900, 1024, 1200 and 1794px reported zero toolbar overflow. Production Worker version: `2d2ed80c-7f3a-4199-8217-39b7a003db3e`.

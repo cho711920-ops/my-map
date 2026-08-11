@@ -465,8 +465,8 @@
 
   .v6-toolbar-primary {
     grid-template-columns: minmax(0, 1fr) 62px 66px !important;
-    gap: 5px !important;
-    width: min(530px, calc(100vw - 683px)) !important;
+    gap: 6px !important;
+    width: min(530px, calc(100vw - 710px)) !important;
   }
 
   .v6-toolbar-primary .search-row {
@@ -477,22 +477,24 @@
   .v6-toolbar-primary input {
     padding-right: 13px !important;
     padding-left: 13px !important;
-    font-size: 12px !important;
+    font-size: 12.5px !important;
   }
 
   .v6-toolbar-primary button {
-    font-size: 11px !important;
+    font-size: 12px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 76px 80px 74px 88px 0 92px !important;
-    gap: 5px !important;
+    grid-template-columns: 80px 84px 76px 94px 0 98px !important;
+    gap: 6px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
   .v6-toolbar-secondary .v6-primary-action.ai,
   .v6-toolbar-secondary .quick-add-btn {
-    font-size: 11px !important;
+    padding-right: 6px !important;
+    padding-left: 6px !important;
+    font-size: 12px !important;
   }
 
   .async-mutation-status-v1 {
@@ -506,18 +508,30 @@
 
 @media (min-width: 1540px) {
   .v6-toolbar-primary {
-    width: 546px !important;
+    width: 560px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 84px 88px 78px 96px 0 100px !important;
-    gap: 6px !important;
+    grid-template-columns: 92px 96px 84px 106px 0 108px !important;
+    gap: 8px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
   .v6-toolbar-secondary .v6-primary-action.ai,
   .v6-toolbar-secondary .quick-add-btn {
-    font-size: 12px !important;
+    padding-right: 8px !important;
+    padding-left: 8px !important;
+    font-size: 13px !important;
+  }
+
+  .v6-toolbar-primary input,
+  .v6-toolbar-primary button {
+    font-size: 13px !important;
+  }
+
+  .top-action-icon-v638 {
+    width: 17px;
+    height: 17px;
   }
 
   .async-mutation-status-v1 {
