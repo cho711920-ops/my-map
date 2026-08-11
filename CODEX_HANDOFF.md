@@ -443,3 +443,13 @@
 - Gongsilbox remains manual-only. Installed collector is `v2.1.4`; Edge automatic runner remains `v1.0.30` for Naver five districts plus Daangn five districts.
 - Full Cloudflare tests: 58/58 passed; Edge automation tests: 8/8 passed; Wrangler dry-run passed.
 - Production Worker version: `35151ebf-834c-4ac8-b96d-edd4da4cea4c`.
+
+## 2026-08-11 Professional desktop/tablet navigation refresh
+
+- Rebuilt the desktop and landscape-tablet header as one 60px navigation row while preserving every existing click handler and data path.
+- Added compact line icons, clearer primary/secondary button hierarchy, a branded subtitle and a blue quick-registration action.
+- The map's vertical quick tools now use independent translucent glass buttons without the previous solid background rail.
+- Mobile app layouts remain isolated at 768px and below; no mobile data or interaction logic was changed.
+- Render QA covered 900, 1024, 1199, 1200, 1280, 1440, 1540 and 1920px with zero overlaps or viewport overflow.
+- Targeted UI tests: 5/5 passed; Wrangler build and dry-run passed.
+- Production Worker version: `0be2698b-ab49-4cbd-8ac9-e8d401889f60`.
