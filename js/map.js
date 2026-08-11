@@ -2116,6 +2116,21 @@ function getCustomerMatchClusterClassV764(cluster) {
   return "";
 }
 
+function getFieldVisitClusterClassV684(cluster, allDone) {
+  if (allDone) return "";
+
+  /*
+   * 노란 클러스터는 공실박스라는 출처 표시가 아니라 아직 임장 확인이
+   * 필요한 매물이 있다는 뜻입니다. 통합 원본에 공실박스가 남아 있어도
+   * (확인매물)로 바뀐 뒤에는 노란색을 제거해야 합니다.
+   */
+  var hasPendingVisit = ((cluster && cluster.items) || []).some(function(item) {
+    return typeof isFieldVisitItem === "function" && isFieldVisitItem(item);
+  });
+
+  return hasPendingVisit ? " source-gongsil" : "";
+}
+
 function drawMapClustersOnlyV639(items) {
   var selectionSnapshotV638 = jsPinnedClusterSelectionV6515
     ? jsPinnedClusterSelectionV6515.snapshot
@@ -2135,9 +2150,7 @@ function drawMapClustersOnlyV639(items) {
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
     var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
-    var gongsilClass = !allDone && cluster.items.some(function(item) {
-      return typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item);
-    }) ? " source-gongsil" : "";
+    var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 
     /*
      * 클러스터는 출처와 무관하게 기본 파란색을 사용합니다.
@@ -2324,9 +2337,7 @@ function redrawSelectedMarkers() {
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
     var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
-    var gongsilClass = !allDone && cluster.items.some(function(item) {
-      return typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item);
-    }) ? " source-gongsil" : "";
+    var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 
     /*
      * 선택 상태가 바뀌어 다시 그릴 때도
