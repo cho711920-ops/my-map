@@ -453,3 +453,5 @@
 - Render QA covered 900, 1024, 1199, 1200, 1280, 1440, 1540 and 1920px with zero overlaps or viewport overflow.
 - Targeted UI tests: 5/5 passed; Wrangler build and dry-run passed.
 - Production Worker version: `0be2698b-ab49-4cbd-8ac9-e8d401889f60`.
+- Follow-up refinement connected and capped the search group, removed desktop/tablet green status dots, reduced button padding and unused status-column width, and rebuilt the translucent vertical toolbar with per-action line icons and compact labels.
+- Refined production Worker version: `5deb54c1-c177-4c91-b042-2a8d528bc7fc`.
