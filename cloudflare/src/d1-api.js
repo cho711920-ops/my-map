@@ -197,6 +197,35 @@ async function unifiedListings(env) {
   };
 }
 
+export function masterFallbackOriginal(row, images = []) {
+  const id = clean(row?.id || row?.property_id);
+  const contacts = parseJson(row?.contacts_json, []);
+  const uniqueImages = [...new Set((Array.isArray(images) ? images : []).map(clean).filter(Boolean))];
+  return {
+    originalId: `master:${id}`,
+    source: clean(row?.main_source) || "직접등록",
+    link: clean(row?.source_url),
+    buildingName: clean(row?.building_name || row?.title),
+    address: clean(row?.address),
+    room: clean(row?.room),
+    deposit: number(row?.deposit),
+    rent: number(row?.monthly_rent),
+    fee: number(row?.maintenance_fee),
+    premium: number(row?.premium),
+    area: number(row?.area_m2),
+    latitude: number(row?.latitude),
+    longitude: number(row?.longitude),
+    memo: clean(row?.operating_memo),
+    images: uniqueImages,
+    thumbnail: uniqueImages[0] || "",
+    photoCount: uniqueImages.length,
+    contactCount: Array.isArray(contacts) ? contacts.length : 0,
+    revision: Math.max(1, Number(row?.version) || 1),
+    registrationAt: clean(row?.registration_at || row?.first_collected_at),
+    masterFallback: true
+  };
+}
+
 async function unifiedDetail(env, propertyId) {
   const sourceResult = await env.DB.prepare(`SELECT id, list_snapshot_json, raw_json
     FROM listing_sources WHERE listing_id = ?1 AND active = 1 ORDER BY rowid`).bind(propertyId).all();
@@ -220,6 +249,17 @@ async function unifiedDetail(env, propertyId) {
     snapshot.photoCount = Math.max(images.length, Number(snapshot.photoCount) || 0);
     return snapshot;
   });
+  if (!originals.length) {
+    const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,
+        address, room, deposit, monthly_rent, maintenance_fee, premium, area_m2,
+        latitude, longitude, operating_memo, source_url, contacts_json, version,
+        registration_at, first_collected_at
+      FROM listings WHERE property_id = ?1 AND status <> 'deleted' LIMIT 1`).bind(propertyId).first();
+    if (master) {
+      const fallbackImages = (mediaResult?.results || []).map((media) => clean(media.external_url)).filter(Boolean);
+      originals.push(masterFallbackOriginal(master, fallbackImages));
+    }
+  }
   return { ok: true, action: "unifiedListingDetail", propertyId, originals, source: "D1" };
 }
 

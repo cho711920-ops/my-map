@@ -508,10 +508,10 @@
         '<div class="unified-detail-actions-v8">' +
           (selected.link ? '<button type="button" onclick="window.open(\'' + esc(selected.link) +
             '\', \'_blank\', \'noopener,noreferrer\')">원본 링크 열기</button>' : '') +
-          (originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
+          (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
-          '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">이 매물 전체 통합</button>' +
+          (!selected.masterFallback ? '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">이 매물 전체 통합</button>' : '') +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
