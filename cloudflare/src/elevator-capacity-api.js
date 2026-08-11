@@ -7,6 +7,19 @@ function clean(value) {
   return String(value == null ? "" : value).trim();
 }
 
+export function normalizeDataGoKrServiceKey(value) {
+  const key = clean(value);
+  if (!/%[0-9a-f]{2}/i.test(key)) return key;
+  try {
+    // data.go.kr displays both encoded and decoded keys. URLSearchParams
+    // performs its own encoding, so decode the displayed encoded key first
+    // to prevent %3D becoming %253D and producing HTTP 403.
+    return decodeURIComponent(key);
+  } catch (_) {
+    return key;
+  }
+}
+
 function xmlValue(xml, tag) {
   const matched = String(xml || "").match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "i"));
   return clean(matched?.[1])
@@ -55,7 +68,10 @@ function compactRow(row) {
 }
 
 async function fetchPage(env, address, pageNo) {
-  const serviceKey = clean(env.DATA_GO_KR_SERVICE_KEY);
+  // This approval belongs to the Korea Elevator Safety Agency operation API.
+  // Keep it separate from the building-register/public-permit credential so
+  // rotating either service never interrupts the other one.
+  const serviceKey = normalizeDataGoKrServiceKey(env.ELEVATOR_OPERATION_SERVICE_KEY);
   if (!serviceKey) throw new Error("공공데이터 인증키가 설정되지 않았습니다.");
   const url = new URL(API_URL);
   url.searchParams.set("serviceKey", serviceKey);
@@ -169,9 +185,11 @@ export async function getElevatorCapacity(env, { address, cacheKey, expectedCoun
       resultCode: clean(error?.apiResultCode),
       cached: false
     };
-    await writeCache(env, key, fullAddress, result, "+1 day");
-    if (/access|denied|not registered|등록|인증|service key/i.test(`${result.resultCode} ${result.message}`)) {
-      await writeCache(env, "elevator-capacity-service-pause-v1", "", result, "+6 hours");
+    const accessFailure = /HTTP\s*403|access|denied|not registered|등록|인증|service key/i
+      .test(`${result.resultCode} ${result.message}`);
+    await writeCache(env, key, fullAddress, result, accessFailure ? "+10 minutes" : "+1 day");
+    if (accessFailure) {
+      await writeCache(env, "elevator-capacity-service-pause-v1", "", result, "+10 minutes");
     }
     return result;
   }
