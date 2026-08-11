@@ -40,6 +40,102 @@ function clean(value) {
   return String(value == null ? "" : value).trim();
 }
 
+const MEMO_CONTACT_ROLE_PRIORITY = {
+  "주": 90, "남": 80, "여": 80, "관": 70, "세": 70, "가": 70, "임": 40, "기": 10
+};
+
+function memoContactRole(value) {
+  const label = clean(value).replace(/\s+/g, "");
+  if (/^(?:주인|건물주|소유자|주)$/.test(label)) return "주";
+  if (/^(?:임대인|임)$/.test(label)) return "임";
+  if (/^(?:사장|남성|남자|남)$/.test(label)) return "남";
+  if (/^(?:사모|여성|여자|여)$/.test(label)) return "여";
+  if (/^(?:관리소장|관리업체|관리인|관리|관)$/.test(label)) return "관";
+  if (/^(?:세입자|임차인|임차|세)$/.test(label)) return "세";
+  if (/^(?:가족|가)$/.test(label)) return "가";
+  return "기";
+}
+
+function normalizeMemoContactPhone(value) {
+  const digits = clean(value).replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("010")) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 9 && digits.startsWith("02")) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`;
+  }
+  if (digits.length === 10 && digits.startsWith("02")) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 10 && digits.startsWith("0")) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return "";
+}
+
+export function extractManualMemoContacts(memo) {
+  const source = clean(memo);
+  const contacts = [];
+  const seen = new Map();
+  const boundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\.\\-!?。])";
+  const modifier = "(?:(?:다른|기존|현재|새|전|현)\\s*)?";
+  const role = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리소장|관리업체|관리인|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)";
+  const bridge = "(?:[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
+  const phone = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
+  const matcher = new RegExp(boundary + modifier + role + bridge + phone, "g");
+  let match;
+  while ((match = matcher.exec(source))) {
+    const normalizedPhone = normalizeMemoContactPhone(match[2]);
+    if (!normalizedPhone) continue;
+    const key = normalizedPhone.replace(/\D/g, "");
+    const next = { role: memoContactRole(match[1]), phone: normalizedPhone };
+    const existingIndex = seen.get(key);
+    if (existingIndex != null) {
+      const existing = contacts[existingIndex];
+      if ((MEMO_CONTACT_ROLE_PRIORITY[next.role] || 0) > (MEMO_CONTACT_ROLE_PRIORITY[existing.role] || 0)) {
+        existing.role = next.role;
+      }
+      continue;
+    }
+    seen.set(key, contacts.length);
+    contacts.push(next);
+  }
+  return contacts.slice(0, 12);
+}
+
+function isExternalListingSource(value) {
+  return /(?:네이버|naver|당근|daangn|danggeun)/i.test(clean(value));
+}
+
+export function reconcileMemoContacts(source, storedContacts, memo) {
+  const manualContacts = extractManualMemoContacts(memo);
+  const contacts = [];
+  const seen = new Map();
+  const add = (contact) => {
+    const phone = normalizeMemoContactPhone(contact?.phone || contact?.number);
+    if (!phone) return;
+    const key = phone.replace(/\D/g, "");
+    const next = { role: memoContactRole(contact?.role), phone };
+    const existingIndex = seen.get(key);
+    if (existingIndex != null) {
+      const existing = contacts[existingIndex];
+      if ((MEMO_CONTACT_ROLE_PRIORITY[next.role] || 0) > (MEMO_CONTACT_ROLE_PRIORITY[existing.role] || 0)) {
+        existing.role = next.role;
+      }
+      return;
+    }
+    seen.set(key, contacts.length);
+    contacts.push(next);
+  };
+  // Naver/Daangn contacts are never trusted. Only explicitly role-labelled
+  // numbers typed by the user in the memo are retained for those listings.
+  if (!isExternalListingSource(source)) {
+    (Array.isArray(storedContacts) ? storedContacts : []).forEach(add);
+  }
+  manualContacts.forEach(add);
+  return contacts.slice(0, 12);
+}
+
 function number(value) {
   if (value == null || value === "") return null;
   const parsed = Number(String(value).replace(/,/g, ""));
@@ -876,6 +972,7 @@ async function updateProperty(env, user, body) {
   const before = await env.DB.prepare("SELECT * FROM listings WHERE property_id = ?1").bind(propertyId).first();
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
   const value = body.updated && typeof body.updated === "object" ? body.updated : {};
+  const reconciledContacts = reconcileMemoContacts(before.main_source, value.contacts, value.memo);
   const beforeHistory = {
     title: before.title, room: before.room, deposit: before.deposit, monthly_rent: before.monthly_rent,
     maintenance_fee: before.maintenance_fee, premium: before.premium, area_m2: before.area_m2,
@@ -887,7 +984,7 @@ async function updateProperty(env, user, body) {
     monthly_rent: number(value.rent), maintenance_fee: number(value.fee), premium: number(value.premium),
     area_m2: number(value.area), landlord_phone: clean(value.landlordPhone),
     tenant_phone: clean(value.tenantPhone), operating_memo: clean(value.memo),
-    contacts_json: JSON.stringify(value.contacts || [])
+    contacts_json: JSON.stringify(reconciledContacts)
   };
   const now = new Date().toISOString();
   await env.DB.batch([
@@ -897,7 +994,7 @@ async function updateProperty(env, user, body) {
       status=?11, contacts_json=?12, version=version+1, updated_at=?13 WHERE property_id=?14`)
       .bind(clean(value.name), canonicalListingRoom(value.room), number(value.deposit), number(value.rent), number(value.fee),
         number(value.premium), number(value.area), clean(value.landlordPhone), clean(value.tenantPhone),
-        clean(value.memo), clean(value.state) || "active", JSON.stringify(value.contacts || []), now, propertyId),
+        clean(value.memo), clean(value.state) || "active", JSON.stringify(reconciledContacts), now, propertyId),
     env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
       VALUES (?1, 'updateProperty', ?2, ?3, ?4)`)
       .bind(before.id || propertyId, clean(user?.email), JSON.stringify(beforeHistory), JSON.stringify(afterHistory))
@@ -909,18 +1006,22 @@ async function updateProperty(env, user, body) {
 async function updateMemo(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
+  const before = await env.DB.prepare(`SELECT id, main_source, contacts_json
+    FROM listings WHERE property_id=?1 LIMIT 1`).bind(propertyId).first();
+  if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const contacts = reconcileMemoContacts(before.main_source, body.contacts, body.memo);
   const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     SELECT id, 'updatePropertyMemo', ?1,
       json_object('operating_memo', operating_memo, 'contacts_json', contacts_json),
       json_object('operating_memo', ?2, 'contacts_json', ?3)
     FROM listings WHERE property_id=?4 LIMIT 1`)
-    .bind(clean(user?.email), clean(body.memo), JSON.stringify(body.contacts || []), propertyId).run();
+    .bind(clean(user?.email), clean(body.memo), JSON.stringify(contacts), propertyId).run();
   const result = await env.DB.prepare(`UPDATE listings SET operating_memo=?1, contacts_json=?2,
     version=version+1, updated_at=?3 WHERE property_id=?4`)
-    .bind(clean(body.memo), JSON.stringify(body.contacts || []), now, propertyId).run();
+    .bind(clean(body.memo), JSON.stringify(contacts), now, propertyId).run();
   if (!Number(result?.meta?.changes || 0)) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
-  return { ok: true, persisted: true, queued: false, propertyId, memo: clean(body.memo), contacts: body.contacts || [],
+  return { ok: true, persisted: true, queued: false, propertyId, memo: clean(body.memo), contacts,
     operationAdjustments: { history: 1 }, source: "D1" };
 }
 

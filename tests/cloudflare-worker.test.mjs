@@ -676,6 +676,9 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
         sql,
         args: [],
         bind(...args) { this.args = args; return this; },
+        async first() {
+          return { id: "m-property-1", main_source: "", contacts_json: "[]" };
+        },
         async run() { statements.push({ sql: this.sql, args: this.args }); return { meta: { changes: 1 } }; },
         async all() { return { results: [] }; }
       };
@@ -735,6 +738,9 @@ test("primary memo edits persist only in D1 and do not queue a Sheet sync", asyn
         sql,
         args: [],
         bind(...args) { this.args = args; return this; },
+        async first() {
+          return { id: "d1-property-1", main_source: "", contacts_json: "[]" };
+        },
         async run() {
           statements.push({ sql: this.sql, args: this.args });
           return { meta: { changes: 1 } };
