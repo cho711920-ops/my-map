@@ -470,7 +470,7 @@
   }
 
   .v6-toolbar-primary .search-row {
-    grid-template-columns: minmax(0, 1fr) 60px !important;
+    grid-template-columns: minmax(0, 1fr) 68px !important;
     gap: 0 !important;
   }
 
@@ -508,7 +508,16 @@
 
 @media (min-width: 1540px) {
   .v6-toolbar-primary {
-    width: 560px !important;
+    width: 576px !important;
+  }
+
+  .v6-toolbar-primary .search-row {
+    grid-template-columns: minmax(0, 1fr) 76px !important;
+  }
+
+  .v6-toolbar-primary .search-row .search-btn {
+    padding-right: 10px !important;
+    padding-left: 10px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar {

@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "header-professional-v1.css"), "utf8");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
-assert.match(html, /header-professional-v1\.css\?v=1\.0\.4-roomier-actions/);
+assert.match(html, /header-professional-v1\.css\?v=1\.0\.5-search-button-balance/);
 assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/small>/);
 
 [
@@ -43,6 +43,7 @@ assert.match(css, /\.quick-add-btn \.sync-indicator \{[\s\S]*display: none !impo
 assert.match(css, /width: min\(526px, calc\(100vw - 594px\)\) !important/);
 assert.match(css, /grid-template-columns: 92px 96px 84px 106px 0 108px/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*font-size: 13px !important/);
+assert.match(css, /@media \(min-width: 1540px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\) 76px !important/);
 assert.match(css, /\.map-quick-heart-btn \.map-quick-icon-v638 \{[\s\S]*display: block !important/);
 assert.doesNotMatch(script, /btn\.innerHTML\s*=\s*"<span>다중/);
 assert.match(script, /label\.textContent\s*=\s*"다중선택"/);
