@@ -3535,14 +3535,12 @@ function extractListContactsV650(item) {
 
   /* 네이버·당근 광고문구에는 중개업소 전화번호가 포함될 수 있습니다.
    * 해당 번호를 임대인 연락처로 오인하지 않도록 원본 설명과 저장 필드를
-   * 연락처 후보에서 완전히 제외합니다. 연결된 공실박스 번호는 별도 API로만
-   * 불러오므로 아래 조기 반환과 관계없이 정상 표시됩니다. */
+   * 연락처 후보에서 제외합니다. 다만 사용자가 메모에 직접 역할을 붙여 적은
+   * 임대인·세입자 번호는 신뢰 가능한 수동 입력이므로 별도로 허용합니다. */
   var providerSource = String(item && item.source || "").toLowerCase();
-  if (providerSource.indexOf("네이버") >= 0 || providerSource.indexOf("naver") >= 0 ||
+  var externalProvider = providerSource.indexOf("네이버") >= 0 || providerSource.indexOf("naver") >= 0 ||
       providerSource.indexOf("당근") >= 0 || providerSource.indexOf("daangn") >= 0 ||
-      providerSource.indexOf("danggeun") >= 0) {
-    return contacts;
-  }
+      providerSource.indexOf("danggeun") >= 0;
 
   function add(role, phoneValue) {
     role = listContactRoleV650(role);
@@ -3562,8 +3560,10 @@ function extractListContactsV650(item) {
     contacts.push(contact);
   }
 
-  add("임", item && item.landlordPhone);
-  add("세", item && item.tenantPhone);
+  if (!externalProvider) {
+    add("임", item && item.landlordPhone);
+    add("세", item && item.tenantPhone);
+  }
 
   var storedContacts = item && item.contactListRaw;
   if (typeof storedContacts === "string" && storedContacts.trim()) {
@@ -3573,14 +3573,16 @@ function extractListContactsV650(item) {
       storedContacts = [];
     }
   }
-  if (Array.isArray(storedContacts)) {
+  if (!externalProvider && Array.isArray(storedContacts)) {
     storedContacts.forEach(function(contact) {
       add(contact && contact.role, contact && (contact.phone || contact.number));
     });
   }
 
   var memo = String(item && item.memo || "");
-  var rolePattern = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
+  var rolePattern = externalProvider
+    ? "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)"
+    : "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
   var roleBoundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\.\\-!?。])";
   var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
   var roleBridge = "(?:[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
@@ -3590,11 +3592,14 @@ function extractListContactsV650(item) {
     add(match[1], match[2]);
   }
 
-  var everyPhoneMatcher = new RegExp(phonePattern, "g");
-  while ((match = everyPhoneMatcher.exec(memo))) {
-    var prefix = memo.slice(Math.max(0, match.index - 18), match.index);
-    var roleMatch = prefix.match(new RegExp(roleBoundary + rolePattern + roleBridge + "$"));
-    add(roleMatch ? roleMatch[1] : "기", match[1]);
+  // 역할이 없는 광고 전화번호는 네이버·당근 매물에서 절대 표시하지 않습니다.
+  if (!externalProvider) {
+    var everyPhoneMatcher = new RegExp(phonePattern, "g");
+    while ((match = everyPhoneMatcher.exec(memo))) {
+      var prefix = memo.slice(Math.max(0, match.index - 18), match.index);
+      var roleMatch = prefix.match(new RegExp(roleBoundary + rolePattern + roleBridge + "$"));
+      add(roleMatch ? roleMatch[1] : "기", match[1]);
+    }
   }
 
   return contacts.slice(0, 6);
