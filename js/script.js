@@ -3533,6 +3533,17 @@ function extractListContactsV650(item) {
   var contacts = [];
   var byPhone = Object.create(null);
 
+  /* 네이버·당근 광고문구에는 중개업소 전화번호가 포함될 수 있습니다.
+   * 해당 번호를 임대인 연락처로 오인하지 않도록 원본 설명과 저장 필드를
+   * 연락처 후보에서 완전히 제외합니다. 연결된 공실박스 번호는 별도 API로만
+   * 불러오므로 아래 조기 반환과 관계없이 정상 표시됩니다. */
+  var providerSource = String(item && item.source || "").toLowerCase();
+  if (providerSource.indexOf("네이버") >= 0 || providerSource.indexOf("naver") >= 0 ||
+      providerSource.indexOf("당근") >= 0 || providerSource.indexOf("daangn") >= 0 ||
+      providerSource.indexOf("danggeun") >= 0) {
+    return contacts;
+  }
+
   function add(role, phoneValue) {
     role = listContactRoleV650(role);
     var phone = normalizeListPhoneV650(phoneValue);

@@ -264,9 +264,11 @@ async function unifiedDetail(env, propertyId) {
 }
 
 async function listingContacts(env, propertyId) {
-  const result = await env.DB.prepare(`SELECT id, role, name, phone, normalized_phone, status,
-    first_seen_at, last_seen_at FROM listing_contacts
-    WHERE listing_id = ?1 AND status <> 'deleted' ORDER BY rowid`).bind(propertyId).all();
+  const result = await env.DB.prepare(`SELECT c.id, c.role, c.name, c.phone, c.normalized_phone, c.status,
+    c.first_seen_at, c.last_seen_at FROM listing_contacts c
+    JOIN listing_sources s ON s.id = c.source_id
+    WHERE c.listing_id = ?1 AND c.status <> 'deleted' AND s.source = '공실박스'
+    ORDER BY c.rowid`).bind(propertyId).all();
   const contacts = (result?.results || []).map((row) => ({
     id: row.id,
     role: row.role,
@@ -285,7 +287,8 @@ async function tellContacts(env, query) {
   const result = await env.DB.prepare(`SELECT c.id, c.listing_id, c.role, c.name, c.phone,
       l.title, l.address, l.room
     FROM listing_contacts c JOIN listings l ON l.id = c.listing_id
-    WHERE c.status <> 'deleted' AND (
+    JOIN listing_sources s ON s.id = c.source_id
+    WHERE c.status <> 'deleted' AND s.source = '공실박스' AND (
       c.phone LIKE ?1 OR c.normalized_phone LIKE ?1 OR c.name LIKE ?1 OR
       l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1
     ) ORDER BY c.last_seen_at DESC LIMIT 100`).bind(pattern).all();

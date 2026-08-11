@@ -42,6 +42,34 @@ function clean(value) {
   return String(value == null ? "" : value).trim();
 }
 
+const EXTERNAL_PHONE_PATTERN = /(?<!\d)(?:01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}|02[-.\s]?\d{3,4}[-.\s]?\d{4}|0[3-6][1-5][-.\s]?\d{3,4}[-.\s]?\d{4}|070[-.\s]?\d{3,4}[-.\s]?\d{4}|050\d[-.\s]?\d{4}[-.\s]?\d{4})(?!\d)/g;
+const EXTERNAL_CONTACT_KEY = /^(?:.*(?:phone|telephone|mobile|cellphone|tel)(?:number|no)?|contact(?:number)?|cpno)$/i;
+
+export function stripExternalPhoneNumbers(value) {
+  return clean(value)
+    .replace(EXTERNAL_PHONE_PATTERN, " ")
+    .replace(/(?:☎️?\s*)?(?:상담\s*전화|문의\s*전화|전화\s*문의|연락처)\s*[:：]?\s*/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function scrubExternalContactData(value, key = "") {
+  if (EXTERNAL_CONTACT_KEY.test(clean(key))) {
+    if (Array.isArray(value)) return [];
+    if (value && typeof value === "object") return {};
+    return "";
+  }
+  if (Array.isArray(value)) return value.map((item) => scrubExternalContactData(item));
+  if (value && typeof value === "object") {
+    const output = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+      output[childKey] = scrubExternalContactData(childValue, childKey);
+    }
+    return output;
+  }
+  return typeof value === "string" ? stripExternalPhoneNumbers(value) : value;
+}
+
 function number(value) {
   if (value == null || value === "") return null;
   const parsed = Number(String(value).replace(/,/g, ""));
@@ -199,10 +227,11 @@ function naverRecord(item) {
     deposit: number(item?.deposit), rent: number(item?.monthly), fee: number(item?.managementFee || item?.fee),
     premium: number(item?.premium), area: squareMeters && squareMeters > 0
       ? Math.round((squareMeters / 3.305785) * 10) / 10 : number(item?.area),
-    memo: memoWithVisit(item?.description),
+    memo: memoWithVisit(stripExternalPhoneNumbers(item?.description)),
     link: clean(item?.sourceLink || item?.providerUrl || item?.currentUrl) ||
       (sourceId ? `https://fin.land.naver.com/articles/${sourceId.replace(/^네이버-/, "")}` : ""),
-    listSnapshot: clean(item?.listSnapshot), images, contacts: [], raw: item,
+    listSnapshot: stripExternalPhoneNumbers(item?.listSnapshot), images, contacts: [],
+    raw: scrubExternalContactData(item),
     latitude: coordinate(item?.latitude ?? item?.lat ?? item?.mapY, -90, 90),
     longitude: coordinate(item?.longitude ?? item?.lng ?? item?.lon ?? item?.mapX, -180, 180)
   };
@@ -263,7 +292,9 @@ function daangnRecord(article, listSnapshot = "") {
   const sourceId = clean(article?.originalId);
   const optionText = (article?.options || []).some((option) => option?.name === "PARKING" && clean(option?.value).toUpperCase() === "YES")
     ? "주차가능 · " : "";
-  const description = [article?.addressInfo, article?.content].filter(Boolean).join(" ").replace(/\s+/g, " ");
+  const description = stripExternalPhoneNumbers(
+    [article?.addressInfo, article?.content].filter(Boolean).join(" ").replace(/\s+/g, " ")
+  );
   /*
    * Daangn deliberately blurs `publicCoordinate` when `isHideAddress` is true.
    * The detail response can still contain the exact lot address through
@@ -296,7 +327,8 @@ function daangnRecord(article, listSnapshot = "") {
     area: areaM2 && areaM2 > 0 ? Math.floor((areaM2 / 3.305785) * 10 + 0.0000001) / 10 : null,
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
     link: sourceId ? `https://realty.daangn.com/?article_id=%22${encodeURIComponent(sourceId)}%22&panel_stack=article` : "",
-    listSnapshot: clean(listSnapshot), images, contacts: [], raw: article,
+    listSnapshot: stripExternalPhoneNumbers(listSnapshot), images, contacts: [],
+    raw: scrubExternalContactData(article),
     latitude: blurredPublicCoordinate ? null : coordinate(
       article?.latitude ?? article?.lat ?? article?.location?.latitude ?? article?.publicCoordinate?.lat,
       -90,
@@ -328,9 +360,11 @@ export function normalizedRecord(source, value) {
         buildingName: canonical.buildingName || value.buildingName,
         address: canonical.address || value.address,
         room: canonical.room || value.room,
+        memo: canonical.memo,
+        contacts: [],
         latitude: canonical.latitude ?? value.latitude,
         longitude: canonical.longitude ?? value.longitude,
-        raw: value.raw
+        raw: canonical.raw
       };
     }
     return daangnRecord(value, value?.listSnapshot);
