@@ -86,7 +86,12 @@ export function canonicalListingRoom(value) {
     const current = Number(currentAndTotal[1]);
     const total = Number(currentAndTotal[2]);
     if (Number.isFinite(current) && Number.isFinite(total) && current !== 0 && total > 0) {
-      return `${current}/${total}`;
+      // Providers expose "current floor / total floors" here.  The listing's
+      // room field is used by cards, matching, filters and duplicate checks,
+      // so keep only the actual listing floor.  The original provider payload
+      // remains in listing_sources.raw_json when the total-floor value is
+      // needed for auditing.
+      return current < 0 ? `지하${Math.abs(current)}층` : `${current}층`;
     }
   }
 

@@ -31,7 +31,7 @@ test("current-floor and total-floor labels use the first value for matching", ()
   assert.equal(parseListingFloor("1/1"), 1);
   assert.equal(parseListingFloor("6/7"), 6);
   assert.equal(parseListingFloor("-1/4"), -1);
-  assert.equal(canonicalListingRoom("2.0/3.0"), "2/3");
+  assert.equal(canonicalListingRoom("2.0/3.0"), "2층");
   assert.equal(canonicalListingRoom("2.0층"), "2층");
 });
 

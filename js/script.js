@@ -3998,7 +3998,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
             (item.room
-              ? '<span class="item-room-badge">' + escapeHtml(item.room) + '</span>'
+              ? '<span class="item-room-badge">' + escapeHtml(formatListingRoomForCardV653(item.room)) + '</span>'
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV650() +
           '</span>' +
@@ -5053,6 +5053,13 @@ function parseFloorNotationV612(value, allowRoomInference) {
 
   var compact = text.toUpperCase().replace(/\s+/g, "");
 
+  /* 공급사 표기: 해당층/총층 (예: 1/1, 6/7, -1/4) */
+  var currentAndTotal = compact.match(/^(-?\d+(?:\.\d+)?)[/／]\d+(?:\.\d+)?$/);
+  if (currentAndTotal) {
+    var currentFloor = Number(currentAndTotal[1]);
+    return Number.isFinite(currentFloor) && currentFloor !== 0 ? currentFloor : null;
+  }
+
   /* B 표기는 무조건 지하. B101은 지하1층, B201은 지하2층 */
   var basementB = compact.match(/B(\d{1,4})/);
   if (basementB) {
@@ -5092,6 +5099,28 @@ function parseFloorNotationV612(value, allowRoomInference) {
   }
 
   return null;
+}
+
+/* 카드에는 해당층만 표시하고 공급사의 총층 표기는 숨깁니다. */
+function formatListingRoomForCardV653(value) {
+  var text = String(value == null ? "" : value).trim();
+  if (!text) return "";
+  var compact = text.replace(/\s+/g, "");
+  var currentAndTotal = compact.match(/^(-?\d+(?:\.\d+)?)[/／]\d+(?:\.\d+)?$/);
+  if (currentAndTotal) {
+    var current = Number(currentAndTotal[1]);
+    if (Number.isFinite(current) && current !== 0) {
+      return current < 0 ? "지하" + Math.abs(current) + "층" : current + "층";
+    }
+  }
+  var decimalFloor = compact.match(/^(-?\d+(?:\.0+)?)(?:층|F)$/i);
+  if (decimalFloor) {
+    var floor = Number(decimalFloor[1]);
+    if (Number.isFinite(floor) && floor !== 0) {
+      return floor < 0 ? "지하" + Math.abs(floor) + "층" : floor + "층";
+    }
+  }
+  return text;
 }
 
 function getItemFloorNumber(item) {
