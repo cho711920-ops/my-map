@@ -778,8 +778,10 @@
         : {action:"moveOriginalListing", requestId:requestId, originalId:originalId,
           targetMasterId:targetMasterId, expectedRevision:revision})
     }).then(function(response) {
-      if (!response.ok) throw new Error("저장 요청 실패 (HTTP " + response.status + ")");
-      return response.json();
+      return response.json().catch(function() { return null; }).then(function(payload) {
+        if (!response.ok) throw new Error(payload && payload.message || "저장 요청 실패 (HTTP " + response.status + ")");
+        return payload;
+      });
     }).then(function(result) {
       var persisted = consolidateWholeMaster
         ? Number(result && result.consolidated || 0) > 0

@@ -1016,15 +1016,107 @@ async function saveGeocode(env, body) {
   return { ok: true, persisted: true, saved: statements.length, source: "D1" };
 }
 
+function numberOr(value, fallback) {
+  return value == null || value === "" ? number(fallback) : number(value);
+}
+
+export function separatedMasterValues(sourceRow, parent, newId) {
+  const raw = parseJson(sourceRow?.raw_json, {});
+  const snapshot = parseJson(sourceRow?.list_snapshot_json, {});
+  const original = { ...raw, ...snapshot };
+  const contacts = Array.isArray(original.contacts) ? original.contacts : parseJson(parent?.contacts_json, []);
+  const id = clean(newId) || `M-${crypto.randomUUID()}`;
+  return {
+    id,
+    source: clean(sourceRow?.source || original.source || parent?.main_source) || "직접등록",
+    title: clean(original.buildingName || original.name || parent?.building_name || parent?.title) || "일반상가",
+    address: clean(original.address || parent?.address),
+    room: canonicalListingRoom(original.room || parent?.room),
+    listingType: clean(original.type || original.category || parent?.listing_type),
+    deposit: numberOr(original.deposit, parent?.deposit),
+    rent: numberOr(original.rent ?? original.monthly, parent?.monthly_rent),
+    fee: numberOr(original.fee ?? original.managementFee, parent?.maintenance_fee),
+    premium: numberOr(original.premium, parent?.premium),
+    area: numberOr(original.area, parent?.area_m2),
+    latitude: numberOr(original.latitude ?? original.lat, parent?.latitude),
+    longitude: numberOr(original.longitude ?? original.lng, parent?.longitude),
+    memo: clean(original.memo || parent?.operating_memo),
+    link: clean(sourceRow?.source_url || original.link || parent?.source_url),
+    contactsJson: JSON.stringify(Array.isArray(contacts) ? contacts : []),
+    firstCollectedAt: clean(sourceRow?.first_collected_at || original.firstSeen || parent?.first_collected_at),
+    registrationAt: clean(original.registrationAt || original.firstSeen || parent?.registration_at),
+    lastCollectedAt: clean(sourceRow?.last_collected_at || original.lastSeen || parent?.last_collected_at),
+    revision: Math.max(1, Number(original.revision) || 1)
+  };
+}
+
 async function moveOriginal(env, user, body) {
   const originalId = clean(body.originalId).slice(0, 160);
   const targetMasterId = clean(body.targetMasterId).slice(0, 100);
-  const source = await env.DB.prepare("SELECT listing_id FROM listing_sources WHERE id=?1").bind(originalId).first();
-  const target = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 AND status <> 'deleted'").bind(targetMasterId).first();
-  if (!source || !target) throw Object.assign(new Error("이동할 원본매물 또는 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const source = await env.DB.prepare(`SELECT s.*, l.main_source, l.title, l.address, l.building_name,
+      l.room, l.listing_type, l.deposit, l.monthly_rent, l.maintenance_fee, l.premium,
+      l.area_m2, l.latitude, l.longitude, l.operating_memo, l.source_url AS master_source_url,
+      l.contacts_json, l.first_collected_at AS master_first_collected_at,
+      l.registration_at, l.last_collected_at AS master_last_collected_at
+    FROM listing_sources s JOIN listings l ON l.id=s.listing_id
+    WHERE s.id=?1 AND s.active=1 AND l.status<>'deleted' LIMIT 1`).bind(originalId).first();
+  if (!source) throw Object.assign(new Error("분리할 원본매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const sourceSnapshot = parseJson(source.list_snapshot_json, {});
+  const expectedRevision = Math.max(0, Number(body.expectedRevision) || 0);
+  const currentRevision = Math.max(1, Number(sourceSnapshot.revision) || 1);
+  if (expectedRevision && expectedRevision !== currentRevision) {
+    throw Object.assign(new Error("원본매물이 갱신되었습니다. 상세창을 다시 열고 시도해 주세요."), { statusCode: 409 });
+  }
   const now = new Date().toISOString();
+  if (targetMasterId === "NEW") {
+    const newMasterId = `M-${crypto.randomUUID()}`;
+    const value = separatedMasterValues(source, {
+      ...source,
+      source_url: source.master_source_url,
+      first_collected_at: source.master_first_collected_at,
+      last_collected_at: source.master_last_collected_at
+    }, newMasterId);
+    const results = await env.DB.batch([
+      env.DB.prepare(`INSERT INTO listings (
+          id, property_id, status, main_source, title, address, building_name, room, listing_type,
+          deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude,
+          operating_memo, source_url, contacts_json, first_collected_at, registration_at,
+          last_collected_at, created_at, updated_at
+        ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+          ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?20)`)
+        .bind(value.id, value.source, value.title, value.address, value.room, value.listingType,
+          value.deposit, value.rent, value.fee, value.premium, value.area, value.latitude,
+          value.longitude, value.memo, value.link, value.contactsJson,
+          value.firstCollectedAt || now, value.registrationAt || now, value.lastCollectedAt || now, now),
+      env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
+          list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2 WHERE id=?3`)
+        .bind(value.id, now, originalId),
+      env.DB.prepare("UPDATE listing_media SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
+        .bind(value.id, now, originalId),
+      env.DB.prepare("UPDATE listing_contacts SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
+        .bind(value.id, now, originalId),
+      env.DB.prepare(`INSERT INTO listing_history (
+          listing_id, source_id, action, actor_email, before_json, after_json
+        ) VALUES (?1, ?2, 'separateOriginalListing', ?3, ?4, ?5)`)
+        .bind(value.id, originalId, clean(user?.email) || "web",
+          JSON.stringify({ sourceMasterId: source.listing_id }),
+          JSON.stringify({ targetMasterId: value.id, separatedAt: now })),
+      env.DB.prepare(`UPDATE listings SET status='deleted', version=version+1, updated_at=?1
+        WHERE id=?2 AND NOT EXISTS (SELECT 1 FROM listing_sources WHERE listing_id=?2)`)
+        .bind(now, source.listing_id)
+    ]);
+    const sourceMasterRemoved = Number(results?.[5]?.meta?.changes || 0) > 0;
+    return { ok: true, persisted: true, queued: false, separated: true, originalId,
+      propertyId: value.id, sourceMasterId: source.listing_id, targetMasterId: value.id,
+      sourceMasterRemoved,
+      operationAdjustments: { activeMaster: sourceMasterRemoved ? 0 : 1, history: 1 }, source: "D1" };
+  }
+  const target = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 AND status <> 'deleted'")
+    .bind(targetMasterId).first();
+  if (!target) throw Object.assign(new Error("통합할 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
   const results = await env.DB.batch([
-    env.DB.prepare("UPDATE listing_sources SET listing_id=?1, updated_at=?2 WHERE id=?3")
+    env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
+        list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2 WHERE id=?3`)
       .bind(targetMasterId, now, originalId),
     env.DB.prepare("UPDATE listing_media SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
       .bind(targetMasterId, now, originalId),
