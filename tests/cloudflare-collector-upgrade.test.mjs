@@ -68,6 +68,27 @@ test("Daangn structured building address wins over a floor number in addressInfo
   assert.equal(record.longitude, 127.3272713);
 });
 
+test("Daangn hidden-address public coordinates are never treated as the exact property location", () => {
+  const record = normalizedRecord("당근", {
+    originalId: "4203631",
+    isHideAddress: true,
+    publicJibunAddress: "대전광역시 대덕구 송촌동",
+    publicCoordinate: { lat: "36.3495626", lon: "127.4371807" },
+    complex: {
+      buildingsForAddress: {
+        edges: [{ node: {
+          roadAddress: "대전광역시 대덕구 동춘당로 79",
+          jibunAddress: "대전광역시 대덕구 송촌동 477-1"
+        } }]
+      }
+    },
+    trades: [{ preferred: true, type: "MONTH", deposit: 7000, monthlyPay: 400 }]
+  });
+  assert.equal(record.address, "대덕구 송촌동 477-1");
+  assert.equal(record.latitude, null);
+  assert.equal(record.longitude, null);
+});
+
 test("Daangn stores the actual listing floor from current/total provider values", () => {
   const record = mergeDaangnDetailWithList({
     originalId: "floor-total-1",

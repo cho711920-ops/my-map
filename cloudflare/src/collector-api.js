@@ -264,6 +264,25 @@ function daangnRecord(article, listSnapshot = "") {
   const optionText = (article?.options || []).some((option) => option?.name === "PARKING" && clean(option?.value).toUpperCase() === "YES")
     ? "주차가능 · " : "";
   const description = [article?.addressInfo, article?.content].filter(Boolean).join(" ").replace(/\s+/g, " ");
+  /*
+   * Daangn deliberately blurs `publicCoordinate` when `isHideAddress` is true.
+   * The detail response can still contain the exact lot address through
+   * complex.buildingsForAddress, so persisting that blurred coordinate would
+   * place navigation/roadview at an unrelated neighborhood landmark.  Leave
+   * coordinates empty in that case; the map's address geocoder (and its shared
+   * cache) will resolve the exact lot instead.
+   */
+  const hasDirectCoordinate = [
+    article?.latitude,
+    article?.lat,
+    article?.location?.latitude
+  ].some((value) => coordinate(value, -90, 90) != null) && [
+    article?.longitude,
+    article?.lng,
+    article?.lon,
+    article?.location?.longitude
+  ].some((value) => coordinate(value, -180, 180) != null);
+  const blurredPublicCoordinate = Boolean(article?.isHideAddress) && !hasDirectCoordinate;
   return {
     source: "당근", sourceId,
     buildingName: providerBuildingName && !addressLikeBuildingName
@@ -278,8 +297,16 @@ function daangnRecord(article, listSnapshot = "") {
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
     link: sourceId ? `https://realty.daangn.com/?article_id=%22${encodeURIComponent(sourceId)}%22&panel_stack=article` : "",
     listSnapshot: clean(listSnapshot), images, contacts: [], raw: article,
-    latitude: coordinate(article?.latitude ?? article?.lat ?? article?.location?.latitude ?? article?.publicCoordinate?.lat, -90, 90),
-    longitude: coordinate(article?.longitude ?? article?.lng ?? article?.lon ?? article?.location?.longitude ?? article?.publicCoordinate?.lon, -180, 180),
+    latitude: blurredPublicCoordinate ? null : coordinate(
+      article?.latitude ?? article?.lat ?? article?.location?.latitude ?? article?.publicCoordinate?.lat,
+      -90,
+      90
+    ),
+    longitude: blurredPublicCoordinate ? null : coordinate(
+      article?.longitude ?? article?.lng ?? article?.lon ?? article?.location?.longitude ?? article?.publicCoordinate?.lon,
+      -180,
+      180
+    ),
     tradeType: /MONTH/.test(tradeType) ? "월세" : /YEAR|BORROW/.test(tradeType) ? "전세" : /BUY/.test(tradeType) ? "매매" : "월세"
   };
 }
