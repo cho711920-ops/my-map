@@ -511,7 +511,7 @@
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
           (!selected.masterFallback ? '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">다른 매물에 다시 합치기</button>' : '') +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">원본 1개 합치기</button>' : '') +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
@@ -820,7 +820,7 @@
   }
 
   function startMove(encodedOriginalId, revision) {
-    if (!confirm("이 매물을 다른 대표매물에 다시 합치시겠습니까?\n\n별도 분리를 취소하거나, 서로 다른 두 대표매물을 하나로 합칠 때만 사용하세요.")) return;
+    if (!confirm("현재 상세창의 원본매물 1개만 다른 대표매물에 합치시겠습니까?\n\n같은 묶음의 나머지 원본매물은 그대로 유지됩니다.")) return;
     state.pendingMove = {originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision,
       sourcePropertyId: text(state.openPropertyId)};
     closeDetail();
@@ -866,9 +866,9 @@
         alert("이미 이 통합매물에 연결된 원본입니다. 다른 통합매물을 선택해 주세요.");
         return true;
       }
-      if (confirm("정말 다시 합치시겠습니까?\n\n현재 대표매물의 원본 전체가 선택한 매물에 들어가며, 현재 카드는 목록에서 사라집니다.")) {
+      if (confirm("선택한 원본매물 1개만 이 매물에 합칠까요?\n\n기존 묶음의 나머지 원본매물은 이동하지 않습니다.")) {
         setMoveBannerSaving(true);
-        move(pending.originalId, propertyId, pending.revision, pending.sourcePropertyId);
+        move(pending.originalId, propertyId, pending.revision);
       }
       return true;
     }
