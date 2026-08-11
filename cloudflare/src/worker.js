@@ -522,7 +522,11 @@ async function handleDataApi(request, env, context) {
         D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
       ]);
     });
-    if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
+    if (String(body.action || "") === "consolidateExistingMasters") {
+      await invalidation;
+    } else if (context && typeof context.waitUntil === "function") {
+      context.waitUntil(invalidation);
+    }
     touchDataRevision(env, context, ["listings", "operations"], invalidation, { fullReload: true,
       changeAction: String(body.action || "collectorAdmin") });
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
@@ -541,7 +545,11 @@ async function handleDataApi(request, env, context) {
   const invalidation = Promise.resolve(operationSnapshot).catch(() => null).then(() => {
     return deleteR2Cache(env, null, invalidatedKeys);
   });
-  if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
+  if (mutationAction(body) === "moveOriginalListing") {
+    await invalidation;
+  } else if (context && typeof context.waitUntil === "function") {
+    context.waitUntil(invalidation);
+  }
   const changedIds = [d1Result.propertyId, d1Result.sourceMasterId, d1Result.targetMasterId]
     .map((value) => String(value || "").trim()).filter(Boolean);
   touchDataRevision(env, context, [

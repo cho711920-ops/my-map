@@ -511,7 +511,7 @@
           (originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
           '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">다른 매물에 통합</button>' +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">이 매물 전체 통합</button>' +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
@@ -731,19 +731,62 @@
       (failed ? "failed" : (active ? "working" : "idle"));
   }
 
-  function move(originalId, targetMasterId, revision) {
+  function removeConsolidatedMasterFromView(sourceMasterId, targetMasterId) {
+    sourceMasterId = text(sourceMasterId);
+    targetMasterId = text(targetMasterId);
+    if (!sourceMasterId || !targetMasterId || sourceMasterId === targetMasterId) return;
+
+    var sourceOriginals = state.groups[sourceMasterId] || [];
+    var targetOriginals = state.groups[targetMasterId] || [];
+    var seenOriginals = {};
+    state.groups[targetMasterId] = targetOriginals.concat(sourceOriginals).filter(function(original) {
+      var key = text(original && original.originalId) || [
+        text(original && original.source), text(original && original.sourceId)
+      ].join(":");
+      if (!key || seenOriginals[key]) return false;
+      seenOriginals[key] = true;
+      if (original) original.propertyId = targetMasterId;
+      return true;
+    });
+    delete state.groups[sourceMasterId];
+
+    ["allItems", "currentItems", "visibleListItems"].forEach(function(name) {
+      if (!Array.isArray(global[name])) return;
+      global[name] = global[name].filter(function(item) {
+        return text(item && item.propertyId) !== sourceMasterId;
+      });
+    });
+    if (text(global.selectedItemKey)) {
+      var selectedStillExists = (global.allItems || []).some(function(item) {
+        return text(item && item.key) === text(global.selectedItemKey);
+      });
+      if (!selectedStillExists) global.selectedItemKey = null;
+    }
+    attach(global.allItems || [], {groups: state.groups});
+    if (typeof global.applyFilter === "function") global.applyFilter();
+  }
+
+  function move(originalId, targetMasterId, revision, sourceMasterId) {
     var requestId = "move-original-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
+    var consolidateWholeMaster = text(sourceMasterId) && targetMasterId !== "NEW";
     setSaving(true, false);
     return fetch(API, {
       method: "POST", credentials: "same-origin", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({action:"moveOriginalListing", requestId:requestId, originalId:originalId,
-        targetMasterId:targetMasterId, expectedRevision:revision})
+      body: JSON.stringify(consolidateWholeMaster
+        ? {action:"consolidateExistingMasters", requestId:requestId, primaryMasterId:targetMasterId,
+          duplicateMasterIds:[sourceMasterId]}
+        : {action:"moveOriginalListing", requestId:requestId, originalId:originalId,
+          targetMasterId:targetMasterId, expectedRevision:revision})
     }).then(function(response) {
       if (!response.ok) throw new Error("저장 요청 실패 (HTTP " + response.status + ")");
       return response.json();
     }).then(function(result) {
-      if (!result || result.ok === false || result.persisted !== true) throw new Error(result && result.message || "D1 저장 확인 실패");
+      var persisted = consolidateWholeMaster
+        ? Number(result && result.consolidated || 0) > 0
+        : result && result.persisted === true;
+      if (!result || result.ok === false || !persisted) throw new Error(result && result.message || "D1 저장 확인 실패");
       setSaving(false, false);
+      if (consolidateWholeMaster) removeConsolidatedMasterFromView(sourceMasterId, targetMasterId);
       state.loaded = false;
       state.detailCache = {};
       state.pendingMove = null;
@@ -752,8 +795,8 @@
       if (moveBanner) moveBanner.hidden = true;
       closeDetail();
       return load(true).then(function() {
-        if (typeof global.loadSheet === "function") global.loadSheet(true);
-        return result;
+        if (typeof global.loadSheet !== "function") return result;
+        return Promise.resolve(global.loadSheet(true)).then(function() { return result; });
       });
     }).catch(function(error) {
       setSaving(false, true);
@@ -815,9 +858,9 @@
         alert("이미 이 통합매물에 연결된 원본입니다. 다른 통합매물을 선택해 주세요.");
         return true;
       }
-      if (confirm("선택한 원본매물을 이 통합매물로 이동할까요?")) {
+      if (confirm("현재 대표매물에 연결된 원본 전체를 이 매물로 통합할까요?\n통합 후 현재 카드는 목록에서 사라집니다.")) {
         setMoveBannerSaving(true);
-        move(pending.originalId, propertyId, pending.revision);
+        move(pending.originalId, propertyId, pending.revision, pending.sourcePropertyId);
       }
       return true;
     }

@@ -33,7 +33,7 @@ assert.match(ui, /동일매물 ' \+ count \+ '개/);
 assert.match(ui, /동일매물 ' \+ count \+ '개/);
 assert.match(ui, /원본 링크 열기/);
 assert.match(ui, /별도 매물로 분리/);
-assert.match(ui, /다른 매물에 통합/);
+assert.match(ui, /이 매물 전체 통합/);
 assert.doesNotMatch(ui, /이 원본 링크 열기/);
 assert.match(css, /\.unified-detail-actions-v8 \.separate,[\s\S]*?height:\s*30px/);
 assert.match(ui, /이동할 통합매물 카드 또는 체크박스를 클릭하세요/);
