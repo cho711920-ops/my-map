@@ -10,6 +10,7 @@
   var BADGE_MAX_CONCURRENCY = 4;
   var BADGE_MAX_RETRIES = 2;
   var badgeRequests = Object.create(null);
+  var capacityRequestsV820 = Object.create(null);
   var badgeMemoryV6520 = Object.create(null);
   var badgeAddressMemoryV810 = Object.create(null);
   var badgeQueue = [];
@@ -19,7 +20,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.1.2";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.0";
   var state = {
     item: null,
     parcel: null,
@@ -102,6 +103,7 @@
     return {
       year: String(item.buildingYear || "").replace(/\D/g, "").slice(0, 4),
       elevators: Number(item.buildingElevators || 0),
+      capacity: Number(item.buildingElevatorCapacity || 0),
       verified: true,
       persistent: true
     };
@@ -112,6 +114,7 @@
     var normalized = {
       year: String(badge.year || ""),
       elevators: Number(badge.elevators || 0),
+      capacity: Number(badge.capacity || 0),
       verified: !!badge.verified,
       persistent: !!badge.persistent
     };
@@ -124,6 +127,7 @@
         if (normalizedBuildingAddressKeyV810(candidate && candidate.address) !== addressKey) return;
         candidate.buildingYear = normalized.year;
         candidate.buildingElevators = normalized.elevators;
+        candidate.buildingElevatorCapacity = normalized.capacity;
         if (normalized.verified) candidate.buildingInfoStatus = "확인완료";
       });
     }
@@ -649,9 +653,16 @@
       var rowElevators = elevatorCount(row);
       if (rowElevators != null) elevators = Math.max(elevators, rowElevators);
     });
+    var capacity = Number(
+      building.elevatorMaxCapacity ||
+      data && data.elevatorInfo && data.elevatorInfo.maxCapacity ||
+      item && item.buildingElevatorCapacity ||
+      0
+    );
     return {
       year: dateDigits.length >= 4 ? dateDigits.slice(0, 4) : "",
       elevators: elevators,
+      capacity: capacity,
       verified: true
     };
   }
@@ -668,6 +679,7 @@
       if (addressKey && targetCard.getAttribute("data-building-address-key") !== addressKey) return;
       var years = targetCard.querySelectorAll(".item-building-year-v650");
       var elevator = targetCard.querySelector(".item-elevator-v650");
+      var elevatorCapacity = targetCard.querySelector(".item-elevator-capacity-v820");
       Array.prototype.forEach.call(years, function(year) {
         year.textContent = badge.year ? "준" + badge.year : "준공 -";
         year.classList.toggle("verified", !!badge.verified);
@@ -675,8 +687,13 @@
       if (elevator) {
         elevator.hidden = !(badge.verified && badge.elevators > 0);
         if (!elevator.hidden) {
-          elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대";
-          elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대");
+          var capacityText = Number(badge.capacity || 0) > 0 ? " · 최대 " + Number(badge.capacity) + "인승" : "";
+          elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대" + capacityText;
+          elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대" + capacityText);
+          if (elevatorCapacity) {
+            elevatorCapacity.textContent = Number(badge.capacity || 0) > 0 ? Number(badge.capacity) + "인" : "";
+            elevatorCapacity.hidden = !(Number(badge.capacity || 0) > 0);
+          }
         }
       }
     });
@@ -707,6 +724,35 @@
       "address=" + encodeURIComponent(item && item.address || parcel.lotAddress || "")
     ];
     return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
+  }
+
+  function capacityRequestUrl(item, parcel, elevators) {
+    var params = [
+      "action=elevatorCapacity",
+      "client=" + encodeURIComponent(BUILDING_CLIENT_VERSION_V811),
+      "sigunguCd=" + encodeURIComponent(parcel.sigunguCd),
+      "bjdongCd=" + encodeURIComponent(parcel.bjdongCd),
+      "platGbCd=" + encodeURIComponent(parcel.platGbCd),
+      "bun=" + encodeURIComponent(parcel.bun),
+      "ji=" + encodeURIComponent(parcel.ji),
+      "elevators=" + encodeURIComponent(elevators || 0),
+      "propertyId=" + encodeURIComponent(item && (item.propertyId || item.id || item.key) || ""),
+      "address=" + encodeURIComponent(item && item.address || parcel.lotAddress || "")
+    ];
+    return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
+  }
+
+  function requestCapacityData(item, parcel, elevators) {
+    var key = parcelKey(parcel);
+    if (capacityRequestsV820[key]) return capacityRequestsV820[key];
+    capacityRequestsV820[key] = jsonp(capacityRequestUrl(item, parcel, elevators), 25000)
+      .then(function(data) {
+        if (!data || !data.ok || data.action !== "elevatorCapacity") return null;
+        return data;
+      })
+      .catch(function() { return null; })
+      .finally(function() { delete capacityRequestsV820[key]; });
+    return capacityRequestsV820[key];
   }
 
   function requestBadgeData(item, parcel, persistToServer) {
@@ -748,8 +794,18 @@
       if (!card.isConnected) return null;
       card.setAttribute("data-building-parcel-key", parcelKey(parcel));
       return requestBadgeData(item, parcel).then(function(data) {
-        if (card.isConnected) applyBadgeToCard(card, badgeFromData(data, item));
-        return data;
+        var badge = badgeFromData(data, item);
+        if (card.isConnected) applyBadgeToCard(card, badge);
+        if (!(badge.elevators > 0 && !(badge.capacity > 0))) return data;
+        return requestCapacityData(item, parcel, badge.elevators).then(function(capacityData) {
+          if (capacityData && Number(capacityData.maxCapacity || 0) > 0) {
+            badge.capacity = Number(capacityData.maxCapacity);
+            badge.persistent = !!capacityData.persisted;
+            rememberBadgeV810(item, badge);
+            if (card.isConnected) applyBadgeToCard(card, badge);
+          }
+          return data;
+        });
       });
     }).catch(function() {
       if (card.isConnected) applyBadgeToCard(card, { year: "", elevators: 0, verified: false });
@@ -801,8 +857,12 @@
     var persistentBadge = persistentBadgeFromItemV810(item);
     var addressBadge = badgeAddressMemoryV810[normalizedBuildingAddressKeyV810(item.address)];
     if (persistentBadge || addressBadge) {
-      applyBadgeToCard(card, persistentBadge || addressBadge);
-      return;
+      var knownBadge = persistentBadge || addressBadge;
+      applyBadgeToCard(card, knownBadge);
+      // Existing D1 rows already know the elevator count but may predate the
+      // capacity field. Keep the icon visible immediately, then enrich only
+      // those elevator buildings lazily as their cards enter the viewport.
+      if (!(knownBadge.elevators > 0 && !(knownBadge.capacity > 0))) return;
     }
     var cachedParcel = readParcelCache(item);
     if (cachedParcel) {
@@ -1424,6 +1484,10 @@
 
     var mechanicalParking = sumKnown([building.indoorMechanicalParking, building.outdoorMechanicalParking]);
     var selfParking = sumKnown([building.indoorSelfParking, building.outdoorSelfParking]);
+    var elevatorCapacity = Number(building.elevatorMaxCapacity || data && data.elevatorInfo && data.elevatorInfo.maxCapacity ||
+      state.item && state.item.buildingElevatorCapacity || 0);
+    var elevatorDescription = countPair("승용", building.passengerElevators, "비상용", building.emergencyElevators) +
+      (elevatorCapacity > 0 ? " / 최대정원 " + numberText(elevatorCapacity, "인") : "");
     var zoneText = zones.length ? zones.join(" / ") : "정보 없음";
     var buildingName = joinText(building.buildingName, building.dongName);
     var floorTableRows = isGeneralRegister(building)
@@ -1449,7 +1513,7 @@
       registerTableRow("건폐율", numberText(building.buildingCoverageRatio, "%"), "용적률", numberText(building.floorAreaRatio, "%")),
       registerTableRow("세대수", numberText(building.householdCount, "세대"), "가구수", numberText(building.familyCount, "가구")),
       registerTableRow("지상층수", numberText(building.groundFloors, "층"), "지하층수", numberText(building.undergroundFloors, "층")),
-      registerTableRow("엘리베이터", countPair("승용", building.passengerElevators, "비상용", building.emergencyElevators), "주차", countPair("기계식", mechanicalParking, "자주식", selfParking) + " / 합계 " + registerValue(parkingTotal == null ? null : numberText(parkingTotal, "대"))),
+      registerTableRow("엘리베이터", elevatorDescription, "주차", countPair("기계식", mechanicalParking, "자주식", selfParking) + " / 합계 " + registerValue(parkingTotal == null ? null : numberText(parkingTotal, "대"))),
       registerTableRow("허가일", dateText(building.permitDate), "착공일", dateText(building.startDate)),
       registerTableRow("내진능력", building.seismicAbility, "내진설계 적용 여부", building.seismicDesign)
     ].join("");

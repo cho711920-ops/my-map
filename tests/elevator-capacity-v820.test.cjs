@@ -1,0 +1,26 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const api = fs.readFileSync(path.join(root, "cloudflare", "src", "elevator-capacity-api.js"), "utf8");
+const buildingApi = fs.readFileSync(path.join(root, "cloudflare", "src", "building-register-api.js"), "utf8");
+const building = fs.readFileSync(path.join(root, "js", "building-register-v6.js"), "utf8");
+const d1 = fs.readFileSync(path.join(root, "cloudflare", "src", "d1-api.js"), "utf8");
+const map = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
+
+assert.match(api, /getOperationInfoListV1/);
+assert.match(api, /buld_address/);
+assert.match(api, /ratedCap/);
+assert.match(api, /parcelAddressKey\(candidate\) === targetKey/);
+assert.match(api, /elevator-capacity-service-pause-v1/);
+assert.match(buildingApi, /getElevatorCapacityForListing/);
+assert.match(buildingApi, /building_elevator_capacity=\?1/);
+assert.match(d1, /building_elevator_capacity/);
+assert.match(map, /buildingElevatorCapacity/);
+assert.match(building, /action=elevatorCapacity/);
+assert.match(building, /item-elevator-capacity-v820/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.0"/);
+
+console.log("elevator capacity v8.2.0 tests passed");
+

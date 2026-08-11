@@ -3811,6 +3811,7 @@ function buildListElevatorIconV650() {
       '<circle class="item-elevator-person-v662" cx="16" cy="8" r="1.6"></circle>' +
       '<path class="item-elevator-person-v662" d="M16 10.5v4.5m-2.7-2.6 2.7-1.9 2.7 1.9M16 15l-2.4 3.8M16 15l2.4 3.8"></path>' +
     '</svg>' +
+    '<span class="item-elevator-capacity-v820" hidden></span>' +
   '</span>';
 }
 

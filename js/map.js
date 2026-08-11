@@ -75,6 +75,7 @@ function listingChangeRowToItemV683(row, index) {
     source: clean(row.main_source), propertyId: clean(row.property_id), sourceLink: clean(row.source_url),
     contactListRaw: String(row.contacts_json == null ? "" : row.contacts_json).trim(),
     buildingYear: clean(row.building_year), buildingElevators: Number(row.building_elevators) || 0,
+    buildingElevatorCapacity: Number(row.building_elevator_capacity) || 0,
     buildingApprovalDate: clean(row.building_approval_date), buildingInfoCheckedAt: clean(row.building_info_checked_at),
     buildingInfoStatus: clean(row.building_info_status), registrationAt: clean(row.registration_at),
     lastCollectedAt: clean(row.last_collected_at),
@@ -1508,6 +1509,7 @@ function loadSheet(isAuto, forceRefresh) {
           lastCollectedAt: clean(c[24]),
           latitude: clean(c[25]) === "" ? null : Number(c[25]),
           longitude: clean(c[26]) === "" ? null : Number(c[26]),
+          buildingElevatorCapacity: Number(clean(c[27])) || 0,
           sheetRow: i + 1,
           latlng: null
         };

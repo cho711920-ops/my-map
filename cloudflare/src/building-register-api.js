@@ -1,4 +1,5 @@
 import { parseXmlRows } from "../../api/_lib/permit-open-data.js";
+import { getElevatorCapacity } from "./elevator-capacity-api.js";
 
 const API_BASE = "https://apis.data.go.kr/1613000/BldRgstHubService";
 const ENDPOINTS = {
@@ -168,7 +169,7 @@ function sameUnit(unit, area) {
 
 function responseBase(parcel, propertyId) {
   return {
-    ok: true, action: "buildingRegister", version: 10, propertyId: clean(propertyId), parcel,
+    ok: true, action: "buildingRegister", version: 11, propertyId: clean(propertyId), parcel,
     source: "국토교통부 건축HUB 건축물대장정보 서비스", sourceType: "official-open-api",
     sourcePage: "https://www.data.go.kr/data/15134735/openapi.do", updateCycle: "월간",
     queriedAt: new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date()),
@@ -204,16 +205,20 @@ async function persistBuildingBadge(env, propertyId, result) {
   const approval = clean(building.approvalDate);
   const year = approval.match(/^\d{4}/)?.[0] || "";
   const elevators = Number(building.passengerElevators || 0) + Number(building.emergencyElevators || 0);
-  const values = [year, elevators, approval, new Date().toISOString(), clean(propertyId)];
+  const elevatorCapacity = Number(result?.elevatorInfo?.maxCapacity || building?.elevatorMaxCapacity || 0);
+  const values = [year, elevators, elevatorCapacity, approval, new Date().toISOString(), clean(propertyId)];
   let update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
-    building_approval_date=?3, building_info_checked_at=?4, building_info_status='확인완료', updated_at=?4
-    WHERE id=?5`).bind(...values).run();
+    building_elevator_capacity=CASE WHEN ?3>0 THEN ?3 ELSE building_elevator_capacity END,
+    building_approval_date=?4, building_info_checked_at=?5,
+    building_info_status='확인완료', updated_at=?5 WHERE id=?6`).bind(...values).run();
   if (Number(update?.meta?.changes || 0) === 0) {
     update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
-      building_approval_date=?3, building_info_checked_at=?4, building_info_status='확인완료', updated_at=?4
-      WHERE property_id=?5 AND property_id <> ''`).bind(...values).run();
+      building_elevator_capacity=CASE WHEN ?3>0 THEN ?3 ELSE building_elevator_capacity END,
+      building_approval_date=?4, building_info_checked_at=?5,
+      building_info_status='확인완료', updated_at=?5 WHERE property_id=?6 AND property_id <> ''`).bind(...values).run();
   }
-  return { ok: true, persisted: Number(update?.meta?.changes || 0) > 0, year, elevators, approvalDate: approval };
+  return { ok: true, persisted: Number(update?.meta?.changes || 0) > 0, year, elevators,
+    elevatorCapacity, approvalDate: approval };
 }
 
 export async function getBuildingRegister(env, query) {
@@ -271,4 +276,28 @@ export async function getBuildingRegister(env, query) {
   result.buildingInfoCache = await persistBuildingBadge(env, query.propertyId, result);
   await writeCache(env, key, parcel, mode, result);
   return result;
+}
+
+export async function getElevatorCapacityForListing(env, query) {
+  const parcel = parcelFrom(query || {});
+  const result = await getElevatorCapacity(env, {
+    address: clean(query?.address),
+    cacheKey: cacheKey(parcel),
+    expectedCount: Number(query?.elevators || 0),
+    force: /^(1|true|yes)$/i.test(clean(query?.force))
+  });
+  const capacity = Number(result?.maxCapacity || 0);
+  const propertyId = clean(query?.propertyId);
+  let persisted = false;
+  if (capacity > 0 && propertyId && env.DB) {
+    let update = await env.DB.prepare(`UPDATE listings SET building_elevator_capacity=?1,
+      updated_at=?2 WHERE id=?3`).bind(capacity, new Date().toISOString(), propertyId).run();
+    if (Number(update?.meta?.changes || 0) === 0) {
+      update = await env.DB.prepare(`UPDATE listings SET building_elevator_capacity=?1,
+        updated_at=?2 WHERE property_id=?3 AND property_id<>''`)
+        .bind(capacity, new Date().toISOString(), propertyId).run();
+    }
+    persisted = Number(update?.meta?.changes || 0) > 0;
+  }
+  return { ...result, action: "elevatorCapacity", propertyId, persisted };
 }

@@ -6410,14 +6410,27 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 18px;
-  width: 18px;
+  flex: 0 0 auto;
+  min-width: 18px;
   height: 18px;
   margin-left: 2px;
   border: 0;
   color: #334155;
   background: transparent;
   box-sizing: border-box;
+}
+
+.item-elevator-capacity-v820 {
+  margin-left: 1px;
+  color: #2478e8;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.item-elevator-capacity-v820[hidden] {
+  display: none !important;
 }
 
 .item-elevator-v650[hidden] {

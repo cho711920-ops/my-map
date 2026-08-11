@@ -7,7 +7,7 @@ import {
   verifyGoogleCredential
 } from "./security.js";
 import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js";
-import { getBuildingRegister } from "./building-register-api.js";
+import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { getCommercialArea } from "./commercial-area-api.js";
 import { getRegionalMarket } from "./regional-market-api.js";
 import {
@@ -434,6 +434,12 @@ async function handleDataApi(request, env, context) {
       return jsonp(query.callback, await getBuildingRegister(env, query), {
         "cache-control": "private, no-store",
         "x-js-data-source": "D1+PUBLIC-DATA"
+      });
+    }
+    if (query.action === "elevatorCapacity") {
+      return jsonp(query.callback, await getElevatorCapacityForListing(env, query), {
+        "cache-control": "private, no-store",
+        "x-js-data-source": "D1+ELEVATOR-PUBLIC-DATA"
       });
     }
     if (query.action === "commercialArea") {

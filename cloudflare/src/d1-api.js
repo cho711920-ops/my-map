@@ -141,20 +141,21 @@ export async function buildD1SheetCsv(env) {
     landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
     property_id, source_url, contacts_json, building_year, building_elevators,
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
-    last_collected_at, latitude, longitude`, "listings", "status <> 'deleted'", 3_000);
+    last_collected_at, latitude, longitude, building_elevator_capacity`, "listings", "status <> 'deleted'", 3_000);
   const header = [
     "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
     "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
     "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
     "최종수집시각", "위도", "경도"
   ];
+  header.push("엘리베이터최대정원");
   const body = [header, ...rows.map((row) => [
     row.title, row.address, row.room, row.listing_type, row.deposit, row.monthly_rent,
     row.maintenance_fee, row.premium, row.area_m2, row.landlord_phone, row.tenant_phone,
     row.operating_memo, row.status, row.first_collected_at, row.main_source, row.property_id,
     row.source_url, row.contacts_json, row.building_year, row.building_elevators,
     row.building_approval_date, row.building_info_checked_at, row.building_info_status,
-    row.registration_at, row.last_collected_at, row.latitude, row.longitude
+    row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity
   ])].map((row) => row.map(csvCell).join(",")).join("\r\n");
   return `${body}\r\n`;
 }
@@ -169,7 +170,7 @@ async function listingChanges(env, query) {
       landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
       property_id, source_url, contacts_json, building_year, building_elevators,
       building_approval_date, building_info_checked_at, building_info_status, registration_at,
-      last_collected_at, latitude, longitude
+      last_collected_at, latitude, longitude, building_elevator_capacity
     FROM listings WHERE property_id IN (${placeholders})`).bind(...ids).all();
   return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
 }

@@ -486,7 +486,8 @@
 }
 
 .item-elevator-v650 {
-  width: 22px !important;
+  width: auto !important;
+  min-width: 22px !important;
   height: 22px !important;
   color: #475569 !important;
 }
