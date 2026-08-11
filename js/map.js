@@ -1100,7 +1100,7 @@ function scheduleMapIdleRefreshV638() {
     jsLastRenderedItemsV639 = latestMapItems.slice();
     drawMapClustersOnlyV639(jsLastRenderedItemsV639);
 
-    var hasPinnedClusterList = !!selectedGroupKey || (
+    var hasPinnedClusterList = !!jsPinnedClusterSelectionV6515 || !!selectedGroupKey || (
       !!multiClusterMode && (selectedGroupKeys || []).length > 0
     );
 
@@ -1363,6 +1363,27 @@ function restoreAutoUpdateViewState(state) {
 }
 
 
+function showListWithoutReleasingPinnedClusterV685(fallbackItems) {
+  /*
+   * D1 목록보다 늦게 도착하는 통합매물 응답이나 자동 새로고침이
+   * 사용자가 열어둔 클러스터 목록을 전체 목록으로 덮어쓰지 않게 합니다.
+   * 새 데이터에서 고정 매물을 잠시 찾지 못해도 기존 DOM을 유지합니다.
+   */
+  if (jsPinnedClusterSelectionV6515) {
+    var pinnedItems = getPinnedClusterItemsV6515();
+    if (pinnedItems.length && typeof showList === "function") {
+      showList(pinnedItems);
+    }
+    return true;
+  }
+
+  if (typeof showList === "function") {
+    showList(fallbackItems || []);
+  }
+  return false;
+}
+
+
 function loadSheet(isAuto, forceRefresh) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
@@ -1425,7 +1446,7 @@ function loadSheet(isAuto, forceRefresh) {
     window.JSUnifiedListingsV8.attach(targetItems, unifiedResult);
     currentItems = getFilteredItems({ includeUnlocated: true });
     window.jsReuseListCardsOnNextRenderV6521 = true;
-    showList(currentItems);
+    showListWithoutReleasingPinnedClusterV685(currentItems);
     if (list) list.scrollTop = scrollTop;
   }).catch(function(error) {
     console.warn("Unified listing background load failed", error);
@@ -1509,14 +1530,16 @@ function loadSheet(isAuto, forceRefresh) {
       allItems = rawItems;
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
-      showList(currentItems);
+      var keptPinnedClusterListV685 = showListWithoutReleasingPinnedClusterV685(currentItems);
       /*
        * Missing building data is resolved only for cards that enter the visible
        * list. Bulk-prefetching every address kept server functions alive long
        * after the map was left idle and generated unnecessary hosting cost.
        */
-      document.getElementById("status").innerHTML =
-        "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
+      if (!keptPinnedClusterListV685) {
+        document.getElementById("status").innerHTML =
+          "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
+      }
 
       sharedGeocodeRequest.then(function() {
         geocodeItems(rawItems, function(doneItems) {
