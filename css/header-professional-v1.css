@@ -70,6 +70,7 @@
     grid-row: 1 !important;
     align-self: end !important;
     font-size: 19px !important;
+    font-weight: 720 !important;
     line-height: 1.05 !important;
   }
 
@@ -216,6 +217,13 @@
     stroke-linejoin: round;
   }
 
+  /* 기존 데스크톱 찜 버튼 규칙이 SVG를 숨기지 못하도록 전용 아이콘을 고정한다. */
+  .map-quick-heart-btn .map-quick-icon-v638 {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
   .map-quick-tool-btn > span,
   .permit-diagnosis-open-btn-v1 > span {
     font-size: 9px !important;
@@ -315,7 +323,7 @@
     grid-column: 1 !important;
     grid-row: 1 !important;
     gap: 4px !important;
-    width: min(400px, calc(100vw - 572px)) !important;
+    width: min(526px, calc(100vw - 594px)) !important;
     height: 42px !important;
     min-height: 0 !important;
     max-height: 42px !important;
@@ -373,7 +381,7 @@
 
   .v6-toolbar-secondary.v6-command-bar {
     display: grid !important;
-    grid-template-columns: 66px 70px 48px 78px 0 84px !important;
+    grid-template-columns: 66px 70px 70px 78px 0 84px !important;
     grid-template-rows: 42px !important;
     grid-column: 2 !important;
     grid-row: 1 !important;
@@ -458,7 +466,7 @@
   .v6-toolbar-primary {
     grid-template-columns: minmax(0, 1fr) 62px 66px !important;
     gap: 5px !important;
-    width: 410px !important;
+    width: min(530px, calc(100vw - 683px)) !important;
   }
 
   .v6-toolbar-primary .search-row {
@@ -477,7 +485,7 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 76px 80px 52px 88px 0 92px !important;
+    grid-template-columns: 76px 80px 74px 88px 0 92px !important;
     gap: 5px !important;
   }
 
@@ -498,11 +506,11 @@
 
 @media (min-width: 1540px) {
   .v6-toolbar-primary {
-    width: 430px !important;
+    width: 546px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 84px 88px 56px 96px 0 100px !important;
+    grid-template-columns: 84px 88px 78px 96px 0 100px !important;
     gap: 6px !important;
   }
 

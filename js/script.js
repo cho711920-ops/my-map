@@ -4820,7 +4820,13 @@ function updateMultiClusterButton() {
   var btn = document.getElementById("multiClusterBtn");
   if (!btn) return;
 
-  btn.innerHTML = "<span>다중</span>";
+  // 버튼 전체를 다시 만들면 SVG 아이콘이 사라지므로 문구만 갱신한다.
+  var label = btn.querySelector("span");
+  if (!label) {
+    label = document.createElement("span");
+    btn.appendChild(label);
+  }
+  label.textContent = "다중선택";
 
   btn.classList.toggle("on", multiClusterMode);
 }

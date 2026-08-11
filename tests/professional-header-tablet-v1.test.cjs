@@ -5,8 +5,9 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "header-professional-v1.css"), "utf8");
+const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
-assert.match(html, /header-professional-v1\.css\?v=1\.0\.2-icon-toolbar/);
+assert.match(html, /header-professional-v1\.css\?v=1\.0\.3-balanced-toolbar/);
 assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/small>/);
 
 [
@@ -31,7 +32,7 @@ labels.forEach((label) => {
 });
 
 assert.match(css, /@media \(min-width: 900px\)[\s\S]*grid-template-columns: auto max-content/);
-assert.match(css, /grid-template-columns: 66px 70px 48px 78px 0 84px/);
+assert.match(css, /grid-template-columns: 66px 70px 70px 78px 0 84px/);
 assert.match(css, /\.desktop-operations-action \{ grid-column: 1/);
 assert.match(css, /\.quick-add-btn \{ grid-column: 6/);
 assert.match(css, /\.map-quick-tools,[\s\S]*background: transparent !important/);
@@ -39,7 +40,10 @@ assert.match(css, /\.map-quick-tool-btn \{[\s\S]*background: rgba\(255, 255, 255
 assert.match(css, /\.search-row \{[\s\S]*gap: 0 !important/);
 assert.match(css, /\.search-row #keyword \{[\s\S]*border-right: 0 !important/);
 assert.match(css, /\.quick-add-btn \.sync-indicator \{[\s\S]*display: none !important/);
-assert.match(css, /width: min\(400px, calc\(100vw - 572px\)\) !important/);
+assert.match(css, /width: min\(526px, calc\(100vw - 594px\)\) !important/);
+assert.match(css, /\.map-quick-heart-btn \.map-quick-icon-v638 \{[\s\S]*display: block !important/);
+assert.doesNotMatch(script, /btn\.innerHTML\s*=\s*"<span>다중/);
+assert.match(script, /label\.textContent\s*=\s*"다중선택"/);
 assert.ok((html.match(/class="map-quick-icon-v638"/g) || []).length >= 6);
 assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.top-action-icon-v638/);
 

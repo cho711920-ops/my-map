@@ -455,3 +455,6 @@
 - Production Worker version: `0be2698b-ab49-4cbd-8ac9-e8d401889f60`.
 - Follow-up refinement connected and capped the search group, removed desktop/tablet green status dots, reduced button padding and unused status-column width, and rebuilt the translucent vertical toolbar with per-action line icons and compact labels.
 - Refined production Worker version: `5deb54c1-c177-4c91-b042-2a8d528bc7fc`.
+- Balanced-toolbar follow-up widened the desktop search input by about 1.5x, widened Tell, reduced the JS부동산 brand weight, forced the heart icon to remain visible and preserved the multi-select SVG when its active state changes.
+- Live desktop QA at 1794px measured a 348px keyword input, 78px Tell button, zero search seam gap and visible heart/multi-select icons. Landscape-tablet QA at 1024px reported zero toolbar overflow.
+- Final production Worker version: `fdc79bd4-b402-481a-a0c6-3f9c95123738`.
