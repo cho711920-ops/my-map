@@ -759,7 +759,9 @@
   function requestCapacityData(item, parcel, elevators) {
     var key = parcelKey(parcel);
     if (capacityRequestsV820[key]) return capacityRequestsV820[key];
-    capacityRequestsV820[key] = jsonp(capacityRequestUrl(item, parcel, elevators), 25000)
+    // A district index is built only on the first lookup, then reused from R2.
+    // Keep this background enrichment alive without blocking the listing card.
+    capacityRequestsV820[key] = jsonp(capacityRequestUrl(item, parcel, elevators), 60000)
       .then(function(data) {
         if (!data || !data.ok || data.action !== "elevatorCapacity") return null;
         return data;

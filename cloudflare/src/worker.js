@@ -63,7 +63,9 @@ function errorResponse(error) {
   const status = Number(error?.statusCode) || 500;
   return json({
     ok: false,
-    message: status >= 500 ? "서버 보안 설정을 확인해 주세요." : String(error?.message || "요청에 실패했습니다.")
+    message: status >= 500
+      ? String(error?.publicMessage || "서버 보안 설정을 확인해 주세요.")
+      : String(error?.message || "요청에 실패했습니다.")
   }, status, { "cache-control": "no-store" });
 }
 
@@ -643,6 +645,26 @@ export default {
         : await env.ASSETS.fetch(request);
       return withSecurityHeaders(response, request);
     } catch (error) {
+      const url = new URL(request.url);
+      if (url.pathname === "/api/data" && ["buildingRegister", "elevatorCapacity"].includes(url.searchParams.get("action"))) {
+        console.error("official-public-data request failed", {
+          action: url.searchParams.get("action"),
+          message: String(error?.message || error),
+          statusCode: Number(error?.statusCode) || 500
+        });
+      }
+      const callback = url.pathname === "/api/data" ? url.searchParams.get("callback") : "";
+      if (callback) {
+        const status = Number(error?.statusCode) || 500;
+        const publicMessage = status >= 500
+          ? String(error?.publicMessage || error?.message || "서버 설정을 확인해 주세요.")
+          : String(error?.message || "요청에 실패했습니다.");
+        return withSecurityHeaders(jsonp(callback, {
+          ok: false,
+          message: publicMessage,
+          errorType: status >= 500 ? "upstream" : "request"
+        }), request);
+      }
       return withSecurityHeaders(errorResponse(error), request);
     }
   },

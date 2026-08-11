@@ -462,3 +462,13 @@
 - Responsive QA at 900, 1024, 1200 and 1794px reported zero toolbar overflow. Production Worker version: `2d2ed80c-7f3a-4199-8217-39b7a003db3e`.
 - Search-button balance follow-up widened the 1540px+ blue search action from 60px to 76px without reducing the 360px keyword input; both remain 42px high with a zero-gap seam. Production Worker version: `e0b2488c-1b66-4292-8645-0255033a2ac1`.
 - Quick-registration emphasis follow-up raises the desktop action to 14px/900 weight (13px at 1200px) while retaining the existing button footprint and zero header overflow. Production Worker version: `465c8f99-318f-49d0-a691-04b18d299e07`.
+
+## 2026-08-11 BuildingHUB credential recovery and elevator-capacity lookup
+
+- The building-register failure was traced to an empty `DATA_GO_KR_SERVICE_KEY` Worker secret plus a missing approval for the separate Ministry of Land BuildingHUB API. The user completed the BuildingHUB application, and the dedicated secret was populated without reusing it in code as an elevator credential.
+- BuildingHUB encoded display keys are decoded exactly once before `URLSearchParams` serializes them. This keeps encoded and decoded portal keys equivalent.
+- JSONP failures from the building-register and elevator endpoints now remain valid executable callbacks and include a readable public error; Worker logs record the internal action/status for diagnosis.
+- Production verification passed on `Seo-gu Dunsan-dong 1236`: opening the register used cached official data, and pressing `Latest lookup` returned a fresh live BuildingHUB response with the current timestamp.
+- Elevator-capacity discovery now tries normalized address variants, caches a district-wide operation index in R2 when exact lookup is empty, and enriches matched elevator numbers with the separately approved building-elevator detail API. BuildingHUB and elevator environment variables remain logically separate.
+- Cloudflare tests: 88/88 passed. Targeted elevator tests: 5/5 passed. Wrangler build/dry-run passed.
+- Production Worker version before the secret recovery verification: `1a2dc74d-42af-4bcf-b629-78d93124be8b`.

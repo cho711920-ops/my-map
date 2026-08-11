@@ -15,6 +15,18 @@ function clean(value) {
   return String(value == null ? "" : value).trim();
 }
 
+export function normalizeBuildingRegisterServiceKey(value) {
+  const key = clean(value);
+  if (!/%[0-9a-f]{2}/i.test(key)) return key;
+  try {
+    // data.go.kr shows an encoded and a decoded key. URLSearchParams encodes
+    // again, so the encoded display value must be decoded exactly once.
+    return decodeURIComponent(key);
+  } catch (_) {
+    return key;
+  }
+}
+
 function number(value) {
   if (value == null || value === "") return null;
   const parsed = Number(value);
@@ -45,7 +57,9 @@ function xmlValue(xml, tag) {
 }
 
 async function fetchPage(env, endpoint, label, parcel, pageNo) {
-  const key = clean(env.DATA_GO_KR_SERVICE_KEY);
+  // This credential is exclusively for the Ministry of Land Building-HUB
+  // APIs. The Korea Elevator Safety Agency credential is never used here.
+  const key = normalizeBuildingRegisterServiceKey(env.DATA_GO_KR_SERVICE_KEY);
   if (!key) throw new Error("서버 공공데이터 인증키가 연결되지 않았습니다.");
   const url = new URL(`${API_BASE}/${endpoint}`);
   url.searchParams.set("serviceKey", key);

@@ -1,7 +1,12 @@
 import { parseXmlRows } from "../../api/_lib/permit-open-data.js";
 
-const API_URL = "https://apis.data.go.kr/B553664/ElevatorOperationService/getOperationInfoListV1";
+const OPERATION_API_URL = "https://apis.data.go.kr/B553664/ElevatorOperationService/getOperationInfoListV1";
+const BUILDING_ELEVATOR_API_URL = "https://apis.data.go.kr/B553664/BuldElevatorService/getBuldElvtrList";
 const CACHE_DAYS = 45;
+const CACHE_VERSION = 3;
+const SERVICE_PAUSE_KEY = `elevator-capacity-service-pause-v${CACHE_VERSION}`;
+const DISTRICT_INDEX_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const districtIndexLoads = new Map();
 
 function clean(value) {
   return String(value == null ? "" : value).trim();
@@ -54,6 +59,26 @@ function parcelAddressKey(value) {
   return [match[1], match[2], match[3] ? "산" : "", String(Number(match[4])), String(Number(match[5] || 0))].join("|");
 }
 
+export function elevatorAddressVariants(value) {
+  const fullAddress = completeDaejeonAddress(value)
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/(?:지하|지상)?\s*\d+(?:\.0)?\s*층.*$/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = fullAddress.match(/(?:대전광역시|대전시)?\s*([가-힣]+구)\s+([가-힣0-9]+(?:동|가|읍|면|리))\s+(산\s*)?(\d+)(?:\s*-\s*(\d+))?/);
+  if (!match) return fullAddress ? [fullAddress] : [];
+  const district = match[1];
+  const neighborhood = match[2];
+  const lot = `${match[3] ? "산 " : ""}${Number(match[4])}${Number(match[5] || 0) ? `-${Number(match[5])}` : ""}`;
+  return [...new Set([
+    fullAddress,
+    `대전광역시 ${district} ${neighborhood} ${lot}`,
+    `대전 ${district} ${neighborhood} ${lot}`,
+    `${district} ${neighborhood} ${lot}`,
+    `${neighborhood} ${lot}`
+  ])];
+}
+
 function compactRow(row) {
   return {
     elevatorNo: clean(row?.elevatorNo || row?.elvtrUniqueNo),
@@ -67,13 +92,13 @@ function compactRow(row) {
   };
 }
 
-async function fetchPage(env, address, pageNo) {
+async function fetchOperationPage(env, address, pageNo) {
   // This approval belongs to the Korea Elevator Safety Agency operation API.
   // Keep it separate from the building-register/public-permit credential so
   // rotating either service never interrupts the other one.
   const serviceKey = normalizeDataGoKrServiceKey(env.ELEVATOR_OPERATION_SERVICE_KEY);
   if (!serviceKey) throw new Error("공공데이터 인증키가 설정되지 않았습니다.");
-  const url = new URL(API_URL);
+  const url = new URL(OPERATION_API_URL);
   url.searchParams.set("serviceKey", serviceKey);
   url.searchParams.set("pageNo", String(pageNo));
   url.searchParams.set("numOfRows", "500");
@@ -105,13 +130,123 @@ async function fetchPage(env, address, pageNo) {
   };
 }
 
-async function fetchRows(env, address) {
-  const first = await fetchPage(env, address, 1);
-  const pages = Math.min(10, Math.max(1, Math.ceil((first.totalCount || first.rows.length) / 500)));
+async function fetchOperationRows(env, address) {
+  const first = await fetchOperationPage(env, address, 1);
+  const pages = Math.min(20, Math.max(1, Math.ceil((first.totalCount || first.rows.length) / 500)));
   const rest = pages > 1
-    ? await Promise.all(Array.from({ length: pages - 1 }, (_, index) => fetchPage(env, address, index + 2)))
+    ? await Promise.all(Array.from({ length: pages - 1 }, (_, index) => fetchOperationPage(env, address, index + 2)))
     : [];
   return first.rows.concat(...rest.map((page) => page.rows));
+}
+
+function districtFromAddress(value) {
+  return completeDaejeonAddress(value).match(/([가-힣]+구)\s/)?.[1] || "";
+}
+
+async function readDistrictIndex(env, district) {
+  if (!env.MEDIA || !district) return null;
+  const object = await env.MEDIA.get(`api-cache/elevator-district-v1/${district}.json`);
+  if (!object) return null;
+  try {
+    const parsed = JSON.parse(await object.text());
+    const age = Date.now() - Date.parse(parsed?.checkedAt || "");
+    return parsed?.groups && Number.isFinite(age) && age < DISTRICT_INDEX_MAX_AGE_MS ? parsed.groups : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function buildDistrictIndex(env, district) {
+  const rows = (await fetchOperationRows(env, `대전광역시 ${district}`)).map(compactRow)
+    .filter((row) => row.elevatorNo);
+  const groups = {};
+  rows.forEach((row) => {
+    const key = [row.address, row.roadAddress].map(parcelAddressKey).find(Boolean);
+    if (!key) return;
+    if (!groups[key]) groups[key] = [];
+    if (!groups[key].some((entry) => entry.elevatorNo === row.elevatorNo)) groups[key].push(row);
+  });
+  if (env.MEDIA) {
+    await env.MEDIA.put(`api-cache/elevator-district-v1/${district}.json`, JSON.stringify({
+      checkedAt: new Date().toISOString(),
+      district,
+      groups
+    }), { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+  }
+  return groups;
+}
+
+async function districtElevators(env, district, targetKey) {
+  if (!district) return [];
+  const cached = await readDistrictIndex(env, district);
+  if (cached) return cached[targetKey] || [];
+  if (!districtIndexLoads.has(district)) {
+    districtIndexLoads.set(district, buildDistrictIndex(env, district).finally(() => districtIndexLoads.delete(district)));
+  }
+  const groups = await districtIndexLoads.get(district);
+  return groups[targetKey] || [];
+}
+
+async function discoverElevators(env, fullAddress, targetKey) {
+  let serviceReached = false;
+  for (const address of elevatorAddressVariants(fullAddress)) {
+    const rows = await fetchOperationRows(env, address);
+    serviceReached = true;
+    const matched = rows.map(compactRow).filter((row) =>
+      row.elevatorNo && [row.address, row.roadAddress]
+        .some((candidate) => parcelAddressKey(candidate) === targetKey)
+    );
+    if (matched.length) return { rows: matched, queryAddress: address, serviceReached };
+  }
+  const district = districtFromAddress(fullAddress);
+  const districtRows = await districtElevators(env, district, targetKey);
+  if (districtRows.length) {
+    return { rows: districtRows, queryAddress: `대전광역시 ${district}`, serviceReached: true };
+  }
+  return { rows: [], queryAddress: fullAddress, serviceReached };
+}
+
+async function fetchElevatorDetail(env, elevatorNo) {
+  const serviceKey = normalizeDataGoKrServiceKey(env.ELEVATOR_OPERATION_SERVICE_KEY);
+  if (!serviceKey) throw new Error("공공데이터 인증키가 설정되지 않았습니다.");
+  const url = new URL(BUILDING_ELEVATOR_API_URL);
+  url.searchParams.set("serviceKey", serviceKey);
+  url.searchParams.set("elevator_no", elevatorNo);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  let response;
+  try {
+    response = await fetch(url, {
+      signal: controller.signal,
+      cache: "no-store",
+      headers: { Accept: "application/xml,text/xml" }
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  const xml = await response.text();
+  if (!response.ok) throw new Error(`건물별 승강기정보 조회 실패 (HTTP ${response.status})`);
+  const resultCode = xmlValue(xml, "resultCode");
+  if (resultCode && !["00", "0", "NORMAL_SERVICE"].includes(resultCode)) {
+    const error = new Error(xmlValue(xml, "resultMsg") || resultCode);
+    error.apiResultCode = resultCode;
+    throw error;
+  }
+  return parseXmlRows(xml).map(compactRow).find((row) => row.elevatorNo === elevatorNo) || null;
+}
+
+async function enrichElevatorDetails(env, operationRows) {
+  const unique = [...new Map(operationRows.map((row) => [row.elevatorNo, row])).values()];
+  const details = await Promise.all(unique.slice(0, 20).map(async (row) => {
+    try {
+      return (await fetchElevatorDetail(env, row.elevatorNo)) || row;
+    } catch (_) {
+      // The operation response already includes ratedCap/liveLoad. Preserve it
+      // when the newly approved detail service is still propagating.
+      return row;
+    }
+  }));
+  return details.concat(unique.slice(20));
 }
 
 async function readCache(env, key) {
@@ -143,18 +278,16 @@ export async function getElevatorCapacity(env, { address, cacheKey, expectedCoun
   if (!fullAddress || !targetKey || Number(expectedCount || 0) <= 0) {
     return { ok: true, available: true, matched: false, maxCapacity: 0, capacities: [], elevators: [] };
   }
-  const key = `elevator-capacity-v1-${clean(cacheKey) || targetKey}`;
+  const key = `elevator-capacity-v${CACHE_VERSION}-${clean(cacheKey) || targetKey}`;
   if (!force) {
     const cached = await readCache(env, key);
     if (cached) return cached;
-    const servicePause = await readCache(env, "elevator-capacity-service-pause-v1");
+    const servicePause = await readCache(env, SERVICE_PAUSE_KEY);
     if (servicePause?.available === false) return servicePause;
   }
   try {
-    const rows = await fetchRows(env, fullAddress);
-    const elevators = rows.map(compactRow).filter((row) =>
-      row.elevatorNo && [row.address, row.roadAddress].some((candidate) => parcelAddressKey(candidate) === targetKey)
-    );
+    const discovered = await discoverElevators(env, fullAddress, targetKey);
+    const elevators = await enrichElevatorDetails(env, discovered.rows);
     const capacities = [...new Set(elevators.map((row) => row.maxCapacity).filter((value) => value > 0))]
       .sort((a, b) => a - b);
     const result = {
@@ -165,8 +298,9 @@ export async function getElevatorCapacity(env, { address, cacheKey, expectedCoun
       capacities,
       elevators,
       address: fullAddress,
-      source: "한국승강기안전공단 건물별승강기운행정보",
-      sourcePage: "https://www.data.go.kr/data/15151292/openapi.do",
+      queryAddress: discovered.queryAddress,
+      source: "한국승강기안전공단 건물별승강기정보",
+      sourcePage: "https://www.data.go.kr/data/15150945/openapi.do",
       queriedAt: new Date().toISOString(),
       cached: false
     };
@@ -189,7 +323,7 @@ export async function getElevatorCapacity(env, { address, cacheKey, expectedCoun
       .test(`${result.resultCode} ${result.message}`);
     await writeCache(env, key, fullAddress, result, accessFailure ? "+10 minutes" : "+1 day");
     if (accessFailure) {
-      await writeCache(env, "elevator-capacity-service-pause-v1", "", result, "+10 minutes");
+      await writeCache(env, SERVICE_PAUSE_KEY, "", result, "+10 minutes");
     }
     return result;
   }

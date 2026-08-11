@@ -10,16 +10,23 @@ const d1 = fs.readFileSync(path.join(root, "cloudflare", "src", "d1-api.js"), "u
 const map = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
 
 assert.match(api, /getOperationInfoListV1/);
+assert.match(api, /getBuldElvtrList/);
 assert.match(api, /buld_address/);
 assert.match(api, /ratedCap/);
 assert.match(api, /parcelAddressKey\(candidate\) === targetKey/);
-assert.match(api, /elevator-capacity-service-pause-v1/);
+assert.match(api, /SERVICE_PAUSE_KEY/);
+assert.match(api, /elevatorAddressVariants/);
+assert.match(api, /enrichElevatorDetails/);
+assert.match(api, /districtElevators/);
+assert.match(api, /api-cache\/elevator-district-v1/);
 assert.match(api, /normalizeDataGoKrServiceKey/);
 assert.match(api, /env\.ELEVATOR_OPERATION_SERVICE_KEY/);
 assert.doesNotMatch(api, /env\.DATA_GO_KR_SERVICE_KEY/);
 assert.match(api, /decodeURIComponent\(key\)/);
 assert.match(api, /accessFailure \? "\+10 minutes" : "\+1 day"/);
 assert.match(buildingApi, /getElevatorCapacityForListing/);
+assert.match(buildingApi, /normalizeBuildingRegisterServiceKey/);
+assert.match(buildingApi, /normalizeBuildingRegisterServiceKey\(env\.DATA_GO_KR_SERVICE_KEY\)/);
 assert.match(buildingApi, /building_elevator_capacity=\?1/);
 assert.match(d1, /building_elevator_capacity/);
 assert.match(map, /buildingElevatorCapacity/);
