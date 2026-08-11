@@ -497,6 +497,16 @@
     font-size: 12px !important;
   }
 
+  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+    font-size: 13px !important;
+    font-weight: 900 !important;
+  }
+
+  .v6-toolbar-secondary .quick-add-btn .top-action-icon-v638 {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
   .async-mutation-status-v1 {
     width: 66px !important;
     min-width: 66px !important;
@@ -531,6 +541,10 @@
     padding-right: 8px !important;
     padding-left: 8px !important;
     font-size: 13px !important;
+  }
+
+  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+    font-size: 14px !important;
   }
 
   .v6-toolbar-primary input,

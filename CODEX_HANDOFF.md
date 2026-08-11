@@ -461,3 +461,4 @@
 - Roomier desktop actions increased the 1540px+ header labels to 13px with 8px inter-button gaps and wider action cells; 1200px uses 12px/6px while 900-1024px keeps the compact tablet fit. Mobile remains unchanged.
 - Responsive QA at 900, 1024, 1200 and 1794px reported zero toolbar overflow. Production Worker version: `2d2ed80c-7f3a-4199-8217-39b7a003db3e`.
 - Search-button balance follow-up widened the 1540px+ blue search action from 60px to 76px without reducing the 360px keyword input; both remain 42px high with a zero-gap seam. Production Worker version: `e0b2488c-1b66-4292-8645-0255033a2ac1`.
+- Quick-registration emphasis follow-up raises the desktop action to 14px/900 weight (13px at 1200px) while retaining the existing button footprint and zero header overflow. Production Worker version: `465c8f99-318f-49d0-a691-04b18d299e07`.
