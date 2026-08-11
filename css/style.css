@@ -6429,6 +6429,10 @@ body,
   white-space: nowrap;
 }
 
+.item-elevator-capacity-v820.unknown {
+  color: #64748b;
+}
+
 .item-elevator-capacity-v820[hidden] {
   display: none !important;
 }

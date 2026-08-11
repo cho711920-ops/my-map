@@ -495,3 +495,11 @@
 - Live post-deploy cron verification then advanced those counts to 954 total, 752 with capacity and 763 with an official road address, proving the automatic enrichment path was processing new/cached BuildingHUB rows in production.
 - Cloudflare tests: 92/92 passed. Targeted scheduler/elevator tests: 6/6 passed. Wrangler build/dry-run passed.
 - Production Worker version: `b65c443b-e056-431e-ade9-f8f6aa0e6f1b`.
+
+## 2026-08-11 Unknown elevator-capacity marker
+
+- A BuildingHUB-verified elevator with no saved official maximum capacity now renders as `🛗 X` instead of leaving the capacity label blank.
+- Verified capacities continue to render as `🛗 13인`; listings without a verified elevator still hide the elevator badge entirely.
+- The unknown marker is muted gray and its accessible label/title states that maximum capacity is unconfirmed.
+- Cloudflare tests: 92/92 passed. Targeted elevator tests: 5/5 passed. Wrangler build/dry-run passed.
+- Production Worker version: `bc9272c4-ebda-4cfa-a686-de7fc480701a`.

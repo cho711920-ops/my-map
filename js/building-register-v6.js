@@ -19,7 +19,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.4";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.5";
   var state = {
     item: null,
     parcel: null,
@@ -700,12 +700,14 @@
       if (elevator) {
         elevator.hidden = !(badge.verified && badge.elevators > 0);
         if (!elevator.hidden) {
-          var capacityText = Number(badge.capacity || 0) > 0 ? " · 최대 " + Number(badge.capacity) + "인승" : "";
+          var capacity = Number(badge.capacity || 0);
+          var capacityText = capacity > 0 ? " · 최대 " + capacity + "인승" : " · 최대정원 미확인";
           elevator.title = "건축물대장 엘리베이터 " + badge.elevators + "대" + capacityText;
           elevator.setAttribute("aria-label", "엘리베이터 " + badge.elevators + "대" + capacityText);
           if (elevatorCapacity) {
-            elevatorCapacity.textContent = Number(badge.capacity || 0) > 0 ? Number(badge.capacity) + "인" : "";
-            elevatorCapacity.hidden = !(Number(badge.capacity || 0) > 0);
+            elevatorCapacity.textContent = capacity > 0 ? capacity + "인" : "X";
+            elevatorCapacity.hidden = false;
+            elevatorCapacity.classList.toggle("unknown", !(capacity > 0));
           }
         }
       }
