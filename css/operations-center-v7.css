@@ -567,6 +567,31 @@ body.customer-crm-open{overflow:hidden}
 .item-memo-toggle .item-action-emoji-v664{display:none!important}
 .item-memo-toggle:after{content:none!important;display:none!important}
 
+.operations-transaction-candidates-v1{
+  margin-top:14px;padding:16px;border:1px solid #f2c46f;border-radius:16px;background:#fffaf0;
+}
+.operations-transaction-candidates-v1>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.operations-transaction-candidates-v1>header div{display:grid;gap:4px}
+.operations-transaction-candidates-v1>header strong{font-size:17px;color:#7a4300}
+.operations-transaction-candidates-v1>header span{font-size:12px;color:#725b3b}
+.operations-transaction-candidates-v1>header button,
+.operations-transaction-list-v1 article>button{border:1px solid #d9a441;border-radius:9px;background:#fff;color:#7a4300;font-weight:800;cursor:pointer}
+.operations-transaction-candidates-v1>header button{height:34px;padding:0 13px}
+.operations-transaction-list-v1{display:grid;gap:8px;max-height:390px;overflow:auto}
+.operations-transaction-list-v1 article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #ead7b4;border-radius:12px;background:#fff}
+.operations-transaction-list-v1 article>div{display:grid;gap:3px;min-width:0}
+.operations-transaction-list-v1 article strong{font-size:14px;color:#24364d}
+.operations-transaction-list-v1 article span{font-size:12px;color:#485b73}
+.operations-transaction-list-v1 article small{font-size:11px;color:#7b684b}
+.operations-transaction-list-v1 article>button{flex:0 0 auto;height:36px;padding:0 14px;background:#fff7e7}
+.operations-transaction-empty-v1{margin:0;padding:24px;text-align:center;color:#806b4a}
+
+@media(max-width:768px){
+  .operations-transaction-candidates-v1{margin:10px 8px;padding:12px}
+  .operations-transaction-list-v1 article{align-items:stretch;flex-direction:column}
+  .operations-transaction-list-v1 article>button{width:100%}
+}
+
 @media(min-width:769px){
   .standard-card-main-v661 .item-compact-actions-v650{
     grid-template-columns:minmax(0,1fr) 52px!important;

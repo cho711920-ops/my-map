@@ -45,7 +45,9 @@
     customerWorkspaceEpoch: 0,
     customerConditionRefreshV727: { customerId: "", status: "idle" },
     customerEditorCloseTimerV727: null,
-    customerEditorCloseResolveV727: null
+    customerEditorCloseResolveV727: null,
+    transactionCandidates: null,
+    transactionCandidatesLoading: false
   };
 
   window.operationsMatchPropertyIds = null;
@@ -161,18 +163,21 @@
   function dashboardCard(label, value, hint, tone, actionTarget) {
     var actionable = Boolean(actionTarget);
     var reviews = actionTarget === "reviews";
+    var transactions = actionTarget === "transactions";
     var tag = actionable ? "button" : "article";
     var action = actionable
       ? (reviews
         ? ' type="button" onclick="switchOperationsTab(\'reviews\')"'
-        : ' type="button" onclick="openCustomerWorkQueue(\'' + escape(actionTarget) + '\')"')
+        : transactions
+          ? ' type="button" onclick="openTransactionCandidates()"'
+          : ' type="button" onclick="openCustomerWorkQueue(\'' + escape(actionTarget) + '\')"')
       : "";
     return '<' + tag + action + ' class="operations-stat-card ' + (tone || "") +
       (actionable ? ' actionable' : '') + '">' +
       '<span>' + escape(label) + '</span>' +
       '<strong>' + number(value).toLocaleString("ko-KR") + '</strong>' +
       '<small>' + escape(hint) + '</small>' +
-      (actionable ? '<em>' + (reviews ? '매물검증 바로 보기 →' : '해당 고객 바로 보기 →') + '</em>' : '') +
+      (actionable ? '<em>' + (reviews ? '매물검증 바로 보기 →' : transactions ? '후보 목록 보기 →' : '해당 고객 바로 보기 →') + '</em>' : '') +
       '</' + tag + '>';
   }
 
@@ -197,7 +202,7 @@
         dashboardCard("신규 고객매칭", data.newMatches != null ? data.newMatches : data.matches, "아직 후보·보류로 정하지 않은 추천", data.newMatches ? "primary" : "", "new") +
         dashboardCard("미연락 경고", data.overdueMatches, (data.contactReminderDays || 3) + "일 이상 연락기록 없는 신규 추천", data.overdueMatches ? "warning" : "success", "overdue") +
         dashboardCard("오늘 후속관리", data.dueFollowups, "다음 연락·미팅일이 된 고객", data.dueFollowups ? "warning" : "success", "due") +
-        dashboardCard("거래확인 후보", data.transactionCheckCandidates, "전체수집 3회 연속 미노출된 보류매물", data.transactionCheckCandidates ? "warning" : "success") +
+        dashboardCard("거래확인 후보", data.transactionCheckCandidates, "전체수집 3회 연속 미노출된 보류매물", data.transactionCheckCandidates ? "warning" : "success", "transactions") +
         dashboardCard("후보 매물", data.introducedMatches, "고객이 후보로 선택한 매물", "success") +
         dashboardCard("변경 이력", data.history, "수정·통합·상태변경 기록", "") +
         dashboardCard("최근 자동정리", cleanupRemoved, cleanupHint, cleanup.at && hasCurrentListings ? "success" : "") +
@@ -1618,6 +1623,66 @@
       return true;
     }).catch(function() { return false; });
   }
+
+  function renderTransactionCandidates() {
+    var panel = document.getElementById("operationsDashboardPanel");
+    if (!panel) return;
+    var old = document.getElementById("operationsTransactionCandidatesV1");
+    if (old) old.remove();
+    var section = document.createElement("section");
+    section.id = "operationsTransactionCandidatesV1";
+    section.className = "operations-transaction-candidates-v1";
+    var rows = state.transactionCandidates || [];
+    section.innerHTML = '<header><div><strong>거래확인 후보</strong><span>모든 원본이 완전수집에서 3회 연속 보이지 않은 매물입니다. 실제 계약 여부를 확인한 뒤 직접 계약완료 처리하세요.</span></div>' +
+      '<button type="button" onclick="closeTransactionCandidatesV1()">닫기</button></header>' +
+      (state.transactionCandidatesLoading
+        ? '<p class="operations-transaction-empty-v1">후보 매물을 불러오는 중입니다.</p>'
+        : rows.length
+          ? '<div class="operations-transaction-list-v1">' + rows.map(function(row) {
+              var encodedId = encodeURIComponent(text(row.propertyId));
+              var encodedAddress = encodeURIComponent(text(row.address));
+              var price = '보 ' + number(row.deposit).toLocaleString("ko-KR") + ' / 월 ' + number(row.rent).toLocaleString("ko-KR");
+              return '<article><div><strong>' + escape(row.title || row.type || "매물") + '</strong>' +
+                '<span>' + escape([row.address, row.room].filter(Boolean).join(" ")) + '</span>' +
+                '<small>' + escape(price) + (row.area ? ' · 평 ' + escape(row.area) : '') +
+                ' · 원본 ' + number(row.sourceCount) + '개 · 미노출 ' + number(row.missingCount) + '회</small></div>' +
+                '<button type="button" onclick="openTransactionCandidatePropertyV1(\'' + encodedId + '\',\'' + encodedAddress + '\')">매물 확인</button></article>';
+            }).join("") + '</div>'
+          : '<p class="operations-transaction-empty-v1">현재 거래확인 후보가 없습니다.</p>');
+    panel.appendChild(section);
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  window.openTransactionCandidates = function() {
+    state.transactionCandidatesLoading = true;
+    renderTransactionCandidates();
+    apiGet("transactionCandidates").then(function(result) {
+      state.transactionCandidates = result.candidates || [];
+      state.transactionCandidatesLoading = false;
+      renderTransactionCandidates();
+    }).catch(function(error) {
+      state.transactionCandidatesLoading = false;
+      setMessage(error.message || "거래확인 후보를 불러오지 못했습니다.", "error");
+      renderTransactionCandidates();
+    });
+  };
+
+  window.closeTransactionCandidatesV1 = function() {
+    var section = document.getElementById("operationsTransactionCandidatesV1");
+    if (section) section.remove();
+  };
+
+  window.openTransactionCandidatePropertyV1 = function(encodedPropertyId, encodedAddress) {
+    var propertyId = decodeURIComponent(encodedPropertyId || "");
+    var address = decodeURIComponent(encodedAddress || "");
+    window.closeOperationsCenter();
+    var keyword = document.getElementById("keyword");
+    if (keyword && address) keyword.value = address;
+    if (typeof window.applyFilter === "function") window.applyFilter();
+    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.open === "function") {
+      window.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
+    }
+  };
 
   function refreshCustomerAlertWhenChanged(forceDashboard) {
     if (state.operationsRevisionPending) return Promise.resolve();

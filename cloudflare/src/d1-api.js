@@ -10,7 +10,7 @@ const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
   "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard",
-  "listingChanges", "listingHistory", "userManagement", "userProfile"
+  "transactionCandidates", "listingChanges", "listingHistory", "userManagement", "userProfile"
 ]);
 
 const D1_POST_ACTIONS = new Set([
@@ -629,6 +629,38 @@ async function operationsDashboard(env) {
   }
 }
 
+async function transactionCandidates(env) {
+  const result = await env.DB.prepare(`SELECT
+      l.id AS property_id, l.title, l.address, l.room, l.listing_type,
+      l.deposit, l.monthly_rent, l.area_m2, l.main_source,
+      COUNT(s.id) AS source_count, MAX(s.missing_count) AS missing_count,
+      GROUP_CONCAT(DISTINCT s.source) AS sources, MAX(s.updated_at) AS last_checked_at
+    FROM listing_sources s
+    JOIN listings l ON l.id=s.listing_id
+    WHERE l.status NOT IN ('deleted','계약완료')
+    GROUP BY l.id
+    HAVING SUM(CASE WHEN s.active=1 THEN 1 ELSE 0 END)=0
+      AND MAX(s.missing_count)>=3
+    ORDER BY MAX(s.updated_at) DESC, l.address, l.room
+    LIMIT 500`).all();
+  const candidates = (result?.results || []).map((row) => ({
+    propertyId: clean(row.property_id),
+    title: clean(row.title),
+    address: clean(row.address),
+    room: clean(row.room),
+    type: clean(row.listing_type),
+    deposit: number(row.deposit),
+    rent: number(row.monthly_rent),
+    area: number(row.area_m2),
+    mainSource: clean(row.main_source),
+    sourceCount: Number(row.source_count) || 0,
+    missingCount: Number(row.missing_count) || 0,
+    sources: clean(row.sources).split(",").map((value) => value.trim()).filter(Boolean),
+    lastCheckedAt: clean(row.last_checked_at)
+  }));
+  return { ok: true, action: "transactionCandidates", count: candidates.length, candidates, source: "D1" };
+}
+
 const BUSINESS_HISTORY_FIELDS = [
   "title", "room", "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2",
   "landlord_phone", "tenant_phone", "operating_memo", "contacts_json"
@@ -816,6 +848,7 @@ export async function handleD1GetAction(env, user, query) {
   if (action === "customerWorkspace") return customerWorkspace(env, query.customerId);
   if (action === "customerMatches") return customerMatches(env, query.customerId);
   if (action === "operationsDashboard") return operationsDashboard(env);
+  if (action === "transactionCandidates") return transactionCandidates(env);
   if (action === "listingChanges") return listingChanges(env, query);
   if (action === "listingHistory") return listingHistory(env, query);
   if (action === "userProfile") return userProfile(user);
