@@ -273,10 +273,30 @@ function daangnRecord(article, listSnapshot = "") {
   };
 }
 
-function normalizedRecord(source, value) {
+export function normalizedRecord(source, value) {
   if (source === "네이버") return naverRecord(value);
   if (source === "공실박스") return gongsilRecord(value);
-  if (source === "당근") return value?.source === "당근" ? value : daangnRecord(value, value?.listSnapshot);
+  if (source === "당근") {
+    // Automatic collection already produces a normalized record, but keep the
+    // provider detail in `raw`.  Re-normalize that detail once more at the D1
+    // boundary so an older collector (or a resumed pre-fix job) cannot persist
+    // descriptive text such as "봉명동 1층" as the lot address "봉명동 1".
+    if (value?.source === "당근" && value?.raw && typeof value.raw === "object") {
+      const canonical = daangnRecord(value.raw, value.listSnapshot);
+      return {
+        ...value,
+        source: "당근",
+        sourceId: canonical.sourceId || value.sourceId,
+        buildingName: canonical.buildingName || value.buildingName,
+        address: canonical.address || value.address,
+        room: canonical.room || value.room,
+        latitude: canonical.latitude ?? value.latitude,
+        longitude: canonical.longitude ?? value.longitude,
+        raw: value.raw
+      };
+    }
+    return daangnRecord(value, value?.listSnapshot);
+  }
   return null;
 }
 
