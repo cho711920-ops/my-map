@@ -20,7 +20,9 @@ assert.match(d1, /building_elevator_capacity/);
 assert.match(map, /buildingElevatorCapacity/);
 assert.match(building, /action=elevatorCapacity/);
 assert.match(building, /item-elevator-capacity-v820/);
-assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.0"/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.1"/);
+assert.match(building, /function mergeKnownBadgeV821/);
+assert.match(building, /cached building[\s\S]*must not prevent that lazy enrichment request/);
+assert.match(buildingApi, /const elevators = rows\.reduce/);
 
-console.log("elevator capacity v8.2.0 tests passed");
-
+console.log("elevator capacity v8.2.1 tests passed");

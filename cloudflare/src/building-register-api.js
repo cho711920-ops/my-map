@@ -201,10 +201,16 @@ async function writeCache(env, key, parcel, mode, result) {
 
 async function persistBuildingBadge(env, propertyId, result) {
   if (!propertyId || !env.DB) return { ok: true, persisted: false };
-  const building = result.buildings?.[0] || result.recaps?.[0] || {};
+  const rows = [...(result.buildings || []), ...(result.recaps || [])];
+  const building = rows[0] || {};
   const approval = clean(building.approvalDate);
   const year = approval.match(/^\d{4}/)?.[0] || "";
-  const elevators = Number(building.passengerElevators || 0) + Number(building.emergencyElevators || 0);
+  // Public title/recap APIs can return more than one row for one parcel. The
+  // old first-row-only rule could persist 0 even when another official row
+  // clearly reported an elevator. A parcel badge uses the highest verified
+  // total so it cannot silently lose an existing elevator.
+  const elevators = rows.reduce((highest, row) => Math.max(highest,
+    Number(row?.passengerElevators || 0) + Number(row?.emergencyElevators || 0)), 0);
   const elevatorCapacity = Number(result?.elevatorInfo?.maxCapacity || building?.elevatorMaxCapacity || 0);
   const values = [year, elevators, elevatorCapacity, approval, new Date().toISOString(), clean(propertyId)];
   let update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,

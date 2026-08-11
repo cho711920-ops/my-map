@@ -20,7 +20,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.0";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.1";
   var state = {
     item: null,
     parcel: null,
@@ -667,6 +667,20 @@
     };
   }
 
+  function mergeKnownBadgeV821(badge, knownBadge) {
+    if (!knownBadge) return badge;
+    badge = badge || { year: "", elevators: 0, capacity: 0, verified: false };
+    return {
+      year: String(badge.year || knownBadge.year || ""),
+      // A cached title-row lookup must never hide an elevator count that was
+      // already verified and persisted in D1 for this listing/address.
+      elevators: Math.max(Number(badge.elevators || 0), Number(knownBadge.elevators || 0)),
+      capacity: Math.max(Number(badge.capacity || 0), Number(knownBadge.capacity || 0)),
+      verified: !!(badge.verified || knownBadge.verified),
+      persistent: !!(badge.persistent || knownBadge.persistent)
+    };
+  }
+
   function applyBadgeToCard(card, badge) {
     if (!card || !badge) return;
     var badgeItem = card.__buildingBadgeItemV650;
@@ -785,6 +799,8 @@
   }
 
   function ensureBadgeForCard(card, item) {
+    var knownBadge = persistentBadgeFromItemV810(item) ||
+      badgeAddressMemoryV810[normalizedBuildingAddressKeyV810(item.address)];
     var cachedParcel = readParcelCache(item);
     var parcelPromise = cachedParcel ? Promise.resolve(cachedParcel) : resolveParcel(item).then(function(parcel) {
       writeParcelCache(item, parcel);
@@ -794,7 +810,7 @@
       if (!card.isConnected) return null;
       card.setAttribute("data-building-parcel-key", parcelKey(parcel));
       return requestBadgeData(item, parcel).then(function(data) {
-        var badge = badgeFromData(data, item);
+        var badge = mergeKnownBadgeV821(badgeFromData(data, item), knownBadge);
         if (card.isConnected) applyBadgeToCard(card, badge);
         if (!(badge.elevators > 0 && !(badge.capacity > 0))) return data;
         return requestCapacityData(item, parcel, badge.elevators).then(function(capacityData) {
@@ -856,21 +872,27 @@
     card.setAttribute("data-building-address-key", normalizedBuildingAddressKeyV810(item.address));
     var persistentBadge = persistentBadgeFromItemV810(item);
     var addressBadge = badgeAddressMemoryV810[normalizedBuildingAddressKeyV810(item.address)];
+    var knownBadge = persistentBadge || addressBadge;
+    var needsCapacity = false;
     if (persistentBadge || addressBadge) {
-      var knownBadge = persistentBadge || addressBadge;
       applyBadgeToCard(card, knownBadge);
       // Existing D1 rows already know the elevator count but may predate the
       // capacity field. Keep the icon visible immediately, then enrich only
       // those elevator buildings lazily as their cards enter the viewport.
-      if (!(knownBadge.elevators > 0 && !(knownBadge.capacity > 0))) return;
+      needsCapacity = knownBadge.elevators > 0 && !(knownBadge.capacity > 0);
+      if (!needsCapacity) return;
     }
     var cachedParcel = readParcelCache(item);
     if (cachedParcel) {
       card.setAttribute("data-building-parcel-key", parcelKey(cachedParcel));
       var cachedData = readCache(cachedParcel) || readBadgeCache(cachedParcel);
       if (cachedData && cachedData.ok) {
-        applyBadgeToCard(card, badgeFromData(cachedData, item));
-        return;
+        var cachedBadge = mergeKnownBadgeV821(badgeFromData(cachedData, item), knownBadge);
+        applyBadgeToCard(card, cachedBadge);
+        needsCapacity = cachedBadge.elevators > 0 && !(cachedBadge.capacity > 0);
+        // Elevator capacity is a separate official API. A cached building
+        // register response must not prevent that lazy enrichment request.
+        if (!needsCapacity) return;
       }
     }
 
