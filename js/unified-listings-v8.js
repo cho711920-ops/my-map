@@ -511,7 +511,7 @@
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
           (!selected.masterFallback ? '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">이 매물 전체 통합</button>' : '') +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">다른 매물에 다시 합치기</button>' : '') +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
@@ -799,6 +799,11 @@
       return load(true).then(function() {
         if (typeof global.loadSheet !== "function") return result;
         return Promise.resolve(global.loadSheet(true)).then(function() { return result; });
+      }).then(function(reloadedResult) {
+        if (reloadedResult && reloadedResult.separated) {
+          alert("별도 매물 분리가 완료되었습니다.\n목록에 기존 묶음과 새 매물이 각각 표시됩니다.");
+        }
+        return reloadedResult;
       });
     }).catch(function(error) {
       setSaving(false, true);
@@ -815,6 +820,7 @@
   }
 
   function startMove(encodedOriginalId, revision) {
+    if (!confirm("이 매물을 다른 대표매물에 다시 합치시겠습니까?\n\n별도 분리를 취소하거나, 서로 다른 두 대표매물을 하나로 합칠 때만 사용하세요.")) return;
     state.pendingMove = {originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision,
       sourcePropertyId: text(state.openPropertyId)};
     closeDetail();
@@ -860,7 +866,7 @@
         alert("이미 이 통합매물에 연결된 원본입니다. 다른 통합매물을 선택해 주세요.");
         return true;
       }
-      if (confirm("현재 대표매물에 연결된 원본 전체를 이 매물로 통합할까요?\n통합 후 현재 카드는 목록에서 사라집니다.")) {
+      if (confirm("정말 다시 합치시겠습니까?\n\n현재 대표매물의 원본 전체가 선택한 매물에 들어가며, 현재 카드는 목록에서 사라집니다.")) {
         setMoveBannerSaving(true);
         move(pending.originalId, propertyId, pending.revision, pending.sourcePropertyId);
       }
