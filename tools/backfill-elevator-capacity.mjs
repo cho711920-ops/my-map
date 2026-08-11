@@ -92,14 +92,25 @@ function listingTargets() {
       json_extract(j.value,'$.roadAddress') AS road_address
     FROM building_cache b, json_each(b.summary_json,'$.recaps') AS j
     WHERE b.cache_key LIKE 'building-register-v10-%' AND trim(json_extract(j.value,'$.roadAddress'))<>''
+  ), source_locations AS (
+    SELECT listing_id, MAX(CASE
+      WHEN json_extract(raw_json,'$.publicAddress') LIKE '%로 %'
+        OR json_extract(raw_json,'$.publicAddress') LIKE '%길 %'
+        THEN json_extract(raw_json,'$.publicAddress')
+      WHEN json_extract(raw_json,'$.address') LIKE '%로 %'
+        OR json_extract(raw_json,'$.address') LIKE '%길 %'
+        THEN json_extract(raw_json,'$.address')
+      ELSE '' END) AS road_address
+    FROM listing_sources WHERE active=1 AND source='당근' GROUP BY listing_id
   )
   SELECT l.id, l.address, l.building_name, l.building_elevators,
     l.building_elevator_capacity, l.building_info_checked_at,
-    COALESCE(NULLIF(trim(l.road_address),''), MIN(r.road_address)) AS road_address
+    COALESCE(NULLIF(trim(l.road_address),''), MIN(r.road_address), NULLIF(trim(MIN(s.road_address)),'')) AS road_address
   FROM listings l LEFT JOIN register_locations r
     ON r.lot_key=replace(replace(replace(l.address,'대전광역시',''),'번지',''),' ','')
+    LEFT JOIN source_locations s ON s.listing_id=l.id
   WHERE l.status<>'deleted'
-  GROUP BY l.id HAVING trim(COALESCE(NULLIF(l.road_address,''), MIN(r.road_address)))<>''`;
+  GROUP BY l.id HAVING trim(COALESCE(NULLIF(l.road_address,''), MIN(r.road_address), NULLIF(trim(MIN(s.road_address)),'')))<>''`;
   return d1(query).results || [];
 }
 

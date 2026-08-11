@@ -297,8 +297,12 @@ function daangnRecord(article, listSnapshot = "") {
     article?.roadAddress,
     article?.location?.roadAddress,
     article?.complex?.roadAddress,
-    ...addressEdges.map((edge) => edge?.node?.roadAddress)
-  ].map(clean).find(Boolean) || "";
+    ...addressEdges.map((edge) => edge?.node?.roadAddress),
+    // Older Daangn details often put the road address in these generic fields
+    // while a separate buildingsForAddress entry carries the parcel address.
+    article?.publicAddress,
+    article?.address
+  ].map(clean).find((value) => /(?:로|길)\s*\d+(?:-\d+)?(?:\s|\(|$)/.test(value)) || "";
   const optionText = (article?.options || []).some((option) => option?.name === "PARKING" && clean(option?.value).toUpperCase() === "YES")
     ? "주차가능 · " : "";
   const description = stripExternalPhoneNumbers(

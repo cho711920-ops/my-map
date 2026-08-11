@@ -39,6 +39,8 @@ test("safety registry independently overrides an incorrect Building-HUB zero", (
 test("full audit includes register-zero listings and records both matches and no-matches", () => {
   assert.doesNotMatch(audit, /WHERE l\.status<>'deleted' AND l\.building_elevators>0/);
   assert.match(audit, /Building-HUB zero but safety-registry matched/);
+  assert.match(audit, /source_locations AS/);
+  assert.match(audit, /json_extract\(raw_json,'\$\.publicAddress'\)/);
   assert.match(audit, /elevator_registry_status=/);
   assert.match(audit, /building_elevator_capacity=/);
 });

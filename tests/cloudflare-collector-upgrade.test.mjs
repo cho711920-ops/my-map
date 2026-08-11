@@ -159,6 +159,19 @@ test("Daangn road-address placeholders use the explicit property category", () =
   assert.equal(named.buildingName, "테크노월드");
 });
 
+test("Daangn legacy generic address fields preserve a real road address", () => {
+  const row = normalizedRecord("당근", {
+    originalId: "legacy-road-1",
+    publicJibunAddress: "서구 용문동 227-1",
+    publicAddress: "대전광역시 서구 도산로 450 (용문동)",
+    address: "대전광역시 서구 도산로 450 (용문동)",
+    salesTypeV3: { type: "OFFICE" },
+    trades: [{ type: "MONTHLY_RENT", deposit: 1000, monthlyPay: 100 }]
+  });
+  assert.equal(row.address, "서구 용문동 227-1");
+  assert.equal(row.roadAddress, "대전광역시 서구 도산로 450 (용문동)");
+});
+
 test("Gongsilbox relative photo paths become cacheable absolute image URLs", () => {
   const first = "2025/09/20250911_1212163928_00.png";
   const second = "2025/09/20250911_1212163928_01.jpg";
