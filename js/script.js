@@ -3807,8 +3807,24 @@ function listDisplayValueV650(item, field) {
   return String(value).trim();
 }
 
-function buildListElevatorIconV650() {
-  return '<span class="item-elevator-v650" hidden title="건축물대장 엘리베이터 확인" aria-label="엘리베이터 있음">' +
+function persistentListElevatorV826(item) {
+  var status = String(item && item.buildingInfoStatus || "").trim();
+  var elevators = Number(item && item.buildingElevators || 0);
+  if ((status !== "확인완료" && status !== "connected") || !(elevators > 0)) return null;
+  return {
+    elevators: elevators,
+    capacity: Number(item && item.buildingElevatorCapacity || 0)
+  };
+}
+
+function buildListElevatorIconV650(item) {
+  var badge = persistentListElevatorV826(item);
+  var capacity = Number(badge && badge.capacity || 0);
+  var capacityLabel = capacity > 0 ? capacity + "인" : "X";
+  var capacityTitle = capacity > 0 ? "최대 " + capacity + "인승" : "최대정원 미확인";
+  return '<span class="item-elevator-v650"' + (badge ? '' : ' hidden') +
+    ' title="' + (badge ? '건축물대장 엘리베이터 ' + badge.elevators + '대 · ' + capacityTitle : '건축물대장 엘리베이터 확인') + '"' +
+    ' aria-label="' + (badge ? '엘리베이터 ' + badge.elevators + '대 · ' + capacityTitle : '엘리베이터 확인 전') + '">' +
     '<svg class="item-elevator-glyph-v651" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<rect x="2" y="2" width="20" height="20" rx="2"></rect>' +
       '<path class="item-elevator-divider-v665" d="M11 4.5v15"></path>' +
@@ -3816,7 +3832,8 @@ function buildListElevatorIconV650() {
       '<circle class="item-elevator-person-v662" cx="16" cy="8" r="1.6"></circle>' +
       '<path class="item-elevator-person-v662" d="M16 10.5v4.5m-2.7-2.6 2.7-1.9 2.7 1.9M16 15l-2.4 3.8M16 15l2.4 3.8"></path>' +
     '</svg>' +
-    '<span class="item-elevator-capacity-v820" hidden></span>' +
+    '<span class="item-elevator-capacity-v820' + (capacity > 0 ? '' : ' unknown') + '"' +
+      (badge ? '' : ' hidden') + '>' + (badge ? capacityLabel : '') + '</span>' +
   '</span>';
 }
 
@@ -4017,7 +4034,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
             (item.room
               ? '<span class="item-room-badge">' + escapeHtml(formatListingRoomForCardV653(item.room)) + '</span>'
               : '<span class="item-room-badge empty">호실 -</span>') +
-            buildListElevatorIconV650() +
+            buildListElevatorIconV650(item) +
           '</span>' +
           favoriteHeaderButtonV661 +
           (customerMatchControls && regDateLabel

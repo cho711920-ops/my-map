@@ -19,7 +19,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.5";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.6";
   var state = {
     item: null,
     parcel: null,
@@ -716,9 +716,19 @@
 
   function refreshBadgeCards(parcel, data) {
     var key = parcelKey(parcel);
-    Array.prototype.forEach.call(document.querySelectorAll(".item[data-building-parcel-key]"), function(card) {
-      if (card.getAttribute("data-building-parcel-key") !== key || !card.__buildingBadgeItemV650) return;
-      applyBadgeToCard(card, badgeFromData(data, card.__buildingBadgeItemV650));
+    var propertyId = String(data && data.propertyId || "").trim();
+    Array.prototype.forEach.call(document.querySelectorAll(".item[data-listing-key]"), function(card) {
+      var parcelMatches = card.getAttribute("data-building-parcel-key") === key;
+      var propertyMatches = propertyId && card.getAttribute("data-property-id") === propertyId;
+      if (!parcelMatches && !propertyMatches) return;
+      var item = card.__buildingBadgeItemV650 || (typeof allItems !== "undefined" && Array.isArray(allItems)
+        ? allItems.find(function(candidate) {
+            return String(candidate && candidate.propertyId || "").trim() === card.getAttribute("data-property-id");
+          })
+        : null);
+      if (!item) return;
+      card.__buildingBadgeItemV650 = item;
+      applyBadgeToCard(card, badgeFromData(data, item));
     });
   }
 
@@ -1621,10 +1631,18 @@
     prefetchMissing: prefetchMissingBuildingInfoV810,
     refreshVisible: function() {
       Array.prototype.forEach.call(document.querySelectorAll(".item[data-listing-key]"), function(card) {
-        if (card.__buildingBadgeItemV650) bindBadge(card, card.__buildingBadgeItemV650);
+        var item = card.__buildingBadgeItemV650 || (typeof allItems !== "undefined" && Array.isArray(allItems)
+          ? allItems.find(function(candidate) {
+              return String(candidate && candidate.propertyId || "").trim() === card.getAttribute("data-property-id");
+            })
+          : null);
+        if (item) bindBadge(card, item);
       });
     }
   };
+  setTimeout(function() {
+    if (window.JSBuildingRegisterBadges) window.JSBuildingRegisterBadges.refreshVisible();
+  }, 0);
   window.JSBuildingRegisterDiagnosticsV652 = {
     buildingCategory: buildingCategory,
     bestBuildingIndex: bestBuildingIndex,

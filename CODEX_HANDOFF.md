@@ -503,3 +503,12 @@
 - The unknown marker is muted gray and its accessible label/title states that maximum capacity is unconfirmed.
 - Cloudflare tests: 92/92 passed. Targeted elevator tests: 5/5 passed. Wrangler build/dry-run passed.
 - Production Worker version: `bc9272c4-ebda-4cfa-a686-de7fc480701a`.
+
+## 2026-08-11 Listing-card elevator rendering repair
+
+- The list-card template previously created every elevator element hidden and relied entirely on a later badge-binding pass. This allowed the register modal to show official values while the listing itself remained blank when card binding had not run yet.
+- Cards now render persisted D1 elevator data directly during HTML creation: verified capacity displays `🛗 13인`, verified elevator with missing capacity displays `🛗 X`, and no verified elevator remains hidden.
+- The badge module now performs a startup rebinding pass for already-rendered/virtualized cards and can recover the card item by `property_id` when a card was created before the module loaded.
+- A fresh BuildingHUB modal lookup now refreshes the matching listing card by `property_id` as well as parcel key, so closing the register immediately leaves the icon visible on the list.
+- Direct card-markup execution passed for known, unknown and absent elevator cases. Cloudflare tests: 92/92 passed; Wrangler build/dry-run passed.
+- Production Worker version: `c00ad386-5d3a-4523-ae19-20862fb8ca1e`.
