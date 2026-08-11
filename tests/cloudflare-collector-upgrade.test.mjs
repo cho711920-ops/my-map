@@ -64,6 +64,7 @@ test("Daangn structured building address wins over a floor number in addressInfo
     trades: [{ preferred: true, type: "MONTHLY_RENT", deposit: 3000, monthlyPay: 130 }]
   });
   assert.equal(record.address, "유성구 봉명동 1030-4");
+  assert.equal(record.roadAddress, "대전광역시 유성구 봉명서로 61-3");
   assert.equal(record.latitude, 36.357808);
   assert.equal(record.longitude, 127.3272713);
 });
@@ -85,6 +86,7 @@ test("Daangn hidden-address public coordinates are never treated as the exact pr
     trades: [{ preferred: true, type: "MONTH", deposit: 7000, monthlyPay: 400 }]
   });
   assert.equal(record.address, "대덕구 송촌동 477-1");
+  assert.equal(record.roadAddress, "대전광역시 대덕구 동춘당로 79");
   assert.equal(record.latitude, null);
   assert.equal(record.longitude, null);
 });

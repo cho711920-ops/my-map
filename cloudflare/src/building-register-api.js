@@ -226,19 +226,24 @@ async function persistBuildingBadge(env, propertyId, result) {
   const elevators = rows.reduce((highest, row) => Math.max(highest,
     Number(row?.passengerElevators || 0) + Number(row?.emergencyElevators || 0)), 0);
   const elevatorCapacity = Number(result?.elevatorInfo?.maxCapacity || building?.elevatorMaxCapacity || 0);
-  const values = [year, elevators, elevatorCapacity, approval, new Date().toISOString(), clean(propertyId)];
+  const roadAddress = clean(building?.roadAddress) || clean(rows.find((row) => clean(row?.roadAddress))?.roadAddress);
+  const values = [year, elevators, elevatorCapacity, approval, roadAddress, new Date().toISOString(), clean(propertyId)];
   let update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
     building_elevator_capacity=CASE WHEN ?3>0 THEN ?3 ELSE building_elevator_capacity END,
-    building_approval_date=?4, building_info_checked_at=?5,
-    building_info_status='확인완료', updated_at=?5 WHERE id=?6`).bind(...values).run();
+    building_approval_date=?4,
+    road_address=CASE WHEN trim(COALESCE(road_address,''))='' AND ?5<>'' THEN ?5 ELSE road_address END,
+    building_info_checked_at=?6,
+    building_info_status='확인완료', updated_at=?6 WHERE id=?7`).bind(...values).run();
   if (Number(update?.meta?.changes || 0) === 0) {
     update = await env.DB.prepare(`UPDATE listings SET building_year=?1, building_elevators=?2,
       building_elevator_capacity=CASE WHEN ?3>0 THEN ?3 ELSE building_elevator_capacity END,
-      building_approval_date=?4, building_info_checked_at=?5,
-      building_info_status='확인완료', updated_at=?5 WHERE property_id=?6 AND property_id <> ''`).bind(...values).run();
+      building_approval_date=?4,
+      road_address=CASE WHEN trim(COALESCE(road_address,''))='' AND ?5<>'' THEN ?5 ELSE road_address END,
+      building_info_checked_at=?6,
+      building_info_status='확인완료', updated_at=?6 WHERE property_id=?7 AND property_id <> ''`).bind(...values).run();
   }
   return { ok: true, persisted: Number(update?.meta?.changes || 0) > 0, year, elevators,
-    elevatorCapacity, approvalDate: approval };
+    elevatorCapacity, approvalDate: approval, roadAddress };
 }
 
 export async function getBuildingRegister(env, query) {

@@ -484,3 +484,14 @@
 - The regenerative R2 object `api-cache/d1-sheet.csv` was removed once after deployment so the next authenticated sheet request rebuilds it from the corrected D1 row.
 - Cloudflare tests: 89/89 passed. Targeted elevator tests: 6/6 passed. Wrangler build/dry-run passed.
 - Production Worker version: `72a7be29-4653-4d12-b781-c5f148f06418`.
+
+## 2026-08-11 Precomputed elevator badges for current and future listings
+
+- Listing cards no longer start an elevator-capacity request when they enter the viewport. They render only the BuildingHUB/elevator values already stored in D1, eliminating the late capacity flash.
+- Naver, Daangn and Gongsilbox normalization now preserves a provider road address when available. BuildingHUB persistence also writes the official title-row road address without overwriting an existing value.
+- Collection completion starts background enrichment immediately, and the existing every-minute Worker cron repeats it. Newest listings are prioritized; cached parcel data is reused, unfamiliar Daejeon parcels derive BuildingHUB inputs from the legal-dong cache, and only official maximum-capacity values are saved.
+- A read-first production backfill loaded the five official Elevator Safety Agency district indexes and matched BuildingHUB road addresses exactly. Of 746 eligible missing rows, 738 received a verified maximum capacity; all 746 received the official road address. The remaining eight exact-road nonmatches were left at zero for later official recheck rather than inferred.
+- Production active elevator listings after backfill: 936 total, 748 with a saved capacity, 746 with an official road address. Older uncached parcels continue through the automatic minute-by-minute enrichment path.
+- Live post-deploy cron verification then advanced those counts to 954 total, 752 with capacity and 763 with an official road address, proving the automatic enrichment path was processing new/cached BuildingHUB rows in production.
+- Cloudflare tests: 92/92 passed. Targeted scheduler/elevator tests: 6/6 passed. Wrangler build/dry-run passed.
+- Production Worker version: `b65c443b-e056-431e-ade9-f8f6aa0e6f1b`.

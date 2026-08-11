@@ -43,7 +43,7 @@ assert.match(building, /requestBadgeData\(item, parcel, true\)/);
 assert.match(building, /if \(persistToServer && \(!data\.buildingInfoCache \|\| !data\.buildingInfoCache\.ok\)\)/);
 assert.match(building, /"address=" \+ encodeURIComponent\(item && item\.address \|\| parcel\.lotAddress \|\| ""\)/);
 assert.match(building, /prefetchMissing: prefetchMissingBuildingInfoV810/);
-assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.3"/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.4"/);
 assert.doesNotMatch(buildingApi, /building_info_status='connected'/);
 assert.match(buildingApi, /building_info_status='확인완료'/);
 

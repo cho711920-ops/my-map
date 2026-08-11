@@ -205,6 +205,7 @@ function gongsilRecord(record) {
   return {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
     address: normalizedAddress(values[1] || record?.address), room: canonicalListingRoom(values[2] || record?.room),
+    roadAddress: clean(record?.roadAddress || record?.road_address || record?.raw?.detail?.roadAddress),
     category: clean(values[3] || record?.category) || "상가점포", deposit: number(values[4] ?? record?.deposit),
     rent: number(values[5] ?? record?.rent), fee: number(values[6] ?? record?.fee),
     premium: number(values[7] ?? record?.premium), area: number(values[8] ?? record?.area),
@@ -223,6 +224,7 @@ function naverRecord(item) {
   return {
     source: "네이버", sourceId, buildingName: clean(item?.buildingName) || "일반상가",
     address: normalizedAddress(item?.jibunAddress || item?.address),
+    roadAddress: clean(item?.roadAddress || item?.road_address || item?.roadAddressName),
     room: canonicalListingRoom(item?.roomInfo || item?.floorInfo), category: clean(item?.category) || "상가점포",
     deposit: number(item?.deposit), rent: number(item?.monthly), fee: number(item?.managementFee || item?.fee),
     premium: number(item?.premium), area: squareMeters && squareMeters > 0
@@ -290,6 +292,13 @@ function daangnRecord(article, listSnapshot = "") {
   const areaM2 = number(article?.area);
   const images = uniqueUrls([...(article?.images || []), ...(article?.floorPlanImages || [])]);
   const sourceId = clean(article?.originalId);
+  const addressEdges = article?.complex?.buildingsForAddress?.edges || [];
+  const roadAddress = [
+    article?.roadAddress,
+    article?.location?.roadAddress,
+    article?.complex?.roadAddress,
+    ...addressEdges.map((edge) => edge?.node?.roadAddress)
+  ].map(clean).find(Boolean) || "";
   const optionText = (article?.options || []).some((option) => option?.name === "PARKING" && clean(option?.value).toUpperCase() === "YES")
     ? "주차가능 · " : "";
   const description = stripExternalPhoneNumbers(
@@ -320,6 +329,7 @@ function daangnRecord(article, listSnapshot = "") {
       ? providerBuildingName
       : category === "상가점포" ? "일반상가" : category,
     address: daangnAddress(article),
+    roadAddress,
     room: daangnRoom(article),
     category,
     deposit: number(trade?.deposit ?? trade?.price), rent: number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
@@ -359,6 +369,7 @@ export function normalizedRecord(source, value) {
         sourceId: canonical.sourceId || value.sourceId,
         buildingName: canonical.buildingName || value.buildingName,
         address: canonical.address || value.address,
+        roadAddress: canonical.roadAddress || value.roadAddress,
         room: canonical.room || value.room,
         memo: canonical.memo,
         contacts: [],
@@ -375,7 +386,8 @@ export function normalizedRecord(source, value) {
 function unifiedSnapshot(record, originalId, propertyId, now) {
   return {
     originalId, source: record.source, sourceId: record.sourceId, propertyId,
-    link: record.link, buildingName: record.buildingName, address: record.address, room: record.room,
+    link: record.link, buildingName: record.buildingName, address: record.address,
+    roadAddress: record.roadAddress, room: record.room,
     type: record.category, deposit: record.deposit, rent: record.rent, fee: record.fee,
     premium: record.premium, area: record.area, latitude: record.latitude, longitude: record.longitude,
     memo: record.memo, status: "활성",
@@ -986,14 +998,17 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         source_url=CASE WHEN source_url='' THEN ?10 ELSE source_url END,
         latitude=CASE WHEN ?11 IS NOT NULL THEN ?11 ELSE latitude END,
         longitude=CASE WHEN ?12 IS NOT NULL THEN ?12 ELSE longitude END,
-        version=version+1, last_collected_at=?13, updated_at=?13 WHERE id=?14`)
+        road_address=CASE WHEN road_address='' AND ?13<>'' THEN ?13 ELSE road_address END,
+        version=version+1, last_collected_at=?14, updated_at=?14 WHERE id=?15`)
       .bind(record.buildingName, record.room, record.category, record.deposit, record.rent, record.fee,
-        record.premium, record.area, record.memo, record.link, record.latitude, record.longitude, now, listingId)
+        record.premium, record.area, record.memo, record.link, record.latitude, record.longitude,
+        clean(record.roadAddress), now, listingId)
     : listingNeedsTouch ? env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
         source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
         latitude=CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE latitude END,
-        longitude=CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE longitude END WHERE id=?5`)
-      .bind(now, record.link, record.latitude, record.longitude, listingId) : null;
+        longitude=CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE longitude END,
+        road_address=CASE WHEN road_address='' AND ?5<>'' THEN ?5 ELSE road_address END WHERE id=?6`)
+      .bind(now, record.link, record.latitude, record.longitude, clean(record.roadAddress), listingId) : null;
   const historyNeeded = !existingSource || sourceChanged || assets.changed || updateCondition;
   const finalStatements = [];
   if (update) finalStatements.push(update);
@@ -1011,14 +1026,14 @@ async function createListing(env, record, sessionId, actor = "collector", existi
   const now = nowIso();
   const contacts = JSON.stringify(record.contacts);
   await env.DB.prepare(`INSERT INTO listings (
-      id, property_id, status, main_source, title, address, building_name, room, listing_type,
+      id, property_id, status, main_source, title, address, road_address, building_name, room, listing_type,
       deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude, operating_memo, source_url,
       contacts_json, first_collected_at, registration_at, last_collected_at, created_at, updated_at
-    ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-      ?16, ?17, ?17, ?17, ?17, ?17)`)
-    .bind(id, record.source, record.buildingName || "일반상가", record.address, record.room, record.category,
-      record.deposit, record.rent, record.fee, record.premium, record.area, record.latitude, record.longitude,
-      record.memo, record.link, contacts, now).run();
+    ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?5, ?3, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+      ?17, ?18, ?18, ?18, ?18, ?18)`)
+    .bind(id, record.source, record.buildingName || "일반상가", record.address, clean(record.roadAddress),
+      record.room, record.category, record.deposit, record.rent, record.fee, record.premium, record.area,
+      record.latitude, record.longitude, record.memo, record.link, contacts, now).run();
   await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets);
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record)).run();

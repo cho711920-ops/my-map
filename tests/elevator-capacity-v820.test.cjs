@@ -9,6 +9,7 @@ const building = fs.readFileSync(path.join(root, "js", "building-register-v6.js"
 const d1 = fs.readFileSync(path.join(root, "cloudflare", "src", "d1-api.js"), "utf8");
 const map = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
 const worker = fs.readFileSync(path.join(root, "cloudflare", "src", "worker.js"), "utf8");
+const enrichment = fs.readFileSync(path.join(root, "cloudflare", "src", "elevator-enrichment.js"), "utf8");
 
 assert.match(api, /getOperationInfoListV1/);
 assert.match(api, /openapigw\.elevator\.go\.kr/);
@@ -35,14 +36,16 @@ assert.match(buildingApi, /cachedBuildingLocation/);
 assert.match(buildingApi, /roadAddress/);
 assert.match(d1, /building_elevator_capacity/);
 assert.match(map, /buildingElevatorCapacity/);
-assert.match(building, /action=elevatorCapacity/);
+assert.doesNotMatch(building, /action=elevatorCapacity/);
 assert.match(building, /item-elevator-capacity-v820/);
-assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.3"/);
-assert.match(building, /capacityLocationFromDataV823/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.4"/);
 assert.match(building, /function mergeKnownBadgeV821/);
-assert.match(building, /cached building[\s\S]*must not prevent that lazy enrichment request/);
+assert.doesNotMatch(building, /function requestCapacityData/);
 assert.match(buildingApi, /const elevators = rows\.reduce/);
+assert.match(buildingApi, /road_address=CASE WHEN trim\(COALESCE\(road_address,''\)\)=''/);
+assert.match(enrichment, /runScheduledElevatorEnrichment/);
+assert.match(enrichment, /getElevatorCapacity/);
 assert.match(worker, /query\.action === "elevatorCapacity"[\s\S]*D1_SHEET_CACHE_KEY/);
 assert.match(worker, /changeAction: "elevatorCapacity"/);
 
-console.log("elevator capacity v8.2.3 tests passed");
+console.log("elevator capacity v8.2.4 tests passed");

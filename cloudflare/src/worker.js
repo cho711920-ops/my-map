@@ -8,6 +8,7 @@ import {
 } from "./security.js";
 import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js";
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
+import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { getCommercialArea } from "./commercial-area-api.js";
 import { getRegionalMarket } from "./regional-market-api.js";
 import {
@@ -612,6 +613,9 @@ async function handleApi(request, env, context) {
         fullReload: true,
         changeAction: String(collectorBody?.action || "collectorFinalized")
       });
+      if (context && typeof context.waitUntil === "function") {
+        context.waitUntil(runElevatorEnrichmentMaintenance(env, context, "collectorElevatorEnrichment"));
+      }
     }
     return response;
   }
@@ -630,19 +634,39 @@ async function handleApi(request, env, context) {
 }
 
 async function runScheduledMaintenance(env, context) {
-  const result = await runScheduledReviewRepair(env);
-  const changed = Number(result?.merged || 0) + Number(result?.created || 0);
-  if (!changed) return result;
-  const snapshotUpdate = adjustOperationsDashboard(env, result.operationAdjustments || {});
+  const review = await runScheduledReviewRepair(env);
+  const elevator = await runScheduledElevatorEnrichment(env);
+  const reviewChanged = Number(review?.merged || 0) + Number(review?.created || 0);
+  const elevatorChanged = Number(elevator?.changed || 0);
+  if (!reviewChanged && !elevatorChanged) return { review, elevator };
+  const snapshotUpdate = reviewChanged
+    ? adjustOperationsDashboard(env, review.operationAdjustments || {})
+    : null;
   const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
     return deleteR2Cache(env, null, [
-      D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
+      D1_SHEET_CACHE_KEY,
+      ...(reviewChanged ? [UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY] : [])
     ]);
   });
   await invalidation;
-  await touchDataRevision(env, null, ["listings", "operations"], null, {
-    fullReload: true,
-    changeAction: "scheduledReviewRepair"
+  sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+  await touchDataRevision(env, null, reviewChanged ? ["listings", "operations"] : ["listings"], null, {
+    changeIds: elevator?.changedIds || [],
+    fullReload: reviewChanged,
+    changeAction: reviewChanged ? "scheduledReviewRepair" : "scheduledElevatorEnrichment"
+  });
+  return { review, elevator };
+}
+
+async function runElevatorEnrichmentMaintenance(env, context, changeAction) {
+  const result = await runScheduledElevatorEnrichment(env);
+  if (!Number(result?.changed || 0)) return result;
+  sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+  const invalidation = deleteR2Cache(env, null, [D1_SHEET_CACHE_KEY]);
+  await invalidation;
+  await touchDataRevision(env, context, ["listings"], null, {
+    changeIds: result.changedIds || [],
+    changeAction
   });
   return result;
 }
