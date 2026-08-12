@@ -42,11 +42,13 @@ test("separating an original builds a source-specific active master", () => {
 test("NEW target creates a master and moves source assets atomically", async () => {
   const d1 = await readFile(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
   const client = await readFile(new URL("../js/unified-listings-v8.js", import.meta.url), "utf8");
+  const dataAccess = await readFile(new URL("../js/data-access-v6.js", import.meta.url), "utf8");
   assert.match(d1, /if \(targetMasterId === "NEW"\)/);
   assert.match(d1, /INSERT INTO listings/);
   assert.match(d1, /UPDATE listing_sources SET listing_id=\?1/);
   assert.match(d1, /UPDATE listing_media SET listing_id=\?1/);
   assert.match(d1, /UPDATE listing_contacts SET listing_id=\?1/);
   assert.match(d1, /'separateOriginalListing'/);
-  assert.match(client, /payload && payload\.message \|\| "저장 요청 실패/);
+  assert.match(client, /JSDataAccessV6\.mutate\(action, payload/);
+  assert.match(dataAccess, /messageFromPayload\(result, settings\.errorMessage \|\| "저장 요청 실패"\)/);
 });

@@ -102,6 +102,9 @@
   }
 
   function apiGet(action, params) {
+    if (global.JSDataAccessV6) {
+      return global.JSDataAccessV6.read(action, params, { errorMessage: "운영자료 조회 실패" });
+    }
     var query = new URLSearchParams(Object.assign({action: action, _: Date.now()}, params || {}));
     return fetch(API + "?" + query.toString(), {credentials: "same-origin", cache: "no-store"})
       .then(function(response) {
@@ -770,19 +773,22 @@
     var requestId = "move-original-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
     var consolidateWholeMaster = text(sourceMasterId) && targetMasterId !== "NEW";
     setSaving(true, false);
-    return fetch(API, {
-      method: "POST", credentials: "same-origin", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(consolidateWholeMaster
-        ? {action:"consolidateExistingMasters", requestId:requestId, primaryMasterId:targetMasterId,
-          duplicateMasterIds:[sourceMasterId]}
-        : {action:"moveOriginalListing", requestId:requestId, originalId:originalId,
-          targetMasterId:targetMasterId, expectedRevision:revision})
-    }).then(function(response) {
-      return response.json().catch(function() { return null; }).then(function(payload) {
-        if (!response.ok) throw new Error(payload && payload.message || "저장 요청 실패 (HTTP " + response.status + ")");
-        return payload;
+    var action = consolidateWholeMaster ? "consolidateExistingMasters" : "moveOriginalListing";
+    var payload = consolidateWholeMaster
+      ? {requestId:requestId, primaryMasterId:targetMasterId, duplicateMasterIds:[sourceMasterId]}
+      : {requestId:requestId, originalId:originalId, targetMasterId:targetMasterId, expectedRevision:revision};
+    var request = global.JSDataAccessV6
+      ? global.JSDataAccessV6.mutate(action, payload, { errorMessage: "저장 요청 실패" })
+      : fetch(API, {
+        method: "POST", credentials: "same-origin", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(Object.assign({action:action}, payload))
+      }).then(function(response) {
+        return response.json().catch(function() { return null; }).then(function(result) {
+          if (!response.ok) throw new Error(result && result.message || "저장 요청 실패 (HTTP " + response.status + ")");
+          return result;
+        });
       });
-    }).then(function(result) {
+    return request.then(function(result) {
       var persisted = consolidateWholeMaster
         ? Number(result && result.consolidated || 0) > 0
         : result && result.persisted === true;

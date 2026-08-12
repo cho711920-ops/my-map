@@ -42,6 +42,14 @@ var jsListingsRevisionInfoV683 = null;
 
 
 function fetchDataRevisionV682(scope) {
+  if (window.JSDataAccessV6) {
+    return window.JSDataAccessV6.read("dataRevision", {
+      scope: scope || "listings"
+    }, { errorMessage: "Data revision check failed" }).then(function(result) {
+      if ((scope || "listings") === "listings") jsListingsRevisionInfoV683 = result || null;
+      return String(result && result.revision || "");
+    });
+  }
   var api = window.saveApiURL || "/api/data";
   var query = new URLSearchParams({
     action: "dataRevision",
@@ -93,13 +101,15 @@ function listingChangeRowToItemV683(row, index) {
 function applyListingChangesV683(info) {
   var ids = info && Array.isArray(info.changeIds) ? info.changeIds.map(clean).filter(Boolean).slice(0, 50) : [];
   if (!ids.length || info.fullReload) return Promise.resolve(false);
-  var query = new URLSearchParams({ action: "listingChanges", ids: ids.join(","), _: String(Date.now()) });
-  return fetch((window.saveApiURL || "/api/data") + "?" + query.toString(), {
+  var request = window.JSDataAccessV6
+    ? window.JSDataAccessV6.read("listingChanges", { ids: ids.join(",") }, { errorMessage: "Listing delta failed" })
+    : fetch((window.saveApiURL || "/api/data") + "?" + new URLSearchParams({ action: "listingChanges", ids: ids.join(","), _: String(Date.now()) }).toString(), {
     credentials: "same-origin", cache: "no-store"
   }).then(function(response) {
     if (!response.ok) throw new Error("Listing delta failed (HTTP " + response.status + ")");
     return response.json();
-  }).then(function(result) {
+  });
+  return request.then(function(result) {
     var changed = {};
     ids.forEach(function(id) { changed[id] = true; });
     var retained = (allItems || []).filter(function(item) { return !changed[clean(item && item.propertyId)]; });
@@ -1412,13 +1422,14 @@ function loadSheet(isAuto, forceRefresh) {
   var shouldForceRefresh = arguments.length >= 2
     ? !!forceRefresh
     : !!isAuto;
-  var sheetRequest = fetch(sheetURL, shouldForceRefresh ? {
-    cache: "reload",
-    headers: { "X-JS-Force-Refresh": "1" }
-  } : {
-    cache: "default"
-  })
-    .then(function(res) {
+  var sheetRequest = window.JSDataAccessV6
+    ? window.JSDataAccessV6.listingsCsv(shouldForceRefresh)
+    : fetch(sheetURL, shouldForceRefresh ? {
+      cache: "reload",
+      headers: { "X-JS-Force-Refresh": "1" }
+    } : {
+      cache: "default"
+    }).then(function(res) {
       if (res.ok) return res.text();
       return res.text().then(function(body) {
         var message = "D1 매물 데이터를 불러오지 못했습니다. (HTTP " + res.status + ")";

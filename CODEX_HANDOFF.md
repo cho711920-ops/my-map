@@ -525,3 +525,33 @@
 - Future automatic and manual listings run the safety-registry check independently after collection/BuildingHUB enrichment. Matches, no-matches and temporary upstream failures use separate refresh windows, preventing the same locations from being queried every minute.
 - Regenerative listing caches were invalidated and the listings revision was advanced for an immediate client refresh. Cloudflare tests: 95/95 passed; targeted elevator tests and Wrangler dry-run passed.
 - Production Worker version: `af56dfe4-3067-4cf1-9ddb-c08fa5004c8e`.
+
+## 2026-08-12 v6-cloud 브라우저 데이터 접근 계층 기반
+
+- 작업 시작 시 `codex/cloudflare-js-map` 브랜치의 깨끗한 작업 트리를 확인하고, 원격보다 뒤처진 6개 커밋을 `git fetch --prune`과 `git pull --ff-only`로 반영했다. 시작 기준 원격 HEAD는 `527eb40`이었다.
+- 현재 저장소는 이미 Google Sheet·Apps Script·Vercel을 운영 런타임에서 제거하고 Worker + D1 + R2로 운영 중이므로, 새 Cloudflare 스켈레톤을 중복 생성하지 않고 브라우저 데이터 접근 경계를 추가했다.
+- 새 `js/data-access-v6.js`는 `/api/data` D1 조회·저장과 `/api/sheet` CSV 호환 조회를 한곳에서 관리한다. 동일 출처 세션 자격, 캐시 정책, 강제 새로고침 헤더, JSON 오류와 재시도 가능 상태를 공통 처리한다.
+- 매물 CSV 초기 로딩, 리비전 확인, 변경 매물 델타, 통합매물 조회, 원본매물 이동·대표매물 통합 경로를 공통 계층에 연결했다. 기존 직접 `fetch` 코드는 모듈 미로딩 시 호환 폴백으로 남겨 기존 빠른등록·임장ON·메모수정·로드뷰/지도·선택인쇄 동작을 변경하지 않았다.
+- 캐시 버전을 `data-access` 버전으로 올렸고, 데이터 접근 모듈이 모든 소비 모듈보다 먼저 로드되는지 자동 검증한다. 자세한 경계와 점진 전환 원칙은 `docs/CLOUDFLARE_MIGRATION.md`에 추가했다.
+
+### 변경 파일
+
+- 신규: `js/data-access-v6.js`, `tests/cloudflare-data-access.test.mjs`
+- 런타임 연결: `index.html`, `js/script.js`, `js/map.js`, `js/unified-listings-v8.js`
+- 문서: `docs/CLOUDFLARE_MIGRATION.md`, `CODEX_HANDOFF.md`
+- 회귀 계약/캐시 버전 갱신: `tests/cloudflare-cluster-selection-persistence.test.mjs`, `tests/cloudflare-field-visit-cluster.test.mjs`, `tests/cloudflare-list-virtualization.test.mjs`, `tests/cloudflare-separate-original.test.mjs`, `tests/cloudflare-whole-master-merge.test.mjs`
+
+### 테스트와 빌드
+
+- `pnpm run test:cloudflare`: 99/99 통과
+- `pnpm run cf:check`: Cloudflare 자산 124개 빌드 및 Wrangler 4.118.0 dry-run 통과
+- `pnpm run build:cloudflare`: 통과, `.cloudflare-assets/js/data-access-v6.js` 포함 확인
+- 변경 파일과 빠른등록·임장·메모·찜·인쇄·건축물대장·운영센터 관련 핵심 브라우저 스크립트 12개의 `node --check`: 통과
+- `git diff --check`: 통과
+
+### 남은 작업과 주의사항
+
+- 이번 변경은 안전한 첫 경계다. `operations-*`, `list-manager`, `ai-visit`, 비동기 저장 큐 등 나머지 브라우저 모듈의 직접 `/api/data` 호출은 기능별 테스트를 붙인 뒤 공통 계층으로 점진 전환한다.
+- 호환용 `saveApiURL`, `sheetURL`, 직접 `fetch` 폴백은 모든 소비 모듈 전환과 실제 브라우저 회귀 확인 전까지 제거하지 않는다.
+- 오래된 독립 `.cjs` 테스트 일부는 현재보다 과거인 캐시 버전을 고정 검사하거나 다른 PC의 절대 경로를 참조해 일괄 실행할 수 없다. 공식 릴리스 게이트인 `test:cloudflare`는 전부 통과했으며, 레거시 테스트는 별도 정리 후 공식 스크립트에 편입하는 것이 안전하다.
+- D1 스키마·운영 데이터·R2 객체는 변경하지 않았고 이번 작업에서 운영 Worker 배포도 수행하지 않았다.

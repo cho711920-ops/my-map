@@ -7,7 +7,8 @@ const worker = fs.readFileSync("cloudflare/src/worker.js", "utf8");
 const html = fs.readFileSync("index.html", "utf8");
 
 test("detail move transfers only the selected original", () => {
-  assert.match(unified, /action:"consolidateExistingMasters"[\s\S]*?duplicateMasterIds:\[sourceMasterId\]/);
+  assert.match(unified, /action = consolidateWholeMaster \? "consolidateExistingMasters" : "moveOriginalListing"/);
+  assert.match(unified, /duplicateMasterIds:\[sourceMasterId\]/);
   assert.match(unified, /move\(pending\.originalId, propertyId, pending\.revision\)/);
   assert.doesNotMatch(unified, /move\(pending\.originalId, propertyId, pending\.revision, pending\.sourcePropertyId\)/);
   assert.match(unified, />원본 1개 합치기<\/button>/);
@@ -24,5 +25,5 @@ test("merged source card is removed immediately from all live list arrays", () =
 test("merge cache invalidation finishes before the response is rendered", () => {
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /mutationAction\(body\) === "moveOriginalListing"\) \{\s*await invalidation;/);
-  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.20-move-one-original/);
+  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.21-data-access/);
 });

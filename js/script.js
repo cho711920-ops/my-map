@@ -1,6 +1,6 @@
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
-var sheetURL = "/api/sheet";
-var saveApiURL = "/api/data"; // 로그인 세션을 검사하는 Cloudflare D1 API
+var sheetURL = window.JSDataAccessV6 ? window.JSDataAccessV6.endpoints.listings : "/api/sheet";
+var saveApiURL = window.JSDataAccessV6 ? window.JSDataAccessV6.endpoints.data : "/api/data"; // 로그인 세션을 검사하는 Cloudflare D1 API
 
 var map, geocoder;
 var allItems = [];
