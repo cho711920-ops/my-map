@@ -40,7 +40,7 @@ assert.match(
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
 assert.match(htmlSource, /map\.js\?v=8\.2\.5-favorite-map-navigation/);
-assert.match(htmlSource, /script\.js\?v=6\.5\.77-naver-roadview-recovery/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.78-naver-map-tiles/);
 assert.match(scriptSource, /더블클릭하면 스마트 매물카드 열기/);
 assert.match(
   scriptSource,

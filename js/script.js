@@ -1737,6 +1737,8 @@ var naverRoadviewLastTargetKeyV658 = "";
 var naverMapsAuthFailedV663 = false;
 var previousNaverMapsAuthFailureV663 = null;
 var naverMapsNamespaceV663 = null;
+var naverRoadviewMapTilesReadyV665 = false;
+var naverRoadviewMapTileTimerV665 = null;
 
 
 function buildNaverRoadviewDirectionIconV654(pan) {
@@ -1803,6 +1805,45 @@ function updateNaverRoadviewMapV654(moveCenter) {
 }
 
 
+function clearNaverRoadviewMapTileTimerV665() {
+  if (!naverRoadviewMapTileTimerV665) return;
+  window.clearTimeout(naverRoadviewMapTileTimerV665);
+  naverRoadviewMapTileTimerV665 = null;
+}
+
+
+function markNaverRoadviewMapTilesReadyV665() {
+  naverRoadviewMapTilesReadyV665 = true;
+  clearNaverRoadviewMapTileTimerV665();
+  recoverNaverMapsAuthStateV664();
+}
+
+
+function verifyNaverRoadviewMapTilesV665() {
+  clearNaverRoadviewMapTileTimerV665();
+  naverRoadviewMapTileTimerV665 = window.setTimeout(function() {
+    if (
+      naverRoadviewMapTilesReadyV665 ||
+      naverMapsAuthFailedV663 ||
+      !naverRoadviewMapV654 ||
+      !window.naver ||
+      !window.naver.maps
+    ) return;
+
+    /*
+     * 숨겨진 패널에서 초기화됐거나 지도 메타데이터가 늦은 경우 기본
+     * 지도 유형과 크기를 다시 확정해 빈 배경만 남는 상태를 복구합니다.
+     */
+    try {
+      naverRoadviewMapV654.setMapTypeId(window.naver.maps.MapTypeId.NORMAL);
+      window.naver.maps.Event.trigger(naverRoadviewMapV654, "resize");
+      var position = getNaverRoadviewPositionV654();
+      if (position) naverRoadviewMapV654.setCenter(position);
+    } catch (error) {}
+  }, 2500);
+}
+
+
 function setupNaverRoadviewMapV654(position) {
   var mapContainer = document.getElementById("naverRoadviewMapV654");
   if (
@@ -1832,9 +1873,12 @@ function setupNaverRoadviewMapV654(position) {
   }
 
   mapContainer.innerHTML = "";
+  naverRoadviewMapTilesReadyV665 = false;
+  clearNaverRoadviewMapTileTimerV665();
   naverRoadviewMapV654 = new window.naver.maps.Map(mapContainer, {
     center: position,
     zoom: 17,
+    mapTypeId: window.naver.maps.MapTypeId.NORMAL,
     zoomControl: true,
     zoomControlOptions: {
       position: window.naver.maps.Position.TOP_LEFT,
@@ -1850,6 +1894,13 @@ function setupNaverRoadviewMapV654(position) {
       naverRoadviewStreetLayerV654.setMap(naverRoadviewMapV654);
     }
   });
+
+  window.naver.maps.Event.addListener(
+    naverRoadviewMapV654,
+    "tilesloaded",
+    markNaverRoadviewMapTilesReadyV665
+  );
+  verifyNaverRoadviewMapTilesV665();
 
   naverRoadviewPositionMarkerV654 = new window.naver.maps.Marker({
     map: naverRoadviewMapV654,
@@ -1940,6 +1991,8 @@ function destroyNaverRoadviewMapV654() {
   naverRoadviewStreetLayerV654 = null;
   naverRoadviewPositionMarkerV654 = null;
   naverRoadviewTargetMarkerV654 = null;
+  naverRoadviewMapTilesReadyV665 = false;
+  clearNaverRoadviewMapTileTimerV665();
 
   var mapContainer = document.getElementById("naverRoadviewMapV654");
   if (mapContainer) mapContainer.innerHTML = "";
