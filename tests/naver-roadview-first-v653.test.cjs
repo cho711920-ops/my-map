@@ -27,8 +27,13 @@ assert.match(script, /new window\.naver\.maps\.Panorama\(container,/);
 assert.match(script, /switchRoadviewMode\("naver"\)/);
 assert.match(
   script,
-  /fallbackNaverRoadviewToKakaoV653[\s\S]*?switchRoadviewMode\("kakao"\)/,
-  "네이버 거리뷰가 없거나 실패하면 카카오맵으로 안전하게 전환해야 합니다."
+  /function showNaverRoadviewUnavailableV664/,
+  "네이버 거리뷰 실패 상태를 화면에 표시해야 합니다."
+);
+assert.doesNotMatch(
+  script,
+  /function showNaverRoadviewUnavailableV664[\s\S]*?switchRoadviewMode\("kakao"\)/,
+  "네이버 실패 시 사용자의 탭 선택을 카카오로 강제 변경하면 안 됩니다."
 );
 assert.match(script, /location\.photodate \|\| location\.photoDate/);
 
@@ -41,7 +46,7 @@ assert.match(script, /function isInvalidNaverMapsKeyV662/);
 
 assert.match(css, /#naverRoadviewTabBtn\.active/);
 assert.match(css, /\.naver-roadview-capture-info-v653/);
-assert.match(html, /script\.js\?v=6\.5\.76-data-access/);
+assert.match(html, /script\.js\?v=6\.5\.77-naver-roadview-recovery/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.38-elevator-capacity/);
 
 console.log("NAVER-first roadview v6.5.53 tests passed");

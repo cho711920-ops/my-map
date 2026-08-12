@@ -35,7 +35,7 @@ assert.match(memoD1, /persisted:\s*true, queued:\s*false/);
 assert.match(memoD1, /operationAdjustments:\s*\{ history:\s*1 \}/);
 
 assert.match(html, /style\.css\?v=6\.5\.39-elevator-capacity-x/);
-assert.match(html, /script\.js\?v=6\.5\.76-data-access/);
+assert.match(html, /script\.js\?v=6\.5\.77-naver-roadview-recovery/);
 assert.match(css, /\.memo-inline-status\.saving/);
 assert.match(css, /\.memo-inline-status\.success/);
 assert.match(css, /\.memo-inline-status\.error/);

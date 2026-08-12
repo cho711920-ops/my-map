@@ -41,7 +41,7 @@ assert.match(
   /function closeRoadviewModal\(\)[\s\S]*?restorePinnedClusterSelectionAfterTransientUiV6525\(\)/
 );
 
-assert.match(htmlSource, /script\.js\?v=6\.5\.76-data-access/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.77-naver-roadview-recovery/);
 assert.match(htmlSource, /map\.js\?v=8\.2\.5-favorite-map-navigation/);
 
 console.log("cluster transient state v6.5.25 tests passed");

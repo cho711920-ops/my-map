@@ -41,9 +41,9 @@ assert.match(loadSdkBody, /maps-panorama\.js/);
 assert.match(script, /requestIdleCallback\(warmNaverRoadviewSdkV658/);
 assert.match(script, /if \(mapActive && !roadviewFullMap && roadviewTargetPosition\)/);
 assert.match(script, /if \(panoramaPosition && !naverMapsAuthFailedV663\)[\s\S]*?setupNaverRoadviewMapV654\(panoramaPosition\)/);
-assert.match(script, /\}, 6500\);/);
+assert.match(script, /\}, 12000\);/);
 assert.ok(
-  html.includes("script.js?v=6.5.76-data-access"),
+  html.includes("script.js?v=6.5.77-naver-roadview-recovery"),
   "빠른 네이버 거리뷰 캐시 버전이 적용되어야 합니다."
 );
 

@@ -1973,6 +1973,21 @@ function showNaverMapsAuthFallbackV663() {
 }
 
 
+function recoverNaverMapsAuthStateV664() {
+  naverMapsAuthFailedV663 = false;
+
+  var split = document.querySelector(
+    "#naverRoadviewPane .naver-roadview-split-v654"
+  );
+  var mapPanel = document.querySelector(
+    "#naverRoadviewPane .naver-roadview-map-panel-v654"
+  );
+
+  if (split) split.classList.remove("naver-map-auth-failed-v663");
+  if (mapPanel) mapPanel.removeAttribute("aria-hidden");
+}
+
+
 if (!window.__jsNaverMapsAuthFailureBoundV663) {
   previousNaverMapsAuthFailureV663 =
     typeof window.navermap_authFailure === "function"
@@ -2022,6 +2037,7 @@ function loadNaverMapsSdkV653() {
     window.naver.maps.Panorama
   ) {
     naverMapsNamespaceV663 = window.naver.maps;
+    recoverNaverMapsAuthStateV664();
     return Promise.resolve(window.naver.maps);
   }
 
@@ -2033,6 +2049,7 @@ function loadNaverMapsSdkV653() {
         window.naver.maps.Panorama
       ) {
         naverMapsNamespaceV663 = window.naver.maps;
+        recoverNaverMapsAuthStateV664();
         return window.naver.maps;
       }
 
@@ -2084,6 +2101,7 @@ function loadNaverMapsSdkV653() {
             window.naver.maps.Panorama
           ) {
             naverMapsNamespaceV663 = window.naver.maps;
+            recoverNaverMapsAuthStateV664();
             clearTimeout(timeoutId);
             if (pollId) clearInterval(pollId);
             resolve(window.naver.maps);
@@ -2219,7 +2237,7 @@ function buildNaverRoadviewCandidatesV658(coords) {
 }
 
 
-function fallbackNaverRoadviewToKakaoV653(message, sequence) {
+function showNaverRoadviewUnavailableV664(message, sequence) {
   if (sequence !== roadviewOpenSequenceV653) return;
 
   var modal = document.querySelector("#roadviewModal.roadview-modal");
@@ -2230,20 +2248,27 @@ function fallbackNaverRoadviewToKakaoV653(message, sequence) {
   clearNaverRoadviewTimersV658();
 
   if (status) {
-    status.textContent = message || "주변에서 네이버 거리뷰를 찾지 못해 카카오맵으로 전환합니다.";
+    status.textContent = message || "주변에서 네이버 거리뷰를 찾지 못했습니다. 카카오맵은 위 탭에서 직접 선택할 수 있습니다.";
     status.className = "roadview-inline-status error";
   }
 
-  setTimeout(function() {
-    if (
-      sequence === roadviewOpenSequenceV653 &&
-      modal.classList.contains("open") &&
-      currentRoadviewMode === "naver" &&
-      !naverRoadviewRequestReadyV658
-    ) {
-      switchRoadviewMode("kakao");
-    }
-  }, 250);
+  /*
+   * 네이버가 늦거나 해당 위치에 거리뷰가 없더라도 사용자의 탭 선택을
+   * 임의로 바꾸지 않습니다. 연동 지도는 유지해 위치를 계속 확인할 수
+   * 있고, 카카오맵은 사용자가 필요할 때 위 탭에서 직접 선택합니다.
+   */
+  if (
+    !naverMapsAuthFailedV663 &&
+    currentRoadviewCoords &&
+    window.naver &&
+    window.naver.maps
+  ) {
+    setupNaverRoadviewMapV654(new window.naver.maps.LatLng(
+      currentRoadviewCoords.lat,
+      currentRoadviewCoords.lng
+    ));
+    window.setTimeout(syncNaverRoadviewLayoutV654, 30);
+  }
 }
 
 
@@ -2299,8 +2324,8 @@ function tryNextNaverRoadviewCandidateV658() {
 
   var nextIndex = naverRoadviewCandidateIndexV658 + 1;
   if (nextIndex >= naverRoadviewCandidatesV658.length) {
-    fallbackNaverRoadviewToKakaoV653(
-      "주변 4방향까지 확인했지만 네이버 거리뷰가 없어 카카오맵으로 전환합니다.",
+    showNaverRoadviewUnavailableV664(
+      "주변 4방향까지 확인했지만 네이버 거리뷰를 찾지 못했습니다. 카카오맵은 위 탭에서 선택할 수 있습니다.",
       sequence
     );
     return;
@@ -2328,7 +2353,7 @@ function tryNextNaverRoadviewCandidateV658() {
     } catch (error) {
       tryNextNaverRoadviewCandidateV658();
     }
-  }, 70);
+  }, 250);
 }
 
 
@@ -2407,12 +2432,12 @@ function prepareNaverRoadviewRequestV658(sequence) {
       sequence === roadviewOpenSequenceV653 &&
       !naverRoadviewRequestReadyV658
     ) {
-      fallbackNaverRoadviewToKakaoV653(
-        "네이버 거리뷰 응답이 지연되어 카카오맵으로 전환합니다.",
+      showNaverRoadviewUnavailableV664(
+        "네이버 거리뷰 응답이 지연되고 있습니다. 다시 시도하거나 카카오맵 탭을 선택해 주세요.",
         sequence
       );
     }
-  }, 6500);
+  }, 12000);
 }
 
 
@@ -2452,6 +2477,11 @@ function startNaverRoadviewV653(sequence) {
         currentRoadviewCoords.lng
       );
 
+      /* 거리뷰 응답을 기다리는 동안에도 오른쪽 네이버 지도를 먼저 표시합니다. */
+      recoverNaverMapsAuthStateV664();
+      setupNaverRoadviewMapV654(position);
+      window.setTimeout(syncNaverRoadviewLayoutV654, 30);
+
       if (!naverRoadviewInstanceV653) {
         container.innerHTML = "";
         naverRoadviewListenersBoundV658 = false;
@@ -2488,8 +2518,8 @@ function startNaverRoadviewV653(sequence) {
       if (window.console && typeof window.console.error === "function") {
         window.console.error("[JS roadview] NAVER panorama failed", error);
       }
-      fallbackNaverRoadviewToKakaoV653(
-        "네이버 거리뷰를 불러오지 못해 카카오맵으로 전환합니다.",
+      showNaverRoadviewUnavailableV664(
+        "네이버 거리뷰를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
         sequence
       );
     });
