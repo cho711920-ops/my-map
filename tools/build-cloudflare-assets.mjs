@@ -5,6 +5,7 @@ const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, ".cloudflare-assets");
 const directories = ["assets", "css", "data", "icons", "js"];
 const files = [
+  "_headers",
   "index.html",
   "favicon.svg",
   "manifest.webmanifest",

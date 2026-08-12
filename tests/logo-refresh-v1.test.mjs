@@ -8,7 +8,7 @@ const css = fs.readFileSync(new URL("../css/style.css", import.meta.url), "utf8"
 
 test("desktop and mobile JS real-estate logos reload the current app", () => {
   assert.match(html, /class="header"[\s\S]*?onclick="window\.location\.reload\(\)"/);
-  assert.match(html, /style\.css\?v=6\.5\.37-larger-brand/);
+  assert.match(html, /style\.css\?v=6\.5\.39-elevator-capacity-x/);
   assert.match(html, /class="js-brand-mark-v1">JS<\/b><strong class="js-brand-name-v1">JS부동산<\/strong>/);
   assert.match(html, /mobile-app-v1\.js\?v=1\.0\.5-tablet-logo-reload/);
   assert.match(mobile, /class="jsm-brand-v1" onclick="window\.location\.reload\(\)"/);

@@ -81,6 +81,6 @@ const index = read("index.html");
 assert(ui.includes("industry-master.json?v=20260731-health-functional1"));
 assert(ui.includes("industry-critical-guidance.json?v=20260731-health-functional1"));
 assert(ui.includes("industry-area-use-rules.json?v=20260731-health-functional1"));
-assert(index.includes("permit-diagnosis-ui.js?v=2.8.1-health-functional"));
+assert(index.includes("permit-diagnosis-ui.js?v=2.8.2-accessible-label"));
 
 console.log("health functional industry search tests passed (5 legal business types)");

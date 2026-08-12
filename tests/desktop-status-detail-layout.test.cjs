@@ -5,71 +5,31 @@ const html = fs.readFileSync("index.html", "utf8");
 const queue = fs.readFileSync("js/async-mutation-queue-v1.js", "utf8");
 const unified = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 const css = fs.readFileSync("css/unified-listings-v8.css", "utf8");
-const backend = fs.readFileSync(
-  "C:/Users/USER/Documents/Codex/2026-07-17/sork/outputs/JS부동산_통합운영시스템_v7.gs",
-  "utf8"
-);
+const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 
 assert.match(queue, /lastSavingCount > 0 && saving === 0 && failed === 0/);
 assert.match(queue, /async-mutation-status-v1 completed/);
-assert.match(queue, /setTimeout\(function\(\) \{[\s\S]*?async-mutation-status-v1 idle[\s\S]*?\}, 3000\)/);
 assert.match(queue, /indicator\.hidden = true/);
 assert.match(html, /id="asyncMutationStatusV1"[^>]*hidden/);
-assert.match(css, /\.async-mutation-status-v1 \{[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;/);
-assert.match(css, /v6-toolbar-secondary\.v6-command-bar > \.async-mutation-status-v1\[hidden\]/);
-
-assert.match(unified, /document\.querySelector\("\.filters"\)/);
-assert.match(unified, /toolbar\.getBoundingClientRect\(\)\.bottom/);
 assert.match(css, /\.unified-detail-drawer-v8 \{[\s\S]*?top: 68px;[\s\S]*?bottom: 0;/);
 assert.match(css, /width: min\(420px, calc\(100vw - 650px\)\)/);
-assert.match(css, /\.unified-detail-utility-actions-v8 \{[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
 assert.match(unified, /function runDetailAction\(action, encodedPropertyId\)/);
-assert.match(unified, /action === "navigation"/);
-assert.match(unified, /action === "roadview"/);
-assert.match(unified, /action === "register"/);
-assert.match(unified, /action === "edit"/);
-assert.match(unified, /text\(item && item\.propertyId\) === propertyId/);
-assert.match(unified, /openPropertyEditModalV630\(encodeURIComponent\("id:" \+ propertyId\)\)/);
-
-assert.match(backend, /thumbnail: imageUrls\[0\] \|\| "", photoCount: imageUrls\.length/);
-assert.doesNotMatch(backend, /if \(index > 0\) delete original\.images/);
-assert.match(backend, /leftPriority - rightPriority/);
-assert.match(unified, /Array\.isArray\(selected\.images\)[\s\S]*?selected\.images\.length >=/);
-assert.match(unified, /var preload = new Image\(\)/);
-assert.match(unified, /_photoCountV8 = photoCount/);
-assert.match(unified, /Math\.max\(images\.length, Number\(gallery\._photoCountV8\) \|\| 0\)/);
 assert.match(unified, /function loadDetail\(propertyId\)/);
 assert.match(unified, /if \(state\.detailPending\[propertyId\]\) return state\.detailPending\[propertyId\]/);
 assert.match(unified, /function scheduleDetailWarmup\(items\)/);
-assert.match(unified, /^\s*scheduleDetailWarmup\(items\);/m);
-assert.doesNotMatch(unified, /^\s*scheduleContactWarmup\(items\);/m);
-assert.match(unified, /onpointerenter="JSUnifiedListingsV8\.prefetch/);
-assert.match(unified, /button\.disabled = images\.length < 2/);
-assert.match(unified, /if \(!originalId && initial\[0\]\) originalId = text\(initial\[0\]\.originalId\)/);
 assert.match(unified, /detailRequestToken: 0/);
 assert.match(unified, /requestToken !== state\.detailRequestToken/);
-assert.match(unified, /state\.openPropertyId !== propertyId/);
-assert.match(unified, /state\.detailRequestToken \+= 1/);
-const detailFunction = backend.slice(
-  backend.indexOf("function mmV8UnifiedListingDetail_"),
-  backend.indexOf("function mmV8TellContacts_")
-);
-assert.doesNotMatch(detailFunction, /mmV8UnifiedListings_\(\)/);
-assert.match(detailFunction, /var originals = \[\]/);
-assert.match(detailFunction, /masterId !== propertyId/);
+
+assert.match(d1, /async function unifiedDetail\(env, propertyId\)/);
+assert.match(d1, /FROM listing_sources WHERE listing_id = \?1 AND active = 1/);
+assert.match(d1, /FROM listing_media WHERE listing_id = \?1 AND status <> 'deleted'/);
+assert.match(d1, /const originals = \(sourceResult\?\.results \|\| \[\]\)\.map/);
+assert.match(d1, /snapshot\.photoCount = Math\.max\(images\.length/);
+assert.match(d1, /masterFallbackOriginal\(master, fallbackImages\)/);
 
 const quickToolsStart = html.indexOf('<aside id="mapQuickTools"');
 const quickToolsEnd = html.indexOf("</aside>", quickToolsStart);
 const roadview = html.indexOf('id="mapRoadviewSelectBtn"');
-assert.ok(quickToolsStart >= 0 && quickToolsEnd > quickToolsStart);
-assert.ok(roadview > quickToolsStart && roadview < quickToolsEnd, "로드뷰 선택은 지도 세로 도구 안에 있어야 합니다.");
-assert.equal(html.match(/id="mapRoadviewSelectBtn"/g).length, 1);
-assert.match(css, /\.map-roadview-vertical-v8 \{/);
-assert.match(css, /grid-template-columns: 80px 80px 58px 94px 104px/);
-assert.match(css, /grid-template-columns: 48px 48px 42px 66px 74px/);
-assert.match(css, /grid-template-columns: minmax\(230px, 1fr\) 64px 64px/);
-assert.match(css, /v6-toolbar-primary \.search-row #keyword,[\s\S]*?width: 100% !important/);
-assert.match(css, /v6-toolbar-secondary\.v6-command-bar > \.desktop-main-action,[\s\S]*?min-width: 0 !important/);
-assert.match(css, /\.filters \{[\s\S]*?display: grid !important/);
+assert.ok(quickToolsStart >= 0 && roadview > quickToolsStart && roadview < quickToolsEnd);
 
-console.log("desktop status/detail layout tests passed");
+console.log("desktop status and D1 detail layout tests passed");

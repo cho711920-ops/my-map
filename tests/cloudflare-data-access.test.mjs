@@ -65,7 +65,7 @@ test("operations modules use the shared Cloudflare data boundary with a legacy f
       `${entry.name} must retain a guarded legacy fallback`);
   }
   assert.match(html, /operations-center-v7\.js\?v=7\.22\.2-data-access/);
-  assert.match(html, /operations-collection-v8\.js\?v=7\.25\.3-data-access/);
+  assert.match(html, /operations-collection-v8\.js\?v=7\.25\.4-accessible-dialog/);
   assert.match(html, /operations-admin-v1\.js\?v=1\.0\.4-data-access/);
 });
 

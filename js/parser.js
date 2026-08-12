@@ -1,5 +1,5 @@
 /* JS부동산 빠른등록/파서 전용 스크립트 */
-function openQuickAddModal() {
+function openQuickAddModalLegacyV1() {
   var modal = document.getElementById("quickAddModal");
   if (!modal) return;
   modal.style.display = "block";
@@ -52,7 +52,7 @@ function setupQuickAddShortcuts() {
 }
 
 
-function onlyNumberText(value) {
+function onlyNumberTextLegacyV1(value) {
   return String(value || "").replace(/,/g, "").replace(/만원/g, "").replace(/만/g, "").replace(/[^0-9.]/g, "");
 }
 
@@ -102,7 +102,7 @@ function splitQuickAddPhonesByRole(text) {
 }
 
 
-function findFirstMatch(text, patterns) {
+function findFirstMatchLegacyV1(text, patterns) {
   for (var i = 0; i < patterns.length; i++) {
     var m = text.match(patterns[i]);
     if (m && m[1]) return onlyNumberText(m[1]);
@@ -120,7 +120,7 @@ function setFieldIfEmpty(id, value) {
 }
 
 
-function parseQuickAddText() {
+function parseQuickAddTextLegacyV1() {
   var rawEl = document.getElementById("qaRaw");
   if (!rawEl) return;
 
@@ -192,7 +192,7 @@ function parseQuickAddText() {
 }
 
 
-function getQuickAddRowValues() {
+function getQuickAddRowValuesLegacyV1() {
   var source = document.getElementById("qaSource").value || "외부";
   var memo = document.getElementById("qaMemo").value || "";
   if (memo.indexOf("출처:") === -1) memo = "출처:" + source + (memo ? " / " + memo : "");
@@ -216,7 +216,7 @@ function getQuickAddRowValues() {
 }
 
 
-function validateQuickAdd() {
+function validateQuickAddLegacyV1() {
   var address = (document.getElementById("qaAddress").value || "").trim();
   var name = (document.getElementById("qaName").value || "").trim();
   if (!address && !name) {
@@ -227,7 +227,7 @@ function validateQuickAdd() {
 }
 
 
-function updateQuickAddWarning() {
+function updateQuickAddWarningLegacyV1() {
   var box = document.getElementById("quickAddWarning");
   if (!box) return;
   var address = (document.getElementById("qaAddress").value || "").trim();
@@ -284,7 +284,7 @@ function fallbackCopyText(text) {
 }
 
 
-function saveQuickAddToSheet() {
+function saveQuickAddToSheetLegacyV1() {
   if (!validateQuickAdd()) return;
   if (!saveApiURL) {
     alert("자동등록 서버가 아직 연결되지 않았습니다.\nJS부동산 D1 서버 상태를 확인해주세요.\n지금은 '입력값 복사'를 사용할 수 있습니다.");
@@ -327,7 +327,7 @@ function saveQuickAddToSheet() {
 }
 
 
-function clearQuickAddForm() {
+function clearQuickAddFormLegacyV1() {
   ["qaRaw","qaName","qaAddress","qaRoom","qaType","qaDeposit","qaRent","qaFee","qaPremium","qaArea","qaLandlordPhone","qaTenantPhone","qaMemo","qaRegDate"].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = "";
@@ -450,7 +450,7 @@ function detectSourceFromRaw(raw) {
 }
 
 
-function parseQuickAddText() {
+function parseQuickAddTextLegacyV2() {
   var rawEl = document.getElementById("qaRaw");
   if (!rawEl) return;
 
@@ -576,7 +576,7 @@ function updateQuickAddPreview() {
 }
 
 
-function updateQuickAddWarning() {
+function updateQuickAddWarningLegacyV2() {
   var box = document.getElementById("quickAddWarning");
   if (!box) return;
 
@@ -664,7 +664,7 @@ function updateQuickAddWarning() {
 }
 
 
-function getQuickAddRowValues() {
+function getQuickAddRowValuesLegacyV2() {
   var o = getQuickAddObject();
   var memo = o.memo || "";
   if (memo.indexOf("출처:") === -1) memo = "출처:" + o.source + (memo ? " / " + memo : "");
@@ -742,7 +742,7 @@ function slashPriceValue(text, index) {
 }
 
 
-function parseQuickAddText() {
+function parseQuickAddTextLegacyV3() {
   var rawEl = document.getElementById("qaRaw");
   if (!rawEl) return;
 
@@ -847,7 +847,7 @@ function normalizeQuickDuplicateNumberV61(value) {
   return String(value == null ? "" : value).replace(/[,만원원\s]/g, "");
 }
 
-function findQuickDuplicateV61(values) {
+function findQuickDuplicateLegacyV61(values) {
   var target = {
     name: normalizeQuickDuplicateTextV61(values[0]),
     address: normalizeQuickDuplicateTextV61(values[1]),
@@ -953,7 +953,7 @@ function sendQuickAddRequestV61(values, forceDuplicate, btn, oldText) {
   });
 }
 
-function saveQuickAddToSheet() {
+function saveQuickAddToSheetLegacyV61() {
   if (!validateQuickAdd()) return;
   if (!saveApiURL) {
     alert("자동등록 URL이 아직 연결되지 않았습니다.");
@@ -1214,7 +1214,7 @@ function normalizeQuickDuplicateNumberV616(value) {
   return text;
 }
 
-function getQuickDuplicateComparableV616(values) {
+function getQuickDuplicateComparableLegacyV616(values) {
   return {
     address: normalizeQuickDuplicateAddressV616(values[1]),
     room: normalizeQuickDuplicateRoomV616(values[2]),
@@ -1224,7 +1224,7 @@ function getQuickDuplicateComparableV616(values) {
   };
 }
 
-function findQuickDuplicateV61(values) {
+function findQuickDuplicateLegacyV616(values) {
   var target = getQuickDuplicateComparableV616(values);
 
   if (!target.address) return null;
@@ -1271,7 +1271,7 @@ function findQuickDuplicateV61(values) {
   return null;
 }
 
-function quickAddFingerprintV616(values) {
+function quickAddFingerprintLegacyV616(values) {
   var target = getQuickDuplicateComparableV616(values);
 
   if (target.room) {
@@ -1305,7 +1305,7 @@ function normalizeQuickAddAddressFieldV616() {
  * 현재 화면의 전체 매물(allItems) + 전송 대기 지문으로 빠른등록만 차단합니다.
  * 공실박스 추출 경로는 변경하지 않습니다.
  */
-function saveQuickAddToSheet() {
+function saveQuickAddToSheetLegacyV616() {
   normalizeQuickAddAddressFieldV616();
 
   if (!validateQuickAdd()) return;
@@ -1475,7 +1475,7 @@ function ensureQuickAddFieldVisitMemoV626() {
 }
 
 
-function getQuickDuplicateComparableV616(values) {
+function getQuickDuplicateComparableLegacyV626(values) {
   return {
     address: normalizeQuickDuplicateAddressV616(values[1]),
     room: normalizeQuickDuplicateRoomV616(values[2]),
@@ -1485,7 +1485,7 @@ function getQuickDuplicateComparableV616(values) {
 }
 
 
-function findQuickDuplicateV61(values) {
+function findQuickDuplicateLegacyV626(values) {
   var target = getQuickDuplicateComparableV616(values);
 
   if (!target.address) return null;
@@ -1554,7 +1554,7 @@ function findQuickDuplicateV61(values) {
 }
 
 
-function quickAddFingerprintV616(values) {
+function quickAddFingerprintLegacyV626(values) {
   var target = getQuickDuplicateComparableV616(values);
 
   return [
@@ -1630,7 +1630,7 @@ function formatQuickDuplicateNumberV6351(value) {
   });
 }
 
-function updateQuickAddWarning() {
+function updateQuickAddWarningLegacyV6351() {
   var box = document.getElementById("quickAddWarning");
   if (!box) return;
 

@@ -11,7 +11,7 @@ assert.match(
 );
 assert.match(
   html,
-  /script\.js\?v=6\.5\.65-cluster-transient-state/,
+  /script\.js\?v=6\.5\.76-data-access/,
   "the production page must load the relation-aware Gongsil filter"
 );
 

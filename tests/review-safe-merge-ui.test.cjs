@@ -29,7 +29,7 @@ assert.match(ui, /allPendingTotal/);
 assert.match(ui, /전체 검증대기/);
 assert.match(ui, /건 중 현재 작업/);
 assert.match(ui, /reviewBase/);
-assert.match(ui, /기존 " \+ \(index \+ 1\) \+ "번과/);
+assert.match(ui, /같은매물 · 기존 " \+ \(index \+ 1\) \+ "번/);
 assert.match(ui, /복수 후보 · 대표를 직접 선택/);
 assert.match(ui, /review-rental-values/);
 

@@ -43,7 +43,7 @@
               '<article class="permit-diagnosis-card-v1">' +
                 '<h3>고객이 어떤 업종을 원하나요?</h3>' +
                 '<p class="permit-diagnosis-help-v1">“김밥집”, “네일숍” 같은 생활표현부터 공식 업종명·KSIC 코드까지 검색됩니다. 후보 차이와 고객에게 다시 물어볼 내용을 안내합니다.</p>' +
-                '<textarea id="permitIndustryRequestV1" class="permit-diagnosis-textarea-v1" ' +
+                '<textarea id="permitIndustryRequestV1" class="permit-diagnosis-textarea-v1" aria-label="고객이 원하는 업종과 운영 방식" ' +
                   'placeholder="예: 손님이 작은 김밥집을 하려고 합니다. 홀 테이블도 몇 개 놓을 예정입니다."></textarea>' +
                 '<div class="permit-diagnosis-quick-v1">' +
                   '<button type="button" data-permit-example="작은 김밥집을 운영하고 홀 테이블과 포장·배달을 함께 하려고 합니다.">김밥집</button>' +

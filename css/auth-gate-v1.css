@@ -20,8 +20,10 @@ html.auth-pending body > *:not(#jsAuthGate) {
 }
 
 .js-auth-card {
-  width: min(420px, 100%);
+  width: min(420px, calc(100vw - 40px));
+  max-width: 100%;
   padding: 34px 30px 30px;
+  box-sizing: border-box;
   border: 1px solid #dce7f5;
   border-radius: 22px;
   background: rgba(255, 255, 255, .97);
@@ -44,9 +46,17 @@ html.auth-pending body > *:not(#jsAuthGate) {
 }
 
 .js-auth-card h1 {
-  margin: 20px 0 8px;
+  margin: 20px 0 2px;
   font-size: 24px;
   color: #172033;
+}
+
+.js-auth-card .js-auth-subtitle {
+  margin: 0 0 10px;
+  color: #1677ee;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
 }
 
 .js-auth-card p {
@@ -59,8 +69,16 @@ html.auth-pending body > *:not(#jsAuthGate) {
 .js-auth-google {
   display: flex;
   justify-content: center;
+  width: 100%;
+  max-width: 100%;
   min-height: 44px;
   margin-top: 24px;
+  overflow: hidden;
+}
+
+.js-auth-google > div,
+.js-auth-google iframe {
+  max-width: 100% !important;
 }
 
 .js-auth-status {
@@ -71,5 +89,17 @@ html.auth-pending body > *:not(#jsAuthGate) {
 }
 
 @media (max-width: 768px) {
-  .js-auth-card { padding: 28px 22px 24px; }
+  .js-auth-gate { padding: 16px; }
+  .js-auth-card {
+    width: min(420px, calc(100vw - 32px));
+    padding: 28px 20px 24px;
+  }
+}
+
+@media (max-width: 380px) {
+  .js-auth-gate { padding: 12px; }
+  .js-auth-card {
+    width: calc(100vw - 24px);
+    padding-inline: 16px;
+  }
 }

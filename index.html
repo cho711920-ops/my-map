@@ -11,19 +11,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="JS부동산">
+<link rel="preconnect" href="https://accounts.google.com" crossorigin>
+<link rel="stylesheet" href="css/auth-gate-v1.css?v=1.1.0-fast-accessible">
+<script type="module" src="js/auth-gate-v1.js?v=1.1.0-fast-accessible"></script>
+
+<template id="jsAuthenticatedHeadAssets">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://img.kr.gcp-karroter.net">
 <link rel="preconnect" href="https://landthumb-phinf.pstatic.net">
 <link rel="dns-prefetch" href="//img.kr.gcp-karroter.net">
 <link rel="dns-prefetch" href="//landthumb-phinf.pstatic.net">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="css/auth-gate-v1.css?v=1.0.1">
-<script type="module" src="js/auth-gate-v1.js?v=1.0.2-brand"></script>
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
 <link rel="stylesheet" href="css/style.css?v=6.5.39-elevator-capacity-x">
-<link rel="stylesheet" href="css/print-v2.css">
+<link rel="stylesheet" href="css/print-v2.css?v=2.0.0">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.27-recent-sort-only">
 <link rel="stylesheet" href="css/unified-favorites-v7.css?v=7.0.2-reliable-submit">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.34-roadview-viewport">
@@ -40,14 +43,16 @@
 <link rel="stylesheet" href="css/announcement-readable-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/permit-diagnosis-v1.css?v=2.7.0">
 <link rel="stylesheet" href="css/app-font-v1.css?v=1.0.0-pretendard">
-<link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.3-sort-row-aligned">
+<link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.4-touch-targets">
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
 <link rel="stylesheet" href="css/header-professional-v1.css?v=1.0.6-quick-add-emphasis">
+</template>
 </head>
 
 <body>
 
-<div id="wrap">
+<template id="jsAuthenticatedApplication">
+<div id="wrap" inert aria-hidden="true">
   <div id="sidebar">
     <div id="dragHandle"></div>
     <div class="header" role="button" tabindex="0" title="JS부동산 새로고침" aria-label="JS부동산 새로고침"
@@ -61,7 +66,7 @@
 
       <div class="v6-toolbar-primary">
         <div class="search-row">
-          <input id="keyword" placeholder="지역 / 건물 / 호실 검색 · 쉼표 다중검색 (괴정,탄방,월평)">
+          <input id="keyword" aria-label="지역, 건물 또는 호실 검색" placeholder="지역 / 건물 / 호실 검색 · 쉼표 다중검색 (괴정,탄방,월평)">
           <button class="search-btn" onclick="applyFilter()">
             <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.2 4.2"></path></svg>
             <span>검색</span>
@@ -153,32 +158,32 @@
 
       <div id="detailFilter" class="detail-filter">
         <div class="row">
-          <input id="minDeposit" placeholder="보증금 최소">
-          <input id="maxDeposit" placeholder="보증금 최대">
+          <input id="minDeposit" aria-label="보증금 최소" placeholder="보증금 최소">
+          <input id="maxDeposit" aria-label="보증금 최대" placeholder="보증금 최대">
         </div>
 
         <div class="row">
-          <input id="minRent" placeholder="월세 최소">
-          <input id="maxRent" placeholder="월세 최대">
+          <input id="minRent" aria-label="월세 최소" placeholder="월세 최소">
+          <input id="maxRent" aria-label="월세 최대" placeholder="월세 최대">
         </div>
 
         <div class="row">
-          <input id="minPremium" placeholder="권리금 최소">
-          <input id="maxPremium" placeholder="권리금 최대">
+          <input id="minPremium" aria-label="권리금 최소" placeholder="권리금 최소">
+          <input id="maxPremium" aria-label="권리금 최대" placeholder="권리금 최대">
         </div>
 
         <div class="row">
-          <input id="minArea" placeholder="평수 최소">
-          <input id="maxArea" placeholder="평수 최대">
+          <input id="minArea" aria-label="평수 최소" placeholder="평수 최소">
+          <input id="maxArea" aria-label="평수 최대" placeholder="평수 최대">
         </div>
 
         <div class="row">
-          <input id="minFloor" inputmode="numeric" placeholder="층수 최소 (지하 -1)">
-          <input id="maxFloor" inputmode="numeric" placeholder="층수 최대">
+          <input id="minFloor" aria-label="층수 최소" inputmode="numeric" placeholder="층수 최소 (지하 -1)">
+          <input id="maxFloor" aria-label="층수 최대" inputmode="numeric" placeholder="층수 최대">
         </div>
 
         <div class="row industry-filter-row">
-          <input id="industryFilter" class="industry-filter-input" placeholder="업종구분 (예: 식당, 카페)">
+          <input id="industryFilter" class="industry-filter-input" aria-label="업종 구분" placeholder="업종구분 (예: 식당, 카페)">
         </div>
 
         <button class="apply-btn" onclick="applyFilter()">필터 적용</button>
@@ -204,7 +209,7 @@
       </div>
 
       <div class="list-toolbar-control list-type-control">
-        <select id="typeFilter" onchange="applyFilter()">
+        <select id="typeFilter" onchange="applyFilter()" aria-label="매물 구분 필터">
           <option value="">구분</option>
         </select>
       </div>
@@ -496,12 +501,12 @@
     <div class="quick-add-grid">
       <div class="full">
         <label>외부 매물 내용 붙여넣기</label>
-        <textarea id="qaRaw" placeholder="예: 대전 용문동 상가 보증금 2000 월세 110 관리비 5 권리금 1000 30평 010-0000-0000 메모..."></textarea>
+        <textarea id="qaRaw" aria-label="외부 매물 내용 붙여넣기" placeholder="예: 대전 용문동 상가 보증금 2000 월세 110 관리비 5 권리금 1000 30평 010-0000-0000 메모..."></textarea>
       </div>
 
       <div>
         <label>출처</label>
-        <select id="qaSource">
+        <select id="qaSource" aria-label="매물 출처">
           <option value="공실박스">공실박스</option>
           <option value="네이버">네이버</option>
           <option value="당근">당근</option>
@@ -512,52 +517,52 @@
 
       <div>
         <label>건물이름</label>
-        <input id="qaName" placeholder="건물이름 또는 제목">
+        <input id="qaName" aria-label="건물 이름" placeholder="건물이름 또는 제목">
       </div>
 
       <div>
         <label>주소</label>
-        <input id="qaAddress" placeholder="예: 용문동 272-14">
+        <input id="qaAddress" aria-label="주소" placeholder="예: 용문동 272-14">
       </div>
 
       <div>
         <label>호실</label>
-        <input id="qaRoom" placeholder="예: 1층 / 201호">
+        <input id="qaRoom" aria-label="호실" placeholder="예: 1층 / 201호">
       </div>
 
       <div>
         <label>구분</label>
-        <input id="qaType" placeholder="예: 상가 / 사무실 / 월세">
+        <input id="qaType" aria-label="매물 구분" placeholder="예: 상가 / 사무실 / 월세">
       </div>
 
       <div>
         <label>보증금</label>
-        <input id="qaDeposit" placeholder="예: 2000">
+        <input id="qaDeposit" aria-label="보증금" placeholder="예: 2000">
       </div>
 
       <div>
         <label>월세</label>
-        <input id="qaRent" placeholder="예: 110">
+        <input id="qaRent" aria-label="월세" placeholder="예: 110">
       </div>
 
       <div>
         <label>관리비</label>
-        <input id="qaFee" placeholder="예: 5">
+        <input id="qaFee" aria-label="관리비" placeholder="예: 5">
       </div>
 
       <div>
         <label>권리금</label>
-        <input id="qaPremium" placeholder="예: 1000">
+        <input id="qaPremium" aria-label="권리금" placeholder="예: 1000">
       </div>
 
       <div>
         <label>평수</label>
-        <input id="qaArea" placeholder="예: 30">
+        <input id="qaArea" aria-label="평수" placeholder="예: 30">
       </div>
 
       <div>
         <label>상태</label>
-        <select id="qaState">
+        <select id="qaState" aria-label="계약 상태">
           <option value="">공란/계약가능</option>
           <option value="계약완료">계약완료</option>
         </select>
@@ -566,21 +571,21 @@
       <div class="quick-add-contact-row full">
         <div>
           <label>임대인전화</label>
-          <input id="qaLandlordPhone" placeholder="010-0000-0000">
+          <input id="qaLandlordPhone" aria-label="임대인 전화번호" placeholder="010-0000-0000">
         </div>
         <div>
           <label>세입자전화</label>
-          <input id="qaTenantPhone" placeholder="010-0000-0000">
+          <input id="qaTenantPhone" aria-label="세입자 전화번호" placeholder="010-0000-0000">
         </div>
         <div>
           <label>등록일</label>
-          <input id="qaRegDate" placeholder="자동입력">
+          <input id="qaRegDate" aria-label="등록일" placeholder="자동입력">
         </div>
       </div>
 
       <div class="full quick-add-memo-row">
         <label>메모</label>
-        <textarea id="qaMemo" placeholder="특징과 확인사항을 적어두세요. 출처는 별도 열에 저장됩니다."></textarea>
+        <textarea id="qaMemo" aria-label="매물 메모" placeholder="특징과 확인사항을 적어두세요. 출처는 별도 열에 저장됩니다."></textarea>
       </div>
     </div>
 
@@ -679,31 +684,32 @@
     </div>
   </div>
 </div>
+</template>
 
-
+<template id="jsAuthenticatedBodyAssets">
 <script src="js/data-access-v6.js?v=6.0.0-cloudflare-boundary"></script>
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.6-active-only-polling" src="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard"></script>
 <script src="js/unified-listings-v8.js?v=8.1.21-data-access"></script>
 <script src="js/script.js?v=6.5.76-data-access"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
-<script src="js/parser.js?v=6.4.16-phone-role-fix"></script>
-<script src="js/quickadd-at.js"></script>
-<script src="js/print.js"></script>
-<script src="js/print-v2.js"></script>
+<script src="js/parser.js?v=6.4.17-consolidated"></script>
+<script src="js/quickadd-at.js?v=1.0.0"></script>
+<script src="js/print.js?v=1.0.0"></script>
+<script src="js/print-v2.js?v=2.0.0"></script>
 <script src="js/analysis.js?v=6.3.40-smart-card-cluster-pin"></script>
 <script src="js/commercial-public-v6.js?v=6.4.0"></script>
 <script src="js/regional-market-v1.js?v=1.0.4"></script>
 <script src="js/building-register-v6.js?v=8.2.7-elevator-registry"></script>
-<script src="js/list-manager-v6.js?v=6.4.32-account-device-sync"></script>
+<script src="js/list-manager-v6.js?v=6.4.33-accessible-dialogs"></script>
 <script src="js/mobile-detail-fix-v6.js?v=6.4.19-filter-anchor"></script>
-<script src="js/ai-visit-route-v6.js"></script>
-<script src="js/ai-visit-ui-v6.js"></script>
+<script src="js/ai-visit-route-v6.js?v=6.0.0"></script>
+<script src="js/ai-visit-ui-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.37-confirmed-visit"></script>
 <script src="js/unified-favorites-v7.js?v=7.0.4-stable-delete-selection"></script>
 <script src="js/map.js?v=8.2.5-favorite-map-navigation"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter"></script>
   <script src="js/operations-center-v7.js?v=7.22.2-data-access"></script>
-  <script src="js/operations-collection-v8.js?v=7.25.3-data-access"></script>
+  <script src="js/operations-collection-v8.js?v=7.25.4-accessible-dialog"></script>
   <script src="js/operations-admin-v1.js?v=1.0.4-data-access"></script>
 <script src="js/announcement-v1.js?v=1.0.1-readable-steps"></script>
 <script src="js/industry-intent-parser.js?v=1.2.0-ksic11"></script>
@@ -729,6 +735,7 @@
 <script src="js/permit-diagnosis-step6.js?v=1.3.0"></script>
 <script src="js/permit-broker-briefing.js?v=2.1.0"></script>
 <script src="js/mobile-app-v1.js?v=1.0.5-tablet-logo-reload"></script>
-<script src="js/permit-diagnosis-ui.js?v=2.8.1-health-functional"></script>
+<script src="js/permit-diagnosis-ui.js?v=2.8.2-accessible-label"></script>
+</template>
 </body>
 </html>

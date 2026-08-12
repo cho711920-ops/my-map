@@ -22,10 +22,10 @@ assert.match(
   source,
   /if \(alerts && forcePopup === true\) showCustomerWorkAlert\(data, true\);/
 );
-assert.match(source, /refreshCustomerAlertBadge\(false\);/);
+assert.match(source, /Promise\.all\(\[firstRevisionRequest, refreshCustomerAlertBadge\(false\)\]\)/);
 assert.match(
   html,
-  /operations-center-v7\.js\?v=7\.20\.4-condition-refresh-motion/
+  /operations-center-v7\.js\?v=7\.22\.2-data-access/
 );
 
 console.log("customer work alert dismissal tests passed");

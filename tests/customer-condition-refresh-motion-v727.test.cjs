@@ -7,10 +7,10 @@ const operationsCss = fs.readFileSync("css/operations-center-v7.css", "utf8");
 const unified = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.5-unified-memo-toggle/);
-assert.match(html, /operations-center-v7\.js\?v=7\.20\.4-condition-refresh-motion/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.36-naver-map-auth-fallback/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.0\.19-contact-intent-only/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.6-transaction-candidates/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.2-data-access/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.38-elevator-capacity/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.21-data-access/);
 
 assert.match(operations, /customerConditionRefreshV727:\s*\{ customerId: "", status: "idle" \}/);
 assert.match(operations, /조건변경 저장 후 새로운 매물 업데이트 중/);

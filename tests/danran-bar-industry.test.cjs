@@ -36,6 +36,6 @@ const html = read("index.html");
 assert(loader.includes('"danran-bar": "data/industry-rules/danran-bar.json"'));
 assert(loader.includes('"entertainment-bar": "data/industry-rules/entertainment-bar.json"'));
 assert(html.includes("industry-rule-loader.js?v=1.5.0-danran-use"));
-assert(html.includes("permit-diagnosis-ui.js?v=2.8.1-health-functional"));
+assert(html.includes("permit-diagnosis-ui.js?v=2.8.2-accessible-label"));
 
 console.log("danran bar industry tests: ok");

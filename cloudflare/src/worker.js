@@ -72,6 +72,7 @@ function errorResponse(error) {
 
 function withSecurityHeaders(response, request) {
   const headers = new Headers(response.headers);
+  headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");
   headers.set("referrer-policy", "strict-origin-when-cross-origin");

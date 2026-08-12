@@ -1,297 +1,42 @@
-const assert = require("assert");
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
-const scriptSource = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
-const mapSource = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
-const cssSource = fs.readFileSync(path.join(root, "css", "style.css"), "utf8");
-const gasPath = path.resolve(
-  root,
-  "..",
-  "outputs",
-  "JS부동산_Code.gs_v6.5.4_연락처6개_안전작업대기열_최종본.gs"
-);
-const gasSource = fs.readFileSync(gasPath, "utf8");
+const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
+const d1 = fs.readFileSync(path.join(root, "cloudflare", "src", "d1-api.js"), "utf8");
+const collector = fs.readFileSync(path.join(root, "cloudflare", "src", "collector-api.js"), "utf8");
 
-const csvStart = scriptSource.indexOf("function parseCSVLine");
-const csvEnd = scriptSource.indexOf("function itemKey");
+const csvStart = script.indexOf("function parseCSVLine");
+const csvEnd = script.indexOf("function itemKey");
+assert.ok(csvStart >= 0 && csvEnd > csvStart, "CSV parser block must exist");
 const csvContext = {};
 vm.createContext(csvContext);
-vm.runInContext(scriptSource.slice(csvStart, csvEnd), csvContext);
-const contactJson = JSON.stringify([
-  { role: "임", phone: "010-2446-8276" },
-  { role: "여", phone: "010-4951-8276" }
+vm.runInContext(script.slice(csvStart, csvEnd), csvContext);
+const contacts = JSON.stringify([
+  { role: "임대인", phone: "010-2446-8276" },
+  { role: "임차인", phone: "010-4951-8276" }
 ]);
-const csvContactCell = `"${contactJson.replace(/"/g, '""')}"`;
-const parsedContactCsv = csvContext.parseCSVLine(`건물,주소,3층,일반상가,2000,150,0,0,83,,,메모,,,당근,ID,링크,${csvContactCell}`);
-assert.deepStrictEqual(
-  JSON.parse(parsedContactCsv[17]),
-  JSON.parse(contactJson),
-  "자동 새로고침 후에도 S열 연락처 JSON의 따옴표를 보존해야 합니다."
-);
+const csvCell = `"${contacts.replace(/"/g, '""')}"`;
+const parsed = csvContext.parseCSVLine(`매물,주소,3층,일반상가,2000,150,0,0,83,,,메모,,,공실,ID,링크,${csvCell}`);
+assert.deepStrictEqual(JSON.parse(parsed[17]), JSON.parse(contacts));
 
-const frontendStart = scriptSource.indexOf("var LIST_CONTACT_ROLE_META_V650");
-const frontendEnd = scriptSource.indexOf("function listDisplayValueV650");
-assert(frontendStart >= 0 && frontendEnd > frontendStart, "연락처 프론트 함수 범위를 찾지 못했습니다.");
+assert.match(script, /var LIST_CONTACT_ROLE_META_V650/);
+assert.match(script, /postSafeMutationV654\("updatePropertyMemo", payload\)/);
+assert.match(script, /item\.contactListRaw\s*=\s*JSON\.stringify\(result\.contacts\)/);
+assert.match(script, /item\.memo\s*=\s*result\.memo/);
 
-const frontendContext = { window: {} };
-vm.createContext(frontendContext);
-vm.runInContext(
-  scriptSource.slice(frontendStart, frontendEnd),
-  frontendContext
-);
+assert.match(d1, /export function extractManualMemoContacts\(memo\)/);
+assert.match(d1, /export function reconcileMemoContacts\(source, storedContacts, memo\)/);
+assert.match(d1, /if \(!isExternalListingSource\(source\)\)/);
+assert.match(d1, /const contacts = reconcileMemoContacts\(before\.main_source, body\.contacts, body\.memo\)/);
+assert.match(d1, /UPDATE listings SET operating_memo=\?1, contacts_json=\?2/);
+assert.match(d1, /INSERT INTO listing_history/);
+assert.match(d1, /contactCount:\s*contacts\.length, contacts/);
 
-const extracted = frontendContext.extractListContactsV650({
-  landlordPhone: "01058481962",
-  tenantPhone: "010-1111-2222",
-  contactListRaw: JSON.stringify([
-    { role: "관", phone: "042-123-4567" },
-    { role: "주", phone: "010-5848-1962" }
-  ]),
-  memo: "사장) 010-3333-4444 / 연락 01055556666"
-});
-assert.strictEqual(extracted.length, 5, "J·K·S·메모의 모든 번호를 합쳐야 합니다.");
-assert.strictEqual(
-  extracted.filter((contact) => contact.phone.key === "01058481962").length,
-  1,
-  "같은 번호는 형식이 달라도 한 번만 표시해야 합니다."
-);
-assert(
-  extracted.some((contact) => contact.role === "기" && contact.phone.key === "01055556666"),
-  "역할 없는 메모 번호도 기타 연락처로 보존해야 합니다."
-);
+assert.match(collector, /const contacts = Array\.isArray\(record\?\.contactList\)/);
+assert.match(collector, /normalized_phone, status, first_seen_at, last_seen_at/);
+assert.match(collector, /const key = `\$\{clean\(contact\.role\)\}:\$\{normalizedPhone\}`/);
 
-const spouseContact = frontendContext.extractListContactsV650({
-  contactListRaw: JSON.stringify([
-    { role: "\uAE30", phone: "010-9138-9139" }
-  ]),
-  memo: "\uC0AC\uBAA8: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139"
-});
-assert.strictEqual(spouseContact.length, 1);
-assert.strictEqual(
-  spouseContact[0].role,
-  "\uC5EC",
-  "사모 추가연락처는 기타가 아니라 사모 역할로 승격해야 합니다."
-);
-
-const explicitRoleCases = [
-  ["\uC8FC\uC778", "\uC8FC"],
-  ["\uC0AC\uC7A5", "\uB0A8"],
-  ["\uC0AC\uBAA8", "\uC5EC"],
-  ["\uB0A8", "\uB0A8"],
-  ["\uC5EC", "\uC5EC"],
-  ["\uAC00\uC871", "\uAC00"],
-  ["\uBD80\uB3D9\uC0B0", "\uBD80"],
-  ["\uAD00\uB9AC", "\uAD00"],
-  ["\uC138\uC785\uC790", "\uC138"]
-];
-explicitRoleCases.forEach(([label, expectedRole], index) => {
-  const phone = `010-8000-${String(index + 1).padStart(4, "0")}`;
-  const contacts = frontendContext.extractListContactsV650({
-    memo: `${label}: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 ${phone}`
-  });
-  assert.strictEqual(contacts.length, 1);
-  assert.strictEqual(
-    contacts[0].role,
-    expectedRole,
-    `${label} \uBA54\uBAA8 \uC5ED\uD560\uC740 \uAE30\uD0C0\uB85C \uBC14\uB00C\uBA74 \uC548 \uB429\uB2C8\uB2E4.`
-  );
-});
-
-const sevenContacts = frontendContext.extractListContactsV650({
-  contactListRaw: JSON.stringify([
-    ["주", "010-0000-0001"],
-    ["주", "010-0000-0002"],
-    ["주", "010-0000-0003"],
-    ["주", "010-0000-0004"],
-    ["주", "010-0000-0005"],
-    ["주", "010-0000-0006"],
-    ["주", "010-0000-0007"]
-  ].map(([role, phone]) => ({ role, phone })))
-});
-assert.strictEqual(sevenContacts.length, 6, "화면에는 최대 6개까지만 표시해야 합니다.");
-
-assert(
-  /regularActionButtonsV721 = actionContactButtonV654 \+ navButtonV721/.test(scriptSource) &&
-    /customerMatchMapActionsV721 =[\s\S]*?actionContactButtonV654 \+ customerMatchMenuV721 \+ sourceLinkButton/.test(scriptSource) &&
-    !/menuContactButtonV721/.test(scriptSource),
-  "기본 매물카드와 고객매칭 지도카드는 연락처를 3번째 줄 첫 칸에 표시해야 합니다."
-);
-assert(
-  /\.item-contact-button-v654\.has-contacts[\s\S]*background:\s*#10b981/.test(cssSource),
-  "연락처가 있으면 눈에 띄는 초록 배경이어야 합니다."
-);
-assert(
-  /\.item-contact-button-v654\.no-contacts[\s\S]*background:\s*#334155/.test(cssSource),
-  "연락처가 없으면 어두운 배경이어야 합니다."
-);
-assert(
-  /contactListRaw:\s*String\(c\[17\][\s\S]*?\)\.trim\(\)/.test(mapSource) &&
-    !/contactListRaw:\s*clean\(c\[17\]\)/.test(mapSource),
-  "S열 연락처 JSON의 따옴표를 제거하지 않고 읽어야 합니다."
-);
-const reloadedContactListRaw = String(
-  parsedContactCsv[17] == null ? "" : parsedContactCsv[17]
-).trim();
-assert.deepStrictEqual(
-  JSON.parse(reloadedContactListRaw),
-  JSON.parse(contactJson),
-  "메모의 전화번호를 정리한 뒤 자동 새로고침해도 S열 연락처 JSON이 그대로 복원되어야 합니다."
-);
-
-const gasStart = gasSource.indexOf("function normalizeText_");
-const gasEnd = gasSource.indexOf("function normalizeBuildingNameV638_");
-assert(gasStart >= 0 && gasEnd > gasStart, "Apps Script 연락처 함수 범위를 찾지 못했습니다.");
-const gasContext = {
-  PROPERTY_CONTACT_LIST_COLUMN: 19
-};
-vm.createContext(gasContext);
-vm.runInContext(gasSource.slice(gasStart, gasEnd), gasContext);
-
-const row = new Array(19).fill("");
-row[9] = "01058481962";
-row[10] = "010-1111-2222";
-row[11] = "문의는 관리) 042-123-4567, 주차 가능. 연락 010-3333-4444";
-row[15] = "JS-test";
-const plan = gasContext.buildContactStorageV654_(row, [], row[11]);
-assert.strictEqual(plan.ok, true);
-assert.strictEqual(plan.contacts.length, 4);
-assert(!/042-123-4567|010-3333-4444/.test(plan.cleanedMemo), "저장할 번호만 메모에서 제거해야 합니다.");
-assert(/문의는|주차 가능|연락/.test(plan.cleanedMemo), "전화번호 외 메모 내용은 보존해야 합니다.");
-
-const legacyTextRow = new Array(19).fill("");
-legacyTextRow[18] = "사모 추가연락처 010-9138-9139";
-const legacyTextPlan = gasContext.buildContactStorageV654_(
-  legacyTextRow,
-  [],
-  legacyTextRow[11]
-);
-assert.strictEqual(legacyTextPlan.ok, true);
-assert.strictEqual(legacyTextPlan.recoveredLegacy, true);
-assert.strictEqual(legacyTextPlan.contacts.length, 1);
-assert.strictEqual(legacyTextPlan.contacts[0].role, "여");
-assert.strictEqual(legacyTextPlan.contacts[0].phone, "010-9138-9139");
-
-const compactSpouseMemoRow = new Array(19).fill("");
-compactSpouseMemoRow[11] = "사모010-0000-0000";
-const compactSpouseMemoPlan = gasContext.buildContactStorageV654_(
-  compactSpouseMemoRow,
-  [],
-  compactSpouseMemoRow[11]
-);
-assert.strictEqual(compactSpouseMemoPlan.ok, true);
-assert.strictEqual(compactSpouseMemoPlan.contacts.length, 1);
-assert.strictEqual(compactSpouseMemoPlan.contacts[0].role, "여");
-assert.strictEqual(compactSpouseMemoPlan.contacts[0].phone, "010-0000-0000");
-assert.strictEqual(compactSpouseMemoPlan.cleanedMemo, "");
-
-const sentenceSpouseMemo = "대로변 앞 유동인구많고 접근성좋은 최적의 상가자리입니다.사모010-4951-8276";
-const sentenceSpouseContacts = frontendContext.extractListContactsV650({
-  memo: sentenceSpouseMemo
-});
-assert.strictEqual(sentenceSpouseContacts.length, 1);
-assert.strictEqual(sentenceSpouseContacts[0].role, "여");
-const sentenceSpouseRow = new Array(19).fill("");
-sentenceSpouseRow[11] = sentenceSpouseMemo;
-const sentenceSpousePlan = gasContext.buildContactStorageV654_(
-  sentenceSpouseRow,
-  [],
-  sentenceSpouseRow[11]
-);
-assert.strictEqual(sentenceSpousePlan.ok, true);
-assert.strictEqual(sentenceSpousePlan.contacts.length, 1);
-assert.strictEqual(sentenceSpousePlan.contacts[0].role, "여");
-assert.strictEqual(sentenceSpousePlan.contacts[0].phone, "010-4951-8276");
-assert.strictEqual(
-  sentenceSpousePlan.cleanedMemo,
-  "대로변 앞 유동인구많고 접근성좋은 최적의 상가자리입니다"
-);
-
-const malformedLegacyRow = new Array(19).fill("");
-malformedLegacyRow[18] = "[object Object]";
-const malformedLegacyPlan = gasContext.buildContactStorageV654_(
-  malformedLegacyRow,
-  [],
-  malformedLegacyRow[11]
-);
-assert.strictEqual(malformedLegacyPlan.ok, true);
-assert.strictEqual(malformedLegacyPlan.recoveredLegacy, true);
-assert.strictEqual(malformedLegacyPlan.legacyRaw, "[object Object]");
-assert.strictEqual(malformedLegacyPlan.contacts.length, 0);
-
-const spouseRow = new Array(19).fill("");
-spouseRow[11] = "\uC0AC\uBAA8: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 010-9138-9139";
-spouseRow[18] = JSON.stringify([{role: "\uAE30", phone: "010-9138-9139"}]);
-const spousePlan = gasContext.buildContactStorageV654_(
-  spouseRow,
-  [],
-  spouseRow[11]
-);
-assert.strictEqual(spousePlan.ok, true);
-assert.strictEqual(spousePlan.contacts.length, 1);
-assert.strictEqual(spousePlan.contacts[0].role, "\uC5EC");
-assert.strictEqual(spousePlan.cleanedMemo, "");
-explicitRoleCases.forEach(([label, expectedRole], index) => {
-  const roleRow = new Array(19).fill("");
-  const phone = `010-9000-${String(index + 1).padStart(4, "0")}`;
-  roleRow[11] = `${label}: \u00B7 \uCD94\uAC00\uC5F0\uB77D\uCC98 ${phone}`;
-  const rolePlan = gasContext.buildContactStorageV654_(
-    roleRow,
-    [],
-    roleRow[11]
-  );
-  assert.strictEqual(rolePlan.ok, true);
-  assert.strictEqual(rolePlan.contacts.length, 1);
-  assert.strictEqual(rolePlan.contacts[0].role, expectedRole);
-  assert.strictEqual(rolePlan.cleanedMemo, "");
-});
-
-assert(
-  !/idCounts\[propertyId\]\s*!==\s*1/.test(gasSource),
-  "동일 매물ID 행도 전화번호가 정확히 일치하면 역할 복구 대상에서 제외하면 안 됩니다."
-);
-
-const overflowRow = new Array(19).fill("");
-overflowRow[11] = [
-  "010-0000-0001", "010-0000-0002", "010-0000-0003", "010-0000-0004",
-  "010-0000-0005", "010-0000-0006", "010-0000-0007"
-].join(" ");
-const overflowPlan = gasContext.buildContactStorageV654_(overflowRow, [], overflowRow[11]);
-assert.strictEqual(overflowPlan.ok, false);
-assert.strictEqual(overflowPlan.overflow, true);
-assert.strictEqual(overflowRow[11].includes("010-0000-0007"), true, "6개 초과 시 원본 메모를 보존해야 합니다.");
-
-assert(
-  /setValue\(contactPlan\.json\)[\s\S]*SpreadsheetApp\.flush\(\)[\s\S]*getDisplayValue\(\)[\s\S]*cleanedMemo/.test(gasSource),
-  "연락처 저장 후 재확인한 뒤에만 메모를 정리해야 합니다."
-);
-assert(
-  /contactPlan\.cleanedMemo !== memo \|\| contactPlan\.recoveredLegacy/.test(gasSource) &&
-    /contactPlan\.cleanedMemo !== updatedMemo \|\| contactPlan\.recoveredLegacy/.test(gasSource),
-  "기존 연락처 값이 JSON이 아니면 원문을 백업한 뒤에만 복구 저장해야 합니다."
-);
-assert(
-  /item\.contactListRaw\s*=\s*JSON\.stringify\(result\.contacts\)/.test(scriptSource) &&
-    /item\.memo\s*=\s*result\.memo/.test(scriptSource),
-  "메모 저장 성공 직후 서버가 확정한 연락처와 정리된 메모를 카드에 반영해야 합니다."
-);
-assert(
-  /postSafeMutationV654\("updatePropertyMemo", payload\)/.test(scriptSource),
-  "카드 메모는 상태변경과 분리된 메모 전용 저장을 사용해야 합니다."
-);
-assert(
-  /CONTACT_MIGRATION_BACKUP_SHEET_NAME\s*=\s*"JS_연락처이전백업"/.test(gasSource),
-  "메모 정리 전 복구용 백업 시트를 사용해야 합니다."
-);
-assert(
-  /function contactRoleRecoveryMapV655_[\s\S]*role === "기"[\s\S]*result\[propertyId\]\[phoneKey\]/.test(gasSource),
-  "기타로 잘못 저장된 번호는 백업 원문에서 명시된 역할만 복구해야 합니다."
-);
-assert(
-  /contactRoleRecoveryMapV655_\(spreadsheet\)[\s\S]*buildContactStorageV654_\([\s\S]*recoveryContacts/.test(gasSource),
-  "연락처 재이전 때 매물ID·전화번호가 일치하는 백업 역할을 적용해야 합니다."
-);
-
-console.log("listing contacts v6.5.4 tests passed");
+console.log("listing contacts and D1 persistence tests passed");

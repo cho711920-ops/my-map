@@ -129,6 +129,6 @@ assert(index.includes("ksic-industry-adapter.js?v=1.0.0"));
 assert(index.includes("industry-intent-parser.js?v=1.2.0-ksic11"));
 assert(index.includes("industry-candidate-selector.js?v=2.3.0-ksic11"));
 assert(index.includes("permit-diagnosis-step2.js?v=2.8.0-ksic11"));
-assert(index.includes("permit-diagnosis-ui.js?v=2.8.1-health-functional"));
+assert(index.includes("permit-diagnosis-ui.js?v=2.8.2-accessible-label"));
 
 console.log("KSIC universal industry search tests passed (1,205 + 21 + 84 = 1,310)");

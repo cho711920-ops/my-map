@@ -462,7 +462,7 @@
     wrapper.innerHTML =
       '<div id="listManagerModal" class="lm-modal" aria-hidden="true">' +
         '<div class="lm-backdrop" onclick="closeListManager()"></div>' +
-        '<div class="lm-dialog" role="dialog" aria-modal="true">' +
+        '<div class="lm-dialog" role="dialog" aria-modal="true" aria-labelledby="lmTitle">' +
           '<div class="lm-header">' +
             '<div><div id="lmTitle" class="lm-title"></div><div id="lmSubtitle" class="lm-subtitle"></div></div>' +
             '<button class="lm-close" type="button" onclick="closeListManager()">×</button>' +
@@ -472,7 +472,7 @@
       '</div>' +
       '<div id="itemListPickerModal" class="lm-modal" aria-hidden="true">' +
         '<div class="lm-backdrop" onclick="closeItemListPicker()"></div>' +
-        '<div class="lm-dialog lm-picker-dialog" role="dialog" aria-modal="true">' +
+        '<div class="lm-dialog lm-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="lmPickerTitle">' +
           '<div class="lm-header">' +
             '<div><div id="lmPickerTitle" class="lm-title"></div><div id="lmPickerSubtitle" class="lm-subtitle"></div></div>' +
             '<button class="lm-close" type="button" onclick="closeItemListPicker()">×</button>' +

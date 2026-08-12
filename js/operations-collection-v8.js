@@ -742,7 +742,7 @@
     modal.className = "review-decision-modal";
     modal.hidden = true;
     modal.innerHTML = '<div class="review-decision-backdrop" onclick="closeReviewDecisionModal()"></div>' +
-      '<section class="review-decision-dialog" role="dialog" aria-modal="true">' +
+      '<section class="review-decision-dialog" role="dialog" aria-modal="true" aria-labelledby="reviewDecisionTitle" aria-describedby="reviewDecisionText">' +
         '<header><h3 id="reviewDecisionTitle"></h3><p id="reviewDecisionText"></p></header>' +
         '<div class="review-decision-actions">' +
           '<button id="reviewDecisionCancel" type="button" onclick="closeReviewDecisionModal()">취소</button>' +

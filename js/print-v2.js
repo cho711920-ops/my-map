@@ -145,7 +145,7 @@
         '<meta charset="utf-8">' +
         '<meta name="viewport" content="width=device-width,initial-scale=1">' +
         '<title>JS부동산 임장리스트</title>' +
-        '<link rel="stylesheet" href="css/print-v2.css">' +
+        '<link rel="stylesheet" href="css/print-v2.css?v=2.0.0">' +
       '</head>' +
       '<body class="js-print-body">' +
         '<main class="js-print-sheet">' +
