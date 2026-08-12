@@ -752,6 +752,12 @@ function clearAdministrativeListSelectionV6570() {
 }
 
 
+function clearMapListSelectionForNavigationV6571() {
+  clearPinnedClusterSelectionV6515(true);
+  clearAdministrativeListSelectionV6570();
+}
+
+
 function getAdministrativeListItemsV6570(items) {
   var selection = jsAdministrativeListSelectionV6570;
   var sourceItems = (items || []).slice();
@@ -791,8 +797,8 @@ window.clearAdministrativeListSelectionV6570 = clearAdministrativeListSelectionV
 
 function getAdministrativeClusterModeV655(level) {
   var value = Number(level) || 0;
-  if (value >= 7) return "district";
-  if (value >= 6) return "neighborhood";
+  if (value >= 8) return "district";
+  if (value >= 7) return "neighborhood";
   return "";
 }
 
@@ -1170,7 +1176,7 @@ kakao.maps.load(function() {
 
   kakao.maps.event.addListener(map, "dragstart", function() {
     if (shouldClearPinnedClusterForMapNavigationV6525()) {
-      clearPinnedClusterSelectionV6515(true);
+      clearMapListSelectionForNavigationV6571();
     } else {
       keepPinnedClusterSelectionAcrossTransientUiV6525(2400);
     }
@@ -1178,7 +1184,7 @@ kakao.maps.load(function() {
 
   kakao.maps.event.addListener(map, "zoom_start", function() {
     if (shouldClearPinnedClusterForMapNavigationV6525()) {
-      clearPinnedClusterSelectionV6515(true);
+      clearMapListSelectionForNavigationV6571();
     } else {
       keepPinnedClusterSelectionAcrossTransientUiV6525(2400);
     }

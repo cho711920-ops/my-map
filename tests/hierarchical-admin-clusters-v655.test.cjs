@@ -46,8 +46,10 @@ const context = {
 vm.createContext(context);
 vm.runInContext([
   extractFunction("getAddressAdminRegionV655"),
+  extractFunction("clearPinnedClusterSelectionV6515"),
   extractFunction("setAdministrativeListSelectionV6570"),
   extractFunction("clearAdministrativeListSelectionV6570"),
+  extractFunction("clearMapListSelectionForNavigationV6571"),
   extractFunction("getAdministrativeListItemsV6570"),
   extractFunction("getAdministrativeClusterModeV655"),
   extractFunction("createAdministrativeClustersV655"),
@@ -64,8 +66,9 @@ assert.deepEqual(
   JSON.parse(JSON.stringify(context.getAddressAdminRegionV655("대전광역시 서구 괴정동 95-19"))),
   { district: "서구", neighborhood: "괴정동" }
 );
-assert.equal(context.getAdministrativeClusterModeV655(7), "district");
-assert.equal(context.getAdministrativeClusterModeV655(6), "neighborhood");
+assert.equal(context.getAdministrativeClusterModeV655(8), "district");
+assert.equal(context.getAdministrativeClusterModeV655(7), "neighborhood");
+assert.equal(context.getAdministrativeClusterModeV655(6), "");
 assert.equal(context.getAdministrativeClusterModeV655(5), "");
 assert.equal(context.getAdministrativeClusterModeV655(4), "");
 
@@ -107,6 +110,23 @@ assert.equal(
 );
 context.clearAdministrativeListSelectionV6570();
 assert.equal(context.getAdministrativeListItemsV6570(groups).length, groups.length);
+
+context.jsPinnedClusterSelectionV6515 = { itemIdentities: ["property:1"] };
+context.jsPinnedClusterSpatialChangeIgnoreUntilV6517 = Date.now() + 1000;
+context.selectedGroupKey = "cluster:1";
+context.selectedGroupKeys = ["cluster:1"];
+context.selectedItemKey = "property:1";
+context.jsClusterSelectionMemoryV638 = {
+  singleItemIds: ["property:1"],
+  multiItemIdGroups: [["property:1"]]
+};
+context.setAdministrativeListSelectionV6570(neighborhoods[0]);
+context.clearMapListSelectionForNavigationV6571();
+assert.equal(context.jsPinnedClusterSelectionV6515, null);
+assert.equal(context.jsAdministrativeListSelectionV6570, null);
+assert.equal(context.selectedGroupKey, null);
+assert.deepEqual(Array.from(context.selectedGroupKeys), []);
+assert.equal(context.selectedItemKey, null);
 
 assert.equal(context.getPremiumClusterSizeClassV635(1).trim(), "cluster-size-sm");
 assert.equal(context.getPremiumClusterSizeClassV635(10).trim(), "cluster-size-md");
@@ -188,16 +208,19 @@ assert.match(source, /function openAdministrativeClusterV655[\s\S]*?setAdministr
 assert.doesNotMatch(source, /function openAdministrativeClusterV655[\s\S]*?map\.setLevel\(/);
 assert.doesNotMatch(source, /function openAdministrativeClusterV655[\s\S]*?map\.panTo\(/);
 assert.match(source, /scheduleMapIdleRefreshV638[\s\S]*?getAdministrativeListItemsV6570\(jsLastRenderedItemsV639\)/);
+assert.match(source, /function clearMapListSelectionForNavigationV6571\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\);[\s\S]*?clearAdministrativeListSelectionV6570\(\);[\s\S]*?\}/);
+assert.match(source, /addListener\(map, "dragstart"[\s\S]*?clearMapListSelectionForNavigationV6571\(\)/);
+assert.match(source, /addListener\(map, "zoom_start"[\s\S]*?clearMapListSelectionForNavigationV6571\(\)/);
 assert.match(source, /getFilteredItems\(\{\s*includeUnlocated: true,\s*ignoreMapBounds: true\s*\}\)/);
 assert.match(scriptSource, /var ignoreMapBounds = !!\(options && options\.ignoreMapBounds\)/);
-assert.match(scriptSource, /var inMap = ignoreMapBounds\s*\? true\s*:/);
+assert.match(scriptSource, /var inMap = ignoreMapBounds \|\| mobileGlobalKeywordSearch\s*\? true\s*:/);
 assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
 assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
 assert.match(css, /admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.1.6-cluster-transient-state"));
+assert.ok(html.includes("map.js?v=8.2.5-favorite-map-navigation"));
 assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 5 \* 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
-assert.ok(html.includes("style.css?v=6.5.33-admin-count-confirmed"));
+assert.ok(html.includes("style.css?v=6.5.39-elevator-capacity-x"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");
