@@ -38,6 +38,11 @@
     });
   }
   function apiGet(action, params) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function") {
+      return window.JSDataAccessV6.read(action, params, {
+        errorMessage: "자료를 불러오지 못했습니다."
+      });
+    }
     var query = new URLSearchParams(Object.assign({action: action}, params || {}));
     return fetch(saveApiURL + "?" + query.toString(), {cache: "no-store", credentials: "same-origin"})
       .then(function(response) { return response.json(); })
@@ -47,6 +52,11 @@
       });
   }
   function apiPost(action, payload) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.mutate === "function") {
+      return window.JSDataAccessV6.mutate(action, payload, {
+        errorMessage: "처리하지 못했습니다."
+      });
+    }
     return fetch(saveApiURL, {
       method: "POST", credentials: "same-origin",
       headers: {"Content-Type": "application/json"},

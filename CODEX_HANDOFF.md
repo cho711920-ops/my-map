@@ -555,3 +555,27 @@
 - 호환용 `saveApiURL`, `sheetURL`, 직접 `fetch` 폴백은 모든 소비 모듈 전환과 실제 브라우저 회귀 확인 전까지 제거하지 않는다.
 - 오래된 독립 `.cjs` 테스트 일부는 현재보다 과거인 캐시 버전을 고정 검사하거나 다른 PC의 절대 경로를 참조해 일괄 실행할 수 없다. 공식 릴리스 게이트인 `test:cloudflare`는 전부 통과했으며, 레거시 테스트는 별도 정리 후 공식 스크립트에 편입하는 것이 안전하다.
 - D1 스키마·운영 데이터·R2 객체는 변경하지 않았고 이번 작업에서 운영 Worker 배포도 수행하지 않았다.
+
+## 2026-08-12 v6-cloud 운영센터 데이터 접근 계층 전환
+
+- 작업 시작 시 `CODEX_HANDOFF.md`를 UTF-8로 확인하고 `git fetch --prune origin`을 실행했다. 로컬 `codex/cloudflare-js-map`과 원격은 모두 `c957ecf`로 이미 일치해 추가 병합은 없었다.
+- `operations-center-v7.js`, `operations-collection-v8.js`, `operations-admin-v1.js`의 현황·고객·매물검증·변경이력·사용자 관리 조회와 저장을 `JSDataAccessV6.read/mutate`에 연결했다.
+- 공통 계층이 없는 구형 독립 실행 환경에서는 기존 `saveApiURL`·직접 `fetch`가 계속 동작하도록 가드된 폴백을 유지했다. D1 액션 이름, 요청 본문, 세션 자격, 화면별 오류 처리 흐름은 바꾸지 않았다.
+- 운영센터 자산 캐시 버전을 각각 `7.22.2-data-access`, `7.25.3-data-access`, `1.0.4-data-access`로 갱신했고, 공통 계층 선행 로드와 세 모듈의 조회·저장 연결을 공식 Cloudflare 테스트에서 자동 검증한다.
+- `docs/CLOUDFLARE_MIGRATION.md`의 브라우저 데이터 접근 경계에 운영센터 적용 범위를 반영했다.
+
+### 테스트와 빌드
+
+- 변경한 운영센터 JavaScript 3개의 `node --check`: 통과
+- 데이터 접근·전문 운영센터 대상 테스트: 10/10 통과
+- `pnpm run test:cloudflare`: 100/100 통과
+- `pnpm run cf:check`: Cloudflare 자산 124개 빌드 및 Wrangler 4.118.0 dry-run 통과
+- `pnpm run build:cloudflare`: 통과
+- `git diff --check`: 통과
+- 오래된 독립 운영센터 `.cjs` 테스트 4개는 코드 실행 전에 다른 PC의 절대 경로 또는 현재 저장소에 없는 과거 `outputs` 폴더를 읽다가 종료됐다. 이번 변경의 공식 테스트와 대상 테스트는 모두 통과했으며, 이 레거시 경로 문제는 별도 테스트 정리 작업으로 남겼다.
+
+### 남은 작업과 주의사항
+
+- 다음 전환 후보는 `list-manager-v6.js`, `ai-visit-session-v6.js`, `async-mutation-queue-v1.js`, `diagnosis-storage.js`다. 비동기 큐는 재시도·작업상태 계약이 있으므로 독립 테스트의 절대 경로 문제를 먼저 제거한 뒤 전환하는 편이 안전하다.
+- 운영센터의 직접 `fetch` 코드는 공통 계층 미로딩 시의 호환 폴백이므로 실제 브라우저 회귀 확인 전까지 제거하지 않는다.
+- D1 스키마·운영 데이터·R2 객체는 변경하지 않았고 운영 Worker 배포도 수행하지 않았다.

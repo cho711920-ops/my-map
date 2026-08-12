@@ -98,6 +98,11 @@
   }
 
   function apiGet(action, params) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function") {
+      return window.JSDataAccessV6.read(action, params, {
+        errorMessage: "운영자료 조회에 실패했습니다."
+      });
+    }
     var query = new URLSearchParams(Object.assign({ action: action }, params || {}));
     return fetch(saveApiURL + "?" + query.toString(), {
       credentials: "same-origin",
@@ -112,6 +117,11 @@
   }
 
   function apiPost(action, payload) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.mutate === "function") {
+      return window.JSDataAccessV6.mutate(action, payload, {
+        errorMessage: "운영 요청 처리에 실패했습니다."
+      });
+    }
     return fetch(saveApiURL, {
       method: "POST",
       credentials: "same-origin",

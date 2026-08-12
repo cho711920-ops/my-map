@@ -1,7 +1,7 @@
 (function (global) {
   "use strict";
 
-  var API = "/api/data";
+  var API = global.JSDataAccessV6 ? global.JSDataAccessV6.endpoints.data : "/api/data";
   var previousSwitch = global.switchOperationsTab;
   var state = { profile: null, history: [], nextCursor: 0, users: [], loading: false };
 
@@ -12,11 +12,21 @@
     });
   }
   function apiGet(action, params) {
+    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.read === "function") {
+      return global.JSDataAccessV6.read(action, params, {
+        errorMessage: "요청을 처리하지 못했습니다."
+      });
+    }
     var query = new URLSearchParams(Object.assign({ action: action, _: Date.now() }, params || {}));
     return fetch(API + "?" + query.toString(), { credentials: "same-origin", cache: "no-store" })
       .then(parseResponse);
   }
   function apiPost(action, payload) {
+    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.mutate === "function") {
+      return global.JSDataAccessV6.mutate(action, payload, {
+        errorMessage: "요청을 처리하지 못했습니다."
+      });
+    }
     return fetch(API, {
       method: "POST",
       credentials: "same-origin",

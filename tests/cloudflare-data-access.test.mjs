@@ -5,6 +5,14 @@ import vm from "node:vm";
 
 const source = readFileSync(new URL("../js/data-access-v6.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const operationsSources = [
+  "operations-center-v7.js",
+  "operations-collection-v8.js",
+  "operations-admin-v1.js"
+].map((name) => ({
+  name,
+  source: readFileSync(new URL(`../js/${name}`, import.meta.url), "utf8")
+}));
 
 function clientWith(fetch) {
   const window = { fetch, URLSearchParams };
@@ -35,9 +43,30 @@ test("data access reads Cloudflare D1 actions with session credentials", async (
 test("data access loads before every legacy UI consumer", () => {
   const accessIndex = html.indexOf('src="js/data-access-v6.js');
   assert.ok(accessIndex >= 0);
-  for (const consumer of ["js/unified-listings-v8.js", "js/script.js", "js/map.js"]) {
+  for (const consumer of [
+    "js/unified-listings-v8.js",
+    "js/script.js",
+    "js/map.js",
+    "js/operations-center-v7.js",
+    "js/operations-collection-v8.js",
+    "js/operations-admin-v1.js"
+  ]) {
     assert.ok(accessIndex < html.indexOf(`src="${consumer}`), `${consumer} must load after the data boundary`);
   }
+});
+
+test("operations modules use the shared Cloudflare data boundary with a legacy fallback", () => {
+  for (const entry of operationsSources) {
+    assert.match(entry.source, /JSDataAccessV6\.read\(action, params,/,
+      `${entry.name} must read through JSDataAccessV6`);
+    assert.match(entry.source, /JSDataAccessV6\.mutate\(action, payload,/,
+      `${entry.name} must mutate through JSDataAccessV6`);
+    assert.match(entry.source, /typeof (?:window|global)\.JSDataAccessV6\.(?:read|mutate) === "function"/,
+      `${entry.name} must retain a guarded legacy fallback`);
+  }
+  assert.match(html, /operations-center-v7\.js\?v=7\.22\.2-data-access/);
+  assert.match(html, /operations-collection-v8\.js\?v=7\.25\.3-data-access/);
+  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.4-data-access/);
 });
 
 test("data access mutations preserve action payload and surface D1 failures", async () => {
