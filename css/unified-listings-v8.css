@@ -229,8 +229,15 @@
   .unified-detail-photo-nav-v8[hidden] { display: none; }
   .unified-gallery-empty-v8 { display: grid; min-height: 250px; place-items: center; padding: 30px 15px; color: #6b7280; font-size: 15px; text-align: center; }
   .unified-detail-summary-v8 { padding: 19px 18px; border-bottom: 1px solid #e2e8f0; }
-  .unified-detail-summary-v8 > div:first-child { display: flex; flex-direction: column; gap: 7px; }
-  .unified-detail-summary-v8 > div:first-child strong { font-size: 19px; line-height: 1.35; }
+  .unified-detail-source-address-v827 { display: flex; flex-direction: column; gap: 7px; }
+  .unified-detail-source-address-v827 > strong { font-size: 19px; line-height: 1.35; }
+  .unified-detail-source-row-v827 { display: flex; min-width: 0; align-items: center; gap: 8px; }
+  .unified-detail-source-link-v827 {
+    display: inline-flex; height: 27px; align-items: center; justify-content: center; margin-left: auto;
+    padding: 0 9px; border: 1px solid #b9c9dc; border-radius: 999px; background: #fff;
+    color: #31516f; font-size: 11px; font-weight: 850; letter-spacing: -.02em; white-space: nowrap; cursor: pointer;
+  }
+  .unified-detail-source-link-v827:hover { border-color: #2484e8; background: #eff7ff; color: #075bb7; }
   .unified-detail-summary-v8 > p { margin: 16px 0; color: #1e3a8a; font-size: 17px; font-weight: 850; line-height: 1.45; }
   .unified-detail-utility-actions-v8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: -2px 0 13px; }
   .unified-detail-utility-actions-v8 button {
@@ -242,8 +249,8 @@
   .unified-detail-summary-v8 .source-naver,
   .unified-detail-summary-v8 .source-gongsil,
   .unified-detail-summary-v8 .source-direct { font-size: 14px; }
-  .unified-detail-actions-v8 { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; }
-  .unified-detail-actions-v8 button { min-width: 0; height: 38px; min-height: 38px; padding: 0 8px; border: 1px solid #93c5fd; border-radius: 9px; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 900; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+  .unified-detail-actions-v8 { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 8px; }
+  .unified-detail-actions-v8 button { flex: 1 1 0; min-width: 0; height: 38px; min-height: 38px; padding: 0 4px; border: 1px solid #93c5fd; border-radius: 9px; background: #eff6ff; color: #1d4ed8; font-size: 10.5px; font-weight: 900; line-height: 1.2; letter-spacing: -.035em; white-space: nowrap; cursor: pointer; }
   .unified-detail-actions-v8 .separate,
   .unified-detail-actions-v8 .move { border-radius: 9px; }
   .unified-detail-actions-v8 .separate { border-color: #fca5a5; background: #fff1f2; color: #be123c; }

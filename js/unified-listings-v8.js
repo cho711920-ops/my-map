@@ -10,6 +10,9 @@
     photoPreloads: {}, photoPreloadOrder: [], photoWarmupTimer: 0 };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
+  function encodedExternalLink(value) {
+    return encodeURIComponent(text(value)).replace(/'/g, "%27");
+  }
   function esc(value) {
     return text(value).replace(/[&<>"']/g, function(character) {
       return {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[character];
@@ -352,8 +355,8 @@
     } else {
       var link = originals.length ? text(originals[0].link) : text(item && item.sourceLink);
       button = link
-        ? '<button type="button" class="item-source-link-btn active" onclick="event.stopPropagation(); window.open(\'' +
-          esc(link) + '\', \'_blank\', \'noopener,noreferrer\')">링크</button>'
+        ? '<button type="button" class="item-source-link-btn active" onclick="event.stopPropagation(); ' +
+          'JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(link) + '\')">링크</button>'
         : '<button type="button" class="item-source-link-btn disabled" disabled>링크</button>';
     }
     return {thumbnail: thumbnailMarkup, badge: badge, sourceButton: button};
@@ -363,6 +366,18 @@
     return '<span><b>보</b> ' + number(original.deposit) + ' / <b>월</b> ' + number(original.rent) +
       ' · <b>관</b> ' + number(original.fee) + ' · <b>권</b> ' + number(original.premium) +
       ' · <b>평</b> ' + number(original.area) + '</span>';
+  }
+
+  function openExternalLink(encodedLink) {
+    var link = "";
+    try {
+      link = decodeURIComponent(text(encodedLink));
+    } catch (_) {
+      return;
+    }
+    if (!/^https?:\/\//i.test(link)) return;
+    var popup = global.open(link, "_blank", "noopener,noreferrer");
+    if (popup) popup.opener = null;
   }
 
   function resolveMasterItem(propertyId) {
@@ -516,8 +531,13 @@
             'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, 1)">›</button>' :
           '<div class="unified-gallery-empty-v8">등록된 사진 없음</div>') +
       '</section>' +
-      '<section class="unified-detail-summary-v8"><div><span class="source-' + sourceKey(selected.source) + '">' +
-        esc(selected.source) + '</span><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
+      '<section class="unified-detail-summary-v8"><div class="unified-detail-source-address-v827">' +
+        '<div class="unified-detail-source-row-v827"><span class="source-' + sourceKey(selected.source) + '">' +
+          esc(selected.source) + '</span>' +
+          (selected.link ? '<button type="button" class="unified-detail-source-link-v827" ' +
+            'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
+            'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
+        '</div><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
         '<p>' + conditionLine(selected) + '</p>' +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
@@ -526,15 +546,13 @@
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' +
         '</div>' +
         (registrationDate ? '<div class="unified-detail-meta-v8"><span>등록일</span><b>' + esc(registrationDate) + '</b></div>' : '') +
-        '<div class="unified-detail-actions-v8">' +
-          (selected.link ? '<button type="button" onclick="window.open(\'' + esc(selected.link) +
-            '\', \'_blank\', \'noopener,noreferrer\')">원본 링크 열기</button>' : '') +
+        '<div class="unified-detail-actions-v8" aria-label="원본매물 정리 작업">' +
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
-            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
+            encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물 분리</button>' : '') +
           (!selected.masterFallback ? '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">원본 1개 합치기</button>' : '') +
           '<button type="button" class="move whole-master" onclick="JSUnifiedListingsV8.startWholeMasterMove(\'' +
-            encodedActionPropertyId + '\')">대표매물 전체 합치기</button>' +
+            encodedActionPropertyId + '\')">대표 전체 합치기</button>' +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
@@ -1100,6 +1118,6 @@
     loadContacts: loadContacts, getCachedContacts: getCachedContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError,
-    runDetailAction: runDetailAction
+    runDetailAction: runDetailAction, openExternalLink: openExternalLink
   };
 })(window);

@@ -16,12 +16,12 @@ test("detail move transfers only the selected original", () => {
 });
 
 test("detail exposes a separate whole-master merge flow including fallback-only listings", () => {
-  assert.match(unified, />대표매물 전체 합치기<\/button>/);
+  assert.match(unified, />대표 전체 합치기<\/button>/);
   assert.match(unified, /function startWholeMasterMove\(encodedPropertyId\)/);
   assert.match(unified, /state\.pendingMove = \{mode: "whole", sourcePropertyId: sourcePropertyId\}/);
   assert.match(unified, /if \(wholeMaster\) move\("", propertyId, 1, pending\.sourcePropertyId\)/);
   assert.match(unified, /현재 매물의 모든 원본·사진·연결정보가 이동/);
-  assert.doesNotMatch(unified, /!selected\.masterFallback[^\n]+대표매물 전체 합치기/);
+  assert.doesNotMatch(unified, /!selected\.masterFallback[^\n]+대표 전체 합치기/);
 });
 
 test("merged source card is removed immediately from all live list arrays", () => {
@@ -36,6 +36,6 @@ test("merge cache invalidation finishes before the response is rendered", () => 
   assert.match(worker, /OPERATIONS_DASHBOARD_CACHE_KEY,[\s\S]*?\.\.\.wholeMergeDetailKeys/);
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /mutationAction\(body\) === "moveOriginalListing"\) \{\s*await invalidation;/);
-  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.26-representative-priority/);
-  assert.match(html, /css\/unified-listings-v8\.css\?v=8\.0\.39-whole-master-merge/);
+  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.27-detail-action-layout/);
+  assert.match(html, /css\/unified-listings-v8\.css\?v=8\.0\.40-detail-action-layout/);
 });

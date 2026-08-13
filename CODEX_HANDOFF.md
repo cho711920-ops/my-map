@@ -771,3 +771,20 @@
 - `pnpm run cf:check`: Cloudflare 자산 126개 및 Wrangler 4.118.0 dry-run 통과
 - 운영 HTML·JavaScript 응답과 브라우저 DOM에서 `6.5.81-card-instance-selection`, 행 단위 체크 키, 카드 인스턴스 DOM 식별자를 확인했다.
 - 운영 Worker 버전: `77d7e544-2172-4ec0-a687-966fe85efb5b`.
+
+## 2026-08-14 상세카드 원본 링크·합치기 작업 한 줄 정리
+
+- 상세카드 하단 작업 그리드에 있던 `원본 링크 열기`를 선택한 당근·네이버·공실박스 출처 표시 오른쪽으로 이동해 `원본 링크 ↗` 보조 버튼으로 표시한다. 주소는 그 아래에 그대로 유지한다.
+- 하단 작업 영역에는 `별도 매물 분리`, `원본 1개 합치기`, `대표 전체 합치기`만 남기고 동일 너비의 `flex-wrap: nowrap` 행으로 구성해 세 기능이 한 줄에 표시되도록 했다.
+- 좁은 데스크톱 상세창에서도 세 버튼이 넘치지 않도록 문구·간격·글자 크기를 다듬었다. 원본 수와 대표 상태에 따른 기존 버튼 노출 조건, 분리·합치기 서버 로직과 데이터는 변경하지 않았다.
+- 원본 링크는 공용 `openExternalLink`로 열며 HTTP(S)만 허용하고 `noopener,noreferrer` 및 잘못된 URL 디코딩 방어를 적용했다. 목록카드의 단일 원본 링크도 같은 안전 함수를 사용한다.
+- 브라우저 캐시 버전은 `unified-listings-v8.js?v=8.1.27-detail-action-layout`, `unified-listings-v8.css?v=8.0.40-detail-action-layout`으로 갱신했다.
+
+### 테스트와 운영 반영
+
+- 상세카드 위치·한 줄 레이아웃·분리/합치기 노출·원본 링크 보안 집중 테스트 통과
+- `pnpm test`: 248/248 통과
+- `pnpm run test:cloudflare`: 120/120 통과
+- `pnpm run cf:check`: Cloudflare 자산 126개 및 Wrangler 4.118.0 dry-run 통과
+- 운영 HTML·JavaScript·CSS와 브라우저 DOM에서 새 자산 버전, 출처 옆 링크 구조, 세 버튼 문구 및 줄바꿈 금지 스타일을 확인했다.
+- 운영 Worker 버전: `0347a4dd-7f12-4843-923a-f2312aa763cf`.

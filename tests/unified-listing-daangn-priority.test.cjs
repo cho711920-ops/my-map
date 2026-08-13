@@ -3,9 +3,15 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const source = fs.readFileSync("js/unified-listings-v8.js", "utf8");
+const openedLinks = [];
 const window = {
   innerWidth: 1280,
-  addEventListener() {}
+  addEventListener() {},
+  open(url, target, features) {
+    const popup = {opener: "initial"};
+    openedLinks.push({url, target, features, popup});
+    return popup;
+  }
 };
 const context = {
   window,
@@ -16,6 +22,15 @@ const context = {
 
 vm.createContext(context);
 vm.runInContext(source, context);
+
+window.JSUnifiedListingsV8.openExternalLink(encodeURIComponent("https://example.com/listing?id=1"));
+assert.equal(openedLinks[0].url, "https://example.com/listing?id=1");
+assert.equal(openedLinks[0].target, "_blank");
+assert.equal(openedLinks[0].features, "noopener,noreferrer");
+assert.equal(openedLinks[0].popup.opener, null);
+window.JSUnifiedListingsV8.openExternalLink(encodeURIComponent("javascript:alert(1)"));
+window.JSUnifiedListingsV8.openExternalLink("%E0%A4%A");
+assert.equal(openedLinks.length, 1, "only HTTP(S) source links may open");
 
 const items = [{propertyId: "MASTER-1", sourceLink: ""}];
 window.JSUnifiedListingsV8.attach(items, {
