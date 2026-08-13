@@ -20,5 +20,7 @@ assert.match(d1, /"preserveRepresentative"/);
 assert.match(listingUi, /preserveRepresentative\) return 10/);
 assert.match(worker, /collectorAdmin\.affectedListingIds/);
 assert.match(worker, /review\?\.affectedListingIds/);
+assert.match(collector, /shardCount/);
+assert.match(collector, /instr\('0123456789abcdef'/);
 
 console.log("single candidate review merge: ok");

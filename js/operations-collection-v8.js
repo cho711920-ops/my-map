@@ -590,13 +590,18 @@
     message("기존매물이 1건인 검증 원본을 대표정보 변경 없이 합치는 중입니다…", "loading");
     showReviewDecisionModal("기존매물 1건 자동합치기 진행 중",
       "서버에서 20건씩 동일매물 하위 원본으로 연결하고 있습니다.", "", true);
-    function runNextBatch() {
-      return apiPost("mergeSingleCandidateReviews", {limit: 20, refreshCustomerMatches: false}).then(function(result) {
+    var shardCount = 8;
+    var shardRemaining = Array(shardCount).fill(0);
+    function runNextBatch(shard) {
+      return apiPost("mergeSingleCandidateReviews", {
+        limit: 20, shard: shard, shardCount: shardCount, refreshCustomerMatches: false
+      }).then(function(result) {
         totals.passes += 1;
         ["scanned", "merged", "aliasesMerged", "failed"].forEach(function(key) {
           totals[key] += number(result[key]);
         });
-        var remaining = number(result.remainingSingleCandidate);
+        shardRemaining[shard] = number(result.remainingSingleCandidate);
+        var remaining = shardRemaining.reduce(function(sum, value) { return sum + value; }, 0);
         message("자동합치기 " + totals.merged.toLocaleString("ko-KR") + "건 · 반복원본 " +
           totals.aliasesMerged.toLocaleString("ko-KR") + "건 · 남은 대상 " +
           remaining.toLocaleString("ko-KR") + "건", "loading");
@@ -605,11 +610,11 @@
           "검증원본 " + totals.merged.toLocaleString("ko-KR") + "건 · 반복원본 " +
           totals.aliasesMerged.toLocaleString("ko-KR") + "건 합침\n남은 대상 " +
           remaining.toLocaleString("ko-KR") + "건";
-        if (result.hasMore && totals.passes < 600) return runNextBatch();
+        if (result.hasMore && totals.passes < 4800) return runNextBatch(shard);
         return result;
       });
     }
-    runNextBatch().then(function() {
+    Promise.all(Array.from({length: shardCount}, function(_, shard) { return runNextBatch(shard); })).then(function() {
       clearReviewCache();
       showReviewDecisionModal("기존매물 1건 자동합치기 완료",
         "검증원본 " + totals.merged.toLocaleString("ko-KR") + "건 · 함께 묶인 반복원본 " +

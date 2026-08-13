@@ -2024,7 +2024,17 @@ async function consolidateExisting(env, user, body) {
 async function mergeSingleCandidateReviews(env, user, options = {}) {
   const requestedLimit = Math.floor(Number(options.limit) || 20);
   const limit = Math.max(1, Math.min(requestedLimit, 20));
-  const rows = await env.DB.prepare(`SELECT cr.id, cr.session_id, cr.source, cr.source_listing_id,
+  const shardCount = Math.max(1, Math.min(Math.floor(Number(options.shardCount) || 1), 16));
+  const requestedShard = Math.floor(Number(options.shard));
+  const shard = Number.isFinite(requestedShard) && requestedShard >= 0 && requestedShard < shardCount
+    ? requestedShard : -1;
+  const shardClause = shard >= 0
+    ? ` AND ((instr('0123456789abcdef', lower(substr(cr.id, -1))) - 1) % ?2)=?3`
+    : "";
+  const remainingShardClause = shard >= 0
+    ? ` AND ((instr('0123456789abcdef', lower(substr(cr.id, -1))) - 1) % ?1)=?2`
+    : "";
+  const rowsStatement = env.DB.prepare(`SELECT cr.id, cr.session_id, cr.source, cr.source_listing_id,
       cr.payload_json, json_extract(cr.result_json, '$.candidateIds[0]') AS candidate_id
     FROM collector_raw cr
     JOIN listings l ON l.id=json_extract(cr.result_json, '$.candidateIds[0]')
@@ -2034,7 +2044,11 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
       AND l.address=json_extract(cr.payload_json, '$.address')
       AND NOT EXISTS (SELECT 1 FROM listings other
         WHERE other.status <> 'deleted' AND other.address=l.address AND other.id<>l.id)
-    ORDER BY cr.created_at, cr.id LIMIT ?1`).bind(limit).all();
+      ${shardClause}
+    ORDER BY cr.created_at, cr.id LIMIT ?1`);
+  const rows = await (shard >= 0
+    ? rowsStatement.bind(limit, shardCount, shard).all()
+    : rowsStatement.bind(limit).all());
   const reviewRows = rows?.results || [];
   let merged = 0;
   let aliasesMerged = 0;
@@ -2093,21 +2107,25 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
         .bind(clean(error?.message || error).slice(0, 500), row.id).run();
     }
   }
-  const remaining = await env.DB.prepare(`SELECT COUNT(*) AS count
+  const remainingStatement = env.DB.prepare(`SELECT COUNT(*) AS count
     FROM collector_raw cr JOIN listings l ON l.id=json_extract(cr.result_json, '$.candidateIds[0]')
     WHERE cr.processing_state='review'
       AND json_array_length(json_extract(cr.result_json, '$.candidateIds'))=1
       AND l.status <> 'deleted'
       AND l.address=json_extract(cr.payload_json, '$.address')
       AND NOT EXISTS (SELECT 1 FROM listings other
-        WHERE other.status <> 'deleted' AND other.address=l.address AND other.id<>l.id)`).first();
+        WHERE other.status <> 'deleted' AND other.address=l.address AND other.id<>l.id)
+      ${remainingShardClause}`);
+  const remaining = await (shard >= 0
+    ? remainingStatement.bind(shardCount, shard).first()
+    : remainingStatement.first());
   const remainingSingleCandidate = Number(remaining?.count || 0);
   const customerMatches = options.refreshCustomerMatches === false
     ? { listings: 0, evaluated: 0, matched: 0, removed: 0, skipped: true }
     : await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   return { ok: true, action: "mergeSingleCandidateReviews", scanned: reviewRows.length,
     merged, aliasesMerged, aliasesFailed, failed, affectedListingIds: [...affectedListingIds],
-    remainingSingleCandidate, hasMore: remainingSingleCandidate > 0, customerMatches,
+    remainingSingleCandidate, hasMore: remainingSingleCandidate > 0, shard, shardCount, customerMatches,
     operationAdjustments: { pendingReview: -merged }, source: "D1" };
 }
 
