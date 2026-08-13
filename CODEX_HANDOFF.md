@@ -712,3 +712,25 @@
 - 카드 썸네일, 상세창 첫 화면, 동일매물 원본 목록 순서에 같은 규칙을 적용한다. 원본 연결·임대조건·DB 데이터는 변경하지 않는다.
 - 통합매물 JS 자산 버전을 `8.1.25-photo-priority`로 갱신하고 당근 사진 우선, 당근 부재 시 네이버 사진 우선 시나리오를 자동검사에 추가했다.
 - 전체 테스트 245/245, Cloudflare 테스트 118/118, Wrangler dry-run을 통과했고 운영 HTML·JavaScript에서 새 우선순위 제공을 확인했다. 운영 Worker 버전은 `90623294-6f30-4cd6-8e6f-ebf14e00d9f4`이다.
+
+## 2026-08-13 v6-cloud AI임장 데이터 접근 계층 전환
+
+- 작업 시작 시 `CODEX_HANDOFF.md`와 깨끗한 작업 트리를 확인한 뒤 `git fetch --prune origin` 및 `git pull --ff-only`을 실행했다. 원격의 최신 16개 커밋을 fast-forward로 반영했으며 작업 시작 기준 HEAD는 `921bfdd`였다.
+- `ai-visit-session-v6.js`의 계정별 AI임장 진행상태 조회·저장을 `JSDataAccessV6.read/mutate` 공용 경계에 연결했다. `loadCloudState`·`saveCloudState`의 범위, 레코드 키, 기기 캐시·메모리 대체와 지연 저장 방식은 바꾸지 않았다.
+- 임장완료 시 매물 메모를 저장하는 `toggleDone`도 공용 D1 저장 경계로 연결해 JSON 응답으로 성공 여부를 즉시 확인한다. 저장 실패 시 화면 메모를 이전 값으로 되돌리고, 성공 시 기존처럼 매물 목록을 새로 읽는다.
+- 공용 모듈이 없는 구형 독립 실행 환경에서는 기존 `saveApiURL` 직접 요청과 `mutationStatus` JSONP 폴링이 계속 동작하도록 가드된 폴백을 유지했다. D1 액션 이름과 요청 본문, 임장 확인·미확인 의미, 완료 메모 변환 로직은 변경하지 않았다.
+- AI임장 자산 캐시 버전을 `6.4.39-data-access`로 갱신하고, 공용 경계 선행 로드·조회·저장 연결·레거시 폴백을 Cloudflare 회귀 테스트에 추가했다. `docs/CLOUDFLARE_MIGRATION.md`에도 적용 범위를 반영했다.
+
+### 테스트와 빌드
+
+- `js/ai-visit-session-v6.js` 문법 검사와 AI임장·데이터 접근·확인 상태·로드뷰 대상 테스트: 12/12 통과
+- `pnpm test`: 247/247 통과
+- `pnpm run test:cloudflare`: 119/119 통과
+- `pnpm run cf:check`: Cloudflare 자산 126개 빌드 및 Wrangler 4.118.0 dry-run 통과
+- `git diff --check`: 통과
+
+### 남은 작업과 주의사항
+
+- 다음 데이터 접근 전환 후보는 `async-mutation-queue-v1.js`, 그다음 `diagnosis-storage.js`다. 비동기 큐는 재시도·작업상태·중복 요청 계약을 보존하는 동작 테스트를 먼저 보강한 뒤 전환한다.
+- `ai-visit-session-v6.js`의 직접 `fetch`와 `mutationStatus` 폴링은 공용 계층 미로딩 시의 호환 폴백이므로 실제 브라우저 회귀 확인 전까지 제거하지 않는다.
+- D1 스키마·운영 데이터·R2 객체는 변경하지 않았고 이번 작업에서 운영 Worker 배포도 수행하지 않았다.

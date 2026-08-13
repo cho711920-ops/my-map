@@ -252,20 +252,60 @@
     }
   }
 
-  function syncSessionMapFromCloud() {
-    if (cloudSessionReady) return Promise.resolve();
-    if (cloudSessionLoading) return cloudSessionLoading;
-
-    var url = (window.saveApiURL || "/api/data") +
-      "?action=loadCloudState&scope=visitSession&recordKey=default&_=" + Date.now();
-    cloudSessionLoading = fetch(url, {
+  function readAiVisitData(action, params) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function") {
+      return window.JSDataAccessV6.read(action, params, {
+        errorMessage: "AI임장 진행상태를 불러오지 못했습니다."
+      });
+    }
+    var queryValues = Object.assign({}, params || {});
+    queryValues.action = action;
+    if (!Object.prototype.hasOwnProperty.call(queryValues, "_")) queryValues._ = String(Date.now());
+    var query = new URLSearchParams(queryValues);
+    return fetch((window.saveApiURL || "/api/data") + "?" + query.toString(), {
       credentials: "same-origin",
       cache: "no-store"
     }).then(function(response) {
       if (!response.ok) throw new Error("AI임장 진행상태를 불러오지 못했습니다.");
       return response.json();
     }).then(function(result) {
-      if (!result || result.ok === false) throw new Error((result && result.message) || "AI임장 동기화에 실패했습니다.");
+      if (!result || result.ok === false) {
+        throw new Error((result && result.message) || "AI임장 동기화에 실패했습니다.");
+      }
+      return result;
+    });
+  }
+
+  function mutateAiVisitData(action, payload) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.mutate === "function") {
+      return window.JSDataAccessV6.mutate(action, payload, {
+        errorMessage: "AI임장 진행상태를 저장하지 못했습니다."
+      });
+    }
+    return fetch(window.saveApiURL || "/api/data", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ action: action }, payload || {}))
+    }).then(function(response) {
+      if (!response.ok) throw new Error("AI임장 진행상태를 저장하지 못했습니다.");
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) {
+        throw new Error((result && result.message) || "AI임장 저장에 실패했습니다.");
+      }
+      return result;
+    });
+  }
+
+  function syncSessionMapFromCloud() {
+    if (cloudSessionReady) return Promise.resolve();
+    if (cloudSessionLoading) return cloudSessionLoading;
+
+    cloudSessionLoading = readAiVisitData("loadCloudState", {
+      scope: "visitSession",
+      recordKey: "default"
+    }).then(function(result) {
       var sessions = result.found && result.data && typeof result.data === "object" && !Array.isArray(result.data)
         ? result.data : {};
       writeDeviceSessionCache(sessions);
@@ -286,22 +326,11 @@
     var snapshot = JSON.parse(JSON.stringify(sessions || {}));
     window.clearTimeout(cloudSessionSaveTimer);
     cloudSessionSaveTimer = window.setTimeout(function() {
-      fetch(window.saveApiURL || "/api/data", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "saveCloudState",
-          scope: "visitSession",
-          recordKey: "default",
-          data: snapshot,
-          version: Date.now()
-        })
-      }).then(function(response) {
-        if (!response.ok) throw new Error("AI임장 진행상태를 저장하지 못했습니다.");
-        return response.json();
-      }).then(function(result) {
-        if (!result || result.ok === false) throw new Error((result && result.message) || "AI임장 저장에 실패했습니다.");
+      mutateAiVisitData("saveCloudState", {
+        scope: "visitSession",
+        recordKey: "default",
+        data: snapshot,
+        version: Date.now()
       }).catch(function(error) {
         console.warn("로그인 계정 AI임장 저장 실패", error);
       });
@@ -1021,7 +1050,9 @@
 
   function saveMemoToSheet(item, memo, callback) {
     if (!item) return callback(false);
-    if (!window.saveApiURL) {
+    var sharedDataAccess = window.JSDataAccessV6 &&
+      typeof window.JSDataAccessV6.mutate === "function";
+    if (!sharedDataAccess && !window.saveApiURL) {
       alert("JS부동산 D1 저장 연결 상태를 확인해주세요.");
       callback(false);
       return;
@@ -1043,6 +1074,25 @@
       state: item.state || "",
       memo: memo
     };
+    if (sharedDataAccess) {
+      mutateAiVisitData("toggleDone", {
+        requestId: requestId,
+        row: payload.row,
+        key: payload.key,
+        state: payload.state,
+        memo: memo
+      }).then(function(result) {
+        callback(true, result && result.message || "");
+        window.setTimeout(function () {
+          if (typeof window.loadSheet === "function") window.loadSheet(true);
+        }, 500);
+      }).catch(function(error) {
+        console.error(error);
+        item.memo = previousMemo;
+        callback(false, error && error.message || "");
+      });
+      return;
+    }
     fetch(window.saveApiURL, {
       method: "POST",
       mode: "no-cors",

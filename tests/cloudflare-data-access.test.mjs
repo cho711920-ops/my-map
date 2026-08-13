@@ -6,6 +6,7 @@ import vm from "node:vm";
 const source = readFileSync(new URL("../js/data-access-v6.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", import.meta.url), "utf8");
+const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", import.meta.url), "utf8");
 const operationsSources = [
   "operations-center-v7.js",
   "operations-collection-v8.js",
@@ -48,6 +49,7 @@ test("data access loads before every legacy UI consumer", () => {
     "js/unified-listings-v8.js",
     "js/script.js",
     "js/list-manager-v6.js",
+    "js/ai-visit-session-v6.js",
     "js/map.js",
     "js/operations-center-v7.js",
     "js/operations-collection-v8.js",
@@ -55,6 +57,20 @@ test("data access loads before every legacy UI consumer", () => {
   ]) {
     assert.ok(accessIndex < html.indexOf(`src="${consumer}`), `${consumer} must load after the data boundary`);
   }
+});
+
+test("AI visit sessions use the shared Cloudflare data boundary with a legacy fallback", () => {
+  assert.match(aiVisitSource, /JSDataAccessV6\.read\(action, params,/);
+  assert.match(aiVisitSource, /JSDataAccessV6\.mutate\(action, payload,/);
+  assert.match(aiVisitSource, /readAiVisitData\("loadCloudState"/);
+  assert.match(aiVisitSource, /mutateAiVisitData\("saveCloudState"/);
+  assert.match(aiVisitSource, /mutateAiVisitData\("toggleDone"/);
+  assert.match(aiVisitSource, /typeof window\.JSDataAccessV6\.read === "function"/);
+  assert.match(aiVisitSource, /typeof window\.JSDataAccessV6\.mutate === "function"/);
+  assert.match(aiVisitSource, /fetch\(\(window\.saveApiURL \|\| "\/api\/data"\)/);
+  assert.match(aiVisitSource, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
+  assert.match(aiVisitSource, /pollMutationResult\(requestId/);
+  assert.match(html, /ai-visit-session-v6\.js\?v=6\.4\.39-data-access/);
 });
 
 test("list manager uses the shared Cloudflare data boundary with a legacy fallback", () => {

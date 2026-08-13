@@ -22,5 +22,5 @@ test("cloud session sync remains ready when only the device cache exceeds quota"
 });
 
 test("AI visit quota repair has a new browser cache version", () => {
-  assert.match(html, /js\/ai-visit-session-v6\.js\?v=6\.4\.38-storage-fallback/);
+  assert.match(html, /js\/ai-visit-session-v6\.js\?v=6\.4\.39-data-access/);
 });
