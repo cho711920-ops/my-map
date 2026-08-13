@@ -718,6 +718,22 @@
     state.detailRequestToken += 1;
   }
 
+  function closeDetailForOverlay() {
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (detailCloseTimerV827) {
+      global.clearTimeout(detailCloseTimerV827);
+      detailCloseTimerV827 = null;
+    }
+    if (drawer) {
+      drawer.classList.remove("open", "opening-v827", "closing-v827");
+      drawer.setAttribute("aria-hidden", "true");
+    }
+    closeGallery();
+    state.openPropertyId = "";
+    state.openOriginalId = "";
+    state.detailRequestToken += 1;
+  }
+
   function imageError(image, showLabel) {
     if (!image) return;
     var parent = image.parentElement;
@@ -956,6 +972,7 @@
 
   function openTell() {
     if (!desktop()) return;
+    closeDetailForOverlay();
     var modal = document.getElementById("tellModalV8");
     if (!modal) {
       modal = document.createElement("div");
@@ -1004,6 +1021,18 @@
     if (drawer && drawer.classList.contains("open")) positionDrawer(drawer);
   });
 
+  if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("click", function(event) {
+    var button = event.target && event.target.closest
+      ? event.target.closest("button, [role='button']") : null;
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (!button || !drawer || drawer.contains(button) ||
+        (!drawer.classList.contains("open") && !drawer.classList.contains("opening-v827"))) return;
+    var action = text(button.getAttribute("onclick"));
+    var opensOtherMenu = /(?:openOperationsCenter|openListManager|openQuickAddModal|startAiVisitPreview|JSUnifiedListingsV8\.openTell|toggleDetailFilter|toggleV6ActionMenu|toggleSortDropdown)/.test(action) ||
+      button.matches("[data-mobile-view='customers'], [data-mobile-action='quick-add'], [data-mobile-action='favorites'], [data-mobile-action='dashboard'], [data-mobile-action='filter']");
+    if (opensOtherMenu) closeDetailForOverlay();
+  }, true);
+
   global.addEventListener("keydown", function(event) {
     var gallery = document.getElementById("unifiedGalleryV8");
     if (gallery && gallery.classList.contains("open")) {
@@ -1028,7 +1057,8 @@
 
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
-    toggle: toggle, open: open, prefetch: prefetch, close: closeDetail, handleCardClick: handleCardClick,
+    toggle: toggle, open: open, prefetch: prefetch, close: closeDetail,
+    closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,

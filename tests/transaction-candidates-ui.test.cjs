@@ -13,6 +13,6 @@ assert.match(api, /MAX\(s\.missing_count\)>=3/);
 assert.match(ui, /dashboardCard\("거래확인 후보"[\s\S]*?"transactions"\)/);
 assert.match(ui, /window\.openTransactionCandidates = function/);
 assert.match(ui, /window\.openTransactionCandidatePropertyV1 = function/);
-assert.match(html, /operations-center-v7\.js\?v=7\.22\.3-customer-delete/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.4-overlay-exclusivity/);
 
 console.log("transaction candidate list UI tests passed");

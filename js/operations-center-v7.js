@@ -1010,6 +1010,9 @@
   };
 
   window.openOperationsCenter = function(tab) {
+    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.closeForOverlay === "function") {
+      window.JSUnifiedListingsV8.closeForOverlay();
+    }
     var center = document.getElementById("operationsCenter");
     if (!center) return;
     center.classList.add("open");
