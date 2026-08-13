@@ -14,6 +14,8 @@
   var cloudSessionReady = false;
   var cloudSessionLoading = null;
   var cloudSessionSaveTimer = 0;
+  var memorySessionMap = null;
+  var sessionCacheWarningShown = false;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -226,6 +228,30 @@
     } catch (error) {}
   }
 
+  function writeDeviceSessionCache(sessions) {
+    memorySessionMap = sessions && typeof sessions === "object" && !Array.isArray(sessions)
+      ? sessions : {};
+
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(memorySessionMap));
+      return true;
+    } catch (error) {
+      /* 기존 AI임장 캐시만 비운 뒤 한 번 더 시도합니다. 다른 사이트 데이터는 건드리지 않습니다. */
+      clearDeviceSessionCache();
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(memorySessionMap));
+        return true;
+      } catch (retryError) {
+        clearDeviceSessionCache();
+        if (!sessionCacheWarningShown) {
+          sessionCacheWarningShown = true;
+          console.warn("AI임장 기기 저장공간이 부족해 현재 화면의 메모리와 로그인 계정에 저장합니다.", retryError);
+        }
+        return false;
+      }
+    }
+  }
+
   function syncSessionMapFromCloud() {
     if (cloudSessionReady) return Promise.resolve();
     if (cloudSessionLoading) return cloudSessionLoading;
@@ -242,7 +268,7 @@
       if (!result || result.ok === false) throw new Error((result && result.message) || "AI임장 동기화에 실패했습니다.");
       var sessions = result.found && result.data && typeof result.data === "object" && !Array.isArray(result.data)
         ? result.data : {};
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      writeDeviceSessionCache(sessions);
       cloudSessionReady = true;
       cloudSessionLoading = null;
     }).catch(function(error) {
@@ -283,6 +309,10 @@
   }
 
   function loadSessionMap() {
+    if (memorySessionMap && typeof memorySessionMap === "object" && !Array.isArray(memorySessionMap)) {
+      return memorySessionMap;
+    }
+
     var sessions = {};
     try {
       var parsed = JSON.parse(localStorage.getItem(SESSION_KEY) || "{}");
@@ -294,10 +324,11 @@
       var legacy = JSON.parse(localStorage.getItem(LEGACY_SESSION_KEY) || "null");
       if (legacy && legacy.active && legacy.listId && !sessions[legacy.listId]) {
         sessions[legacy.listId] = legacy;
-        localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+        writeDeviceSessionCache(sessions);
       }
       localStorage.removeItem(LEGACY_SESSION_KEY);
     } catch (error) {}
+    memorySessionMap = sessions;
     return sessions;
   }
 
@@ -306,7 +337,7 @@
     try {
       var sessions = loadSessionMap();
       sessions[activeSession.listId] = activeSession;
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      writeDeviceSessionCache(sessions);
       scheduleCloudSessionSave(sessions);
     } catch (error) {
       console.error("AI임장 세션 저장 실패", error);
@@ -323,7 +354,7 @@
     try {
       var sessions = loadSessionMap();
       delete sessions[listId];
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions));
+      writeDeviceSessionCache(sessions);
       scheduleCloudSessionSave(sessions);
     } catch (error) {}
   }

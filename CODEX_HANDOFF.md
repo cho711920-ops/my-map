@@ -677,3 +677,11 @@
 - `pnpm test`: 233/233 통과, `pnpm run test:cloudflare`: 108/108 통과, `pnpm run cf:check`: 통과했다.
 - 운영 `js-map.com`, `www.js-map.com`, Workers 도메인에서 새 HTML·CSS·JS와 삭제 함수 제공을 확인했다.
 - 운영 Worker 버전 `0ddfe9d0-0bad-4b83-b50b-b1e410cb13ef`로 배포했다.
+
+## 2026-08-13 AI임장 브라우저 저장공간 초과 복구
+
+- AI임장 실행 시 계정의 진행상태를 `js_ai_visit_sessions_v6` 기기 저장소에 복사하다 브라우저 할당량을 넘으면 영문 `Storage quota` 오류창에서 실행이 중단되던 문제를 수정했다.
+- 기기 저장이 실패하면 AI임장 전용 현재·레거시 캐시만 제거하고 한 번 재시도한다. 그래도 공간이 부족하면 계정에서 불러온 진행상태를 현재 화면의 메모리에 유지하고 서버 저장을 계속해 AI임장이 정상적으로 열린다.
+- `localStorage.clear()` 또는 다른 키 삭제는 사용하지 않아 찜목록·매물·고객정보·사이트 설정은 건드리지 않는다. D1 스키마와 운영 데이터 변경도 없다.
+- AI임장 자산 버전을 `6.4.38-storage-fallback`으로 갱신하고 용량 초과 복구 범위, 메모리 대체, 서버 저장 지속을 Cloudflare 회귀 테스트에 추가했다.
+- AI임장·로드뷰 대상 테스트 6/6, `pnpm run test:cloudflare` 117/117, `pnpm run cf:check`, `git diff --check`를 통과했다.

@@ -46,6 +46,6 @@ assert.match(script, /rootMargin:\s*"80px 0px"/);
 assert.match(css, /\.unified-expand-btn-v8\.duplicate-shimmer-visible-v812::after/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(aiVisit, /window\.markFieldVisitConfirmedInMemo\(value\)/);
-assert.ok(html.includes("ai-visit-session-v6.js?v=6.4.37-confirmed-visit"));
+assert.ok(html.includes("ai-visit-session-v6.js?v=6.4.38-storage-fallback"));
 
 console.log("confirmed visit and viewport-only duplicate shimmer v8.1.2 tests passed");
