@@ -519,6 +519,8 @@
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물로 분리</button>' : '') +
           (!selected.masterFallback ? '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">원본 1개 합치기</button>' : '') +
+          '<button type="button" class="move whole-master" onclick="JSUnifiedListingsV8.startWholeMasterMove(\'' +
+            encodedActionPropertyId + '\')">대표매물 전체 합치기</button>' +
         '</div>' +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
@@ -828,6 +830,8 @@
       }).then(function(reloadedResult) {
         if (reloadedResult && reloadedResult.separated) {
           alert("별도 매물 분리가 완료되었습니다.\n목록에 기존 묶음과 새 매물이 각각 표시됩니다.");
+        } else if (consolidateWholeMaster && Number(reloadedResult && reloadedResult.consolidated || 0) > 0) {
+          alert("대표매물 전체 합치기가 완료되었습니다.\n선택한 대상 매물은 유지되고 이전 대표카드는 목록에서 제거되었습니다.");
         }
         return reloadedResult;
       });
@@ -847,8 +851,19 @@
 
   function startMove(encodedOriginalId, revision) {
     if (!confirm("현재 상세창의 원본매물 1개만 다른 대표매물에 합치시겠습니까?\n\n같은 묶음의 나머지 원본매물은 그대로 유지됩니다.")) return;
-    state.pendingMove = {originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision,
+    state.pendingMove = {mode: "original", originalId: decodeURIComponent(encodedOriginalId || ""), revision: revision,
       sourcePropertyId: text(state.openPropertyId)};
+    closeDetail();
+    var banner = ensureMoveBanner();
+    setMoveBannerSaving(false);
+    banner.hidden = false;
+  }
+
+  function startWholeMasterMove(encodedPropertyId) {
+    var sourcePropertyId = decodeURIComponent(encodedPropertyId || "") || text(state.openPropertyId);
+    if (!sourcePropertyId) return;
+    if (!confirm("현재 대표매물 전체를 다른 대표매물에 합치시겠습니까?\n\n현재 매물의 모든 원본·사진·연결정보가 이동하고 현재 대표카드는 제거됩니다. 대상 매물의 대표정보와 임대조건은 그대로 유지됩니다.")) return;
+    state.pendingMove = {mode: "whole", sourcePropertyId: sourcePropertyId};
     closeDetail();
     var banner = ensureMoveBanner();
     setMoveBannerSaving(false);
@@ -863,7 +878,9 @@
     banner.classList.toggle("saving", !!saving);
     if (message) message.textContent = saving
       ? "통합 저장·D1 확인 중입니다."
-      : "이동할 통합매물 카드 또는 체크박스를 클릭하세요.";
+      : (state.pendingMove && state.pendingMove.mode === "whole"
+        ? "전체를 합칠 대상 대표매물 카드 또는 체크박스를 클릭하세요."
+        : "원본 1개를 합칠 대상 매물 카드 또는 체크박스를 클릭하세요.");
     if (cancel) cancel.disabled = !!saving;
   }
 
@@ -892,9 +909,14 @@
         alert("이미 이 통합매물에 연결된 원본입니다. 다른 통합매물을 선택해 주세요.");
         return true;
       }
-      if (confirm("선택한 원본매물 1개만 이 매물에 합칠까요?\n\n기존 묶음의 나머지 원본매물은 이동하지 않습니다.")) {
+      var wholeMaster = pending.mode === "whole";
+      var confirmed = wholeMaster
+        ? confirm("선택한 매물을 대표로 유지하고 현재 대표매물 전체를 합칠까요?\n\n현재 대표카드는 제거되며 이 작업은 화면에서 되돌릴 수 없습니다.")
+        : confirm("선택한 원본매물 1개만 이 매물에 합칠까요?\n\n기존 묶음의 나머지 원본매물은 이동하지 않습니다.");
+      if (confirmed) {
         setMoveBannerSaving(true);
-        move(pending.originalId, propertyId, pending.revision);
+        if (wholeMaster) move("", propertyId, 1, pending.sourcePropertyId);
+        else move(pending.originalId, propertyId, pending.revision);
       }
       return true;
     }
@@ -1059,7 +1081,8 @@
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, open: open, prefetch: prefetch, close: closeDetail,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
-    openGallery: openGallery, separate: separate, startMove: startMove, openTell: openTell,
+    openGallery: openGallery, separate: separate, startMove: startMove,
+    startWholeMasterMove: startWholeMasterMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts,
     imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError,

@@ -248,6 +248,7 @@
   .unified-detail-actions-v8 .move { border-radius: 9px; }
   .unified-detail-actions-v8 .separate { border-color: #fca5a5; background: #fff1f2; color: #be123c; }
   .unified-detail-actions-v8 .move { border-color: #c4b5fd; background: #f5f3ff; color: #6d28d9; }
+  .unified-detail-actions-v8 .whole-master { border-color: #8b5cf6; background: #ede9fe; color: #5b21b6; }
   .unified-detail-memo-v8 { margin-top: 15px; padding: 13px; border-radius: 9px; background: #f8fafc; color: #475569; font-size: 15px; line-height: 1.6; }
   .unified-detail-originals-v8 { padding: 17px; }
   .unified-detail-originals-v8 h4 { margin: 0 0 11px; font-size: 17px; }

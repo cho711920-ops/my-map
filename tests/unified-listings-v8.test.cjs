@@ -11,6 +11,7 @@ const gongsil = fs.readFileSync("js/gongsil-collector.js", "utf8");
 assert.match(ui, /원본 링크 열기/);
 assert.match(ui, /별도 매물로 분리/);
 assert.match(ui, /원본 1개 합치기/);
+assert.match(ui, /대표매물 전체 합치기/);
 assert.match(ui, /통합 저장·D1 확인 중입니다/);
 assert.match(ui, /function originalImages\(original\)/);
 assert.match(ui, /function detailDisplayImageUrl\(url\)/);

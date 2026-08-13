@@ -535,12 +535,17 @@ async function handleDataApi(request, env, context) {
   const collectorAdmin = await handleCollectorAdminPost(env, user, body);
   if (collectorAdmin) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
+    const wholeMergeDetailKeys = String(body.action || "") === "consolidateExistingMasters"
+      ? [body.primaryMasterId, ...(Array.isArray(body.duplicateMasterIds) ? body.duplicateMasterIds : [])]
+        .map(unifiedDetailCacheKey).filter(Boolean)
+      : [];
     const snapshotUpdate = collectorAdmin.operationRefresh
       ? refreshOperationsDashboard(env)
       : adjustOperationsDashboard(env, collectorAdmin.operationAdjustments || {});
     const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
       return deleteR2Cache(env, null, [
-        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY
+        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
+        ...wholeMergeDetailKeys
       ]);
     });
     if (String(body.action || "") === "consolidateExistingMasters") {

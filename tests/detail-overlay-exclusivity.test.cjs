@@ -14,7 +14,7 @@ assert.match(source, /openOperationsCenter\|openListManager\|openQuickAddModal\|
 assert.match(source, /toggleDetailFilter\|toggleV6ActionMenu\|toggleSortDropdown/);
 assert.match(source, /closeForOverlay: closeDetailForOverlay/);
 assert.match(operations, /JSUnifiedListingsV8\.closeForOverlay\(\)/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.23-overlay-exclusivity/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.24-whole-master-merge/);
 assert.match(html, /operations-center-v7\.js\?v=7\.22\.4-overlay-exclusivity/);
 
 let capturedClick = null;
