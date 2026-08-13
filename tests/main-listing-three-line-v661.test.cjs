@@ -48,6 +48,6 @@ assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !impo
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.39-whole-master-merge/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.1\.26-representative-priority/);
-assert.match(html, /script\.js\?v=6\.5\.80-property-selection/);
+assert.match(html, /script\.js\?v=6\.5\.81-card-instance-selection/);
 
 console.log("main listing three-line v6.6.1 tests passed");

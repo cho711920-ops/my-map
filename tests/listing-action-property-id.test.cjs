@@ -45,7 +45,7 @@ assert(
   "card checkboxes must carry the property ID selection target"
 );
 assert(
-  html.includes("script.js?v=6.5.80-property-selection"),
+  html.includes("script.js?v=6.5.81-card-instance-selection"),
   "the production page must load the fixed script cache version"
 );
 
@@ -100,8 +100,9 @@ const selectedItemsBlock = sourceBetween(
   "function toggleGongsilOnly("
 );
 const duplicateItems = [
-  { key: "same-building|same-address|1F|store", propertyId: "M-FIRST" },
-  { key: "same-building|same-address|1F|store", propertyId: "M-SECOND" }
+  { key: "same-building|same-address|1F|store", propertyId: "M-FIRST", sheetRow: 101 },
+  { key: "same-building|same-address|1F|store", propertyId: "M-SECOND", sheetRow: 102 },
+  { key: "same-building|same-address|1F|store", propertyId: "M-THIRD", sheetRow: 103 }
 ];
 const selectionContext = {
   allItems: duplicateItems,
@@ -114,17 +115,36 @@ selectionContext.window = selectionContext;
 vm.createContext(selectionContext);
 vm.runInContext(selectionBlock + selectedItemsBlock, selectionContext);
 
-selectionContext.togglePrintSelection(encodeURIComponent("property:M-FIRST"));
-assert.deepEqual(Array.from(selectionContext.selectedPrintKeys), ["property:M-FIRST"]);
+const firstSelectionKey = selectionContext.actionSelectionKeyV660(duplicateItems[0]);
+const secondSelectionKey = selectionContext.actionSelectionKeyV660(duplicateItems[1]);
+selectionContext.togglePrintSelection(encodeURIComponent(firstSelectionKey));
+assert.deepEqual(Array.from(selectionContext.selectedPrintKeys), ["property:M-FIRST|row:101"]);
 assert.deepEqual(
   Array.from(selectionContext.getSelectedPrintItems(), (item) => item.propertyId),
   ["M-FIRST"]
 );
 
-selectionContext.togglePrintSelection(encodeURIComponent("property:M-SECOND"));
+selectionContext.togglePrintSelection(encodeURIComponent(secondSelectionKey));
 assert.deepEqual(
   Array.from(selectionContext.getSelectedPrintItems(), (item) => item.propertyId),
   ["M-FIRST", "M-SECOND"]
 );
 
-console.log("listing actions resolve duplicate display keys by property ID");
+const samePropertyIdItems = [
+  { key: "same-building|same-address|1F|store", propertyId: "M-SHARED", sheetRow: 201 },
+  { key: "same-building|same-address|1F|store", propertyId: "M-SHARED", sheetRow: 202 },
+  { key: "same-building|same-address|1F|store", propertyId: "M-SHARED", sheetRow: 203 }
+];
+selectionContext.allItems = samePropertyIdItems;
+selectionContext.visibleListItems = samePropertyIdItems;
+selectionContext.selectedPrintKeys = [];
+selectionContext.togglePrintSelection(encodeURIComponent(
+  selectionContext.actionSelectionKeyV660(samePropertyIdItems[1])
+));
+assert.deepEqual(
+  Array.from(selectionContext.getSelectedPrintItems(), (item) => item.sheetRow),
+  [202],
+  "even duplicate property IDs must remain separate card selections"
+);
+
+console.log("listing actions keep same-address same-floor cards independently selectable");

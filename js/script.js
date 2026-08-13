@@ -1314,7 +1314,7 @@ function getListRenderWindowSizeV1() {
 }
 
 function getListVirtualItemKeyV1(item, index) {
-  return item && item.key ? String(item.key) : "__list_index_" + index;
+  return actionSelectionKeyV660(item) || "__list_index_" + index;
 }
 
 function measureListCardOuterHeightV1(card) {
@@ -1366,14 +1366,15 @@ function unobserveVirtualizedListCardV1(card) {
 function appendVirtualListItemV1(index, target) {
   var item = visibleListItems[index];
   if (!item) return null;
-  var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[item.key];
+  var listCardIdV681 = actionSelectionKeyV660(item);
+  var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[listCardIdV681];
   if (reusableCard && reusableCard.classList.contains("customer-match-map-card-v721") !== isCustomerMatchMapCardV721(item)) {
     reusableCard = null;
   }
   if (reusableCard) {
     reusableCard.setAttribute("data-list-index-v1", String(index));
     target.appendChild(reusableCard);
-    delete listCardReusePoolV6521[item.key];
+    delete listCardReusePoolV6521[listCardIdV681];
     return reusableCard;
   }
   var card = addListItem(item, target);
@@ -1601,11 +1602,11 @@ function showList(items) {
   cacheRenderedListCardHeightsV1(list);
   resetUnifiedDuplicateShimmerObserverV812();
   var previousSignature = (visibleListItems || []).map(function(item) {
-    return item.key;
+    return actionSelectionKeyV660(item);
   }).join("||");
 
   var nextSignature = (items || []).map(function(item) {
-    return item.key;
+    return actionSelectionKeyV660(item);
   }).join("||");
 
   /*
@@ -1631,9 +1632,9 @@ function showList(items) {
   if (reuseExistingCards && list) {
     listCardReusePoolV6521 = Object.create(null);
     Array.prototype.forEach.call(
-      list.querySelectorAll(".item[data-listing-key]"),
+      list.querySelectorAll(".item[data-list-card-id-v681]"),
       function(card) {
-        var key = card.getAttribute("data-listing-key");
+        var key = card.getAttribute("data-list-card-id-v681");
         if (!key || listCardReusePoolV6521[key]) return;
         listCardReusePoolV6521[key] = card;
         card.remove();
@@ -4136,6 +4137,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     customerMatchControls + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;
 
   div.setAttribute("data-listing-key", item.key);
+  div.setAttribute("data-list-card-id-v681", actionSelectionKeyV660(item));
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
@@ -4609,8 +4611,16 @@ function toggleDoneStatus(encodedKey, checked) {
 
 
 function actionSelectionKeyV660(item) {
+  if (!item) return "";
   var propertyId = String(item && item.propertyId || "").trim();
-  return propertyId ? "property:" + propertyId : String(item && item.key || "");
+  var sheetRow = Number(item.sheetRow);
+  var rowSuffix = Number.isFinite(sheetRow) && sheetRow > 0 ? "|row:" + sheetRow : "";
+  if (propertyId) return "property:" + propertyId + rowSuffix;
+
+  var sourceLink = String(item.sourceLink || "").trim();
+  if (sourceLink) return "source:" + sourceLink + rowSuffix;
+
+  return "item:" + String(item.key || "") + rowSuffix;
 }
 
 window.actionSelectionKeyV660 = actionSelectionKeyV660;
