@@ -45,7 +45,7 @@ test("unified list and detail responses sanitize legacy Gongsilbox media", () =>
   assert.match(worker, /unified-detail-v2-actual-photos/);
 });
 
-test("primary dialogs share one visible accessible close-button style", () => {
+test("primary dialogs share one minimal single-glyph close-button style", () => {
   const css = fs.readFileSync("css/modal-close-v1.css", "utf8");
   const html = fs.readFileSync("index.html", "utf8");
   [
@@ -54,7 +54,10 @@ test("primary dialogs share one visible accessible close-button style", () => {
     ".property-edit-close-v630",
     ".unified-detail-drawer-v8 > header > button"
   ].forEach((selector) => assert.ok(css.includes(selector), `${selector} must use the shared close control`));
-  assert.match(css, /min-width: 44px !important/);
+  assert.match(css, /min-width: 40px !important/);
+  assert.match(css, /content: none !important/);
+  assert.doesNotMatch(css, /mask:/);
+  assert.match(css, /#roadviewModal\.roadview-modal \.roadview-modal-close/);
   assert.match(css, /:focus-visible/);
-  assert.match(html, /modal-close-v1\.css\?v=1\.0\.0-consistent-controls/);
+  assert.match(html, /modal-close-v1\.css\?v=1\.1\.0-minimal-circle/);
 });
