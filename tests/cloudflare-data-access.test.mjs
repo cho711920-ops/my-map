@@ -5,6 +5,7 @@ import vm from "node:vm";
 
 const source = readFileSync(new URL("../js/data-access-v6.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", import.meta.url), "utf8");
 const operationsSources = [
   "operations-center-v7.js",
   "operations-collection-v8.js",
@@ -46,6 +47,7 @@ test("data access loads before every legacy UI consumer", () => {
   for (const consumer of [
     "js/unified-listings-v8.js",
     "js/script.js",
+    "js/list-manager-v6.js",
     "js/map.js",
     "js/operations-center-v7.js",
     "js/operations-collection-v8.js",
@@ -53,6 +55,16 @@ test("data access loads before every legacy UI consumer", () => {
   ]) {
     assert.ok(accessIndex < html.indexOf(`src="${consumer}`), `${consumer} must load after the data boundary`);
   }
+});
+
+test("list manager uses the shared Cloudflare data boundary with a legacy fallback", () => {
+  assert.match(listManagerSource, /JSDataAccessV6\.read\(action, params,/);
+  assert.match(listManagerSource, /JSDataAccessV6\.mutate\(action, payload,/);
+  assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.read === "function"/);
+  assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.mutate === "function"/);
+  assert.match(listManagerSource, /fetch\(\(window\.saveApiURL \|\| "\/api\/data"\)/);
+  assert.match(listManagerSource, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
+  assert.match(html, /list-manager-v6\.js\?v=6\.4\.34-data-access/);
 });
 
 test("operations modules use the shared Cloudflare data boundary with a legacy fallback", () => {

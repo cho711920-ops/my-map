@@ -239,6 +239,48 @@
     return type === "visit" ? "visitLists" : "favorites";
   }
 
+  function readCloudData(action, params) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function") {
+      return window.JSDataAccessV6.read(action, params, {
+        errorMessage: "목록 동기화에 실패했습니다."
+      });
+    }
+    var queryValues = Object.assign({}, params || {});
+    queryValues.action = action;
+    if (!Object.prototype.hasOwnProperty.call(queryValues, "_")) queryValues._ = String(Date.now());
+    var query = new URLSearchParams(queryValues);
+    return fetch((window.saveApiURL || "/api/data") + "?" + query.toString(), {
+      credentials: "same-origin",
+      cache: "no-store"
+    }).then(function(response) {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) throw new Error(result && result.message || "목록 동기화에 실패했습니다.");
+      return result;
+    });
+  }
+
+  function mutateCloudData(action, payload) {
+    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.mutate === "function") {
+      return window.JSDataAccessV6.mutate(action, payload, {
+        errorMessage: "목록 저장에 실패했습니다."
+      });
+    }
+    return fetch(window.saveApiURL || "/api/data", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(Object.assign({ action: action }, payload || {}))
+    }).then(function(response) {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) throw new Error(result && result.message || "목록 저장에 실패했습니다.");
+      return result;
+    });
+  }
+
   function mergeCloudAndLocalLists(remoteLists, localLists) {
     var mergedById = {};
     var order = [];
@@ -270,21 +312,12 @@
   function flushCloudSave(type, lists, attempt) {
     var snapshot = JSON.stringify(lists || []);
     var revision = Number(cloudRevisions[type] || 0);
-    fetch(window.saveApiURL || "/api/data", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "saveCloudState",
-          scope: cloudScope(type),
-          recordKey: "default",
-          data: lists,
-          deletedIds: loadDeletedIds(type),
-          version: Date.now()
-        })
-      }).then(function(response) {
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        return response.json();
+    mutateCloudData("saveCloudState", {
+        scope: cloudScope(type),
+        recordKey: "default",
+        data: lists,
+        deletedIds: loadDeletedIds(type),
+        version: Date.now()
       }).then(function(result) {
         if (!result || result.ok === false) throw new Error(result && result.message || "저장 응답 오류");
         cloudSaveRetries[type] = 0;
@@ -319,13 +352,10 @@
   async function loadCloudLists(type) {
     var revisionAtStart = Number(cloudRevisions[type] || 0);
     var dirtyAtStart = isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0 || hasDeletedListIds(type);
-    var url = (window.saveApiURL || "/api/data") +
-      "?action=loadCloudState&scope=" + encodeURIComponent(cloudScope(type)) +
-      "&recordKey=default&_=" + Date.now();
-    var response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
-    if (!response.ok) throw new Error("로그인 계정의 목록을 불러오지 못했습니다.");
-    var result = await response.json();
-    if (!result.ok) throw new Error(result.message || "목록 동기화에 실패했습니다.");
+    var result = await readCloudData("loadCloudState", {
+      scope: cloudScope(type),
+      recordKey: "default"
+    });
     mergeDeletedIds(type, result.deletedIds);
     var local = excludeDeletedLists(type, loadLists(type));
     if (result.found && Array.isArray(result.data)) {

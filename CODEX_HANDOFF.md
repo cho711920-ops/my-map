@@ -594,3 +594,24 @@
 - 운영 배포 후 `https://js-map.com/`에서 찜폴더 5개 매물과 `1km` 동 클러스터 표시를 확인했다.
 - 운영 HTML은 `js/map.js?v=8.2.5-favorite-map-navigation`을 제공하며, 운영 지도 스크립트의 `1km=동`, `2km 이상=구`, 사용자 지도 이동 선택 해제 코드 포함을 직접 확인했다.
 - Production Worker version: `82d031f1-a2d9-4b98-9b33-4b35f400df95`.
+
+## 2026-08-13 v6-cloud 찜목록 데이터 접근 계층 전환
+
+- 작업 시작 시 `CODEX_HANDOFF.md`와 깨끗한 작업 트리를 확인하고 `git fetch --prune origin` 및 `git pull --ff-only`을 실행했다. 원격의 최신 7개 커밋을 fast-forward로 반영했으며 작업 시작 기준 HEAD는 `51abfb6`이었다.
+- `list-manager-v6.js`의 찜목록·임장목록 D1 조회와 저장을 `JSDataAccessV6.read/mutate` 공용 경계에 연결했다. 로그인 계정 확인용 `/api/session`은 데이터 API가 아니므로 기존 세션 요청을 유지했다.
+- 공용 모듈이 없는 구형 독립 실행 환경에서는 기존 `saveApiURL` 또는 `/api/data` 직접 요청이 계속 작동하도록 가드된 폴백을 유지했다. `loadCloudState`·`saveCloudState` 액션, 계정별 병합, 삭제 tombstone, 재시도 흐름은 바꾸지 않았다.
+- 찜목록 자산 캐시 버전을 `6.4.34-data-access`로 갱신했다. 공용 경계 선행 로드, 읽기·쓰기 연결, 직접 요청 폴백을 Cloudflare 테스트에서 자동 검증하며 계정 전환 테스트는 공용 경계와 폴백 양쪽을 실행한다.
+
+### 테스트와 빌드
+
+- 찜목록 대상 회귀 테스트 5종과 `js/list-manager-v6.js` 문법 검사: 통과
+- `pnpm test`: 229/229 통과
+- `pnpm run test:cloudflare`: 104/104 통과
+- `pnpm run cf:check`: Cloudflare 자산 125개 빌드 및 Wrangler 4.118.0 dry-run 통과
+- `git diff --check`: 통과
+
+### 남은 작업과 주의사항
+
+- 다음 데이터 접근 전환 후보는 `ai-visit-session-v6.js`, `async-mutation-queue-v1.js`, `diagnosis-storage.js`다. 비동기 큐는 재시도·작업상태 계약을 보존하는 대상 테스트를 먼저 추가한 뒤 전환한다.
+- `list-manager-v6.js`의 직접 `fetch`는 공용 계층 미로딩 시의 호환 폴백이므로 실제 브라우저 회귀 확인 전까지 제거하지 않는다.
+- D1 스키마·운영 데이터·R2 객체는 변경하지 않았고 이번 작업에서 운영 Worker 배포도 수행하지 않았다.
