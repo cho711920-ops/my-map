@@ -390,7 +390,7 @@ export function tellContactSearchPatterns(query) {
 
 async function tellContacts(env, query) {
   const search = tellContactSearchPatterns(query);
-  const result = await env.DB.prepare(`SELECT c.id, c.listing_id, c.role, c.name, c.phone,
+  const providerResult = await env.DB.prepare(`SELECT c.id, c.listing_id, c.role, c.name, c.phone,
       l.title, l.address, l.room
     FROM listing_contacts c JOIN listings l ON l.id = c.listing_id
     JOIN listing_sources s ON s.id = c.source_id
@@ -399,20 +399,48 @@ async function tellContacts(env, query) {
       l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1 OR
       REPLACE(l.address, ' ', '') LIKE ?2
     ) ORDER BY c.last_seen_at DESC LIMIT 100`).bind(search.pattern, search.compactPattern).all();
+  const memoResult = await env.DB.prepare(`SELECT l.id AS listing_id, l.title, l.address, l.room, l.operating_memo
+    FROM listings l WHERE (
+      l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1 OR l.operating_memo LIKE ?1 OR
+      REPLACE(l.address, ' ', '') LIKE ?2 OR REPLACE(l.operating_memo, ' ', '') LIKE ?2
+    ) ORDER BY l.updated_at DESC LIMIT 100`).bind(search.pattern, search.compactPattern).all();
+  const contacts = (providerResult?.results || []).map((row) => ({
+    id: row.id,
+    propertyId: row.listing_id,
+    role: row.role,
+    name: row.name,
+    phone: row.phone,
+    buildingName: row.title,
+    address: row.address,
+    room: row.room,
+    contactSource: "공실박스"
+  }));
+  const seen = new Set(contacts.map((contact) =>
+    `${clean(contact.propertyId)}|${clean(contact.phone).replace(/\D/g, "")}`));
+  for (const row of memoResult?.results || []) {
+    for (const contact of extractManualMemoContacts(row.operating_memo)) {
+      const digits = clean(contact.phone).replace(/\D/g, "");
+      const key = `${clean(row.listing_id)}|${digits}`;
+      if (!digits || seen.has(key)) continue;
+      seen.add(key);
+      contacts.push({
+        id: `memo:${clean(row.listing_id)}:${digits}`,
+        propertyId: row.listing_id,
+        role: contact.role,
+        name: "직접 메모",
+        phone: contact.phone,
+        buildingName: row.title,
+        address: row.address,
+        room: row.room,
+        contactSource: "직접 메모"
+      });
+    }
+  }
   return {
     ok: true,
     action: "tellContacts",
     query: search.query,
-    contacts: (result?.results || []).map((row) => ({
-      id: row.id,
-      propertyId: row.listing_id,
-      role: row.role,
-      name: row.name,
-      phone: row.phone,
-      buildingName: row.title,
-      address: row.address,
-      room: row.room
-    }))
+    contacts: contacts.slice(0, 100)
   };
 }
 
