@@ -271,6 +271,30 @@ async function listingChanges(env, query) {
   return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
 }
 
+export function actualGongsilImages(raw = {}) {
+  const list = raw?.list || raw || {};
+  const detail = raw?.detail || {};
+  const rows = [list?.Photos, list?.photos, detail?.Photos, detail?.photos]
+    .flatMap((value) => Array.isArray(value) ? value : []);
+  const images = [];
+  for (const row of rows) {
+    let path = clean(row && typeof row === "object"
+      ? row.Photo || row.photo || row.url || row.Xbfimg || row.xbfimg
+      : row);
+    if (!path || /(?:^|\/)avatars\//i.test(path)) continue;
+    if (!/^https:\/\//i.test(path)) {
+      path = path.replace(/^\/+/, "")
+        .replace(/^(?:https?:\/\/)?(?:file1\.)?gongsilbox\.com\/file\/land_photo\//i, "");
+      if (!path || /(?:^|\/)\.\.(?:\/|$)/.test(path) || /\\/.test(path)) continue;
+      path = `https://file1.gongsilbox.com/file/land_photo/${path}`;
+    }
+    if (!/\.(?:jpe?g|png|webp|gif|avif)(?:[?#]|$)/i.test(path) || images.includes(path)) continue;
+    images.push(path);
+    if (images.length >= 40) break;
+  }
+  return images;
+}
+
 export function sourceListingSearchIndex(rows = []) {
   const sourceSearchIds = {};
   for (const row of rows) {
@@ -286,7 +310,13 @@ export function sourceListingSearchIndex(rows = []) {
 }
 
 async function unifiedListings(env) {
-  const rows = await allRowidPages(env, "listing_id, list_snapshot_json", "listing_sources", "active = 1", 4_000);
+  const rows = await allRowidPages(
+    env,
+    "listing_id, list_snapshot_json, json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json",
+    "listing_sources",
+    "active = 1",
+    4_000
+  );
   const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
     FROM listing_sources s JOIN listings l ON l.id=s.listing_id
     WHERE l.status<>'deleted' AND s.source IN ('네이버','당근') ORDER BY s.rowid`, 4_000);
@@ -294,6 +324,13 @@ async function unifiedListings(env) {
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
     const original = parseJson(row.list_snapshot_json, {});
+    if (clean(original.source) === "공실박스") {
+      const actualImages = actualGongsilImages({
+        list: { Photos: parseJson(row.gongsil_photos_json, []) }
+      });
+      original.thumbnail = actualImages[0] || "";
+      original.photoCount = actualImages.length;
+    }
     const propertyId = clean(row.listing_id || original.propertyId);
     if (!propertyId) continue;
     if (!groups[propertyId]) groups[propertyId] = [];
@@ -343,7 +380,7 @@ export function masterFallbackOriginal(row, images = []) {
 }
 
 async function unifiedDetail(env, propertyId) {
-  const sourceResult = await env.DB.prepare(`SELECT id, list_snapshot_json, raw_json
+  const sourceResult = await env.DB.prepare(`SELECT id, source, list_snapshot_json, raw_json
     FROM listing_sources WHERE listing_id = ?1 AND active = 1 ORDER BY rowid`).bind(propertyId).all();
   const mediaResult = await env.DB.prepare(`SELECT source_id, external_url, r2_key, thumbnail_r2_key, sort_order
     FROM listing_media WHERE listing_id = ?1 AND status <> 'deleted' ORDER BY source_id, sort_order, rowid`)
@@ -356,13 +393,18 @@ async function unifiedDetail(env, propertyId) {
     if (url && !mediaBySource[sourceId].includes(url)) mediaBySource[sourceId].push(url);
   }
   const originals = (sourceResult?.results || []).map((row) => {
+    const raw = parseJson(row.raw_json, {});
     const snapshot = {
       ...parseJson(row.list_snapshot_json, {}),
-      ...parseJson(row.raw_json, {})
+      ...raw
     };
-    const images = mediaBySource[clean(row.id)] || [];
-    if (images.length) snapshot.images = images;
-    snapshot.photoCount = Math.max(images.length, Number(snapshot.photoCount) || 0);
+    const isGongsil = clean(row.source || snapshot.source) === "공실박스";
+    const images = isGongsil ? actualGongsilImages(raw) : (mediaBySource[clean(row.id)] || []);
+    snapshot.images = images;
+    snapshot.thumbnail = images[0] || "";
+    snapshot.photoCount = isGongsil
+      ? images.length
+      : Math.max(images.length, Number(snapshot.photoCount) || 0);
     return snapshot;
   });
   if (!originals.length) {

@@ -175,15 +175,10 @@ export function gongsilImageUrls(record) {
   const detail = raw?.detail || {};
   const photoRows = [list?.Photos, list?.photos, detail?.Photos, detail?.photos]
     .flatMap((value) => Array.isArray(value) ? value : []);
-  const rawPhotos = photoRows.map(gongsilPhotoUrl).filter(Boolean);
-  const fallback = rawPhotos.length ? [] : [list?.Xbfimg, list?.xbfimg, detail?.Xbfimg, detail?.xbfimg]
-    .map(gongsilPhotoUrl).filter(Boolean);
-  return uniqueUrls([
-    record?.primaryImage,
-    ...(Array.isArray(record?.imageUrls) ? record.imageUrls : []),
-    ...rawPhotos,
-    ...fallback
-  ]);
+  // Photos/photos is the provider's actual listing-photo collection. Xbfimg,
+  // bfxphoto and profile paths such as avatars/1.png are representative or
+  // broker images and must never fill an otherwise photo-less listing.
+  return uniqueUrls(photoRows.map(gongsilPhotoUrl).filter((url) => !/\/avatars\//i.test(url)));
 }
 
 function memoWithVisit(value) {

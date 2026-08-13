@@ -122,7 +122,8 @@ applyStatements([...listingStatements, ...sourceStatements]);
 
 if (apply) {
   const cacheKeys = ["api-cache/d1-sheet.csv", "api-cache/unified-listings.json",
-    "api-cache/unified-listings-v3-source-search.json"];
+    "api-cache/unified-listings-v3-source-search.json",
+    "api-cache/unified-listings-v4-actual-gongsil-photos.json"];
   for (const key of cacheKeys) {
     run(["exec", "wrangler", "r2", "object", "delete", `js-map-media/${key}`, "--remote", "--force"]);
   }

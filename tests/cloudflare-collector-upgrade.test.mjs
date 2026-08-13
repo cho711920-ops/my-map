@@ -185,11 +185,16 @@ test("Gongsilbox relative photo paths become cacheable absolute image URLs", () 
   ]);
 });
 
-test("Gongsilbox representative image is used only when detail photos are absent", () => {
+test("Gongsilbox representative image never fills an otherwise photo-less listing", () => {
   const fallback = "2025/08/20250822_1129224858_00.png";
-  assert.deepEqual(gongsilImageUrls({ raw: { list: { Photos: [], Xbfimg: fallback } } }), [
-    `https://file1.gongsilbox.com/file/land_photo/${fallback}`
-  ]);
+  assert.deepEqual(gongsilImageUrls({
+    primaryImage: "https://file1.gongsilbox.com/file/land_photo/avatars/1.png",
+    imageUrls: [`https://file1.gongsilbox.com/file/land_photo/${fallback}`],
+    raw: {
+      list: { Photos: [], Xbfimg: fallback },
+      detail: { bdsinfo: { photo: "avatars/1.png" }, bilinfo: { bfxphoto: fallback } }
+    }
+  }), []);
 });
 
 test("legacy source rows bootstrap from stable listing terms without a detail refetch", () => {

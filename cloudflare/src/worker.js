@@ -29,7 +29,7 @@ const QUEUE_CLIENT_VERSION = "1.0.8";
 const UPSTREAM_TIMEOUT_MS = 20_000;
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
-const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v3-source-search.json";
+const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v4-actual-gongsil-photos.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
 const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
@@ -195,7 +195,7 @@ function deleteR2Cache(env, context, keys) {
 
 function unifiedDetailCacheKey(propertyId) {
   const safe = String(propertyId || "").trim();
-  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail/${safe}.json` : "";
+  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v2-actual-photos/${safe}.json` : "";
 }
 
 function mutationAction(body) {

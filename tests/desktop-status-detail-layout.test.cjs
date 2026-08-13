@@ -24,7 +24,8 @@ assert.match(d1, /async function unifiedDetail\(env, propertyId\)/);
 assert.match(d1, /FROM listing_sources WHERE listing_id = \?1 AND active = 1/);
 assert.match(d1, /FROM listing_media WHERE listing_id = \?1 AND status <> 'deleted'/);
 assert.match(d1, /const originals = \(sourceResult\?\.results \|\| \[\]\)\.map/);
-assert.match(d1, /snapshot\.photoCount = Math\.max\(images\.length/);
+assert.match(d1, /snapshot\.photoCount = isGongsil/);
+assert.match(d1, /Math\.max\(images\.length, Number\(snapshot\.photoCount\)/);
 assert.match(d1, /masterFallbackOriginal\(master, fallbackImages\)/);
 
 const quickToolsStart = html.indexOf('<aside id="mapQuickTools"');
