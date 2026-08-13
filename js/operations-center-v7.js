@@ -47,7 +47,8 @@
     customerEditorCloseTimerV727: null,
     customerEditorCloseResolveV727: null,
     transactionCandidates: null,
-    transactionCandidatesLoading: false
+    transactionCandidatesLoading: false,
+    deletingCustomerId: ""
   };
 
   window.operationsMatchPropertyIds = null;
@@ -633,7 +634,8 @@
         }).join("") +
       '</select></label>' +
       '<button type="button" onclick="openCustomerMemo(\'' + escape(customerId) + '\')">상담·미팅 메모</button>' +
-      '<button type="button" onclick="openCustomerEditor(\'' + escape(customerId) + '\')">조건 수정</button>' +
+      '<button type="button" class="customer-condition-edit-button-v728" onclick="openCustomerEditor(\'' + escape(customerId) + '\')">조건 수정</button>' +
+      '<button type="button" class="customer-delete-button-v728" onclick="deleteSelectedCustomerV728(this)">고객 삭제</button>' +
       '<button type="button" onclick="showSelectedCustomerMatchesOnMap()"' + (allRows.length ? '' : ' disabled') + '>지도에서 보기</button></div></div>' +
       customerConditionRefreshHtmlV727(customerId) +
       '<div class="operations-match-listing-toolbar-v719">' +
@@ -1065,6 +1067,70 @@
       setMessage(error.message || "고객 매칭 재계산에 실패했습니다.", "error");
     }).finally(function() {
       state.rebuilding = false;
+    });
+  };
+
+  window.deleteSelectedCustomerV728 = function(button) {
+    var customerId = text(state.selectedCustomerId);
+    if (!customerId || state.deletingCustomerId) return;
+    var customer = state.customers.find(function(row) {
+      return field(row, state.customerHeaders, "고객ID") === customerId;
+    });
+    if (!customer) return;
+    var customerName = field(customer, state.customerHeaders, "고객명/상호") || "선택 고객";
+    var matchCount = state.matches.filter(function(row) {
+      return field(row, state.matchHeaders, "고객ID") === customerId;
+    }).length;
+    var activityCount = state.activities.filter(function(row) {
+      return field(row, state.activityHeaders, "고객ID") === customerId;
+    }).length;
+    var message = customerName + " 고객을 삭제할까요?\n\n" +
+      "연결된 매칭 " + matchCount + "건과 상담·미팅 이력 " + activityCount + "건도 함께 삭제됩니다.\n" +
+      "삭제 후에는 복구할 수 없습니다.";
+    if (!window.confirm(message)) return;
+    state.deletingCustomerId = customerId;
+    if (button) {
+      button.disabled = true;
+      button.textContent = "삭제 중…";
+    }
+    setMessage(customerName + " 고객과 연결 자료를 삭제하고 있습니다…", "loading");
+    apiPost("deleteCustomer", { customerId: customerId }).then(function(result) {
+      state.customers = state.customers.filter(function(row) {
+        return field(row, state.customerHeaders, "고객ID") !== customerId;
+      });
+      state.matches = state.matches.filter(function(row) {
+        return field(row, state.matchHeaders, "고객ID") !== customerId;
+      });
+      state.activities = state.activities.filter(function(row) {
+        return field(row, state.activityHeaders, "고객ID") !== customerId;
+      });
+      delete state.matchSummary[customerId];
+      if (text(window.customerMatchMapCustomerIdV722) === customerId &&
+          typeof window.clearCustomerMatchMapFilter === "function") {
+        window.clearCustomerMatchMapFilter();
+      }
+      state.selectedCustomerId = state.customers.length
+        ? field(state.customers[0], state.customerHeaders, "고객ID") : "";
+      state.loadedMatchCustomerId = "";
+      state.lastCustomerWorkspace = null;
+      state.customerPrefetchPromise = null;
+      state.customerLoaded = false;
+      try { sessionStorage.removeItem(OPERATIONS_CACHE_KEY); } catch (_) {}
+      renderCustomers();
+      renderMatches(state.selectedCustomerId);
+      var successMessage = (result.customerName || customerName) + " 고객을 삭제했습니다. 매칭 " +
+        number(result.deletedMatches) + "건 · 상담 이력 " + number(result.deletedActivities) + "건도 정리했습니다.";
+      return loadOperationsData(true).then(function() {
+        setMessage(successMessage, "success");
+      });
+    }).catch(function(error) {
+      setMessage(error.message || "고객 삭제에 실패했습니다.", "error");
+      if (button && button.isConnected) {
+        button.disabled = false;
+        button.textContent = "고객 삭제";
+      }
+    }).finally(function() {
+      state.deletingCustomerId = "";
     });
   };
 

@@ -107,6 +107,7 @@ body.customer-work-alert-open{overflow:hidden}
 .operations-customer-view-empty{grid-column:1/-1;padding:38px 12px;border:1px dashed #cfdae8;border-radius:12px;color:#738198;font-size:12px;font-weight:800;text-align:center}
 .operations-customer-card i.scheduled{background:#edf6ff;color:#0568e8}.operations-customer-card i.due{background:#fff0ee;color:#c23b32}
 .operations-match-heading-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}.operations-match-heading-actions button,.operations-match-heading-actions a{display:inline-flex;min-height:36px;align-items:center;justify-content:center;padding:0 10px;border:1px solid #c9d8e9;border-radius:12px;background:#fff;color:#40516a;font-size:12px;font-weight:850;text-decoration:none;white-space:nowrap;cursor:pointer}.operations-match-heading-actions button:last-child{border-color:#0568e8;background:#0568e8;color:#fff}.operations-match-heading-actions .customer-call-link{border-color:#7cc6a1;background:#edfff5;color:#087a4d}
+.operations-match-heading-actions .customer-delete-button-v728{border-color:#f0b8b8;background:#fff5f5;color:#bd1e2d}
 .customer-status-quick{display:flex;min-height:36px;align-items:center;gap:6px;padding:0 7px 0 9px;border:1px solid #c9d8e9;border-radius:12px;background:#fff;color:#65738a;white-space:nowrap}.customer-status-quick span{font-size:10px!important;font-weight:850}.customer-status-quick select{height:28px;border:0;background:transparent;color:#1f3656;font:inherit;font-size:12px;font-weight:900;outline:none;cursor:pointer}.customer-status-quick select:disabled{opacity:.55;cursor:wait}
 .customer-crm-modal{position:fixed;inset:0;z-index:15000;display:flex;align-items:center;justify-content:center;padding:16px}.customer-crm-modal[hidden]{display:none}.customer-crm-backdrop{position:absolute;inset:0;background:rgba(11,24,45,.58);backdrop-filter:blur(3px)}
 .customer-crm-dialog{position:relative;z-index:1;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;border:1px solid #dbe5f2;border-radius:22px;background:#fff;box-shadow:0 28px 80px rgba(8,29,61,.34)}.customer-crm-dialog-wide{width:min(900px,calc(100vw - 24px))}
@@ -434,7 +435,7 @@ body.customer-crm-open{overflow:hidden}
 @media(min-width:769px) and (max-width:1100px){
   #operationsCustomersPanel .customer-match-layout{grid-template-columns:330px minmax(0,1fr)!important}
   #operationsCustomersPanel .operations-match-listing-toolbar-v719>strong span{display:none}
-  #operationsCustomersPanel .operations-match-heading-actions .customer-status-quick,#operationsCustomersPanel .operations-match-heading-actions button:nth-last-child(2){display:none}
+  #operationsCustomersPanel .operations-match-heading-actions .customer-status-quick,#operationsCustomersPanel .operations-match-heading-actions .customer-condition-edit-button-v728{display:none}
 }
 
 /* v7.20 고객매칭 1:1 분할 · 3줄 고객카드 · 매물버튼 정돈 */

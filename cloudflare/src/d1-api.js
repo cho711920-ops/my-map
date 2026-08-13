@@ -14,7 +14,7 @@ const D1_GET_ACTIONS = new Set([
 ]);
 
 const D1_POST_ACTIONS = new Set([
-  "deleteProperty", "enqueueMutation", "moveOriginalListing", "quickAdd", "saveCloudState",
+  "deleteCustomer", "deleteProperty", "enqueueMutation", "moveOriginalListing", "quickAdd", "saveCloudState",
   "saveGeocodeCache", "toggleDone", "updateProperty", "updatePropertyMemo", "saveCustomer",
   "updateCustomerMatch", "rebuildCustomerMatches", "addCustomerActivity",
   "restoreListingHistory", "saveAllowedUser"
@@ -1551,6 +1551,38 @@ async function saveCustomer(env, user, body) {
   return result;
 }
 
+export async function deleteCustomer(env, body) {
+  const customerId = clean(body.customerId).slice(0, 100);
+  if (!customerId) throw Object.assign(new Error("삭제할 고객을 선택해 주세요."), { statusCode: 400 });
+  const customer = await env.DB.prepare(`SELECT id, name FROM customers WHERE id=?1 LIMIT 1`)
+    .bind(customerId).first();
+  if (!customer) throw Object.assign(new Error("삭제할 고객을 찾을 수 없습니다."), { statusCode: 404 });
+  const related = await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM customer_matches WHERE customer_id=?1) AS match_count,
+      (SELECT COUNT(*) FROM customer_activities WHERE customer_id=?1) AS activity_count`)
+    .bind(customerId).first();
+  const results = await env.DB.batch([
+    env.DB.prepare("DELETE FROM customer_matches WHERE customer_id=?1").bind(customerId),
+    env.DB.prepare("DELETE FROM customer_activities WHERE customer_id=?1").bind(customerId),
+    env.DB.prepare("DELETE FROM customers WHERE id=?1").bind(customerId)
+  ]);
+  if (!Number(results?.[2]?.meta?.changes || 0)) {
+    throw Object.assign(new Error("고객 삭제를 완료하지 못했습니다."), { statusCode: 409 });
+  }
+  return {
+    ok: true,
+    action: "deleteCustomer",
+    persisted: true,
+    queued: false,
+    deleted: true,
+    customerId,
+    customerName: clean(customer.name),
+    deletedMatches: Number(related?.match_count || 0),
+    deletedActivities: Number(related?.activity_count || 0),
+    source: "D1"
+  };
+}
+
 async function updateCustomerMatch(env, body) {
   const customerId = clean(body.customerId);
   const propertyId = clean(body.masterId || body.propertyId);
@@ -1681,6 +1713,7 @@ async function executePost(env, user, body) {
   if (action === "saveGeocodeCache") return saveGeocode(env, body);
   if (action === "moveOriginalListing") return moveOriginal(env, user, body);
   if (action === "saveCustomer") return saveCustomer(env, user, body);
+  if (action === "deleteCustomer") return deleteCustomer(env, body);
   if (action === "updateCustomerMatch") return updateCustomerMatch(env, body);
   if (action === "rebuildCustomerMatches") {
     const rebuilt = await rebuildCustomerMatches(env, body.customerId);

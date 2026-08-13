@@ -38,7 +38,7 @@ const SHEET_CACHE_ACTIONS = new Set([
 ]);
 const UNIFIED_CACHE_ACTIONS = new Set(["moveOriginalListing"]);
 const OPERATIONS_CACHE_ACTIONS = new Set([
-  "addCustomerActivity", "deleteProperty", "moveOriginalListing", "quickAdd",
+  "addCustomerActivity", "deleteCustomer", "deleteProperty", "moveOriginalListing", "quickAdd",
   "rebuildCustomerMatches", "restoreListingHistory", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
 ]);
 const UNIFIED_COMPACT_FIELDS = [

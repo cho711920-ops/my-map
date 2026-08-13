@@ -17,7 +17,7 @@ assert.match(css, /메인·고객매칭·고객지도 메모 버튼 공통 규�
 assert.match(css, /\.item-memo-toggle \.item-memo-label-v728\s*\{[^}]*display:inline-flex!important/s);
 assert.match(css, /\.standard-card-main-v661 \.item-compact-actions-v650>\.item-memo-toggle,[\s\S]*?#list \.customer-match-map-card-main-v721[\s\S]*?#operationsCustomersPanel[\s\S]*?width:52px!important/);
 assert.match(css, /\.item-memo-toggle:after\{content:none!important;display:none!important\}/);
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.6-transaction-candidates/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.7-customer-delete/);
 assert.match(html, /script\.js\?v=6\.5\.78-naver-map-tiles/);
 
 console.log("unified memo toggle v7.28 tests passed");

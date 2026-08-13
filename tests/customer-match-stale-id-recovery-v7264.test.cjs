@@ -20,7 +20,7 @@ assert.match(
   /window\.refreshCustomerMatchesAfterDuplicateMergeV7186 = function\(\)[\s\S]*?apiGet\("customerMatches"/
 );
 assert.match(duplicateUi, /refreshCustomerMatchesAfterDuplicateMergeV7186/);
-assert.match(html, /operations-center-v7\.js\?v=7\.22\.2-data-access/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.3-customer-delete/);
 assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.js/);
 
 console.log("customer match stable pair identity tests passed");

@@ -25,7 +25,7 @@ assert.match(
 assert.match(source, /Promise\.all\(\[firstRevisionRequest, refreshCustomerAlertBadge\(false\)\]\)/);
 assert.match(
   html,
-  /operations-center-v7\.js\?v=7\.22\.2-data-access/
+  /operations-center-v7\.js\?v=7\.22\.3-customer-delete/
 );
 
 console.log("customer work alert dismissal tests passed");

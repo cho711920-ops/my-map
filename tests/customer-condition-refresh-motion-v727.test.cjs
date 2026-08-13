@@ -7,8 +7,8 @@ const operationsCss = fs.readFileSync("css/operations-center-v7.css", "utf8");
 const unified = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.6-transaction-candidates/);
-assert.match(html, /operations-center-v7\.js\?v=7\.22\.2-data-access/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.7-customer-delete/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.3-customer-delete/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.38-elevator-capacity/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.1\.21-data-access/);
 

@@ -7,8 +7,8 @@ const script = fs.readFileSync("js/script.js", "utf8");
 const css = fs.readFileSync("css/operations-center-v7.css", "utf8");
 const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 
-assert.match(html, /operations-center-v7\.css\?v=7\.20\.6-transaction-candidates/);
-assert.match(html, /operations-center-v7\.js\?v=7\.22\.2-data-access/);
+assert.match(html, /operations-center-v7\.css\?v=7\.20\.7-customer-delete/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.3-customer-delete/);
 assert.match(operations, /customerView:\s*"before"/);
 assert.match(operations, /syncCustomerMatchMapStatusV722/);
 assert.match(operations, /applyCompactCustomerSaveV723/);
