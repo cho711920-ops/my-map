@@ -539,13 +539,15 @@ async function handleDataApi(request, env, context) {
       ? [body.primaryMasterId, ...(Array.isArray(body.duplicateMasterIds) ? body.duplicateMasterIds : [])]
         .map(unifiedDetailCacheKey).filter(Boolean)
       : [];
+    const collectorDetailKeys = (Array.isArray(collectorAdmin.affectedListingIds)
+      ? collectorAdmin.affectedListingIds : []).map(unifiedDetailCacheKey).filter(Boolean);
     const snapshotUpdate = collectorAdmin.operationRefresh
       ? refreshOperationsDashboard(env)
       : adjustOperationsDashboard(env, collectorAdmin.operationAdjustments || {});
     const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
       return deleteR2Cache(env, null, [
         D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
-        ...wholeMergeDetailKeys
+        ...wholeMergeDetailKeys, ...collectorDetailKeys
       ]);
     });
     if (String(body.action || "") === "consolidateExistingMasters") {
@@ -651,7 +653,9 @@ async function runScheduledMaintenance(env, context) {
   const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
     return deleteR2Cache(env, null, [
       D1_SHEET_CACHE_KEY,
-      ...(reviewChanged ? [UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY] : [])
+      ...(reviewChanged ? [UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
+        ...(Array.isArray(review?.affectedListingIds)
+          ? review.affectedListingIds.map(unifiedDetailCacheKey).filter(Boolean) : [])] : [])
     ]);
   });
   await invalidation;

@@ -10,8 +10,10 @@ assert.match(worker, /runScheduledReviewRepair\(env\)/);
 assert.match(worker, /runScheduledElevatorEnrichment\(env\)/);
 assert.match(worker, /adjustOperationsDashboard\(env, review\.operationAdjustments/);
 assert.match(collector, /export async function runScheduledReviewRepair\(env\)/);
-assert.match(collector, /includeRemaining: false/);
-assert.match(collector, /reviewRows\.length >= 20/);
+assert.match(collector, /return mergeSingleCandidateReviews\(env/);
+assert.match(collector, /json_array_length\(json_extract\(cr\.result_json, '\$\.candidateIds'\)\)=1/);
+assert.match(collector, /NOT EXISTS \(SELECT 1 FROM listings other/);
+assert.match(collector, /preserveRepresentative: true/);
 assert.match(wrangler, /crons = \["\* \* \* \* \*"\]/);
 
 console.log("scheduled review repair tests passed");

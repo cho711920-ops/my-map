@@ -3,7 +3,7 @@ import { requireRole } from "./security.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
-  "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision"
+  "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative"
 ];
 
 const D1_GET_ACTIONS = new Set([

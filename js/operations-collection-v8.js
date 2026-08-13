@@ -362,7 +362,7 @@
     if (group) extraState.selectedGroupKey = group.groupKey;
     var filters = ["all", "높음", "중간", "낮음"];
     panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>왼쪽 기존 통합매물과 오른쪽 신규 원본매물을 비교해 동일매물·다른매물·보류만 선택하세요.</span></div>' +
-      '<div class="review-toolbar-actions"><button type="button" title="전체 검증대상을 검사해 같은 공간은 통합하고 명확히 다른 층·호실은 별도 매물로 등록하며 애매한 항목만 남깁니다." onclick="repairRoomlessExactReviews()">자동분류 정리</button>' +
+      '<div class="review-toolbar-actions"><button type="button" title="같은 주소에 기존 대표매물이 정확히 1개인 검증 원본만 그 대표매물의 동일매물로 연결합니다. 대표정보는 바꾸지 않습니다." onclick="mergeSingleCandidateReviews()">기존매물 1건 자동합치기</button>' +
       '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-queue-tools">' +
       '<label class="review-address-search"><span>주소검색</span><input id="reviewAddressSearch" type="search" ' +
@@ -580,6 +580,51 @@
 
   window.refreshCollectionStatus = function() { extraState.collection = null; return loadCollection(true); };
   window.refreshReviewWorkspace = function() { return loadFreshReviews(false); };
+  window.mergeSingleCandidateReviews = function() {
+    if (extraState.repairing) {
+      message("기존매물 1건 자동합치기가 이미 진행 중입니다.", "loading");
+      return;
+    }
+    extraState.repairing = true;
+    var totals = {scanned: 0, merged: 0, aliasesMerged: 0, failed: 0, passes: 0};
+    message("기존매물이 1건인 검증 원본을 대표정보 변경 없이 합치는 중입니다…", "loading");
+    showReviewDecisionModal("기존매물 1건 자동합치기 진행 중",
+      "서버에서 20건씩 동일매물 하위 원본으로 연결하고 있습니다.", "", true);
+    function runNextBatch() {
+      return apiPost("mergeSingleCandidateReviews", {limit: 20, refreshCustomerMatches: false}).then(function(result) {
+        totals.passes += 1;
+        ["scanned", "merged", "aliasesMerged", "failed"].forEach(function(key) {
+          totals[key] += number(result[key]);
+        });
+        var remaining = number(result.remainingSingleCandidate);
+        message("자동합치기 " + totals.merged.toLocaleString("ko-KR") + "건 · 반복원본 " +
+          totals.aliasesMerged.toLocaleString("ko-KR") + "건 · 남은 대상 " +
+          remaining.toLocaleString("ko-KR") + "건", "loading");
+        document.getElementById("reviewDecisionTitle").textContent = "기존매물 1건 자동합치기 진행 중";
+        document.getElementById("reviewDecisionText").textContent =
+          "검증원본 " + totals.merged.toLocaleString("ko-KR") + "건 · 반복원본 " +
+          totals.aliasesMerged.toLocaleString("ko-KR") + "건 합침\n남은 대상 " +
+          remaining.toLocaleString("ko-KR") + "건";
+        if (result.hasMore && totals.passes < 600) return runNextBatch();
+        return result;
+      });
+    }
+    runNextBatch().then(function() {
+      clearReviewCache();
+      showReviewDecisionModal("기존매물 1건 자동합치기 완료",
+        "검증원본 " + totals.merged.toLocaleString("ko-KR") + "건 · 함께 묶인 반복원본 " +
+        totals.aliasesMerged.toLocaleString("ko-KR") + "건을 합쳤습니다.\n대표매물의 주소·가격·면적·대표사진은 변경하지 않았습니다." +
+        (totals.failed ? "\n오류 " + totals.failed.toLocaleString("ko-KR") + "건" : ""), "", true);
+      return loadReviews(true, true);
+    }).then(function() {
+      message("기존매물 1건 자동합치기를 완료했습니다.", "success");
+    }).catch(function(error) {
+      message(error.message, "error");
+      showReviewDecisionModal("기존매물 1건 자동합치기 실패", error.message || "다시 시도해 주세요.", "", true);
+    }).finally(function() {
+      extraState.repairing = false;
+    });
+  };
   window.repairRoomlessExactReviews = function() {
     if (extraState.repairing) {
       message("자동분류 정리가 이미 진행 중입니다.", "loading");

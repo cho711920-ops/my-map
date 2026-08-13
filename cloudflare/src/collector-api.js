@@ -14,7 +14,8 @@ const ADMIN_GET_ACTIONS = new Set([
 ]);
 
 const ADMIN_POST_ACTIONS = new Set([
-  "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews"
+  "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
+  "mergeSingleCandidateReviews"
 ]);
 
 const EXTERNAL_ACTIONS = new Set([
@@ -382,7 +383,7 @@ export function normalizedRecord(source, value) {
   return null;
 }
 
-function unifiedSnapshot(record, originalId, propertyId, now) {
+function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresentative = false) {
   return {
     originalId, source: record.source, sourceId: record.sourceId, propertyId,
     link: record.link, buildingName: record.buildingName, address: record.address,
@@ -391,7 +392,8 @@ function unifiedSnapshot(record, originalId, propertyId, now) {
     premium: record.premium, area: record.area, latitude: record.latitude, longitude: record.longitude,
     memo: record.memo, status: "활성",
     firstSeen: now, lastSeen: now, thumbnail: record.images[0] || "",
-    photoCount: record.images.length, contactCount: record.contacts.length, revision: 1
+    photoCount: record.images.length, contactCount: record.contacts.length, revision: 1,
+    preserveRepresentative: Boolean(preserveRepresentative)
   };
 }
 
@@ -953,14 +955,16 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now,
 }
 
 async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false,
-  actor = "collector", existingAssets = null) {
+  actor = "collector", existingAssets = null, preserveListing = false) {
   const now = nowIso();
   const restoredOriginalId = /^O-[A-Za-z0-9_-]{8,160}$/.test(clean(record?.originalId))
     ? clean(record.originalId)
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
-  const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now);
+  const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
+  const protectListing = preserveRepresentative && !updateCondition;
+  const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
   const snapshotHash = snapshotKey(record.listSnapshot || snapshot);
   const snapshotJson = JSON.stringify(snapshot);
   const rawJson = JSON.stringify(record.raw || {});
@@ -988,8 +992,8 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId).run();
     }
   }
-  const listingNeedsTouch = !existingSource || sourceChanged || assets.changed || updateCondition;
-  const update = updateCondition
+  const listingNeedsTouch = !protectListing && (!existingSource || sourceChanged || assets.changed || updateCondition);
+  const update = !protectListing && updateCondition
     ? env.DB.prepare(`UPDATE listings SET title=CASE WHEN ?1<>'' THEN ?1 ELSE title END,
         building_name=CASE WHEN ?1<>'' THEN ?1 ELSE building_name END, room=?2, listing_type=?3,
         deposit=?4, monthly_rent=?5, maintenance_fee=?6, premium=?7, area_m2=?8,
@@ -1052,6 +1056,13 @@ async function queueReview(env, record, sessionId, candidates, reason = "") {
     .bind(reviewId, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
       JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).first();
   return clean(saved?.id) || reviewId;
+}
+
+async function currentSingleAddressCandidate(env, record, candidates) {
+  if (!record?.address || candidates.length !== 1) return null;
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS count FROM listings
+    WHERE status <> 'deleted' AND address=?1`).bind(record.address).first();
+  return Number(row?.count || 0) === 1 ? candidates[0] : null;
 }
 
 async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
@@ -1155,6 +1166,10 @@ async function ingestRecords(env, source, values, metadata = {}) {
       const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
       if (classified.decision === "merge") {
         await attachSource(env, record, classified.candidate.id, sessionId);
+        totals.merged += 1;
+      } else if (classified.decision === "review" && await currentSingleAddressCandidate(env, record, candidates)) {
+        await attachSource(env, record, candidates[0].id, sessionId, null, false,
+          "system-single-candidate-merge@js-map.com", null, true);
         totals.merged += 1;
       } else if (pendingMatch) {
         await savePendingReviewAlias(env, record, sessionId, pendingMatch);
@@ -2006,6 +2021,96 @@ async function consolidateExisting(env, user, body) {
     operationAdjustments: { activeMaster: -consolidated, history: consolidated }, customerMatches, source: "D1" };
 }
 
+async function mergeSingleCandidateReviews(env, user, options = {}) {
+  const requestedLimit = Math.floor(Number(options.limit) || 20);
+  const limit = Math.max(1, Math.min(requestedLimit, 20));
+  const rows = await env.DB.prepare(`SELECT cr.id, cr.session_id, cr.source, cr.source_listing_id,
+      cr.payload_json, json_extract(cr.result_json, '$.candidateIds[0]') AS candidate_id
+    FROM collector_raw cr
+    JOIN listings l ON l.id=json_extract(cr.result_json, '$.candidateIds[0]')
+    WHERE cr.processing_state='review'
+      AND json_array_length(json_extract(cr.result_json, '$.candidateIds'))=1
+      AND l.status <> 'deleted'
+      AND l.address=json_extract(cr.payload_json, '$.address')
+      AND NOT EXISTS (SELECT 1 FROM listings other
+        WHERE other.status <> 'deleted' AND other.address=l.address AND other.id<>l.id)
+    ORDER BY cr.created_at, cr.id LIMIT ?1`).bind(limit).all();
+  const reviewRows = rows?.results || [];
+  let merged = 0;
+  let aliasesMerged = 0;
+  let aliasesFailed = 0;
+  let failed = 0;
+  const affectedListingIds = new Set();
+  const actor = clean(user?.email) || "system-single-candidate-merge@js-map.com";
+  for (const row of reviewRows) {
+    try {
+      const record = normalizeReviewRecord(parseJson(row.payload_json, {}));
+      const listingId = clean(row.candidate_id);
+      if (!record.sourceId || !record.address || !listingId) throw new Error("검증 원본 또는 대표매물 확인 필요");
+      const existingSourceMap = await loadExistingSources(env, record.source, [record]);
+      const existingSource = existingSourceMap.get(record.sourceId) || null;
+      const existingAssetsMap = existingSource ? await loadSourceAssets(env, existingSourceMap) : new Map();
+      await attachSource(env, record, listingId, row.session_id, existingSource, false, actor,
+        existingSource ? existingAssetsMap.get(clean(existingSource.id)) : null, true);
+
+      const aliasResult = await env.DB.prepare(`SELECT id, session_id, source, source_listing_id, payload_json
+        FROM collector_raw
+        WHERE processing_state='duplicate'
+          AND json_extract(result_json, '$.action')='sameAsPendingReview'
+          AND json_extract(result_json, '$.canonicalReviewId')=?1
+        ORDER BY created_at, id`).bind(row.id).all();
+      for (const alias of aliasResult?.results || []) {
+        try {
+          const aliasRecord = normalizeReviewRecord(parseJson(alias.payload_json, {}));
+          if (!aliasRecord.sourceId) aliasRecord.sourceId = clean(alias.source_listing_id);
+          if (!aliasRecord.source) aliasRecord.source = clean(alias.source);
+          if (!aliasRecord.address) aliasRecord.address = record.address;
+          const aliasSourceMap = await loadExistingSources(env, aliasRecord.source, [aliasRecord]);
+          const aliasSource = aliasSourceMap.get(aliasRecord.sourceId) || null;
+          const aliasAssetsMap = aliasSource ? await loadSourceAssets(env, aliasSourceMap) : new Map();
+          await attachSource(env, aliasRecord, listingId, alias.session_id, aliasSource, false, actor,
+            aliasSource ? aliasAssetsMap.get(clean(aliasSource.id)) : null, true);
+          await env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
+              result_json=?2, error_text='' WHERE id=?3`)
+            .bind(nowIso(), JSON.stringify({ action: "autoMergeSingleCandidateAlias", listingId,
+              canonicalReviewId: row.id, preserveRepresentative: true }), alias.id).run();
+          aliasesMerged += 1;
+        } catch (error) {
+          aliasesFailed += 1;
+          await env.DB.prepare("UPDATE collector_raw SET error_text=?1 WHERE id=?2")
+            .bind(clean(error?.message || error).slice(0, 500), alias.id).run();
+        }
+      }
+      await env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
+          result_json=?2, error_text='' WHERE id=?3`)
+        .bind(nowIso(), JSON.stringify({ action: "autoMergeSingleCandidate", listingId,
+          preserveRepresentative: true, aliasesMerged: Number(aliasResult?.results?.length || 0) }), row.id).run();
+      affectedListingIds.add(listingId);
+      merged += 1;
+    } catch (error) {
+      failed += 1;
+      await env.DB.prepare("UPDATE collector_raw SET error_text=?1 WHERE id=?2")
+        .bind(clean(error?.message || error).slice(0, 500), row.id).run();
+    }
+  }
+  const remaining = await env.DB.prepare(`SELECT COUNT(*) AS count
+    FROM collector_raw cr JOIN listings l ON l.id=json_extract(cr.result_json, '$.candidateIds[0]')
+    WHERE cr.processing_state='review'
+      AND json_array_length(json_extract(cr.result_json, '$.candidateIds'))=1
+      AND l.status <> 'deleted'
+      AND l.address=json_extract(cr.payload_json, '$.address')
+      AND NOT EXISTS (SELECT 1 FROM listings other
+        WHERE other.status <> 'deleted' AND other.address=l.address AND other.id<>l.id)`).first();
+  const remainingSingleCandidate = Number(remaining?.count || 0);
+  const customerMatches = options.refreshCustomerMatches === false
+    ? { listings: 0, evaluated: 0, matched: 0, removed: 0, skipped: true }
+    : await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
+  return { ok: true, action: "mergeSingleCandidateReviews", scanned: reviewRows.length,
+    merged, aliasesMerged, aliasesFailed, failed, affectedListingIds: [...affectedListingIds],
+    remainingSingleCandidate, hasMore: remainingSingleCandidate > 0, customerMatches,
+    operationAdjustments: { pendingReview: -merged }, source: "D1" };
+}
+
 async function repairExactReviews(env, user, options = {}) {
   const decisionVersion = 4;
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
@@ -2107,10 +2212,10 @@ async function repairExactReviews(env, user, options = {}) {
 }
 
 export async function runScheduledReviewRepair(env) {
-  return repairExactReviews(env, {
+  return mergeSingleCandidateReviews(env, {
     email: "system-review-repair@js-map.com",
     role: "owner"
-  }, { includeRemaining: false });
+  }, { limit: 20, refreshCustomerMatches: false });
 }
 
 export async function handleCollectorAdminPost(env, user, body) {
@@ -2120,5 +2225,6 @@ export async function handleCollectorAdminPost(env, user, body) {
   if (action === "applyReviewBatch") return applyReviewBatch(env, user, body);
   if (action === "consolidateExistingMasters") return consolidateExisting(env, user, body);
   if (action === "repairRoomlessExactReviews") return repairExactReviews(env, user);
+  if (action === "mergeSingleCandidateReviews") return mergeSingleCandidateReviews(env, user, body);
   return null;
 }

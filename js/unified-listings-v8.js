@@ -28,6 +28,7 @@
   }
   function desktop() { return global.innerWidth > 768; }
   function sourcePriority(original, hasDaangn) {
+    if (original && original.preserveRepresentative) return 10;
     var key = sourceKey(original && original.source);
     var hasPhoto = originalImages(original).length > 0;
     if (hasDaangn) {
