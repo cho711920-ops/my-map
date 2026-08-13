@@ -685,3 +685,4 @@
 - `localStorage.clear()` 또는 다른 키 삭제는 사용하지 않아 찜목록·매물·고객정보·사이트 설정은 건드리지 않는다. D1 스키마와 운영 데이터 변경도 없다.
 - AI임장 자산 버전을 `6.4.38-storage-fallback`으로 갱신하고 용량 초과 복구 범위, 메모리 대체, 서버 저장 지속을 Cloudflare 회귀 테스트에 추가했다.
 - AI임장·로드뷰 대상 테스트 6/6, `pnpm run test:cloudflare` 117/117, `pnpm run cf:check`, `git diff --check`를 통과했다.
+- 전체 `pnpm test` 244/244를 통과했고 운영 HTML의 새 자산 버전과 운영 JavaScript의 용량 초과 대체 코드를 직접 확인했다. 운영 Worker 버전은 `9d1ed057-0fd3-485d-b6d8-3a0d4923db1a`이다.
