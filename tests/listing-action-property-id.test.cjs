@@ -41,7 +41,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.78-naver-map-tiles"),
+  html.includes("script.js?v=6.5.79-source-listing-search"),
   "the production page must load the fixed script cache version"
 );
 

@@ -733,6 +733,50 @@ function getSearchComparableFields(item) {
 }
 
 
+function parseOriginalListingNumberKeyword(value) {
+  var normalized = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  var match = normalized.match(/^(?:(네이버|naver|당근|daangn|danggeun|karrot)\s*)?(?:매물(?:번호)?\s*)?(?:[:#-]\s*)?(\d{6,})$/i);
+
+  if (!match) return null;
+
+  var provider = String(match[1] || "").toLowerCase();
+  if (/^(?:네이버|naver)$/.test(provider)) provider = "naver";
+  else if (/^(?:당근|daangn|danggeun|karrot)$/.test(provider)) provider = "daangn";
+
+  return {
+    provider: provider,
+    number: match[2]
+  };
+}
+
+
+function matchesOriginalListingNumber(item, parsedKeyword) {
+  if (!parsedKeyword || !parsedKeyword.number) return false;
+  var indexedIds = Array.isArray(item && item.sourceListingSearchV6579) ? item.sourceListingSearchV6579 : [];
+  var indexedMatch = indexedIds.some(function(value) {
+    var parts = String(value || "").split(":");
+    var provider = parts[0] === "n" ? "naver" : (parts[0] === "d" ? "daangn" : "");
+    return provider && (!parsedKeyword.provider || parsedKeyword.provider === provider) &&
+      parts.slice(1).join(":") === parsedKeyword.number;
+  });
+  if (indexedMatch) return true;
+
+  var originals = Array.isArray(item && item.unifiedOriginalsV8) ? item.unifiedOriginalsV8 : [];
+
+  return originals.some(function(original) {
+    var source = String(original && original.source || "").trim().toLowerCase();
+    var sourceKey = /네이버|naver/.test(source)
+      ? "naver"
+      : (/당근|daangn|danggeun|karrot/.test(source) ? "daangn" : "");
+    if (!sourceKey || (parsedKeyword.provider && parsedKeyword.provider !== sourceKey)) return false;
+
+    var sourceId = String(original && original.sourceId || "").trim();
+    if (sourceKey === "naver") sourceId = sourceId.replace(/^네이버-/i, "");
+    return sourceId === parsedKeyword.number;
+  });
+}
+
+
 function parseExactJibunKeyword(value) {
   var compact = normalizeSearchComparableText(value);
   var match = compact.match(/([가-힣]+(?:동|읍|면|리))(\d+(?:-\d+)?)$/);
@@ -806,6 +850,11 @@ function matchesMultiKeyword(item, rawKeyword) {
   if (!orGroups.length) return true;
 
   return orGroups.some(function(group) {
+    var originalListingNumberKeyword = parseOriginalListingNumberKeyword(group);
+    if (originalListingNumberKeyword) {
+      return matchesOriginalListingNumber(item, originalListingNumberKeyword);
+    }
+
     var exactJibunKeyword = parseExactJibunKeyword(group);
 
     /* 월평동753 / 월평동 753처럼 주소와 지번만 입력한 경우 주소 열만 정확히 검색한다. */

@@ -3,7 +3,7 @@
 
   var API = "/api/data";
   var state = { groups: {}, detailCache: {}, detailPending: {}, contactCache: {}, contactPending: {},
-    tellCache: {}, tellPending: {}, masterMeta: {}, pendingMove: null,
+    tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
@@ -244,11 +244,13 @@
         result.groups = expanded;
       }
       state.groups = result.groups || {};
+      state.sourceSearchIds = result.sourceSearchIds || {};
       state.loaded = true;
       return result;
     }).catch(function(error) {
       console.error("통합매물 원본 조회 실패", error);
       state.groups = {};
+      state.sourceSearchIds = {};
       state.loaded = true;
       return {ok: false, groups: {}};
     });
@@ -257,6 +259,7 @@
   function attach(items, result) {
     if (result && result.groups) {
       state.groups = result.groups;
+      state.sourceSearchIds = result.sourceSearchIds || state.sourceSearchIds || {};
       state.loaded = true;
     }
     (items || []).forEach(function(item) {
@@ -281,6 +284,7 @@
         buildingYear: text(item.buildingYear || item.approvalYear)
       };
       item.unifiedOriginalsV8 = originals;
+      item.sourceListingSearchV6579 = (state.sourceSearchIds[text(item.propertyId)] || []).slice();
       item.unifiedOriginalCountV8 = originals.length || 1;
       item.thumbnailV8 = originals.length ? originalImage(originals[0]) : "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });

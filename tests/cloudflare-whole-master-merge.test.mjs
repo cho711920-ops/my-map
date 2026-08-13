@@ -25,5 +25,5 @@ test("merged source card is removed immediately from all live list arrays", () =
 test("merge cache invalidation finishes before the response is rendered", () => {
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /mutationAction\(body\) === "moveOriginalListing"\) \{\s*await invalidation;/);
-  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.21-data-access/);
+  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.22-source-listing-search/);
 });

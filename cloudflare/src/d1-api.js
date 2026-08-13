@@ -271,9 +271,27 @@ async function listingChanges(env, query) {
   return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
 }
 
+export function sourceListingSearchIndex(rows = []) {
+  const sourceSearchIds = {};
+  for (const row of rows) {
+    const propertyId = clean(row?.listing_id);
+    const sourceId = clean(row?.source_listing_id).replace(/^네이버-/i, "");
+    const sourceCode = clean(row?.source) === "네이버" ? "n" : (clean(row?.source) === "당근" ? "d" : "");
+    if (!propertyId || !sourceCode || !/^\d+$/.test(sourceId)) continue;
+    if (!sourceSearchIds[propertyId]) sourceSearchIds[propertyId] = [];
+    const key = `${sourceCode}:${sourceId}`;
+    if (!sourceSearchIds[propertyId].includes(key)) sourceSearchIds[propertyId].push(key);
+  }
+  return sourceSearchIds;
+}
+
 async function unifiedListings(env) {
   const rows = await allRowidPages(env, "listing_id, list_snapshot_json", "listing_sources", "active = 1", 4_000);
+  const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
+    FROM listing_sources s JOIN listings l ON l.id=s.listing_id
+    WHERE l.status<>'deleted' AND s.source IN ('네이버','당근') ORDER BY s.rowid`, 4_000);
   const groups = {};
+  const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
     const original = parseJson(row.list_snapshot_json, {});
     const propertyId = clean(row.listing_id || original.propertyId);
@@ -289,6 +307,7 @@ async function unifiedListings(env) {
     format: "compact-v2",
     fields: UNIFIED_FIELDS,
     groups,
+    sourceSearchIds,
     originalCount: rows.length,
     source: "D1"
   };
