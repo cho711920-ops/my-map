@@ -41,7 +41,11 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  html.includes("script.js?v=6.5.79-source-listing-search"),
+  script.includes("togglePrintSelection(\\'' + encodedActionSelectionKeyV660 + '\\')"),
+  "card checkboxes must carry the property ID selection target"
+);
+assert(
+  html.includes("script.js?v=6.5.80-property-selection"),
   "the production page must load the fixed script cache version"
 );
 
@@ -86,5 +90,41 @@ assert.deepEqual(openedUrls, [
   "https://realty.daangn.com/?article_id=SECOND"
 ]);
 assert.deepEqual(alerts, []);
+
+const selectionBlock = sourceBetween(
+  "function actionSelectionKeyV660(",
+  "function clearSelectedPrintItems("
+);
+const selectedItemsBlock = sourceBetween(
+  "function getSelectedPrintItems(",
+  "function toggleGongsilOnly("
+);
+const duplicateItems = [
+  { key: "same-building|same-address|1F|store", propertyId: "M-FIRST" },
+  { key: "same-building|same-address|1F|store", propertyId: "M-SECOND" }
+];
+const selectionContext = {
+  allItems: duplicateItems,
+  visibleListItems: duplicateItems,
+  selectedPrintKeys: [],
+  decodeURIComponent,
+  showList() {}
+};
+selectionContext.window = selectionContext;
+vm.createContext(selectionContext);
+vm.runInContext(selectionBlock + selectedItemsBlock, selectionContext);
+
+selectionContext.togglePrintSelection(encodeURIComponent("property:M-FIRST"));
+assert.deepEqual(Array.from(selectionContext.selectedPrintKeys), ["property:M-FIRST"]);
+assert.deepEqual(
+  Array.from(selectionContext.getSelectedPrintItems(), (item) => item.propertyId),
+  ["M-FIRST"]
+);
+
+selectionContext.togglePrintSelection(encodeURIComponent("property:M-SECOND"));
+assert.deepEqual(
+  Array.from(selectionContext.getSelectedPrintItems(), (item) => item.propertyId),
+  ["M-FIRST", "M-SECOND"]
+);
 
 console.log("listing actions resolve duplicate display keys by property ID");

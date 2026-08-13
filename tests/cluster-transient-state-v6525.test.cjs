@@ -41,7 +41,7 @@ assert.match(
   /function closeRoadviewModal\(\)[\s\S]*?restorePinnedClusterSelectionAfterTransientUiV6525\(\)/
 );
 
-assert.match(htmlSource, /script\.js\?v=6\.5\.79-source-listing-search/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.80-property-selection/);
 assert.match(htmlSource, /map\.js\?v=8\.2\.5-favorite-map-navigation/);
 
 console.log("cluster transient state v6.5.25 tests passed");

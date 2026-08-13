@@ -48,6 +48,6 @@ assert.ok(
 
 assert.match(script, /\}, 12000\);/);
 assert.doesNotMatch(script, /\}, 6500\);/);
-assert.match(html, /script\.js\?v=6\.5\.79-source-listing-search/);
+assert.match(html, /script\.js\?v=6\.5\.80-property-selection/);
 
 console.log("NAVER roadview runtime recovery v6.6.4 tests passed");

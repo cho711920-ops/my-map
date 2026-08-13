@@ -4023,7 +4023,7 @@ function isCustomerMatchMapCardV721(item, customerMatchContextV719) {
 function addListItem(item, appendTarget, customerMatchContextV719) {
   var div = document.createElement("div");
   var customerMatchMapCardV721 = isCustomerMatchMapCardV721(item, customerMatchContextV719);
-  var printSelected = selectedPrintKeys.includes(item.key);
+  var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
   var memoOpen = openMemoKey === item.key;
   var memoEditing = editingMemoKey === item.key;
   var cachedBuildingBadgeV6519 =
@@ -4068,6 +4068,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
       : "");
 
   var encodedKey = encodeURIComponent(item.key);
+  var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
   var encodedEditTargetV648 = encodeURIComponent(
     item.propertyId
       ? "id:" + String(item.propertyId).trim()
@@ -4151,7 +4152,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
             '<input type="checkbox" class="action-select-check" ' +
               (printSelected ? 'checked' : '') +
-              ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedKey + '\')">' +
+              ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')">' +
           '</label>' +
           '<span class="item-building-year-v650 item-building-year-head-v652' +
             cachedBuildingYearClassV6519 +
@@ -4607,6 +4608,13 @@ function toggleDoneStatus(encodedKey, checked) {
 }
 
 
+function actionSelectionKeyV660(item) {
+  var propertyId = String(item && item.propertyId || "").trim();
+  return propertyId ? "property:" + propertyId : String(item && item.key || "");
+}
+
+window.actionSelectionKeyV660 = actionSelectionKeyV660;
+
 function togglePrintSelection(encodedKey) {
   var key = decodeURIComponent(encodedKey);
 
@@ -4622,8 +4630,9 @@ function togglePrintSelection(encodedKey) {
 
 function selectAllVisibleItems() {
   visibleListItems.forEach(function(item) {
-    if (!selectedPrintKeys.includes(item.key)) {
-      selectedPrintKeys.push(item.key);
+    var key = actionSelectionKeyV660(item);
+    if (key && !selectedPrintKeys.includes(key)) {
+      selectedPrintKeys.push(key);
     }
   });
 
@@ -4648,7 +4657,7 @@ function syncListMasterCheckbox() {
   var checkbox = document.getElementById("listMasterCheckbox");
   if (!checkbox) return;
 
-  var visibleKeys = (visibleListItems || []).map(function(item) { return item.key; });
+  var visibleKeys = (visibleListItems || []).map(actionSelectionKeyV660).filter(Boolean);
   var selectedCount = visibleKeys.filter(function(key) {
     return selectedPrintKeys.includes(key);
   }).length;
@@ -4768,8 +4777,9 @@ function markSelectedAsVisited() {
   var previousValues = {};
 
   targetItems.forEach(function(item) {
-    previousValues[item.key] = item.memo || "";
-    doneTogglePendingKeys[item.key] = true;
+    var selectionKey = actionSelectionKeyV660(item);
+    previousValues[selectionKey] = item.memo || "";
+    doneTogglePendingKeys[selectionKey] = true;
     item.memo = markFieldVisitConfirmedInMemo(item.memo || "");
   });
 
@@ -4803,7 +4813,7 @@ function markSelectedAsVisited() {
 
   Promise.all(requests).then(function(results) {
     targetItems.forEach(function(item) {
-      delete doneTogglePendingKeys[item.key];
+      delete doneTogglePendingKeys[actionSelectionKeyV660(item)];
     });
 
     selectedPrintKeys = [];
@@ -4823,8 +4833,9 @@ function markSelectedAsVisited() {
     console.error(error);
 
     targetItems.forEach(function(item) {
-      item.memo = previousValues[item.key] || "";
-      delete doneTogglePendingKeys[item.key];
+      var selectionKey = actionSelectionKeyV660(item);
+      item.memo = previousValues[selectionKey] || "";
+      delete doneTogglePendingKeys[selectionKey];
     });
 
     refreshDoneStatusUI(true);
@@ -4861,7 +4872,7 @@ function completeSelectedItems() {
   var scrollTop = sidebar ? sidebar.scrollTop : 0;
 
   selectedItems.forEach(function(item) {
-    doneTogglePendingKeys[item.key] = true;
+    doneTogglePendingKeys[actionSelectionKeyV660(item)] = true;
     item.state = "계약완료";
     item.memo = makeDoneMemo(item.memo || "", true);
   });
@@ -4892,7 +4903,7 @@ function completeSelectedItems() {
 
   Promise.all(requests).then(function(results) {
     selectedItems.forEach(function(item) {
-      delete doneTogglePendingKeys[item.key];
+      delete doneTogglePendingKeys[actionSelectionKeyV660(item)];
     });
 
     selectedPrintKeys = [];
@@ -4912,7 +4923,7 @@ function completeSelectedItems() {
     console.error(error);
 
     selectedItems.forEach(function(item) {
-      delete doneTogglePendingKeys[item.key];
+      delete doneTogglePendingKeys[actionSelectionKeyV660(item)];
     });
 
     refreshDoneStatusUI(true);
@@ -4923,7 +4934,7 @@ function completeSelectedItems() {
 
 function getSelectedPrintItems() {
   return allItems.filter(function(item) {
-    return selectedPrintKeys.includes(item.key);
+    return selectedPrintKeys.includes(actionSelectionKeyV660(item));
   });
 }
 

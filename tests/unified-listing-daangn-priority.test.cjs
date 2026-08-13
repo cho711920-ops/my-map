@@ -74,4 +74,21 @@ assert.deepEqual(
 );
 assert.equal(daangnPhotoItems[0].thumbnailV8, "daangn-photo.jpg");
 
+const preservedDaangnItems = [{propertyId: "MASTER-4", sourceLink: ""}];
+window.JSUnifiedListingsV8.attach(preservedDaangnItems, {
+  groups: {
+    "MASTER-4": [
+      {originalId: "GONGSIL-PRIMARY", propertyId: "MASTER-4", source: "Gongsil", thumbnail: ""},
+      {originalId: "DAANGN-PRESERVED", propertyId: "MASTER-4", source: "Daangn",
+        thumbnail: "daangn-preserved.jpg", preserveRepresentative: true}
+    ]
+  }
+});
+
+assert.deepEqual(
+  Array.from(preservedDaangnItems[0].unifiedOriginalsV8, original => original.originalId),
+  ["DAANGN-PRESERVED", "GONGSIL-PRIMARY"]
+);
+assert.equal(preservedDaangnItems[0].thumbnailV8, "daangn-preserved.jpg");
+
 console.log("unified listing daangn priority tests passed");

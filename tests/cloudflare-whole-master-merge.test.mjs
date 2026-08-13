@@ -36,6 +36,6 @@ test("merge cache invalidation finishes before the response is rendered", () => 
   assert.match(worker, /OPERATIONS_DASHBOARD_CACHE_KEY,[\s\S]*?\.\.\.wholeMergeDetailKeys/);
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /mutationAction\(body\) === "moveOriginalListing"\) \{\s*await invalidation;/);
-  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.25-photo-priority/);
+  assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.26-representative-priority/);
   assert.match(html, /css\/unified-listings-v8\.css\?v=8\.0\.39-whole-master-merge/);
 });

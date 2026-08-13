@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { separatedMasterValues } from "../cloudflare/src/d1-api.js";
+import { remainingMasterValues, separatedMasterValues } from "../cloudflare/src/d1-api.js";
 
 test("separating an original builds a source-specific active master", () => {
   const value = separatedMasterValues({
@@ -39,6 +39,39 @@ test("separating an original builds a source-specific active master", () => {
   assert.equal(value.memo, "내부 화장실 2개");
 });
 
+test("the source master adopts the remaining originals' rental terms after separation", () => {
+  const parent = {
+    deposit: 3000,
+    monthly_rent: 150,
+    maintenance_fee: 0,
+    premium: 1,
+    area_m2: 20.9,
+    room: "1층",
+    listing_type: "상가점포"
+  };
+  const value = remainingMasterValues([
+    {
+      source: "당근",
+      list_snapshot_json: JSON.stringify({ deposit: 1000, rent: 75, fee: 1, premium: 0, area: 9.9 })
+    },
+    {
+      source: "네이버",
+      list_snapshot_json: JSON.stringify({ deposit: 1000, rent: 75, area: 10 })
+    },
+    {
+      source: "네이버",
+      list_snapshot_json: JSON.stringify({ deposit: 3000, rent: 150, area: 20.9 })
+    }
+  ], parent, "M-remaining");
+
+  assert.equal(value.id, "M-remaining");
+  assert.equal(value.deposit, 1000);
+  assert.equal(value.rent, 75);
+  assert.equal(value.fee, 1);
+  assert.equal(value.premium, 0);
+  assert.equal(value.area, 9.9);
+});
+
 test("NEW target creates a master and moves source assets atomically", async () => {
   const d1 = await readFile(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
   const client = await readFile(new URL("../js/unified-listings-v8.js", import.meta.url), "utf8");
@@ -48,6 +81,8 @@ test("NEW target creates a master and moves source assets atomically", async () 
   assert.match(d1, /UPDATE listing_sources SET listing_id=\?1/);
   assert.match(d1, /UPDATE listing_media SET listing_id=\?1/);
   assert.match(d1, /UPDATE listing_contacts SET listing_id=\?1/);
+  assert.match(d1, /refreshMasterTermsStatement\(env, remainingValue, source\.listing_id, now\)/);
+  assert.match(d1, /sourceMasterRefreshed: !!remainingValue/);
   assert.match(d1, /'separateOriginalListing'/);
   assert.match(client, /JSDataAccessV6\.mutate\(action, payload/);
   assert.match(dataAccess, /messageFromPayload\(result, settings\.errorMessage \|\| "저장 요청 실패"\)/);

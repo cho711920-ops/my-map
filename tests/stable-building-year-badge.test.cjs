@@ -39,6 +39,6 @@ assert.equal(
 assert.match(script, /var listCardReusePoolV6521 = null/);
 assert.match(script, /target\.appendChild\(reusableCard\)/);
 assert.match(html, /building-register-v6\.js\?v=8\.2\.7-elevator-registry/);
-assert.match(html, /script\.js\?v=6\.5\.79-source-listing-search/);
+assert.match(html, /script\.js\?v=6\.5\.80-property-selection/);
 
 console.log("stable building year badge tests passed");

@@ -18,7 +18,7 @@ test("property list keeps a bounded bidirectional render window", () => {
   assert.match(script, /data-rendered-start/);
   assert.match(script, /data-rendered-count/);
   assert.match(style, /#list \.list-virtual-top-spacer-v1/);
-  assert.match(html, /js\/script\.js\?v=6\.5\.79-source-listing-search/);
+  assert.match(html, /js\/script\.js\?v=6\.5\.80-property-selection/);
 });
 
 test("listing workflow no longer exposes legacy Google Sheet wording", () => {

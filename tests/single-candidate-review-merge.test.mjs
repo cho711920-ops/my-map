@@ -17,7 +17,7 @@ assert.match(collector, /autoMergeSingleCandidateAlias/);
 assert.match(collector, /processing_state='duplicate'[\s\S]*?canonicalReviewId/);
 assert.match(collector, /const protectListing = preserveRepresentative && !updateCondition/);
 assert.match(d1, /"preserveRepresentative"/);
-assert.match(listingUi, /preserveRepresentative\) return 10/);
+assert.doesNotMatch(listingUi, /preserveRepresentative\) return 10/);
 assert.match(worker, /collectorAdmin\.affectedListingIds/);
 assert.match(worker, /review\?\.affectedListingIds/);
 assert.match(collector, /shardCount/);

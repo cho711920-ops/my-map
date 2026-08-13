@@ -1287,6 +1287,44 @@ export function separatedMasterValues(sourceRow, parent, newId) {
   };
 }
 
+function remainingSourcePriority(source) {
+  const value = clean(source);
+  if (value === "당근") return 0;
+  if (value === "네이버") return 1;
+  if (value === "공실박스") return 2;
+  return 3;
+}
+
+export function remainingMasterValues(sourceRows, parent, masterId) {
+  const groups = new Map();
+  for (const [index, sourceRow] of (Array.isArray(sourceRows) ? sourceRows : []).entries()) {
+    const value = separatedMasterValues(sourceRow, parent, masterId);
+    const signature = `${value.deposit}|${value.rent}`;
+    const priority = remainingSourcePriority(value.source);
+    const current = groups.get(signature);
+    if (!current) {
+      groups.set(signature, { count: 1, value, priority, index });
+      continue;
+    }
+    current.count += 1;
+    if (priority < current.priority) {
+      current.value = value;
+      current.priority = priority;
+      current.index = index;
+    }
+  }
+  const ranked = [...groups.values()].sort((left, right) =>
+    right.count - left.count || left.priority - right.priority || left.index - right.index);
+  return ranked[0]?.value || null;
+}
+
+function refreshMasterTermsStatement(env, value, masterId, now) {
+  return env.DB.prepare(`UPDATE listings SET deposit=?1, monthly_rent=?2,
+      maintenance_fee=?3, premium=?4, area_m2=?5, version=version+1, updated_at=?6
+    WHERE id=?7 AND status<>'deleted'`)
+    .bind(value.deposit, value.rent, value.fee, value.premium, value.area, now, masterId);
+}
+
 async function moveOriginal(env, user, body) {
   const originalId = clean(body.originalId).slice(0, 160);
   const targetMasterId = clean(body.targetMasterId).slice(0, 100);
@@ -1305,15 +1343,21 @@ async function moveOriginal(env, user, body) {
     throw Object.assign(new Error("원본매물이 갱신되었습니다. 상세창을 다시 열고 시도해 주세요."), { statusCode: 409 });
   }
   const now = new Date().toISOString();
+  const sourceParent = {
+    ...source,
+    source_url: source.master_source_url,
+    first_collected_at: source.master_first_collected_at,
+    last_collected_at: source.master_last_collected_at
+  };
+  const remainingResult = await env.DB.prepare(`SELECT * FROM listing_sources
+    WHERE listing_id=?1 AND id<>?2 AND active=1
+    ORDER BY last_collected_at DESC, rowid DESC`).bind(source.listing_id, originalId).all();
+  const remainingValue = remainingMasterValues(
+    remainingResult?.results || [], sourceParent, source.listing_id);
   if (targetMasterId === "NEW") {
     const newMasterId = `M-${crypto.randomUUID()}`;
-    const value = separatedMasterValues(source, {
-      ...source,
-      source_url: source.master_source_url,
-      first_collected_at: source.master_first_collected_at,
-      last_collected_at: source.master_last_collected_at
-    }, newMasterId);
-    const results = await env.DB.batch([
+    const value = separatedMasterValues(source, sourceParent, newMasterId);
+    const statements = [
       env.DB.prepare(`INSERT INTO listings (
           id, property_id, status, main_source, title, address, building_name, room, listing_type,
           deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude,
@@ -1337,34 +1381,46 @@ async function moveOriginal(env, user, body) {
         ) VALUES (?1, ?2, 'separateOriginalListing', ?3, ?4, ?5)`)
         .bind(value.id, originalId, clean(user?.email) || "web",
           JSON.stringify({ sourceMasterId: source.listing_id }),
-          JSON.stringify({ targetMasterId: value.id, separatedAt: now })),
+          JSON.stringify({ targetMasterId: value.id, separatedAt: now }))
+    ];
+    if (remainingValue) {
+      statements.push(refreshMasterTermsStatement(env, remainingValue, source.listing_id, now));
+    }
+    statements.push(
       env.DB.prepare(`UPDATE listings SET status='deleted', version=version+1, updated_at=?1
         WHERE id=?2 AND NOT EXISTS (SELECT 1 FROM listing_sources WHERE listing_id=?2)`)
         .bind(now, source.listing_id)
-    ]);
-    const sourceMasterRemoved = Number(results?.[5]?.meta?.changes || 0) > 0;
+    );
+    const results = await env.DB.batch(statements);
+    const sourceMasterRemoved = Number(results?.[results.length - 1]?.meta?.changes || 0) > 0;
     return { ok: true, persisted: true, queued: false, separated: true, originalId,
       propertyId: value.id, sourceMasterId: source.listing_id, targetMasterId: value.id,
-      sourceMasterRemoved,
+      sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
       operationAdjustments: { activeMaster: sourceMasterRemoved ? 0 : 1, history: 1 }, source: "D1" };
   }
   const target = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 AND status <> 'deleted'")
     .bind(targetMasterId).first();
   if (!target) throw Object.assign(new Error("통합할 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
-  const results = await env.DB.batch([
+  const statements = [
     env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
         list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2 WHERE id=?3`)
       .bind(targetMasterId, now, originalId),
     env.DB.prepare("UPDATE listing_media SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
       .bind(targetMasterId, now, originalId),
     env.DB.prepare("UPDATE listing_contacts SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
-      .bind(targetMasterId, now, originalId),
+      .bind(targetMasterId, now, originalId)
+  ];
+  if (remainingValue) {
+    statements.push(refreshMasterTermsStatement(env, remainingValue, source.listing_id, now));
+  }
+  statements.push(
     env.DB.prepare(`UPDATE listings SET status='deleted', version=version+1, updated_at=?1
       WHERE id=?2 AND id<>?3
         AND NOT EXISTS (SELECT 1 FROM listing_sources WHERE listing_id=?2)`)
       .bind(now, source.listing_id, targetMasterId)
-  ]);
-  const sourceMasterRemoved = Number(results?.[3]?.meta?.changes || 0) > 0;
+  );
+  const results = await env.DB.batch(statements);
+  const sourceMasterRemoved = Number(results?.[results.length - 1]?.meta?.changes || 0) > 0;
   if (sourceMasterRemoved) {
     await env.DB.prepare(`INSERT INTO listing_history (
         listing_id, source_id, action, actor_email, before_json, after_json
@@ -1374,7 +1430,7 @@ async function moveOriginal(env, user, body) {
         JSON.stringify({ targetMasterId, removedAt: now })).run();
   }
   return { ok: true, persisted: true, queued: false, originalId, sourceMasterId: source.listing_id,
-    targetMasterId, sourceMasterRemoved,
+    targetMasterId, sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
     operationAdjustments: { activeMaster: sourceMasterRemoved ? -1 : 0, history: sourceMasterRemoved ? 1 : 0 }, source: "D1" };
 }
 
