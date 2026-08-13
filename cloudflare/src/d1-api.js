@@ -379,20 +379,30 @@ async function listingContacts(env, propertyId) {
   return { ok: true, action: "unifiedListingContacts", propertyId, contactCount: contacts.length, contacts };
 }
 
+export function tellContactSearchPatterns(query) {
+  const normalized = clean(query).replace(/\s+/g, " ").slice(0, 100);
+  return {
+    query: normalized,
+    pattern: `%${normalized}%`,
+    compactPattern: `%${normalized.replace(/\s+/g, "")}%`
+  };
+}
+
 async function tellContacts(env, query) {
-  const pattern = `%${clean(query).slice(0, 100)}%`;
+  const search = tellContactSearchPatterns(query);
   const result = await env.DB.prepare(`SELECT c.id, c.listing_id, c.role, c.name, c.phone,
       l.title, l.address, l.room
     FROM listing_contacts c JOIN listings l ON l.id = c.listing_id
     JOIN listing_sources s ON s.id = c.source_id
     WHERE c.status <> 'deleted' AND s.source = '공실박스' AND (
       c.phone LIKE ?1 OR c.normalized_phone LIKE ?1 OR c.name LIKE ?1 OR
-      l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1
-    ) ORDER BY c.last_seen_at DESC LIMIT 100`).bind(pattern).all();
+      l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1 OR
+      REPLACE(l.address, ' ', '') LIKE ?2
+    ) ORDER BY c.last_seen_at DESC LIMIT 100`).bind(search.pattern, search.compactPattern).all();
   return {
     ok: true,
     action: "tellContacts",
-    query: clean(query),
+    query: search.query,
     contacts: (result?.results || []).map((row) => ({
       id: row.id,
       propertyId: row.listing_id,
