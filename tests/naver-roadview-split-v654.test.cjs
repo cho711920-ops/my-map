@@ -39,6 +39,6 @@ assert.match(
 );
 
 assert.match(html, /script\.js\?v=6\.5\.81-card-instance-selection/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.40-detail-action-layout/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.41-source-link-spacing/);
 
 console.log("NAVER split roadview v6.5.54 tests passed");

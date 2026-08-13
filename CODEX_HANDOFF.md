@@ -788,3 +788,12 @@
 - `pnpm run cf:check`: Cloudflare 자산 126개 및 Wrangler 4.118.0 dry-run 통과
 - 운영 HTML·JavaScript·CSS와 브라우저 DOM에서 새 자산 버전, 출처 옆 링크 구조, 세 버튼 문구 및 줄바꿈 금지 스타일을 확인했다.
 - 운영 Worker 버전: `0347a4dd-7f12-4843-923a-f2312aa763cf`.
+
+## 2026-08-14 상세카드 출처·원본 링크 간격 보정
+
+- 선택한 원본의 출처명과 `원본 링크 ↗` 사이 간격을 8px에서 18px로 늘리고 자동 오른쪽 밀기를 제거해, 서로 붙어 보이지 않으면서 한 정보 묶음으로 읽히도록 조정했다.
+- 상세카드의 세 분리·합치기 버튼 한 줄 구성과 기능 로직은 그대로 유지한다.
+- CSS 캐시 버전은 `unified-listings-v8.css?v=8.0.41-source-link-spacing`으로 갱신했다.
+- `pnpm test` 248/248, `pnpm run test:cloudflare` 120/120, `pnpm run cf:check`를 통과했다.
+- 운영 배포 Worker 버전은 `2f814e32-7bb5-4754-9fd6-221411096821`이다.
+- 앱 내 브라우저에는 승인 계정용 Google 로그인 버튼이 표시되지만 자동 브라우저 제어가 교차 출처 Google iframe 내부를 누를 수 없어, 로그인 후 실제 상세카드 캡처는 사용자 로그인 세션 연결이 필요하다.

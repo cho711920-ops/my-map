@@ -231,9 +231,9 @@
   .unified-detail-summary-v8 { padding: 19px 18px; border-bottom: 1px solid #e2e8f0; }
   .unified-detail-source-address-v827 { display: flex; flex-direction: column; gap: 7px; }
   .unified-detail-source-address-v827 > strong { font-size: 19px; line-height: 1.35; }
-  .unified-detail-source-row-v827 { display: flex; min-width: 0; align-items: center; gap: 8px; }
+  .unified-detail-source-row-v827 { display: flex; min-width: 0; align-items: center; gap: 18px; }
   .unified-detail-source-link-v827 {
-    display: inline-flex; height: 27px; align-items: center; justify-content: center; margin-left: auto;
+    display: inline-flex; height: 27px; align-items: center; justify-content: center; margin-left: 0;
     padding: 0 9px; border: 1px solid #b9c9dc; border-radius: 999px; background: #fff;
     color: #31516f; font-size: 11px; font-weight: 850; letter-spacing: -.02em; white-space: nowrap; cursor: pointer;
   }

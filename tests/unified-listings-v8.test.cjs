@@ -27,6 +27,7 @@ assert.match(ui, /referrerpolicy="no-referrer"/);
 assert.match(css, /unified-detail-drawer-v8\.open/);
 assert.match(css, /unified-detail-actions-v8 \{ display: flex; flex-wrap: nowrap/);
 assert.match(css, /unified-detail-source-link-v827/);
+assert.match(css, /unified-detail-source-row-v827 \{[^}]*gap: 18px/);
 assert.match(css, /unified-gallery-nav-v8/);
 assert.match(css, /async-mutation-status-v1\.idle \{ display: none/);
 
