@@ -27,14 +27,28 @@
       : raw;
   }
   function desktop() { return global.innerWidth > 768; }
-  function sourcePriority(original) {
-    return sourceKey(original && original.source) === "danggeun" ? 0 : 1;
+  function sourcePriority(original, hasDaangn) {
+    var key = sourceKey(original && original.source);
+    var hasPhoto = originalImages(original).length > 0;
+    if (hasDaangn) {
+      if (key === "danggeun") return hasPhoto ? 0 : 1;
+      return hasPhoto ? 2 : 3;
+    }
+    if (key === "naver" && hasPhoto) return 0;
+    if (hasPhoto) return 1;
+    if (key === "naver") return 2;
+    return 3;
   }
   function orderOriginals(originals) {
-    return (originals || []).map(function(original, index) {
+    var values = originals || [];
+    var hasDaangn = values.some(function(original) {
+      return sourceKey(original && original.source) === "danggeun";
+    });
+    return values.map(function(original, index) {
       return {original: original, index: index};
     }).sort(function(left, right) {
-      return sourcePriority(left.original) - sourcePriority(right.original) || left.index - right.index;
+      return sourcePriority(left.original, hasDaangn) - sourcePriority(right.original, hasDaangn) ||
+        left.index - right.index;
     }).map(function(entry) { return entry.original; });
   }
   function group(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }

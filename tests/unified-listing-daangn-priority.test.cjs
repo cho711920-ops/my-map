@@ -39,4 +39,39 @@ const card = window.JSUnifiedListingsV8.cardParts(items[0]);
 assert.match(card.thumbnail, /daangn\.jpg/);
 assert.doesNotMatch(card.thumbnail, /naver\.jpg/);
 
+const naverOnlyItems = [{propertyId: "MASTER-2", sourceLink: ""}];
+window.JSUnifiedListingsV8.attach(naverOnlyItems, {
+  groups: {
+    "MASTER-2": [
+      {originalId: "NAVER-NO-PHOTO", propertyId: "MASTER-2", source: "Naver", thumbnail: ""},
+      {originalId: "NAVER-WITH-PHOTO", propertyId: "MASTER-2", source: "Naver", thumbnail: "naver-photo.jpg"},
+      {originalId: "GONGSIL-NO-PHOTO", propertyId: "MASTER-2", source: "Gongsil", thumbnail: ""}
+    ]
+  }
+});
+
+assert.deepEqual(
+  Array.from(naverOnlyItems[0].unifiedOriginalsV8, original => original.originalId),
+  ["NAVER-WITH-PHOTO", "NAVER-NO-PHOTO", "GONGSIL-NO-PHOTO"]
+);
+assert.equal(naverOnlyItems[0].thumbnailV8, "naver-photo.jpg");
+assert.match(window.JSUnifiedListingsV8.cardParts(naverOnlyItems[0]).thumbnail, /naver-photo\.jpg/);
+
+const daangnPhotoItems = [{propertyId: "MASTER-3", sourceLink: ""}];
+window.JSUnifiedListingsV8.attach(daangnPhotoItems, {
+  groups: {
+    "MASTER-3": [
+      {originalId: "DAANGN-NO-PHOTO", propertyId: "MASTER-3", source: "Daangn", thumbnail: ""},
+      {originalId: "DAANGN-WITH-PHOTO", propertyId: "MASTER-3", source: "Karrot", thumbnail: "daangn-photo.jpg"},
+      {originalId: "NAVER-WITH-PHOTO-2", propertyId: "MASTER-3", source: "Naver", thumbnail: "naver-photo-2.jpg"}
+    ]
+  }
+});
+
+assert.deepEqual(
+  Array.from(daangnPhotoItems[0].unifiedOriginalsV8, original => original.originalId),
+  ["DAANGN-WITH-PHOTO", "DAANGN-NO-PHOTO", "NAVER-WITH-PHOTO-2"]
+);
+assert.equal(daangnPhotoItems[0].thumbnailV8, "daangn-photo.jpg");
+
 console.log("unified listing daangn priority tests passed");
