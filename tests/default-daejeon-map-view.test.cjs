@@ -11,7 +11,7 @@ assert.match(
   mapSource,
   /var jsDefaultMapCenterV6524 = \{\s*lat: 36\.3504,\s*lng: 127\.3845\s*\};/
 );
-assert.match(mapSource, /var jsDefaultMapLevelV6524 = 8;/);
+assert.match(mapSource, /var jsDefaultMapLevelV6524 = 7;/);
 assert.match(mapSource, /var jsLegacyDefaultMapLevelV690 = 7;/);
 assert.match(
   mapSource,
@@ -34,6 +34,6 @@ assert.match(
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
 assert.match(indexSource, /js\/script\.js\?v=6\.5\.81-card-instance-selection/);
-assert.match(indexSource, /js\/map\.js\?v=8\.2\.9-world-grid-viewport-count/);
+assert.match(indexSource, /js\/map\.js\?v=8\.2\.11-initial-1km-neighborhood/);
 
 console.log("default Daejeon map view tests passed");

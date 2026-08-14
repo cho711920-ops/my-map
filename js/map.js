@@ -33,7 +33,7 @@ var jsDefaultMapCenterV6524 = {
   lat: 36.3504,
   lng: 127.3845
 };
-var jsDefaultMapLevelV6524 = 8;
+var jsDefaultMapLevelV6524 = 7;
 var jsLegacyDefaultMapLevelV690 = 7;
 var jsAdministrativeListSelectionV6570 = null;
 var jsAutomaticDataRefreshIntervalV681 = 5 * 60 * 1000;
