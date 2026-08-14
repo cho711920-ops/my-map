@@ -1,5 +1,27 @@
 # JS부동산 Codex 인수인계
 
+## 2026-08-14 v6-cloud 입점진단 저장 데이터 접근 계층 전환
+
+- 작업 시작 시 `CODEX_HANDOFF.md`를 UTF-8로 확인하고 `git fetch --prune origin` 및 `git pull --ff-only`을 실행했다. 원격의 최신 8개 커밋을 fast-forward로 반영했으며 작업 시작 기준 HEAD는 `e593242`였다.
+- HANDOFF의 다음 작업이었던 `js/diagnosis-storage.js`의 `loadCloudState` 조회와 `saveCloudState` 저장을 `JSDataAccessV6.read/mutate` 공통 경계에 연결했다. 진단 레코드 키·업종별 분리·변경 이력·로컬 저장 형식과 STEP 6 화면 동작은 바꾸지 않았다.
+- 기존 5초 요청 제한을 공통 경계에서도 유지하기 위해 `JSDataAccessV6.read/mutate`가 호출자의 `AbortSignal`을 실제 요청에 전달하도록 확장했다. 클라우드 조회 실패·미발견 시 로컬 진단을 반환하고, 브라우저 저장공간 초과 시에도 클라우드 저장을 계속하며, 클라우드 저장 실패 시 로컬 기록을 보존한 채 기존 경고를 반환한다.
+- 공통 모듈이 없거나 필요한 메서드를 제공하지 않는 구형·비정상 로딩 환경에서는 기존 `saveApiURL` 또는 `/api/data` 직접 GET·POST 요청을 그대로 사용한다. 공통 경계와 직접 fallback 모두 동일한 `permitDiagnosis` 범위와 요청 본문을 사용한다.
+- 데이터 접근 자산은 `data-access-v6.js?v=6.0.1-request-signals`, 진단 저장 자산은 `diagnosis-storage.js?v=1.2.1-data-access`로 갱신했다. `docs/CLOUDFLARE_MIGRATION.md`에도 입점진단 적용 범위와 보존 계약을 반영했다.
+
+### 테스트와 빌드
+
+- 진단 저장·공통 경계 집중 실행 테스트와 기존 입점진단 STEP 6 테스트: 통과
+- `pnpm test`: 261/261 통과
+- `pnpm run test:cloudflare`: 132/132 통과
+- `pnpm run cf:check`: Cloudflare 자산 126개 빌드 및 Wrangler 4.118.0 dry-run 통과
+- `js/diagnosis-storage.js`, `js/data-access-v6.js` 문법 검사와 `git diff --check`: 통과
+
+### 남은 작업과 주의사항
+
+- 공통 경계로 전환된 모듈의 직접 `fetch`는 모듈 미로딩 시 호환 fallback이므로 실제 브라우저 회귀 확인 전까지 제거하지 않는다.
+- 다음 데이터 접근 정리는 아직 공통 경계가 없는 `announcement-v1.js`, `listing-duplicate-cleanup-v1.js`, 빠른등록·지오코딩 저장 경로를 기능별 실행 테스트와 함께 우선순위화한 뒤 진행한다. `mode: no-cors`와 비동기 작업 큐 계약이 섞인 경로는 일괄 치환하지 않는다.
+- D1 스키마·운영 데이터·R2 객체는 변경하지 않았고 이번 작업에서 운영 Worker 배포도 수행하지 않았다.
+
 ## 2026-08-14 초기 1km 동 단위 클러스터 고정
 
 - 운영 브라우저에서 카카오 축척을 직접 측정해 `level 8=2km`, `level 7=1km`임을 확인했습니다. 기본 지도 확대 단계를 `level 8`에서 `level 7`로 변경해 첫 화면과 초기화 버튼 사용 시 실제 1km 동 단위로 열리도록 고정했습니다.

@@ -164,27 +164,56 @@
     }
   }
 
-  function request(url, options) {
+  function withTimeout(work) {
     var controller = new AbortController();
     var timer = global.setTimeout(function () { controller.abort(); }, 5000);
-    var requestOptions = Object.assign({}, options || {}, { signal: controller.signal });
-    return fetch(url, requestOptions).then(function (response) {
-      return response.json().then(function (result) {
-        if (!response.ok || !result || result.ok === false) {
-          throw new Error(result && result.message || "진단 저장 서버가 응답하지 않았습니다.");
-        }
-        return result;
-      });
+    return Promise.resolve().then(function () {
+      return work(controller.signal);
     }).finally(function () {
       global.clearTimeout(timer);
     });
   }
 
+  function request(url, options) {
+    return withTimeout(function (signal) {
+      var requestOptions = Object.assign({}, options || {}, { signal: signal });
+      return fetch(url, requestOptions).then(function (response) {
+        return response.json().then(function (result) {
+          if (!response.ok || !result || result.ok === false) {
+            throw new Error(result && result.message || "진단 저장 서버가 응답하지 않았습니다.");
+          }
+          return result;
+        });
+      });
+    });
+  }
+
+  function sharedAccess(method) {
+    var access = global.JSDataAccessV6;
+    return access && typeof access[method] === "function" ? access : null;
+  }
+
   function load(recordKey) {
-    var url = (global.saveApiURL || "/api/data") +
-      "?action=loadCloudState&scope=" + encodeURIComponent(SCOPE) +
-      "&recordKey=" + encodeURIComponent(recordKey) + "&_=" + Date.now();
-    return request(url, { credentials: "same-origin", cache: "no-store" })
+    var access = sharedAccess("read");
+    var cloudLoad;
+    if (access) {
+      cloudLoad = withTimeout(function (signal) {
+        return access.read("loadCloudState", {
+          scope: SCOPE,
+          recordKey: recordKey
+        }, {
+          cache: "no-store",
+          signal: signal,
+          errorMessage: "진단 저장 서버가 응답하지 않았습니다."
+        });
+      });
+    } else {
+      var url = (global.saveApiURL || "/api/data") +
+        "?action=loadCloudState&scope=" + encodeURIComponent(SCOPE) +
+        "&recordKey=" + encodeURIComponent(recordKey) + "&_=" + Date.now();
+      cloudLoad = request(url, { credentials: "same-origin", cache: "no-store" });
+    }
+    return cloudLoad
       .then(function (result) {
         if (result.found && result.data) {
           try {
@@ -201,18 +230,30 @@
 
   function save(record) {
     var localSaved = saveLocal(record);
-    return request(global.saveApiURL || "/api/data", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "saveCloudState",
-        scope: SCOPE,
-        recordKey: record.recordKey,
-        data: record,
-        version: Date.now()
+    var payload = {
+      scope: SCOPE,
+      recordKey: record.recordKey,
+      data: record,
+      version: Date.now()
+    };
+    function saveThroughFallback() {
+      return request(global.saveApiURL || "/api/data", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(Object.assign({ action: "saveCloudState" }, payload))
+      });
+    }
+    var access = sharedAccess("mutate");
+    var cloudSave = access
+      ? withTimeout(function (signal) {
+        return access.mutate("saveCloudState", payload, {
+          signal: signal,
+          errorMessage: "진단 저장 서버가 응답하지 않았습니다."
+        });
       })
-    }).then(function () {
+      : saveThroughFallback();
+    return cloudSave.then(function () {
       return { record: record, cloudSaved: true, localSaved: localSaved };
     }).catch(function (error) {
       return {

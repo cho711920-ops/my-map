@@ -8,6 +8,7 @@ const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", import.meta.url), "utf8");
 const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", import.meta.url), "utf8");
 const asyncMutationSource = readFileSync(new URL("../js/async-mutation-queue-v1.js", import.meta.url), "utf8");
+const diagnosisStorageSource = readFileSync(new URL("../js/diagnosis-storage.js", import.meta.url), "utf8");
 const operationsSources = [
   "operations-center-v7.js",
   "operations-collection-v8.js",
@@ -52,6 +53,7 @@ test("data access loads before every legacy UI consumer", () => {
     "js/script.js",
     "js/list-manager-v6.js",
     "js/ai-visit-session-v6.js",
+    "js/diagnosis-storage.js",
     "js/map.js",
     "js/operations-center-v7.js",
     "js/operations-collection-v8.js",
@@ -59,6 +61,17 @@ test("data access loads before every legacy UI consumer", () => {
   ]) {
     assert.ok(accessIndex < html.indexOf(`src="${consumer}`), `${consumer} must load after the data boundary`);
   }
+});
+
+test("diagnosis storage uses the shared Cloudflare data boundary with a legacy fallback", () => {
+  assert.match(diagnosisStorageSource, /access\.read\("loadCloudState",/);
+  assert.match(diagnosisStorageSource, /access\.mutate\("saveCloudState", payload,/);
+  assert.match(diagnosisStorageSource, /typeof access\[method\] === "function"/);
+  assert.match(diagnosisStorageSource, /request\(url, \{ credentials: "same-origin", cache: "no-store" \}\)/);
+  assert.match(diagnosisStorageSource, /return request\(global\.saveApiURL \|\| "\/api\/data",/);
+  assert.match(diagnosisStorageSource, /controller\.abort\(\)/);
+  assert.match(html, /data-access-v6\.js\?v=6\.0\.1-request-signals/);
+  assert.match(html, /diagnosis-storage\.js\?v=1\.2\.1-data-access/);
 });
 
 test("async mutation queue uses the shared boundary and preserves its legacy fallback", () => {
@@ -128,6 +141,22 @@ test("data access mutations preserve action payload and surface D1 failures", as
   );
   assert.deepEqual(savedBody, { propertyId: "M-1", memo: "test", action: "updateProperty" });
   assert.equal(requestOptions.keepalive, true);
+});
+
+test("data access forwards caller cancellation signals", async () => {
+  const requests = [];
+  const signal = {aborted: false};
+  const client = clientWith(async (url, options) => {
+    requests.push({url, options});
+    return new Response(JSON.stringify({ok: true}), {status: 200});
+  });
+
+  await client.read("loadCloudState", {scope: "permitDiagnosis"}, {signal});
+  await client.mutate("saveCloudState", {scope: "permitDiagnosis"}, {signal});
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].options.signal, signal);
+  assert.equal(requests[1].options.signal, signal);
 });
 
 test("listing CSV requests keep the existing force-refresh contract", async () => {

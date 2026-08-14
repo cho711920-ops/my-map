@@ -29,7 +29,8 @@
     var settings = options || {};
     return request(DATA_API + "?" + query.toString(), {
       cache: settings.cache || "no-store",
-      headers: settings.headers || undefined
+      headers: settings.headers || undefined,
+      signal: settings.signal || undefined
     }).then(function(response) {
       return response.json().catch(function() { return null; }).then(function(payload) {
         if (!response.ok) {
@@ -54,6 +55,7 @@
       method: "POST",
       cache: "no-store",
       keepalive: settings.keepalive === true,
+      signal: settings.signal || undefined,
       headers: Object.assign({ "Content-Type": "application/json" }, settings.headers || {}),
       body: JSON.stringify(body)
     }).then(function(response) {
