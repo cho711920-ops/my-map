@@ -137,8 +137,9 @@ assert.match(
   /function getStableClusterSourceItemsV690[\s\S]*?getAdministrativeClusterModeV655\(level\)[\s\S]*?return \(fallbackItems \|\| \[\]\)\.slice\(\)[\s\S]*?ignoreMapBounds: true/
 );
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?world-grid-cluster-v690/);
+assert.match(css, /js-world-grid-clusters-v690 \.circle-marker\.world-grid-cluster-v690 \{[\s\S]*?border: 0 !important;/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-district-v690/);
-assert.match(html, /style\.css\?v=6\.5\.40-world-grid-clusters/);
+assert.match(html, /style\.css\?v=6\.5\.41-borderless-world-grid/);
 assert.match(html, /map\.js\?v=8\.2\.9-world-grid-viewport-count/);
 
 console.log("world grid cluster v6.9.0 tests passed");

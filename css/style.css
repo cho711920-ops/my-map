@@ -8395,7 +8395,7 @@ body,
    - 행정구역 카드는 수량과 무관하게 일정한 크기를 유지합니다.
    ========================================================= */
 .js-world-grid-clusters-v690 .circle-marker.world-grid-cluster-v690 {
-  border: 2px solid rgba(255, 255, 255, .92) !important;
+  border: 0 !important;
   box-shadow: 0 3px 10px rgba(8, 75, 154, .24) !important;
 }
 

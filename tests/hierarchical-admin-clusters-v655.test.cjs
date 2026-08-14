@@ -225,6 +225,6 @@ assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655 
 assert.ok(html.includes("map.js?v=8.2.9-world-grid-viewport-count"));
 assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 5 \* 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
-assert.ok(html.includes("style.css?v=6.5.40-world-grid-clusters"));
+assert.ok(html.includes("style.css?v=6.5.41-borderless-world-grid"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");
