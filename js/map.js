@@ -1708,12 +1708,18 @@ function loadSheet(isAuto, forceRefresh) {
   });
 
   /*
-   * 공용 좌표 캐시는 지도 마커에만 필요합니다. 큰 좌표 응답을 기다리느라
-   * 매물목록까지 늦어지지 않도록 D1 통합자료와 동시에 시작하되 기본 목록은 D1 CSV가 오면 표시합니다.
+   * 공용 좌표 캐시는 D1 CSV에 좌표가 빠진 행이 있을 때만 지연 요청합니다.
+   * 현재처럼 모든 행에 좌표가 있으면 초기 네트워크와 JSON 파싱에서 제외합니다.
    */
-  var sharedGeocodeRequest = typeof loadSharedGeocodeCache === "function"
-    ? loadSharedGeocodeCache()
-    : Promise.resolve({ ok: false, entries: {} });
+  var sharedGeocodeRequest = null;
+  function getSharedGeocodeRequestV691() {
+    if (!sharedGeocodeRequest) {
+      sharedGeocodeRequest = typeof loadSharedGeocodeCache === "function"
+        ? loadSharedGeocodeCache()
+        : Promise.resolve({ ok: false, entries: {} });
+    }
+    return sharedGeocodeRequest;
+  }
 
   return sheetRequest
     .then(function(data) {
@@ -1770,6 +1776,13 @@ function loadSheet(isAuto, forceRefresh) {
 
         item.key = itemKey(item);
 
+        if (Number.isFinite(item.latitude) && Number.isFinite(item.longitude) &&
+            item.latitude >= -90 && item.latitude <= 90 &&
+            item.longitude >= -180 && item.longitude <= 180 &&
+            window.kakao && kakao.maps) {
+          item.latlng = new kakao.maps.LatLng(item.latitude, item.longitude);
+        }
+
         if (item.address) rawItems.push(item);
       }
 
@@ -1786,7 +1799,12 @@ function loadSheet(isAuto, forceRefresh) {
       allItems = rawItems;
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
-      var keptPinnedClusterListV685 = showListWithoutReleasingPinnedClusterV685(currentItems);
+      var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {
+        return !!item.latlng;
+      });
+      var keptPinnedClusterListV685 = allRowsAlreadyLocatedV691
+        ? false
+        : showListWithoutReleasingPinnedClusterV685(currentItems);
       /*
        * Missing building data is resolved only for cards that enter the visible
        * list. Bulk-prefetching every address kept server functions alive long
@@ -1794,10 +1812,27 @@ function loadSheet(isAuto, forceRefresh) {
        */
       if (!keptPinnedClusterListV685) {
         document.getElementById("status").innerHTML =
-          "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
+          allRowsAlreadyLocatedV691
+            ? "매물 " + currentItems.length + "개 지도 표시 중..."
+            : "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
       }
 
-      sharedGeocodeRequest.then(function() {
+      /*
+       * 현재 D1 CSV에 좌표가 모두 있으면 0.7MB 공용 좌표 캐시 요청과
+       * 목록/클러스터의 두 번째 렌더를 생략하고 즉시 한 번만 그립니다.
+       */
+      if (allRowsAlreadyLocatedV691 && !isAuto) {
+        applyFilter();
+        updateErrorStatus();
+        pendingAutoUpdate = false;
+        isLoadingSheet = false;
+        document.getElementById("status").innerHTML = "매물 " + allItems.length + "개 불러옴";
+        return true;
+      }
+
+      (allRowsAlreadyLocatedV691
+        ? Promise.resolve({ ok: true, entries: {} })
+        : getSharedGeocodeRequestV691()).then(function() {
         geocodeItems(rawItems, function(doneItems) {
         var hasPendingPropertyEditV638 =
           typeof pendingPropertyEditStateV634 !== "undefined" &&

@@ -13,5 +13,15 @@ assert.match(
   /allItems = rawItems;[\s\S]*?getFilteredItems\(\{ includeUnlocated: true \}\);[\s\S]*?showListWithoutReleasingPinnedClusterV685\(currentItems\);[\s\S]*?geocodeItems\(rawItems/
 );
 assert.match(mapSource, /개 목록 먼저 표시 · 지도 좌표 준비 중/);
+assert.match(mapSource, /function getSharedGeocodeRequestV691\(\)/);
+assert.match(mapSource, /var allRowsAlreadyLocatedV691 = rawItems\.length > 0/);
+assert.match(
+  mapSource,
+  /if \(allRowsAlreadyLocatedV691 && !isAuto\) \{[\s\S]*?applyFilter\(\);[\s\S]*?isLoadingSheet = false;[\s\S]*?return true;/
+);
+assert.match(
+  mapSource,
+  /allRowsAlreadyLocatedV691[\s\S]*?Promise\.resolve\(\{ ok: true, entries: \{\} \}\)[\s\S]*?getSharedGeocodeRequestV691\(\)/
+);
 
 console.log("initial list before geocode tests passed");

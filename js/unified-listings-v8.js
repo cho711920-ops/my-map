@@ -7,7 +7,7 @@
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
-    photoPreloads: {}, photoPreloadOrder: [], photoWarmupTimer: 0 };
+    photoPreloads: {}, pendingDetailSteps: {} };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function encodedExternalLink(value) {
@@ -100,19 +100,27 @@
   function preloadDetailImage(url, highPriority) {
     var source = detailDisplayImageUrl(url);
     if (!source) return null;
-    if (state.photoPreloads[source]) return state.photoPreloads[source];
+    if (state.photoPreloads[source]) return null;
 
     var preload = new Image();
     preload.decoding = "async";
     preload.referrerPolicy = "no-referrer";
     try { preload.fetchPriority = highPriority ? "high" : "low"; } catch (ignore) {}
-    state.photoPreloads[source] = preload;
-    state.photoPreloadOrder.push(source);
-    while (state.photoPreloadOrder.length > 80) {
-      delete state.photoPreloads[state.photoPreloadOrder.shift()];
-    }
+    /*
+     * Image DOM 객체를 전역 캐시에 보관하면 압축된 파일 크기와 별개로
+     * 디코딩 비트맵이 수십~수백 MB까지 남을 수 있습니다. 요청 중복만
+     * boolean으로 막고 실제 Image 객체는 로드가 끝난 뒤 GC에 맡깁니다.
+     */
+    state.photoPreloads[source] = true;
     preload.onload = function() {
-      if (typeof preload.decode === "function") preload.decode().catch(function() {});
+      delete state.photoPreloads[source];
+      preload.onload = null;
+      preload.onerror = null;
+    };
+    preload.onerror = function() {
+      delete state.photoPreloads[source];
+      preload.onload = null;
+      preload.onerror = null;
     };
     preload.src = source;
     return preload;
@@ -148,11 +156,9 @@
   function primeDetailImages(originals) {
     if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
     var selected = orderOriginals(originals)[0];
-    /* 첫 장은 목록 썸네일의 브라우저 캐시를 재사용하고 다음 장부터 먼저 받습니다. */
-    originalImages(selected).slice(1, 7).forEach(function(url, index) {
-      if (index < 2) preloadDetailImage(url, true);
-      else global.setTimeout(function() { preloadDetailImage(url, false); }, 700 + (index - 2) * 220);
-    });
+    /* 첫 장은 목록 캐시를 재사용하고 실제 다음 한 장만 준비합니다. */
+    var nextImage = originalImages(selected)[1];
+    if (nextImage) preloadDetailImage(nextImage, true);
   }
 
   function loadDetail(propertyId) {
@@ -189,31 +195,16 @@
   }
 
   function scheduleDetailWarmup(items) {
-    var seen = {};
-    state.detailWarmupIds = (items || []).map(function(item) { return text(item && item.propertyId); })
-      .filter(function(propertyId) {
-        if (!propertyId || seen[propertyId] || state.detailCache[propertyId] || state.detailPending[propertyId]) return false;
-        seen[propertyId] = true;
-        return needsDetail(group(propertyId), "");
-      }).slice(0, 8);
-    if (typeof global.setTimeout !== "function") return;
     if (state.detailWarmupTimer && typeof global.clearTimeout === "function") {
       global.clearTimeout(state.detailWarmupTimer);
     }
-    if (!state.detailWarmupIds.length) return;
-    state.detailWarmupTimer = global.setTimeout(function() {
-      var ids = state.detailWarmupIds.slice();
-      var cursor = 0;
-      function worker() {
-        if (cursor >= ids.length) return;
-        var propertyId = ids[cursor++];
-        loadDetail(propertyId).catch(function(error) {
-          console.warn("상세 사진 유휴 조회 실패", propertyId, error);
-        }).then(worker);
-      }
-      worker();
-      if (ids.length > 1) global.setTimeout(worker, 120);
-    }, 250);
+    state.detailWarmupTimer = 0;
+    state.detailWarmupIds = [];
+    /*
+     * 초기 목록 진입만으로 상세 8건과 사진 수십 장을 받지 않습니다.
+     * 카드 hover/focus/pointerdown과 실제 상세 열기만 loadDetail을 시작합니다.
+     */
+    return items || [];
   }
 
   function scheduleContactWarmup(items) {
@@ -567,6 +558,11 @@
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._failedImagesV8 = {};
       renderDetailPhoto(detailGallery, 0);
+      var pendingStep = state.pendingDetailSteps[text(propertyId)];
+      if (images.length > 1 && Number.isFinite(Number(pendingStep))) {
+        delete state.pendingDetailSteps[text(propertyId)];
+        renderDetailPhoto(detailGallery, Number(pendingStep));
+      }
     }
     showDetailDrawerV827(drawer);
   }
@@ -591,26 +587,27 @@
     var photoCount = Math.max(images.length, Number(gallery._photoCountV8) || 0);
     gallery.querySelectorAll(".unified-detail-photo-nav-v8").forEach(function(button) {
       button.hidden = photoCount < 2;
-      button.disabled = images.length < 2;
+      button.disabled = photoCount < 2;
     });
-    [1, 2].forEach(function(offset) {
-      if (images.length <= offset) return;
-      preloadDetailImage(images[(safeIndex + offset) % images.length], true);
-    });
-    if (state.photoWarmupTimer) global.clearTimeout(state.photoWarmupTimer);
-    state.photoWarmupTimer = global.setTimeout(function() {
-      [3, 4, 5].forEach(function(offset, delayedIndex) {
-        if (images.length <= offset) return;
-        global.setTimeout(function() {
-          preloadDetailImage(images[(safeIndex + offset) % images.length], false);
-        }, delayedIndex * 220);
-      });
-    }, 700);
+    if (images.length > 1) {
+      preloadDetailImage(images[(safeIndex + 1) % images.length], true);
+    }
   }
 
   function stepDetailPhoto(button, direction) {
     var gallery = button && button.closest(".unified-detail-gallery-v8");
     if (!gallery) return;
+    var images = gallery._imagesV8 || [];
+    var photoCount = Math.max(images.length, Number(gallery._photoCountV8) || 0);
+    if (images.length < 2 && photoCount > 1) {
+      var propertyId = text(gallery._propertyIdV8);
+      state.pendingDetailSteps[propertyId] = Number(direction || 0) < 0
+        ? Math.max(0, photoCount - 1)
+        : 1;
+      var counter = gallery.querySelector(".unified-detail-photo-count-v8");
+      if (counter) counter.textContent = "다음 사진 불러오는 중…";
+      return;
+    }
     renderDetailPhoto(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0));
   }
 
