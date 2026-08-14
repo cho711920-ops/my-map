@@ -148,6 +148,67 @@
     }, Math.max(250, Number(delay) || POLL_INTERVAL_MS));
   }
 
+  function mutateQueueData(action, payload) {
+    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.mutate === "function") {
+      return global.JSDataAccessV6.mutate(action, payload, {
+        keepalive: true,
+        errorMessage: "작업 대기열 접수 실패"
+      });
+    }
+    return fetch(API_URL, {
+      method: "POST", credentials: "same-origin", keepalive: true,
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(Object.assign({action: action}, payload || {}))
+    }).then(function(response) {
+      if (!response.ok) throw new Error("작업 대기열 접수 HTTP " + response.status);
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) throw new Error((result && result.message) || "작업 대기열 접수 실패");
+      return result;
+    });
+  }
+
+  function readQueueData(action, params) {
+    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.read === "function") {
+      return global.JSDataAccessV6.read(action, params, {
+        cache: "no-store",
+        errorMessage: "상태 조회 실패"
+      });
+    }
+    var query = new URLSearchParams(Object.assign({action: action}, params || {}));
+    return fetch(API_URL + "?" + query.toString(), {
+      credentials: "same-origin", cache: "no-store"
+    }).then(function(response) {
+      if (!response.ok) throw new Error("상태 조회 실패");
+      return response.json();
+    }).then(function(result) {
+      if (!result || result.ok === false) throw new Error((result && result.message) || "상태 조회 실패");
+      return result;
+    });
+  }
+
+  function queueMutationRequest(init) {
+    var body = {};
+    try { body = JSON.parse(init && init.body || "{}"); } catch (_) {}
+    var action = String(body.action || "enqueueMutation");
+    delete body.action;
+    return mutateQueueData(action, body).then(function(result) {
+      return {ok: true, json: function() { return Promise.resolve(result); }};
+    });
+  }
+
+  function queueStatusRequest(url, init) {
+    var queryText = String(url || "").split("?")[1] || "";
+    var query = new URLSearchParams(queryText);
+    var action = query.get("action") || "workQueueStatus";
+    query.delete("action");
+    var params = {};
+    query.forEach(function(value, key) { params[key] = value; });
+    return readQueueData(action, params).then(function(result) {
+      return {ok: true, json: function() { return Promise.resolve(result); }};
+    });
+  }
+
   function sendOutbox() {
     if (sending) return;
     var tasks = readOutbox();
@@ -157,7 +218,7 @@
     }
     sending = true;
     var task = tasks[0];
-    fetch(API_URL, {
+    queueMutationRequest({
       method: "POST",
       credentials: "same-origin",
       keepalive: true,
@@ -285,7 +346,7 @@
   }
 
   function refreshStatus() {
-    return fetch(API_URL + "?action=workQueueStatus&client=" + encodeURIComponent(STATUS_CLIENT_VERSION) + "&_=" + Date.now(), {
+    return queueStatusRequest(API_URL + "?action=workQueueStatus&client=" + encodeURIComponent(STATUS_CLIENT_VERSION) + "&_=" + Date.now(), {
       credentials: "same-origin",
       cache: "no-store"
     }).then(function(response) {

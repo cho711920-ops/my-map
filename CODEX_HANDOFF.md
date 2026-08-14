@@ -1,5 +1,15 @@
 # JS부동산 Codex 인수인계
 
+## 2026-08-14 비동기 저장 큐 공통 데이터 접근 계층 전환
+
+- 작업 시작 시 원격 브랜치를 `git pull --ff-only`로 최신화해 `98ed607 Space detail source link`까지 6개 커밋을 fast-forward로 반영한 뒤, 이전 HANDOFF의 다음 작업이었던 `js/async-mutation-queue-v1.js` 전환을 진행했습니다.
+- 비동기 저장 큐의 `enqueueMutation` 쓰기와 `workQueueStatus` 조회를 `JSDataAccessV6.mutate/read` 공통 경계로 연결했습니다. 공통 모듈을 불러오지 못한 구형·비정상 로딩 상황에서는 기존 `/api/data` 직접 요청을 그대로 사용합니다.
+- 저장 큐의 기존 계약인 동일 `requestId` 중복 방지, 실패 작업 로컬 보존, 3초 후 재시도, 서버 완료 감지, 작업 상태 이벤트와 페이지 종료 시 `keepalive` 요청을 유지했습니다. 이를 위해 `JSDataAccessV6.mutate`가 선택적으로 `keepalive`를 전달하도록 확장했습니다.
+- 실제 큐를 실행하는 테스트를 추가해 중복 요청이 한 번만 전송되는지, 실패 후 재시도되는지, 성공 시 outbox·활성 작업이 정리되는지, 상태 조회와 완료 이벤트가 유지되는지 검증했습니다. 자산 버전은 `async-mutation-queue-v1.js?v=1.0.9-data-access`입니다.
+- 전체 테스트 `251/251`, Cloudflare 테스트 `123/123`, `cf:check`, `git diff --check`를 통과했습니다. 운영 정적 자산은 HTTP `200`이고 배포본에서 공통 `mutate/read`, `keepalive` 전달 코드를 확인했습니다.
+- 운영 Worker 버전 `50e43fa3-4889-4dcb-969c-d6c986584f76`로 배포했습니다. D1 스키마·운영 데이터는 변경하지 않았습니다.
+- 다음 마이그레이션 대상은 `js/diagnosis-storage.js`입니다. 저장·조회 의미와 기존 직접 요청 fallback을 유지하면서 `JSDataAccessV6` 경계로 옮기고 같은 방식의 실행 테스트를 추가합니다.
+
 ## 2026-08-13 기존매물 1건 검증원본 자동 합치기
 
 - 매물검증 원본 중 저장된 후보가 1개이고, 실행 시점에도 같은 정확한 주소의 활성 대표매물이 실제로 1개뿐인 경우만 그 대표매물의 동일매물 하위 원본으로 자동 연결합니다. 같은 주소에 활성 대표매물이 여러 개인 건은 자동 처리하지 않고 검증대기에 유지합니다.

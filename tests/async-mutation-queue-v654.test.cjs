@@ -22,7 +22,9 @@ assert.match(queue, /function scheduleStatusPolling\(delay\)/);
 assert.match(queue, /document\.visibilityState === "hidden"/);
 assert.doesNotMatch(queue, /setInterval\(refreshStatus, 5000\)/);
 assert.match(html, /id="asyncMutationStatusV1"/);
-assert.match(html, /async-mutation-queue-v1\.js\?v=1\.0\.6-active-only-polling/);
+assert.match(html, /src="js\/async-mutation-queue-v1\.js\?v=1\.0\.9-data-access"/);
+assert.match(queue, /JSDataAccessV6\.mutate\(action, payload,/);
+assert.match(queue, /JSDataAccessV6\.read\(action, params,/);
 assert.match(css, /\.v6-toolbar-secondary\.v6-command-bar > \.async-mutation-status-v1/);
 
 assert.match(script, /postSafeMutationV654\("updatePropertyMemo"/);

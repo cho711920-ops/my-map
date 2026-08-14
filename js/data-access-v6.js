@@ -53,6 +53,7 @@
     return request(DATA_API, {
       method: "POST",
       cache: "no-store",
+      keepalive: settings.keepalive === true,
       headers: Object.assign({ "Content-Type": "application/json" }, settings.headers || {}),
       body: JSON.stringify(body)
     }).then(function(response) {

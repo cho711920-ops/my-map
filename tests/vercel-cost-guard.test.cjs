@@ -25,6 +25,6 @@ ok(proxy.includes('? await fetchWithTimeout(upstreamUrl(query), requestOptions)'
 ok(!proxy.includes('response = await fetchWithTimeout(upstreamUrl(query), {'),
   "the twenty-second timeout must not wrap every read-only Apps Script action");
 ok(queue.includes("client="), "the current queue client must identify itself to the server guard");
-ok(html.includes("1.0.8-legacy-server-guard"), "the browser cache key must be updated");
+ok(html.includes('src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"'), "the browser cache key must be updated");
 
 console.log("vercel cost guard tests passed");

@@ -7,6 +7,7 @@ const source = readFileSync(new URL("../js/data-access-v6.js", import.meta.url),
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", import.meta.url), "utf8");
 const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", import.meta.url), "utf8");
+const asyncMutationSource = readFileSync(new URL("../js/async-mutation-queue-v1.js", import.meta.url), "utf8");
 const operationsSources = [
   "operations-center-v7.js",
   "operations-collection-v8.js",
@@ -47,6 +48,7 @@ test("data access loads before every legacy UI consumer", () => {
   assert.ok(accessIndex >= 0);
   for (const consumer of [
     "js/unified-listings-v8.js",
+    "js/async-mutation-queue-v1.js",
     "js/script.js",
     "js/list-manager-v6.js",
     "js/ai-visit-session-v6.js",
@@ -57,6 +59,17 @@ test("data access loads before every legacy UI consumer", () => {
   ]) {
     assert.ok(accessIndex < html.indexOf(`src="${consumer}`), `${consumer} must load after the data boundary`);
   }
+});
+
+test("async mutation queue uses the shared boundary and preserves its legacy fallback", () => {
+  assert.match(asyncMutationSource, /JSDataAccessV6\.mutate\(action, payload,/);
+  assert.match(asyncMutationSource, /JSDataAccessV6\.read\(action, params,/);
+  assert.match(asyncMutationSource, /keepalive:\s*true/);
+  assert.match(asyncMutationSource, /return fetch\(API_URL,/);
+  assert.match(asyncMutationSource, /return fetch\(API_URL \+ "\?" \+ query\.toString\(\),/);
+  assert.match(asyncMutationSource, /setTimeout\(sendOutbox, 3000\)/);
+  assert.match(asyncMutationSource, /tasks\.some\(function\(item\) \{ return item\.requestId === requestId; \}\)/);
+  assert.match(html, /async-mutation-queue-v1\.js\?v=1\.0\.9-data-access/);
 });
 
 test("AI visit sessions use the shared Cloudflare data boundary with a legacy fallback", () => {
@@ -99,7 +112,9 @@ test("operations modules use the shared Cloudflare data boundary with a legacy f
 
 test("data access mutations preserve action payload and surface D1 failures", async () => {
   let savedBody;
+  let requestOptions;
   const client = clientWith(async (_url, options) => {
+    requestOptions = options;
     savedBody = JSON.parse(options.body);
     return new Response(JSON.stringify({ ok: false, message: "D1 write failed" }), {
       status: 409,
@@ -108,10 +123,11 @@ test("data access mutations preserve action payload and surface D1 failures", as
   });
 
   await assert.rejects(
-    client.mutate("updateProperty", { propertyId: "M-1", memo: "test" }),
+    client.mutate("updateProperty", { propertyId: "M-1", memo: "test" }, { keepalive: true }),
     (error) => error.message === "D1 write failed" && error.status === 409
   );
   assert.deepEqual(savedBody, { propertyId: "M-1", memo: "test", action: "updateProperty" });
+  assert.equal(requestOptions.keepalive, true);
 });
 
 test("listing CSV requests keep the existing force-refresh contract", async () => {
