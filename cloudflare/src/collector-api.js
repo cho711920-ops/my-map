@@ -107,6 +107,16 @@ function sourceName(value) {
   return clean(value).slice(0, 40);
 }
 
+const REPRESENTATIVE_SOURCE_PRIORITY = { "당근": 0, "네이버": 1, "공실박스": 2, "직접등록": 3 };
+
+export function shouldPromoteListingRepresentative(incomingSource, currentSource) {
+  const incoming = sourceName(incomingSource);
+  const current = sourceName(currentSource);
+  const incomingPriority = REPRESENTATIVE_SOURCE_PRIORITY[incoming] ?? 9;
+  const currentPriority = REPRESENTATIVE_SOURCE_PRIORITY[current] ?? 9;
+  return Boolean(incoming) && incomingPriority < currentPriority;
+}
+
 function normalizedAddress(value) {
   return clean(value)
     .replace(/^대한민국\s+/, "")
@@ -962,8 +972,10 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
+  const currentListing = await env.DB.prepare("SELECT main_source FROM listings WHERE id=?1").bind(listingId).first();
+  const promoteRepresentative = shouldPromoteListingRepresentative(record.source, currentListing?.main_source);
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
-  const protectListing = preserveRepresentative && !updateCondition;
+  const protectListing = preserveRepresentative && !updateCondition && !promoteRepresentative;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
   const snapshotHash = snapshotKey(record.listSnapshot || snapshot);
   const snapshotJson = JSON.stringify(snapshot);
@@ -992,8 +1004,22 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId).run();
     }
   }
-  const listingNeedsTouch = !protectListing && (!existingSource || sourceChanged || assets.changed || updateCondition);
-  const update = !protectListing && updateCondition
+  const listingNeedsTouch = !protectListing && (!existingSource || sourceChanged || assets.changed || updateCondition || promoteRepresentative);
+  const update = promoteRepresentative
+    ? env.DB.prepare(`UPDATE listings SET main_source=?1,
+        title=CASE WHEN ?2<>'' THEN ?2 ELSE title END,
+        building_name=CASE WHEN ?2<>'' THEN ?2 ELSE building_name END, room=?3, listing_type=?4,
+        deposit=?5, monthly_rent=?6, maintenance_fee=?7, premium=?8, area_m2=?9,
+        operating_memo=CASE WHEN ?10<>'' THEN ?10 ELSE operating_memo END,
+        source_url=CASE WHEN ?11<>'' THEN ?11 ELSE source_url END,
+        latitude=CASE WHEN ?12 IS NOT NULL THEN ?12 ELSE latitude END,
+        longitude=CASE WHEN ?13 IS NOT NULL THEN ?13 ELSE longitude END,
+        road_address=CASE WHEN ?14<>'' THEN ?14 ELSE road_address END,
+        version=version+1, last_collected_at=?15, updated_at=?15 WHERE id=?16`)
+      .bind(sourceName(record.source), record.buildingName, record.room, record.category, record.deposit,
+        record.rent, record.fee, record.premium, record.area, record.memo, record.link,
+        record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
+    : !protectListing && updateCondition
     ? env.DB.prepare(`UPDATE listings SET title=CASE WHEN ?1<>'' THEN ?1 ELSE title END,
         building_name=CASE WHEN ?1<>'' THEN ?1 ELSE building_name END, room=?2, listing_type=?3,
         deposit=?4, monthly_rent=?5, maintenance_fee=?6, premium=?7, area_m2=?8,
@@ -1019,8 +1045,9 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`).bind(listingId, sourceRowId,
         existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), snapshotJson));
   if (finalStatements.length) await env.DB.batch(finalStatements);
-  return { sourceRowId, changed: sourceChanged || assets.changed || updateCondition,
-    conditionChanged: conditionChanged || updateCondition,
+  return { sourceRowId, changed: sourceChanged || assets.changed || updateCondition || promoteRepresentative,
+    conditionChanged: conditionChanged || updateCondition || promoteRepresentative,
+    representativePromoted: promoteRepresentative,
     sourceChanged, mediaChanged: assets.mediaChanged, contactsChanged: assets.contactsChanged };
 }
 

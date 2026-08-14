@@ -9,9 +9,18 @@ import {
   manifestEntryMatch,
   mergeDaangnDetailWithList,
   normalizedRecord,
+  shouldPromoteListingRepresentative,
   shouldRefreshGongsilDetail,
   sourceConditionChanged
 } from "../cloudflare/src/collector-api.js";
+
+test("Daangn representative priority overrides preservation of a lower-priority source", () => {
+  assert.equal(shouldPromoteListingRepresentative("당근", "네이버"), true);
+  assert.equal(shouldPromoteListingRepresentative("당근", "공실박스"), true);
+  assert.equal(shouldPromoteListingRepresentative("네이버", "공실박스"), true);
+  assert.equal(shouldPromoteListingRepresentative("네이버", "당근"), false);
+  assert.equal(shouldPromoteListingRepresentative("공실박스", "당근"), false);
+});
 
 test("Daangn detail rows inherit stable list fields when the detail response omits them", () => {
   const record = mergeDaangnDetailWithList({
@@ -366,6 +375,8 @@ test("Daangn detail failures stay queued with bounded retries and recorded cause
   const source = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
   assert.match(source, /DAANGN_DETAIL_HASH = "4c1882a8e36e65957eadc7862361a8159697d93e0326fc99d7f83d086acc60d5"/);
   assert.match(source, /DAANGN_DETAIL_MAX_ATTEMPTS = 8/);
+  assert.match(source, /preserveRepresentative && !updateCondition && !promoteRepresentative/);
+  assert.match(source, /UPDATE listings SET main_source=\?1,/);
   assert.match(source, /pendingDetailIds: job\.pendingDetailIds \|\| \[\]/);
   assert.match(source, /detailAttempts: job\.detailAttempts \|\| \{\}/);
   assert.match(source, /pending\.push\(id\)/);

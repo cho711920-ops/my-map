@@ -163,7 +163,7 @@
     }
     if (state.detailPending[propertyId]) return state.detailPending[propertyId];
     var request = apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
-      var originals = result.originals || [];
+      var originals = orderOriginals(result.originals || []);
       state.detailCache[propertyId] = originals;
       delete state.detailPending[propertyId];
       primeDetailImages(originals);
@@ -643,6 +643,8 @@
     state.openPropertyId = propertyId;
     var cached = state.detailCache[propertyId];
     if (cached) {
+      cached = orderOriginals(cached);
+      state.detailCache[propertyId] = cached;
       state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
       return renderDetail(propertyId, cached, state.openOriginalId);
     }

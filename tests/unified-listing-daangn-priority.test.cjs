@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 const source = fs.readFileSync("js/unified-listings-v8.js", "utf8");
+assert.match(source, /var originals = orderOriginals\(result\.originals \|\| \[\]\);/);
+assert.match(source, /if \(cached\) \{\s*cached = orderOriginals\(cached\);\s*state\.detailCache\[propertyId\] = cached;/);
 const openedLinks = [];
 const window = {
   innerWidth: 1280,
