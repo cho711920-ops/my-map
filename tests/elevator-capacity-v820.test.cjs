@@ -41,7 +41,7 @@ assert.match(d1, /building_elevator_capacity/);
 assert.match(map, /buildingElevatorCapacity/);
 assert.doesNotMatch(building, /action=elevatorCapacity/);
 assert.match(building, /item-elevator-capacity-v820/);
-assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.7"/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.8"/);
 assert.match(building, /elevatorCapacity\.textContent = capacity > 0 \? capacity \+ "인" : "X"/);
 assert.match(building, /elevatorCapacity\.hidden = false/);
 assert.match(script, /function persistentListElevatorV826\(item\)/);
@@ -59,4 +59,4 @@ assert.match(enrichment, /getElevatorCapacity/);
 assert.match(worker, /query\.action === "elevatorCapacity"[\s\S]*D1_SHEET_CACHE_KEY/);
 assert.match(worker, /changeAction: "elevatorCapacity"/);
 
-console.log("elevator capacity v8.2.7 tests passed");
+console.log("elevator capacity v8.2.8 tests passed");

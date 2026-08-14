@@ -1,11 +1,11 @@
 (function () {
   "use strict";
 
-  var LOCAL_CACHE_PREFIX = "js-building-register-v11:";
+  var LOCAL_CACHE_PREFIX = "js-building-register-v12:";
   var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-  var BADGE_CACHE_PREFIX = "js-building-badge-v3:";
+  var BADGE_CACHE_PREFIX = "js-building-badge-v4:";
   var BADGE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
   var BADGE_MAX_CONCURRENCY = 4;
   var BADGE_MAX_RETRIES = 2;
@@ -19,10 +19,12 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.7";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.8";
   var state = {
     item: null,
     parcel: null,
+    requestedParcel: null,
+    parcelFallback: null,
     data: null,
     buildingIndex: 0,
     unitIndex: 0,
@@ -1024,6 +1026,12 @@
 
   function applyRegisterData(data, requestToken, writeLocalCache) {
     if (requestToken !== state.requestToken) return null;
+    if (data && data.parcelFallback && data.parcelFallback.used) {
+      state.parcelFallback = data.parcelFallback;
+      state.parcel = data.parcel || data.parcelFallback.resolvedParcel || state.parcel;
+    } else if (state.parcelFallback) {
+      data = Object.assign({}, data, { parcelFallback: state.parcelFallback });
+    }
     state.data = data;
     state.buildingIndex = bestBuildingIndex(data, state.item);
     var buildings = Array.isArray(data.buildings) ? data.buildings : [];
@@ -1033,7 +1041,12 @@
       buildings
     );
     state.unitIndex = bestVisibleUnitGlobalIndex(entries, state.item && state.item.room);
-    if (writeLocalCache) writeCache(state.parcel, data);
+    if (writeLocalCache) {
+      writeCache(state.parcel, data);
+      if (state.requestedParcel && parcelKey(state.requestedParcel) !== parcelKey(state.parcel)) {
+        writeCache(state.requestedParcel, data);
+      }
+    }
     writeBadgeCache(state.parcel, data);
     refreshBadgeCards(state.parcel, data);
     render();
@@ -1044,18 +1057,7 @@
     var requestToken = state.requestToken;
     var cached = !force ? readCache(state.parcel) : null;
     if (cached && cached.ok) {
-      if (requestToken !== state.requestToken) return Promise.resolve(null);
-      state.data = cached;
-      state.buildingIndex = bestBuildingIndex(cached, state.item);
-      var buildings = Array.isArray(cached.buildings) ? cached.buildings : [];
-      var entries = unitEntriesForBuilding(
-        buildings[state.buildingIndex],
-        cached.units || [],
-        buildings
-      );
-      state.unitIndex = bestVisibleUnitGlobalIndex(entries, state.item && state.item.room);
-      render();
-      return Promise.resolve(cached);
+      return Promise.resolve(applyRegisterData(cached, requestToken, false));
     }
 
     setLoading(force ? "최신 건축물대장을 다시 조회하고 있습니다" : "건축물대장을 조회하고 있습니다");
@@ -1469,6 +1471,16 @@
         }).join("") +
       '</select></label>' : "";
 
+    var parcelFallbackNotice = "";
+    if (data.parcelFallback && data.parcelFallback.used) {
+      var requestedAddress = data.parcelFallback.requestedAddress || state.item && state.item.address || "입력 지번";
+      var resolvedAddress = data.parcelFallback.resolvedAddress || data.parcelFallback.sourceAddress || "동일매물 원본 지번";
+      parcelFallbackNotice = '<div class="building-register-parcel-fallback" role="status">' +
+        '<strong>동일매물 원본 지번의 대장을 표시합니다.</strong>' +
+        '<p><b>' + esc(requestedAddress) + '</b>은 공공 대장이 0건이라, 같은 매물 원본에 기록된 <b>' +
+        esc(resolvedAddress) + '</b>의 공식 대장을 조회했습니다.</p></div>';
+    }
+
     var unitSelector = unitBrowserHtml(visibleUnits, unit);
     var unitNotice = unitAvailabilityNotice(data, building, units, visibleUnits);
 
@@ -1547,6 +1559,7 @@
     }
 
     body.innerHTML = '' +
+      parcelFallbackNotice +
       selector +
       unitSelector +
       unitNotice +
@@ -1596,6 +1609,8 @@
     }
     state.item = item;
     state.parcel = null;
+    state.requestedParcel = null;
+    state.parcelFallback = null;
     state.data = null;
     state.buildingIndex = 0;
     state.unitIndex = 0;
@@ -1606,6 +1621,7 @@
     var cachedParcel = readParcelCache(item);
     if (cachedParcel) {
       state.parcel = cachedParcel;
+      state.requestedParcel = cachedParcel;
       fetchRegister(false);
       return;
     }
@@ -1613,6 +1629,7 @@
     resolveParcel(item).then(function (parcel) {
       if (requestToken !== state.requestToken) return null;
       state.parcel = parcel;
+      state.requestedParcel = parcel;
       writeParcelCache(item, parcel);
       return fetchRegister(false);
     }).catch(function (error) {

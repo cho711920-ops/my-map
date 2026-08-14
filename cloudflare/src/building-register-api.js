@@ -51,6 +51,112 @@ function cacheKey(parcel) {
   return [parcel.sigunguCd, parcel.bjdongCd, parcel.platGbCd, parcel.bun, parcel.ji].join("_");
 }
 
+function parseJson(value, fallback = {}) {
+  if (value && typeof value === "object") return value;
+  try {
+    return JSON.parse(String(value || "")) || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+export function parseBuildingRegisterLotAddress(value) {
+  const address = clean(value).replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ");
+  const matched = address.match(/(동구|중구|서구|유성구|대덕구)\s+([가-힣0-9]+(?:동|가|읍|면|리))\s+(산\s*)?(\d+)(?:-(\d+))?(?:번지)?(?=\s|$|,)/);
+  if (!matched) return null;
+  return {
+    district: matched[1],
+    neighborhood: matched[2],
+    platGbCd: matched[3] ? "1" : "0",
+    bun: matched[4].padStart(4, "0"),
+    ji: (matched[5] || "0").padStart(4, "0"),
+    address: matched[0].replace(/\s+/g, " ").trim()
+  };
+}
+
+function parseBuildingRegisterLocality(value) {
+  const address = clean(value).replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ");
+  const matched = address.match(/(동구|중구|서구|유성구|대덕구)\s+([가-힣0-9]+(?:동|가|읍|면|리))(?=\s|$|,)/);
+  return matched ? { district: matched[1], neighborhood: matched[2] } : null;
+}
+
+function coordinateDistanceMeters(firstLat, firstLng, secondLat, secondLng) {
+  const values = [firstLat, firstLng, secondLat, secondLng].map(Number);
+  if (!values.every(Number.isFinite) || !values[0] || !values[1] || !values[2] || !values[3]) return null;
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const dLat = radians(values[2] - values[0]);
+  const dLng = radians(values[3] - values[1]);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(values[0])) * Math.cos(radians(values[2])) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function sourceAddressObservations(row) {
+  const snapshot = parseJson(row?.list_snapshot_json);
+  const raw = parseJson(row?.raw_json);
+  const rawList = parseJson(raw?.list);
+  return [
+    { address: row?.listing_address, latitude: row?.listing_latitude, longitude: row?.listing_longitude },
+    { address: snapshot?.address, latitude: snapshot?.latitude, longitude: snapshot?.longitude },
+    { address: raw?.jibunAddress, latitude: raw?.latitude, longitude: raw?.longitude },
+    { address: raw?.address, latitude: raw?.latitude, longitude: raw?.longitude },
+    { address: raw?.publicAddress, latitude: raw?.latitude, longitude: raw?.longitude },
+    { address: rawList?.address, latitude: raw?.latitude, longitude: raw?.longitude }
+  ];
+}
+
+async function alternateParcelsForListing(env, propertyId, requestedParcel, requestedAddress) {
+  if (!env.DB || !clean(propertyId)) return [];
+  let rows;
+  try {
+    const result = await env.DB.prepare(`SELECT l.address AS listing_address,
+      l.latitude AS listing_latitude, l.longitude AS listing_longitude,
+      s.list_snapshot_json, s.raw_json
+      FROM listings l
+      LEFT JOIN listing_sources s ON s.listing_id=l.id AND s.active=1
+      WHERE l.id=?1 OR (l.property_id=?1 AND l.property_id<>'')
+      LIMIT 80`).bind(clean(propertyId)).all();
+    rows = Array.isArray(result?.results) ? result.results : [];
+  } catch (_) {
+    return [];
+  }
+  const requestedExactParcel = parseBuildingRegisterLotAddress(requestedAddress);
+  const requestedLocation = requestedExactParcel || parseBuildingRegisterLocality(requestedAddress) ||
+    rows.flatMap(sourceAddressObservations).map((entry) => parseBuildingRegisterLotAddress(entry.address)).find(Boolean);
+  if (!requestedLocation) return [];
+  const requestedKey = cacheKey(requestedParcel);
+  const master = rows.find((row) => Number(row?.listing_latitude) && Number(row?.listing_longitude)) || {};
+  const candidates = [];
+  const seen = new Set([requestedKey]);
+  for (const row of rows) {
+    for (const observation of sourceAddressObservations(row)) {
+      const parsed = parseBuildingRegisterLotAddress(observation.address);
+      if (!parsed || parsed.district !== requestedLocation.district ||
+          parsed.neighborhood !== requestedLocation.neighborhood) continue;
+      const distance = coordinateDistanceMeters(master.listing_latitude, master.listing_longitude,
+        observation.latitude, observation.longitude);
+      // When the displayed address already has an exact lot number, a different
+      // source lot is accepted only if both sides prove the same physical point.
+      // Dong-only listings often carry intentionally approximate coordinates,
+      // so their active source's exact lot is safer than reverse-geocoding that
+      // approximate point and is restricted by the same district/neighborhood.
+      if (requestedExactParcel && (distance == null || distance > 120)) continue;
+      const parcel = {
+        sigunguCd: requestedParcel.sigunguCd,
+        bjdongCd: requestedParcel.bjdongCd,
+        platGbCd: parsed.platGbCd,
+        bun: parsed.bun,
+        ji: parsed.ji
+      };
+      const key = cacheKey(parcel);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({ parcel, address: parsed.address, sourceAddress: clean(observation.address) });
+      if (candidates.length >= 4) return candidates;
+    }
+  }
+  return candidates;
+}
+
 function xmlValue(xml, tag) {
   const matched = String(xml || "").match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "i"));
   return clean(matched?.[1]).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -213,8 +319,16 @@ async function writeCache(env, key, parcel, mode, result) {
     .bind(key, JSON.stringify(parcel), summaryJson, detailsJson, new Date().toISOString()).run();
 }
 
+export function hasBuildingRegisterRecords(result) {
+  if ((result?.buildings || []).length || (result?.recaps || []).length || (result?.units || []).length) return true;
+  return Object.values(result?.recordCounts || {}).some((value) => Number(value || 0) > 0);
+}
+
 async function persistBuildingBadge(env, propertyId, result) {
   if (!propertyId || !env.DB) return { ok: true, persisted: false };
+  if (!hasBuildingRegisterRecords(result)) {
+    return { ok: true, persisted: false, available: false, reason: "no-register-records" };
+  }
   const rows = [...(result.buildings || []), ...(result.recaps || [])];
   const building = rows[0] || {};
   const approval = clean(building.approvalDate);
@@ -248,9 +362,7 @@ async function persistBuildingBadge(env, propertyId, result) {
     elevatorCapacity, approvalDate: approval, roadAddress };
 }
 
-export async function getBuildingRegister(env, query) {
-  const parcel = parcelFrom(query || {});
-  const mode = clean(query.mode).toLowerCase() === "summary" ? "summary" : "full";
+async function getBuildingRegisterForParcel(env, query, parcel, mode) {
   const key = `building-register-v10-${cacheKey(parcel)}`;
   if (!/^(1|true|yes)$/i.test(clean(query.force))) {
     const cached = await readCache(env, key, mode);
@@ -303,6 +415,38 @@ export async function getBuildingRegister(env, query) {
   result.buildingInfoCache = await persistBuildingBadge(env, query.propertyId, result);
   await writeCache(env, key, parcel, mode, result);
   return result;
+}
+
+export async function getBuildingRegister(env, query) {
+  query = query || {};
+  const parcel = parcelFrom(query);
+  const mode = clean(query.mode).toLowerCase() === "summary" ? "summary" : "full";
+  const primary = await getBuildingRegisterForParcel(env, query, parcel, mode);
+  if (hasBuildingRegisterRecords(primary) || !clean(query.propertyId)) return primary;
+
+  const candidates = await alternateParcelsForListing(env, query.propertyId, parcel, query.address);
+  let checked = 0;
+  for (const candidate of candidates) {
+    checked += 1;
+    const summary = await getBuildingRegisterForParcel(env, query, candidate.parcel, "summary");
+    if (!hasBuildingRegisterRecords(summary)) continue;
+    const resolved = mode === "summary"
+      ? summary
+      : await getBuildingRegisterForParcel(env, query, candidate.parcel, "full");
+    return {
+      ...resolved,
+      alternateParcelsChecked: checked,
+      parcelFallback: {
+        used: true,
+        requestedParcel: parcel,
+        requestedAddress: clean(query.address),
+        resolvedParcel: candidate.parcel,
+        resolvedAddress: candidate.address,
+        sourceAddress: candidate.sourceAddress
+      }
+    };
+  }
+  return { ...primary, alternateParcelsChecked: checked };
 }
 
 async function listingElevatorContext(env, propertyId) {
