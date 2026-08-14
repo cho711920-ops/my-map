@@ -34,6 +34,6 @@ assert.match(
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
 assert.match(indexSource, /js\/script\.js\?v=6\.5\.81-card-instance-selection/);
-assert.match(indexSource, /js\/map\.js\?v=8\.2\.8-world-grid-density/);
+assert.match(indexSource, /js\/map\.js\?v=8\.2\.9-world-grid-viewport-count/);
 
 console.log("default Daejeon map view tests passed");

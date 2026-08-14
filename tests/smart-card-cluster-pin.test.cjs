@@ -39,7 +39,7 @@ assert.match(
   /addListener\(map, "zoom_start"[\s\S]*?clearMapListSelectionForNavigationV6571\(\)/
 );
 assert.match(htmlSource, /analysis\.js\?v=6\.3\.40-smart-card-cluster-pin/);
-assert.match(htmlSource, /map\.js\?v=8\.2\.8-world-grid-density/);
+assert.match(htmlSource, /map\.js\?v=8\.2\.9-world-grid-viewport-count/);
 assert.match(htmlSource, /script\.js\?v=6\.5\.81-card-instance-selection/);
 assert.match(scriptSource, /더블클릭하면 스마트 매물카드 열기/);
 assert.match(

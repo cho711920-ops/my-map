@@ -92,6 +92,36 @@ assert.equal(engineContext.shouldUseWorldGridClustersV690(), false);
 engineContext.window.location.search = "?clusterEngine=world-grid";
 assert.equal(engineContext.shouldUseWorldGridClustersV690(), true);
 
+const viewportItems = [{ id: "viewport" }];
+const globalItems = [{ id: "global" }];
+const sourceContext = {
+  window: { mapRadiusFilterV658: null },
+  map: { getLevel: () => 6 },
+  shouldUseWorldGridClustersV690: () => true,
+  getAdministrativeClusterModeV655: (level) => level >= 8 ? "district" : (level === 7 ? "neighborhood" : ""),
+  getFilteredItems: () => globalItems,
+  Number
+};
+vm.createContext(sourceContext);
+vm.runInContext(extractFunction("getStableClusterSourceItemsV690"), sourceContext);
+assert.deepEqual(
+  sourceContext.getStableClusterSourceItemsV690(viewportItems).map((item) => item.id),
+  ["viewport"],
+  "spatial clusters must use the exact current viewport listing set"
+);
+sourceContext.map.getLevel = () => 7;
+assert.deepEqual(
+  sourceContext.getStableClusterSourceItemsV690(viewportItems).map((item) => item.id),
+  ["global"],
+  "administrative clusters must keep whole-region totals"
+);
+sourceContext.window.mapRadiusFilterV658 = {};
+assert.deepEqual(
+  sourceContext.getStableClusterSourceItemsV690(viewportItems).map((item) => item.id),
+  ["viewport"],
+  "radius-filtered clusters must stay inside the selected radius"
+);
+
 assert.match(mapSource, /var jsMapClusterEngineDefaultV690 = "world-grid";/);
 assert.match(mapSource, /useLegacy: function\(\) \{ return setMapClusterEngineV690\("legacy"\); \}/);
 assert.match(
@@ -104,11 +134,11 @@ assert.match(
 );
 assert.match(
   mapSource,
-  /function getStableClusterSourceItemsV690[\s\S]*?ignoreMapBounds: true/
+  /function getStableClusterSourceItemsV690[\s\S]*?getAdministrativeClusterModeV655\(level\)[\s\S]*?return \(fallbackItems \|\| \[\]\)\.slice\(\)[\s\S]*?ignoreMapBounds: true/
 );
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?world-grid-cluster-v690/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-district-v690/);
 assert.match(html, /style\.css\?v=6\.5\.40-world-grid-clusters/);
-assert.match(html, /map\.js\?v=8\.2\.8-world-grid-density/);
+assert.match(html, /map\.js\?v=8\.2\.9-world-grid-viewport-count/);
 
 console.log("world grid cluster v6.9.0 tests passed");

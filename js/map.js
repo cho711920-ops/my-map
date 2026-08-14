@@ -914,6 +914,18 @@ function getStableClusterSourceItemsV690(fallbackItems) {
    */
   if (window.mapRadiusFilterV658) return (fallbackItems || []).slice();
 
+  /*
+   * 구·동 행정 클러스터는 현재 화면 밖까지 포함한 전체 지역 합계를 표시해야 합니다.
+   * 반면 공간 클러스터는 현재 지도 목록과 같은 매물 집합을 고정 세계 격자에 넣어야
+   * 화면 가장자리의 큰 격자 중심점 때문에 화면 안 매물이 누락되지 않습니다.
+   */
+  var level = map && typeof map.getLevel === "function"
+    ? Number(map.getLevel()) || 0
+    : 0;
+  if (!getAdministrativeClusterModeV655(level)) {
+    return (fallbackItems || []).slice();
+  }
+
   return getFilteredItems({
     includeUnlocated: false,
     ignoreMapBounds: true
