@@ -8389,3 +8389,75 @@ body,
   padding: 6px 7px !important;
 }
 
+/* =========================================================
+   v6.9.0 당근형 고정 공간 클러스터
+   - legacy 전환 시 위 기존 디자인을 그대로 사용합니다.
+   - 행정구역 카드는 수량과 무관하게 일정한 크기를 유지합니다.
+   ========================================================= */
+.js-world-grid-clusters-v690 .circle-marker.world-grid-cluster-v690 {
+  border: 2px solid rgba(255, 255, 255, .92) !important;
+  box-shadow: 0 3px 10px rgba(8, 75, 154, .24) !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.world-grid-cluster-v690:hover {
+  filter: saturate(1.08) brightness(1.03) !important;
+  box-shadow: 0 5px 14px rgba(8, 75, 154, .3) !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 {
+  width: auto !important;
+  min-width: 68px !important;
+  max-width: 88px !important;
+  min-height: 46px !important;
+  padding: 7px 9px !important;
+  gap: 3px !important;
+  border: 1px solid #d9e1eb !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .97) !important;
+  color: #172033 !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .13) !important;
+  backdrop-filter: none !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690 {
+  min-width: 76px !important;
+  max-width: 92px !important;
+  min-height: 50px !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 strong {
+  font-size: 13.5px !important;
+  line-height: 1.08 !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 span {
+  color: #64748b !important;
+  font-size: 11px !important;
+  line-height: 1.08 !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 span b {
+  color: #0877dc !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-sm,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-md,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-lg,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-xl,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-xxl {
+  min-width: 68px !important;
+  max-width: 88px !important;
+  min-height: 46px !important;
+  padding: 7px 9px !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-sm,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-md,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-lg,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-xl,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-xxl {
+  min-width: 76px !important;
+  max-width: 92px !important;
+  min-height: 50px !important;
+}
+

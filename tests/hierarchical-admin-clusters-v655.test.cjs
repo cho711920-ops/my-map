@@ -133,11 +133,11 @@ assert.equal(context.getPremiumClusterSizeClassV635(10).trim(), "cluster-size-md
 assert.equal(context.getPremiumClusterSizeClassV635(600).trim(), "cluster-size-xxl");
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /admin-region-cluster-v655/);
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /<span>매물 <b>3<\/b><\/span>/);
-assert.equal(context.estimateAdministrativeClusterBoxV656({ regionLabel: "괴정동", items: Array(9999) }).height, 40);
+assert.equal(context.estimateAdministrativeClusterBoxV656({ regionLabel: "괴정동", items: Array(9999) }).height, 46);
 assert.equal(
   context.administrativeBoxesOverlapV656(
-    { left: 0, right: 54, top: 0, bottom: 40 },
-    { left: 60, right: 114, top: 0, bottom: 40 },
+    { left: 0, right: 68, top: 0, bottom: 46 },
+    { left: 74, right: 142, top: 0, bottom: 46 },
     4
   ),
   false
@@ -180,10 +180,14 @@ const denseDaejeonLabels = Array.from({ length: 80 }, (_, index) => ({
   items: Array(index + 1),
   latlng: new LatLng(350, 500)
 }));
-context.resolveAdministrativeClusterPositionsV656(denseDaejeonLabels);
-assert.equal(denseDaejeonLabels.filter((cluster) => cluster.displayLatlng).length, 80);
+const placedDenseDaejeonLabels = context.resolveAdministrativeClusterPositionsV656(denseDaejeonLabels);
+assert.ok(placedDenseDaejeonLabels.length > 0);
+assert.ok(
+  placedDenseDaejeonLabels.length < denseDaejeonLabels.length,
+  "같은 위치에 몰린 동 이름표를 지도 전체로 밀어내지 말고 일부를 생략해야 합니다."
+);
 
-const denseBoxes = denseDaejeonLabels.map((cluster) => {
+const denseBoxes = placedDenseDaejeonLabels.map((cluster) => {
   const size = context.estimateAdministrativeClusterBoxV656(cluster);
   const centerX = cluster.displayLatlng.getLng();
   const centerY = cluster.displayLatlng.getLat();
@@ -215,12 +219,12 @@ assert.match(source, /getFilteredItems\(\{\s*includeUnlocated: true,\s*ignoreMap
 assert.match(scriptSource, /var ignoreMapBounds = !!\(options && options\.ignoreMapBounds\)/);
 assert.match(scriptSource, /var inMap = ignoreMapBounds \|\| mobileGlobalKeywordSearch\s*\? true\s*:/);
 assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
-assert.match(css, /admin-region-cluster-v655[\s\S]*?min-width: 54px/);
-assert.match(css, /admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.91\)/);
-assert.match(css, /admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.2.5-favorite-map-navigation"));
+assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?min-width: 68px/);
+assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.97\)/);
+assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
+assert.ok(html.includes("map.js?v=8.2.7-world-grid-relayout"));
 assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 5 \* 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
-assert.ok(html.includes("style.css?v=6.5.39-elevator-capacity-x"));
+assert.ok(html.includes("style.css?v=6.5.40-world-grid-clusters"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");

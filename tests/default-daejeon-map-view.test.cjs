@@ -11,16 +11,29 @@ assert.match(
   mapSource,
   /var jsDefaultMapCenterV6524 = \{\s*lat: 36\.3504,\s*lng: 127\.3845\s*\};/
 );
-assert.match(mapSource, /var jsDefaultMapLevelV6524 = 7;/);
+assert.match(mapSource, /var jsDefaultMapLevelV6524 = 8;/);
+assert.match(mapSource, /var jsLegacyDefaultMapLevelV690 = 7;/);
 assert.match(
   mapSource,
-  /new kakao\.maps\.Map[\s\S]*?level: jsDefaultMapLevelV6524/
+  /new kakao\.maps\.Map[\s\S]*?level: shouldUseWorldGridClustersV690\(\)[\s\S]*?jsDefaultMapLevelV6524[\s\S]*?jsLegacyDefaultMapLevelV690/
+);
+assert.match(
+  mapSource,
+  /function relayoutMapPreservingCenterV690[\s\S]*?map\.relayout\(\);[\s\S]*?map\.setCenter\(center\)/
+);
+assert.match(
+  mapSource,
+  /function setupMapViewportRelayoutV690[\s\S]*?new ResizeObserver\(scheduleRelayout\)[\s\S]*?\[0, 140, 480\]/
+);
+assert.match(
+  mapSource,
+  /kakao\.maps\.load[\s\S]*?setupMapViewportRelayoutV690\(mapElementV6525\)/
 );
 assert.match(
   scriptSource,
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
 assert.match(indexSource, /js\/script\.js\?v=6\.5\.81-card-instance-selection/);
-assert.match(indexSource, /js\/map\.js\?v=8\.2\.5-favorite-map-navigation/);
+assert.match(indexSource, /js\/map\.js\?v=8\.2\.7-world-grid-relayout/);
 
 console.log("default Daejeon map view tests passed");

@@ -42,6 +42,6 @@ assert.match(
 );
 
 assert.match(htmlSource, /script\.js\?v=6\.5\.81-card-instance-selection/);
-assert.match(htmlSource, /map\.js\?v=8\.2\.5-favorite-map-navigation/);
+assert.match(htmlSource, /map\.js\?v=8\.2\.7-world-grid-relayout/);
 
 console.log("cluster transient state v6.5.25 tests passed");

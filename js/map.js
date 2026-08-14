@@ -33,12 +33,132 @@ var jsDefaultMapCenterV6524 = {
   lat: 36.3504,
   lng: 127.3845
 };
-var jsDefaultMapLevelV6524 = 7;
+var jsDefaultMapLevelV6524 = 8;
+var jsLegacyDefaultMapLevelV690 = 7;
 var jsAdministrativeListSelectionV6570 = null;
 var jsAutomaticDataRefreshIntervalV681 = 5 * 60 * 1000;
 var jsListingsRevisionV682 = "";
 var jsListingsRevisionPendingV682 = false;
 var jsListingsRevisionInfoV683 = null;
+var jsMapClusterEngineDefaultV690 = "world-grid";
+var jsMapClusterEngineStorageKeyV690 = "js_map_cluster_engine_v690";
+var jsMapResizeObserverV690 = null;
+var jsMapResizeRelayoutTimerV690 = null;
+
+
+/*
+ * v6.9.0 당근형 고정 공간 클러스터 전환 장치
+ * - 기본값은 지도 전체에 고정된 world-grid입니다.
+ * - 문제가 생기면 URL `?clusterEngine=legacy` 또는 아래 공개 API로
+ *   기존 화면 픽셀 격자를 즉시 다시 사용할 수 있습니다.
+ * - 매물/DB는 건드리지 않고 표시 계산만 전환합니다.
+ */
+function normalizeMapClusterEngineV690(value) {
+  return String(value || "").trim().toLowerCase() === "legacy"
+    ? "legacy"
+    : "world-grid";
+}
+
+
+function getMapClusterEngineV690() {
+  var queryMode = "";
+  try {
+    queryMode = new URLSearchParams(window.location.search || "").get("clusterEngine") || "";
+  } catch (_) {}
+  if (queryMode) return normalizeMapClusterEngineV690(queryMode);
+
+  var runtimeMode = String(window.JS_MAP_CLUSTER_ENGINE_V690 || "").trim();
+  if (runtimeMode) return normalizeMapClusterEngineV690(runtimeMode);
+
+  try {
+    var storedMode = window.localStorage.getItem(jsMapClusterEngineStorageKeyV690);
+    if (storedMode) return normalizeMapClusterEngineV690(storedMode);
+  } catch (_) {}
+
+  return jsMapClusterEngineDefaultV690;
+}
+
+
+function shouldUseWorldGridClustersV690() {
+  return getMapClusterEngineV690() === "world-grid";
+}
+
+
+function syncMapClusterEngineClassV690() {
+  if (typeof document === "undefined" || !document.documentElement) return;
+  var stable = shouldUseWorldGridClustersV690();
+  document.documentElement.classList.toggle("js-world-grid-clusters-v690", stable);
+  document.documentElement.classList.toggle("js-legacy-grid-clusters-v690", !stable);
+}
+
+
+function setMapClusterEngineV690(mode, persist) {
+  var normalized = normalizeMapClusterEngineV690(mode);
+  window.JS_MAP_CLUSTER_ENGINE_V690 = normalized;
+
+  if (persist !== false) {
+    try {
+      window.localStorage.setItem(jsMapClusterEngineStorageKeyV690, normalized);
+    } catch (_) {}
+  }
+
+  syncMapClusterEngineClassV690();
+  if (typeof applyFilter === "function") applyFilter();
+  return normalized;
+}
+
+
+window.JSMapClusterEngineV690 = {
+  get: getMapClusterEngineV690,
+  set: setMapClusterEngineV690,
+  useStable: function() { return setMapClusterEngineV690("world-grid"); },
+  useLegacy: function() { return setMapClusterEngineV690("legacy"); }
+};
+
+syncMapClusterEngineClassV690();
+
+
+function relayoutMapPreservingCenterV690(forcedCenter) {
+  if (!map || typeof map.relayout !== "function") return;
+  var center = forcedCenter || (typeof map.getCenter === "function" ? map.getCenter() : null);
+  map.relayout();
+  if (center && typeof map.setCenter === "function") map.setCenter(center);
+}
+
+
+function setupMapViewportRelayoutV690(mapElement) {
+  if (!mapElement) return;
+
+  var scheduleRelayout = function() {
+    if (jsMapResizeRelayoutTimerV690) clearTimeout(jsMapResizeRelayoutTimerV690);
+    jsMapResizeRelayoutTimerV690 = setTimeout(function() {
+      jsMapResizeRelayoutTimerV690 = null;
+      relayoutMapPreservingCenterV690();
+    }, 40);
+  };
+
+  if (typeof ResizeObserver === "function") {
+    jsMapResizeObserverV690 = new ResizeObserver(scheduleRelayout);
+    jsMapResizeObserverV690.observe(mapElement);
+  }
+  window.addEventListener("resize", scheduleRelayout);
+
+  /*
+   * 인증 해제 직후 비동기 CSS가 적용되면 지도 폭이 약 1,280px에서
+   * 실제 지도 영역으로 줄어듭니다. 초기 중심을 세 번 짧게 보정해
+   * 5개 구가 오른쪽 목록 뒤로 밀리지 않게 합니다.
+   */
+  var overviewCenter = new kakao.maps.LatLng(
+    jsDefaultMapCenterV6524.lat,
+    jsDefaultMapCenterV6524.lng
+  );
+  [0, 140, 480].forEach(function(delay) {
+    setTimeout(function() {
+      if (Date.now() <= jsMapUserNavigationIntentUntilV6525) return;
+      relayoutMapPreservingCenterV690(overviewCenter);
+    }, delay);
+  });
+}
 
 
 function fetchDataRevisionV682(scope) {
@@ -173,7 +293,9 @@ function refreshListingsWhenChangedV682() {
 
 function resetToDaejeonOverviewV6524() {
   if (!map || !window.kakao || !kakao.maps) return;
-  map.setLevel(jsDefaultMapLevelV6524);
+  map.setLevel(shouldUseWorldGridClustersV690()
+    ? jsDefaultMapLevelV6524
+    : jsLegacyDefaultMapLevelV690);
   map.setCenter(new kakao.maps.LatLng(
     jsDefaultMapCenterV6524.lat,
     jsDefaultMapCenterV6524.lng
@@ -675,6 +797,128 @@ function getClusterDistance() {
 }
 
 
+function getWorldGridCellSizeMetersV690(level) {
+  var value = Number(level) || 0;
+
+  /*
+   * 카카오 레벨이 한 단계 확대될 때 고정 공간 칸도 절반으로 줄입니다.
+   * 같은 레벨에서 지도를 드래그하면 이 경계는 움직이지 않습니다.
+   */
+  if (value >= 6) return 640;
+  if (value === 5) return 320;
+  if (value === 4) return 160;
+  if (value === 3) return 80;
+  return 40;
+}
+
+
+function toWorldMercatorMetersV690(lat, lng) {
+  var earthRadius = 6378137;
+  var limitedLat = Math.max(-85.05112878, Math.min(85.05112878, Number(lat) || 0));
+  var longitude = Number(lng) || 0;
+  var latRadians = limitedLat * Math.PI / 180;
+
+  return {
+    x: earthRadius * longitude * Math.PI / 180,
+    y: earthRadius * Math.log(Math.tan(Math.PI / 4 + latRadians / 2))
+  };
+}
+
+
+function createWorldGridClustersV690(addressGroups, level) {
+  var cellSize = getWorldGridCellSizeMetersV690(level);
+  var cells = Object.create(null);
+
+  (addressGroups || []).forEach(function(group) {
+    if (!group || !group.latlng) return;
+    var lat = Number(group.latlng.getLat());
+    var lng = Number(group.latlng.getLng());
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    var point = toWorldMercatorMetersV690(lat, lng);
+    var cellX = Math.floor(point.x / cellSize);
+    var cellY = Math.floor(point.y / cellSize);
+    var cellKey = cellX + ":" + cellY;
+
+    if (!cells[cellKey]) {
+      cells[cellKey] = {
+        cellX: cellX,
+        cellY: cellY,
+        cellSizeMeters: cellSize,
+        groups: [],
+        items: [],
+        latitudeTotal: 0,
+        longitudeTotal: 0,
+        addressPointCount: 0,
+        worldGrid: true
+      };
+    }
+
+    cells[cellKey].groups.push(group);
+    cells[cellKey].items = cells[cellKey].items.concat(group.items || []);
+    cells[cellKey].latitudeTotal += lat;
+    cells[cellKey].longitudeTotal += lng;
+    cells[cellKey].addressPointCount += 1;
+  });
+
+  return Object.keys(cells).sort(function(firstKey, secondKey) {
+    var first = cells[firstKey];
+    var second = cells[secondKey];
+    return first.cellY - second.cellY || first.cellX - second.cellX;
+  }).map(function(cellKey) {
+    var cluster = cells[cellKey];
+    var pointCount = cluster.addressPointCount || 1;
+    cluster.latlng = new kakao.maps.LatLng(
+      cluster.latitudeTotal / pointCount,
+      cluster.longitudeTotal / pointCount
+    );
+    cluster.key = "world-grid:" + cellSize + ":" + cluster.cellX + ":" + cluster.cellY;
+    return cluster;
+  });
+}
+
+
+function filterClustersToMapViewportV690(clusters, margin) {
+  if (!map || typeof map.getProjection !== "function" || typeof document === "undefined") {
+    return clusters || [];
+  }
+
+  var projection = map.getProjection();
+  var mapElement = document.getElementById("map");
+  var width = mapElement ? Number(mapElement.clientWidth) || 0 : 0;
+  var height = mapElement ? Number(mapElement.clientHeight) || 0 : 0;
+  var buffer = Number(margin) || 0;
+  if (!projection || !width || !height) return clusters || [];
+
+  return (clusters || []).filter(function(cluster) {
+    if (!cluster || !cluster.latlng) return false;
+    var point = projection.containerPointFromCoords(cluster.latlng);
+    return point &&
+      point.x >= -buffer && point.x <= width + buffer &&
+      point.y >= -buffer && point.y <= height + buffer;
+  });
+}
+
+
+function getStableClusterSourceItemsV690(fallbackItems) {
+  if (!shouldUseWorldGridClustersV690() || typeof getFilteredItems !== "function") {
+    return (fallbackItems || []).slice();
+  }
+
+  /*
+   * 반경검색은 원 자체가 지도 상태이므로 기존 결과를 그대로 사용합니다.
+   * 일반 검색·필터는 화면 밖 120px까지 같은 고정 셀을 완성할 수 있도록
+   * 지도 경계만 제외한 전체 필터 결과를 사용합니다.
+   */
+  if (window.mapRadiusFilterV658) return (fallbackItems || []).slice();
+
+  return getFilteredItems({
+    includeUnlocated: false,
+    ignoreMapBounds: true
+  });
+}
+
+
 function getMapViewportKeyV638() {
   if (!map) return "";
 
@@ -706,9 +950,9 @@ function createExactAddressClustersV6519(addressGroups) {
 
 /*
  * v6.5.27 행정구역 단계형 클러스터
- * - level 7 이상: 구 단위
- * - level 6: 동 단위
- * - level 5 이하: 기존 화면 격자 숫자 클러스터
+ * - level 8 이상: 구 단위
+ * - level 7: 동 단위
+ * - level 6 이하: 공간 숫자 클러스터
  */
 function getAddressAdminRegionV655(address) {
   var tokens = String(address || "")
@@ -855,11 +1099,11 @@ function createAdministrativeClustersV655(addressGroups, mode) {
 function estimateAdministrativeClusterBoxV656(cluster) {
   var label = String(cluster && cluster.regionLabel || "");
   var count = String(((cluster && cluster.items) || []).length || 0);
-  var contentWidth = Math.max(label.length * 12, (count.length + 3) * 6.2);
+  var contentWidth = Math.max(label.length * 13, (count.length + 3) * 6.8);
 
   return {
-    width: Math.max(54, Math.min(72, Math.ceil(contentWidth + 14))),
-    height: 40
+    width: Math.max(68, Math.min(88, Math.ceil(contentWidth + 18))),
+    height: 46
   };
 }
 
@@ -874,9 +1118,9 @@ function administrativeBoxesOverlapV656(first, second, gap) {
 
 
 /*
- * 동 이름표가 많은 화면에서도 서로 가리지 않도록 화면 좌표에서 가까운 빈자리를 찾습니다.
- * 실제 행정동 중심(cluster.latlng)은 그대로 두고 표시 위치(displayLatlng)만 소폭 이동하므로,
- * 이름표를 눌렀을 때 확대되는 중심은 원래 위치를 유지합니다.
+ * 동 이름표가 많은 화면에서도 서로 가리지 않도록 가까운 빈자리를 찾습니다.
+ * 당근 지도처럼 원래 행정구역 중심에서 멀리 밀어내지 않고, 가까운 자리가
+ * 모두 찼으면 수량이 적은 이름표를 이번 화면에서만 생략합니다.
  */
 function resolveAdministrativeClusterPositionsV656(clusters) {
   if (!map || typeof map.getProjection !== "function" || typeof document === "undefined") {
@@ -890,8 +1134,8 @@ function resolveAdministrativeClusterPositionsV656(clusters) {
   if (!projection || !width || !height) return clusters || [];
 
   var candidates = [];
-  var step = 10;
-  var maxRing = 14;
+  var step = 8;
+  var maxRing = 8;
 
   for (var offsetX = -maxRing; offsetX <= maxRing; offsetX += 1) {
     for (var offsetY = -maxRing; offsetY <= maxRing; offsetY += 1) {
@@ -919,12 +1163,14 @@ function resolveAdministrativeClusterPositionsV656(clusters) {
   }).filter(function(row) {
     return !!row.point;
   }).sort(function(first, second) {
-    return first.point.y - second.point.y ||
+    return ((second.cluster.items || []).length - (first.cluster.items || []).length) ||
+      first.point.y - second.point.y ||
       first.point.x - second.point.x ||
       String(first.cluster.regionLabel || "").localeCompare(String(second.cluster.regionLabel || ""), "ko");
   });
 
   var placedBoxes = [];
+  var placedClusters = [];
   rows.forEach(function(row) {
     var boxSize = estimateAdministrativeClusterBoxV656(row.cluster);
     var halfWidth = boxSize.width / 2;
@@ -951,67 +1197,40 @@ function resolveAdministrativeClusterPositionsV656(clusters) {
       }
     }
 
-    /*
-     * 밀집도가 아주 높은 화면에서는 가까운 후보가 모두 찰 수 있습니다.
-     * 그때는 화면 전체의 소형 격자 중 원래 위치와 가장 가까운 빈칸을 사용합니다.
-     */
     if (!chosen) {
-      var fallbackCandidates = [];
-      var fallbackStepX = boxSize.width + 4;
-      var fallbackStepY = boxSize.height + 4;
-
-      for (var fallbackY = halfHeight + 4; fallbackY <= height - halfHeight - 4; fallbackY += fallbackStepY) {
-        for (var fallbackX = halfWidth + 4; fallbackX <= width - halfWidth - 4; fallbackX += fallbackStepX) {
-          fallbackCandidates.push({
-            x: fallbackX,
-            y: fallbackY,
-            distance: Math.pow(fallbackX - row.point.x, 2) + Math.pow(fallbackY - row.point.y, 2)
-          });
-        }
-      }
-
-      fallbackCandidates.sort(function(first, second) {
-        return first.distance - second.distance || first.y - second.y || first.x - second.x;
-      });
-
-      for (var fallbackIndex = 0; fallbackIndex < fallbackCandidates.length; fallbackIndex += 1) {
-        var fallback = fallbackCandidates[fallbackIndex];
-        var fallbackBox = {
-          left: fallback.x - halfWidth,
-          right: fallback.x + halfWidth,
-          top: fallback.y - halfHeight,
-          bottom: fallback.y + halfHeight
-        };
-        var fallbackOverlaps = placedBoxes.some(function(placed) {
-          return administrativeBoxesOverlapV656(fallbackBox, placed, 4);
-        });
-
-        if (!fallbackOverlaps) {
-          chosen = {
-            point: new kakao.maps.Point(fallback.x, fallback.y),
-            box: fallbackBox
-          };
-          break;
-        }
-      }
+      row.cluster.hiddenByCollisionV690 = true;
+      return;
     }
-
-    if (!chosen) return;
     placedBoxes.push(chosen.box);
     row.cluster.displayLatlng = projection.coordsFromContainerPoint(chosen.point);
+    placedClusters.push(row.cluster);
   });
 
-  return clusters || [];
+  return placedClusters;
 }
 
 
 function createClustersForCurrentZoomV655(addressGroups) {
-  var mode = getAdministrativeClusterModeV655(map && map.getLevel ? map.getLevel() : 0);
-  if (!mode) return createDynamicClusters(addressGroups);
+  var level = map && map.getLevel ? Number(map.getLevel()) || 0 : 0;
+  var mode = getAdministrativeClusterModeV655(level);
+  var useWorldGrid = shouldUseWorldGridClustersV690();
 
-  return resolveAdministrativeClusterPositionsV656(
-    createAdministrativeClustersV655(addressGroups, mode)
-  );
+  if (mode) {
+    var administrativeClusters = createAdministrativeClustersV655(addressGroups, mode);
+    if (useWorldGrid) {
+      administrativeClusters = filterClustersToMapViewportV690(administrativeClusters, 80);
+    }
+
+    return resolveAdministrativeClusterPositionsV656(administrativeClusters);
+  }
+
+  if (!useWorldGrid) return createDynamicClusters(addressGroups);
+
+  var spatialClusters = level <= 1
+    ? createExactAddressClustersV6519(addressGroups)
+    : createWorldGridClustersV690(addressGroups, level);
+
+  return filterClustersToMapViewportV690(spatialClusters, 120);
 }
 
 
@@ -1146,7 +1365,9 @@ kakao.maps.load(function() {
       jsDefaultMapCenterV6524.lat,
       jsDefaultMapCenterV6524.lng
     ),
-    level: jsDefaultMapLevelV6524
+    level: shouldUseWorldGridClustersV690()
+      ? jsDefaultMapLevelV6524
+      : jsLegacyDefaultMapLevelV690
   });
 
   geocoder = new kakao.maps.services.Geocoder();
@@ -1163,6 +1384,8 @@ kakao.maps.load(function() {
       passive: true
     });
   }
+
+  setupMapViewportRelayoutV690(mapElementV6525);
 
   /*
    * v6.3 현장모드: 지도 이동을 방해하지 않고 현재 위치만 보라색 점으로 표시합니다.
@@ -2134,12 +2357,14 @@ function buildClusterOverlayContentV655(cluster, classNames) {
   var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
 
   if (cluster && cluster.regionMode) {
-    return '<button type="button" class="' + classes + ' admin-region-cluster-v655"' +
+    classes += " admin-region-cluster-v655 admin-region-" + cluster.regionMode + "-v690";
+    return '<button type="button" class="' + classes + '"' +
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
       ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기">' +
       '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span></button>';
   }
 
+  if (cluster && cluster.worldGrid) classes += " world-grid-cluster-v690";
   return '<div class="' + classes + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 }
 
@@ -2180,7 +2405,10 @@ function drawMapClustersOnlyV639(items) {
   isRendering = true;
   clearMapOverlaysOnlyV639();
 
-  var addressGroups = getVisibleAddressGroupsV639(items);
+  var clusterSourceItems = getStableClusterSourceItemsV690(items);
+  var addressGroups = shouldUseWorldGridClustersV690()
+    ? groupByAddress(clusterSourceItems)
+    : getVisibleAddressGroupsV639(items);
   var clusters = createClustersForCurrentZoomV655(addressGroups);
 
   clusters.forEach(function(cluster) {

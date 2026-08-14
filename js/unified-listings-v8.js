@@ -1086,7 +1086,17 @@
     var action = text(button.getAttribute("onclick"));
     var opensOtherMenu = /(?:openOperationsCenter|openListManager|openQuickAddModal|startAiVisitPreview|JSUnifiedListingsV8\.openTell|toggleDetailFilter|toggleV6ActionMenu|toggleSortDropdown)/.test(action) ||
       button.matches("[data-mobile-view='customers'], [data-mobile-action='quick-add'], [data-mobile-action='favorites'], [data-mobile-action='dashboard'], [data-mobile-action='filter']");
-    if (opensOtherMenu) closeDetailForOverlay();
+    if (opensOtherMenu) {
+      closeDetailForOverlay();
+      /*
+       * 상세 매물과 함께 열린 AI 브리핑 패널도 다른 전역 메뉴보다
+       * 위에 남지 않게 함께 닫습니다. 매물/클러스터 선택 자체는
+       * closeAiSidePanel()에서 보존하므로 지도 상태에는 영향을 주지 않습니다.
+       */
+      if (typeof global.closeAiSidePanel === "function") {
+        global.closeAiSidePanel();
+      }
+    }
   }, true);
 
   global.addEventListener("keydown", function(event) {

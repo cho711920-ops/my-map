@@ -34,7 +34,7 @@ assert.match(memoD1, /UPDATE listings SET operating_memo=\?1, contacts_json=\?2/
 assert.match(memoD1, /persisted:\s*true, queued:\s*false/);
 assert.match(memoD1, /operationAdjustments:\s*\{ history:\s*1 \}/);
 
-assert.match(html, /style\.css\?v=6\.5\.39-elevator-capacity-x/);
+assert.match(html, /style\.css\?v=6\.5\.40-world-grid-clusters/);
 assert.match(html, /script\.js\?v=6\.5\.81-card-instance-selection/);
 assert.match(css, /\.memo-inline-status\.saving/);
 assert.match(css, /\.memo-inline-status\.success/);
