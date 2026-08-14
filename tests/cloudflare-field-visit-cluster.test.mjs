@@ -36,5 +36,5 @@ test("both initial draw and redraw use pending visit state", () => {
     3,
     "the helper definition, initial draw and selected-cluster redraw must stay connected"
   );
-  assert.match(html, /js\/map\.js\?v=8\.2\.7-world-grid-relayout/);
+  assert.match(html, /js\/map\.js\?v=8\.2\.8-world-grid-density/);
 });

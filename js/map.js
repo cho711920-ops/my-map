@@ -803,12 +803,14 @@ function getWorldGridCellSizeMetersV690(level) {
   /*
    * 카카오 레벨이 한 단계 확대될 때 고정 공간 칸도 절반으로 줄입니다.
    * 같은 레벨에서 지도를 드래그하면 이 경계는 움직이지 않습니다.
+   * 동 단위 다음 첫 공간 단계는 1.28km로 넉넉히 묶어 큰 클러스터를
+   * 먼저 보여주고, 그 다음 단계부터 절반씩 자연스럽게 분해합니다.
    */
-  if (value >= 6) return 640;
-  if (value === 5) return 320;
-  if (value === 4) return 160;
-  if (value === 3) return 80;
-  return 40;
+  if (value >= 6) return 1280;
+  if (value === 5) return 640;
+  if (value === 4) return 320;
+  if (value === 3) return 160;
+  return 80;
 }
 
 

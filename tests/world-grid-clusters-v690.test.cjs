@@ -43,11 +43,11 @@ vm.runInContext([
   extractFunction("createWorldGridClustersV690")
 ].join("\n"), clusterContext);
 
-assert.equal(clusterContext.getWorldGridCellSizeMetersV690(6), 640);
-assert.equal(clusterContext.getWorldGridCellSizeMetersV690(5), 320);
-assert.equal(clusterContext.getWorldGridCellSizeMetersV690(4), 160);
-assert.equal(clusterContext.getWorldGridCellSizeMetersV690(3), 80);
-assert.equal(clusterContext.getWorldGridCellSizeMetersV690(2), 40);
+assert.equal(clusterContext.getWorldGridCellSizeMetersV690(6), 1280);
+assert.equal(clusterContext.getWorldGridCellSizeMetersV690(5), 640);
+assert.equal(clusterContext.getWorldGridCellSizeMetersV690(4), 320);
+assert.equal(clusterContext.getWorldGridCellSizeMetersV690(3), 160);
+assert.equal(clusterContext.getWorldGridCellSizeMetersV690(2), 80);
 
 const groups = [
   { key: "a", latlng: new LatLng(36.3500, 127.3800), items: [{ key: "a" }] },
@@ -57,11 +57,13 @@ const groups = [
 ];
 
 const level6 = clusterContext.createWorldGridClustersV690(groups, 6);
+const level5 = clusterContext.createWorldGridClustersV690(groups, 5);
 const level2 = clusterContext.createWorldGridClustersV690(groups, 2);
 assert.ok(level6.length > 0);
+assert.ok(level5.length >= level6.length, "동 다음 단계부터 확대할수록 큰 셀이 더 작은 셀로 분해되어야 합니다.");
 assert.ok(level2.length >= level6.length, "확대할수록 고정 공간 셀이 같거나 더 잘게 나뉘어야 합니다.");
 assert.ok(level6.every((cluster) => cluster.worldGrid));
-assert.ok(level6.every((cluster) => /^world-grid:640:-?\d+:-?\d+$/.test(cluster.key)));
+assert.ok(level6.every((cluster) => /^world-grid:1280:-?\d+:-?\d+$/.test(cluster.key)));
 
 const firstKeys = level6.map((cluster) => cluster.key);
 clusterContext.map = { getCenter: () => new LatLng(0, 0) };
@@ -107,6 +109,6 @@ assert.match(
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?world-grid-cluster-v690/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-district-v690/);
 assert.match(html, /style\.css\?v=6\.5\.40-world-grid-clusters/);
-assert.match(html, /map\.js\?v=8\.2\.7-world-grid-relayout/);
+assert.match(html, /map\.js\?v=8\.2\.8-world-grid-density/);
 
 console.log("world grid cluster v6.9.0 tests passed");
