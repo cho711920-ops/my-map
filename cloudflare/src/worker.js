@@ -644,7 +644,7 @@ async function handleApi(request, env, context) {
 async function runScheduledMaintenance(env, context) {
   const review = await runScheduledReviewRepair(env);
   const elevator = await runScheduledElevatorEnrichment(env);
-  const reviewChanged = Number(review?.merged || 0) + Number(review?.created || 0);
+  const reviewChanged = Number(review?.merged || 0) + Number(review?.created || 0) + Number(review?.duplicate || 0);
   const elevatorChanged = Number(elevator?.changed || 0);
   if (!reviewChanged && !elevatorChanged) return { review, elevator };
   const snapshotUpdate = reviewChanged

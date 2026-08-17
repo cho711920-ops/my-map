@@ -816,6 +816,9 @@ export function compareListingSpace(record, row) {
   if (genericSpecific && offerMatch && !incoming.wholeFloor && !existing.wholeFloor) {
     return { decision: "same", reason: "같은 층·임대조건·평수" };
   }
+  if (genericSpecific && reliableOfferMismatch(record || {}, row || {})) {
+    return { decision: "different", reason: "같은 층이지만 호실 표기와 임대조건·평수가 모두 다름" };
+  }
   if (sameKnownFloor && !incoming.units.length && !existing.units.length && offerMatch) {
     return { decision: "same", reason: "같은 층·임대조건·평수" };
   }
@@ -2157,11 +2160,14 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
 }
 
 async function repairExactReviews(env, user, options = {}) {
-  const decisionVersion = 4;
+  const decisionVersion = 5;
+  const sourceFilter = clean(options.source);
+  const scanLimit = Math.max(1, Math.min(20, Number(options.limit) || 20));
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
-    ORDER BY created_at LIMIT 20`).bind(decisionVersion).all();
+      AND (?2='' OR source=?2)
+    ORDER BY created_at LIMIT ?3`).bind(decisionVersion, sourceFilter, scanLimit).all();
   const reviewRows = rows?.results || [];
   const parsedRows = reviewRows.map((row) => {
     const parsed = parseJson(row.payload_json, null);
@@ -2213,6 +2219,7 @@ async function repairExactReviews(env, user, options = {}) {
       if (classified.decision === "merge") {
         await attachSource(env, record, classified.candidate.id, row.session_id, existingSource, false,
           clean(user?.email), existingAssets);
+        affectedListingIds.add(classified.candidate.id);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: classified.candidate.id,
             reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
@@ -2245,22 +2252,31 @@ async function repairExactReviews(env, user, options = {}) {
   const includeRemaining = options.includeRemaining !== false;
   const pending = includeRemaining
     ? await env.DB.prepare(`SELECT COUNT(*) AS count FROM collector_raw
-      WHERE processing_state='review' AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1`)
-      .bind(decisionVersion).first()
+      WHERE processing_state='review' AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
+        AND (?2='' OR source=?2)`)
+      .bind(decisionVersion, sourceFilter).first()
     : null;
   const remainingToScan = includeRemaining ? Number(pending?.count || 0) : null;
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
     merged, created, duplicate, ambiguous, failed,
     hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= 20,
-    remainingToScan, customerMatches,
+    remainingToScan, sourceFilter, customerMatches,
     operationAdjustments: { pendingReview: -(merged + created + duplicate) }, source: "D1" };
 }
 
 export async function runScheduledReviewRepair(env) {
-  return mergeSingleCandidateReviews(env, {
+  const systemUser = {
     email: "system-review-repair@js-map.com",
     role: "owner"
-  }, { limit: 20, refreshCustomerMatches: false });
+  };
+  const gongsilRepair = await repairExactReviews(env, systemUser, {
+    includeRemaining: false,
+    source: "공실박스"
+  });
+  if (Number(gongsilRepair?.scanned || 0) > 0) return gongsilRepair;
+  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false });
+  if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
+  return mergeSingleCandidateReviews(env, systemUser, { limit: 20, refreshCustomerMatches: false });
 }
 
 export async function handleCollectorAdminPost(env, user, body) {

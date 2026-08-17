@@ -25,7 +25,7 @@ test("the same explicit room is one physical listing even when rental terms chan
   assert.equal(result.candidate.id, "M-1");
 });
 
-test("a generic floor and a unit on that floor merge only with exact terms and under one pyeong difference", () => {
+test("a generic floor and a unit on that floor merge only with matching terms and area", () => {
   assert.equal(classifyListingCandidates(incoming("1층", 1000, 50, 10.8), [
     existing("M-1", "101호", 1000, 50, 10)
   ]).decision, "merge");
@@ -35,6 +35,12 @@ test("a generic floor and a unit on that floor merge only with exact terms and u
   assert.equal(classifyListingCandidates(incoming("1층", 2000, 50, 10.5), [
     existing("M-1", "101호", 1000, 50, 10)
   ]).decision, "review");
+  assert.equal(classifyListingCandidates(incoming("114호", 300, 60, 6), [
+    existing("M-1", "1층", 3000, 130, 13.1)
+  ]).decision, "create");
+  assert.equal(classifyListingCandidates(incoming("1층", 3000, 130, 13.1), [
+    existing("M-1", "114호", 300, 60, 6)
+  ]).decision, "create");
 });
 
 test("basement aliases share one floor while above-ground rooms remain separate", () => {
