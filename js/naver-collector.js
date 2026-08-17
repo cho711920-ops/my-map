@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.9.1";
+  var VERSION = "5.9.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -33,6 +33,7 @@
   var FIN_ARTICLE_KEY_PATH = "/front-api/v1/article/key";
   var FIN_ARTICLE_BASIC_PATH = "/front-api/v1/article/basicInfo";
   var FIN_DETAIL_CONCURRENCY = 5;
+  var FIN_DETAIL_TIMEOUT_MS = 15000;
   // 새 네이버 목록 API는 실제 화면과 동일한 30건 단위에서만 다음 페이지
   // lastInfo/seed 조합을 안정적으로 받아들입니다. 100건으로 올리면 2페이지부터 400이 납니다.
   var FIN_PAGE_SIZE = 30;
@@ -2382,11 +2383,16 @@
     var lastError = null;
     for (var attempt = 1; attempt <= (attempts || 4); attempt += 1) {
       throwIfStopRequested();
+      var controller = typeof AbortController === "function" ? new AbortController() : null;
+      var timeoutId = controller ? window.setTimeout(function() {
+        controller.abort();
+      }, FIN_DETAIL_TIMEOUT_MS) : 0;
       try {
         var response = await nativeFetch(url, {
           method: "GET",
           credentials: "include",
-          headers: {Accept: "application/json, text/plain, */*"}
+          headers: {Accept: "application/json, text/plain, */*"},
+          signal: controller ? controller.signal : undefined
         });
         if (response.ok) return await response.json();
         if (response.status !== 429 && response.status < 500) {
@@ -2394,7 +2400,11 @@
         }
         lastError = new Error("HTTP " + response.status);
       } catch (error) {
-        lastError = error;
+        lastError = controller && controller.signal.aborted
+          ? new Error("네이버 상세조회 응답 시간 초과")
+          : error;
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
       }
       await delay(Math.min(2500, 250 * attempt * attempt));
     }
@@ -2468,9 +2478,20 @@
       while (cursor < items.length) {
         var index = cursor;
         cursor += 1;
-        results[index] = await enrichNaverDetail(items[index]);
-        completed += 1;
-        if (onProgress) onProgress(completed, items.length);
+        try {
+          results[index] = await enrichNaverDetail(items[index]);
+        } catch (error) {
+          if (state.stopRequested) throw error;
+          results[index] = {
+            item: items[index],
+            valid: false,
+            fetchFailed: true,
+            reason: String(error && error.message ? error.message : error)
+          };
+        } finally {
+          completed += 1;
+          if (onProgress) onProgress(completed, items.length);
+        }
       }
     }
     var workers = [];
@@ -2789,8 +2810,18 @@
         }).map(function(result) {
           return result.item;
         });
+        var detailFailureCount = detailResults.filter(function(result) {
+          return result && result.fetchFailed;
+        }).length;
+        if (!firstFailure && detailFailureCount) {
+          var firstDetailFailure = detailResults.find(function(result) {
+            return result && result.fetchFailed;
+          });
+          firstFailure = clean(firstDetailFailure && firstDetailFailure.reason);
+        }
         var incompleteCount = candidateBatch.length - batch.length;
-        totals.addressMissing += incompleteCount;
+        totals.failed += detailFailureCount;
+        totals.addressMissing += Math.max(0, incompleteCount - detailFailureCount);
         if (!batch.length) {
           index += candidateBatch.length;
           updateDashboard({

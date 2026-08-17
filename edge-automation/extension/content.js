@@ -1,6 +1,6 @@
 "use strict";
 
-const RESULT_TIMEOUT_MS = 5 * 60 * 60 * 1000;
+const RESULT_TIMEOUT_MS = 90 * 60 * 1000;
 
 function sendRuntimeMessage(message) {
   return new Promise((resolve) => {

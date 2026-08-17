@@ -11,6 +11,12 @@ const source = fs.readFileSync(
 assert.match(source, /FIN_ARTICLE_KEY_PATH = "\/front-api\/v1\/article\/key"/);
 assert.match(source, /FIN_ARTICLE_BASIC_PATH = "\/front-api\/v1\/article\/basicInfo"/);
 assert.match(source, /async function enrichNaverDetailBatch/);
+assert.match(source, /FIN_DETAIL_TIMEOUT_MS = 15000/);
+assert.match(source, /controller\.abort\(\)/);
+assert.match(source, /signal: controller \? controller\.signal : undefined/);
+assert.match(source, /fetchFailed: true/);
+assert.match(source, /totals\.failed \+= detailFailureCount/);
+assert.match(source, /firstFailure = clean\(firstDetailFailure && firstDetailFailure\.reason\)/);
 assert.match(source, /hasExactNaverJibun/);
 assert.match(source, /hasExactNaverFloorOrRoom/);
 assert.match(source, /function finExactAddressText/);

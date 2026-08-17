@@ -43,6 +43,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 4/);
   assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 8/);
   assert.match(background, /MAX_RUN_AGE_MS/);
+  assert.match(background, /COLLECTION_STALL_TIMEOUT_MS = 90 \* 60 \* 1000/);
   assert.match(background, /주소·층 오류/);
   assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
   assert.match(background, /state\.summary\.retryErrors/);
@@ -64,6 +65,7 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(content, /async function reportTargetFinished\(message\)/);
   assert.match(content, /sendResponse\(\{ ok: true, started: true \}\)/);
   assert.match(content, /RESULT_TIMEOUT_MS/);
+  assert.match(content, /RESULT_TIMEOUT_MS = 90 \* 60 \* 1000/);
 });
 
 test("all three collectors expose registration and unattended execution", () => {

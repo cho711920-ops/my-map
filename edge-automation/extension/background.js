@@ -15,7 +15,7 @@ const MAX_IMMEDIATE_ATTEMPTS = 4;
 const MAX_DEFERRED_RETRY_CYCLES = 8;
 const MAX_RUN_AGE_MS = 20 * 60 * 60 * 1000;
 const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
-const COLLECTION_STALL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+const COLLECTION_STALL_TIMEOUT_MS = 90 * 60 * 1000;
 const DEFAULT_CONFIG = {
   enabled: false,
   schedule: "06:00",
@@ -686,7 +686,7 @@ async function recoverAutomaticRun() {
       ok: false,
       message: stalledLoading
         ? "수집기 시작 신호가 3분 동안 없어 다시 시작합니다."
-        : "한 대상이 6시간 안에 끝나지 않아 마지막 저장 지점부터 복구합니다."
+        : "한 대상이 90분 안에 끝나지 않아 마지막 저장 지점부터 복구합니다."
     }, state.currentTabId);
   }
   return { ok: true, active: true };
