@@ -57,6 +57,6 @@ test("done-only view is mutually exclusive with hiding completed listings", () =
   assert.match(scriptSource, /function toggleDoneOnly\(\)[\s\S]*?if \(doneOnly\) hideDone = false/);
   assert.match(scriptSource, /localStorage\.setItem\(doneViewStorageKeyV656, mode\)/);
   assert.match(quickToolsSource, /\["mapQuickDoneOnlyBtn", !!window\.doneOnly\]/);
-assert.match(htmlSource, /script\.js\?v=6\.5\.81-card-instance-selection/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
   assert.match(htmlSource, /map-quick-tools-v657\.js\?v=6\.5\.10-done-only-filter/);
 });

@@ -45,6 +45,51 @@ test("data access reads Cloudflare D1 actions with session credentials", async (
   assert.equal(request.options.cache, "no-store");
 });
 
+test("large initial read endpoints use browser revalidation instead of cache-busting URLs", async () => {
+  const requests = [];
+  const client = clientWith(async (url, options) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({ ok: true, groups: {} }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  });
+
+  await client.read("unifiedListings", {});
+  await client.read("geocodeCache", {});
+
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.doesNotMatch(request.url, /[?&]_=/);
+    assert.equal(request.options.cache, "default");
+  }
+});
+
+test("authenticated asset loading warms the two initial datasets without duplicate requests", async () => {
+  const requests = [];
+  const client = clientWith(async (url, options) => {
+    requests.push({ url, options });
+    if (url === "/api/sheet") return new Response("title,address\nshop,dunsan", { status: 200 });
+    return new Response(JSON.stringify({ ok: true, groups: { sample: [] } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  });
+
+  client.warmInitialData();
+  const [csv, unified] = await Promise.all([
+    client.listingsCsv(false),
+    client.read("unifiedListings", {})
+  ]);
+
+  assert.equal(csv, "title,address\nshop,dunsan");
+  assert.deepEqual(JSON.parse(JSON.stringify(unified.groups)), { sample: [] });
+  assert.deepEqual(requests.map((entry) => entry.url).sort(), [
+    "/api/data?action=unifiedListings",
+    "/api/sheet"
+  ]);
+});
+
 test("data access loads before every legacy UI consumer", () => {
   const accessIndex = html.indexOf('src="js/data-access-v6.js');
   assert.ok(accessIndex >= 0);
@@ -82,7 +127,7 @@ test("diagnosis storage uses the shared Cloudflare data boundary with a legacy f
   assert.match(diagnosisStorageSource, /request\(url, \{ credentials: "same-origin", cache: "no-store" \}\)/);
   assert.match(diagnosisStorageSource, /return request\(global\.saveApiURL \|\| "\/api\/data",/);
   assert.match(diagnosisStorageSource, /controller\.abort\(\)/);
-  assert.match(html, /data-access-v6\.js\?v=6\.0\.1-request-signals/);
+  assert.match(html, /data-access-v6\.js\?v=6\.0\.2-revalidated-warmup/);
   assert.match(html, /diagnosis-storage\.js\?v=1\.2\.1-data-access/);
 });
 

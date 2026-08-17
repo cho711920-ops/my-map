@@ -41,6 +41,6 @@ assert.match(step, /다음 사진 불러오는 중…/);
 assert.match(unified, /images\.length > 1 && Number\.isFinite\(Number\(pendingStep\)\)/);
 
 assert.match(html, /unified-listings-v8\.js\?v=8\.1\.30-fast-photo-carousel/);
-assert.match(html, /map\.js\?v=8\.2\.12-single-pass-initial-load/);
+assert.match(html, /map\.js\?v=8\.2\.13-local-geocode-first/);
 
 console.log("initial photo performance v8.1.30 tests passed");

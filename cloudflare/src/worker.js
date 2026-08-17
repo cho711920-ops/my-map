@@ -41,6 +41,7 @@ const OPERATIONS_CACHE_ACTIONS = new Set([
   "addCustomerActivity", "deleteCustomer", "deleteProperty", "moveOriginalListing", "quickAdd",
   "rebuildCustomerMatches", "restoreListingHistory", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
 ]);
+const BROWSER_REVALIDATED_ACTIONS = new Set(["unifiedListings", "geocodeCache"]);
 const UNIFIED_COMPACT_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "thumbnail", "photoCount", "contactCount", "revision"
@@ -409,6 +410,30 @@ function jsonp(callback, payload, headers = {}) {
   });
 }
 
+function requestEtagMatches(request, etag) {
+  const candidate = String(request.headers.get("if-none-match") || "");
+  if (!candidate || !etag) return false;
+  return candidate.split(",").some((value) => {
+    const normalized = value.trim();
+    return normalized === "*" || normalized === etag || normalized.replace(/^W\//, "") === etag;
+  });
+}
+
+async function revalidatedPrivateResponse(request, body, contentType, headers = {}) {
+  const etag = await sha256Etag(body);
+  const responseHeaders = {
+    "content-type": contentType || "application/json; charset=utf-8",
+    "cache-control": "private, max-age=0, must-revalidate",
+    vary: "Cookie, Accept-Encoding",
+    etag,
+    ...headers
+  };
+  if (requestEtagMatches(request, etag)) {
+    return new Response(null, { status: 304, headers: responseHeaders });
+  }
+  return new Response(body, { headers: responseHeaders });
+}
+
 async function handleDataApi(request, env, context) {
   const user = await requireSession(request, env);
   if (request.method !== "GET" && request.method !== "POST") {
@@ -501,6 +526,11 @@ async function handleDataApi(request, env, context) {
         if (cachedBody !== cached.body) {
           writeR2TextCache(env, context, r2CacheKey, cachedBody, cached.contentType);
         }
+        if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
+          return revalidatedPrivateResponse(request, cachedBody, cached.contentType, {
+            "x-js-data-cache": "HIT"
+          });
+        }
         return new Response(cachedBody, {
           headers: {
             "content-type": cached.contentType,
@@ -518,6 +548,12 @@ async function handleDataApi(request, env, context) {
     }
     const responseText = JSON.stringify(payload);
     if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8");
+    if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
+      return revalidatedPrivateResponse(request, responseText, "application/json; charset=utf-8", {
+        "x-js-data-source": "D1",
+        ...(r2CacheKey ? { "x-js-data-cache": "MISS" } : {})
+      });
+    }
     return jsonp(query.callback, payload, {
       "x-js-data-source": "D1",
       ...(r2CacheKey ? { "x-js-data-cache": "MISS" } : {})

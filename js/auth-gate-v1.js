@@ -42,12 +42,16 @@ async function appendAuthenticatedHeadAssets() {
   const template = document.getElementById("jsAuthenticatedHeadAssets");
   if (!template) return;
   const nodes = Array.from(template.content.childNodes);
+  const scripts = [];
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") {
-      await loadScriptInOrder(node, document.head);
+      scripts.push(node);
     } else {
       document.head.appendChild(node.cloneNode(true));
     }
+  }
+  for (const script of scripts) {
+    await loadScriptInOrder(script, document.head);
   }
   template.remove();
 }
@@ -89,6 +93,13 @@ async function appendAuthenticatedBodyAssets() {
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") {
       await loadScriptInOrder(node);
+      if (
+        /(?:^|\/)data-access-v6\.js(?:\?|$)/.test(node.getAttribute("src") || "") &&
+        window.JSDataAccessV6 &&
+        typeof window.JSDataAccessV6.warmInitialData === "function"
+      ) {
+        window.JSDataAccessV6.warmInitialData();
+      }
     } else {
       document.body.appendChild(node.cloneNode(true));
     }

@@ -248,14 +248,20 @@ function flushSharedGeocodeCache() {
 function loadSharedGeocodeCache() {
   if (sharedGeocodeCacheLoadPromise) return sharedGeocodeCacheLoadPromise;
 
-  sharedGeocodeCacheLoadPromise = fetch(saveApiURL + "?action=geocodeCache", {
-    credentials: "same-origin",
-    cache: "no-store"
-  })
-    .then(function(response) {
+  var sharedRequest = window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function"
+    ? window.JSDataAccessV6.read("geocodeCache", {}, {
+      cache: "default",
+      errorMessage: "공용 좌표 캐시 조회 실패"
+    })
+    : fetch(saveApiURL + "?action=geocodeCache", {
+      credentials: "same-origin",
+      cache: "default"
+    }).then(function(response) {
       if (!response.ok) throw new Error("공용 좌표 캐시 조회 실패");
       return response.json();
-    })
+    });
+
+  sharedGeocodeCacheLoadPromise = sharedRequest
     .then(function(result) {
       if (!result || result.ok === false) {
         throw new Error((result && result.message) || "공용 좌표 캐시 조회 실패");

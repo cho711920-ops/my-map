@@ -3,6 +3,11 @@
 
   var DATA_API = "/api/data";
   var LISTINGS_API = "/api/sheet";
+  var REVALIDATED_READ_ACTIONS = Object.freeze({
+    unifiedListings: true,
+    geocodeCache: true
+  });
+  var initialWarmups = Object.create(null);
 
   function messageFromPayload(payload, fallback) {
     return String(payload && payload.message || fallback || "요청을 처리하지 못했습니다.");
@@ -21,14 +26,17 @@
     return global.fetch(url, init);
   }
 
-  function read(action, params, options) {
+  function readNetwork(action, params, options) {
     var queryValues = Object.assign({}, params || {});
     queryValues.action = action;
-    if (!Object.prototype.hasOwnProperty.call(queryValues, "_")) queryValues._ = String(Date.now());
+    var revalidated = !!REVALIDATED_READ_ACTIONS[action];
+    if (!revalidated && !Object.prototype.hasOwnProperty.call(queryValues, "_")) {
+      queryValues._ = String(Date.now());
+    }
     var query = new URLSearchParams(queryValues);
     var settings = options || {};
     return request(DATA_API + "?" + query.toString(), {
-      cache: settings.cache || "no-store",
+      cache: settings.cache || (revalidated ? "default" : "no-store"),
       headers: settings.headers || undefined,
       signal: settings.signal || undefined
     }).then(function(response) {
@@ -46,6 +54,38 @@
         return payload;
       });
     });
+  }
+
+  function settledWarmup(promise) {
+    return Promise.resolve(promise).then(function(value) {
+      return { ok: true, value: value };
+    }, function(error) {
+      return { ok: false, error: error };
+    });
+  }
+
+  function consumeWarmup(key, fallback) {
+    var pending = initialWarmups[key];
+    if (!pending) return fallback();
+    delete initialWarmups[key];
+    return pending.then(function(result) {
+      return result && result.ok ? result.value : fallback();
+    });
+  }
+
+  function read(action, params, options) {
+    var values = params || {};
+    var settings = options || {};
+    if (
+      action === "unifiedListings" &&
+      !settings.signal &&
+      !Object.keys(values).length
+    ) {
+      return consumeWarmup("unifiedListings", function() {
+        return readNetwork(action, values, settings);
+      });
+    }
+    return readNetwork(action, values, settings);
   }
 
   function mutate(action, payload, options) {
@@ -75,7 +115,7 @@
     });
   }
 
-  function listingsCsv(forceRefresh) {
+  function listingsCsvNetwork(forceRefresh) {
     var headers = forceRefresh ? { "X-JS-Force-Refresh": "1" } : undefined;
     return request(LISTINGS_API, {
       cache: forceRefresh ? "reload" : "default",
@@ -91,10 +131,33 @@
     });
   }
 
+  function listingsCsv(forceRefresh) {
+    if (forceRefresh) {
+      delete initialWarmups.listingsCsv;
+      return listingsCsvNetwork(true);
+    }
+    return consumeWarmup("listingsCsv", function() {
+      return listingsCsvNetwork(false);
+    });
+  }
+
+  function warmInitialData() {
+    if (!initialWarmups.listingsCsv) {
+      initialWarmups.listingsCsv = settledWarmup(listingsCsvNetwork(false));
+    }
+    if (!initialWarmups.unifiedListings) {
+      initialWarmups.unifiedListings = settledWarmup(readNetwork("unifiedListings", {}, {
+        cache: "default"
+      }));
+    }
+    return true;
+  }
+
   global.JSDataAccessV6 = Object.freeze({
     endpoints: Object.freeze({ data: DATA_API, listings: LISTINGS_API }),
     read: read,
     mutate: mutate,
-    listingsCsv: listingsCsv
+    listingsCsv: listingsCsv,
+    warmInitialData: warmInitialData
   });
 })(window);

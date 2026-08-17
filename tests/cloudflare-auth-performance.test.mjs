@@ -15,6 +15,8 @@ test("only authentication assets execute before the session is approved", () => 
   assert.match(html, /<template id="jsAuthenticatedBodyAssets">[\s\S]*?js\/data-access-v6\.js[\s\S]*?js\/map\.js[\s\S]*?<\/template>/);
   assert.match(auth, /if \(response\.ok\) \{[\s\S]*?await unlock\(result\.email\)/);
   assert.match(auth, /appendAuthenticatedApplication\(\);[\s\S]*?await appendAuthenticatedHeadAssets\(\);[\s\S]*?await appendAuthenticatedBodyAssets\(\)/);
+  assert.match(auth, /const scripts = \[\][\s\S]*?document\.head\.appendChild\(node\.cloneNode\(true\)\)[\s\S]*?for \(const script of scripts\)/);
+  assert.match(auth, /JSDataAccessV6\.warmInitialData\(\)/);
 });
 
 test("the authentication gate isolates the application and fits mobile viewports", () => {

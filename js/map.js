@@ -1638,6 +1638,34 @@ function showListWithoutReleasingPinnedClusterV685(fallbackItems) {
 }
 
 
+function hasReadyCoordinateWithoutSharedCacheV8213(item) {
+  if (!item) return true;
+  if (item.latlng) return true;
+
+  var sourceLat = item.latitude == null || item.latitude === "" ? NaN : Number(item.latitude);
+  var sourceLng = item.longitude == null || item.longitude === "" ? NaN : Number(item.longitude);
+  if (
+    Number.isFinite(sourceLat) && Number.isFinite(sourceLng) &&
+    sourceLat >= -90 && sourceLat <= 90 &&
+    sourceLng >= -180 && sourceLng <= 180
+  ) {
+    return true;
+  }
+
+  var addressKey = typeof normalizeAddressForCache === "function"
+    ? normalizeAddressForCache(item.address)
+    : "";
+  var cached = addressKey && typeof geocodeCache !== "undefined"
+    ? geocodeCache[addressKey]
+    : null;
+  return !!(
+    cached &&
+    Number.isFinite(Number(cached.lat)) &&
+    Number.isFinite(Number(cached.lng))
+  );
+}
+
+
 function loadSheet(isAuto, forceRefresh) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
@@ -1802,6 +1830,9 @@ function loadSheet(isAuto, forceRefresh) {
       var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {
         return !!item.latlng;
       });
+      var allRowsReadyWithoutSharedCacheV8213 = rawItems.length > 0 && rawItems.every(function(item) {
+        return hasReadyCoordinateWithoutSharedCacheV8213(item);
+      });
       var keptPinnedClusterListV685 = allRowsAlreadyLocatedV691
         ? false
         : showListWithoutReleasingPinnedClusterV685(currentItems);
@@ -1830,7 +1861,7 @@ function loadSheet(isAuto, forceRefresh) {
         return true;
       }
 
-      (allRowsAlreadyLocatedV691
+      (allRowsAlreadyLocatedV691 || allRowsReadyWithoutSharedCacheV8213
         ? Promise.resolve({ ok: true, entries: {} })
         : getSharedGeocodeRequestV691()).then(function() {
         geocodeItems(rawItems, function(doneItems) {

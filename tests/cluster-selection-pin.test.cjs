@@ -31,8 +31,8 @@ assert.match(
   operationsSource,
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
-assert.match(htmlSource, /js\/map\.js\?v=8\.2\.12-single-pass-initial-load/);
-assert.match(htmlSource, /js\/script\.js\?v=6\.5\.81-card-instance-selection/);
+assert.match(htmlSource, /js\/map\.js\?v=8\.2\.13-local-geocode-first/);
+assert.match(htmlSource, /js\/script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.22\.4-overlay-exclusivity/);
 
 console.log("cluster selection pin tests passed");

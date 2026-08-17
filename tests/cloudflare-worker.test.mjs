@@ -76,24 +76,38 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
     throw new Error("upstream should not be called on a cache hit");
   };
   try {
-    const response = await authenticatedRequest(
-      "/api/data?action=unifiedListings",
-      {
-        MEDIA: {
-          get: async (key) => {
-            assert.equal(key, "api-cache/unified-listings-v4-actual-gongsil-photos.json");
-            return {
-              customMetadata: { savedAt: String(Date.now()) },
-              httpMetadata: { contentType: "application/json; charset=utf-8" },
-              text: async () => JSON.stringify({ ok: true, groups: { sample: [] } })
-            };
-          }
+    const cachedBody = JSON.stringify({ ok: true, groups: { sample: [] } });
+    const cachedEnv = {
+      MEDIA: {
+        get: async (key) => {
+          assert.equal(key, "api-cache/unified-listings-v4-actual-gongsil-photos.json");
+          return {
+            customMetadata: { savedAt: String(Date.now()) },
+            httpMetadata: { contentType: "application/json; charset=utf-8" },
+            text: async () => cachedBody
+          };
         }
       }
+    };
+    const response = await authenticatedRequest(
+      "/api/data?action=unifiedListings",
+      cachedEnv
     );
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-js-data-cache"), "HIT");
+    assert.match(response.headers.get("cache-control"), /must-revalidate/);
+    assert.match(response.headers.get("vary"), /Cookie/);
+    assert.ok(response.headers.get("etag"));
     assert.equal((await response.json()).ok, true);
+
+    const revalidated = await authenticatedRequest(
+      "/api/data?action=unifiedListings",
+      cachedEnv,
+      {},
+      { headers: { "if-none-match": response.headers.get("etag") } }
+    );
+    assert.equal(revalidated.status, 304);
+    assert.equal(await revalidated.text(), "");
     assert.equal(upstreamCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;

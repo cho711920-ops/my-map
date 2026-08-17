@@ -41,7 +41,7 @@ assert.match(
   /function closeRoadviewModal\(\)[\s\S]*?restorePinnedClusterSelectionAfterTransientUiV6525\(\)/
 );
 
-assert.match(htmlSource, /script\.js\?v=6\.5\.81-card-instance-selection/);
-assert.match(htmlSource, /map\.js\?v=8\.2\.12-single-pass-initial-load/);
+assert.match(htmlSource, /script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
+assert.match(htmlSource, /map\.js\?v=8\.2\.13-local-geocode-first/);
 
 console.log("cluster transient state v6.5.25 tests passed");

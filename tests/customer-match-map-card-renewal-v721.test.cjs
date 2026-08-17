@@ -47,6 +47,6 @@ assert.match(css, /customer-match-map-card-v721\.customer-match-held[\s\S]*?bord
 assert.match(html, /id="customerMatchMapStatusOverlayV722"/);
 assert.match(html, /id="customerMatchMapStatusOverlayV722"[\s\S]*?>메인화면으로 돌아가기<\/button>/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.41-source-link-spacing/);
-assert.match(html, /script\.js\?v=6\.5\.81-card-instance-selection/);
+assert.match(html, /script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
 
 console.log("customer match map card renewal v7.21 tests passed");
