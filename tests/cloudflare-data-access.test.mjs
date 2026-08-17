@@ -9,6 +9,7 @@ const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", impor
 const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", import.meta.url), "utf8");
 const asyncMutationSource = readFileSync(new URL("../js/async-mutation-queue-v1.js", import.meta.url), "utf8");
 const diagnosisStorageSource = readFileSync(new URL("../js/diagnosis-storage.js", import.meta.url), "utf8");
+const announcementSource = readFileSync(new URL("../js/announcement-v1.js", import.meta.url), "utf8");
 const operationsSources = [
   "operations-center-v7.js",
   "operations-collection-v8.js",
@@ -54,6 +55,7 @@ test("data access loads before every legacy UI consumer", () => {
     "js/list-manager-v6.js",
     "js/ai-visit-session-v6.js",
     "js/diagnosis-storage.js",
+    "js/announcement-v1.js",
     "js/map.js",
     "js/operations-center-v7.js",
     "js/operations-collection-v8.js",
@@ -61,6 +63,16 @@ test("data access loads before every legacy UI consumer", () => {
   ]) {
     assert.ok(accessIndex < html.indexOf(`src="${consumer}`), `${consumer} must load after the data boundary`);
   }
+});
+
+test("announcement uses the shared Cloudflare data boundary with a legacy fallback", () => {
+  assert.match(announcementSource, /access\.read\("announcement", \{\},/);
+  assert.match(announcementSource, /typeof access\.read === "function"/);
+  assert.match(announcementSource, /fetch\(saveApiURL \+ separator \+ "action=announcement&_="/);
+  assert.match(announcementSource, /credentials: "same-origin"/);
+  assert.match(announcementSource, /result\.announcement/);
+  assert.match(announcementSource, /source\.body/);
+  assert.match(html, /announcement-v1\.js\?v=1\.0\.2-data-access/);
 });
 
 test("diagnosis storage uses the shared Cloudflare data boundary with a legacy fallback", () => {

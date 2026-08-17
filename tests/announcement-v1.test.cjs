@@ -11,7 +11,7 @@ assert.match(script, /function formatAnnouncementContent\(/);
 assert.match(script, /js-announcement-step/);
 assert.match(script, /<br><br>/);
 assert.match(css, /\.js-announcement-step\s*\{/);
-assert.match(html, /announcement-v1\.js\?v=1\.0\.1-readable-steps/);
+assert.match(html, /announcement-v1\.js\?v=1\.0\.2-data-access/);
 assert.match(html, /announcement-v1\.css\?v=1\.0\.1-readable-steps/);
 assert.match(html, /announcement-readable-v1\.css\?v=1\.0\.0/);
 

@@ -60,13 +60,44 @@
     });
   }
 
-  function loadAnnouncement() {
-    if (typeof saveApiURL !== "string" || !saveApiURL) return;
+  function normalizeAnnouncement(result) {
+    if (!result || result.ok === false) return null;
+    var wrapped = Object.prototype.hasOwnProperty.call(result, "announcement");
+    var source = wrapped ? result.announcement : result;
+    if (!source) return null;
+    var active = source.active;
+    if (active == null) active = wrapped;
+    active = active === true || active === 1 || text(active).toLowerCase() === "true";
+    return Object.assign({}, source, {
+      id: text(source.id),
+      title: text(source.title),
+      content: text(source.content || source.body),
+      updatedAt: text(source.updatedAt || source.updated_at),
+      active: active
+    });
+  }
+
+  function readAnnouncement() {
+    var access = window.JSDataAccessV6;
+    if (access && typeof access.read === "function") {
+      return access.read("announcement", {}, {
+        cache: "no-store",
+        errorMessage: "공지사항을 불러오지 못했습니다."
+      });
+    }
+    if (typeof saveApiURL !== "string" || !saveApiURL) return Promise.resolve(null);
     var separator = saveApiURL.indexOf("?") >= 0 ? "&" : "?";
-    fetch(saveApiURL + separator + "action=announcement&_=" + Date.now(), {cache: "no-store"})
-      .then(function(response) { return response.json(); })
+    return fetch(saveApiURL + separator + "action=announcement&_=" + Date.now(), {
+      cache: "no-store",
+      credentials: "same-origin"
+    }).then(function(response) { return response.json(); });
+  }
+
+  function loadAnnouncement() {
+    readAnnouncement()
       .then(function(result) {
-        if (result && result.ok !== false && result.active) showAnnouncement(result, false);
+        var notice = normalizeAnnouncement(result);
+        if (notice && notice.active) showAnnouncement(notice, false);
       }).catch(function() {});
   }
 
