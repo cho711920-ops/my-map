@@ -10,12 +10,14 @@ const headers = fs.readFileSync("_headers", "utf8");
 const build = fs.readFileSync("tools/build-cloudflare-assets.mjs", "utf8");
 
 test("only authentication assets execute before the session is approved", () => {
-  assert.match(html, /<template id="jsAuthenticatedHeadAssets">[\s\S]*?dapi\.kakao\.com[\s\S]*?<\/template>/);
+  assert.match(html, /<template id="jsAuthenticatedHeadAssets">[\s\S]*?js\/data-access-v6\.js[\s\S]*?dapi\.kakao\.com[\s\S]*?<\/template>/);
   assert.match(html, /<template id="jsAuthenticatedApplication">[\s\S]*?id="wrap" inert aria-hidden="true"[\s\S]*?<\/template>/);
-  assert.match(html, /<template id="jsAuthenticatedBodyAssets">[\s\S]*?js\/data-access-v6\.js[\s\S]*?js\/map\.js[\s\S]*?<\/template>/);
+  assert.match(html, /<template id="jsAuthenticatedBodyAssets">[\s\S]*?data-auth-critical src="js\/unified-listings-v8\.js[\s\S]*?data-auth-critical src="js\/map\.js[\s\S]*?<\/template>/);
   assert.match(auth, /if \(response\.ok\) \{[\s\S]*?await unlock\(result\.email\)/);
   assert.match(auth, /appendAuthenticatedApplication\(\);[\s\S]*?await appendAuthenticatedHeadAssets\(\);[\s\S]*?await appendAuthenticatedBodyAssets\(\)/);
   assert.match(auth, /const scripts = \[\][\s\S]*?document\.head\.appendChild\(node\.cloneNode\(true\)\)[\s\S]*?for \(const script of scripts\)/);
+  assert.match(auth, /const criticalScripts = scripts\.filter[\s\S]*?for \(const script of criticalScripts\)/);
+  assert.match(auth, /deferredAuthenticatedAssetsPromise = \(async \(\) =>/);
   assert.match(auth, /JSDataAccessV6\.warmInitialData\(\)/);
 });
 

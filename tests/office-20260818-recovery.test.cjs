@@ -59,7 +59,7 @@ test("all recovered August 18 cache versions are active", () => {
     "js/operations-center-v7.js?v=7.22.5-shared-data-only",
     "js/operations-collection-v8.js?v=7.25.8-shared-data-only",
     "js/operations-admin-v1.js?v=1.0.5-shared-data-only",
-    "js/commercial-brokerage-v1.js?v=1.0.0",
+    "js/commercial-brokerage-v1.js?v=1.1.0-exclusive-bands",
     "css/list-manager-v6.css?v=6.4.28-brokerage-filter",
     "css/mobile-app-v1.css?v=1.0.6-brokerage-no-floor"
   ]) {

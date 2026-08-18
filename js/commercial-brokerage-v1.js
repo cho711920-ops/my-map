@@ -36,16 +36,24 @@
     var calculation = calculateMaximumFee(item);
     if (!calculation) return false;
 
-    if (value === "gt500") return calculation.maximumFee > 500;
+    var ranges = {
+      fee0to100: { minExclusive: -1, maxInclusive: 100 },
+      fee100to200: { minExclusive: 100, maxInclusive: 200 },
+      fee200to300: { minExclusive: 200, maxInclusive: 300 },
+      fee300to500: { minExclusive: 300, maxInclusive: 500 },
+      feeOver500: { minExclusive: 500, maxInclusive: Infinity },
 
-    var limits = {
-      lte100: 100,
-      lte200: 200,
-      lte300: 300,
-      lte500: 500
+      /* 이전 브라우저 DOM을 잠깐 재사용해도 새 구간 의미로 안전하게 동작합니다. */
+      lte100: { minExclusive: -1, maxInclusive: 100 },
+      lte200: { minExclusive: 100, maxInclusive: 200 },
+      lte300: { minExclusive: 200, maxInclusive: 300 },
+      lte500: { minExclusive: 300, maxInclusive: 500 },
+      gt500: { minExclusive: 500, maxInclusive: Infinity }
     };
-    var limit = limits[value];
-    return Number.isFinite(limit) && calculation.maximumFee <= limit;
+    var range = ranges[value];
+    if (!range) return false;
+    return calculation.maximumFee > range.minExclusive &&
+      calculation.maximumFee <= range.maxInclusive;
   }
 
   global.JSCommercialBrokerageV1 = Object.freeze({

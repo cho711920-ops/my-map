@@ -44,6 +44,7 @@ var jsMapClusterEngineDefaultV690 = "world-grid";
 var jsMapClusterEngineStorageKeyV690 = "js_map_cluster_engine_v690";
 var jsMapResizeObserverV690 = null;
 var jsMapResizeRelayoutTimerV690 = null;
+var jsInitialListingsCacheHitV1 = false;
 
 
 /*
@@ -1638,6 +1639,60 @@ function showListWithoutReleasingPinnedClusterV685(fallbackItems) {
 }
 
 
+function hydrateInitialListingsCacheItemsV1(snapshot) {
+  var rows = snapshot && Array.isArray(snapshot.items) ? snapshot.items : [];
+  return rows.map(function(cached, index) {
+    var item = Object.assign({}, cached || {});
+    item.displayValuePresence = Object.assign({}, cached && cached.displayValuePresence || {});
+    item.sheetRow = Number(item.sheetRow) || index + 2;
+    item.latlng = null;
+    var latitude = item.latitude == null || item.latitude === "" ? NaN : Number(item.latitude);
+    var longitude = item.longitude == null || item.longitude === "" ? NaN : Number(item.longitude);
+    if (
+      Number.isFinite(latitude) && Number.isFinite(longitude) &&
+      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 &&
+      window.kakao && kakao.maps
+    ) {
+      item.latitude = latitude;
+      item.longitude = longitude;
+      item.latlng = new kakao.maps.LatLng(latitude, longitude);
+    }
+    item.key = itemKey(item);
+    return item;
+  }).filter(function(item) { return !!item.address; });
+}
+
+
+function showInitialListingsCacheV1(snapshot) {
+  if (!snapshot || !window.JSUnifiedListingsV8 ||
+      typeof window.JSUnifiedListingsV8.attach !== "function") return false;
+  var cachedItems = hydrateInitialListingsCacheItemsV1(snapshot);
+  if (!cachedItems.length) return false;
+
+  window.JSUnifiedListingsV8.attach(cachedItems, snapshot.unified || { groups: {} });
+  allItems = cachedItems;
+  updateTypeOptions(allItems);
+  currentItems = getFilteredItems({ includeUnlocated: true });
+  /*
+   * 캐시 화면은 카드부터 즉시 보여 줍니다. 1만 건 공간 클러스터는 곧 도착할
+   * 최신 D1 목록이 한 번만 그리게 하며, 네트워크가 늦을 때만 1.2초 뒤
+   * 캐시 좌표로 보완합니다.
+   */
+  showList(getAdministrativeListItemsV6570(currentItems));
+  jsInitialListingsCacheHitV1 = true;
+  document.documentElement.setAttribute("data-initial-list-cache-hit", "true");
+  var statusElement = document.getElementById("status");
+  if (statusElement) {
+    statusElement.textContent = "저장된 최근 매물 먼저 표시 · 최신 전체목록 확인 중...";
+  }
+  window.setTimeout(function() {
+    if (allItems !== cachedItems || !jsInitialListingsCacheHitV1) return;
+    drawMapClustersOnlyV639(currentItems);
+  }, 1200);
+  return true;
+}
+
+
 function hasReadyCoordinateWithoutSharedCacheV8213(item) {
   if (!item) return true;
   if (item.latlng) return true;
@@ -1685,6 +1740,17 @@ function loadSheet(isAuto, forceRefresh) {
   isLoadingSheet = true;
   errorItems = [];
   document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "D1 매물 불러오는 중...";
+  var liveInitialDataAppliedV1 = false;
+  var liveInitialItemsForCacheV1 = null;
+  var initialCacheWriteStartedV1 = false;
+
+  if (!isAuto && window.JSInitialListingsCacheV1 &&
+      typeof window.JSInitialListingsCacheV1.read === "function") {
+    window.JSInitialListingsCacheV1.read().then(function(snapshot) {
+      if (liveInitialDataAppliedV1 || !isLoadingSheet) return;
+      showInitialListingsCacheV1(snapshot);
+    });
+  }
 
   /*
    * 저장 직후의 loadSheet(true)는 운영 D1 데이터를 강제로 다시 읽습니다.
@@ -1714,6 +1780,18 @@ function loadSheet(isAuto, forceRefresh) {
 
   var unifiedResult = null;
   var renderedItemsAwaitingUnified = null;
+  function persistInitialListingsCacheV1() {
+    if (
+      isAuto || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
+      !unifiedResult || unifiedResult.ok === false ||
+      !window.JSInitialListingsCacheV1 ||
+      typeof window.JSInitialListingsCacheV1.write !== "function"
+    ) return;
+    initialCacheWriteStartedV1 = true;
+    window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, unifiedResult).then(function(saved) {
+      if (saved) document.documentElement.setAttribute("data-initial-list-cache-live", "true");
+    });
+  }
   var unifiedRequest = window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function"
     ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
     : Promise.resolve({ ok: false, groups: {} });
@@ -1731,6 +1809,7 @@ function loadSheet(isAuto, forceRefresh) {
     window.jsReuseListCardsOnNextRenderV6521 = true;
     showListWithoutReleasingPinnedClusterV685(currentItems);
     if (list) list.scrollTop = scrollTop;
+    persistInitialListingsCacheV1();
   }).catch(function(error) {
     console.warn("Unified listing background load failed", error);
   });
@@ -1824,9 +1903,12 @@ function loadSheet(isAuto, forceRefresh) {
        * 좌표가 준비될 때까지 목록까지 0건으로 숨기지 않고, D1에서 읽은 매물 카드를
        * 먼저 보여 준 뒤 지도 마커만 순차적으로 추가합니다.
        */
+      liveInitialDataAppliedV1 = true;
       allItems = rawItems;
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
+      liveInitialItemsForCacheV1 = currentItems;
+      persistInitialListingsCacheV1();
       var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {
         return !!item.latlng;
       });

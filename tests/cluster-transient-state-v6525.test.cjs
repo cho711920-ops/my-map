@@ -42,6 +42,6 @@ assert.match(
 );
 
 assert.match(htmlSource, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
-assert.match(htmlSource, /map\.js\?v=8\.2\.13-local-geocode-first/);
+assert.match(htmlSource, /map\.js\?v=8\.2\.16-fast-cache-snapshot/);
 
 console.log("cluster transient state v6.5.25 tests passed");

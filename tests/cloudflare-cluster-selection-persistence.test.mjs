@@ -51,5 +51,5 @@ test("idle and both asynchronous listing paths honor the pinned guard", () => {
     (mapSource.match(/showListWithoutReleasingPinnedClusterV685\(currentItems\)/g) || []).length,
     2
   );
-  assert.match(html, /js\/map\.js\?v=8\.2\.13-local-geocode-first/);
+  assert.match(html, /js\/map\.js\?v=8\.2\.16-fast-cache-snapshot/);
 });

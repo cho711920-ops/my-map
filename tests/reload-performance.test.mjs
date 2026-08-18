@@ -13,9 +13,10 @@ test("authenticated reload overlaps critical data reads with remaining script lo
   assert.match(dataAccess, /function warmInitialData\(\)/);
   assert.match(dataAccess, /settledWarmup\(listingsCsvNetwork\(false\)\)/);
   assert.match(dataAccess, /settledWarmup\(readNetwork\("unifiedListings"/);
-  assert.match(auth, /await loadScriptInOrder\(node\)[\s\S]*?JSDataAccessV6\.warmInitialData\(\)/);
-  assert.match(html, /auth-gate-v1\.js\?v=1\.1\.1-initial-data-warmup/);
-  assert.match(html, /data-access-v6\.js\?v=6\.0\.2-revalidated-warmup/);
+  assert.match(auth, /await loadScriptInOrder\(script, document\.head\);[\s\S]*?warmInitialDataAfterScript\(script\)/);
+  assert.match(auth, /criticalScripts[\s\S]*?deferredScripts/);
+  assert.match(html, /auth-gate-v1\.js\?v=1\.2\.0-priority-loader/);
+  assert.match(html, /data-access-v6\.js\?v=6\.0\.3-earliest-warmup/);
 });
 
 test("large initial datasets use ETag revalidation without timestamp cache busting", () => {
@@ -32,5 +33,5 @@ test("reload skips the shared geocode download when source or local coordinates 
   assert.match(script, /JSDataAccessV6\.read\("geocodeCache", \{\}, \{/);
   assert.match(script, /cache: "default"/);
   assert.match(html, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
-  assert.match(html, /map\.js\?v=8\.2\.13-local-geocode-first/);
+  assert.match(html, /map\.js\?v=8\.2\.16-fast-cache-snapshot/);
 });

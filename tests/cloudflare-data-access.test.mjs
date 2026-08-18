@@ -137,7 +137,7 @@ test("diagnosis storage uses the shared Cloudflare data boundary with a legacy f
   assert.match(diagnosisStorageSource, /request\(url, \{ credentials: "same-origin", cache: "no-store" \}\)/);
   assert.match(diagnosisStorageSource, /return request\(global\.saveApiURL \|\| "\/api\/data",/);
   assert.match(diagnosisStorageSource, /controller\.abort\(\)/);
-  assert.match(html, /data-access-v6\.js\?v=6\.0\.2-revalidated-warmup/);
+  assert.match(html, /data-access-v6\.js\?v=6\.0\.3-earliest-warmup/);
   assert.match(html, /diagnosis-storage\.js\?v=1\.2\.1-data-access/);
 });
 

@@ -1,5 +1,6 @@
 let googleClientId = "";
 let authenticatedAssetsPromise = null;
+let deferredAuthenticatedAssetsPromise = null;
 
 function setApplicationIsolation(locked) {
   const application = document.getElementById("wrap");
@@ -52,6 +53,7 @@ async function appendAuthenticatedHeadAssets() {
   }
   for (const script of scripts) {
     await loadScriptInOrder(script, document.head);
+    warmInitialDataAfterScript(script);
   }
   template.remove();
 }
@@ -76,13 +78,24 @@ function loadScriptInOrder(sourceScript, target = document.body) {
   });
 }
 
+function warmInitialDataAfterScript(script) {
+  if (
+    /(?:^|\/)data-access-v6\.js(?:\?|$)/.test(script.getAttribute("src") || "") &&
+    window.JSDataAccessV6 &&
+    typeof window.JSDataAccessV6.warmInitialData === "function"
+  ) {
+    window.JSDataAccessV6.warmInitialData();
+  }
+}
+
 async function appendAuthenticatedBodyAssets() {
   const template = document.getElementById("jsAuthenticatedBodyAssets");
   if (!template) return;
   const nodes = Array.from(template.content.childNodes);
-  const preloadLinks = nodes.filter((node) => (
+  const scripts = nodes.filter((node) => (
     node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT" && node.getAttribute("src")
-  )).map((node) => {
+  ));
+  const preloadLinks = scripts.map((node) => {
     const preload = document.createElement("link");
     preload.rel = "preload";
     preload.as = "script";
@@ -90,22 +103,32 @@ async function appendAuthenticatedBodyAssets() {
     document.head.appendChild(preload);
     return preload;
   });
-  for (const node of nodes) {
-    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") {
-      await loadScriptInOrder(node);
-      if (
-        /(?:^|\/)data-access-v6\.js(?:\?|$)/.test(node.getAttribute("src") || "") &&
-        window.JSDataAccessV6 &&
-        typeof window.JSDataAccessV6.warmInitialData === "function"
-      ) {
-        window.JSDataAccessV6.warmInitialData();
-      }
-    } else {
+  nodes.forEach((node) => {
+    if (!(node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT")) {
       document.body.appendChild(node.cloneNode(true));
     }
+  });
+
+  const criticalScripts = scripts.filter((script) => script.hasAttribute("data-auth-critical"));
+  const deferredScripts = scripts.filter((script) => !script.hasAttribute("data-auth-critical"));
+  for (const script of criticalScripts) {
+    await loadScriptInOrder(script);
+    warmInitialDataAfterScript(script);
   }
-  preloadLinks.forEach((preload) => preload.remove());
   template.remove();
+
+  deferredAuthenticatedAssetsPromise = (async () => {
+    for (const script of deferredScripts) {
+      await loadScriptInOrder(script);
+      warmInitialDataAfterScript(script);
+    }
+    return true;
+  })().catch((error) => {
+    console.error("지연 앱 구성요소 로딩 실패", error);
+    return false;
+  }).finally(() => {
+    preloadLinks.forEach((preload) => preload.remove());
+  });
 }
 
 function loadAuthenticatedAssets() {
@@ -190,6 +213,9 @@ async function loginWithGoogle(response) {
 
 async function logout() {
   try {
+    if (window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.clear === "function") {
+      await window.JSInitialListingsCacheV1.clear();
+    }
     await fetch("/api/session", { method: "DELETE", credentials: "same-origin" });
     if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
   } finally {

@@ -17,12 +17,13 @@ function brokerageApi() {
 
 test("the restored brokerage filter replaces the quick floor control", () => {
   assert.match(html, /id="brokerageFeeFilter"/);
-  assert.match(html, /<option value="lte100">100 이하<\/option>/);
-  assert.match(html, /<option value="lte500">500 이하<\/option>/);
-  assert.match(html, /<option value="gt500">500 초과<\/option>/);
+  assert.match(html, /<option value="fee0to100">0~100 이하<\/option>/);
+  assert.match(html, /<option value="fee100to200">100 초과~200 이하<\/option>/);
+  assert.match(html, /<option value="fee300to500">300 초과~500 이하<\/option>/);
+  assert.match(html, /<option value="feeOver500">500 초과<\/option>/);
   assert.doesNotMatch(html, /id="floorQuickFilter"/);
   assert.ok(
-    html.indexOf("js/commercial-brokerage-v1.js?v=1.0.0") <
+    html.indexOf("js/commercial-brokerage-v1.js?v=1.1.0-exclusive-bands") <
       html.indexOf("js/script.js?v=6.10.1-brokerage-fee-filter"),
     "brokerage calculations must load before the main list filter"
   );
@@ -48,15 +49,20 @@ test("low-value commercial leases use the restored 70-times rent rule", () => {
 
 test("brokerage fee bands include and exclude listings correctly", () => {
   const api = brokerageApi();
-  const fee162 = { deposit: 3000, rent: 150 };
-  const fee540 = { deposit: 10000, rent: 500 };
+  const filters = ["fee0to100", "fee100to200", "fee200to300", "fee300to500", "feeOver500"];
+  const samples = [
+    [{ deposit: 10000, rent: 0 }, "fee0to100"],
+    [{ deposit: 20000, rent: 0 }, "fee100to200"],
+    [{ deposit: 30000, rent: 0 }, "fee200to300"],
+    [{ deposit: 50000, rent: 0 }, "fee300to500"],
+    [{ deposit: 60000, rent: 0 }, "feeOver500"]
+  ];
 
-  assert.equal(api.matchesFilter(fee162, "lte100"), false);
-  assert.equal(api.matchesFilter(fee162, "lte200"), true);
-  assert.equal(api.matchesFilter(fee162, "lte500"), true);
-  assert.equal(api.matchesFilter(fee162, "gt500"), false);
-  assert.equal(api.matchesFilter(fee540, "gt500"), true);
-  assert.equal(api.matchesFilter({}, "lte100"), false);
+  for (const [item, expected] of samples) {
+    assert.deepEqual(filters.filter((filter) => api.matchesFilter(item, filter)), [expected]);
+  }
+  assert.equal(api.matchesFilter({ deposit: 3000, rent: 150 }, "fee100to200"), true);
+  assert.equal(api.matchesFilter({}, "fee0to100"), false);
   assert.equal(api.matchesFilter({}, ""), true);
 });
 
