@@ -10,6 +10,7 @@ const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", impor
 const asyncMutationSource = readFileSync(new URL("../js/async-mutation-queue-v1.js", import.meta.url), "utf8");
 const diagnosisStorageSource = readFileSync(new URL("../js/diagnosis-storage.js", import.meta.url), "utf8");
 const announcementSource = readFileSync(new URL("../js/announcement-v1.js", import.meta.url), "utf8");
+const duplicateCleanupSource = readFileSync(new URL("../js/listing-duplicate-cleanup-v1.js", import.meta.url), "utf8");
 const operationsSources = [
   "operations-center-v7.js",
   "operations-collection-v8.js",
@@ -118,6 +119,14 @@ test("announcement uses the shared Cloudflare data boundary with a legacy fallba
   assert.match(announcementSource, /result\.announcement/);
   assert.match(announcementSource, /source\.body/);
   assert.match(html, /announcement-v1\.js\?v=1\.0\.2-data-access/);
+});
+
+test("dormant duplicate cleanup uses the shared mutation boundary without being re-enabled", () => {
+  assert.match(duplicateCleanupSource, /access\.mutate\("consolidateExistingMasters", payload,/);
+  assert.match(duplicateCleanupSource, /typeof access\.mutate === "function"/);
+  assert.match(duplicateCleanupSource, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
+  assert.match(duplicateCleanupSource, /credentials: "same-origin"/);
+  assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.(?:css|js)/);
 });
 
 test("diagnosis storage uses the shared Cloudflare data boundary with a legacy fallback", () => {

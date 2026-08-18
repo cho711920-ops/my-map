@@ -8,6 +8,9 @@ const collector = fs.readFileSync("cloudflare/src/collector-api.js", "utf8");
 
 assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.(?:css|js)/);
 assert.match(ui, /consolidateExistingMasters/);
+assert.match(ui, /JSDataAccessV6/);
+assert.match(ui, /access\.mutate\("consolidateExistingMasters"/);
+assert.match(ui, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
 assert.match(ui, /manualOverride/);
 assert.match(ui, /removeDuplicatesFromCurrentView/);
 assert.match(ui, /window\.loadSheet\(true\)/);

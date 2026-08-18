@@ -151,22 +151,41 @@
       window.showList((window.visibleListItems || []).slice());
     }
   }
+  function requestDuplicateCleanup(payload) {
+    var access = window.JSDataAccessV6;
+    if (access && typeof access.mutate === "function") {
+      return access.mutate("consolidateExistingMasters", payload, {
+        errorMessage: "중복정리에 실패했습니다."
+      });
+    }
+
+    return fetch(window.saveApiURL || "/api/data", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(Object.assign({
+        action: "consolidateExistingMasters"
+      }, payload))
+    }).then(function(response) {
+      return response.json().catch(function() { return null; }).then(function(result) {
+        if (!response.ok || !result || result.ok === false) {
+          throw new Error(result && result.message ? result.message : "중복정리에 실패했습니다.");
+        }
+        return result;
+      });
+    });
+  }
   function executeCleanup() {
     var confirmButton = modal().querySelector("[data-confirm]");
     confirmButton.disabled = true;
     confirmButton.textContent = "정리 중…";
-    fetch(window.saveApiURL, {
-      method: "POST", credentials: "same-origin",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        action: "consolidateExistingMasters",
-        primaryMasterId: state.primaryId,
-        duplicateMasterIds: state.duplicateIds,
-        manualOverride: true,
-        manualOverrideReason: "사용자 선택중복 직접 정리"
-      })
-    }).then(function(response) { return response.json(); }).then(function(result) {
-      if (!result || result.ok === false) throw new Error(result && result.message || "중복정리에 실패했습니다.");
+    requestDuplicateCleanup({
+      primaryMasterId: state.primaryId,
+      duplicateMasterIds: state.duplicateIds,
+      manualOverride: true,
+      manualOverrideReason: "사용자 선택중복 직접 정리"
+    }).then(function(result) {
       var removedIds = state.duplicateIds.slice();
       closeConfirmation();
       setActive(false);
