@@ -11,7 +11,7 @@ assert.match(
 );
 assert.match(
   html,
-  /script\.js\?v=6\.5\.82-revalidated-geocode-cache/,
+  /script\.js\?v=6\.10\.1-brokerage-fee-filter/,
   "the production page must load the relation-aware Gongsil filter"
 );
 

@@ -99,41 +99,20 @@
   }
 
   function apiGet(action, params) {
-    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function") {
-      return window.JSDataAccessV6.read(action, params, {
-        errorMessage: "운영자료 조회에 실패했습니다."
-      });
+    if (!window.JSDataAccessV6 || typeof window.JSDataAccessV6.read !== "function") {
+      return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    var query = new URLSearchParams(Object.assign({ action: action }, params || {}));
-    return fetch(saveApiURL + "?" + query.toString(), {
-      credentials: "same-origin",
-      cache: "no-store"
-    }).then(function(response) {
-      if (!response.ok) throw new Error("운영자료를 불러오지 못했습니다. (HTTP " + response.status + ")");
-      return response.json();
-    }).then(function(result) {
-      if (!result || result.ok === false) throw new Error((result && result.message) || "운영자료 조회에 실패했습니다.");
-      return result;
+    return window.JSDataAccessV6.read(action, params, {
+      errorMessage: "운영자료 조회에 실패했습니다."
     });
   }
 
   function apiPost(action, payload) {
-    if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.mutate === "function") {
-      return window.JSDataAccessV6.mutate(action, payload, {
-        errorMessage: "운영 요청 처리에 실패했습니다."
-      });
+    if (!window.JSDataAccessV6 || typeof window.JSDataAccessV6.mutate !== "function") {
+      return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    return fetch(saveApiURL, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.assign({ action: action }, payload || {}))
-    }).then(function(response) {
-      if (!response.ok) throw new Error("운영 요청을 처리하지 못했습니다. (HTTP " + response.status + ")");
-      return response.json();
-    }).then(function(result) {
-      if (!result || result.ok === false) throw new Error((result && result.message) || "운영 요청 처리에 실패했습니다.");
-      return result;
+    return window.JSDataAccessV6.mutate(action, payload, {
+      errorMessage: "운영 요청 처리에 실패했습니다."
     });
   }
 

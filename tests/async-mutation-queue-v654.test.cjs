@@ -5,13 +5,13 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const queue = read("js", "async-mutation-queue-v1.js");
-const script = read("js", "script.js");
+const script = [read("js", "script.js"), read("js", "property-edit-v648.js")].join("\n");
 const operations = read("js", "operations-center-v7.js");
 const reviews = read("js", "operations-collection-v8.js");
 const dataAccess = read("js", "data-access-v6.js");
 const d1 = read("cloudflare", "src", "d1-api.js");
 const html = read("index.html");
-const css = read("css", "style.css");
+const css = [read("css", "style.css"), read("css", "app-final-overrides-v690.css")].join("\n");
 
 assert.match(queue, /js_async_mutation_outbox_v1/);
 assert.match(queue, /js_async_mutation_active_v1/);

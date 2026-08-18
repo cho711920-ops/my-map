@@ -39,6 +39,21 @@ const window = {
   saveApiURL: "/api/apps-script",
   setTimeout
 };
+window.JSDataAccessV6 = {
+  async read() {
+    return { ok: true, found: false };
+  },
+  async mutate(action, payload) {
+    requests.push({
+      url: "shared:" + action,
+      options: {
+        method: "POST",
+        body: JSON.stringify(Object.assign({ action }, payload))
+      }
+    });
+    return { ok: true };
+  }
+};
 window.window = window;
 
 const sandbox = {

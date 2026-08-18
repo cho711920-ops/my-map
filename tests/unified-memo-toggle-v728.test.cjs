@@ -18,6 +18,6 @@ assert.match(css, /\.item-memo-toggle \.item-memo-label-v728\s*\{[^}]*display:in
 assert.match(css, /\.standard-card-main-v661 \.item-compact-actions-v650>\.item-memo-toggle,[\s\S]*?#list \.customer-match-map-card-main-v721[\s\S]*?#operationsCustomersPanel[\s\S]*?width:52px!important/);
 assert.match(css, /\.item-memo-toggle:after\{content:none!important;display:none!important\}/);
 assert.match(html, /operations-center-v7\.css\?v=7\.20\.7-customer-delete/);
-assert.match(html, /script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
+assert.match(html, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
 
 console.log("unified memo toggle v7.28 tests passed");

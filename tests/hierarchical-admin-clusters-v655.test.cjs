@@ -7,7 +7,10 @@ const root = path.resolve(__dirname, "..");
 const source = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
 const scriptSource = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-const css = fs.readFileSync(path.join(root, "css", "style.css"), "utf8");
+const css = [
+  fs.readFileSync(path.join(root, "css", "style.css"), "utf8"),
+  fs.readFileSync(path.join(root, "css", "app-final-overrides-v690.css"), "utf8")
+].join("\n");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -225,6 +228,6 @@ assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655 
 assert.ok(html.includes("map.js?v=8.2.13-local-geocode-first"));
 assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 5 \* 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
-assert.ok(html.includes("style.css?v=6.5.41-borderless-world-grid"));
+assert.ok(html.includes("style.css?v=6.10.0-module-split"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");

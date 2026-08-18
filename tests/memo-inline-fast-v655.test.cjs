@@ -34,8 +34,8 @@ assert.match(memoD1, /UPDATE listings SET operating_memo=\?1, contacts_json=\?2/
 assert.match(memoD1, /persisted:\s*true, queued:\s*false/);
 assert.match(memoD1, /operationAdjustments:\s*\{ history:\s*1 \}/);
 
-assert.match(html, /style\.css\?v=6\.5\.41-borderless-world-grid/);
-assert.match(html, /script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
+assert.match(html, /style\.css\?v=6\.10\.0-module-split/);
+assert.match(html, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
 assert.match(css, /\.memo-inline-status\.saving/);
 assert.match(css, /\.memo-inline-status\.success/);
 assert.match(css, /\.memo-inline-status\.error/);

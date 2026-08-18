@@ -31,6 +31,6 @@ test("reload skips the shared geocode download when source or local coordinates 
   assert.match(map, /allRowsAlreadyLocatedV691 \|\| allRowsReadyWithoutSharedCacheV8213/);
   assert.match(script, /JSDataAccessV6\.read\("geocodeCache", \{\}, \{/);
   assert.match(script, /cache: "default"/);
-  assert.match(html, /script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
+  assert.match(html, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
   assert.match(html, /map\.js\?v=8\.2\.13-local-geocode-first/);
 });

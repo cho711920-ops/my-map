@@ -33,7 +33,7 @@ assert.match(
   scriptSource,
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
-assert.match(indexSource, /js\/script\.js\?v=6\.5\.82-revalidated-geocode-cache/);
+assert.match(indexSource, /js\/script\.js\?v=6\.10\.1-brokerage-fee-filter/);
 assert.match(indexSource, /js\/map\.js\?v=8\.2\.13-local-geocode-first/);
 
 console.log("default Daejeon map view tests passed");

@@ -1,7 +1,6 @@
 (function(global) {
   "use strict";
 
-  var API = "/api/data";
   var state = { groups: {}, detailCache: {}, detailPending: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
@@ -127,18 +126,10 @@
   }
 
   function apiGet(action, params) {
-    if (global.JSDataAccessV6) {
-      return global.JSDataAccessV6.read(action, params, { errorMessage: "운영자료 조회 실패" });
+    if (!global.JSDataAccessV6 || typeof global.JSDataAccessV6.read !== "function") {
+      return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    var query = new URLSearchParams(Object.assign({action: action, _: Date.now()}, params || {}));
-    return fetch(API + "?" + query.toString(), {credentials: "same-origin", cache: "no-store"})
-      .then(function(response) {
-        if (!response.ok) throw new Error("운영자료 조회 실패 (HTTP " + response.status + ")");
-        return response.json();
-      }).then(function(result) {
-        if (!result || result.ok === false) throw new Error(result && result.message || "운영자료 조회 실패");
-        return result;
-      });
+    return global.JSDataAccessV6.read(action, params, { errorMessage: "운영자료 조회 실패" });
   }
 
   function needsDetail(originals, originalId) {
@@ -830,17 +821,9 @@
     var payload = consolidateWholeMaster
       ? {requestId:requestId, primaryMasterId:targetMasterId, duplicateMasterIds:[sourceMasterId]}
       : {requestId:requestId, originalId:originalId, targetMasterId:targetMasterId, expectedRevision:revision};
-    var request = global.JSDataAccessV6
+    var request = global.JSDataAccessV6 && typeof global.JSDataAccessV6.mutate === "function"
       ? global.JSDataAccessV6.mutate(action, payload, { errorMessage: "저장 요청 실패" })
-      : fetch(API, {
-        method: "POST", credentials: "same-origin", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(Object.assign({action:action}, payload))
-      }).then(function(response) {
-        return response.json().catch(function() { return null; }).then(function(result) {
-          if (!response.ok) throw new Error(result && result.message || "저장 요청 실패 (HTTP " + response.status + ")");
-          return result;
-        });
-      });
+      : Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     return request.then(function(result) {
       var persisted = consolidateWholeMaster
         ? Number(result && result.consolidated || 0) > 0

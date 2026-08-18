@@ -145,7 +145,7 @@
 
   .js-mobile-app-v1 #listToolbar > .list-source-control > #sourceFilter,
   .js-mobile-app-v1 #listToolbar > .list-type-control > #typeFilter,
-  .js-mobile-app-v1 #listToolbar > .list-floor-control > #floorQuickFilter,
+  .js-mobile-app-v1 #listToolbar > .list-brokerage-control > #brokerageFeeFilter,
   .js-mobile-app-v1 #listToolbar > #sortDropdown > #sortDropdownBtn {
     height: 44px !important;
     min-height: 44px !important;

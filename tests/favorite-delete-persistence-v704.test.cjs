@@ -42,6 +42,15 @@ const window = {
   localStorage, matchMedia() { return { matches: false }; },
   requestAnimationFrame(callback) { callback(); }, saveApiURL: "/api/apps-script", setTimeout
 };
+window.JSDataAccessV6 = {
+  async read(_action, params) {
+    return { ok: true, found: true, data: params.scope === "favorites" ? [deletedFolder] : [] };
+  },
+  async mutate(action, payload) {
+    posts.push(Object.assign({ action }, payload));
+    return { ok: true };
+  }
+};
 window.window = window;
 
 vm.runInNewContext(source, {
@@ -60,7 +69,7 @@ vm.runInNewContext(source, {
   );
   const favoriteSave = posts.find((payload) => payload.scope === "favorites");
   assert.ok(favoriteSave, "삭제 상태를 계정 저장소에 다시 확정해야 한다");
-  assert.deepEqual(favoriteSave.data, []);
+  assert.deepEqual(JSON.parse(JSON.stringify(favoriteSave.data)), []);
   console.log("favorite delete persistence v7.0.4 tests passed");
 })().catch((error) => {
   console.error(error);

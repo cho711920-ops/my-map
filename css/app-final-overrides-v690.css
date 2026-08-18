@@ -1,0 +1,260 @@
+/* v6.5.10 태블릿/데스크탑 지도 도구: 매물목록 경계를 침범하지 않도록 최종 고정 */
+@media (min-width: 769px) {
+  .map-quick-tools {
+    right: calc(var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) + 14px) !important;
+  }
+}
+
+/* v6.5.12 데스크톱·태블릿 매물카드 작업 버튼 높이 보정 (모바일 제외) */
+@media (min-width: 769px) {
+  .item-compact-actions-v650 {
+    min-height: 29px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 29px !important;
+    min-height: 29px !important;
+    line-height: 27px !important;
+  }
+}
+
+/* 터치 태블릿은 클릭 여유를 조금 더 남깁니다. */
+@media (min-width: 769px) and (pointer: coarse),
+       (min-width: 769px) and (hover: none) {
+  .item-compact-actions-v650 {
+    min-height: 34px !important;
+  }
+
+  .item-compact-actions-v650 .customer-match-inline-actions button,
+  .item-compact-actions-v650 .item-nav-btn,
+  .item-compact-actions-v650 .item-roadview-btn,
+  .item-compact-actions-v650 .item-building-register-btn,
+  .item-compact-actions-v650 .item-list-add-btn,
+  .item-compact-actions-v650 .item-source-link-btn,
+  .item-compact-actions-v650 .item-edit-btn-v630,
+  .item-compact-actions-v650 .item-memo-toggle {
+    height: 34px !important;
+    min-height: 34px !important;
+    line-height: 32px !important;
+  }
+}
+
+/* v6.5.24 최종: 저장상태는 빠른등록 왼쪽, 모바일에서는 숨김 */
+@media (min-width: 1100px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 80px 80px 42px 94px 88px 104px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 {
+    display: grid !important;
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    grid-column: 6 !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1099px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 70px 70px 40px 82px 78px 94px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 {
+    display: grid !important;
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn {
+    grid-column: 6 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 {
+    display: none !important;
+  }
+}
+
+/* 고객매칭 지도 보류 토글은 공통 지도도구 배경보다 우선합니다. */
+@media (min-width: 769px) {
+  #customerMatchHeldToggleV1.customer-match-held-toggle-v1 {
+    border-color: #1e293b !important;
+    background: #334155 !important;
+    color: #fff !important;
+  }
+
+  #customerMatchHeldToggleV1.customer-match-held-toggle-v1.on {
+    border-color: #d97706 !important;
+    background: #f59e0b !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, .22) !important;
+  }
+}
+
+/* v6.5.32 대량 수집용 소형 행정구역 클러스터 */
+.circle-marker.cluster-size-sm {
+  --cluster-size: 36px !important;
+  --cluster-font-size: 13.5px !important;
+}
+
+.circle-marker.cluster-size-md {
+  --cluster-size: 44px !important;
+  --cluster-font-size: 14.5px !important;
+}
+
+.circle-marker.cluster-size-lg {
+  --cluster-size: 52px !important;
+  --cluster-font-size: 16px !important;
+}
+
+.circle-marker.cluster-size-xl {
+  --cluster-size: 62px !important;
+  --cluster-font-size: 17px !important;
+}
+
+.circle-marker.cluster-size-xxl {
+  --cluster-size: 74px !important;
+  --cluster-font-size: 19px !important;
+}
+
+.circle-marker.admin-region-cluster-v655 {
+  width: auto !important;
+  min-width: 54px !important;
+  max-width: 72px !important;
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 6px 7px !important;
+  display: grid !important;
+  grid-template-rows: auto auto !important;
+  align-content: center !important;
+  justify-items: center !important;
+  gap: 2px !important;
+  border: 1px solid rgba(148, 163, 184, .34) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, .91) !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, .15) !important;
+  font-family: var(--js-app-font) !important;
+  letter-spacing: -.2px !important;
+  white-space: nowrap !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+.circle-marker.admin-region-cluster-v655 strong {
+  display: block;
+  width: 100%;
+  font-size: 12.5px !important;
+  font-weight: 900;
+  line-height: 1.05 !important;
+  text-align: center;
+}
+
+.circle-marker.admin-region-cluster-v655 span {
+  display: block;
+  width: 100%;
+  color: #334155;
+  font-size: 10.5px !important;
+  font-weight: 800;
+  line-height: 1.05 !important;
+  text-align: center;
+}
+
+.circle-marker.admin-region-cluster-v655 span b {
+  color: #0877dc;
+  font: inherit;
+  font-weight: 950;
+}
+
+.circle-marker.admin-region-cluster-v655.cluster-size-sm,
+.circle-marker.admin-region-cluster-v655.cluster-size-md,
+.circle-marker.admin-region-cluster-v655.cluster-size-lg,
+.circle-marker.admin-region-cluster-v655.cluster-size-xl,
+.circle-marker.admin-region-cluster-v655.cluster-size-xxl {
+  min-width: 54px !important;
+  max-width: 72px !important;
+  min-height: 40px !important;
+  padding: 6px 7px !important;
+}
+
+/* =========================================================
+   v6.9.0 당근형 고정 공간 클러스터
+   - legacy 전환 시 위 기존 디자인을 그대로 사용합니다.
+   - 행정구역 카드는 수량과 무관하게 일정한 크기를 유지합니다.
+   ========================================================= */
+.js-world-grid-clusters-v690 .circle-marker.world-grid-cluster-v690 {
+  border: 0 !important;
+  box-shadow: 0 3px 10px rgba(8, 75, 154, .24) !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.world-grid-cluster-v690:hover {
+  filter: saturate(1.08) brightness(1.03) !important;
+  box-shadow: 0 5px 14px rgba(8, 75, 154, .3) !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 {
+  width: auto !important;
+  min-width: 68px !important;
+  max-width: 88px !important;
+  min-height: 46px !important;
+  padding: 7px 9px !important;
+  gap: 3px !important;
+  border: 1px solid #d9e1eb !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, .97) !important;
+  color: #172033 !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .13) !important;
+  backdrop-filter: none !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690 {
+  min-width: 76px !important;
+  max-width: 92px !important;
+  min-height: 50px !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 strong {
+  font-size: 13.5px !important;
+  line-height: 1.08 !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 span {
+  color: #64748b !important;
+  font-size: 11px !important;
+  line-height: 1.08 !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655 span b {
+  color: #0877dc !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-sm,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-md,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-lg,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-xl,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.cluster-size-xxl {
+  min-width: 68px !important;
+  max-width: 88px !important;
+  min-height: 46px !important;
+  padding: 7px 9px !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-sm,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-md,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-lg,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-xl,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-district-v690.cluster-size-xxl {
+  min-width: 76px !important;
+  max-width: 92px !important;
+  min-height: 50px !important;
+}
+

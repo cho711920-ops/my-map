@@ -1954,39 +1954,62 @@ function focusQuickAddRawV636() {
   }, 60);
 }
 
-function submitQuickAddRequestV636(values, forceDuplicate, fingerprint, btn, oldText) {
-  /*
-   * 사용자에게는 요청을 시작한 즉시 알려줍니다.
-   * D1 API의 실제 처리는 백그라운드에서 계속됩니다.
-   */
-  showQuickAddToastV636(
-    "매물 등록 요청을 보냈습니다. 다음 매물을 계속 등록할 수 있습니다.",
-    "success"
-  );
+function sendQuickAddMutationV6418(values, forceDuplicate) {
+  var payload = {
+    values: values,
+    forceDuplicate: !!forceDuplicate
+  };
 
-  clearQuickAddForm();
-  focusQuickAddRawV636();
-
-  if (btn) {
-    setTimeout(function() {
-      btn.innerText = oldText;
-      btn.disabled = false;
-    }, 180);
+  if (
+    window.JSDataAccessV6 &&
+    typeof window.JSDataAccessV6.mutate === "function"
+  ) {
+    return window.JSDataAccessV6.mutate("quickAdd", payload, {
+      errorMessage: "빠른등록 저장 실패"
+    });
   }
 
-  fetch(saveApiURL, {
+  return fetch(saveApiURL, {
     method: "POST",
-    mode: "no-cors",
+    cache: "no-store",
+    credentials: "same-origin",
     headers: {
-      "Content-Type": "text/plain;charset=utf-8"
+      "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      action: "quickAdd",
-      values: values,
-      forceDuplicate: !!forceDuplicate
-    })
-  }).then(function() {
-    /* 서버 처리가 끝난 뒤 지도만 조용히 갱신 */
+    body: JSON.stringify(Object.assign({ action: "quickAdd" }, payload))
+  }).then(function(response) {
+    return response.json().catch(function() { return null; }).then(function(result) {
+      if (!response.ok || !result || result.ok === false) {
+        throw new Error((result && result.message) || "빠른등록 저장 실패");
+      }
+      return result;
+    });
+  });
+}
+
+function submitQuickAddRequestV636(values, forceDuplicate, fingerprint, btn, oldText) {
+  showQuickAddToastV636("매물을 저장하고 있습니다.", "success");
+
+  sendQuickAddMutationV6418(values, forceDuplicate).then(function(result) {
+    if (!result || result.persisted !== true) {
+      delete quickAddPendingFingerprintsV616[fingerprint];
+      showQuickAddToastV636(
+        result && result.duplicateType === "exact"
+          ? "같은 매물이 이미 등록되어 있어 저장하지 않았습니다."
+          : "매물이 저장되지 않았습니다. 입력값을 확인해주세요.",
+        "error"
+      );
+      return;
+    }
+
+    showQuickAddToastV636(
+      "매물 등록이 완료됐습니다. 다음 매물을 계속 등록할 수 있습니다.",
+      "success"
+    );
+    clearQuickAddForm();
+    focusQuickAddRawV636();
+
+    /* 캐시 무효화가 끝난 뒤 새 대표매물을 목록에 반영한다. */
     setTimeout(function() {
       loadSheet(true);
     }, 500);
@@ -1994,10 +2017,14 @@ function submitQuickAddRequestV636(values, forceDuplicate, fingerprint, btn, old
     console.error(error);
     delete quickAddPendingFingerprintsV616[fingerprint];
     showQuickAddToastV636(
-      "자동등록 요청 중 오류가 발생했습니다. 연결 URL을 확인해주세요.",
+      (error && error.message) || "자동등록 요청 중 오류가 발생했습니다.",
       "error"
     );
   }).finally(function() {
+    if (btn) {
+      btn.innerText = oldText;
+      btn.disabled = false;
+    }
     setTimeout(function() {
       delete quickAddPendingFingerprintsV616[fingerprint];
     }, 8000);

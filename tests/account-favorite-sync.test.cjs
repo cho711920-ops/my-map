@@ -82,7 +82,7 @@ function createApp(email, useSharedDataAccess) {
   assert.ok(gg.reads.some((request) => request.action === "loadCloudState" &&
     request.params.scope === "favorites"));
 
-  const cho = createApp("cho711920@gmail.com");
+  const cho = createApp("cho711920@gmail.com", true);
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(cho.window.JSV6ListStore.load("favorite")[0].id, "fav_cho");
   assert.ok(storage.has("js_favorite_lists_v6::cho711920%40gmail.com"));

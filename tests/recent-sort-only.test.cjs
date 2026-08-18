@@ -16,6 +16,6 @@ assert.match(script, /if \(sortType === "latest"\)[\s\S]*?listingRegistrationTim
 assert.match(script, /function listingRegistrationTime\(item\)/);
 assert.match(script, /item\.registrationAt \|\| item\.regDate/);
 assert.match(script, /Number\(b\.sheetRow\)[\s\S]*?Number\(a\.sheetRow\)/);
-assert.match(html, /list-manager-v6\.css\?v=6\.4\.27-recent-sort-only/);
+assert.match(html, /list-manager-v6\.css\?v=6\.4\.28-brokerage-filter/);
 
 console.log("recent registration sort-only tests passed");

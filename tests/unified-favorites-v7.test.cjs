@@ -10,7 +10,7 @@ const main = fs.readFileSync("js/script.js", "utf8");
 
 assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.2-reliable-submit/);
 assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.4-stable-delete-selection/);
-assert.match(html, /list-manager-v6\.js\?v=6\.4\.34-data-access/);
+assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
 assert.doesNotMatch(html, /openListManager\('visit'\)/);

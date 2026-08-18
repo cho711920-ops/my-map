@@ -6,6 +6,7 @@ import vm from "node:vm";
 const source = readFileSync(new URL("../js/data-access-v6.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", import.meta.url), "utf8");
+const unifiedListingsSource = readFileSync(new URL("../js/unified-listings-v8.js", import.meta.url), "utf8");
 const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", import.meta.url), "utf8");
 const asyncMutationSource = readFileSync(new URL("../js/async-mutation-queue-v1.js", import.meta.url), "utf8");
 const diagnosisStorageSource = readFileSync(new URL("../js/diagnosis-storage.js", import.meta.url), "utf8");
@@ -165,28 +166,40 @@ test("AI visit sessions use the shared Cloudflare data boundary with a legacy fa
   assert.match(html, /ai-visit-session-v6\.js\?v=6\.4\.39-data-access/);
 });
 
-test("list manager uses the shared Cloudflare data boundary with a legacy fallback", () => {
+test("list manager only uses the shared Cloudflare data boundary", () => {
   assert.match(listManagerSource, /JSDataAccessV6\.read\(action, params,/);
   assert.match(listManagerSource, /JSDataAccessV6\.mutate\(action, payload,/);
-  assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.read === "function"/);
-  assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.mutate === "function"/);
-  assert.match(listManagerSource, /fetch\(\(window\.saveApiURL \|\| "\/api\/data"\)/);
-  assert.match(listManagerSource, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
-  assert.match(html, /list-manager-v6\.js\?v=6\.4\.34-data-access/);
+  assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.read !== "function"/);
+  assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.mutate !== "function"/);
+  assert.match(listManagerSource, /공통 데이터 연결이 준비되지 않았습니다/);
+  assert.doesNotMatch(listManagerSource, /fetch\((?:window\.saveApiURL|saveApiURL|API)/);
+  assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 });
 
-test("operations modules use the shared Cloudflare data boundary with a legacy fallback", () => {
+test("operations modules only use the shared Cloudflare data boundary", () => {
   for (const entry of operationsSources) {
     assert.match(entry.source, /JSDataAccessV6\.read\(action, params,/,
       `${entry.name} must read through JSDataAccessV6`);
     assert.match(entry.source, /JSDataAccessV6\.mutate\(action, payload,/,
       `${entry.name} must mutate through JSDataAccessV6`);
-    assert.match(entry.source, /typeof (?:window|global)\.JSDataAccessV6\.(?:read|mutate) === "function"/,
-      `${entry.name} must retain a guarded legacy fallback`);
+    assert.match(entry.source, /typeof (?:window|global)\.JSDataAccessV6\.(?:read|mutate) !== "function"/,
+      `${entry.name} must guard the shared data boundary`);
+    assert.match(entry.source, /공통 데이터 연결이 준비되지 않았습니다/,
+      `${entry.name} must expose a deterministic initialization error`);
+    assert.doesNotMatch(entry.source, /\bfetch\(/,
+      `${entry.name} must not bypass JSDataAccessV6`);
   }
-  assert.match(html, /operations-center-v7\.js\?v=7\.22\.4-overlay-exclusivity/);
-  assert.match(html, /operations-collection-v8\.js\?v=7\.25\.7-single-candidate-merge-parallel/);
-  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.4-data-access/);
+  assert.match(html, /operations-center-v7\.js\?v=7\.22\.5-shared-data-only/);
+  assert.match(html, /operations-collection-v8\.js\?v=7\.25\.8-shared-data-only/);
+  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.5-shared-data-only/);
+});
+
+test("unified listing reads and writes only through the shared data boundary", () => {
+  assert.match(unifiedListingsSource, /JSDataAccessV6\.read\(action, params,/);
+  assert.match(unifiedListingsSource, /JSDataAccessV6\.mutate\(action, payload,/);
+  assert.match(unifiedListingsSource, /공통 데이터 연결이 준비되지 않았습니다/);
+  assert.doesNotMatch(unifiedListingsSource, /\bfetch\(/);
+  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.31-shared-data-only/);
 });
 
 test("data access mutations preserve action payload and surface D1 failures", async () => {

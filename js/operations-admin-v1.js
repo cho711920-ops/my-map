@@ -1,7 +1,6 @@
 (function (global) {
   "use strict";
 
-  var API = global.JSDataAccessV6 ? global.JSDataAccessV6.endpoints.data : "/api/data";
   var previousSwitch = global.switchOperationsTab;
   var state = { profile: null, history: [], nextCursor: 0, users: [], loading: false };
 
@@ -12,34 +11,19 @@
     });
   }
   function apiGet(action, params) {
-    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.read === "function") {
-      return global.JSDataAccessV6.read(action, params, {
-        errorMessage: "요청을 처리하지 못했습니다."
-      });
+    if (!global.JSDataAccessV6 || typeof global.JSDataAccessV6.read !== "function") {
+      return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    var query = new URLSearchParams(Object.assign({ action: action, _: Date.now() }, params || {}));
-    return fetch(API + "?" + query.toString(), { credentials: "same-origin", cache: "no-store" })
-      .then(parseResponse);
+    return global.JSDataAccessV6.read(action, params, {
+      errorMessage: "요청을 처리하지 못했습니다."
+    });
   }
   function apiPost(action, payload) {
-    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.mutate === "function") {
-      return global.JSDataAccessV6.mutate(action, payload, {
-        errorMessage: "요청을 처리하지 못했습니다."
-      });
+    if (!global.JSDataAccessV6 || typeof global.JSDataAccessV6.mutate !== "function") {
+      return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    return fetch(API, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(Object.assign({ action: action }, payload || {}))
-    }).then(parseResponse);
-  }
-  function parseResponse(response) {
-    return response.json().catch(function () { return {}; }).then(function (result) {
-      if (!response.ok || !result || result.ok === false) {
-        throw new Error(result && result.message || "요청을 처리하지 못했습니다.");
-      }
-      return result;
+    return global.JSDataAccessV6.mutate(action, payload, {
+      errorMessage: "요청을 처리하지 못했습니다."
     });
   }
   function formatAt(value) {

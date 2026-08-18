@@ -25,9 +25,10 @@
 
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.5.41-borderless-world-grid">
+<link rel="stylesheet" href="css/style.css?v=6.10.0-module-split">
+<link rel="stylesheet" href="css/app-final-overrides-v690.css?v=1.0.0">
 <link rel="stylesheet" href="css/print-v2.css?v=2.0.0">
-<link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.27-recent-sort-only">
+<link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.28-brokerage-filter">
 <link rel="stylesheet" href="css/unified-favorites-v7.css?v=7.0.2-reliable-submit">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.34-roadview-viewport">
 <link rel="stylesheet" href="css/mobile-detail-fix-v6.css?v=6.4.19-filter-anchor">
@@ -35,7 +36,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.6-alternate-parcel-notice">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.41-source-link-spacing">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.42-card-elevator-hidden">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.20.7-customer-delete">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
   <link rel="stylesheet" href="css/operations-admin-v1.css?v=1.0.0-history-roles">
@@ -43,7 +44,7 @@
 <link rel="stylesheet" href="css/announcement-readable-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/permit-diagnosis-v1.css?v=2.7.0">
 <link rel="stylesheet" href="css/app-font-v1.css?v=1.0.0-pretendard">
-<link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.4-touch-targets">
+<link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.6-brokerage-no-floor">
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
 <link rel="stylesheet" href="css/header-professional-v1.css?v=1.0.6-quick-add-emphasis">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
@@ -215,13 +216,14 @@
         </select>
       </div>
 
-      <div class="list-toolbar-control list-floor-control">
-        <select id="floorQuickFilter" onchange="applyFilter()" aria-label="층 필터">
-          <option value="">층</option>
-          <option value="basement">지하</option>
-          <option value="first">1층</option>
-          <option value="upper">2층 이상</option>
-          <option value="unknown">층 미확인</option>
+      <div class="list-toolbar-control list-brokerage-control" title="상가 임대차 법정 상한요율 0.9% 기준 · 부가세 별도">
+        <select id="brokerageFeeFilter" onchange="applyFilter()" aria-label="중개보수 필터">
+          <option value="">중개보수</option>
+          <option value="lte100">100 이하</option>
+          <option value="lte200">200 이하</option>
+          <option value="lte300">300 이하</option>
+          <option value="lte500">500 이하</option>
+          <option value="gt500">500 초과</option>
         </select>
       </div>
 
@@ -690,10 +692,12 @@
 <template id="jsAuthenticatedBodyAssets">
 <script src="js/data-access-v6.js?v=6.0.2-revalidated-warmup"></script>
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard" src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"></script>
-<script src="js/unified-listings-v8.js?v=8.1.30-fast-photo-carousel"></script>
-<script src="js/script.js?v=6.5.82-revalidated-geocode-cache"></script>
+<script src="js/unified-listings-v8.js?v=8.1.31-shared-data-only"></script>
+<script src="js/commercial-brokerage-v1.js?v=1.0.0"></script>
+<script src="js/script.js?v=6.10.1-brokerage-fee-filter"></script>
+<script src="js/property-edit-v648.js?v=1.0.0"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
-<script src="js/parser.js?v=6.4.17-consolidated"></script>
+<script src="js/parser.js?v=6.4.18-quick-add-response"></script>
 <script src="js/quickadd-at.js?v=1.0.0"></script>
 <script src="js/print.js?v=1.0.0"></script>
 <script src="js/print-v2.js?v=2.0.0"></script>
@@ -701,7 +705,7 @@
 <script src="js/commercial-public-v6.js?v=6.4.0"></script>
 <script src="js/regional-market-v1.js?v=1.0.4"></script>
 <script src="js/building-register-v6.js?v=8.2.8-alternate-parcel-fallback"></script>
-<script src="js/list-manager-v6.js?v=6.4.34-data-access"></script>
+<script src="js/list-manager-v6.js?v=6.4.35-shared-data-only"></script>
 <script src="js/mobile-detail-fix-v6.js?v=6.4.19-filter-anchor"></script>
 <script src="js/ai-visit-route-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-ui-v6.js?v=6.0.0"></script>
@@ -709,9 +713,9 @@
 <script src="js/unified-favorites-v7.js?v=7.0.4-stable-delete-selection"></script>
 <script src="js/map.js?v=8.2.13-local-geocode-first"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter"></script>
-  <script src="js/operations-center-v7.js?v=7.22.4-overlay-exclusivity"></script>
-  <script src="js/operations-collection-v8.js?v=7.25.7-single-candidate-merge-parallel"></script>
-  <script src="js/operations-admin-v1.js?v=1.0.4-data-access"></script>
+  <script src="js/operations-center-v7.js?v=7.22.5-shared-data-only"></script>
+  <script src="js/operations-collection-v8.js?v=7.25.8-shared-data-only"></script>
+  <script src="js/operations-admin-v1.js?v=1.0.5-shared-data-only"></script>
 <script src="js/announcement-v1.js?v=1.0.2-data-access"></script>
 <script src="js/industry-intent-parser.js?v=1.2.0-ksic11"></script>
 <script src="js/ksic-industry-adapter.js?v=1.0.0"></script>

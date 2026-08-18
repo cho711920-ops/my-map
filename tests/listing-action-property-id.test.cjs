@@ -5,14 +5,19 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
+const propertyEdit = fs.readFileSync(path.join(root, "js", "property-edit-v648.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
-function sourceBetween(start, end) {
-  const startIndex = script.indexOf(start);
-  const endIndex = script.indexOf(end, startIndex);
+function sourceBetweenIn(source, start, end) {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex);
   assert(startIndex >= 0, `${start} was not found`);
   assert(endIndex > startIndex, `${end} was not found after ${start}`);
-  return script.slice(startIndex, endIndex);
+  return source.slice(startIndex, endIndex);
+}
+
+function sourceBetween(start, end) {
+  return sourceBetweenIn(script, start, end);
 }
 
 const sourceLinkBlock = sourceBetween(
@@ -45,11 +50,12 @@ assert(
   "card checkboxes must carry the property ID selection target"
 );
 assert(
-  html.includes("script.js?v=6.5.82-revalidated-geocode-cache"),
+  html.includes("script.js?v=6.10.1-brokerage-fee-filter"),
   "the production page must load the fixed script cache version"
 );
 
-const helperBlock = sourceBetween(
+const helperBlock = sourceBetweenIn(
+  propertyEdit,
   "function getPropertyByEncodedKeyV630(",
   "function ensurePropertyEditModalV630("
 );

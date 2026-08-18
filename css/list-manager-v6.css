@@ -1221,3 +1221,21 @@ body.v6-menu-open{overflow:auto!important}
   .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column:4!important; }
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column:5!important; }
 }
+
+/* v6.4.28 매물리스트 상가 중개보수 필터 */
+@media (min-width: 769px) {
+  #listToolbar > .list-brokerage-control {
+    position: relative !important;
+    display: block !important;
+    visibility: visible !important;
+    flex: 1 1 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 31px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+  }
+}
