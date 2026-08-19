@@ -192,6 +192,38 @@ function scheduleSharedGeocodeFlush(delay) {
 }
 
 
+function saveSharedGeocodeEntriesV6102(entries) {
+  var access = window.JSDataAccessV6;
+  var request;
+
+  if (access && typeof access.mutate === "function") {
+    request = access.mutate("saveGeocodeCache", { entries: entries }, {
+      errorMessage: "공용 좌표 캐시 저장 실패"
+    });
+  } else {
+    request = fetch(saveApiURL, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "saveGeocodeCache",
+        entries: entries
+      })
+    }).then(function(response) {
+      if (!response.ok) throw new Error("공용 좌표 캐시 저장 실패");
+      return response.json();
+    });
+  }
+
+  return Promise.resolve(request).then(function(result) {
+    if (!result || result.ok === false || result.persisted === false) {
+      throw new Error((result && result.message) || "공용 좌표 캐시 저장 실패");
+    }
+    return result;
+  });
+}
+
+
 function flushSharedGeocodeCache() {
   if (!sharedGeocodeCacheReady || sharedGeocodeFlushInProgress) return;
 
@@ -204,24 +236,8 @@ function flushSharedGeocodeCache() {
 
   sharedGeocodeFlushInProgress = true;
 
-  fetch(saveApiURL, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "saveGeocodeCache",
-      entries: entries
-    })
-  })
-    .then(function(response) {
-      if (!response.ok) throw new Error("공용 좌표 캐시 저장 실패");
-      return response.json();
-    })
+  return saveSharedGeocodeEntriesV6102(entries)
     .then(function(result) {
-      if (!result || result.ok === false) {
-        throw new Error((result && result.message) || "공용 좌표 캐시 저장 실패");
-      }
-
       keys.forEach(function(key) {
         delete pendingSharedGeocodeEntries[key];
       });

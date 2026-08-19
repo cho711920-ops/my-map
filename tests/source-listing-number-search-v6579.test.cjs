@@ -43,7 +43,7 @@ assert.match(d1, /l\.status<>'deleted'/);
 assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),
   /api-cache\/unified-listings-v4-actual-gongsil-photos\.json/);
-assert.match(html, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
+assert.match(html, /script\.js\?v=6\.10\.2-geocode-data-access/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.1\.31-shared-data-only/);
 
 console.log("source listing number search v6.5.79 tests passed");

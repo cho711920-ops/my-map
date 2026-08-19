@@ -14,7 +14,7 @@ const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 test("the August 18 module split loads extracted code in dependency order", () => {
   const styleIndex = html.indexOf("css/style.css?v=6.10.0-module-split");
   const overrideIndex = html.indexOf("css/app-final-overrides-v690.css?v=1.0.0");
-  const mainIndex = html.indexOf("js/script.js?v=6.10.1-brokerage-fee-filter");
+  const mainIndex = html.indexOf("js/script.js?v=6.10.2-geocode-data-access");
   const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.0");
 
   assert.ok(styleIndex >= 0 && styleIndex < overrideIndex);
@@ -42,13 +42,15 @@ test("quick add waits for a confirmed D1 persistence result before clearing inpu
   const sendMutation = parser.slice(sendStart, submitStart);
 
   assert.ok(sendStart >= 0 && submitStart > sendStart);
-  assert.match(html, /parser\.js\?v=6\.4\.18-quick-add-response/);
+  assert.match(html, /data-auth-critical src="js\/parser\.js\?v=6\.4\.19-distinct-listing-save"/);
   assert.match(parser, /function sendQuickAddMutationV6418\(values, forceDuplicate\)/);
   assert.match(parser, /JSDataAccessV6\.mutate\("quickAdd", payload,/);
   assert.match(parser, /result\.persisted !== true/);
   assert.match(parser, /매물 등록이 완료됐습니다[\s\S]*clearQuickAddForm\(\)/);
   assert.doesNotMatch(sendMutation, /mode:\s*"no-cors"/);
   assert.match(d1, /async function quickAdd\(env, user, body\)/);
+  assert.match(d1, /duplicate\.duplicateType === "exact"/);
+  assert.match(d1, /COALESCE\(area_m2, 0\) = COALESCE\(\?5, 0\)/);
   assert.match(d1, /return \{ ok: true, persisted: true, queued: false, propertyId,/);
 });
 

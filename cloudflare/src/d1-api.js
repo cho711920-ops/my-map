@@ -553,10 +553,12 @@ async function duplicateCheck(env, values) {
   const room = clean(row[2]);
   const deposit = number(row[4]);
   const rent = number(row[5]);
+  const area = number(row[8]);
   const exact = await env.DB.prepare(`SELECT property_id, title, address, room, deposit, monthly_rent
     FROM listings WHERE status <> 'deleted' AND address = ?1 AND room = ?2
       AND COALESCE(deposit, 0) = COALESCE(?3, 0) AND COALESCE(monthly_rent, 0) = COALESCE(?4, 0)
-    LIMIT 1`).bind(address, room, deposit, rent).first();
+      AND COALESCE(area_m2, 0) = COALESCE(?5, 0)
+    LIMIT 1`).bind(address, room, deposit, rent, area).first();
   const similar = exact || await env.DB.prepare(`SELECT property_id, title, address, room, deposit, monthly_rent
     FROM listings WHERE status <> 'deleted' AND address = ?1 LIMIT 1`).bind(address).first();
   const existing = similar ? {
@@ -1169,7 +1171,8 @@ async function deleteProperty(env, user, body) {
 async function quickAdd(env, user, body) {
   const values = Array.isArray(body.values) ? body.values : [];
   const duplicate = await duplicateCheck(env, values);
-  if (duplicate.duplicateType !== "none" && !body.forceDuplicate) {
+  /* 같은 주소라도 층·호실·조건·평수가 다른 별도 매물은 정상 등록합니다. */
+  if (duplicate.duplicateType === "exact" && !body.forceDuplicate) {
     return { ...duplicate, persisted: false };
   }
   const propertyId = clean(values[15]) || `M-${crypto.randomUUID()}`;

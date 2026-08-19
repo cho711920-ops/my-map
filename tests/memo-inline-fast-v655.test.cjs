@@ -35,7 +35,7 @@ assert.match(memoD1, /persisted:\s*true, queued:\s*false/);
 assert.match(memoD1, /operationAdjustments:\s*\{ history:\s*1 \}/);
 
 assert.match(html, /style\.css\?v=6\.10\.0-module-split/);
-assert.match(html, /script\.js\?v=6\.10\.1-brokerage-fee-filter/);
+assert.match(html, /script\.js\?v=6\.10\.2-geocode-data-access/);
 assert.match(css, /\.memo-inline-status\.saving/);
 assert.match(css, /\.memo-inline-status\.success/);
 assert.match(css, /\.memo-inline-status\.error/);

@@ -24,7 +24,7 @@ test("the restored brokerage filter replaces the quick floor control", () => {
   assert.doesNotMatch(html, /id="floorQuickFilter"/);
   assert.ok(
     html.indexOf("js/commercial-brokerage-v1.js?v=1.1.0-exclusive-bands") <
-      html.indexOf("js/script.js?v=6.10.1-brokerage-fee-filter"),
+      html.indexOf("js/script.js?v=6.10.2-geocode-data-access"),
     "brokerage calculations must load before the main list filter"
   );
 });
