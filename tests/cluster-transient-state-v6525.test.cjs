@@ -42,6 +42,6 @@ assert.match(
 );
 
 assert.match(htmlSource, /script\.js\?v=6\.10\.4-filter-chips-selection/);
-assert.match(htmlSource, /map\.js\?v=8\.2\.16-fast-cache-snapshot/);
+assert.match(htmlSource, /map\.js\?v=8\.2\.17-linked-selection/);
 
 console.log("cluster transient state v6.5.25 tests passed");

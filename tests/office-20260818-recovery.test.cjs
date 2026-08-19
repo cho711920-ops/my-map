@@ -58,7 +58,7 @@ test("quick add waits for a confirmed D1 persistence result before clearing inpu
 
 test("all recovered August 18 cache versions are active", () => {
   for (const asset of [
-    "js/unified-listings-v8.js?v=8.1.31-shared-data-only",
+    "js/unified-listings-v8.js?v=8.1.32-linked-selection",
     "js/list-manager-v6.js?v=6.4.35-shared-data-only",
     "js/operations-center-v7.js?v=7.22.5-shared-data-only",
     "js/operations-collection-v8.js?v=7.25.8-shared-data-only",

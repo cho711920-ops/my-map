@@ -935,6 +935,9 @@
       return true;
     }
     if (event && event.target && event.target.closest("button,input,label,a,textarea,select")) return false;
+    if (typeof global.selectListingOnMapV844 === "function") {
+      global.selectListingOnMapV844(item);
+    }
     open(encodeURIComponent(propertyId));
     return true;
   }

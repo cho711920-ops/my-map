@@ -2785,14 +2785,10 @@ function redrawSelectedMarkers() {
 }
 
 
-function openItem(item) {
+function selectListingOnMapV844(item) {
+  if (!item || !item.key) return;
   selectedItemKey = item.key;
-  preservePinnedClusterSelectionDuringRelayoutV6517(1500);
 
-  /*
-   * 일반 선택 모드에서 리스트 매물을 누르면 해당 클러스터만 표시합니다.
-   * 다중선택 모드에서는 기존 누적 선택을 건드리지 않아 상태가 꼬이지 않게 합니다.
-   */
   if (!multiClusterMode) {
     var matchedOverlay = overlays.find(function(overlay) {
       return (
@@ -2813,6 +2809,22 @@ function openItem(item) {
       redrawSelectedMarkers();
     }
   }
+
+  document.querySelectorAll("#list .item").forEach(function(card) {
+    card.classList.toggle(
+      "selected",
+      card.getAttribute("data-listing-key") === String(item.key)
+    );
+  });
+}
+
+
+window.selectListingOnMapV844 = selectListingOnMapV844;
+
+
+function openItem(item) {
+  preservePinnedClusterSelectionDuringRelayoutV6517(1500);
+  selectListingOnMapV844(item);
 
   /*
    * 리스트 안에 AI카드를 펼치지 않고,
