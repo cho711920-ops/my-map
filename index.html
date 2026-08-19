@@ -220,11 +220,11 @@
       <div class="list-toolbar-control list-brokerage-control" title="상가 임대차 법정 상한요율 0.9% 기준 · 부가세 별도">
         <select id="brokerageFeeFilter" onchange="applyFilter()" aria-label="중개보수 필터">
           <option value="">중개보수</option>
-          <option value="fee0to100">0~100 이하</option>
-          <option value="fee100to200">100 초과~200 이하</option>
-          <option value="fee200to300">200 초과~300 이하</option>
-          <option value="fee300to500">300 초과~500 이하</option>
-          <option value="feeOver500">500 초과</option>
+          <option value="feeAtMost100">100 이하</option>
+          <option value="feeAtLeast100">100 이상</option>
+          <option value="feeAtLeast200">200 이상</option>
+          <option value="feeAtLeast300">300 이상</option>
+          <option value="feeAtLeast500">500 이상</option>
         </select>
       </div>
 
@@ -693,7 +693,7 @@
 <template id="jsAuthenticatedBodyAssets">
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard" src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"></script>
 <script data-auth-critical src="js/unified-listings-v8.js?v=8.1.31-shared-data-only"></script>
-<script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.1.0-exclusive-bands"></script>
+<script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds"></script>
 <script data-auth-critical src="js/script.js?v=6.10.2-geocode-data-access"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.1.0-fast-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.0"></script>
