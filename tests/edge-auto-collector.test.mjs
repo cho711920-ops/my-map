@@ -14,6 +14,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.ok(manifest.content_scripts.some((entry) => entry.world === "MAIN" && entry.js.includes("auto-bridge.js")));
   assert.match(background, /const SOURCE_ORDER = \{ naver: 1, daangn: 2, gongsil: 3 \}/);
   assert.match(background, /periodInMinutes: 24 \* 60/);
+  assert.match(background, /schedule: "11:00"/);
   assert.match(background, /LAST_SCHEDULE_KEY/);
   assert.match(background, /scheduleIsDue/);
   assert.match(background, /RUN_LOCK_KEY/);
@@ -43,12 +44,16 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 4/);
   assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 8/);
   assert.match(background, /MAX_RUN_AGE_MS/);
-  assert.match(background, /COLLECTION_STALL_TIMEOUT_MS = 90 \* 60 \* 1000/);
+  assert.match(background, /COLLECTOR_START_TIMEOUT_MS = 2 \* 60 \* 1000/);
+  assert.match(background, /COLLECTION_STALL_TIMEOUT_MS = 20 \* 60 \* 1000/);
+  assert.match(background, /COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 \* 60 \* 1000/);
   assert.match(background, /주소·층 오류/);
   assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
   assert.match(background, /state\.summary\.retryErrors/);
   assert.match(background, /stalledLoading/);
+  assert.match(background, /stalledStart/);
   assert.match(background, /stalledCollection/);
+  assert.match(background, /disconnectedCollection/);
   assert.doesNotMatch(background, /onInstalled[\s\S]{0,400}remove\(\[RUN_STATE_KEY, RUN_LOCK_KEY\]\)/);
 });
 
@@ -66,6 +71,15 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(content, /sendResponse\(\{ ok: true, started: true \}\)/);
   assert.match(content, /RESULT_TIMEOUT_MS/);
   assert.match(content, /RESULT_TIMEOUT_MS = 90 \* 60 \* 1000/);
+  assert.match(content, /START_ACK_TIMEOUT_MS = 35 \* 1000/);
+  assert.match(content, /JS_COLLECTOR_AUTOMATION_STARTED/);
+  assert.match(content, /\[data-metric\]/);
+  assert.match(content, /JS_AUTO_TARGET_HEARTBEAT/);
+  assert.match(content, /JS_AUTO_COLLECTOR_PAGE_LOADED/);
+  const bridge = read("edge-automation/extension/auto-bridge.js");
+  assert.match(bridge, /async function waitForRuntime/);
+  assert.match(bridge, /JS_COLLECTOR_AUTOMATION_STARTED/);
+  assert.match(bridge, /activeRuns/);
 });
 
 test("all three collectors expose registration and unattended execution", () => {
@@ -119,6 +133,7 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   const uninstall = read("tools/uninstall-edge-auto-collector.ps1");
   const launch = read("tools/run-edge-auto-collector.ps1");
   assert.match(install, /New-ScheduledTaskTrigger -Daily/);
+  assert.match(install, /\[string\]\$Schedule = '11:00'/);
   assert.doesNotMatch(install, /New-TimeSpan -Minutes 30/);
   assert.match(install, /-StartWhenAvailable/);
   assert.match(install, /-WakeToRun/);

@@ -15,10 +15,12 @@ const MAX_IMMEDIATE_ATTEMPTS = 4;
 const MAX_DEFERRED_RETRY_CYCLES = 8;
 const MAX_RUN_AGE_MS = 20 * 60 * 60 * 1000;
 const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
-const COLLECTION_STALL_TIMEOUT_MS = 90 * 60 * 1000;
+const COLLECTOR_START_TIMEOUT_MS = 2 * 60 * 1000;
+const COLLECTION_STALL_TIMEOUT_MS = 20 * 60 * 1000;
+const COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 * 60 * 1000;
 const DEFAULT_CONFIG = {
   enabled: false,
-  schedule: "06:00",
+  schedule: "11:00",
   closeTabs: true,
   targets: []
 };
@@ -51,8 +53,8 @@ async function saveConfig(next) {
 }
 
 function nextAlarmAt(schedule) {
-  const match = String(schedule || "06:00").match(/^(\d{1,2}):(\d{2})$/);
-  const hour = match ? Math.min(23, Number(match[1])) : 6;
+  const match = String(schedule || "11:00").match(/^(\d{1,2}):(\d{2})$/);
+  const hour = match ? Math.min(23, Number(match[1])) : 11;
   const minute = match ? Math.min(59, Number(match[2])) : 0;
   const next = new Date();
   next.setHours(hour, minute, 0, 0);
@@ -76,8 +78,8 @@ function localDateKey(date = new Date()) {
 }
 
 function scheduleIsDue(config, now = new Date()) {
-  const match = String(config.schedule || "06:00").match(/^(\d{1,2}):(\d{2})$/);
-  const targetMinutes = (match ? Number(match[1]) : 6) * 60 + (match ? Number(match[2]) : 0);
+  const match = String(config.schedule || "11:00").match(/^(\d{1,2}):(\d{2})$/);
+  const targetMinutes = (match ? Number(match[1]) : 11) * 60 + (match ? Number(match[2]) : 0);
   return now.getHours() * 60 + now.getMinutes() >= targetMinutes;
 }
 
@@ -182,7 +184,7 @@ async function waitForTabComplete(tabId, timeoutMs = 90000) {
 
 async function sendRunMessage(tabId, target, runId, parentRunId) {
   let lastError = null;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await chrome.tabs.sendMessage(tabId, {
         type: "JS_AUTO_RUN_TARGET",
@@ -307,12 +309,92 @@ async function restartPersistedRun(state, reason) {
   state.currentTabId = null;
   state.targetRunId = null;
   state.targetStartedAt = null;
+  state.runtimeStartedAt = null;
+  state.lastHeartbeatAt = null;
+  state.lastProgressAt = null;
+  state.lastProgressFingerprint = "";
+  state.progressMessage = "";
   state.phase = "resuming";
   await saveRunState(state);
   await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
   if (staleTabId) await chrome.tabs.remove(staleTabId).catch(() => {});
   await appendLog({ level: "info", message: reason || "중단된 자동수집을 저장 지점부터 이어서 실행합니다." });
   return launchCurrentTarget(state);
+}
+
+async function reconnectReloadedCollectorPage(senderTabId) {
+  const state = await getRunState();
+  const reconnectable = new Set(["loading", "starting-collector", "collecting"]);
+  if (!state || !state.active || !reconnectable.has(state.phase)) {
+    return { ok: true, skipped: true };
+  }
+  if (!Number.isInteger(senderTabId) || state.currentTabId !== senderTabId) {
+    return { ok: true, skipped: true };
+  }
+  const target = (state.targets || [])[state.index];
+  if (!target || !state.targetRunId) return { ok: true, skipped: true };
+  try {
+    state.phase = "starting-collector";
+    state.progressMessage = "새로고침된 수집 화면 재연결 중";
+    await saveRunState(state);
+    await sendRunMessage(senderTabId, target, state.targetRunId, state.runId);
+    const latest = await getRunState();
+    if (!latest || latest.runId !== state.runId || latest.targetRunId !== state.targetRunId) {
+      return { ok: true, skipped: true };
+    }
+    const now = Date.now();
+    latest.phase = "collecting";
+    latest.runtimeStartedAt = now;
+    latest.lastHeartbeatAt = now;
+    latest.lastProgressAt = now;
+    latest.lastProgressFingerprint = "";
+    latest.progressMessage = "수집 재연결 완료";
+    await saveRunState(latest);
+    await appendLog({
+      level: "info",
+      source: target.source,
+      target: target.label,
+      message: "수집 탭 새로고침을 감지해 마지막 저장 지점부터 즉시 다시 연결했습니다."
+    });
+    return { ok: true, reconnected: true };
+  } catch (error) {
+    await appendLog({
+      level: "warning",
+      source: target.source,
+      target: target.label,
+      message: "새로고침된 수집 탭 재연결에 실패해 새 탭으로 복구합니다."
+    });
+    await restartPersistedRun(state, "새로고침된 수집 탭을 새 탭에서 저장 지점부터 복구합니다.");
+    return { ok: true, restarted: true, message: String(error && error.message || error) };
+  }
+}
+
+async function updateTargetHeartbeat(message, senderTabId) {
+  const state = await getRunState();
+  const heartbeatPhases = new Set(["starting-collector", "collecting"]);
+  if (!state || !state.active || !heartbeatPhases.has(state.phase)) return { ok: true, skipped: true };
+  if (message.runId !== state.runId || message.targetRunId !== state.targetRunId) {
+    return { ok: true, skipped: true };
+  }
+  if (!Number.isInteger(senderTabId) || senderTabId !== state.currentTabId) {
+    return { ok: true, skipped: true };
+  }
+  const now = Date.now();
+  const fingerprint = String(message.progressFingerprint || "").slice(0, 1_000);
+  const progressMessage = String(message.progressMessage || "").slice(0, 180);
+  state.lastHeartbeatAt = now;
+  if (!state.lastProgressAt || (fingerprint && fingerprint !== state.lastProgressFingerprint)) {
+    state.lastProgressAt = now;
+    state.lastProgressFingerprint = fingerprint;
+  }
+  state.progressMessage = progressMessage;
+  await saveRunState(state);
+  const target = (state.targets || [])[state.index];
+  if (target) await updateRunReport(state, target, "running", {
+    message: progressMessage,
+    progressUpdatedAt: now
+  });
+  return { ok: true, heartbeat: true };
 }
 
 async function scheduleRecovery(state, delayMinutes, message) {
@@ -368,13 +450,26 @@ async function launchCurrentTarget(state, reuseTabId = null) {
     state.currentTabId = tab.id;
     state.targetRunId = targetRunId;
     state.targetStartedAt = startedAt;
+    state.runtimeStartedAt = null;
+    state.lastHeartbeatAt = startedAt;
+    state.lastProgressAt = startedAt;
+    state.lastProgressFingerprint = "";
+    state.progressMessage = "수집 화면 연결 중";
     state.phase = "loading";
     await saveRunState(state);
     await waitForTabComplete(tab.id);
+    state.phase = "starting-collector";
+    state.progressMessage = "수집 기능 시작 확인 중";
+    await saveRunState(state);
     await sendRunMessage(tab.id, target, targetRunId, state.runId);
     const latest = await getRunState();
     if (latest && latest.runId === state.runId && latest.targetRunId === targetRunId) {
+      const runtimeStartedAt = Date.now();
       latest.phase = "collecting";
+      latest.runtimeStartedAt = runtimeStartedAt;
+      latest.lastHeartbeatAt = runtimeStartedAt;
+      latest.lastProgressAt = runtimeStartedAt;
+      latest.progressMessage = "수집 기능 시작 확인 완료";
       await saveRunState(latest);
     }
     await appendLog({ level: "info", source: target.source, target: target.label, message: `${target.label || target.source} 자동수집 실행 중` });
@@ -438,6 +533,11 @@ async function finishCurrentTarget(result, senderTabId) {
     state.currentTabId = null;
     state.targetRunId = null;
     state.targetStartedAt = null;
+    state.runtimeStartedAt = null;
+    state.lastHeartbeatAt = null;
+    state.lastProgressAt = null;
+    state.lastProgressFingerprint = "";
+    state.progressMessage = "";
     state.targetAttempt = targetAttempt + 1;
     state.phase = "retrying";
     await saveRunState(state);
@@ -500,6 +600,11 @@ async function finishCurrentTarget(result, senderTabId) {
   state.currentTabId = null;
   state.targetRunId = null;
   state.targetStartedAt = null;
+  state.runtimeStartedAt = null;
+  state.lastHeartbeatAt = null;
+  state.lastProgressAt = null;
+  state.lastProgressFingerprint = "";
+  state.progressMessage = "";
   state.targetAttempt = 1;
   state.phase = "between-targets";
   await saveRunState(state);
@@ -676,17 +781,38 @@ async function recoverAutomaticRun() {
     await saveRunState(state);
     return launchCurrentTarget(state);
   }
-  const elapsed = Date.now() - Number(state.targetStartedAt || Date.now());
+  const now = Date.now();
+  const elapsed = now - Number(state.targetStartedAt || now);
   const stalledLoading = state.phase === "loading" && elapsed > LOAD_STALL_TIMEOUT_MS;
-  const stalledCollection = state.phase === "collecting" && elapsed > COLLECTION_STALL_TIMEOUT_MS;
-  if (stalledLoading || stalledCollection) {
+  const stalledStart = state.phase === "starting-collector" && elapsed > COLLECTOR_START_TIMEOUT_MS;
+  const stalledCollection = state.phase === "collecting" &&
+    now - Number(state.lastProgressAt || state.runtimeStartedAt || state.targetStartedAt || now) > COLLECTION_STALL_TIMEOUT_MS;
+  const disconnectedCollection = state.phase === "collecting" &&
+    now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || state.targetStartedAt || now) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
+  if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection) {
+    const target = (state.targets || [])[state.index];
+    const recoveryMessage = stalledLoading
+      ? "수집 화면 로딩이 3분 동안 끝나지 않아 다시 시작합니다."
+      : stalledStart
+        ? "실제 수집 시작 확인이 2분 동안 없어 다시 시작합니다."
+        : disconnectedCollection
+          ? "수집 화면의 상태 신호가 8분 동안 없어 마지막 저장 지점부터 복구합니다."
+          : "수집 화면의 숫자가 20분 동안 진행되지 않아 마지막 저장 지점부터 복구합니다.";
+    if (now - Number(state.lastRecoveryNotificationAt || 0) > 15 * 60 * 1000) {
+      state.lastRecoveryNotificationAt = now;
+      await saveRunState(state);
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icon.svg",
+        title: "JS 자동수집 자동복구",
+        message: `${target && (target.label || target.source) || "현재 대상"} · ${recoveryMessage}`
+      }).catch(() => {});
+    }
     return finishCurrentTarget({
       runId: state.runId,
       targetRunId: state.targetRunId,
       ok: false,
-      message: stalledLoading
-        ? "수집기 시작 신호가 3분 동안 없어 다시 시작합니다."
-        : "한 대상이 90분 안에 끝나지 않아 마지막 저장 지점부터 복구합니다."
+      message: recoveryMessage
     }, state.currentTabId);
   }
   return { ok: true, active: true };
@@ -746,6 +872,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "JS_AUTO_TARGET_FINISHED") {
       return finishCurrentTarget(message, sender && sender.tab && sender.tab.id);
     }
+    if (message.type === "JS_AUTO_TARGET_HEARTBEAT") {
+      return updateTargetHeartbeat(message, sender && sender.tab && sender.tab.id);
+    }
     if (message.type === "JS_AUTO_GET_STATE") {
       const [config, stored, runState, runReport] = await Promise.all([
         getConfig(),
@@ -768,6 +897,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const runState = await getRunState();
       if (runState && runState.active) return { ok: true, resumed: true, runState };
       return message.forceRun ? runAll("windows-force") : runScheduled("windows-schedule");
+    }
+    if (message.type === "JS_AUTO_COLLECTOR_PAGE_LOADED") {
+      return reconnectReloadedCollectorPage(sender && sender.tab && sender.tab.id);
     }
     if (message.type === "JS_AUTO_CLEAR_LOGS") {
       await chrome.storage.local.set({ [LOG_KEY]: [] });

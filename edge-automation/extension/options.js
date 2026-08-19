@@ -136,7 +136,7 @@ function renderTargets(targets) {
 function render() {
   const config = state.config || {};
   document.getElementById("enabled").checked = Boolean(config.enabled);
-  document.getElementById("schedule").value = config.schedule || "06:00";
+  document.getElementById("schedule").value = config.schedule || "11:00";
   document.getElementById("closeTabs").checked = config.closeTabs !== false;
   const targets = Array.isArray(config.targets) ? config.targets : [];
   document.getElementById("runSummary").innerHTML = renderRunSummary();
@@ -155,8 +155,20 @@ function currentRunStatus(response) {
   const target = targets[index];
   const label = target && (target.label || SOURCE_LABELS[target.source] || target.source);
   const position = targets.length ? `${index + 1}/${targets.length}` : "";
-  const phase = runState.phase === "retry-wait" ? "재시도 대기" : "수집 실행 중";
-  return [phase, position, label].filter(Boolean).join(" · ");
+  const phaseLabels = {
+    loading: "수집 화면 여는 중",
+    "starting-collector": "실제 수집 시작 확인 중",
+    collecting: "수집 실행 중",
+    "retry-wait": "재시도 대기",
+    retrying: "즉시 재시도 중"
+  };
+  const phase = phaseLabels[runState.phase] || "수집 실행 중";
+  const progressAt = Number(runState.lastProgressAt || 0);
+  const progressAge = progressAt ? Math.max(0, Math.floor((Date.now() - progressAt) / 60000)) : null;
+  const progress = String(runState.progressMessage || "").trim();
+  return [phase, position, label, progress,
+    progressAge === null ? "" : progressAge ? `마지막 진행 ${progressAge}분 전` : "방금 진행 확인"
+  ].filter(Boolean).join(" · ");
 }
 
 async function load() {
@@ -168,7 +180,7 @@ async function load() {
 
 document.getElementById("save").addEventListener("click", async () => {
   state.config.enabled = document.getElementById("enabled").checked;
-  state.config.schedule = document.getElementById("schedule").value || "06:00";
+  state.config.schedule = document.getElementById("schedule").value || "11:00";
   state.config.closeTabs = document.getElementById("closeTabs").checked;
   const response = await runtime({ type: "JS_AUTO_SAVE_CONFIG", config: state.config });
   if (response.ok) state.config = response.config;
@@ -218,7 +230,7 @@ document.getElementById("exportConfig").addEventListener("click", () => {
     exportedAt: new Date().toISOString(),
     config: {
       enabled: Boolean(config.enabled),
-      schedule: config.schedule || "06:00",
+      schedule: config.schedule || "11:00",
       closeTabs: config.closeTabs !== false,
       targets: Array.isArray(config.targets) ? config.targets.map(portableTarget) : []
     }
