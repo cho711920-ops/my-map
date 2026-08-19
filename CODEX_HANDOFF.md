@@ -15,6 +15,8 @@
 - 동적 회귀검사에서 같은 `item.key`를 가진 `M-first/21행`, `M-second/22행` 두 매물을 재현했다. 두 번째 카드를 선택했을 때 두 번째 카드와 두 번째 클러스터만 선택되고, 자동갱신 뒤에도 `M-first → M-second` 순서로 각각 복원되는 것을 확인했다.
 - 자산 버전은 `script.js?v=6.10.5-unique-linked-selection`, `map.js?v=8.2.18-unique-linked-selection`, `unified-listings-v8.js?v=8.1.33-unique-linked-selection`, `analysis.js?v=6.3.41-unique-linked-selection`, `property-edit-v648.js?v=1.0.1-linked-selection`이다. D1 스키마·운영 매물·통합 원본 연결·고객·수집 데이터는 수정하지 않았다.
 - 변경 JavaScript 5개 문법 검사, 선택 집중 테스트 `9/9`, 전체 테스트 `305/305`, Cloudflare 전용 테스트 `153/153`, 정적 자산 130개 빌드, Wrangler 4.124.0 dry-run과 `git diff --check`를 통과했다.
+- 기능 커밋 `e90b605`를 원격 `codex/cloudflare-js-map`에 푸시하고 운영 Worker `ed1edf3e-cf67-4076-a8ca-e0d7f7284b36`으로 배포했다. 운영 홈과 새 script/map/unified 자산은 모두 HTTP 200이며 새 버전과 고유 카드 ID 코드를 반환했다.
+- 로그인된 운영 화면에서 매물 `10,151개`, 카드 18개, 클러스터 62개가 정상 렌더링됐다. `갈마동 366-10` 검색으로 같은 표시 키를 공유하는 `M-af744599...`의 `3,000/150`과 `M-b4795878...`의 `1,000/75` 두 1층 매물을 재현해, 두 번째 클릭 시 두 번째 카드·클러스터만 각각 1개 선택되고 첫 번째 클릭 시에도 선택 개수가 각각 1개인 채 정확히 이동하는 것을 확인했다. 앱 오류는 없었고 브라우저 위치 권한이 없는 환경의 `GeolocationPositionError` 경고만 있었다.
 
 ## 2026-08-19 적용 필터 칩·매물/지도 선택 강조
 
