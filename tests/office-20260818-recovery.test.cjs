@@ -14,7 +14,7 @@ const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 test("the August 18 module split loads extracted code in dependency order", () => {
   const styleIndex = html.indexOf("css/style.css?v=6.10.0-module-split");
   const overrideIndex = html.indexOf("css/app-final-overrides-v690.css?v=1.0.0");
-  const mainIndex = html.indexOf("js/script.js?v=6.10.2-geocode-data-access");
+  const mainIndex = html.indexOf("js/script.js?v=6.10.3-card-elevator-icon");
   const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.0");
 
   assert.ok(styleIndex >= 0 && styleIndex < overrideIndex);
@@ -29,11 +29,13 @@ test("the August 18 module split loads extracted code in dependency order", () =
   assert.match(overrides, /\.map-quick-tools/);
 });
 
-test("compact cards hide elevator decorations while register details retain them", () => {
-  assert.doesNotMatch(main, /buildListElevatorIconV650/);
+test("compact cards show only the elevator-presence icon while register details retain capacity", () => {
+  assert.match(main, /function buildListElevatorIconV843\(item\)/);
+  assert.match(main, /class="item-elevator-v650"/);
+  assert.doesNotMatch(main, /item-elevator-capacity-v820/);
   assert.doesNotMatch(style, /\.item-elevator-v650/);
-  assert.doesNotMatch(unifiedCss, /\.item-elevator-v650/);
-  assert.match(html, /unified-listings-v8\.css\?v=8\.0\.42-card-elevator-hidden/);
+  assert.match(unifiedCss, /\.item-elevator-v650/);
+  assert.match(html, /unified-listings-v8\.css\?v=8\.0\.43-card-elevator-icon/);
 });
 
 test("quick add waits for a confirmed D1 persistence result before clearing input", () => {

@@ -20,7 +20,7 @@ assert.match(building, /requestBadgeData\(item, parcel, true\)/);
 assert.match(building, /if \(persistToServer && \(!data\.buildingInfoCache \|\| !data\.buildingInfoCache\.ok\)\)/);
 assert.match(building, /"address=" \+ encodeURIComponent\(item && item\.address \|\| parcel\.lotAddress \|\| ""\)/);
 assert.match(building, /prefetchMissing:\s*prefetchMissingBuildingInfoV810/);
-assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.8"/);
+assert.match(building, /BUILDING_CLIENT_VERSION_V811 = "8\.2\.9"/);
 
 assert.match(buildingApi, /UPDATE listings SET building_year=\?1/);
 assert.match(buildingApi, /building_elevators=MAX\(/);

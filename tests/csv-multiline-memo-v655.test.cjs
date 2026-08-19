@@ -51,7 +51,7 @@ assert.equal(
 assert.match(mapSource, /var rows = parseCSVRecordsV655\(data\);/);
 assert.match(mapSource, /var c = rows\[i\];/);
 assert.doesNotMatch(mapSource, /data\.trim\(\)\.split\("\\n"\)/);
-assert.match(indexSource, /js\/script\.js\?v=6\.10\.2-geocode-data-access/);
+assert.match(indexSource, /js\/script\.js\?v=6\.10\.3-card-elevator-icon/);
 assert.match(indexSource, /js\/map\.js\?v=8\.2\.16-fast-cache-snapshot/);
 
 console.log("multiline memo CSV tests passed");

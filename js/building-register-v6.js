@@ -19,7 +19,7 @@
   var buildingInfoPrefetchSeenV810 = Object.create(null);
   var buildingInfoPrefetchActiveV810 = 0;
   var BUILDING_INFO_PREFETCH_CONCURRENCY_V810 = 2;
-  var BUILDING_CLIENT_VERSION_V811 = "8.2.8";
+  var BUILDING_CLIENT_VERSION_V811 = "8.2.9";
   var state = {
     item: null,
     parcel: null,
@@ -694,7 +694,6 @@
       if (addressKey && targetCard.getAttribute("data-building-address-key") !== addressKey) return;
       var years = targetCard.querySelectorAll(".item-building-year-v650");
       var elevator = targetCard.querySelector(".item-elevator-v650");
-      var elevatorCapacity = targetCard.querySelector(".item-elevator-capacity-v820");
       Array.prototype.forEach.call(years, function(year) {
         year.textContent = badge.year ? "준" + badge.year : "준공 -";
         year.classList.toggle("verified", !!badge.verified);
@@ -702,15 +701,8 @@
       if (elevator) {
         elevator.hidden = !(badge.verified && badge.elevators > 0);
         if (!elevator.hidden) {
-          var capacity = Number(badge.capacity || 0);
-          var capacityText = capacity > 0 ? " · 최대 " + capacity + "인승" : " · 최대정원 미확인";
-          elevator.title = "공식자료 승강기 " + badge.elevators + "대" + capacityText;
-          elevator.setAttribute("aria-label", "승강기 " + badge.elevators + "대" + capacityText);
-          if (elevatorCapacity) {
-            elevatorCapacity.textContent = capacity > 0 ? capacity + "인" : "X";
-            elevatorCapacity.hidden = false;
-            elevatorCapacity.classList.toggle("unknown", !(capacity > 0));
-          }
+          elevator.title = "공식자료 승강기 있음";
+          elevator.setAttribute("aria-label", "승강기 있음");
         }
       }
     });

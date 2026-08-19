@@ -50,7 +50,7 @@ assert(
   "card checkboxes must carry the property ID selection target"
 );
 assert(
-  html.includes("script.js?v=6.10.2-geocode-data-access"),
+  html.includes("script.js?v=6.10.3-card-elevator-icon"),
   "the production page must load the fixed script cache version"
 );
 

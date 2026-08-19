@@ -37,5 +37,5 @@ test("merge cache invalidation finishes before the response is rendered", () => 
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /mutationAction\(body\) === "moveOriginalListing"\) \{\s*await invalidation;/);
   assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.31-shared-data-only/);
-  assert.match(html, /css\/unified-listings-v8\.css\?v=8\.0\.42-card-elevator-hidden/);
+  assert.match(html, /css\/unified-listings-v8\.css\?v=8\.0\.43-card-elevator-icon/);
 });

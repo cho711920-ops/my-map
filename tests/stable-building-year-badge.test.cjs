@@ -38,7 +38,7 @@ assert.equal(
 );
 assert.match(script, /var listCardReusePoolV6521 = null/);
 assert.match(script, /target\.appendChild\(reusableCard\)/);
-assert.match(html, /building-register-v6\.js\?v=8\.2\.8-alternate-parcel-fallback/);
-assert.match(html, /script\.js\?v=6\.10\.2-geocode-data-access/);
+assert.match(html, /building-register-v6\.js\?v=8\.2\.9-card-elevator-icon/);
+assert.match(html, /script\.js\?v=6\.10\.3-card-elevator-icon/);
 
 console.log("stable building year badge tests passed");

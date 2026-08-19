@@ -3967,6 +3967,26 @@ function listDisplayValueV650(item, field) {
   return String(value).trim();
 }
 
+function persistentListElevatorV843(item) {
+  var status = String(item && item.buildingInfoStatus || "").trim();
+  var elevators = Number(item && item.buildingElevators || 0);
+  return (status === "확인완료" || status === "connected") && elevators > 0;
+}
+
+function buildListElevatorIconV843(item) {
+  var hasElevator = persistentListElevatorV843(item);
+  return '<span class="item-elevator-v650"' + (hasElevator ? '' : ' hidden') +
+    ' title="공식자료 승강기 있음" aria-label="승강기 있음">' +
+    '<svg class="item-elevator-glyph-v651" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<rect x="2" y="2" width="20" height="20" rx="2"></rect>' +
+      '<path class="item-elevator-divider-v665" d="M11 4.5v15"></path>' +
+      '<path class="item-elevator-arrows-v660" d="M7 10V5m-2 2 2-2 2 2m-2 7v5m-2-2 2 2 2-2"></path>' +
+      '<circle class="item-elevator-person-v662" cx="16" cy="8" r="1.6"></circle>' +
+      '<path class="item-elevator-person-v662" d="M16 10.5v4.5m-2.7-2.6 2.7-1.9 2.7 1.9M16 15l-2.4 3.8M16 15l2.4 3.8"></path>' +
+    '</svg>' +
+  '</span>';
+}
+
 window.closeCustomerMatchCardMenusV721 = function(exceptPanel) {
   document.querySelectorAll(".customer-match-menu-panel-v721").forEach(function(panel) {
     if (panel === exceptPanel) return;
@@ -4166,6 +4186,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
             (item.room
               ? '<span class="item-room-badge">' + escapeHtml(formatListingRoomForCardV653(item.room)) + '</span>'
               : '<span class="item-room-badge empty">호실 -</span>') +
+            buildListElevatorIconV843(item) +
           '</span>' +
           favoriteHeaderButtonV661 +
           (customerMatchControls && regDateLabel
