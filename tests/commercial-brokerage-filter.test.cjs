@@ -25,7 +25,7 @@ test("the restored brokerage filter replaces the quick floor control", () => {
   assert.doesNotMatch(html, /id="floorQuickFilter"/);
   assert.ok(
     html.indexOf("js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds") <
-      html.indexOf("js/script.js?v=6.10.3-card-elevator-icon"),
+      html.indexOf("js/script.js?v=6.10.4-filter-chips-selection"),
     "brokerage calculations must load before the main list filter"
   );
 });

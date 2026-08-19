@@ -9,7 +9,7 @@ const css = fs.readFileSync(new URL("../css/mobile-app-v1.css", import.meta.url)
 
 test("mobile keyword search syncs immediately and searches outside map bounds", () => {
   assert.match(html, /mobile-app-v1\.js\?v=1\.0\.5-tablet-logo-reload/);
-  assert.match(html, /mobile-app-v1\.css\?v=1\.0\.6-brokerage-no-floor/);
+  assert.match(html, /mobile-app-v1\.css\?v=1\.0\.7-filter-chips-selection/);
   assert.match(mobile, /mobileInput\.addEventListener\("input", queueMobileKeywordSearch\)/);
   assert.match(mobile, /global\.jsMobileGlobalKeywordV1 = !!source\.value\.trim\(\)/);
   assert.match(script, /ignoreMapBounds \|\| mobileGlobalKeywordSearch/);

@@ -9,7 +9,7 @@ const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 
 assert.match(html, /operations-center-v7\.css\?v=7\.20\.7-customer-delete/);
 assert.match(html, /operations-center-v7\.js\?v=7\.22\.5-shared-data-only/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.43-card-elevator-icon/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.44-filter-chips-selection/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.1\.31-shared-data-only/);
 
 assert.match(operations, /customerConditionRefreshV727:\s*\{ customerId: "", status: "idle" \}/);

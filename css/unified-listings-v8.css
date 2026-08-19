@@ -2149,3 +2149,124 @@
     padding: 10px 12px;
   }
 }
+
+/* v8.0.44 - 적용 필터 칩 + 매물/지도 선택 연결 강조 */
+.active-filter-chips-v844 {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  border-bottom: 1px solid #dbe8f7;
+  background: linear-gradient(180deg, #f7fbff, #f2f8ff);
+  scrollbar-width: thin;
+  scrollbar-color: #bdd4ee transparent;
+}
+
+.active-filter-chips-v844[hidden] {
+  display: none !important;
+}
+
+.active-filter-chip-v844 {
+  display: inline-flex;
+  min-width: max-content;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid #8fbee9;
+  border-radius: 999px;
+  background: #eaf4ff;
+  color: #075aa9;
+  box-shadow: 0 1px 3px rgba(5, 104, 232, .08);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.active-filter-chip-v844:hover,
+.active-filter-chip-v844:focus-visible {
+  border-color: #0568e8;
+  background: #dceeff;
+  box-shadow: 0 0 0 3px rgba(5, 104, 232, .12);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.active-filter-chip-remove-v844 {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(5, 104, 232, .11);
+  color: #075aa9;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+#list .item.selected {
+  border-color: #0568e8 !important;
+  background: #eef6ff !important;
+  box-shadow:
+    inset 4px 0 0 #0568e8,
+    0 0 0 2px rgba(5, 104, 232, .22),
+    0 8px 20px rgba(5, 104, 232, .14) !important;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease !important;
+}
+
+.circle-marker.selected,
+.circle-marker.done.selected,
+.circle-marker.source-gongsil.selected,
+.circle-marker.source-gongsil.done.selected,
+.js-world-grid-clusters-v690 .circle-marker.world-grid-cluster-v690.selected {
+  --cluster-fill: rgba(5, 104, 232, .98) !important;
+  --cluster-border: transparent !important;
+  --cluster-text: #ffffff !important;
+  background: rgba(5, 104, 232, .98) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 0 0 5px rgba(5, 104, 232, .28),
+    0 8px 20px rgba(5, 104, 232, .32) !important;
+  filter: saturate(1.15) brightness(1.02) !important;
+  opacity: 1 !important;
+  animation: linkedSelectionPulseV844 .24s ease-out 1 !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.selected {
+  border-color: #0568e8 !important;
+  background: #e7f2ff !important;
+  color: #063f7c !important;
+  box-shadow:
+    0 0 0 3px rgba(5, 104, 232, .24),
+    0 8px 18px rgba(5, 104, 232, .22) !important;
+}
+
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.selected span,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.selected span b {
+  color: #0568e8 !important;
+}
+
+@keyframes linkedSelectionPulseV844 {
+  0% { transform: scale(.94) translateZ(0); }
+  62% { transform: scale(1.055) translateZ(0); }
+  100% { transform: scale(1) translateZ(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #list .item.selected,
+  .active-filter-chip-v844,
+  .circle-marker.selected {
+    animation: none !important;
+    transition: none !important;
+  }
+}

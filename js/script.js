@@ -1213,11 +1213,194 @@ function isItemWithinMapRadiusV658(item, radiusFilter) {
 }
 
 
+function getFilterInputValueV844(id) {
+  var input = document.getElementById(id);
+  return String((input && input.value) || "").trim();
+}
+
+
+function getSelectedFilterLabelV844(id) {
+  var select = document.getElementById(id);
+  if (!select || !select.value) return "";
+  var option = select.options && select.selectedIndex >= 0
+    ? select.options[select.selectedIndex]
+    : null;
+  return String((option && option.textContent) || select.value || "").trim();
+}
+
+
+function formatFilterNumberV844(value) {
+  var number = Number(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
+    : String(value || "").trim();
+}
+
+
+function buildRangeFilterChipV844(label, minId, maxId, unit, zeroCounts) {
+  var minRaw = getFilterInputValueV844(minId);
+  var maxRaw = getFilterInputValueV844(maxId);
+  var minNumber = Number(minRaw);
+  var maxNumber = Number(maxRaw);
+  var hasMin = minRaw !== "" && Number.isFinite(minNumber) && (zeroCounts || minNumber > 0);
+  var hasMax = maxRaw !== "" && Number.isFinite(maxNumber) && (zeroCounts || maxNumber > 0);
+
+  if (!hasMin && !hasMax) return "";
+  if (hasMin && hasMax) {
+    return label + " " + formatFilterNumberV844(minNumber) + "~" + formatFilterNumberV844(maxNumber) + unit;
+  }
+  if (hasMin) return label + " " + formatFilterNumberV844(minNumber) + unit + " 이상";
+  return label + " " + formatFilterNumberV844(maxNumber) + unit + " 이하";
+}
+
+
+function getActiveFilterChipsV844() {
+  var chips = [];
+  var push = function(key, label) {
+    if (label) chips.push({ key: key, label: label });
+  };
+  var keyword = getFilterInputValueV844("keyword");
+  var source = getSelectedFilterLabelV844("sourceFilter");
+  var type = getSelectedFilterLabelV844("typeFilter");
+  var brokerage = getSelectedFilterLabelV844("brokerageFeeFilter");
+  var floorQuick = getSelectedFilterLabelV844("floorQuickFilter");
+  var industry = getFilterInputValueV844("industryFilter");
+  var radiusFilter = window.mapRadiusFilterV658 || null;
+
+  push("keyword", keyword ? "검색 " + keyword : "");
+  push("source", source ? "출처 " + source : "");
+  push("type", type ? "구분 " + type : "");
+  push("brokerage", brokerage ? "중개보수 " + brokerage : "");
+  push("floorQuick", floorQuick ? "층 " + floorQuick : "");
+  push("deposit", buildRangeFilterChipV844("보증금", "minDeposit", "maxDeposit", "만원", false));
+  push("rent", buildRangeFilterChipV844("월세", "minRent", "maxRent", "만원", false));
+  push("premium", buildRangeFilterChipV844("권리금", "minPremium", "maxPremium", "만원", false));
+  push("area", buildRangeFilterChipV844("평수", "minArea", "maxArea", "평", false));
+  push("floor", buildRangeFilterChipV844("층", "minFloor", "maxFloor", "층", true));
+  push("industry", industry ? "업종 " + industry : "");
+
+  if (favoriteOnly) push("favoriteOnly", "찜목록");
+  if (doneOnly) {
+    push("doneOnly", "계약완료만");
+  } else if (!hideDone) {
+    push("includeDone", "계약완료 포함");
+  }
+  if (gongsilOnly) push("gongsilOnly", "임장할매물만");
+  if (todayNewOnly) push("todayNewOnly", "오늘 신규만");
+  if (radiusFilter && Number(radiusFilter.meters) > 0) {
+    push("radius", "반경 " + Number(radiusFilter.meters).toLocaleString("ko-KR") + "m");
+  }
+
+  return chips;
+}
+
+
+function syncFilterToggleControlsV844() {
+  var favoriteButton = document.getElementById("favoriteBtn");
+  if (favoriteButton) favoriteButton.classList.toggle("on", !!favoriteOnly);
+
+  if (typeof updateHideDoneMenuUI === "function") updateHideDoneMenuUI();
+
+  var gongsilButton = document.getElementById("gongsilOnlyBtn");
+  if (gongsilButton) {
+    gongsilButton.classList.toggle("on", !!gongsilOnly);
+    gongsilButton.setAttribute("aria-checked", gongsilOnly ? "true" : "false");
+  }
+
+  var todayButton = document.getElementById("todayNewBtn");
+  if (todayButton) {
+    todayButton.classList.toggle("on", !!todayNewOnly);
+    todayButton.setAttribute("aria-checked", todayNewOnly ? "true" : "false");
+  }
+
+  if (typeof window.syncMapQuickToolStateV657 === "function") {
+    window.syncMapQuickToolStateV657();
+  }
+}
+
+
+function clearActiveFilterChipV844(key) {
+  var inputIds = {
+    keyword: ["keyword"],
+    source: ["sourceFilter"],
+    type: ["typeFilter"],
+    brokerage: ["brokerageFeeFilter"],
+    floorQuick: ["floorQuickFilter"],
+    deposit: ["minDeposit", "maxDeposit"],
+    rent: ["minRent", "maxRent"],
+    premium: ["minPremium", "maxPremium"],
+    area: ["minArea", "maxArea"],
+    floor: ["minFloor", "maxFloor"],
+    industry: ["industryFilter"]
+  };
+
+  (inputIds[key] || []).forEach(function(id) {
+    var input = document.getElementById(id);
+    if (input) input.value = "";
+  });
+
+  if (key === "keyword") window.jsMobileGlobalKeywordV1 = false;
+  if (key === "favoriteOnly") favoriteOnly = false;
+  if (key === "doneOnly" || key === "includeDone") {
+    doneOnly = false;
+    hideDone = true;
+    if (typeof saveDoneViewModeV656 === "function") saveDoneViewModeV656();
+  }
+  if (key === "gongsilOnly") gongsilOnly = false;
+  if (key === "todayNewOnly") todayNewOnly = false;
+  if (key === "radius") {
+    if (typeof window.clearMapMeasurementsV657 === "function") {
+      window.clearMapMeasurementsV657(true);
+    } else {
+      window.mapRadiusFilterV658 = null;
+    }
+  }
+
+  syncFilterToggleControlsV844();
+  applyFilter();
+}
+
+
+function renderActiveFilterChipsV844() {
+  var container = document.getElementById("activeFilterChipsV844");
+  if (!container) return;
+  var chips = getActiveFilterChipsV844();
+
+  container.replaceChildren();
+  container.hidden = chips.length === 0;
+
+  chips.forEach(function(chip) {
+    var button = document.createElement("button");
+    var label = document.createElement("span");
+    var remove = document.createElement("span");
+    button.type = "button";
+    button.className = "active-filter-chip-v844";
+    button.setAttribute("aria-label", chip.label + " 필터 해제");
+    button.title = chip.label + " 필터 해제";
+    label.textContent = chip.label;
+    remove.className = "active-filter-chip-remove-v844";
+    remove.setAttribute("aria-hidden", "true");
+    remove.textContent = "×";
+    button.appendChild(label);
+    button.appendChild(remove);
+    button.addEventListener("click", function() {
+      clearActiveFilterChipV844(chip.key);
+    });
+    container.appendChild(button);
+  });
+}
+
+
+window.clearActiveFilterChipV844 = clearActiveFilterChipV844;
+window.renderActiveFilterChipsV844 = renderActiveFilterChipsV844;
+
+
 function applyFilter() {
   var filtered = getFilteredItems();
   currentItems = filtered;
 
   drawItems(filtered);
+  renderActiveFilterChipsV844();
   var pinnedItems = typeof getPinnedClusterItemsV6515 === "function"
     ? getPinnedClusterItemsV6515()
     : [];

@@ -14,7 +14,7 @@ const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 test("the August 18 module split loads extracted code in dependency order", () => {
   const styleIndex = html.indexOf("css/style.css?v=6.10.0-module-split");
   const overrideIndex = html.indexOf("css/app-final-overrides-v690.css?v=1.0.0");
-  const mainIndex = html.indexOf("js/script.js?v=6.10.3-card-elevator-icon");
+  const mainIndex = html.indexOf("js/script.js?v=6.10.4-filter-chips-selection");
   const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.0");
 
   assert.ok(styleIndex >= 0 && styleIndex < overrideIndex);
@@ -35,7 +35,7 @@ test("compact cards show only the elevator-presence icon while register details 
   assert.doesNotMatch(main, /item-elevator-capacity-v820/);
   assert.doesNotMatch(style, /\.item-elevator-v650/);
   assert.match(unifiedCss, /\.item-elevator-v650/);
-  assert.match(html, /unified-listings-v8\.css\?v=8\.0\.43-card-elevator-icon/);
+  assert.match(html, /unified-listings-v8\.css\?v=8\.0\.44-filter-chips-selection/);
 });
 
 test("quick add waits for a confirmed D1 persistence result before clearing input", () => {
@@ -65,7 +65,7 @@ test("all recovered August 18 cache versions are active", () => {
     "js/operations-admin-v1.js?v=1.0.5-shared-data-only",
     "js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds",
     "css/list-manager-v6.css?v=6.4.28-brokerage-filter",
-    "css/mobile-app-v1.css?v=1.0.6-brokerage-no-floor"
+    "css/mobile-app-v1.css?v=1.0.7-filter-chips-selection"
   ]) {
     assert.ok(html.includes(asset), `${asset} must be loaded`);
   }
