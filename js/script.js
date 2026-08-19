@@ -2479,6 +2479,66 @@ function formatNaverPanoramaDateV653(value) {
 }
 
 
+function setNaverRoadviewHistoryReadyV666(isReady) {
+  var button = document.getElementById("naverRoadviewHistoryBtn");
+  if (!button) return;
+
+  var ready = Boolean(isReady) && currentRoadviewMode === "naver";
+  button.disabled = !ready;
+  button.setAttribute("aria-disabled", ready ? "false" : "true");
+  button.title = ready
+    ? "공식 네이버 지도에서 과거 촬영사진 보기"
+    : "네이버 거리뷰를 불러온 뒤 사용할 수 있습니다.";
+}
+
+
+function formatNaverRoadviewLinkNumberV666(value, fallback, min, max) {
+  var number = Number(value);
+  if (!isFinite(number)) number = fallback;
+  number = Math.max(min, Math.min(max, number));
+  return Math.round(number * 100) / 100;
+}
+
+
+function buildNaverRoadviewHistoryUrlV666() {
+  if (!naverRoadviewInstanceV653) return "";
+
+  var panoId = "";
+  var pov = null;
+  try {
+    panoId = String(naverRoadviewInstanceV653.getPanoId() || "").trim();
+    pov = naverRoadviewInstanceV653.getPov();
+  } catch (error) {
+    return "";
+  }
+  if (!panoId) return "";
+
+  var pan = formatNaverRoadviewLinkNumberV666(pov && pov.pan, 0, -180, 180);
+  var tilt = formatNaverRoadviewLinkNumberV666(pov && pov.tilt, 0, -90, 90);
+  var fov = formatNaverRoadviewLinkNumberV666(pov && pov.fov, 90, 20, 100);
+
+  /*
+   * 네이버 지도 웹이 공유하는 전체 거리뷰 주소 형식입니다. 현재 panoId와
+   * 시야를 함께 넘겨 지도 검색 화면을 거치지 않고 공식 거리뷰로 진입합니다.
+   * 촬영 날짜 선택은 공식 네이버 거리뷰 화면에서 제공합니다.
+   */
+  return "https://map.naver.com/p?c=17.00,0,0,0,adh&p=" +
+    encodeURIComponent(panoId) + "," + pan + "," + tilt + "," + fov + ",Float";
+}
+
+
+function openNaverPastRoadviewV666() {
+  var url = buildNaverRoadviewHistoryUrlV666();
+  if (!url) {
+    alert("네이버 거리뷰가 준비된 후 다시 눌러 주세요.");
+    return;
+  }
+
+  var opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (opened) opened.opener = null;
+}
+
+
 function updateNaverPanoramaInfoV653() {
   var info = document.getElementById("naverRoadviewCaptureInfo");
   if (!info || !naverRoadviewInstanceV653) return;
@@ -2560,6 +2620,7 @@ function showNaverRoadviewUnavailableV664(message, sequence) {
 
   naverRoadviewLoadingV653 = false;
   clearNaverRoadviewTimersV658();
+  setNaverRoadviewHistoryReadyV666(false);
 
   if (status) {
     status.textContent = message || "주변에서 네이버 거리뷰를 찾지 못했습니다. 카카오맵은 위 탭에서 직접 선택할 수 있습니다.";
@@ -2607,6 +2668,7 @@ function markNaverRoadviewReadyV658() {
   naverRoadviewLoadingV653 = false;
   naverRoadviewLastTargetKeyV658 = naverRoadviewActiveTargetKeyV658;
   clearNaverRoadviewTimersV658();
+  setNaverRoadviewHistoryReadyV666(true);
 
   status.textContent = "네이버 거리뷰 연결 완료";
   status.className = "roadview-inline-status success";
@@ -2690,6 +2752,7 @@ function bindNaverRoadviewEventsV658() {
       if (statusValue === "OK") {
         markNaverRoadviewReadyV658();
       } else if (statusValue === "ERROR") {
+        setNaverRoadviewHistoryReadyV666(false);
         if (naverRoadviewRequestReadyV658) {
           var status = document.getElementById("naverRoadviewModalStatus");
           if (status) {
@@ -2740,6 +2803,7 @@ function prepareNaverRoadviewRequestV658(sequence) {
   naverRoadviewCandidatesV658 = buildNaverRoadviewCandidatesV658(currentRoadviewCoords);
   naverRoadviewActiveTargetKeyV658 = getNaverRoadviewTargetKeyV658(currentRoadviewCoords);
   clearNaverRoadviewTimersV658();
+  setNaverRoadviewHistoryReadyV666(false);
 
   naverRoadviewFallbackTimerV653 = setTimeout(function() {
     if (
@@ -2987,6 +3051,9 @@ function switchRoadviewMode(mode) {
   naverButton.setAttribute("aria-selected", naverActive ? "true" : "false");
   roadviewButton.setAttribute("aria-selected", kakaoActive ? "true" : "false");
   mapButton.setAttribute("aria-selected", mapActive ? "true" : "false");
+  setNaverRoadviewHistoryReadyV666(
+    naverActive && naverRoadviewRequestReadyV658
+  );
 
   if (naverActive) {
     startNaverRoadviewV653(roadviewOpenSequenceV653);
@@ -3178,6 +3245,7 @@ function openKakaoRoadview(encodedKey) {
   status.className = "roadview-inline-status loading";
   naverStatus.textContent = "네이버 최신 거리뷰를 찾고 있습니다.";
   naverStatus.className = "roadview-inline-status loading";
+  setNaverRoadviewHistoryReadyV666(false);
 
   container.innerHTML = "";
   if (naverInfo) {
@@ -3288,6 +3356,7 @@ function closeRoadviewModal() {
 
   roadviewOpenSequenceV653 += 1;
   clearNaverRoadviewTimersV658();
+  setNaverRoadviewHistoryReadyV666(false);
   naverRoadviewRequestReadyV658 = false;
   naverRoadviewRequestSequenceV658 = roadviewOpenSequenceV653;
   roadviewInstance = null;

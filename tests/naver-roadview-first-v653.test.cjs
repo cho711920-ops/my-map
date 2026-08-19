@@ -46,7 +46,7 @@ assert.match(script, /function isInvalidNaverMapsKeyV662/);
 
 assert.match(css, /#naverRoadviewTabBtn\.active/);
 assert.match(css, /\.naver-roadview-capture-info-v653/);
-assert.match(html, /script\.js\?v=6\.10\.5-unique-linked-selection/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.44-filter-chips-selection/);
+assert.match(html, /script\.js\?v=6\.10\.6-naver-history-deeplink/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.45-naver-history-button/);
 
 console.log("NAVER-first roadview v6.5.53 tests passed");

@@ -37,7 +37,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.6-alternate-parcel-notice">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.44-filter-chips-selection">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.45-naver-history-button">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.20.7-customer-delete">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
   <link rel="stylesheet" href="css/operations-admin-v1.css?v=1.0.0-history-roles">
@@ -632,6 +632,17 @@
         >네이버맵</button>
 
         <button
+          id="naverRoadviewHistoryBtn"
+          type="button"
+          class="roadview-history-button-v666"
+          onclick="openNaverPastRoadviewV666()"
+          aria-label="공식 네이버 지도에서 과거 촬영사진 보기"
+          aria-disabled="true"
+          title="네이버 거리뷰를 불러온 뒤 사용할 수 있습니다."
+          disabled
+        >과거사진 보기 ↗</button>
+
+        <button
           id="roadviewTabBtn"
           type="button"
           class="roadview-view-tab"
@@ -696,7 +707,7 @@
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard" src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"></script>
 <script data-auth-critical src="js/unified-listings-v8.js?v=8.1.33-unique-linked-selection"></script>
 <script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds"></script>
-<script data-auth-critical src="js/script.js?v=6.10.5-unique-linked-selection"></script>
+<script data-auth-critical src="js/script.js?v=6.10.6-naver-history-deeplink"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.1.0-fast-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>

@@ -20,7 +20,7 @@ test("property list keeps a bounded bidirectional render window", () => {
   assert.match(style, /#list \.list-virtual-top-spacer-v1/);
   assert.match(script, /data-list-card-id-v681/);
   assert.match(script, /return actionSelectionKeyV660\(item\) \|\| "__list_index_" \+ index/);
-  assert.match(html, /js\/script\.js\?v=6\.10\.5-unique-linked-selection/);
+  assert.match(html, /js\/script\.js\?v=6\.10\.6-naver-history-deeplink/);
 });
 
 test("listing workflow no longer exposes legacy Google Sheet wording", () => {

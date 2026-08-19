@@ -2067,6 +2067,41 @@
   white-space: nowrap;
 }
 
+.roadview-history-button-v666 {
+  min-width: 112px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid #9bd8b5;
+  border-radius: 7px;
+  background: #f2fbf6;
+  color: #08783b;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+
+.roadview-history-button-v666:hover:not(:disabled) {
+  border-color: #03a94d;
+  background: #e5f8ed;
+  color: #036b32;
+}
+
+.roadview-history-button-v666:focus-visible {
+  outline: 3px solid rgba(3, 199, 90, .24);
+  outline-offset: 2px;
+}
+
+.roadview-history-button-v666:disabled {
+  border-color: #d8dee8;
+  background: #f6f7f9;
+  color: #98a2b3;
+  cursor: wait;
+}
+
 #naverRoadviewTabBtn.active {
   border-color: #03a94d !important;
   background: #03c75a !important;
@@ -2141,6 +2176,13 @@
     font-size: 11px !important;
   }
 
+  .roadview-history-button-v666 {
+    min-width: 96px;
+    height: 34px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
   .naver-roadview-capture-info-v653 {
     left: 10px;
     bottom: 10px;
@@ -2148,6 +2190,29 @@
     max-width: calc(100% - 20px);
     padding: 10px 12px;
   }
+}
+
+@media (max-width: 420px) {
+  .roadview-view-tabs {
+    gap: 3px !important;
+  }
+
+  .roadview-view-tab {
+    min-width: 56px !important;
+    padding: 0 6px !important;
+  }
+
+  .roadview-history-button-v666 {
+    min-width: 88px;
+    padding: 0 6px;
+  }
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-history-button-v666 {
+  height: 32px !important;
+  min-width: 96px !important;
+  padding: 0 7px !important;
+  font-size: 11px !important;
 }
 
 /* v8.0.44 - 적용 필터 칩 + 매물/지도 선택 연결 강조 */

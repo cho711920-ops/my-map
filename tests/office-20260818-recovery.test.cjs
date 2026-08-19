@@ -14,7 +14,7 @@ const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 test("the August 18 module split loads extracted code in dependency order", () => {
   const styleIndex = html.indexOf("css/style.css?v=6.10.0-module-split");
   const overrideIndex = html.indexOf("css/app-final-overrides-v690.css?v=1.0.0");
-  const mainIndex = html.indexOf("js/script.js?v=6.10.5-unique-linked-selection");
+  const mainIndex = html.indexOf("js/script.js?v=6.10.6-naver-history-deeplink");
   const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.1-linked-selection");
 
   assert.ok(styleIndex >= 0 && styleIndex < overrideIndex);
@@ -35,7 +35,7 @@ test("compact cards show only the elevator-presence icon while register details 
   assert.doesNotMatch(main, /item-elevator-capacity-v820/);
   assert.doesNotMatch(style, /\.item-elevator-v650/);
   assert.match(unifiedCss, /\.item-elevator-v650/);
-  assert.match(html, /unified-listings-v8\.css\?v=8\.0\.44-filter-chips-selection/);
+  assert.match(html, /unified-listings-v8\.css\?v=8\.0\.45-naver-history-button/);
 });
 
 test("quick add waits for a confirmed D1 persistence result before clearing input", () => {
