@@ -39,6 +39,6 @@ assert.match(
 );
 
 assert.match(html, /script\.js\?v=6\.10\.6-naver-history-deeplink/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.45-naver-history-button/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.46-roadview-polish/);
 
 console.log("NAVER split roadview v6.5.54 tests passed");

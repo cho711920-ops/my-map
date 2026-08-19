@@ -37,7 +37,7 @@
 <link rel="stylesheet" href="css/regional-market-v1.css?v=1.0.5-readable">
 <link rel="stylesheet" href="css/building-register-v6.css?v=6.5.6-alternate-parcel-notice">
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
-<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.45-naver-history-button">
+<link rel="stylesheet" href="css/unified-listings-v8.css?v=8.0.46-roadview-polish">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.20.7-customer-delete">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.23.12-review-card-overlap">
   <link rel="stylesheet" href="css/operations-admin-v1.css?v=1.0.0-history-roles">
@@ -621,44 +621,54 @@
 
   <div class="roadview-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="roadviewModalTitle">
     <div class="roadview-modal-header">
-      <div class="roadview-view-tabs" role="tablist" aria-label="네이버 거리뷰, 카카오 로드뷰, 지도 전환">
-        <button
-          id="naverRoadviewTabBtn"
-          type="button"
-          class="roadview-view-tab active"
-          onclick="switchRoadviewMode('naver')"
-          role="tab"
-          aria-selected="true"
-        >네이버맵</button>
+      <div class="roadview-view-controls-v667">
+        <div class="roadview-view-tabs" role="tablist" aria-label="네이버 거리뷰, 카카오 로드뷰, 지도 전환">
+          <button
+            id="naverRoadviewTabBtn"
+            type="button"
+            class="roadview-view-tab active"
+            onclick="switchRoadviewMode('naver')"
+            role="tab"
+            aria-selected="true"
+          >네이버맵</button>
 
-        <button
-          id="naverRoadviewHistoryBtn"
-          type="button"
-          class="roadview-history-button-v666"
-          onclick="openNaverPastRoadviewV666()"
-          aria-label="공식 네이버 지도에서 과거 촬영사진 보기"
-          aria-disabled="true"
-          title="네이버 거리뷰를 불러온 뒤 사용할 수 있습니다."
-          disabled
-        >과거사진 보기 ↗</button>
+          <button
+            id="naverRoadviewHistoryBtn"
+            type="button"
+            class="roadview-history-button-v666"
+            onclick="openNaverPastRoadviewV666()"
+            aria-label="공식 네이버 지도에서 과거 촬영사진 보기"
+            aria-disabled="true"
+            title="네이버 거리뷰를 불러온 뒤 사용할 수 있습니다."
+            disabled
+          >
+            <svg class="roadview-history-icon-v667" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"></path>
+              <path d="M4 4v4.6h4.6"></path>
+              <path d="M12 7.5v4.8l3 1.7"></path>
+            </svg>
+            <span>과거사진 보기</span><span class="roadview-external-mark-v667" aria-hidden="true">↗</span>
+          </button>
 
-        <button
-          id="roadviewTabBtn"
-          type="button"
-          class="roadview-view-tab"
-          onclick="switchRoadviewMode('kakao')"
-          role="tab"
-          aria-selected="false"
-        >카카오맵</button>
+          <button
+            id="roadviewTabBtn"
+            type="button"
+            class="roadview-view-tab"
+            onclick="switchRoadviewMode('kakao')"
+            role="tab"
+            aria-selected="false"
+          >카카오맵</button>
 
-        <button
-          id="roadviewMapTabBtn"
-          type="button"
-          class="roadview-view-tab"
-          onclick="switchRoadviewMode('map')"
-          role="tab"
-          aria-selected="false"
-        >지도</button>
+          <button
+            id="roadviewMapTabBtn"
+            type="button"
+            class="roadview-view-tab"
+            onclick="switchRoadviewMode('map')"
+            role="tab"
+            aria-selected="false"
+          >지도</button>
+        </div>
+        <span class="roadview-header-divider-v667" aria-hidden="true"></span>
       </div>
 
       <div class="roadview-modal-heading">
@@ -684,6 +694,10 @@
           </div>
           <aside class="naver-roadview-map-panel-v654" aria-label="네이버 거리뷰 연동 지도">
             <div id="naverRoadviewMapV654" class="naver-roadview-map-v654"></div>
+            <div class="naver-roadview-map-legend-v667" aria-label="지도 위치 안내">
+              <span><i class="target" aria-hidden="true"></i>매물 위치</span>
+              <span><i class="current" aria-hidden="true"></i>현재 거리뷰</span>
+            </div>
             <div class="naver-roadview-map-help-v654">파란 도로를 누르면 해당 위치의 거리뷰로 이동합니다.</div>
           </aside>
         </div>

@@ -1059,8 +1059,10 @@
 }
 
 .naver-roadview-panorama-panel-v654 {
-  border-right: 1px solid rgba(15, 23, 42, .2);
+  z-index: 1;
+  border-right: 1px solid #cbd5e1;
   background: #101827;
+  box-shadow: 5px 0 16px rgba(15, 23, 42, .08);
 }
 
 .naver-roadview-map-panel-v654 {
@@ -1073,6 +1075,7 @@
 
 #naverRoadviewPane .naver-map-auth-failed-v663 > .naver-roadview-panorama-panel-v654 {
   border-right: 0;
+  box-shadow: none;
 }
 
 #naverRoadviewPane .naver-map-auth-failed-v663 > .naver-roadview-map-panel-v654 {
@@ -1105,6 +1108,50 @@
   line-height: 1.25;
   text-align: center;
   pointer-events: none;
+}
+
+.naver-roadview-map-legend-v667 {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 10px;
+  border: 1px solid rgba(15, 23, 42, .12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .94);
+  color: #344054;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .14);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.naver-roadview-map-legend-v667 span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.naver-roadview-map-legend-v667 i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, .14);
+}
+
+.naver-roadview-map-legend-v667 i.target {
+  background: #1877f2;
+}
+
+.naver-roadview-map-legend-v667 i.current {
+  background: #0cbf7a;
 }
 
 .naver-roadview-direction-marker-v654 {
@@ -1191,6 +1238,14 @@
   .naver-roadview-map-help-v654 {
     bottom: 10px;
     font-size: 11px;
+  }
+
+  .naver-roadview-map-legend-v667 {
+    top: 10px;
+    right: 10px;
+    gap: 7px;
+    padding: 6px 8px;
+    font-size: 10px;
   }
 }
 
@@ -2061,6 +2116,33 @@
   gap: 4px !important;
 }
 
+.roadview-view-controls-v667 {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.roadview-header-divider-v667 {
+  width: 1px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #d8e0ea;
+}
+
+#roadviewModal.roadview-modal .roadview-modal-heading {
+  min-width: 0;
+  overflow: hidden;
+}
+
+#roadviewModal.roadview-modal .roadview-modal-title,
+#roadviewModal.roadview-modal .roadview-modal-address {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .roadview-view-tab {
   min-width: 74px !important;
   padding: 0 10px !important;
@@ -2068,13 +2150,17 @@
 }
 
 .roadview-history-button-v666 {
+  display: inline-flex;
   min-width: 112px;
   height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   padding: 0 11px;
-  border: 1px solid #9bd8b5;
+  border: 1px solid #cbd5e1;
   border-radius: 7px;
-  background: #f2fbf6;
-  color: #08783b;
+  background: #fff;
+  color: #475569;
   font-family: inherit;
   font-size: 12px;
   font-weight: 850;
@@ -2085,9 +2171,9 @@
 }
 
 .roadview-history-button-v666:hover:not(:disabled) {
-  border-color: #03a94d;
-  background: #e5f8ed;
-  color: #036b32;
+  border-color: #6fcf97;
+  background: #f0fbf5;
+  color: #08783b;
 }
 
 .roadview-history-button-v666:focus-visible {
@@ -2100,6 +2186,23 @@
   background: #f6f7f9;
   color: #98a2b3;
   cursor: wait;
+}
+
+.roadview-history-icon-v667 {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.roadview-external-mark-v667 {
+  margin-left: -2px;
+  font-size: 11px;
+  line-height: 1;
 }
 
 #naverRoadviewTabBtn.active {
@@ -2170,6 +2273,14 @@
 }
 
 @media (max-width: 768px) {
+  .roadview-view-controls-v667 {
+    gap: 0;
+  }
+
+  .roadview-header-divider-v667 {
+    display: none;
+  }
+
   .roadview-view-tab {
     min-width: 64px !important;
     padding: 0 7px !important;
@@ -2213,6 +2324,14 @@
   min-width: 96px !important;
   padding: 0 7px !important;
   font-size: 11px !important;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-view-controls-v667 {
+  gap: 9px;
+}
+
+#roadviewModal.roadview-modal.aiv-tablet-landscape .roadview-header-divider-v667 {
+  height: 20px;
 }
 
 /* v8.0.44 - 적용 필터 칩 + 매물/지도 선택 연결 강조 */

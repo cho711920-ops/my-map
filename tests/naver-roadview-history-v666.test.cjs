@@ -13,7 +13,7 @@ const css = fs.readFileSync(
 
 assert.match(
   html,
-  /id="naverRoadviewTabBtn"[\s\S]*?id="naverRoadviewHistoryBtn"[\s\S]*?과거사진 보기 ↗[\s\S]*?id="roadviewTabBtn"/,
+  /id="naverRoadviewTabBtn"[\s\S]*?id="naverRoadviewHistoryBtn"[\s\S]*?과거사진 보기[\s\S]*?↗[\s\S]*?id="roadviewTabBtn"/,
   "과거사진 버튼은 네이버맵과 카카오맵 사이에 있어야 합니다."
 );
 assert.match(html, /id="naverRoadviewHistoryBtn"[\s\S]*?disabled/);
@@ -21,7 +21,7 @@ assert.match(html, /onclick="openNaverPastRoadviewV666\(\)"/);
 assert.match(css, /\.roadview-history-button-v666/);
 assert.match(css, /\.roadview-history-button-v666:disabled/);
 assert.match(html, /script\.js\?v=6\.10\.6-naver-history-deeplink/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.0\.45-naver-history-button/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.0\.46-roadview-polish/);
 
 const start = script.indexOf("function setNaverRoadviewHistoryReadyV666");
 const end = script.indexOf("function updateNaverPanoramaInfoV653", start);
