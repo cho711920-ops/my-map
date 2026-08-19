@@ -7,6 +7,8 @@ const html = fs.readFileSync("index.html", "utf8");
 const script = fs.readFileSync("js/script.js", "utf8");
 const mapSource = fs.readFileSync("js/map.js", "utf8");
 const unifiedSource = fs.readFileSync("js/unified-listings-v8.js", "utf8");
+const analysisSource = fs.readFileSync("js/analysis.js", "utf8");
+const propertyEditSource = fs.readFileSync("js/property-edit-v648.js", "utf8");
 const desktopCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 const mobileCss = fs.readFileSync("css/mobile-app-v1.css", "utf8");
 
@@ -16,6 +18,26 @@ function chipRuntime() {
   const end = script.indexOf(endMarker, start) + endMarker.length;
   assert.ok(start >= 0 && end > start, "filter chip runtime should be extractable");
   return script.slice(start, end);
+}
+
+function linkedSelectionRuntime() {
+  const identityStart = script.indexOf("function actionSelectionKeyV660");
+  const identityEndMarker = "window.clearLinkedListingSelectionV845 = clearLinkedListingSelectionV845;";
+  const identityEnd = script.indexOf(identityEndMarker, identityStart) + identityEndMarker.length;
+  const selectionStart = mapSource.indexOf("function selectListingOnMapV844");
+  const selectionEndMarker = "window.selectListingOnMapV844 = selectListingOnMapV844;";
+  const selectionEnd = mapSource.indexOf(selectionEndMarker, selectionStart) + selectionEndMarker.length;
+  assert.ok(identityStart >= 0 && identityEnd > identityStart);
+  assert.ok(selectionStart >= 0 && selectionEnd > selectionStart);
+  return script.slice(identityStart, identityEnd) + "\n" +
+    mapSource.slice(selectionStart, selectionEnd);
+}
+
+function savedListRuntime() {
+  const start = mapSource.indexOf("function findItemsBySavedKeys");
+  const end = mapSource.indexOf("function restoreAutoUpdateViewState", start);
+  assert.ok(start >= 0 && end > start);
+  return mapSource.slice(start, end);
 }
 
 function input(value = "") {
@@ -35,9 +57,11 @@ test("active filter chips are mounted below the listing toolbar with cache-buste
   const chipIndex = html.indexOf('id="activeFilterChipsV844"');
   const listIndex = html.indexOf('id="list"');
   assert.ok(toolbarIndex >= 0 && chipIndex > toolbarIndex && listIndex > chipIndex);
-  assert.match(html, /script\.js\?v=6\.10\.4-filter-chips-selection/);
-  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.32-linked-selection/);
-  assert.match(html, /map\.js\?v=8\.2\.17-linked-selection/);
+  assert.match(html, /script\.js\?v=6\.10\.5-unique-linked-selection/);
+  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.33-unique-linked-selection/);
+  assert.match(html, /map\.js\?v=8\.2\.18-unique-linked-selection/);
+  assert.match(html, /analysis\.js\?v=6\.3\.41-unique-linked-selection/);
+  assert.match(html, /property-edit-v648\.js\?v=1\.0\.1-linked-selection/);
   assert.match(html, /unified-listings-v8\.css\?v=8\.0\.44-filter-chips-selection/);
   assert.match(html, /mobile-app-v1\.css\?v=1\.0\.7-filter-chips-selection/);
   assert.match(script, /drawItems\(filtered\);\s*renderActiveFilterChipsV844\(\);/);
@@ -107,11 +131,67 @@ test("one chip clears only its own condition and refreshes filtering", () => {
 });
 
 test("selected listing card and its current map cluster use one strong blue state", () => {
-  assert.match(script, /selectedItemKey === item\.key \? " selected"/);
+  assert.match(script, /isLinkedListingSelectedV845\(item\) \? " selected"/);
   assert.match(unifiedSource, /handleCardClick[\s\S]*?global\.selectListingOnMapV844\(item\)[\s\S]*?open\(encodeURIComponent\(propertyId\)\)/);
-  assert.match(mapSource, /function selectListingOnMapV844\(item\)[\s\S]*?selectedGroupKey\s*=[\s\S]*?matchedOverlay[\s\S]*?redrawSelectedMarkers\(\)/);
-  assert.match(mapSource, /card\.classList\.toggle\([\s\S]*?"selected"[\s\S]*?data-listing-key/);
+  assert.match(mapSource, /function selectListingOnMapV844\(item\)[\s\S]*?selectedListCardIdV845\s*=[\s\S]*?matchedOverlay[\s\S]*?redrawSelectedMarkers\(\)/);
+  assert.match(mapSource, /card\.classList\.toggle\([\s\S]*?"selected"[\s\S]*?data-list-card-id-v681/);
+  assert.match(analysisSource, /function openAiSidePanel\(item\)[\s\S]*?selectListingOnMapV844\(item\)/);
+  assert.match(propertyEditSource, /clearLinkedListingSelectionV845\(\)/);
   assert.match(desktopCss, /#list \.item\.selected[\s\S]*?inset 4px 0 0 #0568e8/);
   assert.match(desktopCss, /\.circle-marker\.selected[\s\S]*?--cluster-fill: rgba\(5, 104, 232, \.98\)/);
   assert.match(mobileCss, /\.js-mobile-app-v1 #list \.item\.selected[\s\S]*?inset 4px 0 0 #0568e8/);
+});
+
+test("same-address same-floor listings keep card and cluster selection independent", () => {
+  const first = { key: "same-address|1층|일반상가", propertyId: "M-first", sheetRow: 21 };
+  const second = { key: "same-address|1층|일반상가", propertyId: "M-second", sheetRow: 22 };
+  const selectedStates = [false, false];
+  const cardIds = ["property:M-first|row:21", "property:M-second|row:22"];
+  const cards = cardIds.map((cardId, index) => ({
+    getAttribute: (name) => name === "data-list-card-id-v681" ? cardId : null,
+    classList: { toggle: (name, enabled) => { if (name === "selected") selectedStates[index] = enabled; } }
+  }));
+  let redrawCount = 0;
+  const context = {
+    console,
+    selectedItemKey: null,
+    selectedListCardIdV845: null,
+    selectedGroupKey: null,
+    multiClusterMode: false,
+    overlays: [
+      { __cluster: { key: "cluster-first", items: [first] } },
+      { __cluster: { key: "cluster-second", items: [second] } }
+    ],
+    redrawSelectedMarkers: () => { redrawCount += 1; },
+    document: { querySelectorAll: () => cards }
+  };
+  context.window = context;
+  vm.createContext(context);
+  vm.runInContext(linkedSelectionRuntime(), context);
+
+  context.selectListingOnMapV844(second);
+
+  assert.equal(context.selectedItemKey, second.key);
+  assert.equal(context.selectedListCardIdV845, cardIds[1]);
+  assert.equal(context.selectedGroupKey, "cluster-second");
+  assert.deepEqual(selectedStates, [false, true]);
+  assert.equal(redrawCount, 1);
+});
+
+test("automatic refresh restores separate same-key cards in their original order", () => {
+  const first = { key: "same-address|1층|일반상가", propertyId: "M-first", sheetRow: 21 };
+  const second = { key: "same-address|1층|일반상가", propertyId: "M-second", sheetRow: 22 };
+  const context = {
+    allItems: [second, first],
+    getLinkedSelectionCardIdV845: (item) => `property:${item.propertyId}|row:${item.sheetRow}`
+  };
+  vm.createContext(context);
+  vm.runInContext(savedListRuntime(), context);
+
+  const restored = context.findItemsBySavedKeys(
+    [first.key, second.key],
+    ["property:M-first|row:21", "property:M-second|row:22"]
+  );
+
+  assert.deepEqual(Array.from(restored, (item) => item.propertyId), ["M-first", "M-second"]);
 });

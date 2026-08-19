@@ -58,5 +58,5 @@ test("listing cards accept explicit manual memo contacts but reject provider pho
   assert.equal(JSON.stringify(contacts.map((contact) => [contact.role, contact.phone.display])),
     JSON.stringify([["임", "010-5555-6666"], ["세", "010-7777-8888"]]));
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-assert.match(html, /js\/script\.js\?v=6\.10\.4-filter-chips-selection/);
+assert.match(html, /js\/script\.js\?v=6\.10\.5-unique-linked-selection/);
 });

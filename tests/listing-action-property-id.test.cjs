@@ -50,7 +50,7 @@ assert(
   "card checkboxes must carry the property ID selection target"
 );
 assert(
-  html.includes("script.js?v=6.10.4-filter-chips-selection"),
+  html.includes("script.js?v=6.10.5-unique-linked-selection"),
   "the production page must load the fixed script cache version"
 );
 

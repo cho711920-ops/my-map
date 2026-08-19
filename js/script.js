@@ -8,6 +8,7 @@ var currentItems = [];
 var overlays = [];
 var selectedGroupKey = null;
 var selectedItemKey = null;
+var selectedListCardIdV845 = null;
 var favoriteOnly = false;
 var doneViewStorageKeyV656 = "JS_REAL_ESTATE_DONE_VIEW_V1";
 var hideDone = true;
@@ -4244,7 +4245,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var customerMatchStatusV719 = getCustomerMatchStatus(item, customerMatchContextV719);
   div.className =
     "item" +
-    (selectedItemKey === item.key ? " selected" : "") +
+    (isLinkedListingSelectedV845(item) ? " selected" : "") +
     (isDone(item) ? " done" : "") +
     (printSelected ? " print-selected" : "") +
     (memoOpen ? " memo-open" : "") +
@@ -4661,7 +4662,7 @@ function resetFilter() {
     window.mapRadiusFilterV658 = null;
   }
   selectedGroupKey = null;
-  selectedItemKey = null;
+  clearLinkedListingSelectionV845();
   if (typeof clearPinnedClusterSelectionV6515 === "function") {
     clearPinnedClusterSelectionV6515(false);
   }
@@ -4826,6 +4827,28 @@ function actionSelectionKeyV660(item) {
 }
 
 window.actionSelectionKeyV660 = actionSelectionKeyV660;
+
+
+function getLinkedSelectionCardIdV845(item) {
+  return actionSelectionKeyV660(item);
+}
+
+
+function isLinkedListingSelectedV845(item) {
+  if (!item || !selectedItemKey || !selectedListCardIdV845) return false;
+  return selectedItemKey === item.key &&
+    selectedListCardIdV845 === getLinkedSelectionCardIdV845(item);
+}
+
+
+function clearLinkedListingSelectionV845() {
+  selectedItemKey = null;
+  selectedListCardIdV845 = null;
+}
+
+
+window.getLinkedSelectionCardIdV845 = getLinkedSelectionCardIdV845;
+window.clearLinkedListingSelectionV845 = clearLinkedListingSelectionV845;
 
 function togglePrintSelection(encodedKey) {
   var key = decodeURIComponent(encodedKey);
@@ -5161,7 +5184,7 @@ function toggleGongsilOnly() {
   }
 
   selectedGroupKey = null;
-  selectedItemKey = null;
+  clearLinkedListingSelectionV845();
   if (typeof clearPinnedClusterSelectionV6515 === "function") {
     clearPinnedClusterSelectionV6515(false);
   }
@@ -5178,7 +5201,7 @@ function toggleMultiClusterMode() {
   if (!multiClusterMode) {
     selectedGroupKeys = [];
     selectedGroupKey = null;
-    selectedItemKey = null;
+    clearLinkedListingSelectionV845();
     if (typeof clearPinnedClusterSelectionV6515 === "function") {
       clearPinnedClusterSelectionV6515(false);
     }
@@ -5366,7 +5389,7 @@ function refreshDoneViewFilterV656() {
   saveDoneViewModeV656();
   updateHideDoneMenuUI();
   selectedGroupKey = null;
-  selectedItemKey = null;
+  clearLinkedListingSelectionV845();
   if (typeof clearPinnedClusterSelectionV6515 === "function") {
     clearPinnedClusterSelectionV6515(false);
   }

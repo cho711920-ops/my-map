@@ -803,11 +803,21 @@
         return text(item && item.propertyId) !== sourceMasterId;
       });
     });
-    if (text(global.selectedItemKey)) {
+    if (text(global.selectedItemKey) || text(global.selectedListCardIdV845)) {
       var selectedStillExists = (global.allItems || []).some(function(item) {
+        if (text(global.selectedListCardIdV845) && typeof global.getLinkedSelectionCardIdV845 === "function") {
+          return text(global.getLinkedSelectionCardIdV845(item)) === text(global.selectedListCardIdV845);
+        }
         return text(item && item.key) === text(global.selectedItemKey);
       });
-      if (!selectedStillExists) global.selectedItemKey = null;
+      if (!selectedStillExists) {
+        if (typeof global.clearLinkedListingSelectionV845 === "function") {
+          global.clearLinkedListingSelectionV845();
+        } else {
+          global.selectedItemKey = null;
+          global.selectedListCardIdV845 = null;
+        }
+      }
     }
     attach(global.allItems || [], {groups: state.groups});
     if (typeof global.applyFilter === "function") global.applyFilter();

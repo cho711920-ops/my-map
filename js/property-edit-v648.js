@@ -451,6 +451,9 @@ function savePropertyEditV630() {
 
     if (selectedItemKey === oldKey || selectedItemKey === item.key) {
       selectedItemKey = item.key;
+      selectedListCardIdV845 = typeof getLinkedSelectionCardIdV845 === "function"
+        ? getLinkedSelectionCardIdV845(item)
+        : (typeof selectedListCardIdV845 !== "undefined" ? selectedListCardIdV845 : null);
     }
 
     propertyEditSavingV630 = false;
@@ -672,7 +675,12 @@ function deletePropertyV648() {
       modal.setAttribute("aria-hidden", "true");
     }
 
-    selectedItemKey = null;
+    if (typeof clearLinkedListingSelectionV845 === "function") {
+      clearLinkedListingSelectionV845();
+    } else {
+      selectedItemKey = null;
+      selectedListCardIdV845 = null;
+    }
     selectedGroupKey = null;
     selectedGroupKeys = [];
     if (typeof clearPinnedClusterSelectionV6515 === "function") {
@@ -703,4 +711,3 @@ function deletePropertyV648() {
     alert(message);
   });
 }
-

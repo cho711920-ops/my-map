@@ -367,7 +367,12 @@ function clearPinnedClusterSelectionV6515(clearSelection) {
   if (!clearSelection) return;
   selectedGroupKey = null;
   selectedGroupKeys = [];
-  selectedItemKey = null;
+  if (typeof clearLinkedListingSelectionV845 === "function") {
+    clearLinkedListingSelectionV845();
+  } else {
+    selectedItemKey = null;
+    selectedListCardIdV845 = null;
+  }
   jsClusterSelectionMemoryV638.singleItemIds = [];
   jsClusterSelectionMemoryV638.multiItemIdGroups = [];
 }
@@ -592,16 +597,24 @@ function findBestClusterOverlayV638(itemIdentities, preferredIdentity, usedKeys)
 
 
 function captureClusterSelectionSnapshotV638() {
-  var selectedItem = selectedItemKey
+  var selectedItem = selectedListCardIdV845 && typeof getLinkedSelectionCardIdV845 === "function"
     ? (allItems || []).find(function(item) {
-        return item && item.key === selectedItemKey;
+        return getLinkedSelectionCardIdV845(item) === selectedListCardIdV845;
       }) || null
     : null;
+  if (!selectedItem && selectedItemKey) {
+    selectedItem = (allItems || []).find(function(item) {
+      return item && item.key === selectedItemKey;
+    }) || null;
+  }
 
   if (!selectedItem && selectedItemKey) {
     (overlays || []).some(function(overlay) {
       selectedItem = ((overlay && overlay.__cluster && overlay.__cluster.items) || []).find(function(item) {
-        return item && item.key === selectedItemKey;
+        if (!item) return false;
+        return selectedListCardIdV845 && typeof getLinkedSelectionCardIdV845 === "function"
+          ? getLinkedSelectionCardIdV845(item) === selectedListCardIdV845
+          : item.key === selectedItemKey;
       }) || null;
       return !!selectedItem;
     });
@@ -660,7 +673,12 @@ function restoreClusterSelectionSnapshotV638(snapshot) {
 
   var preferredIdentity = snapshot.selectedItemIdentity || "";
   var restoredItem = findItemByStableIdentityV638(preferredIdentity);
-  if (restoredItem) selectedItemKey = restoredItem.key;
+  if (restoredItem) {
+    selectedItemKey = restoredItem.key;
+    selectedListCardIdV845 = typeof getLinkedSelectionCardIdV845 === "function"
+      ? getLinkedSelectionCardIdV845(restoredItem)
+      : "";
+  }
 
   if (snapshot.multiClusterMode) {
     var usedKeys = Object.create(null);
@@ -1486,12 +1504,18 @@ function captureAutoUpdateViewState() {
 
   return {
     selectedItemKey: selectedItemKey || "",
+    selectedListCardIdV845: selectedListCardIdV845 || "",
     selectedGroupKey: selectedGroupKey || "",
     selectedGroupKeys: (selectedGroupKeys || []).slice(),
     multiClusterMode: !!multiClusterMode,
     clusterSelection: clusterSelection,
     visibleKeys: (visibleListItems || []).map(function(item) {
       return item.key;
+    }),
+    visibleListCardIdsV845: (visibleListItems || []).map(function(item) {
+      return typeof getLinkedSelectionCardIdV845 === "function"
+        ? getLinkedSelectionCardIdV845(item)
+        : "";
     }),
     sidebarScrollTop: sidebar ? sidebar.scrollTop : 0,
     aiOpen: aiOpen,
@@ -1503,23 +1527,29 @@ function captureAutoUpdateViewState() {
 }
 
 
-function findItemsBySavedKeys(keys) {
-  if (!Array.isArray(keys) || !keys.length) return [];
+function findItemsBySavedKeys(keys, linkedCardIdsV845) {
+  var useLinkedCardIdsV845 = Array.isArray(linkedCardIdsV845) &&
+    linkedCardIdsV845.length === (keys || []).length &&
+    linkedCardIdsV845.some(Boolean) &&
+    typeof getLinkedSelectionCardIdV845 === "function";
+  var savedIdsV845 = useLinkedCardIdsV845 ? linkedCardIdsV845 : keys;
+  if (!Array.isArray(savedIdsV845) || !savedIdsV845.length) return [];
 
   var keySet = {};
-  keys.forEach(function(key) {
+  savedIdsV845.forEach(function(key) {
     keySet[key] = true;
   });
 
   var foundMap = {};
   (allItems || []).forEach(function(item) {
-    if (keySet[item.key]) {
-      foundMap[item.key] = item;
+    var itemIdV845 = useLinkedCardIdsV845 ? getLinkedSelectionCardIdV845(item) : item.key;
+    if (keySet[itemIdV845]) {
+      foundMap[itemIdV845] = item;
     }
   });
 
   // 기존 리스트 순서를 그대로 유지
-  return keys.map(function(key) {
+  return savedIdsV845.map(function(key) {
     return foundMap[key] || null;
   }).filter(Boolean);
 }
@@ -1531,17 +1561,24 @@ function restoreAutoUpdateViewState(state) {
   var sidebar = document.getElementById("sidebar");
   var aiBody = document.getElementById("aiSidePanelBody");
 
-  var restoredList = findItemsBySavedKeys(state.visibleKeys);
+  var restoredList = findItemsBySavedKeys(state.visibleKeys, state.visibleListCardIdsV845);
   var clusterSelection = state.clusterSelection || null;
-  var selectedItem = state.selectedItemKey
+  var selectedItem = state.selectedListCardIdV845 && typeof getLinkedSelectionCardIdV845 === "function"
     ? (allItems || []).find(function(item) {
-        return item.key === state.selectedItemKey;
+        return getLinkedSelectionCardIdV845(item) === state.selectedListCardIdV845;
       }) || null
     : null;
 
   if (!selectedItem && clusterSelection && clusterSelection.selectedItemIdentity) {
     selectedItem = findItemByStableIdentityV638(clusterSelection.selectedItemIdentity);
   }
+
+  if (!selectedItem && state.selectedItemKey) {
+    selectedItem = (allItems || []).find(function(item) {
+      return item.key === state.selectedItemKey;
+    }) || null;
+  }
+
 
   /*
    * 자동업데이트 전에 보고 있던 리스트가 남아 있으면
@@ -1553,6 +1590,9 @@ function restoreAutoUpdateViewState(state) {
   }
 
   selectedItemKey = selectedItem ? selectedItem.key : null;
+  selectedListCardIdV845 = selectedItem && typeof getLinkedSelectionCardIdV845 === "function"
+    ? getLinkedSelectionCardIdV845(selectedItem)
+    : null;
 
   /*
    * 클러스터 키가 새 렌더링 후에도 존재하면 선택 상태를 유지합니다.
@@ -2664,7 +2704,12 @@ function openCluster(encodedKey) {
   jsMapUserNavigationIntentUntilV6525 = 0;
   closeOpenListingDetailsForMapSelectionV6525();
 
-  selectedItemKey = null;
+  if (typeof clearLinkedListingSelectionV845 === "function") {
+    clearLinkedListingSelectionV845();
+  } else {
+    selectedItemKey = null;
+    selectedListCardIdV845 = null;
+  }
 
   /*
    * 다중선택 OFF: 기존처럼 한 클러스터만 표시
@@ -2787,7 +2832,11 @@ function redrawSelectedMarkers() {
 
 function selectListingOnMapV844(item) {
   if (!item || !item.key) return;
+  var linkedCardIdV845 = typeof getLinkedSelectionCardIdV845 === "function"
+    ? getLinkedSelectionCardIdV845(item)
+    : "";
   selectedItemKey = item.key;
+  selectedListCardIdV845 = linkedCardIdV845;
 
   if (!multiClusterMode) {
     var matchedOverlay = overlays.find(function(overlay) {
@@ -2795,7 +2844,10 @@ function selectListingOnMapV844(item) {
         overlay &&
         overlay.__cluster &&
         overlay.__cluster.items.some(function(clusterItem) {
-          return clusterItem && clusterItem.key === item.key;
+          if (!clusterItem) return false;
+          return linkedCardIdV845 && typeof getLinkedSelectionCardIdV845 === "function"
+            ? getLinkedSelectionCardIdV845(clusterItem) === linkedCardIdV845
+            : clusterItem.key === item.key;
         })
       );
     });
@@ -2813,7 +2865,7 @@ function selectListingOnMapV844(item) {
   document.querySelectorAll("#list .item").forEach(function(card) {
     card.classList.toggle(
       "selected",
-      card.getAttribute("data-listing-key") === String(item.key)
+      card.getAttribute("data-list-card-id-v681") === linkedCardIdV845
     );
   });
 }

@@ -14,8 +14,8 @@ const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 test("the August 18 module split loads extracted code in dependency order", () => {
   const styleIndex = html.indexOf("css/style.css?v=6.10.0-module-split");
   const overrideIndex = html.indexOf("css/app-final-overrides-v690.css?v=1.0.0");
-  const mainIndex = html.indexOf("js/script.js?v=6.10.4-filter-chips-selection");
-  const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.0");
+  const mainIndex = html.indexOf("js/script.js?v=6.10.5-unique-linked-selection");
+  const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.1-linked-selection");
 
   assert.ok(styleIndex >= 0 && styleIndex < overrideIndex);
   assert.ok(mainIndex >= 0 && mainIndex < propertyEditIndex);
@@ -58,7 +58,7 @@ test("quick add waits for a confirmed D1 persistence result before clearing inpu
 
 test("all recovered August 18 cache versions are active", () => {
   for (const asset of [
-    "js/unified-listings-v8.js?v=8.1.32-linked-selection",
+    "js/unified-listings-v8.js?v=8.1.33-unique-linked-selection",
     "js/list-manager-v6.js?v=6.4.35-shared-data-only",
     "js/operations-center-v7.js?v=7.22.5-shared-data-only",
     "js/operations-collection-v8.js?v=7.25.8-shared-data-only",

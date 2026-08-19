@@ -1993,7 +1993,14 @@ function openAiSidePanel(item) {
   if (!panel || !body) return;
 
   aiSidePanelCurrentKey = item.key || "";
-  selectedItemKey = item.key;
+  if (typeof selectListingOnMapV844 === "function") {
+    selectListingOnMapV844(item);
+  } else {
+    selectedItemKey = item.key;
+    selectedListCardIdV845 = typeof getLinkedSelectionCardIdV845 === "function"
+      ? getLinkedSelectionCardIdV845(item)
+      : null;
+  }
 
   if (subtitle) {
     subtitle.textContent = [item.name, item.address, item.room].filter(Boolean).join(" / ");

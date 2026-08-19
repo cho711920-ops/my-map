@@ -40,7 +40,7 @@ assert.match(step, /state\.pendingDetailSteps\[propertyId\]/);
 assert.match(step, /다음 사진 불러오는 중…/);
 assert.match(unified, /images\.length > 1 && Number\.isFinite\(Number\(pendingStep\)\)/);
 
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.32-linked-selection/);
-assert.match(html, /map\.js\?v=8\.2\.17-linked-selection/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.33-unique-linked-selection/);
+assert.match(html, /map\.js\?v=8\.2\.18-unique-linked-selection/);
 
 console.log("initial photo performance v8.1.30 tests passed");
