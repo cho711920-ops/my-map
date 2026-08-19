@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.4";
+  var VERSION = "2.1.5";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -9,6 +9,7 @@
    * 2천~5천 개짜리 클러스터도 누락 없이 합칠 수 있습니다.
    */
   var LIST_REQUEST_CHUNK_SIZE = 300;
+  var LIST_RETRY_DELAYS = [0, 800, 2000];
   // A single import request performs several D1 operations per listing. Keep the
   // batch below the Worker/D1 per-request query ceiling so a HTTP 200 response
   // cannot hide a mostly-failed import.
@@ -61,6 +62,7 @@
     capturedAt: 0,
     detailAuth: loadDetailAuth(),
     detailCache: {},
+    listFailures: [],
     migratedTransformItem: migratedTransformItem,
     pendingSave: null,
     dashboard: createEmptyDashboard()
@@ -575,12 +577,17 @@
       if (!items.length) {
         throw new Error("선택한 클러스터에서 매물을 찾지 못했습니다.");
       }
+      var listFailures = Array.isArray(state.listFailures)
+        ? state.listFailures.slice()
+        : [];
+      var totalItemCount = Math.max(selectedCount, items.length);
       updateDashboard({
-        found: items.length,
-        processed: 0,
-        remaining: items.length
+        found: totalItemCount,
+        processed: listFailures.length,
+        remaining: Math.max(0, totalItemCount - listFailures.length),
+        failed: listFailures.length
       });
-      setProgress(0, items.length);
+      setProgress(listFailures.length, totalItemCount);
 
       var collectorKey = getCollectorKey();
       var saveMetadata = {
@@ -588,11 +595,14 @@
         scope: selectedCount >= 2000
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
-        complete: isCompleteGongsilCapture(selectedCount, items.length),
+        complete: isCompleteGongsilCapture(selectedCount, items.length) &&
+          listFailures.length === 0,
         selectedCount: selectedCount,
-        found: items.length,
+        found: totalItemCount,
         manifestCount: items.length,
         rejectedCount: 0,
+        listFailedCount: listFailures.length,
+        listFailureReasons: listFailures.slice(0, 20),
         observedSourceIds: observedSourceIds(items),
         manifestRegistered: true
       };
@@ -607,16 +617,18 @@
         var id = recordSourceId(item);
         return classification.needs[id] || classification.refresh[id];
       });
-      var detailBaseProcessed = Math.max(0, items.length - detailItems.length);
+      var unchangedItemCount = Math.max(0, items.length - detailItems.length);
+      var detailBaseProcessed = listFailures.length + unchangedItemCount;
       updateDashboard({
-        found: items.length,
+        found: totalItemCount,
         processed: detailBaseProcessed,
         remaining: detailItems.length,
-        duplicate: detailBaseProcessed,
+        duplicate: unchangedItemCount,
         detailedDuplicates: 0,
-        skippedUnchanged: detailBaseProcessed
+        skippedUnchanged: unchangedItemCount,
+        failed: listFailures.length
       });
-      setProgress(detailBaseProcessed, items.length);
+      setProgress(detailBaseProcessed, totalItemCount);
 
       if (detailItems.length && !state.migratedTransformItem) {
         await ensureDetailAuth();
@@ -656,11 +668,11 @@
 
           completed += 1;
           updateDashboard({
-            found: items.length,
+            found: totalItemCount,
             processed: detailBaseProcessed + completed,
             remaining: Math.max(0, detailItems.length - completed)
           });
-          setProgress(detailBaseProcessed + completed, items.length);
+          setProgress(detailBaseProcessed + completed, totalItemCount);
           if (completed === detailItems.length || completed % 5 === 0) {
             setStatus(
               "매물별 상세정보·역할 연락처 확인 중",
@@ -706,23 +718,24 @@
       );
 
       saveMetadata.rejectedCount = rejected.length;
-      saveMetadata.unchanged = detailBaseProcessed;
+      saveMetadata.unchanged = unchangedItemCount;
       state.pendingSave = {
         records: transformed,
         metadata: saveMetadata,
-        itemsLength: items.length,
+        itemsLength: totalItemCount,
         rejectedReasons: rejected.slice(),
         selectedCount: selectedCount
       };
 
       updateDashboard({
-        found: items.length,
+        found: totalItemCount,
         processed: detailBaseProcessed + rejected.length,
-        remaining: transformed.length
+        remaining: transformed.length,
+        failed: listFailures.length
       });
       setProgress(
         detailBaseProcessed + rejected.length,
-        items.length
+        totalItemCount
       );
       var result = await sendToAppsScript(transformed, saveMetadata, collectorKey);
       if (!result || result.ok !== true) {
@@ -745,11 +758,14 @@
         : "공실박스 매물 전송을 완료했습니다.";
       message += saveMetadata.complete
         ? "\n완전수집 목록 " + items.length + "개를 확인하고 상세·연락처 " + detailItems.length + "개를 차등 갱신했습니다."
-        : "\n전체 " + items.length + "개 중 기존 동일 " +
-          classification.unchanged + "개는 상세조회를 생략했습니다.";
+        : "\n전체 " + totalItemCount + "개 중 기존 동일 " +
+          classification.unchanged + "개는 상세조회를 생략했습니다." +
+          (listFailures.length
+            ? " 목록조회 제외 " + listFailures.length + "개는 다음 수집 때 다시 확인합니다."
+            : "");
       updateDashboard({
-        found: items.length,
-        processed: items.length,
+        found: totalItemCount,
+        processed: totalItemCount,
         remaining: 0,
         created: result.created,
         merged: result.merged,
@@ -757,15 +773,15 @@
         conditionUpdated: result.conditionUpdated !== undefined ? result.conditionUpdated : result.updated,
         refreshed: result.refreshed,
         review: result.review,
-        duplicate: Number(result.duplicate || 0) + detailBaseProcessed,
+        duplicate: Number(result.duplicate || 0) + unchangedItemCount,
         detailedDuplicates: result.detailedDuplicates !== undefined
           ? result.detailedDuplicates
           : result.duplicate,
-        skippedUnchanged: detailBaseProcessed,
+        skippedUnchanged: unchangedItemCount,
         addressMissing: rejected.length,
         failed: result.failed
       });
-      setProgress(items.length, items.length);
+      setProgress(totalItemCount, totalItemCount);
 
       setStatus(
         result.stopped ? "공실박스 안전중단 완료" : "저장 완료",
@@ -949,6 +965,7 @@
   }
 
   async function loadAllCapturedItems(capture) {
+    state.listFailures = [];
     var byId = {};
     addItems(byId, getListItems(capture.response));
     var selectedCount = getSelectedItemCount(capture);
@@ -1061,6 +1078,7 @@
       var id = String(value == null ? "" : value).trim();
       if (!id || seen[id]) return;
       seen[id] = true;
+      if (byId[id]) return;
       entries.push({
         value: value
       });
@@ -1085,43 +1103,17 @@
     for (var offset = 0; offset < entries.length; offset += LIST_REQUEST_CHUNK_SIZE) {
       if (state.stopRequested) break;
       var chunk = entries.slice(offset, offset + LIST_REQUEST_CHUNK_SIZE);
-      var requestBody = Object.assign({}, sourceBody, {
-        // The endpoint caps one response at 400. Leave headroom because the
-        // complete secondary context can add a few related rows.
-        mxline: 400,
-        key: Number(sourceBody.key || 0) + Math.floor(offset / LIST_REQUEST_CHUNK_SIZE) + 1001
+      var filteredItems = await loadSelectedChunkWithFallback({
+        sourceBody: sourceBody,
+        primaryName: primaryName,
+        secondaryName: secondaryName,
+        secondaryRequestValues: secondaryRequestValues,
+        entries: chunk,
+        keySeed: Number(sourceBody.key || 0) +
+          Math.floor(offset / LIST_REQUEST_CHUNK_SIZE) + 1001,
+        selectedCount: selectedCount
       });
-
-      requestBody[primaryName] = chunk.map(function (entry) {
-        return entry.value;
-      });
-
-      requestBody[secondaryName] = secondaryRequestValues.slice();
-
-      var response = await originalFetch("/api/maps/lists", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(requestBody)
-      });
-      var data = await response.json();
       if (state.stopRequested) break;
-
-      if (!data || data.res !== "success") {
-        throw new Error(
-          data && data.message
-            ? data.message
-            : "공실박스 분할 목록 조회에 실패했습니다."
-        );
-      }
-
-      var chunkIds = Object.create(null);
-      chunk.forEach(function (entry) {
-        chunkIds[String(entry.value)] = true;
-      });
-      var filteredItems = getListItems(data).filter(function (item) {
-        return itemMatchesPrimaryId(item, primaryName, chunkIds);
-      });
       addItems(byId, filteredItems);
 
       if (Object.keys(byId).length > MAX_ITEMS) {
@@ -1138,6 +1130,153 @@
         Object.keys(byId).length.toLocaleString("ko-KR") + "개 확인"
       );
     }
+  }
+
+  async function loadSelectedChunkWithFallback(options) {
+    var entries = Array.isArray(options.entries) ? options.entries : [];
+    if (!entries.length || state.stopRequested) return [];
+
+    var requestBody = Object.assign({}, options.sourceBody, {
+      // The endpoint caps one response at 400. Leave headroom because the
+      // complete secondary context can add a few related rows.
+      mxline: 400,
+      key: Number(options.keySeed || 0)
+    });
+    requestBody[options.primaryName] = entries.map(function (entry) {
+      return entry.value;
+    });
+    requestBody[options.secondaryName] = options.secondaryRequestValues.slice();
+
+    try {
+      var data = await fetchGongsilListWithRetry(
+        requestBody,
+        entries.length.toLocaleString("ko-KR") + "개 목록 조회"
+      );
+      var chunkIds = Object.create(null);
+      entries.forEach(function (entry) {
+        chunkIds[String(entry.value)] = true;
+      });
+      var filteredItems = getListItems(data).filter(function (item) {
+        return itemMatchesPrimaryId(item, options.primaryName, chunkIds);
+      });
+      var returnedIds = Object.create(null);
+      filteredItems.forEach(function (item) {
+        var aliases = options.primaryName === "bfidxs"
+          ? ["Bfidx", "bfidx", "BfIdx"]
+          : ["Bidx", "bidx", "BIdx"];
+        var id = text(pick(item, aliases));
+        if (id) returnedIds[id] = true;
+      });
+      var missingEntries = entries.filter(function (entry) {
+        return !returnedIds[String(entry.value)];
+      });
+      if (!missingEntries.length) return filteredItems;
+      if (entries.length === 1) {
+        var missingId = String(entries[0].value == null ? "" : entries[0].value);
+        state.listFailures.push({
+          sourceId: missingId,
+          message: "공실박스 목록 응답에 선택 매물이 없음"
+        });
+        setStatus(
+          "목록에서 사라진 매물 1건을 분리했습니다.",
+          "매물번호 " + (missingId || "확인 불가") +
+          "은 다음 수집 때 다시 확인하고, 나머지 목록은 계속 읽습니다.\n" +
+          "기존 매물은 숨기지 않습니다."
+        );
+        return filteredItems;
+      }
+      if (missingEntries.length === entries.length) {
+        var missingMiddle = Math.ceil(entries.length / 2);
+        var missingLeft = await loadSelectedChunkWithFallback(Object.assign({}, options, {
+          entries: entries.slice(0, missingMiddle),
+          keySeed: Number(options.keySeed || 0) * 2 + 3
+        }));
+        var missingRight = await loadSelectedChunkWithFallback(Object.assign({}, options, {
+          entries: entries.slice(missingMiddle),
+          keySeed: Number(options.keySeed || 0) * 2 + 4
+        }));
+        return missingLeft.concat(missingRight);
+      }
+      var recoveredMissing = await loadSelectedChunkWithFallback(Object.assign({}, options, {
+        entries: missingEntries,
+        keySeed: Number(options.keySeed || 0) * 2 + 3
+      }));
+      return filteredItems.concat(recoveredMissing);
+    } catch (error) {
+      if (state.stopRequested) throw error;
+      if (entries.length === 1) {
+        var failedId = String(entries[0].value == null ? "" : entries[0].value);
+        state.listFailures.push({
+          sourceId: failedId,
+          message: error && error.message ? error.message : String(error)
+        });
+        setStatus(
+          "응답하지 않는 매물 1건을 분리했습니다.",
+          "매물번호 " + (failedId || "확인 불가") +
+          "은 다음 수집 때 다시 확인하고, 나머지 목록은 계속 읽습니다.\n" +
+          "기존 매물은 숨기지 않습니다."
+        );
+        return [];
+      }
+
+      var middle = Math.ceil(entries.length / 2);
+      setStatus(
+        "공실박스 목록을 더 작은 묶음으로 복구 중입니다.",
+        entries.length.toLocaleString("ko-KR") +
+        "개 요청이 반복 실패해 " + middle.toLocaleString("ko-KR") +
+        "개 이하로 나눠 자동 재시도합니다.\n창을 닫지 않아도 계속 진행됩니다."
+      );
+      var leftOptions = Object.assign({}, options, {
+        entries: entries.slice(0, middle),
+        keySeed: Number(options.keySeed || 0) * 2 + 1
+      });
+      var rightOptions = Object.assign({}, options, {
+        entries: entries.slice(middle),
+        keySeed: Number(options.keySeed || 0) * 2 + 2
+      });
+      var left = await loadSelectedChunkWithFallback(leftOptions);
+      var right = await loadSelectedChunkWithFallback(rightOptions);
+      return left.concat(right);
+    }
+  }
+
+  async function fetchGongsilListWithRetry(requestBody, label) {
+    var lastError = null;
+    for (var attempt = 0; attempt < LIST_RETRY_DELAYS.length; attempt += 1) {
+      if (state.stopRequested) throw new Error("사용자 안전중단");
+      if (LIST_RETRY_DELAYS[attempt]) await delay(LIST_RETRY_DELAYS[attempt]);
+      try {
+        var response = await originalFetch("/api/maps/lists", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(requestBody)
+        });
+        if (!response || (response.ok === false && response.status)) {
+          throw new Error("공실박스 목록 HTTP " + Number(response && response.status || 0));
+        }
+        var data = await response.json();
+        if (!data || data.res !== "success") {
+          throw new Error(
+            data && data.message
+              ? data.message
+              : "공실박스 분할 목록 조회에 실패했습니다."
+          );
+        }
+        return data;
+      } catch (error) {
+        lastError = error;
+        if (attempt + 1 < LIST_RETRY_DELAYS.length) {
+          setStatus(
+            "공실박스 목록 연결을 자동 복구 중입니다.",
+            (label || "목록 조회") + " · 재시도 " +
+            (attempt + 1) + "/" + (LIST_RETRY_DELAYS.length - 1) +
+            "\n창을 닫지 않아도 자동으로 다시 연결합니다."
+          );
+        }
+      }
+    }
+    throw lastError || new Error("공실박스 분할 목록 조회에 실패했습니다.");
   }
 
   function itemMatchesPrimaryId(item, primaryName, idSet) {
@@ -1177,7 +1316,11 @@
         MAX_ITEMS.toLocaleString("ko-KR") + "개를 초과했습니다."
       );
     }
-    if (selectedCount && keys.length < selectedCount) {
+    var missingCount = selectedCount ? Math.max(0, selectedCount - keys.length) : 0;
+    var isolatedFailures = Array.isArray(state.listFailures)
+      ? state.listFailures.length
+      : 0;
+    if (missingCount > isolatedFailures) {
       throw new Error(
         "선택 매물 " + selectedCount.toLocaleString("ko-KR") +
         "개 중 " + keys.length.toLocaleString("ko-KR") +
@@ -1996,6 +2139,11 @@
   async function sendToAppsScript(records, metadata, suppliedCollectorKey) {
     metadata = metadata || {};
     var itemsLength = importItemTotal(records, metadata);
+    var listFailedCount = Number(metadata.listFailedCount || 0);
+    var saveFailureReasons = Array.isArray(metadata.saveFailureReasons)
+      ? metadata.saveFailureReasons
+      : [];
+    metadata.saveFailureReasons = saveFailureReasons;
     var collectorKey = suppliedCollectorKey || getCollectorKey();
     var emptyTotals = {
       received: 0,
@@ -2013,6 +2161,10 @@
     if (savedProgress && savedProgress.sessionId) {
       metadata.sessionId = savedProgress.sessionId;
       metadata.scope = savedProgress.scope || metadata.scope;
+      if (Array.isArray(savedProgress.saveFailureReasons)) {
+        saveFailureReasons = savedProgress.saveFailureReasons.slice(-20);
+        metadata.saveFailureReasons = saveFailureReasons;
+      }
     }
     if (!metadata.sessionId) metadata.sessionId = createCollectionSessionId();
     var totals = savedProgress
@@ -2100,10 +2252,63 @@
           await delay(600);
           continue;
         }
-        throw new Error(
-          "매물 1개의 D1 저장이 완료되지 않아 이 위치에서 안전하게 멈췄습니다." +
-          (firstBatchError ? "\n원인: " + firstBatchError : "")
+        addImportResult(totals, result);
+        saveFailureReasons.push({
+          sourceId: recordSignatureId(batch[0]),
+          message: firstBatchError || "D1 저장 실패"
+        });
+        saveFailureReasons = saveFailureReasons.slice(-20);
+        metadata.saveFailureReasons = saveFailureReasons;
+        offset += batch.length;
+        try {
+          localStorage.setItem(SAVE_PROGRESS_KEY, JSON.stringify({
+            signature: signature,
+            sessionId: metadata.sessionId,
+            scope: metadata.scope,
+            offset: offset,
+            batchIndex: batchIndex,
+            totals: totals,
+            saveFailureReasons: saveFailureReasons,
+            updatedAt: new Date().toISOString()
+          }));
+        } catch (_) {}
+        updateDashboard({
+          found: itemsLength,
+          processed: Math.min(
+            itemsLength,
+            Number(metadata.unchanged || 0) +
+              Number(metadata.rejectedCount || 0) +
+              listFailedCount + offset
+          ),
+          remaining: Math.max(0, records.length - offset),
+          created: totals.created,
+          merged: totals.merged,
+          updated: totals.updated,
+          conditionUpdated: totals.conditionUpdated,
+          refreshed: totals.refreshed,
+          review: totals.review,
+          duplicate: totals.duplicate,
+          detailedDuplicates: totals.duplicate,
+          skippedUnchanged: Number(metadata.unchanged || 0),
+          failed: listFailedCount + totals.failed
+        });
+        setProgress(
+          Math.min(
+            itemsLength,
+            Number(metadata.unchanged || 0) +
+              Number(metadata.rejectedCount || 0) +
+              listFailedCount + offset
+          ),
+          itemsLength
         );
+        setStatus(
+          "저장할 수 없는 매물 1건을 분리했습니다.",
+          "원본 " + (recordSignatureId(batch[0]) || "번호 확인 불가") +
+          "은 다음 수집 때 다시 확인하고 나머지 매물을 계속 저장합니다." +
+          (firstBatchError ? "\n원인: " + firstBatchError : "") +
+          "\n기존 매물은 숨기지 않습니다."
+        );
+        continue;
       }
 
       addImportResult(totals, result);
@@ -2116,6 +2321,7 @@
           offset: offset,
           batchIndex: batchIndex,
           totals: totals,
+          saveFailureReasons: saveFailureReasons,
           updatedAt: new Date().toISOString()
         }));
       } catch (_) {}
@@ -2125,6 +2331,7 @@
           itemsLength,
           Number(metadata.unchanged || 0) +
           Number(metadata.rejectedCount || 0) +
+          listFailedCount +
           offset
         ),
         remaining: Math.max(0, records.length - offset),
@@ -2137,13 +2344,14 @@
         duplicate: totals.duplicate,
         detailedDuplicates: totals.duplicate,
         skippedUnchanged: Number(metadata.unchanged || 0),
-        failed: totals.failed
+        failed: listFailedCount + totals.failed
       });
       setProgress(
         Math.min(
           itemsLength,
-          Number(metadata.unchanged || 0) +
+            Number(metadata.unchanged || 0) +
             Number(metadata.rejectedCount || 0) +
+            listFailedCount +
             offset
         ),
         itemsLength
@@ -2158,14 +2366,16 @@
     }
     var stopped = state.stopRequested || offset < records.length;
     metadata.processedCount = Math.min(itemsLength,
-      Number(metadata.unchanged || 0) + Number(metadata.rejectedCount || 0) + offset);
-    metadata.failed = Number(totals.failed || 0);
+      Number(metadata.unchanged || 0) + Number(metadata.rejectedCount || 0) +
+        listFailedCount + offset);
+    metadata.failed = listFailedCount + Number(totals.failed || 0);
     if (offset > 0 || metadata.manifestRegistered) {
       await finalizeGongsilSession(
         metadata,
         collectorKey,
         Boolean(metadata.complete) &&
           !stopped &&
+          listFailedCount === 0 &&
           Number(totals.failed || 0) === 0 &&
           Number(metadata.rejectedCount || 0) === 0,
         stopped
@@ -2189,7 +2399,7 @@
       duplicate: totals.duplicate,
       detailedDuplicates: totals.duplicate,
       skippedUnchanged: Number(metadata.unchanged || 0),
-      failed: totals.failed,
+      failed: listFailedCount + totals.failed,
       message:
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
         "개 중 신규 등록 " + totals.created +
@@ -2199,7 +2409,10 @@
         "개, 검증대기 " + totals.review +
         "개, 상세중복 " + totals.duplicate +
         "개, 기존 동일 생략 " + Number(metadata.unchanged || 0) +
-        "개, 실패 " + totals.failed + "개"
+        "개, 실패 " + (listFailedCount + totals.failed) + "개" +
+        (saveFailureReasons.length
+          ? " · 실패 원본은 다음 수집에서 자동 재확인"
+          : "")
     };
   }
 
@@ -2287,6 +2500,8 @@
     var unchanged = 0;
     var changed = 0;
     var unknown = 0;
+    var totalItemCount = Math.max(items.length, Number(metadata && metadata.found || 0));
+    var listFailedCount = Number(metadata && metadata.listFailedCount || 0);
     var chunkSize = 2500;
     for (var offset = 0; offset < items.length; offset += chunkSize) {
       if (state.stopRequested) throw new Error("사용자 안전중단");
@@ -2343,14 +2558,21 @@
       changed += Number(result.changed || 0);
       unknown += Number(result.unknown || 0);
       updateDashboard({
-        found: items.length,
-        processed: Math.min(offset + chunk.length, items.length),
+        found: totalItemCount,
+        processed: Math.min(
+          totalItemCount,
+          listFailedCount + offset + chunk.length
+        ),
         remaining: Math.max(0, items.length - offset - chunk.length),
         duplicate: unchanged,
         detailedDuplicates: 0,
-        skippedUnchanged: unchanged
+        skippedUnchanged: unchanged,
+        failed: listFailedCount
       });
-      setProgress(Math.min(offset + chunk.length, items.length), items.length);
+      setProgress(
+        Math.min(totalItemCount, listFailedCount + offset + chunk.length),
+        totalItemCount
+      );
     }
     return {needs: needs, refresh: refresh, unchanged: unchanged, changed: changed, unknown: unknown};
   }

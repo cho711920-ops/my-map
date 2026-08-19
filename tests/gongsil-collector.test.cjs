@@ -7,7 +7,8 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.1\.4";/);
+assert.match(source, /var VERSION = "2\.1\.5";/);
+assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
 assert.match(source, /var MAX_SAVE_BATCH_SIZE = 8;/);
@@ -17,6 +18,22 @@ assert.match(
   source,
   /complete: isCompleteGongsilCapture\(selectedCount, items\.length\)/,
   "공실박스 완전수집 판정은 선택 수와 최종 목록 수가 정확히 같을 때만 인정하면 안 됩니다."
+);
+assert.match(
+  source,
+  /async function fetchGongsilListWithRetry\([\s\S]*?LIST_RETRY_DELAYS\.length[\s\S]*?공실박스 목록 연결을 자동 복구 중입니다\./,
+  "공실박스 전체 목록 조회는 일시적인 네트워크·응답 오류를 자동 재시도해야 합니다."
+);
+assert.match(
+  source,
+  /async function loadSelectedChunkWithFallback\([\s\S]*?state\.listFailures\.push[\s\S]*?entries\.slice\(0, middle\)[\s\S]*?entries\.slice\(middle\)/,
+  "반복 실패한 목록 묶음은 작은 단위로 분할하고 단일 실패만 격리해야 합니다."
+);
+assert.match(source, /if \(byId\[id\]\) return;[\s\S]*?entries\.push/);
+assert.match(
+  source,
+  /complete: isCompleteGongsilCapture\(selectedCount, items\.length\) &&\s*listFailures\.length === 0/,
+  "목록조회 제외가 있으면 완전수집 판정으로 기존 매물을 숨기면 안 됩니다."
 );
 assert.match(source, /data-metric="conditionUpdated"/);
 assert.match(source, /data-metric="refreshed"/);
@@ -107,7 +124,7 @@ assert.match(
 );
 assert.match(
   source,
-  /detailedDuplicates: result\.detailedDuplicates !== undefined[\s\S]*?skippedUnchanged: detailBaseProcessed/
+  /detailedDuplicates: result\.detailedDuplicates !== undefined[\s\S]*?skippedUnchanged: unchangedItemCount/
 );
 assert.match(
   source,
@@ -188,6 +205,11 @@ assert.ok(failedBatchPosition >= 0);
 assert.ok(failedBatchPosition < offsetPosition);
 assert.ok(checkpointPosition > offsetPosition);
 assert.ok(dashboardPosition > checkpointPosition);
+assert.match(
+  saveFunction,
+  /if \(failedInBatch > 0\)[\s\S]*?addImportResult\(totals, result\);[\s\S]*?saveFailureReasons\.push[\s\S]*?offset \+= batch\.length;[\s\S]*?continue;/,
+  "단일 저장 실패는 기록한 뒤 나머지 매물 저장을 계속해야 합니다."
+);
 assert.match(
   saveFunction,
   /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0 &&[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0/
