@@ -128,7 +128,7 @@
     });
     var linkableUsers = state.users.filter(function (entry) {
       var email = text(entry.email).toLowerCase();
-      return entry.active && (entry.role === "member" || entry.role === "viewer") && !linkedByEmail[email];
+      return entry.active && entry.role !== "owner" && !linkedByEmail[email];
     });
     var linkOptions = linkableUsers.map(function (entry) {
       return '<option value="' + escapeHtml(entry.email) + '">' +
@@ -165,7 +165,7 @@
         '<input name="displayName" type="text" placeholder="표시 이름 (선택)">' +
         '<input name="password" type="password" minlength="10" maxlength="128" placeholder="비밀번호 10자 이상" autocomplete="new-password" required>' +
         '<button type="submit" ' + (linkOptions ? '' : 'disabled') + '>아이디 발급</button></form>' +
-        (!linkOptions && !state.localAccounts.length ? '<p class="operations-local-help-v1">먼저 친구의 Google 계정을 편집자 또는 조회자로 등록해 주세요.</p>' : '') +
+        (!linkOptions && !state.localAccounts.length ? '<p class="operations-local-help-v1">먼저 친구의 Google 계정을 사용 허용 상태로 등록해 주세요.</p>' : '') +
         '<div class="operations-local-user-list-v1">' + state.localAccounts.map(function (entry) {
           return '<article><div><strong>' + escapeHtml(entry.displayName || entry.username) + '</strong><span>아이디 ' +
             escapeHtml(entry.username) + ' · Google ' + escapeHtml(entry.linkedEmail || '연결 없음') +

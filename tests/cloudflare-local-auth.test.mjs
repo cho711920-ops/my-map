@@ -168,7 +168,7 @@ test("master-issued credentials link to the existing Google identity", async () 
           return {
             first: async () => {
               if (/FROM allowed_users/.test(sql)) {
-                return { email: "friend@example.com", display_name: "친구", role: "member", active: 1 };
+                return { email: "friend@example.com", display_name: "친구", role: "admin", active: 1 };
               }
               return null;
             },
@@ -185,10 +185,11 @@ test("master-issued credentials link to the existing Google identity", async () 
     linkedEmail: "friend@example.com", displayName: "친구", password: "friend-safe-2026"
   });
   assert.equal(result.linkedEmail, "friend@example.com");
-  assert.equal(result.role, "member");
+  assert.equal(result.role, "admin");
   const insert = writes.find((entry) => /INSERT INTO local_accounts/.test(entry.sql));
   assert.ok(insert);
   assert.equal(insert.values[1], "friend@example.com");
+  assert.equal(insert.values[3], "member");
   assert.notEqual(insert.values[6], "friend-safe-2026");
 });
 
