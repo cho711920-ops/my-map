@@ -191,7 +191,7 @@ test("operations modules only use the shared Cloudflare data boundary", () => {
   }
   assert.match(html, /operations-center-v7\.js\?v=7\.22\.5-shared-data-only/);
   assert.match(html, /operations-collection-v8\.js\?v=7\.25\.8-shared-data-only/);
-  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.5-shared-data-only/);
+  assert.match(html, /operations-admin-v1\.js\?v=1\.1\.0-local-account/);
 });
 
 test("unified listing reads and writes only through the shared data boundary", () => {

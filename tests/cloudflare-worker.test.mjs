@@ -36,7 +36,7 @@ test("favorite folder deletion tombstones survive stale device uploads", () => {
 test("auth configuration exposes only the public client id", async () => {
   const response = await worker.fetch(new Request("https://js-map.com/api/auth-config"), env);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { googleClientId: env.GOOGLE_CLIENT_ID });
+  assert.deepEqual(await response.json(), { googleClientId: env.GOOGLE_CLIENT_ID, localLoginEnabled: true });
   assert.equal(response.headers.get("x-frame-options"), "DENY");
 });
 

@@ -1,7 +1,10 @@
 const encoder = new TextEncoder();
 
 export const SESSION_COOKIE = "js_realestate_session";
-export const DEFAULT_SESSION_MAX_AGE_SECONDS = 5 * 24 * 60 * 60;
+export const DEFAULT_SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
+export const LOCAL_PASSWORD_ITERATIONS = 310_000;
+const MAX_SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
+const LOCAL_ID_SUFFIX = "@local.js-map";
 
 function base64UrlEncode(value) {
   const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
@@ -24,8 +27,115 @@ function decodeJsonSegment(value) {
 function sessionMaxAgeSeconds(env) {
   const configured = Number(env.SESSION_MAX_AGE_SECONDS || DEFAULT_SESSION_MAX_AGE_SECONDS);
   return Number.isFinite(configured) && configured >= 300
-    ? Math.min(configured, 30 * 24 * 60 * 60)
+    ? Math.min(configured, MAX_SESSION_MAX_AGE_SECONDS)
     : DEFAULT_SESSION_MAX_AGE_SECONDS;
+}
+
+export function normalizeLocalUsername(value) {
+  const username = String(value || "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]{2,31}$/.test(username) ? username : "";
+}
+
+export function localIdentityEmail(username) {
+  const normalized = normalizeLocalUsername(username);
+  return normalized ? `${normalized}${LOCAL_ID_SUFFIX}` : "";
+}
+
+function constantTimeEqual(left, right) {
+  const a = left instanceof Uint8Array ? left : new Uint8Array(left || []);
+  const b = right instanceof Uint8Array ? right : new Uint8Array(right || []);
+  let mismatch = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (a[index % Math.max(1, a.length)] || 0) ^ (b[index % Math.max(1, b.length)] || 0);
+  }
+  return mismatch === 0;
+}
+
+async function deriveLocalPassword(password, salt, iterations) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(String(password || "")),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  return new Uint8Array(await crypto.subtle.deriveBits({
+    name: "PBKDF2",
+    hash: "SHA-256",
+    salt,
+    iterations
+  }, key, 256));
+}
+
+export async function createLocalPassword(password, iterations = LOCAL_PASSWORD_ITERATIONS) {
+  const secret = String(password || "");
+  if (secret.length < 10 || secret.length > 128) {
+    throw Object.assign(new Error("비밀번호는 10자 이상 128자 이하로 입력해 주세요."), { statusCode: 400 });
+  }
+  const rounds = Math.max(100_000, Math.min(Number(iterations) || LOCAL_PASSWORD_ITERATIONS, 600_000));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await deriveLocalPassword(secret, salt, rounds);
+  return { salt: base64UrlEncode(salt), hash: base64UrlEncode(hash), iterations: rounds };
+}
+
+export async function verifyLocalPassword(password, account) {
+  const iterations = Math.max(100_000, Math.min(Number(account?.password_iterations) || 0, 600_000));
+  if (!iterations || !account?.password_salt || !account?.password_hash) return false;
+  try {
+    const actual = await deriveLocalPassword(String(password || ""), base64UrlDecode(account.password_salt), iterations);
+    return constantTimeEqual(actual, base64UrlDecode(account.password_hash));
+  } catch {
+    return false;
+  }
+}
+
+async function localAccessProfile(username, env) {
+  const normalized = normalizeLocalUsername(username);
+  if (!normalized || !env.DB || typeof env.DB.prepare !== "function") return null;
+  try {
+    const row = await env.DB.prepare(`SELECT username, display_name, role, active, password_salt,
+      password_hash, password_iterations, session_version, failed_attempts, locked_until
+      FROM local_accounts WHERE username=?1 LIMIT 1`).bind(normalized).first();
+    return row || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function authenticateLocalAccount(username, password, env, now = Date.now()) {
+  const normalized = normalizeLocalUsername(username);
+  const suppliedPassword = String(password || "");
+  const account = normalized ? await localAccessProfile(normalized, env) : null;
+  const lockedUntil = Date.parse(String(account?.locked_until || "")) || 0;
+  const passwordAccount = account || {
+    password_salt: "AAAAAAAAAAAAAAAAAAAAAA",
+    password_hash: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    password_iterations: 100_000
+  };
+  const passwordMatches = await verifyLocalPassword(suppliedPassword.slice(0, 128), passwordAccount);
+  const valid = Boolean(suppliedPassword.length <= 128 && account && Number(account.active) === 1 &&
+    lockedUntil <= now && passwordMatches);
+  if (!valid) {
+    if (account && env.DB && typeof env.DB.prepare === "function") {
+      const failures = Number(account.failed_attempts || 0) + 1;
+      const nextLockedUntil = failures >= 5 ? new Date(now + 10 * 60_000).toISOString() : "";
+      await env.DB.prepare(`UPDATE local_accounts SET failed_attempts=?1, locked_until=?2,
+        updated_at=?3 WHERE username=?4`).bind(failures, nextLockedUntil, new Date(now).toISOString(), normalized).run();
+    }
+    throw Object.assign(new Error("아이디 또는 비밀번호를 확인해 주세요."), { statusCode: 401 });
+  }
+  await env.DB.prepare(`UPDATE local_accounts SET failed_attempts=0, locked_until='', last_login_at=?1,
+    updated_at=?1 WHERE username=?2`).bind(new Date(now).toISOString(), normalized).run();
+  return {
+    sub: `local:${normalized}`,
+    email: localIdentityEmail(normalized),
+    username: normalized,
+    authType: "local",
+    role: String(account.role || "member"),
+    displayName: String(account.display_name || normalized),
+    sessionVersion: Number(account.session_version || 1)
+  };
 }
 
 function sessionSecret(env) {
@@ -141,6 +251,9 @@ export async function createSessionToken(user, env, now = Date.now()) {
     email: String(user.email || "").trim().toLowerCase(),
     role: String(user.role || "member"),
     displayName: String(user.displayName || user.name || ""),
+    authType: String(user.authType || "google"),
+    username: String(user.username || ""),
+    sessionVersion: Number(user.sessionVersion || 0),
     iat: now,
     exp: now + sessionMaxAgeSeconds(env) * 1000
   })));
@@ -161,6 +274,20 @@ export async function verifySessionToken(token, env, now = Date.now()) {
   const decoded = decodeJsonSegment(payload);
   if (!decoded.exp || now >= Number(decoded.exp)) {
     throw Object.assign(new Error("로그인 세션이 만료되었습니다."), { statusCode: 401 });
+  }
+  if (decoded.authType === "local") {
+    const account = await localAccessProfile(decoded.username, env);
+    if (!account || Number(account.active) !== 1 ||
+      Number(account.session_version || 1) !== Number(decoded.sessionVersion || 0)) {
+      throw Object.assign(new Error("사용이 중지되었거나 다시 로그인이 필요한 계정입니다."), { statusCode: 403 });
+    }
+    return {
+      ...decoded,
+      email: localIdentityEmail(account.username),
+      username: String(account.username || ""),
+      role: String(account.role || "member"),
+      displayName: String(account.display_name || account.username || "")
+    };
   }
   if (!await isAllowedEmail(decoded.email, env)) {
     throw Object.assign(new Error("승인되지 않은 Google 계정입니다."), { statusCode: 403 });

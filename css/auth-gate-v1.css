@@ -81,6 +81,77 @@ html.auth-pending body > *:not(#jsAuthGate) {
   max-width: 100% !important;
 }
 
+.js-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 14px;
+  color: #8a96a8;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.js-auth-divider::before,
+.js-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e1e8f1;
+}
+
+.js-auth-local {
+  display: grid;
+  gap: 9px;
+  text-align: left;
+}
+
+.js-auth-local label {
+  display: grid;
+  gap: 5px;
+}
+
+.js-auth-local label span {
+  color: #4d607a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.js-auth-local input,
+.js-auth-local button {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  font: inherit;
+}
+
+.js-auth-local input {
+  border: 1px solid #cbd8e8;
+  padding: 0 13px;
+  color: #172033;
+  background: #fff;
+  outline: none;
+}
+
+.js-auth-local input:focus {
+  border-color: #1677ee;
+  box-shadow: 0 0 0 3px rgba(22, 119, 238, .12);
+}
+
+.js-auth-local button {
+  margin-top: 3px;
+  border: 1px solid #1677ee;
+  color: #fff;
+  background: #1677ee;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.js-auth-local button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
 .js-auth-status {
   min-height: 22px;
   margin-top: 14px !important;

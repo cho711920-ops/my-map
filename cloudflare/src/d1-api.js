@@ -1,5 +1,5 @@
 import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
-import { requireRole } from "./security.js";
+import { createLocalPassword, normalizeLocalUsername, requireRole } from "./security.js";
 import { carryConfirmedVisitMemo } from "./visit-status.js";
 
 const UNIFIED_FIELDS = [
@@ -18,7 +18,7 @@ const D1_POST_ACTIONS = new Set([
   "deleteCustomer", "deleteProperty", "enqueueMutation", "moveOriginalListing", "quickAdd", "saveCloudState",
   "saveGeocodeCache", "toggleDone", "updateProperty", "updatePropertyMemo", "saveCustomer",
   "updateCustomerMatch", "rebuildCustomerMatches", "addCustomerActivity",
-  "restoreListingHistory", "saveAllowedUser"
+  "restoreListingHistory", "saveAllowedUser", "saveLocalAccount"
 ]);
 
 const CUSTOMER_HEADERS = [
@@ -1004,8 +1004,11 @@ async function userProfile(user) {
     action: "userProfile",
     email: clean(user?.email).toLowerCase(),
     displayName: clean(user?.displayName),
+    authType: clean(user?.authType) || "google",
+    username: clean(user?.username),
     role: clean(user?.role) || "member",
     canManageUsers: ["owner", "admin"].includes(clean(user?.role)),
+    canManageLocalAccounts: clean(user?.role) === "owner",
     canEdit: clean(user?.role) !== "viewer",
     source: "SESSION"
   };
@@ -1031,7 +1034,22 @@ async function userManagement(env, user) {
       users.push({ email, displayName: "", role: index === 0 ? "owner" : "member", active: true, source: "ENV" });
     }
   }
-  return { ok: true, action: "userManagement", users, source: "D1+ENV" };
+  const localResult = await env.DB.prepare(`SELECT username, display_name, role, active, failed_attempts,
+    locked_until, last_login_at, created_at, updated_at FROM local_accounts
+    ORDER BY active DESC, username`).all();
+  const localAccounts = (localResult?.results || []).map((row) => ({
+    username: clean(row.username).toLowerCase(),
+    displayName: clean(row.display_name),
+    role: clean(row.role) || "member",
+    active: Number(row.active) === 1,
+    failedAttempts: Number(row.failed_attempts || 0),
+    lockedUntil: clean(row.locked_until),
+    lastLoginAt: clean(row.last_login_at),
+    createdAt: clean(row.created_at),
+    updatedAt: clean(row.updated_at),
+    source: "LOCAL"
+  }));
+  return { ok: true, action: "userManagement", users, localAccounts, source: "D1+ENV" };
 }
 
 export async function handleD1GetAction(env, user, query) {
@@ -1794,6 +1812,53 @@ async function saveAllowedUser(env, user, body) {
     displayName: clean(body.displayName), role: requestedRole, active: Boolean(active), source: "D1" };
 }
 
+async function saveLocalAccount(env, user, body) {
+  requireRole(user, "owner");
+  const username = normalizeLocalUsername(body.username);
+  if (!username) {
+    throw Object.assign(new Error("아이디는 영문 소문자·숫자·점·밑줄·하이픈으로 3~32자까지 입력해 주세요."),
+      { statusCode: 400 });
+  }
+  const requestedRole = clean(body.role) || "member";
+  if (!new Set(["member", "viewer"]).has(requestedRole)) {
+    throw Object.assign(new Error("친구 계정은 편집자 또는 조회자 권한만 지정할 수 있습니다."), { statusCode: 400 });
+  }
+  const existing = await env.DB.prepare(`SELECT username FROM local_accounts WHERE username=?1 LIMIT 1`)
+    .bind(username).first();
+  const password = String(body.password || "");
+  if (!existing && !password) {
+    throw Object.assign(new Error("새 계정에 사용할 비밀번호를 입력해 주세요."), { statusCode: 400 });
+  }
+  const passwordRecord = password ? await createLocalPassword(password) : null;
+  const active = body.active === false ? 0 : 1;
+  const now = new Date().toISOString();
+  if (existing) {
+    if (passwordRecord) {
+      await env.DB.prepare(`UPDATE local_accounts SET display_name=?1, role=?2, active=?3,
+        password_salt=?4, password_hash=?5, password_iterations=?6,
+        session_version=session_version+1, failed_attempts=0, locked_until='', updated_at=?7
+        WHERE username=?8`).bind(clean(body.displayName).slice(0, 100), requestedRole, active,
+          passwordRecord.salt, passwordRecord.hash, passwordRecord.iterations, now, username).run();
+    } else {
+      await env.DB.prepare(`UPDATE local_accounts SET display_name=?1, role=?2, active=?3,
+        session_version=session_version+1, failed_attempts=0, locked_until='', updated_at=?4
+        WHERE username=?5`).bind(clean(body.displayName).slice(0, 100), requestedRole, active, now, username).run();
+    }
+  } else {
+    await env.DB.prepare(`INSERT INTO local_accounts (
+      username, display_name, role, active, password_salt, password_hash, password_iterations,
+      session_version, created_by, created_at, updated_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, ?9)`).bind(
+      username, clean(body.displayName).slice(0, 100), requestedRole, active,
+      passwordRecord.salt, passwordRecord.hash, passwordRecord.iterations,
+      clean(user?.email).toLowerCase(), now
+    ).run();
+  }
+  return { ok: true, action: "saveLocalAccount", persisted: true, username,
+    displayName: clean(body.displayName), role: requestedRole, active: Boolean(active),
+    passwordChanged: Boolean(passwordRecord), source: "D1" };
+}
+
 async function restoreListingHistory(env, user, body) {
   requireRole(user, ["owner", "admin"]);
   const historyId = Math.max(1, Number(body.historyId) || 0);
@@ -1839,6 +1904,7 @@ async function restoreListingHistory(env, user, body) {
 async function executePost(env, user, body) {
   const action = clean(body.action);
   if (action === "saveAllowedUser") return saveAllowedUser(env, user, body);
+  if (action === "saveLocalAccount") return saveLocalAccount(env, user, body);
   if (action === "restoreListingHistory") return restoreListingHistory(env, user, body);
   if (action === "updatePropertyMemo") return updateMemo(env, user, body);
   if (action === "updateProperty") return updateProperty(env, user, body);

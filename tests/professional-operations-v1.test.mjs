@@ -38,7 +38,7 @@ test("history and role management are isolated from customer matching and notifi
   assert.doesNotMatch(admin, /notification|알림|customerMatches|rebuildCustomer/);
   assert.match(admin, /function deactivateAdminTabs\(\)/);
   assert.match(admin, /deactivateAdminTabs\(\);[\s\S]*return previousSwitch\(tab\)/);
-  assert.match(html, /operations-admin-v1\.js\?v=1\.0\.5-shared-data-only/);
+  assert.match(html, /operations-admin-v1\.js\?v=1\.1\.0-local-account/);
   assert.match(admin, />이전으로 복구<\/button>/);
   assert.doesNotMatch(admin, />이 값으로 복구<\/button>/);
   assert.match(d1, /businessHistoryDiff/);

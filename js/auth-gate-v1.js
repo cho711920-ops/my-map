@@ -1,6 +1,7 @@
 let googleClientId = "";
 let authenticatedAssetsPromise = null;
 let deferredAuthenticatedAssetsPromise = null;
+let sessionRetryTimer = 0;
 
 function setApplicationIsolation(locked) {
   const application = document.getElementById("wrap");
@@ -25,11 +26,18 @@ function authGate() {
       <div class="js-auth-logo">J S</div>
       <h1 id="jsAuthTitle">JS부동산</h1>
       <p class="js-auth-subtitle">대전 상가 매물지도</p>
-      <p id="jsAuthDescription">승인된 Google 계정으로 로그인해야<br>매물 정보를 확인할 수 있습니다.</p>
+      <p id="jsAuthDescription">관리자는 Google 계정으로,<br>발급받은 사용자는 아이디로 로그인합니다.</p>
       <div id="jsGoogleLogin" class="js-auth-google"></div>
+      <div class="js-auth-divider"><span>또는 발급받은 계정</span></div>
+      <form id="jsLocalLoginForm" class="js-auth-local" autocomplete="on">
+        <label><span>아이디</span><input name="username" autocomplete="username" autocapitalize="none" required></label>
+        <label><span>비밀번호</span><input name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">아이디로 로그인</button>
+      </form>
       <p id="jsAuthStatus" class="js-auth-status" role="alert"></p>
     </div>`;
   document.body.appendChild(gate);
+  gate.querySelector("#jsLocalLoginForm")?.addEventListener("submit", loginWithLocal);
   setApplicationIsolation(true);
   return gate;
 }
@@ -150,12 +158,12 @@ async function unlock(email) {
   document.getElementById("jsAuthUser")?.remove();
 }
 
-async function sessionRequest(credential) {
+async function sessionRequest(payload) {
   const response = await fetch("/api/session", {
     method: "POST",
     credentials: "same-origin",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ credential })
+    body: JSON.stringify(payload || {})
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.message || "로그인 승인에 실패했습니다.");
@@ -177,17 +185,29 @@ function loadGoogleLibrary() {
     script.defer = true;
     script.dataset.jsGoogleIdentity = "true";
     script.onload = resolve;
-    script.onerror = () => reject(new Error("Google 로그인 모듈을 불러오지 못했습니다."));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Google 로그인 모듈을 불러오지 못했습니다."));
+    };
     document.head.appendChild(script);
   });
 }
 
-async function loadGoogleLogin() {
+async function loadLoginOptions() {
   const configResponse = await fetch("/api/auth-config", { cache: "no-store" });
-  if (!configResponse.ok) throw new Error("Google 로그인 설정을 불러오지 못했습니다.");
+  if (!configResponse.ok) throw new Error("로그인 설정을 불러오지 못했습니다.");
   const config = await configResponse.json();
+  const localForm = document.getElementById("jsLocalLoginForm");
+  const divider = document.querySelector(".js-auth-divider");
+  const localEnabled = config.localLoginEnabled === true;
+  if (localForm) localForm.hidden = !localEnabled;
+  if (divider) divider.hidden = !localEnabled;
   googleClientId = String(config.googleClientId || "");
-  if (!googleClientId) throw new Error("Google 로그인 설정이 아직 완료되지 않았습니다.");
+  if (!googleClientId) {
+    document.getElementById("jsGoogleLogin")?.setAttribute("hidden", "");
+    if (!localEnabled) throw new Error("로그인 설정이 아직 완료되지 않았습니다.");
+    return;
+  }
   await loadGoogleLibrary();
   window.google.accounts.id.initialize({
     client_id: googleClientId,
@@ -204,10 +224,33 @@ async function loadGoogleLogin() {
 async function loginWithGoogle(response) {
   status("승인된 계정인지 확인하고 있습니다…");
   try {
-    await sessionRequest(response && response.credential);
+    await sessionRequest({ loginType: "google", credential: response && response.credential });
     location.reload();
   } catch (error) {
     status(error.message || "로그인에 실패했습니다.");
+  }
+}
+
+async function loginWithLocal(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  status("아이디와 비밀번호를 확인하고 있습니다…");
+  if (submit) submit.disabled = true;
+  try {
+    await sessionRequest({
+      loginType: "local",
+      username: form.username.value,
+      password: form.password.value
+    });
+    form.password.value = "";
+    location.reload();
+  } catch (error) {
+    form.password.value = "";
+    form.password.focus();
+    status(error.message || "로그인에 실패했습니다.");
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -228,14 +271,25 @@ async function start() {
   try {
     const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
     if (response.ok) {
+      if (sessionRetryTimer) clearTimeout(sessionRetryTimer);
+      sessionRetryTimer = 0;
       const result = await response.json();
       await unlock(result.email);
       return;
     }
-    await loadGoogleLogin();
+    if (response.status !== 401 && response.status !== 403) {
+      throw new Error("인터넷 연결을 기다리는 중입니다.");
+    }
+    await loadLoginOptions();
     status("");
   } catch (error) {
-    status(error.message || "로그인 설정을 확인해 주세요.");
+    status(error.message || "인터넷 연결을 기다리는 중입니다.");
+    if (!sessionRetryTimer) {
+      sessionRetryTimer = setTimeout(function () {
+        sessionRetryTimer = 0;
+        start();
+      }, 3000);
+    }
   }
 }
 

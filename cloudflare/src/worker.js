@@ -1,4 +1,5 @@
 import {
+  authenticateLocalAccount,
   clearSessionCookieHeader,
   createSessionToken,
   requireSameOrigin,
@@ -334,7 +335,8 @@ async function handleSession(request, env) {
   if (request.method === "GET") {
     const user = await requireSession(request, env);
     return json({ ok: true, email: user.email || "", displayName: user.displayName || "",
-      role: user.role || "member" }, 200, { "cache-control": "no-store" });
+      role: user.role || "member", authType: user.authType || "google",
+      username: user.username || "" }, 200, { "cache-control": "no-store" });
   }
   requireSameOrigin(request);
   if (request.method === "DELETE") {
@@ -345,9 +347,13 @@ async function handleSession(request, env) {
   }
   if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "GET, POST, DELETE" } });
   const body = await request.json().catch(() => ({}));
-  const user = await verifyGoogleCredential(String(body.credential || body.idToken || ""), env);
+  const loginType = String(body.loginType || "google").trim().toLowerCase();
+  const user = loginType === "local"
+    ? await authenticateLocalAccount(body.username, body.password, env)
+    : await verifyGoogleCredential(String(body.credential || body.idToken || ""), env);
   const token = await createSessionToken(user, env);
-  return json({ ok: true, email: user.email }, 200, {
+  return json({ ok: true, email: user.email, authType: user.authType || "google",
+    username: user.username || "" }, 200, {
     "cache-control": "no-store",
     "set-cookie": sessionCookieHeader(token, env)
   });
@@ -632,7 +638,8 @@ async function handleApi(request, env, context) {
   const url = new URL(request.url);
   if (url.pathname === "/api/auth-config") {
     if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
-    return json({ googleClientId: String(env.GOOGLE_CLIENT_ID || "") }, 200, { "cache-control": "no-store" });
+    return json({ googleClientId: String(env.GOOGLE_CLIENT_ID || ""), localLoginEnabled: true }, 200,
+      { "cache-control": "no-store" });
   }
   if (url.pathname === "/api/session") return handleSession(request, env);
   if (url.pathname === "/api/sheet") return handleSheet(request, env, context);
