@@ -147,6 +147,9 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /--load-extension=/);
   assert.match(launch, /--new-tab/);
   assert.match(launch, /chrome-extension:\/\/\$extensionId\/autorun\.html/);
+  assert.match(launch, /chrome-extension:\/\/\$extensionId\/options\.html/);
+  assert.match(launch, /\/json\/list/);
+  assert.match(launch, /Reuse an existing status tab/);
   assert.match(launch, /jsAutoCollectorConfigV1/);
   assert.match(launch, /remote-debugging-port=9223/);
   assert.match(launch, /Invoke-RestMethod -Method Put/);

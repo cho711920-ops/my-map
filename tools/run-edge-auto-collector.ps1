@@ -112,6 +112,15 @@ if ($Setup) {
   Start-Sleep -Seconds 4
   & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
   Start-Sleep -Seconds 2
+  # Keep the live per-district status page visible after the short autorun
+  # trigger tabs close themselves. Reuse an existing status tab when Edge
+  # restores the dedicated profile instead of opening duplicates.
+  $statusUrl = "chrome-extension://$extensionId/options.html"
+  $openPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5)
+  if (-not ($openPages | Where-Object { $_.type -eq 'page' -and $_.url -eq $statusUrl })) {
+    $encodedStatusUrl = [Uri]::EscapeDataString($statusUrl)
+    Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedStatusUrl" -TimeoutSec 5 | Out-Null
+  }
   Add-Type @'
 using System;
 using System.Runtime.InteropServices;
