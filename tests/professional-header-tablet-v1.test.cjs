@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "header-professional-v1.css"), "utf8");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
-assert.match(html, /header-professional-v1\.css\?v=1\.1\.0-header-logout/);
+assert.match(html, /header-professional-v1\.css\?v=1\.1\.1-logout-size/);
 assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/small>/);
 
 [
@@ -33,7 +33,7 @@ labels.forEach((label) => {
 });
 
 assert.match(css, /@media \(min-width: 900px\)[\s\S]*grid-template-columns: auto max-content/);
-assert.match(css, /grid-template-columns: 66px 70px 70px 78px 0 84px 66px/);
+assert.match(css, /grid-template-columns: 66px 70px 70px 78px 0 84px 84px/);
 assert.match(css, /\.desktop-operations-action \{ grid-column: 1/);
 assert.match(css, /\.quick-add-btn \{ grid-column: 6/);
 assert.match(css, /\.top-logout-btn-v1 \{ grid-column: 7/);
@@ -44,8 +44,12 @@ assert.match(css, /\.map-quick-tool-btn \{[\s\S]*backdrop-filter: none !importan
 assert.match(css, /\.search-row \{[\s\S]*gap: 0 !important/);
 assert.match(css, /\.search-row #keyword \{[\s\S]*border-right: 0 !important/);
 assert.match(css, /\.quick-add-btn \.sync-indicator \{[\s\S]*display: none !important/);
-assert.match(css, /width: min\(526px, calc\(100vw - 664px\)\) !important/);
-assert.match(css, /grid-template-columns: 92px 96px 84px 106px 0 108px 78px/);
+assert.match(css, /width: min\(526px, calc\(100vw - 682px\)\) !important/);
+assert.match(css, /width: min\(530px, calc\(100vw - 816px\)\) !important/);
+assert.match(css, /grid-template-columns: 80px 84px 76px 94px 0 98px 98px/);
+assert.match(css, /grid-template-columns: 92px 96px 84px 106px 0 108px 108px/);
+assert.match(css, /@media \(min-width: 1200px\)[\s\S]*\.top-logout-btn-v1 \{[\s\S]*font-size: 13px !important;[\s\S]*font-weight: 900 !important/);
+assert.match(css, /\.top-logout-btn-v1 \.top-action-icon-v638 \{[\s\S]*width: 18px !important;[\s\S]*height: 18px !important/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*font-size: 13px !important/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\) 76px !important/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*\.quick-add-btn\.v6-secondary-action \{[\s\S]*font-size: 14px !important/);

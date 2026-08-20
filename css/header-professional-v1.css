@@ -342,7 +342,7 @@
     grid-column: 1 !important;
     grid-row: 1 !important;
     gap: 4px !important;
-    width: min(526px, calc(100vw - 664px)) !important;
+    width: min(526px, calc(100vw - 682px)) !important;
     height: 42px !important;
     min-height: 0 !important;
     max-height: 42px !important;
@@ -400,7 +400,7 @@
 
   .v6-toolbar-secondary.v6-command-bar {
     display: grid !important;
-    grid-template-columns: 66px 70px 70px 78px 0 84px 66px !important;
+    grid-template-columns: 66px 70px 70px 78px 0 84px 84px !important;
     grid-template-rows: 42px !important;
     grid-column: 2 !important;
     grid-row: 1 !important;
@@ -487,7 +487,7 @@
   .v6-toolbar-primary {
     grid-template-columns: minmax(0, 1fr) 62px 66px !important;
     gap: 6px !important;
-    width: min(530px, calc(100vw - 790px)) !important;
+    width: min(530px, calc(100vw - 816px)) !important;
   }
 
   .v6-toolbar-primary .search-row {
@@ -506,7 +506,7 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 80px 84px 76px 94px 0 98px 72px !important;
+    grid-template-columns: 80px 84px 76px 94px 0 98px 98px !important;
     gap: 6px !important;
   }
 
@@ -524,7 +524,13 @@
     font-weight: 900 !important;
   }
 
-  .v6-toolbar-secondary .quick-add-btn .top-action-icon-v638 {
+  .v6-toolbar-secondary .top-logout-btn-v1 {
+    font-size: 13px !important;
+    font-weight: 900 !important;
+  }
+
+  .v6-toolbar-secondary .quick-add-btn .top-action-icon-v638,
+  .v6-toolbar-secondary .top-logout-btn-v1 .top-action-icon-v638 {
     width: 18px !important;
     height: 18px !important;
   }
@@ -553,7 +559,7 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 92px 96px 84px 106px 0 108px 78px !important;
+    grid-template-columns: 92px 96px 84px 106px 0 108px 108px !important;
     gap: 8px !important;
   }
 
@@ -567,6 +573,10 @@
   }
 
   .v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+    font-size: 14px !important;
+  }
+
+  .v6-toolbar-secondary .top-logout-btn-v1 {
     font-size: 14px !important;
   }
 
