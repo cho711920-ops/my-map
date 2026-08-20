@@ -654,6 +654,7 @@ async function loadCandidateListings(env, records, existingSources) {
   const addresses = [...new Set(records.filter((record) => record?.address && !existingSources.has(record.sourceId))
     .map((record) => record.address))];
   const byAddress = new Map(addresses.map((address) => [address, []]));
+  const byListingId = new Map();
   for (let offset = 0; offset < addresses.length; offset += 60) {
     const chunk = addresses.slice(offset, offset + 60);
     const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
@@ -663,7 +664,33 @@ async function loadCandidateListings(env, records, existingSources) {
       ORDER BY updated_at DESC`).bind(...chunk).all();
     for (const row of result?.results || []) {
       const rows = byAddress.get(clean(row.address));
-      if (rows) rows.push(row);
+      if (rows) {
+        row.active_source_snapshots = [];
+        rows.push(row);
+        byListingId.set(clean(row.id), row);
+      }
+    }
+  }
+  const listingIds = [...byListingId.keys()].filter(Boolean);
+  for (let offset = 0; offset < listingIds.length; offset += 60) {
+    const chunk = listingIds.slice(offset, offset + 60);
+    const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
+    const result = await env.DB.prepare(`SELECT listing_id, source, source_listing_id, list_snapshot_json
+      FROM listing_sources
+      WHERE active=1 AND listing_id IN (${placeholders})
+      ORDER BY updated_at DESC`).bind(...chunk).all();
+    for (const sourceRow of result?.results || []) {
+      const listing = byListingId.get(clean(sourceRow.listing_id));
+      if (!listing) continue;
+      const snapshot = parseJson(sourceRow.list_snapshot_json, {});
+      if (!snapshot || Array.isArray(snapshot) || typeof snapshot !== "object") continue;
+      listing.active_source_snapshots.push({
+        id: `${clean(sourceRow.listing_id)}:${clean(sourceRow.source)}:${clean(sourceRow.source_listing_id)}`,
+        property_id: clean(sourceRow.listing_id),
+        source: clean(sourceRow.source), source_listing_id: clean(sourceRow.source_listing_id),
+        room: canonicalListingRoom(snapshot.room), deposit: number(snapshot.deposit),
+        monthly_rent: number(snapshot.rent), area_m2: number(snapshot.area)
+      });
     }
   }
   return byAddress;
@@ -745,7 +772,12 @@ function roomIdentity(value) {
   const dongs = [...text.matchAll(/(?:^|[^0-9A-Z])([0-9]{1,4}|[A-Z])동/g)].map((match) => match[1]);
   const withoutDongs = text.replace(/(?:^|[^0-9A-Z])(?:[0-9]{1,4}|[A-Z])동/g, " ");
   const units = /호/.test(withoutDongs)
-    ? [...withoutDongs.matchAll(/(?:^|[^0-9])(\d{3,4})(?=호|[,/·]|$)/g)].map((match) => match[1].replace(/^0+/, "") || "0")
+    ? [...withoutDongs.matchAll(/(?:^|[^0-9A-Z])([A-Z]?\d{1,4})(?=호|[,/·]|$)/g)].map((match) => {
+      const token = match[1];
+      const prefix = token.match(/^[A-Z]/)?.[0] || "";
+      const digits = token.slice(prefix.length).replace(/^0+/, "") || "0";
+      return `${prefix}${digits}`;
+    })
     : [];
   return {
     key: normalizedRoom(value),
@@ -790,7 +822,7 @@ function reliableOfferMismatch(record, row) {
   return termsDiffer && Math.abs(leftArea - rightArea) >= 1;
 }
 
-export function compareListingSpace(record, row) {
+function compareSingleListingSpace(record, row) {
   const incoming = roomIdentity(record?.room);
   const existing = roomIdentity(row?.room);
   const offerMatch = reliableOfferMatch(record || {}, row || {});
@@ -832,6 +864,39 @@ export function compareListingSpace(record, row) {
     return { decision: "different", reason: "층 미확인이지만 임대조건과 평수가 모두 다름" };
   }
   return { decision: "review", reason: genericSpecific ? "층 표기와 호실 표기 비교 필요" : "공간 식별정보가 부족함" };
+}
+
+function activeSourceSnapshots(row) {
+  return Array.isArray(row?.active_source_snapshots)
+    ? row.active_source_snapshots.filter((snapshot) => snapshot && typeof snapshot === "object")
+    : [];
+}
+
+export function compareListingSpace(record, row) {
+  const representative = compareSingleListingSpace(record, row);
+  const snapshots = activeSourceSnapshots(row);
+  if (!snapshots.length) return representative;
+
+  const incomingIdentity = roomIdentity(record?.room);
+  const identities = [row, ...snapshots].map((candidate) => roomIdentity(candidate?.room));
+  const explicitUnits = identities.filter((identity) => identity.units.length > 0);
+  if (incomingIdentity.units.length && explicitUnits.length &&
+      !explicitUnits.some((identity) => sameSet(incomingIdentity.units, identity.units))) {
+    return { decision: "different", reason: "연결 원본의 호실이 다름" };
+  }
+
+  const sourceComparisons = snapshots.map((snapshot) => ({
+    snapshot, ...compareSingleListingSpace(record, snapshot)
+  }));
+  const sourceMatch = sourceComparisons.find((item) => item.decision === "same");
+  if (sourceMatch) {
+    return { decision: "same", reason: `연결 원본과 ${sourceMatch.reason}` };
+  }
+  if (representative.decision === "different") return representative;
+  if (sourceComparisons.every((item) => item.decision === "different")) {
+    return { decision: "different", reason: sourceComparisons[0]?.reason || "연결 원본과 다른 공간" };
+  }
+  return representative;
 }
 
 export function classifyListingCandidates(record, candidates = []) {
@@ -2160,7 +2225,7 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
 }
 
 async function repairExactReviews(env, user, options = {}) {
-  const decisionVersion = 5;
+  const decisionVersion = 6;
   const sourceFilter = clean(options.source);
   const scanLimit = Math.max(1, Math.min(20, Number(options.limit) || 20));
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
@@ -2191,6 +2256,8 @@ async function repairExactReviews(env, user, options = {}) {
   let merged = 0;
   let created = 0;
   let duplicate = 0;
+  let aliasesMerged = 0;
+  let aliasesFailed = 0;
   let ambiguous = 0;
   let failed = reviewRows.length - parsedRows.length;
   const affectedListingIds = new Set();
@@ -2220,9 +2287,41 @@ async function repairExactReviews(env, user, options = {}) {
         await attachSource(env, record, classified.candidate.id, row.session_id, existingSource, false,
           clean(user?.email), existingAssets);
         affectedListingIds.add(classified.candidate.id);
+        const aliasResult = await env.DB.prepare(`SELECT id, session_id, source, source_listing_id, payload_json
+          FROM collector_raw
+          WHERE processing_state='duplicate'
+            AND json_extract(result_json, '$.action')='sameAsPendingReview'
+            AND json_extract(result_json, '$.canonicalReviewId')=?1
+          ORDER BY created_at, id`).bind(row.id).all();
+        let mergedAliasCount = 0;
+        for (const alias of aliasResult?.results || []) {
+          try {
+            const aliasRecord = normalizeReviewRecord(parseJson(alias.payload_json, {}));
+            if (!aliasRecord.sourceId) aliasRecord.sourceId = clean(alias.source_listing_id);
+            if (!aliasRecord.source) aliasRecord.source = clean(alias.source);
+            if (!aliasRecord.address) aliasRecord.address = record.address;
+            const aliasSourceMap = await loadExistingSources(env, aliasRecord.source, [aliasRecord]);
+            const aliasSource = aliasSourceMap.get(aliasRecord.sourceId) || null;
+            const aliasAssetsMap = aliasSource ? await loadSourceAssets(env, aliasSourceMap) : new Map();
+            await attachSource(env, aliasRecord, classified.candidate.id, alias.session_id, aliasSource, false,
+              clean(user?.email), aliasSource ? aliasAssetsMap.get(clean(aliasSource.id)) : null, true);
+            await env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
+                result_json=?2, error_text='' WHERE id=?3`)
+              .bind(nowIso(), JSON.stringify({ action: "autoMergeExactAlias",
+                listingId: classified.candidate.id, canonicalReviewId: row.id,
+                preserveRepresentative: true, autoDecisionVersion: decisionVersion }), alias.id).run();
+            aliasesMerged += 1;
+            mergedAliasCount += 1;
+          } catch (error) {
+            aliasesFailed += 1;
+            await env.DB.prepare("UPDATE collector_raw SET error_text=?1 WHERE id=?2")
+              .bind(clean(error?.message || error).slice(0, 500), alias.id).run();
+          }
+        }
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: classified.candidate.id,
-            reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
+            reason: classified.reason, aliasesMerged: mergedAliasCount,
+            autoDecisionVersion: decisionVersion }), row.id).run();
         merged += 1;
       } else if (classified.decision === "create") {
         const listingId = await createListing(env, record, row.session_id, clean(user?.email), existingSource, existingAssets);
@@ -2258,7 +2357,7 @@ async function repairExactReviews(env, user, options = {}) {
     : null;
   const remainingToScan = includeRemaining ? Number(pending?.count || 0) : null;
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
-    merged, created, duplicate, ambiguous, failed,
+    merged, created, duplicate, aliasesMerged, aliasesFailed, ambiguous, failed,
     hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= 20,
     remainingToScan, sourceFilter, customerMatches,
     operationAdjustments: { pendingReview: -(merged + created + duplicate) }, source: "D1" };

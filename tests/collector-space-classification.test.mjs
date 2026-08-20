@@ -14,7 +14,29 @@ function existing(id, room, deposit = 1000, rent = 50, area = 10) {
 test("different floors and explicit units are automatically separated", () => {
   assert.equal(compareListingSpace(incoming("2층"), existing("M-1", "1층")).decision, "different");
   assert.equal(compareListingSpace(incoming("102호"), existing("M-1", "101호")).decision, "different");
+  assert.equal(compareListingSpace(incoming("B02호"), existing("M-1", "B01호")).decision, "different");
   assert.equal(classifyListingCandidates(incoming("102호"), [existing("M-1", "101호")]).decision, "create");
+});
+
+test("active source terms recover an exact match hidden by stale representative terms", () => {
+  const staleRepresentative = {
+    ...existing("M-stale", "5층", 1000, 45, 20.1),
+    active_source_snapshots: [existing("O-current", "5/6", 1000, 40, 20.1)]
+  };
+  const result = classifyListingCandidates(incoming("5/6", 1000, 40, 20.1), [staleRepresentative]);
+  assert.equal(result.decision, "merge");
+  assert.equal(result.candidate.id, "M-stale");
+  assert.match(result.reason, /연결 원본/);
+});
+
+test("an explicit incoming unit stays separate from different units hidden under a generic master", () => {
+  const genericMaster = {
+    ...existing("M-501", "5층", 1000, 40, 20.1),
+    active_source_snapshots: [existing("O-501", "501호", 1000, 40, 20.1)]
+  };
+  const result = classifyListingCandidates(incoming("502호", 1000, 40, 20.1), [genericMaster]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /호실이 다름/);
 });
 
 test("the same explicit room is one physical listing even when rental terms changed", () => {
