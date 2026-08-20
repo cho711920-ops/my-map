@@ -32,6 +32,6 @@ test("reload skips the shared geocode download when source or local coordinates 
   assert.match(map, /allRowsAlreadyLocatedV691 \|\| allRowsReadyWithoutSharedCacheV8213/);
   assert.match(script, /JSDataAccessV6\.read\("geocodeCache", \{\}, \{/);
   assert.match(script, /cache: "default"/);
-  assert.match(html, /script\.js\?v=6\.10\.6-naver-history-deeplink/);
+  assert.match(html, /script\.js\?v=6\.10\.7-interaction-smooth/);
   assert.match(html, /map\.js\?v=8\.2\.18-unique-linked-selection/);
 });

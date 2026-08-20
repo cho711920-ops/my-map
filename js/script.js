@@ -3546,10 +3546,30 @@ function cancelMemoEdit() {
 }
 
 
-function autoResizeMemoEditor(element) {
-  if (!element) return;
+function resizeMemoEditorNowV6107(element) {
+  if (!element || !element.isConnected) return;
   element.style.height = "auto";
   element.style.height = element.scrollHeight + "px";
+}
+
+
+function autoResizeMemoEditor(element, immediate) {
+  if (!element) return;
+
+  if (immediate || typeof requestAnimationFrame !== "function") {
+    if (element.__memoResizeFrameV6107 && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(element.__memoResizeFrameV6107);
+    }
+    element.__memoResizeFrameV6107 = 0;
+    resizeMemoEditorNowV6107(element);
+    return;
+  }
+
+  if (element.__memoResizeFrameV6107) return;
+  element.__memoResizeFrameV6107 = requestAnimationFrame(function() {
+    element.__memoResizeFrameV6107 = 0;
+    resizeMemoEditorNowV6107(element);
+  });
 }
 
 
@@ -3658,7 +3678,7 @@ function focusMemoEditorV655(key) {
     } catch (_) {
       editor.focus();
     }
-    autoResizeMemoEditor(editor);
+    autoResizeMemoEditor(editor, true);
   });
 }
 
@@ -3797,8 +3817,6 @@ function saveItemMemo(encodedKey) {
     delete memoDraftValuesV655[key];
     editingMemoKey = null;
     memoEditMode = "replace";
-    memoStatusMessagesV655[key] = { text: "저장완료", tone: "success" };
-    refreshMemoCardV655(key, false);
     showMemoStatusV655(key, "저장완료", "success", 1400);
     document.getElementById("status").innerHTML = "메모 저장완료";
   }).catch(function(error) {
@@ -4482,14 +4500,16 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     '</div>' +
     memoPanel;
 
-  div.onclick = function(event) {
-    if (window.JSUnifiedListingsV8 &&
-        typeof window.JSUnifiedListingsV8.handleCardClick === "function") {
-      window.JSUnifiedListingsV8.handleCardClick(item, event);
-    }
-  };
+  var cardWarmupTimerV6107 = 0;
 
-  div.onpointerenter = function() {
+  function cancelCardWarmupV6107() {
+    if (!cardWarmupTimerV6107) return;
+    window.clearTimeout(cardWarmupTimerV6107);
+    cardWarmupTimerV6107 = 0;
+  }
+
+  function warmUpCardDetailsV6107() {
+    if (!div.isConnected) return;
     if (window.JSUnifiedListingsV8 &&
         typeof window.JSUnifiedListingsV8.prefetch === "function") {
       window.JSUnifiedListingsV8.prefetch(encodeURIComponent(String(item && item.propertyId || "")));
@@ -4497,7 +4517,27 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     if (Number(item && item.gongsilContactCountV8) > 0) {
       prefetchListContactPopupV654(encodedEditTargetV648).catch(function() {});
     }
+  }
+
+  div.onclick = function(event) {
+    cancelCardWarmupV6107();
+    if (window.JSUnifiedListingsV8 &&
+        typeof window.JSUnifiedListingsV8.handleCardClick === "function") {
+      window.JSUnifiedListingsV8.handleCardClick(item, event);
+    }
   };
+
+  div.onpointerenter = function() {
+    cancelCardWarmupV6107();
+    cardWarmupTimerV6107 = window.setTimeout(function() {
+      cardWarmupTimerV6107 = 0;
+      if (div.matches && !div.matches(":hover")) return;
+      warmUpCardDetailsV6107();
+    }, 180);
+  };
+
+  div.onpointerleave = cancelCardWarmupV6107;
+  div.onpointerdown = cancelCardWarmupV6107;
 
   div.ondblclick = function(event) {
     if (

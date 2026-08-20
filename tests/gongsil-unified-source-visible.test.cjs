@@ -11,7 +11,7 @@ assert.match(
 );
 assert.match(
   html,
-  /script\.js\?v=6\.10\.6-naver-history-deeplink/,
+  /script\.js\?v=6\.10\.7-interaction-smooth/,
   "the production page must load the relation-aware Gongsil filter"
 );
 

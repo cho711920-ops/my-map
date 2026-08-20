@@ -20,7 +20,7 @@ assert.match(html, /id="naverRoadviewHistoryBtn"[\s\S]*?disabled/);
 assert.match(html, /onclick="openNaverPastRoadviewV666\(\)"/);
 assert.match(css, /\.roadview-history-button-v666/);
 assert.match(css, /\.roadview-history-button-v666:disabled/);
-assert.match(html, /script\.js\?v=6\.10\.6-naver-history-deeplink/);
+assert.match(html, /script\.js\?v=6\.10\.7-interaction-smooth/);
 assert.match(html, /unified-listings-v8\.css\?v=8\.0\.46-roadview-polish/);
 
 const start = script.indexOf("function setNaverRoadviewHistoryReadyV666");

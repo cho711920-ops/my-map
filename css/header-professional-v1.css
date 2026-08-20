@@ -197,11 +197,11 @@
     flex-direction: column !important;
     gap: 2px !important;
     border-color: rgba(117, 140, 169, .38) !important;
-    background: rgba(255, 255, 255, .22) !important;
+    background: rgba(255, 255, 255, .9) !important;
     color: #243651 !important;
     box-shadow: 0 2px 8px rgba(15, 23, 42, .07) !important;
-    backdrop-filter: blur(8px) saturate(1.08) !important;
-    -webkit-backdrop-filter: blur(8px) saturate(1.08) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
   .map-quick-tool-btn .map-quick-icon-v638,
@@ -264,11 +264,11 @@
     justify-content: center !important;
     gap: 2px !important;
     border-color: rgba(117, 140, 169, .38) !important;
-    background: rgba(255, 255, 255, .22) !important;
+    background: rgba(255, 255, 255, .9) !important;
     color: #243651 !important;
     box-shadow: 0 2px 8px rgba(15, 23, 42, .07) !important;
-    backdrop-filter: blur(8px) saturate(1.08) !important;
-    -webkit-backdrop-filter: blur(8px) saturate(1.08) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 
