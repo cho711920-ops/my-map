@@ -94,7 +94,7 @@ async function localAccessProfile(username, env) {
   const normalized = normalizeLocalUsername(username);
   if (!normalized || !env.DB || typeof env.DB.prepare !== "function") return null;
   try {
-    const row = await env.DB.prepare(`SELECT username, display_name, role, active, password_salt,
+    const row = await env.DB.prepare(`SELECT username, linked_email, display_name, role, active, password_salt,
       password_hash, password_iterations, session_version, failed_attempts, locked_until
       FROM local_accounts WHERE username=?1 LIMIT 1`).bind(normalized).first();
     return row || null;
@@ -107,6 +107,8 @@ export async function authenticateLocalAccount(username, password, env, now = Da
   const normalized = normalizeLocalUsername(username);
   const suppliedPassword = String(password || "");
   const account = normalized ? await localAccessProfile(normalized, env) : null;
+  const linkedEmail = String(account?.linked_email || "").trim().toLowerCase();
+  const linkedProfile = linkedEmail ? await accessProfile(linkedEmail, env) : null;
   const lockedUntil = Date.parse(String(account?.locked_until || "")) || 0;
   const passwordAccount = account || {
     password_salt: "AAAAAAAAAAAAAAAAAAAAAA",
@@ -115,6 +117,7 @@ export async function authenticateLocalAccount(username, password, env, now = Da
   };
   const passwordMatches = await verifyLocalPassword(suppliedPassword.slice(0, 128), passwordAccount);
   const valid = Boolean(suppliedPassword.length <= 128 && account && Number(account.active) === 1 &&
+    (!linkedEmail || linkedProfile) &&
     lockedUntil <= now && passwordMatches);
   if (!valid) {
     if (account && env.DB && typeof env.DB.prepare === "function") {
@@ -129,11 +132,11 @@ export async function authenticateLocalAccount(username, password, env, now = Da
     updated_at=?1 WHERE username=?2`).bind(new Date(now).toISOString(), normalized).run();
   return {
     sub: `local:${normalized}`,
-    email: localIdentityEmail(normalized),
+    email: linkedEmail || localIdentityEmail(normalized),
     username: normalized,
     authType: "local",
-    role: String(account.role || "member"),
-    displayName: String(account.display_name || normalized),
+    role: String(linkedProfile?.role || account.role || "member"),
+    displayName: String(account.display_name || linkedProfile?.displayName || normalized),
     sessionVersion: Number(account.session_version || 1)
   };
 }
@@ -281,12 +284,17 @@ export async function verifySessionToken(token, env, now = Date.now()) {
       Number(account.session_version || 1) !== Number(decoded.sessionVersion || 0)) {
       throw Object.assign(new Error("사용이 중지되었거나 다시 로그인이 필요한 계정입니다."), { statusCode: 403 });
     }
+    const linkedEmail = String(account.linked_email || "").trim().toLowerCase();
+    const linkedProfile = linkedEmail ? await accessProfile(linkedEmail, env) : null;
+    if (linkedEmail && !linkedProfile) {
+      throw Object.assign(new Error("연결된 Google 계정의 사용이 중지되었습니다."), { statusCode: 403 });
+    }
     return {
       ...decoded,
-      email: localIdentityEmail(account.username),
+      email: linkedEmail || localIdentityEmail(account.username),
       username: String(account.username || ""),
-      role: String(account.role || "member"),
-      displayName: String(account.display_name || account.username || "")
+      role: String(linkedProfile?.role || account.role || "member"),
+      displayName: String(account.display_name || linkedProfile?.displayName || account.username || "")
     };
   }
   if (!await isAllowedEmail(decoded.email, env)) {

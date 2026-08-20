@@ -122,8 +122,20 @@
       panel.innerHTML = '<div class="operations-admin-empty-v1">사용자 관리는 관리자만 이용할 수 있습니다.</div>';
       return;
     }
+    var linkedByEmail = {};
+    state.localAccounts.forEach(function (entry) {
+      if (entry.linkedEmail) linkedByEmail[text(entry.linkedEmail).toLowerCase()] = entry.username;
+    });
+    var linkableUsers = state.users.filter(function (entry) {
+      var email = text(entry.email).toLowerCase();
+      return entry.active && (entry.role === "member" || entry.role === "viewer") && !linkedByEmail[email];
+    });
+    var linkOptions = linkableUsers.map(function (entry) {
+      return '<option value="' + escapeHtml(entry.email) + '">' +
+        escapeHtml((entry.displayName || entry.email.split("@")[0]) + " · " + entry.email) + '</option>';
+    }).join("");
     panel.innerHTML = '<section class="operations-admin-toolbar"><div><strong>사용자 권한 관리</strong>' +
-      '<span>본인은 Google 계정, 친구는 직접 발급한 아이디로 접속할 수 있습니다.</span></div></section>' +
+      '<span>친구는 같은 계정으로 Google 로그인과 발급 아이디 로그인을 모두 이용합니다.</span></div></section>' +
       '<div class="operations-user-section-title-v1"><strong>Google 승인 계정</strong><span>승인된 Google 이메일만 로그인할 수 있습니다.</span></div>' +
       '<form class="operations-user-form-v1" onsubmit="saveAllowedUserV1(event)">' +
       '<input name="email" type="email" placeholder="Google 이메일" required>' +
@@ -146,21 +158,21 @@
           '<button type="button" onclick="updateAllowedUserV1(\'' + encodeURIComponent(entry.email) + '\')">저장</button>') + '</article>';
       }).join("") + '</div>' +
       (state.profile.canManageLocalAccounts ? '<div class="operations-user-section-title-v1 operations-local-title-v1"><strong>발급 아이디</strong>' +
-        '<span>공개 회원가입 없이 마스터가 아이디와 비밀번호를 발급합니다.</span></div>' +
+        '<span>기존 Google 계정에 아이디·비밀번호를 연결하므로 찜·임장 기록과 권한이 그대로 유지됩니다.</span></div>' +
         '<form class="operations-user-form-v1 operations-local-user-form-v1" onsubmit="saveLocalAccountV1(event)">' +
         '<input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}" placeholder="친구 아이디" autocomplete="off" required>' +
+        '<select name="linkedEmail" required ' + (linkOptions ? '' : 'disabled') + '><option value="">연결할 Google 계정</option>' + linkOptions + '</select>' +
         '<input name="displayName" type="text" placeholder="표시 이름 (선택)">' +
         '<input name="password" type="password" minlength="10" maxlength="128" placeholder="비밀번호 10자 이상" autocomplete="new-password" required>' +
-        '<select name="role"><option value="member">편집자</option><option value="viewer">조회자</option></select>' +
-        '<button type="submit">아이디 발급</button></form>' +
+        '<button type="submit" ' + (linkOptions ? '' : 'disabled') + '>아이디 발급</button></form>' +
+        (!linkOptions && !state.localAccounts.length ? '<p class="operations-local-help-v1">먼저 친구의 Google 계정을 편집자 또는 조회자로 등록해 주세요.</p>' : '') +
         '<div class="operations-local-user-list-v1">' + state.localAccounts.map(function (entry) {
           return '<article><div><strong>' + escapeHtml(entry.displayName || entry.username) + '</strong><span>아이디 ' +
-            escapeHtml(entry.username) + (entry.lastLoginAt ? ' · 최근 로그인 ' + escapeHtml(formatAt(entry.lastLoginAt)) : '') +
+            escapeHtml(entry.username) + ' · Google ' + escapeHtml(entry.linkedEmail || '연결 없음') +
+            (entry.lastLoginAt ? ' · 최근 로그인 ' + escapeHtml(formatAt(entry.lastLoginAt)) : '') +
             '</span></div><input type="text" data-local-name="' + escapeHtml(entry.username) + '" value="' +
-            escapeHtml(entry.displayName || '') + '" placeholder="표시 이름"><select data-local-role="' +
-            escapeHtml(entry.username) + '"><option value="member" ' + (entry.role === 'member' ? 'selected' : '') +
-            '>편집자</option><option value="viewer" ' + (entry.role === 'viewer' ? 'selected' : '') +
-            '>조회자</option></select><input type="password" data-local-password="' + escapeHtml(entry.username) +
+            escapeHtml(entry.displayName || '') + '" placeholder="표시 이름"><span class="operations-local-role-v1">' +
+            escapeHtml(roleLabel(entry.role)) + '</span><input type="password" data-local-password="' + escapeHtml(entry.username) +
             '" minlength="10" maxlength="128" placeholder="새 비밀번호 (변경할 때만)" autocomplete="new-password">' +
             '<label class="operations-user-active-v1"><input type="checkbox" data-local-active="' +
             escapeHtml(entry.username) + '" ' + (entry.active ? 'checked' : '') + '><span>사용 허용</span></label>' +
@@ -247,9 +259,9 @@
     var form = event.currentTarget;
     apiPost("saveLocalAccount", {
       username: form.username.value,
+      linkedEmail: form.linkedEmail.value,
       displayName: form.displayName.value,
       password: form.password.value,
-      role: form.role.value,
       active: true
     }).then(function () { form.reset(); return loadUsers(); })
       .then(function () { setMessage("친구용 아이디를 발급했습니다. 비밀번호는 안전하게 직접 전달해 주세요.", "success"); })
@@ -258,13 +270,11 @@
   global.updateLocalAccountV1 = function (encodedUsername) {
     var username = decodeURIComponent(encodedUsername || "");
     var displayName = document.querySelector('[data-local-name="' + CSS.escape(username) + '"]');
-    var role = document.querySelector('[data-local-role="' + CSS.escape(username) + '"]');
     var password = document.querySelector('[data-local-password="' + CSS.escape(username) + '"]');
     var active = document.querySelector('[data-local-active="' + CSS.escape(username) + '"]');
     apiPost("saveLocalAccount", {
       username: username,
       displayName: displayName && displayName.value,
-      role: role && role.value,
       password: password && password.value,
       active: !active || active.checked
     }).then(loadUsers).then(function () {

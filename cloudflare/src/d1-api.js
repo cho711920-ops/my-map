@@ -1,5 +1,5 @@
 import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
-import { createLocalPassword, normalizeLocalUsername, requireRole } from "./security.js";
+import { accessProfile, createLocalPassword, normalizeLocalUsername, requireRole } from "./security.js";
 import { carryConfirmedVisitMemo } from "./visit-status.js";
 
 const UNIFIED_FIELDS = [
@@ -1034,13 +1034,14 @@ async function userManagement(env, user) {
       users.push({ email, displayName: "", role: index === 0 ? "owner" : "member", active: true, source: "ENV" });
     }
   }
-  const localResult = await env.DB.prepare(`SELECT username, display_name, role, active, failed_attempts,
+  const localResult = await env.DB.prepare(`SELECT username, linked_email, display_name, role, active, failed_attempts,
     locked_until, last_login_at, created_at, updated_at FROM local_accounts
     ORDER BY active DESC, username`).all();
   const localAccounts = (localResult?.results || []).map((row) => ({
     username: clean(row.username).toLowerCase(),
+    linkedEmail: clean(row.linked_email).toLowerCase(),
     displayName: clean(row.display_name),
-    role: clean(row.role) || "member",
+    role: clean(users.find((entry) => entry.email === clean(row.linked_email).toLowerCase())?.role || row.role) || "member",
     active: Number(row.active) === 1,
     failedAttempts: Number(row.failed_attempts || 0),
     lockedUntil: clean(row.locked_until),
@@ -1819,12 +1820,19 @@ async function saveLocalAccount(env, user, body) {
     throw Object.assign(new Error("아이디는 영문 소문자·숫자·점·밑줄·하이픈으로 3~32자까지 입력해 주세요."),
       { statusCode: 400 });
   }
-  const requestedRole = clean(body.role) || "member";
-  if (!new Set(["member", "viewer"]).has(requestedRole)) {
-    throw Object.assign(new Error("친구 계정은 편집자 또는 조회자 권한만 지정할 수 있습니다."), { statusCode: 400 });
-  }
-  const existing = await env.DB.prepare(`SELECT username FROM local_accounts WHERE username=?1 LIMIT 1`)
+  const existing = await env.DB.prepare(`SELECT username, linked_email FROM local_accounts WHERE username=?1 LIMIT 1`)
     .bind(username).first();
+  const linkedEmail = clean(body.linkedEmail || existing?.linked_email).toLowerCase();
+  const linkedProfile = linkedEmail ? await accessProfile(linkedEmail, env) : null;
+  if (!linkedProfile || !new Set(["member", "viewer"]).has(clean(linkedProfile.role))) {
+    throw Object.assign(new Error("사용 허용된 친구 Google 계정을 선택해 주세요."), { statusCode: 400 });
+  }
+  const duplicateLink = await env.DB.prepare(`SELECT username FROM local_accounts
+    WHERE lower(linked_email)=lower(?1) AND username<>?2 LIMIT 1`).bind(linkedEmail, username).first();
+  if (duplicateLink) {
+    throw Object.assign(new Error("이 Google 계정에는 이미 발급 아이디가 연결되어 있습니다."), { statusCode: 409 });
+  }
+  const requestedRole = clean(linkedProfile.role);
   const password = String(body.password || "");
   if (!existing && !password) {
     throw Object.assign(new Error("새 계정에 사용할 비밀번호를 입력해 주세요."), { statusCode: 400 });
@@ -1834,28 +1842,28 @@ async function saveLocalAccount(env, user, body) {
   const now = new Date().toISOString();
   if (existing) {
     if (passwordRecord) {
-      await env.DB.prepare(`UPDATE local_accounts SET display_name=?1, role=?2, active=?3,
-        password_salt=?4, password_hash=?5, password_iterations=?6,
-        session_version=session_version+1, failed_attempts=0, locked_until='', updated_at=?7
-        WHERE username=?8`).bind(clean(body.displayName).slice(0, 100), requestedRole, active,
+      await env.DB.prepare(`UPDATE local_accounts SET linked_email=?1, display_name=?2, role=?3, active=?4,
+        password_salt=?5, password_hash=?6, password_iterations=?7,
+        session_version=session_version+1, failed_attempts=0, locked_until='', updated_at=?8
+        WHERE username=?9`).bind(linkedEmail, clean(body.displayName).slice(0, 100), requestedRole, active,
           passwordRecord.salt, passwordRecord.hash, passwordRecord.iterations, now, username).run();
     } else {
-      await env.DB.prepare(`UPDATE local_accounts SET display_name=?1, role=?2, active=?3,
-        session_version=session_version+1, failed_attempts=0, locked_until='', updated_at=?4
-        WHERE username=?5`).bind(clean(body.displayName).slice(0, 100), requestedRole, active, now, username).run();
+      await env.DB.prepare(`UPDATE local_accounts SET linked_email=?1, display_name=?2, role=?3, active=?4,
+        session_version=session_version+1, failed_attempts=0, locked_until='', updated_at=?5
+        WHERE username=?6`).bind(linkedEmail, clean(body.displayName).slice(0, 100), requestedRole, active, now, username).run();
     }
   } else {
     await env.DB.prepare(`INSERT INTO local_accounts (
-      username, display_name, role, active, password_salt, password_hash, password_iterations,
+      username, linked_email, display_name, role, active, password_salt, password_hash, password_iterations,
       session_version, created_by, created_at, updated_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, ?9)`).bind(
-      username, clean(body.displayName).slice(0, 100), requestedRole, active,
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?10, ?10)`).bind(
+      username, linkedEmail, clean(body.displayName).slice(0, 100), requestedRole, active,
       passwordRecord.salt, passwordRecord.hash, passwordRecord.iterations,
       clean(user?.email).toLowerCase(), now
     ).run();
   }
   return { ok: true, action: "saveLocalAccount", persisted: true, username,
-    displayName: clean(body.displayName), role: requestedRole, active: Boolean(active),
+    linkedEmail, displayName: clean(body.displayName), role: requestedRole, active: Boolean(active),
     passwordChanged: Boolean(passwordRecord), source: "D1" };
 }
 
