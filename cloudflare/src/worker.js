@@ -196,7 +196,7 @@ function deleteR2Cache(env, context, keys) {
 
 function unifiedDetailCacheKey(propertyId) {
   const safe = String(propertyId || "").trim();
-  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v3-source-aware-review/${safe}.json` : "";
+  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v4-normalized-snapshot/${safe}.json` : "";
 }
 
 function mutationAction(body) {

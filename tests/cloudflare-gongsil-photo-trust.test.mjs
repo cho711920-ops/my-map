@@ -42,7 +42,8 @@ test("unified list and detail responses sanitize legacy Gongsilbox media", () =>
   assert.match(d1, /clean\(original\.source\) === "공실박스"/);
   assert.match(d1, /const isGongsil = clean\(row\.source \|\| snapshot\.source\) === "공실박스"/);
   assert.match(worker, /unified-listings-v5-source-aware-review\.json/);
-  assert.match(worker, /unified-detail-v3-source-aware-review/);
+  assert.match(worker, /unified-detail-v4-normalized-snapshot/);
+  assert.match(d1, /const snapshot = \{\s*\.\.\.raw,\s*\.\.\.parseJson\(row\.list_snapshot_json, \{\}\)\s*\}/);
 });
 
 test("primary dialogs share one minimal single-glyph close-button style", () => {

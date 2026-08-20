@@ -395,8 +395,8 @@ async function unifiedDetail(env, propertyId) {
   const originals = (sourceResult?.results || []).map((row) => {
     const raw = parseJson(row.raw_json, {});
     const snapshot = {
-      ...parseJson(row.list_snapshot_json, {}),
-      ...raw
+      ...raw,
+      ...parseJson(row.list_snapshot_json, {})
     };
     const isGongsil = clean(row.source || snapshot.source) === "공실박스";
     const images = isGongsil ? actualGongsilImages(raw) : (mediaBySource[clean(row.id)] || []);
