@@ -50,7 +50,7 @@ assert(
   "card checkboxes must carry the property ID selection target"
 );
 assert(
-  html.includes("script.js?v=6.10.7-interaction-smooth"),
+  html.includes("script.js?v=6.10.8-favorite-property-id"),
   "the production page must load the fixed script cache version"
 );
 

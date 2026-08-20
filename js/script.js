@@ -4357,6 +4357,10 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
       : "");
 
   var encodedKey = encodeURIComponent(item.key);
+  var favoriteRefV821 = item.propertyId
+    ? "property:" + String(item.propertyId).trim()
+    : item.key;
+  var encodedFavoriteRefV821 = encodeURIComponent(favoriteRefV821);
   var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
   var encodedEditTargetV648 = encodeURIComponent(
     item.propertyId
@@ -4402,7 +4406,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
       'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>';
   var favoriteButtonV721 =
     '<button type="button" class="item-list-add-btn favorite" title="찜 목록에 추가" ' +
-      'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedKey + '\')">찜</button>';
+      'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRefV821 + '\')">찜</button>';
   var editButtonV721 =
     '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
       'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';

@@ -33,7 +33,7 @@ assert.match(
   scriptSource,
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
-assert.match(indexSource, /js\/script\.js\?v=6\.10\.7-interaction-smooth/);
+assert.match(indexSource, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);
 assert.match(indexSource, /js\/map\.js\?v=8\.2\.18-unique-linked-selection/);
 
 console.log("default Daejeon map view tests passed");

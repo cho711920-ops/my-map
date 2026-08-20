@@ -467,10 +467,6 @@
     if (!list) return;
     var refs = uniqueRefs(list.itemKeys || []);
     var filterKeys = refs.slice();
-    refs.forEach(function (ref) {
-      var item = resolveItem(ref);
-      if (item && item.key && filterKeys.indexOf(item.key) < 0) filterKeys.push(item.key);
-    });
     global.favoriteKeys = filterKeys;
     try { localStorage.setItem("favoriteKeys", JSON.stringify(filterKeys)); } catch (_) {}
     global.favoriteOnly = true;

@@ -20,6 +20,6 @@ assert.match(
 assert.match(script, /function verifyNaverRoadviewMapTilesV665\(\)/);
 assert.match(script, /setMapTypeId\(window\.naver\.maps\.MapTypeId\.NORMAL\)/);
 assert.match(script, /Event\.trigger\(naverRoadviewMapV654, "resize"\)/);
-assert.match(html, /script\.js\?v=6\.10\.7-interaction-smooth/);
+assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
 
 console.log("NAVER linked-map tiles v6.6.5 tests passed");
