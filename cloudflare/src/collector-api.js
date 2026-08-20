@@ -2519,7 +2519,7 @@ async function repairExactReviews(env, user, options = {}) {
             reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
         created += 1;
       } else {
-        await env.DB.prepare("UPDATE collector_raw SET result_json=?1 WHERE id=?2")
+        await env.DB.prepare("UPDATE collector_raw SET result_json=?1, error_text='' WHERE id=?2")
           .bind(JSON.stringify({ candidateIds: candidates.map((candidate) => candidate.id), reason: classified.reason,
             autoDecision: "review", autoDecisionVersion: decisionVersion }), row.id).run();
         ambiguous += 1;

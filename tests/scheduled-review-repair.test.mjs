@@ -17,6 +17,7 @@ assert.match(collector, /if \(Number\(exactRepair\?\.scanned \|\| 0\) > 0\) retu
 assert.match(collector, /return mergeSingleCandidateReviews\(env, systemUser/);
 assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 7/);
 assert.match(collector, /const decisionVersion = REVIEW_CLASSIFICATION_VERSION/);
+assert.match(collector, /UPDATE collector_raw SET result_json=\?1, error_text='' WHERE id=\?2/);
 assert.match(collector, /action: "autoMergeExactAlias"/);
 assert.match(collector, /async function attachPendingReviewAliases/);
 assert.match(collector, /aliasesMerged: aliases\.merged/);
