@@ -217,6 +217,11 @@ function gongsilRecord(record) {
     premium: number(values[7] ?? record?.premium), area: number(values[8] ?? record?.area),
     memo: memoWithVisit(values[11] || record?.memo), link: clean(record?.url || record?.sourceUrl),
     listSnapshot: clean(record?.listSnapshot), images, contacts, raw: record?.raw || record,
+    preserveContacts: Boolean(record?.preserveContacts) && contacts.length === 0,
+    contactCaptureStatus: clean(record?.contactCaptureStatus),
+    collectionWarnings: Array.isArray(record?.collectionWarnings)
+      ? record.collectionWarnings.map(clean).filter(Boolean).slice(0, 10)
+      : [],
     latitude: coordinate(record?.latitude ?? record?.lat ?? record?.mapY, -90, 90),
     longitude: coordinate(record?.longitude ?? record?.lng ?? record?.lon ?? record?.mapX, -180, 180)
   };
@@ -595,7 +600,9 @@ async function classifyManifest(env, body) {
         legacyBootstrapped += 1;
       }
       if (source === "공실박스") {
-        if (shouldRefreshGongsilDetail(row.last_collected_at)) {
+        const previousSnapshot = parseJson(row.list_snapshot_json, {});
+        if (clean(previousSnapshot?.contactCaptureStatus) === "deferred" ||
+            shouldRefreshGongsilDetail(row.last_collected_at)) {
           refreshDetail.push(entry.sourceId);
         }
       }
@@ -948,6 +955,11 @@ export function normalizeReviewRecord(value = {}) {
     listSnapshot: clean(value.listSnapshot),
     images: Array.isArray(value.images) ? value.images.filter(Boolean) : [],
     contacts: Array.isArray(value.contacts) ? value.contacts.filter((contact) => contact && typeof contact === "object") : [],
+    preserveContacts: value.preserveContacts === true,
+    contactCaptureStatus: clean(value.contactCaptureStatus),
+    collectionWarnings: Array.isArray(value.collectionWarnings)
+      ? value.collectionWarnings.map(clean).filter(Boolean).slice(0, 10)
+      : [],
     raw: value.raw && typeof value.raw === "object" ? value.raw : {},
     latitude: coordinate(value.latitude ?? value.lat ?? value.mapY, -90, 90),
     longitude: coordinate(value.longitude ?? value.lng ?? value.lon ?? value.mapX, -180, 180)
@@ -991,40 +1003,42 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now,
     mediaChanged += 1;
   }
 
-  const desiredContacts = new Map();
-  for (const contact of record.contacts) {
-    const normalizedPhone = clean(contact.phone).replace(/\D/g, "");
-    const key = `${clean(contact.role)}:${normalizedPhone}`;
-    if (!normalizedPhone || desiredContacts.has(key)) continue;
-    desiredContacts.set(key, { ...contact, normalizedPhone });
-  }
-  const currentContacts = new Map();
-  for (const row of current.contacts || []) {
-    const normalizedPhone = clean(row.normalized_phone || row.phone).replace(/\D/g, "");
-    const key = `${clean(row.role)}:${normalizedPhone}`;
-    if (!normalizedPhone || currentContacts.has(key) || !desiredContacts.has(key)) {
-      statements.push(env.DB.prepare("DELETE FROM listing_contacts WHERE id=?1").bind(row.id));
-      contactsChanged += 1;
-      continue;
+  if (!record.preserveContacts) {
+    const desiredContacts = new Map();
+    for (const contact of record.contacts) {
+      const normalizedPhone = clean(contact.phone).replace(/\D/g, "");
+      const key = `${clean(contact.role)}:${normalizedPhone}`;
+      if (!normalizedPhone || desiredContacts.has(key)) continue;
+      desiredContacts.set(key, { ...contact, normalizedPhone });
     }
-    currentContacts.set(key, row);
-    const desired = desiredContacts.get(key);
-    if (clean(row.listing_id) !== clean(listingId) || clean(row.name) !== clean(desired.name) ||
-        clean(row.phone) !== clean(desired.phone) || clean(row.status) !== "active") {
-      statements.push(env.DB.prepare(`UPDATE listing_contacts SET listing_id=?1, name=?2, phone=?3, normalized_phone=?4,
-        status='active', last_seen_at=?5, updated_at=?5 WHERE id=?6`)
-        .bind(listingId, clean(desired.name), clean(desired.phone), desired.normalizedPhone, now, row.id));
+    const currentContacts = new Map();
+    for (const row of current.contacts || []) {
+      const normalizedPhone = clean(row.normalized_phone || row.phone).replace(/\D/g, "");
+      const key = `${clean(row.role)}:${normalizedPhone}`;
+      if (!normalizedPhone || currentContacts.has(key) || !desiredContacts.has(key)) {
+        statements.push(env.DB.prepare("DELETE FROM listing_contacts WHERE id=?1").bind(row.id));
+        contactsChanged += 1;
+        continue;
+      }
+      currentContacts.set(key, row);
+      const desired = desiredContacts.get(key);
+      if (clean(row.listing_id) !== clean(listingId) || clean(row.name) !== clean(desired.name) ||
+          clean(row.phone) !== clean(desired.phone) || clean(row.status) !== "active") {
+        statements.push(env.DB.prepare(`UPDATE listing_contacts SET listing_id=?1, name=?2, phone=?3, normalized_phone=?4,
+          status='active', last_seen_at=?5, updated_at=?5 WHERE id=?6`)
+          .bind(listingId, clean(desired.name), clean(desired.phone), desired.normalizedPhone, now, row.id));
+        contactsChanged += 1;
+      }
+    }
+    for (const [key, contact] of desiredContacts) {
+      if (currentContacts.has(key)) continue;
+      statements.push(env.DB.prepare(`INSERT INTO listing_contacts (
+          id, listing_id, source_id, role, name, phone, normalized_phone, status, first_seen_at, last_seen_at, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?8, ?8, ?8)`)
+        .bind(`C-${crypto.randomUUID()}`, listingId, sourceRowId, clean(contact.role), clean(contact.name),
+          clean(contact.phone), contact.normalizedPhone, now));
       contactsChanged += 1;
     }
-  }
-  for (const [key, contact] of desiredContacts) {
-    if (currentContacts.has(key)) continue;
-    statements.push(env.DB.prepare(`INSERT INTO listing_contacts (
-        id, listing_id, source_id, role, name, phone, normalized_phone, status, first_seen_at, last_seen_at, created_at, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?8, ?8, ?8)`)
-      .bind(`C-${crypto.randomUUID()}`, listingId, sourceRowId, clean(contact.role), clean(contact.name),
-        clean(contact.phone), contact.normalizedPhone, now));
-    contactsChanged += 1;
   }
   if (statements.length) {
     for (let offset = 0; offset < statements.length; offset += 80) await env.DB.batch(statements.slice(offset, offset + 80));
@@ -1045,13 +1059,22 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
   const protectListing = preserveRepresentative && !updateCondition && !promoteRepresentative;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
+  if (record.preserveContacts) {
+    snapshot.contactCount = Math.max(
+      Number(previous?.contactCount || 0),
+      Array.isArray(existingAssets?.contacts) ? existingAssets.contacts.length : 0
+    );
+    snapshot.contactCaptureStatus = "deferred";
+    snapshot.collectionWarnings = record.collectionWarnings;
+  }
   const snapshotHash = snapshotKey(record.listSnapshot || snapshot);
   const snapshotJson = JSON.stringify(snapshot);
   const rawJson = JSON.stringify(record.raw || {});
   const conditionChanged = Boolean(existingSource) && sourceConditionChanged(previous, snapshot);
   let sourceChanged = !existingSource || clean(existingSource.snapshot_hash) !== snapshotHash ||
     clean(existingSource.source_url) !== clean(record.link) || Number(existingSource.active) !== 1 ||
-    Number(existingSource.missing_count || 0) !== 0;
+    Number(existingSource.missing_count || 0) !== 0 ||
+    clean(previous?.contactCaptureStatus) !== clean(snapshot.contactCaptureStatus);
   if (!existingSource) {
     await env.DB.prepare(`INSERT INTO listing_sources (
         id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
@@ -1122,7 +1145,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
 async function createListing(env, record, sessionId, actor = "collector", existingSource = null, existingAssets = null) {
   const id = `M-${crypto.randomUUID()}`;
   const now = nowIso();
-  const contacts = JSON.stringify(record.contacts);
+  const contacts = JSON.stringify(Array.isArray(record.contacts) ? record.contacts : []);
   await env.DB.prepare(`INSERT INTO listings (
       id, property_id, status, main_source, title, address, road_address, building_name, room, listing_type,
       deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude, operating_memo, source_url,
@@ -1201,7 +1224,7 @@ async function saveCollectorError(env, record, sessionId, message) {
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
-    refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0 };
+    refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0, contactDeferred: 0 };
   const normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
@@ -1214,6 +1237,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
         if (errors.length < 20) errors.push({ sourceId: "", message: "원본 ID 없음" });
         continue;
       }
+      if (record.preserveContacts) totals.contactDeferred += 1;
       normalizedRecords.push(record);
     } catch (error) {
       totals.failed += 1;
@@ -1296,7 +1320,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
   for (const key of ["received", "created", "merged", "updated", "conditionUpdated", "refreshed",
-    "review", "duplicate", "failed"]) {
+    "review", "duplicate", "failed", "contactDeferred"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
@@ -1336,6 +1360,8 @@ export function collectorCompletionAudit(body, observedCount) {
   const processed = countValue(body?.processedCount);
   const failed = countValue(body?.failed);
   const addressMissing = countValue(body?.addressMissing);
+  const requiredFieldRejected = countValue(body?.requiredFieldRejected);
+  const contactDeferred = countValue(body?.contactDeferred);
 
   const block = (message) => { issues.push(message); blockingIssues.push(message); };
   if (!requested) block(body?.stopped ? "안전중단" : "부분수집 요청");
@@ -1351,6 +1377,10 @@ export function collectorCompletionAudit(body, observedCount) {
     if (failed > addressMissing) blockingIssues.push(`주소 외 실패 ${failed - addressMissing}건`);
   }
   if (requested && addressMissing > 0) issues.push(`주소·층 오류 ${addressMissing}건`);
+  if (requested && requiredFieldRejected > addressMissing) {
+    issues.push(`임대조건 등 필수정보 오류 ${requiredFieldRejected - addressMissing}건`);
+  }
+  if (contactDeferred > 0) issues.push(`연락처 보류 ${contactDeferred}건(매물 저장 완료)`);
   if (requested && Boolean(body?.truncated)) block("목록 페이지 잘림");
   if (requested && !clean(body?.collectorVersion)) block("수집기 버전 없음");
 
@@ -1367,6 +1397,8 @@ export function collectorCompletionAudit(body, observedCount) {
     observed,
     failed,
     addressMissing,
+    requiredFieldRejected,
+    contactDeferred,
     collectorVersion: clean(body?.collectorVersion).slice(0, 30)
   };
 }
@@ -1439,6 +1471,20 @@ async function finalizeSession(env, body) {
   totals.processedCount = audit.processed;
   totals.failed = Math.max(Number(totals.failed || 0), audit.failed);
   totals.addressMissing = Math.max(Number(totals.addressMissing || 0), audit.addressMissing);
+  totals.requiredFieldRejected = Math.max(
+    Number(totals.requiredFieldRejected || 0),
+    audit.requiredFieldRejected
+  );
+  totals.contactDeferred = Math.max(Number(totals.contactDeferred || 0), audit.contactDeferred);
+  totals.warningCounts = Object.fromEntries(
+    Object.entries(body?.warningCounts && typeof body.warningCounts === "object" ? body.warningCounts : {})
+      .slice(0, 20)
+      .map(([key, value]) => [clean(key).slice(0, 160), countValue(value)])
+      .filter(([key, value]) => key && value > 0)
+  );
+  if (clean(body?.detailAuthWarning)) {
+    totals.detailAuthWarning = clean(body.detailAuthWarning).slice(0, 500);
+  }
   if (audit.collectorVersion) totals.collectorVersion = audit.collectorVersion;
   await env.DB.prepare(`UPDATE collector_sessions SET state=?1, totals_json=?2,
     finished_at=CASE WHEN ?1 IN ('completed','partial') THEN ?3 ELSE finished_at END, updated_at=?3 WHERE id=?4`)

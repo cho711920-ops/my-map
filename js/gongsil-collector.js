@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.5";
+  var VERSION = "2.1.6";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -261,7 +261,8 @@
           '<div class="jsg-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
           '<div class="jsg-metric"><span>상세 중복</span><b data-metric="detailedDuplicates">0</b></div>' +
           '<div class="jsg-metric"><span>기존 동일 생략</span><b data-metric="skippedUnchanged">0</b></div>' +
-          '<div class="jsg-metric"><span>변환 제외</span><b data-metric="addressMissing">0</b></div>' +
+          '<div class="jsg-metric"><span>연락처 보류</span><b data-metric="contactDeferred">0</b></div>' +
+          '<div class="jsg-metric"><span>필수정보 제외</span><b data-metric="addressMissing">0</b></div>' +
           '<div class="jsg-metric"><span>조회·저장 실패</span><b data-metric="failed">0</b></div>' +
         '</div>' +
         '<div class="jsg-card">' +
@@ -630,8 +631,21 @@
       });
       setProgress(detailBaseProcessed, totalItemCount);
 
+      var detailAuthWarning = "";
       if (detailItems.length && !state.migratedTransformItem) {
-        await ensureDetailAuth();
+        try {
+          await ensureDetailAuth();
+        } catch (detailAuthError) {
+          if (state.stopRequested) throw detailAuthError;
+          detailAuthWarning = detailAuthError && detailAuthError.message
+            ? detailAuthError.message
+            : String(detailAuthError || "상세 연락처 연결 실패");
+          setStatus(
+            "연락처 없이 매물 수집을 계속합니다.",
+            detailAuthWarning +
+            "\n주소·임대조건이 확인된 매물은 저장하고 기존 연락처는 그대로 보존합니다."
+          );
+        }
       }
 
       setStatus(
@@ -644,6 +658,8 @@
 
       var transformed = [];
       var rejected = [];
+      var contactDeferred = [];
+      var addressMissingCount = 0;
       var completed = 0;
       var detailWaitStartedAt = Date.now();
       var detailWaitTimer = window.setInterval(function () {
@@ -689,14 +705,25 @@
       }
 
       queueResult.forEach(function (result) {
-        if (result && result.ok) transformed.push(result.record);
+        if (result && result.ok) {
+          transformed.push(result.record);
+          if (Array.isArray(result.warnings) && result.warnings.length) {
+            contactDeferred.push(result.warnings.join(" / "));
+          }
+        }
         else if (result && result.stopped) return;
-        else rejected.push(result && result.reason ? result.reason : "변환 실패");
+        else {
+          rejected.push(result && result.reason ? result.reason : "변환 실패");
+          if (result && result.rejectType === "address") addressMissingCount += 1;
+        }
       });
       if (!state.stopRequested && completed >= detailItems.length) {
         state.migratedTransformItem = null;
       }
-      updateDashboard({addressMissing: rejected.length});
+      updateDashboard({
+        contactDeferred: contactDeferred.length,
+        addressMissing: rejected.length
+      });
 
       if (state.stopRequested) {
         setStatus(
@@ -714,10 +741,15 @@
 
       setStatus(
         "JS부동산 매물현황으로 전송 중입니다.",
-        transformed.length + "개 저장 · 변환 제외 " + rejected.length + "개"
+        transformed.length + "개 저장 · 연락처 보류 " + contactDeferred.length +
+        "개 · 필수정보 제외 " + rejected.length + "개"
       );
 
       saveMetadata.rejectedCount = rejected.length;
+      saveMetadata.addressMissingCount = addressMissingCount;
+      saveMetadata.contactDeferredCount = contactDeferred.length;
+      saveMetadata.warningCounts = reasonCounts(contactDeferred);
+      if (detailAuthWarning) saveMetadata.detailAuthWarning = detailAuthWarning;
       saveMetadata.unchanged = unchangedItemCount;
       state.pendingSave = {
         records: transformed,
@@ -778,6 +810,7 @@
           ? result.detailedDuplicates
           : result.duplicate,
         skippedUnchanged: unchangedItemCount,
+        contactDeferred: contactDeferred.length,
         addressMissing: rejected.length,
         failed: result.failed
       });
@@ -788,7 +821,10 @@
         message + (result.stopped
           ? "\n이미 저장된 묶음은 유지되며 완전수집 판정은 실행하지 않았습니다."
           : "") + (rejected.length
-            ? "\n변환 제외 " + rejected.length + "개\n" + rejectedSummary(rejected)
+            ? "\n필수정보 제외 " + rejected.length + "개\n" + rejectedSummary(rejected)
+            : "") + (contactDeferred.length
+            ? "\n연락처 보류 " + contactDeferred.length + "개 · 매물은 정상 저장됨\n" +
+              rejectedSummary(contactDeferred)
             : "")
       );
       if (result.stopped) {
@@ -883,6 +919,9 @@
       skippedUnchanged: Number(
         pending.metadata && pending.metadata.unchanged || 0
       ),
+      contactDeferred: Number(
+        pending.metadata && pending.metadata.contactDeferredCount || 0
+      ),
       addressMissing: rejected.length,
       failed: savedProgress && savedProgress.totals
         ? savedProgress.totals.failed
@@ -928,6 +967,9 @@
         skippedUnchanged: result.skippedUnchanged !== undefined
           ? result.skippedUnchanged
           : Number(pending.metadata && pending.metadata.unchanged || 0),
+        contactDeferred: Number(
+          pending.metadata && pending.metadata.contactDeferredCount || 0
+        ),
         addressMissing: rejected.length,
         failed: result.failed
       });
@@ -937,7 +979,7 @@
         message + (result.stopped
           ? "\n이미 저장된 묶음은 유지되며 완전수집 판정은 실행하지 않았습니다."
           : "") + (rejected.length
-            ? "\n변환 제외 " + rejected.length + "개\n" +
+            ? "\n필수정보 제외 " + rejected.length + "개\n" +
               rejectedSummary(rejected)
             : "")
       );
@@ -1385,21 +1427,43 @@
     var address = buildLotAddress(item, addressData);
 
     if (!address || !/\d/.test(address)) {
-      return { ok: false, reason: "지번주소 없음" };
+      return { ok: false, reason: "지번주소 없음", rejectType: "address" };
     }
 
     var rental = getRentalTerms(item);
     if (!rental) {
-      return { ok: false, reason: "임대조건 없음" };
+      return { ok: false, reason: "임대조건 없음", rejectType: "rental" };
     }
 
-    var detail = await fetchDetailData(item);
+    var detail = {};
+    var warnings = [];
+    try {
+      detail = await fetchDetailData(item);
+    } catch (detailError) {
+      warnings.push(detailError && detailError.message
+        ? detailError.message
+        : String(detailError || "상세정보 조회 실패"));
+    }
     /*
-     * 공실박스 원본매물의 연락처는 해당 출처매물ID에 반드시 함께 저장합니다.
-     * 상세조회·역할 확인이 실패하면 빈 연락처로 덮지 않고 이 원본만 실패 처리해
-     * 기존 번호를 보존합니다.
+     * 공실박스 원본매물의 연락처는 역할까지 확인된 경우에만 저장합니다.
+     * 상세조회·역할 확인이 실패해도 주소와 임대조건이 확인된 매물은 저장하되,
+     * preserveContacts를 전달해 기존 번호가 빈 목록으로 덮이지 않게 합니다.
      */
-    var phones = await collectPhones(item, requestBody, addressData, detail);
+    var phones = {
+      landlordPrimary: "",
+      tenantPrimary: "",
+      extraMemo: [],
+      contacts: []
+    };
+    if (!warnings.length) {
+      try {
+        phones = await collectPhones(item, requestBody, addressData, detail);
+      } catch (contactError) {
+        warnings.push(contactError && contactError.message
+          ? contactError.message
+          : String(contactError || "연락처 확인 실패"));
+      }
+    }
     var imageUrls = collectMediaUrls(item, detail);
     var memo = buildMemo(item);
     var pyeong = getPyeong(item);
@@ -1421,17 +1485,34 @@
       "공실박스"
     ];
 
+    var detailBuilding = detail && detail.bilinfo || {};
+    var latitude = numberValue(pick(detailBuilding, ["mapy", "Mapy", "latitude", "lat"])) ||
+      numberValue(pick(item, ["SMapy", "sMapy", "Mapy", "mapy", "Latitude", "latitude", "lat"]));
+    var longitude = numberValue(pick(detailBuilding, ["mapx", "Mapx", "longitude", "lng"])) ||
+      numberValue(pick(item, ["SMapx", "sMapx", "Mapx", "mapx", "Longitude", "longitude", "lng"]));
+    var record = {
+      externalId: text(pick(item, ["Bfidx", "bfidx", "BfIdx"])),
+      listSnapshot: gongsilListSnapshot(item),
+      primaryImage: imageUrls[0] || "",
+      imageUrls: imageUrls,
+      raw: { list: item, detail: detail },
+      roadAddress: text(addressData && addressData.road),
+      latitude: latitude || null,
+      longitude: longitude || null,
+      values: values
+    };
+    if (warnings.length) {
+      record.preserveContacts = true;
+      record.contactCaptureStatus = "deferred";
+      record.collectionWarnings = warnings.slice(0, 5);
+    } else {
+      record.contactList = phones.contacts;
+    }
+
     return {
       ok: true,
-      record: {
-        externalId: text(pick(item, ["Bfidx", "bfidx", "BfIdx"])),
-        listSnapshot: gongsilListSnapshot(item),
-        contactList: phones.contacts,
-        primaryImage: imageUrls[0] || "",
-        imageUrls: imageUrls,
-        raw: { list: item, detail: detail },
-        values: values
-      }
+      record: record,
+      warnings: warnings
     };
   }
 
@@ -2154,6 +2235,7 @@
       refreshed: 0,
       review: 0,
       duplicate: 0,
+      contactDeferred: 0,
       failed: 0
     };
     var signature = collectionSignature(records);
@@ -2290,6 +2372,7 @@
           duplicate: totals.duplicate,
           detailedDuplicates: totals.duplicate,
           skippedUnchanged: Number(metadata.unchanged || 0),
+          contactDeferred: Number(metadata.contactDeferredCount || totals.contactDeferred || 0),
           failed: listFailedCount + totals.failed
         });
         setProgress(
@@ -2344,6 +2427,7 @@
         duplicate: totals.duplicate,
         detailedDuplicates: totals.duplicate,
         skippedUnchanged: Number(metadata.unchanged || 0),
+        contactDeferred: Number(metadata.contactDeferredCount || totals.contactDeferred || 0),
         failed: listFailedCount + totals.failed
       });
       setProgress(
@@ -2399,6 +2483,7 @@
       duplicate: totals.duplicate,
       detailedDuplicates: totals.duplicate,
       skippedUnchanged: Number(metadata.unchanged || 0),
+      contactDeferred: Number(metadata.contactDeferredCount || totals.contactDeferred || 0),
       failed: listFailedCount + totals.failed,
       message:
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
@@ -2409,6 +2494,7 @@
         "개, 검증대기 " + totals.review +
         "개, 상세중복 " + totals.duplicate +
         "개, 기존 동일 생략 " + Number(metadata.unchanged || 0) +
+        "개, 연락처 보류 " + Number(metadata.contactDeferredCount || totals.contactDeferred || 0) +
         "개, 실패 " + (listFailedCount + totals.failed) + "개" +
         (saveFailureReasons.length
           ? " · 실패 원본은 다음 수집에서 자동 재확인"
@@ -2634,6 +2720,7 @@
         ? Number(result.duplicate || 0) + Number(result.duplicateSnapshots || 0)
         : Number(result.duplicates || 0) + Number(result.unchanged || 0)
     );
+    totals.contactDeferred += Number(result.contactDeferred || 0);
     totals.failed += Number(
       result.failed !== undefined ? result.failed : result.rejected || 0
     );
@@ -2694,14 +2781,23 @@
       manifestCount: Number(metadata.manifestCount || metadata.found || 0),
       processedCount: Number(metadata.processedCount || 0),
       failed: Number(metadata.failed || 0),
-      addressMissing: Number(metadata.rejectedCount || 0),
+      addressMissing: Number(metadata.addressMissingCount || 0),
+      requiredFieldRejected: Number(metadata.rejectedCount || 0),
+      contactDeferred: Number(metadata.contactDeferredCount || 0),
+      warningCounts: metadata.warningCounts && typeof metadata.warningCounts === "object"
+        ? metadata.warningCounts
+        : {},
+      detailAuthWarning: text(metadata.detailAuthWarning),
       truncated: Boolean(metadata.truncated),
       note: stopped
         ? "사용자 안전중단 · 저장된 묶음 보존"
         : (complete
           ? "2000개 이상 전체클러스터 완전수집 완료" +
             (Number(metadata.rejectedCount || 0)
-              ? " · 변환 제외 " + Number(metadata.rejectedCount) + "개 노출ID 보호"
+              ? " · 필수정보 제외 " + Number(metadata.rejectedCount) + "개 노출ID 보호"
+              : "") +
+            (Number(metadata.contactDeferredCount || 0)
+              ? " · 연락처 보류 " + Number(metadata.contactDeferredCount) + "개 매물 저장"
               : "")
           : "선택클러스터 수집 완료")
     }, {
@@ -2880,6 +2976,7 @@
       duplicate: 0,
       detailedDuplicates: 0,
       skippedUnchanged: 0,
+      contactDeferred: 0,
       addressMissing: 0,
       failed: 0
     };
@@ -2908,16 +3005,21 @@
   }
 
   function rejectedSummary(reasons) {
-    var counts = {};
-    (reasons || []).forEach(function (reason) {
-      var label = text(reason) || "변환 실패";
-      counts[label] = (counts[label] || 0) + 1;
-    });
+    var counts = reasonCounts(reasons);
     var entries = Object.keys(counts)
       .sort(function (left, right) { return counts[right] - counts[left]; })
       .slice(0, 3)
       .map(function (reason) { return "- " + reason + " " + counts[reason] + "개"; });
     return entries.length ? entries.join("\n") : "- 원인을 확인하지 못했습니다.";
+  }
+
+  function reasonCounts(reasons) {
+    var counts = {};
+    (reasons || []).forEach(function (reason) {
+      var label = text(reason) || "원인 미확인";
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    return counts;
   }
 
   function isMissingIdentifier(value) {

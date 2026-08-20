@@ -646,18 +646,22 @@ async function handleApi(request, env, context) {
       : {};
     if (response.ok && collectorFinalized(String(collectorBody?.action || ""), collectorPayload)) {
       sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-      const invalidation = Promise.resolve(refreshOperationsDashboard(env)).catch(() => null).then(() => {
-        return deleteR2Cache(env, null, [
-          D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
-          GEOCODE_CACHE_KEY
-        ]);
-      });
-      if (context && typeof context.waitUntil === "function") context.waitUntil(invalidation);
-      touchDataRevision(env, context, ["listings", "operations"], invalidation, {
+      const invalidation = deleteR2Cache(env, null, [
+        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
+        GEOCODE_CACHE_KEY
+      ]);
+      const revisionUpdate = touchDataRevision(env, null, ["listings", "operations"], invalidation, {
         fullReload: true,
         changeAction: String(collectorBody?.action || "collectorFinalized")
       });
+      /*
+       * 수집 완료 응답을 브라우저에 돌려주기 전에 목록 캐시와 리비전을 확정합니다.
+       * 이전처럼 waitUntil에만 맡기면 수집기는 완료됐지만 웹 목록이 과거 R2 캐시를
+       * 다시 읽는 짧은 경합 구간이 생길 수 있습니다.
+       */
+      await Promise.all([invalidation, revisionUpdate]);
       if (context && typeof context.waitUntil === "function") {
+        context.waitUntil(Promise.resolve(refreshOperationsDashboard(env)).catch(() => null));
         context.waitUntil(runElevatorEnrichmentMaintenance(env, context, "collectorElevatorEnrichment"));
       }
     }

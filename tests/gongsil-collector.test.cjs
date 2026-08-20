@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.1\.5";/);
+assert.match(source, /var VERSION = "2\.1\.6";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
@@ -78,13 +78,13 @@ assert.match(
 );
 assert.match(
   source,
-  /var phones = await collectPhones\(item, requestBody, addressData, detail\);/,
-  "공실박스 원본 연락처 확인 실패를 빈 목록으로 바꾸지 않아야 합니다."
+  /phones = await collectPhones\(item, requestBody, addressData, detail\);/,
+  "공실박스 원본 연락처는 역할 확인에 성공했을 때 저장해야 합니다."
 );
-assert.doesNotMatch(
+assert.match(
   source.slice(source.indexOf("async function transformItem("), source.indexOf("function collectMediaUrls(")),
-  /phones = \{[^}]*contacts: \[\]/,
-  "연락처 실패 시 빈 contactList로 정상 저장하면 안 됩니다."
+  /catch \(contactError\)[\s\S]*?record\.preserveContacts = true;[\s\S]*?record\.contactCaptureStatus = "deferred";/,
+  "연락처 조회 실패 시 매물은 저장하되 기존 연락처를 보존해야 합니다."
 );
 assert.match(
   source,
@@ -133,8 +133,11 @@ assert.match(
 assert.match(
   collectPhonesSource,
   /if \(!uniqueContacts\.length\) \{\s*throw new Error\(/,
-  "공실박스 연락처가 비어 있으면 빈 매물을 저장하지 말고 제외 사유를 남겨야 합니다."
+  "공실박스 연락처가 비어 있으면 역할 검증 실패를 상위 변환 흐름에 알려야 합니다."
 );
+assert.match(source, /data-metric="contactDeferred"/);
+assert.match(source, /requiredFieldRejected: Number\(metadata\.rejectedCount \|\| 0\)/);
+assert.match(source, /contactDeferred: Number\(metadata\.contactDeferredCount \|\| 0\)/);
 assert.match(
   source,
   /function importItemTotal\(records, metadata\)[\s\S]*?Math\.max\([\s\S]*?Number\(metadata\.found \|\| 0\)/

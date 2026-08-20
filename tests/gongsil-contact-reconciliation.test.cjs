@@ -14,10 +14,13 @@ const collectPhones = collectorUi.slice(
 assert.match(collectPhones, /isCollectiveItem\(item,\s*detail\)/);
 assert.match(collectPhones, /listingCandidates\.map\([\s\S]*?\.concat\(buildingCandidates\.map\(/);
 assert.match(collectPhones, /appendContactFields\(buildingCandidates,\s*detail && detail\.bilinfo/);
-assert.match(collectorUi, /contactList:\s*phones\.contacts/);
+assert.match(collectorUi, /record\.contactList = phones\.contacts/);
+assert.match(collectorUi, /record\.preserveContacts = true/);
 
 assert.match(collectorApi, /record\?\.contactList/);
 assert.match(collectorApi, /async function replaceMediaAndContacts\(/);
+assert.match(collectorApi, /if \(!record\.preserveContacts\) \{/);
+assert.match(collectorApi, /preserveContacts: Boolean\(record\?\.preserveContacts\) && contacts\.length === 0/);
 assert.match(collectorApi, /const key = `\$\{clean\(contact\.role\)\}:\$\{normalizedPhone\}`/);
 assert.match(collectorApi, /DELETE FROM listing_contacts WHERE id=\?1/);
 assert.match(collectorApi, /UPDATE listing_contacts SET listing_id=\?1/);

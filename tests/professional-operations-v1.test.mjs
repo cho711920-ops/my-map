@@ -16,6 +16,11 @@ test("operations dashboard uses a persisted snapshot and refreshes only after fi
   assert.match(d1, /refreshOperationsDashboard/);
   assert.match(worker, /collectorFinalized[\s\S]*refreshOperationsDashboard/);
   assert.match(worker, /adjustOperationsDashboard\(env, d1Result\.operationAdjustments\)/);
+  assert.match(
+    worker,
+    /const revisionUpdate = touchDataRevision\(env, null,[\s\S]*?await Promise\.all\(\[invalidation, revisionUpdate\]\)/,
+    "수집 완료 응답 전 목록 캐시 삭제와 리비전 변경을 모두 기다려야 합니다."
+  );
 });
 
 test("active clients apply small listing changes without downloading the full sheet", () => {

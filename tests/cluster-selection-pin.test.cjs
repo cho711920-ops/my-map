@@ -31,7 +31,7 @@ assert.match(
   operationsSource,
   /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
 );
-assert.match(htmlSource, /js\/map\.js\?v=8\.2\.18-unique-linked-selection/);
+assert.match(htmlSource, /js\/map\.js\?v=8\.2\.19-collector-fresh-sync/);
 assert.match(htmlSource, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.22\.5-shared-data-only/);
 

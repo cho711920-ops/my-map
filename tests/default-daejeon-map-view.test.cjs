@@ -34,6 +34,6 @@ assert.match(
   /function resetFilter\(\)[\s\S]*?window\.resetToDaejeonOverviewV6524\(\);/
 );
 assert.match(indexSource, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(indexSource, /js\/map\.js\?v=8\.2\.18-unique-linked-selection/);
+assert.match(indexSource, /js\/map\.js\?v=8\.2\.19-collector-fresh-sync/);
 
 console.log("default Daejeon map view tests passed");

@@ -285,6 +285,38 @@ test("Gongsilbox unchanged details refresh weekly instead of on every daily coll
   assert.equal(shouldRefreshGongsilDetail("", now), true);
 });
 
+test("Gongsilbox saves the listing while preserving contacts after a detail-role failure", () => {
+  const record = normalizedRecord("공실박스", {
+    externalId: "BF-100",
+    values: ["테스트빌딩", "서구 탄방동 100-1", "3층", "일반상가", 1000, 50, 0, 0, 12, "", "", "메모"],
+    preserveContacts: true,
+    contactCaptureStatus: "deferred",
+    collectionWarnings: ["상세 연락처 연결 실패"],
+    latitude: 36.3,
+    longitude: 127.4
+  });
+  assert.equal(record.sourceId, "BF-100");
+  assert.equal(record.address, "서구 탄방동 100-1");
+  assert.equal(record.preserveContacts, true);
+  assert.deepEqual(record.contacts, []);
+  assert.equal(record.contactCaptureStatus, "deferred");
+  assert.deepEqual(record.collectionWarnings, ["상세 연락처 연결 실패"]);
+  assert.equal(record.latitude, 36.3);
+  assert.equal(record.longitude, 127.4);
+});
+
+test("Gongsilbox retries deferred contacts on the next collection instead of waiting a week", async () => {
+  const source = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /clean\(previousSnapshot\?\.contactCaptureStatus\) === "deferred" \|\|[\s\S]*?shouldRefreshGongsilDetail/
+  );
+  assert.match(
+    source,
+    /clean\(previous\?\.contactCaptureStatus\) !== clean\(snapshot\.contactCaptureStatus\)/
+  );
+});
+
 test("source refreshes are separated from actual rental-condition changes", () => {
   const previous = { room: "2층", type: "일반상가", deposit: 2000, rent: 90,
     fee: 10, premium: 0, area: 26, memo: "기존", photoCount: 1, contactCount: 1 };
@@ -304,6 +336,19 @@ test("complete collections require a current verified manifest", () => {
   }, 2012);
   assert.equal(valid.complete, true);
   assert.deepEqual(valid.issues, []);
+});
+
+test("deferred contacts are visible in the completion audit without blocking saved listings", () => {
+  const result = collectorCompletionAudit({
+    source: "공실박스", scope: "공실박스 2000개 이상 전체클러스터",
+    complete: true, validationVersion: 2, collectorVersion: "2.1.6",
+    expectedCount: 2000, manifestCount: 2000, processedCount: 2000,
+    failed: 0, addressMissing: 0, requiredFieldRejected: 0,
+    contactDeferred: 17, truncated: false, note: "완전수집 완료"
+  }, 2000);
+  assert.equal(result.complete, true);
+  assert.equal(result.contactDeferred, 17);
+  assert.match(result.issues.join(" / "), /연락처 보류 17건\(매물 저장 완료\)/);
 });
 
 test("failed, incomplete, stale or truncated runs never count missing listings", () => {

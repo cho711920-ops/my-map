@@ -36,7 +36,7 @@ var jsDefaultMapCenterV6524 = {
 var jsDefaultMapLevelV6524 = 7;
 var jsLegacyDefaultMapLevelV690 = 7;
 var jsAdministrativeListSelectionV6570 = null;
-var jsAutomaticDataRefreshIntervalV681 = 5 * 60 * 1000;
+var jsAutomaticDataRefreshIntervalV681 = 60 * 1000;
 var jsListingsRevisionV682 = "";
 var jsListingsRevisionPendingV682 = false;
 var jsListingsRevisionInfoV683 = null;
@@ -280,7 +280,7 @@ function refreshListingsWhenChangedV682() {
         jsListingsRevisionV682 = revision;
         return;
       }
-      return Promise.resolve(loadSheet(true, false)).then(function(loaded) {
+      return Promise.resolve(loadSheet(true, true)).then(function(loaded) {
         if (loaded !== false) jsListingsRevisionV682 = revision;
       });
     });
@@ -1793,8 +1793,8 @@ function loadSheet(isAuto, forceRefresh) {
   }
 
   /*
-   * 저장 직후의 loadSheet(true)는 운영 D1 데이터를 강제로 다시 읽습니다.
-   * 1분 자동 확인만 loadSheet(true, false)로 호출하여 ETag 재검증을 사용합니다.
+   * 저장 직후와 데이터 리비전 변경 뒤에는 운영 D1 데이터를 강제로 다시 읽습니다.
+   * 리비전 기준값이 아직 없는 최초 자동 확인만 ETag 재검증을 사용합니다.
    */
   var shouldForceRefresh = arguments.length >= 2
     ? !!forceRefresh

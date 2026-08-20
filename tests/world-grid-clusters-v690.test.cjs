@@ -143,6 +143,6 @@ assert.match(css, /js-world-grid-clusters-v690[\s\S]*?world-grid-cluster-v690/);
 assert.match(css, /js-world-grid-clusters-v690 \.circle-marker\.world-grid-cluster-v690 \{[\s\S]*?border: 0 !important;/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-district-v690/);
 assert.match(html, /style\.css\?v=6\.10\.0-module-split/);
-assert.match(html, /map\.js\?v=8\.2\.18-unique-linked-selection/);
+assert.match(html, /map\.js\?v=8\.2\.19-collector-fresh-sync/);
 
 console.log("world grid cluster v6.9.0 tests passed");

@@ -225,9 +225,14 @@ assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?min-width: 68px/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.97\)/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.2.18-unique-linked-selection"));
-assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 5 \* 60 \* 1000;/);
+assert.ok(html.includes("map.js?v=8.2.19-collector-fresh-sync"));
+assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
+assert.match(
+  source,
+  /revision === jsListingsRevisionV682[\s\S]*?applyListingChangesV683[\s\S]*?loadSheet\(true, true\)/,
+  "수집 완료 리비전이 바뀌면 과거 R2/메모리 캐시가 아니라 D1을 강제로 다시 읽어야 합니다."
+);
 assert.ok(html.includes("style.css?v=6.10.0-module-split"));
 
 console.log("hierarchical admin cluster v6.5.5 tests passed");
