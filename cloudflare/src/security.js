@@ -2,7 +2,7 @@ const encoder = new TextEncoder();
 
 export const SESSION_COOKIE = "js_realestate_session";
 export const DEFAULT_SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
-export const LOCAL_PASSWORD_ITERATIONS = 310_000;
+export const LOCAL_PASSWORD_ITERATIONS = 100_000;
 const MAX_SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const LOCAL_ID_SUFFIX = "@local.js-map";
 

@@ -66,6 +66,7 @@ test("Google and local sessions use the configured 90-day maximum", async () => 
 
 test("issued passwords are salted hashes and both login methods share one identity", async () => {
   const passwordRecord = await createLocalPassword("friend-safe-2026");
+  assert.equal(passwordRecord.iterations, 100_000);
   const account = {
     username: "friend1",
     linked_email: "friend@example.com",
