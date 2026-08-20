@@ -32,7 +32,10 @@ SET
   maintenance_fee = json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.fee'),
   premium = json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.premium'),
   area_m2 = json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.area'),
-  operating_memo = COALESCE(NULLIF(json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.memo'), ''), operating_memo),
+  operating_memo = CASE
+    WHEN operating_memo LIKE '%(확인매물)%' THEN operating_memo
+    ELSE COALESCE(NULLIF(json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.memo'), ''), operating_memo)
+  END,
   source_url = COALESCE(NULLIF((SELECT source_url FROM selected_daangn WHERE listing_id=listings.id), ''), source_url),
   latitude = COALESCE(json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.latitude'), latitude),
   longitude = COALESCE(json_extract((SELECT list_snapshot_json FROM selected_daangn WHERE listing_id=listings.id), '$.longitude'), longitude),

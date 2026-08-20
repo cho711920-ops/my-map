@@ -72,6 +72,26 @@ test("the source master adopts the remaining originals' rental terms after separ
   assert.equal(value.area, 9.9);
 });
 
+test("a new master separated from a confirmed listing remains confirmed", () => {
+  const value = separatedMasterValues({
+    source: "네이버",
+    raw_json: "{}",
+    list_snapshot_json: JSON.stringify({
+      address: "서구 괴정동 100-1",
+      room: "2층",
+      memo: "(임장가자) 원본 광고 설명"
+    })
+  }, {
+    title: "기존 대표매물",
+    address: "서구 괴정동 100-1",
+    room: "2층",
+    operating_memo: "(확인매물) / 현장에서 확인한 매물",
+    contacts_json: "[]"
+  }, "M-separated-confirmed");
+
+  assert.equal(value.memo, "(확인매물) / 원본 광고 설명");
+});
+
 test("NEW target creates a master and moves source assets atomically", async () => {
   const d1 = await readFile(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
   const client = await readFile(new URL("../js/unified-listings-v8.js", import.meta.url), "utf8");

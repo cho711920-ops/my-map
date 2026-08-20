@@ -1,5 +1,6 @@
 import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
 import { requireRole } from "./security.js";
+import { carryConfirmedVisitMemo } from "./visit-status.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -1280,7 +1281,7 @@ export function separatedMasterValues(sourceRow, parent, newId) {
     area: numberOr(original.area, parent?.area_m2),
     latitude: numberOr(original.latitude ?? original.lat, parent?.latitude),
     longitude: numberOr(original.longitude ?? original.lng, parent?.longitude),
-    memo: clean(original.memo || parent?.operating_memo),
+    memo: carryConfirmedVisitMemo(original.memo, parent?.operating_memo),
     link: clean(sourceRow?.source_url || original.link || parent?.source_url),
     contactsJson: JSON.stringify(Array.isArray(contacts) ? contacts : []),
     firstCollectedAt: clean(sourceRow?.first_collected_at || original.firstSeen || parent?.first_collected_at),
@@ -1401,9 +1402,11 @@ async function moveOriginal(env, user, body) {
       sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
       operationAdjustments: { activeMaster: sourceMasterRemoved ? 0 : 1, history: 1 }, source: "D1" };
   }
-  const target = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 AND status <> 'deleted'")
+  const target = await env.DB.prepare("SELECT id, operating_memo FROM listings WHERE id=?1 AND status <> 'deleted'")
     .bind(targetMasterId).first();
   if (!target) throw Object.assign(new Error("통합할 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const targetMemo = carryConfirmedVisitMemo(target.operating_memo, source.operating_memo);
+  const confirmationTransferred = targetMemo !== clean(target.operating_memo);
   const statements = [
     env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
         list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2 WHERE id=?3`)
@@ -1413,6 +1416,18 @@ async function moveOriginal(env, user, body) {
     env.DB.prepare("UPDATE listing_contacts SET listing_id=?1, updated_at=?2 WHERE source_id=?3")
       .bind(targetMasterId, now, originalId)
   ];
+  if (confirmationTransferred) {
+    statements.push(
+      env.DB.prepare(`UPDATE listings SET operating_memo=?1, version=version+1, updated_at=?2 WHERE id=?3`)
+        .bind(targetMemo, now, targetMasterId),
+      env.DB.prepare(`INSERT INTO listing_history (
+          listing_id, source_id, action, actor_email, before_json, after_json
+        ) VALUES (?1, ?2, 'preserveConfirmedVisitOnMove', ?3, ?4, ?5)`)
+        .bind(targetMasterId, originalId, clean(user?.email) || "web",
+          JSON.stringify({ operatingMemo: clean(target.operating_memo), sourceMasterId: source.listing_id }),
+          JSON.stringify({ operatingMemo: targetMemo, sourceMasterId: source.listing_id }))
+    );
+  }
   if (remainingValue) {
     statements.push(refreshMasterTermsStatement(env, remainingValue, source.listing_id, now));
   }
@@ -1434,7 +1449,8 @@ async function moveOriginal(env, user, body) {
   }
   return { ok: true, persisted: true, queued: false, originalId, sourceMasterId: source.listing_id,
     targetMasterId, sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
-    operationAdjustments: { activeMaster: sourceMasterRemoved ? -1 : 0, history: sourceMasterRemoved ? 1 : 0 }, source: "D1" };
+    operationAdjustments: { activeMaster: sourceMasterRemoved ? -1 : 0,
+      history: (sourceMasterRemoved ? 1 : 0) + (confirmationTransferred ? 1 : 0) }, source: "D1" };
 }
 
 function splitRequirement(value) {

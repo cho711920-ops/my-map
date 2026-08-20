@@ -1,6 +1,7 @@
 import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./floor.js";
 import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
+import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 
 const COLLECTOR_ORIGINS = [
   /(^|\.)realty\.daangn\.com$/i,
@@ -1054,8 +1055,10 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
-  const currentListing = await env.DB.prepare("SELECT main_source FROM listings WHERE id=?1").bind(listingId).first();
+  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo FROM listings WHERE id=?1")
+    .bind(listingId).first();
   const promoteRepresentative = shouldPromoteListingRepresentative(record.source, currentListing?.main_source);
+  const representativeMemo = preserveConfirmedVisitMemo(currentListing?.operating_memo, record.memo);
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
   const protectListing = preserveRepresentative && !updateCondition && !promoteRepresentative;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
@@ -1108,7 +1111,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         road_address=CASE WHEN ?14<>'' THEN ?14 ELSE road_address END,
         version=version+1, last_collected_at=?15, updated_at=?15 WHERE id=?16`)
       .bind(sourceName(record.source), record.buildingName, record.room, record.category, record.deposit,
-        record.rent, record.fee, record.premium, record.area, record.memo, record.link,
+        record.rent, record.fee, record.premium, record.area, representativeMemo, record.link,
         record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
     : !protectListing && updateCondition
     ? env.DB.prepare(`UPDATE listings SET title=CASE WHEN ?1<>'' THEN ?1 ELSE title END,
@@ -1121,7 +1124,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         road_address=CASE WHEN road_address='' AND ?13<>'' THEN ?13 ELSE road_address END,
         version=version+1, last_collected_at=?14, updated_at=?14 WHERE id=?15`)
       .bind(record.buildingName, record.room, record.category, record.deposit, record.rent, record.fee,
-        record.premium, record.area, record.memo, record.link, record.latitude, record.longitude,
+        record.premium, record.area, representativeMemo, record.link, record.latitude, record.longitude,
         clean(record.roadAddress), now, listingId)
     : listingNeedsTouch ? env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
         source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
@@ -2179,13 +2182,18 @@ async function applyReviewBatch(env, user, body) {
 async function consolidateExisting(env, user, body) {
   const primaryId = clean(body.primaryMasterId);
   const duplicates = [...new Set((Array.isArray(body.duplicateMasterIds) ? body.duplicateMasterIds : []).map(clean).filter((id) => id && id !== primaryId))].slice(0, 50);
-  const primary = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1").bind(primaryId).first();
+  const primary = await env.DB.prepare("SELECT id, operating_memo FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
+    .bind(primaryId).first();
   if (!primary) throw new Error("대표매물을 찾지 못했습니다.");
+  let primaryMemo = clean(primary.operating_memo);
   let consolidated = 0;
   for (const duplicateId of duplicates) {
-    const duplicate = await env.DB.prepare("SELECT id FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1").bind(duplicateId).first();
+    const duplicate = await env.DB.prepare("SELECT id, operating_memo FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
+      .bind(duplicateId).first();
     if (!duplicate || duplicate.id === primary.id) continue;
-    await env.DB.batch([
+    const mergedMemo = carryConfirmedVisitMemo(primaryMemo, duplicate.operating_memo);
+    const confirmationTransferred = mergedMemo !== primaryMemo;
+    const statements = [
       env.DB.prepare(`INSERT OR IGNORE INTO customer_matches (
           customer_id, listing_id, state, score, memo, created_at, updated_at, contacted_at
         ) SELECT customer_id, ?1, state, score, memo, created_at, updated_at, contacted_at
@@ -2197,8 +2205,16 @@ async function consolidateExisting(env, user, body) {
       env.DB.prepare("UPDATE listings SET status='deleted', updated_at=?1 WHERE id=?2").bind(nowIso(), duplicate.id),
       env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
         VALUES (?1, 'consolidateExistingMasters', ?2, ?3, ?4)`)
-        .bind(primary.id, clean(user?.email), JSON.stringify({ duplicateId: duplicate.id }), JSON.stringify({ primaryId: primary.id }))
-    ]);
+        .bind(primary.id, clean(user?.email),
+          JSON.stringify({ duplicateId: duplicate.id, primaryMemo, duplicateMemo: clean(duplicate.operating_memo) }),
+          JSON.stringify({ primaryId: primary.id, operatingMemo: mergedMemo, confirmationTransferred }))
+    ];
+    if (confirmationTransferred) {
+      statements.unshift(env.DB.prepare(`UPDATE listings SET operating_memo=?1,
+        version=version+1, updated_at=?2 WHERE id=?3`).bind(mergedMemo, nowIso(), primary.id));
+    }
+    await env.DB.batch(statements);
+    primaryMemo = mergedMemo;
     consolidated += 1;
   }
   const customerMatches = await refreshCustomerMatchesForListings(env, [primary.id]);
