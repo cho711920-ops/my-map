@@ -64,13 +64,19 @@ function nextAlarmAt(schedule) {
 
 async function resetAlarm(config) {
   await chrome.alarms.clear(ALARM_NAME);
-  await chrome.alarms.clear(WATCHDOG_ALARM_NAME);
-  chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 5 });
+  await ensureWatchdogAlarm();
   if (!config.enabled) return;
   chrome.alarms.create(ALARM_NAME, {
     when: nextAlarmAt(config.schedule),
     periodInMinutes: 24 * 60
   });
+}
+
+async function ensureWatchdogAlarm() {
+  const existing = await chrome.alarms.get(WATCHDOG_ALARM_NAME).catch(() => null);
+  if (!existing) {
+    chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 5 });
+  }
 }
 
 function localDateKey(date = new Date()) {
@@ -379,6 +385,7 @@ async function updateTargetHeartbeat(message, senderTabId) {
   if (!Number.isInteger(senderTabId) || senderTabId !== state.currentTabId) {
     return { ok: true, skipped: true };
   }
+  await ensureWatchdogAlarm();
   const now = Date.now();
   const fingerprint = String(message.progressFingerprint || "").slice(0, 1_000);
   const progressMessage = String(message.progressMessage || "").slice(0, 180);
@@ -612,6 +619,7 @@ async function finishCurrentTarget(result, senderTabId) {
 }
 
 async function resumeOrExtendActiveRun(state, targets, reason) {
+  await ensureWatchdogAlarm();
   const existingKeys = new Set((state.targets || []).map(targetKey));
   const addedTargets = targets.filter((target) => !existingKeys.has(targetKey(target)));
   if (addedTargets.length) {
@@ -699,6 +707,7 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
 }
 
 async function runAll(reason = "manual") {
+  await ensureWatchdogAlarm();
   const config = await getConfig();
   const targets = config.targets
     .filter((target) => target.enabled !== false)
