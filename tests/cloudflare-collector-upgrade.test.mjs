@@ -6,6 +6,7 @@ import {
   collectorCompletionAudit,
   gongsilImageUrls,
   gongsilPhotoUrl,
+  isMonthlyCollectorRecord,
   manifestEntryMatch,
   mergeDaangnDetailWithList,
   normalizedRecord,
@@ -204,6 +205,52 @@ test("Gongsilbox representative image never fills an otherwise photo-less listin
       detail: { bdsinfo: { photo: "avatars/1.png" }, bilinfo: { bfxphoto: fallback } }
     }
   }), []);
+});
+
+test("Daangn monthly collection prefers a monthly offer over a preferred sale offer", async () => {
+  const article = {
+    originalId: "4239920",
+    publicJibunAddress: "대전광역시 중구 태평동 254-4",
+    trades: [
+      { preferred: true, type: "BUY", price: 15000 },
+      { preferred: false, type: "MONTH", deposit: 2000, monthlyPay: 50 }
+    ]
+  };
+  const record = mergeDaangnDetailWithList(article);
+  assert.equal(record.tradeType, "월세");
+  assert.equal(record.deposit, 2000);
+  assert.equal(record.rent, 50);
+  assert.equal(isMonthlyCollectorRecord("당근", record), true);
+
+  const repaired = normalizedRecord("당근", {
+    source: "당근", sourceId: "4239920", deposit: 15000, rent: 0,
+    tradeType: "매매", raw: article
+  });
+  assert.equal(repaired.tradeType, "월세");
+  assert.equal(repaired.deposit, 2000);
+  assert.equal(repaired.rent, 50);
+
+  const legacyWithoutTrades = normalizedRecord("당근", {
+    source: "당근", sourceId: "legacy", deposit: 1000, rent: 70,
+    tradeType: "월세", raw: { originalId: "legacy" }
+  });
+  assert.equal(legacyWithoutTrades.deposit, 1000);
+  assert.equal(legacyWithoutTrades.rent, 70);
+  assert.equal(legacyWithoutTrades.tradeType, "월세");
+
+  const saleOnly = mergeDaangnDetailWithList({
+    originalId: "sale-only", trades: [{ preferred: true, type: "BUY", price: 20000 }]
+  });
+  assert.equal(saleOnly.tradeType, "매매");
+  assert.equal(isMonthlyCollectorRecord("당근", saleOnly), false);
+
+  const migration = await readFile(new URL(
+    "../cloudflare/migrations/0018_daangn_monthly_trade_priority.sql", import.meta.url
+  ), "utf8");
+  assert.match(migration, /repairDaangnMonthlyTrade/);
+  assert.match(migration, /json_each\(review\.payload_json, '\$\.raw\.trades'\)/);
+  assert.match(migration, /'\$\.tradeType', '월세'/);
+  assert.match(migration, /'action', 'excludeNonMonthlyTrade'/);
 });
 
 test("legacy source rows bootstrap from stable listing terms without a detail refetch", () => {

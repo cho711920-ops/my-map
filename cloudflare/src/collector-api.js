@@ -295,7 +295,12 @@ function daangnAddress(article) {
 }
 
 function daangnRecord(article, listSnapshot = "") {
-  const trade = (Array.isArray(article?.trades) ? article.trades : []).find((entry) => entry?.preferred) || article?.trades?.[0] || {};
+  const trades = Array.isArray(article?.trades) ? article.trades : [];
+  // The Daangn MONTH filter can return an article whose preferred offer is a
+  // sale when the same article also contains a monthly-rent offer. JS부동산 is
+  // a monthly-rent map, so choose the MONTH offer before provider preference.
+  const trade = trades.find((entry) => /MONTH/.test(clean(entry?.type || entry?.__typename).toUpperCase())) ||
+    trades.find((entry) => entry?.preferred) || trades[0] || {};
   const tradeType = clean(trade.type || trade.__typename).toUpperCase();
   const salesType = clean(article?.salesTypeV3?.type || article?.salesTypeV3?.__typename).toUpperCase();
   const category = /OFFICE/.test(salesType) ? "사무실" : /FACTORY|WAREHOUSE/.test(salesType) ? "공장/창고" : "상가점포";
@@ -365,7 +370,7 @@ function daangnRecord(article, listSnapshot = "") {
       -180,
       180
     ),
-    tradeType: /MONTH/.test(tradeType) ? "월세" : /YEAR|BORROW/.test(tradeType) ? "전세" : /BUY/.test(tradeType) ? "매매" : "월세"
+    tradeType: /MONTH/.test(tradeType) ? "월세" : /YEAR|BORROW/.test(tradeType) ? "전세" : /BUY/.test(tradeType) ? "매매" : ""
   };
 }
 
@@ -379,6 +384,7 @@ export function normalizedRecord(source, value) {
     // descriptive text such as "봉명동 1층" as the lot address "봉명동 1".
     if (value?.source === "당근" && value?.raw && typeof value.raw === "object") {
       const canonical = daangnRecord(value.raw, value.listSnapshot);
+      const canonicalHasTrade = Boolean(canonical.tradeType);
       return {
         ...value,
         source: "당근",
@@ -387,6 +393,13 @@ export function normalizedRecord(source, value) {
         address: canonical.address || value.address,
         roadAddress: canonical.roadAddress || value.roadAddress,
         room: canonical.room || value.room,
+        category: canonical.category || value.category,
+        deposit: canonicalHasTrade ? canonical.deposit : value.deposit,
+        rent: canonicalHasTrade ? canonical.rent : value.rent,
+        fee: canonicalHasTrade ? canonical.fee : value.fee,
+        premium: canonicalHasTrade ? canonical.premium : value.premium,
+        area: canonicalHasTrade ? canonical.area : value.area,
+        tradeType: canonical.tradeType || value.tradeType || "",
         memo: canonical.memo,
         contacts: [],
         latitude: canonical.latitude ?? value.latitude,
@@ -399,12 +412,17 @@ export function normalizedRecord(source, value) {
   return null;
 }
 
+export function isMonthlyCollectorRecord(source, record) {
+  return source !== "당근" || clean(record?.tradeType) === "월세";
+}
+
 function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresentative = false) {
   return {
     originalId, source: record.source, sourceId: record.sourceId, propertyId,
     link: record.link, buildingName: record.buildingName, address: record.address,
     roadAddress: record.roadAddress, room: record.room,
-    type: record.category, deposit: record.deposit, rent: record.rent, fee: record.fee,
+    type: record.category, tradeType: record.tradeType,
+    deposit: record.deposit, rent: record.rent, fee: record.fee,
     premium: record.premium, area: record.area, latitude: record.latitude, longitude: record.longitude,
     memo: record.memo, status: "활성",
     firstSeen: now, lastSeen: now, thumbnail: record.images[0] || "",
@@ -1260,7 +1278,8 @@ async function saveCollectorError(env, record, sessionId, message) {
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
-    refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0, contactDeferred: 0 };
+    refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0,
+    contactDeferred: 0, tradeTypeExcluded: 0 };
   const normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
@@ -1271,6 +1290,10 @@ async function ingestRecords(env, source, values, metadata = {}) {
       if (!record?.sourceId) {
         totals.failed += 1;
         if (errors.length < 20) errors.push({ sourceId: "", message: "원본 ID 없음" });
+        continue;
+      }
+      if (!isMonthlyCollectorRecord(source, record)) {
+        totals.tradeTypeExcluded += 1;
         continue;
       }
       if (record.preserveContacts) totals.contactDeferred += 1;
@@ -1356,7 +1379,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
   for (const key of ["received", "created", "merged", "updated", "conditionUpdated", "refreshed",
-    "review", "duplicate", "failed", "contactDeferred"]) {
+    "review", "duplicate", "failed", "contactDeferred", "tradeTypeExcluded"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
@@ -1611,7 +1634,8 @@ function daangnListEntry(article) {
     rent: record.rent,
     area: record.area
   });
-  return { sourceId: record.sourceId, listSnapshot, deposit: record.deposit, rent: record.rent,
+  return { sourceId: record.sourceId, listSnapshot, tradeType: record.tradeType,
+    deposit: record.deposit, rent: record.rent,
     area: record.area, address: record.address, room: record.room };
 }
 
@@ -1705,7 +1729,7 @@ async function startDaangnJob(env, body) {
     detailAttempts: {}, terminalFailedIds: [], detailErrors: [], cursor: "", hasNextPage: true,
     phase: "list", status: "running", page: 0, found: 0, total: 0, processed: 0, remaining: 0,
     created: 0, merged: 0, updated: 0, review: 0, detailedDuplicates: 0,
-    skippedUnchanged: 0, addressMissing: 0, failed: 0, chunkSize: 8,
+    skippedUnchanged: 0, addressMissing: 0, failed: 0, tradeTypeExcluded: 0, chunkSize: 8,
     detailFetchFailures: 0, detailRetryCount: 0,
     message: "클러스터 목록을 확인하고 있습니다."
   };
@@ -1785,8 +1809,13 @@ async function runDaangnChunk(env, body = {}) {
         const id = clean(article?.originalId);
         if (!id || seen.has(id)) continue;
         seen.add(id);
+        const entry = daangnListEntry(article);
+        if (!isMonthlyCollectorRecord("당근", entry)) {
+          job.tradeTypeExcluded = Number(job.tradeTypeExcluded || 0) + 1;
+          continue;
+        }
         job.ids.push(id);
-        job.entries.push(daangnListEntry(article));
+        job.entries.push(entry);
       }
       job.page += 1;
       job.cursor = clean(connection.pageInfo?.endCursor);
@@ -1870,6 +1899,7 @@ async function runDaangnChunk(env, body = {}) {
     job.review += Number(result.review || 0);
     job.detailedDuplicates += Number(result.duplicate || 0);
     job.failed += Number(result.failed || 0);
+    job.tradeTypeExcluded = Number(job.tradeTypeExcluded || 0) + Number(result.tradeTypeExcluded || 0);
     job.addressMissing += Number(result.addressMissing || 0);
     for (const error of result.errors || []) {
       const sourceId = clean(error?.sourceId);
