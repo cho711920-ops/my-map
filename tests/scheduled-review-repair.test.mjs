@@ -15,7 +15,8 @@ assert.match(collector, /if \(Number\(gongsilRepair\?\.scanned \|\| 0\) > 0\) re
 assert.match(collector, /repairExactReviews\(env, systemUser, \{ includeRemaining: false \}\)/);
 assert.match(collector, /if \(Number\(exactRepair\?\.scanned \|\| 0\) > 0\) return exactRepair/);
 assert.match(collector, /return mergeSingleCandidateReviews\(env, systemUser/);
-assert.match(collector, /const decisionVersion = 6/);
+assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 7/);
+assert.match(collector, /const decisionVersion = REVIEW_CLASSIFICATION_VERSION/);
 assert.match(collector, /action: "autoMergeExactAlias"/);
 assert.match(collector, /async function attachPendingReviewAliases/);
 assert.match(collector, /aliasesMerged: aliases\.merged/);

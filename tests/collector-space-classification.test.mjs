@@ -79,6 +79,14 @@ test("materially different deposit and rent create separate listings on an other
   assert.match(genericFloor.reason, /보증금·월세가 모두 크게 다름/);
 });
 
+test("same-floor offers with completely different terms and area are separate listings", () => {
+  const result = classifyListingCandidates(incoming("8층", 1000, 65, 18.2), [
+    existing("M-dunsan-1072", "8층", 3000, 160, 49.9)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /보증금·월세가 모두 크게 다름/);
+});
+
 test("small rental adjustments on an ambiguous floor still require review", () => {
   assert.equal(classifyListingCandidates(incoming("102호", 500, 55, 12), [
     existing("M-1", "1층", 300, 50, 11.8)

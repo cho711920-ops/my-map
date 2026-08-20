@@ -18,6 +18,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
+const REVIEW_CLASSIFICATION_VERSION = 7;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -2407,7 +2408,7 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
 }
 
 async function repairExactReviews(env, user, options = {}) {
-  const decisionVersion = 6;
+  const decisionVersion = REVIEW_CLASSIFICATION_VERSION;
   const sourceFilter = clean(options.source);
   const scanLimit = Math.max(1, Math.min(20, Number(options.limit) || 20));
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
