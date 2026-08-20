@@ -2032,12 +2032,51 @@ export async function handleCollectorAdminGet(env, user, query) {
   return null;
 }
 
+async function attachPendingReviewAliases(env, reviewId, listingId, fallbackRecord, actor,
+  resultAction = "manualMergeAlias", decisionVersion = null) {
+  const aliasResult = await env.DB.prepare(`SELECT id, session_id, source, source_listing_id, payload_json
+    FROM collector_raw
+    WHERE processing_state='duplicate'
+      AND json_extract(result_json, '$.action')='sameAsPendingReview'
+      AND json_extract(result_json, '$.canonicalReviewId')=?1
+    ORDER BY created_at, id`).bind(reviewId).all();
+  let merged = 0;
+  let failed = 0;
+  for (const alias of aliasResult?.results || []) {
+    try {
+      const aliasRecord = normalizeReviewRecord(parseJson(alias.payload_json, {}));
+      if (!aliasRecord.sourceId) aliasRecord.sourceId = clean(alias.source_listing_id);
+      if (!aliasRecord.source) aliasRecord.source = clean(alias.source);
+      if (!aliasRecord.address) aliasRecord.address = clean(fallbackRecord?.address);
+      const aliasSourceMap = await loadExistingSources(env, aliasRecord.source, [aliasRecord]);
+      const aliasSource = aliasSourceMap.get(aliasRecord.sourceId) || null;
+      const aliasAssetsMap = aliasSource ? await loadSourceAssets(env, aliasSourceMap) : new Map();
+      await attachSource(env, aliasRecord, listingId, alias.session_id, aliasSource, false, actor,
+        aliasSource ? aliasAssetsMap.get(clean(aliasSource.id)) : null, true);
+      const aliasResultJson = { action: resultAction, listingId, canonicalReviewId: reviewId,
+        preserveRepresentative: true };
+      if (decisionVersion != null) aliasResultJson.autoDecisionVersion = decisionVersion;
+      await env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
+          result_json=?2, error_text='' WHERE id=?3`)
+        .bind(nowIso(), JSON.stringify(aliasResultJson), alias.id).run();
+      merged += 1;
+    } catch (error) {
+      failed += 1;
+      await env.DB.prepare("UPDATE collector_raw SET error_text=?1 WHERE id=?2")
+        .bind(clean(error?.message || error).slice(0, 500), alias.id).run();
+    }
+  }
+  return { merged, failed };
+}
+
 async function applyReviewBatch(env, user, body) {
   const ids = [...new Set((Array.isArray(body.reviewIds) ? body.reviewIds : []).map(clean).filter(Boolean))].slice(0, 100);
   const action = clean(body.reviewAction);
   const masterId = clean(body.masterId);
   let processed = 0;
   let failed = 0;
+  let aliasesMerged = 0;
+  let aliasesFailed = 0;
   const processedReviewIds = [];
   const affectedListingIds = new Set();
   const started = Date.now();
@@ -2066,8 +2105,12 @@ async function applyReviewBatch(env, user, body) {
         await attachSource(env, record, listing.id, row.session_id, existingSource, action === "condition",
           clean(user?.email), existingAssets);
         if (action === "condition") affectedListingIds.add(listing.id);
+        const aliases = await attachPendingReviewAliases(env, row.id, listing.id, record, clean(user?.email));
+        aliasesMerged += aliases.merged;
+        aliasesFailed += aliases.failed;
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
-          .bind(nowIso(), JSON.stringify({ action, listingId: listing.id, manual: Boolean(body.manualMergeConfirmed) }), id).run();
+          .bind(nowIso(), JSON.stringify({ action, listingId: listing.id,
+            aliasesMerged: aliases.merged, manual: Boolean(body.manualMergeConfirmed) }), id).run();
       } else {
         throw new Error("검토 처리 방식을 확인해 주세요.");
       }
@@ -2079,7 +2122,7 @@ async function applyReviewBatch(env, user, body) {
   }
   const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM collector_raw WHERE processing_state='review'").first();
-  return { ok: true, action: "applyReviewBatch", processed, failed, processedReviewIds,
+  return { ok: true, action: "applyReviewBatch", processed, failed, aliasesMerged, aliasesFailed, processedReviewIds,
     remaining: Number(remaining?.count || 0), actionWritesVerified: processed,
     reviewRowsRemovedVerified: processed, elapsedMs: Date.now() - started,
     operationAdjustments: { pendingReview: -processed },
