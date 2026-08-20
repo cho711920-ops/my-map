@@ -103,7 +103,8 @@
   .v6-toolbar-primary button,
   .v6-toolbar-secondary.v6-command-bar > button,
   .v6-toolbar-secondary .desktop-main-action,
-  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action,
+  .v6-toolbar-secondary .top-logout-btn-v1 {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -183,6 +184,24 @@
 
   .v6-toolbar-secondary .quick-add-btn.v6-secondary-action .sync-indicator {
     border-color: rgba(255, 255, 255, .9) !important;
+  }
+
+  .v6-toolbar-secondary .top-logout-btn-v1 {
+    border-color: #d8e0eb !important;
+    background: #f8fafc !important;
+    color: #52637a !important;
+    box-shadow: none !important;
+  }
+
+  .v6-toolbar-secondary .top-logout-btn-v1:hover {
+    border-color: #f1b8b8 !important;
+    background: #fff5f5 !important;
+    color: #c24141 !important;
+  }
+
+  .v6-toolbar-secondary .top-logout-btn-v1:disabled {
+    cursor: wait !important;
+    opacity: .64 !important;
   }
 
   /* 긴 흰색 판을 없애고 버튼 사이로 지도가 보이는 유리형 도구막대 */
@@ -323,7 +342,7 @@
     grid-column: 1 !important;
     grid-row: 1 !important;
     gap: 4px !important;
-    width: min(526px, calc(100vw - 594px)) !important;
+    width: min(526px, calc(100vw - 664px)) !important;
     height: 42px !important;
     min-height: 0 !important;
     max-height: 42px !important;
@@ -381,7 +400,7 @@
 
   .v6-toolbar-secondary.v6-command-bar {
     display: grid !important;
-    grid-template-columns: 66px 70px 70px 78px 0 84px !important;
+    grid-template-columns: 66px 70px 70px 78px 0 84px 66px !important;
     grid-template-rows: 42px !important;
     grid-column: 2 !important;
     grid-row: 1 !important;
@@ -411,9 +430,11 @@
   .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; grid-row: 1 !important; }
   .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 { grid-column: 5 !important; grid-row: 1 !important; }
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 6 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 7 !important; grid-row: 1 !important; }
 
   .v6-toolbar-secondary .v6-primary-action.ai,
-  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action {
+  .v6-toolbar-secondary .quick-add-btn.v6-secondary-action,
+  .v6-toolbar-secondary .top-logout-btn-v1 {
     min-width: 0 !important;
     padding: 0 4px !important;
     font-size: 10px !important;
@@ -466,7 +487,7 @@
   .v6-toolbar-primary {
     grid-template-columns: minmax(0, 1fr) 62px 66px !important;
     gap: 6px !important;
-    width: min(530px, calc(100vw - 710px)) !important;
+    width: min(530px, calc(100vw - 790px)) !important;
   }
 
   .v6-toolbar-primary .search-row {
@@ -485,13 +506,14 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 80px 84px 76px 94px 0 98px !important;
+    grid-template-columns: 80px 84px 76px 94px 0 98px 72px !important;
     gap: 6px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
   .v6-toolbar-secondary .v6-primary-action.ai,
-  .v6-toolbar-secondary .quick-add-btn {
+  .v6-toolbar-secondary .quick-add-btn,
+  .v6-toolbar-secondary .top-logout-btn-v1 {
     padding-right: 6px !important;
     padding-left: 6px !important;
     font-size: 12px !important;
@@ -531,13 +553,14 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 92px 96px 84px 106px 0 108px !important;
+    grid-template-columns: 92px 96px 84px 106px 0 108px 78px !important;
     gap: 8px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
   .v6-toolbar-secondary .v6-primary-action.ai,
-  .v6-toolbar-secondary .quick-add-btn {
+  .v6-toolbar-secondary .quick-add-btn,
+  .v6-toolbar-secondary .top-logout-btn-v1 {
     padding-right: 8px !important;
     padding-left: 8px !important;
     font-size: 13px !important;
@@ -562,6 +585,20 @@
     min-width: 76px !important;
     max-width: 76px !important;
   }
+}
+
+@media (min-width: 769px) and (max-width: 899px) {
+  .v6-toolbar-secondary.v6-command-bar {
+    grid-template-columns: 48px 48px 42px 66px 74px 42px !important;
+  }
+
+  .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action { grid-column: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-tell-v8 { grid-column: 3 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 5 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 6 !important; }
+  .v6-toolbar-secondary .top-logout-btn-v1 span { display: none !important; }
 }
 
 @media (max-width: 768px) {

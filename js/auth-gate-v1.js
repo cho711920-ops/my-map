@@ -254,7 +254,15 @@ async function loginWithLocal(event) {
   }
 }
 
-async function logout() {
+async function logout(trigger) {
+  const button = trigger && trigger.nodeType === 1 ? trigger : null;
+  if (button?.disabled) return;
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    const label = button.querySelector("span");
+    if (label) label.textContent = "종료 중";
+  }
   try {
     if (window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.clear === "function") {
       await window.JSInitialListingsCacheV1.clear();
