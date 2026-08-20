@@ -48,7 +48,7 @@ assert.match(css, /width: min\(526px, calc\(100vw - 682px\)\) !important/);
 assert.match(css, /width: min\(530px, calc\(100vw - 816px\)\) !important/);
 assert.match(css, /grid-template-columns: 80px 84px 76px 94px 0 98px 98px/);
 assert.match(css, /grid-template-columns: 92px 96px 84px 106px 0 108px 108px/);
-assert.match(css, /@media \(min-width: 1200px\)[\s\S]*\.top-logout-btn-v1 \{[\s\S]*font-size: 13px !important;[\s\S]*font-weight: 900 !important/);
+assert.match(css, /@media \(min-width: 1200px\)[\s\S]*\.v6-toolbar-secondary\.v6-command-bar > \.top-logout-btn-v1 \{[\s\S]*font-size: 13px !important;[\s\S]*font-weight: 900 !important/);
 assert.match(css, /\.top-logout-btn-v1 \.top-action-icon-v638 \{[\s\S]*width: 18px !important;[\s\S]*height: 18px !important/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*font-size: 13px !important/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\) 76px !important/);

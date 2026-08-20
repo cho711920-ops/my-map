@@ -524,7 +524,7 @@
     font-weight: 900 !important;
   }
 
-  .v6-toolbar-secondary .top-logout-btn-v1 {
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 {
     font-size: 13px !important;
     font-weight: 900 !important;
   }
@@ -576,7 +576,7 @@
     font-size: 14px !important;
   }
 
-  .v6-toolbar-secondary .top-logout-btn-v1 {
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 {
     font-size: 14px !important;
   }
 
