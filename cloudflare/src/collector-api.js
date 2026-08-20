@@ -1935,6 +1935,18 @@ function candidateJson(row) {
   };
 }
 
+export function relevantReviewCandidates(group, candidates = []) {
+  const reviewFloors = [...new Set((Array.isArray(group?.items) ? group.items : [])
+    .map((item) => parseListingFloor(item?.room, true))
+    .filter((floor) => floor != null && Number.isFinite(Number(floor)))
+    .map(Number))];
+  if (!reviewFloors.length) return candidates;
+  return candidates.filter((candidate) => {
+    const candidateFloor = parseListingFloor(candidate?.room, true);
+    return candidateFloor == null || reviewFloors.includes(Number(candidateFloor));
+  });
+}
+
 async function reviewWorkspace(env, query) {
   const search = clean(query.query).slice(0, 100);
   const pattern = `%${search}%`;
@@ -1977,7 +1989,8 @@ async function reviewWorkspace(env, query) {
   }
 
   for (const group of groups.values()) {
-    group.candidates = candidatesByAddress.get(normalizedAddress(group.address)) || [];
+    group.candidates = relevantReviewCandidates(group,
+      candidatesByAddress.get(normalizedAddress(group.address)) || []);
     group.items.forEach((item) => {
       const classified = classifyListingCandidates(item, group.candidates.map((candidate) => ({
         ...candidate, id: candidate.propertyId, monthly_rent: candidate.rent, area_m2: candidate.area

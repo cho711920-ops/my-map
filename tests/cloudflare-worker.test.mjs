@@ -209,6 +209,49 @@ test("review workspace batches candidate lookups instead of querying once per ad
   assert.equal(candidateQueries, 1);
 });
 
+test("review workspace hides existing listings on explicitly different floors", async () => {
+  const reviewRows = [
+    { id: "R-floor-1", source: "네이버", source_listing_id: "N-floor-1", created_at: "2026-08-20",
+      payload_json: JSON.stringify({ address: "서구 탄방동 100", room: "4층", deposit: 1000, rent: 80 }),
+      result_json: "{}" },
+    { id: "R-floor-2", source: "공실박스", source_listing_id: "G-floor-2", created_at: "2026-08-20",
+      payload_json: JSON.stringify({ address: "서구 탄방동 100", room: "4층", deposit: 1000, rent: 80 }),
+      result_json: "{}" }
+  ];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        bind() { return this; },
+        async all() {
+          if (/FROM collector_raw WHERE processing_state='review'/.test(this.sql)) return { results: reviewRows };
+          if (/FROM listings WHERE status <> 'deleted' AND address IN/.test(this.sql)) {
+            return { results: [
+              { id: "M-floor-4", property_id: "M-floor-4", address: "서구 탄방동 100", room: "4층" },
+              { id: "M-room-401", property_id: "M-room-401", address: "서구 탄방동 100", room: "401호" },
+              { id: "M-unknown", property_id: "M-unknown", address: "서구 탄방동 100", room: "" },
+              { id: "M-floor-8", property_id: "M-floor-8", address: "서구 탄방동 100", room: "8층" },
+              { id: "M-floor-11", property_id: "M-floor-11", address: "서구 탄방동 100", room: "11층" },
+              { id: "M-floor-12", property_id: "M-floor-12", address: "서구 탄방동 100", room: "1201호" }
+            ] };
+          }
+          throw new Error(`Unexpected query: ${this.sql}`);
+        },
+        async first() {
+          if (/COUNT\(\*\).*collector_raw/.test(this.sql)) return { count: reviewRows.length };
+          throw new Error(`Unexpected query: ${this.sql}`);
+        }
+      };
+    }
+  };
+  const response = await authenticatedRequest("/api/data?action=reviewWorkspace", { DB: db });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.groups.length, 1);
+  assert.deepEqual(payload.groups[0].candidates.map((candidate) => candidate.propertyId),
+    ["M-floor-4", "M-room-401", "M-unknown"]);
+});
+
 test("primary sheet reads come directly from D1 without Apps Script", async () => {
   let upstreamCalls = 0;
   const cachedWrites = [];
