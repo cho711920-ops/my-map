@@ -2104,7 +2104,7 @@ async function applyReviewBatch(env, user, body) {
         if (!listing) throw new Error("통합할 기존 매물을 찾지 못했습니다.");
         await attachSource(env, record, listing.id, row.session_id, existingSource, action === "condition",
           clean(user?.email), existingAssets);
-        if (action === "condition") affectedListingIds.add(listing.id);
+        affectedListingIds.add(listing.id);
         const aliases = await attachPendingReviewAliases(env, row.id, listing.id, record, clean(user?.email));
         aliasesMerged += aliases.merged;
         aliasesFailed += aliases.failed;
@@ -2123,6 +2123,7 @@ async function applyReviewBatch(env, user, body) {
   const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM collector_raw WHERE processing_state='review'").first();
   return { ok: true, action: "applyReviewBatch", processed, failed, aliasesMerged, aliasesFailed, processedReviewIds,
+    affectedListingIds: [...affectedListingIds],
     remaining: Number(remaining?.count || 0), actionWritesVerified: processed,
     reviewRowsRemovedVerified: processed, elapsedMs: Date.now() - started,
     operationAdjustments: { pendingReview: -processed },

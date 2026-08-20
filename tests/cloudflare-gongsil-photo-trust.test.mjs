@@ -41,8 +41,8 @@ test("unified list and detail responses sanitize legacy Gongsilbox media", () =>
   assert.match(d1, /json_extract\(raw_json, '\$\.list\.Photos'\) AS gongsil_photos_json/);
   assert.match(d1, /clean\(original\.source\) === "공실박스"/);
   assert.match(d1, /const isGongsil = clean\(row\.source \|\| snapshot\.source\) === "공실박스"/);
-  assert.match(worker, /unified-listings-v4-actual-gongsil-photos\.json/);
-  assert.match(worker, /unified-detail-v2-actual-photos/);
+  assert.match(worker, /unified-listings-v5-source-aware-review\.json/);
+  assert.match(worker, /unified-detail-v3-source-aware-review/);
 });
 
 test("primary dialogs share one minimal single-glyph close-button style", () => {

@@ -20,6 +20,8 @@ assert.match(d1, /"preserveRepresentative"/);
 assert.doesNotMatch(listingUi, /preserveRepresentative\) return 10/);
 assert.match(worker, /collectorAdmin\.affectedListingIds/);
 assert.match(worker, /review\?\.affectedListingIds/);
+assert.match(collector, /action === "merge" \|\| action === "condition"[\s\S]*?affectedListingIds\.add\(listing\.id\)/);
+assert.match(collector, /action: "applyReviewBatch"[\s\S]*?affectedListingIds: \[\.\.\.affectedListingIds\]/);
 assert.match(collector, /shardCount/);
 assert.match(collector, /instr\('0123456789abcdef'/);
 
