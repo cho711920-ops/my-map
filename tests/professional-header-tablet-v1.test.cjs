@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "header-professional-v1.css"), "utf8");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
-assert.match(html, /header-professional-v1\.css\?v=1\.1\.1-logout-size/);
+assert.match(html, /header-professional-v1\.css\?v=1\.1\.2-logout-size/);
 assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/small>/);
 
 [

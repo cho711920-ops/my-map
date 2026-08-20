@@ -67,6 +67,6 @@ assert.doesNotMatch(
 
 assert.match(css, /\.map-quick-tool-btn \{[\s\S]*?backdrop-filter: none !important/);
 assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(html, /header-professional-v1\.css\?v=1\.1\.1-logout-size/);
+assert.match(html, /header-professional-v1\.css\?v=1\.1\.2-logout-size/);
 
 console.log("interaction smooth v6.10.7 tests passed");
