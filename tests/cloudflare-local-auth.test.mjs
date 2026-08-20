@@ -40,6 +40,14 @@ function localDb(account) {
   };
 }
 
+async function legacyGoogleToken(payload, sessionSecret) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(sessionSecret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encodedPayload));
+  return `${encodedPayload}.${Buffer.from(signature).toString("base64url")}`;
+}
+
 test("Google and local sessions use the configured 90-day maximum", async () => {
   const env = {
     ALLOWED_EMAILS: "owner@example.com",
@@ -103,6 +111,24 @@ test("local account login endpoint creates a secure 90-day session cookie", asyn
   assert.deepEqual(await response.json(), {
     ok: true, email: localIdentityEmail("friend1"), authType: "local", username: "friend1"
   });
+});
+
+test("an existing five-day Google session upgrades once to the 90-day cookie", async () => {
+  const now = Date.now();
+  const env = {
+    ALLOWED_EMAILS: "owner@example.com", SESSION_SECRET: secret,
+    SESSION_MAX_AGE_SECONDS: "7776000", ASSETS: { fetch: async () => new Response("asset") }
+  };
+  const token = await legacyGoogleToken({
+    sub: "owner", email: "owner@example.com", role: "owner", displayName: "소유자",
+    iat: now, exp: now + 5 * 24 * 60 * 60_000
+  }, secret);
+  const response = await worker.fetch(new Request("https://js-map.com/api/session", {
+    headers: { cookie: `js_realestate_session=${encodeURIComponent(token)}` }
+  }), env);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /Max-Age=7776000/);
+  assert.equal((await response.json()).authType, "google");
 });
 
 test("invalid local identifiers and repeated failures are rejected", async () => {

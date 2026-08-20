@@ -334,9 +334,14 @@ async function handleListingImage(request, env, context) {
 async function handleSession(request, env) {
   if (request.method === "GET") {
     const user = await requireSession(request, env);
+    const headers = { "cache-control": "no-store" };
+    if (!user.authType) {
+      const upgradedUser = { ...user, authType: "google" };
+      headers["set-cookie"] = sessionCookieHeader(await createSessionToken(upgradedUser, env), env);
+    }
     return json({ ok: true, email: user.email || "", displayName: user.displayName || "",
       role: user.role || "member", authType: user.authType || "google",
-      username: user.username || "" }, 200, { "cache-control": "no-store" });
+      username: user.username || "" }, 200, headers);
   }
   requireSameOrigin(request);
   if (request.method === "DELETE") {
