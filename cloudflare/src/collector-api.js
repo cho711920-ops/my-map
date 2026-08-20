@@ -830,6 +830,30 @@ function reliableOfferMismatch(record, row) {
   return termsDiffer && Math.abs(leftArea - rightArea) >= 1;
 }
 
+function relativeNumberGap(left, right) {
+  const difference = Math.abs(left - right);
+  const baseline = Math.min(Math.abs(left), Math.abs(right));
+  if (!difference) return 0;
+  return baseline > 0 ? difference / baseline : Number.POSITIVE_INFINITY;
+}
+
+function stronglyDifferentRentalTerms(record, row, stricter = false) {
+  const leftDeposit = number(row.deposit);
+  const rightDeposit = number(record.deposit);
+  const leftRent = number(row.monthly_rent ?? row.rent);
+  const rightRent = number(record.rent);
+  if (leftDeposit == null || rightDeposit == null || leftRent == null || rightRent == null) return false;
+
+  const depositGap = Math.abs(leftDeposit - rightDeposit);
+  const rentGap = Math.abs(leftRent - rightRent);
+  if (stricter) {
+    return depositGap >= 500 && relativeNumberGap(leftDeposit, rightDeposit) >= 0.5 &&
+      rentGap >= 20 && relativeNumberGap(leftRent, rightRent) >= 0.3;
+  }
+  return depositGap >= 200 && relativeNumberGap(leftDeposit, rightDeposit) >= 0.25 &&
+    rentGap >= 10 && relativeNumberGap(leftRent, rightRent) >= 0.15;
+}
+
 function compareSingleListingSpace(record, row) {
   const incoming = roomIdentity(record?.room);
   const existing = roomIdentity(row?.room);
@@ -859,8 +883,15 @@ function compareSingleListingSpace(record, row) {
   if (genericSpecific && reliableOfferMismatch(record || {}, row || {})) {
     return { decision: "different", reason: "같은 층이지만 호실 표기와 임대조건·평수가 모두 다름" };
   }
+  if (genericSpecific && stronglyDifferentRentalTerms(record || {}, row || {})) {
+    return { decision: "different", reason: "같은 층의 호실 표기와 임대조건이 모두 크게 다름" };
+  }
   if (sameKnownFloor && !incoming.units.length && !existing.units.length && offerMatch) {
     return { decision: "same", reason: "같은 층·임대조건·평수" };
+  }
+  if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
+      stronglyDifferentRentalTerms(record || {}, row || {}, true)) {
+    return { decision: "different", reason: "같은 층이지만 보증금·월세가 모두 크게 다름" };
   }
   if (incoming.floor == null && existing.floor == null && offerMatch) {
     return { decision: "same", reason: "층 미상·임대조건·평수 일치" };
@@ -914,7 +945,9 @@ export function classifyListingCandidates(record, candidates = []) {
   if (same.length === 1) return { decision: "merge", candidate: same[0].row, reason: same[0].reason, comparisons };
   if (same.length > 1) return { decision: "review", reason: "같은 조건의 기존 매물이 여러 개", comparisons };
   if (review.length) return { decision: "review", reason: review[0].reason, comparisons };
-  return { decision: "create", reason: candidates.length ? "기존 매물과 층·호실이 다름" : "같은 주소의 기존 매물 없음", comparisons };
+  return { decision: "create", reason: candidates.length
+    ? (comparisons[0]?.reason || "기존 매물과 층·호실이 다름")
+    : "같은 주소의 기존 매물 없음", comparisons };
 }
 
 export function choosePendingReviewMatch(record, candidates = [], currentReview = null) {

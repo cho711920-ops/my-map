@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.1\.6";/);
+assert.match(source, /var VERSION = "2\.1\.7";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
@@ -153,6 +153,24 @@ const helperSource = source.match(
 const importItemTotal = new Function(
   `${helperSource}\nreturn importItemTotal;`
 )();
+
+const getRoomSource = source.match(
+  /function getRoom\(item\) \{[\s\S]*?\n  \}/
+)[0];
+const getRoom = new Function(`
+  function text(value) { return value == null ? "" : String(value).trim(); }
+  function pick(item, keys) {
+    for (const key of keys) if (item && item[key] !== undefined && item[key] !== null) return item[key];
+    return "";
+  }
+  ${getRoomSource}
+  return getRoom;
+`)();
+
+assert.equal(getRoom({ Ho: "1층" }), "1층");
+assert.equal(getRoom({ Ho: "지하1층" }), "지하1층");
+assert.equal(getRoom({ Ho: "102" }), "102호");
+assert.equal(getRoom({ BfFloor: 2 }), "2층");
 
 assert.equal(
   importItemTotal(new Array(2354), {

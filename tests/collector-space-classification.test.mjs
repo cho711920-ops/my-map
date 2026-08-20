@@ -65,6 +65,29 @@ test("a generic floor and a unit on that floor merge only with matching terms an
   ]).decision, "create");
 });
 
+test("materially different deposit and rent create separate listings on an otherwise ambiguous floor", () => {
+  const explicitRoom = classifyListingCandidates(incoming("102호", 500, 60, 12), [
+    existing("M-1", "1층", 300, 50, 11.8)
+  ]);
+  assert.equal(explicitRoom.decision, "create");
+  assert.match(explicitRoom.reason, /임대조건이 모두 크게 다름/);
+
+  const genericFloor = classifyListingCandidates(incoming("1층", 1500, 100, 12), [
+    existing("M-1", "1층", 300, 50, 11.8)
+  ]);
+  assert.equal(genericFloor.decision, "create");
+  assert.match(genericFloor.reason, /보증금·월세가 모두 크게 다름/);
+});
+
+test("small rental adjustments on an ambiguous floor still require review", () => {
+  assert.equal(classifyListingCandidates(incoming("102호", 500, 55, 12), [
+    existing("M-1", "1층", 300, 50, 11.8)
+  ]).decision, "review");
+  assert.equal(classifyListingCandidates(incoming("1층", 1000, 60, 12), [
+    existing("M-1", "1층", 800, 50, 11.8)
+  ]).decision, "review");
+});
+
 test("basement aliases share one floor while above-ground rooms remain separate", () => {
   assert.equal(classifyListingCandidates(incoming("B01", 1000, 50, 10.2), [
     existing("M-1", "지하1층", 1000, 50, 10)

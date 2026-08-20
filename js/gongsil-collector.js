@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.6";
+  var VERSION = "2.1.7";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -1702,7 +1702,7 @@
   function getRoom(item) {
     var room = text(pick(item, ["Ho", "BfHo", "Room", "Honame"]));
     if (room && room !== "전체" && room !== "0") {
-      return /호$/.test(room) ? room : room + "호";
+      return /(?:층|호)$/.test(room) ? room : room + "호";
     }
 
     var floor = Number(pick(item, ["Ff", "BfFloor", "Floor", "floor"]));
