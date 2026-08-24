@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.9.2";
+  var VERSION = "5.9.3";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -34,6 +34,7 @@
   var FIN_ARTICLE_BASIC_PATH = "/front-api/v1/article/basicInfo";
   var FIN_DETAIL_CONCURRENCY = 5;
   var FIN_DETAIL_TIMEOUT_MS = 15000;
+  var NAVER_LIST_REQUEST_TIMEOUT_MS = 60000;
   // 새 네이버 목록 API는 실제 화면과 동일한 30건 단위에서만 다음 페이지
   // lastInfo/seed 조합을 안정적으로 받아들입니다. 100건으로 올리면 2페이지부터 400이 납니다.
   var FIN_PAGE_SIZE = 30;
@@ -2036,12 +2037,24 @@
     var lastError = null;
     for (var attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        lastResponse = await nativeFetch(url, options);
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() {
+          controller.abort();
+        }, NAVER_LIST_REQUEST_TIMEOUT_MS);
+        try {
+          lastResponse = await nativeFetch(url, Object.assign({}, options || {}, {
+            signal: controller.signal
+          }));
+        } finally {
+          clearTimeout(timeoutId);
+        }
         if (lastResponse.ok || (lastResponse.status !== 429 && lastResponse.status < 500)) {
           return lastResponse;
         }
       } catch (error) {
-        lastError = error;
+        lastError = error && error.name === "AbortError"
+          ? new Error("네이버 목록 응답이 60초 안에 없어 다시 시도합니다.")
+          : error;
       }
       await delay(350 * attempt);
     }

@@ -52,6 +52,9 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /COLLECTOR_START_TIMEOUT_MS = 2 \* 60 \* 1000/);
   assert.match(background, /COLLECTION_STALL_TIMEOUT_MS = 20 \* 60 \* 1000/);
   assert.match(background, /COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 \* 60 \* 1000/);
+  assert.match(background, /MAX_TARGET_RUNTIME_MS = 90 \* 60 \* 1000/);
+  assert.match(background, /targetRuntimeExceeded/);
+  assert.match(background, /한 지역 수집이 90분/);
   assert.match(background, /주소·층 오류/);
   assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
   assert.match(background, /state\.summary\.retryErrors/);
@@ -80,6 +83,8 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(content, /JS_COLLECTOR_AUTOMATION_STARTED/);
   assert.match(content, /\[data-metric\]/);
   assert.match(content, /JS_AUTO_TARGET_HEARTBEAT/);
+  assert.match(content, /function stableProgressText\(value\)/);
+  assert.match(content, /stableProgressText\(detail\)/);
   assert.match(content, /JS_AUTO_COLLECTOR_PAGE_LOADED/);
   const bridge = read("edge-automation/extension/auto-bridge.js");
   assert.match(bridge, /async function waitForRuntime/);
@@ -102,6 +107,9 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(naver, /function selectAutomaticDistrict\(\)/);
   assert.match(naver, /AUTO_DISTRICT_PROGRESS_KEY/);
   assert.match(naver, /async function collectFinAutomaticDistrict\(district\)/);
+  assert.match(naver, /NAVER_LIST_REQUEST_TIMEOUT_MS = 60000/);
+  assert.match(naver, /new AbortController\(\)/);
+  assert.match(naver, /네이버 목록 응답이 60초 안에 없어 다시 시도합니다/);
   assert.match(naver, /saveAutoDistrictProgress\(progress\)/);
   assert.match(naver, /clearAutoDistrictProgress\(district\.cortarNo\)/);
   assert.match(daangn, /state\.job\.completionIssues/);

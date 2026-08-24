@@ -18,6 +18,7 @@ const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
 const COLLECTOR_START_TIMEOUT_MS = 2 * 60 * 1000;
 const COLLECTION_STALL_TIMEOUT_MS = 20 * 60 * 1000;
 const COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 * 60 * 1000;
+const MAX_TARGET_RUNTIME_MS = 90 * 60 * 1000;
 const DEFAULT_CONFIG = {
   enabled: false,
   schedule: "11:00",
@@ -30,7 +31,7 @@ function delay(milliseconds) {
 }
 
 function retryableTargetFailure(message) {
-  return !/(?:로그인|보안키|승인되지 않은|주소·층 오류|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
+  return !/(?:로그인|보안키|승인되지 않은|주소·층 오류|한 지역 수집이 90분|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
     .test(String(message || ""));
 }
 
@@ -798,12 +799,16 @@ async function recoverAutomaticRun() {
     now - Number(state.lastProgressAt || state.runtimeStartedAt || state.targetStartedAt || now) > COLLECTION_STALL_TIMEOUT_MS;
   const disconnectedCollection = state.phase === "collecting" &&
     now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || state.targetStartedAt || now) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
-  if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection) {
+  const targetRuntimeExceeded = ["loading", "starting-collector", "collecting"].includes(state.phase) &&
+    elapsed > MAX_TARGET_RUNTIME_MS;
+  if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection || targetRuntimeExceeded) {
     const target = (state.targets || [])[state.index];
     const recoveryMessage = stalledLoading
       ? "수집 화면 로딩이 3분 동안 끝나지 않아 다시 시작합니다."
       : stalledStart
         ? "실제 수집 시작 확인이 2분 동안 없어 다시 시작합니다."
+        : targetRuntimeExceeded
+          ? "한 지역 수집이 90분을 넘어 다음 지역을 먼저 처리하고, 미완료 지역은 저장 지점부터 다시 시도합니다."
         : disconnectedCollection
           ? "수집 화면의 상태 신호가 8분 동안 없어 마지막 저장 지점부터 복구합니다."
           : "수집 화면의 숫자가 20분 동안 진행되지 않아 마지막 저장 지점부터 복구합니다.";

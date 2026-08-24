@@ -17,6 +17,14 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function stableProgressText(value) {
+  return String(value || "")
+    .replace(/\b[\d,.]+\s*초\s*경과\b/g, "시간 경과")
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "시각")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function collectorProgressSnapshot() {
   const panel = document.querySelector(
     "#js-naver-collector-panel,#js-daangn-collector-panel,#js-gongsil-collector-panel"
@@ -28,7 +36,9 @@ function collectorProgressSnapshot() {
   const progress = String(panel.querySelector("[data-role=progress-bar]")?.style?.width || "").trim();
   const metrics = Array.from(panel.querySelectorAll("[data-metric],[data-role^=metric-]")).map((node) =>
     String(node.textContent || "").trim()).filter(Boolean).join("|");
-  const fingerprint = [status, percent, detail, progress, metrics].join("|")
+  // Elapsed seconds and clocks change even when the provider request is stuck.
+  // Exclude them so the watchdog measures real page/count changes.
+  const fingerprint = [status, percent, stableProgressText(detail), progress, metrics].join("|")
     .replace(/\s+/g, " ").slice(0, 1_000);
   return {
     fingerprint: fingerprint || "panel-ready",
