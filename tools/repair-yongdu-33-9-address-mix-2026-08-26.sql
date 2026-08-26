@@ -3,9 +3,7 @@
 -- 별도 대표로 복구하고, 번지를 확정할 수 없는 2건은 매물검증으로 되돌린다.
 -- 모든 변경은 원래 대표 ID와 원본 ID를 함께 조건으로 사용해 재실행 시 중복 변경되지 않는다.
 
-BEGIN IMMEDIATE;
-
-CREATE TEMP TABLE repair_yongdu_33_9 (
+CREATE TABLE IF NOT EXISTS repair_yongdu_33_9 (
   source_row_id TEXT PRIMARY KEY,
   source_listing_id TEXT NOT NULL,
   action TEXT NOT NULL,
@@ -13,7 +11,7 @@ CREATE TEMP TABLE repair_yongdu_33_9 (
   exact_address TEXT NOT NULL DEFAULT ''
 );
 
-INSERT INTO repair_yongdu_33_9 VALUES
+INSERT OR REPLACE INTO repair_yongdu_33_9 VALUES
   ('O-a07dc5e8-979c-4f3f-9bda-8f03343ba93a','네이버-2641659223','review','',''),
   ('O-c4959ae9-d2d1-4842-9afc-f5bd69e91aee','네이버-2641659982','create','M-repair-nav-2641659982','중구 용두동 111-30'),
   ('O-a2506823-aa2f-4a80-84fc-100a42dbac04','네이버-2641688634','move','M-475491a5-c7a0-4d56-8538-493bf1c0b9d8','중구 용두동 113-10'),
@@ -96,6 +94,13 @@ WHERE listing_id='M-b421c174-81f1-4359-855e-f8a5628a9f84'
   AND id IN (SELECT source_row_id FROM repair_yongdu_33_9 WHERE action='keep');
 
 -- 지번을 확정할 수 없는 원본은 삭제하지 않고 사진·연락처와 함께 대표에서 분리해 검증 대기로 되돌린다.
+INSERT OR IGNORE INTO collector_sessions(
+  id,source,owner_email,state,totals_json,error_json,started_at,finished_at,updated_at
+) VALUES (
+  'repair-2026-08-26','네이버','codex-address-repair@js-map.com','completed',
+  '{"review":2}','{}',strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
+);
+
 INSERT OR IGNORE INTO collector_raw(
   id,session_id,source,source_listing_id,snapshot_hash,payload_json,processing_state,
   result_json,error_text,created_at,processed_at,legacy_original_id,trade_type,sale_category,sale_price
@@ -112,7 +117,8 @@ SELECT 'R-address-repair-' || replace(s.source_listing_id,'네이버-',''),'repa
     'area',json_extract(s.list_snapshot_json,'$.area'),'memo',COALESCE(json_extract(s.list_snapshot_json,'$.memo'),''),
     'link',s.source_url,'latitude',json_extract(s.list_snapshot_json,'$.latitude'),
     'longitude',json_extract(s.list_snapshot_json,'$.longitude')),
-  'review',json_object('candidateIds',json_array(),'reason','정확한 지번 재확인 필요','autoDecision','review'),
+  'review',json_object('candidateIds',json_array(),'reason','정확한 지번 재확인 필요','autoDecision','review',
+    'autoDecisionVersion',7),
   '',strftime('%Y-%m-%dT%H:%M:%fZ','now'),'','',COALESCE(s.trade_type,'lease'),COALESCE(s.sale_category,''),s.sale_price
 FROM listing_sources s JOIN repair_yongdu_33_9 r ON r.source_row_id=s.id
 WHERE s.listing_id='M-b421c174-81f1-4359-855e-f8a5628a9f84' AND r.action='review';
@@ -134,4 +140,3 @@ FROM listing_sources s JOIN repair_yongdu_33_9 r ON r.source_row_id=s.id
 WHERE r.action IN ('move','create') AND s.listing_id=r.target_listing_id;
 
 DROP TABLE repair_yongdu_33_9;
-COMMIT;
