@@ -59,7 +59,8 @@
     if (original && Array.isArray(original.images)) values = original.images.slice();
     if (original && original.thumbnail && values.indexOf(original.thumbnail) < 0) values.unshift(original.thumbnail);
     values = values.map(text).filter(function(url, index, all) {
-      return url && !/\/origin\/profile\//i.test(url) && !/[?&]service=karrotauth(?:&|$)/i.test(url) &&
+      return url && !/\/origin\/profile\//i.test(url) && !/\/avatars\//i.test(url) &&
+        !/[?&]service=karrotauth(?:&|$)/i.test(url) &&
         all.indexOf(url) === index;
     });
     if (sourceKey(original && original.source) === "danggeun") {
@@ -315,6 +316,9 @@
   function cardParts(item) {
     var originals = group(item && item.propertyId);
     var count = originals.length || 1;
+    var sourceUnavailable = originals.length > 0 && originals.every(function(original) {
+      return Boolean(original && original.sourceUnavailable);
+    });
     var thumbnail = originals.length ? originalImage(originals[0]) : "";
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
@@ -326,11 +330,15 @@
       (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
         'onerror="JSUnifiedListingsV8.imageError(this, true)">' : '<span>사진 없음</span>') +
       '</button>';
-    var badge = count > 1
-      ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
-      : '';
+    var badge = sourceUnavailable
+      ? '<span class="unified-badge-v8 source-unavailable">현재 광고 미노출</span>'
+      : count > 1
+        ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
+        : '';
     var button;
-    if (count > 1) {
+    if (sourceUnavailable) {
+      button = '<button type="button" class="item-source-link-btn disabled" disabled>미노출</button>';
+    } else if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +
         '동일매물 ' + count + '개</button>';

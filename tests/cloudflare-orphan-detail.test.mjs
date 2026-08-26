@@ -24,6 +24,23 @@ test("an active master without linked sources still has a usable detail record",
   assert.equal(original.room, "1층");
   assert.equal(original.rent, 300);
   assert.equal(original.thumbnail, "https://example.com/one.jpg");
+  assert.equal(original.sourceUnavailable, false);
+});
+
+test("a master whose collected sources are all hidden keeps its last photo with an unavailable marker", () => {
+  const original = masterFallbackOriginal({
+    id: "M-hidden-1",
+    main_source: "네이버",
+    address: "서구 탄방동 616",
+    room: "4층",
+    source_count: 2,
+    active_source_count: 0,
+    missing_count: 3
+  }, ["https://example.com/last-normal.jpg"]);
+
+  assert.equal(original.thumbnail, "https://example.com/last-normal.jpg");
+  assert.equal(original.sourceUnavailable, true);
+  assert.equal(original.missingCount, 3);
 });
 
 test("fallback detail cards do not expose source move controls", async () => {

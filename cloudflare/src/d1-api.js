@@ -4,7 +4,8 @@ import { carryConfirmedVisitMemo } from "./visit-status.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
-  "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative"
+  "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
+  "masterFallback", "sourceUnavailable", "missingCount"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -339,6 +340,34 @@ async function unifiedListings(env) {
     while (values.length && values[values.length - 1] === "") values.pop();
     groups[propertyId].push(values);
   }
+  const unavailableRows = await allPages(env, `SELECT
+      l.id, l.property_id, l.main_source, l.title, l.building_name, l.address, l.room,
+      l.deposit, l.monthly_rent, l.maintenance_fee, l.premium, l.area_m2,
+      l.latitude, l.longitude, l.operating_memo, l.source_url, l.contacts_json, l.version,
+      l.registration_at, l.first_collected_at, COUNT(s.id) AS source_count,
+      MAX(s.missing_count) AS missing_count,
+      (SELECT lm.external_url FROM listing_media lm
+        LEFT JOIN listing_sources image_source ON image_source.id=lm.source_id
+        WHERE lm.listing_id=l.id AND lm.status<>'deleted' AND trim(COALESCE(lm.external_url,''))<>''
+          AND lm.external_url NOT LIKE '%/avatars/%'
+        ORDER BY COALESCE(image_source.last_collected_at,'') DESC, lm.sort_order, lm.rowid LIMIT 1) AS thumbnail
+    FROM listings l JOIN listing_sources s ON s.listing_id=l.id
+    WHERE l.status NOT IN ('deleted','계약완료')
+    GROUP BY l.id
+    HAVING SUM(CASE WHEN s.active=1 THEN 1 ELSE 0 END)=0 AND MAX(s.missing_count)>=3
+    ORDER BY l.rowid`, 4_000);
+  let unavailableCount = 0;
+  for (const row of unavailableRows) {
+    const propertyId = clean(row.property_id || row.id);
+    if (!propertyId || groups[propertyId]?.length) continue;
+    const fallback = masterFallbackOriginal(row, [row.thumbnail].filter(Boolean));
+    fallback.sourceUnavailable = true;
+    fallback.missingCount = Math.max(3, Number(row.missing_count) || 0);
+    const values = UNIFIED_FIELDS.map((field) => fallback[field] ?? "");
+    while (values.length && values[values.length - 1] === "") values.pop();
+    groups[propertyId] = [values];
+    unavailableCount += 1;
+  }
   return {
     ok: true,
     version: 2,
@@ -346,7 +375,8 @@ async function unifiedListings(env) {
     fields: UNIFIED_FIELDS,
     groups,
     sourceSearchIds,
-    originalCount: rows.length,
+    originalCount: rows.length + unavailableCount,
+    unavailableCount,
     source: "D1"
   };
 }
@@ -376,7 +406,9 @@ export function masterFallbackOriginal(row, images = []) {
     contactCount: Array.isArray(contacts) ? contacts.length : 0,
     revision: Math.max(1, Number(row?.version) || 1),
     registrationAt: clean(row?.registration_at || row?.first_collected_at),
-    masterFallback: true
+    masterFallback: true,
+    sourceUnavailable: Number(row?.source_count || 0) > 0 && Number(row?.active_source_count || 0) === 0,
+    missingCount: Math.max(0, Number(row?.missing_count) || 0)
   };
 }
 
@@ -412,7 +444,10 @@ async function unifiedDetail(env, propertyId) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,
         address, room, deposit, monthly_rent, maintenance_fee, premium, area_m2,
         latitude, longitude, operating_memo, source_url, contacts_json, version,
-        registration_at, first_collected_at
+        registration_at, first_collected_at,
+        (SELECT COUNT(*) FROM listing_sources s WHERE s.listing_id=listings.id) AS source_count,
+        (SELECT COUNT(*) FROM listing_sources s WHERE s.listing_id=listings.id AND s.active=1) AS active_source_count,
+        (SELECT MAX(s.missing_count) FROM listing_sources s WHERE s.listing_id=listings.id) AS missing_count
       FROM listings WHERE property_id = ?1 AND status <> 'deleted' LIMIT 1`).bind(propertyId).first();
     if (master) {
       const fallbackImages = (mediaResult?.results || []).map((media) => clean(media.external_url)).filter(Boolean);
@@ -834,9 +869,15 @@ async function operationsDashboard(env) {
 async function transactionCandidates(env) {
   const result = await env.DB.prepare(`SELECT
       l.id AS property_id, l.title, l.address, l.room, l.listing_type,
-      l.deposit, l.monthly_rent, l.area_m2, l.main_source,
+      l.deposit, l.monthly_rent, l.maintenance_fee, l.premium, l.area_m2,
+      l.main_source, l.operating_memo, l.source_url,
       COUNT(s.id) AS source_count, MAX(s.missing_count) AS missing_count,
-      GROUP_CONCAT(DISTINCT s.source) AS sources, MAX(s.updated_at) AS last_checked_at
+      GROUP_CONCAT(DISTINCT s.source) AS sources, MAX(s.updated_at) AS last_checked_at,
+      (SELECT lm.external_url FROM listing_media lm
+        LEFT JOIN listing_sources image_source ON image_source.id=lm.source_id
+        WHERE lm.listing_id=l.id AND lm.status<>'deleted' AND trim(COALESCE(lm.external_url,''))<>''
+          AND lm.external_url NOT LIKE '%/avatars/%'
+        ORDER BY COALESCE(image_source.last_collected_at,'') DESC, lm.sort_order, lm.rowid LIMIT 1) AS thumbnail
     FROM listing_sources s
     JOIN listings l ON l.id=s.listing_id
     WHERE l.status NOT IN ('deleted','계약완료')
@@ -844,7 +885,7 @@ async function transactionCandidates(env) {
     HAVING SUM(CASE WHEN s.active=1 THEN 1 ELSE 0 END)=0
       AND MAX(s.missing_count)>=3
     ORDER BY MAX(s.updated_at) DESC, l.address, l.room
-    LIMIT 500`).all();
+    LIMIT 2000`).all();
   const candidates = (result?.results || []).map((row) => ({
     propertyId: clean(row.property_id),
     title: clean(row.title),
@@ -853,8 +894,13 @@ async function transactionCandidates(env) {
     type: clean(row.listing_type),
     deposit: number(row.deposit),
     rent: number(row.monthly_rent),
+    fee: number(row.maintenance_fee),
+    premium: number(row.premium),
     area: number(row.area_m2),
     mainSource: clean(row.main_source),
+    memo: clean(row.operating_memo),
+    sourceUrl: clean(row.source_url),
+    thumbnail: clean(row.thumbnail),
     sourceCount: Number(row.source_count) || 0,
     missingCount: Number(row.missing_count) || 0,
     sources: clean(row.sources).split(",").map((value) => value.trim()).filter(Boolean),

@@ -48,6 +48,8 @@
     customerEditorCloseResolveV727: null,
     transactionCandidates: null,
     transactionCandidatesLoading: false,
+    transactionExpandedId: "",
+    transactionCompletingId: "",
     deletingCustomerId: ""
   };
 
@@ -69,6 +71,30 @@
   function number(value) {
     var parsed = Number(String(value == null ? "" : value).replace(/,/g, ""));
     return isFinite(parsed) ? parsed : 0;
+  }
+
+  function transactionImageUrl(value) {
+    var url = text(value);
+    if (!/^https:\/\//i.test(url) || /\/avatars\//i.test(url) || /\/origin\/profile\//i.test(url)) return "";
+    try {
+      var parsed = new URL(url, window.location.href);
+      if (/^(?:img\.kr\.gcp-karroter\.net|landthumb-phinf\.pstatic\.net|dnvefa72aowie\.cloudfront\.net|file1\.gongsilbox\.com)$/i.test(parsed.hostname)) {
+        return "/api/listing-image?url=" + encodeURIComponent(parsed.toString());
+      }
+    } catch (_) {
+      return "";
+    }
+    return url;
+  }
+
+  function transactionDoneMemo(value) {
+    var memo = text(value);
+    if (/\[거래완료\s+\d{4}-\d{2}-\d{2}\]/.test(memo)) return memo;
+    var today = new Date();
+    var marker = "[거래완료 " + today.getFullYear() + "-" +
+      String(today.getMonth() + 1).padStart(2, "0") + "-" +
+      String(today.getDate()).padStart(2, "0") + "]";
+    return memo ? memo + " / " + marker : marker;
   }
 
   function isMobileCustomerAppV1() {
@@ -1682,7 +1708,51 @@
     }).catch(function() { return false; });
   }
 
-  function renderTransactionCandidates() {
+  function transactionCandidateCard(row) {
+    var propertyId = text(row.propertyId);
+    var encodedId = encodeURIComponent(propertyId);
+    var expanded = state.transactionExpandedId === propertyId;
+    var completing = state.transactionCompletingId === propertyId;
+    var price = '보 ' + number(row.deposit).toLocaleString("ko-KR") +
+      ' / 월 ' + number(row.rent).toLocaleString("ko-KR");
+    var imageUrl = transactionImageUrl(row.thumbnail);
+    var sourceText = (row.sources || []).join(" · ") || row.mainSource || "원본";
+    var detail = expanded
+      ? '<div class="operations-transaction-detail-v2">' +
+          '<div class="operations-transaction-photo-v2 ' + (imageUrl ? 'has-photo' : 'no-photo') + '">' +
+            (imageUrl
+              ? '<img src="' + escape(imageUrl) + '" alt="마지막 정상 매물 사진" loading="lazy" referrerpolicy="no-referrer">'
+              : '<span>등록된 사진 없음</span>') +
+            '<em>현재 광고 미노출 · 마지막 정상 사진</em>' +
+          '</div>' +
+          '<div class="operations-transaction-info-v2">' +
+            '<strong>' + escape(row.title || row.type || "매물") + '</strong>' +
+            '<span>' + escape([row.address, row.room].filter(Boolean).join(" ")) + '</span>' +
+            '<div class="operations-transaction-terms-v2"><b>' + escape(price) + '</b>' +
+              '<span>관리비 ' + number(row.fee).toLocaleString("ko-KR") + '</span>' +
+              '<span>권리금 ' + number(row.premium).toLocaleString("ko-KR") + '</span>' +
+              '<span>평 ' + number(row.area).toLocaleString("ko-KR") + '</span></div>' +
+            '<small>출처 ' + escape(sourceText) + ' · 원본 ' + number(row.sourceCount) +
+              '개 · 미노출 ' + number(row.missingCount) + '회</small>' +
+            (row.memo ? '<p>' + escape(row.memo) + '</p>' : '<p class="empty">등록된 메모가 없습니다.</p>') +
+            '<button type="button" class="operations-transaction-complete-v2" ' +
+              (completing ? 'disabled' : '') + ' onclick="completeTransactionCandidateV1(\'' + encodedId + '\')">' +
+              (completing ? '거래완료 저장 중…' : '거래완료 처리') + '</button>' +
+          '</div>' +
+        '</div>'
+      : '';
+    return '<article class="' + (expanded ? 'expanded' : '') + '">' +
+      '<div class="operations-transaction-summary-v2">' +
+        '<div class="operations-transaction-summary-text-v2"><strong>' + escape(row.title || row.type || "매물") + '</strong>' +
+          '<span>' + escape([row.address, row.room].filter(Boolean).join(" ")) + '</span>' +
+          '<small>' + escape(price) + (row.area ? ' · 평 ' + escape(row.area) : '') +
+          ' · 원본 ' + number(row.sourceCount) + '개 · 미노출 ' + number(row.missingCount) + '회</small></div>' +
+        '<button type="button" onclick="openTransactionCandidatePropertyV1(\'' + encodedId + '\')">' +
+          (expanded ? '접기' : '매물 확인') + '</button>' +
+      '</div>' + detail + '</article>';
+  }
+
+  function renderTransactionCandidates(shouldScroll) {
     var panel = document.getElementById("operationsDashboardPanel");
     if (!panel) return;
     var old = document.getElementById("operationsTransactionCandidatesV1");
@@ -1696,50 +1766,75 @@
       (state.transactionCandidatesLoading
         ? '<p class="operations-transaction-empty-v1">후보 매물을 불러오는 중입니다.</p>'
         : rows.length
-          ? '<div class="operations-transaction-list-v1">' + rows.map(function(row) {
-              var encodedId = encodeURIComponent(text(row.propertyId));
-              var encodedAddress = encodeURIComponent(text(row.address));
-              var price = '보 ' + number(row.deposit).toLocaleString("ko-KR") + ' / 월 ' + number(row.rent).toLocaleString("ko-KR");
-              return '<article><div><strong>' + escape(row.title || row.type || "매물") + '</strong>' +
-                '<span>' + escape([row.address, row.room].filter(Boolean).join(" ")) + '</span>' +
-                '<small>' + escape(price) + (row.area ? ' · 평 ' + escape(row.area) : '') +
-                ' · 원본 ' + number(row.sourceCount) + '개 · 미노출 ' + number(row.missingCount) + '회</small></div>' +
-                '<button type="button" onclick="openTransactionCandidatePropertyV1(\'' + encodedId + '\',\'' + encodedAddress + '\')">매물 확인</button></article>';
-            }).join("") + '</div>'
+          ? '<div class="operations-transaction-list-v1">' + rows.map(transactionCandidateCard).join("") + '</div>'
           : '<p class="operations-transaction-empty-v1">현재 거래확인 후보가 없습니다.</p>');
     panel.appendChild(section);
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (shouldScroll) section.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   window.openTransactionCandidates = function() {
     state.transactionCandidatesLoading = true;
-    renderTransactionCandidates();
+    state.transactionExpandedId = "";
+    renderTransactionCandidates(true);
     apiGet("transactionCandidates").then(function(result) {
       state.transactionCandidates = result.candidates || [];
       state.transactionCandidatesLoading = false;
-      renderTransactionCandidates();
+      renderTransactionCandidates(false);
     }).catch(function(error) {
       state.transactionCandidatesLoading = false;
       setMessage(error.message || "거래확인 후보를 불러오지 못했습니다.", "error");
-      renderTransactionCandidates();
+      renderTransactionCandidates(false);
     });
   };
 
   window.closeTransactionCandidatesV1 = function() {
+    state.transactionExpandedId = "";
     var section = document.getElementById("operationsTransactionCandidatesV1");
     if (section) section.remove();
   };
 
-  window.openTransactionCandidatePropertyV1 = function(encodedPropertyId, encodedAddress) {
+  window.openTransactionCandidatePropertyV1 = function(encodedPropertyId) {
     var propertyId = decodeURIComponent(encodedPropertyId || "");
-    var address = decodeURIComponent(encodedAddress || "");
-    window.closeOperationsCenter();
-    var keyword = document.getElementById("keyword");
-    if (keyword && address) keyword.value = address;
-    if (typeof window.applyFilter === "function") window.applyFilter();
-    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.open === "function") {
-      window.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
-    }
+    state.transactionExpandedId = state.transactionExpandedId === propertyId ? "" : propertyId;
+    renderTransactionCandidates(false);
+    if (!state.transactionExpandedId) return;
+    requestAnimationFrame(function() {
+      var expanded = document.querySelector(".operations-transaction-list-v1 article.expanded");
+      if (expanded) expanded.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  };
+
+  window.completeTransactionCandidateV1 = function(encodedPropertyId) {
+    var propertyId = decodeURIComponent(encodedPropertyId || "");
+    var row = (state.transactionCandidates || []).filter(function(candidate) {
+      return text(candidate.propertyId) === propertyId;
+    })[0];
+    if (!row || state.transactionCompletingId) return;
+    if (!window.confirm("이 매물을 거래완료로 처리할까요?\n광고가 실제로 다시 등록되면 자동으로 활성화됩니다.")) return;
+    state.transactionCompletingId = propertyId;
+    renderTransactionCandidates(false);
+    apiPost("toggleDone", {
+      propertyId: propertyId,
+      state: "계약완료",
+      memo: transactionDoneMemo(row.memo)
+    }).then(function() {
+      state.transactionCandidates = (state.transactionCandidates || []).filter(function(candidate) {
+        return text(candidate.propertyId) !== propertyId;
+      });
+      state.transactionExpandedId = "";
+      state.transactionCompletingId = "";
+      if (state.dashboard && number(state.dashboard.transactionCheckCandidates) > 0) {
+        state.dashboard.transactionCheckCandidates = number(state.dashboard.transactionCheckCandidates) - 1;
+        renderDashboard();
+      }
+      setMessage("거래완료로 저장했습니다.", "success");
+      renderTransactionCandidates(false);
+      if (typeof window.loadSheet === "function") setTimeout(function() { window.loadSheet(true); }, 250);
+    }).catch(function(error) {
+      state.transactionCompletingId = "";
+      setMessage(error.message || "거래완료 저장에 실패했습니다.", "error");
+      renderTransactionCandidates(false);
+    });
   };
 
   function refreshCustomerAlertWhenChanged(forceDashboard) {

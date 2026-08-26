@@ -54,6 +54,6 @@ test("customer matching UI requires confirmation and refreshes after deletion", 
   assert.match(ui, /return loadOperationsData\(true\)/);
   assert.match(css, /customer-delete-button-v728[^}]+color:#bd1e2d/);
   assert.match(worker, /OPERATIONS_CACHE_ACTIONS[\s\S]*?"deleteCustomer"/);
-  assert.match(html, /operations-center-v7\.css\?v=7\.20\.7-customer-delete/);
-  assert.match(html, /operations-center-v7\.js\?v=7\.22\.5-shared-data-only/);
+  assert.match(html, /operations-center-v7\.css\?v=7\.22\.6-inline-transactions/);
+  assert.match(html, /operations-center-v7\.js\?v=7\.22\.6-inline-transactions/);
 });

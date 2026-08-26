@@ -16,6 +16,8 @@ assert.match(ui, /unified-detail-source-row-v827[\s\S]*?unified-detail-source-li
 assert.match(ui, /function openExternalLink\(encodedLink\)/);
 assert.match(ui, /통합 저장·D1 확인 중입니다/);
 assert.match(ui, /function originalImages\(original\)/);
+assert.match(ui, /sourceUnavailable/);
+assert.match(ui, /현재 광고 미노출/);
 assert.match(ui, /function detailDisplayImageUrl\(url\)/);
 assert.match(ui, /function preloadDetailImage\(url, highPriority\)/);
 assert.match(ui, /originalImages\(selected\)\[1\]/);
@@ -33,6 +35,9 @@ assert.match(css, /unified-gallery-nav-v8/);
 assert.match(css, /async-mutation-status-v1\.idle \{ display: none/);
 
 assert.match(d1, /async function unifiedDetail\(env, propertyId\)/);
+assert.match(d1, /unavailableRows/);
+assert.match(d1, /HAVING SUM\(CASE WHEN s\.active=1 THEN 1 ELSE 0 END\)=0 AND MAX\(s\.missing_count\)>=3/);
+assert.match(d1, /sourceUnavailable/);
 assert.match(d1, /async function listingContacts\(env, propertyId\)/);
 assert.match(d1, /async function moveOriginal\(env, user, body\)/);
 assert.match(d1, /UPDATE listing_sources SET listing_id=\?1/);
