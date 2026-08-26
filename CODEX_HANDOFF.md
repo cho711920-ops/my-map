@@ -13,6 +13,7 @@
 - 운영 이력을 대조해 계약완료 이후 실제 미노출 원본이 재노출된 것이 확정된 5건(`서구 탄방동 616 4층`, `중구 대흥동 451-3 1층`, `서구 갈마동 377-40 1층`, `서구 용문동 282-21 1층`, `서구 탄방동 58-1 1층`)만 복구했다. 단순히 활성 원본을 가진 계약완료 매물은 건드리지 않았다.
 - 운영 적용 전 D1 전체를 `C:\Users\ITP\Documents\JS부동산 백업\2026-08-26\js-map-primary-pre-source-reappeared-reactivation.sql`(619,802,713바이트)로 내보냈다. 복구 SQL `tools/reactivate-reappeared-completed-listings-2026-08-26.sql`은 대표·원본 ID, 재관찰 시각, 이전 `toggleDone` 이력을 모두 확인하는 조건부·재실행 안전 방식이며 운영 적용 후 5건 모두 활성, 복구 이력 각 1건, 기존 메모 보존과 거래완료 표식 제거를 확인했다.
 - 목록·통합원본·운영현황·리비전 및 5건의 상세 R2 캐시를 제거해 복구 데이터가 즉시 재생성되게 했다. 재노출 경계 집중검사 `4/4`, 전체 테스트 `334/334`, Cloudflare 전용 테스트 `173/173`, 복구 SQL 로컬 D1 10문장 실행, JavaScript 문법 검사, 정적 자산 130개 빌드, Wrangler 4.124.0 dry-run과 `git diff --check`를 통과했다.
+- 운영 데이터 복구 북마크는 `00000361-0000014e-000050d3-8a48db793e5bfe03eb1ac3a12eefcde5`이다. 기능 커밋 `c4748bc`를 원격 `codex/cloudflare-js-map`에 푸시하고 운영 Worker `7778fa5d-982b-4e54-bfe0-cc66fc01469d`로 배포했다. `js-map.com`, `www.js-map.com`, Workers 도메인과 인증 설정 API는 모두 HTTP 200이다.
 
 ## 2026-08-26 과거 네이버 동명주소의 전체 정확지번 복구
 
