@@ -26,6 +26,6 @@ assert.match(
   /\.naver-map-auth-failed-v663 > \.naver-roadview-map-panel-v654[\s\S]*?display:\s*none/
 );
 assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
 
 console.log("NAVER map authentication fallback v6.5.64 tests passed");

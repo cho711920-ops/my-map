@@ -35,7 +35,7 @@ test("compact cards show only the elevator-presence icon while register details 
   assert.doesNotMatch(main, /item-elevator-capacity-v820/);
   assert.doesNotMatch(style, /\.item-elevator-v650/);
   assert.match(unifiedCss, /\.item-elevator-v650/);
-  assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);
+  assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
 });
 
 test("quick add waits for a confirmed D1 persistence result before clearing input", () => {

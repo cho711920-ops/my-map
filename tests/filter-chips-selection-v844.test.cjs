@@ -62,7 +62,7 @@ test("active filter chips are mounted below the listing toolbar with cache-buste
   assert.match(html, /map\.js\?v=8\.2\.21-default-cluster-style/);
   assert.match(html, /analysis\.js\?v=6\.3\.41-unique-linked-selection/);
   assert.match(html, /property-edit-v648\.js\?v=1\.0\.1-linked-selection/);
-  assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);
+  assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
   assert.match(html, /mobile-app-v1\.css\?v=1\.0\.7-filter-chips-selection/);
   assert.match(script, /drawItems\(filtered\);\s*renderActiveFilterChipsV844\(\);/);
 });

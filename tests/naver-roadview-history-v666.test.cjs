@@ -21,7 +21,7 @@ assert.match(html, /onclick="openNaverPastRoadviewV666\(\)"/);
 assert.match(css, /\.roadview-history-button-v666/);
 assert.match(css, /\.roadview-history-button-v666:disabled/);
 assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
 
 const start = script.indexOf("function setNaverRoadviewHistoryReadyV666");
 const end = script.indexOf("function updateNaverPanoramaInfoV653", start);
