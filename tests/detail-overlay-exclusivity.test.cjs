@@ -15,8 +15,8 @@ assert.match(source, /toggleDetailFilter\|toggleV6ActionMenu\|toggleSortDropdown
 assert.match(source, /global\.closeAiSidePanel\(\)/);
 assert.match(source, /closeForOverlay: closeDetailForOverlay/);
 assert.match(operations, /JSUnifiedListingsV8\.closeForOverlay\(\)/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.34-unavailable-photo/);
-assert.match(html, /operations-center-v7\.js\?v=7\.22\.6-inline-transactions/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.35-transaction-check-emphasis/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);
 
 let capturedClick = null;
 let ariaHidden = "false";

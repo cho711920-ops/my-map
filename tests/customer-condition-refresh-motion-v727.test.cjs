@@ -8,9 +8,9 @@ const unified = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 const unifiedCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 
 assert.match(html, /operations-center-v7\.css\?v=7\.22\.6-inline-transactions/);
-assert.match(html, /operations-center-v7\.js\?v=7\.22\.6-inline-transactions/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.1\.34-unavailable-photo/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.34-unavailable-photo/);
+assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.35-transaction-check-emphasis/);
 
 assert.match(operations, /customerConditionRefreshV727:\s*\{ customerId: "", status: "idle" \}/);
 assert.match(operations, /조건변경 저장 후 새로운 매물 업데이트 중/);

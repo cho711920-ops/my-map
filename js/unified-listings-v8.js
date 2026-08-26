@@ -288,6 +288,14 @@
       item.unifiedOriginalCountV8 = originals.length || 1;
       item.thumbnailV8 = originals.length ? originalImage(originals[0]) : "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });
+      item.transactionCheckCandidateV8135 = originals.length > 0 && originals.every(function(original) {
+        return Boolean(original && original.sourceUnavailable);
+      });
+      item.transactionCheckMissingCountV8135 = item.transactionCheckCandidateV8135
+        ? originals.reduce(function(maximum, original) {
+            return Math.max(maximum, Number(original && original.missingCount) || 0);
+          }, 0)
+        : 0;
       item.gongsilContactCountV8 = originals.reduce(function(total, original) {
         return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
       }, 0);
@@ -329,15 +337,21 @@
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.open(\'' + encodedId + '\')">' +
       (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
         'onerror="JSUnifiedListingsV8.imageError(this, true)">' : '<span>사진 없음</span>') +
+      (sourceUnavailable
+        ? '<em class="transaction-check-ribbon-v8135">광고 미노출<b>확인 필요</b></em>'
+        : '') +
       '</button>';
     var badge = sourceUnavailable
-      ? '<span class="unified-badge-v8 source-unavailable">현재 광고 미노출</span>'
+      ? '<span class="unified-badge-v8 source-unavailable">광고 미노출 · 확인 필요</span>'
       : count > 1
         ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
         : '';
     var button;
     if (sourceUnavailable) {
-      button = '<button type="button" class="item-source-link-btn disabled" disabled>미노출</button>';
+      button = '<button type="button" class="item-source-link-btn active transaction-check-button-v8135" ' +
+        'title="3회 연속 광고 미노출 · 거래 여부 확인" ' +
+        'onclick="event.stopPropagation(); if(window.openTransactionCandidateFromListingV1){' +
+          'openTransactionCandidateFromListingV1(\'' + encodedId + '\');}">거래확인</button>';
     } else if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +
@@ -349,7 +363,7 @@
           'JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(link) + '\')">링크</button>'
         : '<button type="button" class="item-source-link-btn disabled" disabled>링크</button>';
     }
-    return {thumbnail: thumbnailMarkup, badge: badge, sourceButton: button};
+    return {thumbnail: thumbnailMarkup, badge: badge, sourceButton: button, sourceUnavailable: sourceUnavailable};
   }
 
   function conditionLine(original) {

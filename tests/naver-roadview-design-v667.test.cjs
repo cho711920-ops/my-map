@@ -43,6 +43,6 @@ assert.match(
   /\.naver-map-auth-failed-v663 > \.naver-roadview-panorama-panel-v654\s*\{[\s\S]*?border-right:\s*0;[\s\S]*?box-shadow:\s*none;/,
   "연동 지도가 숨겨진 인증 실패 상태에서는 불필요한 경계도 없어야 합니다."
 );
-assert.match(html, /unified-listings-v8\.css\?v=8\.1\.34-unavailable-photo/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);
 
 console.log("NAVER roadview visual polish v6.6.7 tests passed");

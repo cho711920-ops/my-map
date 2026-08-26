@@ -1024,7 +1024,7 @@
     center.setAttribute("aria-hidden", "false");
     document.body.classList.add("operations-center-open");
     var targetTab = tab || "dashboard";
-    window.switchOperationsTab(targetTab);
+    return window.switchOperationsTab(targetTab);
   };
 
   window.closeOperationsCenter = function() {
@@ -1047,7 +1047,8 @@
     if (dashboardButton) dashboardButton.classList.toggle("active", !isCustomers);
     if (customerButton) customerButton.classList.toggle("active", isCustomers);
     if (isCustomers && isMobileCustomerAppV1()) setMobileCustomerScreenV1("list");
-    if (document.getElementById("operationsCenter").classList.contains("open")) loadOperationsData(false);
+    if (document.getElementById("operationsCenter").classList.contains("open")) return loadOperationsData(false);
+    return Promise.resolve();
   };
 
   window.rebuildCustomerMatchesNow = function() {
@@ -1780,6 +1781,34 @@
       state.transactionCandidates = result.candidates || [];
       state.transactionCandidatesLoading = false;
       renderTransactionCandidates(false);
+    }).catch(function(error) {
+      state.transactionCandidatesLoading = false;
+      setMessage(error.message || "거래확인 후보를 불러오지 못했습니다.", "error");
+      renderTransactionCandidates(false);
+    });
+  };
+
+  window.openTransactionCandidateFromListingV1 = function(encodedPropertyId) {
+    var propertyId = decodeURIComponent(encodedPropertyId || "");
+    if (!propertyId) return;
+    Promise.resolve(window.openOperationsCenter("dashboard")).then(function() {
+      state.transactionCandidatesLoading = true;
+      state.transactionExpandedId = propertyId;
+      renderTransactionCandidates(true);
+      return apiGet("transactionCandidates");
+    }).then(function(result) {
+      state.transactionCandidates = result.candidates || [];
+      state.transactionCandidatesLoading = false;
+      var found = state.transactionCandidates.some(function(candidate) {
+        return text(candidate.propertyId) === propertyId;
+      });
+      state.transactionExpandedId = found ? propertyId : "";
+      renderTransactionCandidates(false);
+      if (!found) setMessage("이 매물은 더 이상 거래확인 후보가 아닙니다.", "success");
+      requestAnimationFrame(function() {
+        var expanded = document.querySelector(".operations-transaction-list-v1 article.expanded");
+        if (expanded) expanded.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
     }).catch(function(error) {
       state.transactionCandidatesLoading = false;
       setMessage(error.message || "거래확인 후보를 불러오지 못했습니다.", "error");

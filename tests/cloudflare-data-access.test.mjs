@@ -189,7 +189,7 @@ test("operations modules only use the shared Cloudflare data boundary", () => {
     assert.doesNotMatch(entry.source, /\bfetch\(/,
       `${entry.name} must not bypass JSDataAccessV6`);
   }
-  assert.match(html, /operations-center-v7\.js\?v=7\.22\.6-inline-transactions/);
+  assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);
   assert.match(html, /operations-collection-v8\.js\?v=7\.25\.8-shared-data-only/);
   assert.match(html, /operations-admin-v1\.js\?v=1\.2\.0-linked-identity/);
 });
@@ -199,7 +199,7 @@ test("unified listing reads and writes only through the shared data boundary", (
   assert.match(unifiedListingsSource, /JSDataAccessV6\.mutate\(action, payload,/);
   assert.match(unifiedListingsSource, /공통 데이터 연결이 준비되지 않았습니다/);
   assert.doesNotMatch(unifiedListingsSource, /\bfetch\(/);
-  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.34-unavailable-photo/);
+  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.35-transaction-check-emphasis/);
 });
 
 test("data access mutations preserve action payload and surface D1 failures", async () => {

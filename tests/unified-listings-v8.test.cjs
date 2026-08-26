@@ -17,7 +17,7 @@ assert.match(ui, /function openExternalLink\(encodedLink\)/);
 assert.match(ui, /통합 저장·D1 확인 중입니다/);
 assert.match(ui, /function originalImages\(original\)/);
 assert.match(ui, /sourceUnavailable/);
-assert.match(ui, /현재 광고 미노출/);
+assert.match(ui, /광고 미노출 · 확인 필요/);
 assert.match(ui, /function detailDisplayImageUrl\(url\)/);
 assert.match(ui, /function preloadDetailImage\(url, highPriority\)/);
 assert.match(ui, /originalImages\(selected\)\[1\]/);

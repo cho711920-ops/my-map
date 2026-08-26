@@ -42,6 +42,6 @@ assert.match(
 );
 
 assert.match(htmlSource, /script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(htmlSource, /map\.js\?v=8\.2\.19-collector-fresh-sync/);
+assert.match(htmlSource, /map\.js\?v=8\.2\.20-transaction-check-cluster/);
 
 console.log("cluster transient state v6.5.25 tests passed");

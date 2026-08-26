@@ -16,6 +16,7 @@
   }
 
   .unified-thumb-v8 {
+    position: relative;
     grid-column: 1;
     grid-row: 1;
     width: 92px;
@@ -62,8 +63,9 @@
   }
 
   .unified-badge-v8.source-unavailable {
-    background: #fff1d6;
-    color: #9a5700;
+    border: 1px solid #f59e0b;
+    background: #fff3cd;
+    color: #8a4b00;
   }
 
   #list .item.unified-expanded-v8 {
@@ -2403,6 +2405,75 @@
   line-height: 1;
 }
 
+/* 거래확인 후보는 작은 배지 대신 카드 전체와 사진을 함께 강조합니다. */
+.unified-thumb-v8 {
+  position: relative !important;
+}
+
+.transaction-check-ribbon-v8135 {
+  position: absolute;
+  z-index: 2;
+  right: 5px;
+  bottom: 5px;
+  display: grid;
+  gap: 1px;
+  min-width: 62px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, .76);
+  border-radius: 7px;
+  background: rgba(180, 83, 9, .94);
+  box-shadow: 0 3px 9px rgba(120, 53, 15, .3);
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.transaction-check-ribbon-v8135 b {
+  color: #fff7cf;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+#list .item:has(.transaction-check-button-v8135) {
+  border-color: #f59e0b !important;
+  background: linear-gradient(90deg, #fff7e2 0, #fffdf7 42%, #ffffff 100%) !important;
+  box-shadow:
+    inset 5px 0 0 #f59e0b,
+    0 4px 12px rgba(180, 83, 9, .13) !important;
+}
+
+#list .item:has(.transaction-check-button-v8135):hover {
+  border-color: #d97706 !important;
+  box-shadow:
+    inset 5px 0 0 #d97706,
+    0 7px 17px rgba(180, 83, 9, .2) !important;
+}
+
+#list .item .item-source-link-btn.transaction-check-button-v8135 {
+  border-color: #d97706 !important;
+  background: #f59e0b !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  cursor: pointer !important;
+}
+
+#list .item .item-source-link-btn.transaction-check-button-v8135:hover,
+#list .item .item-source-link-btn.transaction-check-button-v8135:focus-visible {
+  border-color: #b45309 !important;
+  background: #d97706 !important;
+  outline: 3px solid rgba(245, 158, 11, .22) !important;
+}
+
+.circle-marker.transaction-check-cluster-v8135:not(.done) {
+  box-shadow:
+    0 0 0 4px rgba(245, 158, 11, .92),
+    0 7px 17px rgba(180, 83, 9, .27) !important;
+}
+
 #list .item.selected {
   border-color: #0568e8 !important;
   background: #eef6ff !important;
@@ -2411,6 +2482,15 @@
     0 0 0 2px rgba(5, 104, 232, .22),
     0 8px 20px rgba(5, 104, 232, .14) !important;
   transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease !important;
+}
+
+#list .item.selected:has(.transaction-check-button-v8135) {
+  border-color: #0568e8 !important;
+  background: linear-gradient(90deg, #fff3d0 0, #eef6ff 48%, #eef6ff 100%) !important;
+  box-shadow:
+    inset 5px 0 0 #f59e0b,
+    0 0 0 2px rgba(5, 104, 232, .25),
+    0 8px 20px rgba(5, 104, 232, .14) !important;
 }
 
 .circle-marker.selected,
@@ -2429,6 +2509,13 @@
   filter: saturate(1.15) brightness(1.02) !important;
   opacity: 1 !important;
   animation: linkedSelectionPulseV844 .24s ease-out 1 !important;
+}
+
+.circle-marker.transaction-check-cluster-v8135.selected {
+  box-shadow:
+    0 0 0 4px rgba(245, 158, 11, .94),
+    0 0 0 8px rgba(5, 104, 232, .24),
+    0 8px 20px rgba(5, 104, 232, .3) !important;
 }
 
 .js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.selected {
