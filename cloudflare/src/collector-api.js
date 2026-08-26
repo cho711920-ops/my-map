@@ -1126,7 +1126,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
-  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo FROM listings WHERE id=?1")
+  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status FROM listings WHERE id=?1")
     .bind(listingId).first();
   const promoteRepresentative = shouldPromoteListingRepresentative(record.source, currentListing?.main_source);
   const representativeMemo = preserveConfirmedVisitMemo(currentListing?.operating_memo, record.memo);
@@ -1145,6 +1145,11 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   const snapshotJson = JSON.stringify(snapshot);
   const rawJson = JSON.stringify(record.raw || {});
   const conditionChanged = Boolean(existingSource) && sourceConditionChanged(previous, snapshot);
+  const sourceIsNewToListing = !existingSource || clean(existingSource?.listing_id) !== clean(listingId);
+  const reactivated = shouldReactivateCompletedListing(
+    currentListing?.status, existingSource, true, sourceIsNewToListing
+  );
+  const reactivatedMemo = removeCompletedListingMemo(currentListing?.operating_memo);
   let sourceChanged = !existingSource || clean(existingSource.snapshot_hash) !== snapshotHash ||
     clean(existingSource.source_url) !== clean(record.link) || Number(existingSource.active) !== 1 ||
     Number(existingSource.missing_count || 0) !== 0 ||
@@ -1206,6 +1211,16 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   const historyNeeded = !existingSource || sourceChanged || assets.changed || updateCondition;
   const finalStatements = [];
   if (update) finalStatements.push(update);
+  if (reactivated) {
+    finalStatements.push(env.DB.prepare(`UPDATE listings SET status='active', operating_memo=?1,
+      version=version+1, last_collected_at=?2, updated_at=?2 WHERE id=?3 AND status='계약완료'`)
+      .bind(reactivatedMemo, now, listingId));
+    finalStatements.push(env.DB.prepare(`INSERT INTO listing_history (
+        listing_id, source_id, action, actor_email, before_json, after_json
+      ) VALUES (?1, ?2, 'sourceReappeared', ?3, ?4, ?5)`)
+      .bind(listingId, sourceRowId, actor, JSON.stringify({ status: "계약완료" }),
+        JSON.stringify({ status: "active", reason: sourceIsNewToListing ? "새 원본 광고 확인" : "미노출 원본 재노출" })));
+  }
   if (historyNeeded) finalStatements.push(env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`).bind(listingId, sourceRowId,
         existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), snapshotJson));
@@ -1213,6 +1228,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   return { sourceRowId, changed: sourceChanged || assets.changed || updateCondition || promoteRepresentative,
     conditionChanged: conditionChanged || updateCondition || promoteRepresentative,
     representativePromoted: promoteRepresentative,
+    reactivated,
     sourceChanged, mediaChanged: assets.mediaChanged, contactsChanged: assets.contactsChanged };
 }
 
@@ -1326,7 +1342,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
     refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0,
-    contactDeferred: 0, tradeTypeExcluded: 0 };
+    contactDeferred: 0, tradeTypeExcluded: 0, reactivated: 0 };
   const normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
@@ -1378,6 +1394,10 @@ async function ingestRecords(env, source, values, metadata = {}) {
       if (existing?.listing_id && !addressReclassification) {
         const result = await attachSource(env, record, existing.listing_id, sessionId, existing, false,
           "collector", sourceAssets.get(clean(existing.id)));
+        if (result.reactivated) {
+          affectedListingIds.add(existing.listing_id);
+          totals.reactivated += 1;
+        }
         if (result.changed) {
           totals.updated += 1;
           if (result.conditionChanged) totals.conditionUpdated += 1;
@@ -1394,13 +1414,21 @@ async function ingestRecords(env, source, values, metadata = {}) {
       const pendingCandidates = pendingReviewsByAddress.get(record.address) || [];
       const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
       if (classified.decision === "merge") {
-        await attachSource(env, record, classified.candidate.id, sessionId, existing, false,
+        const result = await attachSource(env, record, classified.candidate.id, sessionId, existing, false,
           "collector", existing ? sourceAssets.get(clean(existing.id)) : null, addressReclassification);
+        if (result.reactivated) {
+          affectedListingIds.add(classified.candidate.id);
+          totals.reactivated += 1;
+        }
         totals.merged += 1;
       } else if (classified.decision === "review" && await currentSingleAddressCandidate(env, record, candidates)) {
-        await attachSource(env, record, candidates[0].id, sessionId, existing, false,
+        const result = await attachSource(env, record, candidates[0].id, sessionId, existing, false,
           "system-single-candidate-merge@js-map.com",
           existing ? sourceAssets.get(clean(existing.id)) : null, true);
+        if (result.reactivated) {
+          affectedListingIds.add(candidates[0].id);
+          totals.reactivated += 1;
+        }
         totals.merged += 1;
       } else if (pendingMatch) {
         await savePendingReviewAlias(env, record, sessionId, pendingMatch);
@@ -1433,7 +1461,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
   for (const key of ["received", "created", "merged", "updated", "conditionUpdated", "refreshed",
-    "review", "duplicate", "failed", "contactDeferred", "tradeTypeExcluded"]) {
+    "review", "duplicate", "failed", "contactDeferred", "tradeTypeExcluded", "reactivated"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
@@ -1516,6 +1544,21 @@ export function collectorCompletionAudit(body, observedCount) {
   };
 }
 
+export function shouldReactivateCompletedListing(status, sourceState, observed, sourceIsNew = false) {
+  if (clean(status) !== "계약완료" || !observed) return false;
+  if (sourceIsNew) return true;
+  const active = Number(sourceState?.active) !== 0;
+  const missingCount = Math.max(0, Number(sourceState?.missingCount ?? sourceState?.missing_count) || 0);
+  return !active || missingCount >= 3;
+}
+
+export function removeCompletedListingMemo(value) {
+  return clean(value)
+    .replace(/(?:\s*\/\s*)?\[거래완료\s+\d{4}-\d{2}-\d{2}\]/g, "")
+    .replace(/\s*\/\s*$/, "")
+    .trim();
+}
+
 async function finalizeSession(env, body) {
   const source = sourceName(body.source);
   const sessionId = await ensureSession(env, body.sessionId, source);
@@ -1527,22 +1570,38 @@ async function finalizeSession(env, body) {
   let presenceReset = 0;
   let missingMarked = 0;
   let deactivated = 0;
+  let reactivated = 0;
   const scope = clean(body.scope);
   const districtMatch = scope.match(/(동구|중구|서구|유성구|대덕구)/);
   const tracksMissing = complete && observed.length >= 100 &&
     /전체|완전수집/.test(`${scope} ${clean(body.note)}`);
   if (tracksMissing) {
     const observedSet = new Set(observed);
-    const rows = await env.DB.prepare(`SELECT s.id, s.source_listing_id, s.active, s.missing_count, l.address
+    const rows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.active, s.missing_count,
+        l.address, l.status AS listing_status, l.operating_memo
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
       WHERE s.source=?1`).bind(source).all();
     const changes = [];
+    const reactivatedListings = new Set();
     const changedAt = nowIso();
     for (const row of rows?.results || []) {
       if (observedSet.has(clean(row.source_listing_id))) {
         if (Number(row.active) === 1 && Number(row.missing_count || 0) === 0) continue;
         changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
           last_collected_at=?1, updated_at=?1 WHERE id=?2`).bind(changedAt, row.id));
+        if (shouldReactivateCompletedListing(row.listing_status, row, true) &&
+            clean(row.listing_id) && !reactivatedListings.has(clean(row.listing_id))) {
+          reactivatedListings.add(clean(row.listing_id));
+          reactivated += 1;
+          changes.push(env.DB.prepare(`UPDATE listings SET status='active', operating_memo=?1,
+            version=version+1, last_collected_at=?2, updated_at=?2 WHERE id=?3 AND status='계약완료'`)
+            .bind(removeCompletedListingMemo(row.operating_memo), changedAt, row.listing_id));
+          changes.push(env.DB.prepare(`INSERT INTO listing_history (
+              listing_id, source_id, action, actor_email, before_json, after_json
+            ) VALUES (?1, ?2, 'sourceReappeared', 'collector-presence@js-map.com', ?3, ?4)`)
+            .bind(row.listing_id, row.id, JSON.stringify({ status: "계약완료" }),
+              JSON.stringify({ status: "active", reason: "완전수집에서 미노출 원본 재노출" })));
+        }
         presenceReset += 1;
         continue;
       }
@@ -1559,20 +1618,43 @@ async function finalizeSession(env, body) {
     for (let offset = 0; offset < changes.length; offset += 80) await env.DB.batch(changes.slice(offset, offset + 80));
   } else if (observed.length) {
     const seenAt = nowIso();
+    const reactivatedListings = new Set();
     for (let offset = 0; offset < observed.length; offset += 75) {
       const ids = observed.slice(offset, offset + 75);
-      const placeholders = ids.map((_, index) => `?${index + 3}`).join(",");
-      const result = await env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
-        last_collected_at=?1, updated_at=?1
-        WHERE source=?2 AND source_listing_id IN (${placeholders})
-          AND (active=0 OR missing_count<>0)`).bind(seenAt, source, ...ids).run();
-      presenceReset += Number(result?.meta?.changes || 0);
+      const resetRows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.active, s.missing_count,
+          l.status AS listing_status, l.operating_memo
+        FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
+        WHERE s.source=?1 AND s.source_listing_id IN (${ids.map((_, index) => `?${index + 2}`).join(",")})
+          AND (s.active=0 OR s.missing_count<>0)`).bind(source, ...ids).all();
+      const changes = [];
+      for (const row of resetRows?.results || []) {
+        changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
+          last_collected_at=?1, updated_at=?1 WHERE id=?2`).bind(seenAt, row.id));
+        if (shouldReactivateCompletedListing(row.listing_status, row, true) &&
+            clean(row.listing_id) && !reactivatedListings.has(clean(row.listing_id))) {
+          reactivatedListings.add(clean(row.listing_id));
+          reactivated += 1;
+          changes.push(env.DB.prepare(`UPDATE listings SET status='active', operating_memo=?1,
+            version=version+1, last_collected_at=?2, updated_at=?2 WHERE id=?3 AND status='계약완료'`)
+            .bind(removeCompletedListingMemo(row.operating_memo), seenAt, row.listing_id));
+          changes.push(env.DB.prepare(`INSERT INTO listing_history (
+              listing_id, source_id, action, actor_email, before_json, after_json
+            ) VALUES (?1, ?2, 'sourceReappeared', 'collector-presence@js-map.com', ?3, ?4)`)
+            .bind(row.listing_id, row.id, JSON.stringify({ status: "계약완료" }),
+              JSON.stringify({ status: "active", reason: "부분수집에서 미노출 원본 재노출" })));
+        }
+      }
+      for (let changeOffset = 0; changeOffset < changes.length; changeOffset += 80) {
+        await env.DB.batch(changes.slice(changeOffset, changeOffset + 80));
+      }
+      presenceReset += (resetRows?.results || []).length;
     }
   }
   const row = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(row?.totals_json, {});
   totals.observed = observed.length;
   totals.presenceReset = presenceReset;
+  totals.reactivated = Number(totals.reactivated || 0) + reactivated;
   totals.missingMarked = missingMarked;
   totals.deactivated = deactivated;
   totals.note = clean(body.note);
@@ -1604,7 +1686,7 @@ async function finalizeSession(env, body) {
     .bind(state, JSON.stringify(totals), nowIso(), sessionId).run();
   return { ok: true, action: "finalizeCollectionSession", sessionId, state, complete,
     completeRequested: audit.requested, completionValidated: audit.complete, completionIssues: audit.issues,
-    observed: observed.length, presenceReset, missingMarked, deactivated, ...totals, sourceBackend: "D1" };
+    observed: observed.length, presenceReset, reactivated, missingMarked, deactivated, ...totals, sourceBackend: "D1" };
 }
 
 function collectorHostAllowed(request) {

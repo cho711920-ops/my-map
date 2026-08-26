@@ -34,7 +34,7 @@ test("every representative-writing and master-moving path uses confirmation pres
   const d1 = await readFile(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
   const repair = await readFile(new URL("../tools/restore-confirmed-visits-2026-08-20.sql", import.meta.url), "utf8");
 
-  assert.match(collector, /SELECT main_source, operating_memo FROM listings/);
+  assert.match(collector, /SELECT main_source, operating_memo, status FROM listings/);
   assert.match(collector, /preserveConfirmedVisitMemo\(currentListing\?\.operating_memo, record\.memo\)/);
   assert.equal((collector.match(/record\.area, representativeMemo, record\.link/g) || []).length, 2);
   assert.match(collector, /carryConfirmedVisitMemo\(primaryMemo, duplicate\.operating_memo\)/);
