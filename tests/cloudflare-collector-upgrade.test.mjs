@@ -436,7 +436,7 @@ test("provider-hidden addresses are persisted as retryable collector errors", as
   assert.match(collectorSource, /processing_state <> 'error'/);
   assert.match(collectorSource, /async function saveCollectorError/);
   assert.match(collectorSource, /processing_state='error'/);
-  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, "지번주소 없음"\)/);
+  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, "정확한 지번주소 없음"\)/);
 });
 
 test("collector installers always load the current js-map runtime", async () => {

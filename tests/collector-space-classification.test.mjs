@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { choosePendingReviewMatch, classifyListingCandidates, compareListingSpace, normalizeReviewRecord } from "../cloudflare/src/collector-api.js";
+import {
+  choosePendingReviewMatch,
+  classifyListingCandidates,
+  compareListingSpace,
+  existingSourceNeedsAddressReclassification,
+  hasExactLotAddress,
+  normalizeReviewRecord
+} from "../cloudflare/src/collector-api.js";
 
 function incoming(room, deposit = 1000, rent = 50, area = 10) {
   return { room, deposit, rent, area };
@@ -10,6 +17,26 @@ function incoming(room, deposit = 1000, rent = 50, area = 10) {
 function existing(id, room, deposit = 1000, rent = 50, area = 10) {
   return { id, property_id: id, room, deposit, monthly_rent: rent, area_m2: area };
 }
+
+test("dong-only addresses never cross the exact-lot assignment boundary", () => {
+  assert.equal(hasExactLotAddress("중구 용두동"), false);
+  assert.equal(hasExactLotAddress("중구 용두동 1층"), false);
+  assert.equal(hasExactLotAddress("대전광역시 중구 용두동 33-9"), true);
+  assert.equal(hasExactLotAddress("유성구 계산동 산 12-3"), true);
+
+  assert.equal(existingSourceNeedsAddressReclassification(
+    { address: "중구 용두동 113-10" },
+    { id: "O-1", listing_id: "M-old", listing_address: "중구 용두동 33-9" }
+  ), true);
+  assert.equal(existingSourceNeedsAddressReclassification(
+    { address: "중구 용두동 33-9" },
+    { id: "O-1", listing_id: "M-old", listing_address: "중구 용두동 33-9" }
+  ), false);
+  assert.equal(existingSourceNeedsAddressReclassification(
+    { address: "중구 용두동" },
+    { id: "O-1", listing_id: "M-old", listing_address: "중구 용두동 33-9" }
+  ), false);
+});
 
 test("different floors and explicit units are automatically separated", () => {
   assert.equal(compareListingSpace(incoming("2층"), existing("M-1", "1층")).decision, "different");

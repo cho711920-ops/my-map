@@ -128,6 +128,21 @@ function normalizedAddress(value) {
     .trim();
 }
 
+export function hasExactLotAddress(value) {
+  const address = normalizedAddress(value);
+  return /(?:^|\s)[가-힣0-9·.]+(?:읍|면|동|가)\s+(?:산\s*)?\d+(?:-\d+)?(?:번지)?(?:\s|$)/.test(address);
+}
+
+export function existingSourceNeedsAddressReclassification(record, existingSource) {
+  const incomingAddress = normalizedAddress(record?.address);
+  const assignedAddress = normalizedAddress(existingSource?.listing_address);
+  return Boolean(
+    clean(existingSource?.listing_id) &&
+    hasExactLotAddress(incomingAddress) &&
+    incomingAddress !== assignedAddress
+  );
+}
+
 function normalizedRoom(value) {
   return normalizedRoomKey(value);
 }
@@ -678,7 +693,11 @@ async function classifyManifest(env, body) {
 }
 
 async function loadCandidateListings(env, records, existingSources) {
-  const addresses = [...new Set(records.filter((record) => record?.address && !existingSources.has(record.sourceId))
+  const addresses = [...new Set(records.filter((record) => {
+    if (!record?.address) return false;
+    const existingSource = existingSources.get(record.sourceId);
+    return !existingSource?.listing_id || existingSourceNeedsAddressReclassification(record, existingSource);
+  })
     .map((record) => record.address))];
   const byAddress = new Map(addresses.map((address) => [address, []]));
   const byListingId = new Map();
@@ -1216,6 +1235,33 @@ async function createListing(env, record, sessionId, actor = "collector", existi
   return id;
 }
 
+async function detachSourceForAddressReview(env, record, existingSource, actor = "collector") {
+  const listingId = clean(existingSource?.listing_id);
+  const sourceRowId = clean(existingSource?.id);
+  if (!listingId || !sourceRowId) return false;
+  const now = nowIso();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE listing_sources SET listing_id=NULL, updated_at=?1 WHERE id=?2 AND listing_id=?3")
+      .bind(now, sourceRowId, listingId),
+    env.DB.prepare("UPDATE listing_media SET listing_id=NULL, updated_at=?1 WHERE source_id=?2")
+      .bind(now, sourceRowId),
+    env.DB.prepare("UPDATE listing_contacts SET listing_id=NULL, updated_at=?1 WHERE source_id=?2")
+      .bind(now, sourceRowId),
+    env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
+      VALUES (?1, ?2, 'sourceAddressReclassification', ?3, ?4, ?5)`)
+      .bind(listingId, sourceRowId, clean(actor), JSON.stringify({
+        listingId,
+        address: normalizedAddress(existingSource?.listing_address)
+      }), JSON.stringify({
+        listingId: null,
+        address: normalizedAddress(record?.address),
+        reason: "원본의 정확한 지번이 기존 대표매물과 달라 재분류"
+      }))
+  ]);
+  existingSource.listing_id = null;
+  return true;
+}
+
 async function queueReview(env, record, sessionId, candidates, reason = "") {
   const reviewId = `R-${crypto.randomUUID()}`;
   const saved = await env.DB.prepare(`INSERT INTO collector_raw (
@@ -1313,11 +1359,11 @@ async function ingestRecords(env, source, values, metadata = {}) {
       record.address = normalizedAddress(existing.listing_address || previous.address);
       if (!record.room) record.room = canonicalListingRoom(existing.listing_room || previous.room);
     }
-    if (!record.address) {
+    if (!hasExactLotAddress(record.address)) {
       totals.failed += 1;
       totals.addressMissing += 1;
-      await saveCollectorError(env, record, sessionId, "지번주소 없음");
-      if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "지번주소 없음" });
+      await saveCollectorError(env, record, sessionId, "정확한 지번주소 없음");
+      if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "정확한 지번주소 없음" });
       continue;
     }
     records.push(record);
@@ -1328,7 +1374,8 @@ async function ingestRecords(env, source, values, metadata = {}) {
   for (const record of records) {
     try {
       const existing = existingSources.get(record.sourceId);
-      if (existing?.listing_id) {
+      const addressReclassification = existingSourceNeedsAddressReclassification(record, existing);
+      if (existing?.listing_id && !addressReclassification) {
         const result = await attachSource(env, record, existing.listing_id, sessionId, existing, false,
           "collector", sourceAssets.get(clean(existing.id)));
         if (result.changed) {
@@ -1339,22 +1386,28 @@ async function ingestRecords(env, source, values, metadata = {}) {
         else totals.duplicate += 1;
         continue;
       }
+      if (addressReclassification) {
+        await detachSourceForAddressReview(env, record, existing, "collector-address-reclassification@js-map.com");
+      }
       const candidates = candidatesByAddress.get(record.address) || [];
       const classified = classifyListingCandidates(record, candidates);
       const pendingCandidates = pendingReviewsByAddress.get(record.address) || [];
       const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
       if (classified.decision === "merge") {
-        await attachSource(env, record, classified.candidate.id, sessionId);
+        await attachSource(env, record, classified.candidate.id, sessionId, existing, false,
+          "collector", existing ? sourceAssets.get(clean(existing.id)) : null, addressReclassification);
         totals.merged += 1;
       } else if (classified.decision === "review" && await currentSingleAddressCandidate(env, record, candidates)) {
-        await attachSource(env, record, candidates[0].id, sessionId, null, false,
-          "system-single-candidate-merge@js-map.com", null, true);
+        await attachSource(env, record, candidates[0].id, sessionId, existing, false,
+          "system-single-candidate-merge@js-map.com",
+          existing ? sourceAssets.get(clean(existing.id)) : null, true);
         totals.merged += 1;
       } else if (pendingMatch) {
         await savePendingReviewAlias(env, record, sessionId, pendingMatch);
         totals.duplicate += 1;
       } else if (classified.decision === "create") {
-        const listingId = await createListing(env, record, sessionId);
+        const listingId = await createListing(env, record, sessionId, "collector", existing,
+          existing ? sourceAssets.get(clean(existing.id)) : null);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
           address: record.address, room: record.room, listing_type: record.category,
           deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
