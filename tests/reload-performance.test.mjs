@@ -33,5 +33,5 @@ test("reload skips the shared geocode download when source or local coordinates 
   assert.match(script, /JSDataAccessV6\.read\("geocodeCache", \{\}, \{/);
   assert.match(script, /cache: "default"/);
   assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-  assert.match(html, /map\.js\?v=8\.2\.20-transaction-check-cluster/);
+  assert.match(html, /map\.js\?v=8\.2\.21-default-cluster-style/);
 });

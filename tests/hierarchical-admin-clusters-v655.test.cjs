@@ -225,7 +225,7 @@ assert.match(source, /position: cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?min-width: 68px/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?background: rgba\(255, 255, 255, \.97\)/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655 span b[\s\S]*?color: #0877dc/);
-assert.ok(html.includes("map.js?v=8.2.20-transaction-check-cluster"));
+assert.ok(html.includes("map.js?v=8.2.21-default-cluster-style"));
 assert.match(source, /var jsAutomaticDataRefreshIntervalV681 = 60 \* 1000;/);
 assert.match(source, /\}, jsAutomaticDataRefreshIntervalV681\);/);
 assert.match(

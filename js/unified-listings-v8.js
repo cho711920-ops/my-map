@@ -351,7 +351,7 @@
       button = '<button type="button" class="item-source-link-btn active transaction-check-button-v8135" ' +
         'title="3회 연속 광고 미노출 · 거래 여부 확인" ' +
         'onclick="event.stopPropagation(); if(window.openTransactionCandidateFromListingV1){' +
-          'openTransactionCandidateFromListingV1(\'' + encodedId + '\');}">거래확인</button>';
+          'openTransactionCandidateFromListingV1(\'' + encodedId + '\');}">계약완료</button>';
     } else if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +

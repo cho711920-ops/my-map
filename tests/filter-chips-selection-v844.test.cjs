@@ -58,8 +58,8 @@ test("active filter chips are mounted below the listing toolbar with cache-buste
   const listIndex = html.indexOf('id="list"');
   assert.ok(toolbarIndex >= 0 && chipIndex > toolbarIndex && listIndex > chipIndex);
   assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.35-transaction-check-emphasis/);
-  assert.match(html, /map\.js\?v=8\.2\.20-transaction-check-cluster/);
+  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.36-contract-complete-label/);
+  assert.match(html, /map\.js\?v=8\.2\.21-default-cluster-style/);
   assert.match(html, /analysis\.js\?v=6\.3\.41-unique-linked-selection/);
   assert.match(html, /property-edit-v648\.js\?v=1\.0\.1-linked-selection/);
   assert.match(html, /unified-listings-v8\.css\?v=8\.1\.35-transaction-check-emphasis/);

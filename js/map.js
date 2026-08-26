@@ -2600,14 +2600,6 @@ function getFieldVisitClusterClassV684(cluster, allDone) {
   return hasPendingVisit ? " source-gongsil" : "";
 }
 
-function getTransactionCheckClusterClassV8135(cluster, allDone) {
-  if (allDone || !cluster || cluster.regionMode) return "";
-  var hasTransactionCheckCandidate = (cluster.items || []).some(function(item) {
-    return Boolean(item && item.transactionCheckCandidateV8135);
-  });
-  return hasTransactionCheckCandidate ? " transaction-check-cluster-v8135" : "";
-}
-
 function drawMapClustersOnlyV639(items) {
   var selectionSnapshotV638 = jsPinnedClusterSelectionV6515
     ? jsPinnedClusterSelectionV6515.snapshot
@@ -2631,7 +2623,6 @@ function drawMapClustersOnlyV639(items) {
     var doneClass = allDone ? " done" : "";
     var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
-    var transactionCheckClass = getTransactionCheckClusterClassV8135(cluster, allDone);
 
     /*
      * 클러스터는 출처와 무관하게 기본 파란색을 사용합니다.
@@ -2639,7 +2630,7 @@ function drawMapClustersOnlyV639(items) {
      */
     var overlayContent = buildClusterOverlayContentV655(
       cluster,
-      gongsilClass + doneClass + customerMatchClass + transactionCheckClass + selectedClass
+      gongsilClass + doneClass + customerMatchClass + selectedClass
     );
 
     var overlay = new kakao.maps.CustomOverlay({
@@ -2824,7 +2815,6 @@ function redrawSelectedMarkers() {
     var doneClass = allDone ? " done" : "";
     var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
-    var transactionCheckClass = getTransactionCheckClusterClassV8135(cluster, allDone);
 
     /*
      * 선택 상태가 바뀌어 다시 그릴 때도
@@ -2832,7 +2822,7 @@ function redrawSelectedMarkers() {
      */
     var content = buildClusterOverlayContentV655(
       cluster,
-      gongsilClass + doneClass + customerMatchClass + transactionCheckClass + selectedClass
+      gongsilClass + doneClass + customerMatchClass + selectedClass
     );
 
     o.setContent(content);

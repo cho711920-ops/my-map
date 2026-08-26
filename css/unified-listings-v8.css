@@ -2468,12 +2468,6 @@
   outline: 3px solid rgba(245, 158, 11, .22) !important;
 }
 
-.circle-marker.transaction-check-cluster-v8135:not(.done) {
-  box-shadow:
-    0 0 0 4px rgba(245, 158, 11, .92),
-    0 7px 17px rgba(180, 83, 9, .27) !important;
-}
-
 #list .item.selected {
   border-color: #0568e8 !important;
   background: #eef6ff !important;
@@ -2509,13 +2503,6 @@
   filter: saturate(1.15) brightness(1.02) !important;
   opacity: 1 !important;
   animation: linkedSelectionPulseV844 .24s ease-out 1 !important;
-}
-
-.circle-marker.transaction-check-cluster-v8135.selected {
-  box-shadow:
-    0 0 0 4px rgba(245, 158, 11, .94),
-    0 0 0 8px rgba(5, 104, 232, .24),
-    0 8px 20px rgba(5, 104, 232, .3) !important;
 }
 
 .js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.selected {

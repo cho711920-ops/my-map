@@ -199,7 +199,7 @@ test("unified listing reads and writes only through the shared data boundary", (
   assert.match(unifiedListingsSource, /JSDataAccessV6\.mutate\(action, payload,/);
   assert.match(unifiedListingsSource, /공통 데이터 연결이 준비되지 않았습니다/);
   assert.doesNotMatch(unifiedListingsSource, /\bfetch\(/);
-  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.35-transaction-check-emphasis/);
+  assert.match(html, /unified-listings-v8\.js\?v=8\.1\.36-contract-complete-label/);
 });
 
 test("data access mutations preserve action payload and surface D1 failures", async () => {
