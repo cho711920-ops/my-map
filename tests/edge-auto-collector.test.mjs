@@ -28,11 +28,14 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.doesNotMatch(background, /chrome\.scripting\.executeScript/);
   assert.match(background, /async function launchCurrentTarget\(state, reuseTabId = null\)/);
   assert.match(background, /async function finishCurrentTarget\(result, senderTabId\)/);
-  assert.match(background, /await sendRunMessage\(tab\.id, target, targetRunId, state\.runId\)/);
+  assert.match(background, /await sendRunMessage\(tab\.id, runtimeTarget, targetRunId, state\.runId\)/);
   assert.match(background, /JS_AUTO_TARGET_FINISHED/);
   assert.match(background, /JS_AUTO_RUN_REQUEST/);
   assert.match(background, /chrome\.tabs\.onRemoved/);
-  assert.match(background, /chrome\.tabs\.create\(\{ url: target\.url, active: false \}\)/);
+  assert.match(background, /chrome\.tabs\.create\(\{ url: runtimeTarget\.url, active: false \}\)/);
+  assert.match(background, /function automaticTargetRuntimeUrl\(target\)/);
+  assert.match(background, /viewport\[4\] = "11"/);
+  assert.match(background, /await sendRunMessage\(tab\.id, runtimeTarget, targetRunId, state\.runId\)/);
   assert.doesNotMatch(background, /chrome\.windows\.update\(tab\.windowId, \{ state: "minimized" \}\)/);
   assert.match(background, /async function restartPersistedRun\(state, reason\)/);
   assert.match(background, /async function resumeOrExtendActiveRun\(state, targets, reason\)/);

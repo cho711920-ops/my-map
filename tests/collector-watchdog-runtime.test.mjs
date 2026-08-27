@@ -48,7 +48,7 @@ function harness(overrides = {}) {
         async update(id, options) { navigation.push(options.url); return { id, status: "complete" }; },
         async create(options) { navigation.push(options.url); return { id: 43, status: "complete" }; },
         async remove() {}, async sendMessage() { return { started: true }; }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.2" }), onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.3" }), onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async () => {} }
     }
@@ -119,7 +119,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.2");
+  assert.equal(response.backgroundBuild, "1.1.3");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

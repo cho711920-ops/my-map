@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.2";
+const BACKGROUND_BUILD = "1.1.3";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -147,6 +147,23 @@ function validateTarget(target) {
     throw new Error("허용되지 않은 자동수집 대상입니다.");
   }
   return { source, url: url.toString() };
+}
+
+function automaticTargetRuntimeUrl(target) {
+  const validated = validateTarget(target);
+  if (validated.source !== "daangn" || !String(target && target.district || "").trim()) {
+    return validated.url;
+  }
+  const url = new URL(validated.url);
+  const viewport = String(url.searchParams.get("mv") || "").split(",");
+  if (viewport.length === 5 && viewport.slice(0, 4).every(value => Number.isFinite(Number(value)))) {
+    // Clicking a district cluster changes Daangn's saved map to the neighborhood
+    // view. Keep the district cluster id, but reopen unattended runs one level out
+    // so the visible map agrees with the district-wide collection scope.
+    viewport[4] = "11";
+    url.searchParams.set("mv", viewport.join(","));
+  }
+  return url.toString();
 }
 
 function normalizePortableConfig(value) {
@@ -482,6 +499,7 @@ async function launchCurrentTarget(state, reuseTabId = null) {
   if (state.index >= state.targets.length) return finalizeRun(state);
 
   const target = state.targets[state.index];
+  const runtimeTarget = { ...target, url: automaticTargetRuntimeUrl(target) };
   const startedAt = Date.now();
   const targetRunId = `${state.runId}-${state.index}-${Math.random().toString(36).slice(2, 8)}`;
   let tab = null;
@@ -492,11 +510,10 @@ async function launchCurrentTarget(state, reuseTabId = null) {
       message: "",
       attempt: Math.max(1, Number(state.targetAttempt || 1))
     });
-    validateTarget(target);
     if (Number.isInteger(reuseTabId)) {
-      tab = await chrome.tabs.update(reuseTabId, { url: target.url, active: false }).catch(() => null);
+      tab = await chrome.tabs.update(reuseTabId, { url: runtimeTarget.url, active: false }).catch(() => null);
     }
-    if (!tab) tab = await chrome.tabs.create({ url: target.url, active: false });
+    if (!tab) tab = await chrome.tabs.create({ url: runtimeTarget.url, active: false });
     state.currentTabId = tab.id;
     state.targetRunId = targetRunId;
     state.targetStartedAt = startedAt;
@@ -511,7 +528,7 @@ async function launchCurrentTarget(state, reuseTabId = null) {
     state.phase = "starting-collector";
     state.progressMessage = "수집 기능 시작 확인 중";
     await saveRunState(state);
-    await sendRunMessage(tab.id, target, targetRunId, state.runId);
+    await sendRunMessage(tab.id, runtimeTarget, targetRunId, state.runId);
     const latest = await getRunState();
     if (latest && latest.runId === state.runId && latest.targetRunId === targetRunId) {
       const runtimeStartedAt = Date.now();
