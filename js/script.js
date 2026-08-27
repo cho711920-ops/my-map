@@ -1448,6 +1448,9 @@ function getPyeongBadgeClass(value) {
 
 
 function buildPyeongMiniBadge(item) {
+  if (window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item)) {
+    return window.JSListingTradeV1.saleYieldBadge(item);
+  }
   var value = getRentPerPyeongValue(item);
   if (!value) return '<span class="pyeong-mini-badge">평당 -</span>';
   return '<span class="pyeong-mini-badge' + getPyeongBadgeClass(value) + '">평당 ' + escapeHtml(value) + '만</span>';
@@ -4403,7 +4406,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var priceValuesMarkupV1 = saleCardV1
     ? '<span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span>' +
       '<span class="price-separator">·</span>' +
-      '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>'
+      window.JSListingTradeV1.saleAreaHtml(item)
     : '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
       '<span class="price-separator">·</span>' +
       '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
@@ -4455,6 +4458,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   div.setAttribute("data-listing-key", item.key);
   div.setAttribute("data-list-card-id-v681", actionSelectionKeyV660(item));
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
+  if (saleCardV1) div.classList.add("listing-sale-card-v1");
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
   div.innerHTML =
     '<div class="item-card-grid-v650' +

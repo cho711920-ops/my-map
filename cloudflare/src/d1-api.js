@@ -6,7 +6,7 @@ import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
-  "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice"
+  "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice", "saleSummary"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -315,6 +315,21 @@ export function sourceListingSearchIndex(rows = []) {
   return sourceSearchIds;
 }
 
+// Keep initial list payload small: no full descriptions, contacts or raw data.
+export function compactSaleSummary(original) {
+  if (original?.tradeType !== "sale" || !original.saleDetails) return "";
+  const detail = original.saleDetails;
+  const summary = {};
+  if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
+  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome"]) {
+    const value = detail[key];
+    if (value == null || clean(value) === "" || typeof value === "boolean") continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) summary[key] = parsed;
+  }
+  return summary;
+}
+
 async function unifiedListings(env) {
   const rows = await allRowidPages(
     env,
@@ -330,6 +345,7 @@ async function unifiedListings(env) {
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
     const original = parseJson(row.list_snapshot_json, {});
+    original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
       const actualImages = actualGongsilImages({
         list: { Photos: parseJson(row.gongsil_photos_json, []) }

@@ -119,6 +119,77 @@
   }
 
   function modeLabel() { return MODES[currentMode].label; }
+  function escapeHtml(value) {
+    return clean(value).replace(/[&<>"']/g, function(ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+  function nonnegative(value) {
+    if (value == null || clean(value) === "" || typeof value === "boolean") return null;
+    var parsed = Number(clean(value).replace(/,/g, ""));
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+  function sourceName(value) {
+    var name = clean(value).toLowerCase();
+    if (/공실|gongsil/.test(name)) return "gongsil";
+    if (/네이버|naver/.test(name)) return "naver";
+    if (/당근|daangn|danggeun|karrot/.test(name)) return "daangn";
+    return name;
+  }
+  function saleSummary(item) {
+    if (!isSale(item)) return {};
+    if (item.saleDetails || item.saleSummary) return item.saleDetails || item.saleSummary;
+    // Never combine a representative's price with another source's income.
+    var price = nonnegative(item.salePrice ?? item.sale_price);
+    var candidates = (item.unifiedOriginalsV8 || []).filter(function(original) {
+      return isSale(original) && price > 0 && nonnegative(original.salePrice) === price &&
+        sourceName(original.source) === sourceName(item.source) &&
+        normalizedSaleCategory(original) === normalizedSaleCategory(item);
+    });
+    var link = clean(item.sourceLink);
+    var linked = link ? candidates.filter(function(original) { return clean(original.link) === link; }) : [];
+    if (linked.length) candidates = linked;
+    if (!candidates.length) return {};
+    var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
+    var keys = ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome"];
+    return candidates.every(function(original) {
+      var summary = original.saleDetails || original.saleSummary || {};
+      return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
+    }) ? first : {};
+  }
+  var yieldExplanation = "연 임대수입 ÷ (매매가 − 임대보증금) × 100. 보증금 차감 기준 단순 연 수익률이며 대출이자·취득비용·세금·공실·운영비는 미반영입니다.";
+  function saleYield(item) {
+    if (!isSale(item)) return null;
+    var detail = saleSummary(item);
+    var price = nonnegative(item.salePrice ?? item.sale_price);
+    var deposit = nonnegative(detail.totalDeposit);
+    var income = nonnegative(detail.monthlyIncome);
+    if (!(price > 0) || deposit == null || income == null || price <= deposit) return null;
+    var rate = income * 12 / (price - deposit) * 100;
+    return Number.isFinite(rate) ? rate : null;
+  }
+  function saleYieldBadge(item) {
+    if (!isSale(item)) return "";
+    var rate = saleYield(item);
+    return '<span class="pyeong-mini-badge listing-sale-yield-v1' + (rate == null ? ' unavailable' : '') +
+      '" title="' + escapeHtml(yieldExplanation) + '" aria-label="' +
+      escapeHtml(rate == null ? '수익률 확인 필요: 매매가·임대보증금·월수입 확인 필요' : '보증금 차감 기준 단순 연 수익률 ' + rate.toFixed(2) + '%') +
+      '">수익률 ' + (rate == null ? '확인 필요' : rate.toFixed(2) + '%') + '</span>';
+  }
+  function saleAreaHtml(item) {
+    if (!isSale(item)) return "";
+    var detail = saleSummary(item);
+    var land = detail.scope === "land" || normalizedSaleCategory(item) === "land";
+    function area(label, value, fullLabel) {
+      var parsed = nonnegative(value);
+      var formatted = parsed > 0 ? (parsed / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + '평' : '미확인';
+      return '<span title="' + escapeHtml(fullLabel) + '">' + escapeHtml(label) + ' <b>' + escapeHtml(formatted) + '</b></span>';
+    }
+    var html = area(land ? '토지' : '대지', detail.landAreaM2, land ? '토지면적' : '대지면적');
+    if (!land) html += '<i>·</i>' + area('연', detail.grossAreaM2, '연면적');
+    if (!land && nonnegative(detail.exclusiveAreaM2) > 0) html += '<i>·</i>' + area('전용', detail.exclusiveAreaM2, '전용면적');
+    return '<span class="listing-sale-areas-v1">' + html + '</span>';
+  }
   function saleDetailsHtml(item) {
     if (!isSale(item) || !item.saleDetails) return "";
     var detail = item.saleDetails;
@@ -142,13 +213,16 @@
     area("전용면적", detail.exclusiveAreaM2);
     add("기존 보증금 합계", detail.totalDeposit, "만원");
     add("기존 월 임대수입", detail.monthlyIncome, "만원");
+    var rate = saleYield(item);
+    add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
     add("지상층수", detail.aboveGroundFloors, "층");
     add("지하층수", detail.belowGroundFloors, "층");
     add("방 수", detail.roomCount, "개"); add("욕실 수", detail.bathroomCount, "개");
     add("지목", detail.landUse); add("용도지역", detail.zoning);
     add("도로접면", detail.roadAccess); add("건축물 용도", detail.buildingUse);
     add("사용승인일", detail.approvalDate);
-    return rows.length ? '<dl class="listing-sale-details-v1">' + rows.join("") + '</dl>' : "";
+    return rows.length ? '<dl class="listing-sale-details-v1">' + rows.join("") +
+      '</dl><p class="listing-sale-yield-note-v1">' + escapeHtml(yieldExplanation) + '</p>' : "";
   }
   function getMode() { return currentMode; }
   function isSale(item) { return normalizedTradeType(item) === "sale"; }
@@ -164,6 +238,10 @@
     normalizedSaleCategory: normalizedSaleCategory,
     displayPrice: displayPrice,
     saleDetailsHtml: saleDetailsHtml,
+    saleSummary: saleSummary,
+    saleYield: saleYield,
+    saleYieldBadge: saleYieldBadge,
+    saleAreaHtml: saleAreaHtml,
     isSale: isSale
   };
 

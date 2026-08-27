@@ -369,7 +369,8 @@
 
   function conditionLine(original) {
     if (text(original && original.tradeType).toLowerCase() === "sale") {
-      return '<span><b>매매</b> ' + number(original.salePrice) + ' · <b>평</b> ' + number(original.area) + '</span>';
+      return '<span class="listing-sale-condition-v1"><b>매매</b> ' + number(original.salePrice) + ' · ' +
+        (global.JSListingTradeV1 ? global.JSListingTradeV1.saleAreaHtml(original) : '면적 미확인') + '</span>';
     }
     return '<span><b>보</b> ' + number(original.deposit) + ' / <b>월</b> ' + number(original.rent) +
       ' · <b>관</b> ' + number(original.fee) + ' · <b>권</b> ' + number(original.premium) +

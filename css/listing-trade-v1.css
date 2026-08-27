@@ -196,3 +196,22 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 .listing-sale-details-v1 > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; font-size: 12px; }
 .listing-sale-details-v1 dt { color: #63748b; }
 .listing-sale-details-v1 dd { margin: 0; color: #172c46; overflow-wrap: anywhere; }
+.listing-sale-yield-v1.pyeong-mini-badge { background: #e9f5f1; color: #146750; border-color: #a9d5c7; }
+.listing-sale-yield-v1.unavailable { background: #f1f4f8; color: #69788a; border-color: #d9e1ea; }
+.listing-sale-yield-note-v1 { color: #65758b; font-size: 11px; line-height: 1.6; margin: -4px 0 14px; }
+.listing-sale-areas-v1 { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px; color: #25734d; font-size: 11px; }
+.listing-sale-areas-v1 > span { white-space: nowrap; }
+.listing-sale-areas-v1 i { font-style: normal; color: #9ba9b7; }
+.listing-sale-card-v1 .item-compact-price-v650.price-line { flex-wrap: wrap !important; height: auto !important; white-space: normal !important; }
+.listing-sale-card-v1 .item-price-values-v652 { flex-wrap: wrap !important; white-space: normal !important; overflow: visible !important; }
+.listing-sale-card-v1 .item-compact-main-v650 { grid-template-rows: minmax(28px, auto) minmax(30px, auto) minmax(30px, auto) !important; height: auto !important; max-height: none !important; }
+.listing-sale-card-v1 .item-compact-price-v650 .item-price-values-v652 { max-width: 100%; flex-shrink: 1; }
+.listing-sale-card-v1 .listing-sale-areas-v1 { white-space: normal !important; }
+.listing-sale-condition-v1 { white-space: normal; }
+#list .item.listing-sale-card-v1 .standard-card-grid-v661 { grid-template-rows: minmax(108px, auto) !important; }
+.listing-sale-card-v1 .item-compact-actions-v650 { height: auto !important; max-height: none !important; align-items: start !important; }
+#list .item.listing-sale-card-v1 .item-compact-actions-v650 .item-action-left { display: flex !important; flex-wrap: wrap !important; width: 100% !important; min-width: 0 !important; height: auto !important; gap: 4px !important; }
+#list .item.listing-sale-card-v1 .item-action-left > button { width: var(--sale-action-width, 44px) !important; flex: 0 0 auto !important; min-width: 32px !important; max-width: none !important; }
+#list .item.listing-sale-card-v1 .item-action-left > .item-contact-button-v654 { --sale-action-width: 32px; }
+#list .item.listing-sale-card-v1 .item-action-left > .item-roadview-btn { --sale-action-width: 56px; }
+#list .item.listing-sale-card-v1 .item-action-left > .item-source-link-btn { --sale-action-width: 104px; }
