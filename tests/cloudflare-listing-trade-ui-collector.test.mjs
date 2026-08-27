@@ -17,6 +17,7 @@ test("the market selector stays inside the search row without extra visible labe
   assert.match(css, /\.search-row \.search-btn\s*\{\s*grid-column: 3 !important;/);
   assert.match(css, /@media \(min-width: 769px\) and \(max-width: 899px\)/);
   assert.match(css, /width: min\(688px, calc\(100vw - 890px\)\)/);
+  assert.match(css, /\.search-row #keyword\s*\{\s*margin: 0 0 0 8px !important;\s*width: calc\(100% - 8px\) !important;\s*border-radius: 10px 0 0 10px !important;/);
 });
 
 test("the web starts in lease mode and isolates building and land sale listings", async () => {

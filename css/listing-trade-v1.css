@@ -60,7 +60,6 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 .v6-toolbar-primary .search-row #keyword {
   grid-column: 2 !important;
   grid-row: 1 !important;
-  border-radius: 0 !important;
 }
 .v6-toolbar-primary .search-row .search-btn {
   grid-column: 3 !important;
@@ -184,4 +183,12 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
     height: 34px !important;
     font-size: 11px;
   }
+}
+
+/* Separate the market selector only; keep the input and search button joined.
+   Account for the margin within the grid cell to avoid shifting other menus. */
+.v6-toolbar-primary .search-row #keyword {
+  margin: 0 0 0 8px !important;
+  width: calc(100% - 8px) !important;
+  border-radius: 10px 0 0 10px !important;
 }
