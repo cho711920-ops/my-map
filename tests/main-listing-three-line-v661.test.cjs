@@ -47,7 +47,7 @@ assert.match(css, /\.item-nav-btn \.item-action-text-v661,[\s\S]*?display:\s*inl
 assert.match(css, /\.unified-expand-btn-v8 \{[\s\S]*?background:\s*#e7f8ed !important;[\s\S]*?font-size:\s*12\.5px !important/);
 
 assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.36-contract-complete-label/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.37-sale-details/);
 assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
 
 console.log("main listing three-line v6.6.1 tests passed");

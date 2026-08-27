@@ -2,6 +2,7 @@ import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./fl
 import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
+import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -171,14 +172,7 @@ function collectorTradeType(value, legacyDefault = true) {
 function collectorSaleCategory(value, fallback = "") {
   const explicit = normalizeListingSaleCategory(value);
   if (explicit) return explicit;
-  const text = clean(fallback || value);
-  if (/토지|대지|임야|전답/.test(text)) return "land";
-  if (/공장|창고/.test(text)) return "factory_warehouse";
-  if (/다가구|다세대/.test(text)) return "multifamily";
-  if (/단독|주택|빌라/.test(text)) return "house";
-  if (/통건물|건물/.test(text)) return "building";
-  if (/상가|점포|근린|사무/.test(text)) return "commercial";
-  return "other";
+  return saleCategoryFromLabel(fallback || value);
 }
 
 function stableJson(value) {
@@ -259,24 +253,35 @@ function gongsilRecord(record) {
   if (clean(values[9])) contacts.push({ role: "임대인", name: "", phone: clean(values[9]) });
   if (clean(values[10])) contacts.push({ role: "임차인", name: "", phone: clean(values[10]) });
   const images = gongsilImageUrls(record);
-  const tradeType = collectorTradeType(record?.tradeType || record?.trade_type || record?.transactionType, true);
+  const providerSale = gongsilSaleFields(record?.raw || {});
+  const rawList = record?.raw?.list || record?.raw || {};
+  const explicitSale = /매매|sale|buy/i.test(clean(rawList.TradeType || rawList.DealType || rawList.SaleType || rawList.TransactionType));
+  // Recheck provider Me at the server boundary, including old bookmarklets.
+  const tradeType = providerSale.salePrice > 0 || explicitSale ? LISTING_TRADE_TYPES.SALE
+    : collectorTradeType(record?.tradeType || record?.trade_type || record?.transactionType, true);
   const category = clean(values[3] || record?.category) || "상가점포";
   const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
-    ? number(record?.salePrice ?? record?.sale_price ?? values[4] ?? record?.price)
+    ? providerSale.salePrice ?? number(record?.salePrice ?? record?.sale_price)
     : null;
+  const saleCategory = providerSale.saleCategory !== "other" ? providerSale.saleCategory
+    : collectorSaleCategory(record?.saleCategory || record?.sale_category, category);
   return {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
-    address: normalizedAddress(values[1] || record?.address), room: canonicalListingRoom(values[2] || record?.room),
+    address: normalizedAddress(values[1] || record?.address),
+    room: tradeType === "sale" && providerSale.wholeBuilding ? "전체"
+      : tradeType === "sale" && providerSale.saleCategory === "land" ? "" : canonicalListingRoom(values[2] || record?.room),
     roadAddress: clean(record?.roadAddress || record?.road_address || record?.raw?.detail?.roadAddress),
-    category, tradeType,
+    category: tradeType === "sale" ? SALE_CATEGORY_LABELS[saleCategory] || category : category, tradeType,
     saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
-      ? collectorSaleCategory(record?.saleCategory || record?.sale_category, category)
+      ? saleCategory
       : "",
-    salePrice,
+    salePrice, saleDetails: tradeType === "sale" ? providerSale.saleDetails : undefined,
     deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(values[4] ?? record?.deposit),
     rent: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(values[5] ?? record?.rent),
     fee: number(values[6] ?? record?.fee),
-    premium: number(values[7] ?? record?.premium), area: number(values[8] ?? record?.area),
+    premium: number(values[7] ?? record?.premium),
+    area: tradeType === "sale" && (providerSale.wholeBuilding || providerSale.saleCategory === "land")
+      ? providerSale.area : number(values[8] ?? record?.area),
     memo: memoWithVisit(values[11] || record?.memo), link: clean(record?.url || record?.sourceUrl),
     listSnapshot: clean(record?.listSnapshot), images, contacts, raw: record?.raw || record,
     preserveContacts: Boolean(record?.preserveContacts) && contacts.length === 0,
@@ -293,26 +298,30 @@ function naverRecord(item) {
   const sourceId = sourceIdFor("네이버", item?.articleNo || item?.articleNumber || item?.sourceId);
   const images = uniqueUrls(item?.imageUrls || item?.images || []);
   if (clean(item?.primaryImage) && !images.includes(clean(item.primaryImage))) images.unshift(clean(item.primaryImage));
-  const squareMeters = number(item?.areaSquareMeter);
+  const saleDetails = naverSaleFields(item);
   const tradeType = collectorTradeType(item?.tradeType || item?.tradeTypeCode || item?.trade_type, true);
+  const squareMeters = tradeType === "sale" && saleDetails.scope === "land" ? saleDetails.landAreaM2
+    : tradeType === "sale" && saleDetails.scope === "whole_building" ? saleDetails.grossAreaM2
+      : number(item?.areaSquareMeter);
   const category = clean(item?.category) || "상가점포";
   const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
-    ? number(item?.salePrice ?? item?.sale_price ?? item?.dealPrice ?? item?.deposit)
+    ? number(item?.salePrice ?? item?.sale_price ?? item?.dealPrice)
     : null;
   return {
     source: "네이버", sourceId, buildingName: clean(item?.buildingName) || "일반상가",
     address: normalizedAddress(item?.jibunAddress || item?.address),
     roadAddress: clean(item?.roadAddress || item?.road_address || item?.roadAddressName),
-    room: canonicalListingRoom(item?.roomInfo || item?.floorInfo), category, tradeType,
+    room: tradeType === "sale" && saleDetails.scope === "whole_building" ? "전체"
+      : tradeType === "sale" && saleDetails.scope === "land" ? "" : canonicalListingRoom(item?.roomInfo || item?.floorInfo), category, tradeType,
     saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
       ? collectorSaleCategory(item?.saleCategory || item?.sale_category, category)
       : "",
-    salePrice,
+    salePrice, saleDetails: tradeType === "sale" ? saleDetails : undefined,
     deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(item?.deposit),
     rent: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(item?.monthly),
     fee: number(item?.managementFee || item?.fee),
     premium: number(item?.premium), area: squareMeters && squareMeters > 0
-      ? Math.round((squareMeters / 3.305785) * 10) / 10 : number(item?.area),
+      ? Math.round((squareMeters / 3.305785) * 10) / 10 : tradeType === "sale" && saleDetails.scope !== "unit" ? null : number(item?.area),
     memo: memoWithVisit(stripExternalPhoneNumbers(item?.description)),
     link: clean(item?.sourceLink || item?.providerUrl || item?.currentUrl) ||
       (sourceId ? `https://fin.land.naver.com/articles/${sourceId.replace(/^네이버-/, "")}` : ""),
@@ -378,7 +387,9 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
     trades.find((entry) => entry?.preferred) || trades[0] || {};
   const tradeType = clean(trade.type || trade.__typename).toUpperCase();
   const salesType = clean(article?.salesTypeV3?.type || article?.salesTypeV3?.__typename).toUpperCase();
-  const category = /OFFICE/.test(salesType) ? "사무실" : /FACTORY|WAREHOUSE/.test(salesType) ? "공장/창고" : "상가점포";
+  const typedCategory = saleCategoryFromLabel(salesType);
+  const category = /BUY/.test(tradeType) ? SALE_CATEGORY_LABELS[typedCategory]
+    : /OFFICE/.test(salesType) ? "사무실" : /FACTORY|WAREHOUSE/.test(salesType) ? "공장/창고" : "상가점포";
   const providerBuildingName = clean(article?.buildingName || article?.complex?.name);
   const addressLikeBuildingName = /(?:로|길)\s*\d+(?:-\d+)?(?:\s|$)/.test(providerBuildingName);
   const areaM2 = number(article?.area);
@@ -419,10 +430,11 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
     article?.location?.longitude
   ].some((value) => coordinate(value, -180, 180) != null);
   const blurredPublicCoordinate = Boolean(article?.isHideAddress) && !hasDirectCoordinate;
-  const canonicalTradeType = /BUY/.test(tradeType) ? LISTING_TRADE_TYPES.SALE
+  let canonicalTradeType = /BUY/.test(tradeType) ? LISTING_TRADE_TYPES.SALE
     : /MONTH/.test(tradeType) ? LISTING_TRADE_TYPES.LEASE : "";
+  if (requested && canonicalTradeType !== requested) canonicalTradeType = "";
   const saleCategory = canonicalTradeType === LISTING_TRADE_TYPES.SALE
-    ? collectorSaleCategory(article?.saleCategory, category)
+    ? collectorSaleCategory(article?.saleCategory, salesType)
     : "";
   return {
     source: "당근", sourceId,
@@ -431,12 +443,14 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
       : category === "상가점포" ? "일반상가" : category,
     address: daangnAddress(article),
     roadAddress,
-    room: daangnRoom(article),
+    room: saleCategory === "land" ? "" : daangnRoom(article),
     category, tradeType: canonicalTradeType, saleCategory,
-    salePrice: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? number(trade?.price ?? trade?.deposit) : null,
+    salePrice: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? number(trade?.price) : null,
+    saleDetails: canonicalTradeType === "sale" ? daangnSaleFields(article, saleCategory) : undefined,
     deposit: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(trade?.deposit ?? trade?.price),
     rent: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
-    fee: number(article?.totalManageCost) || 0, premium: number(article?.premiumMoney) || 0,
+    fee: canonicalTradeType === "sale" ? number(article?.totalManageCost) : number(article?.totalManageCost) || 0,
+    premium: number(article?.premiumMoney) || 0,
     area: areaM2 && areaM2 > 0 ? Math.floor((areaM2 / 3.305785) * 10 + 0.0000001) / 10 : null,
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
     link: sourceId ? `https://realty.daangn.com/?article_id=%22${encodeURIComponent(sourceId)}%22&panel_stack=article` : "",
@@ -473,16 +487,17 @@ export function normalizedRecord(source, value) {
         buildingName: canonical.buildingName || value.buildingName,
         address: canonical.address || value.address,
         roadAddress: canonical.roadAddress || value.roadAddress,
-        room: canonical.room || value.room,
+        room: canonical.tradeType === "sale" && canonical.saleCategory === "land" ? "" : canonical.room || value.room,
         category: canonical.category || value.category,
         deposit: canonicalHasTrade ? canonical.deposit : value.deposit,
         rent: canonicalHasTrade ? canonical.rent : value.rent,
         fee: canonicalHasTrade ? canonical.fee : value.fee,
         premium: canonicalHasTrade ? canonical.premium : value.premium,
         area: canonicalHasTrade ? canonical.area : value.area,
-        tradeType: canonical.tradeType || value.tradeType || "",
+        tradeType: Array.isArray(value.raw.trades) ? canonical.tradeType : value.tradeType || "",
+        saleDetails: canonical.saleDetails,
         saleCategory: canonical.saleCategory || value.saleCategory || value.sale_category || "",
-        salePrice: canonical.salePrice ?? value.salePrice ?? value.sale_price ?? null,
+        salePrice: canonicalHasTrade ? canonical.salePrice : value.salePrice ?? value.sale_price ?? null,
         memo: canonical.memo,
         contacts: [],
         latitude: canonical.latitude ?? value.latitude,
@@ -497,6 +512,7 @@ export function normalizedRecord(source, value) {
 
 export function isMonthlyCollectorRecord(source, record) {
   const type = collectorTradeType(record?.tradeType, false);
+  if (type === "sale" && ["네이버", "당근"].includes(source) && record?.saleCategory === "apartment") return false;
   return type === LISTING_TRADE_TYPES.LEASE || type === LISTING_TRADE_TYPES.SALE;
 }
 
@@ -506,7 +522,7 @@ function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresenta
     link: record.link, buildingName: record.buildingName, address: record.address,
     roadAddress: record.roadAddress, room: record.room,
     type: record.category, tradeType: record.tradeType,
-    saleCategory: record.saleCategory, salePrice: record.salePrice,
+    saleCategory: record.saleCategory, salePrice: record.salePrice, saleDetails: record.saleDetails,
     deposit: record.deposit, rent: record.rent, fee: record.fee,
     premium: record.premium, area: record.area, latitude: record.latitude, longitude: record.longitude,
     memo: record.memo, status: "활성",
@@ -573,6 +589,12 @@ export function manifestEntryMatch(entry, row) {
   if (!row) return "";
   const incomingHash = snapshotKey(entry.listSnapshot || entry);
   const savedHash = clean(row.snapshot_hash).toLowerCase();
+  // Sale metadata (land/gross areas, total tenancy income, type) is material.
+  // The old lease-only fuzzy shortcut must not discard a changed sale snapshot.
+  if (collectorTradeType(entry.tradeType || entry.trade_type, true) === "sale") {
+    return savedHash === incomingHash && collectorTradeType(row.trade_type || parseJson(row.list_snapshot_json, {}).tradeType, true) === "sale"
+      ? "hash" : "";
+  }
   // Recovery imports used marker values such as `legacy-recovery`, not an
   // actual list fingerprint. Compare their material rental terms instead of
   // treating every scheduled collection as a changed listing.
@@ -1006,6 +1028,16 @@ function stronglyDifferentRentalTerms(record, row, stricter = false) {
 }
 
 function compareSingleListingSpace(record, row) {
+  if (record?.tradeType === "sale") {
+    const incomingCategory = collectorSaleCategory(record.saleCategory, record.category);
+    const existingCategory = collectorSaleCategory(row.sale_category || row.saleCategory, row.category);
+    if (incomingCategory !== "other" && existingCategory !== "other" && incomingCategory !== existingCategory) {
+      return { decision: "different", reason: "매매 물건 종류가 다름" };
+    }
+    if (incomingCategory === "other" || existingCategory === "other") {
+      return { decision: "review", reason: "매매 물건 종류 확인 필요" };
+    }
+  }
   const incoming = roomIdentity(record?.room);
   const existing = roomIdentity(row?.room);
   const offerMatch = reliableOfferMatch(record || {}, row || {});
@@ -1491,6 +1523,12 @@ async function ingestRecords(env, source, values, metadata = {}) {
         totals.tradeTypeExcluded += 1;
         continue;
       }
+      if (record.tradeType === "sale" && !(record.salePrice > 0)) {
+        totals.failed += 1;
+        await saveCollectorError(env, record, sessionId, "매매가 확인 필요: 임대보증금으로 대체하지 않음");
+        if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "매매가 확인 필요" });
+        continue;
+      }
       if (record.preserveContacts) totals.contactDeferred += 1;
       normalizedRecords.push(record);
     } catch (error) {
@@ -1898,6 +1936,10 @@ function parseDaangnUrl(value, requestedTradeType = "") {
     propertyFilter.salesTypes = ["STORE", "OFFICE", "FACTORY"];
   }
   const district = ["동구", "중구", "서구", "유성구", "대덕구"].find((name) => decodeURIComponent(url.toString()).includes(name)) || "";
+  if (collectorTradeType(requestedTradeType, true) === "sale") {
+    propertyFilter.salesTypes = propertyFilter.salesTypes.filter((type) => !/^APARTMENT$|^APT$/i.test(type));
+    if (!propertyFilter.salesTypes.length) throw new Error("당근 아파트 매매는 수집 대상이 아닙니다.");
+  }
   return { url: url.toString(), clusterId, propertyFilter, district,
     tradeType: collectorTradeType(requestedTradeType, true) };
 }
@@ -1910,11 +1952,14 @@ function daangnListEntry(article, requestedTradeType = "") {
     room: record.room,
     category: record.category,
     tradeType: record.tradeType,
+    salePrice: record.salePrice, saleCategory: record.saleCategory,
+    saleDetails: record.saleDetails,
     deposit: record.deposit,
     rent: record.rent,
     area: record.area
   });
   return { sourceId: record.sourceId, listSnapshot, tradeType: record.tradeType,
+    salePrice: record.salePrice, saleCategory: record.saleCategory,
     deposit: record.deposit, rent: record.rent,
     area: record.area, address: record.address, room: record.room };
 }
@@ -1928,9 +1973,9 @@ export function mergeDaangnDetailWithList(article, entry = {}, requestedTradeTyp
     ...record,
     sourceId: record.sourceId || clean(entry.sourceId),
     address: record.address || clean(entry.address),
-    room: record.room || clean(entry.room),
+    room: record.tradeType === "sale" && record.saleCategory === "land" ? "" : record.room || clean(entry.room),
     deposit: record.deposit == null ? number(entry.deposit) : record.deposit,
-    rent: !hasDetailRent && number(entry.rent) != null ? number(entry.rent) : record.rent,
+    rent: record.tradeType === "sale" ? 0 : !hasDetailRent && number(entry.rent) != null ? number(entry.rent) : record.rent,
     area: record.area == null ? number(entry.area) : record.area
   };
 }

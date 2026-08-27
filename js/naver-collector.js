@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.0";
+  var VERSION = "6.0.1";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2247,7 +2247,9 @@
       tradeTypeCode: tradeCode,
       saleCategory: tradeCode === "A1" ? naverSaleCategory(categoryCode,
         article.articleRealEstateTypeName || article.realEstateTypeName || "") : "",
-      salePrice: tradeCode === "A1" ? clean(deposit) : "",
+      salePrice: tradeCode === "A1" ? clean(isFinPrice ? finKrwToManwon(price.dealPrice)
+        : article.dealOrWarrantPrc ?? price.dealPrice) : "",
+      saleRaw: tradeCode === "A1" ? { spaceInfo: space, priceInfo: price, articleDetailInfo: detail } : undefined,
       deposit: clean(deposit),
       monthly: clean(monthly),
       areaSquareMeter: areaSquareMeter,
@@ -2289,14 +2291,29 @@
   }
 
   function naverSaleCategory(code, label) {
-    var value = (clean(code) + " " + clean(label)).toLowerCase();
+    var codes = { APT: "apartment", JGC: "reconstruction", ABYG: "apartment_presale",
+      OPST: "officetel", OBYG: "officetel_presale", VL: "villa", DSD: "villa",
+      DDDGG: "house", JWJT: "house", SGJT: "mixed_house", OR: "one_room", JGB: "redevelopment",
+      TJ: "land", GM: "building", GJCG: "factory_warehouse", APTHG: "knowledge_center",
+      D01: "office", D02: "commercial", E02: "factory_warehouse" };
+    var value = clean(label || code).toLowerCase();
+    if (/재건축/.test(value)) return "reconstruction";
+    if (/재개발/.test(value)) return "redevelopment";
+    if (/분양권/.test(value)) return /오피스텔/.test(value) ? "officetel_presale" : "apartment_presale";
+    if (/아파트|^apt$|apartment/.test(value)) return "apartment";
+    if (/오피스텔|officetel/.test(value)) return "officetel";
+    if (/빌라|다세대|villa/.test(value)) return "villa";
+    if (/상가주택/.test(value)) return "mixed_house";
+    if (/원룸/.test(value)) return "one_room";
+    if (/지식산업/.test(value)) return "knowledge_center";
     if (/land|토지|대지|임야|전답/.test(value)) return "land";
     if (/factory|warehouse|공장|창고|e02/.test(value)) return "factory_warehouse";
-    if (/multi|다가구|다세대/.test(value)) return "multifamily";
+    if (/multi|다가구/.test(value)) return "multifamily";
     if (/house|주택|빌라/.test(value)) return "house";
     if (/building|건물|빌딩/.test(value)) return "building";
-    if (/store|office|상가|점포|사무|근린|d01|d02/.test(value)) return "commercial";
-    return "other";
+    if (/office|사무/.test(value)) return "office";
+    if (/store|상가|점포|근린/.test(value)) return "commercial";
+    return codes[clean(code).toUpperCase()] || "other";
   }
 
   function finImageUrls(input) {
@@ -2417,7 +2434,8 @@
 
   function isCompleteNaverLocation(item) {
     return hasExactNaverJibun(item && item.jibunAddress) &&
-      hasExactNaverFloorOrRoom(item);
+      (item && item.tradeTypeCode === "A1" && ["land", "house", "multifamily", "mixed_house", "building"].indexOf(item.saleCategory) !== -1 ||
+        hasExactNaverFloorOrRoom(item));
   }
 
   async function fetchFinJson(url, attempts) {
@@ -2495,10 +2513,15 @@
     var detailed = Object.assign({}, item, {
       realEstateTypeCode: realEstateType,
       tradeTypeCode: tradeType,
+      tradeType: TRADE_TYPE_LABELS[tradeType] || tradeType,
+      saleCategory: tradeType === "A1" ? naverSaleCategory(realEstateType, item.category) : "",
       jibunAddress: exactAddress || item.jibunAddress,
       floorInfo: finDetailFloor(detailResult, item.floorInfo),
       roomInfo: finDetailRoom(detailResult, item.roomInfo),
       areaSquareMeter: finDetailArea(detailResult, item.areaSquareMeter),
+      saleRaw: tradeType === "A1" ? detailResult : undefined,
+      salePrice: tradeType === "A1" ? clean(finKrwToManwon(
+        (detailResult.priceInfo || (detailResult.detailInfo || {}).priceInfo || {}).dealPrice)) || item.salePrice : "",
       primaryImage: mergedImages[0] || item.primaryImage || "",
       imageUrls: mergedImages
     });
@@ -2560,7 +2583,12 @@
       clean(item.jibunAddress),
       clean(item.description),
       Array.isArray(item.imageUrls) ? item.imageUrls.map(clean).sort() : [],
-      Array.isArray(item.tags) ? item.tags.map(clean).sort() : []
+      Array.isArray(item.tags) ? item.tags.map(clean).sort() : [],
+      item.tradeTypeCode === "A1" ? [
+        (item.saleRaw && item.saleRaw.spaceInfo || {}).landSpace,
+        (item.saleRaw && item.saleRaw.spaceInfo || {}).floorSpace,
+        (item.saleRaw && item.saleRaw.spaceInfo || {}).buildingSpace
+      ] : null
     ]);
   }
 

@@ -139,6 +139,7 @@
       return text(original.originalId) === text(originalId);
     })[0] || originals[0];
     if (!selected) return false;
+    if (selected.tradeType === "sale" && !selected.saleDetails && !selected.masterFallback) return true;
     var imageCount = originalImages(selected).length;
     var declaredCount = Math.max(0, Number(selected.photoCount) || 0);
     if (!imageCount && !declaredCount) return false;
@@ -546,6 +547,7 @@
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
         '</div><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
         '<p>' + conditionLine(selected) + '</p>' +
+        (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'roadview\', \'' + encodedActionPropertyId + '\')">로드뷰</button>' +

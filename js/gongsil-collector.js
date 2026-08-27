@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.0";
+  var VERSION = "2.2.1";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -836,7 +836,7 @@
       setProgress(totalItemCount, totalItemCount);
 
       setStatus(
-        result.stopped ? "공실박스 안전중단 완료" : "저장 완료",
+        result.stopped ? "공실박스 안전중단 완료" : rejected.length || result.failed ? "처리 완료 · 제외/실패 내역 확인" : "저장 완료",
         message + (result.stopped
           ? "\n이미 저장된 묶음은 유지되며 완전수집 판정은 실행하지 않았습니다."
           : "") + (rejected.length
@@ -994,7 +994,7 @@
       });
       setProgress(itemsLength, itemsLength);
       setStatus(
-        result.stopped ? "공실박스 안전중단 완료" : "저장 완료",
+        result.stopped ? "공실박스 안전중단 완료" : rejected.length || result.failed ? "처리 완료 · 제외/실패 내역 확인" : "저장 완료",
         message + (result.stopped
           ? "\n이미 저장된 묶음은 유지되며 완전수집 판정은 실행하지 않았습니다."
           : "") + (rejected.length
@@ -1489,7 +1489,8 @@
     var values = [
       getBuildingName(item),
       address,
-      getRoom(item),
+      terms.tradeType === "sale" && /건물통|통건물|건물전체/.test(text(item.TypeView || item.ViewType)) ? "전체"
+        : terms.saleCategory === "land" ? "" : getRoom(item),
       getPropertyType(item),
       terms.deposit,
       terms.rent,
@@ -1708,7 +1709,7 @@
       }
     }
 
-    if (!deposit && !rent) return null;
+    if (!(rent > 0)) return null;
     return {
       deposit: deposit || 0,
       rent: rent || 0
@@ -2574,7 +2575,8 @@
       "Bo", "Deposit", "MmDeposit", "Mm", "Monthly", "MmMonthly", "Rent",
       "Jun", "JeonseDeposit", "Jmm", "JeonseMonthly", "Moneys", "moneys",
       "TradeType", "DealType", "SaleType", "TransactionType", "SalePrice", "DealPrice",
-      "SellPrice", "TradingPrice", "Ma", "Mae", "Price", "UseType", "Usage", "Category",
+      "Me", "SellPrice", "TradingPrice", "Ma", "Mae", "Price", "UseType", "Usage", "Category",
+      "LandArea", "YunArea", "TotBomoney", "TotMmmoney", "LandAreaM2", "YunAreaM2",
       "Bilname", "BilName", "Bname", "BuildingName",
       "TypeView", "ViewType", "LndType", "Type", "Ckhus", "Collective", "IsCollective",
       "Ho", "BfHo", "Room", "Honame", "Ff", "BfFloor", "Floor", "floor",
@@ -3050,14 +3052,14 @@
     var saleMoney = Array.isArray(moneys) ? moneys.find(function (money) {
       return /매매|sale|buy/i.test(text(money && (money.Ty || money.Type || money.TradeType)));
     }) : null;
-    var salePrice = numberValue(pick(item, [
-      "SalePrice", "DealPrice", "SellPrice", "TradingPrice", "Ma", "Mae"
-    ]));
+    var salePrice = [
+      "Me", "SalePrice", "DealPrice", "SellPrice", "TradingPrice", "Ma", "Mae"
+    ].map(function (key) { return numberValue(item && item[key]); }).find(function (value) { return value > 0; });
     if (!salePrice && saleMoney) {
       salePrice = numberValue(pick(saleMoney, ["Price", "Ma", "Mae", "DealPrice", "Amount", "Bo"]));
     }
     if (/매매|sale|buy/i.test(typeText) || salePrice > 0 || saleMoney) {
-      if (!salePrice) return null;
+      if (!(salePrice > 0)) return null;
       return {
         tradeType: "sale",
         saleCategory: getSaleCategory(item),
@@ -3086,16 +3088,21 @@
   }
 
   function getSaleCategory(item) {
-    var type = [
-      pick(item, ["TypeView", "ViewType", "LndType", "Type", "BuildingType"]),
-      pick(item, ["UseType", "Usage", "Category"])
-    ].map(text).join(" ");
+    // Listing type wins over building use: 토지 + 창고시설 must stay 토지.
+    var type = text(pick(item, ["TypeView", "ViewType", "LndType", "BuildingType", "Type"]));
     if (/토지|대지|임야|전답/.test(type)) return "land";
+    if (/아파트/.test(type)) return "apartment";
+    if (/오피스텔/.test(type)) return "officetel";
+    if (/빌라|다세대/.test(type)) return "villa";
+    if (/상가주택/.test(type)) return "mixed_house";
+    if (/원룸/.test(type)) return "one_room";
+    if (/지식산업/.test(type)) return "knowledge_center";
     if (/공장|창고/.test(type)) return "factory_warehouse";
-    if (/다가구|다세대/.test(type)) return "multifamily";
-    if (/단독|주택|빌라/.test(type)) return "house";
-    if (/통건물|건물전체|빌딩/.test(type)) return "building";
-    if (/상가|점포|근린|사무/.test(type)) return "commercial";
+    if (/다가구/.test(type)) return "multifamily";
+    if (/단독|주택/.test(type)) return "house";
+    if (/건물통|통건물|건물전체|빌딩/.test(type)) return "building";
+    if (/사무/.test(type)) return "office";
+    if (/상가|점포|근린/.test(type)) return "commercial";
     return "other";
   }
 

@@ -192,3 +192,7 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
   width: calc(100% - 8px) !important;
   border-radius: 10px 0 0 10px !important;
 }
+.listing-sale-details-v1 { display: grid; gap: 8px; margin: 12px 0; padding: 12px; background: #f5f8fc; border-radius: 10px; }
+.listing-sale-details-v1 > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+.listing-sale-details-v1 dt { color: #63748b; }
+.listing-sale-details-v1 dd { margin: 0; color: #172c46; overflow-wrap: anywhere; }

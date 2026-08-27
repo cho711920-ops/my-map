@@ -1,3 +1,5 @@
+import { SALE_CATEGORY_LABELS, saleCategoryFromLabel } from "./sale-fields.js";
+
 export const LISTING_TRADE_TYPES = Object.freeze({
   LEASE: "lease",
   SALE: "sale"
@@ -52,7 +54,10 @@ export function normalizeListingSaleCategory(value) {
     ["other", LISTING_SALE_CATEGORIES.OTHER],
     ["기타", LISTING_SALE_CATEGORIES.OTHER]
   ]);
-  return aliases.get(normalized) || "";
+  const canonical = Object.keys(SALE_CATEGORY_LABELS).find((key) => key.replace(/_/g, "") === normalized);
+  if (canonical) return canonical;
+  const inferred = saleCategoryFromLabel(value);
+  return aliases.get(normalized) || (inferred !== "other" ? inferred : "");
 }
 
 export function listingTradeTypesCanMerge(left, right) {
