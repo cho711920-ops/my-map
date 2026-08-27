@@ -49,7 +49,7 @@
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
 <link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.2-logout-size">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
-<link rel="stylesheet" href="css/listing-trade-v1.css?v=1.0.1-mode-selector">
+<link rel="stylesheet" href="css/listing-trade-v1.css?v=1.0.2-inline-header">
 </template>
 </head>
 
@@ -69,16 +69,14 @@
       <div class="filter-title">매물 검색</div>
 
       <div class="v6-toolbar-primary">
-        <div class="listing-trade-mode-v1" title="표시할 매물 시장 선택">
-          <label class="sr-only" for="listingTradeModeSelectV1">매물 시장</label>
-          <select id="listingTradeModeSelectV1" aria-label="매물 시장" onchange="JSListingTradeV1.onSelectorChange(this)">
-            <option value="lease">상가임대</option>
-            <option value="building_sale">건물매매</option>
-            <option value="land_sale">토지매매</option>
-          </select>
-          <span id="listingTradeModeLabelV1" class="sr-only">상가임대</span>
-        </div>
         <div class="search-row">
+          <div class="listing-trade-mode-v1" title="표시할 매물 시장 선택">
+            <select id="listingTradeModeSelectV1" aria-label="매물 시장" onchange="JSListingTradeV1.onSelectorChange(this)">
+              <option value="lease">상가임대</option>
+              <option value="building_sale">건물매매</option>
+              <option value="land_sale">토지매매</option>
+            </select>
+          </div>
           <input id="keyword" aria-label="지역, 건물 또는 호실 검색" placeholder="지역 / 건물 / 호실 검색 · 쉼표 다중검색 (괴정,탄방,월평)">
           <button class="search-btn" onclick="applyFilter()">
             <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.2 4.2"></path></svg>

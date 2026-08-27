@@ -5,6 +5,20 @@ import vm from "node:vm";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
+test("the market selector stays inside the search row without extra visible labels", async () => {
+  const html = await read("../index.html");
+  const css = await read("../css/listing-trade-v1.css");
+  assert.match(html, /<div class="search-row">\s*<div class="listing-trade-mode-v1"[^>]*>\s*<select id="listingTradeModeSelectV1" aria-label="매물 시장"/);
+  assert.match(html, /<\/select>\s*<\/div>\s*<input id="keyword"/);
+  assert.doesNotMatch(html, /id="listingTradeModeLabelV1"|<label[^>]*for="listingTradeModeSelectV1"/);
+  assert.match(css, /\.v6-toolbar-primary \.search-row\s*\{\s*grid-column: 1 !important;\s*grid-row: 1 !important;/);
+  assert.match(css, /\.v6-toolbar-primary \.top-reset-btn\s*\{ grid-row: 1 !important;/);
+  assert.match(css, /\.search-row #keyword\s*\{\s*grid-column: 2 !important;/);
+  assert.match(css, /\.search-row \.search-btn\s*\{\s*grid-column: 3 !important;/);
+  assert.match(css, /@media \(min-width: 769px\) and \(max-width: 899px\)/);
+  assert.match(css, /width: min\(688px, calc\(100vw - 890px\)\)/);
+});
+
 test("the web starts in lease mode and isolates building and land sale listings", async () => {
   const ui = await read("../js/listing-trade-ui-v1.js");
   const html = await read("../index.html");
