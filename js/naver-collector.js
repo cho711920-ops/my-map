@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.1";
+  var VERSION = "6.0.2";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -99,6 +99,7 @@
     active: true,
     busy: false,
     preparing: false,
+    collectingSelection: false,
     stopRequested: false,
     prepareId: 0,
     capture: null,
@@ -888,7 +889,7 @@
   }
 
   function discoverFinContext() {
-    if (!isFinNaver() || state.busy) return;
+    if (!isFinNaver() || state.busy || state.collectingSelection) return;
     var buttons = [];
     try {
       buttons = Array.prototype.slice.call(document.querySelectorAll("button"));
@@ -945,6 +946,9 @@
   }
 
   function capturePayload(json, sourceUrl, requestOptions) {
+    // Provider responses can arrive late while the automatic district run is
+    // paging or saving. Passive capture must not replace its state/dashboard.
+    if (!state.active || state.busy || state.collectingSelection) return false;
     var articles = articleList(json).filter(function (article) {
       return !!articleId(article);
     });
@@ -1676,6 +1680,7 @@
       // materially changed listings.
       clearAutoDistrictProgress(district.cortarNo);
     }
+    state.collectingSelection = true;
     state.preparing = true;
     beginCollectorRun();
     saveButton.disabled = true;
@@ -1713,6 +1718,8 @@
         complete: false,
         message: String(error && error.message ? error.message : error)
       };
+    } finally {
+      state.collectingSelection = false;
     }
   }
 
@@ -2056,9 +2063,17 @@
           controller.abort();
         }, NAVER_LIST_REQUEST_TIMEOUT_MS);
         try {
-          lastResponse = await nativeFetch(url, Object.assign({}, options || {}, {
+          var response = await nativeFetch(url, Object.assign({}, options || {}, {
             signal: controller.signal
           }));
+          // fetch resolves at the headers, not at the end of the body. Keep
+          // the deadline active until JSON is read as well (including retries).
+          var body = await response.text();
+          var parsed = response.ok ? JSON.parse(body) : null;
+          lastResponse = {
+            ok: response.ok, status: response.status, url: response.url,
+            json: async function () { return parsed === null ? JSON.parse(body) : parsed; }
+          };
         } finally {
           clearTimeout(timeoutId);
         }

@@ -163,11 +163,14 @@ function currentRunStatus(response) {
     loading: "수집 화면 여는 중",
     "starting-collector": "실제 수집 시작 확인 중",
     collecting: "수집 실행 중",
+    starting: "실행 준비 중",
+    resuming: "중단 지점 복구 중",
+    "between-targets": "다음 지역 연결 중",
     "retry-wait": "재시도 대기",
     retrying: "즉시 재시도 중"
   };
-  const phase = phaseLabels[runState.phase] || "수집 실행 중";
-  const progressAt = Number(runState.lastProgressAt || 0);
+  const phase = phaseLabels[runState.phase] || "실행 상태 확인 필요";
+  const progressAt = Number(runState.lastProgressAt || runState.runtimeStartedAt || runState.targetStartedAt || runState.phaseEnteredAt || runState.startedAt || 0);
   const progressAge = progressAt ? Math.max(0, Math.floor((Date.now() - progressAt) / 60000)) : null;
   const progress = String(runState.progressMessage || "").trim();
   return [phase, position, label, progress,
@@ -179,7 +182,8 @@ async function load() {
   const response = await runtime({ type: "JS_AUTO_GET_STATE" });
   if (response.ok) state = response;
   render();
-  message(response.ok ? currentRunStatus(response) : "연결 오류");
+  const workerMismatch = response.ok && response.backgroundBuild !== chrome.runtime.getManifest().version;
+  message(response.ok ? (workerMismatch ? "이전 실행기 사용 중 · 전용 수집 브라우저 재시작 필요 · " : "") + currentRunStatus(response) : "연결 오류");
 }
 
 document.getElementById("save").addEventListener("click", async () => {

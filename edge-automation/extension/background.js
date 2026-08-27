@@ -1,5 +1,34 @@
 "use strict";
 
+// A code build ID, deliberately independent of getManifest(): an unpacked
+// extension may show a new manifest while an old worker is still in memory.
+const BACKGROUND_BUILD = "1.1.1";
+let mutationQueue = Promise.resolve();
+let healthCheckPending = false;
+let lastHealthCheckAt = 0;
+
+function serializeMutation(operation) {
+  const next = mutationQueue.then(operation);
+  mutationQueue = next.catch(() => {});
+  return next;
+}
+
+async function logAutomationError(error) {
+  await appendLog({ level: "error", message: "자동수집 제어 오류: " + String(error && error.message || error).slice(0, 300) });
+}
+
+// The status page and content heartbeats also wake the recovery guard. Do not
+// depend solely on one alarm, and do not queue hundreds of checks while loading.
+function requestHealthCheck() {
+  if (healthCheckPending || Date.now() - lastHealthCheckAt < 60000) return;
+  healthCheckPending = true;
+  lastHealthCheckAt = Date.now();
+  serializeMutation(async () => {
+    await ensureWatchdogAlarm();
+    return recoverAutomaticRun();
+  }).catch(logAutomationError).catch(() => {}).finally(() => { healthCheckPending = false; });
+}
+
 const STORAGE_KEY = "jsAutoCollectorConfigV1";
 const LOG_KEY = "jsAutoCollectorLogsV1";
 const RUN_LOCK_KEY = "jsAutoCollectorRunLockV1";
@@ -196,12 +225,18 @@ async function sendRunMessage(tabId, target, runId, parentRunId) {
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const response = await chrome.tabs.sendMessage(tabId, {
-        type: "JS_AUTO_RUN_TARGET",
-        target,
-        runId,
-        parentRunId
-      });
+      let timer;
+      let response;
+      try {
+        response = await Promise.race([
+          chrome.tabs.sendMessage(tabId, { type: "JS_AUTO_RUN_TARGET", target, runId, parentRunId }),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("수집 탭 시작 응답이 40초 안에 없어 다시 연결합니다.")), 40000);
+          })
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
       if (response && response.started === true) return response;
       if (response && response.ok === false) throw new Error(response.message || "자동수집 시작에 실패했습니다.");
     } catch (error) {
@@ -228,6 +263,10 @@ async function getRunState() {
 }
 
 async function saveRunState(state) {
+  const now = Date.now();
+  if (state.savedPhase !== state.phase || !state.phaseEnteredAt) state.phaseEnteredAt = now;
+  state.savedPhase = state.phase;
+  state.updatedAt = now;
   await chrome.storage.local.set({ [RUN_STATE_KEY]: state });
   return state;
 }
@@ -528,7 +567,8 @@ async function finishCurrentTarget(result, senderTabId) {
   const warningCompletion = completedTargetWithWarnings(result);
   const payloadPartial = Boolean(result.result && result.result.partial);
   const successful = result.ok === true && !payloadPartial;
-  if (!successful && !warningCompletion && targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
+  if (!successful && !warningCompletion && elapsedMs < MAX_TARGET_RUNTIME_MS &&
+      targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
     const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
     await appendLog({
       level: "warning",
@@ -624,6 +664,9 @@ async function finishCurrentTarget(result, senderTabId) {
 
 async function resumeOrExtendActiveRun(state, targets, reason) {
   await ensureWatchdogAlarm();
+  await recoverAutomaticRun();
+  state = await getRunState();
+  if (!state || !state.active) return { ok: true, message: "미완료 실행을 정리했습니다. 현황을 확인해주세요." };
   const existingKeys = new Set((state.targets || []).map(targetKey));
   const addedTargets = targets.filter((target) => !existingKeys.has(targetKey(target)));
   if (addedTargets.length) {
@@ -706,7 +749,7 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
     reason,
     message: addedTargets.length
       ? `진행 중인 수집에 ${addedTargets.length}개를 추가해 전체 ${state.targets.length}개를 계속 실행합니다.`
-      : `이미 자동수집이 진행 중입니다.${currentTarget ? ` 현재: ${currentTarget.label || currentTarget.source}` : ""}`
+      : `자동수집 정체 여부를 점검했습니다.${currentTarget ? ` 현재: ${currentTarget.label || currentTarget.source}` : ""}`
   };
 }
 
@@ -795,13 +838,28 @@ async function recoverAutomaticRun() {
     return launchCurrentTarget(state);
   }
   const now = Date.now();
-  const elapsed = now - Number(state.targetStartedAt || now);
+  // Old/reloaded workers can persist a transition without target timestamps.
+  // Use the per-target report before the cycle start; never treat "missing" as now.
+  const report = await getRunReport();
+  const target = (state.targets || [])[state.index];
+  const reportItem = report && report.runId === state.runId &&
+    (report.items || []).find((item) => item.key === targetKey(target));
+  const targetStartedAt = Number(state.targetStartedAt || reportItem && reportItem.startedAt ||
+    state.phaseEnteredAt || state.startedAt || 0);
+  const elapsed = now - targetStartedAt;
+  const transitionAge = now - Number(state.phaseEnteredAt || targetStartedAt);
+  const knownRunningPhase = ["loading", "starting-collector", "collecting"].includes(state.phase);
+  const stalledTransition = !knownRunningPhase && transitionAge > LOAD_STALL_TIMEOUT_MS;
+  const missingTargetIdentity = !state.targetRunId || !Number.isInteger(state.currentTabId);
+  if (stalledTransition || (missingTargetIdentity && elapsed > LOAD_STALL_TIMEOUT_MS)) {
+    return restartPersistedRun(state, "자동수집 단계 연결이 3분 이상 중단돼 미완료 대상부터 복구합니다.");
+  }
   const stalledLoading = state.phase === "loading" && elapsed > LOAD_STALL_TIMEOUT_MS;
   const stalledStart = state.phase === "starting-collector" && elapsed > COLLECTOR_START_TIMEOUT_MS;
   const stalledCollection = state.phase === "collecting" &&
-    now - Number(state.lastProgressAt || state.runtimeStartedAt || state.targetStartedAt || now) > COLLECTION_STALL_TIMEOUT_MS;
+    now - Number(state.lastProgressAt || state.runtimeStartedAt || targetStartedAt) > COLLECTION_STALL_TIMEOUT_MS;
   const disconnectedCollection = state.phase === "collecting" &&
-    now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || state.targetStartedAt || now) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
+    now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || targetStartedAt) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
   const targetRuntimeExceeded = ["loading", "starting-collector", "collecting"].includes(state.phase) &&
     elapsed > MAX_TARGET_RUNTIME_MS;
   if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection || targetRuntimeExceeded) {
@@ -835,7 +893,7 @@ async function recoverAutomaticRun() {
   return { ok: true, active: true };
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(() => serializeMutation(async () => {
   const config = await getConfig();
   await resetAlarm(config);
   const state = await getRunState();
@@ -844,9 +902,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   } else {
     await chrome.storage.local.remove(RUN_LOCK_KEY);
   }
-});
+}).catch(logAutomationError));
 
-chrome.runtime.onStartup.addListener(async () => {
+chrome.runtime.onStartup.addListener(() => serializeMutation(async () => {
   const config = await getConfig();
   await resetAlarm(config);
   const state = await getRunState();
@@ -861,15 +919,18 @@ chrome.runtime.onStartup.addListener(async () => {
   }
   await chrome.storage.local.remove(RUN_LOCK_KEY);
   await runScheduled("browser-startup");
-});
+}).catch(logAutomationError));
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM_NAME) runScheduled("schedule").catch(() => {});
-  if (alarm.name === RECOVERY_ALARM_NAME || alarm.name === WATCHDOG_ALARM_NAME) recoverAutomaticRun().catch(() => {});
+  if (alarm.name === ALARM_NAME) serializeMutation(() => runScheduled("schedule")).catch(logAutomationError);
+  if (alarm.name === RECOVERY_ALARM_NAME || alarm.name === WATCHDOG_ALARM_NAME) {
+    serializeMutation(() => recoverAutomaticRun()).catch(logAutomationError);
+  }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  getRunState().then((state) => {
+  serializeMutation(async () => {
+    const state = await getRunState();
     if (!state || !state.active || state.currentTabId !== tabId) return;
     return finishCurrentTarget({
       runId: state.runId,
@@ -877,11 +938,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
       ok: false,
       message: "자동수집 탭이 수집 완료 전에 닫혔습니다."
     }, tabId);
-  }).catch(() => {});
+  }).catch(logAutomationError);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  (async () => {
+  const handle = async () => {
     if (!message || !message.type) return { ok: false };
     if (message.type === "JS_AUTO_REGISTER_TARGET") {
       return { ok: true, config: await registerTarget(message.target) };
@@ -890,7 +951,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return finishCurrentTarget(message, sender && sender.tab && sender.tab.id);
     }
     if (message.type === "JS_AUTO_TARGET_HEARTBEAT") {
-      return updateTargetHeartbeat(message, sender && sender.tab && sender.tab.id);
+      const response = await updateTargetHeartbeat(message, sender && sender.tab && sender.tab.id);
+      requestHealthCheck();
+      return response;
     }
     if (message.type === "JS_AUTO_GET_STATE") {
       const [config, stored, runState, runReport] = await Promise.all([
@@ -899,7 +962,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         getRunState(),
         getRunReport()
       ]);
-      return { ok: true, config, logs: stored[LOG_KEY] || [], runState, runReport };
+      return { ok: true, config, logs: stored[LOG_KEY] || [], runState, runReport,
+        backgroundBuild: BACKGROUND_BUILD };
     }
     if (message.type === "JS_AUTO_SAVE_CONFIG") {
       return { ok: true, config: await saveConfig(message.config || {}) };
@@ -912,7 +976,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.type === "JS_AUTO_RUN_REQUEST") {
       const runState = await getRunState();
-      if (runState && runState.active) return { ok: true, resumed: true, runState };
+      if (runState && runState.active) {
+        await ensureWatchdogAlarm();
+        await recoverAutomaticRun();
+        return { ok: true, resumed: true, runState: await getRunState() };
+      }
       return message.forceRun ? runAll("windows-force") : runScheduled("windows-schedule");
     }
     if (message.type === "JS_AUTO_COLLECTOR_PAGE_LOADED") {
@@ -928,12 +996,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (sender && sender.tab && sender.tab.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
         return { ok: true, resumed: true };
       }
-      if (message.forceRun) runAll("manual-verification").catch(() => {});
-      else runScheduled("windows-schedule").catch(() => {});
+      if (message.forceRun) await runAll("manual-verification");
+      else await runScheduled("windows-schedule");
       if (sender && sender.tab && sender.tab.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
       return { ok: true };
     }
     return { ok: false };
-  })().then(sendResponse).catch((error) => sendResponse({ ok: false, message: String(error && error.message || error) }));
+  };
+  // Read-only status remains responsive even while a tab is loading. All
+  // transitions/heartbeats are serialized so an old heartbeat cannot resurrect
+  // a completed target or erase the next target's watchdog timestamps.
+  const readOnly = message && message.type === "JS_AUTO_GET_STATE";
+  if (readOnly) requestHealthCheck();
+  (readOnly ? handle() : serializeMutation(handle)).then(sendResponse).catch((error) => {
+    logAutomationError(error).catch(() => {});
+    sendResponse({ ok: false, message: String(error && error.message || error) });
+  });
   return true;
 });

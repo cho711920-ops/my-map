@@ -508,7 +508,7 @@ test("collector review snapshots refresh in place instead of growing every run",
 
 test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {
   const source = await readFile(new URL("../js/naver-collector.js", import.meta.url), "utf8");
-  assert.match(source, /var VERSION = "6\.0\.1"/);
+  assert.match(source, /var VERSION = "6\.0\.2"/);
   assert.match(source, /if \(options\.automatic\) \{[\s\S]*?clearAutoDistrictProgress\(district\.cortarNo\);[\s\S]*?\}/);
   assert.doesNotMatch(source, /if \(options\.automatic\) return collectFinAutomaticDistrict\(district\)/);
   assert.match(source, /var classification = await classifyNaverManifest\(allItems, session\)/);
