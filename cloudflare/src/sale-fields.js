@@ -3,7 +3,7 @@
 import { saleDescriptionFields, naverSaleDescription, supplementSaleDescription } from "./sale-description.js";
 const clean = (value) => String(value ?? "").trim();
 const numeric = (value) => {
-  if (value == null || clean(value) === "") return null;
+  if (value == null || clean(value) === "" || typeof value === "boolean") return null;
   const result = Number(clean(value).replace(/,/g, ""));
   return Number.isFinite(result) && result >= 0 ? result : null;
 };
@@ -45,6 +45,14 @@ export function gongsilSaleFields(raw = {}) {
   const detail = raw.detail || {};
   const building = detail.getbilbases || {};
   const land = detail.getlands || {};
+  const bilinfo = detail.bilinfo || {};
+  const provenance = {};
+  const choose = (key, candidates) => {
+    const found = candidates.find(([, value]) => typeof value === "string" && clean(value) && !/^(?:-|미확인)$/.test(clean(value)));
+    if (!found) return "";
+    provenance[key] = found[0];
+    return clean(found[1]).slice(0, 160);
+  };
   const salePrice = positive(list.Me, list.SalePrice, list.DealPrice, list.SellPrice,
     list.TradingPrice, list.Ma, list.Mae);
   // TypeView is the explicit listing classification. In particular land with
@@ -60,17 +68,22 @@ export function gongsilSaleFields(raw = {}) {
     sourceType, scope: saleCategory === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
     landAreaM2: landAreaM2 ?? siteAreaM2, grossAreaM2,
     totalDeposit: present(list.TotBomoney), monthlyIncome: present(list.TotMmmoney),
-    // Extra parcels remain in the original description; never invent a second
-    // canonical address from the memo or use brokerage contact/profile data.
-    landUse: clean(land.LndCgrCodeNm || list.LandUse || list.Jimok),
-    zoning: clean(land.PrposArea1Nm || list.UseArea || list.Zoning),
+    // The cadastral response can be empty while these listing fields are not.
+    landUse: choose("landUse", [["detail.getlands.LndCgrCodeNm", land.LndCgrCodeNm],
+      ["detail.bilinfo.jimok", bilinfo.jimok], ["list.JiMok", list.JiMok], ["list.LandUse", list.LandUse], ["list.Jimok", list.Jimok]]),
+    zoning: choose("zoning", [["detail.getlands.PrposArea1Nm", land.PrposArea1Nm],
+      ["detail.bilinfo.yongdoaddr", bilinfo.yongdoaddr], ["list.YongdoAddr", list.YongdoAddr],
+      ["list.UseArea", list.UseArea], ["list.Zoning", list.Zoning]]),
+    secondaryZoning: clean(land.PrposArea2Nm), parcelShape: clean(land.TpgrphFrmCodeNm),
+    cadastralAreaM2: positive(land.LndpclAr),
     roadAccess: clean(land.RoadSideCodeNm || list.RoadAccess),
     buildingUse: clean(building.MainPurpsCdNm || list.UseType || list.Usage),
     otherUse: clean(building.EtcPurps),
     buildingAreaM2: positive(building.ArchArea),
     aboveGroundFloors: present(building.GrndFlrCnt), belowGroundFloors: present(building.UgrndFlrCnt),
     approvalDate: clean(building.UseAprDay), householdCount: present(building.HhldCnt),
-    familyCount: present(building.FmlyCnt)
+    familyCount: present(building.FmlyCnt), metadataVersion: 2, fieldSources: provenance,
+    providerCheckedAt: clean(list.Bfokdate || list.Bfokdt)
   };
   return { salePrice, saleCategory, saleDetails, wholeBuilding,
     area: (saleCategory === "land" ? saleDetails.landAreaM2 : wholeBuilding ? grossAreaM2 : null) == null

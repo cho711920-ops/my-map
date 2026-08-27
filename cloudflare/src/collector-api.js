@@ -599,6 +599,8 @@ export function manifestEntryMatch(entry, row, source = "") {
   // Sale metadata (land/gross areas, total tenancy income, type) is material.
   // The old lease-only fuzzy shortcut must not discard a changed sale snapshot.
   if (collectorTradeType(entry.tradeType || entry.trade_type, true) === "sale") {
+    if (source === "공실박스" && Number(row.sale_metadata_version ||
+        parseJson(row.list_snapshot_json, {}).saleDetails?.metadataVersion || 0) < 2) return "";
     // Refresh existing sale details once after the description parser upgrade.
     // Rental schedules and Gongsil contact refresh rules are unchanged.
     if (["네이버", "당근"].includes(source) &&
@@ -704,6 +706,9 @@ async function classifyManifest(env, body) {
             COALESCE(json_extract(payload_json, '$.saleDetails.descriptionVersion'),
               json_extract(payload_json, '$.record.saleDetails.descriptionVersion'),
               json_extract(payload_json, '$.saleDescriptionVersion'), 0) AS sale_description_version,
+            COALESCE(json_extract(payload_json, '$.saleDetails.metadataVersion'),
+              json_extract(payload_json, '$.record.saleDetails.metadataVersion'),
+              json_extract(payload_json, '$.saleMetadataVersion'), 0) AS sale_metadata_version,
             COALESCE(json_extract(payload_json, '$.record.deposit'), json_extract(payload_json, '$.deposit')) AS saved_deposit,
             COALESCE(json_extract(payload_json, '$.record.rent'), json_extract(payload_json, '$.rent')) AS saved_rent,
             COALESCE(json_extract(payload_json, '$.record.area'), json_extract(payload_json, '$.area')) AS saved_area,
@@ -1483,7 +1488,8 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
     area: record.area, link: record.link, listSnapshot: record.listSnapshot,
     latitude: record.latitude, longitude: record.longitude,
     tradeType: record.tradeType, saleCategory: record.saleCategory, salePrice: record.salePrice,
-    saleDescriptionVersion: Number(record.saleDetails?.descriptionVersion || 0)
+    saleDescriptionVersion: Number(record.saleDetails?.descriptionVersion || 0),
+    saleMetadataVersion: Number(record.saleDetails?.metadataVersion || 0)
   };
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json,

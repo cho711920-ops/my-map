@@ -1058,6 +1058,8 @@ function getFilteredItems(options) {
   var radiusFilter = window.mapRadiusFilterV658 || null;
 
   var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
+  var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
+  var saleFilterValues = window.JSSaleWorkbenchV1 ? window.JSSaleWorkbenchV1.filterValues() : {};
   var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
 
   var minRent = Number(document.getElementById("minRent").value) || 0;
@@ -1097,7 +1099,7 @@ function getFilteredItems(options) {
       (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.matchesSource === "function"
         ? window.JSUnifiedListingsV8.matchesSource(item, selectedSource)
         : getItemSourceType(item) === selectedSource);
-    var matchBrokerageFee = !selectedBrokerageFee ||
+    var matchBrokerageFee = saleMode || !selectedBrokerageFee ||
       !!(window.JSCommercialBrokerageV1 &&
         typeof window.JSCommercialBrokerageV1.matchesFilter === "function" &&
         window.JSCommercialBrokerageV1.matchesFilter(item, selectedBrokerageFee));
@@ -1110,26 +1112,25 @@ function getFilteredItems(options) {
       return memoTextForIndustry.indexOf(term) !== -1;
     });
 
-    var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
     var filterPrice = saleMode ? window.JSListingTradeV1.displayPrice(item) : Number(item.deposit || 0);
     var matchPrice =
       filterPrice >= minDeposit &&
       filterPrice <= maxDeposit &&
       (saleMode || (item.rent >= minRent && item.rent <= maxRent)) &&
       (saleMode || ((Number(item.premium) || 0) >= minPremium && (Number(item.premium) || 0) <= maxPremium)) &&
-      item.area >= minArea &&
-      item.area <= maxArea;
+      (saleMode || (item.area >= minArea && item.area <= maxArea));
+    var matchSaleFields = !window.JSSaleWorkbenchV1 || window.JSSaleWorkbenchV1.matches(item, saleFilterValues);
 
     var itemFloor = getItemFloorNumber(item);
     var matchFloor = true;
     var matchQuickFloor =
-      !selectedFloorQuick ||
+      saleMode || !selectedFloorQuick ||
       (selectedFloorQuick === "basement" && itemFloor !== null && itemFloor < 0) ||
       (selectedFloorQuick === "first" && itemFloor === 1) ||
       (selectedFloorQuick === "upper" && itemFloor !== null && itemFloor >= 2) ||
       (selectedFloorQuick === "unknown" && itemFloor === null);
 
-    if (hasFloorFilter) {
+    if (hasFloorFilter && !saleMode) {
       // 층수 범위를 사용하면 층수 미확인 매물은 제외
       matchFloor =
         itemFloor !== null &&
@@ -1149,7 +1150,7 @@ function getFilteredItems(options) {
 
     return matchTradeMode && matchCustomerSelection && matchCustomerHeldVisibility &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&
-      matchFloor && matchQuickFloor &&
+      matchSaleFields && matchFloor && matchQuickFloor &&
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
   });
 
@@ -1164,8 +1165,8 @@ function getFilteredItems(options) {
     if (sortType === "addressDesc") return compareNaturalAddress(b, a);
     if (sortType === "floorLow") return compareFloorItems(a, b, false);
     if (sortType === "floorHigh") return compareFloorItems(a, b, true);
-    if (sortType === "depositLow") return Number(a.deposit || 0) - Number(b.deposit || 0) || compareNaturalAddress(a, b);
-    if (sortType === "depositHigh") return Number(b.deposit || 0) - Number(a.deposit || 0) || compareNaturalAddress(a, b);
+    if (sortType === "depositLow") return (saleMode ? window.JSListingTradeV1.displayPrice(a) - window.JSListingTradeV1.displayPrice(b) : Number(a.deposit || 0) - Number(b.deposit || 0)) || compareNaturalAddress(a, b);
+    if (sortType === "depositHigh") return (saleMode ? window.JSListingTradeV1.displayPrice(b) - window.JSListingTradeV1.displayPrice(a) : Number(b.deposit || 0) - Number(a.deposit || 0)) || compareNaturalAddress(a, b);
     if (sortType === "rentLow") return Number(a.rent || 0) - Number(b.rent || 0) || compareNaturalAddress(a, b);
     if (sortType === "rentHigh") return Number(b.rent || 0) - Number(a.rent || 0) || compareNaturalAddress(a, b);
 
@@ -1281,8 +1282,9 @@ function getActiveFilterChipsV844() {
   push("deposit", buildRangeFilterChipV844(saleMode ? "매매가" : "보증금", "minDeposit", "maxDeposit", "만원", false));
   if (!saleMode) push("rent", buildRangeFilterChipV844("월세", "minRent", "maxRent", "만원", false));
   if (!saleMode) push("premium", buildRangeFilterChipV844("권리금", "minPremium", "maxPremium", "만원", false));
-  push("area", buildRangeFilterChipV844("평수", "minArea", "maxArea", "평", false));
-  push("floor", buildRangeFilterChipV844("층", "minFloor", "maxFloor", "층", true));
+  if (!saleMode) push("area", buildRangeFilterChipV844("평수", "minArea", "maxArea", "평", false));
+  if (!saleMode) push("floor", buildRangeFilterChipV844("층", "minFloor", "maxFloor", "층", true));
+  if (window.JSSaleWorkbenchV1) chips = chips.concat(window.JSSaleWorkbenchV1.chips());
   push("industry", industry ? "업종 " + industry : "");
 
   if (favoriteOnly) push("favoriteOnly", "찜목록");
@@ -1326,6 +1328,7 @@ function syncFilterToggleControlsV844() {
 
 
 function clearActiveFilterChipV844(key) {
+  if (window.JSSaleWorkbenchV1) window.JSSaleWorkbenchV1.clearChip(key);
   var inputIds = {
     keyword: ["keyword"],
     source: ["sourceFilter"],
@@ -4401,7 +4404,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var areaDisplay = listDisplayValueV650(item, "area");
   var saleCardV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item);
   var salePriceDisplayV1 = saleCardV1
-    ? Number(window.JSListingTradeV1.displayPrice(item) || 0).toLocaleString("ko-KR")
+    ? (window.JSSaleWorkbenchV1 ? window.JSSaleWorkbenchV1.price(window.JSListingTradeV1.displayPrice(item)) : Number(window.JSListingTradeV1.displayPrice(item) || 0).toLocaleString("ko-KR"))
     : "";
   var priceValuesMarkupV1 = saleCardV1
     ? '<span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span>' +
@@ -4746,6 +4749,7 @@ function buildOpportunityHtml(analysis) {
 
 
 function resetFilter() {
+  if (window.JSSaleWorkbenchV1) window.JSSaleWorkbenchV1.reset();
   if (window.JSListingTradeV1 && typeof window.JSListingTradeV1.setMode === "function") {
     window.JSListingTradeV1.setMode("lease", { apply: false });
   }

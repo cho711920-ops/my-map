@@ -369,7 +369,7 @@
 
   function conditionLine(original) {
     if (text(original && original.tradeType).toLowerCase() === "sale") {
-      return '<span class="listing-sale-condition-v1"><b>매매</b> ' + number(original.salePrice) + ' · ' +
+      return '<span class="listing-sale-condition-v1"><b>매매</b> ' + (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(original.salePrice) : number(original.salePrice)) + ' · ' +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleAreaHtml(original) : '면적 미확인') + '</span>';
     }
     return '<span><b>보</b> ' + number(original.deposit) + ' / <b>월</b> ' + number(original.rent) +
@@ -549,6 +549,7 @@
         '</div><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
         '<p>' + conditionLine(selected) + '</p>' +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
+        (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'roadview\', \'' + encodedActionPropertyId + '\')">로드뷰</button>' +

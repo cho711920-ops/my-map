@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.2";
+  var VERSION = "2.2.3";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -2594,6 +2594,7 @@
       "TradeType", "DealType", "SaleType", "TransactionType", "SalePrice", "DealPrice",
       "Me", "SellPrice", "TradingPrice", "Ma", "Mae", "Price", "UseType", "Usage", "Category",
       "LandArea", "YunArea", "TotBomoney", "TotMmmoney", "LandAreaM2", "YunAreaM2",
+      "JiMok", "Jimok", "LandUse", "YongdoAddr", "UseArea", "Zoning",
       "Bilname", "BilName", "Bname", "BuildingName",
       "TypeView", "ViewType", "LndType", "Type", "Ckhus", "Collective", "IsCollective",
       "Ho", "BfHo", "Room", "Honame", "Ff", "BfFloor", "Floor", "floor",

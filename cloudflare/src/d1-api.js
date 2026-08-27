@@ -2,6 +2,7 @@ import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.
 import { accessProfile, createLocalPassword, normalizeLocalUsername, requireRole } from "./security.js";
 import { carryConfirmedVisitMemo } from "./visit-status.js";
 import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-trade.js";
+import { saveSaleWorksheet } from "./sale-worksheet.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -1302,6 +1303,7 @@ async function saveCloudState(env, user, body) {
   const owner = clean(user?.email).toLowerCase();
   const scope = clean(body.scope).slice(0, 100);
   const recordKey = clean(body.recordKey || "default").slice(0, 100);
+  if (scope === "saleWorksheetV1") return saveSaleWorksheet(env, owner, recordKey, body);
   const version = Math.max(1, Number(body.version) || Date.now());
   const now = new Date().toISOString();
   if (ACCOUNT_LIST_SCOPES.has(scope) && Array.isArray(body.data)) {

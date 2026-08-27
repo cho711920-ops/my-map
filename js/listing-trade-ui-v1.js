@@ -76,6 +76,7 @@
     if (rentRow) rentRow.hidden = sale;
     if (premiumRow) premiumRow.hidden = sale;
     if (brokerage) brokerage.hidden = sale;
+    if (global.JSSaleWorkbenchV1) global.JSSaleWorkbenchV1.syncMode();
   }
 
   function updateSelector() {
@@ -92,12 +93,16 @@
     var previousMode = currentMode;
     currentMode = mode;
     if (previousMode !== currentMode && (!options || options.resetFilters !== false)) {
-      ["typeFilter", "minDeposit", "maxDeposit", "minRent", "maxRent", "minPremium", "maxPremium"]
+      ["typeFilter", "minDeposit", "maxDeposit", "minRent", "maxRent", "minPremium", "maxPremium", "minArea", "maxArea", "minFloor", "maxFloor", "floorQuickFilter", "brokerageFeeFilter"]
         .forEach(function(id) {
           var element = document.getElementById(id);
           if (element) element.value = "";
         });
+      var sort = document.getElementById("sortFilter");
+      if (sort) sort.value = "latest";
+      if (typeof global.updateSortDropdownUI === "function") global.updateSortDropdownUI();
     }
+    if (previousMode !== currentMode && (!options || options.resetFilters !== false) && global.JSSaleWorkbenchV1) global.JSSaleWorkbenchV1.reset();
     updateSelector();
     if (typeof global.updateTypeOptions === "function") global.updateTypeOptions(global.allItems || []);
     if ((!options || options.apply !== false) && typeof global.applyFilter === "function") global.applyFilter();
@@ -170,6 +175,11 @@
   }
   function saleYieldBadge(item) {
     if (!isSale(item)) return "";
+    if (normalizedSaleCategory(item) === "land" && global.JSSaleWorkbenchV1) {
+      var unit = global.JSSaleWorkbenchV1.unitPrice(item);
+      return '<span class="pyeong-mini-badge listing-sale-yield-v1" title="매매가 ÷ 광고 토지면적(평). 지적공부 전체면적과 다를 수 있습니다.">평당 ' +
+        (unit == null ? '미확인' : unit.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) + '만') + '</span>';
+    }
     var rate = saleYield(item);
     var advertised = nonnegative(saleSummary(item).advertisedYield);
     if (rate == null && advertised != null) return '<span class="pyeong-mini-badge listing-sale-yield-v1" title="광고 설명에 기재된 연 수익률입니다. 대출·이자 반영 등 계산 기준은 상세정보에서 확인하세요. 웹의 단순 연 수익률과 다릅니다.">광고 연 ' + advertised.toFixed(2) + '%</span>';
@@ -234,7 +244,11 @@
     add("광고 실투자금", detail.investmentAmount, "만원");
     add("광고 기재 연 수익률", detail.advertisedYield, "% (광고 기준)");
     var rate = saleYield(item);
-    add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
+    var land = normalizedSaleCategory(item) === "land";
+    if (land && global.JSSaleWorkbenchV1) {
+      var unitPrice = global.JSSaleWorkbenchV1.unitPrice(item);
+      add("토지 평당가", unitPrice == null ? "확인 필요" : unitPrice.toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "만원 (광고면적 기준)");
+    } else add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
     add("지상층수", detail.aboveGroundFloors, "층");
     add("지하층수", detail.belowGroundFloors, "층");
     add("총층수", detail.totalFloors, "층");
@@ -251,10 +265,15 @@
     });
     add("방 수", detail.roomCount, "개"); add("욕실 수", detail.bathroomCount, "개");
     add("지목", detail.landUse); add("용도지역", detail.zoning);
+    add("추가 용도지역", detail.secondaryZoning); add("토지 형상", detail.parcelShape);
+    area("지적공부 면적 (광고면적과 구분)", detail.cadastralAreaM2);
+    if (Number(detail.cadastralAreaM2) > 0 && Number(detail.landAreaM2) > 0 && Math.abs(detail.cadastralAreaM2 - detail.landAreaM2) > 1)
+      add("면적 확인", "광고면적과 지적공부 면적이 다릅니다. 일부 지분·복수 필지 여부를 확인하세요. 평당가는 광고면적 기준입니다.");
     add("도로접면", detail.roadAccess); add("건축물 용도", detail.buildingUse);
+    add("기타 용도", detail.otherUse);
     add("사용승인일", detail.approvalDate);
     return rows.length ? '<dl class="listing-sale-details-v1">' + rows.join("") +
-      '</dl><p class="listing-sale-yield-note-v1">' + escapeHtml(yieldExplanation) +
+      '</dl><p class="listing-sale-yield-note-v1">' + escapeHtml(land ? '토지 평당가는 매매가 ÷ 광고면적(평)입니다. 일부 지분·복수 필지와 지적공부 면적 차이를 확인하세요.' : yieldExplanation) +
       (detail.descriptionVersion ? '<br>설명에서 추출한 조건은 광고 기재값입니다. 이자 차감 월수익은 월 임대수입으로 사용하지 않습니다.' : '') + '</p>' +
       (detail.descriptionText ? '<details class="listing-sale-description-v1"><summary>수집된 매매 상세설명 전체 보기</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">' + escape(detail.descriptionText) + '</div></details>' : '') : "";
   }

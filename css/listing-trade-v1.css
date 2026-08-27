@@ -220,3 +220,36 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 #list .item.listing-sale-card-v1 .item-action-left > .item-contact-button-v654 { --sale-action-width: 32px; }
 #list .item.listing-sale-card-v1 .item-action-left > .item-roadview-btn { --sale-action-width: 56px; }
 #list .item.listing-sale-card-v1 .item-action-left > .item-source-link-btn { --sale-action-width: 104px; }
+
+#saleFiltersV1[hidden], #saleFiltersV1 [hidden], #saleCompareButtonV1[hidden] { display: none !important; }
+html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100dvh - 120px); overflow-y: auto; overscroll-behavior: contain; }
+#saleFiltersV1 { display: grid; gap: 10px; border-top: 1px solid #e0e8f1; padding-top: 10px; margin-top: 8px; }
+#saleFiltersV1 label, .sale-filter-range > label { display: block; font-size: 12px; font-weight: 700; color: #34485e; }
+#saleFiltersV1 input, #saleFiltersV1 select { box-sizing: border-box; width: 100%; min-width: 0; margin-top: 4px; }
+#saleFiltersV1 .row { display: flex; gap: 8px; }
+#saleFiltersV1 .row input { width: calc(50% - 4px); }
+.sale-filter-help, .sale-provenance { font-size: 11px; line-height: 1.6; color: #68788c; overflow-wrap: anywhere; }
+.sale-tools-v1 { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.sale-tools-v1 button, .sale-tools-v1 a { flex: 1 1 130px; display: inline-flex; justify-content: center; align-items: center; min-height: 38px; padding: 8px 12px; border: 1px solid #b5cbea; border-radius: 9px; color: #20539b; background: #f4f8ff; font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1.4; text-decoration: none; cursor: pointer; }
+.sale-workbench-dialog { box-sizing: border-box; width: min(900px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #d3dfea; border-radius: 16px; background: #fff; color: #23384f; box-shadow: 0 24px 80px #1233; font: 14px/1.6 Pretendard, sans-serif; }
+.sale-workbench-dialog::backdrop { background: #14263999; }
+.sale-workbench-dialog header { position: sticky; top: 0; z-index: 1; display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e2eaf3; background: white; }
+.sale-workbench-dialog h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.sale-workbench-dialog button { border: 1px solid #bdcee3; border-radius: 8px; padding: 9px 12px; color: #22579e; background: #f5f9ff; cursor: pointer; }
+.sale-workbench-dialog button:disabled { opacity: .45; cursor: wait; }
+.sale-workbench-dialog [data-sale-close] { flex: 0 0 auto; }
+.sale-workbench-body { padding: 18px 20px; }
+.sale-workbench-body > p:first-child { margin-top: 0; }
+.sale-workbench-body label { display: block; font-size: 12px; font-weight: 700; }
+.sale-workbench-body input, .sale-workbench-body textarea { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #bccce0; background: white; border-radius: 8px; padding: 10px; margin: 5px 0 10px; color: #23384f; font: inherit; }
+.sale-workbench-body textarea { resize: vertical; }
+.sale-calculator-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+.sale-workbench-body output { display: block; padding: 14px; border-radius: 10px; background: #eaf4ff; font-weight: 700; overflow-wrap: anywhere; }
+.sale-workbench-body details { border: 1px solid #dce5f0; border-radius: 10px; padding: 12px; margin: 16px 0; }
+.sale-workbench-body summary { cursor: pointer; font-weight: 700; }
+.sale-compare-scroll { overflow-x: auto; }
+.sale-compare-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sale-compare-scroll th, .sale-compare-scroll td { min-width: 130px; padding: 12px; border: 1px solid #dde5ef; vertical-align: top; overflow-wrap: anywhere; }
+.sale-compare-scroll th { min-width: 90px; background: #f4f7fc; }
+.sale-compare-scroll small { display: block; color: #708096; margin-top: 6px; }
+@media(max-width:480px) { .sale-calculator-grid { grid-template-columns: 1fr; } .sale-workbench-body, .sale-workbench-dialog header { padding: 14px; } }

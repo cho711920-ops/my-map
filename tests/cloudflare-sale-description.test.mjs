@@ -107,7 +107,8 @@ test('old sale snapshots are refreshed once; current descriptions and lease path
   const row={trade_type:'sale',snapshot_hash:'fnv1a-'+(hash>>>0).toString(16).padStart(8,'0'),list_snapshot_json:'{}'};
   assert.equal(manifestEntryMatch(entry,row,'당근'),'');
   assert.equal(manifestEntryMatch(entry,row,'네이버'),'');
-  assert.equal(manifestEntryMatch(entry,row,'공실박스'),'hash');
+  assert.equal(manifestEntryMatch(entry,row,'공실박스'),'');
+  assert.equal(manifestEntryMatch(entry,{...row,sale_metadata_version:2},'공실박스'),'hash');
   row.list_snapshot_json=JSON.stringify({saleDetails:{descriptionVersion:1}});
   assert.equal(manifestEntryMatch(entry,row,'당근'),'hash');
   row.list_snapshot_json='same';

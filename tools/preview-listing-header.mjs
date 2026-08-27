@@ -13,6 +13,20 @@ createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url, `http://127.0.0.1:${port}`).pathname;
     response.setHeader("Cache-Control", "no-store");
+    if (pathname === "/sale-workbench") {
+      const source = await readFile(resolve(root,"index.html"),"utf8");
+      const styles=[...source.matchAll(/<link[^>]+href="css\/[^>]+>/g)].map(m=>m[0]).join('\n');
+      const filter=source.match(/<div id="detailFilter"[^]*?<button class="apply-btn"[^]*?<\/button>\s*<\/div>/)[0];
+      response.setHeader('Content-Type','text/html; charset=utf-8');
+      response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>매매 검토 실제 UI 검수</title>${styles}<style>body{overflow:auto!important;height:auto!important;background:#f2f6fb!important;padding:20px!important}#detailFilter{position:static!important;display:block!important;width:360px!important;max-width:100%!important;box-sizing:border-box}.fixture-grid{display:flex;gap:20px;flex-wrap:wrap}.fixture-detail{background:white;box-sizing:border-box;padding:20px;width:380px;max-width:100%}</style></head><body><label>매물 시장<select id="listingTradeModeSelectV1" onchange="JSListingTradeV1.setMode(this.value)"><option value="lease">상가임대</option><option value="building_sale">건물매매</option><option value="land_sale">토지매매</option></select></label><div class="fixture-grid">${filter}<article class="fixture-detail" id="fixtureDetail"></article></div><button onclick="JSSaleWorkbenchV1.compare()">체크한 매물 2개 비교</button><output id="fixtureResult"></output><script src="js/listing-trade-ui-v1.js"></script><script src="js/sale-workbench-v1.js"></script><script>
+      const fixtureItems=[{propertyId:'TEST-M1',originalId:'TEST-O1',tradeType:'sale',saleCategory:'building',salePrice:197000,name:'검수용 건물',source:'공실박스',address:'서구 월평동 893',saleDetails:{landAreaM2:204.96,grossAreaM2:409.59,totalDeposit:50000,monthlyIncome:695,landUse:'대',zoning:'제2종일반주거지역',providerCheckedAt:'2026-08-27'}},{propertyId:'TEST-M2',originalId:'TEST-O2',tradeType:'sale',saleCategory:'land',salePrice:41000,name:'검수용 토지',source:'공실박스',address:'서구 도마동 49-38',saleDetails:{landAreaM2:167,landUse:'대',zoning:'제2종일반주거지역',providerCheckedAt:'2026-08-27',fieldSources:{landUse:'list.JiMok',zoning:'list.YongdoAddr'}}}];
+      const fixtureState=new Map();
+      window.JSDataAccessV6={read:async(a,p)=>({found:fixtureState.has(p.recordKey),...(fixtureState.get(p.recordKey)||{})}),mutate:async(a,p)=>{const old=fixtureState.get(p.recordKey);if((old?.version||0)!==p.expectedVersion)throw Error('다른 창 변경');const r={data:p.data,version:p.expectedVersion+1};fixtureState.set(p.recordKey,r);return r;}};
+      window.getSelectedPrintItems=()=>fixtureItems;
+      window.applyFilter=()=>{const mode=JSListingTradeV1.getMode(),i=fixtureItems[mode==='land_sale'?1:0];document.getElementById('fixtureDetail').innerHTML='<h2>'+i.name+'</h2><p>'+JSSaleWorkbenchV1.price(i.salePrice)+'</p>'+JSListingTradeV1.saleDetailsHtml(i)+JSSaleWorkbenchV1.detailTools(i,i.propertyId);document.getElementById('fixtureResult').textContent='필터 일치: '+JSSaleWorkbenchV1.matches(i)+' / '+JSSaleWorkbenchV1.chips().map(c=>c.label).join(', ');};
+      JSListingTradeV1.setMode('building_sale');
+      </script></body></html>`);return;
+    }
     if (pathname === "/collection-diagnostics") {
       const ops = await readFile(resolve(root,"js/operations-collection-v8.js"),"utf8");
       const context = {number:v=>Number(v||0),escape:v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')};
@@ -87,7 +101,7 @@ createServer(async (request, response) => {
     }
     const relative = decodeURIComponent(pathname).replace(/^\/+/, "");
     const file = resolve(root, relative);
-    if (!file.startsWith(root + sep) || !/^(css\/|js\/(listing-trade-ui-v1|mobile-app-v1)\.js$)/.test(relative)) {
+    if (!file.startsWith(root + sep) || !/^(css\/|js\/(listing-trade-ui-v1|sale-workbench-v1|mobile-app-v1)\.js$)/.test(relative)) {
       response.writeHead(404).end();
       return;
     }
