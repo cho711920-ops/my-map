@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.0";
+  var VERSION = "1.5.1";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -43,6 +43,7 @@
     job: null,
     jobRequestGeneration: 0,
     automaticRunning: false,
+    fatalError: "",
     manualRecoveryAttempts: 0,
     manualRecoveryTimer: null
   };
@@ -66,6 +67,7 @@
     version: VERSION,
     reopen: function () {
       panel.style.display = "block";
+      if (state.automaticRunning) return;
       var locationDistrict = districtFromUrl(location.href);
       var locationSelection = selectedClusterUrl(location.href, locationDistrict);
       if (locationSelection) {
@@ -116,18 +118,39 @@
   }
 
   function detectTradeType(url) {
-    var textValue = String(url || location.href || "");
-    var filterText = "";
     try {
-      var parsed = new URL(textValue, location.href);
-      filterText = decodeURIComponent(parsed.searchParams.get("af") || "");
-    } catch (_) {}
-    if (/(?:\bBUY\b|매매|sale)/i.test(filterText)) return "sale";
-    if (/(?:\bMONTH(?:LY_RENT)?\b|월세|lease)/i.test(filterText)) return "lease";
+      var parsed = new URL(url || location.href, location.href);
+      var filter = JSON.parse(parsed.searchParams.get("af") || "{}");
+      if (!filter || typeof filter !== "object" || Array.isArray(filter)) return "";
+      // Only values of tradeTypes define the transaction. salesTypes is a
+      // property-category key, not evidence of a sale.
+      if (Object.prototype.hasOwnProperty.call(filter, "tradeTypes")) {
+        if (!Array.isArray(filter.tradeTypes) || filter.tradeTypes.length !== 1) return "";
+        var value = String(filter.tradeTypes[0]).trim().toUpperCase();
+        return value === "BUY" ? "sale" : value === "MONTH" ? "lease" : "";
+      }
+    } catch (_) { return ""; }
     var selectedText = Array.prototype.slice.call(document.querySelectorAll(
       "button[aria-pressed=true],[role=tab][aria-selected=true],[role=option][aria-selected=true]"
-    )).map(function(node) { return String(node.textContent || "").trim(); }).join(" ");
-    return /(?:\bBUY\b|매매|sale)/i.test(selectedText) ? "sale" : "lease";
+    )).map(function(node) { return String(node.textContent || "").trim(); });
+    var sale = selectedText.some(function(value) { return /^(BUY|매매|sale)$/i.test(value); });
+    var lease = selectedText.some(function(value) { return /^(MONTH|월세|lease)$/i.test(value); });
+    return sale !== lease ? (sale ? "sale" : "lease") : "";
+  }
+
+  function automaticTradeType(target, url) {
+    var filter = JSON.parse(new URL(url).searchParams.get("af") || "{}");
+    var requested = target && target.tradeType;
+    var explicit = requested === "sale" || requested === "lease" ? requested : "";
+    if (Object.prototype.hasOwnProperty.call(filter, "tradeTypes")) {
+      var detected = detectTradeType(url);
+      if (!detected || (explicit && explicit !== detected)) {
+        throw new Error("당근 거래유형 설정 불일치: 월세 또는 매매 하나로 자동수집 대상을 다시 등록해 주세요.");
+      }
+      return detected;
+    }
+    // Legacy targets predate the sale feature and were monthly-rent only.
+    return explicit || "lease";
   }
 
   function createPanel() {
@@ -223,6 +246,10 @@
     }
     var district = state.selectedDistrict || districtFromUrl(state.selectedUrl);
     var tradeType = detectTradeType(state.selectedUrl);
+    if (!tradeType) {
+      setStatus("거래유형 확인 필요", "월세 또는 매매 하나만 선택한 뒤 다시 등록해 주세요.");
+      return;
+    }
     state.tradeType = tradeType;
     var requestId = "daangn-register-" + Date.now();
     var onResult = function (event) {
@@ -264,7 +291,9 @@
     state.selectedUrl = url;
     state.selectedDistrict = String(target.district || districtFromUrl(url) || "");
     state.selectedCount = Number(target.selectedCount || 0);
-    state.tradeType = target && target.tradeType === "sale" ? "sale" : detectTradeType(url);
+    state.tradeType = automaticTradeType(target, url);
+    state.fatalError = "";
+    state.jobRequestGeneration += 1;
     state.selectionChanged = false;
     state.job = null;
     renderSelection();
@@ -274,9 +303,10 @@
     var recoveryAttempts = 0;
     var lastProcessed = -1;
     while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
+      if (state.fatalError) throw new Error(state.fatalError);
       if (state.job && state.job.status === "complete") {
         var hardFailed = Math.max(0, Number(state.job.failed || 0) - Number(state.job.addressMissing || 0));
-        var partial = hardFailed > 0 ||
+        var partial = hardFailed > 0 || Number(state.job.addressMissing || 0) > 0 ||
           Boolean(state.selectedDistrict && state.job.completeCollection === false);
         var issues = Array.isArray(state.job.completionIssues) ? state.job.completionIssues.filter(Boolean) : [];
         return {source: "daangn", district: state.selectedDistrict, version: VERSION,
@@ -306,6 +336,7 @@
   }
 
   function handleMapMarkerClick(event) {
+    if (state.automaticRunning) return;
     if (!event || !event.target || panel.contains(event.target)) return;
     var marker = event.target.closest
       ? event.target.closest('.maplibregl-marker,[aria-label="Map marker"]')
@@ -371,6 +402,7 @@
   }
 
   function syncSelectionFromLocation(force) {
+    if (state.automaticRunning) return;
     var clusterId = clusterIdFromUrl(location.href);
     if (!clusterId) return;
     var hintAge = Date.now() - Number(state.pendingSelectionAt || 0);
@@ -462,10 +494,12 @@
   }
 
   function captureSelectedCluster(url, district) {
+    if (state.automaticRunning) return;
     if (!url) return;
     var pendingCount = Number(state.pendingSelectionCount) || 0;
     var changed = clusterIdFromUrl(url) !== clusterIdFromUrl(state.selectedUrl) ||
-      (district || "") !== (state.selectedDistrict || "");
+      (district || "") !== (state.selectedDistrict || "") ||
+      new URL(url).searchParams.get("af") !== new URL(state.selectedUrl || url).searchParams.get("af");
     if (!changed) {
       if (pendingCount && pendingCount !== state.selectedCount) {
         state.selectedCount = pendingCount;
@@ -491,7 +525,7 @@
     if (!match) return "";
     return buildClusterUrl(
       decodeURIComponent(match[1]).replace(/^['"]|['"]$/g, ""),
-      district || districtFromUrl(url)
+      district || districtFromUrl(url), url
     );
   }
 
@@ -505,8 +539,8 @@
     }
   }
 
-  function buildClusterUrl(clusterId, district) {
-    var url = new URL(location.href);
+  function buildClusterUrl(clusterId, district, baseUrl) {
+    var url = new URL(baseUrl || location.href);
     url.searchParams.set("cluster_id", String(clusterId || ""));
     if (district) url.searchParams.set("js_district", district);
     else url.searchParams.delete("js_district");
@@ -585,6 +619,11 @@
   async function startOrResume() {
     if (state.busy) return;
     try {
+      if (!state.automaticRunning) {
+        state.tradeType = detectTradeType(state.selectedUrl);
+        if (!state.tradeType) throw new Error("당근 거래유형 설정 오류: 월세 또는 매매 하나만 선택해 주세요.");
+      }
+      state.fatalError = "";
       state.busy = true;
       state.stopRequested = false;
       startButton.disabled = true;
@@ -817,6 +856,14 @@
   function showError(error) {
     state.busy = false;
     var message = String(error && error.message ? error.message : error);
+    if (/당근 거래유형 설정/.test(message)) {
+      state.fatalError = message;
+      if (state.job) state.job.status = "paused";
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      setStatus("거래유형 확인 필요", message);
+      return;
+    }
     if (/SQLITE_TOOBIG|string or blob too big/i.test(message)) {
       state.job = null;
     }

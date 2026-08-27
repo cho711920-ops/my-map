@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.1";
+const BACKGROUND_BUILD = "1.1.2";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -536,6 +536,21 @@ async function launchCurrentTarget(state, reuseTabId = null) {
 
 function completedTargetWithWarnings(result) {
   const payload = result && result.result || {};
+  if (cleanSource(payload.source) === "daangn") {
+    const job = payload.totals || {};
+    const proof = job.completionProof || {};
+    const issues = payload.completionIssues;
+    const failed = Number(job.failed || 0);
+    const addressMissing = Number(job.addressMissing || 0);
+    // A finished small scope is NOT a validated full census. Keep missing-ad
+    // protection on the server, but don't refetch an exhausted list all day.
+    return result.ok === true && job.status === "complete" && job.phase === "complete" &&
+      proof.version === 1 && proof.listExhausted === true && Number(proof.expected) > 0 &&
+      Number(proof.expected) === Number(proof.observed) && Number(proof.processed) === Number(proof.observed) &&
+      Number(job.found) === Number(proof.observed) && failed >= 0 && failed <= addressMissing &&
+      Array.isArray(issues) && issues.every(issue =>
+        /^(?:관찰 원본 100건 미만|실패 \d+건|주소·층 오류 \d+건)$/.test(String(issue)));
+  }
   if (cleanSource(payload.source) !== "naver") return false;
   const session = payload.session || {};
   const expected = Number(session.expectedCount || session.manifestCount || 0);
@@ -566,10 +581,13 @@ async function finishCurrentTarget(result, senderTabId) {
   const targetAttempt = Math.max(1, Number(state.targetAttempt || 1));
   const warningCompletion = completedTargetWithWarnings(result);
   const payloadPartial = Boolean(result.result && result.result.partial);
+  const failureMessage = String(result.message || (result.result && result.result.completionIssues || []).join(", ") ||
+    "자동수집이 오류로 종료됐습니다.");
+  const invalidTradeConfig = /당근 거래유형 설정/.test(failureMessage);
   const successful = result.ok === true && !payloadPartial;
   if (!successful && !warningCompletion && elapsedMs < MAX_TARGET_RUNTIME_MS &&
-      targetAttempt < MAX_IMMEDIATE_ATTEMPTS && retryableTargetFailure(result.message)) {
-    const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
+      targetAttempt < MAX_IMMEDIATE_ATTEMPTS && !invalidTradeConfig && retryableTargetFailure(failureMessage)) {
+    const message = failureMessage;
     await appendLog({
       level: "warning",
       source: target.source,
@@ -612,18 +630,18 @@ async function finishCurrentTarget(result, senderTabId) {
     await updateRunReport(state, target, partial ? "partial" : "completed", {
       finishedAt: Date.now(),
       elapsedMs,
-      message: partial ? "전체 목록 확인 완료 · 일부 제공처 정보 누락" : "수집 완료",
+      message: partial ? "목록 처리 완료 · 확인사항: " + ((result.result.completionIssues || []).join(", ") || "일부 제공처 정보 누락") : "수집 완료",
       counts: resultCounts(result)
     });
   } else {
-    const message = String(result.message || "자동수집이 오류로 종료됐습니다.");
+    const message = failureMessage;
     state.summary.retries = Number(state.summary.retries || 0) + 1;
     const retryTarget = { ...target, retryCycle: Number(target.retryCycle || 0) + 1 };
     state.summary.retryErrors = Array.isArray(state.summary.retryErrors) ? state.summary.retryErrors : [];
     state.summary.retryErrors.push({ target: target.label || target.key, message,
       cycle: retryTarget.retryCycle, at: new Date().toISOString() });
     state.summary.retryErrors = state.summary.retryErrors.slice(-40);
-    const canRetry = retryTarget.retryCycle <= MAX_DEFERRED_RETRY_CYCLES &&
+    const canRetry = !invalidTradeConfig && retryTarget.retryCycle <= MAX_DEFERRED_RETRY_CYCLES &&
       Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS;
     state.retryQueue = Array.isArray(state.retryQueue) ? state.retryQueue : [];
     if (canRetry && !state.retryQueue.some((item) => targetKey(item) === targetKey(retryTarget))) {

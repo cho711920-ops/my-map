@@ -48,7 +48,7 @@ function harness(overrides = {}) {
         async update(id, options) { navigation.push(options.url); return { id, status: "complete" }; },
         async create(options) { navigation.push(options.url); return { id: 43, status: "complete" }; },
         async remove() {}, async sendMessage() { return { started: true }; }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.1" }), onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.2" }), onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async () => {} }
     }
@@ -119,7 +119,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.1");
+  assert.equal(response.backgroundBuild, "1.1.2");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -161,6 +161,28 @@ function naverFunction(name, next) {
   return naver.slice(naver.indexOf("  async function " + name) >= 0 ? naver.indexOf("  async function " + name) :
     naver.indexOf("  function " + name), naver.indexOf("  function " + next));
 }
+
+test("Daangn exhausted small scope proceeds once, with warning report and no retry queue", async () => {
+  const h = harness({ targetStartedAt: clock - minute });
+  const response = { ok: true, runId: "cycle", targetRunId: "seo", result: {
+    source: "daangn", partial: true, completionIssues: ["관찰 원본 100건 미만"],
+    totals: { status: "complete", phase: "complete", found: 45, failed: 0, addressMissing: 0,
+      completionProof: { version: 1, listExhausted: true, expected: 45, observed: 45, processed: 45 } }
+  } };
+  await h.context.finishCurrentTarget(response, 42);
+  assert.equal(h.data[RUN].index, 4); assert.equal(h.data[RUN].summary.completed, 4);
+  assert.equal(h.data[RUN].retryQueue.length, 0);
+  assert.equal(h.data[REPORT].items[3].status, "partial");
+  assert.match(h.data[REPORT].items[3].message, /관찰 원본 100건 미만/);
+});
+
+test("invalid transaction settings fail once and advance, without immediate or deferred retry", async () => {
+  const h = harness({ targetStartedAt: clock - minute });
+  await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
+    message: "당근 거래유형 설정 불일치: 수집 대상을 다시 등록해 주세요." }, 42);
+  assert.equal(h.data[RUN].index, 4); assert.equal(h.data[RUN].retryQueue.length, 0);
+  assert.equal(h.data[RUN].summary.failed, 1); assert.equal(h.data[REPORT].items[3].status, "failed");
+});
 
 test("Naver body download (not just headers) stays within the abort deadline", { timeout: 2000 }, async () => {
   let attempts = 0;

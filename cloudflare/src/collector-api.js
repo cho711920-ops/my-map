@@ -1923,25 +1923,50 @@ async function daangnGraphql(hash, variables) {
   return payload;
 }
 
-function parseDaangnUrl(value, requestedTradeType = "") {
+export function parseDaangnUrl(value, requestedTradeType = "") {
   const url = new URL(clean(value).replace(/&amp;/g, "&"));
   const clusterId = clean(url.searchParams.get("cluster_id")).replace(/^['"]|['"]$/g, "");
   if (!clusterId) throw new Error("URL에서 cluster_id를 찾지 못했습니다.");
   let propertyFilter = { salesTypes: ["STORE", "OFFICE", "FACTORY"] };
   try {
     const parsed = JSON.parse(url.searchParams.get("af") || "{}");
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) propertyFilter = parsed;
-  } catch {}
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    propertyFilter = parsed;
+  } catch { throw new Error("당근 거래유형 설정 오류: 수집 대상을 다시 등록해 주세요."); }
+  const requested = collectorTradeType(requestedTradeType, false);
+  let tradeType = requested || "lease";
+  if (Object.prototype.hasOwnProperty.call(propertyFilter, "tradeTypes")) {
+    const types = propertyFilter.tradeTypes;
+    const type = Array.isArray(types) && types.length === 1 ? clean(types[0]).toUpperCase() : "";
+    const detected = type === "BUY" ? "sale" : type === "MONTH" ? "lease" : "";
+    if (!detected || (requested && requested !== detected)) {
+      throw new Error("당근 거래유형 설정 불일치: 월세 또는 매매 하나로 수집 대상을 다시 등록해 주세요.");
+    }
+    tradeType = detected;
+  }
+  propertyFilter.tradeTypes = [tradeType === "sale" ? "BUY" : "MONTH"];
   if (!Array.isArray(propertyFilter.salesTypes) || !propertyFilter.salesTypes.length) {
     propertyFilter.salesTypes = ["STORE", "OFFICE", "FACTORY"];
   }
   const district = ["동구", "중구", "서구", "유성구", "대덕구"].find((name) => decodeURIComponent(url.toString()).includes(name)) || "";
-  if (collectorTradeType(requestedTradeType, true) === "sale") {
+  if (tradeType === "sale") {
     propertyFilter.salesTypes = propertyFilter.salesTypes.filter((type) => !/^APARTMENT$|^APT$/i.test(type));
     if (!propertyFilter.salesTypes.length) throw new Error("당근 아파트 매매는 수집 대상이 아닙니다.");
   }
   return { url: url.toString(), clusterId, propertyFilter, district,
-    tradeType: collectorTradeType(requestedTradeType, true) };
+    tradeType };
+}
+
+export function validateDaangnJobTrade(job, requestedTradeType = "") {
+  const parsed = parseDaangnUrl(job.url, job.tradeType || "lease");
+  const requested = collectorTradeType(requestedTradeType, false);
+  if (requested && parsed.tradeType !== requested) {
+    throw new Error("당근 거래유형 설정 불일치: 새 수집기로 다시 시작해 주세요.");
+  }
+  // Re-check the persisted checkpoint too; it must not widen the URL filter.
+  const checkpointUrl = new URL(job.url);
+  checkpointUrl.searchParams.set("af", JSON.stringify(job.propertyFilter || parsed.propertyFilter));
+  return parseDaangnUrl(checkpointUrl.toString(), parsed.tradeType);
 }
 
 function daangnListEntry(article, requestedTradeType = "") {
@@ -1966,8 +1991,10 @@ function daangnListEntry(article, requestedTradeType = "") {
 
 export function mergeDaangnDetailWithList(article, entry = {}, requestedTradeType = "") {
   const record = daangnRecord(article, entry.listSnapshot || "", requestedTradeType || entry.tradeType);
-  const trade = (Array.isArray(article?.trades) ? article.trades : []).find((candidate) => candidate?.preferred) ||
-    article?.trades?.[0] || {};
+  const trades = Array.isArray(article?.trades) ? article.trades : [];
+  const trade = trades.find((candidate) => (record.tradeType === "sale" ? /BUY/ : /MONTH/)
+    .test(clean(candidate?.type || candidate?.__typename).toUpperCase())) ||
+    trades.find((candidate) => candidate?.preferred) || trades[0] || {};
   const hasDetailRent = trade.monthlyPay != null || trade.yearlyPay != null;
   return {
     ...record,
@@ -2109,6 +2136,11 @@ async function finalizeDaangnJob(env, job) {
   });
   job.completeCollection = Boolean(result.complete);
   job.completionIssues = Array.isArray(result.completionIssues) ? result.completionIssues : [];
+  job.completionProof = {
+    version: 1, listExhausted: job.hasNextPage === false,
+    expected: Number(job.found || 0), observed: (job.ids || []).length,
+    processed: Number(job.skippedUnchanged || 0) + Number(job.processed || 0)
+  };
   job.phase = "complete";
   job.status = "complete";
   job.message = result.complete
@@ -2121,6 +2153,9 @@ async function runDaangnChunk(env, body = {}) {
   const job = await loadDaangnJob(env, daangnJobId(body));
   if (!job) throw new Error("이어갈 당근 수집 작업이 없습니다.");
   if (job.status !== "running") return { ok: true, job: publicDaangnJob(job) };
+  const validated = validateDaangnJobTrade(job, body.tradeType);
+  job.tradeType = validated.tradeType;
+  job.propertyFilter = validated.propertyFilter;
   const chunkStarted = Date.now();
   if (job.phase === "list") {
     const seen = new Set(job.ids || []);
@@ -2274,6 +2309,7 @@ async function executeExternalAction(env, body) {
   if (action === "danggeunPauseJob" || action === "danggeunResumeJob") {
     const job = await loadDaangnJob(env, daangnJobId(body));
     if (!job) return { ok: true, job: null };
+    if (action === "danggeunResumeJob") validateDaangnJobTrade(job, body.tradeType);
     job.status = action === "danggeunPauseJob" ? "paused" : "running";
     job.message = action === "danggeunPauseJob" ? "안전중단됨 · 저장 지점 보존" : "저장 지점부터 이어서 수집합니다.";
     await saveDaangnJob(env, job);
