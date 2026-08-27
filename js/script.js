@@ -4514,6 +4514,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           (!customerMatchControls && regDateLabel
             ? '<span class="item-reg-date item-reg-date-price-mobile-v652">등록 ' + escapeHtml(regDateLabel) + '</span>'
             : '') +
+          (saleCardV1 ? window.JSListingTradeV1.saleLandInfoHtml(item) : '') +
         '</div>' +
 
         '<div class="item-action-row item-compact-actions-v650' +

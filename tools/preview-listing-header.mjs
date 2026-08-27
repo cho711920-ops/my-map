@@ -45,7 +45,9 @@ createServer(async (request, response) => {
       const fixtures=[
         {name:'대원아르떼',address:'서구 월평동 893',type:'건물전체',room:'전체',salePrice:197000,saleCategory:'building',saleDetails:{scope:'whole_building',landAreaM2:204.96,grossAreaM2:409.59,totalDeposit:50000,monthlyIncome:695}},
         {name:'베스트',address:'유성구 어은동 111-4',type:'건물전체',room:'전체',salePrice:195000,saleCategory:'building',saleDetails:{scope:'whole_building',landAreaM2:225.45,grossAreaM2:410.91,totalDeposit:13300,monthlyIncome:1400}},
-        {name:'토지',address:'유성구 구암동 123-3',type:'토지',salePrice:213000,saleCategory:'land',saleDetails:{scope:'land',landAreaM2:2817}},
+        {name:'토지',address:'유성구 구암동 123-3',type:'토지',salePrice:213000,saleCategory:'land',saleSummary:{scope:'land',landAreaM2:2817,landUse:'창',zoning:'개발제한구역'}},
+        {name:'토지 정보 일부 미확인',address:'검수용 주소',type:'토지',salePrice:41000,saleCategory:'land',saleSummary:{scope:'land',landAreaM2:167,landUse:'대'}},
+        {name:'토지 긴 용도지역',address:'검수용 주소',type:'토지',salePrice:52000,saleCategory:'land',saleSummary:{scope:'land',landAreaM2:211,landUse:'종교용지',zoning:'제2종일반주거지역, 자연녹지지역 (일부 포함)'}},
         {name:'상가',address:'서구 둔산동 100',type:'상가',room:'101호',salePrice:45000,saleCategory:'commercial',saleDetails:{scope:'unit',exclusiveAreaM2:102.5}},
         {name:'기존 상가임대',address:'서구 탄방동 793',type:'일반상가',room:'1층',tradeType:'lease',deposit:1000,rent:40,fee:0,premium:0,area:10}
       ];

@@ -202,6 +202,11 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 .listing-sale-areas-v1 { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px; color: #25734d; font-size: 11px; }
 .listing-sale-areas-v1 > span { white-space: nowrap; }
 .listing-sale-areas-v1 i { font-style: normal; color: #9ba9b7; }
+.listing-land-info-v1 { display: flex; flex: 0 0 100%; flex-wrap: wrap; gap: 2px 12px; min-width: 0; padding: 3px 0 1px; color: #68798b; font-size: 11px; line-height: 1.5; white-space: normal; }
+.listing-sale-card-v1 .item-compact-price-v650 > .listing-land-info-v1 { flex: 0 0 100% !important; white-space: normal !important; }
+.listing-land-info-v1 > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.listing-land-info-v1 b { color: #334b64; font-weight: 700; }
+.listing-land-info-v1 .unavailable b { color: #8794a2; font-weight: 400; }
 .listing-sale-card-v1 .item-compact-price-v650.price-line { flex-wrap: wrap !important; height: auto !important; white-space: normal !important; }
 .listing-sale-card-v1 .item-price-values-v652 { flex-wrap: wrap !important; white-space: normal !important; overflow: visible !important; }
 .listing-sale-card-v1 .item-compact-main-v650 { grid-template-rows: minmax(28px, auto) minmax(30px, auto) minmax(30px, auto) !important; height: auto !important; max-height: none !important; }

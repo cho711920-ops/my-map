@@ -327,6 +327,13 @@ export function compactSaleSummary(original) {
     const parsed = Number(value);
     if (Number.isFinite(parsed) && parsed >= 0) summary[key] = parsed;
   }
+  if (detail.scope === "land" || original.saleCategory === "land") {
+    for (const key of ["landUse", "zoning"]) {
+      if (typeof detail[key] !== "string") continue;
+      const value = detail[key].trim().replace(/\s+/g, " ").slice(0, 160);
+      if (value) summary[key] = value;
+    }
+  }
   return summary;
 }
 

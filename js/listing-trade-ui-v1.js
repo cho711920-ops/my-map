@@ -151,7 +151,7 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield"];
+    var keys = ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield", "landUse", "zoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
@@ -191,6 +191,19 @@
     if (!land) html += '<i>·</i>' + area('연', detail.grossAreaM2, '연면적');
     if (!land && nonnegative(detail.exclusiveAreaM2) > 0) html += '<i>·</i>' + area('전용', detail.exclusiveAreaM2, '전용면적');
     return '<span class="listing-sale-areas-v1">' + html + '</span>';
+  }
+  function saleLandInfoHtml(item) {
+    if (!isSale(item)) return "";
+    var detail = saleSummary(item);
+    if (detail.scope !== "land" && normalizedSaleCategory(item) !== "land") return "";
+    function field(label, value) {
+      var text = typeof value === "string" ? clean(value) : "";
+      if (/^(?:-|—|미확인|확인 필요)$/.test(text)) text = "";
+      return '<span' + (text ? '' : ' class="unavailable"') + '>' + label +
+        ' <b>' + escapeHtml(text || '미확인') + '</b></span>';
+    }
+    return '<span class="listing-land-info-v1">' + field('지목', detail.landUse) + ' ' +
+      field('용도지역', detail.zoning) + '</span>';
   }
   function saleDetailsHtml(item) {
     if (!isSale(item) || !item.saleDetails) return "";
@@ -263,6 +276,7 @@
     saleYield: saleYield,
     saleYieldBadge: saleYieldBadge,
     saleAreaHtml: saleAreaHtml,
+    saleLandInfoHtml: saleLandInfoHtml,
     isSale: isSale
   };
 
