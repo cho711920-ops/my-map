@@ -141,7 +141,22 @@
       '<div class="review"><b>' + number(result.review).toLocaleString("ko-KR") + '</b><small>검증</small></div>' +
       '<div><b>' + number(result.duplicate).toLocaleString("ko-KR") + '</b><small>중복</small></div>' +
       '<div class="fail"><b>' + number(result.failed).toLocaleString("ko-KR") + '</b><small>실패</small></div>' +
+      '<div class="fail"><b>' + number(result.requiredFieldRejected).toLocaleString("ko-KR") + '</b><small>필수정보 제외</small></div>' +
     '</div>';
+  }
+
+  function collectionDiagnosticsHtml(result) {
+    result = result || {};
+    var count = number(result.failed) + number(result.requiredFieldRejected);
+    var rows = Array.isArray(result.diagnostics) ? result.diagnostics.slice(0, 200) : [];
+    if (!count && !rows.length) return "";
+    return '<details class="collection-diagnostics"><summary>제외/실패 ' + count + '건 · 번호와 사유 보기</summary>' +
+      '<p>수집은 종료됐지만 아래 항목은 정상 저장되지 않았습니다. 검증대기는 별도로 매물검증에서 확인합니다.</p>' +
+      '<div style="max-height:220px;overflow:auto;overflow-wrap:anywhere">' +
+      (rows.length ? rows.map(function (row) {
+        return '<p>' + escape(row.stage) + ' · 매물번호 ' + escape(row.sourceId || '확인 불가') + ' · ' + escape(row.message) + '</p>';
+      }).join('') : '<p>이전 수집기는 개별 사유를 저장하지 않았습니다. 재수집 시 기록됩니다.</p>') +
+      (count > rows.length && rows.length ? '<p>개별 내역 최대 200건 표시. 이전 수집기의 미기록 사유가 있을 수 있습니다.</p>' : '') + '</div></details>';
   }
 
   function renderCollections() {
@@ -162,7 +177,7 @@
           '<br>완전수집 ' + (source.complete ? "Y" : "N") +
           (source.collectorVersion ? ' · v' + escape(source.collectorVersion) : '') +
           (source.completionIssues && source.completionIssues.length ? '<br>확인: ' + escape(source.completionIssues.join(', ')) : '') +
-          '</p>' + resultCells(source.lastResult) + '</article>';
+          '</p>' + resultCells(source.lastResult) + collectionDiagnosticsHtml(source.lastResult) + '</article>';
       }).join("") + '</div>' +
       '<div class="collection-toolbar"><div><strong>수집원본 최신상태</strong><span>전체 ' + number(raw.total).toLocaleString("ko-KR") +
       '건 · 처리대기 ' + number(raw.pending).toLocaleString("ko-KR") + '건 · 오류 ' + number(raw.error).toLocaleString("ko-KR") +
@@ -173,7 +188,8 @@
           '</td><td class="' + (row.complete ? "ok" : "warn") + '">' + (row.complete ? "Y" : "N") +
           '</td><td>' + number(row.found) + '</td><td>' + number(row.created) + '</td><td>' +
           (number(row.merged) + number(row.updated)) + '</td><td>' + number(row.review) + '</td><td>' +
-          number(row.duplicate) + '</td><td>' + number(row.failed) + '</td><td>' + escape(row.status) + '</td></tr>';
+          number(row.duplicate) + '</td><td>' + number(row.failed) + '</td><td>' + escape(row.status) + '</td></tr>' +
+          (number(row.failed) + number(row.requiredFieldRejected) > 0 ? '<tr><td colspan="11">' + collectionDiagnosticsHtml(row) + '</td></tr>' : '');
       }).join("") + '</tbody></table></div></div>';
   }
 

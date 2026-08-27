@@ -12,6 +12,6 @@ assert.match(source, /mergeSingleCandidateReviews/);
 assert.match(source, /대표매물의 주소·가격·면적·대표사진은 변경하지 않았습니다/);
 assert.match(source, /자동분류 정리 진행 중/);
 assert.match(source, /남은 자동검사/);
-assert.match(html, /7\.25\.8-shared-data-only/);
+assert.match(html, /7\.25\.9-collection-diagnostics/);
 
 console.log("review classification progress UI: ok");

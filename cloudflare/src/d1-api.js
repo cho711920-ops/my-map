@@ -321,7 +321,7 @@ export function compactSaleSummary(original) {
   const detail = original.saleDetails;
   const summary = {};
   if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
-  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome"]) {
+  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield"]) {
     const value = detail[key];
     if (value == null || clean(value) === "" || typeof value === "boolean") continue;
     const parsed = Number(value);

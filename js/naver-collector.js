@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.2";
+  var VERSION = "6.0.3";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2485,6 +2485,16 @@
     throw lastError || new Error("네이버 상세조회 실패");
   }
 
+  function finSaleDescription(result, fallback) {
+    var raw = result || {};
+    var detail = raw.detailInfo || raw;
+    var info = detail.articleDetailInfo || raw.articleDetailInfo || {};
+    return [fallback, detail.description, detail.articleDescription, detail.articleFeatureDescription,
+      info.description, info.articleDescription, info.articleFeatureDescription, info.articleDesc]
+      .filter(function(value, index, values) { return typeof value === "string" && value.trim() && values.indexOf(value) === index; })
+      .join("\n").slice(0, 12000);
+  }
+
   async function enrichNaverDetail(item) {
     var articleNumber = clean(item && item.articleNo);
     if (!articleNumber) return {item: item, valid: false, reason: "매물번호 없음"};
@@ -2535,6 +2545,7 @@
       roomInfo: finDetailRoom(detailResult, item.roomInfo),
       areaSquareMeter: finDetailArea(detailResult, item.areaSquareMeter),
       saleRaw: tradeType === "A1" ? detailResult : undefined,
+      description: tradeType === "A1" ? finSaleDescription(detailResult, item.description) : item.description,
       salePrice: tradeType === "A1" ? clean(finKrwToManwon(
         (detailResult.priceInfo || (detailResult.detailInfo || {}).priceInfo || {}).dealPrice)) || item.salePrice : "",
       primaryImage: mergedImages[0] || item.primaryImage || "",

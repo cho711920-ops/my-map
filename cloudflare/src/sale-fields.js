@@ -1,5 +1,6 @@
 // Provider fields are retained separately: land is not exclusive floor area,
 // total rent is not the monthly offer, and building use is not listing type.
+import { saleDescriptionFields, naverSaleDescription, supplementSaleDescription } from "./sale-description.js";
 const clean = (value) => String(value ?? "").trim();
 const numeric = (value) => {
   if (value == null || clean(value) === "") return null;
@@ -85,7 +86,8 @@ export function naverSaleFields(item = {}) {
   const price = detail.priceInfo || original.priceInfo || {};
   const saleCategory = saleCategoryFromLabel(item.saleCategory || item.category || item.realEstateTypeCode);
   const wholeBuilding = ["multifamily", "house", "mixed_house", "building"].includes(saleCategory);
-  return {
+  const descriptionText = naverSaleDescription(item);
+  return supplementSaleDescription({
     sourceType: clean(item.category || item.realEstateTypeCode),
     scope: saleCategory === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
     landAreaM2: positive(space.landSpace), grossAreaM2: positive(space.floorSpace),
@@ -95,19 +97,29 @@ export function naverSaleFields(item = {}) {
     // fin API money is won, unlike the normalized collector's manwon fields.
     totalDeposit: numeric(price.warrantyPrice) == null ? null : numeric(price.warrantyPrice) / 10000,
     monthlyIncome: numeric(price.rentPrice) == null ? null : numeric(price.rentPrice) / 10000
-  };
+  }, saleDescriptionFields(descriptionText), positive(item.salePrice, item.sale_price) ?? (positive(price.dealPrice) || 0) / 10000, descriptionText);
 }
 
 export function daangnSaleFields(article = {}, category = "other") {
-  return {
+  const described = saleDescriptionFields(article.content);
+  const wholeBuilding = Boolean(article.isEntireBuilding) ||
+    ["other", "one_room", "villa"].includes(category) && described.wholeMultifamily;
+  const price = positive((article.trades || []).find(t => /BUY/i.test(t.type || t.__typename || ""))?.price);
+  const detail = {
     sourceType: clean(article.salesTypeV3?.type || article.salesTypeV3?.__typename),
-    scope: category === "land" ? "land" : article.isEntireBuilding ? "whole_building" : "unit",
+    scope: category === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
     landAreaM2: positive(article.landArea, category === "land" ? article.area : null),
-    grossAreaM2: positive(article.grossArea, article.isEntireBuilding ? article.area : null),
-    exclusiveAreaM2: article.isEntireBuilding || category === "land" ? null : positive(article.area),
+    grossAreaM2: positive(article.grossArea) ?? (article.isEntireBuilding ? positive(article.area) : null),
+    exclusiveAreaM2: wholeBuilding || category === "land" ? null : positive(article.area),
     roomCount: present(article.roomCount), bathroomCount: present(article.bathroomCount),
     maintenanceFee: present(article.totalManageCost),
     buildingUse: clean(article.buildingUse), approvalDate: clean(article.approvalDate),
-    totalFloors: present(article.topFloor)
+    totalFloors: present(article.topFloor) ?? described.totalFloors,
+    householdCount: null,
+    descriptionCategory: wholeBuilding && described.wholeMultifamily && ["other", "one_room", "villa"].includes(category) ? "multifamily" : "",
+    descriptionEvidence: described.descriptionEvidence,
+    descriptionWarnings: described.descriptionWarnings,
+    descriptionVersion: 1
   };
+  return supplementSaleDescription(detail, described, price, String(article.content || "").slice(0, 12000));
 }

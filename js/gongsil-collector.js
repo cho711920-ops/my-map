@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.1";
+  var VERSION = "2.2.2";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -250,6 +250,8 @@
           '<div class="jsg-progress"><i data-role="progress-bar"></i></div>' +
           '<div class="jsg-detail" data-role="detail"></div>' +
         '</div>' +
+        '<details class="jsg-card" data-role="diagnostics" hidden><summary>제외·실패 내역</summary>' +
+          '<pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font:12px/1.5 sans-serif"></pre></details>' +
         '<div class="jsg-card jsg-grid">' +
           '<div class="jsg-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsg-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
@@ -551,7 +553,7 @@
     if (
       state.pendingSave &&
       Array.isArray(state.pendingSave.records) &&
-      state.pendingSave.records.length
+      (state.pendingSave.records.length || state.pendingSave.metadata && state.pendingSave.metadata.manifestRegistered)
     ) {
       await resumePendingSave();
       return;
@@ -562,6 +564,7 @@
     }
 
     state.busy = true;
+    panel.querySelector('[data-role="diagnostics"]').hidden = true;
     beginCollectorRun();
     saveButton.disabled = true;
     state.dashboard = createEmptyDashboard();
@@ -621,7 +624,7 @@
         manifestCount: items.length,
         rejectedCount: 0,
         listFailedCount: listFailures.length,
-        listFailureReasons: listFailures.slice(0, 20),
+        listFailureReasons: listFailures.slice(0, 200),
         mixedTradeTypes: mixedTradeTypes,
         observedSourceIds: observedSourceIds(items),
         manifestRegistered: true
@@ -723,7 +726,8 @@
         window.clearInterval(detailWaitTimer);
       }
 
-      queueResult.forEach(function (result) {
+      saveMetadata.rejectedDetails = [];
+      queueResult.forEach(function (result, index) {
         if (result && result.ok) {
           transformed.push(result.record);
           if (Array.isArray(result.warnings) && result.warnings.length) {
@@ -733,6 +737,10 @@
         else if (result && result.stopped) return;
         else {
           rejected.push(result && result.reason ? result.reason : "변환 실패");
+          saveMetadata.rejectedDetails.push({
+            sourceId: recordSourceId(detailItems[index]), stage: "필수정보",
+            message: result && result.reason ? result.reason : "변환 실패"
+          });
           if (result && result.rejectType === "address") addressMissingCount += 1;
         }
       });
@@ -752,11 +760,7 @@
         );
         return;
       }
-      if (!transformed.length && detailItems.length) {
-        throw new Error(
-          "저장 가능한 매물이 없습니다.\n" + rejectedSummary(rejected)
-        );
-      }
+      // Even an all-excluded run must persist its terminal result and reasons.
 
       setStatus(
         "JS부동산 매물현황으로 전송 중입니다.",
@@ -836,7 +840,7 @@
       setProgress(totalItemCount, totalItemCount);
 
       setStatus(
-        result.stopped ? "공실박스 안전중단 완료" : rejected.length || result.failed ? "처리 완료 · 제외/실패 내역 확인" : "저장 완료",
+        gongsilCompletionTitle(result, rejected.length),
         message + (result.stopped
           ? "\n이미 저장된 묶음은 유지되며 완전수집 판정은 실행하지 않았습니다."
           : "") + (rejected.length
@@ -846,11 +850,12 @@
               rejectedSummary(contactDeferred)
             : "")
       );
+      showGongsilDiagnostics(saveMetadata, result);
       if (result.stopped) {
         saveButton.textContent = "저장 중단 지점부터 이어가기";
       } else {
         state.pendingSave = null;
-        saveButton.textContent = "저장 완료 · 다시 수집 가능";
+        saveButton.textContent = "수집 완료 · 다시 수집 가능";
       }
     } catch (error) {
       console.error("[JS 공실박스] 수집 오류", error);
@@ -881,7 +886,7 @@
       state.busy ||
       !pending ||
       !Array.isArray(pending.records) ||
-      !pending.records.length
+      (!pending.records.length && !(pending.metadata && pending.metadata.manifestRegistered))
     ) {
       return;
     }
@@ -890,7 +895,7 @@
     beginCollectorRun();
     saveButton.disabled = true;
 
-    var savedProgress = getSavedProgressForRecords(pending.records);
+    var savedProgress = pending.records.length ? getSavedProgressForRecords(pending.records) : null;
     var savedOffset = savedProgress
       ? Math.max(
         0,
@@ -994,7 +999,7 @@
       });
       setProgress(itemsLength, itemsLength);
       setStatus(
-        result.stopped ? "공실박스 안전중단 완료" : rejected.length || result.failed ? "처리 완료 · 제외/실패 내역 확인" : "저장 완료",
+        gongsilCompletionTitle(result, rejected.length),
         message + (result.stopped
           ? "\n이미 저장된 묶음은 유지되며 완전수집 판정은 실행하지 않았습니다."
           : "") + (rejected.length
@@ -1003,11 +1008,12 @@
             : "")
       );
 
+      showGongsilDiagnostics(pending.metadata, result);
       if (result.stopped) {
         saveButton.textContent = "저장 중단 지점부터 이어가기";
       } else {
         state.pendingSave = null;
-        saveButton.textContent = "저장 완료 · 다시 수집 가능";
+        saveButton.textContent = "수집 완료 · 다시 수집 가능";
       }
     } catch (error) {
       console.error("[JS 공실박스] 저장 이어가기 오류", error);
@@ -2262,13 +2268,20 @@
       failed: 0
     };
     var signature = collectionSignature(records);
-    var savedProgress = getSavedProgressForRecords(records);
+    // Empty filtered runs all share one signature; never borrow an old session.
+    var savedProgress = records.length ? getSavedProgressForRecords(records) : null;
     if (savedProgress && savedProgress.sessionId) {
       metadata.sessionId = savedProgress.sessionId;
       metadata.scope = savedProgress.scope || metadata.scope;
       if (Array.isArray(savedProgress.saveFailureReasons)) {
-        saveFailureReasons = savedProgress.saveFailureReasons.slice(-20);
+        saveFailureReasons = savedProgress.saveFailureReasons.slice(-200);
         metadata.saveFailureReasons = saveFailureReasons;
+      }
+      if (!metadata.rejectedDetails && Array.isArray(savedProgress.rejectedDetails)) {
+        metadata.rejectedDetails = savedProgress.rejectedDetails;
+      }
+      if (!metadata.listFailureReasons && Array.isArray(savedProgress.listFailureReasons)) {
+        metadata.listFailureReasons = savedProgress.listFailureReasons;
       }
     }
     if (!metadata.sessionId) metadata.sessionId = createCollectionSessionId();
@@ -2362,7 +2375,7 @@
           sourceId: recordSignatureId(batch[0]),
           message: firstBatchError || "D1 저장 실패"
         });
-        saveFailureReasons = saveFailureReasons.slice(-20);
+        saveFailureReasons = saveFailureReasons.slice(-200);
         metadata.saveFailureReasons = saveFailureReasons;
         offset += batch.length;
         try {
@@ -2374,6 +2387,8 @@
             batchIndex: batchIndex,
             totals: totals,
             saveFailureReasons: saveFailureReasons,
+            rejectedDetails: (metadata.rejectedDetails || []).slice(0, 200),
+            listFailureReasons: (metadata.listFailureReasons || []).slice(0, 200),
             updatedAt: new Date().toISOString()
           }));
         } catch (_) {}
@@ -2428,6 +2443,8 @@
           batchIndex: batchIndex,
           totals: totals,
           saveFailureReasons: saveFailureReasons,
+          rejectedDetails: (metadata.rejectedDetails || []).slice(0, 200),
+          listFailureReasons: (metadata.listFailureReasons || []).slice(0, 200),
           updatedAt: new Date().toISOString()
         }));
       } catch (_) {}
@@ -2818,6 +2835,7 @@
         ? metadata.warningCounts
         : {},
       detailAuthWarning: text(metadata.detailAuthWarning),
+      diagnostics: gongsilDiagnostics(metadata),
       truncated: Boolean(metadata.truncated),
       note: stopped
         ? "사용자 안전중단 · 저장된 묶음 보존"
@@ -3041,6 +3059,43 @@
       .slice(0, 3)
       .map(function (reason) { return "- " + reason + " " + counts[reason] + "개"; });
     return entries.length ? entries.join("\n") : "- 원인을 확인하지 못했습니다.";
+  }
+
+  function gongsilCompletionTitle(result, rejectedCount) {
+    if (result.stopped) return "공실박스 안전중단 완료";
+    var missing = Number(rejectedCount || 0) + Number(result.failed || 0);
+    return missing ? "수집 완료 · 제외/실패 " + missing + "건" : "수집·저장 완료";
+  }
+
+  function gongsilDiagnostics(metadata) {
+    metadata = metadata || {};
+    var rows = [];
+    [["listFailureReasons", "목록조회"], ["rejectedDetails", "필수정보"], ["saveFailureReasons", "저장"]].forEach(function (entry) {
+      (Array.isArray(metadata[entry[0]]) ? metadata[entry[0]] : []).slice(0, 200).forEach(function (item) {
+        rows.push({ stage: entry[1], sourceId: String(item.sourceId || ""), message: String(item.message || "사유 미기록")
+          .replace(/https?:\/\/[^\s]+/gi, "[요청주소]")
+          .replace(/(?:bearer\s+\S+|(?:token|password|collectorKey|authorization)\s*[:=]\s*\S+)/gi, "[인증정보]")
+          .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, "[이메일]")
+          .replace(/\b0\d{1,2}[- .]?\d{3,4}[- .]?\d{4}\b/g, "[연락처]")
+          .replace(/[\r\n\t]+/g, " ").slice(0, 240) });
+      });
+    });
+    return rows.slice(0, 200);
+  }
+
+  function showGongsilDiagnostics(metadata, result) {
+    var details = panel.querySelector('[data-role="diagnostics"]');
+    var rows = gongsilDiagnostics(metadata);
+    var missing = Number(metadata.rejectedCount || 0) + Number(result.failed || 0);
+    details.hidden = false;
+    details.open = missing > 0;
+    details.querySelector("summary").textContent = missing ? "제외/실패 " + missing + "건 · 번호와 사유 보기" : "수집 완료 내역 보기";
+    details.querySelector("pre").textContent = "100%는 처리가 끝났다는 뜻입니다.\n검증대기 " + Number(result.review || 0) +
+      "건은 매물검증에서 확인합니다.\n제외/실패 매물은 저장 완료 건수에 포함되지 않습니다.\n" +
+      (rows.length ? rows.map(function (row) { return row.stage + " · 매물번호 " + (row.sourceId || "확인 불가") + " · " + row.message; }).join("\n") :
+        missing ? "이전 수집기는 개별 사유를 저장하지 않았습니다. 재수집 시 기록됩니다." : "제외·실패 없음") +
+      (missing > rows.length && rows.length ? "\n개별 사유는 최대 200건까지 표시하며, 일부 사유는 이전 수집기에 기록되지 않았을 수 있습니다." : "") +
+      "\n운영현황 → 수집현황에서도 결과를 확인할 수 있습니다.";
   }
 
   function getTradeTerms(item) {

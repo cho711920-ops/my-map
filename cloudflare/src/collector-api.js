@@ -1,6 +1,7 @@
 import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./floor.js";
 import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
+import { collectorDiagnostics } from "./collector-diagnostics.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
 import {
@@ -298,7 +299,7 @@ function naverRecord(item) {
   const sourceId = sourceIdFor("네이버", item?.articleNo || item?.articleNumber || item?.sourceId);
   const images = uniqueUrls(item?.imageUrls || item?.images || []);
   if (clean(item?.primaryImage) && !images.includes(clean(item.primaryImage))) images.unshift(clean(item.primaryImage));
-  const saleDetails = naverSaleFields(item);
+  const saleDetails = scrubExternalContactData(naverSaleFields(item));
   const tradeType = collectorTradeType(item?.tradeType || item?.tradeTypeCode || item?.trade_type, true);
   const squareMeters = tradeType === "sale" && saleDetails.scope === "land" ? saleDetails.landAreaM2
     : tradeType === "sale" && saleDetails.scope === "whole_building" ? saleDetails.grossAreaM2
@@ -388,7 +389,7 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
   const tradeType = clean(trade.type || trade.__typename).toUpperCase();
   const salesType = clean(article?.salesTypeV3?.type || article?.salesTypeV3?.__typename).toUpperCase();
   const typedCategory = saleCategoryFromLabel(salesType);
-  const category = /BUY/.test(tradeType) ? SALE_CATEGORY_LABELS[typedCategory]
+  let category = /BUY/.test(tradeType) ? SALE_CATEGORY_LABELS[typedCategory]
     : /OFFICE/.test(salesType) ? "사무실" : /FACTORY|WAREHOUSE/.test(salesType) ? "공장/창고" : "상가점포";
   const providerBuildingName = clean(article?.buildingName || article?.complex?.name);
   const addressLikeBuildingName = /(?:로|길)\s*\d+(?:-\d+)?(?:\s|$)/.test(providerBuildingName);
@@ -433,9 +434,14 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
   let canonicalTradeType = /BUY/.test(tradeType) ? LISTING_TRADE_TYPES.SALE
     : /MONTH/.test(tradeType) ? LISTING_TRADE_TYPES.LEASE : "";
   if (requested && canonicalTradeType !== requested) canonicalTradeType = "";
-  const saleCategory = canonicalTradeType === LISTING_TRADE_TYPES.SALE
+  let saleCategory = canonicalTradeType === LISTING_TRADE_TYPES.SALE
     ? collectorSaleCategory(article?.saleCategory, salesType)
     : "";
+  const saleDetails = canonicalTradeType === "sale" ? scrubExternalContactData(daangnSaleFields(article, saleCategory)) : undefined;
+  if (saleDetails?.descriptionCategory) {
+    saleCategory = saleDetails.descriptionCategory;
+    category = SALE_CATEGORY_LABELS[saleCategory];
+  }
   return {
     source: "당근", sourceId,
     buildingName: providerBuildingName && !addressLikeBuildingName
@@ -443,15 +449,16 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
       : category === "상가점포" ? "일반상가" : category,
     address: daangnAddress(article),
     roadAddress,
-    room: saleCategory === "land" ? "" : daangnRoom(article),
+    room: saleCategory === "land" ? "" : saleDetails?.scope === "whole_building" ? "전체" : daangnRoom(article),
     category, tradeType: canonicalTradeType, saleCategory,
     salePrice: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? number(trade?.price) : null,
-    saleDetails: canonicalTradeType === "sale" ? daangnSaleFields(article, saleCategory) : undefined,
+    saleDetails,
     deposit: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(trade?.deposit ?? trade?.price),
     rent: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
     fee: canonicalTradeType === "sale" ? number(article?.totalManageCost) : number(article?.totalManageCost) || 0,
     premium: number(article?.premiumMoney) || 0,
-    area: areaM2 && areaM2 > 0 ? Math.floor((areaM2 / 3.305785) * 10 + 0.0000001) / 10 : null,
+    area: saleDetails?.scope === "whole_building" ? (saleDetails.grossAreaM2 > 0 ? Math.round(saleDetails.grossAreaM2 / 3.305785 * 10) / 10 : null)
+      : areaM2 && areaM2 > 0 ? Math.floor((areaM2 / 3.305785) * 10 + 0.0000001) / 10 : null,
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
     link: sourceId ? `https://realty.daangn.com/?article_id=%22${encodeURIComponent(sourceId)}%22&panel_stack=article` : "",
     listSnapshot: stripExternalPhoneNumbers(listSnapshot), images, contacts: [],
@@ -585,13 +592,17 @@ function manifestMaterialMatches(entry, row) {
   return true;
 }
 
-export function manifestEntryMatch(entry, row) {
+export function manifestEntryMatch(entry, row, source = "") {
   if (!row) return "";
   const incomingHash = snapshotKey(entry.listSnapshot || entry);
   const savedHash = clean(row.snapshot_hash).toLowerCase();
   // Sale metadata (land/gross areas, total tenancy income, type) is material.
   // The old lease-only fuzzy shortcut must not discard a changed sale snapshot.
   if (collectorTradeType(entry.tradeType || entry.trade_type, true) === "sale") {
+    // Refresh existing sale details once after the description parser upgrade.
+    // Rental schedules and Gongsil contact refresh rules are unchanged.
+    if (["네이버", "당근"].includes(source) &&
+        Number(row.sale_description_version || parseJson(row.list_snapshot_json, {}).saleDetails?.descriptionVersion || 0) < 1) return "";
     return savedHash === incomingHash && collectorTradeType(row.trade_type || parseJson(row.list_snapshot_json, {}).tradeType, true) === "sale"
       ? "hash" : "";
   }
@@ -690,6 +701,9 @@ async function classifyManifest(env, body) {
       const rawResult = await env.DB.prepare(`WITH ranked AS (
           SELECT source_listing_id, snapshot_hash, trade_type, sale_category, sale_price,
             json_extract(payload_json, '$.listSnapshot') AS list_snapshot_json,
+            COALESCE(json_extract(payload_json, '$.saleDetails.descriptionVersion'),
+              json_extract(payload_json, '$.record.saleDetails.descriptionVersion'),
+              json_extract(payload_json, '$.saleDescriptionVersion'), 0) AS sale_description_version,
             COALESCE(json_extract(payload_json, '$.record.deposit'), json_extract(payload_json, '$.deposit')) AS saved_deposit,
             COALESCE(json_extract(payload_json, '$.record.rent'), json_extract(payload_json, '$.rent')) AS saved_rent,
             COALESCE(json_extract(payload_json, '$.record.area'), json_extract(payload_json, '$.area')) AS saved_area,
@@ -702,7 +716,7 @@ async function classifyManifest(env, body) {
         )
         SELECT source_listing_id, snapshot_hash, list_snapshot_json, trade_type, sale_category, sale_price, last_collected_at,
           '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude,
-          saved_deposit, saved_rent, saved_area, saved_room, saved_address
+          saved_deposit, saved_rent, saved_area, saved_room, saved_address, sale_description_version
         FROM ranked WHERE row_number=1`).bind(source, ...unresolvedIds).all();
       for (const row of rawResult?.results || []) {
         const id = clean(row.source_listing_id);
@@ -732,7 +746,7 @@ async function classifyManifest(env, body) {
     if (!row) {
       unknown += 1;
       needsDetail.push(entry.sourceId);
-    } else if (manifestEntryMatch(entry, row)) {
+    } else if (manifestEntryMatch(entry, row, source)) {
       unchanged += 1;
       if (!/^fnv1a-[0-9a-f]{8}$/i.test(clean(row.snapshot_hash)) &&
           clean(entry.listSnapshot) && clean(row.id)) {
@@ -1468,7 +1482,8 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
     deposit: record.deposit, rent: record.rent, fee: record.fee, premium: record.premium,
     area: record.area, link: record.link, listSnapshot: record.listSnapshot,
     latitude: record.latitude, longitude: record.longitude,
-    tradeType: record.tradeType, saleCategory: record.saleCategory, salePrice: record.salePrice
+    tradeType: record.tradeType, saleCategory: record.saleCategory, salePrice: record.salePrice,
+    saleDescriptionVersion: Number(record.saleDetails?.descriptionVersion || 0)
   };
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json,
@@ -1852,6 +1867,10 @@ async function finalizeSession(env, body) {
     audit.requiredFieldRejected
   );
   totals.contactDeferred = Math.max(Number(totals.contactDeferred || 0), audit.contactDeferred);
+  if (Array.isArray(body.diagnostics)) {
+    totals.diagnostics = collectorDiagnostics(body.diagnostics);
+    totals.diagnosticsVersion = 1;
+  }
   totals.warningCounts = Object.fromEntries(
     Object.entries(body?.warningCounts && typeof body.warningCounts === "object" ? body.warningCounts : {})
       .slice(0, 20)
@@ -2467,7 +2486,7 @@ async function collectionStatus(env) {
     const count = sourceCounts.get(name) || {};
     return {
       source: name, total: Number(count.total || 0), active: Number(count.active || 0), inactive: Number(count.inactive || 0),
-      lastStatus: row?.state === "completed" ? "완전수집 완료" : row?.state === "paused" ? "안전중단" : row?.state === "partial" ? "부분수집" : row ? "수집 중" : "수집 전",
+      lastStatus: row?.state === "completed" ? "완전수집 완료" : row?.state === "paused" ? "안전중단" : row?.state === "partial" ? "수집 종료 · 부분결과 확인" : row ? "수집 중" : "수집 전",
       lastAt: row?.finished_at || row?.updated_at || "", lastScope: clean(totals.note) || clean(totals.scope),
       complete: row?.state === "completed" && totals.completionValidated !== false,
       collectorVersion: clean(totals.collectorVersion), completionIssues: Array.isArray(totals.completionIssues) ? totals.completionIssues : [],

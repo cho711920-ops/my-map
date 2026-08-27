@@ -151,7 +151,7 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome"];
+    var keys = ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
@@ -171,6 +171,8 @@
   function saleYieldBadge(item) {
     if (!isSale(item)) return "";
     var rate = saleYield(item);
+    var advertised = nonnegative(saleSummary(item).advertisedYield);
+    if (rate == null && advertised != null) return '<span class="pyeong-mini-badge listing-sale-yield-v1" title="광고 설명에 기재된 연 수익률입니다. 대출·이자 반영 등 계산 기준은 상세정보에서 확인하세요. 웹의 단순 연 수익률과 다릅니다.">광고 연 ' + advertised.toFixed(2) + '%</span>';
     return '<span class="pyeong-mini-badge listing-sale-yield-v1' + (rate == null ? ' unavailable' : '') +
       '" title="' + escapeHtml(yieldExplanation) + '" aria-label="' +
       escapeHtml(rate == null ? '수익률 확인 필요: 매매가·임대보증금·월수입 확인 필요' : '보증금 차감 기준 단순 연 수익률 ' + rate.toFixed(2) + '%') +
@@ -213,16 +215,35 @@
     area("전용면적", detail.exclusiveAreaM2);
     add("기존 보증금 합계", detail.totalDeposit, "만원");
     add("기존 월 임대수입", detail.monthlyIncome, "만원");
+    add("광고 융자금", detail.loanAmount, "만원");
+    add("광고 월수익 (이자 차감 표기)", detail.monthlyNetIncome, "만원");
+    add("광고 월수익 (계산 기준 미확인)", detail.statedMonthlyIncome, "만원");
+    add("광고 실투자금", detail.investmentAmount, "만원");
+    add("광고 기재 연 수익률", detail.advertisedYield, "% (광고 기준)");
     var rate = saleYield(item);
     add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
     add("지상층수", detail.aboveGroundFloors, "층");
     add("지하층수", detail.belowGroundFloors, "층");
+    add("총층수", detail.totalFloors, "층");
+    add(detail.descriptionVersion ? "세대수 (설명 기준)" : "세대수", detail.householdCount, "세대");
+    if (detail.descriptionCategory) add("분류 보완", "설명의 대지·연면적·전체층수·세대구성을 근거로 다가구 전체로 분류 (원본 분류: " + detail.sourceType + ")");
+    (detail.descriptionWarnings || []).forEach(function(warning) { add("확인 필요", warning); });
+    var advertised = detail.descriptionFinancials || {};
+    var financialLabels = { salePrice: "매매가", loanAmount: "융자", totalDeposit: "보증금", monthlyIncome: "월 임대수입",
+      monthlyNetIncome: "이자 차감 월수익", statedMonthlyIncome: "월수익 (기준 미확인)", investmentAmount: "실투자금", advertisedYield: "연 수익률" };
+    Object.keys(financialLabels).forEach(function(key) {
+      var current = key === "salePrice" ? item.salePrice : detail[key];
+      if (advertised[key] != null && (current == null || Number(current) !== Number(advertised[key])))
+        add("설명 기재 " + financialLabels[key], advertised[key], key === "advertisedYield" ? "% (계산 미적용)" : "만원 (계산 미적용)");
+    });
     add("방 수", detail.roomCount, "개"); add("욕실 수", detail.bathroomCount, "개");
     add("지목", detail.landUse); add("용도지역", detail.zoning);
     add("도로접면", detail.roadAccess); add("건축물 용도", detail.buildingUse);
     add("사용승인일", detail.approvalDate);
     return rows.length ? '<dl class="listing-sale-details-v1">' + rows.join("") +
-      '</dl><p class="listing-sale-yield-note-v1">' + escapeHtml(yieldExplanation) + '</p>' : "";
+      '</dl><p class="listing-sale-yield-note-v1">' + escapeHtml(yieldExplanation) +
+      (detail.descriptionVersion ? '<br>설명에서 추출한 조건은 광고 기재값입니다. 이자 차감 월수익은 월 임대수입으로 사용하지 않습니다.' : '') + '</p>' +
+      (detail.descriptionText ? '<details class="listing-sale-description-v1"><summary>수집된 매매 상세설명 전체 보기</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">' + escape(detail.descriptionText) + '</div></details>' : '') : "";
   }
   function getMode() { return currentMode; }
   function isSale(item) { return normalizedTradeType(item) === "sale"; }
