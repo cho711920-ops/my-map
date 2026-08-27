@@ -36,7 +36,7 @@ test("every representative-writing and master-moving path uses confirmation pres
 
   assert.match(collector, /SELECT main_source, operating_memo, status FROM listings/);
   assert.match(collector, /preserveConfirmedVisitMemo\(currentListing\?\.operating_memo, record\.memo\)/);
-  assert.equal((collector.match(/record\.area, representativeMemo, record\.link/g) || []).length, 2);
+  assert.equal((collector.match(/record\.area, representativeMemo/g) || []).length, 2);
   assert.match(collector, /carryConfirmedVisitMemo\(primaryMemo, duplicate\.operating_memo\)/);
   assert.match(d1, /carryConfirmedVisitMemo\(original\.memo, parent\?\.operating_memo\)/);
   assert.match(d1, /carryConfirmedVisitMemo\(target\.operating_memo, source\.operating_memo\)/);

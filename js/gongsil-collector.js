@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.1.7";
+  var VERSION = "2.2.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -290,6 +290,7 @@
       return;
     }
     var selectedCount = getSelectedItemCount(state.capture);
+    var tradeType = detectTradeType();
     var requestId = "gongsil-register-" + Date.now();
     var onResult = function (event) {
       if (!event.data || event.data.type !== "JS_COLLECTOR_REGISTER_RESULT" || event.data.requestId !== requestId) return;
@@ -302,11 +303,12 @@
       requestId: requestId,
       target: {
         source: "gongsil",
-        key: "gongsil-screen-" + location.pathname + location.search,
-        label: "공실박스 현재화면 전체클러스터",
+        key: "gongsil-" + tradeType + "-screen-" + location.pathname + location.search,
+        label: "공실박스 " + (tradeType === "sale" ? "매매" : "상가임대") + " 현재화면 전체클러스터",
         url: location.href,
         selectedCount: selectedCount,
-        mode: "screen-largest-cluster"
+        mode: "screen-largest-cluster",
+        tradeType: tradeType
       }
     }, "*");
   }
@@ -340,7 +342,7 @@
     return candidates[0].count;
   }
 
-  async function runAutomatic() {
+  async function runAutomatic(target) {
     panel.style.display = "block";
     state.capture = null;
     state.stopRequested = false;
@@ -360,7 +362,18 @@
     if (selectedCount >= 2000 && Number(state.dashboard.processed || 0) < selectedCount) {
       throw new Error("공실박스 화면 전체 건수와 실제 처리 건수가 일치하지 않습니다.");
     }
-    return {source: "gongsil", selectedCount: selectedCount, version: VERSION, totals: Object.assign({}, state.dashboard)};
+    return {source: "gongsil", tradeType: target && target.tradeType || detectTradeType(),
+      selectedCount: selectedCount, version: VERSION, totals: Object.assign({}, state.dashboard)};
+  }
+
+  function detectTradeType() {
+    var urlText = String(location.href || "").toLowerCase();
+    var selectedText = Array.prototype.slice.call(document.querySelectorAll(
+      "button[aria-pressed=true],[role=tab][aria-selected=true],[role=option][aria-selected=true]"
+    )).map(function(node) { return text(node.textContent); }).join(" ");
+    return /매매|sale|trade(?:type)?=(?:a1|sale|buy)/i.test(urlText + " " + selectedText)
+      ? "sale"
+      : "lease";
   }
 
   function requestSafeStop() {
@@ -591,19 +604,25 @@
       setProgress(listFailures.length, totalItemCount);
 
       var collectorKey = getCollectorKey();
+      var manifestTradeTypes = observedTradeTypes(items);
+      var mixedTradeTypes = manifestTradeTypes.length > 1;
       var saveMetadata = {
         sessionId: createCollectionSessionId(),
+        tradeType: manifestTradeTypes.length === 1
+          ? manifestTradeTypes[0]
+          : detectTradeType(),
         scope: selectedCount >= 2000
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
         complete: isCompleteGongsilCapture(selectedCount, items.length) &&
-          listFailures.length === 0,
+          listFailures.length === 0 && !mixedTradeTypes,
         selectedCount: selectedCount,
         found: totalItemCount,
         manifestCount: items.length,
         rejectedCount: 0,
         listFailedCount: listFailures.length,
         listFailureReasons: listFailures.slice(0, 20),
+        mixedTradeTypes: mixedTradeTypes,
         observedSourceIds: observedSourceIds(items),
         manifestRegistered: true
       };
@@ -1430,9 +1449,9 @@
       return { ok: false, reason: "지번주소 없음", rejectType: "address" };
     }
 
-    var rental = getRentalTerms(item);
-    if (!rental) {
-      return { ok: false, reason: "임대조건 없음", rejectType: "rental" };
+    var terms = getTradeTerms(item);
+    if (!terms) {
+      return { ok: false, reason: "거래조건 없음", rejectType: "trade" };
     }
 
     var detail = {};
@@ -1472,8 +1491,8 @@
       address,
       getRoom(item),
       getPropertyType(item),
-      rental.deposit,
-      rental.rent,
+      terms.deposit,
+      terms.rent,
       getManagementFee(item),
       getPremium(item),
       pyeong,
@@ -1501,6 +1520,9 @@
       longitude: longitude || null,
       values: values
     };
+    record.tradeType = terms.tradeType;
+    record.saleCategory = terms.saleCategory || "";
+    record.salePrice = terms.salePrice == null ? null : terms.salePrice;
     if (warnings.length) {
       record.preserveContacts = true;
       record.contactCaptureStatus = "deferred";
@@ -2551,6 +2573,8 @@
     [
       "Bo", "Deposit", "MmDeposit", "Mm", "Monthly", "MmMonthly", "Rent",
       "Jun", "JeonseDeposit", "Jmm", "JeonseMonthly", "Moneys", "moneys",
+      "TradeType", "DealType", "SaleType", "TransactionType", "SalePrice", "DealPrice",
+      "SellPrice", "TradingPrice", "Ma", "Mae", "Price", "UseType", "Usage", "Category",
       "Bilname", "BilName", "Bname", "BuildingName",
       "TypeView", "ViewType", "LndType", "Type", "Ckhus", "Collective", "IsCollective",
       "Ho", "BfHo", "Room", "Honame", "Ff", "BfFloor", "Floor", "floor",
@@ -2609,12 +2633,15 @@
         sessionId: metadata.sessionId,
         scope: metadata.scope,
         entries: chunk.map(function(item) {
-          var rental = getRentalTerms(item) || {};
+          var terms = getTradeTerms(item) || {};
           return {
             sourceId: recordSourceId(item),
             listSnapshot: gongsilListSnapshot(item),
-            deposit: rental.deposit,
-            rent: rental.rent,
+            tradeType: terms.tradeType,
+            saleCategory: terms.saleCategory,
+            salePrice: terms.salePrice,
+            deposit: terms.deposit,
+            rent: terms.rent,
             area: getPyeong(item),
             room: getRoom(item)
           };
@@ -2772,6 +2799,7 @@
       sessionId: metadata.sessionId,
       scope: metadata.scope || "공실박스 선택클러스터",
       source: "공실박스",
+      tradeType: metadata.tradeType || detectTradeType(),
       complete: Boolean(complete),
       stopped: Boolean(stopped),
       observedSourceIds: Array.isArray(metadata.observedSourceIds)
@@ -3011,6 +3039,64 @@
       .slice(0, 3)
       .map(function (reason) { return "- " + reason + " " + counts[reason] + "개"; });
     return entries.length ? entries.join("\n") : "- 원인을 확인하지 못했습니다.";
+  }
+
+  function getTradeTerms(item) {
+    var moneys = pick(item, ["Moneys", "moneys"]);
+    var typeText = [
+      pick(item, ["TradeType", "DealType", "SaleType", "Ty", "TransactionType"]),
+      pick(item, ["TypeView", "ViewType"])
+    ].map(text).join(" ");
+    var saleMoney = Array.isArray(moneys) ? moneys.find(function (money) {
+      return /매매|sale|buy/i.test(text(money && (money.Ty || money.Type || money.TradeType)));
+    }) : null;
+    var salePrice = numberValue(pick(item, [
+      "SalePrice", "DealPrice", "SellPrice", "TradingPrice", "Ma", "Mae"
+    ]));
+    if (!salePrice && saleMoney) {
+      salePrice = numberValue(pick(saleMoney, ["Price", "Ma", "Mae", "DealPrice", "Amount", "Bo"]));
+    }
+    if (/매매|sale|buy/i.test(typeText) || salePrice > 0 || saleMoney) {
+      if (!salePrice) return null;
+      return {
+        tradeType: "sale",
+        saleCategory: getSaleCategory(item),
+        salePrice: salePrice,
+        deposit: 0,
+        rent: 0
+      };
+    }
+    var rental = getRentalTerms(item);
+    return rental ? {
+      tradeType: "lease",
+      saleCategory: "",
+      salePrice: null,
+      deposit: rental.deposit,
+      rent: rental.rent
+    } : null;
+  }
+
+  function observedTradeTypes(items) {
+    var found = Object.create(null);
+    (Array.isArray(items) ? items : []).forEach(function(item) {
+      var terms = getTradeTerms(item);
+      if (terms && terms.tradeType) found[terms.tradeType] = true;
+    });
+    return Object.keys(found).sort();
+  }
+
+  function getSaleCategory(item) {
+    var type = [
+      pick(item, ["TypeView", "ViewType", "LndType", "Type", "BuildingType"]),
+      pick(item, ["UseType", "Usage", "Category"])
+    ].map(text).join(" ");
+    if (/토지|대지|임야|전답/.test(type)) return "land";
+    if (/공장|창고/.test(type)) return "factory_warehouse";
+    if (/다가구|다세대/.test(type)) return "multifamily";
+    if (/단독|주택|빌라/.test(type)) return "house";
+    if (/통건물|건물전체|빌딩/.test(type)) return "building";
+    if (/상가|점포|근린|사무/.test(type)) return "commercial";
+    return "other";
   }
 
   function reasonCounts(reasons) {

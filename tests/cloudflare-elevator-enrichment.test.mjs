@@ -19,7 +19,7 @@ const audit = fs.readFileSync(new URL("../tools/backfill-elevator-capacity.mjs",
 test("future listings are enriched after collection and by the minute scheduler", () => {
   assert.match(worker, /runElevatorEnrichmentMaintenance\(env, context, "collectorElevatorEnrichment"\)/);
   assert.match(worker, /runScheduledElevatorEnrichment\(env\)/);
-  assert.match(collector, /road_address=CASE WHEN road_address='' AND \?13<>''/);
+  assert.match(collector, /road_address=CASE WHEN road_address='' AND \?16<>''/);
   assert.match(collector, /address, road_address, building_name/);
   assert.match(enrichment, /datetime\(building_info_checked_at\)<datetime\('now','-12 hours'\)/);
 });

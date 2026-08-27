@@ -145,6 +145,9 @@ function normalizePortableConfig(value) {
       selectionMode: String(target && target.selectionMode || "").slice(0, 40),
       selectedCount: Math.max(0, Number(target && target.selectedCount || 0)),
       mode: String(target && target.mode || "").slice(0, 40),
+      tradeType: String(target && target.tradeType || "").slice(0, 20),
+      marketMode: String(target && target.marketMode || "").slice(0, 40),
+      saleCategory: String(target && target.saleCategory || "").slice(0, 40),
       enabled: target && target.enabled !== false,
       registeredAt: target && target.registeredAt || new Date().toISOString()
     };

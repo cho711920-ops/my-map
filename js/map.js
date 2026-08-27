@@ -208,6 +208,9 @@ function listingChangeRowToItemV683(row, index) {
     buildingApprovalDate: clean(row.building_approval_date), buildingInfoCheckedAt: clean(row.building_info_checked_at),
     buildingInfoStatus: clean(row.building_info_status), registrationAt: clean(row.registration_at),
     lastCollectedAt: clean(row.last_collected_at),
+    tradeType: clean(row.trade_type) || "lease",
+    saleCategory: clean(row.sale_category),
+    salePrice: row.sale_price === null || row.sale_price === "" ? null : Number(row.sale_price),
     latitude: row.latitude === null || row.latitude === "" ? null : Number(row.latitude),
     longitude: row.longitude === null || row.longitude === "" ? null : Number(row.longitude),
     sheetRow: Number(index || 0) + 1, latlng: null
@@ -1917,6 +1920,9 @@ function loadSheet(isAuto, forceRefresh) {
           latitude: clean(c[25]) === "" ? null : Number(c[25]),
           longitude: clean(c[26]) === "" ? null : Number(c[26]),
           buildingElevatorCapacity: Number(clean(c[27])) || 0,
+          tradeType: clean(c[28]) || "lease",
+          saleCategory: clean(c[29]),
+          salePrice: clean(c[30]) === "" ? null : Number(c[30]),
           sheetRow: i + 1,
           latlng: null
         };

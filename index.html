@@ -49,6 +49,7 @@
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
 <link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.2-logout-size">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
+<link rel="stylesheet" href="css/listing-trade-v1.css?v=1.0.1-mode-selector">
 </template>
 </head>
 
@@ -68,6 +69,15 @@
       <div class="filter-title">매물 검색</div>
 
       <div class="v6-toolbar-primary">
+        <div class="listing-trade-mode-v1" title="표시할 매물 시장 선택">
+          <label class="sr-only" for="listingTradeModeSelectV1">매물 시장</label>
+          <select id="listingTradeModeSelectV1" aria-label="매물 시장" onchange="JSListingTradeV1.onSelectorChange(this)">
+            <option value="lease">상가임대</option>
+            <option value="building_sale">건물매매</option>
+            <option value="land_sale">토지매매</option>
+          </select>
+          <span id="listingTradeModeLabelV1" class="sr-only">상가임대</span>
+        </div>
         <div class="search-row">
           <input id="keyword" aria-label="지역, 건물 또는 호실 검색" placeholder="지역 / 건물 / 호실 검색 · 쉼표 다중검색 (괴정,탄방,월평)">
           <button class="search-btn" onclick="applyFilter()">
@@ -170,12 +180,12 @@
           <input id="maxDeposit" aria-label="보증금 최대" placeholder="보증금 최대">
         </div>
 
-        <div class="row">
+        <div id="listingTradeRentFilterRowV1" class="row">
           <input id="minRent" aria-label="월세 최소" placeholder="월세 최소">
           <input id="maxRent" aria-label="월세 최대" placeholder="월세 최대">
         </div>
 
-        <div class="row">
+        <div id="listingTradePremiumFilterRowV1" class="row">
           <input id="minPremium" aria-label="권리금 최소" placeholder="권리금 최소">
           <input id="maxPremium" aria-label="권리금 최대" placeholder="권리금 최대">
         </div>
@@ -724,9 +734,10 @@
 
 <template id="jsAuthenticatedBodyAssets">
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard" src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"></script>
-<script data-auth-critical src="js/unified-listings-v8.js?v=8.1.36-contract-complete-label"></script>
+<script data-auth-critical src="js/unified-listings-v8.js?v=8.1.36-contract-complete-label&amp;trade-market-v1=1"></script>
 <script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds"></script>
-<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id"></script>
+<script data-auth-critical src="js/listing-trade-ui-v1.js?v=1.0.2-market-isolation"></script>
+<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;trade-market-v1=1"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.1.0-fast-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
@@ -744,7 +755,7 @@
 <script src="js/ai-visit-ui-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.39-data-access"></script>
 <script src="js/unified-favorites-v7.js?v=7.0.5-property-id-only"></script>
-<script data-auth-critical src="js/map.js?v=8.2.21-default-cluster-style"></script>
+<script data-auth-critical src="js/map.js?v=8.2.21-default-cluster-style&amp;trade-market-v1=1"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>
   <script src="js/operations-collection-v8.js?v=7.25.8-shared-data-only"></script>

@@ -26,14 +26,15 @@ function registeredTime(value) {
 
 function targetSummary(target) {
   const registered = registeredTime(target.registeredAt);
+  const market = target.tradeType === "sale" ? "매매" : "상가임대";
   if (target.source === "gongsil") {
     let zoom = "";
     try { zoom = new URL(target.url).searchParams.get("zoom") || ""; } catch (_) {}
     const count = Number(target.selectedCount || 0);
-    return ["현재 화면 전체클러스터", zoom ? `확대 ${zoom}` : "", count ? `등록 ${count.toLocaleString("ko-KR")}개` : "", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
+    return [market, "현재 화면 전체클러스터", zoom ? `확대 ${zoom}` : "", count ? `등록 ${count.toLocaleString("ko-KR")}개` : "", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
   }
   const district = typeof target.district === "string" ? target.district : target.district && target.district.name;
-  return [district ? `${district} 구 단위` : "구 단위", "매일 자동수집", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
+  return [market, district ? `${district} 구 단위` : "구 단위", "매일 자동수집", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
 }
 
 const STATUS_TEXT = {
@@ -107,6 +108,9 @@ function portableTarget(target) {
     selectionMode: target.selectionMode,
     selectedCount: target.selectedCount,
     mode: target.mode,
+    tradeType: target.tradeType,
+    marketMode: target.marketMode,
+    saleCategory: target.saleCategory,
     enabled: target.enabled !== false,
     registeredAt: target.registeredAt
   };

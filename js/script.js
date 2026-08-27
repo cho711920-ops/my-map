@@ -709,6 +709,7 @@ function updateTypeOptions(items) {
   var types = [];
 
   items.forEach(function(item) {
+    if (window.JSListingTradeV1 && !window.JSListingTradeV1.matchesItem(item)) return;
     if (item.type && !types.includes(item.type)) {
       types.push(item.type);
     }
@@ -1079,6 +1080,7 @@ function getFilteredItems(options) {
   }
 
   var filtered = allItems.filter(function(item) {
+    var matchTradeMode = !window.JSListingTradeV1 || window.JSListingTradeV1.matchesItem(item);
     var operationsMatchIds = window.operationsMatchPropertyIds;
     var matchCustomerSelection = !operationsMatchIds || operationsMatchIds.has(String(item.propertyId || "").trim());
     var customerMatchStatus = operationsMatchIds
@@ -1108,13 +1110,13 @@ function getFilteredItems(options) {
       return memoTextForIndustry.indexOf(term) !== -1;
     });
 
+    var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
+    var filterPrice = saleMode ? window.JSListingTradeV1.displayPrice(item) : Number(item.deposit || 0);
     var matchPrice =
-      item.deposit >= minDeposit &&
-      item.deposit <= maxDeposit &&
-      item.rent >= minRent &&
-      item.rent <= maxRent &&
-      (Number(item.premium) || 0) >= minPremium &&
-      (Number(item.premium) || 0) <= maxPremium &&
+      filterPrice >= minDeposit &&
+      filterPrice <= maxDeposit &&
+      (saleMode || (item.rent >= minRent && item.rent <= maxRent)) &&
+      (saleMode || ((Number(item.premium) || 0) >= minPremium && (Number(item.premium) || 0) <= maxPremium)) &&
       item.area >= minArea &&
       item.area <= maxArea;
 
@@ -1145,7 +1147,7 @@ function getFilteredItems(options) {
         ? isItemWithinMapRadiusV658(item, radiusFilter)
         : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng)));
 
-    return matchCustomerSelection && matchCustomerHeldVisibility &&
+    return matchTradeMode && matchCustomerSelection && matchCustomerHeldVisibility &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&
       matchFloor && matchQuickFloor &&
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
@@ -1273,9 +1275,12 @@ function getActiveFilterChipsV844() {
   push("type", type ? "구분 " + type : "");
   push("brokerage", brokerage ? "중개보수 " + brokerage : "");
   push("floorQuick", floorQuick ? "층 " + floorQuick : "");
-  push("deposit", buildRangeFilterChipV844("보증금", "minDeposit", "maxDeposit", "만원", false));
-  push("rent", buildRangeFilterChipV844("월세", "minRent", "maxRent", "만원", false));
-  push("premium", buildRangeFilterChipV844("권리금", "minPremium", "maxPremium", "만원", false));
+  var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
+  push("tradeMode", window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease"
+    ? window.JSListingTradeV1.modeLabel() : "");
+  push("deposit", buildRangeFilterChipV844(saleMode ? "매매가" : "보증금", "minDeposit", "maxDeposit", "만원", false));
+  if (!saleMode) push("rent", buildRangeFilterChipV844("월세", "minRent", "maxRent", "만원", false));
+  if (!saleMode) push("premium", buildRangeFilterChipV844("권리금", "minPremium", "maxPremium", "만원", false));
   push("area", buildRangeFilterChipV844("평수", "minArea", "maxArea", "평", false));
   push("floor", buildRangeFilterChipV844("층", "minFloor", "maxFloor", "층", true));
   push("industry", industry ? "업종 " + industry : "");
@@ -1341,6 +1346,10 @@ function clearActiveFilterChipV844(key) {
   });
 
   if (key === "keyword") window.jsMobileGlobalKeywordV1 = false;
+  if (key === "tradeMode" && window.JSListingTradeV1) {
+    window.JSListingTradeV1.setMode("lease", { apply: false });
+    if (typeof updateTypeOptions === "function") updateTypeOptions(allItems || []);
+  }
   if (key === "favoriteOnly") favoriteOnly = false;
   if (key === "doneOnly" || key === "includeDone") {
     doneOnly = false;
@@ -4387,6 +4396,21 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var feeDisplay = listDisplayValueV650(item, "fee");
   var premiumDisplay = listDisplayValueV650(item, "premium");
   var areaDisplay = listDisplayValueV650(item, "area");
+  var saleCardV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item);
+  var salePriceDisplayV1 = saleCardV1
+    ? Number(window.JSListingTradeV1.displayPrice(item) || 0).toLocaleString("ko-KR")
+    : "";
+  var priceValuesMarkupV1 = saleCardV1
+    ? '<span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>'
+    : '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
+      '<span class="price-separator">·</span>' +
+      '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>';
   var memoToggleButton =
     '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
       'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
@@ -4481,13 +4505,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           '</span>' +
           typeLabel +
           '<span class="item-price-values-v652">' +
-            '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
-            '<span class="price-separator">·</span>' +
-            '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
-            '<span class="price-separator">·</span>' +
-            '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
-            '<span class="price-separator">·</span>' +
-            '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>' +
+            priceValuesMarkupV1 +
           '</span>' +
           (!customerMatchControls && regDateLabel
             ? '<span class="item-reg-date item-reg-date-price-mobile-v652">등록 ' + escapeHtml(regDateLabel) + '</span>'
@@ -4723,6 +4741,9 @@ function buildOpportunityHtml(analysis) {
 
 
 function resetFilter() {
+  if (window.JSListingTradeV1 && typeof window.JSListingTradeV1.setMode === "function") {
+    window.JSListingTradeV1.setMode("lease", { apply: false });
+  }
   document.getElementById("keyword").value = "";
   document.getElementById("typeFilter").value = "";
   var sourceFilter = document.getElementById("sourceFilter");

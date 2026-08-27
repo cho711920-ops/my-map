@@ -207,7 +207,7 @@ test("Gongsilbox representative image never fills an otherwise photo-less listin
   }), []);
 });
 
-test("Daangn monthly collection prefers a monthly offer over a preferred sale offer", async () => {
+test("Daangn collection selects the requested lease or sale offer without mixing them", async () => {
   const article = {
     originalId: "4239920",
     publicJibunAddress: "대전광역시 중구 태평동 254-4",
@@ -217,16 +217,16 @@ test("Daangn monthly collection prefers a monthly offer over a preferred sale of
     ]
   };
   const record = mergeDaangnDetailWithList(article);
-  assert.equal(record.tradeType, "월세");
+  assert.equal(record.tradeType, "lease");
   assert.equal(record.deposit, 2000);
   assert.equal(record.rent, 50);
   assert.equal(isMonthlyCollectorRecord("당근", record), true);
 
   const repaired = normalizedRecord("당근", {
     source: "당근", sourceId: "4239920", deposit: 15000, rent: 0,
-    tradeType: "매매", raw: article
+    tradeType: "lease", raw: article
   });
-  assert.equal(repaired.tradeType, "월세");
+  assert.equal(repaired.tradeType, "lease");
   assert.equal(repaired.deposit, 2000);
   assert.equal(repaired.rent, 50);
 
@@ -238,11 +238,17 @@ test("Daangn monthly collection prefers a monthly offer over a preferred sale of
   assert.equal(legacyWithoutTrades.rent, 70);
   assert.equal(legacyWithoutTrades.tradeType, "월세");
 
+  const requestedSale = mergeDaangnDetailWithList(article, {}, "sale");
+  assert.equal(requestedSale.tradeType, "sale");
+  assert.equal(requestedSale.salePrice, 15000);
+  assert.equal(requestedSale.deposit, 0);
+  assert.equal(requestedSale.rent, 0);
+
   const saleOnly = mergeDaangnDetailWithList({
     originalId: "sale-only", trades: [{ preferred: true, type: "BUY", price: 20000 }]
   });
-  assert.equal(saleOnly.tradeType, "매매");
-  assert.equal(isMonthlyCollectorRecord("당근", saleOnly), false);
+  assert.equal(saleOnly.tradeType, "sale");
+  assert.equal(isMonthlyCollectorRecord("당근", saleOnly), true);
 
   const migration = await readFile(new URL(
     "../cloudflare/migrations/0018_daangn_monthly_trade_priority.sql", import.meta.url
@@ -502,7 +508,7 @@ test("collector review snapshots refresh in place instead of growing every run",
 
 test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {
   const source = await readFile(new URL("../js/naver-collector.js", import.meta.url), "utf8");
-  assert.match(source, /var VERSION = "5\.9\.3"/);
+  assert.match(source, /var VERSION = "6\.0\.0"/);
   assert.match(source, /if \(options\.automatic\) \{[\s\S]*?clearAutoDistrictProgress\(district\.cortarNo\);[\s\S]*?\}/);
   assert.doesNotMatch(source, /if \(options\.automatic\) return collectFinAutomaticDistrict\(district\)/);
   assert.match(source, /var classification = await classifyNaverManifest\(allItems, session\)/);

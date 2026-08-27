@@ -2,6 +2,12 @@ import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./fl
 import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
+import {
+  LISTING_TRADE_TYPES,
+  listingTradeTypesCanMerge,
+  normalizeListingSaleCategory,
+  normalizeListingTradeType
+} from "./listing-trade.js";
 
 const COLLECTOR_ORIGINS = [
   /(^|\.)realty\.daangn\.com$/i,
@@ -143,8 +149,36 @@ export function existingSourceNeedsAddressReclassification(record, existingSourc
   );
 }
 
+function existingSourceNeedsTradeReclassification(record, existingSource) {
+  if (!clean(existingSource?.listing_id)) return false;
+  return !listingTradeTypesCanMerge(
+    existingSource?.listing_trade_type || existingSource?.trade_type,
+    record?.tradeType
+  );
+}
+
 function normalizedRoom(value) {
   return normalizedRoomKey(value);
+}
+
+function collectorTradeType(value, legacyDefault = true) {
+  const raw = clean(value);
+  if (/^(?:A1|BUY)$/i.test(raw)) return LISTING_TRADE_TYPES.SALE;
+  if (/^(?:B2|MONTH|MONTHLY_RENT)$/i.test(raw)) return LISTING_TRADE_TYPES.LEASE;
+  return normalizeListingTradeType(raw, { legacyDefault });
+}
+
+function collectorSaleCategory(value, fallback = "") {
+  const explicit = normalizeListingSaleCategory(value);
+  if (explicit) return explicit;
+  const text = clean(fallback || value);
+  if (/토지|대지|임야|전답/.test(text)) return "land";
+  if (/공장|창고/.test(text)) return "factory_warehouse";
+  if (/다가구|다세대/.test(text)) return "multifamily";
+  if (/단독|주택|빌라/.test(text)) return "house";
+  if (/통건물|건물/.test(text)) return "building";
+  if (/상가|점포|근린|사무/.test(text)) return "commercial";
+  return "other";
 }
 
 function stableJson(value) {
@@ -225,12 +259,23 @@ function gongsilRecord(record) {
   if (clean(values[9])) contacts.push({ role: "임대인", name: "", phone: clean(values[9]) });
   if (clean(values[10])) contacts.push({ role: "임차인", name: "", phone: clean(values[10]) });
   const images = gongsilImageUrls(record);
+  const tradeType = collectorTradeType(record?.tradeType || record?.trade_type || record?.transactionType, true);
+  const category = clean(values[3] || record?.category) || "상가점포";
+  const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
+    ? number(record?.salePrice ?? record?.sale_price ?? values[4] ?? record?.price)
+    : null;
   return {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
     address: normalizedAddress(values[1] || record?.address), room: canonicalListingRoom(values[2] || record?.room),
     roadAddress: clean(record?.roadAddress || record?.road_address || record?.raw?.detail?.roadAddress),
-    category: clean(values[3] || record?.category) || "상가점포", deposit: number(values[4] ?? record?.deposit),
-    rent: number(values[5] ?? record?.rent), fee: number(values[6] ?? record?.fee),
+    category, tradeType,
+    saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
+      ? collectorSaleCategory(record?.saleCategory || record?.sale_category, category)
+      : "",
+    salePrice,
+    deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(values[4] ?? record?.deposit),
+    rent: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(values[5] ?? record?.rent),
+    fee: number(values[6] ?? record?.fee),
     premium: number(values[7] ?? record?.premium), area: number(values[8] ?? record?.area),
     memo: memoWithVisit(values[11] || record?.memo), link: clean(record?.url || record?.sourceUrl),
     listSnapshot: clean(record?.listSnapshot), images, contacts, raw: record?.raw || record,
@@ -249,12 +294,23 @@ function naverRecord(item) {
   const images = uniqueUrls(item?.imageUrls || item?.images || []);
   if (clean(item?.primaryImage) && !images.includes(clean(item.primaryImage))) images.unshift(clean(item.primaryImage));
   const squareMeters = number(item?.areaSquareMeter);
+  const tradeType = collectorTradeType(item?.tradeType || item?.tradeTypeCode || item?.trade_type, true);
+  const category = clean(item?.category) || "상가점포";
+  const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
+    ? number(item?.salePrice ?? item?.sale_price ?? item?.dealPrice ?? item?.deposit)
+    : null;
   return {
     source: "네이버", sourceId, buildingName: clean(item?.buildingName) || "일반상가",
     address: normalizedAddress(item?.jibunAddress || item?.address),
     roadAddress: clean(item?.roadAddress || item?.road_address || item?.roadAddressName),
-    room: canonicalListingRoom(item?.roomInfo || item?.floorInfo), category: clean(item?.category) || "상가점포",
-    deposit: number(item?.deposit), rent: number(item?.monthly), fee: number(item?.managementFee || item?.fee),
+    room: canonicalListingRoom(item?.roomInfo || item?.floorInfo), category, tradeType,
+    saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
+      ? collectorSaleCategory(item?.saleCategory || item?.sale_category, category)
+      : "",
+    salePrice,
+    deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(item?.deposit),
+    rent: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(item?.monthly),
+    fee: number(item?.managementFee || item?.fee),
     premium: number(item?.premium), area: squareMeters && squareMeters > 0
       ? Math.round((squareMeters / 3.305785) * 10) / 10 : number(item?.area),
     memo: memoWithVisit(stripExternalPhoneNumbers(item?.description)),
@@ -310,12 +366,15 @@ function daangnAddress(article) {
   return "";
 }
 
-function daangnRecord(article, listSnapshot = "") {
+function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
   const trades = Array.isArray(article?.trades) ? article.trades : [];
   // The Daangn MONTH filter can return an article whose preferred offer is a
   // sale when the same article also contains a monthly-rent offer. JS부동산 is
   // a monthly-rent map, so choose the MONTH offer before provider preference.
-  const trade = trades.find((entry) => /MONTH/.test(clean(entry?.type || entry?.__typename).toUpperCase())) ||
+  const requested = collectorTradeType(requestedTradeType, false);
+  const trade = (requested === LISTING_TRADE_TYPES.SALE
+    ? trades.find((entry) => /BUY/.test(clean(entry?.type || entry?.__typename).toUpperCase()))
+    : trades.find((entry) => /MONTH/.test(clean(entry?.type || entry?.__typename).toUpperCase()))) ||
     trades.find((entry) => entry?.preferred) || trades[0] || {};
   const tradeType = clean(trade.type || trade.__typename).toUpperCase();
   const salesType = clean(article?.salesTypeV3?.type || article?.salesTypeV3?.__typename).toUpperCase();
@@ -360,6 +419,11 @@ function daangnRecord(article, listSnapshot = "") {
     article?.location?.longitude
   ].some((value) => coordinate(value, -180, 180) != null);
   const blurredPublicCoordinate = Boolean(article?.isHideAddress) && !hasDirectCoordinate;
+  const canonicalTradeType = /BUY/.test(tradeType) ? LISTING_TRADE_TYPES.SALE
+    : /MONTH/.test(tradeType) ? LISTING_TRADE_TYPES.LEASE : "";
+  const saleCategory = canonicalTradeType === LISTING_TRADE_TYPES.SALE
+    ? collectorSaleCategory(article?.saleCategory, category)
+    : "";
   return {
     source: "당근", sourceId,
     buildingName: providerBuildingName && !addressLikeBuildingName
@@ -368,8 +432,10 @@ function daangnRecord(article, listSnapshot = "") {
     address: daangnAddress(article),
     roadAddress,
     room: daangnRoom(article),
-    category,
-    deposit: number(trade?.deposit ?? trade?.price), rent: number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
+    category, tradeType: canonicalTradeType, saleCategory,
+    salePrice: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? number(trade?.price ?? trade?.deposit) : null,
+    deposit: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(trade?.deposit ?? trade?.price),
+    rent: canonicalTradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(trade?.monthlyPay ?? trade?.yearlyPay) || 0,
     fee: number(article?.totalManageCost) || 0, premium: number(article?.premiumMoney) || 0,
     area: areaM2 && areaM2 > 0 ? Math.floor((areaM2 / 3.305785) * 10 + 0.0000001) / 10 : null,
     memo: memoWithVisit(`${optionText}${description}`.slice(0, 1200)),
@@ -385,8 +451,7 @@ function daangnRecord(article, listSnapshot = "") {
       article?.longitude ?? article?.lng ?? article?.lon ?? article?.location?.longitude ?? article?.publicCoordinate?.lon,
       -180,
       180
-    ),
-    tradeType: /MONTH/.test(tradeType) ? "월세" : /YEAR|BORROW/.test(tradeType) ? "전세" : /BUY/.test(tradeType) ? "매매" : ""
+    )
   };
 }
 
@@ -399,7 +464,7 @@ export function normalizedRecord(source, value) {
     // boundary so an older collector (or a resumed pre-fix job) cannot persist
     // descriptive text such as "봉명동 1층" as the lot address "봉명동 1".
     if (value?.source === "당근" && value?.raw && typeof value.raw === "object") {
-      const canonical = daangnRecord(value.raw, value.listSnapshot);
+      const canonical = daangnRecord(value.raw, value.listSnapshot, value.tradeType || value.trade_type);
       const canonicalHasTrade = Boolean(canonical.tradeType);
       return {
         ...value,
@@ -416,6 +481,8 @@ export function normalizedRecord(source, value) {
         premium: canonicalHasTrade ? canonical.premium : value.premium,
         area: canonicalHasTrade ? canonical.area : value.area,
         tradeType: canonical.tradeType || value.tradeType || "",
+        saleCategory: canonical.saleCategory || value.saleCategory || value.sale_category || "",
+        salePrice: canonical.salePrice ?? value.salePrice ?? value.sale_price ?? null,
         memo: canonical.memo,
         contacts: [],
         latitude: canonical.latitude ?? value.latitude,
@@ -423,13 +490,14 @@ export function normalizedRecord(source, value) {
         raw: canonical.raw
       };
     }
-    return daangnRecord(value, value?.listSnapshot);
+    return daangnRecord(value, value?.listSnapshot, value?.tradeType || value?.trade_type);
   }
   return null;
 }
 
 export function isMonthlyCollectorRecord(source, record) {
-  return source !== "당근" || clean(record?.tradeType) === "월세";
+  const type = collectorTradeType(record?.tradeType, false);
+  return type === LISTING_TRADE_TYPES.LEASE || type === LISTING_TRADE_TYPES.SALE;
 }
 
 function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresentative = false) {
@@ -438,6 +506,7 @@ function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresenta
     link: record.link, buildingName: record.buildingName, address: record.address,
     roadAddress: record.roadAddress, room: record.room,
     type: record.category, tradeType: record.tradeType,
+    saleCategory: record.saleCategory, salePrice: record.salePrice,
     deposit: record.deposit, rent: record.rent, fee: record.fee,
     premium: record.premium, area: record.area, latitude: record.latitude, longitude: record.longitude,
     memo: record.memo, status: "활성",
@@ -469,12 +538,22 @@ function manifestMaterialMatches(entry, row) {
   const parsedSnapshot = parseJson(row.list_snapshot_json, {});
   const saved = parsedSnapshot && !Array.isArray(parsedSnapshot) && typeof parsedSnapshot === "object"
     ? parsedSnapshot : {};
+  const entryTradeType = collectorTradeType(entry.tradeType || entry.trade_type, true);
+  const savedTradeType = collectorTradeType(saved.tradeType || row.trade_type, true);
+  if (!listingTradeTypesCanMerge(entryTradeType, savedTradeType)) return false;
+  if (entryTradeType === LISTING_TRADE_TYPES.SALE) {
+    const entrySalePrice = number(entry.salePrice ?? entry.sale_price ?? entry.deposit);
+    const savedSalePrice = number(saved.salePrice ?? row.sale_price ?? saved.deposit);
+    if (entrySalePrice == null || savedSalePrice == null || !sameNumber(entrySalePrice, savedSalePrice)) return false;
+  }
   const entryDeposit = number(entry.deposit);
   const savedDeposit = number(saved.deposit) ?? number(row.saved_deposit);
   const entryRent = number(entry.rent);
   const savedRent = number(saved.rent) ?? number(row.saved_rent);
-  if (entryDeposit == null || savedDeposit == null || entryRent == null || savedRent == null) return false;
-  if (!sameNumber(entryDeposit, savedDeposit) || !sameNumber(entryRent, savedRent)) return false;
+  if (entryTradeType !== LISTING_TRADE_TYPES.SALE) {
+    if (entryDeposit == null || savedDeposit == null || entryRent == null || savedRent == null) return false;
+    if (!sameNumber(entryDeposit, savedDeposit) || !sameNumber(entryRent, savedRent)) return false;
+  }
 
   const entryArea = number(entry.area);
   const savedArea = number(saved.area) ?? number(row.saved_area);
@@ -514,6 +593,9 @@ export function shouldRefreshGongsilDetail(lastCollectedAt, currentTime = Date.n
 
 function conditionSnapshot(value = {}) {
   return stableJson({
+    tradeType: collectorTradeType(value.tradeType || value.trade_type, true),
+    saleCategory: clean(value.saleCategory || value.sale_category),
+    salePrice: number(value.salePrice ?? value.sale_price),
     room: normalizedRoom(value.room),
     type: clean(value.type || value.category),
     deposit: number(value.deposit),
@@ -568,6 +650,7 @@ async function classifyManifest(env, body) {
     const ids = entries.slice(offset, offset + 80).map((entry) => entry.sourceId);
     const placeholders = ids.map((_, index) => `?${index + 2}`).join(",");
     const result = await env.DB.prepare(`SELECT s.id, s.source_listing_id, s.snapshot_hash, s.list_snapshot_json,
+        s.trade_type, s.sale_category, s.sale_price,
         s.listing_id, s.last_collected_at, l.latitude AS listing_latitude, l.longitude AS listing_longitude,
         l.deposit AS saved_deposit, l.monthly_rent AS saved_rent, l.area_m2 AS saved_area,
         l.room AS saved_room, l.address AS saved_address
@@ -583,7 +666,7 @@ async function classifyManifest(env, body) {
     if (unresolvedIds.length) {
       const rawPlaceholders = unresolvedIds.map((_, index) => `?${index + 2}`).join(",");
       const rawResult = await env.DB.prepare(`WITH ranked AS (
-          SELECT source_listing_id, snapshot_hash,
+          SELECT source_listing_id, snapshot_hash, trade_type, sale_category, sale_price,
             json_extract(payload_json, '$.listSnapshot') AS list_snapshot_json,
             COALESCE(json_extract(payload_json, '$.record.deposit'), json_extract(payload_json, '$.deposit')) AS saved_deposit,
             COALESCE(json_extract(payload_json, '$.record.rent'), json_extract(payload_json, '$.rent')) AS saved_rent,
@@ -595,7 +678,7 @@ async function classifyManifest(env, body) {
           FROM collector_raw
           WHERE source=?1 AND processing_state <> 'error' AND source_listing_id IN (${rawPlaceholders})
         )
-        SELECT source_listing_id, snapshot_hash, list_snapshot_json, last_collected_at,
+        SELECT source_listing_id, snapshot_hash, list_snapshot_json, trade_type, sale_category, sale_price, last_collected_at,
           '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude,
           saved_deposit, saved_rent, saved_area, saved_room, saved_address
         FROM ranked WHERE row_number=1`).bind(source, ...unresolvedIds).all();
@@ -696,7 +779,8 @@ async function loadCandidateListings(env, records, existingSources) {
   const addresses = [...new Set(records.filter((record) => {
     if (!record?.address) return false;
     const existingSource = existingSources.get(record.sourceId);
-    return !existingSource?.listing_id || existingSourceNeedsAddressReclassification(record, existingSource);
+    return !existingSource?.listing_id || existingSourceNeedsAddressReclassification(record, existingSource) ||
+      existingSourceNeedsTradeReclassification(record, existingSource);
   })
     .map((record) => record.address))];
   const byAddress = new Map(addresses.map((address) => [address, []]));
@@ -705,7 +789,8 @@ async function loadCandidateListings(env, records, existingSources) {
     const chunk = addresses.slice(offset, offset + 60);
     const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
     const result = await env.DB.prepare(`SELECT id, property_id, title, address, room, listing_type,
-        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source
+        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source,
+        trade_type, sale_category, sale_price
       FROM listings WHERE status <> 'deleted' AND address IN (${placeholders})
       ORDER BY updated_at DESC`).bind(...chunk).all();
     for (const row of result?.results || []) {
@@ -748,7 +833,8 @@ async function loadPendingReviewsByAddress(env, records) {
   for (let offset = 0; offset < addresses.length; offset += 40) {
     const chunk = addresses.slice(offset, offset + 40);
     const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
-    const result = await env.DB.prepare(`SELECT id, source, source_listing_id, payload_json, created_at
+    const result = await env.DB.prepare(`SELECT id, source, source_listing_id, payload_json,
+        trade_type, sale_category, sale_price, created_at
       FROM collector_raw
       WHERE processing_state='review' AND json_extract(payload_json, '$.address') IN (${placeholders})
       ORDER BY created_at, id`).bind(...chunk).all();
@@ -760,7 +846,9 @@ async function loadPendingReviewsByAddress(env, records) {
         id: clean(row.id), reviewId: clean(row.id), source: clean(row.source),
         sourceId: clean(row.source_listing_id), createdAt: clean(row.created_at),
         room: record.room, deposit: record.deposit, monthly_rent: record.rent,
-        area_m2: record.area, record
+        area_m2: record.area, trade_type: clean(row.trade_type) || record.tradeType,
+        sale_category: clean(row.sale_category) || record.saleCategory,
+        sale_price: row.sale_price ?? record.salePrice, record
       });
     }
   }
@@ -781,7 +869,8 @@ async function loadExistingSources(env, source, records) {
     const placeholders = chunk.map((_, index) => `?${index + 2}`).join(",");
     const result = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.source_url,
         s.snapshot_hash, s.list_snapshot_json, s.raw_json, s.active, s.missing_count, s.last_collected_at,
-        l.address AS listing_address, l.room AS listing_room
+        s.trade_type, s.sale_category, s.sale_price,
+        l.address AS listing_address, l.room AS listing_room, l.trade_type AS listing_trade_type
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
       WHERE s.source=?1 AND s.source_listing_id IN (${placeholders})`)
       .bind(source, ...chunk).all();
@@ -844,6 +933,15 @@ function sameSet(left, right) {
 }
 
 function reliableOfferMatch(record, row) {
+  const tradeType = collectorTradeType(record?.tradeType || record?.trade_type, true);
+  if (tradeType === LISTING_TRADE_TYPES.SALE) {
+    const leftPrice = number(row.sale_price ?? row.salePrice);
+    const rightPrice = number(record.salePrice ?? record.sale_price);
+    const leftArea = number(row.area_m2 ?? row.area);
+    const rightArea = number(record.area);
+    return leftPrice != null && rightPrice != null && leftArea != null && rightArea != null &&
+      sameNumber(leftPrice, rightPrice) && Math.abs(leftArea - rightArea) < 1;
+  }
   const leftDeposit = number(row.deposit);
   const rightDeposit = number(record.deposit);
   const leftRent = number(row.monthly_rent ?? row.rent);
@@ -856,6 +954,15 @@ function reliableOfferMatch(record, row) {
 }
 
 function reliableOfferMismatch(record, row) {
+  const tradeType = collectorTradeType(record?.tradeType || record?.trade_type, true);
+  if (tradeType === LISTING_TRADE_TYPES.SALE) {
+    const leftPrice = number(row.sale_price ?? row.salePrice);
+    const rightPrice = number(record.salePrice ?? record.sale_price);
+    const leftArea = number(row.area_m2 ?? row.area);
+    const rightArea = number(record.area);
+    if (leftPrice == null || rightPrice == null || leftArea == null || rightArea == null) return false;
+    return !sameNumber(leftPrice, rightPrice) && Math.abs(leftArea - rightArea) >= 1;
+  }
   const leftDeposit = number(row.deposit);
   const rightDeposit = number(record.deposit);
   const leftRent = number(row.monthly_rent ?? row.rent);
@@ -876,6 +983,12 @@ function relativeNumberGap(left, right) {
 }
 
 function stronglyDifferentRentalTerms(record, row, stricter = false) {
+  if (collectorTradeType(record?.tradeType || record?.trade_type, true) === LISTING_TRADE_TYPES.SALE) {
+    const leftPrice = number(row.sale_price ?? row.salePrice);
+    const rightPrice = number(record.salePrice ?? record.sale_price);
+    if (leftPrice == null || rightPrice == null) return false;
+    return relativeNumberGap(leftPrice, rightPrice) >= (stricter ? 0.35 : 0.2);
+  }
   const leftDeposit = number(row.deposit);
   const rightDeposit = number(record.deposit);
   const leftRent = number(row.monthly_rent ?? row.rent);
@@ -1157,18 +1270,23 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   if (!existingSource) {
     await env.DB.prepare(`INSERT INTO listing_sources (
         id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
+        trade_type, sale_category, sale_price,
         session_id, active, missing_count, first_collected_at, last_collected_at, created_at, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, 0, ?10, ?10, ?10, ?10)`)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, ?13, ?13, ?13, ?13)`)
       .bind(sourceRowId, listingId, record.source, record.sourceId, record.link, snapshotHash,
-        snapshotJson, rawJson, sessionId, now).run();
+        snapshotJson, rawJson, collectorTradeType(record.tradeType, true), clean(record.saleCategory),
+        record.salePrice, sessionId, now).run();
   }
   const assets = await replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets);
   if (existingSource) {
     if (sourceChanged || assets.changed) {
       await env.DB.prepare(`UPDATE listing_sources SET listing_id=?1, source_url=?2, snapshot_hash=?3,
-          list_snapshot_json=?4, raw_json=?5, session_id=?6, active=1, missing_count=0,
-          last_collected_at=?7, updated_at=?7 WHERE id=?8`)
-        .bind(listingId, record.link, snapshotHash, snapshotJson, rawJson, sessionId, now, sourceRowId).run();
+          list_snapshot_json=?4, raw_json=?5, trade_type=?6, sale_category=?7, sale_price=?8,
+          session_id=?9, active=1, missing_count=0,
+          last_collected_at=?10, updated_at=?10 WHERE id=?11`)
+        .bind(listingId, record.link, snapshotHash, snapshotJson, rawJson,
+          collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+          sessionId, now, sourceRowId).run();
     } else {
       await env.DB.prepare(`UPDATE listing_sources SET session_id=?1, last_collected_at=?2
         WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId).run();
@@ -1179,29 +1297,33 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     ? env.DB.prepare(`UPDATE listings SET main_source=?1,
         title=CASE WHEN ?2<>'' THEN ?2 ELSE title END,
         building_name=CASE WHEN ?2<>'' THEN ?2 ELSE building_name END, room=?3, listing_type=?4,
-        deposit=?5, monthly_rent=?6, maintenance_fee=?7, premium=?8, area_m2=?9,
-        operating_memo=CASE WHEN ?10<>'' THEN ?10 ELSE operating_memo END,
-        source_url=CASE WHEN ?11<>'' THEN ?11 ELSE source_url END,
-        latitude=CASE WHEN ?12 IS NOT NULL THEN ?12 ELSE latitude END,
-        longitude=CASE WHEN ?13 IS NOT NULL THEN ?13 ELSE longitude END,
-        road_address=CASE WHEN ?14<>'' THEN ?14 ELSE road_address END,
-        version=version+1, last_collected_at=?15, updated_at=?15 WHERE id=?16`)
-      .bind(sourceName(record.source), record.buildingName, record.room, record.category, record.deposit,
-        record.rent, record.fee, record.premium, record.area, representativeMemo, record.link,
+        trade_type=?5, sale_category=?6, sale_price=?7,
+        deposit=?8, monthly_rent=?9, maintenance_fee=?10, premium=?11, area_m2=?12,
+        operating_memo=CASE WHEN ?13<>'' THEN ?13 ELSE operating_memo END,
+        source_url=CASE WHEN ?14<>'' THEN ?14 ELSE source_url END,
+        latitude=CASE WHEN ?15 IS NOT NULL THEN ?15 ELSE latitude END,
+        longitude=CASE WHEN ?16 IS NOT NULL THEN ?16 ELSE longitude END,
+        road_address=CASE WHEN ?17<>'' THEN ?17 ELSE road_address END,
+        version=version+1, last_collected_at=?18, updated_at=?18 WHERE id=?19`)
+      .bind(sourceName(record.source), record.buildingName, record.room, record.category,
+        collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+        record.deposit, record.rent, record.fee, record.premium, record.area, representativeMemo, record.link,
         record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
     : !protectListing && updateCondition
     ? env.DB.prepare(`UPDATE listings SET title=CASE WHEN ?1<>'' THEN ?1 ELSE title END,
         building_name=CASE WHEN ?1<>'' THEN ?1 ELSE building_name END, room=?2, listing_type=?3,
-        deposit=?4, monthly_rent=?5, maintenance_fee=?6, premium=?7, area_m2=?8,
-        operating_memo=CASE WHEN ?9<>'' THEN ?9 ELSE operating_memo END,
-        source_url=CASE WHEN source_url='' THEN ?10 ELSE source_url END,
-        latitude=CASE WHEN ?11 IS NOT NULL THEN ?11 ELSE latitude END,
-        longitude=CASE WHEN ?12 IS NOT NULL THEN ?12 ELSE longitude END,
-        road_address=CASE WHEN road_address='' AND ?13<>'' THEN ?13 ELSE road_address END,
-        version=version+1, last_collected_at=?14, updated_at=?14 WHERE id=?15`)
-      .bind(record.buildingName, record.room, record.category, record.deposit, record.rent, record.fee,
-        record.premium, record.area, representativeMemo, record.link, record.latitude, record.longitude,
-        clean(record.roadAddress), now, listingId)
+        trade_type=?4, sale_category=?5, sale_price=?6,
+        deposit=?7, monthly_rent=?8, maintenance_fee=?9, premium=?10, area_m2=?11,
+        operating_memo=CASE WHEN ?12<>'' THEN ?12 ELSE operating_memo END,
+        source_url=CASE WHEN source_url='' THEN ?13 ELSE source_url END,
+        latitude=CASE WHEN ?14 IS NOT NULL THEN ?14 ELSE latitude END,
+        longitude=CASE WHEN ?15 IS NOT NULL THEN ?15 ELSE longitude END,
+        road_address=CASE WHEN road_address='' AND ?16<>'' THEN ?16 ELSE road_address END,
+        version=version+1, last_collected_at=?17, updated_at=?17 WHERE id=?18`)
+      .bind(record.buildingName, record.room, record.category,
+        collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+        record.deposit, record.rent, record.fee, record.premium, record.area, representativeMemo,
+        record.link, record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
     : listingNeedsTouch ? env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
         source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
         latitude=CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE latitude END,
@@ -1238,12 +1360,14 @@ async function createListing(env, record, sessionId, actor = "collector", existi
   const contacts = JSON.stringify(Array.isArray(record.contacts) ? record.contacts : []);
   await env.DB.prepare(`INSERT INTO listings (
       id, property_id, status, main_source, title, address, road_address, building_name, room, listing_type,
+      trade_type, sale_category, sale_price,
       deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude, operating_memo, source_url,
       contacts_json, first_collected_at, registration_at, last_collected_at, created_at, updated_at
-    ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?5, ?3, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-      ?17, ?18, ?18, ?18, ?18, ?18)`)
+    ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?5, ?3, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+      ?16, ?17, ?18, ?19, ?20, ?21, ?21, ?21, ?21, ?21)`)
     .bind(id, record.source, record.buildingName || "일반상가", record.address, clean(record.roadAddress),
-      record.room, record.category, record.deposit, record.rent, record.fee, record.premium, record.area,
+      record.room, record.category, collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+      record.deposit, record.rent, record.fee, record.premium, record.area,
       record.latitude, record.longitude, record.memo, record.link, contacts, now).run();
   await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets);
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
@@ -1281,22 +1405,26 @@ async function detachSourceForAddressReview(env, record, existingSource, actor =
 async function queueReview(env, record, sessionId, candidates, reason = "") {
   const reviewId = `R-${crypto.randomUUID()}`;
   const saved = await env.DB.prepare(`INSERT INTO collector_raw (
-      id, session_id, source, source_listing_id, snapshot_hash, payload_json, processing_state, result_json, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'review', ?7, ?8)
+      id, session_id, source, source_listing_id, snapshot_hash, payload_json,
+      trade_type, sale_category, sale_price, processing_state, result_json, created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'review', ?10, ?11)
     ON CONFLICT(source, source_listing_id) WHERE processing_state='review' DO UPDATE SET
       session_id=excluded.session_id, snapshot_hash=excluded.snapshot_hash,
       payload_json=excluded.payload_json, result_json=excluded.result_json,
+      trade_type=excluded.trade_type, sale_category=excluded.sale_category, sale_price=excluded.sale_price,
       error_text='', processed_at='', created_at=excluded.created_at
     RETURNING id`)
     .bind(reviewId, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
-      JSON.stringify(record), JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).first();
+      JSON.stringify(record), collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+      JSON.stringify({ candidateIds: candidates.map((row) => row.id), reason: clean(reason) }), nowIso()).first();
   return clean(saved?.id) || reviewId;
 }
 
 async function currentSingleAddressCandidate(env, record, candidates) {
   if (!record?.address || candidates.length !== 1) return null;
   const row = await env.DB.prepare(`SELECT COUNT(*) AS count FROM listings
-    WHERE status <> 'deleted' AND address=?1`).bind(record.address).first();
+    WHERE status <> 'deleted' AND address=?1 AND trade_type=?2`)
+    .bind(record.address, collectorTradeType(record.tradeType, true)).first();
   return Number(row?.count || 0) === 1 ? candidates[0] : null;
 }
 
@@ -1307,14 +1435,16 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
     address: record.address, room: record.room, category: record.category,
     deposit: record.deposit, rent: record.rent, fee: record.fee, premium: record.premium,
     area: record.area, link: record.link, listSnapshot: record.listSnapshot,
-    latitude: record.latitude, longitude: record.longitude
+    latitude: record.latitude, longitude: record.longitude,
+    tradeType: record.tradeType, saleCategory: record.saleCategory, salePrice: record.salePrice
   };
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json,
-      processing_state, processed_at, result_json, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'duplicate', ?7, ?8, ?7)`)
+      trade_type, sale_category, sale_price, processing_state, processed_at, result_json, created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'duplicate', ?10, ?11, ?10)`)
     .bind(id, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
-      JSON.stringify(compactPayload), nowIso(), JSON.stringify({
+      JSON.stringify(compactPayload), collectorTradeType(record.tradeType, true), clean(record.saleCategory),
+      record.salePrice, nowIso(), JSON.stringify({
         action: "sameAsPendingReview", canonicalReviewId: clean(pendingReview?.reviewId),
         reason: "이미 검증대기 중인 동일 매물"
       })).run();
@@ -1326,15 +1456,17 @@ async function saveCollectorError(env, record, sessionId, message) {
   const at = nowIso();
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json,
-      processing_state, processed_at, result_json, error_text, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'error', ?7, ?8, ?9, ?7)
+      trade_type, sale_category, sale_price, processing_state, processed_at, result_json, error_text, created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'error', ?10, ?11, ?12, ?10)
     ON CONFLICT(id) DO UPDATE SET
       session_id=excluded.session_id, snapshot_hash=excluded.snapshot_hash,
       payload_json=excluded.payload_json, processing_state='error',
+      trade_type=excluded.trade_type, sale_category=excluded.sale_category, sale_price=excluded.sale_price,
       processed_at=excluded.processed_at, result_json=excluded.result_json,
       error_text=excluded.error_text, created_at=excluded.created_at`)
     .bind(id, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
-      JSON.stringify(record), at, JSON.stringify({ action: "collectorError", reason: clean(message) }), clean(message)).run();
+      JSON.stringify(record), collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+      at, JSON.stringify({ action: "collectorError", reason: clean(message) }), clean(message)).run();
   return id;
 }
 
@@ -1391,7 +1523,9 @@ async function ingestRecords(env, source, values, metadata = {}) {
     try {
       const existing = existingSources.get(record.sourceId);
       const addressReclassification = existingSourceNeedsAddressReclassification(record, existing);
-      if (existing?.listing_id && !addressReclassification) {
+      const tradeReclassification = existingSourceNeedsTradeReclassification(record, existing);
+      const sourceReclassification = addressReclassification || tradeReclassification;
+      if (existing?.listing_id && !sourceReclassification) {
         const result = await attachSource(env, record, existing.listing_id, sessionId, existing, false,
           "collector", sourceAssets.get(clean(existing.id)));
         if (result.reactivated) {
@@ -1406,16 +1540,19 @@ async function ingestRecords(env, source, values, metadata = {}) {
         else totals.duplicate += 1;
         continue;
       }
-      if (addressReclassification) {
+      if (sourceReclassification) {
         await detachSourceForAddressReview(env, record, existing, "collector-address-reclassification@js-map.com");
       }
-      const candidates = candidatesByAddress.get(record.address) || [];
+      const candidates = (candidatesByAddress.get(record.address) || []).filter((candidate) =>
+        listingTradeTypesCanMerge(candidate.trade_type, record.tradeType));
       const classified = classifyListingCandidates(record, candidates);
-      const pendingCandidates = pendingReviewsByAddress.get(record.address) || [];
+      const allPendingCandidates = pendingReviewsByAddress.get(record.address) || [];
+      const pendingCandidates = allPendingCandidates.filter((candidate) =>
+        listingTradeTypesCanMerge(candidate.record?.tradeType || candidate.trade_type, record.tradeType));
       const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
       if (classified.decision === "merge") {
         const result = await attachSource(env, record, classified.candidate.id, sessionId, existing, false,
-          "collector", existing ? sourceAssets.get(clean(existing.id)) : null, addressReclassification);
+          "collector", existing ? sourceAssets.get(clean(existing.id)) : null, sourceReclassification);
         if (result.reactivated) {
           affectedListingIds.add(classified.candidate.id);
           totals.reactivated += 1;
@@ -1438,6 +1575,8 @@ async function ingestRecords(env, source, values, metadata = {}) {
           existing ? sourceAssets.get(clean(existing.id)) : null);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
           address: record.address, room: record.room, listing_type: record.category,
+          trade_type: collectorTradeType(record.tradeType, true), sale_category: record.saleCategory,
+          sale_price: record.salePrice,
           deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
           premium: record.premium, area_m2: record.area, operating_memo: record.memo, main_source: record.source });
         candidatesByAddress.set(record.address, candidates);
@@ -1445,12 +1584,13 @@ async function ingestRecords(env, source, values, metadata = {}) {
         totals.created += 1;
       } else {
         const reviewId = await queueReview(env, record, sessionId, candidates, classified.reason);
-        pendingCandidates.push({
+        allPendingCandidates.push({
           id: reviewId, reviewId, source: record.source, sourceId: record.sourceId,
           createdAt: nowIso(), room: record.room, deposit: record.deposit,
-          monthly_rent: record.rent, area_m2: record.area, record
+          monthly_rent: record.rent, area_m2: record.area, trade_type: record.tradeType,
+          sale_category: record.saleCategory, sale_price: record.salePrice, record
         });
-        pendingReviewsByAddress.set(record.address, pendingCandidates);
+        pendingReviewsByAddress.set(record.address, allPendingCandidates);
         totals.review += 1;
       }
     } catch (error) {
@@ -1561,6 +1701,7 @@ export function removeCompletedListingMemo(value) {
 
 async function finalizeSession(env, body) {
   const source = sourceName(body.source);
+  const tradeType = collectorTradeType(body.tradeType, true);
   const sessionId = await ensureSession(env, body.sessionId, source);
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
@@ -1580,7 +1721,8 @@ async function finalizeSession(env, body) {
     const rows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.active, s.missing_count,
         l.address, l.status AS listing_status, l.operating_memo
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
-      WHERE s.source=?1`).bind(source).all();
+      WHERE s.source=?1 AND COALESCE(NULLIF(s.trade_type,''),'lease')=?2`)
+      .bind(source, tradeType).all();
     const changes = [];
     const reactivatedListings = new Set();
     const changedAt = nowIso();
@@ -1653,6 +1795,7 @@ async function finalizeSession(env, body) {
   const row = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(row?.totals_json, {});
   totals.observed = observed.length;
+  totals.tradeType = tradeType;
   totals.presenceReset = presenceReset;
   totals.reactivated = Number(totals.reactivated || 0) + reactivated;
   totals.missingMarked = missingMarked;
@@ -1742,7 +1885,7 @@ async function daangnGraphql(hash, variables) {
   return payload;
 }
 
-function parseDaangnUrl(value) {
+function parseDaangnUrl(value, requestedTradeType = "") {
   const url = new URL(clean(value).replace(/&amp;/g, "&"));
   const clusterId = clean(url.searchParams.get("cluster_id")).replace(/^['"]|['"]$/g, "");
   if (!clusterId) throw new Error("URL에서 cluster_id를 찾지 못했습니다.");
@@ -1755,11 +1898,12 @@ function parseDaangnUrl(value) {
     propertyFilter.salesTypes = ["STORE", "OFFICE", "FACTORY"];
   }
   const district = ["동구", "중구", "서구", "유성구", "대덕구"].find((name) => decodeURIComponent(url.toString()).includes(name)) || "";
-  return { url: url.toString(), clusterId, propertyFilter, district };
+  return { url: url.toString(), clusterId, propertyFilter, district,
+    tradeType: collectorTradeType(requestedTradeType, true) };
 }
 
-function daangnListEntry(article) {
-  const record = daangnRecord(article, "");
+function daangnListEntry(article, requestedTradeType = "") {
+  const record = daangnRecord(article, "", requestedTradeType);
   const listSnapshot = stableJson({
     sourceId: record.sourceId,
     address: record.address,
@@ -1775,8 +1919,8 @@ function daangnListEntry(article) {
     area: record.area, address: record.address, room: record.room };
 }
 
-export function mergeDaangnDetailWithList(article, entry = {}) {
-  const record = daangnRecord(article, entry.listSnapshot || "");
+export function mergeDaangnDetailWithList(article, entry = {}, requestedTradeType = "") {
+  const record = daangnRecord(article, entry.listSnapshot || "", requestedTradeType || entry.tradeType);
   const trade = (Array.isArray(article?.trades) ? article.trades : []).find((candidate) => candidate?.preferred) ||
     article?.trades?.[0] || {};
   const hasDetailRent = trade.monthlyPay != null || trade.yearlyPay != null;
@@ -1814,7 +1958,8 @@ async function saveDaangnJob(env, job) {
   const state = job.status === "complete" ? "completed" : job.status;
   const payload = {
     url: job.url, clusterId: job.clusterId, propertyFilter: job.propertyFilter,
-    district: job.district, sessionId: job.sessionId, ids: job.ids || [], entries: job.entries || [],
+    district: job.district, tradeType: job.tradeType, sessionId: job.sessionId,
+    ids: job.ids || [], entries: job.entries || [],
     detailIds: job.detailIds || [], pendingDetailIds: job.pendingDetailIds || [],
     detailAttempts: job.detailAttempts || {}, terminalFailedIds: job.terminalFailedIds || [],
     cursor: job.cursor || "", hasNextPage: Boolean(job.hasNextPage)
@@ -1857,7 +2002,7 @@ function publicDaangnJob(job) {
 }
 
 async function startDaangnJob(env, body) {
-  const parsed = parseDaangnUrl(body.url);
+  const parsed = parseDaangnUrl(body.url, body.tradeType);
   const sessionId = await ensureSession(env, `DAANGN-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, "당근");
   const job = {
     ...parsed, _jobId: daangnJobId(body), collectorVersion: clean(body.collectorVersion).slice(0, 30),
@@ -1907,6 +2052,7 @@ async function mapWithConcurrency(values, concurrency, mapper) {
 async function finalizeDaangnJob(env, job) {
   const result = await finalizeSession(env, {
     source: "당근", sessionId: job.sessionId,
+    tradeType: job.tradeType,
     scope: job.district ? `대전 ${job.district} 완전수집` : "당근 선택클러스터",
     complete: Boolean(job.district), observedSourceIds: job.ids || [],
     validationVersion: 2, collectorVersion: job.collectorVersion,
@@ -1945,7 +2091,7 @@ async function runDaangnChunk(env, body = {}) {
         const id = clean(article?.originalId);
         if (!id || seen.has(id)) continue;
         seen.add(id);
-        const entry = daangnListEntry(article);
+        const entry = daangnListEntry(article, job.tradeType);
         if (!isMonthlyCollectorRecord("당근", entry)) {
           job.tradeTypeExcluded = Number(job.tradeTypeExcluded || 0) + 1;
           continue;
@@ -2003,7 +2149,7 @@ async function runDaangnChunk(env, body = {}) {
       if (response?.article) {
         const entry = job.entries.find((candidate) => candidate.sourceId === id) || { sourceId: id };
         records.push({
-          ...mergeDaangnDetailWithList(response.article, entry),
+          ...mergeDaangnDetailWithList(response.article, entry, job.tradeType),
           source: "당근"
         });
         return;
@@ -2394,15 +2540,18 @@ async function applyReviewBatch(env, user, body) {
 async function consolidateExisting(env, user, body) {
   const primaryId = clean(body.primaryMasterId);
   const duplicates = [...new Set((Array.isArray(body.duplicateMasterIds) ? body.duplicateMasterIds : []).map(clean).filter((id) => id && id !== primaryId))].slice(0, 50);
-  const primary = await env.DB.prepare("SELECT id, operating_memo FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
+  const primary = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
     .bind(primaryId).first();
   if (!primary) throw new Error("대표매물을 찾지 못했습니다.");
   let primaryMemo = clean(primary.operating_memo);
   let consolidated = 0;
   for (const duplicateId of duplicates) {
-    const duplicate = await env.DB.prepare("SELECT id, operating_memo FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
+    const duplicate = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
       .bind(duplicateId).first();
     if (!duplicate || duplicate.id === primary.id) continue;
+    if (!listingTradeTypesCanMerge(primary.trade_type, duplicate.trade_type)) {
+      throw new Error("상가임대 대표매물과 매매 대표매물은 서로 합칠 수 없습니다.");
+    }
     const mergedMemo = carryConfirmedVisitMemo(primaryMemo, duplicate.operating_memo);
     const confirmationTransferred = mergedMemo !== primaryMemo;
     const statements = [

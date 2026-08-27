@@ -1,11 +1,12 @@
 import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
 import { accessProfile, createLocalPassword, normalizeLocalUsername, requireRole } from "./security.js";
 import { carryConfirmedVisitMemo } from "./visit-status.js";
+import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-trade.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
-  "masterFallback", "sourceUnavailable", "missingCount"
+  "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -239,21 +240,23 @@ export async function buildD1SheetCsv(env) {
     landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
     property_id, source_url, contacts_json, building_year, building_elevators,
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
-    last_collected_at, latitude, longitude, building_elevator_capacity`, "listings", "status <> 'deleted'", 3_000);
+    last_collected_at, latitude, longitude, building_elevator_capacity,
+    trade_type, sale_category, sale_price`, "listings", "status <> 'deleted'", 3_000);
   const header = [
     "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
     "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
     "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
     "최종수집시각", "위도", "경도"
   ];
-  header.push("엘리베이터최대정원");
+  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가");
   const body = [header, ...rows.map((row) => [
     row.title, row.address, row.room, row.listing_type, row.deposit, row.monthly_rent,
     row.maintenance_fee, row.premium, row.area_m2, row.landlord_phone, row.tenant_phone,
     row.operating_memo, row.status, row.first_collected_at, row.main_source, row.property_id,
     row.source_url, row.contacts_json, row.building_year, row.building_elevators,
     row.building_approval_date, row.building_info_checked_at, row.building_info_status,
-    row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity
+    row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity,
+    row.trade_type, row.sale_category, row.sale_price
   ])].map((row) => row.map(csvCell).join(",")).join("\r\n");
   return `${body}\r\n`;
 }
@@ -268,7 +271,8 @@ async function listingChanges(env, query) {
       landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
       property_id, source_url, contacts_json, building_year, building_elevators,
       building_approval_date, building_info_checked_at, building_info_status, registration_at,
-      last_collected_at, latitude, longitude, building_elevator_capacity
+      last_collected_at, latitude, longitude, building_elevator_capacity,
+      trade_type, sale_category, sale_price
     FROM listings WHERE property_id IN (${placeholders})`).bind(...ids).all();
   return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
 }
@@ -343,6 +347,7 @@ async function unifiedListings(env) {
   const unavailableRows = await allPages(env, `SELECT
       l.id, l.property_id, l.main_source, l.title, l.building_name, l.address, l.room,
       l.deposit, l.monthly_rent, l.maintenance_fee, l.premium, l.area_m2,
+      l.trade_type, l.sale_category, l.sale_price,
       l.latitude, l.longitude, l.operating_memo, l.source_url, l.contacts_json, l.version,
       l.registration_at, l.first_collected_at, COUNT(s.id) AS source_count,
       MAX(s.missing_count) AS missing_count,
@@ -392,6 +397,9 @@ export function masterFallbackOriginal(row, images = []) {
     buildingName: clean(row?.building_name || row?.title),
     address: clean(row?.address),
     room: clean(row?.room),
+    tradeType: clean(row?.trade_type) || "lease",
+    saleCategory: clean(row?.sale_category),
+    salePrice: number(row?.sale_price),
     deposit: number(row?.deposit),
     rent: number(row?.monthly_rent),
     fee: number(row?.maintenance_fee),
@@ -443,6 +451,7 @@ async function unifiedDetail(env, propertyId) {
   if (!originals.length) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,
         address, room, deposit, monthly_rent, maintenance_fee, premium, area_m2,
+        trade_type, sale_category, sale_price,
         latitude, longitude, operating_memo, source_url, contacts_json, version,
         registration_at, first_collected_at,
         (SELECT COUNT(*) FROM listing_sources s WHERE s.listing_id=listings.id) AS source_count,
@@ -1339,6 +1348,10 @@ export function separatedMasterValues(sourceRow, parent, newId) {
     address: clean(original.address || parent?.address),
     room: canonicalListingRoom(original.room || parent?.room),
     listingType: clean(original.type || original.category || parent?.listing_type),
+    tradeType: normalizeListingTradeType(original.tradeType || original.trade_type || sourceRow?.trade_type || parent?.trade_type,
+      { legacyDefault: true }),
+    saleCategory: clean(original.saleCategory || original.sale_category || sourceRow?.sale_category || parent?.sale_category),
+    salePrice: numberOr(original.salePrice ?? original.sale_price ?? sourceRow?.sale_price, parent?.sale_price),
     deposit: numberOr(original.deposit, parent?.deposit),
     rent: numberOr(original.rent ?? original.monthly, parent?.monthly_rent),
     fee: numberOr(original.fee ?? original.managementFee, parent?.maintenance_fee),
@@ -1368,7 +1381,9 @@ export function remainingMasterValues(sourceRows, parent, masterId) {
   const groups = new Map();
   for (const [index, sourceRow] of (Array.isArray(sourceRows) ? sourceRows : []).entries()) {
     const value = separatedMasterValues(sourceRow, parent, masterId);
-    const signature = `${value.deposit}|${value.rent}`;
+    const signature = value.tradeType === "sale"
+      ? `${value.tradeType}|${value.saleCategory}|${value.salePrice}`
+      : `${value.tradeType}|${value.deposit}|${value.rent}`;
     const priority = remainingSourcePriority(value.source);
     const current = groups.get(signature);
     if (!current) {
@@ -1388,10 +1403,11 @@ export function remainingMasterValues(sourceRows, parent, masterId) {
 }
 
 function refreshMasterTermsStatement(env, value, masterId, now) {
-  return env.DB.prepare(`UPDATE listings SET deposit=?1, monthly_rent=?2,
-      maintenance_fee=?3, premium=?4, area_m2=?5, version=version+1, updated_at=?6
-    WHERE id=?7 AND status<>'deleted'`)
-    .bind(value.deposit, value.rent, value.fee, value.premium, value.area, now, masterId);
+  return env.DB.prepare(`UPDATE listings SET trade_type=?1, sale_category=?2, sale_price=?3,
+      deposit=?4, monthly_rent=?5, maintenance_fee=?6, premium=?7, area_m2=?8,
+      version=version+1, updated_at=?9 WHERE id=?10 AND status<>'deleted'`)
+    .bind(value.tradeType, value.saleCategory, value.salePrice, value.deposit, value.rent,
+      value.fee, value.premium, value.area, now, masterId);
 }
 
 async function moveOriginal(env, user, body) {
@@ -1399,6 +1415,7 @@ async function moveOriginal(env, user, body) {
   const targetMasterId = clean(body.targetMasterId).slice(0, 100);
   const source = await env.DB.prepare(`SELECT s.*, l.main_source, l.title, l.address, l.building_name,
       l.room, l.listing_type, l.deposit, l.monthly_rent, l.maintenance_fee, l.premium,
+      l.trade_type, l.sale_category, l.sale_price,
       l.area_m2, l.latitude, l.longitude, l.operating_memo, l.source_url AS master_source_url,
       l.contacts_json, l.first_collected_at AS master_first_collected_at,
       l.registration_at, l.last_collected_at AS master_last_collected_at
@@ -1429,15 +1446,17 @@ async function moveOriginal(env, user, body) {
     const statements = [
       env.DB.prepare(`INSERT INTO listings (
           id, property_id, status, main_source, title, address, building_name, room, listing_type,
+          trade_type, sale_category, sale_price,
           deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude,
           operating_memo, source_url, contacts_json, first_collected_at, registration_at,
           last_collected_at, created_at, updated_at
-        ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-          ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?20)`)
+        ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+          ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?23)`)
         .bind(value.id, value.source, value.title, value.address, value.room, value.listingType,
+          value.tradeType, value.saleCategory, value.salePrice,
           value.deposit, value.rent, value.fee, value.premium, value.area, value.latitude,
-          value.longitude, value.memo, value.link, value.contactsJson,
-          value.firstCollectedAt || now, value.registrationAt || now, value.lastCollectedAt || now, now),
+          value.longitude, value.memo, value.link, value.contactsJson, value.firstCollectedAt || now,
+          value.registrationAt || now, value.lastCollectedAt || now, now),
       env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
           list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2 WHERE id=?3`)
         .bind(value.id, now, originalId),
@@ -1467,9 +1486,12 @@ async function moveOriginal(env, user, body) {
       sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
       operationAdjustments: { activeMaster: sourceMasterRemoved ? 0 : 1, history: 1 }, source: "D1" };
   }
-  const target = await env.DB.prepare("SELECT id, operating_memo FROM listings WHERE id=?1 AND status <> 'deleted'")
+  const target = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 AND status <> 'deleted'")
     .bind(targetMasterId).first();
   if (!target) throw Object.assign(new Error("통합할 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
+  if (!listingTradeTypesCanMerge(source.trade_type, target.trade_type)) {
+    throw Object.assign(new Error("상가임대와 매매 원본은 서로 합칠 수 없습니다."), { statusCode: 400 });
+  }
   const targetMemo = carryConfirmedVisitMemo(target.operating_memo, source.operating_memo);
   const confirmationTransferred = targetMemo !== clean(target.operating_memo);
   const statements = [

@@ -367,6 +367,9 @@
   }
 
   function conditionLine(original) {
+    if (text(original && original.tradeType).toLowerCase() === "sale") {
+      return '<span><b>매매</b> ' + number(original.salePrice) + ' · <b>평</b> ' + number(original.area) + '</span>';
+    }
     return '<span><b>보</b> ' + number(original.deposit) + ' / <b>월</b> ' + number(original.rent) +
       ' · <b>관</b> ' + number(original.fee) + ' · <b>권</b> ' + number(original.premium) +
       ' · <b>평</b> ' + number(original.area) + '</span>';

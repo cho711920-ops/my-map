@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.4.7";
+  var VERSION = "1.5.0";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -38,6 +38,7 @@
     pendingSelectionCount: 0,
     lastLocationClusterId: clusterIdFromUrl(location.href),
     selectedCount: 0,
+    tradeType: detectTradeType(location.href),
     selectionChanged: false,
     job: null,
     jobRequestGeneration: 0,
@@ -110,7 +111,23 @@
     var clusterId = clusterIdFromUrl(url || state.selectedUrl || location.href)
       .replace(/[^A-Za-z0-9_-]/g, "")
       .slice(0, 28);
-    return (getClientId() + (clusterId ? "-" + clusterId : "")).slice(0, 64);
+    var market = state.tradeType === "sale" ? "sale" : "lease";
+    return (getClientId() + "-" + market + (clusterId ? "-" + clusterId : "")).slice(0, 64);
+  }
+
+  function detectTradeType(url) {
+    var textValue = String(url || location.href || "");
+    var filterText = "";
+    try {
+      var parsed = new URL(textValue, location.href);
+      filterText = decodeURIComponent(parsed.searchParams.get("af") || "");
+    } catch (_) {}
+    if (/(?:\bBUY\b|매매|sale)/i.test(filterText)) return "sale";
+    if (/(?:\bMONTH(?:LY_RENT)?\b|월세|lease)/i.test(filterText)) return "lease";
+    var selectedText = Array.prototype.slice.call(document.querySelectorAll(
+      "button[aria-pressed=true],[role=tab][aria-selected=true],[role=option][aria-selected=true]"
+    )).map(function(node) { return String(node.textContent || "").trim(); }).join(" ");
+    return /(?:\bBUY\b|매매|sale)/i.test(selectedText) ? "sale" : "lease";
   }
 
   function createPanel() {
@@ -205,6 +222,8 @@
       return;
     }
     var district = state.selectedDistrict || districtFromUrl(state.selectedUrl);
+    var tradeType = detectTradeType(state.selectedUrl);
+    state.tradeType = tradeType;
     var requestId = "daangn-register-" + Date.now();
     var onResult = function (event) {
       if (!event.data || event.data.type !== "JS_COLLECTOR_REGISTER_RESULT" || event.data.requestId !== requestId) return;
@@ -217,11 +236,14 @@
       requestId: requestId,
       target: {
         source: "daangn",
-        key: "daangn-" + (district || clusterIdFromUrl(state.selectedUrl)),
-        label: district ? "당근 " + district : "당근 선택클러스터",
+        key: "daangn-" + tradeType + "-" + (district || clusterIdFromUrl(state.selectedUrl)),
+        label: (tradeType === "sale" ? "당근 매매 " : "당근 상가임대 ") +
+          (district || "선택클러스터"),
         url: state.selectedUrl,
         district: district,
-        selectedCount: Number(state.selectedCount || 0)
+        selectedCount: Number(state.selectedCount || 0),
+        tradeType: tradeType,
+        marketMode: tradeType === "sale" ? "sale" : "lease"
       }
     }, "*");
   }
@@ -242,6 +264,7 @@
     state.selectedUrl = url;
     state.selectedDistrict = String(target.district || districtFromUrl(url) || "");
     state.selectedCount = Number(target.selectedCount || 0);
+    state.tradeType = target && target.tradeType === "sale" ? "sale" : detectTradeType(url);
     state.selectionChanged = false;
     state.job = null;
     renderSelection();
@@ -452,6 +475,7 @@
     }
     state.selectedUrl = url;
     state.selectedDistrict = district || districtFromUrl(url);
+    state.tradeType = detectTradeType(url);
     state.selectedCount = pendingCount;
     state.selectionChanged = changed && Boolean(
       state.job && state.job.url && state.job.url !== state.selectedUrl
@@ -597,7 +621,7 @@
         ? "danggeunResumeJob"
         : "danggeunStartJob";
       state.jobRequestGeneration += 1;
-      var result = await callServer(action, {url: state.selectedUrl});
+      var result = await callServer(action, {url: state.selectedUrl, tradeType: state.tradeType});
       state.job = result.job || null;
       state.selectionChanged = false;
       renderJob();
@@ -858,6 +882,7 @@
       requestId: requestId,
       collectorKey: collectorKey,
       collectorVersion: VERSION,
+      tradeType: state.tradeType === "sale" ? "sale" : "lease",
       clientId: getScopedClientId(jobUrl)
     });
     try {

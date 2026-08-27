@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "5.9.3";
+  var VERSION = "6.0.0";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -328,6 +328,10 @@
       setStatus("자동수집 등록 취소", String(error && error.message ? error.message : error));
       return;
     }
+    var filters = parseFinFilters(location.href);
+    var tradeType = filters.tradeTypes.indexOf("A1") !== -1 ? "sale" : "lease";
+    var filterKey = filters.tradeTypes.concat(filters.realEstateTypes).join("-") || "default";
+    var marketLabel = tradeType === "sale" ? "매매" : "상가임대";
     var requestId = "naver-register-" + Date.now();
     var onResult = function (event) {
       if (!event.data || event.data.type !== "JS_COLLECTOR_REGISTER_RESULT" || event.data.requestId !== requestId) return;
@@ -340,11 +344,13 @@
       requestId: requestId,
       target: {
         source: "naver",
-        key: "naver-district-" + district.cortarNo,
-        label: "네이버 " + district.name,
+        key: "naver-" + tradeType + "-district-" + district.cortarNo + "-" + filterKey,
+        label: "네이버 " + marketLabel + " " + district.name,
         url: location.href,
         district: {name: district.name, cortarNo: district.cortarNo},
-        selectionMode: "district"
+        selectionMode: "district",
+        tradeType: tradeType,
+        marketMode: tradeType === "sale" ? "sale" : "lease"
       }
     }, "*");
   }
@@ -382,6 +388,14 @@
     // 구를 다시 읽으면 등록 대상이 다른 구로 덮어써질 수 있다.
     autoDistrictSelect.value = district.cortarNo;
     autoRegisterButton.textContent = district.name + " 자동수집 등록";
+    if (target && target.url && target.url !== location.href) {
+      var targetFilters = parseFinFilters(target.url);
+      var currentFilters = parseFinFilters(location.href);
+      if (targetFilters.tradeTypes.join("-") !== currentFilters.tradeTypes.join("-") ||
+          targetFilters.realEstateTypes.join("-") !== currentFilters.realEstateTypes.join("-")) {
+        throw new Error("등록한 네이버 거래유형·매물종류 화면과 현재 화면이 다릅니다.");
+      }
+    }
     var runResult = await collectFinSelectedAndSave({automatic: true});
     if (!runResult || runResult.ok !== true || runResult.complete !== true) {
       throw new Error(runResult && runResult.message || "네이버 자동수집이 부분수집 또는 오류로 종료됐습니다.");
@@ -2231,6 +2245,9 @@
         article.tradeTypeName || TRADE_TYPE_LABELS[tradeCode] || tradeCode
       ),
       tradeTypeCode: tradeCode,
+      saleCategory: tradeCode === "A1" ? naverSaleCategory(categoryCode,
+        article.articleRealEstateTypeName || article.realEstateTypeName || "") : "",
+      salePrice: tradeCode === "A1" ? clean(deposit) : "",
       deposit: clean(deposit),
       monthly: clean(monthly),
       areaSquareMeter: areaSquareMeter,
@@ -2269,6 +2286,17 @@
     };
     normalized.listSnapshot = naverListSnapshot(normalized);
     return normalized;
+  }
+
+  function naverSaleCategory(code, label) {
+    var value = (clean(code) + " " + clean(label)).toLowerCase();
+    if (/land|토지|대지|임야|전답/.test(value)) return "land";
+    if (/factory|warehouse|공장|창고|e02/.test(value)) return "factory_warehouse";
+    if (/multi|다가구|다세대/.test(value)) return "multifamily";
+    if (/house|주택|빌라/.test(value)) return "house";
+    if (/building|건물|빌딩/.test(value)) return "building";
+    if (/store|office|상가|점포|사무|근린|d01|d02/.test(value)) return "commercial";
+    return "other";
   }
 
   function finImageUrls(input) {
@@ -2522,6 +2550,8 @@
       clean(item.buildingName),
       clean(item.category),
       clean(item.tradeType),
+      clean(item.saleCategory),
+      clean(item.salePrice),
       clean(item.deposit),
       clean(item.monthly),
       clean(item.areaSquareMeter),
@@ -2574,6 +2604,9 @@
                 : "",
               address: item.jibunAddress,
               room: item.roomInfo || item.floorInfo,
+              tradeType: item.tradeTypeCode || item.tradeType,
+              saleCategory: item.saleCategory,
+              salePrice: item.salePrice,
               latitude: item.latitude,
               longitude: item.longitude
             };
@@ -2653,6 +2686,8 @@
         complete: Boolean(metadata.complete),
         stopped: Boolean(metadata.stopped),
         source: metadata.source || "네이버",
+        tradeType: metadata.tradeType ||
+          (parseFinFilters(location.href).tradeTypes.indexOf("A1") !== -1 ? "sale" : "lease"),
         observedSourceIds: Array.isArray(metadata.observedSourceIds)
           ? metadata.observedSourceIds : [],
         expectedCount: Number(metadata.expectedCount || 0),
@@ -2769,7 +2804,8 @@
     var session = {
       sessionId: createCollectionSessionId(),
       scope: scopeOverride || "선택 클러스터",
-      startedAt: new Date().toISOString()
+      startedAt: new Date().toISOString(),
+      tradeType: parseFinFilters(location.href).tradeTypes.indexOf("A1") !== -1 ? "sale" : "lease"
     };
 
     try {
