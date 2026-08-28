@@ -95,7 +95,7 @@
   function sourceHtml(item) {
     var d=ui().saleSummary(item),paths=d.fieldSources||{},rows=[];
     Object.keys(paths).forEach(function(k){if(k==="landUse"||k==="zoning")rows.push((k==="landUse"?"지목":"용도지역")+": 공실박스 "+paths[k]);});
-    return '<p class="sale-provenance">정보 출처: '+esc(item.source||'직접등록')+' · 제공처 확인일: '+esc(d.providerCheckedAt||'미제공')+'<br>'+esc(rows.join(' / ')||'기본정보와 상세설명 기재값. 설명 추출값은 상세에 별도 표시합니다.')+'<br>확인일은 실제 계약 가능 여부를 보증하지 않습니다.</p>';
+    return '<details class="sale-provenance sale-source-details-v1"><summary>출처·확인일 보기 · '+esc(item.source||'직접등록')+'</summary><div><p>제공처 확인일: '+esc(d.providerCheckedAt||'미제공')+'</p><p>'+esc(rows.join(' / ')||'기본정보와 상세설명 기재값. 설명 추출값은 상세에 별도 표시합니다.')+'</p><p>확인일은 실제 계약 가능 여부를 보증하지 않습니다.</p></div></details>';
   }
   function detailTools(item,propertyId) {
     if(!ui().isSale(item))return "";

@@ -43,7 +43,13 @@ createServer(async (request, response) => {
       response.setHeader("Content-Type","text/html; charset=utf-8");
       response.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>수집 완료 내역 검수</title><body style="font:15px Arial;padding:24px;max-width:460px"><h2>수집 완료 · 제외/실패 3건</h2>'+html+'</body>');return;
     }
+    if (pathname === "/sale-cards-mobile") {
+      response.setHeader("Content-Type", "text/html; charset=utf-8");
+      response.end('<!doctype html><meta charset="utf-8"><title>모바일 매매 상세 검수</title><h1>390px 모바일 상세</h1><iframe title="모바일 매매 상세" src="/sale-cards?mobile=1#detail-examples" style="width:390px;height:780px;border:1px solid #ddd"></iframe>');
+      return;
+    }
     if (pathname === "/sale-cards") {
+      const mobile = new URL(request.url, `http://127.0.0.1:${port}`).searchParams.has("mobile");
       const source = await readFile(resolve(root, "index.html"), "utf8");
       const head = source.match(/<template id="jsAuthenticatedHeadAssets">([\s\S]*?)<\/template>/)[1];
       const styles = [...head.matchAll(/<link[^>]+href="css\/[^>]+>/g)].map(match => match[0]).join("\n");
@@ -51,7 +57,7 @@ createServer(async (request, response) => {
       const functions = ["addListItem", "getRentPerPyeongValue", "getPyeongBadgeClass", "buildPyeongMiniBadge", "buildCardActionIconV662"]
         .map(name => script.match(new RegExp(`^function ${name}\\([^]*?^}`, "m"))[0]).join("\n");
       response.setHeader("Content-Type", "text/html; charset=utf-8");
-      response.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>매매 카드 검수</title>${styles}<style>body{overflow:auto!important;background:#f1f5fa!important;padding:16px!important;height:auto!important}#list{display:flex!important;gap:18px;flex-wrap:wrap;position:static!important;width:auto!important;height:auto!important;max-height:none!important;padding:0!important;overflow:visible!important}.sample{max-width:100%;box-sizing:border-box}.sample h2{font-size:16px}.sample .item{margin:0 0 12px!important}.detail-example{width:360px;background:white;padding:16px;margin-top:18px}</style></head><body><main id="list"></main><section class="detail-example"></section><script src="js/listing-trade-ui-v1.js"></script><script>
+      response.end(`<!doctype html><html${mobile?' class="js-mobile-app-v1"':''}><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>매매 카드 검수</title>${styles}<style>body{overflow:auto!important;background:#f1f5fa!important;padding:16px!important;height:auto!important}#list,.detail-examples{display:flex!important;gap:18px;flex-wrap:wrap;position:static!important;width:auto!important;height:auto!important;max-height:none!important;padding:0!important;overflow:visible!important}.sample{max-width:100%;box-sizing:border-box}.sample h2{font-size:16px}.sample .item{margin:0 0 12px!important}.detail-example{width:360px;max-width:100%;box-sizing:border-box;background:white;margin-top:18px}.detail-example h2{font-size:16px}</style></head><body><main id="list"></main><div class="detail-examples" id="detail-examples"></div><script src="js/listing-trade-ui-v1.js"></script><script src="js/sale-workbench-v1.js"></script><script>
       // Exercise the actual production card builder with only unrelated actions stubbed.
       const selectedPrintKeys=[],openMemoKey='',editingMemoKey='';
       function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -74,7 +80,16 @@ createServer(async (request, response) => {
         {name:'기존 상가임대',address:'서구 탄방동 793',type:'일반상가',room:'1층',tradeType:'lease',deposit:1000,rent:40,fee:0,premium:0,area:10}
       ];
       for(const width of [600,450,360]){const section=document.createElement('section');section.className='sample';section.style.width=width+'px';section.innerHTML='<h2>카드 폭 '+width+'px</h2>';document.querySelector('main').append(section);fixtures.forEach((f,n)=>addListItem({key:width+'-'+n,propertyId:width+'-'+n,tradeType:'sale',source:'공실박스',memo:'',...f},section));}
-      document.querySelector('.detail-example').innerHTML='<h2>상세 수익률 안내</h2>'+JSListingTradeV1.saleDetailsHtml({...fixtures[0],tradeType:'sale'});
+      // Include the real summary wrapper and all production CSS: the price > p
+      // selector previously overrode note typography, invisible in isolated UI.
+      for(const n of [2,0,4]){
+        const f={...fixtures[n],tradeType:'sale',source:'공실박스',propertyId:'preview-'+n};
+        f.saleDetails={...(f.saleSummary||f.saleDetails),providerCheckedAt:'2025-04-25 10:22:09',fieldSources:{landUse:'detail.bilinfo.jimok',zoning:'detail.bilinfo.yongdoaddr'}};
+        delete f.saleSummary;
+        const section=document.createElement('section');section.className='detail-example unified-detail-summary-v8';
+        section.innerHTML='<h2>'+escapeHtml(f.name)+' · 상세</h2><p class="preview-price">매매 '+f.salePrice.toLocaleString('ko-KR')+'만원</p>'+JSListingTradeV1.saleDetailsHtml(f)+JSSaleWorkbenchV1.detailTools(f,f.propertyId)+'<div class="unified-detail-utility-actions-v8"><button>네비</button><button>로드뷰</button><button>대장</button><button>수정</button></div>';
+        document.querySelector('.detail-examples').append(section);
+      }
       </script></body></html>`);
       return;
     }

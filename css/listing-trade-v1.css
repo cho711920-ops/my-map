@@ -198,15 +198,21 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 .listing-sale-details-v1 dd { margin: 0; color: #172c46; overflow-wrap: anywhere; }
 .listing-sale-yield-v1.pyeong-mini-badge { background: #e9f5f1; color: #146750; border-color: #a9d5c7; }
 .listing-sale-yield-v1.unavailable { background: #f1f4f8; color: #69788a; border-color: #d9e1ea; }
-.listing-sale-yield-note-v1 { color: #65758b; font-size: 11px; line-height: 1.6; margin: -4px 0 14px; }
+/* These are notes, not the price paragraph. The shared desktop price rule
+   uses !important; keep this override restricted to the sale notice only. */
+.listing-sale-yield-note-v1,
+.unified-detail-summary-v8 > p.listing-sale-yield-note-v1 { color: #63748b; font-size: 12px !important; font-weight: 400 !important; line-height: 1.55 !important; letter-spacing: normal; margin: 8px 0 12px; padding: 0; background: transparent; border-radius: 0; overflow-wrap: anywhere; }
 .listing-sale-areas-v1 { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px; color: #25734d; font-size: 11px; }
 .listing-sale-areas-v1 > span { white-space: nowrap; }
 .listing-sale-areas-v1 i { font-style: normal; color: #9ba9b7; }
-.listing-land-info-v1 { display: flex; flex: 0 0 100%; flex-wrap: wrap; gap: 2px 12px; min-width: 0; padding: 3px 0 1px; color: #68798b; font-size: 11px; line-height: 1.5; white-space: normal; }
+.listing-land-info-v1 { display: flex; flex: 0 0 100%; flex-wrap: wrap; align-items: flex-start; gap: 5px; min-width: 0; padding: 5px 0 3px; color: #305c4d; font-size: 12px; line-height: 1.5; white-space: normal; }
 .listing-sale-card-v1 .item-compact-price-v650 > .listing-land-info-v1 { flex: 0 0 100% !important; white-space: normal !important; }
-.listing-land-info-v1 > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-.listing-land-info-v1 b { color: #334b64; font-weight: 700; }
-.listing-land-info-v1 .unavailable b { color: #8794a2; font-weight: 400; }
+.listing-land-info-v1 > span { box-sizing: border-box; min-width: 0; max-width: 100%; padding: 3px 7px; border: 1px solid #a6d6c1; border-radius: 6px; background: #edf8f2; overflow-wrap: anywhere; }
+.listing-land-info-v1 > span:last-child { color: #345d8c; border-color: #b4cfee; background: #edf4ff; }
+.listing-land-info-v1 b { color: #174d38; font-size: 13px; font-weight: 750; }
+.listing-land-info-v1 > span:last-child b { color: #214f86; }
+.listing-land-info-v1 > span.unavailable { color: #69788a; border-color: #d8e0e9; background: #f4f6f8; }
+.listing-land-info-v1 > span.unavailable b { color: #69788a; font-weight: 500; }
 .listing-sale-card-v1 .item-compact-price-v650.price-line { flex-wrap: wrap !important; height: auto !important; white-space: normal !important; }
 .listing-sale-card-v1 .item-price-values-v652 { flex-wrap: wrap !important; white-space: normal !important; overflow: visible !important; }
 .listing-sale-card-v1 .item-compact-main-v650 { grid-template-rows: minmax(28px, auto) minmax(30px, auto) minmax(30px, auto) !important; height: auto !important; max-height: none !important; }
@@ -229,6 +235,12 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100
 #saleFiltersV1 .row { display: flex; gap: 8px; }
 #saleFiltersV1 .row input { width: calc(50% - 4px); }
 .sale-filter-help, .sale-provenance { font-size: 11px; line-height: 1.6; color: #68788c; overflow-wrap: anywhere; }
+.sale-source-details-v1 { margin: 8px 0 14px; padding: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #63748b; }
+.sale-source-details-v1 > summary { padding: 7px 0; cursor: pointer; font-size: 12px; font-weight: 500; color: #52657c; }
+.sale-source-details-v1 > summary:focus-visible { outline: 2px solid #2875d8; outline-offset: 3px; border-radius: 4px; }
+.sale-source-details-v1 > div { padding: 9px 11px; border: 1px solid #e0e7ef; border-radius: 8px; background: #f8fafc; overflow-wrap: anywhere; }
+.sale-source-details-v1 > div > p { margin: 0 0 6px; padding: 0; color: inherit; font-size: 12px; font-weight: 400; line-height: 1.55; }
+.sale-source-details-v1 > div > p:last-child { margin-bottom: 0; }
 .sale-tools-v1 { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .sale-tools-v1 button, .sale-tools-v1 a { flex: 1 1 130px; display: inline-flex; justify-content: center; align-items: center; min-height: 38px; padding: 8px 12px; border: 1px solid #b5cbea; border-radius: 9px; color: #20539b; background: #f4f8ff; font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1.4; text-decoration: none; cursor: pointer; }
 .sale-workbench-dialog { box-sizing: border-box; width: min(900px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #d3dfea; border-radius: 16px; background: #fff; color: #23384f; box-shadow: 0 24px 80px #1233; font: 14px/1.6 Pretendard, sans-serif; }
