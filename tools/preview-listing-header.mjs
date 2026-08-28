@@ -13,6 +13,14 @@ createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url, `http://127.0.0.1:${port}`).pathname;
     response.setHeader("Cache-Control", "no-store");
+    if (pathname === "/parcel-links") {
+      const live=new URL(request.url,`http://127.0.0.1:${port}`).searchParams.get('live')==='1';
+      const sdk=live?(await readFile(resolve(root,'index.html'),'utf8')).match(/https:\/\/dapi\.kakao\.com\/v2\/maps\/sdk\.js[^"']+/)?.[0]?.replaceAll('&amp;','&'):'';
+      response.setHeader('Content-Type','text/html; charset=utf-8');
+      response.end(`<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width,initial-scale=1"><title>필지 연결 UI 검수</title><link rel="stylesheet" href="css/listing-trade-v1.css"><body style="font:14px Arial;padding:20px"><h1>필지 연결 검수</h1><p>${live?'실제 카카오 주소 검색 SDK를 사용합니다.':'주소 검색만 모의 응답입니다.'} 생성된 외부 링크는 실제 서비스입니다. 운영 데이터 저장 없음.</p><button onclick="JSSaleWorkbenchV1.lookup({address:'서구 도마동 49-38'})">정확한 지번 매물</button><button onclick="JSSaleWorkbenchV1.lookup({address:'서구 도마동'})">지번 누락 매물</button><script src="js/listing-trade-ui-v1.js"></script><script src="js/parcel-external-links-v1.js"></script><script src="js/sale-workbench-v1.js"></script>${live?'<script src="'+sdk+'"></script><script>kakao.maps.load(function(){});</script>':`<script>
+      window.kakao={maps:{services:{Status:{OK:'OK'},AnalyzeType:{EXACT:'exact'},Geocoder:function(){this.addressSearch=(query,callback)=>setTimeout(()=>callback(query==='대전광역시 서구 도마동 49-38'?[{address:{address_name:'대전 서구 도마동 49-38',b_code:'3017010300',main_address_no:'49',sub_address_no:'38',mountain_yn:'N'}}]:[],'OK'),300);}}}};
+      </script>`}</body></html>`);return;
+    }
     if (pathname === "/sale-workbench") {
       const source = await readFile(resolve(root,"index.html"),"utf8");
       const styles=[...source.matchAll(/<link[^>]+href="css\/[^>]+>/g)].map(m=>m[0]).join('\n');
@@ -101,7 +109,7 @@ createServer(async (request, response) => {
     }
     const relative = decodeURIComponent(pathname).replace(/^\/+/, "");
     const file = resolve(root, relative);
-    if (!file.startsWith(root + sep) || !/^(css\/|js\/(listing-trade-ui-v1|sale-workbench-v1|mobile-app-v1)\.js$)/.test(relative)) {
+    if (!file.startsWith(root + sep) || !/^(css\/|js\/(listing-trade-ui-v1|sale-workbench-v1|parcel-external-links-v1|mobile-app-v1)\.js$)/.test(relative)) {
       response.writeHead(404).end();
       return;
     }

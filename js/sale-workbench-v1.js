@@ -114,9 +114,26 @@
     dialog.showModal();return dialog;
   }
   function lookup(item) {
-    var address=clean(item.address),valid=/(?:동|리|읍|면)\s*(?:산\s*)?\d/.test(address);
-    var d=modal('외부 부동산 조회','<p>아래 주소를 복사한 뒤 새 탭의 검색창에 붙여 넣으세요. 정확한 필지가 확인되지 않은 좌표로 이동시키지 않습니다.</p><label>검색할 주소<input readonly aria-label="조회 주소" value="'+esc(address)+'"></label>'+(valid?'':'<p role="alert">정확한 지번이 없습니다. 외부 사이트에서 주소를 먼저 확인하세요.</p>')+'<div class="sale-tools-v1"><button type="button" data-copy-address>주소 복사</button><a href="https://www.eum.go.kr/web/am/amMain.jsp" target="_blank" rel="noopener noreferrer">토지이음 ↗</a><a href="https://www.valueupmap.com/" target="_blank" rel="noopener noreferrer">밸류맵 ↗</a></div><p role="status"></p><p>외부 서비스의 로그인·유료 기능은 해당 사이트 기준입니다. 외부 자료를 자동으로 가져오지는 않습니다.</p>');
-    d.querySelector('[data-copy-address]').onclick=async function(){var status=d.querySelector('[role="status"]');try{await navigator.clipboard.writeText(address);status.textContent='주소를 복사했습니다.';}catch(_){d.querySelector('input').select();status.textContent='자동 복사가 제한됩니다. 선택된 주소를 직접 복사하세요.';}};
+    var service=global.JSParcelExternalLinksV1,parsed=service&&service.parseAddress(item.address),address=parsed?parsed.query:clean(item.address);
+    var d=modal('외부 부동산 조회','<p>지번을 확인한 뒤 해당 필지를 새 탭에서 바로 엽니다.</p><label>조회할 지번<input aria-label="조회 주소" value="'+esc(address)+'"></label><p class="sale-provenance">시 이름이 생략된 동구·중구·서구·유성구·대덕구는 대전 기준입니다. 조회용 주소를 바꿔도 저장된 매물정보는 변경하지 않습니다.</p><div class="sale-tools-v1"><button type="button" data-check-parcel>지번 확인</button><button type="button" data-copy-address>주소 복사</button></div><p data-lookup-status role="status" aria-live="polite">지번 확인 중…</p><div class="sale-tools-v1"><a data-parcel-link="eum" role="link" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">토지이음 해당 필지 ↗</a><a data-parcel-link="valuemap" role="link" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">밸류맵 해당 필지 ↗</a></div><p data-copy-status role="status"></p><details><summary>직접 검색이 필요한 경우</summary><p>조회 실패·주소 미공개·외부 서비스 제한 시 주소를 복사해 직접 검색하세요.</p><div class="sale-tools-v1"><a href="https://www.eum.go.kr/web/am/amMain.jsp" target="_blank" rel="noopener noreferrer">토지이음 홈</a><a href="https://www.valueupmap.com/" target="_blank" rel="noopener noreferrer">밸류맵 홈</a></div></details><p class="sale-provenance">외부 서비스의 로그인·열람제한·유료 기능은 해당 사이트 기준입니다. 외부 자료를 자동으로 가져오지는 않습니다.</p>');
+    var sequence=0,field=d.querySelector('input'),status=d.querySelector('[data-lookup-status]'),button=d.querySelector('[data-check-parcel]');
+    function clearLinks(){d.querySelectorAll('[data-parcel-link]').forEach(function(a){a.removeAttribute('href');a.setAttribute('aria-disabled','true');a.setAttribute('tabindex','-1');});}
+    async function check(){
+      var request=++sequence,query=field.value;clearLinks();button.disabled=true;status.textContent='정확한 지번을 확인하고 있습니다…';
+      try{
+        if(!service)throw Error('조회 기능을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
+        var result=await service.resolve(query);
+        if(!d.isConnected||!d.open||request!==sequence)return;
+        field.value=result.address;status.textContent='확인된 지번: '+result.address;
+        d.querySelectorAll('[data-parcel-link]').forEach(function(a){a.href=result.links[a.dataset.parcelLink];a.removeAttribute('aria-disabled');a.removeAttribute('tabindex');});
+      }catch(e){if(d.isConnected&&d.open&&request===sequence)status.textContent=e.message;}
+      finally{if(d.isConnected&&d.open&&request===sequence)button.disabled=false;}
+    }
+    field.addEventListener('input',function(){sequence++;clearLinks();button.disabled=false;status.textContent='주소를 변경했습니다. 지번 확인을 눌러 주세요.';});
+    field.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();check();}});
+    button.onclick=check;
+    d.querySelector('[data-copy-address]').onclick=async function(){var copyStatus=d.querySelector('[data-copy-status]');try{await navigator.clipboard.writeText(field.value);copyStatus.textContent='주소를 복사했습니다.';}catch(_){field.select();copyStatus.textContent='자동 복사가 제한됩니다. 선택된 주소를 직접 복사하세요.';}};
+    check();return d;
   }
   function calcInputs(item) {
     var d=ui().saleSummary(item),values={price:item.salePrice ?? item.sale_price,deposit:d.totalDeposit,income:d.monthlyIncome,loan:d.loanAmount??0,interest:0,vacancy:0,expense:0,acquisition:0};

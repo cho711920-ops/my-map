@@ -237,6 +237,7 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100
 .sale-workbench-dialog h2 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
 .sale-workbench-dialog button { border: 1px solid #bdcee3; border-radius: 8px; padding: 9px 12px; color: #22579e; background: #f5f9ff; cursor: pointer; }
 .sale-workbench-dialog button:disabled { opacity: .45; cursor: wait; }
+.sale-workbench-dialog a[aria-disabled="true"] { opacity: .45; pointer-events: none; cursor: not-allowed; }
 .sale-workbench-dialog [data-sale-close] { flex: 0 0 auto; }
 .sale-workbench-body { padding: 18px 20px; }
 .sale-workbench-body > p:first-child { margin-top: 0; }
