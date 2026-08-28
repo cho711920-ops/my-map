@@ -54,17 +54,35 @@ function reportItem(target) {
   return report.items.find((item) => item.key === key) || null;
 }
 
+function displayCounts(item) {
+  const counts = { ...(item && item.counts || {}) };
+  if (counts.version !== 2 && /daangn|당근/.test(String(item && item.source || ""))) {
+    // Old reports did not persist unchanged counts. Never invent a full census.
+    counts.legacyDaangn = true;
+    const match = String(item.message || "").match(/주소·층 오류 (\d+)건/);
+    if (match) {
+      counts.addressDeferred = Math.min(Number(counts.failed || 0), Number(match[1]));
+      counts.failed = Math.max(0, Number(counts.failed || 0) - counts.addressDeferred);
+    }
+  }
+  return counts;
+}
+
 function countText(item) {
-  const counts = item && item.counts || {};
+  const counts = displayCounts(item);
   const parts = [];
-  if (Number(counts.expected || 0)) {
-    parts.push(`${Number(counts.processed || 0).toLocaleString("ko-KR")} / ${Number(counts.expected).toLocaleString("ko-KR")}건 확인`);
+  if (counts.legacyDaangn) {
+    parts.push(`이전 기록: 대상 ${Number(counts.expected || 0).toLocaleString("ko-KR")} · 상세 처리 ${Number(counts.processed || 0).toLocaleString("ko-KR")}건`);
+  } else if (Number(counts.expected || 0)) {
+    parts.push(`${Number(counts.processed || 0).toLocaleString("ko-KR")} / ${Number(counts.expected).toLocaleString("ko-KR")}건 ${counts.version === 2 ? "목록 확인" : "확인"}`);
   } else if (Number(counts.processed || 0)) {
     parts.push(`${Number(counts.processed).toLocaleString("ko-KR")}건 확인`);
   }
   if (Number(counts.created || 0)) parts.push(`신규 ${Number(counts.created).toLocaleString("ko-KR")}`);
   if (Number(counts.updated || 0)) parts.push(`변경 ${Number(counts.updated).toLocaleString("ko-KR")}`);
   if (Number(counts.review || 0)) parts.push(`검증 ${Number(counts.review).toLocaleString("ko-KR")}`);
+  if (Number(counts.unchanged || 0)) parts.push(`기존 동일 ${Number(counts.unchanged).toLocaleString("ko-KR")}`);
+  if (Number(counts.addressDeferred || 0)) parts.push(`주소 보류 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}`);
   if (Number(counts.failed || 0)) parts.push(`오류 ${Number(counts.failed).toLocaleString("ko-KR")}`);
   return parts.join(" · ");
 }
@@ -74,7 +92,31 @@ function statusDetail(item) {
   const counts = countText(item);
   const at = item.finishedAt || item.startedAt || item.updatedAt;
   const time = at ? registeredTime(at) : "";
-  return [counts, item.message, time].filter(Boolean).join(" · ");
+  const display = displayCounts(item);
+  const detail = display.legacyDaangn && display.addressDeferred
+    ? "정확한 지번 미제공 · 지도 등록 보류" + (display.failed ? " · 조회·저장 실패도 확인 필요" : "")
+    : item.message;
+  return [counts, detail, time].filter(Boolean).join(" · ");
+}
+
+function reportStatus(item) {
+  const counts = displayCounts(item);
+  return item && item.status === "partial" && counts.version === 2 && counts.listComplete &&
+    counts.addressDeferred > 0 && !counts.failed ? "완료·주소보류" : STATUS_TEXT[item && item.status] || "대기";
+}
+
+function renderDiagnostics(item) {
+  const rows = item && Array.isArray(item.diagnostics) ? item.diagnostics : [];
+  if (!rows.length) return "";
+  return `<details class="target-diagnostics"><summary>보류·실패 내역 (최근 ${rows.length}건)</summary>
+    <p>정확한 번지 없는 원본은 보존하며 지도 등록은 보류합니다. 다음 수집에서 다시 확인합니다. 아래는 재시도 중 발생한 오류도 포함한 최근 기록입니다.</p>
+    <ul>${rows.map(row => {
+      const id = String(row.sourceId || "");
+      const label = /^\d+$/.test(id)
+        ? `<a href="https://realty.daangn.com/?article_id=%22${id}%22&amp;panel_stack=article" target="_blank" rel="noopener noreferrer">당근 ${id} ↗</a>`
+        : escapeHtml(id || "번호 미확인");
+      return `<li>${label} · ${escapeHtml(row.message || "확인 필요")}</li>`;
+    }).join("")}</ul></details>`;
 }
 
 function renderRunSummary() {
@@ -92,9 +134,9 @@ function renderRunSummary() {
   const failed = Number(counts.failed || 0);
   return `<div class="run-summary-grid">
     <span><b>${report.active ? "수집 실행 중" : "최근 실행 결과"}</b><small>${registeredTime(report.startedAt)}</small></span>
-    <span><b>${finished} / ${report.items.length}개 완료</b><small>부분완료 포함</small></span>
+    <span><b>${finished} / ${report.items.length}개 처리 종료</b><small>정상 ${Number(counts.completed || 0)} · 부분/보류 ${Number(counts.partial || 0)}</small></span>
     <span><b>${running}개 진행</b><small>${waiting}개 대기</small></span>
-    <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed ? "확인 필요" : "정상"}</small></span>
+    <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed || counts.partial ? "보류·실패 내역 확인" : report.active ? "진행 중" : "정상"}</small></span>
   </div>`;
 }
 
@@ -119,9 +161,9 @@ function portableTarget(target) {
 function renderTarget(target, index) {
   const item = reportItem(target);
   const status = item ? item.status : "pending";
-  return `<div class="item target-item">
-    <div class="target-state state-${escapeHtml(status)}"><span>${escapeHtml(STATUS_TEXT[status] || status)}</span></div>
-    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small>${escapeHtml(statusDetail(item))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small></div>
+  return `<div class="item target-item" data-report-key="${escapeHtml(String(target.key || index))}">
+    <div class="target-state state-${escapeHtml(status)}"><span>${escapeHtml(reportStatus(item))}</span></div>
+    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small class="target-result">${escapeHtml(statusDetail(item))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small>${renderDiagnostics(item)}</div>
     <div class="item-actions"><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>사용</label><button data-remove="${index}">삭제</button></div>
   </div>`;
 }
@@ -144,7 +186,15 @@ function render() {
   document.getElementById("closeTabs").checked = config.closeTabs !== false;
   const targets = Array.isArray(config.targets) ? config.targets : [];
   document.getElementById("runSummary").innerHTML = renderRunSummary();
-  document.getElementById("targets").innerHTML = renderTargets(targets);
+  const targetList = document.getElementById("targets");
+  const openDetails = new Set([...targetList.querySelectorAll(".target-item")]
+    .filter(node => node.querySelector("details[open]"))
+    .map(node => node.dataset.reportKey));
+  targetList.innerHTML = renderTargets(targets);
+  targetList.querySelectorAll(".target-item").forEach(node => {
+    const details = node.querySelector("details");
+    if (details && openDetails.has(node.dataset.reportKey)) details.open = true;
+  });
   const logs = Array.isArray(state.logs) ? state.logs.slice(0, 30) : [];
   document.getElementById("logs").classList.add("log-list");
   document.getElementById("logs").innerHTML = logs.length ? logs.map((log) => `

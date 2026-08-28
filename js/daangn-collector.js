@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.1";
+  var VERSION = "1.5.2";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -208,8 +208,10 @@
       metric("found","선택·찾은 매물") + metric("processed","상세 처리") + metric("remaining","남은 매물") +
       metric("created","신규 등록") + metric("merged","자동 통합") + metric("updated","조건 변경") +
       metric("review","검증대기") + metric("detailedDuplicates","상세 중복") + metric("skippedUnchanged","기존 동일 생략") +
-      metric("addressMissing","주소 미확인") + metric("failed","조회 실패") + metric("page","목록 페이지") +
-      '</div><div class="jsd-card"><div class="jsd-rule" data-role="rule"></div>' +
+      metric("addressMissing","주소 보류") + metric("failed","조회·저장 실패") + metric("page","목록 페이지") +
+      '</div><details class="jsd-card" data-role="diagnostics" hidden><summary>보류·실패 내역</summary>' +
+      '<div class="jsd-detail" data-role="diagnostic-items"></div></details>' +
+      '<div class="jsd-card"><div class="jsd-rule" data-role="rule"></div>' +
       '<div class="jsd-actions"><button type="button" class="jsd-btn jsd-start" data-action="start">수집 시작</button>' +
       '<button type="button" class="jsd-btn jsd-stop" data-action="stop" disabled>안전중단</button>' +
       '<button type="button" class="jsd-btn jsd-auto" data-action="auto-register">자동수집 등록</button></div></div></div>';
@@ -796,15 +798,34 @@
     } catch (_) {}
   }
 
+  function jobDisplay(job) {
+    var deferred = Math.min(Number(job.failed || 0), Number(job.addressMissing || 0));
+    var failed = Math.max(0, Number(job.failed || 0) - deferred);
+    return { deferred: deferred, failed: failed,
+      checked: Number(job.skippedUnchanged || 0) + Number(job.processed || 0),
+      title: failed ? "당근 부분완료 · 실패 확인 필요" :
+        job.district && job.completeCollection !== true ? "당근 부분완료 · 목록 확인 필요" :
+        deferred ? "목록 확인 완료 · 주소 보류" : "당근 수집 완료" };
+  }
+
   function renderJob() {
     var job = state.job;
     if (!job) return renderSelection();
+    var display = jobDisplay(job);
     ["found","processed","remaining","created","merged","updated","review","detailedDuplicates",
       "skippedUnchanged","addressMissing","failed","page"]
       .forEach(function (key) {
         var node = panel.querySelector('[data-metric="' + key + '"]');
-        if (node) node.textContent = Number(job[key] || 0).toLocaleString("ko-KR");
+        if (node) node.textContent = Number(key === "failed" ? display.failed : job[key] || 0).toLocaleString("ko-KR");
       });
+    var diagnostics = panel.querySelector('[data-role="diagnostics"]');
+    var diagnosticItems = panel.querySelector('[data-role="diagnostic-items"]');
+    var errors = Array.isArray(job.detailErrors) ? job.detailErrors.slice(-60) : [];
+    if (diagnostics && diagnosticItems) {
+      diagnostics.hidden = !errors.length;
+      diagnosticItems.textContent = "최근 " + errors.length + "건 (재시도 오류 기록 포함) · 번지가 없는 원본은 보존하고 지도 등록을 보류합니다.\n" +
+        errors.map(function (error) { return "당근 " + String(error.sourceId || "번호 미확인") + " · " + String(error.message || "확인 필요"); }).join("\n");
+    }
     var listing = job.phase === "list";
     var complete = job.status === "complete";
     var paused = job.status === "paused";
@@ -817,10 +838,11 @@
         "초 · 합계 " + (Number(job.lastChunkMs || 0) / 1000).toFixed(1) + "초"
       : "";
     setStatus(
-      complete ? "당근 수집 완료" : (listing ? "클러스터 목록 수집 중" : (paused ? "안전중단됨" : "상세조회·저장 중")),
+      complete ? display.title : (listing ? "클러스터 목록 수집 중" : (paused ? "안전중단됨" : "상세조회·저장 중")),
       (job.message || "") + (job.district
-        ? "\n대전 " + job.district + " · 오류 없이 완료 시 구 완전수집"
+        ? "\n대전 " + job.district + " · 목록 확인 " + display.checked.toLocaleString("ko-KR") + " / " + Number(job.found || 0).toLocaleString("ko-KR") + "건 (기존 동일 포함)"
         : "\n개별클러스터 · 완전수집 제외") +
+        (display.deferred ? "\n정확한 지번 미제공 " + display.deferred + "건 · 지도 등록 보류 / 다음 수집에서 재확인" : "") +
         "\n수집기 v" + VERSION + " · 자동 묶음 " + Number(job.chunkSize || 20) + "개" + timing
     );
     startButton.disabled = job.status === "running";
@@ -829,6 +851,8 @@
   }
 
   function clearMetrics() {
+    var diagnostics = panel.querySelector('[data-role="diagnostics"]');
+    if (diagnostics) diagnostics.hidden = true;
     ["found","processed","remaining","created","merged","updated","review","detailedDuplicates",
       "skippedUnchanged","addressMissing","failed","page"]
       .forEach(function (key) {

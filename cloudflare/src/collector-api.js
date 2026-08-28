@@ -2244,6 +2244,11 @@ async function finalizeDaangnJob(env, job) {
   job.message = result.complete
     ? `전체 ${job.found}개 확인 · 완전수집 검증 완료`
     : `전체 ${job.found}개 확인 · 부분수집 보존${job.completionIssues.length ? ` · ${job.completionIssues.join(", ")}` : ""}`;
+  // Keep legacy failed/addressMissing counters and completion issues for installed
+  // collectors. A complete census is not a promise that every ad was map-registered.
+  if (result.complete && Number(job.addressMissing || 0) > 0) {
+    job.message = `전체 ${job.found}개 목록 확인 완료 · 정확한 지번 미제공 ${job.addressMissing}건 지도 등록 보류`;
+  }
   return result;
 }
 

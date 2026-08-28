@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import test from "node:test";
+import { result as daangnResult } from "./fixtures/daangn-report-fixture.mjs";
 
 const read = (file) => fs.readFileSync(new URL("../" + file, import.meta.url), "utf8");
 const background = read("edge-automation/extension/background.js");
@@ -48,7 +49,7 @@ function harness(overrides = {}) {
         async update(id, options) { navigation.push(options.url); return { id, status: "complete" }; },
         async create(options) { navigation.push(options.url); return { id: 43, status: "complete" }; },
         async remove() {}, async sendMessage() { return { started: true }; }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.3" }), onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.4" }), onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async () => {} }
     }
@@ -119,7 +120,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.3");
+  assert.equal(response.backgroundBuild, "1.1.4");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -174,6 +175,37 @@ test("Daangn exhausted small scope proceeds once, with warning report and no ret
   assert.equal(h.data[RUN].retryQueue.length, 0);
   assert.equal(h.data[REPORT].items[3].status, "partial");
   assert.match(h.data[REPORT].items[3].message, /관찰 원본 100건 미만/);
+});
+
+test("address-only Daangn holds persist accurate counts/reasons and finish without restarting the district", async () => {
+  const h = harness({ targetStartedAt: clock - minute });
+  const response = { ...daangnResult(), runId: "cycle", targetRunId: "seo" };
+  await h.context.finishCurrentTarget(response, 42);
+  const item = h.data[REPORT].items[3];
+  assert.equal(h.data[RUN].index, 4);
+  assert.equal(h.data[RUN].retryQueue.length, 0);
+  assert.equal(item.status, "partial");
+  assert.equal(item.counts.processed, 2078);
+  assert.equal(item.counts.addressDeferred, 19);
+  assert.equal(item.counts.failed, 0);
+  assert.equal(item.diagnostics[0].sourceId, "2068835");
+  assert.equal(item.diagnostics[0].raw, undefined);
+  assert.match(item.message, /지도 등록 보류/);
+  await h.context.finalizeRun(h.data[RUN]);
+  assert.match(h.data[LOG][0].message, /정상 3, 부분\/보류 1, 실패 0/);
+  assert.equal(h.data[LOG][0].level, "warning");
+});
+
+test("actual Daangn failure still enters the normal retry path", async () => {
+  const h = harness({ targetStartedAt: clock - minute });
+  const response = { ...daangnResult(), runId: "cycle", targetRunId: "seo" };
+  response.result.totals.failed++;
+  await h.context.finishCurrentTarget(response, 42);
+  assert.equal(h.data[RUN].index, 4);
+  assert.equal(h.data[RUN].retryQueue.length, 1);
+  assert.equal(h.data[RUN].summary.completed, 3);
+  assert.equal(h.data[REPORT].items[3].status, "retry_wait");
+  assert.equal(h.data[REPORT].items[3].counts.failed, 1);
 });
 
 test("invalid transaction settings fail once and advance, without immediate or deferred retry", async () => {

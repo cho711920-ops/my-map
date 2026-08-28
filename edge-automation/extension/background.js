@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.3";
+const BACKGROUND_BUILD = "1.1.4";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -305,11 +305,29 @@ function resultCounts(result) {
   const totals = payload.totals || session.totals || {};
   const number = (...values) => {
     for (const value of values) {
+      if (value == null || value === "") continue;
       const parsed = Number(value);
       if (Number.isFinite(parsed) && parsed >= 0) return parsed;
     }
     return 0;
   };
+  if (cleanSource(payload.source) === "daangn") {
+    const unchanged = number(totals.skippedUnchanged);
+    const detailProcessed = number(totals.processed);
+    const excluded = number(totals.failed);
+    const addressDeferred = Math.min(excluded, number(totals.addressMissing));
+    const proof = totals.completionProof || {};
+    return {
+      version: 2, expected: number(totals.found),
+      processed: unchanged + detailProcessed, detailProcessed, unchanged,
+      listComplete: proof.version === 1 && proof.listExhausted === true &&
+        Number(proof.expected) > 0 && Number(proof.expected) === Number(proof.observed) &&
+        Number(proof.observed) === Number(proof.processed) &&
+        Number(proof.observed) === Number(totals.found) && Number(proof.processed) === unchanged + detailProcessed,
+      created: number(totals.created), updated: number(totals.updated), review: number(totals.review),
+      addressDeferred, failed: excluded - addressDeferred
+    };
+  }
   return {
     expected: number(session.expectedCount, session.manifestCount, totals.found, totals.total, payload.expectedCount, payload.selectedCount),
     processed: number(session.processedCount, session.observed, totals.processed, payload.processedCount, payload.processed, payload.selectedCount),
@@ -319,6 +337,28 @@ function resultCounts(result) {
     unchanged: number(payload.unchanged, totals.unchanged, session.unchanged),
     failed: number(payload.failed, totals.failed, session.failed)
   };
+}
+
+function resultDiagnostics(result) {
+  const payload = result && result.result || {};
+  if (cleanSource(payload.source) !== "daangn") return [];
+  // Only public IDs and reasons enter the report; never raw detail/contact data.
+  return (Array.isArray(payload.totals?.detailErrors) ? payload.totals.detailErrors : []).slice(-60)
+    .map(error => ({ sourceId: String(error.sourceId || "").slice(0, 40),
+      message: String(error.message || "확인 필요").slice(0, 300) }));
+}
+
+function resultNotice(result) {
+  const payload = result && result.result || {};
+  const counts = resultCounts(result);
+  if (counts.version === 2) {
+    const issues = (payload.completionIssues || []).filter(issue =>
+      !/^(?:실패 \d+건|주소·층 오류 \d+건)$/.test(String(issue)));
+    if (counts.addressDeferred) issues.push(`정확한 지번 미제공 ${counts.addressDeferred}건 · 지도 등록 보류`);
+    if (counts.failed) issues.push(`조회·저장 실패 ${counts.failed}건`);
+    return [counts.listComplete ? "전체 목록 확인 완료" : "목록 완전성 확인 필요", ...issues].join(" · ");
+  }
+  return "목록 처리 완료 · 확인사항: " + ((payload.completionIssues || []).join(", ") || "일부 제공처 정보 누락");
 }
 
 async function updateRunReport(state, target, status, details = {}) {
@@ -339,8 +379,8 @@ async function finalizeRun(state) {
   const summary = state.summary || { completed: 0, failed: 0, errors: [] };
   summary.ok = summary.failed === 0;
   await appendLog({
-    level: summary.ok ? "success" : "warning",
-    message: `자동수집 종료: 성공 ${summary.completed}, 실패 ${summary.failed}`,
+    level: summary.ok && !summary.partial ? "success" : "warning",
+    message: `자동수집 종료: 정상 ${Math.max(0, summary.completed - Number(summary.partial || 0))}, 부분/보류 ${Number(summary.partial || 0)}, 실패 ${summary.failed}`,
     result: summary
   });
   const report = await getRunReport();
@@ -363,7 +403,7 @@ async function finalizeRun(state) {
       type: "basic",
       iconUrl: "icon.svg",
       title: "JS 자동수집 확인 필요",
-      message: `성공 ${summary.completed}개 · 실패 ${summary.failed}개`
+      message: `정상 ${Math.max(0, summary.completed - Number(summary.partial || 0))}개 · 부분/보류 ${Number(summary.partial || 0)}개 · 실패 ${summary.failed}개`
     }).catch(() => {});
   }
   await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
@@ -641,14 +681,14 @@ async function finishCurrentTarget(result, senderTabId) {
       elapsedMs,
       result: result.result || {},
       message: partial
-        ? `${target.label || target.source} 전체 목록 확인 완료 · 제공처 누락 항목은 부분수집으로 기록`
+        ? `${target.label || target.source} ${resultNotice(result)}`
         : `${target.label || target.source} 자동수집 완료`
     });
     await updateRunReport(state, target, partial ? "partial" : "completed", {
       finishedAt: Date.now(),
       elapsedMs,
-      message: partial ? "목록 처리 완료 · 확인사항: " + ((result.result.completionIssues || []).join(", ") || "일부 제공처 정보 누락") : "수집 완료",
-      counts: resultCounts(result)
+      message: partial ? resultNotice(result) : "수집 완료",
+      counts: resultCounts(result), diagnostics: resultDiagnostics(result)
     });
   } else {
     const message = failureMessage;
@@ -678,7 +718,7 @@ async function finishCurrentTarget(result, senderTabId) {
       elapsedMs,
       message,
       attempt: targetAttempt,
-      counts: resultCounts(result)
+      counts: resultCounts(result), diagnostics: resultDiagnostics(result)
     });
   }
 
