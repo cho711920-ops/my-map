@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.4";
+  var VERSION = "2.2.5";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -1470,6 +1470,9 @@
         ? detailError.message
         : String(detailError || "상세정보 조회 실패"));
     }
+    // Current typed detail money wins over old numeric columns in the list.
+    terms = getTradeTerms(item, detail);
+    if (!terms) return { ok: false, reason: "실제 광고된 매매·월세 조건 없음", rejectType: "trade" };
     /*
      * 공실박스 원본매물의 연락처는 역할까지 확인된 경우에만 저장합니다.
      * 상세조회·역할 확인이 실패해도 주소와 임대조건이 확인된 매물은 저장하되,
@@ -1695,31 +1698,52 @@
       .trim();
   }
 
+  function gongsilAdvertisedOffers(list = {}, detail = {}) {
+    // Kept identical in server and bookmarklet; covered by parity tests.
+    const clean = value => String(value ?? "").trim();
+    const amount = value => {
+      if (value == null || clean(value) === "" || typeof value === "boolean") return null;
+      const n = Number(clean(value).replace(/,/g, ""));
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    const first = (item, keys) => keys.map(key => amount(item?.[key])).find(n => n != null);
+    const floor = detail?.floorinfo || {};
+    const moneys = [floor.Moneys, floor.moneys, list.Moneys, list.moneys]
+      .find(rows => Array.isArray(rows) && rows.length > 0);
+    const label = clean(list.TradeType || list.tradeType || list.DealType).toLowerCase();
+    const subtype = clean(floor.LndSubtype ?? list.Subtype ?? list.subtype)
+      || ({ '매매': '1', sale: '1', buy: '1', '전세': '2', '월세': '3', lease: '3', '반전세': '9' })[label] || '';
+    let salePrice, rental;
+    if (moneys) {
+      // Actual advertised rows win over stale numeric fields.
+      const sale = moneys.find(m => /^(매매|sale|buy)$/i.test(clean(m?.Ty || m?.Type || m?.TradeType)));
+      salePrice = first(sale, ["Price", "Ma", "Mae", "DealPrice", "Amount", "Bo"]);
+      rental = moneys.filter(m => /^(월세|반전세)$/i.test(clean(m?.Ty || m?.Type || m?.TradeType)))
+        .map(m => [amount(m.Bo), amount(m.Mm)])
+        .find(([deposit, rent]) => deposit != null && rent > 0);
+    } else {
+      // Subtype: 1=sale, 2=jeonse, 3=monthly, 9=semi-jeonse (13,31,39...).
+      if (subtype && !/^[1239]+$/.test(subtype)) return [];
+      if (!subtype || subtype.includes("1")) {
+        salePrice = ["Me", "SalePrice", "DealPrice", "SellPrice", "TradingPrice", "Ma", "Mae"]
+          .map(key => amount(list[key])).find(n => n > 0);
+      }
+      const pairs = [];
+      if (!subtype || subtype.includes("3")) pairs.push([
+        first(list, ["Bo", "Deposit", "MmDeposit"]), first(list, ["Mm", "Monthly", "MmMonthly", "Rent"])
+      ]);
+      if (subtype.includes("9")) pairs.push([amount(list.Bjbo), amount(list.Bjmm)]);
+      // Jun/Jmm alone is NOT evidence of a monthly advertisement.
+      rental = pairs.find(([deposit, rent]) => deposit != null && rent > 0);
+    }
+    const offers = [];
+    if (salePrice > 0) offers.push({ tradeType: "sale", salePrice, deposit: 0, rent: 0 });
+    if (rental) offers.push({ tradeType: "lease", salePrice: null, deposit: rental[0], rent: rental[1] });
+    return offers;
+  }
+
   function getRentalTerms(item) {
-    // Read actual advertised monthly offers, not investment-income totals.
-    function amount(value) {
-      if (value == null || text(value) === "" || typeof value === "boolean") return null;
-      var parsed = Number(text(value).replace(/,/g, ""));
-      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-    }
-    function first(value, keys) {
-      return keys.map(function(key) { return amount(value && value[key]); })
-        .find(function(value) { return value != null; });
-    }
-    var pairs = [
-      [first(item, ["Bo", "Deposit", "MmDeposit"]), first(item, ["Mm", "Monthly", "MmMonthly", "Rent"])],
-      [first(item, ["Jun", "JeonseDeposit"]), first(item, ["Jmm", "JeonseMonthly"])]
-    ];
-    var moneys = pick(item, ["Moneys", "moneys"]);
-    if (Array.isArray(moneys)) {
-      moneys.forEach(function(money) {
-        if (/^(월세|반전세|전세)$/i.test(text(money && (money.Ty || money.Type || money.TradeType)))) {
-          pairs.push([amount(money.Bo), amount(money.Mm)]);
-        }
-      });
-    }
-    var rental = pairs.find(function(pair) { return pair[0] != null && pair[1] > 0; });
-    return rental ? { deposit: rental[0], rent: rental[1] } : null;
+    return gongsilAdvertisedOffers(item).find(offer => offer.tradeType === "lease") || null;
   }
 
   function getBuildingName(item) {
@@ -2594,6 +2618,7 @@
     [
       "Bo", "Deposit", "MmDeposit", "Mm", "Monthly", "MmMonthly", "Rent",
       "Jun", "JeonseDeposit", "Jmm", "JeonseMonthly", "Moneys", "moneys",
+      "Subtype", "subtype", "Bjbo", "Bjmm",
       "TradeType", "DealType", "SaleType", "TransactionType", "SalePrice", "DealPrice",
       "Me", "SellPrice", "TradingPrice", "Ma", "Mae", "Price", "UseType", "Usage", "Category",
       "LandArea", "YunArea", "TotBomoney", "TotMmmoney", "LandAreaM2", "YunAreaM2",
@@ -3104,39 +3129,8 @@
       "\n운영현황 → 수집현황에서도 결과를 확인할 수 있습니다.";
   }
 
-  function getTradeTerms(item) {
-    var moneys = pick(item, ["Moneys", "moneys"]);
-    var typeText = [
-      pick(item, ["TradeType", "DealType", "SaleType", "Ty", "TransactionType"]),
-      pick(item, ["TypeView", "ViewType"])
-    ].map(text).join(" ");
-    var saleMoney = Array.isArray(moneys) ? moneys.find(function (money) {
-      return /매매|sale|buy/i.test(text(money && (money.Ty || money.Type || money.TradeType)));
-    }) : null;
-    var salePrice = [
-      "Me", "SalePrice", "DealPrice", "SellPrice", "TradingPrice", "Ma", "Mae"
-    ].map(function (key) { return numberValue(item && item[key]); }).find(function (value) { return value > 0; });
-    if (!salePrice && saleMoney) {
-      salePrice = numberValue(pick(saleMoney, ["Price", "Ma", "Mae", "DealPrice", "Amount", "Bo"]));
-    }
-    if (/매매|sale|buy/i.test(typeText) || salePrice > 0 || saleMoney) {
-      if (!(salePrice > 0)) return null;
-      return {
-        tradeType: "sale",
-        saleCategory: getSaleCategory(item),
-        salePrice: salePrice,
-        deposit: 0,
-        rent: 0
-      };
-    }
-    var rental = getRentalTerms(item);
-    return rental ? {
-      tradeType: "lease",
-      saleCategory: "",
-      salePrice: null,
-      deposit: rental.deposit,
-      rent: rental.rent
-    } : null;
+  function getTradeTerms(item, detail) {
+    return getTradeOffers(item, detail)[0] || null;
   }
 
   function observedTradeTypes(items) {
@@ -3147,14 +3141,10 @@
     return Object.keys(found).sort();
   }
 
-  function getTradeOffers(item) {
-    var primary = getTradeTerms(item);
-    var offers = primary ? [primary] : [];
-    var rental = getRentalTerms(item);
-    if (primary && primary.tradeType === "sale" && rental) {
-      offers.push({ tradeType: "lease", deposit: rental.deposit, rent: rental.rent });
-    }
-    return offers;
+  function getTradeOffers(item, detail) {
+    return gongsilAdvertisedOffers(item, detail).map(function(offer) {
+      return Object.assign({}, offer, { saleCategory: offer.tradeType === "sale" ? getSaleCategory(item) : "" });
+    });
   }
 
   function observedOffers(items) {

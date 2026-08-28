@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import { DatabaseSync } from "node:sqlite";
 import { handleCollectorApi, gongsilOfferRecords } from "../cloudflare/src/collector-api.js";
 import { gongsilAdvertisedOffers, gongsilOfferSourceId, resolveGongsilOfferIds } from "../cloudflare/src/gongsil-offers.js";
@@ -66,8 +67,53 @@ test("sale investment income/memo never invents a lease; pure jeonse is not mont
     Memo: "보증금 1억7880만 월수익 202만", Jun: 30000, Jmm: 0 }).map((o) => o.tradeType), ["sale"]);
   assert.equal(gongsilAdvertisedOffers({ Me: 85000, Bo: 1000, Mm: -1 }).length, 1);
   assert.equal(gongsilAdvertisedOffers({ Me: 0, Bo: 0, Mm: 50 })[0].deposit, 0);
-  assert.deepEqual(gongsilAdvertisedOffers({ Me: 50000, Jun: 60000, Jmm: 315 }).map((o) => o.tradeType), ["sale", "lease"]);
+  assert.deepEqual(gongsilAdvertisedOffers({ Me: 50000, Jun: 60000, Jmm: 315 }).map((o) => o.tradeType), ["sale"]);
   assert.equal(gongsilAdvertisedOffers({ Moneys: [{ Ty: "매매", Price: 40000 }, { Ty: "월세", Bo: 2000, Mm: 150 }] }).length, 2);
+});
+
+const providerCases = [
+  [{ Subtype: '1', Me: 75000, Bo: 0, Mm: 0, Jmm: 3 }, {}, [['sale', 75000, 0, 0]]],
+  [{ Subtype: '1', Me: 60000, Bo: 3000, Mm: 90, Jun: 2900 }, {}, [['sale', 60000, 0, 0]]],
+  [{ Subtype: '3', Me: 60000, Bo: 3000, Mm: 90 }, {}, [['lease', null, 3000, 90]]],
+  [{ Subtype: '13', Me: 37000, Bo: 2000, Mm: 150 }, {}, [['sale', 37000, 0, 0], ['lease', null, 2000, 150]]],
+  [{ Subtype: '31', Me: 97000, Bo: 8000, Mm: 380 }, {}, [['sale', 97000, 0, 0], ['lease', null, 8000, 380]]],
+  [{ Subtype: '2', Me: 10000, Bo: 2000, Mm: 70, Jun: 4000, Jmm: 3 }, {}, []],
+  [{ Subtype: '9', Me: 50000, Bo: 1000, Mm: 10, Bjbo: 6000, Bjmm: 35 }, {}, [['lease', null, 6000, 35]]],
+  [{ Subtype: '1', Me: 75000, Bo: 0, Mm: 0, Jmm: 3 }, { floorinfo: { LndSubtype: '1', Moneys: [{ Bo: 75000, Mm: 0, Ty: '매매' }] } }, [['sale', 75000, 0, 0]]],
+  [{ Subtype: '13', Me: 37000, Bo: 2000, Mm: 150 }, { floorinfo: { Moneys: [{ Bo: 38000, Mm: 0, Ty: '매매' }] } }, [['sale', 38000, 0, 0]]],
+  [{ Subtype: '1', Me: 37000, Bo: 2000, Mm: 150 }, { floorinfo: { Moneys: [{ Bo: 2100, Mm: 160, Ty: '월세' }, { Bo: 38000, Mm: 0, Ty: '매매' }] } }, [['sale', 38000, 0, 0], ['lease', null, 2100, 160]]],
+];
+for (const [index, [list, detail, expected]] of providerCases.entries()) {
+  test(`actual advertised type takes precedence over stale amounts: provider case ${index + 1}`, () => {
+    assert.deepEqual(gongsilAdvertisedOffers(list, detail).map(o => [o.tradeType, o.salePrice, o.deposit, o.rent]), expected);
+    const code = fs.readFileSync('js/gongsil-collector.js', 'utf8');
+    const start = code.indexOf('function gongsilAdvertisedOffers(');
+    const end = code.indexOf('\n  function ', start + 10);
+    const client = vm.runInNewContext(`(${code.slice(start, end).trim()})`);
+    assert.deepEqual(JSON.parse(JSON.stringify(client(list, detail))), gongsilAdvertisedOffers(list, detail));
+  });
+}
+
+test('real API rejects stale opposite-market offers even from an old collector', async t => {
+  const { db, save, manifest } = database(t);
+  const saleOnly = fixture('371359', { Subtype: '1', Me: 75000, Bo: 0, Mm: 0, Jmm: 3 });
+  const result = await save(saleOnly);
+  assert.equal(result.created, 1);
+  assert.equal(result.offerReceived, 1);
+  assert.deepEqual(db.prepare('SELECT trade_type,sale_price,monthly_rent FROM listings').all().map(r => Object.values(r)), [['sale', 75000, 0]]);
+  assert.equal((await manifest(saleOnly)).unchanged, 1);
+  const jeonse = fixture('jeonse', { Subtype: '2', Me: 9000, Bo: 1000, Mm: 50 });
+  assert.equal((await save(jeonse)).tradeTypeExcluded, 1);
+  assert.equal(db.prepare('SELECT count(*) n FROM listings').get().n, 1);
+});
+
+test('current typed detail prices override stale list prices in both stored markets', async t => {
+  const { db, save } = database(t);
+  const record = fixture('typed', { Subtype: '13' });
+  record.raw.detail = { floorinfo: { Moneys: [{ Ty: '매매', Bo: 39000, Mm: 0 }, { Ty: '월세', Bo: 3000, Mm: 160 }] } };
+  await save(record);
+  assert.deepEqual(db.prepare('SELECT trade_type,sale_price,deposit,monthly_rent FROM listings ORDER BY trade_type').all().map(r => Object.values(r)),
+    [['lease', null, 3000, 160], ['sale', 39000, 0, 0]]);
 });
 
 test("legacy identity remains in its own market", () => {

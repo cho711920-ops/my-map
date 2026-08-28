@@ -17,7 +17,7 @@ function collectorFunctions(file, names, context = {}) {
   return context.api;
 }
 const gongsil = collectorFunctions("../js/gongsil-collector.js", [
-  "pick", "text", "numberValue", "getRentalTerms", "getSaleCategory", "getTradeTerms",
+  "pick", "text", "numberValue", "gongsilAdvertisedOffers", "getRentalTerms", "getSaleCategory", "getTradeTerms",
   "getTradeOffers", "observedTradeTypes", "gongsilListSnapshot", "stableSnapshotJson"
 ]);
 const rawBuilding = { Me: 197000, Bo: 2000, Mm: 45, TypeView: "건물통", Ho: "전체",

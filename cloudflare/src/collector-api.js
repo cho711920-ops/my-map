@@ -4,7 +4,7 @@ import { requireRole } from "./security.js";
 import { collectorDiagnostics } from "./collector-diagnostics.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
-import { gongsilAdvertisedOffers, resolveGongsilOfferIds } from "./gongsil-offers.js";
+import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -307,7 +307,9 @@ function gongsilLeaseRoom(list, fallback) {
 
 export function gongsilOfferRecords(value) {
   const list = value?.raw?.list || value?.raw || {};
-  const offers = gongsilAdvertisedOffers(list);
+  const detail = value?.raw?.detail || {};
+  const offers = gongsilAdvertisedOffers(list, detail);
+  if (!offers.length && hasGongsilOfferEvidence(list, detail)) return [];
   // Old payloads without a structured list retain their normal validation.
   return offers.length ? offers.map((offer) => gongsilRecord(value, offer)) : [gongsilRecord(value)];
 }
@@ -701,6 +703,7 @@ async function classifyManifest(env, body) {
   if (source === "공실박스") {
     entries = await resolveGongsilOfferIds(env, entries.flatMap((entry) => {
       const offers = gongsilAdvertisedOffers(parseJson(entry.listSnapshot, {}));
+      if (!offers.length && hasGongsilOfferEvidence(parseJson(entry.listSnapshot, {}))) return [];
       return offers.length ? offers.map((offer) => ({ ...entry, ...offer }))
         : [{ ...entry, tradeType: collectorTradeType(entry.tradeType, true) }];
     }));
@@ -1584,6 +1587,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
     totals.received += 1;
     try {
       const offers = source === "공실박스" ? gongsilOfferRecords(value) : [normalizedRecord(source, value)];
+      if (!offers.length) totals.tradeTypeExcluded += 1;
       for (const record of offers) {
         totals.offerReceived += 1;
         if (!record?.sourceId) {
