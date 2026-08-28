@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.2\.3";/);
+assert.match(source, /var VERSION = "2\.2\.4";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);

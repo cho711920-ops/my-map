@@ -4,6 +4,7 @@ import { requireRole } from "./security.js";
 import { collectorDiagnostics } from "./collector-diagnostics.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
+import { gongsilAdvertisedOffers, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -243,7 +244,7 @@ function memoWithVisit(value) {
   return `(임장가자)${memo ? ` ${memo}` : ""}`.slice(0, 1500);
 }
 
-function gongsilRecord(record) {
+function gongsilRecord(record, advertisedOffer = null) {
   const values = Array.isArray(record?.values) ? record.values : [];
   const sourceId = clean(record?.externalId || record?.sourceId || record?.id);
   const contacts = Array.isArray(record?.contactList) ? record.contactList.map((entry) => ({
@@ -258,11 +259,11 @@ function gongsilRecord(record) {
   const rawList = record?.raw?.list || record?.raw || {};
   const explicitSale = /매매|sale|buy/i.test(clean(rawList.TradeType || rawList.DealType || rawList.SaleType || rawList.TransactionType));
   // Recheck provider Me at the server boundary, including old bookmarklets.
-  const tradeType = providerSale.salePrice > 0 || explicitSale ? LISTING_TRADE_TYPES.SALE
-    : collectorTradeType(record?.tradeType || record?.trade_type || record?.transactionType, true);
+  const tradeType = advertisedOffer?.tradeType || (providerSale.salePrice > 0 || explicitSale ? LISTING_TRADE_TYPES.SALE
+    : collectorTradeType(record?.tradeType || record?.trade_type || record?.transactionType, true));
   const category = clean(values[3] || record?.category) || "상가점포";
   const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
-    ? providerSale.salePrice ?? number(record?.salePrice ?? record?.sale_price)
+    ? advertisedOffer?.salePrice ?? providerSale.salePrice ?? number(record?.salePrice ?? record?.sale_price)
     : null;
   const saleCategory = providerSale.saleCategory !== "other" ? providerSale.saleCategory
     : collectorSaleCategory(record?.saleCategory || record?.sale_category, category);
@@ -270,15 +271,17 @@ function gongsilRecord(record) {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
     address: normalizedAddress(values[1] || record?.address),
     room: tradeType === "sale" && providerSale.wholeBuilding ? "전체"
-      : tradeType === "sale" && providerSale.saleCategory === "land" ? "" : canonicalListingRoom(values[2] || record?.room),
+      : tradeType === "sale" && providerSale.saleCategory === "land" ? ""
+        : canonicalListingRoom(advertisedOffer?.tradeType === "lease"
+          ? gongsilLeaseRoom(rawList, values[2] || record?.room) : values[2] || record?.room),
     roadAddress: clean(record?.roadAddress || record?.road_address || record?.raw?.detail?.roadAddress),
     category: tradeType === "sale" ? SALE_CATEGORY_LABELS[saleCategory] || category : category, tradeType,
     saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
       ? saleCategory
       : "",
     salePrice, saleDetails: tradeType === "sale" ? providerSale.saleDetails : undefined,
-    deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(values[4] ?? record?.deposit),
-    rent: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(values[5] ?? record?.rent),
+    deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : advertisedOffer?.deposit ?? number(values[4] ?? record?.deposit),
+    rent: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : advertisedOffer?.rent ?? number(values[5] ?? record?.rent),
     fee: number(values[6] ?? record?.fee),
     premium: number(values[7] ?? record?.premium),
     area: tradeType === "sale" && (providerSale.wholeBuilding || providerSale.saleCategory === "land")
@@ -293,6 +296,20 @@ function gongsilRecord(record) {
     latitude: coordinate(record?.latitude ?? record?.lat ?? record?.mapY, -90, 90),
     longitude: coordinate(record?.longitude ?? record?.lng ?? record?.lon ?? record?.mapX, -180, 180)
   };
+}
+
+function gongsilLeaseRoom(list, fallback) {
+  const room = clean(list.Ho || list.BfHo || list.Room || list.Honame);
+  if (room && room !== "0") return /(?:층|호)$|^전체$/.test(room) ? room : `${room}호`;
+  const floor = number(list.Ff ?? list.BfFloor ?? list.Floor ?? list.floor);
+  return floor ? floor < 0 ? `지하${Math.abs(floor)}층` : `${floor}층` : fallback;
+}
+
+export function gongsilOfferRecords(value) {
+  const list = value?.raw?.list || value?.raw || {};
+  const offers = gongsilAdvertisedOffers(list);
+  // Old payloads without a structured list retain their normal validation.
+  return offers.length ? offers.map((offer) => gongsilRecord(value, offer)) : [gongsilRecord(value)];
 }
 
 function naverRecord(item) {
@@ -526,6 +543,7 @@ export function isMonthlyCollectorRecord(source, record) {
 function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresentative = false) {
   return {
     originalId, source: record.source, sourceId: record.sourceId, propertyId,
+    providerSourceId: record.providerSourceId || record.sourceId,
     link: record.link, buildingName: record.buildingName, address: record.address,
     roadAddress: record.roadAddress, room: record.room,
     type: record.category, tradeType: record.tradeType,
@@ -676,9 +694,17 @@ async function classifyManifest(env, body) {
   const source = sourceName(body.source);
   const rawEntries = Array.isArray(body.entries) ? body.entries : [];
   if (rawEntries.length > 10_000) throw new Error("목록 비교는 한 번에 최대 10,000건까지 가능합니다.");
-  const entries = rawEntries.map((entry) => ({
+  let entries = rawEntries.map((entry) => ({
     ...entry, sourceId: sourceIdFor(source, entry?.sourceId)
   })).filter((entry) => entry.sourceId);
+  const originalCount = entries.length;
+  if (source === "공실박스") {
+    entries = await resolveGongsilOfferIds(env, entries.flatMap((entry) => {
+      const offers = gongsilAdvertisedOffers(parseJson(entry.listSnapshot, {}));
+      return offers.length ? offers.map((offer) => ({ ...entry, ...offer }))
+        : [{ ...entry, tradeType: collectorTradeType(entry.tradeType, true) }];
+    }));
+  }
   const sessionId = await ensureSession(env, body.sessionId, source);
   const rows = new Map();
   for (let offset = 0; offset < entries.length; offset += 80) {
@@ -721,7 +747,7 @@ async function classifyManifest(env, body) {
         )
         SELECT source_listing_id, snapshot_hash, list_snapshot_json, trade_type, sale_category, sale_price, last_collected_at,
           '' AS listing_id, NULL AS listing_latitude, NULL AS listing_longitude,
-          saved_deposit, saved_rent, saved_area, saved_room, saved_address, sale_description_version
+          saved_deposit, saved_rent, saved_area, saved_room, saved_address, sale_description_version, sale_metadata_version
         FROM ranked WHERE row_number=1`).bind(source, ...unresolvedIds).all();
       for (const row of rawResult?.results || []) {
         const id = clean(row.source_listing_id);
@@ -749,9 +775,11 @@ async function classifyManifest(env, body) {
       if (address) cacheRepairs.set(address, { latitude, longitude, sourceId: entry.sourceId });
     }
     if (!row) {
+      entry.manifestStatus = "unknown";
       unknown += 1;
       needsDetail.push(entry.sourceId);
     } else if (manifestEntryMatch(entry, row, source)) {
+      entry.manifestStatus = "unchanged";
       unchanged += 1;
       if (!/^fnv1a-[0-9a-f]{8}$/i.test(clean(row.snapshot_hash)) &&
           clean(entry.listSnapshot) && clean(row.id)) {
@@ -766,6 +794,7 @@ async function classifyManifest(env, body) {
         }
       }
     } else {
+      entry.manifestStatus = "changed";
       changed += 1;
       needsDetail.push(entry.sourceId);
     }
@@ -798,12 +827,32 @@ async function classifyManifest(env, body) {
       await env.DB.batch(statements.slice(offset, offset + 80));
     }
   }
-  const result = { ok: true, action: "classifySourceManifest", source, sessionId, received: entries.length,
-    needsDetail, refreshDetail, unchanged, changed, unknown, legacyBootstrapped,
+  let originalNeeds = needsDetail;
+  let originalRefresh = refreshDetail;
+  if (source === "공실박스") {
+    // The browser fetches detail once per provider ad, not once per offer.
+    const states = new Map();
+    const refreshIds = new Set(refreshDetail);
+    const refresh = new Set();
+    for (const entry of entries) {
+      const id = entry.providerSourceId;
+      const previous = states.get(id);
+      if (!previous || entry.manifestStatus === "unknown" ||
+          previous !== "unknown" && entry.manifestStatus === "changed") states.set(id, entry.manifestStatus);
+      if (refreshIds.has(entry.sourceId)) refresh.add(id);
+    }
+    unchanged = [...states.values()].filter((state) => state === "unchanged").length;
+    unknown = [...states.values()].filter((state) => state === "unknown").length;
+    changed = states.size - unchanged - unknown;
+    originalNeeds = [...states].filter(([, state]) => state !== "unchanged").map(([id]) => id);
+    originalRefresh = [...refresh].filter((id) => states.get(id) === "unchanged");
+  }
+  const result = { ok: true, action: "classifySourceManifest", source, sessionId, received: originalCount,
+    needsDetail: originalNeeds, refreshDetail: originalRefresh, unchanged, changed, unknown, legacyBootstrapped,
     coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(previous?.totals_json, {});
-  totals.manifest = Number(totals.manifest || 0) + entries.length;
+  totals.manifest = Number(totals.manifest || 0) + originalCount;
   totals.unchanged = Number(totals.unchanged || 0) + unchanged;
   totals.changed = Number(totals.changed || 0) + changed;
   totals.unknown = Number(totals.unknown || 0) + unknown;
@@ -1527,36 +1576,40 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
     refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0,
-    contactDeferred: 0, tradeTypeExcluded: 0, reactivated: 0 };
-  const normalizedRecords = [];
+    contactDeferred: 0, tradeTypeExcluded: 0, reactivated: 0, offerReceived: 0 };
+  let normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
   for (const value of values) {
     totals.received += 1;
     try {
-      const record = normalizedRecord(source, value);
-      if (!record?.sourceId) {
-        totals.failed += 1;
-        if (errors.length < 20) errors.push({ sourceId: "", message: "원본 ID 없음" });
-        continue;
+      const offers = source === "공실박스" ? gongsilOfferRecords(value) : [normalizedRecord(source, value)];
+      for (const record of offers) {
+        totals.offerReceived += 1;
+        if (!record?.sourceId) {
+          totals.failed += 1;
+          if (errors.length < 20) errors.push({ sourceId: "", message: "원본 ID 없음" });
+          continue;
+        }
+        if (!isMonthlyCollectorRecord(source, record)) {
+          totals.tradeTypeExcluded += 1;
+          continue;
+        }
+        if (record.tradeType === "sale" && !(record.salePrice > 0)) {
+          totals.failed += 1;
+          await saveCollectorError(env, record, sessionId, "매매가 확인 필요: 임대보증금으로 대체하지 않음");
+          if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "매매가 확인 필요" });
+          continue;
+        }
+        if (record.preserveContacts) totals.contactDeferred += 1;
+        normalizedRecords.push(record);
       }
-      if (!isMonthlyCollectorRecord(source, record)) {
-        totals.tradeTypeExcluded += 1;
-        continue;
-      }
-      if (record.tradeType === "sale" && !(record.salePrice > 0)) {
-        totals.failed += 1;
-        await saveCollectorError(env, record, sessionId, "매매가 확인 필요: 임대보증금으로 대체하지 않음");
-        if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "매매가 확인 필요" });
-        continue;
-      }
-      if (record.preserveContacts) totals.contactDeferred += 1;
-      normalizedRecords.push(record);
     } catch (error) {
       totals.failed += 1;
       if (errors.length < 20) errors.push({ sourceId: "", message: clean(error?.message) || "원본 변환 실패" });
     }
   }
+  if (source === "공실박스") normalizedRecords = await resolveGongsilOfferIds(env, normalizedRecords);
   const existingSources = await loadExistingSources(env, source, normalizedRecords);
   const records = [];
   for (const record of normalizedRecords) {
@@ -1638,7 +1691,12 @@ async function ingestRecords(env, source, values, metadata = {}) {
           sale_price: record.salePrice,
           deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
           premium: record.premium, area_m2: record.area, operating_memo: record.memo, main_source: record.source });
-        candidatesByAddress.set(record.address, candidates);
+        // Keep candidates of the opposite market for the next source in this
+        // same batch, but never use them as a merge target.
+        candidatesByAddress.set(record.address, [
+          ...(candidatesByAddress.get(record.address) || []).filter((candidate) =>
+            !listingTradeTypesCanMerge(candidate.trade_type, record.tradeType)), ...candidates
+        ]);
         affectedListingIds.add(listingId);
         totals.created += 1;
       } else {
@@ -1659,7 +1717,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
-  for (const key of ["received", "created", "merged", "updated", "conditionUpdated", "refreshed",
+  for (const key of ["received", "offerReceived", "created", "merged", "updated", "conditionUpdated", "refreshed",
     "review", "duplicate", "failed", "contactDeferred", "tradeTypeExcluded", "reactivated"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
@@ -1765,6 +1823,21 @@ async function finalizeSession(env, body) {
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
   const audit = collectorCompletionAudit({ ...body, source }, observed.length);
+  let presenceObserved = observed;
+  if (source === "공실박스") {
+    const observedSet = new Set(observed);
+    const offers = Array.isArray(body.observedOffers) ? body.observedOffers.filter((entry) =>
+      observedSet.has(clean(entry?.sourceId)) && ["sale", "lease"].includes(entry?.tradeType)) : [];
+    const covered = new Set(offers.map((entry) => entry.sourceId));
+    if (audit.complete && (covered.size !== observed.length || offers.some((entry) => entry.tradeType !== tradeType))) {
+      audit.complete = false;
+      audit.issues.push("공실박스 거래별 전체목록 미확인 또는 임대·매매 혼합수집");
+      audit.blockingIssues.push(audit.issues.at(-1));
+    }
+    const rows = await resolveGongsilOfferIds(env, offers.length ? offers
+      : observed.map((sourceId) => ({ sourceId, tradeType })));
+    presenceObserved = [...new Set(rows.map((entry) => entry.sourceId))];
+  }
   const complete = audit.complete;
   const state = body.stopped ? "paused" : complete ? "completed" : "partial";
   let presenceReset = 0;
@@ -1776,7 +1849,7 @@ async function finalizeSession(env, body) {
   const tracksMissing = complete && observed.length >= 100 &&
     /전체|완전수집/.test(`${scope} ${clean(body.note)}`);
   if (tracksMissing) {
-    const observedSet = new Set(observed);
+    const observedSet = new Set(presenceObserved);
     const rows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.active, s.missing_count,
         l.address, l.status AS listing_status, l.operating_memo
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
@@ -1817,11 +1890,11 @@ async function finalizeSession(env, body) {
       if (!nextState.active) deactivated += 1;
     }
     for (let offset = 0; offset < changes.length; offset += 80) await env.DB.batch(changes.slice(offset, offset + 80));
-  } else if (observed.length) {
+  } else if (presenceObserved.length) {
     const seenAt = nowIso();
     const reactivatedListings = new Set();
-    for (let offset = 0; offset < observed.length; offset += 75) {
-      const ids = observed.slice(offset, offset + 75);
+    for (let offset = 0; offset < presenceObserved.length; offset += 75) {
+      const ids = presenceObserved.slice(offset, offset + 75);
       const resetRows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.active, s.missing_count,
           l.status AS listing_status, l.operating_memo
         FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { normalizedRecord, isMonthlyCollectorRecord, compareListingSpace, manifestEntryMatch, mergeDaangnDetailWithList } from "../cloudflare/src/collector-api.js";
 import { gongsilSaleFields, saleCategoryFromLabel } from "../cloudflare/src/sale-fields.js";
+import { gongsilAdvertisedOffers } from "../cloudflare/src/gongsil-offers.js";
 
 function collectorFunctions(file, names, context = {}) {
   const source = fs.readFileSync(new URL(file, import.meta.url), "utf8");
@@ -17,7 +18,7 @@ function collectorFunctions(file, names, context = {}) {
 }
 const gongsil = collectorFunctions("../js/gongsil-collector.js", [
   "pick", "text", "numberValue", "getRentalTerms", "getSaleCategory", "getTradeTerms",
-  "observedTradeTypes", "gongsilListSnapshot", "stableSnapshotJson"
+  "getTradeOffers", "observedTradeTypes", "gongsilListSnapshot", "stableSnapshotJson"
 ]);
 const rawBuilding = { Me: 197000, Bo: 2000, Mm: 45, TypeView: "건물통", Ho: "전체",
   LandArea: 62, YunArea: 123.9, Area: 40, TotBomoney: 50000, TotMmmoney: 695 };
@@ -49,6 +50,21 @@ test("Gongsil fingerprints include sale price and separate land/gross area chang
   const before = gongsil.gongsilListSnapshot(rawBuilding);
   for (const changed of [{ Me: 199000 }, { LandArea: 65 }, { YunArea: 140 }, { TotMmmoney: 800 }]) {
     assert.notEqual(gongsil.gongsilListSnapshot({ ...rawBuilding, ...changed }), before);
+  }
+});
+
+test("client and server agree on simultaneous advertised offers, including zero deposits and secondary monthly terms", () => {
+  for (const raw of [
+    { Me: 37000, Bo: 2000, Mm: 150 },
+    { Me: 37000, Bo: 0, Mm: 50 },
+    { Me: 37000, Bo: 500, Mm: 0, Jun: 60000, Jmm: 315 },
+    { Me: 37000, Bo: 0, Mm: 0, Moneys: [{ Ty: "전세", Bo: 1000, Mm: 0 }, { Type: "월세", Bo: 2000, Mm: 150 }] },
+    { Me: 37000, TotBomoney: 5000, TotMmmoney: 150, Memo: "월세 수입 150" },
+    { Me: 37000, Mm: 150 },
+    { Me: 37000, Bo: -1, Mm: 150 }
+  ]) {
+    const fields = (offers) => Array.from(offers, (o) => [o.tradeType, o.deposit, o.rent]);
+    assert.deepEqual(fields(gongsil.getTradeOffers(raw)), fields(gongsilAdvertisedOffers(raw)), JSON.stringify(raw));
   }
 });
 

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.3";
+  var VERSION = "2.2.4";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -627,6 +627,7 @@
         listFailureReasons: listFailures.slice(0, 200),
         mixedTradeTypes: mixedTradeTypes,
         observedSourceIds: observedSourceIds(items),
+        observedOffers: observedOffers(items),
         manifestRegistered: true
       };
       var classification = await classifyGongsilManifest(
@@ -1695,31 +1696,30 @@
   }
 
   function getRentalTerms(item) {
-    var deposit = numberValue(pick(item, ["Bo", "Deposit", "MmDeposit"]));
-    var rent = numberValue(pick(item, ["Mm", "Monthly", "MmMonthly", "Rent"]));
-
-    if (!deposit && !rent) {
-      deposit = numberValue(pick(item, ["Jun", "JeonseDeposit"]));
-      rent = numberValue(pick(item, ["Jmm", "JeonseMonthly"]));
+    // Read actual advertised monthly offers, not investment-income totals.
+    function amount(value) {
+      if (value == null || text(value) === "" || typeof value === "boolean") return null;
+      var parsed = Number(text(value).replace(/,/g, ""));
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
     }
-
+    function first(value, keys) {
+      return keys.map(function(key) { return amount(value && value[key]); })
+        .find(function(value) { return value != null; });
+    }
+    var pairs = [
+      [first(item, ["Bo", "Deposit", "MmDeposit"]), first(item, ["Mm", "Monthly", "MmMonthly", "Rent"])],
+      [first(item, ["Jun", "JeonseDeposit"]), first(item, ["Jmm", "JeonseMonthly"])]
+    ];
     var moneys = pick(item, ["Moneys", "moneys"]);
-    if ((!deposit && !rent) && Array.isArray(moneys)) {
-      var rentalMoney = moneys.find(function (money) {
-        var type = text(money && money.Ty);
-        return type === "월세" || type === "반전세" || type === "전세";
+    if (Array.isArray(moneys)) {
+      moneys.forEach(function(money) {
+        if (/^(월세|반전세|전세)$/i.test(text(money && (money.Ty || money.Type || money.TradeType)))) {
+          pairs.push([amount(money.Bo), amount(money.Mm)]);
+        }
       });
-      if (rentalMoney) {
-        deposit = numberValue(rentalMoney.Bo);
-        rent = numberValue(rentalMoney.Mm);
-      }
     }
-
-    if (!(rent > 0)) return null;
-    return {
-      deposit: deposit || 0,
-      rent: rent || 0
-    };
+    var rental = pairs.find(function(pair) { return pair[0] != null && pair[1] > 0; });
+    return rental ? { deposit: rental[0], rent: rental[1] } : null;
   }
 
   function getBuildingName(item) {
@@ -2514,6 +2514,7 @@
       stopped: stopped,
       action: "gongsilImportBatch",
       received: totals.received,
+      offerReceived: Number(totals.offerReceived || totals.received),
       created: totals.created,
       merged: totals.merged,
       updated: totals.updated,
@@ -2527,7 +2528,9 @@
       failed: listFailedCount + totals.failed,
       message:
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
-        "개 중 신규 등록 " + totals.created +
+        "개" + (Number(totals.offerReceived || 0) > totals.received
+          ? " · 임대·매매 거래조건 " + totals.offerReceived + "건(동시광고 분리 저장)" : "") +
+        " 중 신규 등록 " + totals.created +
         "개, 자동 통합 " + totals.merged +
         "개, 임대조건 변경 " + totals.conditionUpdated +
         "개, 정보 최신화 " + totals.refreshed +
@@ -2752,6 +2755,7 @@
   function addImportResult(totals, result) {
     result = result || {};
     totals.received += Number(result.received || 0);
+    totals.offerReceived = Number(totals.offerReceived || 0) + Number(result.offerReceived || result.received || 0);
     totals.created += Number(
       result.created !== undefined ? result.created : result.inserted || 0
     );
@@ -2825,6 +2829,7 @@
       observedSourceIds: Array.isArray(metadata.observedSourceIds)
         ? metadata.observedSourceIds
         : [],
+      observedOffers: Array.isArray(metadata.observedOffers) ? metadata.observedOffers : [],
       expectedCount: Number(metadata.selectedCount || 0),
       manifestCount: Number(metadata.manifestCount || metadata.found || 0),
       processedCount: Number(metadata.processedCount || 0),
@@ -3137,10 +3142,29 @@
   function observedTradeTypes(items) {
     var found = Object.create(null);
     (Array.isArray(items) ? items : []).forEach(function(item) {
-      var terms = getTradeTerms(item);
-      if (terms && terms.tradeType) found[terms.tradeType] = true;
+      getTradeOffers(item).forEach(function(terms) { found[terms.tradeType] = true; });
     });
     return Object.keys(found).sort();
+  }
+
+  function getTradeOffers(item) {
+    var primary = getTradeTerms(item);
+    var offers = primary ? [primary] : [];
+    var rental = getRentalTerms(item);
+    if (primary && primary.tradeType === "sale" && rental) {
+      offers.push({ tradeType: "lease", deposit: rental.deposit, rent: rental.rent });
+    }
+    return offers;
+  }
+
+  function observedOffers(items) {
+    var offers = [];
+    (Array.isArray(items) ? items : []).forEach(function(item) {
+      getTradeOffers(item).forEach(function(terms) {
+        offers.push({ sourceId: recordSourceId(item), tradeType: terms.tradeType });
+      });
+    });
+    return offers;
   }
 
   function getSaleCategory(item) {
