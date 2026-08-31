@@ -222,7 +222,7 @@
           '<span>내 계정에만 저장·동기화됩니다</span></div>' +
           '<div class="unified-favorite-head-actions-v7">' +
             '<b id="unifiedFavoriteSelectedV7"></b>' +
-            '<button type="button" aria-label="찜목록 닫기" onclick="closeUnifiedFavoritesV7()">×</button>' +
+            '<button class="unified-favorite-close-v7" type="button" aria-label="찜목록 닫기" onclick="closeUnifiedFavoritesV7()">×</button>' +
           '</div>' +
         '</header>' +
         '<div class="unified-favorite-layout-v7">' +
