@@ -174,14 +174,15 @@
     element._photoSwipeBoundV8 = true;
     var gesture = null;
 
-    function resetGesture() {
+    function resetGesture(immediate) {
       var image = element.querySelector("img");
       if (image) {
-        image.style.transition = "transform 150ms ease";
+        image.style.transition = immediate ? "none" : "transform 180ms cubic-bezier(.22,.8,.35,1)";
         image.style.transform = "";
+        image.style.opacity = "";
         global.setTimeout(function() {
           if (image) image.style.transition = "";
-        }, 170);
+        }, immediate ? 0 : 200);
       }
       element.classList.remove("is-photo-dragging-v8");
       gesture = null;
@@ -195,10 +196,15 @@
         startX: event.clientX,
         startY: event.clientY,
         deltaX: 0,
-        horizontal: false
+        horizontal: false,
+        captureTarget: event.target
       };
-      if (typeof element.setPointerCapture === "function") {
-        try { element.setPointerCapture(event.pointerId); } catch (ignore) {}
+      /* 부모가 포인터를 잡으면 실제 사진 button의 click 대상이 부모로 바뀌므로 누른 요소가 직접 잡습니다. */
+      var captureTarget = event.target && typeof event.target.setPointerCapture === "function"
+        ? event.target : element;
+      gesture.captureTarget = captureTarget;
+      if (typeof captureTarget.setPointerCapture === "function") {
+        try { captureTarget.setPointerCapture(event.pointerId); } catch (ignore) {}
       }
     });
 
@@ -219,6 +225,7 @@
       if (image) {
         image.style.transition = "none";
         image.style.transform = "translate3d(" + Math.round(deltaX * 0.32) + "px,0,0)";
+        image.style.opacity = String(Math.max(.68, 1 - Math.abs(deltaX) / 420));
       }
     });
 
@@ -227,8 +234,16 @@
       var deltaX = gesture.deltaX;
       var changed = gesture.horizontal && Math.abs(deltaX) >= 42;
       if (changed) {
-        element._suppressPhotoClickUntilV8 = Date.now() + 350;
+        /* 드래그 직후 브라우저가 만드는 합성 click 한 번만 막고, 다음 실제 클릭은 즉시 허용합니다. */
+        element._suppressNextPhotoClickV8140 = true;
+        if (element._photoClickReleaseTimerV8140) global.clearTimeout(element._photoClickReleaseTimerV8140);
+        element._photoClickReleaseTimerV8140 = global.setTimeout(function() {
+          element._suppressNextPhotoClickV8140 = false;
+          element._photoClickReleaseTimerV8140 = null;
+        }, 180);
+        resetGesture(true);
         onStep(deltaX < 0 ? 1 : -1);
+        return;
       }
       resetGesture();
     }
@@ -238,7 +253,58 @@
     element.addEventListener("lostpointercapture", function() {
       if (gesture) resetGesture();
     });
+    element.addEventListener("click", function(event) {
+      if (!element._suppressNextPhotoClickV8140) return;
+      element._suppressNextPhotoClickV8140 = false;
+      if (element._photoClickReleaseTimerV8140) {
+        global.clearTimeout(element._photoClickReleaseTimerV8140);
+        element._photoClickReleaseTimerV8140 = null;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
     element.addEventListener("dragstart", function(event) { event.preventDefault(); });
+  }
+
+  function transitionPhotoV8140(container, direction, commit) {
+    var image = container && container.querySelector("img");
+    var step = Number(direction || 0) < 0 ? -1 : 1;
+    var reduceMotion = global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!image || typeof image.animate !== "function" || reduceMotion) {
+      commit();
+      return;
+    }
+    var token = Number(container._photoTransitionTokenV8140 || 0) + 1;
+    container._photoTransitionTokenV8140 = token;
+    if (typeof image.getAnimations === "function") {
+      image.getAnimations().forEach(function(animation) { animation.cancel(); });
+    }
+    image.style.transition = "none";
+    image.style.transform = "";
+    image.style.opacity = "";
+    var outgoing = image.animate([
+      {transform: "translate3d(0,0,0)", opacity: 1},
+      {transform: "translate3d(" + (-step * 54) + "px,0,0)", opacity: .18}
+    ], {duration: 115, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards"});
+    Promise.resolve(outgoing.finished).catch(function() {}).then(function() {
+      if (container._photoTransitionTokenV8140 !== token) return;
+      commit();
+      if (typeof image.getAnimations === "function") {
+        image.getAnimations().forEach(function(animation) { animation.cancel(); });
+      }
+      var incoming = image.animate([
+        {transform: "translate3d(" + (step * 54) + "px,0,0)", opacity: .18},
+        {transform: "translate3d(0,0,0)", opacity: 1}
+      ], {duration: 210, easing: "cubic-bezier(.22,.8,.35,1)", fill: "both"});
+      Promise.resolve(incoming.finished).catch(function() {}).then(function() {
+        if (container._photoTransitionTokenV8140 !== token) return;
+        if (typeof image.getAnimations === "function") {
+          image.getAnimations().forEach(function(animation) { animation.cancel(); });
+        }
+        image.style.transform = "";
+        image.style.opacity = "";
+      });
+    });
   }
 
   function loadDetail(propertyId) {
@@ -665,7 +731,9 @@
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._failedImagesV8 = {};
       bindPhotoSwipe(detailGallery, function(direction) {
-        renderDetailPhoto(detailGallery, Number(detailGallery._indexV8 || 0) + direction);
+        transitionPhotoV8140(detailGallery, direction, function() {
+          renderDetailPhoto(detailGallery, Number(detailGallery._indexV8 || 0) + direction);
+        });
       });
       renderDetailPhoto(detailGallery, 0);
       var pendingStep = state.pendingDetailSteps[text(propertyId)];
@@ -716,13 +784,14 @@
       if (counter) counter.textContent = "다음 사진 불러오는 중…";
       return;
     }
-    renderDetailPhoto(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0));
+    transitionPhotoV8140(gallery, direction, function() {
+      renderDetailPhoto(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0));
+    });
   }
 
   function openDetailGallery(button) {
     var gallery = button && button.closest(".unified-detail-gallery-v8");
     if (!gallery) return;
-    if (Number(gallery._suppressPhotoClickUntilV8 || 0) > Date.now()) return;
     openGallery(encodeURIComponent(text(gallery._propertyIdV8)),
       encodeURIComponent(text(gallery._originalIdV8)), Number(gallery._indexV8 || 0));
   }
@@ -1146,7 +1215,6 @@
         stepGallery(1);
       };
       modal.onclick = function(event) {
-        if (Number(modal._suppressPhotoClickUntilV8 || 0) > Date.now()) return;
         if (event.target === modal) closeGallery();
       };
       document.body.appendChild(modal);
@@ -1176,7 +1244,9 @@
   function stepGallery(direction) {
     var modal = document.getElementById("unifiedGalleryV8");
     if (!modal || !modal.classList.contains("open")) return;
-    renderGalleryImage(modal, Number(modal._indexV8 || 0) + Number(direction || 0));
+    transitionPhotoV8140(modal, direction, function() {
+      renderGalleryImage(modal, Number(modal._indexV8 || 0) + Number(direction || 0));
+    });
   }
 
   function closeGallery() {

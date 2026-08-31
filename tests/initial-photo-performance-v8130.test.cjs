@@ -47,12 +47,17 @@ assert.match(unified, /images\.length > 1 && Number\.isFinite\(Number\(pendingSt
 assert.match(swipe, /pointerdown/);
 assert.match(swipe, /pointermove/);
 assert.match(swipe, /Math\.abs\(deltaX\) >= 42/);
+assert.match(swipe, /event\.target && typeof event\.target\.setPointerCapture/);
+assert.doesNotMatch(swipe, /element\.setPointerCapture\(event\.pointerId\)/);
+assert.match(unified, /function transitionPhotoV8140\(container, direction, commit\)/);
+assert.match(unified, /_suppressNextPhotoClickV8140/);
+assert.doesNotMatch(unified, /_suppressPhotoClickUntilV8/);
 assert.match(unified, /bindPhotoSwipe\(detailGallery/);
 assert.match(unified, /bindPhotoSwipe\(modal/);
 assert.match(unifiedCss, /\.unified-detail-gallery-v8[\s\S]*?touch-action: pan-y/);
 assert.match(unifiedCss, /\.unified-gallery-modal-v8[\s\S]*?touch-action: none/);
 
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.39-live-merge-status/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.40-smooth-photo-expand/);
 assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render/);
 
 console.log("initial photo performance v8.1.30 tests passed");

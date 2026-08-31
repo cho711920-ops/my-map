@@ -37,7 +37,7 @@ assert.doesNotMatch(unifiedCss, /circle-marker\.transaction-check-cluster-v8135/
 assert.match(css, /operations-transaction-detail-v2/);
 assert.match(css, /operations-transaction-complete-v2/);
 assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.1\.39-live-merge-status/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.1\.40-smooth-photo-expand/);
 assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render/);
 
 console.log("transaction candidate list UI tests passed");
