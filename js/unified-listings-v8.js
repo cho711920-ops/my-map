@@ -149,9 +149,96 @@
   function primeDetailImages(originals) {
     if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
     var selected = orderOriginals(originals)[0];
-    /* 첫 장은 목록 캐시를 재사용하고 실제 다음 한 장만 준비합니다. */
-    var nextImage = originalImages(selected)[1];
-    if (nextImage) preloadDetailImage(nextImage, true);
+    var images = originalImages(selected);
+    if (images.length < 2) return;
+    /* 상세를 열기 전 다음 장과 순환 이전 장을 함께 준비합니다. */
+    [images[1], images[images.length - 1]].forEach(function(url, index, values) {
+      if (url && values.indexOf(url) === index) preloadDetailImage(url, true);
+    });
+  }
+
+  function preloadAdjacentDetailImages(images, index) {
+    if (!Array.isArray(images) || images.length < 2) return;
+    var safeIndex = ((Number(index) || 0) % images.length + images.length) % images.length;
+    var candidates = [
+      images[(safeIndex + 1) % images.length],
+      images[(safeIndex - 1 + images.length) % images.length]
+    ];
+    candidates.forEach(function(url, candidateIndex) {
+      if (url && candidates.indexOf(url) === candidateIndex) preloadDetailImage(url, true);
+    });
+  }
+
+  function bindPhotoSwipe(element, onStep) {
+    if (!element || element._photoSwipeBoundV8 || typeof onStep !== "function") return;
+    element._photoSwipeBoundV8 = true;
+    var gesture = null;
+
+    function resetGesture() {
+      var image = element.querySelector("img");
+      if (image) {
+        image.style.transition = "transform 150ms ease";
+        image.style.transform = "";
+        global.setTimeout(function() {
+          if (image) image.style.transition = "";
+        }, 170);
+      }
+      element.classList.remove("is-photo-dragging-v8");
+      gesture = null;
+    }
+
+    element.addEventListener("pointerdown", function(event) {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (event.target && event.target.closest(".unified-detail-photo-nav-v8,.unified-gallery-nav-v8,.close")) return;
+      gesture = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        deltaX: 0,
+        horizontal: false
+      };
+      if (typeof element.setPointerCapture === "function") {
+        try { element.setPointerCapture(event.pointerId); } catch (ignore) {}
+      }
+    });
+
+    element.addEventListener("pointermove", function(event) {
+      if (!gesture || event.pointerId !== gesture.pointerId) return;
+      var deltaX = event.clientX - gesture.startX;
+      var deltaY = event.clientY - gesture.startY;
+      if (!gesture.horizontal && Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      if (!gesture.horizontal && Math.abs(deltaY) > Math.abs(deltaX)) {
+        resetGesture();
+        return;
+      }
+      gesture.horizontal = true;
+      gesture.deltaX = deltaX;
+      event.preventDefault();
+      element.classList.add("is-photo-dragging-v8");
+      var image = element.querySelector("img");
+      if (image) {
+        image.style.transition = "none";
+        image.style.transform = "translate3d(" + Math.round(deltaX * 0.32) + "px,0,0)";
+      }
+    });
+
+    function finish(event) {
+      if (!gesture || (event && event.pointerId !== gesture.pointerId)) return;
+      var deltaX = gesture.deltaX;
+      var changed = gesture.horizontal && Math.abs(deltaX) >= 42;
+      if (changed) {
+        element._suppressPhotoClickUntilV8 = Date.now() + 350;
+        onStep(deltaX < 0 ? 1 : -1);
+      }
+      resetGesture();
+    }
+
+    element.addEventListener("pointerup", finish);
+    element.addEventListener("pointercancel", resetGesture);
+    element.addEventListener("lostpointercapture", function() {
+      if (gesture) resetGesture();
+    });
+    element.addEventListener("dragstart", function(event) { event.preventDefault(); });
   }
 
   function loadDetail(propertyId) {
@@ -577,6 +664,9 @@
       detailGallery._propertyIdV8 = propertyId;
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._failedImagesV8 = {};
+      bindPhotoSwipe(detailGallery, function(direction) {
+        renderDetailPhoto(detailGallery, Number(detailGallery._indexV8 || 0) + direction);
+      });
       renderDetailPhoto(detailGallery, 0);
       var pendingStep = state.pendingDetailSteps[text(propertyId)];
       if (images.length > 1 && Number.isFinite(Number(pendingStep))) {
@@ -609,9 +699,7 @@
       button.hidden = photoCount < 2;
       button.disabled = photoCount < 2;
     });
-    if (images.length > 1) {
-      preloadDetailImage(images[(safeIndex + 1) % images.length], true);
-    }
+    preloadAdjacentDetailImages(images, safeIndex);
   }
 
   function stepDetailPhoto(button, direction) {
@@ -634,6 +722,7 @@
   function openDetailGallery(button) {
     var gallery = button && button.closest(".unified-detail-gallery-v8");
     if (!gallery) return;
+    if (Number(gallery._suppressPhotoClickUntilV8 || 0) > Date.now()) return;
     openGallery(encodeURIComponent(text(gallery._propertyIdV8)),
       encodeURIComponent(text(gallery._originalIdV8)), Number(gallery._indexV8 || 0));
   }
@@ -1010,11 +1099,15 @@
         event.stopPropagation();
         stepGallery(1);
       };
-      modal.onclick = function(event) { if (event.target === modal) closeGallery(); };
+      modal.onclick = function(event) {
+        if (Number(modal._suppressPhotoClickUntilV8 || 0) > Date.now()) return;
+        if (event.target === modal) closeGallery();
+      };
       document.body.appendChild(modal);
     }
     var index = Math.max(0, Math.min(Number(startIndex) || 0, images.length - 1));
     modal._imagesV8 = images.slice();
+    bindPhotoSwipe(modal, function(direction) { stepGallery(direction); });
     renderGalleryImage(modal, index);
     modal.classList.add("open");
   }
@@ -1031,10 +1124,7 @@
     modal.querySelector("span").textContent = (safeIndex + 1) + " / " + images.length;
     modal.querySelector(".prev").disabled = safeIndex === 0;
     modal.querySelector(".next").disabled = safeIndex === images.length - 1;
-    [1, 2].forEach(function(offset) {
-      if (safeIndex + offset >= images.length) return;
-      preloadDetailImage(images[safeIndex + offset], true);
-    });
+    preloadAdjacentDetailImages(images, safeIndex);
   }
 
   function stepGallery(direction) {

@@ -44,7 +44,6 @@ var jsMapClusterEngineDefaultV690 = "world-grid";
 var jsMapClusterEngineStorageKeyV690 = "js_map_cluster_engine_v690";
 var jsMapResizeObserverV690 = null;
 var jsMapResizeRelayoutTimerV690 = null;
-var jsInitialListingsCacheHitV1 = false;
 
 
 /*
@@ -1661,81 +1660,6 @@ function restoreAutoUpdateViewState(state) {
 }
 
 
-function showListWithoutReleasingPinnedClusterV685(fallbackItems) {
-  /*
-   * D1 목록보다 늦게 도착하는 통합매물 응답이나 자동 새로고침이
-   * 사용자가 열어둔 클러스터 목록을 전체 목록으로 덮어쓰지 않게 합니다.
-   * 새 데이터에서 고정 매물을 잠시 찾지 못해도 기존 DOM을 유지합니다.
-   */
-  if (jsPinnedClusterSelectionV6515) {
-    var pinnedItems = getPinnedClusterItemsV6515();
-    if (pinnedItems.length && typeof showList === "function") {
-      showList(pinnedItems);
-    }
-    return true;
-  }
-
-  if (typeof showList === "function") {
-    showList(fallbackItems || []);
-  }
-  return false;
-}
-
-
-function hydrateInitialListingsCacheItemsV1(snapshot) {
-  var rows = snapshot && Array.isArray(snapshot.items) ? snapshot.items : [];
-  return rows.map(function(cached, index) {
-    var item = Object.assign({}, cached || {});
-    item.displayValuePresence = Object.assign({}, cached && cached.displayValuePresence || {});
-    item.sheetRow = Number(item.sheetRow) || index + 2;
-    item.latlng = null;
-    var latitude = item.latitude == null || item.latitude === "" ? NaN : Number(item.latitude);
-    var longitude = item.longitude == null || item.longitude === "" ? NaN : Number(item.longitude);
-    if (
-      Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 &&
-      window.kakao && kakao.maps
-    ) {
-      item.latitude = latitude;
-      item.longitude = longitude;
-      item.latlng = new kakao.maps.LatLng(latitude, longitude);
-    }
-    item.key = itemKey(item);
-    return item;
-  }).filter(function(item) { return !!item.address; });
-}
-
-
-function showInitialListingsCacheV1(snapshot) {
-  if (!snapshot || !window.JSUnifiedListingsV8 ||
-      typeof window.JSUnifiedListingsV8.attach !== "function") return false;
-  var cachedItems = hydrateInitialListingsCacheItemsV1(snapshot);
-  if (!cachedItems.length) return false;
-
-  window.JSUnifiedListingsV8.attach(cachedItems, snapshot.unified || { groups: {} });
-  allItems = cachedItems;
-  updateTypeOptions(allItems);
-  currentItems = getFilteredItems({ includeUnlocated: true });
-  /*
-   * 캐시 화면은 카드부터 즉시 보여 줍니다. 1만 건 공간 클러스터는 곧 도착할
-   * 최신 D1 목록이 한 번만 그리게 하며, 네트워크가 늦을 때만 1.2초 뒤
-   * 캐시 좌표로 보완합니다.
-   */
-  showList(getAdministrativeListItemsV6570(currentItems));
-  jsInitialListingsCacheHitV1 = true;
-  document.documentElement.setAttribute("data-initial-list-cache-hit", "true");
-  var statusElement = document.getElementById("status");
-  if (statusElement) {
-    statusElement.textContent = "저장된 최근 매물 먼저 표시 · 최신 전체목록 확인 중...";
-  }
-  window.setTimeout(function() {
-    if (allItems !== cachedItems || !jsInitialListingsCacheHitV1) return;
-    drawMapClustersOnlyV639(currentItems);
-  }, 1200);
-  return true;
-}
-
-
 function hasReadyCoordinateWithoutSharedCacheV8213(item) {
   if (!item) return true;
   if (item.latlng) return true;
@@ -1782,18 +1706,11 @@ function loadSheet(isAuto, forceRefresh) {
 
   isLoadingSheet = true;
   errorItems = [];
-  document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 준비중..." : "D1 매물 불러오는 중...";
-  var liveInitialDataAppliedV1 = false;
+  document.getElementById("status").innerHTML = isAuto
+    ? "자동 업데이트 준비중..."
+    : "전체 매물과 사진정보를 함께 불러오는 중...";
   var liveInitialItemsForCacheV1 = null;
   var initialCacheWriteStartedV1 = false;
-
-  if (!isAuto && window.JSInitialListingsCacheV1 &&
-      typeof window.JSInitialListingsCacheV1.read === "function") {
-    window.JSInitialListingsCacheV1.read().then(function(snapshot) {
-      if (liveInitialDataAppliedV1 || !isLoadingSheet) return;
-      showInitialListingsCacheV1(snapshot);
-    });
-  }
 
   /*
    * 저장 직후와 데이터 리비전 변경 뒤에는 운영 D1 데이터를 강제로 다시 읽습니다.
@@ -1822,7 +1739,6 @@ function loadSheet(isAuto, forceRefresh) {
     });
 
   var unifiedResult = null;
-  var renderedItemsAwaitingUnified = null;
   function persistInitialListingsCacheV1() {
     if (
       isAuto || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
@@ -1839,24 +1755,6 @@ function loadSheet(isAuto, forceRefresh) {
     ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
     : Promise.resolve({ ok: false, groups: {} });
 
-  unifiedRequest.then(function(result) {
-    unifiedResult = result || { ok: false, groups: {} };
-    if (!renderedItemsAwaitingUnified || !window.JSUnifiedListingsV8 ||
-        typeof window.JSUnifiedListingsV8.attach !== "function") return;
-
-    var targetItems = allItems && allItems.length ? allItems : renderedItemsAwaitingUnified;
-    var list = document.getElementById("list");
-    var scrollTop = list ? list.scrollTop : 0;
-    window.JSUnifiedListingsV8.attach(targetItems, unifiedResult);
-    currentItems = getFilteredItems({ includeUnlocated: true });
-    window.jsReuseListCardsOnNextRenderV6521 = true;
-    showListWithoutReleasingPinnedClusterV685(currentItems);
-    if (list) list.scrollTop = scrollTop;
-    persistInitialListingsCacheV1();
-  }).catch(function(error) {
-    console.warn("Unified listing background load failed", error);
-  });
-
   /*
    * 공용 좌표 캐시는 D1 CSV에 좌표가 빠진 행이 있을 때만 지연 요청합니다.
    * 현재처럼 모든 행에 좌표가 있으면 초기 네트워크와 JSON 파싱에서 제외합니다.
@@ -1871,8 +1769,22 @@ function loadSheet(isAuto, forceRefresh) {
     return sharedGeocodeRequest;
   }
 
-  return sheetRequest
-    .then(function(data) {
+  /*
+   * CSV 대표매물과 통합 원본(사진·출처·매매/임대 조건)을 동시에 요청하되,
+   * 둘 중 하나만 먼저 도착했을 때는 목록을 그리지 않습니다. 예전 80개 캐시나
+   * 대표매물만 먼저 보였다가 전체 카드로 바뀌는 두 단계 화면을 없애고,
+   * 두 자료가 모두 준비된 시점에 전체 목록을 한 번만 렌더링합니다.
+   */
+  return Promise.all([
+    sheetRequest,
+    unifiedRequest.catch(function(error) {
+      console.warn("Unified listing initial load failed", error);
+      return { ok: false, groups: {} };
+    })
+  ])
+    .then(function(initialResults) {
+      var data = initialResults[0];
+      unifiedResult = initialResults[1] || { ok: false, groups: {} };
       var rows = parseCSVRecordsV655(data);
       var rawItems = [];
 
@@ -1939,17 +1851,14 @@ function loadSheet(isAuto, forceRefresh) {
         if (item.address) rawItems.push(item);
       }
 
-      renderedItemsAwaitingUnified = rawItems;
       if (unifiedResult && window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
         window.JSUnifiedListingsV8.attach(rawItems, unifiedResult);
       }
 
       /*
-       * D1 초기화 직후에는 좌표 캐시가 비어 있어 수백 건의 주소 변환이 필요합니다.
-       * 좌표가 준비될 때까지 목록까지 0건으로 숨기지 않고, D1에서 읽은 매물 카드를
-       * 먼저 보여 준 뒤 지도 마커만 순차적으로 추가합니다.
+       * 좌표가 모두 준비될 때까지 상태 문구만 갱신합니다. 일부 카드나 마커를 먼저
+       * 그리지 않아 첫 화면의 매물 수가 여러 번 바뀌지 않게 합니다.
        */
-      liveInitialDataAppliedV1 = true;
       allItems = rawItems;
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
@@ -1961,20 +1870,14 @@ function loadSheet(isAuto, forceRefresh) {
       var allRowsReadyWithoutSharedCacheV8213 = rawItems.length > 0 && rawItems.every(function(item) {
         return hasReadyCoordinateWithoutSharedCacheV8213(item);
       });
-      var keptPinnedClusterListV685 = allRowsAlreadyLocatedV691
-        ? false
-        : showListWithoutReleasingPinnedClusterV685(currentItems);
       /*
        * Missing building data is resolved only for cards that enter the visible
        * list. Bulk-prefetching every address kept server functions alive long
        * after the map was left idle and generated unnecessary hosting cost.
        */
-      if (!keptPinnedClusterListV685) {
-        document.getElementById("status").innerHTML =
-          allRowsAlreadyLocatedV691
-            ? "매물 " + currentItems.length + "개 지도 표시 중..."
-            : "매물 " + currentItems.length + "개 목록 먼저 표시 · 지도 좌표 준비 중...";
-      }
+      document.getElementById("status").innerHTML = allRowsAlreadyLocatedV691
+        ? "전체 매물 " + currentItems.length + "개 표시 중..."
+        : "전체 매물 " + currentItems.length + "개 확인 · 지도 좌표 준비 중...";
 
       /*
        * 현재 D1 CSV에 좌표가 모두 있으면 0.7MB 공용 좌표 캐시 요청과
@@ -2096,19 +1999,13 @@ function loadSheet(isAuto, forceRefresh) {
         isLoadingSheet = false;
         }, function(progressItems, remainingCount) {
         /*
-         * 첫 접속에서는 좌표 캐시가 있는 매물을 먼저 보여 줍니다.
-         * 캐시에 없는 주소는 뒤에서 변환하면서 묶음 단위로 지도에 추가합니다.
+         * 좌표 변환 도중 일부 매물만 목록에 다시 그리면 새로고침 직후 카드 수가
+         * 여러 번 바뀝니다. 진행률만 알리고, 전체 좌표 작업이 끝난 뒤 applyFilter()
+         * 에서 지도와 전체 목록을 한 번에 표시합니다.
          */
         if (!progressItems || !progressItems.length || isAuto) return;
-
-        allItems = progressItems;
-        updateTypeOptions(allItems);
-        preserveActionSelectionDuringRender = !!isAuto;
-        applyFilter();
-        preserveActionSelectionDuringRender = false;
-
         document.getElementById("status").innerHTML =
-          "저장된 좌표 " + progressItems.length + "개 먼저 표시 / 나머지 " +
+          "전체 매물 준비 중 · 지도 좌표 " + progressItems.length + "개 확인 / 나머지 " +
           Math.max(0, Number(remainingCount) || 0) + "개 처리 중...";
         });
       });

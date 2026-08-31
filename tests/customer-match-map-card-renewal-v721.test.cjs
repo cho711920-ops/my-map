@@ -46,7 +46,7 @@ assert.match(css, /customer-match-map-card-v721\.customer-match-introduced[\s\S]
 assert.match(css, /customer-match-map-card-v721\.customer-match-held[\s\S]*?border-left-color:\s*#1f2937 !important/);
 assert.match(html, /id="customerMatchMapStatusOverlayV722"/);
 assert.match(html, /id="customerMatchMapStatusOverlayV722"[\s\S]*?>메인화면으로 돌아가기<\/button>/);
-assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
+assert.match(html, /unified-listings-v8\.css\?v=8\.1\.37-swipe-gallery/);
 assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
 
 console.log("customer match map card renewal v7.21 tests passed");

@@ -83,14 +83,13 @@ test("the fast snapshot caps cards and duplicate metadata at the first 80 listin
   assert.equal(result.unified.groups["P-80"], undefined);
 });
 
-test("the map renders a cached snapshot first and always refreshes it from live D1 data", () => {
-  assert.match(mapSource, /function showInitialListingsCacheV1\(snapshot\)/);
-  assert.match(mapSource, /JSInitialListingsCacheV1\.read\(\)\.then/);
-  assert.match(mapSource, /showInitialListingsCacheV1\(snapshot\)/);
-  assert.match(mapSource, /저장된 최근 매물 먼저 표시 · 최신 전체목록 확인 중/);
-  assert.match(mapSource, /showList\(getAdministrativeListItemsV6570\(currentItems\)\)/);
-  assert.match(mapSource, /drawMapClustersOnlyV639\(currentItems\)/);
-  assert.match(mapSource, /liveInitialDataAppliedV1 = true/);
+test("the map waits for the complete live D1 and unified payload before its first render", () => {
+  assert.doesNotMatch(mapSource, /function showInitialListingsCacheV1\(snapshot\)/);
+  assert.doesNotMatch(mapSource, /JSInitialListingsCacheV1\.read\(\)\.then/);
+  assert.doesNotMatch(mapSource, /저장된 최근 매물 먼저 표시/);
+  assert.match(mapSource, /Promise\.all\(\[[\s\S]*?sheetRequest,[\s\S]*?unifiedRequest\.catch/);
+  assert.match(mapSource, /전체 매물과 사진정보를 함께 불러오는 중/);
+  assert.match(mapSource, /window\.JSUnifiedListingsV8\.attach\(rawItems, unifiedResult\)/);
   assert.match(mapSource, /JSInitialListingsCacheV1\.write\(liveInitialItemsForCacheV1, unifiedResult\)/);
   assert.match(auth, /JSInitialListingsCacheV1\.clear\(\)/);
 });

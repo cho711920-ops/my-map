@@ -217,9 +217,13 @@
   }
 
   .unified-detail-body-v8 { height: calc(100% - 66px); overflow: auto; font-size: 15px; }
-  .unified-detail-gallery-v8 { position: relative; height: 330px; overflow: hidden; background: #d1d5db; }
+  .unified-detail-gallery-v8 {
+    position: relative; height: 330px; overflow: hidden; background: #d1d5db;
+    touch-action: pan-y; user-select: none; cursor: grab;
+  }
+  .unified-detail-gallery-v8.is-photo-dragging-v8 { cursor: grabbing; }
   .unified-detail-hero-v8 { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: #d1d5db; cursor: zoom-in; }
-  .unified-detail-hero-v8 img { width: 100%; height: 100%; object-fit: cover; }
+  .unified-detail-hero-v8 img { width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; will-change: transform; }
   .unified-detail-photo-count-v8 {
     position: absolute; right: 14px; bottom: 13px; padding: 6px 11px; border-radius: 999px;
     background: rgba(15,23,42,.78); color: #fff; font-size: 14px; font-weight: 900; letter-spacing: .02em;
@@ -286,10 +290,11 @@
 
   .unified-gallery-modal-v8 {
     position: fixed; inset: 0; z-index: 11000; display: none; align-items: center; justify-content: center;
-    background: rgba(3, 7, 18, .9);
+    background: rgba(3, 7, 18, .9); touch-action: none; user-select: none; cursor: grab;
   }
+  .unified-gallery-modal-v8.is-photo-dragging-v8 { cursor: grabbing; }
   .unified-gallery-modal-v8.open { display: flex; }
-  .unified-gallery-modal-v8 img { max-width: 92vw; max-height: 88vh; object-fit: contain; }
+  .unified-gallery-modal-v8 img { max-width: 92vw; max-height: 88vh; object-fit: contain; user-select: none; -webkit-user-drag: none; will-change: transform; }
   .unified-gallery-modal-v8 .close { position: absolute; top: 20px; right: 24px; border: 0; background: transparent; color: #fff; font-size: 38px; cursor: pointer; }
   .unified-gallery-nav-v8 {
     position: absolute;

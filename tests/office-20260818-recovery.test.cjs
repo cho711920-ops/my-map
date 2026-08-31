@@ -35,7 +35,7 @@ test("compact cards show only the elevator-presence icon while register details 
   assert.doesNotMatch(main, /item-elevator-capacity-v820/);
   assert.doesNotMatch(style, /\.item-elevator-v650/);
   assert.match(unifiedCss, /\.item-elevator-v650/);
-  assert.match(html, /unified-listings-v8\.css\?v=8\.1\.36-contract-complete-label/);
+  assert.match(html, /unified-listings-v8\.css\?v=8\.1\.37-swipe-gallery/);
 });
 
 test("quick add waits for a confirmed D1 persistence result before clearing input", () => {
@@ -58,7 +58,7 @@ test("quick add waits for a confirmed D1 persistence result before clearing inpu
 
 test("all recovered August 18 cache versions are active", () => {
   for (const asset of [
-    "js/unified-listings-v8.js?v=8.1.37-sale-details",
+    "js/unified-listings-v8.js?v=8.1.38-swipe-prefetch",
     "js/list-manager-v6.js?v=6.4.35-shared-data-only",
     "js/operations-center-v7.js?v=7.22.7-list-transaction-link",
     "js/operations-collection-v8.js?v=7.25.9-collection-diagnostics",
