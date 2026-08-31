@@ -258,23 +258,47 @@
   }
 
   function itemPhoto(item) {
-    var candidates = [item && item.thumbnail, item && item.photo, item && item.photoUrl,
+    var candidates = [item && item.thumbnailV8, item && item.thumbnail, item && item.photo, item && item.photoUrl,
       item && item.image, item && item.imageUrl, item && item.representativePhoto];
     if (item && Array.isArray(item.images)) candidates = candidates.concat(item.images);
+    if (item && Array.isArray(item.unifiedOriginalsV8)) {
+      item.unifiedOriginalsV8.forEach(function (original) {
+        if (!original) return;
+        if (original.thumbnail) candidates.push(original.thumbnail);
+        if (Array.isArray(original.images)) candidates = candidates.concat(original.images);
+      });
+    }
     return String(candidates.filter(function (value) { return /^https?:\/\//i.test(String(value || "")); })[0] || "");
+  }
+
+  function favoriteItemPrice(item) {
+    if (!item) return "원본 데이터는 삭제되지 않았습니다";
+    if (String(item.tradeType || "").toLowerCase() === "sale") {
+      var salePrice = item.salePrice;
+      var formattedSalePrice = global.JSSaleWorkbenchV1 && typeof global.JSSaleWorkbenchV1.price === "function"
+        ? global.JSSaleWorkbenchV1.price(salePrice)
+        : (Number.isFinite(Number(salePrice)) ? Number(salePrice).toLocaleString("ko-KR") + "만원" : "가격 확인 필요");
+      return "매매 " + formattedSalePrice + " · 평 " + (item.area || "-");
+    }
+    return "보 " + (item.deposit || "-") + " / 월 " + (item.rent || "-") + " · 평 " + (item.area || "-");
   }
 
   function itemRow(ref, folderId) {
     var item = resolveItem(ref);
     var title = item ? (item.name || item.address || "매물") : "현재 목록에서 확인할 수 없는 매물";
     var address = item ? [item.address, item.room].filter(Boolean).join(" · ") : "매물ID " + ref.replace(/^property:/, "");
-    var price = item ? "보 " + (item.deposit || "-") + " / 월 " + (item.rent || "-") + " · 평 " + (item.area || "-") : "원본 데이터는 삭제되지 않았습니다";
+    var price = favoriteItemPrice(item);
     var photo = itemPhoto(item);
+    var encodedRef = encodeURIComponent(ref);
     return '<article class="unified-favorite-item-v7">' +
-      '<div class="unified-favorite-thumb-v7">' +
-        (photo ? '<img src="' + escapeHtml(photo) + '" alt="매물 사진" onerror="this.parentNode.classList.add(\'empty\');this.remove()">' : '<span>사진 없음</span>') +
-      '</div><div class="unified-favorite-item-info-v7"><strong>' + escapeHtml(title) + '</strong>' +
-        '<span>' + escapeHtml(address) + '</span><b>' + escapeHtml(price) + '</b></div>' +
+      '<button type="button" class="unified-favorite-open-v7" onclick="openUnifiedFavoriteItemV7(\'' + encodedRef + '\')" ' +
+        'aria-label="' + escapeHtml(title) + ' 상세보기">' +
+        '<span class="unified-favorite-thumb-v7">' +
+          (photo ? '<img src="' + escapeHtml(photo) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" ' +
+            'onerror="this.parentNode.classList.add(\'empty\');this.remove();this.parentNode.innerHTML=\'<span>사진 없음</span>\'">' : '<span>사진 없음</span>') +
+        '</span><span class="unified-favorite-item-info-v7"><strong>' + escapeHtml(title) + '</strong>' +
+          '<span>' + escapeHtml(address) + '</span><b>' + escapeHtml(price) + '</b></span>' +
+      '</button>' +
       '<button type="button" class="unified-favorite-remove-v7" onclick="removeUnifiedFavoriteItemV7(\'' +
         escapeHtml(folderId) + '\',\'' + encodeURIComponent(ref) + '\')">찜 제거</button></article>';
   }
@@ -424,6 +448,18 @@
     render();
     showToast("찜폴더에서 매물을 제거했습니다.");
     if (typeof global.applyFilter === "function") global.applyFilter();
+  };
+
+  global.openUnifiedFavoriteItemV7 = function (encodedRef) {
+    var ref = decodeURIComponent(encodedRef || "");
+    var item = resolveItem(ref);
+    var propertyId = String(item && item.propertyId || "").trim();
+    if (!propertyId || !global.JSUnifiedListingsV8 || typeof global.JSUnifiedListingsV8.open !== "function") {
+      showToast("상세정보를 불러오지 못했습니다. 목록을 새로고침한 뒤 다시 눌러 주세요.", "warning");
+      return;
+    }
+    close();
+    global.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
   };
 
   global.renameUnifiedFavoriteFolderV7 = function (id) {

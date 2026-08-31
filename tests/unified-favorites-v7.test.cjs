@@ -9,8 +9,8 @@ const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
 const aiVisit = fs.readFileSync("js/ai-visit-session-v6.js", "utf8");
 const main = fs.readFileSync("js/script.js", "utf8");
 
-assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.2-reliable-submit/);
-assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.5-property-id-only/);
+assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.6-photo-detail/);
+assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.6-photo-detail/);
 assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
@@ -38,6 +38,11 @@ assert.match(favorites, /js-v6-list-store-change/);
 assert.match(favorites, /dialog\.style\.height = height \+ "px"/);
 assert.match(favorites, /Math\.min\(1040, Math\.max\(520, rect\.width - 68\)\)/);
 assert.doesNotMatch(favorites, /customerMatch|customers/);
+assert.match(favorites, /item && item\.thumbnailV8/);
+assert.match(favorites, /item\.unifiedOriginalsV8/);
+assert.match(favorites, /loading="lazy" decoding="async" referrerpolicy="no-referrer"/);
+assert.match(favorites, /openUnifiedFavoriteItemV7/);
+assert.match(favorites, /JSUnifiedListingsV8\.open\(encodeURIComponent\(propertyId\)\)/);
 
 assert.match(listManager, /var propertyPrefix = "property:"/);
 assert.match(listManager, /new CustomEvent\("js-v6-list-store-change"/);
@@ -75,6 +80,9 @@ const context = {
     JSV6ListStore: {
       load: () => [{ id: "fav-one", name: "찜", itemKeys: ["property:M-first"] }]
     },
+    JSUnifiedListingsV8: {
+      open: (propertyId) => { context.openedPropertyId = propertyId; }
+    },
     addEventListener() {},
     setTimeout() {},
     clearTimeout() {},
@@ -89,10 +97,13 @@ vm.runInNewContext(favorites, context);
 context.window.showUnifiedFavoriteOnMapV7("fav-one");
 assert.deepEqual(Array.from(context.window.favoriteKeys), ["property:M-first"]);
 assert.deepEqual(JSON.parse(stored.get("favoriteKeys")), ["property:M-first"]);
+context.window.openUnifiedFavoriteItemV7(encodeURIComponent("property:M-first"));
+assert.equal(context.openedPropertyId, "M-first");
 
 assert.match(favoritesCss, /\.unified-favorite-dialog-v7\{position:fixed/);
 assert.match(favoritesCss, /max-width:1040px;min-height:500px/);
 assert.match(favoritesCss, /\.selection-action-bar \.selection-favorite-btn/);
 assert.match(favoritesCss, /\.unified-favorite-folder-actions-v7 button\.visit/);
+assert.match(favoritesCss, /\.unified-favorite-open-v7\{/);
 
 console.log("unified favorites v7 tests passed");
