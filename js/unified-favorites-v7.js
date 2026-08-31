@@ -8,6 +8,10 @@
     source: "browse"
   };
   var favoriteDetailObserverV7 = null;
+  var favoriteLocationMapV7 = null;
+  var favoriteLocationMarkerV7 = null;
+  var favoriteLocationCircleV7 = null;
+  var favoriteLocationPositionV7 = null;
 
   function store() {
     return global.JSV6ListStore || null;
@@ -226,6 +230,12 @@
           '</div>' +
         '</header>' +
         '<div class="unified-favorite-layout-v7">' +
+          '<aside id="unifiedFavoriteMapHostV7" class="unified-favorite-map-host-v7" aria-hidden="true">' +
+            '<header class="unified-favorite-map-head-v7"><div><strong>매물 위치</strong><span>선택 매물 중심 반경 50m</span></div>' +
+              '<b>50m</b></header>' +
+            '<div id="unifiedFavoriteMiniMapV7" class="unified-favorite-mini-map-v7" role="img" aria-label="선택한 매물의 위치 지도"></div>' +
+            '<div id="unifiedFavoriteMapStatusV7" class="unified-favorite-map-status-v7" aria-live="polite"></div>' +
+          '</aside>' +
           '<aside id="unifiedFavoriteDetailHostV7" class="unified-favorite-detail-host-v7" aria-hidden="true"></aside>' +
           '<div class="unified-favorite-list-pane-v7">' +
             '<form id="unifiedFavoriteCreateFormV7" class="unified-favorite-create-v7">' +
@@ -251,7 +261,7 @@
     if (!modal || !dialog || global.innerWidth <= 768) return;
     var detailOpen = dialog.classList.contains("has-detail-v7");
     var width = detailOpen
-      ? Math.min(1120, Math.max(760, global.innerWidth * 0.84))
+      ? Math.min(1360, Math.max(920, global.innerWidth - 48))
       : Math.min(620, Math.max(500, global.innerWidth * 0.5));
     width = Math.min(width, global.innerWidth - 32);
     var left = Math.max(16, (global.innerWidth - width) / 2);
@@ -263,6 +273,109 @@
     dialog.style.width = width + "px";
     dialog.style.height = height + "px";
     dialog.style.maxHeight = height + "px";
+    refreshFavoriteLocationMapV7();
+  }
+
+  function finiteCoordinateV7(value) {
+    var number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function itemCoordinatesV7(item) {
+    if (!item) return null;
+    var lat = finiteCoordinateV7(item.latitude != null && item.latitude !== "" ? item.latitude : item.lat);
+    var lng = finiteCoordinateV7(item.longitude != null && item.longitude !== "" ? item.longitude : item.lng);
+    if ((lat == null || lng == null) && item.latlng) {
+      try {
+        lat = finiteCoordinateV7(typeof item.latlng.getLat === "function" ? item.latlng.getLat() : lat);
+        lng = finiteCoordinateV7(typeof item.latlng.getLng === "function" ? item.latlng.getLng() : lng);
+      } catch (_) {}
+    }
+    if ((lat == null || lng == null) && Array.isArray(item.unifiedOriginalsV8)) {
+      item.unifiedOriginalsV8.some(function (original) {
+        var originalLat = finiteCoordinateV7(original && (original.latitude != null && original.latitude !== "" ? original.latitude : original.lat));
+        var originalLng = finiteCoordinateV7(original && (original.longitude != null && original.longitude !== "" ? original.longitude : original.lng));
+        if (originalLat == null || originalLng == null) return false;
+        lat = originalLat;
+        lng = originalLng;
+        return true;
+      });
+    }
+    if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return {lat: lat, lng: lng};
+  }
+
+  function setFavoriteMapStatusV7(message, empty) {
+    var status = document.getElementById("unifiedFavoriteMapStatusV7");
+    var container = document.getElementById("unifiedFavoriteMiniMapV7");
+    if (status) status.textContent = message || "";
+    if (container) container.classList.toggle("is-empty-v7", !!empty);
+  }
+
+  function clearFavoriteLocationMapV7() {
+    if (favoriteLocationMarkerV7 && typeof favoriteLocationMarkerV7.setMap === "function") {
+      favoriteLocationMarkerV7.setMap(null);
+    }
+    if (favoriteLocationCircleV7 && typeof favoriteLocationCircleV7.setMap === "function") {
+      favoriteLocationCircleV7.setMap(null);
+    }
+    favoriteLocationMarkerV7 = null;
+    favoriteLocationCircleV7 = null;
+    favoriteLocationPositionV7 = null;
+  }
+
+  function refreshFavoriteLocationMapV7() {
+    if (!favoriteLocationMapV7 || !favoriteLocationPositionV7 || !global.kakao || !global.kakao.maps) return;
+    global.setTimeout(function () {
+      if (!favoriteLocationMapV7 || !favoriteLocationPositionV7) return;
+      global.kakao.maps.event.trigger(favoriteLocationMapV7, "resize");
+      favoriteLocationMapV7.setCenter(favoriteLocationPositionV7);
+    }, 240);
+  }
+
+  function renderFavoriteLocationMapV7(item) {
+    var host = document.getElementById("unifiedFavoriteMapHostV7");
+    var container = document.getElementById("unifiedFavoriteMiniMapV7");
+    if (!host || !container) return;
+    host.setAttribute("aria-hidden", "false");
+    clearFavoriteLocationMapV7();
+    var coords = itemCoordinatesV7(item);
+    var address = String(item && item.address || "").trim();
+    if (!coords) {
+      favoriteLocationMapV7 = null;
+      container.innerHTML = '<div class="unified-favorite-map-empty-v7"><strong>위치 좌표 없음</strong><span>이 매물에는 지도에 표시할 정확한 좌표가 저장되어 있지 않습니다.</span></div>';
+      setFavoriteMapStatusV7(address || "매물 주소를 확인해 주세요.", true);
+      return;
+    }
+    if (!global.kakao || !global.kakao.maps || typeof global.kakao.maps.Map !== "function") {
+      favoriteLocationMapV7 = null;
+      container.innerHTML = '<div class="unified-favorite-map-empty-v7"><strong>지도를 불러오는 중</strong><span>잠시 후 매물을 다시 눌러 주세요.</span></div>';
+      setFavoriteMapStatusV7(address || "선택한 매물 위치", true);
+      return;
+    }
+    container.innerHTML = "";
+    container.classList.remove("is-empty-v7");
+    var position = new global.kakao.maps.LatLng(coords.lat, coords.lng);
+    favoriteLocationPositionV7 = position;
+    favoriteLocationMapV7 = new global.kakao.maps.Map(container, {center: position, level: 3});
+    favoriteLocationMarkerV7 = new global.kakao.maps.Marker({
+      map: favoriteLocationMapV7,
+      position: position,
+      title: address || "매물 위치"
+    });
+    favoriteLocationCircleV7 = new global.kakao.maps.Circle({
+      map: favoriteLocationMapV7,
+      center: position,
+      radius: 50,
+      strokeWeight: 2,
+      strokeColor: "#1677e8",
+      strokeOpacity: 0.92,
+      strokeStyle: "solid",
+      fillColor: "#60a5fa",
+      fillOpacity: 0.18
+    });
+    setFavoriteMapStatusV7(address || "선택한 매물의 저장 위치", false);
+    refreshFavoriteLocationMapV7();
   }
 
   function itemPhoto(item) {
@@ -474,10 +587,13 @@
     }
     var dialog = document.querySelector(".unified-favorite-dialog-v7");
     var host = document.getElementById("unifiedFavoriteDetailHostV7");
-    if (!dialog || !host) return;
+    var mapHost = document.getElementById("unifiedFavoriteMapHostV7");
+    if (!dialog || !host || !mapHost) return;
     dialog.classList.add("has-detail-v7");
     host.setAttribute("aria-hidden", "false");
+    mapHost.setAttribute("aria-hidden", "false");
     positionModal();
+    renderFavoriteLocationMapV7(item);
     global.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
     global.setTimeout(mountFavoriteDetailV7, 0);
   };
@@ -485,8 +601,11 @@
   function setFavoriteDetailPaneV7(open) {
     var dialog = document.querySelector(".unified-favorite-dialog-v7");
     var host = document.getElementById("unifiedFavoriteDetailHostV7");
+    var mapHost = document.getElementById("unifiedFavoriteMapHostV7");
     if (dialog) dialog.classList.toggle("has-detail-v7", !!open);
     if (host) host.setAttribute("aria-hidden", open ? "false" : "true");
+    if (mapHost) mapHost.setAttribute("aria-hidden", open ? "false" : "true");
+    if (!open) clearFavoriteLocationMapV7();
     var modal = document.getElementById("unifiedFavoriteModalV7");
     if (modal && modal.classList.contains("open")) positionModal();
   }
