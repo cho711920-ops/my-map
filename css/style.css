@@ -753,37 +753,73 @@
 
   .map-measure-status-v657 {
     position: fixed;
-    left: 50%;
-    bottom: 24px;
+    top: 74px;
+    left: calc((100vw - var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px))) / 2);
     z-index: 9500;
     display: flex;
     align-items: center;
-    gap: 9px;
-    max-width: min(520px, calc(100vw - 80px));
-    padding: 9px 10px 9px 14px;
-    border: 1px solid #b7cde9;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .97);
-    color: #24405f;
+    gap: 12px;
+    width: max-content;
+    max-width: min(560px, calc(100vw - var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) - 48px));
+    min-height: 42px;
+    padding: 6px 7px 6px 16px;
+    border: 1px solid rgba(91, 146, 211, .48);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .96);
+    color: #173f6b;
     font-size: 12px;
     font-weight: 900;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, .22);
+    line-height: 1.35;
+    box-shadow: 0 8px 24px rgba(15, 54, 94, .17);
+    box-sizing: border-box;
+    backdrop-filter: blur(8px);
     transform: translateX(-50%);
+  }
+
+  .map-measure-status-v657 > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .map-measure-status-v657[hidden] {
     display: none !important;
   }
 
-  .map-measure-status-v657 button {
-    width: 26px;
-    height: 26px;
-    border: 0;
+  .map-measure-status-v657 .map-measure-status-close-v660 {
+    display: grid;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid #cfdae8;
     border-radius: 50%;
-    background: #e9eff7;
-    color: #344054;
-    font-size: 19px;
+    background: #f4f7fb;
+    color: #52677e;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
     cursor: pointer;
+    transition: border-color .16s ease, background-color .16s ease, color .16s ease, transform .16s ease;
+  }
+
+  .map-measure-status-v657 .map-measure-status-close-v660 svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .map-measure-status-v657 .map-measure-status-close-v660:hover {
+    border-color: #93b5dd;
+    background: #eaf3fd;
+    color: #145fa8;
+    transform: scale(1.04);
+  }
+
+  .map-measure-status-v657 .map-measure-status-close-v660:focus-visible {
+    outline: 3px solid rgba(35, 125, 221, .22);
+    outline-offset: 2px;
   }
 
   .map-measure-label-v657 {

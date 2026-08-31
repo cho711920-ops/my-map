@@ -12,7 +12,7 @@ const parser = fs.readFileSync("js/parser.js", "utf8");
 const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
 
 test("the August 18 module split loads extracted code in dependency order", () => {
-  const styleIndex = html.indexOf("css/style.css?v=6.10.0-module-split");
+  const styleIndex = html.indexOf("css/style.css?v=6.10.1-map-status-top");
   const overrideIndex = html.indexOf("css/app-final-overrides-v690.css?v=1.0.0");
   const mainIndex = html.indexOf("js/script.js?v=6.10.8-favorite-property-id");
   const propertyEditIndex = html.indexOf("js/property-edit-v648.js?v=1.0.1-linked-selection");

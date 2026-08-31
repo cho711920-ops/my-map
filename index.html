@@ -26,7 +26,7 @@
 <script src="js/data-access-v6.js?v=6.0.3-earliest-warmup"></script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.10.0-module-split">
+<link rel="stylesheet" href="css/style.css?v=6.10.1-map-status-top">
 <link rel="stylesheet" href="css/app-final-overrides-v690.css?v=1.0.0">
 <link rel="stylesheet" href="css/print-v2.css?v=2.0.0">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.28-brokerage-filter">
@@ -362,7 +362,10 @@
     </div>
     <div id="mapMeasureStatusV657" class="map-measure-status-v657" hidden>
       <span id="mapMeasureStatusTextV657"></span>
-      <button type="button" onclick="clearMapMeasurementsV657()" aria-label="측정 지우기">×</button>
+      <button class="map-measure-status-close-v660" type="button" onclick="clearMapMeasurementsV657()"
+        aria-label="반경 검색 또는 거리재기 해제" title="해제">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"></path></svg>
+      </button>
     </div>
   </aside>
 
