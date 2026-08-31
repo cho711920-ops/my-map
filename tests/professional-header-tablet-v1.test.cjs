@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "header-professional-v1.css"), "utf8");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
-assert.match(html, /header-professional-v1\.css\?v=1\.1\.2-logout-size/);
+assert.match(html, /header-professional-v1\.css\?v=1\.1\.3-map-tool-panel/);
 assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/small>/);
 
 [
@@ -38,8 +38,10 @@ assert.match(css, /\.desktop-operations-action \{ grid-column: 1/);
 assert.match(css, /\.quick-add-btn \{ grid-column: 6/);
 assert.match(css, /\.top-logout-btn-v1 \{ grid-column: 7/);
 assert.match(css, /\.top-logout-btn-v1:hover \{[\s\S]*color: #c24141/);
-assert.match(css, /\.map-quick-tools,[\s\S]*background: transparent !important/);
-assert.match(css, /\.map-quick-tool-btn \{[\s\S]*background: rgba\(255, 255, 255, \.9\)/);
+assert.match(css, /\.map-quick-tools \{[\s\S]*background: transparent !important/);
+assert.match(css, /\.map-quick-tools-inner \{[\s\S]*width: 54px !important;[\s\S]*border: 1px solid #aebfd3 !important;[\s\S]*background: rgba\(244, 248, 253, \.98\) !important/);
+assert.match(css, /\.map-quick-tools-inner::before \{[\s\S]*content: "지도\\A도구";[\s\S]*background: linear-gradient\(145deg, #075fae, #064b8b\)/);
+assert.match(css, /\.map-quick-tool-btn \{[\s\S]*border-radius: 8px !important;[\s\S]*background: #fff !important;[\s\S]*box-shadow: none !important/);
 assert.match(css, /\.map-quick-tool-btn \{[\s\S]*backdrop-filter: none !important/);
 assert.match(css, /\.search-row \{[\s\S]*gap: 0 !important/);
 assert.match(css, /\.search-row #keyword \{[\s\S]*border-right: 0 !important/);

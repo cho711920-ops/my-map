@@ -204,21 +204,53 @@
     opacity: .64 !important;
   }
 
-  /* 긴 흰색 판을 없애고 버튼 사이로 지도가 보이는 유리형 도구막대 */
-  .map-quick-tools,
-  .map-quick-tools-inner {
+  /* 지도 클러스터와 섞이지 않도록 세로 버튼을 하나의 지도 도구 패널로 묶습니다. */
+  .map-quick-tools {
     border: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
   }
 
+  .map-quick-tools-inner {
+    box-sizing: border-box !important;
+    width: 54px !important;
+    padding: 5px !important;
+    gap: 4px !important;
+    border: 1px solid #aebfd3 !important;
+    border-radius: 15px !important;
+    background: rgba(244, 248, 253, .98) !important;
+    box-shadow: 0 9px 26px rgba(15, 42, 74, .24) !important;
+  }
+
+  .map-quick-tools-inner::before {
+    content: "지도\A도구";
+    box-sizing: border-box;
+    display: flex;
+    width: 44px;
+    min-height: 38px;
+    flex: 0 0 38px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px 10px 7px 7px;
+    background: linear-gradient(145deg, #075fae, #064b8b);
+    color: #fff;
+    box-shadow: 0 3px 9px rgba(5, 82, 151, .28);
+    font-size: 9px;
+    font-weight: 950;
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    text-align: center;
+    white-space: pre;
+  }
+
   .map-quick-tool-btn {
     flex-direction: column !important;
     gap: 2px !important;
-    border-color: rgba(117, 140, 169, .38) !important;
-    background: rgba(255, 255, 255, .9) !important;
+    border-color: #d4dfeb !important;
+    border-radius: 8px !important;
+    background: #fff !important;
     color: #243651 !important;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, .07) !important;
+    box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
@@ -259,8 +291,9 @@
   }
 
   .map-quick-tool-btn:hover {
-    border-color: rgba(83, 133, 198, .62) !important;
-    background: rgba(255, 255, 255, .52) !important;
+    border-color: #78a9de !important;
+    background: #eaf4ff !important;
+    box-shadow: inset 3px 0 0 #1769e8 !important;
   }
 
   .map-quick-tool-btn.on,
@@ -273,6 +306,8 @@
   }
 
   .permit-diagnosis-entry-v1 {
+    margin-top: 2px !important;
+    padding-top: 6px !important;
     border-top-color: rgba(148, 163, 184, .32) !important;
   }
 
@@ -282,12 +317,21 @@
     align-items: center !important;
     justify-content: center !important;
     gap: 2px !important;
-    border-color: rgba(117, 140, 169, .38) !important;
-    background: rgba(255, 255, 255, .9) !important;
+    min-height: 44px !important;
+    border-color: #d4dfeb !important;
+    border-radius: 8px !important;
+    background: #fff !important;
     color: #243651 !important;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, .07) !important;
+    box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+  }
+
+  .permit-diagnosis-open-btn-v1:hover {
+    border-color: #78a9de !important;
+    background: #eaf4ff !important;
+    box-shadow: inset 3px 0 0 #1769e8 !important;
+    transform: none !important;
   }
 }
 
