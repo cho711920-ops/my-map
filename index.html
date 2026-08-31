@@ -26,7 +26,7 @@
 <script src="js/data-access-v6.js?v=6.0.3-earliest-warmup"></script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.10.1-map-status-top">
+<link rel="stylesheet" href="css/style.css?v=6.10.1-map-status-top&amp;polygon-filter-v661=1">
 <link rel="stylesheet" href="css/app-final-overrides-v690.css?v=1.0.0">
 <link rel="stylesheet" href="css/print-v2.css?v=2.0.0">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.28-brokerage-filter">
@@ -344,6 +344,18 @@
         </div>
       </div>
 
+      <button id="mapPolygonBtn" class="map-quick-tool-btn" type="button"
+        onclick="togglePolygonSearchV661()" aria-pressed="false"
+        title="지도에 경계를 그려 내부 매물만 보기">
+        <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 5.5 18.5 4 20 17.5 8 20 4 12Z"></path>
+          <circle cx="5" cy="5.5" r="1.3"></circle><circle cx="18.5" cy="4" r="1.3"></circle>
+          <circle cx="20" cy="17.5" r="1.3"></circle><circle cx="8" cy="20" r="1.3"></circle>
+          <circle cx="4" cy="12" r="1.3"></circle>
+        </svg>
+        <span>그리기</span>
+      </button>
+
       <button id="customerMatchHeldToggleV1"
         class="map-quick-tool-btn customer-match-held-toggle-v1"
         type="button"
@@ -363,7 +375,7 @@
     <div id="mapMeasureStatusV657" class="map-measure-status-v657" hidden>
       <span id="mapMeasureStatusTextV657"></span>
       <button class="map-measure-status-close-v660" type="button" onclick="clearMapMeasurementsV657()"
-        aria-label="반경 검색 또는 거리재기 해제" title="해제">
+        aria-label="반경 검색, 영역 그리기 또는 거리재기 해제" title="해제">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"></path></svg>
       </button>
     </div>
@@ -742,7 +754,7 @@
 <script data-auth-critical src="js/listing-trade-ui-v1.js?v=1.5.0-workbench"></script>
 <script data-auth-critical src="js/parcel-external-links-v1.js?v=1.0.0"></script>
 <script data-auth-critical src="js/sale-workbench-v1.js?v=1.0.2-land-readability"></script>
-<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;trade-market-v1=1&amp;sale-metrics-v1=3"></script>
+<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.1.0-fast-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
@@ -760,8 +772,8 @@
 <script src="js/ai-visit-ui-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.39-data-access"></script>
 <script src="js/unified-favorites-v7.js?v=7.0.5-property-id-only"></script>
-<script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;trade-market-v1=1"></script>
-<script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter"></script>
+<script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;polygon-filter-v661=1&amp;trade-market-v1=1"></script>
+<script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>
   <script src="js/operations-collection-v8.js?v=7.25.9-collection-diagnostics"></script>
   <script src="js/operations-admin-v1.js?v=1.2.0-linked-identity"></script>

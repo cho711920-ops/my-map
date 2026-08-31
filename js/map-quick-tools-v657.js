@@ -7,6 +7,9 @@
   var distanceLine = null;
   var distanceLabel = null;
   var distancePreview = null;
+  var polygonPoints = [];
+  var polygonDraftLine = null;
+  var polygonPreview = null;
   var measurementOverlays = [];
 
   function byId(id) {
@@ -44,9 +47,10 @@
   }
 
   function clearPreview() {
-    if (!distancePreview) return;
-    distancePreview.setMap(null);
+    if (distancePreview) distancePreview.setMap(null);
+    if (polygonPreview) polygonPreview.setMap(null);
     distancePreview = null;
+    polygonPreview = null;
   }
 
   function removeMeasurementOverlays() {
@@ -58,15 +62,27 @@
     distancePoints = [];
     distanceLine = null;
     distanceLabel = null;
+    polygonPoints = [];
+    polygonDraftLine = null;
   }
 
   function finishToolMode(keepStatus) {
+    var mapElement = byId("map");
+    if (mapElement) mapElement.classList.remove("map-polygon-drawing-v661");
     toolMode = "";
     radiusMeters = 0;
     clearPreview();
     setPressed("mapDistanceBtn", false);
     setPressed("mapRadiusBtn", !!window.mapRadiusFilterV658);
+    setPressed("mapPolygonBtn", !!window.mapPolygonFilterV661);
     if (!keepStatus) setStatus("");
+  }
+
+  function clearSpatialFiltersV661() {
+    var hadSpatialFilter = !!window.mapRadiusFilterV658 || !!window.mapPolygonFilterV661;
+    window.mapRadiusFilterV658 = null;
+    window.mapPolygonFilterV661 = null;
+    return hadSpatialFilter;
   }
 
   function closePopovers(exceptName) {
@@ -127,6 +143,15 @@
 
     setPressed("mapDistanceBtn", toolMode === "distance");
     setPressed("mapRadiusBtn", toolMode === "radius" || !!window.mapRadiusFilterV658);
+    setPressed("mapPolygonBtn", toolMode === "polygon" || !!window.mapPolygonFilterV661);
+    var polygonButton = byId("mapPolygonBtn");
+    if (polygonButton) {
+      var drawing = toolMode === "polygon";
+      polygonButton.title = drawing
+        ? "경계점 3개 이상 지정 후 다시 눌러 완성"
+        : (window.mapPolygonFilterV661 ? "그린 영역 검색 해제" : "지도에 경계를 그려 내부 매물만 보기");
+      polygonButton.setAttribute("aria-label", polygonButton.title);
+    }
   };
 
   window.syncSelectionActionBarV657 = function (count) {
@@ -154,11 +179,10 @@
       }
       return;
     }
-    var hadRadiusFilter = !!window.mapRadiusFilterV658;
-    window.mapRadiusFilterV658 = null;
+    var hadSpatialFilter = clearSpatialFiltersV661();
     removeMeasurementOverlays();
     finishToolMode();
-    if (hadRadiusFilter && typeof window.applyFilter === "function") window.applyFilter();
+    if (hadSpatialFilter && typeof window.applyFilter === "function") window.applyFilter();
     toolMode = "distance";
     setPressed("mapDistanceBtn", true);
     setStatus("지도에서 이동 경로를 차례로 누르세요. 계속 누르면 누적됩니다.");
@@ -169,11 +193,10 @@
     if (typeof window.setMapRoadviewSelection === "function") {
       window.setMapRoadviewSelection(false);
     }
-    var hadRadiusFilter = !!window.mapRadiusFilterV658;
-    window.mapRadiusFilterV658 = null;
+    var hadSpatialFilter = clearSpatialFiltersV661();
     removeMeasurementOverlays();
     finishToolMode();
-    if (hadRadiusFilter && typeof window.applyFilter === "function") window.applyFilter();
+    if (hadSpatialFilter && typeof window.applyFilter === "function") window.applyFilter();
     toolMode = "radius";
     radiusMeters = Number(meters) || 0;
     closePopovers("");
@@ -182,14 +205,99 @@
   };
 
   window.clearMapMeasurementsV657 = function (skipFilterRefresh) {
-    var hadRadiusFilter = !!window.mapRadiusFilterV658;
-    window.mapRadiusFilterV658 = null;
+    var hadSpatialFilter = clearSpatialFiltersV661();
     removeMeasurementOverlays();
     finishToolMode(false);
     window.syncMapQuickToolStateV657();
-    if (hadRadiusFilter && !skipFilterRefresh && typeof window.applyFilter === "function") {
+    if (hadSpatialFilter && !skipFilterRefresh && typeof window.applyFilter === "function") {
       window.applyFilter();
     }
+  };
+
+  function addPolygonVertexV661(point, index) {
+    var vertex = new kakao.maps.CustomOverlay({
+      position: point,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      content: '<div class="map-polygon-vertex-v661' + (index === 0 ? " first" : "") + '"></div>'
+    });
+    vertex.setMap(map);
+    measurementOverlays.push(vertex);
+  }
+
+  function updatePolygonDraftV661() {
+    if (!polygonDraftLine) {
+      polygonDraftLine = new kakao.maps.Polyline({
+        path: polygonPoints,
+        strokeWeight: 4,
+        strokeColor: "#ff563f",
+        strokeOpacity: 0.95,
+        strokeStyle: "solid"
+      });
+      polygonDraftLine.setMap(map);
+      measurementOverlays.push(polygonDraftLine);
+    } else {
+      polygonDraftLine.setPath(polygonPoints);
+    }
+  }
+
+  function finishPolygonSearchV661() {
+    if (polygonPoints.length < 3) {
+      setStatus("영역을 완성하려면 지도에 경계점을 3개 이상 지정해 주세요.");
+      return;
+    }
+    clearPreview();
+    if (polygonDraftLine) polygonDraftLine.setMap(null);
+    var polygon = new kakao.maps.Polygon({
+      path: polygonPoints,
+      strokeWeight: 3,
+      strokeColor: "#ff4f3a",
+      strokeOpacity: 0.95,
+      strokeStyle: "solid",
+      fillColor: "#ff6b57",
+      fillOpacity: 0.22
+    });
+    polygon.setMap(map);
+    measurementOverlays.push(polygon);
+    window.mapPolygonFilterV661 = {
+      points: polygonPoints.map(function(point) {
+        return { lat: point.getLat(), lng: point.getLng() };
+      })
+    };
+    window.mapRadiusFilterV658 = null;
+    finishToolMode(true);
+    if (typeof window.applyFilter === "function") window.applyFilter();
+    var itemCount = Array.isArray(window.currentItems) ? window.currentItems.length : 0;
+    setStatus("그린 영역 안 매물 " + itemCount.toLocaleString("ko-KR") +
+      "개만 표시 중 · 닫기 버튼을 누르면 해제됩니다.");
+    window.syncMapQuickToolStateV657();
+  }
+
+  window.togglePolygonSearchV661 = function () {
+    if (!isDesktopToolLayout() || !window.map || !window.kakao) return;
+    closePopovers("");
+    if (typeof window.setMapRoadviewSelection === "function") {
+      window.setMapRoadviewSelection(false);
+    }
+    if (toolMode === "polygon") {
+      finishPolygonSearchV661();
+      return;
+    }
+    if (window.mapPolygonFilterV661) {
+      window.clearMapMeasurementsV657();
+      return;
+    }
+    var hadSpatialFilter = clearSpatialFiltersV661();
+    removeMeasurementOverlays();
+    finishToolMode();
+    if (hadSpatialFilter && typeof window.applyFilter === "function") window.applyFilter();
+    toolMode = "polygon";
+    polygonPoints = [];
+    var mapElement = byId("map");
+    if (mapElement) mapElement.classList.add("map-polygon-drawing-v661");
+    setPressed("mapPolygonBtn", true);
+    setStatus("지도에 경계점을 차례로 누르세요. 3개 이상 지정한 뒤 그리기 버튼을 다시 누르면 완성됩니다.");
+    window.syncMapQuickToolStateV657();
   };
 
   function updateDistanceResult() {
@@ -270,6 +378,16 @@
       addRadiusResult(event.latLng);
       return;
     }
+    if (toolMode === "polygon") {
+      polygonPoints.push(event.latLng);
+      addPolygonVertexV661(event.latLng, polygonPoints.length - 1);
+      updatePolygonDraftV661();
+      setStatus("경계점 " + polygonPoints.length + "개 지정 · " +
+        (polygonPoints.length >= 3
+          ? "그리기 버튼을 다시 누르면 영역이 완성됩니다."
+          : "경계점을 " + (3 - polygonPoints.length) + "개 더 지정해 주세요."));
+      return;
+    }
     distancePoints.push(event.latLng);
     if (distancePoints.length === 1) {
       setStatus("시작점 지정 · 이동 경로의 다음 지점을 누르세요.");
@@ -279,6 +397,22 @@
   }
 
   function handleMapMouseMove(event) {
+    if (toolMode === "polygon" && polygonPoints.length && event && event.latLng) {
+      var polygonLastPoint = polygonPoints[polygonPoints.length - 1];
+      if (!polygonPreview) {
+        polygonPreview = new kakao.maps.Polyline({
+          path: [polygonLastPoint, event.latLng],
+          strokeWeight: 3,
+          strokeColor: "#ff7a67",
+          strokeOpacity: 0.75,
+          strokeStyle: "shortdash"
+        });
+        polygonPreview.setMap(map);
+      } else {
+        polygonPreview.setPath([polygonLastPoint, event.latLng]);
+      }
+      return;
+    }
     if (toolMode !== "distance" || !distancePoints.length || !event || !event.latLng) return;
     var lastPoint = distancePoints[distancePoints.length - 1];
     if (!distancePreview) {

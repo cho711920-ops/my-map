@@ -838,6 +838,28 @@
   .map-measure-label-v657.radius {
     background: #1769e8;
   }
+
+  #map.map-polygon-drawing-v661,
+  #map.map-polygon-drawing-v661 * {
+    cursor: crosshair !important;
+  }
+
+  .map-polygon-vertex-v661 {
+    width: 11px;
+    height: 11px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #ff563f;
+    box-shadow: 0 2px 8px rgba(127, 29, 29, .32);
+    box-sizing: border-box;
+  }
+
+  .map-polygon-vertex-v661.first {
+    width: 15px;
+    height: 15px;
+    background: #1769e8;
+    box-shadow: 0 0 0 3px rgba(23, 105, 232, .18), 0 2px 8px rgba(15, 54, 94, .28);
+  }
 }
 
 @media (min-width: 769px) and (max-width: 1099px) {

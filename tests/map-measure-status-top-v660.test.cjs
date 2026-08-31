@@ -16,9 +16,9 @@ test("radius and distance guidance share one map-top status panel", () => {
 });
 
 test("measurement status has a balanced accessible circular close control", () => {
-  assert.match(html, /class="map-measure-status-close-v660"[\s\S]*?aria-label="반경 검색 또는 거리재기 해제"/);
+  assert.match(html, /class="map-measure-status-close-v660"[\s\S]*?aria-label="반경 검색, 영역 그리기 또는 거리재기 해제"/);
   assert.match(html, /map-measure-status-close-v660[\s\S]*?<svg[\s\S]*?<path d="M7 7l10 10M17 7 7 17"/);
   assert.match(css, /\.map-measure-status-v657 \.map-measure-status-close-v660\s*\{[\s\S]*?width:\s*30px;[\s\S]*?height:\s*30px;[\s\S]*?border-radius:\s*50%/);
   assert.match(css, /\.map-measure-status-v657 \.map-measure-status-close-v660:focus-visible/);
-  assert.match(html, /css\/style\.css\?v=6\.10\.1-map-status-top/);
+  assert.match(html, /css\/style\.css\?v=6\.10\.1-map-status-top&amp;polygon-filter-v661=1/);
 });

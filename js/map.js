@@ -933,7 +933,7 @@ function getStableClusterSourceItemsV690(fallbackItems) {
    * 일반 검색·필터는 화면 밖 120px까지 같은 고정 셀을 완성할 수 있도록
    * 지도 경계만 제외한 전체 필터 결과를 사용합니다.
    */
-  if (window.mapRadiusFilterV658) return (fallbackItems || []).slice();
+  if (window.mapRadiusFilterV658 || window.mapPolygonFilterV661) return (fallbackItems || []).slice();
 
   /*
    * 구·동 행정 클러스터는 현재 화면 밖까지 포함한 전체 지역 합계를 표시해야 합니다.

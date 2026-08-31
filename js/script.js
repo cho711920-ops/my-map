@@ -1056,6 +1056,7 @@ function getFilteredItems(options) {
   var sortType = document.getElementById("sortFilter").value;
   var industryKeyword = String((document.getElementById("industryFilter") || {}).value || "").trim().toLowerCase();
   var radiusFilter = window.mapRadiusFilterV658 || null;
+  var polygonFilter = window.mapPolygonFilterV661 || null;
 
   var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
   var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
@@ -1144,9 +1145,11 @@ function getFilteredItems(options) {
     var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
     var inMap = ignoreMapBounds || mobileGlobalKeywordSearch
       ? true
-      : (radiusFilter
-        ? isItemWithinMapRadiusV658(item, radiusFilter)
-        : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng)));
+      : (polygonFilter
+        ? isItemWithinMapPolygonV661(item, polygonFilter)
+        : (radiusFilter
+          ? isItemWithinMapRadiusV658(item, radiusFilter)
+          : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng))));
 
     return matchTradeMode && matchCustomerSelection && matchCustomerHeldVisibility &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&
@@ -1216,6 +1219,42 @@ function isItemWithinMapRadiusV658(item, radiusFilter) {
   return getCoordinateDistanceMetersV658(coords, radiusFilter) <= Number(radiusFilter.meters || 0);
 }
 
+function isCoordinateInPolygonV661(coords, points) {
+  if (!coords || !Array.isArray(points) || points.length < 3) return false;
+  var x = Number(coords.lng);
+  var y = Number(coords.lat);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  var inside = false;
+  for (var index = 0, previous = points.length - 1; index < points.length; previous = index++) {
+    var currentPoint = points[index] || {};
+    var previousPoint = points[previous] || {};
+    var currentX = Number(currentPoint.lng);
+    var currentY = Number(currentPoint.lat);
+    var previousX = Number(previousPoint.lng);
+    var previousY = Number(previousPoint.lat);
+    if (![currentX, currentY, previousX, previousY].every(Number.isFinite)) continue;
+    var crossProduct = (x - currentX) * (previousY - currentY) -
+      (y - currentY) * (previousX - currentX);
+    var boundaryTolerance = 1e-10;
+    var isOnBoundary = Math.abs(crossProduct) <= boundaryTolerance &&
+      x >= Math.min(currentX, previousX) - boundaryTolerance &&
+      x <= Math.max(currentX, previousX) + boundaryTolerance &&
+      y >= Math.min(currentY, previousY) - boundaryTolerance &&
+      y <= Math.max(currentY, previousY) + boundaryTolerance;
+    if (isOnBoundary) return true;
+    var crosses = (currentY > y) !== (previousY > y) &&
+      x < (previousX - currentX) * (y - currentY) / (previousY - currentY) + currentX;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function isItemWithinMapPolygonV661(item, polygonFilter) {
+  var coords = getItemCoordinates(item);
+  return !!coords && !!polygonFilter &&
+    isCoordinateInPolygonV661(coords, polygonFilter.points || []);
+}
+
 
 function getFilterInputValueV844(id) {
   var input = document.getElementById(id);
@@ -1270,6 +1309,7 @@ function getActiveFilterChipsV844() {
   var floorQuick = getSelectedFilterLabelV844("floorQuickFilter");
   var industry = getFilterInputValueV844("industryFilter");
   var radiusFilter = window.mapRadiusFilterV658 || null;
+  var polygonFilter = window.mapPolygonFilterV661 || null;
 
   push("keyword", keyword ? "검색 " + keyword : "");
   push("source", source ? "출처 " + source : "");
@@ -1297,6 +1337,9 @@ function getActiveFilterChipsV844() {
   if (todayNewOnly) push("todayNewOnly", "오늘 신규만");
   if (radiusFilter && Number(radiusFilter.meters) > 0) {
     push("radius", "반경 " + Number(radiusFilter.meters).toLocaleString("ko-KR") + "m");
+  }
+  if (polygonFilter && Array.isArray(polygonFilter.points) && polygonFilter.points.length >= 3) {
+    push("polygon", "그린 영역");
   }
 
   return chips;
@@ -1361,11 +1404,12 @@ function clearActiveFilterChipV844(key) {
   }
   if (key === "gongsilOnly") gongsilOnly = false;
   if (key === "todayNewOnly") todayNewOnly = false;
-  if (key === "radius") {
+  if (key === "radius" || key === "polygon") {
     if (typeof window.clearMapMeasurementsV657 === "function") {
       window.clearMapMeasurementsV657(true);
     } else {
       window.mapRadiusFilterV658 = null;
+      window.mapPolygonFilterV661 = null;
     }
   }
 
@@ -1424,9 +1468,12 @@ function applyFilter() {
     return;
   }
   var radiusFilter = window.mapRadiusFilterV658 || null;
-  document.getElementById("status").innerHTML = radiusFilter
-    ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"
-    : "검색 결과 " + filtered.length + "개";
+  var polygonFilter = window.mapPolygonFilterV661 || null;
+  document.getElementById("status").innerHTML = polygonFilter
+    ? "그린 영역 안 매물 " + filtered.length + "개"
+    : (radiusFilter
+      ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"
+      : "검색 결과 " + filtered.length + "개");
 }
 
 
@@ -4803,6 +4850,7 @@ function resetFilter() {
     window.clearMapMeasurementsV657(true);
   } else {
     window.mapRadiusFilterV658 = null;
+    window.mapPolygonFilterV661 = null;
   }
   selectedGroupKey = null;
   clearLinkedListingSelectionV845();
