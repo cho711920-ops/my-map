@@ -52,7 +52,7 @@ test("cache snapshots keep reusable listing data but exclude runtime map objects
     sourceSearchIds: { "P-1": ["n:1"] }
   });
 
-  assert.equal(result.schema, 2);
+  assert.equal(result.schema, 3);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].address, "서구 둔산동 1");
   assert.equal(result.items[0].latlng, undefined);
@@ -61,7 +61,7 @@ test("cache snapshots keep reusable listing data but exclude runtime map objects
   assert.equal(api.usable(result), true);
 });
 
-test("the fast snapshot caps cards and duplicate metadata at the first 80 listings", () => {
+test("the complete snapshot keeps every listing and its matching card metadata", () => {
   const api = cacheApi();
   const items = Array.from({ length: 100 }, (_, index) => ({
     propertyId: `P-${index}`,
@@ -76,20 +76,30 @@ test("the fast snapshot caps cards and duplicate metadata at the first 80 listin
   ]));
   const result = api.snapshot(items, { ok: true, groups, sourceSearchIds: {} });
 
-  assert.equal(result.items.length, 80);
-  assert.equal(result.itemCount, 80);
+  assert.equal(result.items.length, 100);
+  assert.equal(result.itemCount, 100);
   assert.equal(result.totalItemCount, 100);
-  assert.equal(Object.keys(result.unified.groups).length, 80);
-  assert.equal(result.unified.groups["P-80"], undefined);
+  assert.equal(Object.keys(result.unified.groups).length, 100);
+  assert.ok(result.unified.groups["P-80"]);
+  assert.equal(typeof result.unifiedSignature, "string");
+  assert.equal(api.usable(result), true);
+  const partial = Object.assign({}, result, { totalItemCount: 101 });
+  assert.equal(api.usable(partial), false);
 });
 
-test("the map waits for the complete live D1 and unified payload before its first render", () => {
-  assert.doesNotMatch(mapSource, /function showInitialListingsCacheV1\(snapshot\)/);
-  assert.doesNotMatch(mapSource, /JSInitialListingsCacheV1\.read\(\)\.then/);
-  assert.doesNotMatch(mapSource, /저장된 최근 매물 먼저 표시/);
+test("the map renders only a complete full snapshot and refreshes it without a second unchanged render", () => {
+  assert.match(mapSource, /function showInitialFullListingsCacheV1\(snapshot\)/);
+  assert.match(mapSource, /Number\(snapshot\.itemCount\) !== Number\(snapshot\.totalItemCount\)/);
+  assert.match(mapSource, /JSInitialListingsCacheV1\.read\(\)\.then/);
+  assert.match(mapSource, /showInitialFullListingsCacheV1\(snapshot\)/);
+  assert.match(mapSource, /"전체 매물 " \+ allItems\.length\.toLocaleString\("ko-KR"\) \+[\s\S]*?"개 즉시 표시 · 최신정보 확인 중/);
+  assert.match(mapSource, /canKeepFullInitialCacheV1/);
+  assert.match(mapSource, /jsInitialFullListingsCacheSignatureV1 === liveInitialSignatureV1/);
+  assert.match(mapSource, /jsInitialFullListingsCacheUnifiedSignatureV1 === liveInitialUnifiedSignatureV1/);
   assert.match(mapSource, /Promise\.all\(\[[\s\S]*?sheetRequest,[\s\S]*?unifiedRequest\.catch/);
-  assert.match(mapSource, /전체 매물과 사진정보를 함께 불러오는 중/);
+  assert.match(mapSource, /전체 매물 한 번에 준비 중/);
   assert.match(mapSource, /window\.JSUnifiedListingsV8\.attach\(rawItems, unifiedResult\)/);
   assert.match(mapSource, /JSInitialListingsCacheV1\.write\(liveInitialItemsForCacheV1, unifiedResult\)/);
+  assert.match(mapSource, /liveInitialItemsForCacheV1 = rawItems/);
   assert.match(auth, /JSInitialListingsCacheV1\.clear\(\)/);
 });

@@ -4,16 +4,22 @@
   var DATABASE_NAME = "js-realestate-initial-listings-v1";
   var STORE_NAME = "snapshots";
   var SNAPSHOT_KEY = "latest";
-  var SCHEMA_VERSION = 2;
+  var SCHEMA_VERSION = 3;
   var MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
-  var MAX_FAST_ITEMS = 80;
   var BASE_ITEM_FIELDS = [
     "name", "address", "room", "type", "deposit", "rent", "fee", "premium", "area",
     "landlordPhone", "tenantPhone", "memo", "state", "regDate", "source", "propertyId",
     "sourceLink", "contactListRaw", "buildingYear", "buildingElevators",
     "buildingElevatorCapacity", "buildingApprovalDate", "buildingInfoCheckedAt",
     "buildingInfoStatus", "registrationAt", "lastCollectedAt", "latitude", "longitude",
-    "sheetRow", "key"
+    "sheetRow", "key", "tradeType", "saleCategory", "salePrice"
+  ];
+
+  var UNIFIED_SIGNATURE_FIELDS = [
+    "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium",
+    "area", "latitude", "longitude", "thumbnail", "photoCount", "contactCount",
+    "revision", "masterFallback", "sourceUnavailable", "missingCount", "tradeType",
+    "saleCategory", "salePrice", "saleSummary"
   ];
 
   function copyBaseItem(item) {
@@ -25,35 +31,79 @@
     return output;
   }
 
+  function hashText(hash, value) {
+    var source = typeof value === "object" && value !== null
+      ? JSON.stringify(value)
+      : String(value == null ? "" : value);
+    for (var index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    hash ^= 31;
+    return Math.imul(hash, 16777619);
+  }
+
+  function unifiedSignature(unifiedResult, allowedPropertyIds) {
+    var groups = unifiedResult && unifiedResult.groups && typeof unifiedResult.groups === "object"
+      ? unifiedResult.groups
+      : {};
+    var hash = 2166136261;
+    var originalCount = 0;
+    var propertyIds = Object.keys(groups).filter(function(propertyId) {
+      return !allowedPropertyIds || !!allowedPropertyIds[propertyId];
+    }).sort();
+    propertyIds.forEach(function(propertyId) {
+      hash = hashText(hash, propertyId);
+      (Array.isArray(groups[propertyId]) ? groups[propertyId] : []).forEach(function(original) {
+        originalCount += 1;
+        UNIFIED_SIGNATURE_FIELDS.forEach(function(field) {
+          hash = hashText(hash, original && original[field]);
+        });
+      });
+    });
+    return propertyIds.length + ":" + originalCount + ":" + (hash >>> 0).toString(16);
+  }
+
+  function unifiedSignatureForItems(items, unifiedResult) {
+    var allowedPropertyIds = Object.create(null);
+    (items || []).forEach(function(item) {
+      var propertyId = String(item && item.propertyId || "").trim();
+      if (propertyId) allowedPropertyIds[propertyId] = true;
+    });
+    return unifiedSignature(unifiedResult, allowedPropertyIds);
+  }
+
   function snapshot(items, unifiedResult) {
     if (!Array.isArray(items) || !items.length || !unifiedResult || unifiedResult.ok === false ||
         !unifiedResult.groups || typeof unifiedResult.groups !== "object") return null;
-    var fastItems = items.slice(0, MAX_FAST_ITEMS);
-    var fastIds = Object.create(null);
-    fastItems.forEach(function(item) {
+    var completeItems = items.slice();
+    var completeIds = Object.create(null);
+    completeItems.forEach(function(item) {
       var propertyId = String(item && item.propertyId || "").trim();
-      if (propertyId) fastIds[propertyId] = true;
+      if (propertyId) completeIds[propertyId] = true;
     });
-    var fastGroups = {};
-    var fastSearchIds = {};
-    Object.keys(fastIds).forEach(function(propertyId) {
-      if (unifiedResult.groups[propertyId]) fastGroups[propertyId] = unifiedResult.groups[propertyId];
+    var completeGroups = {};
+    var completeSearchIds = {};
+    Object.keys(completeIds).forEach(function(propertyId) {
+      if (unifiedResult.groups[propertyId]) completeGroups[propertyId] = unifiedResult.groups[propertyId];
       if (unifiedResult.sourceSearchIds && unifiedResult.sourceSearchIds[propertyId]) {
-        fastSearchIds[propertyId] = unifiedResult.sourceSearchIds[propertyId];
+        completeSearchIds[propertyId] = unifiedResult.sourceSearchIds[propertyId];
       }
     });
+    var completeUnified = {
+      ok: true,
+      format: "expanded-cache-v2",
+      groups: completeGroups,
+      sourceSearchIds: completeSearchIds
+    };
     return {
       schema: SCHEMA_VERSION,
       savedAt: Date.now(),
-      itemCount: fastItems.length,
-      totalItemCount: items.length,
-      items: fastItems.map(copyBaseItem),
-      unified: {
-        ok: true,
-        format: "expanded-cache-v1",
-        groups: fastGroups,
-        sourceSearchIds: fastSearchIds
-      }
+      itemCount: completeItems.length,
+      totalItemCount: completeItems.length,
+      items: completeItems.map(copyBaseItem),
+      unifiedSignature: unifiedSignature(unifiedResult, completeIds),
+      unified: completeUnified
     };
   }
 
@@ -63,6 +113,8 @@
       Number(value.savedAt) > Date.now() - MAX_AGE_MS &&
       Array.isArray(value.items) && value.items.length > 0 &&
       Number(value.itemCount) === value.items.length &&
+      Number(value.totalItemCount) === value.items.length &&
+      typeof value.unifiedSignature === "string" && value.unifiedSignature &&
       value.unified && value.unified.groups && typeof value.unified.groups === "object"
     );
   }
@@ -137,6 +189,8 @@
     write: write,
     clear: clear,
     snapshot: snapshot,
+    unifiedSignature: unifiedSignature,
+    unifiedSignatureForItems: unifiedSignatureForItems,
     usable: usable,
     schemaVersion: SCHEMA_VERSION
   });

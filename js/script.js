@@ -5,6 +5,7 @@ var saveApiURL = window.JSDataAccessV6 ? window.JSDataAccessV6.endpoints.data : 
 var map, geocoder;
 var allItems = [];
 var currentItems = [];
+window.jsInitialFullListingsLoadingV1 = true;
 var overlays = [];
 var selectedGroupKey = null;
 var selectedItemKey = null;
@@ -1453,6 +1454,11 @@ window.renderActiveFilterChipsV844 = renderActiveFilterChipsV844;
 
 
 function applyFilter() {
+  if (window.jsInitialFullListingsLoadingV1 && !(allItems || []).length) {
+    var initialStatusV1 = document.getElementById("status");
+    if (initialStatusV1) initialStatusV1.textContent = "전체 매물 한 번에 준비 중...";
+    return;
+  }
   var filtered = getFilteredItems();
   currentItems = filtered;
 

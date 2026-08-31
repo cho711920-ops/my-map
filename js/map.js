@@ -44,6 +44,10 @@ var jsMapClusterEngineDefaultV690 = "world-grid";
 var jsMapClusterEngineStorageKeyV690 = "js_map_cluster_engine_v690";
 var jsMapResizeObserverV690 = null;
 var jsMapResizeRelayoutTimerV690 = null;
+var jsInitialFullListingsCacheHitV1 = false;
+var jsInitialFullListingsCacheItemsV1 = null;
+var jsInitialFullListingsCacheSignatureV1 = "";
+var jsInitialFullListingsCacheUnifiedSignatureV1 = "";
 
 
 /*
@@ -504,6 +508,20 @@ function getItemsDataSignatureV638(items) {
       item.regDate,
       item.source,
       item.sourceLink,
+      item.contactListRaw,
+      item.buildingYear,
+      item.buildingElevators,
+      item.buildingApprovalDate,
+      item.buildingInfoCheckedAt,
+      item.buildingInfoStatus,
+      item.registrationAt,
+      item.lastCollectedAt,
+      item.latitude,
+      item.longitude,
+      item.buildingElevatorCapacity,
+      item.tradeType,
+      item.saleCategory,
+      item.salePrice,
       item.sheetRow
     ].forEach(function(value) {
       var textValue = String(value == null ? "" : value) + "\u001f";
@@ -1660,6 +1678,56 @@ function restoreAutoUpdateViewState(state) {
 }
 
 
+function hydrateInitialFullListingsCacheItemsV1(snapshot) {
+  var rows = snapshot && Array.isArray(snapshot.items) ? snapshot.items : [];
+  return rows.map(function(cached, index) {
+    var item = Object.assign({}, cached || {});
+    item.displayValuePresence = Object.assign({}, cached && cached.displayValuePresence || {});
+    item.sheetRow = Number(item.sheetRow) || index + 2;
+    item.latlng = null;
+    var latitude = item.latitude == null || item.latitude === "" ? NaN : Number(item.latitude);
+    var longitude = item.longitude == null || item.longitude === "" ? NaN : Number(item.longitude);
+    if (
+      Number.isFinite(latitude) && Number.isFinite(longitude) &&
+      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 &&
+      window.kakao && kakao.maps
+    ) {
+      item.latitude = latitude;
+      item.longitude = longitude;
+      item.latlng = new kakao.maps.LatLng(latitude, longitude);
+    }
+    item.key = itemKey(item);
+    return item;
+  }).filter(function(item) { return !!item.address; });
+}
+
+
+function showInitialFullListingsCacheV1(snapshot) {
+  if (!snapshot || Number(snapshot.itemCount) !== Number(snapshot.totalItemCount) ||
+      !window.JSUnifiedListingsV8 ||
+      typeof window.JSUnifiedListingsV8.attach !== "function") return false;
+  var cachedItems = hydrateInitialFullListingsCacheItemsV1(snapshot);
+  if (!cachedItems.length || cachedItems.length !== Number(snapshot.totalItemCount)) return false;
+
+  window.JSUnifiedListingsV8.attach(cachedItems, snapshot.unified || { groups: {} });
+  allItems = cachedItems;
+  updateTypeOptions(allItems);
+  jsInitialFullListingsCacheHitV1 = true;
+  jsInitialFullListingsCacheItemsV1 = cachedItems;
+  jsInitialFullListingsCacheSignatureV1 = getItemsDataSignatureV638(cachedItems);
+  jsInitialFullListingsCacheUnifiedSignatureV1 = String(snapshot.unifiedSignature || "");
+  window.jsInitialFullListingsLoadingV1 = false;
+  document.documentElement.setAttribute("data-initial-full-list-cache-hit", "true");
+  applyFilter();
+  var statusElement = document.getElementById("status");
+  if (statusElement) {
+    statusElement.textContent = "전체 매물 " + allItems.length.toLocaleString("ko-KR") +
+      "개 즉시 표시 · 최신정보 확인 중...";
+  }
+  return true;
+}
+
+
 function hasReadyCoordinateWithoutSharedCacheV8213(item) {
   if (!item) return true;
   if (item.latlng) return true;
@@ -1706,9 +1774,11 @@ function loadSheet(isAuto, forceRefresh) {
 
   isLoadingSheet = true;
   errorItems = [];
+  if (!isAuto && !(allItems || []).length) window.jsInitialFullListingsLoadingV1 = true;
   document.getElementById("status").innerHTML = isAuto
     ? "자동 업데이트 준비중..."
-    : "전체 매물과 사진정보를 함께 불러오는 중...";
+    : "전체 매물 한 번에 준비 중...";
+  var liveInitialDataAppliedV1 = false;
   var liveInitialItemsForCacheV1 = null;
   var initialCacheWriteStartedV1 = false;
 
@@ -1755,6 +1825,14 @@ function loadSheet(isAuto, forceRefresh) {
     ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
     : Promise.resolve({ ok: false, groups: {} });
 
+  if (!isAuto && window.JSInitialListingsCacheV1 &&
+      typeof window.JSInitialListingsCacheV1.read === "function") {
+    window.JSInitialListingsCacheV1.read().then(function(snapshot) {
+      if (liveInitialDataAppliedV1 || !isLoadingSheet) return;
+      showInitialFullListingsCacheV1(snapshot);
+    });
+  }
+
   /*
    * 공용 좌표 캐시는 D1 CSV에 좌표가 빠진 행이 있을 때만 지연 요청합니다.
    * 현재처럼 모든 행에 좌표가 있으면 초기 네트워크와 JSON 파싱에서 제외합니다.
@@ -1770,10 +1848,9 @@ function loadSheet(isAuto, forceRefresh) {
   }
 
   /*
-   * CSV 대표매물과 통합 원본(사진·출처·매매/임대 조건)을 동시에 요청하되,
-   * 둘 중 하나만 먼저 도착했을 때는 목록을 그리지 않습니다. 예전 80개 캐시나
-   * 대표매물만 먼저 보였다가 전체 카드로 바뀌는 두 단계 화면을 없애고,
-   * 두 자료가 모두 준비된 시점에 전체 목록을 한 번만 렌더링합니다.
+   * CSV 대표매물과 통합 원본(사진·출처·매매/임대 조건)을 동시에 요청합니다.
+   * 직전 정상 전체 스냅샷이 있으면 모든 매물을 즉시 한 번에 표시하고,
+   * 두 최신 응답이 모두 준비되면 변경 여부만 확인해 같은 화면의 재렌더를 피합니다.
    */
   return Promise.all([
     sheetRequest,
@@ -1783,6 +1860,7 @@ function loadSheet(isAuto, forceRefresh) {
     })
   ])
     .then(function(initialResults) {
+      liveInitialDataAppliedV1 = true;
       var data = initialResults[0];
       unifiedResult = initialResults[1] || { ok: false, groups: {} };
       var rows = parseCSVRecordsV655(data);
@@ -1855,6 +1933,38 @@ function loadSheet(isAuto, forceRefresh) {
         window.JSUnifiedListingsV8.attach(rawItems, unifiedResult);
       }
 
+      var liveInitialSignatureV1 = getItemsDataSignatureV638(rawItems);
+      var liveInitialUnifiedSignatureV1 = window.JSInitialListingsCacheV1 &&
+        typeof window.JSInitialListingsCacheV1.unifiedSignatureForItems === "function"
+          ? window.JSInitialListingsCacheV1.unifiedSignatureForItems(rawItems, unifiedResult)
+          : "";
+      var canKeepFullInitialCacheV1 = !isAuto && jsInitialFullListingsCacheHitV1 &&
+        jsInitialFullListingsCacheSignatureV1 === liveInitialSignatureV1 &&
+        jsInitialFullListingsCacheUnifiedSignatureV1 === liveInitialUnifiedSignatureV1;
+
+      liveInitialItemsForCacheV1 = rawItems;
+      persistInitialListingsCacheV1();
+
+      if (canKeepFullInitialCacheV1 && jsInitialFullListingsCacheItemsV1) {
+        /*
+         * 직전 전체 스냅샷과 최신 D1/통합정보가 같으면 이미 표시된 전체 목록과
+         * 클러스터 DOM을 그대로 유지합니다. 최신 검색 인덱스만 캐시 객체에 붙여
+         * 새로고침 뒤 두 번째 목록 그리기와 스크롤 초기화를 만들지 않습니다.
+         */
+        if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+          window.JSUnifiedListingsV8.attach(jsInitialFullListingsCacheItemsV1, unifiedResult);
+        }
+        allItems = jsInitialFullListingsCacheItemsV1;
+        currentItems = getFilteredItems({ includeUnlocated: true });
+        window.jsInitialFullListingsLoadingV1 = false;
+        updateErrorStatus();
+        pendingAutoUpdate = false;
+        isLoadingSheet = false;
+        document.getElementById("status").innerHTML =
+          "매물 " + allItems.length.toLocaleString("ko-KR") + "개 불러옴";
+        return true;
+      }
+
       /*
        * 좌표가 모두 준비될 때까지 상태 문구만 갱신합니다. 일부 카드나 마커를 먼저
        * 그리지 않아 첫 화면의 매물 수가 여러 번 바뀌지 않게 합니다.
@@ -1862,8 +1972,6 @@ function loadSheet(isAuto, forceRefresh) {
       allItems = rawItems;
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
-      liveInitialItemsForCacheV1 = currentItems;
-      persistInitialListingsCacheV1();
       var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {
         return !!item.latlng;
       });
@@ -1884,6 +1992,7 @@ function loadSheet(isAuto, forceRefresh) {
        * 목록/클러스터의 두 번째 렌더를 생략하고 즉시 한 번만 그립니다.
        */
       if (allRowsAlreadyLocatedV691 && !isAuto) {
+        window.jsInitialFullListingsLoadingV1 = false;
         applyFilter();
         updateErrorStatus();
         pendingAutoUpdate = false;
@@ -1905,6 +2014,7 @@ function loadSheet(isAuto, forceRefresh) {
           autoUpdateDataSignatureV638 === getItemsDataSignatureV638(doneItems);
 
         allItems = doneItems;
+        if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
 
         /*
          * D1 내용이 바뀌지 않은 자동 확인은 기존 DOM과 클러스터를 그대로 둡니다.
@@ -2013,6 +2123,7 @@ function loadSheet(isAuto, forceRefresh) {
     })
     .catch(function(err) {
       isLoadingSheet = false;
+      if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
       document.getElementById("status").innerHTML = "D1 불러오기 오류";
       console.error(err);
       return false;
