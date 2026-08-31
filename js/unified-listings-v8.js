@@ -896,6 +896,51 @@
       (failed ? "failed" : (active ? "working" : "idle"));
   }
 
+  var mergeNoticeTimerV8139 = null;
+  function showMergeNoticeV8139(message, stateName, persistent) {
+    var notice = document.getElementById("unifiedMergeNoticeV8139");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "unifiedMergeNoticeV8139";
+      notice.className = "unified-merge-notice-v8139";
+      notice.setAttribute("role", "status");
+      notice.setAttribute("aria-live", "polite");
+      document.body.appendChild(notice);
+    }
+    if (mergeNoticeTimerV8139) {
+      global.clearTimeout(mergeNoticeTimerV8139);
+      mergeNoticeTimerV8139 = null;
+    }
+    notice.className = "unified-merge-notice-v8139 " + text(stateName || "working");
+    notice.textContent = text(message);
+    notice.hidden = false;
+    if (!persistent) {
+      mergeNoticeTimerV8139 = global.setTimeout(function() {
+        notice.hidden = true;
+        mergeNoticeTimerV8139 = null;
+      }, 4200);
+    }
+    return notice;
+  }
+
+  function refreshAfterMoveV8139(result, consolidateWholeMaster) {
+    return Promise.resolve().then(function() {
+      return load(true);
+    }).then(function() {
+      if (typeof global.loadSheet !== "function") return result;
+      return Promise.resolve(global.loadSheet(true)).then(function() { return result; });
+    }).then(function() {
+      showMergeNoticeV8139(consolidateWholeMaster
+        ? "대표매물 통합 완료 · 최신 목록 반영도 끝났습니다."
+        : "매물 변경 완료 · 최신 목록 반영도 끝났습니다.", "success", false);
+      return result;
+    }).catch(function(error) {
+      console.warn("[대표매물] 저장 후 목록 동기화 실패", error);
+      showMergeNoticeV8139("저장은 완료됐지만 최신 목록 동기화가 지연됩니다. 잠시 후 새로고침해 주세요.", "warning", false);
+      return result;
+    });
+  }
+
   function removeConsolidatedMasterFromView(sourceMasterId, targetMasterId) {
     sourceMasterId = text(sourceMasterId);
     targetMasterId = text(targetMasterId);
@@ -966,21 +1011,22 @@
       var moveBanner = document.getElementById("unifiedMoveBannerV8");
       if (moveBanner) moveBanner.hidden = true;
       closeDetail();
-      return load(true).then(function() {
-        if (typeof global.loadSheet !== "function") return result;
-        return Promise.resolve(global.loadSheet(true)).then(function() { return result; });
-      }).then(function(reloadedResult) {
-        if (reloadedResult && reloadedResult.separated) {
-          alert("별도 매물 분리가 완료되었습니다.\n목록에 기존 묶음과 새 매물이 각각 표시됩니다.");
-        } else if (consolidateWholeMaster && Number(reloadedResult && reloadedResult.consolidated || 0) > 0) {
-          alert("대표매물 전체 합치기가 완료되었습니다.\n선택한 대상 매물은 유지되고 이전 대표카드는 목록에서 제거되었습니다.");
-        }
-        return reloadedResult;
-      });
+      showMergeNoticeV8139(result && result.separated
+        ? "별도 매물 분리 완료 · 최신 목록을 동기화하고 있습니다."
+        : (consolidateWholeMaster
+          ? "대표매물 통합 완료 · 이전 카드를 제거했고 최신 목록을 동기화하고 있습니다."
+          : "원본매물 이동 완료 · 최신 목록을 동기화하고 있습니다."), "success syncing", true);
+      /*
+       * 서버가 저장과 캐시 무효화를 확인한 순간 사용자에게 완료를 알린다.
+       * 전체 통합정보와 전체 CSV 재조회는 수 초 걸릴 수 있으므로 안내를
+       * 지연시키지 않고 백그라운드에서 이어 간다.
+       */
+      refreshAfterMoveV8139(result, consolidateWholeMaster);
+      return result;
     }).catch(function(error) {
       setSaving(false, true);
       setMoveBannerSaving(false);
-      alert(error.message || "통합매물 변경에 실패했습니다.");
+      showMergeNoticeV8139(error.message || "통합매물 변경에 실패했습니다.", "failed", false);
       throw error;
     });
   }

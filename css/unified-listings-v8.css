@@ -358,6 +358,72 @@
   }
 }
 
+.unified-merge-notice-v8139 {
+  position: fixed;
+  z-index: 10040;
+  top: 76px;
+  left: 50%;
+  max-width: min(560px, calc(100vw - 28px));
+  padding: 12px 18px;
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  background: rgba(240, 253, 244, .98);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .2);
+  color: #166534;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.4;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.unified-merge-notice-v8139.syncing::after {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 8px;
+  border: 2px solid rgba(22, 101, 52, .25);
+  border-top-color: #16a34a;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: unifiedMergeNoticeSpinV8139 .75s linear infinite;
+}
+
+.unified-merge-notice-v8139.warning {
+  border-color: #fcd34d;
+  background: rgba(255, 251, 235, .98);
+  color: #92400e;
+}
+
+.unified-merge-notice-v8139.failed {
+  border-color: #fca5a5;
+  background: rgba(254, 242, 242, .98);
+  color: #991b1b;
+}
+
+.unified-merge-notice-v8139[hidden] {
+  display: none !important;
+}
+
+@keyframes unifiedMergeNoticeSpinV8139 {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .unified-merge-notice-v8139 {
+    top: 66px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unified-merge-notice-v8139.syncing::after {
+    animation: none;
+  }
+}
+
 /* v8.0.29 고객매칭 지도: 중앙 요약 · 상태선 즉시 구분 · 카드 메뉴 표시 보강 */
 .customer-match-map-status-overlay-v722 {
   display: none;
