@@ -7,6 +7,7 @@
     expanded: {},
     source: "browse"
   };
+  var favoriteDetailObserverV7 = null;
 
   function store() {
     return global.JSV6ListStore || null;
@@ -224,12 +225,17 @@
             '<button type="button" aria-label="찜목록 닫기" onclick="closeUnifiedFavoritesV7()">×</button>' +
           '</div>' +
         '</header>' +
-        '<form id="unifiedFavoriteCreateFormV7" class="unified-favorite-create-v7">' +
-          '<label for="unifiedFavoriteNameV7">찜폴더명</label>' +
-          '<input id="unifiedFavoriteNameV7" type="text" maxlength="30" placeholder="새 찜폴더 이름">' +
-          '<button id="unifiedFavoriteAddV7" type="submit">폴더 추가</button>' +
-        '</form>' +
-        '<div id="unifiedFavoriteBodyV7" class="unified-favorite-body-v7"></div>' +
+        '<div class="unified-favorite-layout-v7">' +
+          '<aside id="unifiedFavoriteDetailHostV7" class="unified-favorite-detail-host-v7" aria-hidden="true"></aside>' +
+          '<div class="unified-favorite-list-pane-v7">' +
+            '<form id="unifiedFavoriteCreateFormV7" class="unified-favorite-create-v7">' +
+              '<label for="unifiedFavoriteNameV7">찜폴더명</label>' +
+              '<input id="unifiedFavoriteNameV7" type="text" maxlength="30" placeholder="새 찜폴더 이름">' +
+              '<button id="unifiedFavoriteAddV7" type="submit">폴더 추가</button>' +
+            '</form>' +
+            '<div id="unifiedFavoriteBodyV7" class="unified-favorite-body-v7"></div>' +
+          '</div>' +
+        '</div>' +
       '</section>';
     document.body.appendChild(modal);
     var createForm = document.getElementById("unifiedFavoriteCreateFormV7");
@@ -245,12 +251,16 @@
     var map = document.getElementById("map");
     if (!modal || !dialog || !map || global.innerWidth <= 768) return;
     var rect = map.getBoundingClientRect();
-    var width = Math.min(1040, Math.max(520, rect.width - 68));
-    var left = rect.left + ((rect.width - width) / 2) + 18;
-    left = Math.min(left, rect.right - width - 16);
+    var detailOpen = dialog.classList.contains("has-detail-v7");
+    var width = detailOpen
+      ? Math.min(1040, Math.max(760, rect.width - 42))
+      : Math.min(540, Math.max(440, rect.width * 0.42));
+    width = Math.min(width, global.innerWidth - 32);
+    var right = Math.min(global.innerWidth - 16, rect.right - 16);
+    var left = Math.max(16, right - width);
     var top = Math.max(68, rect.top + 10);
     var height = Math.max(500, Math.min(rect.height - 20, global.innerHeight - top - 10));
-    dialog.style.left = Math.max(rect.left + 24, left) + "px";
+    dialog.style.left = left + "px";
     dialog.style.top = top + "px";
     dialog.style.width = width + "px";
     dialog.style.height = height + "px";
@@ -358,6 +368,7 @@
   function close() {
     var modal = document.getElementById("unifiedFavoriteModalV7");
     if (!modal) return;
+    releaseFavoriteDetailV7();
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("lm-modal-open");
@@ -458,9 +469,64 @@
       showToast("상세정보를 불러오지 못했습니다. 목록을 새로고침한 뒤 다시 눌러 주세요.", "warning");
       return;
     }
-    close();
+    if (global.innerWidth <= 768) {
+      close();
+      global.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
+      return;
+    }
+    var dialog = document.querySelector(".unified-favorite-dialog-v7");
+    var host = document.getElementById("unifiedFavoriteDetailHostV7");
+    if (!dialog || !host) return;
+    dialog.classList.add("has-detail-v7");
+    host.setAttribute("aria-hidden", "false");
+    positionModal();
     global.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
+    global.setTimeout(mountFavoriteDetailV7, 0);
   };
+
+  function setFavoriteDetailPaneV7(open) {
+    var dialog = document.querySelector(".unified-favorite-dialog-v7");
+    var host = document.getElementById("unifiedFavoriteDetailHostV7");
+    if (dialog) dialog.classList.toggle("has-detail-v7", !!open);
+    if (host) host.setAttribute("aria-hidden", open ? "false" : "true");
+    var modal = document.getElementById("unifiedFavoriteModalV7");
+    if (modal && modal.classList.contains("open")) positionModal();
+  }
+
+  function mountFavoriteDetailV7() {
+    var host = document.getElementById("unifiedFavoriteDetailHostV7");
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (!host || !drawer) {
+      setFavoriteDetailPaneV7(false);
+      return;
+    }
+    drawer.classList.add("unified-favorite-embedded-detail-v7");
+    host.appendChild(drawer);
+    if (favoriteDetailObserverV7) favoriteDetailObserverV7.disconnect();
+    if (typeof global.MutationObserver === "function") {
+      favoriteDetailObserverV7 = new global.MutationObserver(function () {
+        if (drawer.getAttribute("aria-hidden") === "true") setFavoriteDetailPaneV7(false);
+      });
+      favoriteDetailObserverV7.observe(drawer, {attributes: true, attributeFilter: ["aria-hidden"]});
+    }
+  }
+
+  function releaseFavoriteDetailV7() {
+    var host = document.getElementById("unifiedFavoriteDetailHostV7");
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (favoriteDetailObserverV7) {
+      favoriteDetailObserverV7.disconnect();
+      favoriteDetailObserverV7 = null;
+    }
+    if (drawer && host && host.contains(drawer)) {
+      if (global.JSUnifiedListingsV8 && typeof global.JSUnifiedListingsV8.close === "function") {
+        global.JSUnifiedListingsV8.close();
+      }
+      drawer.classList.remove("unified-favorite-embedded-detail-v7");
+      document.body.appendChild(drawer);
+    }
+    setFavoriteDetailPaneV7(false);
+  }
 
   global.renameUnifiedFavoriteFolderV7 = function (id) {
     var lists = load("favorite");

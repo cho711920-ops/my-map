@@ -9,8 +9,8 @@ const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
 const aiVisit = fs.readFileSync("js/ai-visit-session-v6.js", "utf8");
 const main = fs.readFileSync("js/script.js", "utf8");
 
-assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.6-photo-detail/);
-assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.6-photo-detail/);
+assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.7-right-split-detail/);
+assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.7-right-split-detail/);
 assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
@@ -36,13 +36,18 @@ assert.match(favorites, /api\.remove\("favorite", id, lists\)/);
 assert.doesNotMatch(favorites, /찜폴더를 삭제할까요/);
 assert.match(favorites, /js-v6-list-store-change/);
 assert.match(favorites, /dialog\.style\.height = height \+ "px"/);
-assert.match(favorites, /Math\.min\(1040, Math\.max\(520, rect\.width - 68\)\)/);
+assert.match(favorites, /var right = Math\.min\(global\.innerWidth - 16, rect\.right - 16\)/);
+assert.match(favorites, /Math\.min\(540, Math\.max\(440, rect\.width \* 0\.42\)\)/);
 assert.doesNotMatch(favorites, /customerMatch|customers/);
 assert.match(favorites, /item && item\.thumbnailV8/);
 assert.match(favorites, /item\.unifiedOriginalsV8/);
 assert.match(favorites, /loading="lazy" decoding="async" referrerpolicy="no-referrer"/);
 assert.match(favorites, /openUnifiedFavoriteItemV7/);
 assert.match(favorites, /JSUnifiedListingsV8\.open\(encodeURIComponent\(propertyId\)\)/);
+assert.match(favorites, /unifiedFavoriteDetailHostV7/);
+assert.match(favorites, /dialog\.classList\.add\("has-detail-v7"\)/);
+assert.match(favorites, /host\.appendChild\(drawer\)/);
+assert.match(favorites, /releaseFavoriteDetailV7\(\)/);
 
 assert.match(listManager, /var propertyPrefix = "property:"/);
 assert.match(listManager, /new CustomEvent\("js-v6-list-store-change"/);
@@ -73,6 +78,7 @@ const context = {
   document: { getElementById: (id) => id === "favoriteBtn" ? favoriteButton : null },
   requestAnimationFrame: (callback) => callback(),
   window: {
+    innerWidth: 700,
     allItems: [
       { propertyId: "M-first", key: "중소형사무실|서구 괴정동 423-4|5층|사무실" },
       { propertyId: "M-second", key: "중소형사무실|서구 괴정동 423-4|5층|사무실" }
@@ -105,5 +111,8 @@ assert.match(favoritesCss, /max-width:1040px;min-height:500px/);
 assert.match(favoritesCss, /\.selection-action-bar \.selection-favorite-btn/);
 assert.match(favoritesCss, /\.unified-favorite-folder-actions-v7 button\.visit/);
 assert.match(favoritesCss, /\.unified-favorite-open-v7\{/);
+assert.match(favoritesCss, /\.unified-favorite-dialog-v7\.has-detail-v7 \.unified-favorite-layout-v7/);
+assert.match(favoritesCss, /grid-template-columns:minmax\(340px,1\.08fr\) minmax\(380px,\.92fr\)/);
+assert.match(favoritesCss, /\.unified-favorite-detail-host-v7 \.unified-detail-drawer-v8/);
 
 console.log("unified favorites v7 tests passed");
