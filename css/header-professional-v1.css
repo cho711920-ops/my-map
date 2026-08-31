@@ -213,42 +213,43 @@
 
   .map-quick-tools-inner {
     box-sizing: border-box !important;
-    width: 54px !important;
-    padding: 5px !important;
-    gap: 4px !important;
-    border: 1px solid #aebfd3 !important;
-    border-radius: 15px !important;
-    background: rgba(244, 248, 253, .98) !important;
-    box-shadow: 0 9px 26px rgba(15, 42, 74, .24) !important;
+    width: 50px !important;
+    padding: 3px !important;
+    gap: 3px !important;
+    border: 1px solid rgba(151, 169, 191, .58) !important;
+    border-radius: 13px !important;
+    background: rgba(255, 255, 255, .82) !important;
+    box-shadow: 0 4px 16px rgba(15, 42, 74, .14) !important;
   }
 
   .map-quick-tools-inner::before {
-    content: "지도\A도구";
+    content: "도구";
     box-sizing: border-box;
     display: flex;
     width: 44px;
-    min-height: 38px;
-    flex: 0 0 38px;
+    min-height: 22px;
+    flex: 0 0 22px;
     align-items: center;
     justify-content: center;
-    border-radius: 10px 10px 7px 7px;
-    background: linear-gradient(145deg, #075fae, #064b8b);
-    color: #fff;
-    box-shadow: 0 3px 9px rgba(5, 82, 151, .28);
+    border-bottom: 1px solid rgba(151, 169, 191, .42);
+    border-radius: 8px 8px 3px 3px;
+    background: transparent;
+    color: #607086;
+    box-shadow: none;
     font-size: 9px;
-    font-weight: 950;
-    line-height: 1.15;
+    font-weight: 850;
+    line-height: 1;
     letter-spacing: -.02em;
     text-align: center;
-    white-space: pre;
+    white-space: nowrap;
   }
 
   .map-quick-tool-btn {
     flex-direction: column !important;
     gap: 2px !important;
-    border-color: #d4dfeb !important;
+    border-color: transparent !important;
     border-radius: 8px !important;
-    background: #fff !important;
+    background: rgba(255, 255, 255, .7) !important;
     color: #243651 !important;
     box-shadow: none !important;
     backdrop-filter: none !important;
@@ -318,9 +319,9 @@
     justify-content: center !important;
     gap: 2px !important;
     min-height: 44px !important;
-    border-color: #d4dfeb !important;
+    border-color: transparent !important;
     border-radius: 8px !important;
-    background: #fff !important;
+    background: rgba(255, 255, 255, .7) !important;
     color: #243651 !important;
     box-shadow: none !important;
     backdrop-filter: none !important;
