@@ -248,17 +248,16 @@
   function positionModal() {
     var modal = document.getElementById("unifiedFavoriteModalV7");
     var dialog = modal && modal.querySelector(".unified-favorite-dialog-v7");
-    var map = document.getElementById("map");
-    if (!modal || !dialog || !map || global.innerWidth <= 768) return;
-    var rect = map.getBoundingClientRect();
+    if (!modal || !dialog || global.innerWidth <= 768) return;
     var detailOpen = dialog.classList.contains("has-detail-v7");
     var width = detailOpen
       ? Math.min(1120, Math.max(760, global.innerWidth * 0.84))
       : Math.min(620, Math.max(500, global.innerWidth * 0.5));
     width = Math.min(width, global.innerWidth - 32);
     var left = Math.max(16, (global.innerWidth - width) / 2);
-    var top = Math.max(68, rect.top + 10);
-    var height = Math.max(500, Math.min(rect.height - 20, global.innerHeight - top - 10));
+    var verticalGap = Math.max(16, Math.min(68, (global.innerHeight - 500) / 2));
+    var top = verticalGap;
+    var height = Math.max(500, global.innerHeight - (verticalGap * 2));
     dialog.style.left = left + "px";
     dialog.style.top = top + "px";
     dialog.style.width = width + "px";
