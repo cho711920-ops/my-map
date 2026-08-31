@@ -157,9 +157,15 @@
     });
   }
 
+  function wrapPhotoIndexV8141(index, length) {
+    var total = Math.max(0, Number(length) || 0);
+    if (!total) return 0;
+    return ((Number(index) || 0) % total + total) % total;
+  }
+
   function preloadAdjacentDetailImages(images, index) {
     if (!Array.isArray(images) || images.length < 2) return;
-    var safeIndex = ((Number(index) || 0) % images.length + images.length) % images.length;
+    var safeIndex = wrapPhotoIndexV8141(index, images.length);
     var candidates = [
       images[(safeIndex + 1) % images.length],
       images[(safeIndex - 1 + images.length) % images.length]
@@ -748,7 +754,7 @@
   function renderDetailPhoto(gallery, index) {
     var images = gallery && gallery._imagesV8 || [];
     if (!gallery || !images.length) return;
-    var safeIndex = ((Number(index) || 0) % images.length + images.length) % images.length;
+    var safeIndex = wrapPhotoIndexV8141(index, images.length);
     gallery._indexV8 = safeIndex;
     var image = gallery.querySelector(".unified-detail-hero-v8 img");
     if (image) {
@@ -1219,7 +1225,7 @@
       };
       document.body.appendChild(modal);
     }
-    var index = Math.max(0, Math.min(Number(startIndex) || 0, images.length - 1));
+    var index = wrapPhotoIndexV8141(startIndex, images.length);
     modal._imagesV8 = images.slice();
     bindPhotoSwipe(modal, function(direction) { stepGallery(direction); });
     renderGalleryImage(modal, index);
@@ -1229,15 +1235,15 @@
   function renderGalleryImage(modal, index) {
     var images = modal && modal._imagesV8 || [];
     if (!modal || !images.length) return;
-    var safeIndex = Math.max(0, Math.min(Number(index) || 0, images.length - 1));
+    var safeIndex = wrapPhotoIndexV8141(index, images.length);
     modal._indexV8 = safeIndex;
     var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
     var modalImage = modal.querySelector("img");
     try { modalImage.fetchPriority = "high"; } catch (ignore) {}
     if (modalImage.getAttribute("src") !== displaySource) modalImage.src = displaySource;
     modal.querySelector("span").textContent = (safeIndex + 1) + " / " + images.length;
-    modal.querySelector(".prev").disabled = safeIndex === 0;
-    modal.querySelector(".next").disabled = safeIndex === images.length - 1;
+    modal.querySelector(".prev").disabled = images.length < 2;
+    modal.querySelector(".next").disabled = images.length < 2;
     preloadAdjacentDetailImages(images, safeIndex);
   }
 

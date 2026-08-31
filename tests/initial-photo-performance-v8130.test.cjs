@@ -25,6 +25,8 @@ const render = functionSource("renderDetailPhoto");
 const step = functionSource("stepDetailPhoto");
 const adjacent = functionSource("preloadAdjacentDetailImages");
 const swipe = functionSource("bindPhotoSwipe");
+const wrapIndex = functionSource("wrapPhotoIndexV8141");
+const galleryRender = functionSource("renderGalleryImage");
 
 assert.doesNotMatch(unified, /photoPreloadOrder|photoWarmupTimer/);
 assert.doesNotMatch(preload, /\.decode\(/);
@@ -54,10 +56,16 @@ assert.match(unified, /_suppressNextPhotoClickV8140/);
 assert.doesNotMatch(unified, /_suppressPhotoClickUntilV8/);
 assert.match(unified, /bindPhotoSwipe\(detailGallery/);
 assert.match(unified, /bindPhotoSwipe\(modal/);
+assert.match(wrapIndex, /% total \+ total\) % total/);
+assert.match(render, /wrapPhotoIndexV8141\(index, images\.length\)/);
+assert.match(galleryRender, /wrapPhotoIndexV8141\(index, images\.length\)/);
+assert.match(galleryRender, /\.prev"\)\.disabled = images\.length < 2/);
+assert.match(galleryRender, /\.next"\)\.disabled = images\.length < 2/);
+assert.doesNotMatch(galleryRender, /\.disabled = safeIndex/);
 assert.match(unifiedCss, /\.unified-detail-gallery-v8[\s\S]*?touch-action: pan-y/);
 assert.match(unifiedCss, /\.unified-gallery-modal-v8[\s\S]*?touch-action: none/);
 
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.40-smooth-photo-expand/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.41-loop-gallery/);
 assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render/);
 
 console.log("initial photo performance v8.1.30 tests passed");
