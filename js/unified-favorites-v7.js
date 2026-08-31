@@ -253,7 +253,7 @@
     var rect = map.getBoundingClientRect();
     var detailOpen = dialog.classList.contains("has-detail-v7");
     var width = detailOpen
-      ? Math.min(1040, Math.max(760, rect.width - 42))
+      ? Math.min(1040, Math.max(660, rect.width - 42))
       : Math.min(540, Math.max(440, rect.width * 0.42));
     width = Math.min(width, global.innerWidth - 32);
     var right = Math.min(global.innerWidth - 16, rect.right - 16);

@@ -112,7 +112,7 @@ assert.match(favoritesCss, /\.selection-action-bar \.selection-favorite-btn/);
 assert.match(favoritesCss, /\.unified-favorite-folder-actions-v7 button\.visit/);
 assert.match(favoritesCss, /\.unified-favorite-open-v7\{/);
 assert.match(favoritesCss, /\.unified-favorite-dialog-v7\.has-detail-v7 \.unified-favorite-layout-v7/);
-assert.match(favoritesCss, /grid-template-columns:minmax\(340px,1\.08fr\) minmax\(380px,\.92fr\)/);
+assert.match(favoritesCss, /grid-template-columns:minmax\(300px,1\.03fr\) minmax\(340px,\.97fr\)/);
 assert.match(favoritesCss, /\.unified-favorite-detail-host-v7 \.unified-detail-drawer-v8/);
 
 console.log("unified favorites v7 tests passed");
