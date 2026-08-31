@@ -65,7 +65,7 @@ assert.doesNotMatch(galleryRender, /\.disabled = safeIndex/);
 assert.match(unifiedCss, /\.unified-detail-gallery-v8[\s\S]*?touch-action: pan-y/);
 assert.match(unifiedCss, /\.unified-gallery-modal-v8[\s\S]*?touch-action: none/);
 
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.41-loop-gallery/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.42-favorite-static-photo/);
 assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render/);
 
 console.log("initial photo performance v8.1.30 tests passed");

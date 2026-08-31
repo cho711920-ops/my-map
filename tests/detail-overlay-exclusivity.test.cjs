@@ -15,7 +15,7 @@ assert.match(source, /toggleDetailFilter\|toggleV6ActionMenu\|toggleSortDropdown
 assert.match(source, /global\.closeAiSidePanel\(\)/);
 assert.match(source, /closeForOverlay: closeDetailForOverlay/);
 assert.match(operations, /JSUnifiedListingsV8\.closeForOverlay\(\)/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.41-loop-gallery/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.42-favorite-static-photo/);
 assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);
 
 let capturedClick = null;

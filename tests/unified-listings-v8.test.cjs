@@ -27,6 +27,7 @@ assert.match(ui, /function bindPhotoSwipe\(element, onStep\)/);
 assert.doesNotMatch(ui, /slice\(1, 7\)/);
 assert.match(ui, /s=960x960/);
 assert.match(ui, /function stepDetailPhoto\(button, direction\)/);
+assert.match(ui, /button && button\.closest\("\.unified-favorite-embedded-detail-v7"\)/);
 assert.match(ui, /function loadTellContacts\(query\)/);
 assert.match(ui, /function getCachedTellContacts\(query\)/);
 assert.match(ui, /referrerpolicy="no-referrer"/);

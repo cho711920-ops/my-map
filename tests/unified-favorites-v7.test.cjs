@@ -9,8 +9,8 @@ const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
 const aiVisit = fs.readFileSync("js/ai-visit-session-v6.js", "utf8");
 const main = fs.readFileSync("js/script.js", "utf8");
 
-assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.13-detail-balance/);
-assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.13-detail-balance/);
+assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.14-static-preview/);
+assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.14-static-preview/);
 assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
@@ -119,6 +119,7 @@ assert.match(favoritesCss, /\.unified-favorite-open-v7\{/);
 assert.match(favoritesCss, /\.unified-favorite-dialog-v7\.has-detail-v7 \.unified-favorite-layout-v7/);
 assert.match(favoritesCss, /grid-template-columns:minmax\(480px,1\.08fr\) minmax\(400px,\.92fr\)/);
 assert.match(favoritesCss, /\.unified-favorite-detail-host-v7\{[^}]*padding-left:18px/);
+assert.match(favoritesCss, /\.unified-favorite-detail-host-v7 \.unified-detail-hero-v8\{cursor:default\}/);
 assert.doesNotMatch(favoritesCss, /\.unified-favorite-map-host-v7\{|\.unified-favorite-mini-map-v7\{/);
 assert.match(favoritesCss, /\.unified-favorite-detail-host-v7 \.unified-detail-drawer-v8/);
 assert.match(favoritesCss, /\.unified-favorite-close-v7\{[^}]*width:40px;[^}]*border-radius:50%;[^}]*background:#eef2f7/);

@@ -796,6 +796,7 @@
   }
 
   function openDetailGallery(button) {
+    if (button && button.closest(".unified-favorite-embedded-detail-v7")) return;
     var gallery = button && button.closest(".unified-detail-gallery-v8");
     if (!gallery) return;
     openGallery(encodeURIComponent(text(gallery._propertyIdV8)),

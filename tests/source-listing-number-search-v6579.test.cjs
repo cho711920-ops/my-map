@@ -44,6 +44,6 @@ assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),
   /api-cache\/unified-listings-v5-source-aware-review\.json/);
 assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.41-loop-gallery/);
+assert.match(html, /unified-listings-v8\.js\?v=8\.1\.42-favorite-static-photo/);
 
 console.log("source listing number search v6.5.79 tests passed");
