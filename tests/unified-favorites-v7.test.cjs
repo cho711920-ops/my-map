@@ -9,8 +9,8 @@ const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
 const aiVisit = fs.readFileSync("js/ai-visit-session-v6.js", "utf8");
 const main = fs.readFileSync("js/script.js", "utf8");
 
-assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.8-right-split-detail/);
-assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.8-right-split-detail/);
+assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.9-centered-wide/);
+assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.9-centered-wide/);
 assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
@@ -36,8 +36,9 @@ assert.match(favorites, /api\.remove\("favorite", id, lists\)/);
 assert.doesNotMatch(favorites, /찜폴더를 삭제할까요/);
 assert.match(favorites, /js-v6-list-store-change/);
 assert.match(favorites, /dialog\.style\.height = height \+ "px"/);
-assert.match(favorites, /var right = Math\.min\(global\.innerWidth - 16, rect\.right - 16\)/);
-assert.match(favorites, /Math\.min\(540, Math\.max\(440, rect\.width \* 0\.42\)\)/);
+assert.match(favorites, /var left = Math\.max\(16, \(global\.innerWidth - width\) \/ 2\)/);
+assert.match(favorites, /Math\.min\(1120, Math\.max\(760, global\.innerWidth \* 0\.84\)\)/);
+assert.match(favorites, /Math\.min\(620, Math\.max\(500, global\.innerWidth \* 0\.5\)\)/);
 assert.doesNotMatch(favorites, /customerMatch|customers/);
 assert.match(favorites, /item && item\.thumbnailV8/);
 assert.match(favorites, /item\.unifiedOriginalsV8/);
@@ -107,12 +108,12 @@ context.window.openUnifiedFavoriteItemV7(encodeURIComponent("property:M-first"))
 assert.equal(context.openedPropertyId, "M-first");
 
 assert.match(favoritesCss, /\.unified-favorite-dialog-v7\{position:fixed/);
-assert.match(favoritesCss, /max-width:1040px;min-height:500px/);
+assert.match(favoritesCss, /max-width:1120px;min-height:500px/);
 assert.match(favoritesCss, /\.selection-action-bar \.selection-favorite-btn/);
 assert.match(favoritesCss, /\.unified-favorite-folder-actions-v7 button\.visit/);
 assert.match(favoritesCss, /\.unified-favorite-open-v7\{/);
 assert.match(favoritesCss, /\.unified-favorite-dialog-v7\.has-detail-v7 \.unified-favorite-layout-v7/);
-assert.match(favoritesCss, /grid-template-columns:minmax\(300px,1\.03fr\) minmax\(340px,\.97fr\)/);
+assert.match(favoritesCss, /grid-template-columns:minmax\(360px,1\.08fr\) minmax\(360px,\.92fr\)/);
 assert.match(favoritesCss, /\.unified-favorite-detail-host-v7 \.unified-detail-drawer-v8/);
 
 console.log("unified favorites v7 tests passed");
