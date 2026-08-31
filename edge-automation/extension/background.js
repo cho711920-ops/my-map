@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.4";
+const BACKGROUND_BUILD = "1.1.5";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -47,6 +47,7 @@ const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
 const COLLECTOR_START_TIMEOUT_MS = 2 * 60 * 1000;
 const COLLECTION_STALL_TIMEOUT_MS = 20 * 60 * 1000;
 const COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 * 60 * 1000;
+const COLLECTION_PROBE_TIMEOUT_MS = 12 * 1000;
 const MAX_TARGET_RUNTIME_MS = 90 * 60 * 1000;
 const DEFAULT_CONFIG = {
   enabled: false,
@@ -504,6 +505,35 @@ async function updateTargetHeartbeat(message, senderTabId) {
   return { ok: true, heartbeat: true };
 }
 
+async function probeCurrentTarget(state) {
+  if (!state || !Number.isInteger(state.currentTabId) || !state.targetRunId) return false;
+  const tab = await chrome.tabs.get(state.currentTabId).catch(() => null);
+  if (!tab || tab.discarded) return false;
+  let timer;
+  try {
+    const response = await Promise.race([
+      chrome.tabs.sendMessage(state.currentTabId, {
+        type: "JS_AUTO_PING_TARGET",
+        runId: state.runId,
+        targetRunId: state.targetRunId
+      }),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), COLLECTION_PROBE_TIMEOUT_MS);
+      })
+    ]).catch(() => null);
+    if (!response || response.ok !== true || response.active !== true) return false;
+    await updateTargetHeartbeat({
+      runId: state.runId,
+      targetRunId: state.targetRunId,
+      progressFingerprint: response.progressFingerprint,
+      progressMessage: response.progressMessage
+    }, state.currentTabId);
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function scheduleRecovery(state, delayMinutes, message) {
   state.phase = "retry-wait";
   state.retryAt = Date.now() + Math.max(1, Number(delayMinutes) || 1) * 60 * 1000;
@@ -937,6 +967,9 @@ async function recoverAutomaticRun() {
     now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || targetStartedAt) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
   const targetRuntimeExceeded = ["loading", "starting-collector", "collecting"].includes(state.phase) &&
     elapsed > MAX_TARGET_RUNTIME_MS;
+  if (disconnectedCollection && !stalledCollection && !targetRuntimeExceeded && await probeCurrentTarget(state)) {
+    return { ok: true, active: true, probed: true };
+  }
   if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection || targetRuntimeExceeded) {
     const target = (state.targets || [])[state.index];
     const recoveryMessage = stalledLoading

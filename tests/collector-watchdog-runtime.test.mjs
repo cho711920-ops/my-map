@@ -45,11 +45,16 @@ function harness(overrides = {}) {
       } },
       alarms: { async get(k) { return alarmMap.get(k); }, async clear(k) { alarmMap.delete(k); },
         create(k, value) { alarmMap.set(k, value); }, onAlarm: event("alarm") },
-      tabs: { async get(id) { return { id, status: "complete" }; },
+      tabs: { async get(id) { return { id, status: "complete", discarded: false }; },
         async update(id, options) { navigation.push(options.url); return { id, status: "complete" }; },
         async create(options) { navigation.push(options.url); return { id: 43, status: "complete" }; },
-        async remove() {}, async sendMessage() { return { started: true }; }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.4" }), onMessage: event("message"),
+        async remove() {}, async sendMessage(_id, message) {
+          if (message && message.type === "JS_AUTO_PING_TARGET") {
+            return { ok: true, active: true, progressFingerprint: "probe-alive", progressMessage: "상세 저장 진행 확인" };
+          }
+          return { started: true };
+        }, onRemoved: event("removed") },
+      runtime: { getManifest: () => ({ version: "1.1.5" }), onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async () => {} }
     }
@@ -101,6 +106,21 @@ test("healthy collection and scheduled retry waits are not restarted", async () 
   }
 });
 
+test("a throttled background heartbeat is confirmed by direct tab probe without reopening the target", async () => {
+  const h = harness({
+    targetStartedAt: clock - 10 * minute,
+    runtimeStartedAt: clock - 10 * minute,
+    lastHeartbeatAt: clock - 9 * minute,
+    lastProgressAt: clock - 5 * minute
+  });
+  const result = await h.context.recoverAutomaticRun();
+  assert.equal(result.probed, true);
+  assert.equal(h.navigation.length, 0);
+  assert.equal(h.data[RUN].lastHeartbeatAt, clock);
+  assert.equal(h.data[RUN].lastProgressFingerprint, "probe-alive");
+  assert.equal(h.data[RUN].progressMessage, "상세 저장 진행 확인");
+});
+
 test("concurrent duplicate completion/old heartbeat cannot advance twice or restore Seo", async () => {
   const h = harness({ targetStartedAt: clock, lastHeartbeatAt: clock, lastProgressAt: clock });
   const finished = { type: "JS_AUTO_TARGET_FINISHED", runId: "cycle", targetRunId: "seo", ok: true, result: {} };
@@ -120,7 +140,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.4");
+  assert.equal(response.backgroundBuild, "1.1.5");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

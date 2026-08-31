@@ -10,6 +10,7 @@ const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
 test("Edge extension schedules one sequential daily collector run", () => {
   const manifest = JSON.parse(read("edge-automation/extension/manifest.json"));
   const background = read("edge-automation/extension/background.js");
+  const content = read("edge-automation/extension/content.js");
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.content_scripts.some((entry) => entry.world === "MAIN" && entry.js.includes("auto-bridge.js")));
   assert.match(background, /const SOURCE_ORDER = \{ naver: 1, daangn: 2, gongsil: 3 \}/);
@@ -55,6 +56,9 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /COLLECTOR_START_TIMEOUT_MS = 2 \* 60 \* 1000/);
   assert.match(background, /COLLECTION_STALL_TIMEOUT_MS = 20 \* 60 \* 1000/);
   assert.match(background, /COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 \* 60 \* 1000/);
+  assert.match(background, /COLLECTION_PROBE_TIMEOUT_MS = 12 \* 1000/);
+  assert.match(background, /await probeCurrentTarget\(state\)/);
+  assert.match(content, /JS_AUTO_PING_TARGET/);
   assert.match(background, /MAX_TARGET_RUNTIME_MS = 90 \* 60 \* 1000/);
   assert.match(background, /targetRuntimeExceeded/);
   assert.match(background, /한 지역 수집이 90분/);

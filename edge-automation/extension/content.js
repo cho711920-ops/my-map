@@ -157,6 +157,16 @@ function runPageCollector(target, runId, parentRunId) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message && message.type === "JS_AUTO_PING_TARGET") {
+    const progress = collectorProgressSnapshot();
+    sendResponse({
+      ok: true,
+      active: collectorSessions.has(message.targetRunId),
+      progressFingerprint: progress.fingerprint,
+      progressMessage: progress.message
+    });
+    return false;
+  }
   if (!message || message.type !== "JS_AUTO_RUN_TARGET") return false;
   const session = runPageCollector(message.target || {}, message.runId, message.parentRunId);
   session.started.then(() => sendResponse({ ok: true, started: true })).catch((error) => {
