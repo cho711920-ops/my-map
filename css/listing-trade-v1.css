@@ -3,8 +3,9 @@
   grid-column: 1 !important;
   grid-row: 1 !important;
   min-width: 0;
-  width: 100%;
+  width: calc(100% - 6px);
   height: 100%;
+  margin-right: 6px;
 }
 
 .v6-toolbar-primary .search-row .listing-trade-mode-v1 select {
@@ -16,13 +17,26 @@
   margin: 0 !important;
   box-sizing: border-box;
   appearance: none;
-  border: 1px solid #b9cae2;
-  border-radius: 10px;
+  border: 1px solid #1f2b3d;
+  border-radius: 7px;
   padding: 0 25px 0 10px !important;
-  background: #f7faff;
-  color: #143a70;
+  background: #222d3d;
+  color: #fff;
   font: 800 13px/1 Pretendard, sans-serif;
   cursor: pointer;
+}
+
+.v6-toolbar-primary .search-row .listing-trade-mode-v1 select:hover,
+.v6-toolbar-primary .search-row .listing-trade-mode-v1 select:focus {
+  border-color: #4d6687;
+  background: #182334;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 67, 112, .14);
+}
+
+.v6-toolbar-primary .search-row .listing-trade-mode-v1 select option {
+  background: #fff;
+  color: #17233c;
 }
 
 .listing-trade-mode-v1::after {
@@ -32,17 +46,44 @@
   top: 50%;
   width: 7px;
   height: 7px;
-  border-right: 2px solid #315b91;
-  border-bottom: 2px solid #315b91;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
   transform: translateY(-70%) rotate(45deg);
   pointer-events: none;
 }
 
 html[data-listing-trade-mode="building_sale"] .v6-toolbar-primary .listing-trade-mode-v1 select,
 html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mode-v1 select {
-  border-color: #e4aa52;
-  background: #fff9ed;
-  color: #8d4f00;
+  border-color: #d89a38;
+  background: #2f2a22;
+  color: #fff;
+}
+
+.v6-toolbar-primary .search-row .search-tell-v8 {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 0 6px !important;
+  border: 1px solid #d6e0ec !important;
+  border-right: 0 !important;
+  border-radius: 8px 0 0 8px !important;
+  background: #fff !important;
+  color: #26364e !important;
+  box-shadow: none !important;
+  font: 850 12px/1 Pretendard, sans-serif !important;
+  cursor: pointer;
+}
+
+.v6-toolbar-primary .search-row .search-tell-v8:hover,
+.v6-toolbar-primary .search-row .search-tell-v8:focus-visible {
+  background: #eef5ff !important;
+  color: #075bc7 !important;
+  outline: none;
 }
 
 .detail-filter .row[hidden],
@@ -53,44 +94,44 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 .v6-toolbar-primary .search-row {
   grid-column: 1 !important;
   grid-row: 1 !important;
-  grid-template-columns: 96px minmax(0, 1fr) 54px !important;
+  grid-template-columns: 96px 42px minmax(0, 1fr) 54px !important;
 }
 .v6-toolbar-primary .detail-btn,
 .v6-toolbar-primary .top-reset-btn { grid-row: 1 !important; }
 .v6-toolbar-primary .search-row #keyword {
-  grid-column: 2 !important;
+  grid-column: 3 !important;
   grid-row: 1 !important;
 }
 .v6-toolbar-primary .search-row .search-btn {
-  grid-column: 3 !important;
+  grid-column: 4 !important;
   grid-row: 1 !important;
 }
 
 @media (min-width: 900px) and (max-width: 1023px) {
   :root { --js-brand-width-v638: 160px; }
   .v6-toolbar-primary {
-    width: calc(100vw - 586px) !important;
+    width: calc(100vw - 510px) !important;
     grid-template-columns: minmax(0, 1fr) 48px 52px !important;
   }
   .v6-toolbar-primary .search-row {
-    grid-template-columns: 88px minmax(0, 1fr) 48px !important;
+    grid-template-columns: 88px 38px minmax(0, 1fr) 48px !important;
   }
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 54px 58px 50px 70px 0 74px 74px !important;
+    grid-template-columns: 54px 0 74px 74px !important;
   }
   .v6-toolbar-secondary .top-action-icon-v638 { display: none !important; }
 }
 
 @media (min-width: 1200px) {
-  .v6-toolbar-primary { width: min(646px, calc(100vw - 816px)) !important; }
+  .v6-toolbar-primary { width: min(646px, calc(100vw - 734px)) !important; }
   .v6-toolbar-primary .search-row {
-    grid-template-columns: 104px minmax(0, 1fr) 68px !important;
+    grid-template-columns: 104px 44px minmax(0, 1fr) 68px !important;
   }
 }
 @media (min-width: 1540px) {
   .v6-toolbar-primary { width: min(688px, calc(100vw - 890px)) !important; }
   .v6-toolbar-primary .search-row {
-    grid-template-columns: 112px minmax(0, 1fr) 76px !important;
+    grid-template-columns: 112px 48px minmax(0, 1fr) 76px !important;
   }
 }
 
@@ -134,6 +175,7 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
     width: 100% !important;
     min-width: 0 !important;
     gap: 0 !important;
+    grid-template-columns: 88px 38px minmax(0, 1fr) 48px !important;
   }
   .v6-toolbar-primary input,
   .v6-toolbar-primary button {
@@ -154,7 +196,7 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
   .v6-toolbar-primary .top-reset-btn { grid-row: 1 !important; }
   .v6-toolbar-secondary.v6-command-bar {
     grid-area: 2 / 1 !important;
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-columns: 52px 0 minmax(66px, 1fr) 42px !important;
     grid-template-rows: 42px !important;
     width: 100% !important;
     min-width: 0 !important;
@@ -173,12 +215,18 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
   .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai {
     grid-row: 1 !important;
   }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 { grid-column: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 3 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 4 !important; }
 }
 
 @media (max-width: 768px) {
   .v6-toolbar-primary .search-row {
     grid-template-columns: 88px minmax(0, 1fr) 48px !important;
   }
+  .v6-toolbar-primary .search-row #keyword { grid-column: 2 !important; }
+  .v6-toolbar-primary .search-row .search-btn { grid-column: 3 !important; }
   .v6-toolbar-primary .search-row .listing-trade-mode-v1 select {
     height: 34px !important;
     font-size: 11px;
@@ -188,9 +236,10 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 /* Separate the market selector only; keep the input and search button joined.
    Account for the margin within the grid cell to avoid shifting other menus. */
 .v6-toolbar-primary .search-row #keyword {
-  margin: 0 0 0 8px !important;
-  width: calc(100% - 8px) !important;
-  border-radius: 10px 0 0 10px !important;
+  margin: 0 !important;
+  width: 100% !important;
+  border-left-color: #d6e0ec !important;
+  border-radius: 0 !important;
 }
 .listing-sale-details-v1 { display: grid; gap: 8px; margin: 12px 0; padding: 12px; background: #f5f8fc; border-radius: 10px; }
 .listing-sale-details-v1 > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; font-size: 12px; }
