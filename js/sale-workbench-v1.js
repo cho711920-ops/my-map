@@ -105,17 +105,19 @@
       address:item.address,buildingName:item.buildingName||item.name,saleDetails:ui().saleSummary(item)};
     return '<div class="sale-tools-v1" data-sale-item="'+esc(JSON.stringify(data))+'"><button type="button" data-sale-action="lookup">토지이음 · 밸류맵 ↗</button><button type="button" data-sale-action="worksheet">'+(ui().normalizedSaleCategory(item)==="land"?'필지·매매 검토':'수익 계산·매매 검토')+'</button></div>'+sourceHtml(item);
   }
-  function modal(title,html) {
+  function modal(title,html,extraClass) {
     var previous=document.getElementById('saleWorkbenchDialogV1');if(previous)previous.remove();
-    var dialog=document.createElement('dialog');dialog.id='saleWorkbenchDialogV1';dialog.className='sale-workbench-dialog';
+    var dialog=document.createElement('dialog');dialog.id='saleWorkbenchDialogV1';dialog.className='sale-workbench-dialog'+(extraClass?' '+extraClass:'');
     dialog.innerHTML='<header><h2>'+esc(title)+'</h2><button type="button" data-sale-close aria-label="닫기">닫기 ×</button></header><div class="sale-workbench-body">'+html+'</div>';
     document.body.append(dialog);dialog.querySelector('[data-sale-close]').onclick=function(){dialog.close();};
     dialog.addEventListener('close',function(){if(active&&active.dialog===dialog)active=null;dialog.remove();});
     dialog.showModal();return dialog;
   }
-  function lookup(item) {
+  function lookup(item,options) {
+    item=item||{};options=options||{};
     var service=global.JSParcelExternalLinksV1,parsed=service&&service.parseAddress(item.address),address=parsed?parsed.query:clean(item.address);
-    var d=modal('외부 부동산 조회','<p>지번을 확인한 뒤 해당 필지를 새 탭에서 바로 엽니다.</p><label>조회할 지번<input aria-label="조회 주소" value="'+esc(address)+'"></label><p class="sale-provenance">시 이름이 생략된 동구·중구·서구·유성구·대덕구는 대전 기준입니다. 조회용 주소를 바꿔도 저장된 매물정보는 변경하지 않습니다.</p><div class="sale-tools-v1"><button type="button" data-check-parcel>지번 확인</button><button type="button" data-copy-address>주소 복사</button></div><p data-lookup-status role="status" aria-live="polite">지번 확인 중…</p><div class="sale-tools-v1"><a data-parcel-link="eum" role="link" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">토지이음 해당 필지 ↗</a><a data-parcel-link="valuemap" role="link" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">밸류맵 해당 필지 ↗</a></div><p data-copy-status role="status"></p><details><summary>직접 검색이 필요한 경우</summary><p>조회 실패·주소 미공개·외부 서비스 제한 시 주소를 복사해 직접 검색하세요.</p><div class="sale-tools-v1"><a href="https://www.eum.go.kr/web/am/amMain.jsp" target="_blank" rel="noopener noreferrer">토지이음 홈</a><a href="https://www.valueupmap.com/" target="_blank" rel="noopener noreferrer">밸류맵 홈</a></div></details><p class="sale-provenance">외부 서비스의 로그인·열람제한·유료 기능은 해당 사이트 기준입니다. 외부 자료를 자동으로 가져오지는 않습니다.</p>');
+    var initialStatus=address?'지번 확인 중…':'지번 주소를 입력한 뒤 확인해 주세요.';
+    var d=modal(options.title||'외부 부동산 조회','<p>지번을 확인한 뒤 해당 필지를 새 탭에서 바로 엽니다.</p><label>조회할 지번<input aria-label="조회 주소" value="'+esc(address)+'" placeholder="예: 대전 서구 도마동 49-38"></label><p class="sale-provenance">시 이름이 생략된 동구·중구·서구·유성구·대덕구는 대전 기준입니다. 조회용 주소를 바꿔도 저장된 매물정보는 변경하지 않습니다.</p><div class="sale-tools-v1"><button type="button" data-check-parcel>지번 확인</button><button type="button" data-copy-address>주소 복사</button></div><p data-lookup-status role="status" aria-live="polite">'+initialStatus+'</p><div class="sale-tools-v1"><a data-parcel-link="eum" role="link" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">토지이음 해당 필지 ↗</a><a data-parcel-link="valuemap" role="link" aria-disabled="true" tabindex="-1" target="_blank" rel="noopener noreferrer">밸류맵 해당 필지 ↗</a></div><p data-copy-status role="status"></p><details><summary>직접 검색이 필요한 경우</summary><p>조회 실패·주소 미공개·외부 서비스 제한 시 주소를 복사해 직접 검색하세요.</p><div class="sale-tools-v1"><a href="https://www.eum.go.kr/web/am/amMain.jsp" target="_blank" rel="noopener noreferrer">토지이음 홈</a><a href="https://www.valueupmap.com/" target="_blank" rel="noopener noreferrer">밸류맵 홈</a></div></details><p class="sale-provenance">외부 서비스의 로그인·열람제한·유료 기능은 해당 사이트 기준입니다. 외부 자료를 자동으로 가져오지는 않습니다.</p>',options.compact?'parcel-quick-dialog-v1':'');
     var sequence=0,field=d.querySelector('input'),status=d.querySelector('[data-lookup-status]'),button=d.querySelector('[data-check-parcel]');
     function clearLinks(){d.querySelectorAll('[data-parcel-link]').forEach(function(a){a.removeAttribute('href');a.setAttribute('aria-disabled','true');a.setAttribute('tabindex','-1');});}
     async function check(){
@@ -133,7 +135,17 @@
     field.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();check();}});
     button.onclick=check;
     d.querySelector('[data-copy-address]').onclick=async function(){var copyStatus=d.querySelector('[data-copy-status]');try{await navigator.clipboard.writeText(field.value);copyStatus.textContent='주소를 복사했습니다.';}catch(_){field.select();copyStatus.textContent='자동 복사가 제한됩니다. 선택된 주소를 직접 복사하세요.';}};
-    check();return d;
+    if(address)check();else if(field.focus)field.focus();
+    return d;
+  }
+  function selectedListingAddress() {
+    var selectedKey=clean(global.selectedItemKey);
+    if(!selectedKey)return '';
+    var selected=(global.allItems||[]).find(function(item){return clean(item&&item.key)===selectedKey;});
+    return clean(selected&&selected.address);
+  }
+  function openTopLookup() {
+    return lookup({address:selectedListingAddress()},{title:'토지·시세 바로조회',compact:true});
   }
   function calcInputs(item) {
     var d=ui().saleSummary(item),values={price:item.salePrice ?? item.sale_price,deposit:d.totalDeposit,income:d.monthlyIncome,loan:d.loanAmount??0,interest:0,vacancy:0,expense:0,acquisition:0};
@@ -184,7 +196,7 @@
     var dialog=modal('매매 매물 비교',comparisonHtml(items));
     dialog.querySelectorAll('[data-compare-open]').forEach(function(b){b.onclick=function(){var item=items[Number(b.dataset.compareOpen)];dialog.close();if(global.JSUnifiedListingsV8)global.JSUnifiedListingsV8.open(item.propertyId);};});
   }
-  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,calculate:calculate,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
+  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,calculate:calculate,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
   mountFilters();
   global.addEventListener('js-listing-trade-mode-change',syncMode);
   document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-action]');if(!b)return;var parent=b.closest('[data-sale-item]');if(!parent)return;event.stopPropagation();try{var item=JSON.parse(parent.dataset.saleItem);if(b.dataset.saleAction==='lookup')lookup(item);else worksheet(item);}catch(e){global.alert(e.message);}});

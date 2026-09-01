@@ -75,7 +75,7 @@ test('dependency loads before workbench within authenticated critical scripts',(
 
 function workbench() {
   const dialogs=[],requests=[];
-  function element(){return {dataset:{},attributes:{},events:{},value:'',textContent:'',disabled:false,setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];if(k==='href')delete this.href;},addEventListener(k,fn){this.events[k]=fn;}};}
+  function element(){return {dataset:{},attributes:{},events:{},value:'',textContent:'',disabled:false,focused:false,focus(){this.focused=true;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];if(k==='href')delete this.href;},addEventListener(k,fn){this.events[k]=fn;}};}
   const window={addEventListener(){},JSParcelExternalLinksV1:{parseAddress:setup().api.parseAddress,resolve(query){return new Promise((resolve,reject)=>requests.push({query,resolve,reject}));}}};
   const document={documentElement:{setAttribute(){}},addEventListener(){},querySelector(){return null;},getElementById(id){return id==='saleWorkbenchDialogV1'?dialogs.find(d=>d.isConnected):null;},body:{append(d){d.isConnected=true;}},createElement(){
     const d=element(),selectors=Object.fromEntries(['input','[data-lookup-status]','[data-check-parcel]','[data-copy-address]','[data-copy-status]','[data-sale-close]'].map(k=>[k,element()]));
@@ -85,7 +85,7 @@ function workbench() {
   }};
   vm.runInNewContext(fs.readFileSync('js/sale-workbench-v1.js','utf8'),{window,document});
   const result={address:'대전광역시 서구 도마동 49-38',links:setup().api.links('3017010300100490038')};
-  return {lookup:window.JSSaleWorkbenchV1.lookup,requests,result};
+  return {lookup:window.JSSaleWorkbenchV1.lookup,openTopLookup:window.JSSaleWorkbenchV1.openTopLookup,requests,result,window,dialogs};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('editing the lookup address invalidates stale responses and links without changing the listing',async()=>{
@@ -101,4 +101,19 @@ test('closing or replacing a lookup dialog prevents late successful/error respon
   const {lookup,requests,result}=workbench(),first=lookup({address:'서구 도마동 49-38'}),second=lookup({address:'서구 도마동 49-39'});
   assert.equal(first.isConnected,false);requests[0].resolve(result);await flush();assert.equal(first.links[0].href,undefined);assert.equal(second.links[0].href,undefined);
   second.close();requests[1].reject(Error('late'));await flush();assert.equal(second.links[0].href,undefined);assert.notEqual(second.selectors['[data-lookup-status]'].textContent,'late');
+});
+test('top lookup stays idle when no listing is selected and prefills a selected listing without writes',()=>{
+  const blank=workbench(),blankDialog=blank.openTopLookup();
+  assert.equal(blank.requests.length,0);
+  assert.equal(blankDialog.selectors.input.value,'');
+  assert.equal(blankDialog.selectors.input.focused,true);
+  assert.match(blankDialog.className,/parcel-quick-dialog-v1/);
+
+  const selected=workbench();
+  selected.window.selectedItemKey='selected-1';
+  selected.window.allItems=[{key:'selected-1',address:'서구 도마동 49-38'}];
+  const selectedDialog=selected.openTopLookup();
+  assert.equal(selectedDialog.selectors.input.value,'대전광역시 서구 도마동 49-38');
+  assert.equal(selected.requests.length,1);
+  assert.equal(selected.requests[0].query,'대전광역시 서구 도마동 49-38');
 });

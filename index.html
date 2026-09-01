@@ -47,9 +47,9 @@
 <link rel="stylesheet" href="css/app-font-v1.css?v=1.0.0-pretendard">
 <link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.7-filter-chips-selection">
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
-<link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.6-search-tell-layout">
+<link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.7-brand-parcel-lookup">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
-<link rel="stylesheet" href="css/listing-trade-v1.css?v=1.4.3-gongsil-search-layout">
+<link rel="stylesheet" href="css/listing-trade-v1.css?v=1.4.4-balanced-selector">
 </template>
 </head>
 
@@ -99,6 +99,11 @@
       </div>
 
       <div class="v6-toolbar-secondary extra-action-row v6-command-bar">
+        <button class="top-parcel-lookup-v1" type="button"
+          onclick="JSSaleWorkbenchV1.openTopLookup()" title="지번으로 토지이음·밸류맵 조회">
+          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5 9.5 3l5 2.5L20 3v15.5L14.5 21l-5-2.5L4 21Z"></path><path d="M9.5 3v15.5M14.5 5.5V21"></path></svg>
+          <span>토지조회</span>
+        </button>
         <div class="v6-command-menu" data-command-menu="view">
           <button class="v6-command-trigger" type="button" onclick="toggleV6ActionMenu('view', event)" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.7"></circle></svg>
@@ -741,7 +746,7 @@
 <script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds"></script>
 <script data-auth-critical src="js/listing-trade-ui-v1.js?v=1.5.0-workbench"></script>
 <script data-auth-critical src="js/parcel-external-links-v1.js?v=1.0.0"></script>
-<script data-auth-critical src="js/sale-workbench-v1.js?v=1.0.2-land-readability"></script>
+<script data-auth-critical src="js/sale-workbench-v1.js?v=1.0.3-header-parcel-lookup"></script>
 <script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.2.0-full-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection"></script>

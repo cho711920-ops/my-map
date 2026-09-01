@@ -18,7 +18,8 @@ test("the market selector and Tell form a Gongsil-style search lead-in", async (
   assert.match(css, /\.search-row \.search-btn\s*\{\s*grid-column: 4 !important;/);
   assert.match(css, /@media \(min-width: 769px\) and \(max-width: 899px\)/);
   assert.match(css, /width: min\(688px, calc\(100vw - 890px\)\)/);
-  assert.match(css, /background: #222d3d;\s*color: #fff;/);
+  assert.match(css, /background: #f2f7fc;\s*color: #244c79;/);
+  assert.match(css, /@media \(min-width: 1200px\)[\s\S]*grid-template-columns: 88px 44px minmax\(0, 1fr\) 68px !important/);
   assert.match(css, /\.search-row #keyword\s*\{\s*margin: 0 !important;\s*width: 100% !important;[\s\S]*?border-radius: 0 !important;/);
   assert.doesNotMatch(html, /v6-toolbar-secondary[\s\S]*?desktop-tell-v8/);
 });
