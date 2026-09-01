@@ -10,22 +10,28 @@
     // A bare floor ("용두동 1층"), road name, multiple lots or hidden lot is not a parcel.
     var m = raw.match(/^(.*?)([가-힣0-9·.]+(?:동|리|가))\s*(산\s*)?(\d{1,4})(?:\s*-\s*(\d{1,4}))?(?:\s*번지)?$/);
     if (!m || !Number(m[4])) return null;
-    var region = text(m[1]), town = m[2];
-    if (!region) return null;
+    var region = text(m[1]), town = m[2], regionOmitted = !region;
+    // JS부동산의 운영 범위에서는 "도마동34-42"도 대전 지번으로 조회하되,
+    // 응답이 정확히 한 필지일 때만 링크를 허용합니다.
+    if (regionOmitted) region = '대전광역시';
     // Existing JS listings omit the city for the five Daejeon districts only.
     if (/^(동구|중구|서구|유성구|대덕구)$/.test(region)) region = '대전광역시 ' + region;
     var parts = region.split(' '); parts[0] = provinces[parts[0]] || parts[0];
     region = parts.join(' ');
     if (!/(?:특별시|광역시|특별자치시|도)(?: |$)/.test(parts[0]) || /[^가-힣0-9·. ]/.test(region)) return null;
     var main = Number(m[4]), sub = Number(m[5] || 0), mountain = !!m[3];
-    return {query:region+' '+town+' '+(mountain?'산 ':'')+main+(sub?'-'+sub:''),main:main,sub:sub,mountain:mountain};
+    return {query:region+' '+town+' '+(mountain?'산 ':'')+main+(sub?'-'+sub:''),regionOmitted:regionOmitted,town:town,main:main,sub:sub,mountain:mountain};
   }
   function matchParcel(query, results) {
     var requested = parseAddress(query), matches = new Map();
-    if (!requested) throw Error('정확한 시·구·동(리)과 지번을 입력해 주세요.');
+    if (!requested) throw Error('정확한 동(리)과 지번을 입력해 주세요.');
     (Array.isArray(results) ? results : []).forEach(function(row) {
       var a = row && row.address, parsed = parseAddress(a && a.address_name);
-      if (!a || !parsed || parsed.query !== requested.query) return;
+      if (!a || !parsed) return;
+      var sameAddress = requested.regionOmitted
+        ? !parsed.regionOmitted && parsed.query.indexOf('대전광역시 ') === 0 && parsed.town === requested.town
+        : parsed.query === requested.query;
+      if (!sameAddress) return;
       var code = text(a.b_code), main = text(a.main_address_no), sub = text(a.sub_address_no) || '0', mountain = text(a.mountain_yn).toUpperCase();
       if (!/^[1-9]\d{9}$/.test(code) || !/^\d{1,4}$/.test(main) || !/^\d{1,4}$/.test(sub) || !/^[NY]$/.test(mountain)) return;
       if (Number(main) !== requested.main || Number(sub) !== requested.sub || (mountain === 'Y') !== requested.mountain) return;
@@ -44,7 +50,7 @@
   }
   function resolve(address) {
     var parsed = parseAddress(address);
-    if (!parsed) return Promise.reject(Error('정확한 시·구·동(리)과 지번을 입력해 주세요. 동 이름만 있거나 여러 필지이면 바로 연결하지 않습니다.'));
+    if (!parsed) return Promise.reject(Error('정확한 동(리)과 지번을 입력해 주세요. 지번이 없거나 여러 필지이면 바로 연결하지 않습니다.'));
     var query = parsed.query, saved = cache.get(query);
     if (saved && Date.now()-saved.at < 600000) return Promise.resolve(saved.value);
     if (pending.has(query)) return pending.get(query);
@@ -61,7 +67,7 @@
         new services.Geocoder().addressSearch(query, function(results, status) {
           if (settled) return;
           if (status !== services.Status.OK) { finish(Error('지번 조회에 실패했습니다. 주소를 확인하거나 잠시 후 다시 시도해 주세요.')); return; }
-          try { var parcel = matchParcel(query, results); finish(null, {address:parcel.address,pnu:parcel.pnu,links:links(parcel.pnu)}); }
+          try { var parcel = matchParcel(address, results); finish(null, {address:parcel.address,pnu:parcel.pnu,links:links(parcel.pnu)}); }
           catch (e) { finish(e); }
         }, {size:30,analyze_type:services.AnalyzeType ? services.AnalyzeType.EXACT : 'exact'});
       } catch (_) { finish(Error('주소 검색 서비스를 실행하지 못했습니다. 잠시 후 다시 확인해 주세요.')); }

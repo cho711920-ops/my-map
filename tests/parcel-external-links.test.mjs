@@ -15,6 +15,7 @@ test('full, short Daejeon, compact lot and mountain addresses normalize without 
   const {api}=setup();
   for(const raw of ['서구 도마동49-38','대전 서구 도마동 49 - 38번지','대전광역시 서구 도마동 0049-0038'])
     assert.equal(api.parseAddress(raw)?.query,'대전광역시 서구 도마동 49-38');
+  assert.equal(api.parseAddress('도마동34-42')?.query,'대전광역시 도마동 34-42');
   assert.equal(api.parseAddress('충남 공주시 반포면 학봉리 산 10-2')?.query,'충청남도 공주시 반포면 학봉리 산 10-2');
   assert.equal(api.parseAddress('서울 중구 충무로1가 21')?.query,'서울특별시 중구 충무로1가 21');
   assert.equal(api.parseAddress('세종 조치원읍 신흥리 1')?.query,'세종특별자치시 조치원읍 신흥리 1');
@@ -23,7 +24,7 @@ test('full, short Daejeon, compact lot and mountain addresses normalize without 
 });
 test('unknown, road, floor, multi-lot and malformed addresses cannot be resolved',async()=>{
   const {api,calls}=setup();
-  for(const address of ['',null,'서구 도마동','서구 도마동1층','도마동 49-38','서구 도마동 49-38 외 1필지','서구 도마동 49-38, 49-39','대전 서구 계백로 100','대전 서구 도마동 0','대전 서구 도마동 49-38 101호','<img src=x>']) {
+  for(const address of ['',null,'서구 도마동','서구 도마동1층','서구 도마동 49-38 외 1필지','서구 도마동 49-38, 49-39','대전 서구 계백로 100','대전 서구 도마동 0','대전 서구 도마동 49-38 101호','<img src=x>']) {
     assert.equal(api.parseAddress(address),null,address);
     await assert.rejects(api.resolve(address),/정확한/);
   }
@@ -34,6 +35,13 @@ test('PNU uses legal code and separately padded general/mountain lot numbers',()
   assert.equal(api.matchParcel('서구 도마동49-38',[sample]).pnu,'3017010300100490038');
   assert.equal(api.matchParcel('서구 도마동 산 49',[{address:{...sample.address,address_name:'대전 서구 도마동 산49',mountain_yn:'Y',sub_address_no:''}}]).pnu,'3017010300200490000');
   assert.equal(api.matchParcel('서구 도마동49-38',[sample,sample]).pnu,'3017010300100490038');
+  assert.equal(api.matchParcel('도마동49-38',[sample]).pnu,'3017010300100490038');
+});
+test('Daejeon dong-and-lot shorthand resolves only one exact returned parcel',async()=>{
+  const {api,calls}=setup(),promise=api.resolve('도마동49-38');
+  assert.equal(calls[0][0],'대전광역시 도마동 49-38');
+  calls[0][1]([sample],'OK');
+  assert.equal((await promise).pnu,'3017010300100490038');
 });
 test('nearby parcels, other districts, missingcode, mismatched lot numbers and ambiguous PNU are rejected',()=>{
   const {api}=setup();
