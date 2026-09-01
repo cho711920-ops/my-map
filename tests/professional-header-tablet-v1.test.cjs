@@ -8,7 +8,7 @@ const css = fs.readFileSync(path.join(root, "css", "header-professional-v1.css")
 const tradeCss = fs.readFileSync(path.join(root, "css", "listing-trade-v1.css"), "utf8");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
-assert.match(html, /header-professional-v1\.css\?v=1\.1\.7-brand-parcel-lookup/);
+assert.match(html, /header-professional-v1\.css\?v=1\.1\.8-compact-action-priority/);
 assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/small>/);
 
 [
