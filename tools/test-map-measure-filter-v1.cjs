@@ -33,6 +33,9 @@ const elements = new Map();
   "mapDistanceBtn",
   "mapRadiusBtn",
   "mapQuickTodayBtn",
+  "mapQuickNew3DaysBtn",
+  "mapQuickNew7DaysBtn",
+  "mapQuickNew15DaysBtn",
   "mapQuickVisitOnlyBtn",
   "mapQuickHideDoneBtn",
   "selectionActionBar",
@@ -97,6 +100,7 @@ const context = {
   applyFilter() { filterRefreshes += 1; },
   selectedPrintKeys: [],
   todayNewOnly: false,
+  newListingDays: 0,
   gongsilOnly: false,
   hideDone: true
 };

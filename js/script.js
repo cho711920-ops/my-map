@@ -24,6 +24,7 @@ try {
 } catch (_) {}
 var gongsilOnly = false;
 var todayNewOnly = false;
+var newListingDays = 0;
 var multiClusterMode = false;
 var selectedGroupKeys = [];
 var preserveActionSelectionDuringRender = false;
@@ -1143,7 +1144,7 @@ function getFilteredItems(options) {
     var matchFavorite = !favoriteOnly || isFavorite(item);
     var matchDone = doneOnly ? isDone(item) : (!hideDone || !isDone(item));
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
-    var matchTodayNew = !todayNewOnly || isTodayRegistration(item.regDate);
+    var matchTodayNew = !newListingDays || isRegistrationWithinDays(item.regDate, newListingDays);
     var inMap = ignoreMapBounds || mobileGlobalKeywordSearch
       ? true
       : (polygonFilter
@@ -1335,7 +1336,7 @@ function getActiveFilterChipsV844() {
     push("includeDone", "계약완료 포함");
   }
   if (gongsilOnly) push("gongsilOnly", "임장할매물만");
-  if (todayNewOnly) push("todayNewOnly", "오늘 신규만");
+  if (newListingDays) push("newListingDays", newListingDays === 1 ? "오늘 신규매물" : "최근 " + newListingDays + "일 신규매물");
   if (radiusFilter && Number(radiusFilter.meters) > 0) {
     push("radius", "반경 " + Number(radiusFilter.meters).toLocaleString("ko-KR") + "m");
   }
@@ -1359,11 +1360,18 @@ function syncFilterToggleControlsV844() {
     gongsilButton.setAttribute("aria-checked", gongsilOnly ? "true" : "false");
   }
 
-  var todayButton = document.getElementById("todayNewBtn");
-  if (todayButton) {
-    todayButton.classList.toggle("on", !!todayNewOnly);
-    todayButton.setAttribute("aria-checked", todayNewOnly ? "true" : "false");
-  }
+  [
+    ["todayNewBtn", 1],
+    ["newListing3DaysBtn", 3],
+    ["newListing7DaysBtn", 7],
+    ["newListing15DaysBtn", 15]
+  ].forEach(function(entry) {
+    var button = document.getElementById(entry[0]);
+    var selected = newListingDays === entry[1];
+    if (!button) return;
+    button.classList.toggle("on", selected);
+    button.setAttribute("aria-checked", selected ? "true" : "false");
+  });
 
   if (typeof window.syncMapQuickToolStateV657 === "function") {
     window.syncMapQuickToolStateV657();
@@ -1404,7 +1412,10 @@ function clearActiveFilterChipV844(key) {
     if (typeof saveDoneViewModeV656 === "function") saveDoneViewModeV656();
   }
   if (key === "gongsilOnly") gongsilOnly = false;
-  if (key === "todayNewOnly") todayNewOnly = false;
+  if (key === "todayNewOnly" || key === "newListingDays") {
+    todayNewOnly = false;
+    newListingDays = 0;
+  }
   if (key === "radius" || key === "polygon") {
     if (typeof window.clearMapMeasurementsV657 === "function") {
       window.clearMapMeasurementsV657(true);
@@ -1753,23 +1764,35 @@ function renderPreviousListChunkV1() {
 }
 
 function isTodayRegistration(value) {
+  return isRegistrationWithinDays(value, 1);
+}
+
+function isRegistrationWithinDays(value, days, now) {
   var text = String(value || "").trim();
   var match = text.match(/(\d{2,4})[-./](\d{1,2})[-./](\d{1,2})/);
   if (!match) return false;
   var year = Number(match[1]);
   if (year < 100) year += 2000;
-  var today = new Date();
-  return year === today.getFullYear() && Number(match[2]) === today.getMonth() + 1 &&
-    Number(match[3]) === today.getDate();
+  var month = Number(match[2]);
+  var day = Number(match[3]);
+  var registered = new Date(year, month - 1, day);
+  if (registered.getFullYear() !== year || registered.getMonth() !== month - 1 || registered.getDate() !== day) return false;
+  var current = now instanceof Date ? now : new Date();
+  var today = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+  var elapsedDays = Math.floor((today.getTime() - registered.getTime()) / 86400000);
+  return elapsedDays >= 0 && elapsedDays < Number(days || 0);
 }
 
 function toggleTodayNewOnly() {
-  todayNewOnly = !todayNewOnly;
-  var button = document.getElementById("todayNewBtn");
-  if (button) {
-    button.classList.toggle("on", todayNewOnly);
-    button.setAttribute("aria-checked", todayNewOnly ? "true" : "false");
-  }
+  toggleNewListingDays(1);
+}
+
+function toggleNewListingDays(days) {
+  var allowed = [1, 3, 7, 15];
+  var selected = allowed.indexOf(Number(days)) >= 0 ? Number(days) : 0;
+  newListingDays = newListingDays === selected ? 0 : selected;
+  todayNewOnly = newListingDays === 1;
+  syncFilterToggleControlsV844();
   applyFilter();
 }
 
@@ -4835,6 +4858,7 @@ function resetFilter() {
   saveDoneViewModeV656();
   gongsilOnly = false;
   todayNewOnly = false;
+  newListingDays = 0;
   multiClusterMode = false;
   selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜목록";
@@ -4845,11 +4869,12 @@ function resetFilter() {
     gongsilOnlyButton.classList.remove("on");
     gongsilOnlyButton.setAttribute("aria-checked", "false");
   }
-  var todayNewButton = document.getElementById("todayNewBtn");
-  if (todayNewButton) {
-    todayNewButton.classList.remove("on");
-    todayNewButton.setAttribute("aria-checked", "false");
-  }
+  ["todayNewBtn", "newListing3DaysBtn", "newListing7DaysBtn", "newListing15DaysBtn"].forEach(function(id) {
+    var newListingButton = document.getElementById(id);
+    if (!newListingButton) return;
+    newListingButton.classList.remove("on");
+    newListingButton.setAttribute("aria-checked", "false");
+  });
   updateMultiClusterButton();
   updateMultiClusterStatus();
   if (typeof window.clearMapMeasurementsV657 === "function") {

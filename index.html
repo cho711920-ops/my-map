@@ -26,7 +26,7 @@
 <script src="js/data-access-v6.js?v=6.0.3-earliest-warmup"></script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
-<link rel="stylesheet" href="css/style.css?v=6.10.1-map-status-top&amp;polygon-filter-v661=1">
+<link rel="stylesheet" href="css/style.css?v=6.10.1-map-status-top&amp;polygon-filter-v661=1&amp;new-listing-periods-v1=1">
 <link rel="stylesheet" href="css/app-final-overrides-v690.css?v=1.0.0">
 <link rel="stylesheet" href="css/print-v2.css?v=2.0.0">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.28-brokerage-filter">
@@ -113,7 +113,10 @@
             <button id="hideDoneBtn" class="hide-done-btn on" type="button" role="menuitemcheckbox" aria-checked="true" onclick="toggleHideDone(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>계약완료 숨김</span></button>
             <button id="doneOnlyBtn" type="button" role="menuitemcheckbox" aria-checked="false" onclick="toggleDoneOnly(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true"></span><span>계약완료만 보기</span></button>
             <button id="gongsilOnlyBtn" class="gongsil-only-btn" type="button" role="menuitemcheckbox" aria-checked="false" onclick="toggleGongsilOnly(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>임장할매물만보기</span></button>
-            <button id="todayNewBtn" type="button" role="menuitemcheckbox" aria-checked="false" onclick="toggleTodayNewOnly(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>오늘 신규만 보기</span></button>
+            <button id="todayNewBtn" class="new-listing-period-btn" type="button" role="menuitemradio" aria-checked="false" onclick="toggleNewListingDays(1); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>오늘 신규매물</span></button>
+            <button id="newListing3DaysBtn" class="new-listing-period-btn" type="button" role="menuitemradio" aria-checked="false" onclick="toggleNewListingDays(3); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>최근 3일 신규매물</span></button>
+            <button id="newListing7DaysBtn" class="new-listing-period-btn" type="button" role="menuitemradio" aria-checked="false" onclick="toggleNewListingDays(7); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>최근 7일 신규매물</span></button>
+            <button id="newListing15DaysBtn" class="new-listing-period-btn" type="button" role="menuitemradio" aria-checked="false" onclick="toggleNewListingDays(15); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>최근 15일 신규매물</span></button>
             <div class="v6-command-divider"></div>
             <button id="favoriteBtn" class="favorite-filter-btn" type="button" onclick="openListManager('favorite'); closeV6ActionMenus()">찜목록</button>
           </div>
@@ -272,9 +275,21 @@
           <span>보기</span>
         </button>
         <div id="mapQuickPopoverView" class="map-quick-popover map-quick-view-popover" hidden>
-          <button id="mapQuickTodayBtn" type="button" role="menuitemcheckbox" aria-checked="false"
-            onclick="toggleTodayNewOnly(); syncMapQuickToolStateV657()">
-            <span class="map-quick-check" aria-hidden="true"></span><span>오늘 신규만</span>
+          <button id="mapQuickTodayBtn" type="button" role="menuitemradio" aria-checked="false"
+            onclick="toggleNewListingDays(1); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>오늘 신규매물</span>
+          </button>
+          <button id="mapQuickNew3DaysBtn" type="button" role="menuitemradio" aria-checked="false"
+            onclick="toggleNewListingDays(3); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>최근 3일 신규매물</span>
+          </button>
+          <button id="mapQuickNew7DaysBtn" type="button" role="menuitemradio" aria-checked="false"
+            onclick="toggleNewListingDays(7); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>최근 7일 신규매물</span>
+          </button>
+          <button id="mapQuickNew15DaysBtn" type="button" role="menuitemradio" aria-checked="false"
+            onclick="toggleNewListingDays(15); syncMapQuickToolStateV657()">
+            <span class="map-quick-check" aria-hidden="true"></span><span>최근 15일 신규매물</span>
           </button>
           <button id="mapQuickVisitOnlyBtn" type="button" role="menuitemcheckbox" aria-checked="false"
             onclick="toggleGongsilOnly(); syncMapQuickToolStateV657()">
@@ -747,7 +762,7 @@
 <script data-auth-critical src="js/listing-trade-ui-v1.js?v=1.5.0-workbench"></script>
 <script data-auth-critical src="js/parcel-external-links-v1.js?v=1.0.1-daejeon-dong-lot"></script>
 <script data-auth-critical src="js/sale-workbench-v1.js?v=1.0.4-daejeon-short-address"></script>
-<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3"></script>
+<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.2.0-full-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection"></script>
 <script src="js/kakao-navigation-v1.js?v=1.0.0"></script>
@@ -766,7 +781,7 @@
 <script src="js/ai-visit-session-v6.js?v=6.4.39-data-access"></script>
 <script src="js/unified-favorites-v7.js?v=7.0.15-ai-visit-entry"></script>
 <script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1"></script>
-<script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1"></script>
+<script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1&amp;new-listing-periods-v1=1"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>
   <script src="js/operations-collection-v8.js?v=7.25.9-collection-diagnostics"></script>
   <script src="js/operations-admin-v1.js?v=1.2.0-linked-identity"></script>

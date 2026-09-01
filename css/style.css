@@ -5950,6 +5950,9 @@ body,
    ========================================================= */
 #hideDoneBtn,
 #todayNewBtn,
+#newListing3DaysBtn,
+#newListing7DaysBtn,
+#newListing15DaysBtn,
 #gongsilOnlyBtn {
   display: flex !important;
   align-items: center !important;
@@ -5957,6 +5960,9 @@ body,
 }
 #hideDoneBtn .view-toggle-check,
 #todayNewBtn .view-toggle-check,
+#newListing3DaysBtn .view-toggle-check,
+#newListing7DaysBtn .view-toggle-check,
+#newListing15DaysBtn .view-toggle-check,
 #gongsilOnlyBtn .view-toggle-check {
   display: inline-flex !important;
   align-items: center !important;
@@ -5974,6 +5980,9 @@ body,
 }
 #hideDoneBtn.on .view-toggle-check,
 #todayNewBtn.on .view-toggle-check,
+#newListing3DaysBtn.on .view-toggle-check,
+#newListing7DaysBtn.on .view-toggle-check,
+#newListing15DaysBtn.on .view-toggle-check,
 #gongsilOnlyBtn.on .view-toggle-check {
   border-color: #1769e8 !important;
   background: #1769e8 !important;

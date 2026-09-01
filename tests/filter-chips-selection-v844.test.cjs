@@ -93,6 +93,7 @@ test("selected filter values become readable independent removable chips", () =>
     doneOnly: false,
     gongsilOnly: false,
     todayNewOnly: false,
+    newListingDays: 0,
     window: { mapRadiusFilterV658: null }
   };
   vm.runInNewContext(chipRuntime(), context);
@@ -121,6 +122,7 @@ test("one chip clears only its own condition and refreshes filtering", () => {
     doneOnly: false,
     gongsilOnly: false,
     todayNewOnly: false,
+    newListingDays: 0,
     applyFilter: () => { applyCount += 1; },
     window: { mapRadiusFilterV658: null }
   };
