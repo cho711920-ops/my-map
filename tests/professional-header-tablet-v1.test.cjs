@@ -39,7 +39,7 @@ assert.match(css, /\.top-parcel-lookup-v1 \{ grid-column: 1/);
 assert.match(css, /\.desktop-operations-action \{ grid-column: 2/);
 assert.match(css, /\.quick-add-btn \{ grid-column: 4/);
 assert.match(css, /\.top-logout-btn-v1 \{ grid-column: 5/);
-assert.match(css, /\.top-logout-btn-v1:hover \{[\s\S]*color: #c24141/);
+assert.match(css, /> \.top-logout-btn-v1:hover \{[\s\S]*color: #c24141/);
 assert.match(css, /\.map-quick-tools \{[\s\S]*background: transparent !important/);
 assert.match(css, /\.map-quick-tools-inner \{[\s\S]*width: 50px !important;[\s\S]*border: 1px solid rgba\(151, 169, 191, \.58\) !important;[\s\S]*background: rgba\(255, 255, 255, \.82\) !important/);
 assert.match(css, /\.map-quick-tools-inner::before \{[\s\S]*content: "도구";[\s\S]*border-bottom: 1px solid rgba\(151, 169, 191, \.42\);[\s\S]*background: transparent/);
@@ -59,7 +59,7 @@ assert.match(tradeCss, /@media \(min-width: 1540px\)[\s\S]*grid-template-columns
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*\.quick-add-btn\.v6-secondary-action \{[\s\S]*font-size: 13px !important/);
 assert.match(css, /--js-brand-width-v638: 238px/);
 assert.match(css, /\.header \.js-brand-name-v1 \{\s*font-size: 22px !important/);
-assert.match(css, /\.top-parcel-lookup-v1 \{[\s\S]*background: #f2f7fc !important/);
+assert.match(css, /> \.top-parcel-lookup-v1 \{[\s\S]*background: #f2f7fc !important/);
 assert.match(css, /\.map-quick-heart-btn \.map-quick-icon-v638 \{[\s\S]*display: block !important/);
 assert.doesNotMatch(script, /btn\.innerHTML\s*=\s*"<span>다중/);
 assert.match(script, /label\.textContent\s*=\s*"다중선택"/);

@@ -155,7 +155,7 @@
     box-shadow: 0 0 0 3px rgba(23, 105, 232, .11) !important;
   }
 
-  .v6-toolbar-secondary .desktop-operations-action {
+  .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action {
     border-color: #b8cff0 !important;
     background: #eff6ff !important;
     color: #164f99 !important;
@@ -184,20 +184,20 @@
     border-color: rgba(255, 255, 255, .9) !important;
   }
 
-  .v6-toolbar-secondary .top-logout-btn-v1 {
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 {
     border-color: #d8e0eb !important;
     background: #f8fafc !important;
     color: #52637a !important;
     box-shadow: none !important;
   }
 
-  .v6-toolbar-secondary .top-logout-btn-v1:hover {
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1:hover {
     border-color: #f1b8b8 !important;
     background: #fff5f5 !important;
     color: #c24141 !important;
   }
 
-  .v6-toolbar-secondary .top-logout-btn-v1:disabled {
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1:disabled {
     cursor: wait !important;
     opacity: .64 !important;
   }
@@ -209,13 +209,13 @@
     box-shadow: none !important;
   }
 
-  .v6-toolbar-secondary .top-parcel-lookup-v1 {
+  .v6-toolbar-secondary.v6-command-bar > .top-parcel-lookup-v1 {
     border-color: #b8cbe2 !important;
     background: #f2f7fc !important;
     color: #244c79 !important;
   }
 
-  .v6-toolbar-secondary .top-parcel-lookup-v1:hover {
+  .v6-toolbar-secondary.v6-command-bar > .top-parcel-lookup-v1:hover {
     border-color: #8cadd2 !important;
     background: #eaf2fb !important;
     color: #174f8c !important;
@@ -472,6 +472,7 @@
     display: none !important;
   }
 
+  .v6-toolbar-secondary.v6-command-bar > .top-parcel-lookup-v1,
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action {
     display: inline-flex !important;
     min-width: 0 !important;
@@ -569,6 +570,7 @@
     gap: 6px !important;
   }
 
+  .v6-toolbar-secondary.v6-command-bar > .top-parcel-lookup-v1,
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
   .v6-toolbar-secondary .quick-add-btn,
   .v6-toolbar-secondary .top-logout-btn-v1 {
@@ -621,6 +623,7 @@
     gap: 8px !important;
   }
 
+  .v6-toolbar-secondary.v6-command-bar > .top-parcel-lookup-v1,
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
   .v6-toolbar-secondary .quick-add-btn,
   .v6-toolbar-secondary .top-logout-btn-v1 {
