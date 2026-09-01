@@ -30,7 +30,7 @@
 <link rel="stylesheet" href="css/app-final-overrides-v690.css?v=1.0.0">
 <link rel="stylesheet" href="css/print-v2.css?v=2.0.0">
 <link rel="stylesheet" href="css/list-manager-v6.css?v=6.4.28-brokerage-filter">
-<link rel="stylesheet" href="css/unified-favorites-v7.css?v=7.0.14-static-preview">
+<link rel="stylesheet" href="css/unified-favorites-v7.css?v=7.0.15-ai-visit-entry">
 <link rel="stylesheet" href="css/ai-visit-v6.css?v=6.4.34-roadview-viewport">
 <link rel="stylesheet" href="css/mobile-detail-fix-v6.css?v=6.4.19-filter-anchor">
 <link rel="stylesheet" href="css/commercial-public-v6.css?v=6.4.15-readable">
@@ -47,7 +47,7 @@
 <link rel="stylesheet" href="css/app-font-v1.css?v=1.0.0-pretendard">
 <link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.7-filter-chips-selection">
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
-<link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.4-integrated-map-rail">
+<link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.5-trimmed-actions">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
 <link rel="stylesheet" href="css/listing-trade-v1.css?v=1.4.2-land-readability">
 </template>
@@ -121,7 +121,6 @@
             <button id="fieldVisitBtn" class="field-visit-btn" type="button" onclick="markSelectedAsVisited(); closeV6ActionMenus()">임장완료</button>
             <div class="v6-command-divider"></div>
             <button type="button" onclick="openOperationsCenter('dashboard'); closeV6ActionMenus()">운영현황</button>
-            <button id="operationsCustomerMenuBtn" type="button" onclick="openOperationsCenter('customers'); closeV6ActionMenus()">고객매칭</button>
           </div>
         </div>
 
@@ -130,21 +129,12 @@
           <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12.5" rx="2"></rect><path d="M8.5 7V4.5h7V7M3.5 11.5h17M10 11.5v2h4v-2"></path></svg>
           <span>운영현황</span><i class="top-action-status-dot-v638" aria-hidden="true"></i>
         </button>
-        <button class="v6-primary-action desktop-main-action desktop-customer-action" type="button"
-          onclick="openOperationsCenter('customers')">
-          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><circle cx="17" cy="9" r="2.3"></circle><path d="M3.5 19c.4-4 2.2-6 5.5-6s5.1 2 5.5 6M14.5 14c3.4-.5 5.4 1.2 5.8 4.5"></path></svg>
-          <span>고객매칭</span>
-        </button>
         <button class="v6-primary-action desktop-main-action desktop-tell-v8" type="button"
           onclick="JSUnifiedListingsV8.openTell()">
           <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.8 10 8 8.2 10c1.1 2.5 3.1 4.5 5.6 5.6l2-1.8L20.2 17l-.7 3.2c-.2.8-.9 1.3-1.7 1.3C9.4 21.2 2.8 14.6 2.5 6.2c0-.8.5-1.5 1.3-1.7L7 3.8Z"></path></svg>
           <span>Tell</span>
         </button>
 
-        <button class="v6-primary-action ai" type="button" onclick="startAiVisitPreview()">
-          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.2 3.1L16 7.3l-2.8 1.2L12 12l-1.2-3.5L8 7.3l2.8-1.2L12 3Z"></path><path d="M5.5 11.5 6.3 14 9 15l-2.7 1-.8 2.5-.8-2.5L2 15l2.7-1 .8-2.5ZM18.5 12l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"></path></svg>
-          <span>AI임장하기</span>
-        </button>
         <button id="asyncMutationStatusV1" class="async-mutation-status-v1 idle" type="button" hidden
           title="백그라운드 저장 상태" aria-label="완료 0건, 저장 중 0건, 실패 0건">
           <span><small>완료</small><b>0</b></span>
@@ -771,7 +761,7 @@
 <script src="js/ai-visit-route-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-ui-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.39-data-access"></script>
-<script src="js/unified-favorites-v7.js?v=7.0.14-static-preview"></script>
+<script src="js/unified-favorites-v7.js?v=7.0.15-ai-visit-entry"></script>
 <script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>

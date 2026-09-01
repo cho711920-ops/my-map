@@ -9,8 +9,8 @@ const listManager = fs.readFileSync("js/list-manager-v6.js", "utf8");
 const aiVisit = fs.readFileSync("js/ai-visit-session-v6.js", "utf8");
 const main = fs.readFileSync("js/script.js", "utf8");
 
-assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.14-static-preview/);
-assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.14-static-preview/);
+assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.15-ai-visit-entry/);
+assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.15-ai-visit-entry/);
 assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
@@ -23,6 +23,7 @@ assert.match(favorites, /"property:" \+ propertyId/);
 assert.match(favorites, /내 계정에만 저장·동기화됩니다/);
 assert.match(favorites, /showUnifiedFavoriteOnMapV7/);
 assert.match(favorites, /startUnifiedFavoriteVisitV7/);
+assert.match(favorites, />AI임장하기<\/button>/);
 assert.match(favorites, /removeUnifiedFavoriteItemV7/);
 assert.match(favorites, /deleteUnifiedFavoriteFolderV7/);
 assert.match(favorites, /unifiedFavoriteAddV7/);

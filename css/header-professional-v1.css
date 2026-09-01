@@ -161,9 +161,7 @@
     color: #164f99 !important;
   }
 
-  .v6-toolbar-secondary .desktop-customer-action,
-  .v6-toolbar-secondary .desktop-tell-v8,
-  .v6-toolbar-secondary .v6-primary-action.ai {
+  .v6-toolbar-secondary .desktop-tell-v8 {
     border-color: var(--js-header-line-v638) !important;
     background: #fff !important;
     color: var(--js-header-navy-v638) !important;
@@ -445,7 +443,7 @@
 
   .v6-toolbar-secondary.v6-command-bar {
     display: grid !important;
-    grid-template-columns: 66px 70px 70px 78px 0 84px 84px !important;
+    grid-template-columns: 72px 70px 0 84px 84px !important;
     grid-template-rows: 42px !important;
     grid-column: 2 !important;
     grid-row: 1 !important;
@@ -470,14 +468,11 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; grid-row: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action { grid-column: 2 !important; grid-row: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .desktop-tell-v8 { grid-column: 3 !important; grid-row: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; grid-row: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 { grid-column: 5 !important; grid-row: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 6 !important; grid-row: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 7 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-tell-v8 { grid-column: 2 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 { grid-column: 3 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 4 !important; grid-row: 1 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 5 !important; grid-row: 1 !important; }
 
-  .v6-toolbar-secondary .v6-primary-action.ai,
   .v6-toolbar-secondary .quick-add-btn.v6-secondary-action,
   .v6-toolbar-secondary .top-logout-btn-v1 {
     min-width: 0 !important;
@@ -551,12 +546,11 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 80px 84px 76px 94px 0 98px 98px !important;
+    grid-template-columns: 84px 76px 0 98px 98px !important;
     gap: 6px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
-  .v6-toolbar-secondary .v6-primary-action.ai,
   .v6-toolbar-secondary .quick-add-btn,
   .v6-toolbar-secondary .top-logout-btn-v1 {
     padding-right: 6px !important;
@@ -604,12 +598,11 @@
   }
 
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 92px 96px 84px 106px 0 108px 108px !important;
+    grid-template-columns: 96px 84px 0 108px 108px !important;
     gap: 8px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-main-action,
-  .v6-toolbar-secondary .v6-primary-action.ai,
   .v6-toolbar-secondary .quick-add-btn,
   .v6-toolbar-secondary .top-logout-btn-v1 {
     padding-right: 8px !important;
@@ -644,15 +637,14 @@
 
 @media (min-width: 769px) and (max-width: 899px) {
   .v6-toolbar-secondary.v6-command-bar {
-    grid-template-columns: 48px 48px 42px 66px 74px 42px !important;
+    grid-template-columns: 52px 42px 0 74px 42px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action { grid-column: 2 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .desktop-tell-v8 { grid-column: 3 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 5 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 6 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .desktop-tell-v8 { grid-column: 2 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 { grid-column: 3 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 4 !important; }
+  .v6-toolbar-secondary.v6-command-bar > .top-logout-btn-v1 { grid-column: 5 !important; }
   .v6-toolbar-secondary .top-logout-btn-v1 span { display: none !important; }
 }
 

@@ -335,7 +335,7 @@
           '<div class="unified-favorite-folder-actions-v7">' +
             (state.pendingRefs.length ? '<button type="button" class="add" onclick="addSelectedToUnifiedFavoriteV7(\'' + escapeHtml(list.id) + '\')">선택매물 담기</button>' : '') +
             '<button type="button" onclick="showUnifiedFavoriteOnMapV7(\'' + escapeHtml(list.id) + '\')">지도 보기</button>' +
-            '<button type="button" class="visit" onclick="startUnifiedFavoriteVisitV7(\'' + escapeHtml(list.id) + '\')">임장하기</button>' +
+            '<button type="button" class="visit" onclick="startUnifiedFavoriteVisitV7(\'' + escapeHtml(list.id) + '\')">AI임장하기</button>' +
             '<button type="button" onclick="renameUnifiedFavoriteFolderV7(\'' + escapeHtml(list.id) + '\')">이름변경</button>' +
             '<button type="button" class="danger" onclick="deleteUnifiedFavoriteFolderV7(\'' + escapeHtml(list.id) + '\')">폴더삭제</button>' +
           '</div></div>' +
