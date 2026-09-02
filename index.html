@@ -47,7 +47,7 @@
 <link rel="stylesheet" href="css/app-font-v1.css?v=1.0.0-pretendard">
 <link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.7-filter-chips-selection">
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
-<link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.8-compact-action-priority">
+<link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.8-compact-action-priority&amp;gongsil-search-actions-v1=1">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
 <link rel="stylesheet" href="css/listing-trade-v1.css?v=1.4.4-balanced-selector">
 </template>
@@ -82,9 +82,8 @@
             <span>Tell</span>
           </button>
           <input id="keyword" aria-label="지역, 건물 또는 호실 검색" placeholder="지역 / 건물 / 호실 검색 · 쉼표 다중검색 (괴정,탄방,월평)">
-          <button class="search-btn" onclick="applyFilter()">
+          <button class="search-btn" type="button" aria-label="검색" title="검색" onclick="applyFilter()">
             <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.2 4.2"></path></svg>
-            <span>검색</span>
           </button>
         </div>
 

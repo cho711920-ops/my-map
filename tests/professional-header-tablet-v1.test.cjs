@@ -24,13 +24,16 @@ assert.match(html, /class="js-brand-subtitle-v2">대전 상가 매물지도<\/sm
 
 assert.ok((html.match(/class="top-action-icon-v638"/g) || []).length >= 6, "상단 주요 기능에 선형 아이콘이 있어야 합니다.");
 
-const labels = ["Tell", "검색", "필터", "초기화", "토지조회", "운영현황", "빠른등록", "로그아웃"];
+const labels = ["Tell", "필터", "초기화", "토지조회", "운영현황", "빠른등록", "로그아웃"];
 let previous = -1;
 labels.forEach((label) => {
   const index = html.indexOf(`<span>${label}</span>`, previous + 1);
   assert.ok(index > previous, `상단 메뉴 순서와 라벨 유지: ${label}`);
   previous = index;
 });
+
+assert.match(html, /class="search-btn" type="button" aria-label="검색" title="검색" onclick="applyFilter\(\)"/);
+assert.doesNotMatch(html, /<button class="search-btn"[^>]*>[\s\S]*?<span>검색<\/span>[\s\S]*?<\/button>/);
 
 assert.match(css, /@media \(min-width: 900px\)[\s\S]*grid-template-columns: auto max-content/);
 assert.doesNotMatch(html, /desktop-customer-action|operationsCustomerMenuBtn|onclick="startAiVisitPreview\(\)"/);
@@ -57,6 +60,11 @@ assert.match(css, /\.top-logout-btn-v1 \.top-action-icon-v638 \{[\s\S]*width: 18
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*font-size: 13px !important/);
 assert.match(tradeCss, /@media \(min-width: 1540px\)[\s\S]*grid-template-columns: 92px 48px minmax\(0, 1fr\) 76px !important/);
 assert.match(css, /@media \(min-width: 1540px\)[\s\S]*\.quick-add-btn\.v6-secondary-action \{[\s\S]*font-size: 13px !important/);
+assert.match(css, /공실박스형 검색 도구/);
+assert.match(css, /\.v6-toolbar-primary \.detail-btn,[\s\S]*\.v6-toolbar-primary \.top-reset-btn \{[\s\S]*border-radius: 7px !important;[\s\S]*background: #f7f9fc !important;[\s\S]*box-shadow: none !important/);
+assert.match(css, /\.v6-toolbar-primary \.detail-btn\.on \{[\s\S]*background: #eaf3ff !important;[\s\S]*color: #0d61c9 !important/);
+assert.match(css, /@media \(min-width: 1200px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\) 48px !important;[\s\S]*width: 22px !important;[\s\S]*height: 22px !important/);
+assert.match(html, /header-professional-v1\.css[^"']+gongsil-search-actions-v1=1/);
 assert.match(css, /--js-brand-width-v638: 238px/);
 assert.match(css, /\.header \.js-brand-name-v1 \{\s*font-size: 22px !important/);
 assert.match(css, /> \.top-parcel-lookup-v1 \{[\s\S]*background: #f2f7fc !important/);
