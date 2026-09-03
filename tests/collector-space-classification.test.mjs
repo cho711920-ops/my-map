@@ -194,6 +194,25 @@ test("matching terms tolerate a small supply-exclusive area notation gap", () =>
   assert.match(result.reason, /면적 표기 호환/);
 });
 
+test("an exact lot, floor, and offer tolerate a twenty-percent area notation gap", () => {
+  const result = classifyListingCandidates({
+    ...incoming("11층", 3000, 200, 18.2), address: "서구 둔산동 1249"
+  }, [{
+    ...existing("M-exact-lot-area-notation", "11층", 3000, 200, 15.4), address: "서구 둔산동 1249"
+  }]);
+  assert.equal(result.decision, "merge");
+  assert.match(result.reason, /면적 표기 호환/);
+});
+
+test("a dong-only address never uses the wider area-notation tolerance", () => {
+  const result = classifyListingCandidates({
+    ...incoming("1층", 2000, 70, 17.2), address: "유성구 죽동"
+  }, [{
+    ...existing("M-dong-only-area-notation", "1층", 2000, 70, 20), address: "유성구 죽동"
+  }]);
+  assert.equal(result.decision, "review");
+});
+
 test("matching terms do not merge materially different same-floor areas", () => {
   const result = classifyListingCandidates(incoming("2층", 8000, 380, 59), [
     existing("M-larger-space", "2층", 8000, 380, 107)

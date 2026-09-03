@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 13;
+const REVIEW_CLASSIFICATION_VERSION = 14;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -1080,7 +1080,11 @@ function compatibleAreaEvidence(record, row) {
   const leftArea = number(row.area_m2 ?? row.area);
   const rightArea = number(record.area);
   if (leftArea == null || rightArea == null) return true;
-  return Math.abs(leftArea - rightArea) <= 3.3 && relativeNumberGap(leftArea, rightArea) <= 0.15;
+  const areaGap = Math.abs(leftArea - rightArea);
+  const relativeGap = relativeNumberGap(leftArea, rightArea);
+  if (areaGap > 3.3) return false;
+  if (relativeGap <= 0.15) return true;
+  return relativeGap <= 0.2 && hasExactLotAddress(record?.address) && hasExactLotAddress(row?.address);
 }
 
 function sameOfferWithCompatibleArea(record, row) {
