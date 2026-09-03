@@ -2982,7 +2982,7 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
 async function repairExactReviews(env, user, options = {}) {
   const decisionVersion = REVIEW_CLASSIFICATION_VERSION;
   const sourceFilter = clean(options.source);
-  const scanLimit = Math.max(1, Math.min(100, Number(options.limit) || 100));
+  const scanLimit = Math.max(1, Math.min(50, Number(options.limit) || 50));
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
@@ -3210,7 +3210,7 @@ export async function runScheduledReviewRepair(env) {
     email: "system-review-repair@js-map.com",
     role: "owner"
   };
-  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false, limit: 100 });
+  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false, limit: 50 });
   if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
   const gongsilRepair = await repairExactReviews(env, systemUser, {
     includeRemaining: false,
