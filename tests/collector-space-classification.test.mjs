@@ -128,6 +128,14 @@ test("same-floor offers with completely different terms and area are separate li
   assert.match(result.reason, /보증금·월세가 모두 크게 다름/);
 });
 
+test("Jijok 1023-3 larger floor offer is separate despite sharing the first floor", () => {
+  const result = classifyListingCandidates(incoming("1층", 5000, 170, 45.8), [
+    existing("M-seoul-vision", "1층", 2000, 140, 31.9)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /임대조건과 평수가 모두 크게 다름/);
+});
+
 test("same-floor offers with the same deposit stay separate when rent and area are clearly different", () => {
   const result = classifyListingCandidates(incoming("2층", 3000, 300, 100), [
     existing("M-existing", "2층", 3000, 150, 38.9),

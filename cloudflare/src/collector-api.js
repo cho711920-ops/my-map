@@ -2932,7 +2932,7 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
 async function repairExactReviews(env, user, options = {}) {
   const decisionVersion = REVIEW_CLASSIFICATION_VERSION;
   const sourceFilter = clean(options.source);
-  const scanLimit = Math.max(1, Math.min(20, Number(options.limit) || 20));
+  const scanLimit = Math.max(1, Math.min(50, Number(options.limit) || 50));
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
@@ -2961,6 +2961,44 @@ async function repairExactReviews(env, user, options = {}) {
             AND exact.area_m2 IS NOT NULL
             AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
             AND ABS(exact.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))<1
+          )
+        )
+    ) THEN 0 WHEN EXISTS (
+      SELECT 1
+      FROM json_each(collector_raw.result_json, '$.candidateIds') candidate_id
+      JOIN listings different ON different.id=candidate_id.value
+      WHERE different.status<>'deleted'
+        AND COALESCE(NULLIF(different.trade_type, ''), 'lease')='lease'
+        AND COALESCE(NULLIF(collector_raw.trade_type, ''), 'lease')='lease'
+        AND different.room=COALESCE(json_extract(collector_raw.payload_json, '$.room'), '')
+        AND different.area_m2 IS NOT NULL
+        AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
+        AND ABS(different.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))>=5
+        AND (
+          MIN(ABS(different.area_m2), ABS(CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL)))=0
+          OR ABS(different.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))>=
+            0.35*MIN(ABS(different.area_m2), ABS(CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL)))
+        )
+        AND (
+          (
+            different.deposit IS NOT NULL
+            AND json_extract(collector_raw.payload_json, '$.deposit') IS NOT NULL
+            AND ABS(different.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))>=500
+            AND (
+              MIN(ABS(different.deposit), ABS(CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)))=0
+              OR ABS(different.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))>=
+                0.5*MIN(ABS(different.deposit), ABS(CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)))
+            )
+          )
+          OR (
+            different.monthly_rent IS NOT NULL
+            AND json_extract(collector_raw.payload_json, '$.rent') IS NOT NULL
+            AND ABS(different.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))>=20
+            AND (
+              MIN(ABS(different.monthly_rent), ABS(CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)))=0
+              OR ABS(different.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))>=
+                0.3*MIN(ABS(different.monthly_rent), ABS(CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)))
+            )
           )
         )
     ) THEN 0 ELSE 1 END, created_at DESC LIMIT ?3`).bind(decisionVersion, sourceFilter, scanLimit).all();
@@ -3098,7 +3136,7 @@ async function repairExactReviews(env, user, options = {}) {
   const remainingToScan = includeRemaining ? Number(pending?.count || 0) : null;
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
     merged, created, duplicate, aliasesMerged, aliasesFailed, ambiguous, failed,
-    hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= 20,
+    hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= scanLimit,
     remainingToScan, sourceFilter, customerMatches,
     operationAdjustments: { pendingReview: -(merged + created + duplicate) }, source: "D1" };
 }
@@ -3108,7 +3146,7 @@ export async function runScheduledReviewRepair(env) {
     email: "system-review-repair@js-map.com",
     role: "owner"
   };
-  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false });
+  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false, limit: 50 });
   if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
   const gongsilRepair = await repairExactReviews(env, systemUser, {
     includeRemaining: false,
