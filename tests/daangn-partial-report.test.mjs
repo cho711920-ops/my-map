@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { background, result, extract, read, fixture } from './fixtures/daangn-report-fixture.mjs';
 import { normalizedRecord, collectorCompletionAudit } from '../cloudflare/src/collector-api.js';
 
-const context = { state: fixture(), STATUS_TEXT: { partial: '부분완료', completed: '완료' } };
+const context = { state: fixture(), STATUS_TEXT: { partial: '부분완료', deferred: '수집완료·주소보류', completed: '완료' } };
 const ui = extract(read('edge-automation/extension/options.js'),
   ['escapeHtml', 'registeredTime', 'displayCounts', 'countText', 'statusDetail', 'reportStatus', 'renderDiagnostics', 'renderRunSummary'], context);
 const client = extract(read('js/daangn-collector.js'), ['jobDisplay'], {}, '  ');
@@ -66,7 +66,7 @@ test('report detail limits payload and escapes untrusted IDs/reasons', () => {
 });
 test('summary never calls partial districts all normal', () => {
   const html = ui.renderRunSummary();
-  assert.match(html, /정상 0 · 부분\/보류 5/); assert.match(html, /보류·실패 내역 확인/);
+  assert.match(html, /정상 0 · 주소보류 5 · 부분 0/); assert.match(html, /주소보류 검토 가능/);
   assert.doesNotMatch(html, /<small>정상<\/small>/);
 });
 test('hidden coordinate, broker lot and complex road alone cannot fabricate a property lot', () => {

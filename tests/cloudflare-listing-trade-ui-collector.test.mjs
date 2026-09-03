@@ -87,7 +87,8 @@ test("collector targets and completion checkpoints are split by trade type", asy
   assert.match(gongsil, /key: "gongsil-" \+ tradeType/);
   assert.match(gongsil, /mixedTradeTypes/);
   assert.match(gongsil, /!mixedTradeTypes/);
-  assert.match(edge, /tradeType: String\(target && target\.tradeType/);
+  assert.match(edge, /tradeType: String\(storedTarget && storedTarget\.tradeType/);
+  assert.match(edge, /function inferredTradeType\(target\)/);
   assert.match(server, /COALESCE\(NULLIF\(s\.trade_type,''\),'lease'\)=\?2/);
   assert.match(server, /listingTradeTypesCanMerge\(candidate\.trade_type, record\.tradeType\)/);
 });

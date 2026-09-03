@@ -103,7 +103,12 @@ async function appendAuthenticatedBodyAssets() {
   const scripts = nodes.filter((node) => (
     node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT" && node.getAttribute("src")
   ));
-  const preloadLinks = scripts.map((node) => {
+  const criticalScripts = scripts.filter((script) => script.hasAttribute("data-auth-critical"));
+  const deferredScripts = scripts.filter((script) => !script.hasAttribute("data-auth-critical"));
+  // Do not compete with the map and the complete-list snapshot for bandwidth.
+  // Only startup-critical files are preloaded; secondary panels begin once the
+  // first screen has yielded to the browser.
+  const preloadLinks = criticalScripts.map((node) => {
     const preload = document.createElement("link");
     preload.rel = "preload";
     preload.as = "script";
@@ -117,21 +122,26 @@ async function appendAuthenticatedBodyAssets() {
     }
   });
 
-  const criticalScripts = scripts.filter((script) => script.hasAttribute("data-auth-critical"));
-  const deferredScripts = scripts.filter((script) => !script.hasAttribute("data-auth-critical"));
   for (const script of criticalScripts) {
     await loadScriptInOrder(script);
     warmInitialDataAfterScript(script);
   }
   template.remove();
 
-  deferredAuthenticatedAssetsPromise = (async () => {
-    for (const script of deferredScripts) {
-      await loadScriptInOrder(script);
-      warmInitialDataAfterScript(script);
+  deferredAuthenticatedAssetsPromise = new Promise((resolve) => {
+    const loadDeferred = async () => {
+      for (const script of deferredScripts) {
+        await loadScriptInOrder(script);
+        warmInitialDataAfterScript(script);
+      }
+      resolve(true);
+    };
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => loadDeferred().catch(() => resolve(false)), { timeout: 600 });
+    } else {
+      setTimeout(() => loadDeferred().catch(() => resolve(false)), 120);
     }
-    return true;
-  })().catch((error) => {
+  }).catch((error) => {
     console.error("지연 앱 구성요소 로딩 실패", error);
     return false;
   }).finally(() => {

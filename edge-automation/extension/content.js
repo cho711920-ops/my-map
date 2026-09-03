@@ -1,6 +1,6 @@
 "use strict";
 
-const RESULT_TIMEOUT_MS = 90 * 60 * 1000;
+const RESULT_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 const START_ACK_TIMEOUT_MS = 35 * 1000;
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const collectorSessions = new Map();
@@ -29,20 +29,46 @@ function collectorProgressSnapshot() {
   const panel = document.querySelector(
     "#js-naver-collector-panel,#js-daangn-collector-panel,#js-gongsil-collector-panel"
   );
-  if (!panel) return { fingerprint: "panel-waiting", message: "수집 화면 연결 중" };
+  if (!panel) return {
+    fingerprint: "panel-waiting",
+    message: "공급처 수집 기능 연결 중",
+    stage: { key: "loading", label: "화면 연결", percent: 0 }
+  };
   const status = String(panel.querySelector("[data-role=status]")?.textContent || "").trim();
   const percent = String(panel.querySelector("[data-role=percent]")?.textContent || "").trim();
   const detail = String(panel.querySelector("[data-role=detail]")?.textContent || "").trim();
   const progress = String(panel.querySelector("[data-role=progress-bar]")?.style?.width || "").trim();
   const metrics = Array.from(panel.querySelectorAll("[data-metric],[data-role^=metric-]")).map((node) =>
     String(node.textContent || "").trim()).filter(Boolean).join("|");
+  const metricValues = {};
+  panel.querySelectorAll("[data-metric]").forEach((node) => {
+    const key = String(node.getAttribute("data-metric") || "");
+    if (!key) return;
+    metricValues[key] = Math.max(0, Number(String(node.textContent || "0").replace(/[^\d.-]/g, "")) || 0);
+  });
+  const numericPercent = Math.max(0, Math.min(100, Number(percent.replace(/[^\d.]/g, "")) || 0));
+  const stageKey = /완료/.test(status) ? "complete"
+    : /저장/.test(status) && !/상세/.test(status) ? "save"
+      : /상세|중복/.test(status) ? "detail"
+        : /목록|클러스터/.test(status) ? "list" : "collect";
+  const stageLabels = { loading: "화면 연결", list: "목록 확인", detail: "상세 조회", save: "저장", complete: "완료", collect: "수집" };
+  const stage = {
+    key: stageKey,
+    label: stageLabels[stageKey] || "수집",
+    percent: stageKey === "complete" ? 100 : numericPercent,
+    found: metricValues.found || 0,
+    processed: metricValues.processed || 0,
+    unchanged: metricValues.skippedUnchanged || 0,
+    remaining: metricValues.remaining || 0
+  };
   // Elapsed seconds and clocks change even when the provider request is stuck.
   // Exclude them so the watchdog measures real page/count changes.
   const fingerprint = [status, percent, stableProgressText(detail), progress, metrics].join("|")
     .replace(/\s+/g, " ").slice(0, 1_000);
   return {
     fingerprint: fingerprint || "panel-ready",
-    message: [status, percent].filter(Boolean).join(" · ").slice(0, 180) || "수집 진행 확인 중"
+    message: [status, percent].filter(Boolean).join(" · ").slice(0, 180) || "수집 진행 확인 중",
+    stage
   };
 }
 
@@ -53,7 +79,8 @@ function reportTargetHeartbeat(parentRunId, targetRunId) {
     runId: parentRunId,
     targetRunId,
     progressFingerprint: progress.fingerprint,
-    progressMessage: progress.message
+    progressMessage: progress.message,
+    progressStage: progress.stage
   });
 }
 
@@ -143,10 +170,15 @@ function runPageCollector(target, runId, parentRunId) {
       reportTargetHeartbeat(parentRunId, runId).catch(() => {});
     }, HEARTBEAT_INTERVAL_MS);
     setTimeout(() => reportTargetHeartbeat(parentRunId, runId).catch(() => {}), 5000);
-    startTimer = setTimeout(() => finish({
-      ok: false,
-      message: "실제 수집 시작 신호를 35초 안에 받지 못했습니다."
-    }), START_ACK_TIMEOUT_MS);
+    startTimer = setTimeout(() => {
+      const progress = collectorProgressSnapshot();
+      finish({
+        ok: false,
+        message: progress.fingerprint === "panel-waiting"
+          ? "수집 기능 화면을 찾지 못했습니다. 공급처 화면 구조 변경 또는 수집기 로딩 오류를 확인해주세요."
+          : "실제 수집 시작 신호를 35초 안에 받지 못했습니다. 공급처 응답과 수집기 버전을 확인해주세요."
+      });
+    }, START_ACK_TIMEOUT_MS);
     resultTimer = setTimeout(() => finish({ ok: false, message: "자동수집 제한시간을 초과했습니다." }), RESULT_TIMEOUT_MS);
     window.postMessage({ type: "JS_AUTO_START_MAIN", target, runId }, "*");
   });
@@ -163,7 +195,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       ok: true,
       active: collectorSessions.has(message.targetRunId),
       progressFingerprint: progress.fingerprint,
-      progressMessage: progress.message
+      progressMessage: progress.message,
+      progressStage: progress.stage
     });
     return false;
   }
@@ -200,6 +233,33 @@ if (/^https:\/\/(?:www\.)?js-map\.com\/collector-install/i.test(location.href)) 
   const query = new URLSearchParams(location.search);
   const forceRun = query.get("js_auto_force") === "1";
   signalScheduledRun(query.get("js_auto_run") === "1" || forceRun, forceRun);
+}
+
+if (/^(?:www\.)?js-map\.com$/i.test(location.hostname)) {
+  window.addEventListener("message", (event) => {
+    if (event.source !== window || !event.data || event.data.type !== "JS_AUTO_COLLECTOR_STATE_REQUEST") return;
+    const requestId = String(event.data.requestId || "");
+    sendRuntimeMessage({ type: "JS_AUTO_GET_STATE" }).then((response) => {
+      const config = response && response.config || {};
+      const runState = response && response.runState || null;
+      const report = response && response.runReport || null;
+      const logs = Array.isArray(response && response.logs) ? response.logs : [];
+      window.postMessage({
+        type: "JS_AUTO_COLLECTOR_STATE_RESULT",
+        requestId,
+        ok: Boolean(response && response.ok),
+        state: {
+          version: chrome.runtime.getManifest().version,
+          enabled: Boolean(config.enabled),
+          schedule: String(config.schedule || ""),
+          targetCount: Array.isArray(config.targets) ? config.targets.filter((target) => target.enabled !== false).length : 0,
+          runState,
+          runReport: report,
+          recentProblems: logs.filter((row) => /warning|error/.test(String(row.level || ""))).slice(0, 5)
+        }
+      }, "*");
+    });
+  });
 }
 
 if (/^(?:new|fin)\.land\.naver\.com$|^realty\.daangn\.com$|(?:^|\.)gongsilbox\.com$/i.test(location.hostname)) {

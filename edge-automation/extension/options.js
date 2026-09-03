@@ -43,6 +43,7 @@ const STATUS_TEXT = {
   retrying: "즉시 재시도",
   retry_wait: "재시도 대기",
   completed: "완료",
+  deferred: "수집완료·주소보류",
   partial: "부분완료",
   failed: "실패"
 };
@@ -101,6 +102,7 @@ function statusDetail(item) {
 
 function reportStatus(item) {
   const counts = displayCounts(item);
+  if (item && item.status === "deferred") return "수집완료·주소보류";
   return item && item.status === "partial" && counts.version === 2 && counts.listComplete &&
     counts.addressDeferred > 0 && !counts.failed ? "완료·주소보류" : STATUS_TEXT[item && item.status] || "대기";
 }
@@ -125,18 +127,21 @@ function renderRunSummary() {
     return '<div class="run-summary-empty">다음 실행부터 10개 구의 진행 결과가 이곳에 저장됩니다.</div>';
   }
   const counts = report.items.reduce((output, item) => {
-    output[item.status] = Number(output[item.status] || 0) + 1;
+    const normalizedStatus = reportStatus(item) === "완료·주소보류" ? "deferred" : item.status;
+    output[normalizedStatus] = Number(output[normalizedStatus] || 0) + 1;
     return output;
   }, {});
   const finished = Number(counts.completed || 0) + Number(counts.partial || 0);
+  const deferred = Number(counts.deferred || 0);
+  const processed = finished + deferred;
   const running = Number(counts.running || 0) + Number(counts.retrying || 0);
   const waiting = Number(counts.pending || 0) + Number(counts.retry_wait || 0);
   const failed = Number(counts.failed || 0);
   return `<div class="run-summary-grid">
     <span><b>${report.active ? "수집 실행 중" : "최근 실행 결과"}</b><small>${registeredTime(report.startedAt)}</small></span>
-    <span><b>${finished} / ${report.items.length}개 처리 종료</b><small>정상 ${Number(counts.completed || 0)} · 부분/보류 ${Number(counts.partial || 0)}</small></span>
+    <span><b>${processed} / ${report.items.length}개 처리 종료</b><small>정상 ${Number(counts.completed || 0)} · 주소보류 ${deferred} · 부분 ${Number(counts.partial || 0)}</small></span>
     <span><b>${running}개 진행</b><small>${waiting}개 대기</small></span>
-    <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed || counts.partial ? "보류·실패 내역 확인" : report.active ? "진행 중" : "정상"}</small></span>
+    <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed ? "실패 내역 확인" : counts.partial ? "부분완료 내역 확인" : deferred ? "주소보류 검토 가능" : report.active ? "진행 중" : "정상"}</small></span>
   </div>`;
 }
 
@@ -199,6 +204,35 @@ function render() {
   document.getElementById("logs").classList.add("log-list");
   document.getElementById("logs").innerHTML = logs.length ? logs.map((log) => `
     <div class="item"><div class="item-info"><b class="${escapeHtml(log.level)}">${escapeHtml(log.message)}</b><small>${escapeHtml(new Date(log.at).toLocaleString("ko-KR"))}</small></div></div>`).join("") : '<div class="empty">실행 기록이 없습니다.</div>';
+  renderDeferredReview();
+}
+
+function renderDeferredReview() {
+  const host = document.getElementById("deferredReview");
+  if (!host) return;
+  const rows = [];
+  let deferredTotal = 0;
+  const items = state.runReport && Array.isArray(state.runReport.items) ? state.runReport.items : [];
+  items.forEach((item) => {
+    const counts = displayCounts(item);
+    if (!Number(counts.addressDeferred || 0)) return;
+    deferredTotal += Number(counts.addressDeferred || 0);
+    (Array.isArray(item.diagnostics) ? item.diagnostics : []).forEach((row) => {
+      if (!/지번주소 없음|주소/.test(String(row.message || ""))) return;
+      rows.push({ target: item.label || item.source, sourceId: row.sourceId, message: row.message });
+    });
+  });
+  if (!rows.length) {
+    host.innerHTML = '<div class="empty">현재 지번 보류 매물이 없습니다.</div>';
+    return;
+  }
+  host.innerHTML = `<div class="deferred-summary"><b>전체 ${deferredTotal.toLocaleString("ko-KR")}건</b><span>최근 사유 ${rows.length.toLocaleString("ko-KR")}건 표시 · 원본은 보존되어 다음 수집에서 다시 확인됩니다.</span></div><div class="deferred-list">${rows.map((row) => {
+    const id = String(row.sourceId || "");
+    const link = /^\d+$/.test(id)
+      ? `<a href="https://realty.daangn.com/?article_id=%22${escapeHtml(id)}%22&amp;panel_stack=article" target="_blank" rel="noopener noreferrer">당근 ${escapeHtml(id)} ↗</a>`
+      : escapeHtml(id || "번호 미확인");
+    return `<div><b>${escapeHtml(row.target)}</b><span>${link} · ${escapeHtml(row.message || "확인 필요")}</span></div>`;
+  }).join("")}</div>`;
 }
 
 function currentRunStatus(response) {
@@ -223,7 +257,10 @@ function currentRunStatus(response) {
   const progressAt = Number(runState.lastProgressAt || runState.runtimeStartedAt || runState.targetStartedAt || runState.phaseEnteredAt || runState.startedAt || 0);
   const progressAge = progressAt ? Math.max(0, Math.floor((Date.now() - progressAt) / 60000)) : null;
   const progress = String(runState.progressMessage || "").trim();
+  const stage = runState.progressStage && typeof runState.progressStage === "object" ? runState.progressStage : null;
+  const stageText = stage ? `${stage.label || "수집"} ${Number(stage.percent || 0)}%` : "";
   return [phase, position, label, progress,
+    stageText,
     progressAge === null ? "" : progressAge ? `마지막 진행 ${progressAge}분 전` : "방금 진행 확인"
   ].filter(Boolean).join(" · ");
 }
@@ -246,7 +283,30 @@ document.getElementById("save").addEventListener("click", async () => {
   render();
 });
 
-document.getElementById("run").addEventListener("click", async () => {
+function previewRows() {
+  const targets = Array.isArray(state.config.targets) ? state.config.targets.filter((target) => target.enabled !== false) : [];
+  const body = document.getElementById("runPreviewBody");
+  if (!body) return targets;
+  const rows = targets.map((target) => {
+    const previous = reportItem(target);
+    const expected = Number(displayCounts(previous).expected || target.selectedCount || 0);
+    return `<div><b>${escapeHtml(target.label || target.source)}</b><span>${escapeHtml(targetSummary(target))}${expected ? ` · 이전 기준 ${expected.toLocaleString("ko-KR")}건` : " · 예상 개수는 목록 확인 후 확정"}</span></div>`;
+  });
+  body.innerHTML = targets.length
+    ? `<div class="preview-total"><b>실행 대상 ${targets.length}개</b><span>표시 개수는 직전 완전수집 또는 등록 당시 기준입니다.</span></div>${rows.join("")}`
+    : '<div class="empty">사용 설정된 대상이 없습니다.</div>';
+  return targets;
+}
+
+document.getElementById("run").addEventListener("click", () => {
+  const targets = previewRows();
+  if (!targets.length) return message("사용 설정된 자동수집 대상이 없습니다.");
+  document.getElementById("runPreview").showModal();
+});
+
+document.getElementById("runConfirmed").addEventListener("click", async (event) => {
+  event.preventDefault();
+  document.getElementById("runPreview").close();
   const button = document.getElementById("run");
   button.disabled = true;
   message("전체 실행 상태 확인 중");

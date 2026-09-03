@@ -7,6 +7,7 @@
   var extraState = {
     tab: "",
     collection: null,
+    edgeAutomation: null,
     reviews: null,
     reviewBase: null,
     selectedGroupKey: "",
@@ -159,6 +160,40 @@
       (count > rows.length && rows.length ? '<p>개별 내역 최대 200건 표시. 이전 수집기의 미기록 사유가 있을 수 있습니다.</p>' : '') + '</div></details>';
   }
 
+  function requestEdgeAutomationState() {
+    return new Promise(function(resolve) {
+      var requestId = "edge-state-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+      var timer = window.setTimeout(function() {
+        window.removeEventListener("message", onMessage);
+        resolve(null);
+      }, 1400);
+      function onMessage(event) {
+        if (event.source !== window || !event.data || event.data.type !== "JS_AUTO_COLLECTOR_STATE_RESULT" || event.data.requestId !== requestId) return;
+        window.clearTimeout(timer);
+        window.removeEventListener("message", onMessage);
+        resolve(event.data.ok ? event.data.state : null);
+      }
+      window.addEventListener("message", onMessage);
+      window.postMessage({ type: "JS_AUTO_COLLECTOR_STATE_REQUEST", requestId: requestId }, "*");
+    });
+  }
+
+  function edgeAutomationHtml() {
+    var edge = extraState.edgeAutomation;
+    if (!edge) return '<article class="edge-automation-card disconnected"><header><h3>Windows·Edge 자동수집</h3><span>확장 연결 없음</span></header><p>전용 Edge에서 JS 자동수집 확장 프로그램을 실행하면 예약 실행과 최근 오류를 이곳에서 함께 확인할 수 있습니다.</p></article>';
+    var report = edge.runReport || {};
+    var run = edge.runState || {};
+    var summary = report.summary || {};
+    var status = run.active ? "수집 진행 중" : report.finishedAt ? "최근 실행 종료" : "실행 기록 없음";
+    var normal = Math.max(0, number(summary.completed) - number(summary.deferred) - number(summary.partial));
+    var problems = Array.isArray(edge.recentProblems) ? edge.recentProblems : [];
+    return '<article class="edge-automation-card"><header><h3>Windows·Edge 자동수집 <small>v' + escape(edge.version) + '</small></h3><span class="' + (run.active ? 'running' : number(summary.failed) ? 'error' : 'complete') + '">' + status + '</span></header>' +
+      '<p>예약 ' + escape(edge.schedule || '-') + ' · 사용 대상 ' + number(edge.targetCount) + '개 · ' + (edge.enabled ? '매일 실행 사용' : '예약 꺼짐') +
+      (report.startedAt ? '<br>최근 시작 ' + escape(formatAt(report.startedAt)) + ' · 정상 ' + normal + ' · 주소보류 ' + number(summary.deferred) + ' · 부분 ' + number(summary.partial) + ' · 실패 ' + number(summary.failed) : '') + '</p>' +
+      (run.active && run.progressMessage ? '<div class="edge-automation-progress"><b>' + escape(run.progressMessage) + '</b><span>' + escape(run.progressStage && run.progressStage.label || '') + ' ' + number(run.progressStage && run.progressStage.percent) + '%</span></div>' : '') +
+      (problems.length ? '<details><summary>최근 확인사항 ' + problems.length + '건</summary>' + problems.map(function(row) { return '<p>' + escape(formatAt(row.at)) + ' · ' + escape(row.message) + '</p>'; }).join('') + '</details>' : '') + '</article>';
+  }
+
   function renderCollections() {
     var panel = document.getElementById("operationsCollectionsPanel");
     if (!panel) return;
@@ -169,7 +204,7 @@
       '<div class="collection-toolbar"><div><strong>매일 수집현황</strong><span>수집기는 응답속도에 따라 묶음 크기를 자동조절하며, 중단되면 마지막 성공 지점부터 이어집니다.</span></div>' +
       '<div><button type="button" onclick="window.open(\'/collector-install.html\',\'_blank\',\'noopener\')">통합 수집 버튼 설치</button> ' +
       '<button type="button" onclick="refreshCollectionStatus()">새로고침</button></div></div>' +
-      '<div class="collection-source-grid">' + sources.map(function(source) {
+      edgeAutomationHtml() + '<div class="collection-source-grid">' + sources.map(function(source) {
         var statusClass = source.complete ? "complete" : (number(source.lastResult && source.lastResult.failed) ? "error" : "");
         return '<article class="collection-source-card"><header><h3>' + escape(source.source) + '</h3>' +
           '<span class="' + statusClass + '">' + escape(source.lastStatus || "수집 전") + '</span></header>' +
@@ -504,8 +539,8 @@
     if (extraState.collectionLoading || (!force && extraState.collection)) return Promise.resolve(renderCollections());
     extraState.collectionLoading = true;
     message("수집현황을 불러오는 중입니다…", "loading");
-    return apiGet("collectionStatus").then(function(data) {
-      extraState.collection = data; renderCollections();
+    return Promise.all([apiGet("collectionStatus"), requestEdgeAutomationState()]).then(function(results) {
+      extraState.collection = results[0]; extraState.edgeAutomation = results[1]; renderCollections();
       message("수집현황을 최신 상태로 불러왔습니다.", "success");
     }).catch(function(error) { message(error.message, "error"); })
       .finally(function() { extraState.collectionLoading = false; });

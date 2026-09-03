@@ -20,15 +20,15 @@ function harness(overrides = {}) {
     url: "https://fin.land.naver.com/map?test=" + index, enabled: true
   }));
   const state = { active: true, runId: "cycle", targets, index: 3, currentTabId: 42,
-    targetRunId: "seo", targetStartedAt: clock - 100 * minute,
-    runtimeStartedAt: clock - 100 * minute, phase: "collecting", targetAttempt: 1,
-    startedAt: clock - 140 * minute, retryQueue: [],
+    targetRunId: "seo", targetStartedAt: clock - 190 * minute,
+    runtimeStartedAt: clock - 190 * minute, phase: "collecting", targetAttempt: 1,
+    startedAt: clock - 230 * minute, retryQueue: [],
     summary: { completed: 3, failed: 0, errors: [] }, ...overrides };
   const data = {
     [RUN]: state, [CONFIG]: { enabled: true, targets, schedule: "11:00" },
     [REPORT]: { runId: "cycle", active: true, items: targets.map((target, i) => ({
       key: target.key, status: i < 3 ? "completed" : i === 3 ? "running" : "pending",
-      startedAt: i === 3 ? clock - 100 * minute : null
+      startedAt: i === 3 ? clock - 190 * minute : null
     })) }
   };
   const events = {};
@@ -46,6 +46,7 @@ function harness(overrides = {}) {
       alarms: { async get(k) { return alarmMap.get(k); }, async clear(k) { alarmMap.delete(k); },
         create(k, value) { alarmMap.set(k, value); }, onAlarm: event("alarm") },
       tabs: { async get(id) { return { id, status: "complete", discarded: false }; },
+        async query() { return []; },
         async update(id, options) { navigation.push(options.url); return { id, status: "complete" }; },
         async create(options) { navigation.push(options.url); return { id: 43, status: "complete" }; },
         async remove() {}, async sendMessage(_id, message) {
@@ -54,7 +55,7 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.5" }), onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.6" }), onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async () => {} }
     }
@@ -65,7 +66,7 @@ function harness(overrides = {}) {
   return { context, data, navigation, alarmMap, dispatch, flush };
 }
 
-test("90-minute stalled Seo defers only Seo, keeps completed regions and starts Dong", async () => {
+test("three-hour stalled Seo defers only Seo, keeps completed regions and starts Dong", async () => {
   const h = harness();
   await h.context.recoverAutomaticRun();
   assert.equal(h.data[RUN].index, 4);
@@ -121,6 +122,26 @@ test("a throttled background heartbeat is confirmed by direct tab probe without 
   assert.equal(h.data[RUN].progressMessage, "상세 저장 진행 확인");
 });
 
+test("the normal first provider load is not mistaken for a collector-page reload", async () => {
+  const h = harness({
+    phase: "loading",
+    initialPageSignalPending: true,
+    targetStartedAt: clock,
+    runtimeStartedAt: null,
+    lastHeartbeatAt: null,
+    lastProgressAt: null
+  });
+  const initial = await h.dispatch({ type: "JS_AUTO_COLLECTOR_PAGE_LOADED" });
+  assert.equal(initial.initialLoad, true);
+  assert.equal(h.navigation.length, 0);
+  assert.equal(h.data[RUN].initialPageSignalPending, false);
+
+  const reload = await h.dispatch({ type: "JS_AUTO_COLLECTOR_PAGE_LOADED" });
+  assert.equal(reload.reconnected, true);
+  assert.equal(h.data[RUN].phase, "collecting");
+  assert.equal(h.navigation.length, 0);
+});
+
 test("concurrent duplicate completion/old heartbeat cannot advance twice or restore Seo", async () => {
   const h = harness({ targetStartedAt: clock, lastHeartbeatAt: clock, lastProgressAt: clock });
   const finished = { type: "JS_AUTO_TARGET_FINISHED", runId: "cycle", targetRunId: "seo", ok: true, result: {} };
@@ -140,7 +161,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.5");
+  assert.equal(response.backgroundBuild, "1.1.6");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -154,7 +175,7 @@ test("manual Run now checks a stale active run instead of just reporting already
   assert.equal(h.navigation.length, 1);
 });
 
-test("content timeout at 90 minutes defers Seo instead of spending another 90 minutes on it", async () => {
+test("content timeout at three hours defers Seo without restarting the whole run", async () => {
   const h = harness();
   await h.dispatch({ type: "JS_AUTO_TARGET_FINISHED", runId: "cycle", targetRunId: "seo",
     ok: false, message: "자동수집 제한시간을 초과했습니다." });
@@ -204,7 +225,7 @@ test("address-only Daangn holds persist accurate counts/reasons and finish witho
   const item = h.data[REPORT].items[3];
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].retryQueue.length, 0);
-  assert.equal(item.status, "partial");
+  assert.equal(item.status, "deferred");
   assert.equal(item.counts.processed, 2078);
   assert.equal(item.counts.addressDeferred, 19);
   assert.equal(item.counts.failed, 0);
@@ -212,8 +233,8 @@ test("address-only Daangn holds persist accurate counts/reasons and finish witho
   assert.equal(item.diagnostics[0].raw, undefined);
   assert.match(item.message, /지도 등록 보류/);
   await h.context.finalizeRun(h.data[RUN]);
-  assert.match(h.data[LOG][0].message, /정상 3, 부분\/보류 1, 실패 0/);
-  assert.equal(h.data[LOG][0].level, "warning");
+  assert.match(h.data[LOG][0].message, /정상 3, 주소보류 1, 부분완료 0, 실패 0/);
+  assert.equal(h.data[LOG][0].level, "success");
 });
 
 test("actual Daangn failure still enters the normal retry path", async () => {

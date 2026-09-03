@@ -211,7 +211,7 @@ test("login and master user-management UI expose issued accounts without public 
   assert.match(identityMigration, /ADD COLUMN linked_email/);
   assert.match(identityMigration, /UNIQUE INDEX/);
   assert.doesNotMatch(auth, /회원가입/);
-  assert.match(html, /auth-gate-v1\.js\?v=1\.3\.1-header-logout/);
+  assert.match(html, /auth-gate-v1\.js\?v=1\.4\.0-idle-secondary-assets/);
   assert.match(html, /id="topLogoutBtnV1"[\s\S]*onclick="jsSecureLogout\(this\)"/);
   assert.match(auth, /button\.setAttribute\("aria-busy", "true"\)/);
   assert.match(auth, /fetch\("\/api\/session", \{ method: "DELETE", credentials: "same-origin" \}\)/);

@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.5";
+const BACKGROUND_BUILD = "1.1.6";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -48,7 +48,10 @@ const COLLECTOR_START_TIMEOUT_MS = 2 * 60 * 1000;
 const COLLECTION_STALL_TIMEOUT_MS = 20 * 60 * 1000;
 const COLLECTION_HEARTBEAT_TIMEOUT_MS = 8 * 60 * 1000;
 const COLLECTION_PROBE_TIMEOUT_MS = 12 * 1000;
-const MAX_TARGET_RUNTIME_MS = 90 * 60 * 1000;
+// Provider collectors can legitimately take more than 90 minutes after a large
+// inventory increase. Keep one shared upper bound with the page bridge so a
+// healthy long-running target is not mistaken for a stalled target.
+const MAX_TARGET_RUNTIME_MS = 3 * 60 * 60 * 1000;
 const DEFAULT_CONFIG = {
   enabled: false,
   schedule: "11:00",
@@ -61,7 +64,7 @@ function delay(milliseconds) {
 }
 
 function retryableTargetFailure(message) {
-  return !/(?:로그인|보안키|승인되지 않은|주소·층 오류|한 지역 수집이 90분|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
+  return !/(?:로그인|보안키|승인되지 않은|주소·층 오류|한 지역 수집이 3시간|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
     .test(String(message || ""));
 }
 
@@ -71,13 +74,42 @@ async function getConfig() {
   return {
     ...DEFAULT_CONFIG,
     ...value,
-    targets: Array.isArray(value.targets) ? value.targets : []
+    targets: Array.isArray(value.targets) ? value.targets.map(normalizeStoredTarget) : []
+  };
+}
+
+function inferredTradeType(target) {
+  const explicit = String(target && target.tradeType || "").toLowerCase();
+  if (explicit === "sale" || explicit === "lease") return explicit;
+  const searchable = [target && target.key, target && target.label, target && target.marketMode,
+    target && target.saleCategory].filter(Boolean).join(" ");
+  if (/(?:^|[-_\s])(sale|매매)(?:$|[-_\s])|건물매매|토지매매/i.test(searchable)) return "sale";
+  try {
+    const url = new URL(String(target && target.url || ""));
+    const naverTrade = String(url.searchParams.get("tradeType") || "").toUpperCase();
+    if (naverTrade === "A1") return "sale";
+    const daangnFilter = JSON.parse(url.searchParams.get("af") || "{}");
+    const daangnTrades = Array.isArray(daangnFilter.tradeTypes) ? daangnFilter.tradeTypes : [];
+    if (daangnTrades.some((value) => /BUY|SALE/i.test(String(value)))) return "sale";
+  } catch (_) {}
+  return "lease";
+}
+
+function normalizeStoredTarget(target) {
+  if (!target || typeof target !== "object") return target;
+  const tradeType = inferredTradeType(target);
+  return {
+    ...target,
+    tradeType,
+    marketMode: String(target.marketMode || tradeType)
   };
 }
 
 async function saveConfig(next) {
   const config = { ...DEFAULT_CONFIG, ...next };
-  config.targets = Array.isArray(config.targets) ? config.targets.slice(0, 40) : [];
+  config.targets = Array.isArray(config.targets)
+    ? config.targets.slice(0, 40).map(normalizeStoredTarget)
+    : [];
   await chrome.storage.local.set({ [STORAGE_KEY]: config });
   await resetAlarm(config);
   return config;
@@ -177,26 +209,27 @@ function normalizePortableConfig(value) {
     throw new Error("실행 시간 형식이 올바르지 않습니다.");
   }
   const targets = (Array.isArray(input.targets) ? input.targets : []).slice(0, 40).map((target) => {
-    const validated = validateTarget(target);
-    const district = typeof target.district === "string"
-      ? target.district.slice(0, 80)
-      : target.district && typeof target.district === "object"
-        ? { name: String(target.district.name || "").slice(0, 80), cortarNo: String(target.district.cortarNo || "").slice(0, 20) }
+    const storedTarget = normalizeStoredTarget(target);
+    const validated = validateTarget(storedTarget);
+    const district = typeof storedTarget.district === "string"
+      ? storedTarget.district.slice(0, 80)
+      : storedTarget.district && typeof storedTarget.district === "object"
+        ? { name: String(storedTarget.district.name || "").slice(0, 80), cortarNo: String(storedTarget.district.cortarNo || "").slice(0, 20) }
         : "";
     return {
       source: validated.source,
       url: validated.url,
-      key: targetKey(target) || [validated.source, target && target.district, validated.url].join("|"),
-      label: String(target && target.label || validated.source).slice(0, 120),
+      key: targetKey(storedTarget) || [validated.source, storedTarget && storedTarget.district, validated.url].join("|"),
+      label: String(storedTarget && storedTarget.label || validated.source).slice(0, 120),
       district,
-      selectionMode: String(target && target.selectionMode || "").slice(0, 40),
-      selectedCount: Math.max(0, Number(target && target.selectedCount || 0)),
-      mode: String(target && target.mode || "").slice(0, 40),
-      tradeType: String(target && target.tradeType || "").slice(0, 20),
-      marketMode: String(target && target.marketMode || "").slice(0, 40),
-      saleCategory: String(target && target.saleCategory || "").slice(0, 40),
-      enabled: target && target.enabled !== false,
-      registeredAt: target && target.registeredAt || new Date().toISOString()
+      selectionMode: String(storedTarget && storedTarget.selectionMode || "").slice(0, 40),
+      selectedCount: Math.max(0, Number(storedTarget && storedTarget.selectedCount || 0)),
+      mode: String(storedTarget && storedTarget.mode || "").slice(0, 40),
+      tradeType: String(storedTarget && storedTarget.tradeType || "").slice(0, 20),
+      marketMode: String(storedTarget && storedTarget.marketMode || "").slice(0, 40),
+      saleCategory: String(storedTarget && storedTarget.saleCategory || "").slice(0, 40),
+      enabled: storedTarget && storedTarget.enabled !== false,
+      registeredAt: storedTarget && storedTarget.registeredAt || new Date().toISOString()
     };
   });
   return {
@@ -209,6 +242,7 @@ function normalizePortableConfig(value) {
 
 async function registerTarget(target) {
   if (!target || !target.source || !target.url) throw new Error("자동수집 대상 정보가 부족합니다.");
+  target = normalizeStoredTarget(target);
   const validated = validateTarget(target);
   const config = await getConfig();
   const key = targetKey(target);
@@ -379,9 +413,11 @@ async function updateRunReport(state, target, status, details = {}) {
 async function finalizeRun(state) {
   const summary = state.summary || { completed: 0, failed: 0, errors: [] };
   summary.ok = summary.failed === 0;
+  const normal = Math.max(0, Number(summary.completed || 0) -
+    Number(summary.deferred || 0) - Number(summary.partial || 0));
   await appendLog({
     level: summary.ok && !summary.partial ? "success" : "warning",
-    message: `자동수집 종료: 정상 ${Math.max(0, summary.completed - Number(summary.partial || 0))}, 부분/보류 ${Number(summary.partial || 0)}, 실패 ${summary.failed}`,
+    message: `자동수집 종료: 정상 ${normal}, 주소보류 ${Number(summary.deferred || 0)}, 부분완료 ${Number(summary.partial || 0)}, 실패 ${summary.failed}`,
     result: summary
   });
   const report = await getRunReport();
@@ -404,10 +440,11 @@ async function finalizeRun(state) {
       type: "basic",
       iconUrl: "icon.svg",
       title: "JS 자동수집 확인 필요",
-      message: `정상 ${Math.max(0, summary.completed - Number(summary.partial || 0))}개 · 부분/보류 ${Number(summary.partial || 0)}개 · 실패 ${summary.failed}개`
+      message: `정상 ${normal}개 · 주소보류 ${Number(summary.deferred || 0)}개 · 부분완료 ${Number(summary.partial || 0)}개 · 실패 ${summary.failed}개`
     }).catch(() => {});
   }
   await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
+  await cleanupAuxiliaryTabs();
   return summary;
 }
 
@@ -421,6 +458,8 @@ async function restartPersistedRun(state, reason) {
   state.lastProgressAt = null;
   state.lastProgressFingerprint = "";
   state.progressMessage = "";
+  state.progressStage = null;
+  state.initialPageSignalPending = false;
   state.phase = "resuming";
   await saveRunState(state);
   await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
@@ -437,6 +476,13 @@ async function reconnectReloadedCollectorPage(senderTabId) {
   }
   if (!Number.isInteger(senderTabId) || state.currentTabId !== senderTabId) {
     return { ok: true, skipped: true };
+  }
+  // The content script sends one ready signal for the normal first document
+  // load. It is not a reload and must not start the collector a second time.
+  if (state.initialPageSignalPending === true) {
+    state.initialPageSignalPending = false;
+    await saveRunState(state);
+    return { ok: true, skipped: true, initialLoad: true };
   }
   const target = (state.targets || [])[state.index];
   if (!target || !state.targetRunId) return { ok: true, skipped: true };
@@ -490,16 +536,21 @@ async function updateTargetHeartbeat(message, senderTabId) {
   const now = Date.now();
   const fingerprint = String(message.progressFingerprint || "").slice(0, 1_000);
   const progressMessage = String(message.progressMessage || "").slice(0, 180);
+  const progressStage = message.progressStage && typeof message.progressStage === "object"
+    ? JSON.parse(JSON.stringify(message.progressStage)).valueOf()
+    : null;
   state.lastHeartbeatAt = now;
   if (!state.lastProgressAt || (fingerprint && fingerprint !== state.lastProgressFingerprint)) {
     state.lastProgressAt = now;
     state.lastProgressFingerprint = fingerprint;
   }
   state.progressMessage = progressMessage;
+  state.progressStage = progressStage;
   await saveRunState(state);
   const target = (state.targets || [])[state.index];
   if (target) await updateRunReport(state, target, "running", {
     message: progressMessage,
+    progressStage,
     progressUpdatedAt: now
   });
   return { ok: true, heartbeat: true };
@@ -526,7 +577,8 @@ async function probeCurrentTarget(state) {
       runId: state.runId,
       targetRunId: state.targetRunId,
       progressFingerprint: response.progressFingerprint,
-      progressMessage: response.progressMessage
+      progressMessage: response.progressMessage,
+      progressStage: response.progressStage
     }, state.currentTabId);
     return true;
   } finally {
@@ -564,6 +616,17 @@ async function continueOrRetryCycle(state, completedTabId) {
     `미완료 대상 ${state.targets.length}개를 ${delayMinutes}분 뒤 마지막 저장 지점부터 다시 실행합니다.`);
 }
 
+async function cleanupAuxiliaryTabs() {
+  const extensionBase = `chrome-extension://${chrome.runtime.id}/`;
+  const pages = await chrome.tabs.query({}).catch(() => []);
+  const statusTabs = pages.filter((tab) => tab.url === `${extensionBase}options.html`);
+  const removable = pages.filter((tab) =>
+    tab.url && (tab.url.startsWith(`${extensionBase}autorun.html`) ||
+      tab.url.startsWith("edge://newtab") || tab.url.startsWith("about:blank")));
+  statusTabs.slice(1).forEach((tab) => removable.push(tab));
+  await Promise.all(removable.map((tab) => chrome.tabs.remove(tab.id).catch(() => {})));
+}
+
 async function launchCurrentTarget(state, reuseTabId = null) {
   if (!state || !state.active) return { ok: false, message: "실행 중인 자동수집이 없습니다." };
   if (state.index >= state.targets.length) return finalizeRun(state);
@@ -592,6 +655,8 @@ async function launchCurrentTarget(state, reuseTabId = null) {
     state.lastProgressAt = startedAt;
     state.lastProgressFingerprint = "";
     state.progressMessage = "수집 화면 연결 중";
+    state.progressStage = null;
+    state.initialPageSignalPending = true;
     state.phase = "loading";
     await saveRunState(state);
     await waitForTabComplete(tab.id);
@@ -702,23 +767,31 @@ async function finishCurrentTarget(result, senderTabId) {
   }
   if (successful || warningCompletion) {
     state.summary.completed += 1;
-    const partial = result.ok !== true || Boolean(result.result && result.result.partial);
-    if (partial) state.summary.partial = Number(state.summary.partial || 0) + 1;
+    const counts = resultCounts(result);
+    const addressDeferred = warningCompletion && counts.version === 2 && counts.listComplete &&
+      Number(counts.addressDeferred || 0) > 0 && !Number(counts.failed || 0);
+    const partial = !addressDeferred && (result.ok !== true || Boolean(result.result && result.result.partial));
+    if (addressDeferred) state.summary.deferred = Number(state.summary.deferred || 0) + 1;
+    else if (partial) state.summary.partial = Number(state.summary.partial || 0) + 1;
     await appendLog({
       level: partial ? "warning" : "success",
       source: target.source,
       target: target.label,
       elapsedMs,
       result: result.result || {},
-      message: partial
+      message: addressDeferred
+        ? `${target.label || target.source} 수집완료 · 정확한 지번 미제공 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}건 지도 등록 보류`
+        : partial
         ? `${target.label || target.source} ${resultNotice(result)}`
         : `${target.label || target.source} 자동수집 완료`
     });
-    await updateRunReport(state, target, partial ? "partial" : "completed", {
+    await updateRunReport(state, target, addressDeferred ? "deferred" : partial ? "partial" : "completed", {
       finishedAt: Date.now(),
       elapsedMs,
-      message: partial ? resultNotice(result) : "수집 완료",
-      counts: resultCounts(result), diagnostics: resultDiagnostics(result)
+      message: addressDeferred
+        ? `수집완료 · 정확한 지번 미제공 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}건 지도 등록 보류`
+        : partial ? resultNotice(result) : "수집 완료",
+      counts, diagnostics: resultDiagnostics(result)
     });
   } else {
     const message = failureMessage;
@@ -761,6 +834,8 @@ async function finishCurrentTarget(result, senderTabId) {
   state.lastProgressAt = null;
   state.lastProgressFingerprint = "";
   state.progressMessage = "";
+  state.progressStage = null;
+  state.initialPageSignalPending = false;
   state.targetAttempt = 1;
   state.phase = "between-targets";
   await saveRunState(state);
@@ -875,7 +950,7 @@ async function runAll(reason = "manual") {
   if (!await acquireRunLock()) return { ok: false, message: "자동수집 실행 상태를 확인하지 못했습니다. 다시 눌러주세요." };
 
   const summary = { ok: true, started: true, reason, total: targets.length,
-    completed: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
+    completed: 0, deferred: 0, partial: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
   const state = {
     active: true,
     runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -977,7 +1052,7 @@ async function recoverAutomaticRun() {
       : stalledStart
         ? "실제 수집 시작 확인이 2분 동안 없어 다시 시작합니다."
         : targetRuntimeExceeded
-          ? "한 지역 수집이 90분을 넘어 다음 지역을 먼저 처리하고, 미완료 지역은 저장 지점부터 다시 시도합니다."
+          ? "한 지역 수집이 3시간을 넘어 다음 지역을 먼저 처리하고, 미완료 지역은 저장 지점부터 다시 시도합니다."
         : disconnectedCollection
           ? "수집 화면의 상태 신호가 8분 동안 없어 마지막 저장 지점부터 복구합니다."
           : "수집 화면의 숫자가 20분 동안 진행되지 않아 마지막 저장 지점부터 복구합니다.";

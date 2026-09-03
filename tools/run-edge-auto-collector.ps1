@@ -19,6 +19,18 @@ $edgePath = $edgeCandidates | Select-Object -First 1
 $automationRoot = Join-Path $env:LOCALAPPDATA 'JSMap\EdgeAutoCollector'
 $extensionPath = Join-Path $automationRoot 'extension'
 $profilePath = Join-Path $automationRoot 'profile'
+$logPath = Join-Path $automationRoot 'logs'
+New-Item -ItemType Directory -Path $logPath -Force | Out-Null
+$dailyLog = Join-Path $logPath ((Get-Date).ToString('yyyy-MM-dd') + '.log')
+function Write-AutoCollectorLog([string]$Level, [string]$Message) {
+  $line = '{0} [{1}] {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff'), $Level, $Message
+  Add-Content -LiteralPath $dailyLog -Value $line -Encoding UTF8
+}
+trap {
+  Write-AutoCollectorLog 'ERROR' ([string]$_.Exception.Message)
+  exit 1
+}
+Write-AutoCollectorLog 'INFO' (if ($Setup) { '자동수집 초기 설정 시작' } elseif ($Force) { '수동 전체실행 시작' } else { 'Windows 예약실행 시작' })
 
 if (-not (Test-Path -LiteralPath (Join-Path $extensionPath 'manifest.json'))) {
   throw 'JS 자동수집 확장 프로그램이 설치되지 않았습니다. install-edge-auto-collector.ps1을 먼저 실행해주세요.'
@@ -87,15 +99,16 @@ if ($Setup) {
     Start-Process -FilePath $edgePath -ArgumentList $arguments -WindowStyle Hidden
   }
   $debugReady = $false
-  for ($attempt = 0; $attempt -lt 30; $attempt += 1) {
+  $debugDeadline = (Get-Date).AddSeconds(45)
+  do {
     try {
-      Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/version' -TimeoutSec 1 | Out-Null
+      Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/version' -TimeoutSec 2 | Out-Null
       $debugReady = $true
       break
     } catch {
-      Start-Sleep -Milliseconds 250
+      Start-Sleep -Milliseconds 500
     }
-  }
+  } while ((Get-Date) -lt $debugDeadline)
   if (-not $debugReady) {
     throw '전용 Edge 자동수집 실행기에 연결하지 못했습니다.'
   }
@@ -106,12 +119,16 @@ if ($Setup) {
     Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedUrl" -TimeoutSec 5 | Out-Null
   }
   & $openAutorun $runToken
-  # The first internal page reloads a stale MV3 service worker after an
-  # extension upgrade. A second idempotent trigger starts the run with the
-  # fresh worker, or simply observes the already active run on normal days.
+  # A normal run uses one trigger only. Open a second trigger solely when the
+  # first page remains after reloading a stale MV3 service worker.
   Start-Sleep -Seconds 4
-  & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
-  Start-Sleep -Seconds 2
+  $triggerPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5 |
+    Where-Object { $_.type -eq 'page' -and $_.url -like "chrome-extension://$extensionId/autorun.html*" })
+  if ($triggerPages.Count) {
+    Write-AutoCollectorLog 'WARN' '첫 실행 신호 페이지가 남아 있어 업데이트된 실행기로 한 번만 재전송합니다.'
+    & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
+    Start-Sleep -Seconds 3
+  }
   # Keep the live per-district status page visible after the short autorun
   # trigger tabs close themselves. Reuse an existing status tab when Edge
   # restores the dedicated profile instead of opening duplicates.
@@ -120,6 +137,12 @@ if ($Setup) {
   if (-not ($openPages | Where-Object { $_.type -eq 'page' -and $_.url -eq $statusUrl })) {
     $encodedStatusUrl = [Uri]::EscapeDataString($statusUrl)
     Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedStatusUrl" -TimeoutSec 5 | Out-Null
+  }
+  # Leave exactly one status page and the single provider collection tab.
+  $cleanupPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5 |
+    Where-Object { $_.type -eq 'page' -and ($_.url -like 'edge://newtab*' -or $_.url -like "chrome-extension://$extensionId/autorun.html*") })
+  foreach ($page in $cleanupPages) {
+    try { Invoke-RestMethod -Uri ("http://127.0.0.1:9223/json/close/" + $page.id) -TimeoutSec 3 | Out-Null } catch {}
   }
   Add-Type @'
 using System;
@@ -137,4 +160,5 @@ public static class JSMapWindow {
         [JSMapWindow]::ShowWindow($edgeProcess.MainWindowHandle, $showMode) | Out-Null
       }
     }
+  Write-AutoCollectorLog 'INFO' 'Edge 연결 및 자동수집 실행 신호 전달 완료'
 }

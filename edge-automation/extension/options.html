@@ -14,7 +14,7 @@
       <label>실행 시간 <input id="schedule" type="time" value="11:00"></label>
       <label class="toggle"><input id="closeTabs" type="checkbox" checked><span>완료한 수집 탭 자동 닫기</span></label>
       <button id="save" class="primary">설정 저장</button>
-      <button id="run">지금 전체 실행</button>
+      <button id="run">확인 후 전체 실행</button>
     </section>
     <section class="transfer">
       <div><h2>다른 PC로 설정 옮기기</h2><p>등록 지역·실행 시간만 이동하며 로그인 정보와 보안키는 포함하지 않습니다.</p></div>
@@ -24,8 +24,16 @@
       </div>
     </section>
     <section><div class="section-title"><h2>구별 수집 진행표</h2><small>수집 사이트 창은 하나만 사용하며, 네이버·당근 10개 구의 진행 결과를 여기에 표시합니다.</small></div><div id="runSummary" class="run-summary"></div><div id="targets" class="list"></div></section>
+    <section><div class="section-title"><h2>당근 지번 보류 검토</h2><small>공급처가 정확한 지번을 제공하지 않은 매물만 모아 표시합니다.</small></div><div id="deferredReview" class="deferred-review"></div></section>
     <section><div class="section-title"><h2>최근 실행 기록</h2><button id="clear">기록 지우기</button></div><div id="logs" class="list"></div></section>
   </main>
+  <dialog id="runPreview" class="run-preview">
+    <form method="dialog">
+      <div class="run-preview-title"><div><h2>자동수집 실행 전 확인</h2><p>사용 중인 대상과 거래유형을 확인한 뒤 실행합니다.</p></div><button value="cancel" aria-label="닫기">×</button></div>
+      <div id="runPreviewBody" class="run-preview-body"></div>
+      <div class="run-preview-actions"><button value="cancel">취소</button><button id="runConfirmed" value="default" class="primary">확인하고 실행</button></div>
+    </form>
+  </dialog>
   <script src="options.js"></script>
 </body>
 </html>

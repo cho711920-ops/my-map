@@ -23,6 +23,8 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /RUN_REPORT_KEY/);
   assert.match(background, /if \(lock && \(!state \|\| !state\.active\)\)/);
   assert.match(background, /validateTarget\(target\)/);
+  assert.match(background, /function inferredTradeType\(target\)/);
+  assert.match(background, /targets: Array\.isArray\(value\.targets\) \? value\.targets\.map\(normalizeStoredTarget\)/);
   assert.match(background, /const result = await runAll\(reason\)/);
   assert.match(background, /LAST_SCHEDULE_KEY\]: localDateKey\(\)/);
   assert.match(background, /runScheduled\("browser-startup"\)/);
@@ -59,9 +61,9 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /COLLECTION_PROBE_TIMEOUT_MS = 12 \* 1000/);
   assert.match(background, /await probeCurrentTarget\(state\)/);
   assert.match(content, /JS_AUTO_PING_TARGET/);
-  assert.match(background, /MAX_TARGET_RUNTIME_MS = 90 \* 60 \* 1000/);
+  assert.match(background, /MAX_TARGET_RUNTIME_MS = 3 \* 60 \* 60 \* 1000/);
   assert.match(background, /targetRuntimeExceeded/);
-  assert.match(background, /한 지역 수집이 90분/);
+  assert.match(background, /한 지역 수집이 3시간/);
   assert.match(background, /주소·층 오류/);
   assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
   assert.match(background, /state\.summary\.retryErrors/);
@@ -85,7 +87,7 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(content, /async function reportTargetFinished\(message\)/);
   assert.match(content, /sendResponse\(\{ ok: true, started: true \}\)/);
   assert.match(content, /RESULT_TIMEOUT_MS/);
-  assert.match(content, /RESULT_TIMEOUT_MS = 90 \* 60 \* 1000/);
+  assert.match(content, /RESULT_TIMEOUT_MS = 3 \* 60 \* 60 \* 1000/);
   assert.match(content, /START_ACK_TIMEOUT_MS = 35 \* 1000/);
   assert.match(content, /JS_COLLECTOR_AUTOMATION_STARTED/);
   assert.match(content, /\[data-metric\]/);
@@ -93,6 +95,7 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(content, /function stableProgressText\(value\)/);
   assert.match(content, /stableProgressText\(detail\)/);
   assert.match(content, /JS_AUTO_COLLECTOR_PAGE_LOADED/);
+  assert.match(content, /공급처 화면 구조 변경 또는 수집기 로딩 오류/);
   const bridge = read("edge-automation/extension/auto-bridge.js");
   assert.match(bridge, /async function waitForRuntime/);
   assert.match(bridge, /JS_COLLECTOR_AUTOMATION_STARTED/);
@@ -168,7 +171,9 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /jsAutoCollectorConfigV1/);
   assert.match(launch, /remote-debugging-port=9223/);
   assert.match(launch, /Invoke-RestMethod -Method Put/);
-  assert.match(launch, /second idempotent trigger/);
+  assert.match(launch, /first page remains after reloading a stale MV3 service worker/);
+  assert.match(launch, /Write-AutoCollectorLog/);
+  assert.match(launch, /AddSeconds\(45\)/);
   assert.match(launch, /\[switch\]\$Force/);
   assert.match(launch, /JSMapWindow/);
   assert.match(launch, /if \(-not \$Setup\)/);
