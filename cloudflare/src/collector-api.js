@@ -2998,21 +2998,31 @@ async function repairExactReviews(env, user, options = {}) {
         AND (
           (
             COALESCE(NULLIF(collector_raw.trade_type, ''), 'lease')='lease'
-            AND exact.area_m2 IS NOT NULL
-            AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
-            AND ABS(exact.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))<1
             AND (
               (
-                exact.deposit=CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)
-                AND ABS(exact.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))<=20
-                AND ABS(exact.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))<=
-                  0.2*MIN(ABS(exact.monthly_rent), ABS(CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)))
+                exact.area_m2 IS NULL
+                AND json_extract(collector_raw.payload_json, '$.area') IS NULL
+                AND exact.deposit=CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)
+                AND exact.monthly_rent=CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)
               )
               OR (
-                exact.monthly_rent=CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)
-                AND ABS(exact.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))<=500
-                AND ABS(exact.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))<=
-                  0.2*MIN(ABS(exact.deposit), ABS(CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)))
+                exact.area_m2 IS NOT NULL
+                AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
+                AND ABS(exact.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))<1
+                AND (
+                  (
+                    exact.deposit=CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)
+                    AND ABS(exact.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))<=20
+                    AND ABS(exact.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))<=
+                      0.2*MIN(ABS(exact.monthly_rent), ABS(CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)))
+                  )
+                  OR (
+                    exact.monthly_rent=CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)
+                    AND ABS(exact.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))<=500
+                    AND ABS(exact.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))<=
+                      0.2*MIN(ABS(exact.deposit), ABS(CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)))
+                  )
+                )
               )
             )
           )

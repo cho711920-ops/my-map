@@ -23,6 +23,7 @@ assert.match(collector, /const decisionVersion = REVIEW_CLASSIFICATION_VERSION/)
 assert.match(collector, /ORDER BY CASE WHEN EXISTS \(/);
 assert.match(collector, /json_each\(collector_raw\.result_json, '\$\.candidateIds'\)/);
 assert.match(collector, /exact\.room=COALESCE\(json_extract\(collector_raw\.payload_json, '\$\.room'\), ''\)/);
+assert.match(collector, /exact\.area_m2 IS NULL[\s\S]*?json_extract\(collector_raw\.payload_json, '\$\.area'\) IS NULL/);
 assert.match(collector, /THEN 0 WHEN EXISTS \(/);
 assert.match(collector, /different\.room=COALESCE\(json_extract\(collector_raw\.payload_json, '\$\.room'\), ''\)/);
 assert.match(collector, /0\.35\*MIN\(ABS\(different\.area_m2\)/);
