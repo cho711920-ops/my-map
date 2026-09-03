@@ -252,6 +252,52 @@ test("review workspace hides existing listings on explicitly different floors", 
     ["M-floor-4", "M-room-401", "M-unknown"]);
 });
 
+test("review workspace keeps lease and sale verification groups and candidates separate", async () => {
+  const reviewRows = [
+    { id: "R-lease", source: "공실박스", source_listing_id: "G-lease", trade_type: "lease",
+      sale_category: "", sale_price: null, created_at: "2026-09-03",
+      payload_json: JSON.stringify({ address: "서구 괴정동 6-3", room: "2층", tradeType: "lease",
+        deposit: 3000, rent: 300, area: 100 }), result_json: "{}" },
+    { id: "R-sale", source: "공실박스", source_listing_id: "G-sale", trade_type: "sale",
+      sale_category: "commercial", sale_price: 90000, created_at: "2026-09-03",
+      payload_json: JSON.stringify({ address: "서구 괴정동 6-3", room: "2층", tradeType: "sale",
+        saleCategory: "commercial", salePrice: 90000, area: 100 }), result_json: "{}" }
+  ];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        bind() { return this; },
+        async all() {
+          if (/FROM collector_raw WHERE processing_state='review'/.test(this.sql)) return { results: reviewRows };
+          if (/FROM listings WHERE status <> 'deleted' AND address IN/.test(this.sql)) {
+            return { results: [
+              { id: "M-lease", property_id: "M-lease", address: "서구 괴정동 6-3", room: "2층",
+                trade_type: "lease", listing_type: "상가점포", deposit: 3000, monthly_rent: 150, area_m2: 38.9 },
+              { id: "M-sale", property_id: "M-sale", address: "서구 괴정동 6-3", room: "2층",
+                trade_type: "sale", sale_category: "commercial", sale_price: 90000,
+                listing_type: "상가매매", deposit: 0, monthly_rent: 0, area_m2: 100 }
+            ] };
+          }
+          throw new Error(`Unexpected query: ${this.sql}`);
+        },
+        async first() {
+          if (/COUNT\(\*\).*collector_raw/.test(this.sql)) return { count: reviewRows.length };
+          throw new Error(`Unexpected query: ${this.sql}`);
+        }
+      };
+    }
+  };
+  const response = await authenticatedRequest("/api/data?action=reviewWorkspace", { DB: db });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.groups.length, 2);
+  for (const group of payload.groups) {
+    assert.equal(group.candidates.length, 1);
+    assert.equal(group.candidates[0].tradeType, group.tradeType);
+  }
+});
+
 test("primary sheet reads come directly from D1 without Apps Script", async () => {
   let upstreamCalls = 0;
   const cachedWrites = [];

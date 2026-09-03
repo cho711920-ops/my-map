@@ -114,6 +114,25 @@ test("same-floor offers with completely different terms and area are separate li
   assert.match(result.reason, /보증금·월세가 모두 크게 다름/);
 });
 
+test("same-floor offers with the same deposit stay separate when rent and area are clearly different", () => {
+  const result = classifyListingCandidates(incoming("2층", 3000, 300, 100), [
+    existing("M-existing", "2층", 3000, 150, 38.9),
+    existing("M-third-floor", "3층", 3000, 250, 100),
+    existing("M-fourth-floor", "4층", 3000, 200, 55.9)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /임대조건과 평수가 모두 크게 다름/);
+});
+
+test("same-floor offers with only a modest area or rent change still require review", () => {
+  assert.equal(classifyListingCandidates(incoming("2층", 3000, 170, 42), [
+    existing("M-existing", "2층", 3000, 150, 38.9)
+  ]).decision, "review");
+  assert.equal(classifyListingCandidates(incoming("2층", 3000, 300, 42), [
+    existing("M-existing", "2층", 3000, 150, 38.9)
+  ]).decision, "review");
+});
+
 test("small rental adjustments on an ambiguous floor still require review", () => {
   assert.equal(classifyListingCandidates(incoming("102호", 500, 55, 12), [
     existing("M-1", "1층", 300, 50, 11.8)

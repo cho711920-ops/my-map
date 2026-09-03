@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 7;
+const REVIEW_CLASSIFICATION_VERSION = 8;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -1098,6 +1098,27 @@ function stronglyDifferentRentalTerms(record, row, stricter = false) {
     rentGap >= 10 && relativeNumberGap(leftRent, rightRent) >= 0.15;
 }
 
+function clearlyDifferentSameFloorRentalOffer(record, row) {
+  if (collectorTradeType(record?.tradeType || record?.trade_type, true) === LISTING_TRADE_TYPES.SALE) return false;
+  const leftDeposit = number(row.deposit);
+  const rightDeposit = number(record.deposit);
+  const leftRent = number(row.monthly_rent ?? row.rent);
+  const rightRent = number(record.rent);
+  const leftArea = number(row.area_m2 ?? row.area);
+  const rightArea = number(record.area);
+  if (leftArea == null || rightArea == null) return false;
+
+  const areaGap = Math.abs(leftArea - rightArea);
+  const areaClearlyDifferent = areaGap >= 5 && relativeNumberGap(leftArea, rightArea) >= 0.35;
+  if (!areaClearlyDifferent) return false;
+
+  const rentClearlyDifferent = leftRent != null && rightRent != null &&
+    Math.abs(leftRent - rightRent) >= 20 && relativeNumberGap(leftRent, rightRent) >= 0.3;
+  const depositClearlyDifferent = leftDeposit != null && rightDeposit != null &&
+    Math.abs(leftDeposit - rightDeposit) >= 500 && relativeNumberGap(leftDeposit, rightDeposit) >= 0.5;
+  return rentClearlyDifferent || depositClearlyDifferent;
+}
+
 function compareSingleListingSpace(record, row) {
   if (record?.tradeType === "sale") {
     const incomingCategory = collectorSaleCategory(record.saleCategory, record.category);
@@ -1146,6 +1167,10 @@ function compareSingleListingSpace(record, row) {
   if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
       stronglyDifferentRentalTerms(record || {}, row || {}, true)) {
     return { decision: "different", reason: "같은 층이지만 보증금·월세가 모두 크게 다름" };
+  }
+  if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
+      clearlyDifferentSameFloorRentalOffer(record || {}, row || {})) {
+    return { decision: "different", reason: "같은 층이지만 임대조건과 평수가 모두 크게 다름" };
   }
   if (incoming.floor == null && existing.floor == null && offerMatch) {
     return { decision: "same", reason: "층 미상·임대조건·평수 일치" };
@@ -2464,7 +2489,8 @@ function candidateJson(row) {
     propertyId: clean(row.property_id || row.id), buildingName: clean(row.title), address: clean(row.address),
     room: clean(row.room), category: clean(row.listing_type), deposit: row.deposit, rent: row.monthly_rent,
     fee: row.maintenance_fee, premium: row.premium, area: row.area_m2, memo: clean(row.operating_memo),
-    source: clean(row.main_source)
+    source: clean(row.main_source), tradeType: collectorTradeType(row.trade_type, true),
+    saleCategory: clean(row.sale_category), salePrice: row.sale_price
   };
 }
 
@@ -2483,22 +2509,28 @@ export function relevantReviewCandidates(group, candidates = []) {
 async function reviewWorkspace(env, query) {
   const search = clean(query.query).slice(0, 100);
   const pattern = `%${search}%`;
-  const result = await env.DB.prepare(`SELECT id, source, source_listing_id, payload_json, result_json, created_at
+  const result = await env.DB.prepare(`SELECT id, source, source_listing_id, trade_type, sale_category, sale_price,
+      payload_json, result_json, created_at
     FROM collector_raw WHERE processing_state='review' AND (?1='' OR payload_json LIKE ?2)
     ORDER BY created_at DESC LIMIT 600`).bind(search, pattern).all();
   const groups = new Map();
   for (const row of result?.results || []) {
     const item = parseJson(row.payload_json, {});
-    const key = `${normalizedAddress(item.address)}|${normalizedRoom(item.room)}`;
+    const tradeType = collectorTradeType(row.trade_type || item.tradeType, true);
+    const saleCategory = tradeType === LISTING_TRADE_TYPES.SALE
+      ? collectorSaleCategory(row.sale_category || item.saleCategory, item.category)
+      : "";
+    const key = `${tradeType}|${saleCategory}|${normalizedAddress(item.address)}|${normalizedRoom(item.room)}`;
     if (!groups.has(key)) groups.set(key, { groupKey: key, address: item.address, room: item.room,
-      risk: "중간", score: 60, recommendation: "직접 확인", items: [], candidates: [] });
+      tradeType, saleCategory, risk: "중간", score: 60, recommendation: "직접 확인", items: [], candidates: [] });
     const group = groups.get(key);
     const stored = parseJson(row.result_json, {});
     group.items.push({
       reviewId: row.id, source: row.source, sourceId: row.source_listing_id,
       buildingName: item.buildingName, address: item.address, room: item.room, type: "신규·변경",
       category: item.category, deposit: item.deposit, rent: item.rent, fee: item.fee,
-      premium: item.premium, area: item.area, memo: item.memo,
+      premium: item.premium, area: item.area, memo: item.memo, tradeType,
+      saleCategory, salePrice: row.sale_price ?? item.salePrice,
       safeCandidateIds: Array.isArray(stored.candidateIds) ? stored.candidateIds : []
     });
   }
@@ -2510,7 +2542,8 @@ async function reviewWorkspace(env, query) {
     const batch = addresses.slice(offset, offset + 75);
     const placeholders = batch.map((_, index) => `?${index + 1}`).join(",");
     const candidates = await env.DB.prepare(`SELECT id, property_id, title, address, room, listing_type,
-        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source, updated_at
+        deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source,
+        trade_type, sale_category, sale_price, updated_at
       FROM listings WHERE status <> 'deleted' AND address IN (${placeholders})
       ORDER BY updated_at DESC`).bind(...batch).all();
     for (const row of candidates?.results || []) {
@@ -2523,7 +2556,8 @@ async function reviewWorkspace(env, query) {
 
   for (const group of groups.values()) {
     group.candidates = relevantReviewCandidates(group,
-      candidatesByAddress.get(normalizedAddress(group.address)) || []);
+      (candidatesByAddress.get(normalizedAddress(group.address)) || []).filter((candidate) =>
+        listingTradeTypesCanMerge(candidate.tradeType, group.tradeType)));
     group.items.forEach((item) => {
       const classified = classifyListingCandidates(item, group.candidates.map((candidate) => ({
         ...candidate, id: candidate.propertyId, monthly_rent: candidate.rent, area_m2: candidate.area
@@ -2887,7 +2921,7 @@ async function repairExactReviews(env, user, options = {}) {
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
       AND (?2='' OR source=?2)
-    ORDER BY created_at LIMIT ?3`).bind(decisionVersion, sourceFilter, scanLimit).all();
+    ORDER BY created_at DESC LIMIT ?3`).bind(decisionVersion, sourceFilter, scanLimit).all();
   const reviewRows = rows?.results || [];
   const parsedRows = reviewRows.map((row) => {
     const parsed = parseJson(row.payload_json, null);
@@ -2923,7 +2957,9 @@ async function repairExactReviews(env, user, options = {}) {
   }
   for (const { row, record } of parsedRows) {
     try {
-      const pendingMatch = choosePendingReviewMatch(record, pendingReviewsByAddress.get(record.address) || [], {
+      const pendingCandidates = (pendingReviewsByAddress.get(record.address) || []).filter((candidate) =>
+        listingTradeTypesCanMerge(candidate.record?.tradeType || candidate.trade_type, record.tradeType));
+      const pendingMatch = choosePendingReviewMatch(record, pendingCandidates, {
         reviewId: row.id, createdAt: row.created_at
       });
       if (pendingMatch) {
@@ -2934,7 +2970,9 @@ async function repairExactReviews(env, user, options = {}) {
         duplicate += 1;
         continue;
       }
-      const candidates = candidatesByAddress.get(record.address) || [];
+      const allCandidates = candidatesByAddress.get(record.address) || [];
+      const candidates = allCandidates.filter((candidate) =>
+        listingTradeTypesCanMerge(candidate.trade_type, record.tradeType));
       const classified = classifyListingCandidates(record, candidates);
       const existingSource = existingSourcesByKey.get(`${clean(record.source)}:${clean(record.sourceId)}`) || null;
       const existingAssets = existingSource ? existingAssetsBySource.get(clean(existingSource.id)) : null;
@@ -2982,9 +3020,14 @@ async function repairExactReviews(env, user, options = {}) {
         const listingId = await createListing(env, record, row.session_id, clean(user?.email), existingSource, existingAssets);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
           address: record.address, room: record.room, listing_type: record.category,
+          trade_type: collectorTradeType(record.tradeType, true), sale_category: record.saleCategory,
+          sale_price: record.salePrice,
           deposit: record.deposit, monthly_rent: record.rent, maintenance_fee: record.fee,
           premium: record.premium, area_m2: record.area, operating_memo: record.memo, main_source: record.source });
-        candidatesByAddress.set(record.address, candidates);
+        candidatesByAddress.set(record.address, [
+          ...allCandidates.filter((candidate) =>
+            !listingTradeTypesCanMerge(candidate.trade_type, record.tradeType)), ...candidates
+        ]);
         affectedListingIds.add(listingId);
         await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action: "autoCreate", listingId,
