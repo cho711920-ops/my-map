@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 11;
+const REVIEW_CLASSIFICATION_VERSION = 12;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -1047,6 +1047,32 @@ function reliableOfferMatch(record, row) {
     areaMatches && sameNumber(leftDeposit, rightDeposit) && sameNumber(leftRent, rightRent);
 }
 
+function exactOfferTerms(record, row) {
+  const tradeType = collectorTradeType(record?.tradeType || record?.trade_type, true);
+  if (tradeType === LISTING_TRADE_TYPES.SALE) {
+    const leftPrice = number(row.sale_price ?? row.salePrice);
+    const rightPrice = number(record.salePrice ?? record.sale_price);
+    return leftPrice != null && rightPrice != null && sameNumber(leftPrice, rightPrice);
+  }
+  const leftDeposit = number(row.deposit);
+  const rightDeposit = number(record.deposit);
+  const leftRent = number(row.monthly_rent ?? row.rent);
+  const rightRent = number(record.rent);
+  return leftDeposit != null && rightDeposit != null && leftRent != null && rightRent != null &&
+    sameNumber(leftDeposit, rightDeposit) && sameNumber(leftRent, rightRent);
+}
+
+function compatibleAreaEvidence(record, row) {
+  const leftArea = number(row.area_m2 ?? row.area);
+  const rightArea = number(record.area);
+  if (leftArea == null || rightArea == null) return true;
+  return Math.abs(leftArea - rightArea) <= 3.3 && relativeNumberGap(leftArea, rightArea) <= 0.15;
+}
+
+function sameOfferWithCompatibleArea(record, row) {
+  return exactOfferTerms(record, row) && compatibleAreaEvidence(record, row);
+}
+
 function reliableOfferMismatch(record, row) {
   const tradeType = collectorTradeType(record?.tradeType || record?.trade_type, true);
   if (tradeType === LISTING_TRADE_TYPES.SALE) {
@@ -1092,8 +1118,8 @@ function stronglyDifferentRentalTerms(record, row, stricter = false) {
   const depositGap = Math.abs(leftDeposit - rightDeposit);
   const rentGap = Math.abs(leftRent - rightRent);
   if (stricter) {
-    return depositGap >= 500 && relativeNumberGap(leftDeposit, rightDeposit) >= 0.5 &&
-      rentGap >= 20 && relativeNumberGap(leftRent, rightRent) >= 0.3;
+    return depositGap >= 500 && relativeNumberGap(leftDeposit, rightDeposit) >= 0.35 &&
+      rentGap >= 20 && relativeNumberGap(leftRent, rightRent) >= 0.25;
   }
   return depositGap >= 200 && relativeNumberGap(leftDeposit, rightDeposit) >= 0.25 &&
     rentGap >= 10 && relativeNumberGap(leftRent, rightRent) >= 0.15;
@@ -1142,7 +1168,7 @@ function clearlyDifferentSameFloorArea(record, row) {
   const leftArea = number(row.area_m2 ?? row.area);
   const rightArea = number(record.area);
   if (leftArea == null || rightArea == null) return false;
-  return Math.abs(leftArea - rightArea) >= 10 && relativeNumberGap(leftArea, rightArea) >= 0.35;
+  return Math.abs(leftArea - rightArea) >= 5 && relativeNumberGap(leftArea, rightArea) >= 0.3;
 }
 
 function compareSingleListingSpace(record, row) {
@@ -1178,6 +1204,11 @@ function compareSingleListingSpace(record, row) {
 
   const sameKnownFloor = incoming.floor != null && existing.floor != null && incoming.floor === existing.floor;
   const genericSpecific = sameKnownFloor && (incoming.units.length > 0) !== (existing.units.length > 0);
+  if (sameKnownFloor && !genericSpecific && !incoming.units.length && !existing.units.length &&
+      !incoming.wholeFloor && !existing.wholeFloor &&
+      sameOfferWithCompatibleArea(record || {}, row || {})) {
+    return { decision: "same", reason: "같은 층·거래조건, 면적 표기 호환" };
+  }
   if (genericSpecific && offerMatch && !incoming.wholeFloor && !existing.wholeFloor) {
     return { decision: "same", reason: "같은 층·임대조건·평수" };
   }

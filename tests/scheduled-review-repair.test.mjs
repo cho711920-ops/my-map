@@ -18,7 +18,7 @@ assert.match(collector, /const exactRepair =[\s\S]*?return exactRepair;[\s\S]*?c
 assert.match(collector, /repairExactReviews\(env, systemUser, \{[\s\S]*?source: "공실박스"/);
 assert.match(collector, /if \(Number\(gongsilRepair\?\.scanned \|\| 0\) > 0\) return gongsilRepair/);
 assert.match(collector, /return mergeSingleCandidateReviews\(env, systemUser/);
-assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 11/);
+assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 12/);
 assert.match(collector, /const decisionVersion = REVIEW_CLASSIFICATION_VERSION/);
 assert.match(collector, /ORDER BY CASE WHEN EXISTS \(/);
 assert.match(collector, /json_each\(collector_raw\.result_json, '\$\.candidateIds'\)/);

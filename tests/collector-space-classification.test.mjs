@@ -121,6 +121,14 @@ test("materially different deposit and rent create separate listings on an other
   assert.match(genericFloor.reason, /보증금·월세가 모두 크게 다름/);
 });
 
+test("thirty-percent-scale rental term gaps are separate on a generic floor", () => {
+  const result = classifyListingCandidates(incoming("1층", 3000, 100, 14.8), [
+    existing("M-other-offer", "1층", 1000, 80, 14.8)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /보증금·월세가 모두 크게 다름/);
+});
+
 test("same-floor offers with completely different terms and area are separate listings", () => {
   const result = classifyListingCandidates(incoming("8층", 1000, 65, 18.2), [
     existing("M-dunsan-1072", "8층", 3000, 160, 49.9)
@@ -168,6 +176,38 @@ test("matching terms with both areas missing still merge safely", () => {
     existing("M-no-area", "2층", 1500, 60, null)
   ]);
   assert.equal(result.decision, "merge");
+});
+
+test("matching terms on the same floor merge when one area is missing", () => {
+  const result = classifyListingCandidates(incoming("2층", 1500, 60, 27.1), [
+    existing("M-one-area", "2층", 1500, 60, null)
+  ]);
+  assert.equal(result.decision, "merge");
+  assert.match(result.reason, /면적 표기 호환/);
+});
+
+test("matching terms tolerate a small supply-exclusive area notation gap", () => {
+  const result = classifyListingCandidates(incoming("2층", 3000, 150, 41.1), [
+    existing("M-area-notation", "2층", 3000, 150, 38.9)
+  ]);
+  assert.equal(result.decision, "merge");
+  assert.match(result.reason, /면적 표기 호환/);
+});
+
+test("matching terms do not merge materially different same-floor areas", () => {
+  const result = classifyListingCandidates(incoming("2층", 8000, 380, 59), [
+    existing("M-larger-space", "2층", 8000, 380, 107)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /평수가 명확히 다름/);
+});
+
+test("a five-pyeong and thirty-percent same-floor area gap is a separate space", () => {
+  const result = classifyListingCandidates(incoming("1층", 2000, 100, 14.8), [
+    existing("M-other-size", "1층", 2000, 100, 20)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /평수가 명확히 다름/);
 });
 
 test("review workspace hides clearly different masters and keeps only plausible candidates", () => {
