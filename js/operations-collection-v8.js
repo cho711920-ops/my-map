@@ -398,6 +398,7 @@
     var filters = ["all", "높음", "중간", "낮음"];
     panel.innerHTML = '<div class="review-toolbar"><div><strong>매물검증 연속처리</strong><span>왼쪽 기존 통합매물과 오른쪽 신규 원본매물을 비교해 동일매물·다른매물·보류만 선택하세요.</span></div>' +
       '<div class="review-toolbar-actions"><button type="button" title="같은 주소에 기존 대표매물이 정확히 1개인 검증 원본만 그 대표매물의 동일매물로 연결합니다. 대표정보는 바꾸지 않습니다." onclick="mergeSingleCandidateReviews()">기존매물 1건 자동합치기</button>' +
+      '<button type="button" title="명확한 동일매물과 다른매물을 자동 확정하고 실제 판단이 필요한 매물만 남깁니다." onclick="repairRoomlessExactReviews()">자동분류 정리</button>' +
       '<button type="button" onclick="refreshReviewWorkspace()">새로고침</button></div></div>' +
       '<div class="review-workspace"><aside class="review-queue"><div class="review-queue-tools">' +
       '<label class="review-address-search"><span>주소검색</span><input id="reviewAddressSearch" type="search" ' +

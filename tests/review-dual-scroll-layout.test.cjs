@@ -36,7 +36,7 @@ assert.match(
 );
 assert.match(
   html,
-  /operations-collection-v8\.css\?v=7\.26\.0-edge-auto-status/,
+  /operations-collection-v8\.css\?v=7\.26\.1-review-audit/,
   "the split-pane stylesheet cache key must be deployed"
 );
 

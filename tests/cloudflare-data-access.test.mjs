@@ -190,7 +190,7 @@ test("operations modules only use the shared Cloudflare data boundary", () => {
       `${entry.name} must not bypass JSDataAccessV6`);
   }
   assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);
-  assert.match(html, /operations-collection-v8\.js\?v=7\.26\.0-edge-auto-status/);
+  assert.match(html, /operations-collection-v8\.js\?v=7\.26\.1-review-audit/);
   assert.match(html, /operations-admin-v1\.js\?v=1\.2\.0-linked-identity/);
 });
 
