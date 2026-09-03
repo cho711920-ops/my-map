@@ -203,6 +203,9 @@ test("legacy review rows never bind undefined optional values to D1", () => {
   assert.equal(record.longitude, null);
   assert.equal(record.fee, null);
   assert.equal(record.premium, null);
+  assert.equal(record.tradeType, "lease");
+  assert.equal(record.saleCategory, "");
+  assert.equal(record.salePrice, null);
   assert.deepEqual(record.images, []);
   assert.deepEqual(record.contacts, []);
   assert.ok(Object.values(record).every((value) => value !== undefined));

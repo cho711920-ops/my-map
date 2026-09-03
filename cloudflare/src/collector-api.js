@@ -1249,6 +1249,7 @@ export function choosePendingReviewMatch(record, candidates = [], currentReview 
 }
 
 export function normalizeReviewRecord(value = {}) {
+  const tradeType = collectorTradeType(value.tradeType || value.trade_type, true);
   return {
     ...value,
     originalId: clean(value.originalId),
@@ -1263,6 +1264,13 @@ export function normalizeReviewRecord(value = {}) {
     fee: number(value.fee),
     premium: number(value.premium),
     area: number(value.area),
+    tradeType,
+    saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
+      ? collectorSaleCategory(value.saleCategory || value.sale_category, value.category)
+      : "",
+    salePrice: tradeType === LISTING_TRADE_TYPES.SALE
+      ? number(value.salePrice ?? value.sale_price)
+      : null,
     memo: clean(value.memo),
     link: clean(value.link),
     listSnapshot: clean(value.listSnapshot),
