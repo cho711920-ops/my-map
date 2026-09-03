@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 8;
+const REVIEW_CLASSIFICATION_VERSION = 9;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -2929,7 +2929,33 @@ async function repairExactReviews(env, user, options = {}) {
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
       AND (?2='' OR source=?2)
-    ORDER BY created_at DESC LIMIT ?3`).bind(decisionVersion, sourceFilter, scanLimit).all();
+    ORDER BY CASE WHEN EXISTS (
+      SELECT 1
+      FROM json_each(collector_raw.result_json, '$.candidateIds') candidate_id
+      JOIN listings exact ON exact.id=candidate_id.value
+      WHERE exact.status<>'deleted'
+        AND COALESCE(NULLIF(exact.trade_type, ''), 'lease')=
+          COALESCE(NULLIF(collector_raw.trade_type, ''), 'lease')
+        AND exact.room=COALESCE(json_extract(collector_raw.payload_json, '$.room'), '')
+        AND (
+          (
+            COALESCE(NULLIF(collector_raw.trade_type, ''), 'lease')='lease'
+            AND exact.deposit=CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)
+            AND exact.monthly_rent=CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)
+            AND exact.area_m2 IS NOT NULL
+            AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
+            AND ABS(exact.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))<1
+          )
+          OR (
+            collector_raw.trade_type='sale'
+            AND exact.sale_category=COALESCE(collector_raw.sale_category, '')
+            AND exact.sale_price=collector_raw.sale_price
+            AND exact.area_m2 IS NOT NULL
+            AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
+            AND ABS(exact.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))<1
+          )
+        )
+    ) THEN 0 ELSE 1 END, created_at DESC LIMIT ?3`).bind(decisionVersion, sourceFilter, scanLimit).all();
   const reviewRows = rows?.results || [];
   const parsedRows = reviewRows.map((row) => {
     const parsed = parseJson(row.payload_json, null);
@@ -3074,13 +3100,13 @@ export async function runScheduledReviewRepair(env) {
     email: "system-review-repair@js-map.com",
     role: "owner"
   };
+  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false });
+  if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
   const gongsilRepair = await repairExactReviews(env, systemUser, {
     includeRemaining: false,
     source: "공실박스"
   });
   if (Number(gongsilRepair?.scanned || 0) > 0) return gongsilRepair;
-  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false });
-  if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
   return mergeSingleCandidateReviews(env, systemUser, { limit: 20, refreshCustomerMatches: false });
 }
 
