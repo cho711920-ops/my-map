@@ -56,6 +56,20 @@ test("active source terms recover an exact match hidden by stale representative 
   assert.match(result.reason, /연결 원본/);
 });
 
+test("a direct representative match wins over another master's stale source match", () => {
+  const staleRepresentative = {
+    ...existing("M-stale", "1층", 2000, 110, 27.1),
+    active_source_snapshots: [existing("O-stale", "1층", 2000, 100, 27.1)]
+  };
+  const directRepresentative = existing("M-direct", "1층", 2000, 100, 27.1);
+  const result = classifyListingCandidates(incoming("1층", 2000, 100, 27.1), [
+    staleRepresentative, directRepresentative
+  ]);
+  assert.equal(result.decision, "merge");
+  assert.equal(result.candidate.id, "M-direct");
+  assert.doesNotMatch(result.reason, /연결 원본/);
+});
+
 test("an explicit incoming unit stays separate from different units hidden under a generic master", () => {
   const genericMaster = {
     ...existing("M-501", "5층", 1000, 40, 20.1),

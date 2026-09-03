@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 9;
+const REVIEW_CLASSIFICATION_VERSION = 10;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -1222,7 +1222,15 @@ export function classifyListingCandidates(record, candidates = []) {
   const same = comparisons.filter((item) => item.decision === "same");
   const review = comparisons.filter((item) => item.decision === "review");
   if (same.length === 1) return { decision: "merge", candidate: same[0].row, reason: same[0].reason, comparisons };
-  if (same.length > 1) return { decision: "review", reason: "같은 조건의 기존 매물이 여러 개", comparisons };
+  if (same.length > 1) {
+    const directSame = same.map((item) => ({ item, direct: compareSingleListingSpace(record, item.row) }))
+      .filter(({ direct }) => direct.decision === "same");
+    if (directSame.length === 1) {
+      return { decision: "merge", candidate: directSame[0].item.row,
+        reason: directSame[0].direct.reason, comparisons };
+    }
+    return { decision: "review", reason: "같은 조건의 기존 매물이 여러 개", comparisons };
+  }
   if (review.length) return { decision: "review", reason: review[0].reason, comparisons };
   return { decision: "create", reason: candidates.length
     ? (comparisons[0]?.reason || "기존 매물과 층·호실이 다름")
