@@ -137,6 +137,39 @@ test("Jijok 1023-3 larger floor offer is separate despite sharing the first floo
   assert.match(result.reason, /임대조건과 평수가 모두 크게 다름/);
 });
 
+test("a large same-floor area gap is separate even when the rent gap is modest", () => {
+  const result = classifyListingCandidates(incoming("1층", 3000, 200, 46), [
+    existing("M-smaller", "1층", 3000, 170, 28.3)
+  ]);
+  assert.equal(result.decision, "create");
+  assert.match(result.reason, /평수가 명확히 다름/);
+});
+
+test("same-floor exact area with a small single-term price change is one listing", () => {
+  const rentChange = classifyListingCandidates(incoming("1층", 5000, 160, 45.8), [
+    existing("M-before-rent", "1층", 5000, 170, 45.8)
+  ]);
+  assert.equal(rentChange.decision, "merge");
+  assert.match(rentChange.reason, /소폭 임대조건 변경/);
+
+  const depositChange = classifyListingCandidates(incoming("1층", 2200, 100, 27.1), [
+    existing("M-before-deposit", "1층", 2000, 100, 27.1)
+  ]);
+  assert.equal(depositChange.decision, "merge");
+  assert.match(depositChange.reason, /소폭 임대조건 변경/);
+
+  assert.equal(classifyListingCandidates(incoming("1층", 300, 20, 4.8), [
+    existing("M-low-rent", "1층", 300, 15, 4.8)
+  ]).decision, "review");
+});
+
+test("matching terms with both areas missing still merge safely", () => {
+  const result = classifyListingCandidates(incoming("2층", 1500, 60, null), [
+    existing("M-no-area", "2층", 1500, 60, null)
+  ]);
+  assert.equal(result.decision, "merge");
+});
+
 test("review workspace hides clearly different masters and keeps only plausible candidates", () => {
   const group = { items: [incoming("1층", 5000, 160, 45.8)] };
   const clearlyDifferent = {

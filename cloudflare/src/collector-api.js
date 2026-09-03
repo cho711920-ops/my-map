@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 10;
+const REVIEW_CLASSIFICATION_VERSION = 11;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -1041,9 +1041,10 @@ function reliableOfferMatch(record, row) {
   const rightRent = number(record.rent);
   const leftArea = number(row.area_m2 ?? row.area);
   const rightArea = number(record.area);
+  const areaMatches = leftArea == null && rightArea == null ||
+    leftArea != null && rightArea != null && Math.abs(leftArea - rightArea) < 1;
   return leftDeposit != null && rightDeposit != null && leftRent != null && rightRent != null &&
-    leftArea != null && rightArea != null && sameNumber(leftDeposit, rightDeposit) &&
-    sameNumber(leftRent, rightRent) && Math.abs(leftArea - rightArea) < 1;
+    areaMatches && sameNumber(leftDeposit, rightDeposit) && sameNumber(leftRent, rightRent);
 }
 
 function reliableOfferMismatch(record, row) {
@@ -1119,6 +1120,31 @@ function clearlyDifferentSameFloorRentalOffer(record, row) {
   return rentClearlyDifferent || depositClearlyDifferent;
 }
 
+function likelySameFloorPriceAdjustment(record, row) {
+  if (collectorTradeType(record?.tradeType || record?.trade_type, true) === LISTING_TRADE_TYPES.SALE) return false;
+  const leftDeposit = number(row.deposit);
+  const rightDeposit = number(record.deposit);
+  const leftRent = number(row.monthly_rent ?? row.rent);
+  const rightRent = number(record.rent);
+  const leftArea = number(row.area_m2 ?? row.area);
+  const rightArea = number(record.area);
+  if (leftDeposit == null || rightDeposit == null || leftRent == null || rightRent == null ||
+      leftArea == null || rightArea == null || Math.abs(leftArea - rightArea) >= 1) return false;
+  const rentAdjustment = sameNumber(leftDeposit, rightDeposit) && Math.abs(leftRent - rightRent) <= 20 &&
+    relativeNumberGap(leftRent, rightRent) <= 0.2;
+  const depositAdjustment = sameNumber(leftRent, rightRent) && Math.abs(leftDeposit - rightDeposit) <= 500 &&
+    relativeNumberGap(leftDeposit, rightDeposit) <= 0.2;
+  return rentAdjustment || depositAdjustment;
+}
+
+function clearlyDifferentSameFloorArea(record, row) {
+  if (collectorTradeType(record?.tradeType || record?.trade_type, true) === LISTING_TRADE_TYPES.SALE) return false;
+  const leftArea = number(row.area_m2 ?? row.area);
+  const rightArea = number(record.area);
+  if (leftArea == null || rightArea == null) return false;
+  return Math.abs(leftArea - rightArea) >= 10 && relativeNumberGap(leftArea, rightArea) >= 0.35;
+}
+
 function compareSingleListingSpace(record, row) {
   if (record?.tradeType === "sale") {
     const incomingCategory = collectorSaleCategory(record.saleCategory, record.category);
@@ -1165,12 +1191,20 @@ function compareSingleListingSpace(record, row) {
     return { decision: "same", reason: "같은 층·임대조건·평수" };
   }
   if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
+      likelySameFloorPriceAdjustment(record || {}, row || {})) {
+    return { decision: "same", reason: "같은 층·평수의 소폭 임대조건 변경" };
+  }
+  if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
       stronglyDifferentRentalTerms(record || {}, row || {}, true)) {
     return { decision: "different", reason: "같은 층이지만 보증금·월세가 모두 크게 다름" };
   }
   if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
       clearlyDifferentSameFloorRentalOffer(record || {}, row || {})) {
     return { decision: "different", reason: "같은 층이지만 임대조건과 평수가 모두 크게 다름" };
+  }
+  if (sameKnownFloor && !incoming.units.length && !existing.units.length &&
+      clearlyDifferentSameFloorArea(record || {}, row || {})) {
+    return { decision: "different", reason: "같은 층이지만 평수가 명확히 다름" };
   }
   if (incoming.floor == null && existing.floor == null && offerMatch) {
     return { decision: "same", reason: "층 미상·임대조건·평수 일치" };
@@ -1225,6 +1259,11 @@ export function classifyListingCandidates(record, candidates = []) {
   if (same.length > 1) {
     const directSame = same.map((item) => ({ item, direct: compareSingleListingSpace(record, item.row) }))
       .filter(({ direct }) => direct.decision === "same");
+    const exactDirectSame = directSame.filter(({ item }) => reliableOfferMatch(record, item.row));
+    if (exactDirectSame.length === 1) {
+      return { decision: "merge", candidate: exactDirectSame[0].item.row,
+        reason: exactDirectSame[0].direct.reason, comparisons };
+    }
     if (directSame.length === 1) {
       return { decision: "merge", candidate: directSame[0].item.row,
         reason: directSame[0].direct.reason, comparisons };
@@ -2943,7 +2982,7 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
 async function repairExactReviews(env, user, options = {}) {
   const decisionVersion = REVIEW_CLASSIFICATION_VERSION;
   const sourceFilter = clean(options.source);
-  const scanLimit = Math.max(1, Math.min(50, Number(options.limit) || 50));
+  const scanLimit = Math.max(1, Math.min(100, Number(options.limit) || 100));
   const rows = await env.DB.prepare(`SELECT id, session_id, payload_json, result_json, created_at FROM collector_raw
     WHERE processing_state='review'
       AND COALESCE(json_extract(result_json, '$.autoDecisionVersion'), 0) < ?1
@@ -2959,11 +2998,23 @@ async function repairExactReviews(env, user, options = {}) {
         AND (
           (
             COALESCE(NULLIF(collector_raw.trade_type, ''), 'lease')='lease'
-            AND exact.deposit=CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)
-            AND exact.monthly_rent=CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)
             AND exact.area_m2 IS NOT NULL
             AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
             AND ABS(exact.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))<1
+            AND (
+              (
+                exact.deposit=CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)
+                AND ABS(exact.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))<=20
+                AND ABS(exact.monthly_rent-CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL))<=
+                  0.2*MIN(ABS(exact.monthly_rent), ABS(CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)))
+              )
+              OR (
+                exact.monthly_rent=CAST(json_extract(collector_raw.payload_json, '$.rent') AS REAL)
+                AND ABS(exact.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))<=500
+                AND ABS(exact.deposit-CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL))<=
+                  0.2*MIN(ABS(exact.deposit), ABS(CAST(json_extract(collector_raw.payload_json, '$.deposit') AS REAL)))
+              )
+            )
           )
           OR (
             collector_raw.trade_type='sale'
@@ -2985,10 +3036,12 @@ async function repairExactReviews(env, user, options = {}) {
         AND different.area_m2 IS NOT NULL
         AND json_extract(collector_raw.payload_json, '$.area') IS NOT NULL
         AND ABS(different.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))>=5
-        AND (
+        AND (ABS(different.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))>=10 OR
+          (
           MIN(ABS(different.area_m2), ABS(CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL)))=0
           OR ABS(different.area_m2-CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL))>=
             0.35*MIN(ABS(different.area_m2), ABS(CAST(json_extract(collector_raw.payload_json, '$.area') AS REAL)))
+          )
         )
         AND (
           (
@@ -3157,7 +3210,7 @@ export async function runScheduledReviewRepair(env) {
     email: "system-review-repair@js-map.com",
     role: "owner"
   };
-  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false, limit: 50 });
+  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false, limit: 100 });
   if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
   const gongsilRepair = await repairExactReviews(env, systemUser, {
     includeRemaining: false,
