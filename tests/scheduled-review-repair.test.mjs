@@ -23,6 +23,7 @@ assert.match(collector, /const allCandidates = candidatesByAddress[\s\S]*?const 
 assert.match(collector, /const key = `\$\{tradeType\}\|\$\{saleCategory\}\|/);
 assert.match(collector, /listingTradeTypesCanMerge\(candidate\.tradeType, group\.tradeType\)/);
 assert.match(collector, /UPDATE collector_raw SET result_json=\?1, error_text='' WHERE id=\?2/);
+assert.equal((collector.match(/processing_state='processed', processed_at=\?1, result_json=\?2, error_text=''/g) || []).length >= 2, true);
 assert.match(collector, /action: "autoMergeExactAlias"/);
 assert.match(collector, /async function attachPendingReviewAliases/);
 assert.match(collector, /aliasesMerged: aliases\.merged/);

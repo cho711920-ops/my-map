@@ -2745,7 +2745,7 @@ async function applyReviewBatch(env, user, body) {
         const aliases = await attachPendingReviewAliases(env, row.id, listing.id, record, clean(user?.email));
         aliasesMerged += aliases.merged;
         aliasesFailed += aliases.failed;
-        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
+        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2, error_text='' WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action, listingId: listing.id,
             aliasesMerged: aliases.merged, manual: Boolean(body.manualMergeConfirmed) }), id).run();
       } else {
@@ -3019,7 +3019,7 @@ async function repairExactReviews(env, user, options = {}) {
               .bind(clean(error?.message || error).slice(0, 500), alias.id).run();
           }
         }
-        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
+        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2, error_text='' WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action: "autoMerge", listingId: classified.candidate.id,
             reason: classified.reason, aliasesMerged: mergedAliasCount,
             autoDecisionVersion: decisionVersion }), row.id).run();
@@ -3037,7 +3037,7 @@ async function repairExactReviews(env, user, options = {}) {
             !listingTradeTypesCanMerge(candidate.trade_type, record.tradeType)), ...candidates
         ]);
         affectedListingIds.add(listingId);
-        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2 WHERE id=?3")
+        await env.DB.prepare("UPDATE collector_raw SET processing_state='processed', processed_at=?1, result_json=?2, error_text='' WHERE id=?3")
           .bind(nowIso(), JSON.stringify({ action: "autoCreate", listingId,
             reason: classified.reason, autoDecisionVersion: decisionVersion }), row.id).run();
         created += 1;
