@@ -292,10 +292,12 @@ test("review workspace keeps lease and sale verification groups and candidates s
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.groups.length, 2);
-  for (const group of payload.groups) {
-    assert.equal(group.candidates.length, 1);
-    assert.equal(group.candidates[0].tradeType, group.tradeType);
-  }
+  const leaseGroup = payload.groups.find((group) => group.tradeType === "lease");
+  const saleGroup = payload.groups.find((group) => group.tradeType === "sale");
+  assert.equal(leaseGroup.candidates.length, 0);
+  assert.equal(leaseGroup.recommendation, "별도 신규등록 가능");
+  assert.equal(saleGroup.candidates.length, 1);
+  assert.equal(saleGroup.candidates[0].tradeType, "sale");
 });
 
 test("primary sheet reads come directly from D1 without Apps Script", async () => {

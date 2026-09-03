@@ -7,7 +7,8 @@ import {
   compareListingSpace,
   existingSourceNeedsAddressReclassification,
   hasExactLotAddress,
-  normalizeReviewRecord
+  normalizeReviewRecord,
+  relevantReviewCandidates
 } from "../cloudflare/src/collector-api.js";
 
 function incoming(room, deposit = 1000, rent = 50, area = 10) {
@@ -134,6 +135,21 @@ test("Jijok 1023-3 larger floor offer is separate despite sharing the first floo
   ]);
   assert.equal(result.decision, "create");
   assert.match(result.reason, /임대조건과 평수가 모두 크게 다름/);
+});
+
+test("review workspace hides clearly different masters and keeps only plausible candidates", () => {
+  const group = { items: [incoming("1층", 5000, 160, 45.8)] };
+  const clearlyDifferent = {
+    propertyId: "M-old", room: "1층", deposit: 2000, rent: 140, area: 31.9, tradeType: "lease"
+  };
+  const plausible = {
+    propertyId: "M-new", room: "1층", deposit: 5000, rent: 170, area: 45.8, tradeType: "lease"
+  };
+  const otherFloor = {
+    propertyId: "M-fourth", room: "4층", deposit: 5000, rent: 300, area: 103, tradeType: "lease"
+  };
+  assert.deepEqual(relevantReviewCandidates(group, [clearlyDifferent, plausible, otherFloor])
+    .map((candidate) => candidate.propertyId), ["M-new"]);
 });
 
 test("same-floor offers with the same deposit stay separate when rent and area are clearly different", () => {

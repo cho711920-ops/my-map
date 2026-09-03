@@ -2511,15 +2511,26 @@ function candidateJson(row) {
 }
 
 export function relevantReviewCandidates(group, candidates = []) {
-  const reviewFloors = [...new Set((Array.isArray(group?.items) ? group.items : [])
+  const reviewItems = Array.isArray(group?.items) ? group.items : [];
+  const reviewFloors = [...new Set(reviewItems
     .map((item) => parseListingFloor(item?.room, true))
     .filter((floor) => floor != null && Number.isFinite(Number(floor)))
     .map(Number))];
-  if (!reviewFloors.length) return candidates;
-  return candidates.filter((candidate) => {
+  const floorCandidates = reviewFloors.length ? candidates.filter((candidate) => {
     const candidateFloor = parseListingFloor(candidate?.room, true);
     return candidateFloor == null || reviewFloors.includes(Number(candidateFloor));
-  });
+  }) : candidates;
+  if (!reviewItems.length) return floorCandidates;
+  return floorCandidates.filter((candidate) => reviewItems.some((item) =>
+    compareListingSpace(item, {
+      ...candidate,
+      id: candidate.propertyId || candidate.id,
+      monthly_rent: candidate.rent ?? candidate.monthly_rent,
+      area_m2: candidate.area ?? candidate.area_m2,
+      trade_type: candidate.tradeType || candidate.trade_type,
+      sale_category: candidate.saleCategory || candidate.sale_category,
+      sale_price: candidate.salePrice ?? candidate.sale_price
+    }).decision !== "different"));
 }
 
 async function reviewWorkspace(env, query) {
