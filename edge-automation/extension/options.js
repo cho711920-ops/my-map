@@ -222,8 +222,12 @@ function renderDeferredReview() {
       rows.push({ target: item.label || item.source, sourceId: row.sourceId, message: row.message });
     });
   });
-  if (!rows.length) {
+  if (!deferredTotal) {
     host.innerHTML = '<div class="empty">현재 지번 보류 매물이 없습니다.</div>';
+    return;
+  }
+  if (!rows.length) {
+    host.innerHTML = `<div class="deferred-summary"><b>전체 ${deferredTotal.toLocaleString("ko-KR")}건</b><span>이전 기록에는 개별 매물번호가 없어 다음 수집 때 사유 목록이 채워집니다.</span></div>`;
     return;
   }
   host.innerHTML = `<div class="deferred-summary"><b>전체 ${deferredTotal.toLocaleString("ko-KR")}건</b><span>최근 사유 ${rows.length.toLocaleString("ko-KR")}건 표시 · 원본은 보존되어 다음 수집에서 다시 확인됩니다.</span></div><div class="deferred-list">${rows.map((row) => {
