@@ -263,7 +263,35 @@ test("basement aliases share one floor while above-ground rooms remain separate"
 test("multiple equally strong candidates remain for manual verification", () => {
   const result = classifyListingCandidates(incoming("1층", 1000, 50, 10.2), [
     existing("M-1", "101호", 1000, 50, 10),
-    existing("M-2", "1층", 1000, 50, 10.1)
+    existing("M-2", "102호", 1000, 50, 10.1)
+  ]);
+  assert.equal(result.decision, "review");
+});
+
+test("an explicit room wins over an otherwise matching generic-floor candidate", () => {
+  const result = classifyListingCandidates(incoming("112호", 5000, 100, 10.5), [
+    existing("M-generic", "1층", 5000, 100, 10.4),
+    existing("M-room", "112호", 5000, 100, 10.5)
+  ]);
+  assert.equal(result.decision, "merge");
+  assert.equal(result.candidate.id, "M-room");
+  assert.match(result.reason, /층호실 표기 우선/);
+});
+
+test("a generic floor wins over an otherwise matching explicit-room candidate", () => {
+  const result = classifyListingCandidates(incoming("1층", 1000, 80, 25), [
+    existing("M-room", "101호", 1000, 80, 25),
+    existing("M-generic", "1층", 1000, 80, 25)
+  ]);
+  assert.equal(result.decision, "merge");
+  assert.equal(result.candidate.id, "M-generic");
+  assert.match(result.reason, /층호실 표기 우선/);
+});
+
+test("two equally aligned generic-floor candidates still require verification", () => {
+  const result = classifyListingCandidates(incoming("1층", 1000, 80, 25), [
+    existing("M-generic-a", "1층", 1000, 80, 25),
+    existing("M-generic-b", "1층", 1000, 80, 25.1)
   ]);
   assert.equal(result.decision, "review");
 });

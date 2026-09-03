@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 12;
+const REVIEW_CLASSIFICATION_VERSION = 13;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -1047,6 +1047,20 @@ function reliableOfferMatch(record, row) {
     areaMatches && sameNumber(leftDeposit, rightDeposit) && sameNumber(leftRent, rightRent);
 }
 
+function directlyAlignedSpaceIdentity(record, row) {
+  const incoming = roomIdentity(record?.room);
+  const existing = roomIdentity(row?.room);
+  if (incoming.wholeBuilding || existing.wholeBuilding) {
+    return incoming.wholeBuilding && existing.wholeBuilding;
+  }
+  if (incoming.units.length || existing.units.length) {
+    return incoming.units.length > 0 && existing.units.length > 0 && sameSet(incoming.units, existing.units) &&
+      (!incoming.dongs.length || !existing.dongs.length || sameSet(incoming.dongs, existing.dongs));
+  }
+  return incoming.floor != null && existing.floor != null && incoming.floor === existing.floor &&
+    incoming.wholeFloor === existing.wholeFloor;
+}
+
 function exactOfferTerms(record, row) {
   const tradeType = collectorTradeType(record?.tradeType || record?.trade_type, true);
   if (tradeType === LISTING_TRADE_TYPES.SALE) {
@@ -1290,6 +1304,11 @@ export function classifyListingCandidates(record, candidates = []) {
   if (same.length > 1) {
     const directSame = same.map((item) => ({ item, direct: compareSingleListingSpace(record, item.row) }))
       .filter(({ direct }) => direct.decision === "same");
+    const identityAlignedSame = directSame.filter(({ item }) => directlyAlignedSpaceIdentity(record, item.row));
+    if (identityAlignedSame.length === 1) {
+      return { decision: "merge", candidate: identityAlignedSame[0].item.row,
+        reason: `${identityAlignedSame[0].direct.reason}·층호실 표기 우선`, comparisons };
+    }
     const exactDirectSame = directSame.filter(({ item }) => reliableOfferMatch(record, item.row));
     if (exactDirectSame.length === 1) {
       return { decision: "merge", candidate: exactDirectSame[0].item.row,
