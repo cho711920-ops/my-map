@@ -30,7 +30,13 @@ trap {
   Write-AutoCollectorLog 'ERROR' ([string]$_.Exception.Message)
   exit 1
 }
-Write-AutoCollectorLog 'INFO' (if ($Setup) { '자동수집 초기 설정 시작' } elseif ($Force) { '수동 전체실행 시작' } else { 'Windows 예약실행 시작' })
+$launchMessage = 'Windows 예약실행 시작'
+if ($Setup) {
+  $launchMessage = '자동수집 초기 설정 시작'
+} elseif ($Force) {
+  $launchMessage = '수동 전체실행 시작'
+}
+Write-AutoCollectorLog 'INFO' $launchMessage
 
 if (-not (Test-Path -LiteralPath (Join-Path $extensionPath 'manifest.json'))) {
   throw 'JS 자동수집 확장 프로그램이 설치되지 않았습니다. install-edge-auto-collector.ps1을 먼저 실행해주세요.'
@@ -119,16 +125,17 @@ if ($Setup) {
     Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedUrl" -TimeoutSec 5 | Out-Null
   }
   & $openAutorun $runToken
-  # A normal run uses one trigger only. Open a second trigger solely when the
-  # first page remains after reloading a stale MV3 service worker.
+  # The first trigger reloads a stale MV3 worker when its build does not match
+  # the installed manifest. Always send one bounded follow-up trigger so the
+  # refreshed worker starts or resumes the persisted run exactly once.
   Start-Sleep -Seconds 4
   $triggerPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5 |
     Where-Object { $_.type -eq 'page' -and $_.url -like "chrome-extension://$extensionId/autorun.html*" })
   if ($triggerPages.Count) {
     Write-AutoCollectorLog 'WARN' '첫 실행 신호 페이지가 남아 있어 업데이트된 실행기로 한 번만 재전송합니다.'
-    & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
-    Start-Sleep -Seconds 3
   }
+  & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
+  Start-Sleep -Seconds 3
   # Keep the live per-district status page visible after the short autorun
   # trigger tabs close themselves. Reuse an existing status tab when Edge
   # restores the dedicated profile instead of opening duplicates.

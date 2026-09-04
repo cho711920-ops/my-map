@@ -14,6 +14,13 @@ function send(message) {
 }
 
 async function start() {
+  const manifestVersion = chrome.runtime.getManifest().version;
+  const workerState = await send({ type: "JS_AUTO_GET_STATE" });
+  if (!workerState || workerState.ok !== true || workerState.backgroundBuild !== manifestVersion) {
+    statusElement.textContent = "업데이트된 자동수집 실행기를 적용하고 다시 연결합니다.";
+    chrome.runtime.reload();
+    return;
+  }
   let response = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     response = await send({ type: "JS_AUTO_RUN_REQUEST", forceRun });
