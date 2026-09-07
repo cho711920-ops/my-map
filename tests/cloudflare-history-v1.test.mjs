@@ -32,7 +32,8 @@ test("business history hides internal fields and maps edit aliases", () => {
       field: "contacts_json",
       before: [{ role: "관리", phone: "010-1111-2222" }],
       after: [{ role: "관리", phone: "010-3333-4444" }]
-    }
+    },
+    { field: "status", before: "active", after: "deleted" }
   ]);
 });
 

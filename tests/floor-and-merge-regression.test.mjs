@@ -49,5 +49,5 @@ test("moving the last source removes the empty master and invalidates both listi
   assert.match(d1, /NOT EXISTS \(SELECT 1 FROM listing_sources WHERE listing_id=\?2\)/);
   assert.match(d1, /emptyMasterRemovedAfterMove/);
   assert.match(worker, /SHEET_CACHE_ACTIONS[\s\S]*"moveOriginalListing"/);
-  assert.match(worker, /UNIFIED_CACHE_ACTIONS = new Set\(\["moveOriginalListing"\]\)/);
+  assert.match(worker, /UNIFIED_CACHE_ACTIONS = new Set\(\[[\s\S]*"moveOriginalListing"[\s\S]*"toggleDone"[\s\S]*"updateProperty"/);
 });

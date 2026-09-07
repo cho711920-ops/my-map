@@ -42,7 +42,7 @@ test("history and role management are isolated from customer matching and notifi
   assert.match(admin, />이전으로 복구<\/button>/);
   assert.doesNotMatch(admin, />이 값으로 복구<\/button>/);
   assert.match(d1, /businessHistoryDiff/);
-  assert.match(d1, /h\.action IN \('quickAdd', 'updateProperty', 'updatePropertyMemo', 'restoreListingHistory'\)/);
+  assert.match(d1, /h\.action IN \('quickAdd', 'updateProperty', 'updatePropertyMemo', 'toggleDone', 'deleteProperty', 'restoreListingHistory'\)/);
 });
 
 test("server enforces edit and administrator roles", () => {

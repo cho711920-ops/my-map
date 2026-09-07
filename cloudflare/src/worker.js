@@ -37,7 +37,9 @@ const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
 const SHEET_CACHE_ACTIONS = new Set([
   "deleteProperty", "moveOriginalListing", "quickAdd", "restoreListingHistory", "toggleDone", "updateProperty", "updatePropertyMemo"
 ]);
-const UNIFIED_CACHE_ACTIONS = new Set(["moveOriginalListing"]);
+const UNIFIED_CACHE_ACTIONS = new Set([
+  "moveOriginalListing", "restoreListingHistory", "toggleDone", "updateProperty"
+]);
 const OPERATIONS_CACHE_ACTIONS = new Set([
   "addCustomerActivity", "deleteCustomer", "deleteProperty", "moveOriginalListing", "quickAdd",
   "rebuildCustomerMatches", "restoreListingHistory", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
@@ -633,7 +635,7 @@ async function handleDataApi(request, env, context) {
     ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
   ], invalidation, {
     changeIds: [...new Set(changedIds)],
-    fullReload: !changedIds.length || mutationAction(body) === "moveOriginalListing",
+    fullReload: !changedIds.length || mutationAction(body) === "moveOriginalListing" || d1Result.fullReload === true,
     changeAction: mutationAction(body)
   });
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });

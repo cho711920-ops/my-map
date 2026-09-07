@@ -1277,6 +1277,20 @@ button {
   margin-right:4px;
 }
 
+button.done-badge.done-restore-button-v1 {
+  border:0;
+  font-family:inherit;
+  cursor:pointer;
+}
+
+button.done-badge.done-restore-button-v1:hover,
+button.done-badge.done-restore-button-v1:focus-visible {
+  background:#cbd5e1;
+  color:#334155;
+  outline:2px solid rgba(37, 99, 235, .25);
+  outline-offset:1px;
+}
+
 .star {
   font-size:19px;
   cursor:pointer;

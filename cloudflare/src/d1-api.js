@@ -944,7 +944,7 @@ async function transactionCandidates(env) {
 
 const BUSINESS_HISTORY_FIELDS = [
   "title", "room", "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2",
-  "landlord_phone", "tenant_phone", "operating_memo", "contacts_json"
+  "landlord_phone", "tenant_phone", "operating_memo", "contacts_json", "status"
 ];
 
 const BUSINESS_HISTORY_ALIASES = {
@@ -967,7 +967,9 @@ const BUSINESS_HISTORY_ALIASES = {
   memo: "operating_memo",
   operating_memo: "operating_memo",
   contacts: "contacts_json",
-  contacts_json: "contacts_json"
+  contacts_json: "contacts_json",
+  state: "status",
+  status: "status"
 };
 
 const BUSINESS_HISTORY_NUMBERS = new Set([
@@ -1047,7 +1049,7 @@ async function listingHistory(env, query) {
     FROM listing_history h
     LEFT JOIN listings l ON l.id=h.listing_id
     WHERE (?1='' OR h.listing_id=?1 OR l.property_id=?1)
-      AND h.action IN ('quickAdd', 'updateProperty', 'updatePropertyMemo', 'restoreListingHistory')
+      AND h.action IN ('quickAdd', 'updateProperty', 'updatePropertyMemo', 'toggleDone', 'deleteProperty', 'restoreListingHistory')
       AND (?2=0 OR h.id < ?2)
     ORDER BY h.id DESC LIMIT ?3`)
     .bind(propertyId, cursor, limit + 1).all();
@@ -1177,17 +1179,35 @@ async function updateProperty(env, user, body) {
     title: before.title, room: before.room, deposit: before.deposit, monthly_rent: before.monthly_rent,
     maintenance_fee: before.maintenance_fee, premium: before.premium, area_m2: before.area_m2,
     landlord_phone: before.landlord_phone, tenant_phone: before.tenant_phone,
-    operating_memo: before.operating_memo, contacts_json: before.contacts_json
+    operating_memo: before.operating_memo, contacts_json: before.contacts_json, status: before.status
   };
   const afterHistory = {
     title: clean(value.name), room: canonicalListingRoom(value.room), deposit: number(value.deposit),
     monthly_rent: number(value.rent), maintenance_fee: number(value.fee), premium: number(value.premium),
     area_m2: number(value.area), landlord_phone: clean(value.landlordPhone),
     tenant_phone: clean(value.tenantPhone), operating_memo: clean(value.memo),
-    contacts_json: JSON.stringify(reconciledContacts)
+    contacts_json: JSON.stringify(reconciledContacts), status: clean(value.state) || "active"
   };
   const now = new Date().toISOString();
+  const linkedSourcesBefore = await linkedSourceHistorySnapshot(env, before.id);
+  const restoringCompleted = clean(before.status) === "계약완료" && afterHistory.status !== "계약완료";
+  const completedSnapshot = restoringCompleted
+    ? await latestCompletedSourceSnapshot(env, before.id)
+    : [];
+  const recovery = restoringCompleted
+    ? await completionSourceRecoveryPlan(env, before.id, completedSnapshot, now)
+    : { statements: [], recovered: [], conflicts: 0, missing: 0 };
+  const recoveredById = new Map(recovery.recovered.map((row) => [row.id, row]));
+  const linkedSourcesAfter = linkedSourcesBefore.concat(
+    completedSnapshot.filter((row) => recoveredById.has(clean(row?.id))).map((row) => ({
+      ...row,
+      active: recoveredById.get(clean(row?.id))?.active || 0
+    }))
+  );
+  beforeHistory.linkedSources = linkedSourcesBefore;
+  afterHistory.linkedSources = linkedSourcesAfter;
   await env.DB.batch([
+    ...recovery.statements,
     env.DB.prepare(`UPDATE listings SET
       title=?1, building_name=?1, room=?2, deposit=?3, monthly_rent=?4, maintenance_fee=?5,
       premium=?6, area_m2=?7, landlord_phone=?8, tenant_phone=?9, operating_memo=?10,
@@ -1200,6 +1220,11 @@ async function updateProperty(env, user, body) {
       .bind(before.id || propertyId, clean(user?.email), JSON.stringify(beforeHistory), JSON.stringify(afterHistory))
   ]);
   return { ok: true, persisted: true, queued: false, propertyId, updated: value,
+    sourceCount: linkedSourcesAfter.length,
+    activeSourceCount: linkedSourcesAfter.filter((row) => Number(row?.active) === 1).length,
+    restoredSourceCount: recovery.recovered.length,
+    sourceConflicts: recovery.conflicts, missingSources: recovery.missing,
+    sourceLinksChanged: recovery.recovered.length > 0, fullReload: restoringCompleted,
     operationAdjustments: { history: 1 }, source: "D1" };
 }
 
@@ -1225,6 +1250,66 @@ async function updateMemo(env, user, body) {
     operationAdjustments: { history: 1 }, source: "D1" };
 }
 
+async function linkedSourceHistorySnapshot(env, listingId) {
+  const result = await env.DB.prepare(`SELECT id, source, source_listing_id, active
+    FROM listing_sources WHERE listing_id=?1 ORDER BY rowid`).bind(listingId).all();
+  return (result?.results || []).map((row) => ({
+    id: clean(row.id),
+    source: clean(row.source),
+    sourceListingId: clean(row.source_listing_id),
+    active: Number(row.active) === 1 ? 1 : 0
+  })).filter((row) => row.id);
+}
+
+async function latestCompletedSourceSnapshot(env, listingId) {
+  const result = await env.DB.prepare(`SELECT before_json, after_json
+    FROM listing_history
+    WHERE listing_id=?1 AND action IN ('toggleDone', 'updateProperty')
+    ORDER BY id DESC LIMIT 20`).bind(listingId).all();
+  for (const row of result?.results || []) {
+    const after = parseJson(row.after_json, {});
+    if (clean(after.status) !== "계약완료") continue;
+    const before = parseJson(row.before_json, {});
+    if (Array.isArray(before.linkedSources)) return before.linkedSources;
+  }
+  return [];
+}
+
+async function completionSourceRecoveryPlan(env, listingId, snapshot, now) {
+  const sourceIds = [...new Set((Array.isArray(snapshot) ? snapshot : [])
+    .map((row) => clean(row?.id)).filter(Boolean))];
+  if (!sourceIds.length) return { statements: [], recovered: [], conflicts: 0, missing: 0 };
+  const placeholders = sourceIds.map((_, index) => `?${index + 1}`).join(",");
+  const result = await env.DB.prepare(`SELECT id, listing_id, active FROM listing_sources
+    WHERE id IN (${placeholders})`).bind(...sourceIds).all();
+  const rows = result?.results || [];
+  const found = new Set(rows.map((row) => clean(row.id)).filter(Boolean));
+  const recoverable = rows.filter((row) => !clean(row.listing_id));
+  const conflicts = rows.filter((row) => clean(row.listing_id) && clean(row.listing_id) !== listingId).length;
+  const statements = [];
+  for (const row of recoverable) {
+    const sourceId = clean(row.id);
+    statements.push(
+      env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
+        list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2
+        WHERE id=?3 AND (listing_id IS NULL OR trim(listing_id)='')`).bind(listingId, now, sourceId),
+      env.DB.prepare(`UPDATE listing_media SET listing_id=?1, updated_at=?2
+        WHERE source_id=?3 AND (listing_id IS NULL OR trim(listing_id)='')`).bind(listingId, now, sourceId),
+      env.DB.prepare(`UPDATE listing_contacts SET listing_id=?1, updated_at=?2
+        WHERE source_id=?3 AND (listing_id IS NULL OR trim(listing_id)='')`).bind(listingId, now, sourceId)
+    );
+  }
+  return {
+    statements,
+    recovered: recoverable.map((row) => ({
+      id: clean(row.id),
+      active: Number(row.active) === 1 ? 1 : 0
+    })),
+    conflicts,
+    missing: sourceIds.filter((id) => !found.has(id)).length
+  };
+}
+
 async function toggleDone(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
@@ -1233,17 +1318,40 @@ async function toggleDone(env, user, body) {
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
   const after = { status: clean(body.state) || "active", operating_memo: clean(body.memo) };
   const now = new Date().toISOString();
+  const linkedSourcesBefore = await linkedSourceHistorySnapshot(env, before.id);
+  const restoringCompleted = clean(before.status) === "계약완료" && after.status !== "계약완료";
+  const completedSnapshot = restoringCompleted
+    ? await latestCompletedSourceSnapshot(env, before.id)
+    : [];
+  const recovery = restoringCompleted
+    ? await completionSourceRecoveryPlan(env, before.id, completedSnapshot, now)
+    : { statements: [], recovered: [], conflicts: 0, missing: 0 };
+  const recoveredById = new Map(recovery.recovered.map((row) => [row.id, row]));
+  const linkedSourcesAfter = linkedSourcesBefore.concat(
+    completedSnapshot.filter((row) => recoveredById.has(clean(row?.id))).map((row) => ({
+      ...row,
+      active: recoveredById.get(clean(row?.id))?.active || 0
+    }))
+  );
   const results = await env.DB.batch([
+    ...recovery.statements,
     env.DB.prepare(`UPDATE listings SET status=?1, operating_memo=?2,
       version=version+1, updated_at=?3 WHERE property_id=?4`)
       .bind(after.status, after.operating_memo, now, propertyId),
     env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
       VALUES (?1, 'toggleDone', ?2, ?3, ?4)`)
-      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(before), JSON.stringify(after))
+      .bind(before.id || propertyId, clean(user?.email),
+        JSON.stringify({ ...before, linkedSources: linkedSourcesBefore }),
+        JSON.stringify({ ...after, linkedSources: linkedSourcesAfter }))
   ]);
-  const result = results?.[0];
+  const result = results?.[recovery.statements.length];
   if (!Number(result?.meta?.changes || 0)) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const sourceCount = linkedSourcesAfter.length;
+  const activeSourceCount = linkedSourcesAfter.filter((row) => Number(row?.active) === 1).length;
   return { ok: true, persisted: true, queued: false, propertyId, state: after.status, memo: after.operating_memo,
+    sourceCount, activeSourceCount, restoredSourceCount: recovery.recovered.length,
+    sourceConflicts: recovery.conflicts, missingSources: recovery.missing,
+    sourceLinksChanged: recovery.recovered.length > 0, fullReload: restoringCompleted,
     operationAdjustments: { history: 1 }, source: "D1" };
 }
 

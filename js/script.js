@@ -123,9 +123,10 @@ window.addEventListener("js-async-mutation-finished", function(event) {
     return;
   }
   if (asyncMutationSheetReloadTimerV654) clearTimeout(asyncMutationSheetReloadTimerV654);
+  var refreshUnifiedSources = Boolean(detail.result && detail.result.fullReload);
   asyncMutationSheetReloadTimerV654 = setTimeout(function() {
     asyncMutationSheetReloadTimerV654 = null;
-    loadSheet(true);
+    loadSheet(true, refreshUnifiedSources);
   }, 250);
 });
 var listRenderLimit = 0;
@@ -4433,8 +4434,11 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     (customerMatchContextV719 ? " operations-match-listing-card-v719" : "") +
     (customerMatchMapCardV721 ? " customer-match-map-card-v721" : "");
 
+  var encodedKey = encodeURIComponent(item.key);
   var doneLabel = isDone(item)
-    ? '<span class="done-badge">계약완료</span>'
+    ? '<button type="button" class="done-badge done-restore-button-v1" ' +
+        'title="계약가능으로 복구" aria-label="계약완료 상태를 계약가능으로 복구" ' +
+        'onclick="event.stopPropagation(); restoreCompletedListing(\'' + encodedKey + '\')">계약완료 ↩</button>'
     : "";
 
   var typeLabel = item.type
@@ -4447,7 +4451,6 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
       ? '<span class="gongsil-source-badge verification-done-v661">확인</span>'
       : "");
 
-  var encodedKey = encodeURIComponent(item.key);
   var favoriteRefV821 = item.propertyId
     ? "property:" + String(item.propertyId).trim()
     : item.key;
@@ -4939,6 +4942,29 @@ function makeDoneMemo(memo, checked) {
 }
 
 
+function restoreCompletedListing(encodedKey) {
+  var key = decodeURIComponent(encodedKey || "");
+  var item = getItemByKeyForStatus(key);
+
+  if (!item || !isDone(item)) {
+    alert("복구할 계약완료 매물을 찾지 못했습니다.");
+    return;
+  }
+
+  var linkedCount = Math.max(1, Number(item.unifiedOriginalCountV8) || 1);
+  var message =
+    "이 매물을 계약가능 상태로 복구할까요?\n" +
+    "거래완료 날짜 표식도 함께 제거됩니다.";
+
+  if (linkedCount > 1) {
+    message += "\n연결된 동일매물 " + linkedCount + "개도 그대로 유지합니다.";
+  }
+
+  if (!confirm(message)) return;
+  toggleDoneStatus(encodedKey, false);
+}
+
+
 function restoreListScrollAfterRender(scrollTop) {
   requestAnimationFrame(function() {
     var sidebar = document.getElementById("sidebar");
@@ -5014,12 +5040,21 @@ function toggleDoneStatus(encodedKey, checked) {
     delete doneTogglePendingKeys[key];
     refreshDoneStatusUI(true);
 
+    var restoredOriginalCount = Math.max(
+      0,
+      Number(result && result.activeSourceCount) || 0
+    );
     document.getElementById("status").innerHTML =
-      checked ? "거래완료 저장 요청 완료" : "계약가능 복구 요청 완료";
+      checked
+        ? "거래완료 저장 요청 완료"
+        : "계약가능 복구 요청 완료" +
+          (restoredOriginalCount > 1
+            ? " · 동일매물 " + restoredOriginalCount + "개 유지"
+            : "");
 
     // D1 반영값을 다시 읽어 실제 저장 상태를 확인
     if (!result || !result.queued) {
-      setTimeout(function() { loadSheet(true); }, 1800);
+      setTimeout(function() { loadSheet(true, true); }, 700);
     }
   }).catch(function(error) {
     console.error(error);

@@ -338,7 +338,7 @@ function schedulePropertyEditReloadV634() {
    */
   propertyEditReloadTimerV634 = setTimeout(function() {
     propertyEditReloadTimerV634 = null;
-    loadSheet(true);
+    loadSheet(true, true);
   }, 2200);
 }
 
@@ -382,6 +382,16 @@ function savePropertyEditV630() {
       return { role: contact.role, phone: contact.phone.display };
     })
   };
+
+  if (
+    item.state === "계약완료" &&
+    !updated.state &&
+    typeof makeDoneMemo === "function"
+  ) {
+    updated.memo = makeDoneMemo(updated.memo, false);
+    document.getElementById("peMemoV630").value = updated.memo;
+  }
+
   var updatedValuePresenceV650 = {
     deposit: String(document.getElementById("peDepositV630").value || "").trim() !== "",
     rent: String(document.getElementById("peRentV630").value || "").trim() !== "",
