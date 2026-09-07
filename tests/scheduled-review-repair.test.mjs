@@ -18,7 +18,7 @@ assert.match(collector, /const exactRepair =[\s\S]*?return exactRepair;[\s\S]*?c
 assert.match(collector, /repairExactReviews\(env, systemUser, \{[\s\S]*?source: "공실박스"/);
 assert.match(collector, /if \(Number\(gongsilRepair\?\.scanned \|\| 0\) > 0\) return gongsilRepair/);
 assert.match(collector, /return mergeSingleCandidateReviews\(env, systemUser/);
-assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 14/);
+assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 15/);
 assert.match(collector, /const decisionVersion = REVIEW_CLASSIFICATION_VERSION/);
 assert.match(collector, /ORDER BY CASE WHEN EXISTS \(/);
 assert.match(collector, /json_each\(collector_raw\.result_json, '\$\.candidateIds'\)/);
@@ -40,6 +40,8 @@ assert.match(collector, /aliasesMerged: aliases\.merged/);
 assert.match(collector, /json_array_length\(json_extract\(cr\.result_json, '\$\.candidateIds'\)\)=1/);
 assert.match(collector, /NOT EXISTS \(SELECT 1 FROM listings other/);
 assert.match(collector, /preserveRepresentative: true/);
+assert.match(collector, /consolidateClassifiedCandidateDuplicates/);
+assert.match(collector, /activeMaster: -consolidated/);
 assert.match(wrangler, /crons = \["\* \* \* \* \*"\]/);
 
 console.log("scheduled review repair tests passed");

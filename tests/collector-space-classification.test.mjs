@@ -307,12 +307,25 @@ test("a generic floor wins over an otherwise matching explicit-room candidate", 
   assert.match(result.reason, /층호실 표기 우선/);
 });
 
-test("two equally aligned generic-floor candidates still require verification", () => {
+test("equivalent generic-floor duplicate masters select one representative and consolidate the rest", () => {
   const result = classifyListingCandidates(incoming("1층", 1000, 80, 25), [
-    existing("M-generic-a", "1층", 1000, 80, 25),
-    existing("M-generic-b", "1층", 1000, 80, 25.1)
+    {...existing("M-generic-a", "1층", 1000, 80, 25), main_source: "네이버", active_source_count: 3},
+    {...existing("M-generic-b", "1층", 1000, 80, 25.1), main_source: "당근", active_source_count: 1}
   ]);
-  assert.equal(result.decision, "review");
+  assert.equal(result.decision, "merge");
+  assert.equal(result.candidate.id, "M-generic-b");
+  assert.deepEqual(result.duplicateCandidateIds, ["M-generic-a"]);
+  assert.match(result.reason, /중복 대표매물 자동정리/);
+});
+
+test("multiple same-floor masters with only a small rent change consolidate automatically", () => {
+  const result = classifyListingCandidates(incoming("7층", 3000, 160, 45.6), [
+    {...existing("M-rent-160", "7층", 3000, 160, 45.6), main_source: "네이버"},
+    {...existing("M-rent-170", "7층", 3000, 170, 45.6), main_source: "공실박스"}
+  ]);
+  assert.equal(result.decision, "merge");
+  assert.equal(result.candidate.id, "M-rent-160");
+  assert.deepEqual(result.duplicateCandidateIds, ["M-rent-170"]);
 });
 
 test("a roomless offer is separate when both terms and area clearly differ", () => {

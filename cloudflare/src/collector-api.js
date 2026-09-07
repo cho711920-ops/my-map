@@ -27,7 +27,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "applyReviewBatch", "consolidateExistingMasters", "repairRoomlessExactReviews",
   "mergeSingleCandidateReviews"
 ]);
-const REVIEW_CLASSIFICATION_VERSION = 14;
+const REVIEW_CLASSIFICATION_VERSION = 15;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
@@ -883,9 +883,11 @@ async function loadCandidateListings(env, records, existingSources) {
     const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
     const result = await env.DB.prepare(`SELECT id, property_id, title, address, room, listing_type,
         deposit, monthly_rent, maintenance_fee, premium, area_m2, operating_memo, main_source,
-        trade_type, sale_category, sale_price
+        trade_type, sale_category, sale_price, created_at, updated_at,
+        (SELECT COUNT(*) FROM listing_sources source_count
+          WHERE source_count.listing_id=listings.id AND source_count.active=1) AS active_source_count
       FROM listings WHERE status <> 'deleted' AND address IN (${placeholders})
-      ORDER BY updated_at DESC`).bind(...chunk).all();
+      ORDER BY active_source_count DESC, created_at, id`).bind(...chunk).all();
     for (const row of result?.results || []) {
       const rows = byAddress.get(clean(row.address));
       if (rows) {
@@ -1300,6 +1302,48 @@ export function compareListingSpace(record, row) {
   return representative;
 }
 
+function candidateAsIncomingRecord(row) {
+  return {
+    address: clean(row?.address),
+    room: clean(row?.room),
+    tradeType: collectorTradeType(row?.trade_type || row?.tradeType, true),
+    saleCategory: clean(row?.sale_category || row?.saleCategory),
+    salePrice: number(row?.sale_price ?? row?.salePrice),
+    deposit: number(row?.deposit),
+    rent: number(row?.monthly_rent ?? row?.rent),
+    area: number(row?.area_m2 ?? row?.area)
+  };
+}
+
+function mutuallyEquivalentSameCandidates(items) {
+  if (!Array.isArray(items) || items.length < 2) return false;
+  for (let leftIndex = 0; leftIndex < items.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < items.length; rightIndex += 1) {
+      const left = items[leftIndex]?.item?.row || items[leftIndex]?.row || items[leftIndex];
+      const right = items[rightIndex]?.item?.row || items[rightIndex]?.row || items[rightIndex];
+      if (!directlyAlignedSpaceIdentity(candidateAsIncomingRecord(left), right)) return false;
+      if (compareSingleListingSpace(candidateAsIncomingRecord(left), right).decision !== "same") return false;
+      if (compareSingleListingSpace(candidateAsIncomingRecord(right), left).decision !== "same") return false;
+    }
+  }
+  return true;
+}
+
+function canonicalSameCandidate(items) {
+  return [...items].sort((leftEntry, rightEntry) => {
+    const left = leftEntry?.item?.row || leftEntry?.row || leftEntry;
+    const right = rightEntry?.item?.row || rightEntry?.row || rightEntry;
+    const sourceGap = (REPRESENTATIVE_SOURCE_PRIORITY[sourceName(left?.main_source)] ?? 9) -
+      (REPRESENTATIVE_SOURCE_PRIORITY[sourceName(right?.main_source)] ?? 9);
+    if (sourceGap) return sourceGap;
+    const originalGap = Number(right?.active_source_count || 0) - Number(left?.active_source_count || 0);
+    if (originalGap) return originalGap;
+    const createdGap = clean(left?.created_at).localeCompare(clean(right?.created_at));
+    if (createdGap) return createdGap;
+    return clean(left?.id || left?.property_id).localeCompare(clean(right?.id || right?.property_id));
+  })[0];
+}
+
 export function classifyListingCandidates(record, candidates = []) {
   const comparisons = candidates.map((row) => ({ row, ...compareListingSpace(record, row) }));
   const same = comparisons.filter((item) => item.decision === "same");
@@ -1308,6 +1352,14 @@ export function classifyListingCandidates(record, candidates = []) {
   if (same.length > 1) {
     const directSame = same.map((item) => ({ item, direct: compareSingleListingSpace(record, item.row) }))
       .filter(({ direct }) => direct.decision === "same");
+    if (!review.length && directSame.length === same.length && mutuallyEquivalentSameCandidates(directSame)) {
+      const canonical = canonicalSameCandidate(directSame);
+      const duplicateCandidateIds = directSame
+        .map(({ item }) => clean(item.row?.id || item.row?.property_id))
+        .filter((id) => id && id !== clean(canonical?.item?.row?.id || canonical?.item?.row?.property_id));
+      return { decision: "merge", candidate: canonical.item.row, duplicateCandidateIds,
+        reason: `${canonical.direct.reason}·중복 대표매물 자동정리`, comparisons };
+    }
     const identityAlignedSame = directSame.filter(({ item }) => directlyAlignedSpaceIdentity(record, item.row));
     if (identityAlignedSame.length === 1) {
       return { decision: "merge", candidate: identityAlignedSame[0].item.row,
@@ -1801,6 +1853,15 @@ async function ingestRecords(env, source, values, metadata = {}) {
         listingTradeTypesCanMerge(candidate.record?.tradeType || candidate.trade_type, record.tradeType));
       const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
       if (classified.decision === "merge") {
+        const consolidated = await consolidateClassifiedCandidateDuplicates(env, {
+          email: "collector-duplicate-master-repair@js-map.com"
+        }, classified);
+        if (consolidated > 0) {
+          const removedIds = new Set(classified.duplicateCandidateIds || []);
+          candidatesByAddress.set(record.address, (candidatesByAddress.get(record.address) || [])
+            .filter((candidate) => !removedIds.has(clean(candidate.id || candidate.property_id))));
+          affectedListingIds.add(classified.candidate.id);
+        }
         const result = await attachSource(env, record, classified.candidate.id, sessionId, existing, false,
           "collector", existing ? sourceAssets.get(clean(existing.id)) : null, sourceReclassification);
         if (result.reactivated) {
@@ -2902,7 +2963,9 @@ async function consolidateExisting(env, user, body) {
         ) SELECT customer_id, ?1, state, score, memo, created_at, updated_at, contacted_at
           FROM customer_matches WHERE listing_id=?2`).bind(primary.id, duplicate.id),
       env.DB.prepare("DELETE FROM customer_matches WHERE listing_id=?1").bind(duplicate.id),
-      env.DB.prepare("UPDATE listing_sources SET listing_id=?1, updated_at=?2 WHERE listing_id=?3").bind(primary.id, nowIso(), duplicate.id),
+      env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
+        list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2
+        WHERE listing_id=?3`).bind(primary.id, nowIso(), duplicate.id),
       env.DB.prepare("UPDATE listing_media SET listing_id=?1, updated_at=?2 WHERE listing_id=?3").bind(primary.id, nowIso(), duplicate.id),
       env.DB.prepare("UPDATE listing_contacts SET listing_id=?1, updated_at=?2 WHERE listing_id=?3").bind(primary.id, nowIso(), duplicate.id),
       env.DB.prepare("UPDATE listings SET status='deleted', updated_at=?1 WHERE id=?2").bind(nowIso(), duplicate.id),
@@ -2920,9 +2983,24 @@ async function consolidateExisting(env, user, body) {
     primaryMemo = mergedMemo;
     consolidated += 1;
   }
-  const customerMatches = await refreshCustomerMatchesForListings(env, [primary.id]);
+  const customerMatches = body.skipCustomerRefresh
+    ? { listings: 0, evaluated: 0, matched: 0, removed: 0, skipped: true }
+    : await refreshCustomerMatchesForListings(env, [primary.id]);
   return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id,
     operationAdjustments: { activeMaster: -consolidated, history: consolidated }, customerMatches, source: "D1" };
+}
+
+async function consolidateClassifiedCandidateDuplicates(env, user, classified) {
+  const primaryMasterId = clean(classified?.candidate?.id || classified?.candidate?.property_id);
+  const duplicateMasterIds = [...new Set((classified?.duplicateCandidateIds || [])
+    .map(clean).filter((id) => id && id !== primaryMasterId))];
+  if (!primaryMasterId || !duplicateMasterIds.length) return 0;
+  const result = await consolidateExisting(env, user, {
+    primaryMasterId,
+    duplicateMasterIds,
+    skipCustomerRefresh: true
+  });
+  return Number(result?.consolidated || 0);
 }
 
 async function mergeSingleCandidateReviews(env, user, options = {}) {
@@ -3153,6 +3231,7 @@ async function repairExactReviews(env, user, options = {}) {
   let merged = 0;
   let created = 0;
   let duplicate = 0;
+  let consolidated = 0;
   let aliasesMerged = 0;
   let aliasesFailed = 0;
   let ambiguous = 0;
@@ -3185,6 +3264,14 @@ async function repairExactReviews(env, user, options = {}) {
       const existingSource = existingSourcesByKey.get(`${clean(record.source)}:${clean(record.sourceId)}`) || null;
       const existingAssets = existingSource ? existingAssetsBySource.get(clean(existingSource.id)) : null;
       if (classified.decision === "merge") {
+        const consolidatedNow = await consolidateClassifiedCandidateDuplicates(env, user, classified);
+        if (consolidatedNow > 0) {
+          consolidated += consolidatedNow;
+          const removedIds = new Set(classified.duplicateCandidateIds || []);
+          candidatesByAddress.set(record.address, allCandidates
+            .filter((candidate) => !removedIds.has(clean(candidate.id || candidate.property_id))));
+          affectedListingIds.add(classified.candidate.id);
+        }
         await attachSource(env, record, classified.candidate.id, row.session_id, existingSource, false,
           clean(user?.email), existingAssets);
         affectedListingIds.add(classified.candidate.id);
@@ -3263,10 +3350,14 @@ async function repairExactReviews(env, user, options = {}) {
     : null;
   const remainingToScan = includeRemaining ? Number(pending?.count || 0) : null;
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
-    merged, created, duplicate, aliasesMerged, aliasesFailed, ambiguous, failed,
+    merged, created, duplicate, consolidated, aliasesMerged, aliasesFailed, ambiguous, failed,
     hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= scanLimit,
     remainingToScan, sourceFilter, customerMatches,
-    operationAdjustments: { pendingReview: -(merged + created + duplicate) }, source: "D1" };
+    operationAdjustments: {
+      pendingReview: -(merged + created + duplicate),
+      activeMaster: -consolidated,
+      history: consolidated
+    }, source: "D1" };
 }
 
 export async function runScheduledReviewRepair(env) {
