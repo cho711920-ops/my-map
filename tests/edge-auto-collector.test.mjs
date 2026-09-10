@@ -52,8 +52,9 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /async function runAll\(reason = "manual"\) \{\s*await ensureWatchdogAlarm\(\)/);
   assert.match(background, /async function resumeOrExtendActiveRun\(state, targets, reason\) \{\s*await ensureWatchdogAlarm\(\)/);
   assert.match(background, /async function updateTargetHeartbeat\(message, senderTabId\)[\s\S]{0,700}await ensureWatchdogAlarm\(\)/);
-  assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 4/);
-  assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 8/);
+  assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 2/);
+  assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 3/);
+  assert.match(background, /SOURCE_CIRCUIT_TTL_MS = 24 \* 60 \* 60 \* 1000/);
   assert.match(background, /MAX_RUN_AGE_MS/);
   assert.match(background, /COLLECTOR_START_TIMEOUT_MS = 2 \* 60 \* 1000/);
   assert.match(background, /COLLECTION_STALL_TIMEOUT_MS = 20 \* 60 \* 1000/);
@@ -65,7 +66,13 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /targetRuntimeExceeded/);
   assert.match(background, /한 지역 수집이 3시간/);
   assert.match(background, /주소·층 오류/);
-  assert.match(background, /state\.summary\.failed = Number\(state\.summary\.failed \|\| 0\) \+ 1/);
+  assert.match(background, /function deriveRunSummary\(report, previous = \{\}\)/);
+  assert.match(background, /report\.summary = deriveRunSummary\(report/);
+  assert.match(background, /allTargets: targets\.slice\(\)/);
+  assert.match(background, /completedKeys: \[\]/);
+  assert.match(background, /function classifyTargetFailure\(message, result\)/);
+  assert.match(background, /provider_persisted_query/);
+  assert.match(background, /async function failPendingSourceTargets\(state, target, circuit\)/);
   assert.match(background, /state\.summary\.retryErrors/);
   assert.match(background, /stalledLoading/);
   assert.match(background, /stalledStart/);
@@ -153,7 +160,7 @@ test("provider omissions complete a target with a warning instead of restarting 
   assert.match(background, /session\.completeRequested === true/);
   assert.match(background, /const successful = result\.ok === true && !payloadPartial/);
   assert.match(background, /successful \|\| warningCompletion/);
-  assert.match(background, /state\.summary\.partial/);
+  assert.match(background, /const partial = Number\(statuses\.partial \|\| 0\)/);
   assert.match(background, /전체 목록 확인 완료/);
 });
 

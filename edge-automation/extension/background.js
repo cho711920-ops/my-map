@@ -36,13 +36,15 @@ const RUN_STATE_KEY = "jsAutoCollectorRunStateV2";
 const RUN_REPORT_KEY = "jsAutoCollectorRunReportV1";
 const LAST_SCHEDULE_KEY = "jsAutoCollectorLastScheduleV1";
 const LAST_VERSION_RUN_KEY = "jsAutoCollectorLastVersionRunV1";
+const SOURCE_CIRCUIT_KEY = "jsAutoCollectorSourceCircuitsV1";
 const ALARM_NAME = "js-auto-collector-daily";
 const RECOVERY_ALARM_NAME = "js-auto-collector-recovery";
 const WATCHDOG_ALARM_NAME = "js-auto-collector-watchdog";
 const SOURCE_ORDER = { naver: 1, daangn: 2, gongsil: 3 };
-const MAX_IMMEDIATE_ATTEMPTS = 4;
-const MAX_DEFERRED_RETRY_CYCLES = 8;
-const MAX_RUN_AGE_MS = 20 * 60 * 60 * 1000;
+const MAX_IMMEDIATE_ATTEMPTS = 2;
+const MAX_DEFERRED_RETRY_CYCLES = 3;
+const MAX_RUN_AGE_MS = 6 * 60 * 60 * 1000;
+const SOURCE_CIRCUIT_TTL_MS = 24 * 60 * 60 * 1000;
 const LOAD_STALL_TIMEOUT_MS = 3 * 60 * 1000;
 const COLLECTOR_START_TIMEOUT_MS = 2 * 60 * 1000;
 const COLLECTION_STALL_TIMEOUT_MS = 20 * 60 * 1000;
@@ -63,9 +65,43 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function retryableTargetFailure(message) {
-  return !/(?:로그인|보안키|승인되지 않은|주소·층 오류|한 지역 수집이 3시간|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
-    .test(String(message || ""));
+function failureText(message, result) {
+  const payload = result && result.result || {};
+  const error = payload && payload.error || {};
+  const graphqlErrors = Array.isArray(payload && payload.errors) ? payload.errors : [];
+  return [message,
+    result && result.status != null ? `status:${result.status}` : "", result && result.code,
+    payload.status != null ? `status:${payload.status}` : "", payload.code,
+    error.status != null ? `status:${error.status}` : "", error.code, error.message,
+    ...graphqlErrors.flatMap((item) => [item && item.message, item && item.extensions && item.extensions.code])]
+    .filter((value) => value !== undefined && value !== null && value !== "").join(" ");
+}
+
+function classifyTargetFailure(message, result) {
+  const text = failureText(message, result);
+  if (/(?:HTTP(?:\s*오류)?|status(?:\s*code)?|상태(?:\s*코드)?|응답)\s*[:=]?\s*(?:401|403)\b|\b(?:UNAUTHENTICATED|UNAUTHORIZED|FORBIDDEN)\b/i.test(text)) {
+    return { retryable: false, sourceCircuit: true, code: "provider_auth" };
+  }
+  if (/(?:PersistedQueryNotFound|PERSISTED_QUERY_NOT_FOUND|persisted[\s_-]*query|sha256Hash)/i.test(text)) {
+    return { retryable: false, sourceCircuit: true, code: "provider_persisted_query" };
+  }
+  if (/(?:GRAPHQL_VALIDATION_FAILED|GraphQL[^\n]*(?:validation|schema)|Cannot query field|Unknown (?:argument|field|type|operation)|Expected type|Variable [^\n]* got invalid value|Field [^\n]*(?:is not defined|does not exist)|스키마(?:\s*오류|\s*변경)?)/i.test(text)) {
+    return { retryable: false, immediateRetryable: false, sourceCircuit: true, code: "provider_schema" };
+  }
+  if (/(?:로그인|보안키|승인되지 않은|당근 거래유형 설정)/
+      .test(text)) {
+    return { retryable: false, immediateRetryable: false, sourceCircuit: false, code: "terminal" };
+  }
+  if (/(?:주소·층 오류|한 지역 수집이 3시간|자동수집할 .* 정보가 없습니다|최신 수집기를 불러오지 못했습니다)/
+      .test(text)) {
+    return { retryable: true, immediateRetryable: false, sourceCircuit: false, code: "deferred" };
+  }
+  return { retryable: true, immediateRetryable: true, sourceCircuit: false, code: "transient" };
+}
+
+function retryableTargetFailure(message, result) {
+  const classification = classifyTargetFailure(message, result);
+  return classification.retryable && classification.immediateRetryable !== false;
 }
 
 async function getConfig() {
@@ -161,6 +197,130 @@ async function appendLog(entry) {
 
 function targetKey(target) {
   return String(target && (target.key || [target.source, target.district, target.url].join("|")) || "");
+}
+
+function uniqueTargets(targets) {
+  const seen = new Set();
+  return (Array.isArray(targets) ? targets : []).filter((target) => {
+    const key = targetKey(target);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function terminalReportStatus(status) {
+  return ["completed", "deferred", "partial", "failed"].includes(String(status || ""));
+}
+
+function ensureRunCollections(state, report) {
+  if (!state || typeof state !== "object") return state;
+  state.targets = uniqueTargets(state.targets);
+  state.retryQueue = uniqueTargets(state.retryQueue);
+  state.allTargets = uniqueTargets([...(Array.isArray(state.allTargets) ? state.allTargets : []),
+    ...state.targets, ...state.retryQueue]);
+  const completed = new Set(Array.isArray(state.completedKeys) ? state.completedKeys.map(String) : []);
+  if (report && report.runId === state.runId) {
+    (Array.isArray(report.items) ? report.items : []).forEach((item) => {
+      if (terminalReportStatus(item.status) && item.key) completed.add(String(item.key));
+    });
+  }
+  state.completedKeys = [...completed];
+  state.sourceCircuits = state.sourceCircuits && typeof state.sourceCircuits === "object"
+    ? state.sourceCircuits
+    : {};
+  return state;
+}
+
+function rememberCompletedTarget(state, target) {
+  const completed = new Set(Array.isArray(state.completedKeys) ? state.completedKeys.map(String) : []);
+  const key = targetKey(target);
+  if (key) completed.add(key);
+  state.completedKeys = [...completed];
+}
+
+function deriveRunSummary(report, previous = {}) {
+  const items = report && Array.isArray(report.items) ? report.items : [];
+  const statuses = items.reduce((counts, item) => {
+    const status = String(item && item.status || "pending");
+    counts[status] = Number(counts[status] || 0) + 1;
+    return counts;
+  }, {});
+  const deferred = Number(statuses.deferred || 0);
+  const partial = Number(statuses.partial || 0);
+  const completed = Number(statuses.completed || 0) + deferred + partial;
+  const failedItems = items.filter((item) => item && item.status === "failed");
+  const retries = items.reduce((total, item) => total + Math.max(0, Number(item && item.retryCount || 0)), 0);
+  const settled = completed + failedItems.length;
+  const errorTimestamp = (value) => {
+    const date = new Date(value || Date.now());
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  };
+  return {
+    ...previous,
+    total: items.length,
+    completed,
+    deferred,
+    partial,
+    failed: failedItems.length,
+    retries,
+    errors: failedItems.map((item) => ({
+      target: item.label || item.key,
+      message: String(item.message || "자동수집 실패").slice(0, 300),
+      attempts: Math.max(1, Number(item.attempt || 1)),
+      at: errorTimestamp(item.finishedAt)
+    })),
+    ok: items.length > 0 && failedItems.length === 0 && (report.active === true || settled === items.length)
+  };
+}
+
+async function getSourceCircuits() {
+  const saved = await chrome.storage.local.get(SOURCE_CIRCUIT_KEY);
+  const stored = saved[SOURCE_CIRCUIT_KEY] && typeof saved[SOURCE_CIRCUIT_KEY] === "object"
+    ? saved[SOURCE_CIRCUIT_KEY]
+    : {};
+  const now = Date.now();
+  const active = {};
+  Object.entries(stored).forEach(([source, circuit]) => {
+    if (circuit && Number(circuit.expiresAt || 0) > now) active[source] = circuit;
+  });
+  if (Object.keys(active).length !== Object.keys(stored).length) {
+    await chrome.storage.local.set({ [SOURCE_CIRCUIT_KEY]: active });
+  }
+  return active;
+}
+
+async function setSourceCircuit(state, target, classification, message) {
+  const source = cleanSource(target && target.source);
+  if (!source) return null;
+  const now = Date.now();
+  const circuit = {
+    source,
+    code: classification.code,
+    message: String(message || "공급처 오류").slice(0, 300),
+    openedAt: now,
+    expiresAt: now + SOURCE_CIRCUIT_TTL_MS
+  };
+  state.sourceCircuits = { ...(state.sourceCircuits || {}), [source]: circuit };
+  const persisted = await getSourceCircuits();
+  await chrome.storage.local.set({ [SOURCE_CIRCUIT_KEY]: { ...persisted, [source]: circuit } });
+  return circuit;
+}
+
+async function clearSourceCircuit(state, target) {
+  const source = cleanSource(target && target.source);
+  if (!source) return;
+  if (state && state.sourceCircuits) delete state.sourceCircuits[source];
+  const persisted = await getSourceCircuits();
+  if (!persisted[source]) return;
+  delete persisted[source];
+  await chrome.storage.local.set({ [SOURCE_CIRCUIT_KEY]: persisted });
+}
+
+function activeSourceCircuit(state, target) {
+  const source = cleanSource(target && target.source);
+  const circuit = source && state && state.sourceCircuits && state.sourceCircuits[source];
+  return circuit && Number(circuit.expiresAt || 0) > Date.now() ? circuit : null;
 }
 
 function validateTarget(target) {
@@ -450,22 +610,40 @@ async function updateRunReport(state, target, status, details = {}) {
   if (!item) return report;
   const nextDetails = { ...details };
   const replaceCounts = nextDetails.replaceCounts === true;
+  const incrementRetry = nextDetails.incrementRetry === true;
   delete nextDetails.replaceCounts;
+  delete nextDetails.incrementRetry;
   if (nextDetails.counts) {
     nextDetails.counts = replaceCounts
       ? { ...nextDetails.counts }
       : mergeCountSnapshots(item.counts, nextDetails.counts);
   }
+  if (incrementRetry) nextDetails.retryCount = Math.max(0, Number(item.retryCount || 0)) + 1;
   Object.assign(item, { status, updatedAt: Date.now(), ...nextDetails });
   report.active = Boolean(state.active);
-  report.summary = { ...(state.summary || {}) };
+  report.summary = deriveRunSummary(report, state.summary || {});
+  state.summary = { ...report.summary };
   report.updatedAt = Date.now();
   return saveRunReport(report);
 }
 
 async function finalizeRun(state) {
-  const summary = state.summary || { completed: 0, failed: 0, errors: [] };
-  summary.ok = summary.failed === 0;
+  if (!state) return { ok: false, completed: 0, failed: 0, errors: [] };
+  const existingReport = await getRunReport();
+  if (state.finalizedAt || (existingReport && existingReport.runId === state.runId &&
+      existingReport.active === false && existingReport.finishedAt)) {
+    return existingReport && existingReport.summary || state.summary || { ok: false, completed: 0, failed: 0, errors: [] };
+  }
+  state.active = false;
+  state.phase = "finalizing";
+  state.finalizedAt = Date.now();
+  await saveRunState(state);
+  const report = existingReport && existingReport.runId === state.runId ? existingReport : null;
+  if (report) report.active = false;
+  const summary = report
+    ? deriveRunSummary(report, state.summary || {})
+    : { ...(state.summary || { completed: 0, failed: 0, errors: [] }), ok: false };
+  state.summary = { ...summary };
   const normal = Math.max(0, Number(summary.completed || 0) -
     Number(summary.deferred || 0) - Number(summary.partial || 0));
   await appendLog({
@@ -473,15 +651,17 @@ async function finalizeRun(state) {
     message: `자동수집 종료: 정상 ${normal}, 주소보류 ${Number(summary.deferred || 0)}, 부분완료 ${Number(summary.partial || 0)}, 실패 ${summary.failed}`,
     result: summary
   });
-  const report = await getRunReport();
-  if (report && report.runId === state.runId) {
+  if (report) {
     report.active = false;
-    report.finishedAt = Date.now();
-    report.updatedAt = Date.now();
+    report.finishedAt = state.finalizedAt;
+    report.updatedAt = state.finalizedAt;
     report.summary = { ...summary };
     await saveRunReport(report);
   }
-  if (summary.ok) {
+  const scheduledReason = ["schedule", "browser-startup", "windows-schedule"].includes(state.reason);
+  const fullySettled = Boolean(report && Array.isArray(report.items) && report.items.length &&
+    report.items.every((item) => terminalReportStatus(item.status)));
+  if (summary.ok || (scheduledReason && fullySettled)) {
     await chrome.storage.local.set({
       [LAST_SCHEDULE_KEY]: localDateKey(),
       [LAST_VERSION_RUN_KEY]: chrome.runtime.getManifest().version
@@ -652,9 +832,53 @@ async function scheduleRecovery(state, delayMinutes, message) {
   return { ok: true, retryScheduled: true, retryAt: state.retryAt };
 }
 
+function resetTargetRuntimeState(state) {
+  state.currentTabId = null;
+  state.targetRunId = null;
+  state.targetStartedAt = null;
+  state.runtimeStartedAt = null;
+  state.lastHeartbeatAt = null;
+  state.lastProgressAt = null;
+  state.lastProgressFingerprint = "";
+  state.progressMessage = "";
+  state.progressStage = null;
+  state.initialPageSignalPending = false;
+  state.targetAttempt = 1;
+}
+
+async function failPendingSourceTargets(state, target, circuit) {
+  const source = cleanSource(target && target.source);
+  if (!source) return null;
+  state.retryQueue = uniqueTargets(state.retryQueue).filter((item) => cleanSource(item.source) !== source);
+  const report = await getRunReport();
+  if (!report || report.runId !== state.runId) return null;
+  const now = Date.now();
+  const currentKey = targetKey(target);
+  const message = `동일 공급처 ${source} 오류로 자동 재시도를 중단했습니다. · ${String(circuit.message || "확인 필요").slice(0, 220)}`;
+  (Array.isArray(report.items) ? report.items : []).forEach((item) => {
+    if (cleanSource(item.source) !== source || terminalReportStatus(item.status) || item.key === currentKey) return;
+    Object.assign(item, {
+      status: "failed",
+      finishedAt: now,
+      updatedAt: now,
+      message,
+      terminalCode: circuit.code,
+      circuitBlocked: true
+    });
+    rememberCompletedTarget(state, item);
+  });
+  report.summary = deriveRunSummary(report, state.summary || {});
+  report.updatedAt = now;
+  state.summary = { ...report.summary };
+  await saveRunReport(report);
+  return report;
+}
+
 async function continueOrRetryCycle(state, completedTabId) {
   if (state.index < state.targets.length) return launchCurrentTarget(state, completedTabId);
-  const retryQueue = Array.isArray(state.retryQueue) ? state.retryQueue : [];
+  const completed = new Set(Array.isArray(state.completedKeys) ? state.completedKeys.map(String) : []);
+  const retryQueue = uniqueTargets(state.retryQueue).filter((target) =>
+    !completed.has(targetKey(target)) && !activeSourceCircuit(state, target));
   if (!retryQueue.length) {
     if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
     return finalizeRun(state);
@@ -686,7 +910,34 @@ async function cleanupAuxiliaryTabs() {
 
 async function launchCurrentTarget(state, reuseTabId = null) {
   if (!state || !state.active) return { ok: false, message: "실행 중인 자동수집이 없습니다." };
-  if (state.index >= state.targets.length) return finalizeRun(state);
+  const report = await getRunReport();
+  ensureRunCollections(state, report);
+  const completed = new Set(state.completedKeys);
+  while (state.index < state.targets.length) {
+    const candidate = state.targets[state.index];
+    const key = targetKey(candidate);
+    if (completed.has(key)) {
+      state.index += 1;
+      continue;
+    }
+    const circuit = activeSourceCircuit(state, candidate);
+    if (!circuit) break;
+    await updateRunReport(state, candidate, "failed", {
+      finishedAt: Date.now(),
+      message: `공급처 자동 재시도 차단 중 · ${String(circuit.message || "확인 필요").slice(0, 240)}`,
+      terminalCode: circuit.code,
+      circuitBlocked: true
+    });
+    rememberCompletedTarget(state, candidate);
+    completed.add(key);
+    state.index += 1;
+  }
+  if (state.index >= state.targets.length) {
+    resetTargetRuntimeState(state);
+    state.phase = "between-targets";
+    await saveRunState(state);
+    return continueOrRetryCycle(state, reuseTabId);
+  }
 
   const target = state.targets[state.index];
   const runtimeTarget = { ...target, url: automaticTargetRuntimeUrl(target) };
@@ -783,6 +1034,8 @@ async function finishCurrentTarget(result, senderTabId) {
   if (state.currentTabId && senderTabId && state.currentTabId !== senderTabId) {
     return { ok: true, ignored: true };
   }
+  ensureRunCollections(state, await getRunReport());
+  state.summary = state.summary || { completed: 0, failed: 0, errors: [], retryErrors: [] };
 
   const target = state.targets[state.index];
   const completedTabId = state.currentTabId;
@@ -793,13 +1046,14 @@ async function finishCurrentTarget(result, senderTabId) {
   const failureMessage = String(result.message || (result.result && result.result.completionIssues || []).join(", ") ||
     "자동수집이 오류로 종료됐습니다.");
   const invalidTradeConfig = /당근 거래유형 설정/.test(failureMessage);
+  const failureClass = classifyTargetFailure(failureMessage, result);
   const successful = result.ok === true && !payloadPartial;
   const interruptedCounts = mergeCountSnapshots(
     progressCounts(target, result.progressStage || state.progressStage),
     resultCounts(result)
   );
   if (!successful && !warningCompletion && elapsedMs < MAX_TARGET_RUNTIME_MS &&
-      targetAttempt < MAX_IMMEDIATE_ATTEMPTS && !invalidTradeConfig && retryableTargetFailure(failureMessage)) {
+      targetAttempt < MAX_IMMEDIATE_ATTEMPTS && !invalidTradeConfig && retryableTargetFailure(failureMessage, result)) {
     const message = failureMessage;
     await appendLog({
       level: "warning",
@@ -811,7 +1065,8 @@ async function finishCurrentTarget(result, senderTabId) {
     await updateRunReport(state, target, "retrying", {
       message,
       attempt: targetAttempt + 1,
-      counts: interruptedCounts
+      counts: interruptedCounts,
+      incrementRetry: true
     });
     state.currentTabId = null;
     state.targetRunId = null;
@@ -828,13 +1083,10 @@ async function finishCurrentTarget(result, senderTabId) {
     return launchCurrentTarget(state, completedTabId);
   }
   if (successful || warningCompletion) {
-    state.summary.completed += 1;
     const counts = resultCounts(result);
     const addressDeferred = warningCompletion && counts.version === 2 && counts.listComplete &&
       Number(counts.addressDeferred || 0) > 0 && !Number(counts.failed || 0);
     const partial = !addressDeferred && (result.ok !== true || Boolean(result.result && result.result.partial));
-    if (addressDeferred) state.summary.deferred = Number(state.summary.deferred || 0) + 1;
-    else if (partial) state.summary.partial = Number(state.summary.partial || 0) + 1;
     await appendLog({
       level: partial ? "warning" : "success",
       source: target.source,
@@ -855,50 +1107,47 @@ async function finishCurrentTarget(result, senderTabId) {
         : partial ? resultNotice(result) : "수집 완료",
       counts, replaceCounts: true, progressStage: null, diagnostics: resultDiagnostics(result)
     });
+    rememberCompletedTarget(state, target);
+    await clearSourceCircuit(state, target);
   } else {
     const message = failureMessage;
-    state.summary.retries = Number(state.summary.retries || 0) + 1;
     const retryTarget = { ...target, retryCycle: Number(target.retryCycle || 0) + 1 };
     state.summary.retryErrors = Array.isArray(state.summary.retryErrors) ? state.summary.retryErrors : [];
     state.summary.retryErrors.push({ target: target.label || target.key, message,
       cycle: retryTarget.retryCycle, at: new Date().toISOString() });
     state.summary.retryErrors = state.summary.retryErrors.slice(-40);
-    const canRetry = !invalidTradeConfig && retryTarget.retryCycle <= MAX_DEFERRED_RETRY_CYCLES &&
+    const canRetry = failureClass.retryable && !invalidTradeConfig &&
+      retryTarget.retryCycle <= MAX_DEFERRED_RETRY_CYCLES &&
       Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS;
+    const circuit = failureClass.sourceCircuit
+      ? await setSourceCircuit(state, target, failureClass, message)
+      : null;
     state.retryQueue = Array.isArray(state.retryQueue) ? state.retryQueue : [];
     if (canRetry && !state.retryQueue.some((item) => targetKey(item) === targetKey(retryTarget))) {
       state.retryQueue.push(retryTarget);
     }
-    if (!canRetry) {
-      state.summary.failed = Number(state.summary.failed || 0) + 1;
-      state.summary.errors.push({ target: target.label || target.key, message,
-        attempts: targetAttempt, cycles: retryTarget.retryCycle, at: new Date().toISOString() });
-    }
     await appendLog({ level: canRetry ? "warning" : "error", source: target.source, target: target.label, elapsedMs,
       message: canRetry
         ? `${message} · 다른 지역을 계속한 뒤 미완료 목록에서 다시 이어서 수집합니다.`
-        : `${message} · 자동 재시도 한도를 모두 사용해 최종 실패로 기록했습니다.` });
+        : failureClass.sourceCircuit
+          ? `${message} · 동일 공급처의 자동 재시도를 24시간 중단합니다.`
+          : `${message} · 자동 재시도 없이 최종 실패로 기록했습니다.` });
     await updateRunReport(state, target, canRetry ? "retry_wait" : "failed", {
       finishedAt: canRetry ? null : Date.now(),
       elapsedMs,
       message,
       attempt: targetAttempt,
-      counts: interruptedCounts, diagnostics: resultDiagnostics(result)
+      counts: interruptedCounts,
+      diagnostics: resultDiagnostics(result),
+      terminalCode: canRetry ? null : failureClass.code,
+      incrementRetry: canRetry
     });
+    if (!canRetry) rememberCompletedTarget(state, target);
+    if (circuit) await failPendingSourceTargets(state, target, circuit);
   }
 
   state.index += 1;
-  state.currentTabId = null;
-  state.targetRunId = null;
-  state.targetStartedAt = null;
-  state.runtimeStartedAt = null;
-  state.lastHeartbeatAt = null;
-  state.lastProgressAt = null;
-  state.lastProgressFingerprint = "";
-  state.progressMessage = "";
-  state.progressStage = null;
-  state.initialPageSignalPending = false;
-  state.targetAttempt = 1;
+  resetTargetRuntimeState(state);
   state.phase = "between-targets";
   await saveRunState(state);
   return continueOrRetryCycle(state, completedTabId);
@@ -909,21 +1158,37 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
   await recoverAutomaticRun();
   state = await getRunState();
   if (!state || !state.active) return { ok: true, message: "미완료 실행을 정리했습니다. 현황을 확인해주세요." };
-  const existingKeys = new Set((state.targets || []).map(targetKey));
+  let report = await getRunReport();
+  ensureRunCollections(state, report);
+  const reportKeys = new Set(report && report.runId === state.runId
+    ? (report.items || []).map((item) => String(item.key || "")).filter(Boolean)
+    : []);
+  const allTargetKeys = new Set(state.allTargets.map(targetKey));
+  // Legacy retry-cycle state replaced `targets` with only the retry queue. Rebuild
+  // its immutable run inventory from the report/config without scheduling the
+  // already completed rows again.
+  targets.forEach((target) => {
+    const key = targetKey(target);
+    if (reportKeys.has(key) && !allTargetKeys.has(key)) {
+      state.allTargets.push(target);
+      allTargetKeys.add(key);
+    }
+  });
+  const existingKeys = new Set([...allTargetKeys, ...reportKeys, ...state.completedKeys]);
   const addedTargets = targets.filter((target) => !existingKeys.has(targetKey(target)));
   if (addedTargets.length) {
-    state.targets = (state.targets || []).concat(addedTargets);
-    state.summary = state.summary || { completed: 0, failed: 0, errors: [] };
-    state.summary.total = state.targets.length;
-    await saveRunState(state);
+    state.allTargets = uniqueTargets(state.allTargets.concat(addedTargets));
+    state.targets = uniqueTargets(state.targets.concat(addedTargets));
     await appendLog({
       level: "info",
-      message: `진행 중인 자동수집에 누락 대상 ${addedTargets.length}개를 추가했습니다. (전체 ${state.targets.length}개)`
+      message: `진행 중인 자동수집에 누락 대상 ${addedTargets.length}개를 추가했습니다. (전체 ${state.allTargets.length}개)`
     });
   }
+  await saveRunState(state);
 
-  let report = await getRunReport();
   if (!report || report.runId !== state.runId) {
+    const currentKey = targetKey((state.targets || [])[state.index]);
+    const completed = new Set(state.completedKeys);
     report = {
       runId: state.runId,
       reason: state.reason || reason,
@@ -931,18 +1196,18 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
       startedAt: state.startedAt || Date.now(),
       updatedAt: Date.now(),
       finishedAt: null,
-      total: state.targets.length,
+      total: state.allTargets.length,
       summary: { ...state.summary },
-      items: state.targets.map((target, index) => ({
+      items: state.allTargets.map((target) => ({
         key: targetKey(target),
         source: target.source,
         label: target.label || target.source,
-        status: index < state.index ? "completed" : index === state.index ? "running" : "pending",
-        attempt: index === state.index ? Math.max(1, Number(state.targetAttempt || 1)) : 0,
-        startedAt: index === state.index ? Number(state.targetStartedAt || Date.now()) : null,
+        status: completed.has(targetKey(target)) ? "completed" : targetKey(target) === currentKey ? "running" : "pending",
+        attempt: targetKey(target) === currentKey ? Math.max(1, Number(state.targetAttempt || 1)) : 0,
+        startedAt: targetKey(target) === currentKey ? Number(state.targetStartedAt || Date.now()) : null,
         finishedAt: null,
         updatedAt: Date.now(),
-        message: index < state.index ? "이전 실행에서 완료" : "",
+        message: completed.has(targetKey(target)) ? "이전 실행에서 완료" : "",
         counts: {}
       }))
     };
@@ -965,9 +1230,11 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
   }
   report.active = true;
   report.total = report.items.length;
-  report.summary = { ...state.summary };
+  report.summary = deriveRunSummary(report, state.summary || {});
+  state.summary = { ...report.summary };
   report.updatedAt = Date.now();
   await saveRunReport(report);
+  await saveRunState(state);
 
   let currentTab = null;
   if (Number.isInteger(state.currentTabId)) {
@@ -986,11 +1253,11 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
     started: true,
     resumed: true,
     added: addedTargets.length,
-    total: state.targets.length,
+    total: state.allTargets.length,
     currentTarget: currentTarget && (currentTarget.label || currentTarget.source),
     reason,
     message: addedTargets.length
-      ? `진행 중인 수집에 ${addedTargets.length}개를 추가해 전체 ${state.targets.length}개를 계속 실행합니다.`
+      ? `진행 중인 수집에 ${addedTargets.length}개를 추가해 전체 ${state.allTargets.length}개를 계속 실행합니다.`
       : `자동수집 정체 여부를 점검했습니다.${currentTarget ? ` 현재: ${currentTarget.label || currentTarget.source}` : ""}`
   };
 }
@@ -1011,6 +1278,8 @@ async function runAll(reason = "manual") {
   }
   if (!await acquireRunLock()) return { ok: false, message: "자동수집 실행 상태를 확인하지 못했습니다. 다시 눌러주세요." };
 
+  const manualCircuitOverride = ["manual", "manual-verification", "windows-force"].includes(reason);
+  const sourceCircuits = manualCircuitOverride ? {} : await getSourceCircuits();
   const summary = { ok: true, started: true, reason, total: targets.length,
     completed: 0, deferred: 0, partial: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
   const state = {
@@ -1020,7 +1289,10 @@ async function runAll(reason = "manual") {
     startedAt: Date.now(),
     index: 0,
     targets,
+    allTargets: targets.slice(),
+    completedKeys: [],
     retryQueue: [],
+    sourceCircuits,
     closeTabs: config.closeTabs !== false,
     currentTabId: null,
     targetRunId: null,
@@ -1053,7 +1325,7 @@ async function runAll(reason = "manual") {
   await appendLog({ level: "info", message: `자동수집 시작 (${reason}, ${targets.length}개 대상)` });
   await saveRunState(state);
   await launchCurrentTarget(state);
-  return summary;
+  return { ...state.summary };
 }
 
 async function runScheduled(reason) {

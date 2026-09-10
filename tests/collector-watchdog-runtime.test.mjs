@@ -11,6 +11,7 @@ const RUN = "jsAutoCollectorRunStateV2";
 const REPORT = "jsAutoCollectorRunReportV1";
 const CONFIG = "jsAutoCollectorConfigV1";
 const LOG = "jsAutoCollectorLogsV1";
+const CIRCUIT = "jsAutoCollectorSourceCircuitsV1";
 const minute = 60000;
 const clock = Date.parse("2026-08-27T07:00:00Z");
 
@@ -137,7 +138,7 @@ test("a throttled background heartbeat is confirmed by direct tab probe without 
   assert.equal(h.data[RUN].progressMessage, "상세 저장 진행 확인");
 });
 
-test("Daangn heartbeat counts survive a 403 retry instead of becoming zero", async () => {
+test("Daangn heartbeat counts survive a terminal 403 without entering a retry loop", async () => {
   const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
     lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 4 });
   setCurrentDaangn(h);
@@ -160,12 +161,15 @@ test("Daangn heartbeat counts survive a 403 retry instead of becoming zero", asy
   await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
     message: "당근 API HTTP 오류: 403", result: {} }, 42);
   item = h.data[REPORT].items[3];
-  assert.equal(item.status, "retry_wait");
+  assert.equal(item.status, "failed");
   assert.equal(item.counts.expected, 1853);
   assert.equal(item.counts.processed, 500);
   assert.equal(item.counts.updated, 2);
   assert.equal(item.counts.review, 7);
   assert.equal(item.message, "당근 API HTTP 오류: 403");
+  assert.equal(h.data[RUN].retryQueue.length, 0);
+  assert.equal(h.data[RUN].sourceCircuits.daangn.code, "provider_auth");
+  assert.equal(h.data[CIRCUIT].daangn.code, "provider_auth");
 });
 
 test("Daangn immediate retry relaunch keeps the last numeric progress", async () => {
@@ -176,7 +180,7 @@ test("Daangn immediate retry relaunch keeps the last numeric progress", async ()
     progressFingerprint: "daangn-immediate", progressStage: daangnStage() });
   await h.flush();
   await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
-    message: "당근 API HTTP 오류: 403", result: {}, progressStage: daangnStage({ found: 0,
+    message: "당근 API 일시적 네트워크 연결 오류", result: {}, progressStage: daangnStage({ found: 0,
       processed: 0, unchanged: 0, created: 0, updated: 0, review: 0 }) }, 42);
   const item = h.data[REPORT].items[3];
   assert.equal(item.status, "running");
@@ -201,6 +205,82 @@ test("Daangn terminal failure keeps numeric progress and the provider error", as
   assert.equal(item.counts.processed, 500);
   assert.equal(item.message, "당근 API HTTP 오류: 403");
   assert.equal(h.data[RUN].summary.failed, 1);
+});
+
+test("provider auth, persisted-query and schema errors are terminal source failures", () => {
+  for (const [message, code] of [
+    ["당근 API HTTP 오류: 401", "provider_auth"],
+    ["Forbidden", "provider_auth"],
+    ["PersistedQueryNotFound", "provider_persisted_query"],
+    ["Cannot query field articleByClusterId", "provider_schema"]
+  ]) {
+    const classification = hClassify(message);
+    assert.equal(classification.retryable, false, message);
+    assert.equal(classification.sourceCircuit, true, message);
+    assert.equal(classification.code, code, message);
+  }
+  function hClassify(message) {
+    const h = harness();
+    return h.context.classifyTargetFailure(message, {});
+  }
+});
+
+test("one provider 403 opens a circuit, fails its pending districts once, and keeps other sources untouched", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 1 });
+  setCurrentDaangn(h);
+  h.data[RUN].targets[4] = { ...h.data[RUN].targets[4], key: "daangn-dong", source: "daangn",
+    label: "당근 동구", url: "https://realty.daangn.com/?test=dong" };
+  h.data[REPORT].items[4] = { ...h.data[REPORT].items[4], key: "daangn-dong", source: "daangn", label: "당근 동구" };
+  await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
+    message: "당근 API HTTP 오류: 403", result: {} }, 42);
+  assert.equal(h.navigation.length, 0);
+  assert.equal(h.data[REPORT].active, false);
+  assert.equal(h.data[REPORT].items[3].status, "failed");
+  assert.equal(h.data[REPORT].items[4].status, "failed");
+  assert.equal(h.data[REPORT].items[4].circuitBlocked, true);
+  assert.equal(h.data[REPORT].summary.completed, 3);
+  assert.equal(h.data[REPORT].summary.failed, 2);
+  assert.equal(h.data[CIRCUIT].daangn.code, "provider_auth");
+});
+
+test("legacy retry-only state rebuilds allTargets without re-adding completed Naver districts", async () => {
+  const h = harness();
+  const configured = structuredClone(h.data[CONFIG].targets);
+  h.data[RUN].targets = [{ ...configured[3], retryCycle: 1 }];
+  h.data[RUN].retryQueue = [];
+  h.data[RUN].index = 0;
+  h.data[RUN].currentTabId = null;
+  h.data[RUN].targetRunId = null;
+  h.data[RUN].phase = "retry-wait";
+  h.data[RUN].retryAt = clock + 10 * minute;
+  delete h.data[RUN].allTargets;
+  delete h.data[RUN].completedKeys;
+  h.data[REPORT].items.forEach((item, index) => {
+    item.status = index === 3 ? "retry_wait" : "completed";
+    item.source = "naver";
+    item.label = configured[index].label;
+  });
+  await h.context.resumeOrExtendActiveRun(h.data[RUN], configured, "manual");
+  assert.equal(h.data[RUN].targets.length, 1, "only the actual retry target stays in the execution queue");
+  assert.equal(h.data[RUN].allTargets.length, 5, "the immutable run inventory is rebuilt");
+  assert.deepEqual(h.data[RUN].completedKeys.sort(), ["naver-0", "naver-1", "naver-2", "naver-4"]);
+  assert.equal(h.data[REPORT].items.length, 5);
+  assert.equal(h.data[REPORT].summary.completed, 4);
+});
+
+test("finalization is idempotent and derives its totals from report rows", async () => {
+  const h = harness({ summary: { completed: 99, failed: 88, errors: [{ message: "stale" }] } });
+  h.data[REPORT].items.forEach((item) => { item.status = "completed"; });
+  const state = h.data[RUN];
+  const first = await h.context.finalizeRun(state);
+  const second = await h.context.finalizeRun(state);
+  assert.equal(first.completed, 5);
+  assert.equal(first.failed, 0);
+  assert.equal(first.ok, true);
+  assert.equal(second.completed, 5);
+  assert.equal((h.data[LOG] || []).filter((item) => /자동수집 종료/.test(item.message)).length, 1);
+  assert.equal(h.data[REPORT].summary.completed, 5);
 });
 
 test("Daangn selection heartbeat is not promoted to collected counts", async () => {
@@ -237,7 +317,8 @@ test("the normal first provider load is not mistaken for a collector-page reload
 });
 
 test("concurrent duplicate completion/old heartbeat cannot advance twice or restore Seo", async () => {
-  const h = harness({ targetStartedAt: clock, lastHeartbeatAt: clock, lastProgressAt: clock });
+  const h = harness({ targetStartedAt: clock, lastHeartbeatAt: clock, lastProgressAt: clock,
+    summary: { completed: 99, failed: 0, errors: [] } });
   const finished = { type: "JS_AUTO_TARGET_FINISHED", runId: "cycle", targetRunId: "seo", ok: true, result: {} };
   await Promise.all([
     h.dispatch(finished),
@@ -267,6 +348,18 @@ test("manual Run now checks a stale active run instead of just reporting already
   assert.equal(response.resumed, true);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.navigation.length, 1);
+});
+
+test("a newly launched run keeps an ok start response while report rows are still active", async () => {
+  const h = harness();
+  delete h.data[RUN];
+  delete h.data[REPORT];
+  const response = await h.dispatch({ type: "JS_AUTO_RUN_NOW" });
+  assert.equal(response.ok, true);
+  assert.equal(response.started, true);
+  assert.equal(response.total, 5);
+  assert.equal(h.data[RUN].allTargets.length, 5);
+  assert.equal(h.data[REPORT].items[0].status, "running");
 });
 
 test("content timeout at three hours defers Seo without restarting the whole run", async () => {
@@ -333,7 +426,7 @@ test("address-only Daangn holds persist accurate counts/reasons and finish witho
   assert.match(item.message, /지도 등록 보류/);
   await h.context.finalizeRun(h.data[RUN]);
   assert.match(h.data[LOG][0].message, /정상 3, 주소보류 1, 부분완료 0, 실패 0/);
-  assert.equal(h.data[LOG][0].level, "success");
+  assert.equal(h.data[LOG][0].level, "warning", "report rows keep an unfinished district from being reported as a successful run");
 });
 
 test("actual Daangn failure still enters the normal retry path", async () => {
