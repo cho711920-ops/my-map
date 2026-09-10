@@ -155,7 +155,7 @@
           }).join("") + '</select></label><label class="operations-user-active-v1"><input type="checkbox" data-user-active="' +
           escapeHtml(entry.email) + '" ' + (entry.active ? 'checked' : '') + ' ' + (immutable ? 'disabled' : '') +
           '><span>사용 허용</span></label>' + (immutable ? '<small>환경설정에서 고정된 계정</small>' :
-          '<button type="button" onclick="updateAllowedUserV1(\'' + encodeURIComponent(entry.email) + '\')">저장</button>') + '</article>';
+          '<button type="button" data-save-allowed-user="' + escapeHtml(encodeURIComponent(entry.email)) + '">저장</button>') + '</article>';
       }).join("") + '</div>' +
       (state.profile.canManageLocalAccounts ? '<div class="operations-user-section-title-v1 operations-local-title-v1"><strong>발급 아이디</strong>' +
         '<span>기존 Google 계정에 아이디·비밀번호를 연결하므로 찜·임장 기록과 권한이 그대로 유지됩니다.</span></div>' +
@@ -176,8 +176,18 @@
             '" minlength="10" maxlength="128" placeholder="새 비밀번호 (변경할 때만)" autocomplete="new-password">' +
             '<label class="operations-user-active-v1"><input type="checkbox" data-local-active="' +
             escapeHtml(entry.username) + '" ' + (entry.active ? 'checked' : '') + '><span>사용 허용</span></label>' +
-            '<button type="button" onclick="updateLocalAccountV1(\'' + encodeURIComponent(entry.username) + '\')">저장</button></article>';
+            '<button type="button" data-save-local-account="' + escapeHtml(encodeURIComponent(entry.username)) + '">저장</button></article>';
         }).join('') + '</div>' : '');
+    panel.querySelectorAll("[data-save-allowed-user]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        global.updateAllowedUserV1(button.getAttribute("data-save-allowed-user") || "");
+      });
+    });
+    panel.querySelectorAll("[data-save-local-account]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        global.updateLocalAccountV1(button.getAttribute("data-save-local-account") || "");
+      });
+    });
   }
 
   function loadUsers() {
@@ -243,7 +253,7 @@
       role: form.role.value,
       active: true
     }).then(function () { form.reset(); return loadUsers(); })
-      .then(function () { setMessage("사용자를 저장했습니다. 새 권한은 다음 로그인부터 적용됩니다.", "success"); })
+      .then(function () { setMessage("사용자를 저장했습니다. 새 권한은 다음 요청부터 적용됩니다.", "success"); })
       .catch(function (error) { setMessage(error.message, "error"); });
   };
   global.updateAllowedUserV1 = function (encodedEmail) {

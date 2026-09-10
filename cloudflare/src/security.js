@@ -2,7 +2,7 @@ const encoder = new TextEncoder();
 
 export const SESSION_COOKIE = "js_realestate_session";
 export const DEFAULT_SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
-export const LOCAL_PASSWORD_ITERATIONS = 100_000;
+export const LOCAL_PASSWORD_ITERATIONS = 310_000;
 const MAX_SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const LOCAL_ID_SUFFIX = "@local.js-map";
 
@@ -113,7 +113,7 @@ export async function authenticateLocalAccount(username, password, env, now = Da
   const passwordAccount = account || {
     password_salt: "AAAAAAAAAAAAAAAAAAAAAA",
     password_hash: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    password_iterations: 100_000
+    password_iterations: LOCAL_PASSWORD_ITERATIONS
   };
   const passwordMatches = await verifyLocalPassword(suppliedPassword.slice(0, 128), passwordAccount);
   const valid = Boolean(suppliedPassword.length <= 128 && account && Number(account.active) === 1 &&
@@ -181,15 +181,30 @@ function envAccessRole(email, env) {
   return index === 0 ? "owner" : "member";
 }
 
+export function bootstrapOwnerEmail(env) {
+  return String(env.ALLOWED_EMAILS || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)[0] || "";
+}
+
 export async function accessProfile(email, env) {
   const normalized = String(email || "").trim().toLowerCase();
   if (!normalized) return null;
+  const bootstrapOwner = bootstrapOwnerEmail(env);
   if (env.DB && typeof env.DB.prepare === "function") {
     try {
       const row = await env.DB.prepare(
         "SELECT email, display_name, role, active FROM allowed_users WHERE email = ?1 LIMIT 1"
       ).bind(normalized).first();
       if (row) {
+        if (normalized === bootstrapOwner) {
+          return {
+            email: normalized,
+            displayName: String(row.display_name || ""),
+            role: "owner"
+          };
+        }
         if (Number(row.active) !== 1) return null;
         return {
           email: normalized,
@@ -204,19 +219,7 @@ export async function accessProfile(email, env) {
 }
 
 export async function isAllowedEmail(email, env) {
-  const normalized = String(email || "").trim().toLowerCase();
-  if (!normalized) return false;
-  if (envAllowedEmails(env).has(normalized)) return true;
-  if (!env.DB || typeof env.DB.prepare !== "function") return false;
-
-  try {
-    const row = await env.DB.prepare(
-      "SELECT email FROM allowed_users WHERE email = ?1 AND active = 1 LIMIT 1"
-    ).bind(normalized).first();
-    return Boolean(row);
-  } catch {
-    return false;
-  }
+  return Boolean(await accessProfile(email, env));
 }
 
 export function requireRole(user, roles) {
@@ -230,14 +233,19 @@ export function requireRole(user, roles) {
 
 export function parseCookies(request) {
   const source = String(request.headers.get("cookie") || "");
-  return Object.fromEntries(
-    source.split(";").map((part) => part.trim()).filter(Boolean).map((part) => {
-      const index = part.indexOf("=");
-      const key = index >= 0 ? part.slice(0, index) : part;
-      const value = index >= 0 ? part.slice(index + 1) : "";
-      return [decodeURIComponent(key), decodeURIComponent(value)];
-    })
-  );
+  const cookies = Object.create(null);
+  for (const part of source.split(";").map((value) => value.trim()).filter(Boolean)) {
+    const index = part.indexOf("=");
+    const key = index >= 0 ? part.slice(0, index) : part;
+    const value = index >= 0 ? part.slice(index + 1) : "";
+    try {
+      const decodedKey = decodeURIComponent(key);
+      if (decodedKey) cookies[decodedKey] = decodeURIComponent(value);
+    } catch {
+      // Ignore malformed cookie pairs so one invalid value cannot turn an auth failure into a 500.
+    }
+  }
+  return cookies;
 }
 
 export function sessionCookieHeader(value, env, maxAge = sessionMaxAgeSeconds(env)) {
@@ -264,17 +272,32 @@ export async function createSessionToken(user, env, now = Date.now()) {
 }
 
 export async function verifySessionToken(token, env, now = Date.now()) {
-  const [payload, signature] = String(token || "").split(".");
-  if (!payload || !signature) throw Object.assign(new Error("잘못된 로그인 세션입니다."), { statusCode: 401 });
-  const valid = await crypto.subtle.verify(
-    "HMAC",
-    await hmacKey(env),
-    base64UrlDecode(signature),
-    encoder.encode(payload)
-  );
+  const parts = String(token || "").split(".");
+  const [payload, signature] = parts;
+  if (parts.length !== 2 || !payload || !signature) {
+    throw Object.assign(new Error("잘못된 로그인 세션입니다."), { statusCode: 401 });
+  }
+  let signatureBytes;
+  let decoded;
+  try {
+    signatureBytes = base64UrlDecode(signature);
+    decoded = decodeJsonSegment(payload);
+  } catch {
+    throw Object.assign(new Error("잘못된 로그인 세션입니다."), { statusCode: 401 });
+  }
+  let valid = false;
+  const key = await hmacKey(env);
+  try {
+    valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signatureBytes,
+      encoder.encode(payload)
+    );
+  } catch {
+    throw Object.assign(new Error("잘못된 로그인 세션입니다."), { statusCode: 401 });
+  }
   if (!valid) throw Object.assign(new Error("잘못된 로그인 세션입니다."), { statusCode: 401 });
-
-  const decoded = decodeJsonSegment(payload);
   if (!decoded.exp || now >= Number(decoded.exp)) {
     throw Object.assign(new Error("로그인 세션이 만료되었습니다."), { statusCode: 401 });
   }
@@ -297,12 +320,16 @@ export async function verifySessionToken(token, env, now = Date.now()) {
       displayName: String(account.display_name || linkedProfile?.displayName || account.username || "")
     };
   }
-  if (!await isAllowedEmail(decoded.email, env)) {
+  const profile = await accessProfile(decoded.email, env);
+  if (!profile) {
     throw Object.assign(new Error("승인되지 않은 Google 계정입니다."), { statusCode: 403 });
   }
-  if (decoded.role) return decoded;
-  const profile = await accessProfile(decoded.email, env);
-  return { ...decoded, role: profile?.role || "member", displayName: profile?.displayName || "" };
+  return {
+    ...decoded,
+    email: profile.email,
+    role: profile.role || "member",
+    displayName: profile.displayName || decoded.displayName || ""
+  };
 }
 
 export async function requireSession(request, env) {

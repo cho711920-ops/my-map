@@ -116,10 +116,18 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
 
 test("operations dashboard is served from R2 without repeating full-table counts", async () => {
   let databaseQueries = 0;
+  let authQueries = 0;
   const response = await authenticatedRequest(
     "/api/data?action=operationsDashboard",
     {
-      DB: { prepare() { databaseQueries += 1; throw new Error("cached dashboard must not query D1"); } },
+      DB: { prepare(sql) {
+        if (/FROM allowed_users/.test(sql)) {
+          authQueries += 1;
+          return { bind() { return { first: async () => null }; } };
+        }
+        databaseQueries += 1;
+        throw new Error("cached dashboard must not query application data in D1");
+      } },
       MEDIA: {
         get: async (key) => {
           assert.equal(key, "api-cache/operations-dashboard.json");
@@ -135,15 +143,24 @@ test("operations dashboard is served from R2 without repeating full-table counts
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-js-data-cache"), "HIT");
   assert.equal((await response.json()).activeMaster, 8754);
+  assert.equal(authQueries, 1);
   assert.equal(databaseQueries, 0);
 });
 
 test("data revision checks use a tiny R2 object and never query D1", async () => {
   let databaseQueries = 0;
+  let authQueries = 0;
   const response = await authenticatedRequest(
     "/api/data?action=dataRevision&scope=listings",
     {
-      DB: { prepare() { databaseQueries += 1; throw new Error("revision checks must not query D1"); } },
+      DB: { prepare(sql) {
+        if (/FROM allowed_users/.test(sql)) {
+          authQueries += 1;
+          return { bind() { return { first: async () => null }; } };
+        }
+        databaseQueries += 1;
+        throw new Error("revision checks must not query application data in D1");
+      } },
       MEDIA: {
         get: async (key) => {
           assert.equal(key, "api-cache/revision/listings.json");
@@ -159,6 +176,7 @@ test("data revision checks use a tiny R2 object and never query D1", async () =>
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-js-data-source"), "R2-REVISION");
   assert.equal((await response.json()).revision, "rev-123");
+  assert.equal(authQueries, 1);
   assert.equal(databaseQueries, 0);
 });
 

@@ -26,7 +26,9 @@ test("D1 allowlist extends the bootstrap environment allowlist", async () => {
       prepare() {
         return {
           bind(email) {
-            return { first: async () => email === "worker@example.com" ? { email } : null };
+            return { first: async () => email === "worker@example.com"
+              ? { email, display_name: "", role: "member", active: 1 }
+              : null };
           }
         };
       }

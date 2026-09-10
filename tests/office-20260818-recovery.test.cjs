@@ -62,7 +62,7 @@ test("all recovered August 18 cache versions are active", () => {
     "js/list-manager-v6.js?v=6.4.35-shared-data-only",
     "js/operations-center-v7.js?v=7.22.7-list-transaction-link",
     "js/operations-collection-v8.js?v=7.26.1-review-audit",
-    "js/operations-admin-v1.js?v=1.2.0-linked-identity",
+    "js/operations-admin-v1.js?v=1.2.0-linked-identity&amp;live-role-v1=1",
     "js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds",
     "css/list-manager-v6.css?v=6.4.28-brokerage-filter",
     "css/mobile-app-v1.css?v=1.0.7-filter-chips-selection"

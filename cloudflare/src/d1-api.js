@@ -1,5 +1,11 @@
 import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
-import { accessProfile, createLocalPassword, normalizeLocalUsername, requireRole } from "./security.js";
+import {
+  accessProfile,
+  bootstrapOwnerEmail,
+  createLocalPassword,
+  normalizeLocalUsername,
+  requireRole
+} from "./security.js";
 import { carryConfirmedVisitMemo } from "./visit-status.js";
 import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-trade.js";
 import { saveSaleWorksheet } from "./sale-worksheet.js";
@@ -1097,19 +1103,24 @@ async function userProfile(user) {
 
 async function userManagement(env, user) {
   requireRole(user, ["owner", "admin"]);
+  const bootstrapOwner = bootstrapOwnerEmail(env);
   const result = await env.DB.prepare(`SELECT email, display_name, role, active, created_at, updated_at
     FROM allowed_users ORDER BY active DESC,
       CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
       email`).all();
-  const users = (result?.results || []).map((row) => ({
-    email: clean(row.email).toLowerCase(),
-    displayName: clean(row.display_name),
-    role: clean(row.role) || "member",
-    active: Number(row.active) === 1,
-    createdAt: clean(row.created_at),
-    updatedAt: clean(row.updated_at),
-    source: "D1"
-  }));
+  const users = (result?.results || []).map((row) => {
+    const email = clean(row.email).toLowerCase();
+    const isBootstrapOwner = Boolean(bootstrapOwner && email === bootstrapOwner);
+    return {
+      email,
+      displayName: clean(row.display_name),
+      role: isBootstrapOwner ? "owner" : clean(row.role) || "member",
+      active: isBootstrapOwner || Number(row.active) === 1,
+      createdAt: clean(row.created_at),
+      updatedAt: clean(row.updated_at),
+      source: isBootstrapOwner ? "ENV" : "D1"
+    };
+  });
   for (const [index, email] of String(env.ALLOWED_EMAILS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean).entries()) {
     if (!users.some((entry) => entry.email === email)) {
       users.push({ email, displayName: "", role: index === 0 ? "owner" : "member", active: true, source: "ENV" });
@@ -1988,16 +1999,44 @@ async function saveAllowedUser(env, user, body) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw Object.assign(new Error("올바른 이메일 주소를 입력해 주세요."), { statusCode: 400 });
   }
+  const actorRole = clean(user?.role) || "member";
+  const actorEmail = clean(user?.email).toLowerCase();
+  const bootstrapOwner = bootstrapOwnerEmail(env);
+  const existing = await env.DB.prepare(`SELECT email, role, active FROM allowed_users
+    WHERE lower(email)=lower(?1) LIMIT 1`).bind(email).first();
+  const configuredRole = String(env.ALLOWED_EMAILS || "").split(",")
+    .map((value) => value.trim().toLowerCase()).filter(Boolean).includes(email) ? "member" : "";
+  const currentRole = email === bootstrapOwner ? "owner" : clean(existing?.role || configuredRole);
+  const currentActive = email === bootstrapOwner || (existing
+    ? Number(existing.active) === 1
+    : Boolean(configuredRole));
+  if (email === bootstrapOwner) {
+    throw Object.assign(new Error("환경설정의 기본 소유자 계정은 변경할 수 없습니다."), { statusCode: 403 });
+  }
+  if (actorRole === "admin" && new Set(["owner", "admin"]).has(currentRole)) {
+    throw Object.assign(new Error("관리자는 동급 또는 상위 권한 계정을 변경할 수 없습니다."), { statusCode: 403 });
+  }
   const requestedRole = clean(body.role) || "member";
-  const allowedRoles = clean(user?.role) === "owner"
+  const allowedRoles = actorRole === "owner"
     ? new Set(["admin", "member", "viewer"])
     : new Set(["member", "viewer"]);
   if (!allowedRoles.has(requestedRole)) {
     throw Object.assign(new Error("해당 권한을 지정할 수 없습니다."), { statusCode: 403 });
   }
   const active = body.active === false ? 0 : 1;
-  if (email === clean(user?.email).toLowerCase() && !active) {
+  if (email === actorEmail && !active) {
     throw Object.assign(new Error("현재 로그인한 계정은 비활성화할 수 없습니다."), { statusCode: 400 });
+  }
+  if (currentActive && currentRole === "owner" && (requestedRole !== "owner" || !active)) {
+    const remaining = await env.DB.prepare(`SELECT COUNT(*) AS count FROM allowed_users
+      WHERE active=1 AND role='owner' AND lower(email)<>lower(?1) AND lower(email)<>lower(?2)`)
+      .bind(email, bootstrapOwner).first();
+    const effectiveRemainingOwners = Number(remaining?.count || 0) +
+      (bootstrapOwner && bootstrapOwner !== email ? 1 : 0);
+    if (effectiveRemainingOwners < 1) {
+      throw Object.assign(new Error("마지막 사용 가능한 소유자 계정은 강등하거나 비활성화할 수 없습니다."),
+        { statusCode: 400 });
+    }
   }
   const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO allowed_users (
@@ -2009,7 +2048,7 @@ async function saveAllowedUser(env, user, body) {
       active=excluded.active,
       updated_at=excluded.updated_at`)
     .bind(email, clean(body.displayName).slice(0, 100), requestedRole, active,
-      clean(user?.email).toLowerCase(), now).run();
+      actorEmail, now).run();
   return { ok: true, action: "saveAllowedUser", persisted: true, email,
     displayName: clean(body.displayName), role: requestedRole, active: Boolean(active), source: "D1" };
 }

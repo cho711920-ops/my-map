@@ -8,6 +8,7 @@ import {
   authenticateLocalAccount,
   createLocalPassword,
   createSessionToken,
+  LOCAL_PASSWORD_ITERATIONS,
   normalizeLocalUsername,
   verifyLocalPassword,
   verifySessionToken
@@ -66,7 +67,8 @@ test("Google and local sessions use the configured 90-day maximum", async () => 
 
 test("issued passwords are salted hashes and both login methods share one identity", async () => {
   const passwordRecord = await createLocalPassword("friend-safe-2026");
-  assert.equal(passwordRecord.iterations, 100_000);
+  assert.equal(passwordRecord.iterations, 310_000);
+  assert.equal(passwordRecord.iterations, LOCAL_PASSWORD_ITERATIONS);
   const account = {
     username: "friend1",
     linked_email: "friend@example.com",
@@ -206,6 +208,9 @@ test("login and master user-management UI expose issued accounts without public 
   assert.match(admin, /linkedEmail/);
   assert.match(admin, /찜·임장 기록과 권한이 그대로 유지/);
   assert.match(admin, /기존 Google 계정에 아이디·비밀번호를 연결/);
+  assert.match(admin, /data-save-allowed-user/);
+  assert.doesNotMatch(admin, /onclick="updateAllowedUserV1/);
+  assert.match(admin, /새 권한은 다음 요청부터 적용됩니다/);
   assert.match(migration, /password_salt TEXT NOT NULL/);
   assert.match(migration, /session_version INTEGER NOT NULL/);
   assert.match(identityMigration, /ADD COLUMN linked_email/);
