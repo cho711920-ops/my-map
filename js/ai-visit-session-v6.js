@@ -418,7 +418,11 @@
       saveSession();
       closeModal("aiVisitConfirmModal");
       openWorkspace();
-      if (!(result && result.optimized)) {
+      if (result && result.locationError && result.locationError.code === "CACHE") {
+        window.setTimeout(function () {
+          alert("실시간 위치를 가져오지 못해 이 탭의 최근 위치로 방문 순서를 계산했습니다. 현위치 재계산으로 다시 확인할 수 있습니다.");
+        }, 120);
+      } else if (!(result && result.optimized)) {
         window.setTimeout(function () {
           var detail = result && result.locationError && result.locationError.message
             ? "\n원인: " + result.locationError.message
@@ -657,14 +661,14 @@
       accuracy: Number(position.coords.accuracy) || 0,
       timestamp: Number(position.timestamp) || Date.now()
     };
-    try { localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(lastKnownLocation)); } catch (error) {}
+    try { sessionStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(lastKnownLocation)); } catch (error) {}
     return lastKnownLocation;
   }
 
   function getFreshCachedLocation(maxAgeMs) {
     if (!lastKnownLocation) {
       try {
-        var cached = JSON.parse(localStorage.getItem(LOCATION_CACHE_KEY) || "null");
+        var cached = JSON.parse(sessionStorage.getItem(LOCATION_CACHE_KEY) || "null");
         if (cached && isFinite(Number(cached.lat)) && isFinite(Number(cached.lng))) {
           lastKnownLocation = { lat: Number(cached.lat), lng: Number(cached.lng), accuracy: Number(cached.accuracy) || 0, timestamp: Number(cached.timestamp) || 0 };
         }
@@ -672,6 +676,13 @@
     }
     if (!lastKnownLocation) return null;
     return Date.now() - lastKnownLocation.timestamp <= maxAgeMs ? lastKnownLocation : null;
+  }
+
+  function clearLocationCache() {
+    lastKnownLocation = null;
+    try { sessionStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
+    // Remove the unscoped precise cache used by earlier releases.
+    try { localStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
   }
 
   function warmCurrentLocation() {
@@ -683,21 +694,21 @@
         navigator.geolocation.getCurrentPosition(
           function (position) { rememberLocation(position); },
           function () {},
-          { enableHighAccuracy: true, timeout: 7000, maximumAge: 120000 }
+          { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
         );
       },
-      { enableHighAccuracy: false, timeout: 2500, maximumAge: 300000 }
+      { enableHighAccuracy: false, timeout: 2500, maximumAge: 0 }
     );
   }
 
   function requestCurrentLocation(onSuccess, onFailure) {
-    var cached = getFreshCachedLocation(300000);
-    if (cached) {
-      onSuccess(cached);
-      return;
-    }
     if (!navigator.geolocation) {
-      onFailure();
+      var unsupportedFallback = getFreshCachedLocation(300000);
+      if (unsupportedFallback) {
+        onSuccess(unsupportedFallback, { code: "CACHE", message: "실시간 위치 대신 이 탭의 최근 위치를 사용합니다." });
+      } else {
+        onFailure();
+      }
       return;
     }
 
@@ -709,23 +720,30 @@
       finished = true;
       onSuccess(location);
     }
+    function useCachedOrFail() {
+      if (finished) return;
+      var cached = getFreshCachedLocation(300000);
+      if (cached) {
+        finished = true;
+        onSuccess(cached, { code: "CACHE", message: "실시간 위치 대신 이 탭의 최근 위치를 사용합니다." });
+        return;
+      }
+      finished = true;
+      onFailure();
+    }
     function fallback() {
       if (finished) return;
       navigator.geolocation.getCurrentPosition(
         success,
-        function () {
-          if (finished) return;
-          finished = true;
-          onFailure();
-        },
-        { enableHighAccuracy: true, timeout: 6500, maximumAge: 120000 }
+        useCachedOrFail,
+        { enableHighAccuracy: true, timeout: 6500, maximumAge: 0 }
       );
     }
 
     navigator.geolocation.getCurrentPosition(
       success,
       fallback,
-      { enableHighAccuracy: false, timeout: 2200, maximumAge: 300000 }
+      { enableHighAccuracy: false, timeout: 2200, maximumAge: 0 }
     );
   }
 
@@ -806,7 +824,10 @@
     }
 
     requestCurrentLocation(
-      function (location) {
+      function (location, locationError) {
+        if (locationError && locationError.code === "CACHE") {
+          alert("실시간 위치를 가져오지 못해 이 탭의 최근 위치를 출발지로 사용합니다.");
+        }
         launchKakaoRoute(location, destination);
       },
       function () {
@@ -1247,6 +1268,9 @@
       activeSession.updatedAt = new Date().toISOString();
       saveSession();
       renderWorkspace();
+      if (result.locationError && result.locationError.code === "CACHE") {
+        alert("실시간 위치를 가져오지 못해 이 탭의 최근 위치로 동선을 다시 계산했습니다.");
+      }
     });
   }
 
@@ -1383,7 +1407,8 @@
       var stored = loadStoredSession(listId);
       if (!stored) return null;
       return { current: Number(stored.currentIndex || 0) + 1, total: (stored.itemKeys || []).length, updatedAt: stored.updatedAt || "" };
-    }
+    },
+    clearLocationCache: clearLocationCache
   };
   window.JSAiVisitDiagnosticsV6433 = {
     visitHoldControl: visitHoldControl
@@ -1401,6 +1426,8 @@
   });
 
   ensureUi();
+  // Never reuse unscoped precise locations written by older releases.
+  try { localStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
   clearDeviceSessionCache();
   syncSessionMapFromCloud().catch(function() {});
   watchRoadviewViewport();

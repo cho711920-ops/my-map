@@ -37,7 +37,7 @@
     if (!location) return null;
     currentLocation = location;
     try {
-      localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(location));
+      sessionStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(location));
     } catch (error) {}
     return location;
   }
@@ -48,10 +48,25 @@
 
   function readStoredLocation(key) {
     try {
-      return normalizeLocation(JSON.parse(localStorage.getItem(key) || "null"));
+      return normalizeLocation(JSON.parse(sessionStorage.getItem(key) || "null"));
     } catch (error) {
       return null;
     }
+  }
+
+  function clearLocationCache() {
+    currentLocation = null;
+    [LOCATION_CACHE_KEY, LEGACY_LOCATION_CACHE_KEY].forEach(function (key) {
+      try { sessionStorage.removeItem(key); } catch (error) {}
+      // Remove precise positions written by releases before session-only storage.
+      try { localStorage.removeItem(key); } catch (error) {}
+    });
+  }
+
+  function clearLegacyPersistentLocationStorage() {
+    [LOCATION_CACHE_KEY, LEGACY_LOCATION_CACHE_KEY].forEach(function (key) {
+      try { localStorage.removeItem(key); } catch (error) {}
+    });
   }
 
   function getFreshLocation(maxAgeMs) {
@@ -73,14 +88,11 @@
   }
 
   function requestCurrentLocation(callback) {
-    var cached = getFreshLocation(2 * 60 * 1000);
-    if (cached) {
-      callback(cached, null);
-      return;
-    }
-
     if (!navigator.geolocation) {
-      callback(null, { code: "UNSUPPORTED" });
+      var unsupportedFallback = getFreshLocation(2 * 60 * 1000);
+      callback(unsupportedFallback, unsupportedFallback
+        ? { code: "CACHE", message: "실시간 위치 대신 이 탭의 최근 위치를 사용합니다." }
+        : { code: "UNSUPPORTED" });
       return;
     }
 
@@ -91,6 +103,15 @@
       callback(location ? saveLocation(location) : null, error || null);
     }
 
+    function finishWithRecentFallback(error) {
+      var cached = getFreshLocation(2 * 60 * 1000);
+      if (cached) {
+        finish(cached, { code: "CACHE", message: "실시간 위치 대신 이 탭의 최근 위치를 사용합니다.", cause: error || null });
+      } else {
+        finish(null, error || { code: "UNAVAILABLE" });
+      }
+    }
+
     function requestHighAccuracy(previousError) {
       try {
         navigator.geolocation.getCurrentPosition(
@@ -98,7 +119,7 @@
             finish(normalizeLocation(position), null);
           },
           function (error) {
-            finish(null, error || previousError || { code: "UNAVAILABLE" });
+            finishWithRecentFallback(error || previousError || { code: "UNAVAILABLE" });
           },
           {
             enableHighAccuracy: true,
@@ -107,7 +128,7 @@
           }
         );
       } catch (error) {
-        finish(null, error || previousError);
+        finishWithRecentFallback(error || previousError);
       }
     }
 
@@ -122,7 +143,7 @@
         {
           enableHighAccuracy: false,
           timeout: 3000,
-          maximumAge: 120000
+          maximumAge: 0
         }
       );
     } catch (error) {
@@ -219,7 +240,10 @@
       return;
     }
 
-    requestCurrentLocation(function (location) {
+    requestCurrentLocation(function (location, locationError) {
+      if (location && locationError && locationError.code === "CACHE") {
+        alert("실시간 위치를 가져오지 못해 이 탭의 최근 위치를 출발지로 사용합니다.");
+      }
       if (!location) {
         alert("현재 위치를 가져오지 못했습니다. 카카오맵에서 출발지를 현재 위치로 선택해주세요.");
       }
@@ -227,11 +251,14 @@
     });
   }
 
+  clearLegacyPersistentLocationStorage();
+
   window.JSKakaoNavigation = {
     open: open,
     rememberPosition: rememberPosition,
     getFreshLocation: getFreshLocation,
     buildRouteTargets: buildRouteTargets,
-    launchRoute: launchRoute
+    launchRoute: launchRoute,
+    clearLocationCache: clearLocationCache
   };
 })();

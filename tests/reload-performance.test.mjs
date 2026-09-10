@@ -16,7 +16,7 @@ test("authenticated reload overlaps critical data reads with remaining script lo
   assert.match(dataAccess, /settledWarmup\(readNetwork\("unifiedListings"/);
   assert.match(auth, /await loadScriptInOrder\(script, document\.head\);[\s\S]*?warmInitialDataAfterScript\(script\)/);
   assert.match(auth, /criticalScripts[\s\S]*?deferredScripts/);
-  assert.match(html, /auth-gate-v1\.js\?v=1\.4\.0-idle-secondary-assets/);
+  assert.match(html, /auth-gate-v1\.js\?v=1\.5\.0-retry-privacy/);
   assert.match(html, /data-access-v6\.js\?v=6\.0\.3-earliest-warmup/);
 });
 

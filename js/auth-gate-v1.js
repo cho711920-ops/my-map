@@ -2,6 +2,19 @@ let googleClientId = "";
 let authenticatedAssetsPromise = null;
 let deferredAuthenticatedAssetsPromise = null;
 let sessionRetryTimer = 0;
+let authenticatedHeadStaticAssetsAppended = false;
+let authenticatedBodyStaticAssetsAppended = false;
+let deferredAuthenticatedScripts = [];
+const authenticatedScriptLoads = new Map();
+const AUTH_ACCOUNT_SESSION_KEY = "js_authenticated_account_v1";
+const PRECISE_LOCATION_KEYS = [
+  "js_kakao_navigation_location_v1",
+  "js_ai_visit_location_v6"
+];
+const AI_VISIT_DEVICE_CACHE_KEYS = [
+  "js_ai_visit_sessions_v6",
+  "js_ai_visit_session_v6"
+];
 
 function setApplicationIsolation(locked) {
   const application = document.getElementById("wrap");
@@ -55,10 +68,11 @@ async function appendAuthenticatedHeadAssets() {
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") {
       scripts.push(node);
-    } else {
+    } else if (!authenticatedHeadStaticAssetsAppended) {
       document.head.appendChild(node.cloneNode(true));
     }
   }
+  authenticatedHeadStaticAssetsAppended = true;
   for (const script of scripts) {
     await loadScriptInOrder(script, document.head);
     warmInitialDataAfterScript(script);
@@ -75,15 +89,32 @@ function appendAuthenticatedApplication() {
 }
 
 function loadScriptInOrder(sourceScript, target = document.body) {
-  return new Promise((resolve, reject) => {
+  const source = sourceScript.getAttribute("src") || "";
+  const key = new URL(source, document.baseURI).href;
+  if (authenticatedScriptLoads.has(key)) return authenticatedScriptLoads.get(key);
+
+  const pending = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     for (const attribute of sourceScript.attributes) {
       script.setAttribute(attribute.name, attribute.value);
     }
-    script.addEventListener("load", resolve, { once: true });
-    script.addEventListener("error", () => reject(new Error(`앱 구성요소를 불러오지 못했습니다: ${sourceScript.src}`)), { once: true });
+    script.dataset.jsAuthenticatedAsset = "true";
+    script.addEventListener("load", () => {
+      script.dataset.jsAuthenticatedAssetLoaded = "true";
+      resolve(true);
+    }, { once: true });
+    script.addEventListener("error", () => {
+      script.remove();
+      reject(new Error(`앱 구성요소를 불러오지 못했습니다: ${source}`));
+    }, { once: true });
     target.appendChild(script);
+  }).catch((error) => {
+    // Keep already loaded scripts, but allow only the failed URL to be retried.
+    authenticatedScriptLoads.delete(key);
+    throw error;
   });
+  authenticatedScriptLoads.set(key, pending);
+  return pending;
 }
 
 function warmInitialDataAfterScript(script) {
@@ -117,55 +148,243 @@ async function appendAuthenticatedBodyAssets() {
     return preload;
   });
   nodes.forEach((node) => {
-    if (!(node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT")) {
+    if (!authenticatedBodyStaticAssetsAppended && !(node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT")) {
       document.body.appendChild(node.cloneNode(true));
     }
   });
+  authenticatedBodyStaticAssetsAppended = true;
 
-  for (const script of criticalScripts) {
-    await loadScriptInOrder(script);
-    warmInitialDataAfterScript(script);
+  try {
+    for (const script of criticalScripts) {
+      await loadScriptInOrder(script);
+      warmInitialDataAfterScript(script);
+    }
+  } catch (error) {
+    preloadLinks.forEach((preload) => preload.remove());
+    throw error;
   }
   template.remove();
+  deferredAuthenticatedScripts = deferredScripts.slice();
+  setDeferredFeatureReadiness("loading");
+  startDeferredAuthenticatedAssets(preloadLinks);
+}
 
-  deferredAuthenticatedAssetsPromise = new Promise((resolve) => {
-    const loadDeferred = async () => {
-      for (const script of deferredScripts) {
+function globalFunctionExists(path) {
+  const parts = String(path || "").replace(/^window\./, "").split(".").filter(Boolean);
+  let value = window;
+  for (const part of parts) {
+    if (value == null || !(part in value)) return false;
+    value = value[part];
+  }
+  return typeof value === "function";
+}
+
+function hasUnavailableInlineAction(control) {
+  const handler = String(control.getAttribute("onclick") || "");
+  const ignored = new Set(["if", "for", "while", "switch", "function", "return"]);
+  const calls = handler.matchAll(/(?:^|[^\w$.])((?:window\.)?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g);
+  for (const match of calls) {
+    const path = match[1];
+    if (!ignored.has(path) && !globalFunctionExists(path)) return true;
+  }
+  return false;
+}
+
+function refreshDeferredControls() {
+  document.querySelectorAll("button[onclick]").forEach((button) => {
+    const unavailable = hasUnavailableInlineAction(button);
+    if (unavailable) {
+      if (!button.hasAttribute("data-js-auth-deferred-control")) {
+        button.dataset.jsAuthDeferredOriginalAriaDisabled = button.getAttribute("aria-disabled") || "";
+        button.dataset.jsAuthDeferredOriginalTitle = button.getAttribute("title") || "";
+      }
+      button.dataset.jsAuthDeferredControl = "true";
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("aria-busy", "true");
+      button.title = "이 기능을 준비하고 있습니다.";
+      return;
+    }
+    if (!button.hasAttribute("data-js-auth-deferred-control")) return;
+    const originalAriaDisabled = button.dataset.jsAuthDeferredOriginalAriaDisabled || "";
+    if (originalAriaDisabled) button.setAttribute("aria-disabled", originalAriaDisabled);
+    else button.removeAttribute("aria-disabled");
+    button.removeAttribute("aria-busy");
+    const originalTitle = button.dataset.jsAuthDeferredOriginalTitle || "";
+    if (originalTitle) button.title = originalTitle;
+    else button.removeAttribute("title");
+    delete button.dataset.jsAuthDeferredControl;
+    delete button.dataset.jsAuthDeferredOriginalAriaDisabled;
+    delete button.dataset.jsAuthDeferredOriginalTitle;
+  });
+}
+
+document.addEventListener("click", (event) => {
+  const blocked = event.target && typeof event.target.closest === "function"
+    ? event.target.closest("[data-js-auth-deferred-control]")
+    : null;
+  if (!blocked) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+
+function authenticatedFeatureStatus() {
+  let element = document.getElementById("jsAuthenticatedFeatureStatus");
+  if (element) return element;
+  element = document.createElement("aside");
+  element.id = "jsAuthenticatedFeatureStatus";
+  element.className = "js-auth-feature-status";
+  element.setAttribute("role", "status");
+  element.setAttribute("aria-live", "polite");
+  element.innerHTML = '<span data-js-auth-feature-message></span><button type="button" hidden>다시 시도</button>';
+  element.querySelector("button").addEventListener("click", () => {
+    retryDeferredAuthenticatedAssets();
+  });
+  document.body.appendChild(element);
+  return element;
+}
+
+function showAuthenticatedFeatureStatus(message, options = {}) {
+  const element = authenticatedFeatureStatus();
+  const messageElement = element.querySelector("[data-js-auth-feature-message]");
+  const retryButton = element.querySelector("button");
+  element.dataset.tone = options.tone || "info";
+  element.setAttribute("role", options.tone === "error" ? "alert" : "status");
+  if (messageElement) messageElement.textContent = message || "";
+  if (retryButton) retryButton.hidden = options.retry !== true;
+  element.hidden = !message;
+}
+
+function setDeferredFeatureReadiness(state, error) {
+  refreshDeferredControls();
+  const application = document.getElementById("wrap");
+  if (application) {
+    if (state === "loading") application.setAttribute("aria-busy", "true");
+    else application.removeAttribute("aria-busy");
+  }
+  if (state === "loading") {
+    showAuthenticatedFeatureStatus("부가 기능을 준비하고 있습니다…");
+  } else if (state === "error") {
+    showAuthenticatedFeatureStatus("일부 기능을 불러오지 못했습니다. 사용할 기능만 다시 불러올 수 있습니다.", { tone: "error", retry: true });
+    console.error("지연 앱 구성요소 로딩 실패", error);
+  } else {
+    showAuthenticatedFeatureStatus("");
+  }
+}
+
+function scheduleDeferredLoad(load) {
+  return new Promise((resolve, reject) => {
+    const run = () => Promise.resolve().then(load).then(resolve, reject);
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 600 });
+    else setTimeout(run, 120);
+  });
+}
+
+function startDeferredAuthenticatedAssets(preloadLinks = []) {
+  if (deferredAuthenticatedAssetsPromise) return deferredAuthenticatedAssetsPromise;
+  deferredAuthenticatedAssetsPromise = scheduleDeferredLoad(async () => {
+    const failures = [];
+    for (const script of deferredAuthenticatedScripts) {
+      try {
         await loadScriptInOrder(script);
         warmInitialDataAfterScript(script);
+      } catch (error) {
+        failures.push(error);
+      } finally {
+        refreshDeferredControls();
       }
-      resolve(true);
-    };
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(() => loadDeferred().catch(() => resolve(false)), { timeout: 600 });
-    } else {
-      setTimeout(() => loadDeferred().catch(() => resolve(false)), 120);
     }
-  }).catch((error) => {
-    console.error("지연 앱 구성요소 로딩 실패", error);
-    return false;
+    if (failures.length) {
+      throw new AggregateError(failures, `${failures.length}개 부가 기능을 불러오지 못했습니다.`);
+    }
+    return true;
   }).finally(() => {
     preloadLinks.forEach((preload) => preload.remove());
   });
+
+  // Observe the rejection for UI feedback while retaining a rejected promise
+  // for callers that need an explicit readiness result.
+  deferredAuthenticatedAssetsPromise.then(
+    () => setDeferredFeatureReadiness("ready"),
+    (error) => {
+      deferredAuthenticatedAssetsPromise = null;
+      setDeferredFeatureReadiness("error", error);
+    }
+  );
+  return deferredAuthenticatedAssetsPromise;
+}
+
+function retryDeferredAuthenticatedAssets() {
+  if (!deferredAuthenticatedScripts.length) return Promise.resolve(true);
+  setDeferredFeatureReadiness("loading");
+  return startDeferredAuthenticatedAssets();
 }
 
 function loadAuthenticatedAssets() {
   if (authenticatedAssetsPromise) return authenticatedAssetsPromise;
-  authenticatedAssetsPromise = (async () => {
+  const pending = (async () => {
     appendAuthenticatedApplication();
     await appendAuthenticatedHeadAssets();
     await appendAuthenticatedBodyAssets();
   })();
+  authenticatedAssetsPromise = pending.catch((error) => {
+    // Templates and successfully loaded URLs are retained, so a later session
+    // retry resumes at only the failed critical asset.
+    authenticatedAssetsPromise = null;
+    throw error;
+  });
   return authenticatedAssetsPromise;
 }
 
 async function unlock(email) {
   status("앱을 준비하고 있습니다…");
+  syncLocationPrivacyForAccount(email);
   await loadAuthenticatedAssets();
   setApplicationIsolation(false);
   document.documentElement.classList.remove("auth-pending");
   document.getElementById("jsAuthGate")?.remove();
   document.getElementById("jsAuthUser")?.remove();
+}
+
+function removeStorageKeys(storage, keys) {
+  if (!storage) return;
+  for (const key of keys) {
+    try { storage.removeItem(key); } catch (error) {}
+  }
+}
+
+function clearPreciseLocationCaches(options = {}) {
+  removeStorageKeys(window.sessionStorage, PRECISE_LOCATION_KEYS);
+  removeStorageKeys(window.localStorage, PRECISE_LOCATION_KEYS);
+  if (options.clearVisitDeviceCache) {
+    removeStorageKeys(window.localStorage, AI_VISIT_DEVICE_CACHE_KEYS);
+  }
+  if (options.clearAccountMarker) {
+    removeStorageKeys(window.sessionStorage, [AUTH_ACCOUNT_SESSION_KEY]);
+  }
+  if (window.JSKakaoNavigation && typeof window.JSKakaoNavigation.clearLocationCache === "function") {
+    window.JSKakaoNavigation.clearLocationCache();
+  }
+  if (window.JSAiVisitRouteV6 && typeof window.JSAiVisitRouteV6.clearLocationCache === "function") {
+    window.JSAiVisitRouteV6.clearLocationCache();
+  }
+  if (window.JSAiVisitV6 && typeof window.JSAiVisitV6.clearLocationCache === "function") {
+    window.JSAiVisitV6.clearLocationCache();
+  }
+}
+
+function syncLocationPrivacyForAccount(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  let previous = "";
+  try { previous = String(window.sessionStorage.getItem(AUTH_ACCOUNT_SESSION_KEY) || "").trim().toLowerCase(); } catch (error) {}
+
+  // Persistent caches from older releases are never reused. A new tab/account
+  // also starts without inheriting another signed-in user's precise position.
+  removeStorageKeys(window.localStorage, PRECISE_LOCATION_KEYS);
+  if (!previous || previous !== normalized) {
+    clearPreciseLocationCaches({ clearVisitDeviceCache: true });
+  }
+  try { window.sessionStorage.setItem(AUTH_ACCOUNT_SESSION_KEY, normalized); } catch (error) {}
+  window.JSAuthenticatedAccountEmail = normalized;
 }
 
 async function sessionRequest(payload) {
@@ -274,13 +493,25 @@ async function logout(trigger) {
     if (label) label.textContent = "종료 중";
   }
   try {
+    clearPreciseLocationCaches({ clearVisitDeviceCache: true, clearAccountMarker: true });
     if (window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.clear === "function") {
       await window.JSInitialListingsCacheV1.clear();
     }
-    await fetch("/api/session", { method: "DELETE", credentials: "same-origin" });
+    const response = await fetch("/api/session", { method: "DELETE", credentials: "same-origin" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) {
+      throw new Error(result.message || "로그아웃 요청을 완료하지 못했습니다.");
+    }
     if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect();
-  } finally {
     location.reload();
+  } catch (error) {
+    showAuthenticatedFeatureStatus(error.message || "로그아웃에 실패했습니다. 잠시 후 다시 시도해주세요.", { tone: "error" });
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      const label = button.querySelector("span");
+      if (label) label.textContent = "로그아웃";
+    }
   }
 }
 

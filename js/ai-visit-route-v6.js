@@ -7,6 +7,27 @@
   var lastLocation = null;
   var lastEntries = [];
   var lastRouteSignature = "";
+  var LOCATION_CACHE_KEY = "js_ai_visit_location_v6";
+
+  function readCachedLocation(maxAgeMs) {
+    var cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem(LOCATION_CACHE_KEY) || "null"); } catch (error) {}
+    if (!cached || !isFinite(Number(cached.lat)) || !isFinite(Number(cached.lng)) ||
+        Date.now() - Number(cached.timestamp || 0) > maxAgeMs) return null;
+    return {
+      lat: Number(cached.lat),
+      lng: Number(cached.lng),
+      accuracy: Number(cached.accuracy) || 0,
+      timestamp: Number(cached.timestamp) || Date.now(),
+      source: "cache"
+    };
+  }
+
+  function clearLocationCache() {
+    lastLocation = null;
+    try { sessionStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
+    try { localStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
+  }
 
   function getItem(key) {
     if (window.JSV6ListStore && typeof window.JSV6ListStore.getItem === "function") {
@@ -39,9 +60,11 @@
   }
 
   function requestLocation(callback) {
-    var CACHE_KEY = "js_ai_visit_location_v6";
     if (!navigator.geolocation) {
-      callback(null, { code: "UNSUPPORTED", message: "이 기기는 위치 기능을 지원하지 않습니다." });
+      var unsupportedFallback = readCachedLocation(30 * 60 * 1000);
+      callback(unsupportedFallback, unsupportedFallback
+        ? { code: "CACHE", message: "실시간 위치 대신 이 탭의 최근 위치를 사용했습니다." }
+        : { code: "UNSUPPORTED", message: "이 기기는 위치 기능을 지원하지 않습니다." });
       return;
     }
 
@@ -62,7 +85,7 @@
 
     function saveLocation(location) {
       lastLocation = location;
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify(location)); } catch (error) {}
+      try { sessionStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(location)); } catch (error) {}
     }
 
     function finish(value, errorInfo) {
@@ -116,7 +139,7 @@
       var lowWatch = navigator.geolocation.watchPosition(
         function (position) { accept(position, "watch-low"); },
         function (error) { recordError("watch-low", error); },
-        { enableHighAccuracy: false, maximumAge: 300000, timeout: 15000 }
+        { enableHighAccuracy: false, maximumAge: 0, timeout: 15000 }
       );
       watchIds.push(lowWatch);
     } catch (error) { recordError("watch-low", error); }
@@ -125,7 +148,7 @@
       navigator.geolocation.getCurrentPosition(
         function (position) { accept(position, "current-low"); },
         function (error) { recordError("current-low", error); },
-        { enableHighAccuracy: false, timeout: 9000, maximumAge: 300000 }
+        { enableHighAccuracy: false, timeout: 9000, maximumAge: 0 }
       );
     } catch (error) { recordError("current-low", error); }
 
@@ -162,19 +185,10 @@
        그래도 실패하면 30분 이내 저장 위치를 마지막 안전장치로 사용합니다. */
     timers.push(window.setTimeout(function () {
       if (finished) return;
-      var cached = null;
-      try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (error) {}
-      if (cached && isFinite(Number(cached.lat)) && isFinite(Number(cached.lng)) &&
-          Date.now() - Number(cached.timestamp || 0) <= 30 * 60 * 1000) {
-        cached = {
-          lat: Number(cached.lat),
-          lng: Number(cached.lng),
-          accuracy: Number(cached.accuracy) || 0,
-          timestamp: Number(cached.timestamp) || Date.now(),
-          source: "cache"
-        };
+      var cached = readCachedLocation(30 * 60 * 1000);
+      if (cached) {
         saveLocation(cached);
-        finish(cached, { code: "CACHE", message: "최근 위치를 사용했습니다." });
+        finish(cached, { code: "CACHE", message: "실시간 위치 대신 이 탭의 최근 위치를 사용했습니다." });
         return;
       }
       var lastError = errors.length ? errors[errors.length - 1] : null;
@@ -261,7 +275,7 @@
         : Math.max(0, session.itemKeys.length - 1);
       session.routeStartLocation = location;
       session.routeOptimized = true;
-      callback({ ok: true, session: session });
+      callback({ ok: true, session: session, locationError: locationError || null });
     });
   }
 
@@ -380,6 +394,10 @@
     clear: clearRouteMap,
     nextPendingIndex: nextPendingIndex,
     distanceMeters: distanceMeters,
-    getLastLocation: function () { return lastLocation; }
+    getLastLocation: function () { return lastLocation; },
+    clearLocationCache: clearLocationCache
   };
+
+  // Erase the persistent, account-unscoped cache left by older builds.
+  try { localStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
 })();

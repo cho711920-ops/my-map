@@ -163,7 +163,7 @@ test("AI visit sessions use the shared Cloudflare data boundary with a legacy fa
   assert.match(aiVisitSource, /fetch\(\(window\.saveApiURL \|\| "\/api\/data"\)/);
   assert.match(aiVisitSource, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
   assert.match(aiVisitSource, /pollMutationResult\(requestId/);
-  assert.match(html, /ai-visit-session-v6\.js\?v=6\.4\.39-data-access/);
+  assert.match(html, /ai-visit-session-v6\.js\?v=6\.4\.40-location-privacy/);
 });
 
 test("list manager only uses the shared Cloudflare data boundary", () => {

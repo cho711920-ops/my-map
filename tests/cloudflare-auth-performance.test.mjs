@@ -17,10 +17,13 @@ test("only authentication assets execute before the session is approved", () => 
   assert.match(auth, /appendAuthenticatedApplication\(\);[\s\S]*?await appendAuthenticatedHeadAssets\(\);[\s\S]*?await appendAuthenticatedBodyAssets\(\)/);
   assert.match(auth, /const scripts = \[\][\s\S]*?document\.head\.appendChild\(node\.cloneNode\(true\)\)[\s\S]*?for \(const script of scripts\)/);
   assert.match(auth, /const criticalScripts = scripts\.filter[\s\S]*?for \(const script of criticalScripts\)/);
-  assert.match(auth, /deferredAuthenticatedAssetsPromise = new Promise/);
+  assert.match(auth, /deferredAuthenticatedAssetsPromise = scheduleDeferredLoad/);
   assert.match(auth, /requestIdleCallback/);
   assert.match(auth, /const preloadLinks = criticalScripts\.map/);
   assert.match(auth, /JSDataAccessV6\.warmInitialData\(\)/);
+  assert.match(auth, /authenticatedAssetsPromise = null;[\s\S]*?throw error/);
+  assert.match(auth, /data-js-auth-deferred-control/);
+  assert.match(auth, /throw new AggregateError/);
 });
 
 test("the authentication gate isolates the application and fits mobile viewports", () => {
