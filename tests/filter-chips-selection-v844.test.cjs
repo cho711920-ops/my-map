@@ -20,6 +20,13 @@ function chipRuntime() {
   return script.slice(start, end);
 }
 
+function listingFilterRuntime() {
+  const start = script.indexOf("function readOptionalFilterNumberV1");
+  const end = script.indexOf("function listingRegistrationTime", start);
+  assert.ok(start >= 0 && end > start, "listing filter runtime should be extractable");
+  return script.slice(start, end);
+}
+
 function linkedSelectionRuntime() {
   const identityStart = script.indexOf("function actionSelectionKeyV660");
   const identityEndMarker = "window.clearLinkedListingSelectionV845 = clearLinkedListingSelectionV845;";
@@ -57,7 +64,7 @@ test("active filter chips are mounted below the listing toolbar with cache-buste
   const chipIndex = html.indexOf('id="activeFilterChipsV844"');
   const listIndex = html.indexOf('id="list"');
   assert.ok(toolbarIndex >= 0 && chipIndex > toolbarIndex && listIndex > chipIndex);
-  assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
+  assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id[^"']*zero-range-favorite-folder-v1=1/);
   assert.match(html, /unified-listings-v8\.js\?v=8\.1\.42-favorite-static-photo/);
   assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render/);
   assert.match(html, /analysis\.js\?v=6\.3\.41-unique-linked-selection/);
@@ -65,6 +72,89 @@ test("active filter chips are mounted below the listing toolbar with cache-buste
   assert.match(html, /unified-listings-v8\.css\?v=8\.1\.40-smooth-photo-expand/);
   assert.match(html, /mobile-app-v1\.css\?v=1\.0\.7-filter-chips-selection/);
   assert.match(script, /drawItems\(filtered\);\s*renderActiveFilterChipsV844\(\);/);
+});
+
+test("zero is a real range endpoint in both filtering and active chips", () => {
+  const elements = {
+    keyword: input(""),
+    sourceFilter: select("", ""),
+    typeFilter: select("", ""),
+    brokerageFeeFilter: select("", ""),
+    floorQuickFilter: select("", ""),
+    sortFilter: select("", ""),
+    industryFilter: input(""),
+    minDeposit: input(""),
+    maxDeposit: input(""),
+    minRent: input(""),
+    maxRent: input("0"),
+    minPremium: input(""),
+    maxPremium: input(""),
+    minArea: input(""),
+    maxArea: input(""),
+    minFloor: input(""),
+    maxFloor: input("")
+  };
+  const context = {
+    console,
+    document: {
+      documentElement: { classList: { contains: () => false } },
+      getElementById: (id) => elements[id] || null
+    },
+    map: { getBounds: () => ({ contain: () => true }) },
+    allItems: [
+      { key: "rent-zero", deposit: 1000, rent: 0, premium: 0, area: 10, latlng: {} },
+      { key: "rent-positive", deposit: 1000, rent: 50, premium: 0, area: 10, latlng: {} }
+    ],
+    favoriteOnly: false,
+    activeFavoriteFolderId: "",
+    activeFavoriteFolderName: "",
+    favoriteFilterKeys: [],
+    hideDone: true,
+    doneOnly: false,
+    gongsilOnly: false,
+    todayNewOnly: false,
+    newListingDays: 0,
+    matchesMultiKeyword: () => true,
+    getItemSourceType: () => "",
+    getItemFloorNumber: () => null,
+    readOptionalNumberInput: () => null,
+    isFavorite: () => false,
+    isDone: () => false,
+    window: {
+      mapRadiusFilterV658: null,
+      mapPolygonFilterV661: null,
+      operationsMatchPropertyIds: null,
+      JSListingTradeV1: {
+        getMode: () => "lease",
+        matchesItem: () => true
+      }
+    }
+  };
+  vm.runInNewContext(listingFilterRuntime(), context);
+  assert.deepEqual(Array.from(context.getFilteredItems(), (item) => item.key), ["rent-zero"]);
+
+  vm.runInNewContext(chipRuntime(), context);
+  assert.equal(
+    context.getActiveFilterChipsV844().find((chip) => chip.key === "rent").label,
+    "월세 0만원 이하"
+  );
+});
+
+test("every money and area endpoint distinguishes zero from an empty value", () => {
+  const ids = [
+    "minDeposit", "maxDeposit", "minRent", "maxRent",
+    "minPremium", "maxPremium", "minArea", "maxArea"
+  ];
+  const elements = Object.fromEntries(ids.map((id) => [id, input("0")]));
+  const context = {
+    document: { getElementById: (id) => elements[id] || null }
+  };
+  const sourceStart = script.indexOf("function readOptionalFilterNumberV1");
+  const sourceEnd = script.indexOf("function getFilteredItems", sourceStart);
+  vm.runInNewContext(script.slice(sourceStart, sourceEnd), context);
+  ids.forEach((id) => assert.equal(context.readOptionalFilterNumberV1(id, Infinity), 0));
+  elements.maxRent.value = "";
+  assert.equal(context.readOptionalFilterNumberV1("maxRent", Infinity), Infinity);
 });
 
 test("selected filter values become readable independent removable chips", () => {

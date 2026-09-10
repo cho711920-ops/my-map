@@ -541,6 +541,7 @@
     list.updatedAt = nowIso();
     save(lists);
     render();
+    if (typeof global.applyFilter === "function") global.applyFilter();
   };
 
   global.deleteUnifiedFavoriteFolderV7 = function (id) {
@@ -566,12 +567,17 @@
     var list = load("favorite").find(function (entry) { return String(entry.id) === String(id); });
     if (!list) return;
     var refs = uniqueRefs(list.itemKeys || []);
-    var filterKeys = refs.slice();
-    global.favoriteKeys = filterKeys;
-    try { localStorage.setItem("favoriteKeys", JSON.stringify(filterKeys)); } catch (_) {}
-    global.favoriteOnly = true;
-    var button = document.getElementById("favoriteBtn");
-    if (button) button.classList.add("on");
+    var api = store();
+    if (api && typeof api.activateFavoriteFilter === "function") {
+      api.activateFavoriteFilter(id, { silent: true });
+    } else {
+      global.activeFavoriteFolderId = String(list.id || "");
+      global.activeFavoriteFolderName = String(list.name || "찜폴더");
+      global.favoriteFilterKeys = refs.slice();
+      global.favoriteOnly = true;
+      var button = document.getElementById("favoriteBtn");
+      if (button) button.classList.add("on");
+    }
     close();
     if (typeof global.applyFilter === "function") global.applyFilter();
   };

@@ -10,8 +10,8 @@ const aiVisit = fs.readFileSync("js/ai-visit-session-v6.js", "utf8");
 const main = fs.readFileSync("js/script.js", "utf8");
 
 assert.match(html, /unified-favorites-v7\.css\?v=7\.0\.15-ai-visit-entry/);
-assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.15-ai-visit-entry/);
-assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only/);
+assert.match(html, /unified-favorites-v7\.js\?v=7\.0\.15-ai-visit-entry[^"']*favorite-folder-filter-v1=1/);
+assert.match(html, /list-manager-v6\.js\?v=6\.4\.35-shared-data-only[^"']*favorite-folder-filter-v1=1/);
 assert.match(html, /class="selection-favorite-btn"[^>]+openSelectedFavoritesManagerV7/);
 assert.match(html, /id="mapQuickListBtn"[\s\S]*?openListManager\('favorite'\)[\s\S]*?<span>찜목록<\/span>/);
 assert.doesNotMatch(html, /openListManager\('visit'\)/);
@@ -67,11 +67,13 @@ assert.match(listManager, /기기 저장을 건너뛰고 계정 동기화를 계
 assert.match(listManager, /pendingCloudSave\[type\] \|\| localStorage\.getItem/);
 assert.match(listManager, /migrationComplete = localStorage\.getItem/);
 assert.match(listManager, /기존 찜 표시용 기기 저장을 건너뜁니다/);
-assert.match(favorites, /try \{ localStorage\.setItem\("favoriteKeys"/);
+assert.match(favorites, /api\.activateFavoriteFilter\(id, \{ silent: true \}\)/);
+assert.doesNotMatch(favorites, /localStorage\.setItem\("favoriteKeys"/);
 assert.match(aiVisit, /window\.JSV6ListStore\.load\("favorite"\)/);
 assert.match(aiVisit, /js_favorite_lists_v6/);
 assert.match(main, /var favoriteHeaderButtonV661 = "";/);
-assert.match(main, /favoriteKeys\.includes\(propertyRef\)/);
+assert.match(main, /var matchKeys = favoriteOnly && activeFavoriteFolderId/);
+assert.match(main, /matchKeys\.includes\(propertyRef\)/);
 assert.match(main, /var favoriteRefV821 = item\.propertyId[\s\S]*?"property:" \+ String\(item\.propertyId\)\.trim\(\)/);
 assert.match(main, /openItemListDestinationPicker\([^\n]+encodedFavoriteRefV821/);
 assert.doesNotMatch(favorites, /filterKeys\.push\(item\.key\)/);
@@ -107,8 +109,9 @@ context.window.document = context.document;
 context.window.localStorage = context.localStorage;
 vm.runInNewContext(favorites, context);
 context.window.showUnifiedFavoriteOnMapV7("fav-one");
-assert.deepEqual(Array.from(context.window.favoriteKeys), ["property:M-first"]);
-assert.deepEqual(JSON.parse(stored.get("favoriteKeys")), ["property:M-first"]);
+assert.deepEqual(Array.from(context.window.favoriteFilterKeys), ["property:M-first"]);
+assert.equal(context.window.activeFavoriteFolderId, "fav-one");
+assert.equal(stored.has("favoriteKeys"), false);
 context.window.openUnifiedFavoriteItemV7(encodeURIComponent("property:M-first"));
 assert.equal(context.openedPropertyId, "M-first");
 

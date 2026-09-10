@@ -6,6 +6,8 @@
   var VISIT_KEY = "js_visit_lists_v6";
   var LEGACY_MIGRATION_KEY = "js_favorite_lists_v6_migrated";
   var ACCOUNT_MARKER_KEY = "js_list_account_email_v6";
+  var ACTIVE_FAVORITE_FILTER_KEY = "js_active_favorite_folder_filter_v1";
+  var ACTIVE_FAVORITE_HISTORY_KEY = "jsActiveFavoriteFolderFilterV1";
   var accountEmail = "";
   var currentManagerType = "favorite";
   var currentItemKey = "";
@@ -58,6 +60,86 @@
 
   function scopedKey(base) {
     return accountEmail ? base + "::" + encodeURIComponent(accountEmail) : base;
+  }
+
+  function activeFavoriteFilterState() {
+    var state = null;
+    try {
+      var historyState = window.history && window.history.state;
+      state = historyState && historyState[ACTIVE_FAVORITE_HISTORY_KEY];
+    } catch (_) {}
+    if (!state) {
+      try { state = JSON.parse(window.sessionStorage.getItem(ACTIVE_FAVORITE_FILTER_KEY) || "null"); } catch (_) {}
+    }
+    if (!state || typeof state !== "object" || !String(state.folderId || "").trim()) return null;
+    var stateEmail = String(state.accountEmail || "").trim().toLowerCase();
+    if (accountEmail && stateEmail && stateEmail !== accountEmail) return null;
+    return {
+      accountEmail: stateEmail,
+      folderId: String(state.folderId).trim()
+    };
+  }
+
+  function writeActiveFavoriteFilterState(list) {
+    var value = list ? {
+      accountEmail: accountEmail || String(window.JSListAccountEmail || "").trim().toLowerCase(),
+      folderId: String(list.id || "").trim()
+    } : null;
+    try {
+      if (value) window.sessionStorage.setItem(ACTIVE_FAVORITE_FILTER_KEY, JSON.stringify(value));
+      else window.sessionStorage.removeItem(ACTIVE_FAVORITE_FILTER_KEY);
+    } catch (_) {}
+    try {
+      if (!window.history || typeof window.history.replaceState !== "function") return;
+      var nextHistoryState = Object.assign({}, window.history.state || {});
+      if (value) nextHistoryState[ACTIVE_FAVORITE_HISTORY_KEY] = value;
+      else delete nextHistoryState[ACTIVE_FAVORITE_HISTORY_KEY];
+      window.history.replaceState(nextHistoryState, document.title);
+    } catch (_) {}
+  }
+
+  function clearActiveFavoriteFolderFilter(options) {
+    options = options || {};
+    window.activeFavoriteFolderId = "";
+    window.activeFavoriteFolderName = "";
+    window.favoriteFilterKeys = [];
+    if (options.disableFilter !== false) window.favoriteOnly = false;
+    writeActiveFavoriteFilterState(null);
+    var button = document.getElementById("favoriteBtn");
+    if (button && options.disableFilter !== false) button.classList.remove("on");
+    if (!options.silent && typeof window.applyFilter === "function") window.applyFilter();
+  }
+
+  function activateFavoriteFolderFilter(list, options) {
+    options = options || {};
+    if (!list || !String(list.id || "").trim()) {
+      clearActiveFavoriteFolderFilter(options);
+      return false;
+    }
+    window.activeFavoriteFolderId = String(list.id).trim();
+    window.activeFavoriteFolderName = String(list.name || "찜폴더").trim() || "찜폴더";
+    window.favoriteFilterKeys = Array.isArray(list.itemKeys) ? list.itemKeys.slice() : [];
+    window.favoriteOnly = true;
+    writeActiveFavoriteFilterState(list);
+    var button = document.getElementById("favoriteBtn");
+    if (button) button.classList.add("on");
+    if (!options.silent && typeof window.applyFilter === "function") window.applyFilter();
+    return true;
+  }
+
+  function restoreActiveFavoriteFolderFilter(lists, options) {
+    options = options || {};
+    lists = Array.isArray(lists) ? lists : loadLists("favorite");
+    var folderId = String(window.activeFavoriteFolderId || "").trim();
+    var savedState = activeFavoriteFilterState();
+    if (!folderId && savedState) folderId = savedState.folderId;
+    if (!folderId) return false;
+    var list = lists.find(function(entry) { return String(entry && entry.id || "") === folderId; });
+    if (!list) {
+      clearActiveFavoriteFolderFilter({ silent: options.silent, disableFilter: true });
+      return false;
+    }
+    return activateFavoriteFolderFilter(list, { silent: options.silent });
   }
 
   function migrationKey() {
@@ -134,6 +216,7 @@
       pendingCloudSave = { favorite: false, visit: false };
       try { localStorage.setItem("favoriteKeys", "[]"); } catch (_) {}
       window.favoriteKeys = [];
+      clearActiveFavoriteFolderFilter({ silent: true, disableFilter: true });
     }
     try { localStorage.setItem(ACCOUNT_MARKER_KEY, email); } catch (_) {}
   }
@@ -370,6 +453,7 @@
 
   function syncListsWhenDeviceResumes() {
     if (document.visibilityState && document.visibilityState !== "visible") return;
+    restoreActiveFavoriteFolderFilter(loadLists("favorite"), { silent: true });
     if (Date.now() - lastCloudSyncAt < 15000) return;
     syncListsFromCloud();
   }
@@ -387,6 +471,7 @@
     } catch (error) {
       console.warn("기존 찜 표시용 기기 저장을 건너뜁니다.", error);
     }
+    restoreActiveFavoriteFolderFilter(lists, { silent: true });
   }
 
   function migrateLegacyFavorites() {
@@ -705,11 +790,7 @@
   window.showFavoriteListOnMap = function (listId) {
     var list = loadLists("favorite").find(function (entry) { return entry.id === listId; });
     if (!list) return;
-    window.favoriteKeys = (list.itemKeys || []).slice();
-    localStorage.setItem("favoriteKeys", JSON.stringify(window.favoriteKeys));
-    window.favoriteOnly = true;
-    var button = document.getElementById("favoriteBtn");
-    if (button) button.classList.add("on");
+    activateFavoriteFolderFilter(list, { silent: true });
     closeListManager();
     if (typeof window.applyFilter === "function") window.applyFilter();
   };
@@ -860,8 +941,26 @@
       markDeletedListId(type, id);
       return saveLists(type, lists);
     },
-    getItem: getItem
+    getItem: getItem,
+    activateFavoriteFilter: function (id, options) {
+      var list = loadLists("favorite").find(function(entry) { return String(entry && entry.id || "") === String(id || ""); });
+      return activateFavoriteFolderFilter(list, options);
+    },
+    restoreFavoriteFilter: function () {
+      return restoreActiveFavoriteFolderFilter(loadLists("favorite"));
+    },
+    clearFavoriteFilter: function (options) {
+      clearActiveFavoriteFolderFilter(options);
+    }
   };
+  window.activateFavoriteFolderFilterV1 = function(id, options) {
+    var list = loadLists("favorite").find(function(entry) { return String(entry && entry.id || "") === String(id || ""); });
+    return activateFavoriteFolderFilter(list, options);
+  };
+  window.restoreActiveFavoriteFolderFilterV1 = function(options) {
+    return restoreActiveFavoriteFolderFilter(loadLists("favorite"), options);
+  };
+  window.clearActiveFavoriteFolderFilterV1 = clearActiveFavoriteFolderFilter;
 
 
   function isMobileLayout() {
@@ -1132,10 +1231,12 @@
 
   prepareAccountStorage().then(function () {
     migrateLegacyFavorites();
+    restoreActiveFavoriteFolderFilter(loadLists("favorite"), { silent: true });
     syncListsFromCloud();
     ensureModal();
     window.addEventListener("focus", syncListsWhenDeviceResumes);
     window.addEventListener("pageshow", syncListsWhenDeviceResumes);
+    window.addEventListener("popstate", syncListsWhenDeviceResumes);
     document.addEventListener("visibilitychange", syncListsWhenDeviceResumes);
   });
 })();

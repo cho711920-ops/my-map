@@ -11,6 +11,9 @@ var selectedGroupKey = null;
 var selectedItemKey = null;
 var selectedListCardIdV845 = null;
 var favoriteOnly = false;
+var favoriteFilterKeys = [];
+var activeFavoriteFolderId = "";
+var activeFavoriteFolderName = "";
 var doneViewStorageKeyV656 = "JS_REAL_ESTATE_DONE_VIEW_V1";
 var hideDone = true;
 var doneOnly = false;
@@ -136,7 +139,13 @@ var listCardReusePoolV6521 = null;
 var listVirtualTopHeightV1 = 0;
 var listVirtualScrollScheduledV1 = false;
 var listVirtualItemHeightsV1 = Object.create(null);
-var favoriteKeys = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
+var favoriteKeys = [];
+try {
+  var storedFavoriteKeysV1 = JSON.parse(localStorage.getItem("favoriteKeys") || "[]");
+  favoriteKeys = Array.isArray(storedFavoriteKeysV1) ? storedFavoriteKeysV1 : [];
+} catch (_) {
+  favoriteKeys = [];
+}
 var isRendering = false;
 var doneTogglePendingKeys = {};
 
@@ -440,7 +449,10 @@ function isDone(item) {
 
 function isFavorite(item) {
   var propertyRef = item && item.propertyId ? "property:" + String(item.propertyId) : "";
-  return favoriteKeys.includes(item.key) || (!!propertyRef && favoriteKeys.includes(propertyRef));
+  var matchKeys = favoriteOnly && activeFavoriteFolderId && Array.isArray(favoriteFilterKeys)
+    ? favoriteFilterKeys
+    : favoriteKeys;
+  return matchKeys.includes(item.key) || (!!propertyRef && matchKeys.includes(propertyRef));
 }
 
 
@@ -457,7 +469,15 @@ function toggleFavorite(key) {
 
 
 function toggleFavoriteOnly() {
-  favoriteOnly = !favoriteOnly;
+  var nextFavoriteOnly = !favoriteOnly;
+  if (typeof window.clearActiveFavoriteFolderFilterV1 === "function") {
+    window.clearActiveFavoriteFolderFilterV1({ disableFilter: !nextFavoriteOnly, silent: true });
+  } else {
+    activeFavoriteFolderId = "";
+    activeFavoriteFolderName = "";
+    favoriteFilterKeys = [];
+  }
+  favoriteOnly = nextFavoriteOnly;
   document.getElementById("favoriteBtn").innerText = "찜목록";
   document.getElementById("favoriteBtn").classList.toggle("on", favoriteOnly);
   applyFilter();
@@ -1041,6 +1061,16 @@ document.addEventListener("click", function(event) {
 setTimeout(updateSortDropdownUI, 0);
 
 
+function readOptionalFilterNumberV1(id, fallback) {
+  var input = document.getElementById(id);
+  if (!input) return fallback;
+  var raw = String(input.value == null ? "" : input.value).trim();
+  if (raw === "") return fallback;
+  var value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+
 function getFilteredItems(options) {
   var includeUnlocated = !!(options && options.includeUnlocated);
   var ignoreMapBounds = !!(options && options.ignoreMapBounds);
@@ -1061,19 +1091,19 @@ function getFilteredItems(options) {
   var radiusFilter = window.mapRadiusFilterV658 || null;
   var polygonFilter = window.mapPolygonFilterV661 || null;
 
-  var minDeposit = Number(document.getElementById("minDeposit").value) || 0;
+  var minDeposit = readOptionalFilterNumberV1("minDeposit", 0);
   var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
   var saleFilterValues = window.JSSaleWorkbenchV1 ? window.JSSaleWorkbenchV1.filterValues() : {};
-  var maxDeposit = Number(document.getElementById("maxDeposit").value) || 999999999;
+  var maxDeposit = readOptionalFilterNumberV1("maxDeposit", Infinity);
 
-  var minRent = Number(document.getElementById("minRent").value) || 0;
-  var maxRent = Number(document.getElementById("maxRent").value) || 999999999;
+  var minRent = readOptionalFilterNumberV1("minRent", 0);
+  var maxRent = readOptionalFilterNumberV1("maxRent", Infinity);
 
-  var minPremium = Number(document.getElementById("minPremium").value) || 0;
-  var maxPremium = Number(document.getElementById("maxPremium").value) || 999999999;
+  var minPremium = readOptionalFilterNumberV1("minPremium", 0);
+  var maxPremium = readOptionalFilterNumberV1("maxPremium", Infinity);
 
-  var minArea = Number(document.getElementById("minArea").value) || 0;
-  var maxArea = Number(document.getElementById("maxArea").value) || 999999999;
+  var minArea = readOptionalFilterNumberV1("minArea", 0);
+  var maxArea = readOptionalFilterNumberV1("maxArea", Infinity);
 
   var minFloor = readOptionalNumberInput("minFloor");
   var maxFloor = readOptionalNumberInput("maxFloor");
@@ -1283,13 +1313,13 @@ function formatFilterNumberV844(value) {
 }
 
 
-function buildRangeFilterChipV844(label, minId, maxId, unit, zeroCounts) {
+function buildRangeFilterChipV844(label, minId, maxId, unit) {
   var minRaw = getFilterInputValueV844(minId);
   var maxRaw = getFilterInputValueV844(maxId);
   var minNumber = Number(minRaw);
   var maxNumber = Number(maxRaw);
-  var hasMin = minRaw !== "" && Number.isFinite(minNumber) && (zeroCounts || minNumber > 0);
-  var hasMax = maxRaw !== "" && Number.isFinite(maxNumber) && (zeroCounts || maxNumber > 0);
+  var hasMin = minRaw !== "" && Number.isFinite(minNumber);
+  var hasMax = maxRaw !== "" && Number.isFinite(maxNumber);
 
   if (!hasMin && !hasMax) return "";
   if (hasMin && hasMax) {
@@ -1322,15 +1352,15 @@ function getActiveFilterChipsV844() {
   var saleMode = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
   push("tradeMode", window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease"
     ? window.JSListingTradeV1.modeLabel() : "");
-  push("deposit", buildRangeFilterChipV844(saleMode ? "매매가" : "보증금", "minDeposit", "maxDeposit", "만원", false));
-  if (!saleMode) push("rent", buildRangeFilterChipV844("월세", "minRent", "maxRent", "만원", false));
-  if (!saleMode) push("premium", buildRangeFilterChipV844("권리금", "minPremium", "maxPremium", "만원", false));
-  if (!saleMode) push("area", buildRangeFilterChipV844("평수", "minArea", "maxArea", "평", false));
-  if (!saleMode) push("floor", buildRangeFilterChipV844("층", "minFloor", "maxFloor", "층", true));
+  push("deposit", buildRangeFilterChipV844(saleMode ? "매매가" : "보증금", "minDeposit", "maxDeposit", "만원"));
+  if (!saleMode) push("rent", buildRangeFilterChipV844("월세", "minRent", "maxRent", "만원"));
+  if (!saleMode) push("premium", buildRangeFilterChipV844("권리금", "minPremium", "maxPremium", "만원"));
+  if (!saleMode) push("area", buildRangeFilterChipV844("평수", "minArea", "maxArea", "평"));
+  if (!saleMode) push("floor", buildRangeFilterChipV844("층", "minFloor", "maxFloor", "층"));
   if (window.JSSaleWorkbenchV1) chips = chips.concat(window.JSSaleWorkbenchV1.chips());
   push("industry", industry ? "업종 " + industry : "");
 
-  if (favoriteOnly) push("favoriteOnly", "찜목록");
+  if (favoriteOnly) push("favoriteOnly", activeFavoriteFolderName ? "찜: " + activeFavoriteFolderName : "찜목록");
   if (doneOnly) {
     push("doneOnly", "계약완료만");
   } else if (!hideDone) {
@@ -1406,7 +1436,16 @@ function clearActiveFilterChipV844(key) {
     window.JSListingTradeV1.setMode("lease", { apply: false });
     if (typeof updateTypeOptions === "function") updateTypeOptions(allItems || []);
   }
-  if (key === "favoriteOnly") favoriteOnly = false;
+  if (key === "favoriteOnly") {
+    favoriteOnly = false;
+    if (typeof window.clearActiveFavoriteFolderFilterV1 === "function") {
+      window.clearActiveFavoriteFolderFilterV1({ disableFilter: true, silent: true });
+    } else {
+      activeFavoriteFolderId = "";
+      activeFavoriteFolderName = "";
+      favoriteFilterKeys = [];
+    }
+  }
   if (key === "doneOnly" || key === "includeDone") {
     doneOnly = false;
     hideDone = true;
@@ -4856,6 +4895,13 @@ function resetFilter() {
   if (industryInput) industryInput.value = "";
 
   favoriteOnly = false;
+  if (typeof window.clearActiveFavoriteFolderFilterV1 === "function") {
+    window.clearActiveFavoriteFolderFilterV1({ disableFilter: true, silent: true });
+  } else {
+    activeFavoriteFolderId = "";
+    activeFavoriteFolderName = "";
+    favoriteFilterKeys = [];
+  }
   hideDone = true;
   doneOnly = false;
   saveDoneViewModeV656();
