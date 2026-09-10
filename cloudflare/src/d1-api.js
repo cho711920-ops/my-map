@@ -647,11 +647,20 @@ async function duplicateCheck(env, values) {
   return { ok: true, action: "checkDuplicate", duplicateType: exact ? "exact" : similar ? "similar" : "none", existing };
 }
 
-async function mutationStatus(env, requestId) {
-  const row = await env.DB.prepare(`SELECT state, result_json FROM mutation_results WHERE request_id = ?1`)
-    .bind(clean(requestId).slice(0, 160)).first();
+async function mutationStatus(env, user, requestId) {
+  const id = clean(requestId).slice(0, 160);
+  const owner = clean(user?.email).toLowerCase();
+  const row = await env.DB.prepare(`SELECT state, result_json FROM mutation_results
+    WHERE request_id = ?1 AND owner_email = ?2`)
+    .bind(id, owner).first();
   if (!row) return { ok: true, ready: false, requestId: clean(requestId) };
-  return { ok: true, ready: row.state === "completed", requestId: clean(requestId), result: parseJson(row.result_json, {}) };
+  return {
+    ok: true,
+    ready: ["completed", "failed"].includes(clean(row.state)),
+    state: clean(row.state),
+    requestId: id,
+    result: parseJson(row.result_json, {})
+  };
 }
 
 async function workQueueStatus(env, user) {
@@ -1156,7 +1165,7 @@ export async function handleD1GetAction(env, user, query) {
   if (action === "loadCloudState") return cloudState(env, user, query);
   if (action === "announcement") return announcement(env);
   if (action === "checkDuplicate") return duplicateCheck(env, parseJson(query.values, []));
-  if (action === "mutationStatus") return mutationStatus(env, query.requestId);
+  if (action === "mutationStatus") return mutationStatus(env, user, query.requestId);
   if (action === "workQueueStatus") return workQueueStatus(env, user);
   if (action === "customerWorkspace") return customerWorkspace(env, query.customerId);
   if (action === "customerMatches") return customerMatches(env, query.customerId);
@@ -1174,9 +1183,52 @@ async function recordMutation(env, user, action, requestId, result, state = "com
   await env.DB.prepare(`INSERT INTO mutation_results (
       request_id, owner_email, action, state, result_json, created_at, expires_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now', '+7 days'))
-    ON CONFLICT(request_id) DO UPDATE SET state=excluded.state, result_json=excluded.result_json`)
+    ON CONFLICT(request_id) DO UPDATE SET state=excluded.state, result_json=excluded.result_json,
+      expires_at=excluded.expires_at
+    WHERE mutation_results.owner_email=excluded.owner_email AND mutation_results.action=excluded.action`)
     .bind(id, clean(user?.email).toLowerCase(), action, state, JSON.stringify(result || {}), new Date().toISOString()).run();
   return id;
+}
+
+async function reserveMutation(env, user, action, requestId) {
+  const id = clean(requestId).slice(0, 160);
+  const owner = clean(user?.email).toLowerCase();
+  const now = new Date().toISOString();
+  const pending = { ok: true, ready: false, requestId: id };
+  const inserted = await env.DB.prepare(`INSERT INTO mutation_results (
+      request_id, owner_email, action, state, result_json, created_at, expires_at
+    ) VALUES (?1, ?2, ?3, 'processing', ?4, ?5, datetime('now', '+7 days'))
+    ON CONFLICT(request_id) DO NOTHING`)
+    .bind(id, owner, action, JSON.stringify(pending), now).run();
+  if (Number(inserted?.meta?.changes || 0) > 0 || (inserted?.meta?.changes == null && inserted?.success !== false)) {
+    return { acquired: true, id };
+  }
+
+  const existing = await env.DB.prepare(`SELECT owner_email, action, state, result_json, created_at
+    FROM mutation_results WHERE request_id=?1`).bind(id).first();
+  if (!existing || clean(existing.owner_email).toLowerCase() !== owner || clean(existing.action) !== action) {
+    throw Object.assign(new Error("동일한 요청번호를 사용할 수 없습니다."), { statusCode: 409 });
+  }
+  if (clean(existing.state) === "completed") {
+    return { acquired: false, id, result: { ...parseJson(existing.result_json, {}), replayed: true } };
+  }
+  if (clean(existing.state) === "failed") {
+    const failure = parseJson(existing.result_json, {});
+    throw Object.assign(new Error(clean(failure.message) || "이 요청은 이전 처리에서 실패했습니다."), {
+      statusCode: Math.max(400, Math.min(599, Number(failure.statusCode) || 409))
+    });
+  }
+
+  // A Worker request cannot legitimately remain active for ten minutes. Taking
+  // over only an expired processing reservation recovers safely from a runtime
+  // termination without allowing concurrent duplicate writes.
+  const takeover = await env.DB.prepare(`UPDATE mutation_results SET created_at=?1,
+      result_json=?2, expires_at=datetime('now', '+7 days')
+    WHERE request_id=?3 AND owner_email=?4 AND action=?5 AND state='processing'
+      AND datetime(created_at) < datetime('now', '-10 minutes')`)
+    .bind(now, JSON.stringify(pending), id, owner, action).run();
+  if (Number(takeover?.meta?.changes || 0) > 0) return { acquired: true, id };
+  throw Object.assign(new Error("동일한 요청을 처리 중입니다."), { statusCode: 409 });
 }
 
 async function updateProperty(env, user, body) {
@@ -2186,9 +2238,22 @@ export async function handleD1PostAction(env, user, body) {
   const effectiveAction = action === "enqueueMutation" ? clean(body.taskAction) : action;
   if (effectiveAction !== "saveCloudState") requireRole(user, ["owner", "admin", "member"]);
   const requestId = clean(body.requestId || body?.payload?.requestId || `${action}-${crypto.randomUUID()}`).slice(0, 160);
-  const result = await executePost(env, user, body);
-  if (!result) return null;
-  const finalResult = { ...result, requestId };
-  await recordMutation(env, user, action === "enqueueMutation" ? clean(body.taskAction) : action, requestId, finalResult);
-  return finalResult;
+  const mutationName = action === "enqueueMutation" ? clean(body.taskAction) : action;
+  const reservation = await reserveMutation(env, user, mutationName, requestId);
+  if (!reservation.acquired) return reservation.result;
+  try {
+    const result = await executePost(env, user, body);
+    if (!result) return null;
+    const finalResult = { ...result, requestId };
+    await recordMutation(env, user, mutationName, requestId, finalResult);
+    return finalResult;
+  } catch (error) {
+    await recordMutation(env, user, mutationName, requestId, {
+      ok: false,
+      requestId,
+      message: clean(error?.message) || "저장 요청에 실패했습니다.",
+      statusCode: Number(error?.statusCode) || 500
+    }, "failed").catch(() => null);
+    throw error;
+  }
 }
