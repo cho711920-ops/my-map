@@ -44,6 +44,9 @@ const DAANGN_DETAIL_MAX_ATTEMPTS = 8;
 const DAANGN_DETAIL_ERROR_LIMIT = 60;
 const GONGSIL_PHOTO_ROOT = "https://file1.gongsilbox.com/file/land_photo/";
 const GONGSIL_DETAIL_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+const COLLECTOR_MAX_BODY_BYTES = 4 * 1024 * 1024;
+const COLLECTOR_STALE_SESSION_MINUTES = 120;
+const COLLECTOR_MAINTENANCE_DELETE_LIMIT = 1_000;
 
 function daangnJobId(body = {}) {
   const clientId = clean(body.clientId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
@@ -671,8 +674,13 @@ async function ensureSession(env, sessionId, source, owner = "collector") {
   const now = nowIso();
   await env.DB.prepare(`INSERT INTO collector_sessions (id, source, owner_email, state, totals_json, started_at, updated_at)
     VALUES (?1, ?2, ?3, 'running', '{}', ?4, ?4)
-    ON CONFLICT(id) DO UPDATE SET source=excluded.source, state=CASE WHEN collector_sessions.state='completed' THEN collector_sessions.state ELSE 'running' END,
-      updated_at=excluded.updated_at`).bind(id, source, owner, now).run();
+    ON CONFLICT(id) DO UPDATE SET source=CASE WHEN excluded.source<>'' THEN excluded.source ELSE collector_sessions.source END,
+      state=CASE WHEN collector_sessions.state IN ('completed','partial','finalizing')
+        THEN collector_sessions.state ELSE 'running' END,
+      finished_at=CASE WHEN collector_sessions.state IN ('completed','partial','finalizing')
+        THEN collector_sessions.finished_at ELSE '' END,
+      updated_at=CASE WHEN collector_sessions.state IN ('completed','partial','finalizing')
+        THEN collector_sessions.updated_at ELSE excluded.updated_at END`).bind(id, source, owner, now).run();
   return id;
 }
 
@@ -681,15 +689,124 @@ async function saveMutationResult(env, requestId, action, result, owner = "colle
   if (!id) return;
   await env.DB.prepare(`INSERT INTO mutation_results (request_id, owner_email, action, state, result_json, created_at, expires_at)
     VALUES (?1, ?2, ?3, 'completed', ?4, ?5, datetime('now','+7 days'))
-    ON CONFLICT(request_id) DO UPDATE SET state='completed', result_json=excluded.result_json`)
+    ON CONFLICT(request_id) DO UPDATE SET state='completed', result_json=excluded.result_json,
+      created_at=excluded.created_at, expires_at=excluded.expires_at
+    WHERE mutation_results.owner_email=excluded.owner_email AND mutation_results.action=excluded.action`)
     .bind(id, owner, action, JSON.stringify(result || {}), nowIso()).run();
 }
 
-async function mutationStatus(env, requestId) {
-  const row = await env.DB.prepare("SELECT state, result_json FROM mutation_results WHERE request_id=?1")
-    .bind(clean(requestId).slice(0, 160)).first();
-  if (!row) return { ok: true, ready: false, requestId: clean(requestId) };
-  return { ok: true, ready: row.state === "completed", requestId: clean(requestId), result: parseJson(row.result_json, {}) };
+async function mutationScope(env, requestId) {
+  const id = clean(requestId).slice(0, 160);
+  if (!id) return null;
+  return env.DB.prepare(`SELECT owner_email, action FROM mutation_results WHERE request_id=?1`)
+    .bind(id).first();
+}
+
+async function mutationStatus(env, requestId, owner = "collector", expectedAction = "") {
+  const id = clean(requestId).slice(0, 160);
+  const scopedOwner = clean(owner).slice(0, 320);
+  const scopedAction = clean(expectedAction).slice(0, 120);
+  if (!id || !scopedOwner) return { ok: true, ready: false, requestId: id };
+  const row = scopedAction
+    ? await env.DB.prepare(`SELECT state, result_json, action FROM mutation_results
+        WHERE request_id=?1 AND owner_email=?2 AND action=?3
+          AND (expires_at='' OR julianday(expires_at)>julianday('now'))`)
+      .bind(id, scopedOwner, scopedAction).first()
+    : await env.DB.prepare(`SELECT state, result_json, action FROM mutation_results
+        WHERE request_id=?1 AND owner_email=?2
+          AND (expires_at='' OR julianday(expires_at)>julianday('now'))`)
+      .bind(id, scopedOwner).first();
+  if (!row) return { ok: true, ready: false, requestId: id };
+  return { ok: true, ready: row.state === "completed", requestId: id,
+    mutationAction: clean(row.action), result: parseJson(row.result_json, {}) };
+}
+
+function configuredCollectorBodyLimit(env) {
+  const configured = Number(env?.COLLECTOR_MAX_BODY_BYTES);
+  return Number.isFinite(configured) && configured >= 64 * 1024
+    ? Math.min(16 * 1024 * 1024, Math.floor(configured))
+    : COLLECTOR_MAX_BODY_BYTES;
+}
+
+async function readBoundedRequestText(request, limit) {
+  if (!request.body || typeof request.body.getReader !== "function") {
+    const text = await request.text();
+    return { text, tooLarge: new TextEncoder().encode(text).byteLength > limit };
+  }
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let bytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += Number(value?.byteLength || 0);
+    if (bytes > limit) {
+      await reader.cancel().catch(() => null);
+      return { text: "", tooLarge: true };
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
+  return { text, tooLarge: false };
+}
+
+async function readCollectorBody(request, env, responseHeaders = {}) {
+  const limit = configuredCollectorBodyLimit(env);
+  const declaredHeader = clean(request.headers.get("content-length"));
+  const declared = declaredHeader ? Number(declaredHeader) : 0;
+  if (declaredHeader && (!Number.isFinite(declared) || declared < 0)) {
+    return { error: jsonResponse({ ok: false, message: "잘못된 Content-Length입니다." }, 400, responseHeaders) };
+  }
+  if (declared > limit) {
+    return { error: jsonResponse({ ok: false, message: "한 번에 보낼 수 있는 수집 요청 크기를 초과했습니다." }, 413, responseHeaders) };
+  }
+  const bounded = await readBoundedRequestText(request, limit);
+  if (bounded.tooLarge) {
+    return { error: jsonResponse({ ok: false, message: "한 번에 보낼 수 있는 수집 요청 크기를 초과했습니다." }, 413, responseHeaders) };
+  }
+  try {
+    return { body: JSON.parse(bounded.text) };
+  } catch {
+    return { body: null };
+  }
+}
+
+export async function runCollectorMaintenance(env, options = {}) {
+  if (!env?.DB || typeof env.DB.prepare !== "function") {
+    return { ok: true, abandonedSessions: 0, failedJobs: 0, expiredMutationsDeleted: 0 };
+  }
+  const configuredMinutes = Number(options.staleMinutes ?? env.COLLECTOR_STALE_SESSION_MINUTES);
+  const staleMinutes = Number.isFinite(configuredMinutes)
+    ? Math.max(30, Math.min(24 * 60, Math.floor(configuredMinutes)))
+    : COLLECTOR_STALE_SESSION_MINUTES;
+  const now = clean(options.now) || nowIso();
+  const cutoff = new Date(Date.parse(now) - staleMinutes * 60_000).toISOString();
+  const reason = `heartbeat ${staleMinutes}분 초과로 자동 종료`;
+  const sessions = await env.DB.prepare(`UPDATE collector_sessions
+    SET state='abandoned', finished_at=?1, updated_at=?1,
+      error_json=json_set(CASE WHEN json_valid(error_json) THEN error_json ELSE '{}' END,
+        '$.lastFailure', json_object('type','stale-session','message',?2,'at',?1))
+    WHERE state IN ('running','finalizing') AND julianday(updated_at)<julianday(?3)`)
+    .bind(now, reason, cutoff).run();
+  const jobs = await env.DB.prepare(`UPDATE jobs
+    SET state='failed', leased_until='', last_error=?2, updated_at=?1,
+      progress_json=json_set(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,
+        '$.lastError', ?2, '$.failedAt', ?1)
+    WHERE job_type='daangn-collector' AND state='running' AND julianday(updated_at)<julianday(?3)`)
+    .bind(now, reason, cutoff).run();
+  const expired = await env.DB.prepare(`DELETE FROM mutation_results WHERE request_id IN (
+      SELECT request_id FROM mutation_results
+      WHERE expires_at<>'' AND julianday(expires_at)<=julianday(?1)
+      ORDER BY expires_at LIMIT ?2
+    )`).bind(now, COLLECTOR_MAINTENANCE_DELETE_LIMIT).run();
+  return {
+    ok: true,
+    staleMinutes,
+    abandonedSessions: Number(sessions?.meta?.changes || 0),
+    failedJobs: Number(jobs?.meta?.changes || 0),
+    expiredMutationsDeleted: Number(expired?.meta?.changes || 0)
+  };
 }
 
 async function classifyManifest(env, body) {
@@ -2015,7 +2132,88 @@ export function removeCompletedListingMemo(value) {
     .trim();
 }
 
+function replayFinalizedSession(row, sessionId) {
+  const totals = parseJson(row?.totals_json, {});
+  const saved = totals?.finalizationResult;
+  const replayTotals = { ...totals };
+  delete replayTotals.finalizationResult;
+  if (saved && typeof saved === "object" && saved.ok === true) {
+    return { ...saved, ...replayTotals, replayed: true, sourceBackend: "D1" };
+  }
+  return {
+    ok: true,
+    action: "finalizeCollectionSession",
+    sessionId,
+    state: clean(row?.state) || "completed",
+    complete: clean(row?.state) === "completed",
+    completeRequested: Boolean(totals.completeRequested),
+    completionValidated: Boolean(totals.completionValidated),
+    completionIssues: Array.isArray(totals.completionIssues) ? totals.completionIssues : [],
+    observed: Number(totals.observed || 0),
+    ...replayTotals,
+    replayed: true,
+    sourceBackend: "D1"
+  };
+}
+
+function finalizedSessionIsReplayable(row) {
+  const state = clean(row?.state);
+  if (!clean(row?.finished_at)) return false;
+  if (["completed", "partial"].includes(state)) return true;
+  return state === "paused" && Boolean(parseJson(row?.totals_json, {})?.finalizationResult);
+}
+
+async function failCollectorSession(env, sessionId, error, type = "collector-error") {
+  const id = clean(sessionId);
+  if (!id) return;
+  const now = nowIso();
+  const row = await env.DB.prepare("SELECT error_json FROM collector_sessions WHERE id=?1").bind(id).first();
+  const errors = parseJson(row?.error_json, {});
+  errors.lastFailure = {
+    type: clean(type).slice(0, 80),
+    message: (clean(error?.message || error) || "수집 처리 실패").slice(0, 500),
+    at: now
+  };
+  await env.DB.prepare(`UPDATE collector_sessions SET state='failed', error_json=?1,
+    finished_at=?2, updated_at=?2 WHERE id=?3 AND state NOT IN ('completed','partial')`)
+    .bind(JSON.stringify(errors), now, id).run();
+}
+
 async function finalizeSession(env, body) {
+  const source = sourceName(body.source);
+  const requestedSessionId = clean(body.sessionId);
+  if (requestedSessionId) {
+    const previous = await env.DB.prepare(`SELECT state, totals_json, finished_at
+      FROM collector_sessions WHERE id=?1`).bind(requestedSessionId).first();
+    if (finalizedSessionIsReplayable(previous)) return replayFinalizedSession(previous, requestedSessionId);
+  }
+  const sessionId = await ensureSession(env, body.sessionId, source);
+  let row = await env.DB.prepare(`SELECT state, totals_json, finished_at
+    FROM collector_sessions WHERE id=?1`).bind(sessionId).first();
+  if (finalizedSessionIsReplayable(row)) {
+    return replayFinalizedSession(row, sessionId);
+  }
+  const claimedAt = nowIso();
+  const claimed = await env.DB.prepare(`UPDATE collector_sessions SET state='finalizing', updated_at=?1
+    WHERE id=?2 AND state NOT IN ('completed','partial','finalizing')`)
+    .bind(claimedAt, sessionId).run();
+  if (Number(claimed?.meta?.changes || 0) !== 1) {
+    row = await env.DB.prepare(`SELECT state, totals_json, finished_at
+      FROM collector_sessions WHERE id=?1`).bind(sessionId).first();
+    if (finalizedSessionIsReplayable(row)) {
+      return replayFinalizedSession(row, sessionId);
+    }
+    throw Object.assign(new Error("수집 완료 처리가 이미 진행 중입니다."), { statusCode: 409 });
+  }
+  try {
+    return await finalizeSessionWork(env, body);
+  } catch (error) {
+    await failCollectorSession(env, sessionId, error, "finalize-error").catch(() => null);
+    throw error;
+  }
+}
+
+async function finalizeSessionWork(env, body) {
   const source = sourceName(body.source);
   const tradeType = collectorTradeType(body.tradeType, true);
   const sessionId = await ensureSession(env, body.sessionId, source);
@@ -2159,12 +2357,30 @@ async function finalizeSession(env, body) {
     totals.detailAuthWarning = clean(body.detailAuthWarning).slice(0, 500);
   }
   if (audit.collectorVersion) totals.collectorVersion = audit.collectorVersion;
-  await env.DB.prepare(`UPDATE collector_sessions SET state=?1, totals_json=?2,
-    finished_at=CASE WHEN ?1 IN ('completed','partial') THEN ?3 ELSE finished_at END, updated_at=?3 WHERE id=?4`)
-    .bind(state, JSON.stringify(totals), nowIso(), sessionId).run();
-  return { ok: true, action: "finalizeCollectionSession", sessionId, state, complete,
+  const finalizedAt = nowIso();
+  const result = { ok: true, action: "finalizeCollectionSession", sessionId, state, complete,
     completeRequested: audit.requested, completionValidated: audit.complete, completionIssues: audit.issues,
     observed: observed.length, presenceReset, reactivated, missingMarked, deactivated, ...totals, sourceBackend: "D1" };
+  totals.finalizationResult = {
+    ok: true,
+    action: result.action,
+    sessionId,
+    state,
+    complete,
+    completeRequested: audit.requested,
+    completionValidated: audit.complete,
+    completionIssues: audit.issues,
+    observed: observed.length,
+    presenceReset,
+    reactivated,
+    missingMarked,
+    deactivated
+  };
+  totals.finalizedAt = finalizedAt;
+  await env.DB.prepare(`UPDATE collector_sessions SET state=?1, totals_json=?2,
+    finished_at=?3, updated_at=?3 WHERE id=?4 AND state='finalizing'`)
+    .bind(state, JSON.stringify(totals), finalizedAt, sessionId).run();
+  return result;
 }
 
 function collectorHostAllowed(request) {
@@ -2326,6 +2542,7 @@ async function loadDaangnJob(env, jobId = `${DAANGN_JOB_PREFIX}active`) {
 
 async function saveDaangnJob(env, job) {
   const state = job.status === "complete" ? "completed" : job.status;
+  const lastError = clean(job.lastError || job.lastFailure?.message).slice(0, 500);
   const payload = {
     url: job.url, clusterId: job.clusterId, propertyFilter: job.propertyFilter,
     district: job.district, tradeType: job.tradeType, sessionId: job.sessionId,
@@ -2347,11 +2564,42 @@ async function saveDaangnJob(env, job) {
   delete progress.hasNextPage;
   delete progress._jobId;
   await env.DB.prepare(`INSERT INTO jobs (
-      id, job_type, owner_email, state, priority, payload_json, progress_json, attempts, available_at, created_at, updated_at
-    ) VALUES (?1, 'daangn-collector', 'collector', ?2, 20, ?3, ?4, 0, ?5, ?5, ?5)
+      id, job_type, owner_email, state, priority, payload_json, progress_json, attempts,
+      available_at, last_error, created_at, updated_at
+    ) VALUES (?1, 'daangn-collector', 'collector', ?2, 20, ?3, ?4, 0, ?6, ?5, ?6, ?6)
     ON CONFLICT(id) DO UPDATE SET state=excluded.state, payload_json=excluded.payload_json,
-      progress_json=excluded.progress_json, updated_at=excluded.updated_at`)
-    .bind(job._jobId || `${DAANGN_JOB_PREFIX}active`, state, JSON.stringify(payload), JSON.stringify(progress), nowIso()).run();
+      progress_json=excluded.progress_json, last_error=excluded.last_error, updated_at=excluded.updated_at`)
+    .bind(job._jobId || `${DAANGN_JOB_PREFIX}active`, state, JSON.stringify(payload), JSON.stringify(progress),
+      lastError, nowIso()).run();
+}
+
+async function failDaangnJob(env, body, error) {
+  let job = null;
+  try {
+    job = await loadDaangnJob(env, daangnJobId(body));
+  } catch {}
+  if (!job) return;
+  const message = (clean(error?.message || error) || "당근 수집 처리 실패").slice(0, 500);
+  job.status = "failed";
+  job.failureCount = Number(job.failureCount || 0) + 1;
+  job.lastError = message;
+  job.failedAt = nowIso();
+  job.message = `수집 중단 · ${message}`;
+  await saveDaangnJob(env, job);
+  await failCollectorSession(env, job.sessionId, error, "daangn-job-error");
+}
+
+async function setDaangnSessionState(env, job, state) {
+  const sessionId = clean(job?.sessionId);
+  if (!sessionId) return;
+  const now = nowIso();
+  if (state === "running") {
+    await env.DB.prepare(`UPDATE collector_sessions SET state='running', finished_at='', updated_at=?1
+      WHERE id=?2 AND state NOT IN ('completed','partial')`).bind(now, sessionId).run();
+    return;
+  }
+  await env.DB.prepare(`UPDATE collector_sessions SET state=?1, finished_at=?2, updated_at=?2
+    WHERE id=?3 AND state NOT IN ('completed','partial')`).bind(state, now, sessionId).run();
 }
 
 function publicDaangnJob(job) {
@@ -2606,16 +2854,29 @@ async function executeExternalAction(env, body) {
       state: row?.state || "missing", processed: Number(totals.received || 0), pending: 0, ...totals, sourceBackend: "D1" };
   }
   if (action === "danggeunStartJob") return startDaangnJob(env, body);
-  if (action === "danggeunRunJobChunk") return runDaangnChunk(env, body);
+  if (action === "danggeunRunJobChunk") {
+    try {
+      return await runDaangnChunk(env, body);
+    } catch (error) {
+      await failDaangnJob(env, body, error).catch(() => null);
+      throw error;
+    }
+  }
   if (action === "danggeunJobStatus") return { ok: true,
     job: publicDaangnJob(await loadDaangnJob(env, daangnJobId(body))), sourceBackend: "D1" };
   if (action === "danggeunPauseJob" || action === "danggeunResumeJob") {
     const job = await loadDaangnJob(env, daangnJobId(body));
     if (!job) return { ok: true, job: null };
     if (action === "danggeunResumeJob") validateDaangnJobTrade(job, body.tradeType);
+    if (action === "danggeunResumeJob" && clean(job.lastError)) {
+      job.lastFailure = { message: clean(job.lastError), at: clean(job.failedAt) };
+      delete job.lastError;
+      delete job.failedAt;
+    }
     job.status = action === "danggeunPauseJob" ? "paused" : "running";
     job.message = action === "danggeunPauseJob" ? "안전중단됨 · 저장 지점 보존" : "저장 지점부터 이어서 수집합니다.";
     await saveDaangnJob(env, job);
+    await setDaangnSessionState(env, job, job.status);
     return { ok: true, job: publicDaangnJob(job), sourceBackend: "D1" };
   }
   return null;
@@ -2631,27 +2892,59 @@ export async function handleCollectorApi(request, env) {
     if (!validCollectorKey(env, query.collectorKey || query.accessKey)) {
       return jsonpResponse(query.callback, { ok: false, ready: true, result: { ok: false, message: "승인되지 않은 요청입니다." } }, cors);
     }
-    return jsonpResponse(query.callback, await mutationStatus(env, query.requestId), cors);
+    const targetAction = clean(query.targetAction || query.mutationAction);
+    if (targetAction && (!EXTERNAL_ACTIONS.has(targetAction) || targetAction === "mutationStatus")) {
+      return jsonpResponse(query.callback, { ok: false, ready: true,
+        result: { ok: false, message: "잘못된 상태 조회 범위입니다." } }, cors);
+    }
+    const status = await mutationStatus(env, query.requestId, "collector", targetAction);
+    if (!targetAction) status.legacyActionScope = true;
+    return jsonpResponse(query.callback, status, cors);
   }
   if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "GET, POST, OPTIONS", ...cors } });
-  const body = await request.json().catch(() => null);
+  const parsed = await readCollectorBody(request, env, cors);
+  if (parsed.error) return parsed.error;
+  const body = parsed.body;
   if (!body || typeof body !== "object" || !EXTERNAL_ACTIONS.has(clean(body.action))) {
     return jsonResponse({ ok: false, message: "잘못된 수집 요청입니다." }, 400, cors);
   }
   if (!validCollectorKey(env, body.collectorKey || body.accessKey)) {
     return jsonResponse({ ok: false, message: "승인되지 않은 요청입니다." }, 403, cors);
   }
-  const existing = clean(body.requestId) ? await mutationStatus(env, body.requestId) : null;
-  if (existing?.ready) return jsonResponse(existing.result, 200, cors);
+  const action = clean(body.action);
+  if (action === "mutationStatus") {
+    const targetAction = clean(body.targetAction || body.mutationAction);
+    if (!targetAction || !EXTERNAL_ACTIONS.has(targetAction) || targetAction === "mutationStatus") {
+      return jsonResponse({ ok: false, message: "상태 조회에는 targetAction이 필요합니다." }, 400, cors);
+    }
+    return jsonResponse(await mutationStatus(env, body.requestId, "collector", targetAction), 200, cors);
+  }
+  if (clean(body.requestId)) {
+    const scope = await mutationScope(env, body.requestId);
+    if (scope && (clean(scope.owner_email) !== "collector" || clean(scope.action) !== action)) {
+      return jsonResponse({ ok: false, message: "요청번호가 다른 작업 범위에서 이미 사용되었습니다." }, 409, cors);
+    }
+  }
+  const existing = clean(body.requestId)
+    ? await mutationStatus(env, body.requestId, "collector", action)
+    : null;
+  if (existing?.ready) {
+    const response = jsonResponse(existing.result, 200, cors);
+    response.headers.set("x-js-collector-action", action);
+    return response;
+  }
   try {
     const result = await executeExternalAction(env, body);
     if (!result) return jsonResponse({ ok: false, message: "지원하지 않는 수집 작업입니다." }, 404, cors);
     if (body.requestId) await saveMutationResult(env, body.requestId, body.action, result);
-    return jsonResponse(result, 200, cors);
+    const response = jsonResponse(result, 200, cors);
+    response.headers.set("x-js-collector-action", action);
+    return response;
   } catch (error) {
     const result = { ok: false, message: clean(error?.message) || "수집 처리에 실패했습니다." };
     if (body.requestId) await saveMutationResult(env, body.requestId, body.action, result);
-    return jsonResponse(result, 400, cors);
+    const status = Math.max(400, Math.min(599, Number(error?.statusCode) || 400));
+    return jsonResponse(result, status, cors);
   }
 }
 
@@ -2765,8 +3058,19 @@ async function reviewWorkspace(env, query) {
     loadedGroupCount: ordered.length, groups: ordered, source: "D1" };
 }
 
+function collectorSessionStatusLabel(state) {
+  if (state === "completed") return "완전수집 완료";
+  if (state === "partial") return "수집 종료 · 부분결과 확인";
+  if (state === "paused") return "안전중단";
+  if (state === "failed") return "수집 실패 · 재시작 가능";
+  if (state === "abandoned") return "응답 없음 · 자동 종료";
+  if (state === "finalizing") return "완료 처리 중";
+  return state ? "수집 중" : "수집 전";
+}
+
 async function collectionStatus(env) {
-  const sessions = await env.DB.prepare(`SELECT id, source, state, totals_json, started_at, finished_at, updated_at
+  const sessions = await env.DB.prepare(`SELECT id, source, state, totals_json, error_json,
+      started_at, finished_at, updated_at
     FROM collector_sessions ORDER BY updated_at DESC LIMIT 100`).all();
   const counts = await env.DB.prepare(`SELECT source, COUNT(*) AS total,
     SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS active,
@@ -2787,28 +3091,36 @@ async function collectionStatus(env) {
   const sourceCards = ["네이버", "당근", "공실박스"].map((name) => {
     const row = latestBySource.get(name);
     const totals = parseJson(row?.totals_json, {});
+    const failure = parseJson(row?.error_json, {})?.lastFailure || {};
     const count = sourceCounts.get(name) || {};
     return {
       source: name, total: Number(count.total || 0), active: Number(count.active || 0), inactive: Number(count.inactive || 0),
-      lastStatus: row?.state === "completed" ? "완전수집 완료" : row?.state === "paused" ? "안전중단" : row?.state === "partial" ? "수집 종료 · 부분결과 확인" : row ? "수집 중" : "수집 전",
+      lastStatus: collectorSessionStatusLabel(row?.state),
       lastAt: row?.finished_at || row?.updated_at || "", lastScope: clean(totals.note) || clean(totals.scope),
+      failure: clean(failure.message).slice(0, 500), failureAt: clean(failure.at),
       complete: row?.state === "completed" && totals.completionValidated !== false,
-      collectorVersion: clean(totals.collectorVersion), completionIssues: Array.isArray(totals.completionIssues) ? totals.completionIssues : [],
+      collectorVersion: clean(totals.collectorVersion),
+      completionIssues: [...(Array.isArray(totals.completionIssues) ? totals.completionIssues : []),
+        ...(clean(failure.message) ? [clean(failure.message).slice(0, 500)] : [])],
       lastResult: totals
     };
   });
   const recent = sessionRows.map((row) => {
     const totals = parseJson(row.totals_json, {});
+    const failure = parseJson(row.error_json, {})?.lastFailure || {};
     return {
-      sessionId: row.id, source: sourceName(row.source), status: row.state, scope: clean(totals.note) || clean(totals.scope),
+      sessionId: row.id, source: sourceName(row.source), state: row.state,
+      status: collectorSessionStatusLabel(row.state), scope: clean(totals.note) || clean(totals.scope),
       complete: row.state === "completed" && totals.completionValidated !== false,
-      startedAt: row.started_at, endedAt: row.finished_at || row.updated_at, ...totals
+      startedAt: row.started_at, endedAt: row.finished_at || row.updated_at,
+      failure: clean(failure.message).slice(0, 500), failureAt: clean(failure.at), ...totals
     };
   });
   return {
     ok: true, action: "collectionStatus",
     sessions: sessionRows.map((row) => ({
       sessionId: row.id, source: row.source, state: row.state, ...parseJson(row.totals_json, {}),
+      failure: clean(parseJson(row.error_json, {})?.lastFailure?.message).slice(0, 500),
       startedAt: row.started_at, finishedAt: row.finished_at, updatedAt: row.updated_at
     })),
     sources: sourceCards, recent,

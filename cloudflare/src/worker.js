@@ -16,6 +16,7 @@ import {
   handleCollectorAdminGet,
   handleCollectorAdminPost,
   handleCollectorApi,
+  runCollectorMaintenance,
   runScheduledReviewRepair
 } from "./collector-api.js";
 import {
@@ -651,14 +652,12 @@ async function handleApi(request, env, context) {
   if (url.pathname === "/api/session") return handleSession(request, env);
   if (url.pathname === "/api/sheet") return handleSheet(request, env, context);
   if (url.pathname === "/api/collector") {
-    const collectorBody = request.method === "POST"
-      ? await request.clone().json().catch(() => ({}))
-      : {};
     const response = await handleCollectorApi(request, env);
+    const collectorAction = String(response.headers.get("x-js-collector-action") || "");
     const collectorPayload = response.ok
       ? await response.clone().json().catch(() => ({}))
       : {};
-    if (response.ok && collectorFinalized(String(collectorBody?.action || ""), collectorPayload)) {
+    if (response.ok && collectorFinalized(collectorAction, collectorPayload)) {
       sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
       const invalidation = deleteR2Cache(env, null, [
         D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
@@ -666,7 +665,7 @@ async function handleApi(request, env, context) {
       ]);
       const revisionUpdate = touchDataRevision(env, null, ["listings", "operations"], invalidation, {
         fullReload: true,
-        changeAction: String(collectorBody?.action || "collectorFinalized")
+        changeAction: collectorAction || "collectorFinalized"
       });
       /*
        * 수집 완료 응답을 브라우저에 돌려주기 전에 목록 캐시와 리비전을 확정합니다.
@@ -696,11 +695,12 @@ async function handleApi(request, env, context) {
 }
 
 async function runScheduledMaintenance(env, context) {
+  const collector = await runCollectorMaintenance(env);
   const review = await runScheduledReviewRepair(env);
   const elevator = await runScheduledElevatorEnrichment(env);
   const reviewChanged = Number(review?.merged || 0) + Number(review?.created || 0) + Number(review?.duplicate || 0);
   const elevatorChanged = Number(elevator?.changed || 0);
-  if (!reviewChanged && !elevatorChanged) return { review, elevator };
+  if (!reviewChanged && !elevatorChanged) return { collector, review, elevator };
   const snapshotUpdate = reviewChanged
     ? adjustOperationsDashboard(env, review.operationAdjustments || {})
     : null;
@@ -719,7 +719,7 @@ async function runScheduledMaintenance(env, context) {
     fullReload: reviewChanged,
     changeAction: reviewChanged ? "scheduledReviewRepair" : "scheduledElevatorEnrichment"
   });
-  return { review, elevator };
+  return { collector, review, elevator };
 }
 
 async function runElevatorEnrichmentMaintenance(env, context, changeAction) {
