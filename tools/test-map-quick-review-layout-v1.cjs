@@ -8,6 +8,7 @@ const read = (...parts) => fs.readFileSync(path.join(repo, ...parts), "utf8");
 
 const index = read("index.html");
 const style = read("css", "style.css");
+const finalOverrides = read("css", "app-final-overrides-v690.css");
 const map = read("js", "map.js");
 const quickTools = read("js", "map-quick-tools-v657.js");
 const script = read("js", "script.js");
@@ -23,13 +24,12 @@ const operationsCss = read("css", "operations-collection-v8.css");
   'id="mapRadiusBtn"',
   'id="selectionActionBar"',
   'id="sourceFilter"',
-  'id="floorQuickFilter"',
-  "오늘 신규만",
+  "오늘 신규매물",
   "임장할매물만",
   "계약완료 숨김",
-  "찜❤️",
   "찜목록",
-  "임장목록",
+  "매물찜하기",
+  "임장완료",
   "100m",
   "300m",
   "500m",
@@ -37,9 +37,20 @@ const operationsCss = read("css", "operations-collection-v8.css");
   "2km"
 ].forEach((needle) => assert(index.includes(needle), `index is missing ${needle}`));
 
+assert(
+  !index.includes('id="floorQuickFilter"'),
+  "removed floor quick filter must not be restored"
+);
+assert(
+  index.includes('id="minFloor"') && index.includes('id="maxFloor"'),
+  "floor range controls must remain available in the main filter panel"
+);
 assert(!index.includes('id="listPrintSelectedBtn"'), "duplicate list-header print button must be removed");
 assert(index.includes("desktop-operations-action"), "desktop operations shortcut is missing");
-assert(index.includes("desktop-customer-action"), "desktop customer shortcut is missing");
+assert(
+  !index.includes("desktop-customer-action") && index.includes('id="operationsTabCustomers"'),
+  "customer matching must stay consolidated in the operations workspace"
+);
 assert(index.includes("completeSelectedItems()"), "contract completion action is missing");
 assert(index.includes("markSelectedAsVisited()"), "field visit completion action is missing");
 
@@ -61,14 +72,16 @@ assert(quickTools.includes("distanceLine.setPath(distancePoints)"), "distance ro
 assert(quickTools.includes("window.mapRadiusFilterV658 = {"), "radius list filter state is missing");
 assert(!quickTools.includes("preventMap"), "measurement cleanup must not block later map input");
 assert(script.includes("isItemWithinMapRadiusV658(item, radiusFilter)"), "radius filtering is not connected to the list");
-assert(script.includes("matchSource") && script.includes("matchQuickFloor"), "source/floor quick filters are missing");
+assert(script.includes("matchSource"), "source quick filter is missing");
 assert(style.includes("position: absolute !important") && style.includes("background: transparent !important"), "map tools must overlay the map");
 
 assert(map.includes("Math.floor(point.x / gridSize)"), "grid-cluster X bucketing is missing");
 assert(map.includes("Math.floor(point.y / gridSize)"), "grid-cluster Y bucketing is missing");
 assert(map.includes("(cluster.cellX + 0.5) * gridSize"), "grid-cluster centering is missing");
-assert(map.includes('if (value >= 100) return " cluster-size-lg"'), "large cluster size threshold is missing");
-assert(map.includes('if (value >= 20) return " cluster-size-md"'), "medium cluster size threshold is missing");
+assert(map.includes('if (value >= 500) return " cluster-size-xxl"'), "extra-large cluster size threshold is missing");
+assert(map.includes('if (value >= 120) return " cluster-size-xl"'), "very large cluster size threshold is missing");
+assert(map.includes('if (value >= 30) return " cluster-size-lg"'), "large cluster size threshold is missing");
+assert(map.includes('if (value >= 8) return " cluster-size-md"'), "medium cluster size threshold is missing");
 assert(
   !/v6\.5\.7[\s\S]*?\.circle-marker\.gongsil-cluster\s*\{\s*background\s*:/i.test(style),
   "new cluster layout must not flatten source colors"
@@ -112,8 +125,8 @@ assert(
 );
 assert(quickTools.includes("syncMapQuickToolGeometryV659"), "tablet map-tool geometry sync is missing");
 assert(
-  style.includes("v6.5.10 태블릿/데스크탑 지도 도구") &&
-    style.includes("right: calc(var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) + 14px) !important"),
+  finalOverrides.includes("v6.5.10 태블릿/데스크탑 지도 도구") &&
+    finalOverrides.includes("right: calc(var(--map-sidebar-width-v659, clamp(570px, 34vw, 600px)) + 14px) !important"),
   "tablet map tools must stay fully on the map side"
 );
 
@@ -121,6 +134,7 @@ let openedRoadviewKey = "";
 let roadviewAlert = "";
 const operationsContext = {
   window: {
+    addEventListener() {},
     openKakaoRoadview(encodedKey) {
       openedRoadviewKey = decodeURIComponent(encodedKey);
     }

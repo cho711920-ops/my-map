@@ -4,8 +4,8 @@ const path = require("node:path");
 
 const collectorPath = path.join(__dirname, "..", "js", "daangn-collector.js");
 const installPath = path.join(__dirname, "..", "daangn-collector-install.html");
-const collector = fs.readFileSync(collectorPath, "utf8");
-const install = fs.readFileSync(installPath, "utf8");
+const collector = fs.readFileSync(collectorPath, "utf8").replace(/\r\n/g, "\n");
+const install = fs.readFileSync(installPath, "utf8").replace(/\r\n/g, "\n");
 
 function loadFunction(name) {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.1\.4"/);
+assert.match(collector, /VERSION = "1\.5\.4"/);
 assert.match(collector, /metric\("created","신규 등록"\)/);
 assert.match(collector, /metric\("merged","자동 통합"\)/);
 assert.match(collector, /metric\("updated","조건 변경"\)/);
@@ -51,7 +51,7 @@ assert.match(collector, /101호와 102호는 별도/);
 assert.match(collector, /당근 링크 최우선 유지/);
 assert.match(collector, /showActiveChunkWait/);
 assert.match(collector, /고객매칭은 자동으로 별도 갱신/);
-assert.match(install, /js\/daangn-collector\.js/);
+assert.match(install, /js\/collector-loader\.js/);
 assert.match(install, /URL을 복사하거나 붙여넣을 필요가 없습니다|URL 복사 없이/);
 assert.match(install, /당근 수집<\/strong>을 먼저 누릅니다/);
 assert.match(install, /확대 후 숫자 클러스터/);

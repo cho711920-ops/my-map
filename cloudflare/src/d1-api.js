@@ -248,7 +248,12 @@ export async function buildD1SheetCsv(env) {
     property_id, source_url, contacts_json, building_year, building_elevators,
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
     last_collected_at, latitude, longitude, building_elevator_capacity,
-    trade_type, sale_category, sale_price`, "listings", "status <> 'deleted'", 3_000);
+    trade_type, sale_category, sale_price`, "listings", `status <> 'deleted'
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = listings.id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )`, 3_000);
   const header = [
     "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
     "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
@@ -280,7 +285,12 @@ async function listingChanges(env, query) {
       building_approval_date, building_info_checked_at, building_info_status, registration_at,
       last_collected_at, latitude, longitude, building_elevator_capacity,
       trade_type, sale_category, sale_price
-    FROM listings WHERE property_id IN (${placeholders})`).bind(...ids).all();
+    FROM listings WHERE property_id IN (${placeholders})
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = listings.id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )`).bind(...ids).all();
   return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
 }
 
@@ -349,12 +359,23 @@ async function unifiedListings(env) {
     env,
     "listing_id, list_snapshot_json, json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json",
     "listing_sources",
-    "active = 1",
+    `active = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = listing_sources.listing_id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )`,
     4_000
   );
   const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
     FROM listing_sources s JOIN listings l ON l.id=s.listing_id
-    WHERE l.status<>'deleted' AND s.source IN ('네이버','당근') ORDER BY s.rowid`, 4_000);
+    WHERE l.status<>'deleted' AND s.source IN ('네이버','당근')
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = l.id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )
+    ORDER BY s.rowid`, 4_000);
   const groups = {};
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
@@ -388,6 +409,11 @@ async function unifiedListings(env) {
         ORDER BY COALESCE(image_source.last_collected_at,'') DESC, lm.sort_order, lm.rowid LIMIT 1) AS thumbnail
     FROM listings l JOIN listing_sources s ON s.listing_id=l.id
     WHERE l.status NOT IN ('deleted','계약완료')
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = l.id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )
     GROUP BY l.id
     HAVING SUM(CASE WHEN s.active=1 THEN 1 ELSE 0 END)=0 AND MAX(s.missing_count)>=3
     ORDER BY l.rowid`, 4_000);
@@ -452,7 +478,13 @@ export function masterFallbackOriginal(row, images = []) {
 
 async function unifiedDetail(env, propertyId) {
   const sourceResult = await env.DB.prepare(`SELECT id, source, list_snapshot_json, raw_json
-    FROM listing_sources WHERE listing_id = ?1 AND active = 1 ORDER BY rowid`).bind(propertyId).all();
+    FROM listing_sources WHERE listing_id = ?1 AND active = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = listing_sources.listing_id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )
+    ORDER BY rowid`).bind(propertyId).all();
   const mediaResult = await env.DB.prepare(`SELECT source_id, external_url, r2_key, thumbnail_r2_key, sort_order
     FROM listing_media WHERE listing_id = ?1 AND status <> 'deleted' ORDER BY source_id, sort_order, rowid`)
     .bind(propertyId).all();
@@ -487,7 +519,13 @@ async function unifiedDetail(env, propertyId) {
         (SELECT COUNT(*) FROM listing_sources s WHERE s.listing_id=listings.id) AS source_count,
         (SELECT COUNT(*) FROM listing_sources s WHERE s.listing_id=listings.id AND s.active=1) AS active_source_count,
         (SELECT MAX(s.missing_count) FROM listing_sources s WHERE s.listing_id=listings.id) AS missing_count
-      FROM listings WHERE property_id = ?1 AND status <> 'deleted' LIMIT 1`).bind(propertyId).first();
+      FROM listings WHERE property_id = ?1 AND status <> 'deleted'
+        AND NOT EXISTS (
+          SELECT 1 FROM listing_data_quality_holds quality_hold
+          WHERE quality_hold.listing_id = listings.id
+            AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+        )
+      LIMIT 1`).bind(propertyId).first();
     if (master) {
       const fallbackImages = (mediaResult?.results || []).map((media) => clean(media.external_url)).filter(Boolean);
       originals.push(masterFallbackOriginal(master, fallbackImages));
@@ -501,6 +539,11 @@ async function listingContacts(env, propertyId) {
     c.first_seen_at, c.last_seen_at FROM listing_contacts c
     JOIN listing_sources s ON s.id = c.source_id
     WHERE c.listing_id = ?1 AND c.status <> 'deleted' AND s.source = '공실박스'
+      AND NOT EXISTS (
+        SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id = c.listing_id
+          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
+      )
     ORDER BY c.rowid`).bind(propertyId).all();
   const contacts = (result?.results || []).map((row) => ({
     id: row.id,
@@ -534,11 +577,19 @@ async function tellContacts(env, query) {
       c.phone LIKE ?1 OR c.normalized_phone LIKE ?1 OR c.name LIKE ?1 OR
       l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1 OR
       REPLACE(l.address, ' ', '') LIKE ?2
+    ) AND NOT EXISTS (
+      SELECT 1 FROM listing_data_quality_holds quality_hold
+      WHERE quality_hold.listing_id = c.listing_id
+        AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
     ) ORDER BY c.last_seen_at DESC LIMIT 100`).bind(search.pattern, search.compactPattern).all();
   const memoResult = await env.DB.prepare(`SELECT l.id AS listing_id, l.title, l.address, l.room, l.operating_memo
     FROM listings l WHERE (
       l.title LIKE ?1 OR l.address LIKE ?1 OR l.room LIKE ?1 OR l.operating_memo LIKE ?1 OR
       REPLACE(l.address, ' ', '') LIKE ?2 OR REPLACE(l.operating_memo, ' ', '') LIKE ?2
+    ) AND NOT EXISTS (
+      SELECT 1 FROM listing_data_quality_holds quality_hold
+      WHERE quality_hold.listing_id = l.id
+        AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
     ) ORDER BY l.updated_at DESC LIMIT 100`).bind(search.pattern, search.compactPattern).all();
   const contacts = (providerResult?.results || []).map((row) => ({
     id: row.id,
@@ -595,6 +646,10 @@ async function cloudState(env, user, query) {
   const scope = clean(query.scope).slice(0, 100);
   const recordKey = clean(query.recordKey || "default").slice(0, 100);
   const owner = clean(user?.email).toLowerCase();
+  if (!owner) throw Object.assign(new Error("로그인 계정을 확인해 주세요."), { statusCode: 401 });
+  if (!scope || !recordKey) {
+    throw Object.assign(new Error("클라우드 저장 범위를 확인해 주세요."), { statusCode: 400 });
+  }
   const rowPromise = env.DB.prepare(`SELECT value_json, version, updated_at FROM cloud_state
     WHERE owner_email = ?1 AND scope = ?2 AND record_key = ?3`)
     .bind(owner, scope, recordKey).first();
@@ -904,6 +959,12 @@ async function operationsDashboard(env) {
     const row = await env.DB.prepare(`SELECT payload_json, calculated_at
       FROM operations_snapshots WHERE snapshot_key='main' LIMIT 1`).first();
     if (!row) return refreshOperationsDashboard(env);
+    const calculatedAt = Date.parse(row.calculated_at || "");
+    // Snapshot adjustments keep the common write path fast, while this bound
+    // repairs drift from maintenance jobs or interrupted background refreshes.
+    if (!Number.isFinite(calculatedAt) || Date.now() - calculatedAt > 5 * 60_000) {
+      return refreshOperationsDashboard(env);
+    }
     return {
       ...parseJson(row.payload_json, {}),
       calculatedAt: row.calculated_at || "",
@@ -1475,38 +1536,106 @@ async function saveCloudState(env, user, body) {
   const scope = clean(body.scope).slice(0, 100);
   const recordKey = clean(body.recordKey || "default").slice(0, 100);
   if (scope === "saleWorksheetV1") return saveSaleWorksheet(env, owner, recordKey, body);
-  const version = Math.max(1, Number(body.version) || Date.now());
+  if (!owner) throw Object.assign(new Error("로그인 계정을 확인해 주세요."), { statusCode: 401 });
+  if (!scope || !recordKey) {
+    throw Object.assign(new Error("클라우드 저장 범위를 확인해 주세요."), { statusCode: 400 });
+  }
+  const expectedVersion = body.expectedVersion;
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0 || expectedVersion >= Number.MAX_SAFE_INTEGER) {
+    throw Object.assign(new Error("최신 클라우드 자료를 먼저 불러온 뒤 다시 저장해 주세요."), { statusCode: 428 });
+  }
+  const version = expectedVersion + 1;
   const now = new Date().toISOString();
+  if (ACCOUNT_LIST_SCOPES.has(scope) && !Array.isArray(body.data)) {
+    throw Object.assign(new Error("목록 저장 형식을 확인해 주세요."), { statusCode: 400 });
+  }
   if (ACCOUNT_LIST_SCOPES.has(scope) && Array.isArray(body.data)) {
     const deletionScope = cloudDeletionScope(scope);
-    const existingDeletedRow = await env.DB.prepare(`SELECT value_json FROM cloud_state
+    const existingDeletedRow = await env.DB.prepare(`SELECT value_json, version FROM cloud_state
       WHERE owner_email = ?1 AND scope = ?2 AND record_key = ?3`)
       .bind(owner, deletionScope, recordKey).first();
+    const deletionVersion = Number.isSafeInteger(Number(existingDeletedRow?.version))
+      ? Number(existingDeletedRow.version) : 0;
     const deletedIds = mergeCloudDeletionIds(
       parseJson(existingDeletedRow?.value_json, {}),
       body.deletedIds
     );
     const data = filterCloudDeletedLists(body.data, deletedIds);
-    await env.DB.batch([
+    // The tombstone row and list row are changed as one D1 batch.  A unique
+    // marker couples both conditional statements, so a concurrent loser cannot
+    // update only one half after another device wins the compare-and-swap.
+    const writeMarker = `cloud-list-save:${crypto.randomUUID()}`;
+    const results = await env.DB.batch([
       env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        SELECT ?1, ?2, ?3, ?4, ?5, ?6
+        WHERE (
+          (?7 = 0 AND NOT EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?2 AND record_key=?3
+          )) OR EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?2 AND record_key=?3 AND version=?7
+          )
+        ) AND (
+          (?9 = 0 AND NOT EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?8 AND record_key=?3
+          )) OR EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?8 AND record_key=?3 AND version=?9
+          )
+        )
         ON CONFLICT(owner_email, scope, record_key) DO UPDATE SET
-          value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at`)
-        .bind(owner, scope, recordKey, JSON.stringify(data), version, now),
+          value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at
+        WHERE cloud_state.version=?7 AND (
+          (?9 = 0 AND NOT EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?8 AND record_key=?3
+          )) OR EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?8 AND record_key=?3 AND version=?9
+          )
+        )`)
+        .bind(owner, deletionScope, recordKey, JSON.stringify(deletedIds), version, writeMarker,
+          deletionVersion, scope, expectedVersion),
       env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        SELECT ?1, ?2, ?3, ?4, ?5, ?6
+        WHERE EXISTS (
+          SELECT 1 FROM cloud_state
+          WHERE owner_email=?1 AND scope=?8 AND record_key=?3 AND updated_at=?9
+        ) AND (
+          (?7 = 0 AND NOT EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?2 AND record_key=?3
+          )) OR EXISTS (
+            SELECT 1 FROM cloud_state WHERE owner_email=?1 AND scope=?2 AND record_key=?3 AND version=?7
+          )
+        )
         ON CONFLICT(owner_email, scope, record_key) DO UPDATE SET
-          value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at`)
-        .bind(owner, deletionScope, recordKey, JSON.stringify(deletedIds), version, now)
+          value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at
+        WHERE cloud_state.version=?7 AND EXISTS (
+          SELECT 1 FROM cloud_state
+          WHERE owner_email=?1 AND scope=?8 AND record_key=?3 AND updated_at=?9
+        )`)
+        .bind(owner, scope, recordKey, JSON.stringify(data), version, now, expectedVersion,
+          deletionScope, writeMarker)
     ]);
+    if (results.some((result) => Number(result?.meta?.changes) !== 1)) {
+      throw Object.assign(new Error("다른 창 또는 기기에서 목록이 변경되었습니다. 최신 목록과 합친 뒤 다시 저장해 주세요."), {
+        statusCode: 409
+      });
+    }
     return { ok: true, persisted: true, queued: false, scope, recordKey,
       data, deletedIds, version, updatedAt: now, source: "D1" };
   }
-  await env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+  const result = await env.DB.prepare(`INSERT INTO cloud_state (owner_email, scope, record_key, value_json, version, updated_at)
+    SELECT ?1, ?2, ?3, ?4, ?5, ?6
+    WHERE ?7 = 0 OR EXISTS (
+      SELECT 1 FROM cloud_state
+      WHERE owner_email=?1 AND scope=?2 AND record_key=?3 AND version=?7
+    )
     ON CONFLICT(owner_email, scope, record_key) DO UPDATE SET
-      value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at`)
-    .bind(owner, scope, recordKey, JSON.stringify(body.data ?? null), version, now).run();
+      value_json=excluded.value_json, version=excluded.version, updated_at=excluded.updated_at
+    WHERE cloud_state.version=?7`)
+    .bind(owner, scope, recordKey, JSON.stringify(body.data ?? null), version, now, expectedVersion).run();
+  if (Number(result?.meta?.changes) !== 1) {
+    throw Object.assign(new Error("다른 창 또는 기기에서 자료가 변경되었습니다. 최신 자료를 확인한 뒤 다시 저장해 주세요."), {
+      statusCode: 409
+    });
+  }
   return { ok: true, persisted: true, queued: false, scope, recordKey, version, updatedAt: now, source: "D1" };
 }
 

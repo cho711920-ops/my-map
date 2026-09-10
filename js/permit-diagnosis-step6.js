@@ -11,6 +11,7 @@
     callResults: {},
     loadedRecord: null
   };
+  var saveInFlight = null;
 
   function escapeHtml(value) {
     return global.PermitIndustryCandidateSelectorV1.escapeHtml(value);
@@ -59,6 +60,15 @@
     element.classList.toggle("error", Boolean(error));
   }
 
+  function setSaveBusy(busy) {
+    if (typeof document.querySelector !== "function") return;
+    var button = document.querySelector("[data-permit-diagnosis-save]");
+    if (!button) return;
+    button.disabled = Boolean(busy);
+    if (busy) button.setAttribute("aria-busy", "true");
+    else button.removeAttribute("aria-busy");
+  }
+
   function buildRecord(previous) {
     return global.PermitDiagnosisStorageV1.buildRecord({
       industry: state.industry,
@@ -70,6 +80,15 @@
       callResults: state.callResults,
       previous: previous
     });
+  }
+
+  function previousRecordForSave(recordKey) {
+    var storage = global.PermitDiagnosisStorageV1;
+    var draft = typeof storage.loadDirtyDraft === "function"
+      ? storage.loadDirtyDraft(recordKey) : null;
+    if (draft && draft.record && draft.record.recordKey === recordKey) return draft.record;
+    if (state.loadedRecord && state.loadedRecord.recordKey === recordKey) return state.loadedRecord;
+    return storage.loadLocal(recordKey);
   }
 
   function loadCurrent() {
@@ -104,21 +123,46 @@
       }
       return record;
     }).catch(function (error) {
-      setStatus("저장된 진단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", true);
+      var accountChanged = error && error.code === "account_changed";
+      if (accountChanged) {
+        state.loadedRecord = null;
+        var report = document.getElementById("permitStep6ReportV1");
+        if (report) report.innerHTML = "";
+      }
+      setStatus(accountChanged
+        ? error.message
+        : "저장된 진단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", true);
       return null;
     });
   }
 
   function saveCurrent() {
+    if (saveInFlight) return saveInFlight;
     if (!state.industry || !state.diagnosis || !state.procedure) {
       setStatus("업종 선택과 공공데이터 조회를 먼저 완료해 주세요.", true);
-      return;
+      return Promise.resolve(null);
+    }
+    var recordKey = currentKey();
+    if (!recordKey) {
+      setStatus("매물번호 또는 주소·층·호실을 확인해 주세요.", true);
+      return Promise.resolve(null);
     }
     setStatus("현재 진단을 저장하고 있습니다.");
-    global.PermitDiagnosisStorageV1.load(currentKey()).then(function (previous) {
-      var record = buildRecord(previous);
+    setSaveBusy(true);
+    var work = Promise.resolve().then(function () {
+      // Do not preflight the cloud here. The version captured by an explicit
+      // load must remain the CAS baseline so a stale tab receives a 409 instead
+      // of silently replacing a newer diagnosis.
+      var record = buildRecord(previousRecordForSave(recordKey));
       return global.PermitDiagnosisStorageV1.save(record);
     }).then(function (result) {
+      if (result.accountChanged) {
+        state.loadedRecord = null;
+        var staleReport = document.getElementById("permitStep6ReportV1");
+        if (staleReport) staleReport.innerHTML = "";
+        setStatus(result.warning, true);
+        return result;
+      }
       state.loadedRecord = result.record;
       var report = document.getElementById("permitStep6ReportV1");
       if (report) report.innerHTML = global.PermitDiagnosisReportV1.render(result.record);
@@ -126,12 +170,21 @@
         ? (result.localSaved
           ? "계정 클라우드와 이 기기에 진단을 저장했습니다."
           : "계정 클라우드에 진단을 저장했습니다. 브라우저 저장공간은 가득 찼지만 진단 불러오기는 가능합니다.")
-        : (result.localSaved
-          ? "이 기기에 저장했습니다. 계정 클라우드 저장은 로그인 상태를 확인해 주세요."
-          : result.warning), !result.cloudSaved && !result.localSaved);
+        : (result.conflict
+          ? result.warning
+          : (result.localSaved
+            ? "이 기기에 저장했습니다. 계정 클라우드 저장은 로그인 상태를 확인해 주세요."
+            : result.warning)), !result.cloudSaved && (!result.localSaved || result.conflict));
+      return result;
     }).catch(function (error) {
       setStatus(error.message, true);
+      return null;
     });
+    saveInFlight = work.finally(function () {
+      saveInFlight = null;
+      setSaveBusy(false);
+    });
+    return saveInFlight;
   }
 
   document.addEventListener("click", function (event) {
@@ -190,6 +243,8 @@
 
   global.PermitDiagnosisStep6V1 = {
     renderPanel: renderPanel,
-    buildRecord: buildRecord
+    buildRecord: buildRecord,
+    loadCurrent: loadCurrent,
+    saveCurrent: saveCurrent
   };
 })(window, document);

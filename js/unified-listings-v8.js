@@ -628,6 +628,8 @@
     drawer = document.createElement("aside");
     drawer.id = "unifiedDetailDrawerV8";
     drawer.className = "unified-detail-drawer-v8";
+    drawer.setAttribute("role", "dialog");
+    drawer.setAttribute("aria-labelledby", "unifiedDetailTitleV8");
     drawer.setAttribute("aria-hidden", "true");
     drawer.innerHTML = '<header><div><strong id="unifiedDetailTitleV8">매물 상세</strong><span id="unifiedDetailSubtitleV8"></span></div>' +
       '<button type="button" aria-label="상세매물보기 닫기">×</button></header>' +
@@ -645,6 +647,7 @@
 
   function showDetailDrawerV827(drawer) {
     if (!drawer) return;
+    var wasVisible = drawer.getAttribute("aria-hidden") !== "true";
     if (detailCloseTimerV827) {
       global.clearTimeout(detailCloseTimerV827);
       detailCloseTimerV827 = null;
@@ -654,6 +657,9 @@
     if (drawer.classList.contains("open") || drawer.classList.contains("opening-v827")) return;
     drawer.classList.add("opening-v827");
     void drawer.offsetWidth;
+    if (!wasVisible && global.JSDialogFocusV1) {
+      global.JSDialogFocusV1.activate(drawer, drawer.querySelector("header button"));
+    }
     global.requestAnimationFrame(function() {
       if (!drawer.classList.contains("opening-v827") || !state.openPropertyId) return;
       drawer.classList.add("open");
@@ -922,6 +928,7 @@
   function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (!drawer) return;
+    var wasVisible = drawer.getAttribute("aria-hidden") !== "true";
     if (detailCloseTimerV827) global.clearTimeout(detailCloseTimerV827);
     drawer.classList.remove("opening-v827");
     drawer.classList.add("closing-v827");
@@ -934,6 +941,7 @@
     state.openPropertyId = "";
     state.openOriginalId = "";
     state.detailRequestToken += 1;
+    if (wasVisible && global.JSDialogFocusV1) global.JSDialogFocusV1.deactivate(drawer);
   }
 
   function closeDetailForOverlay() {
@@ -946,7 +954,8 @@
       drawer.classList.remove("open", "opening-v827", "closing-v827");
       drawer.setAttribute("aria-hidden", "true");
     }
-    closeGallery();
+    closeGallery(false);
+    if (drawer && global.JSDialogFocusV1) global.JSDialogFocusV1.deactivate(drawer, {restore: false});
     state.openPropertyId = "";
     state.openOriginalId = "";
     state.detailRequestToken += 1;
@@ -1204,6 +1213,10 @@
       modal = document.createElement("div");
       modal.id = "unifiedGalleryV8";
       modal.className = "unified-gallery-modal-v8";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "매물 사진 크게 보기");
+      modal.setAttribute("aria-hidden", "true");
       modal.innerHTML = '<button class="close" type="button" aria-label="사진 크게 보기 닫기">×</button>' +
         '<button class="unified-gallery-nav-v8 prev" type="button" aria-label="이전 사진">‹</button>' +
         '<img alt="매물 사진" referrerpolicy="no-referrer">' +
@@ -1224,6 +1237,10 @@
       modal.onclick = function(event) {
         if (event.target === modal) closeGallery();
       };
+      modal.addEventListener("keydown", function(event) {
+        if (!modal.classList.contains("open") || !global.JSDialogFocusV1) return;
+        global.JSDialogFocusV1.handleKeydown(modal, event, closeGallery);
+      });
       document.body.appendChild(modal);
     }
     var index = wrapPhotoIndexV8141(startIndex, images.length);
@@ -1231,6 +1248,8 @@
     bindPhotoSwipe(modal, function(direction) { stepGallery(direction); });
     renderGalleryImage(modal, index);
     modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    if (global.JSDialogFocusV1) global.JSDialogFocusV1.activate(modal, modal.querySelector(".close"));
   }
 
   function renderGalleryImage(modal, index) {
@@ -1256,25 +1275,65 @@
     });
   }
 
-  function closeGallery() {
+  function closeGallery(restoreFocus) {
     var modal = document.getElementById("unifiedGalleryV8");
-    if (modal) modal.classList.remove("open");
+    if (!modal) return;
+    var wasOpen = modal.classList.contains("open");
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    if (wasOpen && global.JSDialogFocusV1) {
+      global.JSDialogFocusV1.deactivate(modal, {restore: restoreFocus !== false});
+    }
+  }
+
+  function closeTell(restoreFocus) {
+    var modal = document.getElementById("tellModalV8");
+    if (!modal) return;
+    var wasOpen = modal.classList.contains("open");
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    state.tellRequestToken += 1;
+    if (wasOpen && global.JSDialogFocusV1) {
+      global.JSDialogFocusV1.deactivate(modal, {restore: restoreFocus !== false});
+    }
+  }
+
+  function resolveTellReturnFocusV8(detailDrawer) {
+    var active = document.activeElement;
+    var trigger = document.querySelector("button.search-tell-v8[onclick*='JSUnifiedListingsV8.openTell']");
+    var activeIsInsideDetail = !!(detailDrawer && active && detailDrawer.contains(active));
+    var candidate = (!active || active === document.body || activeIsInsideDetail) ? trigger : active;
+    if (!global.JSDialogFocusV1 || typeof global.JSDialogFocusV1.isRestorable !== "function") {
+      return candidate || trigger || null;
+    }
+    if (global.JSDialogFocusV1.isRestorable(candidate)) return candidate;
+    return global.JSDialogFocusV1.isRestorable(trigger) ? trigger : null;
   }
 
   function openTell() {
     if (!desktop()) return;
+    var detailDrawer = document.getElementById("unifiedDetailDrawerV8");
+    var returnFocus = resolveTellReturnFocusV8(detailDrawer);
     closeDetailForOverlay();
     var modal = document.getElementById("tellModalV8");
     if (!modal) {
       modal = document.createElement("div");
       modal.id = "tellModalV8";
       modal.className = "tell-modal-v8";
-      modal.innerHTML = '<div class="tell-backdrop-v8"></div><section><header><div><strong>Tell 주소 연락처</strong>' +
-        '<span>공실박스에서 수집된 번호를 매물 상태와 관계없이 조회합니다.</span></div><button type="button">×</button></header>' +
+      modal.setAttribute("aria-hidden", "true");
+      modal.innerHTML = '<div class="tell-backdrop-v8" aria-hidden="true"></div>' +
+        '<section role="dialog" aria-modal="true" aria-labelledby="tellModalTitleV8"><header><div>' +
+        '<strong id="tellModalTitleV8">Tell 주소 연락처</strong>' +
+        '<span>공실박스에서 수집된 번호를 매물 상태와 관계없이 조회합니다.</span></div>' +
+        '<button type="button" aria-label="Tell 연락처 검색 닫기">×</button></header>' +
         '<form><input type="search" placeholder="예: 월평동 1197" autocomplete="off"><button type="submit">검색</button></form>' +
         '<div class="tell-results-v8"><p>주소를 입력해 주세요.</p></div></section>';
-      modal.querySelector("header button").onclick = function() { modal.classList.remove("open"); };
-      modal.querySelector(".tell-backdrop-v8").onclick = function() { modal.classList.remove("open"); };
+      modal.querySelector("header button").onclick = function() { closeTell(); };
+      modal.querySelector(".tell-backdrop-v8").onclick = function() { closeTell(); };
+      modal.addEventListener("keydown", function(event) {
+        if (!modal.classList.contains("open") || !global.JSDialogFocusV1) return;
+        global.JSDialogFocusV1.handleKeydown(modal, event, closeTell);
+      });
       modal.querySelector("input").oninput = function() {
         var query = text(this.value);
         if (state.tellInputTimer && typeof global.clearTimeout === "function") {
@@ -1304,7 +1363,10 @@
       document.body.appendChild(modal);
     }
     modal.classList.add("open");
-    setTimeout(function() { modal.querySelector("input").focus(); }, 0);
+    modal.setAttribute("aria-hidden", "false");
+    if (global.JSDialogFocusV1) {
+      global.JSDialogFocusV1.activate(modal, modal.querySelector("input"), {returnFocus: returnFocus});
+    }
   }
 
   global.addEventListener("resize", function() {
@@ -1335,6 +1397,11 @@
   }, true);
 
   global.addEventListener("keydown", function(event) {
+    var tellModal = document.getElementById("tellModalV8");
+    if (tellModal && tellModal.classList.contains("open")) {
+      if (event.key === "Escape") closeTell();
+      return;
+    }
     var gallery = document.getElementById("unifiedGalleryV8");
     if (gallery && gallery.classList.contains("open")) {
       if (event.key === "ArrowLeft") stepGallery(-1);

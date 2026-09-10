@@ -32,6 +32,10 @@ function localDb(account, allowedUser = null) {
                 account.failed_attempts = 0;
                 account.locked_until = "";
                 account.last_login_at = values[0];
+              } else if (/failed_attempts=CASE/.test(sql)) {
+                const lockExpired = Boolean(account.locked_until && account.locked_until <= values[0]);
+                account.failed_attempts = lockExpired ? 1 : Number(account.failed_attempts || 0) + 1;
+                account.locked_until = account.failed_attempts >= 5 ? values[1] : "";
               } else if (/SET failed_attempts=\?1/.test(sql)) {
                 account.failed_attempts = values[0];
                 account.locked_until = values[1];
@@ -160,6 +164,37 @@ test("invalid local identifiers and repeated failures are rejected", async () =>
   }), /아이디 또는 비밀번호/);
   assert.equal(account.failed_attempts, 5);
   assert.ok(Date.parse(account.locked_until) > Date.now());
+});
+
+test("a locked local account is not kept locked forever by retries", async () => {
+  const passwordRecord = await createLocalPassword("friend-safe-2026");
+  const lockedUntil = new Date(Date.now() + 5 * 60_000).toISOString();
+  const account = {
+    username: "friend1", display_name: "친구", role: "member", active: 1,
+    password_salt: passwordRecord.salt, password_hash: passwordRecord.hash,
+    password_iterations: passwordRecord.iterations, session_version: 1,
+    failed_attempts: 5, locked_until: lockedUntil
+  };
+  await assert.rejects(() => authenticateLocalAccount("friend1", "wrong-password", {
+    DB: localDb(account), SESSION_SECRET: secret
+  }), /아이디 또는 비밀번호/);
+  assert.equal(account.failed_attempts, 5);
+  assert.equal(account.locked_until, lockedUntil);
+});
+
+test("an elapsed local-account lock starts a new atomic attempt window", async () => {
+  const passwordRecord = await createLocalPassword("friend-safe-2026");
+  const account = {
+    username: "friend1", display_name: "친구", role: "member", active: 1,
+    password_salt: passwordRecord.salt, password_hash: passwordRecord.hash,
+    password_iterations: passwordRecord.iterations, session_version: 1,
+    failed_attempts: 5, locked_until: new Date(Date.now() - 60_000).toISOString()
+  };
+  await assert.rejects(() => authenticateLocalAccount("friend1", "wrong-password", {
+    DB: localDb(account), SESSION_SECRET: secret
+  }), /아이디 또는 비밀번호/);
+  assert.equal(account.failed_attempts, 1);
+  assert.equal(account.locked_until, "");
 });
 
 test("master-issued credentials link to the existing Google identity", async () => {

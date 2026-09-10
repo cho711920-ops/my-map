@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.2\.5";/);
+assert.match(source, /var VERSION = "2\.2\.6";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
@@ -41,7 +41,7 @@ assert.match(source, /data-metric="detailedDuplicates"/);
 assert.match(source, /data-metric="skippedUnchanged"/);
 assert.match(
   source,
-  /function pollMutationStatus\(requestId, collectorKey\)[\s\S]*?var maxWaitMs = 7 \* 60 \* 1000;[\s\S]*?function canRetry\(\)[\s\S]*?if \(canRetry\(\)\)/,
+  /function pollMutationStatus\(requestId, collectorKey, targetAction\)[\s\S]*?var maxWaitMs = 7 \* 60 \* 1000;[\s\S]*?function canRetry\(\)[\s\S]*?if \(canRetry\(\)\)/,
   "공실박스 대량 저장은 Apps Script 장기 처리 결과를 충분히 기다려야 합니다."
 );
 assert.match(

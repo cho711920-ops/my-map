@@ -120,11 +120,32 @@ export async function authenticateLocalAccount(username, password, env, now = Da
     (!linkedEmail || linkedProfile) &&
     lockedUntil <= now && passwordMatches);
   if (!valid) {
+    // A locked account must not have its lock extended by every retry. This keeps
+    // the D1-backed account lock useful without letting an attacker hold a known
+    // username locked forever by sending one request inside each lock window.
+    if (account && lockedUntil > now) {
+      throw Object.assign(new Error("아이디 또는 비밀번호를 확인해 주세요."), { statusCode: 401 });
+    }
     if (account && env.DB && typeof env.DB.prepare === "function") {
-      const failures = Number(account.failed_attempts || 0) + 1;
-      const nextLockedUntil = failures >= 5 ? new Date(now + 10 * 60_000).toISOString() : "";
-      await env.DB.prepare(`UPDATE local_accounts SET failed_attempts=?1, locked_until=?2,
-        updated_at=?3 WHERE username=?4`).bind(failures, nextLockedUntil, new Date(now).toISOString(), normalized).run();
+      const nowIso = new Date(now).toISOString();
+      const nextLockedUntil = new Date(now + 10 * 60_000).toISOString();
+      // Increment in D1 instead of writing a previously-read absolute value, so
+      // concurrent failures cannot overwrite one another. Once a lock has fully
+      // elapsed, begin a fresh five-attempt window.
+      await env.DB.prepare(`UPDATE local_accounts SET
+        failed_attempts=CASE
+          WHEN locked_until<>'' AND locked_until<=?1 THEN 1
+          ELSE failed_attempts+1
+        END,
+        locked_until=CASE
+          WHEN (CASE
+            WHEN locked_until<>'' AND locked_until<=?1 THEN 1
+            ELSE failed_attempts+1
+          END)>=5 THEN ?2
+          WHEN locked_until<>'' AND locked_until<=?1 THEN ''
+          ELSE locked_until
+        END,
+        updated_at=?1 WHERE username=?3`).bind(nowIso, nextLockedUntil, normalized).run();
     }
     throw Object.assign(new Error("아이디 또는 비밀번호를 확인해 주세요."), { statusCode: 401 });
   }

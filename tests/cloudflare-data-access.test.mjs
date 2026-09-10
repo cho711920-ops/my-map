@@ -138,7 +138,7 @@ test("diagnosis storage uses the shared Cloudflare data boundary with a legacy f
   assert.match(diagnosisStorageSource, /return request\(global\.saveApiURL \|\| "\/api\/data",/);
   assert.match(diagnosisStorageSource, /controller\.abort\(\)/);
   assert.match(html, /data-access-v6\.js\?v=6\.0\.3-earliest-warmup/);
-  assert.match(html, /diagnosis-storage\.js\?v=1\.2\.1-data-access/);
+  assert.match(html, /diagnosis-storage\.js\?v=1\.3\.0-account-cas/);
 });
 
 test("async mutation queue uses the shared boundary and preserves its legacy fallback", () => {
@@ -153,8 +153,9 @@ test("async mutation queue uses the shared boundary and preserves its legacy fal
 });
 
 test("AI visit sessions use the shared Cloudflare data boundary with a legacy fallback", () => {
-  assert.match(aiVisitSource, /JSDataAccessV6\.read\(action, params,/);
-  assert.match(aiVisitSource, /JSDataAccessV6\.mutate\(action, payload,/);
+  assert.match(aiVisitSource, /JSDataAccessV6\.read\(action, scopedParams,/);
+  assert.match(aiVisitSource, /JSDataAccessV6\.mutate\(action, scopedPayload,/);
+  assert.match(aiVisitSource, /expectedAccountEmail: cloudSessionAccountEmail/);
   assert.match(aiVisitSource, /readAiVisitData\("loadCloudState"/);
   assert.match(aiVisitSource, /mutateAiVisitData\("saveCloudState"/);
   assert.match(aiVisitSource, /mutateAiVisitData\("toggleDone"/);
@@ -167,8 +168,9 @@ test("AI visit sessions use the shared Cloudflare data boundary with a legacy fa
 });
 
 test("list manager only uses the shared Cloudflare data boundary", () => {
-  assert.match(listManagerSource, /JSDataAccessV6\.read\(action, params,/);
-  assert.match(listManagerSource, /JSDataAccessV6\.mutate\(action, payload,/);
+  assert.match(listManagerSource, /JSDataAccessV6\.read\(action, scopedParams,/);
+  assert.match(listManagerSource, /JSDataAccessV6\.mutate\(action, scopedPayload,/);
+  assert.match(listManagerSource, /expectedAccountEmail: accountEmail/);
   assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.read !== "function"/);
   assert.match(listManagerSource, /typeof window\.JSDataAccessV6\.mutate !== "function"/);
   assert.match(listManagerSource, /공통 데이터 연결이 준비되지 않았습니다/);

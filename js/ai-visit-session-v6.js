@@ -5,6 +5,10 @@
   var SESSION_KEY = "js_ai_visit_sessions_v6";
   var LEGACY_SESSION_KEY = "js_ai_visit_session_v6";
   var LOCATION_CACHE_KEY = "js_ai_visit_location_v6";
+  var DIRTY_SESSION_KEY_PREFIX = "js_ai_visit_cloud_dirty_v1::";
+  var QUARANTINED_SESSION_KEY_PREFIX = "js_ai_visit_sessions_quarantine_v1::";
+  var LEGACY_SESSION_MIGRATION_KEY_PREFIX = "js_ai_visit_legacy_session_migrated_v1::";
+  var cloudSessionAccountEmail = String(window.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
   var activeSession = null;
   var focusMarker = null;
   var lastKnownLocation = null;
@@ -14,8 +18,17 @@
   var cloudSessionReady = false;
   var cloudSessionLoading = null;
   var cloudSessionSaveTimer = 0;
+  var cloudSessionRetryTimer = 0;
+  var cloudSessionSaveInFlight = false;
+  var cloudSessionDirty = false;
+  var cloudSessionRetryAttempt = 0;
+  var cloudSessionAccountChanged = false;
+  var cloudSessionAccountChangedWarningShown = false;
+  var cloudSessionVersion = 0;
+  var cloudSessionBase = {};
   var memorySessionMap = null;
   var sessionCacheWarningShown = false;
+  var dirtySessionWarningShown = false;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -252,13 +265,149 @@
     }
   }
 
+  function cloudSessionDirtyStorageKey() {
+    return cloudSessionAccountEmail ? DIRTY_SESSION_KEY_PREFIX + encodeURIComponent(cloudSessionAccountEmail) : "";
+  }
+
+  function sanitizeSessionMapForDurableStorage(sessions) {
+    var sanitized = copySessionMap(sessions);
+    Object.keys(sanitized).forEach(function(listId) {
+      if (!sanitized[listId] || typeof sanitized[listId] !== "object") return;
+      delete sanitized[listId].routeStartLocation;
+    });
+    return sanitized;
+  }
+
+  function readCloudSessionDirtyEnvelope() {
+    var key = cloudSessionDirtyStorageKey();
+    if (!key) return null;
+    try {
+      var envelope = JSON.parse(localStorage.getItem(key) || "null");
+      if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
+      if (String(envelope.accountEmail || "").trim().toLowerCase() !== cloudSessionAccountEmail) return null;
+      if (!envelope.snapshot || typeof envelope.snapshot !== "object" || Array.isArray(envelope.snapshot)) return null;
+      var base = envelope.base && typeof envelope.base === "object" && !Array.isArray(envelope.base)
+        ? envelope.base : {};
+      return {
+        snapshot: sanitizeSessionMapForDurableStorage(envelope.snapshot),
+        base: sanitizeSessionMapForDurableStorage(base),
+        version: Math.max(0, Number(envelope.version) || 0)
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeCloudSessionDirtyEnvelope(sessions) {
+    var key = cloudSessionDirtyStorageKey();
+    if (!key) return false;
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        accountEmail: cloudSessionAccountEmail,
+        snapshot: sanitizeSessionMapForDurableStorage(sessions),
+        base: sanitizeSessionMapForDurableStorage(cloudSessionBase),
+        version: Math.max(0, Number(cloudSessionVersion) || 0),
+        savedAt: new Date().toISOString()
+      }));
+      return true;
+    } catch (error) {
+      if (!dirtySessionWarningShown) {
+        dirtySessionWarningShown = true;
+        console.warn("AI임장 미동기화 상태를 이 기기에 보관하지 못했습니다.", error);
+      }
+      return false;
+    }
+  }
+
+  function clearCloudSessionDirtyEnvelope() {
+    var key = cloudSessionDirtyStorageKey();
+    if (!key) return;
+    try { localStorage.removeItem(key); } catch (error) {}
+  }
+
+  function preservePreUpgradeDeviceSessionCache() {
+    var migrationKey = cloudSessionAccountEmail
+      ? LEGACY_SESSION_MIGRATION_KEY_PREFIX + encodeURIComponent(cloudSessionAccountEmail)
+      : "";
+    if (!migrationKey) return true;
+    try {
+      if (localStorage.getItem(migrationKey) === "1") return true;
+    } catch (error) {}
+
+    var raw = null;
+    try { raw = localStorage.getItem(SESSION_KEY); } catch (error) {}
+    if (!raw) {
+      try { localStorage.setItem(migrationKey, "1"); } catch (error) {}
+      return true;
+    }
+    var sessions = null;
+    try { sessions = JSON.parse(raw); } catch (error) {}
+    if (!sessions || typeof sessions !== "object" || Array.isArray(sessions)) {
+      try { localStorage.setItem(migrationKey, "1"); } catch (error) {}
+      return true;
+    }
+
+    var marker = String(window.JSLegacyStorageOwnerEmailV1 || "").trim().toLowerCase();
+    var sanitized = sanitizeSessionMapForDurableStorage(sessions);
+    if (marker && marker === cloudSessionAccountEmail) {
+      // A pre-upgrade page had no durable CAS ancestor. Treat the owned device
+      // snapshot as base-unknown and conservatively merge it with current cloud.
+      var recovered = !!readCloudSessionDirtyEnvelope() || writeCloudSessionDirtyEnvelope(sanitized);
+      if (recovered) {
+        try { localStorage.setItem(migrationKey, "1"); } catch (error) {}
+      }
+      return recovered;
+    }
+
+    // Never expose an unscoped cache to a different account. Preserve only a
+    // location-sanitized quarantine copy for recovery/inspection.
+    try {
+      var quarantineOwner = marker || "unknown";
+      localStorage.setItem(QUARANTINED_SESSION_KEY_PREFIX + encodeURIComponent(quarantineOwner), JSON.stringify({
+        accountEmail: marker,
+        snapshot: sanitized,
+        quarantinedAt: new Date().toISOString()
+      }));
+    } catch (error) {}
+    return true;
+  }
+
+  function aiVisitHttpError(response, payload, fallback) {
+    var error = new Error(String(payload && payload.message || fallback || "AI임장 동기화에 실패했습니다."));
+    error.status = Number(response && response.status || 0);
+    error.payload = payload || null;
+    return error;
+  }
+
+  function isCloudAccountChangedError(error) {
+    return Number(error && error.status) === 409 &&
+      String(error && error.payload && error.payload.code || "").toLowerCase() === "account_changed";
+  }
+
+  function stopCloudSessionSyncForAccountChange(error) {
+    if (!isCloudAccountChangedError(error)) return false;
+    cloudSessionAccountChanged = true;
+    cloudSessionReady = false;
+    cloudSessionDirty = !!readCloudSessionDirtyEnvelope() || cloudSessionDirty;
+    if (cloudSessionSaveTimer) window.clearTimeout(cloudSessionSaveTimer);
+    if (cloudSessionRetryTimer) window.clearTimeout(cloudSessionRetryTimer);
+    cloudSessionSaveTimer = 0;
+    cloudSessionRetryTimer = 0;
+    if (!cloudSessionAccountChangedWarningShown) {
+      cloudSessionAccountChangedWarningShown = true;
+      alert((error.payload && error.payload.message) || "로그인 계정이 변경되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.");
+    }
+    return true;
+  }
+
   function readAiVisitData(action, params) {
+    var scopedParams = Object.assign({}, params || {}, { expectedAccountEmail: cloudSessionAccountEmail });
     if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.read === "function") {
-      return window.JSDataAccessV6.read(action, params, {
+      return window.JSDataAccessV6.read(action, scopedParams, {
         errorMessage: "AI임장 진행상태를 불러오지 못했습니다."
       });
     }
-    var queryValues = Object.assign({}, params || {});
+    var queryValues = Object.assign({}, scopedParams);
     queryValues.action = action;
     if (!Object.prototype.hasOwnProperty.call(queryValues, "_")) queryValues._ = String(Date.now());
     var query = new URLSearchParams(queryValues);
@@ -266,19 +415,19 @@
       credentials: "same-origin",
       cache: "no-store"
     }).then(function(response) {
-      if (!response.ok) throw new Error("AI임장 진행상태를 불러오지 못했습니다.");
-      return response.json();
-    }).then(function(result) {
-      if (!result || result.ok === false) {
-        throw new Error((result && result.message) || "AI임장 동기화에 실패했습니다.");
-      }
-      return result;
+      return response.json().catch(function() { return null; }).then(function(result) {
+        if (!response.ok || !result || result.ok === false) {
+          throw aiVisitHttpError(response, result, "AI임장 진행상태를 불러오지 못했습니다.");
+        }
+        return result;
+      });
     });
   }
 
   function mutateAiVisitData(action, payload) {
+    var scopedPayload = Object.assign({}, payload || {}, { expectedAccountEmail: cloudSessionAccountEmail });
     if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.mutate === "function") {
-      return window.JSDataAccessV6.mutate(action, payload, {
+      return window.JSDataAccessV6.mutate(action, scopedPayload, {
         errorMessage: "AI임장 진행상태를 저장하지 못했습니다."
       });
     }
@@ -286,19 +435,19 @@
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.assign({ action: action }, payload || {}))
+      body: JSON.stringify(Object.assign({ action: action }, scopedPayload))
     }).then(function(response) {
-      if (!response.ok) throw new Error("AI임장 진행상태를 저장하지 못했습니다.");
-      return response.json();
-    }).then(function(result) {
-      if (!result || result.ok === false) {
-        throw new Error((result && result.message) || "AI임장 저장에 실패했습니다.");
-      }
-      return result;
+      return response.json().catch(function() { return null; }).then(function(result) {
+        if (!response.ok || !result || result.ok === false) {
+          throw aiVisitHttpError(response, result, "AI임장 진행상태를 저장하지 못했습니다.");
+        }
+        return result;
+      });
     });
   }
 
   function syncSessionMapFromCloud() {
+    if (cloudSessionAccountChanged) return Promise.resolve();
     if (cloudSessionReady) return Promise.resolve();
     if (cloudSessionLoading) return cloudSessionLoading;
 
@@ -306,35 +455,221 @@
       scope: "visitSession",
       recordKey: "default"
     }).then(function(result) {
-      var sessions = result.found && result.data && typeof result.data === "object" && !Array.isArray(result.data)
+      var remoteSessions = result.found && result.data && typeof result.data === "object" && !Array.isArray(result.data)
         ? result.data : {};
+      var pending = readCloudSessionDirtyEnvelope();
+      var sessions = pending
+        ? mergeSessionMaps(remoteSessions, pending.snapshot, pending.base)
+        : remoteSessions;
+      cloudSessionVersion = Math.max(0, Number(result.version) || 0);
+      cloudSessionBase = copySessionMap(remoteSessions);
       writeDeviceSessionCache(sessions);
       cloudSessionReady = true;
       cloudSessionLoading = null;
+      if (pending) scheduleCloudSessionSave(sessions);
     }).catch(function(error) {
-      clearDeviceSessionCache();
       cloudSessionReady = false;
       cloudSessionLoading = null;
+      if (stopCloudSessionSyncForAccountChange(error)) return;
+      clearDeviceSessionCache();
       console.warn("로그인 계정 AI임장 동기화 실패", error);
       throw error;
     });
     return cloudSessionLoading;
   }
 
-  function scheduleCloudSessionSave(sessions) {
-    if (!cloudSessionReady) return;
-    var snapshot = JSON.parse(JSON.stringify(sessions || {}));
-    window.clearTimeout(cloudSessionSaveTimer);
-    cloudSessionSaveTimer = window.setTimeout(function() {
-      mutateAiVisitData("saveCloudState", {
-        scope: "visitSession",
-        recordKey: "default",
-        data: snapshot,
-        version: Date.now()
-      }).catch(function(error) {
-        console.warn("로그인 계정 AI임장 저장 실패", error);
+  function copySessionMap(sessions) {
+    try { return JSON.parse(JSON.stringify(sessions && typeof sessions === "object" ? sessions : {})); }
+    catch (_) { return {}; }
+  }
+
+  function sameSession(left, right) {
+    return JSON.stringify(left || null) === JSON.stringify(right || null);
+  }
+
+  function sameSessionGeneration(left, right) {
+    return String(left && left.startedAt || "") === String(right && right.startedAt || "");
+  }
+
+  function sessionTime(session, field) {
+    var parsed = Date.parse(session && session[field] || "");
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  }
+
+  function selectNewerSessionGeneration(localValue, remoteValue) {
+    var localStartedAt = sessionTime(localValue, "startedAt");
+    var remoteStartedAt = sessionTime(remoteValue, "startedAt");
+    if (localStartedAt !== remoteStartedAt) return remoteStartedAt > localStartedAt ? remoteValue : localValue;
+
+    var localUpdatedAt = sessionTime(localValue, "updatedAt");
+    var remoteUpdatedAt = sessionTime(remoteValue, "updatedAt");
+    if (localUpdatedAt !== remoteUpdatedAt) return remoteUpdatedAt > localUpdatedAt ? remoteValue : localValue;
+
+    var localStartedKey = String(localValue && localValue.startedAt || "");
+    var remoteStartedKey = String(remoteValue && remoteValue.startedAt || "");
+    if (localStartedKey !== remoteStartedKey) return remoteStartedKey > localStartedKey ? remoteValue : localValue;
+
+    return JSON.stringify(remoteValue || {}) > JSON.stringify(localValue || {}) ? remoteValue : localValue;
+  }
+
+  function mergeSessionStatuses(baseStatuses, localStatuses, remoteStatuses, preferRemote) {
+    var base = baseStatuses && typeof baseStatuses === "object" ? baseStatuses : {};
+    var local = localStatuses && typeof localStatuses === "object" ? localStatuses : {};
+    var remote = remoteStatuses && typeof remoteStatuses === "object" ? remoteStatuses : {};
+    var merged = {};
+    var keys = Object.keys(Object.assign({}, base, local, remote));
+    keys.forEach(function(key) {
+      var baseHas = Object.prototype.hasOwnProperty.call(base, key);
+      var localHas = Object.prototype.hasOwnProperty.call(local, key);
+      var remoteHas = Object.prototype.hasOwnProperty.call(remote, key);
+      var baseValue = base[key];
+      var localValue = local[key];
+      var remoteValue = remote[key];
+      var localChanged = localHas !== baseHas || (localHas && localValue !== baseValue);
+      var remoteChanged = remoteHas !== baseHas || (remoteHas && remoteValue !== baseValue);
+      var chosenHas;
+      var chosenValue;
+      if (!localChanged && remoteChanged) {
+        chosenHas = remoteHas;
+        chosenValue = remoteValue;
+      } else if (localChanged && !remoteChanged) {
+        chosenHas = localHas;
+        chosenValue = localValue;
+      } else if (!localChanged && !remoteChanged) {
+        chosenHas = baseHas;
+        chosenValue = baseValue;
+      } else if (localHas === remoteHas && (!localHas || localValue === remoteValue)) {
+        chosenHas = localHas;
+        chosenValue = localValue;
+      } else {
+        chosenHas = preferRemote ? remoteHas : localHas;
+        chosenValue = preferRemote ? remoteValue : localValue;
+      }
+      if (chosenHas) merged[key] = chosenValue;
+    });
+    return merged;
+  }
+
+  function mergeSessionMaps(remote, local, base) {
+    remote = remote && typeof remote === "object" ? remote : {};
+    local = local && typeof local === "object" ? local : {};
+    base = base && typeof base === "object" ? base : {};
+    var merged = {};
+    var ids = Object.keys(Object.assign({}, base, remote, local));
+    ids.forEach(function(id) {
+      var baseValue = base[id];
+      var remoteValue = remote[id];
+      var localValue = local[id];
+      // A deletion only applies to the generation that the deleting device saw.
+      // Preserve a session restarted under the same list id with a new startedAt.
+      if (baseValue && (!remoteValue || !localValue)) {
+        var survivor = remoteValue || localValue;
+        if (survivor && !sameSessionGeneration(survivor, baseValue)) merged[id] = survivor;
+        return;
+      }
+      if (!localValue) { if (remoteValue) merged[id] = remoteValue; return; }
+      if (!remoteValue) { merged[id] = localValue; return; }
+      if (!sameSessionGeneration(localValue, remoteValue)) {
+        merged[id] = selectNewerSessionGeneration(localValue, remoteValue);
+        return;
+      }
+      if (sameSession(localValue, baseValue)) { merged[id] = remoteValue; return; }
+      if (sameSession(remoteValue, baseValue)) { merged[id] = localValue; return; }
+      var localTime = Date.parse(localValue.updatedAt || 0) || 0;
+      var remoteTime = Date.parse(remoteValue.updatedAt || 0) || 0;
+      var preferRemote = remoteTime > localTime;
+      var selected = preferRemote ? remoteValue : localValue;
+      merged[id] = Object.assign({}, selected, {
+        statuses: mergeSessionStatuses(baseValue && sameSessionGeneration(baseValue, selected) && baseValue.statuses,
+          localValue.statuses, remoteValue.statuses, preferRemote)
       });
-    }, 350);
+    });
+    return merged;
+  }
+
+  function persistCloudSessionSnapshot(snapshot, conflictAttempt) {
+    return mutateAiVisitData("saveCloudState", {
+      scope: "visitSession",
+      recordKey: "default",
+      data: snapshot,
+      expectedVersion: cloudSessionVersion
+    }).then(function(result) {
+      cloudSessionVersion = Math.max(0, Number(result.version) || 0);
+      cloudSessionBase = copySessionMap(snapshot);
+      return result;
+    }).catch(function(error) {
+      if (isCloudAccountChangedError(error)) throw error;
+      if (Number(error && error.status) !== 409 || Number(conflictAttempt || 0) >= 4) throw error;
+      return readAiVisitData("loadCloudState", {
+        scope: "visitSession",
+        recordKey: "default"
+      }).then(function(latest) {
+        var remote = latest.found && latest.data && typeof latest.data === "object" && !Array.isArray(latest.data)
+          ? latest.data : {};
+        var local = loadSessionMap();
+        var merged = mergeSessionMaps(remote, local, cloudSessionBase);
+        cloudSessionVersion = Math.max(0, Number(latest.version) || 0);
+        cloudSessionBase = copySessionMap(remote);
+        writeDeviceSessionCache(merged);
+        writeCloudSessionDirtyEnvelope(merged);
+        return persistCloudSessionSnapshot(copySessionMap(merged), Number(conflictAttempt || 0) + 1);
+      });
+    });
+  }
+
+  function clearCloudSessionRetry() {
+    if (cloudSessionRetryTimer) window.clearTimeout(cloudSessionRetryTimer);
+    cloudSessionRetryTimer = 0;
+    cloudSessionRetryAttempt = 0;
+  }
+
+  function scheduleCloudSessionRetry() {
+    cloudSessionDirty = true;
+    if (cloudSessionAccountChanged || !cloudSessionReady || cloudSessionRetryTimer || cloudSessionSaveTimer || cloudSessionSaveInFlight) return;
+    var delay = Math.min(30000, 1000 * Math.pow(2, Math.min(cloudSessionRetryAttempt, 5)));
+    cloudSessionRetryAttempt += 1;
+    cloudSessionRetryTimer = window.setTimeout(function() {
+      cloudSessionRetryTimer = 0;
+      return flushCloudSessionSave();
+    }, delay);
+  }
+
+  function flushCloudSessionSave() {
+    cloudSessionSaveTimer = 0;
+    if (cloudSessionAccountChanged || !cloudSessionReady || cloudSessionSaveInFlight || !cloudSessionDirty) return Promise.resolve();
+    cloudSessionDirty = false;
+    cloudSessionSaveInFlight = true;
+    var snapshot = copySessionMap(loadSessionMap());
+    return persistCloudSessionSnapshot(snapshot, 0).then(function(result) {
+      cloudSessionSaveInFlight = false;
+      clearCloudSessionRetry();
+      if (!cloudSessionDirty) {
+        clearCloudSessionDirtyEnvelope();
+      } else {
+        writeCloudSessionDirtyEnvelope(loadSessionMap());
+      }
+      if (cloudSessionDirty && !cloudSessionSaveTimer) {
+        cloudSessionSaveTimer = window.setTimeout(flushCloudSessionSave, 350);
+      }
+      return result;
+    }).catch(function(error) {
+      cloudSessionSaveInFlight = false;
+      cloudSessionDirty = true;
+      writeCloudSessionDirtyEnvelope(loadSessionMap());
+      if (stopCloudSessionSyncForAccountChange(error)) return;
+      console.warn("로그인 계정 AI임장 저장 실패", error);
+      scheduleCloudSessionRetry();
+    });
+  }
+
+  function scheduleCloudSessionSave(sessions) {
+    cloudSessionDirty = true;
+    writeCloudSessionDirtyEnvelope(sessions);
+    if (!cloudSessionReady || cloudSessionAccountChanged) return;
+    // An in-flight save or delayed retry will read the latest device snapshot.
+    if (cloudSessionSaveInFlight || cloudSessionRetryTimer) return;
+    window.clearTimeout(cloudSessionSaveTimer);
+    cloudSessionSaveTimer = window.setTimeout(flushCloudSessionSave, 350);
   }
 
   function loadSessionMap() {
@@ -1232,6 +1567,7 @@
       /* 사용자가 보류 해제 항목을 선택했으므로 해제한 매물을 현재 대상으로 엽니다. */
       activeSession.currentIndex = activeSession.itemKeys.indexOf(key);
     }
+    activeSession.updatedAt = new Date().toISOString();
     saveSession();
     renderWorkspace();
   }
@@ -1428,7 +1764,7 @@
   ensureUi();
   // Never reuse unscoped precise locations written by older releases.
   try { localStorage.removeItem(LOCATION_CACHE_KEY); } catch (error) {}
-  clearDeviceSessionCache();
+  if (preservePreUpgradeDeviceSessionCache()) clearDeviceSessionCache();
   syncSessionMapFromCloud().catch(function() {});
   watchRoadviewViewport();
   warmCurrentLocation();

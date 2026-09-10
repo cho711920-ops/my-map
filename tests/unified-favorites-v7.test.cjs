@@ -60,7 +60,7 @@ assert.match(listManager, /new CustomEvent\("js-v6-list-store-change"/);
 assert.match(listManager, /return saveLists\(type === "visit" \? "visit" : "favorite", lists\)/);
 assert.match(listManager, /var memoryLists = \{ favorite: null, visit: null \}/);
 assert.match(listManager, /var deletedListIds = \{ favorite: null, visit: null \}/);
-assert.match(listManager, /excludeDeletedLists\(type, result\.data\)/);
+assert.match(listManager, /excludeDeletedLists\(type, result\.data, result\.deletedIds\)/);
 assert.match(listManager, /markDeletedListId\(type, id\)/);
 assert.match(listManager, /memoryLists\[type\] = lists/);
 assert.match(listManager, /기기 저장을 건너뛰고 계정 동기화를 계속합니다/);

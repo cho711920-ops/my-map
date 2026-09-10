@@ -7,12 +7,21 @@ import {gongsilSaleFields} from '../cloudflare/src/sale-fields.js';
 import {saveSaleWorksheet} from '../cloudflare/src/sale-worksheet.js';
 import {handleD1PostAction} from '../cloudflare/src/d1-api.js';
 const elements = new Map();
-const window={addEventListener(){},dispatchEvent(){}};
+const saleWorkbenchSource=fs.readFileSync('js/sale-workbench-v1.js','utf8');
+const indexSource=fs.readFileSync('index.html','utf8');
+const window={JSAuthenticatedAccountEmail:'owner@example.test',addEventListener(){},dispatchEvent(){}};
 const context={window,document:{getElementById:id=>elements.get(id)||null,querySelector:()=>null,documentElement:{setAttribute(){}},addEventListener(){}},CustomEvent:class{}};
 vm.runInNewContext(fs.readFileSync('js/listing-trade-ui-v1.js','utf8'),context);
-vm.runInNewContext(fs.readFileSync('js/sale-workbench-v1.js','utf8'),context);
+vm.runInNewContext(saleWorkbenchSource,context);
 const ui=window.JSListingTradeV1,w=window.JSSaleWorkbenchV1;
 const land={tradeType:'sale',saleCategory:'land',salePrice:10000,saleDetails:{scope:'land',landAreaM2:330.5785,landUse:'전',zoning:'제3종일반주거지역'}};
+test('sale worksheet cloud requests carry the captured account precondition',()=>{
+  assert.match(saleWorkbenchSource,/var ACCOUNT_EMAIL = clean\(global\.JSAuthenticatedAccountEmail\)\.toLowerCase\(\)/);
+  assert.match(saleWorkbenchSource,/read\('loadCloudState',\{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL\}\)/);
+  assert.match(saleWorkbenchSource,/mutate\('saveCloudState',\{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL,/);
+  assert.match(saleWorkbenchSource,/payload\.code\|\|e&&e\.code\)==="account_changed"/);
+  assert.match(indexSource,/sale-workbench-v1\.js\?v=1\.0\.5-account-precondition/);
+});
 test('Gongsil real listing and bilinfo fields supplement empty cadastral results',()=>{
   const raw={list:{TypeView:'토지',Me:10000,Area:100,JiMok:'전',YongdoAddr:'3종일반주거지역'},detail:{bilinfo:{jimok:'전',yongdoaddr:'3종일반주거지역'},getlands:{LndCgrCodeNm:'',PrposArea1Nm:'',LndpclAr:0}}};
   const d=gongsilSaleFields(raw).saleDetails;

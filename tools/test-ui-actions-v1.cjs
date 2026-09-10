@@ -46,6 +46,8 @@ const aiContext = {
   },
   alert() {},
   confirm() { return true; },
+  URL,
+  URLSearchParams,
   setTimeout() { return 0; },
   clearTimeout() {},
   setInterval() { return 0; }
@@ -79,6 +81,7 @@ const operationsContext = {
     addEventListener() {}
   },
   fetch() { return Promise.reject(new Error("network disabled in unit test")); },
+  addEventListener() {},
   setTimeout() { return 0; },
   clearTimeout() {},
   setInterval() { return 0; }

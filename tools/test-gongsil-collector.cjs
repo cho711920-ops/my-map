@@ -95,14 +95,14 @@ vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "1.8.1");
+assert.strictEqual(api.version, "2.2.6");
 assert(collectorSource.includes("classifySourceManifest"));
 assert(
   collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")
 );
 assert(collectorSource.includes("width:min(460px"));
 assert(collectorSource.includes('data-metric="review"'));
-assert(collectorSource.includes("주소·변환 제외"));
+assert(collectorSource.includes("필수정보 제외"));
 assert(collectorSource.includes('data-action="stop"'));
 assert(collectorSource.includes("공실박스 2000개 이상 전체클러스터"));
 assert(collectorSource.includes("finalizeCollectionSession"));
@@ -138,11 +138,15 @@ assert.deepStrictEqual(
 
 const importTotals = {
   received: 0,
+  offerReceived: 0,
   created: 0,
   merged: 0,
   updated: 0,
+  conditionUpdated: 0,
+  refreshed: 0,
   review: 0,
   duplicate: 0,
+  contactDeferred: 0,
   failed: 0
 };
 api.addImportResult(importTotals, {
@@ -157,11 +161,15 @@ api.addImportResult(importTotals, {
 });
 assert.deepStrictEqual(JSON.parse(JSON.stringify(importTotals)), {
   received: 250,
+  offerReceived: 250,
   created: 210,
   merged: 20,
   updated: 5,
+  conditionUpdated: 5,
+  refreshed: 0,
   review: 3,
   duplicate: 11,
+  contactDeferred: 0,
   failed: 1
 });
 
@@ -185,7 +193,8 @@ const capture = {
   assert.strictEqual(listCalls.length, 9, "2,500 IDs should be requested in 9 chunks");
   assert.deepStrictEqual(
     listCalls.map((body) => body.bfidxs.length),
-    [300, 300, 300, 300, 300, 300, 300, 300, 100]
+    [300, 300, 300, 300, 300, 300, 300, 300, 80],
+    "the 20 listings already present in the captured response must not be fetched again"
   );
   listCalls.forEach((body) => {
     assert.strictEqual(body.mxline, 400);

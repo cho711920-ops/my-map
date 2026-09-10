@@ -6,20 +6,27 @@
   var VISIT_KEY = "js_visit_lists_v6";
   var LEGACY_MIGRATION_KEY = "js_favorite_lists_v6_migrated";
   var ACCOUNT_MARKER_KEY = "js_list_account_email_v6";
+  var DIRTY_ENVELOPE_PREFIX = "js_list_sync_dirty_envelope_v1_";
   var ACTIVE_FAVORITE_FILTER_KEY = "js_active_favorite_folder_filter_v1";
   var ACTIVE_FAVORITE_HISTORY_KEY = "jsActiveFavoriteFolderFilterV1";
-  var accountEmail = "";
+  var accountEmail = String(window.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
   var currentManagerType = "favorite";
   var currentItemKey = "";
   var cloudSaveTimers = {};
   var cloudSaveRetries = {};
   var cloudRevisions = { favorite: 0, visit: 0 };
+  var cloudVersions = { favorite: 0, visit: 0 };
+  var cloudBaseLists = { favorite: [], visit: [] };
+  var cloudBaseKnown = { favorite: false, visit: false };
   var pendingCloudSave = { favorite: false, visit: false };
   var memoryLists = { favorite: null, visit: null };
   var deletedListIds = { favorite: null, visit: null };
   var cloudSyncReady = false;
   var cloudSyncRunning = false;
+  var cloudSyncAccountChanged = false;
+  var cloudSyncAccountChangedWarningShown = false;
   var lastCloudSyncAt = 0;
+  var dirtyEnvelopeWarnings = {};
 
   function getSelectedItemKeys() {
     var keys = Array.isArray(window.selectedPrintKeys) ? window.selectedPrintKeys : [];
@@ -168,6 +175,97 @@
     return scopedKey("js_list_sync_dirty_v6_" + type);
   }
 
+  function dirtyEnvelopeKey(type) {
+    type = type === "visit" ? "visit" : "favorite";
+    return accountEmail ? scopedKey(DIRTY_ENVELOPE_PREFIX + type) : "";
+  }
+
+  function sanitizeListsForDirtyEnvelope(lists) {
+    return copyLists(lists).map(function(list) {
+      if (!list || typeof list !== "object" || !String(list.id || "").trim()) return null;
+      var sanitized = { id: String(list.id).slice(0, 160) };
+      ["name", "createdAt", "updatedAt"].forEach(function(field) {
+        if (Object.prototype.hasOwnProperty.call(list, field)) sanitized[field] = String(list[field] == null ? "" : list[field]).slice(0, 500);
+      });
+      if (Object.prototype.hasOwnProperty.call(list, "itemKeys")) {
+        sanitized.itemKeys = (Array.isArray(list.itemKeys) ? list.itemKeys : []).map(function(key) {
+          return String(key || "").slice(0, 240);
+        }).filter(function(key, index, keys) { return key && keys.indexOf(key) === index; }).slice(0, 10000);
+      }
+      if (Object.prototype.hasOwnProperty.call(list, "migratedFromVisit")) {
+        sanitized.migratedFromVisit = !!list.migratedFromVisit;
+      }
+      return sanitized;
+    }).filter(Boolean).slice(0, 1000);
+  }
+
+  function readListDirtyEnvelope(type) {
+    type = type === "visit" ? "visit" : "favorite";
+    var key = dirtyEnvelopeKey(type);
+    if (!key) return null;
+    try {
+      var envelope = JSON.parse(localStorage.getItem(key) || "null");
+      if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
+      if (String(envelope.accountEmail || "").trim().toLowerCase() !== accountEmail || envelope.type !== type) return null;
+      if (!Array.isArray(envelope.snapshot) || !Array.isArray(envelope.base)) return null;
+      return {
+        snapshot: sanitizeListsForDirtyEnvelope(envelope.snapshot),
+        base: sanitizeListsForDirtyEnvelope(envelope.base),
+        baseKnown: envelope.baseKnown === true,
+        version: Math.max(0, Number(envelope.version) || 0)
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeListDirtyEnvelope(type, lists) {
+    type = type === "visit" ? "visit" : "favorite";
+    var key = dirtyEnvelopeKey(type);
+    if (!key) return false;
+    var existing = readListDirtyEnvelope(type);
+    var baseKnown = !!cloudBaseKnown[type];
+    var base = cloudBaseLists[type];
+    var version = Math.max(0, Number(cloudVersions[type]) || 0);
+    // Before the first cloud read on a reloaded page, retain the durable merge
+    // ancestor instead of replacing it with the empty in-memory defaults.
+    if (!baseKnown && existing && existing.baseKnown) {
+      baseKnown = true;
+      base = existing.base;
+      version = existing.version;
+    }
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        accountEmail: accountEmail,
+        type: type,
+        snapshot: sanitizeListsForDirtyEnvelope(lists),
+        base: sanitizeListsForDirtyEnvelope(base),
+        baseKnown: baseKnown,
+        version: version,
+        savedAt: nowIso()
+      }));
+      return true;
+    } catch (error) {
+      if (!dirtyEnvelopeWarnings[type]) {
+        dirtyEnvelopeWarnings[type] = true;
+        console.warn(typeLabel(type) + "목록의 미동기화 복구본을 기기에 저장하지 못했습니다.", error);
+      }
+      return false;
+    }
+  }
+
+  function clearListDirtyEnvelope(type) {
+    var key = dirtyEnvelopeKey(type);
+    if (!key) return;
+    try { localStorage.removeItem(key); } catch (_) {}
+  }
+
+  function hasListDirtyEnvelope(type) {
+    var key = dirtyEnvelopeKey(type);
+    if (!key) return false;
+    try { return localStorage.getItem(key) != null; } catch (_) { return false; }
+  }
+
   function deletedKey(type) {
     return scopedKey("js_list_deleted_ids_v6_" + type);
   }
@@ -213,6 +311,9 @@
       memoryLists = { favorite: null, visit: null };
       deletedListIds = { favorite: null, visit: null };
       cloudRevisions = { favorite: 0, visit: 0 };
+      cloudVersions = { favorite: 0, visit: 0 };
+      cloudBaseLists = { favorite: [], visit: [] };
+      cloudBaseKnown = { favorite: false, visit: false };
       pendingCloudSave = { favorite: false, visit: false };
       try { localStorage.setItem("favoriteKeys", "[]"); } catch (_) {}
       window.favoriteKeys = [];
@@ -249,16 +350,6 @@
     try { localStorage.setItem(deletedKey(type), JSON.stringify(loadDeletedIds(type))); } catch (_) {}
   }
 
-  function mergeDeletedIds(type, incoming) {
-    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return;
-    var deleted = loadDeletedIds(type);
-    Object.keys(incoming).forEach(function(id) {
-      var deletedAt = Number(incoming[id]) || 0;
-      if (id && deletedAt > (Number(deleted[id]) || 0)) deleted[id] = deletedAt;
-    });
-    persistDeletedIds(type);
-  }
-
   function markDeletedListId(type, id) {
     id = String(id || "").trim();
     if (!id) return;
@@ -270,26 +361,31 @@
     return Object.keys(loadDeletedIds(type)).length > 0;
   }
 
-  function excludeDeletedLists(type, lists) {
-    var deleted = loadDeletedIds(type);
+  function excludeDeletedLists(type, lists, remoteDeletedIds) {
+    var deleted = Object.assign({}, remoteDeletedIds || {}, loadDeletedIds(type));
     return (Array.isArray(lists) ? lists : []).filter(function(list) {
       return !list || !list.id || !deleted[String(list.id)];
     });
   }
 
-  function clearSyncedDeletedIds(type, lists) {
-    var active = {};
-    (lists || []).forEach(function(list) { if (list && list.id) active[String(list.id)] = true; });
+  function clearAcknowledgedDeletedIds(type, sentDeletedIds, acknowledgedDeletedIds) {
+    sentDeletedIds = sentDeletedIds && typeof sentDeletedIds === "object" ? sentDeletedIds : {};
+    acknowledgedDeletedIds = acknowledgedDeletedIds && typeof acknowledgedDeletedIds === "object" ? acknowledgedDeletedIds : {};
     var deleted = loadDeletedIds(type);
-    Object.keys(deleted).forEach(function(id) {
-      if (!active[id]) delete deleted[id];
+    Object.keys(sentDeletedIds).forEach(function(id) {
+      var sentAt = Number(sentDeletedIds[id]) || 0;
+      var currentAt = Number(deleted[id]) || 0;
+      var acknowledgedAt = Number(acknowledgedDeletedIds[id]) || 0;
+      // Only clear the exact tombstone included in this acknowledged request.
+      // A newer deletion created while the save was in flight must remain dirty.
+      if (sentAt > 0 && currentAt === sentAt && acknowledgedAt >= sentAt) delete deleted[id];
     });
     persistDeletedIds(type);
   }
 
   function isCloudDirty(type) {
     try {
-      return pendingCloudSave[type] || localStorage.getItem(dirtyKey(type)) === "1";
+      return pendingCloudSave[type] || localStorage.getItem(dirtyKey(type)) === "1" || hasListDirtyEnvelope(type);
     } catch (_) {
       return !!pendingCloudSave[type];
     }
@@ -326,7 +422,8 @@
     if (!window.JSDataAccessV6 || typeof window.JSDataAccessV6.read !== "function") {
       return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    return window.JSDataAccessV6.read(action, params, {
+    var scopedParams = Object.assign({}, params || {}, { expectedAccountEmail: accountEmail });
+    return window.JSDataAccessV6.read(action, scopedParams, {
       errorMessage: "목록 동기화에 실패했습니다."
     });
   }
@@ -335,7 +432,8 @@
     if (!window.JSDataAccessV6 || typeof window.JSDataAccessV6.mutate !== "function") {
       return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    return window.JSDataAccessV6.mutate(action, payload, {
+    var scopedPayload = Object.assign({}, payload || {}, { expectedAccountEmail: accountEmail });
+    return window.JSDataAccessV6.mutate(action, scopedPayload, {
       errorMessage: "목록 저장에 실패했습니다."
     });
   }
@@ -359,80 +457,266 @@
     return order.map(function(id) { return mergedById[id]; }).filter(Boolean);
   }
 
+  function copyLists(lists) {
+    try { return JSON.parse(JSON.stringify(Array.isArray(lists) ? lists : [])); }
+    catch (_) { return []; }
+  }
+
+  function listMap(lists) {
+    var map = {};
+    (Array.isArray(lists) ? lists : []).forEach(function(list) {
+      if (list && list.id) map[String(list.id)] = list;
+    });
+    return map;
+  }
+
+  function listSame(left, right) {
+    return JSON.stringify(left || null) === JSON.stringify(right || null);
+  }
+
+  function mergeItemKeysThreeWay(base, local, remote) {
+    var baseKeys = Array.isArray(base && base.itemKeys) ? base.itemKeys : [];
+    var localKeys = Array.isArray(local && local.itemKeys) ? local.itemKeys : [];
+    var remoteKeys = Array.isArray(remote && remote.itemKeys) ? remote.itemKeys : [];
+    var order = [];
+    var seen = {};
+    [remoteKeys, localKeys, baseKeys].forEach(function(keys) {
+      keys.forEach(function(key) {
+        key = String(key || "");
+        if (key && !seen[key]) { seen[key] = true; order.push(key); }
+      });
+    });
+    return order.filter(function(key) {
+      var baseHas = baseKeys.indexOf(key) !== -1;
+      var localHas = localKeys.indexOf(key) !== -1;
+      var remoteHas = remoteKeys.indexOf(key) !== -1;
+      if (localHas === baseHas) return remoteHas;
+      if (remoteHas === baseHas) return localHas;
+      return localHas;
+    });
+  }
+
+  function listFieldSame(leftHas, leftValue, rightHas, rightValue) {
+    if (leftHas !== rightHas) return false;
+    return !leftHas || JSON.stringify(leftValue) === JSON.stringify(rightValue);
+  }
+
+  function mergeListFieldThreeWay(field, base, local, remote, preferRemote) {
+    var baseHas = !!base && Object.prototype.hasOwnProperty.call(base, field);
+    var localHas = Object.prototype.hasOwnProperty.call(local, field);
+    var remoteHas = Object.prototype.hasOwnProperty.call(remote, field);
+    var baseValue = baseHas ? base[field] : undefined;
+    var localValue = localHas ? local[field] : undefined;
+    var remoteValue = remoteHas ? remote[field] : undefined;
+    var localChanged = !listFieldSame(localHas, localValue, baseHas, baseValue);
+    var remoteChanged = !listFieldSame(remoteHas, remoteValue, baseHas, baseValue);
+    if (!localChanged && remoteChanged) return { present: remoteHas, value: remoteValue };
+    if (localChanged && !remoteChanged) return { present: localHas, value: localValue };
+    if (!localChanged && !remoteChanged) return { present: baseHas, value: baseValue };
+    if (listFieldSame(localHas, localValue, remoteHas, remoteValue)) {
+      return { present: localHas, value: localValue };
+    }
+    return preferRemote
+      ? { present: remoteHas, value: remoteValue }
+      : { present: localHas, value: localValue };
+  }
+
+  function mergeCloudListRecord(base, local, remote) {
+    var localTime = Date.parse(local.updatedAt || local.createdAt || 0) || 0;
+    var remoteTime = Date.parse(remote.updatedAt || remote.createdAt || 0) || 0;
+    var preferRemote = remoteTime > localTime;
+    var merged = {};
+    var fields = Object.keys(Object.assign({}, base || {}, remote, local));
+    fields.forEach(function(field) {
+      if (field === "id" || field === "itemKeys" || field === "updatedAt") return;
+      var fieldResult = mergeListFieldThreeWay(field, base, local, remote, preferRemote);
+      if (fieldResult.present) merged[field] = fieldResult.value;
+    });
+    merged.id = String(local.id || remote.id || (base && base.id) || "");
+    merged.itemKeys = mergeItemKeysThreeWay(base, local, remote);
+    merged.updatedAt = preferRemote ? remote.updatedAt : local.updatedAt;
+    return merged;
+  }
+
+  function mergeCloudListsThreeWay(remoteLists, localLists, baseLists) {
+    var remoteById = listMap(remoteLists);
+    var localById = listMap(localLists);
+    var baseById = listMap(baseLists);
+    var ids = [];
+    [remoteLists, localLists, baseLists].forEach(function(lists) {
+      (lists || []).forEach(function(list) {
+        var id = list && String(list.id || "");
+        if (id && ids.indexOf(id) === -1) ids.push(id);
+      });
+    });
+    return ids.map(function(id) {
+      var remote = remoteById[id];
+      var local = localById[id];
+      var base = baseById[id];
+      if (!local) return remote || null;
+      if (!remote) return local || null;
+      if (!base) return mergeCloudListRecord(null, local, remote);
+      if (listSame(local, base)) return remote;
+      if (listSame(remote, base)) return local;
+      return mergeCloudListRecord(base, local, remote);
+    }).filter(Boolean);
+  }
+
+  function isCloudAccountChangedError(error) {
+    return Number(error && error.status) === 409 &&
+      String(error && error.payload && error.payload.code || "").toLowerCase() === "account_changed";
+  }
+
+  function stopCloudSyncForAccountChange(error) {
+    if (!isCloudAccountChangedError(error)) return false;
+    cloudSyncAccountChanged = true;
+    cloudSyncReady = false;
+    ["favorite", "visit"].forEach(function(type) {
+      window.clearTimeout(cloudSaveTimers[type]);
+      cloudSaveTimers[type] = 0;
+      if (isCloudDirty(type)) pendingCloudSave[type] = true;
+    });
+    if (!cloudSyncAccountChangedWarningShown) {
+      cloudSyncAccountChangedWarningShown = true;
+      showListToast((error.payload && error.payload.message) || "로그인 계정이 변경되었습니다. 새로고침 후 다시 로그인해 주세요.", "warning");
+    }
+    return true;
+  }
+
   function scheduleCloudSave(type, lists) {
     pendingCloudSave[type] = true;
-    if (!cloudSyncReady) return;
+    writeListDirtyEnvelope(type, Array.isArray(lists) ? lists : loadLists(type));
+    if (!cloudSyncReady || cloudSyncAccountChanged) return;
     window.clearTimeout(cloudSaveTimers[type]);
     cloudSaveTimers[type] = window.setTimeout(function () {
       flushCloudSave(type, Array.isArray(lists) ? lists : loadLists(type), 0);
     }, 250);
   }
 
+  function scheduleCloudSaveRetry(type, attempt) {
+    var nextAttempt = Math.min(Number(attempt || 0) + 1, 4);
+    cloudSaveRetries[type] = nextAttempt;
+    pendingCloudSave[type] = true;
+    writeListDirtyEnvelope(type, loadLists(type));
+    if (cloudSyncAccountChanged) return;
+    var exhausted = nextAttempt >= 4;
+    if (exhausted) {
+      showListToast(typeLabel(type) + "목록은 이 기기에 안전하게 저장됐습니다. 계정 동기화는 자동 재시도합니다.", "warning");
+    }
+    window.clearTimeout(cloudSaveTimers[type]);
+    cloudSaveTimers[type] = window.setTimeout(function() {
+      flushCloudSave(type, loadLists(type), exhausted ? 0 : nextAttempt);
+    }, exhausted ? 30000 : [0, 900, 2500, 6000][nextAttempt]);
+  }
+
   function flushCloudSave(type, lists, attempt) {
+    if (cloudSyncAccountChanged) return Promise.resolve();
     var snapshot = JSON.stringify(lists || []);
     var revision = Number(cloudRevisions[type] || 0);
+    var expectedVersion = Number(cloudVersions[type] || 0);
+    var sentDeletedIds = Object.assign({}, loadDeletedIds(type));
     mutateCloudData("saveCloudState", {
         scope: cloudScope(type),
         recordKey: "default",
         data: lists,
-        deletedIds: loadDeletedIds(type),
-        version: Date.now()
+        deletedIds: sentDeletedIds,
+        expectedVersion: expectedVersion
       }).then(function(result) {
         if (!result || result.ok === false) throw new Error(result && result.message || "저장 응답 오류");
+        cloudVersions[type] = Math.max(0, Number(result.version) || 0);
+        cloudBaseLists[type] = copyLists(Array.isArray(result.data) ? result.data : lists);
+        cloudBaseKnown[type] = true;
         cloudSaveRetries[type] = 0;
         pendingCloudSave[type] = false;
+        clearAcknowledgedDeletedIds(type, sentDeletedIds, result.deletedIds);
         if (revision === Number(cloudRevisions[type] || 0) && snapshot === JSON.stringify(loadLists(type))) {
-          mergeDeletedIds(type, result.deletedIds);
+          cloudRevisions[type] = 0;
           if (Array.isArray(result.data)) saveLists(type, result.data, { remote: true });
           try { localStorage.removeItem(dirtyKey(type)); } catch (_) {}
+          clearListDirtyEnvelope(type);
           return;
         }
+        writeListDirtyEnvelope(type, loadLists(type));
         scheduleCloudSave(type, loadLists(type));
       }).catch(function(error) {
-        console.warn(typeLabel(type) + "목록 동기화 실패", error);
-        var nextAttempt = Math.min(Number(attempt || 0) + 1, 4);
-        cloudSaveRetries[type] = nextAttempt;
-        pendingCloudSave[type] = true;
-        if (nextAttempt < 4) {
-          window.clearTimeout(cloudSaveTimers[type]);
-          cloudSaveTimers[type] = window.setTimeout(function() {
-            flushCloudSave(type, loadLists(type), nextAttempt);
-          }, [0, 900, 2500, 6000][nextAttempt]);
-        } else {
-          showListToast(typeLabel(type) + "목록은 이 기기에 안전하게 저장됐습니다. 계정 동기화는 자동 재시도합니다.", "warning");
-          window.clearTimeout(cloudSaveTimers[type]);
-          cloudSaveTimers[type] = window.setTimeout(function() {
-            flushCloudSave(type, loadLists(type), 0);
-          }, 30000);
+        if (stopCloudSyncForAccountChange(error)) return;
+        if (Number(error && error.status) === 409) {
+          pendingCloudSave[type] = true;
+          if (Number(attempt || 0) >= 4) {
+            showListToast(typeLabel(type) + "목록이 다른 기기에서도 계속 변경되고 있습니다. 잠시 후 다시 합칩니다.", "warning");
+            window.clearTimeout(cloudSaveTimers[type]);
+            cloudSaveTimers[type] = window.setTimeout(syncListsFromCloud, 30000);
+            return;
+          }
+          return readCloudData("loadCloudState", {
+            scope: cloudScope(type),
+            recordKey: "default"
+          }).then(function(latest) {
+            var remote = excludeDeletedLists(type, latest.found && Array.isArray(latest.data) ? latest.data : [], latest.deletedIds);
+            var local = excludeDeletedLists(type, loadLists(type), latest.deletedIds);
+            var base = excludeDeletedLists(type, cloudBaseLists[type], latest.deletedIds);
+            var merged = mergeCloudListsThreeWay(remote, local, base);
+            cloudVersions[type] = Math.max(0, Number(latest.version) || 0);
+            cloudBaseLists[type] = copyLists(remote);
+            cloudBaseKnown[type] = true;
+            saveLists(type, merged, { remote: true });
+            writeListDirtyEnvelope(type, merged);
+            flushCloudSave(type, merged, Math.min(Number(attempt || 0) + 1, 4));
+          }).catch(function(conflictError) {
+            if (stopCloudSyncForAccountChange(conflictError)) return;
+            console.warn(typeLabel(type) + "목록 충돌 병합 실패", conflictError);
+            scheduleCloudSaveRetry(type, attempt);
+          });
         }
+        console.warn(typeLabel(type) + "목록 동기화 실패", error);
+        writeListDirtyEnvelope(type, loadLists(type));
+        scheduleCloudSaveRetry(type, attempt);
       });
   }
 
   async function loadCloudLists(type) {
     var revisionAtStart = Number(cloudRevisions[type] || 0);
-    var dirtyAtStart = isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0 || hasDeletedListIds(type);
+    var durableAtStart = readListDirtyEnvelope(type);
+    var dirtyAtStart = !!durableAtStart || isCloudDirty(type) || pendingCloudSave[type] || revisionAtStart > 0 || hasDeletedListIds(type);
+    var baseAtStart = durableAtStart ? copyLists(durableAtStart.base) : copyLists(cloudBaseLists[type]);
+    var baseKnownAtStart = durableAtStart ? !!durableAtStart.baseKnown : !!cloudBaseKnown[type];
     var result = await readCloudData("loadCloudState", {
       scope: cloudScope(type),
       recordKey: "default"
     });
-    mergeDeletedIds(type, result.deletedIds);
-    var local = excludeDeletedLists(type, loadLists(type));
+    cloudVersions[type] = Math.max(0, Number(result.version) || 0);
+    var revisionChanged = revisionAtStart !== Number(cloudRevisions[type] || 0);
+    var localSnapshot = durableAtStart && !revisionChanged
+      ? durableAtStart.snapshot
+      : loadLists(type);
+    var local = excludeDeletedLists(type, localSnapshot, result.deletedIds);
     if (result.found && Array.isArray(result.data)) {
-      var remoteLists = excludeDeletedLists(type, result.data);
-      if (dirtyAtStart || revisionAtStart !== Number(cloudRevisions[type] || 0)) {
-        var merged = mergeCloudAndLocalLists(remoteLists, local);
+      var remoteLists = excludeDeletedLists(type, result.data, result.deletedIds);
+      cloudBaseLists[type] = copyLists(remoteLists);
+      cloudBaseKnown[type] = true;
+      if (dirtyAtStart || revisionChanged) {
+        var merged = baseKnownAtStart
+          ? mergeCloudListsThreeWay(remoteLists, local, excludeDeletedLists(type, baseAtStart, result.deletedIds))
+          : mergeCloudListsThreeWay(remoteLists, local, []);
         saveLists(type, merged, { remote: true });
         try { localStorage.setItem(dirtyKey(type), "1"); } catch (_) {}
+        writeListDirtyEnvelope(type, merged);
         return { found: true, needsPush: true };
       }
       saveLists(type, remoteLists, { remote: true });
       return { found: true, needsPush: false };
     }
-    return { found: false, needsPush: local.length > 0 };
+    cloudBaseLists[type] = [];
+    cloudBaseKnown[type] = true;
+    if (dirtyAtStart || revisionChanged || local.length > 0 || hasDeletedListIds(type)) {
+      writeListDirtyEnvelope(type, local);
+      return { found: false, needsPush: true };
+    }
+    return { found: false, needsPush: false };
   }
 
   async function syncListsFromCloud() {
-    if (cloudSyncRunning) return;
+    if (cloudSyncRunning || cloudSyncAccountChanged) return;
     cloudSyncRunning = true;
     lastCloudSyncAt = Date.now();
     try {
@@ -442,6 +726,7 @@
       if (found[1].needsPush || pendingCloudSave.visit || isCloudDirty("visit")) scheduleCloudSave("visit", loadLists("visit"));
       if (typeof window.applyFilter === "function") window.applyFilter();
     } catch (error) {
+      if (stopCloudSyncForAccountChange(error)) return;
       cloudSyncReady = true;
       console.warn("로그인 계정 목록 동기화 실패", error);
       if (pendingCloudSave.favorite || isCloudDirty("favorite")) scheduleCloudSave("favorite", loadLists("favorite"));
@@ -552,27 +837,38 @@
     var wrapper = document.createElement("div");
     wrapper.innerHTML =
       '<div id="listManagerModal" class="lm-modal" aria-hidden="true">' +
-        '<div class="lm-backdrop" onclick="closeListManager()"></div>' +
+        '<div class="lm-backdrop" aria-hidden="true" onclick="closeListManager()"></div>' +
         '<div class="lm-dialog" role="dialog" aria-modal="true" aria-labelledby="lmTitle">' +
           '<div class="lm-header">' +
             '<div><div id="lmTitle" class="lm-title"></div><div id="lmSubtitle" class="lm-subtitle"></div></div>' +
-            '<button class="lm-close" type="button" onclick="closeListManager()">×</button>' +
+            '<button class="lm-close" type="button" aria-label="목록 닫기" onclick="closeListManager()">×</button>' +
           '</div>' +
           '<div id="lmBody" class="lm-body"></div>' +
         '</div>' +
       '</div>' +
       '<div id="itemListPickerModal" class="lm-modal" aria-hidden="true">' +
-        '<div class="lm-backdrop" onclick="closeItemListPicker()"></div>' +
+        '<div class="lm-backdrop" aria-hidden="true" onclick="closeItemListPicker()"></div>' +
         '<div class="lm-dialog lm-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="lmPickerTitle">' +
           '<div class="lm-header">' +
             '<div><div id="lmPickerTitle" class="lm-title"></div><div id="lmPickerSubtitle" class="lm-subtitle"></div></div>' +
-            '<button class="lm-close" type="button" onclick="closeItemListPicker()">×</button>' +
+            '<button class="lm-close" type="button" aria-label="목록 선택 닫기" onclick="closeItemListPicker()">×</button>' +
           '</div>' +
           '<div id="lmPickerBody" class="lm-body"></div>' +
           '<div id="lmPickerFooter" class="lm-footer"><button class="lm-primary" type="button" onclick="closeItemListPicker()">완료</button></div>' +
         '</div>' +
       '</div>';
     while (wrapper.firstChild) document.body.appendChild(wrapper.firstChild);
+    ["listManagerModal", "itemListPickerModal"].forEach(function (id) {
+      var modal = document.getElementById(id);
+      if (!modal) return;
+      modal.addEventListener("keydown", function (event) {
+        if (!modal.classList.contains("open") || !window.JSDialogFocusV1) return;
+        window.JSDialogFocusV1.handleKeydown(modal, event, function () {
+          if (id === "listManagerModal") window.closeListManager();
+          else window.closeItemListPicker();
+        });
+      });
+    });
   }
 
   function openModal(id) {
@@ -581,14 +877,20 @@
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("lm-modal-open");
+    if (window.JSDialogFocusV1) {
+      window.JSDialogFocusV1.activate(modal,
+        modal.querySelector("input:not([disabled]), .lm-destination, .lm-close"));
+    }
   }
 
   function closeModal(id) {
     var modal = document.getElementById(id);
     if (!modal) return;
+    var wasOpen = modal.classList.contains("open");
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
     if (!document.querySelector(".lm-modal.open")) document.body.classList.remove("lm-modal-open");
+    if (wasOpen && window.JSDialogFocusV1) window.JSDialogFocusV1.deactivate(modal);
   }
 
   function promptListName(type, currentName) {
@@ -712,6 +1014,7 @@
     if (!list) return;
     if (!confirm('"' + list.name + '" 목록을 삭제할까요?\n목록만 삭제되며 매물 원본은 삭제되지 않습니다.')) return;
     lists = lists.filter(function (entry) { return entry.id !== id; });
+    markDeletedListId(currentManagerType, id);
     saveLists(currentManagerType, lists);
     renderManager();
     if (typeof window.applyFilter === "function") window.applyFilter();
@@ -988,15 +1291,20 @@
     root = document.createElement("div");
     root.id = "v6MobileMenuPortal";
     root.className = "v6-mobile-menu-portal";
+    root.setAttribute("aria-hidden", "true");
     root.innerHTML =
-      '<div class="v6-mobile-menu-dim" data-v6-close></div>' +
-      '<section class="v6-mobile-menu-sheet" role="dialog" aria-modal="true">' +
-        '<div class="v6-mobile-menu-handle"></div>' +
-        '<div class="v6-mobile-menu-head"><strong id="v6MobileMenuTitle"></strong><button type="button" class="v6-mobile-menu-close" data-v6-close>×</button></div>' +
+      '<div class="v6-mobile-menu-dim" data-v6-close aria-hidden="true"></div>' +
+      '<section class="v6-mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="v6MobileMenuTitle">' +
+        '<div class="v6-mobile-menu-handle" aria-hidden="true"></div>' +
+        '<div class="v6-mobile-menu-head"><strong id="v6MobileMenuTitle"></strong><button type="button" class="v6-mobile-menu-close" data-v6-close aria-label="메뉴 닫기">×</button></div>' +
         '<div id="v6MobileMenuBody" class="v6-mobile-menu-body"></div>' +
       '</section>';
     root.addEventListener("click", function (event) {
       if (event.target.closest("[data-v6-close]")) closeMobileSheet();
+    });
+    root.addEventListener("keydown", function (event) {
+      if (!root.classList.contains("open") || !window.JSDialogFocusV1) return;
+      window.JSDialogFocusV1.handleKeydown(root, event, closeMobileSheet);
     });
     document.body.appendChild(root);
     return root;
@@ -1004,11 +1312,14 @@
 
   function closeMobileSheet() {
     var root = document.getElementById("v6MobileMenuPortal");
+    var wasOpen = !!(root && root.classList.contains("open"));
     if (root) {
       root.classList.remove("open");
       root.removeAttribute("data-menu-type");
+      root.setAttribute("aria-hidden", "true");
     }
     document.body.classList.remove("v6-mobile-sheet-open");
+    if (wasOpen && window.JSDialogFocusV1) window.JSDialogFocusV1.deactivate(root);
   }
 
   function openMobileSheet(title, source, type) {
@@ -1050,7 +1361,11 @@
     });
     root.setAttribute("data-menu-type", type);
     root.classList.add("open");
+    root.setAttribute("aria-hidden", "false");
     document.body.classList.add("v6-mobile-sheet-open");
+    if (window.JSDialogFocusV1) {
+      window.JSDialogFocusV1.activate(root, root.querySelector(".v6-mobile-menu-item, .v6-mobile-sort-choice, .v6-mobile-menu-close"));
+    }
   }
 
   function ensureDetailDim() {

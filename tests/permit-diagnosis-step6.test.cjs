@@ -23,6 +23,7 @@ assert(step6Source.includes("loadLocal(key)"), "응답 지연 시 로컬 저장�
 const store = new Map();
 const context = {
   window: {
+    JSAuthenticatedAccountEmail: "tester@example.test",
     localStorage: {
       setItem: (key, value) => store.set(key, value),
       getItem: (key) => store.get(key) || null
@@ -103,6 +104,7 @@ assert(!JSON.stringify(second).includes("proxySecret"), "보안키를 진단 데
 
 const quotaContext = {
   window: {
+    JSAuthenticatedAccountEmail: "tester@example.test",
     localStorage: {
       setItem: () => { throw new Error("QuotaExceededError"); },
       getItem: () => null

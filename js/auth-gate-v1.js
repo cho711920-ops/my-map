@@ -377,8 +377,26 @@ function syncLocationPrivacyForAccount(email) {
   let previous = "";
   try { previous = String(window.sessionStorage.getItem(AUTH_ACCOUNT_SESSION_KEY) || "").trim().toLowerCase(); } catch (error) {}
 
+  // Capture ownership before authenticated assets (including list-manager)
+  // can migrate or update this legacy persistent marker.
+  if (!Object.prototype.hasOwnProperty.call(window, "JSLegacyStorageOwnerEmailV1")) {
+    let legacyStorageOwner = "";
+    try { legacyStorageOwner = String(window.localStorage.getItem("js_list_account_email_v6") || "").trim().toLowerCase(); } catch (error) {}
+    try {
+      Object.defineProperty(window, "JSLegacyStorageOwnerEmailV1", {
+        value: legacyStorageOwner,
+        writable: false,
+        configurable: false
+      });
+    } catch (error) {
+      window.JSLegacyStorageOwnerEmailV1 = legacyStorageOwner;
+    }
+  }
+
   // Persistent caches from older releases are never reused. A new tab/account
   // also starts without inheriting another signed-in user's precise position.
+  // Account-scoped AI/list dirty envelopes intentionally survive sign-out and
+  // account switches; each feature reads only the current authenticated key.
   removeStorageKeys(window.localStorage, PRECISE_LOCATION_KEYS);
   if (!previous || previous !== normalized) {
     clearPreciseLocationCaches({ clearVisitDeviceCache: true });

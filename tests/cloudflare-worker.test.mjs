@@ -46,6 +46,117 @@ test("protected APIs reject an unauthenticated request", async () => {
   assert.match((await response.json()).message, /로그인/);
 });
 
+test("data GET rejects a stale expected account before cache or action access", async () => {
+  const sqls = [];
+  let cacheReads = 0;
+  const guardedEnv = {
+    DB: { prepare(sql) {
+      sqls.push(sql);
+      if (/FROM allowed_users/.test(sql)) {
+        return {bind() { return {first: async () => null}; }};
+      }
+      throw new Error("application D1 must not be touched");
+    } },
+    MEDIA: { get() { cacheReads += 1; throw new Error("R2 must not be touched"); } }
+  };
+  const response = await authenticatedRequest(
+    "/api/data?action=unifiedListings&expectedAccountEmail=other%40example.test",
+    guardedEnv
+  );
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    ok: false,
+    message: "로그인 계정이 변경되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.",
+    code: "account_changed"
+  });
+  assert.equal(sqls.length, 1, "only requireSession may query D1");
+  assert.match(sqls[0], /FROM allowed_users/);
+  assert.equal(cacheReads, 0);
+});
+
+test("data POST rejects a stale expected account before mutation access", async () => {
+  const sqls = [];
+  const response = await authenticatedRequest(
+    "/api/data",
+    { DB: { prepare(sql) {
+      sqls.push(sql);
+      if (/FROM allowed_users/.test(sql)) {
+        return {bind() { return {first: async () => null}; }};
+      }
+      throw new Error("application D1 must not be touched");
+    } } },
+    {},
+    {
+      method: "POST",
+      headers: { origin: "https://js-map.com", "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "saveCloudState",
+        scope: "permitDiagnosis",
+        recordKey: "restaurant_stale",
+        expectedVersion: 0,
+        expectedAccountEmail: "other@example.test",
+        data: {recordKey: "restaurant_stale"}
+      })
+    }
+  );
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, "account_changed");
+  assert.equal(sqls.length, 1, "only requireSession may query D1");
+  assert.match(sqls[0], /FROM allowed_users/);
+});
+
+test("cloud-state GET and POST require an expected account during deployment transition", async () => {
+  const sqls = [];
+  const guardedDb = { prepare(sql) {
+    sqls.push(sql);
+    if (/FROM allowed_users/.test(sql)) {
+      return {bind() { return {first: async () => null}; }};
+    }
+    throw new Error("cloud state D1 must not be touched without the account precondition");
+  } };
+  const getResponse = await authenticatedRequest(
+    "/api/data?action=loadCloudState&scope=permitDiagnosis&recordKey=restaurant_missing_account",
+    {DB: guardedDb}
+  );
+  assert.equal(getResponse.status, 428);
+  assert.equal((await getResponse.json()).code, "expected_account_required");
+
+  const postResponse = await authenticatedRequest(
+    "/api/data",
+    {DB: guardedDb},
+    {},
+    {
+      method: "POST",
+      headers: {origin: "https://js-map.com", "content-type": "application/json"},
+      body: JSON.stringify({
+        action: "saveCloudState",
+        scope: "permitDiagnosis",
+        recordKey: "restaurant_missing_account",
+        expectedVersion: 0,
+        data: {recordKey: "restaurant_missing_account"}
+      })
+    }
+  );
+  assert.equal(postResponse.status, 428);
+  assert.equal((await postResponse.json()).code, "expected_account_required");
+  assert.equal(sqls.length, 2, "each request may only perform its requireSession account lookup");
+  assert(sqls.every((sql) => /FROM allowed_users/.test(sql)));
+});
+
+test("expected account comparison is trimmed and case-insensitive with a bounded field", async () => {
+  const accepted = await authenticatedRequest(
+    "/api/data?action=dataRevision&scope=listings&expectedAccountEmail=%20CHO711920%40GMAIL.COM%20"
+  );
+  assert.equal(accepted.status, 200);
+  assert.equal((await accepted.json()).ok, true);
+
+  const tooLong = await authenticatedRequest(
+    `/api/data?action=dataRevision&expectedAccountEmail=${"a".repeat(321)}`
+  );
+  assert.equal(tooLong.status, 400);
+  assert.equal((await tooLong.json()).code, "invalid_expected_account");
+});
+
 test("static assets remain on the fast asset binding", async () => {
   const response = await worker.fetch(new Request("https://js-map.com/css/style.css"), env);
   assert.equal(response.status, 200);
@@ -145,6 +256,43 @@ test("operations dashboard is served from R2 without repeating full-table counts
   assert.equal((await response.json()).activeMaster, 8754);
   assert.equal(authQueries, 1);
   assert.equal(databaseQueries, 0);
+});
+
+test("operations dashboard ignores an R2 snapshot older than one minute", async () => {
+  let snapshotQueries = 0;
+  const pending = [];
+  const response = await authenticatedRequest(
+    "/api/data?action=operationsDashboard",
+    {
+      DB: { prepare(sql) {
+        if (/FROM allowed_users/.test(sql)) {
+          return { bind() { return { first: async () => null }; } };
+        }
+        if (/FROM operations_snapshots/.test(sql)) {
+          snapshotQueries += 1;
+          return { first: async () => ({
+            payload_json: JSON.stringify({ ok: true, action: "operationsDashboard", activeMaster: 42 }),
+            calculated_at: new Date().toISOString()
+          }) };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      } },
+      MEDIA: {
+        get: async () => ({
+          customMetadata: { savedAt: String(Date.now() - 61_000) },
+          httpMetadata: { contentType: "application/json; charset=utf-8" },
+          text: async () => JSON.stringify({ ok: true, action: "operationsDashboard", activeMaster: 999 })
+        }),
+        put: async () => null
+      }
+    },
+    { waitUntil: (promise) => pending.push(promise) }
+  );
+  await Promise.all(pending);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-js-data-cache"), "MISS");
+  assert.equal((await response.json()).activeMaster, 42);
+  assert.equal(snapshotQueries, 1);
 });
 
 test("data revision checks use a tiny R2 object and never query D1", async () => {
@@ -329,7 +477,7 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
         args: [],
         bind(...args) { this.args = args; return this; },
         async all() {
-          assert.match(this.sql, /FROM listings WHERE \(status <> 'deleted'\) AND rowid > \?1/);
+          assert.match(this.sql, /FROM listings WHERE \(status <> 'deleted'[\s\S]*listing_data_quality_holds[\s\S]*\) AND rowid > \?1/);
           assert.doesNotMatch(this.sql, /OFFSET/);
           return {
             results: [{
@@ -967,9 +1115,11 @@ test("personal cloud-state saves do not invalidate shared listing caches", async
       body: JSON.stringify({
         action: "saveCloudState",
         requestId: "cloud-state-cache-scope",
-        scope: "favorites",
+        scope: "preferences",
         recordKey: "default",
-        data: { ids: ["M-1"] }
+        expectedAccountEmail: "cho711920@gmail.com",
+        expectedVersion: 0,
+        data: [{ id: "favorites-1", itemKeys: ["M-1"] }]
       })
     }
   );

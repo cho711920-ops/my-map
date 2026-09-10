@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.5";
+  var VERSION = "2.2.6";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -2695,7 +2695,11 @@
           };
         })
       }, {label: "기존 매물 빠른 비교"});
-      var result = await pollMutationStatus(requestId, collectorKey);
+      var result = await pollMutationStatus(
+        requestId,
+        collectorKey,
+        "classifySourceManifest"
+      );
       if (isBusyMutationResult(result)) {
         setStatus(
           "이전 저장 작업이 끝나기를 기다리는 중",
@@ -2820,7 +2824,11 @@
     });
 
     try {
-      var saveResult = await pollMutationStatus(requestId, collectorKey);
+      var saveResult = await pollMutationStatus(
+        requestId,
+        collectorKey,
+        "gongsilImportBatch"
+      );
       if (isBusyMutationResult(saveResult)) {
         var busyError = new Error(saveResult.message || "다른 수집 저장이 진행 중입니다.");
         busyError.isCollectorBusy = true;
@@ -2882,7 +2890,11 @@
     }, {
       label: "수집 완료 상태 저장"
     });
-    var finalizeResult = await pollMutationStatus(requestId, collectorKey);
+    var finalizeResult = await pollMutationStatus(
+      requestId,
+      collectorKey,
+      "finalizeCollectionSession"
+    );
     if (isBusyMutationResult(finalizeResult)) {
       setStatus(
         "마지막 저장 작업 순서를 기다리는 중",
@@ -2967,7 +2979,52 @@
     return "GONGSIL-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
   }
 
-  function pollMutationStatus(requestId, collectorKey) {
+  async function fetchMutationStatus(requestId, collectorKey, targetAction) {
+    if (!targetAction || targetAction === "mutationStatus") {
+      throw new Error("잘못된 상태 조회 범위입니다.");
+    }
+    // Do not fall back to JSONP/GET: putting the collector key in a URL leaks it
+    // to browser history, network logs, and potentially referrers.
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = window.setTimeout(function () {
+      if (controller) controller.abort();
+    }, 3500);
+    try {
+      var response = await originalFetch(COLLECTOR_API_URL, {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        headers: {"content-type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({
+          action: "mutationStatus",
+          targetAction: targetAction,
+          requestId: requestId,
+          collectorKey: collectorKey,
+          collectorVersion: VERSION
+        }),
+        signal: controller ? controller.signal : undefined
+      });
+      var payload = await response.json().catch(function () { return null; });
+      if (!response.ok) {
+        throw new Error(
+          payload && payload.message
+            ? payload.message
+            : "공실박스 저장 결과 확인 HTTP 오류: " + response.status
+        );
+      }
+      if (!payload || typeof payload !== "object") {
+        throw new Error("공실박스 저장 결과 확인 응답이 올바르지 않습니다.");
+      }
+      return payload;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  function pollMutationStatus(requestId, collectorKey, targetAction) {
     return new Promise(function (resolve, reject) {
       var attempts = 0;
       /*
@@ -2985,16 +3042,7 @@
 
       function check() {
         attempts += 1;
-        var callbackName =
-          "__jsGongsilStatus_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-        var script = document.createElement("script");
-        var timer;
-
-        window[callbackName] = function (payload) {
-          clearTimeout(timer);
-          delete window[callbackName];
-          script.remove();
-
+        fetchMutationStatus(requestId, collectorKey, targetAction).then(function (payload) {
           if (payload && payload.ready) {
             resolve(payload.result || payload);
           } else if (canRetry()) {
@@ -3002,29 +3050,16 @@
           } else {
             reject(new Error("저장 결과 확인 시간 초과"));
           }
-        };
-
-        timer = setTimeout(function () {
-          delete window[callbackName];
-          script.remove();
-          if (canRetry()) setTimeout(check, 650);
-          else reject(new Error("저장 결과 확인 시간 초과"));
-        }, 2500);
-
-        script.onerror = function () {
-          clearTimeout(timer);
-          delete window[callbackName];
-          script.remove();
-          if (canRetry()) setTimeout(check, 650);
-          else reject(new Error("저장 결과 확인 차단"));
-        };
-        script.src =
-          COLLECTOR_API_URL +
-          "?action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
-          "&collectorKey=" + encodeURIComponent(collectorKey) +
-          "&callback=" + encodeURIComponent(callbackName) +
-          "&_=" + Date.now();
-        document.head.appendChild(script);
+        }).catch(function (error) {
+          var message = String(error && error.message ? error.message : error);
+          if (/승인되지 않은 요청|잘못된 상태 조회 범위/.test(message)) {
+            reject(error);
+          } else if (canRetry()) {
+            setTimeout(check, 650);
+          } else {
+            reject(new Error("저장 결과 확인 차단"));
+          }
+        });
       }
 
       setTimeout(check, 500);

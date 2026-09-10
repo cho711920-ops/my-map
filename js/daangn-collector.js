@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.3";
+  var VERSION = "1.5.4";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -959,7 +959,7 @@
     try {
       var earlyResult = await postServerWithRetry(body, collectorKey);
       if (earlyResult) return earlyResult;
-      return await pollMutationStatus(requestId, collectorKey);
+      return await pollMutationStatus(requestId, collectorKey, action);
     } catch (error) {
       if (!authRetried && isUnauthorizedError(error)) {
         clearCollectorKey();
@@ -1003,6 +1003,7 @@
           existing = await pollMutationStatus(
             body.requestId,
             collectorKey,
+            body.action,
             {maxAttempts: 3, initialDelay: 300, quiet: true}
           );
         } catch (probeError) {
@@ -1029,20 +1030,75 @@
     );
   }
 
-  function pollMutationStatus(requestId, collectorKey, options) {
+  async function fetchMutationStatus(requestId, collectorKey, targetAction) {
+    if (!targetAction || targetAction === "mutationStatus") {
+      throw new Error("잘못된 상태 조회 범위입니다.");
+    }
+    // Do not fall back to JSONP/GET: putting the collector key in a URL leaks it
+    // to browser history, network logs, and potentially referrers.
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = window.setTimeout(function () {
+      if (controller) controller.abort();
+    }, 3500);
+    try {
+      var response = await nativeFetch(COLLECTOR_API_URL, {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        headers: {"content-type": "text/plain;charset=utf-8"},
+        body: JSON.stringify({
+          action: "mutationStatus",
+          targetAction: targetAction,
+          requestId: requestId,
+          collectorKey: collectorKey,
+          collectorVersion: VERSION
+        }),
+        signal: controller ? controller.signal : undefined
+      });
+      var payload = await response.json().catch(function () { return null; });
+      if (!response.ok) {
+        throw new Error(
+          payload && payload.message
+            ? payload.message
+            : "당근 수집 결과 확인 HTTP 오류: " + response.status
+        );
+      }
+      if (!payload || typeof payload !== "object") {
+        throw new Error("당근 수집 결과 확인 응답이 올바르지 않습니다.");
+      }
+      return payload;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  function pollMutationStatus(requestId, collectorKey, targetAction, options) {
     options = options || {};
     return new Promise(function (resolve, reject) {
       var attempts = 0;
       var maxAttempts = Number(options.maxAttempts) || 90;
+
+      function retryOrReject(error) {
+        var message = String(error && error.message ? error.message : error);
+        if (isUnauthorizedError(error) || /잘못된 상태 조회 범위/.test(message)) {
+          reject(error);
+        } else if (attempts < maxAttempts) {
+          setTimeout(check, 900);
+        } else {
+          reject(new Error(
+            options.quiet
+              ? (/Failed to fetch|fetch|abort|network|차단/i.test(message) ? "status-blocked" : "not-ready")
+              : "당근 수집 결과 확인이 일시적으로 차단되었습니다."
+          ));
+        }
+      }
+
       function check() {
         attempts += 1;
-        var callbackName = "__jsDaangnStatus_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-        var script = document.createElement("script");
-        var timer;
-        window[callbackName] = function (payload) {
-          clearTimeout(timer);
-          delete window[callbackName];
-          script.remove();
+        fetchMutationStatus(requestId, collectorKey, targetAction).then(function (payload) {
           if (payload && payload.ready) {
             var result = payload.result || payload;
             if (result && result.ok === false) reject(new Error(result.message || "당근 수집 서버 오류"));
@@ -1052,28 +1108,7 @@
           } else {
             reject(new Error(options.quiet ? "not-ready" : "당근 수집 결과 확인 시간 초과"));
           }
-        };
-        timer = setTimeout(function () {
-          delete window[callbackName];
-          script.remove();
-          if (attempts < maxAttempts) setTimeout(check, 900);
-          else reject(new Error(options.quiet ? "not-ready" : "당근 수집 결과 확인 시간 초과"));
-        }, 3500);
-        script.onerror = function () {
-          clearTimeout(timer);
-          delete window[callbackName];
-          script.remove();
-          if (attempts < maxAttempts) setTimeout(check, 900);
-          else reject(new Error(
-            options.quiet ? "status-blocked" : "당근 수집 결과 확인이 일시적으로 차단되었습니다."
-          ));
-        };
-        script.src = COLLECTOR_API_URL +
-          "?action=mutationStatus&requestId=" + encodeURIComponent(requestId) +
-          "&collectorKey=" + encodeURIComponent(collectorKey) +
-          "&callback=" + encodeURIComponent(callbackName) +
-          "&_=" + Date.now();
-        document.head.appendChild(script);
+        }).catch(retryOrReject);
       }
       setTimeout(check, Number(options.initialDelay) || 900);
     });

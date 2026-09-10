@@ -42,13 +42,13 @@ test("mutation request IDs replay once and cannot cross account boundaries", asy
   try {
     const first = await handleD1PostAction({ DB }, owner, {
       action: "saveCloudState", requestId: "favorite-save-1", scope: "preferences",
-      recordKey: "default", version: 1, data: { theme: "light" }
+      recordKey: "default", expectedVersion: 0, data: { theme: "light" }
     });
     assert.equal(first.replayed, undefined);
 
     const replay = await handleD1PostAction({ DB }, owner, {
       action: "saveCloudState", requestId: "favorite-save-1", scope: "preferences",
-      recordKey: "default", version: 2, data: { theme: "dark" }
+      recordKey: "default", expectedVersion: 0, data: { theme: "dark" }
     });
     assert.equal(replay.replayed, true);
     const stored = sqlite.prepare("SELECT value_json FROM cloud_state WHERE owner_email=?").get(owner.email);
@@ -56,7 +56,7 @@ test("mutation request IDs replay once and cannot cross account boundaries", asy
 
     await assert.rejects(() => handleD1PostAction({ DB }, other, {
       action: "saveCloudState", requestId: "favorite-save-1", scope: "preferences",
-      recordKey: "default", version: 3, data: { theme: "other" }
+      recordKey: "default", expectedVersion: 0, data: { theme: "other" }
     }), (error) => error.statusCode === 409);
 
     const ownStatus = await handleD1GetAction({ DB }, owner, {

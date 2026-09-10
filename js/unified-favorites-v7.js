@@ -215,7 +215,7 @@
     modal.className = "lm-modal unified-favorite-modal-v7";
     modal.setAttribute("aria-hidden", "true");
     modal.innerHTML =
-      '<div class="lm-backdrop unified-favorite-backdrop-v7" onclick="closeUnifiedFavoritesV7()"></div>' +
+      '<div class="lm-backdrop unified-favorite-backdrop-v7" aria-hidden="true" onclick="closeUnifiedFavoritesV7()"></div>' +
       '<section class="unified-favorite-dialog-v7" role="dialog" aria-modal="true" aria-labelledby="unifiedFavoriteTitleV7">' +
         '<header class="unified-favorite-head-v7">' +
           '<div><strong id="unifiedFavoriteTitleV7">찜목록</strong>' +
@@ -238,6 +238,19 @@
         '</div>' +
       '</section>';
     document.body.appendChild(modal);
+    modal.addEventListener("keydown", function (event) {
+      if (!modal.classList.contains("open") || !global.JSDialogFocusV1) return;
+      var embeddedDetail = document.getElementById("unifiedDetailDrawerV8");
+      var detailIsOpen = embeddedDetail && modal.contains(embeddedDetail) &&
+        embeddedDetail.getAttribute("aria-hidden") !== "true";
+      global.JSDialogFocusV1.handleKeydown(modal, event, function () {
+        if (detailIsOpen && global.JSUnifiedListingsV8 && typeof global.JSUnifiedListingsV8.close === "function") {
+          global.JSUnifiedListingsV8.close();
+          return;
+        }
+        close();
+      });
+    });
     var createForm = document.getElementById("unifiedFavoriteCreateFormV7");
     if (createForm) createForm.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -357,10 +370,11 @@
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("lm-modal-open");
     positionModal();
-    global.setTimeout(function () {
-      var input = document.getElementById("unifiedFavoriteNameV7");
-      if (input && state.source === "selection") input.focus();
-    }, 30);
+    if (global.JSDialogFocusV1) {
+      global.JSDialogFocusV1.activate(modal, state.source === "selection"
+        ? "#unifiedFavoriteNameV7"
+        : ".unified-favorite-close-v7");
+    }
   }
 
   function close() {
@@ -371,6 +385,7 @@
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("lm-modal-open");
     state.pendingRefs = [];
+    if (global.JSDialogFocusV1) global.JSDialogFocusV1.deactivate(modal);
   }
 
   global.openUnifiedFavoritesV7 = function (options) { open(options); };

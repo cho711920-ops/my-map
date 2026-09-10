@@ -1,6 +1,7 @@
 (function (global) {
   "use strict";
   var PY = 3.305785;
+  var ACCOUNT_EMAIL = clean(global.JSAuthenticatedAccountEmail).toLowerCase();
   var active = null;
   var categoryLabels = {commercial:"상가",office:"사무실",multifamily:"다가구",house:"단독/전원주택",mixed_house:"상가주택",building:"건물전체",factory_warehouse:"공장/창고",apartment:"아파트",villa:"빌라/다세대",officetel:"오피스텔",one_room:"원룸",reconstruction:"재건축",redevelopment:"재개발",apartment_presale:"아파트분양권",officetel_presale:"오피스텔분양권",knowledge_center:"지식산업센터",other:"기타"};
   var ranges = [
@@ -12,6 +13,8 @@
   var filterIds = ranges.flatMap(function(r){return [r[0]+"Min", r[0]+"Max"];}).concat(["saleCategoryFilter", "saleLandUseFilter", "saleZoningFilter"]);
   function ui() { return global.JSListingTradeV1; }
   function clean(v) { return String(v == null ? "" : v).trim(); }
+  function accountChanged(e) { return Number(e&&e.status)===409 && clean(e&&e.payload&&e.payload.code||e&&e.code)==="account_changed"; }
+  function accountChangedMessage() { return "로그인 계정이 변경되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요."; }
   function esc(v) { return clean(v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
   function num(v) { if(v == null || typeof v === "boolean" || clean(v)==="") return null; var n=Number(clean(v).replace(/,/g,"")); return Number.isFinite(n) && n>=0 ? n : null; }
   function fmt(v,d) { return v == null || !Number.isFinite(Number(v)) ? "미확인" : Number(v).toLocaleString("ko-KR",{maximumFractionDigits:d==null?1:d}); }
@@ -170,13 +173,13 @@
       var status=dialog.querySelector('[data-work-status]'),button=this;button.disabled=true;
       try{
         var parcels=parseParcels(dialog.querySelector('[data-parcels]').value),data={assumptions:readCalc(dialog),parcels:parcels,note:dialog.querySelector('[data-work-note]').value,source:item.source||'',address:clean(item.address),savedAt:new Date().toISOString()};
-        var result=await global.JSDataAccessV6.mutate('saveCloudState',{scope:'saleWorksheetV1',recordKey:key,expectedVersion:context.version,data:data});
+        var result=await global.JSDataAccessV6.mutate('saveCloudState',{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL,expectedVersion:context.version,data:data});
         context.version=result.version;status.textContent='내 계정에 저장했습니다. 다른 PC에서도 이 원본의 매매 검토에서 열 수 있습니다.';
-      }catch(e){status.textContent='저장하지 못했습니다: '+e.message;}finally{if(active===context)button.disabled=false;}
+      }catch(e){if(accountChanged(e)){context.ready=false;status.textContent=accountChangedMessage();}else status.textContent='저장하지 못했습니다: '+e.message;}finally{if(active===context)button.disabled=!context.ready;}
     };
     try {
       if(!global.JSDataAccessV6)throw Error('계정 연결이 준비되지 않았습니다.');
-      var r=await global.JSDataAccessV6.read('loadCloudState',{scope:'saleWorksheetV1',recordKey:key});
+      var r=await global.JSDataAccessV6.read('loadCloudState',{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL});
       if(active!==context)return;
       context.version=r.version||0;var saved=r.data||{};
       if(saved.assumptions)dialog.querySelectorAll('[data-calc]').forEach(function(e){if(Object.hasOwn(saved.assumptions,e.dataset.calc))e.value=saved.assumptions[e.dataset.calc];});
@@ -184,7 +187,7 @@
       dialog.querySelector('[data-work-note]').value=saved.note||'';renderCalc(dialog);
       context.ready=true;dialog.querySelector('[data-work-save]').disabled=false;
       dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';
-    } catch(e) {if(active===context)dialog.querySelector('[data-work-status]').textContent='검토 조회 실패: '+e.message+' · 계산은 가능하지만 기존 자료 보호를 위해 저장은 잠겼습니다.';}
+    } catch(e) {if(active===context)dialog.querySelector('[data-work-status]').textContent=accountChanged(e)?accountChangedMessage():'검토 조회 실패: '+e.message+' · 계산은 가능하지만 기존 자료 보호를 위해 저장은 잠겼습니다.';}
   }
   function comparisonHtml(items) {
     var rows=[['매물',function(i){return i.name||i.buildingName||'-';}],['주소',function(i){return i.address||'미확인';}],['구분',function(i){return categoryLabels[ui().normalizedSaleCategory(i)]||'토지';}],['매매가',function(i){return price(i.salePrice??i.sale_price);}],['대지/토지',function(i){var a=num(ui().saleSummary(i).landAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['연면적',function(i){var a=num(ui().saleSummary(i).grossAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['단순 연 수익률',function(i){var y=ui().saleYield(i);return y==null?'미확인':fmt(y,2)+'%';}],['지목 / 용도지역',function(i){var d=ui().saleSummary(i);return (d.landUse||'미확인')+' / '+(d.zoning||'미확인');}],['출처',function(i){return i.source||'직접등록';}]];

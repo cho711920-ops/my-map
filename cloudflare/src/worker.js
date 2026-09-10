@@ -29,10 +29,18 @@ import {
 
 const QUEUE_CLIENT_VERSION = "1.0.8";
 const UPSTREAM_TIMEOUT_MS = 20_000;
+const MAX_SESSION_BODY_BYTES = 32 * 1024;
+const MAX_DATA_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_EXPECTED_ACCOUNT_EMAIL_LENGTH = 320;
+const MAX_IMAGE_BODY_BYTES = 12 * 1024 * 1024;
+const MAX_IMAGE_REDIRECTS = 4;
+const CANONICAL_HOST = "js-map.com";
+const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v5-source-aware-review.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
+const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
 const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
 const SHEET_CACHE_ACTIONS = new Set([
@@ -58,6 +66,140 @@ const IMAGE_CACHE_HOSTS = new Set([
 ]);
 let sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
 
+function payloadTooLarge(message) {
+  return Object.assign(new Error(message), { statusCode: 413 });
+}
+
+async function readStreamBytesWithLimit(stream, maxBytes, tooLargeMessage) {
+  if (!stream) return new Uint8Array(0);
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value || 0);
+      total += chunk.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw payloadTooLarge(tooLargeMessage);
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function readJsonRequestWithLimit(request, maxBytes) {
+  const declaredHeader = String(request.headers.get("content-length") || "").trim();
+  if (declaredHeader && /^\d+$/.test(declaredHeader) && Number(declaredHeader) > maxBytes) {
+    await request.body?.cancel().catch(() => {});
+    throw payloadTooLarge("한 번에 보낼 수 있는 요청 크기를 초과했습니다.");
+  }
+  const bytes = await readStreamBytesWithLimit(
+    request.body,
+    maxBytes,
+    "한 번에 보낼 수 있는 요청 크기를 초과했습니다."
+  );
+  if (!bytes.byteLength) return null;
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return null;
+  }
+}
+
+function allowedImageUrl(value) {
+  let url;
+  try {
+    url = value instanceof URL ? new URL(value.toString()) : new URL(String(value || ""));
+  } catch {
+    return null;
+  }
+  const standardTlsPort = !url.port || url.port === "443";
+  return url.protocol === "https:" && standardTlsPort && !url.username && !url.password &&
+    IMAGE_CACHE_HOSTS.has(url.hostname.toLowerCase()) ? url : null;
+}
+
+function isRedirectStatus(status) {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+async function fetchAllowlistedImage(source) {
+  let current = source;
+  for (let redirects = 0; redirects <= MAX_IMAGE_REDIRECTS; redirects += 1) {
+    const upstream = await fetchWithTimeout(current, {
+      redirect: "manual",
+      cache: "no-store",
+      headers: { Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8" }
+    }, 25_000);
+    let transferTimer = false;
+    try {
+      const response = upstream.response;
+      if (response.redirected) {
+        await response.body?.cancel().catch(() => {});
+        throw Object.assign(new Error("The source image redirect chain could not be verified."), { statusCode: 502 });
+      }
+      // Keep this hop's AbortController alive until the final response body is
+      // consumed. Clearing it after headers would let a permitted CDN hold the
+      // Worker open indefinitely with a stalled body.
+      if (!isRedirectStatus(response.status)) {
+        transferTimer = true;
+        return { ...upstream, finalUrl: current };
+      }
+      const location = response.headers.get("location");
+      await response.body?.cancel().catch(() => {});
+      if (!location || redirects >= MAX_IMAGE_REDIRECTS) {
+        throw Object.assign(new Error("The source image redirected too many times."), { statusCode: 502 });
+      }
+      let candidate = null;
+      try {
+        candidate = new URL(location, current);
+      } catch {}
+      const next = allowedImageUrl(candidate);
+      if (!next) {
+        throw Object.assign(new Error("The redirected image host is not allowed."), { statusCode: 502 });
+      }
+      current = next;
+    } finally {
+      // A final non-redirect response transfers timer ownership to the caller.
+      if (!transferTimer) upstream.finish();
+    }
+  }
+  throw Object.assign(new Error("The source image redirected too many times."), { statusCode: 502 });
+}
+
+function canonicalNavigationRedirect(request) {
+  const url = new URL(request.url);
+  if (url.hostname.toLowerCase() !== LEGACY_HOST || !["GET", "HEAD"].includes(request.method)) return null;
+  // Keep API requests on their incoming origin. Cross-origin redirects would
+  // drop host-only session cookies and make POST Origin checks fail. Redirecting
+  // the HTML navigation ensures normal app sessions start on the apex instead.
+  if (url.pathname.startsWith("/api/")) return null;
+  const acceptsHtml = String(request.headers.get("accept") || "").toLowerCase().includes("text/html");
+  const navigation = String(request.headers.get("sec-fetch-mode") || "").toLowerCase() === "navigate";
+  if (!acceptsHtml && !navigation) return null;
+  url.hostname = CANONICAL_HOST;
+  url.port = "";
+  return new Response(null, {
+    status: 308,
+    headers: {
+      location: url.toString(),
+      "cache-control": "public, max-age=3600",
+      vary: "Accept, Sec-Fetch-Mode"
+    }
+  });
+}
+
 function json(value, status = 200, headers = {}) {
   return new Response(JSON.stringify(value), {
     status,
@@ -67,23 +209,54 @@ function json(value, status = 200, headers = {}) {
 
 function errorResponse(error) {
   const status = Number(error?.statusCode) || 500;
-  return json({
+  const payload = {
     ok: false,
     message: status >= 500
       ? String(error?.publicMessage || "서버 보안 설정을 확인해 주세요.")
       : String(error?.message || "요청에 실패했습니다.")
-  }, status, { "cache-control": "no-store" });
+  };
+  if (error?.code) payload.code = String(error.code);
+  return json(payload, status, { "cache-control": "no-store" });
+}
+
+function requireExpectedAccount(user, value, required = false) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    if (!required) return;
+    throw Object.assign(new Error("현재 로그인 계정을 확인할 수 없습니다. 페이지를 새로고침해 주세요."), {
+      statusCode: 428,
+      code: "expected_account_required"
+    });
+  }
+  if (raw.length > MAX_EXPECTED_ACCOUNT_EMAIL_LENGTH) {
+    throw Object.assign(new Error("요청 계정 정보가 올바르지 않습니다."), {
+      statusCode: 400,
+      code: "invalid_expected_account"
+    });
+  }
+  const expected = raw.toLowerCase();
+  const authenticated = String(user?.email || "").trim().toLowerCase();
+  if (expected === authenticated) return;
+  throw Object.assign(new Error("로그인 계정이 변경되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요."), {
+    statusCode: 409,
+    code: "account_changed"
+  });
 }
 
 function withSecurityHeaders(response, request) {
   const headers = new Headers(response.headers);
-  headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  const path = new URL(request.url).pathname;
+  // Static assets already receive the application CSP from `_headers`. Keep it
+  // intact now that every asset request enters the Worker; the API/redirect CSP
+  // can remain deny-by-default because neither response executes site scripts.
+  if (path.startsWith("/api/") || (response.status >= 300 && response.status < 400)) {
+    headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  }
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");
   headers.set("referrer-policy", "strict-origin-when-cross-origin");
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(self)");
   headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
-  const path = new URL(request.url).pathname;
   if (path === "/" || path.endsWith(".html")) {
     headers.set("cache-control", "no-cache, no-store, must-revalidate");
   }
@@ -92,11 +265,26 @@ function withSecurityHeaders(response, request) {
 
 async function fetchWithTimeout(url, options = {}, timeout = UPSTREAM_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
+  let timedOut = false;
+  let finished = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeout);
+  const finish = () => {
+    if (finished) return;
+    finished = true;
     clearTimeout(timer);
+  };
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return { response, finish, timedOut: () => timedOut };
+  } catch (error) {
+    finish();
+    if (timedOut) {
+      throw Object.assign(new Error("The source image request timed out."), { statusCode: 504 });
+    }
+    throw error;
   }
 }
 
@@ -277,7 +465,8 @@ async function handleListingImage(request, env, context) {
   } catch {
     throw Object.assign(new Error("Invalid image URL."), { statusCode: 400 });
   }
-  if (source.protocol !== "https:" || !IMAGE_CACHE_HOSTS.has(source.hostname.toLowerCase())) {
+  source = allowedImageUrl(source);
+  if (!source) {
     throw Object.assign(new Error("Image host is not allowed."), { statusCode: 403 });
   }
 
@@ -297,24 +486,34 @@ async function handleListingImage(request, env, context) {
     }
   }
 
-  const response = await fetchWithTimeout(source, {
-    redirect: "follow",
-    cache: "no-store",
-    headers: { Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8" }
-  }, 25_000);
-  const finalUrl = new URL(response.url || source);
+  const upstream = await fetchAllowlistedImage(source);
+  const { response, finalUrl } = upstream;
+  let body;
+  try {
+    const contentType = String(response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    const declaredSize = Number(response.headers.get("content-length") || 0);
+    if (!response.ok || !contentType.startsWith("image/")) {
+      await response.body?.cancel().catch(() => {});
+      throw Object.assign(new Error("The source image could not be loaded."), { statusCode: 502 });
+    }
+    if (declaredSize > MAX_IMAGE_BODY_BYTES) {
+      await response.body?.cancel().catch(() => {});
+      throw payloadTooLarge("The source image is too large.");
+    }
+    body = await readStreamBytesWithLimit(
+      response.body,
+      MAX_IMAGE_BODY_BYTES,
+      "The source image is too large."
+    );
+  } catch (error) {
+    if (upstream.timedOut()) {
+      throw Object.assign(new Error("The source image response timed out."), { statusCode: 504 });
+    }
+    throw error;
+  } finally {
+    upstream.finish();
+  }
   const contentType = String(response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-  const declaredSize = Number(response.headers.get("content-length") || 0);
-  if (!response.ok || !IMAGE_CACHE_HOSTS.has(finalUrl.hostname.toLowerCase()) || !contentType.startsWith("image/")) {
-    throw Object.assign(new Error("The source image could not be loaded."), { statusCode: 502 });
-  }
-  if (declaredSize > 12 * 1024 * 1024) {
-    throw Object.assign(new Error("The source image is too large."), { statusCode: 413 });
-  }
-  const body = await response.arrayBuffer();
-  if (body.byteLength > 12 * 1024 * 1024) {
-    throw Object.assign(new Error("The source image is too large."), { statusCode: 413 });
-  }
   // R2 lifecycle expiration bounds storage. Keeping D1 out of this hot path avoids
   // one aggregate read and one counter write before every newly fetched image.
   const mayStore = env.MEDIA && typeof env.MEDIA.put === "function";
@@ -354,7 +553,7 @@ async function handleSession(request, env) {
     });
   }
   if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "GET, POST, DELETE" } });
-  const body = await request.json().catch(() => ({}));
+  const body = await readJsonRequestWithLimit(request, MAX_SESSION_BODY_BYTES) || {};
   const loginType = String(body.loginType || "google").trim().toLowerCase();
   const user = loginType === "local"
     ? await authenticateLocalAccount(body.username, body.password, env)
@@ -459,6 +658,8 @@ async function handleDataApi(request, env, context) {
     const incoming = new URL(request.url);
     const query = Object.fromEntries(incoming.searchParams.entries());
     delete query._;
+    requireExpectedAccount(user, query.expectedAccountEmail, query.action === "loadCloudState");
+    delete query.expectedAccountEmail;
     query.owner = user.email || "";
     if (query.action === "dataRevision") {
       return jsonp(query.callback, await readDataRevision(env, query.scope), {
@@ -524,13 +725,16 @@ async function handleDataApi(request, env, context) {
         ? 60 * 60_000
         : query.action === "geocodeCache"
           ? 60 * 60_000
-          : 60 * 60_000;
+          : query.action === "operationsDashboard"
+            ? OPERATIONS_DASHBOARD_MAX_CACHE_MS
+            : 60 * 60_000;
       const configuredTtl = query.action === "unifiedListings"
         ? Number(env.UNIFIED_LISTINGS_CACHE_MS || defaultTtl)
         : query.action === "geocodeCache"
           ? Number(env.GEOCODE_CACHE_MS || defaultTtl)
           : query.action === "operationsDashboard"
-            ? Number(env.OPERATIONS_DASHBOARD_CACHE_MS || defaultTtl)
+            ? Math.min(OPERATIONS_DASHBOARD_MAX_CACHE_MS,
+              Number(env.OPERATIONS_DASHBOARD_CACHE_MS || defaultTtl))
             : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
       const cached = await readR2TextCache(env, r2CacheKey, Math.max(30_000, configuredTtl));
       if (cached) {
@@ -574,14 +778,12 @@ async function handleDataApi(request, env, context) {
     });
   }
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 2 * 1024 * 1024) {
-    throw Object.assign(new Error("한 번에 보낼 수 있는 요청 크기를 초과했습니다."), { statusCode: 413 });
-  }
-  const body = await request.json().catch(() => null);
+  const body = await readJsonRequestWithLimit(request, MAX_DATA_BODY_BYTES);
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw Object.assign(new Error("잘못된 요청 형식입니다."), { statusCode: 400 });
   }
+  requireExpectedAccount(user, body.expectedAccountEmail, mutationAction(body) === "saveCloudState");
+  delete body.expectedAccountEmail;
   const collectorAdmin = await handleCollectorAdminPost(env, user, body);
   if (collectorAdmin) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
@@ -739,9 +941,10 @@ export default {
   async fetch(request, env, context) {
     try {
       const url = new URL(request.url);
-      const response = url.pathname.startsWith("/api/")
+      const canonical = canonicalNavigationRedirect(request);
+      const response = canonical || (url.pathname.startsWith("/api/")
         ? await handleApi(request, env, context)
-        : await env.ASSETS.fetch(request);
+        : await env.ASSETS.fetch(request));
       return withSecurityHeaders(response, request);
     } catch (error) {
       const url = new URL(request.url);
@@ -761,7 +964,8 @@ export default {
         return withSecurityHeaders(jsonp(callback, {
           ok: false,
           message: publicMessage,
-          errorType: status >= 500 ? "upstream" : "request"
+          errorType: status >= 500 ? "upstream" : "request",
+          ...(error?.code ? { code: String(error.code) } : {})
         }), request);
       }
       return withSecurityHeaders(errorResponse(error), request);
