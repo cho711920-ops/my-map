@@ -353,5 +353,30 @@ function addAIReportPrintButton() {
 }
 
 
-setInterval(addAIReportPrintButton, 700);
+function installAIReportPrintButtonObserver() {
+  if (!document.body || window.__JS_AI_PRINT_BUTTON_OBSERVER__) return;
+  window.__JS_AI_PRINT_BUTTON_OBSERVER__ = true;
+  var scheduled = false;
+  function scheduleButtonRefresh() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(function () {
+      scheduled = false;
+      addAIReportPrintButton();
+    });
+  }
+  new MutationObserver(scheduleButtonRefresh).observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class"]
+  });
+  scheduleButtonRefresh();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAIReportPrintButtonObserver, { once: true });
+} else {
+  installAIReportPrintButtonObserver();
+}
   /* === v3.2.3 상권분석 UI 정리 === */
