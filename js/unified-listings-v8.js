@@ -494,7 +494,7 @@
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
-      'onclick="event.stopPropagation(); JSUnifiedListingsV8.open(\'' + encodedId + '\')">' +
+      'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggleCardDetail(\'' + encodedId + '\')">' +
       (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
         'onerror="JSUnifiedListingsV8.imageError(this, true)">' : '<span>사진 없음</span>') +
       (sourceUnavailable
@@ -961,6 +961,23 @@
     state.detailRequestToken += 1;
   }
 
+  function isDetailOpenForPropertyV8143(propertyId) {
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    return !!drawer && drawer.getAttribute("aria-hidden") !== "true" &&
+      text(state.openPropertyId) === text(propertyId);
+  }
+
+  function toggleCardDetail(encodedPropertyId) {
+    var propertyId = decodeURIComponent(encodedPropertyId || "");
+    if (!propertyId) return false;
+    if (isDetailOpenForPropertyV8143(propertyId)) {
+      closeDetail();
+      return false;
+    }
+    open(encodeURIComponent(propertyId));
+    return true;
+  }
+
   function imageError(image, showLabel) {
     if (!image) return;
     var parent = image.parentElement;
@@ -1194,6 +1211,10 @@
       return true;
     }
     if (event && event.target && event.target.closest("button,input,label,a,textarea,select")) return false;
+    if (isDetailOpenForPropertyV8143(propertyId)) {
+      closeDetail();
+      return true;
+    }
     if (typeof global.selectListingOnMapV844 === "function") {
       global.selectListingOnMapV844(item);
     }
@@ -1425,7 +1446,7 @@
 
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
-    toggle: toggle, open: open, prefetch: prefetch, close: closeDetail,
+    toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,
