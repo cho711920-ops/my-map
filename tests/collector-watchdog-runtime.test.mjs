@@ -55,7 +55,7 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.6" }), onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.7" }), onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async () => {} }
     }
@@ -64,6 +64,21 @@ function harness(overrides = {}) {
   const dispatch = (message, tabId = 42) => new Promise(resolve => events.message(message, { tab: { id: tabId } }, resolve));
   const flush = async () => { await vm.runInContext("mutationQueue", context); await new Promise(resolve => setImmediate(resolve)); };
   return { context, data, navigation, alarmMap, dispatch, flush };
+}
+
+function setCurrentDaangn(h, overrides = {}) {
+  const target = { ...h.data[RUN].targets[3], key: "daangn-seo", source: "daangn",
+    label: "당근 서구", url: "https://realty.daangn.com/?test=seo", selectedCount: 1853, ...overrides };
+  h.data[RUN].targets[3] = target;
+  h.data[REPORT].items[3] = { ...h.data[REPORT].items[3], key: target.key, source: target.source,
+    label: target.label, counts: {} };
+  return target;
+}
+
+function daangnStage(overrides = {}) {
+  return { key: "detail", found: 1853, processed: 120, unchanged: 380,
+    remaining: 1353, created: 3, updated: 2, review: 7, addressMissing: 4, failed: 1,
+    ...overrides };
 }
 
 test("three-hour stalled Seo defers only Seo, keeps completed regions and starts Dong", async () => {
@@ -122,6 +137,85 @@ test("a throttled background heartbeat is confirmed by direct tab probe without 
   assert.equal(h.data[RUN].progressMessage, "상세 저장 진행 확인");
 });
 
+test("Daangn heartbeat counts survive a 403 retry instead of becoming zero", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 4 });
+  setCurrentDaangn(h);
+  await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+    progressFingerprint: "daangn-500", progressMessage: "상세조회·저장 중 · 27%",
+    progressStage: daangnStage() });
+  await h.flush();
+  let item = h.data[REPORT].items[3];
+  assert.equal(item.counts.expected, 1853);
+  assert.equal(item.counts.processed, 500);
+  assert.equal(item.counts.unchanged, 380);
+  assert.equal(item.counts.created, 3);
+  assert.equal(item.counts.remaining, undefined);
+  await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+    progressFingerprint: "daangn-retry-zero", progressMessage: "수집 재연결 중",
+    progressStage: daangnStage({ found: 0, processed: 0, unchanged: 0, remaining: 0,
+      created: 0, updated: 0, review: 0, addressMissing: 0, failed: 0 }) });
+  await h.flush();
+  assert.equal(h.data[REPORT].items[3].counts.processed, 500);
+  await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
+    message: "당근 API HTTP 오류: 403", result: {} }, 42);
+  item = h.data[REPORT].items[3];
+  assert.equal(item.status, "retry_wait");
+  assert.equal(item.counts.expected, 1853);
+  assert.equal(item.counts.processed, 500);
+  assert.equal(item.counts.updated, 2);
+  assert.equal(item.counts.review, 7);
+  assert.equal(item.message, "당근 API HTTP 오류: 403");
+});
+
+test("Daangn immediate retry relaunch keeps the last numeric progress", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 1 });
+  setCurrentDaangn(h);
+  await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+    progressFingerprint: "daangn-immediate", progressStage: daangnStage() });
+  await h.flush();
+  await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
+    message: "당근 API HTTP 오류: 403", result: {}, progressStage: daangnStage({ found: 0,
+      processed: 0, unchanged: 0, created: 0, updated: 0, review: 0 }) }, 42);
+  const item = h.data[REPORT].items[3];
+  assert.equal(item.status, "running");
+  assert.equal(item.counts.expected, 1853);
+  assert.equal(item.counts.processed, 500);
+  assert.equal(h.data[RUN].targetAttempt, 2);
+  assert.equal(h.navigation.length, 1);
+});
+
+test("Daangn terminal failure keeps numeric progress and the provider error", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 4 });
+  setCurrentDaangn(h, { retryCycle: 8 });
+  await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+    progressFingerprint: "daangn-terminal", progressStage: daangnStage() });
+  await h.flush();
+  await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
+    message: "당근 API HTTP 오류: 403", result: {} }, 42);
+  const item = h.data[REPORT].items[3];
+  assert.equal(item.status, "failed");
+  assert.equal(item.counts.expected, 1853);
+  assert.equal(item.counts.processed, 500);
+  assert.equal(item.message, "당근 API HTTP 오류: 403");
+  assert.equal(h.data[RUN].summary.failed, 1);
+});
+
+test("Daangn selection heartbeat is not promoted to collected counts", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock });
+  setCurrentDaangn(h);
+  await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+    progressFingerprint: "daangn-selection", progressStage: {
+      key: "selection", provisional: true, found: 1853, processed: 0, unchanged: 0
+    } });
+  await h.flush();
+  assert.deepEqual(h.data[REPORT].items[3].counts, {});
+  assert.equal(h.data[REPORT].items[3].progressStage.provisional, true);
+});
+
 test("the normal first provider load is not mistaken for a collector-page reload", async () => {
   const h = harness({
     phase: "loading",
@@ -161,7 +255,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.6");
+  assert.equal(response.backgroundBuild, "1.1.7");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -220,13 +314,18 @@ test("Daangn exhausted small scope proceeds once, with warning report and no ret
 
 test("address-only Daangn holds persist accurate counts/reasons and finish without restarting the district", async () => {
   const h = harness({ targetStartedAt: clock - minute });
+  h.data[REPORT].items[3].counts = { version: 2, expected: 9999, processed: 9000,
+    unchanged: 8000, created: 99, updated: 99, review: 99 };
+  h.data[REPORT].items[3].progressStage = { found: 9999, processed: 1000, unchanged: 8000 };
   const response = { ...daangnResult(), runId: "cycle", targetRunId: "seo" };
   await h.context.finishCurrentTarget(response, 42);
   const item = h.data[REPORT].items[3];
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].retryQueue.length, 0);
   assert.equal(item.status, "deferred");
+  assert.equal(item.counts.expected, 2078);
   assert.equal(item.counts.processed, 2078);
+  assert.equal(item.progressStage, null);
   assert.equal(item.counts.addressDeferred, 19);
   assert.equal(item.counts.failed, 0);
   assert.equal(item.diagnostics[0].sourceId, "2068835");

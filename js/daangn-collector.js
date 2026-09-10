@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.2";
+  var VERSION = "1.5.3";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -893,7 +893,7 @@
     }
     if (state.job && state.job.status === "running") {
       state.job.status = "paused";
-      state.job.message = "통신이 끊겨 화면에서 일시중단했습니다. 저장 지점은 서버에 보존됩니다.";
+      state.job.message = message + " · 저장 지점은 서버에 보존됩니다.";
     }
     if (state.selectionChanged) {
       renderSelection();

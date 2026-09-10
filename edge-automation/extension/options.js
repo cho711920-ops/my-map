@@ -55,9 +55,46 @@ function reportItem(target) {
   return report.items.find((item) => item.key === key) || null;
 }
 
-function displayCounts(item) {
-  const counts = { ...(item && item.counts || {}) };
-  if (counts.version !== 2 && /daangn|당근/.test(String(item && item.source || ""))) {
+function displayCounts(item, target) {
+  let counts = { ...(item && item.counts || {}) };
+  const daangn = /daangn|danggeun|당근/.test(String(item && item.source || target && target.source || ""));
+  const terminalComplete = item && ["completed", "partial", "deferred"].includes(item.status);
+  const provisionalStage = Boolean(daangn && item && item.progressStage && item.progressStage.provisional === true);
+  const stage = daangn && !terminalComplete && !provisionalStage && item && item.progressStage && typeof item.progressStage === "object"
+    ? item.progressStage
+    : null;
+  if (stage) {
+    const number = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    };
+    const detailProcessed = number(stage.processed);
+    const unchanged = number(stage.unchanged);
+    const progress = {
+      version: 2,
+      expected: number(stage.found),
+      processed: detailProcessed + unchanged,
+      detailProcessed,
+      unchanged,
+      created: number(stage.created),
+      updated: number(stage.updated),
+      review: number(stage.review),
+      addressDeferred: number(stage.addressMissing),
+      failed: number(stage.failed),
+      listComplete: false
+    };
+    const numericKeys = new Set([
+      "expected", "processed", "detailProcessed", "unchanged",
+      "created", "updated", "review", "addressDeferred", "failed"
+    ]);
+    Object.entries(progress).forEach(([key, value]) => {
+      if (numericKeys.has(key)) counts[key] = Math.max(Number(counts[key] || 0), Number(value || 0));
+      else if (key === "listComplete") counts[key] = counts[key] === true || value === true;
+      else counts[key] = value;
+    });
+  }
+  if (provisionalStage && counts.version !== 2) counts.version = 2;
+  if (counts.version !== 2 && daangn) {
     // Old reports did not persist unchanged counts. Never invent a full census.
     counts.legacyDaangn = true;
     const match = String(item.message || "").match(/주소·층 오류 (\d+)건/);
@@ -66,18 +103,26 @@ function displayCounts(item) {
       counts.failed = Math.max(0, Number(counts.failed || 0) - counts.addressDeferred);
     }
   }
+  const registeredExpected = Number(target && target.selectedCount || item && item.selectedCount || 0);
+  if (daangn && !Number(counts.expected || 0) && registeredExpected > 0) {
+    counts.expected = registeredExpected;
+    counts.registeredExpected = true;
+    counts.legacyDaangn = false;
+  }
   return counts;
 }
 
-function countText(item) {
-  const counts = displayCounts(item);
+function countText(item, target) {
+  const counts = displayCounts(item, target);
   const parts = [];
   if (counts.legacyDaangn) {
     parts.push(`이전 기록: 대상 ${Number(counts.expected || 0).toLocaleString("ko-KR")} · 상세 처리 ${Number(counts.processed || 0).toLocaleString("ko-KR")}건`);
   } else if (Number(counts.expected || 0)) {
-    parts.push(`${Number(counts.processed || 0).toLocaleString("ko-KR")} / ${Number(counts.expected).toLocaleString("ko-KR")}건 ${counts.version === 2 ? "목록 확인" : "확인"}`);
+    parts.push(`${Number(counts.processed || 0).toLocaleString("ko-KR")} / ${Number(counts.expected).toLocaleString("ko-KR")}건 확인${counts.registeredExpected ? " (등록 기준)" : ""}`);
   } else if (Number(counts.processed || 0)) {
     parts.push(`${Number(counts.processed).toLocaleString("ko-KR")}건 확인`);
+  } else if (counts.version === 2) {
+    parts.push("목록 0건 · 확인 0건 (집계 전)");
   }
   if (Number(counts.created || 0)) parts.push(`신규 ${Number(counts.created).toLocaleString("ko-KR")}`);
   if (Number(counts.updated || 0)) parts.push(`변경 ${Number(counts.updated).toLocaleString("ko-KR")}`);
@@ -88,12 +133,12 @@ function countText(item) {
   return parts.join(" · ");
 }
 
-function statusDetail(item) {
+function statusDetail(item, target) {
   if (!item) return "아직 실행 기록 없음";
-  const counts = countText(item);
+  const counts = countText(item, target);
   const at = item.finishedAt || item.startedAt || item.updatedAt;
   const time = at ? registeredTime(at) : "";
-  const display = displayCounts(item);
+  const display = displayCounts(item, target);
   const detail = display.legacyDaangn && display.addressDeferred
     ? "정확한 지번 미제공 · 지도 등록 보류" + (display.failed ? " · 조회·저장 실패도 확인 필요" : "")
     : item.message;
@@ -168,7 +213,7 @@ function renderTarget(target, index) {
   const status = item ? item.status : "pending";
   return `<div class="item target-item" data-report-key="${escapeHtml(String(target.key || index))}">
     <div class="target-state state-${escapeHtml(status)}"><span>${escapeHtml(reportStatus(item))}</span></div>
-    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small class="target-result">${escapeHtml(statusDetail(item))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small>${renderDiagnostics(item)}</div>
+    <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small class="target-result">${escapeHtml(statusDetail(item, target))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small>${renderDiagnostics(item)}</div>
     <div class="item-actions"><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>사용</label><button data-remove="${index}">삭제</button></div>
   </div>`;
 }
@@ -293,7 +338,7 @@ function previewRows() {
   if (!body) return targets;
   const rows = targets.map((target) => {
     const previous = reportItem(target);
-    const expected = Number(displayCounts(previous).expected || target.selectedCount || 0);
+    const expected = Number(displayCounts(previous, target).expected || target.selectedCount || 0);
     return `<div><b>${escapeHtml(target.label || target.source)}</b><span>${escapeHtml(targetSummary(target))}${expected ? ` · 이전 기준 ${expected.toLocaleString("ko-KR")}건` : " · 예상 개수는 목록 확인 후 확정"}</span></div>`;
   });
   body.innerHTML = targets.length

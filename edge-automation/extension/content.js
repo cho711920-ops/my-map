@@ -47,20 +47,29 @@ function collectorProgressSnapshot() {
     metricValues[key] = Math.max(0, Number(String(node.textContent || "0").replace(/[^\d.-]/g, "")) || 0);
   });
   const numericPercent = Math.max(0, Math.min(100, Number(percent.replace(/[^\d.]/g, "")) || 0));
-  const stageKey = /완료/.test(status) ? "complete"
+  const provisional = panel.id === "js-daangn-collector-panel" &&
+    /클러스터 선택 완료|자동수집 등록 (?:완료|준비)|지도에서 .*클러스터|수량을 확인한 뒤 수집 시작/.test(`${status} ${detail}`);
+  const stageKey = provisional ? "selection"
+    : /완료/.test(status) ? "complete"
     : /저장/.test(status) && !/상세/.test(status) ? "save"
       : /상세|중복/.test(status) ? "detail"
         : /목록|클러스터/.test(status) ? "list" : "collect";
-  const stageLabels = { loading: "화면 연결", list: "목록 확인", detail: "상세 조회", save: "저장", complete: "완료", collect: "수집" };
+  const stageLabels = { loading: "화면 연결", selection: "대상 선택", list: "목록 확인", detail: "상세 조회", save: "저장", complete: "완료", collect: "수집" };
   const stage = {
     key: stageKey,
     label: stageLabels[stageKey] || "수집",
-    percent: stageKey === "complete" ? 100 : numericPercent,
+    percent: stageKey === "complete" ? 100 : provisional ? 0 : numericPercent,
     found: metricValues.found || 0,
     processed: metricValues.processed || 0,
     unchanged: metricValues.skippedUnchanged || 0,
-    remaining: metricValues.remaining || 0
+    remaining: metricValues.remaining || 0,
+    created: metricValues.created || 0,
+    updated: metricValues.updated || 0,
+    review: metricValues.review || 0,
+    addressMissing: metricValues.addressMissing || 0,
+    failed: metricValues.failed || 0
   };
+  if (provisional) stage.provisional = true;
   // Elapsed seconds and clocks change even when the provider request is stuck.
   // Exclude them so the watchdog measures real page/count changes.
   const fingerprint = [status, percent, stableProgressText(detail), progress, metrics].join("|")
@@ -163,7 +172,13 @@ function runPageCollector(target, runId, parentRunId) {
         return;
       }
       if (event.data.type !== "JS_COLLECTOR_AUTOMATION_RESULT") return;
-      finish({ ok: Boolean(event.data.ok), message: event.data.message || "", result: event.data.result || {} });
+      const progress = collectorProgressSnapshot();
+      finish({
+        ok: Boolean(event.data.ok),
+        message: event.data.message || "",
+        result: event.data.result || {},
+        progressStage: progress.stage
+      });
     };
     window.addEventListener("message", onMessage);
     heartbeatTimer = setInterval(() => {
@@ -176,10 +191,14 @@ function runPageCollector(target, runId, parentRunId) {
         ok: false,
         message: progress.fingerprint === "panel-waiting"
           ? "수집 기능 화면을 찾지 못했습니다. 공급처 화면 구조 변경 또는 수집기 로딩 오류를 확인해주세요."
-          : "실제 수집 시작 신호를 35초 안에 받지 못했습니다. 공급처 응답과 수집기 버전을 확인해주세요."
+          : "실제 수집 시작 신호를 35초 안에 받지 못했습니다. 공급처 응답과 수집기 버전을 확인해주세요.",
+        progressStage: progress.stage
       });
     }, START_ACK_TIMEOUT_MS);
-    resultTimer = setTimeout(() => finish({ ok: false, message: "자동수집 제한시간을 초과했습니다." }), RESULT_TIMEOUT_MS);
+    resultTimer = setTimeout(() => {
+      const progress = collectorProgressSnapshot();
+      finish({ ok: false, message: "자동수집 제한시간을 초과했습니다.", progressStage: progress.stage });
+    }, RESULT_TIMEOUT_MS);
     window.postMessage({ type: "JS_AUTO_START_MAIN", target, runId }, "*");
   });
   const session = { started, result, reportAttached: false };
@@ -214,7 +233,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         targetRunId: message.runId,
         ok: Boolean(result && result.ok),
         message: result && result.message || "",
-        result: result && result.result || {}
+        result: result && result.result || {},
+        progressStage: result && result.progressStage || null
       });
     }).catch((error) => {
       return reportTargetFinished({

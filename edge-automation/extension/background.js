@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.6";
+const BACKGROUND_BUILD = "1.1.7";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -374,6 +374,51 @@ function resultCounts(result) {
   };
 }
 
+function mergeCountSnapshots(previous, incoming) {
+  const output = { ...(previous || {}) };
+  const numericKeys = new Set([
+    "expected", "processed", "detailProcessed", "unchanged",
+    "created", "updated", "review", "addressDeferred", "failed"
+  ]);
+  Object.entries(incoming || {}).forEach(([key, value]) => {
+    if (numericKeys.has(key)) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0) return;
+      output[key] = Math.max(Number(output[key] || 0), parsed);
+      return;
+    }
+    if (key === "listComplete") {
+      output[key] = output[key] === true || value === true;
+      return;
+    }
+    if (value !== undefined) output[key] = value;
+  });
+  return output;
+}
+
+function progressCounts(target, stage) {
+  if (cleanSource(target && target.source) !== "daangn" || !stage || typeof stage !== "object" || stage.provisional === true) return {};
+  const number = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  };
+  const detailProcessed = number(stage.processed);
+  const unchanged = number(stage.unchanged);
+  return {
+    version: 2,
+    expected: number(stage.found),
+    processed: detailProcessed + unchanged,
+    detailProcessed,
+    unchanged,
+    created: number(stage.created),
+    updated: number(stage.updated),
+    review: number(stage.review),
+    addressDeferred: number(stage.addressMissing),
+    failed: number(stage.failed),
+    listComplete: false
+  };
+}
+
 function resultDiagnostics(result) {
   const payload = result && result.result || {};
   if (cleanSource(payload.source) !== "daangn") return [];
@@ -403,7 +448,15 @@ async function updateRunReport(state, target, status, details = {}) {
   const key = targetKey(target);
   const item = report.items.find((entry) => entry.key === key);
   if (!item) return report;
-  Object.assign(item, { status, updatedAt: Date.now(), ...details });
+  const nextDetails = { ...details };
+  const replaceCounts = nextDetails.replaceCounts === true;
+  delete nextDetails.replaceCounts;
+  if (nextDetails.counts) {
+    nextDetails.counts = replaceCounts
+      ? { ...nextDetails.counts }
+      : mergeCountSnapshots(item.counts, nextDetails.counts);
+  }
+  Object.assign(item, { status, updatedAt: Date.now(), ...nextDetails });
   report.active = Boolean(state.active);
   report.summary = { ...(state.summary || {}) };
   report.updatedAt = Date.now();
@@ -548,11 +601,15 @@ async function updateTargetHeartbeat(message, senderTabId) {
   state.progressStage = progressStage;
   await saveRunState(state);
   const target = (state.targets || [])[state.index];
-  if (target) await updateRunReport(state, target, "running", {
-    message: progressMessage,
-    progressStage,
-    progressUpdatedAt: now
-  });
+  if (target) {
+    const counts = progressCounts(target, progressStage);
+    await updateRunReport(state, target, "running", {
+      message: progressMessage,
+      progressStage,
+      progressUpdatedAt: now,
+      ...(Object.keys(counts).length ? { counts } : {})
+    });
+  }
   return { ok: true, heartbeat: true };
 }
 
@@ -737,6 +794,10 @@ async function finishCurrentTarget(result, senderTabId) {
     "자동수집이 오류로 종료됐습니다.");
   const invalidTradeConfig = /당근 거래유형 설정/.test(failureMessage);
   const successful = result.ok === true && !payloadPartial;
+  const interruptedCounts = mergeCountSnapshots(
+    progressCounts(target, result.progressStage || state.progressStage),
+    resultCounts(result)
+  );
   if (!successful && !warningCompletion && elapsedMs < MAX_TARGET_RUNTIME_MS &&
       targetAttempt < MAX_IMMEDIATE_ATTEMPTS && !invalidTradeConfig && retryableTargetFailure(failureMessage)) {
     const message = failureMessage;
@@ -749,7 +810,8 @@ async function finishCurrentTarget(result, senderTabId) {
     });
     await updateRunReport(state, target, "retrying", {
       message,
-      attempt: targetAttempt + 1
+      attempt: targetAttempt + 1,
+      counts: interruptedCounts
     });
     state.currentTabId = null;
     state.targetRunId = null;
@@ -791,7 +853,7 @@ async function finishCurrentTarget(result, senderTabId) {
       message: addressDeferred
         ? `수집완료 · 정확한 지번 미제공 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}건 지도 등록 보류`
         : partial ? resultNotice(result) : "수집 완료",
-      counts, diagnostics: resultDiagnostics(result)
+      counts, replaceCounts: true, progressStage: null, diagnostics: resultDiagnostics(result)
     });
   } else {
     const message = failureMessage;
@@ -821,7 +883,7 @@ async function finishCurrentTarget(result, senderTabId) {
       elapsedMs,
       message,
       attempt: targetAttempt,
-      counts: resultCounts(result), diagnostics: resultDiagnostics(result)
+      counts: interruptedCounts, diagnostics: resultDiagnostics(result)
     });
   }
 

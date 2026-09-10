@@ -7,6 +7,9 @@ const context = { state: fixture(), STATUS_TEXT: { partial: '부분완료', defe
 const ui = extract(read('edge-automation/extension/options.js'),
   ['escapeHtml', 'registeredTime', 'displayCounts', 'countText', 'statusDetail', 'reportStatus', 'renderDiagnostics', 'renderRunSummary'], context);
 const client = extract(read('js/daangn-collector.js'), ['jobDisplay'], {}, '  ');
+const progressContext = {};
+const progressUi = extract(read('edge-automation/extension/content.js'),
+  ['stableProgressText', 'collectorProgressSnapshot'], progressContext);
 
 for (const [found, details, held] of [[2078,42,19], [3876,56,27], [613,15,13], [641,10,5], [641,27,23]]) {
   test(`Aug28 census ${found} counts unchanged + detail processing, separately from ${held} held ads`, () => {
@@ -48,6 +51,70 @@ test('old reports expose detail count as detail count, never invent unchanged or
   assert.doesNotMatch(ui.statusDetail(item), /오류|실패 19/);
   assert.equal(ui.reportStatus(item), '부분완료');
   assert.equal(item.counts.failed, 19); // display only; original history is intact
+});
+test('running and retrying Daangn rows use the same numeric summary as Naver', () => {
+  const target = { source: 'daangn', selectedCount: 1853 };
+  const item = { source: 'daangn', status: 'retry_wait', counts: {}, progressStage: {
+    found: 1853, processed: 120, unchanged: 380, remaining: 1353,
+    created: 3, updated: 2, review: 7, addressMissing: 4, failed: 1
+  } };
+  const text = ui.countText(item, target);
+  assert.match(text, /500 \/ 1,853건 확인/);
+  assert.match(text, /신규 3/);
+  assert.match(text, /변경 2/);
+  assert.match(text, /검증 7/);
+  assert.match(text, /기존 동일 380/);
+  assert.match(text, /주소 보류 4/);
+  assert.match(text, /오류 1/);
+  assert.doesNotMatch(text, /이전 기록/);
+});
+test('content heartbeat captures every Daangn number needed by the status row', () => {
+  const values = { found: '1,853', processed: '120', skippedUnchanged: '380', remaining: '1,353',
+    created: '3', updated: '2', review: '7', addressMissing: '4', failed: '1' };
+  const metricNodes = Object.entries(values).map(([key, textContent]) => ({
+    textContent, getAttribute(name) { return name === 'data-metric' ? key : ''; }
+  }));
+  const fixed = {
+    '[data-role=status]': { textContent: '상세조회·저장 중' },
+    '[data-role=percent]': { textContent: '27%' },
+    '[data-role=detail]': { textContent: '500 / 1,853건' },
+    '[data-role=progress-bar]': { style: { width: '27%' } }
+  };
+  progressContext.document = { querySelector() { return { id: 'js-daangn-collector-panel',
+    querySelector(selector) { return fixed[selector] || null; },
+    querySelectorAll(selector) { return selector.includes('[data-metric]') ? metricNodes : []; }
+  }; } };
+  const stage = progressUi.collectorProgressSnapshot().stage;
+  assert.deepEqual({ ...stage }, { key: 'detail', label: '상세 조회', percent: 27,
+    found: 1853, processed: 120, unchanged: 380, remaining: 1353,
+    created: 3, updated: 2, review: 7, addressMissing: 4, failed: 1 });
+});
+test('Daangn selection count stays a clearly labelled registration baseline', () => {
+  const metricNodes = [{ textContent: '1,853', getAttribute() { return 'found'; } }];
+  progressContext.document = { querySelector() { return { id: 'js-daangn-collector-panel',
+    querySelector(selector) { return {
+      '[data-role=status]': { textContent: '대전 유성구 클러스터 선택 완료' },
+      '[data-role=percent]': { textContent: '0%' },
+      '[data-role=detail]': { textContent: '수량을 확인한 뒤 수집 시작을 눌러주세요.' },
+      '[data-role=progress-bar]': { style: { width: '0%' } }
+    }[selector] || null; },
+    querySelectorAll(selector) { return selector.includes('[data-metric]') ? metricNodes : []; }
+  }; } };
+  const stage = progressUi.collectorProgressSnapshot().stage;
+  assert.equal(stage.key, 'selection');
+  assert.equal(stage.provisional, true);
+  assert.equal(stage.found, 1853);
+  const text = ui.countText({ source: 'daangn', status: 'running', counts: {}, progressStage: stage },
+    { source: 'daangn', selectedCount: 1853 });
+  assert.match(text, /0 \/ 1,853건 확인 \(등록 기준\)/);
+});
+test('Daangn blocked before its first list page shows zero against the registered target count', () => {
+  const target = { source: 'daangn', selectedCount: 1853 };
+  const item = { source: 'daangn', status: 'retry_wait', counts: {},
+    progressStage: { found: 0, processed: 0, unchanged: 0, remaining: 0 } };
+  assert.match(ui.statusDetail(item, target), /0 \/ 1,853건 확인 \(등록 기준\)/);
+  assert.doesNotMatch(ui.statusDetail(item, target), /이전 기록/);
+  assert.match(ui.countText({ source: 'daangn', counts: { version: 2 } }), /목록 0건 · 확인 0건 \(집계 전\)/);
 });
 test('Naver and Gongsil legacy counts/zero values are preserved', () => {
   const counts = background.resultCounts({ result: { source: 'naver', session: {

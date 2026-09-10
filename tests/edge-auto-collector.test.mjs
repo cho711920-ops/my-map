@@ -92,6 +92,11 @@ test("automatic targets and schedules stay in the dedicated Edge profile", () =>
   assert.match(content, /JS_COLLECTOR_AUTOMATION_STARTED/);
   assert.match(content, /\[data-metric\]/);
   assert.match(content, /JS_AUTO_TARGET_HEARTBEAT/);
+  assert.match(content, /created: metricValues\.created/);
+  assert.match(content, /updated: metricValues\.updated/);
+  assert.match(content, /review: metricValues\.review/);
+  assert.match(content, /addressMissing: metricValues\.addressMissing/);
+  assert.match(content, /progressStage: result && result\.progressStage/);
   assert.match(content, /function stableProgressText\(value\)/);
   assert.match(content, /stableProgressText\(detail\)/);
   assert.match(content, /JS_AUTO_COLLECTOR_PAGE_LOADED/);
@@ -127,6 +132,7 @@ test("all three collectors expose registration and unattended execution", () => 
   assert.match(daangn, /partial: partial/);
   assert.match(daangn, /scheduleManualRecovery\(message\)/);
   assert.match(daangn, /manualRecoveryAttempts >= 5/);
+  assert.match(daangn, /state\.job\.message = message \+ " · 저장 지점은 서버에 보존됩니다\."/);
   assert.match(daangn, /function getScopedClientId\(url\)/);
   assert.match(daangn, /jobRequestGeneration/);
   assert.match(daangn, /\{jobUrl: state\.job\.url\}/);
