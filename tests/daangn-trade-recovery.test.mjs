@@ -90,6 +90,10 @@ test("sale apartments still rejected; rental categories still retained", () => {
   assert.deepEqual(parseDaangnUrl(url(["MONTH"])).propertyFilter.salesTypes, ["STORE", "OFFICE", "FACTORY"]);
 });
 
+test("server GraphQL requests identify the current realty web client", () => {
+  assert.match(server, /["']x-realty-platform["']:\s*["']realty-web["']/);
+});
+
 test("one article with BUY and MONTH uses the requested offer, including updated detail rent", () => {
   const article = { originalId: "dual", salesTypeV3: { type: "STORE" }, trades: [
     { type: "BUY", price: 35000, preferred: true },
