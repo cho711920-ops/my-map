@@ -194,11 +194,20 @@ async function fetchEndpoint(env, key, parcel) {
   const [endpoint, label] = ENDPOINTS[key];
   const first = await fetchPage(env, endpoint, label, parcel, 1);
   const pageCount = Math.min(10, Math.max(1, Math.ceil((first.totalCount || first.items.length) / 100)));
-  const rest = pageCount > 1
-    ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) => fetchPage(env, endpoint, label, parcel, index + 2)))
+  const settled = pageCount > 1
+    ? await Promise.allSettled(Array.from({ length: pageCount - 1 }, (_, index) => fetchPage(env, endpoint, label, parcel, index + 2)))
     : [];
+  const rest = settled.filter((entry) => entry.status === "fulfilled").map((entry) => entry.value);
+  const pageErrors = settled.flatMap((entry, index) => entry.status === "rejected"
+    ? [{ page: index + 2, message: clean(entry.reason?.message) || `${label} 추가 페이지 조회에 실패했습니다.` }]
+    : []);
   const items = first.items.concat(...rest.map((page) => page.items));
-  return { items, totalCount: first.totalCount || items.length, truncated: (first.totalCount || items.length) > items.length };
+  return {
+    items,
+    totalCount: first.totalCount || items.length,
+    truncated: (first.totalCount || items.length) > items.length || pageErrors.length > 0,
+    pageErrors
+  };
 }
 
 function registerType(row) {
@@ -373,19 +382,41 @@ async function getBuildingRegisterForParcel(env, query, parcel, mode) {
     }
   }
   const requested = mode === "summary" ? ["title", "recap"] : Object.keys(ENDPOINTS);
-  const settled = await Promise.all(requested.map(async (name) => [name, await fetchEndpoint(env, name, parcel)]));
-  const map = Object.fromEntries(settled);
+  const settled = await Promise.allSettled(requested.map((name) => fetchEndpoint(env, name, parcel)));
+  const map = {};
+  const endpointErrors = [];
+  settled.forEach((entry, index) => {
+    const name = requested[index];
+    const label = ENDPOINTS[name]?.[1] || name;
+    if (entry.status === "fulfilled") {
+      map[name] = entry.value;
+      for (const pageError of entry.value.pageErrors || []) {
+        endpointErrors.push({ endpoint: name, label, page: pageError.page, message: pageError.message });
+      }
+      return;
+    }
+    endpointErrors.push({
+      endpoint: name,
+      label,
+      message: clean(entry.reason?.message) || `${label} 조회에 실패했습니다.`
+    });
+  });
+  if (!Object.keys(map).length) {
+    const firstFailure = settled.find((entry) => entry.status === "rejected");
+    throw firstFailure?.reason || new Error("건축물대장 조회에 실패했습니다.");
+  }
   let buildings = (map.title?.items || []).map(title);
   const recaps = (map.recap?.items || []).map(title);
   if (!buildings.length && recaps.length) buildings = recaps.slice();
   const base = responseBase(parcel, query.propertyId);
   if (mode === "summary") {
-    const result = { ...base, partial: true, detailsPending: true, buildings, recaps, units: [],
+    const result = { ...base, partial: true, incomplete: endpointErrors.length > 0, detailsPending: true,
+      endpointErrors, buildings, recaps, units: [],
       recordCounts: { buildings: map.title?.totalCount || 0, recapTitles: map.recap?.totalCount || 0,
         floors: 0, exclusiveUnits: 0, exclusiveAreas: 0, zones: 0 },
       truncated: Boolean(map.title?.truncated || map.recap?.truncated) };
     result.buildingInfoCache = await persistBuildingBadge(env, query.propertyId, result);
-    await writeCache(env, key, parcel, mode, result);
+    if (!endpointErrors.length) await writeCache(env, key, parcel, mode, result);
     return result;
   }
   const floors = (map.floor?.items || []).map(floor);
@@ -407,13 +438,14 @@ async function getBuildingRegisterForParcel(env, query, parcel, mode) {
     building.floors = floors.filter((entry) => sameBuilding(building, entry, buildings.length));
     building.zones = zones.filter((entry) => sameBuilding(building, entry, buildings.length));
   });
-  const result = { ...base, partial: false, detailsPending: false, buildings, recaps, units,
+  const result = { ...base, partial: endpointErrors.length > 0, incomplete: endpointErrors.length > 0,
+    detailsPending: endpointErrors.length > 0, endpointErrors, buildings, recaps, units,
     recordCounts: { buildings: map.title?.totalCount || buildings.length, recapTitles: map.recap?.totalCount || recaps.length,
       floors: map.floor?.totalCount || floors.length, exclusiveUnits: map.exclusive?.totalCount || units.length,
       exclusiveAreas: map.exclusiveArea?.totalCount || areas.length, zones: map.zone?.totalCount || zones.length },
     truncated: Object.values(map).some((entry) => entry.truncated) };
   result.buildingInfoCache = await persistBuildingBadge(env, query.propertyId, result);
-  await writeCache(env, key, parcel, mode, result);
+  if (!endpointErrors.length) await writeCache(env, key, parcel, mode, result);
   return result;
 }
 

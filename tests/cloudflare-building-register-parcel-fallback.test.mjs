@@ -209,3 +209,34 @@ test("a dong-only listing prefers its active source's exact lot over approximate
     globalThis.fetch = previousFetch;
   }
 });
+
+test("one failed register endpoint returns usable partial data without caching the incomplete response", async () => {
+  const previousFetch = globalThis.fetch;
+  const DB = mockDb([]);
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/getBrRecapTitleInfo")) {
+      return new Response("temporary upstream error", { status: 503 });
+    }
+    const item = `<item><mgmBldrgstPk>PARTIAL-1</mgmBldrgstPk><platPlc>대전광역시 중구 선화동 12-3</platPlc><bldNm>부분응답빌딩</bldNm></item>`;
+    return new Response(xml([item], 1), { status: 200 });
+  };
+  try {
+    const result = await getBuildingRegister({ DB, DATA_GO_KR_SERVICE_KEY: "test-key" }, {
+      mode: "summary",
+      sigunguCd: "30140",
+      bjdongCd: "10200",
+      platGbCd: "0",
+      bun: "0012",
+      ji: "0003"
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.incomplete, true);
+    assert.equal(result.buildings[0].buildingName, "부분응답빌딩");
+    assert.deepEqual(result.endpointErrors.map((entry) => entry.endpoint), ["recap"]);
+    assert.match(result.endpointErrors[0].message, /HTTP 503/);
+    assert.equal(DB.state.cacheWrites, 0);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
