@@ -2,7 +2,7 @@
 import http from 'node:http';
 import { read, fixture } from '../tests/fixtures/daangn-report-fixture.mjs';
 const state = fixture();
-const mock = `window.chrome={runtime:{getManifest:()=>({version:'1.1.7'}),sendMessage:(_message,callback)=>callback(${JSON.stringify(state)})},storage:{onChanged:{addListener(){}}}};`;
+const mock = `window.chrome={runtime:{getManifest:()=>({version:'1.1.8'}),sendMessage:(_message,callback)=>callback(${JSON.stringify(state)})},storage:{onChanged:{addListener(){}}}};`;
 http.createServer((req, res) => {
   const name = req.url.split('?')[0];
   if (name === '/mock.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end(mock); }

@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.7";
+const BACKGROUND_BUILD = "1.1.8";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -908,6 +908,58 @@ async function cleanupAuxiliaryTabs() {
   await Promise.all(removable.map((tab) => chrome.tabs.remove(tab.id).catch(() => {})));
 }
 
+function providerSourceFromUrl(value) {
+  try {
+    const host = new URL(String(value || "")).hostname.toLowerCase();
+    if (/^(?:new|fin)\.land\.naver\.com$/.test(host)) return "naver";
+    if (host === "realty.daangn.com") return "daangn";
+    if (/(?:^|\.)gongsilbox\.com$/.test(host)) return "gongsil";
+  } catch (_) {}
+  return "";
+}
+
+function providerSourceFromTab(tab) {
+  return providerSourceFromUrl(tab && tab.pendingUrl) || providerSourceFromUrl(tab && tab.url);
+}
+
+async function removeRedundantProviderTabs(keepTabId = null) {
+  const pages = await chrome.tabs.query({}).catch(() => []);
+  const providerTabs = pages.filter((tab) =>
+    Number.isInteger(tab && tab.id) && providerSourceFromTab(tab));
+  const keep = Number.isInteger(keepTabId)
+    ? providerTabs.find((tab) => tab.id === keepTabId)
+    : null;
+  const removable = providerTabs.filter((tab) => !keep || tab.id !== keep.id);
+  await Promise.all(removable.map((tab) => chrome.tabs.remove(tab.id).catch(() => {})));
+  return { keep: keep || null, removed: removable.length, providerTabs };
+}
+
+async function acquireSingleProviderTab(runtimeTarget, reuseTabId = null) {
+  const pages = await chrome.tabs.query({}).catch(() => []);
+  const providerTabs = pages.filter((tab) =>
+    Number.isInteger(tab && tab.id) && providerSourceFromTab(tab));
+  const targetSource = cleanSource(runtimeTarget && runtimeTarget.source);
+  let tab = null;
+  if (Number.isInteger(reuseTabId)) {
+    tab = pages.find((candidate) => candidate && candidate.id === reuseTabId) ||
+      await chrome.tabs.get(reuseTabId).catch(() => null);
+  }
+  if (!tab) {
+    tab = providerTabs.find((candidate) =>
+      providerSourceFromTab(candidate) === targetSource) || providerTabs[0] || null;
+  }
+  await Promise.all(providerTabs
+    .filter((candidate) => !tab || candidate.id !== tab.id)
+    .map((candidate) => chrome.tabs.remove(candidate.id).catch(() => {})));
+  if (tab) {
+    const candidateId = tab.id;
+    tab = await chrome.tabs.update(candidateId, { url: runtimeTarget.url, active: false }).catch(() => null);
+    if (!tab) await chrome.tabs.remove(candidateId).catch(() => {});
+  }
+  if (!tab) tab = await chrome.tabs.create({ url: runtimeTarget.url, active: false });
+  return tab;
+}
+
 async function launchCurrentTarget(state, reuseTabId = null) {
   if (!state || !state.active) return { ok: false, message: "실행 중인 자동수집이 없습니다." };
   const report = await getRunReport();
@@ -951,10 +1003,7 @@ async function launchCurrentTarget(state, reuseTabId = null) {
       message: "",
       attempt: Math.max(1, Number(state.targetAttempt || 1))
     });
-    if (Number.isInteger(reuseTabId)) {
-      tab = await chrome.tabs.update(reuseTabId, { url: runtimeTarget.url, active: false }).catch(() => null);
-    }
-    if (!tab) tab = await chrome.tabs.create({ url: runtimeTarget.url, active: false });
+    tab = await acquireSingleProviderTab(runtimeTarget, reuseTabId);
     state.currentTabId = tab.id;
     state.targetRunId = targetRunId;
     state.targetStartedAt = startedAt;
@@ -1244,6 +1293,7 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
   if (!currentTab && !waitingForRetry) {
     await restartPersistedRun(state, "멈춘 실행 지점을 복구해 자동수집을 계속합니다.");
   } else {
+    if (currentTab) await removeRedundantProviderTabs(currentTab.id);
     await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
   }
 

@@ -30,6 +30,10 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /runScheduled\("browser-startup"\)/);
   assert.doesNotMatch(background, /chrome\.scripting\.executeScript/);
   assert.match(background, /async function launchCurrentTarget\(state, reuseTabId = null\)/);
+  assert.match(background, /async function acquireSingleProviderTab\(runtimeTarget, reuseTabId = null\)/);
+  assert.match(background, /async function removeRedundantProviderTabs\(keepTabId = null\)/);
+  assert.match(background, /providerSourceFromUrl\(tab && tab\.pendingUrl\) \|\| providerSourceFromUrl\(tab && tab\.url\)/);
+  assert.match(background, /tab = await acquireSingleProviderTab\(runtimeTarget, reuseTabId\)/);
   assert.match(background, /async function finishCurrentTarget\(result, senderTabId\)/);
   assert.match(background, /await sendRunMessage\(tab\.id, runtimeTarget, targetRunId, state\.runId\)/);
   assert.match(background, /JS_AUTO_TARGET_FINISHED/);

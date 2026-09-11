@@ -30,7 +30,7 @@ export function fixture() {
   }));
   const numbers = [[2078, 42, 19], [3876, 56, 27], [613, 15, 13], [641, 10, 5], [641, 27, 23]];
   const changes = [[1, 0, 13], [2, 1, 13], [1, 0, 1], [1, 0, 3], [1, 1, 2]];
-  return { ok: true, backgroundBuild: '1.1.7', config: { enabled: true, closeTabs: true, schedule: '11:00', targets },
+  return { ok: true, backgroundBuild: '1.1.8', config: { enabled: true, closeTabs: true, schedule: '11:00', targets },
     runState: null, logs: [], runReport: { active: false, startedAt: at, items: targets.map((target, i) => {
       const run = result(...numbers[i]);
       [run.result.totals.created, run.result.totals.updated, run.result.totals.review] = changes[i];
