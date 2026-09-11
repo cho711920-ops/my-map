@@ -258,8 +258,8 @@
   min-height: 50px !important;
 }
 
-/* v8.2.3 현재 지도 클러스터 개수 — 지도 좌측 상단 고정 */
-.map-cluster-count-v823 {
+/* v8.2.5 현재 지도 매물 총수 — 지도 좌측 상단 고정 */
+.map-listing-count-v825 {
   position: absolute;
   top: 12px;
   left: 12px;
@@ -285,7 +285,7 @@
   transition: left .22s ease;
 }
 
-.map-cluster-count-v823 strong {
+.map-listing-count-v825 strong {
   color: #0877dc;
   font-size: 14px;
   font-weight: 950;
@@ -293,26 +293,26 @@
 }
 
 @media (min-width: 769px) {
-  body.ai-side-panel-open .map-cluster-count-v823 {
+  body.ai-side-panel-open .map-listing-count-v825 {
     left: 492px;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1300px) {
-  body.ai-side-panel-open .map-cluster-count-v823 {
+  body.ai-side-panel-open .map-listing-count-v825 {
     left: 432px;
   }
 }
 
 @media (max-width: 768px) {
-  .js-mobile-app-v1 .map-cluster-count-v823 {
+  .js-mobile-app-v1 .map-listing-count-v825 {
     top: calc(var(--jsm-header-height) + 8px);
     left: 10px;
     min-height: 34px;
     padding: 6px 10px;
   }
 
-  .js-mobile-app-v1[data-jsm-mobile-view="list"] .map-cluster-count-v823 {
+  .js-mobile-app-v1[data-jsm-mobile-view="list"] .map-listing-count-v825 {
     display: none;
   }
 }
