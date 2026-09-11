@@ -569,6 +569,39 @@ function toggleSidebar() {
 }
 
 
+function selectSearchTextOnMousePointerV824(input, event) {
+  if (!input || !String(input.value || "").trim()) return false;
+  if (!event || event.pointerType !== "mouse" || event.button !== 0) return false;
+  if (
+    typeof input.selectionStart === "number" &&
+    typeof input.selectionEnd === "number" &&
+    input.selectionStart !== input.selectionEnd
+  ) {
+    return false;
+  }
+  if (typeof input.select !== "function") return false;
+
+  input.select();
+  return true;
+}
+
+
+function setupSearchMouseSelectAllV824() {
+  var root = document.documentElement;
+  if (!root || root.dataset.searchMouseSelectAllV824 === "1") return;
+  root.dataset.searchMouseSelectAllV824 = "1";
+
+  document.addEventListener("pointerup", function(event) {
+    var input = event.target;
+    if (!input || (input.id !== "keyword" && input.id !== "jsMobileKeywordV1")) return;
+    selectSearchTextOnMousePointerV824(input, event);
+  });
+}
+
+
+setupSearchMouseSelectAllV824();
+
+
 function setupEnterSearch() {
   var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minPremium, #maxPremium, #minArea, #maxArea, #minFloor, #maxFloor");
 
