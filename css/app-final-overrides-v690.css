@@ -258,3 +258,62 @@
   min-height: 50px !important;
 }
 
+/* v8.2.3 현재 지도 클러스터 개수 — 지도 좌측 상단 고정 */
+.map-cluster-count-v823 {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 9050;
+  box-sizing: border-box;
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(148, 163, 184, .58);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .94);
+  color: #52637a;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, .16);
+  font-family: var(--js-app-font, Pretendard, sans-serif);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  transition: left .22s ease;
+}
+
+.map-cluster-count-v823 strong {
+  color: #0877dc;
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: -.02em;
+}
+
+@media (min-width: 769px) {
+  body.ai-side-panel-open .map-cluster-count-v823 {
+    left: 492px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1300px) {
+  body.ai-side-panel-open .map-cluster-count-v823 {
+    left: 432px;
+  }
+}
+
+@media (max-width: 768px) {
+  .js-mobile-app-v1 .map-cluster-count-v823 {
+    top: calc(var(--jsm-header-height) + 8px);
+    left: 10px;
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+
+  .js-mobile-app-v1[data-jsm-mobile-view="list"] .map-cluster-count-v823 {
+    display: none;
+  }
+}
+

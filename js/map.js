@@ -2521,9 +2521,51 @@ function geocodeItems(items, callback, progressCallback) {
 }
 
 
+/* 현재 지도에 실제로 그려진 클러스터 수를 좌측 상단에 표시합니다. */
+function updateMapClusterCountV823() {
+  var mapElement = document.getElementById("map");
+  var projection = typeof map !== "undefined" && map && map.getProjection
+    ? map.getProjection()
+    : null;
+  var canCheckViewport = !!(
+    mapElement && projection &&
+    mapElement.clientWidth > 0 && mapElement.clientHeight > 0
+  );
+  var count = (overlays || []).reduce(function(total, overlay) {
+    if (!overlay || !overlay.__cluster) return total;
+    if (!canCheckViewport) return total + 1;
+
+    var cluster = overlay.__cluster;
+    var position = cluster.displayLatlng || cluster.latlng;
+    var point = position ? projection.containerPointFromCoords(position) : null;
+    if (!point) return total;
+
+    return total + (
+      point.x >= 0 && point.x <= mapElement.clientWidth &&
+      point.y >= 0 && point.y <= mapElement.clientHeight
+        ? 1
+        : 0
+    );
+  }, 0);
+  var badge = document.getElementById("mapClusterCountV823");
+  var value = document.getElementById("mapClusterCountValueV823");
+
+  if (!badge || !value) return count;
+
+  var formattedCount = count.toLocaleString("ko-KR");
+  value.textContent = formattedCount + "개";
+  badge.dataset.clusterCount = String(count);
+  badge.setAttribute("aria-label", "현재 지도에 표시된 클러스터 " + formattedCount + "개");
+  return count;
+}
+
+window.updateMapClusterCountV823 = updateMapClusterCountV823;
+
+
 function clearMap() {
   overlays.forEach(function(o) { o.setMap(null); });
   overlays = [];
+  updateMapClusterCountV823();
   document.getElementById("list").innerHTML = "";
 }
 
@@ -2658,6 +2700,8 @@ function drawMapClustersOnlyV639(items) {
     overlay.setMap(map);
     overlays.push(overlay);
   });
+
+  updateMapClusterCountV823();
 
   restoreClusterSelectionSnapshotV638(selectionSnapshotV638);
   isRendering = false;
