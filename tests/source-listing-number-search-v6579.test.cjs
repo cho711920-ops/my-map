@@ -38,7 +38,7 @@ assert.equal(helpers.matchesOriginalListingNumber(item, helpers.parseOriginalLis
 assert.equal(helpers.parseOriginalListingNumberKeyword("보증금 3000"), null);
 
 assert.match(d1, /sourceSearchIds/);
-assert.match(d1, /s\.source IN \('네이버','당근'\)/);
+assert.match(d1, /s\.source IN \('네이버','당근','공실박스','직접등록','직접확인'\)/);
 assert.match(d1, /l\.status<>'deleted'/);
 assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),

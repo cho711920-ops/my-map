@@ -9,6 +9,8 @@ import {
 import { carryConfirmedVisitMemo } from "./visit-status.js";
 import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-trade.js";
 import { saveSaleWorksheet } from "./sale-worksheet.js";
+import { validateQuickAddTrade } from "./quick-add-trade.js";
+import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -20,7 +22,7 @@ const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
   "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard",
-  "transactionCandidates", "listingChanges", "listingHistory", "userManagement", "userProfile"
+  "transactionCandidates", "listingChanges", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
 ]);
 
 const D1_POST_ACTIONS = new Set([
@@ -248,7 +250,7 @@ export async function buildD1SheetCsv(env) {
     property_id, source_url, contacts_json, building_year, building_elevators,
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
     last_collected_at, latitude, longitude, building_elevator_capacity,
-    trade_type, sale_category, sale_price`, "listings", `status <> 'deleted'
+    trade_type, sale_category, sale_price, sale_details_json`, "listings", `status <> 'deleted'
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
@@ -260,7 +262,7 @@ export async function buildD1SheetCsv(env) {
     "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
     "최종수집시각", "위도", "경도"
   ];
-  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가");
+  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세");
   const body = [header, ...rows.map((row) => [
     row.title, row.address, row.room, row.listing_type, row.deposit, row.monthly_rent,
     row.maintenance_fee, row.premium, row.area_m2, row.landlord_phone, row.tenant_phone,
@@ -268,7 +270,7 @@ export async function buildD1SheetCsv(env) {
     row.source_url, row.contacts_json, row.building_year, row.building_elevators,
     row.building_approval_date, row.building_info_checked_at, row.building_info_status,
     row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity,
-    row.trade_type, row.sale_category, row.sale_price
+    row.trade_type, row.sale_category, row.sale_price, row.sale_details_json
   ])].map((row) => row.map(csvCell).join(",")).join("\r\n");
   return `${body}\r\n`;
 }
@@ -284,7 +286,7 @@ async function listingChanges(env, query) {
       property_id, source_url, contacts_json, building_year, building_elevators,
       building_approval_date, building_info_checked_at, building_info_status, registration_at,
       last_collected_at, latitude, longitude, building_elevator_capacity,
-      trade_type, sale_category, sale_price
+      trade_type, sale_category, sale_price, sale_details_json
     FROM listings WHERE property_id IN (${placeholders})
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
@@ -323,7 +325,7 @@ export function sourceListingSearchIndex(rows = []) {
   for (const row of rows) {
     const propertyId = clean(row?.listing_id);
     const sourceId = clean(row?.source_listing_id).replace(/^네이버-/i, "");
-    const sourceCode = clean(row?.source) === "네이버" ? "n" : (clean(row?.source) === "당근" ? "d" : "");
+    const sourceCode = ({ "네이버": "n", "당근": "d", "공실박스": "g", "직접등록": "m", "직접확인": "m" })[clean(row?.source)] || "";
     if (!propertyId || !sourceCode || !/^\d+$/.test(sourceId)) continue;
     if (!sourceSearchIds[propertyId]) sourceSearchIds[propertyId] = [];
     const key = `${sourceCode}:${sourceId}`;
@@ -369,7 +371,7 @@ async function unifiedListings(env) {
   );
   const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
     FROM listing_sources s JOIN listings l ON l.id=s.listing_id
-    WHERE l.status<>'deleted' AND s.source IN ('네이버','당근')
+    WHERE l.status<>'deleted' AND s.source IN ('네이버','당근','공실박스','직접등록','직접확인')
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = l.id
@@ -398,7 +400,7 @@ async function unifiedListings(env) {
   const unavailableRows = await allPages(env, `SELECT
       l.id, l.property_id, l.main_source, l.title, l.building_name, l.address, l.room,
       l.deposit, l.monthly_rent, l.maintenance_fee, l.premium, l.area_m2,
-      l.trade_type, l.sale_category, l.sale_price,
+      l.trade_type, l.sale_category, l.sale_price, l.sale_details_json,
       l.latitude, l.longitude, l.operating_memo, l.source_url, l.contacts_json, l.version,
       l.registration_at, l.first_collected_at, COUNT(s.id) AS source_count,
       MAX(s.missing_count) AS missing_count,
@@ -456,6 +458,8 @@ export function masterFallbackOriginal(row, images = []) {
     tradeType: clean(row?.trade_type) || "lease",
     saleCategory: clean(row?.sale_category),
     salePrice: number(row?.sale_price),
+    saleDetails: parseJson(row?.sale_details_json, {}),
+    saleSummary: parseJson(row?.sale_details_json, {}),
     deposit: number(row?.deposit),
     rent: number(row?.monthly_rent),
     fee: number(row?.maintenance_fee),
@@ -513,7 +517,7 @@ async function unifiedDetail(env, propertyId) {
   if (!originals.length) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,
         address, room, deposit, monthly_rent, maintenance_fee, premium, area_m2,
-        trade_type, sale_category, sale_price,
+        trade_type, sale_category, sale_price, sale_details_json,
         latitude, longitude, operating_memo, source_url, contacts_json, version,
         registration_at, first_collected_at,
         (SELECT COUNT(*) FROM listing_sources s WHERE s.listing_id=listings.id) AS source_count,
@@ -677,7 +681,7 @@ async function announcement(env) {
   return { ok: true, action: "announcement", announcement: row || null, source: "D1" };
 }
 
-async function duplicateCheck(env, values) {
+async function duplicateCheck(env, values, trade = { tradeType: "lease", salePrice: null }) {
   const row = Array.isArray(values) ? values : [];
   const address = clean(row[1]);
   const room = clean(row[2]);
@@ -688,7 +692,11 @@ async function duplicateCheck(env, values) {
     FROM listings WHERE status <> 'deleted' AND address = ?1 AND room = ?2
       AND COALESCE(deposit, 0) = COALESCE(?3, 0) AND COALESCE(monthly_rent, 0) = COALESCE(?4, 0)
       AND COALESCE(area_m2, 0) = COALESCE(?5, 0)
-    LIMIT 1`).bind(address, room, deposit, rent, area).first();
+      AND trade_type = ?6 AND (?6 <> 'sale' OR (sale_price = ?7 AND sale_category = ?8
+        AND json_extract(sale_details_json, '$.landAreaM2') IS ?9
+        AND json_extract(sale_details_json, '$.grossAreaM2') IS ?10))
+    LIMIT 1`).bind(address, room, deposit, rent, area, trade.tradeType, trade.salePrice,
+      trade.saleCategory || "", trade.saleDetails?.landAreaM2 ?? null, trade.saleDetails?.grossAreaM2 ?? null).first();
   const similar = exact || await env.DB.prepare(`SELECT property_id, title, address, room, deposit, monthly_rent
     FROM listings WHERE status <> 'deleted' AND address = ?1 LIMIT 1`).bind(address).first();
   const existing = similar ? {
@@ -1216,6 +1224,7 @@ async function userManagement(env, user) {
 }
 
 export async function handleD1GetAction(env, user, query) {
+  if (query.action === "listingHistoryRestorePreview") return previewListingHistoryRestore(env, user, query);
   const action = clean(query.action);
   if (!env.DB || !isD1GetAction(action)) return null;
   if (action === "unifiedListings") return unifiedListings(env);
@@ -1501,7 +1510,8 @@ async function deleteProperty(env, user, body) {
 
 async function quickAdd(env, user, body) {
   const values = Array.isArray(body.values) ? body.values : [];
-  const duplicate = await duplicateCheck(env, values);
+  const trade = validateQuickAddTrade(body, values);
+  const duplicate = await duplicateCheck(env, values, trade);
   /* 같은 주소라도 층·호실·조건·평수가 다른 별도 매물은 정상 등록합니다. */
   if (duplicate.duplicateType === "exact" && !body.forceDuplicate) {
     return { ...duplicate, persisted: false };
@@ -1511,21 +1521,25 @@ async function quickAdd(env, user, body) {
   await env.DB.prepare(`INSERT INTO listings (
     id, property_id, status, main_source, title, address, building_name, room, listing_type,
     deposit, monthly_rent, maintenance_fee, premium, area_m2, landlord_phone, tenant_phone,
-    operating_memo, first_collected_at, source_url, contacts_json, registration_at, last_collected_at, updated_at
+    operating_memo, first_collected_at, source_url, contacts_json, registration_at, last_collected_at, updated_at,
+    trade_type, sale_category, sale_price, sale_details_json
   ) VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?4, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-    ?15, ?16, ?17, ?18, ?19, ?20, ?20)`)
+    ?15, ?16, ?17, ?18, ?19, ?20, ?20, ?21, ?22, ?23, ?24)`)
     .bind(propertyId, clean(values[12]) || "active", clean(values[14]) || "직접등록", clean(values[0]),
       clean(values[1]), canonicalListingRoom(values[2]), clean(values[3]), number(values[4]), number(values[5]),
       number(values[6]), number(values[7]), number(values[8]), clean(values[9]), clean(values[10]),
       clean(values[11]), clean(values[13]) || now, clean(values[16]), clean(values[17]) || "[]",
-      clean(values[23]) || now, clean(values[24]) || now).run();
+      clean(values[23]) || now, clean(values[24]) || now,
+      trade.tradeType, trade.saleCategory, trade.salePrice, JSON.stringify(trade.saleDetails)).run();
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'quickAdd', ?2, '{}', ?3)`)
     .bind(propertyId, clean(user?.email), JSON.stringify({
       title: clean(values[0]), room: canonicalListingRoom(values[2]), deposit: number(values[4]),
       monthly_rent: number(values[5]), maintenance_fee: number(values[6]), premium: number(values[7]),
       area_m2: number(values[8]), landlord_phone: clean(values[9]), tenant_phone: clean(values[10]),
-      operating_memo: clean(values[11]), contacts_json: clean(values[17]) || "[]"
+      operating_memo: clean(values[11]), contacts_json: clean(values[17]) || "[]",
+      trade_type: trade.tradeType, sale_category: trade.saleCategory, sale_price: trade.salePrice,
+      sale_details_json: JSON.stringify(trade.saleDetails)
     })).run();
   return { ok: true, persisted: true, queued: false, propertyId,
     operationAdjustments: { activeMaster: 1, history: 1 }, source: "D1" };
@@ -2289,53 +2303,11 @@ async function saveLocalAccount(env, user, body) {
     passwordChanged: Boolean(passwordRecord), source: "D1" };
 }
 
-async function restoreListingHistory(env, user, body) {
-  requireRole(user, ["owner", "admin"]);
-  const historyId = Math.max(1, Number(body.historyId) || 0);
-  const history = await env.DB.prepare(`SELECT id, listing_id, action, before_json
-    FROM listing_history WHERE id=?1 LIMIT 1`).bind(historyId).first();
-  if (!history || !["updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(clean(history.action))) {
-    throw Object.assign(new Error("복구할 수 있는 변경이력이 아닙니다."), { statusCode: 400 });
-  }
-  const target = parseJson(history.before_json, {});
-  const listing = await env.DB.prepare(`SELECT * FROM listings
-    WHERE id=?1 OR property_id=?1 LIMIT 1`).bind(clean(history.listing_id)).first();
-  if (!listing) throw Object.assign(new Error("복구 대상 매물을 찾을 수 없습니다."), { statusCode: 404 });
-  const fieldMap = {
-    title: "title", building_name: "building_name", room: "room", deposit: "deposit",
-    monthly_rent: "monthly_rent", maintenance_fee: "maintenance_fee", premium: "premium",
-    area_m2: "area_m2", landlord_phone: "landlord_phone", tenant_phone: "tenant_phone",
-    operating_memo: "operating_memo", contacts_json: "contacts_json", status: "status"
-  };
-  const assignments = [];
-  const values = [];
-  for (const [source, column] of Object.entries(fieldMap)) {
-    if (!Object.prototype.hasOwnProperty.call(target, source)) continue;
-    values.push(target[source]);
-    assignments.push(`${column}=?${values.length}`);
-  }
-  if (!assignments.length) throw Object.assign(new Error("복구할 이전 값이 없습니다."), { statusCode: 400 });
-  const now = new Date().toISOString();
-  values.push(now, listing.id);
-  await env.DB.batch([
-    env.DB.prepare(`UPDATE listings SET ${assignments.join(", ")}, version=version+1,
-      updated_at=?${values.length - 1} WHERE id=?${values.length}`).bind(...values),
-    env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
-      VALUES (?1, 'restoreListingHistory', ?2, ?3, ?4)`)
-      .bind(listing.id, clean(user?.email), JSON.stringify(listing), JSON.stringify(target))
-  ]);
-  const activeDelta = clean(listing.status) === "deleted" && clean(target.status) !== "deleted" ? 1
-    : clean(listing.status) !== "deleted" && clean(target.status) === "deleted" ? -1 : 0;
-  return { ok: true, action: "restoreListingHistory", persisted: true,
-    propertyId: clean(listing.property_id || listing.id), historyId,
-    operationAdjustments: { activeMaster: activeDelta, history: 1 }, source: "D1" };
-}
-
 async function executePost(env, user, body) {
   const action = clean(body.action);
   if (action === "saveAllowedUser") return saveAllowedUser(env, user, body);
   if (action === "saveLocalAccount") return saveLocalAccount(env, user, body);
-  if (action === "restoreListingHistory") return restoreListingHistory(env, user, body);
+  if (action === "restoreListingHistory") return restoreSelectedListingHistory(env, user, body);
   if (action === "updatePropertyMemo") return updateMemo(env, user, body);
   if (action === "updateProperty") return updateProperty(env, user, body);
   if (action === "toggleDone") return toggleDone(env, user, body);

@@ -40,6 +40,7 @@
 <link rel="stylesheet" href="css/right-sidebar-v6.css?v=6.4.6-compact-card-actions">
 <link rel="stylesheet" href="css/unified-listings-v8.css?v=8.1.40-smooth-photo-expand">
 <link rel="stylesheet" href="css/operations-center-v7.css?v=7.22.6-inline-transactions">
+<link rel="stylesheet" href="css/workflow-safety-v1.css?v=1">
   <link rel="stylesheet" href="css/operations-collection-v8.css?v=7.26.1-review-audit">
   <link rel="stylesheet" href="css/operations-admin-v1.css?v=1.2.0-linked-identity">
 <link rel="stylesheet" href="css/announcement-v1.css?v=1.0.1-readable-steps">
@@ -548,6 +549,25 @@
 
     <div class="quick-add-grid">
       <div class="full">
+        <label for="qaTradeMode">등록 거래유형</label>
+        <select id="qaTradeMode" aria-label="등록 거래유형" onchange="syncQuickAddTradeV1(false)">
+          <option value="lease">상가임대</option>
+          <option value="building_sale">건물매매</option>
+          <option value="land_sale">토지매매</option>
+        </select>
+      </div>
+      <div id="qaSaleFieldsV1" class="full quick-add-grid" hidden>
+        <div><label for="qaSalePrice">매매가(만원) · 필수</label><input id="qaSalePrice" inputmode="decimal" placeholder="예: 100000 = 10억원"></div>
+        <div><label for="qaSaleCategory">매매 구분</label><select id="qaSaleCategory"><option value="building">건물전체</option><option value="commercial">상가</option><option value="multifamily">다가구</option><option value="mixed_house">상가주택</option><option value="house">주택</option><option value="office">사무실</option><option value="factory_warehouse">공장/창고</option><option value="apartment">아파트</option><option value="villa">빌라/다세대</option><option value="officetel">오피스텔</option><option value="other">기타</option><option value="land">토지</option></select></div>
+        <div><label for="qaLandAreaM2">대지·토지면적(㎡)</label><input id="qaLandAreaM2" inputmode="decimal" placeholder="미확인 시 비워두세요"></div>
+        <div data-qa-building><label for="qaGrossAreaM2">연면적(㎡)</label><input id="qaGrossAreaM2" inputmode="decimal" placeholder="미확인 시 비워두세요"></div>
+        <div data-qa-building><label for="qaTotalDeposit">전체 임대보증금(만원)</label><input id="qaTotalDeposit" inputmode="decimal" placeholder="없음은 0, 미확인은 빈칸"></div>
+        <div data-qa-building><label for="qaMonthlyIncome">전체 월 임대수입(만원)</label><input id="qaMonthlyIncome" inputmode="decimal" placeholder="없음은 0, 미확인은 빈칸"></div>
+        <div data-qa-land><label for="qaLandUse">지목</label><input id="qaLandUse" maxlength="160"></div>
+        <div data-qa-land><label for="qaZoning">용도지역</label><input id="qaZoning" maxlength="160"></div>
+        <p class="full">원본과 가격·거래유형을 확인한 뒤 등록하세요. 미확인 수입은 0으로 계산하지 않습니다.</p>
+      </div>
+      <div class="full">
         <label>외부 매물 내용 붙여넣기</label>
         <textarea id="qaRaw" aria-label="외부 매물 내용 붙여넣기" placeholder="예: 대전 용문동 상가 보증금 2000 월세 110 관리비 5 권리금 1000 30평 010-0000-0000 메모..."></textarea>
       </div>
@@ -585,27 +605,27 @@
 
       <div>
         <label>보증금</label>
-        <input id="qaDeposit" aria-label="보증금" placeholder="예: 2000">
+        <input id="qaDeposit" aria-label="보증금" inputmode="decimal" placeholder="예: 2000">
       </div>
 
       <div>
         <label>월세</label>
-        <input id="qaRent" aria-label="월세" placeholder="예: 110">
+        <input id="qaRent" aria-label="월세" inputmode="decimal" placeholder="예: 110">
       </div>
 
       <div>
         <label>관리비</label>
-        <input id="qaFee" aria-label="관리비" placeholder="예: 5">
+        <input id="qaFee" aria-label="관리비" inputmode="decimal" placeholder="예: 5">
       </div>
 
       <div>
         <label>권리금</label>
-        <input id="qaPremium" aria-label="권리금" placeholder="예: 1000">
+        <input id="qaPremium" aria-label="권리금" inputmode="decimal" placeholder="예: 1000">
       </div>
 
       <div>
         <label>평수</label>
-        <input id="qaArea" aria-label="평수" placeholder="예: 30">
+        <input id="qaArea" aria-label="평수" inputmode="decimal" placeholder="예: 30">
       </div>
 
       <div>
@@ -619,11 +639,11 @@
       <div class="quick-add-contact-row full">
         <div>
           <label>임대인전화</label>
-          <input id="qaLandlordPhone" aria-label="임대인 전화번호" placeholder="010-0000-0000">
+          <input id="qaLandlordPhone" type="tel" inputmode="tel" aria-label="임대인 전화번호" placeholder="010-0000-0000">
         </div>
         <div>
           <label>세입자전화</label>
-          <input id="qaTenantPhone" aria-label="세입자 전화번호" placeholder="010-0000-0000">
+          <input id="qaTenantPhone" type="tel" inputmode="tel" aria-label="세입자 전화번호" placeholder="010-0000-0000">
         </div>
         <div>
           <label>등록일</label>
@@ -761,6 +781,7 @@
 
 <template id="jsAuthenticatedBodyAssets">
 <script data-auth-critical src="js/dialog-focus-v1.js?v=1.0.0-keyboard-focus"></script>
+<script data-auth-critical src="js/local-metrics-v1.js?v=1"></script>
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard" src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"></script>
 <script data-auth-critical src="js/unified-listings-v8.js?v=8.1.43-card-detail-toggle&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;dialog-focus-v1=1"></script>
 <script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds"></script>
@@ -787,6 +808,7 @@
 <script src="js/unified-favorites-v7.js?v=7.0.15-ai-visit-entry&amp;favorite-folder-filter-v1=1&amp;dialog-focus-v1=1"></script>
 <script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;map-listing-count-v825=1"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1&amp;new-listing-periods-v1=1"></script>
+  <script src="js/customer-draft-safety-v1.js?v=1"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>
   <script src="js/operations-collection-v8.js?v=7.26.1-review-audit"></script>
   <script src="js/operations-admin-v1.js?v=1.2.0-linked-identity&amp;live-role-v1=1"></script>

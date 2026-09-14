@@ -30,8 +30,8 @@ assert.match(css, /\.js-mobile-app-v1 \.map-listing-count-v825\s*\{[\s\S]*?top:\
 assert.match(css, /body\.ai-side-panel-open \.map-listing-count-v825\s*\{[\s\S]*?left:\s*492px;/);
 assert.match(css, /max-width:\s*1300px[\s\S]*?body\.ai-side-panel-open \.map-listing-count-v825\s*\{[\s\S]*?left:\s*432px;/);
 assert.match(css, /\.map-listing-count-v825\s*\{[\s\S]*?pointer-events:\s*none;/);
-assert.match(mapSource, /function clearMap\(\)[\s\S]*?overlays = \[\];[\s\S]*?updateMapListingCountV825\(\);/);
-assert.match(mapSource, /function drawMapClustersOnlyV639\(items\)[\s\S]*?overlays\.push\(overlay\);[\s\S]*?updateMapListingCountV825\(\);/);
+assert.match(mapSource, /function clearMap\(\)[\s\S]*?overlays = \[\];[\s\S]*?updateMapListingCountV825\(\[\]\);/);
+assert.match(mapSource, /function drawMapClustersOnlyV639\(items\)[\s\S]*?overlays\.push\(overlay\);[\s\S]*?updateMapListingCountV825\(items\);/);
 
 const badge = {
   dataset: {},
@@ -63,7 +63,7 @@ vm.runInContext(`${extractFunction(mapSource, "updateMapListingCountV825")}; thi
 assert.equal(context.update(), 5);
 assert.equal(value.textContent, "5개");
 assert.equal(badge.dataset.listingCount, "5");
-assert.equal(badge.attributes["aria-label"], "현재 지도에 표시된 매물 5개");
+assert.equal(badge.attributes["aria-label"], "현재 검색·지도 범위 매물 5개");
 
 context.map = {
   getProjection() {
@@ -93,5 +93,10 @@ context.overlays = [];
 assert.equal(context.update(), 0);
 assert.equal(value.textContent, "0개");
 assert.equal(badge.dataset.listingCount, "0");
+// The same filtered rows, not the regional cluster totals, determine the badge.
+assert.equal(context.update(Array(3)), 3);
+context.getFilteredItems = () => Array(7);
+assert.equal(context.update(), 7);
+assert.equal(context.update([]), 0);
 
 console.log("map listing count v8.2.5 tests passed");

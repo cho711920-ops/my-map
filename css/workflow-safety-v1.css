@@ -1,0 +1,8 @@
+.history-restore-dialog-v1 { width: min(960px, calc(100vw - 24px)); max-height: 90dvh; overflow: auto; }
+.history-restore-dialog-v1 table { width: 100%; border-collapse: collapse; }
+.history-restore-dialog-v1 th, .history-restore-dialog-v1 td { padding: 10px; border-bottom: 1px solid #dbe4f0; text-align: left; vertical-align: top; }
+.history-restore-dialog-v1 pre { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 32ch; margin: 0; }
+.history-restore-dialog-v1 small { display: block; color: #815000; font-weight: normal; }
+.history-restore-dialog-v1 footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
+#unifiedFavoriteUndoV1, #unifiedOriginalLoadStatusV1 { padding: 8px 12px; }
+#unifiedFavoriteUndoV1 button, #unifiedOriginalLoadStatusV1 button { min-height: 32px; }

@@ -30,6 +30,18 @@
     window.postMessage({ type: "JS_COLLECTOR_AUTOMATION_STARTED", runId: runId }, "*");
   }
 
+  window.addEventListener("message", function(event) {
+    if (event.source !== window || !event.data || event.data.type !== "JS_AUTO_REPORT_MAIN") return;
+    var message = event.data;
+    var runtime = Object.keys(runtimeNames).map(function(key) { return window[runtimeNames[key]]; })
+      .find(function(value) { return value && typeof value.submitAutomationReport === "function"; });
+    Promise.resolve(runtime ? runtime.submitAutomationReport(message.report) : {ok: false}).then(function(result) {
+      window.postMessage({type: "JS_AUTO_REPORT_RESULT", requestId: message.requestId, ok: Boolean(result && result.ok)}, "*");
+    }).catch(function() {
+      window.postMessage({type: "JS_AUTO_REPORT_RESULT", requestId: message.requestId, ok: false}, "*");
+    });
+  });
+
   window.addEventListener("message", function (event) {
     if (event.source !== window || !event.data || event.data.type !== "JS_AUTO_START_MAIN") return;
     var target = event.data.target || {};

@@ -8,6 +8,8 @@
     source: "browse"
   };
   var favoriteDetailObserverV7 = null;
+  var deletedFolderUndoV1 = null;
+  var favoriteAccountV1 = String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
 
   function store() {
     return global.JSV6ListStore || null;
@@ -332,6 +334,7 @@
     if (selected) selected.textContent = state.pendingRefs.length ? state.pendingRefs.length + "개 매물 선택" : "";
     if (!body) return;
 
+    renderDeletedFolderUndoV1();
     if (!lists.length) {
       body.innerHTML = '<div class="unified-favorite-empty-v7"><strong>아직 찜폴더가 없습니다.</strong>' +
         '<span>위에서 폴더를 만든 뒤 선택한 매물을 추가하세요.</span></div>';
@@ -467,7 +470,7 @@
     if (!list) return;
     list.itemKeys = (list.itemKeys || []).filter(function (entry) { return refSignature(entry) !== signature; });
     list.updatedAt = nowIso();
-    save(lists);
+    if (!save(lists)) return showToast("찜 제거를 저장하지 못했습니다. 다시 시도해 주세요.", "warning");
     state.expanded[id] = true;
     render();
     showToast("찜폴더에서 매물을 제거했습니다.");
@@ -554,7 +557,7 @@
     }
     list.name = name;
     list.updatedAt = nowIso();
-    save(lists);
+    if (!save(lists)) return showToast("폴더 이름을 저장하지 못했습니다. 다시 시도해 주세요.", "warning");
     render();
     if (typeof global.applyFilter === "function") global.applyFilter();
   };
@@ -563,6 +566,8 @@
     var lists = load("favorite");
     var list = lists.find(function (entry) { return String(entry.id) === String(id); });
     if (!list) return;
+    if (!global.confirm('"' + list.name + '" 폴더의 찜 ' + (list.itemKeys || []).length + '개를 목록에서 삭제할까요?\n매물 원본은 삭제되지 않습니다. 5분 동안 새 폴더로 되돌릴 수 있습니다.')) return;
+    var snapshot = JSON.parse(JSON.stringify(list));
     lists = lists.filter(function (entry) { return String(entry.id) !== String(id); });
     var api = store();
     var saved = api && typeof api.remove === "function"
@@ -572,6 +577,7 @@
       showToast("찜폴더를 삭제하지 못했습니다. 다시 시도해 주세요.", "warning");
       return;
     }
+    deletedFolderUndoV1 = { folder: snapshot, expiresAt: Date.now() + 5 * 60 * 1000, account: favoriteAccountV1 };
     delete state.expanded[id];
     render();
     showToast("찜폴더를 삭제했습니다.");
@@ -596,6 +602,47 @@
     close();
     if (typeof global.applyFilter === "function") global.applyFilter();
   };
+
+  function renderDeletedFolderUndoV1() {
+    var body = document.getElementById("unifiedFavoriteBodyV7");
+    if (!body || !body.parentNode) return;
+    var existing = document.getElementById("unifiedFavoriteUndoV1");
+    if (existing) existing.remove();
+    if (!deletedFolderUndoV1 || deletedFolderUndoV1.expiresAt <= Date.now()) { deletedFolderUndoV1 = null; return; }
+    var banner = document.createElement("div");
+    banner.id = "unifiedFavoriteUndoV1";
+    banner.setAttribute("role", "status");
+    banner.className = "operations-center-message";
+    var label = document.createElement("span");
+    label.textContent = '"' + deletedFolderUndoV1.folder.name + '" 삭제됨 · ';
+    var button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "삭제 취소 (새 폴더로 복원)";
+    button.onclick = undoFavoriteFolderDeletionV1;
+    banner.appendChild(label); banner.appendChild(button);
+    body.parentNode.insertBefore(banner, body);
+  }
+
+  function undoFavoriteFolderDeletionV1() {
+    var undo = deletedFolderUndoV1;
+    if (!undo || undo.expiresAt <= Date.now()) { deletedFolderUndoV1 = null; render(); return; }
+    if (!undo.account || undo.account !== String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase()) {
+      return showToast("로그인 계정이 변경되었습니다. 새로고침 후 다시 확인해 주세요.", "warning");
+    }
+    var lists = load("favorite"), copy = JSON.parse(JSON.stringify(undo.folder));
+    // Never resurrect a tombstoned identifier: another device's deletion must win.
+    // An explicit undo is a new folder merged through the existing versioned store.
+    copy.id = uid();
+    copy.createdAt = nowIso(); copy.updatedAt = copy.createdAt;
+    var base = copy.name, suffix = 1;
+    while (lists.some(function(entry) { return entry.name === copy.name; })) copy.name = base + " (복원 " + suffix++ + ")";
+    lists.push(copy);
+    if (!save(lists)) return showToast("복원한 폴더를 저장하지 못했습니다.", "warning");
+    deletedFolderUndoV1 = null;
+    state.expanded[copy.id] = true;
+    render();
+    showToast("찜을 새 폴더로 복원했습니다. 기존 삭제 기록은 유지됩니다.");
+  }
 
   global.startUnifiedFavoriteVisitV7 = function (id) {
     close();

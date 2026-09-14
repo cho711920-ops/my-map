@@ -10,6 +10,7 @@
     "minFloor", "maxFloor",
     "industryFilter"
   ];
+  var saleFilterAnchor = null;
 
   function isPhone() {
     return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
@@ -63,8 +64,38 @@
     FIELD_IDS.forEach(function (id) {
       var source = originalField(id);
       var target = sheetField(id);
-      if (source && target) target.value = source.value || "";
+      if (source && target) {
+        target.value = source.value || "";
+        target.placeholder = source.placeholder || target.placeholder;
+        target.setAttribute("aria-label", source.getAttribute("aria-label") || target.placeholder);
+        var originalRow = source.closest(".row");
+        var sheetRow = target.closest(".v6-detail-sheet-row");
+        if (sheetRow) sheetRow.hidden = !!(originalRow && originalRow.hidden);
+      }
     });
+    syncSaleFilters();
+  }
+
+  function syncSaleFilters() {
+    var source = document.getElementById("saleFiltersV1");
+    var target = document.getElementById("v6DetailSheetSaleFilters");
+    if (!source || !target) return;
+    // Move the actual controls, preserving IDs, values, handlers and the shared
+    // sale-workbench state. Never create a second copy of the sale filters.
+    if (!saleFilterAnchor && source.parentNode !== target) {
+      saleFilterAnchor = document.createComment("mobile-sale-filter-return");
+      source.parentNode.insertBefore(saleFilterAnchor, source);
+    }
+    if (source.parentNode !== target) target.appendChild(source);
+  }
+
+  function restoreSaleFilters() {
+    var source = document.getElementById("saleFiltersV1");
+    if (source && saleFilterAnchor && saleFilterAnchor.parentNode) {
+      saleFilterAnchor.parentNode.insertBefore(source, saleFilterAnchor);
+      saleFilterAnchor.remove();
+      saleFilterAnchor = null;
+    }
   }
 
   function syncToOriginal() {
@@ -98,6 +129,7 @@
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minArea" inputmode="decimal" placeholder="평수 최소"><input id="v6DetailSheet_maxArea" inputmode="decimal" placeholder="평수 최대"></div>' +
           '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="text" placeholder="층수 최소 (예: B1 또는 -1)"><input id="v6DetailSheet_maxFloor" inputmode="text" placeholder="층수 최대 (예: 3)"></div>' +
           '<div class="v6-detail-sheet-row v6-detail-sheet-row-single"><input id="v6DetailSheet_industryFilter" inputmode="text" placeholder="업종구분 (예: 식당, 카페)"></div>' +
+          '<div id="v6DetailSheetSaleFilters"></div>' +
           '<button type="button" class="v6-detail-sheet-apply">필터 적용</button>' +
         '</div>' +
       '</section>';
@@ -123,11 +155,12 @@
     }, false);
 
     root.addEventListener("keydown", function (event) {
+      if (window.JSDialogFocusV1 && window.JSDialogFocusV1.handleKeydown(root, event, close)) return;
       if (event.key === "Enter" && event.target.matches("input")) {
         event.preventDefault();
         apply();
       }
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") { event.stopPropagation(); close(); }
     });
 
     document.body.appendChild(root);
@@ -204,10 +237,12 @@
       button.classList.add("on");
       button.setAttribute("aria-expanded", "true");
     }
+    if (window.JSDialogFocusV1) window.JSDialogFocusV1.activate(root, root.querySelector(".v6-detail-sheet-close"));
   }
 
   function close() {
     var root = document.getElementById("v6DetailSheetPortal");
+    var wasOpen = !!(root && root.classList.contains("open"));
     if (root) {
       root.classList.remove("open");
       root.setAttribute("aria-hidden", "true");
@@ -220,6 +255,8 @@
       button.setAttribute("aria-expanded", "false");
     }
     removeLegacyDetailState();
+    restoreSaleFilters();
+    if (wasOpen && window.JSDialogFocusV1) window.JSDialogFocusV1.deactivate(root);
   }
 
   function toggle() {
@@ -231,9 +268,14 @@
 
   function apply() {
     syncToOriginal();
-    if (typeof window.applyFilter === "function") window.applyFilter();
+    if (typeof window.applyFilter === "function" && window.applyFilter() === false) return;
     close();
   }
+
+  window.addEventListener("js-listing-trade-mode-change", function() {
+    var root = document.getElementById("v6DetailSheetPortal");
+    if (root && root.classList.contains("open")) syncToSheet();
+  });
 
   /* 기존 인라인 onclick/중복 보완 이벤트보다 먼저 가로챕니다. */
   document.addEventListener("click", function (event) {

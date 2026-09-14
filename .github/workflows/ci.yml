@@ -42,5 +42,21 @@ jobs:
       - name: Run regression tests
         run: pnpm test
 
+      - name: Install browser test runtime
+        if: matrix.node == 22
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run isolated desktop and mobile browser regressions
+        if: matrix.node == 22
+        run: pnpm run test:browser
+
+      - name: Preserve failed browser diagnostics
+        if: failure() && matrix.node == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-regressions
+          path: outputs/browser-*
+          retention-days: 7
+
       - name: Build and validate Cloudflare Worker
         run: pnpm run cf:check

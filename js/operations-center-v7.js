@@ -130,6 +130,9 @@
     }
     return window.JSDataAccessV6.read(action, params, {
       errorMessage: "운영자료 조회에 실패했습니다."
+    }).catch(function(error) {
+      if (window.JSLocalMetricsV1) window.JSLocalMetricsV1.error("read");
+      throw error;
     });
   }
 
@@ -139,6 +142,11 @@
     }
     return window.JSDataAccessV6.mutate(action, payload, {
       errorMessage: "운영 요청 처리에 실패했습니다."
+    }).catch(function(error) {
+      if (text(error && error.payload && error.payload.code || error && error.code) === "account_changed" && window.JSCustomerDraftSafetyV1) {
+        window.JSCustomerDraftSafetyV1.clearAll();
+      }
+      throw error;
     });
   }
 
@@ -231,6 +239,12 @@
         '<b>사람이 확인할 일은 두 가지뿐입니다.</b>' +
         '<p>매물검증의 애매한 동일 공간만 결정하세요. 고객 등록·조건수정·후속관리는 이 화면에서 처리하고, 통합매물 연결·이력·재매칭은 자동으로 처리됩니다.</p>' +
       '</div>';
+    if (window.JSLocalMetricsV1) {
+      var diagnostics = document.createElement("section");
+      diagnostics.className = "operations-guidance";
+      panel.appendChild(diagnostics);
+      window.JSLocalMetricsV1.render(diagnostics);
+    }
   }
   window.JSOperationsDiagnosticsV7151 = {
     dashboardCard: dashboardCard,
@@ -377,7 +391,7 @@
       return Number(bFollowup.due) - Number(aFollowup.due) || bStats.fresh - aStats.fresh ||
         field(b, state.customerHeaders, "수정일시").localeCompare(field(a, state.customerHeaders, "수정일시"));
     });
-    list.innerHTML = '<div class="operations-customer-list-heading-v719"><div><b>① 고객 목록</b><span>고객 현황을 한눈에 확인</span></div><strong>총 ' + state.customers.length.toLocaleString("ko-KR") + '명</strong></div>' +
+    var renderedHtml = '<div class="operations-customer-list-heading-v719"><div><b>① 고객 목록</b><span>고객 현황을 한눈에 확인</span></div><strong>총 ' + state.customers.length.toLocaleString("ko-KR") + '명</strong></div>' +
       '<div class="operations-customer-tools"><input id="operationsCustomerSearch" type="search" placeholder="고객명 · 지역 · 연락처 검색" value="' + escape(state.customerSearch) + '"><span>' + filteredCustomers.length.toLocaleString("ko-KR") + '명</span></div>' +
       '<div class="operations-customer-views">' +
         customerViewButton("before", "미팅전", beforeMeetingCount) +
@@ -408,12 +422,34 @@
       '</article>';
     }).join("") : '<div class="operations-customer-view-empty">이 업무에 해당하는 고객이 없습니다.</div>') + '</div>';
     var searchInput = document.getElementById("operationsCustomerSearch");
-    if (searchInput) searchInput.addEventListener("input", function() {
-      state.customerSearch = searchInput.value || "";
-      renderCustomers();
-      var next = document.getElementById("operationsCustomerSearch");
-      if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
-    });
+    if (searchInput && list.contains(searchInput)) {
+      // Keep the input DOM, caret and IME composition intact; replace results only.
+      var prepared = document.createElement("div");
+      prepared.innerHTML = renderedHtml;
+      [".operations-customer-list-heading-v719", ".operations-customer-views", ".operations-customer-grid"].forEach(function(selector) {
+        var current = list.querySelector(selector), next = prepared.querySelector(selector);
+        if (current && next) current.replaceWith(next);
+      });
+      var count = list.querySelector(".operations-customer-tools > span");
+      if (count) count.textContent = filteredCustomers.length.toLocaleString("ko-KR") + "명";
+    } else {
+      list.innerHTML = renderedHtml;
+      searchInput = document.getElementById("operationsCustomerSearch");
+    }
+    if (searchInput && !searchInput._customerSearchBoundV1) {
+      searchInput._customerSearchBoundV1 = true;
+      searchInput.addEventListener("compositionstart", function() { searchInput._composingV1 = true; });
+      searchInput.addEventListener("compositionend", function() {
+        searchInput._composingV1 = false;
+        state.customerSearch = searchInput.value || "";
+        renderCustomers();
+      });
+      searchInput.addEventListener("input", function(event) {
+        state.customerSearch = searchInput.value || "";
+        if (event.isComposing || searchInput._composingV1) return;
+        renderCustomers();
+      });
+    }
     Array.prototype.forEach.call(list.querySelectorAll("[data-customer-id]"), function(button) {
       button.addEventListener("click", function() {
         state.selectedCustomerId = button.getAttribute("data-customer-id") || "";
@@ -531,6 +567,12 @@
     return "unknown";
   }
 
+  function matchPropertyIncludesSourceV1(property, selected) {
+    if (!selected) return true;
+    var sources = property && Array.isArray(property.sourceTypesV8) ? property.sourceTypesV8 : [];
+    return sources.indexOf(selected) >= 0 || matchPropertySourceV719(property) === selected;
+  }
+
   function matchPropertyFloorV719(property) {
     var source = text(property && (property.room || property.floor));
     var basement = source.match(/B\s*(\d+)|지하\s*(\d*)/i);
@@ -601,7 +643,7 @@
     }).filter(function(row) {
       var property = getProperty(field(row, state.matchHeaders, "대표매물ID"));
       if (!property) return true;
-      if (state.matchSourceFilter && matchPropertySourceV719(property) !== state.matchSourceFilter) return false;
+      if (!matchPropertyIncludesSourceV1(property, state.matchSourceFilter)) return false;
       if (state.matchTypeFilter && text(property.type) !== state.matchTypeFilter) return false;
       if (state.matchFloorFilter && matchPropertyFloorV719(property) !== state.matchFloorFilter) return false;
       return true;
@@ -1270,6 +1312,8 @@
     var modal = document.getElementById("customerEditorModal");
     var form = document.getElementById("customerEditorForm");
     if (!modal || !form) return;
+    if ((document.getElementById("customerEditorSaveBtn") || {}).disabled) return;
+    if (!modal.hidden && window.JSCustomerDraftSafetyV1 && !window.JSCustomerDraftSafetyV1.canClose("customerEditorModal")) return;
     var id = text(customerId);
     cancelCustomerEditorCloseAnimationV727();
     if (text(state.customerConditionRefreshV727 && state.customerConditionRefreshV727.customerId) === id &&
@@ -1298,16 +1342,20 @@
     if (nextDate) nextDate.value = "";
     modal.hidden = false;
     document.body.classList.add("customer-crm-open");
+    if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.begin("customerEditorModal", "editor:" + (id || "new"), "[data-customer-field], #customerConsultationMemo, #customerNextContactDate");
     var first = form.querySelector('[data-customer-field="고객명/상호"]');
     if (first) window.setTimeout(function() { first.focus(); }, 50);
   };
 
   window.closeCustomerEditor = function() {
+    if (window.JSCustomerDraftSafetyV1 && !window.JSCustomerDraftSafetyV1.canClose("customerEditorModal")) return false;
     var modal = document.getElementById("customerEditorModal");
     cancelCustomerEditorCloseAnimationV727();
     if (modal) modal.hidden = true;
     state.editingCustomerId = "";
     document.body.classList.remove("customer-crm-open");
+    if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.closed("customerEditorModal");
+    return true;
   };
 
   window.saveCustomerFromWeb = function(event) {
@@ -1343,6 +1391,7 @@
       nextContactDate: nextContactDate,
       compactResponse: true
     }).then(function(result) {
+      if (window.JSCustomerDraftSafetyV1) { window.JSCustomerDraftSafetyV1.saved("customerEditorModal"); window.JSCustomerDraftSafetyV1.closed("customerEditorModal"); }
       state.selectedCustomerId = result.customerId || state.selectedCustomerId;
       if (result.workspace) {
         applyCustomerWorkspace(result.workspace);
@@ -1370,10 +1419,14 @@
       setMessage("고객정보가 D1에 저장되고 재매칭까지 확인됐습니다.", "success");
     }).catch(function(error) {
       if (optimisticUpdate) state.customers[optimisticUpdate.rowIndex] = optimisticUpdate.previous;
+      if (text(error && error.payload && error.payload.code || error && error.code) === "account_changed") {
+        setMessage("로그인 계정이 변경되었습니다. 새로고침 후 다시 로그인해 주세요.", "error"); return;
+      }
       if (isConditionUpdate) setCustomerConditionRefreshV727(editingCustomerId, "error");
       renderCustomers();
       renderMatches(editingCustomerId || state.selectedCustomerId);
       restoreCustomerEditorAfterFailureV723(editingCustomerId);
+      if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.resume("customerEditorModal");
       setMessage(error.message || "고객정보 저장에 실패했습니다.", "error");
     }).finally(function() {
       button.disabled = false;
@@ -1382,6 +1435,9 @@
   };
 
   window.openCustomerActivity = function(customerId) {
+    if ((document.getElementById("customerActivitySaveBtn") || {}).disabled) return;
+    var existing = document.getElementById("customerActivityModal");
+    if (existing && !existing.hidden && window.JSCustomerDraftSafetyV1 && !window.JSCustomerDraftSafetyV1.canClose("customerActivityModal")) return;
     var id = text(customerId) || state.selectedCustomerId;
     if (!id) return;
     state.selectedCustomerId = id;
@@ -1399,15 +1455,22 @@
     if (nextDate) nextDate.value = "";
     if (modal) modal.hidden = false;
     document.body.classList.add("customer-crm-open");
+    if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.begin("customerActivityModal", "activity:" + id, "#customerActivityStage, #customerActivityMemo, #customerActivityNextDate");
   };
 
   window.closeCustomerActivity = function() {
+    if (window.JSCustomerDraftSafetyV1 && !window.JSCustomerDraftSafetyV1.canClose("customerActivityModal")) return false;
     var modal = document.getElementById("customerActivityModal");
     if (modal) modal.hidden = true;
     document.body.classList.remove("customer-crm-open");
+    if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.closed("customerActivityModal");
+    return true;
   };
 
   window.openCustomerMemo = function(customerId) {
+    if ((document.getElementById("customerQuickMemoSaveBtn") || {}).disabled) return;
+    var existing = document.getElementById("customerMemoModal");
+    if (existing && !existing.hidden && window.JSCustomerDraftSafetyV1 && !window.JSCustomerDraftSafetyV1.canClose("customerMemoModal")) return;
     var id = text(customerId);
     var customer = state.customers.find(function(row) {
       return field(row, state.customerHeaders, "고객ID") === id;
@@ -1440,12 +1503,16 @@
     if (modal) modal.hidden = false;
     if (content) content.scrollTop = content.scrollHeight;
     document.body.classList.add("customer-crm-open");
+    if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.begin("customerMemoModal", "memo:" + id, "#customerQuickMemoInput");
   };
 
-  window.closeCustomerMemo = function() {
+  window.closeCustomerMemo = function(saving) {
+    if (!saving && window.JSCustomerDraftSafetyV1 && !window.JSCustomerDraftSafetyV1.canClose("customerMemoModal")) return false;
     var modal = document.getElementById("customerMemoModal");
     if (modal) modal.hidden = true;
     document.body.classList.remove("customer-crm-open");
+    if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.closed("customerMemoModal");
+    return true;
   };
 
   window.saveCustomerQuickMemo = function() {
@@ -1461,7 +1528,7 @@
       button.disabled = true;
       button.textContent = "저장 확인 중…";
     }
-    window.closeCustomerMemo();
+    window.closeCustomerMemo(true);
     setMessage("메모를 바로 접수했습니다. D1 저장을 확인하고 있습니다…", "loading");
     apiPost("addCustomerActivity", {
       customerId: customerId,
@@ -1472,13 +1539,18 @@
     }).then(function(result) {
       if (result.activityRow) state.activities.push(result.activityRow);
       if (input) input.value = "";
+      if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.saved("customerMemoModal");
       setMessage("상담·미팅 메모가 D1에 저장된 것을 확인했습니다.", "success");
     }).catch(function(error) {
+      if (text(error && error.payload && error.payload.code || error && error.code) === "account_changed") {
+        setMessage("로그인 계정이 변경되었습니다. 새로고침 후 다시 로그인해 주세요.", "error"); return;
+      }
       state.viewingMemoCustomerId = customerId;
       var modal = document.getElementById("customerMemoModal");
       if (modal) modal.hidden = false;
       if (input) input.value = memo;
       document.body.classList.add("customer-crm-open");
+      if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.resume("customerMemoModal");
       setMessage(error.message || "메모 저장에 실패했습니다.", "error");
     }).finally(function() {
       if (button) {
@@ -1500,6 +1572,7 @@
       memo: text(document.getElementById("customerActivityMemo") && document.getElementById("customerActivityMemo").value),
       nextContactDate: text(document.getElementById("customerActivityNextDate") && document.getElementById("customerActivityNextDate").value)
     }).then(function(result) {
+      if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.saved("customerActivityModal");
       if (result.activityRow) state.activities.push(result.activityRow);
       var stage = text(result.stage);
       if (stage === "미팅완료" || stage === "임장") {
@@ -1893,12 +1966,22 @@
   }
 
   document.addEventListener("keydown", function(event) {
-    if (event.key === "Escape") {
-      window.closeCustomerEditor();
-      window.closeCustomerActivity();
-      window.closeCustomerMemo();
-      window.closeOperationsCenter();
+    if (event.defaultPrevented || document.querySelector("dialog[open]")) return;
+    var draftTop = window.JSCustomerDraftSafetyV1 && window.JSCustomerDraftSafetyV1.top();
+    if (event.key === "Tab" && draftTop && window.JSDialogFocusV1) {
+      window.JSDialogFocusV1.trap(document.getElementById(draftTop), event); return;
     }
+    if (event.defaultPrevented || event.isComposing || event.key !== "Escape") return;
+    // Native dialogs and nested detail/gallery windows own Escape before the CRM.
+    if (document.querySelector("dialog[open], .unified-gallery-modal-v8.open, .tell-modal-v8.open")) return;
+    var draft = window.JSCustomerDraftSafetyV1;
+    var top = draft && draft.top();
+    var close = {customerEditorModal: window.closeCustomerEditor, customerActivityModal: window.closeCustomerActivity, customerMemoModal: window.closeCustomerMemo}[top];
+    if (close) { event.preventDefault(); event.stopImmediatePropagation(); close(); return; }
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (drawer && drawer.getAttribute("aria-hidden") !== "true") return;
+    var center = document.getElementById("operationsCenter");
+    if (center && center.classList.contains("open")) { event.preventDefault(); event.stopImmediatePropagation(); window.closeOperationsCenter(); }
   });
   try {
     var fastCache = JSON.parse(sessionStorage.getItem(OPERATIONS_CACHE_KEY) || "null");

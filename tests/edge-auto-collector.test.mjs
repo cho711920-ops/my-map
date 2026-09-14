@@ -53,7 +53,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /WATCHDOG_ALARM_NAME/);
   assert.match(background, /async function ensureWatchdogAlarm\(\)/);
   assert.match(background, /chrome\.alarms\.get\(WATCHDOG_ALARM_NAME\)/);
-  assert.match(background, /async function runAll\(reason = "manual"\) \{\s*await ensureWatchdogAlarm\(\)/);
+  assert.match(background, /async function runAll\(reason = "manual", selection = null\) \{\s*await ensureWatchdogAlarm\(\)/);
   assert.match(background, /async function resumeOrExtendActiveRun\(state, targets, reason\) \{\s*await ensureWatchdogAlarm\(\)/);
   assert.match(background, /async function updateTargetHeartbeat\(message, senderTabId\)[\s\S]{0,700}await ensureWatchdogAlarm\(\)/);
   assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 2/);

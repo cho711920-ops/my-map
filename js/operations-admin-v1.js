@@ -236,14 +236,59 @@
   global.refreshListingHistoryV1 = function () { return loadHistory(true); };
   global.loadMoreListingHistoryV1 = function () { return loadHistory(false); };
   global.restoreListingHistoryV1 = function (historyId) {
-    if (!confirm("선택한 시점의 값으로 매물을 복구할까요? 현재 값도 변경이력에 남습니다.")) return;
-    setMessage("이전 값을 복구하는 중입니다.", "loading");
-    apiPost("restoreListingHistory", { historyId: historyId }).then(function () {
-      if (typeof global.loadSheet === "function") global.loadSheet(true);
-      return loadHistory(true);
-    }).then(function () { setMessage("이전 값으로 복구했습니다.", "success"); })
-      .catch(function (error) { setMessage(error.message, "error"); });
+    var old = document.getElementById("listingHistoryRestoreDialogV1");
+    if (old) { old.close(); old.remove(); }
+    setMessage("복구 전 현재 값과 변경이력을 비교합니다.", "loading");
+    return apiGet("listingHistoryRestorePreview", {historyId: historyId}).then(function(preview) {
+      var dialog = document.createElement("dialog");
+      dialog.id = "listingHistoryRestoreDialogV1";
+      dialog.className = "sale-workbench-dialog history-restore-dialog-v1";
+      dialog.setAttribute("aria-labelledby", "historyRestoreTitleV1");
+      var fields = preview.fields || [];
+      dialog.innerHTML = '<header><h3 id="historyRestoreTitleV1">복구 항목 선택 · ' + escapeHtml(preview.title) +
+        '</h3><button type="button" data-close aria-label="복구 닫기">×</button></header>' +
+        '<p>선택한 항목만 이전 값으로 돌립니다. 원본·검수 보류 자료는 변경하지 않으며 현재 값도 이력에 남습니다.</p>' +
+        '<div class="sale-compare-scroll"><table><thead><tr><th>복구</th><th>항목</th><th>현재 값</th><th>복구할 이전 값</th></tr></thead><tbody>' +
+        fields.map(function(entry, index) {
+          return '<tr><td><input type="checkbox" data-restore-index="' + index + '" aria-label="' + escapeHtml(fieldLabel(entry.field)) +
+            ' 복구"' + (entry.alreadyRestored ? ' disabled' : entry.changedSinceHistory ? '' : ' checked') + '></td><th>' +
+            escapeHtml(fieldLabel(entry.field)) + (entry.alreadyRestored ? '<small>이미 같은 값</small>' : entry.changedSinceHistory ? '<small>이후 다시 변경됨 · 직접 선택</small>' : '') +
+            '</th><td><pre>' + escapeHtml(restoreDisplayValueV1(entry.current)) + '</pre></td><td><pre>' + escapeHtml(restoreDisplayValueV1(entry.target)) + '</pre></td></tr>';
+        }).join('') + '</tbody></table></div><p data-result role="status" aria-live="polite">' +
+        (fields.length ? '이후 다시 변경된 항목은 자동 선택하지 않습니다.' : '이 이력에서 복구할 이전 값이 없습니다.') +
+        '</p><footer><button type="button" data-close>취소</button><button type="button" data-apply' + (fields.length ? '' : ' disabled') + '>선택한 항목 복구</button></footer>';
+      dialog.querySelectorAll("[data-close]").forEach(function(button) { button.onclick = function() { dialog.close(); }; });
+      dialog.addEventListener("close", function() { dialog.remove(); });
+      dialog.addEventListener("cancel", function(event) { if (dialog.dataset.saving === "1") event.preventDefault(); });
+      document.body.appendChild(dialog); dialog.showModal();
+      dialog.querySelector("[data-apply]").onclick = function() {
+        var selected = Array.from(dialog.querySelectorAll("[data-restore-index]:checked")).map(function(input) { return fields[Number(input.dataset.restoreIndex)]; });
+        var status = dialog.querySelector("[data-result]");
+        if (!selected.length) { status.textContent = "복구할 항목을 하나 이상 선택하세요."; return; }
+        var expected = {};
+        selected.forEach(function(entry) { expected[entry.field] = entry.current; });
+        dialog.dataset.saving = "1";
+        dialog.querySelectorAll("button, input").forEach(function(button) { button.disabled = true; });
+        status.textContent = "현재 값이 바뀌지 않았는지 확인하며 복구합니다…";
+        apiPost("restoreListingHistory", {historyId: historyId, fields: selected.map(function(entry) { return entry.field; }),
+          expectedVersion: preview.expectedVersion, expectedValues: expected}).then(function() {
+          dialog.close();
+          if (typeof global.loadSheet === "function") global.loadSheet(true);
+          return loadHistory(true);
+        }).then(function() { setMessage("선택한 항목만 이전 값으로 복구했습니다.", "success"); })
+          .catch(function(error) {
+            status.textContent = error.message || "복구에 실패했습니다. 닫고 현재 값을 다시 확인해 주세요.";
+            // On conflicts never silently update the precondition or retry stale selections.
+            dialog.querySelectorAll("[data-close]").forEach(function(button) { button.disabled = false; });
+          }).finally(function() { dialog.dataset.saving = "0"; });
+      };
+    }).catch(function(error) { setMessage(error.message, "error"); });
   };
+
+  function restoreDisplayValueV1(value) {
+    if (value == null || value === "") return "없음";
+    return typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+  }
   global.saveAllowedUserV1 = function (event) {
     event.preventDefault();
     var form = event.currentTarget;

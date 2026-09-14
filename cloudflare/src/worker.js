@@ -13,6 +13,7 @@ import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { getCommercialArea } from "./commercial-area-api.js";
 import { getRegionalMarket } from "./regional-market-api.js";
+import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
   handleCollectorAdminPost,
@@ -45,14 +46,14 @@ const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
 const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
 const SHEET_CACHE_ACTIONS = new Set([
-  "deleteProperty", "moveOriginalListing", "quickAdd", "restoreListingHistory", "toggleDone", "updateProperty", "updatePropertyMemo"
+  "deleteProperty", "moveOriginalListing", "quickAdd", "restoreListingHistory", "resolveOperationsQualityHold", "toggleDone", "updateProperty", "updatePropertyMemo"
 ]);
 const UNIFIED_CACHE_ACTIONS = new Set([
-  "moveOriginalListing", "restoreListingHistory", "toggleDone", "updateProperty"
+  "moveOriginalListing", "restoreListingHistory", "resolveOperationsQualityHold", "toggleDone", "updateProperty"
 ]);
 const OPERATIONS_CACHE_ACTIONS = new Set([
   "addCustomerActivity", "deleteCustomer", "deleteProperty", "moveOriginalListing", "quickAdd",
-  "rebuildCustomerMatches", "restoreListingHistory", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
+  "rebuildCustomerMatches", "restoreListingHistory", "resolveOperationsQualityHold", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
 ]);
 const BROWSER_REVALIDATED_ACTIONS = new Set(["unifiedListings", "geocodeCache"]);
 const UNIFIED_COMPACT_FIELDS = [
@@ -407,6 +408,9 @@ function mutationCacheKeys(body, result = {}) {
   if (UNIFIED_CACHE_ACTIONS.has(action)) keys.push(UNIFIED_LISTINGS_CACHE_KEY);
   if (OPERATIONS_CACHE_ACTIONS.has(action)) keys.push(OPERATIONS_DASHBOARD_CACHE_KEY);
   if (action === "saveGeocodeCache") keys.push(GEOCODE_CACHE_KEY);
+  if (["restoreListingHistory", "resolveOperationsQualityHold", "updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(action)) {
+    keys.push(unifiedDetailCacheKey(result?.propertyId));
+  }
   if (action === "moveOriginalListing") {
     keys.push(
       unifiedDetailCacheKey(result?.sourceMasterId),
@@ -671,7 +675,8 @@ async function handleDataApi(request, env, context) {
         "x-js-data-source": "R2-REVISION"
       });
     }
-    const collectorAdmin = await handleCollectorAdminGet(env, user, query);
+    const collectorAdmin = await handleOperationsQualityGet(env, user, query)
+      || await handleCollectorAdminGet(env, user, query);
     if (collectorAdmin) {
       return jsonp(query.callback, collectorAdmin, {
         "cache-control": "private, no-store",
@@ -817,7 +822,8 @@ async function handleDataApi(request, env, context) {
       changeAction: String(body.action || "collectorAdmin") });
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
   }
-  const d1Result = await handleD1PostAction(env, user, body);
+  const d1Result = await handleOperationsQualityPost(env, user, body)
+    || await handleD1PostAction(env, user, body);
   if (!d1Result) return json({ ok: false, action: body.action, message: "지원하지 않는 저장 작업입니다." }, 400);
   if (SHEET_CACHE_ACTIONS.has(mutationAction(body))) {
     sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
@@ -831,7 +837,7 @@ async function handleDataApi(request, env, context) {
   const invalidation = Promise.resolve(operationSnapshot).catch(() => null).then(() => {
     return deleteR2Cache(env, null, invalidatedKeys);
   });
-  if (mutationAction(body) === "moveOriginalListing") {
+  if (["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory"].includes(mutationAction(body))) {
     await invalidation;
   } else if (context && typeof context.waitUntil === "function") {
     context.waitUntil(invalidation);

@@ -815,13 +815,22 @@ function getSearchComparableFields(item) {
 
 function parseOriginalListingNumberKeyword(value) {
   var normalized = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
-  var match = normalized.match(/^(?:(네이버|naver|당근|daangn|danggeun|karrot)\s*)?(?:매물(?:번호)?\s*)?(?:[:#-]\s*)?(\d{6,})$/i);
+  if (/^https?:\/\//.test(normalized)) {
+    try {
+      var url = new URL(normalized);
+      if (/(^|\.)(?:naver\.com|daangn\.com|gongsilbox\.com)$/.test(url.hostname)) return { provider: "", number: "", url: url.href.replace(/#.*$/, "").replace(/\/$/, "") };
+    } catch (_) { return null; }
+  }
+  if (/^m-[a-z0-9-]{6,}$/i.test(normalized)) return { provider: "manual", number: normalized };
+  var match = normalized.match(/^(?:(네이버|naver|당근|daangn|danggeun|karrot|공실박스|gongsilbox|gongsil|직접등록|직접확인|manual)\s*)?(?:매물(?:번호)?\s*)?(?:[:#-]\s*)?(\d+)$/i);
 
-  if (!match) return null;
+  if (!match || (!match[1] && match[2].length < 6)) return null;
 
   var provider = String(match[1] || "").toLowerCase();
   if (/^(?:네이버|naver)$/.test(provider)) provider = "naver";
   else if (/^(?:당근|daangn|danggeun|karrot)$/.test(provider)) provider = "daangn";
+  else if (/^(?:공실박스|gongsilbox|gongsil)$/.test(provider)) provider = "gongsil";
+  else if (/^(?:직접등록|직접확인|manual)$/.test(provider)) provider = "manual";
 
   return {
     provider: provider,
@@ -831,23 +840,29 @@ function parseOriginalListingNumberKeyword(value) {
 
 
 function matchesOriginalListingNumber(item, parsedKeyword) {
-  if (!parsedKeyword || !parsedKeyword.number) return false;
+  if (!parsedKeyword) return false;
+  var originals = Array.isArray(item && item.unifiedOriginalsV8) ? item.unifiedOriginalsV8 : [];
+  if (parsedKeyword.url) {
+    return [item && item.sourceLink].concat(originals.map(function(o) { return o.link; })).some(function(link) {
+      try { return new URL(link).href.toLowerCase().replace(/#.*$/, "").replace(/\/$/, "") === parsedKeyword.url; } catch (_) { return false; }
+    });
+  }
+  if (!parsedKeyword.number) return false;
+  if ((!parsedKeyword.provider || parsedKeyword.provider === "manual") && String(item && item.propertyId || "").toLowerCase() === parsedKeyword.number) return true;
   var indexedIds = Array.isArray(item && item.sourceListingSearchV6579) ? item.sourceListingSearchV6579 : [];
   var indexedMatch = indexedIds.some(function(value) {
     var parts = String(value || "").split(":");
-    var provider = parts[0] === "n" ? "naver" : (parts[0] === "d" ? "daangn" : "");
+    var provider = ({ n: "naver", d: "daangn", g: "gongsil", m: "manual" })[parts[0]] || "";
     return provider && (!parsedKeyword.provider || parsedKeyword.provider === provider) &&
       parts.slice(1).join(":") === parsedKeyword.number;
   });
   if (indexedMatch) return true;
 
-  var originals = Array.isArray(item && item.unifiedOriginalsV8) ? item.unifiedOriginalsV8 : [];
-
   return originals.some(function(original) {
     var source = String(original && original.source || "").trim().toLowerCase();
     var sourceKey = /네이버|naver/.test(source)
       ? "naver"
-      : (/당근|daangn|danggeun|karrot/.test(source) ? "daangn" : "");
+      : (/당근|daangn|danggeun|karrot/.test(source) ? "daangn" : (/공실박스|gongsil/.test(source) ? "gongsil" : (/직접등록|직접확인|manual/.test(source) ? "manual" : "")));
     if (!sourceKey || (parsedKeyword.provider && parsedKeyword.provider !== sourceKey)) return false;
 
     var sourceId = String(original && original.sourceId || "").trim();
@@ -1543,6 +1558,8 @@ function applyFilter() {
     if (initialStatusV1) initialStatusV1.textContent = "전체 매물 한 번에 준비 중...";
     return;
   }
+  var searchMetricV1 = window.JSLocalMetricsV1 && window.JSLocalMetricsV1.start("search");
+  try {
   var filtered = getFilteredItems();
   currentItems = filtered;
 
@@ -1564,6 +1581,9 @@ function applyFilter() {
     : (radiusFilter
       ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"
       : "검색 결과 " + filtered.length + "개");
+  } finally {
+    if (window.JSLocalMetricsV1) window.JSLocalMetricsV1.finish(searchMetricV1);
+  }
 }
 
 

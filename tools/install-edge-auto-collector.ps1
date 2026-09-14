@@ -39,6 +39,7 @@ foreach ($collectorFile in @('naver-collector.js', 'daangn-collector.js', 'gongs
   Copy-Item -LiteralPath (Join-Path $repoRoot "js\$collectorFile") -Destination (Join-Path $installedCollectors $collectorFile) -Force
 }
 Copy-Item -LiteralPath $sourceLauncher -Destination $installedLauncher -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'read-edge-auto-schedule.ps1') -Destination (Join-Path $automationRoot 'read-edge-auto-schedule.ps1') -Force
 
 $powerShellPath = (Get-Command powershell.exe).Source
 $taskArguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$installedLauncher`""
@@ -48,6 +49,8 @@ $trigger = New-ScheduledTaskTrigger -Daily -At $scheduleTime
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 6) -MultipleInstances IgnoreNew
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description 'JS부동산 Edge 자동수집' -Force | Out-Null
+. (Join-Path $PSScriptRoot 'read-edge-auto-schedule.ps1')
+Write-EdgeAutoScheduleSnapshot -ExtensionPath $installedExtension
 
 $summary = [pscustomobject]@{
   TaskName = $taskName

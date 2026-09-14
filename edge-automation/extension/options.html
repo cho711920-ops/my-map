@@ -15,6 +15,11 @@
       <label class="toggle"><input id="closeTabs" type="checkbox" checked><span>완료한 수집 탭 자동 닫기</span></label>
       <button id="save" class="primary">설정 저장</button>
       <button id="run">확인 후 전체 실행</button>
+      <button id="runSelected">이번 선택만 실행</button>
+      <button id="runFailed">실패·부분완료만 실행</button>
+    </section>
+    <section><div id="scheduleReadiness" role="status"></div><p>확장 예약과 Windows 예약은 별개입니다. 시각이 다르면 설치 도구를 같은 시각으로 다시 실행해 주세요. PC가 꺼진 상태의 실행은 보장되지 않습니다.</p>
+      <div class="notification-settings"><label><input id="notifyComplete" type="checkbox">정상완료 알림</label><label><input id="notifyPartial" type="checkbox">주소보류·부분완료 알림</label><label><input id="notifyFailure" type="checkbox">실패 알림</label></div>
     </section>
     <section class="transfer">
       <div><h2>다른 PC로 설정 옮기기</h2><p>등록 지역·실행 시간만 이동하며 로그인 정보와 보안키는 포함하지 않습니다.</p></div>

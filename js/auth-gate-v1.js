@@ -523,6 +523,7 @@ async function loginWithLocal(event) {
 }
 
 async function logout(trigger) {
+  if (window.JSCustomerDraftSafetyV1) window.JSCustomerDraftSafetyV1.clearAll();
   const button = trigger && trigger.nodeType === 1 ? trigger : null;
   if (button?.disabled) return;
   if (button) {

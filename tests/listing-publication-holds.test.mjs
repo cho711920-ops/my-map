@@ -37,6 +37,7 @@ function database() {
   // The application queries this table directly, so migration 0020 must be
   // applied before publishing the Worker code that introduces the read guard.
   sqlite.exec(readFileSync(new URL("../cloudflare/migrations/0020_listing_data_quality_holds.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../cloudflare/migrations/0023_quick_add_sale_details.sql", import.meta.url), "utf8"));
   const rows = [
     ["P-visible", "공개매물", "대전 서구 공개로 1"],
     ["P-held", "차단매물", "대전 서구 차단로 2"],

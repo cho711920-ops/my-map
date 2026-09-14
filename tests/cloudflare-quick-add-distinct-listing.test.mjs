@@ -67,7 +67,7 @@ test("quick add saves a distinct floor even when the same address already exists
   assert.equal(result.propertyId, "TEST-6층-20");
   assert.ok(calls.some(({ sql }) => /INSERT INTO listings/.test(sql)));
   const exactLookup = calls.find(({ sql }) => /AND address = \?1 AND room = \?2/.test(sql));
-  assert.deepEqual(exactLookup.args, ["서구 탄방동 1028", "6층", 1000, 80, 20]);
+  assert.deepEqual(exactLookup.args, ["서구 탄방동 1028", "6층", 1000, 80, 20, "lease", null, "", null, null]);
 });
 
 test("quick add still blocks a fully identical listing", async () => {

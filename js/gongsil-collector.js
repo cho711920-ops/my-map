@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.6";
+  var VERSION = "2.2.7";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -100,6 +100,23 @@
 
   window.__JS_GONGSIL_COLLECTOR__ = {
     version: VERSION,
+    // Reporting is best-effort and must never prompt for a key or pause collection.
+    submitAutomationReport: async function(report) {
+      var key = "";
+      try { key = String(localStorage.getItem(COLLECTOR_KEY_STORAGE) || "").trim(); } catch (_) {}
+      if (!key || !report || JSON.stringify(report).length > 48000) return {ok: false};
+      var controller = new AbortController();
+      var timer = window.setTimeout(function() { controller.abort(); }, 4500);
+      try {
+        var response = await originalFetch(COLLECTOR_API_URL, {
+          method: "POST", headers: {"content-type": "text/plain;charset=utf-8"},
+          signal: controller.signal,
+          body: JSON.stringify({action: "saveAutomationRunReport", collectorKey: key, report: report})
+        });
+        return response.ok ? await response.json() : {ok: false};
+      } catch (_) { return {ok: false}; }
+      finally { window.clearTimeout(timer); }
+    },
     maxItems: MAX_ITEMS,
     reopen: function () {
       state.active = true;

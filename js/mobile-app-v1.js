@@ -18,6 +18,8 @@
   var MOBILE_LAYER_SELECTORS = [
     "#jsMobileMoreLayerV1.open",
     "#unifiedGalleryV8.open",
+    "#unifiedFavoriteModalV7.open",
+    "#tellModalV8.open",
     "#listContactModalV654.open",
     "#propertyEditModalV630.open",
     "#buildingRegisterModalV640.open",
@@ -70,8 +72,8 @@
           '<button type="button" class="jsm-quick-add-v1" data-mobile-action="quick-add">' + icon("plus") + '<span>빠른등록</span></button>' +
         '</div>' +
         '<form class="jsm-search-v1" id="jsMobileSearchFormV1">' +
-          icon("search") +
-          '<input id="jsMobileKeywordV1" type="search" autocomplete="off" placeholder="지역 · 건물 · 호실 검색">' +
+          '<select id="jsMobileTradeModeV1" aria-label="매물 시장"><option value="lease">상가임대</option><option value="building_sale">건물매매</option><option value="land_sale">토지매매</option></select>' +
+          '<input id="jsMobileKeywordV1" type="search" aria-label="지역, 건물 또는 호실 검색" autocomplete="off" placeholder="지역 · 건물 · 호실 검색">' +
           '<button type="button" data-mobile-action="filter" aria-label="상세 필터">' + icon("filter") + '</button>' +
         '</form>' +
       '</header>' +
@@ -82,9 +84,10 @@
         navButton("customers", "고객", "users") +
         navButton("more", "더보기", "more") +
       '</nav>' +
+      '<button type="button" id="jsMobileSaveStatusV1" class="jsm-save-status-v1" data-mobile-action="save-status" aria-live="polite" hidden></button>' +
       '<div class="jsm-sheet-layer-v1" id="jsMobileMoreLayerV1" hidden>' +
         '<button type="button" class="jsm-sheet-dim-v1" data-mobile-action="close-more" aria-label="더보기 닫기"></button>' +
-        '<section class="jsm-more-sheet-v1" aria-label="더보기 메뉴">' +
+        '<section class="jsm-more-sheet-v1" role="dialog" aria-modal="true" aria-label="더보기 메뉴">' +
           '<div class="jsm-sheet-handle-v1"></div>' +
           '<header><div><strong>더보기</strong><small>자주 쓰는 관리 기능</small></div><button type="button" data-mobile-action="close-more" aria-label="닫기">' + icon("close") + '</button></header>' +
           '<div class="jsm-more-grid-v1">' +
@@ -125,6 +128,13 @@
     });
 
     var form = chrome.querySelector("#jsMobileSearchFormV1");
+    chrome.querySelector("#jsMobileTradeModeV1").addEventListener("change", function(event) {
+      if (global.JSListingTradeV1) global.JSListingTradeV1.onSelectorChange(event.target);
+      syncTradeMode();
+    });
+    chrome.querySelector("#jsMobileMoreLayerV1").addEventListener("keydown", function(event) {
+      if (global.JSDialogFocusV1) global.JSDialogFocusV1.handleKeydown(event.currentTarget, event, closeMore);
+    });
     form.addEventListener("submit", function(event) {
       event.preventDefault();
       global.clearTimeout(mobileSearchTimer);
@@ -159,11 +169,32 @@
     }, 180);
   }
 
-  function syncSearchValue() {
+  function syncSearchValue(force) {
     if (!chrome) return;
     var source = document.getElementById("keyword");
     var input = chrome.querySelector("#jsMobileKeywordV1");
-    if (source && input && input !== document.activeElement) input.value = source.value || "";
+    if (source && input && (force || input !== document.activeElement)) input.value = source.value || "";
+  }
+
+  function syncTradeMode() {
+    if (!chrome) return;
+    var select = chrome.querySelector("#jsMobileTradeModeV1");
+    var source = document.getElementById("listingTradeModeSelectV1");
+    var mode = global.JSListingTradeV1 && global.JSListingTradeV1.getMode();
+    if (select) select.value = mode || (source && source.value) || "lease";
+  }
+
+  function syncSaveStatus(event) {
+    if (!chrome) return;
+    var badge = chrome.querySelector("#jsMobileSaveStatusV1");
+    var status = event && event.detail || (global.JSAsyncMutations && typeof global.JSAsyncMutations.getStatus === "function" && global.JSAsyncMutations.getStatus());
+    if (!badge || !status) return;
+    badge.hidden = !status.visible;
+    badge.dataset.state = status.failed ? "failed" : status.saving ? "working" : "completed";
+    badge.textContent = status.failed ? "저장 실패 " + status.failed + "건 · 확인" :
+      status.saving ? "저장 중 " + status.saving + "건" : "서버 저장 완료";
+    badge.title = status.unsent ? "서버 전송 대기 포함 · 눌러 다시 전송" :
+      status.failed ? "상태를 확인하고 실패한 작업에서 다시 시도해 주세요." : "서버 저장 상태 확인";
   }
 
   function setView(nextView, options) {
@@ -223,18 +254,22 @@
   }
 
   function runAction(action) {
+    if (action === "save-status" && global.JSAsyncMutations) {
+      global.JSAsyncMutations.retry();
+      global.JSAsyncMutations.refreshStatus();
+    }
     if (action === "quick-add" && typeof global.openQuickAddModal === "function") global.openQuickAddModal();
     if (action === "filter") {
-      closeMore();
+      closeMore({restore: false});
       var detailButton = document.getElementById("detailBtn");
       if (detailButton) detailButton.click();
     }
     if (action === "favorites" && typeof global.openListManager === "function") {
-      closeMore();
+      closeMore({restore: false});
       global.openListManager("favorite");
     }
     if (action === "dashboard" && typeof global.openOperationsCenter === "function") {
-      closeMore();
+      closeMore({restore: false});
       global.openOperationsCenter("dashboard");
     }
     if (action === "reset") {
@@ -254,13 +289,15 @@
     layer.hidden = false;
     document.body.classList.add("jsm-more-open-v1");
     global.requestAnimationFrame(function() { layer.classList.add("open"); });
+    if (global.JSDialogFocusV1) global.JSDialogFocusV1.activate(layer, layer.querySelector("header button"));
   }
 
-  function closeMore() {
+  function closeMore(options) {
     var layer = chrome && chrome.querySelector("#jsMobileMoreLayerV1");
     if (!layer || layer.hidden) return;
     layer.classList.remove("open");
     document.body.classList.remove("jsm-more-open-v1");
+    if (global.JSDialogFocusV1) global.JSDialogFocusV1.deactivate(layer, options);
     global.setTimeout(function() { if (!layer.classList.contains("open")) layer.hidden = true; }, 220);
   }
 
@@ -292,6 +329,7 @@
     if (!element) return;
     var id = element.id || "";
     if (id === "jsMobileMoreLayerV1") return closeMore();
+    if (id === "unifiedFavoriteModalV7" && typeof global.closeUnifiedFavoritesV7 === "function") return global.closeUnifiedFavoritesV7();
     if (id === "unifiedDetailDrawerV8" && global.JSUnifiedListingsV8) return global.JSUnifiedListingsV8.close();
     if (id === "listContactModalV654" && typeof global.closeListContactPopupV654 === "function") return global.closeListContactPopupV654();
     if (id === "propertyEditModalV630" && typeof global.closePropertyEditModalV630 === "function") return global.closePropertyEditModalV630();
@@ -380,6 +418,16 @@
     if (view === "list") setView("map", {fromHistory: true});
   }
 
+  function handleMobileEscape(event) {
+    if (!active || event.key !== "Escape" || event.defaultPrevented || event.isComposing || document.querySelector("dialog[open]")) return;
+    var layers = openMobileLayers();
+    var top = layers[layers.length - 1];
+    if (!top) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeMobileLayer(top);
+  }
+
   function watchSidebar() {
     var sidebar = document.getElementById("sidebar");
     if (!sidebar || sidebarObserver) return;
@@ -395,6 +443,11 @@
     active = true;
     buildChrome().hidden = false;
     root.classList.add("js-mobile-app-v1");
+    syncTradeMode();
+    // The desktop filter is authoritative when entering the mobile layout,
+    // even if the browser restored focus into the previously hidden input.
+    syncSearchValue(true);
+    syncSaveStatus();
     watchSidebar();
     watchMobileLayers();
     setView("map");
@@ -430,6 +483,9 @@
       if (active && event.target && event.target.id === "keyword") syncSearchValue();
     });
     global.addEventListener("popstate", handleMobileBack);
+    global.addEventListener("keydown", handleMobileEscape, true);
+    global.addEventListener("js-listing-trade-mode-change", syncTradeMode);
+    global.addEventListener("js-mutation-status", syncSaveStatus);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, {once: true});

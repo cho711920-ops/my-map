@@ -41,6 +41,11 @@ Write-AutoCollectorLog 'INFO' $launchMessage
 if (-not (Test-Path -LiteralPath (Join-Path $extensionPath 'manifest.json'))) {
   throw 'JS 자동수집 확장 프로그램이 설치되지 않았습니다. install-edge-auto-collector.ps1을 먼저 실행해주세요.'
 }
+$scheduleReader = Join-Path $PSScriptRoot 'read-edge-auto-schedule.ps1'
+if (Test-Path -LiteralPath $scheduleReader) {
+  . $scheduleReader
+  Write-EdgeAutoScheduleSnapshot -ExtensionPath $extensionPath
+}
 
 $arguments = @(
   "--user-data-dir=$profilePath",

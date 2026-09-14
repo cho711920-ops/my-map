@@ -35,6 +35,7 @@ function harness(overrides = {}) {
   const events = {};
   const alarmMap = new Map();
   const navigation = [];
+  const notifications = [];
   const event = (name) => ({ addListener(fn) { events[name] = fn; } });
   class FakeDate extends Date { static now() { return clock; } }
   const context = vm.createContext({ console, Date: FakeDate, URL, setTimeout: (fn) => setTimeout(fn, 0), clearTimeout,
@@ -56,16 +57,77 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.8" }), onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.9" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
-      notifications: { create: async () => {} }
+      notifications: { create: async message => { notifications.push(message); } }
     }
   });
   vm.runInContext(background, context);
-  const dispatch = (message, tabId = 42) => new Promise(resolve => events.message(message, { tab: { id: tabId } }, resolve));
+  const dispatch = (message, tabId = 42, extraSender = {}) => new Promise(resolve => events.message(message, { tab: { id: tabId }, ...extraSender }, resolve));
   const flush = async () => { await vm.runInContext("mutationQueue", context); await new Promise(resolve => setImmediate(resolve)); };
-  return { context, data, navigation, alarmMap, dispatch, flush };
+  return { context, data, navigation, notifications, alarmMap, dispatch, flush };
 }
+
+test("one-off selection runs only chosen enabled targets without modifying tomorrow's configuration", async () => {
+  const h = harness();
+  delete h.data[RUN];
+  const before = structuredClone(h.data[CONFIG]);
+  const response = await h.dispatch({type: "JS_AUTO_RUN_SELECTED", keys: ["naver-4"]}, 42, {url: "chrome-extension://test/options.html"});
+  await h.flush();
+  assert.equal(response.ok, true);
+  assert.deepEqual(h.data[RUN].targets.map(target => target.key), ["naver-4"]);
+  assert.deepEqual(h.data[CONFIG], before);
+});
+test("failed-only selection excludes completed targets and rejects provider-page requests", async () => {
+  const h = harness();
+  delete h.data[RUN];
+  h.data[REPORT].items[3].status = "failed";
+  h.data[REPORT].items[4].status = "partial";
+  const denied = await h.dispatch({type: "JS_AUTO_RUN_SELECTED", keys: ["naver-3"]}, 42, {url: "https://realty.daangn.com/"});
+  assert.equal(denied.ok, false);
+  const response = await h.dispatch({type: "JS_AUTO_RUN_SELECTED", keys: ["naver-0", "naver-3", "naver-4"], failedOnly: true}, 42, {url: "chrome-extension://test/options.html"});
+  await h.flush();
+  assert.equal(response.ok, true);
+  assert.deepEqual(h.data[RUN].targets.map(target => target.key), ["naver-3", "naver-4"]);
+});
+test("Windows schedule is unknown without a trusted snapshot, not inferred from extension config", async () => {
+  const h = harness();
+  const ready = await h.context.automationReadiness();
+  assert.equal(ready.schedule, "11:00");
+  assert.equal(ready.windowsSchedule, "");
+  assert.equal(ready.windowsTaskState, "Unknown");
+  assert.equal(ready.windowsCheckedAt, null);
+});
+test("minimal report drops target URLs, raw payload and diagnostic contacts", async () => {
+  const h = harness();
+  const report = {runId: "run-1234567890123-test", startedAt: clock, updatedAt: clock + 1, active: true,
+    items: [{key: "naver-0", source: "naver", label: "유성구", status: "running", message: "010-1234-5678 secret",
+      raw: {token: "secret"}, counts: {created: 3, url: "https://private.example/"}}]};
+  const clean = JSON.stringify(await h.context.minimalAutomationReport(report));
+  assert.doesNotMatch(clean, /https|secret|010-1234|raw|naver-0/);
+  assert.match(clean, /"created":3/);
+});
+test("failed report uploads remain queued across a later run and do not fail the collection", async () => {
+  const h = harness();
+  const first = {runId: "run-1234567890123-first", startedAt: clock, updatedAt: clock, active: true,
+    items: [{key: "naver-0", source: "naver", status: "running", counts: {}}]};
+  await h.context.saveRunReport(first);
+  await h.context.saveRunReport({...first, runId: "run-1234567890124-next", updatedAt: clock + 1});
+  await h.flush();
+  const queued = h.data.jsAutoCollectorPendingReportV1;
+  assert.equal(queued.length, 2);
+  assert.equal(h.data[RUN].active, true);
+});
+test("normal completion notification is opt-in and failure notifications can be muted", async () => {
+  for (const [notifyComplete, notifyFailure, failed, expected] of [[false,true,false,0],[true,true,false,1],[false,false,true,0],[false,true,true,1]]) {
+    const h = harness();
+    h.data[CONFIG].notifyComplete = notifyComplete;
+    h.data[CONFIG].notifyFailure = notifyFailure;
+    h.data[REPORT].items.forEach((item, index) => { item.status = failed && index === 0 ? "failed" : "completed"; });
+    await h.context.finalizeRun(h.data[RUN]);
+    assert.equal(h.notifications.length, expected);
+  }
+});
 
 function setCurrentDaangn(h, overrides = {}) {
   const target = { ...h.data[RUN].targets[3], key: "daangn-seo", source: "daangn",
@@ -336,7 +398,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.8");
+  assert.equal(response.backgroundBuild, "1.1.9");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

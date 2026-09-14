@@ -13,6 +13,7 @@ function queueHarness() {
   const reads = [];
   let timerId = 0;
   let rejectMutation = false;
+  let rejectStorage = false;
   let statusResult = {ok: true, completed: 0, processing: 0, pending: 0, failed: 0, jobs: []};
 
   const indicator = {
@@ -38,7 +39,7 @@ function queueHarness() {
   };
   const localStorage = {
     getItem(key) { return storage.has(key) ? storage.get(key) : null; },
-    setItem(key, value) { storage.set(key, String(value)); }
+    setItem(key, value) { if (rejectStorage) throw new Error("QuotaExceededError"); storage.set(key, String(value)); }
   };
   function setTimeoutFake(callback, delay) {
     const entry = {id: ++timerId, callback, delay: Number(delay) || 0, cancelled: false};
@@ -53,7 +54,7 @@ function queueHarness() {
     document,
     localStorage,
     addEventListener() {},
-    dispatchEvent(event) { events.push(event); return true; },
+    dispatchEvent(event) { if (event.type !== "js-mutation-status") events.push(event); return true; },
     JSDataAccessV6: {
       mutate(action, payload, options) {
         mutations.push({action, payload, options});
@@ -96,6 +97,7 @@ function queueHarness() {
     mutations,
     reads,
     setRejectMutation(value) { rejectMutation = value; },
+    setRejectStorage(value) { rejectStorage = value; },
     setStatusResult(value) { statusResult = value; },
     runTimer,
     flush
@@ -127,6 +129,22 @@ test("queue deduplicates request ids and completes through the shared data bound
   assert.equal(harness.events[0].type, "js-async-mutation-finished");
   assert.equal(harness.events[0].detail.requestId, "same-request");
   assert.equal(harness.events[0].detail.ok, true);
+});
+
+test("queue rejects a request when durable local storage fails, rather than reporting a phantom save", async () => {
+  const harness = queueHarness();
+  harness.setRejectStorage(true);
+  await assert.rejects(harness.queue.enqueue("updatePropertyMemo", {requestId: "quota-request", memo: "private text"}),
+    {code: "STORAGE_UNAVAILABLE"});
+  assert.equal(harness.queue.pendingCount(), 0);
+  assert.equal(harness.mutations.length, 0);
+  assert.equal(harness.queue.getStatus().failed, 1);
+  assert.equal(harness.queue.getStatus().visible, true);
+  assert.doesNotMatch(JSON.stringify(harness.queue.getStatus()), /private text|quota-request/);
+  harness.setRejectStorage(false);
+  await harness.queue.enqueue("updatePropertyMemo", {requestId: "quota-request", memo: "private text"});
+  assert.equal(harness.queue.pendingCount(), 1);
+  assert.equal(harness.queue.getStatus().failed, 0);
 });
 
 test("queue retains a failed task and retries it after three seconds", async () => {

@@ -13,6 +13,8 @@
   var lastSavingCount = 0;
   var externalSavingCount = 0;
   var externalFailedCount = 0;
+  var storageFailed = false;
+  var statusSnapshot = {visible: false, saving: 0, failed: 0, unsent: 0, completed: 0};
   var lastServerStatus = {completed: 0, processing: 0, pending: 0, failed: 0};
 
   function readOutbox() {
@@ -27,7 +29,13 @@
   function writeOutbox(tasks) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks || []));
-    } catch (_) {}
+      storageFailed = false;
+      return true;
+    } catch (_) {
+      storageFailed = true;
+      if (global.JSLocalMetricsV1) global.JSLocalMetricsV1.error("storage");
+      return false;
+    }
   }
 
   function readActive() {
@@ -42,7 +50,11 @@
   function writeActive(tasks) {
     try {
       localStorage.setItem(ACTIVE_KEY, JSON.stringify(tasks || []));
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      storageFailed = true;
+      return false;
+    }
   }
 
   function createRequestId(action) {
@@ -80,7 +92,7 @@
     var pending = Number(lastServerStatus.pending || 0) + unsent;
     var processing = Number(lastServerStatus.processing || 0);
     var completed = Number(lastServerStatus.completed || 0);
-    var failed = Number(lastServerStatus.failed || 0) + externalFailedCount;
+    var failed = Number(lastServerStatus.failed || 0) + externalFailedCount + (storageFailed ? 1 : 0);
     var saving = pending + processing + externalSavingCount;
     var justCompleted = lastSavingCount > 0 && saving === 0 && failed === 0;
     if (saving || failed) {
@@ -97,6 +109,8 @@
         if (externalSavingCount || externalFailedCount || readOutbox().length) return renderStatus();
         indicator.className = "async-mutation-status-v1 idle";
         indicator.hidden = true;
+        statusSnapshot.visible = false;
+        publishStatus();
       }, 3000);
     } else if (!indicator.classList.contains("completed") || !hideTimer) {
       indicator.className = "async-mutation-status-v1 idle";
@@ -114,6 +128,15 @@
       ? "서버 전송 대기 " + unsent + "건 포함 · 누르면 새로 확인"
       : "누르면 저장 상태 새로 확인";
     lastSavingCount = saving;
+    statusSnapshot = {visible: !indicator.hidden, saving: saving, failed: failed, unsent: unsent, completed: completed};
+    publishStatus();
+  }
+
+  function publishStatus() {
+    // Counts only. Never publish task payloads, account IDs or error messages.
+    if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      global.dispatchEvent(new CustomEvent("js-mutation-status", {detail: Object.assign({}, statusSnapshot)}));
+    }
   }
 
   function setExternalState(active, failed) {
@@ -239,7 +262,6 @@
       var latest = readOutbox().filter(function(item) {
         return item.requestId !== task.requestId;
       });
-      writeOutbox(latest);
       var active = readActive();
       if (!active.some(function(item) { return item.requestId === task.requestId; })) {
         active.push({
@@ -247,8 +269,9 @@
           action: task.action,
           createdAt: task.createdAt
         });
-        writeActive(active);
+        if (!writeActive(active)) throw new Error("저장 상태를 기기에 기록하지 못했습니다. 저장공간을 확인해 주세요.");
       }
+      if (!writeOutbox(latest)) throw new Error("전송 대기열을 갱신하지 못했습니다. 저장공간을 확인해 주세요.");
       statusPollingSuspended = false;
       sending = false;
       renderStatus();
@@ -284,7 +307,12 @@
         payload: taskPayload,
         createdAt: Date.now()
       });
-      writeOutbox(tasks);
+      if (!writeOutbox(tasks)) {
+        renderStatus();
+        var error = new Error("이 기기에 전송 대기열을 저장하지 못했습니다. 저장공간 또는 브라우저 저장 설정을 확인한 뒤 다시 시도해 주세요.");
+        error.code = "STORAGE_UNAVAILABLE";
+        return Promise.reject(error);
+      }
     }
     renderStatus();
     scheduleStatusPolling(250);
@@ -389,6 +417,7 @@
     refreshStatus: refreshStatus,
     retry: sendOutbox,
     setExternalState: setExternalState,
+    getStatus: function() { return Object.assign({}, statusSnapshot); },
     pendingCount: function() {
       return readOutbox().length + readActive().length;
     }

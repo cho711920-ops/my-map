@@ -1,6 +1,10 @@
 "use strict";
 
 let state = { config: { targets: [] }, logs: [], runState: null, runReport: null };
+const selectedOnce = new Set();
+let runPreviewMode = "all";
+let settingsDirty = false;
+function keyForTarget(target) { return String(target.key || [target.source, target.district, target.url].join("|")); }
 document.getElementById("autoVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 
 const SOURCE_ORDER = ["naver", "daangn", "gongsil"];
@@ -142,7 +146,16 @@ function statusDetail(item, target) {
   const detail = display.legacyDaangn && display.addressDeferred
     ? "정확한 지번 미제공 · 지도 등록 보류" + (display.failed ? " · 조회·저장 실패도 확인 필요" : "")
     : item.message;
-  return [counts, detail, time].filter(Boolean).join(" · ");
+  const help = item && item.status === "failed" ? failureGuidance(item) : "";
+  return [counts, detail, help, time].filter(Boolean).join(" · ");
+}
+
+function failureGuidance(item) {
+  const message = String(item.terminalCode || "") + " " + String(item.message || "");
+  if (/provider_auth|401|403|로그인|보안키|승인되지/.test(message)) return "조치: 공급처 로그인과 수집 승인을 먼저 확인하세요.";
+  if (/provider_schema|provider_persisted_query|GraphQL|스키마|최신 수집기/.test(message)) return "조치: 공급처 API·수집기 업데이트 확인 후 다시 실행하세요.";
+  if (/주소|지번/.test(message)) return "조치: 원본에서 정확한 주소 확인이 필요합니다.";
+  return "조치: 연결 상태를 확인한 뒤 실패한 지역만 다시 실행할 수 있습니다.";
 }
 
 function reportStatus(item) {
@@ -214,7 +227,7 @@ function renderTarget(target, index) {
   return `<div class="item target-item" data-report-key="${escapeHtml(String(target.key || index))}">
     <div class="target-state state-${escapeHtml(status)}"><span>${escapeHtml(reportStatus(item))}</span></div>
     <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small class="target-result">${escapeHtml(statusDetail(item, target))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small>${renderDiagnostics(item)}</div>
-    <div class="item-actions"><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>사용</label><button data-remove="${index}">삭제</button></div>
+    <div class="item-actions"><label><input type="checkbox" data-once="${index}" ${selectedOnce.has(keyForTarget(target)) ? "checked" : ""} ${target.enabled === false ? "disabled" : ""}>이번만 선택</label><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>예약 사용</label><button data-remove="${index}">삭제</button></div>
   </div>`;
 }
 
@@ -231,9 +244,22 @@ function renderTargets(targets) {
 
 function render() {
   const config = state.config || {};
-  document.getElementById("enabled").checked = Boolean(config.enabled);
-  document.getElementById("schedule").value = config.schedule || "11:00";
-  document.getElementById("closeTabs").checked = config.closeTabs !== false;
+  if (!settingsDirty) {
+    document.getElementById("enabled").checked = Boolean(config.enabled);
+    document.getElementById("schedule").value = config.schedule || "11:00";
+    document.getElementById("closeTabs").checked = config.closeTabs !== false;
+    document.getElementById("notifyComplete").checked = config.notifyComplete === true;
+    document.getElementById("notifyPartial").checked = config.notifyPartial !== false;
+    document.getElementById("notifyFailure").checked = config.notifyFailure !== false;
+  }
+  const ready = state.readiness || {};
+  const windows = ready.windowsCheckedAt ? `Windows ${ready.windowsSchedule || "시각 미확인"} · ${ready.windowsTaskState} · ${registeredTime(ready.windowsCheckedAt)} 확인` : "Windows 실제 예약 미확인";
+  const mismatch = ready.schedule && ready.windowsSchedule && ready.schedule !== ready.windowsSchedule;
+  document.getElementById("scheduleReadiness").textContent =
+    `확장 다음 실행: ${ready.nextAlarmAt ? registeredTime(ready.nextAlarmAt) : "미확인/꺼짐"} · ${windows}` +
+    (mismatch ? " · ⚠ 예약 시각 불일치: Windows 설치 도구에서 같은 시각으로 갱신 필요" : "") +
+    (ready.windowsCheckedAt && Date.now() - ready.windowsCheckedAt > 86400000 ? " · Windows 확인이 하루 이상 지남" : "") +
+    (state.reportPending ? " · 서버 보고 전송 대기(다음 공급처 연결에서 재시도)" : "");
   const targets = Array.isArray(config.targets) ? config.targets : [];
   document.getElementById("runSummary").innerHTML = renderRunSummary();
   const targetList = document.getElementById("targets");
@@ -326,14 +352,21 @@ document.getElementById("save").addEventListener("click", async () => {
   state.config.enabled = document.getElementById("enabled").checked;
   state.config.schedule = document.getElementById("schedule").value || "11:00";
   state.config.closeTabs = document.getElementById("closeTabs").checked;
+  state.config.notifyComplete = document.getElementById("notifyComplete").checked;
+  state.config.notifyPartial = document.getElementById("notifyPartial").checked;
+  state.config.notifyFailure = document.getElementById("notifyFailure").checked;
   const response = await runtime({ type: "JS_AUTO_SAVE_CONFIG", config: state.config });
-  if (response.ok) state.config = response.config;
+  if (response.ok) { state.config = response.config; settingsDirty = false; }
   message(response.ok ? "저장 완료" : "저장 실패");
   render();
 });
 
 function previewRows() {
-  const targets = Array.isArray(state.config.targets) ? state.config.targets.filter((target) => target.enabled !== false) : [];
+  const targets = Array.isArray(state.config.targets) ? state.config.targets.filter((target) => target.enabled !== false).filter(target => {
+    if (runPreviewMode === "selected") return selectedOnce.has(keyForTarget(target));
+    const previous = reportItem(target);
+    return runPreviewMode !== "failed" || previous && ["failed", "partial"].includes(previous.status);
+  }) : [];
   const body = document.getElementById("runPreviewBody");
   if (!body) return targets;
   const rows = targets.map((target) => {
@@ -348,9 +381,26 @@ function previewRows() {
 }
 
 document.getElementById("run").addEventListener("click", () => {
+  runPreviewMode = "all";
   const targets = previewRows();
   if (!targets.length) return message("사용 설정된 자동수집 대상이 없습니다.");
   document.getElementById("runPreview").showModal();
+});
+for (const [id, mode] of [["runSelected", "selected"], ["runFailed", "failed"]]) {
+  document.getElementById(id).addEventListener("click", () => {
+    runPreviewMode = mode;
+    if (!previewRows().length) return message(mode === "failed" ? "실패·부분완료 대상이 없습니다." : "이번에 실행할 대상을 체크해 주세요.");
+    document.getElementById("runPreview").showModal();
+  });
+}
+for (const id of ["enabled", "schedule", "closeTabs", "notifyComplete", "notifyPartial", "notifyFailure"]) {
+  document.getElementById(id).addEventListener("input", () => { settingsDirty = true; });
+}
+document.getElementById("targets").addEventListener("change", event => {
+  const index = Number(event.target.dataset.once);
+  if (!Number.isInteger(index) || !state.config.targets[index]) return;
+  const key = keyForTarget(state.config.targets[index]);
+  if (event.target.checked) selectedOnce.add(key); else selectedOnce.delete(key);
 });
 
 document.getElementById("runConfirmed").addEventListener("click", async (event) => {
@@ -360,7 +410,8 @@ document.getElementById("runConfirmed").addEventListener("click", async (event) 
   button.disabled = true;
   message("전체 실행 상태 확인 중");
   try {
-    const response = await runtime({ type: "JS_AUTO_RUN_NOW" });
+    const response = await runtime(runPreviewMode === "all" ? { type: "JS_AUTO_RUN_NOW" } :
+      {type: "JS_AUTO_RUN_SELECTED", keys: previewRows().map(keyForTarget), failedOnly: runPreviewMode === "failed"});
     await load();
     message(response.message || (response.ok ? `전체 ${Number(response.total || 0)}개 실행 시작` : "실행 실패"));
   } finally {
@@ -399,6 +450,9 @@ document.getElementById("exportConfig").addEventListener("click", () => {
       enabled: Boolean(config.enabled),
       schedule: config.schedule || "11:00",
       closeTabs: config.closeTabs !== false,
+      notifyComplete: config.notifyComplete === true,
+      notifyPartial: config.notifyPartial !== false,
+      notifyFailure: config.notifyFailure !== false,
       targets: Array.isArray(config.targets) ? config.targets.map(portableTarget) : []
     }
   };

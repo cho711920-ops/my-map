@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.5\.4"/);
+assert.match(collector, /VERSION = "1\.5\.5"/);
 assert.match(collector, /metric\("created","신규 등록"\)/);
 assert.match(collector, /metric\("merged","자동 통합"\)/);
 assert.match(collector, /metric\("updated","조건 변경"\)/);

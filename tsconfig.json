@@ -11,5 +11,5 @@
     "types": [],
     "skipLibCheck": true
   },
-  "include": ["cloudflare/src/floor.js", "cloudflare/src/visit-status.js"]
+  "include": ["cloudflare/src/floor.js", "cloudflare/src/visit-status.js", "cloudflare/src/quick-add-trade.js"]
 }

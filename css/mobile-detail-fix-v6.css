@@ -225,6 +225,13 @@
   grid-template-columns: 1fr;
 }
 
+.v6-detail-sheet-row[hidden],
+.v6-detail-sheet #saleFiltersV1[hidden],
+.v6-detail-sheet #saleFiltersV1 [hidden] { display: none !important; }
+.v6-detail-sheet #saleFiltersV1 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.v6-detail-sheet #saleFiltersV1 input,
+.v6-detail-sheet #saleFiltersV1 select { box-sizing: border-box; max-width: 100%; min-width: 0; }
+
 .v6-detail-sheet-row input {
   box-sizing: border-box;
   width: 100%;

@@ -214,6 +214,7 @@ function listingChangeRowToItemV683(row, index) {
     tradeType: clean(row.trade_type) || "lease",
     saleCategory: clean(row.sale_category),
     salePrice: row.sale_price === null || row.sale_price === "" ? null : Number(row.sale_price),
+    saleDetails: parseDirectSaleDetailsV1(row.sale_details_json),
     latitude: row.latitude === null || row.latitude === "" ? null : Number(row.latitude),
     longitude: row.longitude === null || row.longitude === "" ? null : Number(row.longitude),
     sheetRow: Number(index || 0) + 1, latlng: null
@@ -1913,6 +1914,7 @@ function loadSheet(isAuto, forceRefresh) {
           tradeType: clean(c[28]) || "lease",
           saleCategory: clean(c[29]),
           salePrice: clean(c[30]) === "" ? null : Number(c[30]),
+          saleDetails: parseDirectSaleDetailsV1(c[31]),
           sheetRow: i + 1,
           latlng: null
         };
@@ -2521,8 +2523,13 @@ function geocodeItems(items, callback, progressCallback) {
 }
 
 
-/* 현재 지도에 보이는 클러스터들이 대표하는 매물 총수를 표시합니다. */
-function updateMapListingCountV825() {
+function parseDirectSaleDetailsV1(value) {
+  try { var result = JSON.parse(value || "{}"); return result && typeof result === "object" && !Array.isArray(result) && Object.keys(result).length ? result : null; }
+  catch (_) { return null; }
+}
+
+/* 목록에 적용한 것과 같은 검색/지도 범위 기준을 사용합니다. */
+function updateMapListingCountV825(filteredItems) {
   var mapElement = document.getElementById("map");
   var projection = typeof map !== "undefined" && map && map.getProjection
     ? map.getProjection()
@@ -2531,7 +2538,8 @@ function updateMapListingCountV825() {
     mapElement && projection &&
     mapElement.clientWidth > 0 && mapElement.clientHeight > 0
   );
-  var count = (overlays || []).reduce(function(total, overlay) {
+  var count = Array.isArray(filteredItems) ? filteredItems.length : typeof getFilteredItems === "function" && typeof map !== "undefined" && map
+    ? getFilteredItems().length : (overlays || []).reduce(function(total, overlay) {
     if (!overlay || !overlay.__cluster) return total;
 
     var cluster = overlay.__cluster;
@@ -2557,7 +2565,8 @@ function updateMapListingCountV825() {
   var formattedCount = count.toLocaleString("ko-KR");
   value.textContent = formattedCount + "개";
   badge.dataset.listingCount = String(count);
-  badge.setAttribute("aria-label", "현재 지도에 표시된 매물 " + formattedCount + "개");
+  badge.setAttribute("aria-label", "현재 검색·지도 범위 매물 " + formattedCount + "개");
+  badge.title = "현재 검색·지도 범위 기준입니다. 동·구 클러스터 숫자는 해당 지역 전체를 나타냅니다.";
   return count;
 }
 
@@ -2567,7 +2576,7 @@ window.updateMapListingCountV825 = updateMapListingCountV825;
 function clearMap() {
   overlays.forEach(function(o) { o.setMap(null); });
   overlays = [];
-  updateMapListingCountV825();
+  updateMapListingCountV825([]);
   document.getElementById("list").innerHTML = "";
 }
 
@@ -2703,7 +2712,7 @@ function drawMapClustersOnlyV639(items) {
     overlays.push(overlay);
   });
 
-  updateMapListingCountV825();
+  updateMapListingCountV825(items);
 
   restoreClusterSelectionSnapshotV638(selectionSnapshotV638);
   isRendering = false;
@@ -2749,6 +2758,7 @@ function drawItems(items) {
   showList(pinnedItems.length
     ? pinnedItems
     : getAdministrativeListItemsV6570(jsLastRenderedItemsV639));
+  if (jsLastRenderedItemsV639.length && window.JSLocalMetricsV1) window.JSLocalMetricsV1.markFirstData();
 }
 
 

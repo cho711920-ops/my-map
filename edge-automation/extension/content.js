@@ -208,6 +208,18 @@ function runPageCollector(target, runId, parentRunId) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message && message.type === "JS_AUTO_PUBLISH_REPORT") {
+    const requestId = "report-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    let finished = false;
+    const finish = ok => { if (finished) return; finished = true; clearTimeout(timer); window.removeEventListener("message", receive); sendResponse({ok}); };
+    const receive = event => {
+      if (event.source === window && event.data && event.data.type === "JS_AUTO_REPORT_RESULT" && event.data.requestId === requestId) finish(event.data.ok === true);
+    };
+    const timer = setTimeout(() => finish(false), 5500);
+    window.addEventListener("message", receive);
+    window.postMessage({type: "JS_AUTO_REPORT_MAIN", requestId, report: message.report}, "*");
+    return true;
+  }
   if (message && message.type === "JS_AUTO_PING_TARGET") {
     const progress = collectorProgressSnapshot();
     sendResponse({
@@ -275,6 +287,8 @@ if (/^(?:www\.)?js-map\.com$/i.test(location.hostname)) {
           targetCount: Array.isArray(config.targets) ? config.targets.filter((target) => target.enabled !== false).length : 0,
           runState,
           runReport: report,
+          readiness: response && response.readiness || null,
+          reportPending: Boolean(response && response.reportPending),
           recentProblems: logs.filter((row) => /warning|error/.test(String(row.level || ""))).slice(0, 5)
         }
       }, "*");

@@ -2,6 +2,8 @@ import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./fl
 import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
 import { collectorDiagnostics } from "./collector-diagnostics.js";
+import { normalizeCollectionCounts, collectionDateRange, summarizeCollectionDay, collectorActionGuidance } from "./collection-status-summary.js";
+import { saveAutomationRunReport, readAutomationRunReports } from "./automation-run-reports.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
@@ -33,6 +35,7 @@ const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
   "gongsilImportBatch", "finalizeCollectionSession", "mutationStatus",
   "danggeunStartJob", "danggeunResumeJob", "danggeunRunJobChunk", "danggeunPauseJob", "danggeunJobStatus"
+  , "saveAutomationRunReport"
 ]);
 
 const DAANGN_GRAPHQL_URL = "https://realty.kr.karrotmarket.com/graphql";
@@ -2842,6 +2845,7 @@ async function runDaangnChunk(env, body = {}) {
 
 async function executeExternalAction(env, body) {
   const action = clean(body.action);
+  if (action === "saveAutomationRunReport") return saveAutomationRunReport(env, body.report);
   if (action === "classifySourceManifest") return classifyManifest(env, body);
   if (action === "saveNaverBatch") return ingestRecords(env, "네이버", Array.isArray(body.data) ? body.data.slice(0, 250) : [], body);
   if (action === "gongsilImportBatch") return ingestRecords(env, "공실박스", Array.isArray(body.records) ? body.records.slice(0, 400) : [], body);
@@ -3068,10 +3072,12 @@ function collectorSessionStatusLabel(state) {
   return state ? "수집 중" : "수집 전";
 }
 
-async function collectionStatus(env) {
+async function collectionStatus(env, query = {}) {
+  const range = collectionDateRange(query.date);
   const sessions = await env.DB.prepare(`SELECT id, source, state, totals_json, error_json,
       started_at, finished_at, updated_at
-    FROM collector_sessions ORDER BY updated_at DESC LIMIT 100`).all();
+    FROM collector_sessions WHERE started_at>=?1 AND started_at<?2
+    ORDER BY started_at DESC, updated_at DESC LIMIT 1000`).bind(range.baselineStart, range.end).all();
   const counts = await env.DB.prepare(`SELECT source, COUNT(*) AS total,
     SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS active,
     SUM(CASE WHEN active=0 THEN 1 ELSE 0 END) AS inactive
@@ -3090,7 +3096,7 @@ async function collectionStatus(env) {
   }
   const sourceCards = ["네이버", "당근", "공실박스"].map((name) => {
     const row = latestBySource.get(name);
-    const totals = parseJson(row?.totals_json, {});
+    const totals = normalizeCollectionCounts(parseJson(row?.totals_json, {}));
     const failure = parseJson(row?.error_json, {})?.lastFailure || {};
     const count = sourceCounts.get(name) || {};
     return {
@@ -3098,6 +3104,7 @@ async function collectionStatus(env) {
       lastStatus: collectorSessionStatusLabel(row?.state),
       lastAt: row?.finished_at || row?.updated_at || "", lastScope: clean(totals.note) || clean(totals.scope),
       failure: clean(failure.message).slice(0, 500), failureAt: clean(failure.at),
+      guidance: collectorActionGuidance(failure.message || totals.completionIssues?.join(" · ")),
       complete: row?.state === "completed" && totals.completionValidated !== false,
       collectorVersion: clean(totals.collectorVersion),
       completionIssues: [...(Array.isArray(totals.completionIssues) ? totals.completionIssues : []),
@@ -3106,7 +3113,7 @@ async function collectionStatus(env) {
     };
   });
   const recent = sessionRows.map((row) => {
-    const totals = parseJson(row.totals_json, {});
+    const totals = normalizeCollectionCounts(parseJson(row.totals_json, {}));
     const failure = parseJson(row.error_json, {})?.lastFailure || {};
     return {
       sessionId: row.id, source: sourceName(row.source), state: row.state,
@@ -3123,7 +3130,10 @@ async function collectionStatus(env) {
       failure: clean(parseJson(row.error_json, {})?.lastFailure?.message).slice(0, 500),
       startedAt: row.started_at, finishedAt: row.finished_at, updatedAt: row.updated_at
     })),
-    sources: sourceCards, recent,
+    sources: sourceCards, recent: recent.filter(row => row.startedAt >= range.start && row.startedAt < range.end),
+    daySummary: summarizeCollectionDay(recent, range.date, {source: clean(query.source), tradeType: clean(query.tradeType)}),
+    historyTruncated: sessionRows.length === 1000,
+    automation: await readAutomationRunReports(env),
     raw: { total: Number(raw?.total || 0), pending: Number(raw?.pending || 0), error: Number(raw?.error || 0) },
     pendingReview: Number(raw?.review || 0), sourceCounts: counts?.results || [], source: "D1"
   };
@@ -3134,8 +3144,14 @@ async function propertyTimeline(env, propertyId) {
       s.source FROM listing_history h LEFT JOIN listing_sources s ON s.id=h.source_id
     WHERE h.listing_id=?1 ORDER BY h.id DESC LIMIT 200`).bind(clean(propertyId)).all();
   return { ok: true, action: "propertyTimeline", propertyId: clean(propertyId),
-    items: (result?.results || []).map((row) => ({ action: row.action, reason: parseJson(row.after_json, {})?.reason || "",
-      at: row.created_at, source: row.source || row.actor_email || "D1" })), source: "D1" };
+    items: (result?.results || []).map((row) => {
+      const before = parseJson(row.before_json, {});
+      const after = parseJson(row.after_json, {});
+      const fields = ["deposit", "monthly_rent", "rent", "maintenance_fee", "fee", "premium", "area_m2", "area", "room", "trade_type", "sale_price", "status"];
+      return { action: row.action, reason: after.reason || "", at: row.created_at, source: row.source || row.actor_email || "D1",
+        changes: fields.filter(key => Object.hasOwn(before, key) && Object.hasOwn(after, key) && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+          .map(key => ({field: key, before: before[key], after: after[key]})) };
+    }), source: "D1" };
 }
 
 export function isCollectorAdminGetAction(action) {
@@ -3150,7 +3166,7 @@ export async function handleCollectorAdminGet(env, user, query) {
   const action = clean(query.action);
   if (!isCollectorAdminGetAction(action)) return null;
   if (action === "reviewWorkspace") return reviewWorkspace(env, query);
-  if (action === "collectionStatus") return collectionStatus(env);
+  if (action === "collectionStatus") return collectionStatus(env, query);
   if (action === "propertyTimeline") return propertyTimeline(env, query.propertyId);
   return null;
 }

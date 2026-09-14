@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.4";
+  var VERSION = "1.5.5";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -65,6 +65,23 @@
 
   window.__JS_DAANGN_COLLECTOR__ = {
     version: VERSION,
+    // Reporting is best-effort and must never prompt for a key or pause collection.
+    submitAutomationReport: async function(report) {
+      var key = "";
+      try { key = String(localStorage.getItem(COLLECTOR_KEY_STORAGE) || "").trim(); } catch (_) {}
+      if (!key || !report || JSON.stringify(report).length > 48000) return {ok: false};
+      var controller = new AbortController();
+      var timer = window.setTimeout(function() { controller.abort(); }, 4500);
+      try {
+        var response = await nativeFetch(COLLECTOR_API_URL, {
+          method: "POST", headers: {"content-type": "text/plain;charset=utf-8"},
+          signal: controller.signal,
+          body: JSON.stringify({action: "saveAutomationRunReport", collectorKey: key, report: report})
+        });
+        return response.ok ? await response.json() : {ok: false};
+      } catch (_) { return {ok: false}; }
+      finally { window.clearTimeout(timer); }
+    },
     reopen: function () {
       panel.style.display = "block";
       if (state.automaticRunning) return;

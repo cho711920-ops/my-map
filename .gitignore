@@ -2,6 +2,8 @@ node_modules/
 .vercel/
 .wrangler/
 .cloudflare-assets/
+outputs/browser-report/
+outputs/browser-results/
 .dev.vars
 .env
 .env.*

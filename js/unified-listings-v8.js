@@ -6,7 +6,7 @@
   var state = { groups: {}, detailCache: {}, detailCachedAt: {}, detailRetryAt: {}, detailGeneration: 0,
     detailPending: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
-    loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
+    loaded: false, loadPending: null, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
     photoPreloads: {}, pendingDetailSteps: {} };
@@ -133,7 +133,10 @@
     if (!global.JSDataAccessV6 || typeof global.JSDataAccessV6.read !== "function") {
       return Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
     }
-    return global.JSDataAccessV6.read(action, params, { errorMessage: "운영자료 조회 실패" });
+    return global.JSDataAccessV6.read(action, params, { errorMessage: "운영자료 조회 실패" }).catch(function(error) {
+      if (global.JSLocalMetricsV1) global.JSLocalMetricsV1.error("read");
+      throw error;
+    });
   }
 
   function needsDetail(originals, originalId) {
@@ -418,10 +421,41 @@
     }, 450);
   }
 
+  function originalLoadStatus(failed) {
+    var banner = document.getElementById("unifiedOriginalLoadStatusV1");
+    if (!failed) { if (banner) banner.remove(); return; }
+    if (banner) return;
+    var status = document.getElementById("status");
+    if (!status || !status.parentNode) return;
+    banner = document.createElement("div");
+    banner.id = "unifiedOriginalLoadStatusV1";
+    banner.className = "operations-center-message error";
+    banner.setAttribute("role", "status");
+    var message = document.createElement("span");
+    message.textContent = state.loaded ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 연결 조회 실패 · 기본 매물자료를 표시합니다. ";
+    var retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "원본 다시 불러오기";
+    retry.onclick = function() {
+      retry.disabled = true;
+      load(true).then(function(result) {
+        if (result.ok === false) return;
+        attach(global.allItems || [], result);
+        if (typeof global.applyFilter === "function") global.applyFilter();
+      }).finally(function() { retry.disabled = false; });
+    };
+    banner.appendChild(message);
+    banner.appendChild(retry);
+    status.parentNode.insertBefore(banner, status.nextSibling);
+  }
+
   function load(force) {
-    if (state.loaded && !force) return Promise.resolve({groups: state.groups});
-    if (force) invalidateDetails();
-    return apiGet("unifiedListings").then(function(result) {
+    if (state.loadPending) return state.loadPending;
+    if (state.loaded && !force) return Promise.resolve({groups: state.groups, sourceSearchIds: state.sourceSearchIds});
+    state.loadPending = apiGet("unifiedListings").then(function(result) {
+      if (!result || result.ok === false || !result.groups || typeof result.groups !== "object" || Array.isArray(result.groups)) {
+        throw new Error(result && result.message || "원본 매물 응답을 확인하지 못했습니다.");
+      }
       if (result && /^compact-v\d+$/.test(result.format || "") && Array.isArray(result.fields)) {
         var fields = result.fields;
         var expanded = {};
@@ -434,17 +468,18 @@
         });
         result.groups = expanded;
       }
+      if (force) invalidateDetails();
       state.groups = result.groups || {};
       state.sourceSearchIds = result.sourceSearchIds || {};
       state.loaded = true;
+      originalLoadStatus(false);
       return result;
     }).catch(function(error) {
       console.error("통합매물 원본 조회 실패", error);
-      state.groups = {};
-      state.sourceSearchIds = {};
-      state.loaded = true;
-      return {ok: false, groups: {}};
-    });
+      originalLoadStatus(true);
+      return {ok: false, stale: state.loaded, groups: state.groups, sourceSearchIds: state.sourceSearchIds};
+    }).finally(function() { state.loadPending = null; });
+    return state.loadPending;
   }
 
   function attach(items, result) {
@@ -452,7 +487,7 @@
       if (state.groups !== result.groups) invalidateDetails();
       state.groups = result.groups;
       state.sourceSearchIds = result.sourceSearchIds || state.sourceSearchIds || {};
-      state.loaded = true;
+      if (result.ok !== false) state.loaded = true;
     }
     (items || []).forEach(function(item) {
       var originals = group(item.propertyId);
@@ -856,7 +891,7 @@
     gallery.innerHTML = '<div class="unified-gallery-empty-v8">사진을 불러오지 못했습니다.</div>';
   }
 
-  function refreshOpenDetail(propertyId, originalId, requestToken) {
+  function refreshOpenDetail(propertyId, originalId, requestToken, measurement) {
     return loadDetail(propertyId).then(function(originals) {
       if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
           state.openOriginalId !== originalId) return;
@@ -878,10 +913,12 @@
       gallery = body && body.querySelector(".unified-detail-gallery-v8");
       if (gallery && photoIndex > 0) renderDetailPhoto(gallery, photoIndex);
       if (body) body.scrollTop = scrollTop;
+      if (originals.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
     }).catch(function(error) { console.warn("매물 상세 최신화 실패 · 기존 정보를 유지합니다.", error); });
   }
 
   function open(encodedPropertyId, encodedOriginalId) {
+    var measurement = global.JSLocalMetricsV1 ? global.JSLocalMetricsV1.start("detail") : null;
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var requestToken = ++state.detailRequestToken;
@@ -892,6 +929,7 @@
       state.detailCache[propertyId] = cached;
       state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
       renderDetail(propertyId, cached, state.openOriginalId);
+      if (cached.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
       if (!detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken);
       return;
     }
@@ -899,7 +937,8 @@
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     state.openOriginalId = originalId;
     renderDetail(propertyId, initial, originalId);
-    return refreshOpenDetail(propertyId, originalId, requestToken);
+    if (initial.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
+    return refreshOpenDetail(propertyId, originalId, requestToken, measurement);
   }
 
   function loadContacts(propertyId) {
@@ -1481,6 +1520,7 @@
   }, true);
 
   global.addEventListener("keydown", function(event) {
+    if (event.defaultPrevented || event.isComposing || (document.querySelector && document.querySelector("dialog[open]"))) return;
     var tellModal = document.getElementById("tellModalV8");
     if (tellModal && tellModal.classList.contains("open")) {
       if (event.key === "Escape") closeTell();

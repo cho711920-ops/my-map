@@ -564,11 +564,14 @@ function updateQuickAddPreview() {
     ["건물이름", o.name], ["주소", o.address], ["구분", o.type],
     ["보증금", o.deposit], ["월세", o.rent], ["평수", o.area]
   ];
+  var salePreviewV1 = quickTradeModeV1() !== "lease";
+  if (salePreviewV1) required = [["주소", o.address], ["매매가", quickTradeFieldV1("qaSalePrice")], ["매매 구분", quickTradeFieldV1("qaSaleCategory")]];
   var okCount = required.filter(function(x) { return String(x[1] || "").trim() !== ""; }).length;
-  var status = okCount >= 5 ? '<span class="good">분석 양호</span>' : '<span class="warn">확인 필요</span>';
+  var status = okCount >= (salePreviewV1 ? required.length : 5) ? '<span class="good">분석 양호</span>' : '<span class="warn">확인 필요</span>';
   var price = "보" + (o.deposit || "-") + " / 월" + (o.rent || "-") + " / 관" + (o.fee || "-") + " / 권" + (o.premium || "-") + " / " + (o.area || "-") + "평";
+  if (quickTradeModeV1() !== "lease") price = "매매 " + (quickTradeFieldV1("qaSalePrice") || "미입력") + "만원 · " + (quickTradeModeV1() === "land_sale" ? "토지" : "건물") + " · 가격/면적은 원본을 확인해 주세요.";
   box.innerHTML =
-    '<b>AI 분석 미리보기</b> · ' + status + ' <span class="muted">(' + okCount + '/6 핵심항목)</span>' +
+    '<b>AI 분석 미리보기</b> · ' + status + ' <span class="muted">(' + okCount + '/' + required.length + ' 핵심항목)</span>' +
     '<div class="preview-row">' + escapeHtml(o.source) + ' · ' + escapeHtml(o.type || '구분없음') + ' · ' + escapeHtml(o.name || '건물이름 없음') + '</div>' +
     '<div class="preview-row">' + escapeHtml(o.address || '주소 없음') + ' / ' + escapeHtml(o.room || '호실 없음') + '</div>' +
     '<div class="preview-row">' + escapeHtml(price) + '</div>' +
@@ -680,6 +683,13 @@ function getQuickAddRowValuesLegacyV2() {
 function validateQuickAdd() {
   updateQuickAddWarning();
   var o = getQuickAddObject();
+  if (quickTradeModeV1() !== "lease") {
+    var price = quickTradeFieldV1("qaSalePrice").replace(/,/g, "");
+    if (!/^\d+(?:\.\d+)?$/.test(price) || !(Number(price) > 0)) { alert("매매가를 만원 단위의 양수로 입력해 주세요."); return false; }
+    if (!o.address) { alert("매매 매물의 주소를 입력해 주세요."); return false; }
+    return true;
+  }
+  if (/매매/.test(o.type)) { alert("매매 매물은 등록 거래유형을 매매로 선택해 주세요."); return false; }
   if (!o.address && !o.name) {
     alert("건물이름 또는 주소 중 하나는 입력해야 합니다.");
     return false;
@@ -703,6 +713,8 @@ function clearQuickAddForm() {
   var warn = document.getElementById("quickAddWarning");
   if (warn) warn.style.display = "none";
   setQuickAddNow();
+  ["qaSalePrice", "qaLandAreaM2", "qaGrossAreaM2", "qaTotalDeposit", "qaMonthlyIncome", "qaLandUse", "qaZoning"].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ""; });
+  syncQuickAddTradeV1(false);
 }
 
 
@@ -710,6 +722,7 @@ function openQuickAddModal() {
   var modal = document.getElementById("quickAddModal");
   if (!modal) return;
   modal.style.display = "block";
+  syncQuickAddTradeV1(!quickTradeFieldV1("qaAddress") && !quickTradeFieldV1("qaRaw"));
   setQuickAddNow();
   updateQuickAddPreview();
   setTimeout(function() {
@@ -828,11 +841,46 @@ function parseQuickAddTextLegacyV3() {
    ========================================================= */
 function getQuickAddRowValues() {
   var o = getQuickAddObject();
-  return [
+  var values = [
     o.name, o.address, o.room, o.type,
     o.deposit, o.rent, o.fee, o.premium, o.area,
     o.landlordPhone, o.tenantPhone, o.memo, o.state, o.regDate, o.source
   ];
+  var sale = quickTradeModeV1() !== "lease";
+  values[28] = sale ? "sale" : "lease";
+  values[29] = sale ? quickTradeFieldV1("qaSaleCategory") : "";
+  values[30] = sale ? quickTradeFieldV1("qaSalePrice").replace(/,/g, "") : "";
+  values[31] = JSON.stringify(sale ? quickTradeDetailsV1() : {});
+  if (sale) { values[4] = ""; values[5] = ""; values[7] = ""; }
+  return values;
+}
+
+function quickTradeFieldV1(id) { var el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
+function quickTradeModeV1() { return quickTradeFieldV1("qaTradeMode") || "lease"; }
+function quickTradeDetailsV1() {
+  var land = quickTradeModeV1() === "land_sale";
+  var details = { scope: land ? "land" : "whole_building" };
+  var fields = land ? { landAreaM2: "qaLandAreaM2", landUse: "qaLandUse", zoning: "qaZoning" } : { landAreaM2: "qaLandAreaM2", grossAreaM2: "qaGrossAreaM2", totalDeposit: "qaTotalDeposit", monthlyIncome: "qaMonthlyIncome" };
+  Object.keys(fields).forEach(function(key) { details[key] = quickTradeFieldV1(fields[key]); });
+  return details;
+}
+function syncQuickAddTradeV1(useCurrentMarket) {
+  var select = document.getElementById("qaTradeMode");
+  if (!select) return;
+  if (useCurrentMarket && window.JSListingTradeV1) select.value = window.JSListingTradeV1.getMode();
+  var sale = select.value !== "lease", land = select.value === "land_sale";
+  var section = document.getElementById("qaSaleFieldsV1");
+  if (section) { section.hidden = !sale; section.style.display = sale ? "grid" : "none"; }
+  var category = document.getElementById("qaSaleCategory");
+  if (category) {
+    category.disabled = land;
+    if (land) category.value = "land"; else if (category.value === "land") category.value = "building";
+    Array.from(category.options || []).forEach(function(option) { if (option.value === "land") option.hidden = !land; });
+  }
+  ["qaDeposit", "qaRent", "qaPremium"].forEach(function(id) { var el = document.getElementById(id); if (el && el.parentElement) el.parentElement.style.display = sale ? "none" : ""; });
+  document.querySelectorAll("[data-qa-building]").forEach(function(el) { el.style.display = land ? "none" : ""; });
+  document.querySelectorAll("[data-qa-land]").forEach(function(el) { el.style.display = land ? "" : "none"; });
+  updateQuickAddPreview();
 }
 
 function normalizeQuickDuplicateTextV61(value) {
@@ -860,6 +908,8 @@ function findQuickDuplicateLegacyV61(values) {
   var similar = null;
   for (var i = 0; i < (allItems || []).length; i++) {
     var item = allItems[i] || {};
+    if ((item.tradeType || "lease") !== (values[28] || "lease")) continue;
+    if (values[28] === "sale" && Number(item.salePrice) !== Number(values[30])) continue;
     var current = {
       name: normalizeQuickDuplicateTextV61(item.name),
       address: normalizeQuickDuplicateTextV61(item.address),
@@ -1791,11 +1841,23 @@ function isSameQuickDuplicateUnitV636(target, current) {
 function findQuickDuplicateV61(values) {
   var target = getQuickDuplicateComparableV636(values);
   var areaMismatch = null;
+  var saleDetailsV1 = {};
+  try { saleDetailsV1 = JSON.parse(values[31] || "{}"); } catch (_) { /* Incomplete form. */ }
 
   if (!target.address) return null;
 
   for (var i = 0; i < (allItems || []).length; i++) {
     var item = allItems[i] || {};
+    if ((item.tradeType || "lease") !== (values[28] || "lease")) continue;
+    if (values[28] === "sale" && Number(item.salePrice) !== Number(values[30])) continue;
+    if (values[28] === "sale") {
+      if (String(item.saleCategory || "") !== String(values[29] || "")) continue;
+      var existingDetailsV1 = item.saleDetails || item.saleSummary || {};
+      if (["landAreaM2", "grossAreaM2"].some(function(key) {
+        var left = existingDetailsV1[key], right = saleDetailsV1[key];
+        return (left == null ? null : Number(left)) !== (right == null ? null : Number(right));
+      })) continue;
+    }
     var current = {
       address: normalizeQuickDuplicateAddressV616(item.address),
       room: normalizeQuickDuplicateRoomV616(item.room),
@@ -1829,6 +1891,7 @@ function quickAddFingerprintV616(values) {
   var target = getQuickDuplicateComparableV636(values);
 
   return [
+    values[28] || "lease", values[29] || "", values[30] || "",
     target.address,
     target.room ? "room:" + target.room : "no-room",
     "deposit:" + target.deposit,
@@ -1957,6 +2020,10 @@ function focusQuickAddRawV636() {
 function sendQuickAddMutationV6418(values, forceDuplicate) {
   var payload = {
     values: values,
+    tradeType: values[28] || "lease",
+    saleCategory: values[29] || "",
+    salePrice: values[30] === "" || values[30] == null ? null : values[30],
+    saleDetails: JSON.parse(values[31] || "{}"),
     forceDuplicate: !!forceDuplicate
   };
 

@@ -162,9 +162,10 @@
       ? originalGetQuickAddRowValues()
       : [];
 
-    values = values.slice(0, 14);
+    // Keep appended trade and sale-detail columns supplied by the main form.
+    values = values.slice();
     values[11] = ensureVisitMarker(memo, source);
-    values.push(source);
+    values[14] = source;
 
     return values;
   };

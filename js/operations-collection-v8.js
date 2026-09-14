@@ -7,6 +7,14 @@
   var extraState = {
     tab: "",
     collection: null,
+    collectionDate: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    collectionSource: "",
+    collectionTrade: "",
+    collectionLoadedAt: 0,
+    quality: null,
+    retention: null,
+    qualityState: 'open',
+    qualityOffset: 0,
     edgeAutomation: null,
     reviews: null,
     reviewBase: null,
@@ -136,23 +144,25 @@
   function resultCells(result) {
     result = result || {};
     return '<div class="collection-result-grid">' +
-      '<div><b>' + number(result.found).toLocaleString("ko-KR") + '</b><small>발견</small></div>' +
+      '<div><b>' + (result.found == null ? '미기록' : number(result.found).toLocaleString("ko-KR")) + '</b><small>목록 확인</small></div>' +
       '<div class="new"><b>' + number(result.created).toLocaleString("ko-KR") + '</b><small>신규</small></div>' +
       '<div><b>' + (number(result.merged) + number(result.updated)).toLocaleString("ko-KR") + '</b><small>통합·갱신</small></div>' +
       '<div class="review"><b>' + number(result.review).toLocaleString("ko-KR") + '</b><small>검증</small></div>' +
       '<div><b>' + number(result.duplicate).toLocaleString("ko-KR") + '</b><small>중복</small></div>' +
-      '<div class="fail"><b>' + number(result.failed).toLocaleString("ko-KR") + '</b><small>실패</small></div>' +
-      '<div class="fail"><b>' + number(result.requiredFieldRejected).toLocaleString("ko-KR") + '</b><small>필수정보 제외</small></div>' +
+      '<div><b>' + number(result.unchanged).toLocaleString("ko-KR") + '</b><small>기존 동일</small></div>' +
+      '<div class="review"><b>' + number(result.addressDeferred).toLocaleString("ko-KR") + '</b><small>주소 보류</small></div>' +
+      '<div class="fail"><b>' + number(result.failed).toLocaleString("ko-KR") + '</b><small>조회·저장 실패</small></div>' +
+      '<div class="fail"><b>' + number(result.requiredFieldExcluded).toLocaleString("ko-KR") + '</b><small>필수정보 제외</small></div>' +
     '</div>';
   }
 
   function collectionDiagnosticsHtml(result) {
     result = result || {};
-    var count = number(result.failed) + number(result.requiredFieldRejected);
+    var count = number(result.failed) + number(result.addressDeferred) + number(result.requiredFieldExcluded);
     var rows = Array.isArray(result.diagnostics) ? result.diagnostics.slice(0, 200) : [];
     if (!count && !rows.length) return "";
-    return '<details class="collection-diagnostics"><summary>제외/실패 ' + count + '건 · 번호와 사유 보기</summary>' +
-      '<p>수집은 종료됐지만 아래 항목은 정상 저장되지 않았습니다. 검증대기는 별도로 매물검증에서 확인합니다.</p>' +
+    return '<details class="collection-diagnostics"><summary>보류·제외·실패 사유 보기</summary>' +
+      '<p>주소 보류는 목록 확인 실패가 아닙니다. 정확한 지번이 확인될 때까지 지도 등록만 보류합니다. 같은 항목에 여러 사유가 있을 수 있습니다.</p>' +
       '<div style="max-height:220px;overflow:auto;overflow-wrap:anywhere">' +
       (rows.length ? rows.map(function (row) {
         return '<p>' + escape(row.stage) + ' · 매물번호 ' + escape(row.sourceId || '확인 불가') + ' · ' + escape(row.message) + '</p>';
@@ -180,7 +190,7 @@
 
   function edgeAutomationHtml() {
     var edge = extraState.edgeAutomation;
-    if (!edge) return '<article class="edge-automation-card disconnected"><header><h3>Windows·Edge 자동수집</h3><span>확장 연결 없음</span></header><p>전용 Edge에서 JS 자동수집 확장 프로그램을 실행하면 예약 실행과 최근 오류를 이곳에서 함께 확인할 수 있습니다.</p></article>';
+    if (!edge) return '<article class="edge-automation-card disconnected"><header><h3>Windows·Edge 자동수집</h3><span>현재 브라우저와 확장 연결 없음</span></header><p>이 표시는 수집 실패를 뜻하지 않습니다. 아래 서버 보고서의 마지막 수신 시각을 확인해 주세요.</p></article>';
     var report = edge.runReport || {};
     var run = edge.runState || {};
     var summary = report.summary || {};
@@ -188,11 +198,131 @@
     var normal = Math.max(0, number(summary.completed) - number(summary.deferred) - number(summary.partial));
     var problems = Array.isArray(edge.recentProblems) ? edge.recentProblems : [];
     return '<article class="edge-automation-card"><header><h3>Windows·Edge 자동수집 <small>v' + escape(edge.version) + '</small></h3><span class="' + (run.active ? 'running' : number(summary.failed) ? 'error' : 'complete') + '">' + status + '</span></header>' +
-      '<p>예약 ' + escape(edge.schedule || '-') + ' · 사용 대상 ' + number(edge.targetCount) + '개 · ' + (edge.enabled ? '매일 실행 사용' : '예약 꺼짐') +
+      '<p>확장 예약 ' + escape(edge.schedule || '-') + ' · 사용 대상 ' + number(edge.targetCount) + '개 · ' + (edge.enabled ? '매일 실행 사용' : '예약 꺼짐') +
+      '<br>' + escape(readinessText(edge.readiness)) +
       (report.startedAt ? '<br>최근 시작 ' + escape(formatAt(report.startedAt)) + ' · 정상 ' + normal + ' · 주소보류 ' + number(summary.deferred) + ' · 부분 ' + number(summary.partial) + ' · 실패 ' + number(summary.failed) : '') + '</p>' +
       (run.active && run.progressMessage ? '<div class="edge-automation-progress"><b>' + escape(run.progressMessage) + '</b><span>' + escape(run.progressStage && run.progressStage.label || '') + ' ' + number(run.progressStage && run.progressStage.percent) + '%</span></div>' : '') +
       (problems.length ? '<details><summary>최근 확인사항 ' + problems.length + '건</summary>' + problems.map(function(row) { return '<p>' + escape(formatAt(row.at)) + ' · ' + escape(row.message) + '</p>'; }).join('') + '</details>' : '') + '</article>';
   }
+
+  function readinessText(value) {
+    var state = value || {};
+    var next = state.nextAlarmAt ? '확장 다음 실행 ' + formatAt(state.nextAlarmAt) : '확장 다음 실행 미확인';
+    var windows = !state.windowsCheckedAt ? 'Windows 실제 예약 미확인' :
+      'Windows ' + (state.windowsSchedule || '시각 미확인') + ' · ' + (state.windowsTaskState || 'Unknown') +
+      ' (' + formatAt(state.windowsCheckedAt) + ' 확인)';
+    var mismatch = state.schedule && state.windowsSchedule && state.schedule !== state.windowsSchedule;
+    return next + ' · ' + windows + (mismatch ? ' · ⚠ 두 예약이 다릅니다. Windows 설치 도구에서 같은 시각으로 갱신해 주세요.' : '') +
+      (state.windowsCheckedAt && Date.now() - state.windowsCheckedAt > 24 * 60 * 60 * 1000 ? ' · Windows 확인이 하루 이상 지났습니다.' : '');
+  }
+  function serverAutomationHtml(data) {
+    var automation = data.automation || {};
+    var report = (automation.runs || [])[0];
+    if (!report) return '<article class="edge-automation-card"><header><h3>서버에 저장된 전체 실행</h3></header><p>' +
+      escape(automation.message || '아직 보고서가 없습니다. 업데이트한 전용 수집기가 실행되면 진행·종료 기록을 서버로 전송합니다.') + '</p></article>';
+    var counts = {completed: 0, deferred: 0, partial: 0, failed: 0, created: 0};
+    (report.items || []).forEach(function(item) { counts[item.status] = number(counts[item.status]) + 1; counts.created += number(item.counts && item.counts.created); });
+    var status = report.active ? report.stale ? '마지막 응답 이후 10분 경과 · 실행 여부 확인 필요' : '실행 중' : '실행 종료';
+    return '<article class="edge-automation-card"><header><h3>서버에 저장된 전체 실행</h3><span>' + escape(status) + '</span></header><p>' +
+      '시작 ' + escape(formatAt(report.startedAt)) + ' · 마지막 수신 ' + escape(formatAt(report.reportedAt)) +
+      '<br>정상 ' + counts.completed + ' · 주소보류 ' + counts.deferred + ' · 부분 ' + counts.partial + ' · 실패 ' + counts.failed +
+      ' · 이번 실행 신규 ' + counts.created + '<br>' + escape(readinessText(report.readiness)) + '</p></article>';
+  }
+  function collectionDayHtml(data) {
+    var summary = data.daySummary || {};
+    var options = ['', '네이버', '당근', '공실박스'].map(function(source) { return '<option value="' + escape(source) + '"' + (extraState.collectionSource === source ? ' selected' : '') + '>' + escape(source || '모든 출처') + '</option>'; }).join('');
+    return '<section class="collection-day-summary"><div class="collection-toolbar"><div><strong>날짜·구별 수집 요약</strong><span>' + escape(summary.policy || '') + '</span></div>' +
+      '<div class="collection-filter-controls"><label>날짜 <input type="date" value="' + escape(extraState.collectionDate) + '" onchange="setCollectionReportFilter(\'date\',this.value)"></label>' +
+      '<label>출처 <select onchange="setCollectionReportFilter(\'source\',this.value)">' + options + '</select></label>' +
+      '<label>거래 <select onchange="setCollectionReportFilter(\'trade\',this.value)">' + [['','전체'],['lease','임대'],['sale','매매']].map(function(entry) { return '<option value="' + entry[0] + '"' + (extraState.collectionTrade === entry[0] ? ' selected' : '') + '>' + entry[1] + '</option>'; }).join('') + '</select></label></div></div>' +
+      resultCells(summary.totals || {}) +
+      (summary.totals && summary.totals.unknownFound ? '<p>목록 수 미기록 ' + number(summary.totals.unknownFound) + '개 범위는 합계에서 제외했습니다.</p>' : '') +
+      (data.historyTruncated ? '<p>조회 상한에 도달해 일부 이전 기록은 제외됐을 수 있습니다.</p>' : '') +
+      '<div class="collection-coverage">' + (summary.districtCoverage || []).map(function(row) { return '<p><b>' + escape(row.source) + '</b> ' + row.districts.map(function(item) { return escape(item.district) + ' ' + (item.state === 'complete' ? '완료' : item.state === 'missing' ? '기록 없음' : '진행·확인 필요'); }).join(' · ') + '</p>'; }).join('') + '</div>' +
+      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>출처·범위</th><th>목록 확인</th><th>신규</th><th>변경·통합</th><th>기존 동일</th><th>주소 보류</th><th>실패</th><th>상태</th></tr></thead><tbody>' +
+      (summary.items || []).map(function(row) { return '<tr><td>' + escape(row.source + ' · ' + row.scope) + '</td><td>' + (row.found == null ? '미기록' : number(row.found).toLocaleString('ko-KR')) + '</td><td>' + number(row.created) + '</td><td>' + (number(row.updated) + number(row.merged)) + '</td><td>' + number(row.unchanged) + '</td><td>' + number(row.addressDeferred) + '</td><td>' + number(row.failed) + '</td><td>' + escape(row.complete ? '목록 확인 완료' : row.status) + '</td></tr>' +
+        (row.anomaly ? '<tr><td colspan="8">⚠ ' + escape(row.anomaly) + '</td></tr>' : ''); }).join('') + '</tbody></table></div></section>';
+  }
+
+  function loadOperationsQuality() {
+    return Promise.all([
+      apiGet('operationsQualityHolds', {state: extraState.qualityState, offset: extraState.qualityOffset, limit: 50}).catch(function(error) { return {error: error.message}; }),
+      apiGet('operationsRetentionStatus').catch(function(error) { return {error: error.message}; })
+    ]).then(function(results) {
+      extraState.quality = results[0]; extraState.retention = results[1];
+      renderOperationsQuality(); renderOperationsRetention();
+    });
+  }
+  function renderOperationsQuality() {
+    var host = document.getElementById('operationsQualitySummary');
+    if (!host) return;
+    var data = extraState.quality;
+    if (!data) { host.innerHTML = '<p>공개 보류 검수 자료를 확인하는 중입니다.</p>'; return; }
+    if (data.error) { host.innerHTML = '<p>공개 보류 검수: ' + escape(data.error) + '</p>'; return; }
+    var summary = data.summary || {};
+    host.innerHTML = '<section class="operations-quality-box"><div class="collection-toolbar"><div><strong>공개 보류 검수함</strong><span>' + escape(data.description) + '</span></div>' +
+      '<select aria-label="공개 보류 검수 상태" onchange="changeOperationsQualityState(this.value)">' + [['open','검수 대기'],['resolved','해제 완료'],['dismissed','판정 제외'],['all','전체 이력']].map(function(entry) { return '<option value="' + entry[0] + '"' + (extraState.qualityState === entry[0] ? ' selected' : '') + '>' + entry[1] + '</option>'; }).join('') + '</select></div>' +
+      '<p>공개 차단 ' + number(summary.openBlocking) + '건 · 비차단 참고 ' + number(summary.openNonBlocking) + '건 · 검수 완료 ' + (number(summary.resolved) + number(summary.dismissed)) + '건</p>' +
+      (data.rows || []).map(function(row, index) {
+        return '<article class="operations-quality-item"><b>' + escape(row.title || row.propertyId) + '</b><p>' + escape([row.address, row.room].filter(Boolean).join(' ')) + '</p><p>' +
+          escape(row.reason) + ' · ' + (row.blocksPublication && row.state === 'open' ? '공개 보류' : '공개 차단 없음') +
+          ' · 보증금 ' + escape(row.deposit == null ? '미확인' : row.deposit) + ' / 월세 ' + escape(row.monthlyRent == null ? '미확인' : row.monthlyRent) + '만원</p><details><summary>원본·검수 근거 보기</summary>' +
+          (row.sources || []).map(function(source) { return '<p>' + escape(source.source) + ' · ' + escape(source.active ? '활성' : '비활성') + ' · ' +
+            escape(source.deposit == null ? '미확인' : source.deposit) + ' / ' + escape(source.monthlyRent == null ? '미확인' : source.monthlyRent) + '만원 · ' +
+            (source.sourceUrl ? '<a target="_blank" rel="noopener noreferrer" href="' + escape(source.sourceUrl) + '">원본 확인 ↗</a>' : '원본 링크 없음') + '</p>'; }).join('') +
+          '<pre class="operations-quality-evidence">' + escape(JSON.stringify(row.evidence || {}, null, 2)) + '</pre>' +
+          (row.resolvedAt ? '<p>검수 ' + escape(formatAt(row.resolvedAt)) + ' · ' + escape(row.resolvedBy) + ' · ' + escape(row.resolution && row.resolution.note) + '</p>' : '') + '</details>' +
+          (row.releaseSupported ? '<button type="button" onclick="openOperationsQualityReview(' + index + ')">원본 확인 후 개별 검수</button>' : '<p>거래유형·원본 근거 확인이 필요합니다. 이 화면에서 일괄 해제하거나 가격을 추정하지 않습니다.</p>') + '</article>';
+      }).join('') + (!(data.rows || []).length ? '<p>해당 상태의 검수 자료가 없습니다.</p>' : '') +
+      '<p>' + number(data.offset) + '번 이후 ' + (data.rows || []).length + ' / ' + number(data.total) + '건 ' +
+      (data.offset ? '<button onclick="pageOperationsQuality(-1)">이전</button>' : '') +
+      (data.offset + (data.rows || []).length < data.total ? '<button onclick="pageOperationsQuality(1)">다음</button>' : '') + '</p></section>';
+  }
+  window.changeOperationsQualityState = function(value) { extraState.qualityState = value; extraState.qualityOffset = 0; return loadOperationsQuality(); };
+  window.pageOperationsQuality = function(direction) { extraState.qualityOffset = Math.max(0, extraState.qualityOffset + direction * 50); return loadOperationsQuality(); };
+  function renderOperationsRetention() {
+    var host = document.getElementById('operationsRetentionSummary');
+    if (!host) return;
+    var data = extraState.retention;
+    if (!data) return;
+    if (data.error) { host.innerHTML = '<p>수집기록 정리 상태: ' + escape(data.error) + '</p>'; return; }
+    var policy = data.policy || {}, report = data.lastReport;
+    host.innerHTML = '<section class="operations-retention-box"><strong>수집 기록 백업·자동정리</strong><p>원문 ' + number(policy.rawDays) + '일 · 실행 기록 ' + number(policy.sessionDays) +
+      '일 · 1회 검사 상한 종류별 ' + number(policy.batchLimit) + '행 · ' + escape(policy.mode === 'archive' ? '백업 검증 후 정리' : '삭제 없는 점검') + '</p><p>다음 실행 ' + escape(formatAt(data.nextRunAt)) +
+      ' · 마지막 기록 ' + escape(formatAt(data.lastUpdatedAt)) + ' · ' + (data.running ? '점검 실행 중' : '대기') + '</p>' +
+      (report ? '<p>최근 검사: 원문 ' + number(report.scanned.raw) + ' / 실행기록 ' + number(report.scanned.sessions) + ' · 조건 제외: 원문 ' + number(report.excludedInLastScan.raw) + ' / 실행기록 ' + number(report.excludedInLastScan.sessions) +
+        '</p><p>정리 완료: 원문 ' + number(report.deleted.raw) + ' / 실행기록 ' + number(report.deleted.sessions) + ' · 백업 ' + (report.archiveVerified ? '내용 검증 완료' : report.archiveKey ? '검증 확인 필요' : '이번 점검 저장 대상 없음') +
+        '</p>' + (report.error ? '<p>' + escape(report.error) + '</p>' : '') + (report.archiveKey ? '<details><summary>복구용 백업 경로</summary><code>' + escape(report.archiveKey) + '</code><p>자료 복구는 원본·현재 값을 대조하는 관리자 작업이 필요합니다.</p></details>' : '') : '<p>아직 자동정리 결과가 없습니다.</p>') +
+      '<p>' + escape(data.notice) + ' 전체 잔여 건수와 예상 완료시간은 아직 집계하지 않습니다.</p></section>';
+  }
+  window.openOperationsQualityReview = function(index) {
+    var row = extraState.quality && extraState.quality.rows && extraState.quality.rows[index];
+    if (!row || !row.releaseSupported) return;
+    var dialog = document.getElementById('operationsQualityDialog');
+    if (dialog) dialog.remove();
+    dialog = document.createElement('dialog'); dialog.id = 'operationsQualityDialog'; dialog.className = 'operations-quality-box';
+    dialog.setAttribute('aria-labelledby', 'operationsQualityDialogTitle');
+    dialog.innerHTML = '<form id="operationsQualityReviewForm"><h3 id="operationsQualityDialogTitle">원본 확인 후 공개 보류 검수</h3><p>' + escape(row.releaseNotice) + '</p>' +
+      '<p><label>확인한 활성 원본 <select name="sourceUrl" required><option value="">직접 확인한 원본 선택</option>' + (row.sources || []).filter(function(source) { return source.active && source.sourceUrl; }).map(function(source) { return '<option value="' + escape(source.sourceUrl) + '">' + escape(source.source + ' ' + source.sourceListingId) + '</option>'; }).join('') + '</select></label></p>' +
+      '<p><label>확인한 보증금(만원) <input name="deposit" type="number" min="0" step="1" required></label></p><p><label>확인한 월세(만원) <input name="monthlyRent" type="number" min="0" step="1" required></label></p>' +
+      '<p><label>검수 근거 <textarea name="note" minlength="12" maxlength="2000" required placeholder="원본에서 확인한 거래유형·주소·조건과 확인 내용을 기록해 주세요."></textarea></label></p>' +
+      '<p><label><input type="checkbox" name="confirmed" required>원본에서 임대 거래임을 확인했고 주소·호실·금액이 현재 매물과 일치합니다.</label></p>' +
+      '<p role="status" id="operationsQualityReviewStatus"></p><button type="submit">근거를 기록하고 이 보류만 해제</button> <button type="button" onclick="document.getElementById(\'operationsQualityDialog\').close()">취소</button></form>';
+    document.body.appendChild(dialog); dialog.showModal();
+    dialog.querySelector('form').addEventListener('submit', function(event) {
+      event.preventDefault(); var form = event.currentTarget; if (!form.reportValidity()) return;
+      var button = form.querySelector('button[type=submit]'); button.disabled = true;
+      apiPost('resolveOperationsQualityHold', {listingId: row.listingId, issueCode: row.issueCode, expectedVersion: row.version,
+        expectedHoldUpdatedAt: row.updatedAt, resolutionState: 'resolved', evidence: {note: form.elements.note.value,
+          sourceUrl: form.elements.sourceUrl.value, tradeType: 'lease', deposit: Number(form.elements.deposit.value), monthlyRent: Number(form.elements.monthlyRent.value)}
+      }).then(function(result) {
+        dialog.close(); message(result.message || '검수 근거를 기록했습니다. 다른 공개 보류가 있으면 계속 차단됩니다.', 'success');
+        if (typeof window.loadSheet === 'function') window.loadSheet(true);
+        return loadOperationsQuality();
+      }).catch(function(error) { document.getElementById('operationsQualityReviewStatus').textContent = error.message; })
+        .finally(function() { button.disabled = false; });
+    });
+  };
 
   function renderCollections() {
     var panel = document.getElementById("operationsCollectionsPanel");
@@ -204,14 +334,15 @@
       '<div class="collection-toolbar"><div><strong>매일 수집현황</strong><span>수집기는 응답속도에 따라 묶음 크기를 자동조절하며, 중단되면 마지막 성공 지점부터 이어집니다.</span></div>' +
       '<div><button type="button" onclick="window.open(\'/collector-install.html\',\'_blank\',\'noopener\')">통합 수집 버튼 설치</button> ' +
       '<button type="button" onclick="refreshCollectionStatus()">새로고침</button></div></div>' +
-      edgeAutomationHtml() + '<div class="collection-source-grid">' + sources.map(function(source) {
+      edgeAutomationHtml() + serverAutomationHtml(data) + collectionDayHtml(data) + '<div class="collection-source-grid">' + sources.map(function(source) {
         var statusClass = source.complete ? "complete" : (number(source.lastResult && source.lastResult.failed) ? "error" : "");
         return '<article class="collection-source-card"><header><h3>' + escape(source.source) + '</h3>' +
           '<span class="' + statusClass + '">' + escape(source.lastStatus || "수집 전") + '</span></header>' +
-          '<p>' + escape(formatAt(source.lastAt)) + ' · ' + escape(source.lastScope || "수집 기록 없음") +
+          '<p>최근 범위 1회 결과 · ' + escape(formatAt(source.lastAt)) + ' · ' + escape(source.lastScope || "수집 기록 없음") +
           '<br>완전수집 ' + (source.complete ? "Y" : "N") +
           (source.collectorVersion ? ' · v' + escape(source.collectorVersion) : '') +
           (source.completionIssues && source.completionIssues.length ? '<br>확인: ' + escape(source.completionIssues.join(', ')) : '') +
+          (source.guidance ? '<br>' + escape(source.guidance) : '') +
           '</p>' + resultCells(source.lastResult) + collectionDiagnosticsHtml(source.lastResult) + '</article>';
       }).join("") + '</div>' +
       '<div class="collection-toolbar"><div><strong>수집원본 최신상태</strong><span>전체 ' + number(raw.total).toLocaleString("ko-KR") +
@@ -221,11 +352,13 @@
       (data.recent || []).map(function(row) {
         return '<tr><td>' + escape(formatAt(row.endedAt)) + '</td><td>' + escape(row.source) + '</td><td>' + escape(row.scope) +
           '</td><td class="' + (row.complete ? "ok" : "warn") + '">' + (row.complete ? "Y" : "N") +
-          '</td><td>' + number(row.found) + '</td><td>' + number(row.created) + '</td><td>' +
+          '</td><td>' + (row.found == null ? '미기록' : number(row.found)) + '</td><td>' + number(row.created) + '</td><td>' +
           (number(row.merged) + number(row.updated)) + '</td><td>' + number(row.review) + '</td><td>' +
           number(row.duplicate) + '</td><td>' + number(row.failed) + '</td><td>' + escape(row.status) + '</td></tr>' +
           (number(row.failed) + number(row.requiredFieldRejected) > 0 ? '<tr><td colspan="11">' + collectionDiagnosticsHtml(row) + '</td></tr>' : '');
-      }).join("") + '</tbody></table></div></div>';
+      }).join("") + '</tbody></table></div><div id="operationsQualitySummary"></div><div id="operationsRetentionSummary"></div></div>';
+    renderOperationsQuality();
+    renderOperationsRetention();
   }
 
   function riskFilteredGroups() {
@@ -536,13 +669,15 @@
       '</div>';
   }
 
-  function loadCollection(force) {
+  function loadCollection(force, silent) {
     if (extraState.collectionLoading || (!force && extraState.collection)) return Promise.resolve(renderCollections());
     extraState.collectionLoading = true;
-    message("수집현황을 불러오는 중입니다…", "loading");
-    return Promise.all([apiGet("collectionStatus"), requestEdgeAutomationState()]).then(function(results) {
+    if (!silent) message("수집현황을 불러오는 중입니다…", "loading");
+    return Promise.all([apiGet("collectionStatus", {date: extraState.collectionDate, source: extraState.collectionSource, tradeType: extraState.collectionTrade}), requestEdgeAutomationState()]).then(function(results) {
+      extraState.collectionLoadedAt = Date.now();
       extraState.collection = results[0]; extraState.edgeAutomation = results[1]; renderCollections();
-      message("수집현황을 최신 상태로 불러왔습니다.", "success");
+      if (!silent) message("수집현황을 최신 상태로 불러왔습니다.", "success");
+      if (!silent) loadOperationsQuality();
     }).catch(function(error) { message(error.message, "error"); })
       .finally(function() { extraState.collectionLoading = false; });
   }
@@ -615,6 +750,12 @@
   };
 
   window.refreshCollectionStatus = function() { extraState.collection = null; return loadCollection(true); };
+  window.setCollectionReportFilter = function(key, value) {
+    if (key === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value)) extraState.collectionDate = value;
+    if (key === 'source') extraState.collectionSource = ['', '네이버', '당근', '공실박스'].indexOf(value) >= 0 ? value : '';
+    if (key === 'trade') extraState.collectionTrade = ['', 'lease', 'sale'].indexOf(value) >= 0 ? value : '';
+    return loadCollection(true);
+  };
   window.refreshReviewWorkspace = function() { return loadFreshReviews(false); };
   window.mergeSingleCandidateReviews = function() {
     if (extraState.repairing) {
@@ -1040,6 +1181,18 @@
     document.body.appendChild(modal);
     return modal;
   }
+  function timelineActionLabel(action) {
+    return ({create: '신규 등록', createListing: '신규 등록', update: '원본 갱신', merge: '원본 통합',
+      updateProperty: '매물정보 수정', updatePropertyMemo: '메모 수정', toggleDone: '계약상태 변경',
+      deleteProperty: '매물 삭제', restoreListingHistory: '이전 값 복구', manualMerge: '검수 후 통합',
+      resolveOperationsQualityHold: '공개 보류 검수'})[action] || action;
+  }
+  function timelineChangesHtml(changes) {
+    var labels = {deposit:'보증금',monthly_rent:'월세',rent:'월세',maintenance_fee:'관리비',fee:'관리비',premium:'권리금',
+      area_m2:'면적(㎡)',area:'면적',room:'호실',trade_type:'거래유형',sale_price:'매매가격',status:'상태'};
+    return (changes || []).map(function(change) { return '<div><b>' + escape(labels[change.field] || change.field) + '</b> ' +
+      escape(change.before == null ? '미확인' : change.before) + ' → ' + escape(change.after == null ? '미확인' : change.after) + '</div>'; }).join('');
+  }
   window.openPropertyTimeline = function(propertyId) {
     var modal = timelineModal();
     modal.hidden = false;
@@ -1048,8 +1201,8 @@
     apiGet("propertyTimeline", {propertyId: propertyId}).then(function(data) {
       document.getElementById("propertyTimelineList").innerHTML = data.items && data.items.length
         ? data.items.map(function(item) {
-          return '<article class="property-timeline-item"><b>' + escape(item.action) + '</b><span>' +
-            escape(item.reason || "자동 기록") + '</span><small>' + escape(formatAt(item.at)) + ' · ' +
+          return '<article class="property-timeline-item"><b>' + escape(timelineActionLabel(item.action)) + '</b><span>' +
+            escape(item.reason || "자동 기록") + '</span>' + timelineChangesHtml(item.changes) + '<small>' + escape(formatAt(item.at)) + ' · ' +
             escape(item.source) + '</small></article>';
         }).join("")
         : '<div class="operations-empty"><b>저장된 변경이력이 없습니다.</b></div>';
@@ -1101,6 +1254,14 @@
       loadFreshReviews(true);
     }
   });
+  window.setInterval(function() {
+    var center = document.getElementById('operationsCenter');
+    var active = document.activeElement;
+    if (document.visibilityState !== 'visible' || extraState.tab !== 'collections' || !center || !center.classList.contains('open') ||
+      extraState.collectionLoading || Date.now() - extraState.collectionLoadedAt < 30000 ||
+      active && /INPUT|SELECT|TEXTAREA/.test(active.tagName)) return;
+    loadCollection(true, true);
+  }, 30000);
   restoreReviewCache();
   setTimeout(function() {
     if (!extraState.refreshing) loadReviews(true, true);

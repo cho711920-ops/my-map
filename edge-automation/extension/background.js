@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.8";
+const BACKGROUND_BUILD = "1.1.9";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -36,6 +36,9 @@ const RUN_STATE_KEY = "jsAutoCollectorRunStateV2";
 const RUN_REPORT_KEY = "jsAutoCollectorRunReportV1";
 const LAST_SCHEDULE_KEY = "jsAutoCollectorLastScheduleV1";
 const LAST_VERSION_RUN_KEY = "jsAutoCollectorLastVersionRunV1";
+const REPORT_UPLOAD_KEY = "jsAutoCollectorPendingReportV1";
+let reportUploadBusy = false;
+let reportUploadAt = 0;
 const SOURCE_CIRCUIT_KEY = "jsAutoCollectorSourceCircuitsV1";
 const ALARM_NAME = "js-auto-collector-daily";
 const RECOVERY_ALARM_NAME = "js-auto-collector-recovery";
@@ -58,6 +61,9 @@ const DEFAULT_CONFIG = {
   enabled: false,
   schedule: "11:00",
   closeTabs: true,
+  notifyComplete: false,
+  notifyPartial: true,
+  notifyFailure: true,
   targets: []
 };
 
@@ -146,6 +152,7 @@ async function saveConfig(next) {
   config.targets = Array.isArray(config.targets)
     ? config.targets.slice(0, 40).map(normalizeStoredTarget)
     : [];
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(config.schedule || ""))) throw new Error("실행 시간은 HH:mm 형식으로 입력해 주세요.");
   await chrome.storage.local.set({ [STORAGE_KEY]: config });
   await resetAlarm(config);
   return config;
@@ -396,6 +403,9 @@ function normalizePortableConfig(value) {
     enabled: Boolean(input.enabled),
     schedule,
     closeTabs: input.closeTabs !== false,
+    notifyComplete: input.notifyComplete === true,
+    notifyPartial: input.notifyPartial !== false,
+    notifyFailure: input.notifyFailure !== false,
     targets
   };
 }
@@ -490,8 +500,73 @@ async function getRunReport() {
 
 async function saveRunReport(report) {
   if (!report) return null;
+  const previous = await getRunReport();
+  report.updatedAt = Math.max(Number(report.updatedAt) || Date.now(), previous && previous.runId === report.runId ? Number(previous.updatedAt || 0) + 1 : 0);
   await chrome.storage.local.set({ [RUN_REPORT_KEY]: report });
+  try {
+    const stored = (await chrome.storage.local.get(REPORT_UPLOAD_KEY))[REPORT_UPLOAD_KEY];
+    const queue = (Array.isArray(stored) ? stored : stored ? [stored] : []).filter(item => item.runId !== report.runId);
+    queue.push(await minimalAutomationReport(report));
+    await chrome.storage.local.set({ [REPORT_UPLOAD_KEY]: queue.slice(-10) });
+    publishPendingAutomationReport().catch(() => {});
+  } catch (_) {}
   return report;
+}
+
+async function automationReadiness(config) {
+  config = config || await getConfig();
+  const alarm = await chrome.alarms.get(ALARM_NAME).catch(() => null);
+  let windows = {};
+  try {
+    const response = await fetch(chrome.runtime.getURL("windows-schedule.json"), {cache: "no-store"});
+    if (response.ok) windows = await response.json();
+  } catch (_) {}
+  return { enabled: config.enabled === true, schedule: config.schedule,
+    nextAlarmAt: alarm && Number(alarm.scheduledTime) || null,
+    windowsSchedule: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(windows.schedule || "")) ? windows.schedule : "",
+    windowsCheckedAt: Number(windows.checkedAt) || null, windowsNextRunAt: Number(windows.nextRunAt) || null,
+    windowsTaskState: ["Ready", "Running", "Disabled"].includes(windows.taskState) ? windows.taskState : "Unknown" };
+}
+
+async function minimalAutomationReport(report) {
+  const config = await getConfig();
+  const allowedCounts = ["expected", "processed", "detailProcessed", "unchanged", "created", "updated", "review", "addressDeferred", "failed"];
+  return { version: 1, runId: report.runId, revision: Number(report.updatedAt), startedAt: Number(report.startedAt),
+    active: report.active === true, finishedAt: report.finishedAt || null, extensionVersion: BACKGROUND_BUILD,
+    readiness: await automationReadiness(config),
+    items: (report.items || []).slice(0, 40).map((item, index) => {
+      const target = (config.targets || []).find(target => targetKey(target) === item.key) || {};
+      const districtText = String(target.district || item.label || "");
+      return { targetIndex: index, source: item.source, district: ["유성구", "대덕구", "중구", "서구", "동구"].find(value => districtText.includes(value)) || "",
+        tradeType: item.tradeType || inferredTradeType(target), status: item.status,
+        terminalCode: ["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"].includes(item.terminalCode) ? item.terminalCode : "",
+        counts: Object.fromEntries(allowedCounts.map(key => [key, Math.max(0, Math.floor(Number(item.counts && item.counts[key]) || 0))])) };
+    }) };
+}
+
+async function publishPendingAutomationReport(tabId = null, force = false) {
+  if (reportUploadBusy || (!force && Date.now() - reportUploadAt < 30000)) return false;
+  const state = await getRunState();
+  tabId = Number.isInteger(tabId) ? tabId : state && state.currentTabId;
+  if (!Number.isInteger(tabId)) return false;
+  const stored = (await chrome.storage.local.get(REPORT_UPLOAD_KEY))[REPORT_UPLOAD_KEY];
+  const queue = Array.isArray(stored) ? stored : stored ? [stored] : [];
+  const pending = queue[queue.length - 1];
+  if (!pending) return true;
+  reportUploadBusy = true;
+  reportUploadAt = Date.now();
+  try {
+    const response = await Promise.race([
+      chrome.tabs.sendMessage(tabId, {type: "JS_AUTO_PUBLISH_REPORT", report: pending}),
+      delay(6000).then(() => ({ok: false}))
+    ]);
+    if (!response || !response.ok) return false;
+    const latest = (await chrome.storage.local.get(REPORT_UPLOAD_KEY))[REPORT_UPLOAD_KEY];
+    const remaining = (Array.isArray(latest) ? latest : latest ? [latest] : []).filter(item => item.runId !== pending.runId || item.revision !== pending.revision);
+    await chrome.storage.local.set({ [REPORT_UPLOAD_KEY]: remaining });
+    return true;
+  } catch (_) { return false; }
+  finally { reportUploadBusy = false; }
 }
 
 function resultCounts(result) {
@@ -627,7 +702,7 @@ async function updateRunReport(state, target, status, details = {}) {
   return saveRunReport(report);
 }
 
-async function finalizeRun(state) {
+async function finalizeRun(state, reportTabId = null) {
   if (!state) return { ok: false, completed: 0, failed: 0, errors: [] };
   const existingReport = await getRunReport();
   if (state.finalizedAt || (existingReport && existingReport.runId === state.runId &&
@@ -658,6 +733,9 @@ async function finalizeRun(state) {
     report.summary = { ...summary };
     await saveRunReport(report);
   }
+  // Report upload failure never changes the collection result. Keep it queued.
+  if (reportUploadBusy) await delay(6100);
+  await publishPendingAutomationReport(reportTabId, true);
   const scheduledReason = ["schedule", "browser-startup", "windows-schedule"].includes(state.reason);
   const fullySettled = Boolean(report && Array.isArray(report.items) && report.items.length &&
     report.items.every((item) => terminalReportStatus(item.status)));
@@ -668,11 +746,14 @@ async function finalizeRun(state) {
     });
   }
   await chrome.alarms.clear(RECOVERY_ALARM_NAME);
-  if (summary.failed) {
+  const notificationConfig = await getConfig();
+  const hasPartial = Number(summary.partial || 0) > 0 || Number(summary.deferred || 0) > 0;
+  const notify = summary.failed ? notificationConfig.notifyFailure !== false : hasPartial ? notificationConfig.notifyPartial !== false : notificationConfig.notifyComplete === true;
+  if (notify) {
     chrome.notifications.create({
       type: "basic",
       iconUrl: "icon.svg",
-      title: "JS 자동수집 확인 필요",
+      title: summary.failed || hasPartial ? "JS 자동수집 확인 필요" : "JS 자동수집 완료",
       message: `정상 ${normal}개 · 주소보류 ${Number(summary.deferred || 0)}개 · 부분완료 ${Number(summary.partial || 0)}개 · 실패 ${summary.failed}개`
     }).catch(() => {});
   }
@@ -880,8 +961,9 @@ async function continueOrRetryCycle(state, completedTabId) {
   const retryQueue = uniqueTargets(state.retryQueue).filter((target) =>
     !completed.has(targetKey(target)) && !activeSourceCircuit(state, target));
   if (!retryQueue.length) {
+    const result = await finalizeRun(state, completedTabId);
     if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
-    return finalizeRun(state);
+    return result;
   }
   state.targets = retryQueue;
   state.retryQueue = [];
@@ -1312,11 +1394,12 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
   };
 }
 
-async function runAll(reason = "manual") {
+async function runAll(reason = "manual", selection = null) {
   await ensureWatchdogAlarm();
   const config = await getConfig();
   const targets = config.targets
     .filter((target) => target.enabled !== false)
+    .filter((target) => !Array.isArray(selection) || selection.includes(targetKey(target)))
     .sort((a, b) => (SOURCE_ORDER[a.source] || 99) - (SOURCE_ORDER[b.source] || 99));
   if (!targets.length) {
     return { ok: false, started: false, message: "사용 설정된 자동수집 대상이 없습니다." };
@@ -1328,7 +1411,7 @@ async function runAll(reason = "manual") {
   }
   if (!await acquireRunLock()) return { ok: false, message: "자동수집 실행 상태를 확인하지 못했습니다. 다시 눌러주세요." };
 
-  const manualCircuitOverride = ["manual", "manual-verification", "windows-force"].includes(reason);
+  const manualCircuitOverride = ["manual", "manual-verification", "windows-force", "manual-selected", "manual-failed"].includes(reason);
   const sourceCircuits = manualCircuitOverride ? {} : await getSourceCircuits();
   const summary = { ok: true, started: true, reason, total: targets.length,
     completed: 0, deferred: 0, partial: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
@@ -1362,6 +1445,7 @@ async function runAll(reason = "manual") {
     items: targets.map((target) => ({
       key: targetKey(target),
       source: target.source,
+      tradeType: inferredTradeType(target),
       label: target.label || target.source,
       status: "pending",
       attempt: 0,
@@ -1530,6 +1614,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         getRunReport()
       ]);
       return { ok: true, config, logs: stored[LOG_KEY] || [], runState, runReport,
+        readiness: await automationReadiness(config), reportPending: Boolean(((await chrome.storage.local.get(REPORT_UPLOAD_KEY))[REPORT_UPLOAD_KEY] || []).length),
         backgroundBuild: BACKGROUND_BUILD };
     }
     if (message.type === "JS_AUTO_SAVE_CONFIG") {
@@ -1540,6 +1625,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.type === "JS_AUTO_RUN_NOW") {
       return runAll("manual");
+    }
+    if (message.type === "JS_AUTO_RUN_SELECTED") {
+      if (!sender || sender.url !== chrome.runtime.getURL("options.html")) throw new Error("확장 설정 화면에서 실행 대상을 확인해 주세요.");
+      const keys = Array.isArray(message.keys) ? [...new Set(message.keys.map(String))].slice(0, 40) : [];
+      if (!keys.length) return {ok: false, message: "이번에 실행할 대상을 선택해 주세요."};
+      const previous = await getRunReport();
+      const selected = message.failedOnly ? keys.filter(key => (previous && previous.items || []).some(item => item.key === key && ["failed", "partial"].includes(item.status))) : keys;
+      if (!selected.length) return {ok: false, message: "선택한 실패·부분완료 대상이 없습니다."};
+      return runAll(message.failedOnly ? "manual-failed" : "manual-selected", selected);
     }
     if (message.type === "JS_AUTO_RUN_REQUEST") {
       const runState = await getRunState();

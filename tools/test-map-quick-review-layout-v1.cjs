@@ -135,6 +135,7 @@ let roadviewAlert = "";
 const operationsContext = {
   window: {
     addEventListener() {},
+    setInterval() {},
     openKakaoRoadview(encodedKey) {
       openedRoadviewKey = decodeURIComponent(encodedKey);
     }
