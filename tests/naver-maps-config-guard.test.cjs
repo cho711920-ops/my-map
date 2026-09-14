@@ -22,7 +22,7 @@ function createResponse() {
 }
 
 (async function run() {
-  const apiUrl = pathToFileURL(path.resolve(__dirname, "..", "api", "naver-maps-config.js"));
+  const apiUrl = pathToFileURL(path.resolve(__dirname, "..", "legacy", "vercel", "api", "naver-maps-config.js"));
   const { default: handler } = await import(apiUrl.href);
   const previous = process.env.NAVER_MAPS_NCP_KEY_ID;
 

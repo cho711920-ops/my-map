@@ -8,18 +8,24 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs tests/*.test.cjs tools/test-*.cjs",
     "test:legacy": "node --test tests/*.test.cjs",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm run cf:check",
     "build:cloudflare": "node tools/build-cloudflare-assets.mjs",
     "cf:dev": "pnpm run build:cloudflare && wrangler dev",
     "cf:check": "pnpm run build:cloudflare && wrangler deploy --dry-run",
+    "cf:retention:preview": "node tools/preview-collector-retention.mjs",
     "test:cloudflare": "node --test tests/cloudflare-*.test.mjs",
     "test:daangn:live": "node tools/test-daangn-provider-contract.mjs",
     "edge:auto:install": "powershell -ExecutionPolicy Bypass -File tools/install-edge-auto-collector.ps1",
     "edge:auto:setup": "powershell -ExecutionPolicy Bypass -File tools/run-edge-auto-collector.ps1 -Setup"
   },
-  "dependencies": {
-    "google-auth-library": "^10.3.0"
-  },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "esbuild": "0.28.2",
+    "google-auth-library": "11.0.2",
+    "typescript": "5.9.3",
     "wrangler": "^4.130.0"
   }
 }

@@ -1,3 +1,4 @@
+// Archived Vercel handler; not deployed by the Cloudflare build.
 import { requireSession, sendError } from "./_lib/security.js";
 import {
   fetchBuildingPermitHistory,

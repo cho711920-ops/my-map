@@ -10,10 +10,10 @@ async function run() {
   process.env.SHEET_MEMORY_CACHE_MS = "120000";
 
   const securityUrl = pathToFileURL(
-    path.join(__dirname, "..", "api", "_lib", "security.js")
+    path.join(__dirname, "..", "legacy", "vercel", "api", "_lib", "security.js")
   ).href;
   const sheetUrl = pathToFileURL(
-    path.join(__dirname, "..", "api", "sheet.js")
+    path.join(__dirname, "..", "legacy", "vercel", "api", "sheet.js")
   ).href + `?test=${Date.now()}`;
   const security = await import(securityUrl);
   const handler = (await import(sheetUrl)).default;

@@ -1,3 +1,4 @@
+// Archived Vercel handler; not deployed by the Cloudflare build.
 import { requireSameOrigin, requireSession, sendError } from "./_lib/security.js";
 
 const STATUS_CACHE_TTL_MS = 15000;

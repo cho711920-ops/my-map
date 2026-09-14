@@ -148,14 +148,14 @@ assert.match(
 );
 
 const helperSource = source.match(
-  /function importItemTotal\(records, metadata\) \{[\s\S]*?\n  \}/
+  /function importItemTotal\(records, metadata\) \{[\s\S]*?\n {2}\}/
 )[0];
 const importItemTotal = new Function(
   `${helperSource}\nreturn importItemTotal;`
 )();
 
 const getRoomSource = source.match(
-  /function getRoom\(item\) \{[\s\S]*?\n  \}/
+  /function getRoom\(item\) \{[\s\S]*?\n {2}\}/
 )[0];
 const getRoom = new Function(`
   function text(value) { return value == null ? "" : String(value).trim(); }
@@ -190,7 +190,7 @@ assert.equal(
 );
 
 const completeCaptureSource = source.match(
-  /function isCompleteGongsilCapture\(selectedCount, capturedCount\) \{[\s\S]*?\n  \}/
+  /function isCompleteGongsilCapture\(selectedCount, capturedCount\) \{[\s\S]*?\n {2}\}/
 )[0];
 const isCompleteGongsilCapture = new Function(
   `${completeCaptureSource}\nreturn isCompleteGongsilCapture;`

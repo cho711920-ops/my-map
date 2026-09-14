@@ -3,7 +3,7 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const queue = fs.readFileSync(path.join(root, "js", "async-mutation-queue-v1.js"), "utf8");
-const proxy = fs.readFileSync(path.join(root, "api", "apps-script.js"), "utf8");
+const proxy = fs.readFileSync(path.join(root, "legacy", "vercel", "api", "apps-script.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
 function ok(condition, message) {

@@ -113,7 +113,7 @@ assert.strictEqual(checks["same-building-area"], undefined, "같은 건축물 �
 assert.strictEqual(checks["education-zone"], undefined, "교육환경은 자료 없이 추정하면 안 됩니다.");
 
 (async () => {
-  const api = await import(pathToFileURL(path.join(root, "api/permit-public-data.js")).href + "?test=" + Date.now());
+  const api = await import(pathToFileURL(path.join(root, "legacy/vercel/api/permit-public-data.js")).href + "?test=" + Date.now());
   assert.deepStrictEqual(api.validateParcel({
     sigunguCd: "30170", bjdongCd: "10400", platGbCd: "0", bun: "0123", ji: "0004"
   }), {

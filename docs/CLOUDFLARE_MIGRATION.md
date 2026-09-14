@@ -1,5 +1,8 @@
 # JS부동산 Cloudflare 전환
 
+최근 개선·보관 정책·보류 매물 현황은 [2026-09-14 반영 기록](UPDATES_2026_09_14.md)을 참고한다.
+아래 데이터 수와 크기는 최초 전환 시점의 기록이며 현재 운영 수치가 아니다.
+
 ## 목표와 결과
 
 `js-map.com`에서 기존 JS부동산 화면과 수집기를 그대로 사용하면서 Google Sheet, Apps Script, Vercel을 운영 런타임에서 제거했다. Google은 허용된 Gmail 계정의 OAuth 로그인에만 사용한다.

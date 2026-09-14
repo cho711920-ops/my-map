@@ -1,3 +1,4 @@
+// Archived Vercel handler; not deployed by the Cloudflare build.
 import { OAuth2Client } from "google-auth-library";
 import {
   SESSION_MAX_AGE_MS,

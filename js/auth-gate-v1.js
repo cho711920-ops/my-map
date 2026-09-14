@@ -282,16 +282,23 @@ function scheduleDeferredLoad(load) {
 function startDeferredAuthenticatedAssets(preloadLinks = []) {
   if (deferredAuthenticatedAssetsPromise) return deferredAuthenticatedAssetsPromise;
   deferredAuthenticatedAssetsPromise = scheduleDeferredLoad(async () => {
+    // Fetch secondary files together after the first screen has yielded, then
+    // execute them in their original dependency order. Failed URLs can retry.
+    const deferredPreloads = preloadAuthenticatedScripts(deferredAuthenticatedScripts);
     const failures = [];
-    for (const script of deferredAuthenticatedScripts) {
-      try {
-        await loadScriptInOrder(script);
-        warmInitialDataAfterScript(script);
-      } catch (error) {
-        failures.push(error);
-      } finally {
-        refreshDeferredControls();
+    try {
+      for (const script of deferredAuthenticatedScripts) {
+        try {
+          await loadScriptInOrder(script);
+          warmInitialDataAfterScript(script);
+        } catch (error) {
+          failures.push(error);
+        } finally {
+          refreshDeferredControls();
+        }
       }
+    } finally {
+      deferredPreloads.forEach((preload) => preload.remove());
     }
     if (failures.length) {
       throw new AggregateError(failures, `${failures.length}개 부가 기능을 불러오지 못했습니다.`);
@@ -311,6 +318,20 @@ function startDeferredAuthenticatedAssets(preloadLinks = []) {
     }
   );
   return deferredAuthenticatedAssetsPromise;
+}
+
+function preloadAuthenticatedScripts(scripts) {
+  return scripts.filter((script) => {
+    const key = new URL(script.getAttribute("src"), document.baseURI).href;
+    return !authenticatedScriptLoads.has(key);
+  }).map((script) => {
+    const preload = document.createElement("link");
+    preload.rel = "preload";
+    preload.as = "script";
+    preload.href = script.getAttribute("src");
+    document.head.appendChild(preload);
+    return preload;
+  });
 }
 
 function retryDeferredAuthenticatedAssets() {

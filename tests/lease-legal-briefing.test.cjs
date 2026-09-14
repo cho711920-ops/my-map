@@ -5,7 +5,7 @@ const assert = require("assert");
 const root = path.resolve(__dirname, "..");
 const knowledge = JSON.parse(fs.readFileSync(path.join(root, "data/lease-legal-knowledge.json"), "utf8"));
 const ui = fs.readFileSync(path.join(root, "js/lease-legal-briefing.js"), "utf8");
-const api = fs.readFileSync(path.join(root, "api/permit-lease-legal.js"), "utf8");
+const api = fs.readFileSync(path.join(root, "legacy/vercel/api/permit-lease-legal.js"), "utf8");
 const step2 = fs.readFileSync(path.join(root, "js/permit-diagnosis-step2.js"), "utf8");
 const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
 

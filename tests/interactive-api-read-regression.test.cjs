@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
-const proxy = fs.readFileSync(path.join(root, "api", "apps-script.js"), "utf8");
+const proxy = fs.readFileSync(path.join(root, "legacy", "vercel", "api", "apps-script.js"), "utf8");
 
 function ok(condition, message) {
   if (!condition) throw new Error(message);

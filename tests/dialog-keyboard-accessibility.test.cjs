@@ -47,7 +47,8 @@ assert.match(listings, /function resolveTellReturnFocusV8\(detailDrawer\)/);
 assert.match(listings, /active === document\.body \|\| activeIsInsideDetail\) \? trigger : active/);
 assert.match(listings, /\{returnFocus: returnFocus\}/);
 
-assert.match(workflow, /node-version: 22/);
+assert.match(workflow, /node:\s*\[22, 24\]/);
+assert.match(workflow, /node-version:\s*\$\{\{ matrix\.node \}\}/);
 assert.match(workflow, /pnpm install --frozen-lockfile/);
 assert.match(workflow, /run: pnpm test/);
 assert.match(workflow, /run: pnpm run cf:check/);

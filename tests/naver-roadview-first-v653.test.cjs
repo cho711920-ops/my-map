@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const script = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "unified-listings-v8.css"), "utf8");
-const api = fs.readFileSync(path.join(root, "api", "naver-maps-config.js"), "utf8");
+const api = fs.readFileSync(path.join(root, "legacy", "vercel", "api", "naver-maps-config.js"), "utf8");
 
 assert.match(
   html,

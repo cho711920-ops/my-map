@@ -1,3 +1,4 @@
+// Shared public-data adapter for the production Cloudflare runtime.
 const DATA_GO_BASE = "https://apis.data.go.kr";
 const REQUEST_TIMEOUT_MS = 7000;
 

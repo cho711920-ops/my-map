@@ -3,7 +3,7 @@ import {
   fetchIndustryPermitHistory,
   fetchLandUseActivities,
   unavailableResult
-} from "../../api/_lib/permit-open-data.js";
+} from "./permit-open-data.js";
 import { requireSession } from "./security.js";
 import { getBuildingRegister } from "./building-register-api.js";
 

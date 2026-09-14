@@ -10,6 +10,7 @@ import {
 import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js";
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
+import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { getCommercialArea } from "./commercial-area-api.js";
 import { getRegionalMarket } from "./regional-market-api.js";
 import {
@@ -257,7 +258,10 @@ function withSecurityHeaders(response, request) {
   headers.set("referrer-policy", "strict-origin-when-cross-origin");
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(self)");
   headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
-  if (path === "/" || path.endsWith(".html")) {
+  if (path === "/offline" || path === "/offline.html") {
+    // A static connection notice only: no account, listing, or application data.
+    headers.set("cache-control", "public, max-age=0, must-revalidate");
+  } else if (path === "/" || path.endsWith(".html")) {
     headers.set("cache-control", "no-cache, no-store, must-revalidate");
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -727,7 +731,7 @@ async function handleDataApi(request, env, context) {
           ? 60 * 60_000
           : query.action === "operationsDashboard"
             ? OPERATIONS_DASHBOARD_MAX_CACHE_MS
-            : 60 * 60_000;
+            : 5 * 60_000;
       const configuredTtl = query.action === "unifiedListings"
         ? Number(env.UNIFIED_LISTINGS_CACHE_MS || defaultTtl)
         : query.action === "geocodeCache"
@@ -736,7 +740,9 @@ async function handleDataApi(request, env, context) {
             ? Math.min(OPERATIONS_DASHBOARD_MAX_CACHE_MS,
               Number(env.OPERATIONS_DASHBOARD_CACHE_MS || defaultTtl))
             : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
-      const cached = await readR2TextCache(env, r2CacheKey, Math.max(30_000, configuredTtl));
+      const validTtl = Number.isFinite(configuredTtl) && configuredTtl > 0 ? configuredTtl : defaultTtl;
+      const boundedTtl = detailCacheKey ? Math.min(5 * 60_000, validTtl) : validTtl;
+      const cached = await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl));
       if (cached) {
         const cachedBody = query.action === "unifiedListings"
           ? compactUnifiedListingsBody(cached.body)
@@ -973,5 +979,8 @@ export default {
   },
   async scheduled(_event, env, context) {
     context.waitUntil(runScheduledMaintenance(env, context));
+    context.waitUntil(runScheduledCollectorRetention(env).then((report) => {
+      if (!report.ok) console.error("collector-retention failed closed", report.error || report.reason);
+    }));
   }
 };

@@ -122,7 +122,7 @@ test('old sale snapshots are refreshed once; current descriptions and lease path
 test('Naver full description collector includes detail text beyond the short list summary', () => {
   const text=fs.readFileSync('js/naver-collector.js','utf8');
   const context={};
-  vm.runInNewContext(text.match(/^  function finSaleDescription\([^]*?^  }/m)[0],context);
+  vm.runInNewContext(text.match(/^ {2}function finSaleDescription\([^]*?^ {2}}/m)[0],context);
   assert.equal(context.finSaleDescription({detailInfo:{articleDetailInfo:{description:content}}},'목록 요약'),'목록 요약\n'+content);
   assert.equal(context.finSaleDescription({description:'중복'},'중복'),'중복');
   assert.match(text,/description: tradeType === "A1" \? finSaleDescription/);

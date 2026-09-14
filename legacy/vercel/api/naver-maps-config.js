@@ -1,3 +1,4 @@
+// Archived Vercel handler; not deployed by the Cloudflare build.
 function isInvalidNcpKeyId(value) {
   var normalized = String(value || "").trim().toUpperCase();
   return !normalized || [

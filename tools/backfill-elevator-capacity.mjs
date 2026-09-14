@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { parseXmlRows } from "../api/_lib/permit-open-data.js";
+import { parseXmlRows } from "../cloudflare/src/permit-open-data.js";
 
 const DATABASE = "js-map-primary";
 const WRANGLER = "node_modules/wrangler/bin/wrangler.js";

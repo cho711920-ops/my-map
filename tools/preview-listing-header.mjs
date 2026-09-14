@@ -38,7 +38,7 @@ createServer(async (request, response) => {
     if (pathname === "/collection-diagnostics") {
       const ops = await readFile(resolve(root,"js/operations-collection-v8.js"),"utf8");
       const context = {number:v=>Number(v||0),escape:v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')};
-      vm.runInNewContext(ops.match(/^  function collectionDiagnosticsHtml\([^]*?^  }/m)[0],context);
+      vm.runInNewContext(ops.match(/^ {2}function collectionDiagnosticsHtml\([^]*?^ {2}}/m)[0],context);
       const html=context.collectionDiagnosticsHtml({failed:1,requiredFieldRejected:2,diagnostics:[{sourceId:'123',stage:'필수정보',message:'정확한 지번 주소 없음'},{sourceId:'456',stage:'필수정보',message:'거래조건 확인 필요'},{sourceId:'789',stage:'저장',message:'요청 시간 초과'}]});
       response.setHeader("Content-Type","text/html; charset=utf-8");
       response.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>수집 완료 내역 검수</title><body style="font:15px Arial;padding:24px;max-width:460px"><h2>수집 완료 · 제외/실패 3건</h2>'+html+'</body>');return;

@@ -2,7 +2,12 @@
   "use strict";
 
   var LOCAL_CACHE_PREFIX = "js-building-register-v12:";
-  var LOCAL_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+  var LOCAL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+  var LOCAL_CACHE_REVALIDATE_MS = 24 * 60 * 60 * 1000;
+  var REGISTER_RETRY_DELAY = 15 * 60 * 1000;
+  var registerRefreshPending = Object.create(null);
+  var registerRefreshAfter = Object.create(null);
+  var registerRefreshGeneration = Object.create(null);
   var PARCEL_CACHE_PREFIX = "js-building-parcel-v1:";
   var PARCEL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
   var BADGE_CACHE_PREFIX = "js-building-badge-v4:";
@@ -185,6 +190,9 @@
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("building-register-open");
+    state.requestToken += 1;
+    state.loading = false;
+    state.detailsLoading = false;
   }
 
   function bodyElement() {
@@ -346,6 +354,16 @@
     } catch (_) {
       return null;
     }
+  }
+
+  function shouldRevalidateRegister(parcel) {
+    var key = parcelKey(parcel);
+    if (Date.now() < Number(registerRefreshAfter[key] || 0)) return false;
+    try {
+      var wrapper = JSON.parse(localStorage.getItem(LOCAL_CACHE_PREFIX + key) || "null");
+      var savedAt = Number(wrapper && wrapper.savedAt || 0);
+      return !savedAt || Date.now() - savedAt >= LOCAL_CACHE_REVALIDATE_MS || savedAt > Date.now();
+    } catch (_) { return true; }
   }
 
   function writeCache(parcel, data) {
@@ -985,7 +1003,7 @@
     });
   }
 
-  function requestUrl(force, mode) {
+  function requestUrl(force, mode, revalidate) {
     if (typeof saveApiURL === "undefined" || !saveApiURL) {
       throw new Error("JS부동산 서버 주소가 설정되지 않았습니다.");
     }
@@ -1002,12 +1020,13 @@
       "address=" + encodeURIComponent(state.item.address || parcel.lotAddress || "")
     ];
     if (force) params.push("force=1");
+    if (revalidate && !force) params.push("revalidate=1");
     if (mode) params.push("mode=" + encodeURIComponent(mode));
     return saveApiURL + (saveApiURL.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
   }
 
-  function requestRegister(force, mode) {
-    var url = requestUrl(force, mode);
+  function requestRegister(force, mode, revalidate) {
+    var url = requestUrl(force, mode, revalidate);
     return jsonp(url, 120000).then(function (data) {
       if (!data || !data.ok || data.action !== "buildingRegister") {
         throw new Error((data && data.message) || "건축물대장 API 설정을 확인해주세요.");
@@ -1045,11 +1064,63 @@
     return data;
   }
 
+  function refreshCachedRegister(requestToken) {
+    var parcel = state.parcel;
+    var key = parcelKey(parcel);
+    var pending = registerRefreshPending[key];
+    if (!pending && !shouldRevalidateRegister(parcel)) return Promise.resolve(state.data);
+    if (!pending) {
+      var generation = Number(registerRefreshGeneration[key] || 0);
+      registerRefreshAfter[key] = Date.now() + REGISTER_RETRY_DELAY;
+      pending = requestRegister(false, "full", true).then(function(data) {
+        // An incomplete upstream response must not replace a complete cached
+        // register or restart the local cache's freshness clock.
+        if (generation === Number(registerRefreshGeneration[key] || 0) &&
+            !data.partial && !data.incomplete && !data.refreshDeferred) writeCache(parcel, data);
+        return data;
+      }).finally(function() {
+        if (registerRefreshPending[key] === pending) delete registerRefreshPending[key];
+      });
+      registerRefreshPending[key] = pending;
+    }
+    return pending.then(function(data) {
+      if (requestToken !== state.requestToken || !state.parcel || parcelKey(state.parcel) !== key ||
+          data.partial || data.incomplete || data.refreshDeferred) return null;
+      var buildingIndex = state.buildingIndex;
+      var unitIndex = state.unitIndex;
+      var previous = state.data;
+      applyRegisterData(data, requestToken, false);
+      // Retain a user's selected building/unit only when the same stable
+      // records still occupy those slots in the refreshed result.
+      var oldBuilding = previous && (previous.buildings || [])[buildingIndex];
+      var nextBuilding = (data.buildings || [])[buildingIndex];
+      if (oldBuilding && nextBuilding && oldBuilding.managementKey &&
+          oldBuilding.managementKey === nextBuilding.managementKey) state.buildingIndex = buildingIndex;
+      var oldUnit = previous && (previous.units || [])[unitIndex];
+      var nextUnit = (data.units || [])[unitIndex];
+      if (oldUnit && nextUnit && oldUnit.managementKey && oldUnit.managementKey === nextUnit.managementKey) {
+        state.unitIndex = unitIndex;
+      }
+      render();
+      return data;
+    }).catch(function(error) {
+      console.warn("건축물대장 최신화 실패 · 저장된 정보를 유지합니다.", error);
+      return null;
+    });
+  }
+
   function fetchRegister(force) {
+    if (force) {
+      state.requestToken += 1;
+      var refreshKey = parcelKey(state.parcel);
+      registerRefreshGeneration[refreshKey] = Number(registerRefreshGeneration[refreshKey] || 0) + 1;
+    }
     var requestToken = state.requestToken;
     var cached = !force ? readCache(state.parcel) : null;
     if (cached && cached.ok) {
-      return Promise.resolve(applyRegisterData(cached, requestToken, false));
+      applyRegisterData(cached, requestToken, false);
+      // Render first; at most one quiet server revalidation per parcel/day.
+      return refreshCachedRegister(requestToken);
     }
 
     setLoading(force ? "최신 건축물대장을 다시 조회하고 있습니다" : "건축물대장을 조회하고 있습니다");
@@ -1061,10 +1132,12 @@
 
       state.detailsLoading = true;
       updateRefreshButton();
-      return requestRegister(false, "full").then(function (fullData) {
+      return requestRegister(false, "full", true).then(function (fullData) {
+        if (requestToken !== state.requestToken) return null;
         state.detailsLoading = false;
-        return applyRegisterData(fullData, requestToken, true);
+        return applyRegisterData(fullData, requestToken, !fullData.partial && !fullData.incomplete && !fullData.refreshDeferred);
       }).catch(function () {
+        if (requestToken !== state.requestToken) return null;
         state.detailsLoading = false;
         updateRefreshButton();
         return data;
@@ -1072,6 +1145,11 @@
     }).catch(function (error) {
       if (requestToken !== state.requestToken) return null;
       state.detailsLoading = false;
+      if (state.data && state.data.ok) {
+        render();
+        console.warn("건축물대장 최신화 실패 · 저장된 정보를 유지합니다.", error);
+        return state.data;
+      }
       setError(error && error.message);
       return null;
     });

@@ -1,3 +1,4 @@
+// Archived Vercel helper. Production authentication is cloudflare/src/security.js.
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE = "js_realestate_session";

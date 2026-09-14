@@ -3,6 +3,8 @@
 // Phase 1 (default) is read-only against D1.  It writes a private evidence
 // bundle and guarded forward/rollback SQL outside the repository:
 //   node tools/repair-lease-market-contamination.mjs --backup=C:\private
+// Limit a reviewed correction to one exact existing master ID:
+//   node tools/repair-lease-market-contamination.mjs --listing-id=M-... --backup=C:\private
 //
 // Phase 2 can only execute that exact reviewed bundle.  It requires both its
 // directory and SHA-256 digest.  This file never hard-deletes a listing,
@@ -68,8 +70,23 @@ function daangnSaleCategory(raw = {}) {
 }
 
 export function daangnTradeEvidence(source = {}) {
-  const raw = parseJson(source.raw_json);
-  const trades = Array.isArray(raw.trades) ? raw.trades : [];
+  const envelope = parseJson(source.raw_json);
+  const payloads = [];
+  let cursor = envelope;
+  let path = "raw_json";
+  // Older bookmarklets wrapped the provider response in raw_json.raw. Read
+  // only that known envelope, bounded in depth; never mine arbitrary memo or
+  // unrelated nested objects for transaction-looking data.
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (Array.isArray(cursor.trades) && cursor.trades.length) payloads.push({ raw: cursor, path });
+    if (!cursor.raw || typeof cursor.raw !== "object" || Array.isArray(cursor.raw)) break;
+    cursor = cursor.raw;
+    path += ".raw";
+  }
+  // Preserve conflicting advertised types across envelopes rather than
+  // misclassifying a BUY-only outer snapshot when MONTH exists inside it.
+  const trades = payloads.flatMap((entry) => entry.raw.trades);
+  const raw = payloads[0]?.raw || envelope;
   const buy = trades
     .filter((trade) => /BUY/.test(tradeLabel(trade?.type || trade?.__typename)))
     .map((trade) => ({ price: number(trade?.price), preferred: Boolean(trade?.preferred) }))
@@ -88,7 +105,9 @@ export function daangnTradeEvidence(source = {}) {
     hasBuyType: trades.some((trade) => /BUY/.test(tradeLabel(trade?.type || trade?.__typename))),
     hasMonthType: trades.some((trade) => /MONTH/.test(tradeLabel(trade?.type || trade?.__typename))),
     saleCategory: daangnSaleCategory(raw),
-    structured: trades.length > 0
+    structured: trades.length > 0,
+    evidencePaths: payloads.map((entry) => entry.path),
+    nestedLegacyEvidence: payloads.some((entry) => entry.path !== "raw_json")
   };
 }
 
@@ -140,6 +159,32 @@ function decision(listing, sources, kind, issueCode, blocksPublication, reason, 
   };
 }
 
+function verifiedGongsilSemiJeonseCorrection(listing, row) {
+  const { source, list, detail } = row;
+  const snapshot = parseJson(source.list_snapshot_json);
+  const floor = detail.floorinfo || {};
+  const money = Array.isArray(floor.Moneys) && floor.Moneys.length === 1 ? floor.Moneys[0] : null;
+  const providerId = clean(source.source_listing_id);
+  const room = (value) => clean(value).replace(/\s+/g, "").replace(/호$/, "");
+  const masterRoom = room(listing.room);
+  const deposit = number(money?.Bo), rent = number(money?.Mm);
+  if (clean(listing.trade_type) !== "lease" || number(listing.monthly_rent) !== 0 ||
+      Number(source.active) !== 1 || clean(source.listing_id) !== clean(listing.id) ||
+      clean(source.trade_type) !== "lease" || clean(snapshot.tradeType) !== "lease" ||
+      !/^\d+$/.test(providerId) || [list.Bfidx, detail.bfidx, snapshot.sourceId].some((value) => clean(value) !== providerId) ||
+      !clean(list.Bidx) || clean(list.Bidx) !== clean(detail.bidx) ||
+      !masterRoom || !/^\d+$/.test(masterRoom) ||
+      [snapshot.room, list.Ho, floor.BfHo].some((value) => room(value) !== masterRoom) ||
+      number(list.Ff) == null || number(list.Ff) !== number(floor.BfFloor) ||
+      !clean(listing.address) || clean(snapshot.address) !== clean(listing.address) ||
+      clean(list.Subtype) !== "9" || clean(floor.LndSubtype) !== "9" || clean(money?.Ty) !== "반전세" ||
+      clean(list.Onoff) !== "1" || clean(floor.BfOnoff) !== "1" ||
+      deposit == null || !(rent > 0) || number(list.Me) > 0 ||
+      number(snapshot.deposit) !== deposit || number(snapshot.rent) !== rent ||
+      number(list.Bjbo) !== deposit || number(list.Bjmm) !== rent) return null;
+  return { sourceId: clean(source.id), deposit, monthlyRent: rent };
+}
+
 export function classifyLeaseMarketListing({ listing, sources = [], historyActions = [] }) {
   assert.ok(listing && clean(listing.id), "listing.id is required");
   const baseEvidence = safeEvidence(listing, sources);
@@ -166,7 +211,8 @@ export function classifyLeaseMarketListing({ listing, sources = [], historyActio
       hasMonth,
       manualHistory,
       saleCollisionCount: saleCollisions,
-      activeNonDaangnCount: activeNonDaangn.length
+      activeNonDaangnCount: activeNonDaangn.length,
+      nestedRawSourceCount: proofs.filter((row) => row.evidence.nestedLegacyEvidence).length
     });
     const underlyingIssue = hasBuy && hasMonth ? "daangn_monthly_terms_stale"
       : hasBuy ? "daangn_buy_only_in_lease" : "daangn_zero_rent_unproven";
@@ -197,6 +243,10 @@ export function classifyLeaseMarketListing({ listing, sources = [], historyActio
         return decision(listing, sources, "hold", underlyingIssue, 1,
           "BUY and MONTH exist, but no active source has a complete positive monthly offer.", facts);
       }
+      if (proofs.some((row) => row.evidence.nestedLegacyEvidence)) {
+        return decision(listing, sources, "hold", underlyingIssue, 1,
+          "Nested legacy BUY/MONTH evidence was recovered; validate the original advertisement before changing its representative.", facts);
+      }
       return decision(listing, sources, "repair_monthly", underlyingIssue, 0,
         "Restore the active provider MONTH terms on the same master ID.", {
           ...facts,
@@ -215,9 +265,10 @@ export function classifyLeaseMarketListing({ listing, sources = [], historyActio
         row.evidence.structured && row.evidence.hasBuyType && !row.evidence.hasMonthType && row.evidence.buy);
       const allSourcesAreDaangn = sources.every((source) => clean(source.source) === "당근");
       const anyActive = sources.some((source) => Number(source.active) === 1);
-      if (!latestBuy || !everyStructuredSourceIsBuyOnly || !allSourcesAreDaangn || anyActive) {
+      if (!latestBuy || !everyStructuredSourceIsBuyOnly || !allSourcesAreDaangn || anyActive ||
+          proofs.some((row) => row.evidence.nestedLegacyEvidence)) {
         return decision(listing, sources, "hold", underlyingIssue, 1,
-          "Pure-sale evidence is incomplete, mixed with another source, or still actively changing.", facts);
+          "Pure-sale evidence is incomplete, mixed with another source, nested in a legacy envelope, or still actively changing.", facts);
       }
       return decision(listing, sources, "reclassify_sale", underlyingIssue, 0,
         "Reclassify the same master ID as a sale; all user-linked relations remain attached.", {
@@ -259,6 +310,16 @@ export function classifyLeaseMarketListing({ listing, sources = [], historyActio
     });
     if (positiveLease) {
       const offer = positiveLease.offers.find((value) => value.tradeType === "lease" && value.rent > 0);
+      const correction = sources.length === 1 && !preserve && !manualHistory && saleCollisions === 0
+        ? verifiedGongsilSemiJeonseCorrection(listing, positiveLease) : null;
+      if (correction) {
+        return decision(listing, sources, "repair_monthly", "gongsil_master_terms_stale", 0,
+          "One active semi-jeonse source has matching provider IDs, address, room, snapshot and full advertised terms; restore only its representative rent.", {
+            ...facts, manualHistory, saleCollisionCount: saleCollisions,
+            selectedSourceId: correction.sourceId, correctedDeposit: correction.deposit,
+            correctedMonthlyRent: correction.monthlyRent, verifiedSingleSemiJeonse: true
+          }, correction);
+      }
       return decision(listing, sources, "hold", "gongsil_master_terms_stale", 1,
         "Provider evidence has positive rent, but legacy Gongsil rows require manual representative review.", {
           ...facts, suggestedDeposit: offer.deposit, suggestedMonthlyRent: offer.rent,
@@ -305,6 +366,18 @@ export function auditLeaseMarketDataset({ listings = [], sources = [], history =
     summary[key] = (summary[key] || 0) + 1;
   }
   return { decisions, summary };
+}
+
+export function scopeLeaseMarketDataset(dataset, listingId) {
+  const id = clean(listingId);
+  if (!id) return dataset;
+  const listings = (dataset.listings || []).filter((listing) => clean(listing.id) === id);
+  assert.equal(listings.length, 1, "--listing-id must match exactly one candidate master ID");
+  return {
+    listings,
+    sources: (dataset.sources || []).filter((source) => clean(source.listing_id) === id),
+    history: (dataset.history || []).filter((row) => clean(row.listing_id) === id)
+  };
 }
 
 function quote(value) {
@@ -431,6 +504,28 @@ export function buildLeaseMarketRepairSql(dataset, { now = new Date().toISOStrin
         resolved_by=${quote(REPAIR_ACTOR)}, resolved_at=${quote(now)}, updated_at=${quote(now)}
         WHERE listing_id=${quote(item.listingId)} AND issue_code=${quote(item.issueCode)} AND state='open';`);
       continue;
+    }
+
+    if (item.kind === "repair_monthly" && item.evidence.verifiedSingleSemiJeonse) {
+      const source = item.sources[0];
+      // These checks run in the reviewed plan as well as the dry-run. Even a
+      // changed raw payload with an unchanged timestamp must abort the repair.
+      forward.push(`INSERT INTO ${guard} SELECT CASE WHEN COUNT(*)=1 THEN 1 ELSE 0 END
+        FROM listings WHERE id=${quote(item.listingId)} AND address IS ${quote(clean(listing.address))}
+          AND room IS ${quote(clean(listing.room))} AND physical_key IS ${quote(clean(listing.physical_key))}
+          AND condition_key IS ${quote(clean(listing.condition_key))};`);
+      forward.push(`INSERT INTO ${guard} SELECT CASE WHEN COUNT(*)=1 THEN 1 ELSE 0 END
+        FROM listing_sources WHERE id=${quote(source.id)} AND listing_id=${quote(item.listingId)}
+          AND source='공실박스' AND source_listing_id IS ${quote(clean(source.source_listing_id))}
+          AND raw_json IS ${quote(String(source.raw_json))} AND ${stateWhere(sourceState(source))};`);
+      forward.push(`INSERT INTO ${guard} SELECT CASE WHEN COUNT(*)=0 THEN 1 ELSE 0 END
+        FROM listing_history WHERE listing_id=${quote(item.listingId)}
+          AND action IN (${[...USER_HISTORY_ACTIONS].map(quote).join(",")});`);
+      forward.push(`INSERT INTO ${guard} SELECT CASE WHEN COUNT(*)=0 THEN 1 ELSE 0 END FROM listings sale
+        WHERE sale.id<>${quote(item.listingId)} AND sale.status<>'deleted' AND sale.trade_type='sale'
+          AND ((sale.physical_key<>'' AND sale.physical_key=(SELECT physical_key FROM listings WHERE id=${quote(item.listingId)}))
+            OR (sale.address<>'' AND sale.address=(SELECT address FROM listings WHERE id=${quote(item.listingId)})
+              AND COALESCE(sale.room,'')=COALESCE((SELECT room FROM listings WHERE id=${quote(item.listingId)}),'')));`);
     }
 
     let after;
@@ -672,7 +767,12 @@ function invalidateRepairCaches(root, directory, listingIds = []) {
 function main() {
   const root = resolve(import.meta.dirname, "..");
   const applyPlan = arg("--apply-plan");
+  const selectionArgs = process.argv.filter((value) => value === "--listing-id" || value.startsWith("--listing-id="));
+  const listingId = arg("--listing-id");
+  assert.ok(selectionArgs.length === 0 || (selectionArgs.length === 1 && clean(listingId)),
+    "provide --listing-id=<exact master ID> once, with a nonempty value");
   if (applyPlan) {
+    assert.equal(selectionArgs.length, 0, "--listing-id scopes a dry-run; apply the exact saved plan without a new scope");
     const directory = privateDirectory(root, applyPlan, ".");
     const repairFile = resolve(directory, "repair.sql");
     const manifestFile = resolve(directory, "manifest.json");
@@ -699,8 +799,9 @@ function main() {
   const backupRoot = arg("--backup");
   const directory = privateDirectory(root, backupRoot,
     `lease-market-repair-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+  const dataset = scopeLeaseMarketDataset(loadDataset(root), listingId);
+  const scope = listingId ? { mode: "single-listing", listingId } : { mode: "all-candidates" };
   mkdirSync(directory, { recursive: true });
-  const dataset = loadDataset(root);
   const plan = buildLeaseMarketRepairSql(dataset);
   writeFileSync(resolve(directory, "evidence-private.json"), JSON.stringify(dataset, null, 2));
   writeFileSync(resolve(directory, "audit.json"), JSON.stringify(sanitizedAudit(plan.audit), null, 2));
@@ -710,6 +811,7 @@ function main() {
     digest: plan.digest,
     createdAt: new Date().toISOString(),
     database: "js-map-primary",
+    scope,
     expected: plan.expected,
     affectedListingIds: plan.audit.decisions.map((item) => item.listingId),
     preservation: {
@@ -724,6 +826,7 @@ function main() {
     }
   }, null, 2));
   console.log(JSON.stringify({ mode: "dry-run", plan: directory, digest: plan.digest,
+    scope,
     candidates: dataset.listings.length, summary: plan.audit.summary,
     autoRepairs: plan.expected.length,
     instruction: `Review audit.json and repair.sql, then use --apply-plan=${directory} --confirm=${plan.digest}`

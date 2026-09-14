@@ -1,3 +1,4 @@
+// Archived Vercel handler; not deployed by the Cloudflare build.
 import { createHash } from "node:crypto";
 import { requireSession, sendError } from "./_lib/security.js";
 

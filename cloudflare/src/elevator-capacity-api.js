@@ -1,4 +1,4 @@
-import { parseXmlRows } from "../../api/_lib/permit-open-data.js";
+import { parseXmlRows } from "./permit-open-data.js";
 
 const OPERATION_API_URL = "https://apis.data.go.kr/B553664/ElevatorOperationService/getOperationInfoListV1";
 const SOURCE_OPERATION_API_URL = "http://openapigw.elevator.go.kr/openapi/service/ElevatorOperationService/getOperationInfoListV1";

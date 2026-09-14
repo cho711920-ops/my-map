@@ -1,7 +1,10 @@
 (function(global) {
   "use strict";
 
-  var state = { groups: {}, detailCache: {}, detailPending: {}, contactCache: {}, contactPending: {},
+  var DETAIL_CACHE_TTL = 5 * 60 * 1000;
+  var DETAIL_RETRY_DELAY = 30 * 1000;
+  var state = { groups: {}, detailCache: {}, detailCachedAt: {}, detailRetryAt: {}, detailGeneration: 0,
+    detailPending: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
     loaded: false, openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
@@ -313,21 +316,48 @@
     });
   }
 
+  function detailIsFresh(propertyId) {
+    return Object.prototype.hasOwnProperty.call(state.detailCache, propertyId) &&
+      Number.isFinite(state.detailCachedAt[propertyId]) &&
+      Date.now() - state.detailCachedAt[propertyId] >= 0 &&
+      Date.now() - state.detailCachedAt[propertyId] < DETAIL_CACHE_TTL;
+  }
+
+  function invalidateDetails() {
+    state.detailGeneration += 1;
+    state.detailRequestToken += 1;
+    state.detailCache = {};
+    state.detailCachedAt = {};
+    state.detailRetryAt = {};
+    state.detailPending = {};
+  }
+
   function loadDetail(propertyId) {
     propertyId = text(propertyId);
     if (!propertyId) return Promise.resolve([]);
-    if (Object.prototype.hasOwnProperty.call(state.detailCache, propertyId)) {
+    if (detailIsFresh(propertyId)) {
       return Promise.resolve(state.detailCache[propertyId]);
     }
     if (state.detailPending[propertyId]) return state.detailPending[propertyId];
+    if (state.detailCache[propertyId] && Date.now() < Number(state.detailRetryAt[propertyId] || 0)) {
+      return Promise.resolve(state.detailCache[propertyId]);
+    }
+    var generation = state.detailGeneration;
     var request = apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
+      if (!result || result.ok === false || !Array.isArray(result.originals)) {
+        throw new Error(result && result.message || "매물 상세 응답을 확인하지 못했습니다.");
+      }
       var originals = orderOriginals(result.originals || []);
+      if (generation !== state.detailGeneration) return originals;
       state.detailCache[propertyId] = originals;
-      delete state.detailPending[propertyId];
+      state.detailCachedAt[propertyId] = Date.now();
+      delete state.detailRetryAt[propertyId];
+      if (state.detailPending[propertyId] === request) delete state.detailPending[propertyId];
       primeDetailImages(originals);
       return originals;
-    }, function(error) {
-      delete state.detailPending[propertyId];
+    }).catch(function(error) {
+      if (generation === state.detailGeneration) state.detailRetryAt[propertyId] = Date.now() + DETAIL_RETRY_DELAY;
+      if (state.detailPending[propertyId] === request) delete state.detailPending[propertyId];
       throw error;
     });
     state.detailPending[propertyId] = request;
@@ -390,6 +420,7 @@
 
   function load(force) {
     if (state.loaded && !force) return Promise.resolve({groups: state.groups});
+    if (force) invalidateDetails();
     return apiGet("unifiedListings").then(function(result) {
       if (result && /^compact-v\d+$/.test(result.format || "") && Array.isArray(result.fields)) {
         var fields = result.fields;
@@ -418,6 +449,7 @@
 
   function attach(items, result) {
     if (result && result.groups) {
+      if (state.groups !== result.groups) invalidateDetails();
       state.groups = result.groups;
       state.sourceSearchIds = result.sourceSearchIds || state.sourceSearchIds || {};
       state.loaded = true;
@@ -824,6 +856,31 @@
     gallery.innerHTML = '<div class="unified-gallery-empty-v8">사진을 불러오지 못했습니다.</div>';
   }
 
+  function refreshOpenDetail(propertyId, originalId, requestToken) {
+    return loadDetail(propertyId).then(function(originals) {
+      if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
+          state.openOriginalId !== originalId) return;
+      var body = document.getElementById("unifiedDetailBodyV8");
+      var active = document.activeElement;
+      // Do not replace a form while the user is editing it. The fresh response
+      // remains cached and is used the next time the card is opened.
+      if (body && active && body.contains && body.contains(active) &&
+          (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || ""))) return;
+      var gallery = body && body.querySelector(".unified-detail-gallery-v8");
+      var photoIndex = gallery ? Number(gallery._indexV8 || 0) : 0;
+      var scrollTop = body ? body.scrollTop : 0;
+      var selected = originals.filter(function(original) {
+        return text(original.originalId) === originalId;
+      })[0] || originals[0];
+      state.openOriginalId = text(selected && selected.originalId);
+      renderDetail(propertyId, originals, state.openOriginalId);
+      body = document.getElementById("unifiedDetailBodyV8");
+      gallery = body && body.querySelector(".unified-detail-gallery-v8");
+      if (gallery && photoIndex > 0) renderDetailPhoto(gallery, photoIndex);
+      if (body) body.scrollTop = scrollTop;
+    }).catch(function(error) { console.warn("매물 상세 최신화 실패 · 기존 정보를 유지합니다.", error); });
+  }
+
   function open(encodedPropertyId, encodedOriginalId) {
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
@@ -834,22 +891,15 @@
       cached = orderOriginals(cached);
       state.detailCache[propertyId] = cached;
       state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
-      return renderDetail(propertyId, cached, state.openOriginalId);
+      renderDetail(propertyId, cached, state.openOriginalId);
+      if (!detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken);
+      return;
     }
     var initial = group(propertyId);
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     state.openOriginalId = originalId;
-    var selected = initial.filter(function(original) {
-      return text(original.originalId) === text(originalId);
-    })[0] || initial[0];
     renderDetail(propertyId, initial, originalId);
-    if (selected && Array.isArray(selected.images) && selected.images.length &&
-        selected.images.length >= Math.max(1, Number(selected.photoCount) || 0)) return;
-    loadDetail(propertyId).then(function(originals) {
-      if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
-          state.openOriginalId !== originalId) return;
-      renderDetail(propertyId, originals, originalId);
-    }).catch(function(error) { console.error(error); });
+    return refreshOpenDetail(propertyId, originalId, requestToken);
   }
 
   function loadContacts(propertyId) {
@@ -1107,7 +1157,7 @@
       setSaving(false, false);
       if (consolidateWholeMaster) removeConsolidatedMasterFromView(sourceMasterId, targetMasterId);
       state.loaded = false;
-      state.detailCache = {};
+      invalidateDetails();
       state.pendingMove = null;
       setMoveBannerSaving(false);
       var moveBanner = document.getElementById("unifiedMoveBannerV8");
@@ -1389,6 +1439,19 @@
       global.JSDialogFocusV1.activate(modal, modal.querySelector("input"), {returnFocus: returnFocus});
     }
   }
+
+  global.addEventListener("focus", function() {
+    if (state.openPropertyId && !detailIsFresh(state.openPropertyId)) {
+      refreshOpenDetail(state.openPropertyId, state.openOriginalId, state.detailRequestToken);
+    }
+  });
+
+  global.addEventListener("js-async-mutation-finished", function(event) {
+    var detail = event && event.detail || {};
+    if (detail.ok && /^(toggleDone|updateProperty|deleteProperty|moveOriginalListing|consolidateExistingMasters)$/.test(detail.action || "")) {
+      invalidateDetails();
+    }
+  });
 
   global.addEventListener("resize", function() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");

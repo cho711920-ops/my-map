@@ -3,7 +3,7 @@ const fs = require("fs");
 const vm = require("vm");
 
 (async function main() {
-  const moduleSource = fs.readFileSync("api/_lib/permit-open-data.js", "utf8")
+  const moduleSource = fs.readFileSync("cloudflare/src/permit-open-data.js", "utf8")
     .replace(/export async function /g, "async function ")
     .replace(/export function /g, "function ")
     .replace(/export const permitOpenDataInternals[\s\S]*$/m, "");
@@ -53,7 +53,7 @@ const vm = require("vm");
   assert.strictEqual(rows[0].name, "테스트");
   assert.strictEqual(rows[0].state, "영업");
 
-  const serverSource = fs.readFileSync("api/permit-public-data.js", "utf8");
+  const serverSource = fs.readFileSync("legacy/vercel/api/permit-public-data.js", "utf8");
   assert.match(serverSource, /Promise\.allSettled/);
   assert.match(serverSource, /buildingPermitHistory/);
   assert.match(serverSource, /industryPermitHistory/);

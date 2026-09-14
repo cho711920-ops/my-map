@@ -1,7 +1,10 @@
-import { parseXmlRows } from "../../api/_lib/permit-open-data.js";
+import { parseXmlRows } from "./permit-open-data.js";
 import { getElevatorCapacity } from "./elevator-capacity-api.js";
 
 const API_BASE = "https://apis.data.go.kr/1613000/BldRgstHubService";
+const CACHE_REVALIDATE_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_RETRY_MS = 15 * 60 * 1000;
+const registerRefreshStates = new WeakMap();
 const ENDPOINTS = {
   title: ["getBrTitleInfo", "건축물 표제부"],
   recap: ["getBrRecapTitleInfo", "건축물 총괄표제부"],
@@ -302,17 +305,18 @@ function responseBase(parcel, propertyId) {
     source: "국토교통부 건축HUB 건축물대장정보 서비스", sourceType: "official-open-api",
     sourcePage: "https://www.data.go.kr/data/15134735/openapi.do", updateCycle: "월간",
     queriedAt: new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date()),
-    cached: false
+    cached: false, fetchedAt: new Date().toISOString()
   };
 }
 
 async function readCache(env, key, mode) {
   if (!env.DB) return null;
-  const row = await env.DB.prepare(`SELECT summary_json, details_json, expires_at FROM building_cache
+  const row = await env.DB.prepare(`SELECT summary_json, details_json, checked_at, expires_at FROM building_cache
     WHERE cache_key=?1 AND (expires_at='' OR datetime(expires_at)>datetime('now'))`).bind(key).first();
   const value = mode === "summary" ? row?.summary_json : row?.details_json;
-  const parsed = value ? JSON.parse(value) : null;
-  return parsed?.ok ? { ...parsed, cached: true } : null;
+  let parsed;
+  try { parsed = value ? JSON.parse(value) : null; } catch (_) { return null; }
+  return parsed?.ok ? { ...parsed, cached: true, cacheCheckedAt: parsed.fetchedAt || row.checked_at || "" } : null;
 }
 
 async function writeCache(env, key, parcel, mode, result) {
@@ -376,6 +380,35 @@ async function getBuildingRegisterForParcel(env, query, parcel, mode) {
   if (!/^(1|true|yes)$/i.test(clean(query.force))) {
     const cached = await readCache(env, key, mode);
     if (cached) {
+      const checkedAt = Date.parse(cached.cacheCheckedAt || "");
+      const stale = !Number.isFinite(checkedAt) || checkedAt > Date.now() || Date.now() - checkedAt >= CACHE_REVALIDATE_MS;
+      if (/^(1|true|yes)$/i.test(clean(query.revalidate)) && stale) {
+        // Reuse one request for concurrent viewers of the same parcel. Failed
+        // public-API calls keep the last complete result and use a cooldown.
+        const owner = env.DB || env;
+        let states = registerRefreshStates.get(owner);
+        if (!states) { states = new Map(); registerRefreshStates.set(owner, states); }
+        const refreshKey = `${key}:${mode}`;
+        let state = states.get(refreshKey);
+        if (!state || (!state.pending && Date.now() >= state.retryAfter)) {
+          if (states.size >= 250) {
+            for (const [oldKey, oldState] of states) {
+              if (!oldState.pending) { states.delete(oldKey); break; }
+            }
+          }
+          state = { retryAfter: Date.now() + CACHE_RETRY_MS, pending: null };
+          states.set(refreshKey, state);
+          state.pending = getBuildingRegisterForParcel(env, { ...query, force: "1", propertyId: "" }, parcel, mode)
+            .catch(() => null).finally(() => { state.pending = null; });
+        }
+        const refreshed = state.pending ? await state.pending : null;
+        if (refreshed && !refreshed.incomplete && !(mode === "full" && refreshed.partial)) {
+          const result = { ...refreshed, propertyId: clean(query.propertyId) };
+          result.buildingInfoCache = await persistBuildingBadge(env, query.propertyId, result);
+          return result;
+        }
+        cached.refreshDeferred = true;
+      }
       cached.propertyId = clean(query.propertyId);
       cached.buildingInfoCache = await persistBuildingBadge(env, query.propertyId, cached);
       return cached;

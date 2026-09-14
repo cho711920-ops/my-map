@@ -1,11 +1,14 @@
+/** @param {unknown} value */
 function clean(value) {
   return String(value == null ? "" : value).trim();
 }
 
+/** @param {unknown} value */
 function compact(value) {
   return clean(value).toUpperCase().replace(/\s+/g, "");
 }
 
+/** @param {unknown} value @returns {number | null} */
 export function parseBasementFloor(value) {
   const text = compact(value);
   if (!text) return null;
@@ -32,6 +35,7 @@ export function parseBasementFloor(value) {
   return null;
 }
 
+/** @param {unknown} value @param {boolean} [inferRoom] @returns {number | null} */
 export function parseListingFloor(value, inferRoom = true) {
   const text = compact(value);
   if (!text) return null;
@@ -72,11 +76,13 @@ export function parseListingFloor(value, inferRoom = true) {
   return null;
 }
 
+/** @param {{ floor?: unknown, room?: unknown } | null | undefined} row */
 export function listingFloor(row) {
   const fromFloor = parseListingFloor(row?.floor, true);
   return fromFloor == null ? parseListingFloor(row?.room, true) : fromFloor;
 }
 
+/** @param {unknown} value */
 export function canonicalListingRoom(value) {
   const text = clean(value);
   if (!text) return "";
@@ -106,19 +112,21 @@ export function canonicalListingRoom(value) {
   return text;
 }
 
+/** @param {unknown} value */
 export function normalizedRoomKey(value) {
   return canonicalListingRoom(value)
     .replace(/\s+/g, "")
     .replace(/호실$/g, "호");
 }
 
+/** @param {unknown} floor @param {unknown} minimum @param {unknown} maximum */
 export function floorMatchesBounds(floor, minimum, maximum) {
   const min = minimum == null || minimum === "" ? null : Number(minimum);
   const max = maximum == null || maximum === "" ? null : Number(maximum);
   if (min == null && max == null) return true;
   if (floor == null || !Number.isFinite(Number(floor))) return false;
   const value = Number(floor);
-  if (Number.isFinite(min) && value < min) return false;
-  if (Number.isFinite(max) && value > max) return false;
+  if (min != null && Number.isFinite(min) && value < min) return false;
+  if (max != null && Number.isFinite(max) && value > max) return false;
   return true;
 }
