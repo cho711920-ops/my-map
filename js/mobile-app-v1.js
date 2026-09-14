@@ -13,6 +13,7 @@
   var historySyncQueued = false;
   var closingFromBackToken = "";
   var ignoreNextPop = false;
+  var pendingViewAfterPop = null;
   var mobileSearchTimer = null;
 
   var MOBILE_LAYER_SELECTORS = [
@@ -211,6 +212,13 @@
     if (nextView === "more") {
       openMore();
       return;
+    }
+    if (!options.fromHistory) {
+      syncLayerHistory();
+      if (ignoreNextPop) {
+        pendingViewAfterPop = {view: nextView, options: options};
+        return;
+      }
     }
     if (nextView === "list" && chrome) {
       var mobileInput = chrome.querySelector("#jsMobileKeywordV1");
@@ -420,6 +428,9 @@
     if (!active) return;
     if (ignoreNextPop) {
       ignoreNextPop = false;
+      var pendingView = pendingViewAfterPop;
+      pendingViewAfterPop = null;
+      if (pendingView) setView(pendingView.view, pendingView.options);
       queueLayerHistorySync();
       return;
     }

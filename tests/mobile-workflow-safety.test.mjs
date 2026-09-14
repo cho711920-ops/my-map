@@ -82,7 +82,7 @@ test("mobile layer replacement waits for asynchronous back traversal before push
     go(delta) {pendingDelta = delta; calls.push("go");}
   };
   const context = {
-    active: true, historySyncQueued: false, ignoreNextPop: false,
+    active: true, historySyncQueued: false, ignoreNextPop: false, pendingViewAfterPop: null,
     historyLayers: [], closingFromBackToken: "", historySerial: 0,
     global: {history, location: {href: "http://127.0.0.1/"}},
     openMobileLayers: () => openLayers,
@@ -107,4 +107,31 @@ test("mobile layer replacement waits for asynchronous back traversal before push
   assert.equal(index, 0, "closing favorites returns to the application base entry, not the previous document");
   assert.equal(history.state.page, "fixture");
   assert.equal(context.historyLayers.length, 0);
+});
+
+test("opening the mobile listing view waits for a just-closed modal history traversal", () => {
+  const calls = [];
+  const context = {
+    active: true, view: "map", pendingViewAfterPop: null, ignoreNextPop: false,
+    chrome: {querySelector: () => null, querySelectorAll: () => []},
+    document: {getElementById: () => null}, root: {setAttribute() {}},
+    syncLayerHistory() {context.ignoreNextPop = true;},
+    closeMore() {}, syncSearchValue() {}, resizeMap() {},
+    global: {
+      history: {state: {}, pushState: () => calls.push("push-list")},
+      location: {href: "http://127.0.0.1/"}, setTimeout() {}
+    },
+    queueLayerHistorySync() {}
+  };
+  vm.createContext(context);
+  vm.runInContext(functionSource(mobile, "setView", "resizeMap") +
+    functionSource(mobile, "handleMobileBack", "handleMobileEscape"), context);
+  vm.runInContext('setView("list");', context);
+  assert.equal(calls.length, 0, "view navigation cannot push across the modal's pending back traversal");
+  assert.equal(context.pendingViewAfterPop.view, "list");
+  context.syncLayerHistory = () => {};
+  vm.runInContext("handleMobileBack({});", context);
+  assert.deepEqual(calls, ["push-list"]);
+  assert.equal(context.view, "list");
+  assert.equal(context.pendingViewAfterPop, null);
 });
