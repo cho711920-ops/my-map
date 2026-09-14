@@ -14,6 +14,7 @@ function queueHarness() {
   let timerId = 0;
   let rejectMutation = false;
   let rejectStorage = false;
+  let rejectStorageKey = "";
   let statusResult = {ok: true, completed: 0, processing: 0, pending: 0, failed: 0, jobs: []};
 
   const indicator = {
@@ -39,7 +40,7 @@ function queueHarness() {
   };
   const localStorage = {
     getItem(key) { return storage.has(key) ? storage.get(key) : null; },
-    setItem(key, value) { if (rejectStorage) throw new Error("QuotaExceededError"); storage.set(key, String(value)); }
+    setItem(key, value) { if (rejectStorage || key === rejectStorageKey) throw new Error("QuotaExceededError"); storage.set(key, String(value)); }
   };
   function setTimeoutFake(callback, delay) {
     const entry = {id: ++timerId, callback, delay: Number(delay) || 0, cancelled: false};
@@ -98,6 +99,7 @@ function queueHarness() {
     reads,
     setRejectMutation(value) { rejectMutation = value; },
     setRejectStorage(value) { rejectStorage = value; },
+    setRejectStorageKey(value) { rejectStorageKey = value; },
     setStatusResult(value) { statusResult = value; },
     runTimer,
     flush
@@ -145,6 +147,25 @@ test("queue rejects a request when durable local storage fails, rather than repo
   await harness.queue.enqueue("updatePropertyMemo", {requestId: "quota-request", memo: "private text"});
   assert.equal(harness.queue.pendingCount(), 1);
   assert.equal(harness.queue.getStatus().failed, 0);
+});
+
+test("active-job storage failure remains visible when outbox error metadata saves successfully", async () => {
+  const harness = queueHarness();
+  harness.setRejectStorageKey("js_async_mutation_active_v1");
+  await harness.queue.enqueue("updatePropertyMemo", {requestId: "active-quota-request"});
+  await harness.runTimer(0);
+  assert.equal(harness.queue.getStatus().failed, 1);
+  assert.equal(harness.queue.getStatus().unsent, 1);
+  assert.match(JSON.parse(harness.storage.get("js_async_mutation_outbox_v1"))[0].lastError, /저장 상태/);
+  harness.setRejectStorageKey("");
+  harness.setStatusResult({
+    ok: true, completed: 1, processing: 0, pending: 0, failed: 0,
+    jobs: [{id: "active-quota-request", status: "완료", attempts: 1, result: "{}"}]
+  });
+  await harness.runTimer(3000);
+  assert.equal(harness.queue.getStatus().failed, 0);
+  assert.equal(harness.queue.pendingCount(), 0);
+  assert.equal(harness.mutations[1].payload.requestId, "active-quota-request", "retry keeps the idempotency key");
 });
 
 test("queue retains a failed task and retries it after three seconds", async () => {

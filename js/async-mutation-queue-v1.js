@@ -13,7 +13,7 @@
   var lastSavingCount = 0;
   var externalSavingCount = 0;
   var externalFailedCount = 0;
-  var storageFailed = false;
+  var storageFailures = {outbox: false, active: false};
   var statusSnapshot = {visible: false, saving: 0, failed: 0, unsent: 0, completed: 0};
   var lastServerStatus = {completed: 0, processing: 0, pending: 0, failed: 0};
 
@@ -29,10 +29,10 @@
   function writeOutbox(tasks) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks || []));
-      storageFailed = false;
+      storageFailures.outbox = false;
       return true;
     } catch (_) {
-      storageFailed = true;
+      storageFailures.outbox = true;
       if (global.JSLocalMetricsV1) global.JSLocalMetricsV1.error("storage");
       return false;
     }
@@ -50,9 +50,11 @@
   function writeActive(tasks) {
     try {
       localStorage.setItem(ACTIVE_KEY, JSON.stringify(tasks || []));
+      storageFailures.active = false;
       return true;
     } catch (_) {
-      storageFailed = true;
+      storageFailures.active = true;
+      if (global.JSLocalMetricsV1) global.JSLocalMetricsV1.error("storage");
       return false;
     }
   }
@@ -92,7 +94,8 @@
     var pending = Number(lastServerStatus.pending || 0) + unsent;
     var processing = Number(lastServerStatus.processing || 0);
     var completed = Number(lastServerStatus.completed || 0);
-    var failed = Number(lastServerStatus.failed || 0) + externalFailedCount + (storageFailed ? 1 : 0);
+    var failed = Number(lastServerStatus.failed || 0) + externalFailedCount +
+      (storageFailures.outbox || storageFailures.active ? 1 : 0);
     var saving = pending + processing + externalSavingCount;
     var justCompleted = lastSavingCount > 0 && saving === 0 && failed === 0;
     if (saving || failed) {

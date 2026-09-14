@@ -43,7 +43,7 @@ test("both screen sizes share the market and sale-filter controls", async ({page
   await listView(page, isMobile);
   await expect(page.locator("#list .item")).toHaveCount(1);
   await expect(page.locator("#list")).toContainText("테스트 건물매매");
-  const trigger = page.locator(isMobile ? '[data-mobile-action="filter"]' : "#detailBtn");
+  const trigger = page.locator(isMobile ? '#jsMobileSearchFormV1 [data-mobile-action="filter"]' : "#detailBtn");
   await trigger.click();
   const price = page.locator(isMobile ? "#v6DetailSheet_minDeposit" : "#minDeposit");
   await expect(price).toHaveAttribute("placeholder", /매매가/);
@@ -51,10 +51,12 @@ test("both screen sizes share the market and sale-filter controls", async ({page
   await expect(page.locator("#saleGrossMin")).toBeVisible();
   await expect(page.locator(isMobile ? "#v6DetailSheet_minRent" : "#minRent")).toBeHidden();
   if (isMobile) {
+    await page.locator("#saleLandMin").fill("9999");
     await page.keyboard.press("Escape");
     await expect(page.locator("#v6DetailSheetPortal")).not.toHaveClass(/open/);
     await expect(trigger).toBeFocused();
     await expect(page.locator("#detailFilter #saleFiltersV1")).toHaveCount(1);
+    await expect(page.locator("#saleLandMin")).toHaveValue("");
   } else {
     await trigger.click();
   }
@@ -75,6 +77,8 @@ test("favorite-folder map filtering survives returning from an original link", a
   const favorites = page.locator("#unifiedFavoriteModalV7");
   await expect(favorites).toContainText("테스트 찜폴더");
   await favorites.getByRole("button", {name: "지도 보기", exact: true}).click();
+  await expect(page).toHaveURL("http://127.0.0.1:4179/");
+  await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
   await listView(page, isMobile);
   await expect(page.locator("#list .item")).toHaveCount(1);
   await page.locator("#list .item .item-building-name").first().click();
@@ -85,6 +89,7 @@ test("favorite-folder map filtering survives returning from an original link", a
   await expect(popup).toHaveTitle("가상 원본 매물");
   await popup.close();
   await page.bringToFront();
+  await expect(page).toHaveURL("http://127.0.0.1:4179/");
   await expect.poll(() => page.evaluate(() => window.activeFavoriteFolderId)).toBe("fixture-favorites");
   await expect.poll(() => page.evaluate(() => window.favoriteOnly)).toBe(true);
   await expect(page.locator("#list .item")).toHaveCount(1);
@@ -121,6 +126,12 @@ test("mobile more sheet restores keyboard focus after Escape", async ({page, isM
   await expect(layer.locator("header button")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(layer).not.toHaveClass(/open/);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.locator('[data-mobile-action="favorites"]').click();
+  await expect(page.locator("#unifiedFavoriteModalV7")).toHaveClass(/open/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#unifiedFavoriteModalV7")).not.toHaveClass(/open/);
   await expect(trigger).toBeFocused();
 });
 

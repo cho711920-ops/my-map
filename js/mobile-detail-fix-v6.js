@@ -11,6 +11,7 @@
     "industryFilter"
   ];
   var saleFilterAnchor = null;
+  var saleFilterSnapshot = null;
 
   function isPhone() {
     return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
@@ -87,6 +88,23 @@
       source.parentNode.insertBefore(saleFilterAnchor, source);
     }
     if (source.parentNode !== target) target.appendChild(source);
+  }
+
+  function captureSaleFilterValues() {
+    var source = document.getElementById("saleFiltersV1");
+    saleFilterSnapshot = source ? Array.prototype.map.call(source.querySelectorAll("input, select, textarea"), function(field) {
+      return {field: field, value: field.value, checked: field.checked};
+    }) : [];
+  }
+
+  function finishSaleFilterEdit(applied) {
+    if (!applied && saleFilterSnapshot) {
+      saleFilterSnapshot.forEach(function(saved) {
+        saved.field.value = saved.value;
+        if (typeof saved.checked === "boolean") saved.field.checked = saved.checked;
+      });
+    }
+    saleFilterSnapshot = null;
   }
 
   function restoreSaleFilters() {
@@ -226,6 +244,7 @@
     if (!useDetailSheet()) return;
     removeLegacyDetailState();
     var root = ensureSheet();
+    if (!root.classList.contains("open")) captureSaleFilterValues();
     syncToSheet();
     root.classList.add("open");
     root.setAttribute("aria-hidden", "false");
@@ -240,7 +259,7 @@
     if (window.JSDialogFocusV1) window.JSDialogFocusV1.activate(root, root.querySelector(".v6-detail-sheet-close"));
   }
 
-  function close() {
+  function close(options) {
     var root = document.getElementById("v6DetailSheetPortal");
     var wasOpen = !!(root && root.classList.contains("open"));
     if (root) {
@@ -255,6 +274,7 @@
       button.setAttribute("aria-expanded", "false");
     }
     removeLegacyDetailState();
+    finishSaleFilterEdit(!!(options && options.applied));
     restoreSaleFilters();
     if (wasOpen && window.JSDialogFocusV1) window.JSDialogFocusV1.deactivate(root);
   }
@@ -269,12 +289,15 @@
   function apply() {
     syncToOriginal();
     if (typeof window.applyFilter === "function" && window.applyFilter() === false) return;
-    close();
+    close({applied: true});
   }
 
   window.addEventListener("js-listing-trade-mode-change", function() {
     var root = document.getElementById("v6DetailSheetPortal");
-    if (root && root.classList.contains("open")) syncToSheet();
+    if (root && root.classList.contains("open")) {
+      captureSaleFilterValues();
+      syncToSheet();
+    }
   });
 
   /* 기존 인라인 onclick/중복 보완 이벤트보다 먼저 가로챕니다. */

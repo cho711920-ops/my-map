@@ -260,16 +260,16 @@
     }
     if (action === "quick-add" && typeof global.openQuickAddModal === "function") global.openQuickAddModal();
     if (action === "filter") {
-      closeMore({restore: false});
+      closeMoreForNavigation();
       var detailButton = document.getElementById("detailBtn");
       if (detailButton) detailButton.click();
     }
     if (action === "favorites" && typeof global.openListManager === "function") {
-      closeMore({restore: false});
+      closeMoreForNavigation();
       global.openListManager("favorite");
     }
     if (action === "dashboard" && typeof global.openOperationsCenter === "function") {
-      closeMore({restore: false});
+      closeMoreForNavigation();
       global.openOperationsCenter("dashboard");
     }
     if (action === "reset") {
@@ -290,6 +290,16 @@
     document.body.classList.add("jsm-more-open-v1");
     global.requestAnimationFrame(function() { layer.classList.add("open"); });
     if (global.JSDialogFocusV1) global.JSDialogFocusV1.activate(layer, layer.querySelector("header button"));
+  }
+
+  function closeMoreForNavigation() {
+    var layer = chrome && chrome.querySelector("#jsMobileMoreLayerV1");
+    if (!layer || layer.hidden) return;
+    var returnFocus = layer.__jsReturnFocusV1 || chrome.querySelector('[data-mobile-view="more"]');
+    closeMore({restore: false});
+    // The destination dialog records the visible navigation trigger, not the
+    // menu item that is about to disappear with the closing More sheet.
+    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus({preventScroll: true});
   }
 
   function closeMore(options) {
@@ -356,7 +366,7 @@
 
   function syncLayerHistory() {
     historySyncQueued = false;
-    if (!active) return;
+    if (!active || ignoreNextPop) return;
     var openLayers = openMobileLayers();
     var manuallyClosedCount = 0;
 
@@ -372,6 +382,10 @@
     if (manuallyClosedCount) {
       ignoreNextPop = true;
       global.history.go(-manuallyClosedCount);
+      // History traversal is asynchronous. Recording a replacement layer now
+      // would race the pending back navigation (More -> favorites in particular).
+      // Reconcile the still-open destination after its popstate has completed.
+      return;
     }
 
     openLayers.forEach(function(element) {
@@ -406,6 +420,7 @@
     if (!active) return;
     if (ignoreNextPop) {
       ignoreNextPop = false;
+      queueLayerHistorySync();
       return;
     }
     var top = historyLayers[historyLayers.length - 1];
