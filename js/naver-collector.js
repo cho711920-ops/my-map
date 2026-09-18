@@ -1041,7 +1041,7 @@
     if (!capture || state.busy) return;
     state.preparing = true;
     try {
-      var articles = await collectAll(capture);
+      var articles = await collectAll(capture, prepareId);
       if (prepareId !== state.prepareId || state.capture !== capture) return;
       capture.articles = articles.slice();
       capture.expected = articles.length;
@@ -1103,14 +1103,14 @@
     }
   }
 
-  async function collectAll(capture) {
+  async function collectAll(capture, prepareId) {
     if (!nativeFetch) throw new Error("현재 브라우저에서 목록을 불러올 수 없습니다.");
     if (
       /\/front-api\/v1\/article\//i.test(capture.responseUrl || "") &&
       capture.requestOptions &&
       capture.requestOptions.requestBody
     ) {
-      return collectFinCapturedRequest(capture);
+      return collectFinCapturedRequest(capture, prepareId);
     }
     var found = new Map();
     var firstArticles = capture.articles || [];
@@ -1189,7 +1189,13 @@
     return state.collected;
   }
 
-  async function collectFinCapturedRequest(capture) {
+  async function collectFinCapturedRequest(capture, prepareId) {
+    // Automatic collection invalidates passive preparation. Let an in-flight
+    // read finish, but stop this obsolete crawl before touching shared progress.
+    function preparationIsCurrent() {
+      return prepareId == null ||
+        (prepareId === state.prepareId && state.capture === capture);
+    }
     var found = new Map();
     (capture.articles || []).forEach(function (article) {
       var id = articleId(article);
@@ -1202,6 +1208,7 @@
     var previousSignature = "";
 
     while (hasMore(json) !== false && page < FIN_MAX_PAGES) {
+      if (!preparationIsCurrent()) return Array.from(found.values());
       var result = json && json.result || {};
       body.articlePagingRequest = Object.assign(
         {},
@@ -1229,8 +1236,10 @@
         },
         body: JSON.stringify(body)
       }, 3);
+      if (!preparationIsCurrent()) return Array.from(found.values());
       if (!response.ok) throw new Error("새 네이버 목록 조회 실패(HTTP " + response.status + ")");
       json = await response.json();
+      if (!preparationIsCurrent()) return Array.from(found.values());
       var items = articleList(json);
       var signature = items.map(articleId).filter(Boolean).join(",");
       if (!items.length || (signature && signature === previousSignature)) break;
@@ -1246,7 +1255,9 @@
         remaining: Math.max(0, Number(expected || found.size) - found.size)
       });
       await delay(CITY_PAGE_DELAY);
+      if (!preparationIsCurrent()) return Array.from(found.values());
     }
+    if (!preparationIsCurrent()) return Array.from(found.values());
     if (page >= FIN_MAX_PAGES && hasMore(json) !== false) {
       throw new Error("새 네이버 목록이 500페이지를 넘었습니다. 선택 범위를 나눠 주세요.");
     }

@@ -323,3 +323,62 @@ for (const failureMode of ["timeout", "network", "invalid-envelope"]) {
     assert.equal(h.timers.size, 0);
   });
 }
+
+for (const interruptedAt of ["fetch", "json", "delay"]) {
+  test(`superseded passive preparation stops after ${interruptedAt} without changing automatic progress`, async () => {
+    const capture = {
+      articles: [{articleNo: "1"}],
+      json: {result: {hasNextPage: true, list: [{articleNo: "1"}]}},
+      requestOptions: {requestBody: {}},
+      responseUrl: "https://fin.land.naver.com/front-api/v1/article/legalDivisionArticleList"
+    };
+    let release;
+    const paused = new Promise(resolve => { release = resolve; });
+    let requests = 0;
+    let progressWrites = 0;
+    const automaticRows = [{articleNo: "automatic"}];
+    const state = {busy: false, preparing: false, prepareId: 1, capture};
+    const context = vm.createContext({
+      state, FIN_PAGE_SIZE: 30, FIN_MAX_PAGES: 500, CITY_PAGE_DELAY: 70,
+      nativeFetch() {},
+      articleId: item => item.articleNo,
+      articleList: json => json.result.list,
+      expectedCount: () => 90,
+      hasMore: json => json.result.hasNextPage,
+      formatNumber: String,
+      setStatus() { progressWrites += 1; },
+      setProgress() { progressWrites += 1; },
+      updateDashboard() { progressWrites += 1; },
+      showCapture() { throw new Error("Obsolete capture must not be shown"); },
+      saveButton: {},
+      fetchPageWithRetry: async () => {
+        requests += 1;
+        if (interruptedAt === "fetch") await paused;
+        return {ok: true, json: async () => {
+          if (interruptedAt === "json") await paused;
+          return {result: {hasNextPage: true, list: [{articleNo: "2"}]}};
+        }};
+      },
+      delay: async () => { if (interruptedAt === "delay") await paused; }
+    });
+    for (const name of ["prepareFullCapture", "collectAll", "collectFinCapturedRequest"]) {
+      vm.runInContext(functionSource(name), context);
+    }
+    const pending = context.prepareFullCapture(capture, 1);
+    await flush();
+    assert.equal(requests, 1);
+    // This is the same token invalidation performed by runAutomatic.
+    state.prepareId += 1;
+    state.capture = null;
+    state.collected = automaticRows;
+    state.preparing = true;
+    const writesBeforeRelease = progressWrites;
+    release();
+    await pending;
+    assert.equal(requests, 1, "no further obsolete page is requested");
+    assert.equal(progressWrites, writesBeforeRelease, "automatic progress stays intact");
+    assert.equal(state.collected, automaticRows);
+    assert.equal(state.preparing, true, "passive finally does not reset the automatic preparation");
+    assert.equal(capture.prepared, undefined);
+  });
+}
