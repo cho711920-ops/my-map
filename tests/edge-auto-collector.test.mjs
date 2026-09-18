@@ -179,6 +179,10 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(install, /-WakeToRun/);
   assert.match(uninstall, /Unregister-ScheduledTask/);
   assert.match(launch, /--user-data-dir=/);
+  assert.match(launch, /--disable-background-timer-throttling/);
+  assert.match(launch, /--disable-backgrounding-occluded-windows/);
+  assert.match(launch, /--disable-renderer-backgrounding/);
+  assert.doesNotMatch(launch, /--disable-web-security|--no-sandbox|--ignore-certificate-errors/);
   assert.match(launch, /--load-extension=/);
   assert.match(launch, /--new-tab/);
   assert.match(launch, /chrome-extension:\/\/\$extensionId\/autorun\.html/);

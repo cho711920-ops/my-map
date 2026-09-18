@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.9";
+const BACKGROUND_BUILD = "1.1.10";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -180,8 +180,10 @@ async function resetAlarm(config) {
 
 async function ensureWatchdogAlarm() {
   const existing = await chrome.alarms.get(WATCHDOG_ALARM_NAME).catch(() => null);
-  if (!existing) {
-    chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 5 });
+  if (!existing || existing.periodInMinutes !== 1) {
+    // Keep the safety deadlines, but do not add another five-minute wait
+    // before noticing a lost content-script heartbeat.
+    chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 1 });
   }
 }
 
@@ -536,7 +538,8 @@ async function minimalAutomationReport(report) {
     readiness: await automationReadiness(config),
     items: (report.items || []).slice(0, 40).map((item, index) => {
       const target = (config.targets || []).find(target => targetKey(target) === item.key) || {};
-      const districtText = String(target.district || item.label || "");
+      const districtText = [typeof target.district === "object" ? target.district && target.district.name : target.district,
+        target.label, item.label].filter(Boolean).join(" ");
       return { targetIndex: index, source: item.source, district: ["유성구", "대덕구", "중구", "서구", "동구"].find(value => districtText.includes(value)) || "",
         tradeType: item.tradeType || inferredTradeType(target), status: item.status,
         terminalCode: ["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"].includes(item.terminalCode) ? item.terminalCode : "",
@@ -1504,14 +1507,23 @@ async function recoverAutomaticRun() {
   }
   const stalledLoading = state.phase === "loading" && elapsed > LOAD_STALL_TIMEOUT_MS;
   const stalledStart = state.phase === "starting-collector" && elapsed > COLLECTOR_START_TIMEOUT_MS;
-  const stalledCollection = state.phase === "collecting" &&
+  let stalledCollection = state.phase === "collecting" &&
     now - Number(state.lastProgressAt || state.runtimeStartedAt || targetStartedAt) > COLLECTION_STALL_TIMEOUT_MS;
-  const disconnectedCollection = state.phase === "collecting" &&
+  let disconnectedCollection = state.phase === "collecting" &&
     now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || targetStartedAt) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
   const targetRuntimeExceeded = ["loading", "starting-collector", "collecting"].includes(state.phase) &&
     elapsed > MAX_TARGET_RUNTIME_MS;
-  if (disconnectedCollection && !stalledCollection && !targetRuntimeExceeded && await probeCurrentTarget(state)) {
-    return { ok: true, active: true, probed: true };
+  if ((disconnectedCollection || stalledCollection) && !targetRuntimeExceeded && await probeCurrentTarget(state)) {
+    // A minimized page may have advanced without delivering its timer-based
+    // heartbeat. Re-read actual progress before restarting a healthy target.
+    const refreshed = await getRunState();
+    if (!refreshed || !refreshed.active || refreshed.targetRunId !== state.targetRunId) {
+      return { ok: true, skipped: true };
+    }
+    Object.assign(state, refreshed);
+    stalledCollection = now - Number(refreshed.lastProgressAt || refreshed.runtimeStartedAt || targetStartedAt) > COLLECTION_STALL_TIMEOUT_MS;
+    disconnectedCollection = false;
+    if (!stalledCollection) return { ok: true, active: true, probed: true };
   }
   if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection || targetRuntimeExceeded) {
     const target = (state.targets || [])[state.index];

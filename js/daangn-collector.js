@@ -1,13 +1,15 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.5";
+  var VERSION = "1.5.6";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
   var COLLECTOR_KEY_STORAGE = "js_daangn_collector_access_key_v1";
   var CLIENT_ID_STORAGE = "js_daangn_collector_client_id_v1";
-  var POST_RETRY_DELAYS = [0, 1200, 3000, 6000];
+  // Eight serial retries can need 8 * (3 * 10s + 2.25s) upstream time.
+  var COLLECTOR_POST_TIMEOUT_MS = 360000;
+  var MUTATION_STATUS_TIMEOUT_MS = COLLECTOR_POST_TIMEOUT_MS;
 
   if (!/(^|\.)realty\.daangn\.com$/i.test(location.hostname)) {
     alert("당근부동산 지도에서 실행해 주세요.");
@@ -897,12 +899,12 @@
   function showError(error) {
     state.busy = false;
     var message = String(error && error.message ? error.message : error);
-    if (/당근 거래유형 설정/.test(message)) {
+    if (/당근 거래유형 설정/.test(message) || isProviderStopError(message)) {
       state.fatalError = message;
       if (state.job) state.job.status = "paused";
       startButton.disabled = false;
       stopButton.disabled = true;
-      setStatus("거래유형 확인 필요", message);
+      setStatus(/당근 거래유형 설정/.test(message) ? "거래유형 확인 필요" : "당근 응답 확인 필요", message);
       return;
     }
     if (/SQLITE_TOOBIG|string or blob too big/i.test(message)) {
@@ -955,6 +957,10 @@
       .indexOf("승인되지 않은 요청") !== -1;
   }
 
+  function isProviderStopError(message) {
+    return /당근 API HTTP 오류:\s*(?:401|403)\b|UNAUTHENTICATED|UNAUTHORIZED|FORBIDDEN|PersistedQueryNotFound|PERSISTED_QUERY_NOT_FOUND|GRAPHQL_VALIDATION_FAILED|Cannot query field|Unknown (?:argument|field|type|operation)|Expected type|Variable [^\n]* got invalid value|Field [^\n]*(?:is not defined|does not exist)/i.test(message);
+  }
+
   function clearCollectorKey() {
     try { localStorage.removeItem(COLLECTOR_KEY_STORAGE); } catch (_) {}
   }
@@ -991,60 +997,51 @@
   }
 
   async function postServerWithRetry(body, collectorKey) {
-    var lastError = null;
-    for (var attempt = 0; attempt < POST_RETRY_DELAYS.length; attempt += 1) {
-      if (POST_RETRY_DELAYS[attempt]) {
-        await delay(POST_RETRY_DELAYS[attempt]);
-      }
-      try {
-        var controller = typeof AbortController === "function" ? new AbortController() : null;
-        var timeoutId = window.setTimeout(function () {
-          if (controller) controller.abort();
-        }, 15000);
-        try {
-          await nativeFetch(COLLECTOR_API_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: {"content-type": "text/plain;charset=utf-8"},
-            body: JSON.stringify(body),
-            signal: controller ? controller.signal : undefined
-          });
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
-        return null;
-      } catch (error) {
-        lastError = error;
-        var existing = null;
-        try {
-          existing = await pollMutationStatus(
-            body.requestId,
-            collectorKey,
-            body.action,
-            {maxAttempts: 3, initialDelay: 300, quiet: true}
-          );
-        } catch (probeError) {
-          var probeMessage = String(
-            probeError && probeError.message ? probeError.message : probeError
-          );
-          if (probeMessage !== "not-ready" && probeMessage !== "status-blocked") {
-            throw probeError;
-          }
-        }
-        if (existing) return existing;
-        if (attempt + 1 < POST_RETRY_DELAYS.length) {
-          setStatus(
-            "네트워크 연결을 자동 복구 중입니다.",
-            "저장 지점은 유지됩니다. 재연결 " +
-            (attempt + 1) + "/" + (POST_RETRY_DELAYS.length - 1)
-          );
-        }
-      }
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timeoutId = window.setTimeout(function () {
+      if (controller) controller.abort();
+    }, COLLECTOR_POST_TIMEOUT_MS);
+    var response = null;
+    var payload = null;
+    var transportFailed = false;
+    try {
+      response = await nativeFetch(COLLECTOR_API_URL, {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        headers: {"content-type": "text/plain;charset=utf-8"},
+        body: JSON.stringify(body),
+        signal: controller ? controller.signal : undefined
+      });
+      if (response.type !== "opaque") payload = await response.json().catch(function () { return null; });
+    } catch (_) {
+      transportFailed = true;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-    throw new Error(
-      "서버 연결을 여러 번 시도했지만 복구하지 못했습니다. " +
-      (lastError && lastError.message ? lastError.message : "Failed to fetch")
-    );
+    // The endpoint returns the completed job with CORS. Avoid a redundant
+    // request and a background-tab timer when that response is readable.
+    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+      if (payload.ok === false && typeof payload.message === "string") throw new Error(payload.message);
+      if (response.ok && payload.ok === true && payload.sourceBackend === "D1" &&
+          Object.prototype.hasOwnProperty.call(payload, "job")) return payload;
+    }
+    if (transportFailed) {
+      setStatus("서버 처리 결과를 확인하고 있습니다.", "같은 요청번호로 저장 결과를 확인합니다. 처리 중인 요청은 다시 보내지 않습니다.");
+      // A lost response does not prove the mutation failed. Never resend it
+      // while its original execution may still be updating the checkpoint.
+      return pollMutationStatus(
+        body.requestId,
+        collectorKey,
+        body.action,
+        {maxAttempts: 410, initialDelay: 300, timeoutMs: MUTATION_STATUS_TIMEOUT_MS}
+      );
+    }
+    // Older/opaque or malformed responses retain the stored-result protocol.
+    return null;
   }
 
   async function fetchMutationStatus(requestId, collectorKey, targetAction) {
@@ -1096,13 +1093,14 @@
     options = options || {};
     return new Promise(function (resolve, reject) {
       var attempts = 0;
-      var maxAttempts = Number(options.maxAttempts) || 90;
+      var maxAttempts = Number(options.maxAttempts) || 410;
+      var deadline = Date.now() + (Number(options.timeoutMs) || MUTATION_STATUS_TIMEOUT_MS);
 
       function retryOrReject(error) {
         var message = String(error && error.message ? error.message : error);
         if (isUnauthorizedError(error) || /잘못된 상태 조회 범위/.test(message)) {
           reject(error);
-        } else if (attempts < maxAttempts) {
+        } else if (attempts < maxAttempts && Date.now() < deadline) {
           setTimeout(check, 900);
         } else {
           reject(new Error(
@@ -1114,13 +1112,17 @@
       }
 
       function check() {
+        if (Date.now() >= deadline) {
+          reject(new Error(options.quiet ? "not-ready" : "당근 수집 결과 확인 시간 초과"));
+          return;
+        }
         attempts += 1;
         fetchMutationStatus(requestId, collectorKey, targetAction).then(function (payload) {
           if (payload && payload.ready) {
             var result = payload.result || payload;
             if (result && result.ok === false) reject(new Error(result.message || "당근 수집 서버 오류"));
             else resolve(result);
-          } else if (attempts < maxAttempts) {
+          } else if (attempts < maxAttempts && Date.now() < deadline) {
             setTimeout(check, 900);
           } else {
             reject(new Error(options.quiet ? "not-ready" : "당근 수집 결과 확인 시간 초과"));

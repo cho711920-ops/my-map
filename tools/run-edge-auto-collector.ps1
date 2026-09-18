@@ -53,6 +53,12 @@ $arguments = @(
   "--disable-extensions-except=$extensionPath",
   '--no-first-run',
   '--disable-features=msEdgeFirstRunExperience',
+  # Only the dedicated collection profile uses these scheduling switches.
+  # Minimized/background pages otherwise stretch short polling timers to a
+  # minute, even while the server has already finished the requested work.
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
   '--remote-debugging-port=9223'
 )
 

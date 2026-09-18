@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.5\.5"/);
+assert.match(collector, /VERSION = "1\.5\.6"/);
 assert.match(collector, /metric\("created","신규 등록"\)/);
 assert.match(collector, /metric\("merged","자동 통합"\)/);
 assert.match(collector, /metric\("updated","조건 변경"\)/);
@@ -35,9 +35,10 @@ assert.match(collector, /setInterval\(function \(\) \{ syncSelectionFromLocation
 assert.match(collector, /\[0, 80, 220, 500, 900, 1500, 2500\]/);
 assert.match(collector, /\[aria-label="Map marker"\]/);
 assert.match(collector, /\.maplibregl-marker,\[aria-label="Map marker"\]/);
-assert.match(collector, /POST_RETRY_DELAYS/);
+assert.match(collector, /COLLECTOR_POST_TIMEOUT_MS/);
+assert.doesNotMatch(collector, /POST_RETRY_DELAYS/);
 assert.match(collector, /postServerWithRetry/);
-assert.match(collector, /네트워크 연결을 자동 복구 중입니다/);
+assert.match(collector, /서버 처리 결과를 확인하고 있습니다/);
 assert.match(collector, /이전 수집을 안전중단하는 중입니다/);
 assert.match(collector, /danggeunStartJob/);
 assert.match(collector, /danggeunRunJobChunk/);

@@ -11,6 +11,14 @@ const progressContext = {};
 const progressUi = extract(read('edge-automation/extension/content.js'),
   ['stableProgressText', 'collectorProgressSnapshot'], progressContext);
 
+test('Korean elapsed seconds never count as collection progress, but listing counts still do', () => {
+  const first = progressUi.stableProgressText('1~8 / 100개 · 9초 경과\n저장 중');
+  const later = progressUi.stableProgressText('1~8 / 100개 · 1,209초 경과\n저장 중');
+  assert.equal(first, later);
+  assert.notEqual(later, progressUi.stableProgressText('9~16 / 100개 · 1,209초 경과\n저장 중'));
+  assert.equal(progressUi.stableProgressText('12:34:56 · 10초 경과'), '시각 · 시간 경과');
+});
+
 for (const [found, details, held] of [[2078,42,19], [3876,56,27], [613,15,13], [641,10,5], [641,27,23]]) {
   test(`Aug28 census ${found} counts unchanged + detail processing, separately from ${held} held ads`, () => {
     const run = result(found, details, held);

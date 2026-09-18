@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.4";
+  var VERSION = "6.0.5";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -35,6 +35,9 @@
   var FIN_DETAIL_CONCURRENCY = 5;
   var FIN_DETAIL_TIMEOUT_MS = 15000;
   var NAVER_LIST_REQUEST_TIMEOUT_MS = 60000;
+  var COLLECTOR_REQUEST_TIMEOUT_MS = 60000;
+  var COLLECTOR_FINALIZE_TIMEOUT_MS = 120000;
+  var COLLECTOR_RESULT_TIMEOUT_MS = 30000;
   // 새 네이버 목록 API는 실제 화면과 동일한 30건 단위에서만 다음 페이지
   // lastInfo/seed 조합을 안정적으로 받아들입니다. 100건으로 올리면 2페이지부터 400이 납니다.
   var FIN_PAGE_SIZE = 30;
@@ -1531,6 +1534,7 @@
           addResultTotals(progress, result);
         }
       } catch (error) {
+        if (error && error.collectorRequestAmbiguous) throw error;
         entry.message = String(error && error.message ? error.message : error);
         remaining.push(entry);
       }
@@ -1885,7 +1889,8 @@
       );
       clearCityProgress();
     } catch (error) {
-      if (error && error.safeStop && progress.sessionId && progress.seenIds.length) {
+      if (error && error.safeStop && !error.collectorRequestAmbiguous &&
+          progress.sessionId && progress.seenIds.length) {
         try {
           await finalizeNaverSession({
             sessionId: progress.sessionId,
@@ -2472,7 +2477,8 @@
 
   async function fetchFinJson(url, attempts) {
     var lastError = null;
-    for (var attempt = 1; attempt <= (attempts || 4); attempt += 1) {
+    var maxAttempts = attempts || 4;
+    for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
       throwIfStopRequested();
       var controller = typeof AbortController === "function" ? new AbortController() : null;
       var timeoutId = controller ? window.setTimeout(function() {
@@ -2487,17 +2493,22 @@
         });
         if (response.ok) return await response.json();
         if (response.status !== 429 && response.status < 500) {
-          throw new Error("HTTP " + response.status);
+          var terminalError = new Error("HTTP " + response.status);
+          terminalError.noRetry = true;
+          throw terminalError;
         }
         lastError = new Error("HTTP " + response.status);
       } catch (error) {
+        if (error && error.noRetry) throw error;
         lastError = controller && controller.signal.aborted
           ? new Error("네이버 상세조회 응답 시간 초과")
           : error;
       } finally {
         if (timeoutId) window.clearTimeout(timeoutId);
       }
-      await delay(Math.min(2500, 250 * attempt * attempt));
+      if (attempt < maxAttempts) {
+        await delay(Math.min(2500, 250 * attempt * attempt));
+      }
     }
     throw lastError || new Error("네이버 상세조회 실패");
   }
@@ -2635,6 +2646,83 @@
     ]);
   }
 
+  function collectorRequestFailure(payload, error) {
+    var failure = new Error(error && error.message ? error.message : String(error));
+    failure.collectorRequestAmbiguous = payload.action !== "mutationStatus" &&
+      payload.action !== "getNaverSessionResult";
+    failure.collectorAction = payload.action;
+    return failure;
+  }
+
+  async function fetchCollectorText(payload, timeoutMs) {
+    var controller = new AbortController();
+    var timeoutId;
+    var timeout = new Promise(function (_, reject) {
+      timeoutId = window.setTimeout(function () {
+        var error = collectorRequestFailure(payload, new Error(
+          "JS부동산 서버 응답이 " + Math.round(timeoutMs / 1000) + "초 안에 없어 결과 확인이 필요합니다."
+        ));
+        // Aborting the client does not prove that the server stopped writing.
+        // Reject the deadline first, so callers retain the ambiguous outcome.
+        reject(error);
+        controller.abort();
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        (async function () {
+          var response = await nativeFetch(COLLECTOR_API_URL, {
+            method: "POST",
+            headers: {"Content-Type": "text/plain;charset=utf-8"},
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          // Keep the same deadline through the body, not just response headers.
+          return await response.text();
+        })(),
+        timeout
+      ]);
+    } catch (error) {
+      // Network and body failures can also occur after a committed server write.
+      throw collectorRequestFailure(payload, error);
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function fetchCollectorJson(payload, timeoutMs, invalidResponseMessage) {
+    var text;
+    try {
+      text = await fetchCollectorText(payload, timeoutMs);
+      try {
+        var result = JSON.parse(text);
+        if (!result || typeof result !== "object" || Array.isArray(result) ||
+            typeof result.ok !== "boolean") {
+          throw new Error(invalidResponseMessage);
+        }
+        return result;
+      } catch (_) {
+        throw collectorRequestFailure(payload, new Error(invalidResponseMessage));
+      }
+    } catch (error) {
+      if (error && error.collectorRequestAmbiguous && payload.requestId) {
+        try {
+          var status = await fetchCollectorJson({
+            action: "mutationStatus",
+            targetAction: payload.action,
+            requestId: payload.requestId,
+            collectorKey: payload.collectorKey
+          }, COLLECTOR_RESULT_TIMEOUT_MS, "저장 결과 확인 응답을 읽지 못했습니다.");
+          if (status && status.ok && status.ready && status.result &&
+              typeof status.result.ok === "boolean") {
+            return status.result;
+          }
+        } catch (_) {}
+      }
+      throw error;
+    }
+  }
+
   async function classifyNaverManifest(items, metadata) {
     var need = Object.create(null);
     var unchanged = 0;
@@ -2651,10 +2739,7 @@
         "개 · 신규·변경 매물만 상세 저장합니다."
       );
       setProgress(offset, items.length || 1);
-      var response = await nativeFetch(COLLECTOR_API_URL, {
-        method: "POST",
-        headers: {"Content-Type": "text/plain;charset=utf-8"},
-        body: JSON.stringify({
+      var result = await fetchCollectorJson({
           action: "classifySourceManifest",
           requestId: metadata.sessionId + "-manifest-" + offset,
           collectorKey: getCollectorKey(),
@@ -2682,13 +2767,7 @@
               longitude: item.longitude
             };
           })
-        })
-      });
-      var text = await response.text();
-      var result;
-      try { result = JSON.parse(text); } catch (_) {
-        throw new Error("기존 매물 비교 응답을 읽지 못했습니다.");
-      }
+      }, COLLECTOR_REQUEST_TIMEOUT_MS, "기존 매물 비교 응답을 읽지 못했습니다.");
       if (!result.ok) throw new Error(result.message || "기존 매물 비교에 실패했습니다.");
       (Array.isArray(result.needsDetail) ? result.needsDetail : []).forEach(function(id) {
         need[String(id).replace(/^네이버-/, "")] = true;
@@ -2715,10 +2794,7 @@
 
   async function postBatch(items, metadata) {
     metadata = metadata || {};
-    var response = await nativeFetch(COLLECTOR_API_URL, {
-      method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body: JSON.stringify({
+    var result = await fetchCollectorJson({
         action: "saveNaverBatch",
         requestId: metadata.requestId || "",
         collectorKey: getCollectorKey(),
@@ -2728,15 +2804,7 @@
         scope: metadata.scope || "선택 클러스터",
         startedAt: metadata.startedAt || "",
         manifestRegistered: Boolean(metadata.manifestRegistered)
-      })
-    });
-    var text = await response.text();
-    var result;
-    try {
-      result = JSON.parse(text);
-    } catch (_) {
-      throw new Error("JS부동산 저장 서버 응답을 읽지 못했습니다.");
-    }
+    }, COLLECTOR_REQUEST_TIMEOUT_MS, "JS부동산 저장 서버 응답을 읽지 못했습니다.");
     if (!result.ok) throw new Error(result.message || "D1 저장에 실패했습니다.");
     return result;
   }
@@ -2744,11 +2812,9 @@
   async function finalizeNaverSession(metadata) {
     metadata = metadata || {};
     if (!metadata.sessionId) return {ok: true};
-    var response = await nativeFetch(COLLECTOR_API_URL, {
-      method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body: JSON.stringify({
+    var result = await fetchCollectorJson({
         action: "finalizeNaverSession",
+        requestId: metadata.sessionId + "-finalize-" + (metadata.complete ? "complete" : "partial"),
         collectorKey: getCollectorKey(),
         collectorVersion: VERSION,
         validationVersion: 2,
@@ -2768,15 +2834,7 @@
         addressMissing: Number(metadata.addressMissing || 0),
         truncated: Boolean(metadata.truncated),
         note: metadata.note || ""
-      })
-    });
-    var text = await response.text();
-    var result;
-    try {
-      result = JSON.parse(text);
-    } catch (_) {
-      throw new Error("수집회차 완료 응답을 읽지 못했습니다.");
-    }
+    }, COLLECTOR_FINALIZE_TIMEOUT_MS, "수집회차 완료 응답을 읽지 못했습니다.");
     if (!result.ok) throw new Error(result.message || "수집회차 완료 기록에 실패했습니다.");
     return result;
   }
@@ -2784,22 +2842,11 @@
   async function getNaverSessionResult(metadata) {
     metadata = metadata || {};
     if (!metadata.sessionId) return null;
-    var response = await nativeFetch(COLLECTOR_API_URL, {
-      method: "POST",
-      headers: {"Content-Type": "text/plain;charset=utf-8"},
-      body: JSON.stringify({
+    var result = await fetchCollectorJson({
         action: "getNaverSessionResult",
         collectorKey: getCollectorKey(),
         sessionId: metadata.sessionId
-      })
-    });
-    var text = await response.text();
-    var result;
-    try {
-      result = JSON.parse(text);
-    } catch (_) {
-      throw new Error("JS매물 반영 결과를 읽지 못했습니다.");
-    }
+    }, COLLECTOR_RESULT_TIMEOUT_MS, "JS매물 반영 결과를 읽지 못했습니다.");
     if (!result.ok) throw new Error(result.message || "JS매물 반영 결과 확인에 실패했습니다.");
     return result;
   }
@@ -3121,7 +3168,8 @@
         finalResult: finalResult || null
       };
     } catch (error) {
-      if (session.manifestRegistered || Number(totals.accepted || 0) > 0) {
+      if (!(error && error.collectorRequestAmbiguous) &&
+          (session.manifestRegistered || Number(totals.accepted || 0) > 0)) {
         try {
           await finalizeNaverSession({
             sessionId: session.sessionId,
@@ -3176,6 +3224,9 @@
       try {
         return await postBatch(batch, metadata);
       } catch (error) {
+        // An unconfirmed write may still be running. Status recovery has already
+        // checked its exact request ID; do not submit another write blindly.
+        if (error && error.collectorRequestAmbiguous) throw error;
         lastError = error;
         if (attempt < attempts) {
           var message = String(error && error.message ? error.message : error);

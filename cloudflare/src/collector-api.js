@@ -45,6 +45,7 @@ const DAANGN_DETAIL_HASH = "b8d21cf0c0de5cc8e43981f48123fcef3a45962bbe96317fb486
 const DAANGN_JOB_PREFIX = "collector-daangn-";
 const DAANGN_DETAIL_MAX_ATTEMPTS = 8;
 const DAANGN_DETAIL_ERROR_LIMIT = 60;
+const DAANGN_REQUEST_TIMEOUT_MS = 10_000;
 const GONGSIL_PHOTO_ROOT = "https://file1.gongsilbox.com/file/land_photo/";
 const GONGSIL_DETAIL_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 const COLLECTOR_MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -2425,19 +2426,40 @@ function jsonpResponse(callback, value, headers = {}) {
 }
 
 async function daangnGraphql(hash, variables) {
-  const response = await fetch(DAANGN_GRAPHQL_URL, {
-    method: "POST",
-    headers: {
-      accept: "application/json", "content-type": "application/json",
-      origin: "https://realty.daangn.com", referer: "https://realty.daangn.com/",
-      "x-realty-platform": "realty-web"
-    },
-    body: JSON.stringify({ variables: variables || {}, extensions: { persistedQuery: { version: 1, sha256Hash: hash } } })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`당근 API HTTP 오류: ${response.status}`);
-  if (payload.errors?.length) throw new Error(`당근 API 오류: ${payload.errors.map((entry) => entry?.message || "알 수 없는 오류").join(" / ")}`);
-  return payload;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DAANGN_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(DAANGN_GRAPHQL_URL, {
+      method: "POST",
+      headers: {
+        accept: "application/json", "content-type": "application/json",
+        origin: "https://realty.daangn.com", referer: "https://realty.daangn.com/",
+        "x-realty-platform": "realty-web"
+      },
+      signal: controller.signal,
+      body: JSON.stringify({ variables: variables || {}, extensions: { persistedQuery: { version: 1, sha256Hash: hash } } })
+    });
+    if (!response.ok) {
+      const error = new Error(`당근 API HTTP 오류: ${response.status}`);
+      error.stopCollection = [401, 403].includes(response.status);
+      throw error;
+    }
+    // The deadline also covers a provider that sends headers but stalls its body.
+    const payload = await response.json();
+    if (payload.errors?.length) {
+      const message = payload.errors.map((entry) => [entry?.message || "알 수 없는 오류", entry?.extensions?.code]
+        .filter(Boolean).join(" ")).join(" / ");
+      const error = new Error(`당근 API 오류: ${message}`);
+      error.stopCollection = /UNAUTHENTICATED|UNAUTHORIZED|FORBIDDEN|PersistedQueryNotFound|PERSISTED_QUERY_NOT_FOUND|GRAPHQL_VALIDATION_FAILED|Cannot query field|Unknown (?:argument|field|type|operation)|Expected type|Variable [^\n]* got invalid value|Field [^\n]*(?:is not defined|does not exist)/i.test(message);
+      throw error;
+    }
+    return payload;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`당근 API 응답 시간 초과 (${DAANGN_REQUEST_TIMEOUT_MS / 1000}초)`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function parseDaangnUrl(value, requestedTradeType = "") {
@@ -2648,6 +2670,7 @@ async function fetchDaangnDetail(articleId) {
       if (article) return { article, error: "", attempts: attempt + 1 };
       lastError = "상세 매물 응답이 비어 있습니다.";
     } catch (error) {
+      if (error?.stopCollection) throw error;
       lastError = clean(error?.message || error) || "당근 상세조회 오류";
     }
     if (attempt < 2) await sleep(450 * (attempt + 1) * (attempt + 1));
@@ -2658,11 +2681,17 @@ async function fetchDaangnDetail(articleId) {
 async function mapWithConcurrency(values, concurrency, mapper) {
   const output = new Array(values.length);
   let cursor = 0;
+  let stopped = false;
   async function worker() {
-    while (cursor < values.length) {
+    while (!stopped && cursor < values.length) {
       const index = cursor;
       cursor += 1;
-      output[index] = await mapper(values[index], index);
+      try {
+        output[index] = await mapper(values[index], index);
+      } catch (error) {
+        stopped = true;
+        throw error;
+      }
       if (cursor < values.length) await sleep(100);
     }
   }

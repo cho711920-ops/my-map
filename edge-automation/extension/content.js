@@ -19,7 +19,9 @@ function delay(ms) {
 
 function stableProgressText(value) {
   return String(value || "")
-    .replace(/\b[\d,.]+\s*초\s*경과\b/g, "시간 경과")
+    // Korean syllables are not ASCII word characters: a trailing \b after
+    // "경과" never matches a newline/space and made a clock look like progress.
+    .replace(/\b[\d,.]+\s*초\s*경과/g, "시간 경과")
     .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "시각")
     .replace(/\s+/g, " ")
     .trim();
@@ -72,7 +74,7 @@ function collectorProgressSnapshot() {
   if (provisional) stage.provisional = true;
   // Elapsed seconds and clocks change even when the provider request is stuck.
   // Exclude them so the watchdog measures real page/count changes.
-  const fingerprint = [status, percent, stableProgressText(detail), progress, metrics].join("|")
+  const fingerprint = [stableProgressText(status), percent, stableProgressText(detail), progress, metrics].join("|")
     .replace(/\s+/g, " ").slice(0, 1_000);
   return {
     fingerprint: fingerprint || "panel-ready",

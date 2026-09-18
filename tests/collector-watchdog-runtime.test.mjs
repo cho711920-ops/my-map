@@ -57,7 +57,7 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.9" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.10" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async message => { notifications.push(message); } }
     }
@@ -106,6 +106,75 @@ test("minimal report drops target URLs, raw payload and diagnostic contacts", as
   const clean = JSON.stringify(await h.context.minimalAutomationReport(report));
   assert.doesNotMatch(clean, /https|secret|010-1234|raw|naver-0/);
   assert.match(clean, /"created":3/);
+});
+
+test("numeric run reports keep Naver district names stored as objects", async () => {
+  const h = harness();
+  h.data[CONFIG].targets[0].district = {name: "유성구", cortarNo: "3020000000"};
+  const clean = await h.context.minimalAutomationReport({runId: "run-1234567890123-test", startedAt: clock,
+    updatedAt: clock, active: true, items: [{key: "naver-0", source: "naver", label: "네이버 유성구",
+      status: "running", counts: {}}]});
+  assert.equal(clean.items[0].district, "유성구");
+});
+
+test("watchdog upgrades an existing five-minute alarm without changing the daily schedule", async () => {
+  const h = harness();
+  h.alarmMap.set("js-auto-collector-watchdog", {periodInMinutes: 5});
+  h.alarmMap.set("js-auto-collector-daily", {periodInMinutes: 1440, scheduledTime: clock + 1000});
+  await h.context.ensureWatchdogAlarm();
+  assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
+  assert.equal(h.alarmMap.get("js-auto-collector-daily").scheduledTime, clock + 1000);
+});
+
+test("fresh page progress prevents restart even when both recorded heartbeat and progress are old", async () => {
+  const h = harness({targetStartedAt: clock - 30 * minute, runtimeStartedAt: clock - 30 * minute,
+    lastHeartbeatAt: clock - 21 * minute, lastProgressAt: clock - 21 * minute,
+    lastProgressFingerprint: "older-page-count"});
+  const result = await h.context.recoverAutomaticRun();
+  assert.equal(result.probed, true);
+  assert.equal(h.data[RUN].lastProgressAt, clock);
+  assert.equal(h.data[RUN].index, 3);
+  assert.equal(h.navigation.length, 0);
+});
+
+test("a responding page with unchanged counts still recovers after the no-progress deadline", async () => {
+  const h = harness({targetStartedAt: clock - 30 * minute, runtimeStartedAt: clock - 30 * minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock - 21 * minute,
+    lastProgressFingerprint: "probe-alive"});
+  await h.context.recoverAutomaticRun();
+  assert.equal(h.navigation.length, 1);
+  assert.notEqual(h.data[RUN].targetRunId, "seo");
+  assert.equal(h.data[REPORT].items[0].status, "completed");
+});
+
+test("stall recovery notification preserves the probe heartbeat and numeric snapshot", async () => {
+  const h = harness({targetStartedAt: clock - 30 * minute, runtimeStartedAt: clock - 30 * minute,
+    lastHeartbeatAt: clock - 9 * minute, lastProgressAt: clock - 21 * minute,
+    lastProgressFingerprint: "probe-alive", progressStage: null});
+  setCurrentDaangn(h);
+  const stage = daangnStage();
+  const sendMessage = h.context.chrome.tabs.sendMessage;
+  h.context.chrome.tabs.sendMessage = async (tabId, message) => message.type === "JS_AUTO_PING_TARGET"
+    ? {ok: true, active: true, progressFingerprint: "probe-alive",
+      progressMessage: "상세 저장 진행 확인", progressStage: stage}
+    : sendMessage(tabId, message);
+  const finishCurrentTarget = h.context.finishCurrentTarget;
+  let stateAtRecovery;
+  h.context.finishCurrentTarget = async (...args) => {
+    stateAtRecovery = structuredClone(h.data[RUN]);
+    return finishCurrentTarget(...args);
+  };
+  await h.context.recoverAutomaticRun();
+  assert.equal(h.notifications.length, 1);
+  assert.equal(stateAtRecovery.lastRecoveryNotificationAt, clock);
+  assert.equal(stateAtRecovery.lastHeartbeatAt, clock);
+  assert.equal(stateAtRecovery.lastProgressAt, clock - 21 * minute);
+  assert.equal(stateAtRecovery.progressMessage, "상세 저장 진행 확인");
+  assert.deepEqual(stateAtRecovery.progressStage, stage);
+  assert.equal(h.data[REPORT].items[3].counts.processed, 500);
+  assert.equal(h.data[REPORT].items[3].counts.addressDeferred, 4);
+  assert.equal(h.data[RUN].targetAttempt, 2);
+  assert.equal(h.navigation.length, 1);
 });
 test("failed report uploads remain queued across a later run and do not fail the collection", async () => {
   const h = harness();
@@ -398,8 +467,8 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.9");
-  assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 5);
+  assert.equal(response.backgroundBuild, "1.1.10");
+  assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
 });
