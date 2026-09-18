@@ -378,28 +378,56 @@ function daangnRoom(article) {
   return canonicalListingRoom(currentText);
 }
 
-function daangnAddress(article) {
-  const candidates = [
+function daangnAddressCandidates(article) {
+  return [
     article?.publicJibunAddress,
     article?.jibunAddress,
     article?.address,
     article?.location?.jibunAddress,
     article?.location?.address,
-    article?.complex?.jibunAddress
+    article?.complex?.jibunAddress,
+    ...(article?.complex?.buildingsForAddress?.edges || []).map((edge) => edge?.node?.jibunAddress)
   ];
-  const edges = article?.complex?.buildingsForAddress?.edges || [];
-  for (const edge of edges) candidates.push(edge?.node?.jibunAddress);
-  // addressInfo is descriptive copy such as "봉명동 1층 코너상가".  If it
-  // is checked before the provider's building address, the floor number can
-  // be mistaken for a lot number ("봉명동 1").  Use it only as the last
-  // fallback after every structured address field has been exhausted.
-  candidates.push(article?.addressInfo);
-  for (const candidate of candidates) {
-    const text = normalizedAddress(candidate);
-    const match = text.match(/((?:[가-힣]+(?:시|군|구)\s+)?[가-힣0-9·.]+(?:읍|면|동|가)\s+(?:산\s*)?\d+(?:-\d+)?)/);
-    if (match) return normalizedAddress(match[1]);
+}
+
+function daangnLotAddress(value, wholeValue = false) {
+  const originalText = clean(value);
+  // Normalization removes building-name parentheses. Reject number units first
+  // so "1(층)" and "12 (㎡)" cannot become apparently valid parcel numbers.
+  if (/\d\s*\(\s*(?:층|평(?:형)?|㎡|m[²2]|제곱(?:미터)?|호(?:실)?|만원|원)\s*\)/i.test(originalText)) return "";
+  const text = normalizedAddress(originalText);
+  // Do not cut a floor/area unit off a number, or treat "소형상가" as a
+  // legal dong name merely because it ends in 가. Legal 가 names use a number.
+  const match = text.match(/((?:[가-힣]+(?:시|군|구)\s+)?(?:[가-힣0-9·.]+(?:읍|면|동)|[가-힣0-9·.]*\d+가)\s+(?:산\s*)?\d+(?:-\d+)?)(?:번지)?(?=\s|$|,(?!\d))(?!\s*(?:층|평|㎡|m[²2]|제곱(?:미터)?|호(?:실)?|만원|원)(?:\s|$|,))/i);
+  if (!match) return "";
+  if (wholeValue && (text.slice(match.index) !== match[0] ||
+      !/^(?:[가-힣]+(?:도|시|군|구)\s+)*$/.test(text.slice(0, match.index)))) return "";
+  return normalizedAddress(match[1]);
+}
+
+function daangnHasAddressEvidence(article) {
+  return Boolean(article?.isHideAddress) || [
+    ...daangnAddressCandidates(article), article?.addressInfo,
+    article?.roadAddress, article?.publicAddress, article?.location?.roadAddress,
+    article?.complex?.roadAddress,
+    ...(article?.complex?.buildingsForAddress?.edges || []).map((edge) => edge?.node?.roadAddress)
+  ].some((value) => Boolean(clean(value)));
+}
+
+function daangnFallbackAddress(article, fallback) {
+  // Current raw address evidence overrides an older guessed/normalized value.
+  // Legacy details with no address fields may retain a complete saved parcel.
+  return !daangnHasAddressEvidence(article) && daangnLotAddress(fallback, true)
+    ? clean(fallback) : "";
+}
+
+function daangnAddress(article) {
+  for (const candidate of daangnAddressCandidates(article)) {
+    const address = daangnLotAddress(candidate);
+    if (address) return address;
   }
-  return "";
+  // Descriptive copy is usable only when the entire value is an exact address.
+  return daangnLotAddress(article?.addressInfo, true);
 }
 
 function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
@@ -518,7 +546,7 @@ export function normalizedRecord(source, value) {
         source: "당근",
         sourceId: canonical.sourceId || value.sourceId,
         buildingName: canonical.buildingName || value.buildingName,
-        address: canonical.address || value.address,
+        address: canonical.address || daangnFallbackAddress(value.raw, value.address),
         roadAddress: canonical.roadAddress || value.roadAddress,
         room: canonical.tradeType === "sale" && canonical.saleCategory === "land" ? "" : canonical.room || value.room,
         category: canonical.category || value.category,
@@ -533,8 +561,8 @@ export function normalizedRecord(source, value) {
         salePrice: canonicalHasTrade ? canonical.salePrice : value.salePrice ?? value.sale_price ?? null,
         memo: canonical.memo,
         contacts: [],
-        latitude: canonical.latitude ?? value.latitude,
-        longitude: canonical.longitude ?? value.longitude,
+        latitude: value.raw.isHideAddress ? canonical.latitude : canonical.latitude ?? value.latitude,
+        longitude: value.raw.isHideAddress ? canonical.longitude : canonical.longitude ?? value.longitude,
         raw: canonical.raw
       };
     }
@@ -1927,7 +1955,10 @@ async function ingestRecords(env, source, values, metadata = {}) {
     const existing = existingSources.get(record.sourceId);
     if (!record.address && existing) {
       const previous = parseJson(existing.list_snapshot_json, {});
-      record.address = normalizedAddress(existing.listing_address || previous.address);
+      const previousAddress = existing.listing_address || previous.address;
+      record.address = source === "당근"
+        ? normalizedAddress(daangnFallbackAddress(record.raw, previousAddress))
+        : normalizedAddress(previousAddress);
       if (!record.room) record.room = canonicalListingRoom(existing.listing_room || previous.room);
     }
     if (!hasExactLotAddress(record.address)) {
@@ -2538,7 +2569,7 @@ export function mergeDaangnDetailWithList(article, entry = {}, requestedTradeTyp
   return {
     ...record,
     sourceId: record.sourceId || clean(entry.sourceId),
-    address: record.address || clean(entry.address),
+    address: record.address || daangnFallbackAddress(article, entry.address),
     room: record.tradeType === "sale" && record.saleCategory === "land" ? "" : record.room || clean(entry.room),
     deposit: record.deposit == null ? number(entry.deposit) : record.deposit,
     rent: record.tradeType === "sale" ? 0 : !hasDetailRent && number(entry.rent) != null ? number(entry.rent) : record.rent,

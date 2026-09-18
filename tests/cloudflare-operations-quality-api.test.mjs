@@ -106,6 +106,39 @@ test("hold source links reject credentials, executable links and unrelated hosts
   }
 });
 
+test("Daangn unproven exact address is labeled, redacted and cannot be released with price evidence", async t => {
+  const { env, sqlite, body, hold } = fixture(t);
+  const issue = "daangn_exact_address_unproven";
+  hold(issue, { sourceId: "S", evidence: {
+    sourceIds: ["S"], token: "PRIVATE_TOKEN", raw: { phone: "PRIVATE_PHONE" }, contact: "PRIVATE_CONTACT"
+  } });
+  sqlite.prepare(`UPDATE listing_sources SET list_snapshot_json=json_set(list_snapshot_json,
+    '$.raw',json(?),'$.contact',?)`).run(JSON.stringify({ phone: "PRIVATE_SOURCE_PHONE" }), "PRIVATE_SOURCE_CONTACT");
+  const listingBefore = sqlite.prepare("SELECT * FROM listings").get();
+  const sourceBefore = sqlite.prepare("SELECT * FROM listing_sources").get();
+  const holdBefore = sqlite.prepare("SELECT * FROM listing_data_quality_holds WHERE issue_code=?").get(issue);
+  const result = await handleOperationsQualityGet(env, ADMIN, { action: "operationsQualityHolds" });
+  const row = result.rows.find(item => item.issueCode === issue);
+  assert.equal(row.reason, "당근 정확한 지번 미제공 · 주소 확인 보류");
+  assert.equal(row.state, "open");
+  assert.equal(row.blocksPublication, true);
+  assert.equal(row.releaseRequiresEvidence, true);
+  assert.equal(row.releaseSupported, false);
+  assert.equal(row.monthlyRent, body.evidence.monthlyRent);
+  assert.equal(row.sources[0].sourceUrl, body.evidence.sourceUrl);
+  assert.deepEqual(row.evidence, { sourceIds: ["S"] });
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_|list_snapshot_json|evidence_json/);
+  for (const resolutionState of ["resolved", "dismissed"]) {
+    await assert.rejects(handleOperationsQualityPost(env, ADMIN, {
+      ...body, issueCode: issue, resolutionState
+    }), status(409));
+  }
+  assert.deepEqual(sqlite.prepare("SELECT * FROM listings").get(), listingBefore);
+  assert.deepEqual(sqlite.prepare("SELECT * FROM listing_sources").get(), sourceBefore);
+  assert.deepEqual(sqlite.prepare("SELECT * FROM listing_data_quality_holds WHERE issue_code=?").get(issue), holdBefore);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM listing_history").get().n, 0);
+});
+
 test("previous repair resolutions are not misrepresented as publication-only releases", async t => {
   const { env, sqlite } = fixture(t);
   sqlite.prepare("UPDATE listing_data_quality_holds SET state='resolved',resolution_json=?").run(JSON.stringify({

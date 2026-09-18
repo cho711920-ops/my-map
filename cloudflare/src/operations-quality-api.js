@@ -8,6 +8,7 @@ const ISSUE_LABELS = {
   daangn_buy_only_in_lease: "매매 원본이 임대로 분류됨",
   daangn_monthly_terms_stale: "당근 원본과 임대조건 불일치",
   daangn_zero_rent_unproven: "당근 월세 0원 거래근거 부족",
+  daangn_exact_address_unproven: "당근 정확한 지번 미제공 · 주소 확인 보류",
   gongsil_master_terms_stale: "공실박스 원본과 임대조건 불일치",
   gongsil_sale_in_lease: "공실박스 매매 원본이 임대로 분류됨",
   gongsil_verified_jeonse: "원본에서 확인된 정상 전세",
