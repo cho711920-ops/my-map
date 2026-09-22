@@ -1,0 +1,151 @@
+/* Only the dedicated phone classifier opts in. Legacy narrow PC/tablet UI is unchanged. */
+#jsPhoneFilterChipsV2, #jsPhoneListCountV2, #jsPhoneMapListV2, #jsPhonePortraitGuardV2,
+#jsMobileAppV1 [data-mobile-view="favorites"] { display: none; }
+
+:root.js-phone-app-v2 {
+  --jsm-blue: #096be0;
+  --jsm-blue-dark: #0759b8;
+  --jsm-ink: #14263f;
+  --jsm-muted: #60738b;
+  --jsm-line: #dce5ef;
+  --jsm-header-height: var(--js-phone-header-height, calc(64px + env(safe-area-inset-top)));
+  --jsm-nav-height: calc(64px + env(safe-area-inset-bottom));
+}
+.js-phone-app-v2, .js-phone-app-v2 body {
+  width: 100% !important; height: 100% !important; min-height: 100% !important;
+  overflow: hidden !important; overscroll-behavior: none;
+}
+.js-phone-app-v2 #wrap { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100dvh !important; display: block !important; overflow: hidden !important; }
+.js-phone-app-v2 #map {
+  position: absolute !important; inset: var(--jsm-header-height) 0 var(--jsm-nav-height) !important;
+  width: 100% !important; height: auto !important; min-height: 0 !important;
+}
+.js-phone-app-v2 .jsm-title-row-v1,
+.js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="visit"],
+.js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="customers"],
+.js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="more"],
+.js-phone-app-v2 #jsMobileMoreLayerV1,
+.js-phone-app-v2 #activeFilterChipsV844,
+.js-phone-app-v2 #status,
+.js-phone-app-v2 #sidebar > .header,
+.js-phone-app-v2 #dragHandle,
+.js-phone-app-v2 #sidebar > .filters,
+.js-phone-app-v2 .map-quick-tools,
+.js-phone-app-v2 #toggleBtn,
+.js-phone-app-v2 #selectionActionBar,
+.js-phone-app-v2 #multiClusterStatus,
+.js-phone-app-v2 #customerMatchMapStatus { display: none !important; }
+
+.js-phone-app-v2 .jsm-app-header-v1 {
+  position: fixed; inset: 0 0 auto; z-index: 10030; height: auto;
+  padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+  border-bottom: 1px solid #dce5ef; background: #fff; box-shadow: 0 2px 8px #1737550a;
+}
+.js-phone-app-v2 .jsm-search-v1 {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr) 44px; align-items: center;
+  height: 47px; gap: 0; margin: 0; padding: 0; border: 1px solid #dce5ef;
+  border-radius: 12px; background: #f8faff; box-shadow: none;
+}
+.js-phone-app-v2 .jsm-search-v1 > select {
+  width: 88px; min-width: 0; height: 44px; margin: 0; padding: 0 4px;
+  border: 0; border-right: 1px solid #e2eaf3; background: transparent;
+  color: #174677; font-size: 13px; font-weight: 700;
+}
+.js-phone-app-v2 .jsm-search-v1 input { min-width: 0; height: 44px; padding: 0 8px; font-size: 16px; }
+.js-phone-app-v2 .jsm-search-v1 button { width: 44px; height: 44px; border-left: 1px solid #e2eaf3; }
+.js-phone-app-v2 .jsm-search-v1 :focus-visible,
+.js-phone-app-v2 button:focus-visible { outline: 2px solid #086bdc; outline-offset: -2px; }
+.js-phone-app-v2 #jsPhoneFilterChipsV2:not([hidden]) {
+  display: flex; gap: 6px; overflow-x: auto; align-items: center; padding: 4px 0 0;
+  max-width: 100%; scrollbar-width: thin;
+}
+.js-phone-app-v2 #jsPhoneFilterChipsV2 button {
+  flex: 0 0 auto; max-width: 90%; min-height: 44px; padding: 7px 11px;
+  border: 1px solid #cde0f8; border-radius: 12px; background: #edf5ff; color: #145da7;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 650;
+}
+.js-phone-app-v2 .jsm-bottom-nav-v1 {
+  position: fixed; inset: auto 0 0; z-index: 10020; display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); height: var(--jsm-nav-height);
+  padding: 5px 8px calc(5px + env(safe-area-inset-bottom));
+  background: #fff; border-top: 1px solid #dce5ef; box-shadow: 0 -2px 8px #1737550a;
+}
+.js-phone-app-v2 .jsm-bottom-nav-v1 button,
+.js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="favorites"] {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; min-height: 48px; padding: 4px; border: 0; border-radius: 12px;
+  background: transparent; color: #62748a; font-size: 12px; font-weight: 700;
+}
+.js-phone-app-v2 .jsm-bottom-nav-v1 button.active { background: #edf5ff; color: #096be0; }
+.js-phone-app-v2 #jsPhoneMapListV2 {
+  position: fixed; z-index: 9700; bottom: calc(var(--jsm-nav-height) + 12px);
+  left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-height: 44px; padding: 10px 20px; border: 1px solid #fff; border-radius: 24px;
+  background: #096be0; color: #fff; font-size: 14px; font-weight: 750;
+  box-shadow: 0 3px 12px #145da72e;
+}
+.js-phone-app-v2[data-jsm-mobile-view="map"][data-js-phone-favorites="false"] #jsPhoneMapListV2 { display: block; }
+.js-phone-app-v2 #mapListingCountV825 { top: calc(var(--jsm-header-height) + 10px) !important; left: 10px !important; z-index: 9600 !important; }
+.js-phone-app-v2[data-jsm-mobile-view="list"] #mapListingCountV825,
+.js-phone-app-v2[data-js-phone-favorites="true"] #mapListingCountV825 { display: none !important; }
+
+.js-phone-app-v2 #sidebar {
+  position: fixed !important; z-index: 9900 !important;
+  inset: var(--jsm-header-height) 0 var(--jsm-nav-height) !important;
+  display: flex !important; flex-direction: column !important;
+  width: 100% !important; min-width: 0 !important; max-width: none !important;
+  height: auto !important; max-height: none !important; padding: 0 !important;
+  border: 0 !important; border-radius: 0 !important; overflow: hidden !important;
+  background: #f5f8fc !important; box-shadow: none !important;
+  transform: translateY(calc(100% + var(--jsm-nav-height))) !important;
+}
+.js-phone-app-v2[data-jsm-mobile-view="list"] #sidebar { transform: translateY(0) !important; }
+.js-phone-app-v2 #listToolbar.list-toolbar {
+  flex: 0 0 auto; display: flex !important; align-items: center !important; justify-content: space-between !important;
+  min-height: 54px !important; padding: 5px 12px !important; gap: 8px !important;
+  border: 0 !important; background: #f5f8fc !important; box-shadow: none !important;
+}
+.js-phone-app-v2 #listToolbar > .list-source-control,
+.js-phone-app-v2 #listToolbar > .list-type-control,
+.js-phone-app-v2 #listToolbar > .list-brokerage-control,
+.js-phone-app-v2 #listToolbar > .list-master-select { display: none !important; }
+.js-phone-app-v2 #jsPhoneListCountV2 { display: block; flex: 1; color: #173553; font-size: 16px; font-weight: 750; }
+.js-phone-app-v2 #listToolbar > #sortDropdown { flex: 0 0 124px; width: 124px !important; }
+.js-phone-app-v2 #listToolbar > #sortDropdown > #sortDropdownBtn { border: 0 !important; background: transparent !important; font-size: 13px !important; }
+.js-phone-app-v2 #sortDropdownMenu { right: 0 !important; left: auto !important; max-width: calc(100vw - 24px); }
+.js-phone-app-v2 #sortDropdownMenu button { min-height: 44px; }
+.js-phone-app-v2 #sidebar #list {
+  flex: 1 1 auto !important; height: auto !important; min-height: 0 !important;
+  padding: 0 10px 16px !important; overflow-y: auto !important; overflow-x: hidden !important;
+}
+.js-phone-app-v2 #list .item { min-height: 104px !important; padding: 10px !important; margin-bottom: 8px !important; border-radius: 14px !important; box-shadow: none !important; }
+.js-phone-app-v2 #list .item .item-card-grid-v650 { grid-template-columns: 70px minmax(0, 1fr) !important; gap: 10px !important; }
+.js-phone-app-v2 #list .unified-thumb-v8 { width: 70px !important; min-width: 70px !important; height: 82px !important; min-height: 82px !important; border-radius: 9px !important; }
+.js-phone-app-v2 #list .item .item-compact-main-v650 { position: relative; display: flex !important; flex-direction: column !important; justify-content: center; gap: 5px !important; padding-right: 34px; }
+.js-phone-app-v2 #list .item-compact-price-v650.price-line { order: 0; display: flex !important; padding: 0 !important; gap: 4px !important; min-height: 0 !important; background: transparent !important; border-radius: 0 !important; }
+.js-phone-app-v2 #list .item .item-card-grid-v650 .item-compact-main-v650 .item-compact-head-v650 { order: 1; flex-direction: column !important; align-items: flex-start !important; gap: 4px !important; }
+.js-phone-app-v2 #list .price-main { font-size: 17px !important; line-height: 1.35 !important; letter-spacing: -.35px; }
+.js-phone-app-v2 #list .price-area { font-size: 12px !important; }
+.js-phone-app-v2 #list .item-building-name { font-size: 13px !important; }
+.js-phone-app-v2 #list .item-address-room-v650 { font-size: 12px !important; line-height: 1.4 !important; flex-wrap: wrap; }
+.js-phone-app-v2 #list .item-compact-actions-v650,
+.js-phone-app-v2 #list .type-badge,
+.js-phone-app-v2 #list .price-separator,
+.js-phone-app-v2 #list .item-price-type-v652,
+.js-phone-app-v2 #list .item-compact-price-v650 .visit-badge,
+.js-phone-app-v2 #list .item-compact-price-v650 .item-type-badge { display: none !important; }
+.js-phone-app-v2 #list .phone-card-favorite-v2 { position: absolute; top: -6px; right: -10px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: #096be0; }
+.js-phone-app-v2 #list .jsm-list-empty-v1 { min-height: 36dvh; padding: 24px 16px; }
+.js-phone-app-v2 #jsMobileSaveStatusV1 { max-width: calc(100vw - 24px); }
+
+.js-phone-app-v2 #jsPhonePortraitGuardV2:not([hidden]) {
+  position: fixed; inset: 0; z-index: 2147483646; display: flex;
+  align-items: center; justify-content: center; flex-direction: column; padding: 24px;
+  background: #f5f9ff; color: #14263f; text-align: center; outline: none;
+}
+.js-phone-app-v2 .js-phone-rotate-icon-v2 { color: #096be0; font-size: 42px; line-height: 1; }
+.js-phone-app-v2 #jsPhonePortraitGuardV2 h2 { margin: 12px 0 8px; font-size: 21px; }
+.js-phone-app-v2 #jsPhonePortraitGuardV2 p { margin: 0; color: #536c85; font-size: 15px; line-height: 1.6; }
+.js-phone-app-v2 body:has(.unified-detail-drawer-v8.open) #jsPhoneMapListV2 { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .js-phone-app-v2 #sidebar, .js-phone-app-v2 .unified-detail-drawer-v8 { transition: none !important; } }

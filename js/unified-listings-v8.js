@@ -12,6 +12,10 @@
     photoPreloads: {}, pendingDetailSteps: {} };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
+  function isPhoneDetailV2() {
+    return !!(global.JSPhoneDeviceV1 && typeof global.JSPhoneDeviceV1.isPhone === "function" &&
+      global.JSPhoneDeviceV1.isPhone());
+  }
   function encodedExternalLink(value) {
     return encodeURIComponent(text(value)).replace(/'/g, "%27");
   }
@@ -631,6 +635,18 @@
       return;
     }
     var encodedKey = encodeURIComponent(text(item.key));
+    if (isPhoneDetailV2() && action === "contact" && typeof global.openListContactPopupV654 === "function") {
+      global.openListContactPopupV654(encodeURIComponent("id:" + propertyId));
+      return;
+    }
+    if (isPhoneDetailV2() && action === "favorite" && typeof global.openItemListDestinationPicker === "function") {
+      // The phone folder picker is an app page beneath the full-screen detail.
+      // Replace the detail only for this explicit save action; ordinary folder
+      // browsing still keeps its detail above the folder for back navigation.
+      closeDetailForOverlay();
+      global.openItemListDestinationPicker(encodeURIComponent("property:" + propertyId));
+      return;
+    }
     if (action === "navigation" && typeof global.openKakaoNavigation === "function") {
       global.openKakaoNavigation(encodedKey);
       return;
@@ -741,12 +757,45 @@
     drawer.style.top = Math.max(0, toolbar ? Math.round(toolbar.getBoundingClientRect().bottom) : 68) + "px";
   }
 
+  function phoneDetailFactsV2(selected) {
+    var sale = text(selected.tradeType).toLowerCase() === "sale";
+    function value(field) {
+      return selected[field] == null || selected[field] === '' ? '미확인' : number(selected[field]);
+    }
+    var price = sale
+      ? '매매 ' + esc(selected.salePrice == null || selected.salePrice === '' ? '미확인' :
+        (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(selected.salePrice) : number(selected.salePrice)))
+      : '보 ' + esc(value('deposit')) + ' / 월 ' + esc(value('rent'));
+    var facts = [['구분', selected.type || '미확인'], ['층·호실', selected.room || '미확인']];
+    if (!sale) facts = facts.concat([
+      ['면적', selected.area == null || selected.area === '' ? '미확인' : number(selected.area) + '평'],
+      ['관리비', selected.fee == null || selected.fee === '' ? '미확인' : number(selected.fee) + '만원'],
+      ['권리금', selected.premium == null || selected.premium === '' ? '미확인' : number(selected.premium) + '만원']
+    ]);
+    return '<div class="phone-detail-price-v2">' + price + '</div>' +
+      '<dl class="phone-detail-facts-v2">' + facts.map(function(fact) {
+        return '<div><dt>' + esc(fact[0]) + '</dt><dd>' + esc(fact[1]) + '</dd></div>';
+      }).join('') + '</dl>';
+  }
+
+  function phoneDetailActionsV2(propertyId, selected) {
+    var encodedId = encodeURIComponent(text(propertyId)).replace(/'/g, '%27');
+    return '<nav class="phone-detail-actions-v2" aria-label="매물 상세 바로가기">' +
+      '<button type="button" class="phone-detail-contact-v2" onclick="JSUnifiedListingsV8.runDetailAction(\'contact\', \'' + encodedId + '\')">전화</button>' +
+      '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedId + '\')">길찾기</button>' +
+      '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'favorite\', \'' + encodedId + '\')">찜하기</button>' +
+      (selected && /^https?:\/\//i.test(text(selected.link))
+        ? '<button type="button" aria-label="선택한 원본 링크 열기" onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 ↗</button>'
+        : '<button type="button" disabled title="등록된 원본 링크가 없습니다">원본 없음</button>') + '</nav>';
+  }
+
   function renderDetail(propertyId, originals, selectedOriginalId) {
     originals = orderOriginals(originals);
     var selected = originals.filter(function(original) {
       return text(original.originalId) === text(selectedOriginalId);
     })[0] || originals[0];
     var masterMeta = state.masterMeta[text(propertyId)] || {};
+    var phoneDetail = isPhoneDetailV2();
     var registrationDate = detailDate(masterMeta.regDate);
     var drawer = ensureDrawer();
     positionDrawer(drawer);
@@ -779,29 +828,32 @@
             'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
         '</div><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
-        '<p>' + conditionLine(selected) + '</p>' +
+        (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
-        (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
+        (!phoneDetail && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'roadview\', \'' + encodedActionPropertyId + '\')">로드뷰</button>' +
-          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'register\', \'' + encodedActionPropertyId + '\')">대장</button>' +
-          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' +
+          (!phoneDetail ? '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'register\', \'' + encodedActionPropertyId + '\')">대장</button>' +
+          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' : '') +
         '</div>' +
         (registrationDate ? '<div class="unified-detail-meta-v8"><span>등록일</span><b>' + esc(registrationDate) + '</b></div>' : '') +
-        '<div class="unified-detail-actions-v8" aria-label="원본매물 정리 작업">' +
+        (!phoneDetail ? '<div class="unified-detail-actions-v8" aria-label="원본매물 정리 작업">' +
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물 분리</button>' : '') +
           (!selected.masterFallback ? '<button type="button" class="move" onclick="JSUnifiedListingsV8.startMove(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">원본 1개 합치기</button>' : '') +
           '<button type="button" class="move whole-master" onclick="JSUnifiedListingsV8.startWholeMasterMove(\'' +
             encodedActionPropertyId + '\')">대표 전체 합치기</button>' +
-        '</div>' +
+        '</div>' : '') +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
       '</section>' +
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +
       '</section>' : '');
+    var phoneActions = drawer.querySelector('.phone-detail-actions-v2');
+    if (phoneActions) phoneActions.remove();
+    if (phoneDetail && selected) drawer.insertAdjacentHTML('beforeend', phoneDetailActionsV2(propertyId, selected));
     var detailGallery = body.querySelector(".unified-detail-gallery-v8");
     if (detailGallery && images.length) {
       detailGallery._imagesV8 = images.slice();

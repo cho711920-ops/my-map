@@ -4,6 +4,24 @@ var saveApiURL = window.JSDataAccessV6 ? window.JSDataAccessV6.endpoints.data : 
 
 var map, geocoder;
 var allItems = [];
+
+function isPhoneListingV2() {
+  return !!(window.JSPhoneDeviceV1 && typeof window.JSPhoneDeviceV1.isPhone === "function" &&
+    window.JSPhoneDeviceV1.isPhone());
+}
+
+function getListingScrollContainerV2() {
+  return (isPhoneListingV2() && document.getElementById("list")) || document.getElementById("sidebar");
+}
+
+function buildPhoneFavoriteButtonV2(item, encodedFavoriteRef) {
+  if (!isPhoneListingV2()) return "";
+  var saved = isFavorite(item);
+  return '<button type="button" class="phone-card-favorite-v2' + (saved ? ' saved' : '') +
+    '" aria-label="' + (saved ? '저장된 매물의 찜 폴더 선택' : '찜 폴더에 저장') +
+    '" onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRef.replace(/'/g, '%27') + '\')">' +
+    '<span aria-hidden="true">' + (saved ? '♥' : '♡') + '</span></button>';
+}
 var currentItems = [];
 window.jsInitialFullListingsLoadingV1 = true;
 var overlays = [];
@@ -1799,7 +1817,7 @@ function trimListWindowFromStartV1(list) {
   ensureListVirtualTopSpacerV1(list);
 
   if (firstKept && firstKeptTop != null) {
-    var sidebar = document.getElementById("sidebar");
+    var sidebar = getListingScrollContainerV2();
     var shift = firstKept.getBoundingClientRect().top - firstKeptTop;
     if (sidebar && Math.abs(shift) > 0.5) sidebar.scrollTop += shift;
   }
@@ -1850,7 +1868,7 @@ function renderPreviousListChunkV1() {
   syncListVirtualMetadataV1(list);
 
   if (oldFirst && oldFirstTop != null) {
-    var sidebar = document.getElementById("sidebar");
+    var sidebar = getListingScrollContainerV2();
     var shift = oldFirst.getBoundingClientRect().top - oldFirstTop;
     if (sidebar && Math.abs(shift) > 0.5) sidebar.scrollTop += shift;
   }
@@ -1927,21 +1945,26 @@ function bindIncrementalListRendering() {
   if (!sidebar) return;
 
   listRenderScrollBound = true;
-  sidebar.addEventListener("scroll", function() {
+  function onListScroll(event) {
+    var scroller = getListingScrollContainerV2();
+    if (!scroller || (event && event.currentTarget !== scroller)) return;
     if (listVirtualScrollScheduledV1) return;
     listVirtualScrollScheduledV1 = true;
     window.requestAnimationFrame(function() {
       listVirtualScrollScheduledV1 = false;
       var list = document.getElementById("list");
       if (!list) return;
-      var renderedTop = list.offsetTop + listVirtualTopHeightV1;
-      if (listRenderStart > 0 && sidebar.scrollTop - renderedTop < 850) {
+      var renderedTop = (scroller === list ? 0 : list.offsetTop) + listVirtualTopHeightV1;
+      if (listRenderStart > 0 && scroller.scrollTop - renderedTop < 850) {
         renderPreviousListChunkV1();
-      } else if (sidebar.scrollHeight - sidebar.scrollTop - sidebar.clientHeight < 850) {
+      } else if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 850) {
         renderNextListChunk();
       }
     });
-  }, { passive: true });
+  }
+  sidebar.addEventListener("scroll", onListScroll, { passive: true });
+  var phoneList = document.getElementById("list");
+  if (phoneList) phoneList.addEventListener("scroll", onListScroll, { passive: true });
 }
 
 
@@ -1992,7 +2015,7 @@ function observeUnifiedDuplicateShimmerV812(card) {
 
 function showList(items) {
   var list = document.getElementById("list");
-  var sidebar = document.getElementById("sidebar");
+  var sidebar = getListingScrollContainerV2();
   var previousSidebarTop = sidebar ? sidebar.scrollTop : 0;
   cacheRenderedListCardHeightsV1(list);
   resetUnifiedDuplicateShimmerObserverV812();
@@ -3593,7 +3616,7 @@ function formatListRegistrationDate(value) {
 
 
 function captureMemoListScrollPosition(anchorKey) {
-  var sidebar = document.getElementById("sidebar");
+  var sidebar = getListingScrollContainerV2();
   var anchor = anchorKey
     ? document.querySelector('[data-listing-key="' + CSS.escape(anchorKey) + '"]')
     : null;
@@ -3614,7 +3637,7 @@ function restoreMemoListScrollPosition(position) {
   if (!position) return;
 
   function restore() {
-    var sidebar = document.getElementById("sidebar");
+    var sidebar = getListingScrollContainerV2();
 
     if (sidebar) {
       var anchor = position.anchorKey
@@ -4567,6 +4590,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   if (unifiedCardPartsV8.sourceButton) sourceLinkButton = unifiedCardPartsV8.sourceButton;
   var customerMatchControls = buildCustomerMatchInlineControls(item, customerMatchContextV719);
   var favoriteHeaderButtonV661 = "";
+  if (!customerMatchContextV719) favoriteHeaderButtonV661 = buildPhoneFavoriteButtonV2(item, encodedFavoriteRefV821);
   var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
   var depositDisplay = listDisplayValueV650(item, "deposit");
   var rentDisplay = listDisplayValueV650(item, "rent");
@@ -4634,6 +4658,17 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   if (saleCardV1) div.classList.add("listing-sale-card-v1");
   div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
+  if (isPhoneListingV2()) {
+    div.setAttribute("title", "매물 상세 보기");
+    div.setAttribute("tabindex", "0");
+    div.setAttribute("role", "group");
+    div.setAttribute("aria-label", (item.name || "매물") + " 상세 보기");
+    div.onkeydown = function(event) {
+      if (event.target !== div || (event.key !== "Enter" && event.key !== " ")) return;
+      event.preventDefault();
+      if (window.JSUnifiedListingsV8) window.JSUnifiedListingsV8.handleCardClick(item, event);
+    };
+  }
   div.innerHTML =
     '<div class="item-card-grid-v650' +
       (customerMatchMapCardV721
@@ -4741,6 +4776,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   div.onpointerdown = cancelCardWarmupV6107;
 
   div.ondblclick = function(event) {
+    if (isPhoneListingV2()) return;
     if (
       event &&
       event.target &&
@@ -5066,14 +5102,14 @@ function restoreCompletedListing(encodedKey) {
 
 function restoreListScrollAfterRender(scrollTop) {
   requestAnimationFrame(function() {
-    var sidebar = document.getElementById("sidebar");
+    var sidebar = getListingScrollContainerV2();
     if (sidebar) sidebar.scrollTop = scrollTop;
   });
 }
 
 
 function refreshDoneStatusUI(keepScroll) {
-  var sidebar = document.getElementById("sidebar");
+  var sidebar = getListingScrollContainerV2();
   var scrollTop = keepScroll && sidebar ? sidebar.scrollTop : 0;
 
   if (typeof applyFilter === "function") {

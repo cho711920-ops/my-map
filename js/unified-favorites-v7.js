@@ -10,6 +10,42 @@
   var favoriteDetailObserverV7 = null;
   var deletedFolderUndoV1 = null;
   var favoriteAccountV1 = String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
+  var phoneFolderIdV2 = "";
+  var phoneScrollV2 = {};
+  var renderedPhoneV2 = false;
+
+  function isPhoneV2() {
+    return !!(document.documentElement && document.documentElement.classList.contains("js-phone-app-v2"));
+  }
+
+  function phoneStateV2() {
+    var modal = document.getElementById("unifiedFavoriteModalV7");
+    var folder = load("favorite").find(function (entry) { return String(entry.id) === phoneFolderIdV2; });
+    return {
+      open: !!(isPhoneV2() && modal && modal.classList.contains("open")),
+      folderId: folder ? phoneFolderIdV2 : "",
+      folderName: folder ? String(folder.name || "") : "",
+      source: state.source
+    };
+  }
+
+  function notifyPhoneV2() {
+    if (!isPhoneV2() || typeof global.dispatchEvent !== "function" || typeof global.CustomEvent !== "function") return;
+    global.dispatchEvent(new global.CustomEvent("js-phone-favorites-change", { detail: phoneStateV2() }));
+  }
+
+  function rememberPhoneScrollV2() {
+    if (!isPhoneV2()) return;
+    var modal = document.getElementById("unifiedFavoriteModalV7");
+    if (!modal || !modal.classList.contains("open")) return;
+    var body = document.getElementById("unifiedFavoriteBodyV7");
+    if (body) phoneScrollV2[body.getAttribute("data-phone-scroll-key") || "index"] = body.scrollTop || 0;
+  }
+
+  function restorePhoneScrollV2() {
+    var body = document.getElementById("unifiedFavoriteBodyV7");
+    if (body) body.scrollTop = phoneScrollV2[phoneFolderIdV2 || "index"] || 0;
+  }
 
   function store() {
     return global.JSV6ListStore || null;
@@ -242,6 +278,15 @@
     document.body.appendChild(modal);
     modal.addEventListener("keydown", function (event) {
       if (!modal.classList.contains("open") || !global.JSDialogFocusV1) return;
+      if (isPhoneV2()) {
+        // This is an app screen: keep the shared search and bottom tabs reachable.
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          global.JSPhoneFavoritesV2.back();
+        }
+        return;
+      }
       var embeddedDetail = document.getElementById("unifiedDetailDrawerV8");
       var detailIsOpen = embeddedDetail && modal.contains(embeddedDetail) &&
         embeddedDetail.getAttribute("aria-hidden") !== "true";
@@ -263,7 +308,7 @@
   function positionModal() {
     var modal = document.getElementById("unifiedFavoriteModalV7");
     var dialog = modal && modal.querySelector(".unified-favorite-dialog-v7");
-    if (!modal || !dialog || global.innerWidth <= 768) return;
+    if (!modal || !dialog || isPhoneV2() || global.innerWidth <= 768) return;
     var detailOpen = dialog.classList.contains("has-detail-v7");
     var width = detailOpen
       ? Math.min(1360, Math.max(920, global.innerWidth - 48))
@@ -326,6 +371,64 @@
         escapeHtml(folderId) + '\',\'' + encodeURIComponent(ref) + '\')">찜 제거</button></article>';
   }
 
+  function phoneItemRowV2(ref, folderId) {
+    var item = resolveItem(ref);
+    var title = item ? (item.name || item.address || "매물") : "현재 확인할 수 없는 매물";
+    var address = item ? [item.address, item.room, item.floor].filter(Boolean).join(" · ") : "매물ID " + ref.replace(/^property:/, "");
+    var photo = itemPhoto(item);
+    return '<article class="phone-favorite-item-v2">' +
+      '<button type="button" class="phone-favorite-item-open-v2" onclick="openUnifiedFavoriteItemV7(' + escapeHtml(JSON.stringify(encodeURIComponent(ref))) + ')" aria-label="' + escapeHtml(title) + ' 상세보기">' +
+        '<span class="phone-favorite-thumb-v2">' + (photo ? '<img src="' + escapeHtml(photo) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.hidden=true">' : '<span>사진 없음</span>') + '</span>' +
+        '<span class="phone-favorite-item-copy-v2"><strong>' + escapeHtml(favoriteItemPrice(item)) + '</strong><span>' + escapeHtml(title) + '</span><small>' + escapeHtml(address) + '</small></span>' +
+      '</button><button type="button" class="phone-favorite-remove-v2" aria-label="' + escapeHtml(title) + ' 찜 제거" onclick="removeUnifiedFavoriteItemV7(' + escapeHtml(JSON.stringify(String(folderId))) + ',' + escapeHtml(JSON.stringify(encodeURIComponent(ref))) + ')">♥</button></article>';
+  }
+
+  function renderPhoneV2(lists, body) {
+    rememberPhoneScrollV2();
+    var folder = lists.find(function (entry) { return String(entry.id) === phoneFolderIdV2; });
+    if (!folder) phoneFolderIdV2 = "";
+    var modal = document.getElementById("unifiedFavoriteModalV7");
+    var dialog = modal.querySelector(".unified-favorite-dialog-v7");
+    dialog.setAttribute("role", "region");
+    dialog.setAttribute("aria-modal", "false");
+    modal.classList.toggle("phone-favorite-folder-open-v2", !!folder);
+    var selected = document.getElementById("unifiedFavoriteSelectedV7");
+    if (selected && !state.pendingRefs.length) selected.textContent = lists.length + "개 폴더";
+    if (!renderedPhoneV2) {
+      body.innerHTML = '<div id="phoneFavoriteIndexV2"></div><section id="phoneFavoriteFolderScreenV2" hidden aria-hidden="true" aria-label="찜폴더 매물"></section>';
+    }
+    renderedPhoneV2 = true;
+    var index = document.getElementById("phoneFavoriteIndexV2");
+    var screen = document.getElementById("phoneFavoriteFolderScreenV2");
+    index.hidden = !!folder;
+    screen.hidden = !folder;
+    screen.setAttribute("aria-hidden", folder ? "false" : "true");
+    if (folder) {
+      var refs = uniqueRefs(folder.itemKeys || []);
+      var folderArg = escapeHtml(JSON.stringify(String(folder.id)));
+      screen.innerHTML = '<header class="phone-favorite-folder-head-v2">' +
+        '<button type="button" class="phone-favorite-back-v2" aria-label="찜폴더 목록으로" onclick="JSPhoneFavoritesV2.showIndex()">‹</button>' +
+        '<div><h2>' + escapeHtml(folder.name) + '</h2><span>저장 매물 ' + refs.length + '개</span></div>' +
+        '<button type="button" class="phone-favorite-close-v2" aria-label="찜목록 닫기" onclick="closeUnifiedFavoritesV7()">×</button></header>' +
+        '<div class="phone-favorite-folder-toolbar-v2"><div class="phone-favorite-view-v2" role="group" aria-label="폴더 보기 방식">' +
+          '<button type="button" aria-pressed="true">목록</button><button type="button" aria-pressed="false" onclick="showUnifiedFavoriteOnMapV7(' + folderArg + ')">지도 보기</button></div>' +
+          '<details class="phone-favorite-manage-v2"><summary>폴더 관리</summary><div>' +
+            '<button type="button" onclick="renameUnifiedFavoriteFolderV7(' + folderArg + ')">이름 변경</button>' +
+            '<button type="button" class="danger" onclick="deleteUnifiedFavoriteFolderV7(' + folderArg + ')">폴더 삭제</button></div></details></div>' +
+        (state.pendingRefs.length ? '<button type="button" class="phone-favorite-add-v2" onclick="addSelectedToUnifiedFavoriteV7(' + folderArg + ')">선택한 ' + state.pendingRefs.length + '개 매물 담기</button>' : '') +
+        '<div class="phone-favorite-items-v2">' + (refs.length ? refs.map(function (ref) { return phoneItemRowV2(ref, folder.id); }).join("") : '<p class="phone-favorite-empty-v2">이 폴더에 저장한 매물이 없습니다.</p>') + '</div>';
+    } else {
+      index.innerHTML = lists.length ? '<div class="phone-favorite-folders-v2">' + lists.map(function (list) {
+        var count = uniqueRefs(list.itemKeys || []).length;
+        return '<button type="button" class="phone-favorite-folder-card-v2" onclick="JSPhoneFavoritesV2.showFolder(' + escapeHtml(JSON.stringify(String(list.id))) + ')">' +
+          '<span class="phone-favorite-folder-symbol-v2" aria-hidden="true">♡</span><span><strong>' + escapeHtml(list.name) + '</strong><small>매물 ' + count + '개' + (state.pendingRefs.length ? ' · 여기에 담기' : '') + '</small></span><span aria-hidden="true">›</span></button>';
+      }).join("") + '</div>' : '<div class="unified-favorite-empty-v7"><strong>아직 찜폴더가 없습니다.</strong><span>폴더를 만들고 관심 매물을 담아보세요.</span></div>';
+    }
+    body.setAttribute("data-phone-scroll-key", phoneFolderIdV2 || "index");
+    restorePhoneScrollV2();
+    notifyPhoneV2();
+  }
+
   function render() {
     ensureModal();
     var lists = load("favorite");
@@ -335,6 +438,18 @@
     if (!body) return;
 
     renderDeletedFolderUndoV1();
+    if (isPhoneV2()) {
+      renderPhoneV2(lists, body);
+      return;
+    }
+    if (renderedPhoneV2) {
+      renderedPhoneV2 = false;
+      var modal = document.getElementById("unifiedFavoriteModalV7");
+      modal.classList.remove("phone-favorite-folder-open-v2");
+      var dialog = modal.querySelector(".unified-favorite-dialog-v7");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+    }
     if (!lists.length) {
       body.innerHTML = '<div class="unified-favorite-empty-v7"><strong>아직 찜폴더가 없습니다.</strong>' +
         '<span>위에서 폴더를 만든 뒤 선택한 매물을 추가하세요.</span></div>';
@@ -367,12 +482,18 @@
     migrateVisitFolders();
     state.source = options.source || "browse";
     state.pendingRefs = uniqueRefs(options.refs || (state.source === "selection" ? getSelectedRefs() : []));
+    if (isPhoneV2() && state.pendingRefs.length) phoneFolderIdV2 = "";
     render();
     var modal = document.getElementById("unifiedFavoriteModalV7");
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("lm-modal-open");
     positionModal();
+    if (isPhoneV2()) {
+      restorePhoneScrollV2();
+      notifyPhoneV2();
+      return;
+    }
     if (global.JSDialogFocusV1) {
       global.JSDialogFocusV1.activate(modal, state.source === "selection"
         ? "#unifiedFavoriteNameV7"
@@ -383,11 +504,18 @@
   function close() {
     var modal = document.getElementById("unifiedFavoriteModalV7");
     if (!modal) return;
+    rememberPhoneScrollV2();
     releaseFavoriteDetailV7();
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("lm-modal-open");
     state.pendingRefs = [];
+    var phoneFolder = document.getElementById("phoneFavoriteFolderScreenV2");
+    if (phoneFolder) {
+      phoneFolder.hidden = true;
+      phoneFolder.setAttribute("aria-hidden", "true");
+    }
+    notifyPhoneV2();
     if (global.JSDialogFocusV1) global.JSDialogFocusV1.deactivate(modal);
   }
 
@@ -395,6 +523,31 @@
   global.closeUnifiedFavoritesV7 = close;
   global.openListManager = function () { open({source: "browse"}); };
   global.closeListManager = close;
+
+  global.JSPhoneFavoritesV2 = {
+    isOpen: function () { return phoneStateV2().open; },
+    getState: phoneStateV2,
+    showFolder: function (id) {
+      if (!isPhoneV2() || !load("favorite").some(function (entry) { return String(entry.id) === String(id); })) return false;
+      rememberPhoneScrollV2();
+      phoneFolderIdV2 = String(id);
+      render();
+      return true;
+    },
+    showIndex: function () {
+      if (!isPhoneV2()) return false;
+      rememberPhoneScrollV2();
+      phoneFolderIdV2 = "";
+      render();
+      return true;
+    },
+    back: function () {
+      if (!phoneStateV2().open) return false;
+      if (phoneFolderIdV2) return this.showIndex();
+      close();
+      return true;
+    }
+  };
 
   global.openSelectedFavoritesManagerV7 = function () {
     var refs = getSelectedRefs();
@@ -428,6 +581,7 @@
       return;
     }
     state.expanded[list.id] = true;
+    if (isPhoneV2()) phoneFolderIdV2 = String(list.id);
     if (input) input.value = "";
     clearSavedSelection();
     render();
@@ -437,6 +591,7 @@
   };
 
   global.toggleUnifiedFavoriteFolderV7 = function (id) {
+    if (isPhoneV2()) return global.JSPhoneFavoritesV2.showFolder(id);
     state.expanded[id] = !state.expanded[id];
     render();
   };
@@ -483,6 +638,12 @@
     var propertyId = String(item && item.propertyId || "").trim();
     if (!propertyId || !global.JSUnifiedListingsV8 || typeof global.JSUnifiedListingsV8.open !== "function") {
       showToast("상세정보를 불러오지 못했습니다. 목록을 새로고침한 뒤 다시 눌러 주세요.", "warning");
+      return;
+    }
+    if (isPhoneV2()) {
+      // The full-screen detail overlays this screen without discarding folder or scroll.
+      rememberPhoneScrollV2();
+      global.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
       return;
     }
     if (global.innerWidth <= 768) {
@@ -599,9 +760,43 @@
       var button = document.getElementById("favoriteBtn");
       if (button) button.classList.add("on");
     }
+    if (isPhoneV2()) phoneFolderIdV2 = String(list.id);
     close();
+    if (isPhoneV2() && global.JSMobileAppV1 && typeof global.JSMobileAppV1.setView === "function") {
+      global.JSMobileAppV1.setView("map");
+    }
     if (typeof global.applyFilter === "function") global.applyFilter();
+    if (isPhoneV2()) fitPhoneFavoriteMapV2(refs);
   };
+
+  function fitPhoneFavoriteMapV2(refs) {
+    if (!global.map || !global.kakao || !global.kakao.maps || typeof global.kakao.maps.LatLngBounds !== "function") return;
+    var points = refs.map(resolveItem).filter(Boolean).map(function (item) {
+      var point = item.latlng;
+      if (!point || typeof point.getLat !== "function" || typeof point.getLng !== "function") return null;
+      var lat = Number(point.getLat()), lng = Number(point.getLng());
+      return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? point : null;
+    }).filter(Boolean);
+    if (!points.length) {
+      showToast("이 폴더에는 지도에 표시할 수 있는 매물이 없습니다.", "info");
+      return;
+    }
+    global.requestAnimationFrame(function () {
+      try {
+        if (typeof global.map.relayout === "function") global.map.relayout();
+        if (points.length === 1 && typeof global.map.setCenter === "function") {
+          global.map.setCenter(points[0]);
+          if (typeof global.map.setLevel === "function") global.map.setLevel(4);
+          return;
+        }
+        var bounds = new global.kakao.maps.LatLngBounds();
+        points.forEach(function (point) { bounds.extend(point); });
+        if (typeof global.map.setBounds === "function") global.map.setBounds(bounds, 48, 28, 48, 28);
+      } catch (error) {
+        console.warn("찜폴더 지도 범위를 조정하지 못했습니다.", error);
+      }
+    });
+  }
 
   function renderDeletedFolderUndoV1() {
     var body = document.getElementById("unifiedFavoriteBodyV7");
@@ -664,7 +859,10 @@
 
   global.addEventListener("resize", function () {
     var modal = document.getElementById("unifiedFavoriteModalV7");
-    if (modal && modal.classList.contains("open")) positionModal();
+    if (modal && modal.classList.contains("open")) {
+      if (renderedPhoneV2 !== isPhoneV2()) render();
+      positionModal();
+    }
   });
 
   global.addEventListener("js-v6-list-store-change", function (event) {

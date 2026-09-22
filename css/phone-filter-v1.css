@@ -1,0 +1,78 @@
+/* These additions are inert outside the explicitly classified phone UI. */
+.js-phone-filter-only { display: none; }
+.js-phone-app-v2 .v6-detail-sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: min(90dvh, 780px);
+  border-radius: 22px 22px 0 0;
+}
+.js-phone-app-v2 .v6-detail-sheet-body {
+  padding: 16px 20px;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.js-phone-app-v2 .v6-detail-sheet-close { width: 44px; height: 44px; }
+.js-phone-app-v2 .v6-detail-sheet-row { margin-bottom: 18px; gap: 8px; }
+.js-phone-app-v2 .js-phone-filter-label {
+  display: block;
+  grid-column: 1 / -1;
+  color: #253a53;
+  font-size: 14px;
+  font-weight: 700;
+}
+.js-phone-app-v2 .v6-detail-sheet-row input,
+.js-phone-app-v2 .v6-detail-sheet #saleFiltersV1 input,
+.js-phone-app-v2 .v6-detail-sheet #saleFiltersV1 select,
+.js-phone-app-v2 .js-phone-filter-advanced select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #cad6e5;
+  border-radius: 10px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #172033;
+}
+.js-phone-app-v2 .js-phone-filter-advanced {
+  display: block;
+  margin-top: 8px;
+  border-top: 1px solid #e1e8f0;
+}
+.js-phone-app-v2 .js-phone-filter-advanced summary {
+  min-height: 48px;
+  padding: 14px 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  color: #344960;
+  font-size: 14px;
+  font-weight: 700;
+}
+.js-phone-app-v2 .js-phone-filter-advanced label { display: grid; gap: 8px; margin: 6px 0 16px; font-size: 14px; }
+.js-phone-app-v2 .js-phone-filter-status { display: block; color: #5c6f85; font-size: 12px; line-height: 1.5; }
+.js-phone-app-v2 .js-phone-filter-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.7fr;
+  flex: 0 0 auto;
+  gap: 10px;
+  padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid #e1e8f0;
+  background: #fff;
+}
+.js-phone-app-v2 .js-phone-filter-actions button {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid #cdd9e6;
+  color: #354b65;
+  font-size: 15px;
+  font-weight: 700;
+  background: #f6f9fc;
+}
+.js-phone-app-v2 .js-phone-filter-actions .js-phone-filter-apply { background: #1769e8; border-color: #1769e8; color: #fff; }
+.js-phone-app-v2 .v6-detail-sheet-body > .v6-detail-sheet-apply { display: none; }
+.js-phone-app-v2 .v6-detail-sheet button:focus-visible,
+.js-phone-app-v2 .v6-detail-sheet input:focus-visible,
+.js-phone-app-v2 .v6-detail-sheet select:focus-visible,
+.js-phone-app-v2 .v6-detail-sheet summary:focus-visible { outline: 3px solid #1e75e5; outline-offset: 2px; }

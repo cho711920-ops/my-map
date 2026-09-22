@@ -20,6 +20,7 @@
     "#jsMobileMoreLayerV1.open",
     "#unifiedGalleryV8.open",
     "#unifiedFavoriteModalV7.open",
+    "#phoneFavoriteFolderScreenV2:not([hidden])",
     "#tellModalV8.open",
     "#listContactModalV654.open",
     "#propertyEditModalV630.open",
@@ -81,6 +82,7 @@
       '<nav class="jsm-bottom-nav-v1" aria-label="모바일 주 메뉴">' +
         navButton("map", "지도", "map") +
         navButton("list", "매물", "list") +
+        navButton("favorites", "찜", "heart") +
         navButton("visit", "임장", "route") +
         navButton("customers", "고객", "users") +
         navButton("more", "더보기", "more") +
@@ -201,6 +203,25 @@
   function setView(nextView, options) {
     if (!active) return;
     options = options || {};
+    // A quick tap can beat the input debounce. Commit the phone query before
+    // changing tabs, otherwise syncSearchValue would restore the older query.
+    if (global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone() && chrome) {
+      var pendingInput = chrome.querySelector("#jsMobileKeywordV1");
+      var appliedInput = document.getElementById("keyword");
+      if (pendingInput && appliedInput && pendingInput.value !== appliedInput.value) {
+        global.clearTimeout(mobileSearchTimer);
+        applyMobileKeywordSearch();
+      }
+    }
+    if (nextView === "favorites") {
+      runAction("favorites");
+      return;
+    }
+    if (global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone() &&
+        (nextView === "map" || nextView === "list") &&
+        global.JSPhoneFavoritesV2 && global.JSPhoneFavoritesV2.isOpen()) {
+      global.closeUnifiedFavoritesV7();
+    }
     if (nextView === "visit") {
       if (typeof global.startAiVisitPreview === "function") global.startAiVisitPreview();
       return;
@@ -250,6 +271,7 @@
     });
     closeMore();
     syncSearchValue();
+    if (global.JSPhoneAppV2) global.JSPhoneAppV2.sync();
     global.setTimeout(resizeMap, 80);
   }
 
@@ -347,6 +369,7 @@
     if (!element) return;
     var id = element.id || "";
     if (id === "jsMobileMoreLayerV1") return closeMore();
+    if (id === "phoneFavoriteFolderScreenV2" && global.JSPhoneFavoritesV2) return global.JSPhoneFavoritesV2.showIndex();
     if (id === "unifiedFavoriteModalV7" && typeof global.closeUnifiedFavoritesV7 === "function") return global.closeUnifiedFavoritesV7();
     if (id === "unifiedDetailDrawerV8" && global.JSUnifiedListingsV8) return global.JSUnifiedListingsV8.close();
     if (id === "listContactModalV654" && typeof global.closeListContactPopupV654 === "function") return global.closeListContactPopupV654();
@@ -459,6 +482,7 @@
     if (!sidebar || sidebarObserver) return;
     sidebarObserver = new MutationObserver(function() {
       if (!active || !sidebar.classList.contains("open") || view === "list") return;
+      if (global.JSPhoneFavoritesV2 && global.JSPhoneFavoritesV2.isOpen()) return;
       setView("list");
     });
     sidebarObserver.observe(sidebar, {attributes: true, attributeFilter: ["class"]});
@@ -495,7 +519,7 @@
   }
 
   function syncMode() {
-    if (global.matchMedia(MOBILE_QUERY).matches) activate();
+    if ((global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone()) || global.matchMedia(MOBILE_QUERY).matches) activate();
     else deactivate();
   }
 
@@ -512,10 +536,11 @@
     global.addEventListener("keydown", handleMobileEscape, true);
     global.addEventListener("js-listing-trade-mode-change", syncTradeMode);
     global.addEventListener("js-mutation-status", syncSaveStatus);
+    global.addEventListener("js-phone-device-change", syncMode);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, {once: true});
   else boot();
 
-  global.JSMobileAppV1 = {setView: setView, syncMode: syncMode};
+  global.JSMobileAppV1 = {setView: setView, syncMode: syncMode, getView: function() { return view; }};
 })(window);

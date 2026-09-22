@@ -40,7 +40,9 @@ test("Cloudflare public build does not copy test fixtures or browser reports", (
   const directories = build.match(/const directories = (\[[^;]+\]);/)[1];
   assert.doesNotMatch(directories, /tests|outputs|browser/);
   const config = readFileSync(new URL("../playwright.config.mjs", import.meta.url), "utf8");
-  assert.match(config, /baseURL: "http:\/\/127\.0\.0\.1:4179"/);
+  assert.match(config, /const baseURL = "http:\/\/127\.0\.0\.1:" \+ port/);
+  assert.match(config, /JS_BROWSER_FIXTURE_PORT \|\| 4179/);
+  assert.match(config, /!Number\.isInteger\(port\) \|\| port < 1024 \|\| port > 65535/);
   assert.match(config, /reuseExistingServer: false/);
   assert.match(config, /serviceWorkers: "block"/);
 });

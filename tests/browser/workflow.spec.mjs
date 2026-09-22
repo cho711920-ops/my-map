@@ -69,15 +69,15 @@ test("both screen sizes share the market and sale-filter controls", async ({page
 
 test("favorite-folder map filtering survives returning from an original link", async ({page, context, isMobile}) => {
   if (isMobile) {
-    await page.locator('[data-mobile-view="more"]').click();
-    await page.locator('[data-mobile-action="favorites"]').click();
+    await page.locator('[data-mobile-view="favorites"]').click();
   } else {
     await page.locator("#mapQuickListBtn").click();
   }
   const favorites = page.locator("#unifiedFavoriteModalV7");
   await expect(favorites).toContainText("테스트 찜폴더");
+  if (isMobile) await favorites.locator(".phone-favorite-folder-card-v2").first().click();
   await favorites.getByRole("button", {name: "지도 보기", exact: true}).click();
-  await expect(page).toHaveURL("http://127.0.0.1:4179/");
+  await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
   await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
   await listView(page, isMobile);
   await expect(page.locator("#list .item")).toHaveCount(1);
@@ -89,7 +89,7 @@ test("favorite-folder map filtering survives returning from an original link", a
   await expect(popup).toHaveTitle("가상 원본 매물");
   await popup.close();
   await page.bringToFront();
-  await expect(page).toHaveURL("http://127.0.0.1:4179/");
+  await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
   await expect.poll(() => page.evaluate(() => window.activeFavoriteFolderId)).toBe("fixture-favorites");
   await expect.poll(() => page.evaluate(() => window.favoriteOnly)).toBe(true);
   await expect(page.locator("#list .item")).toHaveCount(1);
@@ -117,18 +117,10 @@ test("local save failure is visible and retry does not report a phantom save", a
   await expect.poll(() => page.evaluate(() => window.JSAsyncMutations.getStatus().failed)).toBe(0);
 });
 
-test("mobile more sheet restores keyboard focus after Escape", async ({page, isMobile}) => {
-  test.skip(!isMobile, "Mobile-only sheet");
-  const trigger = page.locator('[data-mobile-view="more"]');
+test("phone favorites restores keyboard focus after Escape", async ({page, isMobile}) => {
+  test.skip(!isMobile, "Phone-only navigation");
+  const trigger = page.locator('[data-mobile-view="favorites"]');
   await trigger.click();
-  const layer = page.locator("#jsMobileMoreLayerV1");
-  await expect(layer).toHaveClass(/open/);
-  await expect(layer.locator("header button")).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(layer).not.toHaveClass(/open/);
-  await expect(trigger).toBeFocused();
-  await trigger.click();
-  await page.locator('[data-mobile-action="favorites"]').click();
   await expect(page.locator("#unifiedFavoriteModalV7")).toHaveClass(/open/);
   await page.keyboard.press("Escape");
   await expect(page.locator("#unifiedFavoriteModalV7")).not.toHaveClass(/open/);

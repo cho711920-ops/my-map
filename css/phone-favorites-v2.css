@@ -1,0 +1,110 @@
+/* Smartphone app screen only. Legacy tablet and desktop favorites remain untouched. */
+.js-phone-app-v2 #unifiedFavoriteModalV7 {
+  position: fixed;
+  z-index: 10000;
+  inset: var(--jsm-header-height, 64px) 0 var(--jsm-nav-height, 64px);
+  padding: 0;
+  background: #f5f7fb;
+}
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-backdrop-v7 { display: none; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-dialog-v7 {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  min-width: 0;
+  max-width: none;
+  height: 100% !important;
+  min-height: 0;
+  max-height: none !important;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transition: none;
+}
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-head-v7 { gap: 8px; padding: 10px 14px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-head-v7 strong { font-size: 20px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-head-v7 span { font-size: 11px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-head-actions-v7 { gap: 3px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-head-actions-v7 b:empty { display: none; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-close-v7 { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-layout-v7 { grid-template-columns: minmax(0, 1fr); }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-detail-host-v7 { display: none; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-create-v7 {
+  grid-template-columns: minmax(0, 1fr) 84px;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-create-v7 label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-create-v7 input { min-width: 0; height: 44px; font-size: 16px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-create-v7 button { height: 44px; font-size: 13px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 .unified-favorite-body-v7 {
+  padding: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.js-phone-app-v2 #unifiedFavoriteModalV7.phone-favorite-folder-open-v2 .unified-favorite-head-v7,
+.js-phone-app-v2 #unifiedFavoriteModalV7.phone-favorite-folder-open-v2 .unified-favorite-create-v7 { display: none; }
+.js-phone-app-v2 #unifiedFavoriteModalV7.phone-favorite-folder-open-v2 .unified-favorite-body-v7 { padding-top: 0; }
+.js-phone-app-v2 #phoneFavoriteIndexV2[hidden],
+.js-phone-app-v2 #phoneFavoriteFolderScreenV2[hidden] { display: none !important; }
+.js-phone-app-v2 .phone-favorite-folders-v2 { display: grid; gap: 10px; }
+.js-phone-app-v2 .phone-favorite-folder-card-v2 {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  min-height: 88px;
+  padding: 14px;
+  border: 1px solid #e0e7f0;
+  border-radius: 16px;
+  background: #fff;
+  color: #162a44;
+  text-align: left;
+}
+.js-phone-app-v2 .phone-favorite-folder-symbol-v2 { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; background: #eaf2ff; color: #1674de; font-size: 29px; }
+.js-phone-app-v2 .phone-favorite-folder-card-v2 strong { display: block; overflow-wrap: anywhere; font-size: 16px; }
+.js-phone-app-v2 .phone-favorite-folder-card-v2 small { display: block; margin-top: 5px; color: #697b90; font-size: 12px; }
+.js-phone-app-v2 .phone-favorite-folder-card-v2 > span:last-child { color: #7f8d9c; font-size: 28px; }
+.js-phone-app-v2 .phone-favorite-folder-head-v2 { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 4px; padding: 10px 0; }
+.js-phone-app-v2 .phone-favorite-folder-head-v2 h2 { margin: 0; color: #172a43; font-size: 19px; overflow-wrap: anywhere; }
+.js-phone-app-v2 .phone-favorite-folder-head-v2 span { display: block; margin-top: 3px; color: #677b93; font-size: 12px; }
+.js-phone-app-v2 .phone-favorite-back-v2,
+.js-phone-app-v2 .phone-favorite-close-v2 { display: grid; width: 44px; height: 44px; padding: 0; place-items: center; border: 0; border-radius: 12px; background: transparent; color: #334b68; font-size: 30px; }
+.js-phone-app-v2 .phone-favorite-folder-toolbar-v2 { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.js-phone-app-v2 .phone-favorite-view-v2 { display: flex; flex: 1; padding: 3px; border-radius: 12px; background: #e8edf4; }
+.js-phone-app-v2 .phone-favorite-view-v2 button { flex: 1; min-height: 44px; padding: 0 9px; border: 0; border-radius: 9px; background: transparent; color: #56708b; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.js-phone-app-v2 .phone-favorite-view-v2 button[aria-pressed="true"] { background: #fff; color: #116bc9; box-shadow: 0 1px 4px #20365312; }
+.js-phone-app-v2 .phone-favorite-manage-v2 { flex: 0 0 83px; }
+.js-phone-app-v2 .phone-favorite-manage-v2 summary { display: flex; min-height: 50px; align-items: center; justify-content: center; cursor: pointer; color: #536982; font-size: 13px; list-style: none; }
+.js-phone-app-v2 .phone-favorite-manage-v2 summary::-webkit-details-marker { display: none; }
+.js-phone-app-v2 .phone-favorite-manage-v2 > div { display: grid; gap: 4px; }
+.js-phone-app-v2 .phone-favorite-manage-v2 button { min-height: 44px; padding: 4px; border: 1px solid #d7e0eb; border-radius: 8px; background: #fff; color: #334b68; font-size: 12px; }
+.js-phone-app-v2 .phone-favorite-manage-v2 button.danger { color: #b33035; }
+.js-phone-app-v2 .phone-favorite-add-v2 { width: 100%; min-height: 44px; margin-bottom: 12px; padding: 8px; border: 1px solid #98d2b5; border-radius: 12px; background: #e8f7ef; color: #186f43; font-size: 14px; font-weight: 700; }
+.js-phone-app-v2 .phone-favorite-items-v2 { display: grid; gap: 10px; }
+.js-phone-app-v2 .phone-favorite-item-v2 { position: relative; min-width: 0; border: 1px solid #dfe7f1; border-radius: 15px; background: #fff; }
+.js-phone-app-v2 .phone-favorite-item-open-v2 { display: grid; grid-template-columns: 66px minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-height: 105px; padding: 12px 45px 12px 10px; border: 0; border-radius: 15px; background: transparent; text-align: left; }
+.js-phone-app-v2 .phone-favorite-thumb-v2 { display: grid; place-items: center; width: 66px; height: 72px; overflow: hidden; border-radius: 9px; background: #e7edf3; color: #6c8097; font-size: 10px; }
+.js-phone-app-v2 .phone-favorite-thumb-v2 img { width: 100%; height: 100%; object-fit: cover; }
+.js-phone-app-v2 .phone-favorite-item-copy-v2 { display: grid; min-width: 0; gap: 5px; }
+.js-phone-app-v2 .phone-favorite-item-copy-v2 strong { color: #0e65c8; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.js-phone-app-v2 .phone-favorite-item-copy-v2 > span { color: #20364f; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.js-phone-app-v2 .phone-favorite-item-copy-v2 small { color: #6a7f94; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.js-phone-app-v2 .phone-favorite-remove-v2 { position: absolute; top: 8px; right: 2px; width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: #217adc; font-size: 24px; }
+.js-phone-app-v2 .phone-favorite-empty-v2 { padding: 24px 12px; color: #65798f; text-align: center; font-size: 14px; }
+.js-phone-app-v2 #unifiedFavoriteModalV7 button:focus-visible,
+.js-phone-app-v2 #unifiedFavoriteModalV7 summary:focus-visible { outline: 3px solid #2784e7; outline-offset: 2px; }
+.js-phone-app-v2 #unifiedFavoriteUndoV1 { margin: 8px 12px; font-size: 12px; }
+.js-phone-app-v2 #unifiedFavoriteUndoV1 button { min-height: 44px; }
+.js-phone-app-v2 .unified-favorite-toast-v7 { bottom: calc(var(--jsm-nav-height, 64px) + 12px); }

@@ -12,6 +12,11 @@
   ];
   var saleFilterAnchor = null;
   var saleFilterSnapshot = null;
+  var PHONE_TOOLBAR_IDS = ["sourceFilter", "typeFilter", "brokerageFeeFilter"];
+
+  function isDedicatedPhone() {
+    return !!(window.JSPhoneDeviceV1 && window.JSPhoneDeviceV1.isPhone());
+  }
 
   function isPhone() {
     return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
@@ -75,6 +80,87 @@
       }
     });
     syncSaleFilters();
+    syncPhoneFilters();
+  }
+
+  function ensurePhoneFilters(root) {
+    if (!isDedicatedPhone() || root.querySelector(".js-phone-filter-actions")) return;
+    [
+      ["minDeposit", "보증금 · 만원"], ["minRent", "월세 · 만원"],
+      ["minPremium", "권리금 · 만원"], ["minArea", "면적 · 평"],
+      ["minFloor", "층수"], ["industryFilter", "업종"]
+    ].forEach(function (entry) {
+      var field = sheetField(entry[0]);
+      var row = field && field.closest(".v6-detail-sheet-row");
+      if (!row) return;
+      var label = document.createElement("label");
+      label.className = "js-phone-filter-label js-phone-filter-only";
+      label.htmlFor = field.id;
+      label.textContent = entry[1];
+      row.insertBefore(label, row.firstChild);
+    });
+    var body = root.querySelector(".v6-detail-sheet-body");
+    var advanced = document.createElement("details");
+    advanced.className = "js-phone-filter-advanced js-phone-filter-only";
+    advanced.innerHTML = '<summary>출처 · 매물 구분 · 중개보수</summary>';
+    PHONE_TOOLBAR_IDS.forEach(function (id, index) {
+      var label = document.createElement("label");
+      label.textContent = ["출처", "매물 구분", "중개보수 · 만원"][index];
+      var select = document.createElement("select");
+      select.id = "v6DetailSheet_" + id;
+      select.setAttribute("aria-label", label.textContent);
+      label.appendChild(select);
+      advanced.appendChild(label);
+    });
+    body.appendChild(advanced);
+    var status = document.createElement("p");
+    status.className = "js-phone-filter-status js-phone-filter-only";
+    status.setAttribute("aria-live", "polite");
+    body.appendChild(status);
+    var footer = document.createElement("footer");
+    footer.className = "js-phone-filter-actions js-phone-filter-only";
+    footer.innerHTML = '<button type="button" class="js-phone-filter-reset">조건 초기화</button>' +
+      '<button type="button" class="js-phone-filter-apply">필터 적용</button>';
+    root.querySelector(".v6-detail-sheet").appendChild(footer);
+  }
+
+  function syncPhoneFilters() {
+    if (!isDedicatedPhone()) return;
+    var root = document.getElementById("v6DetailSheetPortal");
+    if (!root) return;
+    ensurePhoneFilters(root);
+    PHONE_TOOLBAR_IDS.forEach(function (id) {
+      var source = originalField(id);
+      var target = sheetField(id);
+      if (!source || !target) return;
+      target.textContent = "";
+      Array.prototype.forEach.call(source.options, function (option) {
+        var copy = document.createElement("option");
+        copy.value = option.value;
+        copy.textContent = option.value === "" ? "전체" : option.textContent;
+        copy.disabled = option.disabled;
+        target.appendChild(copy);
+      });
+      target.value = source.value;
+    });
+    var price = sheetField("minDeposit");
+    var priceLabel = price && price.closest(".v6-detail-sheet-row").querySelector(".js-phone-filter-label");
+    if (priceLabel) priceLabel.textContent = /매매/.test(price.placeholder) ? "매매가 · 만원" : "보증금 · 만원";
+    var status = root.querySelector(".js-phone-filter-status");
+    if (status) status.textContent = "조건을 바꾼 뒤 필터 적용을 눌러 주세요.";
+  }
+
+  function resetPhoneDraft() {
+    if (!isDedicatedPhone()) return;
+    FIELD_IDS.concat(PHONE_TOOLBAR_IDS).forEach(function (id) {
+      var field = sheetField(id);
+      if (field) field.value = "";
+    });
+    // The sale controls retain their original IDs and cancellation snapshot.
+    var sale = document.getElementById("saleFiltersV1");
+    if (sale) sale.querySelectorAll("input, select, textarea").forEach(function (field) { field.value = ""; });
+    var status = document.querySelector("#v6DetailSheetPortal .js-phone-filter-status");
+    if (status) status.textContent = "조건을 초기화했습니다. 필터 적용을 누르면 반영됩니다.";
   }
 
   function syncSaleFilters() {
@@ -122,6 +208,11 @@
       var target = originalField(id);
       if (source && target) target.value = source.value || "";
     });
+    if (isDedicatedPhone()) PHONE_TOOLBAR_IDS.forEach(function (id) {
+      var source = sheetField(id);
+      var target = originalField(id);
+      if (source && target) target.value = source.value || "";
+    });
   }
 
   function ensureSheet() {
@@ -161,12 +252,15 @@
 
     root.addEventListener("click", function (event) {
       var closeTarget = event.target.closest("[data-v6-detail-close]");
-      var applyTarget = event.target.closest(".v6-detail-sheet-apply");
+      var applyTarget = event.target.closest(".v6-detail-sheet-apply, .js-phone-filter-apply");
+      var resetTarget = event.target.closest(".js-phone-filter-reset");
 
       if (closeTarget) {
         close();
       } else if (applyTarget) {
         apply();
+      } else if (resetTarget) {
+        resetPhoneDraft();
       }
 
       event.stopPropagation();
@@ -287,8 +381,19 @@
   }
 
   function apply() {
+    // Draft edits must not leak into shared filters if validation rejects them.
+    var previous = isDedicatedPhone() ? FIELD_IDS.concat(PHONE_TOOLBAR_IDS).map(function (id) {
+      var field = originalField(id);
+      return field ? {field: field, value: field.value} : null;
+    }).filter(Boolean) : [];
     syncToOriginal();
-    if (typeof window.applyFilter === "function" && window.applyFilter() === false) return;
+    var applied = false;
+    try {
+      applied = typeof window.applyFilter !== "function" || window.applyFilter() !== false;
+    } finally {
+      if (!applied) previous.forEach(function (saved) { saved.field.value = saved.value; });
+    }
+    if (!applied) return;
     close({applied: true});
   }
 
