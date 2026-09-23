@@ -1,7 +1,8 @@
 /* Opt-in, on-device troubleshooting. No account data, persistence or telemetry. */
 (function phoneDeviceCheckV1(global) {
   "use strict";
-  if (new URLSearchParams(global.location.search).get("phoneCheck") !== "1") return;
+  var standalone = !!document.querySelector('body[data-phone-check-page="true"]');
+  if (!standalone && new URLSearchParams(global.location.search).get("phoneCheck") !== "1") return;
 
   var panel;
   var output;
@@ -15,7 +16,7 @@
     var hints = nav.userAgentData;
     var device = global.JSPhoneDeviceV1;
     return [
-      "화면 진단 2026-09-23.1",
+      "화면 진단 2026-09-23.2" + (standalone ? " · 독립 확인 페이지" : " · 지도 내 확인"),
       "새 모바일 판별: " + (device && device.isPhone() ? "적용" : "적용 안 됨"),
       "새 모바일 CSS: " + (document.documentElement.classList.contains("js-phone-app-v2") ? "적용" : "적용 안 됨"),
       "screen: " + display.width + " × " + display.height,
@@ -68,6 +69,7 @@
       });
     });
     panel.querySelector("[data-device-check-close]").addEventListener("click", function() {
+      if (standalone) { global.location.assign("/"); return; }
       panel.remove();
       global.removeEventListener("resize", refresh);
       global.removeEventListener("js-phone-device-change", refresh);

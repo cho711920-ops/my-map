@@ -9,6 +9,7 @@ const directories = ["assets", "css", "data", "icons", "js"];
 const files = [
   "_headers",
   "index.html",
+  "phone-check.html",
   "favicon.svg",
   "manifest.webmanifest",
   "offline.html",

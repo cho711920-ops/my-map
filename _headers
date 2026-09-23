@@ -12,6 +12,12 @@
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
+/phone-check
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/phone-check.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /js/*
   Cache-Control: public, max-age=31536000, immutable
 

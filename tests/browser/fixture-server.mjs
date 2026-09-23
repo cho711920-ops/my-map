@@ -55,6 +55,7 @@ export function createFixtureServer() {
         return send(200, "text/html; charset=utf-8", await fixtureHtml());
       }
       if (url.pathname === "/api/session") return json({ok: true, email, role: "owner"});
+      if (url.pathname === "/phone-check" && request.method === "GET") return send(200, "text/html; charset=utf-8", await readFile(resolve(fixtureRoot, "phone-check.html"), "utf8"));
       if (url.pathname === "/__fixture/bootstrap.js") return send(200, "text/javascript; charset=utf-8", await readFile(new URL("./fixture-bootstrap.js", import.meta.url), "utf8"));
       if (url.pathname.startsWith("/original/")) return send(200, "text/html; charset=utf-8", "<!doctype html><title>가상 원본 매물</title><p>검사 전용 원본 링크</p>");
       if (url.pathname === "/__fixture/fail-writes" && request.method === "POST") {failWrites = url.searchParams.get("enabled") === "1"; return json({ok: true});}

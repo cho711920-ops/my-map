@@ -1,4 +1,5 @@
 import {test, expect} from "@playwright/test";
+import {readFile} from "node:fs/promises";
 
 test.beforeEach(async ({context}) => {
   await context.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
@@ -31,5 +32,41 @@ test("explicit diagnostic URL shows local device-only facts and leaves classific
   await panel.getByRole("button",{name:"다시 확인",exact:true}).click();
   expect(await page.evaluate(()=>window.deviceModelReads)).toBe(1);
   await panel.getByRole("button",{name:"닫기",exact:true}).click();
+  await expect(panel).toHaveCount(0);
+});
+
+test("real authenticated bootstrap shows diagnostics even while a secondary script is stalled", async ({page}) => {
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  await page.route("http://127.0.0.1:*/?phoneCheck=1", route=>route.fulfill({status:200,contentType:"text/html",body:html}));
+  await page.route("https://dapi.kakao.com/**", route=>route.fulfill({status:200,contentType:"text/javascript",body:"window.kakao={maps:{load:function(){}}};"}));
+  let resume;
+  const stalled=new Promise(resolve=>{resume=resolve;});
+  await page.route("**/js/async-mutation-queue-v1.js*",async route=>{
+    await stalled;
+    await route.fulfill({status:200,contentType:"text/javascript",body:"/* resumed test-only secondary script */"});
+  });
+  try {
+    await page.goto("/?phoneCheck=1",{waitUntil:"domcontentloaded"});
+    await expect(page.locator("html")).not.toHaveClass(/auth-pending/);
+    await expect(page.locator("#jsPhoneDeviceCheckV1")).toBeVisible({timeout:1500});
+  } finally {resume();}
+});
+
+test("standalone diagnostic works without queries, login, map or any API request", async ({page}) => {
+  const apiRequests=[];
+  await page.route("**/api/**", route=>{
+    apiRequests.push(route.request().url());
+    return route.abort();
+  });
+  await page.goto("/phone-check");
+  await expect(page).toHaveTitle("기기 화면 확인 · JS부동산");
+  const panel=page.locator("#jsPhoneDeviceCheckV1");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("pre")).toContainText("독립 확인 페이지");
+  await expect(panel.locator("pre")).toContainText("TEST-DEVICE");
+  expect(apiRequests).toEqual([]);
+  await expect(page.locator("#wrap, #jsAuthGate, #map")).toHaveCount(0);
+  await panel.getByRole("button",{name:"닫기",exact:true}).click();
+  await expect(page).toHaveURL(/:\d+\/$/);
   await expect(panel).toHaveCount(0);
 });
