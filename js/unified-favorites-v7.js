@@ -111,9 +111,55 @@
   }
 
   function refSignature(ref) {
+    // Property references are already canonical; avoid scanning all listings
+    // for every member of a folder while rendering its map-review buttons.
+    if (String(ref || "").indexOf("property:") === 0) return String(ref);
     var item = resolveItem(ref);
     return stableRef(item, ref);
   }
+
+  function favoriteMapRemovalContextV1(item) {
+    if (!global.favoriteOnly || !String(global.activeFavoriteFolderId || "")) return null;
+    var currentAccount = String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
+    if (favoriteAccountV1 && favoriteAccountV1 !== currentAccount) return null;
+    var folder = load("favorite").find(function(entry) {
+      return String(entry.id) === String(global.activeFavoriteFolderId);
+    });
+    if (!folder) return null;
+    var ref = item ? stableRef(item) : "";
+    if (item && (!ref || !(folder.itemKeys || []).some(function(entry) { return refSignature(entry) === ref; }))) return null;
+    return {folderId: String(folder.id), folderName: String(folder.name || "찜폴더"), ref: ref};
+  }
+
+  global.getFavoriteMapRemovalContextV1 = favoriteMapRemovalContextV1;
+
+  // The expected folder comes from the rendered row, never from the active
+  // folder alone: a stale button must not remove an item from a different folder.
+  global.removeFavoriteMapItemV1 = function(encodedFolderId, encodedRef) {
+    var folderId, ref;
+    try {
+      folderId = decodeURIComponent(encodedFolderId || "");
+      ref = decodeURIComponent(encodedRef || "");
+    } catch (_) { return false; }
+    var item = resolveItem(ref);
+    var context = item && favoriteMapRemovalContextV1(item);
+    if (!context || context.folderId !== folderId || context.ref !== refSignature(ref)) return false;
+    var account = String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
+    var label = [item.address || item.name || "선택 매물", item.room].filter(Boolean).join(" · ");
+    if (!global.confirm('"' + context.folderName + '" 폴더에서 이 매물을 찜 제거할까요?\n' + label +
+        '\n\n현재 폴더에서만 제거됩니다. 매물 원본과 다른 찜폴더는 유지됩니다.')) return false;
+    // Recheck after confirmation, including a folder/filter/account change.
+    context = favoriteMapRemovalContextV1(item);
+    if (!context || context.folderId !== folderId ||
+        account !== String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase()) return false;
+    var previousReview = global.jsFavoriteMapRemovalInProgressV1;
+    global.jsFavoriteMapRemovalInProgressV1 = true;
+    try {
+      return global.removeUnifiedFavoriteItemV7(folderId, encodeURIComponent(context.ref));
+    } finally {
+      global.jsFavoriteMapRemovalInProgressV1 = previousReview;
+    }
+  };
 
   function uniqueRefs(refs) {
     var seen = {};
@@ -622,14 +668,35 @@
     var signature = refSignature(ref);
     var lists = load("favorite");
     var list = lists.find(function (entry) { return String(entry.id) === String(id); });
-    if (!list) return;
-    list.itemKeys = (list.itemKeys || []).filter(function (entry) { return refSignature(entry) !== signature; });
-    list.updatedAt = nowIso();
-    if (!save(lists)) return showToast("찜 제거를 저장하지 못했습니다. 다시 시도해 주세요.", "warning");
+    if (!list) return false;
+    var remaining = (list.itemKeys || []).filter(function (entry) { return refSignature(entry) !== signature; });
+    if (remaining.length === (list.itemKeys || []).length) return false;
+    // The store returns live objects. Do not mutate its cached snapshot before
+    // it accepts a save, so a failed removal leaves the folder unchanged.
+    var next = Object.assign({}, list, {itemKeys: remaining, updatedAt: nowIso()});
+    if (!save(lists.map(function(entry) { return entry === list ? next : entry; }))) {
+      showToast("찜 제거를 저장하지 못했습니다. 다시 시도해 주세요.", "warning");
+      return false;
+    }
+    if (global.favoriteOnly && String(global.activeFavoriteFolderId || "") === String(id)) {
+      // Keep even an empty folder selected; never fall back to all favorites.
+      global.favoriteFilterKeys = remaining.slice();
+    }
+    if (global.jsFavoriteMapRemovalInProgressV1) {
+      var removedItem = resolveItem(ref);
+      if (removedItem && typeof global.isLinkedListingSelectedV845 === "function" &&
+          global.isLinkedListingSelectedV845(removedItem) && typeof global.clearLinkedListingSelectionV845 === "function") {
+        global.clearLinkedListingSelectionV845();
+      }
+      var detailApi = global.JSUnifiedListingsV8;
+      if (removedItem && removedItem.propertyId && detailApi && typeof detailApi.isOpenForProperty === "function" &&
+          detailApi.isOpenForProperty(removedItem.propertyId)) detailApi.close();
+    }
     state.expanded[id] = true;
     render();
     showToast("찜폴더에서 매물을 제거했습니다.");
     if (typeof global.applyFilter === "function") global.applyFilter();
+    return true;
   };
 
   global.openUnifiedFavoriteItemV7 = function (encodedRef) {

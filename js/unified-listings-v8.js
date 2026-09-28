@@ -1602,6 +1602,7 @@
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
+    isOpenForProperty: isDetailOpenForPropertyV8143,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,

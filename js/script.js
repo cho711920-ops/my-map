@@ -1772,6 +1772,10 @@ function appendVirtualListItemV1(index, target) {
   if (reusableCard && reusableCard.classList.contains("customer-match-map-card-v721") !== isCustomerMatchMapCardV721(item)) {
     reusableCard = null;
   }
+  var favoriteContext = typeof window.getFavoriteMapRemovalContextV1 === "function"
+    ? window.getFavoriteMapRemovalContextV1(item) : null;
+  if (reusableCard && (reusableCard.getAttribute("data-favorite-map-folder-id") || "") !==
+      (favoriteContext ? favoriteContext.folderId : "")) reusableCard = null;
   if (reusableCard) {
     reusableCard.setAttribute("data-list-index-v1", String(index));
     target.appendChild(reusableCard);
@@ -2018,6 +2022,33 @@ function showList(items) {
   var sidebar = getListingScrollContainerV2();
   var previousSidebarTop = sidebar ? sidebar.scrollTop : 0;
   cacheRenderedListCardHeightsV1(list);
+  var reviewContext = typeof window.getFavoriteMapRemovalContextV1 === "function"
+    ? window.getFavoriteMapRemovalContextV1() : null;
+  document.documentElement.classList.toggle("favorite-map-review-v1", !!reviewContext);
+  var keepReviewPosition = !!(reviewContext && window.jsFavoriteMapRemovalInProgressV1);
+  var reviewAnchor = null;
+  var reviewStart = 0;
+  var reviewTopHeight = 0;
+  if (keepReviewPosition && list && sidebar) {
+    var nextCardIds = new Set((items || []).map(actionSelectionKeyV660));
+    var remainingCards = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).filter(function(card) {
+      return nextCardIds.has(card.getAttribute("data-list-card-id-v681"));
+    });
+    var scrollerTop = sidebar.getBoundingClientRect().top;
+    var anchorCard = remainingCards.find(function(card) { return card.getBoundingClientRect().bottom > scrollerTop; });
+    if (anchorCard) reviewAnchor = {
+      id: anchorCard.getAttribute("data-list-card-id-v681"),
+      top: anchorCard.getBoundingClientRect().top
+    };
+    if (remainingCards.length) {
+      reviewStart = (items || []).findIndex(function(item) {
+        return actionSelectionKeyV660(item) === remainingCards[0].getAttribute("data-list-card-id-v681");
+      });
+      for (var prefixIndex = 0; prefixIndex < reviewStart; prefixIndex++) {
+        reviewTopHeight += Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(items[prefixIndex], prefixIndex)]) || 0;
+      }
+    }
+  }
   resetUnifiedDuplicateShimmerObserverV812();
   var previousSignature = (visibleListItems || []).map(function(item) {
     return actionSelectionKeyV660(item);
@@ -2065,6 +2096,7 @@ function showList(items) {
   listRenderStart = 0;
   listRenderLimit = 0;
   listVirtualTopHeightV1 = 0;
+  syncListVirtualMetadataV1(list);
   bindIncrementalListRendering();
 
   if (
@@ -2081,7 +2113,11 @@ function showList(items) {
     return;
   }
 
-  if (sameList && previousRenderStart < visibleListItems.length) {
+  if (keepReviewPosition && reviewAnchor) {
+    listRenderStart = Math.max(0, reviewStart);
+    listRenderLimit = listRenderStart;
+    listVirtualTopHeightV1 = reviewTopHeight;
+  } else if (sameList && previousRenderStart < visibleListItems.length) {
     listRenderStart = previousRenderStart;
     listRenderLimit = previousRenderStart;
     listVirtualTopHeightV1 = previousVirtualTopHeight;
@@ -2090,13 +2126,23 @@ function showList(items) {
   }
   ensureListVirtualTopSpacerV1(list);
   renderNextListChunk(
-    sameList
+    keepReviewPosition && reviewAnchor
+      ? listRenderStart + Math.max(previousRenderLimit - previousRenderStart, getListRenderChunkSize())
+      : sameList
       ? Math.max(previousRenderLimit, getListRenderChunkSize())
       : getListRenderChunkSize()
   );
   listCardReusePoolV6521 = null;
 
-  if (sidebar) sidebar.scrollTop = sameList ? previousSidebarTop : 0;
+  if (sidebar) {
+    sidebar.scrollTop = sameList || keepReviewPosition ? previousSidebarTop : 0;
+    if (reviewAnchor) {
+      var restoredAnchor = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).find(function(card) {
+        return card.getAttribute("data-list-card-id-v681") === reviewAnchor.id;
+      });
+      if (restoredAnchor) sidebar.scrollTop += restoredAnchor.getBoundingClientRect().top - reviewAnchor.top;
+    }
+  }
 
   updatePrintSelectedButton();
   syncListMasterCheckbox();
@@ -4518,6 +4564,8 @@ function isCustomerMatchMapCardV721(item, customerMatchContextV719) {
 
 function addListItem(item, appendTarget, customerMatchContextV719) {
   var div = document.createElement("div");
+  var favoriteMapContextV1 = !customerMatchContextV719 && typeof window.getFavoriteMapRemovalContextV1 === "function"
+    ? window.getFavoriteMapRemovalContextV1(item) : null;
   var customerMatchMapCardV721 = isCustomerMatchMapCardV721(item, customerMatchContextV719);
   var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
   var memoOpen = openMemoKey === item.key;
@@ -4550,6 +4598,19 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     (customerMatchMapCardV721 ? " customer-match-map-card-v721" : "");
 
   var encodedKey = encodeURIComponent(item.key);
+  var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
+  var selectionControlV1 = '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
+    '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') +
+    ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')"></label>';
+  if (favoriteMapContextV1) {
+    div.setAttribute("data-favorite-map-folder-id", favoriteMapContextV1.folderId);
+    selectionControlV1 = '<button type="button" class="favorite-map-remove-v1" ' +
+      'title="' + escapeHtml(favoriteMapContextV1.folderName + ' 폴더에서만 찜 제거') + '" ' +
+      'aria-label="' + escapeHtml((item.address || item.name || '매물') + ' 찜 제거') + '" ' +
+      'onclick="event.stopPropagation(); removeFavoriteMapItemV1(' +
+      escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.folderId))) + ',' +
+      escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.ref))) + ')">찜 제거</button>';
+  }
   var doneLabel = isDone(item)
     ? '<button type="button" class="done-badge done-restore-button-v1" ' +
         'title="계약가능으로 복구" aria-label="계약완료 상태를 계약가능으로 복구" ' +
@@ -4570,7 +4631,6 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     ? "property:" + String(item.propertyId).trim()
     : item.key;
   var encodedFavoriteRefV821 = encodeURIComponent(favoriteRefV821);
-  var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
   var encodedEditTargetV648 = encodeURIComponent(
     item.propertyId
       ? "id:" + String(item.propertyId).trim()
@@ -4680,11 +4740,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           ? ' standard-card-main-v661 customer-match-map-card-main-v721'
           : (customerMatchControls ? ' customer-match-card-main-v654' : ' standard-card-main-v661')) + '">' +
         '<div class="item-compact-head-v650">' +
-          '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
-            '<input type="checkbox" class="action-select-check" ' +
-              (printSelected ? 'checked' : '') +
-              ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')">' +
-          '</label>' +
+          selectionControlV1 +
           '<span class="item-building-year-v650 item-building-year-head-v652' +
             cachedBuildingYearClassV6519 +
             '" title="건축물대장 사용승인일">' +

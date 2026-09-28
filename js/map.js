@@ -339,6 +339,50 @@ function getPinnedClusterItemsV6515() {
 }
 
 
+function restrictFavoriteMapPinnedSelectionV1(items) {
+  if (!window.favoriteOnly || !String(window.activeFavoriteFolderId || "").trim()) return;
+  var pin = jsPinnedClusterSelectionV6515;
+  if (!pin || !Array.isArray(pin.itemIdentities)) return;
+
+  // A folder's map selection must not retain a listing removed from that folder.
+  // Prune the stored snapshot too, so closing detail or returning from a link
+  // cannot bring the removed row back from allItems.
+  var allowed = Object.create(null);
+  (items || []).forEach(function(item) {
+    var identity = getStableItemIdentityV638(item);
+    if (identity) allowed[identity] = true;
+  });
+  function retain(identities) {
+    return (identities || []).filter(function(identity) { return !!allowed[identity]; });
+  }
+  pin.itemIdentities = retain(pin.itemIdentities);
+  if (!pin.itemIdentities.length) {
+    clearPinnedClusterSelectionV6515(true);
+    return;
+  }
+
+  var snapshot = pin.snapshot;
+  if (!snapshot) return;
+  snapshot.singleItemIds = retain(snapshot.singleItemIds);
+  snapshot.multiItemIdGroups = (snapshot.multiItemIdGroups || []).map(retain).filter(function(group) {
+    return group.length > 0;
+  });
+  if (snapshot.selectedItemIdentity && !allowed[snapshot.selectedItemIdentity]) {
+    snapshot.selectedItemIdentity = "";
+    if (typeof clearLinkedListingSelectionV845 === "function") {
+      clearLinkedListingSelectionV845();
+    } else {
+      selectedItemKey = null;
+      selectedListCardIdV845 = null;
+    }
+  }
+  jsClusterSelectionMemoryV638.singleItemIds = snapshot.singleItemIds.slice();
+  jsClusterSelectionMemoryV638.multiItemIdGroups = snapshot.multiItemIdGroups.map(function(group) {
+    return group.slice();
+  });
+}
+
+
 function pinCurrentClusterSelectionV6515() {
   var snapshot = captureClusterSelectionSnapshotV638();
   var itemIdentities = [];
@@ -2753,6 +2797,7 @@ function toggleMapRoadviewSelection() {
 
 function drawItems(items) {
   jsLastRenderedItemsV639 = (items || []).slice();
+  restrictFavoriteMapPinnedSelectionV1(jsLastRenderedItemsV639);
   drawMapClustersOnlyV639(jsLastRenderedItemsV639);
   var pinnedItems = getPinnedClusterItemsV6515();
   showList(pinnedItems.length
