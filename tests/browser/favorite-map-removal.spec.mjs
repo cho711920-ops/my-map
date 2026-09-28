@@ -82,11 +82,17 @@ test("ordinary lists keep selection checkboxes and no folder-removal action", as
   }
 });
 
-test("map view replaces row checkbox with removal and cancel leaves folder, selection and detail untouched", async ({page, isMobile}, testInfo) => {
+test("map view keeps row checkboxes beside removal and cancel leaves folder, selection and detail untouched", async ({page, isMobile}, testInfo) => {
   await showFolderOnMap(page, isMobile);
   await expectFolderMode(page, 2);
-  await expect(page.locator("#list .action-select-check")).toHaveCount(0);
-  await expect(page.locator("#listMasterCheckbox")).toBeHidden();
+  await expect(page.locator("#list .action-select-check")).toHaveCount(2);
+  if (!isMobile) {
+    await expect(page.locator("#listMasterCheckbox")).toBeVisible();
+    await expect(row(page).locator(".action-select-check")).toBeVisible();
+    const checkboxBox = await row(page).locator(".action-select-check").boundingBox();
+    const removalBox = await row(page).locator(".favorite-map-remove-v1").boundingBox();
+    expect(checkboxBox.x + checkboxBox.width).toBeLessThan(removalBox.x);
+  }
   const button = row(page).locator(".item-compact-head-v650 .favorite-map-remove-v1");
   await expect(button).toBeVisible();
   await expect(button).toHaveText("찜 제거");
@@ -126,7 +132,7 @@ test("confirmed removal affects only this folder and an empty map folder stays s
   expect(await page.evaluate(() => window.allItems.map(item => ({key: item.key, propertyId: item.propertyId})))).toEqual(allItemsBefore);
 });
 
-test("clearing the favorite-folder filter restores ordinary row checkboxes", async ({page, isMobile}) => {
+test("clearing the favorite-folder filter removes only the folder-removal action", async ({page, isMobile}) => {
   await showFolderOnMap(page, isMobile);
   const chip = page.locator(isMobile ? "#jsPhoneFilterChipsV2 button" : "#activeFilterChipsV844 button").filter({hasText: "광택세차"});
   await chip.click();
@@ -179,7 +185,7 @@ test("returning from an original link preserves the folder-removal mode", async 
   await expect(page.locator("#unifiedDetailDrawerV8")).toHaveAttribute("aria-hidden", "true");
   await expectFolderMode(page, 2);
   await expect(row(page).locator(".favorite-map-remove-v1")).toBeVisible();
-  await expect(page.locator("#list .action-select-check")).toHaveCount(0);
+  await expect(page.locator("#list .action-select-check")).toHaveCount(2);
   await confirmRemoval(page, row(page).locator(".favorite-map-remove-v1"), false);
 });
 
@@ -200,6 +206,66 @@ test("desktop removal closes only the matching detail after confirmation", async
   await confirmRemoval(page, row(page).locator(".favorite-map-remove-v1"), true);
   await expectFolderMode(page, 0);
   await expect(detail).toHaveAttribute("aria-hidden", "true");
+});
+
+test("desktop folder map checkboxes still complete a field visit without removing favorites", async ({page, isMobile}, testInfo) => {
+  test.skip(isMobile, "Phone browsing intentionally hides legacy selection and visit-management controls");
+  // The common fixture omits the map toolbar module. Load its real selection
+  // bar behavior here; only the write response is synthetic, never the UI path.
+  await page.addScriptTag({url: "/js/map-quick-tools-v657.js"});
+  const mutations = [];
+  await page.route("**/api/data", async route => {
+    const request = route.request();
+    const payload = request.method() === "POST" ? request.postDataJSON() : null;
+    if (payload?.action !== "toggleDone") return route.fallback();
+    mutations.push(payload);
+    return route.fulfill({status: 200, contentType: "application/json", body: JSON.stringify({ok: true, persisted: true})});
+  });
+  await page.evaluate(() => {
+    window.allItems.find(item => item.propertyId === "FIXTURE-LEASE-1").memo = "(임장가자) / 방문 확인 테스트";
+    window.applyFilter();
+  });
+  await showFolderOnMap(page, false);
+  const foldersBefore = await savedFolders(page);
+  const master = page.locator("#listMasterCheckbox");
+  await page.locator(".list-master-select").click();
+  await expect(master).toBeChecked();
+  await expect.poll(() => page.evaluate(() => window.selectedPrintKeys.length)).toBe(2);
+  await expect(page.locator("#selectionActionBar")).toBeVisible();
+  await expect(page.locator("#selectionActionCount")).toHaveText("2건 선택");
+  await page.locator(".list-master-select").click();
+  await expect(master).not.toBeChecked();
+  await expect.poll(() => page.evaluate(() => window.selectedPrintKeys.length)).toBe(0);
+  await row(page).locator(".action-select-check").check();
+  await expect(page.locator("#selectionActionCount")).toHaveText("1건 선택");
+  await expect(page.locator("#selectionActionBar .selection-visit-btn")).toBeVisible();
+  await expect(page.locator('#unifiedDetailDrawerV8[aria-hidden="false"]')).toHaveCount(0);
+  // Cancelling removal must not discard the separately selected visit target.
+  await confirmRemoval(page, row(page).locator(".favorite-map-remove-v1"), false);
+  await expect(row(page).locator(".action-select-check")).toBeChecked();
+  await expect.poll(() => page.evaluate(() => window.selectedPrintKeys.length)).toBe(1);
+  await page.screenshot({path: testInfo.outputPath("favorite-map-checkbox-visit-ready-desktop.png")});
+  const dialogEvent = page.waitForEvent("dialog");
+  const click = page.locator("#selectionActionBar .selection-visit-btn").click();
+  const dialog = await dialogEvent;
+  expect(dialog.type()).toBe("confirm");
+  expect(dialog.message()).toBe("임장을 완료할까요?");
+  await dialog.accept();
+  await click;
+  await expect.poll(() => mutations.length).toBe(1);
+  expect(mutations[0]).toMatchObject({
+    action: "toggleDone", key: {propertyId: "FIXTURE-LEASE-1"},
+    state: "active", memo: "(확인매물) / 방문 확인 테스트"
+  });
+  await expect(page.locator("#status")).toHaveText("임장 처리 1개 저장 요청 완료");
+  await expect.poll(() => page.evaluate(() => window.allItems.find(item => item.propertyId === "FIXTURE-LEASE-1").memo)).toBe("(확인매물) / 방문 확인 테스트");
+  await expect.poll(() => page.evaluate(() => window.selectedPrintKeys)).toEqual([]);
+  await expect(page.locator("#selectionActionBar")).toBeHidden();
+  await expectFolderMode(page, 2);
+  expect(await savedFolders(page)).toEqual(foldersBefore);
+  await expect(row(page).locator(".favorite-map-remove-v1")).toBeVisible();
+  await expect(row(page).locator(".action-select-check")).not.toBeChecked();
+  await page.screenshot({path: testInfo.outputPath("favorite-map-checkbox-visit-completed-desktop.png")});
 });
 
 test("removing a deep virtualized row preserves the neighboring card and scroll position", async ({page, isMobile}) => {

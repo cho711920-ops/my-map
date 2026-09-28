@@ -11,7 +11,7 @@
 .selection-action-bar .selection-favorite-btn{border-color:#79c795!important;background:#e7f8ed!important;color:#176c3b!important;font-weight:900!important}
 @media(max-width:768px){.unified-favorite-modal-v7{padding:10px}.unified-favorite-dialog-v7{position:relative;left:auto!important;top:auto!important;width:100%!important;min-width:0;max-width:none;max-height:calc(100vh - 20px)!important;margin:auto;transition:none}.unified-favorite-layout-v7,.unified-favorite-dialog-v7.has-detail-v7 .unified-favorite-layout-v7{grid-template-columns:minmax(0,1fr)}.unified-favorite-detail-host-v7,.unified-favorite-dialog-v7.has-detail-v7 .unified-favorite-detail-host-v7{display:none}.unified-favorite-head-v7{padding:13px 14px}.unified-favorite-head-v7 strong{font-size:19px}.unified-favorite-create-v7{grid-template-columns:1fr 94px;padding:10px 12px}.unified-favorite-create-v7 label{grid-column:1/-1}.unified-favorite-body-v7{padding:10px 12px 14px}.unified-favorite-folder-actions-v7 button{flex:1 1 auto}.unified-favorite-folder-actions-v7 button.danger{margin-left:0}.unified-favorite-item-v7{grid-template-columns:minmax(0,1fr)}.unified-favorite-open-v7{grid-template-columns:48px minmax(0,1fr)}.unified-favorite-thumb-v7{width:48px;height:44px}.unified-favorite-remove-v7{width:100%}}
 @media(prefers-reduced-motion:reduce){.unified-favorite-close-v7{transition:none}}
-/* A folder's map-review list uses the former checkbox slot for removal only. */
+/* Keep selection available; folder-map removal follows the row checkbox. */
 #list .item-compact-head-v650 > .favorite-map-remove-v1 {
   display: inline-flex;
   align-items: center;
@@ -34,8 +34,6 @@
 }
 #list .item-compact-head-v650 > .favorite-map-remove-v1:hover { background: #ffe7e9; border-color: #d77d88; }
 #list .item-compact-head-v650 > .favorite-map-remove-v1:focus-visible { outline: 2px solid #b32f43; outline-offset: -2px; }
-.favorite-map-review-v1 #listToolbar > .list-master-select { visibility: hidden !important; pointer-events: none; }
-.favorite-map-review-v1 #selectionActionBar { display: none !important; }
 @media (pointer: coarse) {
   #list .item-compact-head-v650 > .favorite-map-remove-v1 { min-height: 44px; min-width: 60px; }
 }

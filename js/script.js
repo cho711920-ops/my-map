@@ -4604,7 +4604,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')"></label>';
   if (favoriteMapContextV1) {
     div.setAttribute("data-favorite-map-folder-id", favoriteMapContextV1.folderId);
-    selectionControlV1 = '<button type="button" class="favorite-map-remove-v1" ' +
+    selectionControlV1 += '<button type="button" class="favorite-map-remove-v1" ' +
       'title="' + escapeHtml(favoriteMapContextV1.folderName + ' 폴더에서만 찜 제거') + '" ' +
       'aria-label="' + escapeHtml((item.address || item.name || '매물') + ' 찜 제거') + '" ' +
       'onclick="event.stopPropagation(); removeFavoriteMapItemV1(' +
