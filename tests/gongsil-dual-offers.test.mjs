@@ -62,6 +62,77 @@ test("explicit sale and rent become two independent offers with common media/con
   assert.equal(offers[1].saleDetails, undefined);
 });
 
+test("explicit automation scope limits published offers without changing provider evidence", () => {
+  const dual = fixture();
+  for (const tradeType of ["lease", "sale"]) {
+    const records = gongsilOfferRecords(dual, tradeType);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].tradeType, tradeType);
+    assert.deepEqual(records[0].raw, dual.raw);
+  }
+  assert.equal(gongsilOfferRecords(dual).length, 2, "standalone manual collection still keeps both offers");
+  assert.deepEqual(gongsilOfferRecords(fixture("lease-only", { Subtype: "3", Me: 0 }), "sale"), []);
+  assert.deepEqual(gongsilOfferRecords({ externalId: "legacy", tradeType: "sale", salePrice: 5000, values: [] }, "sale"), [],
+    "scoped collection cannot invent advertised evidence from fallback values");
+  assert.throws(() => gongsilOfferRecords(dual, "both"), /거래유형/);
+  const currentLease = { ...dual, raw: { ...dual.raw, detail: { floorinfo: { Moneys: [{ Ty: "월세", Bo: 3000, Mm: 160 }] } } } };
+  assert.deepEqual(gongsilOfferRecords(currentLease, "sale"), [], "current typed detail beats stale list sale price");
+});
+
+for (const tradeType of ["lease", "sale"]) test(`scoped ${tradeType} API saves and compares only that market`, async t => {
+  const { db, call } = database(t);
+  const record = fixture("scoped-dual");
+  const runManifest = (market) => call({ action: "classifySourceManifest", sessionId: `manifest-${market}`,
+    collectionTradeType: market, entries: [{ sourceId: record.externalId, listSnapshot: record.listSnapshot,
+      tradeType: record.tradeType, saleCategory: "commercial", salePrice: record.salePrice, room: "107호", area: 11 }] });
+  assert.deepEqual((await runManifest(tradeType)).needsDetail, ["scoped-dual"]);
+  const result = await call({ action: "gongsilImportBatch", sessionId: `save-${tradeType}`,
+    collectionTradeType: tradeType, records: [record] });
+  assert.equal(result.failed, 0);
+  assert.equal(result.offerReceived, 1);
+  assert.equal(result.created, 1);
+  assert.deepEqual(db.prepare("SELECT trade_type FROM listings").all().map(row => row.trade_type), [tradeType]);
+  const saved = db.prepare("SELECT source_listing_id, raw_json FROM listing_sources").get();
+  assert.equal(saved.source_listing_id, `scoped-dual::${tradeType}`);
+  assert.deepEqual(JSON.parse(saved.raw_json), record.raw);
+  const ownManifest = await runManifest(tradeType);
+  assert.equal(ownManifest.unchanged, 1, "scoped rerun must retain unchanged fast path");
+  assert.deepEqual(ownManifest.needsDetail, []);
+  const opposite = tradeType === "lease" ? "sale" : "lease";
+  assert.deepEqual((await runManifest(opposite)).needsDetail, ["scoped-dual"], "own-market hash cannot hide missing opposite offer");
+});
+
+test("legacy dual-offer hashes remain usable but scoped refresh never touches the opposite market", async t => {
+  const { db, save, call } = database(t);
+  const initial = fixture("old-dual");
+  await save(initial);
+  const beforeSale = db.prepare("SELECT * FROM listing_sources WHERE trade_type='sale'").get();
+  const manifest = await call({ action: "classifySourceManifest", collectionTradeType: "lease",
+    entries: [{ sourceId: initial.externalId, listSnapshot: initial.listSnapshot, tradeType: "sale", room: "107호", area: 11 }] });
+  assert.equal(manifest.unchanged, 1);
+  const result = await call({ action: "gongsilImportBatch", sessionId: "lease-refresh", collectionTradeType: "lease",
+    records: [fixture("old-dual", { Me: 99000, Mm: 175 })] });
+  assert.equal(result.offerReceived, 1);
+  assert.equal(JSON.parse(db.prepare("SELECT list_snapshot_json FROM listing_sources WHERE trade_type='lease'").get().list_snapshot_json).rent, 175);
+  assert.deepEqual(db.prepare("SELECT * FROM listing_sources WHERE trade_type='sale'").get(), beforeSale);
+});
+
+test("invalid explicit collection market fails before database mutations", async t => {
+  const { db, env } = database(t);
+  for (const action of ["classifySourceManifest", "gongsilImportBatch"]) {
+    const response = await handleCollectorApi(new Request("https://js-map.com/api/collector", {
+      method: "POST", headers: { Origin: "https://www.gongsilbox.com", "Content-Type": "application/json" },
+      body: JSON.stringify({ action, collectorKey: "test-only", source: "공실박스", collectionTradeType: "both",
+        records: [fixture()], entries: [{ sourceId: "invalid", listSnapshot: fixture().listSnapshot }] })
+    }), env);
+    const result = await response.json();
+    assert.equal(result.ok, false);
+    assert.match(result.message, /거래유형/);
+  }
+  assert.equal(db.prepare("SELECT count(*) n FROM listings").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) n FROM collector_sessions").get().n, 0);
+});
+
 test("sale investment income/memo never invents a lease; pure jeonse is not monthly rent", () => {
   assert.deepEqual(gongsilAdvertisedOffers({ Me: 85000, TotBomoney: 17880, TotMmmoney: 202,
     Memo: "보증금 1억7880만 월수익 202만", Jun: 30000, Jmm: 0 }).map((o) => o.tradeType), ["sale"]);

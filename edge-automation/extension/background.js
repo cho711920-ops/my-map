@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.10";
+const BACKGROUND_BUILD = "1.1.11";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -34,7 +34,9 @@ const LOG_KEY = "jsAutoCollectorLogsV1";
 const RUN_LOCK_KEY = "jsAutoCollectorRunLockV1";
 const RUN_STATE_KEY = "jsAutoCollectorRunStateV2";
 const RUN_REPORT_KEY = "jsAutoCollectorRunReportV1";
+const RUN_REPORTS_KEY = "jsAutoCollectorRunReportsByMarketV1";
 const LAST_SCHEDULE_KEY = "jsAutoCollectorLastScheduleV1";
+const PENDING_SCHEDULE_KEY = "jsAutoCollectorPendingLeaseScheduleV1";
 const LAST_VERSION_RUN_KEY = "jsAutoCollectorLastVersionRunV1";
 const REPORT_UPLOAD_KEY = "jsAutoCollectorPendingReportV1";
 let reportUploadBusy = false;
@@ -128,8 +130,8 @@ function inferredTradeType(target) {
   if (/(?:^|[-_\s])(sale|매매)(?:$|[-_\s])|건물매매|토지매매/i.test(searchable)) return "sale";
   try {
     const url = new URL(String(target && target.url || ""));
-    const naverTrade = String(url.searchParams.get("tradeType") || "").toUpperCase();
-    if (naverTrade === "A1") return "sale";
+    const naverTrades = String(url.searchParams.get("tradeTypes") || url.searchParams.get("tradeType") || url.searchParams.get("t") || "").toUpperCase().split(/[-,:|\s]+/);
+    if (naverTrades.includes("A1")) return "sale";
     const daangnFilter = JSON.parse(url.searchParams.get("af") || "{}");
     const daangnTrades = Array.isArray(daangnFilter.tradeTypes) ? daangnFilter.tradeTypes : [];
     if (daangnTrades.some((value) => /BUY|SALE/i.test(String(value)))) return "sale";
@@ -143,8 +145,28 @@ function normalizeStoredTarget(target) {
   return {
     ...target,
     tradeType,
+    // Registration and manual execution remain available; only leases may
+    // participate in the daily schedule, including imported legacy targets.
+    enabled: tradeType === "lease" && target.enabled !== false,
     marketMode: String(target.marketMode || tradeType)
   };
+}
+
+function normalizeRunMarket(market = "lease") {
+  if (market !== "lease" && market !== "sale") throw new Error("상가임대 또는 매매 수집을 선택해 주세요.");
+  return market;
+}
+
+function isScheduledRunReason(reason) {
+  return ["schedule", "browser-startup", "windows-schedule"].includes(reason);
+}
+
+function marketForRun(state) {
+  const targets = [...(state && state.allTargets || []), ...(state && state.targets || []),
+    ...(state && state.retryQueue || []), ...(state && state.items || [])];
+  const markets = new Set(targets.map(inferredTradeType));
+  if (state && (state.market === "lease" || state.market === "sale")) markets.add(state.market);
+  return markets.size > 1 ? "mixed" : [...markets][0] || "lease";
 }
 
 async function saveConfig(next) {
@@ -152,6 +174,7 @@ async function saveConfig(next) {
   config.targets = Array.isArray(config.targets)
     ? config.targets.slice(0, 40).map(normalizeStoredTarget)
     : [];
+  config.targets.forEach(validateTarget);
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(config.schedule || ""))) throw new Error("실행 시간은 HH:mm 형식으로 입력해 주세요.");
   await chrome.storage.local.set({ [STORAGE_KEY]: config });
   await resetAlarm(config);
@@ -348,6 +371,33 @@ function validateTarget(target) {
   if (url.protocol !== "https:" || !patterns[source] || !patterns[source].test(url.hostname)) {
     throw new Error("허용되지 않은 자동수집 대상입니다.");
   }
+  // Do not let a saved URL silently override the selected market. The Fin
+  // collector uses plural tradeTypes directly in district list requests.
+  let trades = [];
+  if (source === "naver") {
+    if (url.hostname.toLowerCase() === "fin.land.naver.com") {
+      const finTrades = String(url.searchParams.get("tradeTypes") || "").toUpperCase().split(/[-,:|\s]+/).filter(Boolean);
+      if (!finTrades.length || finTrades.some(value => !/^(?:A1|B[123])$/.test(value))) {
+        throw new Error("네이버 수집 주소의 거래유형이 불명확합니다. 상가임대 또는 매매만 선택한 뒤 다시 등록해 주세요.");
+      }
+    }
+    trades = [url.searchParams.get("tradeTypes"), url.searchParams.get("tradeType"), url.searchParams.get("t")]
+      .filter(Boolean).flatMap(value => String(value).toUpperCase().split(/[-,:|\s]+/));
+  } else if (source === "daangn") {
+    let filter;
+    try { filter = JSON.parse(url.searchParams.get("af") || "{}"); }
+    catch { throw new Error("당근 거래유형 설정을 확인하고 수집 대상을 다시 등록해 주세요."); }
+    if (filter && Object.prototype.hasOwnProperty.call(filter, "tradeTypes")) {
+      if (!Array.isArray(filter.tradeTypes)) throw new Error("당근 거래유형 설정이 올바르지 않습니다.");
+      trades = filter.tradeTypes.map(value => String(value).toUpperCase());
+    }
+  }
+  const sale = trades.some(value => /^(?:A1|BUY|SALE)$/.test(value));
+  const lease = trades.some(value => /^(?:B[123]|LEASE|RENT|MONTH|MONTHLY_RENT|MONTHLY|JEONSE|WOLSE)$/.test(value));
+  if (sale && lease) throw new Error("상가임대와 매매가 함께 선택된 대상은 수집할 수 없습니다. 거래유형을 하나만 선택해 다시 등록해 주세요.");
+  if ((sale && inferredTradeType(target) !== "sale") || (lease && inferredTradeType(target) !== "lease")) {
+    throw new Error("등록한 거래유형과 수집 주소의 거래유형이 다릅니다. 상가임대 또는 매매를 확인해 다시 등록해 주세요.");
+  }
   return { source, url: url.toString() };
 }
 
@@ -414,6 +464,7 @@ function normalizePortableConfig(value) {
 
 async function registerTarget(target) {
   if (!target || !target.source || !target.url) throw new Error("자동수집 대상 정보가 부족합니다.");
+  const schedulePreferenceSupplied = Object.prototype.hasOwnProperty.call(target, "enabled");
   target = normalizeStoredTarget(target);
   const validated = validateTarget(target);
   const config = await getConfig();
@@ -427,6 +478,9 @@ async function registerTarget(target) {
     registeredAt: target.registeredAt || new Date().toISOString()
   };
   const index = config.targets.findIndex((item) => targetKey(item) === key);
+  if (index >= 0 && normalized.tradeType === "lease" && !schedulePreferenceSupplied) {
+    normalized.enabled = config.targets[index].enabled !== false;
+  }
   if (index >= 0) config.targets[index] = { ...config.targets[index], ...normalized };
   else config.targets.push(normalized);
   await saveConfig(config);
@@ -495,16 +549,51 @@ async function saveRunState(state) {
   return state;
 }
 
-async function getRunReport() {
+async function getRunReport(market = null) {
+  if (market !== null) return (await getRunReports())[normalizeRunMarket(market)] || null;
   const saved = await chrome.storage.local.get(RUN_REPORT_KEY);
   return saved[RUN_REPORT_KEY] || null;
+}
+
+async function reportsByMarket(report, config) {
+  const reports = {};
+  if (!report || !Array.isArray(report.items)) return reports;
+  const items = report.items.map(item => {
+    const target = (config.targets || []).find(target => targetKey(target) === item.key);
+    return { ...item, tradeType: item.tradeType === "sale" || item.tradeType === "lease"
+      ? item.tradeType : inferredTradeType(target || item) };
+  });
+  for (const market of ["lease", "sale"]) {
+    const scoped = items.filter(item => item.tradeType === market);
+    if (!scoped.length) continue;
+    const scopedReport = { ...report, market, items: scoped, total: scoped.length };
+    scopedReport.summary = deriveRunSummary(scopedReport, { ...(report.summary || {}), market });
+    reports[market] = scopedReport;
+  }
+  return reports;
+}
+
+async function getRunReports() {
+  const saved = await chrome.storage.local.get([RUN_REPORT_KEY, RUN_REPORTS_KEY]);
+  const stored = saved[RUN_REPORTS_KEY] || {};
+  const reports = { lease: stored.lease || null, sale: stored.sale || null };
+  // Migrate the last legacy report lazily, including old mixed-market runs.
+  // Keep the latest legacy report for recovery while presenting separate rows.
+  const latest = await reportsByMarket(saved[RUN_REPORT_KEY], await getConfig());
+  for (const market of ["lease", "sale"]) {
+    if (latest[market] && (!reports[market] ||
+        Number(latest[market].updatedAt || 0) >= Number(reports[market].updatedAt || 0))) reports[market] = latest[market];
+  }
+  return reports;
 }
 
 async function saveRunReport(report) {
   if (!report) return null;
   const previous = await getRunReport();
   report.updatedAt = Math.max(Number(report.updatedAt) || Date.now(), previous && previous.runId === report.runId ? Number(previous.updatedAt || 0) + 1 : 0);
-  await chrome.storage.local.set({ [RUN_REPORT_KEY]: report });
+  const reports = await getRunReports();
+  Object.assign(reports, await reportsByMarket(report, await getConfig()));
+  await chrome.storage.local.set({ [RUN_REPORT_KEY]: report, [RUN_REPORTS_KEY]: reports });
   try {
     const stored = (await chrome.storage.local.get(REPORT_UPLOAD_KEY))[REPORT_UPLOAD_KEY];
     const queue = (Array.isArray(stored) ? stored : stored ? [stored] : []).filter(item => item.runId !== report.runId);
@@ -739,10 +828,10 @@ async function finalizeRun(state, reportTabId = null) {
   // Report upload failure never changes the collection result. Keep it queued.
   if (reportUploadBusy) await delay(6100);
   await publishPendingAutomationReport(reportTabId, true);
-  const scheduledReason = ["schedule", "browser-startup", "windows-schedule"].includes(state.reason);
+  const scheduledReason = isScheduledRunReason(state.reason) && marketForRun(state) === "lease";
   const fullySettled = Boolean(report && Array.isArray(report.items) && report.items.length &&
     report.items.every((item) => terminalReportStatus(item.status)));
-  if (summary.ok || (scheduledReason && fullySettled)) {
+  if (scheduledReason && fullySettled) {
     await chrome.storage.local.set({
       [LAST_SCHEDULE_KEY]: localDateKey(),
       [LAST_VERSION_RUN_KEY]: chrome.runtime.getManifest().version
@@ -756,12 +845,17 @@ async function finalizeRun(state, reportTabId = null) {
     chrome.notifications.create({
       type: "basic",
       iconUrl: "icon.svg",
-      title: summary.failed || hasPartial ? "JS 자동수집 확인 필요" : "JS 자동수집 완료",
+      title: `${marketForRun(state) === "sale" ? "매매" : "상가임대"} ${summary.failed || hasPartial ? "수집 확인 필요" : "수집 완료"}`,
       message: `정상 ${normal}개 · 주소보류 ${Number(summary.deferred || 0)}개 · 부분완료 ${Number(summary.partial || 0)}개 · 실패 ${summary.failed}개`
     }).catch(() => {});
   }
   await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
   await cleanupAuxiliaryTabs();
+  // Launch only on a later serialized alarm. Starting the lease here could
+  // reuse the just-finished sale tab before its caller closes that tab.
+  if ((await chrome.storage.local.get(PENDING_SCHEDULE_KEY))[PENDING_SCHEDULE_KEY]) {
+    chrome.alarms.create(RECOVERY_ALARM_NAME, { when: Date.now() + 1000 });
+  }
   return summary;
 }
 
@@ -1057,6 +1151,24 @@ async function launchCurrentTarget(state, reuseTabId = null) {
       state.index += 1;
       continue;
     }
+    let scopeError = "";
+    const market = isScheduledRunReason(state.reason) ? "lease"
+      : state.market === "sale" || state.market === "lease" ? state.market : marketForRun(state);
+    if (inferredTradeType(candidate) !== market) {
+      scopeError = "실행 중인 거래유형과 다른 대상은 수집하지 않았습니다. 임대·매매 영역에서 따로 실행해 주세요.";
+    } else {
+      try { validateTarget(candidate); }
+      catch (error) { scopeError = String(error && error.message || error); }
+    }
+    if (scopeError) {
+      await updateRunReport(state, candidate, "failed", {
+        finishedAt: Date.now(), message: scopeError, terminalCode: "terminal"
+      });
+      rememberCompletedTarget(state, candidate);
+      completed.add(key);
+      state.index += 1;
+      continue;
+    }
     const circuit = activeSourceCircuit(state, candidate);
     if (!circuit) break;
     await updateRunReport(state, candidate, "failed", {
@@ -1288,6 +1400,10 @@ async function finishCurrentTarget(result, senderTabId) {
 }
 
 async function resumeOrExtendActiveRun(state, targets, reason) {
+  const market = marketForRun(state);
+  if (market === "mixed" || targets.some(target => inferredTradeType(target) !== market)) {
+    return { ok: false, started: false, busy: true, message: "다른 거래유형을 진행 중인 수집에 추가할 수 없습니다. 현재 수집 완료 후 실행해 주세요." };
+  }
   await ensureWatchdogAlarm();
   await recoverAutomaticRun();
   state = await getRunState();
@@ -1326,6 +1442,7 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
     report = {
       runId: state.runId,
       reason: state.reason || reason,
+      market: marketForRun(state),
       active: true,
       startedAt: state.startedAt || Date.now(),
       updatedAt: Date.now(),
@@ -1335,6 +1452,7 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
       items: state.allTargets.map((target) => ({
         key: targetKey(target),
         source: target.source,
+        tradeType: inferredTradeType(target),
         label: target.label || target.source,
         status: completed.has(targetKey(target)) ? "completed" : targetKey(target) === currentKey ? "running" : "pending",
         attempt: targetKey(target) === currentKey ? Math.max(1, Number(state.targetAttempt || 1)) : 0,
@@ -1352,6 +1470,7 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
       .map((target) => ({
         key: targetKey(target),
         source: target.source,
+        tradeType: inferredTradeType(target),
         label: target.label || target.source,
         status: "pending",
         attempt: 0,
@@ -1397,31 +1516,40 @@ async function resumeOrExtendActiveRun(state, targets, reason) {
   };
 }
 
-async function runAll(reason = "manual", selection = null) {
+async function runAll(reason = "manual", selection = null, market = "lease") {
+  market = normalizeRunMarket(market);
+  const scheduled = isScheduledRunReason(reason);
+  if (scheduled && market !== "lease") throw new Error("매매는 예약 자동실행 없이 필요할 때 수동으로 수집합니다.");
   await ensureWatchdogAlarm();
   const config = await getConfig();
   const targets = config.targets
-    .filter((target) => target.enabled !== false)
+    .filter((target) => inferredTradeType(target) === market)
+    .filter((target) => !scheduled || target.enabled !== false)
     .filter((target) => !Array.isArray(selection) || selection.includes(targetKey(target)))
     .sort((a, b) => (SOURCE_ORDER[a.source] || 99) - (SOURCE_ORDER[b.source] || 99));
   if (!targets.length) {
-    return { ok: false, started: false, message: "사용 설정된 자동수집 대상이 없습니다." };
+    return { ok: false, started: false, message: `${market === "sale" ? "매매" : "상가임대"} ${scheduled ? "매일 자동실행 설정된" : "실행할"} 수집 대상이 없습니다.` };
   }
+  targets.forEach(validateTarget);
 
   const activeState = await getRunState();
   if (activeState && activeState.active) {
+    if (marketForRun(activeState) !== market) {
+      return { ok: false, started: false, busy: true, message: "다른 거래유형의 수집이 진행 중입니다. 현재 수집 완료 후 실행해 주세요." };
+    }
     return resumeOrExtendActiveRun(activeState, targets, reason);
   }
   if (!await acquireRunLock()) return { ok: false, message: "자동수집 실행 상태를 확인하지 못했습니다. 다시 눌러주세요." };
 
   const manualCircuitOverride = ["manual", "manual-verification", "windows-force", "manual-selected", "manual-failed"].includes(reason);
   const sourceCircuits = manualCircuitOverride ? {} : await getSourceCircuits();
-  const summary = { ok: true, started: true, reason, total: targets.length,
+  const summary = { ok: true, started: true, reason, market, total: targets.length,
     completed: 0, deferred: 0, partial: 0, failed: 0, retries: 0, errors: [], retryErrors: [] };
   const state = {
     active: true,
     runId: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     reason,
+    market,
     startedAt: Date.now(),
     index: 0,
     targets,
@@ -1439,6 +1567,7 @@ async function runAll(reason = "manual", selection = null) {
   await saveRunReport({
     runId: state.runId,
     reason,
+    market,
     active: true,
     startedAt: state.startedAt,
     updatedAt: state.startedAt,
@@ -1459,8 +1588,11 @@ async function runAll(reason = "manual", selection = null) {
       counts: {}
     }))
   });
-  await appendLog({ level: "info", message: `자동수집 시작 (${reason}, ${targets.length}개 대상)` });
+  await appendLog({ level: "info", market, message: `${market === "sale" ? "매매 수동" : "상가임대"} 자동수집 시작 (${reason}, ${targets.length}개 대상)` });
   await saveRunState(state);
+  // The persisted run can now recover independently if the worker stops.
+  // Consume a deferred schedule only after its lease run state is durable.
+  if (scheduled) await chrome.storage.local.remove(PENDING_SCHEDULE_KEY);
   await launchCurrentTarget(state);
   return { ...state.summary };
 }
@@ -1472,15 +1604,38 @@ async function runScheduled(reason) {
   const today = localDateKey();
   const currentVersion = chrome.runtime.getManifest().version;
   if (saved[LAST_SCHEDULE_KEY] === today && saved[LAST_VERSION_RUN_KEY] === currentVersion) {
+    await chrome.storage.local.remove(PENDING_SCHEDULE_KEY);
     return { ok: true, skipped: true, message: "오늘 자동수집은 이미 실행했습니다." };
   }
   const result = await runAll(reason);
+  if (result && result.busy) {
+    const pending = (await chrome.storage.local.get(PENDING_SCHEDULE_KEY))[PENDING_SCHEDULE_KEY];
+    if (!pending || pending.date !== today) {
+      await chrome.storage.local.set({ [PENDING_SCHEDULE_KEY]: { date: today, requestedAt: Date.now(), reason } });
+      await appendLog({ level: "info", market: "lease", message: "매매 수집 완료 후 상가임대 예약수집을 실행하도록 대기합니다." });
+    }
+    return { ok: true, started: false, queued: true, message: "매매 완료 후 상가임대 예약실행 대기 중입니다. 현재 수집은 그대로 계속합니다." };
+  }
   return result;
 }
 
-async function recoverAutomaticRun() {
+async function resumePendingLeaseSchedule() {
+  const pending = (await chrome.storage.local.get(PENDING_SCHEDULE_KEY))[PENDING_SCHEDULE_KEY];
+  if (!pending) return { ok: true, skipped: true };
+  const config = await getConfig();
+  if (!config.enabled || !config.targets.some(target => inferredTradeType(target) === "lease" && target.enabled !== false)) {
+    await chrome.storage.local.remove(PENDING_SCHEDULE_KEY);
+    return { ok: true, skipped: true, message: "상가임대 자동실행이 해제되어 대기 중인 예약수집을 취소했습니다." };
+  }
   const state = await getRunState();
-  if (!state || !state.active) return { ok: true, skipped: true };
+  if (state && state.active) return { ok: true, waiting: true };
+  return runScheduled(isScheduledRunReason(pending.reason) ? pending.reason : "schedule");
+}
+
+async function recoverAutomaticRun({ allowPendingSchedule = false } = {}) {
+  const state = await getRunState();
+  if (!state || !state.active) return allowPendingSchedule
+    ? resumePendingLeaseSchedule() : { ok: true, skipped: true };
   if (state.phase === "retry-wait") {
     if (Date.now() + 1000 < Number(state.retryAt || 0)) return { ok: true, waiting: true };
     state.retryAt = null;
@@ -1587,7 +1742,7 @@ chrome.runtime.onStartup.addListener(() => serializeMutation(async () => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) serializeMutation(() => runScheduled("schedule")).catch(logAutomationError);
   if (alarm.name === RECOVERY_ALARM_NAME || alarm.name === WATCHDOG_ALARM_NAME) {
-    serializeMutation(() => recoverAutomaticRun()).catch(logAutomationError);
+    serializeMutation(() => recoverAutomaticRun({ allowPendingSchedule: true })).catch(logAutomationError);
   }
 });
 
@@ -1619,13 +1774,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return response;
     }
     if (message.type === "JS_AUTO_GET_STATE") {
-      const [config, stored, runState, runReport] = await Promise.all([
+      const [config, stored, runState, runReport, runReports] = await Promise.all([
         getConfig(),
         chrome.storage.local.get(LOG_KEY),
         getRunState(),
-        getRunReport()
+        getRunReport(),
+        getRunReports()
       ]);
-      return { ok: true, config, logs: stored[LOG_KEY] || [], runState, runReport,
+      return { ok: true, config, logs: stored[LOG_KEY] || [], runState, runReport, runReports,
         readiness: await automationReadiness(config), reportPending: Boolean(((await chrome.storage.local.get(REPORT_UPLOAD_KEY))[REPORT_UPLOAD_KEY] || []).length),
         backgroundBuild: BACKGROUND_BUILD };
     }
@@ -1636,20 +1792,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true, config: await saveConfig(normalizePortableConfig(message.config)) };
     }
     if (message.type === "JS_AUTO_RUN_NOW") {
-      return runAll("manual");
+      return runAll("manual", null, normalizeRunMarket(message.market));
     }
     if (message.type === "JS_AUTO_RUN_SELECTED") {
       if (!sender || sender.url !== chrome.runtime.getURL("options.html")) throw new Error("확장 설정 화면에서 실행 대상을 확인해 주세요.");
+      const market = normalizeRunMarket(message.market);
       const keys = Array.isArray(message.keys) ? [...new Set(message.keys.map(String))].slice(0, 40) : [];
       if (!keys.length) return {ok: false, message: "이번에 실행할 대상을 선택해 주세요."};
-      const previous = await getRunReport();
+      const previous = await getRunReport(market);
       const selected = message.failedOnly ? keys.filter(key => (previous && previous.items || []).some(item => item.key === key && ["failed", "partial"].includes(item.status))) : keys;
       if (!selected.length) return {ok: false, message: "선택한 실패·부분완료 대상이 없습니다."};
-      return runAll(message.failedOnly ? "manual-failed" : "manual-selected", selected);
+      return runAll(message.failedOnly ? "manual-failed" : "manual-selected", selected, market);
     }
     if (message.type === "JS_AUTO_RUN_REQUEST") {
       const runState = await getRunState();
       if (runState && runState.active) {
+        if (marketForRun(runState) !== "lease") {
+          if (!message.forceRun) return runScheduled("windows-schedule");
+          return { ok: false, busy: true, message: "매매 수집이 진행 중이므로 상가임대 예약실행을 시작하지 않았습니다. 현재 수집을 계속합니다." };
+        }
         await ensureWatchdogAlarm();
         await recoverAutomaticRun();
         return { ok: true, resumed: true, runState: await getRunState() };
@@ -1667,6 +1828,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const runState = await getRunState();
       if (runState && runState.active) {
         if (sender && sender.tab && sender.tab.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
+        if (marketForRun(runState) !== "lease") {
+          if (!message.forceRun) return runScheduled("windows-schedule");
+          return { ok: false, busy: true, message: "매매 수집이 진행 중이므로 상가임대 예약실행을 시작하지 않았습니다. 현재 수집을 계속합니다." };
+        }
         return { ok: true, resumed: true };
       }
       if (message.forceRun) await runAll("manual-verification");

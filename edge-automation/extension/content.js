@@ -131,7 +131,11 @@ window.addEventListener("message", (event) => {
       type: "JS_COLLECTOR_REGISTER_RESULT",
       requestId: event.data.requestId,
       ok: Boolean(response && response.ok),
-      message: response && response.ok ? "자동수집 대상에 등록했습니다." : response && response.message
+      message: response && response.ok
+        ? event.data.target && event.data.target.tradeType === "sale"
+          ? "매매 수동수집 대상으로 등록했습니다. 설정 화면의 매매 수집에서 필요할 때 실행해 주세요."
+          : "상가임대 수집 대상으로 등록했습니다. 설정 화면에서 매일 자동실행 여부를 확인해 주세요."
+        : response && response.message
     }, "*");
   });
 });

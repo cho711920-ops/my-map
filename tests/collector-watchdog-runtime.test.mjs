@@ -18,7 +18,7 @@ const clock = Date.parse("2026-08-27T07:00:00Z");
 function harness(overrides = {}) {
   const targets = ["유성구", "대덕구", "중구", "서구", "동구"].map((label, index) => ({
     key: "naver-" + index, source: "naver", label,
-    url: "https://fin.land.naver.com/map?test=" + index, enabled: true
+    url: "https://fin.land.naver.com/map?tradeTypes=B2&test=" + index, enabled: true
   }));
   const state = { active: true, runId: "cycle", targets, index: 3, currentTabId: 42,
     targetRunId: "seo", targetStartedAt: clock - 190 * minute,
@@ -467,7 +467,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.10");
+  assert.equal(response.backgroundBuild, "1.1.11");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

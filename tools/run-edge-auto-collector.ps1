@@ -34,7 +34,7 @@ $launchMessage = 'Windows 예약실행 시작'
 if ($Setup) {
   $launchMessage = '자동수집 초기 설정 시작'
 } elseif ($Force) {
-  $launchMessage = '수동 전체실행 시작'
+  $launchMessage = '상가임대 수동 전체실행 시작 (매매 제외)'
 }
 Write-AutoCollectorLog 'INFO' $launchMessage
 

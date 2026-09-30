@@ -6,7 +6,7 @@ import vm from "node:vm";
 const background = fs.readFileSync(new URL("../edge-automation/extension/background.js", import.meta.url), "utf8");
 
 function runtimeUrl(target) {
-  const names = ["validateTarget", "automaticTargetRuntimeUrl"];
+  const names = ["inferredTradeType", "validateTarget", "automaticTargetRuntimeUrl"];
   const code = names.map((name) => {
     const match = background.match(new RegExp(`^function ${name}\\([^]*?^}`, "m"));
     assert.ok(match, `missing ${name}`);
@@ -33,6 +33,6 @@ test("Daangn district automation keeps the district id and opens the visible map
 test("non-Daangn and manually selected Daangn targets retain their registered viewport", () => {
   const daangn = "https://realty.daangn.com/?cluster_id=CELL%3A1&mv=1,2,3,4,15";
   assert.equal(runtimeUrl({ source: "daangn", district: "", url: daangn }), daangn);
-  const naver = "https://fin.land.naver.com/map?zoom=17";
+  const naver = "https://fin.land.naver.com/map?zoom=17&tradeTypes=B2";
   assert.equal(runtimeUrl({ source: "naver", district: "서구", url: naver }), naver);
 });

@@ -8,17 +8,14 @@
 </head>
 <body>
   <main>
-    <header><div><h1>JS 자동수집 <small id="autoVersion"></small></h1><p>Edge가 네이버 → 당근 → 공실박스를 순서대로 실행합니다.</p></div><span id="status">확인 중</span></header>
+    <header><div><h1>JS 자동수집 <small id="autoVersion"></small></h1><p>상가임대는 매일 자동으로, 매매는 필요할 때만 따로 수집합니다.</p></div><span id="status">확인 중</span></header>
     <section class="settings">
-      <label class="toggle"><input id="enabled" type="checkbox"><span>매일 자동수집 사용</span></label>
-      <label>실행 시간 <input id="schedule" type="time" value="11:00"></label>
+      <label class="toggle"><input id="enabled" type="checkbox"><span>상가임대 매일 자동실행</span></label>
+      <label>상가임대 실행 시간 <input id="schedule" type="time" value="11:00"></label>
       <label class="toggle"><input id="closeTabs" type="checkbox" checked><span>완료한 수집 탭 자동 닫기</span></label>
       <button id="save" class="primary">설정 저장</button>
-      <button id="run">확인 후 전체 실행</button>
-      <button id="runSelected">이번 선택만 실행</button>
-      <button id="runFailed">실패·부분완료만 실행</button>
     </section>
-    <section><div id="scheduleReadiness" role="status"></div><p>확장 예약과 Windows 예약은 별개입니다. 시각이 다르면 설치 도구를 같은 시각으로 다시 실행해 주세요. PC가 꺼진 상태의 실행은 보장되지 않습니다.</p>
+    <section><div id="scheduleReadiness" role="status"></div><p>예약은 상가임대에만 적용하며 매매는 자동실행하지 않습니다. 확장 예약과 Windows 예약의 시각이 다르면 설치 도구를 같은 시각으로 다시 실행해 주세요. PC가 꺼진 상태의 실행은 보장되지 않습니다.</p>
       <div class="notification-settings"><label><input id="notifyComplete" type="checkbox">정상완료 알림</label><label><input id="notifyPartial" type="checkbox">주소보류·부분완료 알림</label><label><input id="notifyFailure" type="checkbox">실패 알림</label></div>
     </section>
     <section class="transfer">
@@ -28,13 +25,13 @@
         <label class="file-button">설정 가져오기<input id="importConfig" type="file" accept=".json,application/json"></label>
       </div>
     </section>
-    <section><div class="section-title"><h2>구별 수집 진행표</h2><small>수집 사이트 창은 하나만 사용하며, 네이버·당근 10개 구의 진행 결과를 여기에 표시합니다.</small></div><div id="runSummary" class="run-summary"></div><div id="targets" class="list"></div></section>
+    <div id="targets" class="market-panels"></div>
     <section><div class="section-title"><h2>당근 지번 보류 검토</h2><small>공급처가 정확한 지번을 제공하지 않은 매물만 모아 표시합니다.</small></div><div id="deferredReview" class="deferred-review"></div></section>
     <section><div class="section-title"><h2>최근 실행 기록</h2><button id="clear">기록 지우기</button></div><div id="logs" class="list"></div></section>
   </main>
   <dialog id="runPreview" class="run-preview">
     <form method="dialog">
-      <div class="run-preview-title"><div><h2>자동수집 실행 전 확인</h2><p>사용 중인 대상과 거래유형을 확인한 뒤 실행합니다.</p></div><button value="cancel" aria-label="닫기">×</button></div>
+      <div class="run-preview-title"><div><h2 id="runPreviewTitle">수집 실행 전 확인</h2><p id="runPreviewHint">선택한 거래유형의 대상만 실행합니다.</p></div><button value="cancel" aria-label="닫기">×</button></div>
       <div id="runPreviewBody" class="run-preview-body"></div>
       <div class="run-preview-actions"><button value="cancel">취소</button><button id="runConfirmed" value="default" class="primary">확인하고 실행</button></div>
     </form>

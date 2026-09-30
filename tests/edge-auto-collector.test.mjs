@@ -53,8 +53,8 @@ test("Edge extension schedules one sequential daily collector run", () => {
   assert.match(background, /WATCHDOG_ALARM_NAME/);
   assert.match(background, /async function ensureWatchdogAlarm\(\)/);
   assert.match(background, /chrome\.alarms\.get\(WATCHDOG_ALARM_NAME\)/);
-  assert.match(background, /async function runAll\(reason = "manual", selection = null\) \{\s*await ensureWatchdogAlarm\(\)/);
-  assert.match(background, /async function resumeOrExtendActiveRun\(state, targets, reason\) \{\s*await ensureWatchdogAlarm\(\)/);
+  assert.match(background, /async function runAll\(reason = "manual", selection = null, market = "lease"\) \{[\s\S]{0,400}await ensureWatchdogAlarm\(\)/);
+  assert.match(background, /async function resumeOrExtendActiveRun\(state, targets, reason\) \{[\s\S]{0,600}await ensureWatchdogAlarm\(\)/);
   assert.match(background, /async function updateTargetHeartbeat\(message, senderTabId\)[\s\S]{0,700}await ensureWatchdogAlarm\(\)/);
   assert.match(background, /MAX_IMMEDIATE_ATTEMPTS = 2/);
   assert.match(background, /MAX_DEFERRED_RETRY_CYCLES = 3/);
@@ -223,14 +223,15 @@ test("automatic collector settings stay compact with long target URLs", () => {
   assert.match(styles, /\.log-list\{max-height:430px;overflow-y:auto/);
   assert.match(options, /chrome\.runtime\.getManifest\(\)\.version/);
   assert.match(read("edge-automation/extension/options.html"), /id="autoVersion"/);
-  assert.match(read("edge-automation/extension/options.html"), /id="runSummary"/);
-  assert.match(options, /function renderRunSummary\(\)/);
-  assert.match(options, /전체 실행 상태 확인 중/);
+  assert.match(options, /market-panel-summary/);
+  assert.match(options, /function renderRunSummary\(report = state\.runReport\)/);
+  assert.match(options, /data-run-market/);
   assert.match(options, /response\.message/);
   assert.match(options, /function currentRunStatus\(response\)/);
   assert.match(options, /수집 실행 중/);
   assert.match(options, /부분완료/);
-  assert.match(options, /10개 구/);
+  assert.match(options, /수동 실행 전용 · 자동수집 안 함/);
+  assert.match(options, /jsAutoCollectorRunReportsByMarketV1/);
   assert.match(options, /jsAutoCollectorRunReportV1/);
 });
 

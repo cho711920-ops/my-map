@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.7";
+  var VERSION = "2.2.8";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -65,6 +65,7 @@
     listFailures: [],
     migratedTransformItem: migratedTransformItem,
     pendingSave: null,
+    collectionTradeType: "",
     dashboard: createEmptyDashboard()
   };
 
@@ -362,6 +363,24 @@
   }
 
   async function runAutomatic(target) {
+    var tradeType = String(target && target.tradeType || "lease");
+    if (tradeType !== "lease" && tradeType !== "sale") {
+      throw new Error("공실박스 수집 거래유형은 상가임대 또는 매매 하나만 선택해 주세요.");
+    }
+    if (state.busy || state.collectionTradeType) throw new Error("공실박스에서 이미 수집이 진행 중입니다.");
+    if (state.pendingSave && String(state.pendingSave.metadata && state.pendingSave.metadata.collectionTradeType || "") !== tradeType) {
+      throw new Error("다른 거래유형의 저장 대기가 있습니다. 해당 저장을 마친 뒤 실행해 주세요.");
+    }
+    state.collectionTradeType = tradeType;
+    try {
+      return await runAutomaticTarget(target);
+    } finally {
+      // Bookmarklet/manual collection keeps its existing dual-offer behavior.
+      state.collectionTradeType = "";
+    }
+  }
+
+  async function runAutomaticTarget(target) {
     panel.style.display = "block";
     state.capture = null;
     state.stopRequested = false;
@@ -378,11 +397,12 @@
     if (state.stopRequested || Number(state.dashboard.failed || 0) > 0) {
       throw new Error("공실박스 자동수집이 부분수집 또는 오류로 종료됐습니다.");
     }
-    if (selectedCount >= 2000 && Number(state.dashboard.processed || 0) < selectedCount) {
+    var expectedCount = state.collectionTradeType ? Number(state.dashboard.found || 0) : selectedCount;
+    if (Number(state.dashboard.processed || 0) < expectedCount) {
       throw new Error("공실박스 화면 전체 건수와 실제 처리 건수가 일치하지 않습니다.");
     }
-    return {source: "gongsil", tradeType: target && target.tradeType || detectTradeType(),
-      selectedCount: selectedCount, version: VERSION, totals: Object.assign({}, state.dashboard)};
+    return {source: "gongsil", tradeType: state.collectionTradeType || target && target.tradeType || detectTradeType(),
+      selectedCount: expectedCount, version: VERSION, totals: Object.assign({}, state.dashboard)};
   }
 
   function detectTradeType() {
@@ -614,6 +634,15 @@
       var listFailures = Array.isArray(state.listFailures)
         ? state.listFailures.slice()
         : [];
+      var collectionTradeType = state.collectionTradeType;
+      var providerItemCount = items.length;
+      if (collectionTradeType) {
+        items = items.filter(function(item) { return getTradeOffers(item, null, collectionTradeType).length > 0; });
+      }
+      // Opposite-market ads are outside this run, not failed listings. A filtered
+      // provider cluster is not used as full-presence proof for either market.
+      var marketFiltered = providerItemCount !== items.length;
+      if (marketFiltered) selectedCount = items.length + listFailures.length;
       var totalItemCount = Math.max(selectedCount, items.length);
       updateDashboard({
         found: totalItemCount,
@@ -624,18 +653,19 @@
       setProgress(listFailures.length, totalItemCount);
 
       var collectorKey = getCollectorKey();
-      var manifestTradeTypes = observedTradeTypes(items);
+      var manifestTradeTypes = observedTradeTypes(items, collectionTradeType);
       var mixedTradeTypes = manifestTradeTypes.length > 1;
       var saveMetadata = {
         sessionId: createCollectionSessionId(),
-        tradeType: manifestTradeTypes.length === 1
+        collectionTradeType: collectionTradeType,
+        tradeType: collectionTradeType || (manifestTradeTypes.length === 1
           ? manifestTradeTypes[0]
-          : detectTradeType(),
+          : detectTradeType()),
         scope: selectedCount >= 2000
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
         complete: isCompleteGongsilCapture(selectedCount, items.length) &&
-          listFailures.length === 0 && !mixedTradeTypes,
+          listFailures.length === 0 && !mixedTradeTypes && !marketFiltered,
         selectedCount: selectedCount,
         found: totalItemCount,
         manifestCount: items.length,
@@ -644,7 +674,7 @@
         listFailureReasons: listFailures.slice(0, 200),
         mixedTradeTypes: mixedTradeTypes,
         observedSourceIds: observedSourceIds(items),
-        observedOffers: observedOffers(items),
+        observedOffers: observedOffers(items, collectionTradeType),
         manifestRegistered: true
       };
       var classification = await classifyGongsilManifest(
@@ -1473,7 +1503,7 @@
       return { ok: false, reason: "지번주소 없음", rejectType: "address" };
     }
 
-    var terms = getTradeTerms(item);
+    var terms = getTradeTerms(item, null, state.collectionTradeType);
     if (!terms) {
       return { ok: false, reason: "거래조건 없음", rejectType: "trade" };
     }
@@ -1488,7 +1518,7 @@
         : String(detailError || "상세정보 조회 실패"));
     }
     // Current typed detail money wins over old numeric columns in the list.
-    terms = getTradeTerms(item, detail);
+    terms = getTradeTerms(item, detail, state.collectionTradeType);
     if (!terms) return { ok: false, reason: "실제 광고된 매매·월세 조건 없음", rejectType: "trade" };
     /*
      * 공실박스 원본매물의 연락처는 역할까지 확인된 경우에만 저장합니다.
@@ -1549,6 +1579,7 @@
       values: values
     };
     record.tradeType = terms.tradeType;
+    if (state.collectionTradeType) record.collectionTradeType = state.collectionTradeType;
     record.saleCategory = terms.saleCategory || "";
     record.salePrice = terms.salePrice == null ? null : terms.salePrice;
     if (warnings.length) {
@@ -2697,8 +2728,9 @@
         source: "공실박스",
         sessionId: metadata.sessionId,
         scope: metadata.scope,
+        collectionTradeType: metadata.collectionTradeType || "",
         entries: chunk.map(function(item) {
-          var terms = getTradeTerms(item) || {};
+          var terms = getTradeTerms(item, null, metadata.collectionTradeType) || {};
           return {
             sourceId: recordSourceId(item),
             listSnapshot: gongsilListSnapshot(item),
@@ -2770,11 +2802,13 @@
 
   function collectionSignature(records) {
     records = Array.isArray(records) ? records : [];
-    return [
+    var signature = [
       records.length,
       recordSignatureId(records[0]),
       recordSignatureId(records[records.length - 1])
     ].join("|");
+    var collectionTradeType = records[0] && records[0].collectionTradeType;
+    return collectionTradeType ? signature + "|" + collectionTradeType : signature;
   }
 
   function getSavedProgressForRecords(records) {
@@ -2789,6 +2823,7 @@
     var strongSignature = collectionSignature(records);
     var legacySignature = [records.length, "", ""].join("|");
     var isFreshLegacy =
+      !(records[0] && records[0].collectionTradeType) &&
       savedProgress.signature === legacySignature &&
       Date.now() - Date.parse(savedProgress.updatedAt || 0) <=
         12 * 60 * 60 * 1000;
@@ -2833,6 +2868,7 @@
       collectorVersion: VERSION,
       sessionId: metadata && metadata.sessionId || "",
       scope: metadata && metadata.scope || "공실박스 선택클러스터",
+      collectionTradeType: metadata && metadata.collectionTradeType || "",
       complete: false,
       manifestRegistered: Boolean(metadata && metadata.manifestRegistered),
       records: records
@@ -3181,28 +3217,30 @@
       "\n운영현황 → 수집현황에서도 결과를 확인할 수 있습니다.";
   }
 
-  function getTradeTerms(item, detail) {
-    return getTradeOffers(item, detail)[0] || null;
+  function getTradeTerms(item, detail, collectionTradeType) {
+    return getTradeOffers(item, detail, collectionTradeType)[0] || null;
   }
 
-  function observedTradeTypes(items) {
+  function observedTradeTypes(items, collectionTradeType) {
     var found = Object.create(null);
     (Array.isArray(items) ? items : []).forEach(function(item) {
-      getTradeOffers(item).forEach(function(terms) { found[terms.tradeType] = true; });
+      getTradeOffers(item, null, collectionTradeType).forEach(function(terms) { found[terms.tradeType] = true; });
     });
     return Object.keys(found).sort();
   }
 
-  function getTradeOffers(item, detail) {
-    return gongsilAdvertisedOffers(item, detail).map(function(offer) {
+  function getTradeOffers(item, detail, collectionTradeType) {
+    return gongsilAdvertisedOffers(item, detail).filter(function(offer) {
+      return !collectionTradeType || offer.tradeType === collectionTradeType;
+    }).map(function(offer) {
       return Object.assign({}, offer, { saleCategory: offer.tradeType === "sale" ? getSaleCategory(item) : "" });
     });
   }
 
-  function observedOffers(items) {
+  function observedOffers(items, collectionTradeType) {
     var offers = [];
     (Array.isArray(items) ? items : []).forEach(function(item) {
-      getTradeOffers(item).forEach(function(terms) {
+      getTradeOffers(item, null, collectionTradeType).forEach(function(terms) {
         offers.push({ sourceId: recordSourceId(item), tradeType: terms.tradeType });
       });
     });

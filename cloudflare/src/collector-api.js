@@ -313,11 +313,24 @@ function gongsilLeaseRoom(list, fallback) {
   return floor ? floor < 0 ? `지하${Math.abs(floor)}층` : `${floor}층` : fallback;
 }
 
-export function gongsilOfferRecords(value) {
+function gongsilCollectionTradeType(value) {
+  if (value == null || value === "") return "";
+  if (value !== "lease" && value !== "sale") throw new Error("공실박스 수집 거래유형을 확인해 주세요.");
+  return value;
+}
+
+export function gongsilOfferRecords(value, requestedTradeType = "") {
+  const collectionTradeType = gongsilCollectionTradeType(requestedTradeType);
   const list = value?.raw?.list || value?.raw || {};
   const detail = value?.raw?.detail || {};
   const offers = gongsilAdvertisedOffers(list, detail);
   if (!offers.length && hasGongsilOfferEvidence(list, detail)) return [];
+  if (collectionTradeType) {
+    // Preserve the complete provider evidence, but publish only the market the
+    // operator explicitly requested. Never synthesize a price from old values.
+    return offers.filter(offer => offer.tradeType === collectionTradeType)
+      .map(offer => ({ ...gongsilRecord(value, offer), collectionTradeType }));
+  }
   // Old payloads without a structured list retain their normal validation.
   return offers.length ? offers.map((offer) => gongsilRecord(value, offer)) : [gongsilRecord(value)];
 }
@@ -848,6 +861,7 @@ export async function runCollectorMaintenance(env, options = {}) {
 
 async function classifyManifest(env, body) {
   const source = sourceName(body.source);
+  const collectionTradeType = source === "공실박스" ? gongsilCollectionTradeType(body.collectionTradeType) : "";
   const rawEntries = Array.isArray(body.entries) ? body.entries : [];
   if (rawEntries.length > 10_000) throw new Error("목록 비교는 한 번에 최대 10,000건까지 가능합니다.");
   let entries = rawEntries.map((entry) => ({
@@ -858,6 +872,8 @@ async function classifyManifest(env, body) {
     entries = await resolveGongsilOfferIds(env, entries.flatMap((entry) => {
       const offers = gongsilAdvertisedOffers(parseJson(entry.listSnapshot, {}));
       if (!offers.length && hasGongsilOfferEvidence(parseJson(entry.listSnapshot, {}))) return [];
+      if (collectionTradeType) return offers.filter(offer => offer.tradeType === collectionTradeType)
+        .map(offer => ({ ...entry, ...offer, collectionTradeType }));
       return offers.length ? offers.map((offer) => ({ ...entry, ...offer }))
         : [{ ...entry, tradeType: collectorTradeType(entry.tradeType, true) }];
     }));
@@ -1958,6 +1974,7 @@ async function completePublishedSaleReviews(env, publications) {
 }
 
 async function ingestRecords(env, source, values, metadata = {}) {
+  const collectionTradeType = source === "공실박스" ? gongsilCollectionTradeType(metadata.collectionTradeType) : "";
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
     refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0,
@@ -1969,7 +1986,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   for (const value of values) {
     totals.received += 1;
     try {
-      const offers = source === "공실박스" ? gongsilOfferRecords(value) : [normalizedRecord(source, value)];
+      const offers = source === "공실박스" ? gongsilOfferRecords(value, collectionTradeType) : [normalizedRecord(source, value)];
       if (!offers.length) totals.tradeTypeExcluded += 1;
       for (const record of offers) {
         totals.offerReceived += 1;

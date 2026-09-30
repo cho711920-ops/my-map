@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "JS 부동산 자동수집",
-  "version": "1.1.10",
-  "description": "Edge에서 네이버·당근·공실박스 수집기를 매일 순서대로 실행합니다.",
+  "version": "1.1.11",
+  "description": "상가임대는 예약 자동수집, 매매는 필요할 때 수동으로 분리 실행합니다.",
   "permissions": ["alarms", "notifications", "storage", "tabs"],
   "host_permissions": [
     "https://js-map.com/*",

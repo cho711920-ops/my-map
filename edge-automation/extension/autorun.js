@@ -36,7 +36,7 @@ async function start() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   statusElement.textContent = response && response.ok
-    ? (response.resumed ? "중단 지점부터 자동수집을 이어서 실행합니다." : "네이버·당근 자동수집을 시작했습니다.")
+    ? (response.resumed ? "중단 지점부터 상가임대 수집을 이어서 실행합니다." : response.message || "상가임대 자동수집을 시작했습니다.")
     : (response && response.message || "자동수집 실행 신호를 전달하지 못했습니다.");
   if (response && response.ok) {
     setTimeout(() => chrome.tabs.getCurrent((tab) => tab && chrome.tabs.remove(tab.id)), 1200);

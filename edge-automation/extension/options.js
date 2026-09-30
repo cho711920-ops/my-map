@@ -1,14 +1,49 @@
 "use strict";
 
-let state = { config: { targets: [] }, logs: [], runState: null, runReport: null };
+let state = { config: { targets: [] }, logs: [], runState: null, runReport: null, runReports: {} };
 const selectedOnce = new Set();
 let runPreviewMode = "all";
+let runPreviewMarket = "lease";
+let runLaunchPending = false;
 let settingsDirty = false;
 function keyForTarget(target) { return String(target.key || [target.source, target.district, target.url].join("|")); }
 document.getElementById("autoVersion").textContent = `v${chrome.runtime.getManifest().version}`;
 
 const SOURCE_ORDER = ["naver", "daangn", "gongsil"];
 const SOURCE_LABELS = { naver: "네이버", daangn: "당근", gongsil: "공실박스" };
+const MARKET_LABELS = { lease: "상가임대", sale: "매매" };
+
+function compatibleWorker(response = state) {
+  return Boolean(response && response.backgroundBuild && response.backgroundBuild === chrome.runtime.getManifest().version);
+}
+
+function marketForTarget(target) {
+  const explicit = String(target && target.tradeType || "").toLowerCase();
+  if (explicit === "sale" || explicit === "lease") return explicit;
+  const searchable = [target && target.key, target && target.label, target && target.marketMode,
+    target && target.saleCategory].filter(Boolean).join(" ");
+  if (/(?:^|[-_\s])(sale|매매)(?:$|[-_\s])|건물매매|토지매매/i.test(searchable)) return "sale";
+  try {
+    const url = new URL(String(target && target.url || ""));
+    if (String(url.searchParams.get("tradeType") || url.searchParams.get("tradeTypes") || "").toUpperCase().split(/[,:]/).includes("A1")) return "sale";
+    const filter = JSON.parse(url.searchParams.get("af") || "{}");
+    if (Array.isArray(filter.tradeTypes) && filter.tradeTypes.some(value => /BUY|SALE/i.test(String(value)))) return "sale";
+  } catch (_) {}
+  return "lease";
+}
+
+function reportForMarket(market) {
+  const saved = state.runReports && state.runReports[market];
+  if (saved && Array.isArray(saved.items)) return saved;
+  const latest = state.runReport;
+  if (!latest || !Array.isArray(latest.items)) return null;
+  const targets = Array.isArray(state.config && state.config.targets) ? state.config.targets : [];
+  const items = latest.items.filter(item => {
+    const target = targets.find(candidate => keyForTarget(candidate) === item.key);
+    return (target ? marketForTarget(target) : latest.market || marketForTarget(item)) === market;
+  });
+  return items.length ? { ...latest, items } : null;
+}
 
 function message(value) {
   document.getElementById("status").textContent = value;
@@ -30,15 +65,16 @@ function registeredTime(value) {
 
 function targetSummary(target) {
   const registered = registeredTime(target.registeredAt);
-  const market = target.tradeType === "sale" ? "매매" : "상가임대";
+  const market = MARKET_LABELS[marketForTarget(target)];
+  const execution = marketForTarget(target) === "sale" ? "수동 실행 전용" : target.enabled !== false ? "매일 자동실행" : "자동실행 꺼짐 · 수동 수집 가능";
   if (target.source === "gongsil") {
     let zoom = "";
     try { zoom = new URL(target.url).searchParams.get("zoom") || ""; } catch (_) {}
     const count = Number(target.selectedCount || 0);
-    return [market, "현재 화면 전체클러스터", zoom ? `확대 ${zoom}` : "", count ? `등록 ${count.toLocaleString("ko-KR")}개` : "", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
+    return [market, "현재 화면 전체클러스터", execution, zoom ? `확대 ${zoom}` : "", count ? `등록 ${count.toLocaleString("ko-KR")}개` : "", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
   }
   const district = typeof target.district === "string" ? target.district : target.district && target.district.name;
-  return [market, district ? `${district} 구 단위` : "구 단위", "매일 자동수집", registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
+  return [market, district ? `${district} 구 단위` : "구 단위", execution, registered ? `${registered} 등록` : ""].filter(Boolean).join(" · ");
 }
 
 const STATUS_TEXT = {
@@ -53,7 +89,7 @@ const STATUS_TEXT = {
 };
 
 function reportItem(target) {
-  const report = state.runReport;
+  const report = reportForMarket(marketForTarget(target));
   if (!report || !Array.isArray(report.items)) return null;
   const key = String(target.key || [target.source, target.district, target.url].join("|"));
   return report.items.find((item) => item.key === key) || null;
@@ -101,7 +137,7 @@ function displayCounts(item, target) {
   if (counts.version !== 2 && daangn) {
     // Old reports did not persist unchanged counts. Never invent a full census.
     counts.legacyDaangn = true;
-    const match = String(item.message || "").match(/주소·층 오류 (\d+)건/);
+    const match = String(item && item.message || "").match(/주소·층 오류 (\d+)건/);
     if (match) {
       counts.addressDeferred = Math.min(Number(counts.failed || 0), Number(match[1]));
       counts.failed = Math.max(0, Number(counts.failed || 0) - counts.addressDeferred);
@@ -179,10 +215,9 @@ function renderDiagnostics(item) {
     }).join("")}</ul></details>`;
 }
 
-function renderRunSummary() {
-  const report = state.runReport;
+function renderRunSummary(report = state.runReport) {
   if (!report || !Array.isArray(report.items)) {
-    return '<div class="run-summary-empty">다음 실행부터 10개 구의 진행 결과가 이곳에 저장됩니다.</div>';
+    return '<div class="run-summary-empty">아직 실행 기록이 없습니다. 이 거래유형의 수집 결과만 여기에 표시됩니다.</div>';
   }
   const counts = report.items.reduce((output, item) => {
     const normalizedStatus = reportStatus(item) === "완료·주소보류" ? "deferred" : item.status;
@@ -216,7 +251,7 @@ function portableTarget(target) {
     tradeType: target.tradeType,
     marketMode: target.marketMode,
     saleCategory: target.saleCategory,
-    enabled: target.enabled !== false,
+    enabled: marketForTarget(target) === "lease" && target.enabled !== false,
     registeredAt: target.registeredAt
   };
 }
@@ -224,22 +259,52 @@ function portableTarget(target) {
 function renderTarget(target, index) {
   const item = reportItem(target);
   const status = item ? item.status : "pending";
+  const schedule = marketForTarget(target) === "lease"
+    ? `<label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>매일 자동실행</label>`
+    : '<span class="manual-only">자동수집 안 함</span>';
   return `<div class="item target-item" data-report-key="${escapeHtml(String(target.key || index))}">
     <div class="target-state state-${escapeHtml(status)}"><span>${escapeHtml(reportStatus(item))}</span></div>
     <div class="item-info" title="${escapeHtml(target.url)}"><b>${escapeHtml(target.label || target.source)}</b><small class="target-result">${escapeHtml(statusDetail(item, target))}</small><small class="target-registration">${escapeHtml(targetSummary(target))}</small>${renderDiagnostics(item)}</div>
-    <div class="item-actions"><label><input type="checkbox" data-once="${index}" ${selectedOnce.has(keyForTarget(target)) ? "checked" : ""} ${target.enabled === false ? "disabled" : ""}>이번만 선택</label><label><input type="checkbox" data-toggle="${index}" ${target.enabled !== false ? "checked" : ""}>예약 사용</label><button data-remove="${index}">삭제</button></div>
+    <div class="item-actions"><label><input type="checkbox" data-once="${index}" ${selectedOnce.has(keyForTarget(target)) ? "checked" : ""}>이번에 수집</label>${schedule}<button data-remove="${index}">삭제</button></div>
   </div>`;
 }
 
-function renderTargets(targets) {
-  if (!targets.length) return '<div class="empty">등록된 대상이 없습니다.</div>';
-  const indexed = targets.map((target, index) => ({ target, index }));
+function renderSourceGroups(indexed, market) {
+  if (!indexed.length) return `<div class="empty">등록된 ${MARKET_LABELS[market]} 대상이 없습니다. 공급처에서 거래유형을 선택한 뒤 수집 대상으로 등록해 주세요.</div>`;
   const sources = SOURCE_ORDER.concat([...new Set(indexed.map(({ target }) => target.source).filter((source) => !SOURCE_ORDER.includes(source)))]);
   return `<div class="target-groups">${sources.map((source) => {
     const items = indexed.filter(({ target }) => target.source === source);
     if (!items.length) return "";
-    return `<div class="target-group"><div class="target-group-title"><h3>${escapeHtml(SOURCE_LABELS[source] || source)}</h3><span>${items.length}개 사용</span></div><div class="target-group-list">${items.map(({ target, index }) => renderTarget(target, index)).join("")}</div></div>`;
+    const scheduled = market === "lease" ? ` · ${items.filter(({ target }) => target.enabled !== false).length}개 자동실행 선택` : " · 수동 전용";
+    return `<div class="target-group"><div class="target-group-title"><h3>${escapeHtml(SOURCE_LABELS[source] || source)}</h3><span>${items.length}개 등록${scheduled}</span></div><div class="target-group-list">${items.map(({ target, index }) => renderTarget(target, index)).join("")}</div></div>`;
   }).join("")}</div>`;
+}
+
+function renderTargets(targets) {
+  const indexed = targets.map((target, index) => ({ target, index }));
+  const busy = runLaunchPending || !compatibleWorker() || Boolean(state.runState && state.runState.active);
+  return ["lease", "sale"].map(market => {
+    const items = indexed.filter(({ target }) => marketForTarget(target) === market);
+    const label = MARKET_LABELS[market];
+    const selected = items.filter(({ target }) => selectedOnce.has(keyForTarget(target))).length;
+    const schedule = market === "lease"
+      ? state.config.enabled ? `매일 ${escapeHtml(state.config.schedule || "11:00")} 자동실행` : "매일 자동실행 꺼짐"
+      : "수동 실행 전용 · 자동수집 안 함";
+    const hint = market === "lease"
+      ? "매일 자동실행에 체크한 대상만 예약 수집합니다. 아래 버튼으로는 자동실행 설정과 관계없이 상가임대만 수동 수집합니다."
+      : "등록한 매매 대상은 보관만 합니다. 아래 버튼을 눌렀을 때만 실행하며 상가임대는 함께 실행하지 않습니다. 건물·토지는 수집한 매물의 유형에 따라 분류됩니다.";
+    return `<section class="market-panel market-${market}" data-market="${market}" aria-labelledby="marketTitle-${market}">
+      <div class="section-title market-heading"><div><h2 id="marketTitle-${market}">${label} 수집 <span class="market-count">${items.length}개 등록</span></h2><p>${hint}</p></div><span class="market-schedule">${schedule}</span></div>
+      <div class="market-actions">
+        <button class="primary" data-run-market="${market}" data-run-mode="all" ${busy ? "disabled" : ""}>${label} 전체 수집</button>
+        <button data-run-market="${market}" data-run-mode="selected" ${busy ? "disabled" : ""}>${label} 선택만 수집</button>
+        <button data-run-market="${market}" data-run-mode="failed" ${busy ? "disabled" : ""}>${label} 실패·부분완료 재수집</button>
+        <span class="selection-count" data-selection-market="${market}" aria-live="polite">이번에 수집 ${selected}개 선택</span>
+      </div>
+      <div class="market-panel-summary run-summary">${renderRunSummary(reportForMarket(market))}</div>
+      <div class="market-targets">${renderSourceGroups(items, market)}</div>
+    </section>`;
+  }).join("");
 }
 
 function render() {
@@ -256,12 +321,12 @@ function render() {
   const windows = ready.windowsCheckedAt ? `Windows ${ready.windowsSchedule || "시각 미확인"} · ${ready.windowsTaskState} · ${registeredTime(ready.windowsCheckedAt)} 확인` : "Windows 실제 예약 미확인";
   const mismatch = ready.schedule && ready.windowsSchedule && ready.schedule !== ready.windowsSchedule;
   document.getElementById("scheduleReadiness").textContent =
-    `확장 다음 실행: ${ready.nextAlarmAt ? registeredTime(ready.nextAlarmAt) : "미확인/꺼짐"} · ${windows}` +
+    `상가임대 다음 자동실행: ${ready.nextAlarmAt ? registeredTime(ready.nextAlarmAt) : "미확인/꺼짐"} · ${windows}` +
     (mismatch ? " · ⚠ 예약 시각 불일치: Windows 설치 도구에서 같은 시각으로 갱신 필요" : "") +
     (ready.windowsCheckedAt && Date.now() - ready.windowsCheckedAt > 86400000 ? " · Windows 확인이 하루 이상 지남" : "") +
     (state.reportPending ? " · 서버 보고 전송 대기(다음 공급처 연결에서 재시도)" : "");
   const targets = Array.isArray(config.targets) ? config.targets : [];
-  document.getElementById("runSummary").innerHTML = renderRunSummary();
+  document.getElementById("runConfirmed").disabled = runLaunchPending || !compatibleWorker() || Boolean(state.runState && state.runState.active);
   const targetList = document.getElementById("targets");
   const openDetails = new Set([...targetList.querySelectorAll(".target-item")]
     .filter(node => node.querySelector("details[open]"))
@@ -283,16 +348,16 @@ function renderDeferredReview() {
   if (!host) return;
   const rows = [];
   let deferredTotal = 0;
-  const items = state.runReport && Array.isArray(state.runReport.items) ? state.runReport.items : [];
-  items.forEach((item) => {
+  const reports = ["lease", "sale"].map(market => ({ market, report: reportForMarket(market) }));
+  reports.forEach(({ market, report }) => (report && Array.isArray(report.items) ? report.items : []).forEach((item) => {
     const counts = displayCounts(item);
     if (!Number(counts.addressDeferred || 0)) return;
     deferredTotal += Number(counts.addressDeferred || 0);
     (Array.isArray(item.diagnostics) ? item.diagnostics : []).forEach((row) => {
       if (!/지번주소 없음|주소/.test(String(row.message || ""))) return;
-      rows.push({ target: item.label || item.source, sourceId: row.sourceId, message: row.message });
+      rows.push({ target: `${MARKET_LABELS[market]} · ${item.label || item.source}`, sourceId: row.sourceId, message: row.message });
     });
-  });
+  }));
   if (!deferredTotal) {
     host.innerHTML = '<div class="empty">현재 지번 보류 매물이 없습니다.</div>';
     return;
@@ -334,7 +399,8 @@ function currentRunStatus(response) {
   const progress = String(runState.progressMessage || "").trim();
   const stage = runState.progressStage && typeof runState.progressStage === "object" ? runState.progressStage : null;
   const stageText = stage ? `${stage.label || "수집"} ${Number(stage.percent || 0)}%` : "";
-  return [phase, position, label, progress,
+  const market = MARKET_LABELS[runState.market || marketForTarget(target)];
+  return [market, phase, position, label, progress,
     stageText,
     progressAge === null ? "" : progressAge ? `마지막 진행 ${progressAge}분 전` : "방금 진행 확인"
   ].filter(Boolean).join(" · ");
@@ -362,37 +428,40 @@ document.getElementById("save").addEventListener("click", async () => {
 });
 
 function previewRows() {
-  const targets = Array.isArray(state.config.targets) ? state.config.targets.filter((target) => target.enabled !== false).filter(target => {
+  const targets = Array.isArray(state.config.targets) ? state.config.targets.filter(target => marketForTarget(target) === runPreviewMarket).filter(target => {
     if (runPreviewMode === "selected") return selectedOnce.has(keyForTarget(target));
     const previous = reportItem(target);
     return runPreviewMode !== "failed" || previous && ["failed", "partial"].includes(previous.status);
   }) : [];
   const body = document.getElementById("runPreviewBody");
   if (!body) return targets;
+  const label = MARKET_LABELS[runPreviewMarket];
+  document.getElementById("runPreviewTitle").textContent = `${label} 수집 실행 전 확인`;
+  document.getElementById("runPreviewHint").textContent = runPreviewMarket === "sale"
+    ? "매매만 이번에 수동 실행합니다. 상가임대 수집과 매일 예약 설정은 변경하지 않습니다."
+    : "상가임대만 이번에 수동 실행합니다. 매매는 실행하지 않으며 매일 예약 설정은 변경하지 않습니다.";
+  document.getElementById("runConfirmed").textContent = `${label} ${targets.length}개 실행`;
   const rows = targets.map((target) => {
     const previous = reportItem(target);
     const expected = Number(displayCounts(previous, target).expected || target.selectedCount || 0);
     return `<div><b>${escapeHtml(target.label || target.source)}</b><span>${escapeHtml(targetSummary(target))}${expected ? ` · 이전 기준 ${expected.toLocaleString("ko-KR")}건` : " · 예상 개수는 목록 확인 후 확정"}</span></div>`;
   });
   body.innerHTML = targets.length
-    ? `<div class="preview-total"><b>실행 대상 ${targets.length}개</b><span>표시 개수는 직전 완전수집 또는 등록 당시 기준입니다.</span></div>${rows.join("")}`
-    : '<div class="empty">사용 설정된 대상이 없습니다.</div>';
+    ? `<div class="preview-total"><b>${label} 실행 대상 ${targets.length}개</b><span>등록 지역 수 기준이며, 매물 개수는 직전 수집 또는 등록 당시 기준입니다. 수집 사이트 창 하나에서 순서대로 실행합니다.</span></div>${rows.join("")}`
+    : `<div class="empty">실행할 ${label} 대상이 없습니다.</div>`;
   return targets;
 }
 
-document.getElementById("run").addEventListener("click", () => {
-  runPreviewMode = "all";
-  const targets = previewRows();
-  if (!targets.length) return message("사용 설정된 자동수집 대상이 없습니다.");
+document.getElementById("targets").addEventListener("click", event => {
+  const button = event.target.closest("button[data-run-market]");
+  if (!button || button.disabled) return;
+  if (!compatibleWorker()) return message("실행기 버전 확인 필요 · 전용 수집 브라우저를 재시작한 뒤 실행해 주세요.");
+  runPreviewMarket = button.dataset.runMarket;
+  runPreviewMode = button.dataset.runMode;
+  if (!previewRows().length) return message(`${MARKET_LABELS[runPreviewMarket]}: ` +
+    (runPreviewMode === "failed" ? "실패·부분완료 대상이 없습니다." : runPreviewMode === "selected" ? "이번에 수집할 대상을 체크해 주세요." : "등록된 수집 대상이 없습니다."));
   document.getElementById("runPreview").showModal();
 });
-for (const [id, mode] of [["runSelected", "selected"], ["runFailed", "failed"]]) {
-  document.getElementById(id).addEventListener("click", () => {
-    runPreviewMode = mode;
-    if (!previewRows().length) return message(mode === "failed" ? "실패·부분완료 대상이 없습니다." : "이번에 실행할 대상을 체크해 주세요.");
-    document.getElementById("runPreview").showModal();
-  });
-}
 for (const id of ["enabled", "schedule", "closeTabs", "notifyComplete", "notifyPartial", "notifyFailure"]) {
   document.getElementById(id).addEventListener("input", () => { settingsDirty = true; });
 }
@@ -401,34 +470,58 @@ document.getElementById("targets").addEventListener("change", event => {
   if (!Number.isInteger(index) || !state.config.targets[index]) return;
   const key = keyForTarget(state.config.targets[index]);
   if (event.target.checked) selectedOnce.add(key); else selectedOnce.delete(key);
+  for (const market of ["lease", "sale"]) {
+    const count = state.config.targets.filter(target => marketForTarget(target) === market && selectedOnce.has(keyForTarget(target))).length;
+    document.querySelector(`[data-selection-market="${market}"]`).textContent = `이번에 수집 ${count}개 선택`;
+  }
 });
 
 document.getElementById("runConfirmed").addEventListener("click", async (event) => {
   event.preventDefault();
-  document.getElementById("runPreview").close();
-  const button = document.getElementById("run");
-  button.disabled = true;
-  message("전체 실행 상태 확인 중");
+  if (runLaunchPending) return;
+  runLaunchPending = true;
+  render();
+  const label = MARKET_LABELS[runPreviewMarket];
+  message(`${label} 실행 상태 확인 중`);
   try {
-    const response = await runtime(runPreviewMode === "all" ? { type: "JS_AUTO_RUN_NOW" } :
-      {type: "JS_AUTO_RUN_SELECTED", keys: previewRows().map(keyForTarget), failedOnly: runPreviewMode === "failed"});
+    const fresh = await runtime({ type: "JS_AUTO_GET_STATE" });
+    if (fresh.ok) state = fresh;
+    else state = { ...state, backgroundBuild: null };
+    if (!fresh.ok || !compatibleWorker(fresh)) {
+      document.getElementById("runPreview").close();
+      message("실행을 중단했습니다. 최신 실행기 연결 확인 후 전용 수집 브라우저를 재시작해 주세요.");
+      return;
+    }
+    document.getElementById("runPreview").close();
+    if (fresh.runState && fresh.runState.active) {
+      message("이미 진행 중인 수집이 있습니다. 현재 수집이 끝난 뒤 실행해 주세요.");
+      return;
+    }
+    const response = await runtime(runPreviewMode === "all" ? { type: "JS_AUTO_RUN_NOW", market: runPreviewMarket } :
+      {type: "JS_AUTO_RUN_SELECTED", market: runPreviewMarket, keys: previewRows().map(keyForTarget), failedOnly: runPreviewMode === "failed"});
     await load();
-    message(response.message || (response.ok ? `전체 ${Number(response.total || 0)}개 실행 시작` : "실행 실패"));
+    message(response.message || (response.ok ? `${label} ${Number(response.total || 0)}개 실행 시작` : `${label} 실행 실패`));
   } finally {
-    button.disabled = false;
+    runLaunchPending = false;
+    render();
   }
 });
 
 document.getElementById("targets").addEventListener("change", async (event) => {
   const index = Number(event.target.dataset.toggle);
   if (!Number.isInteger(index) || !state.config.targets[index]) return;
+  if (marketForTarget(state.config.targets[index]) !== "lease") return;
   state.config.targets[index].enabled = event.target.checked;
-  await runtime({ type: "JS_AUTO_SAVE_CONFIG", config: state.config });
+  const response = await runtime({ type: "JS_AUTO_SAVE_CONFIG", config: state.config });
+  if (response.ok) state.config = response.config;
+  else message("자동실행 설정 저장 실패 · 다시 확인해 주세요.");
+  render();
 });
 
 document.getElementById("targets").addEventListener("click", async (event) => {
   const index = Number(event.target.dataset.remove);
   if (!Number.isInteger(index) || !state.config.targets[index]) return;
+  selectedOnce.delete(keyForTarget(state.config.targets[index]));
   state.config.targets.splice(index, 1);
   const response = await runtime({ type: "JS_AUTO_SAVE_CONFIG", config: state.config });
   if (response.ok) state.config = response.config;
@@ -486,7 +579,7 @@ document.getElementById("importConfig").addEventListener("change", async (event)
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
-  if (changes.jsAutoCollectorConfigV1 || changes.jsAutoCollectorLogsV1 || changes.jsAutoCollectorRunStateV2 || changes.jsAutoCollectorRunReportV1) load();
+  if (changes.jsAutoCollectorConfigV1 || changes.jsAutoCollectorLogsV1 || changes.jsAutoCollectorRunStateV2 || changes.jsAutoCollectorRunReportV1 || changes.jsAutoCollectorRunReportsByMarketV1) load();
 });
 
 window.setInterval(load, 5000);
