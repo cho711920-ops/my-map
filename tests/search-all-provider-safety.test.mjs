@@ -21,3 +21,19 @@ test("supported original URL searches are exact, unsupported hosts are not inter
   assert.equal(matches({sourceLink:link+"0"},parse(link)),false);
   assert.equal(parse("https://evilnaver.com/articles/123456789"),null);
 });
+
+test("trade-specific source IDs and public provider IDs support exact original-number search",()=>{
+  for (const [provider, sourceId, number] of [
+    ["네이버", "네이버-2643232701::sale", "2643232701"],
+    ["당근", "3768587::lease", "3768587"],
+    ["공실박스", "12345::sale", "12345"]
+  ]) {
+    const item={unifiedOriginalsV8:[{source:provider,sourceId}]};
+    assert.equal(matches(item,parse(provider+" "+number)),true);
+    assert.equal(matches(item,parse(provider+" "+number+"0")),false);
+  }
+  const item={unifiedOriginalsV8:[{source:"당근",sourceId:"internal-id::sale",providerSourceId:"3768587"}]};
+  assert.equal(matches(item,parse("당근 3768587")),true);
+  assert.equal(matches(item,parse("네이버 3768587")),false);
+  assert.equal(matches({unifiedOriginalsV8:[{source:"당근",sourceId:"3768587::other"}]},parse("당근 3768587")),false);
+});

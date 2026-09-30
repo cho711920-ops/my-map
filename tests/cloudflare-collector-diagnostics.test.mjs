@@ -11,6 +11,14 @@ function funcs(text, names, context={}) {
   return context;
 }
 const client = funcs(source,['gongsilCompletionTitle','gongsilDiagnostics']);
+test('market-qualified identities remain readable as provider numbers in diagnostics', () => {
+  const rows = collectorDiagnostics([
+    { sourceId: '네이버-123456::sale', message: '저장 실패' },
+    { sourceId: 'abcdef::lease', message: '주소 확인' },
+    { sourceId: '<img>::sale', message: '거부' }
+  ]);
+  assert.deepEqual(rows.map(row => row.sourceId), ['123456', 'abcdef', '']);
+});
 test('finished 797 capture clearly reports 10 excluded + 1 failure, not still running', () => {
   assert.equal(client.gongsilCompletionTitle({failed:1},10),'수집 완료 · 제외/실패 11건');
   assert.equal(client.gongsilCompletionTitle({failed:0},0),'수집·저장 완료');

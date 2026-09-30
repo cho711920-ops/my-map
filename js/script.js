@@ -883,7 +883,8 @@ function matchesOriginalListingNumber(item, parsedKeyword) {
       : (/당근|daangn|danggeun|karrot/.test(source) ? "daangn" : (/공실박스|gongsil/.test(source) ? "gongsil" : (/직접등록|직접확인|manual/.test(source) ? "manual" : "")));
     if (!sourceKey || (parsedKeyword.provider && parsedKeyword.provider !== sourceKey)) return false;
 
-    var sourceId = String(original && original.sourceId || "").trim();
+    var sourceId = String(original && (original.providerSourceId || original.sourceId) || "").trim()
+      .replace(/::(?:lease|sale)$/, "");
     if (sourceKey === "naver") sourceId = sourceId.replace(/^네이버-/i, "");
     return sourceId === parsedKeyword.number;
   });

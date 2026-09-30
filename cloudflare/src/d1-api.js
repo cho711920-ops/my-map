@@ -324,7 +324,7 @@ export function sourceListingSearchIndex(rows = []) {
   const sourceSearchIds = {};
   for (const row of rows) {
     const propertyId = clean(row?.listing_id);
-    const sourceId = clean(row?.source_listing_id).replace(/^네이버-/i, "");
+    const sourceId = clean(row?.source_listing_id).replace(/::(?:lease|sale)$/, "").replace(/^네이버-/i, "");
     const sourceCode = ({ "네이버": "n", "당근": "d", "공실박스": "g", "직접등록": "m", "직접확인": "m" })[clean(row?.source)] || "";
     if (!propertyId || !sourceCode || !/^\d+$/.test(sourceId)) continue;
     if (!sourceSearchIds[propertyId]) sourceSearchIds[propertyId] = [];
@@ -1412,13 +1412,16 @@ async function completionSourceRecoveryPlan(env, listingId, snapshot, now) {
   const sourceIds = [...new Set((Array.isArray(snapshot) ? snapshot : [])
     .map((row) => clean(row?.id)).filter(Boolean))];
   if (!sourceIds.length) return { statements: [], recovered: [], conflicts: 0, missing: 0 };
+  const target = await env.DB.prepare("SELECT trade_type FROM listings WHERE id=?1 LIMIT 1").bind(listingId).first();
   const placeholders = sourceIds.map((_, index) => `?${index + 1}`).join(",");
-  const result = await env.DB.prepare(`SELECT id, listing_id, active FROM listing_sources
+  const result = await env.DB.prepare(`SELECT id, listing_id, active, trade_type FROM listing_sources
     WHERE id IN (${placeholders})`).bind(...sourceIds).all();
   const rows = result?.results || [];
   const found = new Set(rows.map((row) => clean(row.id)).filter(Boolean));
-  const recoverable = rows.filter((row) => !clean(row.listing_id));
-  const conflicts = rows.filter((row) => clean(row.listing_id) && clean(row.listing_id) !== listingId).length;
+  const compatibleTrade = (row) => Boolean(target && listingTradeTypesCanMerge(row.trade_type, target.trade_type));
+  const recoverable = rows.filter((row) => !clean(row.listing_id) && compatibleTrade(row));
+  const conflicts = rows.filter((row) => clean(row.listing_id)
+    ? clean(row.listing_id) !== listingId : !compatibleTrade(row)).length;
   const statements = [];
   for (const row of recoverable) {
     const sourceId = clean(row.id);
@@ -1754,7 +1757,7 @@ async function moveOriginal(env, user, body) {
   const targetMasterId = clean(body.targetMasterId).slice(0, 100);
   const source = await env.DB.prepare(`SELECT s.*, l.main_source, l.title, l.address, l.building_name,
       l.room, l.listing_type, l.deposit, l.monthly_rent, l.maintenance_fee, l.premium,
-      l.trade_type, l.sale_category, l.sale_price,
+      l.trade_type AS master_trade_type, l.sale_category AS master_sale_category, l.sale_price AS master_sale_price,
       l.area_m2, l.latitude, l.longitude, l.operating_memo, l.source_url AS master_source_url,
       l.contacts_json, l.first_collected_at AS master_first_collected_at,
       l.registration_at, l.last_collected_at AS master_last_collected_at
@@ -1762,6 +1765,13 @@ async function moveOriginal(env, user, body) {
     WHERE s.id=?1 AND s.active=1 AND l.status<>'deleted' LIMIT 1`).bind(originalId).first();
   if (!source) throw Object.assign(new Error("분리할 원본매물을 찾을 수 없습니다."), { statusCode: 404 });
   const sourceSnapshot = parseJson(source.list_snapshot_json, {});
+  const sourceTrade = normalizeListingTradeType(source.trade_type, { legacyDefault: true });
+  const snapshotTrade = normalizeListingTradeType(sourceSnapshot.tradeType || sourceSnapshot.trade_type || source.trade_type,
+    { legacyDefault: true });
+  const parentTrade = normalizeListingTradeType(source.master_trade_type, { legacyDefault: true });
+  if (!sourceTrade || sourceTrade !== snapshotTrade || sourceTrade !== parentTrade) {
+    throw Object.assign(new Error("원본과 대표매물의 거래유형이 일치하지 않습니다. 임대·매매 연결을 확인해 주세요."), { statusCode: 400 });
+  }
   const expectedRevision = Math.max(0, Number(body.expectedRevision) || 0);
   const currentRevision = Math.max(1, Number(sourceSnapshot.revision) || 1);
   if (expectedRevision && expectedRevision !== currentRevision) {
@@ -1770,6 +1780,9 @@ async function moveOriginal(env, user, body) {
   const now = new Date().toISOString();
   const sourceParent = {
     ...source,
+    trade_type: source.master_trade_type,
+    sale_category: source.master_sale_category,
+    sale_price: source.master_sale_price,
     source_url: source.master_source_url,
     first_collected_at: source.master_first_collected_at,
     last_collected_at: source.master_last_collected_at
@@ -1828,7 +1841,7 @@ async function moveOriginal(env, user, body) {
   const target = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 AND status <> 'deleted'")
     .bind(targetMasterId).first();
   if (!target) throw Object.assign(new Error("통합할 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
-  if (!listingTradeTypesCanMerge(source.trade_type, target.trade_type)) {
+  if (!listingTradeTypesCanMerge(sourceTrade, target.trade_type)) {
     throw Object.assign(new Error("상가임대와 매매 원본은 서로 합칠 수 없습니다."), { statusCode: 400 });
   }
   const targetMemo = carryConfirmedVisitMemo(target.operating_memo, source.operating_memo);
@@ -1891,6 +1904,9 @@ function nullableRequirementNumber(value) {
 }
 
 function evaluateCustomerListing(requirements, row) {
+  // Current customer requirements describe lease budgets only. A sale's zero
+  // rental fields must never qualify it as a cheap rental recommendation.
+  if (normalizeListingTradeType(row.trade_type, { legacyDefault: true }) !== "lease") return null;
   const regions = splitRequirement(requirements.regions);
   const types = splitRequirement(requirements.types);
   const requiredTags = splitRequirement(requirements.requiredTags);
@@ -1948,7 +1964,7 @@ export async function refreshCustomerMatchesForListings(env, listingIds = []) {
     const chunk = ids.slice(offset, offset + 80);
     const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
     const page = await env.DB.prepare(`SELECT id, property_id, title, address, road_address, building_name,
-        listing_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags, status
+        listing_type, trade_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags, status
       FROM listings WHERE id IN (${placeholders})`).bind(...chunk).all();
     listings.push(...(page?.results || []));
   }
@@ -1988,7 +2004,7 @@ async function rebuildCustomerMatches(env, customerId = "") {
     : await allPages(env, `SELECT id, requirements_json FROM customers
         WHERE status NOT IN ('계약완료','종료') ORDER BY updated_at DESC`, 500);
   const listings = await allPages(env, `SELECT id, property_id, title, address, road_address, building_name,
-      listing_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags
+      listing_type, trade_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags
     FROM listings WHERE status <> 'deleted'`, 3_000);
   let rebuilt = 0;
   let matchCount = 0;

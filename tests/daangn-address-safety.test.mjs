@@ -154,6 +154,7 @@ test("ingestion does not resurrect a rejected parcel from an existing source sna
   }]));
   const context = vm.createContext({
     normalizedRecord, isMonthlyCollectorRecord, hasExactLotAddress,
+    resolveCollectorOfferIds: async (_env, _source, records) => records,
     ensureSession: async () => "test-session", loadExistingSources: async () => rows,
     loadSourceAssets: async () => new Map(), loadPendingReviewsByAddress: async () => new Map(),
     loadCandidateListings: async (_env, records) => { assert.equal(records.length, 0); return new Map(); },

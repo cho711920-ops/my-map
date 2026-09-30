@@ -1,6 +1,7 @@
 // Bounded operational diagnostics only; never persist request URLs/credentials.
 export function collectorDiagnostics(value) {
   const seen = new Set();
+  const providerId = value => String(value ?? "").replace(/::(?:lease|sale)$/, "").replace(/^네이버-/, "");
   const clean = value => String(value ?? "")
     .replace(/https?:\/\/[^\s]+/gi, "[요청주소]")
     .replace(/(?:bearer\s+\S+|(?:token|password|collectorKey|authorization)\s*[:=]\s*\S+)/gi, "[인증정보]")
@@ -9,7 +10,7 @@ export function collectorDiagnostics(value) {
     .replace(/[\r\n\t]+/g, " ").slice(0, 240);
   return (Array.isArray(value) ? value : []).slice(0, 600).map(item => ({
     stage: ["목록조회", "필수정보", "상세조회", "저장"].includes(item?.stage) ? item.stage : "상세조회",
-    sourceId: /^[\w-]{1,64}$/.test(String(item?.sourceId || "")) ? String(item.sourceId) : "",
+    sourceId: /^[\w-]{1,64}$/.test(providerId(item?.sourceId)) ? providerId(item.sourceId) : "",
     message: clean(item?.message || "사유 미기록")
   })).filter(item => {
     const key = JSON.stringify(item);

@@ -23,3 +23,17 @@ test("the source number index includes inactive originals without changing visib
   assert.doesNotMatch(d1, /WHERE l\.status<>'deleted' AND s\.active=1/);
   assert.match(d1, /groups,\s*sourceSearchIds,/);
 });
+
+test("transaction-qualified source IDs remain searchable by their public provider number", () => {
+  assert.deepEqual(sourceListingSearchIndex([
+    { listing_id: "M-LEASE", source: "네이버", source_listing_id: "네이버-2643232701::lease" },
+    { listing_id: "M-SALE", source: "네이버", source_listing_id: "네이버-2643232701::sale" },
+    { listing_id: "M-SALE", source: "당근", source_listing_id: "3768587::sale" },
+    { listing_id: "M-SALE", source: "당근", source_listing_id: "3768587" },
+    { listing_id: "M-SALE", source: "공실박스", source_listing_id: "12345::sale" },
+    { listing_id: "M-SALE", source: "공실박스", source_listing_id: "12345::other" }
+  ]), {
+    "M-LEASE": ["n:2643232701"],
+    "M-SALE": ["n:2643232701", "d:3768587", "g:12345"]
+  });
+});

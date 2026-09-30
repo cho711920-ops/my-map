@@ -7,6 +7,7 @@ import { saveAutomationRunReport, readAutomationRunReports } from "./automation-
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
+import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector-offer-identity.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -322,7 +323,8 @@ export function gongsilOfferRecords(value) {
 }
 
 function naverRecord(item) {
-  const sourceId = sourceIdFor("네이버", item?.articleNo || item?.articleNumber || item?.sourceId);
+  const sourceId = sourceIdFor("네이버", collectorProviderSourceId(
+    item?.articleNo || item?.articleNumber || item?.providerSourceId || item?.sourceId));
   const images = uniqueUrls(item?.imageUrls || item?.images || []);
   if (clean(item?.primaryImage) && !images.includes(clean(item.primaryImage))) images.unshift(clean(item.primaryImage));
   const saleDetails = scrubExternalContactData(naverSaleFields(item));
@@ -649,6 +651,9 @@ function manifestMaterialMatches(entry, row) {
 
 export function manifestEntryMatch(entry, row, source = "") {
   if (!row) return "";
+  const incomingTrade = collectorTradeType(entry.tradeType || entry.trade_type, true);
+  const savedTrade = collectorTradeType(row.trade_type || parseJson(row.list_snapshot_json, {}).tradeType, true);
+  if (!incomingTrade || !savedTrade || incomingTrade !== savedTrade) return "";
   const incomingHash = snapshotKey(entry.listSnapshot || entry);
   const savedHash = clean(row.snapshot_hash).toLowerCase();
   // Sale metadata (land/gross areas, total tenancy income, type) is material.
@@ -856,6 +861,12 @@ async function classifyManifest(env, body) {
       return offers.length ? offers.map((offer) => ({ ...entry, ...offer }))
         : [{ ...entry, tradeType: collectorTradeType(entry.tradeType, true) }];
     }));
+  } else {
+    entries = await resolveCollectorOfferIds(env, source, entries.map((entry) => {
+      const tradeType = collectorTradeType(entry.tradeType || entry.trade_type, true);
+      if (!tradeType) throw new Error("목록 비교의 거래유형을 확인해 주세요.");
+      return { ...entry, tradeType };
+    }));
   }
   const sessionId = await ensureSession(env, body.sessionId, source);
   const rows = new Map();
@@ -930,7 +941,7 @@ async function classifyManifest(env, body) {
       entry.manifestStatus = "unknown";
       unknown += 1;
       needsDetail.push(entry.sourceId);
-    } else if (manifestEntryMatch(entry, row, source)) {
+    } else if (!(entry.tradeType === "sale" && !clean(row.listing_id)) && manifestEntryMatch(entry, row, source)) {
       entry.manifestStatus = "unchanged";
       unchanged += 1;
       if (!/^fnv1a-[0-9a-f]{8}$/i.test(clean(row.snapshot_hash)) &&
@@ -981,8 +992,9 @@ async function classifyManifest(env, body) {
   }
   let originalNeeds = needsDetail;
   let originalRefresh = refreshDetail;
-  if (source === "공실박스") {
-    // The browser fetches detail once per provider ad, not once per offer.
+  if (entries.some((entry) => entry.providerSourceId)) {
+    // Storage is market-qualified; browser detail requests always use the
+    // provider's original ID. This applies to every provider, not just Gongsil.
     const states = new Map();
     const refreshIds = new Set(refreshDetail);
     const refresh = new Set();
@@ -1551,7 +1563,8 @@ export function choosePendingReviewMatch(record, candidates = [], currentReview 
 }
 
 export function normalizeReviewRecord(value = {}) {
-  const tradeType = collectorTradeType(value.tradeType || value.trade_type, true);
+  const rawTradeType = clean(value.tradeType || value.trade_type);
+  const tradeType = collectorTradeType(rawTradeType, true) || rawTradeType;
   return {
     ...value,
     originalId: clean(value.originalId),
@@ -1669,6 +1682,21 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now,
   return { changed: mediaChanged > 0 || contactsChanged > 0, mediaChanged, contactsChanged };
 }
 
+function assertSourceTradeBoundary(record, listingTradeType, existingSource = null) {
+  // Only an absent legacy trade defaults to lease. Keep explicit unknowns out
+  // of both existing representatives and newly created listings.
+  const incomingTrade = collectorTradeType(record?.tradeType || record?.trade_type, true);
+  const listingTrade = collectorTradeType(listingTradeType, true);
+  if (!incomingTrade || !listingTrade) throw new Error("원본과 대표매물의 거래유형을 확인해 주세요.");
+  if (incomingTrade !== listingTrade) {
+    throw new Error("임대와 매매는 같은 대표매물에 연결할 수 없습니다.");
+  }
+  if (existingSource && collectorTradeType(existingSource.trade_type, true) !== incomingTrade) {
+    throw new Error("다른 거래유형의 수집 원본은 이동할 수 없습니다.");
+  }
+  return incomingTrade;
+}
+
 async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false,
   actor = "collector", existingAssets = null, preserveListing = false) {
   const now = nowIso();
@@ -1677,8 +1705,10 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
-  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status FROM listings WHERE id=?1")
+  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status, trade_type FROM listings WHERE id=?1")
     .bind(listingId).first();
+  if (!currentListing) throw new Error("연결할 대표매물을 찾지 못했습니다.");
+  assertSourceTradeBoundary(record, currentListing.trade_type, existingSource);
   const promoteRepresentative = shouldPromoteListingRepresentative(record.source, currentListing?.main_source);
   const representativeMemo = preserveConfirmedVisitMemo(currentListing?.operating_memo, record.memo);
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
@@ -1793,6 +1823,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
 }
 
 async function createListing(env, record, sessionId, actor = "collector", existingSource = null, existingAssets = null) {
+  const tradeType = assertSourceTradeBoundary(record, record?.tradeType || record?.trade_type, existingSource);
   const id = `M-${crypto.randomUUID()}`;
   const now = nowIso();
   const contacts = JSON.stringify(Array.isArray(record.contacts) ? record.contacts : []);
@@ -1804,7 +1835,7 @@ async function createListing(env, record, sessionId, actor = "collector", existi
     ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?5, ?3, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
       ?16, ?17, ?18, ?19, ?20, ?21, ?21, ?21, ?21, ?21)`)
     .bind(id, record.source, record.buildingName || "일반상가", record.address, clean(record.roadAddress),
-      record.room, record.category, collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
+      record.room, record.category, tradeType, clean(record.saleCategory), record.salePrice,
       record.deposit, record.rent, record.fee, record.premium, record.area,
       record.latitude, record.longitude, record.memo, record.link, contacts, now).run();
   await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets);
@@ -1892,7 +1923,7 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
 }
 
 async function saveCollectorError(env, record, sessionId, message) {
-  const id = `E-${snapshotKey(`${record.source}:${record.sourceId}`)}`;
+  const id = `E-${snapshotKey(`${record.source}:${record.sourceId}:${collectorTradeType(record.tradeType, true)}`)}`;
   const at = nowIso();
   await env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json,
@@ -1910,6 +1941,22 @@ async function saveCollectorError(env, record, sessionId, message) {
   return id;
 }
 
+async function completePublishedSaleReviews(env, publications) {
+  // Old sale reviews are retried by the manifest path. Close only this
+  // successfully published offer; never consume an opposite-market review.
+  const statements = publications.map(({ record, listingId }) => env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
+      result_json=?2, error_text=''
+    WHERE source=?3 AND source_listing_id IN (?4, ?5) AND trade_type='sale'
+      AND (processing_state='review' OR (processing_state='duplicate'
+        AND json_extract(result_json, '$.action')='sameAsPendingReview'))`)
+    .bind(nowIso(), JSON.stringify({ action: "directSalePublish", listingId }), record.source,
+      record.sourceId, record.providerSourceId || record.sourceId));
+  // Keep a large sale import from adding one extra network round trip per ad.
+  for (let offset = 0; offset < statements.length; offset += 80) {
+    await env.DB.batch(statements.slice(offset, offset + 80));
+  }
+}
+
 async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
@@ -1918,6 +1965,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   let normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
+  const salePublications = [];
   for (const value of values) {
     totals.received += 1;
     try {
@@ -1949,6 +1997,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
     }
   }
   if (source === "공실박스") normalizedRecords = await resolveGongsilOfferIds(env, normalizedRecords);
+  else normalizedRecords = await resolveCollectorOfferIds(env, source, normalizedRecords);
   const existingSources = await loadExistingSources(env, source, normalizedRecords);
   const records = [];
   for (const record of normalizedRecords) {
@@ -1992,6 +2041,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
           else totals.refreshed += 1;
         }
         else totals.duplicate += 1;
+        if (record.tradeType === LISTING_TRADE_TYPES.SALE) salePublications.push({ record, listingId: existing.listing_id });
         continue;
       }
       if (sourceReclassification) {
@@ -2003,7 +2053,11 @@ async function ingestRecords(env, source, values, metadata = {}) {
       const allPendingCandidates = pendingReviewsByAddress.get(record.address) || [];
       const pendingCandidates = allPendingCandidates.filter((candidate) =>
         listingTradeTypesCanMerge(candidate.record?.tradeType || candidate.trade_type, record.tradeType));
-      const pendingMatch = choosePendingReviewMatch(record, pendingCandidates);
+      // Sale offers must be published immediately. Ambiguous cross-ad matches
+      // stay separate instead of blocking in review or forcing a merge.
+      const isSale = record.tradeType === LISTING_TRADE_TYPES.SALE;
+      const pendingMatch = isSale ? null : choosePendingReviewMatch(record, pendingCandidates);
+      let publishedListingId = "";
       if (classified.decision === "merge") {
         const consolidated = await consolidateClassifiedCandidateDuplicates(env, {
           email: "collector-duplicate-master-repair@js-map.com"
@@ -2021,7 +2075,8 @@ async function ingestRecords(env, source, values, metadata = {}) {
           totals.reactivated += 1;
         }
         totals.merged += 1;
-      } else if (classified.decision === "review" && await currentSingleAddressCandidate(env, record, candidates)) {
+        publishedListingId = classified.candidate.id;
+      } else if (!isSale && classified.decision === "review" && await currentSingleAddressCandidate(env, record, candidates)) {
         const result = await attachSource(env, record, candidates[0].id, sessionId, existing, false,
           "system-single-candidate-merge@js-map.com",
           existing ? sourceAssets.get(clean(existing.id)) : null, true);
@@ -2033,7 +2088,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
       } else if (pendingMatch) {
         await savePendingReviewAlias(env, record, sessionId, pendingMatch);
         totals.duplicate += 1;
-      } else if (classified.decision === "create") {
+      } else if (classified.decision === "create" || isSale) {
         const listingId = await createListing(env, record, sessionId, "collector", existing,
           existing ? sourceAssets.get(clean(existing.id)) : null);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
@@ -2050,6 +2105,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
         ]);
         affectedListingIds.add(listingId);
         totals.created += 1;
+        publishedListingId = listingId;
       } else {
         const reviewId = await queueReview(env, record, sessionId, candidates, classified.reason);
         allPendingCandidates.push({
@@ -2061,11 +2117,13 @@ async function ingestRecords(env, source, values, metadata = {}) {
         pendingReviewsByAddress.set(record.address, allPendingCandidates);
         totals.review += 1;
       }
+      if (isSale && publishedListingId) salePublications.push({ record, listingId: publishedListingId });
     } catch (error) {
       totals.failed += 1;
       if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: clean(error?.message) || "D1 저장 실패" });
     }
   }
+  if (salePublications.length) await completePublishedSaleReviews(env, salePublications);
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
   for (const key of ["received", "offerReceived", "created", "merged", "updated", "conditionUpdated", "refreshed",
@@ -2251,6 +2309,7 @@ async function finalizeSession(env, body) {
 async function finalizeSessionWork(env, body) {
   const source = sourceName(body.source);
   const tradeType = collectorTradeType(body.tradeType, true);
+  if (!tradeType) throw new Error("수집 완료 처리의 거래유형을 확인해 주세요.");
   const sessionId = await ensureSession(env, body.sessionId, source);
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
@@ -2268,6 +2327,9 @@ async function finalizeSessionWork(env, body) {
     }
     const rows = await resolveGongsilOfferIds(env, offers.length ? offers
       : observed.map((sourceId) => ({ sourceId, tradeType })));
+    presenceObserved = [...new Set(rows.map((entry) => entry.sourceId))];
+  } else {
+    const rows = await resolveCollectorOfferIds(env, source, observed.map((sourceId) => ({ sourceId, tradeType })));
     presenceObserved = [...new Set(rows.map((entry) => entry.sourceId))];
   }
   const complete = audit.complete;
@@ -2331,7 +2393,8 @@ async function finalizeSessionWork(env, body) {
           l.status AS listing_status, l.operating_memo
         FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
         WHERE s.source=?1 AND s.source_listing_id IN (${ids.map((_, index) => `?${index + 2}`).join(",")})
-          AND (s.active=0 OR s.missing_count<>0)`).bind(source, ...ids).all();
+          AND COALESCE(NULLIF(s.trade_type,''),'lease')=?${ids.length + 2}
+          AND (s.active=0 OR s.missing_count<>0)`).bind(source, ...ids, tradeType).all();
       const changes = [];
       for (const row of resetRows?.results || []) {
         changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
