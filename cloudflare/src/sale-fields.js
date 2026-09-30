@@ -1,6 +1,7 @@
 // Provider fields are retained separately: land is not exclusive floor area,
 // total rent is not the monthly offer, and building use is not listing type.
 import { saleDescriptionFields, naverSaleDescription, supplementSaleDescription } from "./sale-description.js";
+import { normalizeNaverPropertyType } from "./naver-property-types.js";
 const clean = (value) => String(value ?? "").trim();
 const numeric = (value) => {
   if (value == null || clean(value) === "" || typeof value === "boolean") return null;
@@ -97,11 +98,14 @@ export function naverSaleFields(item = {}) {
   const info = detail.articleDetailInfo || original.articleDetailInfo || {};
   const floors = info.floorDetailInfo || detail.floorDetailInfo || {};
   const price = detail.priceInfo || original.priceInfo || {};
+  // Repair provider labels independently of physical scope. An in-flight old
+  // collector may send saleCategory=other; translating its code must not change
+  // that payload's unit/floor/area into an inferred whole-building measurement.
   const saleCategory = saleCategoryFromLabel(item.saleCategory || item.category || item.realEstateTypeCode);
   const wholeBuilding = ["multifamily", "house", "mixed_house", "building"].includes(saleCategory);
   const descriptionText = naverSaleDescription(item);
   return supplementSaleDescription({
-    sourceType: clean(item.category || item.realEstateTypeCode),
+    sourceType: normalizeNaverPropertyType(item.category, item.realEstateTypeCode).label,
     scope: saleCategory === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
     landAreaM2: positive(space.landSpace), grossAreaM2: positive(space.floorSpace),
     buildingAreaM2: positive(space.buildingSpace), exclusiveAreaM2: positive(space.exclusiveSpace),

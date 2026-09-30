@@ -855,7 +855,7 @@
       moneyLabel("권리금", item.premium)
     ].filter(Boolean).join("");
 
-    var typeLabel = String(item.type || "").trim();
+    var typeLabel = window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : String(item.type || "").trim();
     var isHeld = Boolean(
       activeSession &&
       activeSession.statuses &&

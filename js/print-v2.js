@@ -74,7 +74,7 @@
 
   function detailHtml(item) {
     var top = [
-      item.type || "",
+      window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item.type || "",
       item.room || "",
       item.area ? item.area + "평" : ""
     ].filter(Boolean).join(" · ");

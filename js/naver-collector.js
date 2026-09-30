@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.5";
+  var VERSION = "6.0.6";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -49,9 +49,26 @@
     B3: "단기임대"
   };
   var REAL_ESTATE_TYPE_LABELS = {
-    D01: "사무실",
-    D02: "상가점포",
-    E02: "공장/창고"
+    A01: "아파트", A02: "오피스텔", A04: "재건축", A05: "연립", A06: "다세대", A07: "도시형생활주택",
+    B01: "아파트분양권", B02: "오피스텔분양권", C01: "원룸", C02: "빌라/연립",
+    C03: "단독/다가구", C04: "전원주택", C06: "한옥주택",
+    D01: "사무실", D02: "상가점포", D03: "빌딩/건물", D04: "상가건물", D05: "상가주택",
+    E01: "숙박/콘도", E02: "공장/창고", E03: "토지/임야", E04: "지식산업센터",
+    F01: "재개발", G01: "고시원", Z00: "기타",
+    APT: "아파트", OPST: "오피스텔", JGC: "재건축", ABYG: "아파트분양권", OBYG: "오피스텔분양권",
+    VL: "빌라/연립", DSD: "다세대", DDDGG: "단독/다가구", JWJT: "전원주택", SGJT: "상가주택",
+    OR: "원룸", JGB: "재개발", TJ: "토지/임야", GM: "빌딩/건물", GJCG: "공장/창고", APTHG: "지식산업센터"
+  };
+  var NAVER_SALE_CATEGORIES = {
+    A01: "apartment", A02: "officetel", A04: "reconstruction", A05: "villa", A06: "villa", A07: "other",
+    B01: "apartment_presale", B02: "officetel_presale", C01: "one_room", C02: "villa",
+    C03: "house", C04: "house", C06: "house", D01: "office", D02: "commercial",
+    D03: "building", D04: "building", D05: "mixed_house", E01: "other", E02: "factory_warehouse",
+    E03: "land", E04: "knowledge_center", F01: "redevelopment", G01: "other", Z00: "other",
+    APT: "apartment", OPST: "officetel", JGC: "reconstruction", ABYG: "apartment_presale",
+    OBYG: "officetel_presale", VL: "villa", DSD: "villa", DDDGG: "house", JWJT: "house",
+    SGJT: "mixed_house", OR: "one_room", JGB: "redevelopment", TJ: "land", GM: "building",
+    GJCG: "factory_warehouse", APTHG: "knowledge_center"
   };
 
   function getCollectorKey() {
@@ -2284,10 +2301,8 @@
       buildingName: clean(
         article.complexName || article.buildingName || article.articleName
       ),
-      category: clean(
-        article.articleRealEstateTypeName || article.realEstateTypeName ||
-        REAL_ESTATE_TYPE_LABELS[categoryCode] || categoryCode
-      ),
+      category: naverPropertyTypeLabel(categoryCode,
+        article.articleRealEstateTypeName || article.realEstateTypeName),
       realEstateTypeCode: categoryCode,
       tradeType: clean(
         article.tradeTypeName || TRADE_TYPE_LABELS[tradeCode] || tradeCode
@@ -2338,30 +2353,40 @@
     return normalized;
   }
 
+  function naverPropertyTypeLabel(code, label) {
+    var text = clean(label);
+    if (/[가-힣]/.test(text)) return text;
+    return REAL_ESTATE_TYPE_LABELS[clean(code || text).toUpperCase()] || "기타(유형 확인 필요)";
+  }
+
   function naverSaleCategory(code, label) {
-    var codes = { APT: "apartment", JGC: "reconstruction", ABYG: "apartment_presale",
-      OPST: "officetel", OBYG: "officetel_presale", VL: "villa", DSD: "villa",
-      DDDGG: "house", JWJT: "house", SGJT: "mixed_house", OR: "one_room", JGB: "redevelopment",
-      TJ: "land", GM: "building", GJCG: "factory_warehouse", APTHG: "knowledge_center",
-      D01: "office", D02: "commercial", E02: "factory_warehouse" };
+    var normalizedCode = clean(code).toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(NAVER_SALE_CATEGORIES, normalizedCode)) {
+      if (["C03", "DDDGG"].indexOf(normalizedCode) !== -1 && /다가구/.test(clean(label)) && !/단독/.test(clean(label))) {
+        return "multifamily";
+      }
+      return NAVER_SALE_CATEGORIES[normalizedCode];
+    }
     var value = clean(label || code).toLowerCase();
     if (/재건축/.test(value)) return "reconstruction";
     if (/재개발/.test(value)) return "redevelopment";
     if (/분양권/.test(value)) return /오피스텔/.test(value) ? "officetel_presale" : "apartment_presale";
     if (/아파트|^apt$|apartment/.test(value)) return "apartment";
     if (/오피스텔|officetel/.test(value)) return "officetel";
-    if (/빌라|다세대|villa/.test(value)) return "villa";
+    if (/빌라|다세대|연립|villa/.test(value)) return "villa";
     if (/상가주택/.test(value)) return "mixed_house";
     if (/원룸/.test(value)) return "one_room";
     if (/지식산업/.test(value)) return "knowledge_center";
     if (/land|토지|대지|임야|전답/.test(value)) return "land";
     if (/factory|warehouse|공장|창고|e02/.test(value)) return "factory_warehouse";
+    if (/도시형생활주택|숙박|콘도|고시원/.test(value)) return "other";
+    if (/단독/.test(value)) return "house";
     if (/multi|다가구/.test(value)) return "multifamily";
     if (/house|주택|빌라/.test(value)) return "house";
     if (/building|건물|빌딩/.test(value)) return "building";
     if (/office|사무/.test(value)) return "office";
     if (/store|상가|점포|근린/.test(value)) return "commercial";
-    return codes[clean(code).toUpperCase()] || "other";
+    return "other";
   }
 
   function finImageUrls(input) {
@@ -2576,6 +2601,7 @@
     });
     var detailed = Object.assign({}, item, {
       realEstateTypeCode: realEstateType,
+      category: naverPropertyTypeLabel(realEstateType, item.category),
       tradeTypeCode: tradeType,
       tradeType: TRADE_TYPE_LABELS[tradeType] || tradeType,
       saleCategory: tradeType === "A1" ? naverSaleCategory(realEstateType, item.category) : "",

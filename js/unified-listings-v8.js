@@ -766,7 +766,8 @@
       ? '매매 ' + esc(selected.salePrice == null || selected.salePrice === '' ? '미확인' :
         (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(selected.salePrice) : number(selected.salePrice)))
       : '보 ' + esc(value('deposit')) + ' / 월 ' + esc(value('rent'));
-    var facts = [['구분', selected.type || '미확인'], ['층·호실', selected.room || '미확인']];
+    var typeLabel = global.JSListingTradeV1 ? global.JSListingTradeV1.displayType(selected) : selected.type;
+    var facts = [['구분', typeLabel || '미확인'], ['층·호실', selected.room || '미확인']];
     if (!sale) facts = facts.concat([
       ['면적', selected.area == null || selected.area === '' ? '미확인' : number(selected.area) + '평'],
       ['관리비', selected.fee == null || selected.fee === '' ? '미확인' : number(selected.fee) + '만원'],

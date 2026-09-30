@@ -21,6 +21,58 @@
 
   function clean(value) { return String(value == null ? "" : value).trim(); }
 
+  // Display-only translation: legacy favorite/selection keys contain item.type.
+  // Never replace that stored value when rendering an existing listing.
+  var NAVER_TYPES = {
+    A01: ["아파트", "apartment"], A02: ["오피스텔", "officetel"],
+    A04: ["재건축", "reconstruction"], A05: ["연립", "villa"], A06: ["다세대", "villa"],
+    A07: ["도시형생활주택", "other"], B01: ["아파트분양권", "apartment_presale"],
+    B02: ["오피스텔분양권", "officetel_presale"], C01: ["원룸", "one_room"],
+    C02: ["빌라/연립", "villa"], C03: ["단독/다가구", "house"], C04: ["전원주택", "house"],
+    C06: ["한옥주택", "house"], D01: ["사무실", "office"], D02: ["상가점포", "commercial"],
+    D03: ["빌딩/건물", "building"], D04: ["상가건물", "building"], D05: ["상가주택", "mixed_house"],
+    E01: ["숙박/콘도", "other"], E02: ["공장/창고", "factory_warehouse"], E03: ["토지/임야", "land"],
+    E04: ["지식산업센터", "knowledge_center"], F01: ["재개발", "redevelopment"],
+    G01: ["고시원", "other"], Z00: ["기타", "other"],
+    APT: ["아파트", "apartment"], OPST: ["오피스텔", "officetel"], JGC: ["재건축", "reconstruction"],
+    ABYG: ["아파트분양권", "apartment_presale"], OBYG: ["오피스텔분양권", "officetel_presale"],
+    VL: ["빌라/연립", "villa"], DSD: ["다세대", "villa"], DDDGG: ["단독/다가구", "house"],
+    JWJT: ["전원주택", "house"], SGJT: ["상가주택", "mixed_house"], OR: ["원룸", "one_room"],
+    JGB: ["재개발", "redevelopment"], TJ: ["토지/임야", "land"], GM: ["빌딩/건물", "building"],
+    GJCG: ["공장/창고", "factory_warehouse"], APTHG: ["지식산업센터", "knowledge_center"]
+  };
+
+  function naverTypeLabel(value) {
+    var text = clean(value);
+    var entry = NAVER_TYPES[text.toUpperCase()];
+    if (entry) return entry[0];
+    return /^[A-Z][A-Z0-9_]*$/i.test(text) ? "기타(유형 확인 필요)" : text;
+  }
+
+  function isNaverItem(item) {
+    return /^(naver|네이버)$/i.test(clean(item && (item.source || item.mainSource || item.main_source)));
+  }
+
+  function displayType(item) {
+    var value = clean(item && (item.type || item.listing_type || item.category));
+    return isNaverItem(item) ? naverTypeLabel(value) : value;
+  }
+
+  function naverCategory(item) {
+    if (!isNaverItem(item)) return "";
+    var detail = item.saleDetails || item.saleSummary || {};
+    var value = clean(item.type || item.listing_type || item.category || detail.sourceType);
+    var entry = NAVER_TYPES[value.toUpperCase()] || NAVER_TYPES[clean(item.realEstateTypeCode || detail.sourceTypeCode).toUpperCase()];
+    if (!entry) {
+      Object.keys(NAVER_TYPES).some(function(code) {
+        if (NAVER_TYPES[code][0] !== value) return false;
+        entry = NAVER_TYPES[code];
+        return true;
+      });
+    }
+    return entry ? entry[1] : "";
+  }
+
   function normalizedTradeType(item) {
     var value = clean(item && (item.tradeType || item.trade_type)).toLowerCase();
     if (value === "sale" || value === "매매" || value === "buy") return "sale";
@@ -45,7 +97,8 @@
       factorywarehouse: "factory_warehouse", "공장창고": "factory_warehouse",
       other: "other", "기타": "other"
     };
-    return aliases[compact] || compact;
+    var category = aliases[compact] || compact;
+    return !category || category === "other" ? naverCategory(item) || category : category;
   }
 
   function matchesItem(item, mode) {
@@ -253,7 +306,7 @@
     add("지하층수", detail.belowGroundFloors, "층");
     add("총층수", detail.totalFloors, "층");
     add(detail.descriptionVersion ? "세대수 (설명 기준)" : "세대수", detail.householdCount, "세대");
-    if (detail.descriptionCategory) add("분류 보완", "설명의 대지·연면적·전체층수·세대구성을 근거로 다가구 전체로 분류 (원본 분류: " + detail.sourceType + ")");
+    if (detail.descriptionCategory) add("분류 보완", "설명의 대지·연면적·전체층수·세대구성을 근거로 다가구 전체로 분류 (원본 분류: " + (isNaverItem(item) ? naverTypeLabel(detail.sourceType) : detail.sourceType) + ")");
     (detail.descriptionWarnings || []).forEach(function(warning) { add("확인 필요", warning); });
     var advertised = detail.descriptionFinancials || {};
     var financialLabels = { salePrice: "매매가", loanAmount: "융자", totalDeposit: "보증금", monthlyIncome: "월 임대수입",
@@ -289,6 +342,8 @@
     matchesItem: matchesItem,
     normalizedTradeType: normalizedTradeType,
     normalizedSaleCategory: normalizedSaleCategory,
+    displayType: displayType,
+    naverTypeLabel: naverTypeLabel,
     displayPrice: displayPrice,
     saleDetailsHtml: saleDetailsHtml,
     saleSummary: saleSummary,

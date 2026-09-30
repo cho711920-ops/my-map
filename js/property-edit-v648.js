@@ -145,7 +145,7 @@ function openPropertyEditModalV630(encodedKey) {
   }
 
   document.getElementById("propertyEditIdentityV630").textContent =
-    [item.name, item.address, item.type].filter(Boolean).join(" · ");
+    [item.name, item.address, window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item.type].filter(Boolean).join(" · ");
 
   document.getElementById("peNameV630").value = item.name || "";
   document.getElementById("peAddressV630").value = item.address || "";

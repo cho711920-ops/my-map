@@ -1723,7 +1723,8 @@ function updateQuickAddWarningLegacyV6351() {
   var visibleItems = same.slice(0, maxVisible);
 
   var rows = visibleItems.map(function(item, index) {
-    var type = escapeHtml((item && item.type) || (item && item.name) || "구분 없음");
+    var displayType = window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item && item.type;
+    var type = escapeHtml(displayType || (item && item.name) || "구분 없음");
     var room = escapeHtml((item && item.room) || "호실 없음");
     var area = formatQuickDuplicateNumberV6351(item && item.area);
 
@@ -2211,7 +2212,8 @@ function updateQuickAddWarning() {
   var visibleItems = same.slice();
 
   var rows = visibleItems.map(function(item, index) {
-    var type = escapeHtml((item && item.type) || (item && item.name) || "구분 없음");
+    var displayType = window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item && item.type;
+    var type = escapeHtml(displayType || (item && item.name) || "구분 없음");
     var room = escapeHtml((item && item.room) || "호실 없음");
     var area = escapeHtml(formatQuickAreaV636(item && item.area));
 

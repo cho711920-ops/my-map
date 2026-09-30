@@ -117,11 +117,11 @@ test("Naver whole building keeps land and floor area separate without treating g
 });
 
 test("Naver actual priceInfo.dealPrice wins over occupied building warrantyPrice", () => {
-  const api = collectorFunctions("../js/naver-collector.js", ["normalize", "finKrwToManwon", "naverSaleCategory"], {
+  const api = collectorFunctions("../js/naver-collector.js", ["normalize", "finKrwToManwon", "naverSaleCategory", "naverPropertyTypeLabel"], {
     clean: (x) => String(x ?? "").trim(), articleId: (x) => x.articleNo,
     finImageUrls: () => [], finFloorInfo: () => "", finAddressText: () => "",
     naverListingUrl: () => "", naverListSnapshot: () => "", location: { href: "" },
-    TRADE_TYPE_LABELS: { A1: "매매" }, REAL_ESTATE_TYPE_LABELS: {}
+    TRADE_TYPE_LABELS: { A1: "매매" }, REAL_ESTATE_TYPE_LABELS: {}, NAVER_SALE_CATEGORIES: {}
   });
   const row = api.normalize({ articleNo: "2644987877", tradeType: "A1", realEstateTypeName: "다가구",
     priceInfo: { dealPrice: 580000000, warrantyPrice: 35000000, rentPrice: 4000000 } });

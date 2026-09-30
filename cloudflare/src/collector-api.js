@@ -6,6 +6,7 @@ import { normalizeCollectionCounts, collectionDateRange, summarizeCollectionDay,
 import { saveAutomationRunReport, readAutomationRunReports } from "./automation-run-reports.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
+import { normalizeNaverPropertyType, resolveNaverSaleCategory } from "./naver-property-types.js";
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector-offer-identity.js";
 import {
@@ -345,7 +346,7 @@ function naverRecord(item) {
   const squareMeters = tradeType === "sale" && saleDetails.scope === "land" ? saleDetails.landAreaM2
     : tradeType === "sale" && saleDetails.scope === "whole_building" ? saleDetails.grossAreaM2
       : number(item?.areaSquareMeter);
-  const category = clean(item?.category) || "상가점포";
+  const category = normalizeNaverPropertyType(item?.category, item?.realEstateTypeCode).label;
   const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
     ? number(item?.salePrice ?? item?.sale_price ?? item?.dealPrice)
     : null;
@@ -356,7 +357,7 @@ function naverRecord(item) {
     room: tradeType === "sale" && saleDetails.scope === "whole_building" ? "전체"
       : tradeType === "sale" && saleDetails.scope === "land" ? "" : canonicalListingRoom(item?.roomInfo || item?.floorInfo), category, tradeType,
     saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
-      ? collectorSaleCategory(item?.saleCategory || item?.sale_category, category)
+      ? resolveNaverSaleCategory(item?.category, item?.saleCategory || item?.sale_category, item?.realEstateTypeCode)
       : "",
     salePrice, saleDetails: tradeType === "sale" ? saleDetails : undefined,
     deposit: tradeType === LISTING_TRADE_TYPES.SALE ? 0 : number(item?.deposit),
@@ -1721,12 +1722,24 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
-  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status, trade_type FROM listings WHERE id=?1")
+  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings WHERE id=?1")
     .bind(listingId).first();
   if (!currentListing) throw new Error("연결할 대표매물을 찾지 못했습니다.");
   assertSourceTradeBoundary(record, currentListing.trade_type, existingSource);
   const promoteRepresentative = shouldPromoteListingRepresentative(record.source, currentListing?.main_source);
   const representativeMemo = preserveConfirmedVisitMemo(currentListing?.operating_memo, record.memo);
+  let representativeCategory = record.category;
+  if (clean(record.source) === "네이버" && clean(currentListing.main_source) === "네이버") {
+    const previousType = normalizeNaverPropertyType(currentListing.listing_type);
+    // Old favorite/visit keys include the master type. A code-to-Korean display
+    // correction alone must not replace that existing key component. Keep the
+    // new Korean type in source snapshots, and allow actual type/source changes.
+    if (previousType.recognized && previousType.code &&
+        clean(currentListing.listing_type).toUpperCase() === previousType.code &&
+        previousType.label === clean(record.category)) {
+      representativeCategory = currentListing.listing_type;
+    }
+  }
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
   const protectListing = preserveRepresentative && !updateCondition && !promoteRepresentative;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
@@ -1789,7 +1802,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         longitude=CASE WHEN ?16 IS NOT NULL THEN ?16 ELSE longitude END,
         road_address=CASE WHEN ?17<>'' THEN ?17 ELSE road_address END,
         version=version+1, last_collected_at=?18, updated_at=?18 WHERE id=?19`)
-      .bind(sourceName(record.source), record.buildingName, record.room, record.category,
+      .bind(sourceName(record.source), record.buildingName, record.room, representativeCategory,
         collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
         record.deposit, record.rent, record.fee, record.premium, record.area, representativeMemo, record.link,
         record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
@@ -1804,7 +1817,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         longitude=CASE WHEN ?15 IS NOT NULL THEN ?15 ELSE longitude END,
         road_address=CASE WHEN road_address='' AND ?16<>'' THEN ?16 ELSE road_address END,
         version=version+1, last_collected_at=?17, updated_at=?17 WHERE id=?18`)
-      .bind(record.buildingName, record.room, record.category,
+      .bind(record.buildingName, record.room, representativeCategory,
         collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
         record.deposit, record.rent, record.fee, record.premium, record.area, representativeMemo,
         record.link, record.latitude, record.longitude, clean(record.roadAddress), now, listingId)

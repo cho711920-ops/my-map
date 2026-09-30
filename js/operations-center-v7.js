@@ -644,7 +644,8 @@
       var property = getProperty(field(row, state.matchHeaders, "대표매물ID"));
       if (!property) return true;
       if (!matchPropertyIncludesSourceV1(property, state.matchSourceFilter)) return false;
-      if (state.matchTypeFilter && text(property.type) !== state.matchTypeFilter) return false;
+      var typeLabel = window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(property) : text(property.type);
+      if (state.matchTypeFilter && typeLabel !== state.matchTypeFilter) return false;
       if (state.matchFloorFilter && matchPropertyFloorV719(property) !== state.matchFloorFilter) return false;
       return true;
     });
@@ -668,7 +669,8 @@
     var typeOptions = {};
     allRows.forEach(function(row) {
       var property = getProperty(field(row, state.matchHeaders, "대표매물ID"));
-      if (property && text(property.type)) typeOptions[text(property.type)] = true;
+      var typeLabel = property && (window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(property) : text(property.type));
+      if (typeLabel) typeOptions[typeLabel] = true;
     });
     var header = (overdueCount ? '<div class="operations-customer-alert"><b>새 매물 안내 필요</b><span>신규매물 ' + overdueCount.toLocaleString("ko-KR") + '건이 ' + (number(state.dashboard && state.dashboard.contactReminderDays) || 3) + '일 이상 확인되지 않았습니다.</span></div>' : '') +
       (followup.due ? '<div class="operations-customer-alert"><b>후속관리 예정일</b><span>' + escape(followup.next) + ' · ' + escape(followup.stage || "상담") + '</span></div>' : '') +

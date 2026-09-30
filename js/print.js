@@ -178,7 +178,8 @@ function printSelectedList() {
   printItems.forEach(function(item) {
     var done = isDone(item);
     var stateLabel = done ? '<span class="done-label">계약완료</span>' : '';
-    var typeText = item.type ? '[' + escapeHtml(item.type) + ']' : '[구분없음]';
+    var displayType = window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item.type;
+    var typeText = displayType ? '[' + escapeHtml(displayType) + ']' : '[구분없음]';
     var nameText = item.name ? escapeHtml(item.name) + ' / ' : '';
     var memoText = shortText(item.memo || "", 160);
 
@@ -284,7 +285,7 @@ function printAIInvestmentReport() {
 '<div class="section"><h2>1. 매물 기본정보</h2>' +
 '<div class="line"><b>매물:</b> ' + escapeHtml(item.name || "") + '</div>' +
 '<div class="line"><b>주소:</b> ' + escapeHtml(item.address || "") + ' / ' + escapeHtml(item.room || "") + '</div>' +
-'<div class="line"><b>구분:</b> ' + escapeHtml(item.type || "") + ' / <b>상태:</b> ' + escapeHtml(item.state || "계약가능") + '</div></div>' +
+'<div class="line"><b>구분:</b> ' + escapeHtml(window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item.type || "") + ' / <b>상태:</b> ' + escapeHtml(item.state || "계약가능") + '</div></div>' +
 
 '<div class="section"><h2>2. 핵심지표</h2><div class="grid">' +
 '<div class="box"><b>보증금</b><strong>' + deposit + '</strong></div>' +

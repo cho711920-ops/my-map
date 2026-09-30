@@ -777,6 +777,11 @@ function setupMobilePanelDrag() {
 }
 
 
+function getListingTypeLabelV1(item) {
+  return window.JSListingTradeV1 && window.JSListingTradeV1.displayType
+    ? window.JSListingTradeV1.displayType(item) : String(item && item.type || "");
+}
+
 function updateTypeOptions(items) {
   var select = document.getElementById("typeFilter");
   var currentValue = select.value;
@@ -784,8 +789,9 @@ function updateTypeOptions(items) {
 
   items.forEach(function(item) {
     if (window.JSListingTradeV1 && !window.JSListingTradeV1.matchesItem(item)) return;
-    if (item.type && !types.includes(item.type)) {
-      types.push(item.type);
+    var label = getListingTypeLabelV1(item);
+    if (label && !types.includes(label)) {
+      types.push(label);
     }
   });
 
@@ -800,6 +806,9 @@ function updateTypeOptions(items) {
     select.appendChild(option);
   });
 
+  if (!types.includes(currentValue) && currentValue && window.JSListingTradeV1) {
+    currentValue = window.JSListingTradeV1.naverTypeLabel(currentValue);
+  }
   if (types.includes(currentValue)) {
     select.value = currentValue;
   }
@@ -819,6 +828,7 @@ function getSearchComparableFields(item) {
     item && item.address,
     item && item.room,
     item && item.type,
+    getListingTypeLabelV1(item),
     item && item.memo
   ].map(function(value) {
     var text = String(value || "").toLowerCase();
@@ -928,6 +938,7 @@ function buildSearchText(item) {
     item && item.address,
     item && item.room,
     item && item.type,
+    getListingTypeLabelV1(item),
     item && item.memo
   ].map(function(value) {
     return String(value || "").toLowerCase();
@@ -1195,7 +1206,7 @@ function getFilteredItems(options) {
       !!window.customerMatchHeldVisibleV1;
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
-    var matchType = !selectedType || item.type === selectedType;
+    var matchType = !selectedType || getListingTypeLabelV1(item) === selectedType;
     var matchSource = !selectedSource ||
       (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.matchesSource === "function"
         ? window.JSUnifiedListingsV8.matchesSource(item, selectedSource)
@@ -4618,8 +4629,9 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
         'onclick="event.stopPropagation(); restoreCompletedListing(\'' + encodedKey + '\')">계약완료 ↩</button>'
     : "";
 
-  var typeLabel = item.type
-    ? '<span class="type-badge">' + escapeHtml(item.type) + '</span>'
+  var displayType = getListingTypeLabelV1(item);
+  var typeLabel = displayType
+    ? '<span class="type-badge">' + escapeHtml(displayType) + '</span>'
     : "";
 
   var sourceLabel = isFieldVisitItem(item)
