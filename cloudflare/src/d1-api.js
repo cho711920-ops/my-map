@@ -12,6 +12,7 @@ import { saveSaleWorksheet } from "./sale-worksheet.js";
 import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
+import { withDaangnLandUse } from "./land-use-display.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -385,7 +386,8 @@ async function unifiedListings(env) {
         'entireBuildingType', json_type(raw_json, '$.isEntireBuilding'),
         'salesType', COALESCE(NULLIF(json_extract(raw_json, '$.salesTypeV3.type'), ''), json_extract(raw_json, '$.salesTypeV3.__typename')),
         'floor', CASE WHEN json_extract(raw_json, '$.isAmbiguousFloor')=1 THEN NULL ELSE json_extract(raw_json, '$.floor') END
-      ) END AS daangn_sale_extent_json`,
+      ) END AS daangn_sale_extent_json,
+      CASE WHEN source='당근' THEN json_extract(raw_json, '$.landType') END AS daangn_land_type`,
     "listing_sources",
     `active = 1
       AND NOT EXISTS (
@@ -408,13 +410,14 @@ async function unifiedListings(env) {
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
     const daangn = parseJson(row.daangn_sale_extent_json, {});
-    const original = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
+    const displayed = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
       source: row.source,
       floorInfo: parseJson(row.naver_floor_info_json, null),
       propertyType: row.naver_property_type,
       gongsil: parseJson(row.gongsil_sale_extent_json, {}),
       daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
     });
+    const original = withDaangnLandUse(displayed, row.daangn_land_type, row.source);
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
       const actualImages = actualGongsilImages({
@@ -548,7 +551,9 @@ async function unifiedDetail(env, propertyId) {
     snapshot.photoCount = isGongsil
       ? images.length
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
-    return withSaleExtentDisplay(snapshot, saleExtentProvider(raw, row.source));
+    return withDaangnLandUse(
+      withSaleExtentDisplay(snapshot, saleExtentProvider(raw, row.source)), raw.landType, row.source
+    );
   });
   if (!originals.length) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,

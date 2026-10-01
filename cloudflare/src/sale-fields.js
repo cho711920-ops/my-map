@@ -2,6 +2,7 @@
 // total rent is not the monthly offer, and building use is not listing type.
 import { saleDescriptionFields, naverSaleDescription, supplementSaleDescription } from "./sale-description.js";
 import { normalizeNaverPropertyType } from "./naver-property-types.js";
+import { daangnLandUse } from "./land-use-display.js";
 const clean = (value) => String(value ?? "").trim();
 const numeric = (value) => {
   if (value == null || clean(value) === "" || typeof value === "boolean") return null;
@@ -119,12 +120,14 @@ export function naverSaleFields(item = {}) {
 
 export function daangnSaleFields(article = {}, category = "other") {
   const described = saleDescriptionFields(article.content);
+  const landUse = category === "land" ? daangnLandUse(article.landType) : "";
   const wholeBuilding = Boolean(article.isEntireBuilding) ||
     ["other", "one_room", "villa"].includes(category) && described.wholeMultifamily;
   const price = positive((article.trades || []).find(t => /BUY/i.test(t.type || t.__typename || ""))?.price);
   const detail = {
     sourceType: clean(article.salesTypeV3?.type || article.salesTypeV3?.__typename),
     scope: category === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
+    ...(landUse ? { landUse } : {}),
     landAreaM2: positive(article.landArea, category === "land" ? article.area : null),
     grossAreaM2: positive(article.grossArea) ?? (article.isEntireBuilding ? positive(article.area) : null),
     exclusiveAreaM2: wholeBuilding || category === "land" ? null : positive(article.area),

@@ -1,4 +1,6 @@
 import {test, expect} from "@playwright/test";
+import {withDaangnLandUse} from "../../cloudflare/src/land-use-display.js";
+import {compactSaleSummary} from "../../cloudflare/src/d1-api.js";
 
 test.beforeEach(async ({page, context}) => {
   await context.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
@@ -6,7 +8,7 @@ test.beforeEach(async ({page, context}) => {
   await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
 });
 
-async function configureLand(page, landUse, room = "3층") {
+async function configureLand(page, landUse, room = "3층", source = "") {
   const details = {scope: "land", landAreaM2: 330.5785, landUse, zoning: "제2종일반주거지역"};
   await page.route("**/api/data?*", async route => {
     if (new URL(route.request().url()).searchParams.get("action") !== "unifiedListingDetail") return route.continue();
@@ -14,20 +16,23 @@ async function configureLand(page, landUse, room = "3층") {
     const data = await response.json();
     for (const original of data.originals || []) if (original.propertyId === "FIXTURE-LAND") {
       Object.assign(original, {room, saleDetails: details});
+      if (source) original.source = source;
     }
     await route.fulfill({response, json: data});
   });
-  await page.evaluate(({details, room}) => {
+  await page.evaluate(({details, room, source}) => {
     const item = window.allItems.find(value => value.propertyId === "FIXTURE-LAND");
     item.room = room;
+    if (source) item.source = source;
     // Initial production list responses carry a compact source summary, not full details.
     item.saleDetails = null;
     item.saleSummary = null;
     for (const original of item.unifiedOriginalsV8 || []) {
       Object.assign(original, {room, saleDetails: undefined, saleSummary: {...details}});
+      if (source) original.source = source;
     }
     window.__landUseIdentity = {room: item.room, key: item.key, propertyId: item.propertyId, salePrice: item.salePrice};
-  }, {details, room});
+  }, {details, room, source});
 }
 
 async function selectMarket(page, isMobile, mode) {
@@ -85,6 +90,29 @@ test("missing land use is explicit even when an old floor or room is present", a
   await expect(card).not.toContainText("호실 -");
   await expect(card.locator(".listing-land-info-v1")).toContainText("제2종일반주거지역");
   expect(((await card.innerText()).match(/지목/g) || []).length).toBe(1);
+  await expectLandIdentityUnchanged(page);
+});
+
+test("a recovered Daangn raw land type reaches the card, land-use filter and detail without recollection", async ({page, isMobile}, testInfo) => {
+  const recovered = withDaangnLandUse({source: "당근", tradeType: "sale", saleCategory: "land",
+    saleDetails: {scope: "land", landAreaM2: 330.5785}}, "PADDY_FIELD");
+  const summary = compactSaleSummary(recovered);
+  await configureLand(page, summary.landUse, "", "당근");
+  await selectMarket(page, isMobile, "land_sale");
+  await expect(page.locator("#list .land-use-badge-v1")).toHaveText("지목: 답");
+  for (const [value, count] of [["답", 1], ["대", 0], ["", 1]]) {
+    await page.evaluate(value => {
+      document.getElementById("saleLandUseFilter").value = value;
+      window.applyFilter();
+    }, value);
+    await expect(page.locator("#list .item")).toHaveCount(count);
+  }
+  await page.screenshot({path: testInfo.outputPath("recovered-daangn-land-use.png")});
+  await page.locator("#list .item-building-name").click();
+  const drawer = page.locator("#unifiedDetailDrawerV8");
+  await expect(drawer.locator(".unified-detail-source-address-v827")).toContainText("지목: 답");
+  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("답");
+  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("답");
   await expectLandIdentityUnchanged(page);
 });
 

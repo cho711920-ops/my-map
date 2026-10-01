@@ -18,11 +18,11 @@ const ids = before.listings.map(r => r.id);
 assert.ok(ids.every(id => /^M-[a-z0-9-]+$/.test(id)));
 const keys = [
   'api-cache/d1-sheet.csv',
-  'api-cache/unified-listings-v7-sale-extent.json',
+  'api-cache/unified-listings-v8-daangn-land-use.json',
   'api-cache/operations-dashboard.json',
   'api-cache/revision/listings.json',
   'api-cache/revision/operations.json',
-  ...ids.map(id => `api-cache/unified-detail-v7-sale-extent/${id}.json`)
+  ...ids.map(id => `api-cache/unified-detail-v8-daangn-land-use/${id}.json`)
 ];
 assert.equal(new Set(keys).size, keys.length);
 console.log(JSON.stringify({ cacheKeys: keys.length, apply: process.argv.includes('--apply') }));
