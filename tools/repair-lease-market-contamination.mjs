@@ -744,11 +744,11 @@ function verifyReferences(root, expected) {
 function invalidateRepairCaches(root, directory, listingIds = []) {
   const keys = [
     "api-cache/d1-sheet.csv",
-    "api-cache/unified-listings-v9-sale-target-evidence.json",
+    "api-cache/unified-listings-v10-sale-area-summary.json",
     "api-cache/operations-dashboard.json",
     "api-cache/revision/listings.json",
     "api-cache/revision/operations.json",
-    ...listingIds.map((id) => `api-cache/unified-detail-v9-sale-target-evidence/${clean(id)}.json`)
+    ...listingIds.map((id) => `api-cache/unified-detail-v10-sale-area-summary/${clean(id)}.json`)
   ].filter(Boolean);
   const results = [...new Set(keys)].map((key) => {
     try {

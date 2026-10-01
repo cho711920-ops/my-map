@@ -597,10 +597,10 @@
     return {thumbnail: thumbnailMarkup, badge: badge, sourceButton: button, sourceUnavailable: sourceUnavailable};
   }
 
-  function conditionLine(original) {
+  function conditionLine(original, hideArea) {
     if (text(original && original.tradeType).toLowerCase() === "sale") {
-      return '<span class="listing-sale-condition-v1"><b>매매</b> ' + (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(original.salePrice) : number(original.salePrice)) + ' · ' +
-        (global.JSListingTradeV1 ? global.JSListingTradeV1.saleAreaHtml(original) : '면적 미확인') + '</span>';
+      return '<span class="listing-sale-condition-v1"><b>매매</b> ' + (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(original.salePrice) : number(original.salePrice)) +
+        (hideArea ? '' : ' · ' + (global.JSListingTradeV1 ? global.JSListingTradeV1.saleAreaHtml(original) : '면적 미확인')) + '</span>';
     }
     return '<span><b>보</b> ' + number(original.deposit) + ' / <b>월</b> ' + number(original.rent) +
       ' · <b>관</b> ' + number(original.fee) + ' · <b>권</b> ' + number(original.premium) +
@@ -670,6 +670,7 @@
     var encodedPropertyId = encodeURIComponent(text(original.propertyId));
     var encodedOriginalId = encodeURIComponent(text(original.originalId));
     var thumbnail = originalImage(original);
+    var buildingSale = global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(original);
     return '<button type="button" class="unified-original-row-v8' + (selected ? ' selected' : '') + '" ' +
       'data-original-id="' + esc(original.originalId) + '" ' +
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedPropertyId + '\', \'' + encodedOriginalId + '\')" ' +
@@ -680,7 +681,8 @@
         (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
           'onerror="JSUnifiedListingsV8.imageError(this, false)">' : '') + '</span>' +
       '<span class="unified-original-body-v8"><span class="unified-original-head-v8"><b class="source-' +
-        sourceKey(original.source) + '">' + esc(original.source) + '</b><em>' + esc((global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel ? global.JSListingTradeV1.landUseLabel(original) : '') || original.room || '호실 -') + '</em></span>' +
+        sourceKey(original.source) + '">' + esc(original.source) + '</b>' +
+        (buildingSale ? '' : '<em>' + esc((global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel ? global.JSListingTradeV1.landUseLabel(original) : '') || original.room || '호실 -') + '</em>') + '</span>' +
         conditionLine(original) + '<small>' + esc(original.buildingName || original.address) + '</small></span>' +
       '</button>';
   }
@@ -767,16 +769,12 @@
         (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(selected.salePrice) : number(selected.salePrice)))
       : '보 ' + esc(value('deposit')) + ' / 월 ' + esc(value('rent'));
     var typeLabel = global.JSListingTradeV1 ? global.JSListingTradeV1.displayType(selected) : selected.type;
-    var floorLabel = global.JSListingTradeV1 && global.JSListingTradeV1.buildingFloorLabel
-      ? global.JSListingTradeV1.buildingFloorLabel(selected) : "";
+    var buildingSale = global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(selected);
     var landLabel = global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel
       ? global.JSListingTradeV1.landUseLabel(selected) : "";
-    var facts = [['구분', typeLabel || '미확인'], landLabel
-      ? ['지목', landLabel.replace(/^지목(?::\s*|\s+)/, '')]
-      : ['층·호실', floorLabel || selected.room || '미확인']];
-    var saleScopeLabel = global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleScopeLabel
-      ? global.JSListingTradeV1.buildingSaleScopeLabel(selected) : "";
-    if (saleScopeLabel) facts.splice(1, 0, ['매매 범위', saleScopeLabel]);
+    var facts = [['구분', typeLabel || '미확인']];
+    if (landLabel) facts.push(['지목', landLabel.replace(/^지목(?::\s*|\s+)/, '')]);
+    else if (!buildingSale) facts.push(['층·호실', selected.room || '미확인']);
     if (!sale) facts = facts.concat([
       ['면적', selected.area == null || selected.area === '' ? '미확인' : number(selected.area) + '평'],
       ['관리비', selected.fee == null || selected.fee === '' ? '미확인' : number(selected.fee) + '만원'],
@@ -816,8 +814,7 @@
     var images = originalImages(selected);
     var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
     var encodedActionPropertyId = encodeURIComponent(text(propertyId));
-    var buildingFloorLabel = selected && global.JSListingTradeV1 && global.JSListingTradeV1.buildingFloorLabel
-      ? global.JSListingTradeV1.buildingFloorLabel(selected) : "";
+    var buildingSale = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(selected);
     var landLabel = selected && global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel
       ? global.JSListingTradeV1.landUseLabel(selected) : "";
     var body = document.getElementById("unifiedDetailBodyV8");
@@ -841,9 +838,9 @@
           (selected.link ? '<button type="button" class="unified-detail-source-link-v827" ' +
             'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
-        '</div><strong>' + esc(selected.address) + ' ' + esc(landLabel || buildingFloorLabel || selected.room) + '</strong></div>' +
-        (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleInfoHtml ? global.JSListingTradeV1.buildingSaleInfoHtml(selected) : '') +
-        (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected) + '</p>') +
+        '</div><strong>' + esc(selected.address) + (buildingSale ? '' : ' ' + esc(landLabel || selected.room)) + '</strong></div>' +
+        (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleAreaInfoHtml ? global.JSListingTradeV1.buildingSaleAreaInfoHtml(selected) : '') +
+        (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected, buildingSale) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
         (!phoneDetail && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +

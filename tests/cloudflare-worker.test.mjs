@@ -191,7 +191,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
     const cachedEnv = {
       MEDIA: {
         get: async (key) => {
-          assert.equal(key, "api-cache/unified-listings-v9-sale-target-evidence.json");
+          assert.equal(key, "api-cache/unified-listings-v10-sale-area-summary.json");
           return {
             customMetadata: { savedAt: String(Date.now()) },
             httpMetadata: { contentType: "application/json; charset=utf-8" },
@@ -991,7 +991,7 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
     await Promise.all(pending);
     assert.ok(!statements.some((entry) => /apps-script-sync/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
-    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v9-sale-target-evidence.json"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v10-sale-area-summary.json"));
     assert.ok(writtenCacheKeys.includes("api-cache/revision/listings.json"));
     assert.ok(!writtenCacheKeys.includes("api-cache/revision/operations.json"));
   } finally {
@@ -1054,7 +1054,7 @@ test("primary memo edits persist only in D1 and do not queue a Sheet sync", asyn
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     assert.ok(statements.some((entry) => /INSERT INTO mutation_results/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
-    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v9-sale-target-evidence.json"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v10-sale-area-summary.json"));
     assert.ok(!statements.some((entry) => /INSERT INTO jobs/.test(entry.sql)));
   } finally {
     globalThis.fetch = originalFetch;

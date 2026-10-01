@@ -209,7 +209,7 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield", "landUse", "zoning"];
+    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield", "landUse", "zoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
@@ -242,22 +242,14 @@
   function buildingSaleScopeLabel(item) {
     return {whole_building: "건물 전체 매매", unit: "특정 층·호실 매매", unknown: "매매 범위 미확인"}[buildingSaleExtent(item)] || "";
   }
-  function buildingSaleInfoHtml(item) {
-    var extent = buildingSaleExtent(item);
-    if (!extent) return "";
-    var help = {
-      whole_building: "원본에서 건물 전체 매매로 확인된 매물입니다.",
-      unit: "건물 전체가 아닌 특정 층·호실 매물입니다. 표시된 층 전체를 판다는 뜻은 아닙니다.",
-      unknown: "전체 또는 일부 매매인지 원본 정보만으로 확인되지 않았습니다. 원본 또는 중개사에게 확인하세요."
-    }[extent];
-    var evidence = clean(buildingSaleSummary(item, ["saleExtent"]).saleExtentEvidence);
-    if (evidence) help += " " + evidence;
-    var sourceFloor = buildingSaleSummary(item, ["saleExtent", "saleSourceFloorText"]).saleSourceFloorText;
-    var floorText = extent === "unknown" ? (typeof sourceFloor === "string" && sourceFloor.trim()
-      ? "원본 층 표기: " + sourceFloor.trim().slice(0, 60) : "") : buildingFloorLabel(item);
-    return '<div class="building-sale-info-v1"><span class="building-sale-scope-v1 ' + extent +
-      '" title="' + escapeHtml(help) + '">' + buildingSaleScopeLabel(item) + '</span>' +
-      (floorText ? '<span class="building-sale-floor-v1">' + escapeHtml(floorText) + '</span>' : '') + '</div>';
+  // The source values remain available internally, but sale scope/floors are
+  // deliberately no longer presented on building-sale cards.
+  function buildingSaleInfoHtml() { return ""; }
+  function isBuildingSale(item) {
+    return isSale(item) && normalizedSaleCategory(item) !== "land" && saleSummary(item).scope !== "land";
+  }
+  function buildingSaleAreaInfoHtml(item) {
+    return isBuildingSale(item) ? '<div class="building-sale-area-info-v1" aria-label="광고 면적 정보">' + saleAreaHtml(item) + '</div>' : "";
   }
 
   // Display only: room is also part of legacy favorite/visit identity.
@@ -349,10 +341,25 @@
       var formatted = parsed > 0 ? (parsed / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + '평' : '미확인';
       return '<span title="' + escapeHtml(fullLabel) + '">' + escapeHtml(label) + ' <b>' + escapeHtml(formatted) + '</b></span>';
     }
-    var html = area(land ? '토지' : '대지', detail.landAreaM2, land ? '토지면적' : '대지면적');
-    if (!land) html += '<i>·</i>' + area('연', detail.grossAreaM2, '연면적');
-    if (!land && nonnegative(detail.exclusiveAreaM2) > 0) html += '<i>·</i>' + area('전용', detail.exclusiveAreaM2, '전용면적');
+    var html = land ? area('토지', detail.landAreaM2, '토지면적') : buildingSaleAreas(item).map(function(entry) {
+      return area(entry.label, entry.value, entry.fullLabel);
+    }).join('<i>·</i>');
+    if (!html) html = '<span class="unavailable">면적 정보 미확인</span>';
     return '<span class="listing-sale-areas-v1">' + html + '</span>';
+  }
+  function buildingSaleAreas(item) {
+    if (!isBuildingSale(item)) return [];
+    var detail = saleSummary(item);
+    return [["전용", "exclusiveAreaM2", "전용면적"], ["대지", "landAreaM2", "대지면적"],
+      ["연면적", "grossAreaM2", "연면적"], ["건축(건평)", "buildingAreaM2", "건축면적(건평)"]].map(function(field) {
+      var value = detail[field[1]];
+      return {label: field[0], fullLabel: field[2], value: typeof value === "number" || typeof value === "string" ? nonnegative(value) : null};
+    }).filter(function(entry) { return entry.value > 0 && Number.isFinite(entry.value); });
+  }
+  function buildingSaleAreaText(item) {
+    return buildingSaleAreas(item).map(function(entry) {
+      return entry.label + " " + (entry.value / 3.305785).toLocaleString("ko-KR", {maximumFractionDigits: 1}) + "평";
+    }).join(" · ") || "면적 정보 미확인";
   }
   function landText(value) {
     var text = typeof value === "string" ? clean(value).replace(/\s+/g, " ") : "";
@@ -388,14 +395,11 @@
       rows.push('<div><dt>' + escape(label) + '</dt><dd>' + escape(value) + escape(suffix || "") + '</dd></div>');
     }
     function area(label, value) {
-      if (!(Number(value) > 0)) return;
+      if (!["number", "string"].includes(typeof value) || !Number.isFinite(Number(value)) || !(Number(value) > 0)) return;
       add(label, Number(value).toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + "㎡ (" +
         (Number(value) / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "평)");
     }
-    add("매매 범위", normalizedSaleCategory(item) === "land" || detail.scope === "land" ? "토지" : buildingSaleScopeLabel(item));
-    if (normalizedSaleCategory(item) !== "land" && detail.scope !== "land") {
-      add("구분 근거", buildingSaleSummary(item, ["saleExtent"]).saleExtentEvidence);
-    }
+    if (normalizedSaleCategory(item) === "land" || detail.scope === "land") add("매매 범위", "토지");
     area("대지면적", detail.landAreaM2);
     area("연면적", detail.grossAreaM2);
     area("건축면적", detail.buildingAreaM2);
@@ -413,15 +417,7 @@
       var unitPrice = global.JSSaleWorkbenchV1.unitPrice(item);
       add("토지 평당가", unitPrice == null ? "확인 필요" : unitPrice.toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "만원 (광고면적 기준)");
     } else add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
-    var floorLabel = buildingFloorLabel(item);
-    if (floorLabel) add("층수", floorLabel);
-    else if (!land) {
-      add("지상층수", detail.aboveGroundFloors, "층");
-      add("지하층수", detail.belowGroundFloors, "층");
-      add("총층수", detail.totalFloors, "층");
-    }
     add(detail.descriptionVersion ? "세대수 (설명 기준)" : "세대수", detail.householdCount, "세대");
-    if (detail.descriptionCategory) add("분류 보완", "설명의 대지·연면적·전체층수·세대구성을 근거로 다가구 전체로 분류 (원본 분류: " + (isNaverItem(item) ? naverTypeLabel(detail.sourceType) : detail.sourceType) + ")");
     (detail.descriptionWarnings || []).forEach(function(warning) { add("확인 필요", warning); });
     var advertised = detail.descriptionFinancials || {};
     var financialLabels = { salePrice: "매매가", loanAmount: "융자", totalDeposit: "보증금", monthlyIncome: "월 임대수입",
@@ -466,6 +462,9 @@
     buildingSaleExtent: buildingSaleExtent,
     buildingSaleScopeLabel: buildingSaleScopeLabel,
     buildingSaleInfoHtml: buildingSaleInfoHtml,
+    buildingSaleAreaInfoHtml: buildingSaleAreaInfoHtml,
+    buildingSaleAreaText: buildingSaleAreaText,
+    isBuildingSale: isBuildingSale,
     saleYield: saleYield,
     saleYieldBadge: saleYieldBadge,
     saleAreaHtml: saleAreaHtml,

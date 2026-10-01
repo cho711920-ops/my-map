@@ -4638,8 +4638,9 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var landUseLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.landUseLabel
     ? window.JSListingTradeV1.landUseLabel(item) : "";
   var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(item.room);
-  var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleInfoHtml
-    ? window.JSListingTradeV1.buildingSaleInfoHtml(item) : "";
+  var buildingSaleV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isBuildingSale && window.JSListingTradeV1.isBuildingSale(item);
+  var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleAreaInfoHtml
+    ? window.JSListingTradeV1.buildingSaleAreaInfoHtml(item) : "";
 
   var sourceLabel = isFieldVisitItem(item)
     ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
@@ -4683,8 +4684,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     : "";
   var priceValuesMarkupV1 = saleCardV1
     ? '<span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      window.JSListingTradeV1.saleAreaHtml(item)
+      (buildingSaleV1 ? '' : '<span class="price-separator">·</span>' + window.JSListingTradeV1.saleAreaHtml(item))
     : '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
       '<span class="price-separator">·</span>' +
       '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
@@ -4771,7 +4771,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
-            (buildingSaleInfoV1 ? '' : roomLabelV1
+            (buildingSaleV1 ? '' : roomLabelV1
               ? '<span class="item-room-badge' + (landUseLabelV1 ? ' land-use-badge-v1' : buildingFloorLabelV1 ? ' building-sale-floor-v1' : '') + '" title="' + escapeHtml(roomLabelV1) + '">' + escapeHtml(roomLabelV1) + '</span>'
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV843(item) +

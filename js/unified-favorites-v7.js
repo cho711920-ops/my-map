@@ -145,7 +145,7 @@
     var context = item && favoriteMapRemovalContextV1(item);
     if (!context || context.folderId !== folderId || context.ref !== refSignature(ref)) return false;
     var account = String(global.JSAuthenticatedAccountEmail || "").trim().toLowerCase();
-    var label = [item.address || item.name || "선택 매물", item.room].filter(Boolean).join(" · ");
+    var label = [item.address || item.name || "선택 매물", isBuildingSaleItem(item) ? "" : item.room].filter(Boolean).join(" · ");
     if (!global.confirm('"' + context.folderName + '" 폴더에서 이 매물을 찜 제거할까요?\n' + label +
         '\n\n현재 폴더에서만 제거됩니다. 매물 원본과 다른 찜폴더는 유지됩니다.')) return false;
     // Recheck after confirmation, including a folder/filter/account change.
@@ -385,6 +385,9 @@
     return String(candidates.filter(function (value) { return /^https?:\/\//i.test(String(value || "")); })[0] || "");
   }
 
+  function isBuildingSaleItem(item) {
+    return global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(item);
+  }
   function favoriteItemPrice(item) {
     if (!item) return "원본 데이터는 삭제되지 않았습니다";
     if (String(item.tradeType || "").toLowerCase() === "sale") {
@@ -392,7 +395,8 @@
       var formattedSalePrice = global.JSSaleWorkbenchV1 && typeof global.JSSaleWorkbenchV1.price === "function"
         ? global.JSSaleWorkbenchV1.price(salePrice)
         : (Number.isFinite(Number(salePrice)) ? Number(salePrice).toLocaleString("ko-KR") + "만원" : "가격 확인 필요");
-      return "매매 " + formattedSalePrice + " · 평 " + (item.area || "-");
+      return "매매 " + formattedSalePrice + (isBuildingSaleItem(item)
+        ? " · " + global.JSListingTradeV1.buildingSaleAreaText(item) : " · 평 " + (item.area || "-"));
     }
     return "보 " + (item.deposit || "-") + " / 월 " + (item.rent || "-") + " · 평 " + (item.area || "-");
   }
@@ -400,7 +404,7 @@
   function itemRow(ref, folderId) {
     var item = resolveItem(ref);
     var title = item ? (item.name || item.address || "매물") : "현재 목록에서 확인할 수 없는 매물";
-    var address = item ? [item.address, item.room].filter(Boolean).join(" · ") : "매물ID " + ref.replace(/^property:/, "");
+    var address = item ? [item.address, isBuildingSaleItem(item) ? "" : item.room].filter(Boolean).join(" · ") : "매물ID " + ref.replace(/^property:/, "");
     var price = favoriteItemPrice(item);
     var photo = itemPhoto(item);
     var encodedRef = encodeURIComponent(ref);
@@ -420,7 +424,7 @@
   function phoneItemRowV2(ref, folderId) {
     var item = resolveItem(ref);
     var title = item ? (item.name || item.address || "매물") : "현재 확인할 수 없는 매물";
-    var address = item ? [item.address, item.room, item.floor].filter(Boolean).join(" · ") : "매물ID " + ref.replace(/^property:/, "");
+    var address = item ? [item.address, isBuildingSaleItem(item) ? "" : item.room, isBuildingSaleItem(item) ? "" : item.floor].filter(Boolean).join(" · ") : "매물ID " + ref.replace(/^property:/, "");
     var photo = itemPhoto(item);
     return '<article class="phone-favorite-item-v2">' +
       '<button type="button" class="phone-favorite-item-open-v2" onclick="openUnifiedFavoriteItemV7(' + escapeHtml(JSON.stringify(encodeURIComponent(ref))) + ')" aria-label="' + escapeHtml(title) + ' 상세보기">' +

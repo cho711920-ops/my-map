@@ -1,5 +1,4 @@
 import {test, expect} from "@playwright/test";
-import {withSaleExtentDisplay, saleExtentProvider} from "../../cloudflare/src/sale-extent-display.js";
 
 test.beforeEach(async ({page, context}) => {
   await context.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
@@ -7,21 +6,28 @@ test.beforeEach(async ({page, context}) => {
   await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
 });
 
+const descriptionText = "광고 원문: 4층 건물 중 1층 매매 · 101호 문의";
+const hiddenLabels = /^(?:매매 범위|구분 근거|층수|층·호실|지상층수|지하층수|총층수|분류 보완|매물 위치)$/;
+
 async function configure(page, scenario) {
   await page.route("**/api/data?*", async route => {
     if (new URL(route.request().url()).searchParams.get("action") !== "unifiedListingDetail") return route.continue();
     const response = await route.fetch();
     const data = await response.json();
-    for (const original of data.originals || []) if (original.propertyId === "FIXTURE-BUILDING") Object.assign(original, scenario);
+    const original = (data.originals || []).find(value => value.propertyId === "FIXTURE-BUILDING");
+    if (original) {
+      Object.assign(original, scenario);
+      data.originals.push({...original, originalId: original.originalId + "-second"});
+    }
     await route.fulfill({response, json: data});
   });
   await page.evaluate(scenario => {
     const current = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");
     Object.assign(current, scenario);
-    window.__floorIdentity = {room: current.room, key: current.key, propertyId: current.propertyId, salePrice: current.salePrice};
-    // Model actual legacy DB rows: master has no saleDetails, original list has compact summary.
-    const originals = current.unifiedOriginalsV8 || [];
-    for (const original of originals) Object.assign(original, scenario, {saleDetails: undefined, saleSummary: scenario.saleDetails});
+    window.__floorIdentity = {room: current.room, key: current.key, propertyId: current.propertyId,
+      salePrice: current.salePrice, area: current.area, tradeType: current.tradeType, saleCategory: current.saleCategory};
+    for (const original of current.unifiedOriginalsV8 || []) Object.assign(original, scenario,
+      {saleDetails: undefined, saleSummary: scenario.saleDetails});
     current.saleDetails = null;
   }, scenario);
 }
@@ -32,173 +38,136 @@ async function buildingList(page, isMobile) {
   await expect(page.locator("#list .item")).toHaveCount(1);
 }
 
-test("whole-building range is visible in list/detail and preserves the legacy room/key", async ({page, isMobile}, testInfo) => {
-  await configure(page, {room: "지하1층", saleCategory: "building", saleDetails: {scope: "unit", saleExtent: "whole_building", floorScope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 1}});
-  await buildingList(page, isMobile);
-  const badge = page.locator("#list .building-sale-floor-v1");
-  await expect(badge).toHaveText("지하 1층 ~ 지상 5층");
-  await expect(badge).toBeVisible();
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("건물 전체 매매");
-  expect(await badge.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  await page.screenshot({path: testInfo.outputPath("building-range-list.png")});
-  await page.locator("#list .item-building-name").click();
-  const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer).toHaveAttribute("aria-hidden", "false");
-  await expect(drawer.locator(".building-sale-scope-v1")).toHaveText("건물 전체 매매");
-  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("지하 1층 ~ 지상 5층");
-  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("지하 1층 ~ 지상 5층");
-  expect(await page.evaluate(() => {
-    const item = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");
-    return JSON.stringify({room: item.room, key: item.key, propertyId: item.propertyId, salePrice: item.salePrice}) === JSON.stringify(window.__floorIdentity);
-  })).toBe(true);
-});
+const cases = [
+  {name: "Hongdo Cheongu villa first floor in a four-floor building", room: "1/4층", saleCategory: "villa",
+    expectedAreas: ["전용", "11.8평"],
+    saleDetails: {scope: "unit", saleExtent: "unit", saleTargetFloor: "1층", saleTargetRoom: "101호", totalFloors: 4, exclusiveAreaM2: 38.88}},
+  {name: "confirmed whole building", room: "지하1층", saleCategory: "building",
+    expectedAreas: ["대지", "67.6평", "연면적", "134.4평", "건축", "40.6평"],
+    saleDetails: {scope: "unit", saleExtent: "whole_building", floorScope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 1,
+      landAreaM2: 223.5, grossAreaM2: 444.34, buildingAreaM2: 134.05}},
+  {name: "unknown sale extent with original floor evidence", room: "4층", saleCategory: "house",
+    expectedAreas: ["면적 정보 미확인"],
+    saleDetails: {scope: "unit", saleExtent: "unknown", saleSourceFloorText: "4층 / 총 4층", totalFloors: 4}},
+  {name: "legacy scope without read-time classification", room: "301호", saleCategory: "officetel",
+    expectedAreas: ["면적 정보 미확인"],
+    saleDetails: {scope: "whole_building", totalFloors: 10}}
+];
 
-test("missing basement and unit sales are never rendered as an invented full-building range", async ({page, isMobile}) => {
-  await configure(page, {room: "전체", saleDetails: {scope: "whole_building", saleExtent: "whole_building", aboveGroundFloors: 5}});
-  await buildingList(page, isMobile);
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("지상 5층 · 지하 미확인");
-  await page.evaluate(() => {
-    const item = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");
-    Object.assign(item, {room: "3/10층", saleCategory: "officetel", saleDetails: {scope: "unit", saleExtent: "unit", aboveGroundFloors: 10, belowGroundFloors: 2}});
-    window.applyFilter();
+for (const sample of cases) {
+  test(`${sample.name}: sale scope/floors are absent from list and detail without changing source data`, async ({page, isMobile}, testInfo) => {
+    const scenario = {...sample, name: "홍도동 청우빌라", buildingName: "청우빌라", address: "대전 동구 홍도동 테스트 주소",
+      saleDetails: {...sample.saleDetails, saleExtentEvidence: "원본 광고 근거", descriptionCategory: "multifamily",
+        monthlyIncome: 100, descriptionText}};
+    await configure(page, scenario);
+    await buildingList(page, isMobile);
+    await expect(page.locator("#list .building-sale-info-v1, #list .building-sale-scope-v1, #list .building-sale-floor-v1, #list .item-room-badge")).toHaveCount(0);
+    const listArea = page.locator("#list .building-sale-area-info-v1");
+    await expect(listArea).toHaveCount(1);
+    await expect(listArea).toBeVisible();
+    for (const text of sample.expectedAreas) await expect(listArea).toContainText(text);
+    if (sample.saleDetails.exclusiveAreaM2) await expect(listArea).not.toContainText(/대지|연면적|건축/);
+    if (sample.expectedAreas[0] === "면적 정보 미확인") await expect(listArea).toHaveText("면적 정보 미확인");
+    await expect(page.locator("#list .item-building-name")).toContainText("청우빌라");
+    await page.screenshot({path: testInfo.outputPath("building-sale-no-scope-floor-list.png")});
+    await page.locator("#list .item-building-name").click();
+    const drawer = page.locator("#unifiedDetailDrawerV8");
+    await expect(drawer).toHaveAttribute("aria-hidden", "false");
+    await expect(drawer.locator(".building-sale-info-v1, .building-sale-scope-v1, .building-sale-floor-v1")).toHaveCount(0);
+    await expect(drawer.locator(".unified-detail-source-address-v827 > strong")).toHaveText(scenario.address);
+    await expect(drawer.locator(".listing-sale-details-v1 dt").filter({hasText: hiddenLabels})).toHaveCount(0);
+    const detailArea = drawer.locator(".building-sale-area-info-v1");
+    await expect(detailArea).toHaveCount(1);
+    await expect(detailArea).toBeVisible();
+    for (const text of sample.expectedAreas) await expect(detailArea).toContainText(text);
+    if (sample.saleDetails.grossAreaM2) await expect(drawer.locator(".listing-sale-details-v1")).toContainText("연면적");
+    if (sample.saleDetails.exclusiveAreaM2) await expect(drawer.locator(".listing-sale-details-v1")).toContainText("전용면적");
+    await expect(drawer.locator(".listing-sale-details-v1")).toContainText("기존 월 임대수입");
+    if (isMobile) {
+      await expect(drawer.locator(".phone-detail-facts-v2")).toBeVisible();
+      await expect(drawer.locator(".phone-detail-facts-v2 dt").filter({hasText: hiddenLabels})).toHaveCount(0);
+    }
+    const originals = drawer.locator(".unified-original-row-v8");
+    await expect(originals).toHaveCount(2);
+    await expect(originals.locator(".unified-original-head-v8 em")).toHaveCount(0);
+    const description = drawer.locator(".listing-sale-description-v1");
+    await description.locator("summary").click();
+    await expect(description.locator("div")).toHaveText(descriptionText);
+    await page.screenshot({path: testInfo.outputPath("building-sale-no-scope-floor-detail.png")});
+    expect(await page.evaluate(() => {
+      const item = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");
+      return JSON.stringify({room: item.room, key: item.key, propertyId: item.propertyId,
+        salePrice: item.salePrice, area: item.area, tradeType: item.tradeType, saleCategory: item.saleCategory}) === JSON.stringify(window.__floorIdentity);
+    })).toBe(true);
   });
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당 3층 / 총 10층");
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
-});
+}
 
-test("legacy default scope is visibly unconfirmed rather than incorrectly advertising a full building", async ({page, isMobile}, testInfo) => {
-  await configure(page, {room: "301호", saleDetails: {scope: "whole_building", totalFloors: 5}});
-  await buildingList(page, isMobile);
-  const scope = page.locator("#list .building-sale-scope-v1");
-  await expect(scope).toHaveText("매매 범위 미확인");
-  await expect(scope).toBeVisible();
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveCount(0);
-  expect(await scope.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  await page.screenshot({path: testInfo.outputPath("building-scope-unknown.png")});
-  await page.locator("#list .item-building-name").click();
-  const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer.locator(".building-sale-scope-v1")).toHaveText("매매 범위 미확인");
-  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("매매 범위 미확인");
-});
-
-test("a particular floor or room sale is distinguished from selling that entire floor", async ({page, isMobile}, testInfo) => {
-  await configure(page, {room: "3/10층", saleCategory: "officetel", saleDetails: {scope: "unit", saleExtent: "unit", totalFloors: 10}});
-  await buildingList(page, isMobile);
-  const scope = page.locator("#list .building-sale-scope-v1");
-  await expect(scope).toHaveText("특정 층·호실 매매");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당 3층 / 총 10층");
-  expect(await scope.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  await page.screenshot({path: testInfo.outputPath("building-scope-unit.png")});
-  await page.locator("#list .item-building-name").click();
-  const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer.locator(".building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
-  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("특정 층·호실 매매");
-  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("특정 층·호실 매매");
-  await expect(drawer).not.toContainText("3층 전체 매매");
-});
-
-test("lease floors remain unchanged and land uses a land-use badge", async ({page, isMobile}) => {
+test("lease floor and land-use badges retain their existing behavior", async ({page, isMobile}) => {
   await page.evaluate(() => {
     const lease = window.allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
     lease.room = "3/10";
-    lease.saleDetails = {scope: "whole_building", aboveGroundFloors: 10, belowGroundFloors: 2};
-    const land = window.allItems.find(item => item.propertyId === "FIXTURE-LAND");
-    land.room = "토지";
-    land.saleDetails = {...land.saleDetails, landUse: null};
-    for (const original of land.unifiedOriginalsV8 || []) {
-      original.saleDetails = {...original.saleDetails, landUse: null};
-      original.saleSummary = {...original.saleSummary, landUse: null};
-    }
     window.applyFilter();
   });
   if (isMobile) await page.locator('[data-mobile-view="list"]').click();
   await expect(page.locator("#list .item").filter({hasText: "테스트 괴정 상가"}).locator(".item-room-badge")).toHaveText("3층");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveCount(0);
-  await expect(page.locator("#list .building-sale-info-v1")).toHaveCount(0);
   await page.locator(isMobile ? "#jsMobileTradeModeV1" : "#listingTradeModeSelectV1").selectOption("land_sale");
-  await expect(page.locator("#list .item-room-badge.land-use-badge-v1")).toHaveText("지목 미확인");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveCount(0);
-  await expect(page.locator("#list .building-sale-info-v1")).toHaveCount(0);
-});
-
-test("Naver explicit residence type recovers a whole factory sale from its original", async ({page, isMobile}, testInfo) => {
-  const raw = {realEstateTypeCode: "E02", saleRaw: {detailInfo: {spaceInfo: {floorInfo: {
-    residenceType: "2", floorType: "00", targetFloor: "-", groundTotalFloor: "2", undergroundTotalFloor: "0"
-  }}}}};
-  const scenario = withSaleExtentDisplay({source: "네이버", tradeType: "sale", saleCategory: "factory_warehouse",
-    room: "지하1층", saleDetails: {scope: "unit"}}, saleExtentProvider(raw, "네이버"));
-  await configure(page, scenario);
-  await buildingList(page, isMobile);
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("건물 전체 매매");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("지상 1층 ~ 지상 2층");
-  await page.screenshot({path: testInfo.outputPath("recovered-whole-building.png")});
-  await page.locator("#list .item-building-name").click();
-  const detail = page.locator("#unifiedDetailDrawerV8 .listing-sale-details-v1");
-  await expect(detail).toContainText("건물 전체 매매");
-  await expect(detail).toContainText("구분 근거");
-  await expect(detail).toContainText(scenario.saleDetails.saleExtentEvidence);
-});
-
-test("explicit original targets replace stale floor labels while preserving stored room and favorites identity", async ({page, isMobile}, testInfo) => {
-  const scenario = withSaleExtentDisplay({source: "공실박스", tradeType: "sale", saleCategory: "apartment",
-    room: "1층", saleDetails: {scope: "unit", totalFloors: 12}},
-  saleExtentProvider({list: {TypeView: "APT", Ho: "402", Ff: 4}}, "공실박스"));
-  await configure(page, scenario);
-  await buildingList(page, isMobile);
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당 4층 · 402호 / 총 12층");
-  await page.screenshot({path: testInfo.outputPath("recovered-specific-unit.png")});
+  await expect(page.locator("#list .item-room-badge.land-use-badge-v1")).toHaveText("지목: 대");
   await page.locator("#list .item-building-name").click();
   const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("해당 4층 · 402호 / 총 12층");
-  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("해당 4층 · 402호 / 총 12층");
-  expect(await page.evaluate(() => {
-    const item = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");
-    return JSON.stringify({room: item.room, key: item.key, propertyId: item.propertyId, salePrice: item.salePrice}) === JSON.stringify(window.__floorIdentity);
-  })).toBe(true);
+  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("토지");
+  await expect(drawer.locator(".listing-sale-details-v1 dt").filter({hasText: /^매매 범위$/})).toHaveCount(1);
+  await expect(drawer.locator(".listing-sale-details-v1 dt").filter({hasText: /^지목$/})).toHaveCount(1);
 });
 
-test("a private original floor still identifies a unit without revealing a legacy stale floor", async ({page, isMobile}) => {
-  const raw = {realEstateTypeCode: "A02", saleRaw: {detailInfo: {spaceInfo: {floorInfo: {
-    residenceType: "1", floorType: "30", targetFloor: "-", totalFloor: "25"
-  }}}}};
-  const scenario = withSaleExtentDisplay({source: "네이버", tradeType: "sale", saleCategory: "officetel",
-    room: "7층", saleDetails: {scope: "unit"}}, saleExtentProvider(raw, "네이버"));
-  await configure(page, scenario);
-  await buildingList(page, isMobile);
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당층 비공개 / 총 25층");
-  await page.locator("#list .item-building-name").click();
-  const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer.locator(".building-sale-floor-v1")).toHaveText("해당층 비공개 / 총 25층");
-  await expect(drawer.locator(".listing-sale-details-v1")).not.toContainText("7층");
-});
-
-test("advertised multifamily composition recovers the whole sale even when the provider defaults to false", async ({page, isMobile}) => {
-  const raw = {salesTypeV3: {type: "TWO_ROOM"}, isEntireBuilding: false, content:
-    "중개대상물 종류 - 다가구주택\n세대수 - 15세대\n대지면적 - 약 67평 (223.5㎡)\n연면적 - 약 134평 (444.34㎡)\n총층수 - 5층\n원룸, 1.5룸, 투룸 구성"};
-  const scenario = withSaleExtentDisplay({source: "당근", tradeType: "sale", saleCategory: "other", room: "층수미확인",
-    saleDetails: {scope: "unit", descriptionText: raw.content}}, saleExtentProvider(raw, "당근"));
-  await configure(page, scenario);
-  await buildingList(page, isMobile);
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("건물 전체 매매");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("총 5층");
-  await page.locator("#list .item-building-name").click();
-  const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("구분 근거");
-  await expect(drawer.locator(".building-sale-floor-v1")).toHaveText("총 5층");
-});
-
-test("a source with no description quotes its floor but does not invent a whole building from room counts", async ({page, isMobile}, testInfo) => {
-  const raw = {salesTypeV3: {type: "HOUSE"}, isEntireBuilding: false, floor: "4.0", topFloor: 4,
-    roomCnt: 18, bathroomCnt: 17, content: ""};
-  const scenario = withSaleExtentDisplay({source: "당근", tradeType: "sale", saleCategory: "house", room: "4층",
-    saleDetails: {scope: "unit", totalFloors: 4}}, saleExtentProvider(raw, "당근"));
-  await configure(page, scenario);
-  await buildingList(page, isMobile);
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("매매 범위 미확인");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("원본 층 표기: 4층 / 총 4층");
-  await page.screenshot({path: testInfo.outputPath("unconfirmed-original-floor.png")});
-  await page.locator("#list .item-building-name").click();
-  await expect(page.locator("#unifiedDetailDrawerV8 .building-sale-floor-v1")).toHaveText("원본 층 표기: 4층 / 총 4층");
+test("building-sale favorites show known area without floor or room in the address and retain identity", async ({page, isMobile}) => {
+  await expect.poll(() => page.evaluate(() => window.JSV6ListStore.load("favorite")
+    .some(folder => folder.id === "fixture-favorites"))).toBe(true);
+  const before = await page.evaluate(() => {
+    const item = window.allItems.find(value => value.propertyId === "FIXTURE-LEASE-1");
+    const identity = value => ({key: value.key, propertyId: value.propertyId, originalId: value.originalId});
+    const snapshot = {
+      item: identity(item),
+      originals: (item.unifiedOriginalsV8 || []).map(identity),
+      favoriteKeys: window.JSV6ListStore.load("favorite").find(folder => folder.id === "fixture-favorites").itemKeys,
+      address: item.address
+    };
+    const saleDetails = {scope: "unit", saleExtent: "unit", exclusiveAreaM2: 38.88, totalFloors: 4};
+    const sale = {tradeType: "sale", saleCategory: "villa", salePrice: 7000, saleDetails, room: "1층", floor: "4층"};
+    Object.assign(item, sale);
+    for (const original of item.unifiedOriginalsV8 || []) Object.assign(original, sale, {saleSummary: saleDetails});
+    return snapshot;
+  });
+  await page.locator(isMobile ? '[data-mobile-view="favorites"]' : "#mapQuickListBtn").click();
+  const modal = page.locator("#unifiedFavoriteModalV7");
+  await expect(modal).toHaveAttribute("aria-hidden", "false");
+  await expect(modal).toContainText("테스트 찜폴더");
+  if (isMobile) await modal.locator(".phone-favorite-folder-card-v2").first().click();
+  else await modal.getByRole("button", {name: "테스트 찜폴더 1개 보기", exact: true}).click();
+  const row = modal.locator(isMobile ? ".phone-favorite-item-v2" : ".unified-favorite-item-v7");
+  await expect(row).toHaveCount(1);
+  await expect(row).toBeVisible();
+  const price = row.locator(isMobile ? ".phone-favorite-item-copy-v2 > strong" : ".unified-favorite-item-info-v7 > b");
+  await expect(price).toContainText("매매");
+  await expect(price).toContainText("전용 11.8평");
+  const address = row.locator(isMobile ? ".phone-favorite-item-copy-v2 > small" : ".unified-favorite-item-info-v7 > span");
+  await expect(address).toHaveText(before.address);
+  await expect(address).not.toContainText(/1층|4층/);
+  const after = await page.evaluate(() => {
+    const item = window.allItems.find(value => value.propertyId === "FIXTURE-LEASE-1");
+    const identity = value => ({key: value.key, propertyId: value.propertyId, originalId: value.originalId});
+    const sale = value => ({tradeType: value.tradeType, saleCategory: value.saleCategory, salePrice: value.salePrice,
+      room: value.room, floor: value.floor, saleDetails: value.saleDetails});
+    return {
+      identity: {item: identity(item), originals: (item.unifiedOriginalsV8 || []).map(identity),
+        favoriteKeys: window.JSV6ListStore.load("favorite").find(folder => folder.id === "fixture-favorites").itemKeys,
+        address: item.address},
+      sale: sale(item), originalSales: (item.unifiedOriginalsV8 || []).map(sale)
+    };
+  });
+  expect(after.identity).toEqual(before);
+  const expectedSale = {tradeType: "sale", saleCategory: "villa", salePrice: 7000, room: "1층", floor: "4층",
+    saleDetails: {scope: "unit", saleExtent: "unit", exclusiveAreaM2: 38.88, totalFloors: 4}};
+  expect(after.sale).toEqual(expectedSale);
+  expect(after.originalSales.length).toBeGreaterThan(0);
+  for (const original of after.originalSales) expect(original).toEqual(expectedSale);
 });

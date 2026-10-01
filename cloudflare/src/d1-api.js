@@ -13,6 +13,7 @@ import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
 import { withDaangnLandUse } from "./land-use-display.js";
+import { withSaleAreaDisplay } from "./sale-area-display.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -342,9 +343,10 @@ export function compactSaleSummary(original) {
   const detail = original.saleDetails;
   const summary = {};
   if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
-  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield"]) {
+  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield"]) {
+    if (key === "buildingAreaM2" && (detail.scope === "land" || original.saleCategory === "land")) continue;
     const value = detail[key];
-    if (value == null || clean(value) === "" || typeof value === "boolean") continue;
+    if (!["number", "string"].includes(typeof value) || clean(value) === "") continue;
     const parsed = Number(value);
     if (Number.isFinite(parsed) && parsed >= 0) summary[key] = parsed;
   }
@@ -445,7 +447,7 @@ async function unifiedListings(env) {
       gongsil: parseJson(row.gongsil_sale_extent_json, {}),
       daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
     });
-    const original = withDaangnLandUse(displayed, row.daangn_land_type, row.source);
+    const original = withDaangnLandUse(withSaleAreaDisplay(displayed, { source: row.source, daangn }), row.daangn_land_type, row.source);
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
       const actualImages = actualGongsilImages({
@@ -542,7 +544,7 @@ export function masterFallbackOriginal(row, images = []) {
     sourceUnavailable: Number(row?.source_count || 0) > 0 && Number(row?.active_source_count || 0) === 0,
     missingCount: Math.max(0, Number(row?.missing_count) || 0)
   };
-  const displayed = withSaleExtentDisplay(original);
+  const displayed = withSaleAreaDisplay(withSaleExtentDisplay(original));
   if (displayed.tradeType === "sale") displayed.saleSummary = compactSaleSummary(displayed);
   return displayed;
 }
@@ -579,8 +581,9 @@ async function unifiedDetail(env, propertyId) {
     snapshot.photoCount = isGongsil
       ? images.length
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
+    const provider = saleExtentProvider(raw, row.source);
     return withDaangnLandUse(
-      withSaleExtentDisplay(snapshot, saleExtentProvider(raw, row.source)), raw.landType, row.source
+      withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), provider), raw.landType, row.source
     );
   });
   if (!originals.length) {

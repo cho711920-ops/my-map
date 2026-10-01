@@ -317,6 +317,12 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100
 .building-sale-info-v1 .building-sale-floor-v1 { max-width: 100%; min-width: 0; color: #56677b; font-size: 12px; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
 .listing-sale-card-v1 .item-compact-main-v650:has(> .building-sale-info-v1) { grid-template-rows: minmax(28px, auto) auto minmax(30px, auto) minmax(30px, auto) !important; }
 .js-phone-app-v2 #list .item .building-sale-info-v1 { order: 1; }
+.building-sale-area-info-v1 { min-width: 0; margin: 4px 0; line-height: 1.55; }
+.building-sale-area-info-v1 .listing-sale-areas-v1 { gap: 4px 6px; font-size: 13px; color: #315548; }
+.building-sale-area-info-v1 .listing-sale-areas-v1 b { font-size: 14px; font-weight: 800; color: #165438; }
+.building-sale-area-info-v1 .unavailable { color: #7b8796; font-size: 12px; }
+.listing-sale-card-v1 .item-compact-main-v650:has(> .building-sale-area-info-v1) { grid-template-rows: minmax(28px, auto) auto minmax(30px, auto) minmax(30px, auto) !important; }
+.js-phone-app-v2 #list .item .building-sale-area-info-v1 { order: 1; }
 #saleFiltersV1 { display: grid; gap: 10px; border-top: 1px solid #e0e8f1; padding-top: 10px; margin-top: 8px; }
 #saleFiltersV1 label, .sale-filter-range > label { display: block; font-size: 12px; font-weight: 700; color: #34485e; }
 #saleFiltersV1 input, #saleFiltersV1 select { box-sizing: border-box; width: 100%; min-width: 0; margin-top: 4px; }

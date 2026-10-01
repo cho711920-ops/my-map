@@ -49,13 +49,47 @@ test("main cards only use matching-source and matching-price metadata, not anoth
 
 test("sale area labels distinguish land, gross and exclusive space without inventing missing area", () => {
   const html = ui.saleAreaHtml(item);
-  assert.match(html, /대지 <b>62평/); assert.match(html, /연 <b>123.9평/);
+  assert.match(html, /대지 <b>62평/); assert.match(html, /연면적 <b>123.9평/);
   const land = ui.saleAreaHtml({ ...item, saleCategory: "land", saleDetails: { scope: "land", landAreaM2: 167 } });
   assert.match(land, /토지 <b>50.5평/); assert.doesNotMatch(land, /연면적/);
   const unit = ui.saleAreaHtml({ ...item, saleDetails: { scope: "unit", exclusiveAreaM2: 33.05785 } });
-  assert.match(unit, /대지 <b>미확인/); assert.match(unit, /연 <b>미확인/); assert.match(unit, /전용 <b>10평/);
+  assert.doesNotMatch(unit, /대지|연면적|미확인/); assert.match(unit, /전용 <b>10평/);
   assert.doesNotMatch(ui.saleAreaHtml({ ...item, area: 124.3, saleDetails: {} }), /124.3/);
   assert.doesNotMatch(ui.saleAreaHtml({ ...item, saleDetails: { landAreaM2: '<img onerror="bad">' } }), /<img/);
+});
+
+test("building area cards show four independently labeled known areas without changing stored values", () => {
+  const listing = {...item, area: 999, room: "1층", saleDetails: {scope: "unit", saleExtent: "unit",
+    exclusiveAreaM2: 38.88, landAreaM2: 223.5, grossAreaM2: 444.34, buildingAreaM2: 134.05}};
+  const before = JSON.stringify(listing);
+  const html = ui.buildingSaleAreaInfoHtml(listing);
+  assert.match(html, /building-sale-area-info-v1/);
+  assert.match(html, /전용 <b>11.8평.*대지 <b>67.6평.*연면적 <b>134.4평.*건축\(건평\) <b>40.6평/);
+  assert.match(html, /title="건축면적\(건평\)"/);
+  assert.equal(ui.buildingSaleAreaText(listing), "전용 11.8평 · 대지 67.6평 · 연면적 134.4평 · 건축(건평) 40.6평");
+  assert.doesNotMatch(html, /매매 범위|층|호실|999/);
+  assert.equal(JSON.stringify(listing), before);
+  for (const value of [false, true, "", null, -1, 0, Infinity, "미확인"]) {
+    const invalid = {...listing, saleDetails: {exclusiveAreaM2: value, buildingAreaM2: value}};
+    assert.match(ui.buildingSaleAreaInfoHtml(invalid), /면적 정보 미확인/);
+    assert.doesNotMatch(ui.buildingSaleAreaInfoHtml(invalid), /전용|건축|999/);
+    assert.doesNotMatch(ui.saleDetailsHtml(invalid), /<dt>(?:전용면적|건축면적)<\/dt>/);
+  }
+  for (const patch of [{tradeType: "lease"}, {saleCategory: "land"}]) {
+    assert.equal(ui.buildingSaleAreaInfoHtml({...listing, ...patch}), "");
+  }
+});
+
+test("building area display does not combine conflicting area evidence or borrow mismatched source values", () => {
+  const master = {...item, saleDetails: undefined, source: "당근", salePrice: 7000, saleCategory: "other"};
+  const original = {tradeType: "sale", source: "당근", salePrice: 7000, saleCategory: "other",
+    saleSummary: {scope: "unit", exclusiveAreaM2: 38.88, buildingAreaM2: 100}};
+  master.unifiedOriginalsV8 = [original];
+  assert.match(ui.buildingSaleAreaInfoHtml(master), /전용 <b>11.8평/);
+  master.unifiedOriginalsV8.push({...original, saleSummary: {...original.saleSummary, buildingAreaM2: 200}});
+  assert.match(ui.buildingSaleAreaInfoHtml(master), /면적 정보 미확인/);
+  master.unifiedOriginalsV8 = [{...original, source: "네이버"}];
+  assert.match(ui.buildingSaleAreaInfoHtml(master), /면적 정보 미확인/);
 });
 
 test("compact API metadata is allowlisted and absent from lease payloads", () => {

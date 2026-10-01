@@ -56,13 +56,13 @@ test("unit sales display current/total and never advertise the whole building ra
   ]) assert.equal(ui.buildingFloorLabel(item({scope: "unit", saleExtent: "unit", ...detail}, {room, saleCategory: "officetel"})), expected, room);
 });
 
-test("lease and land retain their existing renderer and building detail uses the same floor label", () => {
+test("lease and land retain their formatter while building details omit the floor row", () => {
   const building = item({aboveGroundFloors: 5, belowGroundFloors: 1});
   assert.equal(ui.buildingFloorLabel({...building, tradeType: "lease"}), "");
   assert.equal(ui.buildingFloorLabel({...building, saleCategory: "land"}), "");
   assert.equal(ui.buildingFloorLabel(item({scope: "land"})), "");
   assert.equal(ui.buildingFloorLabel(null), "");
-  assert.match(ui.saleDetailsHtml(building), /<dt>층수<\/dt><dd>지하 1층 ~ 지상 5층<\/dd>/);
+  assert.doesNotMatch(ui.saleDetailsHtml(building), /<dt>층수<\/dt>/);
   assert.doesNotMatch(ui.saleDetailsHtml(building), /<dt>지상층수<\/dt>/);
   assert.doesNotMatch(ui.saleDetailsHtml({...building, saleCategory: "land"}), /<dt>지상층수<\/dt>/);
 });
@@ -71,7 +71,7 @@ test("recovered provider floor scope corrects display only, including whole-buil
   const legacy = item({scope: "unit", floorScope: "whole_building", aboveGroundFloors: 3, belowGroundFloors: 1}, {room: "지하1층"});
   const before = JSON.stringify(legacy);
   assert.equal(ui.buildingFloorLabel(legacy), "지하 1층 ~ 지상 3층");
-  assert.match(ui.saleDetailsHtml(legacy), /<dt>매매 범위<\/dt><dd>건물 전체 매매<\/dd>/);
+  assert.doesNotMatch(ui.saleDetailsHtml(legacy), /<dt>매매 범위<\/dt>/);
   assert.equal(JSON.stringify(legacy), before);
   assert.equal(ui.buildingFloorLabel(item({scope: "whole_building", floorScope: "unit", saleExtent: "unit", totalFloors: 5}, {room: "4층"})), "해당 4층 / 총 5층");
 });
@@ -99,12 +99,10 @@ test("sale extent needs explicit read evidence and never treats legacy scope def
   }
   const direct = item({}, {source: "직접등록", room: "301호", saleDetails: {scope: "whole_building"}});
   assert.equal(ui.buildingSaleExtent(direct), "unknown");
-  assert.match(ui.buildingSaleInfoHtml(item()), /건물 전체 매매/);
+  assert.equal(ui.buildingSaleInfoHtml(item()), "");
   const unit = item({saleExtent: "unit", totalFloors: 10}, {room: "3층"});
-  assert.match(ui.buildingSaleInfoHtml(unit), /특정 층·호실 매매/);
-  assert.match(ui.buildingSaleInfoHtml(unit), /해당 3층 \/ 총 10층/);
-  assert.doesNotMatch(ui.buildingSaleInfoHtml(unit), /3층 전체/);
-  assert.match(ui.saleDetailsHtml(unit), /<dt>매매 범위<\/dt><dd>특정 층·호실 매매<\/dd>/);
+  assert.equal(ui.buildingSaleInfoHtml(unit), "");
+  assert.doesNotMatch(ui.saleDetailsHtml(unit), /<dt>매매 범위<\/dt>/);
   for (const value of [{...unit, tradeType: "lease"}, {...unit, saleCategory: "land"}, null]) {
     assert.equal(ui.buildingSaleScopeLabel(value), "");
     assert.equal(ui.buildingSaleInfoHtml(value), "");
@@ -160,11 +158,12 @@ test("provider target floor and room replace stale display values without rewrit
     const before = JSON.stringify(value);
     assert.equal(ui.buildingFloorLabel(value), expected);
     assert.equal(JSON.stringify(value), before);
-    assert.match(ui.saleDetailsHtml(value), /특정 층·호실 매매/);
+    assert.equal(ui.buildingSaleInfoHtml(value), "");
+    assert.doesNotMatch(ui.saleDetailsHtml(value), /<dt>(?:매매 범위|층수|매물 위치)<\/dt>/);
   }
   const evidence = item({saleExtent: "unit", saleTargetFloor: "3", saleExtentEvidence: '원본: <전체 아님> "일부"'});
-  assert.match(ui.saleDetailsHtml(evidence), /구분 근거/);
-  assert.match(ui.buildingSaleInfoHtml(evidence), /&lt;전체 아님&gt; &quot;일부&quot;/);
+  assert.doesNotMatch(ui.saleDetailsHtml(evidence), /구분 근거/);
+  assert.equal(ui.buildingSaleInfoHtml(evidence), "");
   assert.doesNotMatch(ui.saleDetailsHtml(evidence), /<전체 아님>/);
 });
 
@@ -181,7 +180,36 @@ test("unknown extent can quote a supplied original floor without interpreting it
   const value = item({saleExtent: "unknown", saleSourceFloorText: "4층 / 총 4층"}, {room: "전체"});
   assert.equal(ui.buildingSaleScopeLabel(value), "매매 범위 미확인");
   assert.equal(ui.buildingFloorLabel(value), "원본 층 표기: 4층 / 총 4층");
-  assert.match(ui.buildingSaleInfoHtml(value), /원본 층 표기: 4층 \/ 총 4층/);
+  assert.equal(ui.buildingSaleInfoHtml(value), "");
   assert.doesNotMatch(ui.buildingSaleInfoHtml(value), /건물 전체 매매|특정 층·호실 매매/);
   assert.equal(value.room, "전체");
+});
+
+test("building-sale presentation hides scope and floor metadata but preserves data and original advertisement", () => {
+  const descriptionText = "광고 원문: 4층 건물 중 1층 매매, 101호 문의";
+  for (const saleExtent of ["whole_building", "unit", "unknown", undefined]) {
+    const value = item({saleExtent, saleTargetFloor: "1층", saleTargetRoom: "101호", saleSourceFloorText: "1층 / 총 4층",
+      saleExtentEvidence: "원본 일부 선택", aboveGroundFloors: 4, belowGroundFloors: 0, totalFloors: 4,
+      descriptionCategory: "multifamily", descriptionText, grossAreaM2: 100, monthlyIncome: 100},
+    {name: "홍도동 청우빌라", room: "1/4층", saleCategory: "villa"});
+    const before = JSON.stringify(value);
+    assert.equal(ui.isBuildingSale(value), true);
+    assert.equal(ui.buildingSaleInfoHtml(value), "");
+    const html = ui.saleDetailsHtml(value);
+    assert.doesNotMatch(html, /<dt>(?:매매 범위|구분 근거|층수|지상층수|지하층수|총층수|분류 보완|매물 위치)<\/dt>/);
+    assert.match(html, /<dt>연면적<\/dt>/);
+    assert.match(html, /<dt>기존 월 임대수입<\/dt>/);
+    assert.ok(html.includes(descriptionText));
+    assert.equal(JSON.stringify(value), before);
+  }
+  for (const value of [null, undefined, {}, item(), item({saleExtent: "unit"}), item({saleExtent: "unknown"}),
+    item({}, {tradeType: "lease"}), item({scope: "land", landUse: "답"}, {saleCategory: "land"})]) {
+    assert.equal(ui.buildingSaleInfoHtml(value), "");
+  }
+  const land = item({scope: "land", landUse: "답"}, {saleCategory: "land"});
+  assert.equal(ui.isBuildingSale(land), false);
+  assert.equal(ui.isBuildingSale({...land, tradeType: "lease"}), false);
+  assert.equal(ui.isBuildingSale(null), false);
+  assert.match(ui.saleDetailsHtml(land), /<dt>매매 범위<\/dt><dd>토지<\/dd>/);
+  assert.match(ui.saleDetailsHtml(land), /<dt>지목<\/dt><dd>답<\/dd>/);
 });

@@ -134,7 +134,7 @@ test("long land-use values stay inside the address row on desktop and phone", as
   await expectLandIdentityUnchanged(page);
 });
 
-test("land-use decoration does not change lease floors or building-sale scope badges", async ({page, isMobile}) => {
+test("land-use decoration preserves lease floors while building sales use area information", async ({page, isMobile}) => {
   await page.evaluate(() => {
     const lease = window.allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
     lease.room = "3/10";
@@ -149,7 +149,7 @@ test("land-use decoration does not change lease floors or building-sale scope ba
   await expect(leaseCard.locator(".item-room-badge")).toHaveText("3층");
   await expect(page.locator("#list .land-use-badge-v1")).toHaveCount(0);
   await selectMarket(page, isMobile, "building_sale");
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("건물 전체 매매");
-  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("지하 1층 ~ 지상 5층");
+  await expect(page.locator("#list .building-sale-scope-v1, #list .building-sale-floor-v1")).toHaveCount(0);
+  await expect(page.locator("#list .building-sale-area-info-v1")).toHaveText("면적 정보 미확인");
   await expect(page.locator("#list .land-use-badge-v1")).toHaveCount(0);
 });
