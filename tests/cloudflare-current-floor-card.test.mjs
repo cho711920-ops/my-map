@@ -17,7 +17,7 @@ test("current/total provider floors normalize to the listing floor", () => {
 test("listing cards format legacy current/total values before rendering", async () => {
   const script = await readFile(new URL("../js/script.js", import.meta.url), "utf8");
   assert.match(script, /function formatListingRoomForCardV653/);
-  assert.match(script, /roomLabelV1 = buildingFloorLabelV1 \|\| formatListingRoomForCardV653\(item\.room\)/);
+  assert.match(script, /roomLabelV1 = landUseLabelV1 \|\| buildingFloorLabelV1 \|\| formatListingRoomForCardV653\(item\.room\)/);
   assert.match(script, /escapeHtml\(roomLabelV1\)/);
   assert.match(script, /currentAndTotal = compact\.match/);
 });

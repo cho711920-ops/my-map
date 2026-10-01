@@ -34,19 +34,21 @@ test("land cards show land-use and zoning from compact payloads without a detail
   const original = Object.fromEntries(result.fields.map((field, i) => [field, result.groups["M-land"][0][i]]));
   assert.ok(!("saleDetails" in original));
   const master = { ...land, saleDetails: undefined, unifiedOriginalsV8: [original] };
-  assert.match(ui.saleLandInfoHtml(master), /지목 <b>대<\/b>/);
+  assert.equal(ui.landUseLabel(master), "지목: 대");
+  assert.doesNotMatch(ui.saleLandInfoHtml(master), /지목/);
   assert.match(ui.saleLandInfoHtml(master), /용도지역 <b>제2종일반주거지역<\/b>/);
   assert.match(fs.readFileSync("js/script.js", "utf8"), /saleCardV1 \? window.JSListingTradeV1.saleLandInfoHtml\(item\) : ''/);
 });
 
 test("land unknown values stay unknown and markup is escaped", () => {
   const unknown = ui.saleLandInfoHtml({ ...land, saleDetails: { scope: "land", buildingUse: "창고시설" } });
-  assert.equal((unknown.match(/미확인/g) || []).length, 2);
+  assert.equal((unknown.match(/미확인/g) || []).length, 1);
+  assert.equal(ui.landUseLabel({ ...land, saleDetails: { scope: "land", buildingUse: "창고시설" } }), "지목 미확인");
   assert.doesNotMatch(unknown, /창고시설/);
   const partial = ui.saleLandInfoHtml({ ...land, saleDetails: { landUse: "대" } });
   assert.equal((partial.match(/미확인/g) || []).length, 1);
   const escaped = ui.saleLandInfoHtml({ ...land, saleDetails: { landUse: '<img src=x>', zoning: '"<script>&' } });
-  assert.doesNotMatch(escaped, /<img|<script>/); assert.match(escaped, /&lt;img/); assert.match(escaped, /&amp;/);
+  assert.doesNotMatch(escaped, /<img|<script>/); assert.match(escaped, /&lt;script/); assert.match(escaped, /&amp;/);
 });
 
 test("land summary selection does not mix another source or conflicting zoning", () => {
@@ -62,8 +64,24 @@ test("land summary selection does not mix another source or conflicting zoning",
 
 test("lease and building-sale cards do not gain a land information row or extra API fields", () => {
   assert.equal(ui.saleLandInfoHtml({ ...land, tradeType: "lease" }), "");
+  assert.equal(ui.landUseLabel({ ...land, tradeType: "lease" }), "");
   const building = { ...land, saleCategory: "building", saleDetails: { ...land.saleDetails, scope: "whole_building" } };
   assert.equal(ui.saleLandInfoHtml(building), "");
+  assert.equal(ui.landUseLabel(building), "");
   assert.ok(!("zoning" in compactSaleSummary(building)));
   assert.ok(!("landUse" in compactSaleSummary(building)));
+});
+
+test("land-use header labels preserve collected text and identities without turning rooms into land-use", () => {
+  for (const value of ["대", "전", "답", "임야", "종교용지"]) {
+    const item = { ...land, room: "301호", key: "old-room-key", saleDetails: { ...land.saleDetails, landUse: value } };
+    const before = JSON.stringify(item);
+    assert.equal(ui.landUseLabel(item), "지목: " + value);
+    assert.equal(JSON.stringify(item), before);
+  }
+  for (const value of [null, undefined, "", "  ", "-", "—", "미확인", "확인필요", "확인 필요", 0, true, {}, []]) {
+    assert.equal(ui.landUseLabel({ ...land, room: "대", saleDetails: { scope: "land", landUse: value } }), "지목 미확인");
+  }
+  assert.equal(ui.landUseLabel(null), "");
+  assert.doesNotMatch(ui.saleDetailsHtml({ ...land, saleDetails: { ...land.saleDetails, aboveGroundFloors: 3, belowGroundFloors: 1, totalFloors: 4 } }), /<dt>(?:층수|지상층수|지하층수|총층수)<\/dt>/);
 });

@@ -64,7 +64,7 @@ test("lease and land retain their existing renderer and building detail uses the
   assert.equal(ui.buildingFloorLabel(null), "");
   assert.match(ui.saleDetailsHtml(building), /<dt>층수<\/dt><dd>지하 1층 ~ 지상 5층<\/dd>/);
   assert.doesNotMatch(ui.saleDetailsHtml(building), /<dt>지상층수<\/dt>/);
-  assert.match(ui.saleDetailsHtml({...building, saleCategory: "land"}), /<dt>지상층수<\/dt>/);
+  assert.doesNotMatch(ui.saleDetailsHtml({...building, saleCategory: "land"}), /<dt>지상층수<\/dt>/);
 });
 
 test("recovered provider floor scope corrects display only, including whole-building basement mistaken for an occupied floor", () => {

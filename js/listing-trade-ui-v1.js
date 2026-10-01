@@ -339,18 +339,27 @@
     if (!land && nonnegative(detail.exclusiveAreaM2) > 0) html += '<i>·</i>' + area('전용', detail.exclusiveAreaM2, '전용면적');
     return '<span class="listing-sale-areas-v1">' + html + '</span>';
   }
+  function landText(value) {
+    var text = typeof value === "string" ? clean(value).replace(/\s+/g, " ") : "";
+    return /^(?:-|—|미확인|확인\s*필요)$/.test(text) ? "" : text;
+  }
+  function landUseLabel(item) {
+    if (!isSale(item)) return "";
+    var detail = saleSummary(item);
+    if (detail.scope !== "land" && normalizedSaleCategory(item) !== "land") return "";
+    var value = landText(detail.landUse);
+    return value ? "지목: " + value : "지목 미확인";
+  }
   function saleLandInfoHtml(item) {
     if (!isSale(item)) return "";
     var detail = saleSummary(item);
     if (detail.scope !== "land" && normalizedSaleCategory(item) !== "land") return "";
     function field(label, value) {
-      var text = typeof value === "string" ? clean(value) : "";
-      if (/^(?:-|—|미확인|확인 필요)$/.test(text)) text = "";
+      var text = landText(value);
       return '<span' + (text ? '' : ' class="unavailable"') + '>' + label +
         ' <b>' + escapeHtml(text || '미확인') + '</b></span>';
     }
-    return '<span class="listing-land-info-v1">' + field('지목', detail.landUse) + ' ' +
-      field('용도지역', detail.zoning) + '</span>';
+    return '<span class="listing-land-info-v1">' + field('용도지역', detail.zoning) + '</span>';
   }
   function saleDetailsHtml(item) {
     if (!isSale(item) || !item.saleDetails) return "";
@@ -381,14 +390,14 @@
     add("광고 실투자금", detail.investmentAmount, "만원");
     add("광고 기재 연 수익률", detail.advertisedYield, "% (광고 기준)");
     var rate = saleYield(item);
-    var land = normalizedSaleCategory(item) === "land";
+    var land = normalizedSaleCategory(item) === "land" || detail.scope === "land";
     if (land && global.JSSaleWorkbenchV1) {
       var unitPrice = global.JSSaleWorkbenchV1.unitPrice(item);
       add("토지 평당가", unitPrice == null ? "확인 필요" : unitPrice.toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "만원 (광고면적 기준)");
     } else add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
     var floorLabel = buildingFloorLabel(item);
     if (floorLabel) add("층수", floorLabel);
-    else {
+    else if (!land) {
       add("지상층수", detail.aboveGroundFloors, "층");
       add("지하층수", detail.belowGroundFloors, "층");
       add("총층수", detail.totalFloors, "층");
@@ -443,6 +452,7 @@
     saleYieldBadge: saleYieldBadge,
     saleAreaHtml: saleAreaHtml,
     saleLandInfoHtml: saleLandInfoHtml,
+    landUseLabel: landUseLabel,
     isSale: isSale
   };
 

@@ -4635,7 +4635,9 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     : "";
   var buildingFloorLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingFloorLabel
     ? window.JSListingTradeV1.buildingFloorLabel(item) : "";
-  var roomLabelV1 = buildingFloorLabelV1 || formatListingRoomForCardV653(item.room);
+  var landUseLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.landUseLabel
+    ? window.JSListingTradeV1.landUseLabel(item) : "";
+  var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(item.room);
   var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleInfoHtml
     ? window.JSListingTradeV1.buildingSaleInfoHtml(item) : "";
 
@@ -4770,7 +4772,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
             (buildingSaleInfoV1 ? '' : roomLabelV1
-              ? '<span class="item-room-badge' + (buildingFloorLabelV1 ? ' building-sale-floor-v1' : '') + '" title="' + escapeHtml(roomLabelV1) + '">' + escapeHtml(roomLabelV1) + '</span>'
+              ? '<span class="item-room-badge' + (landUseLabelV1 ? ' land-use-badge-v1' : buildingFloorLabelV1 ? ' building-sale-floor-v1' : '') + '" title="' + escapeHtml(roomLabelV1) + '">' + escapeHtml(roomLabelV1) + '</span>'
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV843(item) +
           '</span>' +

@@ -34,9 +34,11 @@ test('folded source metadata escapes provider supplied values and handles missin
 });
 
 test('land badges retain collected values and unknown labels without changing building or lease cards', () => {
-  assert.match(ui.saleLandInfoHtml(land), /지목 <b>대<\/b>/);
+  assert.equal(ui.landUseLabel(land), '지목: 대');
+  assert.doesNotMatch(ui.saleLandInfoHtml(land), /지목/);
   assert.match(ui.saleLandInfoHtml(land), /용도지역 <b>제2종일반주거지역<\/b>/);
-  assert.match(ui.saleLandInfoHtml({...land,saleDetails:{scope:'land'}}), /class="unavailable">지목 <b>미확인<\/b>/);
+  assert.equal(ui.landUseLabel({...land,saleDetails:{scope:'land'}}), '지목 미확인');
+  assert.match(ui.saleLandInfoHtml({...land,saleDetails:{scope:'land'}}), /class="unavailable">용도지역 <b>미확인<\/b>/);
   assert.equal(ui.saleLandInfoHtml({tradeType:'sale',saleCategory:'building',saleDetails:{scope:'whole_building'}}),'');
   assert.equal(ui.saleLandInfoHtml({...land,tradeType:'lease'}),'');
 });

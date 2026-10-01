@@ -305,6 +305,11 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100
 .listing-sale-card-v1 .item-address-room-v650 .building-sale-floor-v1 {
   max-width: 100%; flex-shrink: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.4 !important;
 }
+.listing-sale-card-v1 .item-address-room-v650:has(.land-use-badge-v1) { flex-wrap: wrap; }
+.listing-sale-card-v1 .item-address-room-v650 .land-use-badge-v1 {
+  max-width: 100%; min-width: 0; flex-shrink: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.4 !important;
+  color: #196342; border-color: #a7d5b9; background: #e9f5ee;
+}
 .building-sale-info-v1 { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; min-width: 0; margin: 3px 0; line-height: 1.45; }
 .building-sale-info-v1 .building-sale-scope-v1 { display: inline-block; max-width: 100%; padding: 3px 7px; border: 1px solid #a9c7ec; border-radius: 6px; background: #edf4ff; color: #1c559b; font-size: 12px; font-weight: 800; white-space: normal; overflow-wrap: anywhere; }
 .building-sale-info-v1 .building-sale-scope-v1.whole_building { background: #e9f5ee; color: #196342; border-color: #a7d5b9; }
