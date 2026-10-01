@@ -38,6 +38,94 @@ async function buildingList(page, isMobile) {
   await expect(page.locator("#list .item")).toHaveCount(1);
 }
 
+async function expectReadableAreaBadges(area) {
+  await expect(area).toBeVisible();
+  const badges = area.locator(".listing-sale-areas-v1 > span");
+  await expect(badges).toHaveCount(4);
+  const metrics = await area.evaluate(element => {
+    const rectangle = node => {
+      const {left, right, top, bottom, width, height} = node.getBoundingClientRect();
+      return {left, right, top, bottom, width, height};
+    };
+    return {
+      container: rectangle(element),
+      viewportWidth: window.innerWidth,
+      separatorsHidden: Array.from(element.querySelectorAll(".listing-sale-areas-v1 > i"))
+        .every(node => getComputedStyle(node).display === "none"),
+      badges: Array.from(element.querySelectorAll(".listing-sale-areas-v1 > span")).map(node => {
+        const style = getComputedStyle(node);
+        const value = node.querySelector("b");
+        return {
+          label: Array.from(node.childNodes).filter(child => child.nodeType === Node.TEXT_NODE)
+            .map(child => child.textContent).join("").trim(),
+          text: node.textContent.trim(),
+          fontSize: parseFloat(style.fontSize),
+          fontWeight: Number(style.fontWeight),
+          valueFontSize: parseFloat(getComputedStyle(value).fontSize),
+          backgroundColor: style.backgroundColor,
+          borderWidth: parseFloat(style.borderTopWidth),
+          borderStyle: style.borderTopStyle,
+          borderColor: style.borderTopColor,
+          rect: rectangle(node)
+        };
+      })
+    };
+  });
+  expect(metrics.badges.map(badge => badge.label)).toEqual(["전용", "대지", "연면적", "건축(건평)"]);
+  expect(metrics.separatorsHidden, "separate area badges do not retain dot separators").toBe(true);
+  for (const badge of metrics.badges) {
+    const message = badge.text;
+    expect(badge.fontSize, `${message}: label font size`).toBeGreaterThanOrEqual(13);
+    expect(badge.fontWeight, `${message}: label font weight`).toBeGreaterThanOrEqual(700);
+    expect(badge.valueFontSize, `${message}: numeric font size`).toBeGreaterThanOrEqual(14);
+    expect(badge.backgroundColor, `${message}: visible non-white badge background`)
+      .not.toMatch(/^(?:transparent|rgba\([^)]*,\s*0\)|rgb\(255,\s*255,\s*255\)|rgba\(255,\s*255,\s*255,\s*1\))$/);
+    expect(badge.borderWidth, `${message}: visible badge border`).toBeGreaterThan(0);
+    expect(badge.borderStyle, `${message}: visible badge border`).not.toBe("none");
+    expect(badge.borderColor, `${message}: visible badge border`).not.toMatch(/^(?:transparent|rgba\([^)]*,\s*0\))$/);
+    expect(badge.rect.width, message).toBeGreaterThan(0);
+    expect(badge.rect.height, message).toBeGreaterThan(0);
+    expect(badge.rect.left, `${message}: stays inside area row`).toBeGreaterThanOrEqual(metrics.container.left - 1);
+    expect(badge.rect.right, `${message}: stays inside area row`).toBeLessThanOrEqual(metrics.container.right + 1);
+    expect(badge.rect.top, `${message}: stays inside area row`).toBeGreaterThanOrEqual(metrics.container.top - 1);
+    expect(badge.rect.bottom, `${message}: stays inside area row`).toBeLessThanOrEqual(metrics.container.bottom + 1);
+    expect(badge.rect.left, `${message}: stays inside viewport`).toBeGreaterThanOrEqual(-1);
+    expect(badge.rect.right, `${message}: stays inside viewport`).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+  }
+  for (let index = 0; index < metrics.badges.length; index += 1) {
+    for (const other of metrics.badges.slice(index + 1)) {
+      const badge = metrics.badges[index];
+      const horizontalOverlap = Math.min(badge.rect.right, other.rect.right) - Math.max(badge.rect.left, other.rect.left);
+      const verticalOverlap = Math.min(badge.rect.bottom, other.rect.bottom) - Math.max(badge.rect.top, other.rect.top);
+      expect(horizontalOverlap > 1 && verticalOverlap > 1, `${badge.text} and ${other.text}: no overlapping badges`).toBe(false);
+    }
+  }
+}
+
+for (const width of [null, 320, 375]) {
+  test(`building-sale area badges remain readable and contained in list and detail at ${width || "default"} viewport width`, async ({page, isMobile}, testInfo) => {
+    test.skip(width !== null && !isMobile, "narrow-width cases target the smartphone layout");
+    if (width !== null) await page.setViewportSize({width, height: 844});
+    await configure(page, {
+      name: "면적 배지 검수 건물", buildingName: "면적 배지 검수 건물", room: "1/4층", saleCategory: "building",
+      saleDetails: {scope: "whole_building", exclusiveAreaM2: 444.34, landAreaM2: 223.5,
+        grossAreaM2: 444.34, buildingAreaM2: 134.05}
+    });
+    await buildingList(page, isMobile);
+    await expectReadableAreaBadges(page.locator("#list .building-sale-area-info-v1"));
+    await page.screenshot({path: testInfo.outputPath("building-sale-area-badges-list.png")});
+    await page.locator("#list .item-building-name").click();
+    const drawer = page.locator("#unifiedDetailDrawerV8");
+    await expect(drawer).toHaveAttribute("aria-hidden", "false");
+    await expect(drawer).toHaveClass(/(?:^|\s)open(?:\s|$)/);
+    await drawer.evaluate(async element => {
+      await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {})));
+    });
+    await expectReadableAreaBadges(drawer.locator(".building-sale-area-info-v1"));
+    await page.screenshot({path: testInfo.outputPath("building-sale-area-badges-detail.png")});
+  });
+}
+
 const cases = [
   {name: "Hongdo Cheongu villa first floor in a four-floor building", room: "1/4층", saleCategory: "villa",
     expectedAreas: ["전용", "11.8평"],
