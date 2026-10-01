@@ -112,39 +112,71 @@ test("real SQLite narrow projections preserve boolean presence and list/detail e
   for (const file of readdirSync(migrations).filter(value => value.endsWith(".sql")).sort()) db.exec(readFileSync(new URL(file, migrations), "utf8"));
   const cases = [
     ["네이버", { realEstateTypeCode: "D04", saleRaw: { detailInfo: { spaceInfo: { floorInfo } } } }, "whole_building"],
+    ["네이버", { realEstateTypeCode: "E02", saleRaw: { detailInfo: { spaceInfo: { floorInfo: { residenceType: "2", groundTotalFloor: "2", undergroundTotalFloor: "0", targetFloor: "-" } } } } }, "whole_building"],
+    ["네이버", { realEstateTypeCode: "A07", roomInfo: "301호", saleRaw: { detailInfo: { spaceInfo: { floorInfo: { residenceType: "1", floorType: "30", targetFloor: "-", totalFloor: "5" } } } } }, "unit"],
+    ["네이버", { realEstateTypeCode: "GM", saleRaw: { spaceInfo: { floorInfo } } }, "whole_building"],
     ["공실박스", { list: { TypeView: "건물통", Ho: "전체" } }, "whole_building"],
     ["공실박스", { list: { TypeView: "상가", Ho: "301" } }, "unit"],
+    ["공실박스", { TypeView: "건물통", Ho: "전체" }, "whole_building"],
+    ["공실박스", { TypeView: "", ViewType: " ", LndType: "APT", Ho: "", BfHo: "301", Ff: "", BfFloor: 3 }, "unit"],
+    ["공실박스", { list: { TypeView: "", ViewType: "", LndType: "OFT", Ho: "문의" } }, "unit"],
     ["당근", { isEntireBuilding: true, floor: 3 }, "whole_building"],
     ["당근", { isEntireBuilding: false, floor: "3.0", salesTypeV3: { type: "STORE" } }, "unit"],
     ["당근", { floor: 3, salesTypeV3: { type: "STORE" } }, "unknown"],
     ["당근", { isEntireBuilding: "false", floor: 3, salesTypeV3: { type: "STORE" } }, "unknown"],
     ["당근", { isEntireBuilding: false, floor: 3, salesTypeV3: { type: "TWO_ROOM" }, content: wholeDescription }, "whole_building"],
-    ["당근", { isEntireBuilding: false, floor: "3.0", salesTypeV3: { type: "TWO_ROOM" }, content: wholeDescription }, "unknown", true]
+    ["당근", { isEntireBuilding: false, floor: "3.0", salesTypeV3: { type: "TWO_ROOM" }, content: wholeDescription }, "whole_building", true],
+    ["당근", { isEntireBuilding: false, floor: null, topFloor: 4, salesTypeV3: { type: "SPLIT_ONE_ROOM" } }, "unit"],
+    ["당근", { isEntireBuilding: false, floor: "4.0", topFloor: "4.0", salesTypeV3: { type: "HOUSE" }, addressInfo: "옥상태양광설치 월수입450만원" }, "unknown"],
+    ["당근", { isEntireBuilding: false, floor: "3.0", salesTypeV3: { type: "STORE" }, addressInfo: "건물 전체 매매", content: "현재 일부 임대 중" }, "whole_building", true],
+    ["당근", { isEntireBuilding: false, floor: "3.0", salesTypeV3: { type: "STORE" }, content: "1~2층 전체매매" }, "unit", true],
+    ["당근", { isEntireBuilding: true, salesTypeV3: { type: "STORE" }, content: "각 호실별 매매" }, "unknown", true],
+    ["당근", { isEntireBuilding: false, topFloor: 5, salesTypeV3: { type: "TWO_ROOM" }, content: "중개대상물 종류 - 다가구주택\n세대수 - 15세대\n대지면적 - 약 67평 (223.5㎡)\n연면적 - 약 134평 (444.34㎡)\n총층수 - 5층" }, "whole_building", true],
+    ["당근", { isEntireBuilding: true, salesTypeV3: { type: "HOUSE" }, content: "정원있는 2층집 ▶ 대지 100평에 지하1층 지상2층 매매 ▶ 복층형 2층집에 1층 방3개" }, "whole_building", true],
+    ["당근", { isEntireBuilding: false, floor: "2.0", salesTypeV3: { type: "STORE" }, content: "상가 2층 매매, 사무실 전문 부동산. 채팅주시면 상담 어렵습니다. 원스톱 상담 가능" }, "unit", true],
+    ["당근", { isEntireBuilding: false, floor: true, topFloor: true, salesTypeV3: { type: "STORE" } }, "unknown"],
+    ["당근", { isEntireBuilding: false, floor: false, topFloor: false, salesTypeV3: { type: "STORE" } }, "unknown"],
+    ["당근", { isEntireBuilding: false, floor: 3, salesTypeV3: { type: "STORE" }, content: "건물 전체매매" }, "whole_building", "\n\t"],
+    ["당근", { isEntireBuilding: false, floor: 3, salesTypeV3: { type: "STORE" }, content: "건물 전체매매" }, "whole_building", "\u00a0\u3000"],
+    ["공실박스", { TypeView: false, ViewType: "\t\n", LndType: "상가", Ho: "301", Ff: true }, "unit"]
   ];
   for (const [index, [source, raw, , omitDescription]] of cases.entries()) {
     db.prepare("INSERT INTO listings(id,property_id,status,trade_type) VALUES(?,?,'active','sale')").run(`M-${index}`, `M-${index}`);
     db.prepare("INSERT INTO listing_sources(id,listing_id,source,source_listing_id,active,trade_type,list_snapshot_json,raw_json) VALUES(?,?,?,?,1,'sale',?,?)")
       .run(`S-${index}`, `M-${index}`, source, String(index), JSON.stringify({ ...base, source, originalId: `S-${index}`,
-        saleCategory: source === "당근" && raw.salesTypeV3?.type === "STORE" ? "commercial" : base.saleCategory,
-        saleDetails: { ...base.saleDetails, descriptionText: omitDescription ? undefined : raw.content || "" } }), JSON.stringify(raw));
+        saleCategory: source === "당근" && raw.salesTypeV3?.type === "STORE" ? "commercial"
+          : ["SPLIT_ONE_ROOM", "OPEN_ONE_ROOM"].includes(raw.salesTypeV3?.type) ? "one_room" : base.saleCategory,
+        saleDetails: { ...base.saleDetails, descriptionText: typeof omitDescription === "string" ? omitDescription
+          : omitDescription ? undefined : raw.content || "" } }), JSON.stringify(raw));
   }
+  db.prepare("INSERT INTO listings(id,property_id,status,trade_type) VALUES('M-lease','M-lease','active','lease')").run();
+  db.prepare("INSERT INTO listing_sources(id,listing_id,source,source_listing_id,active,trade_type,list_snapshot_json,raw_json) VALUES('S-lease','M-lease','당근','lease',1,'lease',?,?)")
+    .run(JSON.stringify({ ...base, source: "당근", tradeType: "lease" }), JSON.stringify({ addressInfo: "임대 광고", content: "긴 임대 설명".repeat(4000) }));
   const before = JSON.stringify(db.prepare("SELECT list_snapshot_json, raw_json FROM listing_sources ORDER BY id").all());
   const queries = [];
+  const projectedRows = [];
   const prepare = (sql, values = []) => {
     queries.push(sql);
     const indexes = [];
     const query = sql.replace(/\?(\d+)/g, (_, n) => { indexes.push(Number(n) - 1); return "?"; });
     const args = () => indexes.length ? indexes.map(index => values[index]) : values;
-    return { bind(...bindings) { return prepare(sql, bindings); }, async all() { return { results: db.prepare(query).all(...args()) }; },
+    return { bind(...bindings) { return prepare(sql, bindings); }, async all() {
+      const results = db.prepare(query).all(...args());
+      if (sql.includes("daangn_sale_extent_json")) projectedRows.push(...results);
+      return { results };
+    },
       async first() { return db.prepare(query).get(...args()) || null; } };
   };
   const env = { DB: { prepare } };
   const list = await handleD1GetAction(env, {}, { action: "unifiedListings" });
+  assert.equal(projectedRows.find(row => row.listing_id === "M-lease").daangn_sale_extent_json, null,
+    "lease rows never project advertisement text into the sale-only evidence adapter");
   for (const [index, [, , expected]] of cases.entries()) {
     const detail = await handleD1GetAction(env, {}, { action: "unifiedListingDetail", propertyId: `M-${index}` });
     const summary = list.groups[`M-${index}`][0][list.fields.indexOf("saleSummary")];
     assert.equal(summary.saleExtent, expected, `list ${index}`);
     assert.equal(detail.originals[0].saleDetails.saleExtent, expected, `detail ${index}`);
+    assert.deepEqual(summary, compactSaleSummary(detail.originals[0]), `list/detail summary parity ${index}`);
     assert.equal(detail.originals[0].room, base.room);
     assert.equal(detail.originals[0].saleDetails.scope, base.saleDetails.scope);
     assert.equal(detail.originals[0].salePrice, base.salePrice);
@@ -154,5 +186,7 @@ test("real SQLite narrow projections preserve boolean presence and list/detail e
   assert.equal(JSON.stringify(db.prepare("SELECT list_snapshot_json, raw_json FROM listing_sources ORDER BY id").all()), before);
   assert.ok(queries.every(sql => /^\s*SELECT\b/.test(sql)));
   const projection = queries.find(sql => sql.includes("gongsil_sale_extent_json"));
-  assert.doesNotMatch(projection, /json_extract\(raw_json, '\$\.content'\)|\bSELECT raw_json\b/);
+  assert.match(projection, /substr\(json_extract\(raw_json, '\$\.content'\), 1, 12000\)/);
+  assert.doesNotMatch(projection, /\bSELECT raw_json\b/);
+  assert.doesNotMatch(JSON.stringify(list), /descriptionText|wholeMultifamily|매물유형: 다가구/);
 });

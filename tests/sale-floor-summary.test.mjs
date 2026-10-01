@@ -102,8 +102,8 @@ test("provider basement markers and absence remain distinct, without category or
     assert.equal(result.saleDetails.belowGroundFloors, expected);
   }
   for (const patch of [{ propertyType: "D02" }, { propertyType: "building" }, { propertyType: "" },
-    { floorInfo: { ...providerFloors, targetFloor: "" } },
-    { floorInfo: { ...providerFloors, groundTotalFloor: "-" } }]) {
+    { floorInfo: { ...providerFloors, residenceType: undefined, targetFloor: "" } },
+    { floorInfo: { ...providerFloors, residenceType: undefined, groundTotalFloor: "-" } }]) {
     const result = withNaverSaleFloorDisplay(legacyNaver, { propertyType: "D04", floorInfo: providerFloors, ...patch });
     assert.ok(!("floorScope" in result.saleDetails));
   }

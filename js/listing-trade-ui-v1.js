@@ -240,7 +240,7 @@
     return /^(whole_building|unit)$/.test(detail.saleExtent) ? detail.saleExtent : "unknown";
   }
   function buildingSaleScopeLabel(item) {
-    return {whole_building: "건물 전체 매매", unit: "일부 매매(층·호실)", unknown: "매매 범위 미확인"}[buildingSaleExtent(item)] || "";
+    return {whole_building: "건물 전체 매매", unit: "특정 층·호실 매매", unknown: "매매 범위 미확인"}[buildingSaleExtent(item)] || "";
   }
   function buildingSaleInfoHtml(item) {
     var extent = buildingSaleExtent(item);
@@ -250,18 +250,24 @@
       unit: "건물 전체가 아닌 특정 층·호실 매물입니다. 표시된 층 전체를 판다는 뜻은 아닙니다.",
       unknown: "전체 또는 일부 매매인지 원본 정보만으로 확인되지 않았습니다. 원본 또는 중개사에게 확인하세요."
     }[extent];
+    var evidence = clean(buildingSaleSummary(item, ["saleExtent"]).saleExtentEvidence);
+    if (evidence) help += " " + evidence;
+    var sourceFloor = buildingSaleSummary(item, ["saleExtent", "saleSourceFloorText"]).saleSourceFloorText;
+    var floorText = extent === "unknown" ? (typeof sourceFloor === "string" && sourceFloor.trim()
+      ? "원본 층 표기: " + sourceFloor.trim().slice(0, 60) : "") : buildingFloorLabel(item);
     return '<div class="building-sale-info-v1"><span class="building-sale-scope-v1 ' + extent +
       '" title="' + escapeHtml(help) + '">' + buildingSaleScopeLabel(item) + '</span>' +
-      (extent === "unknown" ? '' : '<span class="building-sale-floor-v1">' + escapeHtml(buildingFloorLabel(item)) + '</span>') + '</div>';
+      (floorText ? '<span class="building-sale-floor-v1">' + escapeHtml(floorText) + '</span>' : '') + '</div>';
   }
 
   // Display only: room is also part of legacy favorite/visit identity.
   function buildingFloorLabel(item) {
     if (!isSale(item) || normalizedSaleCategory(item) === "land") return "";
-    var detail = buildingSaleSummary(item, ["saleExtent", "aboveGroundFloors", "belowGroundFloors", "totalFloors"]);
+    var detail = buildingSaleSummary(item, ["saleExtent", "saleTargetFloor", "saleTargetRoom", "saleSourceFloorText", "aboveGroundFloors", "belowGroundFloors", "totalFloors"]);
     if (detail.scope === "land") return "";
     var extent = buildingSaleExtent(item);
-    if (extent === "unknown") return "매매 대상 층·호실 미확인";
+    if (extent === "unknown") return typeof detail.saleSourceFloorText === "string" && detail.saleSourceFloorText.trim()
+      ? "원본 층 표기: " + detail.saleSourceFloorText.trim().slice(0, 60) : "매매 대상 층·호실 미확인";
     function count(value, allowZero) {
       if (typeof value !== "number" && typeof value !== "string") return null;
       var parsed = nonnegative(value);
@@ -270,7 +276,10 @@
     var above = count(detail.aboveGroundFloors, false);
     var below = count(detail.belowGroundFloors, true);
     var total = count(detail.totalFloors, false);
-    var room = clean(item.room);
+    var targetFloor = typeof detail.saleTargetFloor === "string" ? detail.saleTargetFloor.trim().slice(0, 60) : "";
+    var targetRoom = typeof detail.saleTargetRoom === "string" ? detail.saleTargetRoom.trim().slice(0, 60) : "";
+    var conflictingTargets = item.unifiedOriginalsV8 && item.unifiedOriginalsV8.length && !Object.keys(detail).length;
+    var room = targetFloor || targetRoom || (conflictingTargets ? "" : clean(item.room));
     var compact = room.replace(/\s+/g, "");
     var whole = extent === "whole_building";
     if (whole) {
@@ -283,6 +292,12 @@
       if (below != null) return (below > 0 ? "지하 " + below + "층" : "지하 없음") + " · 지상 미확인";
       return "층수 미확인";
     }
+    // Read-time provider evidence wins over a legacy room/floor string. These
+    // fields are display-only; never overwrite room, which participates in keys.
+    if (targetFloor === "비공개") {
+      return "해당층 비공개" + (targetRoom ? " · " + targetRoom : "") +
+        (total != null || above != null ? " / 총 " + (total || above) + "층" : "");
+    }
     // A provider's 3/10 is current/total, never a lowest/highest range.
     var pair = compact.match(/^((?:지하|지상|B)?-?\d+(?:\.0+)?(?:층|F)?|저층?|중층?|고층?)[/／](\d+(?:\.0+)?)(?:층|F)?$/i);
     var current = pair ? pair[1] : compact;
@@ -290,11 +305,11 @@
     if (total == null) total = above;
     var floor = null;
     var basement = current.match(/^(?:지하|B|-)\s*(\d+(?:\.0+)?)(?:층|F)?$/i);
-    var ground = current.match(/^(?:지상)?(\d+(?:\.0+)?)(?:층|F)$/i) || (pair ? current.match(/^(\d+(?:\.0+)?)$/) : null);
+    var ground = current.match(/^(?:지상)?(\d+(?:\.0+)?)(?:층|F)$/i) || (pair || targetFloor ? current.match(/^(\d+(?:\.0+)?)$/) : null);
     if (basement && Number(basement[1]) > 0) floor = "지하 " + Number(basement[1]) + "층";
     else if (ground && Number(ground[1]) > 0) floor = Number(ground[1]) + "층";
     else if (/^(저|중|고)층?$/.test(current)) floor = current.charAt(0) + "층";
-    if (floor) return "해당 " + floor + (total != null ? " / 총 " + total + "층" : "");
+    if (floor) return "해당 " + floor + (targetRoom && targetRoom !== targetFloor ? " · " + targetRoom : "") + (total != null ? " / 총 " + total + "층" : "");
     if (/^(?:지상|지하|B|-)?0(?:\.0+)?(?:층|F)?$/i.test(current) || /^(?:-|미확인|층수미확인|호실-)$/i.test(compact)) room = "";
     // Keep explicit room identifiers such as 301호; do not turn them into floors.
     return (room || (total != null ? "해당층 미확인" : "층수 미확인")) + (total != null ? " / 총 " + total + "층" : "");
@@ -378,6 +393,9 @@
         (Number(value) / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "평)");
     }
     add("매매 범위", normalizedSaleCategory(item) === "land" || detail.scope === "land" ? "토지" : buildingSaleScopeLabel(item));
+    if (normalizedSaleCategory(item) !== "land" && detail.scope !== "land") {
+      add("구분 근거", buildingSaleSummary(item, ["saleExtent"]).saleExtentEvidence);
+    }
     area("대지면적", detail.landAreaM2);
     area("연면적", detail.grossAreaM2);
     area("건축면적", detail.buildingAreaM2);

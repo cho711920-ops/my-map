@@ -94,17 +94,17 @@ test("sale extent needs explicit read evidence and never treats legacy scope def
     const before = JSON.stringify(value);
     assert.equal(ui.buildingSaleScopeLabel(value), "매매 범위 미확인");
     assert.equal(ui.buildingFloorLabel(value), "매매 대상 층·호실 미확인");
-    assert.doesNotMatch(ui.buildingSaleInfoHtml(value), /건물 전체 매매|일부 매매\(층·호실\)|building-sale-floor-v1/);
+    assert.doesNotMatch(ui.buildingSaleInfoHtml(value), /건물 전체 매매|특정 층·호실 매매|building-sale-floor-v1/);
     assert.equal(JSON.stringify(value), before);
   }
   const direct = item({}, {source: "직접등록", room: "301호", saleDetails: {scope: "whole_building"}});
   assert.equal(ui.buildingSaleExtent(direct), "unknown");
   assert.match(ui.buildingSaleInfoHtml(item()), /건물 전체 매매/);
   const unit = item({saleExtent: "unit", totalFloors: 10}, {room: "3층"});
-  assert.match(ui.buildingSaleInfoHtml(unit), /일부 매매\(층·호실\)/);
+  assert.match(ui.buildingSaleInfoHtml(unit), /특정 층·호실 매매/);
   assert.match(ui.buildingSaleInfoHtml(unit), /해당 3층 \/ 총 10층/);
   assert.doesNotMatch(ui.buildingSaleInfoHtml(unit), /3층 전체/);
-  assert.match(ui.saleDetailsHtml(unit), /<dt>매매 범위<\/dt><dd>일부 매매\(층·호실\)<\/dd>/);
+  assert.match(ui.saleDetailsHtml(unit), /<dt>매매 범위<\/dt><dd>특정 층·호실 매매<\/dd>/);
   for (const value of [{...unit, tradeType: "lease"}, {...unit, saleCategory: "land"}, null]) {
     assert.equal(ui.buildingSaleScopeLabel(value), "");
     assert.equal(ui.buildingSaleInfoHtml(value), "");
@@ -143,5 +143,45 @@ test("legacy direct details do not mask compatible read evidence or alter financ
   master.unifiedOriginalsV8[0].link = master.sourceLink;
   assert.equal(ui.buildingSaleScopeLabel(master), "건물 전체 매매");
   master.saleSummary = {saleExtent: "unit", totalFloors: 5};
-  assert.equal(ui.buildingSaleScopeLabel(master), "일부 매매(층·호실)");
+  assert.equal(ui.buildingSaleScopeLabel(master), "특정 층·호실 매매");
+});
+
+test("provider target floor and room replace stale display values without rewriting identity", () => {
+  for (const [details, expected] of [
+    [{saleTargetFloor: "4", saleTargetRoom: "402호", totalFloors: 12}, "해당 4층 · 402호 / 총 12층"],
+    [{saleTargetFloor: "B1", saleTargetRoom: "B101호", totalFloors: 5}, "해당 지하 1층 · B101호 / 총 5층"],
+    [{saleTargetFloor: "고", totalFloors: 30}, "해당 고층 / 총 30층"],
+    [{saleTargetFloor: "1~2층", totalFloors: 5}, "1~2층 / 총 5층"],
+    [{saleTargetRoom: "301호", totalFloors: 5}, "301호 / 총 5층"],
+    [{saleTargetFloor: "비공개", totalFloors: 25}, "해당층 비공개 / 총 25층"],
+    [{saleTargetFloor: "비공개", saleTargetRoom: "A호"}, "해당층 비공개 · A호"]
+  ]) {
+    const value = item({saleExtent: "unit", ...details}, {room: "지하2층"});
+    const before = JSON.stringify(value);
+    assert.equal(ui.buildingFloorLabel(value), expected);
+    assert.equal(JSON.stringify(value), before);
+    assert.match(ui.saleDetailsHtml(value), /특정 층·호실 매매/);
+  }
+  const evidence = item({saleExtent: "unit", saleTargetFloor: "3", saleExtentEvidence: '원본: <전체 아님> "일부"'});
+  assert.match(ui.saleDetailsHtml(evidence), /구분 근거/);
+  assert.match(ui.buildingSaleInfoHtml(evidence), /&lt;전체 아님&gt; &quot;일부&quot;/);
+  assert.doesNotMatch(ui.saleDetailsHtml(evidence), /<전체 아님>/);
+});
+
+test("conflicting original unit targets cannot revive an old master floor", () => {
+  const master = item({}, {saleDetails: undefined, room: "7층"});
+  master.unifiedOriginalsV8 = [item({saleExtent: "unit", saleTargetFloor: "3"}),
+    item({saleExtent: "unit", saleTargetFloor: "4"})];
+  assert.equal(ui.buildingSaleScopeLabel(master), "특정 층·호실 매매");
+  assert.equal(ui.buildingFloorLabel(master), "층수 미확인");
+  assert.equal(master.room, "7층");
+});
+
+test("unknown extent can quote a supplied original floor without interpreting it as the sale scope", () => {
+  const value = item({saleExtent: "unknown", saleSourceFloorText: "4층 / 총 4층"}, {room: "전체"});
+  assert.equal(ui.buildingSaleScopeLabel(value), "매매 범위 미확인");
+  assert.equal(ui.buildingFloorLabel(value), "원본 층 표기: 4층 / 총 4층");
+  assert.match(ui.buildingSaleInfoHtml(value), /원본 층 표기: 4층 \/ 총 4층/);
+  assert.doesNotMatch(ui.buildingSaleInfoHtml(value), /건물 전체 매매|특정 층·호실 매매/);
+  assert.equal(value.room, "전체");
 });

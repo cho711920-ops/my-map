@@ -1,3 +1,6 @@
+import { canonicalNaverSaleType, NAVER_UNIT_TYPES, saleFloorTarget } from "./sale-target-evidence.js";
+import { NAVER_PROPERTY_TYPES } from "./naver-property-types.js";
+
 const clean = value => String(value ?? "").trim();
 
 function floorCount(value, minimum = 1) {
@@ -29,12 +32,18 @@ export function withNaverSaleFloorDisplay(original, provider = {}) {
     if (value != null && floorCount(detail[key], key === "belowGroundFloors" ? 0 : 1) == null) detail[key] = value;
   }
   const target = clean(floors.targetFloor);
-  const type = clean(provider.propertyType).toUpperCase();
+  const type = canonicalNaverSaleType(provider.propertyType);
   // Known house/building codes plus an explicitly absent unit target and a
   // ground count establish a building range. Unknown provider enums do not.
-  if (["C03", "C04", "C06", "D03", "D04", "D05"].includes(type) && target === "-" && aboveGroundFloors != null) {
+  const residence = clean(floors.residenceType);
+  if (NAVER_PROPERTY_TYPES[type] && type !== "E03" && residence === "1") {
+    detail.floorScope = "unit";
+  } else if (NAVER_PROPERTY_TYPES[type] && type !== "E03" && residence === "2") {
+    delete detail.floorScope;
+    if (!NAVER_UNIT_TYPES.has(type) && !saleFloorTarget(target)) detail.floorScope = "whole_building";
+  } else if (["C03", "C04", "C06", "D03", "D04", "D05"].includes(type) && target === "-" && aboveGroundFloors != null) {
     detail.floorScope = "whole_building";
-  } else if (/^(?:-?[1-9]\d*|B[1-9]\d*)$/i.test(target)) {
+  } else if (saleFloorTarget(target)) {
     detail.floorScope = "unit";
   }
   return { ...original, saleDetails: detail };

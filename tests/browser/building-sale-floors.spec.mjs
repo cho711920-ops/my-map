@@ -1,4 +1,5 @@
 import {test, expect} from "@playwright/test";
+import {withSaleExtentDisplay, saleExtentProvider} from "../../cloudflare/src/sale-extent-display.js";
 
 test.beforeEach(async ({page, context}) => {
   await context.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
@@ -62,7 +63,7 @@ test("missing basement and unit sales are never rendered as an invented full-bui
     window.applyFilter();
   });
   await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당 3층 / 총 10층");
-  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("일부 매매(층·호실)");
+  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
 });
 
 test("legacy default scope is visibly unconfirmed rather than incorrectly advertising a full building", async ({page, isMobile}, testInfo) => {
@@ -84,15 +85,15 @@ test("a particular floor or room sale is distinguished from selling that entire 
   await configure(page, {room: "3/10층", saleCategory: "officetel", saleDetails: {scope: "unit", saleExtent: "unit", totalFloors: 10}});
   await buildingList(page, isMobile);
   const scope = page.locator("#list .building-sale-scope-v1");
-  await expect(scope).toHaveText("일부 매매(층·호실)");
+  await expect(scope).toHaveText("특정 층·호실 매매");
   await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당 3층 / 총 10층");
   expect(await scope.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   await page.screenshot({path: testInfo.outputPath("building-scope-unit.png")});
   await page.locator("#list .item-building-name").click();
   const drawer = page.locator("#unifiedDetailDrawerV8");
-  await expect(drawer.locator(".building-sale-scope-v1")).toHaveText("일부 매매(층·호실)");
-  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("일부 매매(층·호실)");
-  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("일부 매매(층·호실)");
+  await expect(drawer.locator(".building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
+  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("특정 층·호실 매매");
+  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("특정 층·호실 매매");
   await expect(drawer).not.toContainText("3층 전체 매매");
 });
 
@@ -118,4 +119,86 @@ test("lease floors remain unchanged and land uses a land-use badge", async ({pag
   await expect(page.locator("#list .item-room-badge.land-use-badge-v1")).toHaveText("지목 미확인");
   await expect(page.locator("#list .building-sale-floor-v1")).toHaveCount(0);
   await expect(page.locator("#list .building-sale-info-v1")).toHaveCount(0);
+});
+
+test("Naver explicit residence type recovers a whole factory sale from its original", async ({page, isMobile}, testInfo) => {
+  const raw = {realEstateTypeCode: "E02", saleRaw: {detailInfo: {spaceInfo: {floorInfo: {
+    residenceType: "2", floorType: "00", targetFloor: "-", groundTotalFloor: "2", undergroundTotalFloor: "0"
+  }}}}};
+  const scenario = withSaleExtentDisplay({source: "네이버", tradeType: "sale", saleCategory: "factory_warehouse",
+    room: "지하1층", saleDetails: {scope: "unit"}}, saleExtentProvider(raw, "네이버"));
+  await configure(page, scenario);
+  await buildingList(page, isMobile);
+  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("건물 전체 매매");
+  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("지상 1층 ~ 지상 2층");
+  await page.screenshot({path: testInfo.outputPath("recovered-whole-building.png")});
+  await page.locator("#list .item-building-name").click();
+  const detail = page.locator("#unifiedDetailDrawerV8 .listing-sale-details-v1");
+  await expect(detail).toContainText("건물 전체 매매");
+  await expect(detail).toContainText("구분 근거");
+  await expect(detail).toContainText(scenario.saleDetails.saleExtentEvidence);
+});
+
+test("explicit original targets replace stale floor labels while preserving stored room and favorites identity", async ({page, isMobile}, testInfo) => {
+  const scenario = withSaleExtentDisplay({source: "공실박스", tradeType: "sale", saleCategory: "apartment",
+    room: "1층", saleDetails: {scope: "unit", totalFloors: 12}},
+  saleExtentProvider({list: {TypeView: "APT", Ho: "402", Ff: 4}}, "공실박스"));
+  await configure(page, scenario);
+  await buildingList(page, isMobile);
+  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
+  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당 4층 · 402호 / 총 12층");
+  await page.screenshot({path: testInfo.outputPath("recovered-specific-unit.png")});
+  await page.locator("#list .item-building-name").click();
+  const drawer = page.locator("#unifiedDetailDrawerV8");
+  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("해당 4층 · 402호 / 총 12층");
+  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("해당 4층 · 402호 / 총 12층");
+  expect(await page.evaluate(() => {
+    const item = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");
+    return JSON.stringify({room: item.room, key: item.key, propertyId: item.propertyId, salePrice: item.salePrice}) === JSON.stringify(window.__floorIdentity);
+  })).toBe(true);
+});
+
+test("a private original floor still identifies a unit without revealing a legacy stale floor", async ({page, isMobile}) => {
+  const raw = {realEstateTypeCode: "A02", saleRaw: {detailInfo: {spaceInfo: {floorInfo: {
+    residenceType: "1", floorType: "30", targetFloor: "-", totalFloor: "25"
+  }}}}};
+  const scenario = withSaleExtentDisplay({source: "네이버", tradeType: "sale", saleCategory: "officetel",
+    room: "7층", saleDetails: {scope: "unit"}}, saleExtentProvider(raw, "네이버"));
+  await configure(page, scenario);
+  await buildingList(page, isMobile);
+  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("특정 층·호실 매매");
+  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("해당층 비공개 / 총 25층");
+  await page.locator("#list .item-building-name").click();
+  const drawer = page.locator("#unifiedDetailDrawerV8");
+  await expect(drawer.locator(".building-sale-floor-v1")).toHaveText("해당층 비공개 / 총 25층");
+  await expect(drawer.locator(".listing-sale-details-v1")).not.toContainText("7층");
+});
+
+test("advertised multifamily composition recovers the whole sale even when the provider defaults to false", async ({page, isMobile}) => {
+  const raw = {salesTypeV3: {type: "TWO_ROOM"}, isEntireBuilding: false, content:
+    "중개대상물 종류 - 다가구주택\n세대수 - 15세대\n대지면적 - 약 67평 (223.5㎡)\n연면적 - 약 134평 (444.34㎡)\n총층수 - 5층\n원룸, 1.5룸, 투룸 구성"};
+  const scenario = withSaleExtentDisplay({source: "당근", tradeType: "sale", saleCategory: "other", room: "층수미확인",
+    saleDetails: {scope: "unit", descriptionText: raw.content}}, saleExtentProvider(raw, "당근"));
+  await configure(page, scenario);
+  await buildingList(page, isMobile);
+  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("건물 전체 매매");
+  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("총 5층");
+  await page.locator("#list .item-building-name").click();
+  const drawer = page.locator("#unifiedDetailDrawerV8");
+  await expect(drawer.locator(".listing-sale-details-v1")).toContainText("구분 근거");
+  await expect(drawer.locator(".building-sale-floor-v1")).toHaveText("총 5층");
+});
+
+test("a source with no description quotes its floor but does not invent a whole building from room counts", async ({page, isMobile}, testInfo) => {
+  const raw = {salesTypeV3: {type: "HOUSE"}, isEntireBuilding: false, floor: "4.0", topFloor: 4,
+    roomCnt: 18, bathroomCnt: 17, content: ""};
+  const scenario = withSaleExtentDisplay({source: "당근", tradeType: "sale", saleCategory: "house", room: "4층",
+    saleDetails: {scope: "unit", totalFloors: 4}}, saleExtentProvider(raw, "당근"));
+  await configure(page, scenario);
+  await buildingList(page, isMobile);
+  await expect(page.locator("#list .building-sale-scope-v1")).toHaveText("매매 범위 미확인");
+  await expect(page.locator("#list .building-sale-floor-v1")).toHaveText("원본 층 표기: 4층 / 총 4층");
+  await page.screenshot({path: testInfo.outputPath("unconfirmed-original-floor.png")});
+  await page.locator("#list .item-building-name").click();
+  await expect(page.locator("#unifiedDetailDrawerV8 .building-sale-floor-v1")).toHaveText("원본 층 표기: 4층 / 총 4층");
 });

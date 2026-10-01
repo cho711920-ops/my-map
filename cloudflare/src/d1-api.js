@@ -358,6 +358,12 @@ export function compactSaleSummary(original) {
     summary.saleExtent = ["whole_building", "unit"].includes(detail.saleExtent) ? detail.saleExtent : "unknown";
     summary.saleExtentEvidence = typeof detail.saleExtentEvidence === "string"
       ? detail.saleExtentEvidence.trim().slice(0, 100) : "원본 매매범위 근거 부족";
+    if (typeof detail.saleSourceFloorText === "string" && detail.saleSourceFloorText.trim()) summary.saleSourceFloorText = detail.saleSourceFloorText.trim().slice(0, 60);
+    if (summary.saleExtent === "unit") {
+      for (const key of ["saleTargetFloor", "saleTargetRoom"]) {
+        if (typeof detail[key] === "string" && detail[key].trim()) summary[key] = detail[key].trim().slice(0, 60);
+      }
+    }
     if (["whole_building", "unit"].includes(detail.floorScope)) summary.floorScope = detail.floorScope;
     // A confirmed zero basement count means no basement; absent data does not.
     for (const key of ["aboveGroundFloors", "belowGroundFloors", "totalFloors"]) {
@@ -370,22 +376,43 @@ export function compactSaleSummary(original) {
   return summary;
 }
 
+// These paths are fixed provider schema fields, never user-supplied SQL.
+// Match JavaScript String.trim(), including tabs/newlines and Unicode spaces.
+const SQL_TRIM_SPACES = "char(9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279)";
+
+function sourceJsonScalar(...paths) {
+  const values = paths.map(path => `CASE WHEN json_type(raw_json, '$.${path}') IN ('text','integer','real')
+    THEN NULLIF(trim(json_extract(raw_json, '$.${path}'), ${SQL_TRIM_SPACES}), '') END`);
+  return values.length === 1 ? values[0] : `COALESCE(${values.join(", ")})`;
+}
+
+function gongsilJsonScalar(...names) {
+  return `CASE WHEN json_type(raw_json, '$.list')='object' THEN ${sourceJsonScalar(...names.map(name => `list.${name}`))}
+    ELSE ${sourceJsonScalar(...names)} END`;
+}
+
 async function unifiedListings(env) {
   const rows = await allRowidPages(
     env,
     `listing_id, source, list_snapshot_json,
       json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json,
-      json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo') AS naver_floor_info_json,
-      COALESCE(NULLIF(json_extract(raw_json, '$.realEstateTypeCode'), ''), json_extract(raw_json, '$.category')) AS naver_property_type,
+      COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) AS naver_floor_info_json,
+      ${sourceJsonScalar("realEstateTypeCode", "category")} AS naver_property_type,
+      CASE WHEN source='네이버' AND length(json_extract(raw_json, '$.roomInfo'))<=60 THEN json_extract(raw_json, '$.roomInfo') END AS naver_sale_room,
       CASE WHEN source='공실박스' THEN json_object(
-        'typeView', COALESCE(NULLIF(json_extract(raw_json, '$.list.TypeView'), ''), json_extract(raw_json, '$.list.ViewType'), json_extract(raw_json, '$.list.LndType'), json_extract(raw_json, '$.list.BuildingType')),
-        'ho', COALESCE(json_extract(raw_json, '$.list.Ho'), json_extract(raw_json, '$.list.BfHo'), json_extract(raw_json, '$.list.Room'), json_extract(raw_json, '$.list.Honame')),
-        'floor', COALESCE(json_extract(raw_json, '$.list.Ff'), json_extract(raw_json, '$.list.BfFloor'), json_extract(raw_json, '$.list.Floor'), json_extract(raw_json, '$.list.floor'))
+        'typeView', ${gongsilJsonScalar("TypeView", "ViewType", "LndType", "BuildingType")},
+        'ho', ${gongsilJsonScalar("Ho", "BfHo", "Room", "Honame")},
+        'floor', ${gongsilJsonScalar("Ff", "BfFloor", "Floor", "floor")}
       ) END AS gongsil_sale_extent_json,
-      CASE WHEN source='당근' THEN json_object(
+      CASE WHEN source='당근' AND json_extract(list_snapshot_json, '$.tradeType')='sale' THEN json_object(
         'entireBuildingType', json_type(raw_json, '$.isEntireBuilding'),
-        'salesType', COALESCE(NULLIF(json_extract(raw_json, '$.salesTypeV3.type'), ''), json_extract(raw_json, '$.salesTypeV3.__typename')),
-        'floor', CASE WHEN json_extract(raw_json, '$.isAmbiguousFloor')=1 THEN NULL ELSE json_extract(raw_json, '$.floor') END
+        'salesType', ${sourceJsonScalar("salesTypeV3.type", "salesTypeV3.__typename")},
+        'floor', CASE WHEN json_type(raw_json, '$.isAmbiguousFloor')<>'true' OR json_type(raw_json, '$.isAmbiguousFloor') IS NULL
+          THEN CASE WHEN json_type(raw_json, '$.floor') IN ('text','integer','real') THEN json_extract(raw_json, '$.floor') END END,
+        'topFloor', CASE WHEN json_type(raw_json, '$.topFloor') IN ('text','integer','real') THEN json_extract(raw_json, '$.topFloor') END,
+        'tagline', CASE WHEN json_type(raw_json, '$.addressInfo')='text' THEN substr(json_extract(raw_json, '$.addressInfo'), 1, 500) ELSE '' END,
+        'description', CASE WHEN trim(COALESCE(json_extract(list_snapshot_json, '$.saleDetails.descriptionText'), ''), ${SQL_TRIM_SPACES})=''
+          AND json_type(raw_json, '$.content')='text' THEN substr(json_extract(raw_json, '$.content'), 1, 12000) ELSE '' END
       ) END AS daangn_sale_extent_json,
       CASE WHEN source='당근' THEN json_extract(raw_json, '$.landType') END AS daangn_land_type`,
     "listing_sources",
@@ -414,6 +441,7 @@ async function unifiedListings(env) {
       source: row.source,
       floorInfo: parseJson(row.naver_floor_info_json, null),
       propertyType: row.naver_property_type,
+      room: row.naver_sale_room,
       gongsil: parseJson(row.gongsil_sale_extent_json, {}),
       daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
     });
