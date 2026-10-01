@@ -770,6 +770,9 @@
     var floorLabel = global.JSListingTradeV1 && global.JSListingTradeV1.buildingFloorLabel
       ? global.JSListingTradeV1.buildingFloorLabel(selected) : "";
     var facts = [['구분', typeLabel || '미확인'], ['층·호실', floorLabel || selected.room || '미확인']];
+    var saleScopeLabel = global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleScopeLabel
+      ? global.JSListingTradeV1.buildingSaleScopeLabel(selected) : "";
+    if (saleScopeLabel) facts.splice(1, 0, ['매매 범위', saleScopeLabel]);
     if (!sale) facts = facts.concat([
       ['면적', selected.area == null || selected.area === '' ? '미확인' : number(selected.area) + '평'],
       ['관리비', selected.fee == null || selected.fee === '' ? '미확인' : number(selected.fee) + '만원'],
@@ -833,6 +836,7 @@
             'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
         '</div><strong>' + esc(selected.address) + ' ' + esc(buildingFloorLabel || selected.room) + '</strong></div>' +
+        (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleInfoHtml ? global.JSListingTradeV1.buildingSaleInfoHtml(selected) : '') +
         (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
         (!phoneDetail && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +

@@ -4,6 +4,7 @@ import { compactSaleSummary, handleD1GetAction } from "../cloudflare/src/d1-api.
 import { withNaverSaleFloorDisplay } from "../cloudflare/src/sale-floor-display.js";
 
 const floorKeys = ["aboveGroundFloors", "belowGroundFloors", "totalFloors"];
+const unknownExtent = { saleExtent: "unknown", saleExtentEvidence: "원본 매매범위 근거 부족" };
 const building = (floors = {}) => ({
   source: "네이버", tradeType: "sale", saleCategory: "building", salePrice: 120000,
   room: "전체", saleDetails: { scope: "whole_building", ...floors }
@@ -13,12 +14,12 @@ test("compact sale floors retain source scope and explicit no-basement evidence"
   const item = building({ aboveGroundFloors: "5", belowGroundFloors: 0, totalFloors: 5 });
   const before = structuredClone(item);
   assert.deepEqual(compactSaleSummary(item), {
-    scope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 0, totalFloors: 5
+    ...unknownExtent, scope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 0, totalFloors: 5
   });
   assert.deepEqual(item, before);
   assert.deepEqual(compactSaleSummary({ ...item, saleCategory: "commercial", room: "3층",
     saleDetails: { ...item.saleDetails, scope: "unit", belowGroundFloors: 1 } }), {
-    scope: "unit", aboveGroundFloors: 5, belowGroundFloors: 1, totalFloors: 5
+    ...unknownExtent, scope: "unit", aboveGroundFloors: 5, belowGroundFloors: 1, totalFloors: 5
   });
 });
 
@@ -28,9 +29,9 @@ test("missing, fractional and invalid floors never become zero or a floor range"
     for (const key of floorKeys) assert.ok(!(key in summary), `${key}: ${String(value)}`);
   }
   assert.deepEqual(compactSaleSummary(building({ aboveGroundFloors: 0, belowGroundFloors: "0", totalFloors: 0 })), {
-    scope: "whole_building", belowGroundFloors: 0
+    ...unknownExtent, scope: "whole_building", belowGroundFloors: 0
   });
-  assert.deepEqual(compactSaleSummary(building({ totalFloors: 4 })), { scope: "whole_building", totalFloors: 4 });
+  assert.deepEqual(compactSaleSummary(building({ totalFloors: 4 })), { ...unknownExtent, scope: "whole_building", totalFloors: 4 });
 });
 
 test("land and lease listings do not acquire building floor summaries", () => {
@@ -54,7 +55,7 @@ test("initial unified list carries validated saved floor data without individual
   const result = await handleD1GetAction(env, {}, { action: "unifiedListings" });
   const row = result.groups["M-floor"][0];
   assert.deepEqual(row[result.fields.indexOf("saleSummary")], {
-    scope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 0, totalFloors: 5
+    ...unknownExtent, scope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 0, totalFloors: 5
   });
   assert.ok(!result.fields.includes("saleDetails"));
   assert.equal(row[result.fields.indexOf("room")], "전체");
@@ -75,7 +76,7 @@ test("legacy Naver building ranges are read-only display evidence, not changes t
     const result = withNaverSaleFloorDisplay(legacyNaver, { propertyType, floorInfo: providerFloors });
     assert.deepEqual(result, { ...legacyNaver, saleDetails: { ...legacyNaver.saleDetails,
       floorScope: "whole_building", aboveGroundFloors: 3, belowGroundFloors: 1 } });
-    assert.deepEqual(compactSaleSummary(result), { scope: "unit", grossAreaM2: 160,
+    assert.deepEqual(compactSaleSummary(result), { ...unknownExtent, scope: "unit", grossAreaM2: 160,
       totalDeposit: 2000, monthlyIncome: 100, floorScope: "whole_building", aboveGroundFloors: 3, belowGroundFloors: 1 });
   }
   assert.deepEqual(legacyNaver, before);

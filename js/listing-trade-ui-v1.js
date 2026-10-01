@@ -216,11 +216,52 @@
     }) ? first : {};
   }
 
+  // Stored scope has provider/quick-add defaults. Only the read adapter's
+  // evidence-backed saleExtent says what is actually being sold.
+  function buildingSaleSummary(item, keys) {
+    if (!isSale(item)) return {};
+    var detail = item.saleDetails || item.saleSummary || {};
+    if (detail.saleExtent || !item) return detail;
+    if (item.saleSummary && item.saleSummary.saleExtent) return item.saleSummary;
+    if (!item.unifiedOriginalsV8) return detail;
+    // A legacy master snapshot can lack the new read-only evidence. Prefer
+    // a compatible representative source, using the usual price/source guard.
+    // An explicit representative link must match; another ad is not evidence.
+    var originals = item.unifiedOriginalsV8;
+    if (clean(item.sourceLink)) originals = originals.filter(function(original) { return clean(original.link) === clean(item.sourceLink); });
+    var original = saleSummary(Object.assign({}, item, {saleDetails: null, saleSummary: null, unifiedOriginalsV8: originals}), keys);
+    // A disagreement between fresh originals must not revive stale master floors.
+    return original;
+  }
+  function buildingSaleExtent(item) {
+    if (!isSale(item) || normalizedSaleCategory(item) === "land") return "";
+    var detail = buildingSaleSummary(item, ["saleExtent"]);
+    if (detail.scope === "land") return "";
+    return /^(whole_building|unit)$/.test(detail.saleExtent) ? detail.saleExtent : "unknown";
+  }
+  function buildingSaleScopeLabel(item) {
+    return {whole_building: "건물 전체 매매", unit: "일부 매매(층·호실)", unknown: "매매 범위 미확인"}[buildingSaleExtent(item)] || "";
+  }
+  function buildingSaleInfoHtml(item) {
+    var extent = buildingSaleExtent(item);
+    if (!extent) return "";
+    var help = {
+      whole_building: "원본에서 건물 전체 매매로 확인된 매물입니다.",
+      unit: "건물 전체가 아닌 특정 층·호실 매물입니다. 표시된 층 전체를 판다는 뜻은 아닙니다.",
+      unknown: "전체 또는 일부 매매인지 원본 정보만으로 확인되지 않았습니다. 원본 또는 중개사에게 확인하세요."
+    }[extent];
+    return '<div class="building-sale-info-v1"><span class="building-sale-scope-v1 ' + extent +
+      '" title="' + escapeHtml(help) + '">' + buildingSaleScopeLabel(item) + '</span>' +
+      (extent === "unknown" ? '' : '<span class="building-sale-floor-v1">' + escapeHtml(buildingFloorLabel(item)) + '</span>') + '</div>';
+  }
+
   // Display only: room is also part of legacy favorite/visit identity.
   function buildingFloorLabel(item) {
     if (!isSale(item) || normalizedSaleCategory(item) === "land") return "";
-    var detail = saleSummary(item, ["scope", "floorScope", "aboveGroundFloors", "belowGroundFloors", "totalFloors"]);
+    var detail = buildingSaleSummary(item, ["saleExtent", "aboveGroundFloors", "belowGroundFloors", "totalFloors"]);
     if (detail.scope === "land") return "";
+    var extent = buildingSaleExtent(item);
+    if (extent === "unknown") return "매매 대상 층·호실 미확인";
     function count(value, allowZero) {
       if (typeof value !== "number" && typeof value !== "string") return null;
       var parsed = nonnegative(value);
@@ -231,8 +272,7 @@
     var total = count(detail.totalFloors, false);
     var room = clean(item.room);
     var compact = room.replace(/\s+/g, "");
-    var scope = detail.floorScope || detail.scope;
-    var whole = scope === "whole_building" || !scope && /^(전체|건물전체|전체건물|통건물)$/.test(compact);
+    var whole = extent === "whole_building";
     if (whole) {
       if (above != null && below != null) {
         if (below === 0 && above === 1) return "지상 1층";
@@ -328,8 +368,7 @@
       add(label, Number(value).toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + "㎡ (" +
         (Number(value) / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "평)");
     }
-    var displayScope = normalizedSaleCategory(item) === "land" || detail.scope === "land" ? detail.scope : detail.floorScope || detail.scope;
-    add("매매 범위", { land: "토지", whole_building: "건물 전체", unit: "개별 공간" }[displayScope]);
+    add("매매 범위", normalizedSaleCategory(item) === "land" || detail.scope === "land" ? "토지" : buildingSaleScopeLabel(item));
     area("대지면적", detail.landAreaM2);
     area("연면적", detail.grossAreaM2);
     area("건축면적", detail.buildingAreaM2);
@@ -397,6 +436,9 @@
     saleDetailsHtml: saleDetailsHtml,
     saleSummary: saleSummary,
     buildingFloorLabel: buildingFloorLabel,
+    buildingSaleExtent: buildingSaleExtent,
+    buildingSaleScopeLabel: buildingSaleScopeLabel,
+    buildingSaleInfoHtml: buildingSaleInfoHtml,
     saleYield: saleYield,
     saleYieldBadge: saleYieldBadge,
     saleAreaHtml: saleAreaHtml,

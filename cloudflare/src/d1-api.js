@@ -11,7 +11,7 @@ import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-
 import { saveSaleWorksheet } from "./sale-worksheet.js";
 import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
-import { withNaverSaleFloorDisplay } from "./sale-floor-display.js";
+import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -354,6 +354,9 @@ export function compactSaleSummary(original) {
       if (value) summary[key] = value;
     }
   } else {
+    summary.saleExtent = ["whole_building", "unit"].includes(detail.saleExtent) ? detail.saleExtent : "unknown";
+    summary.saleExtentEvidence = typeof detail.saleExtentEvidence === "string"
+      ? detail.saleExtentEvidence.trim().slice(0, 100) : "원본 매매범위 근거 부족";
     if (["whole_building", "unit"].includes(detail.floorScope)) summary.floorScope = detail.floorScope;
     // A confirmed zero basement count means no basement; absent data does not.
     for (const key of ["aboveGroundFloors", "belowGroundFloors", "totalFloors"]) {
@@ -372,7 +375,17 @@ async function unifiedListings(env) {
     `listing_id, source, list_snapshot_json,
       json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json,
       json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo') AS naver_floor_info_json,
-      COALESCE(NULLIF(json_extract(raw_json, '$.realEstateTypeCode'), ''), json_extract(raw_json, '$.category')) AS naver_property_type`,
+      COALESCE(NULLIF(json_extract(raw_json, '$.realEstateTypeCode'), ''), json_extract(raw_json, '$.category')) AS naver_property_type,
+      CASE WHEN source='공실박스' THEN json_object(
+        'typeView', COALESCE(NULLIF(json_extract(raw_json, '$.list.TypeView'), ''), json_extract(raw_json, '$.list.ViewType'), json_extract(raw_json, '$.list.LndType'), json_extract(raw_json, '$.list.BuildingType')),
+        'ho', COALESCE(json_extract(raw_json, '$.list.Ho'), json_extract(raw_json, '$.list.BfHo'), json_extract(raw_json, '$.list.Room'), json_extract(raw_json, '$.list.Honame')),
+        'floor', COALESCE(json_extract(raw_json, '$.list.Ff'), json_extract(raw_json, '$.list.BfFloor'), json_extract(raw_json, '$.list.Floor'), json_extract(raw_json, '$.list.floor'))
+      ) END AS gongsil_sale_extent_json,
+      CASE WHEN source='당근' THEN json_object(
+        'entireBuildingType', json_type(raw_json, '$.isEntireBuilding'),
+        'salesType', COALESCE(NULLIF(json_extract(raw_json, '$.salesTypeV3.type'), ''), json_extract(raw_json, '$.salesTypeV3.__typename')),
+        'floor', CASE WHEN json_extract(raw_json, '$.isAmbiguousFloor')=1 THEN NULL ELSE json_extract(raw_json, '$.floor') END
+      ) END AS daangn_sale_extent_json`,
     "listing_sources",
     `active = 1
       AND NOT EXISTS (
@@ -394,10 +407,13 @@ async function unifiedListings(env) {
   const groups = {};
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
-    const original = withNaverSaleFloorDisplay(parseJson(row.list_snapshot_json, {}), {
+    const daangn = parseJson(row.daangn_sale_extent_json, {});
+    const original = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
       source: row.source,
       floorInfo: parseJson(row.naver_floor_info_json, null),
-      propertyType: row.naver_property_type
+      propertyType: row.naver_property_type,
+      gongsil: parseJson(row.gongsil_sale_extent_json, {}),
+      daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
     });
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
@@ -465,7 +481,7 @@ export function masterFallbackOriginal(row, images = []) {
   const id = clean(row?.id || row?.property_id);
   const contacts = parseJson(row?.contacts_json, []);
   const uniqueImages = [...new Set((Array.isArray(images) ? images : []).map(clean).filter(Boolean))];
-  return {
+  const original = {
     originalId: `master:${id}`,
     source: clean(row?.main_source) || "직접등록",
     link: clean(row?.source_url),
@@ -495,6 +511,9 @@ export function masterFallbackOriginal(row, images = []) {
     sourceUnavailable: Number(row?.source_count || 0) > 0 && Number(row?.active_source_count || 0) === 0,
     missingCount: Math.max(0, Number(row?.missing_count) || 0)
   };
+  const displayed = withSaleExtentDisplay(original);
+  if (displayed.tradeType === "sale") displayed.saleSummary = compactSaleSummary(displayed);
+  return displayed;
 }
 
 async function unifiedDetail(env, propertyId) {
@@ -529,11 +548,7 @@ async function unifiedDetail(env, propertyId) {
     snapshot.photoCount = isGongsil
       ? images.length
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
-    return withNaverSaleFloorDisplay(snapshot, {
-      source: row.source,
-      floorInfo: raw.saleRaw?.detailInfo?.spaceInfo?.floorInfo,
-      propertyType: raw.realEstateTypeCode || raw.category
-    });
+    return withSaleExtentDisplay(snapshot, saleExtentProvider(raw, row.source));
   });
   if (!originals.length) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,

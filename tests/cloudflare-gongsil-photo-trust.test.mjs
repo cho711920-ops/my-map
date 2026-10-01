@@ -41,8 +41,8 @@ test("unified list and detail responses sanitize legacy Gongsilbox media", () =>
   assert.match(d1, /json_extract\(raw_json, '\$\.list\.Photos'\) AS gongsil_photos_json/);
   assert.match(d1, /clean\(original\.source\) === "공실박스"/);
   assert.match(d1, /const isGongsil = clean\(row\.source \|\| snapshot\.source\) === "공실박스"/);
-  assert.match(worker, /unified-listings-v6-sale-floor-summary\.json/);
-  assert.match(worker, /unified-detail-v6-sale-floor-display/);
+  assert.match(worker, /unified-listings-v7-sale-extent\.json/);
+  assert.match(worker, /unified-detail-v7-sale-extent/);
   assert.match(d1, /const snapshot = \{\s*\.\.\.raw,\s*\.\.\.parseJson\(row\.list_snapshot_json, \{\}\)\s*\}/);
 });
 
