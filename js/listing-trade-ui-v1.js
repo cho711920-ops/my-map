@@ -194,7 +194,7 @@
     if (/당근|daangn|danggeun|karrot/.test(name)) return "daangn";
     return name;
   }
-  function saleSummary(item) {
+  function saleSummary(item, comparisonKeys) {
     if (!isSale(item)) return {};
     if (item.saleDetails || item.saleSummary) return item.saleDetails || item.saleSummary;
     // Never combine a representative's price with another source's income.
@@ -209,11 +209,55 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield", "landUse", "zoning"];
+    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield", "landUse", "zoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
     }) ? first : {};
+  }
+
+  // Display only: room is also part of legacy favorite/visit identity.
+  function buildingFloorLabel(item) {
+    if (!isSale(item) || normalizedSaleCategory(item) === "land") return "";
+    var detail = saleSummary(item, ["scope", "floorScope", "aboveGroundFloors", "belowGroundFloors", "totalFloors"]);
+    if (detail.scope === "land") return "";
+    function count(value, allowZero) {
+      if (typeof value !== "number" && typeof value !== "string") return null;
+      var parsed = nonnegative(value);
+      return parsed != null && Number.isInteger(parsed) && (allowZero ? parsed >= 0 : parsed > 0) ? parsed : null;
+    }
+    var above = count(detail.aboveGroundFloors, false);
+    var below = count(detail.belowGroundFloors, true);
+    var total = count(detail.totalFloors, false);
+    var room = clean(item.room);
+    var compact = room.replace(/\s+/g, "");
+    var scope = detail.floorScope || detail.scope;
+    var whole = scope === "whole_building" || !scope && /^(전체|건물전체|전체건물|통건물)$/.test(compact);
+    if (whole) {
+      if (above != null && below != null) {
+        if (below === 0 && above === 1) return "지상 1층";
+        return (below > 0 ? "지하 " + below + "층" : "지상 1층") + " ~ 지상 " + above + "층";
+      }
+      if (above != null) return "지상 " + above + "층 · 지하 미확인";
+      if (total != null) return "총 " + total + "층" + (below == null ? "" : below > 0 ? " · 지하 " + below + "층" : " · 지하 없음");
+      if (below != null) return (below > 0 ? "지하 " + below + "층" : "지하 없음") + " · 지상 미확인";
+      return "층수 미확인";
+    }
+    // A provider's 3/10 is current/total, never a lowest/highest range.
+    var pair = compact.match(/^((?:지하|지상|B)?-?\d+(?:\.0+)?(?:층|F)?|저층?|중층?|고층?)[/／](\d+(?:\.0+)?)(?:층|F)?$/i);
+    var current = pair ? pair[1] : compact;
+    if (pair) total = count(pair[2], false) || total;
+    if (total == null) total = above;
+    var floor = null;
+    var basement = current.match(/^(?:지하|B|-)\s*(\d+(?:\.0+)?)(?:층|F)?$/i);
+    var ground = current.match(/^(?:지상)?(\d+(?:\.0+)?)(?:층|F)$/i) || (pair ? current.match(/^(\d+(?:\.0+)?)$/) : null);
+    if (basement && Number(basement[1]) > 0) floor = "지하 " + Number(basement[1]) + "층";
+    else if (ground && Number(ground[1]) > 0) floor = Number(ground[1]) + "층";
+    else if (/^(저|중|고)층?$/.test(current)) floor = current.charAt(0) + "층";
+    if (floor) return "해당 " + floor + (total != null ? " / 총 " + total + "층" : "");
+    if (/^(?:지상|지하|B|-)?0(?:\.0+)?(?:층|F)?$/i.test(current) || /^(?:-|미확인|층수미확인|호실-)$/i.test(compact)) room = "";
+    // Keep explicit room identifiers such as 301호; do not turn them into floors.
+    return (room || (total != null ? "해당층 미확인" : "층수 미확인")) + (total != null ? " / 총 " + total + "층" : "");
   }
   var yieldExplanation = "연 임대수입 ÷ (매매가 − 임대보증금) × 100. 보증금 차감 기준 단순 연 수익률이며 대출이자·취득비용·세금·공실·운영비는 미반영입니다.";
   function saleYield(item) {
@@ -284,7 +328,8 @@
       add(label, Number(value).toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + "㎡ (" +
         (Number(value) / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "평)");
     }
-    add("매매 범위", { land: "토지", whole_building: "건물 전체", unit: "개별 공간" }[detail.scope]);
+    var displayScope = normalizedSaleCategory(item) === "land" || detail.scope === "land" ? detail.scope : detail.floorScope || detail.scope;
+    add("매매 범위", { land: "토지", whole_building: "건물 전체", unit: "개별 공간" }[displayScope]);
     area("대지면적", detail.landAreaM2);
     area("연면적", detail.grossAreaM2);
     area("건축면적", detail.buildingAreaM2);
@@ -302,9 +347,13 @@
       var unitPrice = global.JSSaleWorkbenchV1.unitPrice(item);
       add("토지 평당가", unitPrice == null ? "확인 필요" : unitPrice.toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "만원 (광고면적 기준)");
     } else add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
-    add("지상층수", detail.aboveGroundFloors, "층");
-    add("지하층수", detail.belowGroundFloors, "층");
-    add("총층수", detail.totalFloors, "층");
+    var floorLabel = buildingFloorLabel(item);
+    if (floorLabel) add("층수", floorLabel);
+    else {
+      add("지상층수", detail.aboveGroundFloors, "층");
+      add("지하층수", detail.belowGroundFloors, "층");
+      add("총층수", detail.totalFloors, "층");
+    }
     add(detail.descriptionVersion ? "세대수 (설명 기준)" : "세대수", detail.householdCount, "세대");
     if (detail.descriptionCategory) add("분류 보완", "설명의 대지·연면적·전체층수·세대구성을 근거로 다가구 전체로 분류 (원본 분류: " + (isNaverItem(item) ? naverTypeLabel(detail.sourceType) : detail.sourceType) + ")");
     (detail.descriptionWarnings || []).forEach(function(warning) { add("확인 필요", warning); });
@@ -347,6 +396,7 @@
     displayPrice: displayPrice,
     saleDetailsHtml: saleDetailsHtml,
     saleSummary: saleSummary,
+    buildingFloorLabel: buildingFloorLabel,
     saleYield: saleYield,
     saleYieldBadge: saleYieldBadge,
     saleAreaHtml: saleAreaHtml,

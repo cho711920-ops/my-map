@@ -4633,6 +4633,9 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   var typeLabel = displayType
     ? '<span class="type-badge">' + escapeHtml(displayType) + '</span>'
     : "";
+  var buildingFloorLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingFloorLabel
+    ? window.JSListingTradeV1.buildingFloorLabel(item) : "";
+  var roomLabelV1 = buildingFloorLabelV1 || formatListingRoomForCardV653(item.room);
 
   var sourceLabel = isFieldVisitItem(item)
     ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
@@ -4764,8 +4767,8 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
           '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
           '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
-            (item.room
-              ? '<span class="item-room-badge">' + escapeHtml(formatListingRoomForCardV653(item.room)) + '</span>'
+            (roomLabelV1
+              ? '<span class="item-room-badge' + (buildingFloorLabelV1 ? ' building-sale-floor-v1' : '') + '" title="' + escapeHtml(roomLabelV1) + '">' + escapeHtml(roomLabelV1) + '</span>'
               : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV843(item) +
           '</span>' +

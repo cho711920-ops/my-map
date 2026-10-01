@@ -1,5 +1,13 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-01 건물매매 층수 표시
+
+- 건물매매 리스트·PC/모바일 상세만 `buildingFloorLabel()`로 표시한다. 통건물은 `지하 1층 ~ 지상 5층`, 지하 명시적 0은 `지상 1층 ~ 지상 5층`, 지하 미제공은 `지상 5층 · 지하 미확인`이다. 개별 공간은 `해당 3층 / 총 10층`; 호실 번호는 층수로 추측하지 않는다. 상가임대·토지매매의 기존 표시는 유지한다.
+- 실제 네이버 저장 원본의 층수는 `saleRaw.detailInfo.spaceInfo.floorInfo`에 있었다. 기존 `floorInfo=-1/3`과 `room=지하1층`이 통건물의 지하~지상 범위를 해당층처럼 보이게 하던 사례를 확인했다. 새 `sale-floor-display.js`는 원본 코드 C03/C04/C06/D03/D04/D05 + `targetFloor='-'` + 양수 `groundTotalFloor` 조합일 때만 표시용 `floorScope=whole_building`을 보강한다. 숫자/B 타깃은 개별 공간으로 유지하고, floorType/residenceType enum 의미는 추측하지 않는다.
+- `room`은 과거 찜/임장 식별값이므로 변경하지 않는다. 저장된 물리적 `saleDetails.scope`, 가격, 면적, 수익, 동일매물 판정 역시 유지한다. 응답의 표시용 `floorScope`만 상세의 매매 범위·층수에 사용한다. 지하 B1은 1로 읽지만 `-`/빈값/null은 0으로 만들지 않는다. 공실박스·당근도 제공된 층수만 사용하며 0/소수 총층은 범위에 쓰지 않는다.
+- 기존 매물 재수집/일괄 DB 수정 없이 원본 읽기 단계에서 층수를 보강한다. 최초 목록 쿼리는 필요한 층 객체·코드만 추가 추출하며 원본별 상세 요청을 늘리지 않는다. 목록 요약은 scope/floorScope와 층수 3필드를 포함한다. 목록 캐시는 `unified-listings-v6-sale-floor-summary.json`, 상세는 `unified-detail-v6-sale-floor-display`로 갱신했다.
+- 최종 `pnpm run check`(lint/타입/1,050개 테스트/빌드/dry-run), PC·모바일 브라우저 28개 통과(플랫폼별 10개 제외). 합성 매물 화면의 층수 배지·상세 범위·넘침을 확인했다. Worker `b766a8ee-e074-42f0-b7b5-fb6b0591e7bc`로 배포했고 apex/www의 표시 관련 JS 3개·CSS 1개가 모두 HTTP 200 및 빌드 해시 일치한다. 운영 로그인 화면을 시각 검수한 것은 아니며, 수집기 재시작·DB 쓰기·매물 재수집은 하지 않았다.
+
 ## 2026-09-30 네이버 구분코드 한글 표기
 
 - `A02=오피스텔`, `B01=아파트분양권`, `C03=단독/다가구` 등 현행 fin.land 코드와 legacy 코드를 수집기·서버·화면에서 동일하게 해석한다. 수집기 버전은 `6.0.6`. 기존 `A02` 등을 과거 코드표로 추측하지 말 것. 서버 기준표는 `cloudflare/src/naver-property-types.js`이고 수집기/화면과 parity 테스트한다.

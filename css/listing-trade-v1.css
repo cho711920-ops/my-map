@@ -301,6 +301,10 @@ html[data-listing-trade-mode="land_sale"] .v6-toolbar-primary .listing-trade-mod
 
 #saleFiltersV1[hidden], #saleFiltersV1 [hidden], #saleCompareButtonV1[hidden] { display: none !important; }
 html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100dvh - 120px); overflow-y: auto; overscroll-behavior: contain; }
+.listing-sale-card-v1 .item-address-room-v650:has(.building-sale-floor-v1) { flex-wrap: wrap; }
+.listing-sale-card-v1 .item-address-room-v650 .building-sale-floor-v1 {
+  max-width: 100%; flex-shrink: 1; white-space: normal; overflow-wrap: anywhere; line-height: 1.4 !important;
+}
 #saleFiltersV1 { display: grid; gap: 10px; border-top: 1px solid #e0e8f1; padding-top: 10px; margin-top: 8px; }
 #saleFiltersV1 label, .sale-filter-range > label { display: block; font-size: 12px; font-weight: 700; color: #34485e; }
 #saleFiltersV1 input, #saleFiltersV1 select { box-sizing: border-box; width: 100%; min-width: 0; margin-top: 4px; }

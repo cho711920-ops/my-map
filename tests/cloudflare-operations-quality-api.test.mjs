@@ -298,7 +298,7 @@ test("Worker waits for hold-release list/detail cache invalidation and publishes
   const response = await worker.fetch(new Request("https://js-map.com/api/data", {method: "POST",
     headers: {cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}`, origin: "https://js-map.com", "content-type": "application/json"}, body: JSON.stringify(body)}), env, {waitUntil: task => pending.push(task)});
   assert.equal(response.status, 200); assert.equal((await response.json()).persisted, true);
-  for (const key of ["api-cache/d1-sheet.csv", "api-cache/unified-listings-v5-source-aware-review.json", "api-cache/operations-dashboard.json", "api-cache/unified-detail-v5-sale-metadata/P.json"]) assert.ok(removed.includes(key), key);
+  for (const key of ["api-cache/d1-sheet.csv", "api-cache/unified-listings-v6-sale-floor-summary.json", "api-cache/operations-dashboard.json", "api-cache/unified-detail-v6-sale-floor-display/P.json"]) assert.ok(removed.includes(key), key);
   await Promise.all(pending);
   assert.ok(written.includes("api-cache/revision/listings.json"));
 });

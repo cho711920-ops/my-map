@@ -11,6 +11,7 @@ import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-
 import { saveSaleWorksheet } from "./sale-worksheet.js";
 import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
+import { withNaverSaleFloorDisplay } from "./sale-floor-display.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -352,6 +353,15 @@ export function compactSaleSummary(original) {
       const value = detail[key].trim().replace(/\s+/g, " ").slice(0, 160);
       if (value) summary[key] = value;
     }
+  } else {
+    if (["whole_building", "unit"].includes(detail.floorScope)) summary.floorScope = detail.floorScope;
+    // A confirmed zero basement count means no basement; absent data does not.
+    for (const key of ["aboveGroundFloors", "belowGroundFloors", "totalFloors"]) {
+      const value = detail[key];
+      if (!["number", "string"].includes(typeof value) || clean(value) === "") continue;
+      const parsed = Number(value);
+      if (Number.isInteger(parsed) && parsed >= (key === "belowGroundFloors" ? 0 : 1)) summary[key] = parsed;
+    }
   }
   return summary;
 }
@@ -359,7 +369,10 @@ export function compactSaleSummary(original) {
 async function unifiedListings(env) {
   const rows = await allRowidPages(
     env,
-    "listing_id, list_snapshot_json, json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json",
+    `listing_id, source, list_snapshot_json,
+      json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json,
+      json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo') AS naver_floor_info_json,
+      COALESCE(NULLIF(json_extract(raw_json, '$.realEstateTypeCode'), ''), json_extract(raw_json, '$.category')) AS naver_property_type`,
     "listing_sources",
     `active = 1
       AND NOT EXISTS (
@@ -381,7 +394,11 @@ async function unifiedListings(env) {
   const groups = {};
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
-    const original = parseJson(row.list_snapshot_json, {});
+    const original = withNaverSaleFloorDisplay(parseJson(row.list_snapshot_json, {}), {
+      source: row.source,
+      floorInfo: parseJson(row.naver_floor_info_json, null),
+      propertyType: row.naver_property_type
+    });
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
       const actualImages = actualGongsilImages({
@@ -512,7 +529,11 @@ async function unifiedDetail(env, propertyId) {
     snapshot.photoCount = isGongsil
       ? images.length
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
-    return snapshot;
+    return withNaverSaleFloorDisplay(snapshot, {
+      source: row.source,
+      floorInfo: raw.saleRaw?.detailInfo?.spaceInfo?.floorInfo,
+      propertyType: raw.realEstateTypeCode || raw.category
+    });
   });
   if (!originals.length) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,

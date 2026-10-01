@@ -767,7 +767,9 @@
         (global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(selected.salePrice) : number(selected.salePrice)))
       : '보 ' + esc(value('deposit')) + ' / 월 ' + esc(value('rent'));
     var typeLabel = global.JSListingTradeV1 ? global.JSListingTradeV1.displayType(selected) : selected.type;
-    var facts = [['구분', typeLabel || '미확인'], ['층·호실', selected.room || '미확인']];
+    var floorLabel = global.JSListingTradeV1 && global.JSListingTradeV1.buildingFloorLabel
+      ? global.JSListingTradeV1.buildingFloorLabel(selected) : "";
+    var facts = [['구분', typeLabel || '미확인'], ['층·호실', floorLabel || selected.room || '미확인']];
     if (!sale) facts = facts.concat([
       ['면적', selected.area == null || selected.area === '' ? '미확인' : number(selected.area) + '평'],
       ['관리비', selected.fee == null || selected.fee === '' ? '미확인' : number(selected.fee) + '만원'],
@@ -807,6 +809,8 @@
     var images = originalImages(selected);
     var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
     var encodedActionPropertyId = encodeURIComponent(text(propertyId));
+    var buildingFloorLabel = selected && global.JSListingTradeV1 && global.JSListingTradeV1.buildingFloorLabel
+      ? global.JSListingTradeV1.buildingFloorLabel(selected) : "";
     var body = document.getElementById("unifiedDetailBodyV8");
     body.innerHTML = !selected ? '<div class="unified-empty-v8">원본매물 정보가 없습니다.</div>' :
       '<section class="unified-detail-gallery-v8">' +
@@ -828,7 +832,7 @@
           (selected.link ? '<button type="button" class="unified-detail-source-link-v827" ' +
             'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
-        '</div><strong>' + esc(selected.address) + ' ' + esc(selected.room) + '</strong></div>' +
+        '</div><strong>' + esc(selected.address) + ' ' + esc(buildingFloorLabel || selected.room) + '</strong></div>' +
         (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
         (!phoneDetail && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
