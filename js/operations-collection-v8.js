@@ -266,13 +266,14 @@
       (data.rows || []).map(function(row, index) {
         return '<article class="operations-quality-item"><b>' + escape(row.title || row.propertyId) + '</b><p>' + escape([row.address, row.room].filter(Boolean).join(' ')) + '</p><p>' +
           escape(row.reason) + ' · ' + (row.blocksPublication && row.state === 'open' ? '공개 보류' : '공개 차단 없음') +
-          ' · 보증금 ' + escape(row.deposit == null ? '미확인' : row.deposit) + ' / 월세 ' + escape(row.monthlyRent == null ? '미확인' : row.monthlyRent) + '만원</p><details><summary>원본·검수 근거 보기</summary>' +
+          (row.tradeType === 'sale' ? ' · 매매' : ' · 보증금 ' + escape(row.deposit == null ? '미확인' : row.deposit) + ' / 월세 ' + escape(row.monthlyRent == null ? '미확인' : row.monthlyRent) + '만원') + '</p><details><summary>원본·검수 근거 보기</summary>' +
           (row.sources || []).map(function(source) { return '<p>' + escape(source.source) + ' · ' + escape(source.active ? '활성' : '비활성') + ' · ' +
-            escape(source.deposit == null ? '미확인' : source.deposit) + ' / ' + escape(source.monthlyRent == null ? '미확인' : source.monthlyRent) + '만원 · ' +
+            (source.tradeType === 'sale' ? '매매' : escape(source.deposit == null ? '미확인' : source.deposit) + ' / ' + escape(source.monthlyRent == null ? '미확인' : source.monthlyRent) + '만원') + ' · ' +
             (source.sourceUrl ? '<a target="_blank" rel="noopener noreferrer" href="' + escape(source.sourceUrl) + '">원본 확인 ↗</a>' : '원본 링크 없음') + '</p>'; }).join('') +
           '<pre class="operations-quality-evidence">' + escape(JSON.stringify(row.evidence || {}, null, 2)) + '</pre>' +
           (row.resolvedAt ? '<p>검수 ' + escape(formatAt(row.resolvedAt)) + ' · ' + escape(row.resolvedBy) + ' · ' + escape(row.resolution && row.resolution.note) + '</p>' : '') + '</details>' +
-          (row.releaseSupported ? '<button type="button" onclick="openOperationsQualityReview(' + index + ')">원본 확인 후 개별 검수</button>' : '<p>거래유형·원본 근거 확인이 필요합니다. 이 화면에서 일괄 해제하거나 가격을 추정하지 않습니다.</p>') + '</article>';
+          (row.releaseSupported ? '<button type="button" onclick="openOperationsQualityReview(' + index + ')">원본 확인 후 개별 검수</button>' : '<p>' + escape(row.issueCode === 'address_lookup_unresolved' && row.releaseNotice
+            ? row.releaseNotice : '거래유형·원본 근거 확인이 필요합니다. 이 화면에서 일괄 해제하거나 가격을 추정하지 않습니다.') + '</p>') + '</article>';
       }).join('') + (!(data.rows || []).length ? '<p>해당 상태의 검수 자료가 없습니다.</p>' : '') +
       '<p>' + number(data.offset) + '번 이후 ' + (data.rows || []).length + ' / ' + number(data.total) + '건 ' +
       (data.offset ? '<button onclick="pageOperationsQuality(-1)">이전</button>' : '') +

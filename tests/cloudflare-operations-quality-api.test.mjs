@@ -139,6 +139,52 @@ test("Daangn unproven exact address is labeled, redacted and cannot be released 
   assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM listing_history").get().n, 0);
 });
 
+test("unresolved Naver sale address stays held with address-specific guidance and preserves source data", async t => {
+  const { env, sqlite, body, hold } = fixture(t);
+  const issue = "address_lookup_unresolved";
+  const sourceUrl = "https://fin.land.naver.com/articles/2650000000";
+  sqlite.exec("UPDATE listings SET trade_type='sale',deposit=0,monthly_rent=0,sale_price=50000");
+  sqlite.prepare(`UPDATE listing_sources SET source='네이버',source_url=?,trade_type='sale',
+    list_snapshot_json=json_set(list_snapshot_json,'$.tradeType','sale','$.deposit',0,'$.rent',0,'$.salePrice',50000)`)
+    .run(sourceUrl);
+  hold(issue, { sourceId: "S", evidence: { sourceIds: ["S"], selectedSourceId: "S", privateRaw: "PRIVATE_EVIDENCE" } });
+  const snapshot = () => ({
+    listing: sqlite.prepare("SELECT * FROM listings").get(),
+    source: sqlite.prepare("SELECT * FROM listing_sources").get(),
+    holds: sqlite.prepare("SELECT * FROM listing_data_quality_holds ORDER BY issue_code").all(),
+    history: sqlite.prepare("SELECT * FROM listing_history").all()
+  });
+  const before = snapshot();
+  const result = await handleOperationsQualityGet(env, ADMIN, { action: "operationsQualityHolds" });
+  const row = result.rows.find(item => item.issueCode === issue);
+  assert.equal(row.reason, "주소 검색 불가 · 원본 주소 확인 보류");
+  assert.equal(row.tradeType, "sale");
+  assert.equal(row.state, "open");
+  assert.equal(row.blocksPublication, true);
+  assert.equal(row.releaseRequiresEvidence, true);
+  assert.equal(row.releaseSupported, false);
+  assert.match(row.releaseNotice, /정확한 원본 주소 확인과 좌표 보정을 먼저/);
+  assert.equal(row.sources[0].source, "네이버");
+  assert.equal(row.sources[0].tradeType, "sale");
+  assert.equal(row.sources[0].sourceUrl, sourceUrl);
+  assert.deepEqual(row.evidence, { sourceIds: ["S"], selectedSourceId: "S" });
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_EVIDENCE/);
+  const release = { ...body, issueCode: issue,
+    evidence: { ...body.evidence, sourceUrl, tradeType: "sale", deposit: 0, monthlyRent: 0 } };
+  for (const resolutionState of ["resolved", "dismissed"]) {
+    await assert.rejects(handleOperationsQualityPost(env, ADMIN, { ...release, resolutionState }), error => {
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.message, row.releaseNotice);
+      assert.doesNotMatch(error.message, /거래유형 검수/);
+      return true;
+    });
+  }
+  await assert.rejects(handleOperationsQualityPost(env, { role: "member" }, release), status(403));
+  await assert.rejects(handleOperationsQualityPost(env, ADMIN, { ...release,
+    evidence: { ...release.evidence, note: "" } }), status(400));
+  assert.deepEqual(snapshot(), before);
+});
+
 test("previous repair resolutions are not misrepresented as publication-only releases", async t => {
   const { env, sqlite } = fixture(t);
   sqlite.prepare("UPDATE listing_data_quality_holds SET state='resolved',resolution_json=?").run(JSON.stringify({

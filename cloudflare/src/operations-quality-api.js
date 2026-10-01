@@ -9,6 +9,7 @@ const ISSUE_LABELS = {
   daangn_monthly_terms_stale: "당근 원본과 임대조건 불일치",
   daangn_zero_rent_unproven: "당근 월세 0원 거래근거 부족",
   daangn_exact_address_unproven: "당근 정확한 지번 미제공 · 주소 확인 보류",
+  address_lookup_unresolved: "주소 검색 불가 · 원본 주소 확인 보류",
   gongsil_master_terms_stale: "공실박스 원본과 임대조건 불일치",
   gongsil_sale_in_lease: "공실박스 매매 원본이 임대로 분류됨",
   gongsil_verified_jeonse: "원본에서 확인된 정상 전세",
@@ -22,6 +23,7 @@ const RELEASABLE_ISSUES = new Set([
   "gongsil_master_terms_stale", "gongsil_zero_rent_needs_review",
   "gongsil_verified_jeonse", "zero_rent_lease_needs_review"
 ]);
+const ADDRESS_LOOKUP_NOTICE = "정확한 원본 주소 확인과 좌표 보정을 먼저 완료해야 합니다. 주소 확인 전에는 공개 보류를 해제하지 않습니다.";
 const clean = value => String(value ?? "").trim();
 const fail = (message, statusCode = 400) => { throw Object.assign(new Error(message), { statusCode }); };
 function parseObject(value) {
@@ -140,7 +142,8 @@ async function qualityHolds(env, query) {
       sources: byListing.get(row.listing_id) || [],
       releaseRequiresEvidence: true, releaseSupported: row.state === "open" && RELEASABLE_ISSUES.has(row.issue_code) &&
         (money(row.monthly_rent) > 0 || (row.issue_code === "gongsil_verified_jeonse" && parseObject(row.evidence_json).verifiedJeonse === true)),
-      releaseNotice: "검수로 공개 보류만 해제합니다. 가격·주소·거래유형은 수정하지 않습니다. 원본과 현재 값이 다르면 먼저 개별 수정이 필요합니다."
+      releaseNotice: row.issue_code === "address_lookup_unresolved" ? ADDRESS_LOOKUP_NOTICE
+        : "검수로 공개 보류만 해제합니다. 가격·주소·거래유형은 수정하지 않습니다. 원본과 현재 값이 다르면 먼저 개별 수정이 필요합니다."
     }))
   };
 }
@@ -187,6 +190,7 @@ async function resolveHold(env, user, body) {
       !Number.isSafeInteger(expectedVersion) || expectedVersion < 1 || !expectedHoldUpdatedAt) fail("매물 버전과 검수 대상이 필요합니다.");
   if (!note || note.length > 2000 || !url) fail("검수 근거와 저장된 원본 링크를 입력해 주세요.");
   if (!["resolved", "dismissed"].includes(state)) fail("해제 처리 상태가 올바르지 않습니다.");
+  if (issueCode === "address_lookup_unresolved") fail(ADDRESS_LOOKUP_NOTICE, 409);
   if (!RELEASABLE_ISSUES.has(issueCode)) fail("원본 누락·매매 분류 문제는 공개 해제만으로 해결할 수 없습니다. 개별 거래유형 검수가 필요합니다.", 409);
   const hold = await env.DB.prepare(`SELECT * FROM listing_data_quality_holds WHERE listing_id=?1 AND issue_code=?2`)
     .bind(listingId, issueCode).first();
