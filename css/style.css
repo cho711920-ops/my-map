@@ -6108,7 +6108,7 @@ body,
 /* 태블릿 가로모드: 로드뷰를 화면 중앙의 큰 팝업으로 복구 */
 @media (orientation: landscape) and (hover: none) and (pointer: coarse)
        and (min-width: 900px) and (max-width: 1600px) {
-  #roadviewModal.roadview-modal {
+  #roadviewModal.roadview-modal.open {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;

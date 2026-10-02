@@ -1,0 +1,205 @@
+/* Shared field-mode controls. Keep the existing desktop/tablet map geometry. */
+.map-field-mode-wrap-v1 {
+  position: relative;
+}
+
+.map-field-mode-toggle-v1 {
+  position: relative;
+  touch-action: manipulation;
+}
+
+.map-field-mode-toggle-v1.on {
+  border-color: #c93437 !important;
+  background: #c93437 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(135, 28, 34, .2) !important;
+}
+
+.map-field-mode-indicator-v1 {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: #edf1f6;
+  color: #536477;
+  font-size: 7px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.map-field-mode-toggle-v1.on .map-field-mode-indicator-v1 {
+  background: #fff;
+  color: #b4232b;
+}
+
+.map-field-mode-controls-v1[hidden] {
+  display: none !important;
+}
+
+.map-field-mode-controls-v1 {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 8px);
+  box-sizing: border-box;
+  width: 124px;
+  padding: 6px;
+  border: 1px solid #dfbfc2;
+  border-radius: 10px;
+  background: #fff;
+  color: #344258;
+  box-shadow: 0 3px 12px rgba(25, 42, 64, .16);
+  pointer-events: auto;
+}
+
+.map-field-mode-scales-v1 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.map-field-mode-scales-v1 button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px;
+  border: 1px solid #d5dce5;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #46556a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.map-field-mode-scales-v1 button.on {
+  border-color: #c93437;
+  background: #fff0f0;
+  color: #ad2830;
+  box-shadow: inset 0 0 0 1px #c93437;
+}
+
+.map-field-mode-toggle-v1:focus-visible,
+.map-field-mode-scales-v1 button:focus-visible {
+  outline: 2px solid #086bdc;
+  outline-offset: 2px;
+}
+
+.map-field-mode-status-v1 {
+  display: block;
+  padding: 6px 2px 1px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.map-field-mode-compact-v1 {
+  display: none;
+}
+
+/* Only the enabled marker replaces the ordinary purple current-location dot. */
+.js-current-location-dot-v630.js-field-mode-car-v1 {
+  width: 36px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+  pointer-events: none;
+}
+
+.js-current-location-dot-v630.js-field-mode-car-v1::before,
+.js-current-location-dot-v630.js-field-mode-car-v1::after {
+  display: none;
+  content: none;
+  animation: none;
+}
+
+.js-field-mode-car-v1 .js-field-mode-car-icon-v1 {
+  display: block;
+  width: 36px;
+  height: 44px;
+  overflow: visible;
+}
+
+@media (max-width: 768px) {
+  .map-field-mode-compact-v1 {
+    position: absolute;
+    z-index: 9600;
+    top: 10px;
+    right: 10px;
+    display: block;
+    max-width: calc(100% - 20px);
+  }
+
+  .map-field-mode-compact-v1 > .map-field-mode-toggle-v1 {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px 9px;
+    border: 1px solid #c8d3e0;
+    border-radius: 10px;
+    background: #fff;
+    color: #344258;
+    box-shadow: 0 2px 8px rgba(25, 42, 64, .12);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .map-field-mode-compact-v1 > .map-field-mode-toggle-v1 > svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .map-field-mode-compact-v1 .map-field-mode-indicator-v1 {
+    position: static;
+    padding: 3px;
+    font-size: 8px;
+  }
+
+  .map-field-mode-compact-v1 .map-field-mode-controls-v1 {
+    top: calc(100% + 6px);
+    right: 0;
+    width: 144px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .map-field-mode-scales-v1 button {
+    min-height: 44px;
+  }
+
+  .js-mobile-app-v1 .map-field-mode-compact-v1,
+  .js-phone-app-v2 .map-field-mode-compact-v1 {
+    top: calc(var(--jsm-header-height) + 10px);
+  }
+
+  [data-jsm-mobile-view="list"] .map-field-mode-compact-v1,
+  [data-js-phone-favorites="true"] .map-field-mode-compact-v1,
+  #sidebar.open ~ .map-field-mode-compact-v1,
+  body.jsm-more-open-v1 .map-field-mode-compact-v1 {
+    display: none;
+  }
+}
+
+@media print {
+  .map-field-mode-wrap-v1,
+  .map-field-mode-compact-v1 {
+    display: none !important;
+  }
+}

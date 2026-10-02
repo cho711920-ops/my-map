@@ -19,7 +19,9 @@
 /* JS부동산 지도/마커/클러스터/D1 로딩 전용 스크립트 */
 var jsCurrentLocationOverlayV630 = null;
 var jsCurrentLocationWatchIdV630 = null;
+var jsLastCurrentLocationPositionV1 = null;
 var jsMapIdleTimerV638 = null;
+var jsFieldModeIdleRefreshPendingV1 = false;
 var jsLastIdleViewportKeyV638 = "";
 var jsLastRenderedItemsV639 = [];
 var jsClusterSelectionMemoryV638 = {
@@ -442,7 +444,11 @@ function preservePinnedClusterSelectionDuringRelayoutV6517(durationMs) {
 function keepPinnedClusterSelectionAcrossTransientUiV6525(durationMs) {
   if (!jsPinnedClusterSelectionV6515) return;
 
-  jsPinnedClusterSelectionV6515.snapshot = captureClusterSelectionSnapshotV638();
+  // Following may move a selected cluster outside the viewport. Do not replace
+  // its remembered selection with an empty snapshot during zoom/visibility UI.
+  if (!(window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing())) {
+    jsPinnedClusterSelectionV6515.snapshot = captureClusterSelectionSnapshotV638();
+  }
   jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
   preservePinnedClusterSelectionDuringRelayoutV6517(durationMs || 2400);
 }
@@ -478,6 +484,7 @@ function markMapUserNavigationIntentV6525(event) {
 
 
 function shouldClearPinnedClusterForMapNavigationV6525() {
+  if (window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing()) return false;
   if (!jsPinnedClusterSelectionV6515) return true;
   if (document.visibilityState === "hidden") return false;
   if (document.body.classList.contains("roadview-modal-open")) return false;
@@ -785,8 +792,9 @@ function restoreClusterSelectionSnapshotV638(snapshot) {
 }
 
 
-function updateCurrentLocationOverlayV630(position) {
+function updateCurrentLocationOverlayV630(position, displayOnly) {
   if (
+    displayOnly !== true &&
     window.JSKakaoNavigation &&
     typeof window.JSKakaoNavigation.rememberPosition === "function"
   ) {
@@ -794,6 +802,10 @@ function updateCurrentLocationOverlayV630(position) {
   }
 
   if (!position || !position.coords || !map || !window.kakao) return;
+  if (displayOnly !== true) jsLastCurrentLocationPositionV1 = position;
+
+  if (window.JSFieldModeV1) position = window.JSFieldModeV1.onPosition(position);
+  if (!position) return;
 
   var lat = Number(position.coords.latitude);
   var lng = Number(position.coords.longitude);
@@ -806,6 +818,7 @@ function updateCurrentLocationOverlayV630(position) {
     var content = document.createElement("div");
     content.className = "js-current-location-dot-v630";
     content.setAttribute("title", "현재 위치");
+    if (window.JSFieldModeV1) window.JSFieldModeV1.decorateMarker(content);
 
     jsCurrentLocationOverlayV630 = new kakao.maps.CustomOverlay({
       position: coords,
@@ -818,6 +831,7 @@ function updateCurrentLocationOverlayV630(position) {
     jsCurrentLocationOverlayV630.setMap(map);
   } else {
     jsCurrentLocationOverlayV630.setPosition(coords);
+    jsCurrentLocationOverlayV630.setMap(map);
   }
 }
 
@@ -830,6 +844,11 @@ function startCurrentLocationTrackingV630() {
       updateCurrentLocationOverlayV630,
       function(error) {
         console.warn("현재 위치 표시 실패", error);
+        if (error && error.code === 1 && jsCurrentLocationWatchIdV630 !== null) {
+          navigator.geolocation.clearWatch(jsCurrentLocationWatchIdV630);
+          jsCurrentLocationWatchIdV630 = null;
+        }
+        if (window.JSFieldModeV1) window.JSFieldModeV1.onError(error);
       },
       {
         enableHighAccuracy: true,
@@ -839,6 +858,7 @@ function startCurrentLocationTrackingV630() {
     );
   } catch (error) {
     console.warn("현재 위치 추적 시작 실패", error);
+    if (window.JSFieldModeV1) window.JSFieldModeV1.onError(error);
   }
 }
 
@@ -1392,10 +1412,20 @@ function createDynamicClusters(addressGroups) {
 
 
 function scheduleMapIdleRefreshV638() {
+  // Live GPS changes the camera, not listing data. Bound local redraws without
+  // starving the final viewport when several fixes arrive during one second.
+  var following = window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing();
+  if (following && jsMapIdleTimerV638) return;
   if (jsMapIdleTimerV638) clearTimeout(jsMapIdleTimerV638);
 
   jsMapIdleTimerV638 = setTimeout(function() {
     jsMapIdleTimerV638 = null;
+
+    if (window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing() && document.hidden) {
+      jsFieldModeIdleRefreshPendingV1 = true;
+      return;
+    }
+    jsFieldModeIdleRefreshPendingV1 = false;
 
     if (isRendering) return;
 
@@ -1453,7 +1483,7 @@ function scheduleMapIdleRefreshV638() {
           ("현재 지도 매물 " + jsLastRenderedItemsV639.length + "개");
       }
     }
-  }, 120);
+  }, following ? 1000 : 120);
 }
 
 
@@ -1541,6 +1571,9 @@ kakao.maps.load(function() {
   }, jsAutomaticDataRefreshIntervalV681);
 
   document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible" && jsFieldModeIdleRefreshPendingV1) {
+      scheduleMapIdleRefreshV638();
+    }
     if (!jsPinnedClusterSelectionV6515) return;
 
     keepPinnedClusterSelectionAcrossTransientUiV6525(3000);
@@ -2769,6 +2802,7 @@ function drawMapClustersOnlyV639(items) {
 window.mapRoadviewSelectionActive = false;
 
 function setMapRoadviewSelection(active) {
+  if (active && window.JSFieldModeV1) window.JSFieldModeV1.stopForMapTool();
   window.mapRoadviewSelectionActive = !!active;
   var button = document.getElementById("mapRoadviewSelectBtn");
   var mapElement = document.getElementById("map");
