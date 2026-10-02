@@ -1,6 +1,10 @@
 /* Shared field-mode controls. Keep the existing desktop/tablet map geometry. */
 .map-field-mode-wrap-v1 {
   position: relative;
+  display: flex;
+  width: 44px;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .map-field-mode-toggle-v1 {
@@ -34,8 +38,40 @@
   color: #b4232b;
 }
 
-.map-field-mode-controls-v1[hidden] {
+.map-field-mode-controls-v1[hidden],
+.map-field-mode-expand-v1[hidden] {
   display: none !important;
+}
+
+.map-field-mode-expand-v1 {
+  display: flex;
+  box-sizing: border-box;
+  width: 44px;
+  min-width: 44px;
+  height: 30px;
+  min-height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 1px solid #dfbfc2;
+  border-radius: 7px;
+  background: #fff;
+  color: #ad2830;
+  box-shadow: 0 2px 8px rgba(25, 42, 64, .12);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.map-field-mode-expand-v1:hover,
+.map-field-mode-expand-v1[aria-expanded="true"] {
+  border-color: #c93437;
+  background: #fff0f0;
 }
 
 .map-field-mode-controls-v1 {
@@ -82,6 +118,7 @@
 }
 
 .map-field-mode-toggle-v1:focus-visible,
+.map-field-mode-expand-v1:focus-visible,
 .map-field-mode-scales-v1 button:focus-visible {
   outline: 2px solid #086bdc;
   outline-offset: 2px;
@@ -134,7 +171,9 @@
     z-index: 9600;
     top: 10px;
     right: 10px;
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     max-width: calc(100% - 20px);
   }
 

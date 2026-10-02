@@ -52,6 +52,7 @@ function element(tagName = "div") {
     },
     setAttribute(name, value) {
       attributes.set(name, String(value));
+      if (name === "id") this.id = String(value);
       if (name.startsWith("data-")) this.dataset[name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = String(value);
     },
     getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
@@ -61,11 +62,23 @@ function element(tagName = "div") {
     querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
     querySelectorAll(selector) {
       const descendants = this.children.flatMap((child) => [child, ...child.querySelectorAll("*")]);
-      return descendants.filter((child) => selector === "*" ||
-        (selector.startsWith(".") && child.classList.contains(selector.slice(1))) ||
-        child.tagName.toLowerCase() === selector.toLowerCase());
+      return descendants.filter((child) => selector === "*" || selector.split(",").some((part) => matches(child, part.trim())));
     },
-    closest() { return null; },
+    contains(target) { return this === target || this.children.some((child) => child.contains(target)); },
+    closest(selector) {
+      for (let current = this; current; current = current.parentNode) {
+        if (selector.split(",").some((part) => matches(current, part.trim()))) return current;
+      }
+      return null;
+    },
+    focus() {
+      const document = this.ownerDocument;
+      if (!document || document.activeElement === this) return;
+      const previous = document.activeElement;
+      document.activeElement = this;
+      if (previous) document.dispatchEvent({ type: "focusout", target: previous, relatedTarget: this });
+      document.dispatchEvent({ type: "focusin", target: this, relatedTarget: previous });
+    },
     getBoundingClientRect() { return { width: 100, height: 100, top: 0, left: 0 }; }
   });
   Object.defineProperty(node, "className", {
@@ -135,27 +148,39 @@ function createRuntime(options = {}) {
   const calls = { centers: [], levels: [], markers: [], navigation: [], watches: [], clearedWatches: [], warnings: [], notifications: [] };
   const nodes = new Map();
   const allNodes = [];
-  for (const match of html.matchAll(/<([a-z][\w-]*)\b([^>]*)>/gi)) {
-    const node = element(match[1]);
-    for (const attr of match[2].matchAll(/([\w:-]+)(?:="([^"]*)"|='([^']*)')?/g)) {
+  const ancestors = [];
+  const markup = html.replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  for (const match of markup.matchAll(/<(\/?)([a-z][\w-]*)\b([^>]*)>/gi)) {
+    const tag = match[2].toLowerCase();
+    if (match[1]) {
+      const index = ancestors.findLastIndex((node) => node.tagName.toLowerCase() === tag);
+      if (index >= 0) ancestors.length = index;
+      continue;
+    }
+    const node = element(tag);
+    for (const attr of match[3].matchAll(/([\w:-]+)(?:="([^"]*)"|='([^']*)')?/g)) {
       node.setAttribute(attr[1], attr[2] ?? attr[3] ?? "");
       if (attr[1] === "class") node.className = attr[2] ?? attr[3] ?? "";
       if (attr[1] === "hidden") node.hidden = true;
     }
     if (node.getAttribute("id")) nodes.set(node.getAttribute("id"), node);
     allNodes.push(node);
+    if (ancestors.length) ancestors.at(-1).appendChild(node);
+    if (!/^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag)) ancestors.push(node);
   }
   const document = eventTarget({
     readyState: "complete",
     hidden: false,
     visibilityState: "visible",
-    body: element("body"),
-    documentElement: element("html"),
+    body: allNodes.find((node) => node.tagName === "BODY"),
+    documentElement: allNodes.find((node) => node.tagName === "HTML"),
     getElementById(id) { return nodes.get(id) || null; },
     createElement: element,
     querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
     querySelectorAll(selector) { return allNodes.filter((node) => selector.split(",").some((part) => matches(node, part.trim()))); }
   });
+  document.activeElement = document.body;
+  for (const node of allNodes) node.ownerDocument = document;
   function LatLng(lat, lng) {
     this.getLat = () => lat;
     this.getLng = () => lng;
@@ -248,6 +273,11 @@ function createRuntime(options = {}) {
   return {
     get api() { return context.JSFieldModeV1; },
     context, clock, calls, document, nodes, map, loadController,
+    click(node) {
+      document.dispatchEvent({ type: "pointerdown", target: node });
+      const handler = node.getAttribute("onclick");
+      if (handler) vm.runInContext(handler, context);
+    },
     fix(lat = 36.3504, lng = 127.3845, accuracy = 12, timestamp = clock.now) {
       return { coords: { latitude: lat, longitude: lng, accuracy }, timestamp };
     },
@@ -333,10 +363,12 @@ function createIdleRuntime(pin = null) {
 test("field mode starts off at 50m and activation without a recent fix waits for GPS", () => {
   const app = createRuntime();
   assert.equal(app.api.state().enabled, false);
+  assert.equal(app.api.state().controlsOpen, false);
   assert.equal(app.api.state().scale, 50);
   assert.equal(app.api.isFollowing(), false);
   app.api.toggle();
   assert.equal(app.api.state().enabled, true);
+  assert.equal(app.api.state().controlsOpen, true);
   assert.equal(app.calls.centers.length, 0, "activation must not invent a location");
   app.clock.advance(1000);
   app.update(app.fix());
@@ -371,9 +403,13 @@ test("20m and 50m selections use their Kakao levels without affecting listing da
   app.update(app.fix());
   app.api.setScale(20);
   assert.equal(app.api.state().scale, 20);
+  assert.equal(app.api.state().controlsOpen, false);
   assert.equal(app.map.level, 1);
+  app.api.toggleScaleControls();
+  assert.equal(app.api.state().controlsOpen, true);
   app.api.setScale(50);
   assert.equal(app.api.state().scale, 50);
+  assert.equal(app.api.state().controlsOpen, false);
   assert.equal(app.map.level, 3);
   app.api.setScale(75);
   assert.ok([20, 50].includes(app.api.state().scale), "unsupported choices must not become map scales");
@@ -381,6 +417,151 @@ test("20m and 50m selections use their Kakao levels without affecting listing da
   assert.deepEqual(app.context.favoriteKeys, ["property:keep"]);
   assert.equal(app.context.activeFavoriteFolderId, "folder-keep");
   assert.equal(app.context.selectedItemKey, "listing-keep");
+});
+
+test("scale controls close after three seconds while GPS and status updates keep following", () => {
+  const app = createRuntime();
+  const controls = app.document.querySelectorAll("[data-field-mode-controls]");
+  app.api.setEnabled(true);
+  app.update(app.fix());
+  for (let index = 1; index <= 5; index += 1) {
+    app.clock.advance(500);
+    app.update(app.fix(36.3504 + index * 0.0001));
+    assert.equal(app.api.state().controlsOpen, true);
+  }
+  app.api.onError({ code: 2 });
+  app.clock.advance(499);
+  assert.equal(app.api.state().controlsOpen, true);
+  app.clock.advance(1);
+  assert.equal(app.api.state().controlsOpen, false, "GPS and status updates must not extend the original deadline");
+  assert.ok(controls.every((node) => node.hidden));
+  assert.equal(app.api.state().enabled, true);
+  assert.equal(app.api.isFollowing(), true);
+  app.update(app.fix(36.3511));
+  app.clock.advance(1000);
+  app.update(app.fix(36.3512, 127.3845, 200));
+  assert.equal(app.api.state().controlsOpen, false, "good and inaccurate fixes must not reopen the popup");
+  assert.equal(app.calls.watches.length, 1);
+  assert.equal(app.map.draggable, false);
+  assert.deepEqual(coordinatePair(app.map.center), [36.3511, 127.3845]);
+});
+
+test("the scale expander only opens and closes controls without toggling mode or restarting GPS", () => {
+  const app = createRuntime();
+  const expanders = app.document.querySelectorAll("[data-field-mode-expand]");
+  assert.equal(expanders.length, 2);
+  assert.ok(expanders.every((node) => node.hidden));
+  app.api.toggleScaleControls();
+  assert.equal(app.api.state().enabled, false);
+  assert.equal(app.api.state().controlsOpen, false);
+  assert.equal(app.calls.watches.length, 0);
+
+  app.api.setEnabled(true);
+  app.update(app.fix());
+  app.clock.advance(3000);
+  const cameraCalls = app.calls.centers.length;
+  for (const expander of expanders) {
+    assert.equal(expander.hidden, false);
+    assert.equal(expander.textContent, "50m ▾");
+    assert.equal(expander.getAttribute("aria-expanded"), "false");
+    app.click(expander);
+    assert.equal(app.api.state().controlsOpen, true);
+    assert.ok(expanders.every((node) => node.getAttribute("aria-expanded") === "true"));
+    app.click(expander);
+    assert.equal(app.api.state().controlsOpen, false);
+    assert.equal(app.api.state().enabled, true);
+  }
+  assert.equal(app.calls.centers.length, cameraCalls);
+  assert.equal(app.calls.watches.length, 1);
+  assert.equal(app.calls.clearedWatches.length, 0);
+  app.api.toggleScaleControls();
+  app.api.setScale(20);
+  assert.ok(expanders.every((node) => node.textContent === "20m ▾" && node.getAttribute("aria-expanded") === "false"));
+  app.api.toggleScaleControls();
+  app.api.setScale(20);
+  assert.equal(app.api.state().controlsOpen, false, "choosing the already selected scale also dismisses the popup");
+  app.api.setEnabled(false);
+  assert.ok(expanders.every((node) => node.hidden));
+});
+
+test("OFF, reactivation and explicit reopening replace the old popup deadline", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.clock.advance(2000);
+  app.api.setEnabled(false);
+  assert.equal(app.api.state().controlsOpen, false);
+  app.clock.advance(500);
+  app.api.setEnabled(true);
+  app.clock.advance(500);
+  assert.equal(app.api.state().controlsOpen, true, "the previous activation deadline must be cancelled");
+  app.clock.advance(2499);
+  assert.equal(app.api.state().controlsOpen, true);
+  app.clock.advance(1);
+  assert.equal(app.api.state().controlsOpen, false);
+  app.api.toggleScaleControls();
+  app.clock.advance(2000);
+  app.api.toggleScaleControls();
+  app.api.toggleScaleControls();
+  app.clock.advance(1000);
+  assert.equal(app.api.state().controlsOpen, true, "an old explicit-open timer must not close a later popup");
+  app.clock.advance(2000);
+  assert.equal(app.api.state().controlsOpen, false);
+  assert.equal(app.calls.watches.length, 1);
+});
+
+test("outside pointer and Escape close the popup and keyboard focus pauses auto-hide", () => {
+  const app = createRuntime();
+  const panel = app.nodes.get("mapFieldModeControlsV1");
+  const scaleButton = panel.querySelector('[data-field-mode-scale="20"]');
+  const expander = app.document.querySelectorAll("[data-field-mode-expand]")
+    .find((node) => node.getAttribute("aria-controls") === panel.getAttribute("id"));
+  app.api.setEnabled(true);
+  app.document.dispatchEvent({ type: "pointerdown", target: scaleButton });
+  assert.equal(app.api.state().controlsOpen, true, "pressing inside the popup is not an outside click");
+  app.document.dispatchEvent({ type: "pointerdown", target: app.document.body });
+  assert.equal(app.api.state().controlsOpen, false);
+  assert.equal(app.api.state().enabled, true);
+
+  app.api.toggleScaleControls();
+  scaleButton.focus();
+  app.clock.advance(5000);
+  assert.equal(app.api.state().controlsOpen, true, "focused scale buttons remain available to keyboard users");
+  app.document.dispatchEvent({ type: "keydown", key: "Escape", target: scaleButton, preventDefault() {} });
+  assert.equal(app.api.state().controlsOpen, false);
+  assert.ok(app.document.activeElement === expander, "Escape returns popup focus to its scale expander");
+  assert.equal(app.api.state().enabled, true);
+
+  app.api.toggleScaleControls();
+  scaleButton.focus();
+  app.clock.advance(3500);
+  app.document.body.focus();
+  app.clock.advance(3000);
+  assert.equal(app.api.state().controlsOpen, false, "leaving popup focus resumes auto-hide");
+  app.api.toggleScaleControls();
+  app.document.dispatchEvent({ type: "keydown", key: "Escape", target: app.document.body, preventDefault() {} });
+  assert.ok(app.document.activeElement === app.document.body, "Escape outside the popup must not steal focus");
+});
+
+test("page suspension closes the scale popup and recovery or fresh GPS does not reopen it", () => {
+  for (const lifecycle of ["visibility", "pagehide"]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    app.clock.advance(1000);
+    if (lifecycle === "visibility") app.visibility(true);
+    else app.context.dispatchEvent({ type: "pagehide" });
+    assert.equal(app.api.state().controlsOpen, false);
+    app.clock.advance(1000);
+    if (lifecycle === "visibility") app.visibility(false);
+    else app.context.dispatchEvent({ type: "pageshow" });
+    app.update(app.fix());
+    assert.equal(app.api.state().controlsOpen, false);
+    app.api.toggleScaleControls();
+    app.clock.advance(1000);
+    assert.equal(app.api.state().controlsOpen, true, "suspension cancels the original popup timer");
+    app.clock.advance(2000);
+    assert.equal(app.api.state().controlsOpen, false);
+    assert.equal(app.api.state().enabled, true);
+  }
 });
 
 test("desktop and compact controls expose the same enabled state, scale and live status", () => {
@@ -397,12 +578,13 @@ test("desktop and compact controls expose the same enabled state, scale and live
   app.update(app.fix());
   app.api.setScale(20);
   assert.ok(toggles.every((node) => node.getAttribute("aria-pressed") === "true"));
-  assert.ok(controls.every((node) => !node.hidden));
+  assert.ok(controls.every((node) => node.hidden));
   assert.ok(app.document.querySelectorAll('[data-field-mode-scale="20"]').every((node) => node.getAttribute("aria-pressed") === "true"));
   assert.ok(app.document.querySelectorAll('[data-field-mode-scale="50"]').every((node) => node.getAttribute("aria-pressed") === "false"));
   app.api.onError({ code: 1 });
   assert.ok(statuses.every((node) => /권한|허용/.test(node.textContent)));
-  assert.ok(controls.every((node) => !node.hidden) || app.calls.notifications.some((message) => /권한|허용/.test(message)),
+  assert.ok(controls.every((node) => node.hidden));
+  assert.ok(app.calls.notifications.some((message) => /권한|허용/.test(message)),
     "permission feedback must be shown after mode turns itself off");
 });
 

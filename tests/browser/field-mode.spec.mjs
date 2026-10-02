@@ -129,6 +129,19 @@ async function expectWithinMap(page, selector) {
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(map.y + map.height + 1);
 }
 
+async function expectPopupAreaReleased(page, bounds) {
+  const point = {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height - 8};
+  const hit = await page.evaluate(({x, y}) => {
+    const target = document.elementFromPoint(x, y);
+    return {
+      exists: !!target,
+      fieldControls: !!target?.closest("[data-field-mode-controls]"),
+      fieldWrapper: !!target?.closest(".map-field-mode-wrap-v1, .map-field-mode-compact-v1")
+    };
+  }, point);
+  expect(hit).toEqual({exists: true, fieldControls: false, fieldWrapper: false});
+}
+
 for (const device of devices) {
   test(`${device.name}: real GPS following, scales and OFF preserve map workflow`, async ({browser, baseURL}, testInfo) => {
     const context = await browser.newContext({
@@ -163,9 +176,11 @@ for (const device of devices) {
       const compact = device.width <= 768;
       const toggle = page.locator(compact ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
       const panel = page.locator(compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
+      const expander = page.locator(`[data-field-mode-expand][aria-controls="${compact ? "mapFieldModeCompactControlsV1" : "mapFieldModeControlsV1"}"]`);
       await expect(toggle).toBeVisible();
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
       await expect(panel).toBeHidden();
+      await expect(expander).toBeHidden();
       await expectWithinMap(page, compact ? "#mapFieldModeCompactV1" : "#mapFieldModeToggleV1");
 
       // Seed a real filtered list and selection before camera movement.
@@ -188,6 +203,9 @@ for (const device of devices) {
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
       await expect(panel).toBeVisible();
+      await expect(expander).toBeVisible();
+      await expect(expander).toHaveText("50m ▾");
+      await expect(expander).toHaveAttribute("aria-expanded", "true");
       await expect(panel.locator("[data-field-mode-status]")).toHaveText("내 위치 따라가는 중");
       await expectWithinMap(page, compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       await expect(dot).toHaveClass(/js-field-mode-car-v1/);
@@ -195,12 +213,46 @@ for (const device of devices) {
       await expect(dot).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       expect(await cameraState(page)).toMatchObject({center: [36.3504, 127.3845], position: [36.3504, 127.3845], level: 3, draggable: false, zoomable: false, watchCalls: 1});
 
+      const initialPanelBounds = await panel.boundingBox();
+      await expect(panel).toBeHidden({timeout: 4500});
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await expect(expander).toHaveAttribute("aria-expanded", "false");
+      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({enabled: true, controlsOpen: false, scale: 50});
+      await expectPopupAreaReleased(page, initialPanelBounds);
+      await expander.click();
+      await expect(panel).toBeVisible();
+      const selectionPanelBounds = await panel.boundingBox();
       await panel.locator('[data-field-mode-scale="20"]').click();
       expect((await cameraState(page)).level).toBe(1);
+      await expect(panel).toBeHidden();
+      await expect(expander).toHaveText("20m ▾");
+      await expect(expander).toHaveAttribute("aria-expanded", "false");
+      await expectPopupAreaReleased(page, selectionPanelBounds);
       await expect(panel.locator('[data-field-mode-scale="20"]')).toHaveAttribute("aria-pressed", "true");
+      await expander.click();
+      await expect(panel).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      expect((await cameraState(page)).watchCalls).toBe(1);
       await panel.locator('[data-field-mode-scale="50"]').click();
       expect((await cameraState(page)).level).toBe(3);
+      await expect(panel).toBeHidden();
+      await expect(expander).toHaveText("50m ▾");
       await expect(panel.locator('[data-field-mode-scale="50"]')).toHaveAttribute("aria-pressed", "true");
+
+      await expander.click();
+      await expect(panel).toBeVisible();
+      const keyboardChoice = panel.locator('[data-field-mode-scale="20"]');
+      await keyboardChoice.focus();
+      await page.waitForTimeout(3100);
+      await expect(panel).toBeVisible();
+      await keyboardChoice.press("Escape");
+      await expect(panel).toBeHidden();
+      await expect(expander).toBeFocused();
+      await expander.click();
+      await expect(panel).toBeVisible();
+      await page.locator("#map").dispatchEvent("pointerdown");
+      await expect(panel).toBeHidden();
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
 
       // A small stationary jitter must not move either the camera or the car.
       const steady = await cameraState(page);
@@ -226,6 +278,8 @@ for (const device of devices) {
       expect(Math.abs(carBounds.y + carBounds.height / 2 - mapBounds.y - mapBounds.height / 2)).toBeLessThan(1);
       expect(apiRequests.length).toBe(apiBaseline);
       expect(await preservedState(page)).toEqual(before);
+      await expect(panel).toBeHidden();
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
       await page.screenshot({path: testInfo.outputPath("field-mode-on.png")});
 
       if (compact) {
@@ -243,6 +297,7 @@ for (const device of devices) {
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
       await expect(panel).toBeHidden();
+      await expect(expander).toBeHidden();
       await expect(dot).not.toHaveClass(/js-field-mode-car-v1/);
       await expect(dot.locator("svg")).toHaveCount(0);
       await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");

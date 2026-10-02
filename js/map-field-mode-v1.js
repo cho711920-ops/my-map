@@ -5,6 +5,8 @@
   var enabled = false;
   var scale = 50;
   var status = "내 위치 따라가기";
+  var controlsOpen = false;
+  var controlsTimer = null;
   var lastPosition = window.jsLastCurrentLocationPositionV1 || null;
   var acceptedPosition = null;
   var pendingPosition = null;
@@ -67,7 +69,14 @@
       element.textContent = enabled ? "ON" : "OFF";
     });
     document.querySelectorAll("[data-field-mode-controls]").forEach(function (element) {
-      element.hidden = !enabled;
+      element.hidden = !enabled || !controlsOpen;
+    });
+    document.querySelectorAll("[data-field-mode-expand]").forEach(function (button) {
+      button.hidden = !enabled;
+      button.textContent = scale + "m ▾";
+      button.setAttribute("aria-expanded", String(enabled && controlsOpen));
+      button.setAttribute("aria-label", "지도 축척 " + scale + "m · 축척 선택 " + (controlsOpen ? "접기" : "열기"));
+      button.title = status + " · 축척 선택";
     });
     document.querySelectorAll("[data-field-mode-scale]").forEach(function (button) {
       var active = Number(button.getAttribute("data-field-mode-scale")) === scale;
@@ -77,6 +86,55 @@
     document.querySelectorAll("[data-field-mode-status]").forEach(function (element) {
       if (element.textContent !== status) element.textContent = status;
     });
+  }
+
+  function focusedControls() {
+    var focused = null;
+    document.querySelectorAll("[data-field-mode-controls]").forEach(function (element) {
+      if (element.contains(document.activeElement)) focused = element;
+    });
+    return focused;
+  }
+
+  function cancelControlsTimer() {
+    if (controlsTimer !== null) window.clearTimeout(controlsTimer);
+    controlsTimer = null;
+  }
+
+  function closeScaleControls(restoreFocus) {
+    cancelControlsTimer();
+    if (!controlsOpen) return;
+    var focused = restoreFocus ? focusedControls() : null;
+    controlsOpen = false;
+    syncControls();
+    if (focused) {
+      document.querySelectorAll("[data-field-mode-expand]").forEach(function (button) {
+        if (!button.hidden && button.getAttribute("aria-controls") === focused.id) button.focus({ preventScroll: true });
+      });
+    }
+  }
+
+  function scheduleControlsClose() {
+    cancelControlsTimer();
+    if (!enabled || !controlsOpen || !isVisible()) return;
+    controlsTimer = window.setTimeout(function () {
+      controlsTimer = null;
+      // Never hide a keyboard user's focused choice. Focusout starts a new
+      // bounded timer; GPS/status updates do not reopen or prolong this panel.
+      if (focusedControls()) return;
+      closeScaleControls(false);
+    }, 3000);
+  }
+
+  function toggleScaleControls() {
+    if (!enabled) return false;
+    if (controlsOpen) closeScaleControls(true);
+    else {
+      controlsOpen = true;
+      syncControls();
+      scheduleControlsClose();
+    }
+    return controlsOpen;
   }
 
   function setStatus(message) {
@@ -246,6 +304,8 @@
     acceptedPosition = null;
     lastUsableStamp = 0;
     enabled = next;
+    controlsOpen = next;
+    cancelControlsTimer();
     if (enabled) {
       bindMap();
       if (typeof window.closeMapQuickPopoversV657 === "function") window.closeMapQuickPopoversV657();
@@ -272,6 +332,7 @@
     }
     decorateMarker(markerContent);
     syncControls();
+    scheduleControlsClose();
     if (lastPosition && isVisible() && Date.now() - Number(lastPosition.timestamp) <= 8000) {
       renderPosition(lastPosition);
     }
@@ -281,6 +342,7 @@
   function setScale(value) {
     if (value !== 20 && value !== 50) return false;
     scale = value;
+    closeScaleControls(true);
     syncControls();
     centerOn(acceptedPosition);
     return true;
@@ -303,6 +365,7 @@
   }
 
   function suspend() {
+    closeScaleControls(false);
     cancelPending();
     acceptedPosition = null;
     freshAfter = Date.now();
@@ -313,13 +376,32 @@
   }
 
   document.addEventListener("visibilitychange", suspend);
+  document.addEventListener("pointerdown", function (event) {
+    if (!controlsOpen || !event.target || typeof event.target.closest !== "function") return;
+    if (!event.target.closest(".map-field-mode-wrap-v1, .map-field-mode-compact-v1")) closeScaleControls(false);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && controlsOpen) {
+      closeScaleControls(true);
+      event.preventDefault();
+    }
+  });
+  document.addEventListener("focusin", function (event) {
+    if (controlsOpen && event.target && typeof event.target.closest === "function" &&
+      event.target.closest("[data-field-mode-controls]")) cancelControlsTimer();
+  });
+  document.addEventListener("focusout", function (event) {
+    if (controlsOpen && event.target && typeof event.target.closest === "function" &&
+      event.target.closest("[data-field-mode-controls]")) scheduleControlsClose();
+  });
   window.addEventListener("pagehide", function () { pageHidden = true; suspend(); });
   window.addEventListener("pageshow", function () { pageHidden = false; suspend(); });
   window.JSFieldModeV1 = {
     toggle: function () { return setEnabled(!enabled); },
     setEnabled: setEnabled,
     setScale: setScale,
-    state: function () { return { enabled: enabled, scale: scale, status: status }; },
+    toggleScaleControls: toggleScaleControls,
+    state: function () { return { enabled: enabled, scale: scale, status: status, controlsOpen: controlsOpen }; },
     isFollowing: function () { return enabled; },
     onPosition: onPosition,
     onError: onError,
