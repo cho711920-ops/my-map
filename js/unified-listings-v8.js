@@ -84,6 +84,17 @@
     return text(originalImages(original)[0]);
   }
 
+  function thumbnailProxyUrl(url) {
+    try {
+      var parsed = new URL(text(url));
+      if (parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.port &&
+          /^(?:img\.kr\.gcp-karroter\.net|landthumb-phinf\.pstatic\.net|dnvefa72aowie\.cloudfront\.net|file1\.gongsilbox\.com)$/i.test(parsed.hostname)) {
+        return "/api/listing-image?url=" + encodeURIComponent(parsed.toString());
+      }
+    } catch (ignore) {}
+    return "";
+  }
+
   /*
    * 상세창 폭보다 훨씬 큰 당근 1440px 원본은 전환할 때마다 수신 시간이 길었습니다.
    * 상세/확대 보기에는 선명도가 충분한 960px 이미지를 사용하고 원본 링크는 그대로 보존합니다.
@@ -566,8 +577,10 @@
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggleCardDetail(\'' + encodedId + '\')">' +
-      (thumbnail ? '<img src="' + esc(thumbnail) + '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
-        'onerror="JSUnifiedListingsV8.imageError(this, true)">' : '<span>사진 없음</span>') +
+      (thumbnail ? '<img src="' + esc(thumbnail) + '" data-thumbnail-source-v8144="' + esc(thumbnail) +
+        '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
+        'onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" ' +
+        'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>사진 없음</span>') +
       (sourceUnavailable
         ? '<em class="transaction-check-ribbon-v8135">광고 미노출<b>확인 필요</b></em>'
         : '') +
@@ -823,6 +836,7 @@
         (images.length ? '<button type="button" class="unified-detail-hero-v8" ' +
           'onclick="JSUnifiedListingsV8.openDetailGallery(this)">' +
             '<img alt="매물 대표 사진" referrerpolicy="no-referrer" ' +
+              'onload="JSUnifiedListingsV8.detailImageLoaded(this)" ' +
               'onerror="JSUnifiedListingsV8.detailImageError(this)">' +
             '<span class="unified-detail-photo-count-v8" aria-live="polite"></span>' +
           '</button>' +
@@ -898,6 +912,7 @@
       image.style.display = "block";
       /* 대표 썸네일은 이미 목록에서 받은 동일 URL을 써서 중복 다운로드를 피합니다. */
       var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
+      image.setAttribute("data-detail-source-v8144", text(images[safeIndex]));
       try { image.fetchPriority = "high"; } catch (ignore) {}
       if (image.getAttribute("src") !== displaySource) image.src = displaySource;
       image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
@@ -1139,6 +1154,57 @@
     parent.classList.remove("has-photo");
     parent.classList.add("no-photo");
     if (showLabel && !parent.querySelector("span")) parent.insertAdjacentHTML("beforeend", "<span>사진 없음</span>");
+  }
+
+  function thumbnailImageError(image) {
+    if (!image || !image.parentElement) return;
+    var original = text(image.getAttribute("data-thumbnail-source-v8144"));
+    var proxy = thumbnailProxyUrl(original);
+    image._jsThumbnailFailedV8144 = true;
+    // Healthy thumbnails still load directly. Only a failed request uses the
+    // existing authenticated image cache, once per thumbnail element.
+    if (proxy && !image._jsThumbnailProxyTriedV8144 && image.getAttribute("src") !== proxy) {
+      image._jsThumbnailProxyTriedV8144 = true;
+      image.src = proxy;
+      return;
+    }
+    // Phone cards declare display:block!important. Hide only this failed image
+    // without letting its broken-image box cover the failure message.
+    image.style.setProperty("display", "none", "important");
+    var parent = image.parentElement;
+    parent.classList.remove("has-photo");
+    parent.classList.add("no-photo");
+    if (!parent.querySelector("[data-thumbnail-error-v8144]")) {
+      parent.insertAdjacentHTML("beforeend", '<span data-thumbnail-error-v8144>사진 불러오기 실패</span>');
+    }
+  }
+
+  function thumbnailImageLoaded(image) {
+    if (!image || !image.parentElement) return;
+    image._jsThumbnailFailedV8144 = false;
+    image.style.display = "";
+    var parent = image.parentElement;
+    parent.classList.remove("no-photo");
+    parent.classList.add("has-photo");
+    var label = parent.querySelector("[data-thumbnail-error-v8144]");
+    if (label) label.remove();
+  }
+
+  function detailImageLoaded(image) {
+    if (!image) return;
+    var original = text(image.getAttribute("data-detail-source-v8144"));
+    var loadedSource = text(image.getAttribute("src"));
+    if (!original || !loadedSource || (loadedSource !== original && loadedSource !== detailDisplayImageUrl(original))) return;
+    // Repair only already-failed thumbnails of this exact photo. Do not
+    // rerender the list or fetch other listings when a detail photo succeeds.
+    document.querySelectorAll(".unified-thumb-v8 img[data-thumbnail-source-v8144]").forEach(function(thumbnail) {
+      if (!thumbnail._jsThumbnailFailedV8144 || text(thumbnail.getAttribute("data-thumbnail-source-v8144")) !== original) return;
+      var recovered = thumbnail._jsThumbnailRecoverySourcesV8144 || (thumbnail._jsThumbnailRecoverySourcesV8144 = []);
+      if (recovered.indexOf(loadedSource) >= 0) return;
+      recovered.push(loadedSource);
+      if (loadedSource === thumbnailProxyUrl(original)) thumbnail._jsThumbnailProxyTriedV8144 = true;
+      thumbnail.src = loadedSource;
+    });
   }
 
   function setSaving(active, failed) {
@@ -1619,7 +1685,8 @@
     openGallery: openGallery, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts,
-    imageError: imageError, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
+    imageError: imageError, thumbnailImageError: thumbnailImageError, thumbnailImageLoaded: thumbnailImageLoaded,
+    detailImageLoaded: detailImageLoaded, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError,
     runDetailAction: runDetailAction, openExternalLink: openExternalLink
   };
