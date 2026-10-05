@@ -36,18 +36,10 @@
   // Kakao ROADMAP scale labels: level 1 = 20m, level 3 = 50m.
   // https://devtalk.kakao.com/t/topic/35624
   var levels = { 20: 1, 50: 3 };
-  var carSvg = '<svg class="js-field-mode-car-icon-v1" viewBox="0 0 36 44" aria-hidden="true">' +
-    '<g class="js-field-mode-direction-cue-v1" fill="none" stroke-linecap="round" stroke-linejoin="round">' +
-      '<path d="m12-5 6-7 6 7" stroke="white" stroke-width="7"/>' +
-      '<path d="m12-5 6-7 6 7" stroke="#b91c1c" stroke-width="3.5"/></g>' +
-    '<path d="M7 11v7m22-7v7M7 30v7m22-7v7" stroke="#1e293b" stroke-width="4" stroke-linecap="round"/>' +
-    '<path data-field-car-body d="M18 1c-7 0-10 5-10 11v25q0 5 5 5h10q5 0 5-5V12C28 6 25 1 18 1Z" fill="#dc2626" stroke="white" stroke-width="2.5"/>' +
-    '<path d="m12 15 2-4h8l2 4 1 5H11Z" fill="#bae6fd" stroke="#7f1d1d" stroke-width="1.2"/>' +
-    '<rect x="12" y="22" width="12" height="9" rx="2" fill="#ef4444"/>' +
-    '<path d="M12 33h12l-1 4H13Z" fill="#475569"/>' +
-    '<path d="m12 7 2-1m8 0 2 1" stroke="#fef08a" stroke-width="3" stroke-linecap="round"/>' +
-    '<path d="M11 39h3m8 0h3" stroke="#fca5a5" stroke-width="2" stroke-linecap="round"/>' +
-    '<path d="m16 8 2-2 2 2" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+  // Retain the existing marker/rotation hooks; only the artwork changes.
+  var markerSvg = '<svg class="js-field-mode-car-icon-v1 js-field-mode-navigation-icon-v1" viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path data-field-navigation-pointer d="m12 2 7 19-7-4-7 4Z" fill="#dc2626" stroke="white" stroke-width="1.3" stroke-linejoin="round"/>' +
+    '<circle data-field-navigation-pending cx="12" cy="12" r="4" fill="#dc2626" stroke="white" stroke-width="1.5"/></svg>' +
     '<span class="js-field-mode-heading-pending-v1" aria-hidden="true">방향 확인 중</span>';
 
   function isVisible() {
@@ -185,7 +177,7 @@
     markerContent = content;
     var wasCar = content.classList.contains("js-field-mode-car-v1");
     content.classList.toggle("js-field-mode-car-v1", enabled);
-    if (wasCar !== enabled) content.innerHTML = enabled ? carSvg : "";
+    if (wasCar !== enabled) content.innerHTML = enabled ? markerSvg : "";
     syncHeadingMarker();
   }
 

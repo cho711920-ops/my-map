@@ -174,12 +174,16 @@
   transition: transform .3s ease-out;
 }
 
-.js-field-mode-direction-cue-v1 {
+.js-field-mode-car-v1 [data-field-navigation-pointer] {
   visibility: hidden;
 }
 
-.js-field-mode-heading-known-v1 .js-field-mode-direction-cue-v1 {
+.js-field-mode-heading-known-v1 [data-field-navigation-pointer] {
   visibility: visible;
+}
+
+.js-field-mode-heading-known-v1 [data-field-navigation-pending] {
+  visibility: hidden;
 }
 
 .js-field-mode-heading-pending-v1 {

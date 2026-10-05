@@ -129,18 +129,34 @@ async function expectWithinMap(page, selector) {
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(map.y + map.height + 1);
 }
 
-async function expectCarCentered(page) {
-  const carBounds = await page.locator(".js-current-location-dot-v630").boundingBox();
+async function expectPointerCentered(page) {
+  const pointerBounds = await page.locator(".js-current-location-dot-v630").boundingBox();
   const mapBounds = await page.locator("#map").boundingBox();
-  expect(carBounds).not.toBeNull();
+  expect(pointerBounds).not.toBeNull();
   expect(mapBounds).not.toBeNull();
-  expect(carBounds.width).toBe(36);
-  expect(carBounds.height).toBe(44);
-  expect(Math.abs(carBounds.x + carBounds.width / 2 - mapBounds.x - mapBounds.width / 2)).toBeLessThan(1);
-  expect(Math.abs(carBounds.y + carBounds.height / 2 - mapBounds.y - mapBounds.height / 2)).toBeLessThan(1);
+  expect(pointerBounds.width).toBe(36);
+  expect(pointerBounds.height).toBe(44);
+  expect(Math.abs(pointerBounds.x + pointerBounds.width / 2 - mapBounds.x - mapBounds.width / 2)).toBeLessThan(1);
+  expect(Math.abs(pointerBounds.y + pointerBounds.height / 2 - mapBounds.y - mapBounds.height / 2)).toBeLessThan(1);
 }
 
-async function expectCarHeading(page, heading) {
+async function expectNavigationArtwork(dot) {
+  const icon = dot.locator("svg");
+  const pointer = icon.locator("[data-field-navigation-pointer]");
+  await expect(icon).toHaveCount(1);
+  await expect(icon).toHaveClass(/js-field-mode-navigation-icon-v1/);
+  await expect(icon).toHaveAttribute("viewBox", "0 0 24 24");
+  await expect(icon.locator("path")).toHaveCount(1);
+  await expect(pointer).toHaveAttribute("d", "m12 2 7 19-7-4-7 4Z");
+  await expect(pointer).toHaveAttribute("fill", "#dc2626");
+  await expect(pointer).toHaveAttribute("stroke", "white");
+  await expect(pointer).toHaveAttribute("stroke-width", "1.3");
+  await expect(icon.locator("circle")).toHaveCount(1);
+  await expect(icon.locator("[data-field-navigation-pending]")).toHaveAttribute("fill", "#dc2626");
+  await expect(dot.locator("[data-field-car-body], .js-field-mode-direction-cue-v1")).toHaveCount(0);
+}
+
+async function expectPointerHeading(page, heading) {
   await expect.poll(() => page.locator(".js-field-mode-car-icon-v1").evaluate((element) => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
     const angle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
@@ -228,7 +244,9 @@ for (const device of devices) {
       await expect(panel.locator("[data-field-mode-status]")).toHaveText("내 위치 따라가는 중");
       await expectWithinMap(page, compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       await expect(dot).toHaveClass(/js-field-mode-car-v1/);
-      await expect(dot.locator("[data-field-car-body]")).toHaveAttribute("fill", "#dc2626");
+      await expectNavigationArtwork(dot);
+      await expect(dot.locator("[data-field-navigation-pointer]")).toBeHidden();
+      await expect(dot.locator("[data-field-navigation-pending]")).toBeVisible();
       await expect(dot).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       expect(await cameraState(page)).toMatchObject({center: [36.3504, 127.3845], position: [36.3504, 127.3845], level: 3, draggable: false, zoomable: false, watchCalls: 1});
 
@@ -273,7 +291,7 @@ for (const device of devices) {
       await expect(panel).toBeHidden();
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
 
-      // A small stationary jitter must not move either the camera or the car.
+      // A small stationary jitter must not move either the camera or the pointer.
       const steady = await cameraState(page);
       await page.evaluate(() => {
         for (let index = 0; index < 12; index += 1) window.__fieldFixture.fix(36.350405, 127.384505);
@@ -281,15 +299,19 @@ for (const device of devices) {
       await page.waitForTimeout(1050);
       expect(await cameraState(page)).toEqual(steady);
 
-      // A burst of real movement settles at the newest fix without API reads.
+      // A burst with a confirmed GPS course settles at the newest fix without API reads.
       await page.evaluate(() => {
-        for (let index = 1; index <= 12; index += 1) window.__fieldFixture.fix(36.3504 + index * 0.0001, 127.3845 + index * 0.0001);
+        for (let index = 1; index <= 12; index += 1) {
+          window.__fieldFixture.fix(36.3504 + index * 0.0001, 127.3845 + index * 0.0001, 8, {heading: 45, speed: 4});
+        }
       });
       await expect.poll(async () => (await cameraState(page)).center[0]).toBeCloseTo(36.3516, 7);
       const moved = await cameraState(page);
       expect(moved.position[0]).toBeCloseTo(36.3516, 7);
       expect(moved.position[1]).toBeCloseTo(127.3857, 7);
-      await expectCarCentered(page);
+      await expectPointerCentered(page);
+      await expect(dot.locator("[data-field-navigation-pointer]")).toBeVisible();
+      await expect(dot.locator("[data-field-navigation-pending]")).toBeHidden();
       expect(apiRequests.length).toBe(apiBaseline);
       expect(await preservedState(page)).toEqual(before);
       await expect(panel).toBeHidden();
@@ -344,7 +366,7 @@ for (const device of devices) {
   });
 }
 
-test("GPS course turns the centered car through cardinal directions and restores the dot on OFF", async ({browser, baseURL}, testInfo) => {
+test("GPS course turns the centered navigation pointer through cardinal directions and restores the dot on OFF", async ({browser, baseURL}, testInfo) => {
   const context = await browser.newContext({
     serviceWorkers: "block", isMobile: true, hasTouch: true, userAgent: tabletUA,
     viewport: {width: 1280, height: 800}, screen: {width: 1280, height: 800}, reducedMotion: "no-preference"
@@ -369,10 +391,15 @@ test("GPS course turns the centered car through cardinal directions and restores
     const dot = page.locator(".js-current-location-dot-v630");
     const icon = dot.locator(".js-field-mode-car-icon-v1");
     await toggle.click();
+    await expectNavigationArtwork(dot);
+    await expect(dot.locator("[data-field-navigation-pointer]")).toHaveCSS("visibility", "hidden");
+    await expect(dot.locator("[data-field-navigation-pointer]")).toBeHidden();
+    await expect(dot.locator("[data-field-navigation-pending]")).toHaveCSS("visibility", "visible");
+    await expect(dot.locator("[data-field-navigation-pending]")).toBeVisible();
     await expect(dot.locator(".js-field-mode-heading-pending-v1")).toHaveText("방향 확인 중");
     await expect(dot.locator(".js-field-mode-heading-pending-v1")).toBeVisible();
     expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: null, headingSource: ""});
-    await expectCarCentered(page);
+    await expectPointerCentered(page);
     await page.screenshot({path: testInfo.outputPath("field-heading-pending.png")});
 
     const courses = [
@@ -384,29 +411,40 @@ test("GPS course turns the centered car through cardinal directions and restores
     for (const course of courses) {
       await page.evaluate(({lat, lng, heading}) => window.__fieldFixture.fix(lat, lng, 8, {heading, speed: 4}), course);
       await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(course.heading);
-      await expectCarHeading(page, course.heading);
+      await expectPointerHeading(page, course.heading);
       expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: course.heading, headingSource: "gps"});
       await expect.poll(async () => (await cameraState(page)).center).toEqual([course.lat, course.lng]);
       await expect(dot).toHaveClass(/js-field-mode-heading-known-v1/);
       await expect(dot.locator(".js-field-mode-heading-pending-v1")).toBeHidden();
-      await expect(dot.locator(".js-field-mode-direction-cue-v1")).toBeVisible();
-      await expectCarCentered(page);
+      await expect(dot.locator("[data-field-navigation-pointer]")).toHaveCSS("visibility", "visible");
+      await expect(dot.locator("[data-field-navigation-pointer]")).toBeVisible();
+      await expect(dot.locator("[data-field-navigation-pending]")).toHaveCSS("visibility", "hidden");
+      await expect(dot.locator("[data-field-navigation-pending]")).toBeHidden();
+      await expect(dot.locator(".js-field-mode-direction-cue-v1")).toHaveCount(0);
+      await expectPointerCentered(page);
       await expect(page.locator("#map")).toHaveCSS("transform", "none");
       await page.screenshot({path: testInfo.outputPath("field-heading-" + course.name + ".png")});
+      if (course.name === "north") {
+        const bounds = await dot.boundingBox();
+        await page.screenshot({
+          path: testInfo.outputPath("navigation-pointer-preview.png"),
+          clip: {x: bounds.x + bounds.width / 2 - 80, y: bounds.y + bounds.height / 2 - 70, width: 160, height: 140}
+        });
+      }
     }
 
     // A parked receiver can report a different heading; keep the last travel
     // direction and avoid moving the overlay or camera for stationary jitter.
     const parked = await cameraState(page);
     await page.evaluate(() => window.__fieldFixture.fix(36.350405, 127.384505, 8, {heading: 90, speed: 0}));
-    await expectCarHeading(page, 270);
+    await expectPointerHeading(page, 270);
     expect(await cameraState(page)).toEqual(parked);
 
     await page.evaluate(() => window.__fieldFixture.fix(36.3514, 127.3845, 8, {heading: 359, speed: 4}));
-    await expectCarHeading(page, 359);
+    await expectPointerHeading(page, 359);
     const beforeNorth = await dot.evaluate((element) => parseFloat(element.style.getPropertyValue("--js-field-mode-heading")));
     await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3845, 8, {heading: 1, speed: 4}));
-    await expectCarHeading(page, 1);
+    await expectPointerHeading(page, 1);
     const afterNorth = await dot.evaluate((element) => parseFloat(element.style.getPropertyValue("--js-field-mode-heading")));
     expect(afterNorth - beforeNorth).toBe(2);
     await expect(dot).toHaveClass(/js-field-mode-heading-turn-v1/);
@@ -415,9 +453,9 @@ test("GPS course turns the centered car through cardinal directions and restores
     await page.emulateMedia({reducedMotion: "reduce"});
     await expect(icon).toHaveCSS("transition-duration", "0s");
     await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3855, 8, {heading: 90, speed: 4}));
-    await expectCarHeading(page, 90);
+    await expectPointerHeading(page, 90);
     await expect.poll(async () => (await cameraState(page)).center).toEqual([36.3524, 127.3855]);
-    await expectCarCentered(page);
+    await expectPointerCentered(page);
     await expect(page.locator("#mapFieldModeControlsV1")).toBeHidden();
     expect((await cameraState(page)).watchCalls).toBe(1);
     await expect(dot).toHaveCount(1);

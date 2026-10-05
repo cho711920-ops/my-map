@@ -627,6 +627,28 @@ test("the existing location overlay switches to the field marker and restores it
   assert.equal(overlay.content.innerHTML, ordinaryMarkup);
 });
 
+test("field mode uses one simple navigation pointer with a neutral unknown-direction dot", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(app.fix());
+  const content = app.context.jsCurrentLocationOverlayV630.getContent();
+  assert.match(content.innerHTML, /js-field-mode-navigation-icon-v1/);
+  assert.match(content.innerHTML, /data-field-navigation-pointer/);
+  assert.match(content.innerHTML, /data-field-navigation-pending/);
+  assert.match(content.innerHTML, /방향 확인 중/);
+  assert.equal((content.innerHTML.match(/<path\b/g) || []).length, 1);
+  assert.doesNotMatch(content.innerHTML, /data-field-car-body|js-field-mode-direction-cue-v1|<rect\b/);
+  assertHeading(app, null, "");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  assertHeading(app, 90, "gps");
+  assert.equal(markerHeading(app), "90deg");
+  app.api.setEnabled(false);
+  assert.equal(content.innerHTML, "");
+  assert.equal(markerHeading(app), "");
+  assert.equal(app.calls.watches.length, 1);
+});
+
 test("deferred field mode adopts the existing marker, recent fix and shared watcher", () => {
   const app = createRuntime({ deferController: true });
   app.context.startCurrentLocationTrackingV630();
