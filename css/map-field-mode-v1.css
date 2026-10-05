@@ -140,6 +140,7 @@
 
 /* Only the enabled marker replaces the ordinary purple current-location dot. */
 .js-current-location-dot-v630.js-field-mode-car-v1 {
+  position: relative;
   width: 36px;
   height: 44px;
   padding: 0;
@@ -163,6 +164,49 @@
   width: 36px;
   height: 44px;
   overflow: visible;
+  transform: rotate(var(--js-field-mode-heading, 0deg));
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+  filter: drop-shadow(0 1px 2px rgba(45, 25, 25, .3));
+}
+
+.js-field-mode-car-v1.js-field-mode-heading-turn-v1 .js-field-mode-car-icon-v1 {
+  transition: transform .3s ease-out;
+}
+
+.js-field-mode-direction-cue-v1 {
+  visibility: hidden;
+}
+
+.js-field-mode-heading-known-v1 .js-field-mode-direction-cue-v1 {
+  visibility: visible;
+}
+
+.js-field-mode-heading-pending-v1 {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 5px;
+  border: 1px solid #d6dde6;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .95);
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.js-field-mode-heading-known-v1 .js-field-mode-heading-pending-v1 {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js-field-mode-car-v1.js-field-mode-heading-turn-v1 .js-field-mode-car-icon-v1 {
+    transition: none;
+  }
 }
 
 @media (max-width: 768px) {

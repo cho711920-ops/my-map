@@ -21,17 +21,34 @@
   var boundMap = null;
   var previousInteraction = null;
   var markerContent = null;
+  var heading = null;
+  var headingSource = "";
+  var headingRotation = 0;
+  var headingHasTurn = false;
+  var headingAnchor = null;
+  var lastHeadingStamp = 0;
   var MOVE_INTERVAL_MS = 1000;
   var MAX_FIX_AGE_MS = 30000;
+  var MAX_HEADING_ACCURACY = 35;
+  var MIN_HEADING_SPEED = 0.8;
+  var MAX_HEADING_SPEED = 60;
+  var MAX_HEADING_GAP_MS = 20000;
   // Kakao ROADMAP scale labels: level 1 = 20m, level 3 = 50m.
   // https://devtalk.kakao.com/t/topic/35624
   var levels = { 20: 1, 50: 3 };
   var carSvg = '<svg class="js-field-mode-car-icon-v1" viewBox="0 0 36 44" aria-hidden="true">' +
-    '<path d="M9 7H7v7h2m18-7h2v7h-2M9 30H7v7h2m18-7h2v7h-2" stroke="#334155" stroke-width="4" stroke-linecap="round"/>' +
-    '<rect x="8" y="2" width="20" height="40" rx="8" fill="#dc2626" stroke="white" stroke-width="2.5"/>' +
-    '<path d="m12 10 2-3h8l2 3 1 5H11Zm0 21h12l-1 5H13Z" fill="#dbeafe" stroke="#991b1b" stroke-width="1"/>' +
-    '<rect x="12" y="18" width="12" height="10" rx="2" fill="#ef4444"/>' +
-    '<path d="M11 5h3m8 0h3" stroke="#fff7ed" stroke-width="2" stroke-linecap="round"/></svg>';
+    '<g class="js-field-mode-direction-cue-v1" fill="none" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="m12-5 6-7 6 7" stroke="white" stroke-width="7"/>' +
+      '<path d="m12-5 6-7 6 7" stroke="#b91c1c" stroke-width="3.5"/></g>' +
+    '<path d="M7 11v7m22-7v7M7 30v7m22-7v7" stroke="#1e293b" stroke-width="4" stroke-linecap="round"/>' +
+    '<path data-field-car-body d="M18 1c-7 0-10 5-10 11v25q0 5 5 5h10q5 0 5-5V12C28 6 25 1 18 1Z" fill="#dc2626" stroke="white" stroke-width="2.5"/>' +
+    '<path d="m12 15 2-4h8l2 4 1 5H11Z" fill="#bae6fd" stroke="#7f1d1d" stroke-width="1.2"/>' +
+    '<rect x="12" y="22" width="12" height="9" rx="2" fill="#ef4444"/>' +
+    '<path d="M12 33h12l-1 4H13Z" fill="#475569"/>' +
+    '<path d="m12 7 2-1m8 0 2 1" stroke="#fef08a" stroke-width="3" stroke-linecap="round"/>' +
+    '<path d="M11 39h3m8 0h3" stroke="#fca5a5" stroke-width="2" stroke-linecap="round"/>' +
+    '<path d="m16 8 2-2 2 2" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+    '<span class="js-field-mode-heading-pending-v1" aria-hidden="true">방향 확인 중</span>';
 
   function isVisible() {
     return !pageHidden && !document.hidden && document.visibilityState !== "hidden";
@@ -168,13 +185,109 @@
     markerContent = content;
     var wasCar = content.classList.contains("js-field-mode-car-v1");
     content.classList.toggle("js-field-mode-car-v1", enabled);
-    content.setAttribute("title", enabled ? "내 위치 · 임장모드" : "현재 위치");
-    content.setAttribute("aria-label", enabled ? "내 위치 · 임장모드" : "현재 위치");
     if (wasCar !== enabled) content.innerHTML = enabled ? carSvg : "";
+    syncHeadingMarker();
+  }
+
+  function syncHeadingMarker() {
+    if (!markerContent) return;
+    var known = enabled && heading !== null;
+    markerContent.classList.toggle("js-field-mode-heading-known-v1", known);
+    markerContent.classList.toggle("js-field-mode-heading-turn-v1", known && headingHasTurn);
+    if (enabled) markerContent.style.setProperty("--js-field-mode-heading", headingRotation + "deg");
+    else markerContent.style.removeProperty("--js-field-mode-heading");
+    var label = enabled ? "내 위치 · 임장모드 · " + (known ? "마지막 확인 이동 방향 " + Math.round(heading) + "도" : "방향 확인 중") : "현재 위치";
+    markerContent.setAttribute("title", label);
+    markerContent.setAttribute("aria-label", label);
+  }
+
+  function resetHeading() {
+    heading = null;
+    headingSource = "";
+    headingRotation = 0;
+    headingHasTurn = false;
+    headingAnchor = null;
+    lastHeadingStamp = 0;
+    syncHeadingMarker();
+  }
+
+  function setHeading(value, source) {
+    if (heading === null) {
+      headingRotation = value;
+    } else {
+      // Unwrap north-crossing turns: 359 -> 1 becomes 359 -> 361, not a full spin.
+      var delta = (value - heading + 540) % 360 - 180;
+      if (Math.abs(delta) < 0.5) {
+        headingSource = source;
+        return;
+      }
+      headingRotation += delta;
+      headingHasTurn = true;
+    }
+    heading = value;
+    headingSource = source;
+    syncHeadingMarker();
+  }
+
+  function bearingDegrees(from, to) {
+    var radians = Math.PI / 180;
+    var lat1 = from.coords.latitude * radians;
+    var lat2 = to.coords.latitude * radians;
+    var lng = (to.coords.longitude - from.coords.longitude) * radians;
+    var y = Math.sin(lng) * Math.cos(lat2);
+    var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lng);
+    return (Math.atan2(y, x) / radians + 360) % 360;
+  }
+
+  function updateHeading(position) {
+    var stamp = Number(position.timestamp);
+    // A raw fix may be replayed by the throttled marker renderer. Never use it twice.
+    if (stamp <= lastHeadingStamp) return;
+    lastHeadingStamp = stamp;
+    if (position.coords.accuracy > MAX_HEADING_ACCURACY) {
+      headingAnchor = null;
+      return;
+    }
+    var speed = position.coords.speed;
+    var hasSpeed = typeof speed === "number" && Number.isFinite(speed) && speed >= 0;
+    if (hasSpeed && speed > MAX_HEADING_SPEED) {
+      headingAnchor = null;
+      return;
+    }
+    if (hasSpeed && speed < MIN_HEADING_SPEED) {
+      // Keep the last course while stopped; do not accumulate stationary GPS drift.
+      headingAnchor = position;
+      return;
+    }
+    var course = position.coords.heading;
+    // Heading is travel direction clockwise from true north, not device orientation.
+    // https://www.w3.org/TR/geolocation/#heading-attribute
+    if (hasSpeed && typeof course === "number" && Number.isFinite(course) && course >= 0 && course < 360) {
+      headingAnchor = position;
+      setHeading(course, "gps");
+      return;
+    }
+    var previous = headingAnchor;
+    if (!previous || stamp - Number(previous.timestamp) > MAX_HEADING_GAP_MS) {
+      headingAnchor = position;
+      return;
+    }
+    var elapsed = (stamp - Number(previous.timestamp)) / 1000;
+    var distance = distanceMeters(previous, position);
+    if (distance / elapsed > MAX_HEADING_SPEED) {
+      headingAnchor = position;
+      return;
+    }
+    // Both endpoints' uncertainty must be cleared before inferring travel from fixes.
+    if (distance >= Math.max(8, previous.coords.accuracy + position.coords.accuracy)) {
+      setHeading(bearingDegrees(previous, position), "movement");
+      headingAnchor = position;
+    }
   }
 
   function expireFix() {
     cancelPending();
+    resetHeading();
     acceptedPosition = null;
     lastUsableStamp = 0;
     if (enabled) {
@@ -249,16 +362,21 @@
   }
 
   function onPosition(position) {
-    if (!validCoordinates(position)) return null;
+    if (!validCoordinates(position)) {
+      if (!position || Number(position.timestamp) >= lastHeadingStamp) headingAnchor = null;
+      return null;
+    }
     if (!lastPosition || Number(position.timestamp) >= Number(lastPosition.timestamp)) lastPosition = position;
     if (!enabled) return position;
     if (!isVisible()) return null;
     if (!usableFix(position)) {
+      if (Number(position.timestamp) >= lastHeadingStamp) headingAnchor = null;
       setStatus(position.coords.accuracy > 100 ? "위치 정확도 낮음 · 확인 중" : "새 위치 확인 중");
       return null;
     }
     if (acceptedPosition && Number(position.timestamp) < Number(acceptedPosition.timestamp)) return null;
     refreshFixExpiry(position);
+    updateHeading(position);
     if (acceptedPosition && distanceMeters(position, acceptedPosition) < 3) {
       // The newest fix can supersede a queued GPS jump back to the same spot.
       if (pendingPosition && Number(position.timestamp) >= Number(pendingPosition.timestamp)) {
@@ -304,6 +422,7 @@
     acceptedPosition = null;
     lastUsableStamp = 0;
     enabled = next;
+    resetHeading();
     controlsOpen = next;
     cancelControlsTimer();
     if (enabled) {
@@ -351,6 +470,7 @@
   function onError(error) {
     if (!enabled) return;
     cancelPending();
+    resetHeading();
     acceptedPosition = null;
     hideMarker();
     if (error && error.code === 1) {
@@ -367,6 +487,7 @@
   function suspend() {
     closeScaleControls(false);
     cancelPending();
+    resetHeading();
     acceptedPosition = null;
     freshAfter = Date.now();
     if (enabled) {
@@ -401,7 +522,7 @@
     setEnabled: setEnabled,
     setScale: setScale,
     toggleScaleControls: toggleScaleControls,
-    state: function () { return { enabled: enabled, scale: scale, status: status, controlsOpen: controlsOpen }; },
+    state: function () { return { enabled: enabled, scale: scale, status: status, controlsOpen: controlsOpen, heading: heading, headingSource: headingSource }; },
     isFollowing: function () { return enabled; },
     onPosition: onPosition,
     onError: onError,

@@ -33,7 +33,11 @@ function element(tagName = "div") {
   const node = eventTarget({
     tagName: tagName.toUpperCase(),
     children: [],
-    style: { setProperty(name, value) { this[name] = value; }, removeProperty(name) { delete this[name]; } },
+    style: {
+      setProperty(name, value) { this[name] = String(value); },
+      removeProperty(name) { delete this[name]; },
+      getPropertyValue(name) { return this[name] || ""; }
+    },
     dataset: {},
     textContent: "",
     innerHTML: "",
@@ -293,6 +297,27 @@ function createRuntime(options = {}) {
 
 function coordinatePair(position) {
   return [position.getLat(), position.getLng()];
+}
+
+function fieldFix(app, options = {}) {
+  const { north = 0, east = 0, accuracy = 4, heading, speed, timestamp = app.clock.now } = options;
+  const latitude = 36.3504 + north / 111195;
+  const longitude = 127.3845 + east / (111195 * Math.cos(36.3504 * Math.PI / 180));
+  const position = app.fix(latitude, longitude, accuracy, timestamp);
+  if (Object.hasOwn(options, "heading")) position.coords.heading = heading;
+  if (Object.hasOwn(options, "speed")) position.coords.speed = speed;
+  return position;
+}
+
+function markerHeading(app) {
+  return app.context.jsCurrentLocationOverlayV630.getContent().style.getPropertyValue("--js-field-mode-heading");
+}
+
+function assertHeading(app, expected, source, message) {
+  const state = app.api.state();
+  if (expected === null) assert.equal(state.heading, null, message);
+  else assert.ok(Math.abs(state.heading - expected) < 0.1, message || `expected heading ${expected}, received ${state.heading}`);
+  assert.equal(state.headingSource, source, message);
 }
 
 function createIdleRuntime(pin = null) {
@@ -666,6 +691,262 @@ test("disabled mode preserves ordinary valid fixes without applying the follow a
   assert.equal(app.api.onPosition(app.fix(91)), null);
   assert.equal(app.api.onPosition(app.fix("36.35")), null);
   assert.equal(app.calls.centers.length, 0);
+});
+
+test("direction starts unknown and native GPS course supports all cardinal directions including zero", () => {
+  const app = createRuntime();
+  assertHeading(app, null, "");
+  app.api.setEnabled(true);
+  app.update(fieldFix(app));
+  const content = app.context.jsCurrentLocationOverlayV630.getContent();
+  assertHeading(app, null, "");
+  assert.equal(content.classList.contains("js-field-mode-heading-known-v1"), false);
+  assert.match(content.getAttribute("aria-label"), /방향 확인 중/);
+
+  for (const heading of [0, 90, 180, 270]) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading, speed: 0.8, accuracy: 35 }));
+    assertHeading(app, heading, "gps");
+    assert.equal(content.classList.contains("js-field-mode-heading-known-v1"), true);
+    assert.doesNotMatch(content.getAttribute("aria-label"), /방향 확인 중/);
+    assert.equal(markerHeading(app), `${heading}deg`);
+  }
+  assert.equal(app.calls.centers.length, 1, "course changes at one coordinate do not move the camera");
+  assert.equal(app.calls.markers.length, 1, "course changes reuse the existing marker content");
+  assert.equal(app.calls.watches.length, 1);
+});
+
+test("native direction requires numeric finite course, movement speed and sufficiently accurate GPS", () => {
+  const invalid = [
+    ...[null, undefined, NaN, Infinity, -1, 360, 720, "90"].map((heading) => ({ heading, speed: 2 })),
+    ...[null, undefined, NaN, Infinity, -1, "2", 0, 0.79, 61].map((speed) => ({ heading: 90, speed })),
+    { heading: 90, speed: 2, accuracy: 35.01 },
+    { heading: 90, speed: 2, accuracy: 100 }
+  ];
+  for (const motion of invalid) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, motion));
+    assertHeading(app, null, "", `unreliable native course must remain unknown: ${String(motion.heading)}, ${String(motion.speed)}`);
+    assert.equal(app.context.jsCurrentLocationOverlayV630.getContent().classList.contains("js-field-mode-heading-known-v1"), false);
+  }
+});
+
+test("fresh native heading updates before tiny-position jitter and camera throttling return", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 0, speed: 2 }));
+  app.clock.advance(200);
+  app.update(fieldFix(app, { east: 0.5, heading: 90, speed: 2 }));
+  assertHeading(app, 90, "gps");
+  assert.equal(markerHeading(app), "90deg");
+  assert.equal(app.calls.centers.length, 1);
+  assert.equal(app.calls.markers.length, 1);
+  app.clock.advance(200);
+  app.update(fieldFix(app, { east: 10, heading: 180, speed: 2 }));
+  assertHeading(app, 180, "gps", "a queued camera position still supplies its fresh GPS course immediately");
+  assert.equal(app.calls.centers.length, 1);
+  app.clock.advance(600);
+  assertHeading(app, 180, "gps");
+  assert.equal(app.calls.centers.length, 2);
+  assert.equal(app.calls.navigation.length, 3, "display replay must not add another GPS cache write");
+});
+
+test("movement direction accumulates subthreshold fixes independently of the displayed location", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app));
+  for (const north of [2, 4, 6]) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north, heading: null, speed: null }));
+    assertHeading(app, null, "", "small GPS steps alone do not establish a reliable course");
+  }
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 10, heading: NaN, speed: null }));
+  assertHeading(app, 0, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 10, east: 10 }));
+  assertHeading(app, 90, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { east: 10 }));
+  assertHeading(app, 180, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app));
+  assertHeading(app, 270, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 270, speed: 2 }));
+  assertHeading(app, 270, "gps", "native GPS can confirm the same direction without a visible turn");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { east: -10 }));
+  assertHeading(app, 270, "movement", "the source updates even when fallback confirms the same direction");
+});
+
+test("movement direction must exceed combined endpoint accuracy", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { accuracy: 10 }));
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 16, accuracy: 10 }));
+  assertHeading(app, null, "", "16m displacement is uncertain when endpoint errors total 20m");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 24, accuracy: 10 }));
+  assertHeading(app, 0, "movement", "retaining the original baseline allows enough displacement to accumulate");
+});
+
+test("explicit stationary speed holds the last course and discards movement drift", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  for (const [north, speed] of [[10, 0], [20, 0.4], [30, 0.79]]) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north, heading: 180, speed }));
+    assertHeading(app, 90, "gps", "stationary drift must not alter the last reliable direction");
+  }
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 32 }));
+  assertHeading(app, 90, "gps", "resuming without native speed starts a new movement baseline");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 34 }));
+  assertHeading(app, 90, "gps");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 44 }));
+  assertHeading(app, 0, "movement");
+});
+
+test("invalid, coarse and implausible-speed fixes clear the movement baseline without erasing the last direction", () => {
+  for (const invalid of ["coarse", "invalid coordinates", "invalid accuracy", "implausible speed"]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { heading: 90, speed: 2 }));
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north: 2 }));
+    app.clock.advance(1000);
+    const position = fieldFix(app, { north: 20, accuracy: invalid === "coarse" ? 36 : 4 });
+    if (invalid === "invalid coordinates") position.coords.latitude = NaN;
+    if (invalid === "invalid accuracy") position.coords.accuracy = NaN;
+    if (invalid === "implausible speed") Object.assign(position.coords, { heading: 180, speed: 61 });
+    app.update(position);
+    assertHeading(app, 90, "gps", invalid);
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north: 24 }));
+    assertHeading(app, 90, "gps", `a ${invalid} fix must not bridge the old movement baseline`);
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north: 36 }));
+    assertHeading(app, 0, "movement");
+  }
+});
+
+test("movement course rejects stale baselines and implausibly fast GPS jumps", () => {
+  const gap = createRuntime();
+  gap.api.setEnabled(true);
+  gap.update(fieldFix(gap));
+  gap.clock.advance(21000);
+  gap.update(fieldFix(gap, { north: 10 }));
+  assertHeading(gap, null, "", "movement older than 20 seconds cannot establish a course");
+  gap.clock.advance(1000);
+  gap.update(fieldFix(gap, { north: 20 }));
+  assertHeading(gap, 0, "movement", "a fresh baseline recovers after an old gap");
+
+  const teleport = createRuntime();
+  teleport.api.setEnabled(true);
+  teleport.update(fieldFix(teleport, { heading: 90, speed: 2 }));
+  teleport.clock.advance(1000);
+  teleport.update(fieldFix(teleport, { north: 200 }));
+  assertHeading(teleport, 90, "gps", "an inferred speed over 60m/s must not become a direction");
+});
+
+test("direction rejects duplicate and older raw timestamps even before marker acceptance", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 10, speed: 2 }));
+  app.clock.advance(200);
+  const latest = fieldFix(app, { east: 0.5, heading: 20, speed: 2 });
+  app.update(latest);
+  app.update(fieldFix(app, { east: 1, heading: 180, speed: 2, timestamp: latest.timestamp }));
+  app.update(fieldFix(app, { east: 1, heading: 270, speed: 2, timestamp: latest.timestamp - 100 }));
+  assertHeading(app, 20, "gps");
+  assert.equal(markerHeading(app), "20deg");
+  assert.equal(app.calls.centers.length, 1);
+
+  app.clock.advance(200);
+  app.update(fieldFix(app, { north: 10, heading: 30, speed: 2 }));
+  app.clock.advance(200);
+  app.update(fieldFix(app, { north: 20, heading: 270, speed: 2, accuracy: 80 }));
+  assertHeading(app, 30, "gps");
+  app.clock.advance(400);
+  assertHeading(app, 30, "gps", "a delayed marker replay cannot overwrite the newer raw heading state");
+  assert.equal(markerHeading(app), "30deg");
+  app.clock.advance(100);
+  app.update(fieldFix(app, { north: 30 }));
+  assertHeading(app, 30, "gps", "replaying an older fix must not rebuild the baseline cleared by a newer coarse fix");
+});
+
+test("zero-time and out-of-order movement fixes cannot seed or rotate the fallback course", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  const first = fieldFix(app);
+  app.update(first);
+  app.update(fieldFix(app, { east: 20, timestamp: first.timestamp }));
+  assertHeading(app, null, "");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 10 }));
+  assertHeading(app, 0, "movement", "the original baseline survives a duplicate timestamp");
+  app.update(fieldFix(app, { east: 20, timestamp: first.timestamp + 500 }));
+  assertHeading(app, 0, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 20 }));
+  assertHeading(app, 0, "movement", "an out-of-order point must not replace the movement baseline");
+});
+
+test("heading crosses north by the shortest turn while public direction remains normalized", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 359, speed: 2 }));
+  const content = app.context.jsCurrentLocationOverlayV630.getContent();
+  assert.equal(markerHeading(app), "359deg", "the first reliable direction is placed without accumulating a turn from north");
+  assert.equal(content.classList.contains("js-field-mode-heading-turn-v1"), false, "the first course must not animate from north");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 1, speed: 2 }));
+  assertHeading(app, 1, "gps");
+  assert.equal(markerHeading(app), "361deg");
+  assert.equal(content.classList.contains("js-field-mode-heading-turn-v1"), true, "later direction changes may animate their short turn");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 359, speed: 2 }));
+  assertHeading(app, 359, "gps");
+  assert.equal(markerHeading(app), "359deg");
+});
+
+test("OFF, suspension, GPS errors and expiry reset direction, baseline and accumulated rotation", () => {
+  for (const lifecycle of ["off", "visibility", "pagehide", "denied", "unavailable", "timeout", "expiry"]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { heading: 359, speed: 2 }));
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 1, speed: 2 }));
+    assert.equal(markerHeading(app), "361deg");
+    if (lifecycle === "off") app.api.setEnabled(false);
+    else if (lifecycle === "visibility") app.visibility(true);
+    else if (lifecycle === "pagehide") app.context.dispatchEvent({ type: "pagehide" });
+    else if (lifecycle === "expiry") app.clock.advance(31000);
+    else app.api.onError({ code: { denied: 1, unavailable: 2, timeout: 3 }[lifecycle] });
+    assertHeading(app, null, "", lifecycle);
+    const content = app.context.jsCurrentLocationOverlayV630.getContent();
+    assert.equal(content.classList.contains("js-field-mode-heading-known-v1"), false, lifecycle);
+    assert.equal(content.classList.contains("js-field-mode-heading-turn-v1"), false, lifecycle);
+    assert.equal(markerHeading(app), app.api.state().enabled ? "0deg" : "", lifecycle);
+    if (app.api.state().enabled) assert.match(content.getAttribute("aria-label"), /방향 확인 중/, lifecycle);
+    if (lifecycle === "visibility") app.visibility(false);
+    if (lifecycle === "pagehide") app.context.dispatchEvent({ type: "pageshow" });
+    app.clock.advance(9000);
+    if (!app.api.state().enabled) app.api.setEnabled(true);
+    app.update(fieldFix(app, { north: 30 }));
+    assertHeading(app, null, "", `${lifecycle} must discard the earlier movement baseline`);
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north: 30, heading: 270, speed: 2 }));
+    assertHeading(app, 270, "gps", `${lifecycle} must accept a new course after recovery`);
+    assert.equal(markerHeading(app), "270deg", `${lifecycle} must not retain the previous accumulated turn`);
+    assert.equal(app.calls.watches.length, 1, `${lifecycle} must reuse the shared watcher`);
+  }
 });
 
 test("jitter below 3m keeps the marker and center together while navigation gets the raw fix", () => {

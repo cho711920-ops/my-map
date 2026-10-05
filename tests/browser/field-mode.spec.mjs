@@ -83,9 +83,9 @@ async function installMapBoundary(page) {
     }});
     window.__fieldFixture = {
       state,
-      fix(lat, lng, accuracy = 8) {
+      fix(lat, lng, accuracy = 8, motion = {}) {
         if (!state.positionCallback) throw new Error("Production GPS watcher was not started");
-        state.positionCallback({coords: {latitude: lat, longitude: lng, accuracy}, timestamp: Date.now()});
+        state.positionCallback({coords: {latitude: lat, longitude: lng, accuracy, ...motion}, timestamp: Date.now()});
       }
     };
     document.getElementById("map").style.position = "relative";
@@ -127,6 +127,25 @@ async function expectWithinMap(page, selector) {
   expect(bounds.y).toBeGreaterThanOrEqual(map.y - 1);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(map.x + map.width + 1);
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(map.y + map.height + 1);
+}
+
+async function expectCarCentered(page) {
+  const carBounds = await page.locator(".js-current-location-dot-v630").boundingBox();
+  const mapBounds = await page.locator("#map").boundingBox();
+  expect(carBounds).not.toBeNull();
+  expect(mapBounds).not.toBeNull();
+  expect(carBounds.width).toBe(36);
+  expect(carBounds.height).toBe(44);
+  expect(Math.abs(carBounds.x + carBounds.width / 2 - mapBounds.x - mapBounds.width / 2)).toBeLessThan(1);
+  expect(Math.abs(carBounds.y + carBounds.height / 2 - mapBounds.y - mapBounds.height / 2)).toBeLessThan(1);
+}
+
+async function expectCarHeading(page, heading) {
+  await expect.poll(() => page.locator(".js-field-mode-car-icon-v1").evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    const angle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+    return (Math.round(angle) + 360) % 360;
+  })).toBe(heading);
 }
 
 async function expectPopupAreaReleased(page, bounds) {
@@ -209,7 +228,7 @@ for (const device of devices) {
       await expect(panel.locator("[data-field-mode-status]")).toHaveText("내 위치 따라가는 중");
       await expectWithinMap(page, compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       await expect(dot).toHaveClass(/js-field-mode-car-v1/);
-      await expect(dot.locator("svg rect").first()).toHaveAttribute("fill", "#dc2626");
+      await expect(dot.locator("[data-field-car-body]")).toHaveAttribute("fill", "#dc2626");
       await expect(dot).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       expect(await cameraState(page)).toMatchObject({center: [36.3504, 127.3845], position: [36.3504, 127.3845], level: 3, draggable: false, zoomable: false, watchCalls: 1});
 
@@ -270,12 +289,7 @@ for (const device of devices) {
       const moved = await cameraState(page);
       expect(moved.position[0]).toBeCloseTo(36.3516, 7);
       expect(moved.position[1]).toBeCloseTo(127.3857, 7);
-      const carBounds = await dot.boundingBox();
-      const mapBounds = await page.locator("#map").boundingBox();
-      expect(carBounds.width).toBe(36);
-      expect(carBounds.height).toBe(44);
-      expect(Math.abs(carBounds.x + carBounds.width / 2 - mapBounds.x - mapBounds.width / 2)).toBeLessThan(1);
-      expect(Math.abs(carBounds.y + carBounds.height / 2 - mapBounds.y - mapBounds.height / 2)).toBeLessThan(1);
+      await expectCarCentered(page);
       expect(apiRequests.length).toBe(apiBaseline);
       expect(await preservedState(page)).toEqual(before);
       await expect(panel).toBeHidden();
@@ -329,3 +343,93 @@ for (const device of devices) {
     } finally { await context.close(); }
   });
 }
+
+test("GPS course turns the centered car through cardinal directions and restores the dot on OFF", async ({browser, baseURL}, testInfo) => {
+  const context = await browser.newContext({
+    serviceWorkers: "block", isMobile: true, hasTouch: true, userAgent: tabletUA,
+    viewport: {width: 1280, height: 800}, screen: {width: 1280, height: 800}, reducedMotion: "no-preference"
+  });
+  try {
+    await context.route("**/*", (route) => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
+    const page = await context.newPage();
+    const errors = [];
+    const apiRequests = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("request", (request) => { if (new URL(request.url()).pathname === "/api/data") apiRequests.push(request.url()); });
+    await page.goto(baseURL);
+    await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
+    await page.locator("#fixtureControls").evaluate((element) => { element.style.display = "none"; });
+    await installMapBoundary(page);
+    await page.evaluate(() => {
+      window.startCurrentLocationTrackingV630();
+      window.__fieldFixture.fix(36.3504, 127.3845, 8, {heading: null, speed: 0});
+    });
+    const apiBaseline = apiRequests.length;
+    const toggle = page.locator("#mapFieldModeToggleV1");
+    const dot = page.locator(".js-current-location-dot-v630");
+    const icon = dot.locator(".js-field-mode-car-icon-v1");
+    await toggle.click();
+    await expect(dot.locator(".js-field-mode-heading-pending-v1")).toHaveText("방향 확인 중");
+    await expect(dot.locator(".js-field-mode-heading-pending-v1")).toBeVisible();
+    expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: null, headingSource: ""});
+    await expectCarCentered(page);
+    await page.screenshot({path: testInfo.outputPath("field-heading-pending.png")});
+
+    const courses = [
+      {name: "north", heading: 0, lat: 36.3514, lng: 127.3845},
+      {name: "east", heading: 90, lat: 36.3514, lng: 127.3855},
+      {name: "south", heading: 180, lat: 36.3504, lng: 127.3855},
+      {name: "west", heading: 270, lat: 36.3504, lng: 127.3845}
+    ];
+    for (const course of courses) {
+      await page.evaluate(({lat, lng, heading}) => window.__fieldFixture.fix(lat, lng, 8, {heading, speed: 4}), course);
+      await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(course.heading);
+      await expectCarHeading(page, course.heading);
+      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: course.heading, headingSource: "gps"});
+      await expect.poll(async () => (await cameraState(page)).center).toEqual([course.lat, course.lng]);
+      await expect(dot).toHaveClass(/js-field-mode-heading-known-v1/);
+      await expect(dot.locator(".js-field-mode-heading-pending-v1")).toBeHidden();
+      await expect(dot.locator(".js-field-mode-direction-cue-v1")).toBeVisible();
+      await expectCarCentered(page);
+      await expect(page.locator("#map")).toHaveCSS("transform", "none");
+      await page.screenshot({path: testInfo.outputPath("field-heading-" + course.name + ".png")});
+    }
+
+    // A parked receiver can report a different heading; keep the last travel
+    // direction and avoid moving the overlay or camera for stationary jitter.
+    const parked = await cameraState(page);
+    await page.evaluate(() => window.__fieldFixture.fix(36.350405, 127.384505, 8, {heading: 90, speed: 0}));
+    await expectCarHeading(page, 270);
+    expect(await cameraState(page)).toEqual(parked);
+
+    await page.evaluate(() => window.__fieldFixture.fix(36.3514, 127.3845, 8, {heading: 359, speed: 4}));
+    await expectCarHeading(page, 359);
+    const beforeNorth = await dot.evaluate((element) => parseFloat(element.style.getPropertyValue("--js-field-mode-heading")));
+    await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3845, 8, {heading: 1, speed: 4}));
+    await expectCarHeading(page, 1);
+    const afterNorth = await dot.evaluate((element) => parseFloat(element.style.getPropertyValue("--js-field-mode-heading")));
+    expect(afterNorth - beforeNorth).toBe(2);
+    await expect(dot).toHaveClass(/js-field-mode-heading-turn-v1/);
+    expect(await icon.evaluate((element) => parseFloat(getComputedStyle(element).transitionDuration))).toBeGreaterThan(0);
+
+    await page.emulateMedia({reducedMotion: "reduce"});
+    await expect(icon).toHaveCSS("transition-duration", "0s");
+    await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3855, 8, {heading: 90, speed: 4}));
+    await expectCarHeading(page, 90);
+    await expect.poll(async () => (await cameraState(page)).center).toEqual([36.3524, 127.3855]);
+    await expectCarCentered(page);
+    await expect(page.locator("#mapFieldModeControlsV1")).toBeHidden();
+    expect((await cameraState(page)).watchCalls).toBe(1);
+    await expect(dot).toHaveCount(1);
+    expect(apiRequests.length).toBe(apiBaseline);
+
+    await toggle.click();
+    await expect(dot).not.toHaveClass(/js-field-mode-car-v1|js-field-mode-heading-known-v1|js-field-mode-heading-turn-v1/);
+    await expect(dot.locator("svg, .js-field-mode-heading-pending-v1")).toHaveCount(0);
+    await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");
+    expect(await dot.evaluate((element) => element.style.getPropertyValue("--js-field-mode-heading"))).toBe("");
+    expect(await cameraState(page)).toMatchObject({draggable: true, zoomable: true, watchCalls: 1});
+    expect(apiRequests.length).toBe(apiBaseline);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
