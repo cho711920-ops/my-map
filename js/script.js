@@ -1260,7 +1260,10 @@ function getFilteredItems(options) {
         ? isItemWithinMapPolygonV661(item, polygonFilter)
         : (radiusFilter
           ? isItemWithinMapRadiusV658(item, radiusFilter)
-          : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng))));
+          : (!item.latlng ? includeUnlocated : (
+            window.JSFieldMapCameraV1 && window.JSFieldMapCameraV1.state().active
+              ? window.JSFieldMapCameraV1.contains(item.latlng)
+              : bounds.contain(item.latlng)))));
 
     return matchTradeMode && matchCustomerSelection && matchCustomerHeldVisibility &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&

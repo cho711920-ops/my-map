@@ -42,12 +42,14 @@ class Point {
 }
 
 const context = {
+  window: {},
   kakao: { maps: { LatLng, Point } },
   encodeURIComponent,
   console
 };
 vm.createContext(context);
 vm.runInContext([
+  extractFunction("getMapDisplayProjectionV1"),
   extractFunction("getAddressAdminRegionV655"),
   extractFunction("clearPinnedClusterSelectionV6515"),
   extractFunction("setAdministrativeListSelectionV6570"),

@@ -1,3 +1,21 @@
+/* Our viewport keeps all existing responsive geometry; only its SDK surface turns. */
+#map.js-field-map-viewport-v1 { overflow: hidden !important; }
+#jsFieldMapSurfaceV1 {
+  position: absolute !important;
+  left: 0; top: 0; width: 100%; height: 100%;
+  transform-origin: 50% 50%;
+  border: 0;
+}
+.js-field-map-heading-up-v1 .circle-marker,
+.js-field-map-heading-up-v1 .js-current-location-dot-v630 {
+  rotate: var(--js-field-map-counter, 0deg);
+}
+.js-field-map-heading-up-v1 .js-field-mode-car-icon-v1 {
+  transform: none !important;
+  transition: none !important;
+}
+.map-field-mode-direction-v1 { display: block; margin-top: 4px; color: #475569; font-size: 11px; line-height: 1.5; }
+.js-field-map-copyright-v1 { z-index: 10 !important; }
 /* Shared field-mode controls. Keep the existing desktop/tablet map geometry. */
 .map-field-mode-wrap-v1 {
   position: relative;

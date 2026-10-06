@@ -984,12 +984,16 @@ function createWorldGridClustersV690(addressGroups, level) {
 }
 
 
+function getMapDisplayProjectionV1() {
+  return window.JSFieldMapCameraV1 ? window.JSFieldMapCameraV1.projection(map) : map.getProjection();
+}
+
 function filterClustersToMapViewportV690(clusters, margin) {
   if (!map || typeof map.getProjection !== "function" || typeof document === "undefined") {
     return clusters || [];
   }
 
-  var projection = map.getProjection();
+  var projection = getMapDisplayProjectionV1();
   var mapElement = document.getElementById("map");
   var width = mapElement ? Number(mapElement.clientWidth) || 0 : 0;
   var height = mapElement ? Number(mapElement.clientHeight) || 0 : 0;
@@ -1048,7 +1052,9 @@ function getMapViewportKeyV638() {
     center ? center.getLat().toFixed(6) : "",
     center ? center.getLng().toFixed(6) : "",
     mapElement ? mapElement.clientWidth : 0,
-    mapElement ? mapElement.clientHeight : 0
+    mapElement ? mapElement.clientHeight : 0,
+    window.JSFieldMapCameraV1 && window.JSFieldMapCameraV1.state().active
+      ? window.JSFieldMapCameraV1.state().bearing.toFixed(1) : "north"
   ].join("|");
 }
 
@@ -1245,7 +1251,7 @@ function resolveAdministrativeClusterPositionsV656(clusters) {
     return clusters || [];
   }
 
-  var projection = map.getProjection();
+  var projection = getMapDisplayProjectionV1();
   var mapElement = document.getElementById("map");
   var width = mapElement ? Number(mapElement.clientWidth) || 0 : 0;
   var height = mapElement ? Number(mapElement.clientHeight) || 0 : 0;
@@ -1361,7 +1367,7 @@ function createDynamicClusters(addressGroups) {
     return createExactAddressClustersV6519(addressGroups);
   }
 
-  var projection = map.getProjection();
+  var projection = getMapDisplayProjectionV1();
   var gridSize = getClusterDistance();
   var cells = Object.create(null);
   var mapElement = document.getElementById("map");
@@ -1488,7 +1494,10 @@ function scheduleMapIdleRefreshV638() {
 
 
 kakao.maps.load(function() {
-  map = new kakao.maps.Map(document.getElementById("map"), {
+  var viewport = document.getElementById("map");
+  var canvas = document.getElementById("jsFieldMapSurfaceV1") || viewport;
+  if (window.JSFieldMapCameraV1) canvas = window.JSFieldMapCameraV1.createContainer(viewport);
+  map = new kakao.maps.Map(canvas, {
     center: new kakao.maps.LatLng(
       jsDefaultMapCenterV6524.lat,
       jsDefaultMapCenterV6524.lng
@@ -1498,6 +1507,7 @@ kakao.maps.load(function() {
       : jsLegacyDefaultMapLevelV690
   });
 
+  if (window.JSFieldMapCameraV1) window.JSFieldMapCameraV1.attach(map);
   geocoder = new kakao.maps.services.Geocoder();
 
   var mapElementV6525 = document.getElementById("map");
@@ -2609,7 +2619,7 @@ function parseDirectSaleDetailsV1(value) {
 function updateMapListingCountV825(filteredItems) {
   var mapElement = document.getElementById("map");
   var projection = typeof map !== "undefined" && map && map.getProjection
-    ? map.getProjection()
+    ? getMapDisplayProjectionV1()
     : null;
   var canCheckViewport = !!(
     mapElement && projection &&
@@ -2668,7 +2678,7 @@ function getVisibleAddressGroupsV639(items) {
   var groups = groupByAddress(items || []);
   if (!map || !map.getProjection) return groups;
 
-  var projection = map.getProjection();
+  var projection = getMapDisplayProjectionV1();
   var mapElement = document.getElementById("map");
   if (!projection || !mapElement) return groups;
 

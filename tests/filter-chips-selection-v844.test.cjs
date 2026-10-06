@@ -133,6 +133,15 @@ test("zero is a real range endpoint in both filtering and active chips", () => {
   vm.runInNewContext(listingFilterRuntime(), context);
   assert.deepEqual(Array.from(context.getFilteredItems(), (item) => item.key), ["rent-zero"]);
 
+  // SDK overscan bounds may include items that are outside the rotated visible
+  // viewport. Only field ON switches bounds; zero-price and global-search rules stay.
+  let headingUp = true;
+  context.window.JSFieldMapCameraV1 = { state: () => ({active: headingUp}), contains: () => false };
+  assert.deepEqual(Array.from(context.getFilteredItems()), []);
+  assert.deepEqual(Array.from(context.getFilteredItems({ignoreMapBounds: true}), (item) => item.key), ["rent-zero"]);
+  headingUp = false;
+  assert.deepEqual(Array.from(context.getFilteredItems(), (item) => item.key), ["rent-zero"]);
+
   vm.runInNewContext(chipRuntime(), context);
   assert.equal(
     context.getActiveFilterChipsV844().find((chip) => chip.key === "rent").label,

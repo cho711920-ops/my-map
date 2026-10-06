@@ -23,10 +23,24 @@ test.beforeEach(({isMobile}, testInfo) => {
   test.skip(isMobile || testInfo.project.name !== "desktop", "Dedicated touch-device contexts run once from the desktop project.");
 });
 
-async function installMapBoundary(page) {
-  await page.evaluate(() => {
+async function installMapBoundary(page, options = {}) {
+  await page.evaluate(({camera}) => {
     const listeners = new Map();
     const overlays = new Set();
+    const viewport = document.getElementById("map");
+    let host = viewport;
+    let credits = null;
+    if (camera) {
+      host = document.getElementById("jsFieldMapSurfaceV1") || document.createElement("div");
+      host.id = "jsFieldMapSurfaceV1";
+      if (!host.parentNode) viewport.appendChild(host);
+      host.style.background = "repeating-linear-gradient(0deg, transparent, transparent 59px, #dce5ee 60px), repeating-linear-gradient(90deg, #f0f6fa, #f0f6fa 59px, #dce5ee 60px)";
+      credits = document.createElement("div");
+      credits.id = "fixtureSdkCredits";
+      Object.assign(credits.style, {position: "absolute", bottom: "0px", left: "0px", height: "19px", zIndex: "1", display: "flex", gap: "4px", alignItems: "center"});
+      credits.innerHTML = '<span data-fixture-scale>50m</span><a href="http://map.kakao.com/"><img width="32" height="10" alt="Kakao test boundary" src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'10\'%3E%3Ctext x=\'0\' y=\'9\' font-size=\'10\'%3Ekakao%3C/text%3E%3C/svg%3E"></a>';
+      host.appendChild(credits);
+    }
     const state = {watchCalls: 0, centerCalls: 0, levelCalls: 0, markerMoves: 0, positionCallback: null};
     function LatLng(lat, lng) { this.getLat = () => lat; this.getLng = () => lng; }
     function emit(type) { for (const listener of listeners.get(type) || []) listener(); }
@@ -36,6 +50,10 @@ async function installMapBoundary(page) {
       getLevel() { return this.level; },
       getDraggable() { return this.draggable; },
       getZoomable() { return this.zoomable; },
+      getProjection() { return {
+        containerPointFromCoords(point) { return {x: host.clientWidth/2+(point.getLng()-map.center.getLng())*100000, y: host.clientHeight/2-(point.getLat()-map.center.getLat())*100000}; },
+        coordsFromContainerPoint(point) { return new LatLng(map.center.getLat()-(point.y-host.clientHeight/2)/100000, map.center.getLng()+(point.x-host.clientWidth/2)/100000); }
+      }; },
       setDraggable(value) { this.draggable = value; },
       setZoomable(value) { this.zoomable = value; },
       setCenter(point) {
@@ -43,18 +61,20 @@ async function installMapBoundary(page) {
         for (const overlay of overlays) overlay.render();
         emit("center_changed"); emit("idle");
       },
-      setLevel(level) { this.level = level; state.levelCalls += 1; emit("zoom_changed"); emit("idle"); },
+      setLevel(level) { this.level = level; state.levelCalls += 1; if (credits) credits.querySelector("[data-fixture-scale]").textContent = level === 1 ? "20m" : "50m"; emit("zoom_changed"); emit("idle"); },
       panTo(point) { this.setCenter(point); },
       relayout() { for (const overlay of overlays) overlay.render(); }
     });
     function CustomOverlay(settings) {
       this.content = settings.content;
+      this.anchor = camera ? document.createElement("div") : this.content;
+      if (camera) this.anchor.appendChild(this.content);
       this.position = settings.position;
       this.owner = null;
       this.render = () => {
         if (!this.owner) return;
         const point = this.position;
-        Object.assign(this.content.style, {
+        Object.assign(this.anchor.style, {
           position: "absolute", zIndex: String(settings.zIndex),
           left: "calc(50% + " + ((point.getLng() - map.center.getLng()) * 100000) + "px)",
           top: "calc(50% - " + ((point.getLat() - map.center.getLat()) * 100000) + "px)",
@@ -66,12 +86,12 @@ async function installMapBoundary(page) {
       this.getContent = () => this.content;
       this.setMap = (owner) => {
         this.owner = owner;
-        if (owner) { document.getElementById("map").appendChild(this.content); overlays.add(this); this.render(); }
-        else { this.content.remove(); overlays.delete(this); }
+        if (owner) { host.appendChild(this.anchor); overlays.add(this); this.render(); }
+        else { this.anchor.remove(); overlays.delete(this); }
       };
     }
     window.map = map;
-    window.kakao = {maps: {LatLng, CustomOverlay, event: {
+    window.kakao = {maps: {LatLng, Point: function(x,y) {this.x=x;this.y=y;}, CustomOverlay, event: {
       addListener(target, type, callback) {
         if (!listeners.has(type)) listeners.set(type, new Set());
         listeners.get(type).add(callback);
@@ -83,14 +103,20 @@ async function installMapBoundary(page) {
     }});
     window.__fieldFixture = {
       state,
+      host,
+      credits,
       fix(lat, lng, accuracy = 8, motion = {}) {
         if (!state.positionCallback) throw new Error("Production GPS watcher was not started");
         state.positionCallback({coords: {latitude: lat, longitude: lng, accuracy, ...motion}, timestamp: Date.now()});
       }
     };
     document.getElementById("map").style.position = "relative";
-  });
+  }, {camera: !!options.camera});
   await page.addScriptTag({content: "var jsCurrentLocationOverlayV630 = null; var jsCurrentLocationWatchIdV630 = null;\n" + locationSource});
+  if (options.camera) {
+    await page.addScriptTag({url: "/js/map-field-camera-v1.js"});
+    await page.addScriptTag({url: "/js/map-field-orientation-v1.js"});
+  }
   await page.addScriptTag({url: "/js/map-field-mode-v1.js"});
   await page.addScriptTag({url: "/js/map-quick-tools-v657.js"});
   await page.evaluate(() => window.syncMapQuickToolGeometryV659());
@@ -471,3 +497,134 @@ test("GPS course turns the centered navigation pointer through cardinal directio
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });
+
+for (const device of [devices[0], devices[3]]) {
+  test(`${device.name}: full field UI arbitrates GPS/compass heading-up and preserves the favorite map`, async ({browser, baseURL}, testInfo) => {
+    const context = await browser.newContext({
+      serviceWorkers: "block", isMobile: true, hasTouch: true, userAgent: device.userAgent,
+      viewport: {width: device.width, height: device.height}, screen: {width: device.screenWidth, height: device.screenHeight}
+    });
+    try {
+      await context.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
+      const page = await context.newPage();
+      const errors = [];
+      const apiRequests = [];
+      page.on("pageerror", error => errors.push(error.message));
+      page.on("request", request => { if (new URL(request.url()).pathname === "/api/data") apiRequests.push(request.url()); });
+      await page.goto(baseURL);
+      await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
+      await expect.poll(() => page.evaluate(() => window.JSV6ListStore.load("favorite").some(folder => folder.id === "fixture-favorites"))).toBe(true);
+      await page.locator("#fixtureControls").evaluate(element => {element.style.display="none";});
+      await installMapBoundary(page, {camera:true});
+      // Use the real favorite UI so both the saved folder and map-only filter
+      // must survive subsequent heading changes and the mobile list round trip.
+      await page.locator(device.phone ? '[data-mobile-view="favorites"]' : "#mapQuickListBtn").click();
+      const favorites = page.locator("#unifiedFavoriteModalV7");
+      await expect(favorites).toHaveAttribute("aria-hidden", "false");
+      if (device.phone) await favorites.locator(".phone-favorite-folder-card-v2").filter({hasText:"테스트 찜폴더"}).click();
+      await favorites.getByRole("button", {name:"지도 보기",exact:true}).click();
+      await expect(favorites).toHaveAttribute("aria-hidden", "true");
+      await expect(page.locator("#list .item")).toHaveCount(1);
+      await expect.poll(() => page.evaluate(() => window.activeFavoriteFolderId)).toBe("fixture-favorites");
+      await page.evaluate(() => {
+        document.getElementById("keyword").value="괴정";
+        const mobileKeyword=document.getElementById("jsMobileKeywordV1");
+        if(mobileKeyword) mobileKeyword.value="괴정";
+        document.getElementById("sourceFilter").value="naver";
+        window.applyFilter();
+        window.selectedItemKey=window.allItems[0].key;
+        window.startCurrentLocationTrackingV630();
+        window.__fieldFixture.fix(36.3504,127.3845,8,{heading:null,speed:0});
+      });
+      const baseline = await preservedState(page);
+      const savedFavorites = await page.evaluate(() => window.JSV6ListStore.load("favorite"));
+      const apiBaseline = apiRequests.length;
+      const originalBounds = await page.locator("#map").boundingBox();
+      const toggle=page.locator(device.phone ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
+      const panel=page.locator(device.phone ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
+      const expander=page.locator(`[data-field-mode-expand][aria-controls="${device.phone ? "mapFieldModeCompactControlsV1" : "mapFieldModeControlsV1"}"]`);
+      const dot=page.locator(".js-current-location-dot-v630");
+      const surface=page.locator("#jsFieldMapSurfaceV1");
+      const credits=page.locator("#fixtureSdkCredits");
+      expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().active)).toBe(false);
+      expect(await page.evaluate(() => window.JSFieldOrientationV1.state().running)).toBe(false);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(() => page.evaluate(() => window.JSFieldOrientationV1.state().listening)).toBe(true);
+      await expect(dot.locator("[data-field-navigation-pending]")).toBeVisible();
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:90,speed:4}));
+      await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().headingSource)).toBe("gps");
+      await expect.poll(() => page.evaluate(() => window.JSFieldMapCameraV1.state().bearing)).toBe(90);
+      await expect(surface).toHaveCSS("transform", "matrix(0, -1, 1, 0, 0, 0)");
+      await expect.poll(async () => (await cameraState(page)).center).toEqual([36.3504,127.3855]);
+      await expectPointerCentered(page);
+      await expect(dot.locator(".js-field-mode-car-icon-v1")).toHaveCSS("transform", "none");
+      expect(await dot.locator("svg").evaluate(element => {
+        const matrix=element.getScreenCTM();
+        return Math.abs(Math.atan2(matrix.b,matrix.a)*180/Math.PI);
+      })).toBeLessThan(0.01);
+      await expect(credits).toBeVisible();
+      await expect(credits).toContainText("50m");
+      await expectWithinMap(page,"#fixtureSdkCredits");
+      expect(await credits.evaluate(element => element.parentElement.id)).toBe("map");
+      expect(await page.locator("#map").boundingBox()).toEqual(originalBounds);
+      expect(await preservedState(page)).toEqual(baseline);
+
+      // Moving GPS remains authoritative even if the device points elsewhere.
+      await page.evaluate(() => {
+        const alpha=((screen.orientation.angle||0)-180+360)%360;
+        window.dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute",{absolute:true,alpha,beta:0,gamma:0}));
+      });
+      expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().bearing)).toBe(90);
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:90,speed:0}));
+      await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().headingSource)).toBe("compass");
+      await expect.poll(() => page.evaluate(() => window.JSFieldMapCameraV1.state().bearing)).toBe(180);
+      await expect(surface).toHaveCSS("transform", "matrix(-1, 0, 0, -1, 0, 0)");
+      await expectPointerCentered(page);
+      await expect(panel.locator("[data-field-mode-direction]")).toContainText("기기 위쪽이 바라보는 방향");
+      expect(await preservedState(page)).toEqual(baseline);
+      await page.screenshot({path:testInfo.outputPath("field-heading-up-integrated.png")});
+
+      // The same SDK credit node continues to receive scale changes after it is
+      // lifted out of the rotating surface; selecting scale closes the popup.
+      if (!await panel.isVisible()) await expander.click();
+      await panel.locator('[data-field-mode-scale="20"]').click();
+      await expect(credits).toContainText("20m");
+      await expect(panel).toBeHidden();
+      if (device.phone) {
+        await page.locator('[data-mobile-view="list"]').click();
+        await expect(toggle).toBeHidden();
+        await expect(page.locator("#list .item")).toBeVisible();
+        await expect(page.locator("#list")).toContainText("괴정");
+        await page.locator('[data-mobile-view="map"]').click();
+        await expect(toggle).toBeVisible();
+        expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().active)).toBe(true);
+      }
+      expect(await preservedState(page)).toEqual(baseline);
+      expect(await page.evaluate(() => window.JSV6ListStore.load("favorite"))).toEqual(savedFavorites);
+      expect(apiRequests.length).toBe(apiBaseline);
+
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await expect(surface).toHaveCSS("transform", "none");
+      await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");
+      await expect(dot.locator("svg")).toHaveCount(0);
+      expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().active)).toBe(false);
+      expect(await page.evaluate(() => window.JSFieldOrientationV1.state())).toMatchObject({running:false,listening:false,status:"off"});
+      expect(await credits.evaluate(element => element.parentElement.id)).toBe("jsFieldMapSurfaceV1");
+      await expectWithinMap(page,"#fixtureSdkCredits");
+      expect(await surface.evaluate(element => ({width:element.clientWidth,height:element.clientHeight}))).toEqual({width:originalBounds.width,height:originalBounds.height});
+      await page.evaluate(() => {
+        const alpha=((screen.orientation.angle||0)-270+360)%360;
+        window.dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute",{absolute:true,alpha,beta:0,gamma:0}));
+        window.__fieldFixture.fix(36.3504,127.3865,8,{heading:270,speed:4});
+      });
+      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({enabled:false,heading:null});
+      await expect(surface).toHaveCSS("transform", "none");
+      expect(await cameraState(page)).toMatchObject({center:[36.3504,127.3855],draggable:true,zoomable:true,watchCalls:1});
+      expect(await preservedState(page)).toEqual(baseline);
+      expect(apiRequests.length).toBe(apiBaseline);
+      expect(errors).toEqual([]);
+    } finally {await context.close();}
+  });
+}

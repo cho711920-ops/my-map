@@ -149,7 +149,7 @@ function functionSource(text, name) {
 
 function createRuntime(options = {}) {
   const clock = fakeClock();
-  const calls = { centers: [], levels: [], markers: [], navigation: [], watches: [], clearedWatches: [], warnings: [], notifications: [] };
+  const calls = { centers: [], levels: [], markers: [], navigation: [], watches: [], clearedWatches: [], warnings: [], notifications: [], camera: [], orientationStarts: [], orientationStops: 0 };
   const nodes = new Map();
   const allNodes = [];
   const ancestors = [];
@@ -265,6 +265,32 @@ function createRuntime(options = {}) {
   });
   context.window = context;
   vm.createContext(context);
+  const cameraState = { bearing: null };
+  if (options.directionHelpers || options.realOrientation) {
+    context.JSFieldMapCameraV1 = {
+      state() { return { active: cameraState.bearing !== null, bearing: cameraState.bearing }; },
+      setBearing(bearing) { calls.camera.push({ type: "bearing", bearing }); cameraState.bearing = bearing; },
+      reset() { calls.camera.push({ type: "reset" }); cameraState.bearing = null; }
+    };
+    if (options.realOrientation) {
+      context.DeviceOrientationEvent = function DeviceOrientationEvent() {};
+      context.isSecureContext = true;
+      context.screen = { orientation: eventTarget({ angle: 0 }) };
+      vm.runInContext(read("js/map-field-orientation-v1.js"), context, { filename: "map-field-orientation-v1.js" });
+      const sensorStart = context.JSFieldOrientationV1.start;
+      const sensorStop = context.JSFieldOrientationV1.stop;
+      context.JSFieldOrientationV1.start = function (onHeading, onStatus) {
+        calls.orientationStarts.push({ onHeading, onStatus });
+        return sensorStart(onHeading, onStatus);
+      };
+      context.JSFieldOrientationV1.stop = function () { calls.orientationStops += 1; sensorStop(); };
+    } else {
+      context.JSFieldOrientationV1 = {
+        start(onHeading, onStatus) { calls.orientationStarts.push({ onHeading, onStatus }); onStatus("waiting"); return Promise.resolve(true); },
+        stop() { calls.orientationStops += 1; calls.orientationStarts.at(-1)?.onStatus("off"); }
+      };
+    }
+  }
   vm.runInContext([
     functionSource(mapSource, "updateCurrentLocationOverlayV630"),
     functionSource(mapSource, "startCurrentLocationTrackingV630")
@@ -276,7 +302,14 @@ function createRuntime(options = {}) {
   if (!options.deferController) loadController();
   return {
     get api() { return context.JSFieldModeV1; },
-    context, clock, calls, document, nodes, map, loadController,
+    context, clock, calls, document, nodes, map, loadController, cameraState,
+    compass(heading, timestamp = clock.now, extra = {}) {
+      calls.orientationStarts.at(-1)?.onHeading({ heading, timestamp, source: "compass", accuracy: 8, ...extra });
+    },
+    compassStatus(status) { calls.orientationStarts.at(-1)?.onStatus(status); },
+    sensor(overrides = {}) {
+      context.dispatchEvent({ type: "deviceorientationabsolute", absolute: true, alpha: 0, beta: 0, gamma: 0, timeStamp: clock.now, ...overrides });
+    },
     click(node) {
       document.dispatchEvent({ type: "pointerdown", target: node });
       const handler = node.getAttribute("onclick");
@@ -736,6 +769,328 @@ test("direction starts unknown and native GPS course supports all cardinal direc
   assert.equal(app.calls.centers.length, 1, "course changes at one coordinate do not move the camera");
   assert.equal(app.calls.markers.length, 1, "course changes reuse the existing marker content");
   assert.equal(app.calls.watches.length, 1);
+});
+
+test("compass listeners and heading-up camera only activate inside field mode", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  assert.equal(app.calls.orientationStarts.length, 0);
+  assert.equal(app.calls.orientationStops, 0);
+  assert.equal(app.calls.camera.some((call) => call.type === "bearing"), false);
+  app.api.setEnabled(true);
+  assert.equal(app.calls.orientationStarts.length, 1);
+  app.api.setEnabled(true);
+  assert.equal(app.calls.orientationStarts.length, 1, "repeated ON does not request sensors twice");
+  assert.equal(app.cameraState.bearing, 90);
+  app.api.setEnabled(false);
+  assert.equal(app.calls.orientationStops, 1);
+  assert.equal(app.cameraState.bearing, null);
+  const bearings = app.calls.camera.filter((call) => call.type === "bearing").length;
+  app.compass(180);
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 270, speed: 2 }));
+  assert.equal(app.calls.camera.filter((call) => call.type === "bearing").length, bearings);
+  assertHeading(app, null, "");
+  app.api.setEnabled(false);
+  assert.equal(app.calls.orientationStops, 1);
+});
+
+test("missing map or GPS never starts the optional compass", () => {
+  for (const options of [{ map: false }, { geolocation: false }]) {
+    const app = createRuntime({ ...options, directionHelpers: true });
+    app.api.setEnabled(true);
+    assert.equal(app.calls.orientationStarts.length, 0);
+    assert.equal(app.calls.camera.some((call) => call.type === "bearing"), false);
+  }
+});
+
+test("compass waits for a usable GPS location instead of rotating an unlocated map", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.compass(120);
+  assertHeading(app, null, "");
+  assert.equal(app.cameraState.bearing, null);
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 120, "compass");
+  assert.equal(app.cameraState.bearing, 120);
+});
+
+test("a stationary GPS fix immediately permits fresh compass rotation", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 3 }));
+  app.compass(180);
+  assertHeading(app, 90, "gps");
+  app.clock.advance(100);
+  app.update(fieldFix(app, { heading: 90, speed: 0 }));
+  assertHeading(app, 180, "compass", "explicit stop need not wait six seconds");
+  assert.equal(app.cameraState.bearing, 180);
+  app.compass(200);
+  assertHeading(app, 200, "compass");
+  assert.match(app.context.jsCurrentLocationOverlayV630.getContent().getAttribute("aria-label"), /기기.*200/);
+  assert.equal(app.calls.centers.length, 1, "a turn in place must not invent a coordinate move");
+});
+
+test("reliable moving GPS wins over compass for six seconds, then fresh compass may take over", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 3 }));
+  app.clock.advance(5999);
+  app.compass(180);
+  assertHeading(app, 90, "gps");
+  app.clock.advance(1);
+  app.compass(180);
+  assertHeading(app, 180, "compass");
+  app.clock.advance(1);
+  app.update(fieldFix(app, { heading: 100, speed: 3 }));
+  assertHeading(app, 100, "gps", "a new reliable travel course immediately regains priority");
+  app.compass(210);
+  assertHeading(app, 100, "gps");
+});
+
+test("inferred movement course gets the same six-second compass priority as native GPS", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app));
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { east: 12 }));
+  assertHeading(app, 90, "movement");
+  app.clock.advance(5900);
+  app.compass(270);
+  assertHeading(app, 90, "movement");
+  app.clock.advance(100);
+  app.compass(270);
+  assertHeading(app, 270, "compass");
+});
+
+test("fresh compass is usable when the GPS has a position but no trustworthy course", () => {
+  for (const motion of [{}, { heading: null, speed: null }, { heading: 90, speed: 2, accuracy: 70 }]) {
+    const app = createRuntime({ directionHelpers: true });
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, motion));
+    app.compass(45);
+    assertHeading(app, 45, "compass");
+  }
+});
+
+test("invalid, future and five-second-old compass callbacks are ignored", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  for (const heading of [NaN, Infinity, null, undefined, "90", -1, 360]) app.compass(heading);
+  app.compass(90, app.clock.now - 5000);
+  app.compass(90, app.clock.now - 5001);
+  app.compass(90, app.clock.now + 1001);
+  app.compass(90, NaN);
+  assertHeading(app, null, "");
+  assert.equal(app.cameraState.bearing, null);
+  app.compass(90);
+  assertHeading(app, 90, "compass");
+});
+
+test("a five-second-old cached compass cannot override a later stationary GPS fix", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 3 }));
+  app.compass(180);
+  app.clock.advance(5000);
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 90, "gps");
+  app.compass(210);
+  assertHeading(app, 210, "compass");
+});
+
+test("every non-ready sensor state invalidates a cached compass before a GPS stop", () => {
+  for (const status of ["waiting", "stale", "tilted", "uncalibrated", "hidden", "denied", "unavailable", "off"]) {
+    const app = createRuntime({ directionHelpers: true });
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { heading: 90, speed: 3 }));
+    app.compass(180);
+    app.compassStatus(status);
+    app.clock.advance(100);
+    app.update(fieldFix(app, { speed: 0 }));
+    assertHeading(app, 90, "gps", `${status} must discard the old screen's bearing`);
+  }
+});
+
+test("sensor unavailability holds the last direction without guessing north or disabling GPS following", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  app.compass(140);
+  const cameraCalls = app.calls.camera.length;
+  app.compassStatus("uncalibrated");
+  assertHeading(app, 140, "compass");
+  assert.equal(app.calls.camera.length, cameraCalls);
+  assert.equal(app.api.isFollowing(), true);
+  for (const node of app.document.querySelectorAll("[data-field-mode-direction]")) assert.match(node.textContent, /마지막 방향 유지/);
+});
+
+test("heading-up camera remains reset after stale GPS until a new location arrives", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  app.compass(140);
+  app.clock.advance(30000);
+  assertHeading(app, null, "");
+  assert.equal(app.cameraState.bearing, null);
+  app.compass(210);
+  assertHeading(app, null, "");
+  app.clock.advance(1);
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 210, "compass");
+});
+
+test("temporary GPS errors prevent compass reactivation until a post-error fix", () => {
+  for (const code of [2, 3]) {
+    const app = createRuntime({ directionHelpers: true });
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { speed: 0 }));
+    app.compass(90);
+    app.clock.advance(100);
+    app.api.onError({ code });
+    assertHeading(app, null, "");
+    assert.equal(app.cameraState.bearing, null);
+    app.compass(180);
+    assertHeading(app, null, "", `GPS error ${code} must block compass until fresh coordinates arrive`);
+    app.clock.advance(100);
+    app.update(fieldFix(app, { speed: 0 }));
+    assertHeading(app, 180, "compass");
+  }
+});
+
+test("hidden/resumed pages cannot rotate from compass before receiving fresh GPS", () => {
+  for (const lifecycle of ["visibility", "pagehide"]) {
+    const app = createRuntime({ directionHelpers: true });
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { speed: 0 }));
+    app.compass(90);
+    app.clock.advance(100);
+    if (lifecycle === "visibility") app.visibility(true);
+    else app.context.dispatchEvent({ type: "pagehide" });
+    app.compass(180);
+    assertHeading(app, null, "");
+    assert.equal(app.cameraState.bearing, null);
+    app.clock.advance(100);
+    if (lifecycle === "visibility") app.visibility(false);
+    else app.context.dispatchEvent({ type: "pageshow" });
+    app.compass(270);
+    assertHeading(app, null, "", "returning to the tab is not a fresh GPS fix");
+    app.clock.advance(100);
+    app.update(fieldFix(app, { speed: 0 }));
+    assertHeading(app, 270, "compass");
+  }
+});
+
+test("permission denial and map-tool exits stop compass and restore the normal camera", () => {
+  for (const exit of ["denied", "tool"]) {
+    const app = createRuntime({ directionHelpers: true });
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { speed: 0 }));
+    app.compass(190);
+    if (exit === "denied") app.api.onError({ code: 1 });
+    else app.api.stopForMapTool();
+    assert.equal(app.calls.orientationStops, 1);
+    assertHeading(app, null, "");
+    assert.equal(app.cameraState.bearing, null);
+    assert.equal(app.map.draggable, true);
+    assert.equal(app.map.zoomable, true);
+    app.compass(240);
+    assertHeading(app, null, "");
+  }
+});
+
+test("north-crossing compass turns use the existing short-rotation marker and normalized camera bearing", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  app.compass(359);
+  app.compass(1);
+  assertHeading(app, 1, "compass");
+  assert.equal(markerHeading(app), "361deg");
+  assert.equal(app.cameraState.bearing, 1);
+  assert.equal(app.context.favoriteOnly, true);
+  assert.equal(app.context.activeFavoriteFolderId, "folder-keep");
+  assert.equal(app.context.selectedItemKey, "listing-keep");
+});
+
+test("same-bearing GPS/compass source changes also update the accessible marker description", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  app.compass(90);
+  const marker = app.context.jsCurrentLocationOverlayV630.getContent();
+  assert.match(marker.getAttribute("aria-label"), /기기 방향/);
+  app.clock.advance(100);
+  app.update(fieldFix(app, { heading: 90, speed: 3 }));
+  assertHeading(app, 90, "gps");
+  assert.match(marker.getAttribute("aria-label"), /이동 방향/);
+  app.clock.advance(100);
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 90, "compass");
+  assert.match(marker.getAttribute("aria-label"), /기기 방향/);
+});
+
+test("real compass helper integrates with GPS priority, sensor staleness and OFF cleanup", () => {
+  const app = createRuntime({ realOrientation: true });
+  app.sensor({ alpha: 270 });
+  assert.equal(app.context.JSFieldOrientationV1.state().running, false);
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  app.sensor({ alpha: 270 });
+  assertHeading(app, 90, "compass");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 100, speed: 3 }));
+  app.sensor({ alpha: 220 });
+  assertHeading(app, 100, "gps");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 140, "compass");
+  app.clock.advance(5000);
+  assert.equal(app.context.JSFieldOrientationV1.state().status, "stale");
+  assertHeading(app, 140, "compass", "stale compass holds the last known orientation");
+  app.api.setEnabled(false);
+  assert.equal(app.context.JSFieldOrientationV1.state().running, false);
+  assert.equal(app.context.JSFieldOrientationV1.state().listening, false);
+  assert.equal(app.cameraState.bearing, null);
+  app.sensor({ alpha: 180 });
+  assertHeading(app, null, "");
+});
+
+test("real sensor hidden/resume and screen-rotation lifecycle never reuses an old screen bearing", () => {
+  const app = createRuntime({ realOrientation: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { speed: 0 }));
+  app.sensor({ alpha: 270 });
+  assertHeading(app, 90, "compass");
+  app.visibility(true);
+  assert.equal(app.context.JSFieldOrientationV1.state().listening, false);
+  app.clock.advance(1000);
+  app.visibility(false);
+  assert.equal(app.context.JSFieldOrientationV1.state().listening, true);
+  app.sensor({ alpha: 0 });
+  assertHeading(app, null, "");
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 0, "compass");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 100, speed: 3 }));
+  app.context.screen.orientation.angle = 90;
+  app.context.screen.orientation.dispatchEvent({ type: "change" });
+  app.clock.advance(100);
+  app.update(fieldFix(app, { speed: 0 }));
+  assertHeading(app, 100, "gps", "screen-change waiting state invalidates old compass geometry");
+  app.sensor({ alpha: 0 });
+  assertHeading(app, 90, "compass");
+});
+
+test("orientation and camera helpers load once before the optional controller", () => {
+  for (const name of ["map-field-orientation-v1", "map-field-camera-v1"]) {
+    const tags = [...html.matchAll(new RegExp(`<script\\b[^>]*src="js/${name}\\.js[^>]*>`, "g"))];
+    assert.equal(tags.length, 1, name);
+    assert.ok(html.indexOf(tags[0][0]) < html.indexOf('src="js/map-field-mode-v1.js'), `${name} must be available before the controller`);
+    assert.doesNotMatch(tags[0][0], /data-auth-critical/);
+  }
+  assert.equal((html.match(/data-field-mode-direction/g) || []).length, 2, "both desktop and compact controls explain the direction source");
 });
 
 test("native direction requires numeric finite course, movement speed and sufficiently accurate GPS", () => {

@@ -7,7 +7,7 @@ const mapSource = fs.readFileSync(path.join(root, "js", "map.js"), "utf8");
 const scriptSource = fs.readFileSync(path.join(root, "js", "script.js"), "utf8");
 
 assert.match(scriptSource, /function getFilteredItems\(options\)/);
-assert.match(scriptSource, /!item\.latlng \? includeUnlocated : bounds\.contain\(item\.latlng\)/);
+assert.match(scriptSource, /!item\.latlng \? includeUnlocated : \(\s*window\.JSFieldMapCameraV1 && window\.JSFieldMapCameraV1\.state\(\)\.active\s*\? window\.JSFieldMapCameraV1\.contains\(item\.latlng\)\s*: bounds\.contain\(item\.latlng\)/);
 assert.match(
   mapSource,
   /allItems = rawItems;[\s\S]*?getFilteredItems\(\{ includeUnlocated: true \}\);[\s\S]*?geocodeItems\(rawItems/

@@ -27,6 +27,10 @@
   var headingHasTurn = false;
   var headingAnchor = null;
   var lastHeadingStamp = 0;
+  var compassFix = null;
+  var compassStatus = "off";
+  var lastTravelAt = 0;
+  var directionStopped = false;
   var MOVE_INTERVAL_MS = 1000;
   var MAX_FIX_AGE_MS = 30000;
   var MAX_HEADING_ACCURACY = 35;
@@ -94,6 +98,17 @@
     });
     document.querySelectorAll("[data-field-mode-status]").forEach(function (element) {
       if (element.textContent !== status) element.textContent = status;
+    });
+    document.querySelectorAll("[data-field-mode-direction]").forEach(function (element) {
+      var cameraActive = window.JSFieldMapCameraV1 && window.JSFieldMapCameraV1.state().active;
+      element.textContent = !enabled ? ""
+        : heading !== null && !cameraActive ? "북쪽 고정 · 지도 회전 사용 불가"
+          : compassStatus === "tilted" ? "기기를 조금 눕혀주세요 · 마지막 방향 유지"
+            : headingSource === "compass"
+              ? (compassStatus === "ready" ? "기기 위쪽이 바라보는 방향 · 지도 회전" : "나침반 확인 중 · 마지막 방향 유지")
+              : compassStatus === "denied" || compassStatus === "unavailable" ? "나침반 사용 불가 · 이동 방향 기준"
+                : heading !== null ? "이동 방향 기준 · 정지 시 기기 방향 사용"
+                  : "방향 확인 중 · 센서 미지원 시 이동하면 맞춰집니다";
     });
   }
 
@@ -182,13 +197,17 @@
   }
 
   function syncHeadingMarker() {
+    if (window.JSFieldMapCameraV1) {
+      if (enabled && heading !== null) window.JSFieldMapCameraV1.setBearing(heading);
+      else window.JSFieldMapCameraV1.reset();
+    }
     if (!markerContent) return;
     var known = enabled && heading !== null;
     markerContent.classList.toggle("js-field-mode-heading-known-v1", known);
     markerContent.classList.toggle("js-field-mode-heading-turn-v1", known && headingHasTurn);
     if (enabled) markerContent.style.setProperty("--js-field-mode-heading", headingRotation + "deg");
     else markerContent.style.removeProperty("--js-field-mode-heading");
-    var label = enabled ? "내 위치 · 임장모드 · " + (known ? "마지막 확인 이동 방향 " + Math.round(heading) + "도" : "방향 확인 중") : "현재 위치";
+    var label = enabled ? "내 위치 · 임장모드 · " + (known ? "마지막 확인 " + (headingSource === "compass" ? "기기" : "이동") + " 방향 " + Math.round(heading) + "도" : "방향 확인 중") : "현재 위치";
     markerContent.setAttribute("title", label);
     markerContent.setAttribute("aria-label", label);
   }
@@ -200,6 +219,9 @@
     headingHasTurn = false;
     headingAnchor = null;
     lastHeadingStamp = 0;
+    compassFix = null;
+    lastTravelAt = 0;
+    directionStopped = false;
     syncHeadingMarker();
   }
 
@@ -211,6 +233,8 @@
       var delta = (value - heading + 540) % 360 - 180;
       if (Math.abs(delta) < 0.5) {
         headingSource = source;
+        syncHeadingMarker();
+        syncControls();
         return;
       }
       headingRotation += delta;
@@ -219,6 +243,31 @@
     heading = value;
     headingSource = source;
     syncHeadingMarker();
+    syncControls();
+  }
+
+  function applyCompass() {
+    if (!enabled || !isVisible() || !compassFix || !lastUsableStamp ||
+      Date.now() - lastUsableStamp >= MAX_FIX_AGE_MS || Date.now() - compassFix.timestamp >= 5000) return;
+    // A fresh, reliable travel course wins while moving. Once the GPS explicitly
+    // reports a stop, a turn of the device may immediately update the camera.
+    if (!directionStopped && Date.now() - lastTravelAt < 6000) return;
+    setHeading(compassFix.heading, "compass");
+  }
+
+  function onCompass(fix) {
+    if (!enabled || !isVisible() || !fix || typeof fix.heading !== "number" ||
+      !Number.isFinite(fix.heading) || fix.heading < 0 || fix.heading >= 360 ||
+      !Number.isFinite(fix.timestamp) || Date.now() - fix.timestamp >= 5000 || fix.timestamp > Date.now() + 1000) return;
+    compassFix = fix;
+    compassStatus = "ready";
+    applyCompass();
+  }
+
+  function onCompassStatus(value) {
+    compassStatus = value;
+    if (value !== "ready") compassFix = null;
+    syncControls();
   }
 
   function bearingDegrees(from, to) {
@@ -249,13 +298,17 @@
     if (hasSpeed && speed < MIN_HEADING_SPEED) {
       // Keep the last course while stopped; do not accumulate stationary GPS drift.
       headingAnchor = position;
+      directionStopped = true;
+      applyCompass();
       return;
     }
+    directionStopped = false;
     var course = position.coords.heading;
     // Heading is travel direction clockwise from true north, not device orientation.
     // https://www.w3.org/TR/geolocation/#heading-attribute
     if (hasSpeed && typeof course === "number" && Number.isFinite(course) && course >= 0 && course < 360) {
       headingAnchor = position;
+      lastTravelAt = Date.now();
       setHeading(course, "gps");
       return;
     }
@@ -272,6 +325,7 @@
     }
     // Both endpoints' uncertainty must be cleared before inferring travel from fixes.
     if (distance >= Math.max(8, previous.coords.accuracy + position.coords.accuracy)) {
+      lastTravelAt = Date.now();
       setHeading(bearingDegrees(previous, position), "movement");
       headingAnchor = position;
     }
@@ -369,6 +423,7 @@
     if (acceptedPosition && Number(position.timestamp) < Number(acceptedPosition.timestamp)) return null;
     refreshFixExpiry(position);
     updateHeading(position);
+    applyCompass();
     if (acceptedPosition && distanceMeters(position, acceptedPosition) < 3) {
       // The newest fix can supersede a queued GPS jump back to the same spot.
       if (pendingPosition && Number(position.timestamp) >= Number(pendingPosition.timestamp)) {
@@ -418,6 +473,7 @@
     controlsOpen = next;
     cancelControlsTimer();
     if (enabled) {
+      if (window.JSFieldOrientationV1) window.JSFieldOrientationV1.start(onCompass, onCompassStatus);
       bindMap();
       if (typeof window.closeMapQuickPopoversV657 === "function") window.closeMapQuickPopoversV657();
       if (typeof window.finishMapToolForFieldModeV1 === "function") window.finishMapToolForFieldModeV1();
@@ -434,6 +490,8 @@
       hideMarker();
       if (typeof window.startCurrentLocationTrackingV630 === "function") window.startCurrentLocationTrackingV630();
     } else {
+      if (window.JSFieldOrientationV1) window.JSFieldOrientationV1.stop();
+      compassStatus = "off";
       if (previousInteraction && window.map) {
         if (typeof window.map.setDraggable === "function") window.map.setDraggable(previousInteraction.draggable);
         if (typeof window.map.setZoomable === "function") window.map.setZoomable(previousInteraction.zoomable);
@@ -462,6 +520,7 @@
   function onError(error) {
     if (!enabled) return;
     cancelPending();
+    lastUsableStamp = 0;
     resetHeading();
     acceptedPosition = null;
     hideMarker();
@@ -479,6 +538,7 @@
   function suspend() {
     closeScaleControls(false);
     cancelPending();
+    lastUsableStamp = 0;
     resetHeading();
     acceptedPosition = null;
     freshAfter = Date.now();
