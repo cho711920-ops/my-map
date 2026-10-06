@@ -11,6 +11,7 @@ function makeCamera(width = 800, height = 600, options = {}) {
   const observers = [];
   const timers = new Map();
   let timerId = 0;
+  let now = 1000;
   const document = { hidden: false, visibilityState: "visible" };
   class Element {
     constructor(tag = "div") {
@@ -110,7 +111,7 @@ function makeCamera(width = 800, height = 600, options = {}) {
   document.querySelector = () => null;
   document.querySelectorAll = () => [];
   document.addEventListener = () => {};
-  const calls = { relayout: 0, center: 0, events: [] };
+  const calls = { relayout: 0, center: 0, events: [], refresh: 0, preserve: 0 };
   function Point(x, y) { this.x = x; this.y = y; }
   function LatLng(lat, lng) { this.getLat = () => lat; this.getLng = () => lng; }
   function Observer(callback) {
@@ -125,13 +126,17 @@ function makeCamera(width = 800, height = 600, options = {}) {
     clearTimeout(id) { timers.delete(id); },
     requestAnimationFrame(callback) { const id = ++timerId; timers.set(id, callback); return id; },
     cancelAnimationFrame(id) { timers.delete(id); },
+    performance: { now: () => now },
+    scheduleMapIdleRefreshV638() { calls.refresh += 1; },
+    preservePinnedClusterSelectionDuringRelayoutV6517() { calls.preserve += 1; },
     addEventListener() {}, removeEventListener() {},
     getComputedStyle(element) { return { position: "relative", width: element.clientWidth + "px", height: element.clientHeight + "px" }; },
-    matchMedia() { return { matches: false, addEventListener() {}, removeEventListener() {} }; },
+    matchMedia() { return { matches: !!options.reducedMotion, addEventListener() {}, removeEventListener() {} }; },
     kakao: { maps: { Point, LatLng, event: { addListener() {}, removeListener() {}, trigger(_map, name) { calls.events.push(name); } } } }
   };
   context.window = context;
   context.globalThis = context;
+  if (options.noAnimationFrame) context.requestAnimationFrame = context.cancelAnimationFrame = undefined;
   let camera;
   let surface;
   if (options.deferred) {
@@ -191,6 +196,14 @@ function makeCamera(width = 800, height = 600, options = {}) {
   } else camera.attach(map);
   return { camera, viewport, surface, map, raw, calls, Point, LatLng, width, height, context,
     copyrightNodes, tilePane, controlPane, elements, originalSdkChildren,
+    frame(milliseconds = 16) {
+      now += milliseconds;
+      const queued = Array.from(timers.entries());
+      queued.forEach(([id]) => timers.delete(id));
+      queued.forEach(([, callback]) => callback(now));
+    },
+    pendingFrames: () => timers.size,
+    queuedCallbacks: () => Array.from(timers.values()),
     resize(nextWidth, nextHeight) {
       width = nextWidth;
       height = nextHeight;
@@ -435,4 +448,166 @@ test("deferred adoption automatically attaches the existing map and restores its
   assert.deepEqual(app.surface.children, app.originalSdkChildren);
   assert.equal(attribution.parentElement, app.surface);
   assert.equal(app.elements.filter((element) => element.id === "jsFieldMapSurfaceV1").length, 1);
+});
+
+test("optional animated turns keep actual transform, upright overlays and projection at the same intermediate bearing", () => {
+  const app = makeCamera();
+  app.camera.setBearing(0);
+  app.camera.setBearing(90, { animate: true });
+  assert.equal(app.camera.state().bearing, 0, "the visible angle is not prematurely replaced by the target");
+  assert.equal(app.camera.state().targetBearing, 90);
+  app.frame(350);
+  const bearing = app.camera.state().bearing;
+  near(bearing, 78.75, "700ms cubic ease-out at the half-way time");
+  near(parseFloat(app.surface.style.transform.slice(7)), -bearing, "map surface uses the displayed bearing");
+  near(parseFloat(app.viewport.style.getPropertyValue("--js-field-map-counter")), bearing, "marker counter-rotation uses the displayed bearing");
+  const projection = app.camera.projection(app.map);
+  const rad = bearing * Math.PI / 180;
+  const ahead = new app.LatLng(100 * Math.cos(rad), 100 * Math.sin(rad));
+  const point = projection.containerPointFromCoords(ahead);
+  near(point.x, 400, "visible forward point remains horizontally centered during animation");
+  near(point.y, 200, "visible forward point remains above the user during animation");
+  const roundTrip = projection.coordsFromContainerPoint(point);
+  near(roundTrip.getLat(), ahead.getLat(), "mid-turn click latitude matches the visible map");
+  near(roundTrip.getLng(), ahead.getLng(), "mid-turn click longitude matches the visible map");
+  assert.equal(app.camera.contains(projection.coordsFromContainerPoint(new app.Point(1, 1))), true);
+  assert.equal(app.camera.contains(projection.coordsFromContainerPoint(new app.Point(-1, 1))), false);
+  app.frame(350);
+  assert.equal(app.camera.state().bearing, 90);
+  assert.equal(app.camera.state().animating, false);
+  assert.equal(app.camera.state().targetBearing, null);
+  assert.equal(app.pendingFrames(), 0);
+});
+
+test("animated north crossing takes the two-degree short path and repeated targets cannot restart it", () => {
+  const app = makeCamera();
+  app.camera.setBearing(359);
+  app.camera.setBearing(1, { animate: true });
+  app.frame(350);
+  near(app.camera.state().bearing, 0.75, "359 to 1 crosses north rather than spinning around");
+  for (let index = 0; index < 20; index += 1) app.camera.setBearing(361, { animate: true });
+  assert.equal(app.pendingFrames(), 1, "normalized repeated targets retain one original animation");
+  app.frame(350);
+  assert.equal(app.camera.state().bearing, 1, "repeated marker updates do not extend the turn deadline");
+  app.camera.setBearing(359, { animate: true });
+  app.frame(350);
+  near(app.camera.state().bearing, 359.25, "the reverse crossing is also the short path");
+  app.frame(350);
+  assert.equal(app.camera.state().bearing, 359);
+});
+
+test("a changed target starts from the currently displayed angle and obsolete callbacks cannot take over", () => {
+  const app = makeCamera();
+  app.camera.setBearing(0);
+  app.camera.setBearing(90, { animate: true });
+  app.frame(350);
+  const displayed = app.camera.state().bearing;
+  const obsolete = app.queuedCallbacks()[0];
+  app.camera.setBearing(180, { animate: true });
+  near(app.camera.state().bearing, displayed, "retargeting does not jump to the old target");
+  obsolete(999999);
+  near(app.camera.state().bearing, displayed, "a cancelled callback does not replace the new turn");
+  assert.equal(app.camera.state().targetBearing, 180);
+  app.frame(350);
+  near(app.camera.state().bearing, displayed + (180 - displayed) * 0.875, "retargeted easing starts at the visible angle");
+  app.frame(350);
+  assert.equal(app.camera.state().bearing, 180);
+});
+
+test("reset cancels animation and stale callbacks cannot reactivate an OFF or newly enabled camera", () => {
+  const app = makeCamera();
+  app.camera.setBearing(0);
+  app.camera.setBearing(90, { animate: true });
+  app.frame(200);
+  const obsolete = app.queuedCallbacks()[0];
+  app.camera.reset();
+  assert.equal(app.pendingFrames(), 0);
+  assert.equal(app.camera.state().animating, false);
+  assert.equal(app.camera.state().targetBearing, null);
+  obsolete(999999);
+  assert.equal(app.camera.state().active, false);
+  assert.equal(app.surface.style.transform, "none");
+  assert.equal(app.camera.projection(app.map), app.raw);
+  app.camera.setBearing(270);
+  obsolete(999999);
+  assert.equal(app.camera.state().bearing, 270);
+  assert.equal(app.camera.state().animating, false);
+});
+
+test("animation frames never relayout or rebuild listings and refresh only at turn boundaries", () => {
+  const app = makeCamera();
+  app.camera.setBearing(0);
+  const before = { ...app.calls };
+  app.camera.setBearing(90, { animate: true });
+  assert.equal(app.calls.refresh - before.refresh, 1);
+  for (let index = 0; index < 34; index += 1) {
+    app.frame(20);
+    app.camera.setBearing(90, { animate: true });
+    assert.equal(app.calls.refresh - before.refresh, 1, "intermediate frames and repeated targets do not refresh listings");
+    assert.equal(app.calls.relayout, before.relayout);
+    assert.equal(app.calls.center, before.center);
+  }
+  app.frame(20);
+  assert.equal(app.calls.refresh - before.refresh, 2, "one final refresh uses the completed viewport bearing");
+  assert.equal(app.calls.preserve - before.preserve, 2);
+  app.camera.setBearing(90, { animate: true });
+  assert.equal(app.calls.refresh - before.refresh, 2, "an already displayed target is inert");
+});
+
+test("resizing during a turn updates geometry while preserving animation, coordinate agreement and center", () => {
+  const app = makeCamera();
+  app.camera.setBearing(0);
+  app.camera.setBearing(90, { animate: true });
+  app.frame(200);
+  const bearing = app.camera.state().bearing;
+  const center = app.map.getCenter();
+  app.resize(390, 844);
+  assert.equal(app.camera.state().bearing, bearing);
+  assert.equal(app.camera.state().animating, true);
+  const projection = app.camera.projection(app.map);
+  const visibleCenter = projection.containerPointFromCoords(new app.LatLng(0, 0));
+  near(visibleCenter.x, 195, "resized viewport center x");
+  near(visibleCenter.y, 422, "resized viewport center y");
+  assert.equal(app.map.getCenter(), center);
+  for (const [x, y] of [[0, 0], [390, 0], [0, 844], [390, 844]]) {
+    const geo = projection.coordsFromContainerPoint(new app.Point(x, y));
+    const roundTrip = projection.containerPointFromCoords(geo);
+    near(roundTrip.x, x, "resized mid-turn point x");
+    near(roundTrip.y, y, "resized mid-turn point y");
+  }
+  app.frame(500);
+  assert.equal(app.camera.state().bearing, 90);
+  assert.equal(app.camera.state().animating, false);
+});
+
+test("initial direction, default calls, reduced motion and unavailable frame APIs all remain immediate", () => {
+  const app = makeCamera();
+  app.camera.setBearing(90, { animate: true });
+  assert.equal(app.camera.state().bearing, 90, "the first known direction does not rotate from an invented north bearing");
+  assert.equal(app.pendingFrames(), 0);
+  app.camera.setBearing(180);
+  assert.equal(app.camera.state().bearing, 180, "existing direct callers remain synchronous");
+  app.camera.setBearing(270, { animate: true });
+  app.camera.setBearing(45);
+  assert.equal(app.camera.state().bearing, 45, "a direct call cancels an optional animated turn");
+  assert.equal(app.pendingFrames(), 0);
+  for (const options of [{ reducedMotion: true }, { noAnimationFrame: true }]) {
+    const immediate = makeCamera(800, 600, options);
+    immediate.camera.setBearing(0);
+    immediate.camera.setBearing(180, { animate: true });
+    assert.equal(immediate.camera.state().bearing, 180);
+    assert.equal(immediate.pendingFrames(), 0);
+  }
+});
+
+test("enabling reduced motion during a turn immediately finishes at the next frame", () => {
+  const options = {};
+  const app = makeCamera(800, 600, options);
+  app.camera.setBearing(0);
+  app.camera.setBearing(90, { animate: true });
+  app.frame(100);
+  options.reducedMotion = true;
+  app.frame(16);
+  assert.equal(app.camera.state().bearing, 90);
+  assert.equal(app.pendingFrames(), 0);
 });

@@ -190,6 +190,35 @@ async function expectPointerHeading(page, heading) {
   })).toBe(heading);
 }
 
+async function surfaceBearing(page) {
+  return page.locator("#jsFieldMapSurfaceV1").evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    const angle = -Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+    return (angle + 360) % 360;
+  });
+}
+
+async function expectSurfaceBearing(page, heading) {
+  await expect.poll(async () => {
+    const current = await surfaceBearing(page);
+    return Math.abs((current - heading + 540) % 360 - 180);
+  }).toBeLessThan(0.0001);
+}
+
+async function dispatchDeviceTurn(page, heading) {
+  await page.evaluate((value) => {
+    const alpha = ((screen.orientation.angle || 0) - value + 360) % 360;
+    window.dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute", {absolute: true, alpha, beta: 0, gamma: 0}));
+    window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", {absolute: true, alpha, beta: 0, gamma: 0}));
+  }, heading);
+}
+
+async function confirmedTravelFix(page, fix) {
+  await page.evaluate(({lat, lng, heading}) => window.__fieldFixture.fix(lat, lng, 8, {heading, speed: 4}), fix);
+  await page.waitForTimeout(1050);
+  await page.evaluate(({lat, lng, heading}) => window.__fieldFixture.fix(lat, lng, 8, {heading, speed: 4}), fix);
+}
+
 async function expectPopupAreaReleased(page, bounds) {
   const point = {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height - 8};
   const hit = await page.evaluate(({x, y}) => {
@@ -435,7 +464,7 @@ test("GPS course turns the centered navigation pointer through cardinal directio
       {name: "west", heading: 270, lat: 36.3504, lng: 127.3845}
     ];
     for (const course of courses) {
-      await page.evaluate(({lat, lng, heading}) => window.__fieldFixture.fix(lat, lng, 8, {heading, speed: 4}), course);
+      await confirmedTravelFix(page, course);
       await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(course.heading);
       await expectPointerHeading(page, course.heading);
       expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: course.heading, headingSource: "gps"});
@@ -466,19 +495,23 @@ test("GPS course turns the centered navigation pointer through cardinal directio
     await expectPointerHeading(page, 270);
     expect(await cameraState(page)).toEqual(parked);
 
-    await page.evaluate(() => window.__fieldFixture.fix(36.3514, 127.3845, 8, {heading: 359, speed: 4}));
+    await confirmedTravelFix(page, {lat: 36.3514, lng: 127.3845, heading: 359});
     await expectPointerHeading(page, 359);
     const beforeNorth = await dot.evaluate((element) => parseFloat(element.style.getPropertyValue("--js-field-mode-heading")));
     await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3845, 8, {heading: 1, speed: 4}));
-    await expectPointerHeading(page, 1);
+    await expectPointerHeading(page, 359);
+    expect(await page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(359);
+    await page.waitForTimeout(50);
+    await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3845, 8, {heading: 6, speed: 4}));
+    await expectPointerHeading(page, 6);
     const afterNorth = await dot.evaluate((element) => parseFloat(element.style.getPropertyValue("--js-field-mode-heading")));
-    expect(afterNorth - beforeNorth).toBe(2);
+    expect(afterNorth - beforeNorth).toBe(7);
     await expect(dot).toHaveClass(/js-field-mode-heading-turn-v1/);
     expect(await icon.evaluate((element) => parseFloat(getComputedStyle(element).transitionDuration))).toBeGreaterThan(0);
 
     await page.emulateMedia({reducedMotion: "reduce"});
     await expect(icon).toHaveCSS("transition-duration", "0s");
-    await page.evaluate(() => window.__fieldFixture.fix(36.3524, 127.3855, 8, {heading: 90, speed: 4}));
+    await confirmedTravelFix(page, {lat: 36.3524, lng: 127.3855, heading: 90});
     await expectPointerHeading(page, 90);
     await expect.poll(async () => (await cameraState(page)).center).toEqual([36.3524, 127.3855]);
     await expectPointerCentered(page);
@@ -499,7 +532,8 @@ test("GPS course turns the centered navigation pointer through cardinal directio
 });
 
 for (const device of [devices[0], devices[3]]) {
-  test(`${device.name}: full field UI arbitrates GPS/compass heading-up and preserves the favorite map`, async ({browser, baseURL}, testInfo) => {
+  test(`${device.name}: travel-only heading-up ignores device turns and retains stopped direction and favorites`, async ({browser, baseURL}, testInfo) => {
+    test.setTimeout(60000);
     const context = await browser.newContext({
       serviceWorkers: "block", isMobile: true, hasTouch: true, userAgent: device.userAgent,
       viewport: {width: device.width, height: device.height}, screen: {width: device.screenWidth, height: device.screenHeight}
@@ -510,7 +544,9 @@ for (const device of [devices[0], devices[3]]) {
       const errors = [];
       const apiRequests = [];
       page.on("pageerror", error => errors.push(error.message));
-      page.on("request", request => { if (new URL(request.url()).pathname === "/api/data") apiRequests.push(request.url()); });
+      page.on("request", request => {
+        if (new URL(request.url()).pathname === "/api/data") apiRequests.push({url: request.url(), method: request.method()});
+      });
       await page.goto(baseURL);
       await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
       await expect.poll(() => page.evaluate(() => window.JSV6ListStore.load("favorite").some(folder => folder.id === "fixture-favorites"))).toBe(true);
@@ -527,6 +563,10 @@ for (const device of [devices[0], devices[3]]) {
       await expect(page.locator("#list .item")).toHaveCount(1);
       await expect.poll(() => page.evaluate(() => window.activeFavoriteFolderId)).toBe("fixture-favorites");
       await page.evaluate(() => {
+        // Keep this synthetic property inside the simulated travel corridor.
+        // The default fixture location is hundreds of screen pixels away.
+        const favoriteItem = window.allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
+        favoriteItem.latlng = new window.kakao.maps.LatLng(36.3504, 127.3850);
         document.getElementById("keyword").value="괴정";
         const mobileKeyword=document.getElementById("jsMobileKeywordV1");
         if(mobileKeyword) mobileKeyword.value="괴정";
@@ -538,7 +578,22 @@ for (const device of [devices[0], devices[3]]) {
       });
       const baseline = await preservedState(page);
       const savedFavorites = await page.evaluate(() => window.JSV6ListStore.load("favorite"));
+      const allPropertyIds = await page.evaluate(() => window.allItems.map(item => item.propertyId));
       const apiBaseline = apiRequests.length;
+      function expectOnlyExistingListResumeReads() {
+        // The existing phone history.back path refreshes the two saved-list
+        // scopes after 15 seconds. No listing query or write may be introduced.
+        const reads = apiRequests.slice(apiBaseline);
+        expect(reads.length).toBeLessThanOrEqual(device.phone ? 2 : 0);
+        const scopes = reads.map(request => {
+          expect(request.method).toBe("GET");
+          const params = new URL(request.url).searchParams;
+          expect(params.get("action")).toBe("loadCloudState");
+          expect(["favorites", "visitLists"]).toContain(params.get("scope"));
+          return params.get("scope");
+        });
+        expect(new Set(scopes).size).toBe(scopes.length);
+      }
       const originalBounds = await page.locator("#map").boundingBox();
       const toggle=page.locator(device.phone ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
       const panel=page.locator(device.phone ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
@@ -550,12 +605,15 @@ for (const device of [devices[0], devices[3]]) {
       expect(await page.evaluate(() => window.JSFieldOrientationV1.state().running)).toBe(false);
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
-      await expect.poll(() => page.evaluate(() => window.JSFieldOrientationV1.state().listening)).toBe(true);
+      expect(await page.evaluate(() => window.JSFieldOrientationV1.state())).toMatchObject({running: false, listening: false});
       await expect(dot.locator("[data-field-navigation-pending]")).toBeVisible();
+      await dispatchDeviceTurn(page, 180);
+      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: null, headingSource: ""});
+      expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().active)).toBe(false);
       await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:90,speed:4}));
       await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().headingSource)).toBe("gps");
       await expect.poll(() => page.evaluate(() => window.JSFieldMapCameraV1.state().bearing)).toBe(90);
-      await expect(surface).toHaveCSS("transform", "matrix(0, -1, 1, 0, 0, 0)");
+      await expectSurfaceBearing(page, 90);
       await expect.poll(async () => (await cameraState(page)).center).toEqual([36.3504,127.3855]);
       await expectPointerCentered(page);
       await expect(dot.locator(".js-field-mode-car-icon-v1")).toHaveCSS("transform", "none");
@@ -570,20 +628,74 @@ for (const device of [devices[0], devices[3]]) {
       expect(await page.locator("#map").boundingBox()).toEqual(originalBounds);
       expect(await preservedState(page)).toEqual(baseline);
 
-      // Moving GPS remains authoritative even if the device points elsewhere.
-      await page.evaluate(() => {
-        const alpha=((screen.orientation.angle||0)-180+360)%360;
-        window.dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute",{absolute:true,alpha,beta:0,gamma:0}));
-      });
+      // Device orientation never starts controlling the camera, while moving
+      // or stopped. Small course noise also leaves the established direction.
+      await dispatchDeviceTurn(page, 180);
       expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().bearing)).toBe(90);
-      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:90,speed:0}));
-      await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().headingSource)).toBe("compass");
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:94,speed:4}));
+      expect(await page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(90);
+      await expectSurfaceBearing(page, 90);
+
+      // One implausibly abrupt GPS course is withheld. A coherent subsequent
+      // sample confirms the turn, and its visual rotation is interpolated.
+      await page.waitForTimeout(50);
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:180,speed:4}));
+      expect(await page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(90);
+      await expectSurfaceBearing(page, 90);
+      await page.waitForTimeout(1050);
+      const turnStarted = Date.now();
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:180,speed:4}));
+      await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(180);
+      await page.waitForTimeout(150);
+      const intermediate = await surfaceBearing(page);
+      expect(intermediate).toBeGreaterThan(90);
+      expect(intermediate).toBeLessThan(180);
+      await expectSurfaceBearing(page, 180);
+      expect(Date.now() - turnStarted).toBeGreaterThanOrEqual(500);
       await expect.poll(() => page.evaluate(() => window.JSFieldMapCameraV1.state().bearing)).toBe(180);
-      await expect(surface).toHaveCSS("transform", "matrix(-1, 0, 0, -1, 0, 0)");
       await expectPointerCentered(page);
-      await expect(panel.locator("[data-field-mode-direction]")).toContainText("기기 위쪽이 바라보는 방향");
+      expect(await page.evaluate(() => window.JSFieldModeV1.state().headingSource)).toBe("gps");
+      await expect(panel.locator("[data-field-mode-direction]")).not.toContainText("기기 위쪽이 바라보는 방향");
+
+      const stopped = await cameraState(page);
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:270,speed:0}));
+      await dispatchDeviceTurn(page, 270);
+      await page.waitForTimeout(10200);
+      await page.evaluate(() => window.__fieldFixture.fix(36.3504,127.3855,8,{heading:0,speed:0.2}));
+      await dispatchDeviceTurn(page, 0);
+      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({heading: 180, headingSource: "gps"});
+      await expectSurfaceBearing(page, 180);
+      expect(await cameraState(page)).toEqual(stopped);
+      expect(await page.evaluate(() => window.JSFieldOrientationV1.state())).toMatchObject({running: false, listening: false});
+
+      // Restarting follows travel only after a large new course is confirmed.
+      await confirmedTravelFix(page, {lat: 36.3504, lng: 127.3845, heading: 270});
+      await expectSurfaceBearing(page, 270);
+      await expect.poll(() => page.evaluate(() => window.JSFieldModeV1.state().heading)).toBe(270);
+      await expect.poll(async () => (await cameraState(page)).center).toEqual([36.3504,127.3845]);
+      await expectPointerCentered(page);
       expect(await preservedState(page)).toEqual(baseline);
-      await page.screenshot({path:testInfo.outputPath("field-heading-up-integrated.png")});
+      if (device.phone) {
+        // Filtering out an offscreen virtual property is not deletion. Exercise
+        // the production predicate without changing the saved folder or cards.
+        const offscreen = await page.evaluate(() => {
+          const item = window.allItems.find(value => value.propertyId === "FIXTURE-LEASE-1");
+          const originalPosition = item.latlng;
+          item.latlng = new window.kakao.maps.LatLng(36.35, 127.38);
+          try {
+            return {visible: window.getFilteredItems().map(value => value.propertyId),
+              contains: window.JSFieldMapCameraV1.contains(item.latlng),
+              allPropertyIds: window.allItems.map(value => value.propertyId),
+              favorites: window.JSV6ListStore.load("favorite")};
+          } finally { item.latlng = originalPosition; }
+        });
+        expect(offscreen.contains).toBe(false);
+        expect(offscreen.visible).toEqual([]);
+        expect(offscreen.allPropertyIds).toEqual(allPropertyIds);
+        expect(offscreen.favorites).toEqual(savedFavorites);
+      }
+      await page.screenshot({path:testInfo.outputPath("field-travel-only-heading-up.png")});
+      expect(apiRequests.length, "GPS movement, turns and a long stop perform no API calls").toBe(apiBaseline);
 
       // The same SDK credit node continues to receive scale changes after it is
       // lifted out of the rotating surface; selecting scale closes the popup.
@@ -600,9 +712,9 @@ for (const device of [devices[0], devices[3]]) {
         await expect(toggle).toBeVisible();
         expect(await page.evaluate(() => window.JSFieldMapCameraV1.state().active)).toBe(true);
       }
-      expect(await preservedState(page)).toEqual(baseline);
+      await expect.poll(() => preservedState(page)).toEqual(baseline);
       expect(await page.evaluate(() => window.JSV6ListStore.load("favorite"))).toEqual(savedFavorites);
-      expect(apiRequests.length).toBe(apiBaseline);
+      expectOnlyExistingListResumeReads();
 
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
@@ -621,9 +733,9 @@ for (const device of [devices[0], devices[3]]) {
       });
       expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({enabled:false,heading:null});
       await expect(surface).toHaveCSS("transform", "none");
-      expect(await cameraState(page)).toMatchObject({center:[36.3504,127.3855],draggable:true,zoomable:true,watchCalls:1});
+      expect(await cameraState(page)).toMatchObject({center:[36.3504,127.3845],draggable:true,zoomable:true,watchCalls:1});
       expect(await preservedState(page)).toEqual(baseline);
-      expect(apiRequests.length).toBe(apiBaseline);
+      expectOnlyExistingListResumeReads();
       expect(errors).toEqual([]);
     } finally {await context.close();}
   });

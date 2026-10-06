@@ -172,6 +172,50 @@ test("actual Kakao: cardinal rotation, upright clickable overlays, projection an
   expect(boundary.forbidden).toEqual([]);
 });
 
+test("actual Kakao: animated turns keep projection and overlays aligned without rebuilding every frame", async ({page}) => {
+  const boundary = await installRealMap(page);
+  const result = await page.evaluate(async () => {
+    JSFieldMapCameraV1.setBearing(90);
+    let refreshes = 0;
+    window.scheduleMapIdleRefreshV638 = () => { refreshes += 1; };
+    JSFieldMapCameraV1.setBearing(180, {animate: true});
+    const frames = [];
+    await new Promise(resolve => {
+      function sample() {
+        const state = JSFieldMapCameraV1.state();
+        const viewport = document.getElementById("map").getBoundingClientRect();
+        const marker = document.getElementById("fixture-east").getBoundingClientRect();
+        const point = JSFieldMapCameraV1.projection(map).containerPointFromCoords(fixture.points.east);
+        frames.push({bearing:state.bearing, error:Math.hypot(marker.x + marker.width / 2 - viewport.x - point.x,
+          marker.y + marker.height / 2 - viewport.y - point.y), width:marker.width, height:marker.height});
+        if (state.animating) requestAnimationFrame(sample);
+        else resolve();
+      }
+      requestAnimationFrame(sample);
+    });
+    return {frames, refreshes};
+  });
+  expect(result.frames.some(frame => frame.bearing > 90 && frame.bearing < 180)).toBe(true);
+  expect(result.frames.at(-1).bearing).toBe(180);
+  expect(result.refreshes).toBe(2);
+  for (const frame of result.frames) {
+    expect(frame.error).toBeLessThan(2);
+    expect(frame.width).toBeCloseTo(64, 0);
+    expect(frame.height).toBeCloseTo(36, 0);
+  }
+  await page.locator("#fixture-east").click();
+  await expect(page.locator("#selection")).toHaveText("동쪽 선택");
+  await expectAttribution(page, "50m");
+  await page.evaluate(() => {
+    JSFieldMapCameraV1.setBearing(270, {animate:true});
+    JSFieldMapCameraV1.reset();
+  });
+  await expect(page.locator("#map")).not.toHaveClass(/js-field-map-heading-up-v1/);
+  expect(await page.evaluate(() => JSFieldMapCameraV1.state().animating)).toBe(false);
+  expect(boundary.errors).toEqual([]);
+  expect(boundary.forbidden).toEqual([]);
+});
+
 test("actual Kakao: heading-up survives tablet/phone resizing and rejects overscan-only coordinates", async ({page}, testInfo) => {
   test.setTimeout(60000);
   const boundary = await installRealMap(page);

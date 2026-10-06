@@ -14,6 +14,25 @@
   var resizeObserver = null;
   var copyright = null;
   var copyrightNext = null;
+  var animationFrame = null;
+  var animationGeneration = 0;
+  var targetBearing = null;
+  var TURN_DURATION_MS = 700;
+
+  function normalize(value) { return (value % 360 + 360) % 360; }
+
+  function reducedMotion() {
+    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function cancelTurn() {
+    animationGeneration += 1;
+    if (animationFrame !== null && typeof window.cancelAnimationFrame === "function") {
+      window.cancelAnimationFrame(animationFrame);
+    }
+    animationFrame = null;
+    targetBearing = null;
+  }
 
   function liftCopyright() {
     // Retain the actual SDK logo, link, attribution and live scale together.
@@ -59,6 +78,14 @@
     if (typeof window.scheduleMapIdleRefreshV638 === "function") window.scheduleMapIdleRefreshV638();
   }
 
+  function applyBearingTransform() {
+    // Projection and overlays read this same displayed bearing, including each
+    // animation frame. A CSS-only transition would leave hit testing at the
+    // final angle while the visible map was still turning.
+    surface.style.transform = "rotate(" + (-bearing) + "deg)";
+    viewport.style.setProperty("--js-field-map-counter", bearing + "deg");
+  }
+
   function layout() {
     if (!viewport || !surface) return;
     var w = viewport.clientWidth;
@@ -72,8 +99,7 @@
       surface.style.height = size + "px";
       surface.style.left = (width - size) / 2 + "px";
       surface.style.top = (height - size) / 2 + "px";
-      surface.style.transform = "rotate(" + (-bearing) + "deg)";
-      viewport.style.setProperty("--js-field-map-counter", bearing + "deg");
+      applyBearingTransform();
     } else {
       surface.style.width = "100%";
       surface.style.height = "100%";
@@ -111,6 +137,7 @@
   }
 
   function reset() {
+    cancelTurn();
     if (!active) return;
     active = false; bearing = 0; width = 0;
     viewport.classList.remove("js-field-map-heading-up-v1");
@@ -123,17 +150,50 @@
     refresh();
   }
 
-  function setBearing(value) {
+  function setBearing(value, options) {
     if (value === null) { reset(); return false; }
     if (!surface || !owner || typeof value !== "number" || !Number.isFinite(value)) return false;
     var first = !active;
+    var nextBearing = normalize(value);
+    var animate = !first && options && options.animate === true && !reducedMotion() &&
+      typeof window.requestAnimationFrame === "function" && typeof window.cancelAnimationFrame === "function";
+    // Marker repainting may repeat the latest course many times. It must not
+    // restart an in-flight turn or starve it before reaching its destination.
+    if (animate && animationFrame !== null && targetBearing === nextBearing) return true;
+    if (!first && animationFrame === null && bearing === nextBearing) return true;
     if (first && !liftCopyright()) return false;
+    cancelTurn();
     active = true;
-    bearing = (value % 360 + 360) % 360;
     if (first) width = 0;
     viewport.classList.add("js-field-map-heading-up-v1");
-    layout();
-    refresh();
+    var delta = (nextBearing - bearing + 540) % 360 - 180;
+    if (!animate || Math.abs(delta) < 0.001) {
+      bearing = nextBearing;
+      layout();
+      refresh();
+    } else {
+      var fromBearing = bearing;
+      var generation = animationGeneration;
+      var startedAt = window.performance && typeof window.performance.now === "function" ? window.performance.now() : null;
+      targetBearing = nextBearing;
+      // Rebuild visible listings only at the turn boundaries. Frames update
+      // two transforms, never SDK geometry or the listing collection.
+      refresh();
+      var turn = function (stamp) {
+        if (generation !== animationGeneration || !active) return;
+        if (startedAt === null) startedAt = stamp;
+        var progress = reducedMotion() ? 1 : Math.min(1, Math.max(0, (stamp - startedAt) / TURN_DURATION_MS));
+        var eased = 1 - Math.pow(1 - progress, 3);
+        bearing = progress === 1 ? nextBearing : normalize(fromBearing + delta * eased);
+        applyBearingTransform();
+        if (progress === 1) {
+          animationFrame = null;
+          targetBearing = null;
+          refresh();
+        } else animationFrame = window.requestAnimationFrame(turn);
+      };
+      animationFrame = window.requestAnimationFrame(turn);
+    }
     return true;
   }
 
@@ -159,7 +219,8 @@
       var p = projection(owner).containerPointFromCoords(coords);
       return !!p && p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height;
     },
-    state: function () { return { active: active, bearing: bearing, width: width, height: height, size: size }; },
+    state: function () { return { active: active, bearing: bearing, width: width, height: height, size: size,
+      animating: animationFrame !== null, targetBearing: targetBearing }; },
     forward: forward, inverse: inverse
   };
   // Authentication intentionally defers optional modules until after map.js.

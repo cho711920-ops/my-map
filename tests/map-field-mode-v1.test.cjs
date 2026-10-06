@@ -269,7 +269,7 @@ function createRuntime(options = {}) {
   if (options.directionHelpers || options.realOrientation) {
     context.JSFieldMapCameraV1 = {
       state() { return { active: cameraState.bearing !== null, bearing: cameraState.bearing }; },
-      setBearing(bearing) { calls.camera.push({ type: "bearing", bearing }); cameraState.bearing = bearing; },
+      setBearing(bearing, options) { calls.camera.push({ type: "bearing", bearing, options }); cameraState.bearing = bearing; },
       reset() { calls.camera.push({ type: "reset" }); cameraState.bearing = null; }
     };
     if (options.realOrientation) {
@@ -761,6 +761,8 @@ test("direction starts unknown and native GPS course supports all cardinal direc
   for (const heading of [0, 90, 180, 270]) {
     app.clock.advance(1000);
     app.update(fieldFix(app, { heading, speed: 0.8, accuracy: 35 }));
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading, speed: 0.8, accuracy: 35 }));
     assertHeading(app, heading, "gps");
     assert.equal(content.classList.contains("js-field-mode-heading-known-v1"), true);
     assert.doesNotMatch(content.getAttribute("aria-label"), /방향 확인 중/);
@@ -771,326 +773,204 @@ test("direction starts unknown and native GPS course supports all cardinal direc
   assert.equal(app.calls.watches.length, 1);
 });
 
-test("compass listeners and heading-up camera only activate inside field mode", () => {
+test("only field mode uses the travel camera and it never starts the compass", () => {
   const app = createRuntime({ directionHelpers: true });
   app.update(fieldFix(app, { heading: 90, speed: 2 }));
-  assert.equal(app.calls.orientationStarts.length, 0);
-  assert.equal(app.calls.orientationStops, 0);
   assert.equal(app.calls.camera.some((call) => call.type === "bearing"), false);
   app.api.setEnabled(true);
-  assert.equal(app.calls.orientationStarts.length, 1);
   app.api.setEnabled(true);
-  assert.equal(app.calls.orientationStarts.length, 1, "repeated ON does not request sensors twice");
+  assertHeading(app, 90, "gps");
   assert.equal(app.cameraState.bearing, 90);
+  assert.equal(app.calls.orientationStarts.length, 0);
+  assert.equal(app.calls.camera.find((call) => call.type === "bearing").options.animate, false);
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 120, speed: 2 }));
+  assert.equal(app.calls.camera.at(-1).options.animate, true);
   app.api.setEnabled(false);
-  assert.equal(app.calls.orientationStops, 1);
   assert.equal(app.cameraState.bearing, null);
-  const bearings = app.calls.camera.filter((call) => call.type === "bearing").length;
   app.compass(180);
   app.clock.advance(1000);
   app.update(fieldFix(app, { heading: 270, speed: 2 }));
-  assert.equal(app.calls.camera.filter((call) => call.type === "bearing").length, bearings);
   assertHeading(app, null, "");
-  app.api.setEnabled(false);
-  assert.equal(app.calls.orientationStops, 1);
+  assert.equal(app.calls.orientationStarts.length, 0);
+  assert.equal(app.calls.watches.length, 1);
 });
 
-test("missing map or GPS never starts the optional compass", () => {
-  for (const options of [{ map: false }, { geolocation: false }]) {
-    const app = createRuntime({ ...options, directionHelpers: true });
-    app.api.setEnabled(true);
-    assert.equal(app.calls.orientationStarts.length, 0);
-    assert.equal(app.calls.camera.some((call) => call.type === "bearing"), false);
-  }
-});
-
-test("compass waits for a usable GPS location instead of rotating an unlocated map", () => {
-  const app = createRuntime({ directionHelpers: true });
+test("initial stationary position never guesses a compass course", () => {
+  const app = createRuntime({ realOrientation: true });
   app.api.setEnabled(true);
-  app.compass(120);
-  assertHeading(app, null, "");
-  assert.equal(app.cameraState.bearing, null);
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 120, "compass");
-  assert.equal(app.cameraState.bearing, 120);
-});
-
-test("a stationary GPS fix immediately permits fresh compass rotation", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { heading: 90, speed: 3 }));
-  app.compass(180);
-  assertHeading(app, 90, "gps");
-  app.clock.advance(100);
-  app.update(fieldFix(app, { heading: 90, speed: 0 }));
-  assertHeading(app, 180, "compass", "explicit stop need not wait six seconds");
-  assert.equal(app.cameraState.bearing, 180);
-  app.compass(200);
-  assertHeading(app, 200, "compass");
-  assert.match(app.context.jsCurrentLocationOverlayV630.getContent().getAttribute("aria-label"), /기기.*200/);
-  assert.equal(app.calls.centers.length, 1, "a turn in place must not invent a coordinate move");
-});
-
-test("reliable moving GPS wins over compass for six seconds, then fresh compass may take over", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { heading: 90, speed: 3 }));
-  app.clock.advance(5999);
-  app.compass(180);
-  assertHeading(app, 90, "gps");
-  app.clock.advance(1);
-  app.compass(180);
-  assertHeading(app, 180, "compass");
-  app.clock.advance(1);
-  app.update(fieldFix(app, { heading: 100, speed: 3 }));
-  assertHeading(app, 100, "gps", "a new reliable travel course immediately regains priority");
-  app.compass(210);
-  assertHeading(app, 100, "gps");
-});
-
-test("inferred movement course gets the same six-second compass priority as native GPS", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app));
+  app.update(fieldFix(app, { heading: 210, speed: 0 }));
+  app.sensor({ alpha: 270 });
   app.clock.advance(1000);
-  app.update(fieldFix(app, { east: 12 }));
-  assertHeading(app, 90, "movement");
-  app.clock.advance(5900);
-  app.compass(270);
-  assertHeading(app, 90, "movement");
-  app.clock.advance(100);
-  app.compass(270);
-  assertHeading(app, 270, "compass");
-});
-
-test("fresh compass is usable when the GPS has a position but no trustworthy course", () => {
-  for (const motion of [{}, { heading: null, speed: null }, { heading: 90, speed: 2, accuracy: 70 }]) {
-    const app = createRuntime({ directionHelpers: true });
-    app.api.setEnabled(true);
-    app.update(fieldFix(app, motion));
-    app.compass(45);
-    assertHeading(app, 45, "compass");
-  }
-});
-
-test("invalid, future and five-second-old compass callbacks are ignored", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  for (const heading of [NaN, Infinity, null, undefined, "90", -1, 360]) app.compass(heading);
-  app.compass(90, app.clock.now - 5000);
-  app.compass(90, app.clock.now - 5001);
-  app.compass(90, app.clock.now + 1001);
-  app.compass(90, NaN);
   assertHeading(app, null, "");
   assert.equal(app.cameraState.bearing, null);
-  app.compass(90);
-  assertHeading(app, 90, "compass");
+  assert.equal(app.context.JSFieldOrientationV1.state().running, false);
+  assert.match(app.nodes.get("mapFieldModeControlsV1").querySelector("[data-field-mode-direction]").textContent, /조금 이동/);
 });
 
-test("a five-second-old cached compass cannot override a later stationary GPS fix", () => {
+test("real device and screen orientation events cannot rotate a stopped or moving field map", () => {
+  const app = createRuntime({ realOrientation: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 3 }));
+  for (const speed of [3, 0, 0.4, 0.79]) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 90, speed }));
+    app.sensor({ alpha: 0 });
+    app.context.screen.orientation.angle = 90;
+    app.context.screen.orientation.dispatchEvent({ type: "change" });
+    app.context.dispatchEvent({ type: "deviceorientation", absolute: true, alpha: 180, beta: 0, gamma: 0 });
+    app.clock.advance(100);
+    assertHeading(app, 90, "gps");
+    assert.equal(app.cameraState.bearing, 90);
+  }
+  assert.equal(app.calls.orientationStarts.length, 0);
+  assert.equal(app.context.JSFieldOrientationV1.state().listening, false);
+});
+
+test("fresh stationary fixes hold the last course beyond both old compass and location expiry intervals", () => {
   const app = createRuntime({ directionHelpers: true });
   app.api.setEnabled(true);
   app.update(fieldFix(app, { heading: 90, speed: 3 }));
-  app.compass(180);
-  app.clock.advance(5000);
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 90, "gps");
-  app.compass(210);
-  assertHeading(app, 210, "compass");
-});
-
-test("every non-ready sensor state invalidates a cached compass before a GPS stop", () => {
-  for (const status of ["waiting", "stale", "tilted", "uncalibrated", "hidden", "denied", "unavailable", "off"]) {
-    const app = createRuntime({ directionHelpers: true });
-    app.api.setEnabled(true);
-    app.update(fieldFix(app, { heading: 90, speed: 3 }));
-    app.compass(180);
-    app.compassStatus(status);
-    app.clock.advance(100);
-    app.update(fieldFix(app, { speed: 0 }));
-    assertHeading(app, 90, "gps", `${status} must discard the old screen's bearing`);
+  for (let second = 1; second <= 40; second += 1) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 270, speed: [0, 0.4, 0.79][second % 3] }));
+    app.compass(second * 7 % 360);
+    assertHeading(app, 90, "gps");
+    assert.equal(app.cameraState.bearing, 90);
   }
-});
-
-test("sensor unavailability holds the last direction without guessing north or disabling GPS following", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  app.compass(140);
-  const cameraCalls = app.calls.camera.length;
-  app.compassStatus("uncalibrated");
-  assertHeading(app, 140, "compass");
-  assert.equal(app.calls.camera.length, cameraCalls);
-  assert.equal(app.api.isFollowing(), true);
-  for (const node of app.document.querySelectorAll("[data-field-mode-direction]")) assert.match(node.textContent, /마지막 방향 유지/);
-});
-
-test("heading-up camera remains reset after stale GPS until a new location arrives", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  app.compass(140);
-  app.clock.advance(30000);
-  assertHeading(app, null, "");
-  assert.equal(app.cameraState.bearing, null);
-  app.compass(210);
-  assertHeading(app, null, "");
-  app.clock.advance(1);
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 210, "compass");
-});
-
-test("temporary GPS errors prevent compass reactivation until a post-error fix", () => {
-  for (const code of [2, 3]) {
-    const app = createRuntime({ directionHelpers: true });
-    app.api.setEnabled(true);
-    app.update(fieldFix(app, { speed: 0 }));
-    app.compass(90);
-    app.clock.advance(100);
-    app.api.onError({ code });
-    assertHeading(app, null, "");
-    assert.equal(app.cameraState.bearing, null);
-    app.compass(180);
-    assertHeading(app, null, "", `GPS error ${code} must block compass until fresh coordinates arrive`);
-    app.clock.advance(100);
-    app.update(fieldFix(app, { speed: 0 }));
-    assertHeading(app, 180, "compass");
-  }
-});
-
-test("hidden/resumed pages cannot rotate from compass before receiving fresh GPS", () => {
-  for (const lifecycle of ["visibility", "pagehide"]) {
-    const app = createRuntime({ directionHelpers: true });
-    app.api.setEnabled(true);
-    app.update(fieldFix(app, { speed: 0 }));
-    app.compass(90);
-    app.clock.advance(100);
-    if (lifecycle === "visibility") app.visibility(true);
-    else app.context.dispatchEvent({ type: "pagehide" });
-    app.compass(180);
-    assertHeading(app, null, "");
-    assert.equal(app.cameraState.bearing, null);
-    app.clock.advance(100);
-    if (lifecycle === "visibility") app.visibility(false);
-    else app.context.dispatchEvent({ type: "pageshow" });
-    app.compass(270);
-    assertHeading(app, null, "", "returning to the tab is not a fresh GPS fix");
-    app.clock.advance(100);
-    app.update(fieldFix(app, { speed: 0 }));
-    assertHeading(app, 270, "compass");
-  }
-});
-
-test("permission denial and map-tool exits stop compass and restore the normal camera", () => {
-  for (const exit of ["denied", "tool"]) {
-    const app = createRuntime({ directionHelpers: true });
-    app.api.setEnabled(true);
-    app.update(fieldFix(app, { speed: 0 }));
-    app.compass(190);
-    if (exit === "denied") app.api.onError({ code: 1 });
-    else app.api.stopForMapTool();
-    assert.equal(app.calls.orientationStops, 1);
-    assertHeading(app, null, "");
-    assert.equal(app.cameraState.bearing, null);
-    assert.equal(app.map.draggable, true);
-    assert.equal(app.map.zoomable, true);
-    app.compass(240);
-    assertHeading(app, null, "");
-  }
-});
-
-test("north-crossing compass turns use the existing short-rotation marker and normalized camera bearing", () => {
-  const app = createRuntime({ directionHelpers: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  app.compass(359);
-  app.compass(1);
-  assertHeading(app, 1, "compass");
-  assert.equal(markerHeading(app), "361deg");
-  assert.equal(app.cameraState.bearing, 1);
+  const explanation = app.nodes.get("mapFieldModeControlsV1").querySelector("[data-field-mode-direction]").textContent;
+  assert.match(explanation, /정차 중.*마지막 진행 방향 유지/);
   assert.equal(app.context.favoriteOnly, true);
   assert.equal(app.context.activeFavoriteFolderId, "folder-keep");
   assert.equal(app.context.selectedItemKey, "listing-keep");
 });
 
-test("same-bearing GPS/compass source changes also update the accessible marker description", () => {
+test("missing movement data holds the course without a delayed compass takeover", () => {
   const app = createRuntime({ directionHelpers: true });
   app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  app.compass(90);
-  const marker = app.context.jsCurrentLocationOverlayV630.getContent();
-  assert.match(marker.getAttribute("aria-label"), /기기 방향/);
-  app.clock.advance(100);
-  app.update(fieldFix(app, { heading: 90, speed: 3 }));
-  assertHeading(app, 90, "gps");
-  assert.match(marker.getAttribute("aria-label"), /이동 방향/);
-  app.clock.advance(100);
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 90, "compass");
-  assert.match(marker.getAttribute("aria-label"), /기기 방향/);
-});
-
-test("real compass helper integrates with GPS priority, sensor staleness and OFF cleanup", () => {
-  const app = createRuntime({ realOrientation: true });
-  app.sensor({ alpha: 270 });
-  assert.equal(app.context.JSFieldOrientationV1.state().running, false);
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  app.sensor({ alpha: 270 });
-  assertHeading(app, 90, "compass");
-  app.clock.advance(1000);
-  app.update(fieldFix(app, { heading: 100, speed: 3 }));
-  app.sensor({ alpha: 220 });
-  assertHeading(app, 100, "gps");
-  app.clock.advance(1000);
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 140, "compass");
-  app.clock.advance(5000);
-  assert.equal(app.context.JSFieldOrientationV1.state().status, "stale");
-  assertHeading(app, 140, "compass", "stale compass holds the last known orientation");
-  app.api.setEnabled(false);
-  assert.equal(app.context.JSFieldOrientationV1.state().running, false);
-  assert.equal(app.context.JSFieldOrientationV1.state().listening, false);
-  assert.equal(app.cameraState.bearing, null);
-  app.sensor({ alpha: 180 });
-  assertHeading(app, null, "");
-});
-
-test("real sensor hidden/resume and screen-rotation lifecycle never reuses an old screen bearing", () => {
-  const app = createRuntime({ realOrientation: true });
-  app.api.setEnabled(true);
-  app.update(fieldFix(app, { speed: 0 }));
-  app.sensor({ alpha: 270 });
-  assertHeading(app, 90, "compass");
-  app.visibility(true);
-  assert.equal(app.context.JSFieldOrientationV1.state().listening, false);
-  app.clock.advance(1000);
-  app.visibility(false);
-  assert.equal(app.context.JSFieldOrientationV1.state().listening, true);
-  app.sensor({ alpha: 0 });
-  assertHeading(app, null, "");
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 0, "compass");
-  app.clock.advance(1000);
-  app.update(fieldFix(app, { heading: 100, speed: 3 }));
-  app.context.screen.orientation.angle = 90;
-  app.context.screen.orientation.dispatchEvent({ type: "change" });
-  app.clock.advance(100);
-  app.update(fieldFix(app, { speed: 0 }));
-  assertHeading(app, 100, "gps", "screen-change waiting state invalidates old compass geometry");
-  app.sensor({ alpha: 0 });
-  assertHeading(app, 90, "compass");
-});
-
-test("orientation and camera helpers load once before the optional controller", () => {
-  for (const name of ["map-field-orientation-v1", "map-field-camera-v1"]) {
-    const tags = [...html.matchAll(new RegExp(`<script\\b[^>]*src="js/${name}\\.js[^>]*>`, "g"))];
-    assert.equal(tags.length, 1, name);
-    assert.ok(html.indexOf(tags[0][0]) < html.indexOf('src="js/map-field-mode-v1.js'), `${name} must be available before the controller`);
-    assert.doesNotMatch(tags[0][0], /data-auth-critical/);
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  for (let second = 0; second < 12; second += 1) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: null, speed: null, east: second % 2 }));
+    app.compass(180);
+    assertHeading(app, 90, "gps");
   }
-  assert.equal((html.match(/data-field-mode-direction/g) || []).length, 2, "both desktop and compact controls explain the direction source");
+});
+
+test("five-degree deadband suppresses jitter including north-crossing noise", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 359, speed: 2 }));
+  const count = app.calls.camera.filter((call) => call.type === "bearing").length;
+  for (const heading of [0, 1, 2, 355, 359]) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading, speed: 2 }));
+    assertHeading(app, 359, "gps");
+  }
+  assert.equal(app.calls.camera.filter((call) => call.type === "bearing").length, count, "small jitter must not animate or refresh the camera");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 4, speed: 2 }));
+  assertHeading(app, 4, "gps");
+  assert.equal(markerHeading(app), "364deg");
+});
+
+test("one sharp GPS outlier does not turn the map and a genuine U-turn needs confirmation", () => {
+  const app = createRuntime({ directionHelpers: true });
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 3 }));
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 270, speed: 3 }));
+  assertHeading(app, 90, "gps");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 91, speed: 3 }));
+  assertHeading(app, 90, "gps");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 269, speed: 3 }));
+  assertHeading(app, 90, "gps");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 270, speed: 3 }));
+  assertHeading(app, 270, "gps");
+  assert.equal(app.cameraState.bearing, 270);
+});
+
+test("stopping cancels an unconfirmed turn and departure starts confirmation afresh", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  for (const motion of [{heading:180,speed:2}, {heading:180,speed:0}, {heading:180,speed:2}]) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, motion));
+    assertHeading(app, 90, "gps");
+  }
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 185, speed: 2 }));
+  assertHeading(app, 185, "gps");
+});
+
+test("inconsistent, stale and low-quality candidates cannot confirm a sharp turn", () => {
+  for (const interruption of ["inconsistent", "stale", "inaccurate", "invalid", "implausible"]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { heading: 0, speed: 2 }));
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 100, speed: 2 }));
+    app.clock.advance(interruption === "stale" ? 9000 : 1000);
+    if (interruption === "inconsistent") app.update(fieldFix(app, { heading: 270, speed: 2 }));
+    if (interruption === "inaccurate") app.update(fieldFix(app, { heading: 100, speed: 2, accuracy: 50 }));
+    if (interruption === "invalid") app.update({...fieldFix(app), coords: {latitude: NaN, longitude: 127, accuracy: 4}});
+    if (interruption === "implausible") app.update(fieldFix(app, { heading: 100, speed: 61 }));
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 100, speed: 2 }));
+    assertHeading(app, 0, "gps", interruption);
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 105, speed: 2 }));
+    assertHeading(app, 105, "gps", interruption);
+  }
+});
+
+test("replayed and near-simultaneous fixes cannot confirm an abrupt turn", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 0, speed: 2 }));
+  app.clock.advance(1000);
+  const turn = fieldFix(app, { heading: 90, speed: 2 });
+  app.update(turn);
+  app.update(turn);
+  app.clock.advance(100);
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  assertHeading(app, 0, "gps");
+  app.clock.advance(200);
+  app.update(fieldFix(app, { heading: 90, speed: 2 }));
+  assertHeading(app, 90, "gps");
+});
+
+test("GPS expiry and errors reset the camera and stationary fixes do not invent a new direction", () => {
+  for (const condition of ["expiry", 2, 3]) {
+    const app = createRuntime({ realOrientation: true });
+    app.api.setEnabled(true);
+    app.update(fieldFix(app, { heading: 90, speed: 2 }));
+    if (condition === "expiry") app.clock.advance(30000);
+    else app.api.onError({code: condition});
+    assertHeading(app, null, "");
+    assert.equal(app.cameraState.bearing, null);
+    app.sensor({alpha: 180});
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { speed: 0 }));
+    assertHeading(app, null, "");
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { heading: 180, speed: 2 }));
+    assertHeading(app, 180, "gps");
+  }
+});
+
+test("the camera loads once before the controller and the compass module is no longer loaded", () => {
+  const tags = [...html.matchAll(/<script\b[^>]*src="js\/map-field-camera-v1\.js[^>]*>/g)];
+  assert.equal(tags.length, 1);
+  assert.ok(html.indexOf(tags[0][0]) < html.indexOf('src="js/map-field-mode-v1.js'));
+  assert.doesNotMatch(tags[0][0], /data-auth-critical/);
+  assert.doesNotMatch(html, /src="js\/map-field-orientation-v1\.js/);
+  assert.doesNotMatch(source, /JSFieldOrientationV1|deviceorientation|applyCompass/);
+  assert.equal((html.match(/data-field-mode-direction/g) || []).length, 2);
 });
 
 test("native direction requires numeric finite course, movement speed and sufficiently accurate GPS", () => {
@@ -1114,17 +994,17 @@ test("fresh native heading updates before tiny-position jitter and camera thrott
   app.api.setEnabled(true);
   app.update(fieldFix(app, { heading: 0, speed: 2 }));
   app.clock.advance(200);
-  app.update(fieldFix(app, { east: 0.5, heading: 90, speed: 2 }));
-  assertHeading(app, 90, "gps");
-  assert.equal(markerHeading(app), "90deg");
+  app.update(fieldFix(app, { east: 0.5, heading: 30, speed: 2 }));
+  assertHeading(app, 30, "gps");
+  assert.equal(markerHeading(app), "30deg");
   assert.equal(app.calls.centers.length, 1);
   assert.equal(app.calls.markers.length, 1);
   app.clock.advance(200);
-  app.update(fieldFix(app, { east: 10, heading: 180, speed: 2 }));
-  assertHeading(app, 180, "gps", "a queued camera position still supplies its fresh GPS course immediately");
+  app.update(fieldFix(app, { east: 10, heading: 50, speed: 2 }));
+  assertHeading(app, 50, "gps", "a queued camera position still supplies its fresh GPS course immediately");
   assert.equal(app.calls.centers.length, 1);
   app.clock.advance(600);
-  assertHeading(app, 180, "gps");
+  assertHeading(app, 50, "gps");
   assert.equal(app.calls.centers.length, 2);
   assert.equal(app.calls.navigation.length, 3, "display replay must not add another GPS cache write");
 });
@@ -1143,12 +1023,21 @@ test("movement direction accumulates subthreshold fixes independently of the dis
   assertHeading(app, 0, "movement");
   app.clock.advance(1000);
   app.update(fieldFix(app, { north: 10, east: 10 }));
+  assertHeading(app, 0, "movement", "the first sharp inferred turn awaits confirmation");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 10, east: 20 }));
   assertHeading(app, 90, "movement");
   app.clock.advance(1000);
-  app.update(fieldFix(app, { east: 10 }));
+  app.update(fieldFix(app, { east: 20 }));
+  assertHeading(app, 90, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: -10, east: 20 }));
   assertHeading(app, 180, "movement");
   app.clock.advance(1000);
-  app.update(fieldFix(app));
+  app.update(fieldFix(app, { north: -10, east: 10 }));
+  assertHeading(app, 180, "movement");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: -10 }));
   assertHeading(app, 270, "movement");
   app.clock.advance(1000);
   app.update(fieldFix(app, { heading: 270, speed: 2 }));
@@ -1156,6 +1045,19 @@ test("movement direction accumulates subthreshold fixes independently of the dis
   app.clock.advance(1000);
   app.update(fieldFix(app, { east: -10 }));
   assertHeading(app, 270, "movement", "the source updates even when fallback confirms the same direction");
+});
+
+test("a walking device without native heading can confirm a turn across longer independent movement legs", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  app.update(fieldFix(app, { heading: 0, speed: 2, accuracy: 8 }));
+  for (let east = 1; east <= 70; east += 1) {
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { east, heading: null, speed: null, accuracy: 8 }));
+    if (east <= 20) assertHeading(app, 0, "gps", "one movement leg must not confirm the sharp turn");
+  }
+  assertHeading(app, 90, "movement", "accurate one-metre-per-second walking must not be stuck on its old course");
+  assert.equal(app.calls.watches.length, 1);
 });
 
 test("movement direction must exceed combined endpoint accuracy", () => {
@@ -1187,6 +1089,9 @@ test("explicit stationary speed holds the last course and discards movement drif
   assertHeading(app, 90, "gps");
   app.clock.advance(1000);
   app.update(fieldFix(app, { north: 44 }));
+  assertHeading(app, 90, "gps", "a sharp inferred turn also requires confirmation");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { north: 54 }));
   assertHeading(app, 0, "movement");
 });
 
@@ -1209,6 +1114,9 @@ test("invalid, coarse and implausible-speed fixes clear the movement baseline wi
     assertHeading(app, 90, "gps", `a ${invalid} fix must not bridge the old movement baseline`);
     app.clock.advance(1000);
     app.update(fieldFix(app, { north: 36 }));
+    assertHeading(app, 90, "gps", "the recovered sharp turn still needs a second reliable sample");
+    app.clock.advance(1000);
+    app.update(fieldFix(app, { north: 46 }));
     assertHeading(app, 0, "movement");
   }
 });
@@ -1284,8 +1192,12 @@ test("heading crosses north by the shortest turn while public direction remains 
   assert.equal(content.classList.contains("js-field-mode-heading-turn-v1"), false, "the first course must not animate from north");
   app.clock.advance(1000);
   app.update(fieldFix(app, { heading: 1, speed: 2 }));
-  assertHeading(app, 1, "gps");
-  assert.equal(markerHeading(app), "361deg");
+  assertHeading(app, 359, "gps");
+  assert.equal(markerHeading(app), "359deg", "two-degree north-crossing jitter is ignored");
+  app.clock.advance(1000);
+  app.update(fieldFix(app, { heading: 6, speed: 2 }));
+  assertHeading(app, 6, "gps");
+  assert.equal(markerHeading(app), "366deg");
   assert.equal(content.classList.contains("js-field-mode-heading-turn-v1"), true, "later direction changes may animate their short turn");
   app.clock.advance(1000);
   app.update(fieldFix(app, { heading: 359, speed: 2 }));
@@ -1299,8 +1211,8 @@ test("OFF, suspension, GPS errors and expiry reset direction, baseline and accum
     app.api.setEnabled(true);
     app.update(fieldFix(app, { heading: 359, speed: 2 }));
     app.clock.advance(1000);
-    app.update(fieldFix(app, { heading: 1, speed: 2 }));
-    assert.equal(markerHeading(app), "361deg");
+    app.update(fieldFix(app, { heading: 6, speed: 2 }));
+    assert.equal(markerHeading(app), "366deg");
     if (lifecycle === "off") app.api.setEnabled(false);
     else if (lifecycle === "visibility") app.visibility(true);
     else if (lifecycle === "pagehide") app.context.dispatchEvent({ type: "pagehide" });
