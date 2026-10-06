@@ -1,5 +1,13 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-06 긴급 복구 — Kakao 신규 CDN의 CSP 차단으로 지도·목록 초기화 중단
+
+- 방향 회전 배포 직후 사용자가 새로고침하면 지도/목록이 흰색이며 매물 0개라고 보고했다. 운영 HTTP 응답은 정상이었다. 안전조치로 Worker `63db7078-0e86-4280-8848-4e496dd4a056`로 롤백하고 apex/www의 이전 HTML을 확인했으나 사용자 증상은 그대로였다. DB·매물·찜 데이터는 변경하지 않았다.
+- 실제 SDK bootstrap을 읽으니 core `4.5.27`/`4.5.28` 및 services 등 스크립트를 `https://t1.kakaocdn.net`에서 요청했다. 운영 `_headers`의 script-src는 기존 `https://t1.daumcdn.net`만 허용하고 신규 CDN이 빠져 있었다. 지도 SDK 로드 callback이 실행되지 않으면서 map 생성과 최초 loadSheet가 진행되지 않았다. 롤백 버전도 같은 CSP여서 복구되지 않은 원인이다.
+- 실제 index/auth-gate/SDK에 운영 CSP를 적용한 격리 전체 시작 검사에서 console의 신규 core 스크립트 CSP 위반, map undefined/목록 0을 재현했다. CSP에 `https://t1.kakaocdn.net` 한 호스트만 추가하면 지도 객체·가상 매물·클러스터가 정상 생성되고 pageerror 0임을 A/B 확인했다. 모든 스크립트/도메인을 광범위하게 허용하지 않고 기존 정책은 유지했다. tile의 `mts.kakaocdn.net`은 기존 img-src https:로 허용되어 별도 운영 변경은 없다.
+- `_headers` 수정과 명시적 CDN 허용 회귀시험을 추가했다. 실제 SDK 브라우저 검수의 네트워크 허용 목록도 신규 core/tile 호스트를 반영했다. `kakao-startup-csp.spec.mjs`의 전체 시작 A/B 2개와 최신 SDK 회전 2개를 합쳐 4개 모두 통과했다. SDK가 try/catch로 처리하는 구형 IE 감지 eval은 계속 차단하며 unsafe-eval을 허용하지 않았다. 직전 회전 검사만으로 실제 운영 보안 헤더를 포함한 전체 시작을 검증하지 못했던 범위를 보완한다.
+- `pnpm run check`(lint/타입/1,239개 테스트/빌드/Worker dry-run) 통과. 핫픽스 Worker `bb20d705-24e6-42ed-97e6-1b206238531c`, public cache `5eb1b3311333e6d8f9a2ff20` 배포. apex/www 응답에서 신규 CSP 허용, no-cache/no-store HTML, `1.1.0-heading-up` 자산이 적용된 것을 확인했다. 임장모드 개선은 유지하며 열린 화면은 Ctrl+F5로 갱신하도록 안내했다. 원인 수정 없는 10월5일 Worker 롤백은 같은 차단을 재발시키므로 복구 수단으로 사용하지 않는다.
+
 ## 2026-10-06 임장모드 한정 진행·기기 방향에 맞춘 지도 회전
 
 - 사용자가 이동·정지 상태 모두 실제 좌우와 북쪽 고정 지도의 좌우가 다르게 보인다고 보고했고, 임장모드에만 적용하여 검수 후 배포하도록 승인했다. 임장 OFF/일반 지도는 북쪽 고정, ON은 신뢰할 수 있는 GPS 이동 방향을 우선하고 정지 시 절대 나침반 방향으로 보완한다. 기기 방향은 사용자의 머리/시선이 아니라 화면 위쪽 방향이다.

@@ -9,7 +9,7 @@ import {readFile} from "node:fs/promises";
 const enabled = process.env.JS_FIELD_REAL_SDK === "1";
 const fixtureURL = "https://js-map.com/__field-camera-sdk-fixture";
 const allowedSdkHosts = new Set([
-  "dapi.kakao.com", "t1.daumcdn.net", "t2.daumcdn.net", "t3.daumcdn.net", "t4.daumcdn.net",
+  "dapi.kakao.com", "t1.kakaocdn.net", "mts.kakaocdn.net", "t1.daumcdn.net", "t2.daumcdn.net", "t3.daumcdn.net", "t4.daumcdn.net",
   "mts.daumcdn.net", "map.daumcdn.net", "map0.daumcdn.net", "map1.daumcdn.net", "map2.daumcdn.net", "map3.daumcdn.net", "map4.daumcdn.net"
 ]);
 
