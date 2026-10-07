@@ -1,5 +1,14 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-07 임장 버튼 축척 순환·3초 길게 눌러 해제
+
+- 사용자 요청: OFF에서 짧게 누르면 20m ON, ON에서 짧게 누를 때마다 20→30→50→20m, 3초 이상 길게 누르면 OFF. 재진입은 항상 20m이며 PC와 모바일 공통이다. 기존 축척 선택창은 보조 수단으로 유지하되 ON 때 자동으로 열지 않는다.
+- 임대조건 카드는 실제 지도 level 1/2(20m/30m)에서만 표시한다. 요청 축척이 50m이면 GPS 대기/만료로 이전 근접 확대가 남아 있어도 카드를 숨긴다. 50m는 기존 클러스터로 돌아가며 카드 크기·두 줄 구성·기존 매물/필터/찜 데이터는 유지한다.
+- 버튼 안의 3초 진행 표시 외에 지도 위에 별도 안내판을 추가하지 않는다. 새 위치 감시·외부 요청·DB/수집기 변경은 없다. 현재 축척/다음 동작을 버튼 표시·title·aria-label에 반영하고 Space/Enter 길게 누르기도 지원한다.
+- 포인터 ID·좌클릭·이동/이탈·capture 유실·blur·화면 숨김·Escape·외부 OFF·GPS 오류에서 hold를 취소한다. 3초 OFF 후 늦은 release/click으로 다시 켜지지 않으며 OFF에서 길게 누르기는 무동작이다. 실제 Edge click도 isPrimary=false인 점을 재현하여 primary 검사는 pointerdown에만 적용했다. 유실된 release의 guard가 접근성 클릭을 무기한 막던 경로도 별도 검증·보완했다. contextmenu/callout 방지는 해당 버튼에만 적용한다.
+- 최종 `pnpm run check`(lint/타입/1,271개/빌드/Worker dry-run), controller+camera 109개, 카드 18개 통과. 폰/태블릿 전체 브라우저 14개 및 마지막 변경 후 실제 mouse/CDP touch 경계 테스트 2개 재검증, 실제 Kakao SDK 전체 로더의 20→30→50→20→길게 OFF 1개 통과. 독립 실제 Edge 검사로 blur/keyup 유실 및 늦은 release/보조기술 클릭도 확인했다. 실기 삼성인터넷 현장 테스트를 한 것은 아니다.
+- Worker `74f9dd53-8223-434b-98fd-1673dae7be34`, public cache `14e3535408487ea782b28ae3` 운영 배포 완료. apex/www의 HTML·CSS·controller·카드 모듈·서비스워커 10개 응답 모두 HTTP 200 및 빌드 SHA256 일치, 두 화면용 새 click(event) 핸들러·자산 버전·Kakao CDN CSP·HTML no-cache/no-store를 확인했다. 열린 웹은 새로고침 후 적용된다. 배포 전 정상 Worker는 `e67dbed6-3a78-46d3-98aa-eab5c1b562a6`, 커밋 `06ef027`이다.
+
 ## 2026-10-07 임대조건 카드 크기 축소
 
 - 사용자 요청에 따라 임장모드 임대카드 CSS만 축소했다. 최소 폭 132→112px, 매물 행 최소 높이 53→44px, 내부 여백 7/9→4/6px, 줄 간격 3→2px, 층·평수 13→12px / 금액 14→13px로 조정했다. 큰 금액은 기존 최대 폭 210px까지 늘어나며 두 줄 가운데 정렬과 터치 높이를 유지한다.

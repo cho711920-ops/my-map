@@ -43,6 +43,8 @@ function element(tagName = "div") {
     innerHTML: "",
     hidden: false,
     disabled: false,
+    setPointerCapture(pointerId) { this.capturedPointer = pointerId; },
+    releasePointerCapture(pointerId) { if (this.capturedPointer === pointerId) this.capturedPointer = null; },
     classList: {
       add(...names) { names.forEach((name) => classes.add(name)); },
       remove(...names) { names.forEach((name) => classes.delete(name)); },
@@ -311,9 +313,14 @@ function createRuntime(options = {}) {
       context.dispatchEvent({ type: "deviceorientationabsolute", absolute: true, alpha: 0, beta: 0, gamma: 0, timeStamp: clock.now, ...overrides });
     },
     click(node) {
-      document.dispatchEvent({ type: "pointerdown", target: node });
+      const event = { type: "click", target: node, currentTarget: node, button: 0, pointerId: 1, isPrimary: false,
+        clientX: 40, clientY: 40, preventDefault() { this.defaultPrevented = true; } };
+      document.dispatchEvent({ ...event, type: "pointerdown", isPrimary: true });
+      document.dispatchEvent({ ...event, type: "pointerup", isPrimary: true });
       const handler = node.getAttribute("onclick");
+      context.event = event;
       if (handler) vm.runInContext(handler, context);
+      delete context.event;
     },
     fix(lat = 36.3504, lng = 127.3845, accuracy = 12, timestamp = clock.now) {
       return { coords: { latitude: lat, longitude: lng, accuracy }, timestamp };
@@ -330,6 +337,15 @@ function createRuntime(options = {}) {
 
 function coordinatePair(position) {
   return [position.getLat(), position.getLng()];
+}
+
+function mainEvent(app, type, overrides = {}, button = app.nodes.get("mapFieldModeToggleV1")) {
+  const event = { type, target: button, currentTarget: button, button: 0, pointerId: 17,
+    isPrimary: type !== "click", clientX: 40, clientY: 40, repeat: false, defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; }, ...overrides };
+  app.document.dispatchEvent(event);
+  if (type === "click") app.api.toggle(event);
+  return event;
 }
 
 function fieldFix(app, options = {}) {
@@ -418,21 +434,255 @@ function createIdleRuntime(pin = null) {
   };
 }
 
-test("field mode starts off at 50m and activation without a recent fix waits for GPS", () => {
+test("field mode starts off at 20m without a popup and activation waits for a real GPS fix", () => {
   const app = createRuntime();
   assert.equal(app.api.state().enabled, false);
   assert.equal(app.api.state().controlsOpen, false);
-  assert.equal(app.api.state().scale, 50);
+  assert.equal(app.api.state().scale, 20);
   assert.equal(app.api.isFollowing(), false);
   app.api.toggle();
   assert.equal(app.api.state().enabled, true);
-  assert.equal(app.api.state().controlsOpen, true);
+  assert.equal(app.api.state().controlsOpen, false);
   assert.equal(app.calls.centers.length, 0, "activation must not invent a location");
   app.clock.advance(1000);
   app.update(app.fix());
   assert.equal(app.api.isFollowing(), true);
   assert.deepEqual(coordinatePair(app.map.center), [36.3504, 127.3845]);
-  assert.equal(app.map.level, 3);
+  assert.equal(app.map.level, 1);
+});
+
+test("short primary clicks start at 20m, cycle 20/30/50 and reset to 20 after OFF", () => {
+  const app = createRuntime();
+  const toggles = app.document.querySelectorAll("[data-field-mode-toggle]");
+  for (const expected of [20, 30, 50, 20]) {
+    app.click(toggles[0]);
+    assert.equal(app.api.state().enabled, true);
+    assert.equal(app.api.state().scale, expected);
+    assert.equal(app.api.state().controlsOpen, false);
+    assert.ok(app.document.querySelectorAll("[data-field-mode-indicator]").every(node => node.textContent === expected + "m"));
+    const next = expected === 20 ? 30 : expected === 30 ? 50 : 20;
+    assert.ok(toggles.every(node => node.getAttribute("aria-label").includes("짧게 누르면 " + next + "m")));
+    assert.ok(toggles.every(node => node.title.includes("3초 길게 누르면 끄기")));
+  }
+  app.api.setEnabled(false);
+  app.api.setScale(50);
+  app.click(toggles[1]);
+  assert.equal(app.api.state().scale, 20);
+  assert.equal(app.calls.watches.length, 1);
+});
+
+test("a 3000ms pointer hold turns OFF once and its delayed release/click cannot restart it", () => {
+  const app = createRuntime();
+  const button = app.nodes.get("mapFieldModeToggleV1");
+  app.api.setEnabled(true);
+  mainEvent(app, "pointerdown");
+  assert.ok(button.classList.contains("map-field-mode-holding-v1"));
+  assert.equal(button.capturedPointer, 17);
+  app.clock.advance(2999);
+  assert.equal(app.api.state().enabled, true);
+  app.clock.advance(1);
+  assert.equal(app.api.state().enabled, false);
+  assert.equal(button.classList.contains("map-field-mode-holding-v1"), false);
+  assert.equal(button.capturedPointer, null);
+  app.clock.advance(12000);
+  mainEvent(app, "pointerup");
+  assert.equal(mainEvent(app, "click").defaultPrevented, true);
+  mainEvent(app, "click", {pointerType: "touch"});
+  assert.equal(app.api.state().enabled, false);
+  app.click(button);
+  assert.equal(app.api.state().enabled, true, "a fresh deliberate tap clears the old release guard");
+  assert.equal(app.api.state().scale, 20);
+});
+
+test("holding while OFF is a no-op and context menus are suppressed only on the main button", () => {
+  const app = createRuntime();
+  mainEvent(app, "pointerdown");
+  app.clock.advance(3000);
+  mainEvent(app, "pointerup");
+  mainEvent(app, "click");
+  assert.equal(app.api.state().enabled, false);
+  assert.equal(app.calls.watches.length, 0);
+  assert.equal(mainEvent(app, "contextmenu").defaultPrevented, true);
+  assert.equal(mainEvent(app, "contextmenu", {}, app.document.body).defaultPrevented, false);
+});
+
+test("trusted Edge clicks and standalone assistive clicks do not require click.isPrimary", () => {
+  const app = createRuntime();
+  mainEvent(app, "pointerdown");
+  mainEvent(app, "pointerup");
+  mainEvent(app, "click", {isPrimary: false, pointerType: "mouse", detail: 1, isTrusted: true});
+  assert.equal(app.api.state().scale, 20);
+  assert.equal(app.api.state().enabled, true);
+  mainEvent(app, "click", {isPrimary: false, pointerType: "", pointerId: -1, detail: 0});
+  assert.equal(app.api.state().scale, 30, "assistive/programmatic activation has no pointerdown");
+  mainEvent(app, "keydown", {key: "Enter"});
+  mainEvent(app, "keyup", {key: "Enter"});
+  assert.equal(app.api.state().scale, 50);
+  mainEvent(app, "click", {isPrimary: false, pointerType: "", pointerId: -1, detail: 0});
+  assert.equal(app.api.state().scale, 50, "the key's immediate duplicate click is suppressed");
+  app.clock.advance(1001);
+  mainEvent(app, "click", {isPrimary: false, pointerType: "", pointerId: -1, detail: 0});
+  assert.equal(app.api.state().scale, 20, "the bounded key-click guard does not disable later assistive activation");
+});
+
+test("a cancelled pointer without pointerup does not permanently block assistive activation", () => {
+  const app = createRuntime();
+  app.api.setEnabled(true);
+  mainEvent(app, "pointerdown", {pointerType: "mouse"});
+  app.context.dispatchEvent({type: "blur"});
+  app.clock.advance(1300);
+  const assistive = mainEvent(app, "click", {detail: 0, pointerType: "", pointerId: -1});
+  assert.equal(assistive.defaultPrevented, false);
+  assert.equal(app.api.state().scale, 30, "lost pointerup cannot lock out a standalone non-pointer activation");
+  app.clock.advance(12000);
+  mainEvent(app, "pointerup", {pointerType: "mouse"});
+  const oldPointerClick = mainEvent(app, "click", {detail: 1, pointerType: "mouse"});
+  assert.equal(oldPointerClick.defaultPrevented, true);
+  assert.equal(app.api.state().scale, 30, "the original late physical click is still suppressed");
+});
+
+test("a cancelled key without keyup has a bounded click guard and its late keyup never cycles", () => {
+  for (const key of ["Enter", " "]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    mainEvent(app, "keydown", {key});
+    app.context.dispatchEvent({type: "blur"});
+    app.clock.advance(1300);
+    mainEvent(app, "click", {detail: 0, pointerType: "", pointerId: -1});
+    assert.equal(app.api.state().scale, 30, "a lost keyup must not permanently block assistive activation");
+    app.clock.advance(12000);
+    mainEvent(app, "keyup", {key});
+    mainEvent(app, "click", {detail: 0, pointerType: "", pointerId: -1});
+    assert.equal(app.api.state().scale, 30, "late keyup only renews duplicate-click suppression");
+  }
+});
+
+test("only the originating primary left pointer can complete a hold; repeats do not restart it", () => {
+  const app = createRuntime();
+  const button = app.nodes.get("mapFieldModeToggleV1");
+  app.api.setEnabled(true);
+  for (const overrides of [{button: 2}, {isPrimary: false}, {pointerId: NaN}]) {
+    mainEvent(app, "pointerdown", overrides);
+    app.clock.advance(3001);
+    assert.equal(app.api.state().enabled, true);
+    assert.equal(button.classList.contains("map-field-mode-holding-v1"), false);
+  }
+  mainEvent(app, "pointerdown");
+  app.clock.advance(2000);
+  mainEvent(app, "pointerdown");
+  mainEvent(app, "pointerdown", {pointerId: 18, isPrimary: false});
+  mainEvent(app, "pointerup", {pointerId: 18});
+  app.clock.advance(1000);
+  assert.equal(app.api.state().enabled, false);
+});
+
+test("leaving, dragging, cancellation and lost capture cancel holds and suppress their click", () => {
+  for (const [type, overrides] of [
+    ["pointerleave", {}], ["pointermove", {clientX: 54}],
+    ["pointermove", {clientX: -1}], ["pointercancel", {}], ["lostpointercapture", {}]
+  ]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    mainEvent(app, "pointerdown");
+    app.clock.advance(1000);
+    mainEvent(app, type, overrides);
+    app.clock.advance(4000);
+    mainEvent(app, "pointerup");
+    mainEvent(app, "click");
+    assert.equal(app.api.state().enabled, true, type);
+    assert.equal(app.api.state().scale, 20, type + " must not become a short click");
+    assert.equal(app.nodes.get("mapFieldModeToggleV1").classList.contains("map-field-mode-holding-v1"), false);
+  }
+});
+
+test("lifecycle, focus, external OFF and GPS failures clean up a held main button", () => {
+  const cancellations = [
+    ["blur", app => app.context.dispatchEvent({type: "blur"}), true],
+    ["focusout", app => mainEvent(app, "focusout", {relatedTarget: app.document.body}), true],
+    ["visibility", app => app.visibility(true), true],
+    ["pagehide", app => app.context.dispatchEvent({type: "pagehide"}), true],
+    ["external OFF", app => app.api.setEnabled(false), false],
+    ["permission", app => app.api.onError({code: 1}), false],
+    ["temporary GPS", app => app.api.onError({code: 2}), true],
+    ["map tool", app => app.api.stopForMapTool(), false]
+  ];
+  for (const [name, cancel, remainsEnabled] of cancellations) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    mainEvent(app, "pointerdown");
+    app.clock.advance(1000);
+    cancel(app);
+    app.clock.advance(4000);
+    mainEvent(app, "pointerup");
+    mainEvent(app, "click");
+    assert.equal(app.api.state().enabled, remainsEnabled, name);
+    assert.equal(app.api.state().scale, 20, name);
+    assert.equal(app.nodes.get("mapFieldModeToggleV1").classList.contains("map-field-mode-holding-v1"), false, name);
+  }
+});
+
+test("Escape cancels pointer and keyboard holds without letting their release cycle", () => {
+  for (const key of [null, "Enter", " "]) {
+    const app = createRuntime();
+    app.api.setEnabled(true);
+    mainEvent(app, key ? "keydown" : "pointerdown", key ? {key} : {pointerType: "mouse"});
+    app.clock.advance(1000);
+    mainEvent(app, "keydown", {key: "Escape"});
+    assert.equal(app.nodes.get("mapFieldModeToggleV1").classList.contains("map-field-mode-holding-v1"), false);
+    app.clock.advance(4000);
+    mainEvent(app, key ? "keyup" : "pointerup", key ? {key} : {pointerType: "mouse"});
+    const releaseClick = mainEvent(app, "click", {detail: key ? 0 : 1, pointerType: key ? "" : "mouse"});
+    assert.equal(releaseClick.defaultPrevented, true);
+    assert.equal(app.api.state().enabled, true);
+    assert.equal(app.api.state().scale, 20);
+  }
+});
+
+for (const key of ["Enter", " "]) {
+  test(`${key === " " ? "Space" : key} uses keyup once, ignores native/repeat clicks and holds OFF`, () => {
+    const app = createRuntime();
+    assert.equal(mainEvent(app, "keydown", {key}).defaultPrevented, true);
+    mainEvent(app, "click", {detail: 0});
+    assert.equal(app.api.state().enabled, false, "Enter native keydown click cannot fire early");
+    app.clock.advance(100);
+    mainEvent(app, "keydown", {key, repeat: true});
+    assert.equal(mainEvent(app, "keyup", {key}).defaultPrevented, true);
+    mainEvent(app, "click", {detail: 0});
+    assert.equal(app.api.state().enabled, true);
+    assert.equal(app.api.state().scale, 20);
+    mainEvent(app, "keydown", {key});
+    mainEvent(app, "keyup", {key});
+    mainEvent(app, "click", {detail: 0});
+    assert.equal(app.api.state().scale, 30);
+    mainEvent(app, "keydown", {key});
+    app.clock.advance(2000);
+    mainEvent(app, "keydown", {key, repeat: true});
+    app.clock.advance(1000);
+    assert.equal(app.api.state().enabled, false);
+    mainEvent(app, "keydown", {key, repeat: true});
+    app.clock.advance(12000);
+    mainEvent(app, "keyup", {key});
+    mainEvent(app, "click", {detail: 0});
+    assert.equal(app.api.state().enabled, false);
+    mainEvent(app, "keydown", {key});
+    app.clock.advance(3000);
+    mainEvent(app, "keyup", {key});
+    mainEvent(app, "click", {detail: 0});
+    assert.equal(app.api.state().enabled, false, "long keyboard activation while OFF is also a no-op");
+  });
+}
+
+test("choosing a scale refreshes presentation even without a usable fix or SDK level change", () => {
+  const app = createRuntime();
+  let refreshes = 0;
+  app.context.scheduleMapIdleRefreshV638 = () => { refreshes += 1; };
+  app.api.setEnabled(true);
+  app.api.setScale(30);
+  app.api.setScale(50);
+  app.api.setScale(50);
+  assert.equal(refreshes, 4);
+  assert.equal(app.calls.centers.length, 0);
+  assert.equal(app.api.state().scale, 50);
 });
 
 test("activation can reuse an accurate fix from the last eight seconds but waits when it is old", () => {
@@ -493,6 +743,7 @@ test("scale controls close after three seconds while GPS and status updates keep
   const app = createRuntime();
   const controls = app.document.querySelectorAll("[data-field-mode-controls]");
   app.api.setEnabled(true);
+  app.api.toggleScaleControls();
   app.update(app.fix());
   for (let index = 1; index <= 5; index += 1) {
     app.clock.advance(500);
@@ -532,7 +783,7 @@ test("the scale expander only opens and closes controls without toggling mode or
   const cameraCalls = app.calls.centers.length;
   for (const expander of expanders) {
     assert.equal(expander.hidden, false);
-    assert.equal(expander.textContent, "50m ▾");
+    assert.equal(expander.textContent, "20m ▾");
     assert.equal(expander.getAttribute("aria-expanded"), "false");
     app.click(expander);
     assert.equal(app.api.state().controlsOpen, true);
@@ -557,11 +808,14 @@ test("the scale expander only opens and closes controls without toggling mode or
 test("OFF, reactivation and explicit reopening replace the old popup deadline", () => {
   const app = createRuntime();
   app.api.setEnabled(true);
+  app.api.toggleScaleControls();
   app.clock.advance(2000);
   app.api.setEnabled(false);
   assert.equal(app.api.state().controlsOpen, false);
   app.clock.advance(500);
   app.api.setEnabled(true);
+  assert.equal(app.api.state().controlsOpen, false, "reactivation never opens the popup automatically");
+  app.api.toggleScaleControls();
   app.clock.advance(500);
   assert.equal(app.api.state().controlsOpen, true, "the previous activation deadline must be cancelled");
   app.clock.advance(2499);
@@ -586,6 +840,7 @@ test("outside pointer and Escape close the popup and keyboard focus pauses auto-
   const expander = app.document.querySelectorAll("[data-field-mode-expand]")
     .find((node) => node.getAttribute("aria-controls") === panel.getAttribute("id"));
   app.api.setEnabled(true);
+  app.api.toggleScaleControls();
   app.document.dispatchEvent({ type: "pointerdown", target: scaleButton });
   assert.equal(app.api.state().controlsOpen, true, "pressing inside the popup is not an outside click");
   app.document.dispatchEvent({ type: "pointerdown", target: app.document.body });
@@ -1344,7 +1599,7 @@ test("camera changes while following return to the accepted location and selecte
   app.fireMap("zoom_changed");
   app.clock.advance(0);
   assert.deepEqual(coordinatePair(app.map.center), [36.3504, 127.3845]);
-  assert.equal(app.map.level, 3);
+  assert.equal(app.map.level, 1);
   assert.equal(app.context.favoriteOnly, true);
   assert.deepEqual(app.context.favoriteKeys, ["property:keep"]);
   assert.equal(app.context.activeFavoriteFolderId, "folder-keep");

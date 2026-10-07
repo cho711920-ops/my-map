@@ -115,7 +115,7 @@ async function installBoundary(page) {
     kakao.maps.event.addListener(map, "idle", scheduleMapIdleRefreshV638);
     syncMapQuickToolGeometryV659();
     const first = allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
-    first.latlng = new kakao.maps.LatLng(36.3507, 127.3796);
+    first.latlng = new kakao.maps.LatLng(36.3503, 127.3798);
     for (let index = 2; index <= 4; index += 1) {
       allItems.push({...first, propertyId: "FIXTURE-SAME-" + index, key: "fixture-same-" + index,
         room: index + "층", area: 20 + index * 5, deposit: 1000 * index, rent: 70 + index * 10});
@@ -226,6 +226,9 @@ for (const device of devices) {
       const panel = page.locator(compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       const expander = page.locator(`[data-field-mode-expand][aria-controls="${compact ? "mapFieldModeCompactControlsV1" : "mapFieldModeControlsV1"}"]`);
       await toggle.click();
+      await expect(expander).toHaveText("20m ▾");
+      await expect(panel).toBeHidden();
+      expect(await page.evaluate(() => map.getLevel())).toBe(1);
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(1);
       await expect(page.locator(".circle-marker")).toHaveCount(0);
       await expectCardLayout(page);
@@ -242,6 +245,15 @@ for (const device of devices) {
       await page.screenshot({path: testInfo.outputPath(device.name + "-30m.png")});
       await expander.click();
       await panel.locator('[data-field-mode-scale="50"]').click();
+      await expect(expander).toHaveText("50m ▾");
+      await expect(page.locator(".field-lease-card-v1")).toHaveCount(0);
+      await expect(page.locator(".circle-marker")).toHaveCount(1);
+      expect(await page.evaluate(() => JSFieldModeV1.state().enabled)).toBe(true);
+      expect(await preserved(page)).toEqual(baseline);
+      await toggle.click();
+      await expect(expander).toHaveText("20m ▾");
+      await expect(page.locator(".field-lease-card-v1")).toHaveCount(1);
+      await expect(page.locator(".circle-marker")).toHaveCount(0);
 
       // The map button opens the real existing detail. Dispatching the second
       // button event checks the same public toggle even if a phone sheet covers it.
@@ -293,7 +305,7 @@ for (const device of devices) {
       await expectCardLayout(page);
       expect(await preserved(page)).toEqual(baseline);
 
-      await toggle.click();
+      await toggle.click({delay: 3100});
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(0);
       await expect(page.locator(".circle-marker")).toHaveCount(1);
       await expect(page.locator("#jsFieldMapSurfaceV1")).toHaveCSS("transform", "none");
@@ -324,7 +336,7 @@ test("switching from a pinned building to another lease row survives GPS renderi
     await page.evaluate(() => {
       const second = allItems.find(item => item.propertyId === "FIXTURE-LEASE-2");
       second.address = "대전 서구 괴정동 2-2";
-      second.latlng = new kakao.maps.LatLng(36.3491, 127.3807);
+      second.latlng = new kakao.maps.LatLng(36.3497, 127.3802);
       favoriteKeys.push("property:" + second.propertyId);
       favoriteFilterKeys = favoriteKeys.slice();
       applyFilter();

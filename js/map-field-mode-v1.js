@@ -3,10 +3,14 @@
   "use strict";
 
   var enabled = false;
-  var scale = 50;
+  var scale = 20;
   var status = "내 위치 따라가기";
   var controlsOpen = false;
   var controlsTimer = null;
+  var mainPress = null;
+  var blockedMainClick = null;
+  var HOLD_OFF_MS = 3000;
+  var PRESS_MOVE_LIMIT = 12;
   var lastPosition = window.jsLastCurrentLocationPositionV1 || null;
   var acceptedPosition = null;
   var pendingPosition = null;
@@ -77,10 +81,13 @@
     document.querySelectorAll("[data-field-mode-toggle]").forEach(function (button) {
       button.classList.toggle("on", enabled);
       button.setAttribute("aria-pressed", String(enabled));
-      button.title = "임장모드 " + (enabled ? "ON · " : "OFF · ") + status;
+      var action = enabled ? scale + "m · 짧게 누르면 " + nextScale() + "m · 3초 길게 누르면 끄기"
+        : "OFF · 짧게 누르면 20m로 켜기 · 켠 뒤 3초 길게 누르면 끄기";
+      button.title = "임장모드 " + action + " · " + status;
+      button.setAttribute("aria-label", "임장모드 " + action);
     });
     document.querySelectorAll("[data-field-mode-indicator]").forEach(function (element) {
-      element.textContent = enabled ? "ON" : "OFF";
+      element.textContent = enabled ? scale + "m" : "OFF";
     });
     document.querySelectorAll("[data-field-mode-controls]").forEach(function (element) {
       element.hidden = !enabled || !controlsOpen;
@@ -157,6 +164,152 @@
     }
     return controlsOpen;
   }
+
+  function nextScale() { return scale === 20 ? 30 : scale === 30 ? 50 : 20; }
+
+  function mainButton(target) {
+    return target && typeof target.closest === "function" ? target.closest("[data-field-mode-toggle]") : null;
+  }
+
+  function preventMainEvent(event) {
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
+  }
+
+  function finishMainPress(blockClick) {
+    var press = mainPress;
+    if (!press) return null;
+    mainPress = null;
+    if (press.timer !== null) window.clearTimeout(press.timer);
+    press.button.classList.remove("map-field-mode-holding-v1");
+    if (blockClick) {
+      // A physical finger can remain down for a long time. Keyboard repeat
+      // defaults are prevented, so its guard can expire if keyup is lost.
+      // Either release renews the guard; a fresh deliberate press clears it.
+      blockedMainClick = { button: press.button, kind: press.kind,
+        pointerId: press.pointerId, key: press.key, until: press.kind === "keyboard" ? Date.now() + 1000 : Infinity };
+    }
+    if (press.kind === "pointer" && typeof press.button.releasePointerCapture === "function") {
+      try { press.button.releasePointerCapture(press.pointerId); } catch (_) { /* Already released by the browser. */ }
+    }
+    return press;
+  }
+
+  function startMainPress(button, kind, event, key) {
+    if (mainPress || !button || button.disabled || !isVisible()) return;
+    blockedMainClick = null;
+    var press = { button: button, kind: kind, pointerId: event.pointerId, key: key,
+      x: event.clientX, y: event.clientY, startedAt: Date.now(), timer: null };
+    mainPress = press;
+    if (enabled) button.classList.add("map-field-mode-holding-v1");
+    press.timer = window.setTimeout(function () {
+      if (mainPress !== press) return;
+      finishMainPress(true);
+      // Holding an OFF button does not start location tracking on release.
+      if (enabled) setEnabled(false);
+    }, HOLD_OFF_MS);
+    if (kind === "pointer" && typeof button.setPointerCapture === "function") {
+      try { button.setPointerCapture(event.pointerId); } catch (_) { /* Document listeners remain the fallback. */ }
+    }
+  }
+
+  function validPointer(event) {
+    return event.isPrimary !== false && event.button === 0 && Number.isFinite(event.pointerId);
+  }
+
+  function outsidePress(press, event) {
+    var box = press.button.getBoundingClientRect();
+    return Math.hypot(event.clientX - press.x, event.clientY - press.y) > PRESS_MOVE_LIMIT ||
+      event.clientX < box.left || event.clientX > box.left + box.width ||
+      event.clientY < box.top || event.clientY > box.top + box.height;
+  }
+
+  function cycleMainButton() {
+    if (!enabled) return setEnabled(true);
+    setScale(nextScale());
+    return enabled;
+  }
+
+  function toggleMainButton(event) {
+    var button = event && mainButton(event.currentTarget) || event && mainButton(event.target);
+    // Edge reports isPrimary=false even for a trusted mouse click. Validate
+    // primary pointers on pointerdown, never on click or assistive activation.
+    if (event && (event.button > 0 ||
+        mainPress && mainPress.button === button ||
+        blockedMainClick && blockedMainClick.button === button && Date.now() <= blockedMainClick.until &&
+          // Blur/cancel can lose pointerup entirely. Such a stale physical
+          // pointer must not block a later, independent assistive activation.
+          !(blockedMainClick.kind === "pointer" && !mainPress && event.detail === 0 && !event.pointerType))) {
+      preventMainEvent(event);
+      return enabled;
+    }
+    finishMainPress(true);
+    return cycleMainButton();
+  }
+
+  function activationKey(event) {
+    return event.key === "Enter" ? "Enter" : event.key === " " || event.key === "Spacebar" ? "Space" : "";
+  }
+
+  document.addEventListener("pointerdown", function (event) {
+    var button = mainButton(event.target);
+    if (button && validPointer(event)) startMainPress(button, "pointer", event, "");
+  }, true);
+  document.addEventListener("pointermove", function (event) {
+    if (mainPress && mainPress.kind === "pointer" && mainPress.pointerId === event.pointerId && outsidePress(mainPress, event)) {
+      finishMainPress(true);
+    }
+  }, true);
+  document.addEventListener("pointerup", function (event) {
+    if (mainPress && mainPress.kind === "pointer" && mainPress.pointerId === event.pointerId) {
+      var held = Date.now() - mainPress.startedAt >= HOLD_OFF_MS;
+      var cancelled = !validPointer(event) || outsidePress(mainPress, event);
+      finishMainPress(held || cancelled);
+      if (held && !cancelled && enabled) setEnabled(false);
+    }
+    if (blockedMainClick && blockedMainClick.kind === "pointer" && blockedMainClick.pointerId === event.pointerId) {
+      blockedMainClick.until = Date.now() + 1000;
+      preventMainEvent(event);
+    }
+  }, true);
+  ["pointercancel", "lostpointercapture"].forEach(function (type) {
+    document.addEventListener(type, function (event) {
+      if (mainPress && mainPress.kind === "pointer" && mainPress.pointerId === event.pointerId) finishMainPress(true);
+    }, true);
+  });
+  document.addEventListener("pointerleave", function (event) {
+    if (mainPress && mainPress.kind === "pointer" && mainPress.pointerId === event.pointerId &&
+        event.target === mainPress.button) finishMainPress(true);
+  }, true);
+  document.addEventListener("contextmenu", function (event) {
+    if (mainButton(event.target)) preventMainEvent(event);
+  });
+  document.addEventListener("keydown", function (event) {
+    var button = mainButton(event.target), key = activationKey(event);
+    if (!button || !key) return;
+    preventMainEvent(event);
+    if (!event.repeat) startMainPress(button, "keyboard", event, key);
+  }, true);
+  document.addEventListener("keyup", function (event) {
+    var key = activationKey(event);
+    if (!key) return;
+    if (mainPress && mainPress.kind === "keyboard" && mainPress.key === key) {
+      var button = mainButton(event.target);
+      var press = finishMainPress(true);
+      if (button === press.button && isVisible()) {
+        if (Date.now() - press.startedAt < HOLD_OFF_MS) cycleMainButton();
+        else if (enabled) setEnabled(false);
+      }
+      preventMainEvent(event);
+    }
+    if (blockedMainClick && blockedMainClick.kind === "keyboard" && blockedMainClick.key === key) {
+      blockedMainClick.until = Date.now() + 1000;
+      preventMainEvent(event);
+    }
+  }, true);
+  document.addEventListener("focusout", function (event) {
+    if (mainPress && mainPress.button.contains(event.target) && !mainPress.button.contains(event.relatedTarget)) finishMainPress(true);
+  });
+  window.addEventListener("blur", function () { finishMainPress(true); });
 
   function setStatus(message) {
     if (status === message) return;
@@ -463,6 +616,7 @@
 
   function setEnabled(value) {
     var next = !!value;
+    finishMainPress(true);
     if (next === enabled) return enabled;
     if (next && (!mapReady() || !navigator.geolocation)) {
       setStatus(!mapReady() ? "지도를 준비 중입니다" : "위치정보를 사용할 수 없습니다");
@@ -474,9 +628,10 @@
     lastUsableStamp = 0;
     enabled = next;
     resetHeading();
-    controlsOpen = next;
+    controlsOpen = false;
     cancelControlsTimer();
     if (enabled) {
+      scale = 20;
       bindMap();
       if (typeof window.closeMapQuickPopoversV657 === "function") window.closeMapQuickPopoversV657();
       if (typeof window.finishMapToolForFieldModeV1 === "function") window.finishMapToolForFieldModeV1();
@@ -514,14 +669,17 @@
 
   function setScale(value) {
     if (value !== 20 && value !== 30 && value !== 50) return false;
+    finishMainPress(true);
     scale = value;
     closeScaleControls(true);
     syncControls();
     centerOn(acceptedPosition);
+    if (typeof window.scheduleMapIdleRefreshV638 === "function") window.scheduleMapIdleRefreshV638();
     return true;
   }
 
   function onError(error) {
+    finishMainPress(true);
     if (!enabled) return;
     cancelPending();
     lastUsableStamp = 0;
@@ -540,6 +698,7 @@
   }
 
   function suspend() {
+    finishMainPress(true);
     closeScaleControls(false);
     cancelPending();
     lastUsableStamp = 0;
@@ -558,6 +717,7 @@
     if (!event.target.closest(".map-field-mode-wrap-v1, .map-field-mode-compact-v1")) closeScaleControls(false);
   });
   document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") finishMainPress(true);
     if (event.key === "Escape" && controlsOpen) {
       closeScaleControls(true);
       event.preventDefault();
@@ -574,7 +734,7 @@
   window.addEventListener("pagehide", function () { pageHidden = true; suspend(); });
   window.addEventListener("pageshow", function () { pageHidden = false; suspend(); });
   window.JSFieldModeV1 = {
-    toggle: function () { return setEnabled(!enabled); },
+    toggle: toggleMainButton,
     setEnabled: setEnabled,
     setScale: setScale,
     toggleScaleControls: toggleScaleControls,
@@ -584,6 +744,7 @@
     onError: onError,
     decorateMarker: decorateMarker,
     stopForMapTool: function () {
+      finishMainPress(true);
       if (enabled) {
         setEnabled(false);
         notify("지도 도구 사용을 위해 임장모드를 껐습니다.");

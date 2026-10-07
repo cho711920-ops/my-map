@@ -61,7 +61,7 @@ async function installMapBoundary(page, options = {}) {
         for (const overlay of overlays) overlay.render();
         emit("center_changed"); emit("idle");
       },
-      setLevel(level) { this.level = level; state.levelCalls += 1; if (credits) credits.querySelector("[data-fixture-scale]").textContent = level === 1 ? "20m" : "50m"; emit("zoom_changed"); emit("idle"); },
+      setLevel(level) { this.level = level; state.levelCalls += 1; if (credits) credits.querySelector("[data-fixture-scale]").textContent = ({1: "20m", 2: "30m", 3: "50m"})[level] || ""; emit("zoom_changed"); emit("idle"); },
       panTo(point) { this.setCenter(point); },
       relayout() { for (const overlay of overlays) overlay.render(); }
     });
@@ -232,6 +232,107 @@ async function expectPopupAreaReleased(page, bounds) {
   expect(hit).toEqual({exists: true, fieldControls: false, fieldWrapper: false});
 }
 
+for (const input of ["mouse", "touch"]) {
+  test(`${input}: short presses cycle scales; only an uninterrupted three-second hold turns field mode OFF`, async ({browser, baseURL}) => {
+    const touch = input === "touch";
+    const context = await browser.newContext({serviceWorkers: "block", isMobile: touch, hasTouch: touch,
+      viewport: touch ? {width: 390, height: 844} : {width: 1280, height: 800},
+      ...(touch ? {userAgent: phoneUA, screen: {width: 390, height: 844}} : {})});
+    try {
+      await context.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort());
+      const page = await context.newPage();
+      const errors = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.goto(baseURL);
+      await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
+      await page.locator("#fixtureControls").evaluate(element => {element.style.display = "none";});
+      await installMapBoundary(page);
+      const toggle = page.locator(touch ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
+      await expect(toggle).toBeVisible();
+      const box = await toggle.boundingBox();
+      const point = {x: box.x + box.width / 2, y: box.y + box.height / 2};
+      const outside = {x: point.x + (point.x > 200 ? -70 : 70), y: point.y};
+      const session = touch ? await context.newCDPSession(page) : null;
+      const now = Date.now();
+      await page.clock.install({time: new Date(now)});
+      await page.clock.pauseAt(new Date(now + 100));
+      await page.evaluate(() => {
+        startCurrentLocationTrackingV630();
+        __fieldFixture.fix(36.3504, 127.3845);
+        window.__fieldPressEvents = [];
+        for (const type of ["pointerdown", "pointerup", "pointercancel", "lostpointercapture", "pointerleave", "click"]) {
+          window.addEventListener(type, event => {
+            window.__fieldPressEvents.push({type, button: event.button, pointerId: event.pointerId,
+              isPrimary: event.isPrimary, fieldButton: !!event.target.closest?.("[data-field-mode-toggle]"),
+              enabled: JSFieldModeV1.state().enabled, scale: JSFieldModeV1.state().scale});
+            if (window.__fieldPressEvents.length > 20) window.__fieldPressEvents.shift();
+          });
+        }
+      });
+      async function touchEvent(type, location = point) {
+        await session.send("Input.dispatchTouchEvent", {type, touchPoints: /End|Cancel/.test(type) ? [] : [
+          {...location, id: 1, radiusX: 3, radiusY: 3, force: 1}
+        ]});
+      }
+      async function down() {
+        if (touch) await touchEvent("touchStart");
+        else { await page.mouse.move(point.x, point.y); await page.mouse.down(); }
+      }
+      async function up() {
+        if (touch) await touchEvent("touchEnd");
+        else await page.mouse.up();
+        await page.clock.runFor(50);
+      }
+      async function tap() { await down(); await page.clock.runFor(60); await up(); }
+      async function expectState(enabled, scale) {
+        expect(await page.evaluate(() => JSFieldModeV1.state()),
+          JSON.stringify(await page.evaluate(() => window.__fieldPressEvents))).toMatchObject({enabled, scale, controlsOpen: false});
+        await expect(toggle).toHaveAttribute("aria-pressed", String(enabled));
+      }
+      for (const scale of [20, 30, 50, 20]) {
+        await tap();
+        await expectState(true, scale);
+        expect((await cameraState(page)).level).toBe(({20: 1, 30: 2, 50: 3})[scale]);
+      }
+      await down();
+      await page.clock.runFor(2500);
+      await expectState(true, 20);
+      await up();
+      await expectState(true, 30);
+
+      await down();
+      await page.clock.runFor(2999);
+      await expectState(true, 30);
+      await page.clock.runFor(1);
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await up();
+      // The browser's real release click must not immediately switch back ON.
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await tap();
+      await expectState(true, 20);
+
+      await down();
+      await page.clock.runFor(2000);
+      if (touch) await touchEvent("touchMove", outside);
+      else await page.mouse.move(outside.x, outside.y);
+      await page.clock.runFor(2000);
+      await expectState(true, 20);
+      await up();
+      await expectState(true, 20);
+
+      await down();
+      await page.clock.runFor(2000);
+      if (touch) await touchEvent("touchCancel");
+      else await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+      await page.clock.runFor(2000);
+      if (!touch) await up();
+      await expectState(true, 20);
+      expect((await cameraState(page)).watchCalls).toBe(1);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+}
+
 for (const device of devices) {
   test(`${device.name}: real GPS following, scales and OFF preserve map workflow`, async ({browser, baseURL}, testInfo) => {
     const context = await browser.newContext({
@@ -292,24 +393,26 @@ for (const device of devices) {
 
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
-      await expect(panel).toBeVisible();
+      await expect(panel).toBeHidden();
       await expect(expander).toBeVisible();
-      await expect(expander).toHaveText("50m ▾");
-      await expect(expander).toHaveAttribute("aria-expanded", "true");
+      await expect(expander).toHaveText("20m ▾");
+      await expect(expander).toHaveAttribute("aria-expanded", "false");
       await expect(panel.locator("[data-field-mode-status]")).toHaveText("내 위치 따라가는 중");
-      await expectWithinMap(page, compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       await expect(dot).toHaveClass(/js-field-mode-car-v1/);
       await expectNavigationArtwork(dot);
       await expect(dot.locator("[data-field-navigation-pointer]")).toBeHidden();
       await expect(dot.locator("[data-field-navigation-pending]")).toBeVisible();
       await expect(dot).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-      expect(await cameraState(page)).toMatchObject({center: [36.3504, 127.3845], position: [36.3504, 127.3845], level: 3, draggable: false, zoomable: false, watchCalls: 1});
+      expect(await cameraState(page)).toMatchObject({center: [36.3504, 127.3845], position: [36.3504, 127.3845], level: 1, draggable: false, zoomable: false, watchCalls: 1});
 
+      await expander.click();
+      await expect(panel).toBeVisible();
+      await expectWithinMap(page, compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       const initialPanelBounds = await panel.boundingBox();
       await expect(panel).toBeHidden({timeout: 4500});
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
       await expect(expander).toHaveAttribute("aria-expanded", "false");
-      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({enabled: true, controlsOpen: false, scale: 50});
+      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({enabled: true, controlsOpen: false, scale: 20});
       await expectPopupAreaReleased(page, initialPanelBounds);
       await expander.click();
       await expect(panel).toBeVisible();
@@ -385,7 +488,7 @@ for (const device of devices) {
         expect(await preservedState(page)).toEqual(before);
       }
 
-      await toggle.click();
+      await toggle.click({delay: 3100});
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
       await expect(panel).toBeHidden();
       await expect(expander).toBeHidden();
@@ -520,7 +623,7 @@ test("GPS course turns the centered navigation pointer through cardinal directio
     await expect(dot).toHaveCount(1);
     expect(apiRequests.length).toBe(apiBaseline);
 
-    await toggle.click();
+    await toggle.click({delay: 3100});
     await expect(dot).not.toHaveClass(/js-field-mode-car-v1|js-field-mode-heading-known-v1|js-field-mode-heading-turn-v1/);
     await expect(dot.locator("svg, .js-field-mode-heading-pending-v1")).toHaveCount(0);
     await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");
@@ -622,7 +725,7 @@ for (const device of [devices[0], devices[3]]) {
         return Math.abs(Math.atan2(matrix.b,matrix.a)*180/Math.PI);
       })).toBeLessThan(0.01);
       await expect(credits).toBeVisible();
-      await expect(credits).toContainText("50m");
+      await expect(credits).toContainText("20m");
       await expectWithinMap(page,"#fixtureSdkCredits");
       expect(await credits.evaluate(element => element.parentElement.id)).toBe("map");
       expect(await page.locator("#map").boundingBox()).toEqual(originalBounds);
@@ -716,7 +819,7 @@ for (const device of [devices[0], devices[3]]) {
       expect(await page.evaluate(() => window.JSV6ListStore.load("favorite"))).toEqual(savedFavorites);
       expectOnlyExistingListResumeReads();
 
-      await toggle.click();
+      await toggle.click({delay: 3100});
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
       await expect(surface).toHaveCSS("transform", "none");
       await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");

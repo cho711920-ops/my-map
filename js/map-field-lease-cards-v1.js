@@ -8,8 +8,10 @@
     // While waiting for GPS the map can still show the whole city. Never turn
     // thousands of distant buildings into cards before entering field zoom.
     var level = global.map && typeof global.map.getLevel === "function" ? Number(global.map.getLevel()) : 0;
+    var fieldState = global.JSFieldModeV1 && typeof global.JSFieldModeV1.state === "function"
+      ? global.JSFieldModeV1.state() : null;
     return !!(global.JSFieldModeV1 && global.JSFieldModeV1.isFollowing() &&
-      level >= 1 && level <= 3 &&
+      level >= 1 && level <= 2 && (!fieldState || fieldState.scale === 20 || fieldState.scale === 30) &&
       (!global.JSListingTradeV1 || global.JSListingTradeV1.getMode() === "lease"));
   }
 

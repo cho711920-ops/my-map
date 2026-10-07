@@ -14,11 +14,11 @@ function fn(name) {
   return mapSource.slice(start, end);
 }
 function harness() {
-  const state = { enabled: true, mode: "lease", selected: [], details: [], more: [] };
+  const state = { enabled: true, scale: 20, mode: "lease", selected: [], details: [], more: [] };
   const ctx = {
     window: null, overlays: [], selectedItemKey: "",
-    map: {getLevel: () => 3},
-    JSFieldModeV1: {isFollowing: () => state.enabled},
+    map: {getLevel: () => 1},
+    JSFieldModeV1: {isFollowing: () => state.enabled, state: () => state},
     JSListingTradeV1: {getMode: () => state.mode, matchesItem: item => item.tradeType !== "sale"},
     formatListingRoomForCardV653: value => value === "1/4" ? "1층" : value,
     getItemFloorNumber: item => item.floor ?? null,
@@ -61,6 +61,21 @@ test("GPS permission wait on a citywide map never creates thousands of price car
   ctx.map.getLevel = () => 2;
   assert.equal(api.active(), true);
 });
+
+test("only 20m and 30m show lease cards; 50m hides cards even while waiting for a fresh GPS fix", () => {
+  const {ctx, api, state} = harness();
+  for (const [scale, level] of [[20, 1], [30, 2]]) {
+    state.scale = scale;
+    ctx.map.getLevel = () => level;
+    assert.equal(api.active(), true);
+  }
+  state.scale = 50;
+  assert.equal(api.active(), false, "a stale 30m camera cannot leave cards visible at selected 50m");
+  ctx.map.getLevel = () => 3;
+  assert.equal(api.active(), false);
+  state.scale = 20;
+  assert.equal(api.active(), false, "wait for the actual 20m/30m zoom before showing cards");
+});
 test("two centered-line values use master room, pyeong and separated rent/deposit", () => {
   const {api} = harness();
   const values = api.lines(item("A", {room: "1/4", area: 25.5}));
@@ -79,7 +94,7 @@ test("money retains the same two decimals as list and detail, without rounding c
   const {api} = harness();
   assert.equal(api.lines(item("A", {deposit: 1000.25, rent: 25.25})).bottom, "보 1,000.25 / 월 25.25");
 });
-test("nearby addresses remain separate at every field scale; no input mutation or extra data", () => {
+test("nearby addresses remain separate in lease-card mode; no input mutation or extra data", () => {
   const {api} = harness();
   const items = [item("C", {floor: null}), item("B", {floor: 2}), item("A", {floor: 1})];
   const groups = [group(items, "첫 건물"), group([item("D")], "옆 건물")];
@@ -165,6 +180,18 @@ test("more shows the exact existing group and stops responding after mode OFF", 
   assert.equal(api.more(key), false);
   assert.equal(api.open(key, encodeURIComponent("id:A")), false);
 });
+
+test("stale lease-card clicks at 50m cannot open old details or replace the current list", () => {
+  const {ctx, api, state} = harness();
+  const cluster = mount(ctx, api, [item("A")]);
+  state.scale = 50;
+  const key = encodeURIComponent(cluster.key);
+  assert.equal(api.open(key, encodeURIComponent("id:A")), false);
+  assert.equal(api.more(key), false);
+  assert.deepEqual(state.details, []);
+  assert.deepEqual(state.more, []);
+  assert.deepEqual(state.selected, []);
+});
 test("multi-selection preserves pinned/offscreen group ids while following the new detail selection", () => {
   const {ctx, api} = harness();
   const cluster = mount(ctx, api, [item("B")]);
@@ -182,7 +209,7 @@ test("multi-selection preserves pinned/offscreen group ids while following the n
   assert.equal(ctx.jsPinnedClusterSelectionV6515.itemIdentities, pinnedIds);
   assert.deepEqual(snapshot.multiItemIdGroups, [["property:A"], ["property:offscreen"]]);
 });
-test("actual map builder uses field address groups at levels 1/2/3 and retains old path OFF", () => {
+test("actual map builder uses field address groups at levels 1/2 and retains old path at 50m or OFF", () => {
   const {ctx, api, state} = harness();
   let level = 1;
   ctx.map = {getLevel: () => level};
@@ -194,22 +221,31 @@ test("actual map builder uses field address groups at levels 1/2/3 and retains o
   vm.runInContext(fn("createClustersForCurrentZoomV655"), ctx);
   vm.runInContext(fn("buildClusterOverlayContentV655"), ctx);
   const groups = [group([item("A")]), group([item("B")], "second")];
-  for (level of [1, 2, 3]) {
+  for (level of [1, 2]) {
     const clusters = ctx.createClustersForCurrentZoomV655(groups);
     assert.equal(clusters.length, 2);
     assert.equal(clusters[0].fieldLease, true);
     assert.match(ctx.buildClusterOverlayContentV655(clusters[0], " selected"), /field-lease-row-v1/);
   }
-  state.enabled = false;
+  level = 3;
+  state.scale = 50;
   assert.deepEqual(Array.from(ctx.createClustersForCurrentZoomV655(groups)), ["normal-grid"]);
+  assert.equal(api.active(), false);
+  level = 1;
+  state.scale = 20;
+  state.enabled = false;
+  assert.deepEqual(Array.from(ctx.createClustersForCurrentZoomV655(groups)), ["normal-exact"]);
   assert.equal(api.active(), false);
 });
 test("viewport dedupe distinguishes stationary ON/OFF, CSS counter-rotation includes cards", () => {
   const {ctx, state} = harness();
-  ctx.map = {getLevel: () => 3, getCenter: () => ({getLat: () => 36.35, getLng: () => 127.38})};
+  ctx.map = {getLevel: () => 1, getCenter: () => ({getLat: () => 36.35, getLng: () => 127.38})};
   ctx.document = {getElementById: () => ({clientWidth: 390, clientHeight: 844})};
   vm.runInContext(fn("getMapViewportKeyV638"), ctx);
   const on = ctx.getMapViewportKeyV638();
+  state.scale = 50;
+  assert.notEqual(ctx.getMapViewportKeyV638(), on, "50m request invalidates stale GPS-wait cards at the same camera zoom");
+  state.scale = 20;
   state.enabled = false;
   assert.notEqual(ctx.getMapViewportKeyV638(), on);
   assert.match(read("css/map-field-mode-v1.css"), /\.js-field-map-heading-up-v1 \.field-lease-card-v1,/);

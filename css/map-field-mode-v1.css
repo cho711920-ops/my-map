@@ -52,6 +52,26 @@
 .map-field-mode-toggle-v1 {
   position: relative;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Hold feedback stays inside the existing button, never over the map. */
+.map-field-mode-toggle-v1.map-field-mode-holding-v1::after {
+  content: "";
+  position: absolute;
+  left: 4px; right: 4px; bottom: 2px;
+  height: 3px; border-radius: 2px;
+  background: #fff;
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: field-mode-hold-progress-v1 3s linear forwards;
+}
+
+@keyframes field-mode-hold-progress-v1 {
+  to { transform: scaleX(1); }
 }
 
 .map-field-mode-toggle-v1.on {
@@ -250,6 +270,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .map-field-mode-toggle-v1.map-field-mode-holding-v1::after {
+    animation: none;
+    transform: scaleX(1);
+  }
   .js-field-mode-car-v1.js-field-mode-heading-turn-v1 .js-field-mode-car-icon-v1 {
     transition: none;
   }
