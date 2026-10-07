@@ -7,6 +7,7 @@
   border: 0;
 }
 .js-field-map-heading-up-v1 .circle-marker,
+.js-field-map-heading-up-v1 .field-lease-card-v1,
 .js-field-map-heading-up-v1 .js-current-location-dot-v630 {
   rotate: var(--js-field-map-counter, 0deg);
 }
@@ -16,6 +17,29 @@
 }
 .map-field-mode-direction-v1 { display: block; margin-top: 4px; color: #475569; font-size: 11px; line-height: 1.5; }
 .js-field-map-copyright-v1 { z-index: 10 !important; }
+/* Compact rectangular lease cards: two centered lines, no address/photos. */
+.field-lease-card-v1 {
+  width: max-content; min-width: 132px; max-width: 210px;
+  background: #fff; border: 1.5px solid #3077c9; border-radius: 5px;
+  box-shadow: 0 2px 6px #0f274526; overflow: hidden;
+  color: #1e293b; font-family: inherit; text-align: center;
+}
+.field-lease-row-v1 {
+  display: flex; width: 100%; min-height: 53px; flex-direction: column;
+  justify-content: center; align-items: center; gap: 3px;
+  padding: 7px 9px; border: 0; background: #fff; color: inherit;
+  font-family: inherit; line-height: 1.25; text-align: center; cursor: pointer;
+}
+.field-lease-row-v1 + .field-lease-row-v1 { border-top: 1px solid #dbe7f4; }
+.field-lease-top-v1 { display: block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; }
+.field-lease-price-v1 { display: block; white-space: nowrap; font-size: 14px; font-weight: 800; color: #075cb5; font-variant-numeric: tabular-nums; }
+.field-lease-row-v1:hover, .field-lease-row-v1.selected { background: #eaf4ff; }
+.field-lease-card-v1.selected { border-color: #075cb5; box-shadow: 0 0 0 2px #94c8ff, 0 2px 6px #0f274526; }
+.field-lease-row-v1.done { color: #64748b; background: #f1f5f9; }
+.field-lease-row-v1.done .field-lease-price-v1 { color: #64748b; }
+.field-lease-row-v1 small { font-size: 10px; }
+.field-lease-more-v1 { display: block; width: 100%; min-height: 30px; border: 0; border-top: 1px solid #dbe7f4; background: #f1f7ff; color: #075cb5; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.field-lease-card-v1 button:focus-visible { outline: 2px solid #075cb5; outline-offset: -3px; }
 /* Shared field-mode controls. Keep the existing desktop/tablet map geometry. */
 .map-field-mode-wrap-v1 {
   position: relative;

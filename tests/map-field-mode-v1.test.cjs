@@ -455,7 +455,7 @@ test("activation can reuse an accurate fix from the last eight seconds but waits
   assert.equal(old.calls.centers.length, 1);
 });
 
-test("20m and 50m selections use their Kakao levels without affecting listing data", () => {
+test("20m, 30m and 50m selections use their Kakao levels without affecting listing data", () => {
   const app = createRuntime();
   app.api.setEnabled(true);
   app.update(app.fix());
@@ -465,12 +465,24 @@ test("20m and 50m selections use their Kakao levels without affecting listing da
   assert.equal(app.map.level, 1);
   app.api.toggleScaleControls();
   assert.equal(app.api.state().controlsOpen, true);
+  assert.equal(app.api.setScale(30), true);
+  assert.equal(app.api.state().scale, 30);
+  assert.equal(app.api.state().controlsOpen, false);
+  assert.equal(app.map.level, 2);
+  const thirtyButtons = app.document.querySelectorAll('[data-field-mode-scale="30"]');
+  assert.equal(thirtyButtons.length, 2, "desktop/tablet and compact controls both offer 30m");
+  assert.ok(thirtyButtons.every((node) => node.getAttribute("aria-pressed") === "true"));
+  assert.ok(app.document.querySelectorAll("[data-field-mode-expand]").every((node) => node.textContent === "30m ▾"));
   app.api.setScale(50);
   assert.equal(app.api.state().scale, 50);
   assert.equal(app.api.state().controlsOpen, false);
   assert.equal(app.map.level, 3);
-  app.api.setScale(75);
-  assert.ok([20, 50].includes(app.api.state().scale), "unsupported choices must not become map scales");
+  assert.ok(thirtyButtons.every((node) => node.getAttribute("aria-pressed") === "false"));
+  for (const invalid of [40, 75, "30"]) {
+    assert.equal(app.api.setScale(invalid), false);
+    assert.equal(app.api.state().scale, 50, "unsupported choices must not become map scales");
+    assert.equal(app.map.level, 3);
+  }
   assert.equal(app.context.favoriteOnly, true);
   assert.deepEqual(app.context.favoriteKeys, ["property:keep"]);
   assert.equal(app.context.activeFavoriteFolderId, "folder-keep");

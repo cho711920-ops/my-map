@@ -1054,7 +1054,8 @@ function getMapViewportKeyV638() {
     mapElement ? mapElement.clientWidth : 0,
     mapElement ? mapElement.clientHeight : 0,
     window.JSFieldMapCameraV1 && window.JSFieldMapCameraV1.state().active
-      ? window.JSFieldMapCameraV1.state().bearing.toFixed(1) : "north"
+      ? window.JSFieldMapCameraV1.state().bearing.toFixed(1) : "north",
+    window.JSFieldLeaseCardsV1 && window.JSFieldLeaseCardsV1.active() ? "field-lease" : "clusters"
   ].join("|");
 }
 
@@ -1335,6 +1336,11 @@ function resolveAdministrativeClusterPositionsV656(clusters) {
 
 
 function createClustersForCurrentZoomV655(addressGroups) {
+  if (window.JSFieldLeaseCardsV1 && window.JSFieldLeaseCardsV1.active()) {
+    // Never mix neighboring buildings into a price card. Use the real address
+    // anchor, and only render the current map's filtered listings.
+    return filterClustersToMapViewportV690(window.JSFieldLeaseCardsV1.clusters(addressGroups), 80);
+  }
   var level = map && map.getLevel ? Number(map.getLevel()) || 0 : 0;
   var mode = getAdministrativeClusterModeV655(level);
   var useWorldGrid = shouldUseWorldGridClustersV690();
@@ -2709,6 +2715,9 @@ function getPremiumClusterSizeClassV635(count) {
 }
 
 function buildClusterOverlayContentV655(cluster, classNames) {
+  if (cluster && cluster.fieldLease && window.JSFieldLeaseCardsV1) {
+    return window.JSFieldLeaseCardsV1.content(cluster, classNames);
+  }
   var count = ((cluster && cluster.items) || []).length;
   var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
 
@@ -2761,7 +2770,8 @@ function drawMapClustersOnlyV639(items) {
   isRendering = true;
   clearMapOverlaysOnlyV639();
 
-  var clusterSourceItems = getStableClusterSourceItemsV690(items);
+  var clusterSourceItems = window.JSFieldLeaseCardsV1 && window.JSFieldLeaseCardsV1.active()
+    ? (items || []).slice() : getStableClusterSourceItemsV690(items);
   var addressGroups = shouldUseWorldGridClustersV690()
     ? groupByAddress(clusterSourceItems)
     : getVisibleAddressGroupsV639(items);
@@ -2795,6 +2805,7 @@ function drawMapClustersOnlyV639(items) {
     });
 
     overlay.__cluster = cluster;
+    if (cluster.fieldLease) overlay.__fieldLeaseContentV1 = overlayContent;
     overlay.setMap(map);
     overlays.push(overlay);
   });
@@ -2984,6 +2995,12 @@ function redrawSelectedMarkers() {
       gongsilClass + doneClass + customerMatchClass + selectedClass
     );
 
+    // The initial render is immediately followed by selection restoration.
+    // Keep identical field-card DOM instead of replacing it twice per GPS fix.
+    if (cluster.fieldLease) {
+      if (o.__fieldLeaseContentV1 === content) return;
+      o.__fieldLeaseContentV1 = content;
+    }
     o.setContent(content);
   });
 }

@@ -96,3 +96,35 @@ test("current production CSP permits full authenticated startup, live Kakao map 
   expect(boundary.forbidden).toEqual([]);
   await page.screenshot({path:testInfo.outputPath("fixed-csp-full-startup.png")});
 });
+
+test("full production loader and real Kakao switch field lease cards at 30m and restore ordinary clusters",async({page},testInfo)=>{
+  test.setTimeout(45000);
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,"geolocation",{configurable:true,value:{
+      watchPosition(success){window.__fieldGpsSuccess=success;return 123;}, clearWatch(){},
+      getCurrentPosition(success){success({coords:{latitude:36.3504,longitude:127.3841,accuracy:5,speed:0},timestamp:Date.now()});}
+    }});
+  });
+  const boundary=await startFullApplication(page);
+  await expect(page.locator("#list .item")).toHaveCount(1,{timeout:20000});
+  await expect.poll(()=>page.evaluate(()=>!!window.JSFieldModeV1 && !!window.JSFieldLeaseCardsV1)).toBe(true);
+  await page.evaluate(()=>{
+    window.JSFieldModeV1.setScale(30);
+    window.JSFieldModeV1.setEnabled(true);
+    window.__fieldGpsSuccess({coords:{latitude:36.3504,longitude:127.3841,accuracy:5,heading:90,speed:3},timestamp:Date.now()});
+  });
+  await expect.poll(()=>page.evaluate(()=>window.map.getLevel())).toBe(2);
+  const card=page.locator("#map .field-lease-card-v1");
+  await expect(card).toHaveCount(1);
+  await expect(card.locator(".field-lease-top-v1")).toHaveText("1층 · 25평");
+  await expect(card.locator(".field-lease-price-v1")).toHaveText("보 2,000 / 월 90");
+  await expect(card).toHaveCSS("rotate","90deg");
+  await expect(page.locator("#map .circle-marker")).toHaveCount(0);
+  await page.screenshot({path:testInfo.outputPath("live-sdk-field-lease-30m.png")});
+  await page.evaluate(()=>window.JSFieldModeV1.setEnabled(false));
+  await expect(card).toHaveCount(0);
+  await expect(page.locator("#map .circle-marker")).toHaveCount(1);
+  expect(await page.evaluate(()=>window.allItems.length)).toBe(1);
+  expect(boundary.errors).toEqual([]);
+  expect(boundary.forbidden).toEqual([]);
+});

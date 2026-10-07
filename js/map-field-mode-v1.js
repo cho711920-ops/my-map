@@ -38,9 +38,9 @@
   var HEADING_DEADBAND_DEGREES = 5;
   var HEADING_TURN_CONFIRM_DEGREES = 60;
   var HEADING_CONFIRM_GAP_MS = 8000;
-  // Kakao ROADMAP scale labels: level 1 = 20m, level 3 = 50m.
+  // Kakao ROADMAP scale labels: level 1 = 20m, level 2 = 30m, level 3 = 50m.
   // https://devtalk.kakao.com/t/topic/35624
-  var levels = { 20: 1, 50: 3 };
+  var levels = { 20: 1, 30: 2, 50: 3 };
   // Retain the existing marker/rotation hooks; only the artwork changes.
   var markerSvg = '<svg class="js-field-mode-car-icon-v1 js-field-mode-navigation-icon-v1" viewBox="0 0 24 24" aria-hidden="true">' +
     '<path data-field-navigation-pointer d="m12 2 7 19-7-4-7 4Z" fill="#dc2626" stroke="white" stroke-width="1.3" stroke-linejoin="round"/>' +
@@ -506,11 +506,14 @@
     if (lastPosition && isVisible() && Date.now() - Number(lastPosition.timestamp) <= 8000) {
       renderPosition(lastPosition);
     }
+    // Presentation changes even while stopped / awaiting the first GPS fix.
+    // Reuse the normal throttled map render, without a network reload.
+    if (typeof window.scheduleMapIdleRefreshV638 === "function") window.scheduleMapIdleRefreshV638();
     return enabled;
   }
 
   function setScale(value) {
-    if (value !== 20 && value !== 50) return false;
+    if (value !== 20 && value !== 30 && value !== 50) return false;
     scale = value;
     closeScaleControls(true);
     syncControls();
