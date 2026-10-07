@@ -64,6 +64,75 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   return {errors,forbidden};
 }
 
+async function expectFieldAnchorGeometry(page){
+  const anchor=page.locator("#map .field-lease-anchor-v1");
+  await expect(anchor).toHaveCount(1);
+  await expect(anchor).toHaveCSS("rotate","90deg");
+  await expect(anchor).toHaveCSS("transform-origin","0px 0px");
+  await expect(anchor.locator(".field-lease-card-v1")).toHaveCSS("rotate","none");
+  await expect(anchor.locator(".field-lease-card-v1")).toHaveCSS("transform","none");
+  let geometry;
+  await expect.poll(async()=>{
+    geometry=await page.evaluate(()=>{
+      const viewport=document.getElementById("map"),surface=document.getElementById("jsFieldMapSurfaceV1");
+      const node=viewport.querySelector(".field-lease-anchor-v1");
+      const overlay=window.overlays.find(entry=>entry.__cluster?.fieldLease);
+      if(!node || !overlay)return null;
+      const cluster=overlay.__cluster,position=overlay.getPosition();
+      // Independent of JSFieldMapCameraV1.forward/projection: apply the actual
+      // browser CSS transform to the real SDK's raw container projection.
+      const raw=map.getProjection().containerPointFromCoords(cluster.latlng);
+      const css=getComputedStyle(surface),matrix=new DOMMatrixReadOnly(css.transform);
+      const [originX,originY]=css.transformOrigin.split(" ").map(Number.parseFloat);
+      const rotated=new DOMPoint(raw.x-originX,raw.y-originY).matrixTransform(matrix);
+      const viewportRect=viewport.getBoundingClientRect();
+      const expected={x:viewportRect.left+viewport.clientLeft+Number.parseFloat(css.left)+originX+rotated.x,
+        y:viewportRect.top+viewport.clientTop+Number.parseFloat(css.top)+originY+rotated.y};
+      const wrapper=node.getBoundingClientRect(),dot=node.querySelector(".field-lease-location-v1").getBoundingClientRect();
+      const line=node.querySelector(".field-lease-connector-v1");
+      const lineMatrix=line.getScreenCTM();
+      if(!lineMatrix)return null;
+      const endpoint=new DOMPoint(line.x2.baseVal.value,line.y2.baseVal.value).matrixTransform(lineMatrix);
+      const start=new DOMPoint(line.x1.baseVal.value,line.y1.baseVal.value).matrixTransform(lineMatrix);
+      const card=node.querySelector(".field-lease-card-v1"),cardRect=card.getBoundingClientRect(),cardCss=getComputedStyle(card);
+      const dotCenter={x:dot.left+dot.width/2,y:dot.top+dot.height/2};
+      const distance=point=>Math.hypot(point.x-expected.x,point.y-expected.y);
+      return {expected,dotCenter,endpoint:{x:endpoint.x,y:endpoint.y},wrapper:{x:wrapper.left,y:wrapper.top,width:wrapper.width,height:wrapper.height},
+        position:[position.getLat(),position.getLng()],original:[cluster.latlng.getLat(),cluster.latlng.getLng()],
+        maxError:Math.max(distance(dotCenter),distance(endpoint),distance({x:wrapper.left,y:wrapper.top})),
+        lineOrigin:[line.x2.baseVal.value,line.y2.baseVal.value],lineLength:Math.hypot(start.x-endpoint.x,start.y-endpoint.y),
+        cardAxisError:Math.max(Math.abs(cardRect.width-Number.parseFloat(cardCss.width)),Math.abs(cardRect.height-Number.parseFloat(cardCss.height))),
+        tail:node.querySelector(".field-lease-tail-v1").getAttribute("d")};
+    });
+    return geometry?.maxError ?? Infinity;
+  },{message:"real SDK address projection, zero-size origin, dot and connector endpoint must agree"}).toBeLessThan(1.5);
+  // Kakao's getPosition() round-trip differs by ~1e-14 degrees, not a moved
+  // display coordinate. Keep sub-micrometre tolerance for the real SDK.
+  geometry.position.forEach((coordinate,index)=>expect(coordinate).toBeCloseTo(geometry.original[index],11));
+  expect(geometry.original).toEqual([36.3504,127.3845]);
+  expect(geometry.wrapper.width).toBe(0);
+  expect(geometry.wrapper.height).toBe(0);
+  expect(geometry.lineOrigin).toEqual([0,0]);
+  expect(geometry.lineLength).toBeGreaterThan(5);
+  expect(geometry.cardAxisError).toBeLessThan(0.2);
+  expect(geometry.tail).toMatch(/^M .* L .* L /);
+  return geometry;
+}
+
+async function selectFieldCardAndCloseDetail(page){
+  await page.locator("#map .field-lease-row-v1").click();
+  const drawer=page.locator("#unifiedDetailDrawerV8");
+  await expect(drawer).toHaveAttribute("aria-hidden","false");
+  await expect(drawer).toBeVisible();
+  await expect(page.locator("#map .field-lease-row-v1")).toHaveClass(/selected/);
+  expect(await page.evaluate(()=>selectedItemKey===allItems[0].key)).toBe(true);
+  await expectFieldAnchorGeometry(page);
+  await drawer.locator(":scope > header button").click();
+  await expect(drawer).toHaveAttribute("aria-hidden","true");
+  await expect(drawer).toBeHidden();
+  await expectFieldAnchorGeometry(page);
+}
+
 test("old CSP reproduces the post-login blank map and zero listings when the current Kakao SDK changes CDN",async({page},testInfo)=>{
   test.setTimeout(45000);
   const boundary=await startFullApplication(page,{oldCsp:true});
@@ -123,8 +192,9 @@ test("full production loader and real Kakao cycle 20/30m cards, 50m clusters and
   await expect(card).toHaveCount(1);
   await expect(card.locator(".field-lease-top-v1")).toHaveText("1층 · 25평");
   await expect(card.locator(".field-lease-price-v1")).toHaveText("보 2,000 / 월 90");
-  await expect(card).toHaveCSS("rotate","90deg");
+  await expectFieldAnchorGeometry(page);
   await expect(page.locator("#map .circle-marker")).toHaveCount(0);
+  await selectFieldCardAndCloseDetail(page);
   await page.screenshot({path:testInfo.outputPath("live-sdk-field-lease-30m.png")});
   await toggle.click();
   await expect.poll(()=>page.evaluate(()=>window.map.getLevel())).toBe(3);
@@ -193,7 +263,7 @@ test("full production loader and real Kakao preserve tablet portrait/landscape f
     await expect(card).toBeVisible();
     await expect(card.locator(".field-lease-top-v1")).toHaveText("1층 · 25평");
     await expect(card.locator(".field-lease-price-v1")).toHaveText("보 2,000 / 월 90");
-    await expect(card).toHaveCSS("rotate","90deg");
+    await expectFieldAnchorGeometry(page);
     await expect(page.locator("#map .circle-marker")).toHaveCount(0);
     await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(images=>images.filter(img=>img.complete && img.naturalWidth>0).length),{timeout:20000}).toBeGreaterThan(0);
     expect(await page.evaluate(()=>window.__tabletFieldGps)).toEqual({watchCalls:1,clearCalls:0,active:[1]});
@@ -207,6 +277,8 @@ test("full production loader and real Kakao preserve tablet portrait/landscape f
     const {data}=await session.send("Page.captureScreenshot",{format:"png",fromSurface:true,captureBeyondViewport:false});
     await writeFile(testInfo.outputPath(name),Buffer.from(data,"base64"));
   }
+  await expectPreservedFieldMode();
+  await selectFieldCardAndCloseDetail(page);
   await expectPreservedFieldMode();
   await expect(compact.locator(".map-field-mode-indicator-v1")).toHaveText("30m");
   await capturePhysicalScreen("live-sdk-tablet-portrait-field-30m.png");
@@ -224,6 +296,7 @@ test("full production loader and real Kakao preserve tablet portrait/landscape f
   await expect(main).toHaveAttribute("aria-pressed","true");
   await expect(main.locator(".map-field-mode-indicator-v1")).toHaveText("30m");
   await expectPreservedFieldMode();
+  expect(await page.evaluate(()=>selectedItemKey===allItems[0].key)).toBe(true);
   await capturePhysicalScreen("live-sdk-tablet-landscape-field-30m.png");
 
   await page.setViewportSize({width:820,height:1180});
@@ -237,6 +310,7 @@ test("full production loader and real Kakao preserve tablet portrait/landscape f
   await expect(main).toBeHidden();
   await expect(compact.locator(".map-field-mode-indicator-v1")).toHaveText("30m");
   await expectPreservedFieldMode();
+  expect(await page.evaluate(()=>selectedItemKey===allItems[0].key)).toBe(true);
   await capturePhysicalScreen("live-sdk-tablet-portrait-return-field-30m.png");
   await expect(page.locator("html")).toHaveClass(/js-phone-app-v2/);
   const violations=await page.evaluate(()=>window.__startupCspViolations);

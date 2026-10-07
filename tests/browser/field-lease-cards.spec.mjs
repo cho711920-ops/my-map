@@ -1,5 +1,5 @@
 import {test, expect} from "@playwright/test";
-import {readFile} from "node:fs/promises";
+import {readFile, writeFile} from "node:fs/promises";
 import ts from "typescript";
 
 // The loopback fixture supplies real filters/list/detail/mobile modules. Extract
@@ -105,8 +105,8 @@ async function installBoundary(page) {
     Object.defineProperty(navigator, "geolocation", {configurable: true, value: {
       watchPosition(callback) { state.watchCalls += 1; state.positionCallback = callback; return 101; }
     }});
-    window.__leaseFixture = {state, fix(heading = null, speed = 0) {
-      state.positionCallback({coords: {latitude: 36.35, longitude: 127.38, accuracy: 8, heading, speed}, timestamp: Date.now()});
+    window.__leaseFixture = {state, fix(heading = null, speed = 0, position = {}) {
+      state.positionCallback({coords: {latitude: 36.35, longitude: 127.38, accuracy: 8, heading, speed, ...position}, timestamp: Date.now()});
     }};
   });
   await page.addScriptTag({content: mapDeclarations});
@@ -291,9 +291,12 @@ for (const device of devices) {
       await expectCardLayout(page);
       const rotations = await page.locator(".field-lease-card-v1").evaluate(card => {
         const surface = new DOMMatrixReadOnly(getComputedStyle(document.getElementById("jsFieldMapSurfaceV1")).transform);
-        return {map: Math.atan2(surface.b, surface.a) * 180 / Math.PI, card: parseFloat(getComputedStyle(card).rotate)};
+        return {map: Math.atan2(surface.b, surface.a) * 180 / Math.PI,
+          anchor: parseFloat(getComputedStyle(card.closest(".field-lease-anchor-v1")).rotate),
+          card: getComputedStyle(card).rotate};
       });
-      expect(Math.abs(rotations.map + rotations.card)).toBeLessThan(.01);
+      expect(Math.abs(rotations.map + rotations.anchor)).toBeLessThan(.01);
+      expect(rotations.card).toBe("none");
       await page.screenshot({path: testInfo.outputPath(device.name + "-heading-up.png")});
       expect(await preserved(page)).toEqual(baseline);
       expect(await page.evaluate(() => __leaseFixture.state.watchCalls)).toBe(1);
@@ -386,6 +389,227 @@ test("switching from a pinned building to another lease row survives GPS renderi
     expect(await preserved(page)).toEqual(baseline);
     await page.evaluate(() => JSUnifiedListingsV8.close());
     await page.screenshot({path: testInfo.outputPath("tablet-building-switch-after-gps.png")});
+    expect(errors).toEqual([]);
+    expect(forbidden).toEqual([]);
+  } finally { await context.close(); }
+});
+
+async function installNearbyAddresses(page) {
+  await page.evaluate(() => {
+    const first = allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
+    // Three distinct ground points only 2-8px apart at 20m. All four rooms
+    // belonging to the first address retain one shared, exact coordinate.
+    allItems.filter(item => item.address === first.address).forEach(item => {
+      item.latlng = new kakao.maps.LatLng(36.35, 127.37993);
+    });
+    const second = allItems.find(item => item.propertyId === "FIXTURE-LEASE-2");
+    Object.assign(second, {address: "대전 서구 괴정동 2-2", latlng: new kakao.maps.LatLng(36.350005, 127.379945)});
+    const third = {...first, propertyId: "FIXTURE-NEARBY-3", key: "fixture-nearby-3", address: "대전 서구 괴정동 3-3",
+      room: "3층", deposit: 4000, rent: 120, latlng: new kakao.maps.LatLng(36.349995, 127.37995)};
+    allItems.push(third);
+    favoriteKeys.push("property:" + second.propertyId, "property:" + third.propertyId);
+    favoriteFilterKeys = favoriteKeys.slice();
+    applyFilter();
+  });
+}
+
+async function originalCoordinates(page) {
+  return page.evaluate(() => allItems.filter(item => item.latlng).map(item =>
+    [item.propertyId, item.latlng.getLat(), item.latlng.getLng()]));
+}
+
+async function nearbyGeometry(page) {
+  return page.evaluate(() => {
+    const viewport = document.getElementById("map"), mapBox = viewport.getBoundingClientRect();
+    const surface = document.getElementById("jsFieldMapSurfaceV1"), style = getComputedStyle(surface);
+    const matrix = new DOMMatrixReadOnly(style.transform === "none" ? undefined : style.transform);
+    const origin = style.transformOrigin.split(" ").map(parseFloat);
+    const boxOf = element => {
+      const b = element.getBoundingClientRect();
+      return {left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height};
+    };
+    const screenPoint = (svg, x, y) => {
+      const p = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM());
+      return {x: p.x, y: p.y};
+    };
+    const toolRail = boxOf(document.getElementById("mapQuickTools"));
+    const railLeft = toolRail.left - mapBox.left;
+    const layoutWidth = toolRail.width > 0 && toolRail.height > 0 && railLeft > viewport.clientWidth / 2 && railLeft < viewport.clientWidth
+      ? railLeft - 4 : viewport.clientWidth;
+    return {map: boxOf(viewport), toolRail, viewport: {width: viewport.clientWidth, height: viewport.clientHeight}, layoutWidth,
+      cards: overlays.filter(overlay => overlay.__cluster?.fieldLease).map(overlay => {
+      const cluster = overlay.__cluster;
+      const anchor = Array.from(viewport.querySelectorAll(".field-lease-anchor-v1")).find(node =>
+        node.dataset.fieldLeaseKey === encodeURIComponent(cluster.key));
+      const card = anchor.querySelector(".field-lease-card-v1"), dot = anchor.querySelector(".field-lease-location-v1");
+      const svg = anchor.querySelector(".field-lease-leader-v1"), line = anchor.querySelector(".field-lease-connector-v1");
+      const tail = anchor.querySelector(".field-lease-tail-v1");
+      const raw = map.getProjection().containerPointFromCoords(cluster.latlng);
+      // Independent of the application's camera.projection/planLayout: derive
+      // the ground point from SDK coordinates and the actual CSS transform.
+      const projected = matrix.transformPoint(new DOMPoint(raw.x - origin[0], raw.y - origin[1]));
+      const expected = {x: mapBox.left + viewport.clientLeft + surface.offsetLeft + origin[0] + projected.x,
+        y: mapBox.top + viewport.clientTop + surface.offsetTop + origin[1] + projected.y};
+      const dotBox = dot.getBoundingClientRect();
+      const endpoint = screenPoint(svg, line.x2.baseVal.value, line.y2.baseVal.value);
+      const start = screenPoint(svg, line.x1.baseVal.value, line.y1.baseVal.value);
+      const tailTip = tail.getPointAtLength(tail.getTotalLength() / 2);
+      const point = overlay.getPosition();
+      return {key: cluster.key, count: cluster.items.length, card: boxOf(card), anchor: boxOf(anchor),
+        layoutRow: {key: anchor.dataset.fieldLeaseKey, point: getMapDisplayProjectionV1().containerPointFromCoords(cluster.latlng),
+          width: card.offsetWidth, height: card.offsetHeight, selected: card.classList.contains("selected"),
+          previous: {x: parseFloat(card.style.left), y: parseFloat(card.style.top)}},
+        position: [point.getLat(), point.getLng()], cluster: [cluster.latlng.getLat(), cluster.latlng.getLng()],
+        items: cluster.items.map(item => [item.latlng.getLat(), item.latlng.getLng()]), expected,
+        dot: {x: dotBox.left + dotBox.width / 2, y: dotBox.top + dotBox.height / 2}, endpoint, start,
+        tailTip: screenPoint(svg, tailTip.x, tailTip.y),
+        decorative: [anchor, svg, line, tail, dot].map(element => getComputedStyle(element).pointerEvents),
+        cardPointer: getComputedStyle(card).pointerEvents, cardRotate: getComputedStyle(card).rotate,
+        rendered: card.style.transform === "none"};
+    })};
+  });
+}
+
+async function expectNearbyGeometry(page) {
+  // SDK scale/center events schedule the real idle redraw. Inspect its settled
+  // placements, not the old card offset during the intervening map movement.
+  await expect.poll(() => page.evaluate(() => jsMapIdleTimerV638)).toBe(null);
+  await expect(page.locator(".field-lease-anchor-v1")).toHaveCount(3);
+  await expect.poll(() => page.locator(".field-lease-card-v1").evaluateAll(cards =>
+    cards.length === 3 && cards.every(card => card.style.transform === "none"))).toBe(true);
+  await expect.poll(() => page.evaluate(() => JSFieldMapCameraV1.state().animating)).toBe(false);
+  const geometry = await nearbyGeometry(page);
+  // Retain exact measured inputs even on a failed assertion so the pure layout
+  // solver can gain a deterministic unit regression without a browser fixture.
+  await writeFile(test.info().outputPath("nearby-layout-inputs.json"), JSON.stringify({
+    width: geometry.layoutWidth, height: geometry.viewport.height, rows: geometry.cards.map(card => card.layoutRow), geometry
+  }, null, 2));
+  expect(geometry.cards.map(card => card.count).sort()).toEqual([1, 1, 4]);
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  for (const entry of geometry.cards) {
+    expect(entry.anchor.width).toBe(0);
+    expect(entry.anchor.height).toBe(0);
+    expect(entry.position).toEqual(entry.cluster);
+    for (const coords of entry.items) expect(coords).toEqual(entry.cluster);
+    expect(distance(entry.dot, entry.expected)).toBeLessThan(2);
+    expect(distance(entry.endpoint, entry.dot)).toBeLessThan(1);
+    expect(distance(entry.start, entry.tailTip)).toBeLessThan(1);
+    expect(entry.decorative).toEqual(["none", "none", "none", "none", "none"]);
+    expect(entry.cardPointer).toBe("auto");
+    expect(entry.cardRotate).toBe("none");
+    expect(entry.card.left).toBeGreaterThanOrEqual(geometry.map.left + 7);
+    expect(entry.card.top).toBeGreaterThanOrEqual(geometry.map.top + 7);
+    expect(entry.card.right).toBeLessThanOrEqual(geometry.map.right - 7);
+    expect(entry.card.bottom).toBeLessThanOrEqual(geometry.map.bottom - 7);
+    if (geometry.toolRail.width > 0 && geometry.toolRail.height > 0) {
+      const a = entry.card, b = geometry.toolRail;
+      const railOverlap = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+        Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+      expect(railOverlap, "A fixed map control must not cover the listing text").toBeLessThan(1);
+    }
+  }
+  for (let i = 0; i < geometry.cards.length; i += 1) {
+    for (let j = i + 1; j < geometry.cards.length; j += 1) {
+      const a = geometry.cards[i].card, b = geometry.cards[j].card;
+      const intersection = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+        Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+      expect(intersection, JSON.stringify({a, b})).toBeLessThan(1);
+    }
+  }
+  return geometry;
+}
+
+const nearbyDevices = [
+  {name: "phone-740", portrait: {width: 360, height: 740}, landscape: {width: 740, height: 360}, userAgent: phoneUA},
+  {name: "phone-844", portrait: {width: 390, height: 844}, landscape: {width: 844, height: 390}, userAgent: phoneUA},
+  {name: "tablet-1280", portrait: {width: 820, height: 1280}, landscape: {width: 1280, height: 820}, userAgent: tabletUA}
+];
+for (const device of nearbyDevices) test(`${device.name}: nearby cards keep real anchors through scale, GPS and rotation`, async ({browser, baseURL}, testInfo) => {
+  const context = await browser.newContext({serviceWorkers: "block", isMobile: true, hasTouch: true,
+    userAgent: device.userAgent, viewport: device.portrait, screen: device.portrait, deviceScaleFactor: 1});
+  const errors = [], forbidden = [];
+  try {
+    await context.route("**/*", route => {
+      if (new URL(route.request().url()).hostname !== "127.0.0.1" || route.request().method() !== "GET") {
+        forbidden.push(route.request().method() + " " + route.request().url()); return route.abort();
+      }
+      return route.continue();
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(baseURL);
+    await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
+    await installBoundary(page);
+    await installNearbyAddresses(page);
+    await expect(page.locator("#list .item")).toHaveCount(6);
+    const baseline = await preserved(page), coordinates = await originalCoordinates(page);
+    await expect(page.locator(".field-lease-anchor-v1")).toHaveCount(0);
+    const normalCount = await page.locator(".circle-marker").count();
+    expect(normalCount).toBeGreaterThan(0);
+    const compactToggle = page.locator("#mapFieldModeCompactToggleV1");
+    await compactToggle.click();
+    await expectSingleFieldControl(page, compactToggle, 20);
+    await expectNearbyGeometry(page);
+    await page.locator(".field-lease-more-v1").click();
+    await expect(page.locator("#list .item")).toHaveCount(4);
+    await expect(page.locator("#status")).toHaveText("선택 매물 4개");
+    await page.locator('[data-mobile-view="map"]').click();
+    const secondRow = page.locator(".field-lease-row-v1").filter({hasText: "보 3,000 / 월 150"});
+    await secondRow.click();
+    await expect.poll(() => page.evaluate(() => JSUnifiedListingsV8.isOpenForProperty("FIXTURE-LEASE-2"))).toBe(true);
+    await expect(page.locator("#list .item")).toHaveCount(1);
+    await page.getByRole("button", {name: "상세매물보기 닫기", exact: true}).click();
+    await expect.poll(() => page.evaluate(() => JSUnifiedListingsV8.isOpenForProperty("FIXTURE-LEASE-2"))).toBe(false);
+    await page.locator('[data-mobile-view="map"]').click();
+    expect(await page.evaluate(() => selectedItemKey)).toBe("fixture-lease-2");
+    await expectNearbyGeometry(page);
+    await compactToggle.click();
+    await expectSingleFieldControl(page, compactToggle, 30);
+    await expectNearbyGeometry(page);
+    await page.evaluate(() => __leaseFixture.fix(90, 4, {latitude: 36.35002, longitude: 127.38001}));
+    await expect.poll(() => page.evaluate(() => JSFieldMapCameraV1.state().bearing)).toBe(90);
+    await expect.poll(() => page.evaluate(() => jsMapIdleTimerV638)).toBe(null);
+    await expectNearbyGeometry(page);
+    const session = await context.newCDPSession(page);
+    await session.send("Emulation.setDeviceMetricsOverride", {...device.landscape, screenWidth: device.landscape.width,
+      screenHeight: device.landscape.height, mobile: true, deviceScaleFactor: 1, screenOrientation: {type: "landscapePrimary", angle: 90}});
+    await expect(page.locator("html")).toHaveClass(/js-handheld-landscape-v1/);
+    await expect(page.locator("html")).not.toHaveClass(/js-phone-app-v2|js-mobile-app-v1/);
+    await expect.poll(() => page.evaluate(() => jsMapIdleTimerV638)).toBe(null);
+    await expectNearbyGeometry(page);
+    // Exercise the displaced cards after a real rotation as well: neither
+    // the connector nor another card may swallow the actual pointer click.
+    await page.locator(".field-lease-more-v1").click();
+    await expect(page.locator("#list .item")).toHaveCount(4);
+    await secondRow.click();
+    await expect.poll(() => page.evaluate(() => JSUnifiedListingsV8.isOpenForProperty("FIXTURE-LEASE-2"))).toBe(true);
+    await expect(page.locator("#list .item")).toHaveCount(1);
+    await page.getByRole("button", {name: "상세매물보기 닫기", exact: true}).click();
+    await expect.poll(() => page.evaluate(() => JSUnifiedListingsV8.isOpenForProperty("FIXTURE-LEASE-2"))).toBe(false);
+    await page.locator("#unifiedDetailDrawerV8").evaluate(element =>
+      Promise.all(element.getAnimations({subtree: true}).map(animation => animation.finished)));
+    const landscapeGeometry = await expectNearbyGeometry(page);
+    await testInfo.attach("landscape-anchor-geometry.json", {body: Buffer.from(JSON.stringify(landscapeGeometry, null, 2)), contentType: "application/json"});
+    const screenshot = await session.send("Page.captureScreenshot", {format: "png", captureBeyondViewport: false});
+    await writeFile(testInfo.outputPath("nearby-anchors-landscape.png"), Buffer.from(screenshot.data, "base64"));
+    await session.send("Emulation.setDeviceMetricsOverride", {...device.portrait, screenWidth: device.portrait.width,
+      screenHeight: device.portrait.height, mobile: true, deviceScaleFactor: 1, screenOrientation: {type: "portraitPrimary", angle: 0}});
+    await expect(page.locator("html")).toHaveClass(/js-phone-app-v2/);
+    await expect.poll(() => page.evaluate(() => jsMapIdleTimerV638)).toBe(null);
+    await expectNearbyGeometry(page);
+    await page.screenshot({path: testInfo.outputPath("nearby-anchors-portrait.png")});
+    expect(await originalCoordinates(page)).toEqual(coordinates);
+    expect(await preserved(page)).toEqual(baseline);
+    expect(await page.evaluate(() => __leaseFixture.state.watchCalls)).toBe(1);
+    await compactToggle.click();
+    await expectSingleFieldControl(page, compactToggle, 50);
+    await expect(page.locator(".field-lease-anchor-v1,.field-lease-location-v1,.field-lease-leader-v1")).toHaveCount(0);
+    await expect(page.locator(".circle-marker")).toHaveCount(normalCount);
+    await compactToggle.click({delay: 3100});
+    await expectSingleFieldControl(page, compactToggle, null);
+    await expect(page.locator(".field-lease-anchor-v1,.field-lease-location-v1,.field-lease-leader-v1")).toHaveCount(0);
+    await expect(page.locator(".circle-marker")).toHaveCount(normalCount);
+    expect(await preserved(page)).toEqual(baseline);
     expect(errors).toEqual([]);
     expect(forbidden).toEqual([]);
   } finally { await context.close(); }
