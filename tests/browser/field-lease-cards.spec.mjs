@@ -145,29 +145,58 @@ async function preserved(page) {
   }));
 }
 
+// The 120px target permits subpixel font metrics (120.14px in installed Edge).
+async function expectCompactRowGeometry(row, maximumWidth = 121) {
+  const geometry = await row.evaluate(row => {
+    const topElement = row.querySelector(".field-lease-top-v1");
+    const priceElement = row.querySelector(".field-lease-price-v1");
+    const top = topElement.getBoundingClientRect();
+    const price = priceElement.getBoundingClientRect();
+    const card = row.closest(".field-lease-card-v1");
+    const box = card.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    const style = getComputedStyle(row);
+    const textBounds = [topElement, priceElement].map(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const text = range.getBoundingClientRect();
+      return {left: text.left, right: text.right, top: text.top, bottom: text.bottom,
+        lineCount: range.getClientRects().length, overflow: element.scrollWidth - element.clientWidth};
+    });
+    return {topCenter: top.x + top.width / 2, priceCenter: price.x + price.width / 2,
+      cardCenter: box.x + box.width / 2, topBottom: top.bottom, priceTop: price.top,
+      width: box.width, rowHeight: rowBox.height, radius: parseFloat(getComputedStyle(card).borderRadius),
+      cardLeft: box.left, cardRight: box.right, rowTop: rowBox.top, rowBottom: rowBox.bottom,
+      textBounds,
+      direction: style.flexDirection, align: style.alignItems, justify: style.justifyContent,
+      lineCount: row.children.length};
+  });
+  expect(geometry).toMatchObject({direction: "column", align: "center", justify: "center", lineCount: 2});
+  expect(geometry.width).toBeGreaterThanOrEqual(112);
+  expect(geometry.width).toBeLessThanOrEqual(maximumWidth);
+  expect(geometry.rowHeight).toBeGreaterThanOrEqual(44);
+  expect(geometry.rowHeight).toBeLessThanOrEqual(46);
+  expect(geometry.radius).toBeLessThanOrEqual(6);
+  expect(Math.abs(geometry.topCenter - geometry.cardCenter)).toBeLessThan(1);
+  expect(Math.abs(geometry.priceCenter - geometry.cardCenter)).toBeLessThan(1);
+  expect(geometry.priceTop).toBeGreaterThanOrEqual(geometry.topBottom);
+  for (const line of geometry.textBounds) {
+    expect(line.lineCount).toBe(1);
+    expect(line.overflow).toBeLessThanOrEqual(1);
+    expect(line.left).toBeGreaterThanOrEqual(geometry.cardLeft + 1);
+    expect(line.right).toBeLessThanOrEqual(geometry.cardRight - 1);
+    expect(line.top).toBeGreaterThanOrEqual(geometry.rowTop);
+    expect(line.bottom).toBeLessThanOrEqual(geometry.rowBottom);
+  }
+  return geometry;
+}
+
 async function expectCardLayout(page) {
   const rows = page.locator(".field-lease-row-v1");
   await expect(rows).toHaveCount(3);
   await expect(rows.first().locator(".field-lease-top-v1")).toHaveText("1층 · 25평");
   await expect(rows.first().locator(".field-lease-price-v1")).toHaveText("보 2,000 / 월 90");
-  const geometry = await rows.first().evaluate(row => {
-    const top = row.querySelector(".field-lease-top-v1").getBoundingClientRect();
-    const price = row.querySelector(".field-lease-price-v1").getBoundingClientRect();
-    const card = row.closest(".field-lease-card-v1");
-    const box = card.getBoundingClientRect();
-    const style = getComputedStyle(row);
-    return {topCenter: top.x + top.width / 2, priceCenter: price.x + price.width / 2,
-      cardCenter: box.x + box.width / 2, topBottom: top.bottom, priceTop: price.top,
-      width: box.width, radius: parseFloat(getComputedStyle(card).borderRadius),
-      direction: style.flexDirection, align: style.alignItems, justify: style.justifyContent,
-      lineCount: row.children.length};
-  });
-  expect(geometry).toMatchObject({direction: "column", align: "center", justify: "center", lineCount: 2});
-  expect(geometry.width).toBeGreaterThanOrEqual(132);
-  expect(geometry.radius).toBeLessThanOrEqual(6);
-  expect(Math.abs(geometry.topCenter - geometry.cardCenter)).toBeLessThan(1);
-  expect(Math.abs(geometry.priceCenter - geometry.cardCenter)).toBeLessThan(1);
-  expect(geometry.priceTop).toBeGreaterThanOrEqual(geometry.topBottom);
+  for (const row of await rows.all()) await expectCompactRowGeometry(row);
 }
 
 for (const device of devices) {
@@ -244,6 +273,26 @@ for (const device of devices) {
       expect(await preserved(page)).toEqual(baseline);
       expect(await page.evaluate(() => __leaseFixture.state.watchCalls)).toBe(1);
 
+      // Only this loopback fixture changes: long money must grow beyond the
+      // ordinary compact card without clipping, wrapping or becoming taller.
+      const originalAmounts = await page.evaluate(() => {
+        const first = allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
+        const original = {deposit: first.deposit, rent: first.rent};
+        Object.assign(first, {deposit: 123456.78, rent: 123.45});
+        applyFilter();
+        return original;
+      });
+      const longRow = page.locator(".field-lease-row-v1").filter({hasText: "보 123,456.78 / 월 123.45"});
+      await expect(longRow).toHaveCount(1);
+      expect((await expectCompactRowGeometry(longRow, 210)).width).toBeGreaterThan(120);
+      await page.screenshot({path: testInfo.outputPath(device.name + "-long-money.png")});
+      await page.evaluate(original => {
+        Object.assign(allItems.find(item => item.propertyId === "FIXTURE-LEASE-1"), original);
+        applyFilter();
+      }, originalAmounts);
+      await expectCardLayout(page);
+      expect(await preserved(page)).toEqual(baseline);
+
       await toggle.click();
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(0);
       await expect(page.locator(".circle-marker")).toHaveCount(1);
@@ -284,6 +333,10 @@ test("switching from a pinned building to another lease row survives GPS renderi
     await page.locator("#mapFieldModeToggleV1").click();
     await expect(page.locator(".field-lease-card-v1")).toHaveCount(2);
     const secondRow = page.locator(".field-lease-row-v1").filter({hasText: "보 3,000 / 월 150"});
+    const singleGeometry = await expectCompactRowGeometry(secondRow);
+    await testInfo.attach("lease-single-card-geometry.json", {
+      body: Buffer.from(JSON.stringify(singleGeometry, null, 2)), contentType: "application/json"
+    });
     await secondRow.locator("..").screenshot({path: testInfo.outputPath("lease-single-card-example.png")});
     await page.locator(".field-lease-more-v1").click();
     await expect(page.locator("#list .item")).toHaveCount(4);
@@ -299,6 +352,7 @@ test("switching from a pinned building to another lease row survives GPS renderi
     expect(await page.evaluate(() => getPinnedClusterItemsV6515().map(item => item.propertyId))).toEqual(["FIXTURE-LEASE-2"]);
     expect(await page.evaluate(() => selectedItemKey)).toBe("fixture-lease-2");
     await expect(secondRow).toHaveClass(/selected/);
+    await expectCompactRowGeometry(secondRow);
     await expect(page.locator("#list .item")).toContainText("2층");
     expect(await preserved(page)).toEqual(baseline);
     await page.evaluate(() => JSUnifiedListingsV8.close());

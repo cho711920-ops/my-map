@@ -213,6 +213,8 @@ test("viewport dedupe distinguishes stationary ON/OFF, CSS counter-rotation incl
   state.enabled = false;
   assert.notEqual(ctx.getMapViewportKeyV638(), on);
   assert.match(read("css/map-field-mode-v1.css"), /\.js-field-map-heading-up-v1 \.field-lease-card-v1,/);
-  assert.match(read("css/map-field-mode-v1.css"), /align-items: center; gap: 3px/);
+  assert.match(read("css/map-field-mode-v1.css"), /align-items: center; gap: 2px/);
+  assert.match(read("css/map-field-mode-v1.css"), /min-width: 112px; max-width: 210px/);
+  assert.match(read("css/map-field-mode-v1.css"), /min-height: 44px; flex-direction: column/);
   assert.match(read("index.html"), /js\/map-field-lease-cards-v1\.js/);
 });
