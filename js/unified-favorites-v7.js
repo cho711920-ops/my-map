@@ -13,8 +13,13 @@
   var phoneFolderIdV2 = "";
   var phoneScrollV2 = {};
   var renderedPhoneV2 = false;
+  var desktopScrollV2 = 0;
+  var favoritePresentationDetailV2 = false;
 
   function isPhoneV2() {
+    var device = global.JSPhoneDeviceV1;
+    if (device && typeof device.isMobileLayout === "function") return !!device.isMobileLayout();
+    if (device && typeof device.isPhone === "function") return !!device.isPhone();
     return !!(document.documentElement && document.documentElement.classList.contains("js-phone-app-v2"));
   }
 
@@ -30,12 +35,12 @@
   }
 
   function notifyPhoneV2() {
-    if (!isPhoneV2() || typeof global.dispatchEvent !== "function" || typeof global.CustomEvent !== "function") return;
+    if (typeof global.dispatchEvent !== "function" || typeof global.CustomEvent !== "function") return;
     global.dispatchEvent(new global.CustomEvent("js-phone-favorites-change", { detail: phoneStateV2() }));
   }
 
   function rememberPhoneScrollV2() {
-    if (!isPhoneV2()) return;
+    if (!renderedPhoneV2) return;
     var modal = document.getElementById("unifiedFavoriteModalV7");
     if (!modal || !modal.classList.contains("open")) return;
     var body = document.getElementById("unifiedFavoriteBodyV7");
@@ -493,6 +498,8 @@
       return;
     }
     if (renderedPhoneV2) {
+      rememberPhoneScrollV2();
+      if (phoneFolderIdV2) state.expanded[phoneFolderIdV2] = true;
       renderedPhoneV2 = false;
       var modal = document.getElementById("unifiedFavoriteModalV7");
       modal.classList.remove("phone-favorite-folder-open-v2");
@@ -581,6 +588,7 @@
       if (!isPhoneV2() || !load("favorite").some(function (entry) { return String(entry.id) === String(id); })) return false;
       rememberPhoneScrollV2();
       phoneFolderIdV2 = String(id);
+      state.expanded[id] = true;
       render();
       return true;
     },
@@ -643,6 +651,8 @@
   global.toggleUnifiedFavoriteFolderV7 = function (id) {
     if (isPhoneV2()) return global.JSPhoneFavoritesV2.showFolder(id);
     state.expanded[id] = !state.expanded[id];
+    if (state.expanded[id]) phoneFolderIdV2 = String(id);
+    else if (phoneFolderIdV2 === String(id)) phoneFolderIdV2 = "";
     render();
   };
 
@@ -714,6 +724,7 @@
     if (isPhoneV2()) {
       // The full-screen detail overlays this screen without discarding folder or scroll.
       rememberPhoneScrollV2();
+      favoritePresentationDetailV2 = true;
       global.JSUnifiedListingsV8.open(encodeURIComponent(propertyId));
       return;
     }
@@ -742,6 +753,8 @@
   }
 
   function mountFavoriteDetailV7() {
+    favoritePresentationDetailV2 = true;
+    if (isPhoneV2()) return;
     var host = document.getElementById("unifiedFavoriteDetailHostV7");
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (!host || !drawer) {
@@ -760,6 +773,7 @@
   }
 
   function releaseFavoriteDetailV7() {
+    favoritePresentationDetailV2 = false;
     var host = document.getElementById("unifiedFavoriteDetailHostV7");
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (favoriteDetailObserverV7) {
@@ -928,13 +942,37 @@
   };
   global.closeItemListPicker = close;
 
-  global.addEventListener("resize", function () {
+  function syncLayoutV2() {
     var modal = document.getElementById("unifiedFavoriteModalV7");
     if (modal && modal.classList.contains("open")) {
-      if (renderedPhoneV2 !== isPhoneV2()) render();
+      if (renderedPhoneV2 !== isPhoneV2()) {
+        var body = document.getElementById("unifiedFavoriteBodyV7");
+        if (!renderedPhoneV2 && body) desktopScrollV2 = body.scrollTop || 0;
+        render();
+        var host = document.getElementById("unifiedFavoriteDetailHostV7");
+        var drawer = document.getElementById("unifiedDetailDrawerV8");
+        if (isPhoneV2() && host && drawer && host.contains(drawer)) {
+          // The portrait host is hidden. Keep the live drawer/photo/drafts but
+          // lift it above the folder screen instead of closing or reloading it.
+          favoritePresentationDetailV2 = true;
+          if (favoriteDetailObserverV7) favoriteDetailObserverV7.disconnect();
+          favoriteDetailObserverV7 = null;
+          drawer.classList.remove("unified-favorite-embedded-detail-v7");
+          document.body.appendChild(drawer);
+          setFavoriteDetailPaneV7(false);
+        } else if (!isPhoneV2() && favoritePresentationDetailV2 && drawer &&
+            (drawer.classList.contains("open") || drawer.classList.contains("opening-v827"))) {
+          setFavoriteDetailPaneV7(true);
+          mountFavoriteDetailV7();
+        }
+        if (!renderedPhoneV2 && body) body.scrollTop = desktopScrollV2;
+        notifyPhoneV2();
+      }
       positionModal();
     }
-  });
+  }
+  global.addEventListener("resize", syncLayoutV2);
+  global.addEventListener("js-phone-device-change", syncLayoutV2);
 
   global.addEventListener("js-v6-list-store-change", function (event) {
     if (!event || !event.detail || event.detail.type !== "favorite") return;

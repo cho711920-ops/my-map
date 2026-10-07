@@ -6,13 +6,29 @@ var map, geocoder;
 var allItems = [];
 
 function isPhoneListingV2() {
-  return !!(window.JSPhoneDeviceV1 && typeof window.JSPhoneDeviceV1.isPhone === "function" &&
-    window.JSPhoneDeviceV1.isPhone());
+  var device = window.JSPhoneDeviceV1;
+  return !!(device && (typeof device.isMobileLayout === "function" ? device.isMobileLayout() :
+    typeof device.isPhone === "function" && device.isPhone()));
 }
 
 function getListingScrollContainerV2() {
   return (isPhoneListingV2() && document.getElementById("list")) || document.getElementById("sidebar");
 }
+
+var listingMobilePresentationV2 = isPhoneListingV2();
+window.addEventListener("js-phone-device-change", function() {
+  var mobile = isPhoneListingV2();
+  if (mobile === listingMobilePresentationV2) return;
+  var previousScroller = document.getElementById(listingMobilePresentationV2 ? "list" : "sidebar");
+  var previousTop = previousScroller ? previousScroller.scrollTop : 0;
+  listingMobilePresentationV2 = mobile;
+  // Render the same already-filtered identities, without applying map bounds,
+  // clearing selections or changing an active favorite-folder/field-mode scope.
+  if (!document.getElementById("list")) return;
+  showList(visibleListItems || []);
+  var scroller = getListingScrollContainerV2();
+  if (scroller) scroller.scrollTop = previousTop;
+});
 
 function buildPhoneFavoriteButtonV2(item, encodedFavoriteRef) {
   if (!isPhoneListingV2()) return "";
@@ -1158,7 +1174,6 @@ function getFilteredItems(options) {
 
   var keyword = document.getElementById("keyword").value.trim();
   var mobileGlobalKeywordSearch = !!keyword &&
-    document.documentElement.classList.contains("js-mobile-app-v1") &&
     !!window.jsMobileGlobalKeywordV1;
   var selectedType = document.getElementById("typeFilter").value;
   var selectedSource = String((document.getElementById("sourceFilter") || {}).value || "");

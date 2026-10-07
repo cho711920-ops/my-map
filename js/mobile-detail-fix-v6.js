@@ -12,17 +12,23 @@
   ];
   var saleFilterAnchor = null;
   var saleFilterSnapshot = null;
+  var phoneToolbarDraft = false;
   var PHONE_TOOLBAR_IDS = ["sourceFilter", "typeFilter", "brokerageFeeFilter"];
 
   function isDedicatedPhone() {
-    return !!(window.JSPhoneDeviceV1 && window.JSPhoneDeviceV1.isPhone());
+    var device = window.JSPhoneDeviceV1;
+    return !!(device && (typeof device.isMobileLayout === "function" ? device.isMobileLayout() : device.isPhone()));
   }
 
   function isPhone() {
+    var device = window.JSPhoneDeviceV1;
+    if (device && typeof device.isHandheld === "function" && device.isHandheld()) return isDedicatedPhone();
     return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
   }
 
   function isTouchTablet() {
+    var device = window.JSPhoneDeviceV1;
+    if (device && typeof device.isHandheld === "function" && device.isHandheld()) return !isDedicatedPhone();
     var width = Math.max(
       Number(window.innerWidth) || 0,
       Number(document.documentElement && document.documentElement.clientWidth) || 0
@@ -129,6 +135,7 @@
     var root = document.getElementById("v6DetailSheetPortal");
     if (!root) return;
     ensurePhoneFilters(root);
+    phoneToolbarDraft = true;
     PHONE_TOOLBAR_IDS.forEach(function (id) {
       var source = originalField(id);
       var target = sheetField(id);
@@ -208,7 +215,7 @@
       var target = originalField(id);
       if (source && target) target.value = source.value || "";
     });
-    if (isDedicatedPhone()) PHONE_TOOLBAR_IDS.forEach(function (id) {
+    if (phoneToolbarDraft) PHONE_TOOLBAR_IDS.forEach(function (id) {
       var source = sheetField(id);
       var target = originalField(id);
       if (source && target) target.value = source.value || "";
@@ -338,8 +345,11 @@
     if (!useDetailSheet()) return;
     removeLegacyDetailState();
     var root = ensureSheet();
-    if (!root.classList.contains("open")) captureSaleFilterValues();
-    syncToSheet();
+    if (!root.classList.contains("open")) {
+      phoneToolbarDraft = false;
+      captureSaleFilterValues();
+      syncToSheet();
+    }
     root.classList.add("open");
     root.setAttribute("aria-hidden", "false");
     document.documentElement.setAttribute("data-v6-detail-mode", isPhone() ? "phone" : "tablet");
@@ -370,6 +380,7 @@
     removeLegacyDetailState();
     finishSaleFilterEdit(!!(options && options.applied));
     restoreSaleFilters();
+    phoneToolbarDraft = false;
     if (wasOpen && window.JSDialogFocusV1) window.JSDialogFocusV1.deactivate(root);
   }
 
@@ -382,10 +393,10 @@
 
   function apply() {
     // Draft edits must not leak into shared filters if validation rejects them.
-    var previous = isDedicatedPhone() ? FIELD_IDS.concat(PHONE_TOOLBAR_IDS).map(function (id) {
+    var previous = FIELD_IDS.concat(phoneToolbarDraft ? PHONE_TOOLBAR_IDS : []).map(function (id) {
       var field = originalField(id);
       return field ? {field: field, value: field.value} : null;
-    }).filter(Boolean) : [];
+    }).filter(Boolean);
     syncToOriginal();
     var applied = false;
     try {
@@ -416,25 +427,21 @@
     toggle();
   }, true);
 
-  window.addEventListener("resize", function () {
-    if (!useDetailSheet()) {
-      close();
-      return;
-    }
-
+  function syncLayout() {
     var root = document.getElementById("v6DetailSheetPortal");
-    if (root && root.classList.contains("open") && !isPhone()) {
-      positionTabletPopup(root);
+    if (root && root.classList.contains("open")) {
+      document.documentElement.setAttribute("data-v6-detail-mode", isPhone() ? "phone" : "tablet");
+      // Only add previously unavailable toolbar controls. Never copy shared
+      // values over an already-open filter draft during a rotation.
+      if (isDedicatedPhone() && !phoneToolbarDraft) syncPhoneFilters();
+      if (!isPhone()) positionTabletPopup(root);
     }
-  });
+  }
+  window.addEventListener("resize", syncLayout);
+  window.addEventListener("js-phone-device-change", syncLayout);
 
   window.addEventListener("orientationchange", function () {
-    setTimeout(function () {
-      var root = document.getElementById("v6DetailSheetPortal");
-      if (root && root.classList.contains("open") && !isPhone()) {
-        positionTabletPopup(root);
-      }
-    }, 120);
+    setTimeout(syncLayout, 120);
   });
 
   window.toggleDetailFilter = function () {

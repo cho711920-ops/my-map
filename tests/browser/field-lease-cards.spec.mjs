@@ -15,6 +15,8 @@ const phoneUA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KH
 const devices = [
   {name: "phone-portrait", width: 390, height: 844, screen: {width: 390, height: 844}, userAgent: phoneUA},
   {name: "tablet-portrait", width: 768, height: 1024, screen: {width: 768, height: 1024}, userAgent: tabletUA},
+  {name: "tablet-portrait-wide", width: 820, height: 1180, screen: {width: 820, height: 1180}, userAgent: tabletUA},
+  {name: "phone-landscape", width: 740, height: 360, screen: {width: 740, height: 360}, userAgent: phoneUA},
   {name: "tablet-landscape", width: 1280, height: 800, screen: {width: 1280, height: 800}, userAgent: tabletUA},
   {name: "tablet-split", width: 600, height: 900, screen: {width: 820, height: 1280}, userAgent: tabletUA}
 ];
@@ -24,6 +26,7 @@ test.beforeEach(({isMobile}, testInfo) => {
 });
 
 async function installBoundary(page) {
+  await page.locator("#fixtureControls").evaluate(element => {element.style.display = "none";});
   await page.evaluate(() => {
     const listeners = new Map(), attached = new Set();
     const viewport = document.getElementById("map");
@@ -115,7 +118,10 @@ async function installBoundary(page) {
     kakao.maps.event.addListener(map, "idle", scheduleMapIdleRefreshV638);
     syncMapQuickToolGeometryV659();
     const first = allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
-    first.latlng = new kakao.maps.LatLng(36.3503, 127.3798);
+    // Keep the full three-row card inside a short landscape map at 20m scale;
+    // the portrait-only north offset would put its top rows under the header.
+    const shortMap = document.getElementById("map").clientHeight < 400;
+    first.latlng = new kakao.maps.LatLng(shortMap ? 36.3498 : 36.3503, 127.3798);
     for (let index = 2; index <= 4; index += 1) {
       allItems.push({...first, propertyId: "FIXTURE-SAME-" + index, key: "fixture-same-" + index,
         room: index + "층", area: 20 + index * 5, deposit: 1000 * index, rent: 70 + index * 10});
@@ -232,7 +238,7 @@ for (const device of devices) {
       await expect(page.locator("#list .item")).toHaveCount(4);
       await expect(page.locator(".circle-marker")).toHaveCount(1);
       const baseline = await preserved(page);
-      const compact = device.width <= 768;
+      const compact = device.height > device.width;
       const toggle = page.locator(compact ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
       await expectSingleFieldControl(page, toggle, null);
       await toggle.click();

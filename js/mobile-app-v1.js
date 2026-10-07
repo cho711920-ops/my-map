@@ -15,6 +15,17 @@
   var ignoreNextPop = false;
   var pendingViewAfterPop = null;
   var mobileSearchTimer = null;
+  var layoutTransition = false;
+
+  function isMobileLayout() {
+    var device = global.JSPhoneDeviceV1;
+    return !!(device && (typeof device.isMobileLayout === "function" ? device.isMobileLayout() : device.isPhone()));
+  }
+
+  function isHandheld() {
+    var device = global.JSPhoneDeviceV1;
+    return !!(device && (typeof device.isHandheld === "function" ? device.isHandheld() : device.isPhone()));
+  }
 
   var MOBILE_LAYER_SELECTORS = [
     "#jsMobileMoreLayerV1.open",
@@ -154,6 +165,8 @@
 
   function applyMobileKeywordSearch(options) {
     options = options || {};
+    global.clearTimeout(mobileSearchTimer);
+    mobileSearchTimer = null;
     if (!active || !chrome) return;
     var source = document.getElementById("keyword");
     var input = chrome.querySelector("#jsMobileKeywordV1");
@@ -205,7 +218,7 @@
     options = options || {};
     // A quick tap can beat the input debounce. Commit the phone query before
     // changing tabs, otherwise syncSearchValue would restore the older query.
-    if (global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone() && chrome) {
+    if (!options.fromLayout && isMobileLayout() && chrome) {
       var pendingInput = chrome.querySelector("#jsMobileKeywordV1");
       var appliedInput = document.getElementById("keyword");
       if (pendingInput && appliedInput && pendingInput.value !== appliedInput.value) {
@@ -217,7 +230,7 @@
       runAction("favorites");
       return;
     }
-    if (global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone() &&
+    if (!options.fromLayout && isMobileLayout() &&
         (nextView === "map" || nextView === "list") &&
         global.JSPhoneFavoritesV2 && global.JSPhoneFavoritesV2.isOpen()) {
       global.closeUnifiedFavoritesV7();
@@ -269,7 +282,7 @@
       button.classList.toggle("active", selected);
       button.setAttribute("aria-current", selected ? "page" : "false");
     });
-    closeMore();
+    if (!options.fromLayout) closeMore();
     syncSearchValue();
     if (global.JSPhoneAppV2) global.JSPhoneAppV2.sync();
     global.setTimeout(resizeMap, 80);
@@ -397,7 +410,7 @@
 
   function syncLayerHistory() {
     historySyncQueued = false;
-    if (!active || ignoreNextPop) return;
+    if (!active || layoutTransition || ignoreNextPop) return;
     var openLayers = openMobileLayers();
     var manuallyClosedCount = 0;
 
@@ -431,7 +444,7 @@
   }
 
   function queueLayerHistorySync() {
-    if (!active || historySyncQueued) return;
+    if (!active || layoutTransition || historySyncQueued) return;
     historySyncQueued = true;
     global.requestAnimationFrame(syncLayerHistory);
   }
@@ -448,7 +461,6 @@
   }
 
   function handleMobileBack(event) {
-    if (!active) return;
     if (ignoreNextPop) {
       ignoreNextPop = false;
       var pendingView = pendingViewAfterPop;
@@ -457,6 +469,7 @@
       queueLayerHistorySync();
       return;
     }
+    if (!active || layoutTransition) return;
     var top = historyLayers[historyLayers.length - 1];
     if (top && layerIsVisible(top.element)) {
       closingFromBackToken = top.token;
@@ -481,7 +494,7 @@
     var sidebar = document.getElementById("sidebar");
     if (!sidebar || sidebarObserver) return;
     sidebarObserver = new MutationObserver(function() {
-      if (!active || !sidebar.classList.contains("open") || view === "list") return;
+      if (!active || layoutTransition || !sidebar.classList.contains("open") || view === "list") return;
       if (global.JSPhoneFavoritesV2 && global.JSPhoneFavoritesV2.isOpen()) return;
       setView("list");
     });
@@ -500,27 +513,46 @@
     syncSaveStatus();
     watchSidebar();
     watchMobileLayers();
-    setView("map");
+    setView(view, {fromHistory: true, fromLayout: true});
+    var more = chrome.querySelector("#jsMobileMoreLayerV1");
+    if (more && more.classList.contains("open")) document.body.classList.add("jsm-more-open-v1");
   }
 
   function deactivate() {
     if (!active) return;
+    // Finish an entered query before hiding its editor; rotation is not a reset.
+    if (mobileSearchTimer !== null) applyMobileKeywordSearch();
     active = false;
     global.clearTimeout(mobileSearchTimer);
-    global.jsMobileGlobalKeywordV1 = false;
+    mobileSearchTimer = null;
     root.classList.remove("js-mobile-app-v1");
     root.removeAttribute("data-jsm-mobile-view");
     document.body.classList.remove("jsm-more-open-v1");
     if (chrome) chrome.hidden = true;
     var sidebar = document.getElementById("sidebar");
     if (sidebar) sidebar.classList.remove("open");
-    closeMore();
     resizeMap();
   }
 
   function syncMode() {
-    if ((global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone()) || global.matchMedia(MOBILE_QUERY).matches) activate();
+    var nextActive = isHandheld() ? isMobileLayout() : global.matchMedia(MOBILE_QUERY).matches;
+    if (nextActive === active) return;
+    layoutTransition = true;
+    if (nextActive) activate();
     else deactivate();
+    // Device listeners can replace presentation nodes. Rotation must not be
+    // mistaken for manually closing a layer and traverse browser history.
+    global.requestAnimationFrame(function() {
+      if (active) {
+        historyLayers = openMobileLayers().map(function(element) {
+          var previous = historyLayers.find(function(entry) { return entry.element === element || (element.id && entry.element.id === element.id); });
+          var token = previous ? previous.token : "jsm-layer-" + (++historySerial);
+          if (!previous) global.history.pushState(Object.assign({}, global.history.state || {}, {jsmMobileLayerToken: token}), "", global.location.href);
+          return {element: element, token: token};
+        });
+      }
+      layoutTransition = false;
+    });
   }
 
   function boot() {

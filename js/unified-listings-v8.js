@@ -13,8 +13,9 @@
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function isPhoneDetailV2() {
-    return !!(global.JSPhoneDeviceV1 && typeof global.JSPhoneDeviceV1.isPhone === "function" &&
-      global.JSPhoneDeviceV1.isPhone());
+    var device = global.JSPhoneDeviceV1;
+    return !!(device && (typeof device.isMobileLayout === "function" ? device.isMobileLayout() :
+      typeof device.isPhone === "function" && device.isPhone()));
   }
   function encodedExternalLink(value) {
     return encodeURIComponent(text(value)).replace(/'/g, "%27");
@@ -810,7 +811,7 @@
         : '<button type="button" disabled title="등록된 원본 링크가 없습니다">원본 없음</button>') + '</nav>';
   }
 
-  function renderDetail(propertyId, originals, selectedOriginalId) {
+  function renderDetail(propertyId, originals, selectedOriginalId, layoutOptions) {
     originals = orderOriginals(originals);
     var selected = originals.filter(function(original) {
       return text(original.originalId) === text(selectedOriginalId);
@@ -819,6 +820,7 @@
     var phoneDetail = isPhoneDetailV2();
     var registrationDate = detailDate(masterMeta.regDate);
     var drawer = ensureDrawer();
+    drawer.__detailPresentationV2 = {phone: phoneDetail, propertyId: propertyId, originals: originals, originalId: selected && selected.originalId};
     positionDrawer(drawer);
     document.getElementById("unifiedDetailTitleV8").textContent = selected
       ? (selected.buildingName || selected.address || "매물 상세") : "매물 상세";
@@ -881,7 +883,9 @@
     if (phoneActions) phoneActions.remove();
     if (phoneDetail && selected) drawer.insertAdjacentHTML('beforeend', phoneDetailActionsV2(propertyId, selected));
     var detailGallery = body.querySelector(".unified-detail-gallery-v8");
-    if (detailGallery && images.length) {
+    if (detailGallery && layoutOptions && layoutOptions.gallery) {
+      detailGallery.replaceWith(layoutOptions.gallery);
+    } else if (detailGallery && images.length) {
       detailGallery._imagesV8 = images.slice();
       detailGallery._photoCountV8 = photoCount;
       detailGallery._propertyIdV8 = propertyId;
@@ -900,6 +904,48 @@
       }
     }
     showDetailDrawerV827(drawer);
+  }
+
+  function syncDetailPresentationV2() {
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (!drawer || (!drawer.classList.contains("open") && !drawer.classList.contains("opening-v827"))) return;
+    var saved = drawer.__detailPresentationV2;
+    var body = document.getElementById("unifiedDetailBodyV8");
+    if (!saved || !body || saved.phone === isPhoneDetailV2()) { positionDrawer(drawer); return; }
+    var gallery = body.querySelector(".unified-detail-gallery-v8");
+    var scrollTop = body.scrollTop;
+    var key = text(saved.propertyId) + ":" + text(saved.originalId);
+    if (drawer.__layoutDraftKeyV2 !== key) drawer.__layoutDraftV2 = {};
+    drawer.__layoutDraftKeyV2 = key;
+    var drafts = drawer.__layoutDraftV2;
+    var focused = document.activeElement;
+    var focusKey = "";
+    var selection = null;
+    function fieldKey(field, index) { return field.id || field.name || field.tagName + ":" + index; }
+    Array.prototype.forEach.call(body.querySelectorAll("input, select, textarea, details"), function(field, index) {
+      var id = fieldKey(field, index);
+      drafts[id] = {value: field.value, checked: field.checked, open: field.open};
+      if (field === focused) {
+        focusKey = id;
+        selection = {start: field.selectionStart, end: field.selectionEnd};
+      }
+    });
+    // Reuse the live gallery node: photo index, in-flight images and swipe
+    // handlers survive. This is presentation only, with no detail fetch/save.
+    renderDetail(saved.propertyId, saved.originals, saved.originalId, {gallery: gallery});
+    Array.prototype.forEach.call(body.querySelectorAll("input, select, textarea, details"), function(field, index) {
+      var id = fieldKey(field, index);
+      var draft = drafts[id];
+      if (!draft) return;
+      if (typeof draft.value !== "undefined") field.value = draft.value;
+      if (typeof draft.checked === "boolean") field.checked = draft.checked;
+      if (typeof draft.open === "boolean") field.open = draft.open;
+      if (focusKey === id) {
+        field.focus({preventScroll: true});
+        if (selection && selection.start != null && typeof field.setSelectionRange === "function") field.setSelectionRange(selection.start, selection.end);
+      }
+    });
+    body.scrollTop = scrollTop;
   }
 
   function renderDetailPhoto(gallery, index) {
@@ -1622,10 +1668,8 @@
     }
   });
 
-  global.addEventListener("resize", function() {
-    var drawer = document.getElementById("unifiedDetailDrawerV8");
-    if (drawer && drawer.classList.contains("open")) positionDrawer(drawer);
-  });
+  global.addEventListener("resize", syncDetailPresentationV2);
+  global.addEventListener("js-phone-device-change", syncDetailPresentationV2);
 
   if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("click", function(event) {
     var button = event.target && event.target.closest

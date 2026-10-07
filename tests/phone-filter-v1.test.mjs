@@ -15,7 +15,7 @@ function fixture(phone = true) {
   const originals = {minRent: {value: "70"}, sourceFilter: {value: "naver"}};
   const drafts = {minRent: {value: "90"}, sourceFilter: {value: "danggeun"}};
   const context = {
-    FIELD_IDS: ["minRent"], PHONE_TOOLBAR_IDS: ["sourceFilter"],
+    FIELD_IDS: ["minRent"], PHONE_TOOLBAR_IDS: ["sourceFilter"], phoneToolbarDraft: phone,
     isDedicatedPhone: () => phone,
     originalField: (id) => originals[id], sheetField: (id) => drafts[id],
     window: {applyFilter: () => true}, close: (options) => {context.closed = options;}
@@ -49,6 +49,32 @@ test("rejected phone Apply retains drafts but restores original values", () => {
   assert.equal(originals.minRent.value, "70");
   assert.equal(drafts.minRent.value, "90");
   assert.equal(context.closed, undefined);
+});
+
+test("portrait filter drafts still apply after rotation to landscape", () => {
+  const {context, originals} = fixture(true);
+  context.isDedicatedPhone = () => false;
+  vm.runInContext("apply();", context);
+  assert.equal(originals.sourceFilter.value, "danggeun");
+  assert.equal(originals.minRent.value, "90");
+  assert.equal(context.closed.applied, true);
+});
+
+test("rotation changes the open filter presentation without recopying or cancelling edits", () => {
+  const calls = [];
+  let portrait = false;
+  const context = {phoneToolbarDraft: true, isPhone: () => portrait, isDedicatedPhone: () => portrait,
+    document: {getElementById: () => ({classList: {contains: () => true}}), documentElement: {setAttribute: (_, value) => calls.push(value)}},
+    positionTabletPopup: () => calls.push("position"), syncPhoneFilters: () => calls.push("copy"),
+    window: {addEventListener() {}}
+  };
+  vm.createContext(context);
+  const start = source.indexOf("  function syncLayout()");
+  vm.runInContext(source.slice(start, source.indexOf('  window.addEventListener("orientationchange"', start)), context);
+  vm.runInContext("syncLayout();", context);
+  portrait = true;
+  vm.runInContext("syncLayout();", context);
+  assert.deepEqual(calls, ["tablet", "position", "phone"]);
 });
 
 test("throwing filter validation also restores shared phone values", () => {

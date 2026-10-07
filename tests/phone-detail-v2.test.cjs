@@ -15,14 +15,14 @@ function between(source, start, end) {
 }
 
 function detailHarness(phone) {
-  const calls = [], alerts = [];
-  const body = {innerHTML: '', querySelector() { return null; }};
-  const drawer = {actions: '', querySelector() { return null; }, insertAdjacentHTML(_, markup) { this.actions = markup; }};
-  const nodes = {unifiedDetailBodyV8: body, unifiedDetailTitleV8: {}, unifiedDetailSubtitleV8: {}};
+  const calls = [], alerts = [], listeners = {};
+  const body = {innerHTML: '', scrollTop: 0, querySelector() { return null; }, querySelectorAll() { return []; }};
+  const drawer = {actions: '', classList: {contains: () => true}, querySelector() { return null; }, insertAdjacentHTML(_, markup) { this.actions = markup; }};
+  const nodes = {unifiedDetailDrawerV8: drawer, unifiedDetailBodyV8: body, unifiedDetailTitleV8: {}, unifiedDetailSubtitleV8: {}};
   const window = {
     allItems: [{propertyId: 'P1', key: 'same-key'}, {propertyId: 'P2', key: 'same-key'}],
     JSPhoneDeviceV1: {isPhone() { return phone; }},
-    addEventListener() {},
+    addEventListener(type, handler) { listeners[type] = handler; },
     openListContactPopupV654(key) { calls.push(['contact', key]); },
     openItemListDestinationPicker(key) { calls.push(['favorite', key]); },
     openKakaoNavigation(key) { calls.push(['navigation', key]); },
@@ -39,7 +39,7 @@ function detailHarness(phone) {
     closeDetailForOverlay = global.__closeForPicker;
     global.JSUnifiedListingsV8 = {`);
   vm.runInNewContext(instrumented, {window, document: {addEventListener() {}, getElementById(id) { return nodes[id]; }}, alert(message) { alerts.push(message); }});
-  return {window, api: window.JSUnifiedListingsV8, test: window.__test, body, drawer, calls, alerts};
+  return {window, api: window.JSUnifiedListingsV8, test: window.__test, body, drawer, calls, alerts, listeners};
 }
 
 test('phone detail uses exact property identity for existing contact and favorite pickers', () => {
@@ -107,10 +107,41 @@ test('phone detail does not invent absent amounts or unsafe source links', () =>
   assert.match(h.test.phoneDetailFactsV2({...original, type: '<img src=x>'}), /&lt;img src=x&gt;/);
 });
 
+test('layout API overrides physical-phone identity and rotation preserves original, gallery, drafts and scroll without reads', () => {
+  const h = detailHarness(true);
+  let portrait = false, galleryReplacements = 0;
+  h.window.JSPhoneDeviceV1.isMobileLayout = () => portrait;
+  h.test.renderDetail('P2', [original, {...original, originalId: 'O2'}], 'O2');
+  assert.match(h.body.innerHTML, /대표 전체 합치기/);
+  const gallery = {_indexV8: 2, _imagesV8: ['a', 'b', 'c'], replaceWith(node) {
+    assert.equal(node, gallery); galleryReplacements++;
+  }};
+  let field = {id: 'draft-field', value: '미저장 메모', checked: false};
+  let markup = h.body.innerHTML;
+  Object.defineProperty(h.body, 'innerHTML', {get: () => markup, set(value) {markup = value; field = {id: 'draft-field', value: '', checked: false}; }});
+  h.body.querySelector = selector => selector === '.unified-detail-gallery-v8' ? gallery : null;
+  h.body.querySelectorAll = () => [field];
+  h.body.scrollTop = 246;
+  portrait = true;
+  h.listeners['js-phone-device-change']();
+  assert.match(h.body.innerHTML, /phone-detail-price-v2/);
+  assert.equal(h.drawer.__detailPresentationV2.originalId, 'O2');
+  assert.equal(h.drawer.__detailPresentationV2.propertyId, 'P2');
+  assert.equal(gallery._indexV8, 2);
+  assert.equal(field.value, '미저장 메모');
+  assert.equal(h.body.scrollTop, 246);
+  portrait = false;
+  h.listeners['js-phone-device-change']();
+  assert.match(h.body.innerHTML, /대표 전체 합치기/);
+  assert.equal(galleryReplacements, 2);
+  assert.equal(field.value, '미저장 메모');
+  assert.equal(h.calls.length, 0);
+});
+
 function listHarness(phone) {
   const list = {scrollTop: 310, getBoundingClientRect() { return {top: 80}; }};
   const sidebar = {scrollTop: 25, getBoundingClientRect() { return {top: 40}; }};
-  const window = {JSPhoneDeviceV1: {isPhone() { return phone; }}, scrollX: 0, scrollY: 0};
+  const window = {JSPhoneDeviceV1: {isPhone() { return phone; }}, scrollX: 0, scrollY: 0, addEventListener() {}};
   const context = {window, document: {getElementById(id) { return id === 'list' ? list : sidebar; }, querySelector() { return null; }},
     isFavorite() { return true; }, CSS: {escape(value) { return value; }}, requestAnimationFrame(callback) { callback(); }};
   vm.createContext(context);

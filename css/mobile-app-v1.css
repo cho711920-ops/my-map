@@ -1,10 +1,10 @@
 /* JS부동산 모바일 앱 UI v1
- * 768px 이하에서만 활성화됩니다. PC 레이아웃에는 어떤 규칙도 적용하지 않습니다.
+ * JS가 활성화한 모바일 레이아웃에만 적용합니다. 세로 태블릿도 같은 UI를 사용합니다.
  */
 .jsm-app-v1[hidden],
 .jsm-sheet-layer-v1[hidden] { display: none !important; }
 
-@media (max-width: 768px) {
+@media all {
   :root.js-mobile-app-v1 {
     --jsm-blue: #0877e8;
     --jsm-blue-dark: #075fbd;

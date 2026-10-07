@@ -1,4 +1,4 @@
-/* Only the dedicated phone classifier opts in. Legacy narrow PC/tablet UI is unchanged. */
+/* The handheld classifier opts in only for portrait phones and tablets. */
 #jsPhoneFilterChipsV2, #jsPhoneListCountV2, #jsPhoneMapListV2, #jsPhonePortraitGuardV2,
 #jsMobileAppV1 [data-mobile-view="favorites"] { display: none; }
 
@@ -15,7 +15,7 @@
   width: 100% !important; height: 100% !important; min-height: 100% !important;
   overflow: hidden !important; overscroll-behavior: none;
 }
-.js-phone-app-v2 #wrap { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100dvh !important; display: block !important; overflow: hidden !important; }
+.js-phone-app-v2 #wrap { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100dvh !important; display: block !important; overflow: hidden !important; padding: 0 !important; }
 .js-phone-app-v2 #map {
   position: absolute !important; inset: var(--jsm-header-height) 0 var(--jsm-nav-height) !important;
   width: 100% !important; height: auto !important; min-height: 0 !important;

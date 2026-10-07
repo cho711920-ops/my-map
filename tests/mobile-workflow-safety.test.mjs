@@ -82,7 +82,7 @@ test("mobile layer replacement waits for asynchronous back traversal before push
     go(delta) {pendingDelta = delta; calls.push("go");}
   };
   const context = {
-    active: true, historySyncQueued: false, ignoreNextPop: false, pendingViewAfterPop: null,
+    active: true, layoutTransition: false, historySyncQueued: false, ignoreNextPop: false, pendingViewAfterPop: null,
     historyLayers: [], closingFromBackToken: "", historySerial: 0,
     global: {history, location: {href: "http://127.0.0.1/"}},
     openMobileLayers: () => openLayers,
@@ -112,7 +112,8 @@ test("mobile layer replacement waits for asynchronous back traversal before push
 test("opening the mobile listing view waits for a just-closed modal history traversal", () => {
   const calls = [];
   const context = {
-    active: true, view: "map", pendingViewAfterPop: null, ignoreNextPop: false,
+    active: true, layoutTransition: false, view: "map", pendingViewAfterPop: null, ignoreNextPop: false,
+    isMobileLayout: () => false,
     chrome: {querySelector: () => null, querySelectorAll: () => []},
     document: {getElementById: () => null}, root: {setAttribute() {}},
     syncLayerHistory() {context.ignoreNextPop = true;},
@@ -134,4 +135,59 @@ test("opening the mobile listing view waits for a just-closed modal history trav
   assert.deepEqual(calls, ["push-list"]);
   assert.equal(context.view, "list");
   assert.equal(context.pendingViewAfterPop, null);
+});
+
+test("handheld rotations keep the mobile tab and finish pending search without closing layers or traversing history", () => {
+  const classes = new Set();
+  const root = {classList: {add: x => classes.add(x), remove: x => classes.delete(x)}, setAttribute() {}, removeAttribute() {}};
+  const sidebar = {classList: {toggle() {}, remove() {}}};
+  const input = {value: ""};
+  let applied = 0, inputEvents = 0, handheld = true, portrait = true, narrow = false;
+  const source = {value: "둔산동", dispatchEvent() { inputEvents++; }};
+  const frames = [];
+  const chrome = {hidden: true, querySelector: selector => selector === "#jsMobileKeywordV1" ? input : null, querySelectorAll: () => []};
+  const context = {
+    active: false, view: "list", root, chrome, MOBILE_QUERY: "(max-width: 768px)", mobileSearchTimer: null,
+    layoutTransition: false, historyLayers: [], historySerial: 0, ignoreNextPop: false,
+    isHandheld: () => handheld, isMobileLayout: () => portrait,
+    document: {getElementById: id => id === "keyword" ? source : sidebar, body: {classList: {add() {}, remove() {}}}},
+    Event: function Event(type) { this.type = type; },
+    buildChrome: () => chrome, syncTradeMode() {}, syncSaveStatus() {}, watchSidebar() {}, watchMobileLayers() {},
+    resizeMap() {}, openMobileLayers: () => [],
+    closeMore() { throw new Error("rotation closed More"); },
+    global: {clearTimeout() {}, setTimeout() {}, requestAnimationFrame: callback => frames.push(callback),
+      applyFilter() { applied++; }, matchMedia: () => ({matches: narrow}),
+      JSPhoneFavoritesV2: {isOpen: () => true},
+      closeUnifiedFavoritesV7() { throw new Error("rotation closed favorites"); },
+      history: {back() { throw new Error("rotation traversed history"); }, go() { throw new Error("rotation traversed history"); }}
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(functionSource(mobile, "applyMobileKeywordSearch", "queueMobileKeywordSearch") +
+    functionSource(mobile, "syncSearchValue", "syncTradeMode") +
+    functionSource(mobile, "setView", "resizeMap") + functionSource(mobile, "activate", "boot"), context);
+  const sync = () => { vm.runInContext("syncMode();", context); while (frames.length) frames.shift()(); };
+  sync();
+  assert.equal(context.active, true, "wide handheld portrait still uses mobile UI");
+  assert.equal(context.view, "list");
+  assert.equal(input.value, "둔산동");
+  input.value = "부사동 91-9";
+  context.mobileSearchTimer = 123;
+  portrait = false; narrow = true;
+  sync();
+  assert.equal(context.active, false, "narrow handheld landscape still uses PC UI");
+  assert.equal(source.value, "부사동 91-9");
+  assert.equal(applied, 1);
+  assert.equal(inputEvents, 1);
+  assert.equal(context.global.jsMobileGlobalKeywordV1, true);
+  assert.equal(context.mobileSearchTimer, null);
+  portrait = true;
+  sync();
+  assert.equal(context.view, "list");
+  assert.equal(input.value, "부사동 91-9");
+  assert.equal(applied, 1, "returning portrait does not reapply data filters");
+  handheld = false; portrait = false;
+  sync();
+  assert.equal(context.active, true, "non-handheld narrow desktop keeps the prior responsive behavior");
+  assert.doesNotMatch(functionSource(mobile, "deactivate", "syncMode"), /jsMobileGlobalKeywordV1\s*=\s*false|closeMore\(/);
 });

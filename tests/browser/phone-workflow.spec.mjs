@@ -117,7 +117,7 @@ test("a tab tap before debounce preserves the newest query", async ({page}) => {
   await expect(page.locator("#list .item")).toHaveCount(1);
 });
 
-test("first landscape login does not restore the pre-auth inert lock on portrait return", async ({page, context}) => {
+test("first landscape login has usable PC layout and no pre-auth inert lock on portrait return", async ({page, context}) => {
   await page.route("http://127.0.0.1:*/", async route => {
     const response=await route.fetch();
     const html=(await response.text()).replace('<html lang="ko">','<html lang="ko" class="auth-pending">').replace('id="wrap"','id="wrap" inert');
@@ -132,7 +132,11 @@ test("first landscape login does not restore the pre-auth inert lock on portrait
     document.getElementById("wrap").inert=false;
     document.documentElement.classList.remove("auth-pending");
   });
-  await expect(page.locator("#jsPhonePortraitGuardV2")).toBeVisible();
+  await expect(page.locator("#jsPhonePortraitGuardV2")).toBeHidden();
+  await expect(page.locator("html")).toHaveClass(/js-handheld-landscape-v1/);
+  await expect(page.locator("html")).not.toHaveClass(/js-phone-app-v2/);
+  await expect(page.locator("#keyword")).toBeVisible();
+  await expect(page.locator("#sidebar")).toBeVisible();
   await session.send("Emulation.setDeviceMetricsOverride",{width:390,height:844,screenWidth:390,screenHeight:844,mobile:true,deviceScaleFactor:1,screenOrientation:{type:"portraitPrimary",angle:0}});
   await expect(page.locator("#jsPhonePortraitGuardV2")).toBeHidden();
   await expect(page.locator("#wrap")).not.toHaveAttribute("inert","");

@@ -1,4 +1,4 @@
-/* Smartphone-only presentation. Shared data and legacy tablet/PC layouts stay intact. */
+/* Handheld portrait presentation. Shared data and the landscape/PC layout stay intact. */
 (function phoneAppV2(global) {
   "use strict";
   var root = document.documentElement;
@@ -10,11 +10,9 @@
   var guard;
   var lastChips = "";
   var queued = false;
-  var returnFocus = null;
-  var blockedElements = new Map();
 
-  function isPhone() {
-    return !!(global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isPhone());
+  function isMobileLayout() {
+    return !!(global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isMobileLayout());
   }
 
   function create() {
@@ -44,23 +42,15 @@
     guard = document.createElement("section");
     guard.id = "jsPhonePortraitGuardV2";
     guard.hidden = true;
-    guard.setAttribute("role", "dialog");
-    guard.setAttribute("aria-modal", "true");
-    guard.setAttribute("aria-labelledby", "jsPhonePortraitTitleV2");
-    guard.setAttribute("aria-describedby", "jsPhonePortraitDescriptionV2");
-    guard.setAttribute("tabindex", "-1");
-    guard.innerHTML = '<span class="js-phone-rotate-icon-v2" aria-hidden="true">↻</span>' +
-      '<h2 id="jsPhonePortraitTitleV2">휴대폰을 세로로 돌려주세요</h2>' +
-      '<p id="jsPhonePortraitDescriptionV2">스마트폰에서는 세로 화면으로 이용합니다.<br>검색 조건과 보던 매물은 그대로 유지됩니다.</p>';
-    guard.addEventListener("keydown", function(event) {
-      if (event.key === "Tab") { event.preventDefault(); guard.focus({preventScroll: true}); }
-    });
+    // Retain the legacy node for integrations, but landscape now uses the PC UI.
+    // Rotation must not make the app inert or take focus away from entered data.
+    guard.setAttribute("aria-hidden", "true");
     document.body.appendChild(guard);
 
     // Input submission dismisses the soft keyboard without selecting/clearing the query.
     var form = document.getElementById("jsMobileSearchFormV1");
     form.addEventListener("submit", function() {
-      if (!isPhone()) return;
+      if (!isMobileLayout()) return;
       var input = document.getElementById("jsMobileKeywordV1");
       if (input) input.blur();
       if (global.JSPhoneFavoritesV2 && global.JSPhoneFavoritesV2.isOpen()) global.closeUnifiedFavoritesV7();
@@ -73,8 +63,6 @@
     if (originalChips) observer.observe(originalChips, {childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"]});
     var mapCount = document.getElementById("mapListingCountV825");
     if (mapCount) observer.observe(mapCount, {attributes: true, attributeFilter: ["data-listing-count"]});
-    // New dialogs must also be inert while the portrait notice covers the app.
-    observer.observe(document.body, {childList: true});
     observer.observe(root, {attributes: true, attributeFilter: ["class"]});
     if (global.ResizeObserver) new global.ResizeObserver(syncHeaderHeight).observe(header);
     global.addEventListener("js-phone-favorites-change", queueSync);
@@ -83,45 +71,18 @@
   }
 
   function syncHeaderHeight() {
-    if (!header || !isPhone()) return;
+    if (!isMobileLayout()) { root.style.removeProperty("--js-phone-header-height"); return; }
+    if (!header) return;
     var height = Math.ceil(header.getBoundingClientRect().height);
     if (height > 0) root.style.setProperty("--js-phone-header-height", height + "px");
-  }
-
-  function syncPortraitGuard() {
-    if (!guard) return;
-    // Auth owns the initial inert state. Wait for unlock before taking any
-    // snapshot, or portrait restoration could re-lock an authenticated #wrap.
-    if (root.classList.contains("auth-pending")) { guard.hidden = true; return; }
-    var landscape = isPhone() && global.JSPhoneDeviceV1.isLandscape();
-    if (landscape) {
-      if (guard.hidden) returnFocus = document.activeElement;
-      guard.hidden = false;
-      Array.prototype.forEach.call(document.body.children, function(element) {
-        if (element === guard || /^(SCRIPT|STYLE|LINK|TEMPLATE)$/.test(element.tagName)) return;
-        if (!blockedElements.has(element)) blockedElements.set(element, element.inert);
-        element.inert = true;
-      });
-      if (document.activeElement !== guard) guard.focus({preventScroll: true});
-    } else {
-      var wasVisible = !guard.hidden;
-      guard.hidden = true;
-      blockedElements.forEach(function(previous, element) { element.inert = previous; });
-      blockedElements.clear();
-      if (wasVisible && returnFocus && returnFocus.isConnected && typeof returnFocus.focus === "function") {
-        // Do not reopen the keyboard after rotation; all entered values remain in place.
-        if (!/^(INPUT|TEXTAREA|SELECT)$/.test(returnFocus.tagName)) returnFocus.focus({preventScroll: true});
-      }
-      returnFocus = null;
-    }
   }
 
   function sync() {
     queued = false;
     if (!app) create();
     if (!app) return;
-    syncPortraitGuard();
-    if (!isPhone()) {
+    if (guard) guard.hidden = true;
+    if (!isMobileLayout()) {
       root.style.removeProperty("--js-phone-header-height");
       return;
     }

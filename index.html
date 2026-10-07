@@ -25,7 +25,7 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 
 <script src="js/data-access-v6.js?v=6.0.3-earliest-warmup"></script>
-<script src="js/phone-device-v1.js?v=1.0.0-phone-only"></script>
+<script src="js/phone-device-v1.js?v=1.1.0-handheld-orientation"></script>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&libraries=services&autoload=false"></script>
 
 <link rel="stylesheet" href="css/style.css?v=6.10.1-map-status-top&amp;polygon-filter-v661=1&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;field-mode-v1=1">
@@ -48,16 +48,18 @@
 <link rel="stylesheet" href="css/announcement-readable-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/permit-diagnosis-v1.css?v=2.7.0">
 <link rel="stylesheet" href="css/app-font-v1.css?v=1.0.0-pretendard">
-<link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.7-filter-chips-selection">
+<link rel="stylesheet" href="css/mobile-app-v1.css?v=1.0.7-filter-chips-selection&amp;handheld-layout-v1=1">
 <link rel="stylesheet" href="css/mobile-customer-app-v1.css?v=1.0.2-mobile-card-fix">
 <link rel="stylesheet" href="css/header-professional-v1.css?v=1.1.8-compact-action-priority&amp;gongsil-search-actions-v1=1">
 <link rel="stylesheet" href="css/modal-close-v1.css?v=1.1.0-minimal-circle">
 <link rel="stylesheet" href="css/listing-trade-v1.css?v=1.4.4-balanced-selector&amp;search-icon-balance-v1=1">
-<link rel="stylesheet" href="css/phone-app-v2.css?v=2.0.0-portrait">
+<link rel="stylesheet" href="css/phone-app-v2.css?v=2.0.0-portrait&amp;handheld-layout-v1=1">
 <link rel="stylesheet" href="css/phone-filter-v1.css?v=1.0.0-phone-only">
 <link rel="stylesheet" href="css/phone-favorites-v2.css?v=2.0.0-phone-only">
 <link rel="stylesheet" href="css/phone-detail-v2.css?v=2.0.0-phone-only">
 <link rel="stylesheet" href="css/map-field-mode-v1.css?v=1.4.1-single-control">
+<link rel="stylesheet" href="css/handheld-orientation-v1.css?v=1.0.0">
+<link rel="stylesheet" href="css/handheld-detail-landscape-v1.css?v=1.0.0">
 </template>
 </head>
 
@@ -830,12 +832,12 @@
 <script data-auth-critical src="js/dialog-focus-v1.js?v=1.0.0-keyboard-focus"></script>
 <script data-auth-critical src="js/local-metrics-v1.js?v=1"></script>
 <script data-cache-predecessor="js/async-mutation-queue-v1.js?v=1.0.8-legacy-server-guard" src="js/async-mutation-queue-v1.js?v=1.0.9-data-access"></script>
-<script data-auth-critical src="js/unified-listings-v8.js?v=8.1.43-card-detail-toggle&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;dialog-focus-v1=1&amp;thumbnail-recovery-v1=1"></script>
+<script data-auth-critical src="js/unified-listings-v8.js?v=8.1.43-card-detail-toggle&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;dialog-focus-v1=1&amp;thumbnail-recovery-v1=1&amp;handheld-layout-v1=1"></script>
 <script data-auth-critical src="js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds"></script>
 <script data-auth-critical src="js/listing-trade-ui-v1.js?v=1.5.0-workbench"></script>
 <script data-auth-critical src="js/parcel-external-links-v1.js?v=1.0.1-daejeon-dong-lot"></script>
 <script data-auth-critical src="js/sale-workbench-v1.js?v=1.0.5-account-precondition"></script>
-<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;zero-range-favorite-folder-v1=1&amp;search-select-all-v824=1"></script>
+<script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;zero-range-favorite-folder-v1=1&amp;search-select-all-v824=1&amp;handheld-layout-v1=1"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.2.0-full-snapshot"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection&amp;completed-restore-v1=1"></script>
 <script src="js/kakao-navigation-v1.js?v=1.1.0-session-location"></script>
@@ -848,11 +850,11 @@
 <script src="js/regional-market-v1.js?v=1.0.4"></script>
 <script src="js/building-register-v6.js?v=8.2.9-card-elevator-icon"></script>
 <script src="js/list-manager-v6.js?v=6.4.35-shared-data-only&amp;favorite-folder-filter-v1=1&amp;dialog-focus-v1=1&amp;cloud-cas-v1=1&amp;cloud-dirty-v1=1"></script>
-<script src="js/mobile-detail-fix-v6.js?v=6.4.19-filter-anchor"></script>
+<script src="js/mobile-detail-fix-v6.js?v=6.4.19-filter-anchor&amp;handheld-layout-v1=1"></script>
 <script src="js/ai-visit-route-v6.js?v=6.1.0-session-location"></script>
 <script src="js/ai-visit-ui-v6.js?v=6.0.0"></script>
 <script src="js/ai-visit-session-v6.js?v=6.4.40-location-privacy&amp;cloud-cas-v1=1&amp;cloud-dirty-v1=1"></script>
-<script src="js/unified-favorites-v7.js?v=7.0.15-ai-visit-entry&amp;favorite-folder-filter-v1=1&amp;dialog-focus-v1=1"></script>
+<script src="js/unified-favorites-v7.js?v=7.0.15-ai-visit-entry&amp;favorite-folder-filter-v1=1&amp;dialog-focus-v1=1&amp;handheld-layout-v1=1"></script>
 <script src="js/map-field-camera-v1.js?v=1.2.0-travel-heading"></script>
 <script src="js/map-field-lease-cards-v1.js?v=1.1.0-near-scales"></script>
 <script src="js/map-field-mode-v1.js?v=1.4.0-cycle-hold"></script>
@@ -885,8 +887,8 @@
 <script src="js/diagnosis-report.js?v=1.0.0"></script>
 <script src="js/permit-diagnosis-step6.js?v=1.4.0-cloud-cas"></script>
 <script src="js/permit-broker-briefing.js?v=2.1.0"></script>
-<script data-auth-critical src="js/mobile-app-v1.js?v=1.0.5-tablet-logo-reload&amp;phone-v2=1"></script>
-<script data-auth-critical src="js/phone-app-v2.js?v=2.0.0-portrait"></script>
+<script data-auth-critical src="js/mobile-app-v1.js?v=1.0.5-tablet-logo-reload&amp;phone-v2=1&amp;handheld-layout-v1=1"></script>
+<script data-auth-critical src="js/phone-app-v2.js?v=2.0.0-portrait&amp;handheld-layout-v1=1"></script>
 <script data-auth-critical src="js/phone-device-check-v1.js?v=1.0.1-direct-entry"></script>
 <script src="js/permit-diagnosis-ui.js?v=2.8.2-accessible-label"></script>
 </template>

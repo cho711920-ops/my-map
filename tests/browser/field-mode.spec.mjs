@@ -122,15 +122,15 @@ async function installMapBoundary(page, options = {}) {
   await page.evaluate(() => window.syncMapQuickToolGeometryV659());
 }
 
-async function preservedState(page) {
-  return page.evaluate(() => ({
-    cards: Array.from(document.querySelectorAll("#list .item")).map((item) => item.textContent),
+async function preservedState(page, layoutIndependent = false) {
+  return page.evaluate((layoutIndependent) => ({
+    cards: Array.from(document.querySelectorAll("#list .item")).map((item) => layoutIndependent ? item.getAttribute("data-property-id") : item.textContent),
     filters: ["keyword", "sourceFilter", "typeFilter", "minRent", "maxRent", "sortFilter"].map((id) => [id, document.getElementById(id)?.value]),
     selectedItemKey: window.selectedItemKey,
     favoriteOnly: window.favoriteOnly,
     activeFavoriteFolderId: window.activeFavoriteFolderId,
     favoriteKeys: window.favoriteKeys
-  }));
+  }), layoutIndependent);
 }
 
 async function cameraState(page) {
@@ -228,6 +228,78 @@ async function expectSingleFieldControl(page, toggle, scale) {
     button.focus();
     return getComputedStyle(button).display === "none" && document.activeElement !== button;
   }))).toBe(true);
+}
+
+for (const device of [
+  {name: "phone", portrait: {width: 390, height: 844}, landscape: {width: 844, height: 390}, userAgent: phoneUA},
+  {name: "tablet", portrait: {width: 800, height: 1280}, landscape: {width: 1280, height: 800}, userAgent: tabletUA}
+]) {
+  test(`${device.name}: actual rotation retains field scale, GPS position, selected listing and one watcher without API writes`, async ({browser, baseURL}, testInfo) => {
+    const context = await browser.newContext({serviceWorkers: "block", isMobile: true, hasTouch: true,
+      userAgent: device.userAgent, viewport: device.portrait, screen: device.portrait});
+    const writes = [], errors = [], forbidden = [];
+    try {
+      await context.route("**/*", route => {
+        const request = route.request();
+        if (new URL(request.url()).hostname !== "127.0.0.1") {forbidden.push(request.url()); return route.abort();}
+        if (request.method() !== "GET") {writes.push(request.url()); return route.abort();}
+        return route.continue();
+      });
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      await page.goto(baseURL);
+      await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
+      await page.locator("#fixtureControls").evaluate(element => {element.style.display = "none";});
+      await installMapBoundary(page, {camera: true});
+      await page.evaluate(() => {
+        document.getElementById("keyword").value = "괴정";
+        document.getElementById("jsMobileKeywordV1").value = "괴정";
+        document.getElementById("sourceFilter").value = "naver";
+        window.applyFilter();
+        window.selectedItemKey = window.allItems[0].key;
+        window.startCurrentLocationTrackingV630();
+        window.__fieldFixture.fix(36.3504, 127.3845, 8, {heading: 90, speed: 4});
+      });
+      const compactToggle = page.locator("#mapFieldModeCompactToggleV1");
+      await compactToggle.click();
+      await compactToggle.click();
+      await expectSingleFieldControl(page, compactToggle, 30);
+      await expect.poll(() => page.evaluate(() => JSFieldMapCameraV1.state().bearing)).toBe(90);
+      const before = await preservedState(page, true);
+      const position = (await cameraState(page)).position;
+      const session = await context.newCDPSession(page);
+      for (const landscape of [true, false, true, false]) {
+        const dimensions = landscape ? device.landscape : device.portrait;
+        await session.send("Emulation.setDeviceMetricsOverride", {...dimensions, screenWidth: dimensions.width, screenHeight: dimensions.height,
+          mobile: true, deviceScaleFactor: 1, screenOrientation: {type: landscape ? "landscapePrimary" : "portraitPrimary", angle: landscape ? 90 : 0}});
+        if (landscape) {
+          await expect(page.locator("html")).toHaveClass(/js-handheld-landscape-v1/);
+          await expect(page.locator("html")).not.toHaveClass(/js-phone-app-v2/);
+        } else {
+          await expect(page.locator("html")).toHaveClass(/js-phone-app-v2/);
+        }
+        const toggle = page.locator(landscape ? "#mapFieldModeToggleV1" : "#mapFieldModeCompactToggleV1");
+        await expect(toggle).toBeVisible();
+        await expectSingleFieldControl(page, toggle, 30);
+        expect(await page.evaluate(() => JSFieldModeV1.state())).toMatchObject({enabled: true, scale: 30, heading: 90, headingSource: "gps"});
+        expect(await cameraState(page)).toMatchObject({center: position, position, level: 2, watchCalls: 1, draggable: false, zoomable: false});
+        await expect.poll(async () => {
+          const marker = await page.locator(".js-current-location-dot-v630").boundingBox();
+          const map = await page.locator("#map").boundingBox();
+          return Math.max(Math.abs(marker.x + marker.width / 2 - map.x - map.width / 2), Math.abs(marker.y + marker.height / 2 - map.y - map.height / 2));
+        }).toBeLessThan(1);
+        expect(await preservedState(page, true)).toEqual(before);
+        await expect(page.locator(".js-current-location-dot-v630")).toHaveCount(1);
+      }
+      await page.evaluate(() => __fieldFixture.fix(36.3504, 127.3855, 8, {heading: 90, speed: 4}));
+      await expect.poll(async () => (await cameraState(page)).position).toEqual([36.3504, 127.3855]);
+      expect((await cameraState(page)).watchCalls).toBe(1);
+      await page.screenshot({path: testInfo.outputPath("rotation-round-trip-field-mode.png")});
+      expect(writes).toEqual([]);
+      expect(forbidden).toEqual([]);
+      expect(errors).toEqual([]);
+    } finally {await context.close();}
+  });
 }
 
 for (const input of ["mouse", "touch"]) {
@@ -350,7 +422,7 @@ for (const device of devices) {
       await expect(page.locator("html")).toHaveAttribute("data-fixture-ready", "true");
       await page.locator("#fixtureControls").evaluate((element) => { element.style.display = "none"; });
       await installMapBoundary(page);
-      if (device.phone) await expect(page.locator("html")).toHaveClass(/js-phone-app-v2/);
+      if (device.height > device.width) await expect(page.locator("html")).toHaveClass(/js-phone-app-v2/);
       else await expect(page.locator("html")).not.toHaveClass(/js-phone-app-v2/);
       if (device.width === 1280) {
         // Touch-landscape CSS must honor the modal's closed state. Opening only
@@ -363,7 +435,7 @@ for (const device of devices) {
         await expect(roadview).toBeHidden();
       }
 
-      const compact = device.width <= 768;
+      const compact = device.height > device.width;
       const toggle = page.locator(compact ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
       const panel = page.locator(compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
       await expect(toggle).toBeVisible();

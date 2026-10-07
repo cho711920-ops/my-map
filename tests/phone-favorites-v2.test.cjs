@@ -130,6 +130,73 @@ test("phone favorites is a dedicated folder index without AI visits and does not
   assert.equal(app.calls.some(([name]) => name === "focus-activate"), false);
 });
 
+test("portrait and landscape re-render the same open favorite folder without saving or changing selection scope", () => {
+  const app = createApp();
+  let portrait = true, saves = 0;
+  app.window.JSPhoneDeviceV1 = {isPhone: () => false, isMobileLayout: () => portrait};
+  app.window.JSV6ListStore.save = () => { saves++; return true; };
+  app.window.openListManager("favorite");
+  app.window.JSPhoneFavoritesV2.showFolder("folder-a");
+  app.favoriteBody.scrollTop = 315;
+  app.elements.get("unifiedFavoriteNameV7").value = "작성 중인 폴더";
+  const before = JSON.stringify(app.folders);
+  portrait = false;
+  app.window.innerWidth = 844;
+  app.listeners["js-phone-device-change"]();
+  assert.equal(app.modal.classList.contains("open"), true);
+  assert.equal(app.dialog.getAttribute("role"), "dialog");
+  assert.match(app.favoriteBody.innerHTML, /unified-favorite-folder-v7 open/);
+  assert.equal(app.window.JSPhoneFavoritesV2.getState().folderId, "folder-a");
+  assert.equal(app.events.at(-1).detail.open, false);
+  app.favoriteBody.scrollTop = 170;
+  portrait = true;
+  app.listeners["js-phone-device-change"]();
+  assert.equal(app.dialog.getAttribute("role"), "region");
+  assert.equal(app.favoriteBody.scrollTop, 315);
+  assert.equal(app.window.JSPhoneFavoritesV2.getState().folderId, "folder-a");
+  assert.equal(app.elements.get("unifiedFavoriteNameV7").value, "작성 중인 폴더");
+  portrait = false;
+  app.listeners["js-phone-device-change"]();
+  assert.equal(app.favoriteBody.scrollTop, 170);
+  app.window.toggleUnifiedFavoriteFolderV7("folder-b");
+  portrait = true;
+  app.listeners["js-phone-device-change"]();
+  assert.equal(app.window.JSPhoneFavoritesV2.getState().folderId, "folder-b");
+  assert.equal(saves, 0);
+  assert.equal(JSON.stringify(app.folders), before);
+  assert.equal(app.calls.some(([name]) => name === "filter" || name === "detail" || name.startsWith("map-")), false);
+});
+
+test("favorite detail moves between landscape pane and portrait overlay without closing or reloading", () => {
+  const app = createApp();
+  let portrait = true;
+  app.window.JSPhoneDeviceV1 = {isMobileLayout: () => portrait};
+  app.window.openListManager("favorite");
+  app.window.JSPhoneFavoritesV2.showFolder("folder-a");
+  app.window.openUnifiedFavoriteItemV7(encodeURIComponent("property:A"));
+  const host = app.elements.get("unifiedFavoriteDetailHostV7");
+  const drawer = new host.constructor("unifiedDetailDrawerV8");
+  drawer.classList.add("open");
+  drawer.photoIndex = 2;
+  host.contains = node => node.parentNode === host;
+  app.window.document.body.appendChild(drawer);
+  portrait = false;
+  app.window.innerWidth = 844;
+  app.listeners["js-phone-device-change"]();
+  assert.equal(drawer.parentNode, host);
+  assert.equal(app.dialog.classList.contains("has-detail-v7"), true);
+  assert.equal(host.getAttribute("aria-hidden"), "false");
+  portrait = true;
+  app.listeners["js-phone-device-change"]();
+  assert.equal(drawer.parentNode, app.window.document.body);
+  assert.equal(app.dialog.classList.contains("has-detail-v7"), false);
+  assert.equal(drawer.classList.contains("unified-favorite-embedded-detail-v7"), false);
+  assert.equal(drawer.classList.contains("open"), true);
+  assert.equal(drawer.photoIndex, 2);
+  assert.equal(app.calls.filter(([name]) => name === "detail").length, 1);
+  assert.equal(app.window.JSPhoneFavoritesV2.getState().folderId, "folder-a");
+});
+
 test("folder screen identity survives refresh, detail and return; folder and index have independent scroll", () => {
   const app = createApp();
   app.window.openListManager("favorite");

@@ -1,0 +1,259 @@
+/* Layout-only overrides. Physical orientation is classified in phone-device-v1.js.
+ * Desktop and the existing wide landscape tablet layout remain untouched. */
+
+/* A portrait tablet uses the same compact field-mode control as a phone. */
+.js-phone-app-v2 .map-field-mode-compact-v1 {
+  position: absolute;
+  z-index: 9600;
+  top: calc(var(--jsm-header-height) + 10px);
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 20px);
+}
+.js-phone-app-v2 .map-field-mode-compact-v1 > .map-field-mode-toggle-v1 {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 9px;
+  border: 1px solid #c8d3e0;
+  border-radius: 10px;
+  background: #fff;
+  color: #344258;
+  box-shadow: 0 2px 8px rgba(25, 42, 64, .12);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.js-phone-app-v2 .map-field-mode-compact-v1 > .map-field-mode-toggle-v1 > svg {
+  width: 18px; height: 18px;
+  fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.js-phone-app-v2 .map-field-mode-compact-v1 .map-field-mode-indicator-v1 {
+  position: static; padding: 3px; font-size: 8px;
+}
+.js-phone-app-v2[data-jsm-mobile-view="list"] .map-field-mode-compact-v1,
+.js-phone-app-v2[data-js-phone-favorites="true"] .map-field-mode-compact-v1,
+.js-phone-app-v2 body:has(.unified-detail-drawer-v8.open) .map-field-mode-compact-v1,
+.js-handheld-landscape-v1 .map-field-mode-compact-v1 { display: none; }
+
+/* Narrow landscape phones need the PC split view even below the legacy 769px
+ * breakpoint. Keep the ordinary tablet/desktop >=900px styling verbatim. */
+@media (max-width: 899px) {
+  :root.js-handheld-landscape-v1 { --map-sidebar-width-v659: min(52vw, 480px); }
+  .js-handheld-landscape-v1, .js-handheld-landscape-v1 body {
+    width: 100% !important; height: 100% !important; margin: 0 !important;
+    min-height: 0 !important; overflow: hidden !important;
+  }
+  .js-handheld-landscape-v1 #wrap {
+    position: fixed !important; inset: 96px 0 0 !important;
+    display: flex !important; flex-direction: row-reverse !important;
+    width: 100% !important; height: auto !important; min-height: 0 !important;
+    padding: 0 !important; margin: 0 !important; gap: 0 !important; overflow: hidden !important;
+  }
+  .js-handheld-landscape-v1 #sidebar {
+    position: relative !important; inset: auto !important;
+    display: flex !important; flex-direction: column !important;
+    flex: 0 0 var(--map-sidebar-width-v659) !important;
+    width: var(--map-sidebar-width-v659) !important; min-width: 0 !important;
+    max-width: none !important; height: 100% !important; max-height: none !important;
+    padding: 0 !important; margin: 0 !important; transform: none !important;
+    overflow: hidden !important; border-radius: 0 !important;
+    border-left: 1px solid #d8e1ef !important; background: #fff !important;
+  }
+  .js-handheld-landscape-v1 #map {
+    position: relative !important; inset: auto !important; flex: 1 1 auto !important;
+    width: auto !important; height: 100% !important; min-width: 0 !important;
+    min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+  }
+  .js-handheld-landscape-v1 #list {
+    position: relative !important; top: auto !important; flex: 1 1 auto !important;
+    height: auto !important; min-height: 0 !important; overflow-y: auto !important;
+    padding: 6px !important; margin: 0 !important;
+  }
+  .js-handheld-landscape-v1 #dragHandle,
+  .js-handheld-landscape-v1 #toggleBtn { display: none !important; }
+  .js-handheld-landscape-v1 #sidebar > .header {
+    position: fixed !important; inset: 0 auto auto 0 !important;
+    display: flex !important; width: 130px !important; height: 96px !important;
+    min-height: 0 !important; padding: 8px !important;
+    align-items: center !important; justify-content: center !important;
+    flex-direction: column !important; gap: 3px !important;
+    font-size: 14px !important;
+  }
+  .js-handheld-landscape-v1 .header::before,
+  .js-handheld-landscape-v1 .header::after { content: none !important; }
+  .js-handheld-landscape-v1 .header .js-brand-name-v1 { font-size: 14px !important; }
+  .js-handheld-landscape-v1 .header .js-brand-subtitle-v2 { font-size: 8px !important; }
+  .js-handheld-landscape-v1 .header .js-brand-mark-v1 {
+    width: 32px !important; height: 32px !important; flex-basis: 32px !important;
+    font-size: 14px !important;
+  }
+  .js-handheld-landscape-v1 #sidebar > .filters {
+    position: fixed !important; inset: 0 0 auto 130px !important;
+    display: flex !important; flex-direction: column !important;
+    width: auto !important; height: 96px !important; min-height: 0 !important;
+    padding: 5px 8px !important; gap: 5px !important;
+    overflow: visible !important; background: #fff !important;
+  }
+  .js-handheld-landscape-v1 .filters .filter-title,
+  .js-handheld-landscape-v1 .filters::before { display: none !important; }
+  .js-handheld-landscape-v1 .v6-toolbar-primary,
+  .js-handheld-landscape-v1 .v6-toolbar-secondary.v6-command-bar {
+    position: static !important; inset: auto !important;
+    display: flex !important; flex: 0 0 40px !important;
+    align-items: center !important; gap: 4px !important;
+    width: 100% !important; min-width: 0 !important; height: 40px !important;
+    min-height: 0 !important; max-height: none !important; margin: 0 !important;
+  }
+  .js-handheld-landscape-v1 .v6-toolbar-primary .search-row {
+    position: static !important; inset: auto !important;
+    display: grid !important; flex: 1 1 0 !important; gap: 0 !important;
+    grid-template-columns: 84px 40px minmax(0, 1fr) 40px !important;
+    grid-template-rows: 40px !important;
+    width: auto !important; min-width: 0 !important; height: 40px !important;
+  }
+  .js-handheld-landscape-v1 .v6-toolbar-primary .search-row .listing-trade-mode-v1 {
+    grid-column: 1 !important; width: 80px !important; height: 38px !important;
+  }
+  .js-handheld-landscape-v1 .v6-toolbar-primary .search-row .listing-trade-mode-v1 select {
+    height: 38px !important; padding: 0 18px 0 4px !important; font-size: 11px !important;
+  }
+  .js-handheld-landscape-v1 .v6-toolbar-primary .search-row .search-tell-v8 { grid-column: 2 !important; }
+  .js-handheld-landscape-v1 .v6-toolbar-primary .search-row .search-btn { grid-column: 4 !important; }
+  .js-handheld-landscape-v1 .v6-toolbar-primary #keyword {
+    grid-column: 3 !important; width: 100% !important; min-width: 0 !important;
+    height: 38px !important; padding: 0 8px !important;
+  }
+  .js-handheld-landscape-v1 .v6-toolbar-primary button,
+  .js-handheld-landscape-v1 .v6-toolbar-secondary.v6-command-bar > button,
+  .js-handheld-landscape-v1 .v6-toolbar-secondary.v6-command-bar .desktop-main-action {
+    position: static !important; inset: auto !important;
+    display: inline-flex !important; align-items: center !important;
+    justify-content: center !important; width: auto !important; min-width: 40px !important;
+    height: 38px !important; min-height: 0 !important; margin: 0 !important;
+    padding: 0 7px !important; font-size: 11px !important;
+  }
+  .js-handheld-landscape-v1 .v6-toolbar-secondary .v6-command-menu { display: none !important; }
+  .js-handheld-landscape-v1 .top-action-icon-v638 {
+    display: block !important; flex: 0 0 16px !important;
+    width: 16px !important; height: 16px !important;
+    fill: none; stroke: currentColor; stroke-width: 1.8;
+  }
+  .js-handheld-landscape-v1 .search-btn { background: #1769e8 !important; color: #fff !important; }
+  .js-handheld-landscape-v1 .v6-toolbar-primary button,
+  .js-handheld-landscape-v1 .v6-toolbar-secondary button { border-radius: 7px !important; }
+  .js-handheld-landscape-v1 #listToolbar.list-toolbar {
+    position: relative !important; flex: 0 0 auto !important;
+    display: flex !important; width: 100% !important; min-width: 0 !important;
+    padding: 5px !important;
+  }
+  .js-handheld-landscape-v1 #listToolbar > .list-toolbar-control,
+  .js-handheld-landscape-v1 #listToolbar > .list-sort-control {
+    display: block !important; flex: 1 1 0 !important;
+    width: 0 !important; min-width: 0 !important; max-width: none !important;
+  }
+  .js-handheld-landscape-v1 #listToolbar > .list-toolbar-control > select,
+  .js-handheld-landscape-v1 #sortDropdownBtn {
+    width: 100% !important; min-width: 0 !important; height: 31px !important;
+    font-size: 10px !important; padding: 0 14px 0 4px !important;
+  }
+  .js-handheld-landscape-v1 #list .item .item-card-grid-v650 {
+    display: grid !important; grid-template-columns: 70px minmax(0,1fr) !important; gap: 6px !important;
+  }
+  .js-handheld-landscape-v1 #list .unified-thumb-v8 {
+    overflow: hidden !important;
+    width: 70px !important; min-width: 70px !important;
+    height: 90px !important; min-height: 90px !important;
+  }
+  .js-handheld-landscape-v1 #list .unified-thumb-v8 img {
+    display: block !important; width: 100% !important; height: 100% !important;
+    object-fit: cover !important;
+  }
+  .js-handheld-landscape-v1 #list .unified-thumb-v8 span { white-space: nowrap; font-size: 10px !important; }
+  .js-handheld-landscape-v1 #list .item-compact-main-v650 { min-width: 0 !important; }
+  .js-handheld-landscape-v1 #list .item-action-row,
+  .js-handheld-landscape-v1 #list .item-action-left {
+    display: flex !important; flex-wrap: wrap !important; height: auto !important;
+    min-width: 0 !important; max-width: 100% !important; overflow: visible !important;
+  }
+  .js-handheld-landscape-v1 #list .item-action-left { flex: 1 1 100% !important; }
+  .js-handheld-landscape-v1 #list .price-line,
+  .js-handheld-landscape-v1 #list .item-price-values-v652 {
+    display: flex !important; flex-wrap: wrap !important; white-space: normal !important;
+    min-width: 0 !important; height: auto !important; max-height: none !important;
+  }
+  .js-handheld-landscape-v1 .map-quick-tools {
+    position: absolute !important; top: 0 !important; bottom: 0 !important;
+    right: calc(var(--map-sidebar-width-v659) + 6px) !important;
+    display: flex !important; width: 48px !important; min-width: 0 !important;
+    height: 100% !important; padding: 6px 0 !important;
+    overflow-y: auto !important; pointer-events: none !important;
+    z-index: 9100 !important;
+  }
+  .js-handheld-landscape-v1 .map-quick-tools-inner {
+    display: flex !important; flex-direction: column !important; width: 44px !important; gap: 3px !important;
+    pointer-events: auto !important; height: max-content !important;
+    flex-shrink: 0 !important;
+  }
+  .js-handheld-landscape-v1 .map-quick-tool-btn,
+  .js-handheld-landscape-v1 .permit-diagnosis-open-btn-v1 {
+    display: flex !important; flex-direction: column !important;
+    align-items: center !important; justify-content: center !important;
+    width: 44px !important; height: 44px !important; min-height: 44px !important;
+    padding: 2px !important; gap: 2px !important;
+    border: 1px solid #d4deea; border-radius: 8px; background: #fff; color: #334155;
+  }
+  .js-handheld-landscape-v1 .map-quick-tool-btn svg,
+  .js-handheld-landscape-v1 .permit-diagnosis-open-btn-v1 svg {
+    display: block !important; width: 18px !important; height: 18px !important;
+    flex: 0 0 18px !important; fill: none; stroke: currentColor; stroke-width: 1.7;
+  }
+  .js-handheld-landscape-v1 .map-quick-tool-btn > span,
+  .js-handheld-landscape-v1 .permit-diagnosis-open-btn-v1 > span {
+    font-size: 9px !important; line-height: 1.1 !important; white-space: nowrap;
+  }
+  /* The short landscape tool rail scrolls, but its menus must not be clipped
+     by that 48px-wide scroll container. */
+  .js-handheld-landscape-v1 .map-quick-popover {
+    position: fixed !important; top: 104px !important;
+    right: calc(var(--map-sidebar-width-v659) + 58px) !important;
+    width: min(184px, calc(48vw - 64px)); max-height: calc(100dvh - 112px);
+    padding: 8px; overflow: auto; border: 1px solid #d9e2ee;
+    border-radius: 12px; background: #fff; box-shadow: 0 6px 20px #0f172a33;
+  }
+  .js-handheld-landscape-v1 .map-quick-popover[hidden] { display: none !important; }
+  .js-handheld-landscape-v1 .map-quick-popover > button {
+    display: flex; width: 100%; min-height: 40px; align-items: center;
+  }
+  .js-handheld-landscape-v1 .unified-detail-drawer-v8 {
+    position: fixed !important; top: 96px !important;
+    right: var(--map-sidebar-width-v659) !important; left: auto !important; bottom: 0 !important;
+    width: calc(100vw - var(--map-sidebar-width-v659)) !important;
+    max-width: 400px !important; height: auto !important; max-height: none !important;
+    border-radius: 0 !important;
+  }
+  .js-handheld-landscape-v1 .unified-favorite-dialog-v7 {
+    position: fixed !important; inset: 8px !important;
+    width: calc(100vw - 16px) !important; min-width: 0 !important;
+    height: calc(100dvh - 16px) !important; min-height: 0 !important;
+    max-height: calc(100dvh - 16px) !important; margin: 0 !important;
+  }
+  .js-handheld-landscape-v1 .unified-favorite-dialog-v7.has-detail-v7 .unified-favorite-layout-v7 {
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  }
+  .js-handheld-landscape-v1 .unified-favorite-dialog-v7.has-detail-v7 .unified-favorite-detail-host-v7 {
+    display: block !important; padding-left: 6px;
+  }
+  .js-handheld-landscape-v1 .unified-favorite-detail-host-v7 .unified-detail-drawer-v8 {
+    position: relative !important; inset: auto !important;
+    width: 100% !important; min-width: 0 !important; max-width: none !important;
+    height: 100% !important;
+  }
+}
