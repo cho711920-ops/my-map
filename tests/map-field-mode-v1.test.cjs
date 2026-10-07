@@ -10,6 +10,12 @@ const source = read("js/map-field-mode-v1.js");
 const mapSource = read("js/map.js");
 const html = read("index.html");
 
+test("the redundant scale expander stays out of layout and keyboard order", () => {
+  const css = read("css/map-field-mode-v1.css");
+  assert.match(css, /\.map-field-mode-expand-v1\s*\{[^}]*display:\s*none\s*!important;/);
+  assert.match(html, /map-field-mode-v1\.css\?v=1\.4\.1-single-control/);
+});
+
 function eventTarget(target = {}) {
   const listeners = new Map();
   return Object.assign(target, {

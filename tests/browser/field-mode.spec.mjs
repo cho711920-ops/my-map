@@ -219,17 +219,15 @@ async function confirmedTravelFix(page, fix) {
   await page.evaluate(({lat, lng, heading}) => window.__fieldFixture.fix(lat, lng, 8, {heading, speed: 4}), fix);
 }
 
-async function expectPopupAreaReleased(page, bounds) {
-  const point = {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height - 8};
-  const hit = await page.evaluate(({x, y}) => {
-    const target = document.elementFromPoint(x, y);
-    return {
-      exists: !!target,
-      fieldControls: !!target?.closest("[data-field-mode-controls]"),
-      fieldWrapper: !!target?.closest(".map-field-mode-wrap-v1, .map-field-mode-compact-v1")
-    };
-  }, point);
-  expect(hit).toEqual({exists: true, fieldControls: false, fieldWrapper: false});
+async function expectSingleFieldControl(page, toggle, scale) {
+  await expect(page.locator("[data-field-mode-expand]:visible")).toHaveCount(0);
+  await expect(page.locator("[data-field-mode-controls]:visible")).toHaveCount(0);
+  await expect(toggle.locator("[data-field-mode-indicator]")).toBeVisible();
+  await expect(toggle.locator("[data-field-mode-indicator]")).toHaveText(scale ? scale + "m" : "OFF");
+  expect(await page.locator("[data-field-mode-expand]").evaluateAll(buttons => buttons.every(button => {
+    button.focus();
+    return getComputedStyle(button).display === "none" && document.activeElement !== button;
+  }))).toBe(true);
 }
 
 for (const input of ["mouse", "touch"]) {
@@ -288,6 +286,7 @@ for (const input of ["mouse", "touch"]) {
         expect(await page.evaluate(() => JSFieldModeV1.state()),
           JSON.stringify(await page.evaluate(() => window.__fieldPressEvents))).toMatchObject({enabled, scale, controlsOpen: false});
         await expect(toggle).toHaveAttribute("aria-pressed", String(enabled));
+        await expectSingleFieldControl(page, toggle, enabled ? scale : null);
       }
       for (const scale of [20, 30, 50, 20]) {
         await tap();
@@ -367,11 +366,9 @@ for (const device of devices) {
       const compact = device.width <= 768;
       const toggle = page.locator(compact ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
       const panel = page.locator(compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
-      const expander = page.locator(`[data-field-mode-expand][aria-controls="${compact ? "mapFieldModeCompactControlsV1" : "mapFieldModeControlsV1"}"]`);
       await expect(toggle).toBeVisible();
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
-      await expect(panel).toBeHidden();
-      await expect(expander).toBeHidden();
+      await expectSingleFieldControl(page, toggle, null);
       await expectWithinMap(page, compact ? "#mapFieldModeCompactV1" : "#mapFieldModeToggleV1");
 
       // Seed a real filtered list and selection before camera movement.
@@ -393,10 +390,7 @@ for (const device of devices) {
 
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
-      await expect(panel).toBeHidden();
-      await expect(expander).toBeVisible();
-      await expect(expander).toHaveText("20m ▾");
-      await expect(expander).toHaveAttribute("aria-expanded", "false");
+      await expectSingleFieldControl(page, toggle, 20);
       await expect(panel.locator("[data-field-mode-status]")).toHaveText("내 위치 따라가는 중");
       await expect(dot).toHaveClass(/js-field-mode-car-v1/);
       await expectNavigationArtwork(dot);
@@ -405,49 +399,20 @@ for (const device of devices) {
       await expect(dot).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       expect(await cameraState(page)).toMatchObject({center: [36.3504, 127.3845], position: [36.3504, 127.3845], level: 1, draggable: false, zoomable: false, watchCalls: 1});
 
-      await expander.click();
-      await expect(panel).toBeVisible();
-      await expectWithinMap(page, compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
-      const initialPanelBounds = await panel.boundingBox();
-      await expect(panel).toBeHidden({timeout: 4500});
-      await expect(toggle).toHaveAttribute("aria-pressed", "true");
-      await expect(expander).toHaveAttribute("aria-expanded", "false");
-      expect(await page.evaluate(() => window.JSFieldModeV1.state())).toMatchObject({enabled: true, controlsOpen: false, scale: 20});
-      await expectPopupAreaReleased(page, initialPanelBounds);
-      await expander.click();
-      await expect(panel).toBeVisible();
-      const selectionPanelBounds = await panel.boundingBox();
-      await panel.locator('[data-field-mode-scale="20"]').click();
-      expect((await cameraState(page)).level).toBe(1);
-      await expect(panel).toBeHidden();
-      await expect(expander).toHaveText("20m ▾");
-      await expect(expander).toHaveAttribute("aria-expanded", "false");
-      await expectPopupAreaReleased(page, selectionPanelBounds);
-      await expect(panel.locator('[data-field-mode-scale="20"]')).toHaveAttribute("aria-pressed", "true");
-      await expander.click();
-      await expect(panel).toBeVisible();
-      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      for (const scale of [30, 50, 20, 30, 50]) {
+        await toggle.click();
+        await expectSingleFieldControl(page, toggle, scale);
+        expect(await page.evaluate(() => JSFieldModeV1.state())).toMatchObject({enabled: true, controlsOpen: false, scale});
+        expect((await cameraState(page)).level).toBe(({20: 1, 30: 2, 50: 3})[scale]);
+      }
+      for (const [key, scale] of [["Enter", 20], [" ", 30], ["Enter", 50]]) {
+        await toggle.press(key);
+        await expectSingleFieldControl(page, toggle, scale);
+      }
+      await toggle.focus();
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => !!document.activeElement.closest("[data-field-mode-expand], [data-field-mode-controls]"))).toBe(false);
       expect((await cameraState(page)).watchCalls).toBe(1);
-      await panel.locator('[data-field-mode-scale="50"]').click();
-      expect((await cameraState(page)).level).toBe(3);
-      await expect(panel).toBeHidden();
-      await expect(expander).toHaveText("50m ▾");
-      await expect(panel.locator('[data-field-mode-scale="50"]')).toHaveAttribute("aria-pressed", "true");
-
-      await expander.click();
-      await expect(panel).toBeVisible();
-      const keyboardChoice = panel.locator('[data-field-mode-scale="20"]');
-      await keyboardChoice.focus();
-      await page.waitForTimeout(3100);
-      await expect(panel).toBeVisible();
-      await keyboardChoice.press("Escape");
-      await expect(panel).toBeHidden();
-      await expect(expander).toBeFocused();
-      await expander.click();
-      await expect(panel).toBeVisible();
-      await page.locator("#map").dispatchEvent("pointerdown");
-      await expect(panel).toBeHidden();
-      await expect(toggle).toHaveAttribute("aria-pressed", "true");
 
       // A small stationary jitter must not move either the camera or the pointer.
       const steady = await cameraState(page);
@@ -472,7 +437,7 @@ for (const device of devices) {
       await expect(dot.locator("[data-field-navigation-pending]")).toBeHidden();
       expect(apiRequests.length).toBe(apiBaseline);
       expect(await preservedState(page)).toEqual(before);
-      await expect(panel).toBeHidden();
+      await expectSingleFieldControl(page, toggle, 50);
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
       await page.screenshot({path: testInfo.outputPath("field-mode-on.png")});
 
@@ -490,8 +455,7 @@ for (const device of devices) {
 
       await toggle.click({delay: 3100});
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
-      await expect(panel).toBeHidden();
-      await expect(expander).toBeHidden();
+      await expectSingleFieldControl(page, toggle, null);
       await expect(dot).not.toHaveClass(/js-field-mode-car-v1/);
       await expect(dot.locator("svg")).toHaveCount(0);
       await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");
@@ -549,6 +513,7 @@ test("GPS course turns the centered navigation pointer through cardinal directio
     const dot = page.locator(".js-current-location-dot-v630");
     const icon = dot.locator(".js-field-mode-car-icon-v1");
     await toggle.click();
+    await expectSingleFieldControl(page, toggle, 20);
     await expectNavigationArtwork(dot);
     await expect(dot.locator("[data-field-navigation-pointer]")).toHaveCSS("visibility", "hidden");
     await expect(dot.locator("[data-field-navigation-pointer]")).toBeHidden();
@@ -624,6 +589,7 @@ test("GPS course turns the centered navigation pointer through cardinal directio
     expect(apiRequests.length).toBe(apiBaseline);
 
     await toggle.click({delay: 3100});
+    await expectSingleFieldControl(page, toggle, null);
     await expect(dot).not.toHaveClass(/js-field-mode-car-v1|js-field-mode-heading-known-v1|js-field-mode-heading-turn-v1/);
     await expect(dot.locator("svg, .js-field-mode-heading-pending-v1")).toHaveCount(0);
     await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");
@@ -700,7 +666,6 @@ for (const device of [devices[0], devices[3]]) {
       const originalBounds = await page.locator("#map").boundingBox();
       const toggle=page.locator(device.phone ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
       const panel=page.locator(device.phone ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
-      const expander=page.locator(`[data-field-mode-expand][aria-controls="${device.phone ? "mapFieldModeCompactControlsV1" : "mapFieldModeControlsV1"}"]`);
       const dot=page.locator(".js-current-location-dot-v630");
       const surface=page.locator("#jsFieldMapSurfaceV1");
       const credits=page.locator("#fixtureSdkCredits");
@@ -708,6 +673,7 @@ for (const device of [devices[0], devices[3]]) {
       expect(await page.evaluate(() => window.JSFieldOrientationV1.state().running)).toBe(false);
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await expectSingleFieldControl(page, toggle, 20);
       expect(await page.evaluate(() => window.JSFieldOrientationV1.state())).toMatchObject({running: false, listening: false});
       await expect(dot.locator("[data-field-navigation-pending]")).toBeVisible();
       await dispatchDeviceTurn(page, 180);
@@ -798,14 +764,16 @@ for (const device of [devices[0], devices[3]]) {
         expect(offscreen.favorites).toEqual(savedFavorites);
       }
       await page.screenshot({path:testInfo.outputPath("field-travel-only-heading-up.png")});
+      await expectSingleFieldControl(page, toggle, 20);
       expect(apiRequests.length, "GPS movement, turns and a long stop perform no API calls").toBe(apiBaseline);
 
-      // The same SDK credit node continues to receive scale changes after it is
-      // lifted out of the rotating surface; selecting scale closes the popup.
-      if (!await panel.isVisible()) await expander.click();
-      await panel.locator('[data-field-mode-scale="20"]').click();
-      await expect(credits).toContainText("20m");
-      await expect(panel).toBeHidden();
+      // The single main button updates the lifted SDK scale without exposing
+      // the retained compatibility popup or adding a second focus target.
+      for (const scale of [30, 50, 20]) {
+        await toggle.click();
+        await expect(credits).toContainText(scale + "m");
+        await expectSingleFieldControl(page, toggle, scale);
+      }
       if (device.phone) {
         await page.locator('[data-mobile-view="list"]').click();
         await expect(toggle).toBeHidden();
@@ -821,6 +789,7 @@ for (const device of [devices[0], devices[3]]) {
 
       await toggle.click({delay: 3100});
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await expectSingleFieldControl(page, toggle, null);
       await expect(surface).toHaveCSS("transform", "none");
       await expect(dot).toHaveCSS("background-color", "rgb(123, 44, 255)");
       await expect(dot.locator("svg")).toHaveCount(0);

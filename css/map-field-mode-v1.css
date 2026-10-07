@@ -106,7 +106,9 @@
 }
 
 .map-field-mode-expand-v1 {
-  display: flex;
+  /* The main button already displays and cycles the scale. Keep the legacy
+     control out of both the layout and keyboard order in every mode. */
+  display: none !important;
   box-sizing: border-box;
   width: 44px;
   min-width: 44px;

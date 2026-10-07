@@ -199,6 +199,17 @@ async function expectCardLayout(page) {
   for (const row of await rows.all()) await expectCompactRowGeometry(row);
 }
 
+async function expectSingleFieldControl(page, toggle, scale) {
+  await expect(page.locator("[data-field-mode-expand]:visible")).toHaveCount(0);
+  await expect(page.locator("[data-field-mode-controls]:visible")).toHaveCount(0);
+  await expect(toggle.locator("[data-field-mode-indicator]")).toBeVisible();
+  await expect(toggle.locator("[data-field-mode-indicator]")).toHaveText(scale ? scale + "m" : "OFF");
+  expect(await page.locator("[data-field-mode-expand]").evaluateAll(buttons => buttons.every(button => {
+    button.focus();
+    return getComputedStyle(button).display === "none" && document.activeElement !== button;
+  }))).toBe(true);
+}
+
 for (const device of devices) {
   test(`${device.name}: lease cards, three scales, detail, more and heading keep filters`, async ({browser, baseURL}, testInfo) => {
     const context = await browser.newContext({serviceWorkers: "block", isMobile: true, hasTouch: true,
@@ -223,11 +234,9 @@ for (const device of devices) {
       const baseline = await preserved(page);
       const compact = device.width <= 768;
       const toggle = page.locator(compact ? "#mapFieldModeCompactToggleV1" : "#mapFieldModeToggleV1");
-      const panel = page.locator(compact ? "#mapFieldModeCompactControlsV1" : "#mapFieldModeControlsV1");
-      const expander = page.locator(`[data-field-mode-expand][aria-controls="${compact ? "mapFieldModeCompactControlsV1" : "mapFieldModeControlsV1"}"]`);
+      await expectSingleFieldControl(page, toggle, null);
       await toggle.click();
-      await expect(expander).toHaveText("20m ▾");
-      await expect(panel).toBeHidden();
+      await expectSingleFieldControl(page, toggle, 20);
       expect(await page.evaluate(() => map.getLevel())).toBe(1);
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(1);
       await expect(page.locator(".circle-marker")).toHaveCount(0);
@@ -235,23 +244,20 @@ for (const device of devices) {
       await expect(page.locator(".field-lease-more-v1")).toHaveText("외 1개 더 보기");
       expect(await preserved(page)).toEqual(baseline);
 
-      if (!await panel.isVisible()) await expander.click();
-      await expect(panel.locator("[data-field-mode-scale]")).toHaveText(["20m", "30m", "50m"]);
-      await panel.locator('[data-field-mode-scale="30"]').click();
-      await expect(expander).toHaveText("30m ▾");
+      await toggle.click();
+      await expectSingleFieldControl(page, toggle, 30);
       expect(await page.evaluate(() => map.getLevel())).toBe(2);
       await expect(page.locator("#fixtureSdkCredits")).toContainText("30m");
       await expectCardLayout(page);
       await page.screenshot({path: testInfo.outputPath(device.name + "-30m.png")});
-      await expander.click();
-      await panel.locator('[data-field-mode-scale="50"]').click();
-      await expect(expander).toHaveText("50m ▾");
+      await toggle.click();
+      await expectSingleFieldControl(page, toggle, 50);
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(0);
       await expect(page.locator(".circle-marker")).toHaveCount(1);
       expect(await page.evaluate(() => JSFieldModeV1.state().enabled)).toBe(true);
       expect(await preserved(page)).toEqual(baseline);
       await toggle.click();
-      await expect(expander).toHaveText("20m ▾");
+      await expectSingleFieldControl(page, toggle, 20);
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(1);
       await expect(page.locator(".circle-marker")).toHaveCount(0);
 
@@ -275,6 +281,7 @@ for (const device of devices) {
       // stays horizontal, including its actual screen-space line geometry.
       await page.evaluate(() => __leaseFixture.fix(90, 4));
       await expect.poll(() => page.evaluate(() => JSFieldMapCameraV1.state().bearing)).toBe(90);
+      await expectSingleFieldControl(page, toggle, 20);
       await expectCardLayout(page);
       const rotations = await page.locator(".field-lease-card-v1").evaluate(card => {
         const surface = new DOMMatrixReadOnly(getComputedStyle(document.getElementById("jsFieldMapSurfaceV1")).transform);
@@ -306,6 +313,7 @@ for (const device of devices) {
       expect(await preserved(page)).toEqual(baseline);
 
       await toggle.click({delay: 3100});
+      await expectSingleFieldControl(page, toggle, null);
       await expect(page.locator(".field-lease-card-v1")).toHaveCount(0);
       await expect(page.locator(".circle-marker")).toHaveCount(1);
       await expect(page.locator("#jsFieldMapSurfaceV1")).toHaveCSS("transform", "none");
@@ -342,7 +350,9 @@ test("switching from a pinned building to another lease row survives GPS renderi
       applyFilter();
     });
     const baseline = await preserved(page);
-    await page.locator("#mapFieldModeToggleV1").click();
+    const toggle = page.locator("#mapFieldModeToggleV1");
+    await toggle.click();
+    await expectSingleFieldControl(page, toggle, 20);
     await expect(page.locator(".field-lease-card-v1")).toHaveCount(2);
     const secondRow = page.locator(".field-lease-row-v1").filter({hasText: "보 3,000 / 월 150"});
     const singleGeometry = await expectCompactRowGeometry(secondRow);
@@ -361,6 +371,7 @@ test("switching from a pinned building to another lease row survives GPS renderi
     await expect.poll(() => page.evaluate(() => JSFieldMapCameraV1.state().bearing)).toBe(90);
     // Observe a completed real idle refresh, not only the immediate click state.
     await expect.poll(() => page.evaluate(() => jsMapIdleTimerV638)).toBe(null);
+    await expectSingleFieldControl(page, toggle, 20);
     expect(await page.evaluate(() => getPinnedClusterItemsV6515().map(item => item.propertyId))).toEqual(["FIXTURE-LEASE-2"]);
     expect(await page.evaluate(() => selectedItemKey)).toBe("fixture-lease-2");
     await expect(secondRow).toHaveClass(/selected/);
