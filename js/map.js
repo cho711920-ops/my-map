@@ -2798,8 +2798,8 @@ function drawMapClustersOnlyV639(items) {
     );
 
     var overlay = new kakao.maps.CustomOverlay({
-      // Field cards move inside their zero-size wrapper, never away from the
-      // address coordinate that anchors their location dot and connector.
+      // Field cards sit directly above their original address coordinate;
+      // ordinary clusters keep their existing collision-adjusted position.
       position: cluster.fieldLease ? cluster.latlng : cluster.displayLatlng || cluster.latlng,
       content: overlayContent,
       yAnchor: cluster.fieldLease ? 0 : 0.5,
@@ -3005,11 +3005,6 @@ function redrawSelectedMarkers() {
     }
     o.setContent(content);
   });
-  // Selection can replace a field card's content/height. Schedule after every
-  // overlay is current; the module coalesces requests and only places live DOM.
-  if (window.JSFieldLeaseCardsV1 && typeof window.JSFieldLeaseCardsV1.scheduleLayout === "function") {
-    window.JSFieldLeaseCardsV1.scheduleLayout();
-  }
 }
 
 

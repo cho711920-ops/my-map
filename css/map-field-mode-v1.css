@@ -17,32 +17,16 @@
 }
 .map-field-mode-direction-v1 { display: block; margin-top: 4px; color: #475569; font-size: 11px; line-height: 1.5; }
 .js-field-map-copyright-v1 { z-index: 10 !important; }
-/* The zero-size root stays at the original geographic point. Counter-rotate
- * the entire label/leader/dot around that origin, never the card on its own. */
+/* Keep the card's bottom center exactly on the property's original coordinate.
+ * Counter-rotate around that point, without leaders or collision offsets. */
 .field-lease-anchor-v1 {
   position: relative; width: 0; height: 0;
   overflow: visible; transform-origin: 0 0; pointer-events: none;
-  --field-lease-color: #3077c9;
 }
-.field-lease-anchor-v1.selected { --field-lease-color: #075cb5; z-index: 2; }
-.field-lease-leader-v1 {
-  position: absolute; left: 0; top: 0; overflow: visible;
-  pointer-events: none; stroke-linecap: round; stroke-linejoin: round;
-}
-.field-lease-connector-halo-v1 { stroke: #fff; stroke-width: 4; }
-.field-lease-connector-v1 { stroke: var(--field-lease-color); stroke-width: 1.7; }
-.field-lease-tail-v1 { fill: #fff; stroke: var(--field-lease-color); stroke-width: 1.5; }
-.field-lease-location-v1 {
-  position: absolute; left: 0; top: 0; z-index: 2;
-  width: 9px; height: 9px; box-sizing: border-box;
-  transform: translate(-50%, -50%); border: 2px solid #fff;
-  border-radius: 50%; background: var(--field-lease-color);
-  box-shadow: 0 0 0 1px var(--field-lease-color), 0 1px 3px #0f27454d;
-  pointer-events: none;
-}
+.field-lease-anchor-v1.selected { z-index: 2; }
 /* Compact rectangular lease cards: two centered lines, no address/photos. */
 .field-lease-card-v1 {
-  position: absolute; left: 0; top: -20px; z-index: 1;
+  position: absolute; left: 0; top: 0; z-index: 1;
   transform: translate(-50%, -100%); pointer-events: auto;
   width: max-content; min-width: 112px; max-width: 210px;
   background: #fff; border: 1.5px solid #3077c9; border-radius: 5px;

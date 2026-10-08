@@ -70,7 +70,9 @@ async function expectFieldAnchorGeometry(page){
   await expect(anchor).toHaveCSS("rotate","90deg");
   await expect(anchor).toHaveCSS("transform-origin","0px 0px");
   await expect(anchor.locator(".field-lease-card-v1")).toHaveCSS("rotate","none");
-  await expect(anchor.locator(".field-lease-card-v1")).toHaveCSS("transform","none");
+  await expect(anchor.locator(".field-lease-card-v1")).toHaveCSS("left","0px");
+  await expect(anchor.locator(".field-lease-card-v1")).toHaveCSS("top","0px");
+  await expect(page.locator("#map .field-lease-location-v1, #map .field-lease-leader-v1, #map .field-lease-connector-v1, #map .field-lease-connector-halo-v1, #map .field-lease-tail-v1")).toHaveCount(0);
   let geometry;
   await expect.poll(async()=>{
     geometry=await page.evaluate(()=>{
@@ -88,34 +90,24 @@ async function expectFieldAnchorGeometry(page){
       const viewportRect=viewport.getBoundingClientRect();
       const expected={x:viewportRect.left+viewport.clientLeft+Number.parseFloat(css.left)+originX+rotated.x,
         y:viewportRect.top+viewport.clientTop+Number.parseFloat(css.top)+originY+rotated.y};
-      const wrapper=node.getBoundingClientRect(),dot=node.querySelector(".field-lease-location-v1").getBoundingClientRect();
-      const line=node.querySelector(".field-lease-connector-v1");
-      const lineMatrix=line.getScreenCTM();
-      if(!lineMatrix)return null;
-      const endpoint=new DOMPoint(line.x2.baseVal.value,line.y2.baseVal.value).matrixTransform(lineMatrix);
-      const start=new DOMPoint(line.x1.baseVal.value,line.y1.baseVal.value).matrixTransform(lineMatrix);
+      const wrapper=node.getBoundingClientRect();
       const card=node.querySelector(".field-lease-card-v1"),cardRect=card.getBoundingClientRect(),cardCss=getComputedStyle(card);
-      const dotCenter={x:dot.left+dot.width/2,y:dot.top+dot.height/2};
+      const cardBottomCenter={x:cardRect.left+cardRect.width/2,y:cardRect.bottom};
       const distance=point=>Math.hypot(point.x-expected.x,point.y-expected.y);
-      return {expected,dotCenter,endpoint:{x:endpoint.x,y:endpoint.y},wrapper:{x:wrapper.left,y:wrapper.top,width:wrapper.width,height:wrapper.height},
+      return {expected,cardBottomCenter,wrapper:{x:wrapper.left,y:wrapper.top,width:wrapper.width,height:wrapper.height},
         position:[position.getLat(),position.getLng()],original:[cluster.latlng.getLat(),cluster.latlng.getLng()],
-        maxError:Math.max(distance(dotCenter),distance(endpoint),distance({x:wrapper.left,y:wrapper.top})),
-        lineOrigin:[line.x2.baseVal.value,line.y2.baseVal.value],lineLength:Math.hypot(start.x-endpoint.x,start.y-endpoint.y),
-        cardAxisError:Math.max(Math.abs(cardRect.width-Number.parseFloat(cardCss.width)),Math.abs(cardRect.height-Number.parseFloat(cardCss.height))),
-        tail:node.querySelector(".field-lease-tail-v1").getAttribute("d")};
+        maxError:Math.max(distance(cardBottomCenter),distance({x:wrapper.left,y:wrapper.top})),
+        cardAxisError:Math.max(Math.abs(cardRect.width-Number.parseFloat(cardCss.width)),Math.abs(cardRect.height-Number.parseFloat(cardCss.height)))};
     });
     return geometry?.maxError ?? Infinity;
-  },{message:"real SDK address projection, zero-size origin, dot and connector endpoint must agree"}).toBeLessThan(1.5);
+  },{message:"real SDK address projection, zero-size origin and card bottom-center must agree"}).toBeLessThan(1.5);
   // Kakao's getPosition() round-trip differs by ~1e-14 degrees, not a moved
   // display coordinate. Keep sub-micrometre tolerance for the real SDK.
   geometry.position.forEach((coordinate,index)=>expect(coordinate).toBeCloseTo(geometry.original[index],11));
   expect(geometry.original).toEqual([36.3504,127.3845]);
   expect(geometry.wrapper.width).toBe(0);
   expect(geometry.wrapper.height).toBe(0);
-  expect(geometry.lineOrigin).toEqual([0,0]);
-  expect(geometry.lineLength).toBeGreaterThan(5);
   expect(geometry.cardAxisError).toBeLessThan(0.2);
-  expect(geometry.tail).toMatch(/^M .* L .* L /);
   return geometry;
 }
 

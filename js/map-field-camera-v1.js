@@ -76,11 +76,6 @@
       window.preservePinnedClusterSelectionDuringRelayoutV6517(1800);
     }
     if (typeof window.scheduleMapIdleRefreshV638 === "function") window.scheduleMapIdleRefreshV638();
-    // Repack screen-offset cards at turn/resize boundaries, not on animation
-    // frames. Their anchor wrapper counter-rotates continuously in CSS.
-    if (window.JSFieldLeaseCardsV1 && typeof window.JSFieldLeaseCardsV1.scheduleLayout === "function") {
-      window.JSFieldLeaseCardsV1.scheduleLayout();
-    }
   }
 
   function applyBearingTransform() {
