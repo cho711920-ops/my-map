@@ -193,7 +193,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
         get: async (key) => {
           assert.equal(key, "api-cache/unified-listings-v10-sale-area-summary.json");
           return {
-            customMetadata: { savedAt: String(Date.now()) },
+            customMetadata: { savedAt: String(Date.now()), revision: "snapshot-1" },
             httpMetadata: { contentType: "application/json; charset=utf-8" },
             text: async () => cachedBody
           };
@@ -206,6 +206,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
     );
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-js-data-cache"), "HIT");
+    assert.equal(response.headers.get("x-js-listings-revision"), "snapshot-1");
     assert.match(response.headers.get("cache-control"), /must-revalidate/);
     assert.match(response.headers.get("vary"), /Cookie/);
     assert.ok(response.headers.get("etag"));
@@ -218,6 +219,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
       { headers: { "if-none-match": response.headers.get("etag") } }
     );
     assert.equal(revalidated.status, 304);
+    assert.equal(revalidated.headers.get("x-js-listings-revision"), "snapshot-1");
     assert.equal(await revalidated.text(), "");
     assert.equal(upstreamCalls, 0);
   } finally {
@@ -964,6 +966,7 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
       {
         DB: db,
         MEDIA: {
+          get: async () => null,
           delete: async (keys) => deletedCacheKeys.push(...keys),
           put: async (key) => writtenCacheKeys.push(key)
         }

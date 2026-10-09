@@ -7,6 +7,8 @@
 
 var propertyEditTargetV630 = null;
 var propertyEditSavingV630 = false;
+var propertyEditOriginalValuesV1 = null;
+var propertyEditConflictV1 = null;
 
 /*
  * v6.3.2 QA2
@@ -130,6 +132,10 @@ function openPropertyEditModalV630(encodedKey) {
 
   propertyEditTargetV630 = item;
   propertyEditSavingV630 = false;
+  // Freeze the values the user actually saw, not a live item later refreshed
+  // by collection, another tab, or an optimistic status change.
+  propertyEditOriginalValuesV1 = buildOriginalPropertyValuesV630(item).slice();
+  propertyEditConflictV1 = null;
 
   var deleteButtonV648 = document.getElementById("propertyEditDeleteBtnV648");
   var saveButtonV648 = document.getElementById("propertyEditSaveBtnV630");
@@ -160,6 +166,8 @@ function openPropertyEditModalV630(encodedKey) {
   document.getElementById("peStateV630").value = item.state || "";
   document.getElementById("peMemoV630").value = item.memo || "";
   document.getElementById("propertyEditStatusV630").textContent = "";
+  var previousConflict = document.getElementById("propertyEditConflictV1");
+  if (previousConflict) previousConflict.remove();
 
   var modal = document.getElementById("propertyEditModalV630");
   modal.classList.add("open");
@@ -181,6 +189,8 @@ function closePropertyEditModalV630() {
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
   propertyEditTargetV630 = null;
+  propertyEditOriginalValuesV1 = null;
+  propertyEditConflictV1 = null;
 }
 
 
@@ -218,6 +228,114 @@ function buildOriginalPropertyValuesV630(item) {
     item.regDate || "",
     item.source || ""
   ];
+}
+
+
+function propertyEditFieldsV1() {
+  return [
+    ["name", "peNameV630", "건물이름", 0], ["room", "peRoomV630", "호실", 2],
+    ["deposit", "peDepositV630", "보증금", 4], ["rent", "peRentV630", "월세", 5],
+    ["fee", "peFeeV630", "관리비", 6], ["premium", "pePremiumV630", "권리금", 7],
+    ["area", "peAreaV630", "평수", 8], ["landlordPhone", "peLandlordPhoneV630", "임대인 전화", 9],
+    ["tenantPhone", "peTenantPhoneV630", "세입자 전화", 10], ["memo", "peMemoV630", "메모", 11],
+    ["state", "peStateV630", "상태", 12]
+  ];
+}
+
+function propertyEditComparableV1(key, value) {
+  if (["deposit", "rent", "fee", "premium", "area"].indexOf(key) >= 0) return Number(value) || 0;
+  if (key === "state") return !value || value === "active" ? "" : String(value).trim();
+  return String(value == null ? "" : value).trim();
+}
+
+function propertyEditCurrentItemV1(row) {
+  return { name: row.title, address: row.address, room: row.room, type: row.listing_type,
+    deposit: row.deposit, rent: row.monthly_rent, fee: row.maintenance_fee, premium: row.premium,
+    area: row.area_m2, landlordPhone: row.landlord_phone, tenantPhone: row.tenant_phone,
+    memo: row.operating_memo, state: row.status === "active" ? "" : row.status,
+    propertyId: row.property_id, contactListRaw: row.contacts_json,
+    regDate: row.first_collected_at, source: row.main_source };
+}
+
+function showPropertyEditConflictV1(draft) {
+  var target = propertyEditTargetV630;
+  var status = document.getElementById("propertyEditStatusV630");
+  if (!target) return Promise.resolve();
+  if (!window.JSDataAccessV6) {
+    status.textContent = "최신 값 조회 연결이 없습니다. 입력 내용은 유지되며 저장하지 않았습니다.";
+    return Promise.resolve();
+  }
+  return window.JSDataAccessV6.read("listingChanges", { ids: target.propertyId }).then(function(result) {
+    if (propertyEditTargetV630 !== target) return;
+    var row = (result.items || []).filter(function(entry) { return entry.property_id === target.propertyId; })[0];
+    if (!row || row.status === "deleted") {
+      status.textContent = "매물이 삭제되었거나 조회할 수 없습니다. 입력 내용은 유지되며 저장하지 않았습니다.";
+      return;
+    }
+    var current = propertyEditCurrentItemV1(row);
+    // Keep edits typed while the latest-value request was in flight too.
+    draft = Object.assign({}, draft);
+    propertyEditFieldsV1().forEach(function(field) {
+      draft[field[0]] = propertyEditComparableV1(field[0], document.getElementById(field[1]).value);
+    });
+    propertyEditConflictV1 = {current: current, draft: draft, choices: {}};
+    var old = document.getElementById("propertyEditConflictV1");
+    if (old) old.remove();
+    var panel = document.createElement("div");
+    panel.id = "propertyEditConflictV1";
+    panel.setAttribute("role", "region");
+    panel.setAttribute("aria-label", "최신 값과 내 입력 비교");
+    var heading = document.createElement("p");
+    heading.textContent = "아직 저장하지 않았습니다. 체크한 항목만 내 입력을 유지합니다. 나머지는 최신 값을 사용합니다.";
+    panel.appendChild(heading);
+    propertyEditFieldsV1().forEach(function(field) {
+      var key = field[0];
+      var latest = propertyEditComparableV1(key, current[key]);
+      var mine = propertyEditComparableV1(key, draft[key]);
+      if (latest === mine) return;
+      var initial = propertyEditComparableV1(key, propertyEditOriginalValuesV1[field[3]]);
+      var label = document.createElement("label");
+      label.style.display = "block";
+      label.style.whiteSpace = "pre-wrap";
+      label.style.overflowWrap = "anywhere";
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = mine !== initial && latest === initial;
+      checkbox.setAttribute("aria-label", field[2] + " 내 입력 유지");
+      propertyEditConflictV1.choices[key] = checkbox;
+      label.appendChild(checkbox);
+      var description = document.createElement("span");
+      var display = function(value) { return key === "state" ? (value || "계약가능") : (value === "" ? "(빈 값)" : String(value)); };
+      description.textContent = " " + field[2] + " · 최신: " + display(latest) + " / 내 입력: " + display(mine);
+      label.appendChild(description);
+      panel.appendChild(label);
+    });
+    var apply = document.createElement("button");
+    apply.type = "button";
+    apply.textContent = "선택한 값으로 편집 계속 (아직 저장 안 함)";
+    apply.onclick = applyPropertyEditConflictV1;
+    panel.appendChild(apply);
+    status.parentNode.insertBefore(panel, status.nextSibling);
+    status.textContent = "다른 작업에서 값이 변경되어 저장을 중단했습니다. 입력 내용은 그대로 유지했습니다.";
+  }).catch(function() {
+    if (propertyEditTargetV630 === target) status.textContent = "최신 값 조회에 실패했습니다. 입력 내용은 유지됩니다. 저장을 다시 눌러 비교해 주세요.";
+  });
+}
+
+function applyPropertyEditConflictV1() {
+  var conflict = propertyEditConflictV1;
+  if (!conflict || !propertyEditTargetV630 || propertyEditSavingV630) return;
+  propertyEditFieldsV1().forEach(function(field) {
+    var choice = conflict.choices[field[0]];
+    var value = choice && choice.checked ? document.getElementById(field[1]).value : conflict.current[field[0]];
+    document.getElementById(field[1]).value = propertyEditComparableV1(field[0], value);
+  });
+  propertyEditOriginalValuesV1 = buildOriginalPropertyValuesV630(conflict.current).slice();
+  Object.assign(propertyEditTargetV630, conflict.current);
+  propertyEditConflictV1 = null;
+  var panel = document.getElementById("propertyEditConflictV1");
+  if (panel) panel.remove();
+  document.getElementById("propertyEditStatusV630").textContent = "최신 값 비교를 반영했습니다. 내용을 확인한 뒤 저장을 눌러 주세요.";
 }
 
 
@@ -345,6 +463,10 @@ function schedulePropertyEditReloadV634() {
 
 function savePropertyEditV630() {
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
+  if (propertyEditConflictV1) {
+    document.getElementById("propertyEditStatusV630").textContent = "먼저 최신 값 비교에서 유지할 입력을 선택해 주세요. 아직 저장하지 않았습니다.";
+    return;
+  }
 
   if (!saveApiURL) {
     alert("JS부동산 D1 서버 주소가 설정되지 않았습니다.");
@@ -415,7 +537,7 @@ function savePropertyEditV630() {
         room: item.room || "",
         type: item.type || ""
       },
-      originalValues: buildOriginalPropertyValuesV630(item),
+      originalValues: propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1.slice(),
       updated: updated
   }).then(function(queueResult) {
     /*
@@ -423,6 +545,9 @@ function savePropertyEditV630() {
      * gviz 캐시를 이용한 성공/실패 판정은 제거합니다.
      * 화면에서는 수정값을 즉시 반영하고, 잠시 뒤 최신 D1 데이터를 다시 읽습니다.
      */
+    // The server may have merged unrelated changes from another editor.
+    // Reflect the accepted values, never the stale full form we submitted.
+    if (queueResult && queueResult.updated) updated = Object.assign({}, updated, queueResult.updated);
     var oldKey = item.key;
 
     item.name = updated.name;
@@ -479,6 +604,7 @@ function savePropertyEditV630() {
     }
 
     propertyEditTargetV630 = null;
+    propertyEditOriginalValuesV1 = null;
 
     /*
      * 필터·리스트·다중 선택 상태를 즉시 복원합니다.
@@ -503,8 +629,13 @@ function savePropertyEditV630() {
     saveButton.disabled = false;
     if (deleteButton) deleteButton.disabled = false;
     saveButton.textContent = "저장";
-    status.textContent = "수정 요청에 실패했습니다.";
-    alert("매물 수정 중 오류가 발생했습니다.");
+    if (Number(error && error.status) === 409 || /HTTP 409|PROPERTY_EDIT_CONFLICT/.test(String(error && error.message || ""))) {
+      status.textContent = "다른 작업에서 값이 변경되었습니다. 입력 내용은 유지한 채 최신 값을 조회합니다.";
+      showPropertyEditConflictV1(updated);
+    } else {
+      status.textContent = "수정 요청에 실패했습니다. 입력 내용은 유지됩니다.";
+      alert("매물 수정 중 오류가 발생했습니다. 입력 내용은 유지됩니다.");
+    }
   });
 }
 

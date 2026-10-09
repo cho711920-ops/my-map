@@ -51,6 +51,7 @@
         if (!payload || payload.ok === false) {
           throw httpError(messageFromPayload(payload, settings.errorMessage || "운영자료 조회 실패"), response, payload);
         }
+        if (action === "unifiedListings") payload.snapshotRevision = String(response.headers.get("x-js-listings-revision") || "");
         return payload;
       });
     });
@@ -76,6 +77,10 @@
   function read(action, params, options) {
     var values = params || {};
     var settings = options || {};
+    if (action === "unifiedListings" && settings.headers && settings.headers["X-JS-Force-Refresh"] === "1") {
+      delete initialWarmups.unifiedListings;
+      return readNetwork(action, values, settings);
+    }
     if (
       action === "unifiedListings" &&
       !settings.signal &&
@@ -122,7 +127,8 @@
       headers: headers
     }).then(function(response) {
       return response.text().then(function(body) {
-        if (response.ok) return body;
+        if (response.ok) return { body: body,
+          revision: String(response.headers.get("x-js-listings-revision") || "") };
         var payload = null;
         try { payload = JSON.parse(body); } catch (_) {}
         var fallback = "D1 매물 데이터를 불러오지 못했습니다. (HTTP " + response.status + ")";
@@ -131,7 +137,7 @@
     });
   }
 
-  function listingsCsv(forceRefresh) {
+  function listingsSnapshot(forceRefresh) {
     if (forceRefresh) {
       delete initialWarmups.listingsCsv;
       return listingsCsvNetwork(true);
@@ -139,6 +145,10 @@
     return consumeWarmup("listingsCsv", function() {
       return listingsCsvNetwork(false);
     });
+  }
+
+  function listingsCsv(forceRefresh) {
+    return listingsSnapshot(forceRefresh).then(function(snapshot) { return snapshot.body; });
   }
 
   function warmInitialData() {
@@ -158,6 +168,7 @@
     read: read,
     mutate: mutate,
     listingsCsv: listingsCsv,
+    listingsSnapshot: listingsSnapshot,
     warmInitialData: warmInitialData
   });
 })(window);

@@ -320,15 +320,16 @@ async function readR2TextCache(env, key, maxAgeMs) {
   if (!object || cacheAgeMs(object) > maxAgeMs) return null;
   return {
     body: await object.text(),
+    revision: String(object.customMetadata?.revision || ""),
     contentType: object.httpMetadata?.contentType || "application/json; charset=utf-8"
   };
 }
 
-function writeR2TextCache(env, context, key, body, contentType) {
+function writeR2TextCache(env, context, key, body, contentType, revision = "") {
   if (!env.MEDIA || typeof env.MEDIA.put !== "function") return;
   const task = env.MEDIA.put(key, body, {
     httpMetadata: { contentType: contentType || "application/json; charset=utf-8" },
-    customMetadata: { savedAt: String(Date.now()) }
+    customMetadata: { savedAt: String(Date.now()), ...(revision ? { revision } : {}) }
   });
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
 }
@@ -339,23 +340,68 @@ function revisionKey(scope) {
     : LISTINGS_REVISION_KEY;
 }
 
-async function readDataRevision(env, scope) {
+async function readDataRevision(env, scope, since) {
   const normalizedScope = revisionKey(scope) === OPERATIONS_REVISION_KEY ? "operations" : "listings";
   const cached = await readR2TextCache(env, revisionKey(normalizedScope), 10 * 365 * 24 * 60 * 60_000);
   if (cached) {
     try {
       const payload = JSON.parse(cached.body);
-      if (payload && payload.revision) return {
+      if (payload && payload.revision) {
+        const result = {
         ok: true,
         scope: normalizedScope,
         revision: String(payload.revision),
         changeIds: Array.isArray(payload.changeIds) ? payload.changeIds.slice(0, 50) : [],
         fullReload: payload.fullReload === true,
         changeAction: String(payload.changeAction || "")
-      };
+        };
+        if (normalizedScope === "listings" && since !== undefined) {
+          const base = String(since || "");
+          const history = Array.isArray(payload.history) ? payload.history : [];
+          const index = history.findIndex((entry) => entry.revision === base);
+          const changes = base === result.revision ? [] : index >= 0 ? history.slice(index + 1) : null;
+          const ids = [...new Set((changes || []).flatMap((entry) => entry.changeIds || []))];
+          result.fullReload = changes === null || changes.some((entry) => entry.fullReload) || ids.length > 50;
+          result.changeIds = result.fullReload ? [] : ids;
+        }
+        return result;
+      }
     } catch {}
   }
   return { ok: true, scope: normalizedScope, revision: "0" };
+}
+
+async function appendDataRevision(env, scope, token, changeInfo) {
+  const key = revisionKey(scope);
+  const ids = [...new Set((changeInfo.changeIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  const entry = {
+    revision: token,
+    changeIds: ids.slice(0, 50),
+    fullReload: changeInfo.fullReload === true || !ids.length || ids.length > 50,
+    changeAction: String(changeInfo.changeAction || "")
+  };
+  const metadata = { httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: { savedAt: String(Date.now()) } };
+  // R2 conditional writes preserve concurrent collectors/edits without another database poll.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    let previous;
+    try { previous = await env.MEDIA.get(key); } catch { break; }
+    let payload = {};
+    try { payload = previous ? JSON.parse(await previous.text()) : {}; } catch {}
+    const history = Array.isArray(payload.history) ? payload.history :
+      payload.revision ? [{ revision: String(payload.revision), fullReload: true, changeIds: [] }] : [];
+    const next = { ok: true, scope, ...entry, history: [...history, entry].slice(-64) };
+    let written;
+    try {
+      written = await env.MEDIA.put(key, JSON.stringify(next), {
+        ...metadata, onlyIf: previous ? { etagMatches: previous.etag } : { etagDoesNotMatch: "*" }
+      });
+    } catch { break; }
+    if (written) return written;
+  }
+  // Under sustained contention a conservative full refresh is safe; losing an update is not.
+  return env.MEDIA.put(key, JSON.stringify({ ok: true, scope, ...entry,
+    fullReload: true, changeIds: [], history: [{ ...entry, fullReload: true, changeIds: [] }] }), metadata);
 }
 
 function touchDataRevision(env, context, scopes, afterPromise = null, changeInfo = {}) {
@@ -364,6 +410,7 @@ function touchDataRevision(env, context, scopes, afterPromise = null, changeInfo
   const task = Promise.resolve(afterPromise).then(() => Promise.all(
     [...new Set(scopes || [])].map((scope) => {
       const normalizedScope = scope === "operations" ? "operations" : "listings";
+      if (normalizedScope === "listings") return appendDataRevision(env, normalizedScope, token, changeInfo);
       return env.MEDIA.put(revisionKey(normalizedScope), JSON.stringify({
         ok: true,
         scope: normalizedScope,
@@ -585,16 +632,19 @@ async function handleSheet(request, env, context) {
   const cacheKey = D1_SHEET_CACHE_KEY;
   if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl) {
     const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl);
-    if (cached) {
-      sheetCache = { body: cached.body, etag: await sha256Etag(cached.body), fetchedAt: Date.now(), key: cacheKey };
+    if (cached && cached.revision) {
+      sheetCache = { body: cached.body, revision: cached.revision, etag: await sha256Etag(cached.body), fetchedAt: Date.now(), key: cacheKey };
     } else {
+      // Capture BEFORE the query: concurrent writes must remain visible on the next revision check.
+      const revision = (await readDataRevision(env, "listings")).revision;
       const body = await buildD1SheetCsv(env);
-      sheetCache = { body, etag: await sha256Etag(body), fetchedAt: Date.now(), key: cacheKey };
-      writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8");
+      sheetCache = { body, revision, etag: await sha256Etag(body), fetchedAt: Date.now(), key: cacheKey };
+      writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8", revision);
     }
   }
   if (request.headers.get("if-none-match") === sheetCache.etag) {
-    return new Response(null, { status: 304, headers: { etag: sheetCache.etag } });
+    return new Response(null, { status: 304, headers: { etag: sheetCache.etag,
+      "x-js-listings-revision": sheetCache.revision || "" } });
   }
   return new Response(sheetCache.body, {
     headers: {
@@ -602,6 +652,7 @@ async function handleSheet(request, env, context) {
       "cache-control": "private, max-age=0, must-revalidate",
       vary: "Cookie, Accept-Encoding",
       etag: sheetCache.etag,
+      "x-js-listings-revision": sheetCache.revision || "",
       "x-js-data-source": "D1"
     }
   });
@@ -670,7 +721,7 @@ async function handleDataApi(request, env, context) {
     delete query.expectedAccountEmail;
     query.owner = user.email || "";
     if (query.action === "dataRevision") {
-      return jsonp(query.callback, await readDataRevision(env, query.scope), {
+      return jsonp(query.callback, await readDataRevision(env, query.scope, query.since), {
         "cache-control": "private, no-store",
         "x-js-data-source": "R2-REVISION"
       });
@@ -729,6 +780,7 @@ async function handleDataApi(request, env, context) {
         : query.action === "operationsDashboard"
           ? OPERATIONS_DASHBOARD_CACHE_KEY
           : detailCacheKey;
+    let unifiedSnapshotRevision = "";
     if (r2CacheKey) {
       const defaultTtl = query.action === "unifiedListings"
         ? 60 * 60_000
@@ -747,16 +799,18 @@ async function handleDataApi(request, env, context) {
             : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
       const validTtl = Number.isFinite(configuredTtl) && configuredTtl > 0 ? configuredTtl : defaultTtl;
       const boundedTtl = detailCacheKey ? Math.min(5 * 60_000, validTtl) : validTtl;
-      const cached = await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl));
-      if (cached) {
+      const forceFresh = query.action === "unifiedListings" && request.headers.get("x-js-force-refresh") === "1";
+      const cached = forceFresh ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl));
+      if (cached && (query.action !== "unifiedListings" || cached.revision)) {
         const cachedBody = query.action === "unifiedListings"
           ? compactUnifiedListingsBody(cached.body)
           : cached.body;
         if (cachedBody !== cached.body) {
-          writeR2TextCache(env, context, r2CacheKey, cachedBody, cached.contentType);
+          writeR2TextCache(env, context, r2CacheKey, cachedBody, cached.contentType, cached.revision);
         }
         if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
           return revalidatedPrivateResponse(request, cachedBody, cached.contentType, {
+            ...(query.action === "unifiedListings" ? { "x-js-listings-revision": cached.revision } : {}),
             "x-js-data-cache": "HIT"
           });
         }
@@ -769,6 +823,7 @@ async function handleDataApi(request, env, context) {
         });
       }
     }
+    if (query.action === "unifiedListings") unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
     const payload = await handleD1GetAction(env, user, query);
     if (!payload) {
       return jsonp(query.callback, { ok: false, action: query.action, message: "지원하지 않는 서버 작업입니다." }, {
@@ -776,9 +831,10 @@ async function handleDataApi(request, env, context) {
       });
     }
     const responseText = JSON.stringify(payload);
-    if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8");
+    if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8", unifiedSnapshotRevision);
     if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
       return revalidatedPrivateResponse(request, responseText, "application/json; charset=utf-8", {
+        ...(unifiedSnapshotRevision ? { "x-js-listings-revision": unifiedSnapshotRevision } : {}),
         "x-js-data-source": "D1",
         ...(r2CacheKey ? { "x-js-data-cache": "MISS" } : {})
       });
@@ -850,7 +906,8 @@ async function handleDataApi(request, env, context) {
     ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
   ], invalidation, {
     changeIds: [...new Set(changedIds)],
-    fullReload: !changedIds.length || mutationAction(body) === "moveOriginalListing" || d1Result.fullReload === true,
+    fullReload: !changedIds.length || invalidatedKeys.includes(UNIFIED_LISTINGS_CACHE_KEY) ||
+      mutationAction(body) === "moveOriginalListing" || d1Result.fullReload === true,
     changeAction: mutationAction(body)
   });
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });

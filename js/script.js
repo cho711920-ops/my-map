@@ -2265,6 +2265,7 @@ var naverRoadviewStreetLayerV654 = null;
 var naverRoadviewPositionMarkerV654 = null;
 var naverRoadviewTargetMarkerV654 = null;
 var naverRoadviewSdkPromiseV653 = null;
+var naverRoadviewSdkReadyV1 = false;
 var naverRoadviewFallbackTimerV653 = null;
 var naverRoadviewLoadingV653 = false;
 var kakaoRoadviewLoadingV653 = false;
@@ -2639,35 +2640,20 @@ function loadNaverMapsSdkV653() {
   }
 
   if (naverRoadviewSdkPromiseV653) {
-    return naverRoadviewSdkPromiseV653.then(function() {
-      if (
-        window.naver &&
-        window.naver.maps &&
-        window.naver.maps.Panorama
-      ) {
-        naverMapsNamespaceV663 = window.naver.maps;
-        recoverNaverMapsAuthStateV664();
-        return window.naver.maps;
-      }
-
-      /*
-       * Panorama가 닫히는 순간 네이버 SDK 내부 상태가 손상된 경우
-       * 이미 완료된 Promise를 다시 쓰지 않고 SDK를 깨끗하게 재요청한다.
-       */
-      naverRoadviewSdkPromiseV653 = null;
-      var staleSdk = document.getElementById("naverMapsSdkV653");
-      if (staleSdk) staleSdk.remove();
-      document.querySelectorAll('script[src*="maps-panorama.js"]').forEach(function(script) {
-        script.remove();
-      });
-      return loadNaverMapsSdkV653();
-    }, function() {
-      naverRoadviewSdkPromiseV653 = null;
-      return loadNaverMapsSdkV653();
+    // Share one in-flight attempt, including its failure. Concurrent callers
+    // must not each start a recursive retry after the same network error.
+    if (!naverRoadviewSdkReadyV1) return naverRoadviewSdkPromiseV653;
+    /* A previously ready SDK whose namespace disappeared needs a clean load. */
+    naverRoadviewSdkPromiseV653 = null;
+    var staleSdk = document.getElementById("naverMapsSdkV653");
+    if (staleSdk) staleSdk.remove();
+    document.querySelectorAll('script[src*="maps-panorama.js"]').forEach(function(script) {
+      script.remove();
     });
   }
 
-  naverRoadviewSdkPromiseV653 = fetch("/api/naver-maps-config", {
+  naverRoadviewSdkReadyV1 = false;
+  var sdkRequest = fetch("/api/naver-maps-config", {
     method: "GET",
     cache: "no-store",
     credentials: "same-origin"
@@ -2684,14 +2670,31 @@ function loadNaverMapsSdkV653() {
 
       return new Promise(function(resolve, reject) {
         var existing = document.getElementById("naverMapsSdkV653");
+        var scriptNode = existing;
+        var settled = false;
         var pollId = null;
         var pollStarted = false;
         var timeoutId = setTimeout(function() {
-          if (pollId) clearInterval(pollId);
-          reject(new Error("NAVER_MAPS_SDK_TIMEOUT"));
+          fail("NAVER_MAPS_SDK_TIMEOUT");
         }, 12000);
 
+        function fail(message) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          if (pollId) clearInterval(pollId);
+          // A failed script will never fire load again. Remove it so a later
+          // user action can make one fresh SDK request after connectivity recovers.
+          if (scriptNode) {
+            scriptNode.onload = null;
+            scriptNode.onerror = null;
+            scriptNode.remove();
+          }
+          reject(new Error(message));
+        }
+
         function finish() {
+          if (settled) return true;
           if (
             window.naver &&
             window.naver.maps &&
@@ -2699,6 +2702,7 @@ function loadNaverMapsSdkV653() {
           ) {
             naverMapsNamespaceV663 = window.naver.maps;
             recoverNaverMapsAuthStateV664();
+            settled = true;
             clearTimeout(timeoutId);
             if (pollId) clearInterval(pollId);
             resolve(window.naver.maps);
@@ -2722,13 +2726,13 @@ function loadNaverMapsSdkV653() {
             waitForPanoramaModule();
           }, { once: true });
           existing.addEventListener("error", function() {
-            clearTimeout(timeoutId);
-            reject(new Error("NAVER_MAPS_SDK_FAILED"));
+            fail("NAVER_MAPS_SDK_FAILED");
           }, { once: true });
           return;
         }
 
         var script = document.createElement("script");
+        scriptNode = script;
         script.id = "naverMapsSdkV653";
         script.async = true;
         script.defer = true;
@@ -2740,17 +2744,23 @@ function loadNaverMapsSdkV653() {
           waitForPanoramaModule();
         };
         script.onerror = function() {
-          clearTimeout(timeoutId);
-          reject(new Error("NAVER_MAPS_SDK_FAILED"));
+          fail("NAVER_MAPS_SDK_FAILED");
         };
         document.head.appendChild(script);
       });
     })
-    .catch(function(error) {
-      naverRoadviewSdkPromiseV653 = null;
+    .then(function(maps) {
+      if (naverRoadviewSdkPromiseV653 === sdkRequest) naverRoadviewSdkReadyV1 = true;
+      return maps;
+    }).catch(function(error) {
+      if (naverRoadviewSdkPromiseV653 === sdkRequest) {
+        naverRoadviewSdkPromiseV653 = null;
+        naverRoadviewSdkReadyV1 = false;
+      }
       throw error;
     });
 
+  naverRoadviewSdkPromiseV653 = sdkRequest;
   return naverRoadviewSdkPromiseV653;
 }
 
@@ -3195,13 +3205,15 @@ function warmNaverRoadviewSdkV658() {
 
 
 if (!window.__jsNaverRoadviewWarmupBoundV658) {
-  window.addEventListener("load", function() {
+  var scheduleNaverRoadviewWarmupV1 = function() {
     if (typeof window.requestIdleCallback === "function") {
       window.requestIdleCallback(warmNaverRoadviewSdkV658, { timeout: 1200 });
     } else {
       window.setTimeout(warmNaverRoadviewSdkV658, 500);
     }
-  }, { once: true });
+  };
+  if (document.readyState === "complete") scheduleNaverRoadviewWarmupV1();
+  else window.addEventListener("load", scheduleNaverRoadviewWarmupV1, { once: true });
   window.__jsNaverRoadviewWarmupBoundV658 = true;
 }
 

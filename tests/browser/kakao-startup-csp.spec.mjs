@@ -33,19 +33,19 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   });
   await page.route("**/*",async route=>{
     const request=route.request(),target=new URL(request.url());
-    const json=body=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
+    const json=body=>route.fulfill({status:200,headers:{"x-js-listings-revision":"fixture-boot-1"},contentType:"application/json",body:JSON.stringify(body)});
     if(request.method()==="GET" && sdkHosts.has(target.hostname))return route.continue();
     // Do not make an unrelated external font dependency part of map startup.
     if(target.hostname==="cdn.jsdelivr.net")return route.fulfill({status:200,contentType:"text/css",body:""});
     if(target.hostname!=="js-map.com"){forbidden.push(target.hostname+target.pathname);return route.abort();}
     if(target.href===url)return route.fulfill({status:200,headers:{"Content-Security-Policy":csp},contentType:"text/html; charset=utf-8",body:index});
     if(target.pathname==="/api/session")return json({ok:true,email:"startup-fixture@example.invalid",role:"owner"});
-    if(target.pathname==="/api/sheet")return route.fulfill({status:200,contentType:"text/csv",body:csv});
+    if(target.pathname==="/api/sheet")return route.fulfill({status:200,headers:{"x-js-listings-revision":"fixture-boot-1"},contentType:"text/csv",body:csv});
     if(target.pathname.startsWith("/api/")){
       const action=target.searchParams.get("action") || request.postDataJSON()?.action;
       if(action==="unifiedListings")return json({ok:true,groups:{},sourceSearchIds:{}});
       if(action==="loadCloudState")return json({ok:true,found:true,version:1,data:[],deletedIds:{}});
-      if(action==="listingsRevision")return json({ok:true,revision:"fixture-boot-1"});
+      if(action==="dataRevision")return json({ok:true,revision:"fixture-boot-1",changeIds:[],fullReload:false});
       if(action==="geocodeCache")return json({ok:true,entries:{}});
       return json({ok:true,rows:[],items:[],jobs:[],pending:0,processing:0,failed:0,completed:0});
     }

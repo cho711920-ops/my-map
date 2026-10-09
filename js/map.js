@@ -170,7 +170,8 @@ function setupMapViewportRelayoutV690(mapElement) {
 function fetchDataRevisionV682(scope) {
   if (window.JSDataAccessV6) {
     return window.JSDataAccessV6.read("dataRevision", {
-      scope: scope || "listings"
+      scope: scope || "listings",
+      since: (scope || "listings") === "listings" ? jsListingsRevisionV682 : undefined
     }, { errorMessage: "Data revision check failed" }).then(function(result) {
       if ((scope || "listings") === "listings") jsListingsRevisionInfoV683 = result || null;
       return String(result && result.revision || "");
@@ -182,6 +183,7 @@ function fetchDataRevisionV682(scope) {
     scope: scope || "listings",
     _: String(Date.now())
   });
+  if ((scope || "listings") === "listings") query.set("since", jsListingsRevisionV682);
   return fetch(api + "?" + query.toString(), {
     credentials: "same-origin",
     cache: "no-store"
@@ -264,24 +266,18 @@ function applyListingChangesV683(info) {
 
 
 function rememberListingsRevisionV682() {
-  return fetchDataRevisionV682("listings").then(function(revision) {
-    if (revision) jsListingsRevisionV682 = revision;
-    return revision;
-  }).catch(function() {
-    return "";
-  });
+  // The baseline belongs to the downloaded CSV, never to an unrelated latest-revision response.
+  return refreshListingsWhenChangedV682();
 }
 
 
 function refreshListingsWhenChangedV682() {
   if (jsListingsRevisionPendingV682 || isLoadingSheet) return;
   jsListingsRevisionPendingV682 = true;
-  fetchDataRevisionV682("listings").then(function(revision) {
+  return fetchDataRevisionV682("listings").then(function(revision) {
     if (!revision) return;
     if (!jsListingsRevisionV682) {
-      return Promise.resolve(loadSheet(true, false)).then(function(loaded) {
-        if (loaded !== false) jsListingsRevisionV682 = revision;
-      });
+      return loadSheet(true, true);
     }
     if (revision === jsListingsRevisionV682) return;
     return applyListingChangesV683(jsListingsRevisionInfoV683).then(function(applied) {
@@ -289,9 +285,7 @@ function refreshListingsWhenChangedV682() {
         jsListingsRevisionV682 = revision;
         return;
       }
-      return Promise.resolve(loadSheet(true, true)).then(function(loaded) {
-        if (loaded !== false) jsListingsRevisionV682 = revision;
-      });
+      return loadSheet(true, true);
     });
   }).catch(function(error) {
     console.warn("Listing revision check failed", error);
@@ -1850,6 +1844,11 @@ function hasReadyCoordinateWithoutSharedCacheV8213(item) {
 }
 
 
+function matchingListingSnapshotRevisionV1(snapshot, originals) {
+  return snapshot && originals && originals.ok !== false &&
+    snapshot.revision && snapshot.revision === originals.snapshotRevision ? snapshot.revision : "";
+}
+
 function loadSheet(isAuto, forceRefresh) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
@@ -1878,20 +1877,24 @@ function loadSheet(isAuto, forceRefresh) {
 
   /*
    * 저장 직후와 데이터 리비전 변경 뒤에는 운영 D1 데이터를 강제로 다시 읽습니다.
-   * 리비전 기준값이 아직 없는 최초 자동 확인만 ETag 재검증을 사용합니다.
+   * 최초 요청은 캐시를 사용하되 응답에 묶인 리비전으로 변경 여부를 확인합니다.
    */
   var shouldForceRefresh = arguments.length >= 2
     ? !!forceRefresh
     : !!isAuto;
   var sheetRequest = window.JSDataAccessV6
-    ? window.JSDataAccessV6.listingsCsv(shouldForceRefresh)
+    ? (typeof window.JSDataAccessV6.listingsSnapshot === "function"
+      ? window.JSDataAccessV6.listingsSnapshot(shouldForceRefresh)
+      : window.JSDataAccessV6.listingsCsv(shouldForceRefresh).then(function(body) { return { body: body, revision: "" }; }))
     : fetch(sheetURL, shouldForceRefresh ? {
       cache: "reload",
       headers: { "X-JS-Force-Refresh": "1" }
     } : {
       cache: "default"
     }).then(function(res) {
-      if (res.ok) return res.text();
+      if (res.ok) return res.text().then(function(body) {
+        return { body: body, revision: String(res.headers.get("x-js-listings-revision") || "") };
+      });
       return res.text().then(function(body) {
         var message = "D1 매물 데이터를 불러오지 못했습니다. (HTTP " + res.status + ")";
         try {
@@ -1955,8 +1958,11 @@ function loadSheet(isAuto, forceRefresh) {
   ])
     .then(function(initialResults) {
       liveInitialDataAppliedV1 = true;
-      var data = initialResults[0];
+      var snapshot = initialResults[0];
+      var data = snapshot.body;
       unifiedResult = initialResults[1] || { ok: false, groups: {} };
+      // Two parallel snapshots may straddle a collection. Never mark a mixed pair as current.
+      var snapshotRevision = matchingListingSnapshotRevisionV1(snapshot, unifiedResult);
       var rows = parseCSVRecordsV655(data);
       var rawItems = [];
 
@@ -2050,6 +2056,7 @@ function loadSheet(isAuto, forceRefresh) {
           window.JSUnifiedListingsV8.attach(jsInitialFullListingsCacheItemsV1, unifiedResult);
         }
         allItems = jsInitialFullListingsCacheItemsV1;
+        jsListingsRevisionV682 = snapshotRevision;
         currentItems = getFilteredItems({ includeUnlocated: true });
         window.jsInitialFullListingsLoadingV1 = false;
         updateErrorStatus();
@@ -2065,6 +2072,7 @@ function loadSheet(isAuto, forceRefresh) {
        * 그리지 않아 첫 화면의 매물 수가 여러 번 바뀌지 않게 합니다.
        */
       allItems = rawItems;
+      jsListingsRevisionV682 = snapshotRevision;
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
       var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {

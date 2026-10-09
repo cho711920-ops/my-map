@@ -1373,13 +1373,73 @@ async function reserveMutation(env, user, action, requestId) {
   throw Object.assign(new Error("동일한 요청을 처리 중입니다."), { statusCode: 409 });
 }
 
+function propertyEditFieldsV1() {
+  return [
+    ["name", "title", 0, clean], ["room", "room", 2, canonicalListingRoom],
+    ["deposit", "deposit", 4, number], ["rent", "monthly_rent", 5, number],
+    ["fee", "maintenance_fee", 6, number], ["premium", "premium", 7, number],
+    ["area", "area_m2", 8, number], ["landlordPhone", "landlord_phone", 9, clean],
+    ["tenantPhone", "tenant_phone", 10, clean], ["memo", "operating_memo", 11, clean],
+    ["state", "status", 12, (value) => clean(value) || "active"]
+  ];
+}
+
+function propertyEditConflictV1() {
+  return Object.assign(new Error("다른 작업에서 매물이 변경되었습니다. 작성 내용은 유지됩니다. 최신 값과 비교한 뒤 다시 저장해 주세요."),
+    { statusCode: 409, code: "PROPERTY_EDIT_CONFLICT" });
+}
+
+function propertyEditPatchV1(before, body) {
+  const original = body.originalValues;
+  if (!Array.isArray(original) || original.length < 13 || clean(before.status) === "deleted") {
+    throw propertyEditConflictV1();
+  }
+  const submitted = body.updated && typeof body.updated === "object" ? body.updated : {};
+  const current = {}, changes = [];
+  for (const [key, column, index, normalize] of propertyEditFieldsV1()) {
+    current[key] = normalize(before[column]);
+    if (!Object.prototype.hasOwnProperty.call(submitted, key)) continue;
+    const initial = normalize(original[index]), desired = normalize(submitted[key]);
+    if (desired === initial) continue;
+    if (current[key] !== initial && current[key] !== desired) throw propertyEditConflictV1();
+    if (current[key] !== desired) changes.push({ key, column, value: desired });
+    current[key] = desired;
+  }
+  return { value: current, changes };
+}
+
+function propertyEditRecoveryStatementsV1(env, listingId, recovered, now, historyJson) {
+  // This exact, uniquely-tokened history row is inserted only after our CAS wins.
+  // Guard every recovery statement: a failed CAS must not reconnect any source.
+  const guard = `EXISTS (SELECT 1 FROM listing_history WHERE listing_id=?1
+    AND action='updateProperty' AND after_json=?4)`;
+  return recovered.flatMap((row) => [
+    env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
+      list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2
+      WHERE id=?3 AND (listing_id IS NULL OR trim(listing_id)='') AND ${guard}`)
+      .bind(listingId, now, row.id, historyJson),
+    ...["listing_media", "listing_contacts"].map((table) => env.DB.prepare(`UPDATE ${table}
+      SET listing_id=?1, updated_at=?2 WHERE source_id=?3
+      AND (listing_id IS NULL OR trim(listing_id)='') AND ${guard}
+      AND EXISTS (SELECT 1 FROM listing_sources WHERE id=?3 AND listing_id=?1)`)
+      .bind(listingId, now, row.id, historyJson))
+  ]);
+}
+
 async function updateProperty(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
   const before = await env.DB.prepare("SELECT * FROM listings WHERE property_id = ?1").bind(propertyId).first();
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
-  const value = body.updated && typeof body.updated === "object" ? body.updated : {};
-  const reconciledContacts = reconcileMemoContacts(before.main_source, value.contacts, value.memo);
+  const { value, changes } = propertyEditPatchV1(before, body);
+  const memoChanged = changes.some((entry) => entry.key === "memo");
+  const reconciledContacts = memoChanged
+    ? reconcileMemoContacts(before.main_source, parseJson(before.contacts_json, []), value.memo)
+    : parseJson(before.contacts_json, []);
+  value.state = value.state === "active" ? "" : value.state;
+  value.contacts = reconciledContacts;
+  if (!changes.length) return { ok: true, persisted: true, queued: false, propertyId,
+    updated: value, noChange: true, operationAdjustments: {}, source: "D1" };
   const beforeHistory = {
     title: before.title, room: before.room, deposit: before.deposit, monthly_rent: before.monthly_rent,
     maintenance_fee: before.maintenance_fee, premium: before.premium, area_m2: before.area_m2,
@@ -1387,11 +1447,10 @@ async function updateProperty(env, user, body) {
     operating_memo: before.operating_memo, contacts_json: before.contacts_json, status: before.status
   };
   const afterHistory = {
-    title: clean(value.name), room: canonicalListingRoom(value.room), deposit: number(value.deposit),
-    monthly_rent: number(value.rent), maintenance_fee: number(value.fee), premium: number(value.premium),
-    area_m2: number(value.area), landlord_phone: clean(value.landlordPhone),
-    tenant_phone: clean(value.tenantPhone), operating_memo: clean(value.memo),
-    contacts_json: JSON.stringify(reconciledContacts), status: clean(value.state) || "active"
+    ...beforeHistory,
+    ...Object.fromEntries(changes.map((entry) => [entry.column, entry.value])),
+    contacts_json: memoChanged ? JSON.stringify(reconciledContacts) : before.contacts_json,
+    status: clean(value.state) || "active", editMutationToken: crypto.randomUUID()
   };
   const now = new Date().toISOString();
   const linkedSourcesBefore = await linkedSourceHistorySnapshot(env, before.id);
@@ -1411,19 +1470,31 @@ async function updateProperty(env, user, body) {
   );
   beforeHistory.linkedSources = linkedSourcesBefore;
   afterHistory.linkedSources = linkedSourcesAfter;
-  await env.DB.batch([
-    ...recovery.statements,
-    env.DB.prepare(`UPDATE listings SET
-      title=?1, building_name=?1, room=?2, deposit=?3, monthly_rent=?4, maintenance_fee=?5,
-      premium=?6, area_m2=?7, landlord_phone=?8, tenant_phone=?9, operating_memo=?10,
-      status=?11, contacts_json=?12, version=version+1, updated_at=?13 WHERE property_id=?14`)
-      .bind(clean(value.name), canonicalListingRoom(value.room), number(value.deposit), number(value.rent), number(value.fee),
-        number(value.premium), number(value.area), clean(value.landlordPhone), clean(value.tenantPhone),
-        clean(value.memo), clean(value.state) || "active", JSON.stringify(reconciledContacts), now, propertyId),
+  const bindings = [], assignments = [];
+  const bind = (entry) => { bindings.push(entry ?? null); return `?${bindings.length}`; };
+  for (const change of changes) {
+    const parameter = bind(change.value);
+    assignments.push(`${change.column}=${parameter}`);
+    if (change.key === "name") assignments.push(`building_name=${parameter}`);
+  }
+  if (memoChanged) assignments.push(`contacts_json=${bind(JSON.stringify(reconciledContacts))}`);
+  assignments.push(`version=version+1`, `updated_at=${bind(now)}`);
+  const checks = [`property_id=${bind(propertyId)}`, `version IS ${bind(before.version)}`];
+  // Some collection paths intentionally don't increment version. Compare the
+  // values used for this decision as well, inside the same atomic UPDATE.
+  for (const column of [...new Set(propertyEditFieldsV1().map((entry) => entry[1])
+    .concat(["contacts_json", "main_source", "building_name", "trade_type"]))]) {
+    checks.push(`${column} IS ${bind(before[column])}`);
+  }
+  const afterJson = JSON.stringify(afterHistory);
+  const results = await env.DB.batch([
+    env.DB.prepare(`UPDATE listings SET ${assignments.join(", ")} WHERE ${checks.join(" AND ")}`).bind(...bindings),
     env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
-      VALUES (?1, 'updateProperty', ?2, ?3, ?4)`)
-      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(beforeHistory), JSON.stringify(afterHistory))
+      SELECT ?1, 'updateProperty', ?2, ?3, ?4 WHERE changes()=1`)
+      .bind(before.id || propertyId, clean(user?.email), JSON.stringify(beforeHistory), afterJson),
+    ...propertyEditRecoveryStatementsV1(env, before.id || propertyId, recovery.recovered, now, afterJson)
   ]);
+  if (Number(results?.[0]?.meta?.changes || 0) !== 1) throw propertyEditConflictV1();
   return { ok: true, persisted: true, queued: false, propertyId, updated: value,
     sourceCount: linkedSourcesAfter.length,
     activeSourceCount: linkedSourcesAfter.filter((row) => Number(row?.active) === 1).length,

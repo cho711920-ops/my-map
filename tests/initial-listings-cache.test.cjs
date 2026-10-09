@@ -15,7 +15,7 @@ function cacheApi() {
 }
 
 test("initial data warmup starts before the Kakao SDK and critical UI scripts", () => {
-  const access = html.indexOf('src="js/data-access-v6.js?v=6.0.3-earliest-warmup"');
+  const access = html.indexOf('src="js/data-access-v6.js?v=6.0.3-earliest-warmup&amp;snapshot-revision-v1=1"');
   const kakao = html.indexOf('src="https://dapi.kakao.com/v2/maps/sdk.js');
   const main = html.indexOf('data-auth-critical src="js/script.js');
   const cache = html.indexOf('data-auth-critical src="js/initial-listings-cache-v1.js');
