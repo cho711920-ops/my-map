@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'edge-auto-profile.ps1')
 if ($Schedule -notmatch '^([01]\d|2[0-3]):[0-5]\d$') {
   throw '실행 시간은 HH:mm 형식으로 입력해주세요. 예: 11:00'
 }
@@ -29,16 +30,21 @@ New-Item -ItemType Directory -Force -Path $installedCollectors | Out-Null
 # Unpacked Manifest V3 service workers can keep the previous background.js in
 # memory even after files are replaced. Stop only the dedicated automation
 # profile before copying so the next launch is guaranteed to load this build.
-Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue |
-  Where-Object { $_.CommandLine -like "*$profilePath*" } |
+Get-EdgeAutoProfileProcesses -ProfilePath $profilePath |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-Start-Sleep -Milliseconds 700
+$stopDeadline = (Get-Date).AddSeconds(12)
+do {
+  Start-Sleep -Milliseconds 250
+  $stillRunning = @(Get-EdgeAutoProfileProcesses -ProfilePath $profilePath)
+} while ($stillRunning.Count -and (Get-Date) -lt $stopDeadline)
+if ($stillRunning.Count) { throw '전용 수집 브라우저가 종료되지 않아 코드 교체를 중단했습니다.' }
 
 Copy-Item -Path (Join-Path $sourceExtension '*') -Destination $installedExtension -Recurse -Force
 foreach ($collectorFile in @('naver-collector.js', 'daangn-collector.js', 'gongsil-collector.js')) {
   Copy-Item -LiteralPath (Join-Path $repoRoot "js\$collectorFile") -Destination (Join-Path $installedCollectors $collectorFile) -Force
 }
 Copy-Item -LiteralPath $sourceLauncher -Destination $installedLauncher -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'edge-auto-profile.ps1') -Destination (Join-Path $automationRoot 'edge-auto-profile.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'read-edge-auto-schedule.ps1') -Destination (Join-Path $automationRoot 'read-edge-auto-schedule.ps1') -Force
 
 $powerShellPath = (Get-Command powershell.exe).Source

@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "6\.0\.6";/);
+assert.match(source, /var VERSION = "6\.0\.7";/);
 assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(source, /data-metric="updated"/);
@@ -20,7 +20,8 @@ assert.match(
 assert.match(source, /postBatchWithRetry\(batch, 6, Object\.assign\(\{\}, session/);
 assert.match(source, /다른 수집 \(\?:작업\|저장\)이 진행 중/);
 assert.match(source, /Math\.min\(10000, 2000 \* attempt\)/);
-assert.match(source, /var BATCH_SIZE = 100;/);
+assert.match(source, /var DEFAULT_BATCH_SIZE = 20;/);
+assert.match(source, /var BATCH_SIZE = loadNaverBatchSize\(\);/);
 assert.doesNotMatch(source, /NAVER_ACCESS_KEY/);
 assert.match(source, /validationVersion: 2/);
 assert.match(source, /if \(state\.preparing && !state\.busy\)/);

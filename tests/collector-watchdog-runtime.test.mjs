@@ -57,7 +57,7 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.10" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.12" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async message => { notifications.push(message); } }
     }
@@ -252,6 +252,69 @@ test("healthy collection and scheduled retry waits are not restarted", async () 
     await h.context.recoverAutomaticRun();
     assert.equal(h.navigation.length, 0);
   }
+});
+
+test("Naver heartbeat persists inclusive progress without counting unchanged listings twice", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 4 });
+  h.data[RUN].targets[3].retryCycle = 8;
+  const stage = { key: "save", found: 8193, processed: 7602, unchanged: 7582,
+    created: 3, updated: 10, review: 2, addressMissing: 1, failed: 0 };
+  await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+    progressFingerprint: "naver-save-7602", progressStage: stage });
+  await h.flush();
+  let counts = h.data[REPORT].items[3].counts;
+  assert.equal(counts.expected, 8193);
+  assert.equal(counts.processed, 7602);
+  assert.equal(counts.unchanged, 7582);
+  assert.equal(counts.detailProcessed, 20);
+  assert.equal(counts.addressDeferred, 1);
+  assert.equal(counts.created, 3);
+  assert.equal(counts.updated, 10);
+  assert.equal(counts.review, 2);
+  assert.equal(counts.listComplete, false);
+  await h.context.finishCurrentTarget({ ok: false, runId: "cycle", targetRunId: "seo",
+    message: "서버 응답 제한시간 60초 초과", result: {} }, 42);
+  const item = h.data[REPORT].items[3];
+  assert.equal(item.status, "failed");
+  counts = item.counts;
+  assert.equal(counts.processed, 7602);
+  assert.equal(counts.detailProcessed, 20);
+  assert.equal(counts.unchanged, 7582);
+  assert.equal(counts.listComplete, false);
+});
+
+test("Naver progress stays nonnegative before detail work and never proves completion", () => {
+  const h = harness();
+  const counts = h.context.progressCounts({ source: "네이버" }, {
+    found: 8193, processed: 0, unchanged: 7582
+  });
+  assert.equal(counts.processed, 0);
+  assert.equal(counts.detailProcessed, 0);
+  assert.equal(counts.listComplete, false);
+  assert.deepEqual({ ...h.context.progressCounts({ source: "naver" }, {
+    provisional: true, found: 8193, processed: 8193
+  }) }, {});
+});
+
+test("Naver comparison-to-detail transition replaces its old counter with the latest snapshot", async () => {
+  const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+    lastHeartbeatAt: clock, lastProgressAt: clock });
+  for (const stage of [
+    { key: "collect", found: 8193, processed: 8000, unchanged: 7400 },
+    { key: "detail", found: 8193, processed: 7582, unchanged: 7582 }
+  ]) {
+    await h.dispatch({ type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+      progressFingerprint: "naver-" + stage.key, progressStage: stage });
+    await h.flush();
+  }
+  const item = h.data[REPORT].items[3];
+  assert.equal(item.counts.expected, 8193);
+  assert.equal(item.counts.processed, 7582);
+  assert.equal(item.counts.detailProcessed, 0);
+  assert.equal(item.counts.unchanged, 7582);
+  assert.equal(item.counts.listComplete, false);
+  assert.equal(item.progressStage.key, "detail");
 });
 
 test("a throttled background heartbeat is confirmed by direct tab probe without reopening the target", async () => {
@@ -467,7 +530,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.11");
+  assert.equal(response.backgroundBuild, "1.1.12");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

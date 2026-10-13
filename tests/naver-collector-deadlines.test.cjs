@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
+const {createHash} = require("node:crypto");
 
 const source = fs.readFileSync(path.resolve(__dirname, "..", "js", "naver-collector.js"), "utf8");
 
@@ -20,24 +21,35 @@ function jsonResponse(result) {
 }
 
 async function flush() {
-  for (let i = 0; i < 30; i += 1) await Promise.resolve();
+  for (let i = 0; i < 100; i += 1) await Promise.resolve();
 }
 
 function harness(fetch) {
   const timers = new Map();
   const calls = [];
   const delays = [];
+  const storage = new Map();
   let nextTimer = 1;
   const context = vm.createContext({
     AbortController,
+    TextEncoder,
+    crypto: {subtle: {digest: async (_, data) => Uint8Array.from(createHash("sha256").update(data).digest()).buffer}},
     COLLECTOR_API_URL: "https://collector.invalid/api/collector",
     COLLECTOR_REQUEST_TIMEOUT_MS: 60000,
     COLLECTOR_FINALIZE_TIMEOUT_MS: 120000,
     COLLECTOR_RESULT_TIMEOUT_MS: 30000,
+    COLLECTOR_RECOVERY_ATTEMPTS: 4,
+    COLLECTOR_RECOVERY_DELAY_MS: 5000,
     FIN_DETAIL_TIMEOUT_MS: 15000,
     FIN_DETAIL_CONCURRENCY: 5,
-    BATCH_SIZE: 100,
-    VERSION: "6.0.5",
+    BATCH_SIZE: 20, DEFAULT_BATCH_SIZE: 20, MIN_BATCH_SIZE: 5, MAX_BATCH_SIZE: 40,
+    BATCH_SIZE_STORAGE_KEY: "batch-size-test",
+    PENDING_SAVE_STORAGE_KEY: "pending-save-test",
+    localStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value),
+      removeItem: key => storage.delete(key)},
+    state: {stopRequested: false, runGeneration: 1},
+    panel: {isConnected: true},
+    VERSION: "6.0.7",
     location: {href: "https://fin.land.naver.com/map"},
     window: {
       setTimeout(callback, ms) {
@@ -64,14 +76,17 @@ function harness(fetch) {
     updateDashboard() {},
     parseFinFilters: () => ({tradeTypes: ["B2"]})
   });
-  for (const name of ["collectorRequestFailure", "fetchCollectorText", "fetchCollectorJson", "classifyNaverManifest",
+  for (const name of ["loadNaverBatchSize", "rememberNaverBatchSize", "collectorRequestFailure",
+    "collectorRecoveryIsCurrent", "recoverCollectorRequest", "naverBatchRequestId",
+    "pendingNaverSave", "rememberPendingNaverSave", "clearPendingNaverSave", "reconcilePendingNaverSave",
+    "fetchCollectorText", "fetchCollectorJson", "classifyNaverManifest",
     "postBatch", "postBatchWithRetry", "finalizeNaverSession", "getNaverSessionResult",
     "fetchFinJson", "enrichNaverDetailBatch", "collectAndSave", "retryFailedCityArticles",
     "collectFinDaejeonAll"]) {
     vm.runInContext(functionSource(name), context);
   }
   return {
-    context, calls, delays, timers,
+    context, calls, delays, timers, storage,
     expire(ms) {
       assert.equal(timers.size, 1, "only the current request owns a deadline");
       const [id, timer] = timers.entries().next().value;
@@ -114,11 +129,12 @@ for (const operation of operations) {
       assert.equal(h.calls.filter(call => call.payload.action === operation.action).length, 1);
       assert.equal(h.calls[0].options.signal.aborted, true);
       assert.equal(h.timers.size, 0);
-      assert.deepEqual(h.delays, []);
+      assert.deepEqual(h.delays, operation.action === "getNaverSessionResult" ? [] : [5000, 5000, 5000]);
       if (operation.action !== "getNaverSessionResult") {
         assert.equal(h.calls[1].payload.action, "mutationStatus");
         assert.equal(h.calls[1].payload.targetAction, operation.action);
         assert.equal(h.calls[1].payload.requestId, h.calls[0].payload.requestId);
+        assert.equal(h.calls.filter(call => call.payload.action === "mutationStatus").length, 4);
       }
     });
   }
@@ -136,7 +152,8 @@ test("a timed-out save recovers its confirmed result using the original action a
   h.expire(60000);
   assert.deepEqual(JSON.parse(JSON.stringify(await pending)), saved);
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
-  assert.equal(h.calls[1].payload.requestId, "session-1-batch-0");
+  assert.match(h.calls[1].payload.requestId, /^session-1-batch-0-[a-f0-9]{64}$/);
+  assert.equal(h.calls[1].payload.requestId, h.calls[0].payload.requestId);
   assert.equal(h.calls[1].payload.targetAction, "saveNaverBatch");
   assert.equal(h.timers.size, 0);
 });
@@ -148,10 +165,12 @@ test("a stalled recovery read is bounded and preserves the original ambiguous wr
     error.collectorAction === "saveNaverBatch");
   await flush();
   h.expire(60000);
-  await flush();
-  h.expire(30000);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await flush();
+    h.expire(30000);
+  }
   await rejected;
-  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", ...Array(4).fill("mutationStatus")]);
   assert.equal(h.timers.size, 0);
 });
 
@@ -162,9 +181,9 @@ for (const malformed of [null, {}, [], 1, "saved", {ok: "true"}]) {
       : jsonResponse(malformed));
     await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "same-batch"}),
       error => error.collectorRequestAmbiguous && error.collectorAction === "saveNaverBatch");
-    assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
-    assert.equal(h.calls[1].payload.requestId, "same-batch");
-    assert.deepEqual(h.delays, []);
+    assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", ...Array(4).fill("mutationStatus")]);
+    assert.equal(h.calls[1].payload.requestId, h.calls[0].payload.requestId);
+    assert.deepEqual(h.delays, [5000, 5000, 5000]);
     assert.equal(h.timers.size, 0);
   });
 }
@@ -196,9 +215,59 @@ test("successful requests preserve payloads, manifest filtering, and results wit
   assert.equal(result.finished, true);
   assert.equal(h.calls[0].payload.requestId, "session-1-manifest-0");
   assert.equal(h.calls[1].payload.sessionId, "session-1");
-  assert.equal(h.calls[1].payload.requestId, "session-1-batch-0");
+  assert.match(h.calls[1].payload.requestId, /^session-1-batch-0-[a-f0-9]{64}$/);
   assert.equal(h.calls[2].payload.complete, true);
   assert.equal(h.calls[2].payload.processedCount, 2);
+  assert.equal(h.timers.size, 0);
+});
+
+test("a 1201-row manifest uses 500/500/201 chunks with exact offsets and complete accounting", async () => {
+  const dashboards = [];
+  const h = harness(({payload}) => {
+    assert.equal(payload.action, "classifySourceManifest");
+    const entries = payload.entries;
+    return jsonResponse({ok: true, needsDetail: [entries[0].sourceId, entries.at(-1).sourceId],
+      unchanged: entries.length - 2, changed: 1, unknown: 1});
+  });
+  h.context.updateDashboard = update => dashboards.push(JSON.parse(JSON.stringify(update)));
+  const items = Array.from({length: 1201}, (_, index) => ({articleNo: String(index + 1), areaSquareMeter: 33}));
+  const classified = await h.context.classifyNaverManifest(items, {sessionId: "session-large", scope: "서구 전체"});
+  assert.deepEqual(h.calls.map(call => call.payload.entries.length), [500, 500, 201]);
+  assert.deepEqual(h.calls.map(call => call.payload.requestId),
+    [0, 500, 1000].map(offset => `session-large-manifest-${offset}`));
+  assert.deepEqual(h.calls.flatMap(call => call.payload.entries.map(entry => entry.sourceId)),
+    items.map(item => `네이버-${item.articleNo}`));
+  assert.deepEqual(Array.from(classified.items, item => item.articleNo), ["1", "500", "501", "1000", "1001", "1201"]);
+  assert.equal(classified.unchanged, 1195);
+  assert.equal(classified.changed, 3);
+  assert.equal(classified.unknown, 3);
+  assert.equal(classified.items.length + classified.unchanged, items.length);
+  assert.deepEqual(dashboards.map(update => update.processed), [500, 1000, 1201]);
+  assert.deepEqual(dashboards.map(update => update.remaining), [701, 201, 0]);
+  assert.equal(dashboards.at(-1).skippedUnchanged, 1195);
+  assert.equal(h.timers.size, 0);
+  assert.deepEqual(h.delays, []);
+});
+
+test("an ambiguous second manifest chunk is reconciled by its exact offset without replay or advancement", async () => {
+  const h = harness(({payload}) => {
+    if (payload.action === "mutationStatus") return jsonResponse({ok: true, ready: false});
+    if (payload.requestId.endsWith("-0")) return jsonResponse({ok: true, needsDetail: [], unchanged: 500});
+    return new Promise(() => {});
+  });
+  const items = Array.from({length: 1201}, (_, index) => ({articleNo: String(index + 1)}));
+  const pending = h.context.classifyNaverManifest(items, {sessionId: "session-large", scope: "서구 전체"});
+  const rejected = assert.rejects(pending, error => error.collectorRequestAmbiguous &&
+    error.collectorAction === "classifySourceManifest");
+  await flush();
+  h.expire(60000);
+  await rejected;
+  const writes = h.calls.filter(call => call.payload.action === "classifySourceManifest");
+  const reads = h.calls.filter(call => call.payload.action === "mutationStatus");
+  assert.deepEqual(writes.map(call => call.payload.requestId), ["session-large-manifest-0", "session-large-manifest-500"]);
+  assert.equal(reads.length, 4);
+  assert.equal(reads.every(call => call.payload.requestId === "session-large-manifest-500" &&
+    call.payload.targetAction === "classifySourceManifest"), true);
   assert.equal(h.timers.size, 0);
 });
 
@@ -278,7 +347,7 @@ for (const {action: timedOutAction, failureMode} of ambiguousRunCases) {
     assert.equal(finalizations.length, timedOutAction === "finalizeNaverSession" ? 1 : 0);
     assert.equal(finalizations.some(call => call.payload.complete === false), false);
     assert.equal(h.timers.size, 0);
-    assert.equal(h.calls.filter(call => call.payload.action === "mutationStatus").length, 1);
+    assert.equal(h.calls.filter(call => call.payload.action === "mutationStatus").length, 4);
   });
 }
 
@@ -315,14 +384,203 @@ for (const failureMode of ["timeout", "network", "invalid-envelope"]) {
     await flush();
     if (failureMode === "timeout") h.expire(60000);
     await pending;
-    assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
-    assert.equal(h.calls[1].payload.requestId, "session-city-retry-123");
+    assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", ...Array(4).fill("mutationStatus")]);
+    assert.match(h.calls[1].payload.requestId, /^session-city-retry-123-[a-f0-9]{64}$/);
+    assert.equal(h.calls[1].payload.requestId, h.calls[0].payload.requestId);
     assert.equal(progress.failedItems.length, 2);
     assert.equal(cleared, false);
     assert.equal(h.context.state.busy, false);
     assert.equal(h.timers.size, 0);
   });
 }
+
+test("a late third-read success reconciles exactly one saved write", async () => {
+  let reads = 0;
+  const saved = {ok: true, saved: 20, created: 2};
+  const h = harness(({payload}) => {
+    if (payload.action === "mutationStatus") {
+      reads += 1;
+      return jsonResponse(reads < 3 ? {ok: true, ready: false} : {ok: true, ready: true, result: saved});
+    }
+    return new Promise(() => {});
+  });
+  const pending = h.context.postBatchWithRetry([{articleNo: "123", contact: "must-not-persist"}], 6,
+    {sessionId: "session-late", requestId: "session-late-batch-0"});
+  await flush();
+  const descriptor = JSON.parse(h.storage.get("pending-save-test"));
+  assert.deepEqual(Object.keys(descriptor).sort(), ["count", "createdAt", "fingerprint", "requestId", "sessionId"]);
+  assert.equal(JSON.stringify(descriptor).includes("must-not-persist"), false);
+  assert.equal(JSON.stringify(descriptor).includes("test-only-key"), false);
+  h.expire(60000);
+  assert.deepEqual(JSON.parse(JSON.stringify(await pending)), saved);
+  assert.equal(h.context.BATCH_SIZE, 10);
+  assert.equal(h.context.loadNaverBatchSize(), 10);
+  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.deepEqual(h.delays, [5000, 5000]);
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", ...Array(3).fill("mutationStatus")]);
+  for (const call of h.calls.slice(1)) {
+    assert.equal(call.payload.requestId, h.calls[0].payload.requestId);
+    assert.equal(call.payload.targetAction, "saveNaverBatch");
+  }
+});
+
+test("a server running claim is polled, never posted again", async () => {
+  const h = harness(({payload}) => jsonResponse(payload.action === "mutationStatus"
+    ? {ok: true, ready: true, result: {ok: true, saved: 1}}
+    : {ok: false, requestPending: true, message: "already running"}));
+  const result = await h.context.postBatchWithRetry([{articleNo: "123"}], 6, {requestId: "pending-batch"});
+  assert.equal(result.saved, 1);
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
+  assert.equal(h.calls[1].payload.requestId, h.calls[0].payload.requestId);
+  assert.equal(h.storage.has("pending-save-test"), false);
+});
+
+test("a recovered confirmed failure is not replayed under the cached request ID", async () => {
+  const h = harness(({payload}) => {
+    if (payload.action === "mutationStatus") return jsonResponse({ok: true, ready: true,
+      result: {ok: false, message: "confirmed storage failure"}});
+    throw new TypeError("lost response");
+  });
+  await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "failed-batch"}),
+    error => error.collectorFailureConfirmed && error.message === "confirmed storage failure");
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
+  assert.equal(h.storage.has("pending-save-test"), false);
+});
+
+test("a normal terminal save failure is not posted again under its cached ID", async () => {
+  const h = harness(() => jsonResponse({ok: false, message: "confirmed save failure"}));
+  await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "failed-batch"}),
+    error => error.collectorFailureConfirmed && error.message === "confirmed save failure");
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch"]);
+  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.deepEqual(h.delays, []);
+});
+
+test("the explicit legacy pre-write lock response keeps its bounded lock retry", async () => {
+  let attempts = 0;
+  const h = harness(() => jsonResponse(++attempts < 3
+    ? {ok: false, message: "다른 수집 저장이 진행 중입니다."}
+    : {ok: true, saved: 1}));
+  assert.equal((await h.context.postBatchWithRetry([], 6, {requestId: "locked-batch"})).saved, 1);
+  assert.deepEqual(h.calls.map(call => call.payload.action), Array(3).fill("saveNaverBatch"));
+  assert.equal(new Set(h.calls.map(call => call.payload.requestId)).size, 1);
+  assert.deepEqual(h.delays, [2000, 4000]);
+});
+
+for (const canceledBy of ["panel", "run"]) {
+  for (const canceledAt of ["read", "delay"]) {
+    test(`${canceledBy} replacement during ${canceledAt} stops further recovery without replay`, async () => {
+      let h;
+      const cancel = () => canceledBy === "panel" ? h.context.panel.isConnected = false : h.context.state.runGeneration++;
+      h = harness(({payload}) => {
+        if (payload.action !== "mutationStatus") throw new TypeError("lost response");
+        if (canceledAt === "read") cancel();
+        return jsonResponse({ok: true, ready: false});
+      });
+      if (canceledAt === "delay") h.context.delay = async () => { cancel(); };
+      await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "canceled-batch"}),
+        error => error.collectorRequestAmbiguous);
+      assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
+      assert.equal(h.storage.has("pending-save-test"), true);
+      assert.equal(h.timers.size, 0);
+    });
+  }
+}
+
+test("safe stop reconciles the already-sent write without posting another write", async () => {
+  let h;
+  let reads = 0;
+  h = harness(({payload}) => {
+    if (payload.action !== "mutationStatus") throw new TypeError("lost response");
+    h.context.state.stopRequested = true;
+    return jsonResponse(++reads < 2 ? {ok: true, ready: false}
+      : {ok: true, ready: true, result: {ok: true, saved: 1}});
+  });
+  assert.equal((await h.context.postBatchWithRetry([], 6, {requestId: "stop-batch"})).saved, 1);
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus", "mutationStatus"]);
+  assert.equal(h.context.state.stopRequested, true);
+  assert.equal(h.storage.has("pending-save-test"), false);
+});
+
+test("a replaced panel cannot continue the old run after its late normal save response", async () => {
+  let release;
+  const h = harness(() => new Promise(resolve => { release = resolve; }));
+  const pending = h.context.postBatchWithRetry([], 6, {requestId: "replaced-panel"});
+  await flush();
+  h.context.panel.isConnected = false;
+  release(jsonResponse({ok: true, saved: 1}));
+  await assert.rejects(pending, error => error.collectorRequestAmbiguous);
+  assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch"]);
+  assert.equal(h.storage.has("pending-save-test"), true);
+  assert.equal(h.timers.size, 0);
+});
+
+test("unresolved safe stop preserves ambiguity and its pending descriptor", async () => {
+  let h;
+  h = harness(({payload}) => {
+    if (payload.action !== "mutationStatus") throw new TypeError("lost response");
+    h.context.state.stopRequested = true;
+    return jsonResponse({ok: true, ready: false});
+  });
+  await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "stop-batch"}),
+    error => error.collectorRequestAmbiguous && error.safeStop);
+  assert.equal(h.calls.filter(call => call.payload.action === "saveNaverBatch").length, 1);
+  assert.equal(h.calls.filter(call => call.payload.action === "mutationStatus").length, 4);
+  assert.equal(h.storage.has("pending-save-test"), true);
+});
+
+for (const nextAction of ["classifySourceManifest", "saveNaverBatch", "finalizeNaverSession"]) {
+  test(`a fresh tab blocks ${nextAction} until the previous save is confirmed`, async () => {
+    const prior = harness(({payload}) => payload.action === "mutationStatus"
+      ? jsonResponse({ok: true, ready: false}) : Promise.reject(new TypeError("lost response")));
+    await assert.rejects(prior.context.postBatchWithRetry([{articleNo: "1"}], 6,
+      {sessionId: "old-city-session", requestId: "old-city-index-0"}));
+    const fresh = harness(() => jsonResponse({ok: true, ready: false}));
+    for (const [key, value] of prior.storage) fresh.storage.set(key, value);
+    const payload = {action: nextAction, collectorKey: "test-only-key", requestId: "new-batch", data: []};
+    await assert.rejects(fresh.context.fetchCollectorJson(payload, 60000, "bad result"),
+      error => error.collectorRequestAmbiguous);
+    assert.deepEqual(fresh.calls.map(call => call.payload.action), Array(4).fill("mutationStatus"));
+    assert.equal(fresh.calls.every(call => call.payload.requestId === prior.calls[0].payload.requestId), true);
+    assert.equal(fresh.storage.get("pending-save-test"), prior.storage.get("pending-save-test"));
+  });
+}
+
+test("a fresh tab may compare again only after the exact previous write is confirmed", async () => {
+  const prior = harness(({payload}) => payload.action === "mutationStatus"
+    ? jsonResponse({ok: true, ready: false}) : Promise.reject(new TypeError("lost response")));
+  await assert.rejects(prior.context.postBatchWithRetry([], 6,
+    {sessionId: "old-session", requestId: "old-session-batch-0"}));
+  const fresh = harness(({payload}) => jsonResponse(payload.action === "mutationStatus"
+    ? {ok: true, ready: true, result: {ok: true, saved: 1}}
+    : {ok: true, needsDetail: [], unchanged: 1}));
+  for (const [key, value] of prior.storage) fresh.storage.set(key, value);
+  await fresh.context.classifyNaverManifest([{articleNo: "1"}], {sessionId: "fresh-session"});
+  assert.deepEqual(fresh.calls.map(call => call.payload.action), ["mutationStatus", "classifySourceManifest"]);
+  assert.equal(fresh.calls[0].payload.requestId, prior.calls[0].payload.requestId);
+  assert.equal(fresh.storage.has("pending-save-test"), false);
+});
+
+test("a same-payload resumed batch returns its confirmed old result without posting", async () => {
+  const prior = harness(({payload}) => payload.action === "mutationStatus"
+    ? jsonResponse({ok: true, ready: false}) : Promise.reject(new TypeError("lost response")));
+  const data = [{articleNo: "123"}];
+  const metadata = {sessionId: "same-city", requestId: "same-city-index-0"};
+  await assert.rejects(prior.context.postBatchWithRetry(data, 6, metadata));
+  const fresh = harness(() => jsonResponse({ok: true, ready: true, result: {ok: true, saved: 1}}));
+  for (const [key, value] of prior.storage) fresh.storage.set(key, value);
+  assert.equal((await fresh.context.postBatchWithRetry(data, 6, metadata)).saved, 1);
+  assert.deepEqual(fresh.calls.map(call => call.payload.action), ["mutationStatus"]);
+  assert.equal(fresh.calls[0].payload.requestId, prior.calls[0].payload.requestId);
+});
+
+test("a damaged pending descriptor blocks new writes instead of discarding uncertainty", async () => {
+  const h = harness(() => { throw new Error("must not call server"); });
+  h.storage.set("pending-save-test", "invalid JSON");
+  await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "fresh-batch"}),
+    error => error.collectorRequestAmbiguous);
+  assert.equal(h.calls.length, 0);
+});
 
 for (const interruptedAt of ["fetch", "json", "delay"]) {
   test(`superseded passive preparation stops after ${interruptedAt} without changing automatic progress`, async () => {

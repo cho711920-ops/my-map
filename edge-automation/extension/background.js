@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.11";
+const BACKGROUND_BUILD = "1.1.12";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -724,17 +724,21 @@ function mergeCountSnapshots(previous, incoming) {
 }
 
 function progressCounts(target, stage) {
-  if (cleanSource(target && target.source) !== "daangn" || !stage || typeof stage !== "object" || stage.provisional === true) return {};
+  const source = cleanSource(target && target.source);
+  if (!["naver", "daangn"].includes(source) || !stage || typeof stage !== "object" || stage.provisional === true) return {};
   const number = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
   };
-  const detailProcessed = number(stage.processed);
   const unchanged = number(stage.unchanged);
+  // Naver's dashboard already includes unchanged listings in processed.
+  // Daangn reports detail work separately, so its unchanged count is added.
+  const processed = number(stage.processed) + (source === "daangn" ? unchanged : 0);
+  const detailProcessed = source === "naver" ? Math.max(0, processed - unchanged) : number(stage.processed);
   return {
     version: 2,
     expected: number(stage.found),
-    processed: detailProcessed + unchanged,
+    processed,
     detailProcessed,
     unchanged,
     created: number(stage.created),
@@ -965,7 +969,12 @@ async function updateTargetHeartbeat(message, senderTabId) {
       message: progressMessage,
       progressStage,
       progressUpdatedAt: now,
-      ...(Object.keys(counts).length ? { counts } : {})
+      // Naver resets its comparison counter before detail work. Its latest
+      // dashboard snapshot is authoritative; monotonic merging overstates it.
+      ...(Object.keys(counts).length ? {
+        counts,
+        replaceCounts: cleanSource(target.source) === "naver"
+      } : {})
     });
   }
   return { ok: true, heartbeat: true };

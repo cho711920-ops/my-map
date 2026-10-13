@@ -1,5 +1,17 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-13 네이버 서구 반복 실패 수정·실제 완료 확인
+
+- 사용자 요청: 반복 실패/재수집 대기인 네이버 서구의 원인을 수정하고 실제 완료시킨다. 제공된 설정 화면의 `ERR_BLOCKED_BY_CLIENT`도 함께 확인했다. 기존 웹 디자인·임장·찜·매매 분리 정책은 변경하지 않았으며 운영 매물 삭제/중복 정리나 다른 지역의 강제 재수집은 하지 않았다.
+- 원인: 대규모 manifest/상세 저장 요청의 60초 응답 제한과 불확실한 결과 확인·재시도 경로가 문제였다. 원격 manifest 요청의 시간초과를 관측했고 특정 D1 쿼리 하나의 지연 원인으로 단정하지 않는다. 기존 동일 requestId 동시 저장은 실제 SQLite fixture에서 중복 master 생성이 재현됐다. Windows 실행기는 전용 Edge command line의 이중 백슬래시를 단순 문자열로 비교해 기존 프로세스를 놓쳤고, 일시 연결 실패에도 확장 reload를 시도할 수 있는 경로도 발견했다. 기존 설정 탭은 차단 오류 문서로 남았지만 동일 URL의 새 탭은 정상이며 Edge 차단 자체의 내부 원인을 확정한 것은 아니다.
+- 네이버 수집기 `6.0.7`: manifest 2,500→500건, 상세 저장 초기 100→20건(5~40건 적응형)으로 축소했다. 시간초과 시 같은 requestId 결과만 최대 4회 확인하며 불확실한 저장을 나누어 다시 보내지 않는다. 실제 payload의 SHA256 requestId와 키/원문 없는 pending descriptor를 저장하고 확정 전 다음 쓰기/완료 처리를 차단한다. 정상 성공 경로에 상태조회 왕복은 추가하지 않는다. 저장 결과가 끝내 확인되지 않으면 임의 성공/실패 처리하지 않고 점검 필요로 보존한다.
+- 서버: 기존 mutation_results에 saveNaverBatch running claim을 원자적으로 선점한다. 같은 ID의 동시 실행은 409/requestPending으로 거절하고 최초 실행만 terminal 결과를 저장한다. 완료 결과 재생/소유자·action 분리/legacy no-ID 동작을 유지한다. running claim은 자동 만료·재실행하지 않으며 DB migration은 없다.
+- 확장 `1.1.12`: 네이버 진행 단계의 실제 숫자를 최신 snapshot으로 교체해 unchanged 중복 합산이나 단계 전환 시 과대 누적을 막는다. 재시도 대기는 예정 시각·남은 분을 표시한다. 일시적인 worker 상태 실패는 bounded 재연결만 하고 확인된 build 불일치일 때만 reload한다. 설치/실행기는 exact canonical 전용 프로필만 종료·확인하며 일반 Edge 프로필은 제외한다. PowerShell JSON 배열도 탭별로 열거해 실행 신호/설정 탭 재사용/정리 판정을 검증했다.
+- 실제 결과(2026-10-13 16:52:38 KST): session `S-NAVER-1791877282019-8qqg2jvz`, run `run-1791875541698-cc0a58`. D1 state=completed/completionValidated=1, 관측 8,224건. 확장 처리 8,224/8,224, 신규 6, 기존 매물 통합 159, 조건 갱신 8, 상세 중복 20, 검토 3, 저장 실패 0, 주소·층 불충분 제외 85, manifest 기존 동일 7,943. 세션 시작 16:41:29→완료 16:52:38이며 이 시간을 모든 향후 수집의 속도 보장으로 사용하지 않는다. 읽기 진단 rows_written=0, 자동 보고 active=0/completed 및 설정 UI 완료 표시도 확인했다.
+- 설치된 수집기/launcher/helper/autorun 소스 해시 일치. 정상 설정 탭은 v1.1.12/차단 없음/매일 자동실행 ON/11:00/서구 완료를 확인했고 오래된 차단 오류 탭만 닫았다. 브라우저 보안 설정은 변경하지 않았다. 실패 대상 수동 복구는 daily version marker를 갱신하지 않으므로 당일 새 버전으로 전체 launcher를 다시 실행하면 예약 대상 전체를 재실행할 수 있다. 완료 후 불필요한 cold restart/전체 재수집이나 marker 조작을 하지 않았다.
+- 최종 검수: 전체 check(lint/타입/단위 1,369개/asset build/Worker dry-run) 통과. actual SQLite 동시 request claim·pending/status/replay, bounded timeout/stop/replacement/persistent pending, 500건 manifest 경계와 적응형 batch, 확장 단계/ETA/market 회귀 및 Windows launcher/profile/autorun 15개 포함. PC·모바일 collector-markets 브라우저 14개 통과. 삼성인터넷 실기 시험은 아니다. 산출물 `outputs/naver-seogu-fix-20261013/`, 관련 설치 전 파일 백업은 동 경로 `installed-before/`에 보존했다.
+- 운영 배포 Worker `66158b8d-ca9a-40bb-82c0-108377920cde`, public cache `1b313b76d6f7402a0e4718e7`. apex/www의 naver-collector.js·sw.js 총 4응답 HTTP200 및 최종 빌드 SHA256 일치를 확인했다. 설치 확장 변경은 이 PC의 전용 수집 프로필에 반영됐으며 다른 PC는 같은 설치 업데이트가 필요하다. 기존 첨부/전사 등 unrelated untracked 파일은 보존한다.
+
 ## 2026-10-09 웹 오류·성능 검수 후 4개 오류군 수정
 
 - 승인 범위: 자동반영 누락, 오래된 수정창의 최신 호실/상태 덮어쓰기, 상세 사진 조회 실패 후 재시도 불가, 로드뷰 SDK 실패 후 재시도 불가. 수집기 대표 우선순위/자동 재활성화 정책이나 화면 디자인은 변경하지 않았다. 운영 매물·찜 데이터 정리/삭제/재수집은 실행하지 않는다.

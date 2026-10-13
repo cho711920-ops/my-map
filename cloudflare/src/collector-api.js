@@ -753,6 +753,23 @@ async function mutationScope(env, requestId) {
     .bind(id).first();
 }
 
+async function claimNaverBatchRequest(env, requestId) {
+  const id = clean(requestId).slice(0, 160);
+  if (!id) return false;
+  // A client deadline does not cancel D1 writes. Keep an unfinished claim
+  // until its owner records the result; maintenance must not expire it.
+  const claimed = await env.DB.prepare(`INSERT INTO mutation_results (
+      request_id, owner_email, action, state, result_json, created_at, expires_at
+    ) VALUES (?1, 'collector', 'saveNaverBatch', 'running', '{}', ?2, '')
+    ON CONFLICT(request_id) DO UPDATE SET state='running', result_json='{}',
+      created_at=excluded.created_at, expires_at=''
+    WHERE mutation_results.owner_email='collector' AND mutation_results.action='saveNaverBatch'
+      AND mutation_results.state='completed' AND mutation_results.expires_at<>''
+      AND julianday(mutation_results.expires_at)<=julianday('now')`)
+    .bind(id, nowIso()).run();
+  return Number(claimed?.meta?.changes || 0) === 1;
+}
+
 async function mutationStatus(env, requestId, owner = "collector", expectedAction = "") {
   const id = clean(requestId).slice(0, 160);
   const scopedOwner = clean(owner).slice(0, 320);
@@ -3090,16 +3107,33 @@ export async function handleCollectorApi(request, env) {
     response.headers.set("x-js-collector-action", action);
     return response;
   }
+  if (action === "saveNaverBatch" && clean(body.requestId) &&
+      !await claimNaverBatchRequest(env, body.requestId)) {
+    // Another request may have claimed or completed the ID after the reads
+    // above. Recheck its scope/result without executing or replacing it.
+    const scope = await mutationScope(env, body.requestId);
+    if (scope && (clean(scope.owner_email) !== "collector" || clean(scope.action) !== action)) {
+      return jsonResponse({ ok: false, message: "요청번호가 다른 작업 범위에서 이미 사용되었습니다." }, 409, cors);
+    }
+    const completed = await mutationStatus(env, body.requestId, "collector", action);
+    if (completed.ready) {
+      const response = jsonResponse(completed.result, 200, cors);
+      response.headers.set("x-js-collector-action", action);
+      return response;
+    }
+    return jsonResponse({ ok: false, requestPending: true,
+      message: "같은 저장 요청이 처리 중입니다. 결과를 확인한 뒤 이어갑니다." }, 409, cors);
+  }
   try {
     const result = await executeExternalAction(env, body);
     if (!result) return jsonResponse({ ok: false, message: "지원하지 않는 수집 작업입니다." }, 404, cors);
-    if (body.requestId) await saveMutationResult(env, body.requestId, body.action, result);
+    if (body.requestId) await saveMutationResult(env, body.requestId, action, result);
     const response = jsonResponse(result, 200, cors);
     response.headers.set("x-js-collector-action", action);
     return response;
   } catch (error) {
     const result = { ok: false, message: clean(error?.message) || "수집 처리에 실패했습니다." };
-    if (body.requestId) await saveMutationResult(env, body.requestId, body.action, result);
+    if (body.requestId) await saveMutationResult(env, body.requestId, action, result);
     const status = Math.max(400, Math.min(599, Number(error?.statusCode) || 400));
     return jsonResponse(result, status, cors);
   }

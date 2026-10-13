@@ -192,7 +192,7 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /jsAutoCollectorConfigV1/);
   assert.match(launch, /remote-debugging-port=9223/);
   assert.match(launch, /Invoke-RestMethod -Method Put/);
-  assert.match(launch, /first trigger reloads a stale MV3 worker/);
+  assert.match(launch, /only a still-pending page needs one follow-up/);
   assert.match(launch, /Write-AutoCollectorLog/);
   assert.match(launch, /\$launchMessage = 'Windows 예약실행 시작'/);
   assert.doesNotMatch(launch, /\(if \(\$Setup\)/);
@@ -204,12 +204,14 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /\$stillRunning/);
   assert.match(install, /installedCollectors/);
   assert.match(install, /gongsil-collector\.js/);
-  assert.match(install, /Get-CimInstance Win32_Process/);
+  assert.match(install, /Get-EdgeAutoProfileProcesses -ProfilePath \$profilePath/);
   assert.match(install, /Stop-Process -Id \$_.ProcessId/);
   assert.match(read("edge-automation/extension/autorun.js"), /JS_AUTO_RUN_REQUEST/);
   assert.match(read("edge-automation/extension/autorun.js"), /chrome\.runtime\.reload\(\)/);
   assert.match(read("edge-automation/extension/autorun.js"), /workerState\.backgroundBuild !== manifestVersion/);
-  assert.match(launch, /Always send one bounded follow-up trigger/);
+  assert.match(launch, /if \(\$triggerPages\.Count\)/);
+  assert.match(launch, /AddSeconds\(25\)/);
+  assert.match(install, /edge-auto-profile\.ps1/);
 });
 
 test("automatic collector settings stay compact with long target URLs", () => {

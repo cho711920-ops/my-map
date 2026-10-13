@@ -12,8 +12,8 @@ function uiFixture() {
   const nodes = new Map();
   const context = {
     URL,
-    state: { backgroundBuild: '1.1.11', config: { enabled: true, schedule: '11:00', targets }, runReports: {}, runReport: null },
-    chrome: { runtime: { getManifest: () => ({ version: '1.1.11' }) } },
+    state: { backgroundBuild: '1.1.12', config: { enabled: true, schedule: '11:00', targets }, runReports: {}, runReport: null },
+    chrome: { runtime: { getManifest: () => ({ version: '1.1.12' }) } },
     selectedOnce: new Set(),
     runPreviewMode: 'all',
     runPreviewMarket: 'sale',
@@ -29,7 +29,7 @@ function uiFixture() {
     'compatibleWorker', 'marketForTarget', 'reportForMarket', 'escapeHtml', 'registeredTime', 'targetSummary',
     'reportItem', 'displayCounts', 'countText', 'statusDetail', 'failureGuidance', 'reportStatus',
     'renderDiagnostics', 'renderRunSummary', 'portableTarget', 'renderTarget', 'renderSourceGroups',
-    'renderTargets', 'previewRows', 'renderDeferredReview'
+    'renderTargets', 'previewRows', 'renderDeferredReview', 'currentRunStatus'
   ], context);
   return { ui, context, targets, nodes };
 }
@@ -121,12 +121,12 @@ test('legacy market inference and export keep sales manual-only', () => {
 
 test('old or unidentified background workers cannot enable any market run action', () => {
   const { ui, context, targets } = uiFixture();
-  for (const backgroundBuild of [undefined, '', '1.1.10']) {
+  for (const backgroundBuild of [undefined, '', '1.1.10', '1.1.11']) {
     context.state.backgroundBuild = backgroundBuild;
     assert.equal(ui.compatibleWorker(), false);
     assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 6);
   }
-  context.state.backgroundBuild = '1.1.11';
+  context.state.backgroundBuild = '1.1.12';
   assert.equal(ui.compatibleWorker(), true);
   assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 0);
 });
@@ -136,4 +136,61 @@ test('newly registered Daangn with no prior report has numeric registration base
   assert.equal(ui.displayCounts(null, targets[3]).expected, 1234);
   assert.match(ui.countText(null, targets[3]), /0 \/ 1,234건 확인 \(등록 기준\)/);
   assert.match(ui.renderTarget(targets[3], 3), /아직 실행 기록 없음/);
+});
+
+test('legacy Naver failed rows recover real progress from the stage without double counting unchanged ads', () => {
+  const { ui } = uiFixture();
+  const item = { source: 'naver', status: 'failed', counts: { expected: 0, processed: 0 },
+    progressStage: { found: 8193, processed: 7602, unchanged: 7582,
+      created: 3, updated: 10, review: 2, addressMissing: 1, failed: 0 } };
+  const counts = ui.displayCounts(item);
+  assert.equal(counts.processed, 7602);
+  assert.equal(counts.detailProcessed, 20);
+  assert.equal(counts.listComplete, false);
+  assert.match(ui.countText(item), /7,602 \/ 8,193건 확인/);
+  assert.match(ui.countText(item), /기존 동일 7,582/);
+  assert.match(ui.countText(item), /주소 보류 1/);
+  assert.equal(item.counts.processed, 0, 'display fallback does not rewrite saved history');
+  assert.equal(ui.displayCounts({ ...item, status: 'completed', counts: { processed: 8193,
+    expected: 8193 } }).processed, 8193, 'a terminal result keeps its authoritative counts');
+});
+
+test('Naver stage snapshots replace stale comparison counters in running and failed rows', () => {
+  const { ui } = uiFixture();
+  for (const status of ['running', 'retry_wait', 'failed']) {
+    const item = { source: 'naver', status,
+      counts: { version: 2, expected: 8193, processed: 8000, detailProcessed: 600, unchanged: 7400 },
+      progressStage: { key: 'detail', found: 8193, processed: 7582, unchanged: 7582 } };
+    const counts = ui.displayCounts(item);
+    assert.equal(counts.processed, 7582);
+    assert.equal(counts.detailProcessed, 0);
+    assert.equal(counts.unchanged, 7582);
+    assert.equal(counts.listComplete, false);
+    assert.match(ui.countText(item), /7,582 \/ 8,193건 확인/);
+    assert.equal(item.counts.processed, 8000, 'history is unchanged by rendering');
+  }
+});
+
+test('retry wait shows the Korean resume time and rounded-up minutes instead of stale progress age', () => {
+  const { ui, context } = uiFixture();
+  const now = Date.parse('2026-10-13T05:49:16Z');
+  context.Date = class extends Date { static now() { return now; } };
+  const status = ui.currentRunStatus({ runState: { active: true, market: 'lease', phase: 'retry-wait',
+    targets: [{ source: 'naver', label: '네이버 서구' }], index: 0,
+    retryAt: now + 5 * 60000 + 10000, lastProgressAt: now - 8 * 60000 } });
+  assert.match(status, /상가임대 · 재시도 대기 · 1\/1 · 네이버 서구/);
+  assert.match(status, /다음 재시도 10\. 13\. 오후 02:54:26/);
+  assert.match(status, /약 6분 후/);
+  assert.doesNotMatch(status, /마지막 진행|방금 진행/);
+});
+
+test('elapsed and missing retry times never invent another waiting period', () => {
+  const { ui, context } = uiFixture();
+  const now = Date.parse('2026-10-13T05:49:16Z');
+  context.Date = class extends Date { static now() { return now; } };
+  const runState = { active: true, phase: 'retry-wait', targets: [{ source: 'naver' }] };
+  assert.match(ui.currentRunStatus({ runState: { ...runState, retryAt: now - 1 } }), /실행 재개 확인 중/);
+  assert.doesNotMatch(ui.currentRunStatus({ runState: { ...runState, retryAt: now - 1 } }), /약 \d+분 후/);
+  assert.match(ui.currentRunStatus({ runState }), /재시도 시각 확인 중/);
+  assert.match(ui.currentRunStatus({ runState: { ...runState, retryAt: 'invalid' } }), /재시도 시각 확인 중/);
 });

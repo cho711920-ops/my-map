@@ -5,6 +5,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'edge-auto-profile.ps1')
+function Get-EdgeAutoDebugPages {
+  # Windows PowerShell passes an Invoke-RestMethod JSON array to a pipeline
+  # as one object. Enumerate explicitly before inspecting individual tabs.
+  $debugTargets = Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5
+  foreach ($debugTarget in $debugTargets) {
+    if ($debugTarget.type -eq 'page') { $debugTarget }
+  }
+}
 $edgeCandidates = @(@(
   (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
   (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
@@ -48,9 +57,9 @@ if (Test-Path -LiteralPath $scheduleReader) {
 }
 
 $arguments = @(
-  "--user-data-dir=$profilePath",
-  "--load-extension=$extensionPath",
-  "--disable-extensions-except=$extensionPath",
+  "--user-data-dir=`"$profilePath`"",
+  "--load-extension=`"$extensionPath`"",
+  "--disable-extensions-except=`"$extensionPath`"",
   '--no-first-run',
   '--disable-features=msEdgeFirstRunExperience',
   # Only the dedicated collection profile uses these scheduling switches.
@@ -67,8 +76,7 @@ $arguments = @(
 # scheduled/forced run. Extension storage and collector checkpoints live in
 # the profile and D1, so an interrupted target resumes from its saved point.
 if (-not $Setup) {
-  $automationProcesses = @(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
-    Where-Object { $_.CommandLine -like "*$profilePath*" })
+  $automationProcesses = @(Get-EdgeAutoProfileProcesses -ProfilePath $profilePath)
   if ($automationProcesses.Count) {
     $automationProcesses |
       Sort-Object { if ($_.CommandLine -like '*--type=*') { 1 } else { 0 } } |
@@ -76,9 +84,9 @@ if (-not $Setup) {
     $deadline = (Get-Date).AddSeconds(12)
     do {
       Start-Sleep -Milliseconds 250
-      $stillRunning = @(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
-        Where-Object { $_.CommandLine -like "*$profilePath*" })
+      $stillRunning = @(Get-EdgeAutoProfileProcesses -ProfilePath $profilePath)
     } while ($stillRunning.Count -and (Get-Date) -lt $deadline)
+    if ($stillRunning.Count) { throw '전용 수집 브라우저 종료를 확인하지 못해 새 실행을 중단했습니다.' }
   }
 }
 
@@ -134,31 +142,39 @@ if ($Setup) {
     $autorunUrl = "chrome-extension://$extensionId/autorun.html?force=$forceValue&run=$Token"
     $encodedUrl = [Uri]::EscapeDataString($autorunUrl)
     Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedUrl" -TimeoutSec 5 | Out-Null
+    return $autorunUrl
   }
-  & $openAutorun $runToken
-  # The first trigger reloads a stale MV3 worker when its build does not match
-  # the installed manifest. Always send one bounded follow-up trigger so the
-  # refreshed worker starts or resumes the persisted run exactly once.
-  Start-Sleep -Seconds 4
-  $triggerPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5 |
-    Where-Object { $_.type -eq 'page' -and $_.url -like "chrome-extension://$extensionId/autorun.html*" })
+  $firstTriggerUrl = & $openAutorun $runToken
+  # Startup already recovers persisted work. Normally a single trigger closes
+  # after its acknowledgement; only a still-pending page needs one follow-up.
+  $triggerDeadline = (Get-Date).AddSeconds(25)
+  do {
+    Start-Sleep -Milliseconds 500
+    $triggerPages = @(Get-EdgeAutoDebugPages |
+      Where-Object { $_.url -eq $firstTriggerUrl })
+  } while ($triggerPages.Count -and (Get-Date) -lt $triggerDeadline)
   if ($triggerPages.Count) {
     Write-AutoCollectorLog 'WARN' '첫 실행 신호 페이지가 남아 있어 업데이트된 실행기로 한 번만 재전송합니다.'
+    $followupUrl = & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
+    $followupDeadline = (Get-Date).AddSeconds(10)
+    do {
+      Start-Sleep -Milliseconds 500
+      $followupPages = @(Get-EdgeAutoDebugPages |
+        Where-Object { $_.url -eq $followupUrl })
+    } while ($followupPages.Count -and (Get-Date) -lt $followupDeadline)
   }
-  & $openAutorun ([DateTimeOffset]::Now.ToUnixTimeMilliseconds())
-  Start-Sleep -Seconds 3
   # Keep the live per-district status page visible after the short autorun
   # trigger tabs close themselves. Reuse an existing status tab when Edge
   # restores the dedicated profile instead of opening duplicates.
   $statusUrl = "chrome-extension://$extensionId/options.html"
-  $openPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5)
-  if (-not ($openPages | Where-Object { $_.type -eq 'page' -and $_.url -eq $statusUrl })) {
+  $openPages = @(Get-EdgeAutoDebugPages)
+  if (-not ($openPages | Where-Object { $_.url -eq $statusUrl })) {
     $encodedStatusUrl = [Uri]::EscapeDataString($statusUrl)
     Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedStatusUrl" -TimeoutSec 5 | Out-Null
   }
   # Leave exactly one status page and the single provider collection tab.
-  $cleanupPages = @(Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/list' -TimeoutSec 5 |
-    Where-Object { $_.type -eq 'page' -and ($_.url -like 'edge://newtab*' -or $_.url -like "chrome-extension://$extensionId/autorun.html*") })
+  $cleanupPages = @(Get-EdgeAutoDebugPages |
+    Where-Object { $_.url -like 'edge://newtab*' -or $_.url -like "chrome-extension://$extensionId/autorun.html*" })
   foreach ($page in $cleanupPages) {
     try { Invoke-RestMethod -Uri ("http://127.0.0.1:9223/json/close/" + $page.id) -TimeoutSec 3 | Out-Null } catch {}
   }
@@ -169,8 +185,8 @@ public static class JSMapWindow {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
 '@
-  Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
-    Where-Object { $_.CommandLine -like "*$profilePath*" -and $_.CommandLine -notlike '*--type=*' } |
+  Get-EdgeAutoProfileProcesses -ProfilePath $profilePath |
+    Where-Object { $_.CommandLine -notlike '*--type=*' } |
     ForEach-Object {
       $edgeProcess = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
       if ($edgeProcess -and $edgeProcess.MainWindowHandle -ne 0) {

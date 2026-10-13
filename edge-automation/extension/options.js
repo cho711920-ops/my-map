@@ -97,10 +97,12 @@ function reportItem(target) {
 
 function displayCounts(item, target) {
   let counts = { ...(item && item.counts || {}) };
-  const daangn = /daangn|danggeun|당근/.test(String(item && item.source || target && target.source || ""));
+  const source = String(item && item.source || target && target.source || "").toLowerCase();
+  const daangn = /daangn|danggeun|당근/.test(source);
+  const naver = /naver|네이버/.test(source);
   const terminalComplete = item && ["completed", "partial", "deferred"].includes(item.status);
-  const provisionalStage = Boolean(daangn && item && item.progressStage && item.progressStage.provisional === true);
-  const stage = daangn && !terminalComplete && !provisionalStage && item && item.progressStage && typeof item.progressStage === "object"
+  const provisionalStage = Boolean((daangn || naver) && item && item.progressStage && item.progressStage.provisional === true);
+  const stage = (daangn || naver) && !terminalComplete && !provisionalStage && item && item.progressStage && typeof item.progressStage === "object"
     ? item.progressStage
     : null;
   if (stage) {
@@ -108,12 +110,13 @@ function displayCounts(item, target) {
       const parsed = Number(value);
       return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
     };
-    const detailProcessed = number(stage.processed);
     const unchanged = number(stage.unchanged);
+    const processed = number(stage.processed) + (daangn ? unchanged : 0);
+    const detailProcessed = naver ? Math.max(0, processed - unchanged) : number(stage.processed);
     const progress = {
       version: 2,
       expected: number(stage.found),
-      processed: detailProcessed + unchanged,
+      processed,
       detailProcessed,
       unchanged,
       created: number(stage.created),
@@ -128,7 +131,8 @@ function displayCounts(item, target) {
       "created", "updated", "review", "addressDeferred", "failed"
     ]);
     Object.entries(progress).forEach(([key, value]) => {
-      if (numericKeys.has(key)) counts[key] = Math.max(Number(counts[key] || 0), Number(value || 0));
+      if (naver) counts[key] = value;
+      else if (numericKeys.has(key)) counts[key] = Math.max(Number(counts[key] || 0), Number(value || 0));
       else if (key === "listComplete") counts[key] = counts[key] === true || value === true;
       else counts[key] = value;
     });
@@ -400,6 +404,16 @@ function currentRunStatus(response) {
   const stage = runState.progressStage && typeof runState.progressStage === "object" ? runState.progressStage : null;
   const stageText = stage ? `${stage.label || "수집"} ${Number(stage.percent || 0)}%` : "";
   const market = MARKET_LABELS[runState.market || marketForTarget(target)];
+  if (runState.phase === "retry-wait") {
+    const retryAt = Number(runState.retryAt || 0);
+    const remaining = retryAt - Date.now();
+    const retryText = Number.isFinite(retryAt) && retryAt > 0
+      ? `다음 재시도 ${new Date(retryAt).toLocaleString("ko-KR", {
+        timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"
+      })} · ${remaining > 0 ? `약 ${Math.ceil(remaining / 60000)}분 후` : "실행 재개 확인 중"}`
+      : "재시도 시각 확인 중";
+    return [market, phase, position, label, retryText, progress, stageText].filter(Boolean).join(" · ");
+  }
   return [market, phase, position, label, progress,
     stageText,
     progressAge === null ? "" : progressAge ? `마지막 진행 ${progressAge}분 전` : "방금 진행 확인"

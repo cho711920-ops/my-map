@@ -1,15 +1,18 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.6";
+  var VERSION = "6.0.7";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
-  // JS부동산 D1 서버의 요청당 안전 상한인 100건까지 한 번에 저장한다.
-  // 실패한 묶음은 기존 재시도 로직이 같은 범위를 다시 전송한다.
-  var BATCH_SIZE = 100;
-  var MIN_BATCH_SIZE = 50;
-  var MAX_BATCH_SIZE = 250;
+  // Keep slow D1 writes small. Remember a safer size when automation opens a
+  // fresh tab; an unconfirmed write must never be split or sent again here.
+  var DEFAULT_BATCH_SIZE = 20;
+  var MIN_BATCH_SIZE = 5;
+  var MAX_BATCH_SIZE = 40;
+  var BATCH_SIZE_STORAGE_KEY = "js_naver_save_batch_size_v1";
+  var PENDING_SAVE_STORAGE_KEY = "js_naver_pending_save_v1";
+  var BATCH_SIZE = loadNaverBatchSize();
   var CITY_PROGRESS_KEY = "js_naver_daejeon_progress_v1";
   var CITY_FAILED_KEY = "js_naver_daejeon_failed_v1";
   var AUTO_DISTRICT_PROGRESS_KEY = "js_naver_auto_district_progress_v2";
@@ -38,6 +41,8 @@
   var COLLECTOR_REQUEST_TIMEOUT_MS = 60000;
   var COLLECTOR_FINALIZE_TIMEOUT_MS = 120000;
   var COLLECTOR_RESULT_TIMEOUT_MS = 30000;
+  var COLLECTOR_RECOVERY_ATTEMPTS = 4;
+  var COLLECTOR_RECOVERY_DELAY_MS = 5000;
   // 새 네이버 목록 API는 실제 화면과 동일한 30건 단위에서만 다음 페이지
   // lastInfo/seed 조합을 안정적으로 받아들입니다. 100건으로 올리면 2페이지부터 400이 납니다.
   var FIN_PAGE_SIZE = 30;
@@ -121,6 +126,7 @@
     preparing: false,
     collectingSelection: false,
     stopRequested: false,
+    runGeneration: 0,
     prepareId: 0,
     capture: null,
     collected: [],
@@ -466,12 +472,14 @@
   }
 
   function beginCollectorRun() {
+    state.runGeneration = Number(state.runGeneration || 0) + 1;
     state.stopRequested = false;
     stopButton.disabled = false;
     stopButton.textContent = "안전중단";
   }
 
   function finishCollectorRun() {
+    state.runGeneration = Number(state.runGeneration || 0) + 1;
     stopButton.disabled = true;
     stopButton.textContent = "안전중단";
   }
@@ -608,11 +616,27 @@
     progressBarElement.style.width = percent + "%";
   }
 
+  function loadNaverBatchSize() {
+    try {
+      var saved = Number(localStorage.getItem(BATCH_SIZE_STORAGE_KEY));
+      if (Number.isFinite(saved) && saved > 0) {
+        return Math.max(MIN_BATCH_SIZE, Math.min(MAX_BATCH_SIZE, Math.floor(saved)));
+      }
+    } catch (_) {}
+    return DEFAULT_BATCH_SIZE;
+  }
+
+  function rememberNaverBatchSize(size) {
+    BATCH_SIZE = Math.max(MIN_BATCH_SIZE, Math.min(MAX_BATCH_SIZE, Math.floor(size)));
+    try { localStorage.setItem(BATCH_SIZE_STORAGE_KEY, String(BATCH_SIZE)); } catch (_) {}
+    return BATCH_SIZE;
+  }
+
   function adjustBatchSize(elapsedMs, failed) {
     if (failed || elapsedMs > 12000) {
-      BATCH_SIZE = Math.max(MIN_BATCH_SIZE, Math.floor(BATCH_SIZE * 0.7 / 10) * 10);
+      return rememberNaverBatchSize(Math.floor(BATCH_SIZE * 0.7));
     } else if (elapsedMs < 4500) {
-      BATCH_SIZE = Math.min(MAX_BATCH_SIZE, BATCH_SIZE + 25);
+      return rememberNaverBatchSize(BATCH_SIZE + 5);
     }
     return BATCH_SIZE;
   }
@@ -2688,6 +2712,7 @@
     failure.collectorRequestAmbiguous = payload.action !== "mutationStatus" &&
       payload.action !== "getNaverSessionResult";
     failure.collectorAction = payload.action;
+    failure.collectorDeadlineExceeded = Boolean(error && error.collectorDeadlineExceeded);
     return failure;
   }
 
@@ -2699,6 +2724,7 @@
         var error = collectorRequestFailure(payload, new Error(
           "JS부동산 서버 응답이 " + Math.round(timeoutMs / 1000) + "초 안에 없어 결과 확인이 필요합니다."
         ));
+        error.collectorDeadlineExceeded = true;
         // Aborting the client does not prove that the server stopped writing.
         // Reject the deadline first, so callers retain the ambiguous outcome.
         reject(error);
@@ -2727,34 +2753,139 @@
     }
   }
 
+  function collectorRecoveryIsCurrent(generation) {
+    // Safe stop still reconciles the one write already sent. Only replacement
+    // of its owning run/panel cancels further reads; neither permits a replay.
+    return Number(state.runGeneration || 0) === generation &&
+      (typeof panel === "undefined" || panel.isConnected !== false);
+  }
+
+  function pendingNaverSave() {
+    var raw = localStorage.getItem(PENDING_SAVE_STORAGE_KEY);
+    if (!raw) return null;
+    var saved;
+    try { saved = JSON.parse(raw); } catch (_) {}
+    if (raw.length > 1024 || !saved || typeof saved.requestId !== "string" ||
+        !saved.requestId || saved.requestId.length > 160 ||
+        typeof saved.sessionId !== "string" || saved.sessionId.length > 160 ||
+        !/^[a-f0-9]{64}$/.test(saved.fingerprint) ||
+        !Number.isInteger(saved.count) || saved.count < 0 || saved.count > 250) {
+      throw collectorRequestFailure({action: "saveNaverBatch"},
+        new Error("이전 저장 요청 확인 기록이 올바르지 않습니다. 새 저장 전에 확인이 필요합니다."));
+    }
+    return saved;
+  }
+
+  function rememberPendingNaverSave(payload) {
+    var saved = {requestId: payload.requestId, sessionId: String(payload.sessionId || ""),
+      fingerprint: payload.requestId.slice(-64), count: payload.data.length, createdAt: Date.now()};
+    try { localStorage.setItem(PENDING_SAVE_STORAGE_KEY, JSON.stringify(saved)); }
+    catch (_) {
+      throw collectorRequestFailure(payload,
+        new Error("저장 요청 확인 기록을 보관하지 못해 전송을 중단했습니다. 브라우저 저장공간을 확인해 주세요."));
+    }
+  }
+
+  function clearPendingNaverSave(requestId) {
+    var saved = pendingNaverSave();
+    if (saved && saved.requestId === requestId) localStorage.removeItem(PENDING_SAVE_STORAGE_KEY);
+  }
+
+  async function reconcilePendingNaverSave(payload, generation) {
+    var pending = pendingNaverSave();
+    if (!pending) return null;
+    var sameRequest = payload.action === "saveNaverBatch" && payload.requestId === pending.requestId;
+    var previous = {action: "saveNaverBatch", requestId: pending.requestId, collectorKey: payload.collectorKey};
+    var unresolved = collectorRequestFailure(previous,
+      new Error("이전 저장 요청의 결과가 아직 확인되지 않았습니다. 중복 전송 없이 결과 확인 후 이어갑니다."));
+    try {
+      var result = await recoverCollectorRequest(previous, unresolved, generation);
+      return sameRequest ? {result: result} : null;
+    } catch (error) {
+      // A definite previous failure permits a fresh manifest comparison, but
+      // replaying the same failed request ID cannot repair its cached result.
+      if (error && error.collectorFailureConfirmed && !sameRequest) return null;
+      throw error;
+    }
+  }
+
+  async function recoverCollectorRequest(payload, error, generation) {
+    for (var attempt = 0; attempt < COLLECTOR_RECOVERY_ATTEMPTS; attempt += 1) {
+      if (!collectorRecoveryIsCurrent(generation)) break;
+      if (attempt) {
+        await delay(COLLECTOR_RECOVERY_DELAY_MS);
+        if (!collectorRecoveryIsCurrent(generation)) break;
+      }
+      try {
+        var status = await fetchCollectorJson({
+          action: "mutationStatus",
+          targetAction: payload.action,
+          requestId: payload.requestId,
+          collectorKey: payload.collectorKey
+        }, COLLECTOR_RESULT_TIMEOUT_MS, "저장 결과 확인 응답을 읽지 못했습니다.");
+        if (!collectorRecoveryIsCurrent(generation)) break;
+        if (status && status.ok && status.ready && status.result &&
+            typeof status.result.ok === "boolean") {
+          if (payload.action === "saveNaverBatch") clearPendingNaverSave(payload.requestId);
+          if (!status.result.ok) {
+            var confirmedError = new Error(status.result.message || "D1 저장에 실패했습니다.");
+            confirmedError.collectorFailureConfirmed = true;
+            confirmedError.collectorAction = payload.action;
+            throw confirmedError;
+          }
+          return status.result;
+        }
+      } catch (statusError) {
+        if (statusError && statusError.collectorFailureConfirmed) throw statusError;
+        // A bounded status read can fail too. It never authorizes replaying the
+        // original write, including after a panel replacement or safe stop.
+      }
+    }
+    if (state.stopRequested) error.safeStop = true;
+    throw error;
+  }
+
   async function fetchCollectorJson(payload, timeoutMs, invalidResponseMessage) {
+    var generation = Number(state.runGeneration || 0);
+    var mutation = payload.action !== "mutationStatus" && payload.action !== "getNaverSessionResult";
+    if (mutation) {
+      var recovered = await reconcilePendingNaverSave(payload, generation);
+      if (recovered) return recovered.result;
+      if (!collectorRecoveryIsCurrent(generation)) {
+        throw collectorRequestFailure(payload, new Error("수집 실행이 변경되어 새 저장을 중단했습니다."));
+      }
+      if (state.stopRequested && !payload.stopped) throwIfStopRequested();
+      if (payload.action === "saveNaverBatch" && payload.requestId) rememberPendingNaverSave(payload);
+    }
     var text;
     try {
       text = await fetchCollectorText(payload, timeoutMs);
+      if (mutation && !collectorRecoveryIsCurrent(generation)) {
+        throw collectorRequestFailure(payload,
+          new Error("수집 실행이 변경되어 저장 결과를 새 실행에서 확인합니다."));
+      }
       try {
         var result = JSON.parse(text);
         if (!result || typeof result !== "object" || Array.isArray(result) ||
             typeof result.ok !== "boolean") {
           throw new Error(invalidResponseMessage);
         }
+        if (result.requestPending === true) {
+          throw collectorRequestFailure(payload,
+            new Error(result.message || "같은 저장 요청이 처리 중입니다. 결과 확인 후 이어갑니다."));
+        }
+        if (payload.action === "saveNaverBatch" && payload.requestId) clearPendingNaverSave(payload.requestId);
         return result;
-      } catch (_) {
+      } catch (parseError) {
+        if (parseError && parseError.collectorRequestAmbiguous) throw parseError;
         throw collectorRequestFailure(payload, new Error(invalidResponseMessage));
       }
     } catch (error) {
+      if (payload.action === "saveNaverBatch" && error && error.collectorDeadlineExceeded) {
+        rememberNaverBatchSize(Math.floor(BATCH_SIZE / 2));
+      }
       if (error && error.collectorRequestAmbiguous && payload.requestId) {
-        try {
-          var status = await fetchCollectorJson({
-            action: "mutationStatus",
-            targetAction: payload.action,
-            requestId: payload.requestId,
-            collectorKey: payload.collectorKey
-          }, COLLECTOR_RESULT_TIMEOUT_MS, "저장 결과 확인 응답을 읽지 못했습니다.");
-          if (status && status.ok && status.ready && status.result &&
-              typeof status.result.ok === "boolean") {
-            return status.result;
-          }
-        } catch (_) {}
+        return recoverCollectorRequest(payload, error, generation);
       }
       throw error;
     }
@@ -2765,7 +2896,9 @@
     var unchanged = 0;
     var changed = 0;
     var unknown = 0;
-    var chunkSize = 2500;
+    // Manifest comparison also performs D1 work. Bound it independently of
+    // detail saves so a large district cannot monopolize the 60-second request.
+    var chunkSize = 500;
     for (var offset = 0; offset < items.length; offset += chunkSize) {
       throwIfStopRequested();
       var chunk = items.slice(offset, offset + chunkSize);
@@ -2831,7 +2964,8 @@
 
   async function postBatch(items, metadata) {
     metadata = metadata || {};
-    var result = await fetchCollectorJson({
+    var generation = Number(state.runGeneration || 0);
+    var payload = {
         action: "saveNaverBatch",
         requestId: metadata.requestId || "",
         collectorKey: getCollectorKey(),
@@ -2841,9 +2975,36 @@
         scope: metadata.scope || "선택 클러스터",
         startedAt: metadata.startedAt || "",
         manifestRegistered: Boolean(metadata.manifestRegistered)
-    }, COLLECTOR_REQUEST_TIMEOUT_MS, "JS부동산 저장 서버 응답을 읽지 못했습니다.");
-    if (!result.ok) throw new Error(result.message || "D1 저장에 실패했습니다.");
+    };
+    if (payload.requestId) payload.requestId = await naverBatchRequestId(payload);
+    if (!collectorRecoveryIsCurrent(generation)) {
+      throw collectorRequestFailure(payload, new Error("수집 실행이 변경되어 새 저장을 중단했습니다."));
+    }
+    throwIfStopRequested();
+    var result = await fetchCollectorJson(payload,
+      COLLECTOR_REQUEST_TIMEOUT_MS, "JS부동산 저장 서버 응답을 읽지 못했습니다.");
+    if (!result.ok) {
+      var failure = new Error(result.message || "D1 저장에 실패했습니다.");
+      // Only the legacy pre-write lock response is a temporary rejection.
+      // Replaying a terminal cached failure under its same ID cannot repair it.
+      failure.collectorFailureConfirmed = !/다른 수집 (?:작업|저장)이 진행 중/.test(failure.message);
+      failure.collectorAction = "saveNaverBatch";
+      throw failure;
+    }
     return result;
+  }
+
+  async function naverBatchRequestId(payload) {
+    // An old city checkpoint can resume the same index with a smaller batch.
+    // Bind its ID to the exact write content, not just the mutable batch index.
+    var content = Object.assign({}, payload);
+    delete content.requestId;
+    delete content.collectorKey;
+    var digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(content)));
+    var fingerprint = Array.from(new Uint8Array(digest), function(byte) {
+      return byte.toString(16).padStart(2, "0");
+    }).join("");
+    return String(payload.requestId).slice(0, 94) + "-" + fingerprint;
   }
 
   async function finalizeNaverSession(metadata) {
@@ -3263,7 +3424,7 @@
       } catch (error) {
         // An unconfirmed write may still be running. Status recovery has already
         // checked its exact request ID; do not submit another write blindly.
-        if (error && error.collectorRequestAmbiguous) throw error;
+        if (error && (error.collectorRequestAmbiguous || error.collectorFailureConfirmed || error.safeStop)) throw error;
         lastError = error;
         if (attempt < attempts) {
           var message = String(error && error.message ? error.message : error);
