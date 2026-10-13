@@ -2257,6 +2257,143 @@ export function collectorCompletionAudit(body, observedCount) {
   };
 }
 
+export function gongsilPresenceMarkets(body) {
+  const requested = clean(body?.collectionTradeType);
+  if (requested && !["lease", "sale"].includes(requested)) return [];
+  return requested ? [requested] : ["lease", "sale"];
+}
+
+export function validatedGongsilPresenceScope(value) {
+  const bounds = value?.bounds;
+  if (value?.version !== 1 || value?.selectionKind !== "full-map-result" ||
+      !Array.isArray(bounds) || bounds.length !== 4 ||
+      bounds.some(n => typeof n !== "number" || !Number.isFinite(n)) ||
+      !(bounds[0] < bounds[2] && bounds[1] < bounds[3]) ||
+      bounds[0] < -90 || bounds[2] > 90 || bounds[1] < -180 || bounds[3] > 180 ||
+      !Number.isInteger(value?.level) || value.level < 1 || value.level > 22 ||
+      !/^[a-f0-9]{64}$/.test(clean(value?.filtersHash)) ||
+      !/^[A-Za-z0-9_-]{1,40}$/.test(clean(value?.btype))) return null;
+  // No IDs, counts or moving cluster centroids enter this stable identity.
+  return { version: 1, selectionKind: "full-map-result", bounds,
+    level: value.level, btype: value.btype, filtersHash: value.filtersHash };
+}
+
+async function gongsilPresenceScopeKey(value) {
+  const scope = validatedGongsilPresenceScope(value);
+  if (!scope) return "";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stableJson(scope)));
+  return `gongsil-map-v1-${Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
+async function trackScopedGongsilPresence(env, body, sessionId, offers, complete) {
+  const markets = gongsilPresenceMarkets(body);
+  const scopeKey = complete ? await gongsilPresenceScopeKey(body.presenceScope) : "";
+  const result = { missingMarked: 0, deactivated: 0, presenceTracking: false,
+    presenceScopeEstablished: false, presenceTrackingIssue: "", presenceScopeKey: scopeKey };
+  const observed = offers.filter(row => markets.includes(row.tradeType));
+  const observedSet = new Set(observed.map(row => `${row.tradeType}:${row.sourceId}`));
+  const seenAt = nowIso();
+  const seenJson = JSON.stringify(observed.map(row => ({ sourceId: row.sourceId, tradeType: row.tradeType })));
+  // Observation (including partial runs) cancels prior misses in every scope.
+  // No partial/failed run can add a miss or establish a new baseline.
+  const reset = env.DB.prepare(`UPDATE collector_source_presence SET missing_count=0,
+      last_seen_at=?1, updated_at=?1
+    WHERE source='공실박스' AND missing_count<>0 AND EXISTS (
+      SELECT 1 FROM json_each(?2) seen
+      WHERE json_extract(seen.value,'$.sourceId')=collector_source_presence.source_listing_id
+        AND json_extract(seen.value,'$.tradeType')=collector_source_presence.trade_type)`)
+    .bind(seenAt, seenJson);
+  if (!complete || !scopeKey || !markets.length) {
+    if (observed.length) await reset.run();
+    if (complete) result.presenceTrackingIssue = "지도 범위·필터의 전체목록을 확인하지 못해 거래완료후보 판정을 보류했습니다. 공실박스를 새로고침한 뒤 같은 범위의 전체목록을 다시 수집해 주세요.";
+    return result;
+  }
+  const previous = await env.DB.prepare(`SELECT p.trade_type, p.source_listing_id, p.missing_count,
+      p.last_seen_at, p.last_checked_session_id, p.updated_at AS presence_updated_at,
+      s.id, s.active, s.last_collected_at, s.updated_at AS source_updated_at, s.session_id AS source_session_id
+    FROM collector_source_presence p LEFT JOIN listing_sources s
+      ON s.source=p.source AND s.source_listing_id=p.source_listing_id
+        AND COALESCE(NULLIF(s.trade_type,''),'lease')=p.trade_type
+    WHERE p.scope_key=?1 AND p.source='공실박스'
+      AND p.trade_type IN (SELECT value FROM json_each(?2))`)
+    .bind(scopeKey, JSON.stringify(markets)).all();
+  const misses = [];
+  for (const row of previous?.results || []) {
+    if (!row.id || Number(row.active) !== 1 || row.last_checked_session_id === sessionId ||
+        observedSet.has(`${row.trade_type}:${row.source_listing_id}`)) continue;
+    // A source seen in another scope or a save that did not reach finalization
+    // still resets this scope's consecutive-miss sequence.
+    const returned = clean(row.last_collected_at) > clean(row.last_seen_at);
+    const missingCount = Math.min(3, (returned ? 0 : countValue(row.missing_count)) + 1);
+    misses.push({ id: row.id, sourceId: row.source_listing_id, tradeType: row.trade_type, missingCount,
+      lastSeenAt: returned ? row.last_collected_at : row.last_seen_at,
+      oldMissingCount: countValue(row.missing_count), oldLastSeenAt: row.last_seen_at,
+      oldLastCheckedSessionId: row.last_checked_session_id, oldPresenceUpdatedAt: row.presence_updated_at,
+      sourceLastCollectedAt: row.last_collected_at, sourceUpdatedAt: row.source_updated_at,
+      sourceSessionId: row.source_session_id });
+  }
+  const missJson = JSON.stringify(misses);
+  // json_each keeps thousands of members to a handful of indexed/bulk SQL
+  // statements rather than one RPC per source. D1 batch commits atomically.
+  const changes = [reset, env.DB.prepare(`INSERT INTO collector_source_presence
+      (scope_key,source,trade_type,source_listing_id,missing_count,last_seen_at,last_checked_session_id,updated_at)
+    SELECT ?1,'공실박스',json_extract(seen.value,'$.tradeType'),json_extract(seen.value,'$.sourceId'),0,?2,?3,?2
+      FROM json_each(?4) seen WHERE 1
+    ON CONFLICT(scope_key,source,trade_type,source_listing_id) DO UPDATE SET
+      missing_count=0,last_seen_at=excluded.last_seen_at,
+      last_checked_session_id=excluded.last_checked_session_id,updated_at=excluded.updated_at`)
+    .bind(scopeKey, seenAt, sessionId, seenJson)];
+  if (misses.length) changes.push(
+    env.DB.prepare(`UPDATE collector_source_presence SET
+        missing_count=json_extract(miss.value,'$.missingCount'),
+        last_seen_at=json_extract(miss.value,'$.lastSeenAt'),last_checked_session_id=?1,updated_at=?2
+      FROM json_each(?3) miss WHERE scope_key=?4 AND source='공실박스'
+        AND trade_type=json_extract(miss.value,'$.tradeType')
+        AND source_listing_id=json_extract(miss.value,'$.sourceId')
+        AND last_checked_session_id<>?1
+        AND missing_count=json_extract(miss.value,'$.oldMissingCount')
+        AND last_seen_at=json_extract(miss.value,'$.oldLastSeenAt')
+        AND last_checked_session_id=json_extract(miss.value,'$.oldLastCheckedSessionId')
+        AND updated_at=json_extract(miss.value,'$.oldPresenceUpdatedAt')
+        AND EXISTS (SELECT 1 FROM listing_sources current_source
+          WHERE current_source.id=json_extract(miss.value,'$.id') AND current_source.active=1
+            AND current_source.last_collected_at=json_extract(miss.value,'$.sourceLastCollectedAt')
+            AND current_source.updated_at=json_extract(miss.value,'$.sourceUpdatedAt')
+            AND current_source.session_id=json_extract(miss.value,'$.sourceSessionId'))`)
+      .bind(sessionId, seenAt, missJson, scopeKey),
+    env.DB.prepare(`UPDATE listing_sources SET missing_count=json_extract(miss.value,'$.missingCount'),
+        active=CASE WHEN json_extract(miss.value,'$.missingCount')>=3 THEN 0 ELSE 1 END,updated_at=?1
+      FROM json_each(?2) miss WHERE listing_sources.id=json_extract(miss.value,'$.id')
+        AND listing_sources.active=1
+        AND listing_sources.last_collected_at=json_extract(miss.value,'$.sourceLastCollectedAt')
+        AND listing_sources.updated_at=json_extract(miss.value,'$.sourceUpdatedAt')
+        AND listing_sources.session_id=json_extract(miss.value,'$.sourceSessionId')
+        AND EXISTS (SELECT 1 FROM collector_source_presence committed
+          WHERE committed.scope_key=?3 AND committed.source='공실박스'
+            AND committed.trade_type=json_extract(miss.value,'$.tradeType')
+            AND committed.source_listing_id=json_extract(miss.value,'$.sourceId')
+            AND committed.last_checked_session_id=?4
+            AND committed.missing_count=json_extract(miss.value,'$.missingCount'))`)
+      .bind(seenAt, missJson, scopeKey, sessionId));
+  await env.DB.batch(changes);
+  result.presenceTracking = true;
+  result.presenceScopeEstablished = !(previous?.results || []).length;
+  if (misses.length) {
+    const committed = await env.DB.prepare(`SELECT COUNT(*) AS marked,
+        SUM(CASE WHEN s.active=0 THEN 1 ELSE 0 END) AS deactivated
+      FROM collector_source_presence p JOIN listing_sources s
+        ON s.source=p.source AND s.source_listing_id=p.source_listing_id
+          AND COALESCE(NULLIF(s.trade_type,''),'lease')=p.trade_type
+      WHERE p.scope_key=?1 AND p.source='공실박스' AND p.last_checked_session_id=?2
+        AND p.missing_count>0 AND s.updated_at=?3
+        AND s.missing_count=p.missing_count`)
+      .bind(scopeKey, sessionId, seenAt).first();
+    result.missingMarked = countValue(committed?.marked);
+    result.deactivated = countValue(committed?.deactivated);
+  }
+  return result;
+}
+
 export function shouldReactivateCompletedListing(status, sourceState, observed, sourceIsNew = false) {
   if (clean(status) !== "계약완료" || !observed) return false;
   if (sourceIsNew) return true;
@@ -2360,20 +2497,40 @@ async function finalizeSessionWork(env, body) {
   const sessionId = await ensureSession(env, body.sessionId, source);
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
-  const audit = collectorCompletionAudit({ ...body, source }, observed.length);
+  const providerObserved = source === "공실박스" && Number(body.presenceVersion) === 1 &&
+      Array.isArray(body.providerObservedSourceIds)
+    ? [...new Set(body.providerObservedSourceIds.map(id => sourceIdFor(source, id)).filter(Boolean))] : null;
+  const providerObservedSet = providerObserved ? new Set(providerObserved) : null;
+  // A chosen market can shrink below 100 (or to zero) while the full provider
+  // map remains proven. Opposite-market rows count as inspected list entries,
+  // never as saved/failed offers of this run or as candidates of that market.
+  const audit = collectorCompletionAudit(providerObserved ? {
+    ...body, source, expectedCount: body.providerExpectedCount, manifestCount: providerObserved.length,
+    processedCount: countValue(body.processedCount) + Math.max(0, providerObserved.length - observed.length)
+  } : { ...body, source }, providerObserved ? providerObserved.length : observed.length);
+  if (providerObserved && (observed.some(id => !providerObservedSet.has(id)) ||
+      countValue(body.manifestCount) !== observed.length || countValue(body.processedCount) < observed.length)) {
+    audit.complete = false;
+    audit.issues.push("공실박스 원본 전체목록·거래별 처리목록 불일치");
+    audit.blockingIssues.push(audit.issues.at(-1));
+  }
   let presenceObserved = observed;
+  let gongsilOffers = [];
   if (source === "공실박스") {
     const observedSet = new Set(observed);
     const offers = Array.isArray(body.observedOffers) ? body.observedOffers.filter((entry) =>
       observedSet.has(clean(entry?.sourceId)) && ["sale", "lease"].includes(entry?.tradeType)) : [];
     const covered = new Set(offers.map((entry) => entry.sourceId));
-    if (audit.complete && (covered.size !== observed.length || offers.some((entry) => entry.tradeType !== tradeType))) {
+    const markets = Number(body.presenceVersion) === 1 ? gongsilPresenceMarkets(body) : [tradeType];
+    if (audit.complete && (covered.size !== observed.length || !markets.length ||
+        offers.some((entry) => !markets.includes(entry.tradeType)))) {
       audit.complete = false;
       audit.issues.push("공실박스 거래별 전체목록 미확인 또는 임대·매매 혼합수집");
       audit.blockingIssues.push(audit.issues.at(-1));
     }
     const rows = await resolveGongsilOfferIds(env, offers.length ? offers
       : observed.map((sourceId) => ({ sourceId, tradeType })));
+    gongsilOffers = rows;
     presenceObserved = [...new Set(rows.map((entry) => entry.sourceId))];
   } else {
     const rows = await resolveCollectorOfferIds(env, source, observed.map((sourceId) => ({ sourceId, tradeType })));
@@ -2387,7 +2544,9 @@ async function finalizeSessionWork(env, body) {
   let reactivated = 0;
   const scope = clean(body.scope);
   const districtMatch = scope.match(/(동구|중구|서구|유성구|대덕구)/);
-  const tracksMissing = complete && observed.length >= 100 &&
+  // An arbitrary Gongsil map selection must never age the entire provider.
+  // Its scope-specific, market-specific baseline is handled below instead.
+  const tracksMissing = source !== "공실박스" && complete && observed.length >= 100 &&
     /전체|완전수집/.test(`${scope} ${clean(body.note)}`);
   if (tracksMissing) {
     const observedSet = new Set(presenceObserved);
@@ -2434,14 +2593,19 @@ async function finalizeSessionWork(env, body) {
   } else if (presenceObserved.length) {
     const seenAt = nowIso();
     const reactivatedListings = new Set();
-    for (let offset = 0; offset < presenceObserved.length; offset += 75) {
-      const ids = presenceObserved.slice(offset, offset + 75);
+    const presenceMarkets = source === "공실박스" && Number(body.presenceVersion) === 1
+      ? gongsilPresenceMarkets(body) : [tradeType];
+    for (const presenceMarket of presenceMarkets) {
+      const marketIds = source === "공실박스" ? gongsilOffers.filter(row => row.tradeType === presenceMarket)
+        .map(row => row.sourceId) : presenceObserved;
+      for (let offset = 0; offset < marketIds.length; offset += 75) {
+      const ids = marketIds.slice(offset, offset + 75);
       const resetRows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.active, s.missing_count,
           l.status AS listing_status, l.operating_memo
         FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
         WHERE s.source=?1 AND s.source_listing_id IN (${ids.map((_, index) => `?${index + 2}`).join(",")})
           AND COALESCE(NULLIF(s.trade_type,''),'lease')=?${ids.length + 2}
-          AND (s.active=0 OR s.missing_count<>0)`).bind(source, ...ids, tradeType).all();
+          AND (s.active=0 OR s.missing_count<>0)`).bind(source, ...ids, presenceMarket).all();
       const changes = [];
       for (const row of resetRows?.results || []) {
         changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
@@ -2464,7 +2628,15 @@ async function finalizeSessionWork(env, body) {
         await env.DB.batch(changes.slice(changeOffset, changeOffset + 80));
       }
       presenceReset += (resetRows?.results || []).length;
+      }
     }
+  }
+  const scopedPresence = source === "공실박스"
+    ? await trackScopedGongsilPresence(env, body, sessionId, gongsilOffers, complete) : null;
+  if (scopedPresence) {
+    missingMarked = scopedPresence.missingMarked;
+    deactivated = scopedPresence.deactivated;
+    if (scopedPresence.presenceTrackingIssue) audit.issues.push(scopedPresence.presenceTrackingIssue);
   }
   const row = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(row?.totals_json, {});
@@ -2474,13 +2646,16 @@ async function finalizeSessionWork(env, body) {
   totals.reactivated = Number(totals.reactivated || 0) + reactivated;
   totals.missingMarked = missingMarked;
   totals.deactivated = deactivated;
+  if (scopedPresence) Object.assign(totals, scopedPresence);
   totals.note = clean(body.note);
   totals.completeRequested = audit.requested;
   totals.completionValidated = audit.complete;
   totals.completionIssues = audit.issues;
-  totals.expectedCount = audit.expected;
-  totals.manifestCount = audit.manifest;
-  totals.processedCount = audit.processed;
+  totals.expectedCount = providerObserved ? countValue(body.expectedCount) : audit.expected;
+  totals.manifestCount = providerObserved ? countValue(body.manifestCount) : audit.manifest;
+  totals.processedCount = providerObserved ? countValue(body.processedCount) : audit.processed;
+  if (providerObserved) Object.assign(totals, { providerExpectedCount: audit.expected,
+    providerManifestCount: audit.manifest, providerProcessedCount: audit.processed });
   totals.failed = Math.max(Number(totals.failed || 0), audit.failed);
   totals.addressMissing = Math.max(Number(totals.addressMissing || 0), audit.addressMissing);
   totals.requiredFieldRejected = Math.max(

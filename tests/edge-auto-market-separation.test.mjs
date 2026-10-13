@@ -40,7 +40,7 @@ function harness(targets = [target("lease-on", "lease"), target("lease-off", "le
         async query() { return []; }, async remove() {},
         async create(values) { launches.push(values); return { id: 10, status: "complete", ...values }; },
         async sendMessage() { return { started: true }; } },
-      runtime: { getManifest: () => ({ version: "1.1.12" }), getURL: path => `chrome-extension://test/${path}`,
+      runtime: { getManifest: () => ({ version: "1.1.13" }), getURL: path => `chrome-extension://test/${path}`,
         onMessage: event("message"), onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { async create() {} }
     }
@@ -204,7 +204,7 @@ test("only a settled scheduled lease run marks today's schedule complete", async
     const state = clone(h.data[RUN]);
     await h.context.finalizeRun(state);
     assert.equal(Boolean(h.data[LAST]), marksDaily, `${reason}/${market}`);
-    assert.equal(h.data[VERSION], marksDaily ? "1.1.12" : undefined);
+    assert.equal(h.data[VERSION], marksDaily ? "1.1.13" : undefined);
   }
 });
 

@@ -96,7 +96,9 @@ test("the map renders only a complete full snapshot and refreshes it without a s
   assert.match(mapSource, /canKeepFullInitialCacheV1/);
   assert.match(mapSource, /jsInitialFullListingsCacheSignatureV1 === liveInitialSignatureV1/);
   assert.match(mapSource, /jsInitialFullListingsCacheUnifiedSignatureV1 === liveInitialUnifiedSignatureV1/);
-  assert.match(mapSource, /Promise\.all\(\[[\s\S]*?sheetRequest,[\s\S]*?unifiedRequest\.catch/);
+  assert.match(mapSource, /return sheetRequest\s*\.then\(function\(snapshot\)/);
+  assert.doesNotMatch(mapSource, /return Promise\.all\(\[\s*sheetRequest/);
+  assert.match(mapSource, /matchingListingSnapshotRevisionV1\(sheetSnapshotV1, unifiedResult\)/);
   assert.match(mapSource, /전체 매물 한 번에 준비 중/);
   assert.match(mapSource, /window\.JSUnifiedListingsV8\.attach\(rawItems, unifiedResult\)/);
   assert.match(mapSource, /JSInitialListingsCacheV1\.write\(liveInitialItemsForCacheV1, unifiedResult\)/);

@@ -14,6 +14,7 @@ import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./l
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
 import { withDaangnLandUse } from "./land-use-display.js";
 import { withSaleAreaDisplay } from "./sale-area-display.js";
+import { newListingPeriod } from "./new-listing-period.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
@@ -25,7 +26,7 @@ const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
   "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard",
-  "transactionCandidates", "listingChanges", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
+  "transactionCandidates", "listingChanges", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
 ]);
 
 const D1_POST_ACTIONS = new Set([
@@ -209,10 +210,11 @@ function csvCell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-async function allPages(env, sql, pageSize = 4_000) {
+async function allPages(env, sql, pageSize = 4_000, bindings = []) {
   const rows = [];
   for (let offset = 0; ; offset += pageSize) {
-    const result = await env.DB.prepare(`${sql} LIMIT ?1 OFFSET ?2`).bind(pageSize, offset).all();
+    const result = await env.DB.prepare(`${sql} LIMIT ?${bindings.length + 1} OFFSET ?${bindings.length + 2}`)
+      .bind(...bindings, pageSize, offset).all();
     const page = result?.results || [];
     rows.push(...page);
     if (page.length < pageSize) break;
@@ -220,13 +222,13 @@ async function allPages(env, sql, pageSize = 4_000) {
   return rows;
 }
 
-async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000) {
+async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000, bindings = []) {
   const rows = [];
   let cursor = 0;
   for (;;) {
     const result = await env.DB.prepare(`SELECT rowid AS __page_cursor, ${selectSql}
-      FROM ${tableSql} WHERE (${whereSql}) AND rowid > ?1 ORDER BY rowid LIMIT ?2`)
-      .bind(cursor, pageSize).all();
+      FROM ${tableSql} WHERE (${whereSql}) AND rowid > ?${bindings.length + 1} ORDER BY rowid LIMIT ?${bindings.length + 2}`)
+      .bind(...bindings, cursor, pageSize).all();
     const page = result?.results || [];
     for (const row of page) {
       const { __page_cursor: pageCursor, ...value } = row;
@@ -393,7 +395,13 @@ function gongsilJsonScalar(...names) {
     ELSE ${sourceJsonScalar(...names)} END`;
 }
 
-async function unifiedListings(env) {
+async function unifiedListings(env, listingIds = null) {
+  const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
+  if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
+    groups: {}, sourceSearchIds: {}, originalCount: 0, unavailableCount: 0, source: "D1" };
+  if (scopedIds && scopedIds.length > 75) throw new Error("한 번에 조회할 신규매물 범위를 초과했습니다.");
+  const bindings = scopedIds || [];
+  const scopeSql = column => scopedIds ? ` AND ${column} IN (${scopedIds.map((_, i) => `?${i + 1}`).join(",")})` : "";
   const rows = await allRowidPages(
     env,
     `listing_id, source, list_snapshot_json,
@@ -423,8 +431,8 @@ async function unifiedListings(env) {
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listing_sources.listing_id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
-      )`,
-    4_000
+      )${scopeSql("listing_id")}`,
+    4_000, bindings
   );
   const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
     FROM listing_sources s JOIN listings l ON l.id=s.listing_id
@@ -433,8 +441,8 @@ async function unifiedListings(env) {
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = l.id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
-      )
-    ORDER BY s.rowid`, 4_000);
+      )${scopeSql("s.listing_id")}
+    ORDER BY s.rowid`, 4_000, bindings);
   const groups = {};
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
@@ -481,10 +489,10 @@ async function unifiedListings(env) {
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = l.id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
-      )
+      )${scopeSql("l.id")}
     GROUP BY l.id
     HAVING SUM(CASE WHEN s.active=1 THEN 1 ELSE 0 END)=0 AND MAX(s.missing_count)>=3
-    ORDER BY l.rowid`, 4_000);
+    ORDER BY l.rowid`, 4_000, bindings);
   let unavailableCount = 0;
   for (const row of unavailableRows) {
     const propertyId = clean(row.property_id || row.id);
@@ -1300,6 +1308,7 @@ export async function handleD1GetAction(env, user, query) {
   const action = clean(query.action);
   if (!env.DB || !isD1GetAction(action)) return null;
   if (action === "unifiedListings") return unifiedListings(env);
+  if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
   if (action === "unifiedListingContacts") return listingContacts(env, clean(query.propertyId).slice(0, 100));
   if (action === "tellContacts") return tellContacts(env, query.query);

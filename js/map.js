@@ -50,6 +50,9 @@ var jsInitialFullListingsCacheHitV1 = false;
 var jsInitialFullListingsCacheItemsV1 = null;
 var jsInitialFullListingsCacheSignatureV1 = "";
 var jsInitialFullListingsCacheUnifiedSignatureV1 = "";
+var jsListingsLoadGenerationV1 = 0;
+var jsListingsCompleteBaseV1 = false;
+var jsListingsFullBaseTimerV1 = null;
 
 
 /*
@@ -230,9 +233,17 @@ function listingChangeRowToItemV683(row, index) {
   return item;
 }
 
+function notifyListingsSnapshotV1(kind, revision) {
+  if (typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+  window.dispatchEvent(new CustomEvent("js-listings-full-snapshot", {
+    detail: {kind: kind, revision: String(revision || "")}
+  }));
+}
+
 function applyListingChangesV683(info) {
   var ids = info && Array.isArray(info.changeIds) ? info.changeIds.map(clean).filter(Boolean).slice(0, 50) : [];
   if (!ids.length || info.fullReload) return Promise.resolve(false);
+  var generationV1 = jsListingsLoadGenerationV1;
   var request = window.JSDataAccessV6
     ? window.JSDataAccessV6.read("listingChanges", { ids: ids.join(",") }, { errorMessage: "Listing delta failed" })
     : fetch((window.saveApiURL || "/api/data") + "?" + new URLSearchParams({ action: "listingChanges", ids: ids.join(","), _: String(Date.now()) }).toString(), {
@@ -242,6 +253,7 @@ function applyListingChangesV683(info) {
     return response.json();
   });
   return request.then(function(result) {
+    if (generationV1 !== jsListingsLoadGenerationV1) return false;
     var changed = {};
     ids.forEach(function(id) { changed[id] = true; });
     var retained = (allItems || []).filter(function(item) { return !changed[clean(item && item.propertyId)]; });
@@ -249,12 +261,14 @@ function applyListingChangesV683(info) {
       return item.address && item.state !== "deleted";
     });
     allItems = retained.concat(replacements);
-    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function") {
-      return window.JSUnifiedListingsV8.load(false).then(function(unified) {
-        if (typeof window.JSUnifiedListingsV8.attach === "function") window.JSUnifiedListingsV8.attach(allItems, unified);
-      });
+    notifyListingsSnapshotV1("delta", info && info.revision);
+    // A bounded master delta must not wait behind a full-sized originals read.
+    // Source changes advertise fullReload and use the separate full-load path.
+    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+      window.JSUnifiedListingsV8.attach(allItems);
     }
   }).then(function() {
+    if (generationV1 !== jsListingsLoadGenerationV1) return false;
     updateTypeOptions(allItems);
     applyFilter();
     updateErrorStatus();
@@ -274,13 +288,16 @@ function rememberListingsRevisionV682() {
 function refreshListingsWhenChangedV682() {
   if (jsListingsRevisionPendingV682 || isLoadingSheet) return;
   jsListingsRevisionPendingV682 = true;
+  var generationV1 = typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0;
   return fetchDataRevisionV682("listings").then(function(revision) {
+    if (generationV1 !== (typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0)) return;
     if (!revision) return;
     if (!jsListingsRevisionV682) {
       return loadSheet(true, true);
     }
     if (revision === jsListingsRevisionV682) return;
     return applyListingChangesV683(jsListingsRevisionInfoV683).then(function(applied) {
+      if (generationV1 !== (typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0)) return;
       if (applied) {
         jsListingsRevisionV682 = revision;
         return;
@@ -329,9 +346,13 @@ function getPinnedClusterItemsV6515() {
     var identity = getStableItemIdentityV638(item);
     if (identity) byIdentity[identity] = item;
   });
-  return pin.itemIdentities.map(function(identity) {
+  var pinnedItems = pin.itemIdentities.map(function(identity) {
     return byIdentity[identity] || null;
   }).filter(Boolean);
+  if (Number(window.newListingDays || 0) === 1 && window.JSTodayListingsV1) {
+    pinnedItems = pinnedItems.filter(function(item) { return window.JSTodayListingsV1.matches(item); });
+  }
+  return pinnedItems;
 }
 
 
@@ -1799,6 +1820,7 @@ function showInitialFullListingsCacheV1(snapshot) {
 
   window.JSUnifiedListingsV8.attach(cachedItems, snapshot.unified || { groups: {} });
   allItems = cachedItems;
+  jsListingsCompleteBaseV1 = true;
   updateTypeOptions(allItems);
   jsInitialFullListingsCacheHitV1 = true;
   jsInitialFullListingsCacheItemsV1 = cachedItems;
@@ -1849,6 +1871,81 @@ function matchingListingSnapshotRevisionV1(snapshot, originals) {
     snapshot.revision && snapshot.revision === originals.snapshotRevision ? snapshot.revision : "";
 }
 
+function applyScopedListingsV1(result) {
+  if (!result || result.ok === false || !Array.isArray(result.items) ||
+      !result.snapshotRevision || !result.unified || result.unified.ok === false ||
+      result.unified.snapshotRevision !== result.snapshotRevision ||
+      !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.mergeScoped !== "function") return false;
+  var replacements = result.items.map(listingChangeRowToItemV683);
+  if (replacements.some(function(item) { return !item.propertyId || !item.address; })) return false;
+  // Decode and validate originals before invalidating any live full snapshot.
+  if (!window.JSUnifiedListingsV8.mergeScoped(result.unified)) return false;
+  jsListingsLoadGenerationV1 += 1;
+  if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.invalidateRead === "function") {
+    window.JSDataAccessV6.invalidateRead("listingsCsv");
+  }
+  var byId = Object.create(null);
+  replacements.forEach(function(item) { byId[item.propertyId] = item; });
+  var nextItems = (allItems || []).map(function(previous) {
+    var replacement = byId[previous.propertyId];
+    if (!replacement) return previous;
+    delete byId[previous.propertyId];
+    replacement.sheetRow = previous.sheetRow || replacement.sheetRow;
+    if (!replacement.latlng && previous.latlng && replacement.address === previous.address) {
+      replacement.latlng = previous.latlng;
+      replacement.latitude = previous.latitude;
+      replacement.longitude = previous.longitude;
+    }
+    return replacement;
+  });
+  Object.keys(byId).forEach(function(id) { nextItems.push(byId[id]); });
+  allItems = nextItems;
+  window.JSUnifiedListingsV8.attach(allItems);
+  window.jsInitialFullListingsLoadingV1 = false;
+  isLoadingSheet = false;
+  pendingAutoUpdate = false;
+  updateTypeOptions(allItems);
+  // A first-ever Today request may beat the initial complete CSV. Keep its
+  // instant result, but do not leave the normal view permanently scoped-only.
+  if (!jsListingsCompleteBaseV1 && typeof window.setTimeout === "function") {
+    if (jsListingsFullBaseTimerV1 !== null && typeof window.clearTimeout === "function") {
+      window.clearTimeout(jsListingsFullBaseTimerV1);
+    }
+    var scopedGeneration = jsListingsLoadGenerationV1;
+    jsListingsFullBaseTimerV1 = window.setTimeout(function() {
+      jsListingsFullBaseTimerV1 = null;
+      if (scopedGeneration === jsListingsLoadGenerationV1 && !jsListingsCompleteBaseV1 && !isLoadingSheet) {
+        loadSheet(true, true);
+      }
+    }, 0);
+  }
+  // Root's period controller supplies authoritative visible IDs. Other rows,
+  // favorites, selection, and the complete-dataset revision remain untouched.
+  return true;
+}
+
+window.JSListingRefreshV1 = { applyScoped: applyScopedListingsV1 };
+
+function applyOriginalsSnapshotV1(result, revision, generation) {
+  if (generation !== jsListingsLoadGenerationV1 || !revision || !result || result.ok === false ||
+      result.snapshotRevision !== revision || jsListingsRevisionV682 !== revision ||
+      !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.attach !== "function") return false;
+  var view = captureAutoUpdateViewState();
+  window.JSUnifiedListingsV8.attach(allItems, result);
+  preserveActionSelectionDuringRender = true;
+  try {
+    applyFilter();
+    restoreAutoUpdateViewState(view);
+  } finally {
+    preserveActionSelectionDuringRender = false;
+  }
+  return true;
+}
+
+window.JSListingRefreshV1.applyOriginals = applyOriginalsSnapshotV1;
+window.JSListingRefreshV1.generation = function() { return jsListingsLoadGenerationV1; };
+window.JSListingRefreshV1.hasCompleteBase = function() { return jsListingsCompleteBaseV1; };
+
 function loadSheet(isAuto, forceRefresh) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
@@ -1866,6 +1963,7 @@ function loadSheet(isAuto, forceRefresh) {
     : "";
 
   isLoadingSheet = true;
+  var loadGenerationV1 = ++jsListingsLoadGenerationV1;
   errorItems = [];
   if (!isAuto && !(allItems || []).length) window.jsInitialFullListingsLoadingV1 = true;
   document.getElementById("status").innerHTML = isAuto
@@ -1906,26 +2004,50 @@ function loadSheet(isAuto, forceRefresh) {
     });
 
   var unifiedResult = null;
+  var sheetSnapshotV1 = null;
+  var sheetPublishedV1 = false;
+  var unifiedAppliedV1 = false;
+  function applyLateUnifiedV1() {
+    if (unifiedAppliedV1 || !sheetPublishedV1 || isLoadingSheet ||
+        loadGenerationV1 !== jsListingsLoadGenerationV1 || !unifiedResult) return;
+    if (!matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult)) {
+      if (unifiedResult.ok !== false && window.JSUnifiedListingsV8 &&
+          typeof window.JSUnifiedListingsV8.markSnapshotStale === "function") window.JSUnifiedListingsV8.markSnapshotStale();
+      return;
+    }
+    if (!applyOriginalsSnapshotV1(unifiedResult, sheetSnapshotV1.revision, loadGenerationV1)) return;
+    unifiedAppliedV1 = true;
+    persistInitialListingsCacheV1();
+  }
   function persistInitialListingsCacheV1() {
     if (
       isAuto || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
       !unifiedResult || unifiedResult.ok === false ||
+      loadGenerationV1 !== jsListingsLoadGenerationV1 ||
+      !matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult) ||
       !window.JSInitialListingsCacheV1 ||
       typeof window.JSInitialListingsCacheV1.write !== "function"
     ) return;
     initialCacheWriteStartedV1 = true;
     window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, unifiedResult).then(function(saved) {
-      if (saved) document.documentElement.setAttribute("data-initial-list-cache-live", "true");
+      if (saved && loadGenerationV1 === jsListingsLoadGenerationV1) document.documentElement.setAttribute("data-initial-list-cache-live", "true");
     });
   }
   var unifiedRequest = window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.load === "function"
-    ? window.JSUnifiedListingsV8.load(Boolean(isAuto))
+    ? window.JSUnifiedListingsV8.load(Boolean(isAuto), {deferCommit: true})
     : Promise.resolve({ ok: false, groups: {} });
+  unifiedRequest.then(function(result) {
+    if (loadGenerationV1 !== jsListingsLoadGenerationV1) return;
+    unifiedResult = result || {ok: false, groups: {}};
+    applyLateUnifiedV1();
+  }).catch(function(error) {
+    console.warn("Unified listing initial load failed", error);
+  });
 
   if (!isAuto && window.JSInitialListingsCacheV1 &&
       typeof window.JSInitialListingsCacheV1.read === "function") {
     window.JSInitialListingsCacheV1.read().then(function(snapshot) {
-      if (liveInitialDataAppliedV1 || !isLoadingSheet) return;
+      if (liveInitialDataAppliedV1 || !isLoadingSheet || loadGenerationV1 !== jsListingsLoadGenerationV1) return;
       showInitialFullListingsCacheV1(snapshot);
     });
   }
@@ -1947,22 +2069,18 @@ function loadSheet(isAuto, forceRefresh) {
   /*
    * CSV 대표매물과 통합 원본(사진·출처·매매/임대 조건)을 동시에 요청합니다.
    * 직전 정상 전체 스냅샷이 있으면 모든 매물을 즉시 한 번에 표시하고,
-   * 두 최신 응답이 모두 준비되면 변경 여부만 확인해 같은 화면의 재렌더를 피합니다.
+   * 전체 CSV가 준비되면 즉시 최신 대표매물을 표시합니다. 큰 통합 원본 응답을
+   * 기다리지 않으며 같은 리비전의 원본만 이후 사진·출처 정보로 붙입니다.
    */
-  return Promise.all([
-    sheetRequest,
-    unifiedRequest.catch(function(error) {
-      console.warn("Unified listing initial load failed", error);
-      return { ok: false, groups: {} };
-    })
-  ])
-    .then(function(initialResults) {
+  return sheetRequest
+    .then(function(snapshot) {
+      if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
       liveInitialDataAppliedV1 = true;
-      var snapshot = initialResults[0];
+      sheetSnapshotV1 = snapshot;
       var data = snapshot.body;
-      unifiedResult = initialResults[1] || { ok: false, groups: {} };
-      // Two parallel snapshots may straddle a collection. Never mark a mixed pair as current.
-      var snapshotRevision = matchingListingSnapshotRevisionV1(snapshot, unifiedResult);
+      // This complete CSV is the master-list baseline, never a scoped result.
+      // Original metadata and reusable pairs still require equal revisions.
+      var snapshotRevision = String(snapshot.revision || "");
       var rows = parseCSVRecordsV655(data);
       var rawItems = [];
 
@@ -2030,8 +2148,14 @@ function loadSheet(isAuto, forceRefresh) {
         if (item.address) rawItems.push(item);
       }
 
-      if (unifiedResult && window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+      if (matchingListingSnapshotRevisionV1(snapshot, unifiedResult) &&
+          window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
         window.JSUnifiedListingsV8.attach(rawItems, unifiedResult);
+        unifiedAppliedV1 = true;
+      } else if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+        // Reuse last-known photo/source metadata without committing a mismatched
+        // network response; all representative prices/dates still come from CSV.
+        window.JSUnifiedListingsV8.attach(rawItems);
       }
 
       var liveInitialSignatureV1 = getItemsDataSignatureV638(rawItems);
@@ -2040,6 +2164,7 @@ function loadSheet(isAuto, forceRefresh) {
           ? window.JSInitialListingsCacheV1.unifiedSignatureForItems(rawItems, unifiedResult)
           : "";
       var canKeepFullInitialCacheV1 = !isAuto && jsInitialFullListingsCacheHitV1 &&
+        !!matchingListingSnapshotRevisionV1(snapshot, unifiedResult) &&
         jsInitialFullListingsCacheSignatureV1 === liveInitialSignatureV1 &&
         jsInitialFullListingsCacheUnifiedSignatureV1 === liveInitialUnifiedSignatureV1;
 
@@ -2056,23 +2181,27 @@ function loadSheet(isAuto, forceRefresh) {
           window.JSUnifiedListingsV8.attach(jsInitialFullListingsCacheItemsV1, unifiedResult);
         }
         allItems = jsInitialFullListingsCacheItemsV1;
+        jsListingsCompleteBaseV1 = true;
         jsListingsRevisionV682 = snapshotRevision;
+        sheetPublishedV1 = true;
+        notifyListingsSnapshotV1("full", snapshotRevision);
         currentItems = getFilteredItems({ includeUnlocated: true });
         window.jsInitialFullListingsLoadingV1 = false;
         updateErrorStatus();
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+        applyLateUnifiedV1();
         document.getElementById("status").innerHTML =
           "매물 " + allItems.length.toLocaleString("ko-KR") + "개 불러옴";
         return true;
       }
 
-      /*
-       * 좌표가 모두 준비될 때까지 상태 문구만 갱신합니다. 일부 카드나 마커를 먼저
-       * 그리지 않아 첫 화면의 매물 수가 여러 번 바뀌지 않게 합니다.
-       */
+      /* 최신 전체 CSV를 먼저 반영하고 필요한 좌표만 별도로 준비합니다. */
       allItems = rawItems;
+      jsListingsCompleteBaseV1 = true;
       jsListingsRevisionV682 = snapshotRevision;
+      sheetPublishedV1 = true;
+      notifyListingsSnapshotV1("full", snapshotRevision);
       updateTypeOptions(allItems);
       currentItems = getFilteredItems({ includeUnlocated: true });
       var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {
@@ -2100,14 +2229,25 @@ function loadSheet(isAuto, forceRefresh) {
         updateErrorStatus();
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+        applyLateUnifiedV1();
         document.getElementById("status").innerHTML = "매물 " + allItems.length + "개 불러옴";
         return true;
       }
 
+      // Even when a few addresses need coordinates, all complete CSV records
+      // are available to local filters immediately; existing located rows render.
+      window.jsInitialFullListingsLoadingV1 = false;
+      if (!allRowsAlreadyLocatedV691 && !allRowsReadyWithoutSharedCacheV8213) {
+        preserveActionSelectionDuringRender = !!isAuto;
+        applyFilter();
+        preserveActionSelectionDuringRender = false;
+      }
       (allRowsAlreadyLocatedV691 || allRowsReadyWithoutSharedCacheV8213
         ? Promise.resolve({ ok: true, entries: {} })
         : getSharedGeocodeRequestV691()).then(function() {
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1) return;
         geocodeItems(rawItems, function(doneItems) {
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1) return;
         var hasPendingPropertyEditV638 =
           typeof pendingPropertyEditStateV634 !== "undefined" &&
           !!pendingPropertyEditStateV634;
@@ -2127,6 +2267,7 @@ function loadSheet(isAuto, forceRefresh) {
           updateErrorStatus();
           pendingAutoUpdate = false;
           isLoadingSheet = false;
+          applyLateUnifiedV1();
           document.getElementById("status").innerHTML =
             "자동 업데이트 확인 완료 " + allItems.length + "개";
           return;
@@ -2210,13 +2351,14 @@ function loadSheet(isAuto, forceRefresh) {
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+        applyLateUnifiedV1();
         }, function(progressItems, remainingCount) {
         /*
          * 좌표 변환 도중 일부 매물만 목록에 다시 그리면 새로고침 직후 카드 수가
          * 여러 번 바뀝니다. 진행률만 알리고, 전체 좌표 작업이 끝난 뒤 applyFilter()
          * 에서 지도와 전체 목록을 한 번에 표시합니다.
          */
-        if (!progressItems || !progressItems.length || isAuto) return;
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1 || !progressItems || !progressItems.length || isAuto) return;
         document.getElementById("status").innerHTML =
           "전체 매물 준비 중 · 지도 좌표 " + progressItems.length + "개 확인 / 나머지 " +
           Math.max(0, Number(remainingCount) || 0) + "개 처리 중...";
@@ -2225,6 +2367,7 @@ function loadSheet(isAuto, forceRefresh) {
       return true;
     })
     .catch(function(err) {
+      if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
       isLoadingSheet = false;
       if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
       document.getElementById("status").innerHTML = "D1 불러오기 오류";

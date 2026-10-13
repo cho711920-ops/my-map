@@ -15,7 +15,7 @@ export const fixtureItems = [
     saleDetails: {landAreaM2: 330.5785, landUse: "대", zoning: "일반주거지역"}}
 ].map((item) => ({fee: 0, premium: 0, memo: "브라우저 검사 전용 가상 자료", state: "active", source: "네이버", regDate: "2026-09-14", latitude: 36.35, longitude: 127.38, ...item}));
 const folder = {id: "fixture-favorites", name: "테스트 찜폴더", itemKeys: ["property:FIXTURE-LEASE-1"], createdAt: "2026-09-14T00:00:00Z", updatedAt: "2026-09-14T00:00:00Z"};
-const scripts = ["data-access-v6.js", "phone-device-v1.js", "local-metrics-v1.js", "dialog-focus-v1.js", "unified-listings-v8.js", "commercial-brokerage-v1.js", "listing-trade-ui-v1.js", "sale-workbench-v1.js", "script.js", "parser.js", "quickadd-at.js", "property-edit-v648.js", "list-manager-v6.js", "unified-favorites-v7.js", "mobile-detail-fix-v6.js", "async-mutation-queue-v1.js", "mobile-app-v1.js", "phone-app-v2.js", "phone-device-check-v1.js"];
+const scripts = ["data-access-v6.js", "phone-device-v1.js", "local-metrics-v1.js", "dialog-focus-v1.js", "unified-listings-v8.js", "commercial-brokerage-v1.js", "listing-trade-ui-v1.js", "sale-workbench-v1.js", "script.js", "today-listings-v1.js", "parser.js", "quickadd-at.js", "property-edit-v648.js", "list-manager-v6.js", "unified-favorites-v7.js", "mobile-detail-fix-v6.js", "async-mutation-queue-v1.js", "mobile-app-v1.js", "phone-app-v2.js", "phone-device-check-v1.js"];
 
 export async function fixtureHtml() {
   const index = await readFile(resolve(fixtureRoot, "index.html"), "utf8");
@@ -69,6 +69,14 @@ export function createFixtureServer() {
         }
         const action = body.action || url.searchParams.get("action");
         if (action === "unifiedListings") return json({ok: true, groups: originals(url.origin), sourceSearchIds: {}});
+        if (action === "newListingPeriod") {
+          const day = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const rangeStart = new Date(day + "T00:00:00+09:00").toISOString();
+          const rangeEnd = new Date(Date.parse(rangeStart) + 86400000).toISOString();
+          return json({ok:true,days:1,market:url.searchParams.get("market") || "lease",day,
+            serverNow:new Date().toISOString(),rangeStart,rangeEnd,items:[],hasMore:false,nextCursor:"",
+            snapshotRevision:"fixture-listings-revision",unified:{ok:true,groups:{},sourceSearchIds:{},snapshotRevision:"fixture-listings-revision"}});
+        }
         if (action === "unifiedListingDetail") return json({ok: true, originals: originals(url.origin)[url.searchParams.get("propertyId")] || []});
         if (action === "loadCloudState") {
           const scope = url.searchParams.get("scope");

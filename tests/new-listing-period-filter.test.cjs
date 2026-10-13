@@ -37,7 +37,7 @@ test("registration date filter includes today and the preceding calendar days on
   const context = { console, Date };
   vm.createContext(context);
   vm.runInContext(periodRuntime(), context);
-  const now = new Date(2026, 8, 1, 18, 30);
+  const now = new Date("2026-09-01T09:30:00Z");
 
   assert.equal(context.isRegistrationWithinDays("26.09.01", 1, now), true);
   assert.equal(context.isRegistrationWithinDays("2026-08-31 23:59", 1, now), false);
@@ -56,6 +56,7 @@ test("selecting a period replaces the previous period and selecting it again cle
   const context = {
     console,
     Date,
+    window: {},
     newListingDays: 0,
     todayNewOnly: false,
     syncFilterToggleControlsV844() {},
@@ -77,8 +78,21 @@ test("selecting a period replaces the previous period and selecting it again cle
   assert.equal(refreshes, 4);
 });
 
+test("UTC timestamps use Korean calendar days and local legacy dates keep their day", () => {
+  const context = { Date };
+  vm.createContext(context);
+  vm.runInContext(periodRuntime(), context);
+  const now = new Date("2026-10-13T09:00:00Z");
+  assert.equal(context.isRegistrationWithinDays("2026-10-12T23:40:00Z", 1, now), true);
+  assert.equal(context.isRegistrationWithinDays("2026-10-13T14:59:59Z", 1, now), true);
+  assert.equal(context.isRegistrationWithinDays("2026-10-13T15:00:00Z", 1, now), false);
+  assert.equal(context.isRegistrationWithinDays("2026-10-13T08:40:00+09:00", 1, now), true);
+  assert.equal(context.isRegistrationWithinDays("2026-10-13 23:30", 1, now), true);
+  assert.equal(context.isRegistrationWithinDays("26.10.13", 1, now), true);
+});
+
 test("main list and map quick state share the selected period", () => {
-  assert.match(script, /!newListingDays \|\| isRegistrationWithinDays\(item\.regDate, newListingDays\)/);
+  assert.match(script, /window\.JSTodayListingsV1\.matches\(item\) : isRegistrationWithinDays\(item\.regDate, newListingDays\)/);
   assert.match(script, /newListingDays === 1 \? "오늘 신규매물" : "최근 " \+ newListingDays \+ "일 신규매물"/);
   for (const days of [1, 3, 7, 15]) {
     assert.match(mapQuick, new RegExp(`Number\\(window\\.newListingDays \\|\\| 0\\) === ${days}`));

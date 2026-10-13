@@ -6,7 +6,8 @@
   var state = { groups: {}, detailCache: {}, detailCachedAt: {}, detailRetryAt: {}, detailGeneration: 0,
     detailPending: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
-    loaded: false, loadPending: null, snapshotRevision: "", openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
+    loaded: false, loadPending: null, loadGeneration: 0, snapshotRevision: "", detailPropertyGeneration: {},
+    openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
     photoPreloads: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0 };
@@ -367,12 +368,13 @@
       return Promise.resolve(state.detailCache[propertyId]);
     }
     var generation = state.detailGeneration;
+    var propertyGeneration = Number(state.detailPropertyGeneration[propertyId]) || 0;
     var request = apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
       if (!result || result.ok === false || !Array.isArray(result.originals)) {
         throw new Error(result && result.message || "매물 상세 응답을 확인하지 못했습니다.");
       }
       var originals = orderOriginals(result.originals || []);
-      if (generation !== state.detailGeneration) return originals;
+      if (generation !== state.detailGeneration || propertyGeneration !== (Number(state.detailPropertyGeneration[propertyId]) || 0)) return originals;
       state.detailCache[propertyId] = originals;
       state.detailCachedAt[propertyId] = Date.now();
       delete state.detailRetryAt[propertyId];
@@ -380,7 +382,9 @@
       primeDetailImages(originals);
       return originals;
     }).catch(function(error) {
-      if (generation === state.detailGeneration) state.detailRetryAt[propertyId] = Date.now() + DETAIL_RETRY_DELAY;
+      if (generation === state.detailGeneration && propertyGeneration === (Number(state.detailPropertyGeneration[propertyId]) || 0)) {
+        state.detailRetryAt[propertyId] = Date.now() + DETAIL_RETRY_DELAY;
+      }
       if (state.detailPending[propertyId] === request) delete state.detailPending[propertyId];
       throw error;
     });
@@ -442,7 +446,8 @@
     }, 450);
   }
 
-  function originalLoadStatus(failed) {
+  function originalLoadStatus(failed, explanation) {
+    if (typeof document === "undefined") return;
     var banner = document.getElementById("unifiedOriginalLoadStatusV1");
     if (!failed) { if (banner) banner.remove(); return; }
     if (banner) return;
@@ -453,14 +458,25 @@
     banner.className = "operations-center-message error";
     banner.setAttribute("role", "status");
     var message = document.createElement("span");
-    message.textContent = state.loaded ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 연결 조회 실패 · 기본 매물자료를 표시합니다. ";
+    message.textContent = explanation || (state.loaded ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 연결 조회 실패 · 기본 매물자료를 표시합니다. ");
     var retry = document.createElement("button");
     retry.type = "button";
     retry.textContent = "원본 다시 불러오기";
     retry.onclick = function() {
       retry.disabled = true;
-      load(true).then(function(result) {
+      var refresh = global.JSListingRefreshV1;
+      var generation = refresh && typeof refresh.generation === "function" ? refresh.generation() : null;
+      var revision = text(global.jsListingsRevisionV682);
+      load(true, {deferCommit: !!refresh}).then(function(result) {
         if (result.ok === false) return;
+        if (refresh && typeof refresh.applyOriginals === "function") {
+          if (!refresh.applyOriginals(result, revision, generation) &&
+              typeof refresh.generation === "function" && refresh.generation() === generation &&
+              typeof global.loadSheet === "function") {
+            return global.loadSheet(true, true);
+          }
+          return;
+        }
         attach(global.allItems || [], result);
         if (typeof global.applyFilter === "function") global.applyFilter();
       }).finally(function() { retry.disabled = false; });
@@ -470,25 +486,74 @@
     status.parentNode.insertBefore(banner, status.nextSibling);
   }
 
-  function load(force) {
+  function expandUnifiedResult(result) {
+    if (!result || result.ok === false || !result.groups || typeof result.groups !== "object" || Array.isArray(result.groups)) {
+      throw new Error(result && result.message || "원본 매물 응답을 확인하지 못했습니다.");
+    }
+    var compact = /^compact-v\d+$/.test(result.format || "");
+    if (compact && !Array.isArray(result.fields)) throw new Error("원본 매물 항목을 확인하지 못했습니다.");
+    var expanded = {};
+    Object.keys(result.groups).forEach(function(propertyId) {
+      if (!Array.isArray(result.groups[propertyId])) throw new Error("원본 매물 목록을 확인하지 못했습니다.");
+      expanded[propertyId] = result.groups[propertyId].map(function(values) {
+        if (!compact) {
+          if (!values || typeof values !== "object" || Array.isArray(values)) throw new Error("원본 매물 항목을 확인하지 못했습니다.");
+          return values;
+        }
+        if (!Array.isArray(values)) throw new Error("원본 매물 항목을 확인하지 못했습니다.");
+        var original = {propertyId: propertyId};
+        result.fields.forEach(function(field, index) { original[field] = values[index]; });
+        return original;
+      });
+    });
+    return Object.assign({}, result, {groups: expanded, format: compact ? "expanded-v2" : result.format});
+  }
+
+  function invalidatePendingLoad() {
+    state.loadGeneration += 1;
+    state.loadPending = null;
+    if (global.JSDataAccessV6 && typeof global.JSDataAccessV6.invalidateRead === "function") {
+      global.JSDataAccessV6.invalidateRead("unifiedListings");
+    }
+  }
+
+  function mergeScoped(result) {
+    var expanded;
+    try { expanded = expandUnifiedResult(result); } catch (_) { return false; }
+    invalidatePendingLoad();
+    var merged = Object.assign({}, state.groups);
+    var searchIds = Object.assign({}, state.sourceSearchIds);
+    Object.keys(expanded.groups).forEach(function(propertyId) {
+      merged[propertyId] = expanded.groups[propertyId];
+      searchIds[propertyId] = (expanded.sourceSearchIds && expanded.sourceSearchIds[propertyId] || []).slice();
+      state.detailPropertyGeneration[propertyId] = (Number(state.detailPropertyGeneration[propertyId]) || 0) + 1;
+      delete state.detailCache[propertyId];
+      delete state.detailCachedAt[propertyId];
+      delete state.detailRetryAt[propertyId];
+      delete state.detailPending[propertyId];
+      delete state.contactCache[propertyId];
+      delete state.contactPending[propertyId];
+      if (state.openPropertyId === propertyId) state.detailRequestToken += 1;
+    });
+    state.groups = merged;
+    state.sourceSearchIds = searchIds;
+    // A scoped response is not a complete snapshot; never advertise its revision
+    // as the revision of all original groups or mark a partial first load full.
+    state.snapshotRevision = "";
+    return true;
+  }
+
+  function load(force, options) {
     if (state.loadPending) return state.loadPending;
-    if (state.loaded && !force) return Promise.resolve({groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision});
-    state.loadPending = apiGet("unifiedListings", {}, force).then(function(result) {
-      if (!result || result.ok === false || !result.groups || typeof result.groups !== "object" || Array.isArray(result.groups)) {
-        throw new Error(result && result.message || "원본 매물 응답을 확인하지 못했습니다.");
-      }
-      if (result && /^compact-v\d+$/.test(result.format || "") && Array.isArray(result.fields)) {
-        var fields = result.fields;
-        var expanded = {};
-        Object.keys(result.groups || {}).forEach(function(propertyId) {
-          expanded[propertyId] = (result.groups[propertyId] || []).map(function(values) {
-            var original = {propertyId: propertyId};
-            fields.forEach(function(field, index) { original[field] = values[index]; });
-            return original;
-          });
-        });
-        result.groups = expanded;
-      }
+    if (state.loaded && !force && (!(options && options.deferCommit) || state.snapshotRevision)) {
+      return Promise.resolve({groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision});
+    }
+    var generation = state.loadGeneration;
+    var deferredCommit = !!(options && options.deferCommit);
+    var pending = apiGet("unifiedListings", {}, force).then(function(result) {
+      result = expandUnifiedResult(result);
+      if (generation !== state.loadGeneration) return {ok: false, superseded: true, groups: {}, snapshotRevision: ""};
+      if (deferredCommit) return result;
       if (force) invalidateDetails();
       state.groups = result.groups || {};
       state.sourceSearchIds = result.sourceSearchIds || {};
@@ -497,11 +562,13 @@
       originalLoadStatus(false);
       return result;
     }).catch(function(error) {
+      if (generation !== state.loadGeneration) return {ok: false, superseded: true, groups: {}, snapshotRevision: ""};
       console.error("통합매물 원본 조회 실패", error);
       originalLoadStatus(true);
       return {ok: false, stale: state.loaded, groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision};
-    }).finally(function() { state.loadPending = null; });
-    return state.loadPending;
+    }).finally(function() { if (state.loadPending === pending) state.loadPending = null; });
+    state.loadPending = pending;
+    return pending;
   }
 
   function attach(items, result) {
@@ -509,7 +576,11 @@
       if (state.groups !== result.groups) invalidateDetails();
       state.groups = result.groups;
       state.sourceSearchIds = result.sourceSearchIds || state.sourceSearchIds || {};
-      if (result.ok !== false) state.loaded = true;
+      if (result.ok !== false) {
+        state.loaded = true;
+        if (Object.prototype.hasOwnProperty.call(result, "snapshotRevision")) state.snapshotRevision = result.snapshotRevision || "";
+        originalLoadStatus(false);
+      }
     }
     (items || []).forEach(function(item) {
       var originals = group(item.propertyId);
@@ -1110,12 +1181,13 @@
       return Promise.resolve(state.contactCache[propertyId]);
     }
     if (state.contactPending[propertyId]) return state.contactPending[propertyId];
+    var propertyGeneration = Number(state.detailPropertyGeneration[propertyId]) || 0;
     var request = apiGet("unifiedListingContacts", {propertyId: propertyId}).then(function(result) {
-      state.contactCache[propertyId] = result;
-      delete state.contactPending[propertyId];
+      if (propertyGeneration === (Number(state.detailPropertyGeneration[propertyId]) || 0)) state.contactCache[propertyId] = result;
+      if (state.contactPending[propertyId] === request) delete state.contactPending[propertyId];
       return result;
     }, function(error) {
-      delete state.contactPending[propertyId];
+      if (state.contactPending[propertyId] === request) delete state.contactPending[propertyId];
       throw error;
     });
     state.contactPending[propertyId] = request;
@@ -1759,7 +1831,9 @@
   });
 
   global.JSUnifiedListingsV8 = {
-    load: load, attach: attach, cardParts: cardParts, matchesSource: matchesSource,
+    load: load, attach: attach, mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
+    markSnapshotStale: function() { originalLoadStatus(true, "사진·출처 최신 정보 확인이 필요합니다. "); },
+    cardParts: cardParts, matchesSource: matchesSource,
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,

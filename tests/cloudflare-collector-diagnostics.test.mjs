@@ -41,7 +41,7 @@ test('all-excluded records still finalize a partial session, without marking mis
   const context=funcs(source,['sendToAppsScript'],{
     importItemTotal:()=>10,collectionSignature:()=>'',getSavedProgressForRecords:()=>{throw new Error('empty checkpoint must not be reused');},
     state:{stopRequested:false},localStorage:{removeItem(){}},
-    finalizeGongsilSession:async(...args)=>{saved=args;}
+    finalizeGongsilSession:async(...args)=>{saved=args;}, text:value=>String(value??'').trim()
   });
   const metadata={sessionId:'test',manifestRegistered:true,selectedCount:10,manifestCount:10,complete:true,rejectedCount:10};
   const result=await context.sendToAppsScript([],metadata,'test-key');

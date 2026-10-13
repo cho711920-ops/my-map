@@ -272,7 +272,7 @@ test("one batch retains both market candidates instead merging identical ads wit
   assert.deepEqual(rows.map((r) => [r.trade_type, r.n, r.masters]), [["lease", 2, 1], ["sale", 2, 1]]);
 });
 
-test("complete single-market manifests still count missing only in that market", async (t) => {
+test("old complete single-market manifests without map scope proof never age unrelated provider ads", async (t) => {
   const { db, save, call } = database(t);
   await save(fixture("seen"));
   await save(fixture("missing"));
@@ -282,10 +282,12 @@ test("complete single-market manifests still count missing only in that market",
     manifestCount: 100, processedCount: 100, observedSourceIds: ids,
     observedOffers: ids.map((sourceId) => ({ sourceId, tradeType: "lease" })) });
   assert.equal(result.complete, true, JSON.stringify(result));
-  assert.equal(result.missingMarked, 1);
+  assert.equal(result.missingMarked, 0);
+  assert.equal(result.presenceTracking, false);
+  assert.match(result.presenceTrackingIssue, /지도 범위/);
   const rows = db.prepare("SELECT source_listing_id,missing_count FROM listing_sources ORDER BY source_listing_id").all();
   assert.deepEqual(rows.map((r) => [r.source_listing_id, r.missing_count]),
-    [["missing::lease", 1], ["missing::sale", 0], ["seen::lease", 0], ["seen::sale", 0]]);
+    [["missing::lease", 0], ["missing::sale", 0], ["seen::lease", 0], ["seen::sale", 0]]);
 });
 
 test("legacy pending review IDs are resolved separately from new opposite offers without modifying review data", async (t) => {

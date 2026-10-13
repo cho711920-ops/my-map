@@ -1268,8 +1268,10 @@ function getFilteredItems(options) {
     var matchFavorite = !favoriteOnly || isFavorite(item);
     var matchDone = doneOnly ? isDone(item) : (!hideDone || !isDone(item));
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
-    var matchTodayNew = !newListingDays || isRegistrationWithinDays(item.regDate, newListingDays);
-    var inMap = ignoreMapBounds || mobileGlobalKeywordSearch
+    var matchTodayNew = !newListingDays || (newListingDays === 1 && window.JSTodayListingsV1
+      ? window.JSTodayListingsV1.matches(item) : isRegistrationWithinDays(item.regDate, newListingDays));
+    var todayGlobalScope = newListingDays === 1 && window.JSTodayListingsV1 && window.JSTodayListingsV1.globalScope();
+    var inMap = ignoreMapBounds || mobileGlobalKeywordSearch || (todayGlobalScope && !polygonFilter && !radiusFilter)
       ? true
       : (polygonFilter
         ? isItemWithinMapPolygonV661(item, polygonFilter)
@@ -1551,6 +1553,7 @@ function clearActiveFilterChipV844(key) {
   if (key === "todayNewOnly" || key === "newListingDays") {
     todayNewOnly = false;
     newListingDays = 0;
+    if (window.JSTodayListingsV1) window.JSTodayListingsV1.onPeriodChanged(0);
   }
   if (key === "radius" || key === "polygon") {
     if (typeof window.clearMapMeasurementsV657 === "function") {
@@ -1604,6 +1607,7 @@ function applyFilter() {
   if (window.jsInitialFullListingsLoadingV1 && !(allItems || []).length) {
     var initialStatusV1 = document.getElementById("status");
     if (initialStatusV1) initialStatusV1.textContent = "전체 매물 한 번에 준비 중...";
+    if (window.JSTodayListingsV1) window.JSTodayListingsV1.render();
     return;
   }
   var searchMetricV1 = window.JSLocalMetricsV1 && window.JSLocalMetricsV1.start("search");
@@ -1629,6 +1633,7 @@ function applyFilter() {
     : (radiusFilter
       ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"
       : "검색 결과 " + filtered.length + "개");
+  if (window.JSTodayListingsV1) window.JSTodayListingsV1.render();
   } finally {
     if (window.JSLocalMetricsV1) window.JSLocalMetricsV1.finish(searchMetricV1);
   }
@@ -1912,19 +1917,30 @@ function isTodayRegistration(value) {
   return isRegistrationWithinDays(value, 1);
 }
 
-function isRegistrationWithinDays(value, days, now) {
+function listingRegistrationDayV1(value) {
   var text = String(value || "").trim();
-  var match = text.match(/(\d{2,4})[-./](\d{1,2})[-./](\d{1,2})/);
-  if (!match) return false;
+  if (/(?:Z|[+-]\d{2}:\d{2})$/i.test(text)) {
+    var date = new Date(text);
+    if (!Number.isFinite(date.getTime())) return "";
+    // Korea has a fixed UTC+09:00 offset. Avoid an Intl formatter per listing.
+    return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+  var match = text.match(/^(\d{2,4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (!match) return "";
   var year = Number(match[1]);
   if (year < 100) year += 2000;
-  var month = Number(match[2]);
-  var day = Number(match[3]);
-  var registered = new Date(year, month - 1, day);
-  if (registered.getFullYear() !== year || registered.getMonth() !== month - 1 || registered.getDate() !== day) return false;
+  var month = Number(match[2]), day = Number(match[3]);
+  var dateOnly = new Date(Date.UTC(year, month - 1, day));
+  if (dateOnly.getUTCFullYear() !== year || dateOnly.getUTCMonth() !== month - 1 || dateOnly.getUTCDate() !== day) return "";
+  return String(year) + "-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+}
+
+function isRegistrationWithinDays(value, days, now) {
+  var registrationDay = listingRegistrationDayV1(value);
+  if (!registrationDay) return false;
   var current = now instanceof Date ? now : new Date();
-  var today = new Date(current.getFullYear(), current.getMonth(), current.getDate());
-  var elapsedDays = Math.floor((today.getTime() - registered.getTime()) / 86400000);
+  var todayDay = listingRegistrationDayV1(current.toISOString());
+  var elapsedDays = Math.floor((Date.parse(todayDay + "T00:00:00Z") - Date.parse(registrationDay + "T00:00:00Z")) / 86400000);
   return elapsedDays >= 0 && elapsedDays < Number(days || 0);
 }
 
@@ -1938,6 +1954,7 @@ function toggleNewListingDays(days) {
   newListingDays = newListingDays === selected ? 0 : selected;
   todayNewOnly = newListingDays === 1;
   syncFilterToggleControlsV844();
+  if (window.JSTodayListingsV1) window.JSTodayListingsV1.onPeriodChanged(newListingDays);
   applyFilter();
 }
 
@@ -2132,7 +2149,7 @@ function showList(items) {
   if (
     list &&
     !visibleListItems.length &&
-    document.documentElement.classList.contains("js-mobile-app-v1")
+    (document.documentElement.classList.contains("js-mobile-app-v1") || newListingDays === 1)
   ) {
     list.innerHTML = '<div class="jsm-list-empty-v1"><b>검색 결과가 없습니다.</b><span>검색어를 줄이거나 필터를 초기화해 보세요.</span></div>';
     syncListVirtualMetadataV1(list);
@@ -5103,6 +5120,7 @@ function resetFilter() {
   gongsilOnly = false;
   todayNewOnly = false;
   newListingDays = 0;
+  if (window.JSTodayListingsV1) window.JSTodayListingsV1.onPeriodChanged(0);
   multiClusterMode = false;
   selectedGroupKeys = [];
   document.getElementById("favoriteBtn").innerText = "찜목록";

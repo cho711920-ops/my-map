@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.8";
+  var VERSION = "2.2.9";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -636,11 +636,14 @@
         : [];
       var collectionTradeType = state.collectionTradeType;
       var providerItemCount = items.length;
+      var providerSelectedCount = selectedCount;
+      var providerObservedSourceIds = observedSourceIds(items);
+      var presenceScope = await capturedGongsilPresenceScope(state.capture, items);
       if (collectionTradeType) {
         items = items.filter(function(item) { return getTradeOffers(item, null, collectionTradeType).length > 0; });
       }
-      // Opposite-market ads are outside this run, not failed listings. A filtered
-      // provider cluster is not used as full-presence proof for either market.
+      // Removing the opposite market does not invalidate the provider's complete
+      // list. Presence is checked only for this run's explicit market and scope.
       var marketFiltered = providerItemCount !== items.length;
       if (marketFiltered) selectedCount = items.length + listFailures.length;
       var totalItemCount = Math.max(selectedCount, items.length);
@@ -661,11 +664,11 @@
         tradeType: collectionTradeType || (manifestTradeTypes.length === 1
           ? manifestTradeTypes[0]
           : detectTradeType()),
-        scope: selectedCount >= 2000
+        scope: providerSelectedCount >= 2000
           ? "공실박스 2000개 이상 전체클러스터"
           : "공실박스 선택클러스터",
-        complete: isCompleteGongsilCapture(selectedCount, items.length) &&
-          listFailures.length === 0 && !mixedTradeTypes && !marketFiltered,
+        complete: isCompleteGongsilCapture(providerSelectedCount, providerItemCount) &&
+          listFailures.length === 0,
         selectedCount: selectedCount,
         found: totalItemCount,
         manifestCount: items.length,
@@ -673,6 +676,9 @@
         listFailedCount: listFailures.length,
         listFailureReasons: listFailures.slice(0, 200),
         mixedTradeTypes: mixedTradeTypes,
+        presenceScope: presenceScope,
+        providerExpectedCount: providerSelectedCount,
+        providerObservedSourceIds: providerObservedSourceIds,
         observedSourceIds: observedSourceIds(items),
         observedOffers: observedOffers(items, collectionTradeType),
         manifestRegistered: true
@@ -866,6 +872,7 @@
           (listFailures.length
             ? " 목록조회 제외 " + listFailures.length + "개는 다음 수집 때 다시 확인합니다."
             : "");
+      if (result.presenceTrackingIssue) message += "\n거래완료후보 판정 보류: " + result.presenceTrackingIssue;
       updateDashboard({
         found: totalItemCount,
         processed: totalItemCount,
@@ -2566,7 +2573,7 @@
         listFailedCount + offset);
     metadata.failed = listFailedCount + Number(totals.failed || 0);
     if (offset > 0 || metadata.manifestRegistered) {
-      await finalizeGongsilSession(
+      var finalization = await finalizeGongsilSession(
         metadata,
         collectorKey,
         Boolean(metadata.complete) &&
@@ -2598,6 +2605,10 @@
       skippedUnchanged: Number(metadata.unchanged || 0),
       contactDeferred: Number(metadata.contactDeferredCount || totals.contactDeferred || 0),
       failed: listFailedCount + totals.failed,
+      presenceTracking: Boolean(finalization && finalization.presenceTracking),
+      presenceScopeEstablished: Boolean(finalization && finalization.presenceScopeEstablished),
+      missingMarked: Number(finalization && finalization.missingMarked || 0),
+      presenceTrackingIssue: text(finalization && finalization.presenceTrackingIssue),
       message:
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
         "개" + (Number(totals.offerReceived || 0) > totals.received
@@ -2800,6 +2811,51 @@
     return Object.keys(seen);
   }
 
+  function stableGongsilScopeJson(value) {
+    if (Array.isArray(value)) return "[" + value.map(stableGongsilScopeJson).join(",") + "]";
+    if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(function(key) {
+      return JSON.stringify(key) + ":" + stableGongsilScopeJson(value[key]);
+    }).join(",") + "}";
+    return JSON.stringify(value == null ? null : value);
+  }
+
+  async function capturedGongsilPresenceScope(capture, items) {
+    var mapCapture = window.__JS_GONGSIL_SCOPE_CAPTURE_V1__ && window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture;
+    var body = mapCapture && mapCapture.body;
+    var listBody = capture && capture.body;
+    if (!body || !listBody || !Array.isArray(listBody.bfidxs) || !listBody.bfidxs.length ||
+        !body.search || body.isZzim || body.search.MyActive || body.search.listmemoB || body.search.listmemoF ||
+        Array.isArray(body.search.sch_zzim) && body.search.sch_zzim.length ||
+        Number(body.level) !== Number(listBody.level) || String(body.btype || "") !== String(listBody.btype || "")) return null;
+    // Incremental circle responses contain only newly exposed map fragments.
+    if (body.removecoord && Object.keys(body.removecoord).some(function(key) { return Number(body.removecoord[key]) !== 0; })) return null;
+    var bounds = body.areacoord && [body.areacoord.minlat, body.areacoord.minlng, body.areacoord.maxlat, body.areacoord.maxlng];
+    if (!bounds || bounds.some(function(n) { return typeof n !== "number" || !Number.isFinite(n); }) ||
+        !(bounds[0] < bounds[2] && bounds[1] < bounds[3])) return null;
+    var allIds = Object.create(null);
+    (mapCapture.groups || []).forEach(function(group) {
+      (group.fidxs || []).forEach(function(id) { if (text(id)) allIds[text(id)] = true; });
+    });
+    var selectedIds = Object.create(null);
+    listBody.bfidxs.forEach(function(id) { if (text(id)) selectedIds[text(id)] = true; });
+    var ids = Object.keys(allIds);
+    // Largest does not mean whole: only the entire verified map result can age
+    // this viewport. Neither arbitrary clusters nor unseen providers are aged.
+    if (!ids.length || ids.length !== Object.keys(selectedIds).length ||
+        ids.some(function(id) { return !selectedIds[id]; }) ||
+        observedSourceIds(items).some(function(id) { return !allIds[id]; })) return null;
+    var filters = Object.assign({}, body.search);
+    delete filters.ordersch1;
+    var fingerprint = stableGongsilScopeJson({ search: filters, aptCircle: Boolean(body.aptCircle) });
+    try {
+      var digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprint));
+      return { version: 1, selectionKind: "full-map-result", bounds: bounds, level: Number(body.level),
+        btype: String(body.btype || ""), filtersHash: Array.prototype.map.call(new Uint8Array(digest), function(n) {
+          return n.toString(16).padStart(2, "0");
+        }).join("") };
+    } catch (_) { return null; }
+  }
+
   function collectionSignature(records) {
     records = Array.isArray(records) ? records : [];
     var signature = [
@@ -2910,6 +2966,11 @@
       scope: metadata.scope || "공실박스 선택클러스터",
       source: "공실박스",
       tradeType: metadata.tradeType || detectTradeType(),
+      collectionTradeType: metadata.collectionTradeType || "",
+      presenceVersion: 1,
+      presenceScope: metadata.presenceScope || null,
+      providerExpectedCount: Number(metadata.providerExpectedCount || 0),
+      providerObservedSourceIds: Array.isArray(metadata.providerObservedSourceIds) ? metadata.providerObservedSourceIds : [],
       complete: Boolean(complete),
       stopped: Boolean(stopped),
       observedSourceIds: Array.isArray(metadata.observedSourceIds)
@@ -3207,13 +3268,16 @@
     var rows = gongsilDiagnostics(metadata);
     var missing = Number(metadata.rejectedCount || 0) + Number(result.failed || 0);
     details.hidden = false;
-    details.open = missing > 0;
+    details.open = missing > 0 || Boolean(result.presenceTrackingIssue);
     details.querySelector("summary").textContent = missing ? "제외/실패 " + missing + "건 · 번호와 사유 보기" : "수집 완료 내역 보기";
     details.querySelector("pre").textContent = "100%는 처리가 끝났다는 뜻입니다.\n검증대기 " + Number(result.review || 0) +
       "건은 매물검증에서 확인합니다.\n제외/실패 매물은 저장 완료 건수에 포함되지 않습니다.\n" +
       (rows.length ? rows.map(function (row) { return row.stage + " · 매물번호 " + (row.sourceId || "확인 불가") + " · " + row.message; }).join("\n") :
         missing ? "이전 수집기는 개별 사유를 저장하지 않았습니다. 재수집 시 기록됩니다." : "제외·실패 없음") +
       (missing > rows.length && rows.length ? "\n개별 사유는 최대 200건까지 표시하며, 일부 사유는 이전 수집기에 기록되지 않았을 수 있습니다." : "") +
+      (result.presenceTrackingIssue ? "\n거래완료후보 판정 보류: " + result.presenceTrackingIssue :
+        result.presenceScopeEstablished ? "\n동일 범위 거래완료후보 기준목록을 설정했습니다. 이후 정상 전체수집에서 연속 3회 미노출된 원본만 후보로 검토합니다." :
+        result.presenceTracking ? "\n동일 범위 미노출 확인 " + Number(result.missingMarked || 0) + "건 · 연속 3회부터 거래완료후보" : "") +
       "\n운영현황 → 수집현황에서도 결과를 확인할 수 있습니다.";
   }
 

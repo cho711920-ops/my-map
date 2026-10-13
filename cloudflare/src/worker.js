@@ -726,6 +726,23 @@ async function handleDataApi(request, env, context) {
         "x-js-data-source": "R2-REVISION"
       });
     }
+    if (query.action === "newListingPeriod") {
+      // This small fresh read is independent of the complete CSV/source caches.
+      // Pin every page to one revision; a changed collection is retried, never
+      // reported as an authoritative empty/partial Today result.
+      const before = (await readDataRevision(env, "listings")).revision;
+      if (query.revision && query.revision !== before) {
+        return json({ ok: false, snapshotChanged: true, message: "수집 결과가 갱신되어 오늘 신규매물을 다시 확인합니다." }, 409, { "cache-control": "private, no-store" });
+      }
+      const payload = await handleD1GetAction(env, user, query);
+      const after = (await readDataRevision(env, "listings")).revision;
+      if (before !== after) {
+        return json({ ok: false, snapshotChanged: true, message: "수집 결과가 갱신되어 오늘 신규매물을 다시 확인합니다." }, 409, { "cache-control": "private, no-store" });
+      }
+      payload.snapshotRevision = before;
+      payload.unified.snapshotRevision = before;
+      return json(payload, 200, { "cache-control": "private, no-store", "x-js-listings-revision": before, "x-js-data-source": "D1-PERIOD" });
+    }
     const collectorAdmin = await handleOperationsQualityGet(env, user, query)
       || await handleCollectorAdminGet(env, user, query);
     if (collectorAdmin) {

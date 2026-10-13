@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.2\.8";/);
+assert.match(source, /var VERSION = "2\.2\.9";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
@@ -16,7 +16,7 @@ assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(
   source,
-  /complete: isCompleteGongsilCapture\(selectedCount, items\.length\)/,
+  /complete: isCompleteGongsilCapture\(providerSelectedCount, providerItemCount\)/,
   "공실박스 완전수집 판정은 선택 수와 최종 목록 수가 정확히 같을 때만 인정하면 안 됩니다."
 );
 assert.match(
@@ -32,7 +32,7 @@ assert.match(
 assert.match(source, /if \(byId\[id\]\) return;[\s\S]*?entries\.push/);
 assert.match(
   source,
-  /complete: isCompleteGongsilCapture\(selectedCount, items\.length\) &&\s*listFailures\.length === 0/,
+  /complete: isCompleteGongsilCapture\(providerSelectedCount, providerItemCount\) &&\s*listFailures\.length === 0/,
   "목록조회 제외가 있으면 완전수집 판정으로 기존 매물을 숨기면 안 됩니다."
 );
 assert.match(source, /data-metric="conditionUpdated"/);

@@ -12,6 +12,7 @@ test("the single final listing render still honors the pinned cluster guard", ()
   );
   assert.match(mapSource, /if \(!hasPinnedClusterList && typeof showList === "function"\)/);
   assert.doesNotMatch(mapSource, /function showListWithoutReleasingPinnedClusterV685/);
-  assert.match(mapSource, /Promise\.all\(\[[\s\S]*?sheetRequest,[\s\S]*?unifiedRequest\.catch/);
+  assert.match(mapSource, /return sheetRequest\s*\.then\(function\(snapshot\)/);
+  assert.match(mapSource, /restoreAutoUpdateViewState\(view\)/);
   assert.match(html, /js\/map\.js\?v=8\.2\.22-full-initial-render/);
 });
