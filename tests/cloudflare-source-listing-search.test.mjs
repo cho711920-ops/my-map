@@ -16,10 +16,10 @@ test("Naver and Daangn source numbers build a hidden master search index", () =>
   });
 });
 
-test("the source number index includes inactive originals without changing visible original groups", () => {
+test("the source number index includes eligible inactive originals but excludes unverified archives", () => {
   const d1 = readFileSync(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
   assert.match(d1, /FROM listing_sources s JOIN listings l ON l\.id=s\.listing_id/);
-  assert.match(d1, /WHERE l\.status<>'deleted' AND s\.source IN \('네이버','당근','공실박스','직접등록','직접확인'\)/);
+  assert.match(d1, /WHERE l\.status<>'deleted' AND \$\{publicSourceWhereSql\("s"\)\} AND s\.source IN \('네이버','당근','공실박스','직접등록','직접확인'\)/);
   assert.doesNotMatch(d1, /WHERE l\.status<>'deleted' AND s\.active=1/);
   assert.match(d1, /groups,\s*sourceSearchIds,/);
 });

@@ -272,7 +272,8 @@ test("missing image URLs still render true photo absence; photo cards wire recov
   assert.match(empty, /<span>사진 없음<\/span>/);
   assert.doesNotMatch(empty, /<img|thumbnailImageError|listing-image/);
 
-  api.attach([], { ok: true, groups: { P1: [{ source: "naver", thumbnail: original, sourceUnavailable: true }] } });
+  api.attach([], { ok: true, groups: { P1: [{ source: "naver", thumbnail: original, sourceUnavailable: true,
+    candidateEligible: true, availabilityKind: "census_missing" }] } });
   const populated = api.cardParts({ propertyId: "P1" }).thumbnail;
   assert.match(populated, /data-thumbnail-source-v8144=/);
   assert.match(populated, /onload="JSUnifiedListingsV8\.thumbnailImageLoaded\(this\)"/);

@@ -131,6 +131,20 @@ export async function trackAdvertisementPresence(env, { source, body, sessionId,
         AND p.trade_type=json_extract(miss.value,'$.trade_type') AND p.source_listing_id=json_extract(miss.value,'$.source_listing_id')
         AND p.last_checked_session_id=?5 AND p.updated_at=?1 AND p.missing_count=1)`)
       .bind(at, missJson, scopeKey, source, sessionId));
+    // Only successful CAS transitions in this exact census may acquire new
+    // candidate evidence. This statement commits atomically with the updates.
+    const evidence = JSON.stringify({ version: 1, validationVersion: 3, reason: "scoped-census-missing",
+      providerEndVerified: false, scopeKey, sessionId, capturedAt, checkedAt: at,
+      observedUniqueCount: providerCount, expectedCountKnown: body.completionProof.expectedCountKnown === true,
+      providerExpectedCount: body.completionProof.expectedCountKnown === true ? body.completionProof.providerExpectedCount : null });
+    writes.push(env.DB.prepare(`INSERT INTO listing_source_availability(source_id,kind,evidence_json,updated_at)
+      SELECT s.id,'census_missing',?1,?2 FROM collector_source_presence p JOIN listing_sources s
+        ON s.source=p.source AND s.source_listing_id=p.source_listing_id
+          AND COALESCE(NULLIF(s.trade_type,''),'lease')=p.trade_type
+      WHERE p.scope_key=?3 AND p.source=?4 AND p.last_checked_session_id=?5 AND p.updated_at=?2
+        AND p.missing_count=1 AND s.active=0 AND s.missing_count=1 AND s.updated_at=?2
+      ON CONFLICT(source_id) DO UPDATE SET kind=excluded.kind,evidence_json=excluded.evidence_json,updated_at=excluded.updated_at`)
+      .bind(evidence, at, scopeKey, source, sessionId));
   }
   await env.DB.batch(writes);
   result.presenceTracking = true;

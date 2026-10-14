@@ -121,10 +121,10 @@ sourceStatements.push(`DELETE FROM listing_contacts WHERE source_id IN (SELECT i
 applyStatements([...listingStatements, ...sourceStatements]);
 
 if (apply) {
-  const cacheKeys = ["api-cache/d1-sheet.csv", "api-cache/unified-listings.json",
+  const cacheKeys = ["api-cache/d1-sheet-v2-source-evidence.csv", "api-cache/unified-listings.json",
     "api-cache/unified-listings-v3-source-search.json",
     "api-cache/unified-listings-v4-actual-gongsil-photos.json",
-    "api-cache/unified-listings-v11-advertisement-presence.json"];
+    "api-cache/unified-listings-v12-source-evidence.json"];
   for (const key of cacheKeys) {
     run(["exec", "wrangler", "r2", "object", "delete", `js-map-media/${key}`, "--remote", "--force"]);
   }

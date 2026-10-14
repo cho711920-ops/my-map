@@ -33,7 +33,7 @@ function harness() {
     global.JSUnifiedListingsV8 = {`);
   class Clock extends Date { static now() { return now; } }
   vm.runInNewContext(instrumented, { window, document, console: { warn() {}, error() {} }, Date: Clock });
-  return { api: window.JSUnifiedListingsV8, ...window.__test, calls, renders, events, document, body,
+  return { api: window.JSUnifiedListingsV8, ...window.__test, window, calls, renders, events, document, body,
     advance(ms) { now += ms; } };
 }
 function result(id, memo = "new") { return { ok: true, originals: [{ originalId: id, source: "네이버", memo }] }; }
@@ -120,6 +120,33 @@ test("complete initial images do not suppress freshness checks and edits are not
   await request;
   assert.equal(h.renders.length, 1);
   assert.equal(h.state.detailCache.p1[0].memo, "new");
+});
+
+test("detail keeps the rendered original subset without admitting a different advertisement", async () => {
+  const h = harness();
+  h.window.currentItems = [{ propertyId: "p1", unifiedDisplayOriginalsV2: [{ originalId: "o1" }] }];
+  const cached = h.loadDetail("p1");
+  h.calls[0].resolve({ ok: true, originals: [
+    { originalId: "o1", source: "네이버", memo: "matching" },
+    { originalId: "o2", source: "네이버", memo: "different price" }
+  ] });
+  await cached;
+  await h.api.open("p1", "o1");
+  assert.deepEqual(Array.from(h.renders[0][1], original => original.originalId), ["o1"]);
+});
+
+test("manual completion with no compact originals retains the real server detail fallback", async () => {
+  const h = harness();
+  const master = { propertyId: "p1", state: "계약완료" };
+  h.window.allItems = [master];
+  h.window.currentItems = [{ ...master, unifiedDisplayOriginalsV2: [] }];
+  h.window.doneOnly = true;
+  h.api.attach([master], { ok: true, groups: {} });
+  const request = h.api.open("p1");
+  h.calls[0].resolve({ ok: true, originals: [{ originalId: "master:p1", source: "직접등록",
+    masterFallback: true, sourceUnavailable: false, active: 1, memo: "saved manual detail" }] });
+  await request;
+  assert.equal(h.renders.at(-1)[1][0].memo, "saved manual detail");
 });
 
 test("successful listing mutations invalidate cached detail; unrelated actions do not", async () => {

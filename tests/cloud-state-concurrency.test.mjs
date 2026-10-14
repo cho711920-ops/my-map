@@ -127,6 +127,7 @@ function operationsDatabase() {
   sqlite.exec(`
       CREATE TABLE listings (id TEXT PRIMARY KEY, status TEXT);
       CREATE TABLE listing_sources (id TEXT PRIMARY KEY, listing_id TEXT, active INTEGER, missing_count INTEGER);
+      CREATE TABLE listing_source_availability (source_id TEXT PRIMARY KEY,kind TEXT,evidence_json TEXT,updated_at TEXT);
       CREATE TABLE listing_data_quality_holds (listing_id TEXT, state TEXT, blocks_publication INTEGER);
       CREATE TABLE collector_raw (id TEXT PRIMARY KEY, processing_state TEXT);
       CREATE TABLE customers (id TEXT PRIMARY KEY, status TEXT);
@@ -157,14 +158,14 @@ test("an operations snapshot older than five minutes is recalculated before use"
       "SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main'"
     ).get().payload_json);
     assert.equal(saved.activeMaster, 1);
-    assert.equal(saved.advertisementPolicyVersion, 1);
+    assert.equal(saved.advertisementPolicyVersion, 3);
   } finally {
     sqlite.close();
   }
 });
 
-for (const version of [undefined, 0, 2]) {
-  test(`a fresh operations snapshot with policy ${version ?? 'missing'} is recalculated using advertisement counts`, async () => {
+for (const version of [undefined, 0, 1, 2]) {
+  test(`a fresh operations snapshot with policy ${version ?? 'missing'} is recalculated using integrated-listing counts`, async () => {
     const { sqlite, DB } = operationsDatabase();
     try {
       const payload = { activeMaster: 999, transactionCheckCandidates: 1 };
@@ -173,10 +174,10 @@ for (const version of [undefined, 0, 2]) {
       sqlite.prepare("UPDATE operations_snapshots SET payload_json=?,calculated_at=?,updated_at=? WHERE snapshot_key='main'")
         .run(JSON.stringify(payload), now, now);
       const result = await handleD1GetAction({ DB }, { email: 'reader@example.test', role: 'member' }, { action: 'operationsDashboard' });
-      assert.equal(result.advertisementPolicyVersion, 1);
-      assert.equal(result.activeMaster, 1); assert.equal(result.transactionCheckCandidates, 2);
+      assert.equal(result.advertisementPolicyVersion, 3);
+      assert.equal(result.activeMaster, 1); assert.equal(result.transactionCheckCandidates, 0);
       const saved = JSON.parse(sqlite.prepare("SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main'").get().payload_json);
-      assert.equal(saved.advertisementPolicyVersion, 1); assert.equal(saved.transactionCheckCandidates, 2);
+      assert.equal(saved.advertisementPolicyVersion, 3); assert.equal(saved.transactionCheckCandidates, 0);
     } finally { sqlite.close(); }
   });
 }
@@ -185,7 +186,7 @@ test('a fresh operations snapshot with the current policy remains on the fast ca
   const { sqlite, DB } = operationsDatabase();
   try {
     const now = new Date().toISOString();
-    const payload = JSON.stringify({ ok: true, advertisementPolicyVersion: 1, activeMaster: 123, transactionCheckCandidates: 456 });
+    const payload = JSON.stringify({ ok: true, advertisementPolicyVersion: 3, activeMaster: 123, transactionCheckCandidates: 456 });
     sqlite.prepare("UPDATE operations_snapshots SET payload_json=?,calculated_at=?,updated_at=? WHERE snapshot_key='main'")
       .run(payload, now, now);
     const cachedDb = { prepare(sql) {
@@ -194,7 +195,7 @@ test('a fresh operations snapshot with the current policy remains on the fast ca
     } };
     const result = await handleD1GetAction({ DB: cachedDb }, { email: 'reader@example.test', role: 'member' }, { action: 'operationsDashboard' });
     assert.equal(result.activeMaster, 123); assert.equal(result.transactionCheckCandidates, 456);
-    assert.equal(result.advertisementPolicyVersion, 1); assert.equal(result.source, 'D1-SNAPSHOT');
+    assert.equal(result.advertisementPolicyVersion, 3); assert.equal(result.source, 'D1-SNAPSHOT');
     assert.equal(sqlite.prepare("SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main'").get().payload_json, payload);
   } finally { sqlite.close(); }
 });

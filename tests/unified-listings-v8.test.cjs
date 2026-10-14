@@ -41,7 +41,7 @@ assert.match(css, /async-mutation-status-v1\.idle \{ display: none/);
 assert.match(d1, /async function unifiedDetail\(env, propertyId\)/);
 assert.match(d1, /withSourceOriginalMetadata/);
 assert.doesNotMatch(d1, /HAVING SUM\(CASE WHEN s\.active=1 THEN 1 ELSE 0 END\)=0 AND MAX\(s\.missing_count\)>=3/);
-assert.match(ui, /function visibleOriginalsFrom\(originals, propertyId\)/);
+assert.match(ui, /function visibleOriginalsFrom\(originals, propertyId, masterItem, alreadyOrdered\)/);
 assert.match(d1, /sourceUnavailable/);
 assert.match(d1, /async function listingContacts\(env, propertyId\)/);
 assert.match(d1, /async function moveOriginal\(env, user, body\)/);

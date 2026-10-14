@@ -15,14 +15,18 @@ import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display
 import { withDaangnLandUse } from "./land-use-display.js";
 import { withSaleAreaDisplay } from "./sale-area-display.js";
 import { newListingPeriod } from "./new-listing-period.js";
-import { loadManualRoomOverrides, withSourceOriginalMetadata } from "./source-original-display.js";
+import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
+import {
+  SOURCE_CANDIDATE_POLICY_VERSION, availabilityKindSql, candidateSourceWhereSql,
+  publicSourceWhereSql, publicMasterWhereSql, publicMasterSourcesWhereSql, candidateMasterWhereSql, candidateAdCountSql
+} from "./source-availability.js";
 
 const UNIFIED_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
   "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice", "saleSummary",
   "sourceListingId", "providerSourceId", "active", "floor", "literalRoom", "sourceFloor", "sourceRoom",
-  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt"
+  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -259,6 +263,7 @@ export async function buildD1SheetCsv(env) {
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
     last_collected_at, latitude, longitude, building_elevator_capacity,
     trade_type, sale_category, sale_price, sale_details_json`, "listings", `status <> 'deleted'
+      AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
@@ -296,6 +301,7 @@ async function listingChanges(env, query) {
       last_collected_at, latitude, longitude, building_elevator_capacity,
       trade_type, sale_category, sale_price, sale_details_json
     FROM listings WHERE property_id IN (${placeholders})
+      AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
@@ -422,6 +428,7 @@ async function unifiedListings(env, listingIds = null) {
   const rows = await allRowidPages(
     env,
     `id, listing_id, source, source_listing_id, source_url, active, missing_count, updated_at, last_collected_at, list_snapshot_json,
+      ${availabilityKindSql("listing_sources")} AS availability_kind,
       ${originalFloorMetadataSql()} AS floor_metadata_json,
       json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json,
       COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) AS naver_floor_info_json,
@@ -444,7 +451,7 @@ async function unifiedListings(env, listingIds = null) {
       ) END AS daangn_sale_extent_json,
       CASE WHEN source='당근' THEN json_extract(raw_json, '$.landType') END AS daangn_land_type`,
     "listing_sources",
-    `EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
+    `${publicSourceWhereSql("listing_sources")} AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listing_sources.listing_id
@@ -454,7 +461,7 @@ async function unifiedListings(env, listingIds = null) {
   );
   const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
     FROM listing_sources s JOIN listings l ON l.id=s.listing_id
-    WHERE l.status<>'deleted' AND s.source IN ('네이버','당근','공실박스','직접등록','직접확인')
+    WHERE l.status<>'deleted' AND ${publicSourceWhereSql("s")} AND s.source IN ('네이버','당근','공실박스','직접등록','직접확인')
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = l.id
@@ -463,6 +470,7 @@ async function unifiedListings(env, listingIds = null) {
     ORDER BY s.rowid`, 4_000, bindings);
   const groups = {};
   const manualRooms = await loadManualRoomOverrides(env, scopedIds);
+  const manualFields = await loadManualRepresentativeFields(env, scopedIds);
   let unavailableCount = 0;
   const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
   for (const row of rows) {
@@ -476,7 +484,7 @@ async function unifiedListings(env, listingIds = null) {
       daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
     });
     const original = withSourceOriginalMetadata(
-      withDaangnLandUse(withSaleAreaDisplay(displayed, { source: row.source, daangn }), row.daangn_land_type, row.source), row, manualRooms);
+      withDaangnLandUse(withSaleAreaDisplay(displayed, { source: row.source, daangn }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
     if (original.sourceUnavailable) unavailableCount += 1;
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
@@ -552,8 +560,9 @@ async function unifiedDetail(env, propertyId) {
   const listingId = clean(parent.id);
   const sourceResult = await env.DB.prepare(`SELECT id, listing_id, source, source_listing_id, source_url,
       active, missing_count, updated_at, last_collected_at, list_snapshot_json, raw_json,
+      ${availabilityKindSql("listing_sources")} AS availability_kind,
       ${originalFloorMetadataSql()} AS floor_metadata_json
-    FROM listing_sources WHERE listing_id = ?1
+    FROM listing_sources WHERE listing_id = ?1 AND ${publicSourceWhereSql("listing_sources")}
       AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
@@ -572,6 +581,7 @@ async function unifiedDetail(env, propertyId) {
     if (url && !mediaBySource[sourceId].includes(url)) mediaBySource[sourceId].push(url);
   }
   const manualRooms = await loadManualRoomOverrides(env, [listingId]);
+  const manualFields = await loadManualRepresentativeFields(env, [listingId]);
   const originals = (sourceResult?.results || []).map((row) => {
     const raw = parseJson(row.raw_json, {});
     // The raw provider payload stays on the server. Photos, sale display and
@@ -587,10 +597,10 @@ async function unifiedDetail(env, propertyId) {
     const provider = saleExtentProvider(raw, row.source);
     return { ...withSourceOriginalMetadata(withDaangnLandUse(
       withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), provider), raw.landType, row.source
-    ), row, manualRooms), propertyId: clean(parent.property_id || parent.id) };
+    ), row, manualRooms, manualFields), propertyId: clean(parent.property_id || parent.id) };
   });
   if (!originals.length) {
-    const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name,
+    const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name, status,
         address, room, deposit, monthly_rent, maintenance_fee, premium, area_m2,
         trade_type, sale_category, sale_price, sale_details_json,
         latitude, longitude, operating_memo, source_url, contacts_json, version,
@@ -605,9 +615,13 @@ async function unifiedDetail(env, propertyId) {
             AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
         )
       LIMIT 1`).bind(propertyId).first();
-    if (master) {
+    if (master && (Number(master.source_count) === 0 || master.status === "계약완료")) {
       const fallbackImages = (mediaResult?.results || []).map((media) => clean(media.external_url)).filter(Boolean);
-      originals.push(masterFallbackOriginal(master, fallbackImages));
+      const fallback = masterFallbackOriginal(master, fallbackImages);
+      if (master.status === "계약완료") Object.assign(fallback, {
+        sourceUnavailable: false, candidateEligible: false, availabilityKind: "manual_completed", missingCount: 0
+      });
+      originals.push(fallback);
     }
   }
   return { ok: true, action: "unifiedListingDetail", propertyId, originals, source: "D1" };
@@ -954,11 +968,9 @@ async function computeOperationsDashboard(env) {
         AND datetime(created_at) <= datetime('now','-3 days')) AS overdue_matches,
       (SELECT COUNT(*) FROM customer_activities WHERE next_contact_date <> ''
         AND date(next_contact_date) <= date('now')) AS due_followups,
-      (SELECT COUNT(*) FROM listing_sources s JOIN listings l ON l.id=s.listing_id
-        WHERE l.status NOT IN ('deleted','계약완료') AND s.active=0 AND s.missing_count>=1
-          AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds hold
-            WHERE hold.listing_id=l.id AND hold.state='open' AND hold.blocks_publication=1)
-      ) AS transaction_candidates,
+      (SELECT COUNT(*) FROM listings l WHERE ${candidateMasterWhereSql()}) AS transaction_candidates,
+      ${candidateAdCountSql()} AS candidate_ad_count,
+      (SELECT COUNT(*) FROM listings l WHERE ${publicMasterWhereSql()} AND l.status='계약완료') AS manual_completed,
       (SELECT COUNT(*) FROM listing_history) AS history_count`).first();
   const customerSummary = await env.DB.prepare(`SELECT customer_id,
       SUM(CASE WHEN state IN ('candidate','신규') THEN 1 ELSE 0 END) AS fresh,
@@ -967,7 +979,7 @@ async function computeOperationsDashboard(env) {
   return {
     ok: true,
     action: "operationsDashboard",
-    advertisementPolicyVersion: 1,
+    advertisementPolicyVersion: SOURCE_CANDIDATE_POLICY_VERSION,
     activeMaster: Number(result?.active_master) || 0,
     master: Number(result?.active_master) || 0,
     raw: Number(result?.raw_count) || 0,
@@ -981,6 +993,10 @@ async function computeOperationsDashboard(env) {
     overdueMatches: Number(result?.overdue_matches) || 0,
     dueFollowups: Number(result?.due_followups) || 0,
     transactionCheckCandidates: Number(result?.transaction_candidates) || 0,
+    candidateAdCount: Number(result?.candidate_ad_count) || 0,
+    totalUnavailable: Number(result?.transaction_candidates) || 0,
+    manualCompleted: Number(result?.manual_completed) || 0,
+    completedOnlyTotal: (Number(result?.transaction_candidates) || 0) + (Number(result?.manual_completed) || 0),
     history: Number(result?.history_count) || 0,
     newMatchCustomers: (customerSummary?.results || []).filter((row) => Number(row.fresh) > 0).length,
     overdueCustomers: (customerSummary?.results || []).filter((row) => Number(row.overdue) > 0).length,
@@ -1023,6 +1039,7 @@ export async function adjustOperationsDashboard(env, adjustments = {}) {
   }
   if (!row) return refreshOperationsDashboard(env);
   const payload = parseJson(row.payload_json, {});
+  if (payload.advertisementPolicyVersion !== SOURCE_CANDIDATE_POLICY_VERSION) return refreshOperationsDashboard(env);
   const pairs = [
     ["activeMaster", "activeMaster"], ["master", "activeMaster"],
     ["raw", "raw"], ["pendingReview", "pendingReview"], ["review", "pendingReview"],
@@ -1032,6 +1049,19 @@ export async function adjustOperationsDashboard(env, adjustments = {}) {
     const delta = Number(adjustments[source] || 0);
     if (delta) payload[target] = Math.max(0, Number(payload[target] || 0) + delta);
   }
+  // A manual completion, original move or deletion can change this boundary
+  // without changing the source-row total. Recount only these indexed master
+  // predicates; do not repeat the full operations/history aggregation.
+  const availability = await env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM listings l WHERE ${candidateMasterWhereSql()}) AS unavailable,
+    ${candidateAdCountSql()} AS candidate_ad_count,
+    (SELECT COUNT(*) FROM listings l WHERE ${publicMasterWhereSql()} AND l.status='계약완료') AS manual_completed`).first();
+  payload.transactionCheckCandidates = Number(availability?.unavailable) || 0;
+  payload.totalUnavailable = payload.transactionCheckCandidates;
+  payload.candidateAdCount = Number(availability?.candidate_ad_count) || 0;
+  payload.manualCompleted = Number(availability?.manual_completed) || 0;
+  payload.completedOnlyTotal = payload.totalUnavailable + payload.manualCompleted;
+  payload.advertisementPolicyVersion = SOURCE_CANDIDATE_POLICY_VERSION;
   return saveOperationsSnapshot(env, payload);
 }
 
@@ -1044,7 +1074,7 @@ async function operationsDashboard(env) {
     const calculatedAt = Date.parse(row.calculated_at || "");
     // Snapshot adjustments keep the common write path fast, while this bound
     // repairs drift from maintenance jobs or interrupted background refreshes.
-    if (payload.advertisementPolicyVersion !== 1 || !Number.isFinite(calculatedAt) || Date.now() - calculatedAt > 5 * 60_000) {
+    if (payload.advertisementPolicyVersion !== SOURCE_CANDIDATE_POLICY_VERSION || !Number.isFinite(calculatedAt) || Date.now() - calculatedAt > 5 * 60_000) {
       return refreshOperationsDashboard(env);
     }
     return {
@@ -1058,50 +1088,86 @@ async function operationsDashboard(env) {
 }
 
 async function transactionCandidates(env) {
-  const where = `l.status NOT IN ('deleted','계약완료') AND s.active=0 AND s.missing_count>=1
-    AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds hold
-      WHERE hold.listing_id=l.id AND hold.state='open' AND hold.blocks_publication=1)`;
-  const total = await env.DB.prepare(`SELECT COUNT(*) AS count FROM listing_sources s
-    JOIN listings l ON l.id=s.listing_id WHERE ${where}`).first();
+  const where = candidateMasterWhereSql();
+  const total = await env.DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM listings l WHERE ${where}) AS count,
+    ${candidateAdCountSql()} AS candidate_ad_count,
+    (SELECT COUNT(*) FROM listings l WHERE ${publicMasterWhereSql()} AND l.status='계약완료') AS manual_completed`).first();
   const result = await env.DB.prepare(`SELECT
-      l.property_id, l.title, l.address, l.room AS master_room, l.listing_type,
+      l.id, l.property_id, l.title, l.address, l.room, l.listing_type, l.trade_type, l.sale_price,
       l.deposit, l.monthly_rent, l.maintenance_fee, l.premium, l.area_m2,
-      l.main_source, l.operating_memo, s.id, s.listing_id, s.source, s.source_listing_id, s.source_url,
-      s.active, s.missing_count, s.updated_at, s.last_collected_at, s.list_snapshot_json,
-      ${originalFloorMetadataSql()} AS floor_metadata_json,
-      (SELECT COUNT(*) FROM listing_sources sibling WHERE sibling.listing_id=l.id AND sibling.active=1) AS active_source_count,
+      l.main_source, l.operating_memo, l.source_url,
+      COUNT(s.id) AS candidate_ad_count, MAX(s.missing_count) AS missing_count,
+      (SELECT COUNT(*) FROM listing_sources member WHERE member.listing_id=l.id AND ${publicSourceWhereSql("member")}) AS source_count,
+      (SELECT COUNT(*) FROM listing_sources live WHERE live.listing_id=l.id AND live.active=1) AS active_source_count,
+      GROUP_CONCAT(DISTINCT s.source) AS sources, MAX(s.updated_at) AS last_checked_at,
       (SELECT lm.external_url FROM listing_media lm
-        WHERE lm.source_id=s.id AND lm.status<>'deleted' AND trim(COALESCE(lm.external_url,''))<>''
+        WHERE lm.listing_id=l.id AND lm.status<>'deleted' AND trim(COALESCE(lm.external_url,''))<>''
           AND lm.external_url NOT LIKE '%/avatars/%'
         ORDER BY lm.sort_order, lm.rowid LIMIT 1) AS thumbnail
-    FROM listing_sources s
-    JOIN listings l ON l.id=s.listing_id
-    WHERE ${where}
-    ORDER BY s.updated_at DESC, l.address, l.room, s.id
+    FROM listings l JOIN listing_sources s ON s.listing_id=l.id
+    WHERE ${where} AND ${candidateSourceWhereSql()}
+    GROUP BY l.id
+    ORDER BY MAX(s.updated_at) DESC, l.address, l.room, l.id
     LIMIT 2000`).all();
-  const manualRooms = await loadManualRoomOverrides(env, [...new Set((result?.results || []).map(row => row.listing_id))]);
-  const candidates = (result?.results || []).map((row) => {
-    const snapshot = parseJson(row.list_snapshot_json, {});
-    const original = withSourceOriginalMetadata(snapshot, row, manualRooms);
-    return {
-      propertyId: clean(row.property_id || row.listing_id), originalId: original.originalId,
-      sourceId: original.providerSourceId, sourceListingId: original.sourceListingId, source: original.source,
-      title: clean(snapshot.buildingName || row.title), address: clean(snapshot.address || row.address),
-      room: original.room, floor: original.floor, type: clean(snapshot.type || row.listing_type),
-      tradeType: clean(snapshot.tradeType) || "lease", salePrice: number(snapshot.salePrice),
-      deposit: number(snapshot.deposit ?? row.deposit), rent: number(snapshot.rent ?? row.monthly_rent),
-      fee: number(snapshot.fee ?? row.maintenance_fee), premium: number(snapshot.premium ?? row.premium),
-      area: number(snapshot.area ?? row.area_m2), mainSource: original.source,
-      memo: clean(row.operating_memo), sourceUrl: original.link,
-      thumbnail: clean(row.thumbnail || snapshot.thumbnail), sourceCount: 1,
-      activeSourceCount: Number(row.active_source_count) || 0,
-      missingCount: original.missingCount, sources: [original.source],
-      lastCheckedAt: original.lastCheckedAt, endedAt: original.endedAt, sourceUnavailable: true
-    };
-  });
+  const rows = result?.results || [];
+  const ids = rows.map(row => clean(row.id));
+  const publicIds = new Map(rows.map(row => [clean(row.id), clean(row.property_id || row.id)]));
+  const manualRooms = await loadManualRoomOverrides(env, ids);
+  const manualFields = await loadManualRepresentativeFields(env, ids);
+  // Bound the nested evidence too, without silently pretending every ad was
+  // returned. Ranking gives every returned master its first candidate first.
+  const originalsResult = ids.length ? await env.DB.prepare(`SELECT * FROM (
+    SELECT s.id,s.listing_id,s.source,s.source_listing_id,s.source_url,s.active,s.missing_count,s.updated_at,s.last_collected_at,
+      ${availabilityKindSql()} AS availability_kind, ${originalFloorMetadataSql()} AS floor_metadata_json,
+      json_extract(s.list_snapshot_json,'$.room') AS advertised_room,
+      json_extract(s.list_snapshot_json,'$.type') AS advertised_type,
+      json_extract(s.list_snapshot_json,'$.deposit') AS deposit,json_extract(s.list_snapshot_json,'$.rent') AS rent,
+      json_extract(s.list_snapshot_json,'$.fee') AS fee,json_extract(s.list_snapshot_json,'$.premium') AS premium,
+      json_extract(s.list_snapshot_json,'$.area') AS area,json_extract(s.list_snapshot_json,'$.tradeType') AS trade_type,
+      json_extract(s.list_snapshot_json,'$.salePrice') AS sale_price,
+      json_extract(s.list_snapshot_json,'$.thumbnail') AS saved_thumbnail,
+      json_extract(s.raw_json,'$.list.Photos') AS gongsil_photos_json,
+      (SELECT lm.external_url FROM listing_media lm WHERE lm.source_id=s.id AND lm.status<>'deleted'
+        AND trim(COALESCE(lm.external_url,''))<>'' AND lm.external_url NOT LIKE '%/avatars/%'
+        ORDER BY lm.sort_order,lm.rowid LIMIT 1) AS media_thumbnail,
+      ROW_NUMBER() OVER(PARTITION BY s.listing_id ORDER BY s.updated_at DESC,s.id) AS candidate_rank
+    FROM listing_sources s WHERE s.listing_id IN (SELECT value FROM json_each(?1)) AND ${candidateSourceWhereSql()}
+  ) WHERE candidate_rank<=100 ORDER BY candidate_rank,listing_id LIMIT 10000`).bind(JSON.stringify(ids)).all() : null;
+  const byMaster = new Map();
+  for (const row of originalsResult?.results || []) {
+    const original = withSourceOriginalMetadata({ room: clean(row.advertised_room), type: clean(row.advertised_type), deposit: number(row.deposit), rent: number(row.rent),
+      fee: number(row.fee), premium: number(row.premium), area: number(row.area), tradeType: clean(row.trade_type) || "lease",
+      salePrice: number(row.sale_price), thumbnail: clean(row.media_thumbnail || row.saved_thumbnail)
+    }, row, manualRooms, manualFields);
+    if (original.source === "공실박스") original.thumbnail = actualGongsilImages({ list: { Photos: parseJson(row.gongsil_photos_json, []) } })[0] || "";
+    const values = byMaster.get(row.listing_id) || [];
+    values.push({ ...original, propertyId: publicIds.get(row.listing_id), sourceId: original.providerSourceId }); byMaster.set(row.listing_id, values);
+  }
+  const candidates = rows.map((row) => ({
+    propertyId: clean(row.property_id || row.id), candidateKind: "master-source-candidates",
+    title: clean(row.title), address: clean(row.address), room: clean(row.room), type: clean(row.listing_type),
+    tradeType: clean(row.trade_type) || "lease", salePrice: number(row.sale_price),
+    deposit: number(row.deposit), rent: number(row.monthly_rent), fee: number(row.maintenance_fee),
+    premium: number(row.premium), area: number(row.area_m2), mainSource: clean(row.main_source),
+    memo: clean(row.operating_memo), sourceUrl: clean(row.source_url), thumbnail: clean(row.thumbnail),
+    sourceCount: Number(row.source_count) || 0, endedSourceCount: Number(row.candidate_ad_count) || 0,
+    activeSourceCount: Number(row.active_source_count) || 0, candidateOriginalCount: Number(row.candidate_ad_count) || 0,
+    candidateAdCount: Number(row.candidate_ad_count) || 0,
+    candidateOriginals: byMaster.get(row.id) || [], returnedCandidateOriginalCount: (byMaster.get(row.id) || []).length,
+    candidateOriginalsHasMore: (Number(row.candidate_ad_count) || 0) > (byMaster.get(row.id) || []).length,
+    missingCount: Number(row.missing_count) || 0, sources: clean(row.sources).split(",").filter(Boolean),
+    lastCheckedAt: clean(row.last_checked_at), sourceUnavailable: true,
+    evidenceNotice: "과거 미노출 후보와 동일범위 전체목록 미노출 기록입니다. 실제 광고 삭제·거래완료 확인은 아닙니다."
+  }));
   const count = Number(total?.count) || 0;
+  const manualCompleted = Number(total?.manual_completed) || 0;
   return { ok: true, action: "transactionCandidates", count, returnedCount: candidates.length,
-    hasMore: count > candidates.length, candidates, source: "D1" };
+    hasMore: count > candidates.length, candidates, totalUnavailable: count, manualCompleted,
+    candidateAdCount: Number(total?.candidate_ad_count) || 0,
+    returnedCandidateAdCount: candidates.reduce((sum,row) => sum + row.returnedCandidateOriginalCount, 0),
+    candidateOriginalsHasMore: candidates.some(row => row.candidateOriginalsHasMore),
+    completedOnlyTotal: count + manualCompleted, advertisementPolicyVersion: SOURCE_CANDIDATE_POLICY_VERSION, source: "D1" };
 }
 
 const BUSINESS_HISTORY_FIELDS = [

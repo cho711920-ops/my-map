@@ -842,7 +842,7 @@ function getSearchComparableFields(item) {
   return [
     item && item.name,
     item && item.address,
-    item && item.room,
+    item && (item.sourceFloorVerifiedV1 ? formatListingRoomForCardV653(item.advertisedRoomV1, item.floor) : item.room),
     item && item.type,
     getListingTypeLabelV1(item),
     item && item.memo
@@ -952,7 +952,7 @@ function buildSearchText(item) {
   return [
     item && item.name,
     item && item.address,
-    item && item.room,
+    item && (item.sourceFloorVerifiedV1 ? formatListingRoomForCardV653(item.advertisedRoomV1, item.floor) : item.room),
     item && item.type,
     getListingTypeLabelV1(item),
     item && item.memo
@@ -1198,6 +1198,17 @@ function getFilteredItems(options) {
   var minArea = readOptionalFilterNumberV1("minArea", 0);
   var maxArea = readOptionalFilterNumberV1("maxArea", Infinity);
 
+  function hasBoundsInputV2(first, second) {
+    return [first, second].some(function(id) {
+      var input = document.getElementById(id);
+      return input && String(input.value == null ? "" : input.value).trim() !== "";
+    });
+  }
+  var hasDepositBounds = hasBoundsInputV2("minDeposit", "maxDeposit");
+  var hasRentBounds = hasBoundsInputV2("minRent", "maxRent");
+  var hasPremiumBounds = hasBoundsInputV2("minPremium", "maxPremium");
+  var hasAreaBounds = hasBoundsInputV2("minArea", "maxArea");
+
   var minFloor = readOptionalNumberInput("minFloor");
   var maxFloor = readOptionalNumberInput("maxFloor");
   var hasFloorFilter = minFloor !== null || maxFloor !== null;
@@ -1208,7 +1219,7 @@ function getFilteredItems(options) {
     maxFloor = floorSwap;
   }
 
-  var filtered = allItems.filter(function(item) {
+  function matchesListingConditionsV2(item) {
     var matchTradeMode = !window.JSListingTradeV1 || window.JSListingTradeV1.matchesItem(item);
     var operationsMatchIds = window.operationsMatchPropertyIds;
     var matchCustomerSelection = !operationsMatchIds || operationsMatchIds.has(String(item.propertyId || "").trim());
@@ -1224,7 +1235,7 @@ function getFilteredItems(options) {
     var matchType = !selectedType || getListingTypeLabelV1(item) === selectedType;
     var matchSource = !selectedSource ||
       (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.matchesSource === "function"
-        ? window.JSUnifiedListingsV8.matchesSource(item, selectedSource)
+        ? window.JSUnifiedListingsV8.matchesSource(item, selectedSource, {includeUnavailable: !!(options && options.ignoreDone)})
         : getItemSourceType(item) === selectedSource);
     var matchBrokerageFee = saleMode || !selectedBrokerageFee ||
       !!(window.JSCommercialBrokerageV1 &&
@@ -1240,7 +1251,11 @@ function getFilteredItems(options) {
     });
 
     var filterPrice = saleMode ? window.JSListingTradeV1.displayPrice(item) : Number(item.deposit || 0);
+    var presence = item.displayValuePresence || {};
     var matchPrice =
+      (!hasDepositBounds || presence[saleMode ? "salePrice" : "deposit"] !== false) &&
+      (saleMode || ((!hasRentBounds || presence.rent !== false) &&
+        (!hasPremiumBounds || presence.premium !== false) && (!hasAreaBounds || presence.area !== false))) &&
       filterPrice >= minDeposit &&
       filterPrice <= maxDeposit &&
       (saleMode || (item.rent >= minRent && item.rent <= maxRent)) &&
@@ -1266,8 +1281,12 @@ function getFilteredItems(options) {
     }
 
     var matchFavorite = !favoriteOnly || isFavorite(item);
-    var matchDone = doneOnly ? (isDone(item) || Number(item.unifiedEndedOriginalCountV1 || 0) > 0) : (!hideDone || !isDone(item));
-    var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
+    var matchDone = options && options.ignoreDone ? true : (doneOnly
+      ? (item.state === "계약완료" || Number(item.unifiedCandidateOriginalCountV2 || 0) > 0)
+      : (!hideDone || !isDone(item)));
+    var matchGongsil = !gongsilOnly || isGongsilBoxItem(item) ||
+      !!(options && options.ignoreDone && window.JSUnifiedListingsV8 &&
+        window.JSUnifiedListingsV8.matchesSource(item, "gongsil", {includeUnavailable: true}));
     var matchTodayNew = !newListingDays || (newListingDays === 1 && window.JSTodayListingsV1
       ? window.JSTodayListingsV1.matches(item) : isRegistrationWithinDays(item.regDate, newListingDays));
     var todayGlobalScope = newListingDays === 1 && window.JSTodayListingsV1 && window.JSTodayListingsV1.globalScope();
@@ -1286,6 +1305,16 @@ function getFilteredItems(options) {
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&
       matchSaleFields && matchFloor && matchQuickFloor &&
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
+  }
+
+  var availabilityView = options && options.availabilityView || (options && options.ignoreDone ? "all"
+    : doneOnly ? "completed" : hideDone ? "active" : "all");
+  var filtered = [];
+  allItems.forEach(function(master) {
+    var projected = window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.filterItemForView === "function"
+      ? window.JSUnifiedListingsV8.filterItemForView(master, matchesListingConditionsV2, availabilityView)
+      : matchesListingConditionsV2(master) ? master : null;
+    if (projected) filtered.push(projected);
   });
 
   filtered.sort(function(a, b) {
@@ -1636,6 +1665,9 @@ function applyFilter() {
   if (window.JSTodayListingsV1) window.JSTodayListingsV1.render();
   } finally {
     if (window.JSLocalMetricsV1) window.JSLocalMetricsV1.finish(searchMetricV1);
+    if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent("js-listing-availability-changed"));
+    }
   }
 }
 

@@ -30,6 +30,7 @@ function fixture(t) {
       missing_count,updated_at,list_snapshot_json,raw_json) VALUES (?,?,?,?,?,?,?,?,?,?)`)
       .run(id, parent, sourceName, id + '::lease', 'https://example.test/original/' + id, active, active ? 0 : 1,
         '2026-10-14T02:00:00Z', JSON.stringify(original), JSON.stringify(raw));
+    if (!active) db.prepare("INSERT INTO listing_source_availability(source_id,kind) VALUES (?,'census_missing')").run(id);
   };
   return { db, env, queries, master, source,
     get: action => handleD1GetAction(env, {}, { action }),
@@ -68,14 +69,18 @@ test('all ended ads remain real records; held and deleted masters do not leak', 
   assert.equal(result.groups.deleted, undefined); assert.equal(result.groups.held, undefined);
 });
 
-test('candidate API counts ended advertisements even when their master has active siblings', async t => {
+test('candidate API counts distinct masters having candidate ads, including masters with active siblings', async t => {
   const f = fixture(t); f.master('M'); f.source('live', 'M'); f.source('ended-one', 'M', 0); f.source('ended-two', 'M', 0);
   f.master('manual-done', '1층', '계약완료'); f.source('not-candidate', 'manual-done', 0);
+  f.master('unavailable'); f.source('ended-a', 'unavailable', 0); f.source('ended-b', 'unavailable', 0);
   const result = await f.get('transactionCandidates');
   assert.equal(result.count, 2); assert.equal(result.returnedCount, 2); assert.equal(result.hasMore, false);
-  assert.equal(new Set(result.candidates.map(row => row.originalId)).size, 2);
-  assert.ok(result.candidates.every(row => row.propertyId === 'M' && row.activeSourceCount === 1 && row.sourceUnavailable));
-  assert.ok(result.candidates.every(row => row.sourceUrl.startsWith('https://example.test/original/') && row.sourceId));
+  assert.equal(new Set(result.candidates.map(row => row.propertyId)).size, 2);
+  const mixed = result.candidates.find(row => row.propertyId === 'M');
+  assert.equal(mixed.sourceCount, 3); assert.equal(mixed.activeSourceCount, 1); assert.equal(mixed.candidateOriginalCount, 2);
+  assert.equal(result.candidateAdCount, 4);
+  assert.equal(result.candidates[0].sourceUnavailable, true); assert.equal(result.manualCompleted, 1);
+  assert.equal(result.completedOnlyTotal, 3);
   assert.equal(f.db.prepare("SELECT status FROM listings WHERE id='M'").get().status, 'active');
 });
 
@@ -183,9 +188,10 @@ test('hideDone removes ended originals only; toggling or detail cache cannot del
   assert.equal(api.visibleOriginals('M').length, 9); assert.equal(api.allOriginals('M').length, 10);
 });
 
-test('ad candidate UI has source link/number and cannot complete an entire master', () => {
+test('integrated candidate UI keeps archived links without treating an old ad as proof of a completed contract', () => {
   const source = fs.readFileSync('js/operations-center-v7.js', 'utf8');
-  assert.match(source, /광고번호/); assert.match(source, /원본 광고 미노출 내역/);
+  assert.match(source, /연결 원본/); assert.match(source, /거래확인 후보 · 통합매물 기준/);
+  assert.match(source, /이 후보 광고 원본 링크/);
   assert.match(source, /window\.openTransactionCandidateSourceV1 = function/);
   const compatibility = source.match(/window\.completeTransactionCandidateV1 = function\(\) \{([^]*?)\n\s{2}};/)[1];
   assert.doesNotMatch(compatibility, /apiPost|toggleDone|loadSheet/);

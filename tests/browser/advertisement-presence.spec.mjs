@@ -34,6 +34,10 @@ function data(floors) {
       return {...master,propertyId:master.propertyId,originalId:master.propertyId + "-ad-" + index,
         sourceId:master.propertyId + "-provider-" + index,buildingName:ended?"미노출 원본 " + index:"현재 광고 " + index,
         active:ended?0:1,sourceUnavailable:ended,missingCount:ended?1:0,
+        candidateEligible:ended,availabilityKind:ended?(master.propertyId===mixedId?"census_missing":"legacy_candidate"):"active",
+        deposit:master.propertyId===mixedId&&ended?500:master.deposit,
+        rent:master.propertyId===mixedId&&ended?40:master.rent,
+        source:master.propertyId===mixedId&&ended?"당근":master.source,
         images:[picture],thumbnail:picture,photoCount:1,link:"http://127.0.0.1/original/" + master.propertyId};
     })]));
   return {items,payload:{ok:true,groups,sourceSearchIds:{},snapshotRevision:"QA-PRESENCE-1"}};
@@ -108,7 +112,7 @@ async function ids(page){return page.locator("#list .item").evaluateAll(cards=>c
 async function mapIds(page){return page.evaluate(()=>[...new Set(overlays.flatMap(overlay=>(overlay.__cluster?.items||[]).map(item=>item.propertyId)))].sort());}
 async function menu(page,id){await page.locator(id).evaluate(button=>button.click());}
 
-test("mixed 9-live/1-ended originals stay 9 or 10 while all-ended masters hide from both real map and list",async({page,context,isMobile},testInfo)=>{
+test("mixed originals show nine live ads and restore only the reappearing candidate advertisement",async({page,context,isMobile},testInfo)=>{
   const result=await setup(page,context,isMobile);
   expect(await ids(page)).toEqual([mixedId]);expect(await mapIds(page)).toEqual([mixedId]);
   await expect(page.locator("#mapListingCountValueV825")).toHaveText("1개");
@@ -127,6 +131,14 @@ test("mixed 9-live/1-ended originals stay 9 or 10 while all-ended masters hide f
   await menu(page,"#hideDoneBtn");
   expect(await ids(page)).toEqual([mixedId]);expect(await mapIds(page)).toEqual([mixedId]);
   await expect(card(page,mixedId).locator(".unified-expand-btn-v8")).toHaveText("동일매물 9개");
+  await page.evaluate(()=>{
+    const reappeared=JSUnifiedListingsV8.allOriginals("FIXTURE-LEASE-1").find(original=>original.originalId==="FIXTURE-LEASE-1-ad-9");
+    Object.assign(reappeared,{active:1,sourceUnavailable:false,missingCount:0,candidateEligible:false,availabilityKind:"active"});
+    JSUnifiedListingsV8.refreshOriginalVisibility(allItems);applyFilter();
+  });
+  await expect(card(page,mixedId).locator(".unified-expand-btn-v8")).toHaveText("동일매물 10개");
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({candidateCount:1,candidateAdCount:2});
+  expect(await page.evaluate(id=>JSUnifiedListingsV8.allOriginals(id).length,mixedId)).toBe(10);
   // A genuinely manual completed master still owns its explicit restore UI.
   await page.evaluate(()=>{allItems.find(item=>item.propertyId==="FIXTURE-LEASE-1").state="계약완료";toggleHideDone();});
   await expect(card(page,mixedId).locator(".done-restore-button-v1")).toHaveCount(1);
@@ -135,29 +147,117 @@ test("mixed 9-live/1-ended originals stay 9 or 10 while all-ended masters hide f
   safe(result);
 });
 
-test("done-only selects the ended sibling, preserving favorite IDs, original IDs, memos and manual master states",async({page,context,isMobile})=>{
+test("done-only projects each eligible candidate ad, matching its own price and preserving favorites and memos",async({page,context,isMobile})=>{
   const result=await setup(page,context,isMobile);
   const before=await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),
     items:allItems.map(item=>({id:item.propertyId,key:item.key,memo:item.memo,state:item.state})),
     originals:JSUnifiedListingsV8.allOriginals("FIXTURE-LEASE-1").map(original=>original.originalId)}));
   await menu(page,"#doneOnlyBtn");
-  expect(await ids(page)).toEqual(expect.arrayContaining([mixedId,endedId]));
+  expect((await ids(page)).sort()).toEqual([mixedId,endedId]);expect(await mapIds(page)).toEqual([mixedId,endedId]);
+  await expect(page.locator("#mapListingCountValueV825")).toHaveText("2개");
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({
+    ready:true,candidateCount:2,candidateAdCount:3,manualCompletedCount:0,doneCount:2
+  });
+  // The original ad itself remains the candidate even with nine live siblings.
   expect(await page.evaluate(id=>JSUnifiedListingsV8.visibleOriginals(id).map(original=>original.originalId),mixedId))
     .toEqual([mixedId+"-ad-9"]);
+  await expect(card(page,mixedId).locator(".price-main")).toContainText(/보\s*500\s*\/\s*(?:월세)?월\s*40/);
   await card(page,mixedId).locator(".unified-thumb-v8").click();
   await expect(page.locator("#unifiedDetailDrawerV8")).toHaveAttribute("aria-hidden","false");
   await expect(page.locator("#unifiedDetailTitleV8")).toContainText("미노출 원본 9");
   await expect(page.locator("#unifiedDetailSubtitleV8")).toContainText("원본매물 1개");
   await page.evaluate(()=>JSUnifiedListingsV8.close());
-  await page.evaluate(()=>{JSV6ListStore.activateFavoriteFilter("fixture-favorites");});
+  await page.evaluate(()=>{document.getElementById("maxRent").value="80";applyFilter();});
   expect(await ids(page)).toEqual([mixedId]);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({candidateCount:1,candidateAdCount:1});
+  await page.evaluate(()=>{
+    document.getElementById("maxRent").value="";
+    document.getElementById("minFloor").value="1";document.getElementById("maxFloor").value="1";applyFilter();
+  });
+  expect(await ids(page)).toEqual([mixedId]);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({candidateCount:1,candidateAdCount:1});
+  await page.evaluate(()=>{
+    document.getElementById("minFloor").value="";document.getElementById("maxFloor").value="";
+    document.getElementById("sourceFilter").value="danggeun";applyFilter();
+  });
+  expect(await ids(page)).toEqual([mixedId]);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({candidateCount:1,candidateAdCount:1});
+  await page.evaluate(()=>{document.getElementById("sourceFilter").value="";applyFilter();});
+  expect((await ids(page)).sort()).toEqual([mixedId,endedId]);
+  await page.evaluate(()=>{JSV6ListStore.activateFavoriteFilter("fixture-favorites");});
+  expect(await ids(page)).toEqual([mixedId]);expect(await mapIds(page)).toEqual([mixedId]);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({
+    ready:true,candidateCount:1,candidateAdCount:1,manualCompletedCount:0,doneCount:1
+  });
   await menu(page,"#doneOnlyBtn");await menu(page,"#hideDoneBtn");
   expect(await ids(page)).toEqual([mixedId]);
+  await expect(card(page,mixedId).locator(".price-main")).toContainText(/보\s*2,000\s*\/\s*(?:월세)?월\s*90/);
+  await page.evaluate(()=>{document.getElementById("maxRent").value="50";applyFilter();});
+  expect(await ids(page)).toEqual([]);
+  await menu(page,"#doneOnlyBtn");
+  expect(await ids(page)).toEqual([mixedId]);
+  await expect(card(page,mixedId).locator(".price-main")).toContainText(/보\s*500\s*\/\s*(?:월세)?월\s*40/);
+  await page.evaluate(()=>{
+    document.getElementById("maxRent").value="";document.getElementById("minRent").value="80";applyFilter();
+  });
+  expect(await ids(page)).toEqual([]);
+  await menu(page,"#doneOnlyBtn");await menu(page,"#hideDoneBtn");
+  expect(await ids(page)).toEqual([mixedId]);
+  await page.evaluate(()=>{document.getElementById("minRent").value="";applyFilter();});
   expect(await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),
     items:allItems.map(item=>({id:item.propertyId,key:item.key,memo:item.memo,state:item.state})),
     originals:JSUnifiedListingsV8.allOriginals("FIXTURE-LEASE-1").map(original=>original.originalId)}))).toEqual(before);
   expect(await page.evaluate(()=>({favoriteOnly,activeFavoriteFolderId,favoriteFilterKeys})))
     .toMatchObject({favoriteOnly:true,activeFavoriteFolderId:"fixture-favorites",favoriteFilterKeys:["property:"+mixedId]});
+  safe(result);
+});
+
+test("manual completion and candidate advertisements form a deduplicated master map/list union",async({page,context,isMobile})=>{
+  const result=await setup(page,context,isMobile);
+  await page.evaluate(()=>{
+    allItems.find(item=>item.propertyId==="FIXTURE-LEASE-1").state="계약완료";
+    toggleDoneOnly();
+  });
+  expect((await ids(page)).sort()).toEqual([mixedId,endedId]);
+  expect(await mapIds(page)).toEqual([mixedId,endedId]);
+  await expect(page.locator("#mapListingCountValueV825")).toHaveText("2개");
+  await expect(card(page,mixedId).locator(".done-restore-button-v1")).toHaveCount(1);
+  await expect(card(page,endedId).locator(".done-restore-button-v1")).toHaveCount(0);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({
+    ready:true,candidateCount:1,candidateAdCount:2,manualCompletedCount:1,doneCount:2
+  });
+  // A manual-completed master with no remaining originals is counted once,
+  // under manual completions rather than duplicated as a candidate.
+  await page.evaluate(()=>{
+    allItems.find(item=>item.propertyId==="FIXTURE-LEASE-2").state="계약완료";
+    JSUnifiedListingsV8.refreshOriginalVisibility(allItems);applyFilter();
+  });
+  expect((await ids(page)).sort()).toEqual([mixedId,endedId]);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({
+    ready:true,candidateCount:0,candidateAdCount:0,manualCompletedCount:2,doneCount:2
+  });
+  await menu(page,"#hideDoneBtn");
+  expect(await ids(page)).toEqual([]);expect(await mapIds(page)).toEqual([]);
+  safe(result);
+});
+
+test("candidate keyword searches use its advertised floor without altering the master favorite key",async({page,context,isMobile})=>{
+  const result=await setup(page,context,isMobile);
+  const before=await page.evaluate(()=>allItems.find(item=>item.propertyId==="FIXTURE-LEASE-1").key);
+  await page.evaluate(()=>{
+    const original=JSUnifiedListingsV8.allOriginals("FIXTURE-LEASE-1").find(original=>original.originalId==="FIXTURE-LEASE-1-ad-9");
+    Object.assign(original,{room:"3층",floor:3});
+    toggleDoneOnly();
+    document.getElementById("keyword").value="괴정동 3층";applyFilter();
+  });
+  expect(await ids(page)).toEqual([mixedId]);
+  await expect(card(page,mixedId).locator(".item-room-badge")).toHaveText("3층");
+  await page.evaluate(()=>{document.getElementById("keyword").value="괴정동 1층";applyFilter();});
+  expect(await ids(page)).toEqual([]);
+  expect(await page.evaluate(()=>{
+    const master=allItems.find(item=>item.propertyId==="FIXTURE-LEASE-1");
+    return {key:master.key,room:master.room};
+  })).toEqual({key:before,room:"1층"});
   safe(result);
 });
 

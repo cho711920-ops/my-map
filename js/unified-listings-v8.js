@@ -10,7 +10,9 @@
     openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
-    photoPreloads: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0 };
+    photoPreloads: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0,
+    masterItemsArray: null, masterItemsById: Object.create(null),
+    displayItemsArray: null, displayItemsById: Object.create(null) };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function isPhoneDetailV2() {
@@ -39,8 +41,18 @@
   }
   function desktop() { return global.innerWidth > 768; }
   function isSourceUnavailable(original) {
+    if (original && (original.active === 1 || original.active === "1")) return false;
     return !!(original && (original.sourceUnavailable === true || original.sourceUnavailable === 1 ||
       original.sourceUnavailable === "true" || original.active === 0 || original.active === "0"));
+  }
+  function isCandidateOriginal(original) {
+    return isSourceUnavailable(original) && /^(?:legacy_candidate|census_missing)$/.test(text(original && original.availabilityKind)) && !!(original &&
+      (original.candidateEligible === true || original.candidateEligible === 1 || original.candidateEligible === "true"));
+  }
+  function publicOriginals(originals) {
+    return (originals || []).filter(function(original) {
+      return !isSourceUnavailable(original) || isCandidateOriginal(original);
+    });
   }
   function sourcePriority(original, hasDaangn) {
     var key = sourceKey(original && original.source);
@@ -68,15 +80,41 @@
     }).map(function(entry) { return entry.original; });
   }
   function allOriginals(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }
-  function visibleOriginalsFrom(originals, propertyId) {
-    var values = orderOriginals(originals || []);
+  function visibleOriginalsFrom(originals, propertyId, masterItem, alreadyOrdered) {
+    var values = alreadyOrdered ? originals : orderOriginals(originals || []);
     if (global.doneOnly) {
-      var master = resolveMasterItem(propertyId);
-      return master && text(master.state) === "계약완료" ? values : values.filter(isSourceUnavailable);
+      var master = masterItem || resolveMasterItem(propertyId);
+      return master && text(master.state) === "계약완료" ? publicOriginals(values) : values.filter(isCandidateOriginal);
     }
-    return global.hideDone !== false ? values.filter(function(original) { return !isSourceUnavailable(original); }) : values;
+    return global.hideDone !== false ? values.filter(function(original) { return !isSourceUnavailable(original); }) : publicOriginals(values);
   }
-  function group(propertyId) { return visibleOriginalsFrom(allOriginals(propertyId), propertyId); }
+  function group(propertyId) { return visibleOriginalsFrom(allOriginals(propertyId), propertyId, null, true); }
+
+  function displayedOriginalProjection(propertyId) {
+    var items = Array.isArray(global.currentItems) ? global.currentItems : [];
+    if (state.displayItemsArray !== items) {
+      state.displayItemsArray = items;
+      state.displayItemsById = Object.create(null);
+      items.forEach(function(item) { state.displayItemsById[text(item.propertyId)] = item; });
+    }
+    var displayed = state.displayItemsById[text(propertyId)];
+    return displayed && Array.isArray(displayed.unifiedDisplayOriginalsV2)
+      ? displayed.unifiedDisplayOriginalsV2 : null;
+  }
+
+  function displayedOriginals(propertyId) {
+    return displayedOriginalProjection(propertyId) || group(propertyId);
+  }
+
+  function detailOriginals(originals, propertyId) {
+    var visible = visibleOriginalsFrom(originals, propertyId);
+    var projection = displayedOriginalProjection(propertyId);
+    // Direct/manual listings can obtain their first original only from detail.
+    // Without a rendered subset, keep the valid detail instead of deleting it.
+    if (!projection || !projection.length) return visible;
+    var allowed = new Set(projection.map(function(original) { return text(original.originalId); }));
+    return visible.filter(function(original) { return allowed.has(text(original.originalId)); });
+  }
   function originalRoomLabel(original) {
     return typeof global.formatListingRoomForCardV653 === "function"
       ? global.formatListingRoomForCardV653(original && original.room, original && original.floor)
@@ -601,9 +639,10 @@
         originalLoadStatus(false);
       }
     }
+    indexMasterItems(items || []);
     (items || []).forEach(function(item) {
       var all = allOriginals(item.propertyId);
-      var originals = group(item.propertyId);
+      var originals = visibleOriginalsFrom(all, item.propertyId, item, true);
       // The master room is also a legacy favorite key. Overlay the currently
       // advertised floor/display room without rewriting that persisted key.
       var activeOriginals = all.filter(function(original) { return !isSourceUnavailable(original); });
@@ -647,15 +686,16 @@
         buildingYear: text(item.buildingYear || item.approvalYear)
       };
       item.unifiedAllOriginalsV1 = all;
-      item.unifiedActiveOriginalCountV1 = all.filter(function(original) { return !isSourceUnavailable(original); }).length;
+      item.unifiedActiveOriginalCountV1 = activeOriginals.length;
       item.unifiedEndedOriginalCountV1 = all.length - item.unifiedActiveOriginalCountV1;
+      item.unifiedCandidateOriginalCountV2 = all.filter(isCandidateOriginal).length;
       item.sourceAllUnavailableV1 = all.length > 0 && item.unifiedActiveOriginalCountV1 === 0;
       item.unifiedOriginalsV8 = originals;
       item.sourceListingSearchV6579 = (state.sourceSearchIds[text(item.propertyId)] || []).slice();
       item.unifiedOriginalCountV8 = originals.length || (all.length ? 0 : 1);
       item.thumbnailV8 = originals.length ? originalImage(originals[0]) : "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });
-      item.transactionCheckCandidateV8135 = item.unifiedEndedOriginalCountV1 > 0;
+      item.transactionCheckCandidateV8135 = isTransactionCandidate(item);
       item.transactionCheckMissingCountV8135 = item.transactionCheckCandidateV8135
         ? all.reduce(function(maximum, original) {
             return isSourceUnavailable(original) ? Math.max(maximum, Number(original && original.missingCount) || 1) : maximum;
@@ -680,18 +720,137 @@
     return "unknown";
   }
 
-  function matchesSource(item, selectedSource) {
+  function matchesSource(item, selectedSource, options) {
     if (!selectedSource) return true;
-    var sources = item && item.sourceTypesV8 || [];
-    return sources.length ? sources.indexOf(selectedSource) >= 0 : false;
+    if (item && item.unifiedFilterOriginalV2) return sourceKey(item.unifiedFilterOriginalV2.source) === selectedSource;
+    var sources = options && options.includeUnavailable
+      ? (item && item.unifiedAllOriginalsV1 || []).map(function(original) { return sourceKey(original.source); })
+      : item && item.sourceTypesV8 || [];
+    return sources.length ? sources.indexOf(selectedSource) >= 0
+      : !(item && (item.unifiedAllOriginalsV1 || []).length) && sourceKey(item && item.source) === selectedSource;
+  }
+
+  function isTransactionCandidate(item) {
+    return !!(item && Number(item.unifiedCandidateOriginalCountV2 || 0) > 0 && text(item.state) !== "계약완료");
+  }
+
+  function originalDisplayItem(master, original) {
+    var item = Object.assign({}, master);
+    var manual = !isCandidateOriginal(original) ? text(original.manualDisplayFields).split(",") : [];
+    item.displayValuePresence = Object.assign({}, master.displayValuePresence || {});
+    var fields = {deposit:"deposit", rent:"monthly_rent", fee:"maintenance_fee", premium:"premium",
+      area:"area_m2", salePrice:"sale_price", type:"listing_type", saleCategory:"sale_category"};
+    Object.keys(fields).forEach(function(key) {
+      if (manual.indexOf(fields[key]) >= 0) return;
+      if (/^(?:deposit|rent|fee|premium|area|salePrice)$/.test(key)) {
+        var known = original[key] != null && original[key] !== "" && Number.isFinite(Number(original[key]));
+        item[key] = known ? Number(original[key]) : 0;
+        item.displayValuePresence[key] = known;
+      } else if (original[key] != null && original[key] !== "") item[key] = original[key];
+    });
+    if (original.saleSummary && manual.indexOf("sale_details_json") < 0) item.saleDetails = original.saleSummary;
+    item.name = manual.indexOf("title") >= 0 || manual.indexOf("building_name") >= 0
+      ? master.name : original.buildingName || master.name;
+    item.source = original.source || master.source;
+    item.sourceLink = original.link || master.sourceLink;
+    item.sourceListingSearchV6579 = [original.sourceListingId, original.providerSourceId, original.sourceId]
+      .map(text).filter(Boolean);
+    item.advertisedRoomV1 = Object.prototype.hasOwnProperty.call(original, "floor")
+      ? text(original.room) : original.room || master.advertisedRoomV1 || master.room;
+    if (Object.prototype.hasOwnProperty.call(original, "floor")) {
+      item.floor = original.floor;
+      item.sourceFloorVerifiedV1 = true;
+    }
+    item.unifiedFilterOriginalV2 = original;
+    item.unifiedOriginalsV8 = [original];
+    item.sourceTypesV8 = [sourceKey(original.source)];
+    return item;
+  }
+
+  function filterItemForView(master, matches, view) {
+    var all = master.unifiedAllOriginalsV1 || [];
+    var manual = text(master.state) === "계약완료";
+    if (manual && view === "active") return null;
+    var originals = view === "completed" && !manual ? all.filter(isCandidateOriginal)
+      : view === "active" ? all.filter(function(original) { return !isSourceUnavailable(original); }) : publicOriginals(all);
+    // Preserve explicit manual completion and source-less manual listings.
+    if (manual || !all.length) {
+      if (!manual && view === "completed" || !matches(master)) return null;
+      return Object.assign({}, master, {unifiedDisplayOriginalsV2: originals});
+    }
+    var selected = null, matched = [];
+    originals.forEach(function(original) {
+      var probe = originalDisplayItem(master, original);
+      if (!matches(probe)) return;
+      matched.push(original);
+      if (!selected) selected = probe;
+    });
+    if (!selected) return null;
+    selected.unifiedDisplayOriginalsV2 = matched;
+    selected.unifiedOriginalsV8 = matched;
+    selected.unifiedOriginalCountV8 = matched.length;
+    selected.sourceTypesV8 = matched.map(function(original) { return sourceKey(original.source); });
+    selected.unifiedCandidateOriginalCountV2 = matched.filter(isCandidateOriginal).length;
+    selected.transactionCheckCandidateV8135 = isTransactionCandidate(selected);
+    selected.thumbnailV8 = originalImage(matched[0]);
+    return selected;
+  }
+
+  function candidateSummary(options) {
+    var ready = state.loaded && !global.jsInitialFullListingsLoadingV1 &&
+      !!global.map && typeof global.getFilteredItems === "function";
+    var summary = {ready: ready, candidateCount: 0, candidateAdCount: 0, manualCompletedCount: 0,
+      doneCount: 0, scopeLabel: "현재 지도·검색조건"};
+    if (!ready) return summary;
+    var includeRows = !!(options && options.includeRows);
+    if (includeRows) summary.candidates = [];
+    // Only the completion toggle is ignored. Market, price, favorites, source,
+    // map bounds and the other search conditions remain the same as the map.
+    var items = global.getFilteredItems({ignoreDone: true, availabilityView: "completed"});
+    (items || []).forEach(function(item) {
+      if (text(item.state) === "계약완료") {
+        summary.manualCompletedCount += 1;
+        return;
+      }
+      if (!isTransactionCandidate(item)) return;
+      summary.candidateCount += 1;
+      var originals = (item.unifiedDisplayOriginalsV2 || item.unifiedAllOriginalsV1 || []).filter(isCandidateOriginal);
+      summary.candidateAdCount += originals.length;
+      if (!includeRows) return;
+      var first = originals[0] || {};
+      var sources = [];
+      originals.forEach(function(original) {
+        var source = text(original.source);
+        if (source && sources.indexOf(source) < 0) sources.push(source);
+      });
+      summary.candidates.push({
+        propertyId: text(item.propertyId), title: item.name, address: item.address,
+        room: item.advertisedRoomV1 || item.room, floor: item.floor, type: item.type,
+        tradeType: item.tradeType || "lease", salePrice: item.salePrice,
+        deposit: item.deposit, rent: item.rent, fee: item.fee, premium: item.premium, area: item.area,
+        displayValuePresence: Object.assign({}, item.displayValuePresence || {}),
+        mainSource: item.source, memo: item.memo, sourceUrl: text(item.sourceLink || first.link),
+        thumbnail: originalImage(first), sourceCount: publicOriginals(item.unifiedAllOriginalsV1 || []).length, sources: sources,
+        activeSourceCount: Number(item.unifiedActiveOriginalCountV1) || 0, sourceUnavailable: true,
+        missingCount: item.transactionCheckMissingCountV8135 || 0,
+        candidateKind: "source-candidates", candidateOriginalCount: originals.length,
+        candidateOriginals: originals.map(function(original) {
+          return Object.assign({}, original, {sourceId: original.providerSourceId || original.sourceListingId,
+            sourceUrl: original.link});
+        })
+      });
+    });
+    summary.doneCount = summary.candidateCount + summary.manualCompletedCount;
+    return summary;
   }
 
   function cardParts(item) {
-    var originals = group(item && item.propertyId);
     var all = allOriginals(item && item.propertyId);
+    var originals = item && Array.isArray(item.unifiedDisplayOriginalsV2) ? item.unifiedDisplayOriginalsV2
+      : visibleOriginalsFrom(all, item && item.propertyId, item, true);
     var count = originals.length || (all.length ? 0 : 1);
     var sourceUnavailable = originals.length > 0 && originals.every(function(original) {
-      return isSourceUnavailable(original);
+      return isCandidateOriginal(original);
     });
     var thumbnail = originals.length ? originalImage(originals[0]) : "";
     var encodedId = encodeURIComponent(text(item && item.propertyId));
@@ -756,12 +915,19 @@
     if (popup) popup.opener = null;
   }
 
+  function indexMasterItems(items) {
+    state.masterItemsArray = items;
+    state.masterItemsById = Object.create(null);
+    items.forEach(function(item) {
+      var propertyId = text(item && item.propertyId);
+      if (propertyId && !state.masterItemsById[propertyId]) state.masterItemsById[propertyId] = item;
+    });
+  }
+
   function resolveMasterItem(propertyId) {
-    propertyId = text(propertyId);
     var items = Array.isArray(global.allItems) ? global.allItems : [];
-    return items.filter(function(item) {
-      return text(item && item.propertyId) === propertyId;
-    })[0] || null;
+    if (state.masterItemsArray !== items) indexMasterItems(items);
+    return state.masterItemsById[text(propertyId)] || null;
   }
 
   function runDetailAction(action, encodedPropertyId) {
@@ -834,12 +1000,12 @@
     if (existing) {
       existing.remove();
       card.classList.remove("unified-expanded-v8");
-      button.textContent = "동일매물 " + group(propertyId).length + "개";
+      button.textContent = "동일매물 " + displayedOriginals(propertyId).length + "개";
       return;
     }
     var wrapper = document.createElement("div");
     wrapper.className = "unified-inline-originals-v8";
-    wrapper.innerHTML = group(propertyId).map(function(original) { return originalRow(original, false); }).join("");
+    wrapper.innerHTML = displayedOriginals(propertyId).map(function(original) { return originalRow(original, false); }).join("");
     card.appendChild(wrapper);
     card.classList.add("unified-expanded-v8");
     button.textContent = "동일매물 닫기";
@@ -1168,7 +1334,7 @@
     return loadDetail(propertyId, force).then(function(originals) {
       if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
           state.openOriginalId !== originalId) return;
-      originals = visibleOriginalsFrom(originals, propertyId);
+      originals = detailOriginals(originals, propertyId);
       var body = document.getElementById("unifiedDetailBodyV8");
       var active = document.activeElement;
       // Do not replace a form while the user is editing it. The fresh response
@@ -1207,14 +1373,14 @@
     state.openPropertyId = propertyId;
     var cached = state.detailCache[propertyId];
     if (cached) {
-      cached = visibleOriginalsFrom(cached, propertyId);
+      cached = detailOriginals(cached, propertyId);
       state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
       renderDetail(propertyId, cached, state.openOriginalId);
       if (cached.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
       if (!detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken);
       return;
     }
-    var initial = group(propertyId);
+    var initial = displayedOriginals(propertyId);
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     state.openOriginalId = originalId;
     renderDetail(propertyId, initial, originalId);
@@ -1884,6 +2050,8 @@
     cardParts: cardParts, matchesSource: matchesSource,
     allOriginals: allOriginals, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
     isSourceUnavailable: isSourceUnavailable,
+    isCandidateOriginal: isCandidateOriginal, filterItemForView: filterItemForView,
+    isTransactionCandidate: isTransactionCandidate, candidateSummary: candidateSummary,
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,

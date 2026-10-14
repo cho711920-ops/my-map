@@ -52,7 +52,7 @@ test("cache snapshots keep reusable listing data but exclude runtime map objects
     sourceSearchIds: { "P-1": ["n:1"] }
   });
 
-  assert.equal(result.schema, 3);
+  assert.equal(result.schema, 4);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].address, "서구 둔산동 1");
   assert.equal(result.items[0].latlng, undefined);
@@ -85,6 +85,17 @@ test("the complete snapshot keeps every listing and its matching card metadata",
   assert.equal(api.usable(result), true);
   const partial = Object.assign({}, result, { totalItemCount: 101 });
   assert.equal(api.usable(partial), false);
+});
+
+test("old snapshots are rejected and source-evidence changes invalidate the unified signature", () => {
+  const api = cacheApi();
+  const groups = {P:[{originalId:"O",active:0,candidateEligible:false,availabilityKind:"legacy_unverified"}]};
+  const snapshot = api.snapshot([{propertyId:"P",address:"검수 주소"}],{ok:true,groups});
+  assert.equal(api.usable({...snapshot,schema:3}),false);
+  assert.equal(api.usable(snapshot),true);
+  const before = api.unifiedSignature({groups});
+  const after = api.unifiedSignature({groups:{P:[{...groups.P[0],candidateEligible:true,availabilityKind:"census_missing"}]}});
+  assert.notEqual(before,after);
 });
 
 test("the map renders only a complete full snapshot and refreshes it without a second unchanged render", () => {

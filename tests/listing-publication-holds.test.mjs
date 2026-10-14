@@ -36,6 +36,7 @@ function database() {
     CREATE TABLE listing_history (
       id INTEGER PRIMARY KEY, listing_id TEXT, action TEXT, before_json TEXT, after_json TEXT
     );
+    CREATE TABLE operations_snapshots (snapshot_key TEXT PRIMARY KEY, payload_json TEXT, calculated_at TEXT, updated_at TEXT);
   `);
   // The application queries this table directly, so migration 0020 must be
   // applied before publishing the Worker code that introduces the read guard.
@@ -85,6 +86,7 @@ function database() {
   holdInsert.run("P-held-fallback", "lease_sale_contamination", "open", 1);
   holdInsert.run("P-resolved", "lease_sale_contamination", "resolved", 1);
   holdInsert.run("P-nonblock", "review_note", "open", 0);
+  sqlite.exec(readFileSync(new URL("../cloudflare/migrations/0027_source_candidate_evidence.sql", import.meta.url), "utf8"));
 
   const prepare = (sql) => {
     const statement = sqlite.prepare(sql);
@@ -163,8 +165,8 @@ test("open publication holds are absent from every public listing read path", as
     const restoredDetail = await handleD1GetAction(env, user, {
       action: "unifiedListingDetail", propertyId: "P-held"
     });
-    assert.equal(restoredDetail.originals.length, 2);
-    assert.equal(restoredDetail.originals.filter(row => row.sourceUnavailable).length, 1);
+    assert.equal(restoredDetail.originals.length, 1);
+    assert.equal(restoredDetail.originals.filter(row => row.sourceUnavailable).length, 0);
     assert.equal(restoredDetail.originals[0].propertyId, "P-held");
 
     const restoredContacts = await handleD1GetAction(env, user, {

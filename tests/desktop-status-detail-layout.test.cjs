@@ -22,8 +22,8 @@ assert.match(unified, /detailRequestToken: 0/);
 assert.match(unified, /requestToken !== state\.detailRequestToken/);
 
 assert.match(d1, /async function unifiedDetail\(env, propertyId\)/);
-assert.match(d1, /FROM listing_sources WHERE listing_id = \?1\s+AND EXISTS/);
-assert.match(d1, /\), row, manualRooms\)/);
+assert.match(d1, /FROM listing_sources WHERE listing_id = \?1 AND \$\{publicSourceWhereSql\("listing_sources"\)\}/);
+assert.match(d1, /\), row, manualRooms, manualFields\)/);
 assert.match(d1, /FROM listing_media WHERE listing_id = \?1 AND status <> 'deleted'/);
 assert.match(d1, /const originals = \(sourceResult\?\.results \|\| \[\]\)\.map/);
 assert.match(d1, /snapshot\.photoCount = isGongsil/);

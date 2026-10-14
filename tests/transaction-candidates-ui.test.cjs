@@ -12,16 +12,20 @@ const unifiedCss = fs.readFileSync(path.join(root, "css/unified-listings-v8.css"
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
 assert.match(api, /"transactionCandidates"/);
-assert.match(api, /s\.active=0/);
-assert.match(api, /originalId: original\.originalId/);
-assert.match(api, /lm\.source_id=s\.id/);
+const candidateApi = api.match(/async function transactionCandidates\(env\) \{([^]*?)\nconst BUSINESS_HISTORY_FIELDS/)[1];
+assert.match(candidateApi, /candidateMasterWhereSql\(\)/);
+assert.match(candidateApi, /GROUP BY l\.id/);
+assert.match(candidateApi, /candidateKind: "master-source-candidates"/);
+assert.doesNotMatch(candidateApi, /originalId: original\.originalId/);
+assert.match(candidateApi, /lm\.source_id=s\.id/);
+assert.match(candidateApi, /candidateOriginals:/);
 assert.match(api, /operating_memo[\s\S]*?thumbnail/);
 assert.match(api, /LIMIT 2000/);
 assert.match(ui, /dashboardCard\("(?:거래확인 후보|광고 미노출|원본 광고 미노출)"[\s\S]*?"transactions"\)/);
 assert.match(ui, /window\.openTransactionCandidates = function/);
 assert.match(ui, /window\.openTransactionCandidatePropertyV1 = function/);
 assert.match(ui, /operations-transaction-detail-v2/);
-assert.match(ui, /현재 광고 미노출 · 마지막 정상 사진/);
+assert.match(ui, /첫 조건 일치 후보 광고의 보관 사진/);
 assert.match(ui, /window\.completeTransactionCandidateV1 = function/);
 const legacyComplete = ui.match(/window\.completeTransactionCandidateV1 = function\(\) \{([^]*?)\n {2}};/)[1];
 assert.doesNotMatch(legacyComplete, /apiPost|toggleDone/);

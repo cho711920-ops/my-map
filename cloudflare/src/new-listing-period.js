@@ -1,5 +1,6 @@
 // The fast Today read does not load the complete CSV or complete source cache.
 // Timestamped collector dates are UTC; legacy dates without an offset are KST.
+import { publicMasterSourcesWhereSql } from './source-availability.js';
 export const REGISTRATION_DAY_SQL = `CASE
   WHEN substr(trim(first_collected_at), -1) IN ('Z','z')
     OR (length(trim(first_collected_at))>=25 AND substr(trim(first_collected_at), -6, 1) IN ('+','-'))
@@ -53,6 +54,7 @@ export async function newListingPeriod(env, query, loadOriginals, now = new Date
   const result = await env.DB.prepare(`SELECT ${COLUMNS} FROM listings
     WHERE (${REGISTRATION_DAY_SQL})=?1 AND trade_type=?2 AND id>?3
       AND status<>'deleted' ${saleClause}
+      AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id=listings.id AND quality_hold.state='open' AND quality_hold.blocks_publication=1)
     ORDER BY id LIMIT ?4`).bind(cursor.day, tradeType, cursor.id, PAGE_SIZE + 1).all();

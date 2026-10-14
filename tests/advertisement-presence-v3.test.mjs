@@ -143,6 +143,11 @@ test("a second proven census ends only the missing source advertisement, never i
     assert.equal(f.state("seen", source).active, 1);
     assert.equal(f.state("outside", source).active, 1);
     assert.equal(f.presence("missing", source)[0].missing_count, 1);
+    const annotation=f.db.prepare('SELECT kind,evidence_json FROM listing_source_availability WHERE source_id=?').get(`source-${source}-missing`);
+    assert.equal(annotation.kind,'census_missing');
+    const evidence=JSON.parse(annotation.evidence_json);
+    assert.equal(evidence.sessionId,`next-${source}`);assert.equal(evidence.providerEndVerified,false);
+    assert.equal(evidence.validationVersion,3);assert.equal(evidence.capturedAt,new Date().toISOString());
     f.step();
   }
   assert.deepEqual({ ...f.db.prepare("SELECT status,operating_memo FROM listings WHERE id='shared-master'").get() },
@@ -236,6 +241,7 @@ test("a stale census cannot end an advertisement saved after its snapshot", asyn
   assert.equal((await f.run("stale", [offer("a")], { body: stale })).deactivated, 0);
   assert.deepEqual(f.state("b"), before);
   assert.equal(f.presence("b")[0].missing_count, 0);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM listing_source_availability WHERE source_id='source-네이버-b'").get().n,0);
 });
 
 test("a save racing after the census read is protected by the SQL compare-and-set guards", async t => {
@@ -250,6 +256,7 @@ test("a save racing after the census read is protected by the SQL compare-and-se
   assert.equal(result.deactivated, 0); assert.equal(result.missingMarked, 0);
   assert.equal(f.state("b").active, 1); assert.equal(f.state("b").session_id, "concurrent-save");
   assert.equal(f.presence("b")[0].missing_count, 0);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM listing_source_availability WHERE source_id='source-네이버-b'").get().n,0);
 });
 
 test("a stale positive snapshot cannot reactivate an original ended by a newer save", async t => {
@@ -261,6 +268,15 @@ test("a stale positive snapshot cannot reactivate an original ended by a newer s
   const result = await f.run("late-return", [offer("a")], { body: old });
   assert.equal(result.adsReappeared, 0); assert.equal(result.presenceReset, 0);
   assert.deepEqual(f.state("a"), before);
+});
+
+test("candidate evidence failure rolls back the missing transition and scoped presence atomically", async t => {
+  const f=fixture(t);f.seed('a');f.seed('b');await f.run('base',[offer('a'),offer('b')]);f.step();
+  const before=f.state('b');
+  f.beforeRun(sql=>{if(/^INSERT INTO listing_source_availability/.test(sql))throw new Error('evidence-write-failed');});
+  await assert.rejects(f.run('missing',[offer('a')]),/evidence-write-failed/);
+  assert.deepEqual(f.state('b'),before);assert.equal(f.presence('b')[0].missing_count,0);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM listing_source_availability').get().n,0);
 });
 
 test("a save racing with reappearance does not report rows rejected by the SQL time guard", async t => {

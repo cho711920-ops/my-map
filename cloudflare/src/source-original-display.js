@@ -1,4 +1,5 @@
 import { canonicalListingRoom, parseListingFloor } from "./floor.js";
+import { sourceAvailability } from "./source-availability.js";
 
 const clean = value => String(value ?? "").trim();
 const parsed = value => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
@@ -7,14 +8,15 @@ export const MANUAL_REPRESENTATIVE_FIELDS = ["title", "building_name", "room", "
   "maintenance_fee", "premium", "area_m2", "sale_price", "listing_type", "sale_category", "sale_details_json"];
 
 export async function loadManualRepresentativeFields(env, listingIds) {
-  const ids = [...new Set((listingIds || []).map(clean).filter(Boolean))];
-  if (!ids.length) return new Map();
+  const ids = Array.isArray(listingIds) ? [...new Set(listingIds.map(clean).filter(Boolean))] : null;
+  if (ids && !ids.length) return new Map();
+  const scope = ids ? " AND listing_id IN (SELECT value FROM json_each(?1))" : "";
   const projection = prefix => `json_object(${MANUAL_REPRESENTATIVE_FIELDS.map(key =>
     `'${key}',json_extract(${prefix},'$.${key}')`).join(",")})`;
   const rows = await env.DB.prepare(`SELECT listing_id, ${projection("before_json")} AS before_fields,
       ${projection("after_json")} AS after_fields
     FROM listing_history WHERE action='updateProperty' AND json_valid(before_json) AND json_valid(after_json)
-      AND listing_id IN (SELECT value FROM json_each(?1)) ORDER BY id`).bind(JSON.stringify(ids)).all();
+      ${scope} ORDER BY id`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
   const result = new Map();
   for (const row of rows?.results || []) {
     const before = parsed(row.before_fields), after = parsed(row.after_fields);
@@ -45,7 +47,7 @@ export async function loadManualRoomOverrides(env, listingIds = null) {
   return new Map((result?.results || []).map(row => [clean(row.listing_id), clean(row.master_room)]));
 }
 
-export function withSourceOriginalMetadata(original, row, manualRooms = new Map()) {
+export function withSourceOriginalMetadata(original, row, manualRooms = new Map(), manualFields = new Map()) {
   const metadata = parsed(row.floor_metadata_json);
   const manual = manualRooms.has(clean(row.listing_id));
   const rawRoom = clean(metadata.room ?? original.sourceRoom);
@@ -73,6 +75,8 @@ export function withSourceOriginalMetadata(original, row, manualRooms = new Map(
     hasManualRoomOverride: manual, roomManuallyEditedV1: manual,
     sourceListingId, providerSourceId, active: unavailable ? 0 : 1,
     sourceUnavailable: unavailable, missingCount: unavailable ? Math.max(1, Number(row.missing_count) || 0) : 0,
+    ...sourceAvailability(row.active, row.availability_kind),
+    manualDisplayFields: MANUAL_REPRESENTATIVE_FIELDS.filter(field => manualFields.get(clean(row.listing_id))?.has(field)).join(","),
     lastCheckedAt: clean(row.updated_at || row.last_collected_at),
     endedAt: unavailable ? clean(row.updated_at || row.last_collected_at) : ""
   };

@@ -32,6 +32,7 @@ function fixture() {
     const original = { source: '네이버', originalId: id, thumbnail: 'https://landthumb-phinf.pstatic.net/fixture.jpg', tradeType: 'lease', revision: 1 };
     db.prepare(`INSERT INTO listing_sources (id,listing_id,source,source_listing_id,list_snapshot_json,active,missing_count) VALUES (?,?,'네이버',?,?,?,?)`)
       .run(id, listingId, id, JSON.stringify(original), active, missing);
+    if (!active) db.prepare("INSERT INTO listing_source_availability(source_id,kind) VALUES (?,'census_missing')").run(id);
   }
   return { db, env, queries, listing, source };
 }

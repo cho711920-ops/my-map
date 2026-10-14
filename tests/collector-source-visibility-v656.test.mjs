@@ -10,6 +10,7 @@ import {
 
 const collectorSource = fs.readFileSync("cloudflare/src/collector-api.js", "utf8");
 const d1Source = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
+const availabilitySource = fs.readFileSync("cloudflare/src/source-availability.js", "utf8");
 const presenceSource = fs.readFileSync("cloudflare/src/advertisement-presence.js", "utf8");
 const scriptSource = fs.readFileSync("js/script.js", "utf8");
 const quickToolsSource = fs.readFileSync("js/map-quick-tools-v657.js", "utf8");
@@ -48,20 +49,24 @@ test("an observed source resets misses and reactivates a completed listing only 
   assert.match(collectorSource, /UPDATE listings SET status='active', operating_memo=\?1[^;]+status='계약완료'/s);
 });
 
-test("transaction candidates count ended source advertisements independently of active siblings", () => {
-  assert.match(d1Source, /JOIN listings l ON l\.id=s\.listing_id/);
-  assert.match(d1Source, /l\.status NOT IN \('deleted','계약완료'\)/);
+test("candidate advertisements are evidence-classified even beside live siblings, and master counts are unique", () => {
+  assert.match(availabilitySource, /function candidateMasterWhereSql/);
+  assert.match(availabilitySource, /status<>'계약완료'/);
+  assert.match(availabilitySource, /kind IN \('legacy_candidate','census_missing'\)/);
+  assert.doesNotMatch(availabilitySource, /NOT EXISTS[^;]*live\.active=1/s);
   const candidates = d1Source.match(/async function transactionCandidates\(env\) \{([^]*?)\nconst BUSINESS_HISTORY_FIELDS/)[1];
-  assert.match(candidates, /s\.active=0/);
-  assert.match(candidates, /originalId: original\.originalId/);
-  assert.doesNotMatch(candidates, /HAVING|GROUP BY l\.id/);
+  assert.match(candidates, /candidateMasterWhereSql\(\)/);
+  assert.match(candidates, /GROUP BY l\.id/);
+  assert.match(candidates, /candidateKind: "master-source-candidates"/);
+  assert.doesNotMatch(candidates, /originalId: original\.originalId/);
 });
 
 test("done-only view is mutually exclusive with hiding completed listings", () => {
   assert.match(htmlSource, /id="doneOnlyBtn"[\s\S]*?계약완료만 보기/);
   assert.match(htmlSource, /id="mapQuickDoneOnlyBtn"[\s\S]*?계약완료만 보기/);
   assert.match(scriptSource, /var doneOnly = false/);
-  assert.match(scriptSource, /doneOnly \? \(isDone\(item\) \|\| Number\(item\.unifiedEndedOriginalCountV1 \|\| 0\) > 0\) : \(!hideDone \|\| !isDone\(item\)\)/);
+  assert.match(scriptSource, /unifiedCandidateOriginalCountV2/);
+  assert.match(scriptSource, /filterItemForView\(master, matchesListingConditionsV2, availabilityView\)/);
   assert.match(scriptSource, /function toggleHideDone\(\)[\s\S]*?if \(hideDone\) doneOnly = false/);
   assert.match(scriptSource, /function toggleDoneOnly\(\)[\s\S]*?if \(doneOnly\) hideDone = false/);
   assert.match(scriptSource, /localStorage\.setItem\(doneViewStorageKeyV656, mode\)/);
