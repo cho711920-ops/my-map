@@ -35,8 +35,10 @@ test("every representative-writing and master-moving path uses confirmation pres
   const repair = await readFile(new URL("../tools/restore-confirmed-visits-2026-08-20.sql", import.meta.url), "utf8");
 
   assert.match(collector, /SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings/);
-  assert.match(collector, /preserveConfirmedVisitMemo\(currentListing\?\.operating_memo, record\.memo\)/);
-  assert.equal((collector.match(/record\.area, representativeMemo/g) || []).length, 2);
+  const representatives = await readFile(new URL("../cloudflare/src/source-representative-selection.js", import.meta.url), "utf8");
+  assert.match(collector, /refreshListingRepresentativesFromActiveSources\(env,/);
+  // Automatic representative refresh no longer writes user memos at all.
+  assert.doesNotMatch(representatives, /operating_memo\s*=/);
   assert.match(collector, /carryConfirmedVisitMemo\(primaryMemo, duplicate\.operating_memo\)/);
   assert.match(d1, /carryConfirmedVisitMemo\(original\.memo, parent\?\.operating_memo\)/);
   assert.match(d1, /carryConfirmedVisitMemo\(target\.operating_memo, source\.operating_memo\)/);

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { refreshListingRepresentativesFromActiveSources } from "../cloudflare/src/source-representative-selection.js";
 
 // Run the real ingestion path with local SQLite, without changing exports or
 // contacting a provider. This catches future representative-update regressions.
@@ -46,7 +47,9 @@ function database(t) {
     const record = normalizedRecord(provider, payload);
     record.providerSourceId = record.sourceId;
     record.sourceId = source.source_listing_id;
-    return attachSource(env, record, source.listing_id, source.session_id, source, true, "test-condition");
+    const result = await attachSource(env, record, source.listing_id, source.session_id, source, true, "test-condition");
+    await refreshListingRepresentativesFromActiveSources(env, [source.listing_id]);
+    return result;
   };
   return { db, save, applyCondition, queries };
 }
@@ -80,7 +83,7 @@ test("Korean labels are saved for new masters and snapshots, while equivalent ol
   assert.equal(afterSource.source_listing_id, source.source_listing_id);
   assert.equal(JSON.parse(afterSource.list_snapshot_json).type, "오피스텔");
   assert.equal(JSON.parse(afterSource.raw_json).category, "A02");
-  assert.equal(f.queries.filter(sql => /^SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings/.test(sql)).length, 1);
+  assert.equal(f.queries.filter(sql => /FROM listings WHERE id IN \(SELECT value FROM json_each/.test(sql)).length, 1);
 });
 
 test("an actual Naver type change is not hidden by legacy-key protection", async t => {
@@ -107,7 +110,7 @@ test("promotion from a different representative source does not retain its code 
   assert.equal(after.listing_type, "오피스텔");
 });
 
-test("a higher-priority different provider still replaces a Naver representative with its own Korean type", async t => {
+test("a still-active representative keeps its legacy key when another provider attaches", async t => {
   const f = database(t);
   await f.save("네이버", naver());
   const before = f.db.prepare("SELECT * FROM listings").get();
@@ -117,6 +120,8 @@ test("a higher-priority different provider still replaces a Naver representative
     area: 66.1157, buildingName: "유형 검수", listSnapshot: "promoted-daangn" });
   const after = f.db.prepare("SELECT * FROM listings WHERE id=?").get(before.id);
   assert.equal(f.db.prepare("SELECT COUNT(*) n FROM listings").get().n, 1);
-  assert.equal(after.main_source, "당근");
-  assert.equal(after.listing_type, "오피스텔");
+  assert.equal(after.main_source, "네이버");
+  assert.equal(after.listing_type, "A02");
+  const daangn = f.db.prepare("SELECT list_snapshot_json FROM listing_sources WHERE source='당근'").get();
+  assert.equal(JSON.parse(daangn.list_snapshot_json).type, "오피스텔");
 });

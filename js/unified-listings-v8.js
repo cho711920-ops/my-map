@@ -38,6 +38,10 @@
       : raw;
   }
   function desktop() { return global.innerWidth > 768; }
+  function isSourceUnavailable(original) {
+    return !!(original && (original.sourceUnavailable === true || original.sourceUnavailable === 1 ||
+      original.sourceUnavailable === "true" || original.active === 0 || original.active === "0"));
+  }
   function sourcePriority(original, hasDaangn) {
     var key = sourceKey(original && original.source);
     var hasPhoto = originalImages(original).length > 0;
@@ -58,11 +62,26 @@
     return values.map(function(original, index) {
       return {original: original, index: index};
     }).sort(function(left, right) {
-      return sourcePriority(left.original, hasDaangn) - sourcePriority(right.original, hasDaangn) ||
+      return Number(isSourceUnavailable(left.original)) - Number(isSourceUnavailable(right.original)) ||
+        sourcePriority(left.original, hasDaangn) - sourcePriority(right.original, hasDaangn) ||
         left.index - right.index;
     }).map(function(entry) { return entry.original; });
   }
-  function group(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }
+  function allOriginals(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }
+  function visibleOriginalsFrom(originals, propertyId) {
+    var values = orderOriginals(originals || []);
+    if (global.doneOnly) {
+      var master = resolveMasterItem(propertyId);
+      return master && text(master.state) === "계약완료" ? values : values.filter(isSourceUnavailable);
+    }
+    return global.hideDone !== false ? values.filter(function(original) { return !isSourceUnavailable(original); }) : values;
+  }
+  function group(propertyId) { return visibleOriginalsFrom(allOriginals(propertyId), propertyId); }
+  function originalRoomLabel(original) {
+    return typeof global.formatListingRoomForCardV653 === "function"
+      ? global.formatListingRoomForCardV653(original && original.room, original && original.floor)
+      : text(original && original.room);
+  }
   function originalImages(original) {
     var values = [];
     if (original && Array.isArray(original.images)) values = original.images.slice();
@@ -379,7 +398,7 @@
       state.detailCachedAt[propertyId] = Date.now();
       delete state.detailRetryAt[propertyId];
       if (state.detailPending[propertyId] === request) delete state.detailPending[propertyId];
-      primeDetailImages(originals);
+      primeDetailImages(visibleOriginalsFrom(originals, propertyId));
       return originals;
     }).catch(function(error) {
       if (generation === state.detailGeneration && propertyGeneration === (Number(state.detailPropertyGeneration[propertyId]) || 0)) {
@@ -583,7 +602,31 @@
       }
     }
     (items || []).forEach(function(item) {
+      var all = allOriginals(item.propertyId);
       var originals = group(item.propertyId);
+      // The master room is also a legacy favorite key. Overlay the currently
+      // advertised floor/display room without rewriting that persisted key.
+      var activeOriginals = all.filter(function(original) { return !isSourceUnavailable(original); });
+      var sourceLink = text(item.sourceLink);
+      var floorOriginal = activeOriginals.filter(function(original) {
+        return sourceLink && text(original.link) === sourceLink;
+      })[0] || activeOriginals[0];
+      var saleFloor = text(item.tradeType).toLowerCase() === "sale" ||
+        text(floorOriginal && floorOriginal.tradeType).toLowerCase() === "sale";
+      if (!saleFloor && floorOriginal && Object.prototype.hasOwnProperty.call(floorOriginal, "floor")) {
+        if (!item.sourceFloorVerifiedV1) {
+          item.sourceFloorFallbackV1 = { present: Object.prototype.hasOwnProperty.call(item, "floor"), value: item.floor };
+        }
+        item.sourceFloorVerifiedV1 = true;
+        item.floor = floorOriginal.floor;
+        item.advertisedRoomV1 = text(floorOriginal.room);
+      } else if (item.sourceFloorVerifiedV1) {
+        if (item.sourceFloorFallbackV1 && item.sourceFloorFallbackV1.present) item.floor = item.sourceFloorFallbackV1.value;
+        else delete item.floor;
+        delete item.sourceFloorVerifiedV1;
+        delete item.sourceFloorFallbackV1;
+        delete item.advertisedRoomV1;
+      }
       originals.forEach(function(original) {
         if (!original.buildingName) original.buildingName = item.name || "";
         if (!original.address) original.address = item.address || "";
@@ -603,17 +646,19 @@
         regDate: text(item.regDate),
         buildingYear: text(item.buildingYear || item.approvalYear)
       };
+      item.unifiedAllOriginalsV1 = all;
+      item.unifiedActiveOriginalCountV1 = all.filter(function(original) { return !isSourceUnavailable(original); }).length;
+      item.unifiedEndedOriginalCountV1 = all.length - item.unifiedActiveOriginalCountV1;
+      item.sourceAllUnavailableV1 = all.length > 0 && item.unifiedActiveOriginalCountV1 === 0;
       item.unifiedOriginalsV8 = originals;
       item.sourceListingSearchV6579 = (state.sourceSearchIds[text(item.propertyId)] || []).slice();
-      item.unifiedOriginalCountV8 = originals.length || 1;
+      item.unifiedOriginalCountV8 = originals.length || (all.length ? 0 : 1);
       item.thumbnailV8 = originals.length ? originalImage(originals[0]) : "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });
-      item.transactionCheckCandidateV8135 = originals.length > 0 && originals.every(function(original) {
-        return Boolean(original && original.sourceUnavailable);
-      });
+      item.transactionCheckCandidateV8135 = item.unifiedEndedOriginalCountV1 > 0;
       item.transactionCheckMissingCountV8135 = item.transactionCheckCandidateV8135
-        ? originals.reduce(function(maximum, original) {
-            return Math.max(maximum, Number(original && original.missingCount) || 0);
+        ? all.reduce(function(maximum, original) {
+            return isSourceUnavailable(original) ? Math.max(maximum, Number(original && original.missingCount) || 1) : maximum;
           }, 0)
         : 0;
       item.gongsilContactCountV8 = originals.reduce(function(total, original) {
@@ -643,9 +688,10 @@
 
   function cardParts(item) {
     var originals = group(item && item.propertyId);
-    var count = originals.length || 1;
+    var all = allOriginals(item && item.propertyId);
+    var count = originals.length || (all.length ? 0 : 1);
     var sourceUnavailable = originals.length > 0 && originals.every(function(original) {
-      return Boolean(original && original.sourceUnavailable);
+      return isSourceUnavailable(original);
     });
     var thumbnail = originals.length ? originalImage(originals[0]) : "";
     var encodedId = encodeURIComponent(text(item && item.propertyId));
@@ -660,20 +706,20 @@
         'onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" ' +
         'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>사진 없음</span>') +
       (sourceUnavailable
-        ? '<em class="transaction-check-ribbon-v8135">광고 미노출<b>확인 필요</b></em>'
+        ? '<em class="transaction-check-ribbon-v8135">원본 광고 미노출<b>거래완료 후보</b></em>'
         : '') +
       '</button>';
     var badge = sourceUnavailable
-      ? '<span class="unified-badge-v8 source-unavailable">광고 미노출 · 확인 필요</span>'
+      ? '<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>'
       : count > 1
         ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
         : '';
     var button;
     if (sourceUnavailable) {
       button = '<button type="button" class="item-source-link-btn active transaction-check-button-v8135" ' +
-        'title="3회 연속 광고 미노출 · 거래 여부 확인" ' +
+        'title="원본 광고 미노출 내역 확인 · 실제 계약완료와 별도" ' +
         'onclick="event.stopPropagation(); if(window.openTransactionCandidateFromListingV1){' +
-          'openTransactionCandidateFromListingV1(\'' + encodedId + '\');}">계약완료</button>';
+          'openTransactionCandidateFromListingV1(\'' + encodedId + '\');}">미노출 내역</button>';
     } else if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +
@@ -773,7 +819,8 @@
           'onerror="JSUnifiedListingsV8.imageError(this, false)">' : '') + '</span>' +
       '<span class="unified-original-body-v8"><span class="unified-original-head-v8"><b class="source-' +
         sourceKey(original.source) + '">' + esc(original.source) + '</b>' +
-        (buildingSale ? '' : '<em>' + esc((global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel ? global.JSListingTradeV1.landUseLabel(original) : '') || original.room || '호실 -') + '</em>') + '</span>' +
+        (buildingSale ? '' : '<em>' + esc((global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel ? global.JSListingTradeV1.landUseLabel(original) : '') || originalRoomLabel(original) || '호실 -') + '</em>') + '</span>' +
+        (isSourceUnavailable(original) ? '<small class="source-unavailable">원본 광고 미노출 · 거래완료 후보</small>' : '') +
         conditionLine(original) + '<small>' + esc(original.buildingName || original.address) + '</small></span>' +
       '</button>';
   }
@@ -889,7 +936,7 @@
   }
 
   function renderDetail(propertyId, originals, selectedOriginalId, layoutOptions) {
-    originals = orderOriginals(originals);
+    originals = visibleOriginalsFrom(originals, propertyId);
     var selected = originals.filter(function(original) {
       return text(original.originalId) === text(selectedOriginalId);
     })[0] || originals[0];
@@ -931,7 +978,8 @@
           (selected.link ? '<button type="button" class="unified-detail-source-link-v827" ' +
             'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
-        '</div><strong>' + esc(selected.address) + (buildingSale ? '' : ' ' + esc(landLabel || selected.room)) + '</strong></div>' +
+        '</div><strong>' + esc(selected.address) + (buildingSale ? '' : ' ' + esc(landLabel || originalRoomLabel(selected))) + '</strong></div>' +
+        (isSourceUnavailable(selected) ? '<p class="source-unavailable">원본 광고 미노출 · 거래완료 후보 · 실제 계약 여부는 별도 확인</p>' : '') +
         (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleAreaInfoHtml ? global.JSListingTradeV1.buildingSaleAreaInfoHtml(selected) : '') +
         (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected, buildingSale) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
@@ -1120,6 +1168,7 @@
     return loadDetail(propertyId, force).then(function(originals) {
       if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
           state.openOriginalId !== originalId) return;
+      originals = visibleOriginalsFrom(originals, propertyId);
       var body = document.getElementById("unifiedDetailBodyV8");
       var active = document.activeElement;
       // Do not replace a form while the user is editing it. The fresh response
@@ -1158,8 +1207,7 @@
     state.openPropertyId = propertyId;
     var cached = state.detailCache[propertyId];
     if (cached) {
-      cached = orderOriginals(cached);
-      state.detailCache[propertyId] = cached;
+      cached = visibleOriginalsFrom(cached, propertyId);
       state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
       renderDetail(propertyId, cached, state.openOriginalId);
       if (cached.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
@@ -1599,7 +1647,7 @@
   function openGallery(encodedPropertyId, encodedOriginalId, startIndex) {
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
-    var originals = state.detailCache[propertyId] || group(propertyId);
+    var originals = visibleOriginalsFrom(state.detailCache[propertyId] || allOriginals(propertyId), propertyId);
     var original = originals.filter(function(entry) { return entry.originalId === originalId; })[0];
     var images = originalImages(original);
     if (!images.length) return;
@@ -1834,6 +1882,8 @@
     load: load, attach: attach, mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
     markSnapshotStale: function() { originalLoadStatus(true, "사진·출처 최신 정보 확인이 필요합니다. "); },
     cardParts: cardParts, matchesSource: matchesSource,
+    allOriginals: allOriginals, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
+    isSourceUnavailable: isSourceUnavailable,
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,

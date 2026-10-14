@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.7";
+  var VERSION = "6.0.8";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -832,6 +832,67 @@
     return 0;
   }
 
+  function naverProviderTotal(json) {
+    var candidates = [json && json.totalCount, json && json.articleCount, json && json.total,
+      json && json.pageInfo && json.pageInfo.totalCount, json && json.result && json.result.totalCount];
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (candidates[i] === null || candidates[i] === undefined || candidates[i] === "" || typeof candidates[i] === "boolean") continue;
+      var value = Number(candidates[i]);
+      if (Number.isInteger(value) && value >= 0) return value;
+    }
+    return null;
+  }
+
+  function naverPresenceScope(body) {
+    var filter = body && body.filter;
+    if (!filter || !Array.isArray(filter.legalDivisionNumbers) || filter.legalDivisionNumbers.length !== 1 ||
+        filter.legalDivisionType !== "GUN" || !/^\d{5,20}$/.test(String(filter.legalDivisionNumbers[0]))) return null;
+    var filters = Object.assign({}, filter);
+    delete filters.legalDivisionNumbers;
+    ["tradeTypes", "realEstateTypes"].forEach(function(key) {
+      filters[key] = Array.from(new Set(Array.isArray(filter[key]) ? filter[key].map(String) : [])).sort();
+    });
+    return {version: 1, selectionKind: "provider-region", regionCode: String(filter.legalDivisionNumbers[0]), filters: filters};
+  }
+
+  function naverListResult(found, providerTotal, terminalReached, pagesFetched, presenceScope) {
+    var rows = Array.from(found.values()).filter(Boolean);
+    var known = providerTotal !== null;
+    if (!terminalReached || known && found.size !== providerTotal) {
+      throw new Error("네이버 전체목록 검증 실패: 원본 예상 " + (known ? providerTotal : "미확인") +
+        "개 · 고유번호 " + found.size + "개 · 마지막 페이지 " + (terminalReached ? "확인" : "미확인"));
+    }
+    var proof = {version: 1, expectedCountKnown: known, providerExpectedCount: providerTotal,
+      observedUniqueCount: found.size, terminalReached: terminalReached,
+      listComplete: known && found.size === providerTotal && terminalReached,
+      scopeVerified: Boolean(presenceScope), emptyConfirmed: known && providerTotal === 0 && terminalReached,
+      pagesFetched: pagesFetched, capturedAt: new Date().toISOString(),
+      issueCodes: known ? [] : ["provider-total-unknown"]};
+    Object.defineProperty(rows, "completionProof", {value: proof});
+    Object.defineProperty(rows, "presenceScope", {value: presenceScope});
+    return rows;
+  }
+
+  function checkedNaverTotal(current, json) {
+    var next = naverProviderTotal(json);
+    if (current !== null && next !== null && current !== next) {
+      throw new Error("네이버 목록 조회 중 원본 전체 건수가 변경되었습니다. 같은 범위를 다시 수집해 주세요.");
+    }
+    return current === null ? next : current;
+  }
+
+  function checkedNaverList(json) {
+    if (!json || !(Array.isArray(json.articleList) || json.body && Array.isArray(json.body.articleList) ||
+        json.result && (Array.isArray(json.result.articleList) || Array.isArray(json.result.list)))) {
+      throw new Error("네이버 목록 응답 형식이 변경되어 전체목록 확인을 중단했습니다.");
+    }
+    var items = articleList(json);
+    if (items.some(function(item) { return !articleId(item); })) {
+      throw new Error("네이버 목록에 원본 광고번호가 없는 항목이 있습니다.");
+    }
+    return items;
+  }
+
   function hasMore(json) {
     var candidates = [
       json && json.isMoreData,
@@ -1161,6 +1222,8 @@
     var baseUrl = new URL(capture.responseUrl);
     var requestOptions = replayOptions(capture);
     var noNewCount = 0;
+    var providerTotal = naverProviderTotal(lastJson);
+    var pagesFetched = 1;
 
     firstArticles.forEach(function (article) {
       found.set(articleId(article), article);
@@ -1173,7 +1236,6 @@
 
     for (var step = 1; step < MAX_PAGES; step += 1) {
       if (hasMore(lastJson) === false) break;
-      if (expected && found.size >= expected) break;
 
       var nextPage = currentPage + 1;
       var target = new URL(baseUrl.href);
@@ -1192,7 +1254,9 @@
       }
 
       var json = await response.json();
-      var items = articleList(json);
+      providerTotal = checkedNaverTotal(providerTotal, json);
+      pagesFetched += 1;
+      var items = checkedNaverList(json);
       var before = found.size;
       items.forEach(function (article) {
         var id = articleId(article);
@@ -1211,7 +1275,9 @@
         remaining: Math.max(0, Number(expected || found.size) - found.size)
       });
 
-      if (!items.length || noNewCount >= 1 || hasMore(json) === false) break;
+      if (items.length && noNewCount >= 1) throw new Error("네이버 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
+      if (!items.length && hasMore(json) !== false) throw new Error("네이버 마지막 페이지 확인 전에 빈 목록을 받았습니다.");
+      if (hasMore(json) === false) break;
       await delay(120);
     }
 
@@ -1226,7 +1292,8 @@
       );
     }
 
-    state.collected = Array.from(found.values());
+    state.collected = naverListResult(found, providerTotal, hasMore(lastJson) === false, pagesFetched,
+      naverPresenceScope(capture.requestOptions && capture.requestOptions.requestBody));
     return state.collected;
   }
 
@@ -1247,10 +1314,14 @@
     var body = JSON.parse(JSON.stringify(capture.requestOptions.requestBody || {}));
     var page = 1;
     var previousSignature = "";
+    var providerTotal = naverProviderTotal(json);
 
     while (hasMore(json) !== false && page < FIN_MAX_PAGES) {
       if (!preparationIsCurrent()) return Array.from(found.values());
       var result = json && json.result || {};
+      if (!Array.isArray(result.lastInfo) || !result.lastInfo.length) {
+        throw new Error("네이버 다음 페이지가 있으나 이어읽기 정보가 없습니다.");
+      }
       body.articlePagingRequest = Object.assign(
         {},
         body.articlePagingRequest || {},
@@ -1280,15 +1351,19 @@
       if (!preparationIsCurrent()) return Array.from(found.values());
       if (!response.ok) throw new Error("새 네이버 목록 조회 실패(HTTP " + response.status + ")");
       json = await response.json();
+      providerTotal = checkedNaverTotal(providerTotal, json);
       if (!preparationIsCurrent()) return Array.from(found.values());
-      var items = articleList(json);
+      var items = checkedNaverList(json);
       var signature = items.map(articleId).filter(Boolean).join(",");
-      if (!items.length || (signature && signature === previousSignature)) break;
+      var before = found.size;
+      if (signature && signature === previousSignature) throw new Error("네이버 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
+      if (!items.length && hasMore(json) !== false) throw new Error("네이버 마지막 페이지 확인 전에 빈 목록을 받았습니다.");
       previousSignature = signature;
       items.forEach(function (article) {
         var id = articleId(article);
         if (id) found.set(id, article);
       });
+      if (items.length && found.size === before) throw new Error("네이버 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
       expected = expected || expectedCount(json);
       setProgress(found.size, expected || Math.max(found.size + 1, 1));
       updateDashboard({
@@ -1302,7 +1377,8 @@
     if (page >= FIN_MAX_PAGES && hasMore(json) !== false) {
       throw new Error("새 네이버 목록이 500페이지를 넘었습니다. 선택 범위를 나눠 주세요.");
     }
-    state.collected = Array.from(found.values());
+    state.collected = naverListResult(found, providerTotal, hasMore(json) === false, page,
+      naverPresenceScope(capture.requestOptions.requestBody));
     return state.collected;
   }
 
@@ -1482,6 +1558,7 @@
     var found = new Map();
     var lastJson = {};
     var truncated = false;
+    var providerTotal = null;
     for (var page = 1; page <= CITY_TILE_MAX_PAGES; page += 1) {
       var url = strategy.mode === "district"
         ? buildDistrictUrl(templateUrl, tile, page)
@@ -1492,14 +1569,18 @@
         throw new Error("대전 구역 조회 실패(HTTP " + response.status + ")");
       }
       lastJson = await response.json();
-      var items = articleList(lastJson);
+      providerTotal = checkedNaverTotal(providerTotal, lastJson);
+      var items = checkedNaverList(lastJson);
       var before = found.size;
       items.forEach(function(article) {
         if (article && article.articleNo) found.set(String(article.articleNo), article);
       });
-      if (!items.length || found.size === before || hasMore(lastJson) === false) break;
-      var expected = expectedCount(lastJson);
-      if (expected && found.size >= expected) break;
+      if (items.length && found.size === before) throw new Error("네이버 구역 목록 페이지가 반복되었습니다.");
+      if (!items.length && hasMore(lastJson) !== false) throw new Error("네이버 구역의 마지막 페이지 전에 빈 목록을 받았습니다.");
+      if (hasMore(lastJson) === false) {
+        naverListResult(found, providerTotal, true, page, null);
+        break;
+      }
       if (page === CITY_TILE_MAX_PAGES) truncated = hasMore(lastJson) !== false;
       await delay(180);
     }
@@ -1602,6 +1683,8 @@
     var startPage = Math.max(1, Number(district.nextPage) || 1);
     var bufferedArticles = [];
     var previousSignature = district.lastPageSignature || "";
+    var observed = new Map((district.observedIds || []).map(function(id) { return [String(id), null]; }));
+    var providerTotal = district.expectedCountKnown ? Number(district.providerExpectedCount) : null;
     for (var page = startPage; page <= CITY_DISTRICT_MAX_PAGES; page += 1) {
       setStatus(
         "대전 5개 구 자동 수집 중",
@@ -1614,31 +1697,32 @@
         throw new Error(district.name + " " + page + "페이지 조회 실패(HTTP " + response.status + ")");
       }
       var json = await response.json();
-      var items = articleList(json);
-      if (!items.length) {
-        if (bufferedArticles.length) await saveCityArticles(bufferedArticles, progress, {district: district.name, page: page - 1});
-        district.nextPage = page;
-        district.lastPageSignature = previousSignature;
-        saveCityProgress(progress);
-        return {complete: true, pages: page - 1};
-      }
+      providerTotal = checkedNaverTotal(providerTotal, json);
+      var items = checkedNaverList(json);
+      if (!items.length && hasMore(json) !== false) throw new Error("네이버 마지막 페이지 확인 전에 빈 목록을 받았습니다.");
       var signature = items.map(function(article) { return article && article.articleNo; }).filter(Boolean).join(",");
       if (signature && signature === previousSignature) {
-        if (bufferedArticles.length) await saveCityArticles(bufferedArticles, progress, {district: district.name, page: page - 1});
-        district.nextPage = page;
-        district.lastPageSignature = previousSignature;
-        saveCityProgress(progress);
-        return {complete: true, pages: page - 1};
+        throw new Error("네이버 구 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
       }
+      var before = observed.size;
+      items.forEach(function(item) { if (articleId(item)) observed.set(articleId(item), item); });
+      if (items.length && observed.size === before) throw new Error("네이버 구 목록에서 새 원본번호를 확인하지 못했습니다.");
 
       bufferedArticles = bufferedArticles.concat(items);
       previousSignature = signature;
       var isLastPage = hasMore(json) === false;
+      if (isLastPage) {
+        if (providerTotal === null) throw new Error("네이버 원본 전체 건수를 확인하지 못했습니다.");
+        naverListResult(observed, providerTotal, true, page, null);
+      }
       if (bufferedArticles.length >= BATCH_SIZE || isLastPage) {
         await saveCityArticles(bufferedArticles, progress, {district: district.name, page: page});
         bufferedArticles = [];
         district.lastPageSignature = signature;
         district.nextPage = page + 1;
+        district.observedIds = Array.from(observed.keys());
+        district.expectedCountKnown = providerTotal !== null;
+        district.providerExpectedCount = providerTotal;
         saveCityProgress(progress);
       }
 
@@ -1651,12 +1735,17 @@
   async function collectFinDistrictRaw(district, cursor, onPage, onCursorSaved) {
     cursor = cursor || {};
     var found = new Map();
+    (Array.isArray(cursor.observedIds) ? cursor.observedIds : []).forEach(function(id) { found.set(String(id), null); });
     var page = Math.max(1, Number(cursor.nextPage) || 1);
     var seed = clean(cursor.seed);
     var lastInfo = Array.isArray(cursor.lastInfo) ? cursor.lastInfo : [];
     var previousSignature = clean(cursor.lastPageSignature);
     var expected = Number(cursor.expected) ||
       (cursor.key ? 0 : Number(state.clickedClusterCount)) || 0;
+    var providerTotal = cursor.expectedCountKnown === true ? Number(cursor.providerExpectedCount) : null;
+    var pagesFetched = Number(cursor.pagesFetched || 0);
+    var presenceScope = null;
+    var scopeSignature = clean(cursor.presenceScopeSignature);
 
     for (; page <= FIN_MAX_PAGES; page += 1) {
       throwIfStopRequested();
@@ -1664,6 +1753,10 @@
         seed: seed,
         lastInfo: lastInfo
       });
+      presenceScope = naverPresenceScope(body);
+      var currentScope = JSON.stringify(presenceScope);
+      if (scopeSignature && scopeSignature !== currentScope) throw new Error("네이버 목록 조회 중 수집 범위나 필터가 변경되었습니다.");
+      scopeSignature = currentScope;
       setStatus(
         district.name + " 전체 목록 수집 중",
         page + "페이지 · 찾은 매물 " + formatNumber(found.size) +
@@ -1688,18 +1781,22 @@
       var json = await response.json();
       throwIfStopRequested();
       var result = json && json.result || {};
-      var items = articleList(json).filter(function (article) {
-        return !!articleId(article);
-      });
+      providerTotal = checkedNaverTotal(providerTotal, json);
+      pagesFetched += 1;
+      var items = checkedNaverList(json);
       var signature = items.map(articleId).join(",");
-      if (signature && signature === previousSignature) break;
+      if (signature && signature === previousSignature) throw new Error("네이버 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
+      if (!items.length && hasMore(json) !== false) throw new Error("네이버 마지막 페이지 확인 전에 빈 목록을 받았습니다.");
       previousSignature = signature;
+      var before = found.size;
       items.forEach(function (article) {
         found.set(articleId(article), article);
       });
-      expected = Number(result.totalCount || expected) || found.size;
+      if (items.length && found.size === before) throw new Error("네이버 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
+      expected = providerTotal === null ? expected : providerTotal;
       seed = clean(result.seed || seed);
       lastInfo = Array.isArray(result.lastInfo) ? result.lastInfo : [];
+      if (hasMore(json) !== false && !lastInfo.length) throw new Error("네이버 다음 페이지가 있으나 이어읽기 정보가 없습니다.");
 
       updateDashboard({
         found: found.size,
@@ -1720,12 +1817,18 @@
       cursor.lastPageSignature = signature;
       cursor.nextPage = page + 1;
       cursor.expected = expected;
+      cursor.expectedCountKnown = providerTotal !== null;
+      cursor.providerExpectedCount = providerTotal;
+      cursor.observedIds = Array.from(found.keys());
+      cursor.pagesFetched = pagesFetched;
+      cursor.presenceScopeSignature = scopeSignature;
       if (typeof onCursorSaved === "function") {
         await onCursorSaved(cursor);
       }
 
-      if (!items.length || result.hasNextPage === false) {
-        return Array.from(found.values());
+      if (hasMore(json) === false) {
+        if (providerTotal === null) throw new Error("네이버 원본 전체 건수를 확인하지 못해 완전수집 판정을 중단했습니다.");
+        return naverListResult(found, providerTotal, true, pagesFetched, presenceScope);
       }
       await delay(CITY_PAGE_DELAY);
     }
@@ -1733,7 +1836,7 @@
     if (page > FIN_MAX_PAGES) {
       throw new Error(district.name + " 목록이 500페이지를 넘었습니다. 저장된 다음 페이지부터 이어집니다.");
     }
-    return Array.from(found.values());
+    throw new Error("네이버 마지막 페이지 확인 없이 목록 수집이 종료되었습니다.");
   }
 
   async function collectFinSelectedAndSave(options) {
@@ -1763,11 +1866,12 @@
     updateDashboard(state.dashboard);
     try {
       var articles = await collectFinDistrictRaw(district, {});
-      if (!articles.length) throw new Error(district.name + "에서 매물을 찾지 못했습니다.");
       state.preparing = false;
       var saveResult = await collectAndSave(articles, "대전 " + district.name + " 전체", {
         complete: true,
-        source: "네이버"
+        source: "네이버",
+        completionProof: articles.completionProof,
+        presenceScope: articles.presenceScope
       });
       return saveResult || {ok: false, complete: false, message: "네이버 수집 결과를 확인하지 못했습니다."};
     } catch (error) {
@@ -2917,6 +3021,9 @@
           source: "네이버",
           sessionId: metadata.sessionId,
           scope: metadata.scope,
+          validationVersion: 3,
+          presenceScope: metadata.presenceScope || null,
+          completionProof: metadata.completionProof || null,
           startedAt: metadata.startedAt,
           entries: chunk.map(function(item) {
             var squareMeters = Number(item.areaSquareMeter) || 0;
@@ -2973,6 +3080,9 @@
         data: items,
         sessionId: metadata.sessionId || "",
         scope: metadata.scope || "선택 클러스터",
+        validationVersion: 3,
+        presenceScope: metadata.presenceScope || null,
+        completionProof: metadata.completionProof || null,
         startedAt: metadata.startedAt || "",
         manifestRegistered: Boolean(metadata.manifestRegistered)
     };
@@ -3015,9 +3125,11 @@
         requestId: metadata.sessionId + "-finalize-" + (metadata.complete ? "complete" : "partial"),
         collectorKey: getCollectorKey(),
         collectorVersion: VERSION,
-        validationVersion: 2,
+        validationVersion: 3,
         sessionId: metadata.sessionId,
         scope: metadata.scope || "선택 클러스터",
+        presenceScope: metadata.presenceScope || null,
+        completionProof: metadata.completionProof || null,
         complete: Boolean(metadata.complete),
         stopped: Boolean(metadata.stopped),
         source: metadata.source || "네이버",
@@ -3126,6 +3238,11 @@
 
     try {
       var rawItems = hasOverride ? rawOverride : await collectAll(state.capture);
+      session.completionProof = runOptions.completionProof || rawItems.completionProof || null;
+      session.presenceScope = runOptions.presenceScope || rawItems.presenceScope || null;
+      if (session.presenceScope && session.presenceScope.filters) {
+        session.tradeType = session.presenceScope.filters.tradeTypes.indexOf("A1") !== -1 ? "sale" : "lease";
+      }
       var allItems = rawItems.map(normalize).filter(function (item) {
         return item.articleNo;
       });
@@ -3267,9 +3384,12 @@
         scope: session.scope,
         source: runOptions.source || "네이버",
           complete: Boolean(runOptions.complete) && !safelyStopped && index >= items.length,
+        completionProof: session.completionProof,
+        presenceScope: session.presenceScope,
         stopped: safelyStopped,
         observedSourceIds: session.observedSourceIds,
-        expectedCount: allItems.length,
+        expectedCount: session.completionProof && session.completionProof.expectedCountKnown
+          ? session.completionProof.providerExpectedCount : allItems.length,
         manifestCount: allItems.length,
         processedCount: classification.unchanged + index,
         failed: totals.failed,
@@ -3305,9 +3425,14 @@
           "개 · JS매물 반영 결과 확인 중 · 실패 " + totals.failed + "개" +
           (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
       );
-      var sessionResult = finalResult && finalResult.totals
-        ? Object.assign({finished: true}, finalResult.totals)
+      var sessionResult = finalResult && finalResult.ok
+        ? Object.assign({finished: true}, finalResult.totals || finalResult)
         : null;
+      var presenceResult = Object.assign({}, finalResult && finalResult.totals || {}, finalResult || {});
+      var presenceNotice = presenceResult.presenceTrackingIssue ? "종료판정보류" : presenceResult.presenceScopeEstablished
+        ? "비교기준저장" : presenceResult.presenceTracking ? "원본광고 미노출 " + Number(presenceResult.deactivated || 0) + "건" : "";
+      if (Number(presenceResult.adsReappeared || 0)) presenceNotice += (presenceNotice ? " · " : "") +
+        "원본광고 재등장 " + Number(presenceResult.adsReappeared) + "건";
       setProgress(allItems.length, allItems.length || 1);
       if (sessionResult && sessionResult.finished) {
         updateDashboard({
@@ -3335,7 +3460,7 @@
             "개 · 기존동일생략 " + classification.unchanged +
             "개 · 주소·층 제외 " + Number(totals.addressMissing || 0) +
             "개 · 실패 " + Number(sessionResult.failed || totals.failed || 0) + "개" +
-            (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
+            (firstFailure ? "\n첫 실패 원인: " + firstFailure : "") + (presenceNotice ? "\n" + presenceNotice : "")
         );
       } else {
         dashboardFromTotals(allItems.length, allItems.length, totals);
@@ -3349,7 +3474,7 @@
                 "개 · 처리중 " + Number(sessionResult.pending || 0) + "개"
               : "") +
             " · 실패 " + totals.failed + "개" +
-            (firstFailure ? "\n첫 실패 원인: " + firstFailure : "")
+            (firstFailure ? "\n첫 실패 원인: " + firstFailure : "") + (presenceNotice ? "\n" + presenceNotice : "")
         );
       }
       saveButton.textContent = "저장 완료 · 다시 수집 가능";

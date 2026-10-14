@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.6";
+  var VERSION = "1.5.7";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -326,6 +326,10 @@
     while (Date.now() - startedAt < 5 * 60 * 60 * 1000) {
       if (state.fatalError) throw new Error(state.fatalError);
       if (state.job && state.job.status === "complete") {
+        if (state.job.completionProof && state.job.completionProof.version === 1 &&
+            !verifiedDaangnCompletionProof(state.job.completionProof)) {
+          throw new Error("당근 전체목록 증거가 불완전하여 정상 완료로 처리하지 않았습니다. 같은 범위를 다시 확인해 주세요.");
+        }
         var hardFailed = Math.max(0, Number(state.job.failed || 0) - Number(state.job.addressMissing || 0));
         var partial = hardFailed > 0 || Number(state.job.addressMissing || 0) > 0 ||
           Boolean(state.selectedDistrict && state.job.completeCollection === false);
@@ -633,8 +637,8 @@
       ? selectedCount.toLocaleString("ko-KR") + "개 수집 시작"
       : "수집 시작";
     rule.textContent =
-      "저장: 기존 통합 중복검사 사용 · 101호와 102호는 별도 · 당근 링크 최우선 유지 · " +
-      (district ? district + " 완전수집 가능" : "개별클러스터 완전수집 제외");
+      "저장: 제공처+원본광고번호별 유지 · 101호와 102호는 별도 · 당근 링크 유지 · " +
+      "동일 선택 클러스터·필터의 전체목록 확인 후 원본광고 미노출 판정";
   }
 
   async function startOrResume() {
@@ -817,6 +821,16 @@
     } catch (_) {}
   }
 
+  function verifiedDaangnCompletionProof(proof) {
+    if (!proof || proof.version !== 1 || proof.terminalReached !== true || proof.listComplete !== true ||
+        proof.scopeVerified !== true || !Number.isFinite(Date.parse(proof.capturedAt)) ||
+        !Number.isInteger(proof.observedUniqueCount) || proof.observedUniqueCount < 0 ||
+        !Array.isArray(proof.issueCodes) || proof.issueCodes.length) return false;
+    if (proof.expectedCountKnown && (!Number.isInteger(proof.providerExpectedCount) ||
+        proof.providerExpectedCount !== proof.observedUniqueCount)) return false;
+    return proof.observedUniqueCount !== 0 || proof.emptyConfirmed === true;
+  }
+
   function jobDisplay(job) {
     var deferred = Math.min(Number(job.failed || 0), Number(job.addressMissing || 0));
     var failed = Math.max(0, Number(job.failed || 0) - deferred);
@@ -860,7 +874,7 @@
       complete ? display.title : (listing ? "클러스터 목록 수집 중" : (paused ? "안전중단됨" : "상세조회·저장 중")),
       (job.message || "") + (job.district
         ? "\n대전 " + job.district + " · 목록 확인 " + display.checked.toLocaleString("ko-KR") + " / " + Number(job.found || 0).toLocaleString("ko-KR") + "건 (기존 동일 포함)"
-        : "\n개별클러스터 · 완전수집 제외") +
+        : "\n선택 클러스터 · 동일 범위 목록 검증") +
         (display.deferred ? "\n정확한 지번 미제공 " + display.deferred + "건 · 지도 등록 보류 / 다음 수집에서 재확인" : "") +
         "\n수집기 v" + VERSION + " · 자동 묶음 " + Number(job.chunkSize || 20) + "개" + timing
     );

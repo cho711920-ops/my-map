@@ -89,6 +89,7 @@ test("collector targets and completion checkpoints are split by trade type", asy
   assert.match(gongsil, /presenceVersion: 1/);
   assert.match(edge, /tradeType: String\(storedTarget && storedTarget\.tradeType/);
   assert.match(edge, /function inferredTradeType\(target\)/);
-  assert.match(server, /COALESCE\(NULLIF\(s\.trade_type,''\),'lease'\)=\?2/);
+  const presence = await read("../cloudflare/src/advertisement-presence.js");
+  assert.match(presence, /COALESCE\(NULLIF\(s\.trade_type,''\),'lease'\)=p\.trade_type/);
   assert.match(server, /listingTradeTypesCanMerge\(candidate\.trade_type, record\.tradeType\)/);
 });

@@ -13,7 +13,7 @@ test("detail R2 cache expires within five minutes even with legacy or invalid co
       UNIFIED_DETAIL_CACHE_MS: configured,
       DB: { prepare(sql) { return {
         bind() { return this; },
-        async first() { return null; },
+        async first() { return sql.includes("SELECT id, property_id FROM listings") ? {id: "M-test", property_id: "M-test"} : null; },
         async all() {
           if (sql.includes("listing_sources")) detailReads++;
           return { results: [] };

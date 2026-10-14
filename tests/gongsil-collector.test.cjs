@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.2\.9";/);
+assert.match(source, /var VERSION = "2\.3\.0";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
@@ -16,8 +16,8 @@ assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(
   source,
-  /complete: isCompleteGongsilCapture\(providerSelectedCount, providerItemCount\)/,
-  "공실박스 완전수집 판정은 선택 수와 최종 목록 수가 정확히 같을 때만 인정하면 안 됩니다."
+  /complete: isCompleteGongsilCapture\(providerSelectedCount, providerItemCount, presenceScope\)/,
+  "공실박스 완전수집은 검증된 지도 전체 ID 범위를 요구합니다."
 );
 assert.match(
   source,
@@ -32,7 +32,7 @@ assert.match(
 assert.match(source, /if \(byId\[id\]\) return;[\s\S]*?entries\.push/);
 assert.match(
   source,
-  /complete: isCompleteGongsilCapture\(providerSelectedCount, providerItemCount\) &&\s*listFailures\.length === 0/,
+  /complete: isCompleteGongsilCapture\(providerSelectedCount, providerItemCount, presenceScope\) &&\s*listFailures\.length === 0/,
   "목록조회 제외가 있으면 완전수집 판정으로 기존 매물을 숨기면 안 됩니다."
 );
 assert.match(source, /data-metric="conditionUpdated"/);
@@ -157,12 +157,14 @@ const importItemTotal = new Function(
 const getRoomSource = source.match(
   /function getRoom\(item\) \{[\s\S]*?\n {2}\}/
 )[0];
+const getFloorSource = source.match(/function getGongsilSourceFloor\(item\) \{[\s\S]*?\n {2}\}/)[0];
 const getRoom = new Function(`
   function text(value) { return value == null ? "" : String(value).trim(); }
   function pick(item, keys) {
     for (const key of keys) if (item && item[key] !== undefined && item[key] !== null) return item[key];
     return "";
   }
+  ${getFloorSource}
   ${getRoomSource}
   return getRoom;
 `)();
@@ -171,6 +173,7 @@ assert.equal(getRoom({ Ho: "1층" }), "1층");
 assert.equal(getRoom({ Ho: "지하1층" }), "지하1층");
 assert.equal(getRoom({ Ho: "102" }), "102호");
 assert.equal(getRoom({ BfFloor: 2 }), "2층");
+assert.equal(getRoom({ Ff: -1, Ho: "B03" }), "지하1층 B03호");
 
 assert.equal(
   importItemTotal(new Array(2354), {
@@ -190,15 +193,17 @@ assert.equal(
 );
 
 const completeCaptureSource = source.match(
-  /function isCompleteGongsilCapture\(selectedCount, capturedCount\) \{[\s\S]*?\n {2}\}/
+  /function isCompleteGongsilCapture\(selectedCount, capturedCount, presenceScope\) \{[\s\S]*?\n {2}\}/
 )[0];
 const isCompleteGongsilCapture = new Function(
   `${completeCaptureSource}\nreturn isCompleteGongsilCapture;`
 )();
 
-assert.equal(isCompleteGongsilCapture(2490, 2504), true);
-assert.equal(isCompleteGongsilCapture(2504, 2490), false);
-assert.equal(isCompleteGongsilCapture(1999, 2504), false);
+assert.equal(isCompleteGongsilCapture(2490, 2504, {}), false);
+assert.equal(isCompleteGongsilCapture(2504, 2490, {}), false);
+assert.equal(isCompleteGongsilCapture(1, 1, {}), true);
+assert.equal(isCompleteGongsilCapture(0, 0, {}), true);
+assert.equal(isCompleteGongsilCapture(2504, 2504, null), false);
 
 assert.match(
   source,
@@ -236,7 +241,7 @@ assert.match(
   /Boolean\(metadata\.complete\)[\s\S]*?!stopped[\s\S]*?Number\(totals\.failed \|\| 0\) === 0 &&[\s\S]*?Number\(metadata\.rejectedCount \|\| 0\) === 0/
 );
 assert.match(source, /collectorVersion: VERSION/);
-assert.match(source, /validationVersion: 2/);
+assert.match(source, /validationVersion: 3/);
 assert.match(
   source,
   /function isBusyMutationResult\(result\)[\s\S]*?function isBusyMutationError\(error\)/

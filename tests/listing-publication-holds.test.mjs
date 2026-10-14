@@ -22,7 +22,7 @@ function database() {
     CREATE TABLE listing_sources (
       id TEXT PRIMARY KEY, listing_id TEXT, source TEXT, source_listing_id TEXT,
       active INTEGER, missing_count INTEGER DEFAULT 0, list_snapshot_json TEXT DEFAULT '{}',
-      raw_json TEXT DEFAULT '{}', last_collected_at TEXT DEFAULT ''
+      raw_json TEXT DEFAULT '{}', last_collected_at TEXT DEFAULT '', source_url TEXT DEFAULT '', updated_at TEXT DEFAULT ''
     );
     CREATE TABLE listing_media (
       id TEXT PRIMARY KEY, listing_id TEXT, source_id TEXT, external_url TEXT,
@@ -32,6 +32,9 @@ function database() {
     CREATE TABLE listing_contacts (
       id TEXT PRIMARY KEY, listing_id TEXT, source_id TEXT, role TEXT, name TEXT, phone TEXT,
       normalized_phone TEXT, status TEXT DEFAULT 'active', first_seen_at TEXT, last_seen_at TEXT
+    );
+    CREATE TABLE listing_history (
+      id INTEGER PRIMARY KEY, listing_id TEXT, action TEXT, before_json TEXT, after_json TEXT
     );
   `);
   // The application queries this table directly, so migration 0020 must be
@@ -160,7 +163,8 @@ test("open publication holds are absent from every public listing read path", as
     const restoredDetail = await handleD1GetAction(env, user, {
       action: "unifiedListingDetail", propertyId: "P-held"
     });
-    assert.equal(restoredDetail.originals.length, 1);
+    assert.equal(restoredDetail.originals.length, 2);
+    assert.equal(restoredDetail.originals.filter(row => row.sourceUnavailable).length, 1);
     assert.equal(restoredDetail.originals[0].propertyId, "P-held");
 
     const restoredContacts = await handleD1GetAction(env, user, {

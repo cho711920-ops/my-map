@@ -8,7 +8,10 @@ const worker = fs.readFileSync(new URL("../cloudflare/src/worker.js", import.met
 
 assert.match(collector, /"mergeSingleCandidateReviews"/);
 assert.match(collector, /async function currentSingleAddressCandidate/);
-assert.match(collector, /classified\.decision === "review" && await currentSingleAddressCandidate/);
+const ingest = collector.match(/(?:export )?async function ingestRecords\([^]*?\nexport function nextCollectorSourceVisibilityState/)[0];
+assert.doesNotMatch(ingest, /classified\.decision === "review" && await currentSingleAddressCandidate/);
+assert.doesNotMatch(ingest, /queueReview|savePendingReviewAlias/);
+assert.match(ingest, /Uncertain identity is published separately/);
 assert.match(collector, /json_array_length\(json_extract\(cr\.result_json, '\$\.candidateIds'\)\)=1/);
 assert.match(collector, /l\.address=json_extract\(cr\.payload_json, '\$\.address'\)/);
 assert.match(collector, /other\.status <> 'deleted' AND other\.address=l\.address AND other\.id<>l\.id/);

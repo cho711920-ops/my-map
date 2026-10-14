@@ -16,7 +16,7 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.5\.6"/);
+assert.match(collector, /VERSION = "1\.5\.7"/);
 assert.match(collector, /metric\("created","신규 등록"\)/);
 assert.match(collector, /metric\("merged","자동 통합"\)/);
 assert.match(collector, /metric\("updated","조건 변경"\)/);
@@ -47,9 +47,9 @@ assert.match(collector, /isUnauthorizedError/);
 assert.match(collector, /clearCollectorKey/);
 assert.match(collector, /저장된 인증값이 만료되어 한 번만 다시 입력/);
 assert.match(collector, /안전중단/);
-assert.match(collector, /완전수집/);
+assert.match(collector, /선택.*전체목록|선택범위/);
 assert.match(collector, /101호와 102호는 별도/);
-assert.match(collector, /당근 링크 최우선 유지/);
+assert.match(collector, /원본광고/);
 assert.match(collector, /showActiveChunkWait/);
 assert.match(collector, /고객매칭은 자동으로 별도 갱신/);
 assert.match(install, /js\/collector-loader\.js/);

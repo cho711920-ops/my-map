@@ -12,6 +12,8 @@ test("Edge extension schedules one sequential daily collector run", () => {
   const background = read("edge-automation/extension/background.js");
   const content = read("edge-automation/extension/content.js");
   assert.equal(manifest.manifest_version, 3);
+  assert.equal(manifest.version, "1.1.14");
+  assert.ok(background.includes(`const BACKGROUND_BUILD = "${manifest.version}";`));
   assert.ok(manifest.content_scripts.some((entry) => entry.world === "MAIN" && entry.js.includes("auto-bridge.js")));
   assert.match(background, /const SOURCE_ORDER = \{ naver: 1, daangn: 2, gongsil: 3 \}/);
   assert.match(background, /periodInMinutes: 24 \* 60/);
@@ -128,7 +130,7 @@ test("all three collectors expose registration and unattended execution", () => 
     assert.match(source, /JS_COLLECTOR_REGISTER_TARGET/);
   }
   assert.match(gongsil, /clickScreenLargestCluster/);
-  assert.match(gongsil, /현재 화면 전체클러스터 자동수집 등록/);
+  assert.match(gongsil, /현재 화면 최대클러스터 자동수집 등록/);
   assert.match(naver, /data-role="auto-district"/);
   assert.match(naver, /function selectAutomaticDistrict\(\)/);
   assert.match(naver, /AUTO_DISTRICT_PROGRESS_KEY/);

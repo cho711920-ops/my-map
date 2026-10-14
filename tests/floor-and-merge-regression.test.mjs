@@ -35,11 +35,11 @@ test("current-floor and total-floor labels use the first value for matching", ()
   assert.equal(canonicalListingRoom("2.0층"), "2층");
 });
 
-test("strict first-floor bounds reject basements, upper floors and unknown rooms", () => {
+test("first-floor bounds reject known basements/upper floors but include unknown rooms", () => {
   assert.equal(floorMatchesBounds(1, 1, 1), true);
   assert.equal(floorMatchesBounds(-1, 1, 1), false);
   assert.equal(floorMatchesBounds(2, 1, 1), false);
-  assert.equal(floorMatchesBounds(null, 1, 1), false);
+  assert.equal(floorMatchesBounds(null, 1, 1), true);
   assert.equal(floorMatchesBounds(null, null, null), true);
 });
 

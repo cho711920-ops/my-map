@@ -1,47 +1,38 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import test from "node:test";
+import { DatabaseSync } from "node:sqlite";
+import { runScheduledReviewRepair } from "../cloudflare/src/collector-api.js";
 
-const worker = fs.readFileSync(new URL("../cloudflare/src/worker.js", import.meta.url), "utf8");
-const collector = fs.readFileSync(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
-const wrangler = fs.readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+test("scheduled maintenance does not publish stale pending ads or force ambiguous masters together", async () => {
+  const forbidden = new Proxy({}, { get() { throw new Error("cron must not access the database for stale review repair"); } });
+  const result = await runScheduledReviewRepair(forbidden);
+  assert.equal(result.skipped, true); assert.equal(result.policy, "source-advertisement-v1");
+  assert.equal(result.scanned, 0); assert.equal(result.merged, 0); assert.equal(result.created, 0);
+  const worker = fs.readFileSync(new URL("../cloudflare/src/worker.js", import.meta.url), "utf8");
+  const wrangler = fs.readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+  assert.match(worker, /async scheduled\(_event, env, context\)/);
+  assert.match(worker, /runScheduledElevatorEnrichment\(env\)/);
+  assert.match(wrangler, /crons = \["\* \* \* \* \*"\]/);
+});
 
-assert.match(worker, /async scheduled\(_event, env, context\)/);
-assert.match(worker, /runScheduledReviewRepair\(env\)/);
-assert.match(worker, /runScheduledElevatorEnrichment\(env\)/);
-assert.match(worker, /adjustOperationsDashboard\(env, review\.operationAdjustments/);
-assert.match(collector, /export async function runScheduledReviewRepair\(env\)/);
-assert.match(collector, /repairExactReviews\(env, systemUser, \{ includeRemaining: false, limit: 50 \}\)/);
-assert.match(collector, /if \(Number\(exactRepair\?\.scanned \|\| 0\) > 0\) return exactRepair/);
-assert.match(collector, /Math\.min\(50, Number\(options\.limit\) \|\| 50\)/);
-assert.match(collector, /reviewRows\.length >= scanLimit/);
-assert.match(collector, /const exactRepair =[\s\S]*?return exactRepair;[\s\S]*?const gongsilRepair =/);
-assert.match(collector, /repairExactReviews\(env, systemUser, \{[\s\S]*?source: "공실박스"/);
-assert.match(collector, /if \(Number\(gongsilRepair\?\.scanned \|\| 0\) > 0\) return gongsilRepair/);
-assert.match(collector, /return mergeSingleCandidateReviews\(env, systemUser/);
-assert.match(collector, /const REVIEW_CLASSIFICATION_VERSION = 15/);
-assert.match(collector, /const decisionVersion = REVIEW_CLASSIFICATION_VERSION/);
-assert.match(collector, /ORDER BY CASE WHEN EXISTS \(/);
-assert.match(collector, /json_each\(collector_raw\.result_json, '\$\.candidateIds'\)/);
-assert.match(collector, /exact\.room=COALESCE\(json_extract\(collector_raw\.payload_json, '\$\.room'\), ''\)/);
-assert.match(collector, /exact\.area_m2 IS NULL[\s\S]*?json_extract\(collector_raw\.payload_json, '\$\.area'\) IS NULL/);
-assert.match(collector, /THEN 0 WHEN EXISTS \(/);
-assert.match(collector, /different\.room=COALESCE\(json_extract\(collector_raw\.payload_json, '\$\.room'\), ''\)/);
-assert.match(collector, /0\.35\*MIN\(ABS\(different\.area_m2\)/);
-assert.match(collector, /THEN 0 ELSE 1 END, created_at DESC LIMIT \?3/);
-assert.match(collector, /const pendingCandidates = \(pendingReviewsByAddress[\s\S]*?listingTradeTypesCanMerge/);
-assert.match(collector, /const allCandidates = candidatesByAddress[\s\S]*?const candidates = allCandidates\.filter[\s\S]*?listingTradeTypesCanMerge/);
-assert.match(collector, /const key = `\$\{tradeType\}\|\$\{saleCategory\}\|/);
-assert.match(collector, /listingTradeTypesCanMerge\(candidate\.tradeType, group\.tradeType\)/);
-assert.match(collector, /UPDATE collector_raw SET result_json=\?1, error_text='' WHERE id=\?2/);
-assert.equal((collector.match(/processing_state='processed', processed_at=\?1, result_json=\?2, error_text=''/g) || []).length >= 2, true);
-assert.match(collector, /action: "autoMergeExactAlias"/);
-assert.match(collector, /async function attachPendingReviewAliases/);
-assert.match(collector, /aliasesMerged: aliases\.merged/);
-assert.match(collector, /json_array_length\(json_extract\(cr\.result_json, '\$\.candidateIds'\)\)=1/);
-assert.match(collector, /NOT EXISTS \(SELECT 1 FROM listings other/);
-assert.match(collector, /preserveRepresentative: true/);
-assert.match(collector, /consolidateClassifiedCandidateDuplicates/);
-assert.match(collector, /activeMaster: -consolidated/);
-assert.match(wrangler, /crons = \["\* \* \* \* \*"\]/);
-
-console.log("scheduled review repair tests passed");
+test("pending-review migration retains historical evidence but requires fresh source observation to publish", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    const directory = new URL("../cloudflare/migrations/", import.meta.url);
+    const files = fs.readdirSync(directory).filter(name => name.endsWith(".sql")).sort();
+    for (const file of files.filter(name => name < "0026")) db.exec(fs.readFileSync(new URL(file, directory), "utf8"));
+    db.prepare("INSERT INTO collector_sessions(id,source) VALUES ('session','네이버')").run();
+    for (const state of ["review", "error", "processed"]) {
+      db.prepare(`INSERT INTO collector_raw (id,session_id,source,source_listing_id,processing_state,payload_json,result_json)
+        VALUES (?,'session','네이버',?,?,'{"proof":"preserved"}','{}')`).run(state, state, state);
+    }
+    db.exec(fs.readFileSync(new URL("0026_advertisement_presence_policy.sql", directory), "utf8"));
+    const row = db.prepare("SELECT processing_state,payload_json,result_json FROM collector_raw WHERE id='review'").get();
+    assert.equal(row.processing_state, "awaiting_source_refresh"); assert.equal(JSON.parse(row.payload_json).proof, "preserved");
+    assert.equal(JSON.parse(row.result_json).previousProcessingState, "review");
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM listings").get().n, 0);
+    assert.equal(db.prepare("SELECT processing_state FROM collector_raw WHERE id='error'").get().processing_state, "error");
+    assert.equal(db.prepare("SELECT processing_state FROM collector_raw WHERE id='processed'").get().processing_state, "processed");
+  } finally { db.close(); }
+});

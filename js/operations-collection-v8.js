@@ -148,6 +148,8 @@
       '<div class="new"><b>' + number(result.created).toLocaleString("ko-KR") + '</b><small>신규</small></div>' +
       '<div><b>' + (number(result.merged) + number(result.updated)).toLocaleString("ko-KR") + '</b><small>통합·갱신</small></div>' +
       '<div class="review"><b>' + number(result.review).toLocaleString("ko-KR") + '</b><small>검증</small></div>' +
+      '<div><b>' + (result.presenceReported ? number(result.deactivated).toLocaleString("ko-KR") : '미기록') + '</b><small>원본광고 미노출</small></div>' +
+      '<div><b>' + (result.presenceReported ? number(result.adsReappeared).toLocaleString("ko-KR") : '미기록') + '</b><small>광고 재등장</small></div>' +
       '<div><b>' + number(result.duplicate).toLocaleString("ko-KR") + '</b><small>중복</small></div>' +
       '<div><b>' + number(result.unchanged).toLocaleString("ko-KR") + '</b><small>기존 동일</small></div>' +
       '<div class="review"><b>' + number(result.addressDeferred).toLocaleString("ko-KR") + '</b><small>주소 보류</small></div>' +
@@ -238,10 +240,10 @@
       resultCells(summary.totals || {}) +
       (summary.totals && summary.totals.unknownFound ? '<p>목록 수 미기록 ' + number(summary.totals.unknownFound) + '개 범위는 합계에서 제외했습니다.</p>' : '') +
       (data.historyTruncated ? '<p>조회 상한에 도달해 일부 이전 기록은 제외됐을 수 있습니다.</p>' : '') +
-      '<div class="collection-coverage">' + (summary.districtCoverage || []).map(function(row) { return '<p><b>' + escape(row.source) + '</b> ' + row.districts.map(function(item) { return escape(item.district) + ' ' + (item.state === 'complete' ? '완료' : item.state === 'missing' ? '기록 없음' : '진행·확인 필요'); }).join(' · ') + '</p>'; }).join('') + '</div>' +
-      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>출처·범위</th><th>목록 확인</th><th>신규</th><th>변경·통합</th><th>기존 동일</th><th>주소 보류</th><th>실패</th><th>상태</th></tr></thead><tbody>' +
-      (summary.items || []).map(function(row) { return '<tr><td>' + escape(row.source + ' · ' + row.scope) + '</td><td>' + (row.found == null ? '미기록' : number(row.found).toLocaleString('ko-KR')) + '</td><td>' + number(row.created) + '</td><td>' + (number(row.updated) + number(row.merged)) + '</td><td>' + number(row.unchanged) + '</td><td>' + number(row.addressDeferred) + '</td><td>' + number(row.failed) + '</td><td>' + escape(row.complete ? '목록 확인 완료' : row.status) + '</td></tr>' +
-        (row.anomaly ? '<tr><td colspan="8">⚠ ' + escape(row.anomaly) + '</td></tr>' : ''); }).join('') + '</tbody></table></div></section>';
+      '<div class="collection-coverage">' + (summary.districtCoverage || []).map(function(row) { return '<p><b>' + escape(row.source) + '</b> ' + row.districts.map(function(item) { return escape(item.district) + ' ' + (item.state === 'complete' ? '완료' : item.state === 'scope-only' ? '선택 범위 확인' : item.state === 'missing' ? '기록 없음' : '진행·확인 필요'); }).join(' · ') + '</p>'; }).join('') + '</div>' +
+      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>출처·범위</th><th>목록 확인</th><th>신규</th><th>변경·통합</th><th>기존 동일</th><th>주소 보류</th><th>실패</th><th>원본광고 미노출</th><th>판정 상태</th></tr></thead><tbody>' +
+      (summary.items || []).map(function(row) { return '<tr><td>' + escape(row.source + ' · ' + row.scope) + '</td><td>' + (row.found == null ? '미기록' : number(row.found).toLocaleString('ko-KR')) + '</td><td>' + number(row.created) + '</td><td>' + (number(row.updated) + number(row.merged)) + '</td><td>' + number(row.unchanged) + '</td><td>' + number(row.addressDeferred) + '</td><td>' + number(row.failed) + '</td><td>' + (row.presenceReported ? number(row.deactivated) : '미기록') + '</td><td>' + escape(row.presenceReported ? (row.presenceScopeEstablished ? '비교 기준 저장' : row.presenceTracking ? '동일 범위 비교 완료' : '종료 판정 보류') : (row.complete ? '목록 확인 완료' : row.status)) + '</td></tr>' +
+        (row.anomaly ? '<tr><td colspan="9">⚠ ' + escape(row.anomaly) + '</td></tr>' : ''); }).join('') + '</tbody></table></div></section>';
   }
 
   function loadOperationsQuality() {

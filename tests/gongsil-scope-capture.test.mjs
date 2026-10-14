@@ -74,6 +74,20 @@ test("background scope parsing never delays the original provider fetch response
   assert.equal(h.window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture.groups[0].fidxs[0], "parsed-later");
 });
 
+test("only an explicit successful empty group array can prove an empty map", async () => {
+  const valid = harness(async () => new Response(JSON.stringify({res: "success", datas: {res: []}})));
+  await valid.window.fetch("/api/maps/circle", {method: "POST", body: requestBody});
+  await settle();
+  assert.equal(valid.window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture.complete, true);
+  assert.equal(valid.window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture.groups.length, 0);
+  for (const payload of [{res: "success"}, {res: "success", datas: {res: [{}]}}, {res: "failed", datas: {res: []}}]) {
+    const invalid = harness(async () => new Response(JSON.stringify(payload)));
+    await invalid.window.fetch("/api/maps/circle", {method: "POST", body: requestBody});
+    await settle();
+    assert.equal(invalid.window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture, null);
+  }
+});
+
 test("extension installs only the small scope hook at document_start and leaves collectors at document_idle", () => {
   const manifest = JSON.parse(fs.readFileSync("edge-automation/extension/manifest.json", "utf8"));
   const early = manifest.content_scripts.find(entry => entry.js.includes("gongsil-scope-capture.js"));

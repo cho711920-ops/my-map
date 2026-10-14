@@ -16,6 +16,8 @@ const { ingestRecords, classifyManifest, finalizeSession, normalizedRecord } = a
 
 function database(t, provider) {
   t.mock.method(globalThis, "fetch", () => { throw new Error("Provider/network access is forbidden in this test"); });
+  let clock = Date.now();
+  t.mock.timers.enable({ apis: ["Date"], now: clock });
   const db = new DatabaseSync(":memory:");
   const migrations = new URL("../cloudflare/migrations/", import.meta.url);
   for (const name of fs.readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort()) {
@@ -54,10 +56,20 @@ function database(t, provider) {
         area: normalized.area, address: normalized.address, listSnapshot: normalized.listSnapshot };
     })
   });
-  const finalize = async (tradeType, record) => finalizeSession(env, {
-    source: provider, sessionId: `finish-${++sequence}`, tradeType, complete: false,
-    observedSourceIds: [normalizedRecord(provider, record).sourceId]
-  });
+  const finalize = async (tradeType, record, verified = false) => {
+    clock += 1_000; t.mock.timers.setTime(clock);
+    return finalizeSession(env, {
+      source: provider, sessionId: `finish-${++sequence}`, tradeType, complete: false,
+      observedSourceIds: [normalizedRecord(provider, record).sourceId],
+      ...(verified ? { validationVersion: 3,
+        presenceScope: { version: 1, selectionKind: provider === "네이버" ? "provider-region" : "provider-cluster",
+          regionCode: "3017000000", filters: { tradeType } },
+        completionProof: { version: 1, terminalReached: true, listComplete: true, scopeVerified: true,
+          issueCodes: [], expectedCountKnown: true, providerExpectedCount: 1, observedUniqueCount: 1,
+          capturedAt: new Date().toISOString() }
+      } : {})
+    });
+  };
   const sources = () => db.prepare(`SELECT id, listing_id, source_listing_id, trade_type
     FROM listing_sources ORDER BY trade_type`).all();
   return { db, env, save, manifest, finalize, sources };
@@ -132,10 +144,10 @@ for (const provider of ["네이버", "당근"]) {
       assert.equal(db.prepare("SELECT listing_id FROM listing_contacts WHERE id='manual-opposite'").get().listing_id, oppositeSource.listing_id);
       assert.equal(db.prepare("SELECT status FROM listings WHERE id=?").get(firstSource.listing_id).status, "계약완료");
       const amounts = db.prepare("SELECT trade_type, deposit, monthly_rent, sale_price FROM listings ORDER BY trade_type").all();
-      // Routine source refresh keeps representative terms unless an explicit
-      // condition update/promotion occurs. Source prices still refresh apart.
+      // Live ad terms refresh their own representative market; manual status,
+      // memo, IDs, assets and the opposite market remain untouched above.
       assert.deepEqual(amounts.map((row) => Object.values(row)), [
-        ["lease", 1000, 101, null], ["sale", 0, 0, 50001]
+        ["lease", 1000, firstTrade === "lease" ? 102 : 101, null], ["sale", 0, 0, firstTrade === "sale" ? 50002 : 50001]
       ]);
       for (const source of db.prepare("SELECT * FROM listing_sources").all()) {
         const snapshot = JSON.parse(source.list_snapshot_json);
@@ -172,7 +184,7 @@ for (const provider of ["네이버", "당근"]) {
     await save(fixture(provider, "sale", 3));
     assert.deepEqual(sources(), identities);
     assert.deepEqual(db.prepare("SELECT trade_type, deposit, monthly_rent, sale_price FROM listings ORDER BY trade_type").all()
-      .map((row) => Object.values(row)), [["lease", 1000, 101, null], ["sale", 0, 0, 50001]]);
+      .map((row) => Object.values(row)), [["lease", 1000, 102, null], ["sale", 0, 0, 50003]]);
     assert.deepEqual(db.prepare(`SELECT trade_type, json_extract(list_snapshot_json,'$.deposit'),
       json_extract(list_snapshot_json,'$.rent'), sale_price FROM listing_sources ORDER BY trade_type`).all()
       .map((row) => Object.values(row)), [["lease", 1000, 102, null], ["sale", 0, 0, 50003]]);
@@ -202,7 +214,28 @@ for (const provider of ["네이버", "당근"]) {
   });
 
   for (const observedTrade of ["lease", "sale"]) {
-    test(`${provider}: partial ${observedTrade} finalization cannot revive or touch the opposite offer`, async (t) => {
+    test(`${provider}: verified partial ${observedTrade} observation revives only that original, preserving both manual master states`, async (t) => {
+      const { db, save, finalize, sources } = database(t, provider);
+      await save(fixture(provider, "lease"));
+      await save(fixture(provider, "sale"));
+      const identities = sources();
+      db.exec("UPDATE listing_sources SET active=0, missing_count=1; UPDATE listings SET status='계약완료';");
+      const opposite = db.prepare("SELECT * FROM listing_sources WHERE trade_type<>?").get(observedTrade);
+      const oppositeListing = db.prepare("SELECT * FROM listings WHERE id=?").get(opposite.listing_id);
+      const result = await finalize(observedTrade, fixture(provider, observedTrade), true);
+      assert.equal(result.complete, false); assert.equal(result.presenceTracking, false);
+      assert.equal(result.missingMarked, 0); assert.equal(result.deactivated, 0);
+      assert.equal(result.adsReappeared, 1); assert.equal(result.presenceReset, 1);
+      assert.deepEqual(sources(), identities);
+      assert.deepEqual(db.prepare("SELECT * FROM listing_sources WHERE id=?").get(opposite.id), opposite);
+      assert.deepEqual(db.prepare("SELECT * FROM listings WHERE id=?").get(opposite.listing_id), oppositeListing);
+      assert.deepEqual(db.prepare("SELECT active, missing_count FROM listing_sources WHERE trade_type=?").all(observedTrade)
+        .map(row => Object.values(row)), [[1, 0]]);
+      assert.deepEqual(db.prepare("SELECT status FROM listings ORDER BY trade_type").all().map(row => row.status),
+        ["계약완료", "계약완료"]);
+    });
+
+    test(`${provider}: legacy partial ${observedTrade} finalization without capture proof cannot revive either offer`, async (t) => {
       const { db, save, finalize, sources } = database(t, provider);
       await save(fixture(provider, "lease"));
       await save(fixture(provider, "sale"));
@@ -217,7 +250,7 @@ for (const provider of ["네이버", "당근"]) {
       assert.deepEqual(db.prepare("SELECT * FROM listing_sources WHERE id=?").get(opposite.id), opposite);
       assert.deepEqual(db.prepare("SELECT * FROM listings WHERE id=?").get(opposite.listing_id), oppositeListing);
       assert.deepEqual(db.prepare("SELECT active, missing_count FROM listing_sources WHERE trade_type=?").all(observedTrade)
-        .map((row) => Object.values(row)), [[1, 0]]);
+        .map((row) => Object.values(row)), [[0, 3]]);
     });
   }
 }

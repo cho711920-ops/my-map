@@ -56,7 +56,7 @@ test('Today API uses KST timestamps, legacy calendar dates and an expression ind
   h.db.close();
 });
 
-test('scoped source metadata excludes all other parents and explicitly clears missing originals', async () => {
+test('scoped source metadata excludes other parents and retains real inactive originals as ended ads', async () => {
   const h = fixture();
   const today = koreanCalendarDay();
   h.listing('new', today + ' 12:00'); h.listing('empty', today + ' 12:00');
@@ -67,7 +67,9 @@ test('scoped source metadata excludes all other parents and explicitly clears mi
   const before = h.db.prepare('SELECT total_changes() AS n').get().n;
   const result = await handleD1GetAction(h.env, {}, { action: 'newListingPeriod', days: '1', market: 'lease' });
   assert.deepEqual(Object.keys(result.unified.groups).sort(), ['empty', 'legacy-public', 'new', 'unavailable']);
-  assert.deepEqual(result.unified.groups.empty, []);
+  assert.equal(result.unified.groups.empty.length, 1);
+  assert.equal(result.unified.groups.empty[0][result.unified.fields.indexOf('sourceUnavailable')], true);
+  assert.equal(result.unified.groups.empty[0][result.unified.fields.indexOf('missingCount')], 1);
   assert.equal(result.unified.groups.new.length, 1);
   assert.equal(result.unified.groups.unavailable.length, 1);
   assert.equal(result.unified.groups.unavailable[0][result.unified.fields.indexOf('sourceUnavailable')], true);

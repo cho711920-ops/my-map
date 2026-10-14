@@ -134,14 +134,15 @@ test("unusable price or exact address stays an error instead of a fake map listi
   assert.equal(f.db.prepare("SELECT COUNT(*) n FROM collector_raw WHERE processing_state='error'").get().n, 2);
 });
 
-test("lease ambiguity keeps the existing review workflow", async t => {
+test("lease ambiguity publishes a separate ad without forcing a merge or creating a review", async t => {
   const f = database(t);
   const common = { tradeType: "lease", salePrice: null, deposit: 1000, monthly: 50 };
   await f.save(ad("lease-1", { ...common, roomInfo: "1층" }), ad("lease-2", { ...common, roomInfo: "2층" }));
   const result = await f.save(ad("lease-3", { ...common, roomInfo: "" }));
   assert.equal(result.failed, 0);
-  assert.equal(result.created, 0);
-  assert.equal(result.review, 1);
+  assert.equal(result.created, 1);
+  assert.equal(result.review, 0);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM listings").get().n, 3);
 });
 
 test("qualified internal IDs never become a Naver original URL", () => {

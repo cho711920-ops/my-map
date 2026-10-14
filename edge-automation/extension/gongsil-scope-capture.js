@@ -13,14 +13,17 @@
   };
   const finish = (sequence, body, result) => {
     if (sequence !== state.sequence || !body || result?.res !== "success") return;
-    const groups = Array.isArray(result?.datas?.res) ? result.datas.res : [];
+    if (!Array.isArray(result?.datas?.res)) return;
+    const groups = result.datas.res;
+    if (groups.some(row => !row || !Array.isArray(row.fidxs))) return;
     const count = groups.reduce((sum, row) => sum + (Array.isArray(row?.fidxs) ? row.fidxs.length : 0), 0);
-    if (!groups.length || groups.length > 5000 || count > 30000 ||
+    if (groups.length > 5000 || count > 30000 ||
         JSON.stringify(body.search || {}).length > 64000) return;
     state.capture = {
       body: { btype: body.btype, level: body.level, areacoord: body.areacoord,
         removecoord: body.removecoord, search: body.search, isZzim: body.isZzim, aptCircle: body.aptCircle },
       groups: groups.map(row => ({ fidxs: Array.isArray(row.fidxs) ? row.fidxs : [] })),
+      complete: true,
       capturedAt: Date.now()
     };
   };

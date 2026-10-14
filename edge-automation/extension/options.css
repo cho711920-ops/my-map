@@ -59,6 +59,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #7eafff;outline-offse
 .run-summary-grid b,.run-summary-grid small{display:block}
 .run-summary-grid b{font-size:13px}.run-summary-grid small{margin-top:3px;color:#728097;font-size:11px}
 .run-summary-grid .has-failure{border-color:#f1c5c5;background:#fff5f5;color:#b32f2f}
+.run-summary-presence{margin-top:8px;padding:10px 12px;border:1px solid #dce6f3;border-radius:11px;background:#f6f9fd;color:#425775;font-size:12px;line-height:1.5}
 .target-state{width:96px;text-align:center}
 .target-state span{display:inline-block;min-width:68px;padding:6px 8px;border-radius:99px;background:#e8eef7;color:#52647d;font-size:11px;font-weight:900;white-space:nowrap}
 .state-running span,.state-retrying span{background:#dcecff;color:#1262c6}.state-completed span,.state-deferred span{background:#dcf6e8;color:#087a43}.state-deferred span{box-shadow:inset 0 0 0 1px #8ed5ae}.state-partial span,.state-retry_wait span{background:#fff0d6;color:#9b5b00}.state-failed span{background:#ffe1e1;color:#b32f2f}

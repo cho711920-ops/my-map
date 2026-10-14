@@ -191,7 +191,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
     const cachedEnv = {
       MEDIA: {
         get: async (key) => {
-          assert.equal(key, "api-cache/unified-listings-v10-sale-area-summary.json");
+          assert.equal(key, "api-cache/unified-listings-v11-advertisement-presence.json");
           return {
             customMetadata: { savedAt: String(Date.now()), revision: "snapshot-1" },
             httpMetadata: { contentType: "application/json; charset=utf-8" },
@@ -243,7 +243,7 @@ test("operations dashboard is served from R2 without repeating full-table counts
       } },
       MEDIA: {
         get: async (key) => {
-          assert.equal(key, "api-cache/operations-dashboard.json");
+          assert.equal(key, "api-cache/operations-dashboard-v2-advertisement-presence.json");
           return {
             customMetadata: { savedAt: String(Date.now()) },
             httpMetadata: { contentType: "application/json; charset=utf-8" },
@@ -273,7 +273,7 @@ test("operations dashboard ignores an R2 snapshot older than one minute", async 
         if (/FROM operations_snapshots/.test(sql)) {
           snapshotQueries += 1;
           return { first: async () => ({
-            payload_json: JSON.stringify({ ok: true, action: "operationsDashboard", activeMaster: 42 }),
+            payload_json: JSON.stringify({ ok: true, action: "operationsDashboard", activeMaster: 42, advertisementPolicyVersion: 1 }),
             calculated_at: new Date().toISOString()
           }) };
         }
@@ -576,10 +576,14 @@ test("full listing details and photos come directly from D1", async () => {
       return {
         sql,
         bind() { return this; },
+        async first() {
+          return /FROM listings/.test(this.sql) ? { id: "M-property-1", property_id: "M-property-1" } : null;
+        },
         async all() {
           if (/FROM listing_sources/.test(this.sql)) {
             return { results: [{
               id: "O-source-1",
+              listing_id: "M-property-1", source: "네이버", active: 1,
               list_snapshot_json: JSON.stringify({ originalId: "O-source-1", photoCount: 2 }),
               raw_json: JSON.stringify({ images: ["https://example.invalid/one.jpg", "https://example.invalid/two.jpg"] })
             }] };
@@ -778,7 +782,7 @@ test("collector manifest comparison runs directly against D1", async () => {
   assert.ok(statements.some((entry) => /mutation_results/.test(entry.sql)));
 });
 
-test("collector manifest skips an unchanged listing that is still waiting for review", async () => {
+test("collector manifest requests fresh details for an unpublished unchanged review", async () => {
   const snapshot = "same-review-snapshot";
   let hash = 2166136261;
   for (let index = 0; index < snapshot.length; index += 1) {
@@ -823,13 +827,13 @@ test("collector manifest skips an unchanged listing that is still waiting for re
   }), { ...env, DB: db, COLLECTOR_ACCESS_KEY: "private-key" });
   assert.equal(response.status, 200);
   const payload = await response.json();
-  assert.equal(payload.unchanged, 1);
-  assert.equal(payload.changed, 0);
+  assert.equal(payload.unchanged, 0);
+  assert.equal(payload.changed, 1);
   assert.equal(payload.unknown, 0);
-  assert.deepEqual(payload.needsDetail, []);
+  assert.deepEqual(payload.needsDetail, ["네이버-REVIEW-1"]);
 });
 
-test("collector manifest compares legacy recovery reviews by material terms", async () => {
+test("collector manifest requests fresh details before publishing a legacy recovery review", async () => {
   const db = {
     prepare(sql) {
       return {
@@ -873,9 +877,9 @@ test("collector manifest compares legacy recovery reviews by material terms", as
   }), { ...env, DB: db, COLLECTOR_ACCESS_KEY: "private-key" });
   assert.equal(response.status, 200);
   const payload = await response.json();
-  assert.equal(payload.unchanged, 1);
+  assert.equal(payload.unchanged, 0);
   assert.equal(payload.legacyBootstrapped, 0);
-  assert.deepEqual(payload.needsDetail, []);
+  assert.deepEqual(payload.needsDetail, ["네이버-LEGACY-1"]);
 });
 
 test("naver manifest repairs missing D1 and shared-cache coordinates without a detail fetch", async () => {
@@ -994,7 +998,7 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
     await Promise.all(pending);
     assert.ok(!statements.some((entry) => /apps-script-sync/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
-    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v10-sale-area-summary.json"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v11-advertisement-presence.json"));
     assert.ok(writtenCacheKeys.includes("api-cache/revision/listings.json"));
     assert.ok(!writtenCacheKeys.includes("api-cache/revision/operations.json"));
   } finally {
@@ -1057,7 +1061,7 @@ test("primary memo edits persist only in D1 and do not queue a Sheet sync", asyn
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     assert.ok(statements.some((entry) => /INSERT INTO mutation_results/.test(entry.sql)));
     assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet.csv"));
-    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v10-sale-area-summary.json"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v11-advertisement-presence.json"));
     assert.ok(!statements.some((entry) => /INSERT INTO jobs/.test(entry.sql)));
   } finally {
     globalThis.fetch = originalFetch;

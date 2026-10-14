@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.13";
+const BACKGROUND_BUILD = "1.1.14";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -621,7 +621,8 @@ async function automationReadiness(config) {
 
 async function minimalAutomationReport(report) {
   const config = await getConfig();
-  const allowedCounts = ["expected", "processed", "detailProcessed", "unchanged", "created", "updated", "review", "addressDeferred", "failed"];
+  const allowedCounts = ["expected", "processed", "detailProcessed", "unchanged", "created", "updated", "review", "addressDeferred", "failed",
+    "missingMarked", "deactivated", "adsReappeared"];
   return { version: 1, runId: report.runId, revision: Number(report.updatedAt), startedAt: Number(report.startedAt),
     active: report.active === true, finishedAt: report.finishedAt || null, extensionVersion: BACKGROUND_BUILD,
     readiness: await automationReadiness(config),
@@ -632,7 +633,11 @@ async function minimalAutomationReport(report) {
       return { targetIndex: index, source: item.source, district: ["유성구", "대덕구", "중구", "서구", "동구"].find(value => districtText.includes(value)) || "",
         tradeType: item.tradeType || inferredTradeType(target), status: item.status,
         terminalCode: ["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"].includes(item.terminalCode) ? item.terminalCode : "",
-        counts: Object.fromEntries(allowedCounts.map(key => [key, Math.max(0, Math.floor(Number(item.counts && item.counts[key]) || 0))])) };
+        counts: {...Object.fromEntries(allowedCounts.map(key => [key, Math.max(0, Math.floor(Number(item.counts && item.counts[key]) || 0))])),
+          presenceReported: item.counts?.presenceReported === true,
+          presenceTracking: item.counts?.presenceTracking === true,
+          presenceScopeEstablished: item.counts?.presenceScopeEstablished === true,
+          presenceTrackingIssue: item.counts?.presenceTrackingIssue ? "동일 범위·전체목록 확인 필요" : ""} };
     }) };
 }
 
@@ -673,21 +678,38 @@ function resultCounts(result) {
     }
     return 0;
   };
+  const presence = {...session, ...(session.totals || {}), ...totals, ...payload};
+  const presenceKnown = Object.prototype.hasOwnProperty.call(presence, "presenceReported")
+    ? presence.presenceReported === true
+    : ["missingMarked", "deactivated", "presenceTracking", "presenceScopeEstablished", "presenceTrackingIssue", "adsReappeared"]
+      .some(key => Object.prototype.hasOwnProperty.call(presence, key));
+  const presenceCounts = presenceKnown ? {presenceReported: true,
+    missingMarked: number(presence.missingMarked), deactivated: number(presence.deactivated), adsReappeared: number(presence.adsReappeared),
+    presenceTracking: presence.presenceTracking === true, presenceScopeEstablished: presence.presenceScopeEstablished === true,
+    presenceTrackingIssue: String(presence.presenceTrackingIssue || "").slice(0, 500)} : {};
   if (cleanSource(payload.source) === "daangn") {
     const unchanged = number(totals.skippedUnchanged);
     const detailProcessed = number(totals.processed);
     const excluded = number(totals.failed);
     const addressDeferred = Math.min(excluded, number(totals.addressMissing));
     const proof = totals.completionProof || {};
+    const selectedComplete = proof.version === 1 && proof.listExhausted === true &&
+      Number(proof.expected) >= 0 && Number(proof.expected) === Number(proof.observed) &&
+      Number(proof.observed) === Number(proof.processed) &&
+      Number(proof.observed) === Number(totals.found) && Number(proof.processed) === unchanged + detailProcessed;
+    const hasProviderProof = Object.prototype.hasOwnProperty.call(proof, "terminalReached");
+    const providerComplete = proof.terminalReached === true && proof.listComplete === true && proof.scopeVerified === true &&
+      Number.isInteger(proof.observedUniqueCount) && proof.observedUniqueCount >= 0 &&
+      Number.isFinite(Date.parse(proof.capturedAt)) && Array.isArray(proof.issueCodes) && !proof.issueCodes.length &&
+      (proof.observedUniqueCount > 0 || proof.emptyConfirmed === true) &&
+      (proof.expectedCountKnown !== true || Number.isInteger(proof.providerExpectedCount) &&
+        proof.providerExpectedCount === proof.observedUniqueCount);
     return {
       version: 2, expected: number(totals.found),
       processed: unchanged + detailProcessed, detailProcessed, unchanged,
-      listComplete: proof.version === 1 && proof.listExhausted === true &&
-        Number(proof.expected) > 0 && Number(proof.expected) === Number(proof.observed) &&
-        Number(proof.observed) === Number(proof.processed) &&
-        Number(proof.observed) === Number(totals.found) && Number(proof.processed) === unchanged + detailProcessed,
+      listComplete: selectedComplete && (hasProviderProof ? providerComplete : Number(proof.expected) > 0),
       created: number(totals.created), updated: number(totals.updated), review: number(totals.review),
-      addressDeferred, failed: excluded - addressDeferred
+      addressDeferred, failed: excluded - addressDeferred, ...presenceCounts
     };
   }
   return {
@@ -697,7 +719,7 @@ function resultCounts(result) {
     updated: number(payload.updated, totals.updated, session.updated),
     review: number(payload.review, totals.review, session.review),
     unchanged: number(payload.unchanged, totals.unchanged, session.unchanged),
-    failed: number(payload.failed, totals.failed, session.failed)
+    failed: number(payload.failed, totals.failed, session.failed), ...presenceCounts
   };
 }
 
@@ -705,7 +727,7 @@ function mergeCountSnapshots(previous, incoming) {
   const output = { ...(previous || {}) };
   const numericKeys = new Set([
     "expected", "processed", "detailProcessed", "unchanged",
-    "created", "updated", "review", "addressDeferred", "failed"
+    "created", "updated", "review", "addressDeferred", "failed", "missingMarked", "deactivated", "adsReappeared"
   ]);
   Object.entries(incoming || {}).forEach(([key, value]) => {
     if (numericKeys.has(key)) {
@@ -762,14 +784,17 @@ function resultDiagnostics(result) {
 function resultNotice(result) {
   const payload = result && result.result || {};
   const counts = resultCounts(result);
+  const presence = counts.presenceReported ? [counts.presenceTrackingIssue ? "종료판정보류" : counts.presenceScopeEstablished
+    ? "비교기준저장" : counts.presenceTracking ? `원본광고 미노출 ${Number(counts.deactivated || 0)}건` : "",
+    counts.adsReappeared ? `원본광고 재등장 ${counts.adsReappeared}건` : ""].filter(Boolean) : [];
   if (counts.version === 2) {
     const issues = (payload.completionIssues || []).filter(issue =>
       !/^(?:실패 \d+건|주소·층 오류 \d+건)$/.test(String(issue)));
     if (counts.addressDeferred) issues.push(`정확한 지번 미제공 ${counts.addressDeferred}건 · 지도 등록 보류`);
     if (counts.failed) issues.push(`조회·저장 실패 ${counts.failed}건`);
-    return [counts.listComplete ? "전체 목록 확인 완료" : "목록 완전성 확인 필요", ...issues].join(" · ");
+    return [counts.listComplete ? "전체 목록 확인 완료" : "목록 완전성 확인 필요", ...issues, ...presence].join(" · ");
   }
-  return "목록 처리 완료 · 확인사항: " + ((payload.completionIssues || []).join(", ") || "일부 제공처 정보 누락");
+  return ["목록 처리 완료 · 확인사항: " + ((payload.completionIssues || []).join(", ") || "일부 제공처 정보 누락"), ...presence].join(" · ");
 }
 
 async function updateRunReport(state, target, status, details = {}) {
@@ -1257,12 +1282,15 @@ function completedTargetWithWarnings(result) {
     const issues = payload.completionIssues;
     const failed = Number(job.failed || 0);
     const addressMissing = Number(job.addressMissing || 0);
+    const listComplete = Object.prototype.hasOwnProperty.call(proof, "terminalReached")
+      ? resultCounts(result).listComplete === true
+      : proof.version === 1 && proof.listExhausted === true && Number(proof.expected) > 0 &&
+        Number(proof.expected) === Number(proof.observed) && Number(proof.processed) === Number(proof.observed) &&
+        Number(job.found) === Number(proof.observed);
     // A finished small scope is NOT a validated full census. Keep missing-ad
     // protection on the server, but don't refetch an exhausted list all day.
     return result.ok === true && job.status === "complete" && job.phase === "complete" &&
-      proof.version === 1 && proof.listExhausted === true && Number(proof.expected) > 0 &&
-      Number(proof.expected) === Number(proof.observed) && Number(proof.processed) === Number(proof.observed) &&
-      Number(job.found) === Number(proof.observed) && failed >= 0 && failed <= addressMissing &&
+      listComplete && failed >= 0 && failed <= addressMissing &&
       Array.isArray(issues) && issues.every(issue =>
         /^(?:관찰 원본 100건 미만|실패 \d+건|주소·층 오류 \d+건)$/.test(String(issue)));
   }
@@ -1339,6 +1367,9 @@ async function finishCurrentTarget(result, senderTabId) {
   }
   if (successful || warningCompletion) {
     const counts = resultCounts(result);
+    const presenceNotice = counts.presenceReported ? [counts.presenceTrackingIssue ? "종료판정보류" : counts.presenceScopeEstablished
+      ? "비교기준저장" : counts.presenceTracking ? `원본광고 미노출 ${Number(counts.deactivated || 0)}건` : "",
+      counts.adsReappeared ? `원본광고 재등장 ${counts.adsReappeared}건` : ""].filter(Boolean).join(" · ") : "";
     const addressDeferred = warningCompletion && counts.version === 2 && counts.listComplete &&
       Number(counts.addressDeferred || 0) > 0 && !Number(counts.failed || 0);
     const partial = !addressDeferred && (result.ok !== true || Boolean(result.result && result.result.partial));
@@ -1352,14 +1383,14 @@ async function finishCurrentTarget(result, senderTabId) {
         ? `${target.label || target.source} 수집완료 · 정확한 지번 미제공 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}건 지도 등록 보류`
         : partial
         ? `${target.label || target.source} ${resultNotice(result)}`
-        : `${target.label || target.source} 자동수집 완료`
+        : `${target.label || target.source} 자동수집 완료${presenceNotice ? " · " + presenceNotice : ""}`
     });
     await updateRunReport(state, target, addressDeferred ? "deferred" : partial ? "partial" : "completed", {
       finishedAt: Date.now(),
       elapsedMs,
       message: addressDeferred
         ? `수집완료 · 정확한 지번 미제공 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}건 지도 등록 보류`
-        : partial ? resultNotice(result) : "수집 완료",
+        : partial ? resultNotice(result) : "수집 완료" + (presenceNotice ? " · " + presenceNotice : ""),
       counts, replaceCounts: true, progressStage: null, diagnostics: resultDiagnostics(result)
     });
     rememberCompletedTarget(state, target);

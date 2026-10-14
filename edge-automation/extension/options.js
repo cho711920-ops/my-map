@@ -148,7 +148,7 @@ function displayCounts(item, target) {
     }
   }
   const registeredExpected = Number(target && target.selectedCount || item && item.selectedCount || 0);
-  if (daangn && !Number(counts.expected || 0) && registeredExpected > 0) {
+  if (daangn && !counts.listComplete && !Number(counts.expected || 0) && registeredExpected > 0) {
     counts.expected = registeredExpected;
     counts.registeredExpected = true;
     counts.legacyDaangn = false;
@@ -166,7 +166,7 @@ function countText(item, target) {
   } else if (Number(counts.processed || 0)) {
     parts.push(`${Number(counts.processed).toLocaleString("ko-KR")}건 확인`);
   } else if (counts.version === 2) {
-    parts.push("목록 0건 · 확인 0건 (집계 전)");
+    parts.push(counts.listComplete ? "목록 0건 · 확인 0건" : "목록 0건 · 확인 0건 (집계 전)");
   }
   if (Number(counts.created || 0)) parts.push(`신규 ${Number(counts.created).toLocaleString("ko-KR")}`);
   if (Number(counts.updated || 0)) parts.push(`변경 ${Number(counts.updated).toLocaleString("ko-KR")}`);
@@ -174,6 +174,12 @@ function countText(item, target) {
   if (Number(counts.unchanged || 0)) parts.push(`기존 동일 ${Number(counts.unchanged).toLocaleString("ko-KR")}`);
   if (Number(counts.addressDeferred || 0)) parts.push(`주소 보류 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}`);
   if (Number(counts.failed || 0)) parts.push(`오류 ${Number(counts.failed).toLocaleString("ko-KR")}`);
+  if (counts.presenceReported) {
+    if (counts.presenceTrackingIssue) parts.push("종료판정보류");
+    else if (counts.presenceScopeEstablished) parts.push("비교기준저장");
+    else if (counts.presenceTracking) parts.push(`원본광고 미노출 ${Number(counts.deactivated || 0).toLocaleString("ko-KR")}건`);
+    if (Number(counts.adsReappeared || 0)) parts.push(`원본광고 재등장 ${Number(counts.adsReappeared).toLocaleString("ko-KR")}건`);
+  }
   return parts.join(" · ");
 }
 
@@ -234,12 +240,27 @@ function renderRunSummary(report = state.runReport) {
   const running = Number(counts.running || 0) + Number(counts.retrying || 0);
   const waiting = Number(counts.pending || 0) + Number(counts.retry_wait || 0);
   const failed = Number(counts.failed || 0);
+  const presence = report.items.reduce((output, item) => {
+    const value = displayCounts(item);
+    if (!value.presenceReported) return output;
+    output.reported += 1;
+    if (value.presenceTracking && !value.presenceTrackingIssue && !value.presenceScopeEstablished) output.tracked += 1;
+    output.ended += Number(value.deactivated || 0);
+    output.reappeared += Number(value.adsReappeared || 0);
+    if (value.presenceTrackingIssue) output.deferred += 1;
+    else if (value.presenceScopeEstablished) output.baselines += 1;
+    return output;
+  }, {reported: 0, tracked: 0, ended: 0, reappeared: 0, deferred: 0, baselines: 0});
+  const presenceSummary = [presence.tracked ? `원본광고 미노출 ${presence.ended.toLocaleString("ko-KR")}건` : "",
+    presence.reappeared ? `원본광고 재등장 ${presence.reappeared.toLocaleString("ko-KR")}건` : "",
+    presence.baselines ? `비교기준저장 ${presence.baselines}개 범위` : "",
+    presence.deferred ? `종료판정보류 ${presence.deferred}개 범위` : ""].filter(Boolean).join(" · ");
   return `<div class="run-summary-grid">
     <span><b>${report.active ? "수집 실행 중" : "최근 실행 결과"}</b><small>${registeredTime(report.startedAt)}</small></span>
     <span><b>${processed} / ${report.items.length}개 처리 종료</b><small>정상 ${Number(counts.completed || 0)} · 주소보류 ${deferred} · 부분 ${Number(counts.partial || 0)}</small></span>
     <span><b>${running}개 진행</b><small>${waiting}개 대기</small></span>
     <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed ? "실패 내역 확인" : counts.partial ? "부분완료 내역 확인" : deferred ? "주소보류 검토 가능" : report.active ? "진행 중" : "정상"}</small></span>
-  </div>`;
+  </div>${presenceSummary ? `<div class="run-summary-presence">${presenceSummary}</div>` : ""}`;
 }
 
 function portableTarget(target) {

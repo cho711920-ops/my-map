@@ -9,6 +9,8 @@ import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromL
 import { normalizeNaverPropertyType, resolveNaverSaleCategory } from "./naver-property-types.js";
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector-offer-identity.js";
+import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertisement-presence.js";
+import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -282,7 +284,10 @@ function gongsilRecord(record, advertisedOffer = null) {
     room: tradeType === "sale" && providerSale.wholeBuilding ? "전체"
       : tradeType === "sale" && providerSale.saleCategory === "land" ? ""
         : canonicalListingRoom(advertisedOffer?.tradeType === "lease"
-          ? gongsilLeaseRoom(rawList, values[2] || record?.room) : values[2] || record?.room),
+          ? gongsilLeaseRoom(rawList, values[2] || record?.room) : values[2] || record?.room,
+          record?.sourceFloor ?? rawList.Ff ?? rawList.BfFloor ?? rawList.Floor),
+    sourceFloor: record?.sourceFloor ?? rawList.Ff ?? rawList.BfFloor ?? rawList.Floor ?? "",
+    sourceRoom: clean(record?.sourceRoom ?? rawList.Ho ?? rawList.BfHo ?? rawList.Room ?? rawList.Honame),
     roadAddress: clean(record?.roadAddress || record?.road_address || record?.raw?.detail?.roadAddress),
     category: tradeType === "sale" ? SALE_CATEGORY_LABELS[saleCategory] || category : category, tradeType,
     saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
@@ -599,6 +604,7 @@ function unifiedSnapshot(record, originalId, propertyId, now, preserveRepresenta
     providerSourceId: record.providerSourceId || record.sourceId,
     link: record.link, buildingName: record.buildingName, address: record.address,
     roadAddress: record.roadAddress, room: record.room,
+    sourceFloor: record.sourceFloor, sourceRoom: record.sourceRoom,
     type: record.category, tradeType: record.tradeType,
     saleCategory: record.saleCategory, salePrice: record.salePrice, saleDetails: record.saleDetails,
     deposit: record.deposit, rent: record.rent, fee: record.fee,
@@ -975,7 +981,7 @@ async function classifyManifest(env, body) {
       entry.manifestStatus = "unknown";
       unknown += 1;
       needsDetail.push(entry.sourceId);
-    } else if (!(entry.tradeType === "sale" && !clean(row.listing_id)) && manifestEntryMatch(entry, row, source)) {
+    } else if (clean(row.listing_id) && manifestEntryMatch(entry, row, source)) {
       entry.manifestStatus = "unchanged";
       unchanged += 1;
       if (!/^fnv1a-[0-9a-f]{8}$/i.test(clean(row.snapshot_hash)) &&
@@ -1158,7 +1164,7 @@ async function loadExistingSources(env, source, records) {
     const chunk = ids.slice(offset, offset + 80);
     const placeholders = chunk.map((_, index) => `?${index + 2}`).join(",");
     const result = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.source_url,
-        s.snapshot_hash, s.list_snapshot_json, s.raw_json, s.active, s.missing_count, s.last_collected_at,
+        s.snapshot_hash, s.list_snapshot_json, s.raw_json, s.active, s.missing_count, s.last_collected_at, s.updated_at,
         s.trade_type, s.sale_category, s.sale_price,
         l.address AS listing_address, l.room AS listing_room, l.trade_type AS listing_trade_type
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
@@ -1744,19 +1750,6 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   if (!currentListing) throw new Error("연결할 대표매물을 찾지 못했습니다.");
   assertSourceTradeBoundary(record, currentListing.trade_type, existingSource);
   const promoteRepresentative = shouldPromoteListingRepresentative(record.source, currentListing?.main_source);
-  const representativeMemo = preserveConfirmedVisitMemo(currentListing?.operating_memo, record.memo);
-  let representativeCategory = record.category;
-  if (clean(record.source) === "네이버" && clean(currentListing.main_source) === "네이버") {
-    const previousType = normalizeNaverPropertyType(currentListing.listing_type);
-    // Old favorite/visit keys include the master type. A code-to-Korean display
-    // correction alone must not replace that existing key component. Keep the
-    // new Korean type in source snapshots, and allow actual type/source changes.
-    if (previousType.recognized && previousType.code &&
-        clean(currentListing.listing_type).toUpperCase() === previousType.code &&
-        previousType.label === clean(record.category)) {
-      representativeCategory = currentListing.listing_type;
-    }
-  }
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
   const protectListing = preserveRepresentative && !updateCondition && !promoteRepresentative;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
@@ -1807,43 +1800,21 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     }
   }
   const listingNeedsTouch = !protectListing && (!existingSource || sourceChanged || assets.changed || updateCondition || promoteRepresentative);
-  const update = promoteRepresentative
-    ? env.DB.prepare(`UPDATE listings SET main_source=?1,
-        title=CASE WHEN ?2<>'' THEN ?2 ELSE title END,
-        building_name=CASE WHEN ?2<>'' THEN ?2 ELSE building_name END, room=?3, listing_type=?4,
-        trade_type=?5, sale_category=?6, sale_price=?7,
-        deposit=?8, monthly_rent=?9, maintenance_fee=?10, premium=?11, area_m2=?12,
-        operating_memo=CASE WHEN ?13<>'' THEN ?13 ELSE operating_memo END,
-        source_url=CASE WHEN ?14<>'' THEN ?14 ELSE source_url END,
-        latitude=CASE WHEN ?15 IS NOT NULL THEN ?15 ELSE latitude END,
-        longitude=CASE WHEN ?16 IS NOT NULL THEN ?16 ELSE longitude END,
-        road_address=CASE WHEN ?17<>'' THEN ?17 ELSE road_address END,
-        version=version+1, last_collected_at=?18, updated_at=?18 WHERE id=?19`)
-      .bind(sourceName(record.source), record.buildingName, record.room, representativeCategory,
-        collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
-        record.deposit, record.rent, record.fee, record.premium, record.area, representativeMemo, record.link,
-        record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
-    : !protectListing && updateCondition
-    ? env.DB.prepare(`UPDATE listings SET title=CASE WHEN ?1<>'' THEN ?1 ELSE title END,
-        building_name=CASE WHEN ?1<>'' THEN ?1 ELSE building_name END, room=?2, listing_type=?3,
-        trade_type=?4, sale_category=?5, sale_price=?6,
-        deposit=?7, monthly_rent=?8, maintenance_fee=?9, premium=?10, area_m2=?11,
-        operating_memo=CASE WHEN ?12<>'' THEN ?12 ELSE operating_memo END,
-        source_url=CASE WHEN source_url='' THEN ?13 ELSE source_url END,
-        latitude=CASE WHEN ?14 IS NOT NULL THEN ?14 ELSE latitude END,
-        longitude=CASE WHEN ?15 IS NOT NULL THEN ?15 ELSE longitude END,
-        road_address=CASE WHEN road_address='' AND ?16<>'' THEN ?16 ELSE road_address END,
-        version=version+1, last_collected_at=?17, updated_at=?17 WHERE id=?18`)
-      .bind(record.buildingName, record.room, representativeCategory,
-        collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
-        record.deposit, record.rent, record.fee, record.premium, record.area, representativeMemo,
-        record.link, record.latitude, record.longitude, clean(record.roadAddress), now, listingId)
-    : listingNeedsTouch ? env.DB.prepare(`UPDATE listings SET last_collected_at=?1, updated_at=?1,
-        source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
-        latitude=CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE latitude END,
-        longitude=CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE longitude END,
-        road_address=CASE WHEN road_address='' AND ?5<>'' THEN ?5 ELSE road_address END WHERE id=?6`)
-      .bind(now, record.link, record.latitude, record.longitude, clean(record.roadAddress), listingId) : null;
+  // Source snapshots always refresh; master fields are updated in one bulk,
+  // manual-edit-aware representative pass after this ingest batch.
+  const update = updateCondition ? env.DB.prepare(`UPDATE listings SET
+      deposit=?1,monthly_rent=?2,maintenance_fee=?3,premium=?4,area_m2=?5,sale_price=?6,
+      source_url=?7,version=version+1,last_collected_at=?8,updated_at=?8 WHERE id=?9`)
+    .bind(record.deposit, record.rent, record.fee, record.premium, record.area, record.salePrice,
+      record.link, now, listingId)
+    : listingNeedsTouch ? env.DB.prepare(`UPDATE listings SET
+      last_collected_at=?1,updated_at=?1,
+      source_url=CASE WHEN source_url='' THEN ?2 ELSE source_url END,
+      latitude=CASE WHEN latitude IS NULL THEN ?3 ELSE latitude END,
+      longitude=CASE WHEN longitude IS NULL THEN ?4 ELSE longitude END,
+      road_address=CASE WHEN road_address='' THEN ?5 ELSE road_address END WHERE id=?6`)
+    .bind(now, record.link,
+      record.latitude, record.longitude, clean(record.roadAddress), listingId) : null;
   const historyNeeded = !existingSource || sourceChanged || assets.changed || updateCondition;
   const finalStatements = [];
   if (update) finalStatements.push(update);
@@ -1992,15 +1963,24 @@ async function completePublishedSaleReviews(env, publications) {
   // successfully published offer; never consume an opposite-market review.
   const statements = publications.map(({ record, listingId }) => env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
       result_json=?2, error_text=''
-    WHERE source=?3 AND source_listing_id IN (?4, ?5) AND trade_type='sale'
-      AND (processing_state='review' OR (processing_state='duplicate'
+    WHERE source=?3 AND source_listing_id IN (?4, ?5) AND trade_type=?6
+      AND (processing_state IN ('review','awaiting_source_refresh') OR (processing_state='duplicate'
         AND json_extract(result_json, '$.action')='sameAsPendingReview'))`)
-    .bind(nowIso(), JSON.stringify({ action: "directSalePublish", listingId }), record.source,
-      record.sourceId, record.providerSourceId || record.sourceId));
+    .bind(nowIso(), JSON.stringify({ action: record.tradeType === "sale" ? "directSalePublish" : "directAdvertisementPublish", listingId }), record.source,
+      record.sourceId, record.providerSourceId || record.sourceId, collectorTradeType(record.tradeType, true)));
   // Keep a large sale import from adding one extra network round trip per ad.
   for (let offset = 0; offset < statements.length; offset += 80) {
     await env.DB.batch(statements.slice(offset, offset + 80));
   }
+}
+
+export function staleAdvertisementSave(existing, metadata = {}) {
+  if (!existing) return false;
+  const captured = Date.parse(metadata.completionProof?.capturedAt);
+  const current = Date.parse(existing.updated_at || existing.last_collected_at);
+  // An old, pre-proof client must not resurrect an ad ended by the new policy.
+  if (!Number.isFinite(captured)) return Number(existing.active) === 0 && Number(existing.missing_count) >= 1;
+  return captured > Date.now() + 60_000 || Number.isFinite(current) && current > captured;
 }
 
 async function ingestRecords(env, source, values, metadata = {}) {
@@ -2008,7 +1988,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
     refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0,
-    contactDeferred: 0, tradeTypeExcluded: 0, reactivated: 0, offerReceived: 0 };
+    contactDeferred: 0, tradeTypeExcluded: 0, reactivated: 0, adsReappeared: 0, staleEvidenceSkipped: 0, offerReceived: 0 };
   let normalizedRecords = [];
   const errors = [];
   const affectedListingIds = new Set();
@@ -2068,10 +2048,14 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   const sourceAssets = await loadSourceAssets(env, existingSources);
   const candidatesByAddress = await loadCandidateListings(env, records, existingSources);
-  const pendingReviewsByAddress = await loadPendingReviewsByAddress(env, records);
   for (const record of records) {
     try {
       const existing = existingSources.get(record.sourceId);
+      if (staleAdvertisementSave(existing, metadata)) {
+        totals.duplicate += 1;
+        totals.staleEvidenceSkipped += 1;
+        continue;
+      }
       const addressReclassification = existingSourceNeedsAddressReclassification(record, existing);
       const tradeReclassification = existingSourceNeedsTradeReclassification(record, existing);
       const sourceReclassification = addressReclassification || tradeReclassification;
@@ -2088,7 +2072,8 @@ async function ingestRecords(env, source, values, metadata = {}) {
           else totals.refreshed += 1;
         }
         else totals.duplicate += 1;
-        if (record.tradeType === LISTING_TRADE_TYPES.SALE) salePublications.push({ record, listingId: existing.listing_id });
+        if (Number(existing.active) === 0) totals.adsReappeared += 1;
+        salePublications.push({ record, listingId: existing.listing_id });
         continue;
       }
       if (sourceReclassification) {
@@ -2097,13 +2082,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
       const candidates = (candidatesByAddress.get(record.address) || []).filter((candidate) =>
         listingTradeTypesCanMerge(candidate.trade_type, record.tradeType));
       const classified = classifyListingCandidates(record, candidates);
-      const allPendingCandidates = pendingReviewsByAddress.get(record.address) || [];
-      const pendingCandidates = allPendingCandidates.filter((candidate) =>
-        listingTradeTypesCanMerge(candidate.record?.tradeType || candidate.trade_type, record.tradeType));
-      // Sale offers must be published immediately. Ambiguous cross-ad matches
-      // stay separate instead of blocking in review or forcing a merge.
-      const isSale = record.tradeType === LISTING_TRADE_TYPES.SALE;
-      const pendingMatch = isSale ? null : choosePendingReviewMatch(record, pendingCandidates);
+      // Uncertain identity is published separately, never forced into another unit.
       let publishedListingId = "";
       if (classified.decision === "merge") {
         const consolidated = await consolidateClassifiedCandidateDuplicates(env, {
@@ -2123,19 +2102,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
         }
         totals.merged += 1;
         publishedListingId = classified.candidate.id;
-      } else if (!isSale && classified.decision === "review" && await currentSingleAddressCandidate(env, record, candidates)) {
-        const result = await attachSource(env, record, candidates[0].id, sessionId, existing, false,
-          "system-single-candidate-merge@js-map.com",
-          existing ? sourceAssets.get(clean(existing.id)) : null, true);
-        if (result.reactivated) {
-          affectedListingIds.add(candidates[0].id);
-          totals.reactivated += 1;
-        }
-        totals.merged += 1;
-      } else if (pendingMatch) {
-        await savePendingReviewAlias(env, record, sessionId, pendingMatch);
-        totals.duplicate += 1;
-      } else if (classified.decision === "create" || isSale) {
+      } else {
         const listingId = await createListing(env, record, sessionId, "collector", existing,
           existing ? sourceAssets.get(clean(existing.id)) : null);
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
@@ -2153,28 +2120,21 @@ async function ingestRecords(env, source, values, metadata = {}) {
         affectedListingIds.add(listingId);
         totals.created += 1;
         publishedListingId = listingId;
-      } else {
-        const reviewId = await queueReview(env, record, sessionId, candidates, classified.reason);
-        allPendingCandidates.push({
-          id: reviewId, reviewId, source: record.source, sourceId: record.sourceId,
-          createdAt: nowIso(), room: record.room, deposit: record.deposit,
-          monthly_rent: record.rent, area_m2: record.area, trade_type: record.tradeType,
-          sale_category: record.saleCategory, sale_price: record.salePrice, record
-        });
-        pendingReviewsByAddress.set(record.address, allPendingCandidates);
-        totals.review += 1;
       }
-      if (isSale && publishedListingId) salePublications.push({ record, listingId: publishedListingId });
+      if (publishedListingId) salePublications.push({ record, listingId: publishedListingId });
     } catch (error) {
       totals.failed += 1;
       if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: clean(error?.message) || "D1 저장 실패" });
     }
   }
   if (salePublications.length) await completePublishedSaleReviews(env, salePublications);
+  const representatives = await refreshListingRepresentativesFromActiveSources(env,
+    salePublications.map(entry => entry.listingId));
+  for (const id of representatives.changedListingIds) affectedListingIds.add(id);
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
   for (const key of ["received", "offerReceived", "created", "merged", "updated", "conditionUpdated", "refreshed",
-    "review", "duplicate", "failed", "contactDeferred", "tradeTypeExcluded", "reactivated"]) {
+    "review", "duplicate", "failed", "contactDeferred", "tradeTypeExcluded", "reactivated", "adsReappeared", "staleEvidenceSkipped"]) {
     saved[key] = Number(saved[key] || 0) + Number(totals[key] || 0);
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
@@ -2193,7 +2153,7 @@ export function nextCollectorSourceVisibilityState(current, observed, countMissi
   if (observed) return { active: 1, missingCount: 0 };
   if (!countMissing || !active) return { active: active ? 1 : 0, missingCount };
   const nextMissingCount = missingCount + 1;
-  return { active: nextMissingCount >= 3 ? 0 : 1, missingCount: nextMissingCount };
+  return { active: 0, missingCount: nextMissingCount };
 }
 
 function countValue(value) {
@@ -2216,14 +2176,16 @@ export function collectorCompletionAudit(body, observedCount) {
   const addressMissing = countValue(body?.addressMissing);
   const requiredFieldRejected = countValue(body?.requiredFieldRejected);
   const contactDeferred = countValue(body?.contactDeferred);
+  const census = validationVersion >= 3 ? advertisementCensusAudit(source, body, observed) : null;
 
   const block = (message) => { issues.push(message); blockingIssues.push(message); };
   if (!requested) block(body?.stopped ? "안전중단" : "부분수집 요청");
   if (requested && validationVersion < 2) block("최신 수집기 검증정보 없음");
-  if (requested && !/전체|완전수집/.test(`${scope} ${clean(body?.note)}`)) block("전체수집 범위 아님");
-  if (requested && observed < 100) block("관찰 원본 100건 미만");
-  if (requested && expected <= 0) block("예상 매물 수 없음");
-  if (requested && expected > observed) block(`예상 ${expected}건 중 ${observed}건만 확인`);
+  if (requested && census) census.issues.forEach(block);
+  if (requested && !census && !/전체|완전수집/.test(`${scope} ${clean(body?.note)}`)) block("전체수집 범위 아님");
+  if (requested && !census && observed < 100) block("관찰 원본 100건 미만");
+  if (requested && !census && expected <= 0) block("예상 매물 수 없음");
+  if (requested && !census && expected > observed) block(`예상 ${expected}건 중 ${observed}건만 확인`);
   if (requested && manifest !== observed) block(`목록 ${manifest}건·원본 ${observed}건 불일치`);
   if (requested && processed < observed) block(`처리 ${processed}건·원본 ${observed}건 불일치`);
   if (requested && failed > 0) {
@@ -2278,121 +2240,6 @@ export function validatedGongsilPresenceScope(value) {
     level: value.level, btype: value.btype, filtersHash: value.filtersHash };
 }
 
-async function gongsilPresenceScopeKey(value) {
-  const scope = validatedGongsilPresenceScope(value);
-  if (!scope) return "";
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stableJson(scope)));
-  return `gongsil-map-v1-${Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("")}`;
-}
-
-async function trackScopedGongsilPresence(env, body, sessionId, offers, complete) {
-  const markets = gongsilPresenceMarkets(body);
-  const scopeKey = complete ? await gongsilPresenceScopeKey(body.presenceScope) : "";
-  const result = { missingMarked: 0, deactivated: 0, presenceTracking: false,
-    presenceScopeEstablished: false, presenceTrackingIssue: "", presenceScopeKey: scopeKey };
-  const observed = offers.filter(row => markets.includes(row.tradeType));
-  const observedSet = new Set(observed.map(row => `${row.tradeType}:${row.sourceId}`));
-  const seenAt = nowIso();
-  const seenJson = JSON.stringify(observed.map(row => ({ sourceId: row.sourceId, tradeType: row.tradeType })));
-  // Observation (including partial runs) cancels prior misses in every scope.
-  // No partial/failed run can add a miss or establish a new baseline.
-  const reset = env.DB.prepare(`UPDATE collector_source_presence SET missing_count=0,
-      last_seen_at=?1, updated_at=?1
-    WHERE source='공실박스' AND missing_count<>0 AND EXISTS (
-      SELECT 1 FROM json_each(?2) seen
-      WHERE json_extract(seen.value,'$.sourceId')=collector_source_presence.source_listing_id
-        AND json_extract(seen.value,'$.tradeType')=collector_source_presence.trade_type)`)
-    .bind(seenAt, seenJson);
-  if (!complete || !scopeKey || !markets.length) {
-    if (observed.length) await reset.run();
-    if (complete) result.presenceTrackingIssue = "지도 범위·필터의 전체목록을 확인하지 못해 거래완료후보 판정을 보류했습니다. 공실박스를 새로고침한 뒤 같은 범위의 전체목록을 다시 수집해 주세요.";
-    return result;
-  }
-  const previous = await env.DB.prepare(`SELECT p.trade_type, p.source_listing_id, p.missing_count,
-      p.last_seen_at, p.last_checked_session_id, p.updated_at AS presence_updated_at,
-      s.id, s.active, s.last_collected_at, s.updated_at AS source_updated_at, s.session_id AS source_session_id
-    FROM collector_source_presence p LEFT JOIN listing_sources s
-      ON s.source=p.source AND s.source_listing_id=p.source_listing_id
-        AND COALESCE(NULLIF(s.trade_type,''),'lease')=p.trade_type
-    WHERE p.scope_key=?1 AND p.source='공실박스'
-      AND p.trade_type IN (SELECT value FROM json_each(?2))`)
-    .bind(scopeKey, JSON.stringify(markets)).all();
-  const misses = [];
-  for (const row of previous?.results || []) {
-    if (!row.id || Number(row.active) !== 1 || row.last_checked_session_id === sessionId ||
-        observedSet.has(`${row.trade_type}:${row.source_listing_id}`)) continue;
-    // A source seen in another scope or a save that did not reach finalization
-    // still resets this scope's consecutive-miss sequence.
-    const returned = clean(row.last_collected_at) > clean(row.last_seen_at);
-    const missingCount = Math.min(3, (returned ? 0 : countValue(row.missing_count)) + 1);
-    misses.push({ id: row.id, sourceId: row.source_listing_id, tradeType: row.trade_type, missingCount,
-      lastSeenAt: returned ? row.last_collected_at : row.last_seen_at,
-      oldMissingCount: countValue(row.missing_count), oldLastSeenAt: row.last_seen_at,
-      oldLastCheckedSessionId: row.last_checked_session_id, oldPresenceUpdatedAt: row.presence_updated_at,
-      sourceLastCollectedAt: row.last_collected_at, sourceUpdatedAt: row.source_updated_at,
-      sourceSessionId: row.source_session_id });
-  }
-  const missJson = JSON.stringify(misses);
-  // json_each keeps thousands of members to a handful of indexed/bulk SQL
-  // statements rather than one RPC per source. D1 batch commits atomically.
-  const changes = [reset, env.DB.prepare(`INSERT INTO collector_source_presence
-      (scope_key,source,trade_type,source_listing_id,missing_count,last_seen_at,last_checked_session_id,updated_at)
-    SELECT ?1,'공실박스',json_extract(seen.value,'$.tradeType'),json_extract(seen.value,'$.sourceId'),0,?2,?3,?2
-      FROM json_each(?4) seen WHERE 1
-    ON CONFLICT(scope_key,source,trade_type,source_listing_id) DO UPDATE SET
-      missing_count=0,last_seen_at=excluded.last_seen_at,
-      last_checked_session_id=excluded.last_checked_session_id,updated_at=excluded.updated_at`)
-    .bind(scopeKey, seenAt, sessionId, seenJson)];
-  if (misses.length) changes.push(
-    env.DB.prepare(`UPDATE collector_source_presence SET
-        missing_count=json_extract(miss.value,'$.missingCount'),
-        last_seen_at=json_extract(miss.value,'$.lastSeenAt'),last_checked_session_id=?1,updated_at=?2
-      FROM json_each(?3) miss WHERE scope_key=?4 AND source='공실박스'
-        AND trade_type=json_extract(miss.value,'$.tradeType')
-        AND source_listing_id=json_extract(miss.value,'$.sourceId')
-        AND last_checked_session_id<>?1
-        AND missing_count=json_extract(miss.value,'$.oldMissingCount')
-        AND last_seen_at=json_extract(miss.value,'$.oldLastSeenAt')
-        AND last_checked_session_id=json_extract(miss.value,'$.oldLastCheckedSessionId')
-        AND updated_at=json_extract(miss.value,'$.oldPresenceUpdatedAt')
-        AND EXISTS (SELECT 1 FROM listing_sources current_source
-          WHERE current_source.id=json_extract(miss.value,'$.id') AND current_source.active=1
-            AND current_source.last_collected_at=json_extract(miss.value,'$.sourceLastCollectedAt')
-            AND current_source.updated_at=json_extract(miss.value,'$.sourceUpdatedAt')
-            AND current_source.session_id=json_extract(miss.value,'$.sourceSessionId'))`)
-      .bind(sessionId, seenAt, missJson, scopeKey),
-    env.DB.prepare(`UPDATE listing_sources SET missing_count=json_extract(miss.value,'$.missingCount'),
-        active=CASE WHEN json_extract(miss.value,'$.missingCount')>=3 THEN 0 ELSE 1 END,updated_at=?1
-      FROM json_each(?2) miss WHERE listing_sources.id=json_extract(miss.value,'$.id')
-        AND listing_sources.active=1
-        AND listing_sources.last_collected_at=json_extract(miss.value,'$.sourceLastCollectedAt')
-        AND listing_sources.updated_at=json_extract(miss.value,'$.sourceUpdatedAt')
-        AND listing_sources.session_id=json_extract(miss.value,'$.sourceSessionId')
-        AND EXISTS (SELECT 1 FROM collector_source_presence committed
-          WHERE committed.scope_key=?3 AND committed.source='공실박스'
-            AND committed.trade_type=json_extract(miss.value,'$.tradeType')
-            AND committed.source_listing_id=json_extract(miss.value,'$.sourceId')
-            AND committed.last_checked_session_id=?4
-            AND committed.missing_count=json_extract(miss.value,'$.missingCount'))`)
-      .bind(seenAt, missJson, scopeKey, sessionId));
-  await env.DB.batch(changes);
-  result.presenceTracking = true;
-  result.presenceScopeEstablished = !(previous?.results || []).length;
-  if (misses.length) {
-    const committed = await env.DB.prepare(`SELECT COUNT(*) AS marked,
-        SUM(CASE WHEN s.active=0 THEN 1 ELSE 0 END) AS deactivated
-      FROM collector_source_presence p JOIN listing_sources s
-        ON s.source=p.source AND s.source_listing_id=p.source_listing_id
-          AND COALESCE(NULLIF(s.trade_type,''),'lease')=p.trade_type
-      WHERE p.scope_key=?1 AND p.source='공실박스' AND p.last_checked_session_id=?2
-        AND p.missing_count>0 AND s.updated_at=?3
-        AND s.missing_count=p.missing_count`)
-      .bind(scopeKey, sessionId, seenAt).first();
-    result.missingMarked = countValue(committed?.marked);
-    result.deactivated = countValue(committed?.deactivated);
-  }
-  return result;
-}
 
 export function shouldReactivateCompletedListing(status, sourceState, observed, sourceIsNew = false) {
   if (clean(status) !== "계약완료" || !observed) return false;
@@ -2497,7 +2344,8 @@ async function finalizeSessionWork(env, body) {
   const sessionId = await ensureSession(env, body.sessionId, source);
   const observed = [...new Set((Array.isArray(body.observedSourceIds) ? body.observedSourceIds : [])
     .map((id) => sourceIdFor(source, id)).filter(Boolean))];
-  const providerObserved = source === "공실박스" && Number(body.presenceVersion) === 1 &&
+  const providerObserved = ((source === "공실박스" && Number(body.presenceVersion) === 1) ||
+      (source === "당근" && Number(body.validationVersion) >= 3)) &&
       Array.isArray(body.providerObservedSourceIds)
     ? [...new Set(body.providerObservedSourceIds.map(id => sourceIdFor(source, id)).filter(Boolean))] : null;
   const providerObservedSet = providerObserved ? new Set(providerObserved) : null;
@@ -2511,7 +2359,7 @@ async function finalizeSessionWork(env, body) {
   if (providerObserved && (observed.some(id => !providerObservedSet.has(id)) ||
       countValue(body.manifestCount) !== observed.length || countValue(body.processedCount) < observed.length)) {
     audit.complete = false;
-    audit.issues.push("공실박스 원본 전체목록·거래별 처리목록 불일치");
+    audit.issues.push("원본 전체목록·거래별 처리목록 불일치");
     audit.blockingIssues.push(audit.issues.at(-1));
   }
   let presenceObserved = observed;
@@ -2542,102 +2390,21 @@ async function finalizeSessionWork(env, body) {
   let missingMarked = 0;
   let deactivated = 0;
   let reactivated = 0;
-  const scope = clean(body.scope);
-  const districtMatch = scope.match(/(동구|중구|서구|유성구|대덕구)/);
-  // An arbitrary Gongsil map selection must never age the entire provider.
-  // Its scope-specific, market-specific baseline is handled below instead.
-  const tracksMissing = source !== "공실박스" && complete && observed.length >= 100 &&
-    /전체|완전수집/.test(`${scope} ${clean(body.note)}`);
-  if (tracksMissing) {
-    const observedSet = new Set(presenceObserved);
-    const rows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.active, s.missing_count,
-        l.address, l.status AS listing_status, l.operating_memo
-      FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
-      WHERE s.source=?1 AND COALESCE(NULLIF(s.trade_type,''),'lease')=?2`)
-      .bind(source, tradeType).all();
-    const changes = [];
-    const reactivatedListings = new Set();
-    const changedAt = nowIso();
-    for (const row of rows?.results || []) {
-      if (observedSet.has(clean(row.source_listing_id))) {
-        if (Number(row.active) === 1 && Number(row.missing_count || 0) === 0) continue;
-        changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
-          last_collected_at=?1, updated_at=?1 WHERE id=?2`).bind(changedAt, row.id));
-        if (shouldReactivateCompletedListing(row.listing_status, row, true) &&
-            clean(row.listing_id) && !reactivatedListings.has(clean(row.listing_id))) {
-          reactivatedListings.add(clean(row.listing_id));
-          reactivated += 1;
-          changes.push(env.DB.prepare(`UPDATE listings SET status='active', operating_memo=?1,
-            version=version+1, last_collected_at=?2, updated_at=?2 WHERE id=?3 AND status='계약완료'`)
-            .bind(removeCompletedListingMemo(row.operating_memo), changedAt, row.listing_id));
-          changes.push(env.DB.prepare(`INSERT INTO listing_history (
-              listing_id, source_id, action, actor_email, before_json, after_json
-            ) VALUES (?1, ?2, 'sourceReappeared', 'collector-presence@js-map.com', ?3, ?4)`)
-            .bind(row.listing_id, row.id, JSON.stringify({ status: "계약완료" }),
-              JSON.stringify({ status: "active", reason: "완전수집에서 미노출 원본 재노출" })));
-        }
-        presenceReset += 1;
-        continue;
-      }
-      if (districtMatch && !clean(row.address).startsWith(districtMatch[1])) continue;
-      if (Number(row.active) !== 1) continue;
-      const nextState = nextCollectorSourceVisibilityState(row, false, true);
-      const nextMissing = nextState.missingCount;
-      changes.push(env.DB.prepare(`UPDATE listing_sources SET missing_count=?1,
-        active=?2, updated_at=?3 WHERE id=?4`)
-        .bind(nextMissing, nextState.active, changedAt, row.id));
-      missingMarked += 1;
-      if (!nextState.active) deactivated += 1;
-    }
-    for (let offset = 0; offset < changes.length; offset += 80) await env.DB.batch(changes.slice(offset, offset + 80));
-  } else if (presenceObserved.length) {
-    const seenAt = nowIso();
-    const reactivatedListings = new Set();
-    const presenceMarkets = source === "공실박스" && Number(body.presenceVersion) === 1
-      ? gongsilPresenceMarkets(body) : [tradeType];
-    for (const presenceMarket of presenceMarkets) {
-      const marketIds = source === "공실박스" ? gongsilOffers.filter(row => row.tradeType === presenceMarket)
-        .map(row => row.sourceId) : presenceObserved;
-      for (let offset = 0; offset < marketIds.length; offset += 75) {
-      const ids = marketIds.slice(offset, offset + 75);
-      const resetRows = await env.DB.prepare(`SELECT s.id, s.listing_id, s.active, s.missing_count,
-          l.status AS listing_status, l.operating_memo
-        FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
-        WHERE s.source=?1 AND s.source_listing_id IN (${ids.map((_, index) => `?${index + 2}`).join(",")})
-          AND COALESCE(NULLIF(s.trade_type,''),'lease')=?${ids.length + 2}
-          AND (s.active=0 OR s.missing_count<>0)`).bind(source, ...ids, presenceMarket).all();
-      const changes = [];
-      for (const row of resetRows?.results || []) {
-        changes.push(env.DB.prepare(`UPDATE listing_sources SET active=1, missing_count=0,
-          last_collected_at=?1, updated_at=?1 WHERE id=?2`).bind(seenAt, row.id));
-        if (shouldReactivateCompletedListing(row.listing_status, row, true) &&
-            clean(row.listing_id) && !reactivatedListings.has(clean(row.listing_id))) {
-          reactivatedListings.add(clean(row.listing_id));
-          reactivated += 1;
-          changes.push(env.DB.prepare(`UPDATE listings SET status='active', operating_memo=?1,
-            version=version+1, last_collected_at=?2, updated_at=?2 WHERE id=?3 AND status='계약완료'`)
-            .bind(removeCompletedListingMemo(row.operating_memo), seenAt, row.listing_id));
-          changes.push(env.DB.prepare(`INSERT INTO listing_history (
-              listing_id, source_id, action, actor_email, before_json, after_json
-            ) VALUES (?1, ?2, 'sourceReappeared', 'collector-presence@js-map.com', ?3, ?4)`)
-            .bind(row.listing_id, row.id, JSON.stringify({ status: "계약완료" }),
-              JSON.stringify({ status: "active", reason: "부분수집에서 미노출 원본 재노출" })));
-        }
-      }
-      for (let changeOffset = 0; changeOffset < changes.length; changeOffset += 80) {
-        await env.DB.batch(changes.slice(changeOffset, changeOffset + 80));
-      }
-      presenceReset += (resetRows?.results || []).length;
-      }
-    }
-  }
-  const scopedPresence = source === "공실박스"
-    ? await trackScopedGongsilPresence(env, body, sessionId, gongsilOffers, complete) : null;
-  if (scopedPresence) {
-    missingMarked = scopedPresence.missingMarked;
-    deactivated = scopedPresence.deactivated;
-    if (scopedPresence.presenceTrackingIssue) audit.issues.push(scopedPresence.presenceTrackingIssue);
-  }
+  const markets = source === "공실박스" && Number(body.presenceVersion) === 1
+    ? gongsilPresenceMarkets(body) : [tradeType];
+  const scopeOffers = source === "공실박스" ? gongsilOffers
+    : presenceObserved.map(sourceId => ({ sourceId, tradeType }));
+  const scopedPresence = await trackAdvertisementPresence(env, {
+    source, body, sessionId, offers: scopeOffers, markets, complete,
+    providerCount: providerObserved ? providerObserved.length : observed.length
+  });
+  presenceReset = scopedPresence.presenceReset;
+  missingMarked = scopedPresence.missingMarked;
+  deactivated = scopedPresence.deactivated;
+  const representatives = await refreshListingRepresentativesFromActiveSources(env, scopedPresence.affectedListingIds);
+  scopedPresence.representativesUpdated = representatives.changedListingIds.length;
+  delete scopedPresence.affectedListingIds;
+  if (scopedPresence.presenceTrackingIssue) audit.issues.push(scopedPresence.presenceTrackingIssue);
   const row = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(row?.totals_json, {});
   totals.observed = observed.length;
@@ -2646,7 +2413,10 @@ async function finalizeSessionWork(env, body) {
   totals.reactivated = Number(totals.reactivated || 0) + reactivated;
   totals.missingMarked = missingMarked;
   totals.deactivated = deactivated;
-  if (scopedPresence) Object.assign(totals, scopedPresence);
+  const reappeared = Number(totals.adsReappeared || 0) + scopedPresence.adsReappeared;
+  Object.assign(totals, scopedPresence, { adsReappeared: reappeared });
+  totals.presenceReported = true;
+  totals.presenceScopeKind = clean(body.presenceScope?.selectionKind);
   totals.note = clean(body.note);
   totals.completeRequested = audit.requested;
   totals.completionValidated = audit.complete;
@@ -2888,6 +2658,7 @@ async function saveDaangnJob(env, job) {
     url: job.url, clusterId: job.clusterId, propertyFilter: job.propertyFilter,
     district: job.district, tradeType: job.tradeType, sessionId: job.sessionId,
     ids: job.ids || [], entries: job.entries || [],
+    providerIds: job.providerIds || [], listPageSignatures: job.listPageSignatures || [],
     detailIds: job.detailIds || [], pendingDetailIds: job.pendingDetailIds || [],
     detailAttempts: job.detailAttempts || {}, terminalFailedIds: job.terminalFailedIds || [],
     cursor: job.cursor || "", hasNextPage: Boolean(job.hasNextPage)
@@ -2895,6 +2666,8 @@ async function saveDaangnJob(env, job) {
   const progress = { ...job };
   delete progress.ids;
   delete progress.entries;
+  delete progress.providerIds;
+  delete progress.listPageSignatures;
   delete progress.detailIds;
   delete progress.pendingDetailIds;
   delete progress.detailAttempts;
@@ -2948,6 +2721,8 @@ function publicDaangnJob(job) {
   const output = { ...job };
   delete output.ids;
   delete output.entries;
+  delete output.providerIds;
+  delete output.listPageSignatures;
   delete output.detailIds;
   delete output.pendingDetailIds;
   delete output.detailAttempts;
@@ -2965,7 +2740,9 @@ async function startDaangnJob(env, body) {
   const sessionId = await ensureSession(env, `DAANGN-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, "당근");
   const job = {
     ...parsed, _jobId: daangnJobId(body), collectorVersion: clean(body.collectorVersion).slice(0, 30),
-    sessionId, ids: [], entries: [], detailIds: [], pendingDetailIds: [],
+    sessionId, ids: [], entries: [], providerIds: [], listPageSignatures: [],
+    expectedCountKnown: false, providerExpectedCount: null, listTerminalReached: false, listCapturedAt: "",
+    detailIds: [], pendingDetailIds: [],
     detailAttempts: {}, terminalFailedIds: [], detailErrors: [], cursor: "", hasNextPage: true,
     phase: "list", status: "running", page: 0, found: 0, total: 0, processed: 0, remaining: 0,
     created: 0, merged: 0, updated: 0, review: 0, detailedDuplicates: 0,
@@ -3015,26 +2792,110 @@ async function mapWithConcurrency(values, concurrency, mapper) {
   return output;
 }
 
+export function observeDaangnListPage(job, connection) {
+  if (!connection || !Array.isArray(connection.edges) || !connection.pageInfo ||
+      typeof connection.pageInfo.hasNextPage !== "boolean") {
+    throw new Error("당근 클러스터 목록·페이지 응답 형식이 변경되었습니다.");
+  }
+  const hasNext = connection.pageInfo.hasNextPage;
+  const nextCursor = clean(connection.pageInfo.endCursor);
+  if (hasNext && (!nextCursor || nextCursor === clean(job.cursor))) {
+    throw new Error("당근 다음 페이지가 있으나 이어읽기 정보가 없거나 반복되었습니다.");
+  }
+  if (!connection.edges.length && hasNext) throw new Error("당근 마지막 페이지 확인 전에 빈 목록을 받았습니다.");
+  const articles = connection.edges.map(edge => edge?.node?.article);
+  if (articles.some(article => !article || !clean(article.originalId))) {
+    throw new Error("당근 목록에 원본 광고번호가 없는 항목이 있어 전체목록 판정을 중단했습니다.");
+  }
+  const pageIds = [...new Set(articles.map(article => clean(article.originalId)))];
+  const signature = pageIds.length ? snapshotKey(pageIds.slice().sort()) : "";
+  const signatures = Array.isArray(job.listPageSignatures) ? job.listPageSignatures : [];
+  if (signature && signatures.includes(signature)) throw new Error("당근 목록 페이지가 반복되어 전체목록 확인을 중단했습니다.");
+  const legacy = !Array.isArray(job.providerIds) && Number(job.page || 0) > 0;
+  const previous = new Set(Array.isArray(job.providerIds) ? job.providerIds : job.ids || []);
+  const fresh = pageIds.filter(id => !previous.has(id));
+  if (pageIds.length && !fresh.length) throw new Error("당근 목록 페이지에서 새 원본번호를 확인하지 못했습니다.");
+  const rawTotal = connection.totalCount ?? connection.pageInfo.totalCount;
+  const total = rawTotal !== null && rawTotal !== undefined && rawTotal !== "" && typeof rawTotal !== "boolean"
+    ? Number(rawTotal) : null;
+  const totalKnown = Number.isInteger(total) && total >= 0;
+  if (rawTotal !== null && rawTotal !== undefined && !totalKnown) throw new Error("당근 원본 전체 건수 형식이 올바르지 않습니다.");
+  if (job.expectedCountKnown && totalKnown && Number(job.providerExpectedCount) !== total) {
+    throw new Error("당근 목록 조회 중 원본 전체 건수가 변경되었습니다. 같은 범위를 다시 수집해 주세요.");
+  }
+  const providerTotal = job.expectedCountKnown ? Number(job.providerExpectedCount) : totalKnown ? total : null;
+  pageIds.forEach(id => previous.add(id));
+  if (providerTotal !== null && (previous.size > providerTotal || !hasNext && previous.size !== providerTotal)) {
+    throw new Error("당근 전체목록 원본 예상 건수와 고유 광고번호 수가 일치하지 않습니다.");
+  }
+  if (legacy) job.listProofIssueCodes = [...new Set([...(job.listProofIssueCodes || []), "legacy-list-checkpoint"])];
+  job.providerIds = [...previous];
+  job.listPageSignatures = signature ? signatures.concat(signature) : signatures;
+  job.expectedCountKnown = providerTotal !== null;
+  job.providerExpectedCount = providerTotal;
+  job.page = Number(job.page || 0) + 1;
+  job.cursor = nextCursor;
+  job.hasNextPage = hasNext;
+  job.listTerminalReached = !hasNext;
+  if (!hasNext) job.listCapturedAt = nowIso();
+  const added = new Set(fresh);
+  const emitted = new Set();
+  return articles.filter(article => {
+    const id = clean(article.originalId);
+    if (!added.has(id) || emitted.has(id)) return false;
+    emitted.add(id);
+    return true;
+  });
+}
+
+export function daangnPresenceProof(job) {
+  const known = job.expectedCountKnown === true;
+  const providerCount = Array.isArray(job.providerIds) ? job.providerIds.length : 0;
+  const terminal = job.listTerminalReached === true && job.hasNextPage === false;
+  const scope = {version: 1, selectionKind: "provider-cluster", regionCode: clean(job.clusterId), filters: job.propertyFilter};
+  const issues = [...(Array.isArray(job.listProofIssueCodes) ? job.listProofIssueCodes : [])];
+  if (!terminal) issues.push("terminal-page-unverified");
+  if (!Array.isArray(job.providerIds)) issues.push("provider-ids-unverified");
+  if (known && Number(job.providerExpectedCount) !== providerCount) issues.push("provider-total-mismatch");
+  if (!Number.isFinite(Date.parse(job.listCapturedAt))) issues.push("capture-time-missing");
+  const scopeVerified = Boolean(scope.regionCode && scope.filters && typeof scope.filters === "object");
+  if (!scopeVerified) issues.push("scope-unverified");
+  return {presenceScope: scope, completionProof: {
+    version: 1, expectedCountKnown: known, providerExpectedCount: known ? Number(job.providerExpectedCount) : null,
+    observedUniqueCount: providerCount, terminalReached: terminal, listComplete: !issues.length,
+    scopeVerified, emptyConfirmed: terminal && Array.isArray(job.providerIds) && providerCount === 0 && !issues.length,
+    pagesFetched: Number(job.page || 0), capturedAt: job.listCapturedAt || null, issueCodes: [...new Set(issues)],
+    listExhausted: terminal, expected: Number(job.found || 0), observed: (job.ids || []).length,
+    processed: Number(job.skippedUnchanged || 0) + Number(job.processed || 0)
+  }};
+}
+
 async function finalizeDaangnJob(env, job) {
+  const proof = daangnPresenceProof(job);
   const result = await finalizeSession(env, {
     source: "당근", sessionId: job.sessionId,
     tradeType: job.tradeType,
-    scope: job.district ? `대전 ${job.district} 완전수집` : "당근 선택클러스터",
-    complete: Boolean(job.district), observedSourceIds: job.ids || [],
-    validationVersion: 2, collectorVersion: job.collectorVersion,
+    scope: job.district ? `당근 ${job.district} 선택클러스터 전체목록` : "당근 선택클러스터 전체목록",
+    complete: proof.completionProof.listComplete, observedSourceIds: job.ids || [],
+    providerObservedSourceIds: job.providerIds || [],
+    providerExpectedCount: job.providerExpectedCount,
+    presenceScope: proof.presenceScope, completionProof: proof.completionProof,
+    validationVersion: 3, collectorVersion: job.collectorVersion,
     expectedCount: Number(job.found || 0), manifestCount: (job.ids || []).length,
     processedCount: Number(job.skippedUnchanged || 0) + Number(job.processed || 0),
     failed: Number(job.failed || 0), addressMissing: Number(job.addressMissing || 0),
     truncated: Boolean(job.hasNextPage),
-    note: job.district ? "구 완전수집 완료" : "선택클러스터 수집 완료"
+    note: "선택클러스터 전체목록 확인"
   });
   job.completeCollection = Boolean(result.complete);
   job.completionIssues = Array.isArray(result.completionIssues) ? result.completionIssues : [];
-  job.completionProof = {
-    version: 1, listExhausted: job.hasNextPage === false,
-    expected: Number(job.found || 0), observed: (job.ids || []).length,
-    processed: Number(job.skippedUnchanged || 0) + Number(job.processed || 0)
-  };
+  for (const key of ["missingMarked", "deactivated", "adsReappeared"]) job[key] = countValue(result[key]);
+  job.presenceTracking = result.presenceTracking === true;
+  job.presenceScopeEstablished = result.presenceScopeEstablished === true;
+  job.presenceTrackingIssue = clean(result.presenceTrackingIssue).slice(0, 500);
+  job.presenceReported = Object.prototype.hasOwnProperty.call(result, "presenceTracking");
+  job.completionProof = proof.completionProof;
+  job.presenceScope = proof.presenceScope;
   job.phase = "complete";
   job.status = "complete";
   job.message = result.complete
@@ -3045,6 +2906,10 @@ async function finalizeDaangnJob(env, job) {
   if (result.complete && Number(job.addressMissing || 0) > 0) {
     job.message = `전체 ${job.found}개 목록 확인 완료 · 정확한 지번 미제공 ${job.addressMissing}건 지도 등록 보류`;
   }
+  const presenceNotice = job.presenceTrackingIssue ? "종료판정보류" : job.presenceScopeEstablished
+    ? "비교기준저장" : job.presenceTracking ? `원본광고 미노출 ${job.deactivated}건` : "";
+  if (presenceNotice) job.message += ` · ${presenceNotice}`;
+  if (job.adsReappeared) job.message += ` · 원본광고 재등장 ${job.adsReappeared}건`;
   return result;
 }
 
@@ -3064,9 +2929,8 @@ async function runDaangnChunk(env, body = {}) {
         input: { clusterId: job.clusterId, propertyFilter: job.propertyFilter }
       });
       const connection = payload?.data?.articleByClusterId;
-      if (!connection) throw new Error("당근 클러스터 목록 응답 형식이 변경되었습니다.");
-      for (const edge of connection.edges || []) {
-        const article = edge?.node?.article;
+      const pageArticles = observeDaangnListPage(job, connection);
+      for (const article of pageArticles) {
         const id = clean(article?.originalId);
         if (!id || seen.has(id)) continue;
         seen.add(id);
@@ -3078,16 +2942,16 @@ async function runDaangnChunk(env, body = {}) {
         job.ids.push(id);
         job.entries.push(entry);
       }
-      job.page += 1;
-      job.cursor = clean(connection.pageInfo?.endCursor);
-      job.hasNextPage = Boolean(connection.pageInfo?.hasNextPage && job.cursor);
     }
     job.found = job.ids.length;
     job.remaining = job.ids.length;
     if (!job.hasNextPage) {
+      const proof = daangnPresenceProof(job);
       const classification = await classifyManifest(env, {
         source: "당근", sessionId: job.sessionId, scope: job.district ? `대전 ${job.district} 완전수집` : "당근 선택클러스터",
         collectorVersion: job.collectorVersion,
+        validationVersion: 3,
+        presenceScope: proof.presenceScope, completionProof: proof.completionProof,
         entries: job.entries
       });
       const needed = new Set(classification.needsDetail || []);
@@ -3151,7 +3015,8 @@ async function runDaangnChunk(env, body = {}) {
     job.pendingDetailIds = pending;
     const writeStarted = Date.now();
     const result = records.length
-      ? await ingestRecords(env, "당근", records, { sessionId: job.sessionId })
+      ? await ingestRecords(env, "당근", records, { sessionId: job.sessionId, validationVersion: 3,
+        ...daangnPresenceProof(job) })
       : { created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0, errors: [] };
     job.lastWriteMs = Date.now() - writeStarted;
     job.created += Number(result.created || 0);
@@ -4051,19 +3916,11 @@ async function repairExactReviews(env, user, options = {}) {
     }, source: "D1" };
 }
 
-export async function runScheduledReviewRepair(env) {
-  const systemUser = {
-    email: "system-review-repair@js-map.com",
-    role: "owner"
-  };
-  const exactRepair = await repairExactReviews(env, systemUser, { includeRemaining: false, limit: 50 });
-  if (Number(exactRepair?.scanned || 0) > 0) return exactRepair;
-  const gongsilRepair = await repairExactReviews(env, systemUser, {
-    includeRemaining: false,
-    source: "공실박스"
-  });
-  if (Number(gongsilRepair?.scanned || 0) > 0) return gongsilRepair;
-  return mergeSingleCandidateReviews(env, systemUser, { limit: 20, refreshCustomerMatches: false });
+export async function runScheduledReviewRepair() {
+  // Matching ambiguity no longer blocks publication. Historic unresolved rows
+  // await a fresh provider observation; do not force-merge them in the cron.
+  return { ok: true, policy: "source-advertisement-v1", scanned: 0,
+    merged: 0, created: 0, duplicate: 0, skipped: true };
 }
 
 export async function handleCollectorAdminPost(env, user, body) {

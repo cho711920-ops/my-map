@@ -87,16 +87,6 @@
     return url;
   }
 
-  function transactionDoneMemo(value) {
-    var memo = text(value);
-    if (/\[거래완료\s+\d{4}-\d{2}-\d{2}\]/.test(memo)) return memo;
-    var today = new Date();
-    var marker = "[거래완료 " + today.getFullYear() + "-" +
-      String(today.getMonth() + 1).padStart(2, "0") + "-" +
-      String(today.getDate()).padStart(2, "0") + "]";
-    return memo ? memo + " / " + marker : marker;
-  }
-
   function isMobileCustomerAppV1() {
     return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
   }
@@ -1786,13 +1776,16 @@
 
   function transactionCandidateCard(row) {
     var propertyId = text(row.propertyId);
-    var encodedId = encodeURIComponent(propertyId);
-    var expanded = state.transactionExpandedId === propertyId;
-    var completing = state.transactionCompletingId === propertyId;
-    var price = '보 ' + number(row.deposit).toLocaleString("ko-KR") +
-      ' / 월 ' + number(row.rent).toLocaleString("ko-KR");
+    var candidateId = text(row.originalId) || propertyId;
+    var encodedId = encodeURIComponent(candidateId).replace(/'/g, '%27');
+    var expanded = state.transactionExpandedId === candidateId;
+    var price = row.tradeType === "sale" ? '매매 ' + number(row.salePrice).toLocaleString("ko-KR") + '만원'
+      : '보 ' + number(row.deposit).toLocaleString("ko-KR") + ' / 월 ' + number(row.rent).toLocaleString("ko-KR");
     var imageUrl = transactionImageUrl(row.thumbnail);
-    var sourceText = (row.sources || []).join(" · ") || row.mainSource || "원본";
+    var sourceText = row.source || (row.sources || []).join(" · ") || row.mainSource || "원본";
+    var sourceId = text(row.sourceId || row.sourceListingId);
+    var room = typeof window.formatListingRoomForCardV653 === "function"
+      ? window.formatListingRoomForCardV653(row.room, row.floor) : row.room;
     var detail = expanded
       ? '<div class="operations-transaction-detail-v2">' +
           '<div class="operations-transaction-photo-v2 ' + (imageUrl ? 'has-photo' : 'no-photo') + '">' +
@@ -1803,26 +1796,26 @@
           '</div>' +
           '<div class="operations-transaction-info-v2">' +
             '<strong>' + escape(row.title || row.type || "매물") + '</strong>' +
-            '<span>' + escape([row.address, row.room].filter(Boolean).join(" ")) + '</span>' +
+            '<span>' + escape([row.address, room].filter(Boolean).join(" ")) + '</span>' +
             '<div class="operations-transaction-terms-v2"><b>' + escape(price) + '</b>' +
               '<span>관리비 ' + number(row.fee).toLocaleString("ko-KR") + '</span>' +
               '<span>권리금 ' + number(row.premium).toLocaleString("ko-KR") + '</span>' +
               '<span>평 ' + number(row.area).toLocaleString("ko-KR") + '</span></div>' +
-            '<small>출처 ' + escape(sourceText) + ' · 원본 ' + number(row.sourceCount) +
-              '개 · 미노출 ' + number(row.missingCount) + '회</small>' +
+            '<small>출처 ' + escape(sourceText) + ' · 광고번호 ' + escape(sourceId || "미확인") +
+              ' · 미노출 ' + number(row.missingCount) + '회 · 남은 활성 광고 ' + number(row.activeSourceCount) + '개</small>' +
+            '<p>원본 광고 미노출 · 거래완료 후보입니다. 실제 계약완료로 확정한 기록은 아닙니다.</p>' +
             (row.memo ? '<p>' + escape(row.memo) + '</p>' : '<p class="empty">등록된 메모가 없습니다.</p>') +
-            '<button type="button" class="operations-transaction-complete-v2" ' +
-              (completing ? 'disabled' : '') + ' onclick="completeTransactionCandidateV1(\'' + encodedId + '\')">' +
-              (completing ? '거래완료 저장 중…' : '거래완료 처리') + '</button>' +
+            (/^https?:\/\//i.test(text(row.sourceUrl))
+              ? '<button type="button" class="operations-transaction-complete-v2" onclick="openTransactionCandidateSourceV1(\'' + encodedId + '\')">원본 광고 확인 ↗</button>' : '') +
           '</div>' +
         '</div>'
       : '';
     return '<article class="' + (expanded ? 'expanded' : '') + '">' +
       '<div class="operations-transaction-summary-v2">' +
         '<div class="operations-transaction-summary-text-v2"><strong>' + escape(row.title || row.type || "매물") + '</strong>' +
-          '<span>' + escape([row.address, row.room].filter(Boolean).join(" ")) + '</span>' +
+          '<span>' + escape([row.address, room].filter(Boolean).join(" ")) + '</span>' +
           '<small>' + escape(price) + (row.area ? ' · 평 ' + escape(row.area) : '') +
-          ' · 원본 ' + number(row.sourceCount) + '개 · 미노출 ' + number(row.missingCount) + '회</small></div>' +
+          ' · ' + escape(sourceText) + ' 광고번호 ' + escape(sourceId || "미확인") + '</small></div>' +
         '<button type="button" onclick="openTransactionCandidatePropertyV1(\'' + encodedId + '\')">' +
           (expanded ? '접기' : '매물 확인') + '</button>' +
       '</div>' + detail + '</article>';
@@ -1837,7 +1830,9 @@
     section.id = "operationsTransactionCandidatesV1";
     section.className = "operations-transaction-candidates-v1";
     var rows = state.transactionCandidates || [];
-    section.innerHTML = '<header><div><strong>거래확인 후보</strong><span>모든 원본이 완전수집에서 3회 연속 보이지 않은 매물입니다. 실제 계약 여부를 확인한 뒤 직접 계약완료 처리하세요.</span></div>' +
+    var total = Number(state.transactionCandidateTotal || rows.length);
+    section.innerHTML = '<header><div><strong>원본 광고 미노출 내역</strong><span>동일 범위 전체수집에서 보이지 않은 광고번호별 내역입니다. 다른 활성 광고와 실제 계약완료 상태는 별도로 유지합니다. 총 ' +
+      number(total).toLocaleString("ko-KR") + '건' + (total > rows.length ? ' 중 최근 ' + rows.length + '건 표시' : '') + '</span></div>' +
       '<button type="button" onclick="closeTransactionCandidatesV1()">닫기</button></header>' +
       (state.transactionCandidatesLoading
         ? '<p class="operations-transaction-empty-v1">후보 매물을 불러오는 중입니다.</p>'
@@ -1854,6 +1849,7 @@
     renderTransactionCandidates(true);
     apiGet("transactionCandidates").then(function(result) {
       state.transactionCandidates = result.candidates || [];
+      state.transactionCandidateTotal = Number(result.count || 0);
       state.transactionCandidatesLoading = false;
       renderTransactionCandidates(false);
     }).catch(function(error) {
@@ -1873,11 +1869,12 @@
       return apiGet("transactionCandidates");
     }).then(function(result) {
       state.transactionCandidates = result.candidates || [];
+      state.transactionCandidateTotal = Number(result.count || 0);
       state.transactionCandidatesLoading = false;
-      var found = state.transactionCandidates.some(function(candidate) {
+      var found = state.transactionCandidates.filter(function(candidate) {
         return text(candidate.propertyId) === propertyId;
-      });
-      state.transactionExpandedId = found ? propertyId : "";
+      })[0];
+      state.transactionExpandedId = found ? text(found.originalId || found.propertyId) : "";
       renderTransactionCandidates(false);
       if (!found) setMessage("이 매물은 더 이상 거래확인 후보가 아닙니다.", "success");
       requestAnimationFrame(function() {
@@ -1908,37 +1905,20 @@
     });
   };
 
-  window.completeTransactionCandidateV1 = function(encodedPropertyId) {
-    var propertyId = decodeURIComponent(encodedPropertyId || "");
+  window.openTransactionCandidateSourceV1 = function(encodedOriginalId) {
+    var originalId = decodeURIComponent(encodedOriginalId || "");
     var row = (state.transactionCandidates || []).filter(function(candidate) {
-      return text(candidate.propertyId) === propertyId;
+      return text(candidate.originalId || candidate.propertyId) === originalId;
     })[0];
-    if (!row || state.transactionCompletingId) return;
-    if (!window.confirm("이 매물을 거래완료로 처리할까요?\n광고가 실제로 다시 등록되면 자동으로 활성화됩니다.")) return;
-    state.transactionCompletingId = propertyId;
-    renderTransactionCandidates(false);
-    apiPost("toggleDone", {
-      propertyId: propertyId,
-      state: "계약완료",
-      memo: transactionDoneMemo(row.memo)
-    }).then(function() {
-      state.transactionCandidates = (state.transactionCandidates || []).filter(function(candidate) {
-        return text(candidate.propertyId) !== propertyId;
-      });
-      state.transactionExpandedId = "";
-      state.transactionCompletingId = "";
-      if (state.dashboard && number(state.dashboard.transactionCheckCandidates) > 0) {
-        state.dashboard.transactionCheckCandidates = number(state.dashboard.transactionCheckCandidates) - 1;
-        renderDashboard();
-      }
-      setMessage("거래완료로 저장했습니다.", "success");
-      renderTransactionCandidates(false);
-      if (typeof window.loadSheet === "function") setTimeout(function() { window.loadSheet(true); }, 250);
-    }).catch(function(error) {
-      state.transactionCompletingId = "";
-      setMessage(error.message || "거래완료 저장에 실패했습니다.", "error");
-      renderTransactionCandidates(false);
-    });
+    if (!row || !/^https?:\/\//i.test(text(row.sourceUrl))) return;
+    var popup = window.open(row.sourceUrl, "_blank", "noopener,noreferrer");
+    if (popup) popup.opener = null;
+  };
+
+  // Compatibility for an old open panel: a single ended ad must never complete
+  // a master that may still have nine live sibling advertisements.
+  window.completeTransactionCandidateV1 = function() {
+    setMessage("광고 미노출은 실제 계약완료와 별도입니다. 계약완료는 매물 상세에서 직접 확인 후 처리해 주세요.", "info");
   };
 
   function refreshCustomerAlertWhenChanged(forceDashboard) {

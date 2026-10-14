@@ -265,7 +265,8 @@ test("detail success while the first retry is pending can recover the original w
 });
 
 test("missing image URLs still render true photo absence; photo cards wire recovery without eager proxying", () => {
-  const { api } = runtime();
+  const { api, window } = runtime();
+  window.hideDone = false;
   const empty = api.cardParts({ propertyId: "EMPTY" }).thumbnail;
   assert.match(empty, /no-photo/);
   assert.match(empty, /<span>사진 없음<\/span>/);

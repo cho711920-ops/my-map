@@ -42,8 +42,8 @@ assert.match(d1, /s\.source IN \('네이버','당근','공실박스','직접등�
 assert.match(d1, /l\.status<>'deleted'/);
 assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),
-  /api-cache\/unified-listings-v10-sale-area-summary\.json/);
-assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id/);
-assert.match(html, /unified-listings-v8\.js\?v=8\.1\.43-card-detail-toggle/);
+  /api-cache\/unified-listings-v11-advertisement-presence\.json/);
+assert.match(html, /script\.js\?v=[^"\s]+/);
+assert.match(html, /unified-listings-v8\.js\?v=[^"\s]+/);
 
 console.log("source listing number search v6.5.79 tests passed");

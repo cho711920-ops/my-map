@@ -122,12 +122,12 @@ test("favorite list values and deletion tombstones reject a stale device atomica
   }
 });
 
-test("an operations snapshot older than five minutes is recalculated before use", async () => {
+function operationsDatabase() {
   const { sqlite, DB } = database();
-  try {
-    sqlite.exec(`
+  sqlite.exec(`
       CREATE TABLE listings (id TEXT PRIMARY KEY, status TEXT);
       CREATE TABLE listing_sources (id TEXT PRIMARY KEY, listing_id TEXT, active INTEGER, missing_count INTEGER);
+      CREATE TABLE listing_data_quality_holds (listing_id TEXT, state TEXT, blocks_publication INTEGER);
       CREATE TABLE collector_raw (id TEXT PRIMARY KEY, processing_state TEXT);
       CREATE TABLE customers (id TEXT PRIMARY KEY, status TEXT);
       CREATE TABLE customer_matches (id TEXT PRIMARY KEY, customer_id TEXT, state TEXT, created_at TEXT);
@@ -137,9 +137,17 @@ test("an operations snapshot older than five minutes is recalculated before use"
         snapshot_key TEXT PRIMARY KEY, payload_json TEXT, calculated_at TEXT, updated_at TEXT
       );
       INSERT INTO listings(id,status) VALUES ('P-1','active');
+      INSERT INTO listing_sources(id,listing_id,active,missing_count) VALUES
+        ('active-ad','P-1',1,0),('ended-ad-1','P-1',0,1),('ended-ad-2','P-1',0,1);
       INSERT INTO operations_snapshots(snapshot_key,payload_json,calculated_at,updated_at)
       VALUES ('main','{"activeMaster":999}','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');
-    `);
+  `);
+  return { sqlite, DB };
+}
+
+test("an operations snapshot older than five minutes is recalculated before use", async () => {
+  const { sqlite, DB } = operationsDatabase();
+  try {
     const result = await handleD1GetAction({ DB }, { email: "reader@example.test", role: "member" }, {
       action: "operationsDashboard"
     });
@@ -149,7 +157,44 @@ test("an operations snapshot older than five minutes is recalculated before use"
       "SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main'"
     ).get().payload_json);
     assert.equal(saved.activeMaster, 1);
+    assert.equal(saved.advertisementPolicyVersion, 1);
   } finally {
     sqlite.close();
   }
+});
+
+for (const version of [undefined, 0, 2]) {
+  test(`a fresh operations snapshot with policy ${version ?? 'missing'} is recalculated using advertisement counts`, async () => {
+    const { sqlite, DB } = operationsDatabase();
+    try {
+      const payload = { activeMaster: 999, transactionCheckCandidates: 1 };
+      if (version !== undefined) payload.advertisementPolicyVersion = version;
+      const now = new Date().toISOString();
+      sqlite.prepare("UPDATE operations_snapshots SET payload_json=?,calculated_at=?,updated_at=? WHERE snapshot_key='main'")
+        .run(JSON.stringify(payload), now, now);
+      const result = await handleD1GetAction({ DB }, { email: 'reader@example.test', role: 'member' }, { action: 'operationsDashboard' });
+      assert.equal(result.advertisementPolicyVersion, 1);
+      assert.equal(result.activeMaster, 1); assert.equal(result.transactionCheckCandidates, 2);
+      const saved = JSON.parse(sqlite.prepare("SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main'").get().payload_json);
+      assert.equal(saved.advertisementPolicyVersion, 1); assert.equal(saved.transactionCheckCandidates, 2);
+    } finally { sqlite.close(); }
+  });
+}
+
+test('a fresh operations snapshot with the current policy remains on the fast cached path', async () => {
+  const { sqlite, DB } = operationsDatabase();
+  try {
+    const now = new Date().toISOString();
+    const payload = JSON.stringify({ ok: true, advertisementPolicyVersion: 1, activeMaster: 123, transactionCheckCandidates: 456 });
+    sqlite.prepare("UPDATE operations_snapshots SET payload_json=?,calculated_at=?,updated_at=? WHERE snapshot_key='main'")
+      .run(payload, now, now);
+    const cachedDb = { prepare(sql) {
+      assert.match(sql, /SELECT payload_json, calculated_at\s+FROM operations_snapshots/);
+      return DB.prepare(sql);
+    } };
+    const result = await handleD1GetAction({ DB: cachedDb }, { email: 'reader@example.test', role: 'member' }, { action: 'operationsDashboard' });
+    assert.equal(result.activeMaster, 123); assert.equal(result.transactionCheckCandidates, 456);
+    assert.equal(result.advertisementPolicyVersion, 1); assert.equal(result.source, 'D1-SNAPSHOT');
+    assert.equal(sqlite.prepare("SELECT payload_json FROM operations_snapshots WHERE snapshot_key='main'").get().payload_json, payload);
+  } finally { sqlite.close(); }
 });

@@ -477,7 +477,7 @@ function itemKey(item) {
 
 
 function isDone(item) {
-  return item.state === "계약완료";
+  return item.state === "계약완료" || item.sourceAllUnavailableV1 === true;
 }
 
 
@@ -1258,15 +1258,15 @@ function getFilteredItems(options) {
       (selectedFloorQuick === "unknown" && itemFloor === null);
 
     if (hasFloorFilter && !saleMode) {
-      // 층수 범위를 사용하면 층수 미확인 매물은 제외
+      // 층수 미확인은 함께 표시하되 가격·출처·찜 등 다른 조건은 그대로 적용합니다.
       matchFloor =
-        itemFloor !== null &&
-        (minFloor === null || itemFloor >= minFloor) &&
-        (maxFloor === null || itemFloor <= maxFloor);
+        itemFloor === null || (
+          (minFloor === null || itemFloor >= minFloor) &&
+          (maxFloor === null || itemFloor <= maxFloor));
     }
 
     var matchFavorite = !favoriteOnly || isFavorite(item);
-    var matchDone = doneOnly ? isDone(item) : (!hideDone || !isDone(item));
+    var matchDone = doneOnly ? (isDone(item) || Number(item.unifiedEndedOriginalCountV1 || 0) > 0) : (!hideDone || !isDone(item));
     var matchGongsil = !gongsilOnly || isGongsilBoxItem(item);
     var matchTodayNew = !newListingDays || (newListingDays === 1 && window.JSTodayListingsV1
       ? window.JSTodayListingsV1.matches(item) : isRegistrationWithinDays(item.regDate, newListingDays));
@@ -4647,7 +4647,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   div.className =
     "item" +
     (isLinkedListingSelectedV845(item) ? " selected" : "") +
-    (isDone(item) ? " done" : "") +
+    (item.state === "계약완료" ? " done" : "") +
     (printSelected ? " print-selected" : "") +
     (memoOpen ? " memo-open" : "") +
     (customerMatchStatusV719 === "신규" ? " customer-match-new" : "") +
@@ -4670,7 +4670,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
       escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.folderId))) + ',' +
       escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.ref))) + ')">찜 제거</button>';
   }
-  var doneLabel = isDone(item)
+  var doneLabel = item.state === "계약완료"
     ? '<button type="button" class="done-badge done-restore-button-v1" ' +
         'title="계약가능으로 복구" aria-label="계약완료 상태를 계약가능으로 복구" ' +
         'onclick="event.stopPropagation(); restoreCompletedListing(\'' + encodedKey + '\')">계약완료 ↩</button>'
@@ -4684,7 +4684,9 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     ? window.JSListingTradeV1.buildingFloorLabel(item) : "";
   var landUseLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.landUseLabel
     ? window.JSListingTradeV1.landUseLabel(item) : "";
-  var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(item.room);
+  var roomDisplayV1 = item.sourceFloorVerifiedV1 ? item.advertisedRoomV1 : item.room;
+  var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(roomDisplayV1, item.floor);
+  if (item.sourceFloorVerifiedV1 && !roomDisplayV1 && getItemFloorNumber(item) === null) roomLabelV1 = "층수 미확인";
   var buildingSaleV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isBuildingSale && window.JSListingTradeV1.isBuildingSale(item);
   var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleAreaInfoHtml
     ? window.JSListingTradeV1.buildingSaleAreaInfoHtml(item) : "";
@@ -5205,7 +5207,7 @@ function restoreCompletedListing(encodedKey) {
   var key = decodeURIComponent(encodedKey || "");
   var item = getItemByKeyForStatus(key);
 
-  if (!item || !isDone(item)) {
+  if (!item || item.state !== "계약완료") {
     alert("복구할 계약완료 매물을 찾지 못했습니다.");
     return;
   }
@@ -5903,6 +5905,9 @@ function saveDoneViewModeV656() {
 
 function refreshDoneViewFilterV656() {
   saveDoneViewModeV656();
+  if (window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.refreshOriginalVisibility) {
+    window.JSUnifiedListingsV8.refreshOriginalVisibility(allItems || []);
+  }
   updateHideDoneMenuUI();
   selectedGroupKey = null;
   clearLinkedListingSelectionV845();
@@ -5981,11 +5986,39 @@ setTimeout(function() {
    B1/B01/B101/지1/지하1/-1 => -1
    B201 => -2, 101호 => 1, 502호 => 5
    ========================================================= */
+function parseExplicitFloorLabelV1(value) {
+  var text = String(value == null ? "" : value).toUpperCase().replace(/\s+/g, "");
+  var korean = text.match(/(?:지하|(?:^|[^가-힣])지)0*(\d{1,2})(?:층|F)?/);
+  if (korean) return -Math.max(1, Number(korean[1]) || 1);
+  var negative = text.match(/(?:^|[^0-9])-(\d{1,2})(?:층|F)/);
+  if (negative) return -Math.max(1, Number(negative[1]) || 1);
+  var basement = text.match(/(?:^|[^A-Z0-9])B0*(\d{1,2})(?:층|F)/);
+  if (basement) return -Math.max(1, Number(basement[1]) || 1);
+  var aboveGround = text.match(/(?:^|[^0-9A-Z])(\d{1,2})(?:층|F)/);
+  return aboveGround ? Number(aboveGround[1]) || null : null;
+}
+
+function listingFloorLabelV1(floor) {
+  return floor < 0 ? "지하" + Math.abs(floor) + "층" : floor + "층";
+}
+
+function literalListingRoomLabelV1(value) {
+  var text = String(value == null ? "" : value).trim();
+  if (!text) return "";
+  return /호(?:실)?$/i.test(text) ? text.replace(/호실$/i, "호") : text + "호";
+}
+
 function parseFloorNotationV612(value, allowRoomInference) {
   var text = String(value == null ? "" : value).trim();
   if (!text) return null;
 
   var compact = text.toUpperCase().replace(/\s+/g, "");
+
+  var labeledFloor = parseExplicitFloorLabelV1(compact);
+  if (labeledFloor !== null) return labeledFloor;
+
+  // A literal unit label is not an independently confirmed basement floor.
+  if (allowRoomInference !== false && /^B0\d{1,3}호(?:실)?$/.test(compact)) return null;
 
   /* 공급사 표기: 해당층/총층 (예: 1/1, 6/7, -1/4) */
   var currentAndTotal = compact.match(/^(-?\d+(?:\.\d+)?)[/／]\d+(?:\.\d+)?$/);
@@ -6036,9 +6069,23 @@ function parseFloorNotationV612(value, allowRoomInference) {
 }
 
 /* 카드에는 해당층만 표시하고 공급사의 총층 표기는 숨깁니다. */
-function formatListingRoomForCardV653(value) {
+function formatListingRoomForCardV653(value, knownFloor) {
   var text = String(value == null ? "" : value).trim();
-  if (!text) return "";
+  var authoritativeFloor = parseFloorNotationV612(knownFloor, false);
+  var hasKnownFloor = authoritativeFloor !== null && authoritativeFloor !== 0;
+  if (!text) return hasKnownFloor ? listingFloorLabelV1(authoritativeFloor) : "";
+  var composite = text.match(/^((?:지하|지)\s*\d{1,2}\s*층?|(?:-?\d{1,2}|B\d{1,2})\s*(?:층|F))\s*(B?\d{1,4}(?:\s*[,/~·-]\s*B?\d{1,4})*(?:호(?:실)?)?)$/i);
+  if (composite) {
+    var currentFloor = hasKnownFloor ? authoritativeFloor : parseFloorNotationV612(composite[1], false);
+    if (currentFloor !== null) return listingFloorLabelV1(currentFloor) + " " + literalListingRoomLabelV1(composite[2]);
+  }
+  var explicitUnit = /^B0\d{1,3}호(?:실)?$/i.test(text.replace(/\s+/g, ""));
+  var unitWithKnownFloor = hasKnownFloor && /^(?:B\d{2,4}(?:호(?:실)?)?|\d{3,4}(?:호(?:실)?)?|\d{1,2}호(?:실)?|B?\d{1,4}(?:[,/~·-]B?\d{1,4})+호(?:실)?)$/i.test(text.replace(/\s+/g, ""));
+  if (explicitUnit || unitWithKnownFloor) {
+    return hasKnownFloor ? listingFloorLabelV1(authoritativeFloor) + " " + literalListingRoomLabelV1(text) : text;
+  }
+  if (hasKnownFloor && /^(?:(?:지하|지)\d{0,2}(?:층|F)?|B\d{0,4}(?:층|F|호)?|-?\d+(?:\.\d+)?(?:층|F)?(?:[/／]\d+(?:\.\d+)?)?)$/i.test(text.replace(/\s+/g, "")) &&
+      parseFloorNotationV612(text, false) !== null) return listingFloorLabelV1(authoritativeFloor);
   var compact = text.replace(/\s+/g, "");
   var currentAndTotal = compact.match(/^(-?\d+(?:\.\d+)?)[/／]\d+(?:\.\d+)?$/);
   if (currentAndTotal) {
@@ -6058,6 +6105,9 @@ function formatListingRoomForCardV653(value) {
 }
 
 function getItemFloorNumber(item) {
+  var fromFloor = parseFloorNotationV612(item && item.floor, false);
+  if (item && item.sourceFloorVerifiedV1) return fromFloor;
+  if (fromFloor !== null) return fromFloor;
   var room = String((item && item.room) || "").trim();
   var fromRoom = parseFloorNotationV612(room, true);
   if (fromRoom !== null) return fromRoom;

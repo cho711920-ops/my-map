@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "6\.0\.7";/);
+assert.match(source, /var VERSION = "6\.0\.8";/);
 assert.match(source, /runAutomatic: runAutomatic/);
 assert.match(source, /data-action="auto-register"/);
 assert.match(source, /data-metric="updated"/);
@@ -23,7 +23,7 @@ assert.match(source, /Math\.min\(10000, 2000 \* attempt\)/);
 assert.match(source, /var DEFAULT_BATCH_SIZE = 20;/);
 assert.match(source, /var BATCH_SIZE = loadNaverBatchSize\(\);/);
 assert.doesNotMatch(source, /NAVER_ACCESS_KEY/);
-assert.match(source, /validationVersion: 2/);
+assert.match(source, /validationVersion: 3/);
 assert.match(source, /if \(state\.preparing && !state\.busy\)/);
 assert.match(source, /state\.prepareId \+= 1/);
 assert.match(source, /while \(state\.busy && Date\.now\(\) - readyStartedAt < 90000\)/);

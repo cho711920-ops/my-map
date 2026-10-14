@@ -41,9 +41,10 @@ test("unified list and detail responses sanitize legacy Gongsilbox media", () =>
   assert.match(d1, /json_extract\(raw_json, '\$\.list\.Photos'\) AS gongsil_photos_json/);
   assert.match(d1, /clean\(original\.source\) === "공실박스"/);
   assert.match(d1, /const isGongsil = clean\(row\.source \|\| snapshot\.source\) === "공실박스"/);
-  assert.match(worker, /unified-listings-v10-sale-area-summary\.json/);
-  assert.match(worker, /unified-detail-v10-sale-area-summary/);
-  assert.match(d1, /const snapshot = \{\s*\.\.\.raw,\s*\.\.\.parseJson\(row\.list_snapshot_json, \{\}\)\s*\}/);
+  assert.match(worker, /unified-listings-v11-advertisement-presence\.json/);
+  assert.match(worker, /unified-detail-v11-advertisement-presence/);
+  assert.match(d1, /const snapshot = \{ \.\.\.parseJson\(row\.list_snapshot_json, \{\}\) \}/);
+  assert.match(d1, /const raw = parseJson\(row\.raw_json, \{\}\)/);
 });
 
 test("primary dialogs share one minimal single-glyph close-button style", () => {

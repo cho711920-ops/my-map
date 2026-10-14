@@ -29,6 +29,6 @@ assert.match(d1, /registration_at,\s*last_collected_at, latitude, longitude/);
 assert.match(d1, /registrationAt:\s*clean\(row\?\.registration_at \|\| row\?\.first_collected_at\)/);
 assert.match(collector, /first_collected_at, last_collected_at, created_at, updated_at/);
 assert.match(collector, /first_collected_at, registration_at, last_collected_at/);
-assert.match(collector, /last_collected_at=\?1, updated_at=\?1/);
+assert.match(collector, /last_collected_at=\?1,\s*updated_at=\?1/);
 
 console.log("second-resolution latest registration tests passed");

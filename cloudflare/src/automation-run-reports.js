@@ -1,6 +1,7 @@
 const statuses = new Set(["pending", "running", "completed", "partial", "deferred", "failed", "retrying", "retry_wait", "skipped"]);
 const codes = new Set(["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"]);
-const numericKeys = ["expected", "processed", "detailProcessed", "unchanged", "created", "updated", "review", "addressDeferred", "failed"];
+const numericKeys = ["expected", "processed", "detailProcessed", "unchanged", "created", "updated", "review", "addressDeferred", "failed",
+  "missingMarked", "deactivated", "adsReappeared"];
 const count = value => Math.min(10000000, Math.max(0, Math.floor(Number(value) || 0)));
 const fail = message => { throw Object.assign(new Error(message), { statusCode: 400 }); };
 export function sanitizeAutomationRunReport(input, now = Date.now()) {
@@ -14,6 +15,10 @@ export function sanitizeAutomationRunReport(input, now = Date.now()) {
   const items = input.items.map((item, index) => {
     if (!["naver", "daangn", "gongsil"].includes(item.source) || !statuses.has(item.status)) fail("자동수집 보고 상태가 올바르지 않습니다.");
     const counters = Object.fromEntries(numericKeys.map(key => [key, count(item.counts?.[key])]));
+    Object.assign(counters, {presenceReported: item.counts?.presenceReported === true,
+      presenceTracking: item.counts?.presenceTracking === true,
+      presenceScopeEstablished: item.counts?.presenceScopeEstablished === true,
+      presenceTrackingIssue: item.counts?.presenceTrackingIssue ? "동일 범위·전체목록 확인 필요" : ""});
     return { targetIndex: index, source: item.source,
       district: ["유성구", "대덕구", "중구", "서구", "동구"].includes(item.district) ? item.district : "",
       tradeType: item.tradeType === "sale" ? "sale" : "lease", status: item.status,

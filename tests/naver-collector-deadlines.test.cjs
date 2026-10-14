@@ -586,7 +586,7 @@ for (const interruptedAt of ["fetch", "json", "delay"]) {
   test(`superseded passive preparation stops after ${interruptedAt} without changing automatic progress`, async () => {
     const capture = {
       articles: [{articleNo: "1"}],
-      json: {result: {hasNextPage: true, list: [{articleNo: "1"}]}},
+      json: {result: {totalCount: 90, hasNextPage: true, lastInfo: [{cursor: "2"}], list: [{articleNo: "1"}]}},
       requestOptions: {requestBody: {}},
       responseUrl: "https://fin.land.naver.com/front-api/v1/article/legalDivisionArticleList"
     };
@@ -614,12 +614,13 @@ for (const interruptedAt of ["fetch", "json", "delay"]) {
         if (interruptedAt === "fetch") await paused;
         return {ok: true, json: async () => {
           if (interruptedAt === "json") await paused;
-          return {result: {hasNextPage: true, list: [{articleNo: "2"}]}};
+          return {result: {totalCount: 90, hasNextPage: true, lastInfo: [{cursor: "3"}], list: [{articleNo: "2"}]}};
         }};
       },
       delay: async () => { if (interruptedAt === "delay") await paused; }
     });
-    for (const name of ["prepareFullCapture", "collectAll", "collectFinCapturedRequest"]) {
+    for (const name of ["naverProviderTotal", "checkedNaverTotal", "checkedNaverList", "naverPresenceScope", "naverListResult",
+      "prepareFullCapture", "collectAll", "collectFinCapturedRequest"]) {
       vm.runInContext(functionSource(name), context);
     }
     const pending = context.prepareFullCapture(capture, 1);

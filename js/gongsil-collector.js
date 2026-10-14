@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.2.9";
+  var VERSION = "2.3.0";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -292,7 +292,7 @@
           '<div class="jsg-actions">' +
             '<button type="button" class="jsg-save" data-action="save" disabled>선택 클러스터 전체 저장</button>' +
             '<button type="button" class="jsg-stop" data-action="stop" disabled>안전중단</button>' +
-            '<button type="button" class="jsg-auto" data-action="auto-register">현재 화면 전체클러스터 자동수집 등록</button>' +
+            '<button type="button" class="jsg-auto" data-action="auto-register">현재 화면 최대클러스터 자동수집 등록</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -324,7 +324,7 @@
       target: {
         source: "gongsil",
         key: "gongsil-" + tradeType + "-screen-" + location.pathname + location.search,
-        label: "공실박스 " + (tradeType === "sale" ? "매매" : "상가임대") + " 현재화면 전체클러스터",
+        label: "공실박스 " + (tradeType === "sale" ? "매매" : "상가임대") + " 현재화면 최대클러스터",
         url: location.href,
         selectedCount: selectedCount,
         mode: "screen-largest-cluster",
@@ -384,14 +384,20 @@
     panel.style.display = "block";
     state.capture = null;
     state.stopRequested = false;
-    setStatus("화면 전체클러스터 자동 선택 중", "현재 지도 화면에서 가장 큰 숫자 클러스터를 찾고 있습니다.");
+    state.lastResult = null;
+    setStatus("화면 최대클러스터 자동 선택 중", "현재 지도 화면에서 가장 큰 숫자 클러스터를 찾고 있습니다. 전체 지도범위 일치 여부는 별도로 검증합니다.");
     var startedAt = Date.now();
     var clickedCount = 0;
     while (!state.capture && Date.now() - startedAt < 90000) {
+      var emptyMap = emptyGongsilMapCapture();
+      if (emptyMap && await capturedGongsilPresenceScope(emptyMap, [])) {
+        state.capture = emptyMap;
+        break;
+      }
       if (!clickedCount || Date.now() - startedAt > 10000) clickedCount = clickScreenLargestCluster() || clickedCount;
       await new Promise(function (resolve) { window.setTimeout(resolve, 1000); });
     }
-    if (!state.capture) throw new Error("공실박스 화면 전체클러스터를 자동으로 선택하지 못했습니다. 지도 화면과 로그인을 확인해주세요.");
+    if (!state.capture) throw new Error("공실박스 화면 최대클러스터를 자동으로 선택하지 못했습니다. 지도 화면과 로그인을 확인해주세요.");
     var selectedCount = getSelectedItemCount(state.capture) || clickedCount;
     await collectAndSave();
     if (state.stopRequested || Number(state.dashboard.failed || 0) > 0) {
@@ -399,10 +405,22 @@
     }
     var expectedCount = state.collectionTradeType ? Number(state.dashboard.found || 0) : selectedCount;
     if (Number(state.dashboard.processed || 0) < expectedCount) {
-      throw new Error("공실박스 화면 전체 건수와 실제 처리 건수가 일치하지 않습니다.");
+      throw new Error("공실박스 선택 클러스터 건수와 실제 처리 건수가 일치하지 않습니다.");
+    }
+    var finalResult = state.lastResult || {};
+    if (finalResult.ok !== true || finalResult.stopped) {
+      throw new Error("공실박스 자동수집의 최종 저장 응답을 확인하지 못했습니다.");
     }
     return {source: "gongsil", tradeType: state.collectionTradeType || target && target.tradeType || detectTradeType(),
-      selectedCount: expectedCount, version: VERSION, totals: Object.assign({}, state.dashboard)};
+      selectedCount: expectedCount, version: VERSION,
+      partial: false,
+      completionIssues: finalResult.presenceTrackingIssue ? [finalResult.presenceTrackingIssue] : [],
+      session: finalResult.finalization || null,
+      totals: Object.assign({}, state.dashboard, {presenceReported: finalResult.presenceReported === true,
+        missingMarked: Number(finalResult.missingMarked || 0), deactivated: Number(finalResult.deactivated || 0),
+        adsReappeared: Number(finalResult.adsReappeared || 0), presenceTracking: finalResult.presenceTracking === true,
+        presenceScopeEstablished: finalResult.presenceScopeEstablished === true,
+        presenceTrackingIssue: finalResult.presenceTrackingIssue || ""})};
   }
 
   function detectTradeType() {
@@ -595,6 +613,7 @@
       await resumePendingSave();
       return;
     }
+    if (!state.capture) state.capture = emptyGongsilMapCapture();
     if (!state.capture) {
       alert("먼저 공실박스 지도에서 수집할 숫자 클러스터를 클릭해 주세요.");
       return;
@@ -628,7 +647,7 @@
         );
         return;
       }
-      if (!items.length) {
+      if (!items.length && !state.capture.emptyMapConfirmed) {
         throw new Error("선택한 클러스터에서 매물을 찾지 못했습니다.");
       }
       var listFailures = Array.isArray(state.listFailures)
@@ -639,6 +658,7 @@
       var providerSelectedCount = selectedCount;
       var providerObservedSourceIds = observedSourceIds(items);
       var presenceScope = await capturedGongsilPresenceScope(state.capture, items);
+      var completionProof = gongsilCompletionProof(state.capture, items, presenceScope, listFailures);
       if (collectionTradeType) {
         items = items.filter(function(item) { return getTradeOffers(item, null, collectionTradeType).length > 0; });
       }
@@ -664,10 +684,10 @@
         tradeType: collectionTradeType || (manifestTradeTypes.length === 1
           ? manifestTradeTypes[0]
           : detectTradeType()),
-        scope: providerSelectedCount >= 2000
-          ? "공실박스 2000개 이상 전체클러스터"
+        scope: presenceScope
+          ? "공실박스 동일 지도범위 전체목록"
           : "공실박스 선택클러스터",
-        complete: isCompleteGongsilCapture(providerSelectedCount, providerItemCount) &&
+        complete: isCompleteGongsilCapture(providerSelectedCount, providerItemCount, presenceScope) &&
           listFailures.length === 0,
         selectedCount: selectedCount,
         found: totalItemCount,
@@ -677,6 +697,7 @@
         listFailureReasons: listFailures.slice(0, 200),
         mixedTradeTypes: mixedTradeTypes,
         presenceScope: presenceScope,
+        completionProof: completionProof,
         providerExpectedCount: providerSelectedCount,
         providerObservedSourceIds: providerObservedSourceIds,
         observedSourceIds: observedSourceIds(items),
@@ -847,6 +868,7 @@
         totalItemCount
       );
       var result = await sendToAppsScript(transformed, saveMetadata, collectorKey);
+      state.lastResult = result;
       if (!result || result.ok !== true) {
         if (
           result &&
@@ -872,7 +894,6 @@
           (listFailures.length
             ? " 목록조회 제외 " + listFailures.length + "개는 다음 수집 때 다시 확인합니다."
             : "");
-      if (result.presenceTrackingIssue) message += "\n거래완료후보 판정 보류: " + result.presenceTrackingIssue;
       updateDashboard({
         found: totalItemCount,
         processed: totalItemCount,
@@ -1019,6 +1040,7 @@
         pending.records,
         pending.metadata || {}
       );
+      state.lastResult = result;
       if (!result || result.ok !== true) {
         throw new Error(
           result && result.message
@@ -1418,16 +1440,12 @@
     return unique(selectedIds.map(String)).length;
   }
 
-  function isCompleteGongsilCapture(selectedCount, capturedCount) {
+  function isCompleteGongsilCapture(selectedCount, capturedCount, presenceScope) {
     selectedCount = Number(selectedCount) || 0;
     capturedCount = Number(capturedCount) || 0;
-    /*
-     * 공실박스 목록 응답에는 선택한 ID 외의 같은 클러스터 매물이 함께
-     * 포함될 수 있습니다. 누락은 중단하되, 최종 확인 건수가 선택 건수보다
-     * 많은 정상 전체수집은 완전수집으로 인정해야 기존 매물 연락처도
-     * 빠짐없이 다시 상세조회합니다.
-     */
-    return selectedCount >= 2000 && capturedCount >= selectedCount;
+    // A count threshold never proves coverage. Only the verified map-ID union
+    // can establish a baseline or prove absence, including a genuine empty map.
+    return Boolean(presenceScope) && selectedCount >= 0 && capturedCount === selectedCount;
   }
 
   function validateCapturedItems(byId, selectedCount) {
@@ -1576,6 +1594,8 @@
       numberValue(pick(item, ["SMapx", "sMapx", "Mapx", "mapx", "Longitude", "longitude", "lng"]));
     var record = {
       externalId: text(pick(item, ["Bfidx", "bfidx", "BfIdx"])),
+      sourceFloor: getGongsilSourceFloor(item),
+      sourceRoom: text(pick(item, ["Ho", "BfHo", "Room", "Honame"])),
       listSnapshot: gongsilListSnapshot(item),
       primaryImage: imageUrls[0] || "",
       imageUrls: imageUrls,
@@ -1807,17 +1827,23 @@
       "상가";
   }
 
+  function getGongsilSourceFloor(item) {
+    var raw = text(pick(item, ["Ff", "BfFloor", "Floor", "floor"]));
+    var basement = raw.match(/^(?:지하|B)\s*(\d+)(?:층|F)?$/i);
+    var numeric = raw.match(/^(-?\d+)(?:층|F)?$/i);
+    var floor = basement ? -Number(basement[1]) : numeric ? Number(numeric[1]) : null;
+    return floor !== null && Number.isInteger(floor) && floor !== 0 ? floor : null;
+  }
+
   function getRoom(item) {
     var room = text(pick(item, ["Ho", "BfHo", "Room", "Honame"]));
+    var floor = getGongsilSourceFloor(item);
+    var floorLabel = floor === null ? "" : floor < 0 ? "지하" + Math.abs(floor) + "층" : floor + "층";
     if (room && room !== "전체" && room !== "0") {
-      return /(?:층|호)$/.test(room) ? room : room + "호";
+      var literalRoom = /(?:층|호)$/.test(room) ? room : room + "호";
+      return floorLabel && !/층$/.test(room) ? floorLabel + " " + literalRoom : literalRoom;
     }
-
-    var floor = Number(pick(item, ["Ff", "BfFloor", "Floor", "floor"]));
-    if (!Number.isFinite(floor)) return "";
-    if (floor < 0) return "지하" + Math.abs(floor) + "층";
-    if (floor === 0) return "";
-    return floor + "층";
+    return floorLabel;
   }
 
   function getPropertyType(item) {
@@ -2588,6 +2614,10 @@
       try { localStorage.removeItem(SAVE_PROGRESS_KEY); } catch (_) {}
     }
 
+    var presenceNotice = finalization && (finalization.presenceTrackingIssue ? "종료판정보류" : finalization.presenceScopeEstablished
+      ? "비교기준저장" : finalization.presenceTracking ? "원본광고 미노출 " + Number(finalization.deactivated || 0) + "건" : "");
+    if (finalization && Number(finalization.adsReappeared || 0)) presenceNotice = (presenceNotice ? presenceNotice + " · " : "") +
+      "원본광고 재등장 " + Number(finalization.adsReappeared) + "건";
     return {
       ok: true,
       stopped: stopped,
@@ -2608,6 +2638,10 @@
       presenceTracking: Boolean(finalization && finalization.presenceTracking),
       presenceScopeEstablished: Boolean(finalization && finalization.presenceScopeEstablished),
       missingMarked: Number(finalization && finalization.missingMarked || 0),
+      deactivated: Number(finalization && finalization.deactivated || 0),
+      adsReappeared: Number(finalization && finalization.adsReappeared || 0),
+      presenceReported: Boolean(finalization && Object.prototype.hasOwnProperty.call(finalization, "presenceTracking")),
+      finalization: finalization || null,
       presenceTrackingIssue: text(finalization && finalization.presenceTrackingIssue),
       message:
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
@@ -2624,7 +2658,7 @@
         "개, 실패 " + (listFailedCount + totals.failed) + "개" +
         (saveFailureReasons.length
           ? " · 실패 원본은 다음 수집에서 자동 재확인"
-          : "")
+          : "") + (presenceNotice ? "\n" + presenceNotice : "")
     };
   }
 
@@ -2739,6 +2773,9 @@
         source: "공실박스",
         sessionId: metadata.sessionId,
         scope: metadata.scope,
+        validationVersion: 3,
+        presenceScope: metadata.presenceScope || null,
+        completionProof: metadata.completionProof || null,
         collectionTradeType: metadata.collectionTradeType || "",
         entries: chunk.map(function(item) {
           var terms = getTradeTerms(item, null, metadata.collectionTradeType) || {};
@@ -2819,11 +2856,32 @@
     return JSON.stringify(value == null ? null : value);
   }
 
+  function emptyGongsilMapCapture() {
+    var map = window.__JS_GONGSIL_SCOPE_CAPTURE_V1__ && window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture;
+    if (!map || map.complete !== true || !Array.isArray(map.groups) || map.groups.length || !map.body) return null;
+    return { body: { bfidxs: [], level: map.body.level, btype: map.body.btype },
+      response: { res: "success", datas: { res: [] }, more: false }, emptyMapConfirmed: true };
+  }
+
+  function gongsilCompletionProof(capture, items, presenceScope, failures) {
+    var observed = observedSourceIds(items).length;
+    var expected = getSelectedItemCount(capture);
+    var at = capture && Number(capture.presenceCapturedAt);
+    var capturedAt = Number.isFinite(at) && at > 0 ? new Date(at).toISOString() : null;
+    var complete = Boolean(presenceScope) && Boolean(capturedAt) && observed === expected && !(failures || []).length;
+    return { version: 1, expectedCountKnown: Boolean(presenceScope),
+      providerExpectedCount: presenceScope ? expected : null, observedUniqueCount: observed,
+      terminalReached: complete, listComplete: complete, scopeVerified: Boolean(presenceScope),
+      emptyConfirmed: complete && expected === 0 && capture.emptyMapConfirmed === true,
+      pagesFetched: 1, capturedAt: capturedAt,
+      issueCodes: complete ? [] : [presenceScope ? "incomplete-list" : "unverified-map-scope"] };
+  }
+
   async function capturedGongsilPresenceScope(capture, items) {
     var mapCapture = window.__JS_GONGSIL_SCOPE_CAPTURE_V1__ && window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture;
     var body = mapCapture && mapCapture.body;
     var listBody = capture && capture.body;
-    if (!body || !listBody || !Array.isArray(listBody.bfidxs) || !listBody.bfidxs.length ||
+    if (!body || !listBody || !Array.isArray(listBody.bfidxs) ||
         !body.search || body.isZzim || body.search.MyActive || body.search.listmemoB || body.search.listmemoF ||
         Array.isArray(body.search.sch_zzim) && body.search.sch_zzim.length ||
         Number(body.level) !== Number(listBody.level) || String(body.btype || "") !== String(listBody.btype || "")) return null;
@@ -2839,16 +2897,20 @@
     var selectedIds = Object.create(null);
     listBody.bfidxs.forEach(function(id) { if (text(id)) selectedIds[text(id)] = true; });
     var ids = Object.keys(allIds);
+    var observed = observedSourceIds(items);
     // Largest does not mean whole: only the entire verified map result can age
     // this viewport. Neither arbitrary clusters nor unseen providers are aged.
-    if (!ids.length || ids.length !== Object.keys(selectedIds).length ||
+    if ((!ids.length && !(mapCapture.complete === true && capture.emptyMapConfirmed === true)) ||
+        ids.length !== Object.keys(selectedIds).length || observed.length !== ids.length ||
         ids.some(function(id) { return !selectedIds[id]; }) ||
-        observedSourceIds(items).some(function(id) { return !allIds[id]; })) return null;
+        observed.some(function(id) { return !allIds[id]; })) return null;
     var filters = Object.assign({}, body.search);
     delete filters.ordersch1;
     var fingerprint = stableGongsilScopeJson({ search: filters, aptCircle: Boolean(body.aptCircle) });
     try {
       var digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprint));
+      if (!window.__JS_GONGSIL_SCOPE_CAPTURE_V1__ || window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture !== mapCapture) return null;
+      capture.presenceCapturedAt = mapCapture.capturedAt;
       return { version: 1, selectionKind: "full-map-result", bounds: bounds, level: Number(body.level),
         btype: String(body.btype || ""), filtersHash: Array.prototype.map.call(new Uint8Array(digest), function(n) {
           return n.toString(16).padStart(2, "0");
@@ -2924,6 +2986,9 @@
       collectorVersion: VERSION,
       sessionId: metadata && metadata.sessionId || "",
       scope: metadata && metadata.scope || "공실박스 선택클러스터",
+      validationVersion: 3,
+      presenceScope: metadata && metadata.presenceScope || null,
+      completionProof: metadata && metadata.completionProof || null,
       collectionTradeType: metadata && metadata.collectionTradeType || "",
       complete: false,
       manifestRegistered: Boolean(metadata && metadata.manifestRegistered),
@@ -2961,7 +3026,7 @@
       requestId: requestId,
       collectorKey: collectorKey,
       collectorVersion: VERSION,
-      validationVersion: 2,
+      validationVersion: 3,
       sessionId: metadata.sessionId,
       scope: metadata.scope || "공실박스 선택클러스터",
       source: "공실박스",
@@ -2969,6 +3034,7 @@
       collectionTradeType: metadata.collectionTradeType || "",
       presenceVersion: 1,
       presenceScope: metadata.presenceScope || null,
+      completionProof: metadata.completionProof || null,
       providerExpectedCount: Number(metadata.providerExpectedCount || 0),
       providerObservedSourceIds: Array.isArray(metadata.providerObservedSourceIds) ? metadata.providerObservedSourceIds : [],
       complete: Boolean(complete),
@@ -2993,7 +3059,7 @@
       note: stopped
         ? "사용자 안전중단 · 저장된 묶음 보존"
         : (complete
-          ? "2000개 이상 전체클러스터 완전수집 완료" +
+          ? "동일 지도범위 전체목록 확인 완료" +
             (Number(metadata.rejectedCount || 0)
               ? " · 필수정보 제외 " + Number(metadata.rejectedCount) + "개 노출ID 보호"
               : "") +
@@ -3275,9 +3341,10 @@
       (rows.length ? rows.map(function (row) { return row.stage + " · 매물번호 " + (row.sourceId || "확인 불가") + " · " + row.message; }).join("\n") :
         missing ? "이전 수집기는 개별 사유를 저장하지 않았습니다. 재수집 시 기록됩니다." : "제외·실패 없음") +
       (missing > rows.length && rows.length ? "\n개별 사유는 최대 200건까지 표시하며, 일부 사유는 이전 수집기에 기록되지 않았을 수 있습니다." : "") +
-      (result.presenceTrackingIssue ? "\n거래완료후보 판정 보류: " + result.presenceTrackingIssue :
-        result.presenceScopeEstablished ? "\n동일 범위 거래완료후보 기준목록을 설정했습니다. 이후 정상 전체수집에서 연속 3회 미노출된 원본만 후보로 검토합니다." :
-        result.presenceTracking ? "\n동일 범위 미노출 확인 " + Number(result.missingMarked || 0) + "건 · 연속 3회부터 거래완료후보" : "") +
+      (result.presenceTrackingIssue ? "\n종료판정보류: " + result.presenceTrackingIssue :
+        result.presenceScopeEstablished ? "\n비교기준저장 · 동일 지도범위·필터의 첫 광고번호 목록입니다." :
+        result.presenceTracking ? "\n원본광고 미노출 " + Number(result.deactivated || 0) + "건" : "") +
+      (Number(result.adsReappeared || 0) ? "\n원본광고 재등장 " + Number(result.adsReappeared) + "건" : "") +
       "\n운영현황 → 수집현황에서도 결과를 확인할 수 있습니다.";
   }
 

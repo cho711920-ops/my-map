@@ -57,7 +57,7 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.13" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.14" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async message => { notifications.push(message); } }
     }
@@ -106,6 +106,25 @@ test("minimal report drops target URLs, raw payload and diagnostic contacts", as
   const clean = JSON.stringify(await h.context.minimalAutomationReport(report));
   assert.doesNotMatch(clean, /https|secret|010-1234|raw|naver-0/);
   assert.match(clean, /"created":3/);
+});
+
+test("Gongsil scope deferral persists finished collection counts without reopening a retry target", async () => {
+  const h = harness({targetStartedAt: clock - minute});
+  h.data[RUN].targets[3].source = "gongsil";
+  const counts = {presenceReported: true, missingMarked: 9, deactivated: 4, adsReappeared: 2,
+    presenceTracking: false, presenceScopeEstablished: false, presenceTrackingIssue: "unverified-map-scope",
+    found: 20, processed: 20, failed: 0};
+  await h.context.finishCurrentTarget({ok: true, runId: "cycle", targetRunId: "seo", result: {
+    source: "gongsil", partial: false, totals: counts}}, 42);
+  const item = h.data[REPORT].items[3];
+  assert.equal(item.status, "completed");
+  assert.equal(h.data[RUN].index, 4);
+  assert.equal(h.data[RUN].retryQueue.length, 0);
+  assert.equal(item.counts.missingMarked, 9);
+  assert.equal(item.counts.deactivated, 4);
+  assert.equal(item.counts.adsReappeared, 2);
+  assert.match(item.message, /종료판정보류.*원본광고 재등장 2건/);
+  assert.doesNotMatch(item.message, /계약완료|거래완료/);
 });
 
 test("numeric run reports keep Naver district names stored as objects", async () => {
@@ -530,7 +549,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.13");
+  assert.equal(response.backgroundBuild, "1.1.14");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

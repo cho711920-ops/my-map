@@ -159,7 +159,10 @@ test("ingestion does not resurrect a rejected parcel from an existing source sna
     loadSourceAssets: async () => new Map(), loadPendingReviewsByAddress: async () => new Map(),
     loadCandidateListings: async (_env, records) => { assert.equal(records.length, 0); return new Map(); },
     saveCollectorError: async (_env, record, _session, message) => errors.push({ record, message }),
-    refreshCustomerMatchesForListings: async () => ({}), canonicalListingRoom: value => value
+    refreshCustomerMatchesForListings: async () => ({}), canonicalListingRoom: value => value,
+    refreshListingRepresentativesFromActiveSources: async (_env, ids) => {
+      assert.equal(ids.length, 0); return {changedListingIds: []};
+    }
   });
   for (const name of ["clean", "normalizedAddress", "parseJson", "nowIso", "daangnAddressCandidates",
     "daangnLotAddress", "daangnHasAddressEvidence", "daangnFallbackAddress", "ingestRecords"]) {

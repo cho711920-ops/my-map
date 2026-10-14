@@ -245,13 +245,25 @@ test("partial lease observation cannot revive sale; mixed/old finalization canno
   const { db, save, call } = database(t);
   await save(fixture());
   db.exec("UPDATE listing_sources SET active=0, missing_count=3");
-  await call({ action: "finalizeCollectionSession", sessionId: "partial", tradeType: "lease", complete: false,
+  const legacy = await call({ action: "finalizeCollectionSession", sessionId: "partial-legacy", tradeType: "lease", complete: false,
     observedSourceIds: ["841436"], observedOffers: [{ sourceId: "841436", tradeType: "lease" }] });
+  assert.equal(legacy.adsReappeared, 0);
+  assert.deepEqual(db.prepare("SELECT trade_type,active,missing_count FROM listing_sources ORDER BY trade_type").all().map(r => Object.values(r)),
+    [["lease", 0, 3], ["sale", 0, 3]], "an unproved legacy observation cannot revive either market");
+  const current = await call({ action: "finalizeCollectionSession", sessionId: "partial-verified", tradeType: "lease", complete: false,
+    validationVersion: 3, presenceVersion: 1, collectionTradeType: "lease",
+    presenceScope: { version: 1, selectionKind: "full-map-result", bounds: [36.2, 127.2, 36.5, 127.5],
+      level: 13, btype: "Xone", filtersHash: "a".repeat(64) },
+    completionProof: { version: 1, terminalReached: true, listComplete: true, scopeVerified: true,
+      issueCodes: [], expectedCountKnown: true, providerExpectedCount: 1, observedUniqueCount: 1,
+      capturedAt: new Date().toISOString() },
+    observedSourceIds: ["841436"], observedOffers: [{ sourceId: "841436", tradeType: "lease" }] });
+  assert.equal(current.complete, false); assert.equal(current.adsReappeared, 1); assert.equal(current.missingMarked, 0);
   assert.deepEqual(db.prepare("SELECT trade_type,active,missing_count FROM listing_sources ORDER BY trade_type").all().map((r) => [...Object.values(r)]),
     [["lease", 1, 0], ["sale", 0, 3]]);
   const ids = Array.from({ length: 100 }, (_, i) => String(i));
-  for (const offers of [undefined, ids.flatMap((sourceId) => [{ sourceId, tradeType: "sale" }, { sourceId, tradeType: "lease" }])]) {
-    const result = await call({ action: "finalizeCollectionSession", sessionId: "mixed", tradeType: "sale",
+  for (const [index, offers] of [undefined, ids.flatMap((sourceId) => [{ sourceId, tradeType: "sale" }, { sourceId, tradeType: "lease" }])].entries()) {
+    const result = await call({ action: "finalizeCollectionSession", sessionId: `mixed-${index}`, tradeType: "sale",
       complete: true, validationVersion: 2, scope: "공실박스 전체", expectedCount: 100,
       manifestCount: 100, processedCount: 100, observedSourceIds: ids, observedOffers: offers });
     assert.equal(result.complete, false);
@@ -284,7 +296,7 @@ test("old complete single-market manifests without map scope proof never age unr
   assert.equal(result.complete, true, JSON.stringify(result));
   assert.equal(result.missingMarked, 0);
   assert.equal(result.presenceTracking, false);
-  assert.match(result.presenceTrackingIssue, /지도 범위/);
+  assert.match(result.presenceTrackingIssue, /동일 범위·필터 확인 불가/);
   const rows = db.prepare("SELECT source_listing_id,missing_count FROM listing_sources ORDER BY source_listing_id").all();
   assert.deepEqual(rows.map((r) => [r.source_listing_id, r.missing_count]),
     [["missing::lease", 0], ["missing::sale", 0], ["seen::lease", 0], ["seen::sale", 0]]);

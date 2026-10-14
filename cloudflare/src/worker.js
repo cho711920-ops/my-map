@@ -40,8 +40,8 @@ const CANONICAL_HOST = "js-map.com";
 const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
-const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v10-sale-area-summary.json";
-const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard.json";
+const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v11-advertisement-presence.json";
+const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-v2-advertisement-presence.json";
 const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
 const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
@@ -440,7 +440,7 @@ function deleteR2Cache(env, context, keys) {
 
 function unifiedDetailCacheKey(propertyId) {
   const safe = String(propertyId || "").trim();
-  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v10-sale-area-summary/${safe}.json` : "";
+  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v11-advertisement-presence/${safe}.json` : "";
 }
 
 function mutationAction(body) {

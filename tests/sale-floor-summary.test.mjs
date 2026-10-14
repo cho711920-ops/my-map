@@ -127,13 +127,15 @@ test("list and detail responses recover the same legacy Naver floors using only 
     saleRaw: { detailInfo: { spaceInfo: { floorInfo: providerFloors } } } };
   let listProjection = "";
   const env = { DB: { prepare(sql) {
-    return { bind() { return this; }, async all() {
+    return { bind() { return this; }, async first() {
+      return sql.includes("FROM listings") ? { id: "M-old-floor", property_id: "M-old-floor" } : null;
+    }, async all() {
       if (sql.includes("naver_floor_info_json")) {
         listProjection = sql;
         return { results: [{ rowid: 1, listing_id: "M-old-floor", source: "네이버",
           list_snapshot_json: JSON.stringify(legacyNaver), naver_floor_info_json: JSON.stringify(providerFloors), naver_property_type: "D04" }] };
       }
-      if (sql.includes("SELECT id, source, list_snapshot_json, raw_json")) return { results: [{ id: "naver-floor", source: "네이버",
+      if (/FROM listing_sources WHERE listing_id/.test(sql)) return { results: [{ id: "naver-floor", listing_id: "M-old-floor", source: "네이버", active: 1,
         list_snapshot_json: JSON.stringify(legacyNaver), raw_json: JSON.stringify(raw) }] };
       return { results: [] };
     } };

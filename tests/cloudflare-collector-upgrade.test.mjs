@@ -474,7 +474,7 @@ test("Daangn detail failures stay queued with bounded retries and recorded cause
   assert.match(source, /DAANGN_DETAIL_HASH = "b8d21cf0c0de5cc8e43981f48123fcef3a45962bbe96317fb4864b3e20934b72"/);
   assert.match(source, /DAANGN_DETAIL_MAX_ATTEMPTS = 8/);
   assert.match(source, /preserveRepresentative && !updateCondition && !promoteRepresentative/);
-  assert.match(source, /UPDATE listings SET main_source=\?1,/);
+  assert.match(source, /refreshListingRepresentativesFromActiveSources\(env,/);
   assert.match(source, /pendingDetailIds: job\.pendingDetailIds \|\| \[\]/);
   assert.match(source, /detailAttempts: job\.detailAttempts \|\| \{\}/);
   assert.match(source, /pending\.push\(id\)/);
@@ -508,7 +508,7 @@ test("collector review snapshots refresh in place instead of growing every run",
 
 test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {
   const source = await readFile(new URL("../js/naver-collector.js", import.meta.url), "utf8");
-  assert.match(source, /var VERSION = "6\.0\.7"/);
+  assert.match(source, /var VERSION = "6\.0\.8"/);
   assert.match(source, /if \(options\.automatic\) \{[\s\S]*?clearAutoDistrictProgress\(district\.cortarNo\);[\s\S]*?\}/);
   assert.doesNotMatch(source, /if \(options\.automatic\) return collectFinAutomaticDistrict\(district\)/);
   assert.match(source, /var classification = await classifyNaverManifest\(allItems, session\)/);

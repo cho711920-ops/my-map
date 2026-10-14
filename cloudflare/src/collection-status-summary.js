@@ -12,6 +12,8 @@ export function normalizeCollectionCounts(value = {}) {
     created: count(value.created), merged: count(value.merged), updated: count(value.updated),
     unchanged: count(value.unchanged ?? value.skippedUnchanged), duplicate: count(value.duplicate),
     review: count(value.review), legacyFailed, failed, failureCount: failed,
+    deactivated: count(value.deactivated), adsReappeared: count(value.adsReappeared),
+    presenceReported: own(value, "presenceReported") ? value.presenceReported === true : own(value, "presenceTracking"),
     addressDeferred, requiredFieldExcluded: excluded,
     completionIssues: [...new Set((Array.isArray(value.completionIssues) ? value.completionIssues : [])
       .filter(issue => !/^실패 \d+건$|^주소·층 오류 \d+건$/.test(String(issue)))
@@ -30,6 +32,7 @@ export function collectionDateRange(date) {
     baselineStart: new Date(start.getTime() - 14 * 86400000).toISOString() };
 }
 export function collectionScopeKey(row) {
+  if (row.presenceScopeKey) return `${row.source}|${row.tradeType === "sale" ? "sale" : "lease"}|${row.presenceScopeKey}`;
   const scope = String(row.scope || "");
   const district = DISTRICTS.find(name => scope.includes(name));
   // Selected viewport/cluster runs must not replace a full-district census.
@@ -63,15 +66,21 @@ export function summarizeCollectionDay(rows, date, { source = "", tradeType = ""
       anomaly: dropWarning ? `최근 정상수집 중앙값 ${baseline.toLocaleString("ko-KR")}건 대비 크게 감소했습니다. 실제 감소/수집 범위를 확인해 주세요.` : "" };
   });
   const totals = { scopes: items.length, complete: 0, found: 0, unknownFound: 0, created: 0, merged: 0, updated: 0,
-    unchanged: 0, review: 0, duplicate: 0, failed: 0, addressDeferred: 0, requiredFieldExcluded: 0 };
+    unchanged: 0, review: 0, duplicate: 0, failed: 0, addressDeferred: 0, requiredFieldExcluded: 0,
+    deactivated: 0, adsReappeared: 0, presenceReported: false, absenceDeferredScopes: 0, baselineScopes: 0 };
   for (const row of items) {
     totals.complete += row.complete ? 1 : 0;
     totals.unknownFound += row.foundKnown ? 0 : 1;
-    for (const key of ["found", "created", "merged", "updated", "unchanged", "review", "duplicate", "failed", "addressDeferred", "requiredFieldExcluded"]) totals[key] += count(row[key]);
+    totals.presenceReported ||= row.presenceReported;
+    totals.absenceDeferredScopes += row.presenceReported && !row.presenceTracking ? 1 : 0;
+    totals.baselineScopes += row.presenceScopeEstablished ? 1 : 0;
+    for (const key of ["found", "created", "merged", "updated", "unchanged", "review", "duplicate", "failed", "addressDeferred", "requiredFieldExcluded", "deactivated", "adsReappeared"]) totals[key] += count(row[key]);
   }
   const districtCoverage = ["네이버", "당근"].filter(name => !source || source === name).map(name => ({
     source: name, districts: DISTRICTS.map(district => {
-      const runs = items.filter(row => row.source === name && collectionScopeKey(row).endsWith(`|${district}`));
+      const runs = items.filter(row => row.source === name && (row.presenceScopeKind
+        ? row.scope.includes(district) : collectionScopeKey(row).endsWith(`|${district}`)));
+      if (runs.length && runs.every(row => row.presenceScopeKind === "provider-cluster")) return { district, state: "scope-only" };
       return { district, state: !runs.length ? "missing" : runs.every(row => row.complete) ? "complete" : "attention" };
     })
   }));
