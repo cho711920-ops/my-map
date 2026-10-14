@@ -51,8 +51,83 @@ function harness(targets = [target("lease-on", "lease"), target("lease-off", "le
   vm.runInContext("publishPendingAutomationReport = async () => false; requestHealthCheck = () => {};", context);
   const dispatch = message => new Promise(resolve => events.message(message, { url: "chrome-extension://test/options.html" }, resolve));
   const alarm = async name => { events.alarm({ name }); await vm.runInContext("mutationQueue", context); };
-  return { context, data, dispatch, alarms, launches, alarm };
+  const startup = async () => { events.startup(); await vm.runInContext("mutationQueue", context); };
+  return { context, data, dispatch, alarms, launches, alarm, startup };
 }
+
+test("today's settled schedule remains consumed after an extension update or missing legacy version marker", async () => {
+  for (const version of [undefined, "1.1.13", "1.1.14"]) {
+    const h = harness();
+    vm.runInContext("scheduleIsDue = () => true;", h.context);
+    h.data[LAST] = h.context.localDateKey();
+    if (version !== undefined) h.data[VERSION] = version;
+    h.data[PENDING] = {date: h.data[LAST], reason: "schedule"};
+    const before = clone(h.data[CONFIG]);
+    for (const reason of ["schedule", "browser-startup", "windows-schedule"]) {
+      const result = await h.context.runScheduled(reason);
+      assert.equal(result.skipped, true);
+      assert.match(result.message, /오늘 자동수집은 이미 실행/);
+    }
+    await h.startup();
+    await h.alarm("js-auto-collector-daily");
+    assert.equal(h.launches.length, 0);
+    assert.equal(h.data[RUN], undefined);
+    assert.equal(h.data[PENDING], undefined);
+    assert.equal(h.data[VERSION], version, "diagnostic version is not rewritten merely to inspect status");
+    assert.deepEqual(h.data[CONFIG], before);
+  }
+});
+
+test("a previous-day schedule still starts once and consumes today's date only after settling", async () => {
+  const h = harness();
+  vm.runInContext("scheduleIsDue = () => true;", h.context);
+  const yesterday = h.context.localDateKey(new Date(Date.now() - 86400000));
+  h.data[LAST] = yesterday; h.data[VERSION] = "1.1.13";
+  await h.context.runScheduled("schedule");
+  assert.equal(h.launches.length, 1);
+  assert.equal(h.data[LAST], yesterday);
+  h.data[REPORT].items.forEach(item => {item.status = "completed";});
+  await h.context.finalizeRun(clone(h.data[RUN]));
+  assert.equal(h.data[LAST], h.context.localDateKey());
+  assert.equal(h.data[VERSION], "1.1.14");
+  await h.startup(); await h.alarm("js-auto-collector-daily");
+  assert.equal(h.launches.length, 1);
+});
+
+test("today's schedule marker does not block explicit manual selected reruns", async () => {
+  const h = harness();
+  h.data[LAST] = h.context.localDateKey(); h.data[VERSION] = "1.1.13";
+  const result = await h.dispatch({type: "JS_AUTO_RUN_SELECTED", market: "lease", keys: ["lease-on"]});
+  assert.equal(result.ok, true);
+  assert.equal(h.launches.length, 1);
+  assert.equal(h.data[RUN].reason, "manual-selected");
+  assert.equal(h.data[VERSION], "1.1.13");
+});
+
+test("startup resumes an unfinished run before the daily date guard", async () => {
+  const h = harness();
+  h.data[LAST] = h.context.localDateKey(); h.data[VERSION] = "1.1.13";
+  h.data[RUN] = {active: true, runId: "unfinished", phase: "collecting", index: 1};
+  const resumed = [];
+  h.context.restartPersistedRun = async (state, message) => {resumed.push({runId: state.runId, message});};
+  await h.startup();
+  assert.equal(resumed.length, 1);
+  assert.equal(resumed[0].runId, "unfinished");
+  assert.match(resumed[0].message, /미완료.*이어서/);
+  assert.equal(h.launches.length, 0);
+});
+
+test("startup preserves an unfinished run's future retry alarm without restarting early", async () => {
+  const h = harness();
+  h.data[LAST] = h.context.localDateKey();
+  const retryAt = Date.now() + 60000;
+  h.data[RUN] = {active: true, runId: "waiting", phase: "retry-wait", retryAt};
+  h.context.restartPersistedRun = async () => {assert.fail("must retain the existing retry deadline");};
+  await h.startup();
+  assert.equal(h.alarms.get("js-auto-collector-recovery").when, retryAt);
+  assert.equal(h.data[RUN].runId, "waiting");
+  assert.equal(h.launches.length, 0);
+});
 
 test("legacy and imported sale targets are retained but can never participate in the daily lease schedule", async () => {
   const h = harness();

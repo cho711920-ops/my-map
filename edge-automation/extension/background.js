@@ -1640,10 +1640,11 @@ async function runAll(reason = "manual", selection = null, market = "lease") {
 async function runScheduled(reason) {
   const config = await getConfig();
   if (!config.enabled || !scheduleIsDue(config)) return { ok: true, skipped: true, message: "예약 시간이 아직 되지 않았습니다." };
-  const saved = await chrome.storage.local.get([LAST_SCHEDULE_KEY, LAST_VERSION_RUN_KEY]);
+  const saved = await chrome.storage.local.get(LAST_SCHEDULE_KEY);
   const today = localDateKey();
-  const currentVersion = chrome.runtime.getManifest().version;
-  if (saved[LAST_SCHEDULE_KEY] === today && saved[LAST_VERSION_RUN_KEY] === currentVersion) {
+  // Updating the extension must not start a second automatic run today.
+  // Version is diagnostic only; an unfinished run resumes before this gate.
+  if (saved[LAST_SCHEDULE_KEY] === today) {
     await chrome.storage.local.remove(PENDING_SCHEDULE_KEY);
     return { ok: true, skipped: true, message: "오늘 자동수집은 이미 실행했습니다." };
   }
