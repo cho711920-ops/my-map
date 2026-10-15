@@ -102,8 +102,11 @@ if ($Setup) {
   $extensionStorageRoot = Join-Path $profilePath 'Default\Local Extension Settings'
   $extensionId = Get-ChildItem -LiteralPath $extensionStorageRoot -Directory -ErrorAction SilentlyContinue |
     Where-Object {
-      Get-ChildItem -LiteralPath $_.FullName -File -ErrorAction SilentlyContinue |
-        Select-String -SimpleMatch 'jsAutoCollectorConfigV1' -Quiet -ErrorAction SilentlyContinue
+      # -Quiet emits one boolean per file; a nonempty array of only $false is
+      # truthy in Windows PowerShell. Require an actual matching file instead.
+      $configMatches = @(Get-ChildItem -LiteralPath $_.FullName -File -ErrorAction SilentlyContinue |
+        Select-String -SimpleMatch 'jsAutoCollectorConfigV1' -Quiet -ErrorAction SilentlyContinue)
+      $configMatches -contains $true
     } |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1 -ExpandProperty Name
