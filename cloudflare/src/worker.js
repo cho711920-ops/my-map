@@ -11,6 +11,7 @@ import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js"
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
+import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
@@ -313,12 +314,14 @@ function cacheAgeMs(object) {
   return savedAt > 0 ? Date.now() - savedAt : Number.POSITIVE_INFINITY;
 }
 
-async function readR2TextCache(env, key, maxAgeMs) {
+async function readR2TextCache(env, key, maxAgeMs, streamRequest = null) {
   if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
   const object = await env.MEDIA.get(key);
   if (!object || cacheAgeMs(object) > maxAgeMs) return null;
+  const streamed = streamRequest ? await unifiedCacheStream(streamRequest, object) : null;
+  if (streamed?.response) return streamed;
   return {
-    body: await object.text(),
+    body: streamed?.body ?? await object.text(),
     revision: String(object.customMetadata?.revision || ""),
     contentType: object.httpMetadata?.contentType || "application/json; charset=utf-8"
   };
@@ -807,7 +810,9 @@ async function handleDataApi(request, env, context) {
       const validTtl = Number.isFinite(configuredTtl) && configuredTtl > 0 ? configuredTtl : defaultTtl;
       const boundedTtl = detailCacheKey ? Math.min(5 * 60_000, validTtl) : validTtl;
       const forceFresh = (query.action === "unifiedListings" || Boolean(detailCacheKey)) && request.headers.get("x-js-force-refresh") === "1";
-      const cached = forceFresh ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl));
+      const cached = forceFresh ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl),
+        query.action === "unifiedListings" && !query.callback ? request : null);
+      if (cached?.response) return cached.response;
       if (cached && (query.action !== "unifiedListings" || cached.revision)) {
         const cachedBody = query.action === "unifiedListings"
           ? compactUnifiedListingsBody(cached.body)

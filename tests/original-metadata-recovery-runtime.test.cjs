@@ -104,6 +104,37 @@ test("ready global phase with pending property proofs still performs bounded sco
   assert.equal(h.context.allItems[2].state, "active");
 });
 
+test("visible photos refresh while the full CSV is still loading", async () => {
+  const h = harness(), scheduled = [];
+  h.context.isLoadingSheet = true;
+  h.context.visibleListItems = [h.context.allItems[1]];
+  h.context.listRenderStart = 0; h.context.listRenderLimit = 1;
+  h.context.setTimeout = callback => {scheduled.push(callback);return scheduled.length;};
+  h.context.clearTimeout = () => {};
+  vm.runInContext(functionSource("requestVisibleOriginalMetadataV1"),h.context);
+  h.context.requestVisibleOriginalMetadataV1(); scheduled.shift()(); await flush();
+  assert.equal(h.reads.length,1);
+  assert.equal(h.reads[0].params.ids,"B");
+  h.reads[0].resolve({ok:true,items:[item("B",2)],unified:inventory([
+    ["B",2,original("B",{thumbnail:"https://example.invalid/visible-first.jpg",lastCheckedAt:"2026-10-16T01:00:00Z"})]
+  ])});
+  await h.context.refreshScopedOriginalsV1.pending.promise;
+  assert.equal(h.context.isLoadingSheet,true,"Do not pretend the independent full CSV completed");
+  assert.match(h.api.cardParts(h.context.allItems[1]).thumbnail,/visible-first\.jpg/);
+  assert.equal(h.context.allItems[1].memo,"보존 메모 B");
+});
+
+test("a new visible follow-up preempts remaining background source batches", async () => {
+  const h = harness();
+  const ids = Array.from({length:120},(_,index)=>"background-"+index);
+  const pending=h.context.refreshScopedOriginalsV1(ids,4); await flush();
+  assert.equal(h.reads.length,1);
+  h.context.refreshScopedOriginalsV1.pending.visibleFollowUp=true;
+  h.reads[0].resolve({ok:true,items:[],unified:inventory([])});
+  await pending;
+  assert.equal(h.reads.length,1,"Visible cards must not wait for another 3 background batches");
+});
+
 test("incomplete scoped inventory retains omitted photos and candidates until a later verified recovery", async () => {
   const h = harness(), saved = h.context.allItems.map(preserved), originalC = h.api.allOriginals("C")[0];
   let pending = h.context.recoverOriginalMetadataV1(4);

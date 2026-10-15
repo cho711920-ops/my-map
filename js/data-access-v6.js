@@ -121,6 +121,7 @@
     var settings = options || {};
     var timeoutMs = Number(settings.timeoutMs) > 0 ? Math.min(Number(settings.timeoutMs), 120000) :
       (revalidated ? LARGE_READ_TIMEOUT : NORMAL_READ_TIMEOUT);
+    var startedAt = Date.now();
     return boundedRead(DATA_API + "?" + query.toString(), {
       cache: settings.cache || (revalidated ? "default" : "no-store"),
       headers: settings.headers || undefined,
@@ -137,7 +138,15 @@
         if (!payload || payload.ok === false) {
           throw httpError(messageFromPayload(payload, settings.errorMessage || "운영자료 조회 실패"), response, payload);
         }
-        if (action === "unifiedListings") payload.snapshotRevision = String(response.headers.get("x-js-listings-revision") || "");
+        if (action === "unifiedListings") {
+          payload.snapshotRevision = String(response.headers.get("x-js-listings-revision") || "");
+          // Local DOM diagnostics for validating startup without retaining any
+          // listing details or emitting account data to a telemetry service.
+          if (typeof document !== "undefined" && document.documentElement) {
+            document.documentElement.setAttribute("data-originals-read-ms", String(Date.now() - startedAt));
+            document.documentElement.setAttribute("data-originals-read-transport", String(response.headers.get("x-js-data-transport") || "buffered"));
+          }
+        }
         return payload;
       });
     }, timeoutMs, readKey(action, params, settings));

@@ -2024,6 +2024,9 @@ function refreshScopedOriginalsV1(ids, generation) {
   var task = {generation: generation, promise: null};
   function next() {
     if (generation !== jsListingsLoadGenerationV1 || cursor >= unique.length) return Promise.resolve();
+    // A new viewport must not wait behind the remaining background batches.
+    // The coalesced visible follow-up starts as soon as this one batch settles.
+    if (cursor && task.visibleFollowUp) return Promise.resolve();
     var batch = unique.slice(cursor, cursor += 50);
     var requested = Object.create(null), before = Object.create(null);
     batch.forEach(function(id) { requested[id] = true; });
@@ -2088,7 +2091,7 @@ function requestVisibleOriginalMetadataV1() {
   requestVisibleOriginalMetadataV1.timer = window.setTimeout(function() {
     requestVisibleOriginalMetadataV1.timer = null;
     var api = window.JSUnifiedListingsV8;
-    if (generation !== jsListingsLoadGenerationV1 || isLoadingSheet || !api ||
+    if (generation !== jsListingsLoadGenerationV1 || !(allItems || []).length || !api ||
         typeof api.getOriginalMetadataStatus !== "function" || typeof api.pendingCompatibleIds !== "function") return;
     var shown = typeof visibleListItems !== "undefined" && Array.isArray(visibleListItems)
       ? visibleListItems : Array.isArray(window.currentItems) ? window.currentItems : [];
