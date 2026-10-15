@@ -68,9 +68,9 @@
     var shown = shownItems.length;
     if (typeof global.updateMapListingCountV825 === "function") global.updateMapListingCountV825(shownItems);
     label.textContent = state.phase === "loading" ? "오늘 신규매물 최신 확인 중 · " +
-      (state.confirmedPages ? "광고 " + state.progressAdCount + "개 · 매물 " + state.progressCount + "건 확인 · 목록 계속 확인 중" : "기존 결과 유지")
+      (state.confirmedPages ? "신규매물 " + state.progressCount + "건 · 연결광고 " + state.progressAdCount + "개 확인 · 목록 계속 확인 중" : "기존 결과 유지")
       : state.phase === "error" ? state.message + (state.ids ? " · 마지막 확인 결과 유지" : " · 최신 결과 미확인")
-        : state.ids ? "오늘 신규 광고 " + state.adCount + "개 · 매물 " + state.count + "건" +
+        : state.ids ? "오늘 신규매물 " + state.count + "건 · 연결광고 " + state.adCount + "개" +
           (state.manualCount ? " · 직접등록 " + state.manualCount + "건" : "") + " · 현재 조건 " + shown + "건" : "오늘 신규매물 최신 확인 필요";
     node.appendChild(label);
     var retry = document.createElement("button");
@@ -90,7 +90,8 @@
   function validatePage(result, market, first, seenIds) {
     var perProperty = result && result.snapshotConsistency === "per-property-v1" && result.unified &&
       result.unified.snapshotConsistency === "per-property-v1";
-    if (!result || result.ok === false || !Array.isArray(result.items) || !result.unified ||
+    if (!result || result.ok === false || result.todayPolicy !== "first-observed-property-v1" ||
+        !Array.isArray(result.items) || !result.unified ||
         (!perProperty && (!result.snapshotRevision || result.unified.snapshotRevision !== result.snapshotRevision)) ||
         (!!result.snapshotConsistency !== !!result.unified.snapshotConsistency) ||
         (result.snapshotConsistency && !perProperty) || typeof result.hasMore !== "boolean" ||
@@ -105,7 +106,8 @@
       if (perProperty) midnight.retryScope = "page";
       throw midnight;
     }
-    if (first && ((!perProperty && result.snapshotRevision !== first.snapshotRevision) || result.day !== first.day ||
+    if (first && (result.todayPolicy !== first.todayPolicy ||
+        (!perProperty && result.snapshotRevision !== first.snapshotRevision) || result.day !== first.day ||
         result.snapshotConsistency !== first.snapshotConsistency || result.rangeStart !== first.rangeStart || result.rangeEnd !== first.rangeEnd ||
         result.unified.format !== first.unified.format || JSON.stringify(result.unified.fields) !== JSON.stringify(first.unified.fields))) {
       var changed = new Error("수집 결과가 바뀌어 다시 확인합니다.");
@@ -116,7 +118,9 @@
     var pageIds = Object.create(null);
     result.items.forEach(function(item) {
       var id = String(item.property_id || item.id || ""), allowed = result.todayOriginalIds[id];
-      if (!id || seenIds[id] || pageIds[id] || !Object.prototype.hasOwnProperty.call(result.todayOriginalIds, id) ||
+      if (!id || seenIds[id] || pageIds[id] ||
+          global.listingRegistrationDayV1(item.first_collected_at) !== result.day ||
+          !Object.prototype.hasOwnProperty.call(result.todayOriginalIds, id) ||
           !Array.isArray(allowed) || allowed.some(function(value) { return typeof value !== "string" || !value; }) ||
           new Set(allowed).size !== allowed.length) throw new Error("오늘 신규광고의 연결을 확인하지 못했습니다.");
       pageIds[id] = true;
@@ -260,7 +264,7 @@
       } catch (error) {
         if (!current(token, market) || signal.aborted && !expired) return false;
         state.phase = "error";
-        state.message = state.confirmedPages ? "오늘 신규광고 일부만 확인했습니다 · 나머지 최신 확인 실패" : "오늘 신규매물 최신 확인 실패 · 다시 확인해 주세요";
+        state.message = state.confirmedPages ? "오늘 신규매물 일부만 확인했습니다 · 나머지 최신 확인 실패" : "오늘 신규매물 최신 확인 실패 · 다시 확인해 주세요";
         refreshView();
         return false;
       } finally {
@@ -294,8 +298,8 @@
     // Global updates do not invalidate verified per-property pages. Finish the
     // bounded request, then coalesce this burst into at most one follow-up.
     if (state.pending && revisionChanged) state.dirty = true;
-    // Master creation/last-seen dates cannot establish a new advertisement.
-    // Retain the last verified source-ID gate until the small Today read wins.
+    // Repeated collection or a new ad on a known property cannot establish a
+    // newly observed property. Retain the verified gate until Today rechecks it.
     if (!state.pending && revisionChanged) { refresh(true); return; }
     render();
   }
@@ -320,10 +324,10 @@
       progressCount: state.progressCount, progressAdCount: state.progressAdCount, confirmedPages: state.confirmedPages }; },
     emptyMessage: function() {
       if (!active()) return null;
-      if (state.phase === "loading") return {title: "오늘 신규광고를 확인하고 있습니다.",
-        description: "광고를 순서대로 확인 중입니다. 조회가 끝나기 전에는 0건으로 확정하지 않습니다."};
-      if (state.phase === "error") return {title: "오늘 신규광고 확인이 끝나지 않았습니다.",
-        description: "위의 최신 확인 버튼을 눌러 나머지 광고를 다시 확인해 주세요."};
+      if (state.phase === "loading") return {title: "오늘 신규매물을 확인하고 있습니다.",
+        description: "처음 수집한 매물을 순서대로 확인 중입니다. 조회가 끝나기 전에는 0건으로 확정하지 않습니다."};
+      if (state.phase === "error") return {title: "오늘 신규매물 확인이 끝나지 않았습니다.",
+        description: "위의 최신 확인 버튼을 눌러 나머지 매물을 다시 확인해 주세요."};
       return null;
     }
   };

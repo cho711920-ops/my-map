@@ -176,32 +176,42 @@ test('the real Worker authenticates and proves Today pages without pinning unrel
   h.db.close();
 });
 
-test('Today includes a new source on an old parent but not old ads with new publication, last-seen or reappearance dates', async () => {
+test('Today excludes previously known properties even with new advertisements and keeps first property dates unchanged', async () => {
   const h = fixture(), now = new Date('2026-10-13T09:00:00Z');
   h.listing('existing-parent', '2024-01-01');
   h.listing('old-ad-new-parent', '2026-10-13');
   h.listing('reappeared', '2024-01-01');
   h.listing('manual', '2026-10-13');
+  h.listing('first-property', '2026-10-13');
+  h.listing('mixed-history-parent', '2026-10-13');
   h.source('old-existing', 'existing-parent', 1, 0, { first_collected_at: '2024-01-01' });
   h.source('new-existing', 'existing-parent', 1, 0, { first_collected_at: '2026-10-12T15:00:00Z' });
   h.source('new-second', 'existing-parent', 1, 0, { first_collected_at: '2026-10-13T14:59:59Z' });
   h.source('publication-only', 'old-ad-new-parent', 1, 0, { first_collected_at: '2024-01-01', last_collected_at: '2026-10-13T09:00:00Z' });
   h.source('same-reappeared', 'reappeared', 1, 0, { first_collected_at: '2024-01-01', last_collected_at: '2026-10-13T09:00:00Z' });
+  h.source('first-new-ad', 'first-property', 1, 0, { first_collected_at: '2026-10-12T15:00:00Z' });
+  h.source('second-new-ad', 'first-property', 1, 0, { first_collected_at: '2026-10-13T14:59:59Z' });
+  h.source('historical-inactive', 'mixed-history-parent', 0, 1, { first_collected_at: '2024-01-01' });
+  h.source('mixed-new-ad', 'mixed-history-parent', 1, 0, { first_collected_at: '2026-10-13T03:00:00Z' });
+  const before=h.db.prepare('SELECT total_changes() AS n').get().n;
   const result = await newListingPeriod(h.env, { market: 'lease' }, h.originals, now);
-  assert.deepEqual(result.items.map(row => row.id), ['existing-parent','manual']);
-  assert.equal(result.items[0].first_collected_at,'2024-01-01','Do not rewrite the parent registration history');
-  assert.deepEqual(result.todayOriginalIds, { 'existing-parent':['new-existing','new-second'],manual:[] });
+  assert.deepEqual(result.items.map(row => row.id), ['first-property','manual']);
+  assert.equal(result.todayPolicy,'first-observed-property-v1');
+  assert.equal(h.db.prepare("SELECT first_collected_at FROM listings WHERE id='existing-parent'").get().first_collected_at,'2024-01-01');
+  assert.deepEqual(result.todayOriginalIds, { 'first-property':['first-new-ad','second-new-ad'],manual:[] });
   assert.equal(result.todayAdCount,2);assert.equal(result.todayManualCount,1);
-  assert.equal(result.unified.groups['existing-parent'].length,3,'Keep the whole original group outside the Today-only projection');
+  assert.equal(h.db.prepare("SELECT COUNT(*) n FROM listing_sources WHERE listing_id='existing-parent'").get().n,3,'Keep old properties and all advertisements outside Today');
+  assert.equal(h.db.prepare('SELECT total_changes() AS n').get().n,before,'Changing the view never rewrites dates or advertisement state');
   const plan=h.db.prepare(`EXPLAIN QUERY PLAN SELECT listing_id FROM listing_sources
     WHERE active=1 AND (${REGISTRATION_DAY_SQL})=? AND trade_type=?`).all('2026-10-13','lease');
   assert.match(JSON.stringify(plan),/idx_listing_sources_registration_day_trade_parent/);
   h.db.close();
 });
 
-test('inactive today ads and the next KST day are excluded while boundary ads use their source-first day', async () => {
+test('inactive ads and the next KST day are excluded while both property and source boundaries must match Today', async () => {
   const h=fixture(),now=new Date('2026-10-13T09:00:00Z');
-  for(const id of ['start','before','next','inactive'])h.listing(id,'2024-01-01');
+  h.listing('start','2026-10-12T15:00:00Z');h.listing('before','2026-10-12T14:59:59Z');
+  h.listing('next','2026-10-13T15:00:00Z');h.listing('inactive','2026-10-13');
   h.source('start-ad','start',1,0,{first_collected_at:'2026-10-12T15:00:00Z'});
   h.source('before-ad','before',1,0,{first_collected_at:'2026-10-12T14:59:59Z'});
   h.source('next-ad','next',1,0,{first_collected_at:'2026-10-13T15:00:00Z'});

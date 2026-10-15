@@ -316,6 +316,42 @@ test("Naver progress stays nonnegative before detail work and never proves compl
   }) }, {});
 });
 
+for (const attempt of [1, 2]) {
+  test(`a confirmed Naver D1 finalization CPU failure on attempt ${attempt} preserves progress without an auth circuit`, async () => {
+    const h = harness({targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
+      lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: attempt});
+    const stage = {key: "save", found: 8193, processed: 8193, unchanged: 7582,
+      created: 3, updated: 608, review: 0, addressMissing: 0, failed: 0};
+    await h.dispatch({type: "JS_AUTO_TARGET_HEARTBEAT", runId: "cycle", targetRunId: "seo",
+      progressFingerprint: "naver-saved-before-finalize", progressStage: stage});
+    await h.flush();
+    await h.context.finishCurrentTarget({ok: false, runId: "cycle", targetRunId: "seo",
+      message: "D1_ERROR: CPU time limit exceeded during finalization",
+      result: {ok: false, complete: false, totals: {accepted: 611, saved: 611, created: 3, updated: 608}}}, 42);
+    const item = h.data[REPORT].items[3];
+    assert.equal(item.counts.expected, 8193);
+    assert.equal(item.counts.processed, 8193);
+    assert.equal(item.counts.unchanged, 7582);
+    assert.equal(item.counts.detailProcessed, 611);
+    assert.equal(item.counts.created, 3);
+    assert.equal(item.counts.listComplete, false, "saved rows do not prove successful census finalization");
+    assert.equal(h.data[REPORT].items[0].status, "completed");
+    assert.equal(Object.keys(h.data[CIRCUIT] || {}).length, 0);
+    assert.equal(h.navigation.length, 1);
+    if (attempt === 1) {
+      assert.equal(item.status, "running");
+      assert.equal(h.data[RUN].index, 3);
+      assert.equal(h.data[RUN].targetAttempt, 2);
+      assert.match(h.navigation[0], /test=3$/);
+    } else {
+      assert.equal(item.status, "retry_wait");
+      assert.equal(h.data[RUN].index, 4);
+      assert.equal(h.data[RUN].retryQueue[0].key, "naver-3");
+      assert.match(h.navigation[0], /test=4$/);
+    }
+  });
+}
+
 test("Naver comparison-to-detail transition replaces its old counter with the latest snapshot", async () => {
   const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
     lastHeartbeatAt: clock, lastProgressAt: clock });

@@ -51,6 +51,13 @@ export async function advertisementScopeKey(source, scope) {
   return `${source === "공실박스" ? "gongsil-map" : source === "네이버" ? "naver-region" : "daangn-cluster"}-v1-${hash}`;
 }
 
+function observedAdvertisementPairsSql(parameter) {
+  return `WITH observed AS MATERIALIZED (
+    SELECT DISTINCT json_extract(seen.value,'$.sourceId') AS source_id,
+      json_extract(seen.value,'$.tradeType') AS trade_type FROM json_each(${parameter}) seen
+  )`;
+}
+
 export async function trackAdvertisementPresence(env, { source, body, sessionId, offers, markets, complete, providerCount }) {
   const audit = advertisementCensusAudit(source, body, providerCount);
   const result = { missingMarked: 0, deactivated: 0, presenceReset: 0, adsReappeared: 0,
@@ -65,16 +72,23 @@ export async function trackAdvertisementPresence(env, { source, body, sessionId,
   const observed = offers.filter(row => markets.includes(row.tradeType));
   const seenJson = JSON.stringify(observed.map(row => ({ sourceId: row.sourceId, tradeType: row.tradeType })));
   const at = new Date().toISOString();
-  const resetRows = await env.DB.prepare(`SELECT id,listing_id,active FROM listing_sources s
-    WHERE source=?1 AND (active=0 OR missing_count<>0) AND updated_at<=?2 AND EXISTS (
-      SELECT 1 FROM json_each(?3) seen WHERE json_extract(seen.value,'$.sourceId')=s.source_listing_id
-      AND json_extract(seen.value,'$.tradeType')=COALESCE(NULLIF(s.trade_type,''),'lease'))`)
+  // Drive every positive lookup from the observed ID set. Scanning all old
+  // inactive ads and re-parsing thousands of seen IDs for each row is quadratic.
+  // CROSS JOIN fixes the driver order; the existing source/number unique index
+  // and presence source/market/number index perform the actual lookups.
+  const resetRows = await env.DB.prepare(`${observedAdvertisementPairsSql("?3")}
+    SELECT s.id,s.listing_id,s.active FROM observed CROSS JOIN listing_sources s
+    WHERE s.source=?1 AND s.source_listing_id=observed.source_id
+      AND COALESCE(NULLIF(s.trade_type,''),'lease')=observed.trade_type
+      AND (s.active=0 OR s.missing_count<>0) AND s.updated_at<=?2`)
     .bind(source, capturedAt, seenJson).all();
   if ((resetRows?.results || []).length) {
     const reset = await env.DB.prepare(`UPDATE listing_sources SET active=1,missing_count=0,last_collected_at=?1,updated_at=?2
-      WHERE source=?3 AND (active=0 OR missing_count<>0) AND updated_at<=?1 AND EXISTS (
-        SELECT 1 FROM json_each(?4) seen WHERE json_extract(seen.value,'$.sourceId')=listing_sources.source_listing_id
-        AND json_extract(seen.value,'$.tradeType')=COALESCE(NULLIF(listing_sources.trade_type,''),'lease')) RETURNING id,listing_id`)
+      WHERE rowid IN (${observedAdvertisementPairsSql("?4")}
+        SELECT s.rowid FROM observed CROSS JOIN listing_sources s
+        WHERE s.source=?3 AND s.source_listing_id=observed.source_id
+          AND COALESCE(NULLIF(s.trade_type,''),'lease')=observed.trade_type)
+        AND (active=0 OR missing_count<>0) AND updated_at<=?1 RETURNING id,listing_id`)
       .bind(capturedAt, at, source, seenJson).all();
     const changed = reset?.results || [];
     const inactiveIds = new Set(resetRows.results.filter(row => Number(row.active) === 0).map(row => row.id));
@@ -85,9 +99,10 @@ export async function trackAdvertisementPresence(env, { source, body, sessionId,
   // updated_at also records a missing census: last_seen_at alone cannot order
   // a delayed positive snapshot against a more recently proved absence.
   await env.DB.prepare(`UPDATE collector_source_presence SET missing_count=0,last_seen_at=?1,updated_at=?2
-    WHERE source=?3 AND last_seen_at<=?1 AND updated_at<=?1 AND missing_count<>0 AND EXISTS (
-      SELECT 1 FROM json_each(?4) seen WHERE json_extract(seen.value,'$.sourceId')=collector_source_presence.source_listing_id
-      AND json_extract(seen.value,'$.tradeType')=collector_source_presence.trade_type)`)
+    WHERE rowid IN (${observedAdvertisementPairsSql("?4")}
+      SELECT p.rowid FROM observed CROSS JOIN collector_source_presence p
+      WHERE p.source=?3 AND p.trade_type=observed.trade_type AND p.source_listing_id=observed.source_id)
+      AND last_seen_at<=?1 AND updated_at<=?1 AND missing_count<>0`)
     .bind(capturedAt, at, source, seenJson).run();
   if (!complete || !audit.valid || !markets.length) {
     result.presenceTrackingIssue = audit.valid ? "부분수집: 없어진 광고 판정 보류" : audit.issues.join(" · ");

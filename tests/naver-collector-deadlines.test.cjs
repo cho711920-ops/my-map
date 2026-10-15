@@ -351,6 +351,75 @@ for (const {action: timedOutAction, failureMode} of ambiguousRunCases) {
   });
 }
 
+test("a confirmed finalization CPU failure preserves saves and a fresh manifest retry skips them", async () => {
+  let saved = false;
+  let completeAttempts = 0;
+  let sessionNumber = 0;
+  let detailCalls = 0;
+  const h = harness(({payload}) => {
+    if (payload.action === "classifySourceManifest") {
+      return jsonResponse({ok: true, needsDetail: saved ? [] : ["네이버-123"], unchanged: saved ? 1 : 0});
+    }
+    if (payload.action === "saveNaverBatch") {
+      saved = true;
+      return jsonResponse({ok: true, accepted: 1, saved: 1, created: 1});
+    }
+    if (payload.action === "finalizeNaverSession") {
+      if (payload.complete && ++completeAttempts === 1) {
+        return jsonResponse({ok: false, message: "D1_ERROR: CPU time limit exceeded during finalization"});
+      }
+      return jsonResponse({ok: true, complete: payload.complete, totals: {
+        accepted: 0, saved: 0, created: 0, failed: 0, newSourceAdsReported: true, newSourceAds: 0
+      }});
+    }
+    assert.fail("unexpected action " + payload.action);
+  });
+  const dashboard = {};
+  Object.assign(h.context, {
+    state: {busy: false, preparing: false, stopRequested: false, selectionMode: "district",
+      selectedDistrict: {}, dashboard},
+    saveButton: {}, retryButton: {},
+    createCollectionSessionId: () => "session-" + (++sessionNumber),
+    normalize: item => item,
+    enrichNaverDetailBatch: async items => {
+      detailCalls += 1;
+      return items.map(item => ({item, valid: true}));
+    },
+    showNaverSaveWait() {},
+    updateDashboard: updates => Object.assign(dashboard, updates),
+    addResultTotals(totals, result) {
+      for (const key of ["accepted", "saved", "created"]) totals[key] += Number(result[key] || 0);
+    },
+    newSourceAdCounts: result => result && result.newSourceAdsReported === true
+      ? {newSourceAds: result.newSourceAds, newSourceAdsReported: true} : {},
+    adjustBatchSize() {}, finishCollectorRun() {}, isFinNaver: () => true
+  });
+  const failed = await h.context.collectAndSave([{articleNo: "123"}], "서구 전체", {complete: true});
+  assert.equal(failed.ok, false);
+  assert.equal(failed.complete, false);
+  assert.match(failed.message, /CPU time limit/);
+  assert.equal(failed.totals.accepted, 1);
+  assert.equal(failed.totals.saved, 1);
+  const finals = h.calls.filter(call => call.payload.action === "finalizeNaverSession");
+  assert.deepEqual(finals.map(call => call.payload.complete), [true, false]);
+  assert.equal(finals[1].payload.expectedCount, 0, "partial preservation cannot claim a complete census");
+  assert.equal(finals[1].payload.completionProof, null);
+  assert.equal(finals[1].payload.presenceScope, null);
+  assert.equal(h.calls.some(call => call.payload.action === "mutationStatus"), false,
+    "a confirmed JSON error is not an ambiguous write");
+
+  const retried = await h.context.collectAndSave([{articleNo: "123"}], "서구 전체", {complete: true});
+  assert.equal(retried.ok, true);
+  assert.equal(retried.complete, true);
+  assert.equal(retried.classification.unchanged, 1);
+  assert.equal(retried.totals.newSourceAds, 0);
+  assert.equal(detailCalls, 1);
+  assert.equal(h.calls.filter(call => call.payload.action === "saveNaverBatch").length, 1);
+  assert.deepEqual(h.calls.filter(call => call.payload.action === "classifySourceManifest")
+    .map(call => call.payload.sessionId), ["session-1", "session-2"]);
+  assert.equal(h.timers.size, 0);
+});
+
 for (const failureMode of ["timeout", "network", "invalid-envelope"]) {
   test(`city failed-item retry stops after an ambiguous ${failureMode} without further writes or finalization`, async () => {
     let saveRequests = 0;

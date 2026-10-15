@@ -43,7 +43,7 @@ function fixture() {
     return true;
   }};
   vm.createContext(context); vm.runInContext(source, context);
-  function result(ids, patch = {}) { return { ok: true, days: 1, market, day: '2026-10-13', rangeStart: '2026-10-12T15:00:00Z', rangeEnd: '2026-10-13T15:00:00Z',
+  function result(ids, patch = {}) { return { ok: true, todayPolicy: 'first-observed-property-v1', days: 1, market, day: '2026-10-13', rangeStart: '2026-10-12T15:00:00Z', rangeEnd: '2026-10-13T15:00:00Z',
     snapshotRevision: 'r1', hasMore: false, nextCursor: '', todayOriginalIds:Object.fromEntries(ids.map(id=>[id,[]])),todayAdCount:0,todayManualCount:ids.length,
     items: ids.map(id => ({ id, property_id: id, first_collected_at: '2026-10-13T09:00:00Z', trade_type: market === 'lease' ? 'lease' : 'sale' })),
     unified: { ok: true, groups: {}, sourceSearchIds: {}, snapshotRevision: 'r1' }, ...patch }; }
@@ -96,19 +96,19 @@ test('all Today pages merge original-ID gates and per-property proof maps, with 
   assert.equal(applied.unified.sourceSnapshotKeys.A,a);assert.equal(applied.unified.sourceSnapshotPropertyIds.B,'B');
   assert.deepEqual(Array.from(applied.todayOriginalIds.A),['ad-A1','ad-A2']);
   assert.equal(h.api.state().adCount,2);assert.equal(h.api.state().count,2);assert.equal(h.api.state().manualCount,1);
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/신규 광고 2개 · 매물 2건 · 직접등록 1건/);
+  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/오늘 신규매물 2건 · 연결광고 2개 · 직접등록 1건/);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:1}),true);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'old-ad',active:1}),false);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:0}),false);
 });
 
-test('Today projection selects only new-ad conditions/photos without changing old parent dates, memos or source groups',async()=>{
+test('Today projection selects eligible ad conditions/photos on a first-observed property without changing its date, memo or full source group',async()=>{
   const h=fixture();h.context.console={warn(){},error(){}};h.context.hideDone=true;h.context.doneOnly=false;
   vm.runInContext(fs.readFileSync('js/unified-listings-v8.js','utf8'),h.context);
   const pending=h.api.refresh(true);
   const old={propertyId:'A',originalId:'old',source:'당근',active:1,deposit:100,rent:10,area:30,thumbnail:'https://example.invalid/old.jpg'};
   const fresh={propertyId:'A',originalId:'new',source:'네이버',active:1,deposit:1000,rent:60,area:30,thumbnail:'https://example.invalid/new.jpg'};
-  h.reads[0].resolve(h.result(['A'],{items:[{id:'A',property_id:'A',first_collected_at:'2024-01-01',trade_type:'lease'}],
+  h.reads[0].resolve(h.result(['A'],{items:[{id:'A',property_id:'A',first_collected_at:'2026-10-13T09:00:00Z',trade_type:'lease'}],
     todayOriginalIds:{A:['new']},unified:{ok:true,groups:{A:[old,fresh]},sourceSearchIds:{},snapshotRevision:'r1'}}));
   await pending;
   const master=h.context.allItems.find(item=>item.propertyId==='A');Object.assign(master,{key:'favorite-A',memo:'keep memo',deposit:100,rent:10,area:30});
@@ -152,12 +152,12 @@ test('filter removal and market change abort old responses; repeated clicks shar
   assert.equal(h.elements.get('todayListingStatusV1').hidden, true);
 });
 
-test('latest full master snapshots recheck source IDs rather than treating master dates as new ads', async () => {
+test('latest full master snapshots retain the verified new-property gate until Today confirms eligible IDs', async () => {
   const h = fixture(); let pending = h.api.refresh(true); h.reads[0].resolve(h.result(['first'])); await pending;
   pending = h.api.refresh(true);
   h.context.allItems.push({ propertyId: 'later', regDate: '2026-10-13', tradeType: 'lease' });
   h.events['js-listings-full-snapshot']({ detail: { revision: 'r2' } }); await h.tick();
-  assert.equal(h.api.matches({ propertyId: 'later' }), false,'a new master date cannot establish a newly collected advertisement');
+  assert.equal(h.api.matches({ propertyId: 'later' }), false,'a new master date alone cannot establish verified Today eligibility');
   assert.equal(h.reads[1].options.signal.aborted, false,'an in-flight Today request must not restart on a full snapshot');
   h.reads[1].resolve(h.result(['first']));assert.equal(await pending,true);
   [...h.timers.values()].find(timer=>timer.ms===0).fn();await h.tick();
@@ -297,6 +297,30 @@ test('unsupported protocol, mixed day and duplicate page IDs cannot mutate the c
     await pending;
     assert.equal(h.applied.length,1);assert.equal(h.api.matches({propertyId:'A'}),true);
   }
+});
+
+test('the new-property policy is required and old parents cannot enter Today even with a new advertisement',async()=>{
+  for(const patch of [
+    {todayPolicy:undefined},
+    {todayPolicy:'first-observed-advertisement-v1'},
+    {todayPolicy:'unknown'},
+    {items:[{property_id:'old-parent',first_collected_at:'2026-10-12T09:00:00Z'}],todayOriginalIds:{'old-parent':['new-ad']}}
+  ]) {
+    const h=fixture(),pending=h.api.refresh(true);
+    h.reads[0].resolve(provenPage(h,['A'],'P1',patch));
+    assert.equal(await pending,false);assert.equal(h.applied.length,0);
+    assert.equal(h.api.state().phase,'error');assert.equal(h.api.globalScope(),false);
+    assert.equal(h.reads.length,1,'a policy failure must not restart collection or loop');
+  }
+});
+
+test('a legacy-policy continuation cannot replace a verified first-observed-property page',async()=>{
+  const h=fixture(),pending=h.api.refresh(true);
+  h.reads[0].resolve(provenPage(h,['A'],'P1',{hasMore:true,nextCursor:'second'}));await h.tick();
+  h.reads[1].resolve(provenPage(h,['old-parent'],'P2',{todayPolicy:'first-observed-advertisement-v1'}));
+  assert.equal(await pending,false);assert.equal(h.applied.length,1);
+  assert.equal(h.api.matches({propertyId:'A'}),true);assert.equal(h.api.matches({propertyId:'old-parent'}),false);
+  assert.equal(h.api.state().phase,'error');assert.equal(h.api.state().progressCount,1);
 });
 
 test('an account change cancels and rejects a late Today response before applying other-account data',async()=>{
@@ -444,7 +468,7 @@ test('early Today master rejection preserves source-specific prices, photos, dat
   vm.runInContext(fs.readFileSync('js/unified-listings-v8.js','utf8'),h.context);
   const base=id=>({propertyId:id,key:'favorite-'+id,name:id,address:'서구 테스트동 1',room:'1층',source:'네이버',
     state:'',regDate:'2024-01-01',tradeType:'lease',deposit:1000,rent:60,area:35,fee:0,premium:0,memo:'보존 메모',latlng:{}});
-  const masters=[base('A'),base('B'),{...base('manual'),source:'직접등록',regDate:'2026-10-13'},
+  const masters=[{...base('A'),regDate:'2026-10-13'},{...base('B'),regDate:'2026-10-13'},{...base('manual'),source:'직접등록',regDate:'2026-10-13'},
     base('old'),{...base('reappeared'),regDate:'2026-10-13'},
     {...base('old-manual'),source:'직접등록',regDate:'2024-01-01'},
     {...base('unknown'),unifiedOriginalMetadataPendingV1:true}];
@@ -476,9 +500,9 @@ test('early Today master rejection preserves source-specific prices, photos, dat
   h.context.JSUnifiedListingsV8.attach(h.context.allItems,{ok:true,groups});
   old=run(baseline);fast=run(optimized);
   assert.equal(fast.rows,old.rows);assert.equal(old.projections,7);assert.equal(fast.projections,3);
-  assert.deepEqual(JSON.parse(fast.rows).map(item=>item.id),['manual','A']);
+  assert.deepEqual(JSON.parse(fast.rows).map(item=>item.id).sort(),['A','manual']);
   const selected=JSON.parse(fast.rows).find(item=>item.id==='A');
-  assert.equal(selected.rent,60);assert.equal(selected.regDate,'2024-01-01');assert.equal(selected.memo,'보존 메모');
+  assert.equal(selected.rent,60);assert.equal(selected.regDate,'2026-10-13');assert.equal(selected.memo,'보존 메모');
   assert.match(selected.thumbnail,/new-A\.jpg/);assert.deepEqual(selected.originals,['new-A']);
   h.elements.get('sourceFilter').value='naver';
   old=run(baseline);fast=run(optimized);assert.equal(fast.rows,old.rows);

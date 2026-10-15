@@ -17,7 +17,9 @@ const COLUMNS = `id, title, address, room, listing_type, deposit, monthly_rent, 
   last_collected_at, latitude, longitude, building_elevator_capacity,
   trade_type, sale_category, sale_price, sale_details_json`;
 const PAGE_SIZE = 75;
+export const TODAY_PROPERTY_POLICY = 'first-observed-property-v1';
 const SOURCE_REGISTRATION_DAY_SQL = REGISTRATION_DAY_SQL.replaceAll('first_collected_at', 'today_source.first_collected_at');
+const HISTORICAL_SOURCE_DAY_SQL = REGISTRATION_DAY_SQL.replaceAll('first_collected_at', 'historical_source.first_collected_at');
 const badRequest = message => Object.assign(new Error(message), { statusCode: 400 });
 
 export function koreanCalendarDay(now = new Date()) {
@@ -76,6 +78,11 @@ async function readNewListingPeriodPage(env, query, loadOriginals, now) {
         WHERE today_source.listing_id=listings.id AND today_source.active=1 AND today_source.trade_type=?2
           AND (${SOURCE_REGISTRATION_DAY_SQL})=?1) AS today_original_ids_json FROM listings
     WHERE id IN (SELECT id FROM today_parents) AND trade_type=?2 AND id>?3
+      AND (${REGISTRATION_DAY_SQL})=?1
+      AND NOT EXISTS (SELECT 1 FROM listing_sources historical_source
+        WHERE historical_source.listing_id=listings.id
+          AND COALESCE(NULLIF(historical_source.trade_type,''),'lease')=?2
+          AND (${HISTORICAL_SOURCE_DAY_SQL})<?1)
       AND status<>'deleted' ${saleClause}
       AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
@@ -124,7 +131,7 @@ async function readNewListingPeriodPage(env, query, loadOriginals, now) {
   end.setTime(end.getTime() + 86400000);
   const nextCursor = hasMore ? btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify({ v: 1, day: cursor.day, market, id: items.at(-1).id }))))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : '';
-  return { ok: true, action: 'newListingPeriod', days: 1, market, day: cursor.day,
+  return { ok: true, action: 'newListingPeriod', days: 1, market, day: cursor.day, todayPolicy: TODAY_PROPERTY_POLICY,
     serverNow: now.toISOString(), rangeStart, rangeEnd: end.toISOString(), items, hasMore, nextCursor,
     todayOriginalIds, todayAdCount, todayManualCount,
     unified: { ...unified, groups, sourceSearchIds, sourceSnapshotKeys, sourceSnapshotPropertyIds }, source: 'D1' };

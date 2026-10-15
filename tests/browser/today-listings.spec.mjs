@@ -27,7 +27,7 @@ function row(id, extra={}) {
 function payload(rows, market="lease", revision="TODAY-1", extra={}) {
   const fields = ["originalId","source","thumbnail","photoCount","room","tradeType","saleCategory","salePrice",
     "active","deposit","rent","area","address","buildingName","firstSeen"];
-  return {ok:true,days:1,market,day,rangeStart,rangeEnd,items:rows,snapshotRevision:revision,hasMore:false,nextCursor:"",
+  return {ok:true,todayPolicy:"first-observed-property-v1",days:1,market,day,rangeStart,rangeEnd,items:rows,snapshotRevision:revision,hasMore:false,nextCursor:"",
     dataRevision:revision,snapshotConsistency:"per-property-v1",
     todayOriginalIds:Object.fromEntries(rows.map(item=>[item.property_id,[item.property_id+"-original"]])),todayAdCount:rows.length,
     unified:{ok:true,version:2,format:"compact-v2",fields,snapshotConsistency:"per-property-v1",
@@ -163,10 +163,10 @@ test("Today queries only its real scoped URL and shows outside/unlocated new car
   expect(h.calls[0].params).toMatchObject({action:"newListingPeriod",days:"1",market:"lease"});
   expect(h.calls[0].params).not.toHaveProperty("cursor");expect(h.calls[0].params).not.toHaveProperty("revision");
   expect(h.calls[0].url).not.toContain("undefined");
-  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규 광고 3개 · 매물 3건");
+  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규매물 3건 · 연결광고 3개");
   await expect(page.locator('#list .unified-thumb-v8 img')).toHaveCount(3);
-  await mkdir("outputs/today-new-fix-20261013",{recursive:true});
-  await page.screenshot({path:"outputs/today-new-fix-20261013/today-"+testInfo.project.name+".png"});
+  await mkdir("outputs/today-property-policy-20261015",{recursive:true});
+  await page.screenshot({path:"outputs/today-property-policy-20261015/today-"+testInfo.project.name+".png"});
   safe(h);
 });
 
@@ -179,10 +179,10 @@ test("loading, failed confirmation and confirmed zero are visibly different and 
   h.state.hold.resolve();h.state.hold=null;
   await expect.poll(()=>page.evaluate(()=>JSTodayListingsV1.state().phase)).toBe("error");
   await expect(page.locator("#todayListingStatusV1")).toContainText("최신 확인 실패");
-  await expect(page.locator("#todayListingStatusV1")).not.toContainText("오늘 신규 광고 0개");
+  await expect(page.locator("#todayListingStatusV1")).not.toContainText("오늘 신규매물 0건");
   h.state.status=200;h.state.rows=[];
   await page.locator("#todayListingStatusV1 button").click();await ready(page);
-  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규 광고 0개 · 매물 0건");
+  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규매물 0건 · 연결광고 0개");
   await expect(page.locator("#list .item")).toHaveCount(0);
   await expect(page.locator("#list")).toContainText("검색 결과가 없습니다");
   expect(h.calls).toHaveLength(2);safe(h);
@@ -241,7 +241,7 @@ test("a later complete CSV introduces the next new ID while Today stays enabled 
   await ready(page);
   expect(await cardIds(page)).toEqual(expect.arrayContaining(["NEXT-COLLECTION"]));
   await expect(page.locator("#list .item")).toHaveCount(4);
-  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규 광고 4개 · 매물 4건");
+  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규매물 4건 · 연결광고 4개");
   expect(h.calls).toHaveLength(2);
   safe(h);
 });
@@ -257,7 +257,9 @@ function dateScenario() {
     row("OLD-MASTER-EXPENSIVE-NEW",{first_collected_at:yesterday,registration_at:yesterday}),
     row("KST-JUST-BEFORE",{first_collected_at:beforeStart,registration_at:rangeStart}),
     row("KST-EXACT-START"),
-    row("MANUAL-TODAY",{main_source:"직접등록",operating_memo:"직접등록 사용자 메모"})
+    row("MANUAL-TODAY",{main_source:"직접등록",operating_memo:"직접등록 사용자 메모"}),
+    row("TODAY-FIRST-AFFORDABLE",{operating_memo:"오늘 신규매물 사용자 메모"}),
+    row("TODAY-FIRST-EXPENSIVE")
   ];
   rows.forEach((master,index)=>{master.source_snapshot_key="sha256-v1:"+(index+1).toString(16).padStart(64,"0");});
   function original(master,id,firstSeen,patch={}) {
@@ -278,8 +280,20 @@ function dateScenario() {
     original(rows[3],"OLD-MASTER-EXPENSIVE-NEW-old",yesterday,{deposit:500,rent:40}),
     original(rows[3],"OLD-MASTER-EXPENSIVE-NEW-today",rangeStart,{deposit:5000,rent:200,area:40,thumbnail:newAdPhoto,images:[newAdPhoto]})
   ];
-  const todayOriginalIds={"OLD-MASTER-NEW-AD":["OLD-MASTER-NEW-AD-today"],
-    "OLD-MASTER-EXPENSIVE-NEW":["OLD-MASTER-EXPENSIVE-NEW-today"],
+  groups["TODAY-FIRST-AFFORDABLE"]=[
+    original(rows[7],"TODAY-FIRST-AFFORDABLE-withdrawn",rangeStart,{source:"당근",deposit:500,rent:10,
+      active:0,sourceUnavailable:true,availabilityKind:"withdrawn"}),
+    original(rows[7],"TODAY-FIRST-AFFORDABLE-live",rangeStart,{buildingName:"오늘 처음 수집한 물건",deposit:1000,rent:60,area:30,
+      thumbnail:newAdPhoto,images:[newAdPhoto]})
+  ];
+  groups["TODAY-FIRST-EXPENSIVE"]=[
+    original(rows[8],"TODAY-FIRST-EXPENSIVE-withdrawn",rangeStart,{deposit:500,rent:40,
+      active:0,sourceUnavailable:true,availabilityKind:"withdrawn"}),
+    original(rows[8],"TODAY-FIRST-EXPENSIVE-live",rangeStart,{deposit:5000,rent:200,area:40,
+      thumbnail:newAdPhoto,images:[newAdPhoto]})
+  ];
+  const todayOriginalIds={"TODAY-FIRST-AFFORDABLE":["TODAY-FIRST-AFFORDABLE-live"],
+    "TODAY-FIRST-EXPENSIVE":["TODAY-FIRST-EXPENSIVE-live"],
     "KST-EXACT-START":["KST-EXACT-START-old"],"MANUAL-TODAY":[]};
   const eligible=rows.filter(master=>Object.hasOwn(todayOriginalIds,master.property_id));
   return {rows,groups,todayOriginalIds,eligible,yesterday};
@@ -302,12 +316,12 @@ async function sourceDateFixture(page,context,isMobile,testInfo) {
       snapshotConsistency:body.snapshotConsistency,snapshotRevision:body.snapshotRevision}};
   await page.evaluate(()=>loadSheet(true,true));
   await expect.poll(()=>page.evaluate(()=>isLoadingSheet)).toBe(false);
-  await expect(page.locator("#list")).toHaveAttribute("data-total-count","7");
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","9");
   await expect.poll(()=>page.evaluate(()=>JSV6ListStore.load("favorite").some(folder=>folder.id==="fixture-favorites"))).toBe(true);
   return {...h,scenario};
 }
 
-test("Today source-ID eligibility excludes old publication and reappearance while retaining KST-start and manual entries",async({page,context,isMobile},testInfo)=>{
+test("Today first-observed-property policy excludes old parents with new ads, publication and reappearance while retaining KST-start and manual entries",async({page,context,isMobile},testInfo)=>{
   const h=await sourceDateFixture(page,context,isMobile,testInfo);
   const before=await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),items:allItems.map(value=>({
     id:value.propertyId,key:value.key,memo:value.memo,regDate:value.regDate,state:value.state
@@ -317,9 +331,10 @@ test("Today source-ID eligibility excludes old publication and reappearance whil
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","4");
   expect(await page.evaluate(()=>allItems.find(value=>value.propertyId==="MANUAL-TODAY").memo)).toBe("직접등록 사용자 메모");
   await expect(page.locator('#list .item[data-property-id="KST-EXACT-START"] .unified-thumb-v8 img')).toHaveCount(1);
-  for(const id of ["OLD-PUBLICATION","OLD-REAPPEARED","KST-JUST-BEFORE"])
+  for(const id of ["OLD-PUBLICATION","OLD-REAPPEARED","OLD-MASTER-NEW-AD","OLD-MASTER-EXPENSIVE-NEW","KST-JUST-BEFORE"])
     await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toHaveCount(0);
   expect(await page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"ready",day,count:4,adCount:3});
+  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규매물 4건 · 연결광고 3개 · 직접등록 1건");
   h.state.hold=deferred();
   await page.evaluate(()=>loadSheet(true,true));
   await expect(page.locator("#todayListingStatusV1")).toContainText("최신 확인 중");
@@ -330,24 +345,33 @@ test("Today source-ID eligibility excludes old publication and reappearance whil
     id:value.propertyId,key:value.key,memo:value.memo,regDate:value.regDate,state:value.state
   }))}))).toEqual(before);
   await today(page);
-  await expect(page.locator("#list")).toHaveAttribute("data-total-count","7");
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","9");
+  await expect(page.locator('#list .item[data-property-id="OLD-MASTER-NEW-AD"]')).toHaveCount(1);
   expect(await page.evaluate(()=>JSUnifiedListingsV8.allOriginals("OLD-MASTER-NEW-AD").map(value=>value.originalId)))
     .toEqual(expect.arrayContaining(["OLD-MASTER-NEW-AD-old","OLD-MASTER-NEW-AD-today"]));
+  await page.evaluate(()=>{
+    document.getElementById("sourceFilter").value="naver";
+    document.getElementById("maxRent").value="80";document.getElementById("minArea").value="30";applyFilter();
+  });
+  const known=page.locator('#list .item[data-property-id="OLD-MASTER-NEW-AD"]');
+  await expect(known).toHaveCount(1);
+  await expect(known.locator(".price-main")).toContainText(/보\s*1,000\s*\/\s*(?:월세)?월\s*60/);
+  await expect(known.locator(".unified-thumb-v8 img")).toHaveAttribute("data-thumbnail-source-v8144",newAdPhoto);
   safe(h);
 });
 
-test("Today projects a new advertisement's own conditions and photo on an old master without leaking old sibling matches",async({page,context,isMobile},testInfo)=>{
+test("Today filters first-observed properties by live advertisement conditions/photos without including old properties or withdrawn siblings",async({page,context,isMobile},testInfo)=>{
   const h=await sourceDateFixture(page,context,isMobile,testInfo);
   await page.evaluate(()=>{
     document.getElementById("maxRent").value="80";document.getElementById("maxDeposit").value="2000";
     document.getElementById("minArea").value="30";document.getElementById("maxArea").value="45";
     document.getElementById("sourceFilter").value="naver";
-    JSV6ListStore.load("favorite").push({id:"source-date-review",name:"오늘 광고 검수",
-      itemKeys:["property:OLD-MASTER-NEW-AD","property:OLD-MASTER-EXPENSIVE-NEW"]});
+    JSV6ListStore.load("favorite").push({id:"source-date-review",name:"오늘 신규매물 검수",
+      itemKeys:["property:TODAY-FIRST-AFFORDABLE","property:TODAY-FIRST-EXPENSIVE","property:OLD-MASTER-NEW-AD","property:OLD-MASTER-EXPENSIVE-NEW"]});
     JSV6ListStore.activateFavoriteFilter("source-date-review",{silent:true});
   });
   await today(page);await ready(page);
-  expect(await cardIds(page)).toEqual(["OLD-MASTER-NEW-AD"]);
+  expect(await cardIds(page)).toEqual(["TODAY-FIRST-AFFORDABLE"]);
   const projectedIds=await page.evaluate(()=>{
     const project=JSUnifiedListingsV8.filterItemForView,ids=[];
     JSUnifiedListingsV8.filterItemForView=function(master,...rest){ids.push(master.propertyId);return project(master,...rest);};
@@ -355,29 +379,29 @@ test("Today projects a new advertisement's own conditions and photo on an old ma
     return ids;
   });
   expect(projectedIds.sort()).toEqual(Object.keys(h.scenario.todayOriginalIds).sort());
-  const card=page.locator('#list .item[data-property-id="OLD-MASTER-NEW-AD"]');
+  const card=page.locator('#list .item[data-property-id="TODAY-FIRST-AFFORDABLE"]');
   await expect(card.locator(".price-main")).toContainText(/보\s*1,000\s*\/\s*(?:월세)?월\s*60/);
   await expect(card.locator(".unified-thumb-v8 img")).toHaveAttribute("data-thumbnail-source-v8144",newAdPhoto);
   await card.locator(".unified-thumb-v8").click();
-  await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("오늘 처음 수집한 광고");
+  await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("오늘 처음 수집한 물건");
   await page.evaluate(()=>JSUnifiedListingsV8.close());
   expect(await page.evaluate(()=>({folder:activeFavoriteFolderId,
-    memo:allItems.find(value=>value.propertyId==="OLD-MASTER-NEW-AD").memo,
-    regDate:allItems.find(value=>value.propertyId==="OLD-MASTER-NEW-AD").regDate,
-    originals:JSUnifiedListingsV8.allOriginals("OLD-MASTER-NEW-AD").length})))
-    .toEqual({folder:"source-date-review",memo:"기존 통합매물 사용자 메모",regDate:h.scenario.yesterday,originals:2});
+    memo:allItems.find(value=>value.propertyId==="TODAY-FIRST-AFFORDABLE").memo,
+    regDate:allItems.find(value=>value.propertyId==="TODAY-FIRST-AFFORDABLE").regDate,
+    originals:JSUnifiedListingsV8.allOriginals("TODAY-FIRST-AFFORDABLE").length})))
+    .toEqual({folder:"source-date-review",memo:"오늘 신규매물 사용자 메모",regDate:rangeStart,originals:2});
   await page.evaluate(()=>{document.getElementById("maxRent").value="250";document.getElementById("maxDeposit").value="6000";applyFilter();});
-  expect((await cardIds(page)).sort()).toEqual(["OLD-MASTER-EXPENSIVE-NEW","OLD-MASTER-NEW-AD"]);
-  await expect(page.locator('#list .item[data-property-id="OLD-MASTER-EXPENSIVE-NEW"] .price-main'))
+  expect((await cardIds(page)).sort()).toEqual(["TODAY-FIRST-AFFORDABLE","TODAY-FIRST-EXPENSIVE"]);
+  await expect(page.locator('#list .item[data-property-id="TODAY-FIRST-EXPENSIVE"] .price-main'))
     .toContainText(/보\s*5,000\s*\/\s*(?:월세)?월\s*200/);
   await page.evaluate(()=>{document.getElementById("maxArea").value="35";applyFilter();});
-  expect(await cardIds(page)).toEqual(["OLD-MASTER-NEW-AD"]);
+  expect(await cardIds(page)).toEqual(["TODAY-FIRST-AFFORDABLE"]);
   await page.evaluate(()=>{document.getElementById("minArea").value="35";document.getElementById("maxArea").value="45";applyFilter();});
-  expect(await cardIds(page)).toEqual(["OLD-MASTER-EXPENSIVE-NEW"]);
+  expect(await cardIds(page)).toEqual(["TODAY-FIRST-EXPENSIVE"]);
   await page.evaluate(()=>{document.getElementById("sourceFilter").value="danggeun";applyFilter();});
   expect(await cardIds(page)).toEqual([]);
   await page.evaluate(()=>{document.getElementById("sourceFilter").value="naver";applyFilter();});
-  expect(await cardIds(page)).toEqual(["OLD-MASTER-EXPENSIVE-NEW"]);
+  expect(await cardIds(page)).toEqual(["TODAY-FIRST-EXPENSIVE"]);
   safe(h);
 });
 
@@ -435,7 +459,7 @@ test("three Today pages publish verified cards progressively and finish through 
   await today(page);
   await expect.poll(()=>h.pages.calls.length).toBe(1);
   await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
-  await expect(page.locator("#list")).toContainText("오늘 신규광고를 확인하고 있습니다");
+  await expect(page.locator("#list")).toContainText("오늘 신규매물을 확인하고 있습니다");
   h.pages.gates.first.resolve();
   await expect.poll(()=>h.pages.calls.length).toBe(2);
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","2");
@@ -460,7 +484,7 @@ test("three Today pages publish verified cards progressively and finish through 
   expect(h.pages.calls.every(call=>!Object.hasOwn(call,"revision"))).toBe(true);
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","6");
   await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(6);
-  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규 광고 6개 · 매물 6건");
+  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규매물 6건 · 연결광고 6개");
   expect(await page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"ready",count:6,adCount:6});
   expect(await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),memos:allItems.map(value=>[value.propertyId,value.memo])}))).toEqual(before);
   safe(h);

@@ -19,10 +19,15 @@ test("real Today scoped SQL paginates 1,000 source-backed parents without compac
   for (let index = 0; index < 1000; index += 1) {
     const id = "M-test-" + String(index).padStart(4, "0"), publicId = index % 2 ? "public-" + id : id;
     const sourceId = "O-test-" + index;
-    master.run(id, publicId, "서구 갈마동 " + (index + 1), "2024-01-01", at);
+    master.run(id, publicId, "서구 갈마동 " + (index + 1), at, at);
     source.run(sourceId, id, "네이버", "네이버-" + index + "::lease", JSON.stringify({
       originalId: sourceId, propertyId: id, source: "네이버", tradeType: "lease", room: "1층", thumbnail: "https://example.invalid/test.jpg"
     }), "snapshot-" + index, at, at, at);
+  }
+  for(let index=0;index<100;index+=1){
+    const id='OLD-'+index;
+    master.run(id,id,'서구 기존동 '+index,'2024-01-01',at);
+    source.run('O-'+id,id,'네이버','네이버-old-'+index+'::lease','{}','old-'+index,at,at,at);
   }
   db.exec("COMMIT");
   const env = { DB: { prepare(sql) {
@@ -70,7 +75,7 @@ function changingFixture(t, mutate) {
   }
   const at = koreanCalendarDay() + "T01:00:00Z";
   for (const id of ["inside", "outside"]) {
-    db.prepare("INSERT INTO listings(id,property_id,first_collected_at) VALUES(?,?,?)").run(id, id, "2024-01-01");
+    db.prepare("INSERT INTO listings(id,property_id,first_collected_at) VALUES(?,?,?)").run(id, id, id === "inside" ? at : "2024-01-01");
     db.prepare(`INSERT INTO listing_sources(id,listing_id,source,source_listing_id,list_snapshot_json,
       first_collected_at) VALUES(?,?,'네이버',?,'{}',?)`).run("O-" + id, id, id, id === "inside" ? at : "2024-01-01");
   }
