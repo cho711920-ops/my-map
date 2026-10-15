@@ -11,8 +11,6 @@ import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js"
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
-import { getCommercialArea } from "./commercial-area-api.js";
-import { getRegionalMarket } from "./regional-market-api.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
@@ -776,18 +774,6 @@ async function handleDataApi(request, env, context) {
       return jsonp(query.callback, result, {
         "cache-control": "private, no-store",
         "x-js-data-source": "D1+ELEVATOR-PUBLIC-DATA"
-      });
-    }
-    if (query.action === "commercialArea") {
-      return jsonp(query.callback, await getCommercialArea(env, query), {
-        "cache-control": "private, no-store",
-        "x-js-data-source": "PUBLIC-DATA"
-      });
-    }
-    if (query.action === "regionalMarket") {
-      return jsonp(query.callback, await getRegionalMarket(env, query), {
-        "cache-control": "private, no-store",
-        "x-js-data-source": "SGIS+R-ONE"
       });
     }
     if (query.action === "workQueueStatus" && query.client !== QUEUE_CLIENT_VERSION) return legacyQueueGuard();

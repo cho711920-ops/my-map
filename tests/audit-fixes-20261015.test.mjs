@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {readFileSync} from "node:fs";
 import vm from "node:vm";
-import {getCommercialArea} from "../cloudflare/src/commercial-area-api.js";
 
 const badgesSource = readFileSync(new URL("../js/building-register-v6.js", import.meta.url), "utf8");
 function badgeRuntime(items) {
@@ -74,41 +73,6 @@ test("collection timestamps accept epoch milliseconds and ISO strings in Korean 
   }
   assert.equal(formatAt(null), "-");
   assert.equal(formatAt("unavailable"), "unavailable");
-});
-
-test("commercial-area requests encode both data.go.kr key formats exactly once", async () => {
-  const originalFetch = globalThis.fetch;
-  const calls = [];
-  globalThis.fetch = async input => {
-    calls.push(new URL(input));
-    return Response.json({header: {resultCode: "00"}, body: {items: [], totalCount: 0}});
-  };
-  try {
-    for (const key of ["sample+key/value==", "sample%2Bkey%2Fvalue%3D%3D"]) {
-      const result = await getCommercialArea({DATA_GO_KR_SERVICE_KEY: key}, {lat: 36.35, lng: 127.38});
-      assert.equal(result.ok, true);
-    }
-    assert.equal(calls.length, 2);
-    for (const url of calls) {
-      assert.equal(url.searchParams.get("serviceKey"), "sample+key/value==");
-      assert.ok(!url.href.includes("%252B") && !url.href.includes("%253D"));
-      assert.equal(url.protocol, "https:");
-      assert.equal(url.hostname, "apis.data.go.kr");
-    }
-    await getCommercialArea({DATA_GO_KR_SERVICE_KEY: "building-service-key",
-      COMMERCIAL_DATA_GO_KR_SERVICE_KEY: "commercial%2Bkey%3D%3D"}, {lat: 36.35, lng: 127.38});
-    assert.equal(calls.at(-1).searchParams.get("serviceKey"), "commercial+key==",
-      "a dedicated commercial key must not replace or reuse a separate building-register key");
-    globalThis.fetch = async () => new Response("Forbidden", {status: 403});
-    await assert.rejects(getCommercialArea({DATA_GO_KR_SERVICE_KEY: "private-test-key"},
-      {lat: 36.35, lng: 127.38}), error => /HTTP 403/.test(error.message) && !/private-test-key/.test(error.message));
-    for (const code of ["20", "30"]) {
-      globalThis.fetch = async () => Response.json({OpenAPI_ServiceResponse: {cmmMsgHeader: {
-        returnReasonCode: code, returnAuthMsg: "private-test-key must never be echoed"}}}, {status: 403});
-      await assert.rejects(getCommercialArea({DATA_GO_KR_SERVICE_KEY: "private-test-key"},
-        {lat: 36.35, lng: 127.38}), error => error.message.includes("코드 " + code) && !/private-test-key/.test(error.message));
-    }
-  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("a new keyword clears the previous cluster list scope, while unchanged-query refresh preserves it", () => {

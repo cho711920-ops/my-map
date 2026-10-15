@@ -4852,7 +4852,7 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   div.setAttribute("data-list-card-id-v681", actionSelectionKeyV660(item));
   div.setAttribute("data-property-id", String(item.propertyId || "").trim());
   if (saleCardV1) div.classList.add("listing-sale-card-v1");
-  div.setAttribute("title", "더블클릭하면 스마트 매물카드 열기");
+  div.setAttribute("title", "매물 상세 보기");
   if (isPhoneListingV2()) {
     div.setAttribute("title", "매물 상세 보기");
     div.setAttribute("tabindex", "0");
@@ -4966,16 +4966,6 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
   div.onpointerleave = cancelCardWarmupV6107;
   div.onpointerdown = cancelCardWarmupV6107;
 
-  div.ondblclick = function(event) {
-    if (isPhoneListingV2()) return;
-    if (
-      event &&
-      event.target &&
-      event.target.closest &&
-      event.target.closest("button, input, label, a, textarea, select, .item-memo-panel")
-    ) return;
-    openItem(item);
-  };
 
   (appendTarget || document.getElementById("list")).appendChild(div);
   observeUnifiedDuplicateShimmerV812(div);
@@ -4993,156 +4983,6 @@ function addListItem(item, appendTarget, customerMatchContextV719) {
     });
   }
   return div;
-}
-
-
-/* === v3.0.6.1 수정: AI 스마트 매물카드 안정판 === */
-
-
-/* === v3.0.9 추가: AI 협상/현장체크 로직 === */
-
-
-/* === v3.0.10 추가: 업종별 적합도 로직 === */
-
-
-/* === v3.1.0 추가: AI 시장분석 엔진 1단계 === */
-
-
-function percentDiff(current, avg) {
-  current = Number(current) || 0;
-  avg = Number(avg) || 0;
-  if (!current || !avg) return 0;
-  return Math.round(((current - avg) / avg) * 1000) / 10;
-}
-
-
-/* === v3.1.1 추가: 카카오 Places 기반 AI 상권분석 1단계 === */
-var commercialRadius = 300;
-var commercialAnalysisCache = {};
-
-var commercialSearchGroups = [
-  { group:"생활", items:[
-    { key:"convenience", label:"편의점", keyword:"편의점" },
-    { key:"cafe", label:"카페", keyword:"카페" },
-    { key:"bank", label:"은행", keyword:"은행" },
-    { key:"bus", label:"버스정류장", keyword:"버스정류장" },
-    { key:"laundry", label:"세탁소", keyword:"세탁소" },
-    { key:"coinLaundry", label:"빨래방", keyword:"빨래방" },
-    { key:"post", label:"우체국", keyword:"우체국" }
-  ]},
-  { group:"음식", items:[
-    { key:"korean", label:"한식", keyword:"한식" },
-    { key:"chinese", label:"중식", keyword:"중국집" },
-    { key:"japanese", label:"일식", keyword:"일식" },
-    { key:"snack", label:"분식", keyword:"분식" },
-    { key:"chicken", label:"치킨", keyword:"치킨" },
-    { key:"pizza", label:"피자", keyword:"피자" },
-    { key:"burger", label:"햄버거", keyword:"햄버거" },
-    { key:"beer", label:"호프", keyword:"호프" },
-    { key:"meat", label:"고깃집", keyword:"고기집" },
-    { key:"gukbap", label:"국밥", keyword:"국밥" },
-    { key:"bakery", label:"베이커리", keyword:"베이커리" },
-    { key:"dessert", label:"디저트", keyword:"디저트" }
-  ]},
-  { group:"뷰티", items:[
-    { key:"hair", label:"미용실", keyword:"미용실" },
-    { key:"nail", label:"네일", keyword:"네일" },
-    { key:"eyelash", label:"속눈썹", keyword:"속눈썹" },
-    { key:"skin", label:"피부샵", keyword:"피부관리" },
-    { key:"waxing", label:"왁싱", keyword:"왁싱" },
-    { key:"massage", label:"마사지", keyword:"마사지" },
-    { key:"makeup", label:"메이크업", keyword:"메이크업" }
-  ]},
-  { group:"교육/의료", items:[
-    { key:"academy", label:"학원", keyword:"학원" },
-    { key:"english", label:"영어학원", keyword:"영어학원" },
-    { key:"math", label:"수학학원", keyword:"수학학원" },
-    { key:"taekwondo", label:"태권도", keyword:"태권도" },
-    { key:"piano", label:"피아노", keyword:"피아노학원" },
-    { key:"art", label:"미술", keyword:"미술학원" },
-    { key:"study", label:"독서실", keyword:"독서실" },
-    { key:"hospital", label:"병원", keyword:"병원" },
-    { key:"dental", label:"치과", keyword:"치과" },
-    { key:"pharmacy", label:"약국", keyword:"약국" },
-    { key:"oriental", label:"한의원", keyword:"한의원" }
-  ]}
-];
-
-
-function buildRadiusTabs() {
-  var radiuses = [50, 100, 200, 300, 500];
-  return '<div class="ai-radius-tabs">' + radiuses.map(function(r) {
-    return '<button class="ai-radius-btn ' + (commercialRadius === r ? 'on' : '') + '" onclick="event.stopPropagation(); setCommercialRadius(' + r + ')">' + r + 'm</button>';
-  }).join("") + '</div>' +
-  '<div class="ai-commerce-mode">50m=바로 옆 경쟁 / 100m=같은 블록 / 200m=도보권 / 300m=기본상권 / 500m=생활권</div>';
-}
-
-
-function getSelectedCommercialItem() {
-  var key = window.selectedItemKey || selectedItemKey;
-  if (!key) return null;
-  return (allItems || []).find(function(item) { return item.key === key; }) || null;
-}
-
-
-function setCommercialRadius(radius) {
-  commercialRadius = Number(radius) || 300;
-  var item = getSelectedCommercialItem();
-  if (item) loadCommercialAreaAnalysis(item);
-}
-
-
-function commerceChipClass(key, count) {
-  count = Number(count) || 0;
-  if ((key === "convenience" || key === "nail" || key === "japanese" || key === "dessert") && count <= 1) return "good";
-  if (count >= 15) return "danger";
-  if (count >= 8) return "warn";
-  return "";
-}
-
-
-function buildCommerceChips(analysis, groupName, limit) {
-  if (!analysis || !analysis.groups || !analysis.groups[groupName]) return "";
-  var keys = analysis.groups[groupName].slice();
-  keys.sort(function(a, b) {
-    return commercialCount(analysis.counts, b) - commercialCount(analysis.counts, a);
-  });
-  if (limit) keys = keys.slice(0, limit);
-  return keys.map(function(key) {
-    var count = commercialCount(analysis.counts, key);
-    var label = analysis.labels[key] || key;
-    return '<span class="ai-commerce-chip ' + commerceChipClass(key, count) + '">' + escapeHtml(label) + ' <b>' + count + '</b></span>';
-  }).join("");
-}
-
-
-function buildOpportunityHtml(analysis) {
-  if (!analysis || !analysis.available) return "";
-
-  var blue = (analysis.blueOceans || []).slice(0, 3).map(function(x) {
-    return '<span class="ai-opportunity-pill">' + escapeHtml(x.name) + ' ' + x.count + '</span>';
-  }).join("") || '<span class="ai-opportunity-desc">뚜렷한 공백 업종 없음</span>';
-
-  var hot = (analysis.saturated || []).slice(0, 3).map(function(x) {
-    return '<span class="ai-opportunity-pill hot">' + escapeHtml(x.name) + ' ' + x.count + '</span>';
-  }).join("") || '<span class="ai-opportunity-desc">과밀 업종 낮음</span>';
-
-  return '' +
-    '<div class="ai-opportunity-panel">' +
-      '<div class="ai-opportunity-card score">' +
-        '<div class="ai-opportunity-head">예상 성공가능성</div>' +
-        '<div class="ai-opportunity-main">' + (analysis.successScore || '-') + '점 · ' + escapeHtml(analysis.successLabel || '보통') + '</div>' +
-        '<div class="ai-opportunity-desc">경쟁도·생활수요·음식/교육/의료 밀집도를 종합한 내부 적합도 점수입니다.</div>' +
-      '</div>' +
-      '<div class="ai-opportunity-card blue">' +
-        '<div class="ai-opportunity-head">블루오션 후보</div>' +
-        '<div class="ai-opportunity-list">' + blue + '</div>' +
-      '</div>' +
-      '<div class="ai-opportunity-card hot">' +
-        '<div class="ai-opportunity-head">포화주의 업종</div>' +
-        '<div class="ai-opportunity-list">' + hot + '</div>' +
-      '</div>' +
-    '</div>';
 }
 
 
@@ -5856,41 +5696,6 @@ function isClusterSelected(clusterKey) {
 }
 
 
-function copyCurrentAIAnalysis() {
-  if (!selectedItemKey) {
-    alert("먼저 AI 분석할 매물을 선택해주세요.");
-    return;
-  }
-
-  if (typeof copySmartItemAnalysis === "function") {
-    copySmartItemAnalysis(encodeURIComponent(selectedItemKey));
-    return;
-  }
-
-  alert("분석복사 기능을 찾지 못했습니다.");
-}
-
-
-function printCurrentAIReport() {
-  if (!selectedItemKey) {
-    alert("먼저 AI 분석할 매물을 선택해주세요.");
-    return;
-  }
-
-  if (typeof printAIInvestmentReport === "function") {
-    printAIInvestmentReport();
-    return;
-  }
-
-  if (typeof printAiInvestmentReport === "function") {
-    printAiInvestmentReport(encodeURIComponent(selectedItemKey));
-    return;
-  }
-
-  alert("AI 리포트 인쇄 기능을 찾지 못했습니다.");
-}
-
-
 function updateSyncIndicatorFromStatus() {
   var statusBox = document.getElementById("status");
   var indicator = document.getElementById("syncIndicator");
@@ -6039,7 +5844,6 @@ function showAddressErrors() {
 /* === JS부동산 AI Parser v1.0.1 최종 오버라이드: 권1000/보2000/월100 등 복붙 약어 인식 강화 === */
 
 
-/* === v3.2.2.1 AI 투자리포트 A4 인쇄 수정본 === */
 
 
 /* v6.1 기본 계약완료 숨김 UI 초기화 */

@@ -12,7 +12,6 @@ assert.match(source, /state\.detailRequestToken \+= 1/);
 assert.match(source, /document\.addEventListener\("click", function\(event\)/);
 assert.match(source, /openOperationsCenter\|openListManager\|openQuickAddModal\|startAiVisitPreview/);
 assert.match(source, /toggleDetailFilter\|toggleV6ActionMenu\|toggleSortDropdown/);
-assert.match(source, /global\.closeAiSidePanel\(\)/);
 assert.match(source, /closeForOverlay: closeDetailForOverlay/);
 assert.match(operations, /JSUnifiedListingsV8\.closeForOverlay\(\)/);
 assert.match(html, /unified-listings-v8\.js\?v=8\.1\.43-card-detail-toggle/);
@@ -39,8 +38,7 @@ const windowMock = {
   addEventListener() {},
   clearTimeout() {},
   setTimeout() { return 1; },
-  requestAnimationFrame() {},
-  closeAiSidePanel() { this.aiCloseCount = (this.aiCloseCount || 0) + 1; }
+  requestAnimationFrame() {}
 };
 windowMock.window = windowMock;
 vm.runInNewContext(source, { window: windowMock, document: documentMock, console });
@@ -57,7 +55,6 @@ capturedClick({
 });
 assert.equal(drawerClasses.has("open"), false);
 assert.equal(ariaHidden, "true");
-assert.equal(windowMock.aiCloseCount, 1);
 assert.equal(typeof windowMock.JSUnifiedListingsV8.closeForOverlay, "function");
 
 console.log("detail overlay exclusivity tests passed");

@@ -12,7 +12,7 @@ assert.match(
 );
 assert.match(
   mapSource,
-  /JSUnifiedListingsV8\.close\(\)[\s\S]*?closeAiSidePanel\(\)/
+  /JSUnifiedListingsV8\.close\(\)/
 );
 
 assert.match(mapSource, /function markMapUserNavigationIntentV6525\(event\)/);

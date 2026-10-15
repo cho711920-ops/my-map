@@ -7,7 +7,6 @@
   window.drawItems = function(items) {window.showList(items);};
   window.selectListingOnMapV844 = function() {};
   window.clearPinnedClusterSelectionV6515 = function() {};
-  window.openItem = function(item) {window.JSUnifiedListingsV8.open(encodeURIComponent(item.propertyId));};
   window.allItems = window.__fixtureItems.map(function(item) {
     return Object.assign({}, item, {latlng: {getLat: function() {return 36.35;}, getLng: function() {return 127.38;}}});
   });

@@ -7,7 +7,6 @@ const html = fs.readFileSync("index.html", "utf8");
 const script = fs.readFileSync("js/script.js", "utf8");
 const mapSource = fs.readFileSync("js/map.js", "utf8");
 const unifiedSource = fs.readFileSync("js/unified-listings-v8.js", "utf8");
-const analysisSource = fs.readFileSync("js/analysis.js", "utf8");
 const propertyEditSource = fs.readFileSync("js/property-edit-v648.js", "utf8");
 const desktopCss = fs.readFileSync("css/unified-listings-v8.css", "utf8");
 const mobileCss = fs.readFileSync("css/mobile-app-v1.css", "utf8");
@@ -67,7 +66,6 @@ test("active filter chips are mounted below the listing toolbar with cache-buste
   assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id[^"']*zero-range-favorite-folder-v1=1/);
   assert.match(html, /unified-listings-v8\.js\?v=8\.1\.43-card-detail-toggle/);
   assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render/);
-  assert.match(html, /analysis\.js\?v=6\.3\.41-unique-linked-selection/);
   assert.match(html, /property-edit-v648\.js\?v=1\.0\.1-linked-selection/);
   assert.match(html, /unified-listings-v8\.css\?v=8\.1\.40-smooth-photo-expand/);
   assert.match(html, /mobile-app-v1\.css\?v=1\.0\.7-filter-chips-selection/);
@@ -236,7 +234,6 @@ test("selected listing card and its current map cluster use one strong blue stat
   assert.match(unifiedSource, /handleCardClick[\s\S]*?global\.selectListingOnMapV844\(item\)[\s\S]*?open\(encodeURIComponent\(propertyId\)\)/);
   assert.match(mapSource, /function selectListingOnMapV844\(item\)[\s\S]*?selectedListCardIdV845\s*=[\s\S]*?matchedOverlay[\s\S]*?redrawSelectedMarkers\(\)/);
   assert.match(mapSource, /card\.classList\.toggle\([\s\S]*?"selected"[\s\S]*?data-list-card-id-v681/);
-  assert.match(analysisSource, /function openAiSidePanel\(item\)[\s\S]*?selectListingOnMapV844\(item\)/);
   assert.match(propertyEditSource, /clearLinkedListingSelectionV845\(\)/);
   assert.match(desktopCss, /#list \.item\.selected[\s\S]*?inset 4px 0 0 #0568e8/);
   assert.match(desktopCss, /\.circle-marker\.selected[\s\S]*?--cluster-fill: rgba\(5, 104, 232, \.98\)/);

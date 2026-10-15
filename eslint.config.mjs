@@ -17,7 +17,7 @@ export default [
     }
   },
   { files: ["**/*.cjs"], languageOptions: { sourceType: "commonjs" } },
-  // These two compatibility layers deliberately replace old global functions
+  // This compatibility layer deliberately replaces old global functions
   // with wrappers. Do not change hoisting/initialization during lint adoption.
-  { files: ["js/analysis.js", "js/parser.js"], rules: { "no-func-assign": "off" } }
+  { files: ["js/parser.js"], rules: { "no-func-assign": "off" } }
 ];

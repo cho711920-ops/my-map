@@ -18,6 +18,29 @@ async function listView(page, isMobile) {
 }
 function market(page, isMobile) {return page.locator(isMobile ? "#jsMobileTradeModeV1" : "#listingTradeModeSelectV1");}
 
+test("double click cannot open smart analysis and ordinary detail still opens", async ({page, isMobile}) => {
+  const errors = [], analysisRequests = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("request", request => {
+    if (/action=(?:commercialArea|regionalMarket)/.test(request.url())) analysisRequests.push(request.url());
+  });
+  await listView(page, isMobile);
+  const title = page.locator("#list .item .item-building-name").first();
+  const drawer = page.locator("#unifiedDetailDrawerV8");
+  expect(await page.locator("#list .item").first().evaluate(card => card.ondblclick)).toBeNull();
+  expect(await page.evaluate(() => typeof window.openItem)).toBe("undefined");
+  if (!isMobile) await title.dblclick();
+  await expect(page.locator("#aiSidePanel")).toHaveCount(0);
+  if (await drawer.count() && await drawer.getAttribute("aria-hidden") === "false") {
+    await drawer.locator("header button").click();
+  }
+  await title.click();
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).toContainText("원본");
+  expect(analysisRequests).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 test("search works and the same listing card toggles its detail", async ({page, isMobile}) => {
   const search = page.locator(isMobile ? "#jsMobileKeywordV1" : "#keyword");
   await search.fill("괴정");

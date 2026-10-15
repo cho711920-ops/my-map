@@ -292,17 +292,7 @@
   letter-spacing: -.02em;
 }
 
-@media (min-width: 769px) {
-  body.ai-side-panel-open .map-listing-count-v825 {
-    left: 492px;
-  }
-}
 
-@media (min-width: 769px) and (max-width: 1300px) {
-  body.ai-side-panel-open .map-listing-count-v825 {
-    left: 432px;
-  }
-}
 
 @media (max-width: 768px) {
   .js-mobile-app-v1 .map-listing-count-v825 {

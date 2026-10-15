@@ -13,7 +13,6 @@
   .v6-detail-sheet-close,
   .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
-  .ai-side-panel-close,
   .roadview-modal-close
 ) {
   box-sizing: border-box !important;
@@ -56,7 +55,6 @@
   .v6-detail-sheet-close,
   .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
-  .ai-side-panel-close,
   .roadview-modal-close
 )::before,
 :is(
@@ -73,7 +71,6 @@
   .v6-detail-sheet-close,
   .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
-  .ai-side-panel-close,
   .roadview-modal-close
 )::after {
   display: none !important;
@@ -94,7 +91,6 @@
   .v6-detail-sheet-close,
   .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
-  .ai-side-panel-close,
   .roadview-modal-close
 ):hover {
   background: #dfe9f6 !important;
@@ -116,7 +112,6 @@
   .v6-detail-sheet-close,
   .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
-  .ai-side-panel-close,
   .roadview-modal-close
 ):active {
   background: #d5e2f1 !important;
@@ -137,7 +132,6 @@
   .v6-detail-sheet-close,
   .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
-  .ai-side-panel-close,
   .roadview-modal-close
 ):focus-visible {
   outline: 3px solid rgba(5, 104, 232, .24) !important;
@@ -176,7 +170,6 @@
     .v6-detail-sheet-close,
     .customer-work-alert-dialog header > button,
     .property-timeline-dialog header > button,
-    .ai-side-panel-close,
     .roadview-modal-close
   ) {
     transition: none !important;

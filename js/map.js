@@ -517,12 +517,6 @@ function closeOpenListingDetailsForMapSelectionV6525() {
     window.JSUnifiedListingsV8.close();
   }
 
-  if (
-    document.body.classList.contains("ai-side-panel-open") &&
-    typeof window.closeAiSidePanel === "function"
-  ) {
-    window.closeAiSidePanel();
-  }
 }
 
 
@@ -1625,12 +1619,9 @@ kakao.maps.load(function() {
    - 현재 매물리스트 유지
    - 리스트 스크롤 위치 유지
    - 선택 매물/클러스터 유지
-   - AI 사이드패널 열림 상태와 스크롤 유지
    ========================================================= */
 function captureAutoUpdateViewState() {
   var sidebar = document.getElementById("sidebar");
-  var aiBody = document.getElementById("aiSidePanelBody");
-  var aiOpen = document.body.classList.contains("ai-side-panel-open");
   var clusterSelection = captureClusterSelectionSnapshotV638();
 
   return {
@@ -1648,12 +1639,7 @@ function captureAutoUpdateViewState() {
         ? getLinkedSelectionCardIdV845(item)
         : "";
     }),
-    sidebarScrollTop: sidebar ? sidebar.scrollTop : 0,
-    aiOpen: aiOpen,
-    aiItemKey: typeof aiSidePanelCurrentKey !== "undefined"
-      ? (aiSidePanelCurrentKey || selectedItemKey || "")
-      : (selectedItemKey || ""),
-    aiScrollTop: aiBody ? aiBody.scrollTop : 0
+    sidebarScrollTop: sidebar ? sidebar.scrollTop : 0
   };
 }
 
@@ -1690,7 +1676,6 @@ function restoreAutoUpdateViewState(state) {
   if (!state) return;
 
   var sidebar = document.getElementById("sidebar");
-  var aiBody = document.getElementById("aiSidePanelBody");
 
   var restoredList = state.preserveVisibleListV1 === false ? []
     : findItemsBySavedKeys(state.visibleKeys, state.visibleListCardIdsV845);
@@ -1767,26 +1752,6 @@ function restoreAutoUpdateViewState(state) {
     }
   });
 
-  /*
-   * AI 패널이 열려 있었다면 같은 매물로 다시 열고
-   * 패널 내부 스크롤 위치도 복원합니다.
-   */
-  if (state.aiOpen && state.aiItemKey && typeof openAiSidePanel === "function") {
-    var aiItem = (allItems || []).find(function(item) {
-      return item.key === state.aiItemKey;
-    }) || null;
-
-    if (aiItem) {
-      openAiSidePanel(aiItem);
-
-      setTimeout(function() {
-        var latestAiBody = document.getElementById("aiSidePanelBody");
-        if (latestAiBody) {
-          latestAiBody.scrollTop = state.aiScrollTop || 0;
-        }
-      }, 180);
-    }
-  }
 }
 
 
@@ -3506,29 +3471,3 @@ function selectListingOnMapV844(item) {
 
 
 window.selectListingOnMapV844 = selectListingOnMapV844;
-
-
-function openItem(item) {
-  preservePinnedClusterSelectionDuringRelayoutV6517(1500);
-  selectListingOnMapV844(item);
-
-  /*
-   * 리스트 안에 AI카드를 펼치지 않고,
-   * 선택 상태만 다시 표시한 뒤 독립 AI 패널을 엽니다.
-  */
-  showList(visibleListItems && visibleListItems.length ? visibleListItems : [item]);
-  var pinnedClusterItemsV6518 = getPinnedClusterItemsV6515();
-  document.getElementById("status").innerHTML = pinnedClusterItemsV6518.length
-    ? "선택 매물 " + pinnedClusterItemsV6518.length + "개 · 스마트 매물카드"
-    : (multiClusterMode
-      ? "다중 클러스터 선택 유지 · 현재 매물 AI 분석"
-      : "선택 매물 1개 · AI 분석 패널 표시");
-
-  if (typeof openAiSidePanel === "function") {
-    openAiSidePanel(item);
-  }
-
-  if (window.innerWidth <= 768) {
-    document.getElementById("sidebar").classList.remove("open");
-  }
-}
