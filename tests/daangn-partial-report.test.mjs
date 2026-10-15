@@ -68,7 +68,7 @@ test('running and retrying Daangn rows use the same numeric summary as Naver', (
   } };
   const text = ui.countText(item, target);
   assert.match(text, /500 \/ 1,853건 확인/);
-  assert.match(text, /신규 3/);
+  assert.match(text, /통합신규 3/);
   assert.match(text, /변경 2/);
   assert.match(text, /검증 7/);
   assert.match(text, /기존 동일 380/);

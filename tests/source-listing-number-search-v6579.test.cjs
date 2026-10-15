@@ -42,7 +42,7 @@ assert.match(d1, /s\.source IN \('네이버','당근','공실박스','직접등�
 assert.match(d1, /l\.status<>'deleted'/);
 assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),
-  /api-cache\/unified-listings-v12-source-evidence\.json/);
+  /api-cache\/unified-listings-v13-absence-date\.json/);
 assert.match(html, /script\.js\?v=[^"\s]+/);
 assert.match(html, /unified-listings-v8\.js\?v=[^"\s]+/);
 

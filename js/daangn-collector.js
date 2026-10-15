@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.7";
+  var VERSION = "1.5.8";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -225,7 +225,7 @@
       '<div class="jsd-progress"><i data-role="progress-bar"></i></div><div class="jsd-detail" data-role="detail"></div></div>' +
       '<div class="jsd-card jsd-grid">' +
       metric("found","선택·찾은 매물") + metric("processed","상세 처리") + metric("remaining","남은 매물") +
-      metric("created","신규 등록") + metric("merged","자동 통합") + metric("updated","조건 변경") +
+      metric("newSourceAds","신규광고") + metric("created","통합신규") + metric("merged","자동 통합") + metric("updated","조건 변경") +
       metric("review","검증대기") + metric("detailedDuplicates","상세 중복") + metric("skippedUnchanged","기존 동일 생략") +
       metric("addressMissing","주소 보류") + metric("failed","조회·저장 실패") + metric("page","목록 페이지") +
       '</div><details class="jsd-card" data-role="diagnostics" hidden><summary>보류·실패 내역</summary>' +
@@ -239,7 +239,7 @@
   }
 
   function metric(key, label) {
-    return '<div class="jsd-metric"><span>' + label + '</span><b data-metric="' + key + '">0</b></div>';
+    return '<div class="jsd-metric"><span>' + label + '</span><b data-metric="' + key + '">' + (key === "newSourceAds" ? "미기록" : "0") + '</b></div>';
   }
 
   function bindEvents() {
@@ -335,7 +335,7 @@
           Boolean(state.selectedDistrict && state.job.completeCollection === false);
         var issues = Array.isArray(state.job.completionIssues) ? state.job.completionIssues.filter(Boolean) : [];
         return {source: "daangn", district: state.selectedDistrict, version: VERSION,
-          partial: partial, completionIssues: issues, totals: Object.assign({}, state.job)};
+          partial: partial, completionIssues: issues, totals: Object.assign({}, state.job, newSourceAdCounts(state.job))};
       }
       var processed = Number(state.job && state.job.processed || 0);
       if (processed > lastProcessed) {
@@ -841,10 +841,20 @@
         deferred ? "목록 확인 완료 · 주소 보류" : "당근 수집 완료" };
   }
 
+  function newSourceAdCounts(result) {
+    var value = result && result.newSourceAds;
+    var known = !!(result && result.newSourceAdsReported === true && value != null && value !== "" &&
+      typeof value !== "boolean" && Number.isSafeInteger(Number(value)) && Number(value) >= 0);
+    return {newSourceAds: known ? Number(value) : null, newSourceAdsReported: known};
+  }
+
   function renderJob() {
     var job = state.job;
     if (!job) return renderSelection();
     var display = jobDisplay(job);
+    var adCounts = newSourceAdCounts(job);
+    var adNode = panel.querySelector('[data-metric="newSourceAds"]');
+    if (adNode) adNode.textContent = adCounts.newSourceAdsReported ? adCounts.newSourceAds.toLocaleString("ko-KR") : "미기록";
     ["found","processed","remaining","created","merged","updated","review","detailedDuplicates",
       "skippedUnchanged","addressMissing","failed","page"]
       .forEach(function (key) {
@@ -886,6 +896,8 @@
   function clearMetrics() {
     var diagnostics = panel.querySelector('[data-role="diagnostics"]');
     if (diagnostics) diagnostics.hidden = true;
+    var adNode = panel.querySelector('[data-metric="newSourceAds"]');
+    if (adNode) adNode.textContent = "미기록";
     ["found","processed","remaining","created","merged","updated","review","detailedDuplicates",
       "skippedUnchanged","addressMissing","failed","page"]
       .forEach(function (key) {

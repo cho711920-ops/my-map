@@ -164,7 +164,7 @@ test("ingestion does not resurrect a rejected parcel from an existing source sna
       assert.equal(ids.length, 0); return {changedListingIds: []};
     }
   });
-  for (const name of ["clean", "normalizedAddress", "parseJson", "nowIso", "daangnAddressCandidates",
+  for (const name of ["clean", "normalizedAddress", "parseJson", "nowIso", "preserveNewSourceAdsCounters", "daangnAddressCandidates",
     "daangnLotAddress", "daangnHasAddressEvidence", "daangnFallbackAddress", "ingestRecords"]) {
     const match = source.match(new RegExp(`^(?:async )?function ${name}\\([^]*?^}`, "m"));
     assert.ok(match, name);

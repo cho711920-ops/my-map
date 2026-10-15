@@ -120,6 +120,8 @@ function displayCounts(item, target) {
       detailProcessed,
       unchanged,
       created: number(stage.created),
+      ...(stage.newSourceAdsReported === true && Number.isSafeInteger(stage.newSourceAds) && stage.newSourceAds >= 0
+        ? {newSourceAds: stage.newSourceAds, newSourceAdsReported: true} : {}),
       updated: number(stage.updated),
       review: number(stage.review),
       addressDeferred: number(stage.addressMissing),
@@ -128,7 +130,7 @@ function displayCounts(item, target) {
     };
     const numericKeys = new Set([
       "expected", "processed", "detailProcessed", "unchanged",
-      "created", "updated", "review", "addressDeferred", "failed"
+      "created", "updated", "review", "addressDeferred", "failed", "newSourceAds"
     ]);
     Object.entries(progress).forEach(([key, value]) => {
       if (naver) counts[key] = value;
@@ -168,7 +170,10 @@ function countText(item, target) {
   } else if (counts.version === 2) {
     parts.push(counts.listComplete ? "목록 0건 · 확인 0건" : "목록 0건 · 확인 0건 (집계 전)");
   }
-  if (Number(counts.created || 0)) parts.push(`신규 ${Number(counts.created).toLocaleString("ko-KR")}`);
+  if (counts.newSourceAdsReported === true && Number.isSafeInteger(counts.newSourceAds) && counts.newSourceAds >= 0) {
+    parts.push(`신규광고 ${counts.newSourceAds.toLocaleString("ko-KR")}건`);
+  }
+  if (Number(counts.created || 0)) parts.push(`통합신규 ${Number(counts.created).toLocaleString("ko-KR")}`);
   if (Number(counts.updated || 0)) parts.push(`변경 ${Number(counts.updated).toLocaleString("ko-KR")}`);
   if (Number(counts.review || 0)) parts.push(`검증 ${Number(counts.review).toLocaleString("ko-KR")}`);
   if (Number(counts.unchanged || 0)) parts.push(`기존 동일 ${Number(counts.unchanged).toLocaleString("ko-KR")}`);

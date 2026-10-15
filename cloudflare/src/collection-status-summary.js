@@ -2,6 +2,12 @@
 const DISTRICTS = ["유성구", "대덕구", "중구", "서구", "동구"];
 const count = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
 const own = (value, key) => value && Object.prototype.hasOwnProperty.call(value, key) && value[key] != null;
+export function normalizeNewSourceAdCounts(value = {}) {
+  const raw = value.newSourceAds;
+  const reported = value.newSourceAdsReported === true && own(value, "newSourceAds") &&
+    raw !== "" && typeof raw !== "boolean" && Number.isSafeInteger(Number(raw)) && Number(raw) >= 0;
+  return { newSourceAds: reported ? Math.min(10000000, Number(raw)) : null, newSourceAdsReported: reported };
+}
 export function normalizeCollectionCounts(value = {}) {
   const foundKey = ["observed", "manifestCount", "found", "manifest"].find(key => own(value, key));
   const addressDeferred = count(value.addressMissing ?? value.addressDeferred);
@@ -9,6 +15,7 @@ export function normalizeCollectionCounts(value = {}) {
   const failed = own(value, "failureCount") ? count(value.failureCount) : Math.max(0, legacyFailed - Math.min(legacyFailed, addressDeferred));
   const excluded = Math.max(0, count(value.requiredFieldRejected) - addressDeferred);
   return { ...value, found: foundKey ? count(value[foundKey]) : null, foundKnown: Boolean(foundKey),
+    ...normalizeNewSourceAdCounts(value),
     created: count(value.created), merged: count(value.merged), updated: count(value.updated),
     unchanged: count(value.unchanged ?? value.skippedUnchanged), duplicate: count(value.duplicate),
     review: count(value.review), legacyFailed, failed, failureCount: failed,
@@ -66,16 +73,24 @@ export function summarizeCollectionDay(rows, date, { source = "", tradeType = ""
       anomaly: dropWarning ? `최근 정상수집 중앙값 ${baseline.toLocaleString("ko-KR")}건 대비 크게 감소했습니다. 실제 감소/수집 범위를 확인해 주세요.` : "" };
   });
   const totals = { scopes: items.length, complete: 0, found: 0, unknownFound: 0, created: 0, merged: 0, updated: 0,
+    newSourceAds: null, newSourceAdsReported: false, newSourceAdsKnownTotal: 0,
+    newSourceAdsKnownScopes: 0, unknownNewSourceAdsScopes: 0,
     unchanged: 0, review: 0, duplicate: 0, failed: 0, addressDeferred: 0, requiredFieldExcluded: 0,
     deactivated: 0, adsReappeared: 0, presenceReported: false, absenceDeferredScopes: 0, baselineScopes: 0 };
   for (const row of items) {
     totals.complete += row.complete ? 1 : 0;
     totals.unknownFound += row.foundKnown ? 0 : 1;
+    if (row.newSourceAdsReported) {
+      totals.newSourceAdsKnownScopes += 1;
+      totals.newSourceAdsKnownTotal += row.newSourceAds;
+    } else totals.unknownNewSourceAdsScopes += 1;
     totals.presenceReported ||= row.presenceReported;
     totals.absenceDeferredScopes += row.presenceReported && !row.presenceTracking ? 1 : 0;
     totals.baselineScopes += row.presenceScopeEstablished ? 1 : 0;
     for (const key of ["found", "created", "merged", "updated", "unchanged", "review", "duplicate", "failed", "addressDeferred", "requiredFieldExcluded", "deactivated", "adsReappeared"]) totals[key] += count(row[key]);
   }
+  totals.newSourceAdsReported = items.length > 0 && totals.unknownNewSourceAdsScopes === 0;
+  totals.newSourceAds = totals.newSourceAdsReported ? totals.newSourceAdsKnownTotal : null;
   const districtCoverage = ["네이버", "당근"].filter(name => !source || source === name).map(name => ({
     source: name, districts: DISTRICTS.map(district => {
       const runs = items.filter(row => row.source === name && (row.presenceScopeKind

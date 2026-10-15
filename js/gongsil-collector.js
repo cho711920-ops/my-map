@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.3.0";
+  var VERSION = "2.3.1";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -274,7 +274,8 @@
           '<div class="jsg-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsg-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
           '<div class="jsg-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
-          '<div class="jsg-metric"><span>신규 등록</span><b data-metric="created">0</b></div>' +
+          '<div class="jsg-metric"><span>신규광고</span><b data-metric="newSourceAds">미기록</b></div>' +
+          '<div class="jsg-metric"><span>통합신규</span><b data-metric="created">0</b></div>' +
           '<div class="jsg-metric"><span>자동 통합</span><b data-metric="merged">0</b></div>' +
           '<div class="jsg-metric"><span>임대조건 변경</span><b data-metric="conditionUpdated">0</b></div>' +
           '<div class="jsg-metric"><span>정보 최신화</span><b data-metric="refreshed">0</b></div>' +
@@ -416,7 +417,7 @@
       partial: false,
       completionIssues: finalResult.presenceTrackingIssue ? [finalResult.presenceTrackingIssue] : [],
       session: finalResult.finalization || null,
-      totals: Object.assign({}, state.dashboard, {presenceReported: finalResult.presenceReported === true,
+      totals: Object.assign({}, state.dashboard, newSourceAdCounts(finalResult), {presenceReported: finalResult.presenceReported === true,
         missingMarked: Number(finalResult.missingMarked || 0), deactivated: Number(finalResult.deactivated || 0),
         adsReappeared: Number(finalResult.adsReappeared || 0), presenceTracking: finalResult.presenceTracking === true,
         presenceScopeEstablished: finalResult.presenceScopeEstablished === true,
@@ -899,6 +900,8 @@
         processed: totalItemCount,
         remaining: 0,
         created: result.created,
+        newSourceAds: result.newSourceAds,
+        newSourceAdsReported: result.newSourceAdsReported === true,
         merged: result.merged,
         updated: result.updated,
         conditionUpdated: result.conditionUpdated !== undefined ? result.conditionUpdated : result.updated,
@@ -1055,6 +1058,8 @@
         processed: itemsLength,
         remaining: 0,
         created: result.created,
+        newSourceAds: result.newSourceAds,
+        newSourceAdsReported: result.newSourceAdsReported === true,
         merged: result.merged,
         updated: result.updated,
         conditionUpdated: result.conditionUpdated !== undefined ? result.conditionUpdated : result.updated,
@@ -2618,6 +2623,9 @@
       ? "비교기준저장" : finalization.presenceTracking ? "원본광고 미노출 " + Number(finalization.deactivated || 0) + "건" : "");
     if (finalization && Number(finalization.adsReappeared || 0)) presenceNotice = (presenceNotice ? presenceNotice + " · " : "") +
       "원본광고 재등장 " + Number(finalization.adsReappeared) + "건";
+    // Resumed sessions can include earlier batches: only the authoritative
+    // finalized server total may label the whole run's newly seen ads.
+    var adCounts = newSourceAdCounts(Object.assign({}, finalization && finalization.totals || {}, finalization || {}));
     return {
       ok: true,
       stopped: stopped,
@@ -2625,6 +2633,8 @@
       received: totals.received,
       offerReceived: Number(totals.offerReceived || totals.received),
       created: totals.created,
+      newSourceAds: adCounts.newSourceAds,
+      newSourceAdsReported: adCounts.newSourceAdsReported,
       merged: totals.merged,
       updated: totals.updated,
       conditionUpdated: totals.conditionUpdated,
@@ -2647,7 +2657,8 @@
         "공실박스 상세저장 판정: 상세확인 " + totals.received +
         "개" + (Number(totals.offerReceived || 0) > totals.received
           ? " · 임대·매매 거래조건 " + totals.offerReceived + "건(동시광고 분리 저장)" : "") +
-        " 중 신규 등록 " + totals.created +
+        " · 신규광고 " + (adCounts.newSourceAdsReported ? adCounts.newSourceAds : "미기록") +
+        " · 통합신규 " + totals.created +
         "개, 자동 통합 " + totals.merged +
         "개, 임대조건 변경 " + totals.conditionUpdated +
         "개, 정보 최신화 " + totals.refreshed +
@@ -3262,6 +3273,8 @@
       processed: 0,
       remaining: 0,
       created: 0,
+      newSourceAds: null,
+      newSourceAdsReported: false,
       merged: 0,
       updated: 0,
       conditionUpdated: 0,
@@ -3281,9 +3294,25 @@
     return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "0";
   }
 
+  function newSourceAdCounts(result) {
+    var value = result && result.newSourceAds;
+    var known = !!(result && result.newSourceAdsReported === true && value != null && value !== "" &&
+      typeof value !== "boolean" && Number.isSafeInteger(Number(value)) && Number(value) >= 0);
+    return {newSourceAds: known ? Number(value) : null, newSourceAdsReported: known};
+  }
+
   function updateDashboard(values) {
     values = values || {};
+    if (Object.prototype.hasOwnProperty.call(values, "newSourceAdsReported")) {
+      Object.assign(state.dashboard, newSourceAdCounts(values));
+    }
     Object.keys(state.dashboard).forEach(function (key) {
+      if (key === "newSourceAdsReported") return;
+      if (key === "newSourceAds") {
+        var adNode = panel.querySelector('[data-metric="newSourceAds"]');
+        if (adNode) adNode.textContent = state.dashboard.newSourceAdsReported ? formatNumber(state.dashboard.newSourceAds) : "미기록";
+        return;
+      }
       if (values[key] !== undefined) state.dashboard[key] = Number(values[key]) || 0;
       var node = panel.querySelector('[data-metric="' + key + '"]');
       if (node) node.textContent = formatNumber(state.dashboard[key]);

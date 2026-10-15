@@ -24,7 +24,7 @@ function harness(storage = new Map()) {
   for (const name of ["DEFAULT_BATCH_SIZE", "MIN_BATCH_SIZE", "MAX_BATCH_SIZE", "BATCH_SIZE_STORAGE_KEY"]) {
     vm.runInContext(source.match(new RegExp(`  var ${name} = [^;]+;`))[0], context);
   }
-  for (const name of ["loadNaverBatchSize", "rememberNaverBatchSize", "adjustBatchSize", "naverBatchRequestId"]) {
+  for (const name of ["loadNaverBatchSize", "rememberNaverBatchSize", "adjustBatchSize", "naverBatchRequestId", "newSourceAdCounts"]) {
     vm.runInContext(functionSource(name), context);
   }
   vm.runInContext("var BATCH_SIZE = loadNaverBatchSize();", context);

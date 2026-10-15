@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.8";
+  var VERSION = "6.0.9";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -293,7 +293,8 @@
           '<div class="jsn-metric"><span>선택·찾은 매물</span><b data-metric="found">0</b></div>' +
           '<div class="jsn-metric"><span>처리 완료</span><b data-metric="processed">0</b></div>' +
           '<div class="jsn-metric"><span>남은 매물</span><b data-metric="remaining">0</b></div>' +
-          '<div class="jsn-metric"><span>신규 등록</span><b data-metric="created">0</b></div>' +
+          '<div class="jsn-metric"><span>신규광고</span><b data-metric="newSourceAds">미기록</b></div>' +
+          '<div class="jsn-metric"><span>통합신규</span><b data-metric="created">0</b></div>' +
           '<div class="jsn-metric"><span>자동 통합</span><b data-metric="merged">0</b></div>' +
           '<div class="jsn-metric"><span>조건 변경</span><b data-metric="updated">0</b></div>' +
           '<div class="jsn-metric"><span>검증대기</span><b data-metric="review">0</b></div>' +
@@ -448,7 +449,8 @@
       source: "naver",
       district: district.name,
       version: VERSION,
-      totals: Object.assign({}, state.dashboard),
+      totals: Object.assign({}, state.dashboard, newSourceAdCounts(Object.assign({},
+        runResult.finalResult && runResult.finalResult.totals || {}, runResult.finalResult || {}))),
       session: runResult.finalResult || null
     };
   }
@@ -558,6 +560,8 @@
       processed: 0,
       remaining: 0,
       created: 0,
+      newSourceAds: null,
+      newSourceAdsReported: false,
       merged: 0,
       updated: 0,
       review: 0,
@@ -574,9 +578,25 @@
     return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "0";
   }
 
+  function newSourceAdCounts(result) {
+    var value = result && result.newSourceAds;
+    var known = !!(result && result.newSourceAdsReported === true && value != null && value !== "" &&
+      typeof value !== "boolean" && Number.isSafeInteger(Number(value)) && Number(value) >= 0);
+    return {newSourceAds: known ? Number(value) : null, newSourceAdsReported: known};
+  }
+
   function updateDashboard(values) {
     values = values || {};
+    if (Object.prototype.hasOwnProperty.call(values, "newSourceAdsReported")) {
+      Object.assign(state.dashboard, newSourceAdCounts(values));
+    }
     Object.keys(state.dashboard).forEach(function (key) {
+      if (key === "newSourceAdsReported") return;
+      if (key === "newSourceAds") {
+        var adNode = panel.querySelector('[data-metric="newSourceAds"]');
+        if (adNode) adNode.textContent = state.dashboard.newSourceAdsReported ? formatNumber(state.dashboard.newSourceAds) : "미기록";
+        return;
+      }
       if (values[key] !== undefined) state.dashboard[key] = Number(values[key]) || 0;
       var node = panel.querySelector('[data-metric="' + key + '"]');
       if (node) node.textContent = formatNumber(state.dashboard[key]);
@@ -590,6 +610,8 @@
       processed: processed,
       remaining: Math.max(0, Number(found || 0) - Number(processed || 0)),
       created: totals.created,
+      newSourceAds: totals.newSourceAds,
+      newSourceAdsReported: totals.newSourceAdsReported === true,
       merged: totals.merged,
       updated: totals.updated,
       review: totals.review,
@@ -2011,6 +2033,7 @@
         remainingFailures.length
       );
       var finalResult = sessionResult && sessionResult.finished ? sessionResult : progress;
+      updateDashboard(newSourceAdCounts(finalResult));
       updateDashboard({
         found: progress.seenIds.length,
         processed: progress.seenIds.length,
@@ -2031,7 +2054,7 @@
       setStatus(
         "대전 5개 구 수집 완료",
         "고유매물 " + formatNumber(progress.seenIds.length) +
-        "개 · JS신규 " + formatNumber(finalResult.created) +
+        "개 · 통합신규 " + formatNumber(finalResult.created) +
         "개 · 기존통합 " + formatNumber(finalResult.merged) +
         "개 · 조건변경 " + formatNumber(finalResult.updated) +
         "개 · 검증대기 " + formatNumber(finalResult.review) +
@@ -2193,10 +2216,11 @@
       );
       setProgress(1, 1);
       if (cityResult && cityResult.finished) {
+        updateDashboard(newSourceAdCounts(cityResult));
         setStatus(
           "대전 전체 수집 완료",
           "고유매물 " + progress.seenIds.length +
-            "개 · JS신규 " + Number(cityResult.created || 0) +
+            "개 · 통합신규 " + Number(cityResult.created || 0) +
             "개 · 기존통합 " + Number(cityResult.merged || 0) +
             "개 · 조건갱신 " + Number(cityResult.updated || 0) +
             "개 · 검증대기 " + Number(cityResult.review || 0) +
@@ -2209,7 +2233,7 @@
           "대전 전체 수집 완료",
           "고유매물 " + progress.seenIds.length +
             "개 · 정상접수 " + cityAccepted +
-            "개 · JS신규/통합 판정은 자동 진행 중입니다." +
+            "개 · 통합신규/통합 판정은 자동 진행 중입니다." +
             (cityResult
               ? " 현재 반영 " + Number(cityResult.processed || 0) +
                 "개 · 처리중 " + Number(cityResult.pending || 0) + "개"
@@ -3177,6 +3201,7 @@
       }
       if (latest && latest.finished) return latest;
       if (latest) {
+        updateDashboard(newSourceAdCounts(latest));
         updateDashboard({
           found: found,
           processed: Number(latest.processed || 0),
@@ -3435,6 +3460,7 @@
         "원본광고 재등장 " + Number(presenceResult.adsReappeared) + "건";
       setProgress(allItems.length, allItems.length || 1);
       if (sessionResult && sessionResult.finished) {
+        updateDashboard(newSourceAdCounts(sessionResult));
         updateDashboard({
           found: allItems.length,
           processed: allItems.length,
@@ -3452,7 +3478,7 @@
         setStatus(
           "네이버 수집 완료",
           "전체 " + allItems.length + "개 · 기존 동일 " + classification.unchanged +
-            "개 · JS신규 " + Number(sessionResult.created || 0) +
+            "개 · 통합신규 " + Number(sessionResult.created || 0) +
             "개 · 기존통합 " + Number(sessionResult.merged || 0) +
             "개 · 조건갱신 " + Number(sessionResult.updated || 0) +
             "개 · 검증대기 " + Number(sessionResult.review || 0) +
@@ -3468,7 +3494,7 @@
           "네이버 수집 완료",
           "전체 " + allItems.length + "개 · 기존 동일 " + classification.unchanged +
             "개 · 신규·변경 접수 " + accepted +
-            "개 · JS신규/통합 판정은 자동 진행 중입니다." +
+            "개 · 통합신규/통합 판정은 자동 진행 중입니다." +
             (sessionResult
               ? " 현재 반영 " + Number(sessionResult.processed || 0) +
                 "개 · 처리중 " + Number(sessionResult.pending || 0) + "개"
@@ -3486,7 +3512,7 @@
           ((finalResult && Array.isArray(finalResult.completionIssues) && finalResult.completionIssues.length)
             ? finalResult.completionIssues.join(", ")
             : "네이버 수집이 부분수집으로 종료됐습니다."),
-        totals: Object.assign({}, totals),
+        totals: Object.assign({}, totals, newSourceAdCounts(sessionResult)),
         classification: classification,
         finalResult: finalResult || null
       };

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {background, result, extract, read} from "./fixtures/daangn-report-fixture.mjs";
 import {sanitizeAutomationRunReport} from "../cloudflare/src/automation-run-reports.js";
+import {normalizeNewSourceAdCounts} from "../cloudflare/src/collection-status-summary.js";
 
 const plain = value => JSON.parse(JSON.stringify(value));
 const lifecycle = {presenceReported: true, missingMarked: 9, deactivated: 4, adsReappeared: 2,
@@ -99,7 +100,7 @@ test("cloud report transport preserves lifecycle states but never uploads arbitr
 test("Gongsil saved-but-unproved viewport reports a deferral without retrying the finished collection", async () => {
   const state = {dashboard: {}, collectionTradeType: "lease"};
   const finalization = {...lifecycle, presenceTracking: false, presenceTrackingIssue: "unverified-map-scope"};
-  const api = extract(read("js/gongsil-collector.js"), ["runAutomaticTarget"], {
+  const api = extract(read("js/gongsil-collector.js"), ["newSourceAdCounts", "runAutomaticTarget"], {
     state, VERSION: "test", panel: {style: {}}, window: {setTimeout}, setStatus() {},
     emptyGongsilMapCapture: () => null,
     clickScreenLargestCluster: () => {state.capture = {}; return 20;},
@@ -119,7 +120,7 @@ test("Gongsil saved-but-unproved viewport reports a deferral without retrying th
 
 test("Gongsil automatic completion cannot reuse old successful dashboard numbers without a current save response", async () => {
   const state = {dashboard: {found: 20, processed: 20, failed: 0}, collectionTradeType: "lease"};
-  const api = extract(read("js/gongsil-collector.js"), ["runAutomaticTarget"], {
+  const api = extract(read("js/gongsil-collector.js"), ["newSourceAdCounts", "runAutomaticTarget"], {
     state, VERSION: "test", panel: {style: {}}, window: {setTimeout}, setStatus() {},
     emptyGongsilMapCapture: () => null, clickScreenLargestCluster: () => {state.capture = {}; return 20;},
     getSelectedItemCount: () => 20, collectAndSave: async () => {}
@@ -128,7 +129,7 @@ test("Gongsil automatic completion cannot reuse old successful dashboard numbers
 });
 
 test("Gongsil batch finalization preserves all counters and its message uses deactivated, not missing-marked", async () => {
-  const api = extract(read("js/gongsil-collector.js"), ["sendToAppsScript"], {
+  const api = extract(read("js/gongsil-collector.js"), ["newSourceAdCounts", "sendToAppsScript"], {
     state: {stopRequested: false}, importItemTotal: () => 0, collectionSignature: () => "empty",
     finalizeGongsilSession: async () => lifecycle, localStorage: {removeItem() {}}, SAVE_PROGRESS_KEY: "test",
     text: value => String(value || "")
@@ -142,7 +143,7 @@ test("Gongsil batch finalization preserves all counters and its message uses dea
 
 test("Naver automatic completion keeps the full server finalization in its session result", async () => {
   const finalResult = {ok: true, complete: true, expectedCount: 20, processedCount: 20, ...lifecycle};
-  const api = extract(read("js/naver-collector.js"), ["runAutomatic"], {
+  const api = extract(read("js/naver-collector.js"), ["newSourceAdCounts", "runAutomatic"], {
     state: {dashboard: {found: 20, processed: 20}}, panel: {style: {}}, VERSION: "test", isFinNaver: () => true,
     DAEJEON_DISTRICTS: [{name: "서구", cortarNo: "3017000000"}], autoDistrictSelect: {}, autoRegisterButton: {},
     collectFinSelectedAndSave: async () => ({ok: true, complete: true, finalResult})
@@ -155,6 +156,7 @@ test("Naver automatic completion keeps the full server finalization in its sessi
 
 test("Daangn server completion copies the lifecycle finalization into its public job counters", async () => {
   const api = extract(read("cloudflare/src/collector-api.js"), ["finalizeDaangnJob"], {
+    normalizeNewSourceAdCounts,
     daangnPresenceProof: () => ({presenceScope: {selectionKind: "provider-cluster"}, completionProof: {listComplete: true}}),
     finalizeSession: async () => ({ok: true, complete: true, ...lifecycle}),
     countValue: value => Math.max(0, Number(value || 0)), clean: value => String(value || "").trim()});

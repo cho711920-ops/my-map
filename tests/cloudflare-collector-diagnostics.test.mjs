@@ -38,7 +38,7 @@ test('per-listing reasons survive client finalization; bounded sanitized server 
 });
 test('all-excluded records still finalize a partial session, without marking missing ads',async()=>{
   let saved;
-  const context=funcs(source,['sendToAppsScript'],{
+  const context=funcs(source,['newSourceAdCounts','sendToAppsScript'],{
     importItemTotal:()=>10,collectionSignature:()=>'',getSavedProgressForRecords:()=>{throw new Error('empty checkpoint must not be reused');},
     state:{stopRequested:false},localStorage:{removeItem(){}},
     finalizeGongsilSession:async(...args)=>{saved=args;}, text:value=>String(value??'').trim()

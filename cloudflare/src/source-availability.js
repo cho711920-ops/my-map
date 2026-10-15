@@ -17,6 +17,47 @@ export function availabilityKindSql(source = "s") {
   return `(SELECT availability.kind FROM listing_source_availability availability WHERE availability.source_id=${alias(source)}.id)`;
 }
 
+// Project only the small proof envelope needed for the display date. Neither
+// raw provider data nor the full evidence document belongs in public responses.
+export function absenceMetadataSql(source = "s") {
+  const name = alias(source);
+  return `(SELECT CASE WHEN json_valid(availability.evidence_json) THEN json_object(
+      'version',json_extract(availability.evidence_json,'$.version'),
+      'validationVersion',json_extract(availability.evidence_json,'$.validationVersion'),
+      'reason',json_extract(availability.evidence_json,'$.reason'),
+      'scopeKey',json_extract(availability.evidence_json,'$.scopeKey'),
+      'sessionId',json_extract(availability.evidence_json,'$.sessionId'),
+      'capturedAt',json_extract(availability.evidence_json,'$.capturedAt'),
+      'checkedAt',json_extract(availability.evidence_json,'$.checkedAt'),
+      'updatedAt',availability.updated_at) END
+    FROM listing_source_availability availability WHERE ${name}.active=0
+      AND availability.source_id=${name}.id AND availability.kind='census_missing')`;
+}
+
+function proofTimestamp(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return NaN;
+  const time = Date.parse(value);
+  // Reject JS Date's rollover of invalid calendar dates such as February 30.
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 19) === value.slice(0, 19) ? time : NaN;
+}
+
+export function sourceAbsenceConfirmedAt(row, now = Date.now()) {
+  if (Number(row?.active) !== 0 || row?.availability_kind !== "census_missing") return "";
+  let proof;
+  try { proof = JSON.parse(row.absence_metadata_json || "null"); } catch { return ""; }
+  const prefix = ({ "네이버": "naver-region", "당근": "daangn-cluster", "공실박스": "gongsil-map" })[row.source];
+  if (!prefix || proof?.version !== 1 || !Number.isInteger(proof.validationVersion) || proof.validationVersion < 3 ||
+      proof.reason !== "scoped-census-missing" || typeof proof.sessionId !== "string" || !proof.sessionId.trim() ||
+      typeof proof.scopeKey !== "string" || !new RegExp(`^${prefix}-v1-[a-f0-9]{64}$`).test(proof.scopeKey)) return "";
+  const checked = proofTimestamp(proof.checkedAt);
+  const captured = proofTimestamp(proof.capturedAt);
+  const written = proofTimestamp(proof.updatedAt);
+  // checkedAt is a server-written absence event, not source.updated_at or the
+  // migration time. A reappearance suppresses this historical proof entirely.
+  return Number.isFinite(checked) && Number.isFinite(captured) && checked === written &&
+    captured <= checked + 60_000 && checked <= now + 60_000 ? new Date(checked).toISOString() : "";
+}
+
 export function candidateSourceWhereSql(source = "s") {
   const name = alias(source);
   return `${name}.active=0 AND EXISTS (SELECT 1 FROM listing_source_availability availability

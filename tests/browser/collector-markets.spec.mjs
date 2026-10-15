@@ -14,13 +14,14 @@ function fixtureReport(market) {
     summary: {total: 2, completed: 1, failed: 1}, total: 2,
     items: targets.filter(target => target.tradeType === market).map((target, index) => ({
       key: target.key, source: target.source, tradeType: market, label: target.label,
-      status: index ? "completed" : "failed", counts: {version: 2, expected: market === "sale" ? 23 : 101, processed: market === "sale" ? 23 : 101, created: market === "sale" ? 3 : 1},
+      status: index ? "completed" : "failed", counts: {version: 2, expected: market === "sale" ? 23 : 101, processed: market === "sale" ? 23 : 101,
+        created: market === "sale" ? 3 : 1, newSourceAds: index ? null : market === "sale" ? 14 : 7, newSourceAdsReported: !index},
       message: index ? "수집 완료" : "검사용 실패", finishedAt: 1790726460000
     }))};
 }
 
 test.beforeEach(async ({page, baseURL}) => {
-  const snapshot = {ok: true, backgroundBuild: "1.1.14", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
+  const snapshot = {ok: true, backgroundBuild: "1.1.15", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
     runReport: fixtureReport("sale"), runReports: {lease: fixtureReport("lease"), sale: fixtureReport("sale")}, readiness: {enabled: true, schedule: "11:00", windowsSchedule: "11:00", windowsTaskState: "Ready"}};
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -33,7 +34,7 @@ test.beforeEach(async ({page, baseURL}) => {
   await page.addInitScript(({snapshot}) => {
     window.__collectorSnapshot = snapshot;
     window.__collectorMessages = [];
-    window.chrome = {runtime: {getManifest: () => ({version: "1.1.14"}), sendMessage: (message, callback) => {
+    window.chrome = {runtime: {getManifest: () => ({version: "1.1.15"}), sendMessage: (message, callback) => {
       window.__collectorMessages.push(structuredClone(message));
       if (message.type === "JS_AUTO_GET_STATE") callback(structuredClone(window.__collectorSnapshot));
       else if (message.type === "JS_AUTO_SAVE_CONFIG") {
@@ -57,6 +58,10 @@ test("collector separates market targets, schedule controls and persisted numeri
   await expect(sale.locator("input[data-toggle]")).toHaveCount(0);
   await expect(lease).toContainText("101 / 101건 확인");
   await expect(sale).toContainText("23 / 23건 확인");
+  await expect(lease).toContainText("신규광고 7건");
+  await expect(lease).toContainText("통합신규 1");
+  await expect(sale).toContainText("신규광고 14건");
+  await expect(sale).toContainText("통합신규 3");
   await expect(page.locator("#enabled")).toBeChecked();
   await expect(page.locator("#schedule")).toHaveValue("11:00");
   const errors = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);

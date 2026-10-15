@@ -118,7 +118,7 @@ test('compact list and candidate originals preserve each advertised type without
   f.db.prepare("UPDATE listing_sources SET active=0,missing_count=1 WHERE id='missing'").run();
   f.db.prepare("INSERT INTO listing_source_availability(source_id,kind) VALUES ('missing','census_missing')").run();
   const list=await f.get('unifiedListings');
-  assert.equal(list.fields.at(-1),'type','append the new wire field without shifting existing compact positions');
+  assert.deepEqual(list.fields.slice(-2),['type','absenceConfirmedAt'],'append new wire fields without shifting existing compact positions');
   const originals=new Map(list.groups.M.map(record=>[record[list.fields.indexOf('originalId')],record]));
   assert.equal(originals.get('live')[list.fields.indexOf('type')],'빌라');
   assert.equal(originals.get('missing')[list.fields.indexOf('type')],'일반사무실');

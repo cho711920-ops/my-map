@@ -16,8 +16,9 @@ function loadFunction(name) {
   return Function('"use strict";return (' + match[1] + ");")();
 }
 
-assert.match(collector, /VERSION = "1\.5\.7"/);
-assert.match(collector, /metric\("created","신규 등록"\)/);
+assert.match(collector, /VERSION = "1\.5\.8"/);
+assert.match(collector, /metric\("newSourceAds","신규광고"\)/);
+assert.match(collector, /metric\("created","통합신규"\)/);
 assert.match(collector, /metric\("merged","자동 통합"\)/);
 assert.match(collector, /metric\("updated","조건 변경"\)/);
 assert.match(collector, /metric\("detailedDuplicates","상세 중복"\)/);

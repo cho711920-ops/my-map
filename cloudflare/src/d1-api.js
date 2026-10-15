@@ -17,7 +17,7 @@ import { withSaleAreaDisplay } from "./sale-area-display.js";
 import { newListingPeriod } from "./new-listing-period.js";
 import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
 import {
-  SOURCE_CANDIDATE_POLICY_VERSION, availabilityKindSql, candidateSourceWhereSql,
+  SOURCE_CANDIDATE_POLICY_VERSION, availabilityKindSql, absenceMetadataSql, candidateSourceWhereSql,
   publicSourceWhereSql, publicMasterWhereSql, publicMasterSourcesWhereSql, candidateMasterWhereSql, candidateAdCountSql
 } from "./source-availability.js";
 
@@ -26,7 +26,7 @@ const UNIFIED_FIELDS = [
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
   "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice", "saleSummary",
   "sourceListingId", "providerSourceId", "active", "floor", "literalRoom", "sourceFloor", "sourceRoom",
-  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type"
+  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -429,6 +429,7 @@ async function unifiedListings(env, listingIds = null) {
     env,
     `id, listing_id, source, source_listing_id, source_url, active, missing_count, updated_at, last_collected_at, list_snapshot_json,
       ${availabilityKindSql("listing_sources")} AS availability_kind,
+      ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
       ${originalFloorMetadataSql()} AS floor_metadata_json,
       json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json,
       COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) AS naver_floor_info_json,
@@ -545,6 +546,7 @@ export function masterFallbackOriginal(row, images = []) {
     revision: Math.max(1, Number(row?.version) || 1),
     registrationAt: clean(row?.registration_at || row?.first_collected_at),
     masterFallback: true,
+    absenceConfirmedAt: "", endedAt: "",
     sourceUnavailable: Number(row?.source_count || 0) > 0 && Number(row?.active_source_count || 0) === 0,
     missingCount: Math.max(0, Number(row?.missing_count) || 0)
   };
@@ -561,6 +563,7 @@ async function unifiedDetail(env, propertyId) {
   const sourceResult = await env.DB.prepare(`SELECT id, listing_id, source, source_listing_id, source_url,
       active, missing_count, updated_at, last_collected_at, list_snapshot_json, raw_json,
       ${availabilityKindSql("listing_sources")} AS availability_kind,
+      ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
       ${originalFloorMetadataSql()} AS floor_metadata_json
     FROM listing_sources WHERE listing_id = ?1 AND ${publicSourceWhereSql("listing_sources")}
       AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
@@ -1119,7 +1122,8 @@ async function transactionCandidates(env) {
   // returned. Ranking gives every returned master its first candidate first.
   const originalsResult = ids.length ? await env.DB.prepare(`SELECT * FROM (
     SELECT s.id,s.listing_id,s.source,s.source_listing_id,s.source_url,s.active,s.missing_count,s.updated_at,s.last_collected_at,
-      ${availabilityKindSql()} AS availability_kind, ${originalFloorMetadataSql()} AS floor_metadata_json,
+      ${availabilityKindSql()} AS availability_kind, ${absenceMetadataSql()} AS absence_metadata_json,
+      ${originalFloorMetadataSql()} AS floor_metadata_json,
       json_extract(s.list_snapshot_json,'$.room') AS advertised_room,
       json_extract(s.list_snapshot_json,'$.type') AS advertised_type,
       json_extract(s.list_snapshot_json,'$.deposit') AS deposit,json_extract(s.list_snapshot_json,'$.rent') AS rent,

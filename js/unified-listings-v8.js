@@ -49,6 +49,32 @@
     return isSourceUnavailable(original) && /^(?:legacy_candidate|census_missing)$/.test(text(original && original.availabilityKind)) && !!(original &&
       (original.candidateEligible === true || original.candidateEligible === 1 || original.candidateEligible === "true"));
   }
+  function absenceConfirmationTime(original) {
+    if (!isCandidateOriginal(original) || text(original.availabilityKind) !== "census_missing") return 0;
+    var raw = text(original.absenceConfirmedAt);
+    // Only the server-validated census timestamp is an absence confirmation.
+    // Provider end dates, ordinary updates and legacy flags cannot stand in for it.
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)) return 0;
+    var parsed = Date.parse(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+  function absenceConfirmationDate(original) {
+    var timestamp = absenceConfirmationTime(original);
+    if (!timestamp) return "";
+    // Explicit KST conversion keeps the displayed day stable on overseas devices.
+    var date = new Date(timestamp + 9 * 60 * 60 * 1000);
+    return String(date.getUTCFullYear()).slice(-2) + "." +
+      String(date.getUTCMonth() + 1).padStart(2, "0") + "." + String(date.getUTCDate()).padStart(2, "0");
+  }
+  function detailDateMetadata(masterMeta, selected) {
+    var registrationDate = detailDate(masterMeta && masterMeta.regDate);
+    var candidate = isCandidateOriginal(selected);
+    if (!registrationDate && !candidate) return "";
+    return '<div class="unified-detail-meta-v8">' +
+      (registrationDate ? '<span class="unified-detail-date-v1"><span>등록일</span><b>' + esc(registrationDate) + '</b></span>' : '') +
+      (candidate ? '<span class="unified-detail-date-v1 absence-confirmed-date-v1"><span>미노출 확인일</span><b>' +
+        esc(absenceConfirmationDate(selected) || "미확인") + '</b></span>' : '') + '</div>';
+  }
   function publicOriginals(originals) {
     return (originals || []).filter(function(original) {
       return !isSourceUnavailable(original) || isCandidateOriginal(original);
@@ -112,6 +138,11 @@
     // Direct/manual listings can obtain their first original only from detail.
     // Without a rendered subset, keep the valid detail instead of deleting it.
     if (!projection || !projection.length) return visible;
+    if (global.doneOnly) {
+      var byId = Object.create(null);
+      visible.forEach(function(original) { byId[text(original.originalId)] = original; });
+      return projection.map(function(original) { return byId[text(original.originalId)]; }).filter(Boolean);
+    }
     var allowed = new Set(projection.map(function(original) { return text(original.originalId); }));
     return visible.filter(function(original) { return allowed.has(text(original.originalId)); });
   }
@@ -776,16 +807,27 @@
     // Preserve explicit manual completion and source-less manual listings.
     if (manual || !all.length) {
       if (!manual && view === "completed" || !matches(master)) return null;
-      return Object.assign({}, master, {unifiedDisplayOriginalsV2: originals});
+      return Object.assign({}, master, {unifiedDisplayOriginalsV2: originals, unifiedAbsenceConfirmedTimeV1: 0});
     }
-    var selected = null, matched = [];
+    var selected = null, matched = [], latestAbsenceTime = 0, latestAbsenceIndex = -1;
     originals.forEach(function(original) {
       var probe = originalDisplayItem(master, original);
       if (!matches(probe)) return;
       matched.push(original);
       if (!selected) selected = probe;
+      if (view === "completed") {
+        var absenceTime = absenceConfirmationTime(original);
+        if (absenceTime > latestAbsenceTime) {
+          latestAbsenceTime = absenceTime;
+          latestAbsenceIndex = matched.length - 1;
+          selected = probe;
+        }
+      }
     });
     if (!selected) return null;
+    // Put only the newest matching candidate first. Keep equal/unknown dates
+    // stable and never reorder the stored original group or its favorite key.
+    if (latestAbsenceIndex > 0) matched.unshift(matched.splice(latestAbsenceIndex, 1)[0]);
     selected.unifiedDisplayOriginalsV2 = matched;
     selected.unifiedOriginalsV8 = matched;
     selected.unifiedOriginalCountV8 = matched.length;
@@ -793,6 +835,7 @@
     selected.unifiedCandidateOriginalCountV2 = matched.filter(isCandidateOriginal).length;
     selected.transactionCheckCandidateV8135 = isTransactionCandidate(selected);
     selected.thumbnailV8 = originalImage(matched[0]);
+    selected.unifiedAbsenceConfirmedTimeV1 = latestAbsenceTime;
     return selected;
   }
 
@@ -1108,7 +1151,6 @@
     })[0] || originals[0];
     var masterMeta = state.masterMeta[text(propertyId)] || {};
     var phoneDetail = isPhoneDetailV2();
-    var registrationDate = detailDate(masterMeta.regDate);
     var drawer = ensureDrawer();
     drawer.__detailPresentationV2 = {phone: phoneDetail, propertyId: propertyId, originals: originals, originalId: selected && selected.originalId};
     positionDrawer(drawer);
@@ -1156,7 +1198,7 @@
           (!phoneDetail ? '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'register\', \'' + encodedActionPropertyId + '\')">대장</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' : '') +
         '</div>' +
-        (registrationDate ? '<div class="unified-detail-meta-v8"><span>등록일</span><b>' + esc(registrationDate) + '</b></div>' : '') +
+        detailDateMetadata(masterMeta, selected) +
         (!phoneDetail ? '<div class="unified-detail-actions-v8" aria-label="원본매물 정리 작업">' +
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물 분리</button>' : '') +

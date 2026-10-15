@@ -1114,10 +1114,12 @@ function updateSortDropdownUI() {
    * 사용자가 다른 기준을 선택한 뒤에는 현재 기준을 짧게 표시합니다.
    */
   var buttonLabel = button.querySelector(".v6-sort-label");
+  var latestLabel = doneOnly ? "미노출 최신순" : "최근등록순";
+  var currentLabel = value === "latest" ? (doneOnly ? latestLabel : "정렬") : (SORT_LABELS[value] || "정렬");
   if (buttonLabel) {
-    buttonLabel.textContent = value === "latest" ? "정렬" : (SORT_LABELS[value] || "정렬");
+    buttonLabel.textContent = currentLabel;
   } else {
-    button.textContent = value === "latest" ? "정렬" : (SORT_LABELS[value] || "정렬");
+    button.textContent = currentLabel;
   }
 
   Array.prototype.forEach.call(
@@ -1126,6 +1128,10 @@ function updateSortDropdownUI() {
       var selected = option.getAttribute("data-sort-value") === value;
       option.classList.toggle("selected", selected);
       option.setAttribute("aria-selected", selected ? "true" : "false");
+      if (option.getAttribute("data-sort-value") === "latest") {
+        var label = option.querySelector("span:last-child");
+        if (label) label.textContent = latestLabel;
+      }
     }
   );
 }
@@ -1319,6 +1325,10 @@ function getFilteredItems(options) {
 
   filtered.sort(function(a, b) {
     if (sortType === "latest") {
+      if (availabilityView === "completed") {
+        var absenceDifference = (Number(b.unifiedAbsenceConfirmedTimeV1) || 0) - (Number(a.unifiedAbsenceConfirmedTimeV1) || 0);
+        if (absenceDifference) return absenceDifference;
+      }
       var latestDifference = listingRegistrationTime(b) - listingRegistrationTime(a);
       if (latestDifference) return latestDifference;
       return (Number(b.sheetRow) || 0) - (Number(a.sheetRow) || 0);
@@ -5905,6 +5915,7 @@ setTimeout(initSyncIndicator, 0);
 
 
 function updateHideDoneMenuUI() {
+  if (typeof updateSortDropdownUI === "function") updateSortDropdownUI();
   var btn = document.getElementById("hideDoneBtn");
   if (btn) {
     btn.classList.toggle("on", !!hideDone);

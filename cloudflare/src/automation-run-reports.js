@@ -1,3 +1,5 @@
+import { normalizeNewSourceAdCounts } from "./collection-status-summary.js";
+
 const statuses = new Set(["pending", "running", "completed", "partial", "deferred", "failed", "retrying", "retry_wait", "skipped"]);
 const codes = new Set(["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"]);
 const numericKeys = ["expected", "processed", "detailProcessed", "unchanged", "created", "updated", "review", "addressDeferred", "failed",
@@ -15,6 +17,7 @@ export function sanitizeAutomationRunReport(input, now = Date.now()) {
   const items = input.items.map((item, index) => {
     if (!["naver", "daangn", "gongsil"].includes(item.source) || !statuses.has(item.status)) fail("자동수집 보고 상태가 올바르지 않습니다.");
     const counters = Object.fromEntries(numericKeys.map(key => [key, count(item.counts?.[key])]));
+    Object.assign(counters, normalizeNewSourceAdCounts(item.counts || {}));
     Object.assign(counters, {presenceReported: item.counts?.presenceReported === true,
       presenceTracking: item.counts?.presenceTracking === true,
       presenceScopeEstablished: item.counts?.presenceScopeEstablished === true,

@@ -4,7 +4,7 @@
   var DATABASE_NAME = "js-realestate-initial-listings-v1";
   var STORE_NAME = "snapshots";
   var SNAPSHOT_KEY = "latest";
-  var SCHEMA_VERSION = 4;
+  var SCHEMA_VERSION = 5;
   var MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
   var BASE_ITEM_FIELDS = [
     "name", "address", "room", "type", "deposit", "rent", "fee", "premium", "area",
@@ -20,7 +20,7 @@
     "area", "latitude", "longitude", "thumbnail", "photoCount", "contactCount",
     "revision", "masterFallback", "sourceUnavailable", "missingCount", "tradeType",
     "saleCategory", "salePrice", "saleSummary", "active", "candidateEligible", "availabilityKind",
-    "floor", "literalRoom", "sourceFloor", "sourceRoom", "manualDisplayFields", "hasManualRoomOverride", "type"
+    "floor", "literalRoom", "sourceFloor", "sourceRoom", "manualDisplayFields", "hasManualRoomOverride", "type", "absenceConfirmedAt"
   ];
 
   function copyBaseItem(item) {

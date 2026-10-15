@@ -1594,22 +1594,31 @@
     line-height: 1;
   }
 
-  .unified-detail-meta-v8 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 8px 0 2px;
-    padding: 7px 9px;
-    border-radius: 8px;
-    background: #f3f6fa;
-    color: #617187;
-    font-size: 11px;
-  }
+}
 
-  .unified-detail-meta-v8 b {
-    color: #26384f;
-    font-size: 12px;
-  }
+.unified-detail-meta-v8 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 8px 0 2px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #f3f6fa;
+  color: #617187;
+  font-size: 11px;
+}
+
+.unified-detail-date-v1 {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.unified-detail-meta-v8 b {
+  color: #26384f;
+  font-size: 12px;
 }
 
 @media (min-width: 769px) {

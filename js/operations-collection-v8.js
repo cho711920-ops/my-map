@@ -141,11 +141,19 @@
     return [parts.year, parts.month, parts.day].join(".") + " " + parts.hour + ":" + parts.minute;
   }
 
+  function newSourceAdsText(result) {
+    var value = result && result.newSourceAds;
+    return result && result.newSourceAdsReported === true && value != null && value !== "" &&
+      typeof value !== "boolean" && Number.isSafeInteger(Number(value)) && Number(value) >= 0
+      ? Number(value).toLocaleString("ko-KR") : "미기록";
+  }
+
   function resultCells(result) {
     result = result || {};
     return '<div class="collection-result-grid">' +
       '<div><b>' + (result.found == null ? '미기록' : number(result.found).toLocaleString("ko-KR")) + '</b><small>목록 확인</small></div>' +
-      '<div class="new"><b>' + number(result.created).toLocaleString("ko-KR") + '</b><small>신규</small></div>' +
+      '<div class="new"><b>' + newSourceAdsText(result) + '</b><small>신규광고</small></div>' +
+      '<div><b>' + number(result.created).toLocaleString("ko-KR") + '</b><small>신규통합매물</small></div>' +
       '<div><b>' + (number(result.merged) + number(result.updated)).toLocaleString("ko-KR") + '</b><small>통합·갱신</small></div>' +
       '<div class="review"><b>' + number(result.review).toLocaleString("ko-KR") + '</b><small>검증</small></div>' +
       '<div><b>' + (result.presenceReported ? number(result.deactivated).toLocaleString("ko-KR") : '미기록') + '</b><small>원본광고 미노출</small></div>' +
@@ -222,13 +230,17 @@
     var report = (automation.runs || [])[0];
     if (!report) return '<article class="edge-automation-card"><header><h3>서버에 저장된 전체 실행</h3></header><p>' +
       escape(automation.message || '아직 보고서가 없습니다. 업데이트한 전용 수집기가 실행되면 진행·종료 기록을 서버로 전송합니다.') + '</p></article>';
-    var counts = {completed: 0, deferred: 0, partial: 0, failed: 0, created: 0};
-    (report.items || []).forEach(function(item) { counts[item.status] = number(counts[item.status]) + 1; counts.created += number(item.counts && item.counts.created); });
+    var counts = {completed: 0, deferred: 0, partial: 0, failed: 0, created: 0, newSourceAds: 0, newSourceAdsReported: !!(report.items && report.items.length)};
+    (report.items || []).forEach(function(item) {
+      counts[item.status] = number(counts[item.status]) + 1; counts.created += number(item.counts && item.counts.created);
+      if (newSourceAdsText(item.counts) === '미기록') counts.newSourceAdsReported = false;
+      else counts.newSourceAds += Number(item.counts.newSourceAds);
+    });
     var status = report.active ? report.stale ? '마지막 응답 이후 10분 경과 · 실행 여부 확인 필요' : '실행 중' : '실행 종료';
     return '<article class="edge-automation-card"><header><h3>서버에 저장된 전체 실행</h3><span>' + escape(status) + '</span></header><p>' +
       '시작 ' + escape(formatAt(report.startedAt)) + ' · 마지막 수신 ' + escape(formatAt(report.reportedAt)) +
       '<br>정상 ' + counts.completed + ' · 주소보류 ' + counts.deferred + ' · 부분 ' + counts.partial + ' · 실패 ' + counts.failed +
-      ' · 이번 실행 신규 ' + counts.created + '<br>' + escape(readinessText(report.readiness)) + '</p></article>';
+      ' · 이번 실행 신규광고 ' + newSourceAdsText(counts) + ' · 신규통합매물 ' + counts.created + '<br>' + escape(readinessText(report.readiness)) + '</p></article>';
   }
   function collectionDayHtml(data) {
     var summary = data.daySummary || {};
@@ -238,12 +250,13 @@
       '<label>출처 <select onchange="setCollectionReportFilter(\'source\',this.value)">' + options + '</select></label>' +
       '<label>거래 <select onchange="setCollectionReportFilter(\'trade\',this.value)">' + [['','전체'],['lease','임대'],['sale','매매']].map(function(entry) { return '<option value="' + entry[0] + '"' + (extraState.collectionTrade === entry[0] ? ' selected' : '') + '>' + entry[1] + '</option>'; }).join('') + '</select></label></div></div>' +
       resultCells(summary.totals || {}) +
+      (summary.totals && summary.totals.unknownNewSourceAdsScopes ? '<p>신규광고 미기록 ' + number(summary.totals.unknownNewSourceAdsScopes) + '개 범위 · 기록된 범위의 신규광고 ' + number(summary.totals.newSourceAdsKnownTotal).toLocaleString('ko-KR') + '건은 부분합이며 전체 합계가 아닙니다.</p>' : '') +
       (summary.totals && summary.totals.unknownFound ? '<p>목록 수 미기록 ' + number(summary.totals.unknownFound) + '개 범위는 합계에서 제외했습니다.</p>' : '') +
       (data.historyTruncated ? '<p>조회 상한에 도달해 일부 이전 기록은 제외됐을 수 있습니다.</p>' : '') +
       '<div class="collection-coverage">' + (summary.districtCoverage || []).map(function(row) { return '<p><b>' + escape(row.source) + '</b> ' + row.districts.map(function(item) { return escape(item.district) + ' ' + (item.state === 'complete' ? '완료' : item.state === 'scope-only' ? '선택 범위 확인' : item.state === 'missing' ? '기록 없음' : '진행·확인 필요'); }).join(' · ') + '</p>'; }).join('') + '</div>' +
-      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>출처·범위</th><th>목록 확인</th><th>신규</th><th>변경·통합</th><th>기존 동일</th><th>주소 보류</th><th>실패</th><th>원본광고 미노출</th><th>판정 상태</th></tr></thead><tbody>' +
-      (summary.items || []).map(function(row) { return '<tr><td>' + escape(row.source + ' · ' + row.scope) + '</td><td>' + (row.found == null ? '미기록' : number(row.found).toLocaleString('ko-KR')) + '</td><td>' + number(row.created) + '</td><td>' + (number(row.updated) + number(row.merged)) + '</td><td>' + number(row.unchanged) + '</td><td>' + number(row.addressDeferred) + '</td><td>' + number(row.failed) + '</td><td>' + (row.presenceReported ? number(row.deactivated) : '미기록') + '</td><td>' + escape(row.presenceReported ? (row.presenceScopeEstablished ? '비교 기준 저장' : row.presenceTracking ? '동일 범위 비교 완료' : '종료 판정 보류') : (row.complete ? '목록 확인 완료' : row.status)) + '</td></tr>' +
-        (row.anomaly ? '<tr><td colspan="9">⚠ ' + escape(row.anomaly) + '</td></tr>' : ''); }).join('') + '</tbody></table></div></section>';
+      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>출처·범위</th><th>목록 확인</th><th>신규광고</th><th>신규통합매물</th><th>변경·통합</th><th>기존 동일</th><th>주소 보류</th><th>실패</th><th>원본광고 미노출</th><th>판정 상태</th></tr></thead><tbody>' +
+      (summary.items || []).map(function(row) { return '<tr><td>' + escape(row.source + ' · ' + row.scope) + '</td><td>' + (row.found == null ? '미기록' : number(row.found).toLocaleString('ko-KR')) + '</td><td>' + newSourceAdsText(row) + '</td><td>' + number(row.created) + '</td><td>' + (number(row.updated) + number(row.merged)) + '</td><td>' + number(row.unchanged) + '</td><td>' + number(row.addressDeferred) + '</td><td>' + number(row.failed) + '</td><td>' + (row.presenceReported ? number(row.deactivated) : '미기록') + '</td><td>' + escape(row.presenceReported ? (row.presenceScopeEstablished ? '비교 기준 저장' : row.presenceTracking ? '동일 범위 비교 완료' : '종료 판정 보류') : (row.complete ? '목록 확인 완료' : row.status)) + '</td></tr>' +
+        (row.anomaly ? '<tr><td colspan="10">⚠ ' + escape(row.anomaly) + '</td></tr>' : ''); }).join('') + '</tbody></table></div></section>';
   }
 
   function loadOperationsQuality() {
@@ -351,14 +364,14 @@
       '<div class="collection-toolbar"><div><strong>수집원본 최신상태</strong><span>전체 ' + number(raw.total).toLocaleString("ko-KR") +
       '건 · 처리대기 ' + number(raw.pending).toLocaleString("ko-KR") + '건 · 오류 ' + number(raw.error).toLocaleString("ko-KR") +
       '건 · 검증대기 ' + number(data.pendingReview).toLocaleString("ko-KR") + '건</span></div></div>' +
-      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>완료시각</th><th>출처</th><th>범위</th><th>완전</th><th>발견</th><th>신규</th><th>통합·갱신</th><th>검증</th><th>중복</th><th>실패</th><th>상태</th></tr></thead><tbody>' +
+      '<div class="collection-table-wrap"><table class="collection-table"><thead><tr><th>완료시각</th><th>출처</th><th>범위</th><th>완전</th><th>발견</th><th>신규광고</th><th>신규통합매물</th><th>통합·갱신</th><th>검증</th><th>중복</th><th>실패</th><th>상태</th></tr></thead><tbody>' +
       (data.recent || []).map(function(row) {
         return '<tr><td>' + escape(formatAt(row.endedAt)) + '</td><td>' + escape(row.source) + '</td><td>' + escape(row.scope) +
           '</td><td class="' + (row.complete ? "ok" : "warn") + '">' + (row.complete ? "Y" : "N") +
-          '</td><td>' + (row.found == null ? '미기록' : number(row.found)) + '</td><td>' + number(row.created) + '</td><td>' +
+          '</td><td>' + (row.found == null ? '미기록' : number(row.found)) + '</td><td>' + newSourceAdsText(row) + '</td><td>' + number(row.created) + '</td><td>' +
           (number(row.merged) + number(row.updated)) + '</td><td>' + number(row.review) + '</td><td>' +
           number(row.duplicate) + '</td><td>' + number(row.failed) + '</td><td>' + escape(row.status) + '</td></tr>' +
-          (number(row.failed) + number(row.requiredFieldRejected) > 0 ? '<tr><td colspan="11">' + collectionDiagnosticsHtml(row) + '</td></tr>' : '');
+          (number(row.failed) + number(row.requiredFieldRejected) > 0 ? '<tr><td colspan="12">' + collectionDiagnosticsHtml(row) + '</td></tr>' : '');
       }).join("") + '</tbody></table></div><div id="operationsQualitySummary"></div><div id="operationsRetentionSummary"></div></div>';
     renderOperationsQuality();
     renderOperationsRetention();

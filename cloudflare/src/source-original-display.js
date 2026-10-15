@@ -1,5 +1,5 @@
 import { canonicalListingRoom, parseListingFloor } from "./floor.js";
-import { sourceAvailability } from "./source-availability.js";
+import { sourceAvailability, sourceAbsenceConfirmedAt } from "./source-availability.js";
 
 const clean = value => String(value ?? "").trim();
 const parsed = value => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
@@ -63,6 +63,7 @@ export function withSourceOriginalMetadata(original, row, manualRooms = new Map(
   const unavailable = Number(row.active) === 0;
   const sourceListingId = clean(row.source_listing_id);
   const providerSourceId = sourceListingId.replace(/::(?:lease|sale)$/, "").replace(/^네이버-/, "");
+  const absenceConfirmedAt = sourceAbsenceConfirmedAt(row);
   return {
     ...original, originalId: clean(row.id) || original.originalId,
     propertyId: clean(row.listing_id) || original.propertyId, source,
@@ -78,6 +79,9 @@ export function withSourceOriginalMetadata(original, row, manualRooms = new Map(
     ...sourceAvailability(row.active, row.availability_kind),
     manualDisplayFields: MANUAL_REPRESENTATIVE_FIELDS.filter(field => manualFields.get(clean(row.listing_id))?.has(field)).join(","),
     lastCheckedAt: clean(row.updated_at || row.last_collected_at),
-    endedAt: unavailable ? clean(row.updated_at || row.last_collected_at) : ""
+    // Compatibility alias only: neither field claims the provider's actual end
+    // time. Legacy/active/invalid evidence must never manufacture a date.
+    endedAt: absenceConfirmedAt,
+    absenceConfirmedAt
   };
 }

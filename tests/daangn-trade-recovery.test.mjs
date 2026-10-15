@@ -114,7 +114,7 @@ test("automatic runner starts the saved monthly target even while page shows sal
       assert.equal(state.tradeType, "lease");
       state.job = { status: "complete", completeCollection: true };
     } };
-  const api = functions(client, ["runAutomatic", "runAutomaticTarget"], context);
+  const api = functions(client, ["newSourceAdCounts", "runAutomatic", "runAutomaticTarget"], context);
   const result = await api.runAutomatic({ url: url(["MONTH"]), district: "유성구", tradeType: "lease" });
   assert.equal(started, 1); assert.equal(result.partial, false); assert.equal(state.automaticRunning, false);
 });

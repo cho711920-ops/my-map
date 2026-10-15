@@ -2,7 +2,7 @@ import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./fl
 import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
 import { collectorDiagnostics } from "./collector-diagnostics.js";
-import { normalizeCollectionCounts, collectionDateRange, summarizeCollectionDay, collectorActionGuidance } from "./collection-status-summary.js";
+import { normalizeCollectionCounts, normalizeNewSourceAdCounts, collectionDateRange, summarizeCollectionDay, collectorActionGuidance } from "./collection-status-summary.js";
 import { saveAutomationRunReport, readAutomationRunReports } from "./automation-run-reports.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
@@ -730,7 +730,7 @@ async function ensureSession(env, sessionId, source, owner = "collector") {
   const id = clean(sessionId) || `${source}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const now = nowIso();
   await env.DB.prepare(`INSERT INTO collector_sessions (id, source, owner_email, state, totals_json, started_at, updated_at)
-    VALUES (?1, ?2, ?3, 'running', '{}', ?4, ?4)
+    VALUES (?1, ?2, ?3, 'running', '{"newSourceAds":0,"newSourceAdsReported":true}', ?4, ?4)
     ON CONFLICT(id) DO UPDATE SET source=CASE WHEN excluded.source<>'' THEN excluded.source ELSE collector_sessions.source END,
       state=CASE WHEN collector_sessions.state IN ('completed','partial','finalizing')
         THEN collector_sessions.state ELSE 'running' END,
@@ -739,6 +739,16 @@ async function ensureSession(env, sessionId, source, owner = "collector") {
       updated_at=CASE WHEN collector_sessions.state IN ('completed','partial','finalizing')
         THEN collector_sessions.updated_at ELSE excluded.updated_at END`).bind(id, source, owner, now).run();
   return id;
+}
+
+function preserveNewSourceAdsCounters(jsonParameter) {
+  // Source insertion and this counter are committed together. Other session
+  // checkpoints must not overwrite a concurrent insert with an earlier read.
+  // A pre-upgrade session stays unreported rather than inventing its past total.
+  return `json_set(${jsonParameter}, '$.newSourceAds',
+    COALESCE(json_extract(totals_json, '$.newSourceAds'), 0),
+    '$.newSourceAdsReported', json(CASE WHEN json_extract(totals_json, '$.newSourceAdsReported')=1
+      THEN 'true' ELSE 'false' END))`;
 }
 
 async function saveMutationResult(env, requestId, action, result, owner = "collector") {
@@ -1064,7 +1074,7 @@ async function classifyManifest(env, body) {
   totals.coordinatesRepaired = Number(totals.coordinatesRepaired || 0) + coordinateRepairs.size;
   if (clean(body.collectorVersion)) totals.collectorVersion = clean(body.collectorVersion).slice(0, 30);
   if (clean(body.scope)) totals.scope = clean(body.scope).slice(0, 200);
-  await env.DB.prepare("UPDATE collector_sessions SET totals_json=?1, updated_at=?2 WHERE id=?3")
+  await env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
     .bind(JSON.stringify(totals), nowIso(), sessionId).run();
   return result;
 }
@@ -1738,7 +1748,7 @@ function assertSourceTradeBoundary(record, listingTradeType, existingSource = nu
 }
 
 async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false,
-  actor = "collector", existingAssets = null, preserveListing = false) {
+  actor = "collector", existingAssets = null, preserveListing = false, onNewSource = null) {
   const now = nowIso();
   const restoredOriginalId = /^O-[A-Za-z0-9_-]{8,160}$/.test(clean(record?.originalId))
     ? clean(record.originalId)
@@ -1775,14 +1785,20 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     Number(existingSource.missing_count || 0) !== 0 ||
     clean(previous?.contactCaptureStatus) !== clean(snapshot.contactCaptureStatus);
   if (!existingSource) {
-    await env.DB.prepare(`INSERT INTO listing_sources (
+    await env.DB.batch([env.DB.prepare(`INSERT INTO listing_sources (
         id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
         trade_type, sale_category, sale_price,
         session_id, active, missing_count, first_collected_at, last_collected_at, created_at, updated_at
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, ?13, ?13, ?13, ?13)`)
       .bind(sourceRowId, listingId, record.source, record.sourceId, record.link, snapshotHash,
         snapshotJson, rawJson, collectorTradeType(record.tradeType, true), clean(record.saleCategory),
-        record.salePrice, sessionId, now).run();
+        record.salePrice, sessionId, now),
+      env.DB.prepare(`UPDATE collector_sessions SET totals_json=json_set(totals_json,
+          '$.newSourceAds', COALESCE(json_extract(totals_json, '$.newSourceAds'), 0)+1),
+          updated_at=?1 WHERE id=?2`).bind(now, sessionId)]);
+    // Count actual durable source IDs, not master creation/merge decisions.
+    // An insert failure (including a concurrent duplicate) rolls back both.
+    if (onNewSource) onNewSource();
   }
   const assets = await replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets);
   if (existingSource) {
@@ -1839,7 +1855,8 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     sourceChanged, mediaChanged: assets.mediaChanged, contactsChanged: assets.contactsChanged };
 }
 
-async function createListing(env, record, sessionId, actor = "collector", existingSource = null, existingAssets = null) {
+async function createListing(env, record, sessionId, actor = "collector", existingSource = null, existingAssets = null,
+  onNewSource = null) {
   const tradeType = assertSourceTradeBoundary(record, record?.tradeType || record?.trade_type, existingSource);
   const id = `M-${crypto.randomUUID()}`;
   const now = nowIso();
@@ -1855,7 +1872,7 @@ async function createListing(env, record, sessionId, actor = "collector", existi
       record.room, record.category, tradeType, clean(record.saleCategory), record.salePrice,
       record.deposit, record.rent, record.fee, record.premium, record.area,
       record.latitude, record.longitude, record.memo, record.link, contacts, now).run();
-  await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets);
+  await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets, false, onNewSource);
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record)).run();
   return id;
@@ -1987,6 +2004,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const collectionTradeType = source === "공실박스" ? gongsilCollectionTradeType(metadata.collectionTradeType) : "";
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
+    newSourceAds: 0, newSourceAdsReported: true,
     refreshed: 0, review: 0, duplicate: 0, failed: 0, addressMissing: 0,
     contactDeferred: 0, tradeTypeExcluded: 0, reactivated: 0, adsReappeared: 0, staleEvidenceSkipped: 0, offerReceived: 0 };
   let normalizedRecords = [];
@@ -2025,6 +2043,12 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   if (source === "공실박스") normalizedRecords = await resolveGongsilOfferIds(env, normalizedRecords);
   else normalizedRecords = await resolveCollectorOfferIds(env, source, normalizedRecords);
+  const uniqueSources = new Set();
+  normalizedRecords = normalizedRecords.filter(record => {
+    if (uniqueSources.has(record.sourceId)) { totals.duplicate += 1; return false; }
+    uniqueSources.add(record.sourceId);
+    return true;
+  });
   const existingSources = await loadExistingSources(env, source, normalizedRecords);
   const records = [];
   for (const record of normalizedRecords) {
@@ -2095,7 +2119,8 @@ async function ingestRecords(env, source, values, metadata = {}) {
           affectedListingIds.add(classified.candidate.id);
         }
         const result = await attachSource(env, record, classified.candidate.id, sessionId, existing, false,
-          "collector", existing ? sourceAssets.get(clean(existing.id)) : null, sourceReclassification);
+          "collector", existing ? sourceAssets.get(clean(existing.id)) : null, sourceReclassification,
+          () => { totals.newSourceAds += 1; });
         if (result.reactivated) {
           affectedListingIds.add(classified.candidate.id);
           totals.reactivated += 1;
@@ -2104,7 +2129,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
         publishedListingId = classified.candidate.id;
       } else {
         const listingId = await createListing(env, record, sessionId, "collector", existing,
-          existing ? sourceAssets.get(clean(existing.id)) : null);
+          existing ? sourceAssets.get(clean(existing.id)) : null, () => { totals.newSourceAds += 1; });
         candidates.push({ id: listingId, property_id: listingId, title: record.buildingName,
           address: record.address, room: record.room, listing_type: record.category,
           trade_type: collectorTradeType(record.tradeType, true), sale_category: record.saleCategory,
@@ -2139,7 +2164,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
   if (clean(metadata.scope)) saved.scope = clean(metadata.scope).slice(0, 200);
-  await env.DB.prepare("UPDATE collector_sessions SET totals_json=?1, updated_at=?2 WHERE id=?3")
+  await env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
     .bind(JSON.stringify(saved), nowIso(), sessionId).run();
   const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   return { ok: true, sessionId, ...totals, errors,
@@ -2467,7 +2492,7 @@ async function finalizeSessionWork(env, body) {
     deactivated
   };
   totals.finalizedAt = finalizedAt;
-  await env.DB.prepare(`UPDATE collector_sessions SET state=?1, totals_json=?2,
+  await env.DB.prepare(`UPDATE collector_sessions SET state=?1, totals_json=${preserveNewSourceAdsCounters("?2")},
     finished_at=?3, updated_at=?3 WHERE id=?4 AND state='finalizing'`)
     .bind(state, JSON.stringify(totals), finalizedAt, sessionId).run();
   return result;
@@ -2746,6 +2771,7 @@ async function startDaangnJob(env, body) {
     detailAttempts: {}, terminalFailedIds: [], detailErrors: [], cursor: "", hasNextPage: true,
     phase: "list", status: "running", page: 0, found: 0, total: 0, processed: 0, remaining: 0,
     created: 0, merged: 0, updated: 0, review: 0, detailedDuplicates: 0,
+    newSourceAds: 0, newSourceAdsReported: true,
     skippedUnchanged: 0, addressMissing: 0, failed: 0, tradeTypeExcluded: 0, chunkSize: 8,
     detailFetchFailures: 0, detailRetryCount: 0,
     message: "클러스터 목록을 확인하고 있습니다."
@@ -2889,6 +2915,7 @@ async function finalizeDaangnJob(env, job) {
   });
   job.completeCollection = Boolean(result.complete);
   job.completionIssues = Array.isArray(result.completionIssues) ? result.completionIssues : [];
+  Object.assign(job, normalizeNewSourceAdCounts(result));
   for (const key of ["missingMarked", "deactivated", "adsReappeared"]) job[key] = countValue(result[key]);
   job.presenceTracking = result.presenceTracking === true;
   job.presenceScopeEstablished = result.presenceScopeEstablished === true;
@@ -3017,11 +3044,16 @@ async function runDaangnChunk(env, body = {}) {
     const result = records.length
       ? await ingestRecords(env, "당근", records, { sessionId: job.sessionId, validationVersion: 3,
         ...daangnPresenceProof(job) })
-      : { created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0, errors: [] };
+      : { created: 0, merged: 0, updated: 0, review: 0, duplicate: 0, failed: 0, errors: [],
+        newSourceAds: 0, newSourceAdsReported: true };
     job.lastWriteMs = Date.now() - writeStarted;
     job.created += Number(result.created || 0);
     job.merged += Number(result.merged || 0);
     job.updated += Number(result.updated || 0);
+    const previousNewAds = normalizeNewSourceAdCounts(job);
+    const chunkNewAds = normalizeNewSourceAdCounts(result);
+    job.newSourceAdsReported = previousNewAds.newSourceAdsReported && chunkNewAds.newSourceAdsReported;
+    job.newSourceAds = job.newSourceAdsReported ? previousNewAds.newSourceAds + chunkNewAds.newSourceAds : null;
     job.review += Number(result.review || 0);
     job.detailedDuplicates += Number(result.duplicate || 0);
     job.failed += Number(result.failed || 0);

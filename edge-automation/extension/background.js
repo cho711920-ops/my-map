@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.14";
+const BACKGROUND_BUILD = "1.1.15";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -634,6 +634,8 @@ async function minimalAutomationReport(report) {
         tradeType: item.tradeType || inferredTradeType(target), status: item.status,
         terminalCode: ["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"].includes(item.terminalCode) ? item.terminalCode : "",
         counts: {...Object.fromEntries(allowedCounts.map(key => [key, Math.max(0, Math.floor(Number(item.counts && item.counts[key]) || 0))])),
+          ...(item.counts?.newSourceAdsReported === true && Number.isSafeInteger(item.counts.newSourceAds) && item.counts.newSourceAds >= 0
+            ? {newSourceAds: item.counts.newSourceAds, newSourceAdsReported: true} : {newSourceAdsReported: false}),
           presenceReported: item.counts?.presenceReported === true,
           presenceTracking: item.counts?.presenceTracking === true,
           presenceScopeEstablished: item.counts?.presenceScopeEstablished === true,
@@ -679,6 +681,8 @@ function resultCounts(result) {
     return 0;
   };
   const presence = {...session, ...(session.totals || {}), ...totals, ...payload};
+  const newSourceCounts = presence.newSourceAdsReported === true && Number.isSafeInteger(presence.newSourceAds) && presence.newSourceAds >= 0
+    ? {newSourceAds: presence.newSourceAds, newSourceAdsReported: true} : {newSourceAdsReported: false};
   const presenceKnown = Object.prototype.hasOwnProperty.call(presence, "presenceReported")
     ? presence.presenceReported === true
     : ["missingMarked", "deactivated", "presenceTracking", "presenceScopeEstablished", "presenceTrackingIssue", "adsReappeared"]
@@ -709,7 +713,7 @@ function resultCounts(result) {
       processed: unchanged + detailProcessed, detailProcessed, unchanged,
       listComplete: selectedComplete && (hasProviderProof ? providerComplete : Number(proof.expected) > 0),
       created: number(totals.created), updated: number(totals.updated), review: number(totals.review),
-      addressDeferred, failed: excluded - addressDeferred, ...presenceCounts
+      addressDeferred, failed: excluded - addressDeferred, ...presenceCounts, ...newSourceCounts
     };
   }
   return {
@@ -719,7 +723,7 @@ function resultCounts(result) {
     updated: number(payload.updated, totals.updated, session.updated),
     review: number(payload.review, totals.review, session.review),
     unchanged: number(payload.unchanged, totals.unchanged, session.unchanged),
-    failed: number(payload.failed, totals.failed, session.failed), ...presenceCounts
+    failed: number(payload.failed, totals.failed, session.failed), ...presenceCounts, ...newSourceCounts
   };
 }
 
@@ -727,7 +731,7 @@ function mergeCountSnapshots(previous, incoming) {
   const output = { ...(previous || {}) };
   const numericKeys = new Set([
     "expected", "processed", "detailProcessed", "unchanged",
-    "created", "updated", "review", "addressDeferred", "failed", "missingMarked", "deactivated", "adsReappeared"
+    "created", "updated", "review", "addressDeferred", "failed", "missingMarked", "deactivated", "adsReappeared", "newSourceAds"
   ]);
   Object.entries(incoming || {}).forEach(([key, value]) => {
     if (numericKeys.has(key)) {
@@ -764,6 +768,8 @@ function progressCounts(target, stage) {
     detailProcessed,
     unchanged,
     created: number(stage.created),
+    ...(stage.newSourceAdsReported === true && Number.isSafeInteger(stage.newSourceAds) && stage.newSourceAds >= 0
+      ? {newSourceAds: stage.newSourceAds, newSourceAdsReported: true} : {}),
     updated: number(stage.updated),
     review: number(stage.review),
     addressDeferred: number(stage.addressMissing),

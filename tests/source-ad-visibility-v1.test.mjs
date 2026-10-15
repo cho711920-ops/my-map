@@ -47,7 +47,8 @@ test('compact and detail retain each ended ad beside nine live siblings, without
   assert.equal(originals.length, 10); assert.equal(result.unavailableCount, 1);
   const ended = originals.find(original => original.sourceUnavailable);
   assert.equal(ended.originalId, 'ad-9'); assert.equal(ended.providerSourceId, 'ad-9');
-  assert.equal(ended.missingCount, 1); assert.equal(ended.endedAt, '2026-10-14T02:00:00Z');
+  assert.equal(ended.missingCount, 1); assert.equal(ended.endedAt, '');
+  assert.equal(ended.absenceConfirmedAt, undefined, 'missing proof never falls back to source.updated_at; empty compact tails are omitted');
   assert.equal(ended.floor, 1); assert.equal(originals.filter(original => !original.sourceUnavailable).length, 9);
   assert.doesNotMatch(JSON.stringify(result), /secretRawPayload|not-for-browser/);
   const detail = await handleD1GetAction(f.env, {}, { action: 'unifiedListingDetail', propertyId: 'M' });

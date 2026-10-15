@@ -35,6 +35,7 @@ function data(floors) {
         sourceId:master.propertyId + "-provider-" + index,buildingName:ended?"미노출 원본 " + index:"현재 광고 " + index,
         active:ended?0:1,sourceUnavailable:ended,missingCount:ended?1:0,
         candidateEligible:ended,availabilityKind:ended?(master.propertyId===mixedId?"census_missing":"legacy_candidate"):"active",
+        absenceConfirmedAt:master.propertyId===mixedId&&ended?"2026-10-14T15:15:00.000Z":"",
         deposit:master.propertyId===mixedId&&ended?500:master.deposit,
         rent:master.propertyId===mixedId&&ended?40:master.rent,
         source:master.propertyId===mixedId&&ended?"당근":master.source,
@@ -81,9 +82,10 @@ async function realMap(page, items, payload) {
   },{items,payload});
 }
 
-async function setup(page, context, isMobile, floors=false) {
+async function setup(page, context, isMobile, floors=false, prepareFixture) {
   const errors=[],external=[],writes=[];
   const fixture=data(floors);
+  if (prepareFixture) prepareFixture(fixture);
   page.on("pageerror",error=>errors.push(error.message));
   await context.route("**/*",route=>{
     const url=new URL(route.request().url());
@@ -276,5 +278,97 @@ test("unknown floors survive numeric bounds while price, source and favorite fil
   await page.evaluate(()=>JSV6ListStore.activateFavoriteFilter("fixture-favorites"));
   expect(await ids(page)).toEqual([mixedId]);expect(await mapIds(page)).toEqual([mixedId]);
   await expect(page.locator("#mapListingCountValueV825")).toHaveText("1개");
+  safe(result);
+});
+
+test("completed latest uses verified absence dates and opens the matching newest original on desktop and mobile",async({page,context,isMobile},testInfo)=>{
+  const thirdId="FIXTURE-LEASE-3", manualId="FIXTURE-LEASE-4";
+  const newPicture=picture.replace("%23c9e7f5","%23f3b7a6");
+  const result=await setup(page,context,isMobile,false,fixture=>{
+    fixture.items[0].regDate="2026-10-01";
+    fixture.items[1].regDate="2026-12-01";
+    const mixed=fixture.payload.groups[mixedId];
+    const older=mixed.find(original=>original.originalId===mixedId+"-ad-9");
+    older.absenceConfirmedAt="2026-10-13T01:00:00Z";
+    fixture.payload.groups[mixedId].push({...older,originalId:mixedId+"-ad-latest",source:"네이버",
+      buildingName:"가장 최근 미노출 광고",deposit:700,rent:60,
+      absenceConfirmedAt:"2026-10-14T15:15:00.000Z",images:[newPicture],thumbnail:newPicture});
+    const third=item(thirdId,{regDate:"2026-10-15"});
+    const manual=item(manualId,{regDate:"2026-11-01",state:"계약완료"});
+    fixture.items.push(third,manual);
+    fixture.payload.groups[thirdId]=[
+      {...third,originalId:thirdId+"-active",buildingName:"현재 유효 광고",active:1,
+        candidateEligible:false,availabilityKind:"active",images:[picture],thumbnail:picture,photoCount:1},
+      {...third,originalId:thirdId+"-candidate",buildingName:"전날 미노출 광고",active:0,sourceUnavailable:true,
+        candidateEligible:true,availabilityKind:"census_missing",absenceConfirmedAt:"2026-10-14T12:00:00Z",
+        deposit:900,rent:45,images:[picture],thumbnail:picture,photoCount:1}];
+    fixture.payload.groups[manualId]=[{...manual,originalId:manualId+"-active",active:1,
+      candidateEligible:false,availabilityKind:"active",images:[picture],thumbnail:picture,photoCount:1,
+      // A stray timestamp on a live, manually completed listing is never an absence date.
+      absenceConfirmedAt:"2026-10-15T05:00:00Z"}];
+  });
+  const before=await page.evaluate(()=>({
+    canonical:allItems.map(({propertyId,key,memo,regDate,state,deposit,rent,room})=>({propertyId,key,memo,regDate,state,deposit,rent,room})),
+    originalIds:JSUnifiedListingsV8.allOriginals("FIXTURE-LEASE-1").map(original=>original.originalId),
+    favorites:JSV6ListStore.load("favorite")
+  }));
+  // Normal view remains registration latest, despite the opposite absence order.
+  expect(await ids(page)).toEqual([thirdId,mixedId]);
+  await menu(page,"#doneOnlyBtn");
+  expect(await ids(page)).toEqual([mixedId,thirdId,endedId,manualId]);
+  await expect(page.locator("#sortDropdownBtn .v6-sort-label")).toHaveText("미노출 최신순");
+  await expect(page.locator('[data-sort-value="latest"] span:last-child')).toHaveText("미노출 최신순");
+  await expect(card(page,mixedId).locator(".price-main")).toContainText(/보\s*700\s*\/\s*(?:월세)?월\s*60/);
+  await expect(card(page,mixedId).locator(".unified-thumb-v8 img")).toHaveAttribute("data-thumbnail-source-v8144",newPicture);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.candidateSummary({includeRows:true}).candidates[0]))
+    .toMatchObject({propertyId:mixedId,deposit:700,rent:60,thumbnail:newPicture});
+  await card(page,mixedId).locator(".unified-thumb-v8").click();
+  await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("가장 최근 미노출 광고");
+  const metadata=page.locator("#unifiedDetailBodyV8 .unified-detail-meta-v8");
+  await expect(metadata).toContainText("등록일");
+  await expect(metadata.locator(".absence-confirmed-date-v1")).toContainText("미노출 확인일26.10.15");
+  expect(await metadata.evaluate(row=>{
+    const bounds=row.getBoundingClientRect();
+    return {overflow:row.scrollWidth>row.clientWidth,
+      groups:[...row.querySelectorAll(".unified-detail-date-v1")].every(group=>{
+        const rect=group.getBoundingClientRect();
+        return rect.left>=bounds.left&&rect.right<=bounds.right+1;
+      })};
+  })).toEqual({overflow:false,groups:true});
+  await mkdir("outputs/absence-confirmation-20261015",{recursive:true});
+  await page.screenshot({path:"outputs/absence-confirmation-20261015/"+testInfo.project.name+"-verified-date.png"});
+  await page.evaluate(()=>JSUnifiedListingsV8.close());
+  // The fresh cached detail must also open the date-selected original, not an
+  // older higher-priority photo from another source in the same unit.
+  await card(page,mixedId).locator(".unified-thumb-v8").click();
+  await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("가장 최근 미노출 광고");
+  await page.evaluate(()=>JSUnifiedListingsV8.close());
+  await card(page,endedId).locator(".unified-thumb-v8").click();
+  await expect(page.locator("#unifiedDetailBodyV8 .absence-confirmed-date-v1")).toContainText("미확인");
+  await page.evaluate(()=>JSUnifiedListingsV8.close());
+  await card(page,manualId).locator(".unified-thumb-v8").click();
+  await expect(page.locator("#unifiedDetailBodyV8 .absence-confirmed-date-v1")).toHaveCount(0);
+  await page.evaluate(()=>JSUnifiedListingsV8.close());
+  await page.evaluate(()=>{document.getElementById("maxRent").value="50";applyFilter();});
+  expect(await ids(page)).toEqual([thirdId,mixedId]);
+  await expect(card(page,mixedId).locator(".price-main")).toContainText(/보\s*500\s*\/\s*(?:월세)?월\s*40/);
+  await card(page,mixedId).locator(".unified-thumb-v8").click();
+  await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("미노출 원본 9");
+  await expect(page.locator("#unifiedDetailBodyV8 .absence-confirmed-date-v1")).toContainText("26.10.13");
+  await page.evaluate(()=>JSUnifiedListingsV8.close());
+  await page.evaluate(()=>{
+    document.getElementById("maxRent").value="";document.getElementById("sourceFilter").value="danggeun";applyFilter();
+  });
+  expect(await ids(page)).toEqual([mixedId]);
+  expect(await page.evaluate(()=>currentItems[0].unifiedAbsenceConfirmedTimeV1)).toBe(Date.parse("2026-10-13T01:00:00Z"));
+  await page.evaluate(()=>{document.getElementById("sourceFilter").value="";applyFilter();});
+  await menu(page,"#doneOnlyBtn");await menu(page,"#hideDoneBtn");
+  expect(await ids(page)).toEqual([thirdId,mixedId]);
+  await expect(page.locator('[data-sort-value="latest"] span:last-child')).toHaveText("최근등록순");
+  expect(await page.evaluate(()=>({
+    canonical:allItems.map(({propertyId,key,memo,regDate,state,deposit,rent,room})=>({propertyId,key,memo,regDate,state,deposit,rent,room})),
+    originalIds:JSUnifiedListingsV8.allOriginals("FIXTURE-LEASE-1").map(original=>original.originalId),
+    favorites:JSV6ListStore.load("favorite")
+  }))).toEqual(before);
   safe(result);
 });
