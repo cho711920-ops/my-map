@@ -137,6 +137,7 @@ test('moving the last live ad hides an archive-only ghost from CSV, delta and To
   f.source('live','origin');f.source('archive','origin',0);f.migrate();
   f.db.prepare("UPDATE listing_sources SET listing_id='target' WHERE id='live'").run();
   f.db.prepare('UPDATE listings SET first_collected_at=?').run(koreanCalendarDay()+' 12:00');
+  f.db.prepare('UPDATE listing_sources SET first_collected_at=?').run(koreanCalendarDay()+' 12:00');
   const before=f.db.prepare("SELECT id,property_id,status,room,operating_memo FROM listings WHERE id='origin'").get();
   const csv=await buildD1SheetCsv(f.env);
   assert.doesNotMatch(csv,/public-origin/);assert.match(csv,/public-direct/);assert.match(csv,/public-target/);
@@ -144,6 +145,8 @@ test('moving the last live ad hides an archive-only ghost from CSV, delta and To
   assert.deepEqual(changes.items.map(row=>row.property_id).sort(),['public-direct','public-target']);
   const today=await handleD1GetAction(f.env,{}, {action:'newListingPeriod',days:'1',market:'lease'});
   assert.deepEqual(today.items.map(row=>row.property_id).sort(),['public-direct','public-target']);
+  assert.deepEqual(today.todayOriginalIds, {'public-direct':[], 'public-target':['live']});
+  assert.equal(today.todayAdCount,1);assert.equal(today.todayManualCount,1);
   assert.deepEqual(f.db.prepare("SELECT id,property_id,status,room,operating_memo FROM listings WHERE id='origin'").get(),before);
   assert.equal(f.db.prepare("SELECT kind FROM listing_source_availability WHERE source_id='archive'").get().kind,'legacy_unverified');
 });

@@ -1,6 +1,7 @@
 // The fast Today read does not load the complete CSV or complete source cache.
 // Timestamped collector dates are UTC; legacy dates without an offset are KST.
 import { publicMasterSourcesWhereSql } from './source-availability.js';
+import { hashSourceSnapshotRows, sourceSnapshotProofSql } from './source-snapshot-proof.js';
 export const REGISTRATION_DAY_SQL = `CASE
   WHEN substr(trim(first_collected_at), -1) IN ('Z','z')
     OR (length(trim(first_collected_at))>=25 AND substr(trim(first_collected_at), -6, 1) IN ('+','-'))
@@ -16,6 +17,7 @@ const COLUMNS = `id, title, address, room, listing_type, deposit, monthly_rent, 
   last_collected_at, latitude, longitude, building_elevator_capacity,
   trade_type, sale_category, sale_price, sale_details_json`;
 const PAGE_SIZE = 75;
+const SOURCE_REGISTRATION_DAY_SQL = REGISTRATION_DAY_SQL.replaceAll('first_collected_at', 'today_source.first_collected_at');
 const badRequest = message => Object.assign(new Error(message), { statusCode: 400 });
 
 export function koreanCalendarDay(now = new Date()) {
@@ -51,8 +53,16 @@ export async function newListingPeriod(env, query, loadOriginals, now = new Date
   const tradeType = market === 'lease' ? 'lease' : 'sale';
   const saleClause = market === 'lease' ? '' : market === 'land'
     ? "AND sale_category='land'" : "AND COALESCE(sale_category,'')<>'land'";
-  const result = await env.DB.prepare(`SELECT ${COLUMNS} FROM listings
-    WHERE (${REGISTRATION_DAY_SQL})=?1 AND trade_type=?2 AND id>?3
+  const result = await env.DB.prepare(`WITH today_parents AS (
+      SELECT listing_id AS id FROM listing_sources today_source
+      WHERE today_source.active=1 AND today_source.trade_type=?2 AND (${SOURCE_REGISTRATION_DAY_SQL})=?1
+      UNION SELECT id FROM listings WHERE (${REGISTRATION_DAY_SQL})=?1 AND trade_type=?2 AND status<>'deleted'
+        AND NOT EXISTS (SELECT 1 FROM listing_sources stored WHERE stored.listing_id=listings.id)
+    ) SELECT ${COLUMNS}, ${sourceSnapshotProofSql()} AS source_snapshot_proof,
+      (SELECT json_group_array(today_source.id) FROM listing_sources today_source
+        WHERE today_source.listing_id=listings.id AND today_source.active=1 AND today_source.trade_type=?2
+          AND (${SOURCE_REGISTRATION_DAY_SQL})=?1) AS today_original_ids_json FROM listings
+    WHERE id IN (SELECT id FROM today_parents) AND trade_type=?2 AND id>?3
       AND status<>'deleted' ${saleClause}
       AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
@@ -61,13 +71,40 @@ export async function newListingPeriod(env, query, loadOriginals, now = new Date
   const rows = result?.results || [];
   const hasMore = rows.length > PAGE_SIZE;
   const items = rows.slice(0, PAGE_SIZE).map(row => ({ ...row, property_id: row.property_id || row.id }));
+  await hashSourceSnapshotRows(items);
   const unified = await loadOriginals(items.map(row => row.id));
   // Source groups use parent PKs. Public cards use property_id, which can differ
   // on imported legacy records. Explicit empty groups clear old source metadata.
-  const groups = {}, sourceSearchIds = {};
+  const groups = {}, sourceSearchIds = {}, sourceSnapshotKeys = {}, sourceSnapshotPropertyIds = {}, todayOriginalIds = {};
+  let todayAdCount = 0, todayManualCount = 0;
   for (const row of items) {
-    groups[row.property_id] = unified.groups?.[row.id] || unified.groups?.[row.property_id] || [];
-    sourceSearchIds[row.property_id] = unified.sourceSearchIds?.[row.id] || [];
+    const id = row.id, publicId = row.property_id;
+    if (!row.source_snapshot_key || row.source_snapshot_key !== unified.sourceSnapshotKeys?.[id] ||
+        unified.sourceSnapshotPropertyIds?.[id] !== publicId || !Array.isArray(unified.groups?.[id]) ||
+        Object.hasOwn(groups, publicId)) {
+      return { ok: false, snapshotChanged: true, message: '수집 결과가 바뀌어 오늘 신규광고를 다시 확인합니다.' };
+    }
+    const ids = JSON.parse(row.today_original_ids_json || '[]');
+    const originalIdIndex = unified.fields?.indexOf('originalId');
+    const activeIndex = unified.fields?.indexOf('active');
+    const compact = /^compact-v\d+$/.test(unified.format || '');
+    if (!Array.isArray(ids) || ids.some(sourceId => typeof sourceId !== 'string' || !sourceId ||
+        !unified.groups[id].some(original => compact
+          ? originalIdIndex >= 0 && original[originalIdIndex] === sourceId && Number(original[activeIndex]) === 1
+          : original.originalId === sourceId && Number(original.active) === 1))) {
+      return { ok: false, snapshotChanged: true, message: '오늘 신규광고의 원본 연결을 다시 확인합니다.' };
+    }
+    if (!compact && unified.groups[id].some(original => original.propertyId && original.propertyId !== id && original.propertyId !== publicId)) {
+      return { ok: false, snapshotChanged: true, message: '오늘 신규광고의 매물 연결을 다시 확인합니다.' };
+    }
+    groups[publicId] = compact ? unified.groups[id] : unified.groups[id].map(original => ({ ...original, propertyId: publicId }));
+    sourceSearchIds[publicId] = unified.sourceSearchIds?.[id] || [];
+    sourceSnapshotKeys[publicId] = row.source_snapshot_key;
+    sourceSnapshotPropertyIds[publicId] = publicId;
+    todayOriginalIds[publicId] = ids;
+    todayAdCount += ids.length;
+    if (!ids.length) todayManualCount += 1;
+    delete row.today_original_ids_json;
   }
   const end = new Date(cursor.day + 'T00:00:00+09:00');
   const rangeStart = end.toISOString();
@@ -76,5 +113,6 @@ export async function newListingPeriod(env, query, loadOriginals, now = new Date
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : '';
   return { ok: true, action: 'newListingPeriod', days: 1, market, day: cursor.day,
     serverNow: now.toISOString(), rangeStart, rangeEnd: end.toISOString(), items, hasMore, nextCursor,
-    unified: { ...unified, groups, sourceSearchIds }, source: 'D1' };
+    todayOriginalIds, todayAdCount, todayManualCount,
+    unified: { ...unified, groups, sourceSearchIds, sourceSnapshotKeys, sourceSnapshotPropertyIds }, source: 'D1' };
 }

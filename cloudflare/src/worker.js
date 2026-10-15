@@ -743,6 +743,9 @@ async function handleDataApi(request, env, context) {
         return json({ ok: false, snapshotChanged: true, message: "수집 결과가 갱신되어 오늘 신규매물을 다시 확인합니다." }, 409, { "cache-control": "private, no-store" });
       }
       const payload = await handleD1GetAction(env, user, query);
+      if (payload.ok === false && payload.snapshotChanged) {
+        return json(payload, 409, { "cache-control": "private, no-store" });
+      }
       const after = (await readDataRevision(env, "listings")).revision;
       if (before !== after) {
         return json({ ok: false, snapshotChanged: true, message: "수집 결과가 갱신되어 오늘 신규매물을 다시 확인합니다." }, 409, { "cache-control": "private, no-store" });

@@ -730,7 +730,7 @@
     var own = Object.prototype.hasOwnProperty;
     var byPublicId = Object.create(null), duplicatePublicIds = Object.create(null), itemCounts = Object.create(null);
     var inputItems = Array.isArray(items) ? items : [];
-    var matchedIds = [], inputIds = [], rejected = Object.create(null);
+    var matchedIds = [], inputIds = [], rejected = Object.create(null), accepted = [];
     inputItems.forEach(function(item) {
       var id = text(item && item.propertyId);
       if (!id) return;
@@ -770,6 +770,22 @@
       }
       if (!valid) { rejected[publicId] = true; return; }
       matchedIds.push(publicId);
+      accepted.push({publicId: publicId, proof: proof, rows: rows, search: search});
+    });
+    var nextPending = options && options.scoped ? Object.assign(Object.create(null), state.pendingProofIds) : Object.create(null);
+    inputIds.forEach(function(id) {
+      if (rejected[id]) nextPending[id] = true;
+      else delete nextPending[id];
+    });
+    var pendingIds = Object.keys(nextPending);
+    var unknownIds = pendingIds.filter(function(id) { return !originalMetadataReady(id); });
+    var complete = supported && !pendingIds.length && inputIds.length === inputItems.length;
+    var outcome = {proofSupported: supported, matchedCount: matchedIds.length, matchedIds: matchedIds,
+      pendingIds: pendingIds, unknownIds: unknownIds, complete: complete};
+    if (options && options.validateOnly) return outcome;
+    if (options && options.supersedePending && matchedIds.length) invalidatePendingLoad();
+    accepted.forEach(function(entry) {
+      var publicId = entry.publicId, proof = entry.proof, rows = entry.rows, search = entry.search;
       if (state.sourceSnapshotProofKeys[publicId] !== proof || !originalMetadataReady(publicId)) {
         merged[publicId] = rows.map(function(original) { return Object.assign({}, original, {propertyId: publicId}); });
         searchIds[publicId] = (search || []).slice();
@@ -790,22 +806,17 @@
     state.sourceSearchIds = searchIds;
     // Per-property proofs cannot certify the revision of the entire dataset.
     state.snapshotRevision = "";
-    if (!(options && options.scoped)) state.pendingProofIds = Object.create(null);
-    inputIds.forEach(function(id) {
-      if (rejected[id]) state.pendingProofIds[id] = true;
-      else delete state.pendingProofIds[id];
-    });
-    var pendingIds = Object.keys(state.pendingProofIds);
+    state.pendingProofIds = nextPending;
     state.pendingProofCount = pendingIds.length;
-    var unknownIds = pendingIds.filter(function(id) { return !originalMetadataReady(id); });
-    var complete = supported && !pendingIds.length && inputIds.length === inputItems.length;
-    if (complete) state.loaded = true;
+    var preserveGlobalStatus = !!(options && options.preserveGlobalStatus);
+    if (complete && !preserveGlobalStatus) state.loaded = true;
     attach(inputItems);
-    setOriginalLoadPhase(complete ? "ready" : "pending");
-    if (complete) originalLoadStatus(false);
-    else originalLoadStatus(true, "변경된 매물 " + pendingIds.length + "건 최신 연결 확인 중 · 마지막 확인 자료를 유지합니다. ");
-    return {proofSupported: supported, matchedCount: matchedIds.length, matchedIds: matchedIds,
-      pendingIds: pendingIds, unknownIds: unknownIds, complete: complete};
+    setOriginalLoadPhase(preserveGlobalStatus ? state.originalLoadPhase : complete ? "ready" : "pending");
+    if (!preserveGlobalStatus) {
+      if (complete) originalLoadStatus(false);
+      else originalLoadStatus(true, "변경된 매물 " + pendingIds.length + "건 최신 연결 확인 중 · 마지막 확인 자료를 유지합니다. ");
+    }
+    return outcome;
   }
 
   function canCacheCompatible(items) {
@@ -1009,8 +1020,12 @@
     if (manual && view === "active") return null;
     var originals = view === "completed" && !manual ? all.filter(isCandidateOriginal)
       : view === "active" ? all.filter(function(original) { return !isSourceUnavailable(original); }) : publicOriginals(all);
+    var today = Number(global.newListingDays || 0) === 1 && global.JSTodayListingsV1;
+    if (today && typeof today.matchesOriginal === "function") {
+      originals = originals.filter(function(original) { return today.matchesOriginal(master, original); });
+    }
     // Preserve explicit manual completion and source-less manual listings.
-    if (manual || !all.length) {
+    if (manual && !today || !all.length) {
       if (!manual && view === "completed" || !matches(master)) return null;
       return Object.assign({}, master, {unifiedDisplayOriginalsV2: originals, unifiedAbsenceConfirmedTimeV1: 0});
     }

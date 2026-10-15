@@ -10,6 +10,7 @@ import { normalizeNaverPropertyType, resolveNaverSaleCategory } from "./naver-pr
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector-offer-identity.js";
 import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertisement-presence.js";
+import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObservedAdvertisements } from "./collector-first-observed.js";
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
 import {
   LISTING_TRADE_TYPES,
@@ -1174,8 +1175,8 @@ async function loadExistingSources(env, source, records) {
   for (let offset = 0; offset < ids.length; offset += 80) {
     const chunk = ids.slice(offset, offset + 80);
     const placeholders = chunk.map((_, index) => `?${index + 2}`).join(",");
-    const result = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source_listing_id, s.source_url,
-        s.snapshot_hash, s.list_snapshot_json, s.raw_json, s.active, s.missing_count, s.last_collected_at, s.updated_at,
+    const result = await env.DB.prepare(`SELECT s.id, s.listing_id, s.source, s.source_listing_id, s.source_url,
+        s.snapshot_hash, s.list_snapshot_json, s.raw_json, s.active, s.missing_count, s.first_collected_at, s.created_at, s.last_collected_at, s.updated_at,
         s.trade_type, s.sale_category, s.sale_price,
         l.address AS listing_address, l.room AS listing_room, l.trade_type AS listing_trade_type
       FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
@@ -1756,6 +1757,8 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
+  const observed = record.firstObservedAdvertisementV1 || firstObservedAdvertisement({ source: record.source,
+    sourceId: record.sourceId, tradeType: record.tradeType, sourceRows: existingSource ? [existingSource] : [], now });
   const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings WHERE id=?1")
     .bind(listingId).first();
   if (!currentListing) throw new Error("연결할 대표매물을 찾지 못했습니다.");
@@ -1764,6 +1767,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   const preserveRepresentative = Boolean(preserveListing || previous?.preserveRepresentative);
   const protectListing = preserveRepresentative && !updateCondition && !promoteRepresentative;
   const snapshot = unifiedSnapshot(record, sourceRowId, listingId, now, preserveRepresentative);
+  snapshot.firstSeen = observed.firstObservedAt;
   if (record.preserveContacts) {
     snapshot.contactCount = Math.max(
       Number(previous?.contactCount || 0),
@@ -1784,22 +1788,23 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   let sourceChanged = !existingSource || clean(existingSource.snapshot_hash) !== snapshotHash ||
     clean(existingSource.source_url) !== clean(record.link) || Number(existingSource.active) !== 1 ||
     Number(existingSource.missing_count || 0) !== 0 ||
-    clean(previous?.contactCaptureStatus) !== clean(snapshot.contactCaptureStatus);
+    clean(previous?.contactCaptureStatus) !== clean(snapshot.contactCaptureStatus) ||
+    clean(previous?.firstSeen) !== observed.firstObservedAt;
   if (!existingSource) {
     await env.DB.batch([env.DB.prepare(`INSERT INTO listing_sources (
         id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
         trade_type, sale_category, sale_price,
         session_id, active, missing_count, first_collected_at, last_collected_at, created_at, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, ?13, ?13, ?13, ?13)`)
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, ?13, ?14, ?14, ?14)`)
       .bind(sourceRowId, listingId, record.source, record.sourceId, record.link, snapshotHash,
         snapshotJson, rawJson, collectorTradeType(record.tradeType, true), clean(record.saleCategory),
-        record.salePrice, sessionId, now),
+        record.salePrice, sessionId, observed.firstObservedAt, now),
       env.DB.prepare(`UPDATE collector_sessions SET totals_json=json_set(totals_json,
-          '$.newSourceAds', COALESCE(json_extract(totals_json, '$.newSourceAds'), 0)+1),
-          updated_at=?1 WHERE id=?2`).bind(now, sessionId)]);
-    // Count actual durable source IDs, not master creation/merge decisions.
+          '$.newSourceAds', COALESCE(json_extract(totals_json, '$.newSourceAds'), 0)+?1),
+          updated_at=?2 WHERE id=?3`).bind(observed.previouslyObserved ? 0 : 1, now, sessionId)]);
+    // A previously observed queued ad is publication, not a new advertisement.
     // An insert failure (including a concurrent duplicate) rolls back both.
-    if (onNewSource) onNewSource();
+    if (onNewSource && !observed.previouslyObserved) onNewSource();
   }
   const assets = await replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets);
   if (existingSource) {
@@ -1807,10 +1812,11 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
       await env.DB.prepare(`UPDATE listing_sources SET listing_id=?1, source_url=?2, snapshot_hash=?3,
           list_snapshot_json=?4, raw_json=?5, trade_type=?6, sale_category=?7, sale_price=?8,
           session_id=?9, active=1, missing_count=0,
-          last_collected_at=?10, updated_at=?10 WHERE id=?11`)
+          last_collected_at=?10, updated_at=?10,
+          first_collected_at=CASE WHEN first_collected_at=?12 THEN ?13 ELSE first_collected_at END WHERE id=?11`)
         .bind(listingId, record.link, snapshotHash, snapshotJson, rawJson,
           collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
-          sessionId, now, sourceRowId).run();
+          sessionId, now, sourceRowId, existingSource.first_collected_at || "", observed.firstObservedAt).run();
     } else {
       await env.DB.prepare(`UPDATE listing_sources SET session_id=?1, last_collected_at=?2
         WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId).run();
@@ -1861,6 +1867,8 @@ async function createListing(env, record, sessionId, actor = "collector", existi
   const tradeType = assertSourceTradeBoundary(record, record?.tradeType || record?.trade_type, existingSource);
   const id = `M-${crypto.randomUUID()}`;
   const now = nowIso();
+  const observed = record.firstObservedAdvertisementV1 || firstObservedAdvertisement({ source: record.source,
+    sourceId: record.sourceId, tradeType: record.tradeType, sourceRows: existingSource ? [existingSource] : [], now });
   const contacts = JSON.stringify(Array.isArray(record.contacts) ? record.contacts : []);
   await env.DB.prepare(`INSERT INTO listings (
       id, property_id, status, main_source, title, address, road_address, building_name, room, listing_type,
@@ -1868,11 +1876,11 @@ async function createListing(env, record, sessionId, actor = "collector", existi
       deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude, operating_memo, source_url,
       contacts_json, first_collected_at, registration_at, last_collected_at, created_at, updated_at
     ) VALUES (?1, ?1, 'active', ?2, ?3, ?4, ?5, ?3, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-      ?16, ?17, ?18, ?19, ?20, ?21, ?21, ?21, ?21, ?21)`)
+      ?16, ?17, ?18, ?19, ?20, ?21, ?21, ?22, ?22, ?22)`)
     .bind(id, record.source, record.buildingName || "일반상가", record.address, clean(record.roadAddress),
       record.room, record.category, tradeType, clean(record.saleCategory), record.salePrice,
       record.deposit, record.rent, record.fee, record.premium, record.area,
-      record.latitude, record.longitude, record.memo, record.link, contacts, now).run();
+      record.latitude, record.longitude, record.memo, record.link, contacts, observed.firstObservedAt, now).run();
   await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets, false, onNewSource);
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record)).run();
@@ -2072,6 +2080,10 @@ async function ingestRecords(env, source, values, metadata = {}) {
     records.push(record);
   }
   const sourceAssets = await loadSourceAssets(env, existingSources);
+  const observedIndex = records.length ? await loadFirstObservedAdvertisements(env, source, records, existingSources, nowIso()) : new Map();
+  for (const record of records) Object.defineProperty(record, "firstObservedAdvertisementV1", {
+    value: observedIndex.get(advertisementObservationKey(source, record.sourceId, record.tradeType)), configurable: true
+  });
   const candidatesByAddress = await loadCandidateListings(env, records, existingSources);
   for (const record of records) {
     try {
@@ -3431,6 +3443,35 @@ export async function handleCollectorAdminGet(env, user, query) {
   return null;
 }
 
+// Manual/legacy review entry points can publish without passing through ingest.
+// Batch their evidence too: resolving a queued advertisement is not discovering
+// a new one, and must not replace its original observed day with today's date.
+async function preserveReviewFirstObservations(env, records) {
+  const bySource = new Map();
+  for (const record of records) {
+    if (!record) continue;
+    const tradeType = collectorTradeType(record.tradeType || record.trade_type, true);
+    if (!advertisementObservationKey(record.source, record.sourceId, tradeType)) continue;
+    if (!bySource.has(record.source)) bySource.set(record.source, []);
+    bySource.get(record.source).push({ record, lookup: { ...record, tradeType } });
+  }
+  const now = nowIso();
+  for (const [source, sourceRecords] of bySource) {
+    const index = await loadFirstObservedAdvertisements(env, source, sourceRecords.map(item => item.lookup), new Map(), now);
+    for (const { record, lookup } of sourceRecords) Object.defineProperty(record, "firstObservedAdvertisementV1", {
+      value: index.get(advertisementObservationKey(source, lookup.sourceId, lookup.tradeType)), configurable: true
+    });
+  }
+}
+
+function pendingAliasRecord(alias, fallbackRecord) {
+  const record = normalizeReviewRecord(parseJson(alias.payload_json, {}));
+  if (!record.sourceId) record.sourceId = clean(alias.source_listing_id);
+  if (!record.source) record.source = clean(alias.source);
+  if (!record.address) record.address = clean(fallbackRecord?.address);
+  return record;
+}
+
 async function attachPendingReviewAliases(env, reviewId, listingId, fallbackRecord, actor,
   resultAction = "manualMergeAlias", decisionVersion = null) {
   const aliasResult = await env.DB.prepare(`SELECT id, session_id, source, source_listing_id, payload_json
@@ -3441,12 +3482,10 @@ async function attachPendingReviewAliases(env, reviewId, listingId, fallbackReco
     ORDER BY created_at, id`).bind(reviewId).all();
   let merged = 0;
   let failed = 0;
-  for (const alias of aliasResult?.results || []) {
+  const aliases = (aliasResult?.results || []).map(alias => ({ alias, record: pendingAliasRecord(alias, fallbackRecord) }));
+  await preserveReviewFirstObservations(env, aliases.map(item => item.record));
+  for (const { alias, record: aliasRecord } of aliases) {
     try {
-      const aliasRecord = normalizeReviewRecord(parseJson(alias.payload_json, {}));
-      if (!aliasRecord.sourceId) aliasRecord.sourceId = clean(alias.source_listing_id);
-      if (!aliasRecord.source) aliasRecord.source = clean(alias.source);
-      if (!aliasRecord.address) aliasRecord.address = clean(fallbackRecord?.address);
       const aliasSourceMap = await loadExistingSources(env, aliasRecord.source, [aliasRecord]);
       const aliasSource = aliasSourceMap.get(aliasRecord.sourceId) || null;
       const aliasAssetsMap = aliasSource ? await loadSourceAssets(env, aliasSourceMap) : new Map();
@@ -3479,12 +3518,16 @@ async function applyReviewBatch(env, user, body) {
   const processedReviewIds = [];
   const affectedListingIds = new Set();
   const started = Date.now();
+  const reviewRows = ids.length ? await env.DB.prepare(`SELECT id, session_id, payload_json FROM collector_raw
+    WHERE id IN (${ids.map((_, i) => "?" + (i + 1)).join(",")}) AND processing_state='review'`).bind(...ids).all() : { results: [] };
+  const rowsById = new Map((reviewRows?.results || []).map(row => [row.id, row]));
+  const recordsById = new Map((reviewRows?.results || []).map(row => [row.id, parseJson(row.payload_json, null)]));
+  if (action !== "hold") await preserveReviewFirstObservations(env, [...recordsById.values()]);
   for (const id of ids) {
     try {
-      const row = await env.DB.prepare(`SELECT id, session_id, payload_json FROM collector_raw
-        WHERE id=?1 AND processing_state='review'`).bind(id).first();
+      const row = rowsById.get(id);
       if (!row) continue;
-      const record = parseJson(row.payload_json, null);
+      const record = recordsById.get(id);
       if (!record) throw new Error("검토 원본이 없습니다.");
       const existingSourceMap = await loadExistingSources(env, record.source, [record]);
       const existingSource = existingSourceMap.get(clean(record.sourceId)) || null;
@@ -3621,6 +3664,8 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
     ? rowsStatement.bind(limit, shardCount, shard).all()
     : rowsStatement.bind(limit).all());
   const reviewRows = rows?.results || [];
+  const reviewRecords = new Map(reviewRows.map(row => [row.id, normalizeReviewRecord(parseJson(row.payload_json, {}))]));
+  await preserveReviewFirstObservations(env, [...reviewRecords.values()]);
   let merged = 0;
   let aliasesMerged = 0;
   let aliasesFailed = 0;
@@ -3629,7 +3674,7 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
   const actor = clean(user?.email) || "system-single-candidate-merge@js-map.com";
   for (const row of reviewRows) {
     try {
-      const record = normalizeReviewRecord(parseJson(row.payload_json, {}));
+      const record = reviewRecords.get(row.id);
       const listingId = clean(row.candidate_id);
       if (!record.sourceId || !record.address || !listingId) throw new Error("검증 원본 또는 대표매물 확인 필요");
       const existingSourceMap = await loadExistingSources(env, record.source, [record]);
@@ -3644,12 +3689,10 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
           AND json_extract(result_json, '$.action')='sameAsPendingReview'
           AND json_extract(result_json, '$.canonicalReviewId')=?1
         ORDER BY created_at, id`).bind(row.id).all();
-      for (const alias of aliasResult?.results || []) {
+      const aliases = (aliasResult?.results || []).map(alias => ({ alias, record: pendingAliasRecord(alias, record) }));
+      await preserveReviewFirstObservations(env, aliases.map(item => item.record));
+      for (const { alias, record: aliasRecord } of aliases) {
         try {
-          const aliasRecord = normalizeReviewRecord(parseJson(alias.payload_json, {}));
-          if (!aliasRecord.sourceId) aliasRecord.sourceId = clean(alias.source_listing_id);
-          if (!aliasRecord.source) aliasRecord.source = clean(alias.source);
-          if (!aliasRecord.address) aliasRecord.address = record.address;
           const aliasSourceMap = await loadExistingSources(env, aliasRecord.source, [aliasRecord]);
           const aliasSource = aliasSourceMap.get(aliasRecord.sourceId) || null;
           const aliasAssetsMap = aliasSource ? await loadSourceAssets(env, aliasSourceMap) : new Map();
@@ -3806,6 +3849,7 @@ async function repairExactReviews(env, user, options = {}) {
   const validIds = new Set(parsedRows.map((item) => item.row.id));
   const invalidRows = reviewRows.filter((row) => !validIds.has(row.id));
   const records = parsedRows.map((item) => item.record);
+  await preserveReviewFirstObservations(env, records);
   const candidatesByAddress = await loadCandidateListings(env, records, new Map());
   const existingSourcesByKey = new Map();
   for (const source of [...new Set(records.map((record) => clean(record.source)).filter(Boolean))]) {
@@ -3871,12 +3915,10 @@ async function repairExactReviews(env, user, options = {}) {
             AND json_extract(result_json, '$.canonicalReviewId')=?1
           ORDER BY created_at, id`).bind(row.id).all();
         let mergedAliasCount = 0;
-        for (const alias of aliasResult?.results || []) {
+        const aliases = (aliasResult?.results || []).map(alias => ({ alias, record: pendingAliasRecord(alias, record) }));
+        await preserveReviewFirstObservations(env, aliases.map(item => item.record));
+        for (const { alias, record: aliasRecord } of aliases) {
           try {
-            const aliasRecord = normalizeReviewRecord(parseJson(alias.payload_json, {}));
-            if (!aliasRecord.sourceId) aliasRecord.sourceId = clean(alias.source_listing_id);
-            if (!aliasRecord.source) aliasRecord.source = clean(alias.source);
-            if (!aliasRecord.address) aliasRecord.address = record.address;
             const aliasSourceMap = await loadExistingSources(env, aliasRecord.source, [aliasRecord]);
             const aliasSource = aliasSourceMap.get(aliasRecord.sourceId) || null;
             const aliasAssetsMap = aliasSource ? await loadSourceAssets(env, aliasSourceMap) : new Map();

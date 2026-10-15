@@ -276,6 +276,40 @@ test('a large compatible recovery is bounded per pass but continues while succes
   assert.equal(h.originalReads.length,1);
 });
 
+test('a proof-bearing Today subset commits only after all rows validate and retains unrelated pending coverage', async () => {
+  const h=harness({complete:true});
+  const loading=h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)}),row('C',{source_snapshot_key:proof(1)})],'FULL'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1)],['C',proof(2)]]));
+  await flush();
+  const phase=h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status;
+  const subset=provenOriginals([['B',proof(3),'today-photo']],'PERIOD');
+  assert.equal(h.context.applyScopedListingsV1({ok:true,snapshotRevision:'PERIOD',
+    items:[row('B',{source_snapshot_key:proof(3)})],unified:subset}),true);
+  assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['A','C','B']);
+  assert.match(h.context.allItems[2].thumbnailV8,/today-photo\.jpg/);
+  assert.deepEqual(Array.from(h.context.JSUnifiedListingsV8.pendingCompatibleIds()),['C']);
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status,phase);
+});
+
+test('a proof-bearing Today subset with one invalid row mutates neither masters nor original groups', async () => {
+  const h=harness({complete:true});
+  const loading=h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)})],'FULL'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1),'before']]));
+  await flush();
+  const items=h.context.allItems,generation=h.context.jsListingsLoadGenerationV1;
+  assert.equal(h.context.applyScopedListingsV1({ok:true,snapshotRevision:'PERIOD',
+    items:[row('A',{source_snapshot_key:proof(3)}),row('B',{source_snapshot_key:proof(4)})],
+    unified:provenOriginals([['A',proof(3),'must-not-commit'],['B',proof(5)]],'PERIOD')}),false);
+  assert.equal(h.context.allItems,items);
+  assert.match(h.context.allItems[0].thumbnailV8,/before\.jpg/);
+  assert.equal(h.context.jsListingsLoadGenerationV1,generation);
+  assert.equal(h.context.JSUnifiedListingsV8.allOriginals('B').length,0);
+});
+
 test("a complete latest CSV displays before a stalled original response, retaining today's records", async () => {
   const h = harness();
   const loading = h.context.loadSheet(false, false);

@@ -44,7 +44,8 @@ function fixture() {
   }};
   vm.createContext(context); vm.runInContext(source, context);
   function result(ids, patch = {}) { return { ok: true, days: 1, market, day: '2026-10-13', rangeStart: '2026-10-12T15:00:00Z', rangeEnd: '2026-10-13T15:00:00Z',
-    snapshotRevision: 'r1', hasMore: false, nextCursor: '', items: ids.map(id => ({ id, property_id: id, first_collected_at: '2026-10-13T09:00:00Z', trade_type: market === 'lease' ? 'lease' : 'sale' })),
+    snapshotRevision: 'r1', hasMore: false, nextCursor: '', todayOriginalIds:Object.fromEntries(ids.map(id=>[id,[]])),todayAdCount:0,todayManualCount:ids.length,
+    items: ids.map(id => ({ id, property_id: id, first_collected_at: '2026-10-13T09:00:00Z', trade_type: market === 'lease' ? 'lease' : 'sale' })),
     unified: { ok: true, groups: {}, sourceSearchIds: {}, snapshotRevision: 'r1' }, ...patch }; }
   return { context, api: context.JSTodayListingsV1, reads, applied, events, timers, elements, result,
     setMarket(value) { market = value; }, tick: async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); } };
@@ -70,6 +71,47 @@ test('all pages are assembled at one revision, never displaying a partial page a
   assert.equal(h.reads[1].params.revision, 'r1');
   h.reads[1].resolve(h.result(['second']));
   assert.equal(await pending, true); assert.equal(h.applied[0].items.length, 2);
+});
+
+test('all Today pages merge original-ID gates and per-property proof maps, with explicit advertisement and property counts',async()=>{
+  const h=fixture(),pending=h.api.refresh(true),a='sha256-v1:'+'1'.repeat(64),b='sha256-v1:'+'2'.repeat(64);
+  h.reads[0].resolve(h.result(['A'],{hasMore:true,nextCursor:'page2',todayOriginalIds:{A:['ad-A1','ad-A2']},
+    unified:{ok:true,groups:{A:[]},sourceSearchIds:{A:['naver:A']},sourceSnapshotKeys:{A:a},sourceSnapshotPropertyIds:{A:'A'},snapshotRevision:'r1'}}));
+  await h.tick();
+  h.reads[1].resolve(h.result(['B'],{todayOriginalIds:{B:[]},
+    unified:{ok:true,groups:{B:[]},sourceSearchIds:{B:[]},sourceSnapshotKeys:{B:b},sourceSnapshotPropertyIds:{B:'B'},snapshotRevision:'r1'}}));
+  assert.equal(await pending,true);
+  const applied=h.applied[0];
+  assert.deepEqual(Object.keys(applied.unified.sourceSnapshotKeys).sort(),['A','B']);
+  assert.equal(applied.unified.sourceSnapshotKeys.A,a);assert.equal(applied.unified.sourceSnapshotPropertyIds.B,'B');
+  assert.deepEqual(Array.from(applied.todayOriginalIds.A),['ad-A1','ad-A2']);
+  assert.equal(h.api.state().adCount,2);assert.equal(h.api.state().count,2);assert.equal(h.api.state().manualCount,1);
+  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/신규 광고 2개 · 매물 2건 · 직접등록 1건/);
+  assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:1}),true);
+  assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'old-ad',active:1}),false);
+  assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:0}),false);
+});
+
+test('Today projection selects only new-ad conditions/photos without changing old parent dates, memos or source groups',async()=>{
+  const h=fixture();h.context.console={warn(){},error(){}};h.context.hideDone=true;h.context.doneOnly=false;
+  vm.runInContext(fs.readFileSync('js/unified-listings-v8.js','utf8'),h.context);
+  const pending=h.api.refresh(true);
+  const old={propertyId:'A',originalId:'old',source:'당근',active:1,deposit:100,rent:10,area:30,thumbnail:'https://example.invalid/old.jpg'};
+  const fresh={propertyId:'A',originalId:'new',source:'네이버',active:1,deposit:1000,rent:60,area:30,thumbnail:'https://example.invalid/new.jpg'};
+  h.reads[0].resolve(h.result(['A'],{items:[{id:'A',property_id:'A',first_collected_at:'2024-01-01',trade_type:'lease'}],
+    todayOriginalIds:{A:['new']},unified:{ok:true,groups:{A:[old,fresh]},sourceSearchIds:{},snapshotRevision:'r1'}}));
+  await pending;
+  const master=h.context.allItems.find(item=>item.propertyId==='A');Object.assign(master,{key:'favorite-A',memo:'keep memo',deposit:100,rent:10,area:30});
+  const before={regDate:master.regDate,key:master.key,memo:master.memo,rent:master.rent};
+  h.context.JSUnifiedListingsV8.attach([master],h.applied[0].unified);
+  const projected=h.context.JSUnifiedListingsV8.filterItemForView(master,probe=>h.api.matches(probe)&&probe.rent<=80,'active');
+  assert.deepEqual(Array.from(projected.unifiedDisplayOriginalsV2,row=>row.originalId),['new']);
+  assert.equal(projected.rent,60);assert.match(projected.thumbnailV8,/new\.jpg/);
+  assert.equal(h.context.JSUnifiedListingsV8.filterItemForView(master,probe=>h.api.matches(probe)&&probe.rent<=20,'active'),null);
+  assert.deepEqual({regDate:master.regDate,key:master.key,memo:master.memo,rent:master.rent},before);
+  assert.equal(master.unifiedAllOriginalsV1.length,2);
+  h.context.newListingDays=0;
+  assert.equal(h.context.JSUnifiedListingsV8.filterItemForView(master,()=>true,'active').unifiedDisplayOriginalsV2.length,2);
 });
 
 test('a failed next page preserves the previous success and exposes a retry, not false zero', async () => {
@@ -100,12 +142,12 @@ test('filter removal and market change abort old responses; repeated clicks shar
   assert.equal(h.elements.get('todayListingStatusV1').hidden, true);
 });
 
-test('latest full snapshots admit later Today records and supersede an older period request', async () => {
+test('latest full master snapshots recheck source IDs rather than treating master dates as new ads', async () => {
   const h = fixture(); let pending = h.api.refresh(true); h.reads[0].resolve(h.result(['first'])); await pending;
   pending = h.api.refresh(true);
   h.context.allItems.push({ propertyId: 'later', regDate: '2026-10-13', tradeType: 'lease' });
   h.events['js-listings-full-snapshot']({ detail: { revision: 'r2' } }); await h.tick();
-  assert.equal(h.api.matches({ propertyId: 'later' }), true);
+  assert.equal(h.api.matches({ propertyId: 'later' }), false,'a new master date cannot establish a newly collected advertisement');
   assert.equal(h.reads[1].options.signal.aborted, true); assert.equal(await pending, false);
   h.reads[2].resolve(h.result(['first', 'later'], { snapshotRevision: 'r2', unified: { snapshotRevision: 'r2', groups: {}, sourceSearchIds: {} } })); await h.tick();
   assert.equal(h.api.state().count, 2); assert.equal(h.api.state().revision, 'r2');

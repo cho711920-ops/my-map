@@ -1882,8 +1882,19 @@ function applyScopedListingsV1(result) {
       !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.mergeScoped !== "function") return false;
   var replacements = result.items.map(listingChangeRowToItemV683);
   if (replacements.some(function(item) { return !item.propertyId || !item.address; })) return false;
-  // Decode and validate originals before invalidating any live full snapshot.
-  if (!window.JSUnifiedListingsV8.mergeScoped(result.unified)) return false;
+  // A fresh period response uses the same exact per-property proof protocol.
+  // Preflight every replacement before committing any group or invalidating a
+  // live full read; unrelated pending properties do not invalidate this subset.
+  if (result.unified.sourceSnapshotKeys) {
+    var api = window.JSUnifiedListingsV8;
+    if (typeof api.attachCompatible !== "function") return false;
+    var options = {scoped: true, scopedFresh: true, preserveGlobalStatus: true, validateOnly: true};
+    var validated = api.attachCompatible(replacements, result.unified, options);
+    if (!validated || !validated.proofSupported || validated.matchedCount !== replacements.length) return false;
+    options.validateOnly = false;
+    options.supersedePending = true;
+    api.attachCompatible(replacements, result.unified, options);
+  } else if (!window.JSUnifiedListingsV8.mergeScoped(result.unified)) return false;
   jsListingsLoadGenerationV1 += 1;
   if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.invalidateRead === "function") {
     window.JSDataAccessV6.invalidateRead("listingsCsv");

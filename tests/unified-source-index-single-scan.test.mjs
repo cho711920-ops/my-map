@@ -28,14 +28,14 @@ function fixture(t) {
     db.prepare(`INSERT INTO listings (${fields.join(",")}) VALUES (${fields.map(() => "?").join(",")})`).run(id, ...Object.values(row));
   }
   const insert = db.prepare(`INSERT INTO listing_sources
-    (id,listing_id,source,source_listing_id,source_url,active,missing_count,list_snapshot_json,raw_json,updated_at,last_collected_at)
-    VALUES (?,?,?,?,?,?,?,?,?,'2020-01-02T00:00:00Z','2020-01-01T00:00:00Z')`);
-  function source(id, parent, provider, number, { active = 1, kind = "", market = "lease", photoCount = 7 } = {}) {
+    (id,listing_id,source,source_listing_id,source_url,active,missing_count,list_snapshot_json,raw_json,trade_type,first_collected_at,updated_at,last_collected_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,'2020-01-02T00:00:00Z','2020-01-01T00:00:00Z')`);
+  function source(id, parent, provider, number, { active = 1, kind = "", market = "lease", photoCount = 7, firstCollectedAt = "2020-01-01T00:00:00Z" } = {}) {
     const thumbnail = "https://example.test/" + id + ".jpg";
     insert.run(id, parent, provider, number, "https://example.test/ad/" + id, active, active ? 0 : 1,
       JSON.stringify({ originalId: id, propertyId: parent, source: provider, tradeType: market,
         room: "1층", deposit: 1000, rent: 60, thumbnail, photoCount, type: "일반상가" }),
-      provider === "공실박스" ? JSON.stringify({ list: { Photos: Array.from({ length: photoCount }, (_, i) => i ? thumbnail + "?photo=" + i : thumbnail) } }) : "{}");
+      provider === "공실박스" ? JSON.stringify({ list: { Photos: Array.from({ length: photoCount }, (_, i) => i ? thumbnail + "?photo=" + i : thumbnail) } }) : "{}", market, firstCollectedAt);
     if (kind) {
       const proof = { version: 1, validationVersion: 3, reason: "scoped-census-missing",
         scopeKey: "naver-region-v1-" + "a".repeat(64), sessionId: "verified-session",
@@ -124,16 +124,17 @@ test("one public-source scan preserves the old search IDs, row order, candidate 
 
 test("the Today scoped path keeps provider IDs, market scope and publication guards identical", async t => {
   const f = fixture(t);
+  const firstCollectedAt = koreanCalendarDay() + " 09:00";
   f.master("today"); f.master("old", { first_collected_at: "2020-01-01" });
   f.master("sale", { trade_type: "sale", sale_category: "building" });
   f.master("held"); f.master("deleted", { status: "deleted" });
-  f.source("today-nav", "today", "네이버", "네이버-123::lease");
-  f.source("today-gongsil", "today", "공실박스", "456::lease");
-  f.source("today-missing", "today", "당근", "789", { active: 0, kind: "census_missing" });
+  f.source("today-nav", "today", "네이버", "네이버-123::lease", { firstCollectedAt });
+  f.source("today-gongsil", "today", "공실박스", "456::lease", { firstCollectedAt });
+  f.source("today-missing", "today", "당근", "789", { active: 0, kind: "census_missing", firstCollectedAt });
   f.source("old-nav", "old", "네이버", "999");
-  f.source("sale-nav", "sale", "네이버", "네이버-123::sale", { market: "sale" });
-  f.source("held-nav", "held", "네이버", "321");
-  f.source("deleted-nav", "deleted", "네이버", "654");
+  f.source("sale-nav", "sale", "네이버", "네이버-123::sale", { market: "sale", firstCollectedAt });
+  f.source("held-nav", "held", "네이버", "321", { firstCollectedAt });
+  f.source("deleted-nav", "deleted", "네이버", "654", { firstCollectedAt });
   f.db.prepare("INSERT INTO listing_data_quality_holds(listing_id,issue_code,state,blocks_publication) VALUES ('held','fixture','open',1)").run();
   const before = f.snapshot();
   const result = await handleD1GetAction(f.env, {}, { action: "newListingPeriod", days: "1", market: "lease" });
@@ -141,6 +142,8 @@ test("the Today scoped path keeps provider IDs, market scope and publication gua
   assert.deepEqual(result.unified.sourceSearchIds, f.legacyIndex(["today"]));
   assert.deepEqual(result.unified.sourceSearchIds.today, ["n:123", "g:456", "d:789"]);
   assert.equal(result.unified.originalCount, 3);
+  assert.deepEqual(result.todayOriginalIds.today, ["today-nav", "today-gongsil"], "Only today's active ads enter the Today projection; the ended sibling stays stored");
+  assert.equal(result.todayAdCount, 2);
   assert.deepEqual(expand(result.unified, "today").map(row => row.originalId), ["today-nav", "today-gongsil", "today-missing"]);
   assertSingleScan(f.queries, 1);
   assert.ok(f.queries.some(query => /FROM listing_sources/.test(query.sql) && /listing_id IN \(\?1\)/.test(query.sql) && query.values[0] === "today"));

@@ -285,3 +285,49 @@ test("cache compatibility checks each current CSV item and disallow legacy, dupl
   h.api.markSnapshotStale();
   assert.equal(h.api.canCacheCompatible([item]),false);
 });
+
+test("compatibility preflight never mutates groups, keys, items, pending requests or global readiness",()=>{
+  const item=master("A"),h=harness([item]),before=JSON.stringify(item);
+  const groups=h.state.groups,coverage=h.state.metadataCoverage,pending=h.state.pendingProofIds;
+  let invalidations=0;h.w.JSDataAccessV6.invalidateRead=()=>{invalidations+=1;};
+  const checked=h.api.attachCompatible([item],result([["A","A",key(1),[original("A")]]]),
+    {scoped:true,scopedFresh:true,validateOnly:true,preserveGlobalStatus:true,supersedePending:true});
+  assert.equal(checked.matchedCount,1);assert.equal(checked.complete,true);
+  assert.equal(h.state.groups,groups);assert.equal(h.state.metadataCoverage,coverage);assert.equal(h.state.pendingProofIds,pending);
+  assert.equal(h.state.sourceSnapshotProofKeys.A,undefined);assert.equal(h.state.loaded,false);
+  assert.equal(h.api.getOriginalMetadataStatus().status,"pending");assert.equal(JSON.stringify(item),before);
+  assert.equal(h.events.length,0);assert.equal(invalidations,0);
+});
+
+test("a verified Today subset preserves global load phase and other original groups",()=>{
+  const items=[master("A"),master("B")],h=harness(items);
+  const accepted=h.api.attachCompatible([items[0]],result([["A","A",key(1),[original("A")]]]),
+    {scoped:true,scopedFresh:true,preserveGlobalStatus:true});
+  assert.equal(accepted.matchedCount,1);
+  assert.equal(h.state.loaded,false);assert.equal(h.api.getOriginalMetadataStatus().status,"pending");
+  assert.equal(h.api.getOriginalMetadataStatus("A").ready,true);assert.equal(h.api.getOriginalMetadataStatus("B").ready,false);
+  assert.match(h.api.cardParts(items[0]).thumbnail,/A\.jpg/);
+  assert.equal(h.api.canCacheCompatible(items),false);
+  h.api.attachCompatible(items,result([["A","A",key(1),[original("A")]], ["B","B",key(1),[original("B")]]]));
+  h.api.markSnapshotStale();
+  const banner=h.nodes.get("unifiedOriginalLoadStatusV1"),message=banner.querySelector("span").textContent;
+  h.api.attachCompatible([items[0]],result([["A","A",key(1),[original("A")]]]),{scoped:true,preserveGlobalStatus:true});
+  assert.equal(h.api.getOriginalMetadataStatus().status,"stale");
+  assert.equal(h.nodes.get("unifiedOriginalLoadStatusV1"),banner);assert.equal(banner.querySelector("span").textContent,message);
+  assert.equal(h.api.allOriginals("B").length,1);
+});
+
+test("a committed compatible subset supersedes an old pending full response without letting its failure change phase",async()=>{
+  const item=master("A"),h=harness([item]);let reject;
+  h.w.JSDataAccessV6.read=()=>new Promise((_yes,no)=>{reject=no;});
+  const pending=h.api.load(true,{deferCommit:true});
+  const generation=h.state.loadGeneration;
+  h.api.attachCompatible([item],result([["A","A",key(1),[original("A")]]]),
+    {scoped:true,scopedFresh:true,preserveGlobalStatus:true,supersedePending:true});
+  assert.equal(h.state.loadGeneration,generation+1);
+  reject(new Error("old request offline"));
+  assert.equal((await pending).superseded,true);
+  assert.equal(h.api.getOriginalMetadataStatus().status,"pending");
+  assert.match(h.api.cardParts(item).thumbnail,/A\.jpg/);
+  assert.equal(h.nodes.has("unifiedOriginalLoadStatusV1"),false);
+});

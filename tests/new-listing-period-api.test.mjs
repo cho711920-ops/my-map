@@ -28,13 +28,14 @@ function fixture() {
     const fields = ['id', ...Object.keys(row)];
     db.prepare(`INSERT INTO listings (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`).run(id, ...Object.values(row));
   }
-  function source(id, listingId, active = 1, missing = 0) {
+  function source(id, listingId, active = 1, missing = 0, patch = {}) {
     const original = { source: '네이버', originalId: id, thumbnail: 'https://landthumb-phinf.pstatic.net/fixture.jpg', tradeType: 'lease', revision: 1 };
-    db.prepare(`INSERT INTO listing_sources (id,listing_id,source,source_listing_id,list_snapshot_json,active,missing_count) VALUES (?,?,'네이버',?,?,?,?)`)
-      .run(id, listingId, id, JSON.stringify(original), active, missing);
+    const first = patch.first_collected_at ?? db.prepare('SELECT first_collected_at FROM listings WHERE id=?').get(listingId).first_collected_at;
+    db.prepare(`INSERT INTO listing_sources (id,listing_id,source,source_listing_id,list_snapshot_json,active,missing_count,first_collected_at,last_collected_at,trade_type) VALUES (?,?,'네이버',?,?,?,?,?,?,?)`)
+      .run(id, listingId, id, JSON.stringify(original), active, missing, first, patch.last_collected_at || first, patch.trade_type || 'lease');
     if (!active) db.prepare("INSERT INTO listing_source_availability(source_id,kind) VALUES (?,'census_missing')").run(id);
   }
-  return { db, env, queries, listing, source };
+  return { db, env, queries, listing, source, originals: () => handleD1GetAction(env, {}, { action: 'unifiedListings' }) };
 }
 
 test('Today API uses KST timestamps, legacy calendar dates and an expression index', async () => {
@@ -46,7 +47,7 @@ test('Today API uses KST timestamps, legacy calendar dates and an expression ind
   h.listing('legacy-short', '26.10.13');
   h.listing('yesterday', '2026-10-12 23:59');
   h.listing('bad', 'not a date');
-  const result = await newListingPeriod(h.env, { days: '1', market: 'lease' }, async () => ({ ok: true, groups: {}, sourceSearchIds: {} }), new Date('2026-10-13T09:00:00Z'));
+  const result = await newListingPeriod(h.env, { days: '1', market: 'lease' }, h.originals, new Date('2026-10-13T09:00:00Z'));
   assert.deepEqual(result.items.map(row => row.id), ['legacy-evening', 'legacy-short', 'utc-last', 'utc-morning']);
   assert.equal(result.day, '2026-10-13');
   assert.equal(result.rangeStart, '2026-10-12T15:00:00.000Z');
@@ -57,25 +58,23 @@ test('Today API uses KST timestamps, legacy calendar dates and an expression ind
   h.db.close();
 });
 
-test('scoped source metadata excludes other parents and retains real inactive originals as ended ads', async () => {
+test('Today includes only active new ads and explicitly remaps source proof metadata to public parents', async () => {
   const h = fixture();
   const today = koreanCalendarDay();
   h.listing('new', today + ' 12:00'); h.listing('empty', today + ' 12:00');
   h.listing('unavailable', today + ' 12:00'); h.listing('outside', '2025-01-01');
   h.listing('legacy-pk', today + ' 12:00', { property_id: 'legacy-public' });
   h.source('12345', 'new'); h.source('s-outside', 'outside'); h.source('s-empty', 'empty', 0, 1); h.source('s-unavailable', 'unavailable', 0, 3);
-  h.source('legacy-source', 'legacy-pk', 0, 3);
+  h.source('legacy-source', 'legacy-pk');
   const before = h.db.prepare('SELECT total_changes() AS n').get().n;
   const result = await handleD1GetAction(h.env, {}, { action: 'newListingPeriod', days: '1', market: 'lease' });
-  assert.deepEqual(Object.keys(result.unified.groups).sort(), ['empty', 'legacy-public', 'new', 'unavailable']);
-  assert.equal(result.unified.groups.empty.length, 1);
-  assert.equal(result.unified.groups.empty[0][result.unified.fields.indexOf('sourceUnavailable')], true);
-  assert.equal(result.unified.groups.empty[0][result.unified.fields.indexOf('missingCount')], 1);
+  assert.deepEqual(Object.keys(result.unified.groups).sort(), ['legacy-public', 'new']);
   assert.equal(result.unified.groups.new.length, 1);
-  assert.equal(result.unified.groups.unavailable.length, 1);
-  assert.equal(result.unified.groups.unavailable[0][result.unified.fields.indexOf('sourceUnavailable')], true);
-  assert.equal(result.unified.groups['legacy-public'][0][result.unified.fields.indexOf('sourceUnavailable')], true);
-  assert.deepEqual(result.unified.sourceSearchIds.empty, []);
+  assert.equal(result.unified.groups['legacy-public'][0][result.unified.fields.indexOf('sourceUnavailable')], false);
+  assert.equal(result.todayAdCount, 2);
+  assert.deepEqual(result.todayOriginalIds, { 'legacy-public': ['legacy-source'], new: ['12345'] });
+  assert.equal(result.unified.sourceSnapshotPropertyIds['legacy-public'], 'legacy-public');
+  assert.equal(result.unified.sourceSnapshotKeys['legacy-public'], result.items.find(row => row.property_id === 'legacy-public').source_snapshot_key);
   assert.deepEqual(result.unified.sourceSearchIds.new, ['n:12345']);
   assert.doesNotMatch(JSON.stringify(result), /outside|s-outside/);
   assert.equal(h.db.prepare('SELECT total_changes() AS n').get().n, before);
@@ -90,7 +89,7 @@ test('Today preserves market separation, publication holds and deleted exclusion
   h.listing('building', day, { trade_type: 'sale', sale_category: 'house' }); h.listing('land', day, { trade_type: 'sale', sale_category: 'land' });
   h.db.prepare("INSERT INTO listing_data_quality_holds (listing_id,issue_code,state,blocks_publication) VALUES ('held','fixture','open',1)").run();
   for (const market of ['lease', 'building', 'land']) {
-    const result = await newListingPeriod(h.env, { market }, async () => ({ ok: true, groups: {}, sourceSearchIds: {} }), new Date('2026-10-13T09:00:00Z'));
+    const result = await newListingPeriod(h.env, { market }, h.originals, new Date('2026-10-13T09:00:00Z'));
     assert.deepEqual(result.items.map(row => row.id), [market]);
   }
   h.db.close();
@@ -99,7 +98,7 @@ test('Today preserves market separation, publication holds and deleted exclusion
 test('paging does not cap totals and pins the Korean calendar day across midnight', async () => {
   const h = fixture();
   for (let i = 0; i < 161; i++) h.listing('M-' + String(i).padStart(3, '0'), '2026-10-13T09:00:00Z');
-  const originals = async ids => ({ ok: true, groups: Object.fromEntries(ids.map(id => [id, []])), sourceSearchIds: {}, fields: [] });
+  const originals = h.originals;
   const first = await newListingPeriod(h.env, { market: 'lease' }, originals, new Date('2026-10-13T14:59:59Z'));
   const second = await newListingPeriod(h.env, { market: 'lease', cursor: first.nextCursor }, originals, new Date('2026-10-13T15:00:01Z'));
   const third = await newListingPeriod(h.env, { market: 'lease', cursor: second.nextCursor }, originals, new Date('2026-10-13T15:00:02Z'));
@@ -150,5 +149,51 @@ test('the real Worker route authenticates Today reads, pins revisions and never 
   assert.equal(changed.status, 409); const changedBody = await changed.json();
   assert.equal(changedBody.snapshotChanged, true); assert.equal(changedBody.items, undefined);
   assert.equal(h.db.prepare('SELECT total_changes() AS n').get().n, beforeWrites); assert.equal(writes, 0);
+  h.db.close();
+});
+
+test('Today includes a new source on an old parent but not old ads with new publication, last-seen or reappearance dates', async () => {
+  const h = fixture(), now = new Date('2026-10-13T09:00:00Z');
+  h.listing('existing-parent', '2024-01-01');
+  h.listing('old-ad-new-parent', '2026-10-13');
+  h.listing('reappeared', '2024-01-01');
+  h.listing('manual', '2026-10-13');
+  h.source('old-existing', 'existing-parent', 1, 0, { first_collected_at: '2024-01-01' });
+  h.source('new-existing', 'existing-parent', 1, 0, { first_collected_at: '2026-10-12T15:00:00Z' });
+  h.source('new-second', 'existing-parent', 1, 0, { first_collected_at: '2026-10-13T14:59:59Z' });
+  h.source('publication-only', 'old-ad-new-parent', 1, 0, { first_collected_at: '2024-01-01', last_collected_at: '2026-10-13T09:00:00Z' });
+  h.source('same-reappeared', 'reappeared', 1, 0, { first_collected_at: '2024-01-01', last_collected_at: '2026-10-13T09:00:00Z' });
+  const result = await newListingPeriod(h.env, { market: 'lease' }, h.originals, now);
+  assert.deepEqual(result.items.map(row => row.id), ['existing-parent','manual']);
+  assert.equal(result.items[0].first_collected_at,'2024-01-01','Do not rewrite the parent registration history');
+  assert.deepEqual(result.todayOriginalIds, { 'existing-parent':['new-existing','new-second'],manual:[] });
+  assert.equal(result.todayAdCount,2);assert.equal(result.todayManualCount,1);
+  assert.equal(result.unified.groups['existing-parent'].length,3,'Keep the whole original group outside the Today-only projection');
+  const plan=h.db.prepare(`EXPLAIN QUERY PLAN SELECT listing_id FROM listing_sources
+    WHERE active=1 AND (${REGISTRATION_DAY_SQL})=? AND trade_type=?`).all('2026-10-13','lease');
+  assert.match(JSON.stringify(plan),/idx_listing_sources_registration_day_trade_parent/);
+  h.db.close();
+});
+
+test('inactive today ads and the next KST day are excluded while boundary ads use their source-first day', async () => {
+  const h=fixture(),now=new Date('2026-10-13T09:00:00Z');
+  for(const id of ['start','before','next','inactive'])h.listing(id,'2024-01-01');
+  h.source('start-ad','start',1,0,{first_collected_at:'2026-10-12T15:00:00Z'});
+  h.source('before-ad','before',1,0,{first_collected_at:'2026-10-12T14:59:59Z'});
+  h.source('next-ad','next',1,0,{first_collected_at:'2026-10-13T15:00:00Z'});
+  h.source('inactive-ad','inactive',0,1,{first_collected_at:'2026-10-13T03:00:00Z'});
+  const result=await newListingPeriod(h.env,{market:'lease'},h.originals,now);
+  assert.deepEqual(result.items.map(row=>row.id),['start']);
+  assert.deepEqual(result.todayOriginalIds.start,['start-ad']);
+  h.db.close();
+});
+
+test('a changed source proof is returned as retryable uncertainty, never as an authoritative partial Today list', async()=>{
+  const h=fixture();h.listing('A','2026-10-13');
+  const result=await newListingPeriod(h.env,{market:'lease'},async()=>{
+    const payload=await h.originals();payload.sourceSnapshotKeys.A='sha256-v1:'+'0'.repeat(64);return payload;
+  },new Date('2026-10-13T09:00:00Z'));
+  assert.equal(result.ok,false);assert.equal(result.snapshotChanged,true);
+  assert.equal(result.items,undefined);assert.equal(result.todayOriginalIds,undefined);
   h.db.close();
 });
