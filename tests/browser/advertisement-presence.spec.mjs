@@ -10,6 +10,7 @@ const mapDeclarations = ast.statements.filter(node => ts.isFunctionDeclaration(n
   .map(node => node.getText(ast)).join("\n");
 const mixedId = "FIXTURE-LEASE-1", endedId = "FIXTURE-LEASE-2";
 const picture = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='120'%3E%3Crect width='100' height='120' fill='%23c9e7f5'/%3E%3C/svg%3E";
+const unifiedRuntime = await readFile(new URL("../../js/unified-listings-v8.js", import.meta.url), "utf8");
 
 function item(id, extra = {}) {
   return {propertyId:id,key:"qa-" + id,name:"검수 " + id,address:"대전 서구 괴정동 " + id.length,
@@ -113,6 +114,51 @@ const card = (page,id) => page.locator('#list .item[data-property-id="' + id + '
 async function ids(page){return page.locator("#list .item").evaluateAll(cards=>cards.map(card=>card.dataset.propertyId));}
 async function mapIds(page){return page.evaluate(()=>[...new Set(overlays.flatMap(overlay=>(overlay.__cluster?.items||[]).map(item=>item.propertyId)))].sort());}
 async function menu(page,id){await page.locator(id).evaluate(button=>button.click());}
+
+async function missingMetadataFixture(page, ended) {
+  await page.addScriptTag({content:unifiedRuntime});
+  await page.evaluate(({id,photo,ended})=>{
+    const master=allItems.find(item=>item.propertyId===id);
+    allItems=[master];
+    const access=JSDataAccessV6;
+    window.JSDataAccessV6=Object.assign({},access,{read(action,params,options){
+      if(action!=="unifiedListingDetail")return access.read(action,params,options);
+      return Promise.resolve({ok:true,propertyId:id,originals:Array.from({length:ended?7:1},(_,index)=>({
+        propertyId:id,originalId:"recovered-ad-"+index,providerSourceId:"265000000"+index,
+        source:"네이버",tradeType:"lease",room:"1층",floor:1,deposit:2000,rent:90,area:25,
+        active:ended?0:1,sourceUnavailable:ended,candidateEligible:ended,
+        availabilityKind:ended?"legacy_candidate":"active",lastCheckedAt:"2026-10-15T03:00:00.000Z",
+        buildingName:"원본 확인 사진",address:master.address,thumbnail:photo,images:[photo],photoCount:1
+      }))});
+    }});
+    JSUnifiedListingsV8.attach(allItems);applyFilter();
+  },{id:mixedId,photo:picture,ended});
+}
+
+test("CSV-first photo metadata recovers on detail without false no-photo labels",async({page,context,isMobile})=>{
+  const result=await setup(page,context,isMobile);
+  await missingMetadataFixture(page,false);
+  await expect(card(page,mixedId).locator(".unified-thumb-v8")).toContainText("원본 확인 중");
+  await page.evaluate(id=>JSUnifiedListingsV8.open(encodeURIComponent(id)),mixedId);
+  await expect(card(page,mixedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+  await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("원본 확인 사진");
+  await expect(page.locator("#unifiedDetailBodyV8")).not.toContainText("원본매물 정보가 없습니다");
+  expect(await page.evaluate(id=>allItems.find(item=>item.propertyId===id).memo,mixedId)).toContain("사용자 검수 메모");
+  safe(result);
+});
+
+test("CSV-first ghost card is removed only after its seven candidate originals are confirmed",async({page,context,isMobile})=>{
+  const result=await setup(page,context,isMobile);
+  await missingMetadataFixture(page,true);
+  await expect(card(page,mixedId)).toHaveCount(1);
+  await page.evaluate(id=>JSUnifiedListingsV8.open(encodeURIComponent(id)),mixedId);
+  await expect(card(page,mixedId)).toHaveCount(0);
+  await expect(page.locator("#unifiedDetailBodyV8")).toContainText("미노출");
+  await expect(page.locator("#unifiedDetailBodyV8")).not.toContainText("원본매물 정보가 없습니다");
+  expect(await page.evaluate(id=>JSUnifiedListingsV8.allOriginals(id).length,mixedId)).toBe(7);
+  expect(await page.evaluate(id=>allItems.find(item=>item.propertyId===id).state,mixedId)).toBe("active");
+  safe(result);
+});
 
 test("mixed originals show nine live ads and restore only the reappearing candidate advertisement",async({page,context,isMobile},testInfo)=>{
   const result=await setup(page,context,isMobile);

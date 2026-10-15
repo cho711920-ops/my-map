@@ -4,14 +4,16 @@
   var DETAIL_CACHE_TTL = 5 * 60 * 1000;
   var DETAIL_RETRY_DELAY = 30 * 1000;
   var state = { groups: {}, detailCache: {}, detailCachedAt: {}, detailRetryAt: {}, detailGeneration: 0,
-    detailPending: {}, contactCache: {}, contactPending: {},
+    detailPending: {}, detailPendingForced: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
     loaded: false, loadPending: null, loadGeneration: 0, snapshotRevision: "", detailPropertyGeneration: {},
-    openPropertyId: "", openOriginalId: "", detailRequestToken: 0,
+    openPropertyId: "", openOriginalId: "", openOriginalIdentity: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
     photoPreloads: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0,
+    detailStatus: {}, detailRefreshRetries: {},
     masterItemsArray: null, masterItemsById: Object.create(null),
+    metadataCoverage: Object.create(null),
     displayItemsArray: null, displayItemsById: Object.create(null) };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
@@ -106,6 +108,18 @@
     }).map(function(entry) { return entry.original; });
   }
   function allOriginals(propertyId) { return orderOriginals(state.groups[text(propertyId)] || []); }
+  function originalMetadataReady(propertyId) {
+    var id = text(propertyId);
+    return Object.prototype.hasOwnProperty.call(state.groups, id) || !!state.metadataCoverage[id];
+  }
+  function sourceIdentity(original) {
+    if (!original) return "";
+    var provider = sourceKey(original.source);
+    var id = text(original.providerSourceId || original.sourceListingId || original.sourceId)
+      .replace(/::(?:lease|sale)$/, "").replace(/^네이버-/i, "");
+    return id && /^(?:naver|danggeun|gongsil)$/.test(provider)
+      ? provider + ":" + (text(original.tradeType) || "lease") + ":" + id : "";
+  }
   function visibleOriginalsFrom(originals, propertyId, masterItem, alreadyOrdered) {
     var values = alreadyOrdered ? originals : orderOriginals(originals || []);
     if (global.doneOnly) {
@@ -139,12 +153,21 @@
     // Without a rendered subset, keep the valid detail instead of deleting it.
     if (!projection || !projection.length) return visible;
     if (global.doneOnly) {
-      var byId = Object.create(null);
-      visible.forEach(function(original) { byId[text(original.originalId)] = original; });
-      return projection.map(function(original) { return byId[text(original.originalId)]; }).filter(Boolean);
+      var byId = Object.create(null), byIdentity = Object.create(null);
+      visible.forEach(function(original) {
+        byId[text(original.originalId)] = original;
+        var identity = sourceIdentity(original);
+        if (identity) byIdentity[identity] = Object.prototype.hasOwnProperty.call(byIdentity, identity) ? null : original;
+      });
+      return projection.map(function(original) {
+        return byId[text(original.originalId)] || byIdentity[sourceIdentity(original)];
+      }).filter(Boolean);
     }
     var allowed = new Set(projection.map(function(original) { return text(original.originalId); }));
-    return visible.filter(function(original) { return allowed.has(text(original.originalId)); });
+    var identities = new Set(projection.map(sourceIdentity).filter(Boolean));
+    return visible.filter(function(original) {
+      return allowed.has(text(original.originalId)) || !!sourceIdentity(original) && identities.has(sourceIdentity(original));
+    });
   }
   function originalRoomLabel(original) {
     return typeof global.formatListingRoomForCardV653 === "function"
@@ -443,6 +466,9 @@
     state.detailCachedAt = {};
     state.detailRetryAt = {};
     state.detailPending = {};
+    state.detailPendingForced = {};
+    state.detailStatus = {};
+    state.detailRefreshRetries = {};
   }
 
   function loadDetail(propertyId, force) {
@@ -451,32 +477,51 @@
     if (!force && detailIsFresh(propertyId)) {
       return Promise.resolve(state.detailCache[propertyId]);
     }
-    if (state.detailPending[propertyId]) return state.detailPending[propertyId];
+    if (state.detailPending[propertyId]) {
+      if (!force || state.detailPendingForced[propertyId]) return state.detailPending[propertyId];
+      // A normal hover prefetch may still be using R2. Its promise is not a
+      // cache-bypassing verification, so wait and send one actual forced read.
+      return state.detailPending[propertyId].catch(function() {}).then(function() { return loadDetail(propertyId, true); });
+    }
     if (!force && state.detailCache[propertyId] && Date.now() < Number(state.detailRetryAt[propertyId] || 0)) {
       return Promise.resolve(state.detailCache[propertyId]);
     }
     var generation = state.detailGeneration;
     var propertyGeneration = Number(state.detailPropertyGeneration[propertyId]) || 0;
-    var request = apiGet("unifiedListingDetail", {propertyId: propertyId}).then(function(result) {
+    var request = apiGet("unifiedListingDetail", {propertyId: propertyId}, force).then(function(result) {
       if (!result || result.ok === false || !Array.isArray(result.originals)) {
         throw new Error(result && result.message || "매물 상세 응답을 확인하지 못했습니다.");
       }
       var originals = orderOriginals(result.originals || []);
       if (generation !== state.detailGeneration || propertyGeneration !== (Number(state.detailPropertyGeneration[propertyId]) || 0)) return originals;
-      state.detailCache[propertyId] = originals;
-      state.detailCachedAt[propertyId] = Date.now();
+      if (originals.length) {
+        state.detailCache[propertyId] = originals;
+        state.detailCachedAt[propertyId] = Date.now();
+      } else {
+        // An empty response does not prove that a CSV card has no sources.
+        // Do not turn a transient mismatch into a five-minute empty cache.
+        delete state.detailCache[propertyId];
+        delete state.detailCachedAt[propertyId];
+      }
       delete state.detailRetryAt[propertyId];
-      if (state.detailPending[propertyId] === request) delete state.detailPending[propertyId];
+      if (state.detailPending[propertyId] === request) {
+        delete state.detailPending[propertyId];
+        delete state.detailPendingForced[propertyId];
+      }
       primeDetailImages(visibleOriginalsFrom(originals, propertyId));
       return originals;
     }).catch(function(error) {
       if (generation === state.detailGeneration && propertyGeneration === (Number(state.detailPropertyGeneration[propertyId]) || 0)) {
         state.detailRetryAt[propertyId] = Date.now() + DETAIL_RETRY_DELAY;
       }
-      if (state.detailPending[propertyId] === request) delete state.detailPending[propertyId];
+      if (state.detailPending[propertyId] === request) {
+        delete state.detailPending[propertyId];
+        delete state.detailPendingForced[propertyId];
+      }
       throw error;
     });
     state.detailPending[propertyId] = request;
+    state.detailPendingForced[propertyId] = !!force;
     return request;
   }
 
@@ -666,6 +711,11 @@
       state.sourceSearchIds = result.sourceSearchIds || state.sourceSearchIds || {};
       if (result.ok !== false) {
         state.loaded = true;
+        state.metadataCoverage = Object.create(null);
+        (items || []).forEach(function(item) {
+          var id = text(item && item.propertyId);
+          if (id) state.metadataCoverage[id] = true;
+        });
         if (Object.prototype.hasOwnProperty.call(result, "snapshotRevision")) state.snapshotRevision = result.snapshotRevision || "";
         originalLoadStatus(false);
       }
@@ -717,13 +767,14 @@
         buildingYear: text(item.buildingYear || item.approvalYear)
       };
       item.unifiedAllOriginalsV1 = all;
+      item.unifiedOriginalMetadataPendingV1 = !originalMetadataReady(item.propertyId);
       item.unifiedActiveOriginalCountV1 = activeOriginals.length;
       item.unifiedEndedOriginalCountV1 = all.length - item.unifiedActiveOriginalCountV1;
       item.unifiedCandidateOriginalCountV2 = all.filter(isCandidateOriginal).length;
       item.sourceAllUnavailableV1 = all.length > 0 && item.unifiedActiveOriginalCountV1 === 0;
       item.unifiedOriginalsV8 = originals;
       item.sourceListingSearchV6579 = (state.sourceSearchIds[text(item.propertyId)] || []).slice();
-      item.unifiedOriginalCountV8 = originals.length || (all.length ? 0 : 1);
+      item.unifiedOriginalCountV8 = originals.length || (all.length || item.unifiedOriginalMetadataPendingV1 ? 0 : 1);
       item.thumbnailV8 = originals.length ? originalImage(originals[0]) : "";
       item.sourceTypesV8 = originals.map(function(original) { return sourceKey(original.source); });
       item.transactionCheckCandidateV8135 = isTransactionCandidate(item);
@@ -891,14 +942,16 @@
     var all = allOriginals(item && item.propertyId);
     var originals = item && Array.isArray(item.unifiedDisplayOriginalsV2) ? item.unifiedDisplayOriginalsV2
       : visibleOriginalsFrom(all, item && item.propertyId, item, true);
-    var count = originals.length || (all.length ? 0 : 1);
+    var pending = !all.length && !originalMetadataReady(item && item.propertyId);
+    var count = originals.length || (all.length || pending ? 0 : 1);
     var sourceUnavailable = originals.length > 0 && originals.every(function(original) {
       return isCandidateOriginal(original);
     });
     var thumbnail = originals.length ? originalImage(originals[0]) : "";
+    var photoPending = !thumbnail && originals.some(function(original) { return Number(original.photoCount) > 0; });
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
-      (thumbnail ? 'has-photo' : 'no-photo') + '" title="사진 크게 보기" ' +
+      (thumbnail ? 'has-photo' : 'no-photo') + '" title="' + (pending ? '원본 확인 중' : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
@@ -906,18 +959,21 @@
       (thumbnail ? '<img src="' + esc(thumbnail) + '" data-thumbnail-source-v8144="' + esc(thumbnail) +
         '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
         'onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" ' +
-        'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>사진 없음</span>') +
+        'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>' + (pending ? '원본 확인 중' : photoPending ? '사진 확인 중' : '사진 없음') + '</span>') +
       (sourceUnavailable
         ? '<em class="transaction-check-ribbon-v8135">원본 광고 미노출<b>거래완료 후보</b></em>'
         : '') +
       '</button>';
-    var badge = sourceUnavailable
+    var badge = pending ? '<span class="unified-badge-v8">원본 확인 중</span>' : sourceUnavailable
       ? '<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>'
       : count > 1
         ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
         : '';
     var button;
-    if (sourceUnavailable) {
+    if (pending) {
+      button = '<button type="button" class="item-source-link-btn" onclick="event.stopPropagation(); ' +
+        'JSUnifiedListingsV8.open(\'' + encodedId + '\')">원본 확인</button>';
+    } else if (sourceUnavailable) {
       button = '<button type="button" class="item-source-link-btn active transaction-check-button-v8135" ' +
         'title="원본 광고 미노출 내역 확인 · 실제 계약완료와 별도" ' +
         'onclick="event.stopPropagation(); if(window.openTransactionCandidateFromListingV1){' +
@@ -1144,6 +1200,19 @@
         : '<button type="button" disabled title="등록된 원본 링크가 없습니다">원본 없음</button>') + '</nav>';
   }
 
+  function detailStatusMessage(propertyId) {
+    var status = state.detailStatus[text(propertyId)];
+    if (status === "unavailable") return "현재 노출 중인 원본 광고가 없습니다. 거래완료만 보기의 미노출 후보에서 확인해 주세요.";
+    if (status === "filtered") return "현재 검색조건에 맞는 원본 광고가 없습니다. 최신 조건을 목록에 반영했습니다.";
+    if (status === "mismatch") return "선택한 원본의 최신 연결을 확인하지 못했습니다. 잠시 후 상세를 다시 열어 주세요.";
+    if (status === "error") return "원본 최신 조회에 실패했습니다. 마지막 확인 자료를 유지합니다. 잠시 후 다시 열어 주세요.";
+    return "원본 정보를 확인 중입니다.";
+  }
+
+  function detailPhotoPlaceholder(propertyId, photoCount) {
+    return photoCount > 0 ? state.detailStatus[propertyId] === "pending" ? "사진 확인 중" : "사진 조회 불가" : "등록된 사진 없음";
+  }
+
   function renderDetail(propertyId, originals, selectedOriginalId, layoutOptions) {
     originals = visibleOriginalsFrom(originals, propertyId);
     var selected = originals.filter(function(original) {
@@ -1157,7 +1226,9 @@
     document.getElementById("unifiedDetailTitleV8").textContent = selected
       ? (selected.buildingName || selected.address || "매물 상세") : "매물 상세";
     document.getElementById("unifiedDetailSubtitleV8").textContent = originals.length > 1
-      ? "동일 공간 원본 " + originals.length + "개" : "원본매물 1개";
+      ? "동일 공간 원본 " + originals.length + "개" : originals.length === 1 ? "원본매물 1개"
+      : state.detailStatus[propertyId] === "unavailable" ? "현재 노출 광고 없음"
+      : /^(?:mismatch|error|filtered)$/.test(state.detailStatus[propertyId]) ? "원본 연결 확인 필요" : "원본 확인 중";
     var images = originalImages(selected);
     var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
     var encodedActionPropertyId = encodeURIComponent(text(propertyId));
@@ -1165,7 +1236,9 @@
     var landLabel = selected && global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel
       ? global.JSListingTradeV1.landUseLabel(selected) : "";
     var body = document.getElementById("unifiedDetailBodyV8");
-    body.innerHTML = !selected ? '<div class="unified-empty-v8">원본매물 정보가 없습니다.</div>' :
+    var detailNotice = selected && /^(?:mismatch|error)$/.test(state.detailStatus[propertyId])
+      ? '<div class="unified-empty-v8" role="status">' + esc(detailStatusMessage(propertyId)) + '</div>' : '';
+    body.innerHTML = detailNotice + (!selected ? '<div class="unified-empty-v8" role="status">' + esc(detailStatusMessage(propertyId)) + '</div>' :
       '<section class="unified-detail-gallery-v8">' +
         (images.length ? '<button type="button" class="unified-detail-hero-v8" ' +
           'onclick="JSUnifiedListingsV8.openDetailGallery(this)">' +
@@ -1178,7 +1251,7 @@
             'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, -1)">‹</button>' +
           '<button type="button" class="unified-detail-photo-nav-v8 next" aria-label="다음 사진" ' +
             'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, 1)">›</button>' :
-          '<div class="unified-gallery-empty-v8">등록된 사진 없음</div>') +
+          '<div class="unified-gallery-empty-v8">' + esc(detailPhotoPlaceholder(propertyId, photoCount)) + '</div>') +
       '</section>' +
       '<section class="unified-detail-summary-v8"><div class="unified-detail-source-address-v827">' +
         '<div class="unified-detail-source-row-v827"><span class="source-' + sourceKey(selected.source) + '">' +
@@ -1211,7 +1284,7 @@
       '</section>' +
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +
-      '</section>' : '');
+      '</section>' : ''));
     var phoneActions = drawer.querySelector('.phone-detail-actions-v2');
     if (phoneActions) phoneActions.remove();
     if (phoneDetail && selected) drawer.insertAdjacentHTML('beforeend', phoneDetailActionsV2(propertyId, selected));
@@ -1372,24 +1445,144 @@
       : "추가 사진 조회 실패 · 다음 버튼으로 재시도";
   }
 
+  function synchronizeDetailOriginals(propertyId, originals) {
+    var master = resolveMasterItem(propertyId);
+    if (!master || !originals.length || state.groups[propertyId] === originals || originals.some(function(original) {
+      return !text(original.originalId) || text(original.propertyId) && text(original.propertyId) !== propertyId;
+    })) return false;
+    // A clicked property's fresh original response is evidence for that property,
+    // not a coherent replacement for the full CSV/original snapshot cache.
+    state.groups[propertyId] = originals;
+    state.snapshotRevision = "";
+    attach([master]);
+    if (typeof global.applyFilter === "function") {
+      global.applyFilter();
+      return true;
+    }
+    return false;
+  }
+
+  function sourceCheckedTime(original) {
+    var raw = text(original && original.lastCheckedAt);
+    if (!raw) return 0;
+    var parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function sourceOriginalIndex(originals) {
+    var index = {ids: Object.create(null), identities: Object.create(null)};
+    originals.forEach(function(original) {
+      index.ids[text(original.originalId)] = original;
+      var identity = sourceIdentity(original);
+      if (identity) index.identities[identity] = Object.prototype.hasOwnProperty.call(index.identities, identity) ? null : original;
+    });
+    return index;
+  }
+
+  function sameSourceOriginal(index, target) {
+    if (!target) return null;
+    var exact = index.ids[text(target.originalId)];
+    var identity = sourceIdentity(target);
+    if (exact && (!identity || !sourceIdentity(exact) || sourceIdentity(exact) === identity)) return exact;
+    return identity ? index.identities[identity] || null : null;
+  }
+
+  function detailResponseIsOlder(propertyId, originals) {
+    var known = sourceOriginalIndex(state.groups[propertyId] || []);
+    return originals.some(function(original) {
+      var previous = sameSourceOriginal(known, original);
+      if (!previous) return false;
+      var oldTime = sourceCheckedTime(previous), newTime = sourceCheckedTime(original);
+      if (oldTime && (!newTime || newTime < oldTime)) return true;
+      // With no newer evidence, an old cache must not end a currently active
+      // ad or resurrect an inactive one merely because its row ID still matches.
+      return isSourceUnavailable(previous) !== isSourceUnavailable(original) && (!newTime || newTime <= oldTime);
+    });
+  }
+
+  function prepareDetailOriginals(propertyId, originals, originalId, options) {
+    var before = displayedOriginalProjection(propertyId);
+    var previous = (before || state.groups[propertyId] || []).filter(function(original) {
+      return text(original.originalId) === originalId;
+    })[0];
+    var wantedIdentity = sourceIdentity(previous) || state.openOriginalIdentity;
+    if (!originals.length) {
+      state.detailStatus[propertyId] = "mismatch";
+      return {originals: detailOriginals(state.groups[propertyId] || [], propertyId), retry: true};
+    }
+    var selectedExists = !originalId || originals.some(function(original) {
+      var identity = sourceIdentity(original);
+      return text(original.originalId) === originalId && (!wantedIdentity || !identity || identity === wantedIdentity) ||
+        wantedIdentity && identity === wantedIdentity;
+    });
+    var incomingIndex = sourceOriginalIndex(originals);
+    var missingKnownSource = (state.groups[propertyId] || []).some(function(original) {
+      return !sameSourceOriginal(incomingIndex, original);
+    });
+    // A normal HTTP response can still be an old R2 snapshot containing only
+    // the selected ad. Verify missing siblings with one forced current read
+    // before replacing a newer complete group with that partial response.
+    var unverifiedMissingSource = missingKnownSource && !(options && options.forceFresh);
+    if (!selectedExists || unverifiedMissingSource || detailResponseIsOlder(propertyId, originals)) {
+      state.detailStatus[propertyId] = "mismatch";
+      delete state.detailCache[propertyId];
+      delete state.detailCachedAt[propertyId];
+      return {originals: detailOriginals(state.groups[propertyId] || [], propertyId), retry: true};
+    }
+    // A five-minute browser cache is presentation only. It cannot replace a
+    // newer full-snapshot group, even when it happens to contain matching IDs.
+    var fromCache = !!(options && options.fromCache);
+    var refreshedList = !fromCache && synchronizeDetailOriginals(propertyId, originals);
+    var visible = detailOriginals(originals, propertyId);
+    if (refreshedList && before && !displayedOriginalProjection(propertyId)) {
+      visible = [];
+      state.detailStatus[propertyId] = visibleOriginalsFrom(originals, propertyId).length ? "filtered" : "unavailable";
+    } else if (!visible.length) {
+      state.detailStatus[propertyId] = visibleOriginalsFrom(originals, propertyId).length ? "mismatch" : "unavailable";
+    }
+    var selected = visible.filter(function(original) { return text(original.originalId) === originalId; })[0];
+    if (!selected && wantedIdentity) {
+      var sameIdentity = visible.filter(function(original) { return sourceIdentity(original) === wantedIdentity; });
+      if (sameIdentity.length === 1) selected = sameIdentity[0];
+    }
+    if (!selected && originalId && visible.length) {
+      state.detailStatus[propertyId] = "mismatch";
+      return {originals: [], retry: true};
+    }
+    if (visible.length) state.detailStatus[propertyId] = "";
+    var knownIndex = fromCache ? sourceOriginalIndex(state.groups[propertyId] || []) : null;
+    var needsCurrentPhoto = fromCache && visible.some(function(original) {
+      var known = sameSourceOriginal(knownIndex, original);
+      return known && !originalImage(known) && !!originalImage(original);
+    });
+    return {originals: visible, selected: selected || visible[0],
+      retry: needsCurrentPhoto || state.detailStatus[propertyId] === "mismatch"};
+  }
+
   function refreshOpenDetail(propertyId, originalId, requestToken, measurement, force) {
     return loadDetail(propertyId, force).then(function(originals) {
       if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId ||
           state.openOriginalId !== originalId) return;
-      originals = detailOriginals(originals, propertyId);
       var body = document.getElementById("unifiedDetailBodyV8");
       var active = document.activeElement;
       // Do not replace a form while the user is editing it. The fresh response
       // remains cached and is used the next time the card is opened.
       if (body && active && body.contains && body.contains(active) &&
           (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || ""))) return;
+      var prepared = prepareDetailOriginals(propertyId, originals, originalId, {forceFresh: !!force});
+      if (prepared.retry && !force && !state.detailRefreshRetries[propertyId]) {
+        state.detailRefreshRetries[propertyId] = 1;
+        return refreshOpenDetail(propertyId, originalId, requestToken, measurement, true);
+      }
+      originals = prepared.originals;
       var gallery = body && body.querySelector(".unified-detail-gallery-v8");
       var photoIndex = gallery ? Number(gallery._indexV8 || 0) : 0;
       var scrollTop = body ? body.scrollTop : 0;
-      var selected = originals.filter(function(original) {
+      var selected = prepared.selected || originals.filter(function(original) {
         return text(original.originalId) === originalId;
       })[0] || originals[0];
       state.openOriginalId = text(selected && selected.originalId);
+      state.openOriginalIdentity = sourceIdentity(selected);
       renderDetail(propertyId, originals, state.openOriginalId);
       body = document.getElementById("unifiedDetailBodyV8");
       gallery = body && body.querySelector(".unified-detail-gallery-v8");
@@ -1400,6 +1593,10 @@
       if (body) body.scrollTop = scrollTop;
       if (originals.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
     }).catch(function(error) {
+      if (requestToken === state.detailRequestToken && state.openPropertyId === propertyId) {
+        state.detailStatus[propertyId] = "error";
+        renderDetail(propertyId, displayedOriginals(propertyId), state.openOriginalId);
+      }
       showDetailPhotoLookupFailure(propertyId, requestToken);
       console.warn("매물 상세 최신화 실패 · 기존 정보를 유지합니다.", error);
     });
@@ -1411,18 +1608,23 @@
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var requestToken = ++state.detailRequestToken;
     state.detailPhotoRetryCount = 0;
+    state.detailRefreshRetries[propertyId] = 0;
+    state.detailStatus[propertyId] = "pending";
     delete state.pendingDetailSteps[propertyId];
     state.openPropertyId = propertyId;
+    var initial = displayedOriginals(propertyId);
+    var wanted = initial.filter(function(original) { return text(original.originalId) === originalId; })[0] || initial[0];
+    state.openOriginalIdentity = sourceIdentity(wanted);
     var cached = state.detailCache[propertyId];
     if (cached) {
-      cached = detailOriginals(cached, propertyId);
-      state.openOriginalId = originalId || text(cached[0] && cached[0].originalId);
+      var prepared = prepareDetailOriginals(propertyId, cached, originalId || text(wanted && wanted.originalId), {fromCache: true});
+      cached = prepared.originals;
+      state.openOriginalId = text(prepared.selected && prepared.selected.originalId) || originalId || text(cached[0] && cached[0].originalId);
       renderDetail(propertyId, cached, state.openOriginalId);
       if (cached.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
-      if (!detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken);
+      if (prepared.retry || !detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken, measurement, prepared.retry);
       return;
     }
-    var initial = displayedOriginals(propertyId);
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     state.openOriginalId = originalId;
     renderDetail(propertyId, initial, originalId);
@@ -1564,7 +1766,7 @@
     if (!parent) return;
     parent.classList.remove("has-photo");
     parent.classList.add("no-photo");
-    if (showLabel && !parent.querySelector("span")) parent.insertAdjacentHTML("beforeend", "<span>사진 없음</span>");
+    if (showLabel && !parent.querySelector("span")) parent.insertAdjacentHTML("beforeend", "<span>사진 조회 실패</span>");
   }
 
   function thumbnailImageError(image) {

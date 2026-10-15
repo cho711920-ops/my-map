@@ -619,6 +619,41 @@ test("full listing details and photos come directly from D1", async () => {
   }
 });
 
+test("explicit detail refresh bypasses a stale empty R2 entry without refreshing the full list", async () => {
+  const applicationQueries = [];
+  const cacheReads = [];
+  const cacheWrites = [];
+  const customEnv = {
+    D1_PRIMARY_READS: "1", D1_DETAIL_READS: "1",
+    DB: { prepare(sql) {
+      if (!/FROM allowed_users/.test(sql)) applicationQueries.push(sql);
+      return { bind() { return this; }, async first() { return null; }, async all() { return {results: []}; } };
+    } },
+    MEDIA: {
+      async get(key) {
+        cacheReads.push(key);
+        return { customMetadata: {savedAt: String(Date.now())},
+          httpMetadata: {contentType: "application/json; charset=utf-8"},
+          text: async () => JSON.stringify({ok: true, originals: [], cachedFixture: true}) };
+      },
+      async put(...args) { cacheWrites.push(args); }
+    }
+  };
+  const path = "/api/data?action=unifiedListingDetail&propertyId=M-DETAIL-RETRY";
+  const cached = await authenticatedRequest(path, customEnv);
+  assert.equal((await cached.json()).cachedFixture, true);
+  assert.equal(applicationQueries.length, 0);
+  assert.equal(cacheReads.length, 1);
+  const fresh = await authenticatedRequest(path, customEnv, {waitUntil() {}},
+    {headers: {"X-JS-Force-Refresh": "1"}});
+  assert.equal(fresh.status, 200);
+  assert.equal((await fresh.json()).cachedFixture, undefined);
+  assert.equal(cacheReads.length, 1, "only the requested detail cache is bypassed");
+  assert.equal(applicationQueries.length, 1);
+  assert.match(applicationQueries[0], /WHERE \(property_id=\?1 OR id=\?1\)/);
+  assert.equal(cacheWrites.length, 1);
+});
+
 test("listing images are allowlisted and stored in R2 after the first load", async () => {
   const writes = [];
   const pending = [];

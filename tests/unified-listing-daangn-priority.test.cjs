@@ -4,7 +4,7 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync("js/unified-listings-v8.js", "utf8");
 assert.match(source, /var originals = orderOriginals\(result\.originals \|\| \[\]\);/);
-assert.match(source, /if \(cached\) \{\s*cached = detailOriginals\(cached, propertyId\);/);
+assert.match(source, /if \(cached\) \{\s*var prepared = prepareDetailOriginals\(propertyId, cached,[^\n]*\{fromCache: true\}\);/);
 const openedLinks = [];
 const window = {
   innerWidth: 1280,

@@ -1032,10 +1032,11 @@ async function classifyManifest(env, body) {
     await env.DB.batch(statements);
   }
   if (legacyBackfills.length) {
-    const backfilledAt = nowIso();
+    // A fingerprint-only repair is not a new source observation. Updating its
+    // availability clocks after list capture would make the finalization CAS
+    // reject this same run's genuine reappearance as an older positive result.
     const statements = legacyBackfills.map((item) => env.DB.prepare(`UPDATE listing_sources
-      SET snapshot_hash=?1, session_id=?2, last_collected_at=?3, updated_at=?3
-      WHERE id=?4 AND snapshot_hash=''`).bind(item.hash, sessionId, backfilledAt, item.id));
+      SET snapshot_hash=?1 WHERE id=?2 AND snapshot_hash=''`).bind(item.hash, item.id));
     for (let offset = 0; offset < statements.length; offset += 80) {
       await env.DB.batch(statements.slice(offset, offset + 80));
     }

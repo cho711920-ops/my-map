@@ -817,7 +817,7 @@ async function handleDataApi(request, env, context) {
             : Number(env.UNIFIED_DETAIL_CACHE_MS || defaultTtl);
       const validTtl = Number.isFinite(configuredTtl) && configuredTtl > 0 ? configuredTtl : defaultTtl;
       const boundedTtl = detailCacheKey ? Math.min(5 * 60_000, validTtl) : validTtl;
-      const forceFresh = query.action === "unifiedListings" && request.headers.get("x-js-force-refresh") === "1";
+      const forceFresh = (query.action === "unifiedListings" || Boolean(detailCacheKey)) && request.headers.get("x-js-force-refresh") === "1";
       const cached = forceFresh ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl));
       if (cached && (query.action !== "unifiedListings" || cached.revision)) {
         const cachedBody = query.action === "unifiedListings"

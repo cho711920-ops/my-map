@@ -1946,7 +1946,7 @@ window.JSListingRefreshV1.applyOriginals = applyOriginalsSnapshotV1;
 window.JSListingRefreshV1.generation = function() { return jsListingsLoadGenerationV1; };
 window.JSListingRefreshV1.hasCompleteBase = function() { return jsListingsCompleteBaseV1; };
 
-function loadSheet(isAuto, forceRefresh) {
+function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
     document.getElementById("status").innerHTML = "주소 변환중... 자동 업데이트 대기";
@@ -2007,12 +2007,23 @@ function loadSheet(isAuto, forceRefresh) {
   var sheetSnapshotV1 = null;
   var sheetPublishedV1 = false;
   var unifiedAppliedV1 = false;
+  var originalPairRecoveryStartedV1 = false;
   function applyLateUnifiedV1() {
     if (unifiedAppliedV1 || !sheetPublishedV1 || isLoadingSheet ||
         loadGenerationV1 !== jsListingsLoadGenerationV1 || !unifiedResult) return;
     if (!matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult)) {
       if (unifiedResult.ok !== false && window.JSUnifiedListingsV8 &&
           typeof window.JSUnifiedListingsV8.markSnapshotStale === "function") window.JSUnifiedListingsV8.markSnapshotStale();
+      // A cold cache or a completed collection can race these two reads. Retry
+      // one matching pair in the background, never accept mixed revisions or
+      // keep retrying while a collection continues to change the snapshot.
+      if (unifiedResult.ok !== false && !originalsRecoveryAttempt && !originalPairRecoveryStartedV1) {
+        originalPairRecoveryStartedV1 = true;
+        Promise.resolve().then(function() {
+          if (loadGenerationV1 !== jsListingsLoadGenerationV1 || isLoadingSheet) return;
+          return loadSheet(true, true, true);
+        }).catch(function(error) { console.warn("매물 원본 연결 재확인 실패", error); });
+      }
       return;
     }
     if (!applyOriginalsSnapshotV1(unifiedResult, sheetSnapshotV1.revision, loadGenerationV1)) return;

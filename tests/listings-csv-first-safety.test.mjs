@@ -175,6 +175,35 @@ test("a mixed original revision never attaches or writes a falsely current full 
   assert.equal(h.renders.length, 1);
   assert.equal(h.writes.length, 0);
   assert.equal(h.context.jsListingsRevisionV682, 'NEW', 'complete CSV remains the master baseline');
+  assert.equal(h.csvReads.length, 2, 'one bounded recovery pair is requested');
+  assert.equal(h.csvReads[1].force, true);
+  h.csvReads[1].resolve(csv([row('TODAY')], 'NEWER'));
+  h.originalReads[1].resolve(originals('TODAY','STILL-OLD','stale'));
+  await flush();
+  assert.equal(h.csvReads.length, 2, 'continued collection changes cannot create a retry loop');
+  assert.equal(h.originalReads.length, 2);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.context.allItems[0].thumbnailV8, '');
+});
+
+test("a mismatched initial pair recovers current photos once without changing favorite selection", async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false, false);
+  h.csvReads[0].resolve(csv([row('TODAY')], 'NEW'));
+  await loading;
+  h.originalReads[0].resolve(originals('TODAY','OLD','stale'));
+  await flush();
+  assert.equal(h.csvReads.length, 2);
+  h.csvReads[1].resolve(csv([row('TODAY')], 'RECOVERED'));
+  h.originalReads[1].resolve(originals('TODAY','RECOVERED','fresh'));
+  await flush();
+  assert.match(h.context.allItems[0].thumbnailV8, /fresh\.jpg/);
+  assert.equal(h.context.jsListingsRevisionV682, 'RECOVERED');
+  assert.equal(h.context.favoriteOnly, true);
+  assert.equal(h.context.activeFavoriteFolderId, 'folder-fixture');
+  assert.equal(h.context.selectedPrintKeys[0], 'checked-fixture');
+  assert.equal(h.csvReads.length, 2);
+  assert.equal(h.originalReads.length, 2);
 });
 
 test("scoped originals merge without deleting other photos and supersede a late old full CSV", async () => {
