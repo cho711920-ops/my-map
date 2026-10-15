@@ -357,3 +357,136 @@ test('a complete successful Today read also offers the complete-base bridge only
   h.reads[1].resolve(provenPage(h,['B'],'P2'));assert.equal(await pending,true);
   assert.equal(recoveries,1);assert.equal(h.api.state().phase,'ready');
 });
+
+function scriptFunction(name) {
+  const script=fs.readFileSync('js/script.js','utf8'),start=script.indexOf('function '+name+'(');
+  assert.ok(start>=0,name);
+  return script.slice(start,script.indexOf('\n}',start)+2);
+}
+
+function installFilterPresentation(h) {
+  const draws=[],status={};let scans=0;
+  h.elements.set('status',status);
+  h.context.getFilteredItems=()=>{scans+=1;return h.context.allItems.filter(item=>
+    h.context.newListingDays!==1||h.api.matches(item));};
+  Object.assign(h.context,{currentItems:[],drawItems(items){draws.push(items);},
+    renderActiveFilterChipsV844(){},syncFilterToggleControlsV844(){},getPinnedClusterItemsV6515:()=>[],
+    selectedGroupKeys:[],multiClusterMode:false,jsInitialFullListingsLoadingV1:false});
+  for(const name of ['applyFilter','toggleNewListingDays'])vm.runInContext(scriptFunction(name),h.context);
+  return {draws,status,scans:()=>scans};
+}
+
+test('one Today toggle clears map focus and renders each confirmed page with the same filtered array, without duplicate scans',async()=>{
+  const h=fixture(),presentation=installFilterPresentation(h),order=[],badges=[];
+  h.context.newListingDays=0;
+  h.context.favoriteOnly=true;h.context.favoriteFilterKeys=['property:keep'];
+  h.context.clearPinnedClusterSelectionV6515=value=>order.push(['pinned',value]);
+  h.context.clearAdministrativeListSelectionV6570=()=>order.push(['admin']);
+  const start=mapSource.indexOf('function clearMapListSelectionForNavigationV6571(');
+  vm.runInContext(mapSource.slice(start,mapSource.indexOf('\n}',start)+2),h.context);
+  h.context.updateMapListingCountV825=items=>badges.push(items);
+  h.context.toggleNewListingDays(1);
+  assert.deepEqual(order,[['pinned',true],['admin']]);
+  assert.equal(h.reads.length,1);assert.equal(presentation.scans(),1);
+  assert.equal(presentation.draws.length,1);assert.equal(badges.at(-1),presentation.draws.at(-1));
+  const pending=h.api.refresh(true);
+  h.reads[0].resolve(provenPage(h,['A'],'P1',{hasMore:true,nextCursor:'second'}));await h.tick();
+  assert.equal(presentation.scans(),2);assert.equal(presentation.draws.length,2);
+  assert.equal(badges.at(-1),presentation.draws.at(-1));
+  assert.equal(h.api.state().partial,true);assert.deepEqual(presentation.draws.at(-1).map(item=>item.propertyId),['A']);
+  h.reads[1].resolve(provenPage(h,['B'],'P2'));assert.equal(await pending,true);
+  assert.equal(presentation.scans(),4,'initial, each proven page and final ready presentation only');
+  assert.equal(h.context.favoriteOnly,true);assert.deepEqual(h.context.favoriteFilterKeys,['property:keep']);
+  h.context.toggleNewListingDays(1);
+  assert.equal(h.context.newListingDays,0);assert.equal(presentation.scans(),5);
+  assert.equal(h.elements.get('todayListingStatusV1').hidden,true);
+  assert.deepEqual(presentation.draws.at(-1).map(item=>item.propertyId),['old','A','B']);
+});
+
+test('cold initial Today and a manual cancel keep honest loading state without redundant empty filters or late page renders',async()=>{
+  const h=fixture(),presentation=installFilterPresentation(h),badges=[];
+  h.context.allItems=[];h.context.newListingDays=0;h.context.jsInitialFullListingsLoadingV1=true;
+  h.context.updateMapListingCountV825=items=>badges.push(items);
+  h.context.toggleNewListingDays(1);
+  assert.equal(h.reads.length,1);assert.equal(presentation.scans(),0);
+  assert.equal(badges.length,1);assert.equal(badges[0].length,0);
+  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/최신 확인 중/);
+  const pending=h.api.refresh(true);
+  h.reads[0].resolve(provenPage(h,['A'],'P1',{hasMore:true,nextCursor:'second'}));await h.tick();
+  assert.equal(presentation.scans(),1);assert.deepEqual(presentation.draws.at(-1).map(item=>item.propertyId),['A']);
+  h.context.toggleNewListingDays(1);
+  assert.equal(await pending,false);assert.equal(h.reads[1].options.signal.aborted,true);
+  const afterCancel=presentation.scans();
+  h.reads[1].resolve(provenPage(h,['late'],'P2'));await h.tick();
+  assert.equal(presentation.scans(),afterCancel);assert.equal(h.applied.length,1);
+  assert.equal(h.elements.get('todayListingStatusV1').hidden,true);
+});
+
+test('Today render accepts an already filtered empty result and does not silently rescan it',()=>{
+  const h=fixture(),shown=[];let scans=0,received;
+  h.context.getFilteredItems=()=>{scans+=1;return [{propertyId:'wrong'}];};
+  h.context.updateMapListingCountV825=items=>{received=items;};
+  h.api.render(shown);
+  assert.equal(scans,0);assert.equal(received,shown);
+});
+
+test('early Today master rejection preserves source-specific prices, photos, dates and manual fallback while reducing projections',async()=>{
+  const h=fixture();h.context.console={warn(){},error(){}};
+  Object.assign(h.context,{hideDone:true,doneOnly:false,favoriteOnly:false,gongsilOnly:false,
+    map:{getBounds:()=>({contain:()=>true})},
+    readOptionalFilterNumberV1(id,fallback){const value=h.elements.get(id)?.value;return value?Number(value):fallback;},
+    readOptionalNumberInput:()=>null,matchesMultiKeyword:()=>true,getItemFloorNumber:()=>null,
+    isDone:item=>item.state==='계약완료'});
+  for(const id of ['keyword','typeFilter','sourceFilter','floorQuickFilter','brokerageFeeFilter','industryFilter',
+    'minDeposit','maxDeposit','minRent','maxRent','minPremium','maxPremium','minArea','maxArea','sortFilter'])h.elements.set(id,{value:''});
+  h.elements.get('sortFilter').value='latest';h.elements.get('maxDeposit').value='2000';
+  h.elements.get('maxRent').value='80';h.elements.get('minArea').value='30';
+  vm.runInContext(fs.readFileSync('js/unified-listings-v8.js','utf8'),h.context);
+  const base=id=>({propertyId:id,key:'favorite-'+id,name:id,address:'서구 테스트동 1',room:'1층',source:'네이버',
+    state:'',regDate:'2024-01-01',tradeType:'lease',deposit:1000,rent:60,area:35,fee:0,premium:0,memo:'보존 메모',latlng:{}});
+  const masters=[base('A'),base('B'),{...base('manual'),source:'직접등록',regDate:'2026-10-13'},
+    base('old'),{...base('reappeared'),regDate:'2026-10-13'},
+    {...base('old-manual'),source:'직접등록',regDate:'2024-01-01'},
+    {...base('unknown'),unifiedOriginalMetadataPendingV1:true}];
+  const ad=(id,originalId,source,rent,area=35)=>({propertyId:id,originalId,source,active:1,room:'1층',
+    deposit:1000,rent,area,fee:0,premium:0,thumbnail:'https://example.invalid/'+originalId+'.jpg'});
+  const groups={A:[ad('A','old-cheap','당근',10),ad('A','new-A','네이버',60)],
+    B:[ad('B','new-B','네이버',90)],old:[ad('old','old-only','네이버',20)],
+    reappeared:[ad('reappeared','old-reappeared','당근',20)],manual:[],'old-manual':[]};
+  h.context.allItems=masters;
+  h.context.JSUnifiedListingsV8.attach(masters,{ok:true,groups});
+  const pending=h.api.refresh(true);
+  const optimized=scriptFunction('getFilteredItems');
+  const gate='if (newListingDays === 1 && window.JSTodayListingsV1 && !window.JSTodayListingsV1.matches(master)) return;';
+  assert.ok(optimized.includes(gate));
+  const baseline=optimized.replace(gate,'');
+  vm.runInContext(scriptFunction('listingRegistrationTime'),h.context);
+  const project=h.context.JSUnifiedListingsV8.filterItemForView;let projections=0;
+  h.context.JSUnifiedListingsV8.filterItemForView=(...args)=>{projections+=1;return project(...args);};
+  function run(code){projections=0;vm.runInContext(code,h.context);const items=h.context.getFilteredItems();
+    return {rows:JSON.stringify(items.map(item=>({id:item.propertyId,key:item.key,memo:item.memo,
+      regDate:item.regDate,rent:item.rent,area:item.area,thumbnail:item.thumbnailV8,
+      originals:(item.unifiedDisplayOriginalsV2||[]).map(original=>original.originalId)}))),projections};}
+  let old=run(baseline),fast=run(optimized);
+  assert.equal(fast.rows,old.rows);assert.deepEqual(JSON.parse(fast.rows).map(item=>item.id),['manual']);
+  assert.equal(fast.projections,1,'the original source-less direct-entry fallback remains visible before page one');
+  h.reads[0].resolve(h.result(['A','B','manual'],{todayOriginalIds:{A:['new-A'],B:['new-B'],manual:[]}}));
+  await pending;
+  h.context.allItems.forEach(item=>Object.assign(item,masters.find(master=>master.propertyId===item.propertyId)));
+  h.context.JSUnifiedListingsV8.attach(h.context.allItems,{ok:true,groups});
+  old=run(baseline);fast=run(optimized);
+  assert.equal(fast.rows,old.rows);assert.equal(old.projections,7);assert.equal(fast.projections,3);
+  assert.deepEqual(JSON.parse(fast.rows).map(item=>item.id),['manual','A']);
+  const selected=JSON.parse(fast.rows).find(item=>item.id==='A');
+  assert.equal(selected.rent,60);assert.equal(selected.regDate,'2024-01-01');assert.equal(selected.memo,'보존 메모');
+  assert.match(selected.thumbnail,/new-A\.jpg/);assert.deepEqual(selected.originals,['new-A']);
+  h.elements.get('sourceFilter').value='naver';
+  old=run(baseline);fast=run(optimized);assert.equal(fast.rows,old.rows);
+  assert.deepEqual(JSON.parse(fast.rows).map(item=>item.id),['A']);
+  h.elements.get('maxRent').value='20';
+  assert.equal(run(optimized).rows,run(baseline).rows);assert.deepEqual(JSON.parse(run(optimized).rows),[],
+    'the cheap old sibling cannot satisfy a Today price condition');
+  h.context.newListingDays=0;h.api.onPeriodChanged(0);
+  old=run(baseline);fast=run(optimized);assert.equal(fast.rows,old.rows);assert.equal(fast.projections,7);
+  assert.deepEqual(JSON.parse(fast.rows).map(item=>item.id),['old'],'normal view is not restricted to confirmed Today IDs');
+});

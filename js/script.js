@@ -1317,6 +1317,9 @@ function getFilteredItems(options) {
     : doneOnly ? "completed" : hideDone ? "active" : "all");
   var filtered = [];
   allItems.forEach(function(master) {
+    // The confirmed Today master gate is identical for every original in this
+    // group. Reject unrelated masters before building source projections.
+    if (newListingDays === 1 && window.JSTodayListingsV1 && !window.JSTodayListingsV1.matches(master)) return;
     var projected = window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.filterItemForView === "function"
       ? window.JSUnifiedListingsV8.filterItemForView(master, matchesListingConditionsV2, availabilityView)
       : matchesListingConditionsV2(master) ? master : null;
@@ -1646,8 +1649,8 @@ function applyFilter() {
   if (window.jsInitialFullListingsLoadingV1 && !(allItems || []).length) {
     var initialStatusV1 = document.getElementById("status");
     if (initialStatusV1) initialStatusV1.textContent = "전체 매물 한 번에 준비 중...";
-    if (window.JSTodayListingsV1) window.JSTodayListingsV1.render();
-    return;
+    if (window.JSTodayListingsV1) window.JSTodayListingsV1.render([]);
+    return [];
   }
   var searchMetricV1 = window.JSLocalMetricsV1 && window.JSLocalMetricsV1.start("search");
   try {
@@ -1656,6 +1659,7 @@ function applyFilter() {
 
   drawItems(filtered);
   renderActiveFilterChipsV844();
+  if (window.JSTodayListingsV1) window.JSTodayListingsV1.render(filtered);
   var pinnedItems = typeof getPinnedClusterItemsV6515 === "function"
     ? getPinnedClusterItemsV6515()
     : [];
@@ -1663,7 +1667,7 @@ function applyFilter() {
     document.getElementById("status").innerHTML = multiClusterMode
       ? "선택 클러스터 " + (selectedGroupKeys || []).length + "개 · 매물 " + pinnedItems.length + "개"
       : "선택 매물 " + pinnedItems.length + "개";
-    return;
+    return filtered;
   }
   var radiusFilter = window.mapRadiusFilterV658 || null;
   var polygonFilter = window.mapPolygonFilterV661 || null;
@@ -1672,7 +1676,7 @@ function applyFilter() {
     : (radiusFilter
       ? "반경 " + Number(radiusFilter.meters || 0).toLocaleString("ko-KR") + "m 안 매물 " + filtered.length + "개"
       : "검색 결과 " + filtered.length + "개");
-  if (window.JSTodayListingsV1) window.JSTodayListingsV1.render();
+  return filtered;
   } finally {
     if (window.JSLocalMetricsV1) window.JSLocalMetricsV1.finish(searchMetricV1);
     if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
@@ -1996,7 +2000,11 @@ function toggleNewListingDays(days) {
   newListingDays = newListingDays === selected ? 0 : selected;
   todayNewOnly = newListingDays === 1;
   syncFilterToggleControlsV844();
-  if (window.JSTodayListingsV1) window.JSTodayListingsV1.onPeriodChanged(newListingDays);
+  if (window.JSTodayListingsV1) {
+    window.JSTodayListingsV1.onPeriodChanged(newListingDays);
+    // Today refresh already renders its loading state and confirmed pages.
+    if (newListingDays === 1) return;
+  }
   applyFilter();
 }
 

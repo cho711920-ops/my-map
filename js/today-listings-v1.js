@@ -17,7 +17,6 @@
       state.message = "로그인 계정이 바뀌었습니다 · 새로고침 후 다시 확인해 주세요";
       state.partial = false;
       refreshView();
-      render();
       return false;
     }
     return true;
@@ -26,7 +25,12 @@
     return state.serverNow ? new Date(state.serverNow + Date.now() - state.checkedAt + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) : state.day;
   }
   function expiredDay() { return Boolean(state.ids && state.day && expectedDay() !== state.day); }
-  function refreshView() { if (typeof global.applyFilter === "function") global.applyFilter(); }
+  function refreshView() {
+    // applyFilter renders the banner with the array it already computed.
+    // Keep the fallback for older callers that do not return that array.
+    if (typeof global.applyFilter === "function" && Array.isArray(global.applyFilter())) return;
+    render();
+  }
   function ensureCompleteBase() {
     var bridge = global.JSListingRefreshV1;
     if (bridge && typeof bridge.ensureCompleteBase === "function") bridge.ensureCompleteBase();
@@ -44,7 +48,7 @@
     }
     return node;
   }
-  function render() {
+  function render(shownItems) {
     var node = banner();
     if (!node) return;
     node.hidden = !active();
@@ -59,7 +63,8 @@
     }
     node.replaceChildren();
     var label = document.createElement("span");
-    var shownItems = typeof global.getFilteredItems === "function" ? global.getFilteredItems() : [];
+    shownItems = Array.isArray(shownItems) ? shownItems
+      : typeof global.getFilteredItems === "function" ? global.getFilteredItems() : [];
     var shown = shownItems.length;
     if (typeof global.updateMapListingCountV825 === "function") global.updateMapListingCountV825(shownItems);
     label.textContent = state.phase === "loading" ? "오늘 신규매물 최신 확인 중 · " +
@@ -200,7 +205,6 @@
     var expired = false;
     var deadline = setTimeout(function() { expired = true; if (token === state.token && state.controller) state.controller.abort(); }, 45000);
     refreshView();
-    render();
     function applyPage(result, context, progress) {
       if (!current(token, market) || signal.aborted || !result || !Array.isArray(result.items) ||
           !result.todayOriginalIds || !global.JSListingRefreshV1 || !global.JSListingRefreshV1.applyScoped(result, context)) return false;
@@ -220,7 +224,6 @@
       state.progressAdCount = progress.adCount;
       state.confirmedPages = progress.pages;
       refreshView();
-      render();
       return true;
     }
     var pending = (async function() {
@@ -253,14 +256,12 @@
         state.partial = false;
         state.message = "";
         refreshView();
-        render();
         return true;
       } catch (error) {
         if (!current(token, market) || signal.aborted && !expired) return false;
         state.phase = "error";
         state.message = state.confirmedPages ? "오늘 신규광고 일부만 확인했습니다 · 나머지 최신 확인 실패" : "오늘 신규매물 최신 확인 실패 · 다시 확인해 주세요";
         refreshView();
-        render();
         return false;
       } finally {
         clearTimeout(deadline);
@@ -295,7 +296,7 @@
     if (state.pending && revisionChanged) state.dirty = true;
     // Master creation/last-seen dates cannot establish a new advertisement.
     // Retain the last verified source-ID gate until the small Today read wins.
-    if (!state.pending && revisionChanged) refresh(true);
+    if (!state.pending && revisionChanged) { refresh(true); return; }
     render();
   }
   global.JSTodayListingsV1 = {

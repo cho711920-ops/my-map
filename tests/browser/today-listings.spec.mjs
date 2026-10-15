@@ -271,12 +271,12 @@ function dateScenario() {
     [original(master,master.property_id+"-old",master.first_collected_at)]]));
   groups["OLD-MASTER-NEW-AD"]=[
     original(rows[2],"OLD-MASTER-NEW-AD-old",yesterday,{source:"당근",buildingName:"어제 수집 기존 광고",deposit:8000,rent:450}),
-    original(rows[2],"OLD-MASTER-NEW-AD-today",rangeStart,{buildingName:"오늘 처음 수집한 광고",deposit:1000,rent:60,
+    original(rows[2],"OLD-MASTER-NEW-AD-today",rangeStart,{buildingName:"오늘 처음 수집한 광고",deposit:1000,rent:60,area:30,
       thumbnail:newAdPhoto,images:[newAdPhoto]})
   ];
   groups["OLD-MASTER-EXPENSIVE-NEW"]=[
     original(rows[3],"OLD-MASTER-EXPENSIVE-NEW-old",yesterday,{deposit:500,rent:40}),
-    original(rows[3],"OLD-MASTER-EXPENSIVE-NEW-today",rangeStart,{deposit:5000,rent:200,thumbnail:newAdPhoto,images:[newAdPhoto]})
+    original(rows[3],"OLD-MASTER-EXPENSIVE-NEW-today",rangeStart,{deposit:5000,rent:200,area:40,thumbnail:newAdPhoto,images:[newAdPhoto]})
   ];
   const todayOriginalIds={"OLD-MASTER-NEW-AD":["OLD-MASTER-NEW-AD-today"],
     "OLD-MASTER-EXPENSIVE-NEW":["OLD-MASTER-EXPENSIVE-NEW-today"],
@@ -340,6 +340,7 @@ test("Today projects a new advertisement's own conditions and photo on an old ma
   const h=await sourceDateFixture(page,context,isMobile,testInfo);
   await page.evaluate(()=>{
     document.getElementById("maxRent").value="80";document.getElementById("maxDeposit").value="2000";
+    document.getElementById("minArea").value="30";document.getElementById("maxArea").value="45";
     document.getElementById("sourceFilter").value="naver";
     JSV6ListStore.load("favorite").push({id:"source-date-review",name:"오늘 광고 검수",
       itemKeys:["property:OLD-MASTER-NEW-AD","property:OLD-MASTER-EXPENSIVE-NEW"]});
@@ -347,6 +348,13 @@ test("Today projects a new advertisement's own conditions and photo on an old ma
   });
   await today(page);await ready(page);
   expect(await cardIds(page)).toEqual(["OLD-MASTER-NEW-AD"]);
+  const projectedIds=await page.evaluate(()=>{
+    const project=JSUnifiedListingsV8.filterItemForView,ids=[];
+    JSUnifiedListingsV8.filterItemForView=function(master,...rest){ids.push(master.propertyId);return project(master,...rest);};
+    try {getFilteredItems();} finally {JSUnifiedListingsV8.filterItemForView=project;}
+    return ids;
+  });
+  expect(projectedIds.sort()).toEqual(Object.keys(h.scenario.todayOriginalIds).sort());
   const card=page.locator('#list .item[data-property-id="OLD-MASTER-NEW-AD"]');
   await expect(card.locator(".price-main")).toContainText(/보\s*1,000\s*\/\s*(?:월세)?월\s*60/);
   await expect(card.locator(".unified-thumb-v8 img")).toHaveAttribute("data-thumbnail-source-v8144",newAdPhoto);
@@ -362,6 +370,14 @@ test("Today projects a new advertisement's own conditions and photo on an old ma
   expect((await cardIds(page)).sort()).toEqual(["OLD-MASTER-EXPENSIVE-NEW","OLD-MASTER-NEW-AD"]);
   await expect(page.locator('#list .item[data-property-id="OLD-MASTER-EXPENSIVE-NEW"] .price-main'))
     .toContainText(/보\s*5,000\s*\/\s*(?:월세)?월\s*200/);
+  await page.evaluate(()=>{document.getElementById("maxArea").value="35";applyFilter();});
+  expect(await cardIds(page)).toEqual(["OLD-MASTER-NEW-AD"]);
+  await page.evaluate(()=>{document.getElementById("minArea").value="35";document.getElementById("maxArea").value="45";applyFilter();});
+  expect(await cardIds(page)).toEqual(["OLD-MASTER-EXPENSIVE-NEW"]);
+  await page.evaluate(()=>{document.getElementById("sourceFilter").value="danggeun";applyFilter();});
+  expect(await cardIds(page)).toEqual([]);
+  await page.evaluate(()=>{document.getElementById("sourceFilter").value="naver";applyFilter();});
+  expect(await cardIds(page)).toEqual(["OLD-MASTER-EXPENSIVE-NEW"]);
   safe(h);
 });
 
