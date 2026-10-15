@@ -38,7 +38,7 @@ test("Gongsilbox keeps only explicit Photos entries", () => {
 test("unified list and detail responses sanitize legacy Gongsilbox media", () => {
   const d1 = fs.readFileSync("cloudflare/src/d1-api.js", "utf8");
   const worker = fs.readFileSync("cloudflare/src/worker.js", "utf8");
-  assert.match(d1, /json_extract\(raw_json, '\$\.list\.Photos'\) AS gongsil_photos_json/);
+  assert.match(d1, /CASE WHEN source='공실박스' THEN json_extract\(raw_json, '\$\.list\.Photos'\) END AS gongsil_photos_json/);
   assert.match(d1, /clean\(original\.source\) === "공실박스"/);
   assert.match(d1, /const isGongsil = clean\(row\.source \|\| snapshot\.source\) === "공실박스"/);
   assert.match(worker, /unified-listings-v14-source-proof\.json/);

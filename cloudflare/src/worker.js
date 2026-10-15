@@ -836,7 +836,7 @@ async function handleDataApi(request, env, context) {
       }
     }
     if (query.action === "unifiedListings") unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
-    const payload = await handleD1GetAction(env, user, query);
+    let payload = await handleD1GetAction(env, user, query);
     if (!payload) {
       return jsonp(query.callback, { ok: false, action: query.action, message: "지원하지 않는 서버 작업입니다." }, {
         "x-js-data-source": "D1"
@@ -845,6 +845,9 @@ async function handleDataApi(request, env, context) {
     const responseText = JSON.stringify(payload);
     if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8", unifiedSnapshotRevision);
     if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
+      // This branch uses only serialized JSON. Release the expanded groups
+      // before allocating the ETag's full UTF-8 buffer on a cold cache build.
+      payload = null;
       return revalidatedPrivateResponse(request, responseText, "application/json; charset=utf-8", {
         ...(unifiedSnapshotRevision ? { "x-js-listings-revision": unifiedSnapshotRevision } : {}),
         "x-js-data-source": "D1",

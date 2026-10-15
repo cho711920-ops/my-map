@@ -461,11 +461,13 @@ async function unifiedListings(env, listingIds = null) {
       ${availabilityKindSql("listing_sources")} AS availability_kind,
       ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
       ${originalFloorMetadataSql()} AS floor_metadata_json,
-      json_extract(raw_json, '$.list.Photos') AS gongsil_photos_json,
-      COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) AS naver_floor_info_json,
-      ${sourceJsonScalar("realEstateTypeCode", "category")} AS naver_property_type,
-      CASE WHEN source='네이버' AND length(json_extract(raw_json, '$.roomInfo'))<=60 THEN json_extract(raw_json, '$.roomInfo') END AS naver_sale_room,
-      CASE WHEN source='공실박스' THEN json_object(
+      CASE WHEN source='공실박스' THEN json_extract(raw_json, '$.list.Photos') END AS gongsil_photos_json,
+      CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN
+        COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) END AS naver_floor_info_json,
+      CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN ${sourceJsonScalar("realEstateTypeCode", "category")} END AS naver_property_type,
+      CASE WHEN source='네이버' AND json_extract(list_snapshot_json, '$.tradeType')='sale'
+        AND length(json_extract(raw_json, '$.roomInfo'))<=60 THEN json_extract(raw_json, '$.roomInfo') END AS naver_sale_room,
+      CASE WHEN source='공실박스' AND json_extract(list_snapshot_json, '$.tradeType')='sale' THEN json_object(
         'typeView', ${gongsilJsonScalar("TypeView", "ViewType", "LndType", "BuildingType")},
         'ho', ${gongsilJsonScalar("Ho", "BfHo", "Room", "Honame")},
         'floor', ${gongsilJsonScalar("Ff", "BfFloor", "Floor", "floor")}
@@ -500,12 +502,19 @@ async function unifiedListings(env, listingIds = null) {
       AND ${publicSourceWhereSql("proof_source")}) AS source_snapshot_source_count`, "listings",
     `${publicMasterWhereSql("listings")} AND ${publicMasterSourcesWhereSql("listings")}${scopeSql("id")}`, 3_000, bindings);
   const sourceProof = await sourceSnapshotKeysFromReadRows(rows, parents);
+  // Parent rows have already been reduced to proof keys. Release the inventory
+  // before building another large representation of all source advertisements.
+  parents.length = 0;
   let unavailableCount = 0;
   // These rows already have the same public-parent, hold and scope guards as
   // the original-number index. Reuse their rowid order instead of rescanning
   // every source with OFFSET; the index keeps its own provider/number filter.
   const sourceSearchIds = sourceListingSearchIndex(rows);
-  for (const row of rows) {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    // The snapshot JSON is only an input. Keeping every input row alive while
+    // the compact groups grow doubles peak memory on a cold full-cache build.
+    rows[index] = null;
     const daangn = parseJson(row.daangn_sale_extent_json, {});
     const displayed = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
       source: row.source,
