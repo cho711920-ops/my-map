@@ -475,6 +475,13 @@ function collectorFinalized(action, payload) {
 }
 
 function compactUnifiedListingsBody(body) {
+  // This private, versioned R2 key is written by our D1 JSON serializer. Its
+  // current envelope is already compact: avoid expanding tens of MB of rows
+  // just to discover that no conversion is needed. Other envelopes still use
+  // the legacy parser below; preserve the current fields and body byte-for-byte.
+  if (typeof body === "string" &&
+      body.startsWith('{"ok":true,"version":2,"format":"compact-v2","fields":[') &&
+      body.endsWith(',"source":"D1"}')) return body;
   let payload;
   try {
     payload = JSON.parse(body);

@@ -6,3 +6,7 @@
 .history-restore-dialog-v1 footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
 #unifiedFavoriteUndoV1, #unifiedOriginalLoadStatusV1 { padding: 8px 12px; }
 #unifiedFavoriteUndoV1 button, #unifiedOriginalLoadStatusV1 button { min-height: 32px; }
+#unifiedOriginalLoadStatusV1 { position: static; display: flex; flex: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 8px; margin: 0; padding: 7px 12px; min-width: 0; background: #fff6ed; color: #934817; font-size: 12px; line-height: 1.5; border-bottom: 1px solid #f1dcc4; }
+#unifiedOriginalLoadStatusV1 span { min-width: 0; flex: 1 1 170px; overflow-wrap: anywhere; }
+#unifiedOriginalLoadStatusV1 button { flex: none; padding: 3px 8px; border: 1px solid #dfb98e; border-radius: 6px; background: #fff; color: #934817; cursor: pointer; font: inherit; }
+#unifiedOriginalLoadStatusV1 button:disabled { opacity: .65; cursor: default; }

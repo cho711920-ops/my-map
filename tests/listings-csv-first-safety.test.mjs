@@ -53,7 +53,7 @@ function harness(options = {}) {
     CustomEvent: class {constructor(type, init) {this.type = type; this.detail = init.detail;}},
     isLoadingSheet: false, pendingAutoUpdate: false, errorItems: [], allItems: [], currentItems: [],
     jsListingsLoadGenerationV1: 0, jsListingsCompleteBaseV1: !!options.complete,
-    jsListingsFullBaseTimerV1: null, jsListingsRevisionV682: 'BASE',
+    jsListingsFullBaseTimerV1: null, jsListingsRevisionV682: 'BASE', jsListingsRevisionPendingV682: false,
     jsInitialFullListingsCacheHitV1: false, jsInitialFullListingsCacheItemsV1: null,
     jsInitialFullListingsCacheSignatureV1: '', jsInitialFullListingsCacheUnifiedSignatureV1: '',
     jsInitialFullListingsLoadingV1: true, innerWidth: 1280,
@@ -71,6 +71,7 @@ function harness(options = {}) {
     JSDataAccessV6: {
       listingsSnapshot(force) {const pending = deferred(); csvReads.push({force, ...pending}); return pending.promise;},
       read(action) {
+        if (action === 'dataRevision') return Promise.resolve({ok:true,revision:context.jsListingsRevisionV682});
         if (action === 'listingChanges') return Promise.resolve({ok:true,items:options.deltaItems || []});
         assert.equal(action, 'unifiedListings');
         const pending = deferred(); originalReads.push(pending); return pending.promise;
@@ -98,7 +99,9 @@ function harness(options = {}) {
   for (const name of ['clean','parseCSVRecordsV655','itemKey']) vm.runInContext(fn(script,name),context);
   for (const name of ['listingChangeRowToItemV683','notifyListingsSnapshotV1','getItemsDataSignatureV638',
     'hydrateInitialFullListingsCacheItemsV1','showInitialFullListingsCacheV1','hasReadyCoordinateWithoutSharedCacheV8213',
-    'matchingListingSnapshotRevisionV1','parseDirectSaleDetailsV1','applyScopedListingsV1','applyOriginalsSnapshotV1','loadSheet',
+    'matchingListingSnapshotRevisionV1','parseDirectSaleDetailsV1','applyScopedListingsV1','applyOriginalsSnapshotV1',
+    'refreshOriginalMetadataPresentationV1','recoverOriginalMetadataV1','loadSheet',
+    'fetchDataRevisionV682','refreshListingsWhenChangedV682',
     'applyListingChangesV683']) {
     vm.runInContext(fn(map,name),context);
   }
@@ -172,7 +175,7 @@ test("a mixed original revision never attaches or writes a falsely current full 
   h.originalReads[0].resolve(originals('TODAY','OLD','stale'));
   await flush();
   assert.equal(h.context.allItems[0].thumbnailV8, '');
-  assert.equal(h.renders.length, 1);
+  assert.equal(h.renders.length, 2, 'stale metadata is visibly identified instead of waiting forever');
   assert.equal(h.writes.length, 0);
   assert.equal(h.context.jsListingsRevisionV682, 'NEW', 'complete CSV remains the master baseline');
   assert.equal(h.csvReads.length, 2, 'one bounded recovery pair is requested');
@@ -204,6 +207,110 @@ test("a mismatched initial pair recovers current photos once without changing fa
   assert.equal(h.context.selectedPrintKeys[0], 'checked-fixture');
   assert.equal(h.csvReads.length, 2);
   assert.equal(h.originalReads.length, 2);
+});
+
+test("a failed full original read recovers candidate metadata and photos with one forced pair", async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false, false);
+  h.csvReads[0].resolve(csv([row('CANDIDATE'),row('MANUAL',{status:'계약완료'})], 'CURRENT'));
+  await loading;
+  h.originalReads[0].reject(Object.assign(new Error('Timed out'), {name:'TimeoutError'}));
+  await flush();
+  assert.equal(h.csvReads.length, 2);
+  assert.equal(h.csvReads[1].force, true);
+  const payload = originals('CANDIDATE','CURRENT','candidate-photo');
+  Object.assign(payload.groups.CANDIDATE[0], {active:0,sourceUnavailable:true,
+    availabilityKind:'census_missing',candidateEligible:true});
+  h.csvReads[1].resolve(csv([row('CANDIDATE'),row('MANUAL',{status:'계약완료'})], 'CURRENT'));
+  h.originalReads[1].resolve(payload);
+  await flush();
+  assert.equal(h.context.allItems[0].unifiedCandidateOriginalCountV2, 1);
+  assert.equal(h.context.allItems[1].state, '계약완료');
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'ready');
+  assert.equal(h.context.JSUnifiedListingsV8.allOriginals('CANDIDATE')[0].thumbnail,
+    'https://landthumb-phinf.pstatic.net/candidate-photo.jpg');
+  assert.equal(h.context.loadSheet.originalsRecoveryV1, undefined);
+  assert.equal(h.context.selectedPrintKeys[0], 'checked-fixture');
+  assert.equal(h.context.favoriteOnly, true);
+  assert.equal(h.originalReads.length, 2);
+});
+
+test("unchanged revision polls recover missing metadata with a cooldown and finite retry budget", async () => {
+  const h = harness();
+  let now = Date.now();
+  h.context.Date = class extends Date {static now() {return now;}};
+  const loading = h.context.loadSheet(false, false);
+  h.csvReads[0].resolve(csv([row('TODAY')], 'UNCHANGED'));
+  await loading;
+  h.originalReads[0].reject(new Error('offline'));
+  await flush();
+  h.csvReads[1].resolve(csv([row('TODAY')], 'UNCHANGED'));
+  h.originalReads[1].reject(new Error('still offline'));
+  await flush();
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'error');
+  await h.context.refreshListingsWhenChangedV682();
+  assert.equal(h.originalReads.length, 2, 'no retry before the 60-second cooldown');
+  for (let attempt = 2; attempt <= 3; attempt++) {
+    now += 60_001;
+    const poll = h.context.refreshListingsWhenChangedV682();
+    await flush();
+    assert.equal(h.originalReads.length, attempt + 1);
+    h.csvReads[attempt].resolve(csv([row('TODAY')], 'UNCHANGED'));
+    h.originalReads[attempt].reject(new Error('offline'));
+    await poll;
+    await flush();
+  }
+  now += 10 * 60_000;
+  for (let i = 0; i < 10; i++) await h.context.refreshListingsWhenChangedV682();
+  assert.equal(h.originalReads.length, 4, 'three recovery attempts cannot become endless full downloads');
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'error');
+  assert.equal(h.context.allItems[0].unifiedOriginalMetadataPendingV1, true);
+});
+
+test("metadata-first recovery rerenders identical CSV instead of keeping the pending-only list", async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('TODAY')], 'SAME'));
+  await loading;
+  h.originalReads[0].reject(new Error('first read failed'));
+  await flush();
+  assert.equal(h.csvReads.length,2);
+  h.originalReads[1].resolve(originals('TODAY','SAME','metadata-first'));
+  await flush();
+  const rendersBeforeCsv = h.renders.length;
+  h.csvReads[1].resolve(csv([row('TODAY')], 'SAME'));
+  await flush();
+  assert.match(h.context.allItems[0].thumbnailV8,/metadata-first\.jpg/);
+  assert.equal(h.renders.length,rendersBeforeCsv+1,'changed metadata must render even with identical representative CSV');
+  assert.equal(h.restored.at(-1).preserveVisibleListV1,false,'selection restoration cannot overwrite the fresh member set');
+  assert.equal(h.writes.length,1,'the recovered complete pair is reusable after another refresh');
+  assert.equal(h.context.loadSheet.originalsRecoveryV1,undefined);
+});
+
+test("a successful same-revision poll clears metadata failure without another user refresh", async () => {
+  const h = harness();
+  let now = Date.now();
+  h.context.Date = class extends Date {static now() {return now;}};
+  const loading = h.context.loadSheet(false, false);
+  h.csvReads[0].resolve(csv([row('TODAY')], 'SAME'));
+  await loading;
+  h.originalReads[0].reject(new Error('offline'));
+  await flush();
+  h.csvReads[1].resolve(csv([row('TODAY')], 'SAME'));
+  h.originalReads[1].reject(new Error('offline'));
+  await flush();
+  now += 60_001;
+  const poll = h.context.refreshListingsWhenChangedV682();
+  await flush();
+  h.csvReads[2].resolve(csv([row('TODAY')], 'SAME'));
+  h.originalReads[2].resolve(originals('TODAY','SAME','restored'));
+  await poll;
+  await flush();
+  assert.match(h.context.allItems[0].thumbnailV8, /restored\.jpg/);
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'ready');
+  assert.equal(h.originalReads.length, 3);
+  await h.context.refreshListingsWhenChangedV682();
+  assert.equal(h.originalReads.length, 3, 'healthy unchanged polling remains a tiny revision check');
 });
 
 test("scoped originals merge without deleting other photos and supersede a late old full CSV", async () => {

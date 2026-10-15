@@ -295,7 +295,7 @@ function refreshListingsWhenChangedV682() {
     if (!jsListingsRevisionV682) {
       return loadSheet(true, true);
     }
-    if (revision === jsListingsRevisionV682) return;
+    if (revision === jsListingsRevisionV682) return recoverOriginalMetadataV1(generationV1);
     return applyListingChangesV683(jsListingsRevisionInfoV683).then(function(applied) {
       if (generationV1 !== (typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0)) return;
       if (applied) {
@@ -1690,7 +1690,8 @@ function restoreAutoUpdateViewState(state) {
   var sidebar = document.getElementById("sidebar");
   var aiBody = document.getElementById("aiSidePanelBody");
 
-  var restoredList = findItemsBySavedKeys(state.visibleKeys, state.visibleListCardIdsV845);
+  var restoredList = state.preserveVisibleListV1 === false ? []
+    : findItemsBySavedKeys(state.visibleKeys, state.visibleListCardIdsV845);
   var clusterSelection = state.clusterSelection || null;
   var selectedItem = state.selectedListCardIdV845 && typeof getLinkedSelectionCardIdV845 === "function"
     ? (allItems || []).find(function(item) {
@@ -1931,6 +1932,9 @@ function applyOriginalsSnapshotV1(result, revision, generation) {
       result.snapshotRevision !== revision || jsListingsRevisionV682 !== revision ||
       !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.attach !== "function") return false;
   var view = captureAutoUpdateViewState();
+  // Preserve selection and scroll, not the pre-metadata membership/order.
+  // Otherwise a valid 54-row candidate result is overwritten with the old 52.
+  view.preserveVisibleListV1 = false;
   window.JSUnifiedListingsV8.attach(allItems, result);
   preserveActionSelectionDuringRender = true;
   try {
@@ -1946,6 +1950,36 @@ window.JSListingRefreshV1.applyOriginals = applyOriginalsSnapshotV1;
 window.JSListingRefreshV1.generation = function() { return jsListingsLoadGenerationV1; };
 window.JSListingRefreshV1.hasCompleteBase = function() { return jsListingsCompleteBaseV1; };
 
+function refreshOriginalMetadataPresentationV1() {
+  if (!(allItems || []).length) return;
+  var view = captureAutoUpdateViewState();
+  preserveActionSelectionDuringRender = true;
+  try {
+    applyFilter();
+    restoreAutoUpdateViewState(view);
+  } finally {
+    preserveActionSelectionDuringRender = false;
+  }
+}
+
+function recoverOriginalMetadataV1(generation) {
+  if (generation !== jsListingsLoadGenerationV1 || isLoadingSheet ||
+      !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.getOriginalMetadataStatus !== "function") return false;
+  var metadata = window.JSUnifiedListingsV8.getOriginalMetadataStatus();
+  if (!metadata.retryable) return false;
+  var revision = String(jsListingsRevisionV682 || "");
+  var recovery = loadSheet.originalsRecoveryV1;
+  if (!recovery || recovery.revision !== revision) {
+    recovery = loadSheet.originalsRecoveryV1 = {revision: revision, attempts: 0, nextAt: 0};
+  }
+  // One immediate recovery and at most two later revision-poll recoveries.
+  // No per-card requests, render-loop retries or endless full downloads.
+  if (recovery.attempts >= 3 || Date.now() < recovery.nextAt) return false;
+  recovery.attempts += 1;
+  recovery.nextAt = Date.now() + 60 * 1000;
+  return loadSheet(true, true, true);
+}
+
 function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
@@ -1958,6 +1992,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
    * 최초 로딩과 수동 필터 동작에는 영향을 주지 않습니다.
    */
   var autoUpdateViewState = isAuto ? captureAutoUpdateViewState() : null;
+  if (autoUpdateViewState) autoUpdateViewState.preserveVisibleListV1 = false;
   var autoUpdateDataSignatureV638 = isAuto
     ? getItemsDataSignatureV638(allItems || [])
     : "";
@@ -2014,25 +2049,25 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
     if (!matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult)) {
       if (unifiedResult.ok !== false && window.JSUnifiedListingsV8 &&
           typeof window.JSUnifiedListingsV8.markSnapshotStale === "function") window.JSUnifiedListingsV8.markSnapshotStale();
-      // A cold cache or a completed collection can race these two reads. Retry
-      // one matching pair in the background, never accept mixed revisions or
-      // keep retrying while a collection continues to change the snapshot.
-      if (unifiedResult.ok !== false && !originalsRecoveryAttempt && !originalPairRecoveryStartedV1) {
+      // Failed reads need recovery too: a complete CSV alone cannot classify
+      // candidate ads or supply their photos. Never accept mixed revisions.
+      refreshOriginalMetadataPresentationV1();
+      if (!originalsRecoveryAttempt && !originalPairRecoveryStartedV1) {
         originalPairRecoveryStartedV1 = true;
         Promise.resolve().then(function() {
-          if (loadGenerationV1 !== jsListingsLoadGenerationV1 || isLoadingSheet) return;
-          return loadSheet(true, true, true);
+          return recoverOriginalMetadataV1(loadGenerationV1);
         }).catch(function(error) { console.warn("매물 원본 연결 재확인 실패", error); });
       }
       return;
     }
     if (!applyOriginalsSnapshotV1(unifiedResult, sheetSnapshotV1.revision, loadGenerationV1)) return;
     unifiedAppliedV1 = true;
+    delete loadSheet.originalsRecoveryV1;
     persistInitialListingsCacheV1();
   }
   function persistInitialListingsCacheV1() {
     if (
-      isAuto || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
+      (isAuto && !originalsRecoveryAttempt) || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
       !unifiedResult || unifiedResult.ok === false ||
       loadGenerationV1 !== jsListingsLoadGenerationV1 ||
       !matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult) ||
@@ -2163,6 +2198,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
           window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
         window.JSUnifiedListingsV8.attach(rawItems, unifiedResult);
         unifiedAppliedV1 = true;
+        delete loadSheet.originalsRecoveryV1;
       } else if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
         // Reuse last-known photo/source metadata without committing a mismatched
         // network response; all representative prices/dates still come from CSV.
@@ -2265,6 +2301,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         var canKeepCurrentRenderV638 =
           !!isAuto &&
           !hasPendingPropertyEditV638 &&
+          !unifiedAppliedV1 &&
           autoUpdateDataSignatureV638 === getItemsDataSignatureV638(doneItems);
 
         allItems = doneItems;

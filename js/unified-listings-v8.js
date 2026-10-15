@@ -6,7 +6,7 @@
   var state = { groups: {}, detailCache: {}, detailCachedAt: {}, detailRetryAt: {}, detailGeneration: 0,
     detailPending: {}, detailPendingForced: {}, contactCache: {}, contactPending: {},
     tellCache: {}, tellPending: {}, masterMeta: {}, sourceSearchIds: {}, pendingMove: null,
-    loaded: false, loadPending: null, loadGeneration: 0, snapshotRevision: "", detailPropertyGeneration: {},
+    loaded: false, originalLoadPhase: "pending", loadPending: null, loadGeneration: 0, snapshotRevision: "", detailPropertyGeneration: {},
     openPropertyId: "", openOriginalId: "", openOriginalIdentity: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
@@ -111,6 +111,25 @@
   function originalMetadataReady(propertyId) {
     var id = text(propertyId);
     return Object.prototype.hasOwnProperty.call(state.groups, id) || !!state.metadataCoverage[id];
+  }
+  function getOriginalMetadataStatus(propertyId) {
+    var id = text(propertyId);
+    var ready = id ? originalMetadataReady(id) : state.loaded;
+    var phase = state.originalLoadPhase;
+    if (phase === "ready" && !ready) phase = "stale";
+    return {status: phase, ready: ready, hasKnownData: ready,
+      retryable: phase === "error" || phase === "stale"};
+  }
+  function setOriginalLoadPhase(phase) {
+    if (state.originalLoadPhase === phase) return;
+    state.originalLoadPhase = phase;
+    if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
+      global.dispatchEvent(new global.CustomEvent("js-original-metadata-status", {detail: getOriginalMetadataStatus()}));
+    }
+  }
+  function missingOriginalLabel(propertyId) {
+    var metadata = getOriginalMetadataStatus(propertyId);
+    return metadata.status === "error" ? "원본 조회 실패" : metadata.status === "stale" ? "원본 연결 재확인" : "원본 확인 중";
   }
   function sourceIdentity(original) {
     if (!original) return "";
@@ -579,19 +598,35 @@
     }, 450);
   }
 
+  function placeOriginalLoadStatus(banner) {
+    var chips = document.getElementById("activeFilterChipsV844");
+    var list = document.getElementById("list");
+    var status = document.getElementById("status");
+    var anchor = chips && chips.parentNode ? chips : list && list.parentNode ? list : status;
+    if (!anchor || !anchor.parentNode) return false;
+    var next = anchor === list ? list : anchor.nextSibling;
+    if (banner && next !== banner) anchor.parentNode.insertBefore(banner, next);
+    return true;
+  }
+
   function originalLoadStatus(failed, explanation) {
     if (typeof document === "undefined") return;
     var banner = document.getElementById("unifiedOriginalLoadStatusV1");
     if (!failed) { if (banner) banner.remove(); return; }
-    if (banner) return;
-    var status = document.getElementById("status");
-    if (!status || !status.parentNode) return;
+    if (banner) {
+      var existingMessage = banner.querySelector("span");
+      if (existingMessage) existingMessage.textContent = explanation || (state.loaded
+        ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 조회 실패 · 다시 불러오기를 눌러 확인해 주세요. ");
+      placeOriginalLoadStatus(banner);
+      return;
+    }
+    if (!placeOriginalLoadStatus()) return;
     banner = document.createElement("div");
     banner.id = "unifiedOriginalLoadStatusV1";
     banner.className = "operations-center-message error";
     banner.setAttribute("role", "status");
     var message = document.createElement("span");
-    message.textContent = explanation || (state.loaded ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 연결 조회 실패 · 기본 매물자료를 표시합니다. ");
+    message.textContent = explanation || (state.loaded ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 조회 실패 · 다시 불러오기를 눌러 확인해 주세요. ");
     var retry = document.createElement("button");
     retry.type = "button";
     retry.textContent = "원본 다시 불러오기";
@@ -616,7 +651,7 @@
     };
     banner.appendChild(message);
     banner.appendChild(retry);
-    status.parentNode.insertBefore(banner, status.nextSibling);
+    placeOriginalLoadStatus(banner);
   }
 
   function expandUnifiedResult(result) {
@@ -682,6 +717,7 @@
       return Promise.resolve({groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision});
     }
     var generation = state.loadGeneration;
+    setOriginalLoadPhase("pending");
     var deferredCommit = !!(options && options.deferCommit);
     var pending = apiGet("unifiedListings", {}, force).then(function(result) {
       result = expandUnifiedResult(result);
@@ -692,11 +728,13 @@
       state.sourceSearchIds = result.sourceSearchIds || {};
       state.snapshotRevision = result.snapshotRevision || "";
       state.loaded = true;
+      setOriginalLoadPhase("ready");
       originalLoadStatus(false);
       return result;
     }).catch(function(error) {
       if (generation !== state.loadGeneration) return {ok: false, superseded: true, groups: {}, snapshotRevision: ""};
       console.error("통합매물 원본 조회 실패", error);
+      setOriginalLoadPhase("error");
       originalLoadStatus(true);
       return {ok: false, stale: state.loaded, groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision};
     }).finally(function() { if (state.loadPending === pending) state.loadPending = null; });
@@ -787,6 +825,7 @@
         return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
       }, 0);
     });
+    if (result && result.groups && result.ok !== false) setOriginalLoadPhase("ready");
     /* 자주 여는 상단 매물 사진은 기존처럼 선조회해 첫 클릭 속도를 유지합니다. */
     scheduleDetailWarmup(items);
     /* 연락처는 사용자가 카드나 전화 버튼을 가리킬 때만 선조회합니다. */
@@ -943,6 +982,8 @@
     var originals = item && Array.isArray(item.unifiedDisplayOriginalsV2) ? item.unifiedDisplayOriginalsV2
       : visibleOriginalsFrom(all, item && item.propertyId, item, true);
     var pending = !all.length && !originalMetadataReady(item && item.propertyId);
+    var pendingLabel = pending ? missingOriginalLabel(item && item.propertyId) : "";
+    var pendingRetryable = pending && getOriginalMetadataStatus(item && item.propertyId).retryable;
     var count = originals.length || (all.length || pending ? 0 : 1);
     var sourceUnavailable = originals.length > 0 && originals.every(function(original) {
       return isCandidateOriginal(original);
@@ -951,7 +992,7 @@
     var photoPending = !thumbnail && originals.some(function(original) { return Number(original.photoCount) > 0; });
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
-      (thumbnail ? 'has-photo' : 'no-photo') + '" title="' + (pending ? '원본 확인 중' : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
+      (thumbnail ? 'has-photo' : 'no-photo') + '" title="' + (pending ? pendingLabel + (pendingRetryable ? ' · 다시 확인' : '') : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
@@ -959,12 +1000,12 @@
       (thumbnail ? '<img src="' + esc(thumbnail) + '" data-thumbnail-source-v8144="' + esc(thumbnail) +
         '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
         'onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" ' +
-        'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>' + (pending ? '원본 확인 중' : photoPending ? '사진 확인 중' : '사진 없음') + '</span>') +
+        'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>' + (pending ? pendingLabel : photoPending ? '사진 확인 중' : '사진 없음') + '</span>') +
       (sourceUnavailable
         ? '<em class="transaction-check-ribbon-v8135">원본 광고 미노출<b>거래완료 후보</b></em>'
         : '') +
       '</button>';
-    var badge = pending ? '<span class="unified-badge-v8">원본 확인 중</span>' : sourceUnavailable
+    var badge = pending ? '<span class="unified-badge-v8">' + pendingLabel + (pendingRetryable ? ' · 다시 확인' : '') + '</span>' : sourceUnavailable
       ? '<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>'
       : count > 1
         ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
@@ -972,7 +1013,7 @@
     var button;
     if (pending) {
       button = '<button type="button" class="item-source-link-btn" onclick="event.stopPropagation(); ' +
-        'JSUnifiedListingsV8.open(\'' + encodedId + '\')">원본 확인</button>';
+        'JSUnifiedListingsV8.open(\'' + encodedId + '\')">' + (pendingRetryable ? '다시 확인' : '원본 확인') + '</button>';
     } else if (sourceUnavailable) {
       button = '<button type="button" class="item-source-link-btn active transaction-check-button-v8135" ' +
         'title="원본 광고 미노출 내역 확인 · 실제 계약완료와 별도" ' +
@@ -2290,7 +2331,8 @@
 
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
-    markSnapshotStale: function() { originalLoadStatus(true, "사진·출처 최신 정보 확인이 필요합니다. "); },
+    markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(true, "원본 연결 재확인이 필요합니다. 마지막 확인 자료는 유지합니다. "); },
+    getOriginalMetadataStatus: getOriginalMetadataStatus,
     cardParts: cardParts, matchesSource: matchesSource,
     allOriginals: allOriginals, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
     isSourceUnavailable: isSourceUnavailable,

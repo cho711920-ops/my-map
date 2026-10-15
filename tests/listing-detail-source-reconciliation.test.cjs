@@ -287,7 +287,7 @@ test("an old complete snapshot does not falsely certify a newly arrived CSV prop
   h.w.applyFilter();
   assert.equal(newcomer.unifiedOriginalMetadataPendingV1,true);
   const card=h.api.cardParts(h.w.currentItems.find(item=>item.propertyId==="M-new"));
-  assert.match(card.thumbnail,/원본 확인 중/);
+  assert.match(card.thumbnail,/원본 연결 재확인/);
   assert.doesNotMatch(card.thumbnail,/사진 없음/);
   assert.equal(h.item.unifiedOriginalMetadataPendingV1,false,"The genuinely verified source-less older record stays ready");
 });

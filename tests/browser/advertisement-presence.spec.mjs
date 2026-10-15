@@ -8,6 +8,8 @@ const mapText = await readFile(new URL("../../js/map.js", import.meta.url), "utf
 const ast = ts.createSourceFile("map.js", mapText, ts.ScriptTarget.Latest, true);
 const mapDeclarations = ast.statements.filter(node => ts.isFunctionDeclaration(node) || ts.isVariableStatement(node))
   .map(node => node.getText(ast)).join("\n");
+const mapRefreshExports = ast.statements.filter(node => /^window\.JSListingRefreshV1(?:\.|\s*=)/.test(node.getText(ast)))
+  .map(node => node.getText(ast)).join("\n");
 const mixedId = "FIXTURE-LEASE-1", endedId = "FIXTURE-LEASE-2";
 const picture = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='120'%3E%3Crect width='100' height='120' fill='%23c9e7f5'/%3E%3C/svg%3E";
 const unifiedRuntime = await readFile(new URL("../../js/unified-listings-v8.js", import.meta.url), "utf8");
@@ -74,7 +76,7 @@ async function realMap(page, items, payload) {
     window.map=owner;window.kakao={maps:{LatLng,Point,CustomOverlay,services:{Places,Geocoder,Status},event:{addListener(){},trigger(){}}}};
     window.geocoder=new Geocoder();
   });
-  await page.addScriptTag({content:mapDeclarations});
+  await page.addScriptTag({content:mapDeclarations + "\n" + mapRefreshExports});
   await page.evaluate(({items,payload}) => {
     allItems=items.map(item=>({...item,latlng:new kakao.maps.LatLng(item.latitude,item.longitude)}));
     jsInitialFullListingsLoadingV1=false;jsListingsCompleteBaseV1=true;
@@ -134,6 +136,109 @@ async function missingMetadataFixture(page, ended) {
     JSUnifiedListingsV8.attach(allItems);applyFilter();
   },{id:mixedId,photo:picture,ended});
 }
+
+function recoverySheet(items, revision) {
+  const fields=["title","address","room","listing_type","deposit","monthly_rent","maintenance_fee","premium","area_m2",
+    "landlord_phone","tenant_phone","operating_memo","status","first_collected_at","main_source","property_id",
+    "source_url","contacts_json","building_year","building_elevators","building_approval_date","building_info_checked_at",
+    "building_info_status","registration_at","last_collected_at","latitude","longitude","building_elevator_capacity",
+    "trade_type","sale_category","sale_price","sale_details_json"];
+  const rows=items.map(value=>({title:value.name,address:value.address,room:value.room,listing_type:value.type,
+    deposit:value.deposit,monthly_rent:value.rent,maintenance_fee:value.fee,premium:value.premium,area_m2:value.area,
+    operating_memo:value.memo,status:value.state,first_collected_at:value.regDate,main_source:value.source,
+    property_id:value.propertyId,building_year:value.buildingYear,latitude:value.latitude,longitude:value.longitude,trade_type:value.tradeType}));
+  return {revision,body:[fields,...rows.map(value=>fields.map(field=>value[field]??""))]
+    .map(values=>values.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(",")).join("\r\n")};
+}
+
+async function failedFullMetadataFixture(page, context, isMobile, holdRecovery) {
+  const result=await setup(page,context,isMobile);
+  const manual=Array.from({length:52},(_,index)=>item("MANUAL-DONE-"+index,{state:"계약완료"}));
+  const active=item("ACTIVE-WITH-PHOTO");
+  const candidates=[item(mixedId),item(endedId)];
+  const items=[...manual,active,...candidates];
+  const groups=Object.fromEntries(items.map(master=>[master.propertyId,[{
+    ...master,originalId:master.propertyId+"-source",providerSourceId:"qa-"+master.propertyId,
+    buildingName:master.name,active:candidates.includes(master)?0:1,sourceUnavailable:candidates.includes(master),
+    candidateEligible:candidates.includes(master),availabilityKind:candidates.includes(master)?"census_missing":"active",
+    absenceConfirmedAt:candidates.includes(master)?"2026-10-15T03:00:00Z":"",images:[picture],thumbnail:picture,photoCount:1
+  }]]));
+  const state={reads:[],sheetReads:0,available:false,release:null};
+  const recovery=new Promise(resolve=>{state.release=resolve;});
+  const revision="QA-RECOVERY-CURRENT";
+  const snapshot=recoverySheet(items,revision);
+  await page.route("**/api/data**",async route=>{
+    const request=route.request(),url=new URL(request.url());
+    if(request.method()!=="GET") {result.writes.push(url.pathname);return route.abort();}
+    if(url.searchParams.get("action")!=="unifiedListings")return route.fallback();
+    state.reads.push({force:request.headers()["x-js-force-refresh"]==="1"});
+    if(state.reads.length>1&&holdRecovery)await recovery;
+    if(!state.available)return route.fulfill({status:503,json:{ok:false,message:"검수용 원본 조회 실패"}});
+    return route.fulfill({status:200,headers:{"x-js-listings-revision":revision},
+      json:{ok:true,groups,sourceSearchIds:{},snapshotRevision:revision}});
+  });
+  await page.route("**/api/sheet",route=>{
+    state.sheetReads+=1;
+    return route.fulfill({status:200,contentType:"text/csv",headers:{"x-js-listings-revision":revision},body:snapshot.body});
+  });
+  // Reset only the local runtime, then use the real full CSV/unified read pair.
+  // No attach(payload) shortcut can supply the missing candidate information.
+  await page.addScriptTag({content:unifiedRuntime});
+  await page.evaluate(()=>{
+    allItems=[];currentItems=[];hideDone=false;doneOnly=true;isLoadingSheet=false;pendingAutoUpdate=false;
+    jsListingsCompleteBaseV1=false;jsListingsRevisionV682="";jsInitialFullListingsLoadingV1=true;
+    jsInitialFullListingsCacheHitV1=false;jsInitialFullListingsCacheItemsV1=null;
+    selectedGroupKey=null;jsPinnedClusterSelectionV6515=null;jsAdministrativeListSelectionV6570=null;
+    JSDataAccessV6.invalidateRead("unifiedListings");
+  });
+  return {...result,state,start:()=>page.evaluate(()=>loadSheet(false,true))};
+}
+
+test("failed original metadata automatically recovers all candidates and photos beyond 52 manual completions",async({page,context,isMobile})=>{
+  const result=await failedFullMetadataFixture(page,context,isMobile,true);
+  try {
+    await result.start();
+    await expect(page.locator("#list")).toHaveAttribute("data-total-count","52");
+    await expect.poll(()=>result.state.reads.length).toBe(2);
+    result.state.available=true;result.state.release();
+    await expect.poll(()=>page.evaluate(()=>JSUnifiedListingsV8.getOriginalMetadataStatus().status)).toBe("ready");
+    await expect.poll(()=>page.evaluate(()=>JSUnifiedListingsV8.candidateSummary())).toMatchObject({
+      ready:true,candidateCount:2,manualCompletedCount:52,doneCount:54
+    });
+    await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");
+    await expect(page.locator("#mapListingCountValueV825")).toHaveText("54개");
+    await expect(card(page,mixedId).locator(".transaction-check-ribbon-v8135")).toContainText("거래완료 후보");
+    await expect(card(page,mixedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+    await menu(page,"#doneOnlyBtn");await menu(page,"#hideDoneBtn");
+    await expect(card(page,"ACTIVE-WITH-PHOTO").locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(card(page,"ACTIVE-WITH-PHOTO")).not.toContainText("원본 확인 중");
+    expect(result.state.reads).toHaveLength(2);
+    expect(result.state.reads[1].force).toBe(true);
+    expect(result.state.sheetReads).toBeLessThanOrEqual(2);
+    expect(await page.evaluate(()=>JSV6ListStore.load("favorite").some(folder=>folder.id==="fixture-favorites"))).toBe(true);
+    expect(await page.evaluate(id=>allItems.find(value=>value.propertyId===id).memo,mixedId)).toContain("사용자 검수 메모");
+    safe(result);
+  } finally {result.state.release();}
+});
+
+test("persistent full original failures stop waiting labels and explicit retry restores candidate-only cards",async({page,context,isMobile})=>{
+  const result=await failedFullMetadataFixture(page,context,isMobile,false);
+  await result.start();
+  await expect.poll(()=>result.state.reads.length).toBe(2);
+  await expect(page.locator("#unifiedOriginalLoadStatusV1")).toContainText("실패");
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","52");
+  await expect(page.locator("#list .unified-thumb-v8").first()).toContainText("원본 조회 실패");
+  await expect(page.locator("#list .unified-thumb-v8").filter({hasText:"원본 확인 중"})).toHaveCount(0);
+  result.state.available=true;
+  await page.locator("#unifiedOriginalLoadStatusV1 button").click();
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");
+  await expect(card(page,endedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+  await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+  expect(result.state.reads).toHaveLength(3);
+  expect(result.state.reads[2].force).toBe(true);
+  safe(result);
+});
 
 test("CSV-first photo metadata recovers on detail without false no-photo labels",async({page,context,isMobile})=>{
   const result=await setup(page,context,isMobile);

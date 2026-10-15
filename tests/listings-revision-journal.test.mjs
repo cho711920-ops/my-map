@@ -48,7 +48,7 @@ function browser(h) {
   const counts = { full: 0, delta: 0 };
   const context = vm.createContext({ console, Promise, URLSearchParams,
     jsListingsRevisionV682: "", jsListingsRevisionInfoV683: null, jsListingsRevisionPendingV682: false,
-    isLoadingSheet: false,
+    isLoadingSheet: false, jsListingsLoadGenerationV1: 0,
     window: { JSDataAccessV6: { read: (_action, args) => h.read(args.since) } },
     loadSheet: async () => {
       counts.full++;
@@ -57,7 +57,7 @@ function browser(h) {
     },
     applyListingChangesV683: async (info) => { if (info.fullReload) return false; counts.delta++; return true; }
   });
-  for (const name of ["fetchDataRevisionV682", "rememberListingsRevisionV682", "refreshListingsWhenChangedV682"]) {
+  for (const name of ["fetchDataRevisionV682", "rememberListingsRevisionV682", "recoverOriginalMetadataV1", "refreshListingsWhenChangedV682"]) {
     vm.runInContext(fn(map, name), context);
   }
   return { context, counts };

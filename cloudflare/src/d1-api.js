@@ -460,20 +460,14 @@ async function unifiedListings(env, listingIds = null) {
       )${scopeSql("listing_id")}`,
     4_000, bindings
   );
-  const sourceSearchRows = await allPages(env, `SELECT s.listing_id, s.source, s.source_listing_id
-    FROM listing_sources s JOIN listings l ON l.id=s.listing_id
-    WHERE l.status<>'deleted' AND ${publicSourceWhereSql("s")} AND s.source IN ('네이버','당근','공실박스','직접등록','직접확인')
-      AND NOT EXISTS (
-        SELECT 1 FROM listing_data_quality_holds quality_hold
-        WHERE quality_hold.listing_id = l.id
-          AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
-      )${scopeSql("s.listing_id")}
-    ORDER BY s.rowid`, 4_000, bindings);
   const groups = {};
   const manualRooms = await loadManualRoomOverrides(env, scopedIds);
   const manualFields = await loadManualRepresentativeFields(env, scopedIds);
   let unavailableCount = 0;
-  const sourceSearchIds = sourceListingSearchIndex(sourceSearchRows);
+  // These rows already have the same public-parent, hold and scope guards as
+  // the original-number index. Reuse their rowid order instead of rescanning
+  // every source with OFFSET; the index keeps its own provider/number filter.
+  const sourceSearchIds = sourceListingSearchIndex(rows);
   for (const row of rows) {
     const daangn = parseJson(row.daangn_sale_extent_json, {});
     const displayed = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
