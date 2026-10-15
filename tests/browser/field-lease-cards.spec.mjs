@@ -305,8 +305,11 @@ for (const device of devices) {
       // ordinary compact card without clipping, wrapping or becoming taller.
       const originalAmounts = await page.evaluate(() => {
         const first = allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
-        const original = {deposit: first.deposit, rent: first.rent};
+        const original = {deposit: first.deposit, rent: first.rent,
+          sourceAmounts: (first.unifiedAllOriginalsV1 || []).map(row => ({deposit: row.deposit, rent: row.rent}))};
         Object.assign(first, {deposit: 123456.78, rent: 123.45});
+        // Display conditions come from the selected original advertisement.
+        for (const row of first.unifiedAllOriginalsV1 || []) Object.assign(row, {deposit: 123456.78, rent: 123.45});
         applyFilter();
         return original;
       });
@@ -315,7 +318,9 @@ for (const device of devices) {
       expect((await expectCompactRowGeometry(longRow, 210)).width).toBeGreaterThan(120);
       await page.screenshot({path: testInfo.outputPath(device.name + "-long-money.png")});
       await page.evaluate(original => {
-        Object.assign(allItems.find(item => item.propertyId === "FIXTURE-LEASE-1"), original);
+        const first = allItems.find(item => item.propertyId === "FIXTURE-LEASE-1");
+        Object.assign(first, {deposit: original.deposit, rent: original.rent});
+        (first.unifiedAllOriginalsV1 || []).forEach((row, index) => Object.assign(row, original.sourceAmounts[index]));
         applyFilter();
       }, originalAmounts);
       await expectCardLayout(page);

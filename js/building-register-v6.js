@@ -17,6 +17,10 @@
   var badgeRequests = Object.create(null);
   var badgeMemoryV6520 = Object.create(null);
   var badgeAddressMemoryV810 = Object.create(null);
+  var badgeListingArrayV1 = null;
+  var badgeListingLengthV1 = 0;
+  var badgeListingsByAddressV1 = Object.create(null);
+  var badgeIndexedAddressesV1 = new WeakMap();
   var badgeQueue = [];
   var badgeActive = 0;
   var badgeObserver = null;
@@ -115,6 +119,34 @@
     };
   }
 
+  function badgeAddressItemsV1(item, addressKey) {
+    var items = typeof allItems !== "undefined" && Array.isArray(allItems) ? allItems : [];
+    // Full/delta loads replace the array; quick registration changes its length.
+    // Also notice an existing item's address changing before its next render.
+    if (items !== badgeListingArrayV1 || items.length !== badgeListingLengthV1 ||
+        badgeIndexedAddressesV1.has(item) && badgeIndexedAddressesV1.get(item) !== addressKey) {
+      badgeListingArrayV1 = items;
+      badgeListingLengthV1 = items.length;
+      badgeListingsByAddressV1 = Object.create(null);
+      badgeIndexedAddressesV1 = new WeakMap();
+      items.forEach(function(candidate) {
+        if (!candidate || typeof candidate !== "object") return;
+        var key = normalizedBuildingAddressKeyV810(candidate.address);
+        badgeIndexedAddressesV1.set(candidate, key);
+        if (!key) return;
+        if (!badgeListingsByAddressV1[key]) badgeListingsByAddressV1[key] = [];
+        badgeListingsByAddressV1[key].push(candidate);
+      });
+    }
+    return badgeListingsByAddressV1[addressKey] || [];
+  }
+
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("js-listings-full-snapshot", function() {
+      badgeListingArrayV1 = null;
+    });
+  }
+
   function rememberBadgeV810(item, badge) {
     if (!item || !badge) return;
     var normalized = {
@@ -128,8 +160,8 @@
     var addressKey = normalizedBuildingAddressKeyV810(item.address);
     if (itemKey) badgeMemoryV6520[itemKey] = normalized;
     if (addressKey) badgeAddressMemoryV810[addressKey] = normalized;
-    if (typeof allItems !== "undefined" && Array.isArray(allItems) && addressKey) {
-      allItems.forEach(function(candidate) {
+    if (addressKey) {
+      badgeAddressItemsV1(item, addressKey).forEach(function(candidate) {
         if (normalizedBuildingAddressKeyV810(candidate && candidate.address) !== addressKey) return;
         candidate.buildingYear = normalized.year;
         candidate.buildingElevators = normalized.elevators;

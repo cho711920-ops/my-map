@@ -4,6 +4,18 @@ function clean(value) {
   return String(value == null ? "" : value).trim();
 }
 
+function serviceKey(value) {
+  const key = clean(value);
+  if (!/%[0-9a-f]{2}/i.test(key)) return key;
+  try {
+    // URLSearchParams encodes once. Accept either key format from data.go.kr
+    // without sending an encoded key with its percent signs encoded again.
+    return decodeURIComponent(key);
+  } catch (_) {
+    return key;
+  }
+}
+
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const radians = (value) => value * Math.PI / 180;
   const dLat = radians(lat2 - lat1);
@@ -19,7 +31,7 @@ function listFrom(payload) {
 }
 
 async function fetchPage(env, lat, lng, radius, pageNo) {
-  const key = clean(env.DATA_GO_KR_SERVICE_KEY);
+  const key = serviceKey(env.DATA_GO_KR_SERVICE_KEY);
   if (!key) throw new Error("서버 공공데이터 인증키가 연결되지 않았습니다.");
   const url = new URL(API_URL);
   url.searchParams.set("serviceKey", key);

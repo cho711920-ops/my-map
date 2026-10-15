@@ -473,6 +473,7 @@ test("late scoped proofs cannot overwrite a memo edit or a newer load generation
 
 test("CSV-first photo metadata recovers on detail without false no-photo labels",async({page,context,isMobile})=>{
   const result=await setup(page,context,isMobile);
+  await settleFixtureMetadataRecovery(page);
   await missingMetadataFixture(page,false);
   await expect(card(page,mixedId).locator(".unified-thumb-v8")).toContainText("사진 불러오는 중");
   await page.evaluate(id=>JSUnifiedListingsV8.open(encodeURIComponent(id)),mixedId);

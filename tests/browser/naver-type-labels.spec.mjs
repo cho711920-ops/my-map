@@ -18,8 +18,9 @@ test.beforeEach(async ({page, context}) => {
     old.type = "A02"; old.saleCategory = "other";
     for (const original of old.unifiedOriginalsV8 || []) {original.type = "A02"; original.saleCategory = "other";}
     window.__oldTypeIdentity = {key: old.key, propertyId: old.propertyId};
-    window.allItems.push({...old, type: "오피스텔", saleCategory: "officetel", propertyId: "FIXTURE-NEW-OFFICETEL", key: "fixture-new-officetel", name: "신규 오피스텔", unifiedOriginalsV8: []});
-    window.allItems.push({...old, type: "B01", saleCategory: "other", propertyId: "FIXTURE-PRESALE", key: "fixture-presale", name: "분양권 매물", unifiedOriginalsV8: []});
+    const ownOriginals = {unifiedOriginalsV8: [], unifiedAllOriginalsV1: [], unifiedDisplayOriginalsV2: [], sourceTypesV8: []};
+    window.allItems.push({...old, ...ownOriginals, type: "오피스텔", saleCategory: "officetel", propertyId: "FIXTURE-NEW-OFFICETEL", key: "fixture-new-officetel", name: "신규 오피스텔"});
+    window.allItems.push({...old, ...ownOriginals, type: "B01", saleCategory: "other", propertyId: "FIXTURE-PRESALE", key: "fixture-presale", name: "분양권 매물"});
   });
 });
 

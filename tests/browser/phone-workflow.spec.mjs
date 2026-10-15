@@ -64,7 +64,8 @@ test("search from favorites opens the matching list and dismisses keyboard focus
 test("phone list scroll survives shared refresh and returning from detail", async ({page}) => {
   await page.evaluate(() => {
     const original=window.allItems[0];
-    window.allItems=Array.from({length:80},(_,index)=>({...original,key:"phone-scroll-"+index,propertyId:"PHONE-SCROLL-"+index,name:"목록 확인 "+index}));
+    window.allItems=Array.from({length:80},(_,index)=>({...original,key:"phone-scroll-"+index,propertyId:"PHONE-SCROLL-"+index,name:"목록 확인 "+index,
+      unifiedOriginalsV8:[],unifiedAllOriginalsV1:[],unifiedDisplayOriginalsV2:[],sourceTypesV8:[]}));
     window.applyFilter();
   });
   await page.locator('[data-mobile-view="list"]').click();

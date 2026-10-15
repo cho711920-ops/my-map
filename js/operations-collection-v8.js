@@ -130,7 +130,7 @@
   function formatAt(value) {
     var raw = text(value);
     if (!raw) return "-";
-    var date = new Date(raw);
+    var date = new Date(typeof value === "number" || /^\d{13}$/.test(raw) ? Number(value) : raw);
     if (isNaN(date.getTime())) return raw;
     var parts = new Intl.DateTimeFormat("ko-KR", {
       timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
