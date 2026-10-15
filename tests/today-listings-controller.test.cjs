@@ -96,8 +96,7 @@ test('all Today pages merge original-ID gates and per-property proof maps, with 
   assert.equal(applied.unified.sourceSnapshotKeys.A,a);assert.equal(applied.unified.sourceSnapshotPropertyIds.B,'B');
   assert.deepEqual(Array.from(applied.todayOriginalIds.A),['ad-A1','ad-A2']);
   assert.equal(h.api.state().adCount,2);assert.equal(h.api.state().count,2);assert.equal(h.api.state().manualCount,1);
-  assert.equal(h.elements.get('todayListingStatusV1').hidden,true);
-  assert.equal(h.elements.get('todayListingStatusV1').children.length,0);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:1}),true);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'old-ad',active:1}),false);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:0}),false);
@@ -125,30 +124,53 @@ test('Today projection selects eligible ad conditions/photos on a first-observed
   assert.equal(h.context.JSUnifiedListingsV8.filterItemForView(master,()=>true,'active').unifiedDisplayOriginalsV2.length,2);
 });
 
-test('a failed next page preserves the previous success and exposes a retry, not false zero', async () => {
+test('a failed next page preserves the previous success and allows a controller retry without an extra status row', async () => {
   const h = fixture(); let pending = h.api.refresh(true);
   h.reads[0].resolve(h.result(['known'])); await pending;
   pending = h.api.refresh(true); h.reads[1].resolve(h.result(['partial'], { hasMore: true, nextCursor: 'page2' })); await h.tick();
   h.reads[2].reject(new Error('offline')); await pending;
   assert.equal(h.applied.length, 1); assert.equal(h.api.state().count, 1); assert.equal(h.api.state().phase, 'error');
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent, /마지막 확인 결과 유지/);
-  assert.equal(h.elements.get('todayListingStatusV1').children[1].textContent,'다시 시도');
+  assert.equal(h.api.matches({propertyId:'known'}),true);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
+  assert.match(h.api.emptyMessage().title,/끝나지/);
+  pending=h.api.refresh(true);h.reads[3].resolve(h.result(['known','recovered']));
+  assert.equal(await pending,true);assert.equal(h.api.state().count,2);
 });
 
-test('a successful Today view has no summary row or refresh button but continues automatic refresh and clears a recovered error',async()=>{
-  const h=fixture(),pending=h.api.refresh(true),node=h.elements.get('todayListingStatusV1');
-  assert.equal(node.hidden,false);assert.equal(node.children.length,1,'pending notice has no redundant button');
+test('Today never creates a summary row or refresh button while loading, ready, failed or recovered, and still automatically refreshes',async()=>{
+  const h=fixture(),pending=h.api.refresh(true);
+  h.context.document.createElement=()=>{throw new Error('Today must not create a status element');};
+  assert.equal(h.elements.has('todayListingStatusV1'),false);assert.equal(h.api.state().phase,'loading');
+  assert.match(h.api.emptyMessage().title,/확인하고/);
   h.reads[0].resolve(h.result(['first']));assert.equal(await pending,true);
-  assert.equal(node.hidden,true);assert.equal(node.children.length,0);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
   h.events['js-listings-full-snapshot']({detail:{revision:'next'}});
   await h.tick();assert.equal(h.reads.length,2,'removing the ready controls does not disable automatic reads');
   h.reads[1].reject(new Error('offline'));await h.tick();
-  assert.equal(node.hidden,false);assert.equal(node.children[1].textContent,'다시 시도');
-  node.children[1].listeners.click();await h.tick();
-  assert.equal(h.reads.length,3);assert.equal(node.children.length,1);
-  h.reads[2].resolve(h.result(['first','second']));await h.tick();
+  assert.equal(h.api.state().phase,'error');assert.equal(h.elements.has('todayListingStatusV1'),false);
+  assert.match(h.api.emptyMessage().description,/필터를 껐다 켜면/);
+  assert.doesNotMatch(h.api.emptyMessage().description,/위의|버튼|최신 확인/);
+  const retry=h.api.refresh(true);await h.tick();
+  assert.equal(h.reads.length,3);assert.equal(h.elements.has('todayListingStatusV1'),false);
+  h.reads[2].resolve(h.result(['first','second']));assert.equal(await retry,true);
   assert.equal(h.api.state().phase,'ready');assert.equal(h.api.state().count,2);
-  assert.equal(node.hidden,true);assert.equal(node.children.length,0);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
+});
+
+test('Today removes a legacy status node on initialization and rendering without depending on the filter-chip host',()=>{
+  const h=fixture();let removed=0;
+  const stale=()=>({remove(){removed+=1;h.elements.delete('todayListingStatusV1');}});
+  h.elements.set('todayListingStatusV1',stale());
+  vm.runInContext(source,h.context);
+  assert.equal(removed,1);assert.equal(h.elements.has('todayListingStatusV1'),false);
+  h.elements.delete('activeFilterChipsV844');
+  h.elements.set('todayListingStatusV1',stale());
+  let received;h.context.updateMapListingCountV825=items=>{received=items;};
+  const shown=[];h.context.JSTodayListingsV1.render(shown);
+  assert.equal(removed,2);assert.equal(received,shown);
+  h.elements.set('todayListingStatusV1',stale());h.context.newListingDays=0;
+  h.context.JSTodayListingsV1.render();
+  assert.equal(removed,3);assert.equal(h.elements.has('todayListingStatusV1'),false);
 });
 
 test('a changed server snapshot retries once without committing the incomplete previous pages', async () => {
@@ -167,7 +189,7 @@ test('filter removal and market change abort old responses; repeated clicks shar
   assert.equal(await lease, false); assert.equal(h.applied.length, 1); assert.equal(h.applied[0].market, 'building');
   const next = h.api.refresh(true); h.context.newListingDays = 0; h.api.onPeriodChanged(0);
   await next; assert.equal(h.reads[2].options.signal.aborted, true); assert.equal(h.applied.length, 1);
-  assert.equal(h.elements.get('todayListingStatusV1').hidden, true);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
 });
 
 test('latest full master snapshots retain the verified new-property gate until Today confirms eligible IDs', async () => {
@@ -183,11 +205,12 @@ test('latest full master snapshots retain the verified new-property gate until T
   assert.equal(h.api.state().count, 2); assert.equal(h.api.state().revision, 'r2');
 });
 
-test('an unresolved read has a visible bounded timeout and no full-list or mutation fallback', async () => {
+test('an unresolved read has an honest empty-state timeout and no full-list or mutation fallback', async () => {
   const h = fixture(), pending = h.api.refresh(true);
   [...h.timers.values()].find(timer => timer.ms === 45000).fn(); await pending;
   assert.equal(h.api.state().phase, 'error'); assert.equal(h.reads.length, 1); assert.equal(h.applied.length, 0);
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent, /최신 결과 미확인/);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
+  assert.match(h.api.emptyMessage().title,/확인이 끝나지/);
 });
 
 test('the actual data transport sends no undefined cursor or revision on the first Today page', async () => {
@@ -273,7 +296,7 @@ test('a late proven page fails at the original 45-second deadline, preserving th
   deadline.fn();assert.equal(await pending,false);
   assert.equal(h.api.matches({propertyId:'A'}),true);assert.equal(h.api.state().partial,true);
   assert.equal(h.api.state().phase,'error');assert.equal(h.api.state().confirmedPages,1);
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/일부만 확인/);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
   assert.match(h.api.emptyMessage().title,/끝나지/);
   assert.equal(h.reads.length,2);assert.equal([...h.timers.values()].some(timer=>timer.ms===0),false);
 });
@@ -346,7 +369,8 @@ test('an account change cancels and rejects a late Today response before applyin
   const pending=h.api.refresh(true);h.context.JSAuthenticatedAccountEmail='new@example.invalid';
   h.reads[0].resolve(provenPage(h,['A'],'P1'));assert.equal(await pending,false);
   assert.equal(h.applied.length,0);assert.equal(h.reads[0].options.signal.aborted,true);assert.equal(h.api.state().phase,'error');
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/계정이 바뀌/);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
+  assert.match(h.api.emptyMessage().title,/끝나지/);
 });
 
 test('the empty-list rendering uses Today load/error notices instead of advertising an authoritative zero',()=>{
@@ -441,7 +465,7 @@ test('one Today toggle clears map focus and renders each confirmed page with the
   assert.equal(h.context.favoriteOnly,true);assert.deepEqual(h.context.favoriteFilterKeys,['property:keep']);
   h.context.toggleNewListingDays(1);
   assert.equal(h.context.newListingDays,0);assert.equal(presentation.scans(),5);
-  assert.equal(h.elements.get('todayListingStatusV1').hidden,true);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
   assert.deepEqual(presentation.draws.at(-1).map(item=>item.propertyId),['old','A','B']);
 });
 
@@ -452,7 +476,8 @@ test('cold initial Today and a manual cancel keep honest loading state without r
   h.context.toggleNewListingDays(1);
   assert.equal(h.reads.length,1);assert.equal(presentation.scans(),0);
   assert.equal(badges.length,1);assert.equal(badges[0].length,0);
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/최신 확인 중/);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
+  assert.match(h.api.emptyMessage().title,/확인하고/);
   const pending=h.api.refresh(true);
   h.reads[0].resolve(provenPage(h,['A'],'P1',{hasMore:true,nextCursor:'second'}));await h.tick();
   assert.equal(presentation.scans(),1);assert.deepEqual(presentation.draws.at(-1).map(item=>item.propertyId),['A']);
@@ -461,7 +486,7 @@ test('cold initial Today and a manual cancel keep honest loading state without r
   const afterCancel=presentation.scans();
   h.reads[1].resolve(provenPage(h,['late'],'P2'));await h.tick();
   assert.equal(presentation.scans(),afterCancel);assert.equal(h.applied.length,1);
-  assert.equal(h.elements.get('todayListingStatusV1').hidden,true);
+  assert.equal(h.elements.has('todayListingStatusV1'),false);
 });
 
 test('Today render accepts an already filtered empty result and does not silently rescan it',()=>{

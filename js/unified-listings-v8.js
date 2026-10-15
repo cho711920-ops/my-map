@@ -601,65 +601,10 @@
     }, 450);
   }
 
-  function placeOriginalLoadStatus(banner) {
-    var chips = document.getElementById("activeFilterChipsV844");
-    var list = document.getElementById("list");
-    var status = document.getElementById("status");
-    var anchor = chips && chips.parentNode ? chips : list && list.parentNode ? list : status;
-    if (!anchor || !anchor.parentNode) return false;
-    var next = anchor === list ? list : anchor.nextSibling;
-    if (banner && next !== banner) anchor.parentNode.insertBefore(banner, next);
-    return true;
-  }
-
-  function originalLoadStatus(failed, explanation) {
+  function originalLoadStatus() {
     if (typeof document === "undefined") return;
     var banner = document.getElementById("unifiedOriginalLoadStatusV1");
-    if (!failed) { if (banner) banner.remove(); return; }
-    if (banner) {
-      var existingMessage = banner.querySelector("span");
-      if (existingMessage) existingMessage.textContent = explanation || (state.loaded
-        ? "사진·링크 정보 업데이트가 지연되어 마지막 확인 자료를 표시합니다. " : "사진·링크 정보를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요. ");
-      placeOriginalLoadStatus(banner);
-      return;
-    }
-    if (!placeOriginalLoadStatus()) return;
-    banner = document.createElement("div");
-    banner.id = "unifiedOriginalLoadStatusV1";
-    banner.className = "operations-center-message error";
-    banner.setAttribute("role", "status");
-    var message = document.createElement("span");
-    message.textContent = explanation || (state.loaded ? "사진·링크 정보 업데이트가 지연되어 마지막 확인 자료를 표시합니다. " : "사진·링크 정보를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요. ");
-    var retry = document.createElement("button");
-    retry.type = "button";
-    retry.textContent = "다시 불러오기";
-    retry.onclick = function() {
-      retry.disabled = true;
-      var refresh = global.JSListingRefreshV1;
-      if (state.pendingProofCount && refresh && typeof refresh.recoverOriginals === "function") {
-        return Promise.resolve().then(function() { return refresh.recoverOriginals(); }).catch(function(error) {
-          console.warn("변경 매물 원본 연결 재확인 실패", error);
-        }).finally(function() { retry.disabled = false; });
-      }
-      var generation = refresh && typeof refresh.generation === "function" ? refresh.generation() : null;
-      var revision = text(global.jsListingsRevisionV682);
-      load(true, {deferCommit: !!refresh}).then(function(result) {
-        if (result.ok === false) return;
-        if (refresh && typeof refresh.applyOriginals === "function") {
-          if (!refresh.applyOriginals(result, revision, generation) &&
-              typeof refresh.generation === "function" && refresh.generation() === generation &&
-              typeof global.loadSheet === "function") {
-            return global.loadSheet(true, true);
-          }
-          return;
-        }
-        attach(global.allItems || [], result);
-        if (typeof global.applyFilter === "function") global.applyFilter();
-      }).finally(function() { retry.disabled = false; });
-    };
-    banner.appendChild(message);
-    banner.appendChild(retry);
-    placeOriginalLoadStatus(banner);
+    if (banner) banner.remove();
   }
 
   function expandUnifiedResult(result) {
@@ -814,8 +759,7 @@
     attach(inputItems, null, true);
     setOriginalLoadPhase(preserveGlobalStatus ? state.originalLoadPhase : complete ? "ready" : "pending");
     if (!preserveGlobalStatus) {
-      if (complete) originalLoadStatus(false);
-      else originalLoadStatus(true, "변경된 매물 " + pendingIds.length + "건의 사진·링크 정보 업데이트 중 · 마지막 확인 자료를 유지합니다. ");
+      originalLoadStatus();
     }
     return outcome;
   }
@@ -853,13 +797,13 @@
       state.pendingProofCount = 0;
       state.sourceSnapshotProofKeys = Object.create(null);
       setOriginalLoadPhase("ready");
-      originalLoadStatus(false);
+      originalLoadStatus();
       return result;
     }).catch(function(error) {
       if (generation !== state.loadGeneration) return {ok: false, superseded: true, groups: {}, snapshotRevision: ""};
       console.error("통합매물 원본 조회 실패", error);
       setOriginalLoadPhase("error");
-      originalLoadStatus(true);
+      originalLoadStatus();
       return {ok: false, stale: state.loaded, groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision};
     }).finally(function() { if (state.loadPending === pending) state.loadPending = null; });
     state.loadPending = pending;
@@ -882,7 +826,7 @@
           if (id) state.metadataCoverage[id] = true;
         });
         if (Object.prototype.hasOwnProperty.call(result, "snapshotRevision")) state.snapshotRevision = result.snapshotRevision || "";
-        originalLoadStatus(false);
+        originalLoadStatus();
       }
     }
     indexMasterItems(items || []);
@@ -2471,7 +2415,7 @@
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, attachCompatible: attachCompatible, canCacheCompatible: canCacheCompatible,
     mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
-    markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(true, "사진·링크 정보 업데이트가 지연되어 마지막 확인 자료를 표시합니다. "); },
+    markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(); },
     getOriginalMetadataStatus: getOriginalMetadataStatus,
     pendingCompatibleIds: function() { return Object.keys(state.pendingProofIds); },
     cardParts: cardParts, matchesSource: matchesSource,

@@ -3340,12 +3340,6 @@ body.ai-side-panel-open #map {
    v4.7 리스트 가독성 + 동기화 상태 점
    ========================================================= */
 
-/* Today gets a compact visible read status; ordinary map layout is unchanged. */
-.today-listing-status-v1 { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 12px; background:#f4f9ff; color:#31557c; font-size:12px; line-height:1.5; border-bottom:1px solid #dce9f7; }
-.today-listing-status-v1[hidden] { display:none; }
-.today-listing-status-v1 button { flex:none; padding:3px 8px; border:1px solid #bfd4ed; border-radius:6px; background:#fff; color:#1762a5; cursor:pointer; font:inherit; }
-.today-listing-status-v1 button:disabled { opacity:.65; cursor:default; }
-
 /* 기존 긴 상태문구는 화면에서 숨기고 스크린리더/상태전달 용도로만 유지 */
 #status {
   position:fixed !important;

@@ -23,7 +23,8 @@ function original(extra={}){return {originalId:"source-one",propertyId:"M-one",s
 function status(api,id){return JSON.parse(JSON.stringify(api.getOriginalMetadataStatus(id)));}
 
 function bannerDocument({chips=true,list=true,statusNode=true}={}){
-  const document={addEventListener(){},createElement(tag){return node(tag);},getElementById(id){return find(root,id);}};
+  const created=[];
+  const document={addEventListener(){},createElement(tag){const element=node(tag);created.push(element);return element;},getElementById(id){return find(root,id);}};
   function node(tag,id=""){
     return {tag,id,children:[],parentNode:null,
       get nextSibling(){if(!this.parentNode)return null;const siblings=this.parentNode.children;return siblings[siblings.indexOf(this)+1]||null;},
@@ -38,7 +39,7 @@ function bannerDocument({chips=true,list=true,statusNode=true}={}){
   sidebar.appendChild(node("div","selectionActionBar"));
   if(list)sidebar.appendChild(node("div","list"));
   if(statusNode)root.appendChild(node("div","status"));
-  return {document,root,sidebar};
+  return {document,root,sidebar,created};
 }
 
 test("cold metadata pending is explicit and does not make a per-card request",()=>{
@@ -130,41 +131,59 @@ test("status events contain only readiness flags and never trigger automatic net
   assert.equal(h.reads.length,0);
 });
 
-test("metadata retry banner stays in the sidebar after filter chips, not beside the hidden global status",()=>{
-  const dom=bannerDocument(),h=harness({document:dom.document});
-  h.api.markSnapshotStale();
-  const banner=dom.document.getElementById("unifiedOriginalLoadStatusV1");
-  assert.equal(banner.parentNode,dom.sidebar);
-  assert.equal(dom.document.getElementById("activeFilterChipsV844").nextSibling,banner);
-  assert.ok(dom.sidebar.children.indexOf(banner)<dom.sidebar.children.indexOf(dom.document.getElementById("list")));
-  assert.equal(banner.querySelector("button").textContent,"다시 불러오기");
-  assert.equal(h.reads.length,0);
+test("main, Today and completed-list views keep metadata readiness without rendering a bulk status or retry strip",()=>{
+  for(const mode of ["main","today","completed"]){
+    const dom=bannerDocument(),h=harness({document:dom.document});
+    h.w.doneOnly=mode==="completed";h.w.newListingDays=mode==="today"?1:0;
+    const before=dom.sidebar.children.slice();
+    h.api.markSnapshotStale();
+    assert.equal(dom.document.getElementById("unifiedOriginalLoadStatusV1"),null,mode);
+    assert.deepEqual(dom.sidebar.children,before);
+    assert.equal(dom.created.length,0);
+    assert.equal(status(h.api,"M-one").status,"stale");
+    assert.equal(h.events[0].type,"js-original-metadata-status");
+    assert.equal(h.reads.length,0);
+  }
 });
 
-test("metadata banner relocates an existing legacy-position banner without duplicating its retry button",()=>{
-  const dom=bannerDocument(),h=harness({document:dom.document});
-  h.api.markSnapshotStale();
-  const banner=dom.document.getElementById("unifiedOriginalLoadStatusV1"),button=banner.querySelector("button");
-  dom.root.appendChild(banner);
-  h.api.markSnapshotStale();
-  assert.equal(banner.parentNode,dom.sidebar);
-  assert.equal(dom.document.getElementById("activeFilterChipsV844").nextSibling,banner);
-  assert.equal(banner.querySelector("button"),button);
-  assert.equal(banner.children.filter(child=>child.tag==="button").length,1);
+test("an existing legacy-position bulk status is removed instead of moved or recreated",()=>{
+  for(const parent of ["root","sidebar"]){
+    const dom=bannerDocument(),h=harness({document:dom.document});
+    const legacy=dom.document.createElement("div");legacy.id="unifiedOriginalLoadStatusV1";
+    dom[parent].appendChild(legacy);
+    const before=dom.created.length;
+    h.api.markSnapshotStale();h.api.markSnapshotStale();
+    assert.equal(legacy.parentNode,null);
+    assert.equal(dom.document.getElementById("unifiedOriginalLoadStatusV1"),null);
+    assert.equal(dom.created.length,before);
+    assert.equal(h.events.length,1);
+    assert.equal(h.reads.length,0);
+  }
 });
 
-test("metadata banner uses list-first and legacy status-parent fallbacks without requiring filter chips",()=>{
-  const listOnly=bannerDocument({chips:false,statusNode:false}),listHarness=harness({document:listOnly.document});
-  listHarness.api.markSnapshotStale();
-  assert.equal(listOnly.document.getElementById("unifiedOriginalLoadStatusV1").nextSibling,listOnly.document.getElementById("list"));
-  const legacy=bannerDocument({chips:false,list:false}),legacyHarness=harness({document:legacy.document});
-  legacyHarness.api.markSnapshotStale();
-  assert.equal(legacy.document.getElementById("status").nextSibling,legacy.document.getElementById("unifiedOriginalLoadStatusV1"));
+test("metadata failures and successful recovery never create a global retry strip with or without sidebar anchors",async()=>{
+  for(const anchors of [{},{chips:false,statusNode:false},{chips:false,list:false},{chips:false,list:false,statusNode:false}]){
+    const dom=bannerDocument(anchors),h=harness({document:dom.document}),before=JSON.stringify(h.item);
+    let pending=h.api.load(true,{deferCommit:true});
+    h.reads[0].reject(new Error("Fixture offline"));await pending;
+    assert.equal(status(h.api,"M-one").status,"error");
+    assert.equal(dom.document.getElementById("unifiedOriginalLoadStatusV1"),null);
+    assert.match(h.api.cardParts(h.item).thumbnail,/사진 불러오기 실패/);
+    assert.equal(JSON.stringify(h.item),before);
+    pending=h.api.load(true,{deferCommit:true});
+    h.reads[1].resolve({ok:true,groups:{"M-one":[original()]},snapshotRevision:"recovered"});
+    h.api.attach([h.item],await pending);
+    assert.equal(status(h.api,"M-one").status,"ready");
+    assert.match(h.api.cardParts(h.item).thumbnail,/current\.jpg/);
+    assert.equal(dom.document.getElementById("unifiedOriginalLoadStatusV1"),null);
+    assert.equal(dom.created.length,0);
+    assert.equal(h.reads.length,2,"Only the explicitly requested recovery reads occur");
+  }
 });
 
-test("metadata banner compact styles remain in normal layout flow and allow mobile text wrapping",()=>{
+test("obsolete bulk metadata strip styles are removed while favorite undo controls retain their styles",()=>{
   const css=fs.readFileSync("css/workflow-safety-v1.css","utf8");
-  assert.match(css,/#unifiedOriginalLoadStatusV1\s*\{[^}]*position:\s*static[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/);
-  assert.match(css,/#unifiedOriginalLoadStatusV1 span\s*\{[^}]*overflow-wrap:\s*anywhere/);
-  assert.doesNotMatch(css,/#unifiedOriginalLoadStatusV1\s*\{[^}]*(?:position:\s*(?:fixed|absolute)|z-index:)/);
+  assert.doesNotMatch(css,/#unifiedOriginalLoadStatusV1/);
+  assert.match(css,/#unifiedFavoriteUndoV1\s*\{[^}]*padding:\s*8px 12px/);
+  assert.match(css,/#unifiedFavoriteUndoV1 button\s*\{[^}]*min-height:\s*32px/);
 });

@@ -163,8 +163,7 @@ test("Today queries only its real scoped URL and shows outside/unlocated new car
   expect(h.calls[0].params).toMatchObject({action:"newListingPeriod",days:"1",market:"lease"});
   expect(h.calls[0].params).not.toHaveProperty("cursor");expect(h.calls[0].params).not.toHaveProperty("revision");
   expect(h.calls[0].url).not.toContain("undefined");
-  await expect(page.locator("#todayListingStatusV1")).toBeHidden();
-  await expect(page.locator("#todayListingStatusV1")).toBeEmpty();
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   await expect(page.locator('#todayListingStatusV1 button')).toHaveCount(0);
   await expect(page.locator('#activeFilterChipsV844')).toContainText('오늘 신규매물');
   await expect(page.locator('#list .unified-thumb-v8 img')).toHaveCount(3);
@@ -173,21 +172,25 @@ test("Today queries only its real scoped URL and shows outside/unlocated new car
   safe(h);
 });
 
-test("loading, failed confirmation and confirmed zero are visibly different and retry never writes",async({page,context,isMobile},testInfo)=>{
+test("loading, failure and confirmed zero remain honest empty-list states without an extra summary row, and controller retry never writes",async({page,context,isMobile},testInfo)=>{
   const h=await setup(page,context,isMobile,testInfo);
   h.state.hold=deferred();h.state.status=503;
   await today(page);
-  await expect(page.locator("#todayListingStatusV1")).toContainText("최신 확인 중");
+  await expect.poll(()=>page.evaluate(()=>JSTodayListingsV1.state().phase)).toBe("loading");
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   await expect(page.locator("#todayListingStatusV1 button")).toHaveCount(0);
+  await expect(page.locator("#list")).toContainText("오늘 신규매물을 확인하고 있습니다");
+  await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
   h.state.hold.resolve();h.state.hold=null;
   await expect.poll(()=>page.evaluate(()=>JSTodayListingsV1.state().phase)).toBe("error");
-  await expect(page.locator("#todayListingStatusV1")).toContainText("최신 확인 실패");
-  await expect(page.locator("#todayListingStatusV1")).not.toContainText("오늘 신규매물 0건");
-  await expect(page.locator("#todayListingStatusV1 button")).toHaveText("다시 시도");
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
+  await expect(page.locator("#list")).toContainText("오늘 신규매물 확인이 끝나지 않았습니다");
+  await expect(page.locator("#list")).toContainText("필터를 껐다 켜면 다시 확인");
+  await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
+  await expect(page.locator("#list")).not.toContainText("위의 다시 시도 버튼");
   h.state.status=200;h.state.rows=[];
-  await page.locator("#todayListingStatusV1 button").click();await ready(page);
-  await expect(page.locator("#todayListingStatusV1")).toBeHidden();
-  await expect(page.locator("#todayListingStatusV1")).toBeEmpty();
+  await page.evaluate(()=>JSTodayListingsV1.refresh(true));await ready(page);
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   await expect(page.locator("#list .item")).toHaveCount(0);
   await expect(page.locator("#list")).toContainText("검색 결과가 없습니다");
   expect(h.calls).toHaveLength(2);safe(h);
@@ -246,8 +249,7 @@ test("a later complete CSV introduces the next new ID while Today stays enabled 
   await ready(page);
   expect(await cardIds(page)).toEqual(expect.arrayContaining(["NEXT-COLLECTION"]));
   await expect(page.locator("#list .item")).toHaveCount(4);
-  await expect(page.locator("#todayListingStatusV1")).toBeHidden();
-  await expect(page.locator("#todayListingStatusV1")).toBeEmpty();
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   expect(h.calls).toHaveLength(2);
   safe(h);
 });
@@ -340,11 +342,11 @@ test("Today first-observed-property policy excludes old parents with new ads, pu
   for(const id of ["OLD-PUBLICATION","OLD-REAPPEARED","OLD-MASTER-NEW-AD","OLD-MASTER-EXPENSIVE-NEW","KST-JUST-BEFORE"])
     await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toHaveCount(0);
   expect(await page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"ready",day,count:4,adCount:3});
-  await expect(page.locator("#todayListingStatusV1")).toBeHidden();
-  await expect(page.locator("#todayListingStatusV1")).toBeEmpty();
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   h.state.hold=deferred();
   await page.evaluate(()=>loadSheet(true,true));
-  await expect(page.locator("#todayListingStatusV1")).toContainText("최신 확인 중");
+  await expect.poll(()=>page.evaluate(()=>JSTodayListingsV1.state().phase)).toBe("loading");
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   expect((await cardIds(page)).sort()).toEqual(Object.keys(h.scenario.todayOriginalIds).sort());
   h.state.hold.resolve();h.state.hold=null;
   await ready(page);
@@ -491,8 +493,7 @@ test("three Today pages publish verified cards progressively and finish through 
   expect(h.pages.calls.every(call=>!Object.hasOwn(call,"revision"))).toBe(true);
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","6");
   await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(6);
-  await expect(page.locator("#todayListingStatusV1")).toBeHidden();
-  await expect(page.locator("#todayListingStatusV1")).toBeEmpty();
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
   expect(await page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"ready",count:6,adCount:6});
   expect(await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),memos:allItems.map(value=>[value.propertyId,value.memo])}))).toEqual(before);
   safe(h);
@@ -522,8 +523,8 @@ test("Today deadline is not extended by full-snapshot events and timeout retains
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","5");
   await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(5);
   await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
-  await expect(page.locator("#todayListingStatusV1")).toContainText("실패");
-  await expect(page.locator("#todayListingStatusV1 button")).toBeEnabled();
+  await expect(page.locator("#todayListingStatusV1")).toHaveCount(0);
+  expect(await page.evaluate(()=>JSTodayListingsV1.emptyMessage())).toMatchObject({title:"오늘 신규매물 확인이 끝나지 않았습니다."});
   expect(h.pages.calls).toHaveLength(6);
   safe(h);
 });

@@ -262,16 +262,17 @@ test("failed original metadata automatically recovers all candidates and photos 
   } finally {result.state.release();}
 });
 
-test("persistent full original failures stop waiting labels and explicit retry restores candidate-only cards",async({page,context,isMobile})=>{
+test("persistent original failures keep their state without a status strip and bounded recovery restores candidate-only cards",async({page,context,isMobile})=>{
   const result=await failedFullMetadataFixture(page,context,isMobile,false);
   await result.start();
   await expect.poll(()=>result.state.reads.length).toBe(2);
-  await expect(page.locator("#unifiedOriginalLoadStatusV1")).toContainText("사진·링크 정보 업데이트가 지연");
+  await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+  expect(await page.evaluate(()=>JSUnifiedListingsV8.getOriginalMetadataStatus().status)).toBe("stale");
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","52");
   await expect(page.locator("#list .unified-thumb-v8").first()).toContainText("사진 불러오기 지연");
   await expect(page.locator("#list .unified-thumb-v8").filter({hasText:"사진 불러오는 중"})).toHaveCount(0);
   result.state.available=true;
-  await page.locator("#unifiedOriginalLoadStatusV1 button").click();
+  await page.evaluate(()=>JSListingRefreshV1.recoverOriginals());
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");
   await expect(card(page,endedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
   await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
@@ -423,7 +424,8 @@ test("one changed property fetches only its own proven inventory without clearin
     await expect.poll(()=>h.state.scopeReads).toEqual([[h.changedId]]);
     await expect(page.locator("#list")).toHaveAttribute("data-total-count","53");
     await expect(card(page,h.candidateId).locator(".unified-thumb-v8 img")).toHaveCount(1);
-    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toContainText("변경된 매물 1건");
+    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+    expect(await page.evaluate(()=>JSUnifiedListingsV8.pendingCompatibleIds().length)).toBe(1);
     const revision=await page.evaluate(()=>jsListingsRevisionV682);
     h.state.releases[0]();
     await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");

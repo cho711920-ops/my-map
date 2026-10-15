@@ -69,7 +69,7 @@ test("partial proof matches preserve known candidates/photos and leave only unkn
   assert.deepEqual(Array.from(a.sourceListingSearchV6579),["naver:old-A"]);
   assert.match(h.api.cardParts(b).thumbnail,/B\.jpg/);
   assert.match(h.api.cardParts(c).thumbnail,/사진 불러오는 중/);
-  assert.match(h.nodes.get("unifiedOriginalLoadStatusV1").querySelector("span").textContent,/변경된 매물 2건의 사진·링크 정보 업데이트 중/);
+  assert.equal(h.nodes.has("unifiedOriginalLoadStatusV1"),false);
   assert.equal(h.api.getOriginalMetadataStatus().pendingCount,2);
   assert.equal(h.reads.length,0);
 });
@@ -183,15 +183,19 @@ test("compact response expansion preserves proof maps and explicitly remaps the 
   assert.match(h.api.cardParts(item).thumbnail,/compact\.jpg/);
 });
 
-test("retry uses the bounded scoped recovery helper when compatible IDs are pending",async()=>{
+test("pending compatible IDs remain available to recovery without rendering or triggering a global retry control",()=>{
   const item=master("A"),h=harness([item]);h.api.attachCompatible([item],result([]));
-  let recoveries=0,resolve;
-  h.w.JSListingRefreshV1={recoverOriginals(){recoveries+=1;return new Promise(yes=>{resolve=yes;});}};
-  const button=h.nodes.get("unifiedOriginalLoadStatusV1").querySelector("button");
-  const pending=button.onclick();await Promise.resolve();
-  assert.equal(button.disabled,true);assert.equal(recoveries,1);assert.equal(h.reads.length,0);
-  resolve();await pending;
-  assert.equal(button.disabled,false);
+  let recoveries=0;
+  h.w.JSListingRefreshV1={recoverOriginals(){recoveries+=1;return Promise.resolve();}};
+  h.api.markSnapshotStale();
+  assert.deepEqual(Array.from(h.api.pendingCompatibleIds()),["A"]);
+  assert.equal(h.api.getOriginalMetadataStatus("A").retryable,true);
+  assert.equal(h.nodes.has("unifiedOriginalLoadStatusV1"),false);
+  assert.equal(recoveries,0);assert.equal(h.reads.length,0);
+  h.api.attachCompatible([item],result([["A","A",key(1),[original("A")]]]),{scoped:true});
+  assert.equal(h.api.getOriginalMetadataStatus("A").ready,true);
+  assert.deepEqual(Array.from(h.api.pendingCompatibleIds()),[]);
+  assert.match(h.api.cardParts(item).thumbnail,/A\.jpg/);
 });
 
 test("a fresh detail invalidates its old proof and an equal-proof old full response cannot relabel the newer group",()=>{
@@ -311,10 +315,10 @@ test("a verified Today subset preserves global load phase and other original gro
   assert.equal(h.api.canCacheCompatible(items),false);
   h.api.attachCompatible(items,result([["A","A",key(1),[original("A")]], ["B","B",key(1),[original("B")]]]));
   h.api.markSnapshotStale();
-  const banner=h.nodes.get("unifiedOriginalLoadStatusV1"),message=banner.querySelector("span").textContent;
+  assert.equal(h.nodes.has("unifiedOriginalLoadStatusV1"),false);
   h.api.attachCompatible([items[0]],result([["A","A",key(1),[original("A")]]]),{scoped:true,preserveGlobalStatus:true});
   assert.equal(h.api.getOriginalMetadataStatus().status,"stale");
-  assert.equal(h.nodes.get("unifiedOriginalLoadStatusV1"),banner);assert.equal(banner.querySelector("span").textContent,message);
+  assert.equal(h.nodes.has("unifiedOriginalLoadStatusV1"),false);
   assert.equal(h.api.allOriginals("B").length,1);
 });
 
