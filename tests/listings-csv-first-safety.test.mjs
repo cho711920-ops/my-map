@@ -103,7 +103,7 @@ function harness(options = {}) {
     'hydrateInitialFullListingsCacheItemsV1','showInitialFullListingsCacheV1','hasReadyCoordinateWithoutSharedCacheV8213',
     'matchingListingSnapshotRevisionV1','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','ensureCompleteBaseV1','applyScopedListingsV1','applyOriginalsSnapshotV1',
     'compatibleOriginalsResultV1','compatibleOriginalsCacheV1','originalMetadataMutationPendingV1','refreshScopedOriginalsV1',
-    'refreshOriginalMetadataPresentationV1','recoverOriginalMetadataV1','loadSheet',
+    'requestVisibleOriginalMetadataV1','refreshOriginalMetadataPresentationV1','recoverOriginalMetadataV1','loadSheet',
     'fetchDataRevisionV682','refreshListingsWhenChangedV682',
     'applyListingChangesV683']) {
     vm.runInContext(fn(map,name),context);
@@ -277,6 +277,71 @@ test('a large compatible recovery is bounded per pass but continues while succes
   assert.equal(h.originalReads.length,1);
 });
 
+test('a bounded full recovery connects rendered cards before an unrelated 200-row prefix', async () => {
+  const h=harness(),ids=Array.from({length:250},(_,i)=>'P'+i);
+  const loading=h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv(ids.map(id=>row(id,{source_snapshot_key:proof(1)})),'CSV'));
+  await loading;
+  h.context.visibleListItems=[h.context.allItems[249],h.context.allItems[240]];
+  h.context.listRenderStart=0;h.context.listRenderLimit=2;
+  h.originalReads[0].resolve(provenOriginals(ids.map(id=>[id,proof(2)])));
+  await flush();
+  const batch=h.scopedReads[0].params.ids.split(',');
+  assert.equal(batch.length,50);
+  assert.deepEqual(batch.slice(0,2),['P249','P240']);
+  h.scopedReads[0].reject(new Error('bounded fixture stop'));
+  await flush();
+});
+
+test('visible recovery coalesces scroll renders, reads only the render window, and backs off failures',async()=>{
+  const h=harness(),ids=Array.from({length:60},(_,i)=>'V'+i);
+  let now=Date.now();h.context.Date=class extends Date{static now(){return now;}};
+  h.context.allItems=ids.map(id=>h.context.listingChangeRowToItemV683(row(id,{source_snapshot_key:proof(1)})));
+  h.context.currentItems=h.context.allItems;
+  h.context.visibleListItems=h.context.allItems;
+  h.context.listRenderStart=40;h.context.listRenderLimit=58;
+  h.context.JSUnifiedListingsV8.attachCompatible(h.context.allItems,provenOriginals(ids.map(id=>[id,proof(2)])));
+  h.context.requestVisibleOriginalMetadataV1();h.context.requestVisibleOriginalMetadataV1();
+  assert.equal(h.timers.size,1);assert.equal(h.scopedReads.length,0);
+  h.runTimers();await flush();
+  assert.equal(h.scopedReads.length,1);
+  assert.deepEqual(h.scopedReads[0].params.ids.split(','),ids.slice(40,58));
+  h.scopedReads[0].reject(new Error('offline'));await flush();
+  h.context.requestVisibleOriginalMetadataV1();h.runTimers();await flush();
+  assert.equal(h.scopedReads.length,1,'failed rerenders must not loop requests');
+  now+=30_001;h.context.requestVisibleOriginalMetadataV1();h.runTimers();await flush();
+  assert.equal(h.scopedReads.length,2);
+  const batch=h.scopedReads[1].params.ids.split(',');
+  h.scopedReads[1].resolve({ok:true,items:batch.map(id=>row(id,{source_snapshot_key:proof(3)})),
+    unified:provenOriginals(batch.map(id=>[id,proof(3),'visible-photo']))});
+  await flush();
+  assert.match(h.context.allItems[40].thumbnailV8,/visible-photo/);
+  assert.equal(h.context.JSUnifiedListingsV8.pendingCompatibleIds().length,42);
+  assert.equal(h.csvReads.length,0);assert.equal(h.originalReads.length,0);
+});
+
+test('scrolling outside an in-flight recovery coalesces one visible follow-up without parallel reads',async()=>{
+  const h=harness(),ids=Array.from({length:205},(_,i)=>'S'+i);
+  h.context.allItems=ids.map(id=>h.context.listingChangeRowToItemV683(row(id,{source_snapshot_key:proof(1)})));
+  h.context.currentItems=h.context.allItems;
+  h.context.JSUnifiedListingsV8.attachCompatible(h.context.allItems,provenOriginals(ids.map(id=>[id,proof(2)])));
+  const recovery=h.context.recoverOriginalMetadataV1(h.context.jsListingsLoadGenerationV1);
+  await flush();
+  h.context.visibleListItems=[h.context.allItems[204]];h.context.listRenderStart=0;h.context.listRenderLimit=1;
+  h.context.requestVisibleOriginalMetadataV1();h.runTimers();await flush();
+  assert.equal(h.scopedReads.length,1,'do not overlap the current pass');
+  for(let index=0;index<4;index++){
+    const request=h.scopedReads[index],batch=request.params.ids.split(',');
+    request.resolve({ok:true,items:batch.map(id=>row(id,{source_snapshot_key:proof(3)})),
+      unified:provenOriginals(batch.map(id=>[id,proof(3)]))});await flush();
+  }
+  await recovery;await flush();
+  assert.equal(h.scopedReads.length,4);assert.equal(h.timers.size,1);
+  h.runTimers();await flush();
+  assert.equal(h.scopedReads.length,5);assert.equal(h.scopedReads[4].params.ids,'S204');
+  h.scopedReads[4].reject(new Error('fixture stop'));await flush();
+});
+
 test('a proof-bearing Today subset commits only after all rows validate and retains unrelated pending coverage', async () => {
   const h=harness({complete:true});
   const loading=h.context.loadSheet(false,false);
@@ -408,7 +473,7 @@ test("a complete latest CSV displays before a stalled original response, retaini
   assert.equal(h.context.jsListingsRevisionV682, 'NEW');
   assert.equal(h.renders.length, 1);
   assert.equal(h.writes.length, 0, 'an incomplete pair is never persisted as current');
-  assert.equal(h.events[0].detail.kind, 'full');
+  assert.equal(h.events.find(event=>event.detail.kind==='full').detail.kind, 'full');
 });
 
 test("an old complete cache is replaced by today's complete CSV even while originals remain pending", async () => {
@@ -459,13 +524,14 @@ test("a mixed original revision never attaches or writes a falsely current full 
   assert.equal(h.renders.length, 2, 'stale metadata is visibly identified instead of waiting forever');
   assert.equal(h.writes.length, 0);
   assert.equal(h.context.jsListingsRevisionV682, 'NEW', 'complete CSV remains the master baseline');
-  assert.equal(h.csvReads.length, 2, 'one bounded recovery pair is requested');
-  assert.equal(h.csvReads[1].force, true);
-  h.csvReads[1].resolve(csv([row('TODAY')], 'NEWER'));
-  h.originalReads[1].resolve(originals('TODAY','STILL-OLD','stale'));
+  assert.equal(h.csvReads.length, 1, 'recover the unknown property without another full pair');
+  assert.equal(h.scopedReads.length, 1);
+  h.scopedReads[0].resolve({ok:true,items:[row('TODAY',{source_snapshot_key:proof(3)})],
+    unified:provenOriginals([['TODAY',proof(4),'wrong-scoped']])});
   await flush();
-  assert.equal(h.csvReads.length, 2, 'continued collection changes cannot create a retry loop');
-  assert.equal(h.originalReads.length, 2);
+  assert.equal(h.csvReads.length, 1, 'continued collection changes cannot create a retry loop');
+  assert.equal(h.originalReads.length, 1);
+  assert.equal(h.scopedReads.length, 1);
   assert.equal(h.writes.length, 0);
   assert.equal(h.context.allItems[0].thumbnailV8, '');
 });
@@ -477,33 +543,34 @@ test("a mismatched initial pair recovers current photos once without changing fa
   await loading;
   h.originalReads[0].resolve(originals('TODAY','OLD','stale'));
   await flush();
-  assert.equal(h.csvReads.length, 2);
-  h.csvReads[1].resolve(csv([row('TODAY')], 'RECOVERED'));
-  h.originalReads[1].resolve(originals('TODAY','RECOVERED','fresh'));
+  assert.equal(h.scopedReads.length, 1);
+  h.scopedReads[0].resolve({ok:true,items:[row('TODAY',{source_snapshot_key:proof(3)})],
+    unified:provenOriginals([['TODAY',proof(3),'fresh']])});
   await flush();
   assert.match(h.context.allItems[0].thumbnailV8, /fresh\.jpg/);
-  assert.equal(h.context.jsListingsRevisionV682, 'RECOVERED');
+  assert.equal(h.context.jsListingsRevisionV682, 'NEW','a property response cannot certify a whole-dataset revision');
   assert.equal(h.context.favoriteOnly, true);
   assert.equal(h.context.activeFavoriteFolderId, 'folder-fixture');
   assert.equal(h.context.selectedPrintKeys[0], 'checked-fixture');
-  assert.equal(h.csvReads.length, 2);
-  assert.equal(h.originalReads.length, 2);
+  assert.equal(h.csvReads.length, 1);
+  assert.equal(h.originalReads.length, 1);
 });
 
-test("a failed full original read recovers candidate metadata and photos with one forced pair", async () => {
+test("a failed full original read recovers candidate metadata and photos with one scoped inventory", async () => {
   const h = harness();
   const loading = h.context.loadSheet(false, false);
   h.csvReads[0].resolve(csv([row('CANDIDATE'),row('MANUAL',{status:'계약완료'})], 'CURRENT'));
   await loading;
   h.originalReads[0].reject(Object.assign(new Error('Timed out'), {name:'TimeoutError'}));
   await flush();
-  assert.equal(h.csvReads.length, 2);
-  assert.equal(h.csvReads[1].force, true);
-  const payload = originals('CANDIDATE','CURRENT','candidate-photo');
-  Object.assign(payload.groups.CANDIDATE[0], {active:0,sourceUnavailable:true,
+  assert.equal(h.csvReads.length, 1);
+  assert.equal(h.scopedReads.length, 1);
+  const payload = provenOriginals([['CANDIDATE',proof(3),'candidate-photo'],['MANUAL',proof(4)]]);
+  payload.groups['internal-MANUAL']=[];
+  Object.assign(payload.groups['internal-CANDIDATE'][0], {active:0,sourceUnavailable:true,
     availabilityKind:'census_missing',candidateEligible:true});
-  h.csvReads[1].resolve(csv([row('CANDIDATE'),row('MANUAL',{status:'계약완료'})], 'CURRENT'));
-  h.originalReads[1].resolve(payload);
+  h.scopedReads[0].resolve({ok:true,items:[row('CANDIDATE',{source_snapshot_key:proof(3)}),
+    row('MANUAL',{status:'계약완료',source_snapshot_key:proof(4)})],unified:payload});
   await flush();
   assert.equal(h.context.allItems[0].unifiedCandidateOriginalCountV2, 1);
   assert.equal(h.context.allItems[1].state, '계약완료');
@@ -513,7 +580,7 @@ test("a failed full original read recovers candidate metadata and photos with on
   assert.equal(h.context.loadSheet.originalsRecoveryV1, undefined);
   assert.equal(h.context.selectedPrintKeys[0], 'checked-fixture');
   assert.equal(h.context.favoriteOnly, true);
-  assert.equal(h.originalReads.length, 2);
+  assert.equal(h.originalReads.length, 1);
 });
 
 test("unchanged revision polls recover missing metadata with a cooldown and finite retry budget", async () => {
@@ -525,46 +592,44 @@ test("unchanged revision polls recover missing metadata with a cooldown and fini
   await loading;
   h.originalReads[0].reject(new Error('offline'));
   await flush();
-  h.csvReads[1].resolve(csv([row('TODAY')], 'UNCHANGED'));
-  h.originalReads[1].reject(new Error('still offline'));
+  h.scopedReads[0].reject(new Error('still offline'));
   await flush();
-  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'error');
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'stale');
   await h.context.refreshListingsWhenChangedV682();
-  assert.equal(h.originalReads.length, 2, 'no retry before the 60-second cooldown');
+  assert.equal(h.scopedReads.length, 1, 'no retry before the 60-second cooldown');
   for (let attempt = 2; attempt <= 3; attempt++) {
     now += 60_001;
     const poll = h.context.refreshListingsWhenChangedV682();
     await flush();
-    assert.equal(h.originalReads.length, attempt + 1);
-    h.csvReads[attempt].resolve(csv([row('TODAY')], 'UNCHANGED'));
-    h.originalReads[attempt].reject(new Error('offline'));
+    assert.equal(h.scopedReads.length, attempt);
+    h.scopedReads[attempt-1].reject(new Error('offline'));
     await poll;
     await flush();
   }
   now += 10 * 60_000;
   for (let i = 0; i < 10; i++) await h.context.refreshListingsWhenChangedV682();
-  assert.equal(h.originalReads.length, 4, 'three recovery attempts cannot become endless full downloads');
-  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'error');
+  assert.equal(h.scopedReads.length, 3, 'three recovery attempts cannot become endless requests');
+  assert.equal(h.csvReads.length, 1);assert.equal(h.originalReads.length, 1);
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'stale');
   assert.equal(h.context.allItems[0].unifiedOriginalMetadataPendingV1, true);
 });
 
-test("metadata-first recovery rerenders identical CSV instead of keeping the pending-only list", async () => {
+test("property-proof recovery rerenders unchanged representatives instead of keeping the pending-only list", async () => {
   const h = harness();
   const loading = h.context.loadSheet(false,false);
   h.csvReads[0].resolve(csv([row('TODAY')], 'SAME'));
   await loading;
   h.originalReads[0].reject(new Error('first read failed'));
   await flush();
-  assert.equal(h.csvReads.length,2);
-  h.originalReads[1].resolve(originals('TODAY','SAME','metadata-first'));
-  await flush();
+  assert.equal(h.csvReads.length,1);assert.equal(h.scopedReads.length,1);
   const rendersBeforeCsv = h.renders.length;
-  h.csvReads[1].resolve(csv([row('TODAY')], 'SAME'));
+  h.scopedReads[0].resolve({ok:true,items:[row('TODAY',{source_snapshot_key:proof(3)})],
+    unified:provenOriginals([['TODAY',proof(3),'metadata-first']])});
   await flush();
   assert.match(h.context.allItems[0].thumbnailV8,/metadata-first\.jpg/);
   assert.equal(h.renders.length,rendersBeforeCsv+1,'changed metadata must render even with identical representative CSV');
   assert.equal(h.restored.at(-1).preserveVisibleListV1,false,'selection restoration cannot overwrite the fresh member set');
-  assert.equal(h.writes.length,1,'the recovered complete pair is reusable after another refresh');
+  assert.equal(h.writes.length,0,'a failed full response is never persisted as a verified complete cache');
   assert.equal(h.context.loadSheet.originalsRecoveryV1,undefined);
 });
 
@@ -577,21 +642,20 @@ test("a successful same-revision poll clears metadata failure without another us
   await loading;
   h.originalReads[0].reject(new Error('offline'));
   await flush();
-  h.csvReads[1].resolve(csv([row('TODAY')], 'SAME'));
-  h.originalReads[1].reject(new Error('offline'));
+  h.scopedReads[0].reject(new Error('offline'));
   await flush();
   now += 60_001;
   const poll = h.context.refreshListingsWhenChangedV682();
   await flush();
-  h.csvReads[2].resolve(csv([row('TODAY')], 'SAME'));
-  h.originalReads[2].resolve(originals('TODAY','SAME','restored'));
+  h.scopedReads[1].resolve({ok:true,items:[row('TODAY',{source_snapshot_key:proof(3)})],
+    unified:provenOriginals([['TODAY',proof(3),'restored']])});
   await poll;
   await flush();
   assert.match(h.context.allItems[0].thumbnailV8, /restored\.jpg/);
   assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status, 'ready');
-  assert.equal(h.originalReads.length, 3);
+  assert.equal(h.originalReads.length, 1);assert.equal(h.scopedReads.length, 2);
   await h.context.refreshListingsWhenChangedV682();
-  assert.equal(h.originalReads.length, 3, 'healthy unchanged polling remains a tiny revision check');
+  assert.equal(h.scopedReads.length, 2, 'healthy unchanged polling remains a tiny revision check');
 });
 
 test("scoped originals merge without deleting other photos and supersede a late old full CSV", async () => {

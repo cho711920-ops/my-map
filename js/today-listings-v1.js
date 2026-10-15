@@ -26,7 +26,7 @@
   }
   function expiredDay() { return Boolean(state.ids && state.day && expectedDay() !== state.day); }
   function refreshView() {
-    // applyFilter renders the banner with the array it already computed.
+    // applyFilter renders the load/error notice with its already filtered array.
     // Keep the fallback for older callers that do not return that array.
     if (typeof global.applyFilter === "function" && Array.isArray(global.applyFilter())) return;
     render();
@@ -52,7 +52,7 @@
     var node = banner();
     if (!node) return;
     node.hidden = !active();
-    if (node.hidden) return;
+    if (node.hidden) { node.replaceChildren(); return; }
     if (expiredDay() && !state.rolloverQueued) {
       state.rolloverQueued = true;
       cancel();
@@ -61,22 +61,23 @@
       state.phase = "loading";
       setTimeout(function() { state.rolloverQueued = false; if (active()) refresh(true); }, 0);
     }
-    node.replaceChildren();
-    var label = document.createElement("span");
     shownItems = Array.isArray(shownItems) ? shownItems
       : typeof global.getFilteredItems === "function" ? global.getFilteredItems() : [];
-    var shown = shownItems.length;
     if (typeof global.updateMapListingCountV825 === "function") global.updateMapListingCountV825(shownItems);
+    node.replaceChildren();
+    // The active filter chip and map count already identify the successful
+    // Today view. Keep this extra row only while a read is pending or failed.
+    node.hidden = state.phase !== "loading" && state.phase !== "error";
+    if (node.hidden) return;
+    var label = document.createElement("span");
     label.textContent = state.phase === "loading" ? "오늘 신규매물 최신 확인 중 · " +
       (state.confirmedPages ? "신규매물 " + state.progressCount + "건 · 연결광고 " + state.progressAdCount + "개 확인 · 목록 계속 확인 중" : "기존 결과 유지")
-      : state.phase === "error" ? state.message + (state.ids ? " · 마지막 확인 결과 유지" : " · 최신 결과 미확인")
-        : state.ids ? "오늘 신규매물 " + state.count + "건 · 연결광고 " + state.adCount + "개" +
-          (state.manualCount ? " · 직접등록 " + state.manualCount + "건" : "") + " · 현재 조건 " + shown + "건" : "오늘 신규매물 최신 확인 필요";
+      : state.message + (state.ids ? " · 마지막 확인 결과 유지" : " · 최신 결과 미확인");
     node.appendChild(label);
+    if (state.phase !== "error") return;
     var retry = document.createElement("button");
     retry.type = "button";
-    retry.textContent = state.phase === "loading" ? "확인 중" : "최신 확인";
-    retry.disabled = state.phase === "loading";
+    retry.textContent = "다시 시도";
     retry.addEventListener("click", function() { refresh(true); });
     node.appendChild(retry);
   }
@@ -327,7 +328,7 @@
       if (state.phase === "loading") return {title: "오늘 신규매물을 확인하고 있습니다.",
         description: "처음 수집한 매물을 순서대로 확인 중입니다. 조회가 끝나기 전에는 0건으로 확정하지 않습니다."};
       if (state.phase === "error") return {title: "오늘 신규매물 확인이 끝나지 않았습니다.",
-        description: "위의 최신 확인 버튼을 눌러 나머지 매물을 다시 확인해 주세요."};
+        description: "위의 다시 시도 버튼을 눌러 나머지 매물을 다시 확인해 주세요."};
       return null;
     }
   };

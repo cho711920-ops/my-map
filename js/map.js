@@ -2008,6 +2008,7 @@ window.JSListingRefreshV1.applyOriginals = applyOriginalsSnapshotV1;
 window.JSListingRefreshV1.generation = function() { return jsListingsLoadGenerationV1; };
 window.JSListingRefreshV1.hasCompleteBase = function() { return jsListingsCompleteBaseV1; };
 window.JSListingRefreshV1.recoverOriginals = function() { return recoverOriginalMetadataV1(jsListingsLoadGenerationV1, true); };
+window.JSListingRefreshV1.requestVisibleOriginals = requestVisibleOriginalMetadataV1;
 
 function compatibleOriginalsResultV1(items, result, scoped) {
   if (!result || result.ok === false || !result.sourceSnapshotKeys || !result.sourceSnapshotPropertyIds ||
@@ -2041,7 +2042,19 @@ function originalMetadataMutationPendingV1(item) {
 function refreshScopedOriginalsV1(ids, generation) {
   var previous = refreshScopedOriginalsV1.pending;
   if (previous && previous.generation === generation) return previous.promise;
-  var unique = Array.from(new Set((ids || []).map(clean).filter(Boolean))).slice(0, 200);
+  var unique = Array.from(new Set((ids || []).map(clean).filter(Boolean)));
+  var allowed = new Set(unique), prioritized = [], prioritizedSet = new Set();
+  // The CSV/whole-original caches can age independently during a collection.
+  // Recover the rendered cards first, not an arbitrary prefix of the full map.
+  var shown = typeof visibleListItems !== "undefined" && Array.isArray(visibleListItems)
+    ? visibleListItems : Array.isArray(window.currentItems) ? window.currentItems : [];
+  var start = typeof listRenderStart === "number" ? Math.max(0, listRenderStart) : 0;
+  var end = typeof listRenderLimit === "number" ? Math.max(start, listRenderLimit) : start + 50;
+  shown.slice(start, Math.min(end, start + 50)).forEach(function(item) {
+    var id = clean(item && item.propertyId);
+    if (allowed.has(id) && !prioritizedSet.has(id)) { prioritized.push(id); prioritizedSet.add(id); }
+  });
+  unique = prioritized.concat(unique.filter(function(id) { return !prioritizedSet.has(id); })).slice(0, 200);
   var cursor = 0;
   var task = {generation: generation, promise: null};
   function next() {
@@ -2081,6 +2094,7 @@ function refreshScopedOriginalsV1(ids, generation) {
     if (generation !== jsListingsLoadGenerationV1) return false;
     var remaining = window.JSUnifiedListingsV8.pendingCompatibleIds();
     if (remaining.length) window.JSUnifiedListingsV8.markSnapshotStale();
+    else delete loadSheet.originalsRecoveryV1;
     // Successful progress may continue on the next one-minute poll. The retry
     // cap is for stalled/error recovery, not a permanent 600-property ceiling.
     var recovery = loadSheet.originalsRecoveryV1;
@@ -2096,6 +2110,57 @@ function refreshScopedOriginalsV1(ids, generation) {
   }).finally(function() { if (refreshScopedOriginalsV1.pending === task) refreshScopedOriginalsV1.pending = null; });
   refreshScopedOriginalsV1.pending = task;
   return task.promise;
+}
+
+function requestVisibleOriginalMetadataV1() {
+  if (typeof window.setTimeout !== "function") return;
+  var generation = jsListingsLoadGenerationV1;
+  if (requestVisibleOriginalMetadataV1.timer) {
+    if (requestVisibleOriginalMetadataV1.timerGeneration === generation) return;
+    window.clearTimeout(requestVisibleOriginalMetadataV1.timer);
+  }
+  requestVisibleOriginalMetadataV1.timerGeneration = generation;
+  requestVisibleOriginalMetadataV1.timer = window.setTimeout(function() {
+    requestVisibleOriginalMetadataV1.timer = null;
+    var api = window.JSUnifiedListingsV8;
+    if (generation !== jsListingsLoadGenerationV1 || isLoadingSheet || !api ||
+        typeof api.getOriginalMetadataStatus !== "function" || typeof api.pendingCompatibleIds !== "function") return;
+    var shown = typeof visibleListItems !== "undefined" && Array.isArray(visibleListItems)
+      ? visibleListItems : Array.isArray(window.currentItems) ? window.currentItems : [];
+    var start = typeof listRenderStart === "number" ? Math.max(0, listRenderStart) : 0;
+    var end = typeof listRenderLimit === "number" ? Math.max(start, listRenderLimit) : start + 50;
+    var pendingIds = new Set(api.pendingCompatibleIds());
+    var ids = Array.from(new Set(shown.slice(start, Math.min(end, start + 50)).map(function(item) {
+      return clean(item && item.propertyId);
+    }).filter(function(id) { return id && (pendingIds.has(id) || !api.getOriginalMetadataStatus(id).ready); })));
+    if (!ids.length) return;
+    var pending = refreshScopedOriginalsV1.pending;
+    if (pending && pending.generation === generation) {
+      // A filter/scroll may expose new cards during an existing bounded pass.
+      // Coalesce into one follow-up, never create parallel per-card requests.
+      if (!pending.visibleFollowUp) {
+        pending.visibleFollowUp = true;
+        pending.promise.then(function() {
+          if (generation === jsListingsLoadGenerationV1) requestVisibleOriginalMetadataV1();
+        });
+      }
+      return;
+    }
+    if (requestVisibleOriginalMetadataV1.generation !== generation) {
+      requestVisibleOriginalMetadataV1.generation = generation;
+      requestVisibleOriginalMetadataV1.retryAt = Object.create(null);
+    }
+    var retryAt = requestVisibleOriginalMetadataV1.retryAt, now = Date.now();
+    ids = ids.filter(function(id) { return now >= (retryAt[id] || 0); });
+    if (!ids.length) return;
+    // Re-rendering a failed/partial result must not create a request loop.
+    if (Object.keys(retryAt).length > 500) {
+      Object.keys(retryAt).forEach(function(id) { if (retryAt[id] <= now) delete retryAt[id]; });
+      if (Object.keys(retryAt).length > 500) return;
+    }
+    ids.forEach(function(id) { retryAt[id] = now + 30 * 1000; });
+    refreshScopedOriginalsV1(ids, generation);
+  }, 120);
 }
 
 function refreshOriginalMetadataPresentationV1() {

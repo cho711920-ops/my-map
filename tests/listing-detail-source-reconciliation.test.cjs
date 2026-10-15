@@ -54,9 +54,9 @@ test("unloaded original metadata stays a fast CSV card but cannot claim one sour
   assert.equal(h.item.unifiedOriginalMetadataPendingV1,true);
   assert.equal(h.item.unifiedOriginalCountV8,0);
   const parts=h.api.cardParts(h.w.currentItems[0]);
-  assert.match(parts.thumbnail,/원본 확인 중/);
+  assert.match(parts.thumbnail,/사진 불러오는 중/);
   assert.doesNotMatch(parts.thumbnail,/사진 없음/);
-  assert.match(parts.badge,/원본 확인 중/);
+  assert.match(parts.badge,/사진 불러오는 중/);
   assert.equal(h.calls.length,0,"Pending labels must not trigger per-card network requests");
 });
 
@@ -287,7 +287,7 @@ test("an old complete snapshot does not falsely certify a newly arrived CSV prop
   h.w.applyFilter();
   assert.equal(newcomer.unifiedOriginalMetadataPendingV1,true);
   const card=h.api.cardParts(h.w.currentItems.find(item=>item.propertyId==="M-new"));
-  assert.match(card.thumbnail,/원본 연결 재확인/);
+  assert.match(card.thumbnail,/사진 불러오기 지연/);
   assert.doesNotMatch(card.thumbnail,/사진 없음/);
   assert.equal(h.item.unifiedOriginalMetadataPendingV1,false,"The genuinely verified source-less older record stays ready");
 });

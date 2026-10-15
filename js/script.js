@@ -1874,6 +1874,9 @@ function syncListVirtualMetadataV1(list) {
   list.setAttribute("data-rendered-count", String(Math.max(0, listRenderLimit - listRenderStart)));
   list.setAttribute("data-rendered-end", String(listRenderLimit));
   list.setAttribute("data-total-count", String(visibleListItems.length));
+  if (window.JSListingRefreshV1 && typeof window.JSListingRefreshV1.requestVisibleOriginals === "function") {
+    window.JSListingRefreshV1.requestVisibleOriginals();
+  }
 }
 
 function trimListWindowFromStartV1(list) {

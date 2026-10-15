@@ -96,7 +96,8 @@ test('all Today pages merge original-ID gates and per-property proof maps, with 
   assert.equal(applied.unified.sourceSnapshotKeys.A,a);assert.equal(applied.unified.sourceSnapshotPropertyIds.B,'B');
   assert.deepEqual(Array.from(applied.todayOriginalIds.A),['ad-A1','ad-A2']);
   assert.equal(h.api.state().adCount,2);assert.equal(h.api.state().count,2);assert.equal(h.api.state().manualCount,1);
-  assert.match(h.elements.get('todayListingStatusV1').children[0].textContent,/오늘 신규매물 2건 · 연결광고 2개 · 직접등록 1건/);
+  assert.equal(h.elements.get('todayListingStatusV1').hidden,true);
+  assert.equal(h.elements.get('todayListingStatusV1').children.length,0);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:1}),true);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'old-ad',active:1}),false);
   assert.equal(h.api.matchesOriginal({propertyId:'A'},{originalId:'ad-A1',active:0}),false);
@@ -131,6 +132,23 @@ test('a failed next page preserves the previous success and exposes a retry, not
   h.reads[2].reject(new Error('offline')); await pending;
   assert.equal(h.applied.length, 1); assert.equal(h.api.state().count, 1); assert.equal(h.api.state().phase, 'error');
   assert.match(h.elements.get('todayListingStatusV1').children[0].textContent, /마지막 확인 결과 유지/);
+  assert.equal(h.elements.get('todayListingStatusV1').children[1].textContent,'다시 시도');
+});
+
+test('a successful Today view has no summary row or refresh button but continues automatic refresh and clears a recovered error',async()=>{
+  const h=fixture(),pending=h.api.refresh(true),node=h.elements.get('todayListingStatusV1');
+  assert.equal(node.hidden,false);assert.equal(node.children.length,1,'pending notice has no redundant button');
+  h.reads[0].resolve(h.result(['first']));assert.equal(await pending,true);
+  assert.equal(node.hidden,true);assert.equal(node.children.length,0);
+  h.events['js-listings-full-snapshot']({detail:{revision:'next'}});
+  await h.tick();assert.equal(h.reads.length,2,'removing the ready controls does not disable automatic reads');
+  h.reads[1].reject(new Error('offline'));await h.tick();
+  assert.equal(node.hidden,false);assert.equal(node.children[1].textContent,'다시 시도');
+  node.children[1].listeners.click();await h.tick();
+  assert.equal(h.reads.length,3);assert.equal(node.children.length,1);
+  h.reads[2].resolve(h.result(['first','second']));await h.tick();
+  assert.equal(h.api.state().phase,'ready');assert.equal(h.api.state().count,2);
+  assert.equal(node.hidden,true);assert.equal(node.children.length,0);
 });
 
 test('a changed server snapshot retries once without committing the incomplete previous pages', async () => {

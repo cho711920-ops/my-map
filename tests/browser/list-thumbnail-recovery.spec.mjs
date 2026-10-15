@@ -33,7 +33,7 @@ async function installFixture(page, context, {photos = {[firstId]: [firstPhoto],
       const kind = isProxy ? "proxy" : "direct";
       const source = isProxy ? url.searchParams.get("url") : url.href;
       state.requests[kind][source] = (state.requests[kind][source] || 0) + 1;
-      const result = typeof state[kind] === "function" ? state[kind](source) : state[kind];
+      const result = await (typeof state[kind] === "function" ? state[kind](source) : state[kind]);
       if (!result) return route.fulfill({status: 503, contentType: "text/plain", body: "Fixture temporary image failure"});
       return route.fulfill({status: 200, contentType: "image/svg+xml", body: tile, headers: {"cache-control": "no-store"}});
     }
@@ -143,9 +143,15 @@ test("successful detail image repairs only the matching failed thumbnail in plac
   await expect(thumbnail(page, secondId)).toHaveText("사진 불러오기 실패");
   if (!isMobile) await card(page, secondId).locator(".action-select-check").check();
   const before = await preserveListState(page);
+  let releaseImage;
+  const pendingImage=new Promise(resolve=>{releaseImage=resolve;});
+  state.direct=source=>source===firstPhoto?pendingImage:false;
+  // A fresh detail read may legitimately repaint changed source metadata.
+  // Isolate photo recovery after that read, and assert that the image-load
+  // handler itself repairs the existing nodes rather than rebuilding the list.
+  await page.evaluate(id=>JSUnifiedListingsV8.open(encodeURIComponent(id)),firstId);
   await page.evaluate(() => { window.__thumbnailOriginalCards = [...document.querySelectorAll("#list .item")]; });
-  state.direct = source => source === firstPhoto;
-  await card(page).locator(".item-building-name").click();
+  releaseImage(true);
   const detail = page.locator(".unified-detail-hero-v8 img");
   await imageReady(detail);
   await expect(detail).toHaveAttribute("data-detail-source-v8144", firstPhoto);

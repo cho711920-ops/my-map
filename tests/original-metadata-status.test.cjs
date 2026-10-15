@@ -14,7 +14,7 @@ function harness(options={}){
     dispatchEvent(event){events.push(event);},
     JSDataAccessV6:{read(action,params,options){const call={action,params,options,...deferred()};reads.push(call);return call.promise;}}};
   vm.runInNewContext(source,{window:w,document,console:{error(){},warn(){}}});
-  const api=w.JSUnifiedListingsV8;api.attach([item]);
+  const api=w.JSUnifiedListingsV8;api.attach([item]);events.length=0;
   return {api,w,item,reads,events};
 }
 function original(extra={}){return {originalId:"source-one",propertyId:"M-one",source:"네이버",active:1,
@@ -43,8 +43,8 @@ function bannerDocument({chips=true,list=true,statusNode=true}={}){
 
 test("cold metadata pending is explicit and does not make a per-card request",()=>{
   const h=harness();
-  assert.deepEqual(status(h.api,"M-one"),{status:"pending",ready:false,hasKnownData:false,retryable:false,pendingCount:0});
-  assert.match(h.api.cardParts(h.item).thumbnail,/원본 확인 중/);
+  assert.deepEqual(status(h.api,"M-one"),{status:"pending",ready:false,hasKnownData:false,retryable:false,pendingCount:1});
+  assert.match(h.api.cardParts(h.item).thumbnail,/사진 불러오는 중/);
   assert.equal(h.reads.length,0);
 });
 
@@ -55,12 +55,12 @@ test("failed full metadata load changes unknown cards from perpetual pending to 
   h.reads[0].reject(new Error("Fixture upstream error"));
   const result=await pending;
   assert.equal(result.ok,false);
-  assert.deepEqual(status(h.api,"M-one"),{status:"error",ready:false,hasKnownData:false,retryable:true,pendingCount:0});
+  assert.deepEqual(status(h.api,"M-one"),{status:"error",ready:false,hasKnownData:false,retryable:true,pendingCount:1});
   const card=h.api.cardParts(h.item);
-  assert.match(card.thumbnail,/원본 조회 실패/);
-  assert.match(card.badge,/다시 확인/);
+  assert.match(card.thumbnail,/사진 불러오기 실패/);
+  assert.match(card.badge,/다시 불러오기/);
   assert.match(card.sourceButton,/JSUnifiedListingsV8\.open/);
-  assert.doesNotMatch(card.thumbnail,/원본 확인 중|사진 없음/);
+  assert.doesNotMatch(card.thumbnail,/사진 불러오는 중|사진 없음/);
   assert.equal(h.reads.length,1,"No implicit full retry or card-prefetch storm is added");
   assert.equal(JSON.stringify(h.item),saved);
 });
@@ -100,9 +100,9 @@ test("revision mismatch marks unknown cards stale while preserving the last comm
   const newItem={...h.item,propertyId:"M-new"};delete newItem.unifiedAllOriginalsV1;delete newItem.unifiedDisplayOriginalsV2;
   h.w.allItems.push(newItem);h.api.attach(h.w.allItems);
   h.api.markSnapshotStale();
-  assert.deepEqual(status(h.api,"M-new"),{status:"stale",ready:false,hasKnownData:false,retryable:true,pendingCount:0});
+  assert.deepEqual(status(h.api,"M-new"),{status:"stale",ready:false,hasKnownData:false,retryable:true,pendingCount:1});
   assert.equal(status(h.api,"M-one").ready,true);
-  assert.match(h.api.cardParts(newItem).thumbnail,/원본 연결 재확인/);
+  assert.match(h.api.cardParts(newItem).thumbnail,/사진 불러오기 지연/);
   assert.match(h.api.cardParts(h.item).thumbnail,/current\.jpg/);
   assert.equal(h.reads.length,0);
 });
@@ -137,7 +137,7 @@ test("metadata retry banner stays in the sidebar after filter chips, not beside 
   assert.equal(banner.parentNode,dom.sidebar);
   assert.equal(dom.document.getElementById("activeFilterChipsV844").nextSibling,banner);
   assert.ok(dom.sidebar.children.indexOf(banner)<dom.sidebar.children.indexOf(dom.document.getElementById("list")));
-  assert.equal(banner.querySelector("button").textContent,"원본 다시 불러오기");
+  assert.equal(banner.querySelector("button").textContent,"다시 불러오기");
   assert.equal(h.reads.length,0);
 });
 

@@ -35,6 +35,7 @@ function harness(items) {
   vm.runInNewContext(source.replace("global.JSUnifiedListingsV8 = {","global.__test={state:state,synchronizeDetailOriginals:synchronizeDetailOriginals}; global.JSUnifiedListingsV8 = {"),
     {window:w,document,console:{warn(){},error(){}}});
   w.JSUnifiedListingsV8.attach(items);
+  events.length=0;
   return {w,api:w.JSUnifiedListingsV8,state:w.__test.state,events,nodes,reads};
 }
 function plain(value){return JSON.parse(JSON.stringify(value));}
@@ -67,8 +68,8 @@ test("partial proof matches preserve known candidates/photos and leave only unkn
   assert.equal(a.unifiedCandidateOriginalCountV2,1);
   assert.deepEqual(Array.from(a.sourceListingSearchV6579),["naver:old-A"]);
   assert.match(h.api.cardParts(b).thumbnail,/B\.jpg/);
-  assert.match(h.api.cardParts(c).thumbnail,/원본 확인 중/);
-  assert.match(h.nodes.get("unifiedOriginalLoadStatusV1").querySelector("span").textContent,/변경된 매물 2건 최신 연결 확인 중/);
+  assert.match(h.api.cardParts(c).thumbnail,/사진 불러오는 중/);
+  assert.match(h.nodes.get("unifiedOriginalLoadStatusV1").querySelector("span").textContent,/변경된 매물 2건의 사진·링크 정보 업데이트 중/);
   assert.equal(h.api.getOriginalMetadataStatus().pendingCount,2);
   assert.equal(h.reads.length,0);
 });

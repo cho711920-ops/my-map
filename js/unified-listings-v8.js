@@ -132,7 +132,7 @@
   }
   function missingOriginalLabel(propertyId) {
     var metadata = getOriginalMetadataStatus(propertyId);
-    return metadata.status === "error" ? "원본 조회 실패" : metadata.status === "stale" ? "원본 연결 재확인" : "원본 확인 중";
+    return metadata.status === "error" ? "사진 불러오기 실패" : metadata.status === "stale" ? "사진 불러오기 지연" : "사진 불러오는 중";
   }
   function sourceIdentity(original) {
     if (!original) return "";
@@ -619,7 +619,7 @@
     if (banner) {
       var existingMessage = banner.querySelector("span");
       if (existingMessage) existingMessage.textContent = explanation || (state.loaded
-        ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 조회 실패 · 다시 불러오기를 눌러 확인해 주세요. ");
+        ? "사진·링크 정보 업데이트가 지연되어 마지막 확인 자료를 표시합니다. " : "사진·링크 정보를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요. ");
       placeOriginalLoadStatus(banner);
       return;
     }
@@ -629,10 +629,10 @@
     banner.className = "operations-center-message error";
     banner.setAttribute("role", "status");
     var message = document.createElement("span");
-    message.textContent = explanation || (state.loaded ? "원본 최신화 실패 · 마지막 정상 자료를 표시합니다. " : "원본 조회 실패 · 다시 불러오기를 눌러 확인해 주세요. ");
+    message.textContent = explanation || (state.loaded ? "사진·링크 정보 업데이트가 지연되어 마지막 확인 자료를 표시합니다. " : "사진·링크 정보를 불러오지 못했습니다. 다시 불러오기를 눌러 주세요. ");
     var retry = document.createElement("button");
     retry.type = "button";
-    retry.textContent = "원본 다시 불러오기";
+    retry.textContent = "다시 불러오기";
     retry.onclick = function() {
       retry.disabled = true;
       var refresh = global.JSListingRefreshV1;
@@ -810,11 +810,12 @@
     state.pendingProofCount = pendingIds.length;
     var preserveGlobalStatus = !!(options && options.preserveGlobalStatus);
     if (complete && !preserveGlobalStatus) state.loaded = true;
-    attach(inputItems);
+    // The compatibility transaction publishes its final phase/count once.
+    attach(inputItems, null, true);
     setOriginalLoadPhase(preserveGlobalStatus ? state.originalLoadPhase : complete ? "ready" : "pending");
     if (!preserveGlobalStatus) {
       if (complete) originalLoadStatus(false);
-      else originalLoadStatus(true, "변경된 매물 " + pendingIds.length + "건 최신 연결 확인 중 · 마지막 확인 자료를 유지합니다. ");
+      else originalLoadStatus(true, "변경된 매물 " + pendingIds.length + "건의 사진·링크 정보 업데이트 중 · 마지막 확인 자료를 유지합니다. ");
     }
     return outcome;
   }
@@ -865,7 +866,7 @@
     return pending;
   }
 
-  function attach(items, result) {
+  function attach(items, result, deferStatus) {
     if (result && result.groups) {
       if (state.groups !== result.groups) invalidateDetails();
       state.groups = result.groups;
@@ -886,6 +887,12 @@
     }
     indexMasterItems(items || []);
     (items || []).forEach(function(item) {
+      var propertyId = text(item && item.propertyId);
+      // A new CSV/master item can arrive after a scoped Today response. Track
+      // its missing metadata even when the previous global phase was ready;
+      // otherwise revision polling has no pending ID to recover. Explicit
+      // full-snapshot empty coverage is known data, not an unknown source.
+      if (propertyId && !originalMetadataReady(propertyId)) state.pendingProofIds[propertyId] = true;
       var all = allOriginals(item.propertyId);
       var originals = visibleOriginalsFrom(all, item.propertyId, item, true);
       // The master room is also a legacy favorite key. Overlay the currently
@@ -951,7 +958,8 @@
         return total + (sourceKey(original.source) === "gongsil" ? Math.max(0, Number(original.contactCount) || 0) : 0);
       }, 0);
     });
-    if (result && result.groups && result.ok !== false) setOriginalLoadPhase("ready");
+    state.pendingProofCount = Object.keys(state.pendingProofIds).length;
+    if (!deferStatus) setOriginalLoadPhase(result && result.groups && result.ok !== false ? "ready" : state.originalLoadPhase);
     /* 자주 여는 상단 매물 사진은 기존처럼 선조회해 첫 클릭 속도를 유지합니다. */
     scheduleDetailWarmup(items);
     /* 연락처는 사용자가 카드나 전화 버튼을 가리킬 때만 선조회합니다. */
@@ -1122,7 +1130,7 @@
     var photoPending = !thumbnail && originals.some(function(original) { return Number(original.photoCount) > 0; });
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
-      (thumbnail ? 'has-photo' : 'no-photo') + '" title="' + (pending ? pendingLabel + (pendingRetryable ? ' · 다시 확인' : '') : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
+      (thumbnail ? 'has-photo' : 'no-photo') + '" title="' + (pending ? pendingLabel + (pendingRetryable ? ' · 다시 불러오기' : '') : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
@@ -1135,7 +1143,7 @@
         ? '<em class="transaction-check-ribbon-v8135">원본 광고 미노출<b>거래완료 후보</b></em>'
         : '') +
       '</button>';
-    var badge = pending ? '<span class="unified-badge-v8">' + pendingLabel + (pendingRetryable ? ' · 다시 확인' : '') + '</span>' : sourceUnavailable
+    var badge = pending ? '<span class="unified-badge-v8">' + pendingLabel + (pendingRetryable ? ' · 다시 불러오기' : '') + '</span>' : sourceUnavailable
       ? '<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>'
       : count > 1
         ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
@@ -1143,7 +1151,7 @@
     var button;
     if (pending) {
       button = '<button type="button" class="item-source-link-btn" onclick="event.stopPropagation(); ' +
-        'JSUnifiedListingsV8.open(\'' + encodedId + '\')">' + (pendingRetryable ? '다시 확인' : '원본 확인') + '</button>';
+        'JSUnifiedListingsV8.open(\'' + encodedId + '\')">' + (pendingRetryable ? '다시 불러오기' : '사진·링크') + '</button>';
     } else if (sourceUnavailable) {
       button = '<button type="button" class="item-source-link-btn active transaction-check-button-v8135" ' +
         'title="원본 광고 미노출 내역 확인 · 실제 계약완료와 별도" ' +
@@ -2463,7 +2471,7 @@
   global.JSUnifiedListingsV8 = {
     load: load, attach: attach, attachCompatible: attachCompatible, canCacheCompatible: canCacheCompatible,
     mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
-    markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(true, "원본 연결 재확인이 필요합니다. 마지막 확인 자료는 유지합니다. "); },
+    markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(true, "사진·링크 정보 업데이트가 지연되어 마지막 확인 자료를 표시합니다. "); },
     getOriginalMetadataStatus: getOriginalMetadataStatus,
     pendingCompatibleIds: function() { return Object.keys(state.pendingProofIds); },
     cardParts: cardParts, matchesSource: matchesSource,

@@ -120,6 +120,11 @@ async function menu(page,id){await page.locator(id).evaluate(button=>button.clic
 async function missingMetadataFixture(page, ended) {
   await page.addScriptTag({content:unifiedRuntime});
   await page.evaluate(({id,photo,ended})=>{
+    // These two focused cases exercise the detail recovery path. Automatic
+    // rendered-window recovery is covered independently below, not raced here.
+    if(requestVisibleOriginalMetadataV1.timer)clearTimeout(requestVisibleOriginalMetadataV1.timer);
+    requestVisibleOriginalMetadataV1.timer=null;
+    JSListingRefreshV1.requestVisibleOriginals=()=>{};
     const master=allItems.find(item=>item.propertyId===id);
     allItems=[master];
     const access=JSDataAccessV6;
@@ -155,12 +160,31 @@ function recoverySheet(items, revision) {
     .map(values=>values.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(",")).join("\r\n")};
 }
 
+async function settleFixtureMetadataRecovery(page) {
+  await page.evaluate(async()=>{
+    // Mobile list activation can start a render-window read in setup(). Wait
+    // for that old fixture's request before installing the next route/runtime.
+    JSListingRefreshV1.requestVisibleOriginals=()=>{};
+    function clearVisibleTimer(){
+      if(requestVisibleOriginalMetadataV1.timer)clearTimeout(requestVisibleOriginalMetadataV1.timer);
+      requestVisibleOriginalMetadataV1.timer=null;
+    }
+    clearVisibleTimer();
+    const pending=refreshScopedOriginalsV1.pending;
+    if(pending&&pending.promise)await pending.promise;
+    // Its one coalesced follow-up may have been queued while it settled.
+    clearVisibleTimer();
+  });
+}
+
 async function failedFullMetadataFixture(page, context, isMobile, holdRecovery) {
   const result=await setup(page,context,isMobile);
+  await settleFixtureMetadataRecovery(page);
   const manual=Array.from({length:52},(_,index)=>item("MANUAL-DONE-"+index,{state:"계약완료"}));
   const active=item("ACTIVE-WITH-PHOTO");
   const candidates=[item(mixedId),item(endedId)];
   const items=[...manual,active,...candidates];
+  items.forEach((master,index)=>{master.sourceSnapshotKey=proofKey(index+1000);});
   const groups=Object.fromEntries(items.map(master=>[master.propertyId,[{
     ...master,originalId:master.propertyId+"-source",providerSourceId:"qa-"+master.propertyId,
     buildingName:master.name,active:candidates.includes(master)?0:1,sourceUnavailable:candidates.includes(master),
@@ -174,12 +198,18 @@ async function failedFullMetadataFixture(page, context, isMobile, holdRecovery) 
   await page.route("**/api/data**",async route=>{
     const request=route.request(),url=new URL(request.url());
     if(request.method()!=="GET") {result.writes.push(url.pathname);return route.abort();}
-    if(url.searchParams.get("action")!=="unifiedListings")return route.fallback();
-    state.reads.push({force:request.headers()["x-js-force-refresh"]==="1"});
-    if(state.reads.length>1&&holdRecovery)await recovery;
+    const action=url.searchParams.get("action");
+    if(action!=="unifiedListings"&&action!=="listingOriginals")return route.fallback();
+    const ids=action==="listingOriginals"?(url.searchParams.get("ids")||"").split(","):[];
+    state.reads.push({action,ids,force:request.headers()["x-js-force-refresh"]==="1"});
+    if(action==="listingOriginals"&&holdRecovery)await recovery;
     if(!state.available)return route.fulfill({status:503,json:{ok:false,message:"검수용 원본 조회 실패"}});
+    const selected=action==="listingOriginals"?items.filter(master=>ids.includes(master.propertyId)):items;
+    const unified={ok:true,groups:Object.fromEntries(selected.map(master=>[master.propertyId,groups[master.propertyId]])),
+      sourceSearchIds:{},sourceSnapshotKeys:Object.fromEntries(selected.map(master=>[master.propertyId,master.sourceSnapshotKey])),
+      sourceSnapshotPropertyIds:Object.fromEntries(selected.map(master=>[master.propertyId,master.propertyId])),snapshotRevision:revision};
     return route.fulfill({status:200,headers:{"x-js-listings-revision":revision},
-      json:{ok:true,groups,sourceSearchIds:{},snapshotRevision:revision}});
+      json:action==="listingOriginals"?{ok:true,items:recoveryRows(selected),unified}:unified});
   });
   await page.route("**/api/sheet",route=>{
     state.sheetReads+=1;
@@ -189,6 +219,12 @@ async function failedFullMetadataFixture(page, context, isMobile, holdRecovery) 
   // No attach(payload) shortcut can supply the missing candidate information.
   await page.addScriptTag({content:unifiedRuntime});
   await page.evaluate(()=>{
+    // This fixture verifies one bounded automatic full-load recovery pass and
+    // one explicit retry. Render-window recovery has its own real-hook case;
+    // do not race an additional visible pass against these gated assertions.
+    if(requestVisibleOriginalMetadataV1.timer)clearTimeout(requestVisibleOriginalMetadataV1.timer);
+    requestVisibleOriginalMetadataV1.timer=null;
+    JSListingRefreshV1.requestVisibleOriginals=()=>{};
     allItems=[];currentItems=[];hideDone=false;doneOnly=true;isLoadingSheet=false;pendingAutoUpdate=false;
     jsListingsCompleteBaseV1=false;jsListingsRevisionV682="";jsInitialFullListingsLoadingV1=true;
     jsInitialFullListingsCacheHitV1=false;jsInitialFullListingsCacheItemsV1=null;
@@ -216,10 +252,10 @@ test("failed original metadata automatically recovers all candidates and photos 
     await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
     await menu(page,"#doneOnlyBtn");await menu(page,"#hideDoneBtn");
     await expect(card(page,"ACTIVE-WITH-PHOTO").locator(".unified-thumb-v8 img")).toHaveCount(1);
-    await expect(card(page,"ACTIVE-WITH-PHOTO")).not.toContainText("원본 확인 중");
-    expect(result.state.reads).toHaveLength(2);
-    expect(result.state.reads[1].force).toBe(true);
-    expect(result.state.sheetReads).toBeLessThanOrEqual(2);
+    await expect(card(page,"ACTIVE-WITH-PHOTO")).not.toContainText("사진 불러오는 중");
+    expect(result.state.reads.map(read=>read.action)).toEqual(["unifiedListings","listingOriginals","listingOriginals"]);
+    expect(result.state.reads.slice(1).map(read=>read.ids.length)).toEqual([50,5]);
+    expect(result.state.sheetReads).toBe(1);
     expect(await page.evaluate(()=>JSV6ListStore.load("favorite").some(folder=>folder.id==="fixture-favorites"))).toBe(true);
     expect(await page.evaluate(id=>allItems.find(value=>value.propertyId===id).memo,mixedId)).toContain("사용자 검수 메모");
     safe(result);
@@ -230,23 +266,70 @@ test("persistent full original failures stop waiting labels and explicit retry r
   const result=await failedFullMetadataFixture(page,context,isMobile,false);
   await result.start();
   await expect.poll(()=>result.state.reads.length).toBe(2);
-  await expect(page.locator("#unifiedOriginalLoadStatusV1")).toContainText("실패");
+  await expect(page.locator("#unifiedOriginalLoadStatusV1")).toContainText("사진·링크 정보 업데이트가 지연");
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","52");
-  await expect(page.locator("#list .unified-thumb-v8").first()).toContainText("원본 조회 실패");
-  await expect(page.locator("#list .unified-thumb-v8").filter({hasText:"원본 확인 중"})).toHaveCount(0);
+  await expect(page.locator("#list .unified-thumb-v8").first()).toContainText("사진 불러오기 지연");
+  await expect(page.locator("#list .unified-thumb-v8").filter({hasText:"사진 불러오는 중"})).toHaveCount(0);
   result.state.available=true;
   await page.locator("#unifiedOriginalLoadStatusV1 button").click();
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");
   await expect(card(page,endedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
   await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
-  expect(result.state.reads).toHaveLength(3);
-  expect(result.state.reads[2].force).toBe(true);
+  expect(result.state.reads.map(read=>read.action)).toEqual(["unifiedListings","listingOriginals","listingOriginals","listingOriginals"]);
+  expect(result.state.reads.slice(2).map(read=>read.ids.length)).toEqual([50,5]);
+  expect(result.state.sheetReads).toBe(1);
   safe(result);
+});
+
+test("normal list automatically recovers the visible new property's photo and link before an unrelated 250-row CSV prefix",async({page,context,isMobile})=>{
+  const result=await setup(page,context,isMobile);
+  const target=item("VISIBLE-AFTER-CSV-PREFIX",{name:"뷰포트 우선 검수 대상",sourceSnapshotKey:proofKey(2000),
+    sourceLink:"http://127.0.0.1/original/visible-priority"});
+  const prefix=Array.from({length:250},(_,index)=>item("UNRELATED-PREFIX-"+index,{sourceSnapshotKey:proofKey(index+3000)}));
+  const reads=[],releases=[];
+  await page.route("**/api/data**",async route=>{
+    const url=new URL(route.request().url());
+    if(url.searchParams.get("action")!=="listingOriginals")return route.fallback();
+    if(route.request().method()!=="GET"){result.writes.push(url.pathname);return route.abort();}
+    const ids=(url.searchParams.get("ids")||"").split(",");
+    reads.push(ids);
+    await new Promise(resolve=>{releases.push(resolve);});
+    const selected=[...prefix,target].filter(master=>ids.includes(master.propertyId));
+    const groups=Object.fromEntries(selected.map(master=>[master.propertyId,[{
+      ...master,originalId:"current-"+master.propertyId,providerSourceId:"provider-"+master.propertyId,
+      active:1,availabilityKind:"active",candidateEligible:false,thumbnail:picture,images:[picture],photoCount:1,
+      link:master.sourceLink||"http://127.0.0.1/original/"+master.propertyId
+    }]]));
+    return route.fulfill({json:{ok:true,items:recoveryRows(selected),unified:{ok:true,groups,
+      sourceSnapshotKeys:Object.fromEntries(selected.map(master=>[master.propertyId,master.sourceSnapshotKey])),
+      sourceSnapshotPropertyIds:Object.fromEntries(selected.map(master=>[master.propertyId,master.propertyId]))}}});
+  });
+  try {
+    await page.evaluate(({prefix,target})=>{
+      allItems=allItems.concat(prefix,target).map(master=>({...master,latlng:new kakao.maps.LatLng(master.latitude,master.longitude)}));
+      JSUnifiedListingsV8.attach(allItems);
+      document.getElementById("keyword").value="뷰포트 우선 검수 대상";
+      applyFilter();
+    },{prefix,target});
+    await expect(card(page,target.propertyId)).toHaveCount(1);
+    await expect(card(page,target.propertyId).locator(".unified-thumb-v8")).toContainText("사진 불러오기 지연");
+    await expect.poll(()=>reads).toEqual([[target.propertyId]]);
+    releases[0]();
+    await expect(card(page,target.propertyId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(card(page,target.propertyId).locator(".item-source-link-btn")).toHaveText("링크");
+    await expect(card(page,target.propertyId)).not.toContainText("원본 연결 재확인");
+    expect(await page.evaluate(id=>({memo:allItems.find(master=>master.propertyId===id).memo,
+      ready:JSUnifiedListingsV8.getOriginalMetadataStatus(id).ready}),target.propertyId))
+      .toEqual({memo:target.memo,ready:true});
+    expect(reads).toEqual([[target.propertyId]]);
+    safe(result);
+  } finally {releases.forEach(release=>release());}
 });
 
 const proofKey=index=>"sha256-v1:"+index.toString(16).padStart(64,"0");
 async function proofRecoveryFixture(page,context,isMobile,mismatch=false) {
   const result=await setup(page,context,isMobile);
+  await settleFixtureMetadataRecovery(page);
   const activeId="PROOF-ACTIVE", candidateId="PROOF-CANDIDATE", changedId="PROOF-CHANGED";
   const manual=Array.from({length:52},(_,index)=>item("PROOF-MANUAL-"+index,{state:"계약완료",sourceSnapshotKey:proofKey(index+10)}));
   const items=[...manual,item(activeId,{sourceSnapshotKey:proofKey(1)}),
@@ -359,6 +442,13 @@ test("one changed property fetches only its own proven inventory without clearin
 test("late scoped proofs cannot overwrite a memo edit or a newer load generation",async({page,context,isMobile})=>{
   const h=await proofRecoveryFixture(page,context,isMobile,true);
   try {
+    // Keep the two manually gated replies deterministic. Automatic viewport
+    // follow-up is independently checked with the production hook above.
+    await page.evaluate(()=>{
+      if(requestVisibleOriginalMetadataV1.timer)clearTimeout(requestVisibleOriginalMetadataV1.timer);
+      requestVisibleOriginalMetadataV1.timer=null;
+      JSListingRefreshV1.requestVisibleOriginals=()=>{};
+    });
     await h.start();
     await expect.poll(()=>h.state.scopeReads.length).toBe(1);
     await page.evaluate(id=>{allItems.find(value=>value.propertyId===id).memo="수동 수정 메모 보존";},h.changedId);
@@ -382,7 +472,7 @@ test("late scoped proofs cannot overwrite a memo edit or a newer load generation
 test("CSV-first photo metadata recovers on detail without false no-photo labels",async({page,context,isMobile})=>{
   const result=await setup(page,context,isMobile);
   await missingMetadataFixture(page,false);
-  await expect(card(page,mixedId).locator(".unified-thumb-v8")).toContainText("원본 확인 중");
+  await expect(card(page,mixedId).locator(".unified-thumb-v8")).toContainText("사진 불러오는 중");
   await page.evaluate(id=>JSUnifiedListingsV8.open(encodeURIComponent(id)),mixedId);
   await expect(card(page,mixedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
   await expect(page.locator("#unifiedDetailTitleV8")).toHaveText("원본 확인 사진");
