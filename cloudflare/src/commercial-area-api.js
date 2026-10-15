@@ -31,7 +31,7 @@ function listFrom(payload) {
 }
 
 async function fetchPage(env, lat, lng, radius, pageNo) {
-  const key = serviceKey(env.DATA_GO_KR_SERVICE_KEY);
+  const key = serviceKey(clean(env.COMMERCIAL_DATA_GO_KR_SERVICE_KEY) || env.DATA_GO_KR_SERVICE_KEY);
   if (!key) throw new Error("서버 공공데이터 인증키가 연결되지 않았습니다.");
   const url = new URL(API_URL);
   url.searchParams.set("serviceKey", key);

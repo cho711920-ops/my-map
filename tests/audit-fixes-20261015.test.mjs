@@ -95,6 +95,10 @@ test("commercial-area requests encode both data.go.kr key formats exactly once",
       assert.equal(url.protocol, "https:");
       assert.equal(url.hostname, "apis.data.go.kr");
     }
+    await getCommercialArea({DATA_GO_KR_SERVICE_KEY: "building-service-key",
+      COMMERCIAL_DATA_GO_KR_SERVICE_KEY: "commercial%2Bkey%3D%3D"}, {lat: 36.35, lng: 127.38});
+    assert.equal(calls.at(-1).searchParams.get("serviceKey"), "commercial+key==",
+      "a dedicated commercial key must not replace or reuse a separate building-register key");
     globalThis.fetch = async () => new Response("Forbidden", {status: 403});
     await assert.rejects(getCommercialArea({DATA_GO_KR_SERVICE_KEY: "private-test-key"},
       {lat: 36.35, lng: 127.38}), error => /HTTP 403/.test(error.message) && !/private-test-key/.test(error.message));
