@@ -98,5 +98,34 @@ test("commercial-area requests encode both data.go.kr key formats exactly once",
     globalThis.fetch = async () => new Response("Forbidden", {status: 403});
     await assert.rejects(getCommercialArea({DATA_GO_KR_SERVICE_KEY: "private-test-key"},
       {lat: 36.35, lng: 127.38}), error => /HTTP 403/.test(error.message) && !/private-test-key/.test(error.message));
+    for (const code of ["20", "30"]) {
+      globalThis.fetch = async () => Response.json({OpenAPI_ServiceResponse: {cmmMsgHeader: {
+        returnReasonCode: code, returnAuthMsg: "private-test-key must never be echoed"}}}, {status: 403});
+      await assert.rejects(getCommercialArea({DATA_GO_KR_SERVICE_KEY: "private-test-key"},
+        {lat: 36.35, lng: 127.38}), error => error.message.includes("코드 " + code) && !/private-test-key/.test(error.message));
+    }
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test("a new keyword clears the previous cluster list scope, while unchanged-query refresh preserves it", () => {
+  const source = readFileSync(new URL("../js/script.js", import.meta.url), "utf8");
+  const declaration = source.match(/^function applyFilter\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(declaration);
+  const keyword = {value: "선화"}, status = {innerHTML: ""};
+  let selected = true, clears = 0, shown = [];
+  const matches = [{propertyId: "new-region-a"}, {propertyId: "new-region-b"}];
+  const context = vm.createContext({window: {jsLastAppliedKeywordV1: "문지"}, allItems: matches,
+    document: {getElementById: id => id === "keyword" ? keyword : status},
+    clearMapListSelectionForNavigationV6571() { selected = false; clears++; },
+    getFilteredItems() { return matches; },
+    drawItems(items) { shown = selected ? [] : items; },
+    renderActiveFilterChipsV844() {}});
+  vm.runInContext(declaration, context);
+  context.applyFilter();
+  assert.equal(clears, 1);
+  assert.equal(shown.length, 2);
+  assert.equal(status.innerHTML, "검색 결과 2개");
+  selected = true;
+  context.applyFilter();
+  assert.equal(clears, 1, "same-keyword refresh and price/source filters must preserve a selected cluster");
 });

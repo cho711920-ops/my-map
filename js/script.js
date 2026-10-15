@@ -1654,6 +1654,16 @@ function applyFilter() {
   }
   var searchMetricV1 = window.JSLocalMetricsV1 && window.JSLocalMetricsV1.start("search");
   try {
+  var appliedKeywordV1 = String((document.getElementById("keyword") || {}).value || "").trim();
+  if (window.jsLastAppliedKeywordV1 !== undefined && window.jsLastAppliedKeywordV1 !== appliedKeywordV1) {
+    if (typeof clearMapListSelectionForNavigationV6571 === "function") {
+      clearMapListSelectionForNavigationV6571();
+    } else {
+      if (typeof clearPinnedClusterSelectionV6515 === "function") clearPinnedClusterSelectionV6515(true);
+      if (typeof window.clearAdministrativeListSelectionV6570 === "function") window.clearAdministrativeListSelectionV6570();
+    }
+  }
+  window.jsLastAppliedKeywordV1 = appliedKeywordV1;
   var filtered = getFilteredItems();
   currentItems = filtered;
 

@@ -471,6 +471,28 @@ test("late scoped proofs cannot overwrite a memo edit or a newer load generation
   } finally {h.cleanup();}
 });
 
+test("keyword search leaves a previously selected neighborhood instead of showing an empty list",async({page,context,isMobile})=>{
+  const result=await setup(page,context,isMobile,true,fixture=>{
+    const master=fixture.items.find(row=>row.propertyId===mixedId);
+    master.address="대전 서구 탄방동 22";
+    fixture.payload.groups[mixedId].forEach(original=>{original.address=master.address;});
+  });
+  await page.evaluate(()=>{
+    setAdministrativeListSelectionV6570({regionMode:"neighborhood",regionLabel:"탄방동",districtLabel:"서구"});
+    applyFilter();
+  });
+  await expect(page.locator("#list .item")).toHaveCount(1);
+  await expect(page.locator("#list")).toContainText("탄방동");
+  const input=page.locator(isMobile?"#jsMobileKeywordV1":"#keyword");
+  await input.fill("괴정");
+  await input.press("Enter");
+  await expect(page.locator("#list .item")).not.toHaveCount(0);
+  await expect(page.locator("#list")).toContainText("괴정동");
+  await expect(card(page,mixedId)).toHaveCount(0);
+  expect(await page.evaluate(()=>jsAdministrativeListSelectionV6570)).toBe(null);
+  safe(result);
+});
+
 test("CSV-first photo metadata recovers on detail without false no-photo labels",async({page,context,isMobile})=>{
   const result=await setup(page,context,isMobile);
   await settleFixtureMetadataRecovery(page);

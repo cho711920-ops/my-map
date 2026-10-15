@@ -50,6 +50,21 @@ async function fetchPage(env, lat, lng, radius, pageNo) {
     clearTimeout(timer);
   }
   const payload = await response.json().catch(() => null);
+  const gateway = payload?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+  if (gateway) {
+    const code = clean(gateway.returnReasonCode);
+    const reasons = {
+      "20": "상권정보 서비스 이용승인과 서버 인증키 연결을 확인해 주세요.",
+      "30": "서버에 연결된 공공데이터 인증키가 등록되어 있지 않습니다.",
+      "31": "공공데이터 인증키의 이용기간이 만료되었습니다.",
+      "22": "상권정보의 일일 조회 한도를 초과했습니다.",
+      "23": "상권정보의 초당 조회 한도를 초과했습니다. 잠시 후 다시 확인해 주세요."
+    };
+    // Gateway bodies can contain request diagnostics. Expose only known codes
+    // and our own messages, never the echoed request or service key.
+    const reason = reasons[code] || "공공데이터 서비스 연결을 확인해 주세요.";
+    throw new Error(`상가정보 API HTTP ${response.status} · 코드 ${reasons[code] ? code : "미확인"} · ${reason}`);
+  }
   if (!response.ok || !payload) throw new Error(`상가정보 API HTTP ${response.status}`);
   const header = payload?.header || payload?.response?.header || {};
   const resultCode = clean(header.resultCode || header.resultCd);
