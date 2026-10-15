@@ -30,6 +30,34 @@ function load(overrides = {}) {
   return {window, device: window.JSPhoneDeviceV1, classes, attrs, events, listeners};
 }
 
+test("small Android screen retains proportional landscape in desktop-site mode", () => {
+  const fixture = load({
+    navigator: {userAgent: "Mozilla/5.0 (Linux; Android 14) Chrome/131.0 Safari/537.36", maxTouchPoints: 5, userAgentData: {mobile: false}},
+    screen: {width: 844, height: 390, orientation: {type: "landscape-primary"}},
+    innerWidth: 980, innerHeight: 350
+  });
+  assert.equal(fixture.device.isPhone(), false, "existing device API contract stays unchanged");
+  assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
+  fixture.window.screen.orientation.type = "portrait-primary";
+  fixture.listeners.orientationchange();
+  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+});
+
+test("large landscape tablets keep their wide layout and narrow split screens opt in", () => {
+  const fixture = load({
+    navigator: {userAgent: "Mozilla/5.0 (Linux; Android 14; SM-X710) Safari/537.36", maxTouchPoints: 5, userAgentData: {mobile: false}},
+    screen: {width: 1280, height: 820, orientation: {type: "landscape-primary"}},
+    innerWidth: 1280, innerHeight: 720
+  });
+  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  fixture.window.innerWidth = 740;
+  fixture.listeners.resize();
+  assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
+  fixture.window.innerWidth = 1280;
+  fixture.listeners.resize();
+  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+});
+
 test("390px smartphone is explicitly opted in without changing app views", () => {
   const fixture = load();
   assert.equal(fixture.device.isPhone(), true);

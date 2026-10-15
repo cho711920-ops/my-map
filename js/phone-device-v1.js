@@ -61,8 +61,15 @@
     var handheld = isHandheld();
     var landscape = handheld && isLandscape();
     var mobileLayout = handheld && !landscape;
+    var display = global.screen || {};
+    var shortSide = Math.min(Number(display.width) || 0, Number(display.height) || 0);
+    // A phone requesting the desktop site can have a >=900px layout viewport.
+    // Keep its split view proportional to the physical screen, including when
+    // Android reports a desktop UA/mobile=false. Large tablets keep their UI.
+    var compactLandscape = landscape && (phone || (shortSide > 0 && shortSide < 600) || Number(global.innerWidth) < 900);
     root.classList.toggle("js-phone-app-v2", mobileLayout);
     root.classList.toggle("js-handheld-landscape-v1", landscape);
+    root.classList.toggle("js-compact-handheld-landscape-v1", compactLandscape);
     if (landscape) root.setAttribute("data-js-phone-landscape", "true");
     else root.removeAttribute("data-js-phone-landscape");
     var state = String(phone) + ":" + String(handheld) + ":" + String(landscape) + ":" + String(mobileLayout);

@@ -1,0 +1,64 @@
+휴대전화 가로 화면 비율 수정·대장 원문 검토 (2026-10-16 KST)
+
+사용자 요청
+- 현재 대장 버튼 표시 방식과 건축물대장 원문 제공 가능 여부 확인.
+- 첨부된 스마트폰 가로 화면에서 지도와 목록이 화면 비율에 맞게 표시되도록 개선.
+- 작업 폴더: C:/Users/ITP/.codex/worktrees/e212/JS부동산 AI개발실 v6.0
+- 브랜치: codex/daangn-numeric-status
+
+대장 확인 결과와 미결정 사항
+- 현재 js/building-register-v6.js는 건축HUB API 항목을 자체 표로 표시한다.
+  기본정보, 층별내역, 집합건물 전유부·전유공용면적 등이며 공식 발급 문서 원본은 아니다.
+- 연결 API는 JSON/XML 속성정보를 제공한다. 정부24 발급본 PDF를 내려주는 API가 아니다.
+  https://www.data.go.kr/data/15134735/openapi.do
+- 공식 발급·열람 안내:
+  https://www.gov.kr/mw/AA020InfoCappView.do?CappBizCD=15000000098&HighCtgCD=A09006
+- 사용자에게 발급 문서 원본/PDF인지 전체 항목 표인지 질문했으며 이 기록 시점 답변은 없다.
+  원문 자동 발급이나 PDF 업로드·매물 연결 기능을 구현했다고 보고하지 않는다.
+  대장 클라이언트·API와 발급 연동은 이번에 변경하지 않았다.
+
+화면 수정
+- 기존 터치 화면은 목록 폭을 최대 640px로 고정하며, 좁은 가로 화면 보정은 899px까지만 적용됐다.
+- phone-device-v1.js가 물리적 화면이 작은 가로 기기를 별도 분류한다.
+  넓은 desktop-site viewport나 Android mobile=false도 handheld 판정이 되면 비율 보정을 적용한다.
+- 기존 좁은 가로 기기 보정도 같은 분류로 유지한다.
+  목록 폭 min(52vw, 480px), 지도는 나머지 공간을 차지한다.
+  일반 PC, 큰 태블릿의 넓은 가로 화면, 세로 모바일의 기존 분류는 유지한다.
+- 지도 도구의 이전 inline 측정값이 회전·리사이즈 후 목록 폭을 고정하지 않도록 한다.
+- 목록 카드의 행 높이와 버튼 줄바꿈을 보정하고, 메모 버튼이 카드 안에 표시되도록 했다.
+- 짧은 화면의 도구 레일과 목록은 각자 스크롤하며 검색·상세·찜 상태를 보존한다.
+- 지도 중심·줌·매물 좌표를 강제로 바꾸거나 전국/대전 전체를 자동 축소하는 변경은 없다.
+  화면 안에 보이는 지도 영역을 넓히는 변경이며 같은 배율의 모든 지리 영역 동시 표시는 별개다.
+
+검증
+- 관련 Node: 63/63 통과. 기기 분류, 클러스터 relayout 선택 보존, 임장 지도 회전·좌표 검사.
+- 최종 브라우저: 17/17 통과. 단일 worker, 로컬 가상 매물, 외부 요청 차단.
+  740/844/980 가로 회전, 1280 desktop-site viewport와 물리 화면 크기 분리,
+  920x350 리사이즈, 지도·목록 경계, 카드 버튼 경계, 마지막 지도 도구 스크롤,
+  검색·필터·상세·사진·찜 복귀, 세로 390, 큰 태블릿과 PC 기본 기능을 확인했다.
+- 검증 이미지에서 발견한 카드 버튼 잘림을 보정한 뒤 최종 17개를 재검증했다.
+- ESLint, TypeScript, 빌드, git diff --check 통과.
+- 실제 사용자 휴대전화에서 직접 확인한 결과로 표현하지 않는다.
+  실제 기기 모델·화면 배율·브라우저 설정은 첨부 사진만으로 확정하지 않았다.
+
+배포
+- Worker: fcdc61dd-0bab-4f96-b8b8-14e639ce5faa
+- 공개 정적 캐시: js-map-public-static-v1-62b5781074fbbc26779ebb6c
+- js-map.com / www.js-map.com 공개 파일 SHA256, HTML/SW no-store, Kakao CSP,
+  비로그인 API 401: 총 14/14 확인.
+- 기존 대장 JS와 지도 JS도 빌드·운영 파일 해시 일치를 확인했다.
+- 운영 DB·매물·메모·사진·찜 데이터 변경, 수집 실행, 마이그레이션은 수행하지 않았다.
+
+로컬 검증 자료 — 커밋 금지
+- outputs/phone-landscape-fit-final.log
+- outputs/phone-landscape-fit-final/ (가상 데이터 이미지)
+- outputs/phone-landscape-fit-build.log
+- outputs/phone-landscape-fit-deploy.log
+- outputs/phone-landscape-fit-public.json
+- 첨부 이미지·녹취·임시 파일은 커밋 대상에서 제외한다.
+
+직전 배포 및 복구 기준
+- 직전 소스: 7bd892c4344bd63cb83d0225fd34d249335b6437
+- 직전 Worker: 20b3cfcb-a467-40e3-8a38-109aada7c098
+- 직전 공개 캐시: js-map-public-static-v1-2b9ead6a521ed2dba2b60867
+- 필요하면 이번 표시 변경만 되돌려 배포한다. DB 복구는 필요하지 않다.

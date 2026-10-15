@@ -1,6 +1,8 @@
 JS부동산 작업 이어가기3 — 인수인계 (2026-10-15 KST)
 
 후속 수정·배포 기록
+- 최신 후속 작업: 휴대전화 가로 화면 비율 수정·대장 원문 검토.
+  docs/phone-landscape-fit-and-register-review-20261016.txt 를 먼저 읽는다.
 - 최신 후속 작업: 원본정보 초기 조회 지연 개선·배포.
   docs/original-metadata-startup-fix-20261016.txt 를 먼저 읽는다.
 - 가장 최신 후속 요청은 스마트 매물카드 기능 제거다.

@@ -155,8 +155,59 @@ for (const device of portraitDevices) {
 const rotationDevices = [
   {name: "phone 844", portrait: {width: 390, height: 844}, landscape: {width: 844, height: 390}, userAgent: phoneUA},
   {name: "phone 740", portrait: {width: 360, height: 740}, landscape: {width: 740, height: 360}, userAgent: phoneUA},
+  {name: "phone 980", portrait: {width: 442, height: 980}, landscape: {width: 980, height: 442}, userAgent: phoneUA},
   {name: "tablet 1280", portrait: {width: 820, height: 1280}, landscape: {width: 1280, height: 820}, userAgent: tabletUA}
 ];
+test("phone desktop-site viewport fits map, cards and scrolling tools within the visible height", async ({browser, baseURL}, testInfo) => {
+  const context = await contextFor(browser, {viewport: {width: 1280, height: 530}, screen: {width: 844, height: 390}, userAgent: tabletUA, isMobile: true, hasTouch: true});
+  try {
+    const page = await context.newPage();
+    await ready(page, baseURL);
+    await expect(page.locator("html")).toHaveClass(/js-compact-handheld-landscape-v1/);
+    // Reproduce a stale inline measurement left by the production tool rail.
+    await page.evaluate(() => document.documentElement.style.setProperty("--map-sidebar-width-v659", "640px"));
+    const measure = () => page.evaluate(() => {
+      const rect = id => {const r = document.getElementById(id).getBoundingClientRect(); return {x: r.x, y: r.y, width: r.width, bottom: r.bottom, right: r.right};};
+      return {map: rect("map"), sidebar: rect("sidebar"), width: innerWidth, height: innerHeight};
+    });
+    let geometry = await measure();
+    expect(geometry.map.width).toBeGreaterThanOrEqual(geometry.width * .48 - 1);
+    expect(geometry.sidebar.right).toBeLessThanOrEqual(geometry.width + 1);
+    expect(geometry.map.bottom).toBeLessThanOrEqual(geometry.height + 1);
+    expect(geometry.sidebar.bottom).toBeLessThanOrEqual(geometry.height + 1);
+    await noHorizontalOverflow(page);
+    const expectCardButtonsInside = async () => {
+      const card = page.locator("#list .item").first();
+      const bounds = await card.boundingBox();
+      const buttons = card.locator(".item-action-left > button:visible, .item-memo-toggle:visible");
+      expect(await buttons.count()).toBeGreaterThanOrEqual(6);
+      for (const button of await buttons.all()) {
+        const box = await button.boundingBox();
+        expect(box.width).toBeGreaterThan(25);
+        expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+        expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+      }
+    };
+    await expectCardButtonsInside();
+    const lastTool = page.locator("#mapQuickTools .map-quick-tools-inner > *").last();
+    await lastTool.scrollIntoViewIfNeeded();
+    const toolBox = await lastTool.boundingBox();
+    expect(toolBox.y).toBeGreaterThanOrEqual(geometry.map.y - 1);
+    expect(toolBox.y + toolBox.height).toBeLessThanOrEqual(geometry.height + 1);
+    await page.screenshot({path: testInfo.outputPath("phone-wide-fit.png")});
+    // Address-bar height changes and a narrower desktop viewport must recompute
+    // the split, even when a previous measured sidebar width is still inline.
+    await page.setViewportSize({width: 920, height: 350});
+    geometry = await measure();
+    expect(geometry.map.width).toBeGreaterThanOrEqual(geometry.width * .48 - 1);
+    expect(geometry.sidebar.width).toBeLessThanOrEqual(geometry.width * .52 + 1);
+    expect(geometry.map.bottom).toBeLessThanOrEqual(geometry.height + 1);
+    await expectLandscapeSearch(page, 920, 350);
+    await noHorizontalOverflow(page);
+    await expectCardButtonsInside();
+  } finally {await context.close();}
+});
 for (const device of rotationDevices) test(`${device.name}: actual rotation uses PC landscape and preserves search, selection and detail`, async ({browser, baseURL}, testInfo) => {
   const context = await contextFor(browser, {viewport: device.portrait, screen: device.portrait, userAgent: device.userAgent, isMobile: true, hasTouch: true});
   try {
