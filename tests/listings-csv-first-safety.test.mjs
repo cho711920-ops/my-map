@@ -31,7 +31,7 @@ function csv(rows, revision) {
     "operating_memo","status","first_collected_at","main_source","property_id",
     "source_url","contacts_json","building_year","building_elevators","building_approval_date",
     "building_info_checked_at","building_info_status","registration_at","last_collected_at",
-    "latitude","longitude","building_elevator_capacity","trade_type","sale_category","sale_price","sale_details_json"];
+    "latitude","longitude","building_elevator_capacity","trade_type","sale_category","sale_price","sale_details_json","source_snapshot_key"];
   const body = [fields, ...rows.map(item => fields.map(field => item[field] ?? ""))]
     .map(values => values.map(value => '"' + String(value).replaceAll('"','""') + '"').join(',')).join('\r\n');
   return {body, revision};
@@ -42,7 +42,7 @@ function originals(id, revision, name = "photo") {
     sourceSearchIds: {[id]: ['n:' + id]}, snapshotRevision: revision};
 }
 function harness(options = {}) {
-  const csvReads = [], originalReads = [], writes = [], renders = [], events = [], restored = [], invalidations = [];
+  const csvReads = [], originalReads = [], scopedReads = [], writes = [], renders = [], events = [], restored = [], invalidations = [];
   const timers = new Map();
   let timerId = 0;
   let geocodeCallback;
@@ -58,6 +58,7 @@ function harness(options = {}) {
     jsInitialFullListingsCacheSignatureV1: '', jsInitialFullListingsCacheUnifiedSignatureV1: '',
     jsInitialFullListingsLoadingV1: true, innerWidth: 1280,
     preserveActionSelectionDuringRender: false, selectedPrintKeys: ['checked-fixture'], favoriteOnly: true,
+    memoSavePendingKeysV655: {}, doneTogglePendingKeys: {},
     activeFavoriteFolderId: 'folder-fixture', favoriteFilterKeys: ['property:OUTSIDE'],
     geocodeCache: {}, sheetURL: '/fixture-sheet',
     kakao: {maps: {LatLng}},
@@ -70,8 +71,9 @@ function harness(options = {}) {
     clearTimeout(id) {timers.delete(id);},
     JSDataAccessV6: {
       listingsSnapshot(force) {const pending = deferred(); csvReads.push({force, ...pending}); return pending.promise;},
-      read(action) {
+      read(action, params) {
         if (action === 'dataRevision') return Promise.resolve({ok:true,revision:context.jsListingsRevisionV682});
+        if (action === 'listingOriginals') {const pending = deferred(); scopedReads.push({params, ...pending}); return pending.promise;}
         if (action === 'listingChanges') return Promise.resolve({ok:true,items:options.deltaItems || []});
         assert.equal(action, 'unifiedListings');
         const pending = deferred(); originalReads.push(pending); return pending.promise;
@@ -100,6 +102,7 @@ function harness(options = {}) {
   for (const name of ['listingChangeRowToItemV683','notifyListingsSnapshotV1','getItemsDataSignatureV638',
     'hydrateInitialFullListingsCacheItemsV1','showInitialFullListingsCacheV1','hasReadyCoordinateWithoutSharedCacheV8213',
     'matchingListingSnapshotRevisionV1','parseDirectSaleDetailsV1','applyScopedListingsV1','applyOriginalsSnapshotV1',
+    'compatibleOriginalsResultV1','compatibleOriginalsCacheV1','originalMetadataMutationPendingV1','refreshScopedOriginalsV1',
     'refreshOriginalMetadataPresentationV1','recoverOriginalMetadataV1','loadSheet',
     'fetchDataRevisionV682','refreshListingsWhenChangedV682',
     'applyListingChangesV683']) {
@@ -111,10 +114,167 @@ function harness(options = {}) {
     generation: () => context.jsListingsLoadGenerationV1,
     hasCompleteBase: () => context.jsListingsCompleteBaseV1
   };
-  return {context, csvReads, originalReads, writes, renders, events, restored, invalidations, timers,
+  return {context, csvReads, originalReads, scopedReads, writes, renders, events, restored, invalidations, timers,
     finishGeocode() {assert.equal(typeof geocodeCallback, 'function'); geocodeCallback();},
     runTimers() {const pending = [...timers.entries()]; pending.forEach(([id, timer]) => {timers.delete(id); timer.callback();});}}
 }
+
+const proof = number => 'sha256-v1:' + String(number).padStart(64, '0');
+function provenOriginals(entries, revision = 'UNRELATED-GLOBAL') {
+  const groups = {}, sourceSnapshotKeys = {}, sourceSnapshotPropertyIds = {}, sourceSearchIds = {};
+  for (const [publicId, key, photo = publicId] of entries) {
+    const internalId = 'internal-' + publicId;
+    groups[internalId] = [{propertyId:internalId,originalId:publicId+'-original',source:'네이버',
+      active:1,availabilityKind:'active',thumbnail:'https://landthumb-phinf.pstatic.net/'+photo+'.jpg'}];
+    sourceSnapshotKeys[internalId] = key;
+    sourceSnapshotPropertyIds[internalId] = publicId;
+    sourceSearchIds[internalId] = ['naver:'+publicId];
+  }
+  return {ok:true,groups,sourceSnapshotKeys,sourceSnapshotPropertyIds,sourceSearchIds,snapshotRevision:revision};
+}
+
+test('matching property proofs connect immediately despite different global revisions without another download', async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)})],'CSV-GLOBAL'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1),'current']]));
+  await flush();
+  assert.match(h.context.allItems[0].thumbnailV8,/current\.jpg/);
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status,'ready');
+  assert.equal(h.csvReads.length,1);
+  assert.equal(h.originalReads.length,1);
+  assert.equal(h.scopedReads.length,0);
+  assert.equal(h.writes.length,1);
+  assert.equal(h.writes[0].result.sourceSnapshotKeys.A,proof(1));
+  assert.equal(h.writes[0].result.snapshotRevision,undefined,'do not relabel unrelated global revisions');
+});
+
+test('only a mismatched property is re-read while matching photos stay available', async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)}),row('B',{source_snapshot_key:proof(2)})],'CSV'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1),'preserved'],['B',proof(3),'wrong']]));
+  await flush();
+  assert.match(h.context.allItems[0].thumbnailV8,/preserved\.jpg/);
+  assert.equal(h.scopedReads.length,1);
+  assert.equal(h.scopedReads[0].params.ids,'B');
+  h.scopedReads[0].resolve({ok:true,items:[row('B',{source_snapshot_key:proof(4),monthly_rent:75})],
+    unified:provenOriginals([['B',proof(4),'fresh']])});
+  await flush();
+  assert.equal(h.context.allItems[1].rent,75);
+  assert.match(h.context.allItems[1].thumbnailV8,/fresh\.jpg/);
+  assert.match(h.context.allItems[0].thumbnailV8,/preserved\.jpg/);
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status,'ready');
+  assert.equal(h.csvReads.length,1);
+  assert.equal(h.originalReads.length,1);
+  assert.equal(h.writes.length,1);
+  assert.equal(h.restored.at(-1).preserveVisibleListV1,false);
+});
+
+test('equal global revisions cannot override a mismatched property proof', async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)})],'SAME'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(2),'wrong']],'SAME'));
+  await flush();
+  assert.equal(h.context.allItems[0].thumbnailV8,'');
+  assert.equal(h.scopedReads.length,1);
+  assert.equal(h.writes.length,0);
+  h.scopedReads[0].reject(new Error('offline'));
+  await flush();
+  assert.equal(h.csvReads.length,1);
+});
+
+test('manual full-original retry uses property proofs instead of bypassing them with a global revision', async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)})],'SAME'));
+  await loading;
+  assert.equal(h.context.applyOriginalsSnapshotV1(provenOriginals([['A',proof(2),'wrong']],'SAME'),
+    'SAME',h.context.jsListingsLoadGenerationV1),true);
+  await flush();
+  assert.equal(h.context.allItems[0].thumbnailV8,'');
+  assert.equal(h.scopedReads.length,1);
+  h.scopedReads[0].reject(new Error('offline'));
+  await flush();
+  assert.equal(h.context.applyOriginalsSnapshotV1(provenOriginals([['A',proof(1),'correct']],'DIFFERENT'),
+    'SAME',h.context.jsListingsLoadGenerationV1),true);
+  assert.match(h.context.allItems[0].thumbnailV8,/correct\.jpg/);
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status,'ready');
+});
+
+test('a scoped response cannot overwrite a memo edited after the request began', async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1),operating_memo:'old'})],'CSV'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(2),'wrong']]));
+  await flush();
+  h.context.allItems[0].memo='직접 수정한 메모';
+  h.scopedReads[0].resolve({ok:true,items:[row('A',{source_snapshot_key:proof(3),operating_memo:'old'})],
+    unified:provenOriginals([['A',proof(3),'late']])});
+  await flush();
+  assert.equal(h.context.allItems[0].memo,'직접 수정한 메모');
+  assert.equal(h.context.allItems[0].sourceSnapshotKey,proof(1));
+  assert.equal(h.context.allItems[0].thumbnailV8,'');
+  assert.equal(h.writes.length,0);
+});
+
+test('a memo save already pending before a scoped request preserves the same item object and blocks cache writes', async () => {
+  const h = harness();
+  const loading = h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1),operating_memo:'OLD'})],'CSV'));
+  await loading;
+  const item=h.context.allItems[0];
+  h.context.memoSavePendingKeysV655[item.key]={previousMemo:'OLD'};
+  item.memo='저장 중인 새 메모';
+  h.originalReads[0].resolve(provenOriginals([['A',proof(2),'wrong']]));
+  await flush();
+  delete h.context.memoSavePendingKeysV655[item.key];
+  h.scopedReads[0].resolve({ok:true,items:[row('A',{source_snapshot_key:proof(3),operating_memo:'OLD'})],
+    unified:provenOriginals([['A',proof(3),'late']])});
+  await flush();
+  assert.equal(h.context.allItems[0],item);
+  assert.equal(item.memo,'저장 중인 새 메모');
+  assert.equal(h.writes.length,0);
+});
+
+test('a large compatible recovery is bounded per pass but continues while successful progress is made', async () => {
+  const h=harness();
+  let now=Date.now();
+  h.context.Date=class extends Date {static now(){return now;}};
+  const ids=Array.from({length:205},(_,i)=>'P'+i);
+  const loading=h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv(ids.map(id=>row(id,{source_snapshot_key:proof(1)})),'CSV'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals(ids.map(id=>[id,proof(2)])));
+  await flush();
+  for(let index=0;index<4;index++) {
+    const request=h.scopedReads[index],batch=request.params.ids.split(',');
+    assert.equal(batch.length,50);
+    request.resolve({ok:true,items:batch.map(id=>row(id,{source_snapshot_key:proof(3)})),
+      unified:provenOriginals(batch.map(id=>[id,proof(3)]))});
+    await flush();
+  }
+  assert.equal(h.scopedReads.length,4);
+  assert.equal(h.context.JSUnifiedListingsV8.pendingCompatibleIds().length,5);
+  assert.equal(h.context.loadSheet.originalsRecoveryV1.attempts,0,'progress must not exhaust a permanent auto-recovery ceiling');
+  now+=60_001;
+  const poll=h.context.refreshListingsWhenChangedV682();
+  await flush();
+  const request=h.scopedReads[4],batch=request.params.ids.split(',');
+  assert.equal(batch.length,5);
+  request.resolve({ok:true,items:batch.map(id=>row(id,{source_snapshot_key:proof(3)})),
+    unified:provenOriginals(batch.map(id=>[id,proof(3)]))});
+  await poll;
+  await flush();
+  assert.equal(h.context.JSUnifiedListingsV8.getOriginalMetadataStatus().status,'ready');
+  assert.equal(h.csvReads.length,1);
+  assert.equal(h.originalReads.length,1);
+});
 
 test("a complete latest CSV displays before a stalled original response, retaining today's records", async () => {
   const h = harness();

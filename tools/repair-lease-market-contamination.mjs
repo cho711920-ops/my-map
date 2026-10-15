@@ -743,8 +743,8 @@ function verifyReferences(root, expected) {
 
 function invalidateRepairCaches(root, directory, listingIds = []) {
   const keys = [
-    "api-cache/d1-sheet-v2-source-evidence.csv",
-    "api-cache/unified-listings-v13-absence-date.json",
+    "api-cache/d1-sheet-v3-source-proof.csv",
+    "api-cache/unified-listings-v14-source-proof.json",
     "api-cache/operations-dashboard-v4-source-evidence.json",
     "api-cache/revision/listings.json",
     "api-cache/revision/operations.json",

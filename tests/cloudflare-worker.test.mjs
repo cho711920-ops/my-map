@@ -191,7 +191,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
     const cachedEnv = {
       MEDIA: {
         get: async (key) => {
-          assert.equal(key, "api-cache/unified-listings-v13-absence-date.json");
+          assert.equal(key, "api-cache/unified-listings-v14-source-proof.json");
           return {
             customMetadata: { savedAt: String(Date.now()), revision: "snapshot-1" },
             httpMetadata: { contentType: "application/json; charset=utf-8" },
@@ -540,7 +540,7 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
     assert.equal(response.headers.get("x-js-data-source"), "D1");
     assert.match(await response.text(), /테스트건물,대전광역시 서구 테스트로 1,101호/);
     assert.equal(upstreamCalls, 0);
-    assert.equal(cachedWrites[0][0], "api-cache/d1-sheet-v2-source-evidence.csv");
+    assert.equal(cachedWrites[0][0], "api-cache/d1-sheet-v3-source-proof.csv");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1032,8 +1032,8 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     await Promise.all(pending);
     assert.ok(!statements.some((entry) => /apps-script-sync/.test(entry.sql)));
-    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v2-source-evidence.csv"));
-    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v13-absence-date.json"));
+    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v3-source-proof.csv"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v14-source-proof.json"));
     assert.ok(writtenCacheKeys.includes("api-cache/revision/listings.json"));
     assert.ok(!writtenCacheKeys.includes("api-cache/revision/operations.json"));
   } finally {
@@ -1095,8 +1095,8 @@ test("primary memo edits persist only in D1 and do not queue a Sheet sync", asyn
     assert.equal(payload.propertyId, "d1-property-1");
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     assert.ok(statements.some((entry) => /INSERT INTO mutation_results/.test(entry.sql)));
-    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v2-source-evidence.csv"));
-    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v13-absence-date.json"));
+    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v3-source-proof.csv"));
+    assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v14-source-proof.json"));
     assert.ok(!statements.some((entry) => /INSERT INTO jobs/.test(entry.sql)));
   } finally {
     globalThis.fetch = originalFetch;

@@ -137,16 +137,20 @@ async function missingMetadataFixture(page, ended) {
   },{id:mixedId,photo:picture,ended});
 }
 
+function recoveryRows(items) {
+  return items.map(value=>({title:value.name,address:value.address,room:value.room,listing_type:value.type,
+    deposit:value.deposit,monthly_rent:value.rent,maintenance_fee:value.fee,premium:value.premium,area_m2:value.area,
+    operating_memo:value.memo,status:value.state,first_collected_at:value.regDate,main_source:value.source,
+    property_id:value.propertyId,building_year:value.buildingYear,latitude:value.latitude,longitude:value.longitude,
+    trade_type:value.tradeType,source_snapshot_key:value.sourceSnapshotKey}));
+}
 function recoverySheet(items, revision) {
   const fields=["title","address","room","listing_type","deposit","monthly_rent","maintenance_fee","premium","area_m2",
     "landlord_phone","tenant_phone","operating_memo","status","first_collected_at","main_source","property_id",
     "source_url","contacts_json","building_year","building_elevators","building_approval_date","building_info_checked_at",
     "building_info_status","registration_at","last_collected_at","latitude","longitude","building_elevator_capacity",
-    "trade_type","sale_category","sale_price","sale_details_json"];
-  const rows=items.map(value=>({title:value.name,address:value.address,room:value.room,listing_type:value.type,
-    deposit:value.deposit,monthly_rent:value.rent,maintenance_fee:value.fee,premium:value.premium,area_m2:value.area,
-    operating_memo:value.memo,status:value.state,first_collected_at:value.regDate,main_source:value.source,
-    property_id:value.propertyId,building_year:value.buildingYear,latitude:value.latitude,longitude:value.longitude,trade_type:value.tradeType}));
+    "trade_type","sale_category","sale_price","sale_details_json","source_snapshot_key"];
+  const rows=recoveryRows(items);
   return {revision,body:[fields,...rows.map(value=>fields.map(field=>value[field]??""))]
     .map(values=>values.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(",")).join("\r\n")};
 }
@@ -238,6 +242,141 @@ test("persistent full original failures stop waiting labels and explicit retry r
   expect(result.state.reads).toHaveLength(3);
   expect(result.state.reads[2].force).toBe(true);
   safe(result);
+});
+
+const proofKey=index=>"sha256-v1:"+index.toString(16).padStart(64,"0");
+async function proofRecoveryFixture(page,context,isMobile,mismatch=false) {
+  const result=await setup(page,context,isMobile);
+  const activeId="PROOF-ACTIVE", candidateId="PROOF-CANDIDATE", changedId="PROOF-CHANGED";
+  const manual=Array.from({length:52},(_,index)=>item("PROOF-MANUAL-"+index,{state:"계약완료",sourceSnapshotKey:proofKey(index+10)}));
+  const items=[...manual,item(activeId,{sourceSnapshotKey:proofKey(1)}),
+    item(candidateId,{sourceSnapshotKey:proofKey(2)}),item(changedId,{sourceSnapshotKey:proofKey(3)})];
+  const candidateIds=new Set([candidateId,changedId]);
+  const photo=picture.replace("%23c9e7f5","%23bdd8b2");
+  function original(master,fresh=false) {
+    const candidate=candidateIds.has(master.propertyId);
+    return {...master,originalId:master.propertyId+"-ad",providerSourceId:"provider-"+master.propertyId,
+      buildingName:fresh?"변경 광고 최신 원본":master.name,active:candidate?0:1,sourceUnavailable:candidate,
+      candidateEligible:candidate,availabilityKind:candidate?"census_missing":"active",
+      lastCheckedAt:fresh?"2026-10-15T06:30:00Z":"2026-10-15T06:00:00Z",
+      absenceConfirmedAt:candidate?"2026-10-15T05:00:00Z":"",
+      images:[fresh?photo:picture],thumbnail:fresh?photo:picture,photoCount:1};
+  }
+  const groups={},keys={},publicIds={};
+  items.forEach(master=>{
+    const internal="INTERNAL-"+master.propertyId;
+    groups[internal]=[{...original(master),propertyId:internal}];
+    keys[internal]=mismatch&&master.propertyId===changedId?proofKey(4):master.sourceSnapshotKey;
+    publicIds[internal]=master.propertyId;
+  });
+  const changed={...items.find(value=>value.propertyId===changedId),deposit:900,rent:45,sourceSnapshotKey:proofKey(5)};
+  const state={fullReads:0,sheetReads:0,scopeReads:[],global:0,sheetRevision:"",fullRevision:"",releases:[],scopedResult:{ok:true,
+    items:recoveryRows([changed]),unified:{ok:true,groups:{[changedId]:[original(changed,true)]},
+      sourceSearchIds:{},sourceSnapshotKeys:{[changedId]:changed.sourceSnapshotKey},
+      sourceSnapshotPropertyIds:{[changedId]:changedId}}}};
+  await page.route("**/api/data**",async route=>{
+    const request=route.request(),url=new URL(request.url()),action=url.searchParams.get("action");
+    if(request.method()!=="GET"){result.writes.push(url.pathname);return route.abort();}
+    if(action==="unifiedListings") {
+      state.fullReads+=1;
+      state.fullRevision="GLOBAL-"+(++state.global);
+      return route.fulfill({status:200,headers:{"x-js-listings-revision":state.fullRevision},
+        json:{ok:true,groups,sourceSearchIds:{},sourceSnapshotKeys:keys,sourceSnapshotPropertyIds:publicIds}});
+    }
+    if(action==="listingOriginals") {
+      state.scopeReads.push((url.searchParams.get("ids")||"").split(","));
+      await new Promise(resolve=>{state.releases.push(resolve);});
+      return route.fulfill({status:200,headers:{"x-js-listings-revision":"GLOBAL-"+(++state.global)},json:state.scopedResult});
+    }
+    if(action==="dataRevision")return route.fulfill({json:{ok:true,revision:"GLOBAL-"+(++state.global)}});
+    return route.fallback();
+  });
+  await page.route("**/api/sheet",route=>{
+    state.sheetReads+=1;
+    const snapshot=recoverySheet(items,"GLOBAL-"+(++state.global));
+    state.sheetRevision=snapshot.revision;
+    return route.fulfill({status:200,contentType:"text/csv",headers:{"x-js-listings-revision":snapshot.revision},body:snapshot.body});
+  });
+  await page.addScriptTag({content:unifiedRuntime});
+  await page.evaluate(()=>{
+    allItems=[];currentItems=[];hideDone=false;doneOnly=true;isLoadingSheet=false;pendingAutoUpdate=false;
+    jsListingsCompleteBaseV1=false;jsListingsRevisionV682="";jsInitialFullListingsLoadingV1=true;
+    jsInitialFullListingsCacheHitV1=false;jsInitialFullListingsCacheItemsV1=null;
+    selectedGroupKey=null;jsPinnedClusterSelectionV6515=null;jsAdministrativeListSelectionV6570=null;
+    JSDataAccessV6.invalidateRead("unifiedListings");
+  });
+  return {...result,state,activeId,candidateId,changedId,photo,start:()=>page.evaluate(()=>loadSheet(false,true)),
+    cleanup(){state.releases.forEach(release=>release());}};
+}
+
+test("property proofs restore every photo and candidate despite continuously different global revisions",async({page,context,isMobile})=>{
+  const h=await proofRecoveryFixture(page,context,isMobile);
+  try {
+    await h.start();
+    await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");
+    await expect(page.locator("#mapListingCountValueV825")).toHaveText("54개");
+    await expect(card(page,h.candidateId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(card(page,h.changedId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+    expect(h.state.sheetRevision).not.toBe(h.state.fullRevision);
+    expect(await page.evaluate(()=>jsListingsRevisionV682)).toBe(h.state.sheetRevision);
+    expect(h.state.fullReads).toBe(1);expect(h.state.sheetReads).toBe(1);expect(h.state.scopeReads).toEqual([]);
+    await menu(page,"#doneOnlyBtn");await menu(page,"#hideDoneBtn");
+    await expect(card(page,h.activeId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    expect(await page.evaluate(id=>JSUnifiedListingsV8.allOriginals(id)[0].propertyId,h.activeId)).toBe(h.activeId);
+    await page.evaluate(()=>loadSheet(true,true));
+    await expect.poll(()=>page.evaluate(()=>JSUnifiedListingsV8.getOriginalMetadataStatus().status)).toBe("ready");
+    await expect(card(page,h.activeId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+    expect(h.state.fullReads).toBe(2);expect(h.state.sheetReads).toBe(2);expect(h.state.scopeReads).toEqual([]);
+    safe(h);
+  } finally {h.cleanup();}
+});
+
+test("one changed property fetches only its own proven inventory without clearing other photos or candidates",async({page,context,isMobile})=>{
+  const h=await proofRecoveryFixture(page,context,isMobile,true);
+  try {
+    await h.start();
+    await expect.poll(()=>h.state.scopeReads).toEqual([[h.changedId]]);
+    await expect(page.locator("#list")).toHaveAttribute("data-total-count","53");
+    await expect(card(page,h.candidateId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toContainText("변경된 매물 1건");
+    const revision=await page.evaluate(()=>jsListingsRevisionV682);
+    h.state.releases[0]();
+    await expect(page.locator("#list")).toHaveAttribute("data-total-count","54");
+    await expect(card(page,h.changedId).locator(".unified-thumb-v8 img")).toHaveAttribute("data-thumbnail-source-v8144",h.photo);
+    await expect(card(page,h.changedId).locator(".price-main")).toContainText(/보\s*900\s*\/\s*(?:월세)?월\s*45/);
+    await expect(page.locator("#unifiedOriginalLoadStatusV1")).toHaveCount(0);
+    expect(await page.evaluate(()=>jsListingsRevisionV682)).toBe(revision);
+    expect(h.state.fullReads).toBe(1);expect(h.state.sheetReads).toBe(1);expect(h.state.scopeReads).toEqual([[h.changedId]]);
+    expect(await page.evaluate(id=>({memo:allItems.find(value=>value.propertyId===id).memo,
+      ids:JSUnifiedListingsV8.allOriginals(id).map(value=>value.propertyId)}),h.changedId))
+      .toEqual({memo:"사용자 검수 메모 "+h.changedId,ids:[h.changedId]});
+    safe(h);
+  } finally {h.cleanup();}
+});
+
+test("late scoped proofs cannot overwrite a memo edit or a newer load generation",async({page,context,isMobile})=>{
+  const h=await proofRecoveryFixture(page,context,isMobile,true);
+  try {
+    await h.start();
+    await expect.poll(()=>h.state.scopeReads.length).toBe(1);
+    await page.evaluate(id=>{allItems.find(value=>value.propertyId===id).memo="수동 수정 메모 보존";},h.changedId);
+    h.state.releases[0]();
+    await expect.poll(()=>page.evaluate(()=>refreshScopedOriginalsV1.pending===null)).toBe(true);
+    expect(await page.evaluate(id=>({memo:allItems.find(value=>value.propertyId===id).memo,
+      originals:JSUnifiedListingsV8.allOriginals(id).length}),h.changedId)).toEqual({memo:"수동 수정 메모 보존",originals:0});
+    await page.evaluate(()=>{window.__proofRecoveryPending=JSListingRefreshV1.recoverOriginals();});
+    await expect.poll(()=>h.state.scopeReads.length).toBe(2);
+    await page.evaluate(()=>{jsListingsLoadGenerationV1+=1;});
+    h.state.releases[1]();
+    await page.evaluate(()=>window.__proofRecoveryPending);
+    expect(await page.evaluate(id=>({memo:allItems.find(value=>value.propertyId===id).memo,
+      originals:JSUnifiedListingsV8.allOriginals(id).length}),h.changedId)).toEqual({memo:"수동 수정 메모 보존",originals:0});
+    await expect(card(page,h.candidateId).locator(".unified-thumb-v8 img")).toHaveCount(1);
+    expect(h.state.fullReads).toBe(1);expect(h.state.sheetReads).toBe(1);
+    safe(h);
+  } finally {h.cleanup();}
 });
 
 test("CSV-first photo metadata recovers on detail without false no-photo labels",async({page,context,isMobile})=>{

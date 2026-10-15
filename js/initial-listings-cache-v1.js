@@ -12,7 +12,7 @@
     "sourceLink", "contactListRaw", "buildingYear", "buildingElevators",
     "buildingElevatorCapacity", "buildingApprovalDate", "buildingInfoCheckedAt",
     "buildingInfoStatus", "registrationAt", "lastCollectedAt", "latitude", "longitude",
-    "sheetRow", "key", "tradeType", "saleCategory", "salePrice"
+    "sheetRow", "key", "tradeType", "saleCategory", "salePrice", "sourceSnapshotKey"
   ];
 
   var UNIFIED_SIGNATURE_FIELDS = [

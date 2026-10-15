@@ -13,7 +13,8 @@
     photoPreloads: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0,
     detailStatus: {}, detailRefreshRetries: {},
     masterItemsArray: null, masterItemsById: Object.create(null),
-    metadataCoverage: Object.create(null),
+    metadataCoverage: Object.create(null), sourceSnapshotProofKeys: Object.create(null),
+    pendingProofIds: Object.create(null), pendingProofCount: 0, lastPendingProofCount: 0,
     displayItemsArray: null, displayItemsById: Object.create(null) };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
@@ -117,12 +118,14 @@
     var ready = id ? originalMetadataReady(id) : state.loaded;
     var phase = state.originalLoadPhase;
     if (phase === "ready" && !ready) phase = "stale";
-    return {status: phase, ready: ready, hasKnownData: ready,
+    return {status: phase, ready: ready, hasKnownData: ready, pendingCount: state.pendingProofCount,
       retryable: phase === "error" || phase === "stale"};
   }
   function setOriginalLoadPhase(phase) {
-    if (state.originalLoadPhase === phase) return;
+    var pendingCount = state.pendingProofCount;
+    if (state.originalLoadPhase === phase && state.lastPendingProofCount === pendingCount) return;
     state.originalLoadPhase = phase;
+    state.lastPendingProofCount = pendingCount;
     if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
       global.dispatchEvent(new global.CustomEvent("js-original-metadata-status", {detail: getOriginalMetadataStatus()}));
     }
@@ -633,6 +636,11 @@
     retry.onclick = function() {
       retry.disabled = true;
       var refresh = global.JSListingRefreshV1;
+      if (state.pendingProofCount && refresh && typeof refresh.recoverOriginals === "function") {
+        return Promise.resolve().then(function() { return refresh.recoverOriginals(); }).catch(function(error) {
+          console.warn("변경 매물 원본 연결 재확인 실패", error);
+        }).finally(function() { retry.disabled = false; });
+      }
       var generation = refresh && typeof refresh.generation === "function" ? refresh.generation() : null;
       var revision = text(global.jsListingsRevisionV682);
       load(true, {deferCommit: !!refresh}).then(function(result) {
@@ -693,6 +701,7 @@
     var searchIds = Object.assign({}, state.sourceSearchIds);
     Object.keys(expanded.groups).forEach(function(propertyId) {
       merged[propertyId] = expanded.groups[propertyId];
+      delete state.sourceSnapshotProofKeys[propertyId];
       searchIds[propertyId] = (expanded.sourceSearchIds && expanded.sourceSearchIds[propertyId] || []).slice();
       state.detailPropertyGeneration[propertyId] = (Number(state.detailPropertyGeneration[propertyId]) || 0) + 1;
       delete state.detailCache[propertyId];
@@ -709,6 +718,106 @@
     // as the revision of all original groups or mark a partial first load full.
     state.snapshotRevision = "";
     return true;
+  }
+
+  function attachCompatible(items, result, options) {
+    var expanded = null;
+    try { expanded = expandUnifiedResult(result); } catch (_) {}
+    var keys = expanded && expanded.sourceSnapshotKeys;
+    var propertyIds = expanded && expanded.sourceSnapshotPropertyIds;
+    var supported = !!(keys && typeof keys === "object" && !Array.isArray(keys) &&
+      propertyIds && typeof propertyIds === "object" && !Array.isArray(propertyIds));
+    var own = Object.prototype.hasOwnProperty;
+    var byPublicId = Object.create(null), duplicatePublicIds = Object.create(null), itemCounts = Object.create(null);
+    var inputItems = Array.isArray(items) ? items : [];
+    var matchedIds = [], inputIds = [], rejected = Object.create(null);
+    inputItems.forEach(function(item) {
+      var id = text(item && item.propertyId);
+      if (!id) return;
+      if (!itemCounts[id]) inputIds.push(id);
+      itemCounts[id] = (itemCounts[id] || 0) + 1;
+    });
+    if (supported) Object.keys(propertyIds).forEach(function(internalId) {
+      var publicId = propertyIds[internalId];
+      if (!internalId || internalId !== text(internalId) || typeof publicId !== "string" || !publicId || publicId !== text(publicId)) return;
+      if (own.call(byPublicId, publicId)) duplicatePublicIds[publicId] = true;
+      else byPublicId[publicId] = internalId;
+    });
+    var merged = Object.assign(Object.create(null), state.groups), searchIds = Object.assign(Object.create(null), state.sourceSearchIds);
+    inputItems.forEach(function(item) {
+      var publicId = text(item && item.propertyId), internalId = byPublicId[publicId];
+      if (!publicId || rejected[publicId]) return;
+      var proof = item && item.sourceSnapshotKey;
+      var rows = supported && internalId && own.call(expanded.groups, internalId) ? expanded.groups[internalId] : null;
+      var search = supported && internalId && expanded.sourceSearchIds && expanded.sourceSearchIds[internalId];
+      var valid = supported && itemCounts[publicId] === 1 && !duplicatePublicIds[publicId] &&
+        typeof proof === "string" && /^sha256-v1:[a-f0-9]{64}$/.test(proof) &&
+        own.call(keys, internalId) && keys[internalId] === proof && Array.isArray(rows) &&
+        (search == null || Array.isArray(search) && search.every(function(value) { return typeof value === "string"; })) &&
+        rows.every(function(original) {
+          return typeof original.propertyId === "string" && (original.propertyId === internalId || original.propertyId === publicId);
+        });
+      if (valid) {
+        var incomingIndex = sourceOriginalIndex(rows);
+        var missingKnownSource = (state.groups[publicId] || []).some(function(original) {
+          return !sameSourceOriginal(incomingIndex, original);
+        });
+        // A full read can be an older R2 snapshot even if it matches its CSV.
+        // Only the uncached scoped inventory may establish a removed source;
+        // no response is allowed to regress an existing source's checked time.
+        valid = !detailResponseIsOlder(publicId, rows) &&
+          (!missingKnownSource || !!(options && options.scoped && options.scopedFresh));
+      }
+      if (!valid) { rejected[publicId] = true; return; }
+      matchedIds.push(publicId);
+      if (state.sourceSnapshotProofKeys[publicId] !== proof || !originalMetadataReady(publicId)) {
+        merged[publicId] = rows.map(function(original) { return Object.assign({}, original, {propertyId: publicId}); });
+        searchIds[publicId] = (search || []).slice();
+        state.detailPropertyGeneration[publicId] = (Number(state.detailPropertyGeneration[publicId]) || 0) + 1;
+        delete state.detailCache[publicId];
+        delete state.detailCachedAt[publicId];
+        delete state.detailRetryAt[publicId];
+        delete state.detailPending[publicId];
+        delete state.detailPendingForced[publicId];
+        delete state.contactCache[publicId];
+        delete state.contactPending[publicId];
+        if (state.openPropertyId === publicId) state.detailRequestToken += 1;
+      }
+      state.sourceSnapshotProofKeys[publicId] = proof;
+      state.metadataCoverage[publicId] = true;
+    });
+    state.groups = merged;
+    state.sourceSearchIds = searchIds;
+    // Per-property proofs cannot certify the revision of the entire dataset.
+    state.snapshotRevision = "";
+    if (!(options && options.scoped)) state.pendingProofIds = Object.create(null);
+    inputIds.forEach(function(id) {
+      if (rejected[id]) state.pendingProofIds[id] = true;
+      else delete state.pendingProofIds[id];
+    });
+    var pendingIds = Object.keys(state.pendingProofIds);
+    state.pendingProofCount = pendingIds.length;
+    var unknownIds = pendingIds.filter(function(id) { return !originalMetadataReady(id); });
+    var complete = supported && !pendingIds.length && inputIds.length === inputItems.length;
+    if (complete) state.loaded = true;
+    attach(inputItems);
+    setOriginalLoadPhase(complete ? "ready" : "pending");
+    if (complete) originalLoadStatus(false);
+    else originalLoadStatus(true, "변경된 매물 " + pendingIds.length + "건 최신 연결 확인 중 · 마지막 확인 자료를 유지합니다. ");
+    return {proofSupported: supported, matchedCount: matchedIds.length, matchedIds: matchedIds,
+      pendingIds: pendingIds, unknownIds: unknownIds, complete: complete};
+  }
+
+  function canCacheCompatible(items) {
+    if (!state.loaded || state.originalLoadPhase !== "ready" || state.pendingProofCount || !Array.isArray(items)) return false;
+    var seen = Object.create(null);
+    return items.every(function(item) {
+      var id = text(item && item.propertyId), proof = item && item.sourceSnapshotKey;
+      if (!id || seen[id] || typeof proof !== "string" || !/^sha256-v1:[a-f0-9]{64}$/.test(proof) ||
+          state.sourceSnapshotProofKeys[id] !== proof || !originalMetadataReady(id)) return false;
+      seen[id] = true;
+      return true;
+    });
   }
 
   function load(force, options) {
@@ -728,6 +837,9 @@
       state.sourceSearchIds = result.sourceSearchIds || {};
       state.snapshotRevision = result.snapshotRevision || "";
       state.loaded = true;
+      state.pendingProofIds = Object.create(null);
+      state.pendingProofCount = 0;
+      state.sourceSnapshotProofKeys = Object.create(null);
       setOriginalLoadPhase("ready");
       originalLoadStatus(false);
       return result;
@@ -750,6 +862,9 @@
       if (result.ok !== false) {
         state.loaded = true;
         state.metadataCoverage = Object.create(null);
+        state.pendingProofIds = Object.create(null);
+        state.pendingProofCount = 0;
+        state.sourceSnapshotProofKeys = Object.create(null);
         (items || []).forEach(function(item) {
           var id = text(item && item.propertyId);
           if (id) state.metadataCoverage[id] = true;
@@ -1494,6 +1609,7 @@
     // A clicked property's fresh original response is evidence for that property,
     // not a coherent replacement for the full CSV/original snapshot cache.
     state.groups[propertyId] = originals;
+    delete state.sourceSnapshotProofKeys[propertyId];
     state.snapshotRevision = "";
     attach([master]);
     if (typeof global.applyFilter === "function") {
@@ -2330,9 +2446,11 @@
   });
 
   global.JSUnifiedListingsV8 = {
-    load: load, attach: attach, mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
+    load: load, attach: attach, attachCompatible: attachCompatible, canCacheCompatible: canCacheCompatible,
+    mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
     markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(true, "원본 연결 재확인이 필요합니다. 마지막 확인 자료는 유지합니다. "); },
     getOriginalMetadataStatus: getOriginalMetadataStatus,
+    pendingCompatibleIds: function() { return Object.keys(state.pendingProofIds); },
     cardParts: cardParts, matchesSource: matchesSource,
     allOriginals: allOriginals, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
     isSourceUnavailable: isSourceUnavailable,

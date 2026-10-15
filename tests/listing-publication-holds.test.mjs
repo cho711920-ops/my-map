@@ -21,6 +21,7 @@ function database() {
     );
     CREATE TABLE listing_sources (
       id TEXT PRIMARY KEY, listing_id TEXT, source TEXT, source_listing_id TEXT,
+      snapshot_hash TEXT DEFAULT '',
       active INTEGER, missing_count INTEGER DEFAULT 0, list_snapshot_json TEXT DEFAULT '{}',
       raw_json TEXT DEFAULT '{}', last_collected_at TEXT DEFAULT '', source_url TEXT DEFAULT '', updated_at TEXT DEFAULT ''
     );

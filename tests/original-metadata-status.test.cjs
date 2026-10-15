@@ -43,7 +43,7 @@ function bannerDocument({chips=true,list=true,statusNode=true}={}){
 
 test("cold metadata pending is explicit and does not make a per-card request",()=>{
   const h=harness();
-  assert.deepEqual(status(h.api,"M-one"),{status:"pending",ready:false,hasKnownData:false,retryable:false});
+  assert.deepEqual(status(h.api,"M-one"),{status:"pending",ready:false,hasKnownData:false,retryable:false,pendingCount:0});
   assert.match(h.api.cardParts(h.item).thumbnail,/원본 확인 중/);
   assert.equal(h.reads.length,0);
 });
@@ -55,7 +55,7 @@ test("failed full metadata load changes unknown cards from perpetual pending to 
   h.reads[0].reject(new Error("Fixture upstream error"));
   const result=await pending;
   assert.equal(result.ok,false);
-  assert.deepEqual(status(h.api,"M-one"),{status:"error",ready:false,hasKnownData:false,retryable:true});
+  assert.deepEqual(status(h.api,"M-one"),{status:"error",ready:false,hasKnownData:false,retryable:true,pendingCount:0});
   const card=h.api.cardParts(h.item);
   assert.match(card.thumbnail,/원본 조회 실패/);
   assert.match(card.badge,/다시 확인/);
@@ -74,7 +74,7 @@ test("a failed refresh preserves every known source, candidate, photo and canoni
   h.reads[0].reject(new Error("Fixture offline"));
   const result=await pending;
   assert.equal(result.stale,true);
-  assert.deepEqual(status(h.api),{status:"error",ready:true,hasKnownData:true,retryable:true});
+  assert.deepEqual(status(h.api),{status:"error",ready:true,hasKnownData:true,retryable:true,pendingCount:0});
   assert.deepEqual(Array.from(h.api.allOriginals("M-one"),row=>row.originalId),["source-one","ended-one"]);
   assert.match(h.api.cardParts(h.item).thumbnail,/current\.jpg/);
   assert.equal(h.item.unifiedCandidateOriginalCountV2,1);
@@ -90,7 +90,7 @@ test("deferred success is not a committed ready snapshot until the matching resu
   assert.equal(status(h.api).status,"pending");
   assert.equal(status(h.api,"M-one").ready,false);
   h.api.attach([h.item],result);
-  assert.deepEqual(status(h.api,"M-one"),{status:"ready",ready:true,hasKnownData:true,retryable:false});
+  assert.deepEqual(status(h.api,"M-one"),{status:"ready",ready:true,hasKnownData:true,retryable:false,pendingCount:0});
   assert.match(h.api.cardParts(h.item).thumbnail,/current\.jpg/);
 });
 
@@ -100,7 +100,7 @@ test("revision mismatch marks unknown cards stale while preserving the last comm
   const newItem={...h.item,propertyId:"M-new"};delete newItem.unifiedAllOriginalsV1;delete newItem.unifiedDisplayOriginalsV2;
   h.w.allItems.push(newItem);h.api.attach(h.w.allItems);
   h.api.markSnapshotStale();
-  assert.deepEqual(status(h.api,"M-new"),{status:"stale",ready:false,hasKnownData:false,retryable:true});
+  assert.deepEqual(status(h.api,"M-new"),{status:"stale",ready:false,hasKnownData:false,retryable:true,pendingCount:0});
   assert.equal(status(h.api,"M-one").ready,true);
   assert.match(h.api.cardParts(newItem).thumbnail,/원본 연결 재확인/);
   assert.match(h.api.cardParts(h.item).thumbnail,/current\.jpg/);
@@ -125,7 +125,7 @@ test("status events contain only readiness flags and never trigger automatic net
   h.api.markSnapshotStale();h.api.markSnapshotStale();
   assert.equal(h.events.length,1);
   assert.equal(h.events[0].type,"js-original-metadata-status");
-  assert.deepEqual(Object.keys(h.events[0].detail).sort(),["hasKnownData","ready","retryable","status"]);
+  assert.deepEqual(Object.keys(h.events[0].detail).sort(),["hasKnownData","pendingCount","ready","retryable","status"]);
   assert.equal(h.events[0].detail.status,"stale");
   assert.equal(h.reads.length,0);
 });

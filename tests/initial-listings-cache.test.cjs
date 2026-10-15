@@ -114,7 +114,7 @@ test("the map renders only a complete full snapshot and refreshes it without a s
   assert.match(mapSource, /matchingListingSnapshotRevisionV1\(sheetSnapshotV1, unifiedResult\)/);
   assert.match(mapSource, /전체 매물 한 번에 준비 중/);
   assert.match(mapSource, /window\.JSUnifiedListingsV8\.attach\(rawItems, unifiedResult\)/);
-  assert.match(mapSource, /JSInitialListingsCacheV1\.write\(liveInitialItemsForCacheV1, unifiedResult\)/);
+  assert.match(mapSource, /JSInitialListingsCacheV1\.write\(liveInitialItemsForCacheV1, compatibleCacheResultV1 \|\| unifiedResult\)/);
   assert.match(mapSource, /liveInitialItemsForCacheV1 = rawItems/);
   assert.match(auth, /JSInitialListingsCacheV1\.clear\(\)/);
 });

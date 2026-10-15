@@ -68,7 +68,7 @@ function expand(result, parent) {
 }
 
 function assertSingleScan(queries, expectedPages) {
-  const sources = queries.filter(query => /SELECT rowid AS __page_cursor,[\s\S]*FROM listing_sources/.test(query.sql));
+  const sources = queries.filter(query => /SELECT rowid AS __page_cursor,[\s\S]*FROM listing_sources WHERE/.test(query.sql));
   assert.ok(!queries.some(query => /FROM listing_sources s JOIN listings/.test(query.sql)), "The old whole-index SELECT is not issued");
   assert.equal(sources.length, expectedPages, "Only the existing rowid source pages are queried; no second index scan");
   for (const query of sources) {

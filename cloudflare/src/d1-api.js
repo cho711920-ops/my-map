@@ -16,6 +16,7 @@ import { withDaangnLandUse } from "./land-use-display.js";
 import { withSaleAreaDisplay } from "./sale-area-display.js";
 import { newListingPeriod } from "./new-listing-period.js";
 import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
+import { sourceSnapshotParentSql, sourceSnapshotProofSql, hashSourceSnapshotRows, sourceSnapshotKeysFromReadRows } from "./source-snapshot-proof.js";
 import {
   SOURCE_CANDIDATE_POLICY_VERSION, availabilityKindSql, absenceMetadataSql, candidateSourceWhereSql,
   publicSourceWhereSql, publicMasterWhereSql, publicMasterSourcesWhereSql, candidateMasterWhereSql, candidateAdCountSql
@@ -33,7 +34,7 @@ const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
   "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard",
-  "transactionCandidates", "listingChanges", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
+  "transactionCandidates", "listingChanges", "listingOriginals", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
 ]);
 
 const D1_POST_ACTIONS = new Set([
@@ -262,20 +263,22 @@ export async function buildD1SheetCsv(env) {
     property_id, source_url, contacts_json, building_year, building_elevators,
     building_approval_date, building_info_checked_at, building_info_status, registration_at,
     last_collected_at, latitude, longitude, building_elevator_capacity,
-    trade_type, sale_category, sale_price, sale_details_json`, "listings", `status <> 'deleted'
+    trade_type, sale_category, sale_price, sale_details_json,
+    ${sourceSnapshotProofSql()} AS source_snapshot_proof`, "listings", `status <> 'deleted'
       AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
       )`, 3_000);
+  await hashSourceSnapshotRows(rows);
   const header = [
     "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
     "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
     "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
     "최종수집시각", "위도", "경도"
   ];
-  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세");
+  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세", "원본연결키");
   const body = [header, ...rows.map((row) => [
     row.title, row.address, row.room, row.listing_type, row.deposit, row.monthly_rent,
     row.maintenance_fee, row.premium, row.area_m2, row.landlord_phone, row.tenant_phone,
@@ -283,7 +286,7 @@ export async function buildD1SheetCsv(env) {
     row.source_url, row.contacts_json, row.building_year, row.building_elevators,
     row.building_approval_date, row.building_info_checked_at, row.building_info_status,
     row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity,
-    row.trade_type, row.sale_category, row.sale_price, row.sale_details_json
+    row.trade_type, row.sale_category, row.sale_price, row.sale_details_json, row.source_snapshot_key
   ])].map((row) => row.map(csvCell).join(",")).join("\r\n");
   return `${body}\r\n`;
 }
@@ -294,20 +297,45 @@ async function listingChanges(env, query) {
   if (!ids.length) return { ok: true, action: "listingChanges", items: [], source: "D1" };
   const placeholders = ids.map((_, index) => `?${index + 1}`).join(",");
   const result = await env.DB.prepare(`SELECT
-      title, address, room, listing_type, deposit, monthly_rent, maintenance_fee, premium, area_m2,
+      id, title, address, room, listing_type, deposit, monthly_rent, maintenance_fee, premium, area_m2,
       landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
       property_id, source_url, contacts_json, building_year, building_elevators,
       building_approval_date, building_info_checked_at, building_info_status, registration_at,
       last_collected_at, latitude, longitude, building_elevator_capacity,
-      trade_type, sale_category, sale_price, sale_details_json
-    FROM listings WHERE property_id IN (${placeholders})
+      trade_type, sale_category, sale_price, sale_details_json,
+      ${sourceSnapshotProofSql()} AS source_snapshot_proof
+    FROM listings WHERE property_id IN (${placeholders}) AND status<>'deleted'
       AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
       )`).bind(...ids).all();
-  return { ok: true, action: "listingChanges", items: result?.results || [], requestedIds: ids, source: "D1" };
+  const items = result?.results || [];
+  await hashSourceSnapshotRows(items);
+  return { ok: true, action: "listingChanges", items, requestedIds: ids, source: "D1" };
+}
+
+async function listingOriginals(env, query) {
+  const raw = clean(query.ids).split(",");
+  if (!clean(query.ids) || raw.length > 50 || raw.some(id => !clean(id) || clean(id).length > 100)) {
+    throw Object.assign(new Error("원본 연결 조회는 올바른 매물ID 1~50개만 지원합니다."), { statusCode: 400 });
+  }
+  const ids = [...new Set(raw.map(clean))];
+  const changes = await listingChanges(env, { ids: ids.join(",") });
+  const items = changes.items;
+  const unified = await unifiedListings(env, items.map(row => row.id));
+  const groups = {}, sourceSearchIds = {}, sourceSnapshotKeys = {}, sourceSnapshotPropertyIds = {};
+  for (const row of items) {
+    const id = clean(row.id), publicId = clean(row.property_id) || id;
+    groups[publicId] = unified.groups[id] || [];
+    sourceSearchIds[publicId] = unified.sourceSearchIds[id] || [];
+    if (unified.sourceSnapshotKeys[id]) sourceSnapshotKeys[publicId] = unified.sourceSnapshotKeys[id];
+    sourceSnapshotPropertyIds[publicId] = publicId;
+  }
+  const returnedIds = new Set(items.map(row => clean(row.property_id) || clean(row.id)));
+  return { ok: true, action: "listingOriginals", requestedIds: ids, missingIds: ids.filter(id => !returnedIds.has(id)), items,
+    unified: { ...unified, groups, sourceSearchIds, sourceSnapshotKeys, sourceSnapshotPropertyIds }, source: "D1" };
 }
 
 export function actualGongsilImages(raw = {}) {
@@ -421,13 +449,15 @@ function originalFloorMetadataSql() {
 async function unifiedListings(env, listingIds = null) {
   const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
   if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
-    groups: {}, sourceSearchIds: {}, originalCount: 0, unavailableCount: 0, source: "D1" };
+    groups: {}, sourceSearchIds: {}, sourceSnapshotKeys: {}, sourceSnapshotPropertyIds: {}, originalCount: 0, unavailableCount: 0, source: "D1" };
   if (scopedIds && scopedIds.length > 75) throw new Error("한 번에 조회할 신규매물 범위를 초과했습니다.");
   const bindings = scopedIds || [];
   const scopeSql = column => scopedIds ? ` AND ${column} IN (${scopedIds.map((_, i) => `?${i + 1}`).join(",")})` : "";
   const rows = await allRowidPages(
     env,
-    `id, listing_id, source, source_listing_id, source_url, active, missing_count, updated_at, last_collected_at, list_snapshot_json,
+    `id, listing_id, source, source_listing_id, source_url, snapshot_hash, active, missing_count, updated_at, last_collected_at, list_snapshot_json,
+      (SELECT ${sourceSnapshotParentSql("proof_parent")} FROM listings proof_parent WHERE proof_parent.id=listing_sources.listing_id) AS source_snapshot_parent_json,
+      COALESCE((SELECT proof_availability.updated_at FROM listing_source_availability proof_availability WHERE proof_availability.source_id=listing_sources.id),'') AS availability_updated_at,
       ${availabilityKindSql("listing_sources")} AS availability_kind,
       ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
       ${originalFloorMetadataSql()} AS floor_metadata_json,
@@ -463,6 +493,13 @@ async function unifiedListings(env, listingIds = null) {
   const groups = {};
   const manualRooms = await loadManualRoomOverrides(env, scopedIds);
   const manualFields = await loadManualRepresentativeFields(env, scopedIds);
+  // Read parent tokens/counts last. They may reject a source group changed
+  // between rowid pages; they must never replace the actual read-row proof.
+  const parents = await allRowidPages(env, `id, property_id, version, updated_at, status,
+    (SELECT COUNT(*) FROM listing_sources proof_source WHERE proof_source.listing_id=listings.id
+      AND ${publicSourceWhereSql("proof_source")}) AS source_snapshot_source_count`, "listings",
+    `${publicMasterWhereSql("listings")} AND ${publicMasterSourcesWhereSql("listings")}${scopeSql("id")}`, 3_000, bindings);
+  const sourceProof = await sourceSnapshotKeysFromReadRows(rows, parents);
   let unavailableCount = 0;
   // These rows already have the same public-parent, hold and scope guards as
   // the original-number index. Reuse their rowid order instead of rescanning
@@ -496,6 +533,10 @@ async function unifiedListings(env, listingIds = null) {
     while (values.length && values[values.length - 1] === "") values.pop();
     groups[propertyId].push(values);
   }
+  for (const id of Object.keys(sourceProof.keys)) {
+    if (!groups[id]) groups[id] = [];
+    if (!sourceSearchIds[id]) sourceSearchIds[id] = [];
+  }
   return {
     ok: true,
     version: 2,
@@ -503,6 +544,8 @@ async function unifiedListings(env, listingIds = null) {
     fields: UNIFIED_FIELDS,
     groups,
     sourceSearchIds,
+    sourceSnapshotKeys: sourceProof.keys,
+    sourceSnapshotPropertyIds: sourceProof.propertyIds,
     originalCount: rows.length,
     unavailableCount,
     source: "D1"
@@ -1385,6 +1428,7 @@ export async function handleD1GetAction(env, user, query) {
   if (action === "operationsDashboard") return operationsDashboard(env);
   if (action === "transactionCandidates") return transactionCandidates(env);
   if (action === "listingChanges") return listingChanges(env, query);
+  if (action === "listingOriginals") return listingOriginals(env, query);
   if (action === "listingHistory") return listingHistory(env, query);
   if (action === "userProfile") return userProfile(user);
   if (action === "userManagement") return userManagement(env, user);

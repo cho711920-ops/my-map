@@ -218,6 +218,7 @@ function listingChangeRowToItemV683(row, index) {
     buildingApprovalDate: clean(row.building_approval_date), buildingInfoCheckedAt: clean(row.building_info_checked_at),
     buildingInfoStatus: clean(row.building_info_status), registrationAt: clean(row.registration_at),
     lastCollectedAt: clean(row.last_collected_at),
+    sourceSnapshotKey: clean(row.source_snapshot_key),
     tradeType: clean(row.trade_type) || "lease",
     saleCategory: clean(row.sale_category),
     salePrice: row.sale_price === null || row.sale_price === "" ? null : Number(row.sale_price),
@@ -589,6 +590,7 @@ function getItemsDataSignatureV638(items) {
       item.tradeType,
       item.saleCategory,
       item.salePrice,
+      item.sourceSnapshotKey,
       item.sheetRow
     ].forEach(function(value) {
       var textValue = String(value == null ? "" : value) + "\u001f";
@@ -1869,6 +1871,7 @@ function hasReadyCoordinateWithoutSharedCacheV8213(item) {
 
 function matchingListingSnapshotRevisionV1(snapshot, originals) {
   return snapshot && originals && originals.ok !== false &&
+    !originals.sourceSnapshotKeys &&
     snapshot.revision && snapshot.revision === originals.snapshotRevision ? snapshot.revision : "";
 }
 
@@ -1928,9 +1931,18 @@ function applyScopedListingsV1(result) {
 window.JSListingRefreshV1 = { applyScoped: applyScopedListingsV1 };
 
 function applyOriginalsSnapshotV1(result, revision, generation) {
-  if (generation !== jsListingsLoadGenerationV1 || !revision || !result || result.ok === false ||
-      result.snapshotRevision !== revision || jsListingsRevisionV682 !== revision ||
+  if (generation !== jsListingsLoadGenerationV1 || !result || result.ok === false ||
       !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.attach !== "function") return false;
+  if (result.sourceSnapshotKeys) {
+    var compatible = compatibleOriginalsResultV1(allItems, result);
+    if (!compatible) return false;
+    refreshOriginalMetadataPresentationV1();
+    if (!compatible.complete) Promise.resolve().then(function() {
+      return recoverOriginalMetadataV1(generation);
+    }).catch(function(error) { console.warn("변경 매물 원본 연결 재확인 실패", error); });
+    return true;
+  }
+  if (!revision || result.snapshotRevision !== revision || jsListingsRevisionV682 !== revision) return false;
   var view = captureAutoUpdateViewState();
   // Preserve selection and scroll, not the pre-metadata membership/order.
   // Otherwise a valid 54-row candidate result is overwritten with the old 52.
@@ -1949,10 +1961,101 @@ function applyOriginalsSnapshotV1(result, revision, generation) {
 window.JSListingRefreshV1.applyOriginals = applyOriginalsSnapshotV1;
 window.JSListingRefreshV1.generation = function() { return jsListingsLoadGenerationV1; };
 window.JSListingRefreshV1.hasCompleteBase = function() { return jsListingsCompleteBaseV1; };
+window.JSListingRefreshV1.recoverOriginals = function() { return recoverOriginalMetadataV1(jsListingsLoadGenerationV1, true); };
+
+function compatibleOriginalsResultV1(items, result, scoped) {
+  if (!result || result.ok === false || !result.sourceSnapshotKeys || !result.sourceSnapshotPropertyIds ||
+      !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.attachCompatible !== "function") return null;
+  var applied = window.JSUnifiedListingsV8.attachCompatible(items, result, {scoped: !!scoped, scopedFresh: !!scoped});
+  return applied && applied.proofSupported ? applied : null;
+}
+
+function compatibleOriginalsCacheV1(items) {
+  var api = window.JSUnifiedListingsV8;
+  if (!api || typeof api.pendingCompatibleIds !== "function" || api.pendingCompatibleIds().length ||
+      typeof api.canCacheCompatible !== "function" || !api.canCacheCompatible(items)) return null;
+  var groups = Object.create(null), searchIds = Object.create(null), keys = Object.create(null), ids = Object.create(null);
+  (items || []).forEach(function(item) {
+    groups[item.propertyId] = api.allOriginals(item.propertyId);
+    searchIds[item.propertyId] = (item.sourceListingSearchV6579 || []).slice();
+    keys[item.propertyId] = item.sourceSnapshotKey;
+    ids[item.propertyId] = item.propertyId;
+  });
+  return {ok: true, format: "expanded-v2", groups: groups, sourceSearchIds: searchIds,
+    sourceSnapshotKeys: keys, sourceSnapshotPropertyIds: ids};
+}
+
+function originalMetadataMutationPendingV1(item) {
+  var key = item && (item.key || itemKey(item));
+  var selectionKey = typeof window.actionSelectionKeyV660 === "function" ? window.actionSelectionKeyV660(item) : "";
+  return !!(window.memoSavePendingKeysV655 && window.memoSavePendingKeysV655[key] ||
+    window.doneTogglePendingKeys && (window.doneTogglePendingKeys[key] || window.doneTogglePendingKeys[selectionKey]));
+}
+
+function refreshScopedOriginalsV1(ids, generation) {
+  var previous = refreshScopedOriginalsV1.pending;
+  if (previous && previous.generation === generation) return previous.promise;
+  var unique = Array.from(new Set((ids || []).map(clean).filter(Boolean))).slice(0, 200);
+  var cursor = 0;
+  var task = {generation: generation, promise: null};
+  function next() {
+    if (generation !== jsListingsLoadGenerationV1 || cursor >= unique.length) return Promise.resolve();
+    var batch = unique.slice(cursor, cursor += 50);
+    var requested = Object.create(null), before = Object.create(null);
+    batch.forEach(function(id) { requested[id] = true; });
+    (allItems || []).forEach(function(item) {
+      if (requested[item.propertyId] && !originalMetadataMutationPendingV1(item)) before[item.propertyId] = getItemsDataSignatureV638([item]);
+    });
+    return window.JSDataAccessV6.read("listingOriginals", {ids: batch.join(",")}, {cache: "no-store"}).then(function(result) {
+      if (generation !== jsListingsLoadGenerationV1) return;
+      if (!result || result.ok === false || !Array.isArray(result.items) || !result.unified) throw new Error("변경 매물 원본 응답을 확인하지 못했습니다.");
+      var seen = Object.create(null), current = Object.create(null);
+      (allItems || []).forEach(function(item) { if (requested[item.propertyId]) current[item.propertyId] = item; });
+      var replacements = result.items.map(function(row, index) {
+        var item = listingChangeRowToItemV683(row, index), id = item.propertyId;
+        if (!id || !requested[id] || seen[id]) throw new Error("변경 매물 원본번호 연결을 확인하지 못했습니다.");
+        seen[id] = true;
+        // Do not overwrite an edit made after this property's read began.
+        if (!current[id] || originalMetadataMutationPendingV1(current[id]) || before[id] !== getItemsDataSignatureV638([current[id]])) return null;
+        item.sheetRow = current[id].sheetRow || item.sheetRow;
+        if (current[id].address === item.address && current[id].latlng) item.latlng = current[id].latlng;
+        return item;
+      }).filter(Boolean);
+      var applied = compatibleOriginalsResultV1(replacements, result.unified, true);
+      if (!applied) throw new Error("변경 매물 원본의 정합성을 확인하지 못했습니다.");
+      var accepted = new Set(applied.matchedIds || []), byId = Object.create(null);
+      replacements.forEach(function(item) { if (accepted.has(item.propertyId)) byId[item.propertyId] = item; });
+      allItems = (allItems || []).map(function(item) { return byId[item.propertyId] || item; });
+      window.JSUnifiedListingsV8.attach(allItems);
+      refreshOriginalMetadataPresentationV1();
+      return next();
+    });
+  }
+  task.promise = Promise.resolve().then(next).then(function() {
+    if (generation !== jsListingsLoadGenerationV1) return false;
+    var remaining = window.JSUnifiedListingsV8.pendingCompatibleIds();
+    if (remaining.length) window.JSUnifiedListingsV8.markSnapshotStale();
+    // Successful progress may continue on the next one-minute poll. The retry
+    // cap is for stalled/error recovery, not a permanent 600-property ceiling.
+    var recovery = loadSheet.originalsRecoveryV1;
+    if (remaining.length < (ids || []).length && recovery && recovery.revision === String(jsListingsRevisionV682 || "")) recovery.attempts = 0;
+    return !remaining.length;
+  }).catch(function(error) {
+    if (generation === jsListingsLoadGenerationV1) {
+      window.JSUnifiedListingsV8.markSnapshotStale();
+      refreshOriginalMetadataPresentationV1();
+    }
+    console.warn("변경 매물 원본 재확인 실패", error);
+    return false;
+  }).finally(function() { if (refreshScopedOriginalsV1.pending === task) refreshScopedOriginalsV1.pending = null; });
+  refreshScopedOriginalsV1.pending = task;
+  return task.promise;
+}
 
 function refreshOriginalMetadataPresentationV1() {
   if (!(allItems || []).length) return;
   var view = captureAutoUpdateViewState();
+  view.preserveVisibleListV1 = false;
   preserveActionSelectionDuringRender = true;
   try {
     applyFilter();
@@ -1962,11 +2065,13 @@ function refreshOriginalMetadataPresentationV1() {
   }
 }
 
-function recoverOriginalMetadataV1(generation) {
+function recoverOriginalMetadataV1(generation, force) {
   if (generation !== jsListingsLoadGenerationV1 || isLoadingSheet ||
       !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.getOriginalMetadataStatus !== "function") return false;
   var metadata = window.JSUnifiedListingsV8.getOriginalMetadataStatus();
-  if (!metadata.retryable) return false;
+  var pendingIds = typeof window.JSUnifiedListingsV8.pendingCompatibleIds === "function"
+    ? window.JSUnifiedListingsV8.pendingCompatibleIds() : [];
+  if (!metadata.retryable && !pendingIds.length) return false;
   var revision = String(jsListingsRevisionV682 || "");
   var recovery = loadSheet.originalsRecoveryV1;
   if (!recovery || recovery.revision !== revision) {
@@ -1974,10 +2079,10 @@ function recoverOriginalMetadataV1(generation) {
   }
   // One immediate recovery and at most two later revision-poll recoveries.
   // No per-card requests, render-loop retries or endless full downloads.
-  if (recovery.attempts >= 3 || Date.now() < recovery.nextAt) return false;
+  if (!force && (recovery.attempts >= 3 || Date.now() < recovery.nextAt)) return false;
   recovery.attempts += 1;
   recovery.nextAt = Date.now() + 60 * 1000;
-  return loadSheet(true, true, true);
+  return pendingIds.length ? refreshScopedOriginalsV1(pendingIds, generation) : loadSheet(true, true, true);
 }
 
 function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
@@ -2042,10 +2147,32 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   var sheetSnapshotV1 = null;
   var sheetPublishedV1 = false;
   var unifiedAppliedV1 = false;
+  var compatibleCacheResultV1 = null;
+  var compatiblePendingIdsV1 = null;
   var originalPairRecoveryStartedV1 = false;
   function applyLateUnifiedV1() {
-    if (unifiedAppliedV1 || !sheetPublishedV1 || isLoadingSheet ||
+    if (!sheetPublishedV1 || isLoadingSheet ||
         loadGenerationV1 !== jsListingsLoadGenerationV1 || !unifiedResult) return;
+    if (compatiblePendingIdsV1 && compatiblePendingIdsV1.length && !originalPairRecoveryStartedV1) {
+      originalPairRecoveryStartedV1 = true;
+      Promise.resolve(recoverOriginalMetadataV1(loadGenerationV1)).then(function(recovered) {
+        if (!recovered || loadGenerationV1 !== jsListingsLoadGenerationV1) return;
+        compatibleCacheResultV1 = compatibleOriginalsCacheV1(allItems);
+        liveInitialItemsForCacheV1 = allItems;
+        persistInitialListingsCacheV1();
+      }).catch(function(error) { console.warn("변경 매물 원본 연결 재확인 실패", error); });
+    }
+    if (unifiedAppliedV1) return;
+    var compatible = compatibleOriginalsResultV1(allItems, unifiedResult);
+    if (compatible) {
+      unifiedAppliedV1 = true;
+      compatiblePendingIdsV1 = compatible.pendingIds;
+      compatibleCacheResultV1 = compatible.complete ? compatibleOriginalsCacheV1(allItems) : null;
+      refreshOriginalMetadataPresentationV1();
+      if (compatible.complete) { delete loadSheet.originalsRecoveryV1; persistInitialListingsCacheV1(); }
+      else applyLateUnifiedV1();
+      return;
+    }
     if (!matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult)) {
       if (unifiedResult.ok !== false && window.JSUnifiedListingsV8 &&
           typeof window.JSUnifiedListingsV8.markSnapshotStale === "function") window.JSUnifiedListingsV8.markSnapshotStale();
@@ -2070,12 +2197,12 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       (isAuto && !originalsRecoveryAttempt) || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
       !unifiedResult || unifiedResult.ok === false ||
       loadGenerationV1 !== jsListingsLoadGenerationV1 ||
-      !matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult) ||
+      (!compatibleCacheResultV1 && !matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult)) ||
       !window.JSInitialListingsCacheV1 ||
       typeof window.JSInitialListingsCacheV1.write !== "function"
     ) return;
     initialCacheWriteStartedV1 = true;
-    window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, unifiedResult).then(function(saved) {
+    window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, compatibleCacheResultV1 || unifiedResult).then(function(saved) {
       if (saved && loadGenerationV1 === jsListingsLoadGenerationV1) document.documentElement.setAttribute("data-initial-list-cache-live", "true");
     });
   }
@@ -2178,6 +2305,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
           saleCategory: clean(c[29]),
           salePrice: clean(c[30]) === "" ? null : Number(c[30]),
           saleDetails: parseDirectSaleDetailsV1(c[31]),
+          sourceSnapshotKey: clean(c[32]),
           sheetRow: i + 1,
           latlng: null
         };
@@ -2194,7 +2322,13 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         if (item.address) rawItems.push(item);
       }
 
-      if (matchingListingSnapshotRevisionV1(snapshot, unifiedResult) &&
+      var compatible = compatibleOriginalsResultV1(rawItems, unifiedResult);
+      if (compatible) {
+        unifiedAppliedV1 = true;
+        compatiblePendingIdsV1 = compatible.pendingIds;
+        compatibleCacheResultV1 = compatible.complete ? compatibleOriginalsCacheV1(rawItems) : null;
+        if (compatible.complete) delete loadSheet.originalsRecoveryV1;
+      } else if (matchingListingSnapshotRevisionV1(snapshot, unifiedResult) &&
           window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
         window.JSUnifiedListingsV8.attach(rawItems, unifiedResult);
         unifiedAppliedV1 = true;
