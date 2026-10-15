@@ -1875,13 +1875,44 @@ function matchingListingSnapshotRevisionV1(snapshot, originals) {
     snapshot.revision && snapshot.revision === originals.snapshotRevision ? snapshot.revision : "";
 }
 
-function applyScopedListingsV1(result) {
+function scopedReadLocalValuesV1(item) {
+  var originals = item.unifiedAllOriginalsV1 || [];
+  return [item.name,item.address,item.room,item.type,item.memo,item.state,
+    item.deposit,item.rent,item.fee,item.premium,item.area,item.salePrice,
+    item.contactListRaw,item.landlordPhone,item.tenantPhone,item.sourceSnapshotKey,
+    item.regDate,item.registrationAt,item.lastCollectedAt,item.source,item.sourceLink,
+    item.buildingYear,item.buildingElevators,item.buildingApprovalDate,
+    item.buildingInfoCheckedAt,item.buildingInfoStatus,item.buildingElevatorCapacity,
+    item.tradeType,item.saleCategory,originals.length].concat(originals);
+}
+
+function captureScopedReadV1() {
+  var signatures = Object.create(null);
+  (allItems || []).forEach(function(item) {
+    if (item.propertyId) signatures[item.propertyId] = {values: scopedReadLocalValuesV1(item), blocked: originalMetadataMutationPendingV1(item)};
+  });
+  return signatures;
+}
+
+function applyScopedListingsV1(result, readContext) {
   if (!result || result.ok === false || !Array.isArray(result.items) ||
-      !result.snapshotRevision || !result.unified || result.unified.ok === false ||
-      result.unified.snapshotRevision !== result.snapshotRevision ||
+      !result.unified || result.unified.ok === false ||
       !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.mergeScoped !== "function") return false;
+  var perProperty = result.snapshotConsistency === "per-property-v1" && result.unified.snapshotConsistency === "per-property-v1";
+  if (perProperty ? !result.unified.sourceSnapshotKeys :
+      !result.snapshotRevision || result.unified.snapshotRevision !== result.snapshotRevision) return false;
   var replacements = result.items.map(listingChangeRowToItemV683);
   if (replacements.some(function(item) { return !item.propertyId || !item.address; })) return false;
+  var currentById = Object.create(null);
+  (allItems || []).forEach(function(item) { currentById[item.propertyId] = item; });
+  if (replacements.some(function(item) {
+    var current = currentById[item.propertyId];
+    return current && (originalMetadataMutationPendingV1(current) || readContext &&
+      (!Object.prototype.hasOwnProperty.call(readContext,item.propertyId) ||
+      readContext[item.propertyId].blocked || scopedReadLocalValuesV1(current).some(function(value, index) {
+        return value !== readContext[item.propertyId].values[index];
+      })));
+  })) return false;
   // A fresh period response uses the same exact per-property proof protocol.
   // Preflight every replacement before committing any group or invalidating a
   // live full read; unrelated pending properties do not invalidate this subset.
@@ -1922,24 +1953,28 @@ function applyScopedListingsV1(result) {
   updateTypeOptions(allItems);
   // A first-ever Today request may beat the initial complete CSV. Keep its
   // instant result, but do not leave the normal view permanently scoped-only.
-  if (!jsListingsCompleteBaseV1 && typeof window.setTimeout === "function") {
-    if (jsListingsFullBaseTimerV1 !== null && typeof window.clearTimeout === "function") {
-      window.clearTimeout(jsListingsFullBaseTimerV1);
-    }
-    var scopedGeneration = jsListingsLoadGenerationV1;
-    jsListingsFullBaseTimerV1 = window.setTimeout(function() {
-      jsListingsFullBaseTimerV1 = null;
-      if (scopedGeneration === jsListingsLoadGenerationV1 && !jsListingsCompleteBaseV1 && !isLoadingSheet) {
-        loadSheet(true, true);
-      }
-    }, 0);
-  }
+  if (result.hasMore !== true) ensureCompleteBaseV1();
   // Root's period controller supplies authoritative visible IDs. Other rows,
   // favorites, selection, and the complete-dataset revision remain untouched.
   return true;
 }
 
-window.JSListingRefreshV1 = { applyScoped: applyScopedListingsV1 };
+function ensureCompleteBaseV1() {
+  if (jsListingsCompleteBaseV1 || isLoadingSheet || typeof window.setTimeout !== "function") return;
+  if (jsListingsFullBaseTimerV1 !== null && typeof window.clearTimeout === "function") {
+    window.clearTimeout(jsListingsFullBaseTimerV1);
+  }
+  var scopedGeneration = jsListingsLoadGenerationV1;
+  jsListingsFullBaseTimerV1 = window.setTimeout(function() {
+    jsListingsFullBaseTimerV1 = null;
+    if (scopedGeneration === jsListingsLoadGenerationV1 && !jsListingsCompleteBaseV1 && !isLoadingSheet) {
+      loadSheet(true, true);
+    }
+  }, 0);
+}
+
+window.JSListingRefreshV1 = { applyScoped: applyScopedListingsV1, captureScopedRead: captureScopedReadV1,
+  ensureCompleteBase: ensureCompleteBaseV1 };
 
 function applyOriginalsSnapshotV1(result, revision, generation) {
   if (generation !== jsListingsLoadGenerationV1 || !result || result.ok === false ||
@@ -3000,6 +3035,18 @@ function updateMapListingCountV825(filteredItems) {
   if (!badge || !value) return count;
 
   var formattedCount = count.toLocaleString("ko-KR");
+  var todayState = Number(window.newListingDays || 0) === 1 && window.JSTodayListingsV1 &&
+    typeof window.JSTodayListingsV1.state === "function" ? window.JSTodayListingsV1.state() : null;
+  var unconfirmed = !!(todayState && (todayState.phase === "loading" || todayState.phase === "error"));
+  badge.dataset.pending = unconfirmed ? "true" : "false";
+  if (!count && unconfirmed) {
+    var pendingLabel = todayState.phase === "loading" ? "확인 중" : "미확인";
+    value.textContent = pendingLabel;
+    badge.dataset.listingCount = "0";
+    badge.setAttribute("aria-label", "오늘 신규 매물 " + pendingLabel + " · 아직 0건으로 확정하지 않았습니다.");
+    badge.title = "오늘 신규광고 확인이 끝나지 않았습니다. 확인된 목록부터 표시합니다.";
+    return count;
+  }
   value.textContent = formattedCount + "개";
   badge.dataset.listingCount = String(count);
   badge.setAttribute("aria-label", "현재 검색·지도 범위 매물 " + formattedCount + "개");

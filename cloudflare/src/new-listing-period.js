@@ -46,6 +46,19 @@ function decodeCursor(value, market, today) {
 }
 
 export async function newListingPeriod(env, query, loadOriginals, now = new Date()) {
+  // Only retry the page whose actual parent/source proof changed. A collector
+  // updating another building must not invalidate every previously read page.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await readNewListingPeriodPage(env, query, loadOriginals, now);
+    if (result.ok !== false || !result.snapshotChanged) return {
+      ...result, snapshotConsistency: 'per-property-v1',
+      unified: { ...result.unified, snapshotConsistency: 'per-property-v1' }
+    };
+    if (attempt === 2) return { ...result, retryScope: 'page', snapshotConsistency: 'per-property-v1' };
+  }
+}
+
+async function readNewListingPeriodPage(env, query, loadOriginals, now) {
   if (String(query.days ?? '1') !== '1') throw badRequest('오늘 신규매물 조회는 1일 범위만 지원합니다.');
   const market = String(query.market || 'lease');
   if (!['lease', 'building', 'land'].includes(market)) throw badRequest('조회할 거래유형을 확인해 주세요.');

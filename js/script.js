@@ -2193,7 +2193,10 @@ function showList(items) {
     !visibleListItems.length &&
     (document.documentElement.classList.contains("js-mobile-app-v1") || newListingDays === 1)
   ) {
-    list.innerHTML = '<div class="jsm-list-empty-v1"><b>검색 결과가 없습니다.</b><span>검색어를 줄이거나 필터를 초기화해 보세요.</span></div>';
+    var todayEmptyV1 = window.JSTodayListingsV1 && typeof window.JSTodayListingsV1.emptyMessage === "function"
+      ? window.JSTodayListingsV1.emptyMessage() : null;
+    list.innerHTML = '<div class="jsm-list-empty-v1"><b>' + escapeHtml(todayEmptyV1 ? todayEmptyV1.title : "검색 결과가 없습니다.") +
+      '</b><span>' + escapeHtml(todayEmptyV1 ? todayEmptyV1.description : "검색어를 줄이거나 필터를 초기화해 보세요.") + '</span></div>';
     syncListVirtualMetadataV1(list);
     listCardReusePoolV6521 = null;
     if (sidebar) sidebar.scrollTop = 0;

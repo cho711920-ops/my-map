@@ -118,9 +118,10 @@ test('empty Today reads never request complete sources; bad cursors and ranges f
   h.db.close();
 });
 
-test('the real Worker route authenticates Today reads, pins revisions and never caches a partial result', async () => {
+test('the real Worker authenticates and proves Today pages without pinning unrelated global revisions', async () => {
   const h = fixture(), email = 'today-worker@example.invalid';
   h.listing('fresh-http', koreanCalendarDay() + ' 12:00');
+  h.source('fresh-source', 'fresh-http');
   h.db.prepare("INSERT INTO allowed_users(email,role,active) VALUES (?,'owner',1)").run(email);
   let revisionReads = 0, changeDuringRead = false, writes = 0;
   Object.assign(h.env, { ALLOWED_EMAILS: email, SESSION_SECRET: 'today-local-worker-test-secret-at-least-32-characters',
@@ -142,13 +143,36 @@ test('the real Worker route authenticates Today reads, pins revisions and never 
   assert.equal(successful.status, 200); assert.equal(successful.headers.get('cache-control'), 'private, no-store');
   const body = await successful.json(); assert.equal(body.items.length, 1);
   assert.equal(body.snapshotRevision, 'r1'); assert.equal(body.unified.snapshotRevision, 'r1');
+  assert.equal(body.snapshotConsistency, 'per-property-v1');
+  assert.equal(body.unified.snapshotConsistency, 'per-property-v1');
   const old = await worker.fetch(request('&revision=old'), h.env, {});
-  assert.equal(old.status, 409); assert.equal((await old.json()).snapshotChanged, true);
+  assert.equal(old.status, 200); assert.equal((await old.json()).items.length, 1);
   revisionReads = 0; changeDuringRead = true;
   const changed = await worker.fetch(request(''), h.env, {});
-  assert.equal(changed.status, 409); const changedBody = await changed.json();
-  assert.equal(changedBody.snapshotChanged, true); assert.equal(changedBody.items, undefined);
+  assert.equal(changed.status, 200); const changedBody = await changed.json();
+  assert.equal(changedBody.snapshotRevision, 'r1'); assert.equal(revisionReads, 1);
+  const nextRevision = await worker.fetch(request('&revision=r1'), h.env, {});
+  assert.equal(nextRevision.status, 200);
+  assert.equal((await nextRevision.json()).snapshotRevision, 'r2'); assert.equal(revisionReads, 2);
   assert.equal(h.db.prepare('SELECT total_changes() AS n').get().n, beforeWrites); assert.equal(writes, 0);
+
+  // An actual source change between item and source reads is different: never
+  // accept mismatched metadata or expose a partial list as a verified result.
+  const prepare = h.env.DB.prepare;
+  let changingPages = 0;
+  h.env.DB.prepare = sql => {
+    const statement = prepare(sql), all = statement.all;
+    if (sql.startsWith('WITH today_parents')) statement.all = async function() {
+      const rows = await all.call(this); changingPages += 1;
+      h.db.prepare("UPDATE listing_sources SET snapshot_hash=? WHERE id='fresh-source'").run('changed-' + changingPages);
+      return rows;
+    };
+    return statement;
+  };
+  const mismatched = await worker.fetch(request(''), h.env, {});
+  assert.equal(mismatched.status, 409); const mismatchedBody = await mismatched.json();
+  assert.equal(mismatchedBody.snapshotChanged, true); assert.equal(mismatchedBody.retryScope, 'page');
+  assert.equal(mismatchedBody.items, undefined); assert.equal(changingPages, 3); assert.equal(writes, 0);
   h.db.close();
 });
 

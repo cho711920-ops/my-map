@@ -28,8 +28,9 @@ function payload(rows, market="lease", revision="TODAY-1", extra={}) {
   const fields = ["originalId","source","thumbnail","photoCount","room","tradeType","saleCategory","salePrice",
     "active","deposit","rent","area","address","buildingName","firstSeen"];
   return {ok:true,days:1,market,day,rangeStart,rangeEnd,items:rows,snapshotRevision:revision,hasMore:false,nextCursor:"",
+    dataRevision:revision,snapshotConsistency:"per-property-v1",
     todayOriginalIds:Object.fromEntries(rows.map(item=>[item.property_id,[item.property_id+"-original"]])),todayAdCount:rows.length,
-    unified:{ok:true,version:2,format:"compact-v2",fields,
+    unified:{ok:true,version:2,format:"compact-v2",fields,snapshotConsistency:"per-property-v1",
       groups:Object.fromEntries(rows.map(item=>[item.property_id,[[item.property_id + "-original",item.main_source,thumbnail,1,
         item.room,item.trade_type,item.sale_category || "",item.sale_price,1,item.deposit,item.monthly_rent,item.area_m2,
         item.address,item.title,item.first_collected_at]]])),
@@ -298,7 +299,7 @@ async function sourceDateFixture(page,context,isMobile,testInfo) {
     unified:{ok:true,groups:Object.fromEntries(scenario.eligible.map(master=>[master.property_id,scenario.groups[master.property_id]])),
       sourceSearchIds:{},sourceSnapshotKeys:Object.fromEntries(scenario.eligible.map(master=>[master.property_id,keys[master.property_id]])),
       sourceSnapshotPropertyIds:Object.fromEntries(scenario.eligible.map(master=>[master.property_id,master.property_id])),
-      snapshotRevision:body.snapshotRevision}};
+      snapshotConsistency:body.snapshotConsistency,snapshotRevision:body.snapshotRevision}};
   await page.evaluate(()=>loadSheet(true,true));
   await expect.poll(()=>page.evaluate(()=>isLoadingSheet)).toBe(false);
   await expect(page.locator("#list")).toHaveAttribute("data-total-count","7");
@@ -361,5 +362,155 @@ test("Today projects a new advertisement's own conditions and photo on an old ma
   expect((await cardIds(page)).sort()).toEqual(["OLD-MASTER-EXPENSIVE-NEW","OLD-MASTER-NEW-AD"]);
   await expect(page.locator('#list .item[data-property-id="OLD-MASTER-EXPENSIVE-NEW"] .price-main'))
     .toContainText(/보\s*5,000\s*\/\s*(?:월세)?월\s*200/);
+  safe(h);
+});
+
+async function pagedTodayFixture(page,context,isMobile,testInfo,pageSize=2) {
+  const h=await setup(page,context,isMobile,testInfo);
+  const rows=Array.from({length:6},(_,index)=>row("PAGED-TODAY-"+(index+1),{operating_memo:"페이지 검수 메모 "+index}));
+  const batches=Array.from({length:Math.ceil(rows.length/pageSize)},(_,index)=>rows.slice(index*pageSize,(index+1)*pageSize));
+  const gates={first:deferred(),second:deferred(),third:deferred(),coalescedSecond:deferred()};
+  batches.forEach((_,index)=>{gates["page"+index]=deferred();});
+  const calls=[];
+  const state={calls,holdFirst:false,holdSecond:true,holdThird:true,holdEach:false,holdCoalesced:false,revision:0,occurrences:{},gates};
+  h.state.sheet=sheet(rows,"PAGED-BASE");
+  h.state.fullPayload=payload(rows,"lease","PAGED-BASE").unified;
+  await page.route("**/api/data**",async route=>{
+    const request=route.request(),url=new URL(request.url());
+    if(url.searchParams.get("action")!=="newListingPeriod")return route.fallback();
+    if(request.method()!=="GET"){h.writes.push(request.postDataJSON());return route.abort();}
+    const params=Object.fromEntries(url.searchParams),market=params.market,cursor=params.cursor||"";
+    calls.push(params);
+    const occurrence=(state.occurrences[market+":"+cursor]||0)+1;
+    state.occurrences[market+":"+cursor]=occurrence;
+    if(market!=="lease")return route.fulfill({json:payload([row("PAGED-"+market,{
+      trade_type:"sale",sale_category:market==="land_sale"?"land":"building",sale_price:50000,monthly_rent:0
+    })],market,"OTHER-MARKET-"+(++state.revision))});
+    const index=cursor?Number(cursor.slice(5))-1:0;
+    if(index===0&&occurrence===1&&state.holdFirst)await gates.first.promise;
+    if(index>0&&occurrence===1&&state.holdEach)await gates["page"+index].promise;
+    if(index===1&&occurrence===1&&state.holdSecond&&!state.holdEach)await gates.second.promise;
+    if(index===2&&occurrence===1&&state.holdThird&&!state.holdEach)await gates.third.promise;
+    if(index===1&&occurrence===2&&state.holdCoalesced)await gates.coalescedSecond.promise;
+    const revision="COLLECTION-PAGE-"+(++state.revision);
+    return route.fulfill({json:payload(batches[index],market,revision,{hasMore:index<batches.length-1,
+      nextCursor:index<batches.length-1?"PAGE-"+(index+2):""})}).catch(()=>{});
+  });
+  await page.evaluate(()=>loadSheet(true,true));
+  await expect.poll(()=>page.evaluate(()=>isLoadingSheet)).toBe(false);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","6");
+  await expect.poll(()=>page.evaluate(()=>JSV6ListStore.load("favorite").some(folder=>folder.id==="fixture-favorites"))).toBe(true);
+  const cleanup=testInfo.dataCleanup;
+  testInfo.dataCleanup=()=>{Object.values(gates).forEach(gate=>gate.resolve());cleanup();};
+  async function churn(revision) {
+    h.state.sheet=sheet(rows,revision);
+    h.state.fullPayload=payload(rows,"lease",revision).unified;
+    await page.evaluate(()=>loadSheet(true,true));
+    await expect.poll(()=>page.evaluate(()=>isLoadingSheet)).toBe(false);
+  }
+  return {...h,pages:state,rows,churn};
+}
+
+test("three Today pages publish verified cards progressively and finish through collection churn without restarting cursors",async({page,context,isMobile},testInfo)=>{
+  const h=await pagedTodayFixture(page,context,isMobile,testInfo);
+  h.pages.holdFirst=true;
+  h.pages.holdCoalesced=true;
+  const before=await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),memos:allItems.map(value=>[value.propertyId,value.memo])}));
+  await today(page);
+  await expect.poll(()=>h.pages.calls.length).toBe(1);
+  await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
+  await expect(page.locator("#list")).toContainText("오늘 신규광고를 확인하고 있습니다");
+  h.pages.gates.first.resolve();
+  await expect.poll(()=>h.pages.calls.length).toBe(2);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","2");
+  await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(2);
+  await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
+  expect(await page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"loading",partial:true,confirmedPages:1,progressCount:2,progressAdCount:2});
+  await h.churn("FULL-COLLECTION-CHURN-1");
+  expect(h.pages.calls.map(call=>call.cursor||"")).toEqual(["","PAGE-2"]);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","2");
+  h.pages.gates.second.resolve();
+  await expect.poll(()=>h.pages.calls.length).toBe(3);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","4");
+  await h.churn("FULL-COLLECTION-CHURN-2");
+  expect(h.pages.calls.map(call=>call.cursor||"")).toEqual(["","PAGE-2","PAGE-3"]);
+  h.pages.gates.third.resolve();
+  await expect.poll(()=>h.pages.calls.length).toBe(5);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","6");
+  await h.churn("FULL-COLLECTION-CHURN-3");
+  h.pages.gates.coalescedSecond.resolve();
+  await ready(page);
+  expect(h.pages.calls.map(call=>call.cursor||"")).toEqual(["","PAGE-2","PAGE-3","","PAGE-2","PAGE-3"]);
+  expect(h.pages.calls.every(call=>!Object.hasOwn(call,"revision"))).toBe(true);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","6");
+  await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(6);
+  await expect(page.locator("#todayListingStatusV1")).toContainText("오늘 신규 광고 6개 · 매물 6건");
+  expect(await page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"ready",count:6,adCount:6});
+  expect(await page.evaluate(()=>({favorites:JSV6ListStore.load("favorite"),memos:allItems.map(value=>[value.propertyId,value.memo])}))).toEqual(before);
+  safe(h);
+});
+
+test("Today deadline is not extended by full-snapshot events and timeout retains every verified page",async({page,context,isMobile},testInfo)=>{
+  const h=await pagedTodayFixture(page,context,isMobile,testInfo,1);
+  h.pages.holdEach=true;
+  const noon=new Date(day+"T12:00:00+09:00");
+  await page.clock.install({time:noon});
+  await page.clock.pauseAt(new Date(noon.getTime()+100));
+  await today(page);
+  await expect.poll(()=>h.pages.calls.length).toBe(2);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","1");
+  // Every individual read finishes inside its real 15-second deadline. Only
+  // the total 45-second budget must expire, despite confirmed progress/churn.
+  for(let index=1;index<=4;index++) {
+    await page.clock.fastForward(10000);
+    await page.evaluate(index=>notifyListingsSnapshotV1("full","DEADLINE-CHURN-"+index),index);
+    h.pages.gates["page"+index].resolve();
+    await expect.poll(()=>h.pages.calls.length).toBe(index+2);
+    await expect(page.locator("#list")).toHaveAttribute("data-total-count",String(index+1));
+  }
+  expect(h.pages.calls).toHaveLength(6);
+  await page.clock.fastForward(6000);
+  await expect.poll(()=>page.evaluate(()=>JSTodayListingsV1.state().phase)).toBe("error");
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","5");
+  await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(5);
+  await expect(page.locator("#list")).not.toContainText("검색 결과가 없습니다");
+  await expect(page.locator("#todayListingStatusV1")).toContainText("실패");
+  await expect(page.locator("#todayListingStatusV1 button")).toBeEnabled();
+  expect(h.pages.calls).toHaveLength(6);
+  safe(h);
+});
+
+test("a late lease page cannot replace the current market after switching Today to a sale market",async({page,context,isMobile},testInfo)=>{
+  const h=await pagedTodayFixture(page,context,isMobile,testInfo);
+  await today(page);
+  await expect.poll(()=>h.pages.calls.length).toBe(2);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","2");
+  await page.evaluate(()=>JSListingTradeV1.setMode("building_sale"));
+  await ready(page);
+  expect(await cardIds(page)).toEqual(["PAGED-building_sale"]);
+  h.pages.gates.second.resolve();
+  await expect.poll(()=>page.evaluate(()=>JSTodayListingsV1.state())).toMatchObject({phase:"ready",market:"building_sale",count:1});
+  expect(await cardIds(page)).toEqual(["PAGED-building_sale"]);
+  expect(h.pages.calls.filter(call=>call.market==="lease")).toHaveLength(2);
+  await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(1);
+  safe(h);
+});
+
+test("leaving a cold partial Today result restores the complete normal list instead of keeping only page one",async({page,context,isMobile},testInfo)=>{
+  const h=await pagedTodayFixture(page,context,isMobile,testInfo);
+  await page.evaluate(()=>{
+    allItems=[];currentItems=[];jsListingsCompleteBaseV1=false;jsListingsRevisionV682="";
+    JSUnifiedListingsV8.attach(allItems);applyFilter();
+  });
+  await today(page);
+  await expect.poll(()=>h.pages.calls.length).toBe(2);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","2");
+  expect(await page.evaluate(()=>jsListingsCompleteBaseV1)).toBe(false);
+  await today(page);
+  await expect.poll(()=>page.evaluate(()=>jsListingsCompleteBaseV1)).toBe(true);
+  await expect(page.locator("#list")).toHaveAttribute("data-total-count","6");
+  await expect(page.locator("#list .unified-thumb-v8 img")).toHaveCount(6);
+  expect(await page.evaluate(()=>({active:newListingDays,phase:JSTodayListingsV1.state().phase}))).toEqual({active:0,phase:"idle"});
+  expect(h.pages.calls).toHaveLength(2);
   safe(h);
 });

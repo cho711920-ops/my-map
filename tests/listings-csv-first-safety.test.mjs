@@ -101,16 +101,17 @@ function harness(options = {}) {
   for (const name of ['clean','parseCSVRecordsV655','itemKey']) vm.runInContext(fn(script,name),context);
   for (const name of ['listingChangeRowToItemV683','notifyListingsSnapshotV1','getItemsDataSignatureV638',
     'hydrateInitialFullListingsCacheItemsV1','showInitialFullListingsCacheV1','hasReadyCoordinateWithoutSharedCacheV8213',
-    'matchingListingSnapshotRevisionV1','parseDirectSaleDetailsV1','applyScopedListingsV1','applyOriginalsSnapshotV1',
+    'matchingListingSnapshotRevisionV1','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','ensureCompleteBaseV1','applyScopedListingsV1','applyOriginalsSnapshotV1',
     'compatibleOriginalsResultV1','compatibleOriginalsCacheV1','originalMetadataMutationPendingV1','refreshScopedOriginalsV1',
     'refreshOriginalMetadataPresentationV1','recoverOriginalMetadataV1','loadSheet',
     'fetchDataRevisionV682','refreshListingsWhenChangedV682',
     'applyListingChangesV683']) {
     vm.runInContext(fn(map,name),context);
   }
-  vm.runInContext(unified,context);
+  vm.runInContext(unified.replace('  global.JSUnifiedListingsV8 = {',
+    '  global.__synchronizeDetailOriginals = synchronizeDetailOriginals;\n  global.JSUnifiedListingsV8 = {'),context);
   context.JSListingRefreshV1 = {
-    applyScoped: context.applyScopedListingsV1, applyOriginals: context.applyOriginalsSnapshotV1,
+    applyScoped: context.applyScopedListingsV1, captureScopedRead: context.captureScopedReadV1, ensureCompleteBase: context.ensureCompleteBaseV1, applyOriginals: context.applyOriginalsSnapshotV1,
     generation: () => context.jsListingsLoadGenerationV1,
     hasCompleteBase: () => context.jsListingsCompleteBaseV1
   };
@@ -308,6 +309,92 @@ test('a proof-bearing Today subset with one invalid row mutates neither masters 
   assert.match(h.context.allItems[0].thumbnailV8,/before\.jpg/);
   assert.equal(h.context.jsListingsLoadGenerationV1,generation);
   assert.equal(h.context.JSUnifiedListingsV8.allOriginals('B').length,0);
+});
+
+test('per-property pages need no fabricated aggregate revision and wait for the final page before cold full-base recovery',()=>{
+  const h=harness();
+  const page=(id,key,more)=>({ok:true,snapshotConsistency:'per-property-v1',snapshotRevision:'',hasMore:more,
+    items:[row(id,{source_snapshot_key:key})],unified:{...provenOriginals([[id,key]],''),snapshotConsistency:'per-property-v1'}});
+  assert.equal(h.context.applyScopedListingsV1(page('A',proof(1),true)),true);
+  assert.equal(h.timers.size,0,'no competing full reload between verified pages');
+  assert.equal(h.context.applyScopedListingsV1(page('B',proof(2),false)),true);
+  assert.equal(h.timers.size,1);
+  assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['A','B']);
+});
+
+test('Today pages cannot replace an edit made during the read or a save already pending when it began',async()=>{
+  const h=harness({complete:true});
+  const loading=h.context.loadSheet(false,false);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1),operating_memo:'OLD'})],'FULL'));await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1),'before']]));await flush();
+  const item=h.context.allItems[0];
+  const result={ok:true,snapshotConsistency:'per-property-v1',items:[row('A',{source_snapshot_key:proof(2),operating_memo:'OLD'})],
+    unified:{...provenOriginals([['A',proof(2),'must-not-commit']]),snapshotConsistency:'per-property-v1'}};
+  const context=h.context.captureScopedReadV1();item.memo='새 메모';
+  assert.equal(h.context.applyScopedListingsV1(result,context),false);
+  assert.equal(h.context.allItems[0],item);assert.match(item.thumbnailV8,/before\.jpg/);
+  h.context.memoSavePendingKeysV655[item.key]={};
+  const pendingContext=h.context.captureScopedReadV1();
+  delete h.context.memoSavePendingKeysV655[item.key];
+  assert.equal(h.context.applyScopedListingsV1(result,pendingContext),false);
+  assert.equal(item.memo,'새 메모');
+});
+
+test('late Today pages cannot erase a newly attached advertisement or a master that arrived during the read',()=>{
+  for (const previouslyPresent of [true,false]) {
+    const h=harness({complete:true});
+    if (previouslyPresent) h.context.allItems=[h.context.listingChangeRowToItemV683(row('A',{source_snapshot_key:proof(1)}))];
+    const context=h.context.captureScopedReadV1();
+    const current=h.context.listingChangeRowToItemV683(row('A',{source_snapshot_key:proof(2)}));
+    h.context.allItems=[current];
+    const latest=provenOriginals([['A',proof(2),'latest']]);
+    latest.groups['internal-A'].push({propertyId:'internal-A',originalId:'A-new-ad',source:'네이버',active:1,availabilityKind:'active'});
+    h.context.JSUnifiedListingsV8.attachCompatible(h.context.allItems,latest,{scoped:true,scopedFresh:true});
+    const late={ok:true,snapshotConsistency:'per-property-v1',items:[row('A',{source_snapshot_key:proof(1)})],
+      unified:{...provenOriginals([['A',proof(1),'stale']]),snapshotConsistency:'per-property-v1'}};
+    assert.equal(h.context.applyScopedListingsV1(late,context),false);
+    assert.equal(h.context.allItems[0],current);
+    assert.equal(h.context.JSUnifiedListingsV8.allOriginals('A').length,2);
+    assert.match(current.thumbnailV8,/latest\.jpg/);
+  }
+});
+
+test('cold partial Today failures can recover the complete base once without a request storm',async()=>{
+  const h=harness();
+  const page={ok:true,snapshotConsistency:'per-property-v1',hasMore:true,
+    items:[row('A',{source_snapshot_key:proof(1)})],unified:{...provenOriginals([['A',proof(1)]]),snapshotConsistency:'per-property-v1'}};
+  assert.equal(h.context.applyScopedListingsV1(page),true);
+  assert.equal(h.timers.size,0);
+  h.context.ensureCompleteBaseV1();h.context.ensureCompleteBaseV1();
+  assert.equal(h.timers.size,1);
+  h.runTimers();
+  assert.equal(h.csvReads.length,1);
+  h.context.ensureCompleteBaseV1();assert.equal(h.timers.size,0,'in-flight full read is reused');
+  h.csvReads[0].resolve(csv([row('A'),row('OUTSIDE')],'FULL'));await flush();
+  assert.equal(h.context.jsListingsCompleteBaseV1,true);
+  h.context.ensureCompleteBaseV1();assert.equal(h.timers.size,0,'a complete base needs no extra read');
+  assert.equal(h.context.allItems.length,2);
+});
+
+test('metadata-only detail updates survive late Today pages even before the master proof changes',()=>{
+  const h=harness({complete:true});
+  const item=h.context.listingChangeRowToItemV683(row('A',{source_snapshot_key:proof(1)}));
+  h.context.allItems=[item];
+  h.context.JSUnifiedListingsV8.attachCompatible(h.context.allItems,provenOriginals([['A',proof(1),'old']]),{scoped:true,scopedFresh:true});
+  const initial=h.context.captureScopedReadV1();
+  h.context.JSUnifiedListingsV8.attach(h.context.allItems);
+  const unchanged=h.context.captureScopedReadV1();
+  assert.equal(initial.A.values.length,unchanged.A.values.length);
+  assert.equal(initial.A.values.every((value,index)=>value===unchanged.A.values[index]),true,'ordinary reattach keeps original object identities');
+  const detail=provenOriginals([['A',proof(1),'detail']]);
+  detail.groups['internal-A'].push({propertyId:'internal-A',originalId:'A-new-detail-ad',source:'네이버',active:1,availabilityKind:'active'});
+  const detailRows=detail.groups['internal-A'].map(original=>({...original,propertyId:'A'}));
+  assert.equal(h.context.__synchronizeDetailOriginals('A',detailRows),true);
+  const late={ok:true,snapshotConsistency:'per-property-v1',items:[row('A',{source_snapshot_key:proof(1)})],
+    unified:{...provenOriginals([['A',proof(1),'stale']]),snapshotConsistency:'per-property-v1'}};
+  assert.equal(h.context.applyScopedListingsV1(late,initial),false);
+  assert.equal(h.context.JSUnifiedListingsV8.allOriginals('A').length,2);
+  assert.match(item.thumbnailV8,/detail\.jpg/);
 });
 
 test("a complete latest CSV displays before a stalled original response, retaining today's records", async () => {
