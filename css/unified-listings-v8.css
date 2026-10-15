@@ -2627,19 +2627,6 @@
 .js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b) {
   color: #fff !important;
 }
-.circle-marker.admin-region-cluster-v655 .admin-region-selection-badge-v1 {
-  position: absolute;
-  top: -12px;
-  right: -7px;
-  padding: 2px 5px;
-  border: 1px solid #0568e8;
-  border-radius: 8px;
-  background: #fff;
-  color: #0553af;
-  font: 800 10px/1.2 var(--js-app-font, sans-serif);
-  white-space: nowrap;
-  pointer-events: none;
-}
 
 @media (prefers-reduced-motion: reduce) {
   #list .item.selected,

@@ -145,7 +145,7 @@ assert.equal(context.isAdministrativeClusterSelectedV1({...neighborhoods[0], dis
 assert.equal(context.isAdministrativeClusterSelectedV1(districts[0]), false);
 assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /aria-pressed="true"/);
 assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /admin-region-selected-v1/);
-assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /✓ 선택/);
+assert.doesNotMatch(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /선택|selection-badge/);
 assert.equal(context.isAdministrativeClusterSelectedV1({...neighborhoods[0], items: []}), true, "count refresh does not lose region selection");
 context.clearAdministrativeListSelectionV6570();
 assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /aria-pressed="false"/);

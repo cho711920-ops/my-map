@@ -45,7 +45,7 @@ test("clicked region stays distinct through redraw, switching, and reset without
   await expect(regions.nth(0)).toHaveAttribute("aria-pressed","true");
   await expect(regions.nth(0)).toHaveCSS("background-color","rgb(5, 104, 232)");
   await expect(regions.nth(0).locator("strong")).toHaveCSS("color","rgb(255, 255, 255)");
-  await expect(regions.nth(0)).toContainText("✓ 선택");
+  await expect(page.locator(".admin-region-selection-badge-v1")).toHaveCount(0);
   await expect(regions.nth(2)).toHaveAttribute("aria-pressed","false");
   await expect(page.locator("#list .item")).toHaveCount(1);
   const changes=await page.evaluate(()=>adminSelectionFixture.changes);
@@ -56,13 +56,13 @@ test("clicked region stays distinct through redraw, switching, and reset without
   await regions.nth(1).click();
   await expect(regions.nth(0)).toHaveAttribute("aria-pressed","false");
   await expect(regions.nth(1)).toHaveAttribute("aria-pressed","true");
-  await expect(page.locator(".admin-region-selection-badge-v1")).toHaveCount(1);
+  await expect(page.locator('.admin-test-host [aria-pressed="true"]')).toHaveCount(1);
   if(isMobile) {
     const session=await context.newCDPSession(page);
     await session.send("Emulation.setDeviceMetricsOverride",{width:930,height:530,screenWidth:1100,screenHeight:720,mobile:true,deviceScaleFactor:1,screenOrientation:{type:"landscapePrimary",angle:90}});
     await expect(page.locator("html")).toHaveClass(/js-landscape-desktop-fit-v1/);
     await expect(regions.nth(1)).toHaveCSS("background-color","rgb(5, 104, 232)");
-    await expect(regions.nth(1).locator(".admin-region-selection-badge-v1")).toBeVisible();
+    await expect(regions.nth(1)).toBeVisible();
   }
   if(!isMobile) await page.screenshot({path:info.outputPath("selected-dong.png")});
   await page.evaluate(()=>clearAdministrativeListSelectionV6570());

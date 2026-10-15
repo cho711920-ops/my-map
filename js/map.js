@@ -3165,8 +3165,7 @@ function buildClusterOverlayContentV655(cluster, classNames) {
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
       ' aria-pressed="' + (adminSelected ? "true" : "false") + '"' +
       ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기">' +
-      '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span>' +
-      (adminSelected ? '<em class="admin-region-selection-badge-v1" aria-hidden="true">✓ 선택</em>' : '') + '</button>';
+      '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span></button>';
   }
 
   if (cluster && cluster.worldGrid) classes += " world-grid-cluster-v690";
