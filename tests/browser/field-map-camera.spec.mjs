@@ -18,7 +18,7 @@ test.beforeEach(({isMobile}, testInfo) => {
   test.skip(isMobile || testInfo.project.name !== "desktop", "The network contract runs once from the desktop project.");
 });
 
-async function installRealMap(page) {
+async function installRealMap(page, desktopFit = false) {
   const index = await readFile(new URL("../../index.html", import.meta.url), "utf8");
   const sdkURL = index.match(/<script src="(https:\/\/dapi\.kakao\.com\/v2\/maps\/sdk\.js[^"<>]+)"/)?.[1];
   if (!sdkURL) throw new Error("The configured public Kakao SDK script is missing");
@@ -26,7 +26,8 @@ async function installRealMap(page) {
     readFile(new URL("../../js/map-field-camera-v1.js", import.meta.url), "utf8"),
     readFile(new URL("../../css/map-field-mode-v1.css", import.meta.url), "utf8")
   ]);
-  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  const fitSource = desktopFit ? await readFile(new URL("../../js/phone-device-v1.js", import.meta.url), "utf8") : "";
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script>${fitSource}</script>
     <title>임장모드 격리 SDK 검수</title><style>${css}
     *{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif;background:#e8edf4}
     header{position:absolute;inset:0 0 auto;height:48px;background:white;padding:12px;font-weight:bold}
@@ -72,6 +73,34 @@ async function installRealMap(page) {
   await expect.poll(() => page.locator('#map img[src*="/tile/"]').evaluateAll((images) => images.filter((img) => img.complete && img.naturalWidth > 0).length)).toBeGreaterThan(5);
   return {errors, forbidden};
 }
+
+test("actual Kakao: native PC page fit preserves overlay taps and map projection on a handheld", async ({browser}) => {
+  const context = await browser.newContext({viewport:{width:930,height:530},screen:{width:1100,height:720},isMobile:true,hasTouch:true,serviceWorkers:"block",userAgent:"Mozilla/5.0 (Linux; Android 16) Chrome/140.0 Safari/537.36"});
+  try {
+    const page=await context.newPage();
+    const {errors,forbidden}=await installRealMap(page,true);
+    await expect(page.locator("html")).toHaveClass(/js-landscape-desktop-fit-v1/);
+    await expect.poll(() => page.evaluate(() => innerWidth)).toBe(1280);
+    await expect.poll(() => page.evaluate(() => visualViewport.scale)).toBeCloseTo(930/1280,3);
+    for(const bearing of [0,45,90]) {
+      await page.evaluate(value => JSFieldMapCameraV1.setBearing(value),bearing);
+      await page.locator("#fixture-east").tap();
+      await expect(page.locator("#selection")).toHaveText("동쪽 선택");
+      await page.locator("#fixture-center").tap();
+      await expect(page.locator("#selection")).toHaveText("내 위치 선택");
+      const current=await viewState(page);
+      expect(current.geometry.east.inversePixelError).toBeLessThan(1);
+      expect(Math.abs(current.geometry.east.x-current.geometry.east.projectedX)).toBeLessThan(2);
+      expect(Math.abs(current.geometry.east.y-current.geometry.east.projectedY)).toBeLessThan(2);
+    }
+    await page.setViewportSize({width:740,height:360});
+    await expect.poll(() => page.evaluate(() => visualViewport.scale)).toBeCloseTo(740/1280,3);
+    await page.locator("#fixture-center").tap();
+    expect(await page.evaluate(() => fixture.clicks.filter(x=>x==="center").length)).toBe(4);
+    expect(errors).toEqual([]);
+    expect(forbidden).toEqual([]);
+  } finally {await context.close();}
+});
 
 async function viewState(page) {
   return page.evaluate(() => {

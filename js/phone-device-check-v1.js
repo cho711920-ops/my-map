@@ -19,6 +19,7 @@
       "화면 진단 2026-10-16.1" + (standalone ? " · 독립 확인 페이지" : " · 지도 내 확인"),
       "화면 코드 버전: " + (device && device.layoutVersion || "이전 버전"),
       "가로 분할 보정: " + (document.documentElement.classList.contains("js-compact-handheld-landscape-v1") ? "적용" : "적용 안 됨"),
+      "PC 전체 비례 맞춤: " + (document.documentElement.classList.contains("js-landscape-desktop-fit-v1") ? "적용" : "적용 안 됨"),
       "새 모바일 판별: " + (device && device.isPhone() ? "적용" : "적용 안 됨"),
       "새 모바일 CSS: " + (document.documentElement.classList.contains("js-phone-app-v2") ? "적용" : "적용 안 됨"),
       "screen: " + display.width + " × " + display.height,

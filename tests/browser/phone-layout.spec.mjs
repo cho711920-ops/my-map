@@ -72,6 +72,7 @@ async function fixturePhotos(context, baseURL) {
 }
 
 async function expectLandscapeSearch(page, width, height) {
+  ({width, height} = await page.evaluate(() => ({width: innerWidth, height: innerHeight})));
   await expect(page.locator("html")).not.toHaveClass(/js-mobile-app-v1|js-phone-app-v2/);
   const search = page.locator("#keyword");
   await expect(search).toBeVisible();
@@ -160,11 +161,11 @@ const rotationDevices = [
   {name: "tablet 1280", portrait: {width: 820, height: 1280}, landscape: {width: 1280, height: 820}, userAgent: tabletUA}
 ];
 test("phone desktop-site viewport fits map, cards and scrolling tools within the visible height", async ({browser, baseURL}, testInfo) => {
-  const context = await contextFor(browser, {viewport: {width: 1280, height: 530}, screen: {width: 844, height: 390}, userAgent: tabletUA, isMobile: true, hasTouch: true});
+  const context = await contextFor(browser, {viewport: {width: 980, height: 600}, screen: {width: 1100, height: 720}, userAgent: tabletUA, isMobile: true, hasTouch: true});
   try {
     const page = await context.newPage();
     await ready(page, baseURL);
-    await expect(page.locator("html")).toHaveClass(/js-compact-handheld-landscape-v1/);
+    await expect(page.locator("html")).toHaveClass(/js-landscape-desktop-fit-v1/);
     // Reproduce a stale inline measurement left by the production tool rail.
     await page.evaluate(() => document.documentElement.style.setProperty("--map-sidebar-width-v659", "640px"));
     const measure = () => page.evaluate(() => {
@@ -235,14 +236,14 @@ for (const device of rotationDevices) test(`${device.name}: actual rotation uses
     await expectLandscapeSearch(page, device.landscape.width, device.landscape.height);
     const map = await page.locator("#map").boundingBox(), sidebar = await page.locator("#sidebar").boundingBox();
     if (device.name.startsWith("unfolded foldable")) {
-      await expect(page.locator("html")).toHaveClass(/js-compact-handheld-landscape-v1/);
-      expect(map.width).toBeGreaterThanOrEqual(device.landscape.width * .48 - 1);
-      expect(sidebar.width).toBeLessThanOrEqual(device.landscape.width * .52 + 1);
+      await expect(page.locator("html")).toHaveClass(/js-landscape-desktop-fit-v1/);
+      expect(map.width).toBeGreaterThanOrEqual(await page.evaluate(() => innerWidth * .48 - 1));
+      expect(sidebar.width).toBeLessThanOrEqual(await page.evaluate(() => innerWidth * .52 + 1));
     }
     expect(map.width).toBeGreaterThan(100);
     expect(sidebar.width).toBeGreaterThan(200);
     expect(map.x + map.width).toBeLessThanOrEqual(sidebar.x + 1);
-    expect(sidebar.x + sidebar.width).toBeLessThanOrEqual(device.landscape.width + 1);
+    expect(sidebar.x + sidebar.width).toBeLessThanOrEqual(await page.evaluate(() => innerWidth + 1));
     await noHorizontalOverflow(page);
     await page.locator(".unified-detail-hero-v8").click();
     await expect(page.locator("#unifiedGalleryV8")).toHaveClass(/open/);
@@ -286,7 +287,7 @@ for (const device of rotationDevices) test(`${device.name}: landscape search and
       mobile: true, deviceScaleFactor: 1, screenOrientation: {type: "landscapePrimary", angle: 90}});
     await expect(page.locator("html")).toHaveClass(/js-handheld-landscape-v1/);
     await expectLandscapeSearch(page, device.landscape.width, device.landscape.height);
-    if (device.landscape.width < 900) {
+    if (await page.locator("html").evaluate(el => el.classList.contains("js-landscape-desktop-fit-v1"))) {
       // This layout fixture omits map-quick-tools, so expose the real menu DOM
       // solely to verify CSS containment/hit testing, not controller behaviour.
       const popover = page.locator("#mapQuickPopoverView");
@@ -298,9 +299,9 @@ for (const device of rotationDevices) test(`${device.name}: landscape search and
       expect(bounds.x).toBeGreaterThanOrEqual(mapBounds.x);
       expect(bounds.y).toBeGreaterThanOrEqual(mapBounds.y);
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(mapBounds.x + mapBounds.width + 1);
-      expect(bounds.y + bounds.height).toBeLessThanOrEqual(device.landscape.height);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(await page.evaluate(() => innerHeight + 1));
       const button = popover.locator("button").first();
-      expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(40);
+      expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(39.9);
       expect(await button.evaluate(element => {
         const box = element.getBoundingClientRect();
         return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));

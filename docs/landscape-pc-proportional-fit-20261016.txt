@@ -1,0 +1,66 @@
+가로 화면 PC 전체 비례 맞춤·배포 (2026-10-16 KST)
+
+확정된 사용자 의도
+- 사용자가 PC 화면 구성을 유지하고 지도·메뉴·매물 카드 전체를 휴대폰 가로 폭에 맞춰
+  같은 비율로 줄이는 방식을 선택했다. 이전의 목록 폭 분배 방식은 최종 요구가 아니다.
+- 실제 작업 폴더: C:/Users/ITP/.codex/worktrees/e212/JS부동산 AI개발실 v6.0
+- 브랜치: codex/daangn-numeric-status
+
+구현
+- 가로 handheld의 실제 사용 가능 폭이 1280 CSS px 미만이면 viewport meta를 width=1280으로
+  설정해 기존 PC 레이아웃 전체를 브라우저가 실제 폭으로 비례 축소하도록 한다.
+- 메뉴·카드·지도에 개별 transform/zoom을 적용하지 않는다. 기존 PC 상단 한 줄 구성을 사용한다.
+  가로 740/930/1100px에서 각각 약 57.8/72.7/85.9%로 같은 UI 전체가 축소된다.
+- 너비는 VisualViewport.width * scale로 판단해 브라우저 자동 맞춤 이후 innerWidth=1280이 돼도
+  모드가 반복 전환되지 않는다. VisualViewport 없는 경우 outerWidth/이전 실제 폭을 사용한다.
+- 세로 또는 큰 창으로 돌아가면 저장해둔 원래 viewport meta를 복구한다.
+  사용자 핀치 확대를 막거나 매번 초기화하지 않는다. 세로 키보드 축소도 가로 회전으로 오인하지 않는다.
+- 기존 고정 480px 분할 보정은 정상 viewport가 없는 경우의 호환 경로에만 남는다.
+  현재 정상 가로 맞춤에서는 js-landscape-desktop-fit-v1 클래스가 적용된다.
+- 새 CSS는 지도 도구가 짧은 창에서 스크롤되고 팝오버가 도구 레일에 잘리지 않도록 한다.
+  최초 측정 전 도구 위치를 기존 터치 PC 목록 폭 640px로 맞추며, 실제 컨트롤러 측정이 우선한다.
+- 진단 코드 버전: 2.0.0-desktop-fit. 'PC 전체 비례 맞춤' 적용 여부를 로컬 진단에 표시한다.
+- CSS/JS 버전과 서비스워커 공개 캐시는 새 빌드로 갱신했다.
+- 지도 중심·줌·매물 좌표·클러스터 로직, 대장 클라이언트/API, 운영 데이터는 변경하지 않았다.
+  공식 건축물대장 PDF 원문 연결은 여전히 구현하지 않은 상태다.
+
+검증
+- 관련 Node 최종 71/71 통과: 기기·viewport 상태, 사용자 확대 유지, 회전 복구,
+  클러스터 선택 relayout 보존, 임장 지도 회전·좌표, 로드뷰 viewport 기존 회귀 검사.
+- 관련 브라우저 최종 27/27 통과: 740/930/1100의 전체 동일 배율, 메뉴 한 줄,
+  필터·상세 터치, 회전 후 검색·선택·상세·사진·찜 보존, 세로 390, PC·큰 태블릿 유지,
+  기기 진단·비로그인 독립 페이지를 확인했다.
+- 마지막 지도 도구 기본 위치 보완 후 관련 5개를 다시 검사해 5/5 통과.
+  앞선 27개와 중복되므로 서로 다른 32개 브라우저 검사라고 합산하지 않는다.
+- 별도 실제 카카오 SDK 계약 검사 1/1 통과: 격리 페이지, 가상 좌표, 930→740 리사이즈,
+  0/45/90도에서 중심·동쪽 마커 실제 touch, projection 왕복 및 화면 위치 오차 검증.
+  로그인 쿠키·운영 매물/API 없이 공개 SDK·타일 GET만 허용했다.
+- 최초 브라우저 회귀에서 40px 버튼 높이가 39.999992px로 측정되는 부동소수 오차 1건을
+  허용 오차로 수정한 뒤 최종 27개를 재검증했다.
+- ESLint, TypeScript, 빌드, git diff --check 통과.
+- 실제 사용자의 폴드에서 직접 확인한 결과가 아니다. 운영 공개 파일과 격리 브라우저/SDK 검사다.
+- 긴 매물 목록·짧은 화면의 도구 레일은 스크롤한다. 모든 매물 카드를 한 번에 표시하는 변경은 아니다.
+
+최종 배포
+- Worker: 246002c1-d449-4e99-9846-d5574a52d31e
+- 공개 정적 캐시: js-map-public-static-v1-9650bd26aef2648052a6b718
+- js-map.com / www.js-map.com 파일 SHA256, HTML/SW no-store, Kakao CSP,
+  새 맞춤 CSS·진단 페이지, 기존 대장·지도 JS, 비로그인 API 401: 20/20 확인.
+- 운영 DB·매물·사진·메모·찜 데이터 변경, 수집 실행, 마이그레이션은 수행하지 않았다.
+- 사용자 첨부 사진·녹취·임시파일·outputs는 커밋 대상에서 제외한다.
+
+로컬 검증 자료 — 커밋 금지
+- outputs/desktop-proportional-fit-node.log
+- outputs/desktop-proportional-fit-final.log
+- outputs/desktop-proportional-fit-rail-final.log
+- outputs/desktop-proportional-fit-sdk.log
+- outputs/desktop-proportional-fit-build-final.log
+- outputs/desktop-proportional-fit-deploy.log
+- outputs/desktop-proportional-fit-public.json
+- outputs/desktop-proportional-fit-rail-final/ (가상 자료 이미지)
+
+직전 상태와 복구 기준
+- 소스: c9045b631b7dfcf856a8b785b6678e9a52057150
+- Worker: c09f9404-6f2d-4c33-8cfd-2d8686b98c18
+- 공개 캐시: js-map-public-static-v1-9a437be4959d29fcd92c25ee
+- 필요 시 화면 코드와 공개 자산만 함께 되돌려 배포한다. DB 복구는 필요하지 않다.

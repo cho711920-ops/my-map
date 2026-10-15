@@ -1,0 +1,31 @@
+/* The browser fits the ordinary 1280px PC layout to the available handheld
+ * width. Preserve one shared scale; never transform the map or individual cards.
+ * Short windows can scroll the tool rail while keeping its last action usable. */
+.js-landscape-desktop-fit-v1 {
+  /* Match the existing touch-PC sidebar until its controller measures it.
+     The measured inline property continues to take precedence. */
+  --map-sidebar-width-v659: 640px;
+}
+.js-landscape-desktop-fit-v1 .map-quick-tools {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  height: 100% !important;
+  width: 54px !important;
+  overflow-y: auto !important;
+  padding: 6px 0 !important;
+  pointer-events: none !important;
+}
+.js-landscape-desktop-fit-v1 .map-quick-tools-inner {
+  flex-shrink: 0 !important;
+  height: max-content !important;
+  pointer-events: auto !important;
+}
+.js-landscape-desktop-fit-v1 .map-quick-popover {
+  position: fixed !important;
+  top: 68px !important;
+  right: calc(var(--map-sidebar-width-v659, 640px) + 60px) !important;
+  width: 184px;
+  max-height: calc(100dvh - 78px);
+  overflow: auto;
+}

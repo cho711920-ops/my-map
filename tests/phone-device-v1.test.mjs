@@ -10,6 +10,8 @@ const iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebK
 function load(overrides = {}) {
   const classes = new Set();
   const attrs = new Map();
+  var viewportContent = "width=device-width, initial-scale=1.0";
+  const viewport = {getAttribute: () => viewportContent, setAttribute: (name, value) => {viewportContent = value;}};
   const events = [];
   const listeners = {};
   const window = {
@@ -21,13 +23,13 @@ function load(overrides = {}) {
     dispatchEvent: (event) => events.push(event),
     ...overrides
   };
-  const document = {documentElement: {
+  const document = {querySelector: () => viewport, documentElement: {
     classList: {toggle(name, active) {if (active) classes.add(name); else classes.delete(name);}},
     setAttribute: (name, value) => attrs.set(name, value),
     removeAttribute: (name) => attrs.delete(name)
   }};
   vm.runInNewContext(source, {window, document, CustomEvent: function(type, init) {this.type = type; this.detail = init.detail;}});
-  return {window, device: window.JSPhoneDeviceV1, classes, attrs, events, listeners};
+  return {window, device: window.JSPhoneDeviceV1, classes, attrs, events, listeners, viewport};
 }
 
 test("small Android screen retains proportional landscape in desktop-site mode", () => {
@@ -37,9 +39,38 @@ test("small Android screen retains proportional landscape in desktop-site mode",
     innerWidth: 980, innerHeight: 350
   });
   assert.equal(fixture.device.isPhone(), false, "existing device API contract stays unchanged");
-  assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
+  assert.ok(fixture.classes.has("js-landscape-desktop-fit-v1"));
   fixture.window.screen.orientation.type = "portrait-primary";
   fixture.listeners.orientationchange();
+  assert.equal(fixture.classes.has("js-landscape-desktop-fit-v1"), false);
+});
+
+test("native fit remains stable through the viewport resize it causes and user pinch zoom, then restores portrait metadata", () => {
+  const fixture = load({screen: {width: 1100, height: 720, orientation: {type: "landscape-primary"}}, innerWidth: 980, visualViewport: {width: 980, scale: 1}});
+  assert.equal(fixture.viewport.getAttribute("content"), "width=1280");
+  fixture.window.innerWidth = 1280;
+  fixture.window.visualViewport = {width: 1280, scale: 980 / 1280};
+  fixture.listeners.resize();
+  assert.ok(fixture.classes.has("js-landscape-desktop-fit-v1"));
+  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  fixture.window.visualViewport = {width: 640, scale: 980 / 640};
+  fixture.listeners.resize();
+  assert.equal(fixture.viewport.getAttribute("content"), "width=1280", "user zoom is never reset");
+  fixture.window.screen.orientation.type = "portrait-primary";
+  fixture.listeners.orientationchange();
+  assert.equal(fixture.viewport.getAttribute("content"), "width=device-width, initial-scale=1.0");
+  assert.equal(fixture.classes.has("js-landscape-desktop-fit-v1"), false);
+});
+
+test("without VisualViewport the outer width keeps native fit stable after innerWidth becomes 1280", () => {
+  const fixture = load({screen: {width: 1280, height: 800, orientation: {type: "landscape-primary"}}, innerWidth: 980, outerWidth: 980});
+  fixture.window.innerWidth = 1280;
+  fixture.listeners.resize();
+  fixture.listeners.resize();
+  assert.equal(fixture.viewport.getAttribute("content"), "width=1280");
+  fixture.window.outerWidth = 1366;
+  fixture.listeners.resize();
+  assert.equal(fixture.viewport.getAttribute("content"), "width=device-width, initial-scale=1.0");
   assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
 });
 
@@ -49,13 +80,14 @@ test("large landscape tablets keep their wide layout and narrow split screens op
     screen: {width: 1280, height: 820, orientation: {type: "landscape-primary"}},
     innerWidth: 1280, innerHeight: 720
   });
-  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  assert.equal(fixture.classes.has("js-landscape-desktop-fit-v1"), false);
   fixture.window.innerWidth = 1100;
   fixture.listeners.resize();
-  assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
+  assert.ok(fixture.classes.has("js-landscape-desktop-fit-v1"));
   fixture.window.innerWidth = 1280;
+  fixture.window.visualViewport = {width: 1280, scale: 1};
   fixture.listeners.resize();
-  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  assert.equal(fixture.classes.has("js-landscape-desktop-fit-v1"), false);
 });
 
 for (const width of [900, 980, 1100, 1199]) test(`unfolded foldable ${width}px uses a proportional split despite tablet-like screen and mobile=false`, () => {
@@ -66,15 +98,16 @@ for (const width of [900, 980, 1100, 1199]) test(`unfolded foldable ${width}px u
   });
   assert.equal(fixture.device.isPhone(), false);
   assert.equal(fixture.device.isHandheld(), true);
-  assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
-  fixture.window.innerWidth = 1200;
+  assert.ok(fixture.classes.has("js-landscape-desktop-fit-v1"));
+  fixture.window.innerWidth = 1280;
+  fixture.window.visualViewport = {width: 1280, scale: 1};
   fixture.listeners.resize();
-  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  assert.equal(fixture.classes.has("js-landscape-desktop-fit-v1"), false);
   fixture.window.screen.orientation.type = "portrait-primary";
   fixture.window.innerHeight = 250;
   fixture.listeners.resize();
   assert.ok(fixture.classes.has("js-phone-app-v2"), "portrait keyboard remains in the mobile view");
-  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  assert.equal(fixture.classes.has("js-landscape-desktop-fit-v1"), false);
 });
 
 test("foldable desktop UA can use the Android platform hint without classifying touch-only desktops", () => {
@@ -83,7 +116,7 @@ test("foldable desktop UA can use the Android platform hint without classifying 
     screen: {width: 1100, height: 720, orientation: {type: "landscape-primary"}},
     innerWidth: 980, innerHeight: 600
   };
-  assert.ok(load(settings).classes.has("js-compact-handheld-landscape-v1"));
+  assert.ok(load(settings).classes.has("js-landscape-desktop-fit-v1"));
   assert.equal(load({...settings, navigator: {...settings.navigator, maxTouchPoints: 0}, matchMedia: () => ({matches: false})}).device.isHandheld(), false);
   assert.equal(load({...settings, navigator: {...settings.navigator, userAgentData: {mobile: false, platform: "Linux"}}}).device.isHandheld(), false);
 });
