@@ -50,12 +50,42 @@ test("large landscape tablets keep their wide layout and narrow split screens op
     innerWidth: 1280, innerHeight: 720
   });
   assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
-  fixture.window.innerWidth = 740;
+  fixture.window.innerWidth = 1100;
   fixture.listeners.resize();
   assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
   fixture.window.innerWidth = 1280;
   fixture.listeners.resize();
   assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+});
+
+for (const width of [900, 980, 1100, 1199]) test(`unfolded foldable ${width}px uses a proportional split despite tablet-like screen and mobile=false`, () => {
+  const fixture = load({
+    navigator: {userAgent: "Mozilla/5.0 (Linux; Android 16) Chrome/140.0 Safari/537.36", maxTouchPoints: 5, userAgentData: {mobile: false}},
+    screen: {width: 1100, height: 720, orientation: {type: "landscape-primary"}},
+    innerWidth: width, innerHeight: 600
+  });
+  assert.equal(fixture.device.isPhone(), false);
+  assert.equal(fixture.device.isHandheld(), true);
+  assert.ok(fixture.classes.has("js-compact-handheld-landscape-v1"));
+  fixture.window.innerWidth = 1200;
+  fixture.listeners.resize();
+  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+  fixture.window.screen.orientation.type = "portrait-primary";
+  fixture.window.innerHeight = 250;
+  fixture.listeners.resize();
+  assert.ok(fixture.classes.has("js-phone-app-v2"), "portrait keyboard remains in the mobile view");
+  assert.equal(fixture.classes.has("js-compact-handheld-landscape-v1"), false);
+});
+
+test("foldable desktop UA can use the Android platform hint without classifying touch-only desktops", () => {
+  const settings = {
+    navigator: {userAgent: "Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0 Safari/537.36", maxTouchPoints: 5, userAgentData: {mobile: false, platform: "Android"}},
+    screen: {width: 1100, height: 720, orientation: {type: "landscape-primary"}},
+    innerWidth: 980, innerHeight: 600
+  };
+  assert.ok(load(settings).classes.has("js-compact-handheld-landscape-v1"));
+  assert.equal(load({...settings, navigator: {...settings.navigator, maxTouchPoints: 0}, matchMedia: () => ({matches: false})}).device.isHandheld(), false);
+  assert.equal(load({...settings, navigator: {...settings.navigator, userAgentData: {mobile: false, platform: "Linux"}}}).device.isHandheld(), false);
 });
 
 test("390px smartphone is explicitly opted in without changing app views", () => {

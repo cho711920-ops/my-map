@@ -36,7 +36,10 @@
     // required here so a normal Mac desktop never opts into the handheld layout.
     if (/Macintosh|MacIntel/i.test(ua + " " + platform)) return Number(nav.maxTouchPoints) > 1;
     // UAData.mobile=false is normal for Android tablets, including desktop mode.
-    return /iPad|Android|Tablet|SM-T\w*|SM-X\w*|Galaxy Tab|Kindle|Silk\//i.test(ua);
+    // Desktop-site mode can remove Android from the UA while retaining the
+    // low-entropy Android platform hint. Touch evidence is still required.
+    return /iPad|Android|Tablet|SM-T\w*|SM-X\w*|Galaxy Tab|Kindle|Silk\//i.test(ua) ||
+      /^Android$/i.test(String(nav.userAgentData && nav.userAgentData.platform || ""));
   }
 
   function isLandscape() {
@@ -65,8 +68,10 @@
     var shortSide = Math.min(Number(display.width) || 0, Number(display.height) || 0);
     // A phone requesting the desktop site can have a >=900px layout viewport.
     // Keep its split view proportional to the physical screen, including when
-    // Android reports a desktop UA/mobile=false. Large tablets keep their UI.
-    var compactLandscape = landscape && (phone || (shortSide > 0 && shortSide < 600) || Number(global.innerWidth) < 900);
+    // Android reports a desktop UA/mobile=false. An unfolded foldable may have
+    // no short side below 600px, so include medium-width handheld viewports too.
+    // The 640px touch sidebar otherwise consumes most of a 900-1199px viewport.
+    var compactLandscape = landscape && (phone || (shortSide > 0 && shortSide < 600) || Number(global.innerWidth) < 1200);
     root.classList.toggle("js-phone-app-v2", mobileLayout);
     root.classList.toggle("js-handheld-landscape-v1", landscape);
     root.classList.toggle("js-compact-handheld-landscape-v1", compactLandscape);
@@ -80,7 +85,7 @@
     return {phone: phone, landscape: landscape, handheld: handheld, mobileLayout: mobileLayout};
   }
 
-  global.JSPhoneDeviceV1 = {isPhone: isPhone, isHandheld: isHandheld, isLandscape: isLandscape, isMobileLayout: isMobileLayout, sync: sync};
+  global.JSPhoneDeviceV1 = {layoutVersion: "1.2.1-fold-fit", isPhone: isPhone, isHandheld: isHandheld, isLandscape: isLandscape, isMobileLayout: isMobileLayout, sync: sync};
   global.addEventListener("resize", sync);
   global.addEventListener("orientationchange", sync);
   global.addEventListener("pageshow", sync);

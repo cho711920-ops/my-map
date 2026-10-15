@@ -1,0 +1,51 @@
+펼친 폴드 가로 화면 보정 후속 (2026-10-16 KST)
+
+사용자 확인
+- 대장까지 수정했는지 질문했고, 폴드8 와이드의 펼친 화면에서 이전 사진과 동일하다고 알렸다.
+- 대장 원문/PDF 기능은 아직 추가하지 않았다고 명확히 답변했다. 이번에도 대장 코드는 변경하지 않았다.
+- 실제 기기의 정확한 CSS 화면 크기와 브라우저 설정은 아직 전달받지 못했다.
+  사용자 기기 모델명으로 공식 규격을 추정하거나 실기기 해결을 확인했다고 주장하지 않는다.
+
+직전 수정의 누락과 보완
+- 직전 가로 분할 보정 조건은 phone=true, 물리 화면 짧은 변 <600px, viewport 폭 <900px 중 하나였다.
+  펼친 폴드처럼 짧은 변 >=600px이며 가로 viewport >=900px이면 보정에서 제외될 수 있었다.
+- 확인된 handheld의 가로 viewport가 1200px 미만이면 비율 보정을 적용하도록 범위를 넓혔다.
+  900/980/1100/1199px 펼친 화면을 검사했다. 1200px 이상 큰 태블릿은 기존 넓은 화면 구성을 유지한다.
+- Android 데스크톱 표시 모드에서 UA에 Android가 없어도 낮은 엔트로피 platform 힌트가 Android이고
+  터치 근거가 있으면 handheld로 인식한다. 일반 Linux/Windows/Mac 데스크톱 분류는 유지한다.
+- 모델명별 예외표나 폴드8의 미확인 규격은 사용하지 않는다.
+- 레이아웃 버전 1.2.1-fold-fit. 기기 확인 화면에 코드 버전·가로 분할 보정 여부를 추가했다.
+  안내도 '접은 상태'에서 '문제가 나타나는 접힘·펼침/가로·세로 상태 유지'로 수정했다.
+  https://js-map.com/phone-check
+  진단 정보는 로컬 표시·사용자 복사만 수행하고 계정·매물 정보를 읽거나 전송하지 않는다.
+
+검증과 한계
+- 기기 분류 Node: 최종 32/32 통과.
+- 최종 관련 브라우저: 12/12 통과. 단일 worker, 제한된 Node 메모리, 로컬 가상 자료.
+  펼친 화면 1100x720에서 지도 폭 >=48%, 목록 폭 <=52%, 회전 후 검색·선택·상세·사진 보존,
+  검색·필터·찜 복귀, 일반 PC·큰 태블릿, 독립 진단·로그인 비의존·평상시 진단 비활성 확인.
+- 첫 브라우저 실행에서 trace 파일 스트림 오류가 1건 발생했다. 최종 고정 소스로 12개 전체 재실행 후 통과했다.
+- ESLint, TypeScript, 빌드, git diff --check 통과.
+- 실제 사용자 휴대전화의 새 화면 확인은 아직 남아 있다. 그대로면 펼친 가로 상태에서
+  독립 기기 확인 페이지의 진단 복사값으로 실제 viewport·orientation·코드 버전을 확인한다.
+
+운영 배포 확인
+- Worker: c09f9404-6f2d-4c33-8cfd-2d8686b98c18
+- 공개 정적 캐시: js-map-public-static-v1-9a437be4959d29fcd92c25ee
+- js-map.com / www.js-map.com 파일 SHA256, HTML/SW no-store, Kakao CSP,
+  독립 기기 페이지, 변경 안 한 대장·지도 JS, 비로그인 API 401: 18/18 확인.
+- 운영 데이터·사진·메모·찜 변경, 수집 실행, 마이그레이션은 수행하지 않았다.
+- 임시파일·첨부 사진·녹취·outputs는 커밋하지 않는다.
+
+로컬 자료
+- outputs/fold-wide-fit-node.log
+- outputs/fold-wide-fit-final.log
+- outputs/fold-wide-fit-final/
+- outputs/fold-wide-fit-build.log
+- outputs/fold-wide-fit-deploy.log
+- outputs/fold-wide-fit-public.json
+
+직전 상태
+- 소스: 746686161eeb85b1a7259e1e0a1d502a180ca3c2
+- Worker: fcdc61dd-0bab-4f96-b8b8-14e639ce5faa
+- 공개 캐시: js-map-public-static-v1-62b5781074fbbc26779ebb6c

@@ -26,6 +26,8 @@ test("explicit diagnostic URL shows local device-only facts and leaves classific
   const panel=page.locator("#jsPhoneDeviceCheckV1");
   await expect(panel).toBeVisible();
   await expect(panel.locator("pre")).toContainText("TEST-DEVICE");
+  await expect(panel.locator("pre")).toContainText("화면 코드 버전: 1.2.1-fold-fit");
+  await expect(panel.locator("pre")).toContainText("가로 분할 보정:");
   await expect(panel.locator("pre")).not.toContainText(/example\.invalid|FIXTURE-LEASE|session|token/);
   expect(await page.evaluate(()=>window.deviceModelReads)).toBe(1);
   expect(await page.evaluate(()=>window.JSPhoneDeviceV1.isPhone())).toBe(isMobile);

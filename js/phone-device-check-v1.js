@@ -16,7 +16,9 @@
     var hints = nav.userAgentData;
     var device = global.JSPhoneDeviceV1;
     return [
-      "화면 진단 2026-09-23.2" + (standalone ? " · 독립 확인 페이지" : " · 지도 내 확인"),
+      "화면 진단 2026-10-16.1" + (standalone ? " · 독립 확인 페이지" : " · 지도 내 확인"),
+      "화면 코드 버전: " + (device && device.layoutVersion || "이전 버전"),
+      "가로 분할 보정: " + (document.documentElement.classList.contains("js-compact-handheld-landscape-v1") ? "적용" : "적용 안 됨"),
       "새 모바일 판별: " + (device && device.isPhone() ? "적용" : "적용 안 됨"),
       "새 모바일 CSS: " + (document.documentElement.classList.contains("js-phone-app-v2") ? "적용" : "적용 안 됨"),
       "screen: " + display.width + " × " + display.height,
@@ -45,7 +47,7 @@
     panel.setAttribute("aria-label", "기기 화면 확인");
     panel.style.cssText = "position:fixed;z-index:2147483647;inset:8px;max-width:600px;margin:auto;box-sizing:border-box;overflow:auto;padding:16px;border:2px solid #096be0;border-radius:16px;background:white;color:#172033;font:14px/1.5 sans-serif;";
     panel.innerHTML = '<h2 style="font-size:20px;margin:0 0 8px">기기 화면 확인</h2>' +
-      '<p style="margin:0 0 10px">폴드를 접은 상태에서 아래 내용을 복사해 대화에 붙여넣어 주세요. 화면 정보만 표시하며 계정·매물 정보는 읽거나 전송하지 않습니다.</p>' +
+      '<p style="margin:0 0 10px">문제가 나타나는 화면 상태(접힘·펼침, 가로·세로)를 유지한 채 아래 내용을 복사해 대화에 붙여넣어 주세요. 화면 정보만 표시하며 계정·매물 정보는 읽거나 전송하지 않습니다.</p>' +
       '<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 monospace;background:#f3f7fc;padding:10px;border-radius:8px"></pre>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" data-device-check-copy>진단 내용 복사</button>' +
       '<button type="button" data-device-check-refresh>다시 확인</button><button type="button" data-device-check-close>닫기</button></div>' +

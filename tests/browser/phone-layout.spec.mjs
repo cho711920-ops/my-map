@@ -156,6 +156,7 @@ const rotationDevices = [
   {name: "phone 844", portrait: {width: 390, height: 844}, landscape: {width: 844, height: 390}, userAgent: phoneUA},
   {name: "phone 740", portrait: {width: 360, height: 740}, landscape: {width: 740, height: 360}, userAgent: phoneUA},
   {name: "phone 980", portrait: {width: 442, height: 980}, landscape: {width: 980, height: 442}, userAgent: phoneUA},
+  {name: "unfolded foldable 1100", portrait: {width: 720, height: 1100}, landscape: {width: 1100, height: 720}, userAgent: tabletUA},
   {name: "tablet 1280", portrait: {width: 820, height: 1280}, landscape: {width: 1280, height: 820}, userAgent: tabletUA}
 ];
 test("phone desktop-site viewport fits map, cards and scrolling tools within the visible height", async ({browser, baseURL}, testInfo) => {
@@ -233,6 +234,11 @@ for (const device of rotationDevices) test(`${device.name}: actual rotation uses
     await expect(page.locator("#keyword")).toHaveValue("괴정");
     await expectLandscapeSearch(page, device.landscape.width, device.landscape.height);
     const map = await page.locator("#map").boundingBox(), sidebar = await page.locator("#sidebar").boundingBox();
+    if (device.name.startsWith("unfolded foldable")) {
+      await expect(page.locator("html")).toHaveClass(/js-compact-handheld-landscape-v1/);
+      expect(map.width).toBeGreaterThanOrEqual(device.landscape.width * .48 - 1);
+      expect(sidebar.width).toBeLessThanOrEqual(device.landscape.width * .52 + 1);
+    }
     expect(map.width).toBeGreaterThan(100);
     expect(sidebar.width).toBeGreaterThan(200);
     expect(map.x + map.width).toBeLessThanOrEqual(sidebar.x + 1);
