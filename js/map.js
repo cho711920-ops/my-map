@@ -1128,7 +1128,19 @@ function setAdministrativeListSelectionV6570(cluster) {
 
 
 function clearAdministrativeListSelectionV6570() {
+  var hadSelection = !!jsAdministrativeListSelectionV6570;
   jsAdministrativeListSelectionV6570 = null;
+  if (hadSelection && typeof overlays !== "undefined" && overlays.length && typeof redrawSelectedMarkers === "function") {
+    redrawSelectedMarkers();
+  }
+}
+
+
+function isAdministrativeClusterSelectedV1(cluster) {
+  var selection = jsAdministrativeListSelectionV6570;
+  return !!(selection && cluster && cluster.regionMode === selection.mode &&
+    String(cluster.regionLabel || "").trim() === selection.regionLabel &&
+    (selection.mode === "district" || String(cluster.districtLabel || "").trim() === selection.districtLabel));
 }
 
 
@@ -3146,11 +3158,15 @@ function buildClusterOverlayContentV655(cluster, classNames) {
   var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
 
   if (cluster && cluster.regionMode) {
+    var adminSelected = isAdministrativeClusterSelectedV1(cluster);
     classes += " admin-region-cluster-v655 admin-region-" + cluster.regionMode + "-v690";
+    if (adminSelected) classes += " admin-region-selected-v1";
     return '<button type="button" class="' + classes + '"' +
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
+      ' aria-pressed="' + (adminSelected ? "true" : "false") + '"' +
       ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기">' +
-      '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span></button>';
+      '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span>' +
+      (adminSelected ? '<em class="admin-region-selection-badge-v1" aria-hidden="true">✓ 선택</em>' : '') + '</button>';
   }
 
   if (cluster && cluster.worldGrid) classes += " world-grid-cluster-v690";
@@ -3231,6 +3247,10 @@ function drawMapClustersOnlyV639(items) {
     });
 
     overlay.__cluster = cluster;
+    if (cluster.regionMode) {
+      overlay.__adminRegionContentV1 = overlayContent;
+      if (typeof overlay.setZIndex === "function") overlay.setZIndex(isAdministrativeClusterSelectedV1(cluster) ? 1000 : 0);
+    }
     if (cluster.fieldLease) overlay.__fieldLeaseContentV1 = overlayContent;
     overlay.setMap(map);
     overlays.push(overlay);
@@ -3389,6 +3409,7 @@ function openAdministrativeClusterV655(encodedKey) {
   closeOpenListingDetailsForMapSelectionV6525();
   clearPinnedClusterSelectionV6515(true);
   setAdministrativeListSelectionV6570(cluster);
+  redrawSelectedMarkers();
   showList(cluster.items || []);
   var statusElement = document.getElementById("status");
   if (statusElement) {
@@ -3426,6 +3447,11 @@ function redrawSelectedMarkers() {
     if (cluster.fieldLease) {
       if (o.__fieldLeaseContentV1 === content) return;
       o.__fieldLeaseContentV1 = content;
+    }
+    if (cluster.regionMode) {
+      if (o.__adminRegionContentV1 === content) return;
+      o.__adminRegionContentV1 = content;
+      if (typeof o.setZIndex === "function") o.setZIndex(isAdministrativeClusterSelectedV1(cluster) ? 1000 : 0);
     }
     o.setContent(content);
   });

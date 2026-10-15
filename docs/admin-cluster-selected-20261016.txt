@@ -1,0 +1,51 @@
+동·구 클러스터 선택 표시 개선·배포 (2026-10-16 KST)
+
+요청과 원인
+- 사용자: 동 단위 클러스터를 눌렀을 때 누른 클러스터를 직관적으로 구분하기 어렵다.
+- 기존 openAdministrativeClusterV655는 지역 목록 선택 상태와 목록만 갱신했다.
+  일반 매물의 선택 키와 별개인 지역 선택 상태를 지도 버튼 표시로 연결하지 않았다.
+
+수정
+- 지역 모드·동/구 이름·상위 구 이름으로 지역 선택 여부를 판단한다.
+  같은 이름의 동이 다른 구에 있어도 혼동하지 않으며 구·동 모드도 구분한다.
+- 누른 지역은 파란 바탕·흰 글씨·흰 테두리/파란 외곽선·'✓ 선택' 배지로 표시한다.
+  aria-pressed로 선택 여부를 제공하고 선택 오버레이를 위로 올린다.
+- 동/구를 누르면 목록 렌더 전에 선택 표시를 바로 갱신한다. 다른 지역을 누르면 표시를 옮긴다.
+- 자동 지도 재렌더에서도 지역 이름 상태로 선택을 복원한다. 원본 개수 변화와 무관하다.
+- 같은 지역 HTML은 DOM을 다시 만들지 않아 선택 갱신의 불필요한 깜빡임을 줄인다.
+  최초 오버레이 생성 시 HTML을 캐시해 직후 선택 복원에서도 동일 DOM을 유지한다.
+- 기존 초기화·검색·수동 지도 이동에 의한 지역 선택 해제 규칙을 유지한다.
+  브라우저 전체 새로고침 후 선택을 저장하는 새 영속 기능은 추가하지 않았다.
+- 클러스터 좌표·크기·충돌 배치·줌·목록 범위 계산·운영 데이터는 바꾸지 않았다.
+
+검증
+- 클러스터 관련 Node 6/6, 필터·연동 선택·임장 카드 관련 Node 30/30 통과.
+- 신규 PC·모바일 브라우저 2/2 통과. 실제 선택 함수/마크업과 운영 CSS를 로컬 가상 자료에 적용했다.
+  선택/이전 해제, 파란 바탕·흰 글씨, 동일 동명 상위 구 구분, 재렌더 후 유지,
+  동일 상태 DOM 재사용, 목록 일치, 초기화 해제, 매물 원본 불변·API 쓰기 없음 확인.
+  모바일에서 펼친 폴드 가로 930x530과 PC 비례 맞춤으로 전환한 후에도 표시를 확인했다.
+- PC 시각 재확인 1/1 추가 통과 및 캡처 확인. 위 PC 검사의 중복이며 별도 고유 검사로 합산하지 않는다.
+- ESLint, TypeScript, 빌드, git diff --check 통과.
+- 실사용자의 휴대전화나 운영 매물 전체를 직접 검사한 결과는 아니다.
+
+배포
+- Worker: f5fe57d1-614d-4d31-a777-60431566a08b
+- 공개 정적 캐시: js-map-public-static-v1-596228e8880ec28568862dec
+- js-map.com / www.js-map.com 공개 자산 SHA256·HTML/SW no-store·Kakao CSP·비로그인 API 401:
+  22/22 확인. 변경 지도 JS·CSS 및 기존 가로 PC 맞춤·대장 JS도 포함했다.
+- 운영 DB·매물·사진·메모·찜 변경, 수집 실행, 마이그레이션은 수행하지 않았다.
+- 문서/소스/검사만 커밋한다. 사용자 첨부·녹취·임시파일·outputs는 제외한다.
+
+로컬 자료 — 커밋 금지
+- outputs/admin-cluster-selected-node.log
+- outputs/admin-cluster-selected-related-node.log
+- outputs/admin-cluster-selected-final.log
+- outputs/admin-cluster-selected-visual/
+- outputs/admin-cluster-selected-build.log
+- outputs/admin-cluster-selected-deploy.log
+- outputs/admin-cluster-selected-public.json
+
+직전 상태
+- 소스: 9ccced7c43eb0a652f13a2b91c9c369d577a2080
+- Worker: 246002c1-d449-4e99-9846-d5574a52d31e
+- 공개 캐시: js-map-public-static-v1-9650bd26aef2648052a6b718

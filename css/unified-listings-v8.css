@@ -2611,6 +2611,36 @@
   100% { transform: scale(1) translateZ(0); }
 }
 
+/* A selected administrative region is independent of a selected listing.
+ * Keep its geometry stable so neighboring labels and tap targets do not jump. */
+.circle-marker.admin-region-cluster-v655.admin-region-selected-v1,
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 {
+  position: relative;
+  border-color: #fff !important;
+  background: #0568e8 !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 3px #0568e8, 0 5px 14px rgba(5, 55, 120, .35) !important;
+  filter: none !important;
+  animation: none !important;
+}
+.circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b),
+.js-world-grid-clusters-v690 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b) {
+  color: #fff !important;
+}
+.circle-marker.admin-region-cluster-v655 .admin-region-selection-badge-v1 {
+  position: absolute;
+  top: -12px;
+  right: -7px;
+  padding: 2px 5px;
+  border: 1px solid #0568e8;
+  border-radius: 8px;
+  background: #fff;
+  color: #0553af;
+  font: 800 10px/1.2 var(--js-app-font, sans-serif);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #list .item.selected,
   .active-filter-chip-v844,

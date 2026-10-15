@@ -54,6 +54,7 @@ vm.runInContext([
   extractFunction("clearPinnedClusterSelectionV6515"),
   extractFunction("setAdministrativeListSelectionV6570"),
   extractFunction("clearAdministrativeListSelectionV6570"),
+  extractFunction("isAdministrativeClusterSelectedV1"),
   extractFunction("clearMapListSelectionForNavigationV6571"),
   extractFunction("getAdministrativeListItemsV6570"),
   extractFunction("getAdministrativeClusterModeV655"),
@@ -138,6 +139,16 @@ assert.equal(context.getPremiumClusterSizeClassV635(10).trim(), "cluster-size-md
 assert.equal(context.getPremiumClusterSizeClassV635(600).trim(), "cluster-size-xxl");
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /admin-region-cluster-v655/);
 assert.match(context.buildClusterOverlayContentV655(districts[0], ""), /<span>매물 <b>3<\/b><\/span>/);
+context.setAdministrativeListSelectionV6570(neighborhoods[0]);
+assert.equal(context.isAdministrativeClusterSelectedV1(neighborhoods[0]), true);
+assert.equal(context.isAdministrativeClusterSelectedV1({...neighborhoods[0], districtLabel: "다른구"}), false);
+assert.equal(context.isAdministrativeClusterSelectedV1(districts[0]), false);
+assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /aria-pressed="true"/);
+assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /admin-region-selected-v1/);
+assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /✓ 선택/);
+assert.equal(context.isAdministrativeClusterSelectedV1({...neighborhoods[0], items: []}), true, "count refresh does not lose region selection");
+context.clearAdministrativeListSelectionV6570();
+assert.match(context.buildClusterOverlayContentV655(neighborhoods[0], ""), /aria-pressed="false"/);
 assert.equal(context.estimateAdministrativeClusterBoxV656({ regionLabel: "괴정동", items: Array(9999) }).height, 46);
 assert.equal(
   context.administrativeBoxesOverlapV656(
