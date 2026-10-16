@@ -4,6 +4,24 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { normalizeCollectionCounts, collectionDateRange, summarizeCollectionDay, collectorActionGuidance } from "../cloudflare/src/collection-status-summary.js";
 import { saveAutomationRunReport, sanitizeAutomationRunReport, readAutomationRunReports } from "../cloudflare/src/automation-run-reports.js";
+
+test("legacy completed reports with failures or absence deferrals render partial without rewriting history", async () => {
+  const now=Date.now();
+  const original={runId:`run-${now}-audit`,startedAt:now,revision:now,active:false,
+    items:[{source:'naver',status:'completed',counts:{failed:1}},
+      {source:'gongsil',status:'completed',counts:{presenceTrackingIssue:'동일 범위·전체목록 확인 필요'}},
+      {source:'daangn',status:'deferred',counts:{addressDeferred:19,failed:0}},
+      {source:'naver',status:'completed',counts:{failed:0}}]};
+  const expected=['partial','partial','deferred','completed'];
+  assert.deepEqual(sanitizeAutomationRunReport(original).items.map(item=>item.status),expected);
+  const statements=[];
+  const env={DB:{prepare(sql){statements.push(sql);return {all:async()=>({results:[{
+    report_json:JSON.stringify(original),reported_at:new Date(now).toISOString()}]})};}}};
+  const result=await readAutomationRunReports(env);
+  assert.deepEqual(result.runs[0].items.map(item=>item.status),expected);
+  assert.equal(original.items[0].status,'completed');
+  assert.equal(statements.length,1); assert.match(statements[0],/^SELECT /);
+});
 import { handleCollectorApi, handleCollectorAdminGet } from "../cloudflare/src/collector-api.js";
 
 function database(t) {

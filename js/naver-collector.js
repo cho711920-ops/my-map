@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.9";
+  var VERSION = "6.0.10";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -442,13 +442,20 @@
       }
     }
     var runResult = await collectFinSelectedAndSave({automatic: true});
-    if (!runResult || runResult.ok !== true || runResult.complete !== true) {
+    var finalResult = runResult && runResult.finalResult;
+    var expectedCount = Number(finalResult && finalResult.expectedCount || 0);
+    var settledPartial = finalResult && finalResult.ok === true && finalResult.state === "partial" &&
+      finalResult.completeRequested === true && expectedCount > 0 &&
+      Number(finalResult.processedCount || 0) >= expectedCount;
+    if (!runResult || (runResult.ok !== true || runResult.complete !== true) && !settledPartial) {
       throw new Error(runResult && runResult.message || "네이버 자동수집이 부분수집 또는 오류로 종료됐습니다.");
     }
     return {
       source: "naver",
       district: district.name,
       version: VERSION,
+      partial: runResult.complete !== true,
+      completionIssues: finalResult && finalResult.completionIssues || [],
       totals: Object.assign({}, state.dashboard, newSourceAdCounts(Object.assign({},
         runResult.finalResult && runResult.finalResult.totals || {}, runResult.finalResult || {}))),
       session: runResult.finalResult || null
@@ -3166,11 +3173,24 @@
         processedCount: Number(metadata.processedCount || 0),
         failed: Number(metadata.failed || 0),
         addressMissing: Number(metadata.addressMissing || 0),
+        diagnostics: Array.isArray(metadata.diagnostics) ? metadata.diagnostics : [],
         truncated: Boolean(metadata.truncated),
         note: metadata.note || ""
     }, COLLECTOR_FINALIZE_TIMEOUT_MS, "수집회차 완료 응답을 읽지 못했습니다.");
     if (!result.ok) throw new Error(result.message || "수집회차 완료 기록에 실패했습니다.");
     return result;
+  }
+
+  function addNaverDiagnostics(target, rows) {
+    var diagnostics = Array.isArray(target.diagnostics) ? target.diagnostics.slice() : [];
+    (rows || []).forEach(function(row) {
+      if (!row || !row.message) return;
+      diagnostics.push({stage: row.stage || "저장", sourceId: clean(row.sourceId || row.articleNo),
+        message: clean(row.message).slice(0, 240)});
+    });
+    // Retain actual failures ahead of routine address exclusions in the bounded report.
+    diagnostics.sort(function(a, b) { return Number(a.stage === "필수정보") - Number(b.stage === "필수정보"); });
+    target.diagnostics = diagnostics.slice(0, 200);
   }
 
   async function getNaverSessionResult(metadata) {
@@ -3327,6 +3347,12 @@
           firstFailure = clean(firstDetailFailure && firstDetailFailure.reason);
         }
         var incompleteCount = candidateBatch.length - batch.length;
+        addNaverDiagnostics(totals, detailResults.filter(function(result) { return result && !result.valid; })
+          .map(function(result) {
+            return {stage: result.fetchFailed ? "상세조회" : "필수정보",
+              sourceId: result.item && result.item.articleNo || "",
+              message: result.reason || "주소·층 확인 필요"};
+          }));
         totals.failed += detailFailureCount;
         totals.addressMissing += Math.max(0, incompleteCount - detailFailureCount);
         if (!batch.length) {
@@ -3363,6 +3389,7 @@
           window.clearInterval(saveWaitTimer);
         }
         addResultTotals(totals, result);
+        addNaverDiagnostics(totals, result.errors);
         if (!firstFailure && Array.isArray(result.errors) && result.errors.length) {
           firstFailure = clean(result.errors[0] && result.errors[0].message);
         }
@@ -3419,6 +3446,7 @@
         processedCount: classification.unchanged + index,
         failed: totals.failed,
         addressMissing: totals.addressMissing,
+        diagnostics: totals.diagnostics,
         truncated: false,
         note: safelyStopped
           ? "사용자 안전중단 · 저장 완료 " + index + "/" + items.length
@@ -3526,6 +3554,7 @@
             source: runOptions.source || "네이버",
             complete: false,
             stopped: Boolean(error && error.safeStop),
+            diagnostics: totals.diagnostics,
             note: error && error.safeStop ? "사용자 안전중단" : "수집 중 오류 · 부분저장 보존"
           });
         } catch (_) {}

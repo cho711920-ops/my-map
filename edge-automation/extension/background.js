@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.15";
+const BACKGROUND_BUILD = "1.1.16";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -549,10 +549,24 @@ async function saveRunState(state) {
   return state;
 }
 
+function normalizeFinishedReport(report) {
+  if (!report || !Array.isArray(report.items)) return report;
+  let changed = false;
+  const items = report.items.map(item => {
+    if (item.status !== "completed" || !(Number(item.counts?.failed) > 0 || item.counts?.presenceTrackingIssue)) return item;
+    changed = true;
+    return {...item, status: "partial"};
+  });
+  if (!changed) return report;
+  const corrected = {...report, items};
+  corrected.summary = deriveRunSummary(corrected, report.summary || {});
+  return corrected;
+}
+
 async function getRunReport(market = null) {
   if (market !== null) return (await getRunReports())[normalizeRunMarket(market)] || null;
   const saved = await chrome.storage.local.get(RUN_REPORT_KEY);
-  return saved[RUN_REPORT_KEY] || null;
+  return normalizeFinishedReport(saved[RUN_REPORT_KEY] || null);
 }
 
 async function reportsByMarket(report, config) {
@@ -584,7 +598,7 @@ async function getRunReports() {
     if (latest[market] && (!reports[market] ||
         Number(latest[market].updatedAt || 0) >= Number(reports[market].updatedAt || 0))) reports[market] = latest[market];
   }
-  return reports;
+  return Object.fromEntries(Object.entries(reports).map(([market, report]) => [market, normalizeFinishedReport(report)]));
 }
 
 async function saveRunReport(report) {
@@ -800,7 +814,9 @@ function resultNotice(result) {
     if (counts.failed) issues.push(`조회·저장 실패 ${counts.failed}건`);
     return [counts.listComplete ? "전체 목록 확인 완료" : "목록 완전성 확인 필요", ...issues, ...presence].join(" · ");
   }
-  return ["목록 처리 완료 · 확인사항: " + ((payload.completionIssues || []).join(", ") || "일부 제공처 정보 누락"), ...presence].join(" · ");
+  const issues = [...(payload.completionIssues || payload.session?.completionIssues || [])];
+  if (counts.failed && !issues.some(issue => /실패/.test(String(issue)))) issues.push(`조회·저장 실패 ${counts.failed}건`);
+  return ["목록 처리 완료 · 확인사항: " + (issues.join(", ") || "일부 제공처 정보 누락"), ...presence].join(" · ");
 }
 
 async function updateRunReport(state, target, status, details = {}) {
@@ -1282,6 +1298,17 @@ async function launchCurrentTarget(state, reuseTabId = null) {
 
 function completedTargetWithWarnings(result) {
   const payload = result && result.result || {};
+  if (cleanSource(payload.source) === "gongsil") {
+    const session = payload.session || {};
+    const counts = resultCounts(result);
+    // A saved partial result is terminal for this target. Preserve the warning
+    // without collecting the same cluster repeatedly during this run.
+    const saved = session.ok === true && ["completed", "partial"].includes(session.state);
+    const legacyFinished = !payload.session && payload.partial === false &&
+      counts.presenceReported === true && Boolean(counts.presenceTrackingIssue);
+    return result.ok === true && (saved || legacyFinished) &&
+      counts.expected > 0 && counts.processed >= counts.expected;
+  }
   if (cleanSource(payload.source) === "daangn") {
     const job = payload.totals || {};
     const proof = job.completionProof || {};
@@ -1305,6 +1332,15 @@ function completedTargetWithWarnings(result) {
   const expected = Number(session.expectedCount || session.manifestCount || 0);
   const observed = Number(session.processedCount || session.observed || 0);
   return session.completeRequested === true && expected > 0 && observed >= expected;
+}
+
+function targetResultIsPartial(result) {
+  const payload = result && result.result || {};
+  const session = payload.session || {};
+  const counts = resultCounts(result);
+  return payload.partial === true || session.complete === false ||
+    session.completionValidated === false || ["partial", "paused", "failed", "abandoned"].includes(session.state) ||
+    counts.failed > 0 || Boolean(counts.presenceTrackingIssue);
 }
 
 function cleanSource(value) {
@@ -1331,7 +1367,7 @@ async function finishCurrentTarget(result, senderTabId) {
   const elapsedMs = Date.now() - Number(state.targetStartedAt || Date.now());
   const targetAttempt = Math.max(1, Number(state.targetAttempt || 1));
   const warningCompletion = completedTargetWithWarnings(result);
-  const payloadPartial = Boolean(result.result && result.result.partial);
+  const payloadPartial = targetResultIsPartial(result);
   const failureMessage = String(result.message || (result.result && result.result.completionIssues || []).join(", ") ||
     "자동수집이 오류로 종료됐습니다.");
   const invalidTradeConfig = /당근 거래유형 설정/.test(failureMessage);
@@ -1378,7 +1414,7 @@ async function finishCurrentTarget(result, senderTabId) {
       counts.adsReappeared ? `원본광고 재등장 ${counts.adsReappeared}건` : ""].filter(Boolean).join(" · ") : "";
     const addressDeferred = warningCompletion && counts.version === 2 && counts.listComplete &&
       Number(counts.addressDeferred || 0) > 0 && !Number(counts.failed || 0);
-    const partial = !addressDeferred && (result.ok !== true || Boolean(result.result && result.result.partial));
+    const partial = !addressDeferred && (result.ok !== true || payloadPartial);
     await appendLog({
       level: partial ? "warning" : "success",
       source: target.source,

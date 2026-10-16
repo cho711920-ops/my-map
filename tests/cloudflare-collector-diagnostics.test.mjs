@@ -61,3 +61,64 @@ test('operations reasons are escaped and old missing diagnostics are not invente
   assert.match(html,/매물번호 123/); assert.doesNotMatch(html,/<img/);
   assert.equal(ops.collectionDiagnosticsHtml({}), '');
 });
+
+test('Naver operational failures cannot be cancelled by unrelated address exclusions', () => {
+  const body = {source:'네이버', complete:true, validationVersion:2, scope:'대전 서구 전체',
+    collectorVersion:'6.0.10', expectedCount:8316, manifestCount:8316, processedCount:8316,
+    failed:1, addressMissing:81};
+  const audit = collectorCompletionAudit(body,8316);
+  assert.equal(audit.complete,false);
+  assert.ok(audit.blockingIssues.includes('주소 외 실패 1건'));
+  assert.equal(collectorCompletionAudit({...body, failed:0},8316).complete,true);
+  assert.equal(collectorCompletionAudit({...body, source:'당근', failed:81},8316).complete,true);
+});
+
+test('Gongsil automatic results preserve server partial state and absence warnings', async () => {
+  for (const complete of [false, true]) {
+    const finalization = {ok:true, state:complete?'completed':'partial', complete,
+      completionValidated:complete, completionIssues:complete?[]:['부분수집 요청']};
+    const context=funcs(source,['runAutomaticTarget'],{
+      panel:{style:{}}, state:{dashboard:{found:2783,processed:2783,failed:0},collectionTradeType:'lease'},
+      setStatus(){}, getSelectedItemCount:()=>2783, emptyGongsilMapCapture:()=>({}),
+      capturedGongsilPresenceScope:async()=>({}),
+      collectAndSave:async()=>{context.state.lastResult={ok:true,finalization,
+        presenceTrackingIssue:complete?'':'부분수집: 없어진 광고 판정 보류'};},
+      newSourceAdCounts:()=>({}), VERSION:'2.3.2'
+    });
+    const result=await context.runAutomaticTarget({});
+    assert.equal(result.partial,!complete);
+    assert.equal(result.session.state,finalization.state);
+    if (!complete) assert.ok(result.completionIssues.includes('부분수집 요청'));
+  }
+});
+
+test('Naver diagnostics retain actual failure IDs ahead of address exclusions and sanitize on save', () => {
+  const naver=fs.readFileSync('js/naver-collector.js','utf8');
+  const context=funcs(naver,['addNaverDiagnostics'],{clean:v=>String(v??'').trim()});
+  const totals={};
+  context.addNaverDiagnostics(totals,Array.from({length:230},(_,i)=>({stage:'필수정보',sourceId:String(i),message:'주소 없음'})));
+  context.addNaverDiagnostics(totals,[{stage:'상세조회',articleNo:'777',message:'조회 시간초과 https://example.test/?token=private'}]);
+  assert.equal(totals.diagnostics.length,200);
+  const safe=collectorDiagnostics(totals.diagnostics);
+  assert.equal(safe[0].sourceId,'777');
+  assert.doesNotMatch(safe[0].message,/private|https:/);
+  assert.match(naver,/diagnostics: Array\.isArray\(metadata\.diagnostics\)/);
+});
+
+test('Naver automation returns a finalized partial result without losing its failure counts', async () => {
+  const naver=fs.readFileSync('js/naver-collector.js','utf8');
+  const finalResult={ok:true,state:'partial',complete:false,completeRequested:true,
+    expectedCount:8316,processedCount:8316,failed:1,addressMissing:81,completionIssues:['실패 1건']};
+  const context=funcs(naver,['runAutomatic'],{
+    panel:{style:{}},state:{busy:false,preparing:false,dashboard:{failed:1}},VERSION:'6.0.10',
+    isFinNaver:()=>true,DAEJEON_DISTRICTS:[{name:'서구',cortarNo:'30170'}],autoDistrictSelect:{},autoRegisterButton:{},
+    newSourceAdCounts:()=>({}),
+    collectFinSelectedAndSave:async()=>({ok:false,complete:false,finalResult,message:'실패 1건'})
+  });
+  const result=await context.runAutomatic({district:{name:'서구'}});
+  assert.equal(result.partial,true);
+  assert.equal(result.session.failed,1);
+  assert.equal(result.totals.failed,1);
+  finalResult.processedCount=100;
+  await assert.rejects(context.runAutomatic({district:{name:'서구'}}),/실패 1건/);
+});

@@ -111,7 +111,7 @@ test("Gongsil saved-but-unproved viewport reports a deferral without retrying th
     }
   }, "  ");
   const output = await api.runAutomaticTarget({tradeType: "lease"});
-  assert.equal(output.partial, false);
+  assert.equal(output.partial, true);
   assert.equal(output.session, finalization);
   const counts = background.resultCounts({result: output});
   assert.equal(counts.presenceTrackingIssue, "unverified-map-scope");

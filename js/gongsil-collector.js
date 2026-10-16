@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.3.1";
+  var VERSION = "2.3.2";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -412,10 +412,16 @@
     if (finalResult.ok !== true || finalResult.stopped) {
       throw new Error("공실박스 자동수집의 최종 저장 응답을 확인하지 못했습니다.");
     }
+    var finalization = finalResult.finalization || {};
+    var completionIssues = Array.isArray(finalization.completionIssues) ? finalization.completionIssues.slice() : [];
+    if (finalResult.presenceTrackingIssue && completionIssues.indexOf(finalResult.presenceTrackingIssue) === -1) {
+      completionIssues.push(finalResult.presenceTrackingIssue);
+    }
     return {source: "gongsil", tradeType: state.collectionTradeType || target && target.tradeType || detectTradeType(),
       selectedCount: expectedCount, version: VERSION,
-      partial: false,
-      completionIssues: finalResult.presenceTrackingIssue ? [finalResult.presenceTrackingIssue] : [],
+      partial: finalization.complete !== true || finalization.completionValidated === false ||
+        Boolean(finalResult.presenceTrackingIssue),
+      completionIssues: completionIssues,
       session: finalResult.finalization || null,
       totals: Object.assign({}, state.dashboard, newSourceAdCounts(finalResult), {presenceReported: finalResult.presenceReported === true,
         missingMarked: Number(finalResult.missingMarked || 0), deactivated: Number(finalResult.deactivated || 0),

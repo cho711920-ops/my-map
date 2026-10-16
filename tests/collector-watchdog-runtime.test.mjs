@@ -57,7 +57,7 @@ function harness(overrides = {}) {
           }
           return { started: true };
         }, onRemoved: event("removed") },
-      runtime: { getManifest: () => ({ version: "1.1.15" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
+      runtime: { getManifest: () => ({ version: "1.1.16" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async message => { notifications.push(message); } }
     }
@@ -108,7 +108,7 @@ test("minimal report drops target URLs, raw payload and diagnostic contacts", as
   assert.match(clean, /"created":3/);
 });
 
-test("Gongsil scope deferral persists finished collection counts without reopening a retry target", async () => {
+test("Gongsil scope deferral persists partial status and counts without reopening a retry target", async () => {
   const h = harness({targetStartedAt: clock - minute});
   h.data[RUN].targets[3].source = "gongsil";
   const counts = {presenceReported: true, missingMarked: 9, deactivated: 4, adsReappeared: 2,
@@ -117,7 +117,7 @@ test("Gongsil scope deferral persists finished collection counts without reopeni
   await h.context.finishCurrentTarget({ok: true, runId: "cycle", targetRunId: "seo", result: {
     source: "gongsil", partial: false, totals: counts}}, 42);
   const item = h.data[REPORT].items[3];
-  assert.equal(item.status, "completed");
+  assert.equal(item.status, "partial");
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].retryQueue.length, 0);
   assert.equal(item.counts.missingMarked, 9);
@@ -585,7 +585,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.15");
+  assert.equal(response.backgroundBuild, "1.1.16");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -639,6 +639,43 @@ function naverFunction(name, next) {
   return naver.slice(naver.indexOf("  async function " + name) >= 0 ? naver.indexOf("  async function " + name) :
     naver.indexOf("  function " + name), naver.indexOf("  function " + next));
 }
+
+test("Naver completed legacy payload with one failure is settled as partial, without rerunning the district", async () => {
+  const h=harness({targetStartedAt:clock-minute});
+  await h.context.finishCurrentTarget({ok:true,runId:'cycle',targetRunId:'seo',result:{source:'naver',
+    session:{ok:true,state:'completed',complete:true,completeRequested:true,expectedCount:8316,
+      processedCount:8316,failed:1,addressMissing:81},totals:{failed:1}}},42);
+  assert.equal(h.data[REPORT].items[3].status,'partial');
+  assert.equal(h.data[REPORT].items[3].counts.failed,1);
+  assert.equal(h.data[RUN].index,4);
+  assert.equal(h.data[RUN].retryQueue.length,0);
+});
+
+test("stored legacy reports render partial locally without altering collection checkpoints or stored reports", async () => {
+  const h=harness();
+  h.data[REPORT].items.forEach(item=>{item.status='completed';item.counts={failed:0};});
+  h.data[REPORT].items[3].counts.failed=1;
+  const before=structuredClone(h.data);
+  const report=await h.context.getRunReport();
+  assert.equal(report.items[3].status,'partial');
+  assert.equal(report.summary.partial,1);
+  assert.deepEqual(h.data,before);
+  const byMarket=await h.context.getRunReports();
+  assert.equal(byMarket.lease.items[3].status,'partial');
+  assert.deepEqual(h.data,before);
+});
+
+test("Gongsil server partial cannot become completed even with a legacy partial:false payload", async () => {
+  const h=harness({targetStartedAt:clock-minute});
+  await h.context.finishCurrentTarget({ok:true,runId:'cycle',targetRunId:'seo',result:{source:'gongsil',partial:false,
+    selectedCount:2783,session:{ok:true,state:'partial',complete:false,completionValidated:false},
+    completionIssues:['부분수집 요청'],totals:{found:2783,processed:2783,failed:0,
+      presenceReported:true,presenceTrackingIssue:'부분수집: 없어진 광고 판정 보류'}}},42);
+  assert.equal(h.data[REPORT].items[3].status,'partial');
+  assert.equal(h.data[RUN].index,4);
+  assert.equal(h.data[RUN].retryQueue.length,0);
+  assert.match(h.data[REPORT].items[3].message,/종료판정보류/);
+});
 
 test("Daangn exhausted small scope proceeds once, with warning report and no retry queue", async () => {
   const h = harness({ targetStartedAt: clock - minute });

@@ -96,6 +96,7 @@ test("adaptive detailed saves cover every candidate once as the batch size chang
     setStatus() {}, setProgress() {}, showNaverSaveWait() {}, finishCollectorRun() {},
     delay: async () => {}, clean: String, isFinNaver: () => true
   });
+  vm.runInContext(functionSource("addNaverDiagnostics"), h.context);
   vm.runInContext(functionSource("collectAndSave"), h.context);
   const input = Array.from({length: 80}, (_, index) => ({articleNo: String(index + 1)}));
   const result = await h.context.collectAndSave(input, "서구 전체", {complete: true});

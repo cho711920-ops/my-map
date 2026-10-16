@@ -40,7 +40,7 @@ function harness(targets = [target("lease-on", "lease"), target("lease-off", "le
         async query() { return []; }, async remove() {},
         async create(values) { launches.push(values); return { id: 10, status: "complete", ...values }; },
         async sendMessage() { return { started: true }; } },
-      runtime: { getManifest: () => ({ version: "1.1.15" }), getURL: path => `chrome-extension://test/${path}`,
+      runtime: { getManifest: () => ({ version: "1.1.16" }), getURL: path => `chrome-extension://test/${path}`,
         onMessage: event("message"), onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { async create() {} }
     }
@@ -56,7 +56,7 @@ function harness(targets = [target("lease-on", "lease"), target("lease-off", "le
 }
 
 test("today's settled schedule remains consumed after an extension update or missing legacy version marker", async () => {
-  for (const version of [undefined, "1.1.13", "1.1.14", "1.1.15"]) {
+  for (const version of [undefined, "1.1.13", "1.1.14", "1.1.16"]) {
     const h = harness();
     vm.runInContext("scheduleIsDue = () => true;", h.context);
     h.data[LAST] = h.context.localDateKey();
@@ -89,7 +89,7 @@ test("a previous-day schedule still starts once and consumes today's date only a
   h.data[REPORT].items.forEach(item => {item.status = "completed";});
   await h.context.finalizeRun(clone(h.data[RUN]));
   assert.equal(h.data[LAST], h.context.localDateKey());
-  assert.equal(h.data[VERSION], "1.1.15");
+  assert.equal(h.data[VERSION], "1.1.16");
   await h.startup(); await h.alarm("js-auto-collector-daily");
   assert.equal(h.launches.length, 1);
 });
@@ -279,7 +279,7 @@ test("only a settled scheduled lease run marks today's schedule complete", async
     const state = clone(h.data[RUN]);
     await h.context.finalizeRun(state);
     assert.equal(Boolean(h.data[LAST]), marksDaily, `${reason}/${market}`);
-    assert.equal(h.data[VERSION], marksDaily ? "1.1.15" : undefined);
+    assert.equal(h.data[VERSION], marksDaily ? "1.1.16" : undefined);
   }
 });
 

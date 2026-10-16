@@ -77,6 +77,21 @@ function fixture(t, source) {
   return { db, state, capture, step, classify, finalize, statements, failBackfill: value => { failBackfill = value; } };
 }
 
+test('Naver failed detail plus address exclusions cannot deactivate an unobserved sibling ad', async t => {
+  const f=fixture(t,'네이버');
+  const baseline=f.capture(['returned','sibling']); f.step();
+  await f.finalize('baseline-complete',baseline);
+  const sibling=f.state('sibling');
+  f.step(); const captured=f.capture(['returned']); f.step();
+  const result=await f.finalize('one-failed-detail',captured,{failed:1,addressMissing:81,
+    diagnostics:[{stage:'상세조회',sourceId:'777',message:'상세 응답 시간초과'}]});
+  assert.equal(result.state,'partial'); assert.equal(result.complete,false);
+  assert.equal(result.presenceTracking,false); assert.equal(result.deactivated,0);
+  assert.deepEqual(f.state('sibling'),sibling);
+  assert.equal(f.db.prepare("SELECT operating_memo FROM listings WHERE id='M'").get().operating_memo,'사용자 메모 보존');
+  assert.equal(result.diagnostics[0].sourceId,'777');
+});
+
 for (const source of ["네이버", "당근"]) {
   test(`${source}: unchanged empty-hash manifest preserves availability clocks and the proved current ad reappears`, async t => {
     const f = fixture(t, source), before = f.state("returned"), sibling = f.state("sibling");

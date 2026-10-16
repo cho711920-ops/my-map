@@ -80,7 +80,7 @@ function harness(fetch) {
     "collectorRecoveryIsCurrent", "recoverCollectorRequest", "naverBatchRequestId",
     "pendingNaverSave", "rememberPendingNaverSave", "clearPendingNaverSave", "reconcilePendingNaverSave",
     "fetchCollectorText", "fetchCollectorJson", "classifyNaverManifest",
-    "postBatch", "postBatchWithRetry", "finalizeNaverSession", "getNaverSessionResult",
+    "postBatch", "postBatchWithRetry", "finalizeNaverSession", "addNaverDiagnostics", "getNaverSessionResult",
     "fetchFinJson", "enrichNaverDetailBatch", "collectAndSave", "retryFailedCityArticles",
     "collectFinDaejeonAll"]) {
     vm.runInContext(functionSource(name), context);

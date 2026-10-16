@@ -2228,7 +2228,10 @@ export function collectorCompletionAudit(body, observedCount) {
   if (requested && processed < observed) block(`처리 ${processed}건·원본 ${observed}건 불일치`);
   if (requested && failed > 0) {
     issues.push(`실패 ${failed}건`);
-    if (failed > addressMissing) blockingIssues.push(`주소 외 실패 ${failed - addressMissing}건`);
+    // Naver reports detail/save failures separately from address exclusions.
+    // Daangn/Gongsil's legacy failed counter includes address exclusions.
+    const operationalFailures = source === "네이버" ? failed : Math.max(0, failed - addressMissing);
+    if (operationalFailures > 0) blockingIssues.push(`주소 외 실패 ${operationalFailures}건`);
   }
   if (requested && addressMissing > 0) issues.push(`주소·층 오류 ${addressMissing}건`);
   if (requested && requiredFieldRejected > addressMissing) {

@@ -6,6 +6,10 @@ const numericKeys = ["expected", "processed", "detailProcessed", "unchanged", "c
   "missingMarked", "deactivated", "adsReappeared"];
 const count = value => Math.min(10000000, Math.max(0, Math.floor(Number(value) || 0)));
 const fail = message => { throw Object.assign(new Error(message), { statusCode: 400 }); };
+function normalizedItemStatus(item) {
+  return item.status === "completed" && (count(item.counts?.failed) > 0 || item.counts?.presenceTrackingIssue)
+    ? "partial" : item.status;
+}
 export function sanitizeAutomationRunReport(input, now = Date.now()) {
   if (!input || typeof input !== "object" || JSON.stringify(input).length > 48000) fail("자동수집 보고서 크기가 올바르지 않습니다.");
   if (!/^run-\d{10,16}-[a-z0-9]{1,20}$/.test(String(input.runId || ""))) fail("자동수집 실행번호가 올바르지 않습니다.");
@@ -24,7 +28,7 @@ export function sanitizeAutomationRunReport(input, now = Date.now()) {
       presenceTrackingIssue: item.counts?.presenceTrackingIssue ? "동일 범위·전체목록 확인 필요" : ""});
     return { targetIndex: index, source: item.source,
       district: ["유성구", "대덕구", "중구", "서구", "동구"].includes(item.district) ? item.district : "",
-      tradeType: item.tradeType === "sale" ? "sale" : "lease", status: item.status,
+      tradeType: item.tradeType === "sale" ? "sale" : "lease", status: normalizedItemStatus({...item, counts: counters}),
       counts: counters, terminalCode: codes.has(item.terminalCode) ? item.terminalCode : "" };
   });
   const readiness = input.readiness || {};
@@ -61,8 +65,12 @@ export async function saveAutomationRunReport(env, input) {
 export async function readAutomationRunReports(env) {
   try {
     const rows = await env.DB.prepare("SELECT report_json,reported_at FROM collector_automation_runs ORDER BY started_at DESC LIMIT 10").all();
-    return { available: true, runs: (rows.results || []).map(row => ({ ...JSON.parse(row.report_json), reportedAt: row.reported_at,
-      stale: Date.now() - Date.parse(row.reported_at) > 10 * 60000 })) };
+    return { available: true, runs: (rows.results || []).map(row => {
+      const report = JSON.parse(row.report_json);
+      // Correct legacy display on read; preserve the original stored report.
+      return {...report, items: report.items.map(item => ({...item, status: normalizedItemStatus(item)})),
+        reportedAt: row.reported_at, stale: Date.now() - Date.parse(row.reported_at) > 10 * 60000};
+    }) };
   } catch (error) {
     if (/no such table/.test(String(error?.message || error))) return { available: false, runs: [], message: "자동수집 보고서 저장소 업데이트가 필요합니다." };
     throw error;
