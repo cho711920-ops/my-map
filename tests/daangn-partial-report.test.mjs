@@ -41,6 +41,20 @@ test('actual network/save failure is never hidden by address exclusions', () => 
   assert.match(background.resultNotice(run), /조회·저장 실패 1건/);
   assert.match(client.jobDisplay(run.result.totals).title, /실패/);
 });
+
+for (const [found, details, held] of [[2078,42,19], [3876,56,27], [613,15,13], [641,10,5], [641,27,23]]) {
+  test(`current address-held wording settles ${found} observed ads instead of recollecting the district`, () => {
+    const run = result(found, details, held);
+    run.result.completionIssues = run.result.completionIssues.map(message => message.replace('주소·층 오류', '주소 미확인'));
+    assert.equal(background.completedTargetWithWarnings(run), true);
+    assert.equal(background.resultCounts(run).failed, 0);
+    run.result.totals.failed++;
+    assert.equal(background.completedTargetWithWarnings(run), false, 'a real failure still needs attention');
+    run.result.totals.failed--;
+    run.result.totals.completionProof.listExhausted = false;
+    assert.equal(background.completedTargetWithWarnings(run), false, 'an incomplete list is never settled as address-only');
+  });
+}
 test('a missing or inconsistent census proof never gets the completed-address-held label', () => {
   for (const change of [j => delete j.completionProof, j => j.completionProof.listExhausted = false,
     j => j.skippedUnchanged--, j => j.completionProof.processed--]) {
@@ -143,6 +157,18 @@ test('summary never calls partial districts all normal', () => {
   const html = ui.renderRunSummary();
   assert.match(html, /정상 0 · 주소보류 5 · 부분 0/); assert.match(html, /주소보류 검토 가능/);
   assert.doesNotMatch(html, /<small>정상<\/small>/);
+});
+
+test('user-excluded targets are settled as excluded, never counted as normal or waiting', () => {
+  const original = context.state;
+  context.state = structuredClone(original);
+  context.state.runReport.items.push({key:'removed-gongsil-1',source:'gongsil',status:'skipped',counts:{}},
+    {key:'removed-gongsil-2',source:'gongsil',status:'skipped',counts:{}});
+  const html = ui.renderRunSummary();
+  assert.match(html,/7 \/ 7개 처리 종료/);
+  assert.match(html,/정상 0 · 주소보류 5 · 부분 0 · 제외 2/);
+  assert.match(html,/0개 대기/);
+  context.state = original;
 });
 test('a complex road address publishes without inventing a parcel or using blurred coordinates', () => {
   const record = normalizedRecord('당근', { originalId: '2068835', isHideAddress: true,

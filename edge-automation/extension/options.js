@@ -143,7 +143,7 @@ function displayCounts(item, target) {
   if (counts.version !== 2 && daangn) {
     // Old reports did not persist unchanged counts. Never invent a full census.
     counts.legacyDaangn = true;
-    const match = String(item && item.message || "").match(/주소·층 오류 (\d+)건/);
+    const match = String(item && item.message || "").match(/(?:주소·층 오류|주소 미확인) (\d+)건/);
     if (match) {
       counts.addressDeferred = Math.min(Number(counts.failed || 0), Number(match[1]));
       counts.failed = Math.max(0, Number(counts.failed || 0) - counts.addressDeferred);
@@ -241,7 +241,8 @@ function renderRunSummary(report = state.runReport) {
   }, {});
   const finished = Number(counts.completed || 0) + Number(counts.partial || 0);
   const deferred = Number(counts.deferred || 0);
-  const processed = finished + deferred;
+  const skipped = Number(counts.skipped || 0);
+  const processed = finished + deferred + skipped;
   const running = Number(counts.running || 0) + Number(counts.retrying || 0);
   const waiting = Number(counts.pending || 0) + Number(counts.retry_wait || 0);
   const failed = Number(counts.failed || 0);
@@ -262,7 +263,7 @@ function renderRunSummary(report = state.runReport) {
     presence.deferred ? `종료판정보류 ${presence.deferred}개 범위` : ""].filter(Boolean).join(" · ");
   return `<div class="run-summary-grid">
     <span><b>${report.active ? "수집 실행 중" : "최근 실행 결과"}</b><small>${registeredTime(report.startedAt)}</small></span>
-    <span><b>${processed} / ${report.items.length}개 처리 종료</b><small>정상 ${Number(counts.completed || 0)} · 주소보류 ${deferred} · 부분 ${Number(counts.partial || 0)}</small></span>
+    <span><b>${processed} / ${report.items.length}개 처리 종료</b><small>정상 ${Number(counts.completed || 0)} · 주소보류 ${deferred} · 부분 ${Number(counts.partial || 0)}${skipped ? ` · 제외 ${skipped}` : ""}</small></span>
     <span><b>${running}개 진행</b><small>${waiting}개 대기</small></span>
     <span class="${failed ? "has-failure" : ""}"><b>${failed}개 실패</b><small>${failed ? "실패 내역 확인" : counts.partial ? "부분완료 내역 확인" : deferred ? "주소보류 검토 가능" : report.active ? "진행 중" : "정상"}</small></span>
   </div>${presenceSummary ? `<div class="run-summary-presence">${presenceSummary}</div>` : ""}`;

@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.16";
+const BACKGROUND_BUILD = "1.1.17";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -242,7 +242,7 @@ function uniqueTargets(targets) {
 }
 
 function terminalReportStatus(status) {
-  return ["completed", "deferred", "partial", "failed"].includes(String(status || ""));
+  return ["completed", "deferred", "partial", "failed", "skipped"].includes(String(status || ""));
 }
 
 function ensureRunCollections(state, report) {
@@ -280,7 +280,8 @@ function deriveRunSummary(report, previous = {}) {
   }, {});
   const deferred = Number(statuses.deferred || 0);
   const partial = Number(statuses.partial || 0);
-  const completed = Number(statuses.completed || 0) + deferred + partial;
+  const skipped = Number(statuses.skipped || 0);
+  const completed = Number(statuses.completed || 0) + deferred + partial + skipped;
   const failedItems = items.filter((item) => item && item.status === "failed");
   const retries = items.reduce((total, item) => total + Math.max(0, Number(item && item.retryCount || 0)), 0);
   const settled = completed + failedItems.length;
@@ -294,6 +295,7 @@ function deriveRunSummary(report, previous = {}) {
     completed,
     deferred,
     partial,
+    skipped,
     failed: failedItems.length,
     retries,
     errors: failedItems.map((item) => ({
@@ -863,10 +865,10 @@ async function finalizeRun(state, reportTabId = null) {
     : { ...(state.summary || { completed: 0, failed: 0, errors: [] }), ok: false };
   state.summary = { ...summary };
   const normal = Math.max(0, Number(summary.completed || 0) -
-    Number(summary.deferred || 0) - Number(summary.partial || 0));
+    Number(summary.deferred || 0) - Number(summary.partial || 0) - Number(summary.skipped || 0));
   await appendLog({
     level: summary.ok && !summary.partial ? "success" : "warning",
-    message: `자동수집 종료: 정상 ${normal}, 주소보류 ${Number(summary.deferred || 0)}, 부분완료 ${Number(summary.partial || 0)}, 실패 ${summary.failed}`,
+    message: `자동수집 종료: 정상 ${normal}, 주소보류 ${Number(summary.deferred || 0)}, 부분완료 ${Number(summary.partial || 0)}, 실패 ${summary.failed}${summary.skipped ? `, 제외 ${summary.skipped}` : ""}`,
     result: summary
   });
   if (report) {
@@ -928,6 +930,51 @@ async function restartPersistedRun(state, reason) {
   if (staleTabId) await chrome.tabs.remove(staleTabId).catch(() => {});
   await appendLog({ level: "info", message: reason || "중단된 자동수집을 저장 지점부터 이어서 실행합니다." });
   return launchCurrentTarget(state);
+}
+
+async function reconcileRunAfterUpdate(state, config) {
+  if (!state?.active || state.resultPolicyBuild === BACKGROUND_BUILD) return state;
+  const report = await getRunReport();
+  if (!report || report.runId !== state.runId) return state;
+  ensureRunCollections(state, report);
+  const enabled = new Set((config.targets || []).filter(target => target.enabled !== false).map(targetKey));
+  let changed = 0;
+  for (const item of report.items || []) {
+    const source = cleanSource(item.source);
+    const counts = item.counts || {};
+    const removedGongsil = source === "gongsil" && !enabled.has(item.key);
+    const addressOnly = source === "daangn" && ["retry_wait", "retrying", "partial"].includes(item.status) &&
+      counts.version === 2 && counts.listComplete === true && Number(counts.expected) > 0 &&
+      Number(counts.processed) === Number(counts.expected) && Number(counts.addressDeferred) > 0 &&
+      Number(counts.failed) === 0;
+    if (!removedGongsil && !addressOnly) continue;
+    item.previousStatus = item.status;
+    item.previousMessage = item.message || "";
+    item.status = removedGongsil ? "skipped" : "deferred";
+    item.finishedAt = Date.now();
+    item.updatedAt = Date.now();
+    item.message = removedGongsil ? "사용자가 자동수집 대상에서 제외 · 수동 수집"
+      : `전체목록 확인 완료 · 주소 보류 ${counts.addressDeferred}건 · 불필요한 재시도 해제`;
+    rememberCompletedTarget(state, item);
+    changed += 1;
+  }
+  state.resultPolicyBuild = BACKGROUND_BUILD;
+  if (changed) {
+    report.summary = deriveRunSummary(report, state.summary || {});
+    report.updatedAt = Date.now();
+    state.summary = { ...report.summary };
+    const completed = new Set(state.completedKeys);
+    const retryByKey = new Map((state.retryQueue || []).map(target => [targetKey(target), target]));
+    state.targets = state.allTargets.filter(target => !completed.has(targetKey(target)))
+      .map(target => retryByKey.get(targetKey(target)) || target);
+    state.index = 0;
+    state.retryQueue = [];
+    state.retryAt = null;
+    await saveRunReport(report);
+    await appendLog({level: "info", message: `업데이트 완료 판정 정리 ${changed}개 · 완료 지역 보존 · 제외 대상 재실행 안 함`});
+  }
+  await saveRunState(state);
+  return state;
 }
 
 async function reconnectReloadedCollectorPage(senderTabId) {
@@ -1325,7 +1372,7 @@ function completedTargetWithWarnings(result) {
     return result.ok === true && job.status === "complete" && job.phase === "complete" &&
       listComplete && failed >= 0 && failed <= addressMissing &&
       Array.isArray(issues) && issues.every(issue =>
-        /^(?:관찰 원본 100건 미만|실패 \d+건|주소·층 오류 \d+건)$/.test(String(issue)));
+        /^(?:관찰 원본 100건 미만|실패 \d+건|(?:주소·층 오류|주소 미확인) \d+건)$/.test(String(issue)));
   }
   if (cleanSource(payload.source) !== "naver") return false;
   const session = payload.session || {};
@@ -1799,6 +1846,8 @@ chrome.runtime.onInstalled.addListener(() => serializeMutation(async () => {
   await resetAlarm(config);
   const state = await getRunState();
   if (state && state.active) {
+    await reconcileRunAfterUpdate(state, config);
+    state.upgradeRecoveredAt = Date.now();
     await restartPersistedRun(state, "자동수집기 업데이트 후 미완료 대상을 저장 지점부터 복구합니다.");
   } else {
     await chrome.storage.local.remove(RUN_LOCK_KEY);
@@ -1810,6 +1859,10 @@ chrome.runtime.onStartup.addListener(() => serializeMutation(async () => {
   await resetAlarm(config);
   const state = await getRunState();
   if (state && state.active) {
+    // onInstalled may already have started this same target in this process.
+    if (state.upgradeRecoveredAt && Date.now() - state.upgradeRecoveredAt < 60000 &&
+        state.phase === "collecting" && await probeCurrentTarget(state)) return;
+    await reconcileRunAfterUpdate(state, config);
     if (state.phase === "retry-wait" && Date.now() < Number(state.retryAt || 0)) {
       await chrome.storage.local.set({ [RUN_LOCK_KEY]: { startedAt: Date.now() } });
       chrome.alarms.create(RECOVERY_ALARM_NAME, { when: Number(state.retryAt) });

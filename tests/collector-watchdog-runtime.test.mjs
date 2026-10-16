@@ -65,8 +65,56 @@ function harness(overrides = {}) {
   vm.runInContext(background, context);
   const dispatch = (message, tabId = 42, extraSender = {}) => new Promise(resolve => events.message(message, { tab: { id: tabId }, ...extraSender }, resolve));
   const flush = async () => { await vm.runInContext("mutationQueue", context); await new Promise(resolve => setImmediate(resolve)); };
-  return { context, data, navigation, notifications, alarmMap, dispatch, flush };
+  return { context, data, navigation, notifications, alarmMap, dispatch, flush, events };
 }
+
+test("upgrade settles proven address holds and excludes removed Gongsil without restarting completed regions", async () => {
+  const h = harness({phase: "retry-wait"});
+  const base = h.data[RUN].targets;
+  const daangn = [0,1,2,3,4].map(i => ({key:"daangn-"+i,source:"daangn",label:"당근"+i,
+    url:"https://realty.daangn.com/?test="+i,enabled:true}));
+  const gongsil = [0,1].map(i => ({key:"gongsil-"+i,source:"gongsil",label:"공실"+i,
+    url:"https://gongsilbox.com/?test="+i,enabled:true}));
+  h.data[RUN].targets = [...base,...daangn,...gongsil];
+  h.data[RUN].allTargets = [...h.data[RUN].targets];
+  h.data[RUN].index = 11;
+  h.data[RUN].retryQueue = [base[3],...daangn,gongsil[0]];
+  h.data[CONFIG].targets = [...base,...daangn];
+  h.data[REPORT].items = base.map((target,i) => ({...target,status:i===3?"retry_wait":"completed",counts:{}}))
+    .concat(daangn.map(target => ({...target,status:"retry_wait",counts:h.context.resultCounts(daangnResult())})),
+      gongsil.map(target => ({...target,status:"retry_wait",counts:{}})));
+  const configBefore = structuredClone(h.data[CONFIG]);
+  await h.context.reconcileRunAfterUpdate(h.data[RUN],h.data[CONFIG]);
+  assert.deepEqual(h.data[RUN].targets.map(target=>target.key),["naver-3"]);
+  assert.equal(h.data[RUN].retryQueue.length,0);
+  assert.ok(h.data[REPORT].items.filter(item=>item.source==="daangn").every(item=>item.status==="deferred"));
+  assert.ok(h.data[REPORT].items.filter(item=>item.source==="gongsil").every(item=>item.status==="skipped"));
+  assert.equal(h.data[RUN].summary.deferred,5);
+  assert.equal(h.data[RUN].summary.skipped,2);
+  assert.deepEqual(h.data[CONFIG],configBefore);
+});
+
+test("upgrade keeps real Daangn failures and incomplete proofs in the remaining queue", async () => {
+  for (const override of [{failed:1},{listComplete:false},{version:undefined}]) {
+    const h = harness();
+    const target = {...h.data[RUN].targets[3],source:"daangn"};
+    h.data[RUN].targets[3] = target;
+    h.data[REPORT].items[3] = {...target,status:"retry_wait",counts:{...h.context.resultCounts(daangnResult()),...override}};
+    await h.context.reconcileRunAfterUpdate(h.data[RUN],h.data[CONFIG]);
+    assert.equal(h.data[REPORT].items[3].status,"retry_wait");
+    assert.equal(h.data[RUN].targets[3].key,"naver-3");
+  }
+});
+
+test("install and startup events do not start the upgraded target twice", async () => {
+  const h = harness({targetStartedAt:clock-minute,runtimeStartedAt:clock-minute});
+  await h.events.installed();
+  await h.flush();
+  assert.equal(h.navigation.length,1);
+  await h.events.startup();
+  await h.flush();
+  assert.equal(h.navigation.length,1);
+});
 
 test("one-off selection runs only chosen enabled targets without modifying tomorrow's configuration", async () => {
   const h = harness();
@@ -585,7 +633,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.16");
+  assert.equal(response.backgroundBuild, "1.1.17");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -689,6 +737,20 @@ test("Daangn exhausted small scope proceeds once, with warning report and no ret
   assert.equal(h.data[RUN].retryQueue.length, 0);
   assert.equal(h.data[REPORT].items[3].status, "partial");
   assert.match(h.data[REPORT].items[3].message, /관찰 원본 100건 미만/);
+});
+
+test("current address-held wording advances the district once without a retry queue", async () => {
+  const h = harness({ targetStartedAt: clock - minute });
+  const response = { ...daangnResult(), runId: "cycle", targetRunId: "seo" };
+  response.result.completionIssues = response.result.completionIssues.map(message => message.replace("주소·층 오류", "주소 미확인"));
+  await h.context.finishCurrentTarget(response, 42);
+  assert.equal(h.data[RUN].index, 4);
+  assert.equal(h.data[RUN].retryQueue.length, 0);
+  assert.equal(h.data[REPORT].items[3].status, "deferred");
+  assert.equal(h.data[REPORT].items[3].counts.failed, 0);
+  assert.equal(h.data[REPORT].items[3].counts.addressDeferred, 19);
+  assert.equal(h.navigation.length, 1);
+  assert.match(h.navigation[0], /test=4$/);
 });
 
 test("address-only Daangn holds persist accurate counts/reasons and finish without restarting the district", async () => {
