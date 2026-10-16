@@ -69,11 +69,13 @@ html #list .item .item-contact-button-v654 .item-action-icon-phone-v662 { color:
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655) {
   --cluster-size: var(--density-size-v1, 38px) !important;
   --cluster-font-size: var(--density-font-v1, 14px) !important;
-  --cluster-fill: #f8fafc !important;
+  /* One translucent paint layer keeps roads visible; the fixed highlight adds
+   * a soft pearl finish without blur, images or an animated overlay. */
+  --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(255, 253, 236, .48) 0%, rgba(255, 239, 168, .52) 55%, rgba(247, 220, 128, .56) 100%) !important;
   --cluster-text: #172b4d !important;
-  border: 1px solid #b8c6d6 !important;
+  border: 1px solid rgba(190, 160, 70, .32) !important;
   background: var(--cluster-fill) !important; color: var(--cluster-text) !important;
-  box-shadow: 0 1px 3px #24466b18 !important;
+  box-shadow: inset 0 1px 1px #ffffff45, 0 1px 2px #80651c12 !important;
   font-weight: 700 !important; animation: none !important;
 }
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).done { --cluster-fill: rgba(226, 232, 240, .9) !important; --cluster-text: #64748b !important; }

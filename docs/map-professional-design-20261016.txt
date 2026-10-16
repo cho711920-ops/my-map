@@ -91,3 +91,17 @@ JS부동산 지도·목록 디자인 정돈 — 2026-10-16 18:45 KST
 - Workerc30b7137-90e8-4e0a-85de-a0c06477de9a, 배포100% 확인.
   공개 캐시e5ed5147459fd137782cc91e. 20:21 KST 양 도메인16개 파일 SHA256/HTML 검증 통과.
   outputs/cluster-neutral-palette-browser.log / cluster-neutral-palette-public-verification.json.
+
+후속 투명도·색상 수정 — 2026-10-16 20:48 KST
+- 사용자35093.jpg 요청으로 위 불투명한 흰색 기본 숫자 원을 대체했다.
+  연한 파스텔 노란색의 단일 radial-gradient, 위치별 알파.48~.56으로 뒤 지도가 비친다.
+  위쪽의 약한 밝기 차이와 얇은 안쪽 하이라이트로 정적인 펄 느낌을 표현한다.
+  흐림 효과/반짝임 애니메이션/외부 이미지/추가 통신은 사용하지 않는다.
+- 진한 남색 숫자, 수량·확대 단계별 크기, 선택 파랑/흰 숫자, 완료 원 회색 유지.
+  구·동 이름표 및 지도 묶음/클릭/목록/사진 전환/운영 자료/수집기 변경 없음.
+- 기존 PC·폴드 가로 선택/크기/목록 검사4통과·2플랫폼 제외, 빌드/dry-run/diff 검사 통과.
+  이번 CSS 수정에 전체 Node/전체 브라우저 검사는 반복하지 않았다. 앞선 제한 사항은 유지.
+- Worker37a4794f-cf28-4de1-b697-f8da448868a9, deployments list100% 확인.
+  공개 캐시d40e03ba0eb94a1bc7d4d615. 20:48 KST 양 도메인16개 HTML/파일 SHA256 검사 통과.
+  outputs/cluster-pearl-yellow-browser.log / cluster-pearl-yellow-public-verification.json.
+  공개 파일 반영과 격리 브라우저 동작을 확인했으며 실제 휴대폰 실기 확인은 별도다.
