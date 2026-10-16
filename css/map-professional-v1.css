@@ -135,6 +135,12 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
     visibility: hidden !important; pointer-events: none !important;
   }
   html.js-map-list-closed-v1 #sidebar > :is(.header, .filters) { visibility: visible !important; pointer-events: auto !important; }
+  /* Older list controls explicitly restore visibility on their descendants.
+   * Close the whole toolbar subtree while retaining its measured geometry. */
+  html.js-map-list-closed-v1 #sidebar #listToolbar,
+  html.js-map-list-closed-v1 #sidebar #listToolbar * {
+    visibility: hidden !important; pointer-events: none !important;
+  }
   html.js-map-list-closed-v1 .map-quick-tools { right: 12px !important; }
   html.js-map-list-closed-v1 .map-quick-popover { right: 70px !important; }
 }

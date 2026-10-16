@@ -67,3 +67,16 @@ JS부동산 지도·목록 디자인 정돈 — 2026-10-16 18:45 KST
 - 작업 브랜치codex/daangn-numeric-status. 코드/검사/인수인계만 커밋·푸시한다.
   개인 첨부, outputs, 녹취, 임시 디버그/변환 스크립트, 로컬 환경은 제외한다.
 - 열린 웹은 새로고침해야 새 디자인/지도 우선 시작 상태가 적용된다.
+
+후속 수정 — 2026-10-16 19:54 KST
+- 사용자35090.jpg: 목록을 접은 가로 지도에 출처/구분/중개보수/정렬만 남는 오류 확인.
+  기존 CSS가 목록 컨트롤 자식에 visibility:visible!important를 지정하여 부모 숨김을 우회했다.
+- 접힌 상태에만 #sidebar #listToolbar 및 전체 자식에 visibility:hidden!important 적용.
+  목록/도구줄의 측정 치수와 필터 값은 유지한다. 목록을 열면 원래 컨트롤을 다시 표시한다.
+  상단 검색/필터 버튼과 지도 도구는 유지하며 API/매물/수집기 변경 없음.
+- 기존 PC/폴드 가로 검사에 네 컨트롤 각각의 접힘/열림/재접힘 가시성 검증 추가.
+  해당 검사3통과·3플랫폼 제외. 깊은 목록 카드 위치/검색창 크기 유지 검사 포함.
+  ESLint/빌드/dry-run/git diff --check 통과. 이전 전체 Node검사 결과는 위 기록 참조.
+- Workerf8aca740-ce89-440e-96e6-dc1ae3b4d192, deployments list100% 확인.
+  공개 캐시3dbce93d827459eb733ed1fb. 19:54 KST 두 도메인16개 파일 검증 통과.
+  outputs/map-list-toolbar-visibility-browser.log / map-list-toolbar-public-verification.json.

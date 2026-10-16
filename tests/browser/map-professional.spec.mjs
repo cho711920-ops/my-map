@@ -8,6 +8,14 @@ const functions = new Set(['getPremiumClusterSizeClassV635', 'buildClusterOverla
   'openAdministrativeClusterV655', 'redrawSelectedMarkers', 'isAdministrativeClusterSelectedV1',
   'setAdministrativeListSelectionV6570', 'clearAdministrativeListSelectionV6570', 'getAdministrativeListStatusV6570', 'getFieldVisitClusterClassV684']);
 const runtime = ast.statements.filter(n => ts.isFunctionDeclaration(n) && functions.has(n.name?.text)).map(n => n.getText(ast)).join('\n');
+const listControls = ['#sourceFilter', '#typeFilter', '#brokerageFeeFilter', '#sortDropdownBtn'];
+
+async function expectListControls(page, visible) {
+  for (const selector of listControls) {
+    if (visible) await expect(page.locator(selector)).toBeVisible();
+    else await expect(page.locator(selector)).toBeHidden();
+  }
+}
 
 async function prepare(page, context) {
   const errors = [], writes = [];
@@ -69,6 +77,7 @@ test('desktop map-first list opens on cluster click and preserves search geometr
   test.skip(isMobile, 'Desktop and unfolded layout use the collapsible right panel');
   const h = await prepare(page, context);
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
+  await expectListControls(page, false);
   const search = await page.locator('#keyword').boundingBox();
   const fullWidth = await page.locator('#map').evaluate(el => el.clientWidth);
   expect(fullWidth).toBe(1280);
@@ -80,6 +89,7 @@ test('desktop map-first list opens on cluster click and preserves search geometr
   await expect(page.locator('#mapListTitleV1')).toHaveText('선택한 매물 1개');
   await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('background-color', 'rgb(5, 104, 232)');
   await expect(page.locator('#list .item')).toHaveCount(1);
+  await expectListControls(page, true);
   expect(await page.locator('#keyword').boundingBox()).toEqual(search);
   const state = await page.evaluate(() => ({key: selectedGroupKey, level: map.getLevel(), width: document.getElementById('map').clientWidth,
     point: getMapDisplayProjectionV1().containerPointFromCoords({x: 500, y: 0})}));
@@ -89,9 +99,11 @@ test('desktop map-first list opens on cluster click and preserves search geometr
   await page.screenshot({path: info.outputPath('desktop-selected-list.png')});
   await page.locator('#mapListCloseV1').click();
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
+  await expectListControls(page, false);
   expect(await page.evaluate(() => selectedGroupKey)).toBe(state.key);
   await page.locator('#mapListOpenV1').click();
   await expect(page.locator('#mapListTitleV1')).toHaveText('현재 지도 매물 2개');
+  await expectListControls(page, true);
   expect(await page.evaluate(() => selectedGroupKey)).toBeNull();
   expect(await page.locator('#keyword').boundingBox()).toEqual(search);
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
@@ -178,15 +190,18 @@ test('unfolded landscape reclaims map width and opens the same fitted desktop li
     mobile:true, deviceScaleFactor:1, screenOrientation:{type:'landscapePrimary', angle:90}});
   await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
+  await expectListControls(page, false);
   await expect.poll(() => page.locator('#map').evaluate(el => el.clientWidth)).toBe(1280);
   const search = await page.locator('#keyword').boundingBox();
   await page.locator('#mapListOpenV1').tap();
   await expect(page.locator('#list .item').first()).toBeVisible();
   await expect(page.locator('#mapListCloseV1')).toBeVisible();
+  await expectListControls(page, true);
   expect(await page.locator('#keyword').boundingBox()).toEqual(search);
   expect(await page.locator('html').evaluate(el => el.scrollWidth)).toBeLessThanOrEqual(1281);
   await page.screenshot({path:info.outputPath('unfolded-landscape-list.png')});
   await page.locator('#mapListCloseV1').tap();
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
+  await expectListControls(page, false);
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
