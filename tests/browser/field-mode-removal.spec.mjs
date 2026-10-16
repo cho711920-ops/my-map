@@ -1,0 +1,20 @@
+import {test,expect} from '@playwright/test';
+test('field mode stays retired across screen changes while search, ordinary detail and favorites stay available',async({page,context,isMobile})=>{
+ const errors=[],requested=[];page.on('pageerror',e=>errors.push(e.message));
+ await context.route('**/*',route=>{const url=new URL(route.request().url());requested.push(url.pathname);return url.hostname==='127.0.0.1'?route.continue():route.abort();});
+ await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+ await expect(page.locator('#map')).toBeVisible();
+ await expect(page.locator('#mapFieldModeToggleV1,#mapFieldModeCompactV1,[data-field-mode-toggle],#jsFieldMapSurfaceV1')).toHaveCount(0);
+ expect(await page.evaluate(()=>[typeof window.JSFieldModeV1,typeof window.JSFieldMapCameraV1,typeof window.JSFieldLeaseCardsV1])).toEqual(['undefined','undefined','undefined']);
+ if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+ await page.locator(isMobile?'#jsMobileKeywordV1':'#keyword').fill('괴정');
+ await page.locator(isMobile?'#jsMobileKeywordV1':'#keyword').press('Enter');
+ await expect(page.locator('#list .item')).toHaveCount(1);
+ await page.locator('#list .item-building-name').first().click();
+ await expect(page.locator('#unifiedDetailDrawerV8')).toHaveAttribute('aria-hidden','false');
+ await page.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
+ await page.setViewportSize(isMobile?{width:844,height:390}:{width:1024,height:768});
+ await expect(page.locator('#mapFieldModeToggleV1,#mapFieldModeCompactV1')).toHaveCount(0);
+ expect(requested.some(path=>/map-field-(mode|camera|lease|orientation)/.test(path))).toBe(false);
+ expect(errors).toEqual([]);
+});

@@ -78,11 +78,6 @@
     if (!keepStatus) setStatus("");
   }
 
-  // End only the in-progress map gesture; keep existing search/favorite filters.
-  window.finishMapToolForFieldModeV1 = function () {
-    finishToolMode(false);
-  };
-
   function clearSpatialFiltersV661() {
     var hadSpatialFilter = !!window.mapRadiusFilterV658 || !!window.mapPolygonFilterV661;
     window.mapRadiusFilterV658 = null;
@@ -173,7 +168,6 @@
 
   window.toggleDistanceMeasureV657 = function () {
     if (!isDesktopToolLayout() || !window.map || !window.kakao) return;
-    if (window.JSFieldModeV1) window.JSFieldModeV1.stopForMapTool();
     closePopovers("");
     if (typeof window.setMapRoadviewSelection === "function") {
       window.setMapRoadviewSelection(false);
@@ -199,7 +193,6 @@
 
   window.startRadiusMeasureV657 = function (meters) {
     if (!isDesktopToolLayout() || !window.map || !window.kakao) return;
-    if (window.JSFieldModeV1) window.JSFieldModeV1.stopForMapTool();
     if (typeof window.setMapRoadviewSelection === "function") {
       window.setMapRoadviewSelection(false);
     }
@@ -285,7 +278,6 @@
 
   window.togglePolygonSearchV661 = function () {
     if (!isDesktopToolLayout() || !window.map || !window.kakao) return;
-    if (window.JSFieldModeV1) window.JSFieldModeV1.stopForMapTool();
     closePopovers("");
     if (typeof window.setMapRoadviewSelection === "function") {
       window.setMapRoadviewSelection(false);

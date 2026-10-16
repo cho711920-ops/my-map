@@ -8,7 +8,7 @@
 
   global.JSMapClusterVisualV1 = {
     style: function(cluster) {
-      if (!cluster || cluster.regionMode || cluster.fieldLease) return "";
+      if (!cluster || cluster.regionMode) return "";
       var count = (cluster.items || []).length;
       var level = global.map && typeof global.map.getLevel === "function" ? Number(global.map.getLevel()) : 6;
       var factor = level <= 3 ? .72 : level === 4 ? .88 : 1;

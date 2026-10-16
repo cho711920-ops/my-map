@@ -23,7 +23,7 @@ window.addEventListener("js-phone-device-change", function() {
   var previousTop = previousScroller ? previousScroller.scrollTop : 0;
   listingMobilePresentationV2 = mobile;
   // Render the same already-filtered identities, without applying map bounds,
-  // clearing selections or changing an active favorite-folder/field-mode scope.
+  // clearing selections or changing an active favorite-folder scope.
   if (!document.getElementById("list")) return;
   showList(visibleListItems || []);
   var scroller = getListingScrollContainerV2();
@@ -1294,10 +1294,7 @@ function getFilteredItems(options) {
         ? isItemWithinMapPolygonV661(item, polygonFilter)
         : (radiusFilter
           ? isItemWithinMapRadiusV658(item, radiusFilter)
-          : (!item.latlng ? includeUnlocated : (
-            window.JSFieldMapCameraV1 && window.JSFieldMapCameraV1.state().active
-              ? window.JSFieldMapCameraV1.contains(item.latlng)
-              : bounds.contain(item.latlng)))));
+          : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng))));
 
     return matchTradeMode &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&

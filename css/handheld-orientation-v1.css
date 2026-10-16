@@ -1,48 +1,6 @@
 /* Layout-only overrides. Physical orientation is classified in phone-device-v1.js.
  * Desktop and the existing wide landscape tablet layout remain untouched. */
 
-/* A portrait tablet uses the same compact field-mode control as a phone. */
-.js-phone-app-v2 .map-field-mode-compact-v1 {
-  position: absolute;
-  z-index: 9600;
-  top: calc(var(--jsm-header-height) + 10px);
-  right: 10px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  max-width: calc(100% - 20px);
-}
-.js-phone-app-v2 .map-field-mode-compact-v1 > .map-field-mode-toggle-v1 {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 8px 9px;
-  border: 1px solid #c8d3e0;
-  border-radius: 10px;
-  background: #fff;
-  color: #344258;
-  box-shadow: 0 2px 8px rgba(25, 42, 64, .12);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.js-phone-app-v2 .map-field-mode-compact-v1 > .map-field-mode-toggle-v1 > svg {
-  width: 18px; height: 18px;
-  fill: none; stroke: currentColor; stroke-width: 1.7;
-  stroke-linecap: round; stroke-linejoin: round;
-}
-.js-phone-app-v2 .map-field-mode-compact-v1 .map-field-mode-indicator-v1 {
-  position: static; padding: 3px; font-size: 8px;
-}
-.js-phone-app-v2[data-jsm-mobile-view="list"] .map-field-mode-compact-v1,
-.js-phone-app-v2[data-js-phone-favorites="true"] .map-field-mode-compact-v1,
-.js-phone-app-v2 body:has(.unified-detail-drawer-v8.open) .map-field-mode-compact-v1,
-.js-handheld-landscape-v1 .map-field-mode-compact-v1 { display: none; }
-
 /* Small handhelds use a proportional split even in a wide desktop-site
  * viewport. Classification comes from phone-device-v1.js; large tablets and
  * desktop browsers retain their existing layout. */

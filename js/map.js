@@ -21,7 +21,6 @@ var jsCurrentLocationOverlayV630 = null;
 var jsCurrentLocationWatchIdV630 = null;
 var jsLastCurrentLocationPositionV1 = null;
 var jsMapIdleTimerV638 = null;
-var jsFieldModeIdleRefreshPendingV1 = false;
 var jsLastIdleViewportKeyV638 = "";
 var jsLastRenderedItemsV639 = [];
 var jsClusterSelectionMemoryV638 = {
@@ -465,11 +464,7 @@ function preservePinnedClusterSelectionDuringRelayoutV6517(durationMs) {
 function keepPinnedClusterSelectionAcrossTransientUiV6525(durationMs) {
   if (!jsPinnedClusterSelectionV6515) return;
 
-  // Following may move a selected cluster outside the viewport. Do not replace
-  // its remembered selection with an empty snapshot during zoom/visibility UI.
-  if (!(window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing())) {
-    jsPinnedClusterSelectionV6515.snapshot = captureClusterSelectionSnapshotV638();
-  }
+  jsPinnedClusterSelectionV6515.snapshot = captureClusterSelectionSnapshotV638();
   jsPinnedClusterSelectionV6515.spatialKey = getMapSpatialKeyV6515();
   preservePinnedClusterSelectionDuringRelayoutV6517(durationMs || 2400);
 }
@@ -505,7 +500,6 @@ function markMapUserNavigationIntentV6525(event) {
 
 
 function shouldClearPinnedClusterForMapNavigationV6525() {
-  if (window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing()) return false;
   if (!jsPinnedClusterSelectionV6515) return true;
   if (document.visibilityState === "hidden") return false;
   if (document.body.classList.contains("roadview-modal-open")) return false;
@@ -820,9 +814,6 @@ function updateCurrentLocationOverlayV630(position, displayOnly) {
   if (!position || !position.coords || !map || !window.kakao) return;
   if (displayOnly !== true) jsLastCurrentLocationPositionV1 = position;
 
-  if (window.JSFieldModeV1) position = window.JSFieldModeV1.onPosition(position);
-  if (!position) return;
-
   var lat = Number(position.coords.latitude);
   var lng = Number(position.coords.longitude);
 
@@ -834,7 +825,6 @@ function updateCurrentLocationOverlayV630(position, displayOnly) {
     var content = document.createElement("div");
     content.className = "js-current-location-dot-v630";
     content.setAttribute("title", "현재 위치");
-    if (window.JSFieldModeV1) window.JSFieldModeV1.decorateMarker(content);
 
     jsCurrentLocationOverlayV630 = new kakao.maps.CustomOverlay({
       position: coords,
@@ -864,7 +854,6 @@ function startCurrentLocationTrackingV630() {
           navigator.geolocation.clearWatch(jsCurrentLocationWatchIdV630);
           jsCurrentLocationWatchIdV630 = null;
         }
-        if (window.JSFieldModeV1) window.JSFieldModeV1.onError(error);
       },
       {
         enableHighAccuracy: true,
@@ -874,7 +863,6 @@ function startCurrentLocationTrackingV630() {
     );
   } catch (error) {
     console.warn("현재 위치 추적 시작 실패", error);
-    if (window.JSFieldModeV1) window.JSFieldModeV1.onError(error);
   }
 }
 
@@ -1001,7 +989,7 @@ function createWorldGridClustersV690(addressGroups, level) {
 
 
 function getMapDisplayProjectionV1() {
-  return window.JSFieldMapCameraV1 ? window.JSFieldMapCameraV1.projection(map) : map.getProjection();
+  return map.getProjection();
 }
 
 function filterClustersToMapViewportV690(clusters, margin) {
@@ -1068,10 +1056,7 @@ function getMapViewportKeyV638() {
     center ? center.getLat().toFixed(6) : "",
     center ? center.getLng().toFixed(6) : "",
     mapElement ? mapElement.clientWidth : 0,
-    mapElement ? mapElement.clientHeight : 0,
-    window.JSFieldMapCameraV1 && window.JSFieldMapCameraV1.state().active
-      ? window.JSFieldMapCameraV1.state().bearing.toFixed(1) : "north",
-    window.JSFieldLeaseCardsV1 && window.JSFieldLeaseCardsV1.active() ? "field-lease" : "clusters"
+    mapElement ? mapElement.clientHeight : 0
   ].join("|");
 }
 
@@ -1366,11 +1351,6 @@ function resolveAdministrativeClusterPositionsV656(clusters) {
 
 
 function createClustersForCurrentZoomV655(addressGroups) {
-  if (window.JSFieldLeaseCardsV1 && window.JSFieldLeaseCardsV1.active()) {
-    // Never mix neighboring buildings into a price card. Use the real address
-    // anchor, and only render the current map's filtered listings.
-    return filterClustersToMapViewportV690(window.JSFieldLeaseCardsV1.clusters(addressGroups), 80);
-  }
   var level = map && map.getLevel ? Number(map.getLevel()) || 0 : 0;
   var mode = getAdministrativeClusterModeV655(level);
   var useWorldGrid = shouldUseWorldGridClustersV690();
@@ -1473,20 +1453,10 @@ function createDynamicClusters(addressGroups) {
 
 
 function scheduleMapIdleRefreshV638() {
-  // Live GPS changes the camera, not listing data. Bound local redraws without
-  // starving the final viewport when several fixes arrive during one second.
-  var following = window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing();
-  if (following && jsMapIdleTimerV638) return;
   if (jsMapIdleTimerV638) clearTimeout(jsMapIdleTimerV638);
 
   jsMapIdleTimerV638 = setTimeout(function() {
     jsMapIdleTimerV638 = null;
-
-    if (window.JSFieldModeV1 && window.JSFieldModeV1.isFollowing() && document.hidden) {
-      jsFieldModeIdleRefreshPendingV1 = true;
-      return;
-    }
-    jsFieldModeIdleRefreshPendingV1 = false;
 
     if (isRendering) return;
 
@@ -1544,15 +1514,13 @@ function scheduleMapIdleRefreshV638() {
           ("현재 지도 매물 " + jsLastRenderedItemsV639.length + "개");
       }
     }
-  }, following ? 1000 : 120);
+  }, 120);
 }
 
 
 kakao.maps.load(function() {
   var viewport = document.getElementById("map");
-  var canvas = document.getElementById("jsFieldMapSurfaceV1") || viewport;
-  if (window.JSFieldMapCameraV1) canvas = window.JSFieldMapCameraV1.createContainer(viewport);
-  map = new kakao.maps.Map(canvas, {
+  map = new kakao.maps.Map(viewport, {
     center: new kakao.maps.LatLng(
       jsDefaultMapCenterV6524.lat,
       jsDefaultMapCenterV6524.lng
@@ -1562,7 +1530,6 @@ kakao.maps.load(function() {
       : jsLegacyDefaultMapLevelV690
   });
 
-  if (window.JSFieldMapCameraV1) window.JSFieldMapCameraV1.attach(map);
   geocoder = new kakao.maps.services.Geocoder();
 
   var mapElementV6525 = document.getElementById("map");
@@ -1636,9 +1603,6 @@ kakao.maps.load(function() {
   }, jsAutomaticDataRefreshIntervalV681);
 
   document.addEventListener("visibilitychange", function() {
-    if (document.visibilityState === "visible" && jsFieldModeIdleRefreshPendingV1) {
-      scheduleMapIdleRefreshV638();
-    }
     if (!jsPinnedClusterSelectionV6515) return;
 
     keepPinnedClusterSelectionAcrossTransientUiV6525(3000);
@@ -3180,9 +3144,6 @@ function getPremiumClusterSizeClassV635(count) {
 }
 
 function buildClusterOverlayContentV655(cluster, classNames) {
-  if (cluster && cluster.fieldLease && window.JSFieldLeaseCardsV1) {
-    return window.JSFieldLeaseCardsV1.content(cluster, classNames);
-  }
   var count = ((cluster && cluster.items) || []).length;
   var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
 
@@ -3225,8 +3186,7 @@ function drawMapClustersOnlyV639(items) {
   isRendering = true;
   clearMapOverlaysOnlyV639();
 
-  var clusterSourceItems = window.JSFieldLeaseCardsV1 && window.JSFieldLeaseCardsV1.active()
-    ? (items || []).slice() : getStableClusterSourceItemsV690(items);
+  var clusterSourceItems = getStableClusterSourceItemsV690(items);
   var addressGroups = shouldUseWorldGridClustersV690()
     ? groupByAddress(clusterSourceItems)
     : getVisibleAddressGroupsV639(items);
@@ -3252,12 +3212,10 @@ function drawMapClustersOnlyV639(items) {
     );
 
     var overlay = new kakao.maps.CustomOverlay({
-      // Field cards sit directly above their original address coordinate;
-      // ordinary clusters keep their existing collision-adjusted position.
-      position: cluster.fieldLease ? cluster.latlng : cluster.displayLatlng || cluster.latlng,
+      position: cluster.displayLatlng || cluster.latlng,
       content: overlayContent,
-      yAnchor: cluster.fieldLease ? 0 : 0.5,
-      xAnchor: cluster.fieldLease ? 0 : 0.5
+      yAnchor: 0.5,
+      xAnchor: 0.5
     });
 
     overlay.__cluster = cluster;
@@ -3265,7 +3223,6 @@ function drawMapClustersOnlyV639(items) {
       overlay.__adminRegionContentV1 = overlayContent;
       if (typeof overlay.setZIndex === "function") overlay.setZIndex(isAdministrativeClusterSelectedV1(cluster) ? 1000 : 0);
     }
-    if (cluster.fieldLease) overlay.__fieldLeaseContentV1 = overlayContent;
     overlay.setMap(map);
     overlays.push(overlay);
   });
@@ -3283,7 +3240,6 @@ function drawMapClustersOnlyV639(items) {
 window.mapRoadviewSelectionActive = false;
 
 function setMapRoadviewSelection(active) {
-  if (active && window.JSFieldModeV1) window.JSFieldModeV1.stopForMapTool();
   window.mapRoadviewSelectionActive = !!active;
   var button = document.getElementById("mapRoadviewSelectBtn");
   var mapElement = document.getElementById("map");
@@ -3445,7 +3401,7 @@ function redrawSelectedMarkers() {
     });
 
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
-    if (!cluster.regionMode && !cluster.fieldLease && typeof o.setZIndex === "function") o.setZIndex(selectedClass ? 1000 : 0);
+    if (!cluster.regionMode && typeof o.setZIndex === "function") o.setZIndex(selectedClass ? 1000 : 0);
     var doneClass = allDone ? " done" : "";
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 
@@ -3458,12 +3414,6 @@ function redrawSelectedMarkers() {
       gongsilClass + doneClass + selectedClass
     );
 
-    // The initial render is immediately followed by selection restoration.
-    // Keep identical field-card DOM instead of replacing it twice per GPS fix.
-    if (cluster.fieldLease) {
-      if (o.__fieldLeaseContentV1 === content) return;
-      o.__fieldLeaseContentV1 = content;
-    }
     if (cluster.regionMode) {
       if (o.__adminRegionContentV1 === content) return;
       o.__adminRegionContentV1 = content;

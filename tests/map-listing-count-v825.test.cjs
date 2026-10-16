@@ -91,21 +91,6 @@ context.overlays = [
 assert.equal(context.update(), 6);
 assert.equal(value.textContent, "6개");
 
-// The adapter maps a larger SDK surface back into the clipped 100 by 80 viewport.
-context.JSFieldMapCameraV1 = {
-  projection(owner) {
-    assert.equal(owner, context.map);
-    return {
-      containerPointFromCoords(position) {
-        return { x: position.y - 50, y: 140 - position.x };
-      }
-    };
-  }
-};
-assert.equal(context.update(), 4, "rotated visibility uses the displayed projection rather than raw SDK coordinates");
-assert.equal(value.textContent, "4개");
-delete context.JSFieldMapCameraV1;
-
 context.overlays = [];
 assert.equal(context.update(), 0);
 assert.equal(value.textContent, "0개");
