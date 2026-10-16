@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.10";
+  var VERSION = "6.0.11";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2497,6 +2497,7 @@
         (typeof article.address === "string" ? article.address : "") ||
         finAddressText(address) || article.cortarAddress || article.locationAddress
       ),
+      roadAddress: clean(article.roadAddress || article.roadAddressName || address.roadAddress),
       realtorName: clean(
         article.realtorName || broker.brokerageName || broker.realtorName
       ),
@@ -2655,19 +2656,19 @@
     return /(?:동|가|리|읍|면)\s+(?:산\s*)?\d+(?:-\d+)?(?:\s|$)/.test(text);
   }
 
-  function hasExactNaverFloorOrRoom(item) {
-    var value = clean(item && (item.roomInfo || item.floorInfo))
-      .replace(/\s+/g, "");
-    if (!value || /^(?:0층?|0호)$/.test(value)) return false;
-    if (/^(?:지하|B)\d+층?(?:\/|$)/i.test(value)) return true;
-    if (/^-?[1-9]\d*층?(?:\/|$)/.test(value)) return true;
-    return /(?:^|\D)[1-9]\d*호(?:\D|$)/.test(value);
+  function exactNaverRoadAddress(value) {
+    var original = clean(value);
+    if (/\d\s*\(\s*(?:층|평(?:형)?|㎡|m[²2]|제곱(?:미터)?|호(?:실)?|만원|원)\s*\)/i.test(original)) return "";
+    var text = original.replace(/^대한민국\s+/, "").replace(/^(?:대전광역시|대전시)\s+/, "")
+      .replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    var match = text.match(/^((?:[가-힣0-9·.]+(?:도|시|군|구|읍|면)\s+)*[가-힣0-9·.]+(?:로|길)\s*\d+(?:-\d+)?)(?=\s|$|,(?!\d))(?!\s*(?:층|평|㎡|m[²2]|제곱(?:미터)?|호(?:실)?|만원|원|인근|근처|부근|일대)(?:\s|$|,))/i);
+    return match ? match[1] : "";
   }
 
   function isCompleteNaverLocation(item) {
-    return hasExactNaverJibun(item && item.jibunAddress) &&
-      (item && item.tradeTypeCode === "A1" && ["land", "house", "multifamily", "mixed_house", "building"].indexOf(item.saleCategory) !== -1 ||
-        hasExactNaverFloorOrRoom(item));
+    // Missing unit/floor information must not discard an addressed advertisement.
+    return hasExactNaverJibun(item && item.jibunAddress) ||
+      Boolean(exactNaverRoadAddress(item && item.roadAddress) || exactNaverRoadAddress(item && item.jibunAddress));
   }
 
   async function fetchFinJson(url, attempts) {
@@ -2754,6 +2755,9 @@
       (keyResult.key && keyResult.key.pnu) || keyResult.pnu
     );
     var detailImages = finImageUrls(detailResult);
+    var roadAddress = [item.roadAddress, keyResult.roadAddress, (keyResult.address || {}).roadAddress,
+      detailResult.roadAddress, address.roadAddress, detailResult.roadAddressName]
+      .map(exactNaverRoadAddress).filter(Boolean)[0] || "";
     var mergedImages = finImageUrls({
       listImages: item.imageUrls || [],
       detailImages: detailImages
@@ -2765,6 +2769,7 @@
       tradeType: TRADE_TYPE_LABELS[tradeType] || tradeType,
       saleCategory: tradeType === "A1" ? naverSaleCategory(realEstateType, item.category) : "",
       jibunAddress: exactAddress || item.jibunAddress,
+      roadAddress: roadAddress,
       floorInfo: finDetailFloor(detailResult, item.floorInfo),
       roomInfo: finDetailRoom(detailResult, item.roomInfo),
       areaSquareMeter: finDetailArea(detailResult, item.areaSquareMeter),
@@ -2778,9 +2783,7 @@
     return {
       item: detailed,
       valid: isCompleteNaverLocation(detailed),
-      reason: hasExactNaverJibun(detailed.jibunAddress)
-        ? "정확한 층·호실 없음"
-        : "정확한 지번주소 없음"
+      reason: isCompleteNaverLocation(detailed) ? "" : "건물번호가 있는 지번·도로명주소 없음"
     };
   }
 
@@ -3315,7 +3318,7 @@
         setStatus(
           "네이버 상세주소·층 확인 중",
           (index + 1) + "~" + (index + candidateBatch.length) + "/" + items.length +
-          "개 · 정확한 지번과 실제 층을 확인한 매물만 중복검사에 전달합니다."
+          "개 · 지번·도로명주소가 확인되면 층·호실 미확인 광고도 반영합니다."
         );
         var detailResults = await enrichNaverDetailBatch(
           candidateBatch,
@@ -3512,7 +3515,7 @@
             "개 · 검증대기 " + Number(sessionResult.review || 0) +
             "개 · 상세중복 " + Number(sessionResult.duplicate || 0) +
             "개 · 기존동일생략 " + classification.unchanged +
-            "개 · 주소·층 제외 " + Number(totals.addressMissing || 0) +
+            "개 · 주소 미확인 제외 " + Number(totals.addressMissing || 0) +
             "개 · 실패 " + Number(sessionResult.failed || totals.failed || 0) + "개" +
             (firstFailure ? "\n첫 실패 원인: " + firstFailure : "") + (presenceNotice ? "\n" + presenceNotice : "")
         );

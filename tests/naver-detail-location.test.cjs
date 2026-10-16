@@ -18,12 +18,12 @@ assert.match(source, /fetchFailed: true/);
 assert.match(source, /totals\.failed \+= detailFailureCount/);
 assert.match(source, /firstFailure = clean\(firstDetailFailure && firstDetailFailure\.reason\)/);
 assert.match(source, /hasExactNaverJibun/);
-assert.match(source, /hasExactNaverFloorOrRoom/);
+assert.doesNotMatch(source, /hasExactNaverFloorOrRoom/);
 assert.match(source, /function finExactAddressText/);
 assert.match(source, /function finJibunFromPnu/);
 assert.match(source, /keyResult\.address/);
 assert.match(source, /유형이 이미 있어도 key API를 항상 조회/);
-assert.match(source, /정확한 지번과 실제 층을 확인한 매물만 중복검사에 전달합니다/);
+assert.match(source, /층·호실 미확인 광고도 반영합니다/);
 assert.match(source, /addressMissing: totals\.addressMissing/);
 assert.doesNotMatch(
   source,
@@ -44,6 +44,8 @@ vm.runInContext(
   [
     "function clean(value) { return String(value == null ? '' : value).trim(); }",
     functionSource("hasExactNaverJibun"),
+    functionSource("exactNaverRoadAddress"),
+    functionSource("isCompleteNaverLocation"),
     functionSource("finAddressText"),
     functionSource("finJibunFromPnu"),
     functionSource("finExactAddressText"),
@@ -62,5 +64,14 @@ assert.equal(addressContext.result.fullKey, "대전광역시 서구 둔산동 10
 assert.equal(addressContext.result.liKey, "대전광역시 유성구 봉명동 12-3");
 assert.equal(addressContext.result.pnuMain, "대전광역시 유성구 도안동 12-3");
 assert.equal(addressContext.result.pnuMountain, "대전광역시 유성구 도안동 산 12");
+
+for (const item of [{jibunAddress:"서구 둔산동 1000",floorInfo:""},
+  {jibunAddress:"중구 문창동",roadAddress:"중구 문창로 20",roomInfo:""}]) {
+  assert.equal(addressContext.isCompleteNaverLocation(item),true);
+}
+for (const item of [{jibunAddress:"중구 문창동",floorInfo:"1층"},
+  {jibunAddress:"",roadAddress:"문창로",roomInfo:"101호"}]) {
+  assert.equal(addressContext.isCompleteNaverLocation(item),false);
+}
 
 console.log("naver detail location tests passed");

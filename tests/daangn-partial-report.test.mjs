@@ -144,13 +144,13 @@ test('summary never calls partial districts all normal', () => {
   assert.match(html, /정상 0 · 주소보류 5 · 부분 0/); assert.match(html, /주소보류 검토 가능/);
   assert.doesNotMatch(html, /<small>정상<\/small>/);
 });
-test('hidden coordinate, broker lot and complex road alone cannot fabricate a property lot', () => {
+test('a complex road address publishes without inventing a parcel or using blurred coordinates', () => {
   const record = normalizedRecord('당근', { originalId: '2068835', isHideAddress: true,
     address: '대전광역시 동구 삼성동', publicJibunAddress: '대전광역시 동구 삼성동',
     bizProfile: { jibunAddress: '대전광역시 동구 신흥동 2-1' },
     complex: { buildingsForAddress: { edges: [{ node: { jibunAddress: null, roadAddress: '대전광역시 동구 대전로 935' } }] } },
     publicCoordinate: { lat: 36.34, lon: 127.41 }, trades: [{ type: 'MONTH', deposit: 1000, monthlyPay: 50 }], salesTypeV3: { type: 'STORE' } });
-  assert.equal(record.address, ''); assert.equal(record.latitude, null); assert.equal(record.longitude, null);
+  assert.equal(record.address, '동구 대전로 935'); assert.equal(record.latitude, null); assert.equal(record.longitude, null);
   assert.equal(record.roadAddress, '대전광역시 동구 대전로 935');
 });
 test('full-census safety remains unchanged and next collection can retry held ads', () => {

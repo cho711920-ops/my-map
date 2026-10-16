@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-import { hasExactLotAddress, isMonthlyCollectorRecord, mergeDaangnDetailWithList, normalizedRecord } from "../cloudflare/src/collector-api.js";
+import { hasExactLotAddress, hasPublishableCollectorAddress, isMonthlyCollectorRecord, mergeDaangnDetailWithList, normalizedRecord } from "../cloudflare/src/collector-api.js";
+import { exactCollectorRoadAddress } from "../cloudflare/src/collector-address.js";
 
 const samples = [
   {
@@ -115,7 +116,6 @@ test("structured building parcel still wins over descriptive copy and hidden pub
 
 for (const raw of [
   { publicJibunAddress: "대전광역시 유성구 문지동" },
-  { roadAddress: "대전광역시 유성구 문지로 20" },
   { isHideAddress: true }
 ]) {
   test(`region/road/hidden-only raw evidence blocks an unproven old parcel: ${JSON.stringify(raw)}`, () => {
@@ -153,7 +153,7 @@ test("ingestion does not resurrect a rejected parcel from an existing source sna
     list_snapshot_json: JSON.stringify({ address: sample.previousAddress })
   }]));
   const context = vm.createContext({
-    normalizedRecord, isMonthlyCollectorRecord, hasExactLotAddress,
+    normalizedRecord, isMonthlyCollectorRecord, hasExactLotAddress, hasPublishableCollectorAddress, exactCollectorRoadAddress,
     resolveCollectorOfferIds: async (_env, _source, records) => records,
     ensureSession: async () => "test-session", loadExistingSources: async () => rows,
     loadSourceAssets: async () => new Map(), loadPendingReviewsByAddress: async () => new Map(),
@@ -176,5 +176,5 @@ test("ingestion does not resurrect a rejected parcel from an existing source sna
   assert.equal(result.created, 0);
   assert.equal(result.merged, 0);
   assert.equal(errors.length, 2);
-  assert.ok(errors.every(({ record, message }) => record.address === "" && message === "정확한 지번주소 없음"));
+  assert.ok(errors.every(({ record, message }) => record.address === "" && message === "건물번호가 있는 지번·도로명주소 없음"));
 });

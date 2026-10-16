@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.8";
+  var VERSION = "1.5.9";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -885,7 +885,7 @@
       (job.message || "") + (job.district
         ? "\n대전 " + job.district + " · 목록 확인 " + display.checked.toLocaleString("ko-KR") + " / " + Number(job.found || 0).toLocaleString("ko-KR") + "건 (기존 동일 포함)"
         : "\n선택 클러스터 · 동일 범위 목록 검증") +
-        (display.deferred ? "\n정확한 지번 미제공 " + display.deferred + "건 · 지도 등록 보류 / 다음 수집에서 재확인" : "") +
+        (display.deferred ? "\n지번·도로명주소 미확인 " + display.deferred + "건 · 지도 등록 보류 / 다음 수집에서 재확인" : "") +
         "\n수집기 v" + VERSION + " · 자동 묶음 " + Number(job.chunkSize || 20) + "개" + timing
     );
     startButton.disabled = job.status === "running";

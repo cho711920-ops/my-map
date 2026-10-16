@@ -414,7 +414,7 @@ test("failed, incomplete, stale or truncated runs never count missing listings",
   assert.equal(unsafe.complete, false);
   assert.match(unsafe.issues.join(" / "), /예상 1200건 중 1198건만 확인/);
   assert.match(unsafe.issues.join(" / "), /실패 3건/);
-  assert.match(unsafe.issues.join(" / "), /주소·층 오류 5건/);
+  assert.match(unsafe.issues.join(" / "), /주소 미확인 5건/);
   assert.match(unsafe.issues.join(" / "), /페이지 잘림/);
 
   const stale = collectorCompletionAudit({
@@ -434,7 +434,7 @@ test("a full manifest with only provider-hidden addresses completes without repe
   }, 1857);
   assert.equal(result.complete, true);
   assert.deepEqual(result.blockingIssues, []);
-  assert.match(result.issues.join(" / "), /주소·층 오류 22건/);
+  assert.match(result.issues.join(" / "), /주소 미확인 22건/);
 });
 
 test("provider-hidden addresses are persisted as retryable collector errors", async () => {
@@ -442,7 +442,8 @@ test("provider-hidden addresses are persisted as retryable collector errors", as
   assert.match(collectorSource, /processing_state <> 'error'/);
   assert.match(collectorSource, /async function saveCollectorError/);
   assert.match(collectorSource, /processing_state='error'/);
-  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, "정확한 지번주소 없음"\)/);
+  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, message\)/);
+  assert.match(collectorSource, /hasPublishableCollectorAddress\(source, record.address\)/);
 });
 
 test("collector installers always load the current js-map runtime", async () => {
@@ -508,7 +509,7 @@ test("collector review snapshots refresh in place instead of growing every run",
 
 test("Naver automatic districts use manifest-first collection instead of page-by-page detail saves", async () => {
   const source = await readFile(new URL("../js/naver-collector.js", import.meta.url), "utf8");
-  assert.match(source, /var VERSION = "6\.0\.10"/);
+  assert.match(source, /var VERSION = "6\.0\.11"/);
   assert.match(source, /if \(options\.automatic\) \{[\s\S]*?clearAutoDistrictProgress\(district\.cortarNo\);[\s\S]*?\}/);
   assert.doesNotMatch(source, /if \(options\.automatic\) return collectFinAutomaticDistrict\(district\)/);
   assert.match(source, /var classification = await classifyNaverManifest\(allItems, session\)/);

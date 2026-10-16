@@ -20,7 +20,7 @@ for (const name of ["naverPropertyTypeLabel", "naverSaleCategory"]) {
 
 test("every current and legacy Naver property type has identical Korean client/server mappings", () => {
   assert.equal(Object.isFrozen(NAVER_PROPERTY_TYPES), true);
-  assert.match(source, /var VERSION = "6\.0\.10"/);
+  assert.match(source, /var VERSION = "6\.0\.11"/);
   assert.deepEqual(Object.keys(context.REAL_ESTATE_TYPE_LABELS).sort(), Object.keys(NAVER_PROPERTY_TYPES).sort());
   assert.deepEqual(Object.keys(context.NAVER_SALE_CATEGORIES).sort(), Object.keys(NAVER_PROPERTY_TYPES).sort());
   for (const [code, expected] of Object.entries(NAVER_PROPERTY_TYPES)) {

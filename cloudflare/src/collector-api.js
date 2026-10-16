@@ -12,6 +12,7 @@ import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector
 import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertisement-presence.js";
 import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObservedAdvertisements } from "./collector-first-observed.js";
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
+import { exactCollectorRoadAddress } from "./collector-address.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -154,12 +155,24 @@ export function hasExactLotAddress(value) {
   return /(?:^|\s)[가-힣0-9·.]+(?:읍|면|동|가)\s+(?:산\s*)?\d+(?:-\d+)?(?:번지)?(?:\s|$)/.test(address);
 }
 
+export function hasPublishableCollectorAddress(source, address) {
+  return hasExactLotAddress(address) || ["네이버", "당근"].includes(source) && Boolean(exactCollectorRoadAddress(address));
+}
+
 export function existingSourceNeedsAddressReclassification(record, existingSource) {
   const incomingAddress = normalizedAddress(record?.address);
   const assignedAddress = normalizedAddress(existingSource?.listing_address);
+  if (["네이버", "당근"].includes(record?.source) && hasExactLotAddress(incomingAddress) !== hasExactLotAddress(assignedAddress)) {
+    const previous = parseJson(existingSource?.list_snapshot_json, {});
+    const incomingRoad = exactCollectorRoadAddress(record?.roadAddress || incomingAddress);
+    const assignedRoad = exactCollectorRoadAddress(previous.roadAddress || assignedAddress);
+    // A proven road/parcel representation change of the same ad must not
+    // detach the original master and strand its favorites or field notes.
+    if (incomingRoad && incomingRoad === assignedRoad) return false;
+  }
   return Boolean(
     clean(existingSource?.listing_id) &&
-    hasExactLotAddress(incomingAddress) &&
+    hasPublishableCollectorAddress(record?.source, incomingAddress) &&
     incomingAddress !== assignedAddress
   );
 }
@@ -356,10 +369,13 @@ function naverRecord(item) {
   const salePrice = tradeType === LISTING_TRADE_TYPES.SALE
     ? number(item?.salePrice ?? item?.sale_price ?? item?.dealPrice)
     : null;
+  const suppliedAddress = normalizedAddress(item?.jibunAddress || item?.address);
+  const roadAddress = exactCollectorRoadAddress(item?.roadAddress || item?.road_address || item?.roadAddressName)
+    || exactCollectorRoadAddress(suppliedAddress);
   return {
     source: "네이버", sourceId, buildingName: clean(item?.buildingName) || "일반상가",
-    address: normalizedAddress(item?.jibunAddress || item?.address),
-    roadAddress: clean(item?.roadAddress || item?.road_address || item?.roadAddressName),
+    address: hasExactLotAddress(suppliedAddress) ? suppliedAddress : roadAddress,
+    roadAddress,
     room: tradeType === "sale" && saleDetails.scope === "whole_building" ? "전체"
       : tradeType === "sale" && saleDetails.scope === "land" ? "" : canonicalListingRoom(item?.roomInfo || item?.floorInfo), category, tradeType,
     saleCategory: tradeType === LISTING_TRADE_TYPES.SALE
@@ -412,6 +428,16 @@ function daangnAddressCandidates(article) {
   ];
 }
 
+function daangnRoadAddress(article, preserveText = false) {
+  const values = [article?.roadAddress, article?.location?.roadAddress, article?.complex?.roadAddress,
+    ...(article?.complex?.buildingsForAddress?.edges || []).map(edge => edge?.node?.roadAddress),
+    article?.publicAddress, ...daangnAddressCandidates(article)];
+  const value = values.find(value => exactCollectorRoadAddress(value));
+  if (value) return preserveText ? clean(value) : exactCollectorRoadAddress(value);
+  const fallback = exactCollectorRoadAddress(article?.addressInfo, true);
+  return fallback && preserveText ? clean(article.addressInfo) : fallback;
+}
+
 function daangnLotAddress(value, wholeValue = false) {
   const originalText = clean(value);
   // Normalization removes building-name parentheses. Reject number units first
@@ -439,7 +465,7 @@ function daangnHasAddressEvidence(article) {
 function daangnFallbackAddress(article, fallback) {
   // Current raw address evidence overrides an older guessed/normalized value.
   // Legacy details with no address fields may retain a complete saved parcel.
-  return !daangnHasAddressEvidence(article) && daangnLotAddress(fallback, true)
+  return !daangnHasAddressEvidence(article) && (daangnLotAddress(fallback, true) || exactCollectorRoadAddress(fallback, true))
     ? clean(fallback) : "";
 }
 
@@ -449,7 +475,7 @@ function daangnAddress(article) {
     if (address) return address;
   }
   // Descriptive copy is usable only when the entire value is an exact address.
-  return daangnLotAddress(article?.addressInfo, true);
+  return daangnLotAddress(article?.addressInfo, true) || daangnRoadAddress(article);
 }
 
 function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
@@ -472,17 +498,7 @@ function daangnRecord(article, listSnapshot = "", requestedTradeType = "") {
   const areaM2 = number(article?.area);
   const images = uniqueUrls([...(article?.images || []), ...(article?.floorPlanImages || [])]);
   const sourceId = clean(article?.originalId);
-  const addressEdges = article?.complex?.buildingsForAddress?.edges || [];
-  const roadAddress = [
-    article?.roadAddress,
-    article?.location?.roadAddress,
-    article?.complex?.roadAddress,
-    ...addressEdges.map((edge) => edge?.node?.roadAddress),
-    // Older Daangn details often put the road address in these generic fields
-    // while a separate buildingsForAddress entry carries the parcel address.
-    article?.publicAddress,
-    article?.address
-  ].map(clean).find((value) => /(?:로|길)\s*\d+(?:-\d+)?(?:\s|\(|$)/.test(value)) || "";
+  const roadAddress = daangnRoadAddress(article, true);
   const optionText = (article?.options || []).some((option) => option?.name === "PARKING" && clean(option?.value).toUpperCase() === "YES")
     ? "주차가능 · " : "";
   const description = stripExternalPhoneNumbers(
@@ -582,6 +598,7 @@ export function normalizedRecord(source, value) {
         saleCategory: canonical.saleCategory || value.saleCategory || value.sale_category || "",
         salePrice: canonicalHasTrade ? canonical.salePrice : value.salePrice ?? value.sale_price ?? null,
         memo: canonical.memo,
+        images: Array.isArray(value.images) ? value.images : canonical.images,
         contacts: [],
         latitude: value.raw.isHideAddress ? canonical.latitude : canonical.latitude ?? value.latitude,
         longitude: value.raw.isHideAddress ? canonical.longitude : canonical.longitude ?? value.longitude,
@@ -1990,7 +2007,8 @@ async function completePublishedSaleReviews(env, publications) {
   const statements = publications.map(({ record, listingId }) => env.DB.prepare(`UPDATE collector_raw SET processing_state='processed', processed_at=?1,
       result_json=?2, error_text=''
     WHERE source=?3 AND source_listing_id IN (?4, ?5) AND trade_type=?6
-      AND (processing_state IN ('review','awaiting_source_refresh') OR (processing_state='duplicate'
+      AND (processing_state IN ('review','awaiting_source_refresh')
+        OR (processing_state='error' AND source IN ('네이버','당근')) OR (processing_state='duplicate'
         AND json_extract(result_json, '$.action')='sameAsPendingReview'))`)
     .bind(nowIso(), JSON.stringify({ action: record.tradeType === "sale" ? "directSalePublish" : "directAdvertisementPublish", listingId }), record.source,
       record.sourceId, record.providerSourceId || record.sourceId, collectorTradeType(record.tradeType, true)));
@@ -2070,11 +2088,12 @@ async function ingestRecords(env, source, values, metadata = {}) {
         : normalizedAddress(previousAddress);
       if (!record.room) record.room = canonicalListingRoom(existing.listing_room || previous.room);
     }
-    if (!hasExactLotAddress(record.address)) {
+    if (!hasPublishableCollectorAddress(source, record.address)) {
       totals.failed += 1;
       totals.addressMissing += 1;
-      await saveCollectorError(env, record, sessionId, "정확한 지번주소 없음");
-      if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "정확한 지번주소 없음" });
+      const message = source === "공실박스" ? "정확한 지번주소 없음" : "건물번호가 있는 지번·도로명주소 없음";
+      await saveCollectorError(env, record, sessionId, message);
+      if (errors.length < 20) errors.push({ sourceId: record.sourceId, message });
       continue;
     }
     records.push(record);
@@ -2118,7 +2137,12 @@ async function ingestRecords(env, source, values, metadata = {}) {
       }
       const candidates = (candidatesByAddress.get(record.address) || []).filter((candidate) =>
         listingTradeTypesCanMerge(candidate.trade_type, record.tradeType));
-      const classified = classifyListingCandidates(record, candidates);
+      const identity = roomIdentity(record.room);
+      const unitUnspecified = ["네이버", "당근"].includes(source) && record.tradeType === "lease"
+        && identity.floor == null && !identity.units.length && !identity.wholeBuilding;
+      // An address identifies the building, not a unit. Publish an addressed
+      // floorless ad separately even if another unit has identical prices.
+      const classified = classifyListingCandidates(record, unitUnspecified ? [] : candidates);
       // Uncertain identity is published separately, never forced into another unit.
       let publishedListingId = "";
       if (classified.decision === "merge") {
@@ -2233,7 +2257,7 @@ export function collectorCompletionAudit(body, observedCount) {
     const operationalFailures = source === "네이버" ? failed : Math.max(0, failed - addressMissing);
     if (operationalFailures > 0) blockingIssues.push(`주소 외 실패 ${operationalFailures}건`);
   }
-  if (requested && addressMissing > 0) issues.push(`주소·층 오류 ${addressMissing}건`);
+  if (requested && addressMissing > 0) issues.push(`주소 미확인 ${addressMissing}건`);
   if (requested && requiredFieldRejected > addressMissing) {
     issues.push(`임대조건 등 필수정보 오류 ${requiredFieldRejected - addressMissing}건`);
   }
@@ -2947,7 +2971,7 @@ async function finalizeDaangnJob(env, job) {
   // Keep legacy failed/addressMissing counters and completion issues for installed
   // collectors. A complete census is not a promise that every ad was map-registered.
   if (result.complete && Number(job.addressMissing || 0) > 0) {
-    job.message = `전체 ${job.found}개 목록 확인 완료 · 정확한 지번 미제공 ${job.addressMissing}건 지도 등록 보류`;
+    job.message = `전체 ${job.found}개 목록 확인 완료 · 지번·도로명주소 미확인 ${job.addressMissing}건 지도 등록 보류`;
   }
   const presenceNotice = job.presenceTrackingIssue ? "종료판정보류" : job.presenceScopeEstablished
     ? "비교기준저장" : job.presenceTracking ? `원본광고 미노출 ${job.deactivated}건` : "";
