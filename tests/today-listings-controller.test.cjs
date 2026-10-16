@@ -232,6 +232,8 @@ test('the actual data transport sends no undefined cursor or revision on the fir
 
 test('yesterday pinned cards cannot override the confirmed Today subset', async () => {
   const h = fixture(), pending = h.api.refresh(true);
+  h.context.getFilteredItems = options => (options?.items || h.context.allItems)
+    .filter(item => !h.context.newListingDays || h.api.matches(item));
   h.reads[0].resolve(h.result(['fresh'])); await pending;
   h.context.jsPinnedClusterSelectionV6515 = { itemIdentities: ['property:old', 'property:fresh'] };
   h.context.getStableItemIdentityV638 = item => 'property:' + item.propertyId;

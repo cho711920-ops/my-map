@@ -1174,7 +1174,8 @@ function readOptionalFilterNumberV1(id, fallback) {
 function getFilteredItems(options) {
   var includeUnlocated = !!(options && options.includeUnlocated);
   var ignoreMapBounds = !!(options && options.ignoreMapBounds);
-  if (!map) return allItems;
+  var candidateItems = options && Array.isArray(options.items) ? options.items : allItems;
+  if (!map) return candidateItems;
 
   var bounds = map.getBounds();
 
@@ -1316,7 +1317,7 @@ function getFilteredItems(options) {
   var availabilityView = options && options.availabilityView || (options && options.ignoreDone ? "all"
     : doneOnly ? "completed" : hideDone ? "active" : "all");
   var filtered = [];
-  allItems.forEach(function(master) {
+  candidateItems.forEach(function(master) {
     // The confirmed Today master gate is identical for every original in this
     // group. Reject unrelated masters before building source projections.
     if (newListingDays === 1 && window.JSTodayListingsV1 && !window.JSTodayListingsV1.matches(master)) return;

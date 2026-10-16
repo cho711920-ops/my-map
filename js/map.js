@@ -350,6 +350,11 @@ function getPinnedClusterItemsV6515() {
   var pinnedItems = pin.itemIdentities.map(function(identity) {
     return byIdentity[identity] || null;
   }).filter(Boolean);
+  // Resolve only the pinned masters through the current advertisement filters.
+  // Canonical prices can differ from the original that matched the rent bound.
+  if (typeof getFilteredItems === "function") {
+    return getFilteredItems({items: pinnedItems, includeUnlocated: true, ignoreMapBounds: true});
+  }
   if (Number(window.newListingDays || 0) === 1 && window.JSTodayListingsV1) {
     pinnedItems = pinnedItems.filter(function(item) { return window.JSTodayListingsV1.matches(item); });
   }
@@ -1678,9 +1683,12 @@ function findItemsBySavedKeys(keys, linkedCardIdsV845) {
   });
 
   // 기존 리스트 순서를 그대로 유지
-  return savedIdsV845.map(function(key) {
+  var restored = savedIdsV845.map(function(key) {
     return foundMap[key] || null;
   }).filter(Boolean);
+  return typeof getFilteredItems === "function"
+    ? getFilteredItems({items: restored, includeUnlocated: true, ignoreMapBounds: true})
+    : restored;
 }
 
 

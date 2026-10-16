@@ -117,6 +117,44 @@ async function ids(page){return page.locator("#list .item").evaluateAll(cards=>c
 async function mapIds(page){return page.evaluate(()=>[...new Set(overlays.flatMap(overlay=>(overlay.__cluster?.items||[]).map(item=>item.propertyId)))].sort());}
 async function menu(page,id){await page.locator(id).evaluate(button=>button.click());}
 
+for (const restore of ["pinned", "automatic"]) {
+  test(`rent limit keeps the matching advertisement after ${restore} selection restoration`,async({page,context,isMobile})=>{
+    const result=await setup(page,context,isMobile,false,fixture=>{
+      Object.assign(fixture.items[0],{rent:180,deposit:3000,area:36.3});
+      fixture.payload.groups[mixedId]=[120,180,180].map((rent,index)=>({
+        ...fixture.payload.groups[mixedId][0],originalId:mixedId+"-ad-"+index,
+        rent,deposit:3000,area:36.3,active:1,candidateEligible:false,availabilityKind:"active"
+      }));
+    });
+    await page.evaluate(()=>{
+      document.getElementById("maxRent").value="130";
+      document.getElementById("minArea").value="25";
+      document.getElementById("minFloor").value="1";
+      document.getElementById("maxFloor").value="1";
+      applyFilter();
+    });
+    await expect(card(page,mixedId).locator(".price-main")).toContainText(/월\s*120/);
+    const before=await page.evaluate(()=>({master:JSON.stringify(allItems),favorites:JSV6ListStore.load("favorite")}));
+    await page.evaluate(({id,restore})=>{
+      const cluster=overlays.find(overlay=>overlay.__cluster?.items.some(item=>item.propertyId===id)).__cluster;
+      openCluster(encodeURIComponent(cluster.key));
+      if(restore==="pinned") restorePinnedClusterSelectionAfterTransientUiV6525();
+      else restoreAutoUpdateViewState(captureAutoUpdateViewState());
+    },{id:mixedId,restore});
+    await expect(card(page,mixedId).locator(".price-main")).toContainText(/월\s*120/);
+    await expect(card(page,mixedId).locator(".price-main")).not.toContainText(/월\s*180/);
+    expect(await page.evaluate(()=>({master:JSON.stringify(allItems),favorites:JSV6ListStore.load("favorite")}))).toEqual(before);
+    // A price change that no longer fits must also remove the remembered card.
+    await page.evaluate(id=>{
+      JSUnifiedListingsV8.allOriginals(id).forEach(original=>{original.rent=180;});
+      applyFilter();
+      restorePinnedClusterSelectionAfterTransientUiV6525();
+    },mixedId);
+    expect(await ids(page)).toEqual([]);
+    safe(result);
+  });
+}
+
 async function missingMetadataFixture(page, ended) {
   await page.addScriptTag({content:unifiedRuntime});
   await page.evaluate(({id,photo,ended})=>{
