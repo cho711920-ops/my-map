@@ -80,3 +80,14 @@ JS부동산 지도·목록 디자인 정돈 — 2026-10-16 18:45 KST
 - Workerf8aca740-ce89-440e-96e6-dc1ae3b4d192, deployments list100% 확인.
   공개 캐시3dbce93d827459eb733ed1fb. 19:54 KST 두 도메인16개 파일 검증 통과.
   outputs/map-list-toolbar-visibility-browser.log / map-list-toolbar-public-verification.json.
+
+후속 색상 수정 — 2026-10-16 20:21 KST
+- 사용자35091.jpg: 연한 파란 원이 지도와 어울리지 않음. 흰색에 가까운 불투명 배경,
+  진한 남색 숫자, 얇은 회청색 테두리 제안 후 '수정 ㄱ ㄱ' 승인.
+- 기본 숫자 원 배경#f8fafc, 숫자#172b4d, 테두리#b8c6d6로 변경.
+  선택한 원의 파랑/흰 숫자와 수량·확대 단계별 크기, 완료 원 회색은 유지.
+  CSS의 색상3값만 변경하며 JS/지도 묶음/API/운영 자료/수집기는 변경하지 않았다.
+- 기존 선택/밀도/목록/폴드 가로 브라우저4검사 통과·2플랫폼 제외. 빌드/dry-run 통과.
+- Workerc30b7137-90e8-4e0a-85de-a0c06477de9a, 배포100% 확인.
+  공개 캐시e5ed5147459fd137782cc91e. 20:21 KST 양 도메인16개 파일 SHA256/HTML 검증 통과.
+  outputs/cluster-neutral-palette-browser.log / cluster-neutral-palette-public-verification.json.

@@ -69,9 +69,9 @@ html #list .item .item-contact-button-v654 .item-action-icon-phone-v662 { color:
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655) {
   --cluster-size: var(--density-size-v1, 38px) !important;
   --cluster-font-size: var(--density-font-v1, 14px) !important;
-  --cluster-fill: rgba(191, 219, 254, .76) !important;
-  --cluster-text: #153e75 !important;
-  border: 1px solid rgba(255, 255, 255, .9) !important;
+  --cluster-fill: #f8fafc !important;
+  --cluster-text: #172b4d !important;
+  border: 1px solid #b8c6d6 !important;
   background: var(--cluster-fill) !important; color: var(--cluster-text) !important;
   box-shadow: 0 1px 3px #24466b18 !important;
   font-weight: 700 !important; animation: none !important;
