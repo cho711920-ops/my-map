@@ -1096,7 +1096,8 @@ function createExactAddressClustersV6519(addressGroups) {
  * - level 6 이하: 공간 숫자 클러스터
  */
 function getAddressAdminRegionV655(address) {
-  var tokens = String(address || "")
+  var parcel = window.JSMapAddressRegionV1 && window.JSMapAddressRegionV1.read(address);
+  var tokens = String(parcel || address || "")
     .replace(/[(),]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -1206,8 +1207,9 @@ function createAdministrativeClustersV655(addressGroups, mode) {
   (addressGroups || []).forEach(function(group) {
     if (!group || !group.latlng) return;
     var region = getAddressAdminRegionV655(group.address || group.key);
+    if (mode === "neighborhood" && !region.neighborhood) return;
     var label = mode === "district" ? region.district : region.neighborhood;
-    if (!label) label = mode === "district" ? "기타" : (region.district || "기타");
+    if (!label) label = "기타";
     var regionKey = mode === "district"
       ? label
       : (region.district || "기타") + ":" + label;
@@ -1374,12 +1376,31 @@ function createClustersForCurrentZoomV655(addressGroups) {
   var useWorldGrid = shouldUseWorldGridClustersV690();
 
   if (mode) {
+    var unresolved = mode === "neighborhood" ? addressGroups.filter(function(group) {
+      return !getAddressAdminRegionV655(group.address || group.key).neighborhood;
+    }) : [];
+    if (unresolved.length && window.JSMapAddressRegionV1 && typeof geocoder !== "undefined") {
+      window.JSMapAddressRegionV1.request(unresolved, geocoder, function() {
+        if (!map || map.getLevel() !== 7 || isRendering) return;
+        drawMapClustersOnlyV639(jsLastRenderedItemsV639);
+        if (jsAdministrativeListSelectionV6570) {
+          window.jsReuseListCardsOnNextRenderV6521 = true;
+          showList(getAdministrativeListItemsV6570(jsLastRenderedItemsV639));
+        }
+      });
+    }
     var administrativeClusters = createAdministrativeClustersV655(addressGroups, mode);
     if (useWorldGrid) {
       administrativeClusters = filterClustersToMapViewportV690(administrativeClusters, 80);
     }
 
-    return resolveAdministrativeClusterPositionsV656(administrativeClusters);
+    unresolved = unresolved.filter(function(group) {
+      return !getAddressAdminRegionV655(group.address || group.key).neighborhood;
+    });
+    var unresolvedClusters = !unresolved.length ? [] : useWorldGrid
+      ? filterClustersToMapViewportV690(createWorldGridClustersV690(unresolved, level), 80)
+      : createDynamicClusters(unresolved);
+    return resolveAdministrativeClusterPositionsV656(administrativeClusters).concat(unresolvedClusters);
   }
 
   if (!useWorldGrid) return createDynamicClusters(addressGroups);
