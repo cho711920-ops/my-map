@@ -458,6 +458,10 @@
       if (root) root.style.removeProperty("--map-sidebar-width-v659");
       return;
     }
+    if (root.classList.contains("js-map-list-closed-v1")) {
+      root.style.setProperty("--map-sidebar-width-v659", "0px");
+      return;
+    }
     var sidebarLeft = sidebar.getBoundingClientRect().left;
     var sidebarWidth = Math.max(0, window.innerWidth - sidebarLeft);
     root.style.setProperty("--map-sidebar-width-v659", Math.round(sidebarWidth) + "px");

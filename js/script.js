@@ -2098,6 +2098,7 @@ function observeUnifiedDuplicateShimmerV812(card) {
 
 
 function showList(items) {
+  if (window.JSMapListPanelV1) window.JSMapListPanelV1.syncTitle(items);
   var list = document.getElementById("list");
   var sidebar = getListingScrollContainerV2();
   var previousSidebarTop = sidebar ? sidebar.scrollTop : 0;

@@ -112,6 +112,7 @@
         global.jsPinnedClusterSelectionV6515.snapshot && typeof global.getStableItemIdentityV638 === "function") {
       global.jsPinnedClusterSelectionV6515.snapshot.selectedItemIdentity = global.getStableItemIdentityV638(item);
     }
+    if (global.JSMapListPanelV1 && !(global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isMobileLayout())) global.JSMapListPanelV1.open(cluster);
     if (item.propertyId && global.JSUnifiedListingsV8) {
       global.JSUnifiedListingsV8.toggleCardDetail(encoded(item.propertyId));
     } else if (typeof global.openCluster === "function") global.openCluster(key);

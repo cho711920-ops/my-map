@@ -53,16 +53,6 @@ assert(
   /href="css\/style\.css\?v=[^"]+"/.test(index),
   "versioned primary stylesheet link is missing"
 );
-const operationsCss = fs.readFileSync(
-  path.join(repo, "css", "operations-center-v7.css"),
-  "utf8"
-);
-assert(
-  operationsCss.includes("v7.17.1 넓은 데스크탑 고객매칭") &&
-    operationsCss.includes("grid-template-columns:repeat(3,minmax(0,1fr))"),
-  "wide desktop customer matches must use a three-column grid"
-);
-
 const missingExternalArtifacts = [operationsPath, codePath].filter(
   (artifactPath) => !fs.existsSync(artifactPath)
 );

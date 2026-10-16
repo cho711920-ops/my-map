@@ -27,6 +27,7 @@
   window.JSUnifiedListingsV8.load(true).then(function(result) {
     window.JSUnifiedListingsV8.attach(window.allItems, result);
     window.applyFilter();
+    if (!new URLSearchParams(location.search).has("mapFirst") && !window.JSPhoneDeviceV1.isMobileLayout()) window.JSMapListPanelV1.open();
     window.setupEnterSearch();
     if (window.JSLocalMetricsV1) window.JSLocalMetricsV1.markFirstData();
     document.documentElement.dataset.fixtureReady = "true";

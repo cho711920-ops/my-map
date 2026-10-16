@@ -9,7 +9,8 @@ test("browser fixture mounts the real application and scripts without production
   assert.match(html, /id="listingTradeModeSelectV1"/);
   assert.match(html, /src="\/js\/script.js"/);
   assert.match(html, /src="\/js\/unified-favorites-v7.js"/);
-  assert.doesNotMatch(html, /src="(?:https?:|\/\/)|src="\/js\/(?:auth-gate|pwa|map)\b|id="wrap" inert/);
+  assert.match(html, /src="\/js\/map-list-panel-v1\.js"/);
+  assert.doesNotMatch(html, /src="(?:https?:|\/\/)|src="\/js\/(?:auth-gate[^"/]*|pwa[^"/]*|map\.js(?:\?[^"/]*)?)"|id="wrap" inert/);
 });
 
 test("fixture server handles only loopback synthetic APIs and rejects arbitrary files", async () => {

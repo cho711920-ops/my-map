@@ -53,6 +53,7 @@ test("clicked region stays distinct through redraw, switching, and reset without
   expect(await page.evaluate(()=>adminSelectionFixture.changes)).toBe(changes,"unchanged regions retain their DOM");
   await page.evaluate(()=>paintAdminSelectionFixture());
   await expect(regions.nth(0)).toHaveAttribute("aria-pressed","true");
+  if(isMobile) await page.locator('[data-mobile-view="map"]').click();
   await regions.nth(1).click();
   await expect(regions.nth(0)).toHaveAttribute("aria-pressed","false");
   await expect(regions.nth(1)).toHaveAttribute("aria-pressed","true");

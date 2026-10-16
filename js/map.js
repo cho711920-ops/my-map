@@ -3177,7 +3177,8 @@ function buildClusterOverlayContentV655(cluster, classNames) {
   }
 
   if (cluster && cluster.worldGrid) classes += " world-grid-cluster-v690";
-  return '<div class="' + classes + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+  var densityStyle = typeof window !== "undefined" && window.JSMapClusterVisualV1 ? window.JSMapClusterVisualV1.style(cluster) : "";
+  return '<div class="' + classes + '"' + densityStyle + ' onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 }
 
 
@@ -3386,6 +3387,7 @@ function openCluster(encodedKey) {
 
   pinCurrentClusterSelectionV6515();
   redrawSelectedMarkers();
+  if (window.JSMapListPanelV1) window.JSMapListPanelV1.open(overlay.__cluster);
 }
 
 
@@ -3403,6 +3405,7 @@ function openAdministrativeClusterV655(encodedKey) {
   setAdministrativeListSelectionV6570(cluster);
   redrawSelectedMarkers();
   showList(cluster.items || []);
+  if (window.JSMapListPanelV1) window.JSMapListPanelV1.open(cluster);
   var statusElement = document.getElementById("status");
   if (statusElement) {
     statusElement.innerHTML = getAdministrativeListStatusV6570(cluster.items || []);
@@ -3421,6 +3424,7 @@ function redrawSelectedMarkers() {
     });
 
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
+    if (!cluster.regionMode && !cluster.fieldLease && typeof o.setZIndex === "function") o.setZIndex(selectedClass ? 1000 : 0);
     var doneClass = allDone ? " done" : "";
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 

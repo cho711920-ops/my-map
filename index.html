@@ -57,6 +57,7 @@
 <link rel="stylesheet" href="css/handheld-orientation-v1.css?v=1.1.0-phone-wide-fit">
 <link rel="stylesheet" href="css/handheld-detail-landscape-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/landscape-desktop-fit-v1.css?v=1.0.0">
+<link rel="stylesheet" href="css/map-professional-v1.css?v=1.0.0">
 </template>
 </head>
 
@@ -203,6 +204,7 @@
       </div>
     </div>
 
+    <div class="map-list-panel-head-v1"><span id="mapListTitleV1">현재 지도 매물</span><button id="mapListCloseV1" type="button" onclick="JSMapListPanelV1.close()" aria-label="매물 목록 접기" title="매물 목록 접기">×</button></div>
     <div id="listToolbar" class="list-toolbar" aria-label="매물목록 도구">
       <label class="list-master-select" title="현재 보이는 매물 전체선택/해제">
         <input id="listMasterCheckbox" type="checkbox" onchange="toggleVisibleSelection(this.checked)">
@@ -420,6 +422,7 @@
   <div id="mapListingCountV825" class="map-listing-count-v825" role="status" aria-live="polite"
     aria-atomic="true" aria-label="현재 지도에 표시된 매물 0개">
     <span>매물</span><strong id="mapListingCountValueV825">0개</strong>
+    <button id="mapListOpenV1" type="button" onclick="JSMapListPanelV1.openCurrent()" aria-controls="sidebar" aria-expanded="false" title="현재 지도 범위의 전체 매물 목록 열기">목록 보기</button>
   </div>
 
 </div>
@@ -711,6 +714,7 @@
 <script data-auth-critical src="js/parcel-external-links-v1.js?v=1.0.1-daejeon-dong-lot"></script>
 <script data-auth-critical src="js/sale-workbench-v1.js?v=1.0.5-account-precondition"></script>
 <script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;zero-range-favorite-folder-v1=1&amp;search-select-all-v824=1&amp;handheld-layout-v1=1&amp;roadview-sdk-retry-v1=1"></script>
+<script data-auth-critical src="js/map-list-panel-v1.js?v=1.0.0"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.2.0-full-snapshot"></script>
 <script data-auth-critical src="js/today-listings-v1.js?v=1.0.0-fresh-period"></script>
 <script src="js/property-edit-v648.js?v=1.0.1-linked-selection&amp;completed-restore-v1=1&amp;property-edit-cas-v1=1"></script>
