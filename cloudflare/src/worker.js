@@ -7,7 +7,6 @@ import {
   sessionCookieHeader,
   verifyGoogleCredential
 } from "./security.js";
-import { handlePermitLeaseLegal, handlePermitPublicData } from "./permit-api.js";
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
@@ -968,8 +967,6 @@ async function handleApi(request, env, context) {
   }
   if (url.pathname === "/api/data") return handleDataApi(request, env, context);
   if (url.pathname === "/api/listing-image") return handleListingImage(request, env, context);
-  if (url.pathname === "/api/permit-public-data") return handlePermitPublicData(request, env);
-  if (url.pathname === "/api/permit-lease-legal") return handlePermitLeaseLegal(request, env);
   if (url.pathname === "/api/naver-maps-config") {
     if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
     const key = String(env.NAVER_MAPS_NCP_KEY_ID || "").trim();

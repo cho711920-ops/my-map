@@ -9,7 +9,6 @@ const listManagerSource = readFileSync(new URL("../js/list-manager-v6.js", impor
 const unifiedListingsSource = readFileSync(new URL("../js/unified-listings-v8.js", import.meta.url), "utf8");
 const aiVisitSource = readFileSync(new URL("../js/ai-visit-session-v6.js", import.meta.url), "utf8");
 const asyncMutationSource = readFileSync(new URL("../js/async-mutation-queue-v1.js", import.meta.url), "utf8");
-const diagnosisStorageSource = readFileSync(new URL("../js/diagnosis-storage.js", import.meta.url), "utf8");
 const announcementSource = readFileSync(new URL("../js/announcement-v1.js", import.meta.url), "utf8");
 const duplicateCleanupSource = readFileSync(new URL("../js/listing-duplicate-cleanup-v1.js", import.meta.url), "utf8");
 const operationsSources = [
@@ -101,7 +100,6 @@ test("data access loads before every legacy UI consumer", () => {
     "js/script.js",
     "js/list-manager-v6.js",
     "js/ai-visit-session-v6.js",
-    "js/diagnosis-storage.js",
     "js/announcement-v1.js",
     "js/map.js",
     "js/operations-center-v7.js",
@@ -128,17 +126,6 @@ test("dormant duplicate cleanup uses the shared mutation boundary without being 
   assert.match(duplicateCleanupSource, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
   assert.match(duplicateCleanupSource, /credentials: "same-origin"/);
   assert.doesNotMatch(html, /listing-duplicate-cleanup-v1\.(?:css|js)/);
-});
-
-test("diagnosis storage uses the shared Cloudflare data boundary with a legacy fallback", () => {
-  assert.match(diagnosisStorageSource, /access\.read\("loadCloudState",/);
-  assert.match(diagnosisStorageSource, /access\.mutate\("saveCloudState", payload,/);
-  assert.match(diagnosisStorageSource, /typeof access\[method\] === "function"/);
-  assert.match(diagnosisStorageSource, /request\(url, \{ credentials: "same-origin", cache: "no-store" \}\)/);
-  assert.match(diagnosisStorageSource, /return request\(global\.saveApiURL \|\| "\/api\/data",/);
-  assert.match(diagnosisStorageSource, /controller\.abort\(\)/);
-  assert.match(html, /data-access-v6\.js\?v=6\.0\.3-earliest-warmup/);
-  assert.match(html, /diagnosis-storage\.js\?v=1\.3\.0-account-cas/);
 });
 
 test("async mutation queue uses the shared boundary and preserves its legacy fallback", () => {
@@ -232,8 +219,8 @@ test("data access forwards caller cancellation signals", async () => {
     return new Response(JSON.stringify({ok: true}), {status: 200});
   });
 
-  await client.read("loadCloudState", {scope: "permitDiagnosis"}, {signal});
-  await client.mutate("saveCloudState", {scope: "permitDiagnosis"}, {signal});
+  await client.read("loadCloudState", {scope: "preferences"}, {signal});
+  await client.mutate("saveCloudState", {scope: "preferences"}, {signal});
 
   assert.equal(requests.length, 2);
   assert.equal(requests[0].options.signal, signal);

@@ -16,6 +16,19 @@ async function listView(page, isMobile) {
   if (isMobile) await page.locator('[data-mobile-view="list"]').click();
   await expect(page.locator("#list .item").first()).toBeVisible();
 }
+
+test("industry analysis is retired and the remaining map tools render without missing-module errors", async ({page}) => {
+  const errors=[];
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-fixture-ready","true");
+  await expect(page.locator("#permitDiagnosisOpenBtnV1, #permitDiagnosisModalV1")).toHaveCount(0);
+  expect(await page.evaluate(()=>typeof window.openPermitDiagnosisV1)).toBe("undefined");
+  const analysisResources=await page.evaluate(()=>performance.getEntriesByType("resource")
+    .filter(item=>/permit-diagnosis|industry-master|industry-catalog|diagnosis-storage/.test(item.name)).map(item=>item.name));
+  expect(analysisResources).toEqual([]);
+  expect(errors).toEqual([]);
+});
 function market(page, isMobile) {return page.locator(isMobile ? "#jsMobileTradeModeV1" : "#listingTradeModeSelectV1");}
 
 test("double click cannot open smart analysis and ordinary detail still opens", async ({page, isMobile}) => {

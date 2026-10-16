@@ -91,7 +91,7 @@ test("data POST rejects a stale expected account before mutation access", async 
       headers: { origin: "https://js-map.com", "content-type": "application/json" },
       body: JSON.stringify({
         action: "saveCloudState",
-        scope: "permitDiagnosis",
+        scope: "preferences",
         recordKey: "restaurant_stale",
         expectedVersion: 0,
         expectedAccountEmail: "other@example.test",
@@ -115,7 +115,7 @@ test("cloud-state GET and POST require an expected account during deployment tra
     throw new Error("cloud state D1 must not be touched without the account precondition");
   } };
   const getResponse = await authenticatedRequest(
-    "/api/data?action=loadCloudState&scope=permitDiagnosis&recordKey=restaurant_missing_account",
+    "/api/data?action=loadCloudState&scope=preferences&recordKey=restaurant_missing_account",
     {DB: guardedDb}
   );
   assert.equal(getResponse.status, 428);
@@ -130,7 +130,7 @@ test("cloud-state GET and POST require an expected account during deployment tra
       headers: {origin: "https://js-map.com", "content-type": "application/json"},
       body: JSON.stringify({
         action: "saveCloudState",
-        scope: "permitDiagnosis",
+        scope: "preferences",
         recordKey: "restaurant_missing_account",
         expectedVersion: 0,
         data: {recordKey: "restaurant_missing_account"}
@@ -721,54 +721,6 @@ test("listing image proxy rejects an unknown host", async () => {
     { MEDIA: { get: async () => null } }
   );
   assert.equal(response.status, 403);
-});
-
-test("lease legal endpoint keeps the feature available when an API key is not configured", async () => {
-  const response = await authenticatedRequest(
-    "/api/permit-lease-legal?topics=contract-party,repair"
-  );
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    ok: true,
-    configured: false,
-    records: [],
-    message: "서버에 국가법령정보 공동활용 인증값 연결이 필요합니다. 확인하지 못한 판례를 대신 표시하지 않습니다."
-  });
-});
-
-test("public permit endpoint reads the official building register without Apps Script", async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (input) => {
-    const url = new URL(input);
-    if (/BldRgstHubService/.test(url.pathname)) {
-      return new Response(`<?xml version="1.0" encoding="UTF-8"?>
-        <response><header><resultCode>00</resultCode><resultMsg>NORMAL SERVICE</resultMsg></header>
-        <body><items><item><mgmBldrgstPk>PK-1</mgmBldrgstPk><bldNm>테스트 건물</bldNm>
-        <platPlc>대전광역시 서구 둔산동 1</platPlc><mainPurpsCdNm>제2종근린생활시설</mainPurpsCdNm>
-        <useAprDay>20200101</useAprDay></item></items><totalCount>1</totalCount></body></response>`, {
-        status: 200, headers: { "content-type": "application/xml" }
-      });
-    }
-    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
-  };
-  try {
-    const response = await authenticatedRequest(
-      "/api/permit-public-data?sigunguCd=30170&bjdongCd=11200&platGbCd=0&bun=0001&ji=0000&industryId=general-restaurant",
-      {
-        DATA_GO_KR_SERVICE_KEY: "test-public-data-key"
-      }
-    );
-    assert.equal(response.status, 200);
-    const payload = await response.json();
-    assert.equal(payload.action, "permitPublicData");
-    assert.equal(payload.buildings.length, 1);
-    assert.equal(payload.buildings[0].buildingName, "테스트 건물");
-    assert.equal(payload.buildingPermitHistory.status, "CONNECTED");
-    assert.equal(payload.industryPermitHistory.status, "CONNECTED");
-    assert.equal(payload.landUseActivities.status, "CONNECTED");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
 });
 
 test("collector endpoint rejects requests without the private collector key", async () => {

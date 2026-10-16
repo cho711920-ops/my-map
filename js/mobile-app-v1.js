@@ -36,7 +36,6 @@
     "#listContactModalV654.open",
     "#propertyEditModalV630.open",
     "#buildingRegisterModalV640.open",
-    "#permitDiagnosisModalV1:not([hidden])",
     "#reviewDecisionModal.open",
     "#customerWorkAlert.open",
     "#customerEditorModal:not([hidden])",
@@ -388,7 +387,6 @@
     if (id === "listContactModalV654" && typeof global.closeListContactPopupV654 === "function") return global.closeListContactPopupV654();
     if (id === "propertyEditModalV630" && typeof global.closePropertyEditModalV630 === "function") return global.closePropertyEditModalV630();
     if (id === "buildingRegisterModalV640" && typeof global.closeBuildingRegisterV640 === "function") return global.closeBuildingRegisterV640();
-    if (id === "permitDiagnosisModalV1" && typeof global.closePermitDiagnosisV1 === "function") return global.closePermitDiagnosisV1();
     if (id === "reviewDecisionModal" && typeof global.closeReviewDecisionModal === "function") return global.closeReviewDecisionModal();
     if (id === "customerWorkAlert" && typeof global.closeCustomerWorkAlert === "function") return global.closeCustomerWorkAlert();
     if (id === "customerEditorModal" && typeof global.closeCustomerEditor === "function") return global.closeCustomerEditor();

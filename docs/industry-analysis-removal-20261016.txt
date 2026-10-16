@@ -1,0 +1,63 @@
+업종분석 기능 제거·배포 — 2026-10-16 KST
+
+승인과 작업 위치
+- 사용자가 지도 도구의 업종분석을 거의 사용하지 않아 기능 제거를 논의한 뒤 '오케이 수정 ㄱ ㄱ'로 승인했다.
+- 메뉴·분석 화면·전용 코드·전용 API를 정리하고 업종 필터·대장·지도·수집기·저장 자료를 보존한다.
+- 실제 작업 위치: C:/Users/ITP/.codex/worktrees/e212/JS부동산 AI개발실 v6.0
+- 브랜치 codex/daangn-numeric-status, 변경 전 e5135a0d4d86bf04a8fac551940b68f02a94a473.
+
+제거한 기능
+- index.html의 업종분석 버튼, CSS1개, 초기 로드 JS23개를 제거했다.
+- 업종 후보/KSIC/브랜드 검색, 업종 규칙·시설·용도·오수 진단, 브리핑·기관 문의·진단 저장 화면의
+  전용 JS23개, CSS1개, 정적 규칙 JSON25개를 소스와 배포 자산에서 제거했다.
+- /api/permit-public-data, /api/permit-lease-legal 라우트와 Cloudflare 전용 구현을 제거했다.
+  legacy/vercel/api의 같은 전용 엔드포인트와 사용되지 않는 re-export도 제거했다.
+- 모바일 모달 닫기 분기/열림 감지 및 공용 CSS의 업종분석 전용 선택자를 정리했다.
+- 폐기 기능만 검증하던 테스트21개 파일을 제거하고, 공용 테스트의 진단 저장 의존성을 정리했다.
+
+보존한 기능과 데이터
+- 지도 도구·거리/반경·영역·로드뷰·찜, 매물 검색의 industryFilter는 유지한다.
+- 대장·승강기·배치 승강기 보완 도구가 공유하던 XML 파서의 구현은 변경하지 않고
+  cloudflare/src/public-data-xml.js로 옮겼다. 관련3개 import만 새 파일을 사용한다.
+- 운영 DB/R2/사진/매물/메모/찜/인증/수집 프로필·예약·저장 지점은 수정하지 않았다.
+- 삭제한 data/*.json은 업종분석 전용 정적 규칙·사전이며 운영 매물 데이터가 아니다.
+- 기존 cloud_state의 permitDiagnosis 기록과 브라우저 로컬 저장 자료는 삭제하지 않았다.
+  종료된 scope의 읽기·저장 요청은 410으로 거절한다. 직접/큐 경로 모두 DB 읽기·쓰기나
+  mutation 예약 전에 중단한다. 다른 cloud-state scope와 저장 기능은 그대로 동작한다.
+- 자동수집기 공급자 코드·서버 수집 API·확장 background에는 이번 변경이 없다.
+  11시 수집을 강제로 재시작하거나 재설치하거나 실행하지 않았다.
+
+용량과 검증
+- 배포용 JS/CSS 합계: 이전2,099,664바이트 → 현재1,909,745바이트.
+  189,919바이트(약190KB) 감소, 미압축 파일 합계 기준. 실사용 체감 속도를 측정한 수치는 아니다.
+- 업종분석 JS/CSS24개 자체의 이전 minify 합계188,599바이트, 나머지는 공용 CSS 정리분이다.
+- 폐기 API가 외부 공급자/DB에 접근하지 않고404인지, 폐기 저장 scope는 직접/큐 요청 모두410이며
+  DB에 접근하지 않는지, 업종 필터와 기존 지도 도구가 남는지 새 회귀 테스트로 검증했다.
+- 한글·CDATA·XML entity·여러 행·빈 응답 파서 회귀 통과.
+- 전체 Node 검사1,740개 중1,735통과, 기존실패5개. 새로운 실패는 없다.
+  기존5개: interaction-smooth-v6107, listings-csv-first-safety 스크롤 후속조회,
+  map-listing-count-v825, phone-detail-v2 CSS 범위, reload-performance의 map.js 버전 기대값.
+  수정 전에도 동일하게 재현된 건이며 docs/collector-result-status-fix-20261016.txt에 근거가 있다.
+- PC/모바일 브라우저 회귀36통과·24프로젝트/기기 조건 제외, 실패0.
+  workflow, landscape-desktop-fit, phone-workflow, field-mode. 로컬 모의 데이터·단일 Edge worker 사용.
+  업종분석 버튼/전역함수/네트워크 로드가 없고, 검색·매매 필터·찜·상세보기·가로 전환이 동작한다.
+- ESLint, TypeScript, 자산 빌드, Wrangler 배포 사전 검사 통과.
+- 빌드 디렉터리에 제거 대상 자산이 남지 않는 것을 확인했다.
+
+배포와 원격 확인
+- Worker 4b26e19d-3027-4000-bd3a-613ddf7a51f5, 2026-10-16 11:08 KST, 트래픽100% 확인.
+- 이전 Worker df9aad72-1081-4368-88d6-1bd93e6dc403.
+- 공개 캐시 js-map-public-static-v1-72280374b21449914d1ea9f7.
+- js-map.com 실제 HTML200에서 분석 버튼/리소스 제거 및 industryFilter 유지 확인.
+- 실제 /api/permit-public-data 및 /api/permit-lease-legal 모두404.
+- 실제 /js/permit-diagnosis-ui.js 및 /data/industry-master.json 모두404.
+- 실제 /sw.js200에서 새 캐시 버전 확인.
+- Python 기본 HTTP 클라이언트의403은 PowerShell 정상 HTTP 요청으로 재확인했다.
+  배포 검증의 최종 결과는 위200/404이며, 403을 앱 오류로 집계하지 않는다.
+
+복구와 인계
+- 코드 복구는 이전 커밋/Worker를 사용한다. 전체 DB 되감기나 기존 기록 삭제는 하지 않는다.
+- 과거 docs의 업종분석 사용법·API 연결 기록은 과거 상태 설명이며 현재 활성 기능이 아니다.
+- 자동수집기의 11시 실제 실행 결과는 이 작업에서 검수/조작하지 않았다.
+  수집기 후속 확인은 docs/collector-result-status-fix-20261016.txt를 따른다.
+- outputs의 검사 로그·임시 추출 자료·첨부·녹취 파일은 커밋에서 제외한다.

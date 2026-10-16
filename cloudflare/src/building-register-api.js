@@ -1,4 +1,4 @@
-import { parseXmlRows } from "./permit-open-data.js";
+import { parseXmlRows } from "./public-data-xml.js";
 import { getElevatorCapacity } from "./elevator-capacity-api.js";
 
 const API_BASE = "https://apis.data.go.kr/1613000/BldRgstHubService";

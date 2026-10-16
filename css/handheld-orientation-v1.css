@@ -228,21 +228,18 @@
     pointer-events: auto !important; height: max-content !important;
     flex-shrink: 0 !important;
   }
-  .js-compact-handheld-landscape-v1 .map-quick-tool-btn,
-  .js-compact-handheld-landscape-v1 .permit-diagnosis-open-btn-v1 {
+  .js-compact-handheld-landscape-v1 .map-quick-tool-btn {
     display: flex !important; flex-direction: column !important;
     align-items: center !important; justify-content: center !important;
     width: 44px !important; height: 44px !important; min-height: 44px !important;
     padding: 2px !important; gap: 2px !important;
     border: 1px solid #d4deea; border-radius: 8px; background: #fff; color: #334155;
   }
-  .js-compact-handheld-landscape-v1 .map-quick-tool-btn svg,
-  .js-compact-handheld-landscape-v1 .permit-diagnosis-open-btn-v1 svg {
+  .js-compact-handheld-landscape-v1 .map-quick-tool-btn svg {
     display: block !important; width: 18px !important; height: 18px !important;
     flex: 0 0 18px !important; fill: none; stroke: currentColor; stroke-width: 1.7;
   }
-  .js-compact-handheld-landscape-v1 .map-quick-tool-btn > span,
-  .js-compact-handheld-landscape-v1 .permit-diagnosis-open-btn-v1 > span {
+  .js-compact-handheld-landscape-v1 .map-quick-tool-btn > span {
     font-size: 9px !important; line-height: 1.1 !important; white-space: nowrap;
   }
   /* The short landscape tool rail scrolls, but its menus must not be clipped

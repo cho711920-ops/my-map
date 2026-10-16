@@ -784,11 +784,18 @@ async function geocodeCache(env) {
   return { ok: true, action: "geocodeCache", count: rows.length, entries, source: "D1" };
 }
 
+function requireActiveCloudScope(value) {
+  if (clean(value) === "permitDiagnosis") {
+    throw Object.assign(new Error("업종분석 기능이 종료되었습니다. 기존 저장 자료는 보존됩니다."), { statusCode: 410 });
+  }
+}
+
 async function cloudState(env, user, query) {
   const scope = clean(query.scope).slice(0, 100);
   const recordKey = clean(query.recordKey || "default").slice(0, 100);
   const owner = clean(user?.email).toLowerCase();
   if (!owner) throw Object.assign(new Error("로그인 계정을 확인해 주세요."), { statusCode: 401 });
+  requireActiveCloudScope(scope);
   if (!scope || !recordKey) {
     throw Object.assign(new Error("클라우드 저장 범위를 확인해 주세요."), { statusCode: 400 });
   }
@@ -2620,6 +2627,9 @@ export async function handleD1PostAction(env, user, body) {
   const action = clean(body?.action);
   if (!env.DB || !isD1PostAction(action)) return null;
   const effectiveAction = action === "enqueueMutation" ? clean(body.taskAction) : action;
+  if (effectiveAction === "saveCloudState") {
+    requireActiveCloudScope(action === "enqueueMutation" ? body.payload?.scope : body.scope);
+  }
   if (effectiveAction !== "saveCloudState") requireRole(user, ["owner", "admin", "member"]);
   const requestId = clean(body.requestId || body?.payload?.requestId || `${action}-${crypto.randomUUID()}`).slice(0, 160);
   const mutationName = action === "enqueueMutation" ? clean(body.taskAction) : action;

@@ -10,7 +10,7 @@ assert.match(
 );
 assert.match(html, /css\/app-font-v1\.css\?v=1\.0\.0-pretendard/);
 assert.ok(
-  html.indexOf("css/app-font-v1.css") > html.indexOf("css/permit-diagnosis-v1.css"),
+  html.indexOf("css/app-font-v1.css") > html.indexOf("css/building-register-v6.css"),
   "the app font override must load after component styles"
 );
 assert.match(css, /--js-app-font:\s*"Pretendard Variable", Pretendard/);
