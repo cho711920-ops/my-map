@@ -174,34 +174,27 @@ test('tablet/desktop list keeps original sidebar scroller and no new favorite bu
   assert.equal(h.context.buildPhoneFavoriteButtonV2({}, 'property%3AP2'), '');
 });
 
-test('incremental list loads and restores chunks from phone list scroll events, not sidebar events', () => {
-  const h = listHarness(true);
-  let next = 0, previous = 0;
+test('virtual list follows the active phone or desktop scroller and seeks the requested window', () => {
+  const h = listHarness(true), windows = [];
   for (const element of [h.list, h.sidebar]) {
-    Object.assign(element, {scrollHeight: 1600, clientHeight: 500, scrollTop: 1100, offsetTop: 90,
-      addEventListener(_, callback) { this.scrollListener = callback; }});
+    Object.assign(element, {clientHeight:500,scrollTop:1100,offsetTop:90,
+      addEventListener(_,callback) { this.scrollListener=callback; }});
   }
-  Object.assign(h.context, {listRenderScrollBound: false, listVirtualScrollScheduledV1: false,
-    listVirtualTopHeightV1: 0, listRenderStart: 0,
-    renderNextListChunk() { next += 1; }, renderPreviousListChunkV1() { previous += 1; }});
-  h.context.window.requestAnimationFrame = callback => callback();
-  vm.runInContext(between(main, 'function bindIncrementalListRendering(', 'var unifiedDuplicateShimmerObserverV812'), h.context);
+  Object.assign(h.context,{listRenderScrollBound:false,listVirtualScrollScheduledV1:false,
+    visibleListItems:Array.from({length:80},()=>({})),listRenderStart:0,listRenderLimit:18,
+    getListRenderChunkSize:()=>14,getListRenderWindowSizeV1:()=>28,
+    listIndexAtOffsetV2:offset=>Math.floor(offset/100),renderListWindowV2:(start,end)=>windows.push([start,end])});
+  h.context.window.requestAnimationFrame=callback=>callback();
+  vm.runInContext(between(main,'function bindIncrementalListRendering(','var unifiedDuplicateShimmerObserverV812'),h.context);
   h.context.bindIncrementalListRendering();
-  h.sidebar.scrollListener({currentTarget: h.sidebar});
-  assert.equal(next, 0);
-  h.list.scrollListener({currentTarget: h.list});
-  assert.equal(next, 1);
-  h.context.listRenderStart = 25;
-  h.context.listVirtualTopHeightV1 = 1000;
-  h.list.scrollTop = 1050;
-  h.list.scrollListener({currentTarget: h.list});
-  assert.equal(previous, 1);
-  h.context.window.JSPhoneDeviceV1.isPhone = () => false;
-  h.context.listRenderStart = 0;
-  h.list.scrollListener({currentTarget: h.list});
-  assert.equal(next, 1, 'desktop ignores the inner list event');
-  h.sidebar.scrollListener({currentTarget: h.sidebar});
-  assert.equal(next, 2, 'desktop still listens on its original sidebar');
+  h.sidebar.scrollListener({currentTarget:h.sidebar});assert.equal(windows.length,0);
+  h.list.scrollListener({currentTarget:h.list});assert.deepEqual(windows[0],[4,32]);
+  h.context.listRenderStart=25;h.context.listRenderLimit=53;h.list.scrollTop=1050;
+  h.list.scrollListener({currentTarget:h.list});assert.deepEqual(windows[1],[3,31]);
+  h.context.window.JSPhoneDeviceV1.isPhone=()=>false;h.context.listRenderStart=0;h.context.listRenderLimit=18;
+  h.list.scrollListener({currentTarget:h.list});assert.equal(windows.length,2);
+  h.sidebar.scrollTop=1300;
+  h.sidebar.scrollListener({currentTarget:h.sidebar});assert.deepEqual(windows[2],[5,33]);
 });
 
 test('detail CSS is phone-root scoped, not a width-based tablet override', () => {

@@ -1,7 +1,6 @@
 /* Minimal shared close control. Uses each button's native × exactly once. */
 :is(
   .operations-center-close,
-  .customer-crm-dialog header > button,
   .property-edit-close-v630,
   .unified-detail-drawer-v8 > header > button,
   .lm-close,
@@ -10,7 +9,6 @@
   .aiv-icon-close,
   .list-contact-close-v654,
   .v6-detail-sheet-close,
-  .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
   .roadview-modal-close
 ) {
@@ -42,7 +40,6 @@
 /* Never layer a generated icon over the native close glyph. */
 :is(
   .operations-center-close,
-  .customer-crm-dialog header > button,
   .property-edit-close-v630,
   .unified-detail-drawer-v8 > header > button,
   .lm-close,
@@ -51,13 +48,11 @@
   .aiv-icon-close,
   .list-contact-close-v654,
   .v6-detail-sheet-close,
-  .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
   .roadview-modal-close
 )::before,
 :is(
   .operations-center-close,
-  .customer-crm-dialog header > button,
   .property-edit-close-v630,
   .unified-detail-drawer-v8 > header > button,
   .lm-close,
@@ -66,7 +61,6 @@
   .aiv-icon-close,
   .list-contact-close-v654,
   .v6-detail-sheet-close,
-  .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
   .roadview-modal-close
 )::after {
@@ -76,7 +70,6 @@
 
 :is(
   .operations-center-close,
-  .customer-crm-dialog header > button,
   .property-edit-close-v630,
   .unified-detail-drawer-v8 > header > button,
   .lm-close,
@@ -85,7 +78,6 @@
   .aiv-icon-close,
   .list-contact-close-v654,
   .v6-detail-sheet-close,
-  .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
   .roadview-modal-close
 ):hover {
@@ -96,7 +88,6 @@
 
 :is(
   .operations-center-close,
-  .customer-crm-dialog header > button,
   .property-edit-close-v630,
   .unified-detail-drawer-v8 > header > button,
   .lm-close,
@@ -105,7 +96,6 @@
   .aiv-icon-close,
   .list-contact-close-v654,
   .v6-detail-sheet-close,
-  .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
   .roadview-modal-close
 ):active {
@@ -115,7 +105,6 @@
 
 :is(
   .operations-center-close,
-  .customer-crm-dialog header > button,
   .property-edit-close-v630,
   .unified-detail-drawer-v8 > header > button,
   .lm-close,
@@ -124,7 +113,6 @@
   .aiv-icon-close,
   .list-contact-close-v654,
   .v6-detail-sheet-close,
-  .customer-work-alert-dialog header > button,
   .property-timeline-dialog header > button,
   .roadview-modal-close
 ):focus-visible {
@@ -152,7 +140,6 @@
 @media (prefers-reduced-motion: reduce) {
   :is(
     .operations-center-close,
-    .customer-crm-dialog header > button,
     .property-edit-close-v630,
     .unified-detail-drawer-v8 > header > button,
     .lm-close,
@@ -161,7 +148,6 @@
     .aiv-icon-close,
     .list-contact-close-v654,
     .v6-detail-sheet-close,
-    .customer-work-alert-dialog header > button,
     .property-timeline-dialog header > button,
     .roadview-modal-close
   ) {

@@ -1228,15 +1228,6 @@ function getFilteredItems(options) {
 
   function matchesListingConditionsV2(item) {
     var matchTradeMode = !window.JSListingTradeV1 || window.JSListingTradeV1.matchesItem(item);
-    var operationsMatchIds = window.operationsMatchPropertyIds;
-    var matchCustomerSelection = !operationsMatchIds || operationsMatchIds.has(String(item.propertyId || "").trim());
-    var customerMatchStatus = operationsMatchIds
-      ? String((window.operationsMatchStatusByPropertyId || {})[String(item.propertyId || "").trim()] || "").trim()
-      : "";
-    var matchCustomerHeldVisibility =
-      !operationsMatchIds ||
-      customerMatchStatus !== "보류" ||
-      !!window.customerMatchHeldVisibleV1;
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || getListingTypeLabelV1(item) === selectedType;
@@ -1308,7 +1299,7 @@ function getFilteredItems(options) {
               ? window.JSFieldMapCameraV1.contains(item.latlng)
               : bounds.contain(item.latlng)))));
 
-    return matchTradeMode && matchCustomerSelection && matchCustomerHeldVisibility &&
+    return matchTradeMode &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&
       matchSaleFields && matchFloor && matchQuickFloor &&
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
@@ -1861,9 +1852,6 @@ function appendVirtualListItemV1(index, target) {
   if (!item) return null;
   var listCardIdV681 = actionSelectionKeyV660(item);
   var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[listCardIdV681];
-  if (reusableCard && reusableCard.classList.contains("customer-match-map-card-v721") !== isCustomerMatchMapCardV721(item)) {
-    reusableCard = null;
-  }
   var favoriteContext = typeof window.getFavoriteMapRemovalContextV1 === "function"
     ? window.getFavoriteMapRemovalContextV1(item) : null;
   if (reusableCard && (reusableCard.getAttribute("data-favorite-map-folder-id") || "") !==
@@ -1890,88 +1878,129 @@ function syncListVirtualMetadataV1(list) {
   }
 }
 
-function trimListWindowFromStartV1(list) {
-  var maximum = getListRenderWindowSizeV1();
-  var rendered = listRenderLimit - listRenderStart;
-  if (!list || rendered <= maximum) return;
 
-  var nextStart = listRenderLimit - maximum;
-  var firstKept = list.querySelector('.item[data-list-index-v1="' + nextStart + '"]');
-  var firstKeptTop = firstKept ? firstKept.getBoundingClientRect().top : null;
-  var removedHeight = 0;
+var listVirtualOffsetsV2 = [0];
+var listVirtualEstimatedHeightV2 = 0;
 
-  Array.prototype.forEach.call(
-    list.querySelectorAll(".item[data-list-index-v1]"),
-    function(card) {
-      var index = Number(card.getAttribute("data-list-index-v1"));
-      if (!Number.isFinite(index) || index >= nextStart) return;
-      removedHeight += rememberListCardHeightV1(card);
-      unobserveVirtualizedListCardV1(card);
-      card.remove();
-    }
-  );
-
-  listRenderStart = nextStart;
-  listVirtualTopHeightV1 += removedHeight;
-  ensureListVirtualTopSpacerV1(list);
-
-  if (firstKept && firstKeptTop != null) {
-    var sidebar = getListingScrollContainerV2();
-    var shift = firstKept.getBoundingClientRect().top - firstKeptTop;
-    if (sidebar && Math.abs(shift) > 0.5) sidebar.scrollTop += shift;
+function ensureListVirtualBottomSpacerV2(list) {
+  var spacer = list.querySelector(".list-virtual-bottom-spacer-v2");
+  if (!spacer) {
+    spacer = document.createElement("div");
+    spacer.className = "list-virtual-bottom-spacer-v2";
+    spacer.setAttribute("aria-hidden", "true");
+    list.appendChild(spacer);
   }
+  return spacer;
 }
 
-function trimListWindowFromEndV1(list) {
-  var maximum = getListRenderWindowSizeV1();
-  var rendered = listRenderLimit - listRenderStart;
-  if (!list || rendered <= maximum) return;
+function updateListVirtualSpaceV2(list) {
+  // Read all card sizes before changing either spacer. Do not interleave
+  // a layout read with each of the removed cards.
+  cacheRenderedListCardHeightsV1(list);
+  if (!listVirtualEstimatedHeightV2) {
+    var measured = Object.values(listVirtualItemHeightsV1).filter(function(height) { return height > 0; });
+    listVirtualEstimatedHeightV2 = measured.length
+      ? measured.reduce(function(sum, height) { return sum + height; }, 0) / measured.length : 125;
+  }
+  listVirtualOffsetsV2 = [0];
+  visibleListItems.forEach(function(item, index) {
+    var height = Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(item, index)]) || listVirtualEstimatedHeightV2;
+    listVirtualOffsetsV2.push(listVirtualOffsetsV2[index] + height);
+  });
+  listVirtualTopHeightV1 = listVirtualOffsetsV2[listRenderStart] || 0;
+  ensureListVirtualTopSpacerV1(list);
+  ensureListVirtualBottomSpacerV2(list).style.height = Math.max(0,
+    listVirtualOffsetsV2[visibleListItems.length] - (listVirtualOffsetsV2[listRenderLimit] || 0)) + "px";
+}
 
-  var nextEnd = listRenderStart + maximum;
-  Array.prototype.forEach.call(
-    list.querySelectorAll(".item[data-list-index-v1]"),
-    function(card) {
-      var index = Number(card.getAttribute("data-list-index-v1"));
-      if (!Number.isFinite(index) || index < nextEnd) return;
-      rememberListCardHeightV1(card);
-      unobserveVirtualizedListCardV1(card);
-      card.remove();
-    }
-  );
-  listRenderLimit = nextEnd;
+function renderListWindowV2(start, end) {
+  var list = document.getElementById("list"), scroller = getListingScrollContainerV2();
+  if (!list) return;
+  var previousTop = scroller ? scroller.scrollTop : 0;
+  var cards = Array.from(list.querySelectorAll(".item[data-list-index-v1]"));
+  var viewportTop = scroller ? scroller.getBoundingClientRect().top : 0;
+  var anchor = cards.find(function(card) { return card.getBoundingClientRect().bottom > viewportTop; });
+  var anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
+  cacheRenderedListCardHeightsV1(list);
+  var retained = Object.create(null);
+  cards.forEach(function(card) {
+    var index = Number(card.getAttribute("data-list-index-v1"));
+    if (index >= start && index < end) retained[index] = card;
+    else { unobserveVirtualizedListCardV1(card); card.remove(); }
+  });
+  var bottom = ensureListVirtualBottomSpacerV2(list);
+  var firstRetained = cards.find(function(card) { return retained[Number(card.getAttribute("data-list-index-v1"))]; });
+  var prefix = document.createDocumentFragment(), suffix = document.createDocumentFragment();
+  var firstIndex = firstRetained ? Number(firstRetained.getAttribute("data-list-index-v1")) : end;
+  for (var index = start; index < end; index++) {
+    if (!retained[index]) appendVirtualListItemV1(index, index < firstIndex ? prefix : suffix);
+  }
+  list.insertBefore(prefix, firstRetained || bottom);
+  list.insertBefore(suffix, bottom);
+  listRenderStart = start; listRenderLimit = end;
+  updateListVirtualSpaceV2(list);
+  if (anchor && anchor.isConnected && scroller) {
+    var shift = anchor.getBoundingClientRect().top - anchorTop;
+    if (Math.abs(shift) > 0.5) scroller.scrollTop += shift;
+  } else if (scroller) {
+    scroller.scrollTop = previousTop;
+  }
+  list.querySelectorAll(".unified-expand-btn-v8:not([data-shimmer-observed-v812])").forEach(function(button) {
+    observeUnifiedDuplicateShimmerV812(button.closest(".item"));
+  });
+  syncListVirtualMetadataV1(list);
+}
+
+function listIndexAtOffsetV2(offset) {
+  var low = 0, high = visibleListItems.length;
+  while (low < high) {
+    var middle = Math.floor((low + high) / 2);
+    if (listVirtualOffsetsV2[middle + 1] <= offset) low = middle + 1;
+    else high = middle;
+  }
+  return Math.min(low, Math.max(0, visibleListItems.length - 1));
 }
 
 function renderPreviousListChunkV1() {
-  var list = document.getElementById("list");
-  if (!list || listRenderStart <= 0) return;
-
-  var spacer = ensureListVirtualTopSpacerV1(list);
-  var previousStart = listRenderStart;
-  var nextStart = Math.max(0, previousStart - getListRenderChunkSize());
-  var oldFirst = list.querySelector('.item[data-list-index-v1="' + previousStart + '"]');
-  var oldFirstTop = oldFirst ? oldFirst.getBoundingClientRect().top : null;
-  var restoredHeight = 0;
-  var fragment = document.createDocumentFragment();
-
-  for (var index = nextStart; index < previousStart; index++) {
-    var cacheKey = getListVirtualItemKeyV1(visibleListItems[index], index);
-    restoredHeight += Number(listVirtualItemHeightsV1[cacheKey]) || 0;
-    appendVirtualListItemV1(index, fragment);
-  }
-
-  list.insertBefore(fragment, spacer.nextSibling);
-  listRenderStart = nextStart;
-  listVirtualTopHeightV1 = Math.max(0, listVirtualTopHeightV1 - restoredHeight);
-  ensureListVirtualTopSpacerV1(list);
-  trimListWindowFromEndV1(list);
-  syncListVirtualMetadataV1(list);
-
-  if (oldFirst && oldFirstTop != null) {
-    var sidebar = getListingScrollContainerV2();
-    var shift = oldFirst.getBoundingClientRect().top - oldFirstTop;
-    if (sidebar && Math.abs(shift) > 0.5) sidebar.scrollTop += shift;
-  }
+  if (listRenderStart <= 0) return;
+  var start = Math.max(0, listRenderStart - getListRenderChunkSize());
+  renderListWindowV2(start, Math.min(visibleListItems.length, start + getListRenderWindowSizeV1()));
 }
+
+function renderNextListChunk(targetLimit) {
+  if (listRenderLimit >= visibleListItems.length) return;
+  var end = Math.min(visibleListItems.length, Math.max(listRenderLimit + getListRenderChunkSize(), Number(targetLimit) || 0));
+  renderListWindowV2(Math.max(0, end - getListRenderWindowSizeV1()), end);
+}
+
+function bindIncrementalListRendering() {
+  if (listRenderScrollBound) return;
+  var sidebar = document.getElementById("sidebar");
+  if (!sidebar) return;
+  listRenderScrollBound = true;
+  function onListScroll(event) {
+    var scroller = getListingScrollContainerV2();
+    if (!scroller || event.currentTarget !== scroller || listVirtualScrollScheduledV1) return;
+    listVirtualScrollScheduledV1 = true;
+    window.requestAnimationFrame(function() {
+      listVirtualScrollScheduledV1 = false;
+      var list = document.getElementById("list");
+      if (!list || !visibleListItems.length) return;
+      var offset = Math.max(0, scroller.scrollTop - (scroller === list ? 0 : list.offsetTop));
+      var first = listIndexAtOffsetV2(offset), last = listIndexAtOffsetV2(offset + scroller.clientHeight);
+      if (first >= listRenderStart && last < listRenderLimit &&
+          (listRenderStart === 0 || first - listRenderStart >= 3) &&
+          (listRenderLimit === visibleListItems.length || listRenderLimit - last >= 3)) return;
+      var start = Math.max(0, first - Math.floor(getListRenderChunkSize() / 2));
+      var end = Math.min(visibleListItems.length, Math.max(start + getListRenderWindowSizeV1(), last + 4));
+      renderListWindowV2(start, end);
+    });
+  }
+  sidebar.addEventListener("scroll", onListScroll, {passive: true});
+  var list = document.getElementById("list");
+  if (list) list.addEventListener("scroll", onListScroll, {passive: true});
+}
+
 
 function isTodayRegistration(value) {
   return isRegistrationWithinDays(value, 1);
@@ -2020,66 +2049,6 @@ function toggleNewListingDays(days) {
     if (newListingDays === 1) return;
   }
   applyFilter();
-}
-
-
-function renderNextListChunk(targetLimit) {
-  var list = document.getElementById("list");
-  if (!list || listRenderLimit >= visibleListItems.length) return;
-
-  ensureListVirtualTopSpacerV1(list);
-
-  var chunkSize = getListRenderChunkSize();
-  var nextLimit = Math.min(
-    visibleListItems.length,
-    Math.max(listRenderLimit + chunkSize, Number(targetLimit) || 0)
-  );
-  var fragment = document.createDocumentFragment();
-
-  for (var index = listRenderLimit; index < nextLimit; index++) {
-    appendVirtualListItemV1(index, fragment);
-  }
-
-  list.appendChild(fragment);
-  Array.prototype.forEach.call(
-    list.querySelectorAll(".unified-expand-btn-v8:not([data-shimmer-observed-v812])"),
-    function(button) {
-      observeUnifiedDuplicateShimmerV812(button.closest(".item"));
-    }
-  );
-  listRenderLimit = nextLimit;
-  trimListWindowFromStartV1(list);
-  syncListVirtualMetadataV1(list);
-}
-
-
-function bindIncrementalListRendering() {
-  if (listRenderScrollBound) return;
-
-  var sidebar = document.getElementById("sidebar");
-  if (!sidebar) return;
-
-  listRenderScrollBound = true;
-  function onListScroll(event) {
-    var scroller = getListingScrollContainerV2();
-    if (!scroller || (event && event.currentTarget !== scroller)) return;
-    if (listVirtualScrollScheduledV1) return;
-    listVirtualScrollScheduledV1 = true;
-    window.requestAnimationFrame(function() {
-      listVirtualScrollScheduledV1 = false;
-      var list = document.getElementById("list");
-      if (!list) return;
-      var renderedTop = (scroller === list ? 0 : list.offsetTop) + listVirtualTopHeightV1;
-      if (listRenderStart > 0 && scroller.scrollTop - renderedTop < 850) {
-        renderPreviousListChunkV1();
-      } else if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 850) {
-        renderNextListChunk();
-      }
-    });
-  }
-  sidebar.addEventListener("scroll", onListScroll, { passive: true });
-  var phoneList = document.getElementById("list");
-  if (phoneList) phoneList.addEventListener("scroll", onListScroll, { passive: true });
 }
 
 
@@ -2156,7 +2125,7 @@ function showList(items) {
         return actionSelectionKeyV660(item) === remainingCards[0].getAttribute("data-list-card-id-v681");
       });
       for (var prefixIndex = 0; prefixIndex < reviewStart; prefixIndex++) {
-        reviewTopHeight += Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(items[prefixIndex], prefixIndex)]) || 0;
+        reviewTopHeight += Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(items[prefixIndex], prefixIndex)]) || listVirtualEstimatedHeightV2 || 0;
       }
     }
   }
@@ -2237,6 +2206,7 @@ function showList(items) {
     listVirtualTopHeightV1 = previousVirtualTopHeight;
   } else {
     listVirtualItemHeightsV1 = Object.create(null);
+    listVirtualEstimatedHeightV2 = 0;
   }
   ensureListVirtualTopSpacerV1(list);
   renderNextListChunk(
@@ -4223,63 +4193,6 @@ function saveItemMemo(encodedKey) {
 }
 
 
-function getCustomerMatchStatus(item, cardContext) {
-  if (cardContext && cardContext.status) return String(cardContext.status).trim();
-  var propertyId = String(item && item.propertyId || "").trim();
-  return propertyId && window.operationsMatchStatusByPropertyId
-    ? String(window.operationsMatchStatusByPropertyId[propertyId] || "").trim()
-    : "";
-}
-
-function buildCustomerMatchInlineControls(item, cardContext) {
-  var propertyId = String(item && item.propertyId || "").trim();
-  var status = getCustomerMatchStatus(item, cardContext);
-  if (!propertyId || !status) return "";
-  var encodedId = encodeURIComponent(propertyId);
-  var introduced = status === "소개";
-  var held = status === "보류";
-  var operationHandler = cardContext
-    ? "handleOperationsCustomerMatchToggleV719(this,'" + encodeURIComponent(cardContext.matchId || "") + "','" + encodeURIComponent(cardContext.customerId || "") + "','" + encodeURIComponent(cardContext.propertyId || propertyId) + "',"
-    : "handleCustomerMatchListAction(this,'" + encodedId + "',";
-  return '<div class="customer-match-inline-actions" onclick="event.stopPropagation()">' +
-    '<label class="customer-match-choice-v719 introduce' + (introduced ? ' checked' : '') + '"><input type="checkbox"' + (introduced ? ' checked' : '') + ' onchange="' + operationHandler + '\'소개\')"><span>후보</span></label>' +
-    '<label class="customer-match-choice-v719 hold' + (held ? ' checked' : '') + '"><input type="checkbox"' + (held ? ' checked' : '') + ' onchange="' + operationHandler + '\'보류\')"><span>보류</span></label>' +
-  '</div>';
-}
-
-window.handleCustomerMatchListAction = function(button, encodedPropertyId, selectedStatus) {
-  var propertyId = decodeURIComponent(encodedPropertyId || "");
-  if (!propertyId || typeof window.updateCustomerMatchFromMap !== "function") return;
-  var currentStatus = getCustomerMatchStatus({propertyId: propertyId});
-  var nextStatus = button && button.checked ? selectedStatus : (currentStatus === selectedStatus ? "신규" : currentStatus);
-  if (!nextStatus || nextStatus === currentStatus) return;
-  var card = button && button.closest ? button.closest(".customer-match-map-card-v721") : null;
-  function applyCardStatusVisualV722(status) {
-    if (!card) return;
-    card.classList.toggle("customer-match-new", status === "신규");
-    card.classList.toggle("customer-match-introduced", status === "소개");
-    card.classList.toggle("customer-match-held", status === "보류");
-    card.querySelectorAll(".customer-match-choice-v719").forEach(function(label) {
-      var input = label.querySelector('input[type="checkbox"]');
-      var labelStatus = label.classList.contains("introduce") ? "소개" : "보류";
-      var checked = labelStatus === status;
-      if (input) input.checked = checked;
-      label.classList.toggle("checked", checked);
-    });
-  }
-  applyCardStatusVisualV722(nextStatus);
-  button.disabled = true;
-  window.updateCustomerMatchFromMap(propertyId, nextStatus)
-    .then(function() {
-      if (button && button.isConnected) button.disabled = false;
-    })
-    .catch(function(error) {
-      applyCardStatusVisualV722(currentStatus);
-      if (button && button.isConnected) button.disabled = false;
-      alert((error && error.message) || "고객 매칭 상태를 저장하지 못했습니다.");
-    });
-};
-
 var LIST_CONTACT_ROLE_META_V650 = {
   "주": { short: "주", name: "주인", priority: 90 },
   "임": { short: "임", name: "임대인", priority: 40 },
@@ -4637,353 +4550,250 @@ function buildListElevatorIconV843(item) {
   '</span>';
 }
 
-window.closeCustomerMatchCardMenusV721 = function(exceptPanel) {
-  document.querySelectorAll(".customer-match-menu-panel-v721").forEach(function(panel) {
-    if (panel === exceptPanel) return;
-    panel.hidden = true;
-    panel.classList.remove("open-upward-v722");
-    var card = panel.closest && panel.closest(".customer-match-map-card-v721");
-    if (card) card.classList.remove("customer-match-menu-open-v721");
-    var toggle = panel.parentElement && panel.parentElement.querySelector(".customer-match-menu-toggle-v721");
-    if (toggle) toggle.setAttribute("aria-expanded", "false");
-  });
-};
 
-window.toggleCustomerMatchCardMenuV721 = function(button, event) {
-  if (event) event.stopPropagation();
-  var wrapper = button && button.closest ? button.closest(".customer-match-card-menu-v721") : null;
-  var panel = wrapper ? wrapper.querySelector(".customer-match-menu-panel-v721") : null;
-  if (!panel) return;
-  var willOpen = panel.hidden;
-  window.closeCustomerMatchCardMenusV721(willOpen ? panel : null);
-  panel.hidden = !willOpen;
-  var card = wrapper.closest && wrapper.closest(".customer-match-map-card-v721");
-  if (card) card.classList.toggle("customer-match-menu-open-v721", willOpen);
-  button.setAttribute("aria-expanded", willOpen ? "true" : "false");
-  if (willOpen) {
-    panel.classList.remove("open-upward-v722");
-    window.requestAnimationFrame(function() {
-      if (panel.hidden) return;
-      var panelRect = panel.getBoundingClientRect();
-      if (panelRect.bottom > window.innerHeight - 8) panel.classList.add("open-upward-v722");
-    });
-  } else {
-    panel.classList.remove("open-upward-v722");
-  }
-};
-
-if (!window.customerMatchMenuOutsideBoundV721) {
-  window.customerMatchMenuOutsideBoundV721 = true;
-  document.addEventListener("click", function(event) {
-    if (event && event.target && event.target.closest && event.target.closest(".customer-match-card-menu-v721")) return;
-    window.closeCustomerMatchCardMenusV721();
-  });
-}
-
-function isCustomerMatchMapCardV721(item, customerMatchContextV719) {
-  var customerMatchPropertyIdV721 = String(item && item.propertyId || "").trim();
-  return !customerMatchContextV719 &&
-    window.operationsMatchPropertyIds instanceof Set &&
-    window.operationsMatchPropertyIds.has(customerMatchPropertyIdV721) &&
-    (!window.matchMedia || window.matchMedia("(min-width: 769px)").matches);
-}
-
-function addListItem(item, appendTarget, customerMatchContextV719) {
-  var div = document.createElement("div");
-  var favoriteMapContextV1 = !customerMatchContextV719 && typeof window.getFavoriteMapRemovalContextV1 === "function"
-    ? window.getFavoriteMapRemovalContextV1(item) : null;
-  var customerMatchMapCardV721 = isCustomerMatchMapCardV721(item, customerMatchContextV719);
-  var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
-  var memoOpen = openMemoKey === item.key;
-  var memoEditing = editingMemoKey === item.key;
-  var cachedBuildingBadgeV6519 =
-    window.JSBuildingRegisterBadges &&
-    typeof window.JSBuildingRegisterBadges.getCached === "function"
-      ? window.JSBuildingRegisterBadges.getCached(item)
-      : null;
-  var cachedBuildingYearTextV6519 =
-    cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.year
-      ? "준" + cachedBuildingBadgeV6519.year
-      : "준공 -";
-  var cachedBuildingYearClassV6519 =
-    cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.verified
-      ? " verified"
-      : "";
-
-  var customerMatchStatusV719 = getCustomerMatchStatus(item, customerMatchContextV719);
-  div.className =
-    "item" +
-    (isLinkedListingSelectedV845(item) ? " selected" : "") +
-    (item.state === "계약완료" ? " done" : "") +
-    (printSelected ? " print-selected" : "") +
-    (memoOpen ? " memo-open" : "") +
-    (customerMatchStatusV719 === "신규" ? " customer-match-new" : "") +
-    (customerMatchStatusV719 === "소개" ? " customer-match-introduced" : "") +
-    (customerMatchStatusV719 === "보류" ? " customer-match-held" : "") +
-    (customerMatchContextV719 ? " operations-match-listing-card-v719" : "") +
-    (customerMatchMapCardV721 ? " customer-match-map-card-v721" : "");
-
-  var encodedKey = encodeURIComponent(item.key);
-  var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
-  var selectionControlV1 = '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
-    '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') +
-    ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')"></label>';
-  if (favoriteMapContextV1) {
-    div.setAttribute("data-favorite-map-folder-id", favoriteMapContextV1.folderId);
-    selectionControlV1 += '<button type="button" class="favorite-map-remove-v1" ' +
-      'title="' + escapeHtml(favoriteMapContextV1.folderName + ' 폴더에서만 찜 제거') + '" ' +
-      'aria-label="' + escapeHtml((item.address || item.name || '매물') + ' 찜 제거') + '" ' +
-      'onclick="event.stopPropagation(); removeFavoriteMapItemV1(' +
-      escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.folderId))) + ',' +
-      escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.ref))) + ')">찜 제거</button>';
-  }
-  var doneLabel = item.state === "계약완료"
-    ? '<button type="button" class="done-badge done-restore-button-v1" ' +
-        'title="계약가능으로 복구" aria-label="계약완료 상태를 계약가능으로 복구" ' +
-        'onclick="event.stopPropagation(); restoreCompletedListing(\'' + encodedKey + '\')">계약완료 ↩</button>'
-    : "";
-
-  var displayType = getListingTypeLabelV1(item);
-  var typeLabel = displayType
-    ? '<span class="type-badge">' + escapeHtml(displayType) + '</span>'
-    : "";
-  var buildingFloorLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingFloorLabel
-    ? window.JSListingTradeV1.buildingFloorLabel(item) : "";
-  var landUseLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.landUseLabel
-    ? window.JSListingTradeV1.landUseLabel(item) : "";
-  var roomDisplayV1 = item.sourceFloorVerifiedV1 ? item.advertisedRoomV1 : item.room;
-  var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(roomDisplayV1, item.floor);
-  if (item.sourceFloorVerifiedV1 && !roomDisplayV1 && getItemFloorNumber(item) === null) roomLabelV1 = "층수 미확인";
-  var buildingSaleV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isBuildingSale && window.JSListingTradeV1.isBuildingSale(item);
-  var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleAreaInfoHtml
-    ? window.JSListingTradeV1.buildingSaleAreaInfoHtml(item) : "";
-
-  var sourceLabel = isFieldVisitItem(item)
-    ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
-    : (isConfirmedVisitItem(item) || isGongsilBoxItem(item)
-      ? '<span class="gongsil-source-badge verification-done-v661">확인</span>'
-      : "");
-
-  var favoriteRefV821 = item.propertyId
-    ? "property:" + String(item.propertyId).trim()
-    : item.key;
-  var encodedFavoriteRefV821 = encodeURIComponent(favoriteRefV821);
-  var encodedEditTargetV648 = encodeURIComponent(
-    item.propertyId
-      ? "id:" + String(item.propertyId).trim()
-      : "key:" + item.key
-  );
-  var pyeongMiniBadge = buildPyeongMiniBadge(item);
-  var regDateLabel = formatListRegistrationDate(item.regDate);
-  var unifiedCardPartsV8 = window.JSUnifiedListingsV8 &&
-    typeof window.JSUnifiedListingsV8.cardParts === "function"
-      ? window.JSUnifiedListingsV8.cardParts(item)
-      : { thumbnail: "", badge: "", sourceButton: "" };
-  var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
-  var sourceLinkButton = hasSourceLink
-    ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
-        'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedEditTargetV648 + '\')">링크</button>'
-    : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
-  if (unifiedCardPartsV8.sourceButton) sourceLinkButton = unifiedCardPartsV8.sourceButton;
-  var customerMatchControls = buildCustomerMatchInlineControls(item, customerMatchContextV719);
-  var favoriteHeaderButtonV661 = "";
-  if (!customerMatchContextV719) favoriteHeaderButtonV661 = buildPhoneFavoriteButtonV2(item, encodedFavoriteRefV821);
-  var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
-  var depositDisplay = listDisplayValueV650(item, "deposit");
-  var rentDisplay = listDisplayValueV650(item, "rent");
-  var feeDisplay = listDisplayValueV650(item, "fee");
-  var premiumDisplay = listDisplayValueV650(item, "premium");
-  var areaDisplay = listDisplayValueV650(item, "area");
-  var saleCardV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item);
-  var salePriceDisplayV1 = saleCardV1
-    ? (window.JSSaleWorkbenchV1 ? window.JSSaleWorkbenchV1.price(window.JSListingTradeV1.displayPrice(item)) : Number(window.JSListingTradeV1.displayPrice(item) || 0).toLocaleString("ko-KR"))
-    : "";
-  var priceValuesMarkupV1 = saleCardV1
-    ? '<span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span>' +
-      (buildingSaleV1 ? '' : '<span class="price-separator">·</span>' + window.JSListingTradeV1.saleAreaHtml(item))
-    : '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
-      '<span class="price-separator">·</span>' +
-      '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>';
-  var memoToggleButton =
-    '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
-      'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
-      'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\', this)">' +
-      '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
-    '</button>';
-
-  var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
-  var navButtonV721 =
-    '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
-      'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>';
-  var roadviewButtonV721 =
-    '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
-      'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span>' + buildCardActionIconV662('roadview') + '</button>';
-  var registerButtonV721 =
-    '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
-      'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>';
-  var favoriteButtonV721 =
-    '<button type="button" class="item-list-add-btn favorite" title="찜 목록에 추가" ' +
-      'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRefV821 + '\')">찜</button>';
-  var editButtonV721 =
-    '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
-      'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';
-  var regularActionButtonsV721 = actionContactButtonV654 + navButtonV721 + roadviewButtonV721 +
-    registerButtonV721 + favoriteButtonV721 + editButtonV721 + sourceLinkButton;
-  var menuRegisterButtonV721 = registerButtonV721.replace('>대장</button>', '>건축물대장</button>');
-  var menuEditButtonV721 = editButtonV721.replace('>수정</span>', '>수정하기</span>');
-  var customerMatchMenuV721 =
-    '<div class="customer-match-card-menu-v721" onclick="event.stopPropagation()">' +
-      '<button type="button" class="customer-match-menu-toggle-v721" aria-expanded="false" ' +
-        'onclick="toggleCustomerMatchCardMenuV721(this,event)">메뉴</button>' +
-      '<div class="customer-match-menu-panel-v721" hidden>' +
-        navButtonV721 + roadviewButtonV721 + menuRegisterButtonV721 + menuEditButtonV721 +
-      '</div>' +
-    '</div>';
-  var customerMatchMapActionsV721 =
-    '<div class="item-action-left">' + actionContactButtonV654 + customerMatchMenuV721 + sourceLinkButton + '</div>' +
-    memoToggleButton + customerMatchControls;
-  var standardActionsV721 =
-    customerMatchControls + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;
-
-  div.setAttribute("data-listing-key", item.key);
-  div.setAttribute("data-list-card-id-v681", actionSelectionKeyV660(item));
-  div.setAttribute("data-property-id", String(item.propertyId || "").trim());
-  if (saleCardV1) div.classList.add("listing-sale-card-v1");
-  div.setAttribute("title", "매물 상세 보기");
-  if (isPhoneListingV2()) {
+function addListItem(item, appendTarget) {
+    var div = document.createElement("div");
+    var favoriteMapContextV1 = typeof window.getFavoriteMapRemovalContextV1 === "function"
+        ? window.getFavoriteMapRemovalContextV1(item) : null;
+    var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
+    var memoOpen = openMemoKey === item.key;
+    var memoEditing = editingMemoKey === item.key;
+    var cachedBuildingBadgeV6519 = window.JSBuildingRegisterBadges &&
+        typeof window.JSBuildingRegisterBadges.getCached === "function"
+        ? window.JSBuildingRegisterBadges.getCached(item)
+        : null;
+    var cachedBuildingYearTextV6519 = cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.year
+        ? "준" + cachedBuildingBadgeV6519.year
+        : "준공 -";
+    var cachedBuildingYearClassV6519 = cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.verified
+        ? " verified"
+        : "";
+    div.className =
+        "item" +
+            (isLinkedListingSelectedV845(item) ? " selected" : "") +
+            (item.state === "계약완료" ? " done" : "") +
+            (printSelected ? " print-selected" : "") +
+            (memoOpen ? " memo-open" : "");
+    var encodedKey = encodeURIComponent(item.key);
+    var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
+    var selectionControlV1 = '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
+        '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') +
+        ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')"></label>';
+    if (favoriteMapContextV1) {
+        div.setAttribute("data-favorite-map-folder-id", favoriteMapContextV1.folderId);
+        selectionControlV1 += '<button type="button" class="favorite-map-remove-v1" ' +
+            'title="' + escapeHtml(favoriteMapContextV1.folderName + ' 폴더에서만 찜 제거') + '" ' +
+            'aria-label="' + escapeHtml((item.address || item.name || '매물') + ' 찜 제거') + '" ' +
+            'onclick="event.stopPropagation(); removeFavoriteMapItemV1(' +
+            escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.folderId))) + ',' +
+            escapeHtml(JSON.stringify(encodeURIComponent(favoriteMapContextV1.ref))) + ')">찜 제거</button>';
+    }
+    var doneLabel = item.state === "계약완료"
+        ? '<button type="button" class="done-badge done-restore-button-v1" ' +
+            'title="계약가능으로 복구" aria-label="계약완료 상태를 계약가능으로 복구" ' +
+            'onclick="event.stopPropagation(); restoreCompletedListing(\'' + encodedKey + '\')">계약완료 ↩</button>'
+        : "";
+    var displayType = getListingTypeLabelV1(item);
+    var typeLabel = displayType
+        ? '<span class="type-badge">' + escapeHtml(displayType) + '</span>'
+        : "";
+    var buildingFloorLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingFloorLabel
+        ? window.JSListingTradeV1.buildingFloorLabel(item) : "";
+    var landUseLabelV1 = window.JSListingTradeV1 && window.JSListingTradeV1.landUseLabel
+        ? window.JSListingTradeV1.landUseLabel(item) : "";
+    var roomDisplayV1 = item.sourceFloorVerifiedV1 ? item.advertisedRoomV1 : item.room;
+    var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(roomDisplayV1, item.floor);
+    if (item.sourceFloorVerifiedV1 && !roomDisplayV1 && getItemFloorNumber(item) === null)
+        roomLabelV1 = "층수 미확인";
+    var buildingSaleV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isBuildingSale && window.JSListingTradeV1.isBuildingSale(item);
+    var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleAreaInfoHtml
+        ? window.JSListingTradeV1.buildingSaleAreaInfoHtml(item) : "";
+    var sourceLabel = isFieldVisitItem(item)
+        ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
+        : (isConfirmedVisitItem(item) || isGongsilBoxItem(item)
+            ? '<span class="gongsil-source-badge verification-done-v661">확인</span>'
+            : "");
+    var favoriteRefV821 = item.propertyId
+        ? "property:" + String(item.propertyId).trim()
+        : item.key;
+    var encodedFavoriteRefV821 = encodeURIComponent(favoriteRefV821);
+    var encodedEditTargetV648 = encodeURIComponent(item.propertyId
+        ? "id:" + String(item.propertyId).trim()
+        : "key:" + item.key);
+    var pyeongMiniBadge = buildPyeongMiniBadge(item);
+    var regDateLabel = formatListRegistrationDate(item.regDate);
+    var unifiedCardPartsV8 = window.JSUnifiedListingsV8 &&
+        typeof window.JSUnifiedListingsV8.cardParts === "function"
+        ? window.JSUnifiedListingsV8.cardParts(item)
+        : { thumbnail: "", badge: "", sourceButton: "" };
+    var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
+    var sourceLinkButton = hasSourceLink
+        ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
+            'onclick="event.stopPropagation(); openPropertySourceLink(\'' + encodedEditTargetV648 + '\')">링크</button>'
+        : '<button type="button" class="item-source-link-btn disabled" title="원본 링크 없음" disabled>링크</button>';
+    if (unifiedCardPartsV8.sourceButton)
+        sourceLinkButton = unifiedCardPartsV8.sourceButton;
+    var favoriteHeaderButtonV661 = "";
+    favoriteHeaderButtonV661 = buildPhoneFavoriteButtonV2(item, encodedFavoriteRefV821);
+    var actionContactButtonV654 = buildListContactButtonV654(item, encodedEditTargetV648, false);
+    var depositDisplay = listDisplayValueV650(item, "deposit");
+    var rentDisplay = listDisplayValueV650(item, "rent");
+    var feeDisplay = listDisplayValueV650(item, "fee");
+    var premiumDisplay = listDisplayValueV650(item, "premium");
+    var areaDisplay = listDisplayValueV650(item, "area");
+    var saleCardV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item);
+    var salePriceDisplayV1 = saleCardV1
+        ? (window.JSSaleWorkbenchV1 ? window.JSSaleWorkbenchV1.price(window.JSListingTradeV1.displayPrice(item)) : Number(window.JSListingTradeV1.displayPrice(item) || 0).toLocaleString("ko-KR"))
+        : "";
+    var priceValuesMarkupV1 = saleCardV1
+        ? '<span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span>' +
+            (buildingSaleV1 ? '' : '<span class="price-separator">·</span>' + window.JSListingTradeV1.saleAreaHtml(item))
+        : '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
+            '<span class="price-separator">·</span>' +
+            '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
+            '<span class="price-separator">·</span>' +
+            '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
+            '<span class="price-separator">·</span>' +
+            '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>';
+    var memoToggleButton = '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
+        'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
+        'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\', this)">' +
+        '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
+        '</button>';
+    var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
+    var navButtonV721 = '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
+        'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>';
+    var roadviewButtonV721 = '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +
+        'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span>' + buildCardActionIconV662('roadview') + '</button>';
+    var registerButtonV721 = '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
+        'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>';
+    var favoriteButtonV721 = '<button type="button" class="item-list-add-btn favorite" title="찜 목록에 추가" ' +
+        'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRefV821 + '\')">찜</button>';
+    var editButtonV721 = '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
+        'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';
+    var regularActionButtonsV721 = actionContactButtonV654 + navButtonV721 + roadviewButtonV721 +
+        registerButtonV721 + favoriteButtonV721 + editButtonV721 + sourceLinkButton;
+    var standardActionsV721 = "" + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;
+    div.setAttribute("data-listing-key", item.key);
+    div.setAttribute("data-list-card-id-v681", actionSelectionKeyV660(item));
+    div.setAttribute("data-property-id", String(item.propertyId || "").trim());
+    if (saleCardV1)
+        div.classList.add("listing-sale-card-v1");
     div.setAttribute("title", "매물 상세 보기");
-    div.setAttribute("tabindex", "0");
-    div.setAttribute("role", "group");
-    div.setAttribute("aria-label", (item.name || "매물") + " 상세 보기");
-    div.onkeydown = function(event) {
-      if (event.target !== div || (event.key !== "Enter" && event.key !== " ")) return;
-      event.preventDefault();
-      if (window.JSUnifiedListingsV8) window.JSUnifiedListingsV8.handleCardClick(item, event);
-    };
-  }
-  div.innerHTML =
-    '<div class="item-card-grid-v650' +
-      (customerMatchMapCardV721
-        ? ' standard-card-grid-v661 customer-match-map-card-grid-v721'
-        : (customerMatchControls ? ' customer-match-card-grid-v654' : ' standard-card-grid-v661')) + '">' +
-      unifiedCardPartsV8.thumbnail +
-      '<div class="item-compact-main-v650' +
-        (customerMatchMapCardV721
-          ? ' standard-card-main-v661 customer-match-map-card-main-v721'
-          : (customerMatchControls ? ' customer-match-card-main-v654' : ' standard-card-main-v661')) + '">' +
-        '<div class="item-compact-head-v650">' +
-          selectionControlV1 +
-          '<span class="item-building-year-v650 item-building-year-head-v652' +
+    if (isPhoneListingV2()) {
+        div.setAttribute("title", "매물 상세 보기");
+        div.setAttribute("tabindex", "0");
+        div.setAttribute("role", "group");
+        div.setAttribute("aria-label", (item.name || "매물") + " 상세 보기");
+        div.onkeydown = function(event) {
+            if (event.target !== div || (event.key !== "Enter" && event.key !== " "))
+                return;
+            event.preventDefault();
+            if (window.JSUnifiedListingsV8)
+                window.JSUnifiedListingsV8.handleCardClick(item, event);
+        };
+    }
+    div.innerHTML =
+        '<div class="item-card-grid-v650' +
+            ((' standard-card-grid-v661')) + '">' +
+            unifiedCardPartsV8.thumbnail +
+            '<div class="item-compact-main-v650' +
+            ((' standard-card-main-v661')) + '">' +
+            '<div class="item-compact-head-v650">' +
+            selectionControlV1 +
+            '<span class="item-building-year-v650 item-building-year-head-v652' +
             cachedBuildingYearClassV6519 +
             '" title="건축물대장 사용승인일">' +
             escapeHtml(cachedBuildingYearTextV6519) +
-          '</span>' +
-          doneLabel +
-          (customerMatchControls ? unifiedCardPartsV8.badge : '') +
-          '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
-          '<span class="item-address-room-v650">' +
+            '</span>' +
+            doneLabel +
+            ('') +
+            '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
+            '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
             (buildingSaleV1 ? '' : roomLabelV1
-              ? '<span class="item-room-badge' + (landUseLabelV1 ? ' land-use-badge-v1' : buildingFloorLabelV1 ? ' building-sale-floor-v1' : '') + '" title="' + escapeHtml(roomLabelV1) + '">' + escapeHtml(roomLabelV1) + '</span>'
-              : '<span class="item-room-badge empty">호실 -</span>') +
+                ? '<span class="item-room-badge' + (landUseLabelV1 ? ' land-use-badge-v1' : buildingFloorLabelV1 ? ' building-sale-floor-v1' : '') + '" title="' + escapeHtml(roomLabelV1) + '">' + escapeHtml(roomLabelV1) + '</span>'
+                : '<span class="item-room-badge empty">호실 -</span>') +
             buildListElevatorIconV843(item) +
-          '</span>' +
-          favoriteHeaderButtonV661 +
-          (customerMatchControls && regDateLabel
-            ? '<span class="item-reg-date item-reg-date-head-v651' +
-                (!customerMatchControls ? ' standard-card-v651' : '') +
-                '">등록 ' + escapeHtml(regDateLabel) + '</span>'
-            : '') +
-        '</div>' +
-        buildingSaleInfoV1 +
-        '<div class="price-line item-compact-price-v650">' +
-          sourceLabel +
-          pyeongMiniBadge +
-          '<span class="item-building-year-v650 item-building-year-mobile-v652' +
+            '</span>' +
+            favoriteHeaderButtonV661 +
+            ('') +
+            '</div>' +
+            buildingSaleInfoV1 +
+            '<div class="price-line item-compact-price-v650">' +
+            sourceLabel +
+            pyeongMiniBadge +
+            '<span class="item-building-year-v650 item-building-year-mobile-v652' +
             cachedBuildingYearClassV6519 +
             '" title="건축물대장 사용승인일">' +
             escapeHtml(cachedBuildingYearTextV6519) +
-          '</span>' +
-          typeLabel +
-          '<span class="item-price-values-v652">' +
+            '</span>' +
+            typeLabel +
+            '<span class="item-price-values-v652">' +
             priceValuesMarkupV1 +
-          '</span>' +
-          (!customerMatchControls && regDateLabel
-            ? '<span class="item-reg-date item-reg-date-price-mobile-v652">등록 ' + escapeHtml(regDateLabel) + '</span>'
-            : '') +
-          (saleCardV1 ? window.JSListingTradeV1.saleLandInfoHtml(item) : '') +
-        '</div>' +
-
-        '<div class="item-action-row item-compact-actions-v650' +
-          (customerMatchMapCardV721
-            ? ' customer-match-map-actions-v721'
-            : (customerMatchControls ? ' customer-match-card-actions-v653' : '')) + '">' +
-          (customerMatchMapCardV721 ? customerMatchMapActionsV721 : standardActionsV721) +
-        '</div>' +
-      '</div>' +
-    '</div>' +
-    memoPanel;
-
-  var cardWarmupTimerV6107 = 0;
-
-  function cancelCardWarmupV6107() {
-    if (!cardWarmupTimerV6107) return;
-    window.clearTimeout(cardWarmupTimerV6107);
-    cardWarmupTimerV6107 = 0;
-  }
-
-  function warmUpCardDetailsV6107() {
-    if (!div.isConnected) return;
-    if (window.JSUnifiedListingsV8 &&
-        typeof window.JSUnifiedListingsV8.prefetch === "function") {
-      window.JSUnifiedListingsV8.prefetch(encodeURIComponent(String(item && item.propertyId || "")));
+            '</span>' +
+            (regDateLabel
+                ? '<span class="item-reg-date item-reg-date-price-mobile-v652">등록 ' + escapeHtml(regDateLabel) + '</span>'
+                : '') +
+            (saleCardV1 ? window.JSListingTradeV1.saleLandInfoHtml(item) : '') +
+            '</div>' +
+            '<div class="item-action-row item-compact-actions-v650' +
+            (('')) + '">' +
+            (standardActionsV721) +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            memoPanel;
+    var cardWarmupTimerV6107 = 0;
+    function cancelCardWarmupV6107() {
+        if (!cardWarmupTimerV6107)
+            return;
+        window.clearTimeout(cardWarmupTimerV6107);
+        cardWarmupTimerV6107 = 0;
     }
-    if (Number(item && item.gongsilContactCountV8) > 0) {
-      prefetchListContactPopupV654(encodedEditTargetV648).catch(function() {});
+    function warmUpCardDetailsV6107() {
+        if (!div.isConnected)
+            return;
+        if (window.JSUnifiedListingsV8 &&
+            typeof window.JSUnifiedListingsV8.prefetch === "function") {
+            window.JSUnifiedListingsV8.prefetch(encodeURIComponent(String(item && item.propertyId || "")));
+        }
+        if (Number(item && item.gongsilContactCountV8) > 0) {
+            prefetchListContactPopupV654(encodedEditTargetV648).catch(function() { });
+        }
     }
-  }
-
-  div.onclick = function(event) {
-    cancelCardWarmupV6107();
-    if (window.JSUnifiedListingsV8 &&
-        typeof window.JSUnifiedListingsV8.handleCardClick === "function") {
-      window.JSUnifiedListingsV8.handleCardClick(item, event);
+    div.onclick = function(event) {
+        cancelCardWarmupV6107();
+        if (window.JSUnifiedListingsV8 &&
+            typeof window.JSUnifiedListingsV8.handleCardClick === "function") {
+            window.JSUnifiedListingsV8.handleCardClick(item, event);
+        }
+    };
+    div.onpointerenter = function() {
+        cancelCardWarmupV6107();
+        cardWarmupTimerV6107 = window.setTimeout(function() {
+            cardWarmupTimerV6107 = 0;
+            if (div.matches && !div.matches(":hover"))
+                return;
+            warmUpCardDetailsV6107();
+        }, 180);
+    };
+    div.onpointerleave = cancelCardWarmupV6107;
+    div.onpointerdown = cancelCardWarmupV6107;
+    (appendTarget || document.getElementById("list")).appendChild(div);
+    observeUnifiedDuplicateShimmerV812(div);
+    if (window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
+        window.JSBuildingRegisterBadges.bind(div, item);
     }
-  };
-
-  div.onpointerenter = function() {
-    cancelCardWarmupV6107();
-    cardWarmupTimerV6107 = window.setTimeout(function() {
-      cardWarmupTimerV6107 = 0;
-      if (div.matches && !div.matches(":hover")) return;
-      warmUpCardDetailsV6107();
-    }, 180);
-  };
-
-  div.onpointerleave = cancelCardWarmupV6107;
-  div.onpointerdown = cancelCardWarmupV6107;
-
-
-  (appendTarget || document.getElementById("list")).appendChild(div);
-  observeUnifiedDuplicateShimmerV812(div);
-  if (window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
-    window.JSBuildingRegisterBadges.bind(div, item);
-  }
-
-  if (memoEditing) {
-    requestAnimationFrame(function() {
-      var editor = div.querySelector(".item-memo-editor");
-
-      if (editor) {
-        autoResizeMemoEditor(editor);
-      }
-    });
-  }
-  return div;
+    if (memoEditing) {
+        requestAnimationFrame(function() {
+            var editor = div.querySelector(".item-memo-editor");
+            if (editor) {
+                autoResizeMemoEditor(editor);
+            }
+        });
+    }
+    return div;
 }
 
 
@@ -5357,10 +5167,6 @@ function updatePrintSelectedButton() {
     window.syncSelectionActionBarV657(count);
   }
 }
-
-window.renderCustomerMatchListingCardV719 = function(target, item, context) {
-  return addListItem(item, target, context || {});
-};
 
 
 function removeFieldVisitMarkerFromMemo(memo) {
@@ -5841,10 +5647,7 @@ function showAddressErrors() {
 });
 
 
-
 /* === JS부동산 AI Parser v1.0.1 최종 오버라이드: 권1000/보2000/월100 등 복붙 약어 인식 강화 === */
-
-
 
 
 /* v6.1 기본 계약완료 숨김 UI 초기화 */
@@ -6029,7 +5832,6 @@ if (document.readyState === "loading") {
 } else {
   setupStableDetailFilterV62();
 }
-
 
 
 /* 매물 수정·삭제 UI는 property-edit-v648.js에서 이어서 로드합니다. */

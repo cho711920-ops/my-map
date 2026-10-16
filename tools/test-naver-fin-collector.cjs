@@ -274,7 +274,7 @@ vm.runInContext(source, context, {filename: collectorPath});
   assert(source.includes("width:min(460px"));
   assert(source.includes("선택 클러스터 합계"));
   assert(source.includes("showNaverSaveWait"));
-  assert(source.includes("고객매칭은 자동으로 별도 갱신"));
+  assert(source.includes("매물 저장을 마친 뒤 수집 결과"));
   assert(source.includes("version === VERSION"));
   assert(source.includes("__jsNaverCollectorVersion !== VERSION"));
   assert(source.includes('data-metric="review"'));

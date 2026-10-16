@@ -109,16 +109,4 @@ assert(
 );
 assert(reviewCard.includes("매물검증 바로 보기 →"));
 
-const customerCard = operationsDiagnostic.dashboardCard(
-  "고객 문의",
-  5,
-  "진행 중인 고객 조건",
-  "",
-  "active"
-);
-assert(
-  customerCard.includes("onclick=\"openCustomerWorkQueue('active')\""),
-  "existing customer dashboard navigation must remain unchanged"
-);
-
 console.log("UI action tests: OK");

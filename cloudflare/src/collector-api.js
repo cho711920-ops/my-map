@@ -1,5 +1,4 @@
 import { canonicalListingRoom, normalizedRoomKey, parseListingFloor } from "./floor.js";
-import { refreshCustomerMatchesForListings } from "./d1-api.js";
 import { requireRole } from "./security.js";
 import { collectorDiagnostics } from "./collector-diagnostics.js";
 import { normalizeCollectionCounts, normalizeNewSourceAdCounts, collectionDateRange, summarizeCollectionDay, collectorActionGuidance } from "./collection-status-summary.js";
@@ -2203,10 +2202,9 @@ async function ingestRecords(env, source, values, metadata = {}) {
   if (clean(metadata.scope)) saved.scope = clean(metadata.scope).slice(0, 200);
   await env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
     .bind(JSON.stringify(saved), nowIso(), sessionId).run();
-  const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   return { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
-    inserted: totals.created + totals.merged + totals.updated, customerMatches, sourceBackend: "D1" };
+    inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
 }
 
 export function nextCollectorSourceVisibilityState(current, observed, countMissing) {
@@ -3589,14 +3587,13 @@ async function applyReviewBatch(env, user, body) {
       failed += 1;
     }
   }
-  const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM collector_raw WHERE processing_state='review'").first();
   return { ok: true, action: "applyReviewBatch", processed, failed, aliasesMerged, aliasesFailed, processedReviewIds,
     affectedListingIds: [...affectedListingIds],
     remaining: Number(remaining?.count || 0), actionWritesVerified: processed,
     reviewRowsRemovedVerified: processed, elapsedMs: Date.now() - started,
     operationAdjustments: { pendingReview: -processed },
-    operationRefresh: Number(remaining?.count || 0) === 0, customerMatches, source: "D1" };
+    operationRefresh: Number(remaining?.count || 0) === 0, source: "D1" };
 }
 
 async function consolidateExisting(env, user, body) {
@@ -3617,11 +3614,6 @@ async function consolidateExisting(env, user, body) {
     const mergedMemo = carryConfirmedVisitMemo(primaryMemo, duplicate.operating_memo);
     const confirmationTransferred = mergedMemo !== primaryMemo;
     const statements = [
-      env.DB.prepare(`INSERT OR IGNORE INTO customer_matches (
-          customer_id, listing_id, state, score, memo, created_at, updated_at, contacted_at
-        ) SELECT customer_id, ?1, state, score, memo, created_at, updated_at, contacted_at
-          FROM customer_matches WHERE listing_id=?2`).bind(primary.id, duplicate.id),
-      env.DB.prepare("DELETE FROM customer_matches WHERE listing_id=?1").bind(duplicate.id),
       env.DB.prepare(`UPDATE listing_sources SET listing_id=?1,
         list_snapshot_json=json_set(list_snapshot_json, '$.propertyId', ?1), updated_at=?2
         WHERE listing_id=?3`).bind(primary.id, nowIso(), duplicate.id),
@@ -3642,11 +3634,8 @@ async function consolidateExisting(env, user, body) {
     primaryMemo = mergedMemo;
     consolidated += 1;
   }
-  const customerMatches = body.skipCustomerRefresh
-    ? { listings: 0, evaluated: 0, matched: 0, removed: 0, skipped: true }
-    : await refreshCustomerMatchesForListings(env, [primary.id]);
   return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id,
-    operationAdjustments: { activeMaster: -consolidated, history: consolidated }, customerMatches, source: "D1" };
+    operationAdjustments: { activeMaster: -consolidated, history: consolidated }, source: "D1" };
 }
 
 async function consolidateClassifiedCandidateDuplicates(env, user, classified) {
@@ -3656,8 +3645,7 @@ async function consolidateClassifiedCandidateDuplicates(env, user, classified) {
   if (!primaryMasterId || !duplicateMasterIds.length) return 0;
   const result = await consolidateExisting(env, user, {
     primaryMasterId,
-    duplicateMasterIds,
-    skipCustomerRefresh: true
+    duplicateMasterIds
   });
   return Number(result?.consolidated || 0);
 }
@@ -3761,12 +3749,9 @@ async function mergeSingleCandidateReviews(env, user, options = {}) {
     ? remainingStatement.bind(shardCount, shard).first()
     : remainingStatement.first());
   const remainingSingleCandidate = Number(remaining?.count || 0);
-  const customerMatches = options.refreshCustomerMatches === false
-    ? { listings: 0, evaluated: 0, matched: 0, removed: 0, skipped: true }
-    : await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   return { ok: true, action: "mergeSingleCandidateReviews", scanned: reviewRows.length,
     merged, aliasesMerged, aliasesFailed, failed, affectedListingIds: [...affectedListingIds],
-    remainingSingleCandidate, hasMore: remainingSingleCandidate > 0, shard, shardCount, customerMatches,
+    remainingSingleCandidate, hasMore: remainingSingleCandidate > 0, shard, shardCount,
     operationAdjustments: { pendingReview: -merged }, source: "D1" };
 }
 
@@ -3998,7 +3983,6 @@ async function repairExactReviews(env, user, options = {}) {
       failed += 1;
     }
   }
-  const customerMatches = await refreshCustomerMatchesForListings(env, [...affectedListingIds]);
   const includeRemaining = options.includeRemaining !== false;
   const pending = includeRemaining
     ? await env.DB.prepare(`SELECT COUNT(*) AS count FROM collector_raw
@@ -4010,7 +3994,7 @@ async function repairExactReviews(env, user, options = {}) {
   return { ok: true, action: "repairRoomlessExactReviews", scanned: reviewRows.length,
     merged, created, duplicate, consolidated, aliasesMerged, aliasesFailed, ambiguous, failed,
     hasMore: includeRemaining ? remainingToScan > 0 : reviewRows.length >= scanLimit,
-    remainingToScan, sourceFilter, customerMatches,
+    remainingToScan, sourceFilter,
     operationAdjustments: {
       pendingReview: -(merged + created + duplicate),
       activeMaster: -consolidated,

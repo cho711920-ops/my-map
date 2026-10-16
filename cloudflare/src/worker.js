@@ -39,7 +39,7 @@ const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v3-source-proof.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v14-source-proof.json";
-const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-v4-source-evidence.json";
+const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-no-crm-v4-source-evidence.json";
 const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
 const OPERATIONS_REVISION_KEY = "api-cache/revision/operations.json";
@@ -50,8 +50,8 @@ const UNIFIED_CACHE_ACTIONS = new Set([
   "moveOriginalListing", "restoreListingHistory", "resolveOperationsQualityHold", "toggleDone", "updateProperty"
 ]);
 const OPERATIONS_CACHE_ACTIONS = new Set([
-  "addCustomerActivity", "deleteCustomer", "deleteProperty", "moveOriginalListing", "quickAdd",
-  "rebuildCustomerMatches", "restoreListingHistory", "resolveOperationsQualityHold", "saveCustomer", "toggleDone", "updateCustomerMatch", "updateProperty"
+  "deleteProperty", "moveOriginalListing", "quickAdd",
+  "restoreListingHistory", "resolveOperationsQualityHold", "toggleDone", "updateProperty"
 ]);
 const BROWSER_REVALIDATED_ACTIONS = new Set(["unifiedListings", "geocodeCache"]);
 const UNIFIED_COMPACT_FIELDS = [

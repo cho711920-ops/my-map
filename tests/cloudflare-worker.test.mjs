@@ -243,7 +243,7 @@ test("operations dashboard is served from R2 without repeating full-table counts
       } },
       MEDIA: {
         get: async (key) => {
-          assert.equal(key, "api-cache/operations-dashboard-v4-source-evidence.json");
+          assert.equal(key, "api-cache/operations-dashboard-no-crm-v4-source-evidence.json");
           return {
             customMetadata: { savedAt: String(Date.now()) },
             httpMetadata: { contentType: "application/json; charset=utf-8" },

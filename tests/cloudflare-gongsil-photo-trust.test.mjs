@@ -52,7 +52,6 @@ test("primary dialogs share one minimal single-glyph close-button style", () => 
   const html = fs.readFileSync("index.html", "utf8");
   [
     ".operations-center-close",
-    ".customer-crm-dialog header > button",
     ".property-edit-close-v630",
     ".unified-detail-drawer-v8 > header > button"
   ].forEach((selector) => assert.ok(css.includes(selector), `${selector} must use the shared close control`));

@@ -4,48 +4,6 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const source = (name) => fs.readFileSync("js/" + name, "utf8");
 
-function drafts(account, shared = new Map(), approve = true) {
-  const input = {id:"memo", value:"", getAttribute() { return ""; }};
-  const events = {}, globalEvents = {};
-  const modal = {hidden:false, querySelectorAll() { return [input]; }, querySelector() { return null; }, setAttribute() {}, addEventListener(name, fn) { events[name] = fn; }};
-  const window = {JSAuthenticatedAccountEmail:account, document:{getElementById() { return modal; }},
-    confirm:() => approve, addEventListener(name, fn) { globalEvents[name] = fn; },
-    sessionStorage:{getItem:key=>shared.get(key)||null, setItem:(key,value)=>shared.set(key,value), removeItem:key=>shared.delete(key), key:i=>[...shared.keys()][i], get length() { return shared.size; }} };
-  vm.runInNewContext(source("customer-draft-safety-v1.js"), {window, console});
-  return {api:window.JSCustomerDraftSafetyV1, input, events, globalEvents, modal, window, shared};
-}
-test("customer draft survives reopen in same account but never crosses accounts", () => {
-  const a = drafts("a@test.invalid");
-  a.api.begin("editor", "customer:1", "input"); a.input.value = "미저장 상담"; a.events.input();
-  assert.equal(a.shared.size, 1);
-  const b = drafts("b@test.invalid", a.shared); b.api.begin("editor", "customer:1", "input"); assert.equal(b.input.value, "");
-  const again = drafts("a@test.invalid", a.shared); again.api.begin("editor", "customer:1", "input"); assert.equal(again.input.value, "미저장 상담");
-  again.api.saved("editor"); assert.equal(a.shared.size, 0);
-});
-test("unsaved close can be canceled; expired drafts and logout do not restore personal data", () => {
-  const a = drafts("a@test.invalid", new Map(), false); a.api.begin("editor", "one", "input");
-  a.input.value = "연락처와 상담"; assert.equal(a.api.canClose("editor"), false);
-  const key = [...a.shared.keys()][0], expired = JSON.parse(a.shared.get(key)); expired.at = Date.now() - 13*3600000; a.shared.set(key, JSON.stringify(expired));
-  const again = drafts("a@test.invalid", a.shared); again.api.begin("editor", "one", "input"); assert.equal(again.input.value, "");
-  a.api.clearAll(); assert.equal(a.input.value, ""); assert.equal(a.modal.hidden, true); assert.equal(a.shared.size, 0);
-});
-test("draft storage failure warns before closing and topmost CRM is tracked independently", () => {
-  const a = drafts("a@test.invalid", new Map(), false);
-  a.window.sessionStorage.setItem = () => { throw Error("quota"); };
-  a.api.begin("editor", "one", "input"); a.input.value = "새내용";
-  assert.equal(a.api.canClose("editor"), false); assert.equal(a.api.top(), "editor");
-  a.api.begin("activity", "two", "input"); assert.equal(a.api.top(), "activity");
-  a.api.closed("activity"); assert.equal(a.api.top(), "editor");
-});
-test("customer filter includes every linked source; search keeps input and respects IME", () => {
-  const code = source("operations-center-v7.js"), start = code.indexOf("function matchPropertySourceV719"), end = code.indexOf("function matchPropertyFloorV719", start);
-  const includes = new Function("text", code.slice(start, end) + ";return matchPropertyIncludesSourceV1;")((v) => String(v||"").trim());
-  const property = {sourceTypesV8:["danggeun","naver"]};
-  assert.equal(includes(property,"naver"),true); assert.equal(includes(property,"danggeun"),true); assert.equal(includes(property,"gongsil"),false);
-  assert.match(code, /event\.isComposing \|\| searchInput\._composingV1/);
-  assert.doesNotMatch(code, /next\.setSelectionRange\(next\.value\.length/);
-  assert.match(code, /current\.replaceWith\(next\)/);
-});
 test("unified originals preserve successful data on failure, then retry successfully", async () => {
   let fail = false, count = 0;
   const document = {getElementById() {return null;}, addEventListener() {}};

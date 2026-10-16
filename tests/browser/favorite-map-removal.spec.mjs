@@ -283,6 +283,10 @@ test("removing a deep virtualized row preserves the neighboring card and scroll 
   }, {reviewFolderId});
   await showFolderOnMap(page, isMobile);
   await expectFolderMode(page, 80);
+  if (isMobile) {
+    await expect.poll(() => page.locator("#sidebar").evaluate(element => getComputedStyle(element).transform))
+      .toBe("matrix(1, 0, 0, 1, 0, 0)");
+  }
   const scroller = page.locator(isMobile ? "#list" : "#sidebar");
   const list = page.locator("#list");
   // Scroll through actual incremental rendering until leading cards have been
@@ -293,6 +297,10 @@ test("removing a deep virtualized row preserves the neighboring card and scroll 
     await expect.poll(async () => Number(await list.getAttribute("data-rendered-end"))).toBeGreaterThan(previousEnd);
   }
   await expect.poll(async () => Number(await list.getAttribute("data-rendered-start"))).toBeGreaterThan(0);
+  // The stable full range can seek all the way to the real final row. Leave
+  // room below this review anchor, so deleting a lower row need not clamp the
+  // browser to a shorter absolute bottom before comparing the anchor pixels.
+  await scroller.evaluate(element => {element.scrollTop -= 320;});
   const before = await scroller.evaluate(element => {
     const viewport = element.getBoundingClientRect();
     const cards = Array.from(document.querySelectorAll("#list .item"));

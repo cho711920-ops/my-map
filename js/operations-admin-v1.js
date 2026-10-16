@@ -202,12 +202,12 @@
   }
 
   function activateAdminTab(tab) {
-    ["operationsDashboardPanel", "operationsCollectionsPanel", "operationsReviewsPanel", "operationsCustomersPanel",
+    ["operationsDashboardPanel", "operationsCollectionsPanel", "operationsReviewsPanel",
       "operationsHistoryPanel", "operationsUsersPanel"].forEach(function (id) {
       var node = document.getElementById(id);
       if (node) node.hidden = id !== (tab === "history" ? "operationsHistoryPanel" : "operationsUsersPanel");
     });
-    ["operationsTabDashboard", "operationsTabCollections", "operationsTabReviews", "operationsTabCustomers",
+    ["operationsTabDashboard", "operationsTabCollections", "operationsTabReviews",
       "operationsTabHistory", "operationsTabUsers"].forEach(function (id) {
       var button = document.getElementById(id);
       if (button) button.classList.toggle("active", id === (tab === "history" ? "operationsTabHistory" : "operationsTabUsers"));

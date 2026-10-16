@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { refreshCustomerMatchesForListings, remainingMasterValues, separatedMasterValues } from "../cloudflare/src/d1-api.js";
+import { remainingMasterValues, separatedMasterValues } from "../cloudflare/src/d1-api.js";
 import { listingTradeTypesCanMerge, normalizeListingTradeType } from "../cloudflare/src/listing-trade.js";
 import { carryConfirmedVisitMemo } from "../cloudflare/src/visit-status.js";
 
 const source = readFileSync(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
 const moveStart = source.indexOf("async function moveOriginal(");
-const moveEnd = source.indexOf("function splitRequirement(", moveStart);
+const moveEnd = source.indexOf("async function saveAllowedUser(", moveStart);
 const moveOriginal = new Function("clean", "parseJson", "normalizeListingTradeType", "listingTradeTypesCanMerge",
   "remainingMasterValues", "separatedMasterValues", "carryConfirmedVisitMemo",
   source.slice(moveStart, moveEnd) + "; return moveOriginal;")(
@@ -70,33 +70,7 @@ test("original moves still reject cross-market targets and accept a consistent s
   }
 });
 
-test("new sale listings cannot become zero-rent customer recommendations", async () => {
-  const statements = [];
-  const listings = [
-    { id: "M-LEASE", trade_type: "lease" },
-    { id: "M-SALE", trade_type: "sale" },
-    { id: "M-UNKNOWN", trade_type: "unknown" },
-    { id: "M-LEGACY" }
-  ].map((row) => ({ status: "active", address: "서구 갈마동 1-1", deposit: 0, monthly_rent: 0, ...row }));
-  const env = { DB: {
-    prepare(sql) {
-      return { sql, values: [], bind(...values) { this.values = values; return this; }, async all() {
-        if (sql.includes("FROM customers")) return { results: [{ id: "C-LEASE", requirements_json: "{}" }] };
-        assert.match(sql, /listing_type, trade_type,/);
-        return { results: listings };
-      } };
-    },
-    async batch(batch) { statements.push(...batch); return []; }
-  } };
-  const result = await refreshCustomerMatchesForListings(env, listings.map((row) => row.id));
-  assert.equal(result.matched, 2);
-  assert.equal(result.removed, 2);
-  assert.deepEqual(statements.filter((row) => row.sql.includes("INSERT INTO customer_matches")).map((row) => row.values[1]), ["M-LEASE", "M-LEGACY"]);
-  assert.deepEqual(statements.filter((row) => row.sql.includes("DELETE FROM customer_matches")).map((row) => row.values[1]), ["M-SALE", "M-UNKNOWN"]);
-  const rebuild = source.slice(source.indexOf("async function rebuildCustomerMatches("), source.indexOf("function customerRequirementsFromInput("));
-  assert.match(rebuild, /listing_type, trade_type,/);
-  assert.match(rebuild, /evaluateCustomerListing\(requirements, listing\)/);
-});
+
 
 const recoveryStart = source.indexOf("async function completionSourceRecoveryPlan(");
 const recoveryEnd = source.indexOf("async function toggleDone(", recoveryStart);

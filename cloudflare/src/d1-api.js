@@ -1,4 +1,4 @@
-import { canonicalListingRoom, floorMatchesBounds, listingFloor } from "./floor.js";
+import { canonicalListingRoom } from "./floor.js";
 import {
   accessProfile,
   bootstrapOwnerEmail,
@@ -33,32 +33,15 @@ const UNIFIED_FIELDS = [
 const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
-  "workQueueStatus", "customerWorkspace", "customerMatches", "operationsDashboard",
+  "workQueueStatus", "operationsDashboard",
   "transactionCandidates", "listingChanges", "listingOriginals", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
 ]);
 
 const D1_POST_ACTIONS = new Set([
-  "deleteCustomer", "deleteProperty", "enqueueMutation", "moveOriginalListing", "quickAdd", "saveCloudState",
-  "saveGeocodeCache", "toggleDone", "updateProperty", "updatePropertyMemo", "saveCustomer",
-  "updateCustomerMatch", "rebuildCustomerMatches", "addCustomerActivity",
-  "restoreListingHistory", "saveAllowedUser", "saveLocalAccount"
+  "deleteProperty", "enqueueMutation", "moveOriginalListing", "quickAdd", "saveCloudState",
+  "saveGeocodeCache", "toggleDone", "updateProperty", "updatePropertyMemo", "restoreListingHistory", "saveAllowedUser", "saveLocalAccount"
 ]);
 
-const CUSTOMER_HEADERS = [
-  "고객명/상호", "연락처", "상태", "희망지역", "희망구분", "보증금최소", "보증금최대",
-  "월세최소", "월세최대", "권리금최대", "평수최소", "평수최대", "최저층", "최고층",
-  "필수태그", "선호태그", "제외태그", "요청사항", "담당자", "조건버전", "등록일시",
-  "수정일시", "고객ID"
-];
-
-const MATCH_HEADERS = [
-  "매칭ID", "고객ID", "대표매물ID", "점수", "진행상태", "최초매칭일시", "연락일시",
-  "메모", "수정일시"
-];
-
-const ACTIVITY_HEADERS = [
-  "상담ID", "고객ID", "일시", "단계", "출처", "상담내용", "다음연락일", "담당자"
-];
 
 function clean(value) {
   return String(value == null ? "" : value).trim();
@@ -894,144 +877,15 @@ async function workQueueStatus(env, user) {
   };
 }
 
-function requirementsFromCustomer(row) {
-  return parseJson(row?.requirements_json, {});
-}
-
-function customerRow(row) {
-  const requirements = requirementsFromCustomer(row);
-  return [
-    row.name || "", row.phone || "", row.status || "미팅전", requirements.regions || "",
-    requirements.types || "", requirements.depositMin || "", requirements.depositMax || "",
-    requirements.rentMin || "", requirements.rentMax || "", requirements.premiumMax || "",
-    requirements.areaMin || "", requirements.areaMax || "", requirements.floorMin || "",
-    requirements.floorMax || "", requirements.requiredTags || "", requirements.preferredTags || "",
-    requirements.excludedTags || "", row.memo || "", requirements.manager || "",
-    Number(requirements.conditionVersion) || 1, row.created_at || "", row.updated_at || "", row.id || ""
-  ];
-}
-
-function displayMatchState(value) {
-  const state = clean(value);
-  if (state === "candidate") return "신규";
-  if (state === "introduced") return "소개";
-  if (state === "held") return "보류";
-  return state || "신규";
-}
-
-function matchId(customerId, listingId) {
-  return `CM-${clean(customerId)}-${clean(listingId)}`;
-}
-
-function matchRow(row) {
-  return [
-    matchId(row.customer_id, row.listing_id), row.customer_id || "", row.property_id || row.listing_id || "",
-    Math.round(Number(row.score) || 0), displayMatchState(row.state), row.created_at || "",
-    row.contacted_at || "", row.memo || "", row.updated_at || ""
-  ];
-}
-
-function activityRow(row) {
-  return [
-    row.id || "", row.customer_id || "", row.created_at || "", row.stage || "", row.source || "",
-    row.memo || "", row.next_contact_date || "", row.actor_email || ""
-  ];
-}
-
-async function customerRecords(env) {
-  return allPages(env, `SELECT id, name, phone, status, requirements_json, memo, created_at, updated_at
-    FROM customers ORDER BY updated_at DESC, created_at DESC`, 1_000);
-}
-
-async function customerMatchRecords(env, customerId = "") {
-  const id = clean(customerId);
-  const result = id
-    ? await env.DB.prepare(`SELECT m.customer_id, m.listing_id, m.state, m.score, m.memo,
-        m.created_at, m.updated_at, m.contacted_at, l.property_id
-      FROM customer_matches m JOIN listings l ON l.id=m.listing_id
-      WHERE m.customer_id=?1 AND l.status <> 'deleted'
-      ORDER BY m.score DESC, m.updated_at DESC LIMIT 800`).bind(id).all()
-    : await env.DB.prepare(`SELECT m.customer_id, m.listing_id, m.state, m.score, m.memo,
-        m.created_at, m.updated_at, m.contacted_at, l.property_id
-      FROM customer_matches m JOIN listings l ON l.id=m.listing_id
-      WHERE l.status <> 'deleted' ORDER BY m.updated_at DESC LIMIT 3000`).all();
-  return result?.results || [];
-}
-
-async function activityRecords(env) {
-  return allPages(env, `SELECT id, customer_id, stage, source, memo, next_contact_date, actor_email, created_at
-    FROM customer_activities ORDER BY created_at ASC`, 1_000);
-}
-
-function summarizeMatches(rows) {
-  const byCustomer = {};
-  for (const row of rows) {
-    const id = clean(row.customer_id);
-    if (!byCustomer[id]) byCustomer[id] = { customerId: id, total: 0, fresh: 0, introduced: 0, held: 0, overdue: 0 };
-    const item = byCustomer[id];
-    const state = displayMatchState(row.state);
-    item.total += 1;
-    if (state === "신규") item.fresh += 1;
-    if (state === "소개") item.introduced += 1;
-    if (state === "보류") item.held += 1;
-    if (state === "신규" && !row.contacted_at && Date.now() - Date.parse(row.created_at || 0) >= 3 * 86400000) {
-      item.overdue += 1;
-    }
-  }
-  return Object.values(byCustomer);
-}
-
-async function customerWorkspace(env, requestedCustomerId = "") {
-  const customers = await customerRecords(env);
-  const selectedCustomerId = clean(requestedCustomerId) || clean(customers[0]?.id);
-  const [allMatches, activities] = await Promise.all([
-    customerMatchRecords(env),
-    activityRecords(env)
-  ]);
-  const selectedMatches = selectedCustomerId
-    ? allMatches.filter((row) => clean(row.customer_id) === selectedCustomerId)
-    : [];
-  return {
-    ok: true,
-    action: "customerWorkspace",
-    customerHeaders: CUSTOMER_HEADERS,
-    customers: customers.map(customerRow),
-    matchHeaders: MATCH_HEADERS,
-    matches: selectedMatches.map(matchRow),
-    matchSummary: summarizeMatches(allMatches),
-    activityHeaders: ACTIVITY_HEADERS,
-    activities: activities.map(activityRow),
-    selectedCustomerId,
-    contactReminderDays: 3,
-    source: "D1"
-  };
-}
-
-async function customerMatches(env, customerId) {
-  const rows = await customerMatchRecords(env, customerId);
-  return { ok: true, action: "customerMatches", headers: MATCH_HEADERS, rows: rows.map(matchRow), source: "D1" };
-}
-
 async function computeOperationsDashboard(env) {
   const result = await env.DB.prepare(`SELECT
       (SELECT COUNT(*) FROM listings WHERE status <> 'deleted') AS active_master,
       (SELECT COUNT(*) FROM listing_sources WHERE active=1) AS raw_count,
       (SELECT COUNT(*) FROM collector_raw WHERE processing_state IN ('pending','review')) AS pending_review,
-      (SELECT COUNT(*) FROM customers WHERE status NOT IN ('계약완료','종료')) AS open_customers,
-      (SELECT COUNT(*) FROM customer_matches WHERE state IN ('candidate','신규')) AS new_matches,
-      (SELECT COUNT(*) FROM customer_matches WHERE state IN ('introduced','소개')) AS introduced_matches,
-      (SELECT COUNT(*) FROM customer_matches WHERE state IN ('candidate','신규')
-        AND datetime(created_at) <= datetime('now','-3 days')) AS overdue_matches,
-      (SELECT COUNT(*) FROM customer_activities WHERE next_contact_date <> ''
-        AND date(next_contact_date) <= date('now')) AS due_followups,
       (SELECT COUNT(*) FROM listings l WHERE ${candidateMasterWhereSql()}) AS transaction_candidates,
       ${candidateAdCountSql()} AS candidate_ad_count,
       (SELECT COUNT(*) FROM listings l WHERE ${publicMasterWhereSql()} AND l.status='계약완료') AS manual_completed,
       (SELECT COUNT(*) FROM listing_history) AS history_count`).first();
-  const customerSummary = await env.DB.prepare(`SELECT customer_id,
-      SUM(CASE WHEN state IN ('candidate','신규') THEN 1 ELSE 0 END) AS fresh,
-      SUM(CASE WHEN state IN ('candidate','신규') AND datetime(created_at) <= datetime('now','-3 days') THEN 1 ELSE 0 END) AS overdue
-    FROM customer_matches GROUP BY customer_id`).all();
   return {
     ok: true,
     action: "operationsDashboard",
@@ -1041,22 +895,12 @@ async function computeOperationsDashboard(env) {
     raw: Number(result?.raw_count) || 0,
     pendingReview: Number(result?.pending_review) || 0,
     review: Number(result?.pending_review) || 0,
-    openCustomers: Number(result?.open_customers) || 0,
-    customers: Number(result?.open_customers) || 0,
-    newMatches: Number(result?.new_matches) || 0,
-    matches: Number(result?.new_matches) || 0,
-    introducedMatches: Number(result?.introduced_matches) || 0,
-    overdueMatches: Number(result?.overdue_matches) || 0,
-    dueFollowups: Number(result?.due_followups) || 0,
     transactionCheckCandidates: Number(result?.transaction_candidates) || 0,
     candidateAdCount: Number(result?.candidate_ad_count) || 0,
     totalUnavailable: Number(result?.transaction_candidates) || 0,
     manualCompleted: Number(result?.manual_completed) || 0,
     completedOnlyTotal: (Number(result?.transaction_candidates) || 0) + (Number(result?.manual_completed) || 0),
     history: Number(result?.history_count) || 0,
-    newMatchCustomers: (customerSummary?.results || []).filter((row) => Number(row.fresh) > 0).length,
-    overdueCustomers: (customerSummary?.results || []).filter((row) => Number(row.overdue) > 0).length,
-    contactReminderDays: 3,
     calculatedAt: new Date().toISOString(),
     source: "D1-CALCULATED"
   };
@@ -1439,8 +1283,8 @@ export async function handleD1GetAction(env, user, query) {
   if (action === "checkDuplicate") return duplicateCheck(env, parseJson(query.values, []));
   if (action === "mutationStatus") return mutationStatus(env, user, query.requestId);
   if (action === "workQueueStatus") return workQueueStatus(env, user);
-  if (action === "customerWorkspace") return customerWorkspace(env, query.customerId);
-  if (action === "customerMatches") return customerMatches(env, query.customerId);
+
+
   if (action === "operationsDashboard") return operationsDashboard(env);
   if (action === "transactionCandidates") return transactionCandidates(env);
   if (action === "listingChanges") return listingChanges(env, query);
@@ -2166,318 +2010,6 @@ async function moveOriginal(env, user, body) {
       history: (sourceMasterRemoved ? 1 : 0) + (confirmationTransferred ? 1 : 0) }, source: "D1" };
 }
 
-function splitRequirement(value) {
-  return clean(value).split(/[,/|]/).map((item) => item.trim()).filter(Boolean);
-}
-
-function nullableRequirementNumber(value) {
-  const valueText = clean(value);
-  if (!valueText) return null;
-  const parsed = Number(valueText.replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function evaluateCustomerListing(requirements, row) {
-  // Current customer requirements describe lease budgets only. A sale's zero
-  // rental fields must never qualify it as a cheap rental recommendation.
-  if (normalizeListingTradeType(row.trade_type, { legacyDefault: true }) !== "lease") return null;
-  const regions = splitRequirement(requirements.regions);
-  const types = splitRequirement(requirements.types);
-  const requiredTags = splitRequirement(requirements.requiredTags);
-  const preferredTags = splitRequirement(requirements.preferredTags);
-  const excludedTags = splitRequirement(requirements.excludedTags);
-  const searchable = [row.title, row.address, row.road_address, row.building_name, row.listing_type,
-    row.operating_memo, row.search_tags].map(clean).join(" ").toLowerCase();
-  if (regions.length && !regions.some((item) => searchable.includes(item.toLowerCase()))) return null;
-  if (types.length && !types.some((item) => searchable.includes(item.toLowerCase()))) return null;
-  if (requiredTags.some((item) => !searchable.includes(item.toLowerCase()))) return null;
-  if (excludedTags.some((item) => searchable.includes(item.toLowerCase()))) return null;
-
-  const deposit = Number(row.deposit) || 0;
-  const rent = Number(row.monthly_rent) || 0;
-  const premium = Number(row.premium) || 0;
-  const area = Number(row.area_m2) || 0;
-  const floor = listingFloor(row);
-  const limits = {
-    depositMin: nullableRequirementNumber(requirements.depositMin),
-    depositMax: nullableRequirementNumber(requirements.depositMax),
-    rentMin: nullableRequirementNumber(requirements.rentMin),
-    rentMax: nullableRequirementNumber(requirements.rentMax),
-    premiumMax: nullableRequirementNumber(requirements.premiumMax),
-    areaMin: nullableRequirementNumber(requirements.areaMin),
-    areaMax: nullableRequirementNumber(requirements.areaMax),
-    floorMin: nullableRequirementNumber(requirements.floorMin),
-    floorMax: nullableRequirementNumber(requirements.floorMax)
-  };
-  if (limits.depositMin != null && deposit < limits.depositMin) return null;
-  if (limits.depositMax != null && deposit > limits.depositMax) return null;
-  if (limits.rentMin != null && rent < limits.rentMin) return null;
-  if (limits.rentMax != null && rent > limits.rentMax) return null;
-  if (limits.premiumMax != null && premium > limits.premiumMax) return null;
-  if (limits.areaMin != null && area < limits.areaMin) return null;
-  if (limits.areaMax != null && area > limits.areaMax) return null;
-  if (!floorMatchesBounds(floor, limits.floorMin, limits.floorMax)) return null;
-
-  let score = 70;
-  if (regions.length) score += 8;
-  if (types.length) score += 7;
-  if (requiredTags.length) score += Math.min(9, requiredTags.length * 3);
-  score += Math.min(6, preferredTags.filter((item) => searchable.includes(item.toLowerCase())).length * 2);
-  if (limits.depositMax != null && limits.depositMax > 0) score += Math.max(0, 3 - Math.round(deposit / limits.depositMax * 3));
-  if (limits.rentMax != null && limits.rentMax > 0) score += Math.max(0, 3 - Math.round(rent / limits.rentMax * 3));
-  return Math.min(100, score);
-}
-
-export async function refreshCustomerMatchesForListings(env, listingIds = []) {
-  const ids = [...new Set((Array.isArray(listingIds) ? listingIds : [listingIds]).map(clean).filter(Boolean))].slice(0, 500);
-  if (!ids.length) return { listings: 0, evaluated: 0, matched: 0, removed: 0 };
-  const customers = await allPages(env, `SELECT id, requirements_json FROM customers
-    WHERE status NOT IN ('계약완료','종료') ORDER BY updated_at DESC`, 500);
-  const listings = [];
-  for (let offset = 0; offset < ids.length; offset += 80) {
-    const chunk = ids.slice(offset, offset + 80);
-    const placeholders = chunk.map((_, index) => `?${index + 1}`).join(",");
-    const page = await env.DB.prepare(`SELECT id, property_id, title, address, road_address, building_name,
-        listing_type, trade_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags, status
-      FROM listings WHERE id IN (${placeholders})`).bind(...chunk).all();
-    listings.push(...(page?.results || []));
-  }
-  const byId = new Map(listings.map((listing) => [clean(listing.id), listing]));
-  const statements = [];
-  const now = new Date().toISOString();
-  let matched = 0;
-  let removed = 0;
-  for (const listingId of ids) {
-    const listing = byId.get(listingId);
-    for (const customer of customers) {
-      const score = listing && clean(listing.status) !== "deleted"
-        ? evaluateCustomerListing(requirementsFromCustomer(customer), listing)
-        : null;
-      if (score == null) {
-        statements.push(env.DB.prepare(`DELETE FROM customer_matches
-          WHERE customer_id=?1 AND listing_id=?2 AND state IN ('candidate','신규')`).bind(customer.id, listingId));
-        removed += 1;
-      } else {
-        statements.push(env.DB.prepare(`INSERT INTO customer_matches (
-            customer_id, listing_id, state, score, memo, created_at, updated_at
-          ) VALUES (?1, ?2, '신규', ?3, '', ?4, ?4)
-          ON CONFLICT(customer_id, listing_id) DO UPDATE SET score=excluded.score, updated_at=excluded.updated_at`)
-          .bind(customer.id, listingId, score, now));
-        matched += 1;
-      }
-    }
-  }
-  for (let offset = 0; offset < statements.length; offset += 80) await env.DB.batch(statements.slice(offset, offset + 80));
-  return { listings: ids.length, evaluated: ids.length * customers.length, matched, removed };
-}
-
-async function rebuildCustomerMatches(env, customerId = "") {
-  const requested = clean(customerId);
-  const customers = requested
-    ? (await env.DB.prepare(`SELECT id, requirements_json FROM customers WHERE id=?1`).bind(requested).all())?.results || []
-    : await allPages(env, `SELECT id, requirements_json FROM customers
-        WHERE status NOT IN ('계약완료','종료') ORDER BY updated_at DESC`, 500);
-  const listings = await allPages(env, `SELECT id, property_id, title, address, road_address, building_name,
-      listing_type, trade_type, floor, room, deposit, monthly_rent, premium, area_m2, operating_memo, search_tags
-    FROM listings WHERE status <> 'deleted'`, 3_000);
-  let rebuilt = 0;
-  let matchCount = 0;
-  for (const customer of customers) {
-    const requirements = requirementsFromCustomer(customer);
-    const candidates = listings.map((listing) => ({ listing, score: evaluateCustomerListing(requirements, listing) }))
-      .filter((item) => item.score != null)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 800);
-    await env.DB.prepare(`DELETE FROM customer_matches
-      WHERE customer_id=?1 AND state IN ('candidate','신규')`).bind(customer.id).run();
-    const now = new Date().toISOString();
-    for (let offset = 0; offset < candidates.length; offset += 50) {
-      await env.DB.batch(candidates.slice(offset, offset + 50).map(({ listing, score }) => env.DB.prepare(`INSERT INTO customer_matches (
-          customer_id, listing_id, state, score, memo, created_at, updated_at
-        ) VALUES (?1, ?2, '신규', ?3, '', ?4, ?4)
-        ON CONFLICT(customer_id, listing_id) DO UPDATE SET
-          score=excluded.score, updated_at=excluded.updated_at`)
-        .bind(customer.id, listing.id, score, now)));
-    }
-    rebuilt += 1;
-    matchCount += candidates.length;
-  }
-  return { rebuilt, matchCount };
-}
-
-function customerRequirementsFromInput(input, previous = {}) {
-  return {
-    regions: clean(input["희망지역"] ?? previous.regions),
-    types: clean(input["희망구분"] ?? previous.types),
-    depositMin: clean(input["보증금최소"] ?? previous.depositMin),
-    depositMax: clean(input["보증금최대"] ?? previous.depositMax),
-    rentMin: clean(input["월세최소"] ?? previous.rentMin),
-    rentMax: clean(input["월세최대"] ?? previous.rentMax),
-    premiumMax: clean(input["권리금최대"] ?? previous.premiumMax),
-    areaMin: clean(input["평수최소"] ?? previous.areaMin),
-    areaMax: clean(input["평수최대"] ?? previous.areaMax),
-    floorMin: clean(input["최저층"] ?? previous.floorMin),
-    floorMax: clean(input["최고층"] ?? previous.floorMax),
-    requiredTags: clean(input["필수태그"] ?? previous.requiredTags),
-    preferredTags: clean(input["선호태그"] ?? previous.preferredTags),
-    excludedTags: clean(input["제외태그"] ?? previous.excludedTags),
-    manager: clean(input["담당자"] ?? previous.manager),
-    conditionVersion: Math.max(1, Number(previous.conditionVersion) || 0) + 1
-  };
-}
-
-async function insertCustomerActivity(env, user, values) {
-  const id = `CA-${crypto.randomUUID()}`;
-  const now = new Date().toISOString();
-  const stage = clean(values.stage) || "상담";
-  await env.DB.prepare(`INSERT INTO customer_activities (
-      id, customer_id, stage, source, memo, next_contact_date, actor_email, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`)
-    .bind(id, clean(values.customerId), stage, clean(values.source) || "web", clean(values.memo),
-      clean(values.nextContactDate), clean(user?.email), now).run();
-  if (["미팅완료", "임장"].includes(stage)) {
-    await env.DB.prepare(`UPDATE customers SET status='미팅후', updated_at=?1 WHERE id=?2`)
-      .bind(now, clean(values.customerId)).run();
-  }
-  return {
-    id,
-    customer_id: clean(values.customerId),
-    stage,
-    source: clean(values.source) || "web",
-    memo: clean(values.memo),
-    next_contact_date: clean(values.nextContactDate),
-    actor_email: clean(user?.email),
-    created_at: now
-  };
-}
-
-async function saveCustomer(env, user, body) {
-  const input = body.customer && typeof body.customer === "object" ? body.customer : {};
-  const customerId = clean(body.customerId) || `C-${crypto.randomUUID()}`;
-  const existing = await env.DB.prepare(`SELECT * FROM customers WHERE id=?1`).bind(customerId).first();
-  const previousRequirements = requirementsFromCustomer(existing);
-  const requirements = customerRequirementsFromInput(input, previousRequirements);
-  if (!existing) requirements.conditionVersion = 1;
-  const name = clean(input["고객명/상호"] ?? existing?.name);
-  if (!name) throw Object.assign(new Error("고객명/상호를 입력해주세요."), { statusCode: 400 });
-  const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO customers (id, name, phone, status, requirements_json, memo, created_at, updated_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
-    ON CONFLICT(id) DO UPDATE SET name=excluded.name, phone=excluded.phone, status=excluded.status,
-      requirements_json=excluded.requirements_json, memo=excluded.memo, updated_at=excluded.updated_at`)
-    .bind(customerId, name, clean(input["연락처"] ?? existing?.phone),
-      clean(input["상태"] ?? existing?.status) || "미팅전", JSON.stringify(requirements),
-      clean(input["요청사항"] ?? existing?.memo), existing?.created_at || now).run();
-  let savedActivity = null;
-  if (clean(body.consultationMemo) || clean(body.nextContactDate)) {
-    savedActivity = await insertCustomerActivity(env, user, {
-      customerId,
-      stage: "상담",
-      source: "customerSave",
-      memo: body.consultationMemo,
-      nextContactDate: body.nextContactDate
-    });
-  }
-  const rebuilt = await rebuildCustomerMatches(env, customerId);
-  const updated = await env.DB.prepare(`SELECT * FROM customers WHERE id=?1`).bind(customerId).first();
-  const matches = await customerMatchRecords(env, customerId);
-  const allMatches = await customerMatchRecords(env);
-  const result = {
-    ok: true,
-    action: "saveCustomer",
-    persisted: true,
-    queued: false,
-    customerId,
-    customerHeaders: CUSTOMER_HEADERS,
-    customerRow: customerRow(updated),
-    matchHeaders: MATCH_HEADERS,
-    matches: matches.map(matchRow),
-    matchSummary: summarizeMatches(allMatches),
-    activityHeaders: ACTIVITY_HEADERS,
-    activityRow: savedActivity ? activityRow(savedActivity) : null,
-    rebuilt: rebuilt.rebuilt,
-    matchCount: rebuilt.matchCount,
-    source: "D1"
-  };
-  if (!body.compactResponse) result.workspace = await customerWorkspace(env, customerId);
-  return result;
-}
-
-export async function deleteCustomer(env, body) {
-  const customerId = clean(body.customerId).slice(0, 100);
-  if (!customerId) throw Object.assign(new Error("삭제할 고객을 선택해 주세요."), { statusCode: 400 });
-  const customer = await env.DB.prepare(`SELECT id, name FROM customers WHERE id=?1 LIMIT 1`)
-    .bind(customerId).first();
-  if (!customer) throw Object.assign(new Error("삭제할 고객을 찾을 수 없습니다."), { statusCode: 404 });
-  const related = await env.DB.prepare(`SELECT
-      (SELECT COUNT(*) FROM customer_matches WHERE customer_id=?1) AS match_count,
-      (SELECT COUNT(*) FROM customer_activities WHERE customer_id=?1) AS activity_count`)
-    .bind(customerId).first();
-  const results = await env.DB.batch([
-    env.DB.prepare("DELETE FROM customer_matches WHERE customer_id=?1").bind(customerId),
-    env.DB.prepare("DELETE FROM customer_activities WHERE customer_id=?1").bind(customerId),
-    env.DB.prepare("DELETE FROM customers WHERE id=?1").bind(customerId)
-  ]);
-  if (!Number(results?.[2]?.meta?.changes || 0)) {
-    throw Object.assign(new Error("고객 삭제를 완료하지 못했습니다."), { statusCode: 409 });
-  }
-  return {
-    ok: true,
-    action: "deleteCustomer",
-    persisted: true,
-    queued: false,
-    deleted: true,
-    customerId,
-    customerName: clean(customer.name),
-    deletedMatches: Number(related?.match_count || 0),
-    deletedActivities: Number(related?.activity_count || 0),
-    source: "D1"
-  };
-}
-
-async function updateCustomerMatch(env, body) {
-  const customerId = clean(body.customerId);
-  const propertyId = clean(body.masterId || body.propertyId);
-  const listing = await env.DB.prepare(`SELECT id FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1`)
-    .bind(propertyId).first();
-  if (!customerId || !listing) throw Object.assign(new Error("고객 또는 매칭 매물을 찾을 수 없습니다."), { statusCode: 404 });
-  const state = displayMatchState(body.status);
-  const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO customer_matches (
-      customer_id, listing_id, state, score, memo, created_at, updated_at
-    ) VALUES (?1, ?2, ?3, 0, '', ?4, ?4)
-    ON CONFLICT(customer_id, listing_id) DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at`)
-    .bind(customerId, listing.id, state, now).run();
-  return {
-    ok: true,
-    action: "updateCustomerMatch",
-    persisted: true,
-    queued: false,
-    customerId,
-    propertyId,
-    matchId: matchId(customerId, listing.id),
-    status: state,
-    source: "D1"
-  };
-}
-
-async function addCustomerActivity(env, user, body) {
-  const customerId = clean(body.customerId);
-  const customer = await env.DB.prepare(`SELECT id FROM customers WHERE id=?1`).bind(customerId).first();
-  if (!customer) throw Object.assign(new Error("고객을 찾을 수 없습니다."), { statusCode: 404 });
-  const saved = await insertCustomerActivity(env, user, body);
-  return {
-    ok: true,
-    action: "addCustomerActivity",
-    persisted: true,
-    queued: false,
-    stage: saved.stage,
-    activityHeaders: ACTIVITY_HEADERS,
-    activityRow: activityRow(saved),
-    source: "D1"
-  };
-}
-
 async function saveAllowedUser(env, user, body) {
   requireRole(user, ["owner", "admin"]);
   const email = clean(body.email).toLowerCase().slice(0, 254);
@@ -2606,15 +2138,8 @@ async function executePost(env, user, body) {
   if (action === "saveCloudState") return saveCloudState(env, user, body);
   if (action === "saveGeocodeCache") return saveGeocode(env, body);
   if (action === "moveOriginalListing") return moveOriginal(env, user, body);
-  if (action === "saveCustomer") return saveCustomer(env, user, body);
-  if (action === "deleteCustomer") return deleteCustomer(env, body);
-  if (action === "updateCustomerMatch") return updateCustomerMatch(env, body);
-  if (action === "rebuildCustomerMatches") {
-    const rebuilt = await rebuildCustomerMatches(env, body.customerId);
-    return { ok: true, action, persisted: true, queued: false, ...rebuilt,
-      workspace: await customerWorkspace(env, body.customerId), source: "D1" };
-  }
-  if (action === "addCustomerActivity") return addCustomerActivity(env, user, body);
+
+
   if (action === "enqueueMutation") {
     const nested = { ...(body.payload || {}), action: clean(body.taskAction), requestId: clean(body.requestId) };
     if (!isD1PostAction(nested.action) || nested.action === "enqueueMutation") return null;
@@ -2627,6 +2152,7 @@ export async function handleD1PostAction(env, user, body) {
   const action = clean(body?.action);
   if (!env.DB || !isD1PostAction(action)) return null;
   const effectiveAction = action === "enqueueMutation" ? clean(body.taskAction) : action;
+  if (action === "enqueueMutation" && (!isD1PostAction(effectiveAction) || effectiveAction === "enqueueMutation")) return null;
   if (effectiveAction === "saveCloudState") {
     requireActiveCloudScope(action === "enqueueMutation" ? body.payload?.scope : body.scope);
   }

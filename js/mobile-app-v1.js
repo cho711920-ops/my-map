@@ -37,10 +37,6 @@
     "#propertyEditModalV630.open",
     "#buildingRegisterModalV640.open",
     "#reviewDecisionModal.open",
-    "#customerWorkAlert.open",
-    "#customerEditorModal:not([hidden])",
-    "#customerActivityModal:not([hidden])",
-    "#customerMemoModal:not([hidden])",
     "#aiVisitCompleteModal.open",
     "#aiVisitConfirmModal.open",
     "#aiVisitLauncherModal.open",
@@ -50,7 +46,6 @@
     "#itemListPickerModal.open",
     "#listManagerModal.open",
     "#operationsCenter.open",
-    "#operationsCustomersPanel[data-mobile-customer-screen='matches']",
     "#unifiedDetailDrawerV8.open"
   ];
 
@@ -94,7 +89,6 @@
         navButton("list", "매물", "list") +
         navButton("favorites", "찜", "heart") +
         navButton("visit", "임장", "route") +
-        navButton("customers", "고객", "users") +
         navButton("more", "더보기", "more") +
       '</nav>' +
       '<button type="button" id="jsMobileSaveStatusV1" class="jsm-save-status-v1" data-mobile-action="save-status" aria-live="polite" hidden></button>' +
@@ -236,10 +230,6 @@
     }
     if (nextView === "visit") {
       if (typeof global.startAiVisitPreview === "function") global.startAiVisitPreview();
-      return;
-    }
-    if (nextView === "customers") {
-      if (typeof global.openOperationsCenter === "function") global.openOperationsCenter("customers");
       return;
     }
     if (nextView === "more") {
@@ -388,10 +378,6 @@
     if (id === "propertyEditModalV630" && typeof global.closePropertyEditModalV630 === "function") return global.closePropertyEditModalV630();
     if (id === "buildingRegisterModalV640" && typeof global.closeBuildingRegisterV640 === "function") return global.closeBuildingRegisterV640();
     if (id === "reviewDecisionModal" && typeof global.closeReviewDecisionModal === "function") return global.closeReviewDecisionModal();
-    if (id === "customerWorkAlert" && typeof global.closeCustomerWorkAlert === "function") return global.closeCustomerWorkAlert();
-    if (id === "customerEditorModal" && typeof global.closeCustomerEditor === "function") return global.closeCustomerEditor();
-    if (id === "customerActivityModal" && typeof global.closeCustomerActivity === "function") return global.closeCustomerActivity();
-    if (id === "customerMemoModal" && typeof global.closeCustomerMemo === "function") return global.closeCustomerMemo();
     if (id === "aiVisitCompleteModal" && global.JSAiVisitV6) return global.JSAiVisitV6.closeCompleteConfirm();
     if (id === "aiVisitConfirmModal" && global.JSAiVisitV6) return global.JSAiVisitV6.closeConfirm();
     if (id === "aiVisitLauncherModal" && global.JSAiVisitV6) return global.JSAiVisitV6.closeLauncher();
@@ -400,7 +386,6 @@
     if (id === "itemListPickerModal" && typeof global.closeItemListPicker === "function") return global.closeItemListPicker();
     if (id === "listManagerModal" && typeof global.closeListManager === "function") return global.closeListManager();
     if (id === "operationsCenter" && typeof global.closeOperationsCenter === "function") return global.closeOperationsCenter();
-    if (id === "operationsCustomersPanel" && typeof global.showMobileCustomerListV1 === "function") return global.showMobileCustomerListV1();
     if (id === "v6DetailSheetPortal" && global.JSV6MobileDetailFix) return global.JSV6MobileDetailFix.close();
     var closeButton = element.querySelector("[aria-label*='닫기'], [data-v6-detail-close], .close");
     if (closeButton) closeButton.click();
@@ -454,7 +439,7 @@
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["class", "hidden", "aria-hidden", "style", "data-mobile-customer-screen"]
+      attributeFilter: ["class", "hidden", "aria-hidden", "style"]
     });
   }
 

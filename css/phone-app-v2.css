@@ -22,7 +22,6 @@
 }
 .js-phone-app-v2 .jsm-title-row-v1,
 .js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="visit"],
-.js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="customers"],
 .js-phone-app-v2 #jsMobileAppV1 [data-mobile-view="more"],
 .js-phone-app-v2 #jsMobileMoreLayerV1,
 .js-phone-app-v2 #activeFilterChipsV844,
@@ -33,8 +32,7 @@
 .js-phone-app-v2 .map-quick-tools,
 .js-phone-app-v2 #toggleBtn,
 .js-phone-app-v2 #selectionActionBar,
-.js-phone-app-v2 #multiClusterStatus,
-.js-phone-app-v2 #customerMatchMapStatus { display: none !important; }
+.js-phone-app-v2 #multiClusterStatus{ display: none !important; }
 
 .js-phone-app-v2 .jsm-app-header-v1 {
   position: fixed; inset: 0 0 auto; z-index: 10030; height: auto;

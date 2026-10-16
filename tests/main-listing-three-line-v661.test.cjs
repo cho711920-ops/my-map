@@ -12,9 +12,9 @@ assert.match(script, /function isConfirmedVisitItem\(item\)/);
 assert.match(script, /item\.memo = markFieldVisitConfirmedInMemo\(item\.memo \|\| ""\)/);
 assert.match(script, /standard-card-grid-v661/);
 assert.match(script, /standard-card-main-v661/);
-assert.match(script, /customerMatchControls \? unifiedCardPartsV8\.badge : ''/);
+
 assert.match(script, /var favoriteHeaderButtonV661 = "";/);
-assert.doesNotMatch(script, /favoriteHeaderButtonV661 = !customerMatchControls/);
+
 assert.match(script, /buildCardActionIconV662\('roadview'\)/);
 assert.match(script, /buildCardActionIconV662\('settings'\)/);
 assert.doesNotMatch(script, /buildMemoEmojiIconV664\(\)/);

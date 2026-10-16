@@ -10,8 +10,6 @@
   .item-compact-actions-v650 {
     min-height: 29px !important;
   }
-
-  .item-compact-actions-v650 .customer-match-inline-actions button,
   .item-compact-actions-v650 .item-nav-btn,
   .item-compact-actions-v650 .item-roadview-btn,
   .item-compact-actions-v650 .item-building-register-btn,
@@ -31,8 +29,6 @@
   .item-compact-actions-v650 {
     min-height: 34px !important;
   }
-
-  .item-compact-actions-v650 .customer-match-inline-actions button,
   .item-compact-actions-v650 .item-nav-btn,
   .item-compact-actions-v650 .item-roadview-btn,
   .item-compact-actions-v650 .item-building-register-btn,
@@ -82,22 +78,6 @@
 @media (max-width: 768px) {
   .v6-toolbar-secondary.v6-command-bar > .async-mutation-status-v1 {
     display: none !important;
-  }
-}
-
-/* 고객매칭 지도 보류 토글은 공통 지도도구 배경보다 우선합니다. */
-@media (min-width: 769px) {
-  #customerMatchHeldToggleV1.customer-match-held-toggle-v1 {
-    border-color: #1e293b !important;
-    background: #334155 !important;
-    color: #fff !important;
-  }
-
-  #customerMatchHeldToggleV1.customer-match-held-toggle-v1.on {
-    border-color: #d97706 !important;
-    background: #f59e0b !important;
-    color: #fff !important;
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, .22) !important;
   }
 }
 

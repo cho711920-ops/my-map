@@ -3595,7 +3595,7 @@
       (index + batchLength).toLocaleString("ko-KR") + " / " +
       total.toLocaleString("ko-KR") + "개 · " +
       seconds.toLocaleString("ko-KR") + "초 경과\n" +
-      "매물 저장을 먼저 끝내고 고객매칭은 자동으로 별도 갱신합니다."
+      "매물 저장을 마친 뒤 수집 결과를 확인합니다."
     );
   }
 

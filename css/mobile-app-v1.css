@@ -80,7 +80,6 @@
   .js-mobile-app-v1 .filters .v6-toolbar-primary,
   .js-mobile-app-v1 .filters .v6-toolbar-secondary,
   .js-mobile-app-v1 #multiClusterStatus,
-  .js-mobile-app-v1 #customerMatchMapStatus,
   .js-mobile-app-v1 #selectionActionBar,
   .js-mobile-app-v1 #toggleBtn,
   .js-mobile-app-v1 .map-quick-tools {
@@ -289,8 +288,7 @@
   .js-mobile-app-v1 .item-compact-actions-v650 .item-list-add-btn,
   .js-mobile-app-v1 .item-compact-actions-v650 .item-edit-btn-v630,
   .js-mobile-app-v1 .item-compact-actions-v650 .item-source-link-btn,
-  .js-mobile-app-v1 .item-compact-actions-v650 .item-memo-toggle,
-  .js-mobile-app-v1 .item-compact-actions-v650 .customer-match-inline-actions {
+  .js-mobile-app-v1 .item-compact-actions-v650 .item-memo-toggle{
     display: none !important;
   }
 

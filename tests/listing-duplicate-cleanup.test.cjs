@@ -14,7 +14,7 @@ assert.match(ui, /fetch\(window\.saveApiURL \|\| "\/api\/data"/);
 assert.match(ui, /manualOverride/);
 assert.match(ui, /removeDuplicatesFromCurrentView/);
 assert.match(ui, /window\.loadSheet\(true\)/);
-assert.match(ui, /refreshCustomerMatchesAfterDuplicateMergeV7186/);
+
 assert.match(css, /duplicate-cleanup-primary/);
 assert.match(css, /duplicate-cleanup-target/);
 
@@ -26,6 +26,6 @@ assert.match(collector, /UPDATE listing_contacts SET listing_id=\?1/);
 assert.match(collector, /UPDATE listings SET status='deleted'/);
 assert.match(collector, /INSERT INTO listing_history/);
 assert.match(collector, /action:\s*"consolidateExistingMasters"/);
-assert.match(collector, /customerMatches, source:\s*"D1"/);
+
 
 console.log("listing duplicate cleanup in D1 tests passed");

@@ -13,11 +13,13 @@ test("property list keeps a bounded bidirectional render window", () => {
 
   assert.match(script, /return window\.innerWidth <= 768 \? 14 : 18/);
   assert.match(script, /getListRenderChunkSize\(\) \* 2/);
-  assert.match(script, /function trimListWindowFromStartV1/);
+  assert.match(script, /function renderListWindowV2/);
   assert.match(script, /function renderPreviousListChunkV1/);
   assert.match(script, /data-rendered-start/);
   assert.match(script, /data-rendered-count/);
   assert.match(style, /#list \.list-virtual-top-spacer-v1/);
+  assert.match(style, /#list \.list-virtual-bottom-spacer-v2/);
+  assert.match(script, /function listIndexAtOffsetV2/);
   assert.match(script, /data-list-card-id-v681/);
   assert.match(script, /return actionSelectionKeyV660\(item\) \|\| "__list_index_" \+ index/);
   assert.match(html, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);

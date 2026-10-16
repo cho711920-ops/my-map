@@ -18,7 +18,7 @@ function functionBlock(source, start, end) {
 }
 
 const memoUi = functionBlock(script, "function toggleItemMemo(", "function memoDateLabel(");
-const memoSave = functionBlock(script, "function saveItemMemo(", "function getCustomerMatchStatus(");
+const memoSave = functionBlock(script, "function saveItemMemo(", "function buildCardActionIconV662(");
 const memoD1 = functionBlock(d1, "async function updateMemo(", "async function toggleDone(");
 
 assert.doesNotMatch(memoUi, /showList\(/);

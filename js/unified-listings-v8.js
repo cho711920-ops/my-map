@@ -2370,7 +2370,7 @@
         (!drawer.classList.contains("open") && !drawer.classList.contains("opening-v827"))) return;
     var action = text(button.getAttribute("onclick"));
     var opensOtherMenu = /(?:openOperationsCenter|openListManager|openQuickAddModal|startAiVisitPreview|JSUnifiedListingsV8\.openTell|toggleDetailFilter|toggleV6ActionMenu|toggleSortDropdown)/.test(action) ||
-      button.matches("[data-mobile-view='customers'], [data-mobile-action='quick-add'], [data-mobile-action='favorites'], [data-mobile-action='dashboard'], [data-mobile-action='filter']");
+      button.matches("[data-mobile-action='quick-add'], [data-mobile-action='favorites'], [data-mobile-action='dashboard'], [data-mobile-action='filter']");
     if (opensOtherMenu) {
       closeDetailForOverlay();
     }

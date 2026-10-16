@@ -3,7 +3,6 @@ const fs = require("node:fs");
 
 const mapSource = fs.readFileSync("js/map.js", "utf8");
 const scriptSource = fs.readFileSync("js/script.js", "utf8");
-const operationsSource = fs.readFileSync("js/operations-center-v7.js", "utf8");
 const htmlSource = fs.readFileSync("index.html", "utf8");
 
 assert.match(mapSource, /var jsPinnedClusterSelectionV6515 = null;/);
@@ -23,14 +22,8 @@ assert.match(
   scriptSource,
   /function applyFilter\(\)[\s\S]*?getPinnedClusterItemsV6515\(\)[\s\S]*?선택 매물/
 );
-assert.match(
-  operationsSource,
-  /window\.showSelectedCustomerMatchesOnMap = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
-);
-assert.match(
-  operationsSource,
-  /window\.clearCustomerMatchMapFilter = function\(\) \{[\s\S]*?clearPinnedClusterSelectionV6515\(true\)/
-);
+
+
 assert.match(htmlSource, /js\/map\.js\?v=8\.2\.22-full-initial-render/);
 assert.match(htmlSource, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);
 assert.match(htmlSource, /js\/operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/);

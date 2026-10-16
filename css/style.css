@@ -10,7 +10,7 @@
    v6.5.4 연락처 6개 팝업
    - 세로 연락처 레일 제거
    - 기본 목록: 버튼줄 첫 칸
-   - 고객 매물지도: 등록일 바로 앞
+   - 매물지도: 등록일 표시
    ========================================================= */
 .item-card-grid-v650 {
   grid-template-columns: minmax(0, 1fr) !important;
@@ -556,22 +556,12 @@
     font-weight: 900 !important;
   }
 
-  .desktop-customer-action {
-    border-color: #b8ddc5 !important;
-    background: #eefbf3 !important;
-    color: #087747 !important;
-  }
-
   .v6-toolbar-secondary.v6-command-bar {
     grid-template-columns: 96px 96px 50px 112px 124px !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action {
     grid-column: 1 !important;
-  }
-
-  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action {
-    grid-column: 2 !important;
   }
 
   .v6-toolbar-secondary.v6-command-bar > .map-roadview-select {
@@ -644,23 +634,6 @@
     background: #1769e8 !important;
     color: #fff !important;
     box-shadow: 0 0 0 3px rgba(23, 105, 232, .15);
-  }
-
-  .customer-match-held-toggle-v1[hidden] {
-    display: none !important;
-  }
-
-  .customer-match-held-toggle-v1 {
-    border-color: #1e293b !important;
-    background: #334155 !important;
-    color: #fff !important;
-  }
-
-  .customer-match-held-toggle-v1.on {
-    border-color: #d97706 !important;
-    background: #f59e0b !important;
-    color: #fff !important;
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, .22) !important;
   }
 
   .map-quick-heart-btn {
@@ -1179,7 +1152,8 @@ button {
   padding:8px;
 }
 
-#list .list-virtual-top-spacer-v1 {
+#list .list-virtual-top-spacer-v1,
+#list .list-virtual-bottom-spacer-v2 {
   width:100%;
   height:0;
   pointer-events:none;
@@ -5652,27 +5626,6 @@ body,
   flex-wrap: nowrap !important;
   gap: 4px !important;
 }
-
-.item-compact-actions-v650 .customer-match-inline-actions {
-  display: flex !important;
-  align-items: center !important;
-  flex: 0 0 auto;
-  flex-wrap: nowrap !important;
-  gap: 4px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-}
-
-.item-compact-actions-v650 .customer-match-inline-badge {
-  flex: 0 0 auto !important;
-  margin: 0 !important;
-  padding: 3px 5px !important;
-  font-size: 9px !important;
-}
-
-.item-compact-actions-v650 .customer-match-inline-actions button,
 .item-compact-actions-v650 .item-nav-btn,
 .item-compact-actions-v650 .item-roadview-btn,
 .item-compact-actions-v650 .item-building-register-btn,
@@ -5693,84 +5646,6 @@ body,
 
 .item-compact-actions-v650 .item-memo-toggle {
   margin-left: auto;
-}
-
-/* 고객매칭 지도목록은 모든 작업버튼을 한 줄 너비 안에서 압축하고 메모를 맨 뒤에 유지합니다. */
-.customer-match-card-actions-v653 {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 22px 22px;
-  gap: 4px !important;
-  min-height: 48px !important;
-  overflow: visible !important;
-}
-
-.customer-match-card-actions-v653 .customer-match-inline-actions {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  display: flex !important;
-  width: 100%;
-  flex: 0 0 auto !important;
-  min-width: 0 !important;
-  gap: 3px !important;
-}
-
-.customer-match-card-actions-v653 .customer-match-inline-actions button {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-}
-
-.customer-match-card-actions-v653 .customer-match-inline-badge {
-  flex: 0 1 auto !important;
-  min-width: 0 !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.customer-match-card-actions-v653 .item-action-left {
-  grid-column: 1;
-  grid-row: 2;
-  display: flex !important;
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  gap: 3px !important;
-}
-
-.customer-match-card-actions-v653 .item-action-left > button {
-  flex: 1 1 0 !important;
-  min-width: 0 !important;
-  padding-left: 4px !important;
-  padding-right: 4px !important;
-}
-
-.customer-match-card-actions-v653 .item-memo-toggle {
-  grid-column: 2;
-  grid-row: 2;
-  flex: 0 1 auto !important;
-  min-width: 0 !important;
-  margin-left: 0;
-  padding-left: 5px !important;
-  padding-right: 5px !important;
-  border-color: #c9a7f5;
-  background: #f4ecff;
-  color: #6321ad;
-}
-
-@media (max-width: 1199px) {
-  .customer-match-card-actions-v653 .customer-match-inline-actions button,
-  .customer-match-card-actions-v653 .item-action-left > button,
-  .customer-match-card-actions-v653 .item-memo-toggle {
-    padding-left: 3px !important;
-    padding-right: 3px !important;
-    font-size: 10px !important;
-  }
-
-  .customer-match-card-actions-v653 .customer-match-inline-badge {
-    padding-left: 3px !important;
-    padding-right: 3px !important;
-    font-size: 8.5px !important;
-  }
 }
 
 @media (max-width: 520px) {
@@ -5862,8 +5737,6 @@ body,
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
-  .item-compact-actions-v650 .customer-match-inline-actions button,
   .item-compact-actions-v650 .item-nav-btn,
   .item-compact-actions-v650 .item-roadview-btn,
   .item-compact-actions-v650 .item-building-register-btn,
@@ -5947,8 +5820,6 @@ body,
   .item-compact-actions-v650 {
     min-height: 31px !important;
   }
-
-  .item-compact-actions-v650 .customer-match-inline-actions button,
   .item-compact-actions-v650 .item-nav-btn,
   .item-compact-actions-v650 .item-roadview-btn,
   .item-compact-actions-v650 .item-building-register-btn,
@@ -6020,8 +5891,6 @@ body,
   .item-compact-actions-v650 {
     min-height: 32px !important;
   }
-
-  .item-compact-actions-v650 .customer-match-inline-actions button,
   .item-compact-actions-v650 .item-nav-btn,
   .item-compact-actions-v650 .item-roadview-btn,
   .item-compact-actions-v650 .item-building-register-btn,
@@ -6116,8 +5985,6 @@ body,
   .item-compact-actions-v650 {
     min-height: 38px !important;
   }
-
-  .item-compact-actions-v650 .customer-match-inline-actions button,
   .item-compact-actions-v650 .item-nav-btn,
   .item-compact-actions-v650 .item-roadview-btn,
   .item-compact-actions-v650 .item-building-register-btn,
@@ -7093,7 +6960,6 @@ body,
   }
 
   .v6-toolbar-secondary.v6-command-bar > .desktop-operations-action { grid-column: 1 !important; }
-  .v6-toolbar-secondary.v6-command-bar > .desktop-customer-action { grid-column: 2 !important; }
   .v6-toolbar-secondary.v6-command-bar > .map-roadview-select { grid-column: 3 !important; grid-row: 1 !important; }
   .v6-toolbar-secondary.v6-command-bar > .v6-primary-action.ai { grid-column: 4 !important; grid-row: 1 !important; }
   .v6-toolbar-secondary.v6-command-bar > .quick-add-btn { grid-column: 5 !important; grid-row: 1 !important; }
@@ -7298,3 +7164,5 @@ body,
 }
 
 /* 최종 화면 보정 규칙은 app-final-overrides-v690.css에서 이어서 로드합니다. */
+
+#sidebar, #list { overflow-anchor: none; }

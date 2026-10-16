@@ -48,8 +48,8 @@ assert(
 assert(!index.includes('id="listPrintSelectedBtn"'), "duplicate list-header print button must be removed");
 assert(index.includes("desktop-operations-action"), "desktop operations shortcut is missing");
 assert(
-  !index.includes("desktop-customer-action") && index.includes('id="operationsTabCustomers"'),
-  "customer matching must stay consolidated in the operations workspace"
+  !index.includes("desktop-customer-action") && !index.includes('id="operationsTabCustomers"'),
+  "removed customer matching must not leave a navigation entry"
 );
 assert(index.includes("completeSelectedItems()"), "contract completion action is missing");
 assert(index.includes("markSelectedAsVisited()"), "field visit completion action is missing");

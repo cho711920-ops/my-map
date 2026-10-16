@@ -109,7 +109,7 @@ assert(collectorSource.includes("finalizeCollectionSession"));
 assert(collectorSource.includes("observedSourceIds"));
 assert(collectorSource.includes("showGongsilDetailWait"));
 assert(collectorSource.includes("showGongsilSaveWait"));
-assert(collectorSource.includes("고객매칭은 자동으로 별도 갱신"));
+assert(collectorSource.includes("매물 저장을 마친 뒤 수집 결과"));
 assert(!collectorSource.includes("rejected.length === 0"));
 assert(collectorSource.includes("네트워크 연결을 자동으로 복구 중입니다."));
 assert(collectorSource.includes("저장 중단 지점부터 이어갑니다."));

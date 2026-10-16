@@ -3180,20 +3180,6 @@ function buildClusterOverlayContentV655(cluster, classNames) {
   return '<div class="' + classes + '" onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 }
 
-function getCustomerMatchClusterClassV764(cluster) {
-  if (!window.operationsMatchPropertyIds || !window.operationsMatchStatusByPropertyId) return "";
-  var hasCandidate = false;
-  var hasHeld = false;
-  ((cluster && cluster.items) || []).forEach(function(item) {
-    var propertyId = String(item && item.propertyId || "").trim();
-    var status = propertyId ? String(window.operationsMatchStatusByPropertyId[propertyId] || "").trim() : "";
-    if (status === "소개") hasCandidate = true;
-    if (status === "보류") hasHeld = true;
-  });
-  if (hasCandidate) return " customer-match-candidate";
-  if (hasHeld) return " customer-match-held";
-  return "";
-}
 
 function getFieldVisitClusterClassV684(cluster, allDone) {
   if (allDone) return "";
@@ -3232,7 +3218,6 @@ function drawMapClustersOnlyV639(items) {
 
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
-    var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 
     /*
@@ -3241,7 +3226,7 @@ function drawMapClustersOnlyV639(items) {
      */
     var overlayContent = buildClusterOverlayContentV655(
       cluster,
-      gongsilClass + doneClass + customerMatchClass + selectedClass
+      gongsilClass + doneClass + selectedClass
     );
 
     var overlay = new kakao.maps.CustomOverlay({
@@ -3437,7 +3422,6 @@ function redrawSelectedMarkers() {
 
     var selectedClass = (typeof isClusterSelected === "function" && isClusterSelected(cluster.key)) ? " selected" : "";
     var doneClass = allDone ? " done" : "";
-    var customerMatchClass = getCustomerMatchClusterClassV764(cluster);
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 
     /*
@@ -3446,7 +3430,7 @@ function redrawSelectedMarkers() {
      */
     var content = buildClusterOverlayContentV655(
       cluster,
-      gongsilClass + doneClass + customerMatchClass + selectedClass
+      gongsilClass + doneClass + selectedClass
     );
 
     // The initial render is immediately followed by selection restoration.

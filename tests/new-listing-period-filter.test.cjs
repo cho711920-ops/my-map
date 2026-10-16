@@ -9,7 +9,7 @@ const mapQuick = fs.readFileSync("js/map-quick-tools-v657.js", "utf8");
 
 function periodRuntime() {
   const start = script.indexOf("function isTodayRegistration");
-  const end = script.indexOf("function renderNextListChunk", start);
+  const end = script.indexOf("var unifiedDuplicateShimmerObserverV812", start);
   assert.ok(start >= 0 && end > start, "new listing period runtime should be extractable");
   return script.slice(start, end);
 }

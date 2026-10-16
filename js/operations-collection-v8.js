@@ -754,13 +754,9 @@
     }
     extraState.tab = tab;
     var dashboard = document.getElementById("operationsDashboardPanel");
-    var customers = document.getElementById("operationsCustomersPanel");
     if (dashboard) dashboard.hidden = true;
-    if (customers) customers.hidden = true;
     var dashboardButton = document.getElementById("operationsTabDashboard");
-    var customerButton = document.getElementById("operationsTabCustomers");
     if (dashboardButton) dashboardButton.classList.remove("active");
-    if (customerButton) customerButton.classList.remove("active");
     if (tab === "collections") loadCollection(false);
     else loadFreshReviews(false);
   };
@@ -787,7 +783,7 @@
     var shardRemaining = Array(shardCount).fill(0);
     function runNextBatch(shard) {
       return apiPost("mergeSingleCandidateReviews", {
-        limit: 20, shard: shard, shardCount: shardCount, refreshCustomerMatches: false
+        limit: 20, shard: shard, shardCount: shardCount
       }).then(function(result) {
         totals.passes += 1;
         ["scanned", "merged", "aliasesMerged", "failed"].forEach(function(key) {
@@ -865,7 +861,7 @@
         (totals.failed ? " · 오류 " + totals.failed.toLocaleString("ko-KR") + "건" : ""), "", true);
       return loadReviews(true, true);
     }).then(function() {
-      message("자동분류와 고객매칭 갱신을 완료했습니다.", "success");
+      message("자동분류를 완료했습니다.", "success");
     }).catch(function(error) {
       message(error.message, "error");
       showReviewDecisionModal("자동분류 정리 실패", error.message || "다시 시도해 주세요.", "", true);

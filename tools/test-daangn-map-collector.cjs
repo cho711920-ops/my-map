@@ -52,7 +52,7 @@ assert.match(collector, /선택.*전체목록|선택범위/);
 assert.match(collector, /101호와 102호는 별도/);
 assert.match(collector, /원본광고/);
 assert.match(collector, /showActiveChunkWait/);
-assert.match(collector, /고객매칭은 자동으로 별도 갱신/);
+assert.match(collector, /매물 저장을 마친 뒤 수집 결과/);
 assert.match(install, /js\/collector-loader\.js/);
 assert.match(install, /URL을 복사하거나 붙여넣을 필요가 없습니다|URL 복사 없이/);
 assert.match(install, /당근 수집<\/strong>을 먼저 누릅니다/);

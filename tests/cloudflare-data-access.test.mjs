@@ -169,7 +169,7 @@ test("operations modules only use the shared Cloudflare data boundary", () => {
   for (const entry of operationsSources) {
     assert.match(entry.source, /JSDataAccessV6\.read\(action, params,/,
       `${entry.name} must read through JSDataAccessV6`);
-    assert.match(entry.source, /JSDataAccessV6\.mutate\(action, payload,/,
+    if (entry.name !== "operations-center-v7.js") assert.match(entry.source, /JSDataAccessV6\.mutate\(action, payload,/,
       `${entry.name} must mutate through JSDataAccessV6`);
     assert.match(entry.source, /typeof (?:window|global)\.JSDataAccessV6\.(?:read|mutate) !== "function"/,
       `${entry.name} must guard the shared data boundary`);

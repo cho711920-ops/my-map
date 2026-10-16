@@ -32,7 +32,7 @@ function fixture({count = 3, ready = true, server, cache} = {}) {
     addEventListener(){},querySelector(){return null;},querySelectorAll(){return [];},body:new Element()};
   let current = {ready,candidateCount:count,candidateAdCount:count,manualCompletedCount:52,doneCount:count+52,
     scopeLabel:"현재 지도·검색조건",candidates:Array.from({length:count},(_,index)=>row("C"+String(index).padStart(4,"0")))};
-  const storage = {getItem:key=>key==="js_operations_fast_cache_v1"&&cache?JSON.stringify(cache):null,setItem(){}};
+  const storage = {getItem:key=>key==="js_operations_dashboard_cache_v2"&&cache?JSON.stringify(cache):null,setItem(){}};
   const window = {document,location:{href:"https://example.test/"},addEventListener:(name,listener)=>listeners.set(name,listener),
     setTimeout(){return 0;},setInterval(){return 0;},clearTimeout(){},requestAnimationFrame:callback=>{frames.push(callback);return frames.length;},
     open:(url,target,options)=>{opens.push({url,target,options});return {opener:"initial"};},
