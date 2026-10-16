@@ -358,6 +358,7 @@
     element.addEventListener("pointerdown", function(event) {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       if (event.target && event.target.closest(".unified-detail-photo-nav-v8,.unified-gallery-nav-v8,.close")) return;
+      cancelPhotoTransitionV1(element);
       gesture = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -433,45 +434,94 @@
     element.addEventListener("dragstart", function(event) { event.preventDefault(); });
   }
 
+  function cancelPhotoTransitionV1(container) {
+    if (container && container._photoTransitionCleanupV1) container._photoTransitionCleanupV1();
+  }
+
   function transitionPhotoV8140(container, direction, commit) {
     var image = container && container.querySelector("img");
     var step = Number(direction || 0) < 0 ? -1 : 1;
     var reduceMotion = global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!image || typeof image.animate !== "function" || reduceMotion) {
+      cancelPhotoTransitionV1(container);
       commit();
       return;
     }
+    // Keep at most one outgoing frame. Rapid input advances the index once per
+    // click and retargets the animation rather than restarting a delayed commit.
+    if (container._photoTransitionCleanupV1) container._photoTransitionCleanupV1(true);
+    var ghost = container._photoTransitionGhostV1;
+    if (!ghost && image.complete && image.naturalWidth) {
+      ghost = document.createElement("span");
+      ghost.className = "photo-transition-ghost-v1";
+      ghost.setAttribute("aria-hidden", "true");
+      var appearance = global.getComputedStyle(image);
+      Object.assign(ghost.style, {
+        position: "absolute", left: image.offsetLeft + "px", top: image.offsetTop + "px", bottom: "auto",
+        width: image.offsetWidth + "px", height: image.offsetHeight + "px", display: "block", margin: "0", padding: "0",
+        backgroundImage: "url(" + JSON.stringify(image.currentSrc || image.src) + ")",
+        backgroundSize: appearance.objectFit === "cover" ? "cover" : "contain",
+        backgroundPosition: appearance.objectPosition, backgroundRepeat: "no-repeat",
+        borderRadius: appearance.borderRadius, pointerEvents: "none", opacity: "1"
+      });
+      image.parentNode.insertBefore(ghost, image.nextSibling);
+      container._photoTransitionGhostV1 = ghost;
+    }
     var token = Number(container._photoTransitionTokenV8140 || 0) + 1;
     container._photoTransitionTokenV8140 = token;
-    if (typeof image.getAnimations === "function") {
-      image.getAnimations().forEach(function(animation) { animation.cancel(); });
+    var incoming = null, outgoing = null, timer = null, finished = false, started = false;
+    function cleanup(preserveFrame) {
+      if (finished) return;
+      finished = true;
+      if (timer) global.clearTimeout(timer);
+      image.removeEventListener("load", start);
+      image.removeEventListener("error", fail);
+      if (ghost && preserveFrame) {
+        var current = global.getComputedStyle(ghost);
+        ghost.style.opacity = current.opacity;
+        ghost.style.transform = current.transform;
+      }
+      if (incoming) incoming.cancel();
+      if (outgoing) outgoing.cancel();
+      image.style.opacity = "";
+      image.style.transform = "";
+      image.style.transition = "";
+      if (ghost && !preserveFrame) {
+        ghost.remove();
+        if (container._photoTransitionGhostV1 === ghost) delete container._photoTransitionGhostV1;
+      }
+      if (container._photoTransitionCleanupV1 === cleanup) delete container._photoTransitionCleanupV1;
     }
+    function fail() { cleanup(); }
+    function start() {
+      if (finished || started || container._photoTransitionTokenV8140 !== token) return;
+      started = true;
+      if (!image.isConnected || !container.isConnected) return cleanup();
+      if (timer) global.clearTimeout(timer);
+      var options = {duration: 380, easing: "cubic-bezier(.22,.61,.36,1)", fill: "both"};
+      incoming = image.animate([
+        {transform: "translate3d(" + (step * 16) + "px,0,0)", opacity: .85},
+        {transform: "translate3d(0,0,0)", opacity: 1}
+      ], options);
+      if (ghost) outgoing = ghost.animate([
+        {transform: ghost.style.transform || "translate3d(0,0,0)", opacity: Number(ghost.style.opacity || 1)},
+        {transform: "translate3d(" + (-step * 12) + "px,0,0)", opacity: 0}
+      ], options);
+      Promise.all([incoming.finished, outgoing && outgoing.finished]).catch(function() {}).then(function() {
+        if (container._photoTransitionTokenV8140 === token) cleanup();
+      });
+    }
+    container._photoTransitionCleanupV1 = cleanup;
     image.style.transition = "none";
     image.style.transform = "";
-    image.style.opacity = "";
-    var outgoing = image.animate([
-      {transform: "translate3d(0,0,0)", opacity: 1},
-      {transform: "translate3d(" + (-step * 54) + "px,0,0)", opacity: .18}
-    ], {duration: 115, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards"});
-    Promise.resolve(outgoing.finished).catch(function() {}).then(function() {
-      if (container._photoTransitionTokenV8140 !== token) return;
-      commit();
-      if (typeof image.getAnimations === "function") {
-        image.getAnimations().forEach(function(animation) { animation.cancel(); });
-      }
-      var incoming = image.animate([
-        {transform: "translate3d(" + (step * 54) + "px,0,0)", opacity: .18},
-        {transform: "translate3d(0,0,0)", opacity: 1}
-      ], {duration: 210, easing: "cubic-bezier(.22,.8,.35,1)", fill: "both"});
-      Promise.resolve(incoming.finished).catch(function() {}).then(function() {
-        if (container._photoTransitionTokenV8140 !== token) return;
-        if (typeof image.getAnimations === "function") {
-          image.getAnimations().forEach(function(animation) { animation.cancel(); });
-        }
-        image.style.transform = "";
-        image.style.opacity = "";
-      });
-    });
+    // The loaded old frame stays visible until the destination is available.
+    if (ghost) image.style.opacity = "0";
+    image.addEventListener("load", start, {once: true});
+    image.addEventListener("error", fail, {once: true});
+    commit();
+    if (finished) return;
+    if (image.complete && image.naturalWidth) start();
+    else timer = global.setTimeout(fail, 2000);
   }
 
   function detailIsFresh(propertyId) {
@@ -1832,6 +1882,7 @@
 
   function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
+    cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"));
     if (!drawer) return;
     var wasVisible = drawer.getAttribute("aria-hidden") !== "true";
     if (detailCloseTimerV827) global.clearTimeout(detailCloseTimerV827);
@@ -1851,6 +1902,7 @@
 
   function closeDetailForOverlay() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
+    cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"));
     if (detailCloseTimerV827) {
       global.clearTimeout(detailCloseTimerV827);
       detailCloseTimerV827 = null;
@@ -2238,7 +2290,7 @@
     var modalImage = modal.querySelector("img");
     try { modalImage.fetchPriority = "high"; } catch (ignore) {}
     if (modalImage.getAttribute("src") !== displaySource) modalImage.src = displaySource;
-    modal.querySelector("span").textContent = (safeIndex + 1) + " / " + images.length;
+    modal.querySelector("span:not(.photo-transition-ghost-v1)").textContent = (safeIndex + 1) + " / " + images.length;
     modal.querySelector(".prev").disabled = images.length < 2;
     modal.querySelector(".next").disabled = images.length < 2;
     preloadAdjacentDetailImages(images, safeIndex);
@@ -2255,6 +2307,7 @@
   function closeGallery(restoreFocus) {
     var modal = document.getElementById("unifiedGalleryV8");
     if (!modal) return;
+    cancelPhotoTransitionV1(modal);
     var wasOpen = modal.classList.contains("open");
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");

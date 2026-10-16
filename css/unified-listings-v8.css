@@ -221,7 +221,7 @@
     touch-action: pan-y; user-select: none; cursor: grab;
   }
   .unified-detail-gallery-v8.is-photo-dragging-v8 { cursor: grabbing; }
-  .unified-detail-hero-v8 { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: #d1d5db; cursor: zoom-in; }
+  .unified-detail-hero-v8 { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: #d1d5db; cursor: zoom-in; }
   .unified-detail-hero-v8 img { width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; will-change: transform; }
   .unified-detail-photo-count-v8 {
     position: absolute; right: 14px; bottom: 13px; padding: 6px 11px; border-radius: 999px;

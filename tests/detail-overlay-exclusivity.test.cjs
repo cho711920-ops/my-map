@@ -20,7 +20,10 @@ assert.match(html, /operations-center-v7\.js\?v=7\.22\.7-list-transaction-link/)
 let capturedClick = null;
 let ariaHidden = "false";
 const drawerClasses = new Set(["open"]);
+let photoCleanupCalls = 0;
+const gallery = {_photoTransitionCleanupV1() {photoCleanupCalls++;}};
 const drawer = {
+  querySelector: (selector) => selector === ".unified-detail-gallery-v8" ? gallery : null,
   classList: {
     contains: (name) => drawerClasses.has(name),
     remove: (...names) => names.forEach((name) => drawerClasses.delete(name))
@@ -55,6 +58,7 @@ capturedClick({
 });
 assert.equal(drawerClasses.has("open"), false);
 assert.equal(ariaHidden, "true");
+assert.equal(photoCleanupCalls, 1);
 assert.equal(typeof windowMock.JSUnifiedListingsV8.closeForOverlay, "function");
 
 console.log("detail overlay exclusivity tests passed");

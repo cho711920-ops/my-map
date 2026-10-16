@@ -159,6 +159,7 @@ const detailDrawer = {
   parentElement: tellBody,
   classList: classList(["open"]),
   contains: (node) => node === drawerFocused,
+  querySelector: () => null,
   getAttribute: (name) => drawerAttrs[name] == null ? null : drawerAttrs[name],
   setAttribute: (name, value) => { drawerAttrs[name] = value; }
 };
