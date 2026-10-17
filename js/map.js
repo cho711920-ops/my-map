@@ -3184,13 +3184,22 @@ function drawMapClustersOnlyV639(items) {
     ? jsPinnedClusterSelectionV6515.snapshot
     : captureClusterSelectionSnapshotV638();
   isRendering = true;
-  clearMapOverlaysOnlyV639();
 
   var clusterSourceItems = getStableClusterSourceItemsV690(items);
   var addressGroups = shouldUseWorldGridClustersV690()
     ? groupByAddress(clusterSourceItems)
     : getVisibleAddressGroupsV639(items);
   var clusters = createClustersForCurrentZoomV655(addressGroups);
+
+  // Preserve native overlays for stable region/grid/address keys. Keep the old
+  // frame attached until every replacement is ready; regrouping remains exact.
+  var previousOverlays = overlays;
+  var reusable = new Map();
+  previousOverlays.forEach(function(overlay) {
+    if (overlay.__cluster && overlay.__renderMapV1 === map) reusable.set(overlay.__cluster.key, overlay);
+  });
+  var retained = new Set();
+  overlays = [];
 
   clusters.forEach(function(cluster) {
     var count = cluster.items.length;
@@ -3211,20 +3220,37 @@ function drawMapClustersOnlyV639(items) {
       gongsilClass + doneClass + selectedClass
     );
 
-    var overlay = new kakao.maps.CustomOverlay({
-      position: cluster.displayLatlng || cluster.latlng,
-      content: overlayContent,
-      yAnchor: 0.5,
-      xAnchor: 0.5
-    });
+    var position = cluster.displayLatlng || cluster.latlng;
+    var positionKey = position.getLat() + ":" + position.getLng();
+    var overlay = reusable.get(cluster.key);
+    if (overlay) {
+      retained.add(overlay);
+      reusable.delete(cluster.key);
+      if (overlay.__clusterPositionKeyV1 !== positionKey) overlay.setPosition(position);
+      if (overlay.__clusterContentV1 !== overlayContent) overlay.setContent(overlayContent);
+    } else {
+      overlay = new kakao.maps.CustomOverlay({
+        position: position,
+        content: overlayContent,
+        yAnchor: 0.5,
+        xAnchor: 0.5
+      });
+      overlay.setMap(map);
+    }
 
     overlay.__cluster = cluster;
+    overlay.__renderMapV1 = map;
+    overlay.__clusterContentV1 = overlayContent;
+    overlay.__clusterPositionKeyV1 = positionKey;
     if (cluster.regionMode) {
       overlay.__adminRegionContentV1 = overlayContent;
       if (typeof overlay.setZIndex === "function") overlay.setZIndex(isAdministrativeClusterSelectedV1(cluster) ? 1000 : 0);
     }
-    overlay.setMap(map);
     overlays.push(overlay);
+  });
+
+  previousOverlays.forEach(function(overlay) {
+    if (!retained.has(overlay)) overlay.setMap(null);
   });
 
   updateMapListingCountV825(items);
@@ -3418,7 +3444,8 @@ function redrawSelectedMarkers() {
       if (o.__adminRegionContentV1 === content) return;
       o.__adminRegionContentV1 = content;
       if (typeof o.setZIndex === "function") o.setZIndex(isAdministrativeClusterSelectedV1(cluster) ? 1000 : 0);
-    }
+    } else if (o.__clusterContentV1 === content) return;
+    o.__clusterContentV1 = content;
     o.setContent(content);
   });
 }

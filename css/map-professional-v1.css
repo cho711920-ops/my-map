@@ -2,6 +2,19 @@
  * retain their existing layout contracts. No fonts, images or APIs added. */
 :root { --js-pro-ink: #1e293b; --js-pro-muted: #64748b; --js-pro-line: #e2e8f0; }
 
+.js-listing-hover-pin-v1 {
+  width: 38px; height: 38px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid #075fbd; background: transparent;
+  box-shadow: 0 0 0 3px #ffffffb3, 0 0 0 7px #0568e826;
+  pointer-events: none;
+}
+/* The SDK wrapper must also let pointer input pass to the original map. */
+#map div:has(> .js-listing-hover-pin-v1) { pointer-events: none; }
+.map-quick-group-divider-v1 {
+  flex: 0 0 1px; height: 1px; width: 28px; align-self: center;
+  background: #e2e8f0; pointer-events: none;
+}
+
 html #list .item {
   border: 1px solid var(--js-pro-line) !important;
   border-radius: 8px !important;

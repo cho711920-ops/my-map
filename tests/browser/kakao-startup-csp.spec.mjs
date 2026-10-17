@@ -87,6 +87,47 @@ test("current production CSP permits full authenticated startup, live Kakao map 
   await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(images=>images.filter(img=>img.complete && img.naturalWidth>0).length),{timeout:20000}).toBeGreaterThan(0);
   expect(await page.evaluate(()=>document.getElementById("mapFieldModeToggleV1"))).toBeNull();
   expect(await page.evaluate(()=>typeof window.map.getCenter)).toBe("function");
+  await page.locator('#map .circle-marker').click();
+  // The real map's existing 120ms idle refresh rebuilds the selected list once.
+  // Wait for that normal startup/selection refresh before measuring hover.
+  await page.waitForTimeout(500);
+  const hoverBefore=await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),
+    key:selectedGroupKey,item:selectedItemKey,scroll:document.getElementById('sidebar').scrollTop}));
+  await page.locator('#list .item .item-building-name').first().hover();
+  await expect(page.locator('#map .js-listing-hover-pin-v1')).toHaveCount(1);
+  const hoverLocation=await page.locator('#map .js-listing-hover-pin-v1').evaluate(el=>{
+    const box=el.getBoundingClientRect(),host=document.getElementById('map').getBoundingClientRect();
+    const expected=map.getProjection().containerPointFromCoords(visibleListItems[0].latlng);
+    return {dx:box.x+box.width/2-host.x-expected.x,dy:box.y+box.height/2-host.y-expected.y,
+      events:getComputedStyle(el.parentElement).pointerEvents};
+  });
+  expect(Math.abs(hoverLocation.dx)).toBeLessThan(2);expect(Math.abs(hoverLocation.dy)).toBeLessThan(2);
+  expect(hoverLocation.events).toBe('none');
+  expect(await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),
+    key:selectedGroupKey,item:selectedItemKey,scroll:document.getElementById('sidebar').scrollTop}))).toEqual(hoverBefore);
+  await page.screenshot({path:testInfo.outputPath('native-map-list-hover.png')});
+  await expect(page.locator('#map .js-listing-hover-pin-v1')).toHaveCount(1);
+  await page.mouse.move(10,65);await expect(page.locator('#map .js-listing-hover-pin-v1')).toHaveCount(0);
+  const clusterReuse=await page.evaluate(()=>{
+    window.nativeOverlayBeforeV1=overlays[0];window.nativeElementBeforeV1=document.querySelector('#map .circle-marker');
+    const identity=JSON.stringify(jsLastRenderedItemsV639);
+    for(let i=0;i<5;i++)drawMapClustersOnlyV639(jsLastRenderedItemsV639);
+    return {overlay:overlays[0]===nativeOverlayBeforeV1,element:document.querySelector('#map .circle-marker')===nativeElementBeforeV1,
+      unchanged:JSON.stringify(jsLastRenderedItemsV639)===identity};
+  });
+  expect(clusterReuse).toEqual({overlay:true,element:true,unchanged:true});
+  await page.evaluate(()=>{
+    const center=map.getCenter();map.setCenter(new kakao.maps.LatLng(center.getLat()+.0001,center.getLng()));
+  });
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(()=>overlays[0]===nativeOverlayBeforeV1&&document.querySelector('#map .circle-marker')===nativeElementBeforeV1)).toBe(true);
+  await page.evaluate(()=>map.setLevel(6));
+  await expect.poll(()=>page.evaluate(()=>overlays.map(o=>o.__cluster.key))).toEqual([expect.stringMatching(/^world-grid:/)]);
+  expect(await page.evaluate(()=>overlays.reduce((sum,o)=>sum+o.__cluster.items.length,0))).toBe(1);
+  await page.evaluate(()=>map.setLevel(7));
+  await expect.poll(()=>page.evaluate(()=>overlays.map(o=>o.__cluster.regionMode))).toEqual(['neighborhood']);
+  await expect(page.locator('#map .circle-marker')).toContainText('탄방동');
+  expect(await page.evaluate(()=>overlays.reduce((sum,o)=>sum+o.__cluster.items.length,0))).toBe(1);
   // The SDK still catches eval("document.namespaces") as an old IE feature
   // probe. Keep unsafe-eval blocked; only that SDK's handled eval probe is
   // tolerated. No application script, SDK resource or tile may be blocked.
