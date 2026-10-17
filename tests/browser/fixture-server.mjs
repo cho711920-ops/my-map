@@ -91,6 +91,7 @@ export function createFixtureServer() {
         if (/Contacts$/.test(action || "")) return json({ok: true, contacts: []});
         return json({ok: false, message: "Fixture does not implement this action"}, 400);
       }
+      if (request.method === "GET" && url.pathname === "/data/daejeon-parking-v1.json") return send(200,"application/json; charset=utf-8",await readFile(resolve(fixtureRoot,"data/daejeon-parking-v1.json")));
       if (request.method === "GET" && /^\/(?:js|css|icons)\/[a-zA-Z0-9_.-]+\.(?:js|css|svg|png)$/.test(url.pathname)) {
         const type = url.pathname.endsWith(".css") ? "text/css" : url.pathname.endsWith(".js") ? "text/javascript" : url.pathname.endsWith(".png") ? "image/png" : "image/svg+xml";
         return send(200, type, await readFile(resolve(fixtureRoot, url.pathname.slice(1))));

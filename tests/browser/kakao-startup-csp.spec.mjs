@@ -64,6 +64,39 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   return {errors,forbidden};
 }
 
+test('parking overlays and detail coexist with real Kakao clusters without moving or selecting listings',async({page},testInfo)=>{
+  test.setTimeout(45000);
+  const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await page.waitForTimeout(500);
+  await page.evaluate(()=>{
+    // Only place-search responses are synthetic; map, projection and overlay input are the real SDK.
+    kakao.maps.services.Places=function(){this.categorySearch=function(category,callback){callback([],kakao.maps.services.Status.ZERO_RESULT,{hasNextPage:false});};};
+    window.parkingNativeBefore={center:map.getCenter().toString(),level:map.getLevel(),key:selectedGroupKey,
+      count:overlays.reduce((sum,overlay)=>sum+overlay.__cluster.items.length,0),data:JSON.stringify(allItems)};
+  });
+  await page.locator('#mapParkingBtnV1').click();
+  await expect.poll(()=>page.locator('.parking-pin-v1').count()).toBeGreaterThan(0);
+  const id=await page.locator('.parking-pin-v1').evaluateAll(nodes=>{
+    const host=document.getElementById('map').getBoundingClientRect();
+    return nodes.find(el=>{const r=el.getBoundingClientRect();return r.left>host.left+340&&r.right<host.right-70&&r.top>host.top+30&&r.bottom<host.bottom-30;})?.dataset.parkingId;
+  });
+  expect(id).toBeTruthy();const pin=page.locator('[data-parking-id="'+id+'"]');
+  await pin.click();
+  await expect(page.locator('.parking-detail-v1')).toBeVisible();
+  const placement=await pin.evaluate(el=>{
+    const rect=el.getBoundingClientRect(),host=document.getElementById('map').getBoundingClientRect();
+    const overlay=el.closest('div');return {inMap:rect.left>=host.left-30&&rect.right<=host.right+30,clickable:!!overlay};
+  });
+  expect(placement).toEqual({inMap:true,clickable:true});
+  await page.screenshot({path:testInfo.outputPath('native-parking-layer.png')});
+  expect(await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),key:selectedGroupKey,
+    count:overlays.reduce((sum,overlay)=>sum+overlay.__cluster.items.length,0),data:JSON.stringify(allItems)}))).toEqual(await page.evaluate(()=>parkingNativeBefore));
+  await page.locator('#mapParkingBtnV1').click();await expect(page.locator('.parking-pin-v1')).toHaveCount(0);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
 test("old CSP reproduces the post-login blank map and zero listings when the current Kakao SDK changes CDN",async({page},testInfo)=>{
   test.setTimeout(45000);
   const boundary=await startFullApplication(page,{oldCsp:true});

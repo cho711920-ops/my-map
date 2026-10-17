@@ -57,6 +57,7 @@
 <link rel="stylesheet" href="css/handheld-detail-landscape-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/landscape-desktop-fit-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/map-professional-v1.css?v=1.0.0">
+<link rel="stylesheet" href="css/map-parking-v1.css?v=1.0.0">
 </template>
 </head>
 
@@ -300,6 +301,10 @@
         <span>로드뷰</span>
       </button>
 
+      <button id="mapParkingBtnV1" class="map-quick-tool-btn" type="button" aria-label="주차장 표시" aria-pressed="false" title="지도에 주차장 표시/숨기기">
+        <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M9 18V7h4a3 3 0 0 1 0 6H9"></path></svg>
+        <span>주차장</span>
+      </button>
       <div class="map-quick-group-divider-v1" role="separator" aria-orientation="horizontal"></div>
       <div class="map-quick-tool-wrap">
         <button id="mapQuickListBtn" class="map-quick-tool-btn map-quick-heart-btn" type="button"
@@ -363,6 +368,7 @@
   </aside>
 
   <div id="map"></div>
+  <button id="mapParkingPhoneBtnV1" type="button" aria-label="주차장 표시" aria-pressed="false">Ⓟ 주차장</button>
 
   <div id="mapListingCountV825" class="map-listing-count-v825" role="status" aria-live="polite"
     aria-atomic="true" aria-label="현재 지도에 표시된 매물 0개">
@@ -660,6 +666,7 @@
 <script data-auth-critical src="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;zero-range-favorite-folder-v1=1&amp;search-select-all-v824=1&amp;handheld-layout-v1=1&amp;roadview-sdk-retry-v1=1"></script>
 <script data-auth-critical src="js/map-list-panel-v1.js?v=1.0.0"></script>
 <script data-auth-critical src="js/listing-map-hover-v1.js?v=1.0.0"></script>
+<script data-auth-critical src="js/map-parking-v1.js?v=1.0.0"></script>
 <script data-auth-critical src="js/map-address-region-v1.js?v=1.0.0"></script>
 <script data-auth-critical src="js/initial-listings-cache-v1.js?v=1.2.0-full-snapshot"></script>
 <script data-auth-critical src="js/today-listings-v1.js?v=1.0.0-fresh-period"></script>

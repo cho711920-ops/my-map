@@ -129,7 +129,7 @@ test('two subtle separators preserve toolbar order and all measurement controls 
   for(const line of await lines.all())await expect(line).toBeVisible();
   const order=await page.locator('.map-quick-tools-inner').evaluate(el=>[...el.children].map(child=>
     child.classList.contains('map-quick-group-divider-v1')?'separator':child.id||child.querySelector('button')?.id).filter(Boolean));
-  expect(order.slice(0,9)).toEqual(['mapQuickViewBtn','mapRoadviewSelectBtn','separator','mapQuickListBtn',
+  expect(order.slice(0,10)).toEqual(['mapQuickViewBtn','mapRoadviewSelectBtn','mapParkingBtnV1','separator','mapQuickListBtn',
     'multiClusterBtn','separator','mapDistanceBtn','mapRadiusBtn','mapPolygonBtn']);
   for(const id of ['mapQuickViewBtn','mapRoadviewSelectBtn','mapQuickListBtn','multiClusterBtn','mapDistanceBtn','mapRadiusBtn','mapPolygonBtn'])
     await expect(page.locator('#'+id)).toBeInViewport();

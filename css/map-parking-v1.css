@@ -1,0 +1,31 @@
+/* Parking controls are local to the native map, not the listing sidebar. */
+#mapParkingPhoneBtnV1 { display:none; }
+.js-phone-app-v2[data-jsm-mobile-view="map"][data-js-phone-favorites="false"] #mapParkingPhoneBtnV1 { display:block; position:fixed; top:calc(var(--jsm-header-height) + 10px); right:12px; z-index:9200; padding:9px; border:1px solid #dce5ef; border-radius:9px; background:#fff; color:#246bad; font-weight:700; }
+#mapParkingPhoneBtnV1.on { background:#246bad !important; color:#fff !important; }
+.js-phone-app-v2:has(.parking-detail-v1:not([hidden])) #jsPhoneMapListV2 { display:none !important; }
+.parking-controls-v1[hidden], .parking-detail-v1[hidden] { display:none !important; }
+.parking-controls-v1 { position:absolute; z-index:9200; top:60px; left:12px; width:290px; max-width:calc(100% - 90px); display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding:9px 11px; border:1px solid #dce5ef; border-radius:10px; background:#fffffff5; box-shadow:0 2px 8px #17375512; color:#24374e; font:12px/1.4 Arial,sans-serif; }
+.parking-controls-v1 label { display:flex; align-items:center; gap:6px; font-weight:700; }
+.parking-controls-v1 select { max-width:130px; border:1px solid #dce5ef; border-radius:6px; background:#fff; padding:5px; color:#24374e; }
+.parking-hide-v1 { margin-left:auto; padding:5px; border:0; background:none; color:#52677c; cursor:pointer; }
+.parking-status-v1 { flex:1 0 100%; color:#52677c; font-size:11px; }
+.parking-pin-v1 { display:grid; place-items:center; box-sizing:border-box; width:27px; height:27px; padding:0; border:2px solid white; border-radius:7px; background:#246bad; box-shadow:0 1px 4px #102e4d40; color:white; font:700 17px/1 Arial,sans-serif; cursor:pointer; touch-action:manipulation; }
+.parking-pin-v1:hover,.parking-pin-v1.is-selected { background:#143e69; outline:2px solid #60b4f2; outline-offset:1px; }
+.parking-pin-v1:focus-visible { outline:3px solid #0f172a; outline-offset:2px; }
+.parking-pin-v1:has(.parking-group-count-v1) { display:flex; justify-content:center; gap:3px; width:max-content; min-width:37px; padding:0 5px; }
+.parking-group-count-v1 { font-size:10px; font-weight:700; }
+.parking-group-choice-v1 { display:block; margin:10px 0; color:#52677c; font-size:11px; }
+.parking-group-choice-v1 select { display:block; box-sizing:border-box; width:100%; margin-top:4px; padding:7px 4px; border:1px solid #dce5ef; border-radius:6px; background:#fff; color:#24374e; }
+.parking-detail-v1 { position:absolute; z-index:9250; top:154px; bottom:12px; left:12px; width:312px; max-width:calc(100% - 90px); height:max-content; max-height:calc(100% - 166px); box-sizing:border-box; overflow:auto; overscroll-behavior:contain; padding:14px; border:1px solid #dce5ef; border-radius:12px; background:#fff; box-shadow:0 5px 18px #17375524; color:#24374e; font:12px/1.5 Arial,sans-serif; }
+.parking-detail-head-v1 { display:flex; gap:8px; align-items:flex-start; }
+.parking-detail-head-v1 h2 { flex:1; min-width:0; margin:0; font-size:15px; line-height:1.4; word-break:keep-all; overflow-wrap:anywhere; }
+.parking-close-v1 { flex:0 0 30px; height:30px; border:0; border-radius:50%; background:#f0f4f8; color:#334155; font-size:22px; cursor:pointer; }
+.parking-kind-v1 { margin:5px 0 12px; color:#2565a0; }
+.parking-detail-v1 dl { margin:0; }
+.parking-detail-row-v1 { display:grid; grid-template-columns:86px minmax(0,1fr); padding:6px 0; border-top:1px solid #edf1f6; gap:6px; }
+.parking-detail-row-v1 dt { color:#64748b; }
+.parking-detail-row-v1 dd { margin:0; overflow-wrap:anywhere; }
+.parking-note-v1 { color:#64748b; margin:10px 0; font-size:11px; }
+.parking-links-v1 { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
+.parking-links-v1 a { color:#075fbd; font-weight:700; }
+@media (max-height:550px) { .parking-detail-v1 { top:116px; max-height:calc(100% - 128px); } .parking-controls-v1 { top:48px; padding:6px 9px; } }
