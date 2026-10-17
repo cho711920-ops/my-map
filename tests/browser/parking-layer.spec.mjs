@@ -58,12 +58,12 @@ test('parking is lazy, independent of listings, deduplicated, filterable and ope
   const detail=page.locator('.parking-detail-v1');await expect(detail).toBeVisible();
   await expect(detail).toContainText('45면');await expect(detail).toContainText('30분 / 1,000원');await expect(detail).toContainText('2026-04-20');
   await expect(detail).toContainText('실시간 빈자리가 아닙니다');expect(await state(page)).toEqual(before);
-  await expect(detail.locator('dd').filter({hasText:'미확인'})).not.toHaveCount(0);
+  await expect(detail.locator('dd').filter({hasText:'미확인'})).toHaveCount(0);
   if(isMobile)await expect(page.locator('#jsPhoneMapListV2')).toBeHidden();
   await page.screenshot({path:info.outputPath('parking-layer-detail.png')});
   await page.getByRole('button',{name:'주차장 상세 닫기'}).click();await expect(detail).toBeHidden();
   await page.getByRole('combobox',{name:'주차장 구분'}).selectOption('민영');await expect(page.locator('.parking-pin-v1')).toHaveCount(1);
-  await page.locator('.parking-pin-v1').click();await expect(detail).toContainText('미확인');await expect(detail).not.toContainText('45면');
+  await page.locator('.parking-pin-v1').click();await expect(detail).toContainText('정보를 제공하지 않습니다');await expect(detail).not.toContainText('45면');
   await page.keyboard.press('Escape');await expect(detail).toBeHidden();
   await page.getByRole('combobox',{name:'주차장 구분'}).selectOption('미확인');await page.locator('.parking-pin-v1').click();
   await expect(detail.locator('h2')).toHaveText('<img src=x onerror=alert(1)>');await expect(detail.locator('img')).toHaveCount(0);
@@ -97,7 +97,7 @@ test('failed extra lookup does not retry in a loop and keeps public parking usab
 test('snapshot load failure still permits category results without guessing capacity',async({page,isMobile})=>{
   const audit=await prepare(page,{failData:true});await toggle(page,isMobile).click();await expect(page.locator('.parking-pin-v1')).toHaveCount(3);
   await expect(page.locator('.parking-status-v1')).toContainText('공공자료 로드 실패');
-  await page.locator('[data-parking-id="kakao:private"]').click();await expect(page.locator('.parking-detail-v1')).toContainText('미확인');expect(audit.errors).toEqual([]);
+  await page.locator('[data-parking-id="kakao:private"]').click();await expect(page.locator('.parking-detail-v1')).toContainText('정보를 제공하지 않습니다');expect(audit.errors).toEqual([]);
 });
 
 test('dense parking is bounded and category pagination is capped with an explicit notice',async({page,isMobile})=>{
@@ -116,6 +116,43 @@ test('zoomed-out parking groups can select every member without changing the lis
   await page.getByRole('combobox',{name:'묶인 주차장 선택'}).selectOption('kakao:private');
   await expect(page.locator('.parking-detail-v1 h2')).toHaveText('검사 민영주차장');
   expect(await state(page)).toEqual(before);expect(audit.errors).toEqual([]);
+});
+
+test('capacity coverage is visible before clicking and missing-only rows are not rendered',async({page,isMobile},info)=>{
+  const audit=await prepare(page),before=await state(page);await toggle(page,isMobile).click();
+  await expect(page.locator('.parking-pin-v1')).toHaveCount(3);
+  await expect(page.locator('.parking-status-v1')).toContainText('3곳 중 면수 정보 1곳');
+  await expect(page.locator('.parking-pin-v1.is-location-only')).toHaveCount(2);
+  await expect(page.locator('[data-parking-id="public-1"]')).not.toHaveClass(/is-location-only/);
+  await page.locator('[data-parking-id="kakao:private"]').click();
+  const detail=page.locator('.parking-detail-v1');
+  await expect(detail.locator('dt')).toHaveText(['주소']);
+  await expect(detail).not.toContainText('미확인');await expect(detail).toContainText('주차면수·요금·운영시간 정보를 제공하지 않습니다');
+  await expect(detail.getByRole('link',{name:'카카오 상세 보기'})).toHaveAttribute('href','https://place.map.kakao.com/private');
+  const geometry=await page.evaluate(()=>{
+    const controls=document.querySelector('.parking-controls-v1').getBoundingClientRect(),detail=document.querySelector('.parking-detail-v1').getBoundingClientRect();return detail.top>=controls.bottom;
+  });expect(geometry).toBe(true);
+  await page.screenshot({path:info.outputPath('parking-location-only-compact.png')});
+  const beforeRequests=audit.requests.length;
+  await page.getByRole('checkbox',{name:'면수 정보 있는 곳만'}).check();
+  await expect(detail).toBeHidden();await expect(page.locator('.parking-pin-v1')).toHaveCount(1);
+  await expect(page.locator('.parking-status-v1')).toContainText('면수 정보 1곳만 표시');
+  await page.locator('.parking-pin-v1').click();await expect(detail).toContainText('45면');
+  await page.getByRole('checkbox',{name:'면수 정보 있는 곳만'}).uncheck();await expect(page.locator('.parking-pin-v1')).toHaveCount(3);
+  expect(audit.requests.slice(beforeRequests).filter(r=>r.path!=='/api/naver-maps-config')).toEqual([]);
+  expect(await state(page)).toEqual(before);expect(audit.errors).toEqual([]);
+});
+
+test('capacity-only filter includes known members of a mixed parking group',async({page,isMobile})=>{
+  const audit=await prepare(page);await page.evaluate(()=>{map.getLevel=()=>7;map.getProjection=()=>({containerPointFromCoords:()=>({x:400,y:300})});});
+  await toggle(page,isMobile).click();await expect(page.locator('.parking-group-count-v1')).toHaveText('3');
+  await expect(page.locator('.parking-pin-v1')).not.toHaveClass(/is-location-only/);
+  await page.locator('.parking-pin-v1').click();
+  await expect(page.getByRole('combobox',{name:'묶인 주차장 선택'}).locator('option')).toHaveText([
+    '검사 공영주차장 · 45면','검사 민영주차장 · 면수 미제공','<img src=x onerror=alert(1)> · 면수 미제공']);
+  await page.getByRole('checkbox',{name:'면수 정보 있는 곳만'}).check();
+  await expect(page.locator('.parking-pin-v1')).toHaveCount(1);await expect(page.locator('.parking-group-count-v1')).toHaveCount(0);
+  await page.locator('.parking-pin-v1').click();await expect(page.locator('.parking-detail-v1')).toContainText('45면');expect(audit.errors).toEqual([]);
 });
 
 test('fold landscape toolbar and parking detail fit in the map without blocking listing controls',async({page,isMobile},info)=>{

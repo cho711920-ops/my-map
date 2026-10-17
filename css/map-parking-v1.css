@@ -9,8 +9,13 @@
 .parking-controls-v1 select { max-width:130px; border:1px solid #dce5ef; border-radius:6px; background:#fff; padding:5px; color:#24374e; }
 .parking-hide-v1 { margin-left:auto; padding:5px; border:0; background:none; color:#52677c; cursor:pointer; }
 .parking-status-v1 { flex:1 0 100%; color:#52677c; font-size:11px; }
+.parking-controls-v1 .parking-capacity-filter-v1 { flex:1 0 100%; font-size:11px; font-weight:500; }
+.parking-capacity-filter-v1 input { margin:0; accent-color:#246bad; }
+.parking-legend-v1 { flex:1 0 100%; color:#52677c; font-size:10px; }
 .parking-pin-v1 { display:grid; place-items:center; box-sizing:border-box; width:27px; height:27px; padding:0; border:2px solid white; border-radius:7px; background:#246bad; box-shadow:0 1px 4px #102e4d40; color:white; font:700 17px/1 Arial,sans-serif; cursor:pointer; touch-action:manipulation; }
 .parking-pin-v1:hover,.parking-pin-v1.is-selected { background:#143e69; outline:2px solid #60b4f2; outline-offset:1px; }
+.parking-pin-v1.is-location-only { background:#fff; color:#246bad; border-color:#246bad; box-shadow:0 1px 3px #102e4d24; }
+.parking-pin-v1.is-location-only:hover,.parking-pin-v1.is-location-only.is-selected { background:#e7f2fc; }
 .parking-pin-v1:focus-visible { outline:3px solid #0f172a; outline-offset:2px; }
 .parking-pin-v1:has(.parking-group-count-v1) { display:flex; justify-content:center; gap:3px; width:max-content; min-width:37px; padding:0 5px; }
 .parking-group-count-v1 { font-size:10px; font-weight:700; }
@@ -26,6 +31,7 @@
 .parking-detail-row-v1 dt { color:#64748b; }
 .parking-detail-row-v1 dd { margin:0; overflow-wrap:anywhere; }
 .parking-note-v1 { color:#64748b; margin:10px 0; font-size:11px; }
+.parking-availability-v1 { padding:9px; margin:8px 0 12px; background:#f2f6fa; border-radius:7px; color:#52677c; font-size:12px; }
 .parking-links-v1 { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
 .parking-links-v1 a { color:#075fbd; font-weight:700; }
 @media (max-height:550px) { .parking-detail-v1 { top:116px; max-height:calc(100% - 128px); } .parking-controls-v1 { top:48px; padding:6px 9px; } }

@@ -6,7 +6,7 @@
   var enabled = false, map = null, snapshot = null, loading = null, generation = 0;
   var overlays = new Map(), extra = [], cache = new Map(), timer = null, pending = false;
   var controls, status, filter, detail, selected = null, lastFocus = null;
-  var filterValue = 'all', searchMessage = '', sourceWarning = '';
+  var filterValue = 'all', searchMessage = '', sourceWarning = '', onlyCapacity = false;
   var DATA_URL = '/data/daejeon-parking-v1.json?v=20261017';
 
   function text(node, value) { node.textContent = String(value == null || value === '' ? '미확인' : value); return node; }
@@ -30,6 +30,12 @@
   }
   function money(value) { return Number.isFinite(value) && value > 0 ? value.toLocaleString('ko-KR') + '원' : ''; }
   function hours(value) { return value && value[0] && value[1] ? value[0] + ' ~ ' + value[1] : '미확인'; }
+  function hasCapacity(item) { return Number.isInteger(item.capacity) && item.capacity > 0; }
+  function positionDetail() {
+    if(!controls || !detail || controls.hidden)return;
+    var top=controls.offsetTop+controls.offsetHeight+10;
+    detail.style.top=top+'px'; detail.style.maxHeight='calc(100% - '+(top+12)+'px)';
+  }
   function showDetail(item, target, group) {
     closeDetail(false); selected = target.dataset.parkingId; lastFocus = target;
     if (overlays.has(selected)) overlays.get(selected).node.classList.add('is-selected');
@@ -42,31 +48,38 @@
     if(group && group.length>1){
       var chooseLabel=element('label','parking-group-choice-v1','주변 주차장 '+group.length+'곳 ');
       var choose=element('select');choose.setAttribute('aria-label','묶인 주차장 선택');
-      group.forEach(function(member){var option=element('option','',member.name);option.value=member.id;choose.append(option);});
+      group.forEach(function(member){var option=element('option','',member.name+' · '+(hasCapacity(member)?member.capacity+'면':'면수 미제공'));option.value=member.id;choose.append(option);});
       choose.value=item.id;
       choose.onchange=function(){var next=group.find(function(member){return member.id===choose.value;});if(next)showDetail(next,target,group);};
       chooseLabel.append(choose);detail.append(chooseLabel);
     }
-    detail.append(element('p','parking-kind-v1',item.kind + (item.type ? ' · '+item.type : '')));
+    detail.append(element('p','parking-kind-v1',(item.kind==='미확인'?'위치 정보':item.kind) + (item.type ? ' · '+item.type : '')));
     var fields = element('dl');
-    fields.append(row('총 주차면수', Number.isInteger(item.capacity) && item.capacity > 0 ? item.capacity+'면' : '미확인'),
-      row('요금 구분', item.charge),
-      row('기본 요금', item.basicMinutes > 0 && money(item.basicFee) ? item.basicMinutes+'분 / '+money(item.basicFee) : (item.charge === '무료' ? '무료 (자료 기준)' : '미확인')),
-      row('추가 요금', item.extraMinutes > 0 && money(item.extraFee) ? item.extraMinutes+'분 / '+money(item.extraFee) : '미확인'));
+    if(hasCapacity(item))fields.append(row('총 주차면수',item.capacity+'면'));
+    if(item.charge)fields.append(row('요금 구분',item.charge));
+    var basic=item.basicMinutes>0 && money(item.basicFee) ? item.basicMinutes+'분 / '+money(item.basicFee) : item.charge==='무료' ? '무료 (자료 기준)' : '';
+    if(basic)fields.append(row('기본 요금',basic));
+    if(item.extraMinutes>0 && money(item.extraFee))fields.append(row('추가 요금',item.extraMinutes+'분 / '+money(item.extraFee)));
     if (money(item.dayFee)) fields.append(row('1일 주차권', money(item.dayFee)));
     if (money(item.monthFee)) fields.append(row('월 정기권', money(item.monthFee)));
-    fields.append(row('운영요일', item.days), row('평일', hours(item.weekday)), row('토요일', hours(item.saturday)), row('공휴일', hours(item.holiday)),
-      row('주소', item.address), row('연락처', item.phone), row('관리기관', item.operator), row('자료 기준일', item.referenceDate));
+    if(item.days)fields.append(row('운영요일',item.days));
+    [['평일',item.weekday],['토요일',item.saturday],['공휴일',item.holiday]].forEach(function(entry){if(hours(entry[1])!=='미확인')fields.append(row(entry[0],hours(entry[1])));});
+    [['주소',item.address],['연락처',item.phone],['관리기관',item.operator],['자료 기준일',item.referenceDate]].forEach(function(entry){if(entry[1])fields.append(row(entry[0],entry[1]));});
+    var missing=[];
+    if(!hasCapacity(item))missing.push('주차면수');
+    if(!item.charge && !basic && !money(item.dayFee) && !money(item.monthFee))missing.push('요금');
+    if(![item.weekday,item.saturday,item.holiday].some(function(value){return hours(value)!=='미확인';}))missing.push('운영시간');
+    if(missing.length)detail.append(element('p','parking-availability-v1','이 출처에서는 '+missing.join('·')+' 정보를 제공하지 않습니다. 아래에는 제공되는 정보만 표시합니다.'));
     detail.append(fields);
     if (item.note) detail.append(element('p','parking-note-v1',item.note));
-    detail.append(element('p','parking-note-v1','총 면수는 실시간 빈자리가 아닙니다. 외부 차량 이용 가능 여부·현재 요금은 현장에서 확인하세요.'));
+    detail.append(element('p','parking-note-v1',(hasCapacity(item)?'총 면수는 실시간 빈자리가 아닙니다. ':'')+'외부 차량 이용 가능 여부·현재 요금은 현장에서 확인하세요.'));
     var links = element('div','parking-links-v1');
     var route = element('a','','길찾기 ↗');
     route.href = 'https://map.kakao.com/link/to/'+encodeURIComponent(item.name)+','+item.lat+','+item.lng;
     route.target='_blank'; route.rel='noopener noreferrer'; links.append(route);
-    var source = element('a','','자료 출처 ↗');
+    var source = element('a','',String(item.sourceUrl||'').includes('place.map.kakao.com')?'카카오 상세 보기 ↗':'자료 출처 ↗');
     source.href = item.sourceUrl || snapshot.sourceUrl; source.target='_blank'; source.rel='noopener noreferrer'; links.append(source);
-    detail.append(links); detail.hidden=false; detail.scrollTop=0; close.focus({preventScroll:true});
+    detail.append(links); positionDetail(); detail.hidden=false; detail.scrollTop=0; close.focus({preventScroll:true});
   }
   function setup() {
     if (!controls) {
@@ -78,7 +91,12 @@
       filter.onchange=function () { filterValue=filter.value; closeDetail(false); render(); };
       label.append(filter); status=element('span','parking-status-v1'); status.setAttribute('role','status');
       var hide=element('button','parking-hide-v1','숨기기'); hide.type='button'; hide.onclick=function(){ setEnabled(false); button.focus(); };
-      controls.append(label,hide,status);
+      var capacityLabel=element('label','parking-capacity-filter-v1');
+      var capacityCheck=element('input');capacityCheck.type='checkbox';capacityCheck.checked=onlyCapacity;
+      capacityCheck.onchange=function(){onlyCapacity=capacityCheck.checked;closeDetail(false);render();};
+      capacityLabel.append(capacityCheck,document.createTextNode('면수 정보 있는 곳만'));
+      var legend=element('span','parking-legend-v1','파란 P: 면수 제공 · 흰 P: 면수 미제공');
+      controls.append(label,hide,capacityLabel,legend,status);
       detail=element('section','parking-detail-v1'); detail.hidden=true; detail.setAttribute('role','dialog');
       detail.setAttribute('aria-modal','false'); detail.setAttribute('aria-labelledby','parkingDetailTitleV1');
       [controls,detail].forEach(function(node){
@@ -110,7 +128,9 @@
   function render() {
     if (!enabled || !map) return;
     var center=map.getCenter(), lat=center.getLat(), lng=center.getLng();
-    var visible=merged().filter(function(item){return inBounds(item) && (filterValue==='all' || item.kind===filterValue);});
+    var candidates=merged().filter(function(item){return inBounds(item) && (filterValue==='all' || item.kind===filterValue);});
+    var capacityCount=candidates.filter(hasCapacity).length;
+    var visible=onlyCapacity?candidates.filter(hasCapacity):candidates;
     visible.sort(function(a,b){return ((a.lat-lat)**2+(a.lng-lng)**2)-((b.lat-lat)**2+(b.lng-lng)**2);});
     var groups=new Map(),projection=map.getLevel()>=6 && map.getProjection && map.getProjection();
     visible.forEach(function(item){
@@ -126,8 +146,10 @@
       if(existing && existing.signature===signature)return;
       if(!node){node=element('button','parking-pin-v1');node.type='button';node.dataset.parkingId=key;node.addEventListener('mousedown',function(event){event.stopPropagation();});}
       node.replaceChildren(document.createTextNode('P'));
+      var knownCount=group.filter(hasCapacity).length;
+      node.classList.toggle('is-location-only',knownCount===0);
       if(group.length>1)node.append(element('span','parking-group-count-v1',group.length));
-      node.title=group.length>1 ? '주변 주차장 '+group.length+'곳 · 눌러서 상세 보기' : item.name+' · '+item.kind+' · '+(item.capacity ? item.capacity+'면' : '대수 미확인');
+      node.title=group.length>1 ? '주변 주차장 '+group.length+'곳 · 면수 정보 '+knownCount+'곳' : item.name+' · '+(hasCapacity(item)?item.capacity+'면':'주차면수 미제공');
       node.setAttribute('aria-label',node.title);
       node.onclick=function(event){event.stopPropagation();showDetail(item,node,group);};
       if(existing){existing.signature=signature;existing.overlay.setPosition(coordinates(item));if(selected===key)closeDetail(false);return;}
@@ -135,9 +157,10 @@
       overlays.set(key,{node:node,overlay:overlay,signature:signature});
     });
     if(selected && !keep.has(selected))closeDetail(false);
-    var message='대전 · 현재 지도 '+visible.length+'곳'+(groups.size>160 ? ' · 가까운 160개 표시, 확대해 주세요' :
-      groups.size<visible.length ? ' · 묶음 포함 '+groups.size+'개 표시' : ' 표시');
+    var message='대전 · 현재 지도 '+candidates.length+'곳 중 면수 정보 '+capacityCount+'곳'+(onlyCapacity?'만 표시':'')+(groups.size>160 ? ' · 가까운 160개 표시, 확대해 주세요' :
+      groups.size<visible.length ? ' · 묶음 포함 '+groups.size+'개 표시' : onlyCapacity ? '' : ' · 전체 표시');
     text(status,message+(sourceWarning ? ' · '+sourceWarning : '')+(searchMessage ? ' · '+searchMessage : ''));
+    positionDetail();
   }
   function viewportKey() {
     var bounds=map.getBounds(),sw=bounds.getSouthWest(),ne=bounds.getNorthEast();
@@ -222,6 +245,7 @@
   button.addEventListener('click',toggle);
   var phoneButton=document.getElementById('mapParkingPhoneBtnV1');
   if(phoneButton)phoneButton.addEventListener('click',toggle);
+  global.addEventListener('resize',function(){if(enabled){positionDetail();schedule();}});
   document.addEventListener('keydown',function(event){if(event.key==='Escape' && detail && !detail.hidden){event.stopPropagation();closeDetail(true);}});
   global.JSMapParkingV1={hide:function(){return setEnabled(false);}};
 })(window);
