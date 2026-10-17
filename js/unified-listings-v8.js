@@ -1406,6 +1406,9 @@
     var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
     var encodedActionPropertyId = encodeURIComponent(text(propertyId));
     var buildingSale = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(selected);
+    var salePresentation = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isSale(selected);
+    if (salePresentation) drawer.setAttribute('data-sale-presentation-v2', global.JSListingTradeV1.normalizedSaleCategory(selected) === 'land' ? 'land' : 'building');
+    else drawer.removeAttribute('data-sale-presentation-v2');
     var landLabel = selected && global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel
       ? global.JSListingTradeV1.landUseLabel(selected) : "";
     var body = document.getElementById("unifiedDetailBodyV8");
@@ -1434,10 +1437,11 @@
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
         '</div><strong>' + esc(selected.address) + (buildingSale ? '' : ' ' + esc(landLabel || originalRoomLabel(selected))) + '</strong></div>' +
         (isSourceUnavailable(selected) ? '<p class="source-unavailable">원본 광고 미노출 · 거래완료 후보 · 실제 계약 여부는 별도 확인</p>' : '') +
+        (salePresentation ? global.JSListingTradeV1.saleOverviewHtml(selected) : '') +
         (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleAreaInfoHtml ? global.JSListingTradeV1.buildingSaleAreaInfoHtml(selected) : '') +
-        (phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected, buildingSale) + '</p>') +
+        (salePresentation ? '' : phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected, buildingSale) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
-        (!phoneDetail && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
+        ((!phoneDetail || salePresentation) && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'roadview\', \'' + encodedActionPropertyId + '\')">로드뷰</button>' +

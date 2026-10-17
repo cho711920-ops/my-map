@@ -172,8 +172,8 @@ for (const sample of cases) {
     if (sample.saleDetails.exclusiveAreaM2) await expect(drawer.locator(".listing-sale-details-v1")).toContainText("전용면적");
     await expect(drawer.locator(".listing-sale-details-v1")).toContainText("기존 월 임대수입");
     if (isMobile) {
-      await expect(drawer.locator(".phone-detail-facts-v2")).toBeVisible();
-      await expect(drawer.locator(".phone-detail-facts-v2 dt").filter({hasText: hiddenLabels})).toHaveCount(0);
+      await expect(drawer.locator(".sale-overview-v2")).toBeVisible();
+      await expect(drawer.locator(".listing-sale-details-v1 dt").filter({hasText: hiddenLabels})).toHaveCount(0);
     }
     const originals = drawer.locator(".unified-original-row-v8");
     await expect(originals).toHaveCount(2);

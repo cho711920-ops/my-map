@@ -43,7 +43,7 @@ assert.match(d1, /const sourceSearchIds = sourceListingSearchIndex\(rows\)/);
 assert.match(d1, /l\.status<>'deleted'/);
 assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),
-  /api-cache\/unified-listings-v14-source-proof\.json/);
+  /api-cache\/unified-listings-v15-sale-conditions-source-proof\.json/);
 assert.match(html, /script\.js\?v=[^"\s]+/);
 assert.match(html, /unified-listings-v8\.js\?v=[^"\s]+/);
 

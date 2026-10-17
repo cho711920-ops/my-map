@@ -86,6 +86,12 @@
     var monthly=r*(1-v/100)-l*i/100/12-o;
     return {equity:equity,monthly:monthly,annual:monthly*12,yield:monthly*12/equity*100,interest:l*i/100/12};
   }
+  function calculateLand(values, areaM2) {
+    var p=num(values.price), l=num(values.loan), i=num(values.interest), c=num(values.acquisition), a=num(areaM2);
+    if([p,l,i,c].some(function(n){return n==null;})||p<=0||i>100)return {error:'매매가·대출·이자율·부대비용을 입력하세요. 이자율은 0~100%입니다.'};
+    if(p-l+c<=0)return {error:'매매가 − 대출 + 취득비용이 0보다 커야 합니다.'};
+    return {total:p+c,equity:p-l+c,interest:l*i/100/12,pricePerPy:a>0?p/(a/PY):null,costPerPy:a>0?(p+c)/(a/PY):null};
+  }
   function parseParcels(text) {
     var rows=clean(text)?clean(text).split(/\r?\n/):[];
     if(rows.length>30)throw Error("필지는 최대 30개까지 입력할 수 있습니다.");
@@ -153,26 +159,33 @@
   function calcInputs(item) {
     var d=ui().saleSummary(item),values={price:item.salePrice ?? item.sale_price,deposit:d.totalDeposit,income:d.monthlyIncome,loan:d.loanAmount??0,interest:0,vacancy:0,expense:0,acquisition:0};
     var labels={price:'매매가 (만원)',deposit:'임대보증금 합계 (만원)',income:'월 임대수입 (만원)',loan:'대출금 (만원)',interest:'연 대출이자율 (%)',vacancy:'공실률 (%)',expense:'월 운영비 (만원)',acquisition:'취득 부대비용 (만원)'};
-    return '<div class="sale-calculator-grid">'+Object.keys(labels).map(function(k){return '<label>'+labels[k]+'<input type="number" min="0" step="any" data-calc="'+k+'" aria-label="'+labels[k]+'" value="'+esc(values[k])+'"></label>';}).join('')+'</div>';
+    var keys=ui().normalizedSaleCategory(item)==='land'?['price','acquisition','loan','interest']:Object.keys(labels);
+    return '<div class="sale-calculator-grid">'+keys.map(function(k){return '<label>'+labels[k]+'<input type="number" min="0" step="any" data-calc="'+k+'" aria-label="'+labels[k]+'" value="'+esc(values[k])+'"></label>';}).join('')+'</div>';
   }
   function readCalc(dialog) {var values={};dialog.querySelectorAll('[data-calc]').forEach(function(e){values[e.dataset.calc]=e.value;});return values;}
   function renderCalc(dialog) {
-    var r=calculate(readCalc(dialog)),out=dialog.querySelector('[data-calc-result]');
-    out.textContent=r.error||'가정 실투입 '+fmt(r.equity)+'만원 · 월 현금흐름 '+fmt(r.monthly)+'만원 · 연 '+fmt(r.yield,2)+'%';
+    var land=dialog.dataset.saleReview==='land',r=land?calculateLand(readCalc(dialog),dialog.dataset.landArea):calculate(readCalc(dialog)),out=dialog.querySelector('[data-calc-result]');
+    if(r.error){out.textContent=r.error;return r;}
+    var rows=land?[['총 매입비용',price(r.total)],['가정 실투입',price(r.equity)],['월 대출이자',fmt(r.interest)+'만원'],['부대비용 포함 평당',r.costPerPy==null?'광고면적 필요':fmt(r.costPerPy)+'만원']]:[['가정 실투입',price(r.equity)],['월 현금흐름',fmt(r.monthly)+'만원'],['연 현금흐름',fmt(r.annual)+'만원'],['가정 연 수익률',fmt(r.yield,2)+'%']];
+    out.innerHTML='<span class="sale-result-grid-v2">'+rows.map(function(f){return '<span><small>'+esc(f[0])+'</small><strong>'+esc(f[1])+'</strong></span>';}).join('')+'</span>';
     return r;
   }
   async function worksheet(item) {
     var key=clean(item.originalId||item.propertyId);
     if(!key){global.alert('매물 식별자를 확인할 수 없습니다.');return;}
     var dialog=modal('매매 검토 · '+(item.buildingName||item.name||item.address||''),'<p>'+esc(item.address)+' · 수집 매매가 '+esc(price(item.salePrice??item.sale_price))+'</p>'+calcInputs(item)+'<output data-calc-result aria-live="polite"></output><p class="sale-provenance">가정 계산: 월수입 × (1−공실률) − 월이자 − 운영비. 연 현금흐름 ÷ (매매가−보증금−대출+취득비용). 원금상환·소득세·양도세는 미반영입니다. 입력값은 수집된 원본이나 메인 카드 수익률을 바꾸지 않습니다.</p><details><summary>복수 필지 일괄 매매 관리</summary><p>전체 매매에 포함된 필지를 직접 확인해 입력하세요. 필지별 매물 자동 합치기·지도 좌표 변경은 하지 않습니다.</p><label>지번 | 면적(㎡) — 한 줄에 한 필지<textarea data-parcels rows="4" placeholder="서구 도마동 49-38 | 167\n서구 도마동 49-39 | 100"></textarea></label><button type="button" data-parcel-total>면적 합계 확인</button><output data-parcel-result aria-live="polite"></output></details><label>내 검토 메모<textarea data-work-note rows="3" maxlength="2000"></textarea></label><div class="sale-tools-v1"><button type="button" data-work-save disabled>내 계정에 검토 저장</button></div><p data-work-status role="status">저장된 검토 불러오는 중…</p>');
-    var context={key:key,dialog:dialog,version:0,ready:false};active=context;
+    var land=ui().normalizedSaleCategory(item)==='land';
+    dialog.dataset.saleReview=land?'land':'building';dialog.dataset.landArea=clean(ui().saleSummary(item).landAreaM2);
+    dialog.querySelector('h2').textContent=(land?'토지 매입비용·필지 검토':'건물 수익·매입 검토')+' · '+(item.buildingName||item.name||item.address||'');
+    if(land)dialog.querySelector('[data-calc-result] + .sale-provenance').textContent='총 매입비용 = 매매가 + 직접 입력한 취득 부대비용. 평당비용은 광고 토지면적 기준입니다. 월 대출이자는 이자만 계산하며 세금 자동 산정·원금상환·보유비용은 포함하지 않습니다. 복수 필지 입력은 아래에서 별도로 검토합니다.';
+    var context={key:key,dialog:dialog,version:0,ready:false,savedAssumptions:{}};active=context;
     dialog.querySelectorAll('[data-calc]').forEach(function(e){e.addEventListener('input',function(){renderCalc(dialog);});});renderCalc(dialog);
     dialog.querySelector('[data-parcel-total]').onclick=function(){var out=dialog.querySelector('[data-parcel-result]');try{var p=parseParcels(dialog.querySelector('[data-parcels]').value),t=parcelTotals(p,readCalc(dialog).price);out.textContent=(p.length?p[0].address+(p.length>1?' 외 '+(p.length-1)+'필지':''):'필지 없음')+' · 총 '+fmt(t.areaM2)+'㎡ / '+fmt(t.areaPy)+'평 · 일괄 매매가 '+price(readCalc(dialog).price)+' · 평당 '+fmt(t.pricePerPy)+'만원';}catch(e){out.textContent=e.message;}};
     dialog.querySelector('[data-work-save]').onclick=async function(){
       if(active!==context||!context.ready)return;
       var status=dialog.querySelector('[data-work-status]'),button=this;button.disabled=true;
       try{
-        var parcels=parseParcels(dialog.querySelector('[data-parcels]').value),data={assumptions:readCalc(dialog),parcels:parcels,note:dialog.querySelector('[data-work-note]').value,source:item.source||'',address:clean(item.address),savedAt:new Date().toISOString()};
+        var parcels=parseParcels(dialog.querySelector('[data-parcels]').value),data={assumptions:Object.assign({},context.savedAssumptions,readCalc(dialog)),parcels:parcels,note:dialog.querySelector('[data-work-note]').value,source:item.source||'',address:clean(item.address),savedAt:new Date().toISOString()};
         var result=await global.JSDataAccessV6.mutate('saveCloudState',{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL,expectedVersion:context.version,data:data});
         context.version=result.version;status.textContent='내 계정에 저장했습니다. 다른 PC에서도 이 원본의 매매 검토에서 열 수 있습니다.';
       }catch(e){if(accountChanged(e)){context.ready=false;status.textContent=accountChangedMessage();}else status.textContent='저장하지 못했습니다: '+e.message;}finally{if(active===context)button.disabled=!context.ready;}
@@ -182,24 +195,34 @@
       var r=await global.JSDataAccessV6.read('loadCloudState',{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL});
       if(active!==context)return;
       context.version=r.version||0;var saved=r.data||{};
+      context.savedAssumptions=Object.assign({},saved.assumptions||{});
       if(saved.assumptions)dialog.querySelectorAll('[data-calc]').forEach(function(e){if(Object.hasOwn(saved.assumptions,e.dataset.calc))e.value=saved.assumptions[e.dataset.calc];});
       dialog.querySelector('[data-parcels]').value=(saved.parcels||[]).map(function(p){return p.address+' | '+p.areaM2;}).join('\n');
       dialog.querySelector('[data-work-note]').value=saved.note||'';renderCalc(dialog);
       context.ready=true;dialog.querySelector('[data-work-save]').disabled=false;
-      dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';
+      dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':land?'아직 저장된 검토가 없습니다. 부대비용·대출·이자율의 초기 0은 계산 가정입니다.':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';
     } catch(e) {if(active===context)dialog.querySelector('[data-work-status]').textContent=accountChanged(e)?accountChangedMessage():'검토 조회 실패: '+e.message+' · 계산은 가능하지만 기존 자료 보호를 위해 저장은 잠겼습니다.';}
   }
   function comparisonHtml(items) {
     var rows=[['매물',function(i){return i.name||i.buildingName||'-';}],['주소',function(i){return i.address||'미확인';}],['구분',function(i){return categoryLabels[ui().normalizedSaleCategory(i)]||'토지';}],['매매가',function(i){return price(i.salePrice??i.sale_price);}],['대지/토지',function(i){var a=num(ui().saleSummary(i).landAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['연면적',function(i){var a=num(ui().saleSummary(i).grossAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['단순 연 수익률',function(i){var y=ui().saleYield(i);return y==null?'미확인':fmt(y,2)+'%';}],['지목 / 용도지역',function(i){var d=ui().saleSummary(i);return (d.landUse||'미확인')+' / '+(d.zoning||'미확인');}],['출처',function(i){return i.source||'직접등록';}]];
-    return '<p>선택된 대표 매물 '+items.length+'개 · 수익률은 보증금 차감·대출 미반영 단순 연 수익률입니다.</p><div class="sale-compare-scroll"><table><tbody>'+rows.map(function(r){return '<tr><th scope="row">'+r[0]+'</th>'+items.map(function(i){return '<td>'+esc(r[1](i))+'</td>';}).join('')+'</tr>';}).join('')+'<tr><th scope="row">연락처/원본</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button><small>기존 전화·원본 버튼 이용</small></td>';}).join('')+'</tr></tbody></table></div>';
+    var land=items.every(function(i){return ui().normalizedSaleCategory(i)==='land';});
+    function field(label,key,suffix){return [label,function(i){var v=ui().saleSummary(i,[key])[key];return v==null||clean(v)===''?'미확인':clean(v)+(suffix||'');}];}
+    if(land){
+      rows=rows.filter(function(r){return !['연면적','단순 연 수익률','지목 / 용도지역'].includes(r[0]);});
+      rows.splice(5,0,['토지 평당가',function(i){var v=unitPrice(i);return v==null?'미확인':fmt(v)+'만원';}],field('지목','landUse'),field('용도지역','zoning'),field('도로접면','roadAccess'),field('토지 형상','parcelShape'));
+    }else{
+      rows.splice(6,0,field('임대보증금 합계','totalDeposit','만원'),field('월 임대수입','monthlyIncome','만원'),field('건축물 용도','buildingUse'),field('사용승인일','approvalDate'));
+    }
+    rows=rows.filter(function(r){return ['매물','주소','구분','매매가','출처'].includes(r[0])||items.some(function(i){return !/^(?:미확인|미확인 \/ 미확인)$/.test(r[1](i));});});
+    return '<p>선택된 대표 매물 '+items.length+'개 · '+(land?'평당가는 각 광고의 토지면적 기준입니다. 지적공부 면적과 구분해 검토하세요.':'수익률은 보증금 차감·대출 미반영 단순 연 수익률입니다.')+'</p><div class="sale-compare-scroll"><table><tbody>'+rows.map(function(r){return '<tr><th scope="row">'+r[0]+'</th>'+items.map(function(i){return '<td>'+esc(r[1](i))+'</td>';}).join('')+'</tr>';}).join('')+'<tr><th scope="row">연락처/원본</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button><small>기존 전화·원본 버튼 이용</small></td>';}).join('')+'</tr></tbody></table></div>';
   }
   function compare() {
     var items=typeof global.getSelectedPrintItems==='function'?global.getSelectedPrintItems():[];
-    if(items.length<2||items.length>4||items.some(function(i){return !ui().isSale(i);}))return global.alert('같은 매매 화면에서 매물 2~4개를 체크해 주세요.');
+    if(items.length<2||items.length>4||items.some(function(i){return !ui().isSale(i)||(ui().normalizedSaleCategory(i)==='land')!==(ui().getMode()==='land_sale');}))return global.alert('같은 매매 화면에서 매물 2~4개를 체크해 주세요.');
     var dialog=modal('매매 매물 비교',comparisonHtml(items));
     dialog.querySelectorAll('[data-compare-open]').forEach(function(b){b.onclick=function(){var item=items[Number(b.dataset.compareOpen)];dialog.close();if(global.JSUnifiedListingsV8)global.JSUnifiedListingsV8.open(item.propertyId);};});
   }
-  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,calculate:calculate,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
+  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,calculate:calculate,calculateLand:calculateLand,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
   mountFilters();
   global.addEventListener('js-listing-trade-mode-change',syncMode);
   document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-action]');if(!b)return;var parent=b.closest('[data-sale-item]');if(!parent)return;event.stopPropagation();try{var item=JSON.parse(parent.dataset.saleItem);if(b.dataset.saleAction==='lookup')lookup(item);else worksheet(item);}catch(e){global.alert(e.message);}});

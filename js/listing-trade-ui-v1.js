@@ -321,7 +321,7 @@
     if (!isSale(item)) return "";
     if (normalizedSaleCategory(item) === "land" && global.JSSaleWorkbenchV1) {
       var unit = global.JSSaleWorkbenchV1.unitPrice(item);
-      return '<span class="pyeong-mini-badge listing-sale-yield-v1" title="매매가 ÷ 광고 토지면적(평). 지적공부 전체면적과 다를 수 있습니다.">평당 ' +
+      return '<span class="pyeong-mini-badge listing-sale-yield-v1' + (unit == null ? ' unavailable' : '') + '" title="매매가 ÷ 광고 토지면적(평). 지적공부 전체면적과 다를 수 있습니다.">평당 ' +
         (unit == null ? '미확인' : unit.toLocaleString('ko-KR', { maximumFractionDigits: 1 }) + '만') + '</span>';
     }
     var rate = saleYield(item);
@@ -389,10 +389,17 @@
     var escape = function(value) { return clean(value).replace(/[&<>"']/g, function(ch) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
     }); };
-    var rows = [];
+    var rows = [], groups = [];
+    function group(title) {
+      if (rows.length) groups.push('<div class="sale-fact-group-v2"><dt>' + escape(title) + '</dt><dd><dl>' + rows.join('') + '</dl></dd></div>');
+      rows = [];
+    }
     function add(label, value, suffix) {
       if (value == null || value === "") return;
-      rows.push('<div><dt>' + escape(label) + '</dt><dd>' + escape(value) + escape(suffix || "") + '</dd></div>');
+      var shown = suffix && /^(?:만원|%)/.test(suffix) && nonnegative(value) != null
+        ? nonnegative(value).toLocaleString('ko-KR', {maximumFractionDigits: 2}) : value;
+      var wide = label === "토지 평당가" || clean(value).length > 24 || label.length > 13;
+      rows.push('<div' + (wide ? ' class="sale-fact-wide-v2"' : '') + '><dt>' + escape(label) + '</dt><dd>' + escape(shown) + escape(suffix || "") + '</dd></div>');
     }
     function area(label, value) {
       if (!["number", "string"].includes(typeof value) || !Number.isFinite(Number(value)) || !(Number(value) > 0)) return;
@@ -404,6 +411,7 @@
     area("연면적", detail.grossAreaM2);
     area("건축면적", detail.buildingAreaM2);
     area("전용면적", detail.exclusiveAreaM2);
+    group("광고 면적");
     add("기존 보증금 합계", detail.totalDeposit, "만원");
     add("기존 월 임대수입", detail.monthlyIncome, "만원");
     add("광고 융자금", detail.loanAmount, "만원");
@@ -416,8 +424,14 @@
     if (land && global.JSSaleWorkbenchV1) {
       var unitPrice = global.JSSaleWorkbenchV1.unitPrice(item);
       add("토지 평당가", unitPrice == null ? "확인 필요" : unitPrice.toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + "만원 (광고면적 기준)");
-    } else add("단순 연 수익률", rate == null ? "확인 필요" : rate.toFixed(2) + "% (보증금 차감)");
+    } else if (rate != null) add("단순 연 수익률", rate.toFixed(2) + "% (보증금 차감)");
+    group(land ? "가격 기준" : "임대·수익 현황");
     add(detail.descriptionVersion ? "세대수 (설명 기준)" : "세대수", detail.householdCount, "세대");
+    add("가구 수", detail.familyCount, "가구");
+    add("방 수", detail.roomCount, "개"); add("욕실 수", detail.bathroomCount, "개");
+    add("건축물 용도", detail.buildingUse); add("기타 용도", detail.otherUse);
+    add("사용승인일", detail.approvalDate);
+    group("건물 기본정보");
     (detail.descriptionWarnings || []).forEach(function(warning) { add("확인 필요", warning); });
     var advertised = detail.descriptionFinancials || {};
     var financialLabels = { salePrice: "매매가", loanAmount: "융자", totalDeposit: "보증금", monthlyIncome: "월 임대수입",
@@ -427,19 +441,45 @@
       if (advertised[key] != null && (current == null || Number(current) !== Number(advertised[key])))
         add("설명 기재 " + financialLabels[key], advertised[key], key === "advertisedYield" ? "% (계산 미적용)" : "만원 (계산 미적용)");
     });
-    add("방 수", detail.roomCount, "개"); add("욕실 수", detail.bathroomCount, "개");
+    group("원문 대조·확인사항");
     add("지목", detail.landUse); add("용도지역", detail.zoning);
     add("추가 용도지역", detail.secondaryZoning); add("토지 형상", detail.parcelShape);
     area("지적공부 면적 (광고면적과 구분)", detail.cadastralAreaM2);
     if (Number(detail.cadastralAreaM2) > 0 && Number(detail.landAreaM2) > 0 && Math.abs(detail.cadastralAreaM2 - detail.landAreaM2) > 1)
       add("면적 확인", "광고면적과 지적공부 면적이 다릅니다. 일부 지분·복수 필지 여부를 확인하세요. 평당가는 광고면적 기준입니다.");
-    add("도로접면", detail.roadAccess); add("건축물 용도", detail.buildingUse);
-    add("기타 용도", detail.otherUse);
-    add("사용승인일", detail.approvalDate);
-    return rows.length ? '<dl class="listing-sale-details-v1">' + rows.join("") +
+    add("도로접면", detail.roadAccess);
+    group("필지·이용 조건");
+    return groups.length || detail.descriptionText ? '<dl class="listing-sale-details-v1">' + groups.join("") +
       '</dl><p class="listing-sale-yield-note-v1">' + escapeHtml(land ? '토지 평당가는 매매가 ÷ 광고면적(평)입니다. 일부 지분·복수 필지와 지적공부 면적 차이를 확인하세요.' : yieldExplanation) +
       (detail.descriptionVersion ? '<br>설명에서 추출한 조건은 광고 기재값입니다. 이자 차감 월수익은 월 임대수입으로 사용하지 않습니다.' : '') + '</p>' +
       (detail.descriptionText ? '<details class="listing-sale-description-v1"><summary>수집된 매매 상세설명 전체 보기</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">' + escape(detail.descriptionText) + '</div></details>' : '') : "";
+  }
+  // Presentation only. Keep facts tied to this original's price and source.
+  function saleCardFactsHtml(item) {
+    if (!isSale(item)) return "";
+    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "roadAccess", "parcelShape", "buildingUse"]), land = normalizedSaleCategory(item) === "land", fields = [];
+    function money(label, value) {
+      var n = nonnegative(value);
+      if (n != null) fields.push([label, n.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만원']);
+    }
+    if (land) {
+      if (landText(d.roadAccess)) fields.push(['도로', landText(d.roadAccess)]);
+      if (landText(d.parcelShape)) fields.push(['형상', landText(d.parcelShape)]);
+    } else {
+      money('보증금 합계', d.totalDeposit); money('월 임대수입', d.monthlyIncome);
+      if (landText(d.buildingUse)) fields.push(['용도', landText(d.buildingUse)]);
+    }
+    return fields.length ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
+      return '<span><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';
+    }).join('') + '</div>' : '';
+  }
+  function saleOverviewHtml(item) {
+    if (!isSale(item)) return "";
+    var land = normalizedSaleCategory(item) === "land";
+    var money = global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(displayPrice(item)) : String(displayPrice(item));
+    return '<div class="sale-overview-v2 ' + (land ? 'land' : 'building') + '"><span class="sale-overview-label-v2">' +
+      (land ? '토지 매입 검토' : '건물·공간 매입 검토') + ' · ' + escapeHtml(displayType(item)) + '</span><div class="sale-overview-price-v2"><span>매매</span><strong>' + escapeHtml(money) + '</strong></div>' +
+      '<div class="sale-overview-indicators-v2">' + saleYieldBadge(item) + (land ? saleAreaHtml(item) : '') + '</div>' + saleCardFactsHtml(item) + '</div>';
   }
   function getMode() { return currentMode; }
   function isSale(item) { return normalizedTradeType(item) === "sale"; }
@@ -457,6 +497,8 @@
     naverTypeLabel: naverTypeLabel,
     displayPrice: displayPrice,
     saleDetailsHtml: saleDetailsHtml,
+    saleCardFactsHtml: saleCardFactsHtml,
+    saleOverviewHtml: saleOverviewHtml,
     saleSummary: saleSummary,
     buildingFloorLabel: buildingFloorLabel,
     buildingSaleExtent: buildingSaleExtent,

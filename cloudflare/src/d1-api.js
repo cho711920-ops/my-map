@@ -373,12 +373,13 @@ export function compactSaleSummary(original) {
     if (Number.isFinite(parsed) && parsed >= 0) summary[key] = parsed;
   }
   if (detail.scope === "land" || original.saleCategory === "land") {
-    for (const key of ["landUse", "zoning"]) {
+    for (const key of ["landUse", "zoning", "roadAccess", "parcelShape"]) {
       if (typeof detail[key] !== "string") continue;
       const value = detail[key].trim().replace(/\s+/g, " ").slice(0, 160);
       if (value) summary[key] = value;
     }
   } else {
+    if (typeof detail.buildingUse === "string" && detail.buildingUse.trim()) summary.buildingUse = detail.buildingUse.trim().replace(/\s+/g, " ").slice(0, 160);
     summary.saleExtent = ["whole_building", "unit"].includes(detail.saleExtent) ? detail.saleExtent : "unknown";
     summary.saleExtentEvidence = typeof detail.saleExtentEvidence === "string"
       ? detail.saleExtentEvidence.trim().slice(0, 100) : "원본 매매범위 근거 부족";

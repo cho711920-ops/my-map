@@ -1,0 +1,94 @@
+/* Sale-only presentation. Lease cards, maps and stored listing facts are unchanged. */
+html #list .item.listing-sale-card-v1 {
+  padding: 12px !important; margin-bottom: 10px !important; border-radius: 12px !important;
+}
+html #list .item.listing-sale-card-v1 .item-compact-main-v650 {
+  display: flex !important; flex-direction: column !important; gap: 7px !important;
+  min-width: 0; height: auto !important; max-height: none !important;
+}
+html #list .item.listing-sale-card-v1 .standard-card-grid-v661 {
+  height: auto !important; max-height: none !important; align-items: stretch !important;
+}
+html #list .item.listing-sale-card-v1 .item-compact-head-v650 { order: 0; flex-wrap: wrap !important; height: auto !important; min-height: 24px; }
+html #list .item.listing-sale-card-v1 .item-building-name { font-size: 15px !important; line-height: 1.5 !important; }
+html #list .item.listing-sale-card-v1 .item-address-room-v650 { font-size: 13px !important; line-height: 1.5 !important; }
+html #list .item.listing-sale-card-v1 .item-compact-price-v650 {
+  order: 1; gap: 6px !important; padding: 0 !important; min-height: 0 !important; align-items: center !important;
+}
+html #list .item.listing-sale-card-v1 .item-price-values-v652 {
+  order: -1; flex: 0 0 100% !important; width: 100% !important; line-height: 1.5 !important;
+}
+html #list .item.listing-sale-card-v1 .listing-sale-price-v1 { color: #153d63 !important; font-size: 21px !important; letter-spacing: -.5px; }
+html #list .item.listing-sale-card-v1 .listing-sale-price-v1 > b { font-size: 12px !important; font-weight: 500 !important; margin-right: 4px; color: #62758a !important; }
+html #list .item.listing-sale-card-v1 .building-sale-area-info-v1 { order: 2; margin: 0; }
+html #list .item.listing-sale-card-v1 .listing-land-info-v1 { padding: 0; }
+html #list .item.listing-sale-card-v1 .listing-sale-yield-v1.unavailable { display: none !important; }
+.js-phone-app-v2 #list .item.listing-sale-card-v1 .listing-sale-yield-v1:not(.unavailable) { display: inline-flex !important; }
+html #list .item.listing-sale-card-v1 .item-compact-actions-v650 {
+  order: 4; margin-top: 2px !important; padding-top: 8px !important; border-top: 1px solid #edf0f4;
+}
+.sale-card-facts-v2 {
+  display: flex; flex-wrap: wrap; gap: 5px 16px; color: #52667b; font-size: 12px; line-height: 1.65;
+  min-width: 0; overflow-wrap: anywhere;
+}
+.sale-card-facts-v2 > span { display: inline-flex; flex-wrap: wrap; gap: 3px 6px; max-width: 100%; }
+.sale-card-facts-v2 b { color: #233d56; font-weight: 650; font-variant-numeric: tabular-nums; }
+html #list .item.listing-sale-card-v1 .sale-card-facts-v2 { order: 3; }
+
+#unifiedDetailDrawerV8[data-sale-presentation-v2] { background: #f4f6f9; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-gallery-v8:has(.unified-gallery-empty-v8) { height: 100px !important; min-height: 0 !important; background: #edf1f5; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-gallery-empty-v8 { box-sizing: border-box; height: 100px; min-height: 0; padding: 15px; font-size: 13px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-summary-v8 {
+  background: #fff; border: 1px solid #e1e7ee; border-radius: 14px; padding: 18px; margin-top: 12px;
+}
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-source-address-v827 > strong {
+  font-size: 17px !important; line-height: 1.5 !important; color: #1c344d;
+}
+.sale-overview-v2 {
+  margin: 16px 0 12px; padding: 17px; border: 1px solid #dce5ef; border-radius: 12px;
+  background: linear-gradient(120deg, #f1f6fc, #fbfcfe); color: #243c56;
+}
+.sale-overview-v2.land { background: linear-gradient(120deg, #f1f7f3, #fbfdfc); border-color: #d9e7df; }
+.sale-overview-label-v2 { display: block; margin-bottom: 6px; color: #64778c; font-size: 11px; font-weight: 600; letter-spacing: .3px; }
+.sale-overview-price-v2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.sale-overview-price-v2 > span { color: #63768a; font-size: 13px; }
+.sale-overview-price-v2 > strong { color: #163c61; font-size: 27px; font-weight: 800; line-height: 1.4; letter-spacing: -.7px; }
+.sale-overview-v2.land .sale-overview-price-v2 > strong { color: #205342; }
+.sale-overview-indicators-v2 { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; margin-top: 10px; }
+.sale-overview-v2 .sale-card-facts-v2 { margin-top: 12px; padding-top: 10px; border-top: 1px solid #dce5ef; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .listing-sale-details-v1 { display: grid; gap: 0; padding: 0; background: transparent; border-radius: 0; margin: 18px 0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .listing-sale-details-v1 > .sale-fact-group-v2 {
+  display: block; padding: 14px 0; border-top: 1px solid #e5eaf0;
+}
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dt { margin-bottom: 10px; font-size: 14px; font-weight: 750; color: #203c58; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dd { margin: 0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dd > dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; margin: 0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dd > dl > div { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 7px 9px; background: #f7f9fb; border-radius: 6px; min-width: 0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dd > dl > .sale-fact-wide-v2 { grid-column: 1 / -1; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dt { font-size: 11px; color: #687b8e; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dd { font-size: 13px; font-weight: 600; color: #233c56; line-height: 1.55; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .listing-sale-description-v1 { padding: 12px; border: 1px solid #dce5ef; border-radius: 8px; font-size: 13px; line-height: 1.7; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .listing-sale-description-v1 summary { cursor: pointer; font-weight: 700; color: #304c68; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .listing-sale-description-v1[open] > div { margin-top: 12px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-tools-v1 [data-sale-action="worksheet"] { background: #1d4b74; color: #fff; border-color: #1d4b74; }
+.sale-result-grid-v2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.sale-result-grid-v2 > span { display: flex; flex-direction: column; gap: 3px; }
+.sale-result-grid-v2 small { color: #60788e; font-size: 11px; font-weight: 500; }
+.sale-result-grid-v2 strong { color: #19466d; font-size: 18px; font-variant-numeric: tabular-nums; }
+.sale-workbench-dialog[data-sale-review="land"] [data-calc-result] { background: #eff6f2; }
+.sale-workbench-dialog[data-sale-review="land"] .sale-result-grid-v2 strong { color: #205342; }
+.sale-compare-scroll th { position: sticky; left: 0; z-index: 1; }
+.sale-compare-scroll tr:nth-child(4) td { font-size: 17px; font-weight: 750; color: #163c61; }
+@media (max-width: 600px) {
+  html #list .item.listing-sale-card-v1 { padding: 10px !important; }
+  html #list .item.listing-sale-card-v1 .listing-sale-price-v1 { font-size: 20px !important; }
+  #unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-summary-v8 { padding: 13px; }
+  .sale-overview-v2 { padding: 13px; }
+  .sale-overview-price-v2 > strong { font-size: 25px; }
+  .sale-card-facts-v2 { gap: 4px 10px; }
+}
+.js-phone-app-v2 #list .item.listing-sale-card-v1 .item-compact-main-v650 { justify-content: flex-start; padding-right: 0; }
+.js-phone-app-v2 #list .item.listing-sale-card-v1 .item-card-grid-v650 .item-compact-main-v650 .item-compact-head-v650 {
+  order: 0; flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; padding-right: 30px; gap: 4px !important;
+}
+.js-phone-app-v2 #list .item.listing-sale-card-v1 .item-compact-head-v650 > :is(.item-building-name, .item-address-room-v650) { flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; margin: 0 !important; }

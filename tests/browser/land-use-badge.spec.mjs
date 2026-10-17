@@ -73,7 +73,7 @@ test("land cards use compact-source land use once, keep zoning, and hide the leg
   await expect(drawer.locator(".unified-detail-source-address-v827")).not.toContainText("3층");
   await expect(drawer.locator(".listing-sale-details-v1")).toContainText("지목");
   if (isMobile) {
-    const facts = drawer.locator(".phone-detail-facts-v2");
+    const facts = drawer.locator(".listing-sale-details-v1");
     await expect(facts.locator("dt").filter({hasText: /^지목$/})).toHaveCount(1);
     await expect(facts.locator("dt").filter({hasText: /^층·호실$/})).toHaveCount(0);
     await expect(facts).not.toContainText("3층");
@@ -112,7 +112,7 @@ test("a recovered Daangn raw land type reaches the card, land-use filter and det
   const drawer = page.locator("#unifiedDetailDrawerV8");
   await expect(drawer.locator(".unified-detail-source-address-v827")).toContainText("지목: 답");
   await expect(drawer.locator(".listing-sale-details-v1")).toContainText("답");
-  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("답");
+  if (isMobile) await expect(drawer.locator(".listing-sale-details-v1")).toContainText("답");
   await expectLandIdentityUnchanged(page);
 });
 

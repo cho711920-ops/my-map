@@ -4735,6 +4735,7 @@ function addListItem(item, appendTarget) {
                 : '') +
             (saleCardV1 ? window.JSListingTradeV1.saleLandInfoHtml(item) : '') +
             '</div>' +
+            (saleCardV1 ? window.JSListingTradeV1.saleCardFactsHtml(item) : '') +
             '<div class="item-action-row item-compact-actions-v650' +
             (('')) + '">' +
             (standardActionsV721) +
