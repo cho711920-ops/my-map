@@ -132,6 +132,37 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 
+test('building sale cards, sorting and comparison work with the production shell and real SDK',async({page},testInfo)=>{
+  const boundary=await startFullApplication(page);
+  await page.evaluate(()=>{
+    const items=[100,200,0].map((income,n)=>({...allItems[0],propertyId:'FIXTURE-NATIVE-BUILDING-'+n,key:'native-building-'+n,name:'검수용 가상 건물 '+(n+1),room:'전체',type:'건물',source:'직접등록',tradeType:'sale',saleCategory:'building',salePrice:50000+n*1000,
+      saleDetails:{landAreaM2:330.5785,grossAreaM2:661.157,totalDeposit:5000,monthlyIncome:income,buildingUse:'제2종근린생활시설'}}));
+    allItems.push(...items);JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(items.map(item=>[item.propertyId,[{...item,originalId:item.propertyId+'-ORIGINAL',buildingName:item.name,photoCount:0,images:[]}]]))});
+    window.buildingDataBeforeV5=JSON.stringify(allItems);
+    window.buildingBusinessSnapshotV5=()=>JSON.stringify(allItems.map(i=>[i.propertyId,i.key,i.address,i.latitude,i.longitude,i.tradeType,i.saleCategory,i.salePrice,i.deposit,i.rent,i.area,i.room,i.memo,i.source,i.saleDetails]));
+    window.buildingBusinessBeforeV5=buildingBusinessSnapshotV5();applyFilter();
+  });
+  await page.locator('#listingTradeModeSelectV1').selectOption('building_sale');
+  await page.evaluate(()=>JSMapListPanelV1.open());
+  await page.locator('#sortDropdownBtn').click();
+  await page.getByText('단순 수익률 높은순',{exact:true}).click();
+  await expect(page.locator('#list .listing-building-card-v5')).toHaveCount(3);
+  await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id','FIXTURE-NATIVE-BUILDING-1');
+  await page.screenshot({path:testInfo.outputPath('building-sale-native-v5.png'),animations:'disabled'});
+  await page.locator('#list [data-property-id="FIXTURE-NATIVE-BUILDING-1"] .action-select-check').check();
+  await page.locator('#list [data-property-id="FIXTURE-NATIVE-BUILDING-0"] .action-select-check').check();
+  await page.locator('#saleComparisonTrayV5 [data-sale-compare]').click();
+  await expect(page.locator('.sale-comparison-dialog-v2 .sale-compare-different-v5')).not.toHaveCount(0);
+  await page.screenshot({path:testInfo.outputPath('building-comparison-native-v5.png'),animations:'disabled'});
+  const changedFields=await page.evaluate(()=>{
+    const before=JSON.parse(window.buildingDataBeforeV5);
+    return allItems.flatMap((item,n)=>Object.keys(item).filter(key=>JSON.stringify(item[key])!==JSON.stringify(before[n][key])));
+  });
+  await testInfo.attach('display-cache-fields',{body:JSON.stringify([...new Set(changedFields)]),contentType:'application/json'});
+  expect(await page.evaluate(()=>buildingBusinessSnapshotV5()===window.buildingBusinessBeforeV5)).toBe(true);
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
 test("old CSP reproduces the post-login blank map and zero listings when the current Kakao SDK changes CDN",async({page},testInfo)=>{
   test.setTimeout(45000);
   const boundary=await startFullApplication(page,{oldCsp:true});

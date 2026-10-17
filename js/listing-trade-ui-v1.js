@@ -394,6 +394,16 @@
       '<div title="매매가 ÷ 광고 토지면적(평). 지적공부 면적과 다를 수 있습니다."><span>평당 매매가</span><strong>' +
       (unit == null ? '산정 불가' : number(unit) + '<small>만원</small>') + '</strong><small>광고면적 기준</small></div></div>';
   }
+  function buildingUnitPricesHtml(item) {
+    if (!isBuildingSale(item)) return '';
+    var d=saleSummary(item), price=nonnegative(item.salePrice ?? item.sale_price), fields=[];
+    if (!(price>0)) return '';
+    [['대지 기준','landAreaM2'],['연면적 기준','grossAreaM2']].forEach(function(field){
+      var area=nonnegative(d[field[1]]);
+      if(area>0)fields.push('<span>'+field[0]+' <b>'+(price/(area/3.305785)).toLocaleString('ko-KR',{maximumFractionDigits:1})+'만원/평</b></span>');
+    });
+    return fields.length ? '<div class="building-unit-prices-v5" title="각 단가는 건물 총매매가를 해당 광고면적으로 나눈 비교 지표입니다. 토지만의 가격이 아닙니다.">'+fields.join('')+'</div>' : '';
+  }
   function saleDetailsHtml(item) {
     if (!isSale(item) || !item.saleDetails) return "";
     var detail = item.saleDetails;
@@ -545,6 +555,7 @@
     saleAreaHtml: saleAreaHtml,
     saleLandInfoHtml: saleLandInfoHtml,
     landCardMetricsHtml: landCardMetricsHtml,
+    buildingUnitPricesHtml: buildingUnitPricesHtml,
     landUseLabel: landUseLabel,
     isSale: isSale
   };

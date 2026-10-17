@@ -94,6 +94,67 @@ html #list .item.listing-sale-card-v1 .sale-card-facts-v2 { order: 3; }
 .js-phone-app-v2 #list .item.listing-sale-card-v1 .item-compact-head-v650 > :is(.item-building-name, .item-address-room-v650) { flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; margin: 0 !important; }
 
 /* Property dossier: navigation, an asset summary and readable fact tables. */
+/* Building cards keep the same identity/actions, with asset and income blocks. */
+.sale-card-heading-v5 { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; margin-bottom: 9px; padding-right: 38px; }
+.sale-card-category-v5 { padding: 3px 8px; border-radius: 4px; color: #234d73; background: #eaf1f9; font-size: 11px; font-weight: 750; }
+html #list .listing-sale-card-v1 .item-head-select-v650 { display: inline-flex !important; align-items: center; width: 25px; min-width: 25px; height: 28px; }
+html #list .listing-sale-card-v1 .item-head-select-v650 .action-select-check { display: block !important; width: 17px; height: 17px; margin: 0; accent-color: #226392; }
+html #list .item.listing-building-card-v5 .standard-card-grid-v661 { grid-template-columns: 88px minmax(0,1fr) !important; grid-template-rows: auto !important; gap: 12px !important; }
+html #list .item.listing-building-card-v5 .item-compact-main-v650 { min-height: 0 !important; }
+html #list .item.listing-building-card-v5 .unified-thumb-v8 { width: 88px !important; height: 94px !important; min-height: 0 !important; border-radius: 7px !important; align-self: start; }
+html #list .item.listing-building-card-v5 .unified-thumb-v8.no-photo { background: #f0f4f9 !important; color: #7a8999 !important; }
+html #list .item.listing-building-card-v5 .item-compact-head-v650 { display: flex !important; flex-direction: column; align-items: flex-start !important; gap: 2px !important; padding-right: 0 !important; }
+html #list .item.listing-building-card-v5 .item-building-name { font-size: 15px !important; white-space: normal !important; overflow-wrap: anywhere; }
+html #list .item.listing-building-card-v5 .item-address-room-v650 { margin: 0 !important; }
+html #list .item.listing-building-card-v5 .item-address-text { color: #65788d !important; white-space: normal !important; overflow-wrap: anywhere; }
+html #list .item.listing-building-card-v5 .item-price-values-v652 { flex: 1 1 auto !important; width: auto !important; }
+html #list .item.listing-building-card-v5 > .building-sale-area-info-v1 { margin-top: 10px; }
+html #list .item.listing-building-card-v5 > .sale-card-facts-v2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 16px; margin-top: 10px; padding: 12px; border-radius: 7px; background: #f1f5fa; }
+html #list .item.listing-building-card-v5 > .sale-card-facts-v2 > span { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+html #list .item.listing-building-card-v5 > .sale-card-facts-v2 > span > span { font-size: 11px; }
+html #list .item.listing-building-card-v5 > .sale-card-facts-v2 b { font-size: 16px; color: #21496b; }
+html #list .item.listing-building-card-v5 > .sale-card-facts-v2 > span:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: 8px; }
+html #list .item.listing-building-card-v5 > .sale-card-facts-v2 > span:last-child:nth-child(odd) b { font-size: 12px; }
+.building-unit-prices-v5 { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 9px; font-size: 11px; color: #697d91; line-height: 1.6; }
+.building-unit-prices-v5 b { color: #3f5d79; font-size: 12px; font-weight: 650; }
+.sale-card-meta-v5 { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 8px; font-size: 10px; color: #7a8897; }
+html #list .listing-building-card-v5 .sale-card-meta-v5 .item-building-year-v650 { display: inline-flex !important; position: static !important; }
+html #list .item.listing-building-card-v5 .sale-card-heading-v5 .phone-card-favorite-v2 { display: grid !important; top: -8px; right: -6px; width: 40px; height: 40px; }
+html #list .item.listing-building-card-v5 > .item-compact-actions-v650 { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; margin-top: 8px !important; overflow: visible !important; }
+html #list .listing-building-card-v5 .item-action-left { flex: 1 1 0 !important; width: auto !important; min-width: 0; max-width: 100%; flex-wrap: wrap !important; gap: 4px !important; }
+html #list .listing-building-card-v5 .item-action-left > button,
+html #list .listing-building-card-v5 > .item-compact-actions-v650 > .item-memo-toggle { display: inline-flex !important; align-items: center; justify-content: center; width: auto !important; min-width: 32px !important; height: 30px !important; min-height: 30px !important; padding: 0 7px !important; font-size: 11px !important; line-height: 1.4 !important; }
+html #list .listing-building-card-v5 .item-action-left > .item-source-link-btn { flex: 0 1 auto; }
+html #list .listing-building-card-v5 .item-memo-toggle { flex: 0 0 auto; position: static !important; margin-left: auto; }
+html[data-listing-trade-mode="building_sale"] #sortDropdownMenu,
+html[data-listing-trade-mode="land_sale"] #sortDropdownMenu { max-height: min(440px,60dvh); overflow-y: auto; }
+.sale-comparison-tray-v5[hidden] { display: none !important; }
+.sale-comparison-tray-v5 { position: fixed; right: 16px; bottom: 18px; z-index: 10500; width: min(540px,calc(100vw - 32px)); box-sizing: border-box; padding: 12px; border: 1px solid #cbd9e8; border-radius: 12px; background: #fff; box-shadow: 0 5px 25px #17375524; font: 12px/1.5 var(--js-app-font,Pretendard,sans-serif); color: #284660; }
+.sale-tray-heading-v5 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sale-tray-heading-v5 > span { font-size: 10px; color: #738498; }
+.sale-tray-items-v5 { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; }
+.sale-tray-items-v5 > button { flex: 1 0 110px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 2px 5px; max-width: 180px; min-width: 0; padding: 7px 9px; border: 1px solid #e0e8f0; border-radius: 6px; background: #f5f8fc; color: #4b6177; text-align: left; font: inherit; cursor: pointer; }
+.sale-tray-items-v5 > button > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.sale-tray-items-v5 b { grid-column: 1; color: #1c4265; font-size: 12px; }
+.sale-tray-items-v5 > button > span:last-child { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 17px; }
+.sale-tray-actions-v5 { display: flex; gap: 6px; justify-content: flex-end; }
+.sale-tray-actions-v5 button { min-height: 32px; padding: 6px 12px; border: 1px solid #d5e0ec; border-radius: 5px; background: #fff; color: #526a80; font: inherit; cursor: pointer; }
+.sale-tray-actions-v5 [data-sale-compare] { background: #21577f; color: #fff; border-color: #21577f; }
+.sale-tray-actions-v5 [data-sale-compare]:disabled { background: #eef2f6; color: #8b98a5; border-color: #e2e8ee; cursor: default; }
+.sale-comparison-dialog-v2 .sale-compare-differences-control-v5 { display: flex !important; flex-direction: row !important; align-items: center; gap: 7px; padding: 8px 0 12px; font-size: 12px; }
+.sale-comparison-dialog-v2 .sale-compare-differences-control-v5 input { flex: 0 0 16px; width: 16px !important; min-width: 16px !important; height: 16px; min-height: 16px; margin: 0; padding: 0; }
+.sale-compare-scroll .sale-compare-different-v5 td { background: #f1f7fd; }
+.sale-compare-scroll .sale-compare-different-v5 th small { display: block; font-size: 10px; color: #4375a0; font-weight: 500; margin-top: 3px; }
+.sale-compare-scroll tr[hidden] { display: none !important; }
+@media(max-width:600px) {
+  html #list .item.listing-building-card-v5 .standard-card-grid-v661 { grid-template-columns: 65px minmax(0,1fr) !important; gap: 10px !important; }
+  html #list .item.listing-building-card-v5 .unified-thumb-v8 { width: 65px !important; height: 86px !important; }
+  html #list .item.listing-building-card-v5 .item-compact-head-v650 > :is(.item-building-name,.item-address-room-v650) { max-width: 100%; }
+  html #list .listing-building-card-v5 .item-action-left > .item-list-add-btn { display: none !important; }
+}
+.js-phone-app-v2 .sale-comparison-tray-v5 { bottom: calc(78px + env(safe-area-inset-bottom)); right: 8px; width: calc(100vw - 16px); padding: 9px; }
+html.js-phone-app-v2[data-sale-comparison-open-v5] #list { padding-bottom: 210px !important; }
+@media print { .sale-comparison-tray-v5,.sale-compare-differences-control-v5 { display: none !important; } }
 /* Land lists use parcel facts rather than the shared building/room layout. */
 html #list .item.listing-land-card-v4 { border-color: #dce6e2 !important; }
 .land-card-heading-v4 { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; margin-bottom: 9px; padding-right: 30px; }
@@ -125,7 +186,7 @@ html #list .listing-land-card-v4 .listing-land-info-v1 b { color: #304c3e; font-
 .land-card-meta-v4 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 10px; color: #7b8781; }
 html #list .listing-land-card-v4 .land-card-meta-v4 .item-reg-date { display: inline !important; position: static !important; font-size: 10px; }
 html #list .item.listing-land-card-v4 > .item-compact-actions-v650 { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; margin-top: 8px !important; overflow: visible !important; }
-html #list .listing-land-card-v4 .item-action-left { flex: 1 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap !important; gap: 4px !important; }
+html #list .listing-land-card-v4 .item-action-left { flex: 1 1 0 !important; width: auto !important; min-width: 0; max-width: 100%; flex-wrap: wrap !important; gap: 4px !important; }
 html #list .listing-land-card-v4 .item-action-left > button,
 html #list .listing-land-card-v4 > .item-compact-actions-v650 > .item-memo-toggle { display: inline-flex !important; align-items: center; justify-content: center; width: auto !important; min-width: 32px !important; height: 30px !important; min-height: 30px !important; padding: 0 7px !important; font-size: 11px !important; line-height: 1.4 !important; }
 html #list .listing-land-card-v4 .item-action-left > .item-source-link-btn { flex: 0 1 auto; }

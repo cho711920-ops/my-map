@@ -10,7 +10,7 @@ const elements = new Map();
 const saleWorkbenchSource=fs.readFileSync('js/sale-workbench-v1.js','utf8');
 const indexSource=fs.readFileSync('index.html','utf8');
 const window={JSAuthenticatedAccountEmail:'owner@example.test',addEventListener(){},dispatchEvent(){}};
-const context={window,document:{getElementById:id=>elements.get(id)||null,querySelector:()=>null,documentElement:{setAttribute(){}},addEventListener(){}},CustomEvent:class{}};
+const context={window,document:{getElementById:id=>elements.get(id)||null,querySelector:()=>null,documentElement:{setAttribute(){},removeAttribute(){}},addEventListener(){}},CustomEvent:class{}};
 vm.runInNewContext(fs.readFileSync('js/listing-trade-ui-v1.js','utf8'),context);
 vm.runInNewContext(saleWorkbenchSource,context);
 const ui=window.JSListingTradeV1,w=window.JSSaleWorkbenchV1;

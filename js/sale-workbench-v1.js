@@ -24,6 +24,36 @@
     return (e?fmt(e,0)+"억":"")+(m?fmt(m,2)+"만":"")+"원";
   }
   function unitPrice(item) { var d=ui().saleSummary(item),p=num(item.salePrice ?? item.sale_price),a=num(d.landAreaM2); return p>0 && a>0 ? p/(a/PY) : null; }
+  var saleSortsV5 = {
+    salePriceLow:['매매가 낮은순','price',false], salePriceHigh:['매매가 높은순','price',true],
+    saleLandHigh:['대지·토지 넓은순','landAreaM2',true], saleLandLow:['대지·토지 작은순','landAreaM2',false],
+    saleGrossHigh:['연면적 넓은순','grossAreaM2',true], saleYieldHigh:['단순 수익률 높은순','yield',true],
+    saleIncomeHigh:['월 임대수입 높은순','monthlyIncome',true], saleUnitLow:['토지 평당가 낮은순','unit',false],
+    saleUnitHigh:['토지 평당가 높은순','unit',true]
+  };
+  var leaseSortMenuV5 = null, sortModeV5 = '';
+  function sortLabel(key) { return saleSortsV5[key] ? saleSortsV5[key][0] : ''; }
+  function sortValue(item,key) {
+    var spec=saleSortsV5[key];if(!spec || !ui().isSale(item))return null;
+    var field=spec[1], d=ui().saleSummary(item), v;
+    if(field==='price')v=num(item.salePrice??item.sale_price);
+    else if(field==='unit')v=unitPrice(item);
+    else if(field==='yield')v=ui().saleYield(item);
+    else v=num(d[field]);
+    return v==null || !Number.isFinite(v) || (field!=='monthlyIncome' && field!=='yield' && v<=0) ? null : v;
+  }
+  function compareSortValues(a,b,key) {
+    if(a==null)return b==null?0:1;if(b==null)return -1;
+    return saleSortsV5[key] && saleSortsV5[key][2] ? b-a : a-b;
+  }
+  function syncSortMenu() {
+    var menu=document.getElementById('sortDropdownMenu'),mode=ui().getMode();if(!menu || sortModeV5===mode)return;
+    if(leaseSortMenuV5==null)leaseSortMenuV5=menu.innerHTML;
+    sortModeV5=mode;
+    if(mode==='lease'){menu.innerHTML=leaseSortMenuV5;return;}
+    var keys=['latest','salePriceLow','salePriceHigh','saleLandHigh','saleLandLow'].concat(mode==='land_sale'?['saleUnitLow','saleUnitHigh']:['saleGrossHigh','saleYieldHigh','saleIncomeHigh']);
+    menu.innerHTML=keys.map(function(key){return '<button class="sort-menu-single sort-menu-check" type="button" role="option" aria-selected="false" data-sort-value="'+key+'" onclick="selectSortOption(\''+key+'\')"><span class="sort-choice-check" aria-hidden="true"></span><span>'+esc(key==='latest'?'최근등록순':sortLabel(key))+'</span></button>';}).join('');
+  }
   function input(id) { return clean((document.getElementById(id)||{}).value); }
   // Keep provider values intact; accept their short labels only when filtering.
   function landUseKey(value) {
@@ -76,6 +106,33 @@
     if(root){root.hidden=!sale;root.querySelectorAll('[data-sale-building],[data-sale-range="saleGross"],[data-sale-range="saleYield"]').forEach(function(e){e.hidden=land;});root.querySelectorAll('[data-sale-land],[data-sale-range="saleUnitPrice"]').forEach(function(e){e.hidden=!land;});}
     ["listingLeaseAreaRowV1","listingLeaseFloorRowV1"].forEach(function(id){var e=document.getElementById(id);if(e)e.hidden=sale;});
     var compare=document.getElementById("saleCompareButtonV1");if(compare)compare.hidden=!sale;
+    syncSortMenu();
+    syncComparisonTray();
+  }
+  function selectedSaleItems() {
+    var items=typeof global.getSelectedPrintItems==='function'?global.getSelectedPrintItems():[];
+    if(!items.length)return items;
+    var masters=new Set(global.allItems||[]), visibleByKey=new Map();
+    (global.visibleListItems||[]).forEach(function(item){visibleByKey.set(global.actionSelectionKeyV660(item),item);});
+    return items.map(function(item){
+      if(!masters.has(item))return item;
+      var key=global.actionSelectionKeyV660(item);
+      return visibleByKey.get(key)||item;
+    });
+  }
+  function syncComparisonTray() {
+    var tray=document.getElementById('saleComparisonTrayV5'), sale=ui().getMode()!=='lease';
+    var items=sale?selectedSaleItems():[];
+    if(!sale||!items.length){if(tray)tray.hidden=true;document.documentElement.removeAttribute('data-sale-comparison-open-v5');return;}
+    if(!tray){tray=document.createElement('aside');tray.id='saleComparisonTrayV5';tray.className='sale-comparison-tray-v5';tray.setAttribute('aria-label','선택한 매매 비교 후보');document.body.append(tray);}
+    tray.hidden=false;document.documentElement.setAttribute('data-sale-comparison-open-v5','true');
+    var valid=items.length>=2&&items.length<=4&&items.every(function(item){return ui().isSale(item)&&(ui().normalizedSaleCategory(item)==='land')===(ui().getMode()==='land_sale');});
+    tray.innerHTML='<div class="sale-tray-heading-v5"><strong>비교 후보 '+items.length+'개</strong><span>같은 시장에서 2~4개 선택</span></div><div class="sale-tray-items-v5">'+items.slice(0,4).map(function(item){
+      return '<button type="button" data-sale-remove="'+esc(encodeURIComponent(global.actionSelectionKeyV660(item)))+'" aria-label="'+esc((item.name||item.address||'매물')+' 비교 선택 해제')+'"><span>'+esc(item.name||item.address||'매물')+'</span><b>'+esc(price(item.salePrice??item.sale_price))+'</b><span aria-hidden="true">×</span></button>';
+    }).join('')+'</div><div class="sale-tray-actions-v5"><button type="button" data-sale-clear>선택 해제</button><button type="button" data-sale-compare'+(valid?'':' disabled')+'>비교표 열기</button></div>';
+    tray.querySelector('[data-sale-clear]').onclick=function(){global.clearSelectedPrintItems();};
+    tray.querySelector('[data-sale-compare]').onclick=compare;
+    tray.querySelectorAll('[data-sale-remove]').forEach(function(button){button.onclick=function(){global.togglePrintSelection(button.dataset.saleRemove);};});
   }
   // Assumptions are separate from collected facts. No default unknown rent=0.
   function calculate(values) {
@@ -234,18 +291,26 @@
     }else{
       rows.splice(6,0,field('임대보증금 합계','totalDeposit','만원'),field('월 임대수입','monthlyIncome','만원'),field('건축물 용도','buildingUse'),field('사용승인일','approvalDate'));
       rows.splice(6,0,['전용면적',function(i){return areaValue(i,'exclusiveAreaM2');}],['건축면적',function(i){return areaValue(i,'buildingAreaM2');}]);
+      [['대지 기준 단가','landAreaM2'],['연면적 기준 단가','grossAreaM2']].forEach(function(f){
+        rows.push([f[0],function(i){var p=num(i.salePrice??i.sale_price),a=num(ui().saleSummary(i)[f[1]]);return p>0&&a>0?fmt(p/(a/PY))+'만원/평 (총매매가 기준)':'미확인';}]);
+      });
     }
     rows=rows.filter(function(r){return ['매물','주소','구분','매매가','출처'].includes(r[0])||items.some(function(i){return !/^(?:미확인|미확인 \/ 미확인)$/.test(r[1](i));});});
-    return '<p>선택된 대표 매물 '+items.length+'개 · '+(land?'평당가는 각 광고의 토지면적 기준입니다. 지적공부 면적과 구분해 검토하세요.':'수익률은 보증금 차감·대출 미반영 단순 연 수익률입니다.')+'</p><div class="sale-compare-scroll"><table><tbody>'+rows.map(function(r){return '<tr><th scope="row">'+r[0]+'</th>'+items.map(function(i){return '<td>'+esc(r[1](i))+'</td>';}).join('')+'</tr>';}).join('')+'<tr><th scope="row">연락처/원본</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button><small>기존 전화·원본 버튼 이용</small></td>';}).join('')+'</tr></tbody></table></div>';
+    return '<p>선택된 대표 매물 '+items.length+'개 · '+(land?'평당가는 각 광고의 토지면적 기준입니다. 지적공부 면적과 구분해 검토하세요.':'수익률은 보증금 차감·대출 미반영 단순 연 수익률입니다.')+'</p><label class="sale-compare-differences-control-v5"><input type="checkbox" data-compare-differences> 서로 다른 항목만 보기</label><div class="sale-compare-scroll"><table><tbody>'+rows.map(function(r){
+      var values=items.map(r[1]),different=values.length>1&&new Set(values).size>1;
+      var highlight=different&&!['매물','주소','출처'].includes(r[0]);
+      return '<tr class="'+(highlight?'sale-compare-different-v5':'')+'"'+(!different?' data-compare-same="true"':'')+'><th scope="row">'+r[0]+(highlight?'<small>조건 차이</small>':'')+'</th>'+values.map(function(value){return '<td>'+esc(value)+'</td>';}).join('')+'</tr>';
+    }).join('')+'<tr><th scope="row">연락처/원본</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button><small>기존 전화·원본 버튼 이용</small></td>';}).join('')+'</tr></tbody></table></div>';
   }
   function compare() {
-    var items=typeof global.getSelectedPrintItems==='function'?global.getSelectedPrintItems():[];
+    var items=selectedSaleItems();
     if(items.length<2||items.length>4||items.some(function(i){return !ui().isSale(i)||(ui().normalizedSaleCategory(i)==='land')!==(ui().getMode()==='land_sale');}))return global.alert('같은 매매 화면에서 매물 2~4개를 체크해 주세요.');
     var dialog=modal((ui().getMode()==='land_sale'?'토지':'건물·공간')+' 매물 비교','<div class="sale-compare-controls-v2"><button type="button" data-sale-print>비교표 인쇄</button></div>'+comparisonHtml(items),'sale-comparison-dialog-v2');
     dialog.querySelector('[data-sale-print]').onclick=function(){global.print();};
+    dialog.querySelector('[data-compare-differences]').onchange=function(event){dialog.querySelectorAll('[data-compare-same]').forEach(function(row){row.hidden=event.target.checked;});};
     dialog.querySelectorAll('[data-compare-open]').forEach(function(b){b.onclick=function(){var item=items[Number(b.dataset.compareOpen)];dialog.close();if(global.JSUnifiedListingsV8)global.JSUnifiedListingsV8.open(item.propertyId);};});
   }
-  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,calculate:calculate,calculateLand:calculateLand,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
+  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,sortLabel:sortLabel,sortValue:sortValue,compareSortValues:compareSortValues,syncComparisonTray:syncComparisonTray,calculate:calculate,calculateLand:calculateLand,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
   mountFilters();
   global.addEventListener('js-listing-trade-mode-change',syncMode);
   document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-action]');if(!b)return;var parent=b.closest('[data-sale-item]');if(!parent)return;event.stopPropagation();try{var item=JSON.parse(parent.dataset.saleItem);if(b.dataset.saleAction==='lookup')lookup(item);else worksheet(item);}catch(e){global.alert(e.message);}});

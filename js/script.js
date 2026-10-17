@@ -1115,7 +1115,8 @@ function updateSortDropdownUI() {
    */
   var buttonLabel = button.querySelector(".v6-sort-label");
   var latestLabel = doneOnly ? "미노출 최신순" : "최근등록순";
-  var currentLabel = value === "latest" ? (doneOnly ? latestLabel : "정렬") : (SORT_LABELS[value] || "정렬");
+  var currentLabel = value === "latest" ? (doneOnly ? latestLabel : "정렬") :
+    (window.JSSaleWorkbenchV1 && window.JSSaleWorkbenchV1.sortLabel(value) || SORT_LABELS[value] || "정렬");
   if (buttonLabel) {
     buttonLabel.textContent = currentLabel;
   } else {
@@ -1315,7 +1316,10 @@ function getFilteredItems(options) {
     if (projected) filtered.push(projected);
   });
 
+  var saleSortValuesV5 = saleMode && window.JSSaleWorkbenchV1 && window.JSSaleWorkbenchV1.sortLabel(sortType)
+    ? new Map(filtered.map(function(item) { return [item, window.JSSaleWorkbenchV1.sortValue(item, sortType)]; })) : null;
   filtered.sort(function(a, b) {
+    if (saleSortValuesV5) return window.JSSaleWorkbenchV1.compareSortValues(saleSortValuesV5.get(a), saleSortValuesV5.get(b), sortType) || compareNaturalAddress(a, b);
     if (sortType === "latest") {
       if (availabilityView === "completed") {
         var absenceDifference = (Number(b.unifiedAbsenceConfirmedTimeV1) || 0) - (Number(a.unifiedAbsenceConfirmedTimeV1) || 0);
@@ -4697,7 +4701,7 @@ function addListItem(item, appendTarget) {
                 window.JSUnifiedListingsV8.handleCardClick(item, event);
         };
     }
-    if (!landCardV4) div.innerHTML =
+    if (!saleCardV1) div.innerHTML =
         '<div class="item-card-grid-v650' +
             ((' standard-card-grid-v661')) + '">' +
             unifiedCardPartsV8.thumbnail +
@@ -4749,6 +4753,21 @@ function addListItem(item, appendTarget) {
             '</div>' +
             '</div>' +
             memoPanel;
+    if (buildingSaleV1) {
+        div.classList.add("listing-building-card-v5");
+        div.innerHTML = '<div class="sale-card-heading-v5">' + selectionControlV1 +
+            '<span class="sale-card-category-v5">' + escapeHtml(displayType || "건물매매") + '</span>' + doneLabel + favoriteHeaderButtonV661 + '</div>' +
+            '<div class="item-card-grid-v650 standard-card-grid-v661">' + unifiedCardPartsV8.thumbnail +
+            '<div class="item-compact-main-v650 standard-card-main-v661">' +
+            '<div class="item-compact-head-v650"><span class="item-building-name">' + escapeHtml(item.name || "매매 매물") + '</span>' +
+            '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span></span></div>' +
+            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + pyeongMiniBadge + '</div></div></div>' +
+            buildingSaleInfoV1 + window.JSListingTradeV1.saleCardFactsHtml(item) + window.JSListingTradeV1.buildingUnitPricesHtml(item) +
+            '<div class="sale-card-meta-v5">' + escapeHtml(item.source || "출처 미제공") +
+            (regDateLabel ? '<span>등록 ' + escapeHtml(regDateLabel) + '</span>' : '') +
+            (cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.year ? '<span class="item-building-year-v650' + cachedBuildingYearClassV6519 + '">' + escapeHtml(cachedBuildingYearTextV6519) + '</span>' : '') +
+            buildListElevatorIconV843(item) + sourceLabel + '</div><div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
+    }
     if (landCardV4) {
         div.classList.add("listing-land-card-v4");
         var landNameV4 = String(item.name || "").trim();
@@ -5189,6 +5208,7 @@ function updatePrintSelectedButton() {
   if (typeof window.syncSelectionActionBarV657 === "function") {
     window.syncSelectionActionBarV657(count);
   }
+  if (window.JSSaleWorkbenchV1) window.JSSaleWorkbenchV1.syncComparisonTray();
 }
 
 
