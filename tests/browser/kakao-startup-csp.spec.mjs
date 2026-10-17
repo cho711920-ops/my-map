@@ -34,7 +34,7 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   await page.route("**/*",async route=>{
     const request=route.request(),target=new URL(request.url());
     const json=body=>route.fulfill({status:200,headers:{"x-js-listings-revision":"fixture-boot-1"},contentType:"application/json",body:JSON.stringify(body)});
-    if(request.method()==="GET" && sdkHosts.has(target.hostname))return route.continue();
+    if(request.method()==="GET" && (sdkHosts.has(target.hostname)||/\.(?:daumcdn|kakaocdn)\.net$/.test(target.hostname)))return route.continue();
     // Do not make an unrelated external font dependency part of map startup.
     if(target.hostname==="cdn.jsdelivr.net")return route.fulfill({status:200,contentType:"text/css",body:""});
     if(target.hostname!=="js-map.com"){forbidden.push(target.hostname+target.pathname);return route.abort();}
@@ -94,6 +94,41 @@ test('parking overlays and detail coexist with real Kakao clusters without movin
     count:overlays.reduce((sum,overlay)=>sum+overlay.__cluster.items.length,0),data:JSON.stringify(allItems)}))).toEqual(await page.evaluate(()=>parkingNativeBefore));
   await page.locator('#mapParkingBtnV1').click();await expect(page.locator('.parking-pin-v1')).toHaveCount(0);
   await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
+test('sale-only satellite and cadastral views use the real SDK and restore the lease map',async({page},testInfo)=>{
+  test.setTimeout(60000);
+  const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  const saleDetail={scope:'land',landAreaM2:330.5785,landUse:'대',zoning:'제2종일반주거지역',roadAccess:'중로한면',parcelShape:'장방형',descriptionText:'검수용 가상 광고입니다. 실제 운영 매물이 아닙니다.'};
+  await page.route('**/api/data?*',route=>new URL(route.request().url()).searchParams.get('action')==='unifiedListingDetail'?route.fulfill({json:{ok:true,originals:[{propertyId:'FIXTURE-NATIVE-LAND',originalId:'FIXTURE-NATIVE-LAND-ORIGINAL',source:'직접등록',buildingName:'검수용 가상 토지',address:'대전 서구 탄방동 1',tradeType:'sale',saleCategory:'land',salePrice:30000,saleDetails:saleDetail,images:[],photoCount:0}]}}):route.fallback());
+  await page.evaluate(detail=>{
+    const sale={...allItems[0],propertyId:'FIXTURE-NATIVE-LAND',key:'native-land',name:'검수용 가상 토지',room:'',type:'토지',source:'직접등록',tradeType:'sale',saleCategory:'land',salePrice:30000,saleDetails:detail};
+    allItems.push(sale);JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{'FIXTURE-NATIVE-LAND':[{...sale,originalId:'FIXTURE-NATIVE-LAND-ORIGINAL',buildingName:sale.name}]}});applyFilter();
+    window.saleBusinessSnapshotV3=()=>JSON.stringify(allItems.map(i=>[i.propertyId,i.key,i.address,i.tradeType,i.saleCategory,i.salePrice,i.deposit,i.rent]));
+  },saleDetail);
+  const before=await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}));
+  await page.locator('#listingTradeModeSelectV1').selectOption('land_sale');
+  await expect(page.locator('#saleMapViewsV3')).toBeVisible();
+  const listingBefore=await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),ids:overlays.map(o=>o.__cluster.key),data:saleBusinessSnapshotV3()}));
+  await page.locator('[data-sale-map-view="satellite"]').click();
+  expect(await page.evaluate(()=>map.getMapTypeId()===kakao.maps.MapTypeId.HYBRID)).toBe(true);
+  await page.locator('[data-sale-map-view="district"]').click();
+  await expect(page.locator('[data-sale-map-note]')).toBeVisible();
+  expect(await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),ids:overlays.map(o=>o.__cluster.key),data:saleBusinessSnapshotV3()}))).toEqual(listingBefore);
+  await page.screenshot({path:testInfo.outputPath('sale-satellite-cadastral-native.png')});
+  await page.evaluate(()=>JSMapListPanelV1.open());
+  const viewRect=await page.locator('#saleMapViewsV3').boundingBox(),mapRect=await page.locator('#map').boundingBox();
+  expect(viewRect.x+viewRect.width).toBeLessThanOrEqual(mapRect.x+mapRect.width+1);
+  await page.locator('#list .item-building-name').click();
+  await expect(page.locator('.sale-dossier-nav-v3')).toBeVisible();
+  await expect(page.locator('#unifiedDetailBodyV8')).not.toContainText('원본 최신 조회에 실패');
+  await page.screenshot({path:testInfo.outputPath('sale-dossier-native-preview.png'),animations:'disabled'});
+  await page.locator('#unifiedDetailDrawerV8 > header button').click();
+  await page.locator('#listingTradeModeSelectV1').selectOption('lease');
+  await expect(page.locator('#saleMapViewsV3')).toBeHidden();
+  expect(await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}))).toEqual(before);
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 

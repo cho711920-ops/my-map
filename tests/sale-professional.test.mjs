@@ -51,3 +51,13 @@ test('comparisons use land conditions or building income without all-empty secti
   const ambiguous={...land,source:'네이버',saleDetails:undefined,unifiedOriginalsV8:[{...land,source:'네이버'},{...land,source:'네이버',saleDetails:{...land.saleDetails,roadAccess:'광대한면'}}]};
   assert.doesNotMatch(w.comparisonHtml([ambiguous]),/도로접면|중로한면|광대한면/);
 });
+test('dossier highlights missing facts without treating zero rent as missing or changing lease',()=>{
+  assert.equal(ui.saleReviewGapsHtml({...land,tradeType:'lease'}),'');
+  assert.equal(ui.saleReviewGapsHtml(building),'');
+  assert.equal(ui.saleReviewGapsHtml({...building,saleDetails:{totalDeposit:0,monthlyIncome:0}}),'');
+  const before=JSON.stringify(land), gaps=ui.saleReviewGapsHtml({...land,saleDetails:{}});
+  assert.match(gaps,/광고 토지면적/);assert.match(gaps,/용도지역/);assert.match(gaps,/도로접면/);assert.doesNotMatch(gaps,/<details[^>]*\sopen/);
+  assert.equal(JSON.stringify(land),before);
+  const compare=w.comparisonHtml([{...building,saleDetails:{...building.saleDetails,exclusiveAreaM2:99.17,buildingAreaM2:100}}]);
+  assert.match(compare,/전용면적/);assert.match(compare,/건축면적/);assert.match(compare,/㎡/);
+});

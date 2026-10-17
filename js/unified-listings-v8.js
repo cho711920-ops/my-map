@@ -1333,6 +1333,8 @@
     var toolbar = document.querySelector(".filters");
     drawer.style.right = (sidebar ? Math.round(sidebar.getBoundingClientRect().width) : 620) + "px";
     drawer.style.top = Math.max(0, toolbar ? Math.round(toolbar.getBoundingClientRect().bottom) : 68) + "px";
+    if (drawer.hasAttribute('data-sale-presentation-v2')) drawer.style.setProperty('--sale-dossier-available-v3', Math.max(280, global.innerWidth - (sidebar ? sidebar.getBoundingClientRect().width : 620) - 12) + 'px');
+    else drawer.style.removeProperty('--sale-dossier-available-v3');
   }
 
   function phoneDetailFactsV2(selected) {
@@ -1409,6 +1411,7 @@
     var salePresentation = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isSale(selected);
     if (salePresentation) drawer.setAttribute('data-sale-presentation-v2', global.JSListingTradeV1.normalizedSaleCategory(selected) === 'land' ? 'land' : 'building');
     else drawer.removeAttribute('data-sale-presentation-v2');
+    if (salePresentation) positionDrawer(drawer);
     var landLabel = selected && global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel
       ? global.JSListingTradeV1.landUseLabel(selected) : "";
     var body = document.getElementById("unifiedDetailBodyV8");
@@ -1439,9 +1442,11 @@
         (isSourceUnavailable(selected) ? '<p class="source-unavailable">원본 광고 미노출 · 거래완료 후보 · 실제 계약 여부는 별도 확인</p>' : '') +
         (salePresentation ? global.JSListingTradeV1.saleOverviewHtml(selected) : '') +
         (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleAreaInfoHtml ? global.JSListingTradeV1.buildingSaleAreaInfoHtml(selected) : '') +
+        (salePresentation && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
+        (salePresentation ? '<div class="sale-photo-slot-v3" data-sale-section="photos"></div>' : '') +
         (salePresentation ? '' : phoneDetail ? phoneDetailFactsV2(selected) : '<p>' + conditionLine(selected, buildingSale) + '</p>') +
         (global.JSListingTradeV1 ? global.JSListingTradeV1.saleDetailsHtml(selected) : '') +
-        ((!phoneDetail || salePresentation) && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
+        (!phoneDetail && !salePresentation && global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.detailTools(selected, propertyId) : '') +
         '<div class="unified-detail-utility-actions-v8" aria-label="매물 바로가기">' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'navigation\', \'' + encodedActionPropertyId + '\')">내비</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'roadview\', \'' + encodedActionPropertyId + '\')">로드뷰</button>' +
@@ -1486,6 +1491,7 @@
         renderDetailPhoto(detailGallery, Number(pendingStep));
       }
     }
+    if (global.JSSalePropertyWorkspaceV3) global.JSSalePropertyWorkspaceV3.mountDetail(body, selected);
     showDetailDrawerV827(drawer);
   }
 

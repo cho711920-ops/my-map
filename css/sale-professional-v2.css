@@ -92,3 +92,71 @@ html #list .item.listing-sale-card-v1 .sale-card-facts-v2 { order: 3; }
   order: 0; flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; padding-right: 30px; gap: 4px !important;
 }
 .js-phone-app-v2 #list .item.listing-sale-card-v1 .item-compact-head-v650 > :is(.item-building-name, .item-address-room-v650) { flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; margin: 0 !important; }
+
+/* Property dossier: navigation, an asset summary and readable fact tables. */
+#unifiedDetailDrawerV8[data-sale-presentation-v2] { font-family: var(--js-app-font, Pretendard, "Segoe UI", sans-serif); background: #fff; }
+@media(min-width:1000px) {
+  html:not(.js-phone-app-v2) #unifiedDetailDrawerV8[data-sale-presentation-v2] { width: min(540px, var(--sale-dossier-available-v3, 540px)); min-width: 0; }
+}
+.sale-dossier-nav-v3 { position: sticky; top: 0; z-index: 5; display: flex; overflow-x: auto; gap: 0; padding: 0 12px; border-bottom: 1px solid #d8e2ee; background: #fff; scrollbar-width: thin; }
+.sale-dossier-nav-v3 button { flex: 0 0 auto; min-height: 46px; padding: 0 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #67778a; font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.4; cursor: pointer; white-space: nowrap; }
+.sale-dossier-nav-v3 button[aria-current] { border-bottom-color: #1266b6; color: #145d9e; font-weight: 800; }
+.sale-dossier-nav-v3 button:focus-visible { outline: 2px solid #1266b6; outline-offset: -3px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-summary-v8 { border: 0; margin: 0 !important; padding: 20px !important; border-radius: 0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 { border: 0; border-radius: 10px; padding: 20px; background: #193e60; color: #fff; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2.land { background: #215449; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-price-v2 > strong { color: #fff; font-size: 30px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-price-v2 > span,
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-label-v2 { color: #d5e4ef; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .listing-sale-yield-v1 { color: #fff; border-color: #ffffff38; background: #ffffff14; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .listing-sale-areas-v1 { color: #fff; font-size: 14px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .sale-card-facts-v2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); color: #d5e4ef; border-color: #ffffff26; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .sale-card-facts-v2 > span { display: flex; flex-direction: column; gap: 3px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .sale-card-facts-v2 b { color: #fff; font-size: 16px; }
+.sale-land-metrics-v3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 15px; margin-top: 15px; border-top: 1px solid #ffffff26; }
+.sale-land-metrics-v3 > div { display: flex; flex-direction: column; gap: 4px; }
+.sale-land-metrics-v3 span { font-size: 11px; color: #cfdfdb; }
+.sale-land-metrics-v3 strong { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.sale-review-gaps-v2 { padding-top: 12px; margin-top: 14px; border-top: 1px solid #ffffff26; color: #d8e5ed; }
+.sale-review-gaps-v2 summary { cursor: pointer; font-size: 12px; font-weight: 500; }
+.sale-review-gaps-v2 p { font-size: 13px; line-height: 1.6; margin: 10px 0 5px; }
+.sale-review-gaps-v2 small { font-size: 11px; line-height: 1.5; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .building-sale-area-info-v1 .listing-sale-areas-v1 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .building-sale-area-info-v1 .listing-sale-areas-v1 > span { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; border-color: #dce5ed; background: #f5f8fb; padding: 10px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .building-sale-area-info-v1 .listing-sale-areas-v1 b { color: #244b6b; font-size: 19px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dt { font-size: 16px; margin: 6px 0 12px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dd > dl { grid-template-columns: 1fr; gap: 0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dd > dl > div { grid-template-columns: minmax(100px, .85fr) minmax(0, 1.4fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid #edf0f4; border-radius: 0; background: transparent; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dt { font-size: 12px; line-height: 1.7; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dd { font-size: 14px; text-align: right; }
+.sale-photo-slot-v3[hidden] { display: none; }
+.sale-photo-slot-v3 { margin: 16px 0; border-radius: 8px; overflow: hidden; }
+.sale-photo-slot-v3 .unified-detail-gallery-v8 { height: 240px; }
+.sale-review-toolbar-v2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0; }
+.sale-review-toolbar-v2 span { color: #687c8f; font-size: 11px; }
+.sale-compare-controls-v2 { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+
+.sale-map-views-v3[hidden], .sale-map-views-v3 [hidden] { display: none !important; }
+.sale-map-views-v3 { position: absolute; top: 12px; right: 70px; z-index: 9100; max-width: min(240px, calc(100% - 150px)); padding: 7px; border: 1px solid #d7e1eb; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px #17375512; font: 12px/1.4 Pretendard, sans-serif; color: #445b72; }
+.sale-map-views-v3 > span { display: block; font-size: 10px; margin: 0 3px 5px; color: #718297; }
+.sale-map-views-v3 > div { display: flex; gap: 3px; }
+.sale-map-views-v3 button { padding: 7px 10px; min-height: 32px; border: 0; border-radius: 5px; background: #f1f4f8; color: #465e75; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.sale-map-views-v3 button[aria-pressed="true"] { background: #205d92; color: #fff; }
+.sale-map-views-v3 small { display: block; margin: 6px 3px 0; color: #66798d; font-size: 10px; }
+.sale-map-views-v3 [data-sale-map-status]:empty { display: none; }
+.js-map-design-v1:not(.js-map-list-closed-v1):not(.js-phone-app-v2) .sale-map-views-v3 { right: calc(var(--map-sidebar-width-v659, 620px) + 70px); }
+.js-phone-app-v2 .sale-map-views-v3 { position: fixed; top: calc(var(--jsm-header-height) + 62px); right: 12px; max-width: 230px; }
+.js-phone-app-v2:not([data-jsm-mobile-view="map"]) .sale-map-views-v3 { display: none; }
+.js-phone-app-v2 .sale-map-views-v3 button { min-height: 42px; }
+@media print {
+  html body:has(dialog.sale-comparison-dialog-v2[open]) > #wrap { display: none !important; }
+  body:has(.sale-comparison-dialog-v2[open]) > :not(.sale-comparison-dialog-v2) { display: none !important; }
+  .sale-comparison-dialog-v2[open] { position: static !important; width: 100% !important; max-height: none !important; height: auto !important; margin: 0; border: 0; padding: 0; overflow: visible; box-shadow: none; }
+  .sale-comparison-dialog-v2::backdrop { background: transparent; }
+  .sale-comparison-dialog-v2 :is([data-sale-close], .sale-compare-controls-v2, [data-compare-open]) { display: none !important; }
+  .sale-comparison-dialog-v2 .sale-compare-scroll { overflow: visible; }
+  .sale-comparison-dialog-v2 table { width: 100%; table-layout: fixed; font-size: 10px; }
+  .sale-comparison-dialog-v2 :is(th,td) { min-width: 0; padding: 7px; }
+  .sale-comparison-dialog-v2 th { position: static; }
+  .sale-comparison-dialog-v2 tr { break-inside: avoid; }
+}

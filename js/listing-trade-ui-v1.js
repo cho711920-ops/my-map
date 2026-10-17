@@ -391,7 +391,8 @@
     }); };
     var rows = [], groups = [];
     function group(title) {
-      if (rows.length) groups.push('<div class="sale-fact-group-v2"><dt>' + escape(title) + '</dt><dd><dl>' + rows.join('') + '</dl></dd></div>');
+      var keys={'광고 면적':'areas','임대·수익 현황':'income','가격 기준':'income','건물 기본정보':'building','원문 대조·확인사항':'review','필지·이용 조건':'land'};
+      if (rows.length) groups.push('<div class="sale-fact-group-v2" data-sale-section="' + keys[title] + '"><dt>' + escape(title) + '</dt><dd><dl>' + rows.join('') + '</dl></dd></div>');
       rows = [];
     }
     function add(label, value, suffix) {
@@ -477,9 +478,29 @@
     if (!isSale(item)) return "";
     var land = normalizedSaleCategory(item) === "land";
     var money = global.JSSaleWorkbenchV1 ? global.JSSaleWorkbenchV1.price(displayPrice(item)) : String(displayPrice(item));
-    return '<div class="sale-overview-v2 ' + (land ? 'land' : 'building') + '"><span class="sale-overview-label-v2">' +
+    var d=saleSummary(item), metrics=land?[['지목',d.landUse],['용도지역',d.zoning],['도로접면',d.roadAccess],['토지형상',d.parcelShape]].filter(function(f){return landText(f[1]);}):[];
+    var metricHtml=metrics.length?'<div class="sale-land-metrics-v3">'+metrics.map(function(f){return '<div><span>'+escapeHtml(f[0])+'</span><strong>'+escapeHtml(f[1])+'</strong></div>';}).join('')+'</div>':'';
+    return '<div class="sale-overview-v2 ' + (land ? 'land' : 'building') + '" data-sale-section="summary"><span class="sale-overview-label-v2">' +
       (land ? '토지 매입 검토' : '건물·공간 매입 검토') + ' · ' + escapeHtml(displayType(item)) + '</span><div class="sale-overview-price-v2"><span>매매</span><strong>' + escapeHtml(money) + '</strong></div>' +
-      '<div class="sale-overview-indicators-v2">' + saleYieldBadge(item) + (land ? saleAreaHtml(item) : '') + '</div>' + saleCardFactsHtml(item) + '</div>';
+      '<div class="sale-overview-indicators-v2">' + saleYieldBadge(item) + (land ? saleAreaHtml(item) : '') + '</div>' + (land?metricHtml:saleCardFactsHtml(item)) + saleReviewGapsHtml(item) + '</div>';
+  }
+  function saleReviewGapsHtml(item) {
+    if (!isSale(item)) return '';
+    var d = saleSummary(item), land = normalizedSaleCategory(item) === 'land', missing = [];
+    if (!(nonnegative(displayPrice(item)) > 0)) missing.push('매매가');
+    if (land) {
+      if (!(nonnegative(d.landAreaM2) > 0)) missing.push('광고 토지면적');
+      [['지목', d.landUse], ['용도지역', d.zoning], ['도로접면', d.roadAccess]].forEach(function(f) {
+        if (!landText(f[1])) missing.push(f[0]);
+      });
+    } else {
+      if (nonnegative(d.totalDeposit) == null) missing.push('임대보증금 합계');
+      if (nonnegative(d.monthlyIncome) == null) missing.push('월 임대수입');
+    }
+    return missing.length ? '<details class="sale-review-gaps-v2"><summary>' +
+      (land ? '필지 검토 시 확인할 정보' : '수익 계산을 위해 확인할 금액') + ' · ' + missing.length +
+      '개</summary><p>' + missing.map(escapeHtml).join(' · ') +
+      '</p><small>현재 광고에 제공되지 않은 항목입니다. 원본 광고나 제공처에서 확인해 주세요.</small></details>' : '';
   }
   function getMode() { return currentMode; }
   function isSale(item) { return normalizedTradeType(item) === "sale"; }
@@ -499,6 +520,7 @@
     saleDetailsHtml: saleDetailsHtml,
     saleCardFactsHtml: saleCardFactsHtml,
     saleOverviewHtml: saleOverviewHtml,
+    saleReviewGapsHtml: saleReviewGapsHtml,
     saleSummary: saleSummary,
     buildingFloorLabel: buildingFloorLabel,
     buildingSaleExtent: buildingSaleExtent,
