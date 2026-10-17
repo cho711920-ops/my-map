@@ -91,6 +91,8 @@ test('desktop map-first list opens on cluster click and preserves search geometr
   await expect(page.locator('html')).not.toHaveClass(/js-map-list-closed-v1/);
   await expect(page.locator('#mapListTitleV1')).toHaveText('선택한 매물 1개');
   await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('background-color', 'rgb(5, 104, 232)');
+  await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('border-top-width', '0px');
+  await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('box-shadow', 'none');
   await expect(page.locator('#list .item')).toHaveCount(1);
   await expectListControls(page, true);
   expect(await page.locator('#keyword').boundingBox()).toEqual(search);
@@ -150,6 +152,11 @@ test('density size distinguishes counts and becomes compact when zoomed in witho
   expect(sizes.wide[2]).toBeLessThan(sizes.wide[3]);
   expect(sizes.wide[3]).toBe(110); expect(sizes.close[3]).toBeLessThanOrEqual(66);
   expect(sizes.counts).toEqual([10,100,500,1000]);
+  for (const marker of await page.locator('.design-test-overlay .circle-marker').all()) {
+    await expect(marker).toHaveCSS('border-top-width','0px');
+    await expect(marker).toHaveCSS('box-shadow','none');
+    await expect(marker).toHaveCSS('color','rgb(255, 255, 255)');
+  }
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
 

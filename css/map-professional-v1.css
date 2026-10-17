@@ -86,16 +86,16 @@ html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655) {
    * a soft pearl finish without blur, images or an animated overlay. */
   --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(255, 222, 143, .58) 0%, rgba(247, 184, 60, .62) 55%, rgba(234, 162, 37, .66) 100%) !important;
   --cluster-text: #fff !important;
-  border: 1px solid rgba(174, 126, 29, .28) !important;
+  border: 0 !important;
   background: var(--cluster-fill) !important; color: var(--cluster-text) !important;
-  box-shadow: inset 0 1px 1px #ffffff45, 0 1px 2px #80651c12 !important;
+  box-shadow: none !important;
   font-weight: 700 !important; animation: none !important;
 }
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).done { --cluster-fill: rgba(226, 232, 240, .9) !important; --cluster-text: #64748b !important; }
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).selected {
   --cluster-fill: #0568e8 !important; --cluster-text: #fff !important;
   background: #0568e8 !important; color: #fff !important;
-  border-color: #fff !important; box-shadow: 0 0 0 2px #0568e8 !important; filter: none !important;
+  box-shadow: none !important; filter: none !important;
 }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 {
   border-color: #dce3ec !important; background: #fff !important;
