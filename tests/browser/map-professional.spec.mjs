@@ -28,6 +28,9 @@ async function prepare(page, context) {
   });
   await page.goto('/?mapFirst=1');
   await expect(page.locator('html')).toHaveAttribute('data-fixture-ready', 'true');
+  await expect(page.locator('#mapListingCountV825')).toBeVisible();
+  await expect(page.locator('#mapListingCountV825 button')).toHaveCount(0);
+  await expect(page.locator('#mapListOpenV1,#mapQuickNew3DaysBtn,#mapQuickNew7DaysBtn,#mapQuickNew15DaysBtn,#mapQuickVisitOnlyBtn')).toHaveCount(0);
   await page.locator('#fixtureControls').evaluate(el => el.hidden = true);
   return {errors, writes};
 }
@@ -101,11 +104,34 @@ test('desktop map-first list opens on cluster click and preserves search geometr
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
   await expectListControls(page, false);
   expect(await page.evaluate(() => selectedGroupKey)).toBe(state.key);
-  await page.locator('#mapListOpenV1').click();
-  await expect(page.locator('#mapListTitleV1')).toHaveText('현재 지도 매물 2개');
+  await expect(page.locator('#mapQuickViewBtn')).toBeFocused();
+  await page.locator('.design-test-overlay .circle-marker').click();
+  await expect(page.locator('#mapListTitleV1')).toHaveText('선택한 매물 1개');
   await expectListControls(page, true);
-  expect(await page.evaluate(() => selectedGroupKey)).toBeNull();
+  expect(await page.evaluate(() => selectedGroupKey)).toBe(state.key);
   expect(await page.locator('#keyword').boundingBox()).toEqual(search);
+  expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
+});
+
+test('simplified vertical view menu still toggles today and mutually exclusive completed filters', async ({page, context, isMobile}, info) => {
+  test.skip(isMobile, 'The vertical toolbar belongs to the desktop and fitted landscape layout');
+  const h = await prepare(page, context);
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  await page.locator('#mapQuickViewBtn').click();
+  const menu = page.locator('#mapQuickPopoverView');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('button > span:last-child')).toHaveText(['오늘 신규매물','계약완료 숨김','계약완료만 보기']);
+  await page.locator('#mapQuickTodayBtn').click();
+  await expect(page.locator('#mapQuickTodayBtn')).toHaveAttribute('aria-checked','true');
+  await page.locator('#mapQuickTodayBtn').click();
+  await expect(page.locator('#mapQuickTodayBtn')).toHaveAttribute('aria-checked','false');
+  await page.locator('#mapQuickDoneOnlyBtn').click();
+  await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','true');
+  await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','false');
+  await page.locator('#mapQuickHideDoneBtn').click();
+  await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','true');
+  await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','false');
+  await page.screenshot({path:info.outputPath('simplified-view-menu.png')});
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
 
@@ -193,7 +219,9 @@ test('unfolded landscape reclaims map width and opens the same fitted desktop li
   await expectListControls(page, false);
   await expect.poll(() => page.locator('#map').evaluate(el => el.clientWidth)).toBe(1280);
   const search = await page.locator('#keyword').boundingBox();
-  await page.locator('#mapListOpenV1').tap();
+  await installMap(page);
+  await page.evaluate(() => paintTestClusters([{key:'unfolded', worldGrid:true, latlng:{x:0,y:0}, items:allItems}]));
+  await page.locator('.design-test-overlay .circle-marker').tap();
   await expect(page.locator('#list .item').first()).toBeVisible();
   await expect(page.locator('#mapListCloseV1')).toBeVisible();
   await expectListControls(page, true);

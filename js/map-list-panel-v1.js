@@ -27,8 +27,6 @@
   function sync() {
     root.classList.toggle("js-map-list-closed-v1", !opened && !phoneLayout());
     root.dataset.mapListPanel = opened ? "open" : "closed";
-    var button = document.getElementById("mapListOpenV1");
-    if (button) button.setAttribute("aria-expanded", opened ? "true" : "false");
     if (typeof global.syncMapQuickToolGeometryV659 === "function") global.syncMapQuickToolGeometryV659();
   }
 
@@ -90,21 +88,12 @@
       if (global.JSMobileAppV1) global.JSMobileAppV1.setView("map");
     } else {
       layout();
-      var button = document.getElementById("mapListOpenV1");
+      var button = document.getElementById("mapQuickViewBtn");
       if (button) button.focus({preventScroll: true});
     }
   }
 
-  function openCurrent() {
-    if (typeof global.clearPinnedClusterSelectionV6515 === "function") global.clearPinnedClusterSelectionV6515(true);
-    if (typeof global.clearAdministrativeListSelectionV6570 === "function") global.clearAdministrativeListSelectionV6570();
-    if (typeof global.clearLinkedListingSelectionV845 === "function") global.clearLinkedListingSelectionV845();
-    if (typeof global.redrawSelectedMarkers === "function") global.redrawSelectedMarkers();
-    open();
-    if (typeof global.getFilteredItems === "function") global.showList(global.getFilteredItems());
-  }
-
-  global.JSMapListPanelV1 = {open: open, close: close, openCurrent: openCurrent, syncTitle: syncTitle, isOpen: function() {return opened;}};
+  global.JSMapListPanelV1 = {open: open, close: close, syncTitle: syncTitle, isOpen: function() {return opened;}};
   global.addEventListener("js-phone-device-change", sync);
   global.addEventListener("resize", sync);
   // Carry the existing portrait map/list choice into the fitted landscape view.

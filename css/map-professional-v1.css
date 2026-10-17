@@ -98,13 +98,7 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b) { color: #fff !important; }
 
 .map-list-panel-head-v1 { display: none; }
-#mapListOpenV1 {
-  pointer-events: auto; padding: 4px 0 4px 9px; margin-left: 2px;
-  border: 0; border-left: 1px solid #e2e8f0; background: transparent;
-  color: #475569; font: inherit; cursor: pointer;
-}
-#mapListOpenV1:focus-visible, #mapListCloseV1:focus-visible { outline: 2px solid #0568e8; outline-offset: 2px; }
-.js-phone-app-v2 #mapListOpenV1 { display: none; }
+#mapListCloseV1:focus-visible { outline: 2px solid #0568e8; outline-offset: 2px; }
 @media (min-width: 769px) {
   /* The close button is already in a sticky header. An inherited 8px scroll
    * padding would scroll the list 4px when that button receives focus. */

@@ -12,7 +12,7 @@ test('retired field controls, assets and camera hooks are absent while the ordin
   assert.doesNotMatch(readFileSync(file,'utf8'),/JSField|mapFieldMode|jsFieldMap|fieldLease|map-field-mode|js-field-map|field-mode-v1/);
  const html=readFileSync('index.html','utf8');
  assert.match(html,/<div id="map"><\/div>/);assert.match(source,/new kakao\.maps\.Map\(viewport,/);
- for(const id of ['mapRoadviewSelectBtn','mapDistanceBtn','mapRadiusBtn','mapPolygonBtn','mapListOpenV1'])assert.ok(html.includes('id="'+id+'"'));
+ for(const id of ['mapRoadviewSelectBtn','mapDistanceBtn','mapRadiusBtn','mapPolygonBtn'])assert.ok(html.includes('id="'+id+'"'));
  assert.ok(existsSync('js/ai-visit-session-v6.js'));assert.ok(existsSync('js/unified-favorites-v7.js'));
 });
 test('ordinary GPS keeps one watcher and updates its marker without moving or zooming the map',()=>{

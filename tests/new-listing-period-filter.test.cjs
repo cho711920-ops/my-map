@@ -14,7 +14,7 @@ function periodRuntime() {
   return script.slice(start, end);
 }
 
-test("view menus expose mutually exclusive today, 3, 7 and 15 day choices", () => {
+test("header period choices remain available while the vertical view menu keeps only today", () => {
   const ids = ["todayNewBtn", "newListing3DaysBtn", "newListing7DaysBtn", "newListing15DaysBtn"];
   let lastIndex = -1;
   ids.forEach((id) => {
@@ -27,7 +27,8 @@ test("view menus expose mutually exclusive today, 3, 7 and 15 day choices", () =
   assert.match(html, /최근 7일 신규매물/);
   assert.match(html, /최근 15일 신규매물/);
   assert.match(html, /id="newListing3DaysBtn"[^>]+role="menuitemradio"/);
-  assert.match(html, /id="mapQuickNew15DaysBtn"[^>]+role="menuitemradio"/);
+  assert.match(html, /id="mapQuickTodayBtn"[^>]+role="menuitemradio"/);
+  assert.doesNotMatch(html, /id="mapQuick(?:New(?:3|7|15)Days|VisitOnly)Btn"/);
   assert.match(html, /script\.js[^"']+new-listing-periods-v1=1/);
   assert.match(html, /map-quick-tools-v657\.js[^"']+new-listing-periods-v1=1/);
   assert.match(html, /style\.css[^"']+new-listing-periods-v1=1/);
@@ -94,7 +95,7 @@ test("UTC timestamps use Korean calendar days and local legacy dates keep their 
 test("main list and map quick state share the selected period", () => {
   assert.match(script, /window\.JSTodayListingsV1\.matches\(item\) : isRegistrationWithinDays\(item\.regDate, newListingDays\)/);
   assert.match(script, /newListingDays === 1 \? "오늘 신규매물" : "최근 " \+ newListingDays \+ "일 신규매물"/);
-  for (const days of [1, 3, 7, 15]) {
+  for (const days of [1]) {
     assert.match(mapQuick, new RegExp(`Number\\(window\\.newListingDays \\|\\| 0\\) === ${days}`));
   }
 });
