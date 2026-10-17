@@ -116,7 +116,7 @@ test("a recovered Daangn raw land type reaches the card, land-use filter and det
   await expectLandIdentityUnchanged(page);
 });
 
-test("long land-use values stay inside the address row on desktop and phone", async ({page, isMobile}, testInfo) => {
+test("long land-use values stay inside the land heading on desktop and phone", async ({page, isMobile}, testInfo) => {
   const longLandUse = "대(일부 전·답·임야 포함, 복수 필지의 지목은 원본 자료 확인 필요)";
   await configureLand(page, longLandUse);
   await selectMarket(page, isMobile, "land_sale");
@@ -124,7 +124,7 @@ test("long land-use values stay inside the address row on desktop and phone", as
   await expect(badge).toHaveText("지목: " + longLandUse);
   await expect(badge).toBeVisible();
   expect(await badge.evaluate(element => {
-    const row = element.closest(".item-address-room-v650");
+    const row = element.closest(".land-card-heading-v4");
     const badgeRect = element.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
     return element.scrollWidth <= element.clientWidth + 1 && badgeRect.left >= rowRect.left - 1 &&

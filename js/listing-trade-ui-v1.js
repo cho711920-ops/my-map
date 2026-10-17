@@ -383,6 +383,17 @@
     }
     return '<span class="listing-land-info-v1">' + field('용도지역', detail.zoning) + '</span>';
   }
+  function landCardMetricsHtml(item) {
+    if (!isSale(item) || normalizedSaleCategory(item) !== "land") return "";
+    var d = saleSummary(item), area = nonnegative(d.landAreaM2);
+    var price = nonnegative(displayPrice(item)), unit = price > 0 && area > 0 ? price / (area / 3.305785) : null;
+    function number(value) { return value.toLocaleString('ko-KR', {maximumFractionDigits: 1}); }
+    return '<div class="land-card-metrics-v4" aria-label="광고 면적과 단가">' +
+      '<div><span>토지면적</span><strong>' + (area > 0 ? number(area / 3.305785) + '<small>평</small>' : '면적 미제공') + '</strong>' +
+      (area > 0 ? '<small>' + number(area) + '㎡ · 광고면적</small>' : '') + '</div>' +
+      '<div title="매매가 ÷ 광고 토지면적(평). 지적공부 면적과 다를 수 있습니다."><span>평당 매매가</span><strong>' +
+      (unit == null ? '산정 불가' : number(unit) + '<small>만원</small>') + '</strong><small>광고면적 기준</small></div></div>';
+  }
   function saleDetailsHtml(item) {
     if (!isSale(item) || !item.saleDetails) return "";
     var detail = item.saleDetails;
@@ -533,6 +544,7 @@
     saleYieldBadge: saleYieldBadge,
     saleAreaHtml: saleAreaHtml,
     saleLandInfoHtml: saleLandInfoHtml,
+    landCardMetricsHtml: landCardMetricsHtml,
     landUseLabel: landUseLabel,
     isSale: isSale
   };

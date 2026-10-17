@@ -9,6 +9,18 @@ for(const file of ['listing-trade-ui-v1.js','sale-workbench-v1.js'])vm.runInNewC
 const ui=window.JSListingTradeV1,w=window.JSSaleWorkbenchV1;
 const building={tradeType:'sale',saleCategory:'building',salePrice:50000,saleDetails:{landAreaM2:330.5785,grossAreaM2:661.157,totalDeposit:5000,monthlyIncome:200,buildingUse:'근린생활시설',approvalDate:'2008-01-01'}};
 const land={tradeType:'sale',saleCategory:'land',salePrice:30000,saleDetails:{landAreaM2:330.5785,landUse:'대',zoning:'일반주거지역',roadAccess:'중로한면',parcelShape:'장방형'}};
+
+test('land list metrics use advertised area, refuse missing/conflicting data, and leave other markets empty',()=>{
+  const before=JSON.stringify(land),html=ui.landCardMetricsHtml(land);
+  assert.match(html,/100<small>평/);assert.match(html,/330.6㎡/);assert.match(html,/300<small>만원/);
+  assert.equal(ui.landCardMetricsHtml(building),'');assert.equal(ui.landCardMetricsHtml({...land,tradeType:'lease'}),'');
+  for(const area of [null,'',false,0,-5,Infinity]){
+    const missing=ui.landCardMetricsHtml({...land,saleDetails:{landAreaM2:area,cadastralAreaM2:330.5785}});
+    assert.match(missing,/면적 미제공/);assert.match(missing,/산정 불가/);assert.doesNotMatch(missing,/100<small>|300<small>/);
+  }
+  const conflict={...land,source:'네이버',saleDetails:undefined,unifiedOriginalsV8:[{...land,source:'네이버'},{...land,source:'네이버',saleDetails:{...land.saleDetails,landAreaM2:600}}]};
+  assert.match(ui.landCardMetricsHtml(conflict),/산정 불가/);assert.equal(JSON.stringify(land),before);
+});
 test('sale presentation uses collected facts and leaves lease markup empty',()=>{
   for(const fn of ['saleCardFactsHtml','saleOverviewHtml','saleDetailsHtml'])assert.equal(ui[fn]({...building,tradeType:'lease'}),'');
   assert.match(ui.saleCardFactsHtml(building),/월 임대수입.*200만원/);

@@ -4601,7 +4601,7 @@ function addListItem(item, appendTarget) {
         ? window.JSListingTradeV1.landUseLabel(item) : "";
     var roomDisplayV1 = item.sourceFloorVerifiedV1 ? item.advertisedRoomV1 : item.room;
     var roomLabelV1 = landUseLabelV1 || buildingFloorLabelV1 || formatListingRoomForCardV653(roomDisplayV1, item.floor);
-    if (item.sourceFloorVerifiedV1 && !roomDisplayV1 && getItemFloorNumber(item) === null)
+    if (!landUseLabelV1 && item.sourceFloorVerifiedV1 && !roomDisplayV1 && getItemFloorNumber(item) === null)
         roomLabelV1 = "층수 미확인";
     var buildingSaleV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isBuildingSale && window.JSListingTradeV1.isBuildingSale(item);
     var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleAreaInfoHtml
@@ -4640,6 +4640,7 @@ function addListItem(item, appendTarget) {
     var premiumDisplay = listDisplayValueV650(item, "premium");
     var areaDisplay = listDisplayValueV650(item, "area");
     var saleCardV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item);
+    var landCardV4 = saleCardV1 && window.JSListingTradeV1.normalizedSaleCategory(item) === "land";
     var salePriceDisplayV1 = saleCardV1
         ? (window.JSSaleWorkbenchV1 ? window.JSSaleWorkbenchV1.price(window.JSListingTradeV1.displayPrice(item)) : Number(window.JSListingTradeV1.displayPrice(item) || 0).toLocaleString("ko-KR"))
         : "";
@@ -4665,10 +4666,15 @@ function addListItem(item, appendTarget) {
         'onclick="event.stopPropagation(); openKakaoRoadview(\'' + encodedKey + '\')"><span class="item-action-text-v661">로드뷰</span>' + buildCardActionIconV662('roadview') + '</button>';
     var registerButtonV721 = '<button type="button" class="item-building-register-btn" title="국토교통부 건축물대장" ' +
         'onclick="event.stopPropagation(); openBuildingRegisterV640(\'' + encodedKey + '\')">대장</button>';
+    if (landCardV4)
+        registerButtonV721 = '<button type="button" class="item-building-register-btn land-parcel-lookup-v4" title="토지이음·밸류맵 필지 조회" ' +
+            'onclick="event.stopPropagation(); JSSaleWorkbenchV1.lookup(' + escapeHtml(JSON.stringify({address: item.address || ""})) + ')">필지조회</button>';
     var favoriteButtonV721 = '<button type="button" class="item-list-add-btn favorite" title="찜 목록에 추가" ' +
         'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRefV821 + '\')">찜</button>';
     var editButtonV721 = '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
         'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';
+    if (saleCardV1)
+        editButtonV721 = editButtonV721.replace(/임대조건 수정/g, "매매정보 수정");
     var regularActionButtonsV721 = actionContactButtonV654 + navButtonV721 + roadviewButtonV721 +
         registerButtonV721 + favoriteButtonV721 + editButtonV721 + sourceLinkButton;
     var standardActionsV721 = "" + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;
@@ -4691,7 +4697,7 @@ function addListItem(item, appendTarget) {
                 window.JSUnifiedListingsV8.handleCardClick(item, event);
         };
     }
-    div.innerHTML =
+    if (!landCardV4) div.innerHTML =
         '<div class="item-card-grid-v650' +
             ((' standard-card-grid-v661')) + '">' +
             unifiedCardPartsV8.thumbnail +
@@ -4743,6 +4749,24 @@ function addListItem(item, appendTarget) {
             '</div>' +
             '</div>' +
             memoPanel;
+    if (landCardV4) {
+        div.classList.add("listing-land-card-v4");
+        var landNameV4 = String(item.name || "").trim();
+        var landTitleV4 = landNameV4 && landNameV4 !== item.address ? landNameV4 : "토지 매물";
+        div.innerHTML = '<div class="land-card-heading-v4">' + selectionControlV1 +
+            '<span class="land-card-category-v4">토지매매</span>' +
+            '<span class="item-room-badge land-use-badge-v1">' + escapeHtml(landUseLabelV1) + '</span>' + doneLabel + favoriteHeaderButtonV661 + '</div>' +
+            '<div class="item-card-grid-v650 standard-card-grid-v661">' + unifiedCardPartsV8.thumbnail +
+            '<div class="item-compact-main-v650 standard-card-main-v661">' +
+            '<div class="item-compact-head-v650"><span class="item-building-name" title="' + escapeHtml(landTitleV4) + '">' + escapeHtml(landTitleV4) + '</span>' +
+            '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span></span></div>' +
+            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span></div>' +
+            window.JSListingTradeV1.landCardMetricsHtml(item) + '</div></div>' +
+            '<div class="land-card-conditions-v4">' + window.JSListingTradeV1.saleLandInfoHtml(item) + window.JSListingTradeV1.saleCardFactsHtml(item) + '</div>' +
+            '<div class="land-card-meta-v4"><span>' + escapeHtml(item.source || "출처 미제공") + '</span>' +
+            (regDateLabel ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>' : '') + sourceLabel + '</div>' +
+            '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
+    }
     var cardWarmupTimerV6107 = 0;
     function cancelCardWarmupV6107() {
         if (!cardWarmupTimerV6107)
@@ -4781,7 +4805,7 @@ function addListItem(item, appendTarget) {
     div.onpointerdown = cancelCardWarmupV6107;
     (appendTarget || document.getElementById("list")).appendChild(div);
     observeUnifiedDuplicateShimmerV812(div);
-    if (window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
+    if (!landCardV4 && window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
         window.JSBuildingRegisterBadges.bind(div, item);
     }
     if (memoEditing) {

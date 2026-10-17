@@ -94,6 +94,52 @@ html #list .item.listing-sale-card-v1 .sale-card-facts-v2 { order: 3; }
 .js-phone-app-v2 #list .item.listing-sale-card-v1 .item-compact-head-v650 > :is(.item-building-name, .item-address-room-v650) { flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; margin: 0 !important; }
 
 /* Property dossier: navigation, an asset summary and readable fact tables. */
+/* Land lists use parcel facts rather than the shared building/room layout. */
+html #list .item.listing-land-card-v4 { border-color: #dce6e2 !important; }
+.land-card-heading-v4 { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; margin-bottom: 9px; padding-right: 30px; }
+html #list .item.listing-land-card-v4 .land-card-heading-v4 .land-use-badge-v1 { flex: 0 1 auto !important; min-width: 0; max-width: 100%; white-space: normal !important; overflow-wrap: anywhere; }
+html #list .item.listing-land-card-v4 .land-card-heading-v4 .phone-card-favorite-v2 { display: grid !important; top: -8px; right: -6px; width: 40px; height: 40px; }
+.land-card-category-v4 { color: #28604f; background: #eaf3ef; padding: 3px 7px; border-radius: 4px; font-size: 11px; font-weight: 750; }
+html #list .listing-land-card-v4 .land-use-badge-v1 { background: transparent !important; border: 0 !important; color: #576d63 !important; font-size: 11px !important; overflow-wrap: anywhere; white-space: normal; }
+html #list .item.listing-land-card-v4 .standard-card-grid-v661 { grid-template-columns: 88px minmax(0,1fr) !important; gap: 12px !important; }
+html #list .item.listing-land-card-v4 .unified-thumb-v8 { width: 88px !important; height: 104px !important; min-height: 0 !important; border-radius: 7px !important; align-self: start; }
+html #list .item.listing-land-card-v4 .unified-thumb-v8.no-photo { background: #f1f5f3 !important; color: #7a8b83 !important; }
+html #list .item.listing-land-card-v4 .item-compact-main-v650 { gap: 5px !important; }
+html #list .item.listing-land-card-v4 .item-compact-head-v650 { display: flex !important; flex-direction: column; align-items: flex-start !important; gap: 1px !important; padding-right: 0 !important; }
+html #list .item.listing-land-card-v4 .item-building-name { color: #223d33 !important; font-size: 14px !important; white-space: normal !important; overflow-wrap: anywhere; }
+html #list .item.listing-land-card-v4 .item-address-room-v650 { margin: 0 !important; }
+html #list .item.listing-land-card-v4 .item-address-text { white-space: normal !important; overflow-wrap: anywhere; color: #607269 !important; }
+html #list .item.listing-land-card-v4 .listing-sale-price-v1 { color: #215446 !important; font-size: 22px !important; }
+.land-card-metrics-v4 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); order: 2; gap: 12px; padding-top: 5px; }
+.land-card-metrics-v4 > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.land-card-metrics-v4 > div + div { border-left: 1px solid #e4ebe7; padding-left: 12px; }
+.land-card-metrics-v4 span { font-size: 11px; color: #62776d; }
+.land-card-metrics-v4 strong { color: #254638; font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.4; overflow-wrap: anywhere; }
+.land-card-metrics-v4 strong small { font-size: 11px; margin-left: 3px; color: #526d5f; font-weight: 500; }
+.land-card-metrics-v4 > div > small { color: #7a8982; font-size: 10px; line-height: 1.4; }
+.land-card-conditions-v4 { display: flex; flex-wrap: wrap; gap: 5px 14px; margin-top: 12px; padding: 9px 11px; background: #f5f8f6; border-radius: 6px; min-width: 0; }
+html #list .listing-land-card-v4 .listing-land-info-v1 { display: flex; flex: 1 0 100%; margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+html #list .listing-land-card-v4 .listing-land-info-v1 > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 0; background: transparent; border: 0; color: #65766d; }
+html #list .listing-land-card-v4 .listing-land-info-v1 b { color: #304c3e; font-size: 12px; }
+.land-card-conditions-v4 .sale-card-facts-v2 { font-size: 12px; flex: 1 0 100%; }
+.land-card-meta-v4 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 10px; color: #7b8781; }
+html #list .listing-land-card-v4 .land-card-meta-v4 .item-reg-date { display: inline !important; position: static !important; font-size: 10px; }
+html #list .item.listing-land-card-v4 > .item-compact-actions-v650 { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; margin-top: 8px !important; overflow: visible !important; }
+html #list .listing-land-card-v4 .item-action-left { flex: 1 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap !important; gap: 4px !important; }
+html #list .listing-land-card-v4 .item-action-left > button,
+html #list .listing-land-card-v4 > .item-compact-actions-v650 > .item-memo-toggle { display: inline-flex !important; align-items: center; justify-content: center; width: auto !important; min-width: 32px !important; height: 30px !important; min-height: 30px !important; padding: 0 7px !important; font-size: 11px !important; line-height: 1.4 !important; }
+html #list .listing-land-card-v4 .item-action-left > .item-source-link-btn { flex: 0 1 auto; }
+html #list .listing-land-card-v4 .item-memo-toggle { flex: 0 0 auto; position: static !important; margin-left: auto; }
+html #list .listing-land-card-v4 .land-parcel-lookup-v4 { width: auto !important; min-width: 48px !important; padding: 0 6px !important; font-size: 11px !important; }
+@media(max-width:600px) {
+  html #list .item.listing-land-card-v4 .standard-card-grid-v661 { grid-template-columns: 65px minmax(0,1fr) !important; gap: 10px !important; }
+  html #list .item.listing-land-card-v4 .unified-thumb-v8 { width: 65px !important; height: 86px !important; }
+  html #list .item.listing-land-card-v4 .item-compact-head-v650 > :is(.item-building-name,.item-address-room-v650) { max-width: 100%; }
+  .land-card-metrics-v4 { gap: 7px; }
+  .land-card-metrics-v4 > div + div { padding-left: 7px; }
+  .land-card-metrics-v4 strong { font-size: 16px; }
+  html #list .listing-land-card-v4 .item-action-left > .item-list-add-btn { display: none !important; }
+}
 #unifiedDetailDrawerV8[data-sale-presentation-v2] { font-family: var(--js-app-font, Pretendard, "Segoe UI", sans-serif); background: #fff; }
 @media(min-width:1000px) {
   html:not(.js-phone-app-v2) #unifiedDetailDrawerV8[data-sale-presentation-v2] { width: min(540px, var(--sale-dossier-available-v3, 540px)); min-width: 0; }
