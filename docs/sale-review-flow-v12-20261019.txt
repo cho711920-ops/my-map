@@ -50,4 +50,11 @@
 - 증빙 outputs/sale-review-flow-v12-node-final.log, *-release.log, *-final.log, *-layout-final.log,
   *-dry-run.log 및 browser-results 캡처 (커밋 제외).
 
-배포 증빙은 실제 배포/공개 파일 검증 후 아래에 기록.
+배포 및 공개 확인
+- 제품 커밋22b69fa, codex/daangn-numeric-status 원격 반영.
+- 2026-10-19 02:48 KST Worker1f231cfa-3016-4cad-ab4f-1c009a2f01c0 배포, 트래픽100% 확인.
+- 02:49 KST js-map.com / www.js-map.com 각86개 JS/CSS/SW/공개 주차장JSON, 총172개 SHA256이 최종 빌드와 일치.
+- 두 도메인의 신규 JS/CSS 진입점과 기존 terrain 진입점 확인. 비로그인 기존 매매 API401 유지.
+- 공개 파일·로그인 경계 검증이며 운영계정의 개별 광고/저장 자료를 직접 열거나 수정하지 않음.
+- 증빙 outputs/sale-review-flow-v12-live-verification.json, *-deploy.log, *-deployments.log (커밋 제외).
+- 이미 열린 사이트는 새로고침1회로 새 화면 적용. 재수집 불필요.
