@@ -56,4 +56,10 @@
 - 증빙 outputs/sale-dossier-v9-*.log, outputs/sale-dossier-v9-final/ 등 (개인/임시 파일은 커밋 제외).
 - public cache 5fd67f9634e8d43760ad250d.
 
-배포 확인은 아래에 후속 기록.
+배포 및 공개 확인
+- 제품 커밋 9a35f83, codex/daangn-numeric-status 원격 반영.
+- 2026-10-18 22:12 KST Worker 9753c8aa-cd63-4538-b64f-9628af9cf13e 배포, 트래픽100% 확인.
+- 22:13 KST js-map.com / www.js-map.com 각82개 JS/CSS/SW/공개 주차장JSON, 총164개 SHA256이 최종 빌드와 일치.
+- 두 도메인의 신규 JS/CSS 진입점 및 비로그인 saleAskingHistory/saleParcelFacts/saleTransactions API401 확인.
+- 위 확인은 공개 파일과 로그인 경계 검증. 운영계정의 실제 광고 이력 건수·층별 공적자료 응답·실거래 인증 성공은 미확인.
+- 증빙 outputs/sale-dossier-v9-live-verification.json, outputs/sale-dossier-v9-deployments.log (커밋 제외).
