@@ -58,4 +58,11 @@
 - 변경 파일 ESLint, 저장소의 설정된 TypeScript 범위, git diff --check, build/dry-run 통과.
 - 토지 공적자료 자동 연계, 운영 실거래 인증 성공은 위 검증 결과에 포함하지 않음.
 
-배포/공개 자산 확인은 배포 완료 후 후속 기록.
+배포
+- 제품 코드 커밋 ccc579d, codex/daangn-numeric-status 원격 반영.
+- 2026-10-18 17:22 KST Worker c27b0327-db7d-40a5-a8b2-961696d50493, 트래픽100% 확인.
+- public cache 947eff1ba6328c2315032491.
+- 17:24 KST js-map.com / www.js-map.com 각78개 JS/CSS/SW/주차장JSON, 총156개 SHA256이 최종 빌드와 일치.
+  두 도메인의 새 JS/CSS 진입점과 비로그인 실거래 API 401 응답도 확인.
+- 위 확인은 공개 자산·로그인 경계 검증이며 실제 운영 매물/실거래 API 승인 성공 검증이 아님.
+- 배포 결과: outputs/sale-public-v6-live-verification.json, outputs/sale-public-v6-deployments.log (커밋 제외).
