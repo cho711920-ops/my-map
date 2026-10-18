@@ -116,6 +116,14 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   expect(await page.evaluate(()=>map.getMapTypeId()===kakao.maps.MapTypeId.HYBRID)).toBe(true);
   await page.locator('[data-sale-map-view="district"]').click();
   await expect(page.locator('[data-sale-map-note]')).toBeVisible();
+  await page.evaluate(()=>{
+    window.terrainNativeCallsV11=[];const add=map.addOverlayMapTypeId,remove=map.removeOverlayMapTypeId;
+    map.addOverlayMapTypeId=function(type){if(type===kakao.maps.MapTypeId.TERRAIN)terrainNativeCallsV11.push('add');return add.call(this,type);};
+    map.removeOverlayMapTypeId=function(type){if(type===kakao.maps.MapTypeId.TERRAIN)terrainNativeCallsV11.push('remove');return remove.call(this,type);};
+  });
+  await page.locator('[data-sale-map-view="terrain"]').click();
+  await expect(page.locator('[data-sale-map-view="terrain"]')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('[data-sale-terrain-note]')).toBeVisible();
   expect(await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),ids:overlays.map(o=>o.__cluster.key),data:saleBusinessSnapshotV3()}))).toEqual(listingBefore);
   await page.screenshot({path:testInfo.outputPath('sale-satellite-cadastral-native.png')});
   await page.evaluate(()=>JSMapListPanelV1.open());
@@ -128,6 +136,7 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   await page.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await page.locator('#listingTradeModeSelectV1').selectOption('lease');
   await expect(page.locator('#saleMapViewsV3')).toBeHidden();
+  expect(await page.evaluate(()=>terrainNativeCallsV11)).toEqual(['add','remove']);
   expect(await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}))).toEqual(before);
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });

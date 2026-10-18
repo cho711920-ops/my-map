@@ -27,6 +27,17 @@
 .sale-money-flow-v10 li.total{background:#eaf3f9;border-left:3px solid #467c9e;margin-top:3px;color:#234f6b}
 .sale-money-flow-v10 li.negative{background:#fcf0ee;border-left-color:#bc6b61;color:#9d463e}
 .sale-flow-note-v10{font-size:11px;line-height:1.8;padding-top:12px;color:#6a8190}
+.sale-map-views-v3>div{flex-wrap:wrap}
+.sale-break-even-v11{margin-top:18px;padding-top:6px;border-top:1px solid #e0e8ef}
+.sale-break-even-v11>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sale-break-even-v11>div>div{display:grid;align-content:start;gap:6px;min-width:0;padding:13px;border:1px solid #dce7ee;border-radius:7px;background:#f5f9fc}
+.sale-break-even-v11 span{font-size:11px;color:#637f92}
+.sale-break-even-v11 strong{font-size:18px;text-align:left;color:#2e5f7d;line-height:1.6;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sale-break-even-v11 small{font-size:10px;color:#6d8292;line-height:1.7;overflow-wrap:anywhere}
+.sale-break-even-v11>div p{font-size:10px;margin:0;line-height:1.8}
+.sale-break-even-v11 .negative{background:#fcf4f1;border-color:#edd9d3}
+.sale-break-even-v11 .negative strong{color:#9c5146;font-size:14px}
+@media(max-width:600px){.sale-break-even-v11>div{grid-template-columns:minmax(0,1fr)}}
 .sale-compare-reading-v10{max-height:62vh;overflow:auto;isolation:isolate}
 .sale-compare-reading-v10 table{border-collapse:separate;border-spacing:0}
 .sale-compare-reading-v10 thead th{position:sticky;top:0;z-index:3;background:#eaf1f6;font-size:12px;color:#284e6b;min-width:150px;padding:12px;border-bottom:1px solid #d5e1ea}

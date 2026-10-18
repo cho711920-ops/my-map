@@ -84,8 +84,38 @@
     var p=num(values.price),a=num(values.acquisition),l=num(values.loan),d=num(values.deposit),r=num(values.income),v=num(values.vacancy),o=num(values.expense);
     var html='<section class="sale-money-flow-v10">'+tag('calc')+'<h3>매입자금 흐름</h3><p>현재 입력 가정 기준 · 원금상환·세금 자동 산정 제외</p><ol>'+step('매매가',p)+step('＋ 취득 부대비용',a)+(!land?step('－ 임대보증금',d):'')+step('－ 대출금',l)+step('＝ 필요 자기자금',result.equity,'total')+'</ol>';
     if(land)html+='<div class="sale-flow-note-v10">총 매입비용 <b>'+esc(money(result.total))+'</b> · 월 대출이자 <b>'+esc(money(result.interest))+'</b></div>';
-    else html+='<h3>월 현금흐름</h3><ol>'+step('월 임대수입',r)+step('－ 공실 가정 차감',r*v/100)+step('－ 월 대출이자',result.interest)+step('－ 월 운영비',o)+step('＝ 월 현금흐름',result.monthly,result.monthly<0?'total negative':'total')+'</ol>';
+    else html+='<h3>월 현금흐름</h3><ol>'+step('월 임대수입',r)+step('－ 공실 가정 차감',r*v/100)+step('－ 월 대출이자',result.interest)+step('－ 월 운영비',o)+step('＝ 월 현금흐름',result.monthly,result.monthly<0?'total negative':'total')+'</ol>'+breakEvenHtml(values);
     return html+'</section>';
+  }
+  function breakEven(values){
+    var current=work().calculate(values);
+    if(current.error)return {error:current.error};
+    if(!Number.isFinite(current.monthly)||!Number.isFinite(current.interest)||!Number.isFinite(current.equity))return {error:'입력 금액이 계산 범위를 벗어났습니다.'};
+    var income=num(values.income),loan=num(values.loan),vacancy=num(values.vacancy),expense=num(values.expense);
+    function point(value){
+      if(!Number.isFinite(value))return {status:'unavailable'};
+      // Suppress only floating-point residue at the endpoints, not real deficits.
+      if(Math.abs(value)<1e-10)value=0;if(Math.abs(value-100)<1e-10)value=100;
+      return {status:value<0?'below_zero':value>100?'above_range':'point',value:value};
+    }
+    return {
+      vacancy:income>0?point((1-(current.interest+expense)/income)*100):{status:'no_income'},
+      interest:loan>0?point((income*(1-vacancy/100)-expense)/loan*1200):{status:'no_loan'}
+    };
+  }
+  function breakEvenHtml(values){
+    var result=breakEven(values);if(result.error)return '<p class="sale-break-even-error-v11">'+esc(result.error)+'</p>';
+    function metric(key,title,fixed){
+      var r=result[key],label,help='';
+      if(r.status==='point'){label=r.value>0&&r.value<0.01?'0.01% 미만':(Math.abs(r.value-Number(r.value.toFixed(2)))>1e-10?'약 ':'')+fmt(r.value)+'%';help='손익분기 비율보다 높아지면 월적자 · 표시값은 반올림';}
+      else if(r.status==='below_zero'){label=key==='vacancy'?'공실 0%여도 월적자':'금리 0%여도 월적자';help='현재 고정한 다른 조건에서는 0~100% 범위의 손익분기가 없습니다.';}
+      else if(r.status==='above_range'){label='0~100% 범위 내 손익분기 없음';help='현재 고정한 다른 조건에서는 100%에서도 월 현금흐름이 양수입니다.';}
+      else if(r.status==='no_income'){label='산정 불가 · 월 임대수입 0원';help='공실률의 영향을 계산할 기준 수입이 없습니다.';}
+      else if(r.status==='no_loan'){label='대출금 0원 · 금리 영향 없음';help='월적자 여부는 수입·공실·운영비에 따라 별도로 확인하세요.';}
+      else {label='손익분기 산정 불가';help='입력값이 계산 범위를 벗어났습니다.';}
+      return '<div data-break-even="'+key+'" class="'+(r.status==='below_zero'?'negative':'')+'"><span>'+title+'</span><strong>'+esc(label)+'</strong><small>'+esc(fixed)+'</small><p>'+esc(help)+'</p></div>';
+    }
+    return '<section class="sale-break-even-v11" aria-label="월 현금흐름 손익분기"><h3>월 현금흐름 손익분기</h3><p>현재 입력 가정에서 한 조건씩만 바꾼 0원 기준입니다. 두 비율을 동시에 적용한 결과가 아닙니다.</p><div>'+metric('vacancy','공실률 손익분기','연 금리 '+fmt(num(values.interest))+'% · 월 운영비 '+money(num(values.expense))+' 고정')+metric('interest','연 금리 손익분기','공실률 '+fmt(num(values.vacancy))+'% · 월 운영비 '+money(num(values.expense))+' 고정')+'</div><p>이자만 계산하며 원금상환·세금은 미반영입니다. 보증금 반환·거래의 손익분기나 수익 보장 기준이 아닙니다.</p></section>';
   }
   function renderFlow(dialog,values,result){
     var out=dialog.querySelector('.sale-money-flow-host-v10');if(!out){out=document.createElement('div');out.className='sale-money-flow-host-v10';dialog.querySelector('[data-calc-result]').after(out);}
@@ -127,5 +157,5 @@
     records.forEach(function(record){var phone=record.target;if(!phone.matches('.item-action-left>.item-contact-button-v654'))return;var card=phone.closest('.listing-sale-card-v1');if(card)syncPhone(card.querySelector('[data-table-phone]'),phone);});
   }).observe(list,{subtree:true,attributes:true,attributeFilter:['class','style','title','aria-label']});
   global.addEventListener('js-listing-trade-mode-change',syncTable);global.addEventListener('js-phone-device-change',syncTable);global.matchMedia('(min-width:769px)').addEventListener('change',syncTable);
-  global.JSSaleReviewV10={dateText:dateText,mountCard:mountCard,chooseLayout:chooseLayout,syncTable:syncTable,enhanceComparison:enhanceComparison,renderFlow:renderFlow,flowHtml:flowHtml,buildingHighlights:buildingHighlights,evidenceMatches:evidenceMatches,mountDetail:mountDetail,tag:tag};
+  global.JSSaleReviewV10={dateText:dateText,mountCard:mountCard,chooseLayout:chooseLayout,syncTable:syncTable,enhanceComparison:enhanceComparison,renderFlow:renderFlow,flowHtml:flowHtml,breakEven:breakEven,breakEvenHtml:breakEvenHtml,buildingHighlights:buildingHighlights,evidenceMatches:evidenceMatches,mountDetail:mountDetail,tag:tag};
 })(window);

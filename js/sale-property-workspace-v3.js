@@ -1,9 +1,12 @@
 /* Optional sale-only map views and a navigable property dossier. No data writes. */
 (function(global){
   'use strict';
-  var controls=document.getElementById('saleMapViewsV3'), ownedMap=null, previousType=null, baseChanged=false, district=false;
+  var controls=document.getElementById('saleMapViewsV3'), ownedMap=null, previousType=null, baseChanged=false, district=false, terrain=false, terrainMessage=false;
   function isSale(){return global.JSListingTradeV1 && global.JSListingTradeV1.getMode()!=='lease';}
+  function isLand(){return global.JSListingTradeV1&&global.JSListingTradeV1.getMode()==='land_sale';}
+  function removeTerrain(){if(terrain&&ownedMap)ownedMap.removeOverlayMapTypeId(global.kakao.maps.MapTypeId.TERRAIN);terrain=false;}
   function restore(){
+    removeTerrain();
     if(ownedMap){
       if(district)ownedMap.removeOverlayMapTypeId(global.kakao.maps.MapTypeId.USE_DISTRICT);
       if(baseChanged && previousType!=null)ownedMap.setMapTypeId(previousType);
@@ -13,27 +16,40 @@
   function update(){
     if(!controls)return;
     controls.hidden=!isSale();
+    if(!isLand()&&terrainMessage){controls.querySelector('[data-sale-map-status]').textContent='';terrainMessage=false;}
     var map=global.map,types=global.kakao&&global.kakao.maps&&global.kakao.maps.MapTypeId;
+    if(terrain&&(!isLand()||ownedMap!==map))removeTerrain();
     var current=map&&typeof map.getMapTypeId==='function'?map.getMapTypeId():null;
     controls.querySelectorAll('[data-sale-map-view]').forEach(function(button){
       var key=button.dataset.saleMapView;
-      button.setAttribute('aria-pressed',String(key==='district'?district:key==='satellite'?!!(types&&current===types.HYBRID):!!(types&&current===types.ROADMAP)));
+      if(key==='terrain')button.hidden=!isLand();
+      button.setAttribute('aria-pressed',String(key==='terrain'?terrain:key==='district'?district:key==='satellite'?!!(types&&current===types.HYBRID):!!(types&&current===types.ROADMAP)));
     });
     controls.querySelector('[data-sale-map-note]').hidden=!district;
+    var terrainNote=controls.querySelector('[data-sale-terrain-note]');if(terrainNote)terrainNote.hidden=!terrain;
   }
   function choose(view){
-    if(!isSale()||!['normal','satellite','district'].includes(view))return;
+    if(!isSale()||!['normal','satellite','district','terrain'].includes(view)||view==='terrain'&&!isLand())return;
     var map=global.map,types=global.kakao&&global.kakao.maps&&global.kakao.maps.MapTypeId;
     if(!map||!types||typeof map.setMapTypeId!=='function'||typeof map.addOverlayMapTypeId!=='function'){
+      terrainMessage=view==='terrain';
       if(controls)controls.querySelector('[data-sale-map-status]').textContent='지도가 준비되면 다시 눌러 주세요.';
       return;
     }
+    if(view==='terrain'&&(types.TERRAIN==null||typeof map.removeOverlayMapTypeId!=='function')){
+      terrainMessage=true;
+      if(controls)controls.querySelector('[data-sale-map-status]').textContent='현재 지도에서 지형도를 준비하지 못했습니다. 새로고침 후 다시 눌러 주세요.';
+      return;
+    }
     if(ownedMap!==map){restore();ownedMap=map;previousType=map.getMapTypeId();}
-    if(view==='district'){
+    if(view==='terrain'){
+      if(terrain)removeTerrain();else{map.addOverlayMapTypeId(types.TERRAIN);terrain=true;}
+    }else if(view==='district'){
       if(district)map.removeOverlayMapTypeId(types.USE_DISTRICT);else map.addOverlayMapTypeId(types.USE_DISTRICT);
       district=!district;
     }else{map.setMapTypeId(view==='satellite'?types.HYBRID:types.ROADMAP);baseChanged=true;}
     if(controls)controls.querySelector('[data-sale-map-status]').textContent='';
+    terrainMessage=false;
     update();
   }
   function mountDetail(root,item){
