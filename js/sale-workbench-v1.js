@@ -245,6 +245,7 @@
     if(land)dialog.querySelector('[data-calc-result] + .sale-provenance').textContent='총 매입비용 = 매매가 + 직접 입력한 취득 부대비용. 평당비용은 광고 토지면적 기준입니다. 월 대출이자는 이자만 계산하며 세금 자동 산정·원금상환·보유비용은 포함하지 않습니다. 복수 필지 입력은 아래에서 별도로 검토합니다.';
     dialog.querySelector('.sale-calculator-grid').insertAdjacentHTML('beforebegin','<div class="sale-review-toolbar-v2"><button type="button" data-apply-collected>광고 금액 다시 적용</button><span>'+(land?'매매가만 적용 · 대출·부대비용 가정 유지':'매매가·보증금·월수입만 적용 · 대출·비용 가정 유지')+'</span></div>'+ui().saleCardFactsHtml(item));
     var context={key:key,dialog:dialog,version:0,ready:false,savedAssumptions:{},dirty:{},editRevision:0};active=context;
+    var reviewFlow=global.JSSaleReviewFlowV12&&global.JSSaleReviewFlowV12.mountWorksheet(dialog,item);
     function edited(field){
       context.dirty[field]=true;context.editRevision++;
       dialog.querySelector('[data-work-status]').textContent='변경사항이 아직 저장되지 않았습니다.'+(context.ready?' 아래 저장 버튼을 눌러 주세요.':' 기존 검토를 불러온 뒤 저장할 수 있습니다.');
@@ -266,6 +267,7 @@
         var savingRevision=context.editRevision,parcels=parseParcels(dialog.querySelector('[data-parcels]').value),data={assumptions:Object.assign({},context.savedAssumptions,readCalc(dialog)),parcels:parcels,note:dialog.querySelector('[data-work-note]').value,source:item.source||'',address:clean(item.address),savedAt:new Date().toISOString()};
         var result=await global.JSDataAccessV6.mutate('saveCloudState',{scope:'saleWorksheetV1',recordKey:key,expectedAccountEmail:ACCOUNT_EMAIL,expectedVersion:context.version,data:data});
         context.version=result.version;context.savedAssumptions=Object.assign({},data.assumptions);
+        if(reviewFlow)reviewFlow.loaded(data,true);
         status.textContent=context.editRevision===savingRevision?'내 계정에 저장했습니다. 다른 PC에서도 이 원본의 매매 검토에서 열 수 있습니다.':'저장 요청한 내용은 저장했습니다. 그 뒤 입력한 변경사항은 아직 저장되지 않았습니다.';
       }catch(e){if(accountChanged(e)){context.ready=false;status.textContent=accountChangedMessage();}else status.textContent='저장하지 못했습니다: '+e.message;}finally{if(active===context)button.disabled=!context.ready;}
     };
@@ -278,10 +280,11 @@
       if(saved.assumptions)dialog.querySelectorAll('[data-calc]').forEach(function(e){if(!context.dirty[e.dataset.calc]&&Object.hasOwn(saved.assumptions,e.dataset.calc))e.value=saved.assumptions[e.dataset.calc];});
       if(!context.dirty.parcels){dialog.querySelector('[data-parcels]').value=(saved.parcels||[]).map(function(p){return p.address+' | '+p.areaM2;}).join('\n');if(dialog._saleParcelTableV9)dialog._saleParcelTableV9.load();}
       if(!context.dirty.note)dialog.querySelector('[data-work-note]').value=saved.note||'';renderCalc(dialog);
+      if(reviewFlow)reviewFlow.loaded(saved,r.found);
       context.ready=true;dialog.querySelector('[data-work-save]').disabled=false;
       dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+date(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':land?'아직 저장된 검토가 없습니다. 부대비용·대출·이자율의 초기 0은 계산 가정입니다.':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';
       if(context.editRevision)dialog.querySelector('[data-work-status]').textContent='기존 검토를 불러왔습니다. 먼저 입력한 변경사항은 유지했으며 아직 저장되지 않았습니다.';
-    } catch(e) {if(active===context)dialog.querySelector('[data-work-status]').textContent=accountChanged(e)?accountChangedMessage():'검토 조회 실패: '+e.message+' · 계산은 가능하지만 기존 자료 보호를 위해 저장은 잠겼습니다.';}
+    } catch(e) {if(active===context){if(reviewFlow)reviewFlow.failed();dialog.querySelector('[data-work-status]').textContent=accountChanged(e)?accountChangedMessage():'검토 조회 실패: '+e.message+' · 계산은 가능하지만 기존 자료 보호를 위해 저장은 잠겼습니다.';}}
   }
   function comparisonHtml(items) {
     var rows=[['매물',function(i){return i.name||i.buildingName||'-';}],['주소',function(i){return i.address||'미확인';}],['구분',function(i){return categoryLabels[ui().normalizedSaleCategory(i)]||'토지';}],['매매가',function(i){return price(i.salePrice??i.sale_price);}],['대지/토지',function(i){var a=num(ui().saleSummary(i).landAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['연면적',function(i){var a=num(ui().saleSummary(i).grossAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['단순 연 수익률',function(i){var y=ui().saleYield(i);return y==null?'미확인':fmt(y,2)+'%';}],['지목 / 용도지역',function(i){var d=ui().saleSummary(i);return (d.landUse||'미확인')+' / '+(d.zoning||'미확인');}],['출처',function(i){return i.source||'직접등록';}]];

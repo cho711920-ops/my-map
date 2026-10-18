@@ -2189,6 +2189,7 @@ function showList(items) {
   }
 
   visibleListItems = items.slice();
+  if (window.JSSaleReviewFlowV12 && window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== 'lease') window.JSSaleReviewFlowV12.refreshNavigation();
   if (list) list.innerHTML = "";
   listRenderStart = 0;
   listRenderLimit = 0;

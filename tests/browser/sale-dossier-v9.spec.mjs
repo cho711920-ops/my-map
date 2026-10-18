@@ -62,8 +62,8 @@ test('floor diagram loads only on request, separates buildings and shows no occu
   });
   const drawer=await open(page,isMobile);expect(calls).toBe(0);await drawer.locator('[data-floors-load]').click();expect(calls).toBe(1);
   const section=drawer.locator('.sale-floors-v9');await expect(section.locator('.sale-floor-stack-v9')).toHaveCount(0);await section.locator('select').selectOption('0');
-  await expect(section.locator('ol')).toContainText('소매점');await expect(section.locator('ol')).not.toContainText('다른동');await expect(section).toContainText('일부 자료');
-  await section.locator('select').selectOption('1');await expect(section.locator('ol')).toContainText('창고');await expect(section.locator('ol')).not.toContainText('소매점');
+  await expect(section.locator('.sale-floor-stack-v9')).toContainText('소매점');await expect(section.locator('.sale-floor-stack-v9')).not.toContainText('다른동');await expect(section).toContainText('일부 자료');
+  await section.locator('select').selectOption('1');await expect(section.locator('.sale-floor-stack-v9')).toContainText('창고');await expect(section.locator('.sale-floor-stack-v9')).not.toContainText('소매점');
   await page.screenshot({path:info.outputPath('building-floor-stack.png')});
 });
 test('area units switch across list, detail, comparison and report without changing source values',async({page,isMobile})=>{

@@ -89,7 +89,7 @@
     });
     return Array.from(grouped.values()).sort(function(a,b){return a.order==null?b.order==null?0:1:b.order==null?-1:b.order-a.order;}).map(function(g){return {label:g.label,uses:Array.from(g.uses).join(' / ')||'용도 미제공',area:g.known?g.area:null};});
   }
-  function floorHtml(building){var rows=floorRows(building);return rows.length?'<p>선택 건물의 공적 층별개요입니다. 임대료·공실·실제 점유 현황을 뜻하지 않습니다.</p><ol class="sale-floor-stack-v9">'+rows.map(function(r){return '<li><b>'+esc(r.label)+'</b><span>'+esc(r.uses)+'</span><strong>'+areaHtml(r.area)+'</strong></li>';}).join('')+'</ol>':'<p>선택한 건물의 층별개요를 확인하지 못했습니다. 다른 동·미제공 자료 여부를 확인해 주세요.</p>';}
+  function floorHtml(building,partial){var rows=floorRows(building);return rows.length?'<p>선택 건물의 공적 층별개요입니다. 임대료·공실·실제 점유 현황을 뜻하지 않습니다.</p>'+(global.JSSaleReviewFlowV12?global.JSSaleReviewFlowV12.floorCompositionHtml(building,partial):'')+'<ol class="sale-floor-stack-v9">'+rows.map(function(r){return '<li><b>'+esc(r.label)+'</b><span>'+esc(r.uses)+'</span><strong>'+areaHtml(r.area)+'</strong></li>';}).join('')+'</ol>':'<p>선택한 건물의 층별개요를 확인하지 못했습니다. 다른 동·미제공 자료 여부를 확인해 주세요.</p>';}
   function mountFloors(root,item){
     var panel=root.querySelector('[data-sale-section="register"]');if(!panel||panel.querySelector('.sale-floors-v9'))return;
     var section=document.createElement('section');section.className='sale-floors-v9';section.innerHTML='<h4>층별 구성</h4><p>필요할 때 건축물대장의 층별 자료를 조회합니다.</p><button type="button" data-floors-load>층별 구성 조회</button><p data-floors-status role="status"></p><div data-floors-content></div>';panel.append(section);
@@ -98,7 +98,7 @@
         var data=await read({action:'buildingRegister',mode:'full',sigunguCd:parcel.pnu.slice(0,5),bjdongCd:parcel.pnu.slice(5,10),platGbCd:parcel.pnu[10]==='2'?'1':'0',bun:parcel.pnu.slice(11,15),ji:parcel.pnu.slice(15)});if(!active(section))return;
         if(!data.parcel||[data.parcel.sigunguCd,data.parcel.bjdongCd,data.parcel.platGbCd==='1'?'2':'1',data.parcel.bun,data.parcel.ji].join('')!==parcel.pnu)throw Error('요청한 필지와 응답이 다릅니다.');
         var buildings=data.buildings||[];
-        function show(index){var b=buildings[Number(index)];out.querySelector('[data-floor-stack]').innerHTML=index===''?'':buildings.length>1&&!text(b&&b.managementKey)?'<p>건물관리번호가 없어 층별 자료를 안전하게 구분하지 못했습니다. 대장 원문에서 확인해 주세요.</p>':floorHtml(b);refreshUnits(out);}
+        function show(index){var b=buildings[Number(index)];out.querySelector('[data-floor-stack]').innerHTML=index===''?'':buildings.length>1&&!text(b&&b.managementKey)?'<p>건물관리번호가 없어 층별 자료를 안전하게 구분하지 못했습니다. 대장 원문에서 확인해 주세요.</p>':floorHtml(b,data.partial||data.incomplete||data.truncated);refreshUnits(out);}
         out.innerHTML=(buildings.length>1?'<label>층별 자료를 볼 건물·동<select aria-label="층별 구성 건물 선택"><option value="">건물·동 선택</option>'+buildings.map(function(v,i){return '<option value="'+i+'">'+esc([v.buildingName,v.dongName,v.mainUse].filter(Boolean).join(' · ')||'건물 '+(i+1))+'</option>';}).join('')+'</select></label>':'')+'<div data-floor-stack></div>';
         var select=out.querySelector('select');if(select)select.onchange=function(){show(this.value);};else show('0');
         status.textContent=parcel.address+' · 조회 '+date(data.queriedAt||data.fetchedAt||'일시 미제공')+(data.partial||data.incomplete||data.truncated?' · 일부 자료, 원문 확인 필요':'');
@@ -119,8 +119,11 @@
       box.querySelector('[data-parcel-rows]').append(row);
     }
     function load(){box.querySelector('[data-parcel-rows]').replaceChildren();var lines=text(textarea.value)?textarea.value.split('\n'):[];lines.forEach(function(line){var p=line.split('|');add(text(p[0]),text(p[1]));});if(!lines.length)add('','');totals();}
+    var composition=document.createElement('section');composition.className='sale-parcel-composition-v12';box.append(composition);
+    function renderComposition(){if(global.JSSaleReviewFlowV12)composition.innerHTML=global.JSSaleReviewFlowV12.parcelCompositionHtml(Array.from(box.querySelectorAll('[data-parcel-row]')).map(function(row){return {address:row.querySelector('[data-parcel-address]').value,areaM2:row.querySelector('[data-parcel-area]').value};}));refreshUnits(composition);}
+    box.addEventListener('input',renderComposition);box.addEventListener('click',function(event){if(event.target.closest('[data-parcel-remove],[data-parcel-add]'))renderComposition();});
     box.querySelector('[data-parcel-add]').onclick=function(){add('','');sync();};
-    dialog.querySelector('[data-calc="price"]').addEventListener('input',totals);dialog._saleParcelTableV9={load:load};load();
+    dialog.querySelector('[data-calc="price"]').addEventListener('input',totals);dialog._saleParcelTableV9={load:function(){load();renderComposition();}};load();renderComposition();
   }
   document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-unit]');if(!b)return;event.stopPropagation();setUnit(b.dataset.saleUnit);});
   var bar=document.getElementById('saleListLayoutV8');if(bar)bar.insertAdjacentHTML('beforeend',unitButtons());

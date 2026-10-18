@@ -1492,6 +1492,7 @@
       }
     }
     if (global.JSSalePropertyWorkspaceV3) global.JSSalePropertyWorkspaceV3.mountDetail(body, selected);
+    if (global.JSSaleReviewFlowV12) global.JSSaleReviewFlowV12.mountNavigation(drawer);
     showDetailDrawerV827(drawer);
   }
 
