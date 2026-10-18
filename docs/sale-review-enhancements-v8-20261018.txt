@@ -63,4 +63,12 @@
 - 변경 파일 ESLint, 설정된 TypeScript 범위, build/dry-run, diff 공백 검사 통과. TypeScript가 전체 프런트 JS를 검사하는 것은 아님.
 - 증빙: outputs/sale-review-v8-final*, outputs/sale-review-v8-release*, outputs/sale-review-v8-confirmed*,
   outputs/sale-review-v8-node-final.log 등. 민감정보·임시 로그·캡처는 커밋하지 않음.
-- 최종 public cache9e9f8fd6dcd46af61b5e64a2. 배포/공개 자산 확인은 완료 후 기록.
+- 최종 public cache9e9f8fd6dcd46af61b5e64a2.
+
+배포 및 공개 확인
+- 제품 커밋9f6edc2, codex/daangn-numeric-status 원격 반영.
+- 2026-10-18 20:20 KST Worker c99b15fb-3b28-4ca7-8d60-7ec53e1559a9 배포, 트래픽100% 확인.
+- 20:21 KST js-map.com / www.js-map.com 각80개 JS/CSS/SW/공개 주차장JSON, 총160개 SHA256이 최종 빌드와 일치.
+- 두 도메인의 새 JS/CSS 진입점, 비로그인 saleParcelFacts/saleTransactions API401 응답 확인.
+- 위 확인은 공개 파일과 로그인 경계 검증이며, 사용자 운영 매물의 실거래 인증 성공을 뜻하지 않음.
+- 증빙 outputs/sale-review-v8-live-verification.json, outputs/sale-review-v8-deployments.log (커밋 제외).
