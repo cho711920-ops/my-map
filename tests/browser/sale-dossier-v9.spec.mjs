@@ -24,6 +24,8 @@ test('original ad comparison highlights differences and switches to the exact ch
   await drawer.getByRole('button',{name:'원본 광고 조건 비교',exact:true}).click();const dialog=page.locator('.sale-original-dialog-v9');
   await expect(dialog).toContainText('5억원');await expect(dialog).toContainText('6억원');await expect(dialog).toContainText('0만원');
   await expect(dialog.locator('.different')).not.toHaveCount(0);
+  await dialog.locator('[data-compare-differences]').check();await expect(dialog.locator('tr').filter({has:dialog.getByText('광고 연면적',{exact:true})})).toBeHidden();await expect(dialog.locator('thead')).toBeVisible();
+  await dialog.locator('[data-compare-differences]').uncheck();
   await dialog.locator('[data-sale-unit="m2"]').click();await expect(dialog.locator('.sale-unit-m2-v9').first()).toBeVisible();
   await page.screenshot({path:info.outputPath('sale-original-conditions.png')});
   await dialog.getByRole('button',{name:/당근 .*원본 선택/}).click();await expect(drawer.locator('.sale-fixed-summary-v9')).toContainText('6억원');await expect(drawer.locator('.sale-fixed-summary-v9')).toContainText('당근');
@@ -79,7 +81,7 @@ test('asking history is on demand, paginated and does not mutate a listing',asyn
     return route.fulfill({json:{ok:true,originalId:u.searchParams.get('originalId'),source:'네이버',sourceListingId:'TEST-AD',hasMore:more,nextCursor:more?'20':'',entries:more?[{id:30,at:'2026-10-18T00:00:00Z',kind:'price_changed',beforePrice:300000,price:280000}]:[{id:10,at:'2026-10-17T00:00:00Z',kind:'conditions_changed',beforePrice:310000,price:300000}]}});
   });
   const drawer=await open(page,isMobile),history=drawer.locator('.sale-asking-history-v9');expect(calls).toBe(0);const before=await page.evaluate(()=>JSON.stringify(window.allItems));
-  await history.locator('summary').click();await history.locator('[data-history-load]').click();await expect(history).toContainText('30억원 → 28억원');
+  await drawer.locator('.sale-secondary-tools-v10>summary').click();await history.locator('summary').click();await history.locator('[data-history-load]').click();await expect(history).toContainText('30억원 → 28억원');
   await history.locator('[data-history-load]').click();await expect(history).toContainText('조건도 변경');await expect(history.locator('li')).toHaveCount(2);expect(calls).toBe(2);
   expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(before);await page.screenshot({path:info.outputPath('sale-asking-history.png')});
 });

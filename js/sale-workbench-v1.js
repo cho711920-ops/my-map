@@ -18,6 +18,7 @@
   function esc(v) { return clean(v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
   function num(v) { if(v == null || typeof v === "boolean" || clean(v)==="") return null; var n=Number(clean(v).replace(/,/g,"")); return Number.isFinite(n) && n>=0 ? n : null; }
   function fmt(v,d) { return v == null || !Number.isFinite(Number(v)) ? "미확인" : Number(v).toLocaleString("ko-KR",{maximumFractionDigits:d==null?1:d}); }
+  function date(v) {return global.JSSaleReviewV10?global.JSSaleReviewV10.dateText(v):clean(v);}
   function price(v) {
     var n=num(v); if(n==null || n<=0) return "매매가 미확인";
     var e=Math.floor(n/10000), m=Math.round((n-e*10000)*100)/100;
@@ -161,7 +162,7 @@
   function sourceHtml(item) {
     var d=ui().saleSummary(item),paths=d.fieldSources||{},rows=[];
     Object.keys(paths).forEach(function(k){if(k==="landUse"||k==="zoning")rows.push((k==="landUse"?"지목":"용도지역")+": 공실박스 "+paths[k]);});
-    return '<details class="sale-provenance sale-source-details-v1"><summary>출처·확인일 보기 · '+esc(item.source||'직접등록')+'</summary><div><p>제공처 확인일: '+esc(d.providerCheckedAt||'미제공')+'</p><p>'+esc(rows.join(' / ')||'기본정보와 상세설명 기재값. 설명 추출값은 상세에 별도 표시합니다.')+'</p><p>확인일은 실제 계약 가능 여부를 보증하지 않습니다.</p></div></details>';
+    return '<details class="sale-provenance sale-source-details-v1"><summary>출처·확인일 보기 · '+esc(item.source||'직접등록')+'</summary><div><p>제공처 확인일: '+esc(date(d.providerCheckedAt)||'미제공')+'</p><p>'+esc(rows.join(' / ')||'기본정보와 상세설명 기재값. 설명 추출값은 상세에 별도 표시합니다.')+'</p><p>확인일은 실제 계약 가능 여부를 보증하지 않습니다.</p></div></details>';
   }
   function detailTools(item,propertyId) {
     if(!ui().isSale(item))return "";
@@ -177,7 +178,7 @@
     dialog.innerHTML='<header><h2>'+esc(title)+'</h2><button type="button" data-sale-close aria-label="닫기">닫기 ×</button></header><div class="sale-workbench-body">'+html+'</div>';
     document.body.append(dialog);dialog.querySelector('[data-sale-close]').onclick=function(){dialog.close();};
     dialog.addEventListener('close',function(){if(active&&active.dialog===dialog)active=null;dialog.remove();});
-    dialog.showModal();if(global.JSSaleDossierV9)global.JSSaleDossierV9.modalUnits(dialog);return dialog;
+    dialog.showModal();if(global.JSSaleDossierV9)global.JSSaleDossierV9.modalUnits(dialog);if(global.JSSaleReviewV10)global.JSSaleReviewV10.enhanceComparison(dialog);return dialog;
   }
   function lookup(item,options) {
     item=item||{};options=options||{};
@@ -227,6 +228,7 @@
   function renderCalc(dialog) {
     var land=dialog.dataset.saleReview==='land',r=land?calculateLand(readCalc(dialog),dialog.dataset.landArea):calculate(readCalc(dialog)),out=dialog.querySelector('[data-calc-result]');
     if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.renderScenarios(dialog);
+    if(global.JSSaleReviewV10)global.JSSaleReviewV10.renderFlow(dialog,readCalc(dialog),r);
     if(r.error){out.textContent=r.error;return r;}
     var rows=land?[['총 매입비용',price(r.total)],['가정 실투입',price(r.equity)],['월 대출이자',fmt(r.interest)+'만원'],['부대비용 포함 평당',r.costPerPy==null?'광고면적 필요':fmt(r.costPerPy)+'만원']]:[['가정 실투입',price(r.equity)],['월 현금흐름',fmt(r.monthly)+'만원'],['연 현금흐름',fmt(r.annual)+'만원'],['가정 연 수익률',fmt(r.yield,2)+'%']];
     out.innerHTML='<span class="sale-result-grid-v2">'+rows.map(function(f){return '<span><small>'+esc(f[0])+'</small><strong>'+esc(f[1])+'</strong></span>';}).join('')+'</span>';
@@ -277,7 +279,7 @@
       if(!context.dirty.parcels){dialog.querySelector('[data-parcels]').value=(saved.parcels||[]).map(function(p){return p.address+' | '+p.areaM2;}).join('\n');if(dialog._saleParcelTableV9)dialog._saleParcelTableV9.load();}
       if(!context.dirty.note)dialog.querySelector('[data-work-note]').value=saved.note||'';renderCalc(dialog);
       context.ready=true;dialog.querySelector('[data-work-save]').disabled=false;
-      dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':land?'아직 저장된 검토가 없습니다. 부대비용·대출·이자율의 초기 0은 계산 가정입니다.':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';
+      dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+date(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':land?'아직 저장된 검토가 없습니다. 부대비용·대출·이자율의 초기 0은 계산 가정입니다.':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';
       if(context.editRevision)dialog.querySelector('[data-work-status]').textContent='기존 검토를 불러왔습니다. 먼저 입력한 변경사항은 유지했으며 아직 저장되지 않았습니다.';
     } catch(e) {if(active===context)dialog.querySelector('[data-work-status]').textContent=accountChanged(e)?accountChangedMessage():'검토 조회 실패: '+e.message+' · 계산은 가능하지만 기존 자료 보호를 위해 저장은 잠겼습니다.';}
   }
@@ -287,7 +289,7 @@
     function areaValue(item,key){var a=num(ui().saleSummary(item,[key])[key]);return a>0?fmt(a/PY)+'평 ('+fmt(a,2)+'㎡)':'미확인';}
     rows.find(function(r){return r[0]==='대지/토지';})[1]=function(i){return areaValue(i,'landAreaM2');};
     rows.find(function(r){return r[0]==='연면적';})[1]=function(i){return areaValue(i,'grossAreaM2');};
-    function field(label,key,suffix){return [label,function(i){var v=ui().saleSummary(i,[key])[key];return v==null||clean(v)===''?'미확인':clean(v)+(suffix||'');}];}
+    function field(label,key,suffix){return [label,function(i){var v=ui().saleSummary(i,[key])[key];return v==null||clean(v)===''?'미확인':(key==='approvalDate'?date(v):suffix==='만원'&&num(v)!=null?fmt(num(v),2):clean(v))+(suffix||'');}];}
     if(land){
       rows=rows.filter(function(r){return !['연면적','단순 연 수익률','지목 / 용도지역'].includes(r[0]);});
       rows.splice(5,0,['토지 평당가',function(i){var v=unitPrice(i);return v==null?'미확인':fmt(v)+'만원';}],field('지목','landUse'),field('용도지역','zoning'),field('도로접면','roadAccess'),field('토지 형상','parcelShape'));

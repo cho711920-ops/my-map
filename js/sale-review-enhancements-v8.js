@@ -8,7 +8,7 @@
   function num(v){if(v==null||typeof v==='boolean'||!text(v))return null;var n=Number(text(v).replace(/,/g,''));return Number.isFinite(n)&&n>=0?n:null;}
   function fmt(v){return v==null?'미제공':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});}
   function area(v){return num(v)>0?fmt(v/PY)+'평 ('+fmt(v)+'㎡)':'미제공';}
-  function date(v){var s=text(v).replace(/[^0-9]/g,'');return s.length===8?s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6):text(v);}
+  function date(v){if(global.JSSaleReviewV10)return global.JSSaleReviewV10.dateText(v);var s=text(v).replace(/[^0-9]/g,'');return s.length===8?s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6):text(v);}
   function facts(rows){return '<dl class="sale-review-facts-v8">'+rows.map(function(r){return '<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1]||'미제공')+'</dd></div>';}).join('')+'</dl>';}
   function compactHtml(item){
     if(!ui().isSale(item))return '';
@@ -25,6 +25,7 @@
     var changed=document.documentElement.hasAttribute('data-sale-list-compact-v8')!==compact;
     if(changed&&typeof global.reflowSaleListDensityV8==='function')global.reflowSaleListDensityV8(apply);else apply();
     if(bar)bar.querySelectorAll('[data-sale-layout]').forEach(function(b){b.setAttribute('aria-pressed',String((b.dataset.saleLayout==='compact')===!!layouts[mode]));});
+    if(global.JSSaleReviewV10)global.JSSaleReviewV10.syncTable();
   }
   function bodyOf(root){return root.closest('.unified-detail-body-v8');}
   function normalized(v){return text(v).replace(/\s/g,'');}
@@ -88,12 +89,12 @@
     if(referenceData){var r=referenceData.data;
       publicHtml=(referenceData.item.referenceAddressChangedV8?'<p>다른 조회용 지번의 자료입니다. 광고와 자동 대조하지 않습니다.</p>':'')+facts(referenceData.kind==='land'?[['조회 필지',r.address],['공식 지목',r.landUse],['공부면적',area(r.areaM2)],['개별공시지가',r.price&&r.price.available?fmt(r.price.wonPerM2)+'원/㎡ · '+r.price.baseYear+'.'+String(r.price.baseMonth).padStart(2,'0')+' 기준':'미제공']]:buildingRows(r))+
       (referenceData.kind==='land'?(r.regulations||[]).map(function(g){return '<p><b>'+esc(g.label)+'</b> · '+esc((g.items||[]).map(function(i){return i.label;}).join(' · ')||(g.available&&g.complete?'공개 원문 기재 항목 없음':'미조회'))+(!g.complete?' · 일부 자료 확인 필요':'')+'</p>';}).join(''):'')+
-      '<p>출처 '+esc(r.source||'건축물대장')+' · 조회 '+esc(r.queriedAt||r.fetchedAt||'일시 미제공')+((!r.complete&&referenceData.kind==='land')||r.partial?' · 일부 자료 미확인':'')+(referenceData.kind==='building'?' · 선택 건물 기준 '+esc([r.buildingName,r.dongName].filter(Boolean).join(' · ')):'')+'</p>';
+      '<p>출처 '+esc(r.source||'건축물대장')+' · 조회 '+esc(date(r.queriedAt||r.fetchedAt)||'일시 미제공')+((!r.complete&&referenceData.kind==='land')||r.partial?' · 일부 자료 미확인':'')+(referenceData.kind==='building'?' · 선택 건물 기준 '+esc([r.buildingName,r.dongName].filter(Boolean).join(' · ')):'')+'</p>';
       var diff=differences(referenceData.item,referenceData.kind,r);if(diff.length)publicHtml+='<h4>표기 확인사항</h4>'+facts(diff.map(function(v){return [v[0],'광고 '+v[1]+' / 공적자료 '+v[2]];}));
     }
     return '<article class="sale-single-report-v8"><header><span>JS부동산 · '+(land?'토지':'건물')+' 매입 검토서</span><h3>'+esc(item.buildingName||item.name||item.address)+'</h3><p>'+esc(item.address)+'</p><strong>'+esc(w.price(item.salePrice??item.sale_price))+'</strong></header>'+
-      (photo?'<img class="sale-report-photo-v8" alt="상세창에서 확인한 매물 사진" src="'+esc(photo)+'">':'')+'<h4>원본 광고 조건</h4>'+facts(rows)+'<p>출처 '+esc(item.source||'직접등록')+' · 제공처 확인일 '+esc(d.providerCheckedAt||'미제공')+' · 광고 등록일 '+esc(item.regDate||'미제공')+'</p><h4>조회한 공적자료</h4>'+publicHtml+
-      (land?roadHtml(item,referenceData&&referenceData.kind==='land'?referenceData.data:null):'')+'<section data-report-note-section hidden><h4>내 검토 메모</h4><p data-report-note></p></section><footer>작성 '+esc(new Date().toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+' · 광고 호가와 공적자료는 기준·범위가 다를 수 있습니다. 거래 가능 여부·권리관계·현장 조건은 별도 확인하세요.</footer></article>';
+      (photo?'<img class="sale-report-photo-v8" alt="상세창에서 확인한 매물 사진" src="'+esc(photo)+'">':'')+'<h4>원본 광고 조건</h4>'+facts(rows)+'<p>출처 '+esc(item.source||'직접등록')+' · 제공처 확인일 '+esc(date(d.providerCheckedAt)||'미제공')+' · 광고 등록일 '+esc(date(item.regDate)||'미제공')+'</p><h4>조회한 공적자료</h4>'+publicHtml+
+      (land?roadHtml(item,referenceData&&referenceData.kind==='land'?referenceData.data:null):'')+'<section data-report-note-section hidden><h4>내 검토 메모</h4><p data-report-note></p></section><footer>작성 '+esc(date(new Date().toISOString()))+' · 광고 호가와 공적자료는 기준·범위가 다를 수 있습니다. 거래 가능 여부·권리관계·현장 조건은 별도 확인하세요.</footer></article>';
   }
   function report(item,root){
     if(!ui().isSale(item))return;
@@ -115,7 +116,7 @@
       finally{if(dialog.isConnected&&request===revision)print.disabled=false;}
     };
   }
-  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.addEventListener('click',function(event){var b=event.target.closest('[data-sale-layout]');if(!b||ui().getMode()==='lease')return;layouts[ui().getMode()]=b.dataset.saleLayout==='compact';syncLayout();});
+  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.addEventListener('click',function(event){var b=event.target.closest('[data-sale-layout]');if(!b||ui().getMode()==='lease')return;layouts[ui().getMode()]=b.dataset.saleLayout==='compact';if(global.JSSaleReviewV10)global.JSSaleReviewV10.chooseLayout(b.dataset.saleLayout);syncLayout();});
   global.addEventListener('js-listing-trade-mode-change',syncLayout);
   global.addEventListener('js-phone-device-change',syncLayout);
   if(global.matchMedia)global.matchMedia('(min-width:769px)').addEventListener('change',syncLayout);

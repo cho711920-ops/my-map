@@ -8,7 +8,7 @@
   function num(v){if(v==null||typeof v==='boolean'||!text(v))return null;var n=Number(text(v).replace(/,/g,''));return Number.isFinite(n)&&n>=0?n:null;}
   function fmt(v){return num(v)==null?'미제공':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});}
   function area(v){return num(v)>0?fmt(v)+'㎡ · '+fmt(v/PY)+'평':'';}
-  function date(v){var s=text(v);return /^\d{8}$/.test(s)?s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6):s;}
+  function date(v){if(global.JSSaleReviewV10)return global.JSSaleReviewV10.dateText(v);var s=text(v);return /^\d{8}$/.test(s)?s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6):s;}
   function sumKnown(values){return values.every(function(v){return num(v)!=null;})?values.reduce(function(s,v){return s+Number(v);},0):null;}
   function money(v){return global.JSSaleWorkbenchV1.price(v);}
   function rowsHtml(rows){return '<dl class="sale-public-facts-v6">'+rows.filter(function(r){return r[1]!==''&&r[1]!=null;}).map(function(r){return '<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd></div>';}).join('')+'</dl>';}
@@ -52,11 +52,11 @@
     if(!b)return '<p>이 지번에서 건축물 표제부를 확인하지 못했습니다. 대장 조회에서 주소·건물 구성을 확인해 주세요.</p>';
     var missing=buildingRows(b).filter(function(r){return r[1]===''||r[1]==null;}).map(function(r){return r[0];});
     var d=item.saleDetails||{},pair=[['주용도',d.buildingUse,b.mainUse],['사용승인일',date(d.approvalDate),date(b.approvalDate)]].filter(function(r){return r[1]&&r[2];});
-    return '<p class="sale-public-address-v6">'+esc(b.lotAddress||data.parcel&&data.parcel.lotAddress)+' · '+esc([b.buildingName,b.dongName,b.registerType].filter(Boolean).join(' · '))+'</p>'+rowsHtml(buildingRows(b))+
+    return '<p class="sale-public-address-v6">'+esc(b.lotAddress||data.parcel&&data.parcel.lotAddress)+' · '+esc([b.buildingName,b.dongName,b.registerType].filter(Boolean).join(' · '))+'</p>'+(global.JSSaleReviewV10?global.JSSaleReviewV10.buildingHighlights(b):'')+rowsHtml(buildingRows(b))+
       (pair.length?'<details class="sale-public-crosscheck-v6"><summary>광고와 대장 나란히 보기</summary><table><thead><tr><th>항목</th><th>광고 기재</th><th>건축물대장</th></tr></thead><tbody>'+pair.map(function(r){return '<tr><th>'+esc(r[0])+'</th><td>'+esc(r[1])+'</td><td>'+esc(r[2])+'</td></tr>';}).join('')+'</tbody></table></details>':'')+
       (missing.length?'<details class="sale-public-missing-v6"><summary>자료 미제공 항목 '+missing.length+'개</summary><p>'+esc(missing.join(' · '))+'</p></details>':'')+
       '<p class="sale-public-footnote-v6">대장 면적은 선택한 건물 기준입니다. 광고의 일부 지분·전유면적·일괄매매 면적과 다를 수 있습니다. 주차대수는 빈 주차면 수가 아닙니다.</p>'+
-      '<p class="sale-public-source-v6">'+esc(data.source||'국토교통부 건축물대장')+' · 조회 '+esc(data.queriedAt||date(data.fetchedAt)||'일시 미제공')+(data.cached?' · 저장된 조회자료':'')+(data.incomplete||data.partial||data.refreshDeferred?' · 일부 자료 또는 갱신 확인 필요':'')+'</p>';
+      '<p class="sale-public-source-v6">'+esc(data.source||'국토교통부 건축물대장')+' · 조회 '+esc(date(data.queriedAt||data.fetchedAt)||'일시 미제공')+(data.cached?' · 저장된 조회자료':'')+(data.incomplete||data.partial||data.refreshDeferred?' · 일부 자료 또는 갱신 확인 필요':'')+'</p>';
   }
   function section(key,title,description,button){
     var el=document.createElement('section');el.className='sale-public-panel-v6';el.dataset.saleSection=key;

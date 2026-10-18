@@ -76,6 +76,7 @@
     };root.addEventListener('scroll',root._saleDossierBoundV3,{passive:true});}
     syncNav();
     if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountDetail(root,item);
+    if(global.JSSaleReviewV10)global.JSSaleReviewV10.mountDetail(root,item);
   }
   if(controls)controls.addEventListener('click',function(event){var button=event.target.closest('[data-sale-map-view]');if(button)choose(button.dataset.saleMapView);});
   global.addEventListener('js-listing-trade-mode-change',function(){if(!isSale())restore();update();});

@@ -8,6 +8,7 @@
   function num(v){if(v==null||typeof v==='boolean'||!text(v))return null;var n=Number(text(v).replace(/,/g,''));return Number.isFinite(n)&&n>=0?n:null;}
   function fmt(v){return Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});}
   function price(v){return global.JSSaleWorkbenchV1.price(v);}
+  function date(v){return global.JSSaleReviewV10?global.JSSaleReviewV10.dateText(v):text(v);}
   function active(el){var drawer=el.closest('#unifiedDetailDrawerV8');return el.isConnected&&(!drawer||drawer.getAttribute('aria-hidden')!=='true')&&ui().getMode()!=='lease';}
   function areaHtml(m2,primaryOnly){
     if(!(num(m2)>0))return '미제공';
@@ -48,7 +49,7 @@
       ['광고 토지·대지면적',function(o){var d=ui().saleSummary(o);return num(d.landAreaM2)>0?fmt(d.landAreaM2/PY)+'평 ('+fmt(d.landAreaM2)+'㎡)':'미제공';}],
       ['광고 연면적',function(o){var d=ui().saleSummary(o);return num(d.grossAreaM2)>0?fmt(d.grossAreaM2/PY)+'평 ('+fmt(d.grossAreaM2)+'㎡)':'미제공';}],
       ['월 임대수입',function(o){var v=ui().saleSummary(o).monthlyIncome;return num(v)==null?'미제공':fmt(v)+'만원';}],
-      ['제공처 확인일',function(o){return ui().saleSummary(o).providerCheckedAt||'미제공';}],['최근 수집 확인',function(o){return o.lastSeen||o.lastCheckedAt||'미제공';}]];
+      ['제공처 확인일',function(o){return date(ui().saleSummary(o).providerCheckedAt)||'미제공';}],['최근 수집 확인',function(o){return date(o.lastSeen||o.lastCheckedAt)||'미제공';}]];
     if(ui().normalizedSaleCategory(selected)==='land')fields=fields.filter(function(f){return !['광고 연면적','월 임대수입'].includes(f[0]);});
     return '<p>현재 묶인 원본 광고를 비교합니다. 면적·매매범위가 다르면 별도 확인하세요. 가격을 섞거나 광고를 합치지 않습니다.</p><div class="sale-original-table-v9 sale-compare-scroll"><table><thead><tr><th>항목</th>'+originals.map(function(o,i){return '<th'+(sameOriginal(o,selected)?' class="selected"':'')+'>'+esc(o.source||'원본')+' '+(i+1)+(sameOriginal(o,selected)?'<small>현재 선택</small>':'')+'</th>';}).join('')+'</tr></thead><tbody>'+fields.map(function(f){var values=originals.map(f[1]),different=new Set(values).size>1;return '<tr'+(different?' class="different"':'')+'><th>'+esc(f[0])+'</th>'+values.map(function(v){return '<td>'+esc(v)+'</td>';}).join('')+'</tr>';}).join('')+'<tr><th>광고 보기</th>'+originals.map(function(o,i){return '<td><button type="button" data-sale-original-open="'+i+'" aria-label="'+esc(o.source||'원본')+' '+(i+1)+' 원본 선택">이 원본 선택</button></td>';}).join('')+'</tr></tbody></table></div>';
   }
@@ -70,7 +71,7 @@
       history.querySelector('[data-history-load]').onclick=async function(){var b=this,status=history.querySelector('[data-history-status]');b.disabled=true;
         try{status.textContent='광고별 수집 기록을 읽고 있습니다…';var data=await read({action:'saleAskingHistory',propertyId:item.propertyId||drawer.__detailPresentationV2.propertyId,originalId:item.originalId,beforeId:cursor});
           if(!active(history))return;if(data.originalId!==item.originalId)throw Error('요청한 원본과 응답이 다릅니다.');
-          (data.entries||[]).forEach(function(row){if(seen.has(row.id))return;seen.add(row.id);count++;var li=document.createElement('li');li.innerHTML='<span>'+esc(row.at)+'</span><strong>'+esc(row.beforePrice?price(row.beforePrice)+' → '+price(row.price):price(row.price))+'</strong><small>'+esc(row.kind==='conditions_changed'?'면적·주소·매매범위 등 조건도 변경됨':row.kind==='price_changed'?'수집 호가 변경 확인':'수집 기록에서 확인한 호가')+'</small>';history.querySelector('ol').append(li);});
+          (data.entries||[]).forEach(function(row){if(seen.has(row.id))return;seen.add(row.id);count++;var li=document.createElement('li');li.innerHTML='<span>'+esc(date(row.at))+'</span><strong>'+esc(row.beforePrice?price(row.beforePrice)+' → '+price(row.price):price(row.price))+'</strong><small>'+esc(row.kind==='conditions_changed'?'면적·주소·매매범위 등 조건도 변경됨':row.kind==='price_changed'?'수집 호가 변경 확인':'수집 기록에서 확인한 호가')+'</small>';history.querySelector('ol').append(li);});
           cursor=data.nextCursor||'';status.textContent=text(data.source||item.source)+' · 광고번호 '+text(data.sourceListingId||'미제공')+' · '+(count?'확인된 이력 '+count+'건':'확인된 호가 이력이 없습니다.')+(data.hasMore?' · 이전 기록이 더 있습니다.':' · 보유 기록 기준');b.textContent=data.hasMore?'이전 기록 더 보기':'조회 완료';b.hidden=!data.hasMore;
         }catch(e){if(active(history))status.textContent=e.message;}finally{b.disabled=false;}
       };
@@ -100,7 +101,7 @@
         function show(index){var b=buildings[Number(index)];out.querySelector('[data-floor-stack]').innerHTML=index===''?'':buildings.length>1&&!text(b&&b.managementKey)?'<p>건물관리번호가 없어 층별 자료를 안전하게 구분하지 못했습니다. 대장 원문에서 확인해 주세요.</p>':floorHtml(b);refreshUnits(out);}
         out.innerHTML=(buildings.length>1?'<label>층별 자료를 볼 건물·동<select aria-label="층별 구성 건물 선택"><option value="">건물·동 선택</option>'+buildings.map(function(v,i){return '<option value="'+i+'">'+esc([v.buildingName,v.dongName,v.mainUse].filter(Boolean).join(' · ')||'건물 '+(i+1))+'</option>';}).join('')+'</select></label>':'')+'<div data-floor-stack></div>';
         var select=out.querySelector('select');if(select)select.onchange=function(){show(this.value);};else show('0');
-        status.textContent=parcel.address+' · 조회 '+text(data.queriedAt||data.fetchedAt||'일시 미제공')+(data.partial||data.incomplete||data.truncated?' · 일부 자료, 원문 확인 필요':'');
+        status.textContent=parcel.address+' · 조회 '+date(data.queriedAt||data.fetchedAt||'일시 미제공')+(data.partial||data.incomplete||data.truncated?' · 일부 자료, 원문 확인 필요':'');
       }catch(e){if(active(section))status.textContent=e.message;}finally{b.disabled=false;}
     };
   }
