@@ -71,4 +71,11 @@
 - public cache 6bcf87d922670e022c60aeda.
 - 증빙 outputs/sale-review-v10-node-final.log, *-regression.log, *-release.log, *-native.log 및 캡처 (커밋 제외).
 
-배포 확인은 아래에 후속 기록.
+배포 및 공개 확인
+- 제품 커밋531916e, codex/daangn-numeric-status 원격 반영.
+- 2026-10-19 01:19 KST Worker 06a764e2-5e08-4f76-9162-d2dcc3c76a07 배포, 트래픽100% 확인.
+- 01:20 KST js-map.com / www.js-map.com 각84개 JS/CSS/SW/공개 주차장JSON, 총168개 SHA256이 최종 빌드와 일치.
+- 두 도메인의 새 v10 JS/CSS 진입점 및 비로그인 saleAskingHistory/saleParcelFacts/saleTransactions API401 확인.
+- 위 확인은 공개 파일/로그인 경계 검증. 사용자 운영계정의 개별 원문 근거·공적 건물 제원 실조회는 미확인.
+- 새 backend/API/schema/collector 수정 없음. 실거래 인증키 보류 유지.
+- 증빙 outputs/sale-review-v10-live-verification.json, outputs/sale-review-v10-deployments.log (커밋 제외).
