@@ -8,6 +8,7 @@ import {
   verifyGoogleCredential
 } from "./security.js";
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
+import { getSaleTransactions } from "./sale-transactions.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
@@ -754,6 +755,9 @@ async function handleDataApi(request, env, context) {
         "cache-control": "private, no-store",
         "x-js-data-source": "D1"
       });
+    }
+    if (query.action === "saleTransactions") {
+      return jsonp(query.callback, await getSaleTransactions(env, query), {"cache-control": "private, no-store"});
     }
     if (query.action === "buildingRegister") {
       return jsonp(query.callback, await getBuildingRegister(env, query), {

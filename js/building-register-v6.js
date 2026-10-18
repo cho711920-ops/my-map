@@ -1740,6 +1740,23 @@
     });
   };
 
+  // Exact-parcel sale research never supplies a propertyId or persists a badge.
+  window.JSBuildingRegisterReadOnlyV6 = {
+    cached: function(parcel) {
+      return [readCache(parcel), readBadgeCache(parcel)].filter(Boolean).sort(function(a,b) {
+        return Date.parse(b.fetchedAt || '') - Date.parse(a.fetchedAt || '');
+      })[0] || null;
+    },
+    load: function(parcel) {
+      var key = parcelKey(parcel) + ':sale-readonly';
+      if (badgeRequests[key]) return badgeRequests[key];
+      badgeRequests[key] = jsonp(badgeRequestUrl({}, parcel) + '&revalidate=1', 60000).then(function(data) {
+        if (!data || !data.ok || data.action !== 'buildingRegister') throw Error(data && data.message || '건축물대장 요약정보를 확인하지 못했습니다.');
+        writeBadgeCache(parcel, data); return data;
+      }).finally(function() { delete badgeRequests[key]; });
+      return badgeRequests[key];
+    }
+  };
   window.closeBuildingRegisterV640 = closeModal;
   window.refreshBuildingRegisterV640 = function () {
     if (state.parcel) fetchRegister(true);
