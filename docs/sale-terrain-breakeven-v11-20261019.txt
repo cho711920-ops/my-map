@@ -51,4 +51,10 @@
 - public cache19ab5e1253cee05ab4cda177.
 - 증빙 outputs/sale-terrain-breakeven-v11-node-final.log, *-release.log, *-final.log, *-native.log 및 캡처 (커밋 제외).
 
-배포 확인은 아래에 후속 기록.
+배포 및 공개 확인
+- 제품 커밋c876f51, codex/daangn-numeric-status 원격 반영.
+- 2026-10-19 01:46 KST Worker 74b11b13-1f51-404c-a4f4-0469c091c4c6 배포, 트래픽100% 확인.
+- 01:47 KST js-map.com / www.js-map.com 각84개 JS/CSS/SW/공개 주차장JSON, 총168개 SHA256이 최종 빌드와 일치.
+- 두 도메인의 terrain 버튼/안내와 JS/CSS 진입점, 비로그인 기존 매매 API401 확인.
+- 위 확인은 공개 파일·로그인 경계 검증. 사용자 운영계정의 개별 광고/저장 가정을 직접 열거나 수정하지 않음.
+- 증빙 outputs/sale-terrain-breakeven-v11-live-verification.json, *-deployments.log (커밋 제외).
