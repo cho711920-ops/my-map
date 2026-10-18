@@ -1,7 +1,7 @@
 /* Sale-only public reference panels. No advertisement, worksheet or listing writes. */
 (function(global){
   'use strict';
-  var PY=3.305785, parcels=new Map(), transactions=new Map();
+  var PY=3.305785, parcels=new Map(), transactions=new Map(), landFacts=new Map();
   var account=String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
   function text(v){return String(v==null?'':v).trim();}
   function esc(v){return text(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -15,6 +15,15 @@
   function parcelObject(result){var p=result.pnu;return {sigunguCd:p.slice(0,5),bjdongCd:p.slice(5,10),platGbCd:p[10]==='2'?'1':'0',bun:p.slice(11,15),ji:p.slice(15),lotAddress:result.address};}
   function cache(map,key,value){if(map.size>=80)map.delete(map.keys().next().value);map.set(key,value);}
   function active(el){var drawer=el.closest('#unifiedDetailDrawerV8');return el.isConnected&&(!drawer||drawer.getAttribute('aria-hidden')!=='true')&&global.JSListingTradeV1.getMode()!=='lease';}
+  function revealResult(button,target){
+    // A disabled loading button loses focus to body in Chromium. Preserve the
+    // user's lookup intent, but don't move a reader who focused another control.
+    var body=button.closest('.unified-detail-body-v8');if(!body||(document.activeElement!==button&&document.activeElement!==document.body)||!active(target))return;
+    var bounds=body.getBoundingClientRect(),b=button.getBoundingClientRect();
+    if(b.bottom<=bounds.top||b.top>=bounds.bottom)return;
+    var nav=body.querySelector('.sale-dossier-nav-v3');
+    body.scrollTo({top:Math.max(0,body.scrollTop+target.getBoundingClientRect().top-bounds.top-(nav?nav.offsetHeight:0)-12),behavior:'instant'});
+  }
   async function resolve(item){
     var key=text(item.address),saved=parcels.get(key);
     if(saved&&Date.now()-saved.at<600000)return saved.result;
@@ -25,7 +34,7 @@
     var url=new URL('/api/data',global.location.origin);Object.keys(query).forEach(function(k){url.searchParams.set(k,query[k]);});
     if(account)url.searchParams.set('expectedAccountEmail',account);
     var response=await global.fetch(url,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(45000)}),data=await response.json();
-    if(!response.ok||!data.ok)throw Error(data.message||'공식 자료를 불러오지 못했습니다. 잠시 후 다시 조회해 주세요.');
+    if(!response.ok||!data.ok)throw Object.assign(Error(data.message||'공식 자료를 불러오지 못했습니다. 잠시 후 다시 조회해 주세요.'),{code:data.code||''});
     return data;
   }
   function buildingRows(b){
@@ -67,20 +76,38 @@
     if(cached&&Date.now()-cached.at<600000&&reader){var data=reader.cached(parcelObject(cached.result));if(data&&data.ok)show(data);}
     button.onclick=async function(){
       button.disabled=true;status.textContent='지번과 대장 자료를 확인하고 있습니다…';
-      try{var result=await resolve(item);if(!active(el))return;if(!global.JSBuildingRegisterReadOnlyV6)throw Error('건축물대장 기능을 준비하지 못했습니다. 새로고침 후 다시 눌러 주세요.');var data=await global.JSBuildingRegisterReadOnlyV6.load(parcelObject(result));if(!active(el))return;show(data);status.textContent='확인한 지번: '+result.address;button.textContent='다시 확인';}
+      try{var result=await resolve(item);if(!active(el))return;if(!global.JSBuildingRegisterReadOnlyV6)throw Error('건축물대장 기능을 준비하지 못했습니다. 새로고침 후 다시 눌러 주세요.');var data=await global.JSBuildingRegisterReadOnlyV6.load(parcelObject(result));if(!active(el))return;show(data);status.textContent='확인한 지번: '+result.address;button.textContent='다시 확인';revealResult(button,out);}
       catch(e){if(active(el))status.textContent=e.message;}
       finally{button.disabled=false;}
     };
     root.append(el);
   }
+  function landPublicHtml(data,item){
+    var p=data.price||{},d=item.saleDetails||{},amount=num(p.wonPerM2),regulations=Array.isArray(data.regulations)?data.regulations:[];
+    var price=p.available&&amount>0?'<div class="sale-public-land-price-v7"><span>개별공시지가 · '+esc(p.baseYear)+'.'+esc(String(p.baseMonth).padStart(2,'0'))+' 기준</span><strong>'+esc(fmt(amount))+'<small> 원/㎡</small></strong><span>평당 환산 '+esc(fmt(amount*PY))+'원 · 매도호가와 구분</span></div>':'<p class="sale-public-partial-v7">'+esc(p.message||'공시지가가 제공되지 않았습니다. 공식 원문에서 확인해 주세요.')+'</p>';
+    var difference=num(d.landAreaM2)>0&&Math.abs(Number(d.landAreaM2)-Number(data.areaM2))>1;
+    return '<span class="sale-public-label-v6">공적자료 · 토지이음 공개 열람</span><p class="sale-public-address-v6">'+esc(data.address)+'</p>'+rowsHtml([['공식 지목',data.landUse],['공부면적',area(data.areaM2)]])+price+
+      (difference?'<p class="sale-public-partial-v7">광고면적 '+esc(area(d.landAreaM2))+'과 공부면적이 다릅니다. 일부 지분·복수 필지 여부를 확인하세요. 목록의 평당가는 광고면적을 유지합니다.</p>':'')+
+      regulations.map(function(group){var items=Array.isArray(group.items)?group.items:[];
+        return '<details class="sale-public-regulations-v7"'+(group.key==='planning'?' open':'')+'><summary>'+esc(group.label)+'<span>'+(group.available?items.length+'개':'미조회')+'</span></summary>'+
+          (items.length?'<ul>'+items.map(function(row){return '<li>'+esc(row.label)+'</li>';}).join('')+'</ul>':'<p>'+(group.available&&group.complete?'공개 열람 원문에 기재된 항목이 없습니다.':'이 항목의 자료를 확인하지 못했습니다. 원문을 확인해 주세요.')+'</p>')+
+          (!group.complete?'<p>일부 표기를 확인하지 못했습니다. 전체 내용은 공식 원문에서 확인하세요.</p>':'')+'</details>';
+      }).join('')+'<p class="sale-public-footnote-v6">도시계획도로 표기는 실제 도로 접면·진입 가능 여부와 다를 수 있습니다. 이용규제는 원문 참고자료이며 건축 가능 판정이 아닙니다.</p>'+
+      '<p class="sale-public-source-v6">'+esc(data.source)+' · 조회 '+esc(new Date(data.fetchedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+(data.cached?' · 저장된 조회자료':'')+(!data.complete?' · 일부 자료 미확인':'')+'</p>';
+  }
   function mountLand(root,item){
-    var el=section('publicland','필지·공적자료','광고 기재 조건과 공식 이용규제·공시지가를 구분해 검토합니다.','공식자료 연결'),out=el.querySelector('[data-public-content]'),status=el.querySelector('[data-public-status]'),button=el.querySelector('button'),d=item.saleDetails||{};
+    var el=section('publicland','필지·공적자료','토지이음의 필지 기본정보·지역지구·개별공시지가를 광고와 구분해 확인합니다.','공적자료 조회'),out=el.querySelector('[data-public-content]'),status=el.querySelector('[data-public-status]'),button=el.querySelector('button'),d=item.saleDetails||{};
     out.innerHTML='<span class="sale-public-label-v6">수집 광고 기재</span>'+rowsHtml([['지목',d.landUse],['용도지역',d.zoning],['추가 지정·지역',d.secondaryZoning],['도로접면',d.roadAccess],['형상',d.parcelShape],['광고면적',area(d.landAreaM2)],['지적공부 면적 (광고 제공)',area(d.cadastralAreaM2)]])+
-      '<div class="sale-public-official-v6" data-official-land hidden></div><details class="sale-public-missing-v6"><summary>공식 원문에서 확인할 내용</summary><p>지역·지구 지정현황 / 행위제한·건축선·도로조건 / 개별공시지가와 기준연도 / 확인도면</p><p>공적자료는 아직 자동 연계되지 않았습니다. 정확한 지번의 토지이음 원문에서 확인하며, 미조회 상태를 규제 없음으로 표시하지 않습니다.</p></details>';
-    button.onclick=async function(){button.disabled=true;status.textContent='정확한 지번을 확인하고 있습니다…';try{
+      '<div class="sale-public-land-data-v7" data-official-land-data></div><div class="sale-public-official-v6" data-official-land hidden></div><details class="sale-public-missing-v6" data-public-guidance><summary>조회자료 이용 안내</summary><p>필지별 공개 열람자료를 불러옵니다. 공시지가 기준시점과 조회시각은 별개이며, 광고 금액·면적·주소는 변경하지 않습니다.</p><p>행위제한·건축선·도로조건의 상세 내용과 확인도면은 토지이음 원문에서 확인하세요.</p></details>';
+    button.onclick=async function(){button.disabled=true;status.textContent='정확한 지번을 확인하고 있습니다…';out.querySelector('[data-official-land-data]').innerHTML='';try{
       var result=await resolve(item);if(!active(el))return;var official=out.querySelector('[data-official-land]');official.hidden=false;
-      official.innerHTML='<b>확인된 필지 · '+esc(result.address)+'</b><a href="'+esc(result.links.eum)+'" target="_blank" rel="noopener noreferrer">토지이음 이용계획·공시지가·확인도면 ↗</a><a href="'+esc(result.links.valuemap)+'" target="_blank" rel="noopener noreferrer">밸류맵 해당 필지 ↗</a><small>공식 페이지 연결입니다. 공적자료 조회 완료·건축 가능 판정은 아닙니다.</small>';
-      status.textContent='공식자료를 열어 확인할 수 있습니다.';
+      official.innerHTML='<b>확인된 필지 · '+esc(result.address)+'</b><a href="'+esc(result.links.eum)+'" target="_blank" rel="noopener noreferrer">토지이음 이용계획·공시지가·확인도면 ↗</a><a href="'+esc(result.links.valuemap)+'" target="_blank" rel="noopener noreferrer">밸류맵 해당 필지 ↗</a>';
+      status.textContent='토지이음 공개 열람자료를 불러오고 있습니다…';
+      var saved=landFacts.get(result.pnu),age=saved?Date.now()-Date.parse(saved.fetchedAt):Infinity;
+      var data=saved&&age>=0&&age<6*3600000?Object.assign({},saved,{cached:true}):await read({action:'saleParcelFacts',pnu:result.pnu});
+      if(!active(el))return;if(data.pnu!==result.pnu)throw Error('요청한 필지와 응답이 다릅니다. 공식 원문에서 확인해 주세요.');
+      if(data.complete)cache(landFacts,result.pnu,data);
+      var target=out.querySelector('[data-official-land-data]');target.innerHTML=landPublicHtml(data,item);status.textContent=data.complete?'공적자료를 불러왔습니다. 광고 기재값과 구분해 확인하세요.':'필지 자료를 불러왔으나 일부 항목은 확인하지 못했습니다.';button.textContent='다시 조회';revealResult(button,target);
     }catch(e){if(active(el))status.textContent=e.message;}finally{button.disabled=false;}};
     root.append(el);
   }
@@ -122,9 +149,9 @@
       var month=controls.querySelector('[type="month"]').value.replace('-','');if(!/^\d{6}$/.test(month)){status.textContent='조회할 계약월을 선택해 주세요.';return;}
       button.disabled=true;controls.querySelectorAll('input').forEach(function(e){e.dataset.wasDisabled=String(e.disabled);e.disabled=true;});status.textContent='법정동과 공식 실거래 자료를 확인하고 있습니다…';out.innerHTML='';result=null;
       try{resolved=await resolve(item);if(!active(el))return;var query={action:'saleTransactions',kind:land?'land':'commercial',district:resolved.pnu.slice(0,5),month:month},key=[query.kind,query.district,month].join(':');
-        var saved=transactions.get(key),age=saved?Date.now()-Date.parse(saved.fetchedAt):Infinity;result=saved&&age>=0&&age<6*3600000?saved:await read(query);
+        var saved=transactions.get(key),age=saved?Date.now()-Date.parse(saved.fetchedAt):Infinity;result=saved&&age>=0&&age<6*3600000?Object.assign({},saved,{cached:true}):await read(query);
         if(!active(el))return;if(!Array.isArray(result.records))throw Error('실거래 자료 형식을 확인하지 못했습니다. 다시 조회해 주세요.');if(result.complete)cache(transactions,key,result);shown=10;render();
-      }catch(e){if(active(el))status.textContent=e.message;}
+      }catch(e){if(active(el)){status.textContent=e.message;if(e.code==='approval_required')out.innerHTML='<div class="sale-public-approval-v7"><p>실거래 자료의 활용신청·인증 연결을 확인해야 합니다. 조회 실패를 거래 0건으로 표시하지 않습니다.</p><a href="https://www.data.go.kr/data/'+(land?'15126466':'15126463')+'/openapi.do" target="_blank" rel="noopener noreferrer">'+(land?'토지':'상업·업무용')+' 실거래 API 안내 ↗</a></div>';}}
       finally{button.disabled=false;controls.querySelectorAll('input').forEach(function(e){e.disabled=e.dataset.wasDisabled==='true';});}
     };root.append(el);
   }
@@ -141,5 +168,5 @@
     };
     fill();slot.insertBefore(container,slot.querySelector('.unified-detail-utility-actions-v8'));
   }
-  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,comparable:comparable,transactionHtml:transactionHtml};
+  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,comparable:comparable,transactionHtml:transactionHtml};
 })(window);

@@ -43,4 +43,17 @@
 .sale-public-trades-v6 article>header strong{font-size:17px;color:#193d60}
 .sale-public-trades-v6 article>p{font-size:12px;color:#516b80}
 .sale-public-trades-v6 .sale-public-facts-v6{margin-bottom:0}
+.sale-public-land-data-v7:not(:empty){margin-top:18px;padding-top:18px;border-top:1px solid #dce7df}
+.sale-public-land-price-v7{display:grid;gap:7px;padding:17px;margin:16px 0;background:#edf7f2;border-radius:10px;color:#346b54}
+.sale-public-land-price-v7>span{font-size:11px;line-height:1.7}
+.sale-public-land-price-v7 strong{font-size:25px;letter-spacing:-.03em;color:#1e6045;overflow-wrap:anywhere}
+.sale-public-land-price-v7 strong small{font-size:13px;letter-spacing:0}
+.sale-public-regulations-v7{border-top:1px solid #e3ebe6;font-size:12px;color:#375a49}
+.sale-public-regulations-v7 summary{cursor:pointer;padding:14px 0;font-weight:650;line-height:1.8}
+.sale-public-regulations-v7 summary span{float:right;font-size:11px;font-weight:500;color:#748b7d}
+.sale-public-regulations-v7 ul{display:grid;gap:8px;padding:0;margin:0 0 14px;list-style:none}
+.sale-public-regulations-v7 li{padding:9px 12px;background:#f5f8f6;border-radius:6px;line-height:1.8;overflow-wrap:anywhere}
+.sale-public-regulations-v7 p,.sale-public-partial-v7{font-size:11px;line-height:1.8;color:#7b6850;overflow-wrap:anywhere}
+.sale-public-approval-v7{padding:13px;background:#f7f5ef;border-radius:8px;font-size:12px;line-height:1.8;color:#756244}
+.sale-public-approval-v7 a{display:inline-block;margin-top:6px;color:#325e82;font-weight:650}
 @media(max-width:600px){.sale-public-panel-v6{padding:14px}.sale-public-facts-v6{grid-template-columns:1fr}.sale-public-panel-v6>header{align-items:flex-start}.sale-public-panel-v6>header button{max-width:45%;flex-shrink:0}.sale-public-review-v6{gap:14px}.sale-public-crosscheck-v6 td,.sale-public-crosscheck-v6 th{padding:7px}}

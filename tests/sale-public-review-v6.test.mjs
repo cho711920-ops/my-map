@@ -44,6 +44,11 @@ test('building dossier escapes official and original text and keeps ad values se
   assert.doesNotMatch(html,/<script>|<img src/);assert.match(html,/광고 기재/);assert.match(html,/2001.01.01/);assert.match(html,/2002.02.02/);assert.equal(JSON.stringify(ad),before);
   assert.match(ui.buildingHtml({buildings:[]},0,ad),/확인하지 못했습니다/);
 });
+test('land public data retains source units, encodes law labels and never replaces the asking-price denominator',()=>{
+  const item={saleDetails:{landAreaM2:330.5785}},before=JSON.stringify(item);
+  const markup=ui.landPublicHtml({address:'<img>',areaM2:1243,landUse:'대',price:{available:true,wonPerM2:986600,baseYear:2026,baseMonth:1},regulations:[{key:'planning',label:'국토계획법',available:true,complete:true,items:[{label:'<script>법률</script>'}]}],source:'토지이음',fetchedAt:'2026-10-18T10:00:00Z',complete:true},item);
+  assert.doesNotMatch(markup,/<img>|<script>/);assert.match(markup,/986,600/);assert.match(markup,/원\/㎡/);assert.match(markup,/2026.01/);assert.match(markup,/광고면적을 유지/);assert.equal(JSON.stringify(item),before);
+});
 test('similar transactions use the exact legal town, optional conditions and separate whole buildings',()=>{
   const item={tradeType:'sale',saleCategory:'land',saleDetails:{landAreaM2:330,landUse:'대',zoning:'일반주거지역'}};
   const records=[{town:'괴정동',landAreaM2:330,landUse:'대',zoning:'일반주거지역',date:'2026-09-12',buildingType:'일반'},
@@ -62,7 +67,7 @@ test('service missing key is explicit and sends no request',async()=>{
 });
 test('service paginates, uses public cache, and never calls the listing database',async()=>{
   const fetchBefore=global.fetch,urls=[],objects=new Map();
-  global.fetch=async input=>{const url=new URL(input);urls.push(url);const p=Number(url.searchParams.get('pageNo'));return new Response(xml([base],2,p));};
+  global.fetch=async (input,init)=>{if(!['follow','manual'].includes(init.redirect))throw new TypeError('workerd does not support redirect:error');const url=new URL(input);urls.push(url);const p=Number(url.searchParams.get('pageNo'));return new Response(xml([base],2,p));};
   const env={DATA_GO_KR_SERVICE_KEY:'private+key',DB:{prepare(){throw Error('listing writes forbidden');}},MEDIA:{get:async k=>objects.has(k)?{json:async()=>objects.get(k)}:null,put:async(k,v)=>objects.set(k,JSON.parse(v))}};
   try{
     const first=await getSaleTransactions(env,{kind:'commercial',district:'30170',month:'202609'});
@@ -72,7 +77,7 @@ test('service paginates, uses public cache, and never calls the listing database
   }finally{global.fetch=fetchBefore;}
 });
 test('upstream permission error exposes neither key nor failed URL',async()=>{
-  const fetchBefore=global.fetch;global.fetch=async()=>new Response('<resultCode>30</resultCode><resultMsg>KEY_NOT_REGISTERED</resultMsg>');
+  const fetchBefore=global.fetch;global.fetch=async()=>new Response('<OpenAPI_ServiceResponse><cmmMsgHeader><returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg><returnReasonCode>30</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>',{status:403});
   try{const r=await getSaleTransactions({DATA_GO_KR_SERVICE_KEY:'SECRET'}, {kind:'land',district:'30170',month:'202609'});assert.equal(r.code,'approval_required');assert.doesNotMatch(JSON.stringify(r),/SECRET|serviceKey/);}
   finally{global.fetch=fetchBefore;}
 });

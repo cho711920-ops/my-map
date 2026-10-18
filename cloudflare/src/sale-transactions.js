@@ -13,6 +13,11 @@ const number = value => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 function tag(xml, name) { return text(xml.match(new RegExp('<' + name + '>([\\s\\S]*?)</' + name + '>'))?.[1]); }
+function authenticationFailure(xml) {
+  const code = tag(xml, 'resultCode') || tag(xml, 'returnReasonCode');
+  return ['20','30','31'].includes(code) || /SERVICE_ACCESS_DENIED|SERVICE_KEY_IS_NOT_REGISTERED|PERMISSION_DENIED|UNREGISTERED|인증|승인/i.test(tag(xml, 'resultMsg') + tag(xml, 'returnAuthMsg'));
+}
+function approvalError() { return Object.assign(new Error('실거래 API 인증이 거부됐습니다. 공공데이터포털의 토지·상업업무용 실거래 활용신청과 인증키를 확인해 주세요.'), {statusCode: 502, publicCode: 'approval_required'}); }
 
 export function transactionQuery(query, now = new Date()) {
   const kind = text(query.kind), district = text(query.district), month = text(query.month);
@@ -25,8 +30,8 @@ export function transactionQuery(query, now = new Date()) {
 export function parseTransactions(xml, kind, district, month) {
   const code = tag(xml, 'resultCode');
   if (!['00', '000', '0000'].includes(code)) {
-    const denied = /SERVICE|ACCESS|KEY|PERMISSION|인증|승인/i.test(tag(xml, 'resultMsg') + tag(xml, 'returnAuthMsg')) || ['20','30','31'].includes(code);
-    throw Object.assign(new Error(denied ? '실거래 자료 이용 승인이 필요합니다. 공식 실거래가 사이트에서 확인해 주세요.' : '실거래 제공기관의 응답을 확인하지 못했습니다. 잠시 후 다시 조회해 주세요.'), {statusCode: 502, publicCode: denied ? 'approval_required' : 'upstream_unavailable'});
+    if (authenticationFailure(xml)) throw approvalError();
+    throw Object.assign(new Error('실거래 제공기관의 응답을 확인하지 못했습니다. 잠시 후 다시 조회해 주세요.'), {statusCode: 502, publicCode: 'upstream_unavailable'});
   }
   const rows = parseXmlRows(xml), records = [];
   for (const row of rows) {
@@ -45,8 +50,8 @@ export function parseTransactions(xml, kind, district, month) {
       landAreaM2: number(kind === 'land' ? row.dealArea : row.plottageAr), buildingAreaM2: kind === 'land' ? null : number(row.buildingAr),
       method: text(row.dealingGbn).slice(0,40)});
   }
-  const totalCount = Number(tag(xml, 'totalCount'));
-  if (!Number.isInteger(totalCount) || totalCount < 0 || totalCount < rows.length)
+  const totalText = tag(xml, 'totalCount'), totalCount = Number(totalText);
+  if (!/^\d+$/.test(totalText) || !Number.isSafeInteger(totalCount) || totalCount < rows.length)
     throw Object.assign(new Error('실거래 자료의 총건수를 검증하지 못했습니다.'), {statusCode: 502, publicCode: 'upstream_unavailable'});
   return {records, rawCount: rows.length, totalCount, pageNo: Number(tag(xml, 'pageNo'))};
 }
@@ -70,11 +75,14 @@ async function load(env, query) {
     url.search = new URLSearchParams({serviceKey: key, LAWD_CD: district, DEAL_YMD: month, numOfRows: '1000', pageNo: String(page)});
     let response, xml;
     try {
-      response = await fetch(url, {signal: AbortSignal.timeout(10000), redirect: 'error'});
-      if (!response.ok) throw Error('upstream');
+      // workerd supports follow/manual, but rejects redirect:'error' before
+      // sending a request. Manual also keeps credentials off redirected hosts.
+      response = await fetch(url, {signal: AbortSignal.timeout(10000), redirect: 'manual'});
       xml = await response.text();
       if (xml.length > 6000000) throw Error('oversize');
     } catch (_) { throw Object.assign(new Error('실거래 제공기관에 연결하지 못했습니다. 잠시 후 다시 조회해 주세요.'), {statusCode: 502, publicCode: 'upstream_unavailable'}); }
+    if (authenticationFailure(xml)) throw approvalError();
+    if (!response.ok) throw Object.assign(new Error('실거래 제공기관의 HTTP 응답을 확인하지 못했습니다. 잠시 후 다시 조회해 주세요.'), {publicCode: 'upstream_unavailable'});
     const parsed = parseTransactions(xml, kind, district, month);
     if (parsed.pageNo !== page && (page > 1 || parsed.pageNo)) throw Object.assign(new Error('실거래 자료의 페이지를 검증하지 못했습니다.'), {publicCode: 'upstream_unavailable'});
     if (totalCount != null && parsed.totalCount !== totalCount) throw Object.assign(new Error('조회 중 실거래 자료가 변경되었습니다. 다시 조회해 주세요.'), {publicCode: 'snapshot_changed'});

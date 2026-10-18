@@ -1,12 +1,15 @@
 import {test,expect} from '@playwright/test';
+function landData(pnu){return {ok:true,action:'saleParcelFacts',pnu,address:'대전광역시 유성구 장대동 4-4',landUse:'대',areaM2:1243,price:{available:true,wonPerM2:986600,baseYear:2026,baseMonth:1},regulations:[{key:'planning',label:'국토계획법에 따른 지역·지구',available:true,complete:true,items:[{label:'제3종일반주거지역'},{label:'지구단위계획구역(검수용 가상 지정)'},{label:'중로1류(폭 20m~25m)(저촉)'}]},{key:'other',label:'다른 법령에 따른 지역·지구',available:true,complete:true,items:[{label:'교육환경보호구역(검수용 가상 지정)'}]},{key:'additional',label:'그 밖의 확인사항',available:true,complete:true,items:[]}],complete:true,source:'토지이음 공개 열람 · 검수용 가상 자료',fetchedAt:new Date().toISOString()};}
 test.beforeEach(async({page,context})=>{
   await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
   await page.addScriptTag({url:'/js/building-register-v6.js'});
   await page.evaluate(()=>{
     window.__parcelRequests=0;window.__registerRequests=0;
-    window.JSParcelExternalLinksV1.resolve=async address=>{window.__parcelRequests++;return {address:address.includes('장대동')?'대전광역시 유성구 장대동 4-4':'대전광역시 서구 괴정동 3-3',pnu:address.includes('장대동')?'3020010700100040004':'3017010800100030003',links:{eum:'https://www.eum.go.kr/web/ar/lu/luLandDet.jsp?pnu=3017010800100030003',valuemap:'https://www.valueupmap.com/properties/lands/3017010800100030003'}};};
+    window.JSParcelExternalLinksV1.resolve=async address=>{window.__parcelRequests++;const pnu=address.includes('장대동')?'3020010700100040004':'3017010800100030003';return {address:address.includes('장대동')?'대전광역시 유성구 장대동 4-4':'대전광역시 서구 괴정동 3-3',pnu,links:{eum:'https://www.eum.go.kr/web/ar/lu/luLandDet.jsp?pnu='+pnu,valuemap:'https://www.valueupmap.com/properties/lands/'+pnu}};};
   });
+  page.__landRequests=[];
+  await page.route('**/api/data?*',async route=>{const u=new URL(route.request().url());if(u.searchParams.get('action')!=='saleParcelFacts')return route.continue();page.__landRequests.push(u);return route.fulfill({json:landData(u.searchParams.get('pnu'))});});
 });
 async function open(page,isMobile,value){await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption(value);if(isMobile)await page.locator('[data-mobile-view="list"]').click();await page.locator('#list .item-building-name').click();return page.locator('#unifiedDetailDrawerV8');}
 const building={mainUse:'제2종근린생활시설',structure:'철근콘크리트구조',approvalDate:'20020304',siteArea:330,buildingArea:160,totalArea:650,floorArea:600,buildingCoverageRatio:48.48,floorAreaRatio:181.82,indoorSelfParking:4,outdoorSelfParking:2,indoorMechanicalParking:0,outdoorMechanicalParking:0,passengerElevators:1,emergencyElevators:0,lotAddress:'대전 서구 괴정동 3-3'};
@@ -41,13 +44,34 @@ test('multiple buildings require a deliberate choice and missing counts stay unk
   await panel.locator('select').selectOption('1');await expect(panel).toContainText('별동');
   expect(await panel.locator('.sale-public-facts-v6').textContent()).not.toContain('주차 총대수');
 });
-test('land links resolve the selected parcel and distinguish unconnected official data',async({page,isMobile},info)=>{
+test('land facts show official area, designations and dated public price without changing ad values',async({page,isMobile},info)=>{
   const drawer=await open(page,isMobile,'land_sale');await drawer.locator('[data-sale-section-target="publicland"]').click();
   const panel=drawer.locator('[data-sale-section="publicland"]');await expect(drawer.locator('[data-sale-section="register"]')).toHaveCount(0);
+  const before=await page.evaluate(()=>JSON.stringify(window.allItems));expect(page.__landRequests.length).toBe(0);
   await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-official-land]')).toBeVisible();
   await expect(panel.locator('a').first()).toHaveAttribute('href',/eum\.go\.kr/);
-  await panel.locator('summary').click();await expect(panel).toContainText('아직 자동 연계되지 않았습니다');
-  await panel.screenshot({path:info.outputPath('land-official-reference.png'),animations:'disabled'});
+  await expect(panel.locator('[data-public-status]')).toContainText('공적자료를 불러왔습니다');
+  await expect(panel.locator('[data-official-land-data]')).toContainText('986,600');await expect(panel.locator('[data-official-land-data]')).toContainText('2026.01');
+  await expect(panel.locator('[data-official-land-data]')).toContainText('1,243㎡');await expect(panel).toContainText('광고면적');
+  expect(page.__landRequests.length).toBe(1);expect(page.__landRequests[0].searchParams.get('pnu')).toBe('3020010700100040004');
+  expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(before);
+  await expect(panel.locator('.sale-public-land-price-v7')).toBeInViewport();
+  if(isMobile){await page.setViewportSize({width:320,height:720});expect(await drawer.evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);await panel.locator('[data-public-load]').click();await expect(panel.locator('.sale-public-land-price-v7')).toBeInViewport();}
+  await page.screenshot({path:info.outputPath('land-official-reference.png'),animations:'disabled'});
+  await panel.locator('[data-public-guidance] summary').click();await expect(panel).toContainText('광고 금액·면적·주소는 변경하지 않습니다');
+});
+test('unavailable or wrong-parcel official data stays separate from confirmed ad data',async({page,isMobile})=>{
+  let phase='partial';
+  await page.route('**/api/data?*',async route=>{const u=new URL(route.request().url());if(u.searchParams.get('action')!=='saleParcelFacts')return route.fallback();
+    const d=landData(u.searchParams.get('pnu'));if(phase==='partial')return route.fulfill({json:{...d,complete:false,price:{available:false,message:'공시지가를 확인하지 못했습니다.'}}});
+    if(phase==='wrong')return route.fulfill({json:{...d,pnu:'3011011700100560001'}});
+    return route.fulfill({json:{ok:false,code:'source_unavailable',message:'토지이음 자료를 확인하지 못했습니다.'}});
+  });
+  const drawer=await open(page,isMobile,'land_sale');await drawer.locator('[data-sale-section-target="publicland"]').click();const panel=drawer.locator('[data-sale-section="publicland"]');
+  await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-public-status]')).toContainText('일부 항목');await expect(panel).toContainText('공시지가를 확인하지 못했습니다');
+  await expect(panel.locator('.sale-public-land-price-v7')).toHaveCount(0);await expect(panel.locator('[data-official-land-data]')).toContainText('1,243㎡');
+  phase='wrong';await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-public-status]')).toContainText('요청한 필지와 응답이 다릅니다');await expect(panel.locator('[data-official-land-data]')).toBeEmpty();
+  phase='error';await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-public-status]')).toContainText('토지이음 자료를 확인하지 못했습니다');await expect(panel.locator('[data-official-land] a').first()).toBeVisible();
 });
 test('nearby references filter legal town, area, month and whole-building records without new filter requests',async({page,isMobile},info)=>{
   let calls=0;

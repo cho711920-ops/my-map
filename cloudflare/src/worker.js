@@ -9,6 +9,7 @@ import {
 } from "./security.js";
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { getSaleTransactions } from "./sale-transactions.js";
+import { getSaleParcelFacts } from "./sale-parcel-facts.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
@@ -758,6 +759,9 @@ async function handleDataApi(request, env, context) {
     }
     if (query.action === "saleTransactions") {
       return jsonp(query.callback, await getSaleTransactions(env, query), {"cache-control": "private, no-store"});
+    }
+    if (query.action === "saleParcelFacts") {
+      return jsonp(query.callback, await getSaleParcelFacts(env, query), {"cache-control": "private, no-store"});
     }
     if (query.action === "buildingRegister") {
       return jsonp(query.callback, await getBuildingRegister(env, query), {
