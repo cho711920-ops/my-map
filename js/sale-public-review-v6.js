@@ -69,13 +69,15 @@
       var buildings=data.buildings||[];
       out.innerHTML=(buildings.length>1?'<label class="sale-public-building-choice-v6">이 지번의 건물·동 선택<select aria-label="건물 제원 건물 선택"><option value="">'+buildings.length+'개 건물 중 선택</option>'+buildings.map(function(b,i){return '<option value="'+i+'">'+esc([b.buildingName,b.dongName,b.mainUse].filter(Boolean).join(' · ')||'건물 '+(i+1))+'</option>';}).join('')+'</select></label>':'')+'<div data-public-building></div>';
       var body=out.querySelector('[data-public-building]'),select=out.querySelector('select');
-      if(select){body.innerHTML='<p>한 필지에 여러 건물이 있습니다. 확인할 건물·동을 선택해 주세요.</p>';select.onchange=function(){body.innerHTML=this.value===''?'':buildingHtml(data,Number(this.value),item);};}
-      else body.innerHTML=buildingHtml(data,0,item);
+      function reference(index){if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.reference(root,item,'building',index==null?null:Object.assign({},buildings[index],{source:data.source,queriedAt:data.queriedAt,fetchedAt:data.fetchedAt,partial:!!(data.incomplete||data.partial||data.refreshDeferred)}));}
+      if(select){body.innerHTML='<p>한 필지에 여러 건물이 있습니다. 확인할 건물·동을 선택해 주세요.</p>';reference(null);select.onchange=function(){body.innerHTML=this.value===''?'':buildingHtml(data,Number(this.value),item);reference(this.value===''?null:Number(this.value));};}
+      else {body.innerHTML=buildingHtml(data,0,item);reference(buildings.length?0:null);}
     }
     var cached=parcels.get(text(item.address)),reader=global.JSBuildingRegisterReadOnlyV6;
     if(cached&&Date.now()-cached.at<600000&&reader){var data=reader.cached(parcelObject(cached.result));if(data&&data.ok)show(data);}
     button.onclick=async function(){
       button.disabled=true;status.textContent='지번과 대장 자료를 확인하고 있습니다…';
+      if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.reference(root,item,'building',null);
       try{var result=await resolve(item);if(!active(el))return;if(!global.JSBuildingRegisterReadOnlyV6)throw Error('건축물대장 기능을 준비하지 못했습니다. 새로고침 후 다시 눌러 주세요.');var data=await global.JSBuildingRegisterReadOnlyV6.load(parcelObject(result));if(!active(el))return;show(data);status.textContent='확인한 지번: '+result.address;button.textContent='다시 확인';revealResult(button,out);}
       catch(e){if(active(el))status.textContent=e.message;}
       finally{button.disabled=false;}
@@ -85,9 +87,10 @@
   function landPublicHtml(data,item){
     var p=data.price||{},d=item.saleDetails||{},amount=num(p.wonPerM2),regulations=Array.isArray(data.regulations)?data.regulations:[];
     var price=p.available&&amount>0?'<div class="sale-public-land-price-v7"><span>개별공시지가 · '+esc(p.baseYear)+'.'+esc(String(p.baseMonth).padStart(2,'0'))+' 기준</span><strong>'+esc(fmt(amount))+'<small> 원/㎡</small></strong><span>평당 환산 '+esc(fmt(amount*PY))+'원 · 매도호가와 구분</span></div>':'<p class="sale-public-partial-v7">'+esc(p.message||'공시지가가 제공되지 않았습니다. 공식 원문에서 확인해 주세요.')+'</p>';
-    var difference=num(d.landAreaM2)>0&&Math.abs(Number(d.landAreaM2)-Number(data.areaM2))>1;
+    var difference=!item.referenceAddressChangedV8&&num(d.landAreaM2)>0&&Math.abs(Number(d.landAreaM2)-Number(data.areaM2))>1;
     return '<span class="sale-public-label-v6">공적자료 · 토지이음 공개 열람</span><p class="sale-public-address-v6">'+esc(data.address)+'</p>'+rowsHtml([['공식 지목',data.landUse],['공부면적',area(data.areaM2)]])+price+
       (difference?'<p class="sale-public-partial-v7">광고면적 '+esc(area(d.landAreaM2))+'과 공부면적이 다릅니다. 일부 지분·복수 필지 여부를 확인하세요. 목록의 평당가는 광고면적을 유지합니다.</p>':'')+
+      (global.JSSaleReviewEnhancementsV8?global.JSSaleReviewEnhancementsV8.roadHtml(item,data):'')+
       regulations.map(function(group){var items=Array.isArray(group.items)?group.items:[];
         return '<details class="sale-public-regulations-v7"'+(group.key==='planning'?' open':'')+'><summary>'+esc(group.label)+'<span>'+(group.available?items.length+'개':'미조회')+'</span></summary>'+
           (items.length?'<ul>'+items.map(function(row){return '<li>'+esc(row.label)+'</li>';}).join('')+'</ul>':'<p>'+(group.available&&group.complete?'공개 열람 원문에 기재된 항목이 없습니다.':'이 항목의 자료를 확인하지 못했습니다. 원문을 확인해 주세요.')+'</p>')+
@@ -99,7 +102,7 @@
     var el=section('publicland','필지·공적자료','토지이음의 필지 기본정보·지역지구·개별공시지가를 광고와 구분해 확인합니다.','공적자료 조회'),out=el.querySelector('[data-public-content]'),status=el.querySelector('[data-public-status]'),button=el.querySelector('button'),d=item.saleDetails||{};
     out.innerHTML='<span class="sale-public-label-v6">수집 광고 기재</span>'+rowsHtml([['지목',d.landUse],['용도지역',d.zoning],['추가 지정·지역',d.secondaryZoning],['도로접면',d.roadAccess],['형상',d.parcelShape],['광고면적',area(d.landAreaM2)],['지적공부 면적 (광고 제공)',area(d.cadastralAreaM2)]])+
       '<div class="sale-public-land-data-v7" data-official-land-data></div><div class="sale-public-official-v6" data-official-land hidden></div><details class="sale-public-missing-v6" data-public-guidance><summary>조회자료 이용 안내</summary><p>필지별 공개 열람자료를 불러옵니다. 공시지가 기준시점과 조회시각은 별개이며, 광고 금액·면적·주소는 변경하지 않습니다.</p><p>행위제한·건축선·도로조건의 상세 내용과 확인도면은 토지이음 원문에서 확인하세요.</p></details>';
-    button.onclick=async function(){button.disabled=true;status.textContent='정확한 지번을 확인하고 있습니다…';out.querySelector('[data-official-land-data]').innerHTML='';try{
+    button.onclick=async function(){button.disabled=true;status.textContent='정확한 지번을 확인하고 있습니다…';out.querySelector('[data-official-land-data]').innerHTML='';if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.reference(root,item,'land',null);try{
       var result=await resolve(item);if(!active(el))return;var official=out.querySelector('[data-official-land]');official.hidden=false;
       official.innerHTML='<b>확인된 필지 · '+esc(result.address)+'</b><a href="'+esc(result.links.eum)+'" target="_blank" rel="noopener noreferrer">토지이음 이용계획·공시지가·확인도면 ↗</a><a href="'+esc(result.links.valuemap)+'" target="_blank" rel="noopener noreferrer">밸류맵 해당 필지 ↗</a>';
       status.textContent='토지이음 공개 열람자료를 불러오고 있습니다…';
@@ -107,6 +110,7 @@
       var data=saved&&age>=0&&age<6*3600000?Object.assign({},saved,{cached:true}):await read({action:'saleParcelFacts',pnu:result.pnu});
       if(!active(el))return;if(data.pnu!==result.pnu)throw Error('요청한 필지와 응답이 다릅니다. 공식 원문에서 확인해 주세요.');
       if(data.complete)cache(landFacts,result.pnu,data);
+      if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.reference(root,item,'land',data);
       var target=out.querySelector('[data-official-land-data]');target.innerHTML=landPublicHtml(data,item);status.textContent=data.complete?'공적자료를 불러왔습니다. 광고 기재값과 구분해 확인하세요.':'필지 자료를 불러왔으나 일부 항목은 확인하지 못했습니다.';button.textContent='다시 조회';revealResult(button,target);
     }catch(e){if(active(el))status.textContent=e.message;}finally{button.disabled=false;}};
     root.append(el);
@@ -161,12 +165,12 @@
     var container=document.createElement('div');container.className='sale-public-review-v6';
     container.innerHTML='<form class="sale-public-query-v6"><label>공적자료 조회용 지번<input aria-label="공적자료 조회용 지번" maxlength="160" value="'+esc(item.address)+'"></label><button type="submit">주소 적용</button><small>도로명·복수 필지·비공개 주소는 확인할 지번을 입력해 주세요. 조회용 주소만 바뀌며 저장된 매물은 변경하지 않습니다.</small><p role="status" data-public-address-status></p></form><div data-public-panels></div>';
     var panels=container.querySelector('[data-public-panels]'),form=container.querySelector('form'),view=Object.assign({},item);
-    function fill(){panels.replaceChildren();if(global.JSListingTradeV1.normalizedSaleCategory(item)==='land')mountLand(panels,view);else mountBuilding(panels,view);mountTransactions(panels,view);}
+    function fill(){panels.replaceChildren();if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.reference(panels,view,'',null);if(global.JSListingTradeV1.normalizedSaleCategory(item)==='land')mountLand(panels,view);else mountBuilding(panels,view);mountTransactions(panels,view);}
     form.onsubmit=function(event){event.preventDefault();var address=text(form.querySelector('input').value),service=global.JSParcelExternalLinksV1,status=form.querySelector('[data-public-address-status]');
       if(!service||!service.parseAddress(address)){status.textContent='정확한 동(리)과 지번 한 필지를 입력해 주세요.';return;}
-      view=Object.assign({},item,{address:address});fill();status.textContent='조회용 주소를 적용했습니다. 필요한 자료의 조회 버튼을 눌러 주세요.';
+      view=Object.assign({},item,{address:address,referenceAddressChangedV8:address.replace(/\s/g,'')!==text(item.address).replace(/\s/g,'')});fill();status.textContent='조회용 주소를 적용했습니다. 필요한 자료의 조회 버튼을 눌러 주세요.';
     };
-    fill();slot.insertBefore(container,slot.querySelector('.unified-detail-utility-actions-v8'));
+    slot.insertBefore(container,slot.querySelector('.unified-detail-utility-actions-v8'));fill();
   }
   global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,comparable:comparable,transactionHtml:transactionHtml};
 })(window);

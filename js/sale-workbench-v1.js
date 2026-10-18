@@ -168,8 +168,8 @@
     // DOM-only data for the selected original; no stale global selected listing.
     var data={propertyId:propertyId||item.propertyId,originalId:item.originalId,tradeType:item.tradeType||item.trade_type,
       saleCategory:item.saleCategory||item.sale_category,salePrice:item.salePrice??item.sale_price,source:item.source,
-      address:item.address,buildingName:item.buildingName||item.name,saleDetails:ui().saleSummary(item)};
-    return '<div class="sale-tools-v1" data-sale-item="'+esc(JSON.stringify(data))+'"><button type="button" data-sale-action="lookup">토지이음 · 밸류맵 ↗</button><button type="button" data-sale-action="worksheet">'+(ui().normalizedSaleCategory(item)==="land"?'필지·매매 검토':'수익 계산·매매 검토')+'</button></div>'+sourceHtml(item);
+      address:item.address,buildingName:item.buildingName||item.name,regDate:item.regDate,saleDetails:ui().saleSummary(item)};
+    return '<div class="sale-tools-v1" data-sale-item="'+esc(JSON.stringify(data))+'"><button type="button" data-sale-action="lookup">토지이음 · 밸류맵 ↗</button><button type="button" data-sale-action="worksheet">'+(ui().normalizedSaleCategory(item)==="land"?'필지·매매 검토':'수익 계산·매매 검토')+'</button><button type="button" data-sale-action="report">개별 검토서</button></div>'+sourceHtml(item);
   }
   function modal(title,html,extraClass) {
     var previous=document.getElementById('saleWorkbenchDialogV1');if(previous)previous.remove();
@@ -226,6 +226,7 @@
   function readCalc(dialog) {var values={};dialog.querySelectorAll('[data-calc]').forEach(function(e){values[e.dataset.calc]=e.value;});return values;}
   function renderCalc(dialog) {
     var land=dialog.dataset.saleReview==='land',r=land?calculateLand(readCalc(dialog),dialog.dataset.landArea):calculate(readCalc(dialog)),out=dialog.querySelector('[data-calc-result]');
+    if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.renderScenarios(dialog);
     if(r.error){out.textContent=r.error;return r;}
     var rows=land?[['총 매입비용',price(r.total)],['가정 실투입',price(r.equity)],['월 대출이자',fmt(r.interest)+'만원'],['부대비용 포함 평당',r.costPerPy==null?'광고면적 필요':fmt(r.costPerPy)+'만원']]:[['가정 실투입',price(r.equity)],['월 현금흐름',fmt(r.monthly)+'만원'],['연 현금흐름',fmt(r.annual)+'만원'],['가정 연 수익률',fmt(r.yield,2)+'%']];
     out.innerHTML='<span class="sale-result-grid-v2">'+rows.map(function(f){return '<span><small>'+esc(f[0])+'</small><strong>'+esc(f[1])+'</strong></span>';}).join('')+'</span>';
@@ -237,6 +238,7 @@
     var dialog=modal('매매 검토 · '+(item.buildingName||item.name||item.address||''),'<p>'+esc(item.address)+' · 수집 매매가 '+esc(price(item.salePrice??item.sale_price))+'</p>'+calcInputs(item)+'<output data-calc-result aria-live="polite"></output><p class="sale-provenance">가정 계산: 월수입 × (1−공실률) − 월이자 − 운영비. 연 현금흐름 ÷ (매매가−보증금−대출+취득비용). 원금상환·소득세·양도세는 미반영입니다. 입력값은 수집된 원본이나 메인 카드 수익률을 바꾸지 않습니다.</p><details><summary>복수 필지 일괄 매매 관리</summary><p>전체 매매에 포함된 필지를 직접 확인해 입력하세요. 필지별 매물 자동 합치기·지도 좌표 변경은 하지 않습니다.</p><label>지번 | 면적(㎡) — 한 줄에 한 필지<textarea data-parcels rows="4" placeholder="서구 도마동 49-38 | 167\n서구 도마동 49-39 | 100"></textarea></label><button type="button" data-parcel-total>면적 합계 확인</button><output data-parcel-result aria-live="polite"></output></details><label>내 검토 메모<textarea data-work-note rows="3" maxlength="2000"></textarea></label><div class="sale-tools-v1"><button type="button" data-work-save disabled>내 계정에 검토 저장</button></div><p data-work-status role="status">저장된 검토 불러오는 중…</p>');
     var land=ui().normalizedSaleCategory(item)==='land';
     dialog.dataset.saleReview=land?'land':'building';dialog.dataset.landArea=clean(ui().saleSummary(item).landAreaM2);
+    if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.mountScenarios(dialog);
     dialog.querySelector('h2').textContent=(land?'토지 매입비용·필지 검토':'건물 수익·매입 검토')+' · '+(item.buildingName||item.name||item.address||'');
     if(land)dialog.querySelector('[data-calc-result] + .sale-provenance').textContent='총 매입비용 = 매매가 + 직접 입력한 취득 부대비용. 평당비용은 광고 토지면적 기준입니다. 월 대출이자는 이자만 계산하며 세금 자동 산정·원금상환·보유비용은 포함하지 않습니다. 복수 필지 입력은 아래에서 별도로 검토합니다.';
     dialog.querySelector('.sale-calculator-grid').insertAdjacentHTML('beforebegin','<div class="sale-review-toolbar-v2"><button type="button" data-apply-collected>광고 금액 다시 적용</button><span>'+(land?'매매가만 적용 · 대출·부대비용 가정 유지':'매매가·보증금·월수입만 적용 · 대출·비용 가정 유지')+'</span></div>'+ui().saleCardFactsHtml(item));
@@ -310,8 +312,8 @@
     dialog.querySelector('[data-compare-differences]').onchange=function(event){dialog.querySelectorAll('[data-compare-same]').forEach(function(row){row.hidden=event.target.checked;});};
     dialog.querySelectorAll('[data-compare-open]').forEach(function(b){b.onclick=function(){var item=items[Number(b.dataset.compareOpen)];dialog.close();if(global.JSUnifiedListingsV8)global.JSUnifiedListingsV8.open(item.propertyId);};});
   }
-  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,sortLabel:sortLabel,sortValue:sortValue,compareSortValues:compareSortValues,syncComparisonTray:syncComparisonTray,calculate:calculate,calculateLand:calculateLand,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml};
+  global.JSSaleWorkbenchV1={price:price,unitPrice:unitPrice,matches:matches,filterValues:filterValues,filterIds:filterIds,reset:reset,clearChip:clearChip,chips:chips,syncMode:syncMode,sortLabel:sortLabel,sortValue:sortValue,compareSortValues:compareSortValues,syncComparisonTray:syncComparisonTray,calculate:calculate,calculateLand:calculateLand,parseParcels:parseParcels,parcelTotals:parcelTotals,detailTools:detailTools,lookup:lookup,openTopLookup:openTopLookup,worksheet:worksheet,compare:compare,comparisonHtml:comparisonHtml,modal:modal};
   mountFilters();
   global.addEventListener('js-listing-trade-mode-change',syncMode);
-  document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-action]');if(!b)return;var parent=b.closest('[data-sale-item]');if(!parent)return;event.stopPropagation();try{var item=JSON.parse(parent.dataset.saleItem);if(b.dataset.saleAction==='lookup')lookup(item);else worksheet(item);}catch(e){global.alert(e.message);}});
+  document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-action]');if(!b)return;var parent=b.closest('[data-sale-item]');if(!parent)return;event.stopPropagation();try{var item=JSON.parse(parent.dataset.saleItem);if(b.dataset.saleAction==='lookup')lookup(item);else if(b.dataset.saleAction==='report'&&global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.report(item,parent);else if(b.dataset.saleAction==='worksheet')worksheet(item);}catch(e){global.alert(e.message);}});
 })(window);

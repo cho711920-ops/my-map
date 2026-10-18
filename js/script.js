@@ -1962,6 +1962,21 @@ function listIndexAtOffsetV2(offset) {
   return Math.min(low, Math.max(0, visibleListItems.length - 1));
 }
 
+// Density changes invalidate all estimates. Keep the first visible card at the
+// same viewport position, including lists whose earlier rows are virtualized.
+function reflowSaleListDensityV8(apply) {
+  if (!window.JSListingTradeV1 || window.JSListingTradeV1.getMode() === 'lease') { apply(); return; }
+  var list = document.getElementById('list'), scroller = getListingScrollContainerV2();
+  if (!list || !scroller) { apply(); return; }
+  var top = scroller.getBoundingClientRect().top;
+  var anchor = Array.from(list.querySelectorAll('.item[data-list-index-v1]')).find(function(card) { return card.getBoundingClientRect().bottom > top; });
+  var before = anchor ? anchor.getBoundingClientRect().top : null;
+  apply();
+  listVirtualItemHeightsV1 = Object.create(null); listVirtualEstimatedHeightV2 = 0;
+  updateListVirtualSpaceV2(list);
+  if (anchor && anchor.isConnected) scroller.scrollTop += anchor.getBoundingClientRect().top - before;
+}
+
 function renderPreviousListChunkV1() {
   if (listRenderStart <= 0) return;
   var start = Math.max(0, listRenderStart - getListRenderChunkSize());
@@ -4785,6 +4800,9 @@ function addListItem(item, appendTarget) {
             '<div class="land-card-meta-v4"><span>' + escapeHtml(item.source || "출처 미제공") + '</span>' +
             (regDateLabel ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>' : '') + sourceLabel + '</div>' +
             '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
+    }
+    if (saleCardV1 && window.JSSaleReviewEnhancementsV8) {
+        div.insertAdjacentHTML('beforeend', window.JSSaleReviewEnhancementsV8.compactHtml(item));
     }
     var cardWarmupTimerV6107 = 0;
     function cancelCardWarmupV6107() {

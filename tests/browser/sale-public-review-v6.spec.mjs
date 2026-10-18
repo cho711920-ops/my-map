@@ -81,7 +81,7 @@ test('nearby references filter legal town, area, month and whole-building record
     const row={date:'2026-09-10',district:'서구',town:'괴정동',lot:'3**',amount:40000,landAreaM2:300,buildingAreaM2:600,buildingType:'일반',buildingUse:'근린생활시설',zoning:'일반주거지역',method:'중개거래'};
     return route.fulfill({json:{ok:true,month:u.searchParams.get('month'),records:[row,{...row,town:'탄방동',amount:90000},{...row,buildingType:'집합',amount:10000},{...row,landAreaM2:20,amount:1000}],complete:true,source:'국토교통부 실거래가',fetchedAt:new Date().toISOString()}});
   });
-  const drawer=await open(page,isMobile,'building_sale');await drawer.locator('[data-sale-section-target="transactions"]').click();
+  const drawer=await open(page,isMobile,'building_sale');await drawer.locator('[data-sale-group-sections*="transactions"]').click();
   const panel=drawer.locator('[data-sale-section="transactions"]');expect(calls).toBe(0);
   await panel.locator('[type="month"]').fill('2026-09');await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-public-status]')).toContainText('조건 일치 2건');
   await panel.locator('[data-trade-filter="size"]').check();await expect(panel.locator('[data-public-status]')).toContainText('조건 일치 1건');expect(calls).toBe(1);
@@ -97,7 +97,7 @@ test('approval and empty results are distinct, and a closed/replaced panel ignor
     if(fail)return route.fulfill({json:{ok:false,code:'approval_required',message:'실거래 자료 이용 승인이 필요합니다.'}});
     await new Promise(r=>release=r);return route.fulfill({json:{ok:true,month:u.searchParams.get('month'),records:[],complete:true,source:'국토부',fetchedAt:new Date().toISOString()}});
   });
-  const drawer=await open(page,isMobile,'land_sale');await drawer.locator('[data-sale-section-target="transactions"]').click();
+  const drawer=await open(page,isMobile,'land_sale');await drawer.locator('[data-sale-group-sections*="transactions"]').click();
   const panel=drawer.locator('[data-sale-section="transactions"]');await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-public-status]')).toContainText('승인이 필요');await expect(panel).not.toContainText('공개 거래가 없습니다');
   fail=false;await panel.locator('[data-public-load]').click();await expect.poll(()=>typeof release).toBe('function');
   await drawer.locator('[aria-label="공적자료 조회용 지번"]').fill('서구 괴정동 3-3');await drawer.locator('.sale-public-query-v6 button').click();release();

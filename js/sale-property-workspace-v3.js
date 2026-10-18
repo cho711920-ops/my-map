@@ -47,13 +47,16 @@
     var gallery=root.querySelector('.unified-detail-gallery-v8'),slot=root.querySelector('.sale-photo-slot-v3');
     if(gallery&&slot){slot.append(gallery);slot.hidden=!gallery.querySelector('.unified-detail-hero-v8')&&!(Number(item.photoCount)>0);}
     var description=root.querySelector('.listing-sale-description-v1');if(description)description.dataset.saleSection='description';
-    var labels=[['summary','매매요약'],['land','토지정보'],['building','건물정보'],['register','건물 제원'],['publicland','필지·공적자료'],['transactions','실거래'],['areas','면적'],['income','금액·수익'],['description','광고원문'],['photos','사진']];
+    var tools=root.querySelector('.sale-tools-v1');if(tools)tools.dataset.saleSection='workbench';
+    var labels=[['요약',['summary']],['토지·건물',['land','building','areas','review']],['공적자료',['register','publicland','transactions']],['매입검토',['workbench','income']],['사진·원문',['photos','description']]];
     var nav=document.createElement('nav');nav.className='sale-dossier-nav-v3';nav.setAttribute('aria-label','매매 상세 항목 이동');
     labels.forEach(function(entry){
-      var target=root.querySelector('[data-sale-section="'+entry[0]+'"]');if(!target||target.hidden)return;
-      var button=document.createElement('button');button.type='button';button.dataset.saleSectionTarget=entry[0];button.textContent=entry[1];
+      var keys=entry[1].filter(function(key){var el=root.querySelector('[data-sale-section="'+key+'"]');return el&&!el.hidden;});if(!keys.length)return;
+      var key=keys[0],target=root.querySelector('[data-sale-section="'+key+'"]');
+      var button=document.createElement('button');button.type='button';button.dataset.saleSectionTarget=key;button.dataset.saleGroupSections=keys.join(',');button.textContent=entry[0];
       button.onclick=function(){
-        target=root.querySelector('[data-sale-section="'+entry[0]+'"]');if(!target)return;
+        target=root.querySelector('[data-sale-section="'+key+'"]');if(!target)return;
+        if(keys.includes('description')){var description=root.querySelector('[data-sale-section="description"]');if(description)description.open=true;}
         if(target.tagName==='DETAILS')target.open=true;
         root.scrollTo({top:Math.max(0,root.scrollTop+target.getBoundingClientRect().top-root.getBoundingClientRect().top-nav.offsetHeight-10),behavior:global.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
       };
@@ -62,7 +65,7 @@
     root.prepend(nav);
     function syncNav(){
       var top=root.getBoundingClientRect().top+nav.offsetHeight+16, best=null, bestTop=-Infinity;
-      nav.querySelectorAll('button').forEach(function(button){var target=root.querySelector('[data-sale-section="'+button.dataset.saleSectionTarget+'"]'),y=target.getBoundingClientRect().top;if(y<=top&&y>bestTop){best=button;bestTop=y;}});
+      nav.querySelectorAll('button').forEach(function(button){button.dataset.saleGroupSections.split(',').forEach(function(key){var target=root.querySelector('[data-sale-section="'+key+'"]');if(!target||target.hidden)return;var y=target.getBoundingClientRect().top;if(y<=top&&y>bestTop){best=button;bestTop=y;}});});
       best=best||nav.querySelector('button');
       nav.querySelectorAll('button').forEach(function(button){if(button===best)button.setAttribute('aria-current','location');else button.removeAttribute('aria-current');});
     }
