@@ -39,6 +39,7 @@
   function mountDetail(root,item){
     if(!root)return;
     if(!global.JSListingTradeV1||!global.JSListingTradeV1.isSale(item)){
+      if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountDetail(root,item);
       if(root._saleDossierBoundV3)root.removeEventListener('scroll',root._saleDossierBoundV3);
       if(root._saleDossierFrameV3)global.cancelAnimationFrame(root._saleDossierFrameV3);
       root._saleDossierBoundV3=null;root._saleDossierSyncV3=null;root._saleDossierFrameV3=0;return;
@@ -74,6 +75,7 @@
       if(root._saleDossierFrameV3)return;root._saleDossierFrameV3=global.requestAnimationFrame(function(){root._saleDossierFrameV3=0;if(root.querySelector('.sale-dossier-nav-v3'))root._saleDossierSyncV3();});
     };root.addEventListener('scroll',root._saleDossierBoundV3,{passive:true});}
     syncNav();
+    if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountDetail(root,item);
   }
   if(controls)controls.addEventListener('click',function(event){var button=event.target.closest('[data-sale-map-view]');if(button)choose(button.dataset.saleMapView);});
   global.addEventListener('js-listing-trade-mode-change',function(){if(!isSale())restore();update();});

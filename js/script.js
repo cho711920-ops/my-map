@@ -4804,6 +4804,7 @@ function addListItem(item, appendTarget) {
     if (saleCardV1 && window.JSSaleReviewEnhancementsV8) {
         div.insertAdjacentHTML('beforeend', window.JSSaleReviewEnhancementsV8.compactHtml(item));
     }
+    if (saleCardV1 && window.JSSaleDossierV9) window.JSSaleDossierV9.refreshUnits(div);
     var cardWarmupTimerV6107 = 0;
     function cancelCardWarmupV6107() {
         if (!cardWarmupTimerV6107)

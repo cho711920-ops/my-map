@@ -9,6 +9,7 @@ import {
 import { carryConfirmedVisitMemo } from "./visit-status.js";
 import { listingTradeTypesCanMerge, normalizeListingTradeType } from "./listing-trade.js";
 import { saveSaleWorksheet } from "./sale-worksheet.js";
+import { getSaleAskingHistory } from "./sale-asking-history.js";
 import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
@@ -32,7 +33,7 @@ const UNIFIED_FIELDS = [
 
 const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
-  "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings",
+  "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings", "saleAskingHistory",
   "workQueueStatus", "operationsDashboard",
   "transactionCandidates", "listingChanges", "listingOriginals", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
 ]);
@@ -1276,6 +1277,7 @@ export async function handleD1GetAction(env, user, query) {
   if (action === "unifiedListings") return unifiedListings(env);
   if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
+  if (action === "saleAskingHistory") return getSaleAskingHistory(env, query);
   if (action === "unifiedListingContacts") return listingContacts(env, clean(query.propertyId).slice(0, 100));
   if (action === "tellContacts") return tellContacts(env, query.query);
   if (action === "geocodeCache") return geocodeCache(env);

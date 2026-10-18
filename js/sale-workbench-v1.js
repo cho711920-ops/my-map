@@ -177,7 +177,7 @@
     dialog.innerHTML='<header><h2>'+esc(title)+'</h2><button type="button" data-sale-close aria-label="닫기">닫기 ×</button></header><div class="sale-workbench-body">'+html+'</div>';
     document.body.append(dialog);dialog.querySelector('[data-sale-close]').onclick=function(){dialog.close();};
     dialog.addEventListener('close',function(){if(active&&active.dialog===dialog)active=null;dialog.remove();});
-    dialog.showModal();return dialog;
+    dialog.showModal();if(global.JSSaleDossierV9)global.JSSaleDossierV9.modalUnits(dialog);return dialog;
   }
   function lookup(item,options) {
     item=item||{};options=options||{};
@@ -250,6 +250,7 @@
     dialog.querySelectorAll('[data-calc]').forEach(function(e){e.addEventListener('input',function(){edited(e.dataset.calc);renderCalc(dialog);});});renderCalc(dialog);
     dialog.querySelector('[data-work-note]').addEventListener('input',function(){edited('note');});
     dialog.querySelector('[data-parcels]').addEventListener('input',function(){edited('parcels');});
+    if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountParcelTable(dialog,item);
     dialog.querySelector('[data-apply-collected]').onclick=function(){
       var defaults=calcDefaults(item);
       ['price','deposit','income'].forEach(function(k){var input=dialog.querySelector('[data-calc="'+k+'"]');if(input){input.value=defaults[k]==null?'':defaults[k];edited(k);}});
@@ -273,7 +274,7 @@
       context.version=r.version||0;var saved=r.data||{};
       context.savedAssumptions=Object.assign({},saved.assumptions||{});
       if(saved.assumptions)dialog.querySelectorAll('[data-calc]').forEach(function(e){if(!context.dirty[e.dataset.calc]&&Object.hasOwn(saved.assumptions,e.dataset.calc))e.value=saved.assumptions[e.dataset.calc];});
-      if(!context.dirty.parcels)dialog.querySelector('[data-parcels]').value=(saved.parcels||[]).map(function(p){return p.address+' | '+p.areaM2;}).join('\n');
+      if(!context.dirty.parcels){dialog.querySelector('[data-parcels]').value=(saved.parcels||[]).map(function(p){return p.address+' | '+p.areaM2;}).join('\n');if(dialog._saleParcelTableV9)dialog._saleParcelTableV9.load();}
       if(!context.dirty.note)dialog.querySelector('[data-work-note]').value=saved.note||'';renderCalc(dialog);
       context.ready=true;dialog.querySelector('[data-work-save]').disabled=false;
       dialog.querySelector('[data-work-status]').textContent=r.found?'저장된 내 검토: '+(saved.savedAt||r.updatedAt)+' (현재 수집값과 다를 수 있습니다.)':land?'아직 저장된 검토가 없습니다. 부대비용·대출·이자율의 초기 0은 계산 가정입니다.':'아직 저장된 검토가 없습니다. 초기 0은 계산 가정이며 미제공 수입은 직접 확인하세요.';

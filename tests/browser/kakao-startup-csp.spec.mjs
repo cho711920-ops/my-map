@@ -125,7 +125,7 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   await expect(page.locator('.sale-dossier-nav-v3')).toBeVisible();
   await expect(page.locator('#unifiedDetailBodyV8')).not.toContainText('원본 최신 조회에 실패');
   await page.screenshot({path:testInfo.outputPath('sale-dossier-native-preview.png'),animations:'disabled'});
-  await page.locator('#unifiedDetailDrawerV8 > header button').click();
+  await page.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await page.locator('#listingTradeModeSelectV1').selectOption('lease');
   await expect(page.locator('#saleMapViewsV3')).toBeHidden();
   expect(await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}))).toEqual(before);

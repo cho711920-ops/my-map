@@ -339,7 +339,7 @@
     function area(label, value, fullLabel) {
       var parsed = nonnegative(value);
       var formatted = parsed > 0 ? (parsed / 3.305785).toLocaleString("ko-KR", { maximumFractionDigits: 1 }) + '평' : '미확인';
-      return '<span title="' + escapeHtml(fullLabel) + '">' + escapeHtml(label) + ' <b>' + escapeHtml(formatted) + '</b></span>';
+      return '<span title="' + escapeHtml(fullLabel) + '">' + escapeHtml(label) + ' <b>' + (global.JSSaleDossierV9 ? global.JSSaleDossierV9.areaHtml(parsed,true) : escapeHtml(formatted)) + '</b></span>';
     }
     var html = land ? area('토지', detail.landAreaM2, '토지면적') : buildingSaleAreas(item).map(function(entry) {
       return area(entry.label, entry.value, entry.fullLabel);
@@ -389,8 +389,8 @@
     var price = nonnegative(displayPrice(item)), unit = price > 0 && area > 0 ? price / (area / 3.305785) : null;
     function number(value) { return value.toLocaleString('ko-KR', {maximumFractionDigits: 1}); }
     return '<div class="land-card-metrics-v4" aria-label="광고 면적과 단가">' +
-      '<div><span>토지면적</span><strong>' + (area > 0 ? number(area / 3.305785) + '<small>평</small>' : '면적 미제공') + '</strong>' +
-      (area > 0 ? '<small>' + number(area) + '㎡ · 광고면적</small>' : '') + '</div>' +
+      '<div><span>토지면적</span><strong>' + (area > 0 ? global.JSSaleDossierV9 ? global.JSSaleDossierV9.areaHtml(area) : number(area / 3.305785) + '<small>평</small>' : '면적 미제공') + '</strong>' +
+      (area > 0 ? '<small>' + (global.JSSaleDossierV9 ? '광고면적' : number(area) + '㎡ · 광고면적') + '</small>' : '') + '</div>' +
       '<div title="매매가 ÷ 광고 토지면적(평). 지적공부 면적과 다를 수 있습니다."><span>평당 매매가</span><strong>' +
       (unit == null ? '산정 불가' : number(unit) + '<small>만원</small>') + '</strong><small>광고면적 기준</small></div></div>';
   }
