@@ -31,4 +31,11 @@
 - 증빙 outputs/sale-card-separation-v13-before.log, *-final.log, *-status-final.log, *-node.log,
   *-dry-run.log와 browser-results 캡처 (커밋 제외).
 
-배포 증빙은 실제 배포·공개 파일 확인 후 기록.
+배포 및 공개 확인
+- 제품 커밋249ebf7, codex/daangn-numeric-status 원격 반영.
+- 2026-10-19 11:14 KST Worker45f2774c-e031-484c-a1be-625357c94aeb 배포, 트래픽100% 확인.
+- 11:15 KST js-map.com / www.js-map.com 각86개 JS/CSS/SW/공개 주차장JSON, 총172개 SHA256 최종 빌드 일치.
+- 신규 CSS를 포함한 각 도메인의 버전 진입점, 기존 매매 API 비로그인401 유지 확인.
+- 공개 파일·인증 경계 검증이며 사용자 운영계정 매물/사진/저장자료를 수정하지 않음.
+- 증빙 outputs/sale-card-separation-v13-live-verification.json, *-deploy.log, *-deployments.log (커밋 제외).
+- 이미 열린 사이트는 새로고침1회로 적용. 재수집 불필요.
