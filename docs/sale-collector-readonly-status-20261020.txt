@@ -1,0 +1,31 @@
+매매 자동수집 읽기 전용 상태 확인
+2026-10-20 02:41 KST 재확인
+
+결론: 전체 정상 완료로 확인되지 않는다.
+
+실행 보고
+- 매매 실행: 2026-10-19 15:01 KST 시작.
+- 마지막 서버 보고: 2026-10-19 22:57 KST.
+- active=1/finishedAt=null이 남아 있지만 이 보고는 오래됐다.
+  이 값만으로 지금 실제 수집이 계속 진행 중이라고 말하지 않는다.
+- 네이버: 유성구 partial, 서구/대덕구/중구/동구 failed.
+- 당근: 유성구/서구/대덕구/중구 failed, 동구 retrying.
+- 유성구 네이버도 처리건수만으로 전체수집 검증 완료라고 보지 않는다.
+
+최근 서버 세션
+- 네이버 서구 최근 세션: 10/19 21:02 시작, 23:11 abandoned 종료.
+- 당근 최근 시작 세션: 10/19 22:07 시작, 10/20 00:07 abandoned 종료.
+- 당근 동구 앞 세션도 10/20 00:58 abandoned 종료 기록.
+- 오류 유형 stale-session: heartbeat 120분 초과로 자동 종료.
+- 02:41 재조회에서도 매매 전체 보고 완료 없음, 최근 두 세션 abandoned 동일.
+- 현재 확장 화면·프로필 내부 실행 상태까지 직접 조작해 검증한 것은 아니다.
+  실행 중인 전용 Edge는 건드리지 않았다.
+
+확인 범위
+- D1 collector_automation_runs 및 collector_sessions SELECT 조회만 수행.
+- 마지막 재조회 rows_written=0. 원본 매물/광고/상태를 바꾸지 않았다.
+- 수집 중단·재시작·강제 재수집·원격 수집 프로필 재실행·오류 수정은 하지 않았다.
+- 수집 종료와 실제 계약완료를 혼동하거나 누락 매물을 일괄 완료 처리하지 않았다.
+- 증거 outputs/wide-detail-v26-collector-runs.json,
+  wide-detail-v26-collector-sessions.json, wide-detail-v26-collector-recheck-results.json.
+- 세션ID/연락처/인증정보/원본 상세는 사용자 브리핑에 포함하지 않는다.

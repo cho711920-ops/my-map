@@ -1,0 +1,87 @@
+/* Wide gallery dossier, shared by lease/building/land. Map/list remain untouched. */
+html #unifiedDetailDrawerV8[data-wide-detail-v26] {
+  display:flex; flex-direction:column; width:var(--wide-detail-width-v26,540px) !important;
+  min-width:0 !important; max-width:calc(100vw - 24px); border:1px solid #d6dfe8;
+  height:max-content; max-height:var(--wide-detail-max-height-v26,calc(100dvh - 96px)); bottom:auto !important;
+  border-radius:12px; background:#fff; box-shadow:0 8px 28px #20324726;
+  color:#203247; font-family:var(--js-app-font,"Segoe UI","Malgun Gothic",sans-serif);
+  transform:translateY(12px); transform-origin:center;
+  transition:transform .22s cubic-bezier(.2,.75,.25,1),opacity .2s ease,visibility 0s linear .22s;
+}
+html #unifiedDetailDrawerV8[data-wide-detail-v26].open { transform:translateY(0); transition-delay:0s; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] > header { flex:0 0 auto; padding:12px 18px; min-height:64px; background:#fff; border-bottom:1px solid #e2e7ed; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] > header strong { color:#203247; font-size:18px; line-height:1.4; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] > header > button { flex:0 0 40px; width:40px; height:40px; border-radius:50%; background:#f5f7f9; color:#30465c; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] > .unified-detail-body-v8 {
+  flex:1 1 auto; min-height:0; height:auto; overflow:auto; overscroll-behavior:contain;
+  background:white; padding:16px; scrollbar-width:thin;
+}
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-layout-v26 { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr); gap:20px; align-items:start; }
+#unifiedDetailDrawerV8[data-wide-detail-v26][data-wide-layout-v26="stack"] .wide-detail-layout-v26 { grid-template-columns:minmax(0,1fr); gap:16px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-primary-v26 { min-width:0; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-media-v26 { min-width:0; margin:0; border-radius:6px; overflow:hidden; align-self:start; }
+/* Natural image height: no short cover crop and no maximum photo height. */
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8:not(:has(.unified-gallery-empty-v8)),
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8 {
+  height:auto !important; min-height:0 !important; max-height:none !important; background:#f1f3f5 !important;
+}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-hero-v8 { display:block; width:100%; height:auto !important; background:#f1f3f5 !important; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-hero-v8 img {
+  display:block; width:100% !important; height:auto !important; min-height:0 !important;
+  max-height:none !important; object-fit:contain !important; object-position:center;
+}
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-gallery-empty-v8 { min-height:150px; color:#657487; font-size:13px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-photo-nav-v8 { width:42px; height:42px; border-radius:50%; font-size:30px; background:#14223399; border-color:#ffffffb3; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-photo-count-v8 { border-radius:5px; font-size:12px; padding:5px 9px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-source-address-v827 { gap:10px; margin-bottom:14px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-source-address-v827 > strong { font-size:19px; color:#203247; line-height:1.5; overflow-wrap:anywhere; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-source-row-v827 { font-size:12px; gap:10px; flex-wrap:wrap; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-source-link-v827 { border-radius:5px; border-color:#d6dfe8; font-size:11px; font-weight:600; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-prices-v26 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:15px 12px; border:1px solid #e0e6ed; border-radius:6px; font-variant-numeric:tabular-nums; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-prices-v26 > div { display:flex; flex-direction:column; gap:4px; min-width:0; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-prices-v26 > div + div { border-left:1px solid #e0e6ed; padding-left:12px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-prices-v26 span { color:#657487; font-size:12px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-prices-v26 strong { color:#18538a; font-size:23px; font-weight:750; line-height:1.5; overflow-wrap:anywhere; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-facts-v26 { margin:14px 0 0; border:1px solid #e0e6ed; border-radius:6px; overflow:hidden; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-facts-v26 > div { display:grid; grid-template-columns:1fr 1.2fr; gap:10px; padding:11px 12px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-facts-v26 > div + div { border-top:1px solid #e5eaf0; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-facts-v26 dt { color:#657487; font-size:12px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-facts-v26 dd { margin:0; color:#30465c; font-size:14px; font-weight:650; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-primary-v26 .sale-overview-v2 { padding:14px; margin:0; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-primary-v26 .sale-overview-price-v2 > strong { font-size:26px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-primary-v26 .building-sale-area-info-v1 { margin-top:12px; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 {
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:16px 0 0; padding-top:14px; border-top:1px solid #e2e7ed;
+}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 button {
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  width:auto; min-width:0 !important; height:48px; min-height:44px; padding:8px;
+  border:1px solid #d8e1ea; border-radius:6px; background:#fff; color:#24405a;
+  font-family:inherit; font-size:14px; font-weight:650;
+}
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 svg { width:22px; height:22px; flex:0 0 22px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 button:hover { background:#f4f8fc; border-color:#9eb8cf; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] > .unified-detail-utility-actions-v8 { flex:0 0 auto; margin:0; padding:10px 16px 12px; border-top:1px solid #e2e7ed; background:#fff; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] button:focus-visible { outline:2px solid #285a80; outline-offset:2px; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-summary-v8 { border:0; margin:0 !important; padding:18px 0 0 !important; background:white; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-management-v26 { margin-top:18px; padding-top:12px; border-top:1px solid #e2e7ed; color:#647487; font-size:12px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-management-v26 > summary { cursor:pointer; padding:6px 0; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-actions-v8 button { color:#475e73; border-color:#d8e1ea; background:white; border-radius:5px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .sale-dossier-nav-v3 { margin:-16px -16px 16px; }
+#unifiedDetailDrawerV8[data-wide-detail-v26] .sale-fixed-summary-v9 { grid-template-columns:1fr auto; }
+#unifiedDetailDrawerV8[data-wide-detail-v26][data-wide-layout-v26="wide"] .sale-fixed-summary-v9 > strong,
+#unifiedDetailDrawerV8[data-wide-detail-v26][data-wide-layout-v26="wide"] .sale-fixed-summary-v9 > span:not(.sale-unit-switch-v9) { display:none !important; }
+#unifiedDetailDrawerV8[data-wide-detail-v26][data-wide-layout-v26="wide"] .sale-fixed-summary-v9 > .sale-unit-switch-v9 { grid-row:auto; }
+@media(max-width:600px) {
+  html #unifiedDetailDrawerV8[data-wide-detail-v26] > .unified-detail-body-v8 { padding:12px; }
+  #unifiedDetailDrawerV8[data-wide-detail-v26] .sale-dossier-nav-v3 { margin:-12px -12px 12px; }
+  #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 { gap:6px; }
+  html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 button { font-size:12px; gap:5px; }
+}
+html.js-phone-app-v2 #unifiedDetailDrawerV8[data-wide-detail-v26] { width:100% !important; max-width:none; max-height:100dvh; bottom:0 !important; border-radius:0; }
+html.js-phone-app-v2 #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+html.js-phone-app-v2 #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-utility-actions-v8 > button:first-child { display:flex !important; }
+.unified-favorite-detail-host-v7 #unifiedDetailDrawerV8[data-wide-detail-v26] { width:100% !important; max-width:none; border:0; border-radius:0; box-shadow:none; }
+@media(prefers-reduced-motion:reduce) {
+  html #unifiedDetailDrawerV8[data-wide-detail-v26] { transform:none; transition:none; }
+}

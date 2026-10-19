@@ -25,15 +25,15 @@ for(const market of ['building_sale','land_sale'])test(market+' shows the full p
   await page.locator('#list .item-building-name').first().click();
   const drawer=page.locator('#unifiedDetailDrawerV8'),stage=drawer.locator('.unified-detail-gallery-v8'),image=stage.locator('img'),counter=stage.locator('.unified-detail-photo-count-v8');
   await drawer.locator('[data-sale-section-target="photos"]').click();
-  let height;
   for(let i=0;i<dimensions.length;i++){
     await expect(counter).toHaveText((i+1)+' / 3');
     await expect.poll(()=>image.evaluate(e=>e.complete&&e.naturalWidth)).toBe(dimensions[i][0]);
     await expect(stage.locator('.photo-transition-ghost-v1')).toHaveCount(0);
     const geometry=await image.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect(),g=e.closest('.unified-detail-gallery-v8').getBoundingClientRect();const scale=Math.min(r.width/e.naturalWidth,r.height/e.naturalHeight);return {fit:s.objectFit,w:e.naturalWidth*scale,h:e.naturalHeight*scale,boxW:r.width,boxH:r.height,stageH:g.height,overflow:document.documentElement.scrollWidth>innerWidth};});
     expect(geometry.fit).toBe('contain');expect(geometry.w).toBeLessThanOrEqual(geometry.boxW+.1);expect(geometry.h).toBeLessThanOrEqual(geometry.boxH+.1);expect(geometry.overflow).toBe(false);
-    if(height==null)height=geometry.stageH;else expect(geometry.stageH).toBeCloseTo(height,1);
-    expect(height).toBeGreaterThanOrEqual(200);expect(height).toBeLessThanOrEqual(460);
+    // v26: full-width natural ratio, without the old fixed/capped photo stage.
+    expect(geometry.boxH).toBeCloseTo(geometry.boxW*dimensions[i][1]/dimensions[i][0],1);
+    expect(geometry.stageH).toBeCloseTo(geometry.boxH,1);
     await stage.screenshot({path:info.outputPath(market+'-'+i+'-full-photo.png')});
     if(i<dimensions.length-1){await stage.locator('.next').click();await expect(stage.locator('.photo-transition-ghost-v1')).toHaveCSS('background-size','contain');}
   }

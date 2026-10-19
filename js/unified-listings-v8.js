@@ -1323,6 +1323,7 @@
     drawer = document.createElement("aside");
     drawer.id = "unifiedDetailDrawerV8";
     drawer.className = "unified-detail-drawer-v8";
+    if (global.JSWideDetailV26) drawer.setAttribute('data-wide-detail-v26', '');
     drawer.setAttribute("role", "dialog");
     drawer.setAttribute("aria-labelledby", "unifiedDetailTitleV8");
     drawer.setAttribute("aria-hidden", "true");
@@ -1363,6 +1364,7 @@
   }
 
   function positionDrawer(drawer) {
+    if (global.JSWideDetailV26 && global.JSWideDetailV26.position(drawer)) return;
     var sidebar = document.getElementById("sidebar");
     var toolbar = document.querySelector(".filters");
     drawer.style.right = (sidebar ? Math.round(sidebar.getBoundingClientRect().width) : 620) + "px";
@@ -1527,6 +1529,7 @@
     }
     if (global.JSSalePropertyWorkspaceV3) global.JSSalePropertyWorkspaceV3.mountDetail(body, selected);
     if (global.JSSaleReviewFlowV12) global.JSSaleReviewFlowV12.mountNavigation(drawer);
+    if (global.JSWideDetailV26) global.JSWideDetailV26.mount(body, selected);
     showDetailDrawerV827(drawer);
   }
 

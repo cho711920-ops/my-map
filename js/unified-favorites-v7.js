@@ -763,6 +763,7 @@
     }
     drawer.classList.add("unified-favorite-embedded-detail-v7");
     host.appendChild(drawer);
+    if (global.JSWideDetailV26) global.JSWideDetailV26.position(drawer);
     if (favoriteDetailObserverV7) favoriteDetailObserverV7.disconnect();
     if (typeof global.MutationObserver === "function") {
       favoriteDetailObserverV7 = new global.MutationObserver(function () {
