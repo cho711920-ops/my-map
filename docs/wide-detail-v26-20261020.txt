@@ -43,4 +43,14 @@
 - 증거 outputs/wide-detail-v26-*.log, outputs/wide-detail-v26-verified-images/.
 
 수집 완료 확인은 docs/sale-collector-readonly-status-20261020.txt 참조.
-운영 배포: 검수 후 결과 추가 예정.
+운영 배포 완료
+- 제품 b0d5457 / codex/sale-design-v24 원격 저장.
+- Worker 81c98a6b-83a9-4d3e-9715-6f26711e42ce.
+- public cache c3b0246f5f61d2d250f550f7.
+- 직전 운영 v25 Worker12164fba임을 확인한 후 배포했다.
+- 2026-10-20 02:44 KST, js-map.com/www.js-map.com 각 자산89개
+  HTTP200 및 로컬 빌드 SHA256 일치. 새 CSS/JS 연결, 보류 v23 미연결 확인.
+- HTML200/no-store/Kakao CSP 유지, 비로그인 실거래401 정상.
+- 증거 outputs/wide-detail-v26-live-verification.json.
+- 정상 로그인 운영 매물을 저장하는 검사는 하지 않았다.
+- 처음1회 새로고침 필요. 재수집은 디자인 적용에 필요 없다.
