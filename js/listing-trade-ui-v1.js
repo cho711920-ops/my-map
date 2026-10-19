@@ -144,6 +144,9 @@
   function setMode(mode, options) {
     if (!MODES[mode]) mode = "lease";
     var previousMode = currentMode;
+    // Dismiss the previous market's detail/photo overlay before replacing its list.
+    // This also invalidates pending detail responses without restoring stale focus.
+    if (previousMode !== mode && global.JSUnifiedListingsV8 && typeof global.JSUnifiedListingsV8.closeForOverlay === "function") global.JSUnifiedListingsV8.closeForOverlay();
     currentMode = mode;
     if (previousMode !== currentMode && (!options || options.resetFilters !== false)) {
       ["typeFilter", "minDeposit", "maxDeposit", "minRent", "maxRent", "minPremium", "maxPremium", "minArea", "maxArea", "minFloor", "maxFloor", "floorQuickFilter", "brokerageFeeFilter"]
