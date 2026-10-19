@@ -36,7 +36,13 @@
 - 운영 DB/원본 광고/수집기/상가임대 화면/찜/연락처/메모 변경·강제 재수집 없음.
 - 증빙: outputs/sale-print-v22-{node-final,browser-final,build,dry-run}.log 및 browser-results.
 
-배포: 최종 배포와 공개 파일 검증 후 아래 기록.
+배포
+- 제품0b52458, codex/daangn-numeric-status 원격 반영.
+- 2026-10-19 19:18:21 KST Worker8a333ec8-001f-41c8-b4b1-de301f95e512, 트래픽100%.
+- 19:19:19 KST 두 도메인 js-map.com/www.js-map.com 각87개, 총174개 공개 자산 SHA256 빌드 일치.
+- 인쇄·기존 사진/수정/지도 진입점과 카드 모드 확인. 기존 매매 API 비로그인401 유지.
+- 증빙 outputs/sale-print-v22-{deploy.log,deployments.json,live-verification.json}.
+- 웹 새로고침 후 기존 인쇄 창을 닫고 다시 인쇄하면 반영. 강제 재수집 불필요.
 
 후속 검토 맥락
 - 직전 사용자의 실거래 거리·비교 적합성·지도 표시, 토지 지목/sizeInfo 면적 누락 질문은
