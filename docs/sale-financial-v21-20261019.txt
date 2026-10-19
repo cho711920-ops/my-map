@@ -50,4 +50,11 @@
 - 진행 중 수집 중단/재시작/강제 수집, 운영 DB 쓰기·원본 광고/사진/찜/연락처/메모 변경 없음.
 - 증빙: outputs/sale-financial-v21-{node-final,browser-final,analysis,review-final,build,dry-run}.log
 
-배포: 최종 배포·공개 파일 검증 후 아래에 기록.
+배포
+- 제품37b6c68, codex/daangn-numeric-status 원격 반영.
+- 2026-10-19 19:03:42 KST Worker a39867ad-4bdd-4758-8d34-06e43630c3fa, 트래픽100%.
+- 19:04:25 KST js-map.com / www.js-map.com 각87개, 총174개 공개 파일 SHA256 빌드 일치.
+  기존 인쇄·사진·수정·지도 항목과 카드 모드 진입점 정상. 매매 API 비로그인401 유지.
+- 오늘 연결한 MOLIT_TRADE_SERVICE_KEY 비밀 설정의 존재 유지 확인. 키 값은 읽거나 출력하지 않음.
+- 증빙: outputs/sale-financial-v21-{deploy.log,deployments.json,live-verification.json}.
+- 웹 새로고침1회로 새 목록/상세 캐시 사용. 재수집 불필요.
