@@ -2,6 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { businessHistoryDiff } from "../cloudflare/src/d1-api.js";
 
+test('sale history exposes only changed management facts without raw advertiser descriptions or internal override markers',()=>{
+  const before={sale_price:99500,sale_details_json:JSON.stringify({monthlyIncome:350,loanAmount:null,descriptionText:'PRIVATE ORIGINAL',manualSaleFieldsV1:[]})};
+  const after={sale_price:98000,sale_details_json:JSON.stringify({monthlyIncome:370,loanAmount:0,descriptionText:'OTHER PRIVATE ORIGINAL',manualSaleFieldsV1:['monthlyIncome','loanAmount']})};
+  const diff=businessHistoryDiff(before,after);assert.deepEqual(diff,[{field:'sale_price',before:99500,after:98000},{field:'saleDetails.monthlyIncome',before:350,after:370},{field:'saleDetails.loanAmount',before:null,after:0}]);assert.doesNotMatch(JSON.stringify(diff),/PRIVATE|manualSaleFields/);
+  assert.deepEqual(businessHistoryDiff({sale_details_json:'{}'},{sale_details_json:'{"loanAmount":0}'}),[{field:'saleDetails.loanAmount',before:null,after:0}]);
+});
+
 test("business history hides internal fields and maps edit aliases", () => {
   const changes = businessHistoryDiff({
     id: "internal-id",

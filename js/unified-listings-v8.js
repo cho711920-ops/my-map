@@ -997,7 +997,15 @@
         item.displayValuePresence[key] = known;
       } else if (original[key] != null && original[key] !== "") item[key] = original[key];
     });
-    if (original.saleSummary && manual.indexOf("sale_details_json") < 0) item.saleDetails = original.saleSummary;
+    if (original.saleSummary) {
+      var manualSale = master.saleDetails && master.saleDetails.manualSaleFieldsV1;
+      if (manual.indexOf("sale_details_json") < 0) item.saleDetails = original.saleSummary;
+      else if (Array.isArray(manualSale)) {
+        item.saleDetails = Object.assign({}, original.saleSummary);
+        manualSale.forEach(function(key) { if (Object.prototype.hasOwnProperty.call(master.saleDetails,key)) item.saleDetails[key]=master.saleDetails[key]; });
+        item.saleDetails.manualSaleFieldsV1 = manualSale.slice();
+      }
+    }
     item.name = manual.indexOf("title") >= 0 || manual.indexOf("building_name") >= 0
       ? master.name : original.buildingName || master.name;
     item.source = original.source || master.source;

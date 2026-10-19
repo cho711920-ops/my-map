@@ -1,5 +1,6 @@
 import { withSourceOriginalMetadata, loadManualRepresentativeFields } from "./source-original-display.js";
 import { normalizeNaverPropertyType } from "./naver-property-types.js";
+import { mergeManualSaleDetails } from "./sale-property-edit.js";
 
 const clean = value => String(value ?? "").trim();
 const json = value => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
@@ -82,6 +83,10 @@ export async function refreshListingRepresentativesFromActiveSources(env, listin
       // An omitted legacy field is not evidence to erase a known condition.
       // Explicit null, however, belongs to this surviving ad, not the old one.
       for (const field of masterFields) {
+        if (field === "sale_details_json" && protectedFields.has(field) && Array.isArray(json(master.sale_details_json).manualSaleFieldsV1)) {
+          desired[field] = JSON.stringify(mergeManualSaleDetails(json(desired[field]),json(master[field])));
+          continue;
+        }
         if (protectedFields.has(field) || snapshotKeys[field] &&
             !Object.prototype.hasOwnProperty.call(snapshot, snapshotKeys[field])) desired[field] = master[field];
       }

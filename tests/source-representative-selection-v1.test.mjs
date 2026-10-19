@@ -119,6 +119,15 @@ test('surviving sale metadata updates the existing master columns used by CSV/de
   assert.deepEqual(JSON.parse(after.sale_details_json), { landAreaM2: 200, grossAreaM2: 500 });
 });
 
+test('manual sale fields survive collection while other source sale information remains fresh',async t=>{
+  const f=fixture(t),saved={scope:'whole_building',monthlyIncome:370,loanAmount:null,landAreaM2:160,manualSaleFieldsV1:['monthlyIncome','loanAmount']};
+  f.master('M',{trade_type:'sale',sale_category:'building',sale_price:98000,sale_details_json:JSON.stringify(saved)});
+  f.source('new','M','당근',1,{tradeType:'sale',salePrice:99500,saleCategory:'building',saleDetails:{monthlyIncome:350,loanAmount:20000,landAreaM2:170,grossAreaM2:500,descriptionText:'새 원본 설명'}},{trade_type:'sale'});
+  f.db.prepare("INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES('M','updateProperty',?,?)").run(JSON.stringify({sale_price:99500,sale_details_json:'{}'}),JSON.stringify({sale_price:98000,sale_details_json:JSON.stringify(saved)}));
+  const original=f.db.prepare('SELECT * FROM listing_sources').all();await f.run(['M']);const after=f.row('M'),d=JSON.parse(after.sale_details_json);
+  assert.equal(after.sale_price,98000);assert.equal(d.monthlyIncome,370);assert.equal(d.loanAmount,null);assert.equal(d.landAreaM2,170);assert.equal(d.grossAreaM2,500);assert.equal(d.descriptionText,'새 원본 설명');assert.deepEqual(f.db.prepare('SELECT * FROM listing_sources').all(),original);
+});
+
 test('same-label Naver code keeps the old favorite key while real type changes may refresh', async t => {
   const f = fixture(t); f.master('M', { listing_type: 'D02' });
   f.source('new','M','네이버',1,{ type: '상가점포' });

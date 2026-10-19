@@ -48,7 +48,11 @@
       title: "매물명", building_name: "건물명", room: "호실", deposit: "보증금",
       monthly_rent: "월세", maintenance_fee: "관리비", premium: "권리금", area_m2: "면적",
       landlord_phone: "임대인 연락처", tenant_phone: "임차인 연락처",
-      operating_memo: "메모", contacts_json: "연락처 목록", status: "상태"
+      operating_memo: "메모", contacts_json: "연락처 목록", status: "상태", sale_price: "매매가(만원)", sale_details_json: "매매 세부정보",
+      "saleDetails.landAreaM2":"대지·토지면적(㎡)", "saleDetails.grossAreaM2":"연면적(㎡)", "saleDetails.exclusiveAreaM2":"전용면적(㎡)", "saleDetails.buildingAreaM2":"건축면적(㎡)",
+      "saleDetails.totalDeposit":"임대보증금(만원)", "saleDetails.monthlyIncome":"월 임대수입(만원)", "saleDetails.monthlyNetIncome":"광고 월수익·이자차감(만원)", "saleDetails.statedMonthlyIncome":"광고 월수익·기준미확인(만원)",
+      "saleDetails.loanAmount":"융자금(만원)", "saleDetails.investmentAmount":"실투자금(만원)", "saleDetails.advertisedYield":"광고 연 수익률(%)", "saleDetails.buildingUse":"건물 용도",
+      "saleDetails.landUse":"지목", "saleDetails.zoning":"용도지역", "saleDetails.roadAccess":"도로접면", "saleDetails.parcelShape":"형상"
     })[text(value)] || text(value);
   }
   function shortValue(value) {

@@ -27,6 +27,16 @@ function fixture() {
 }
 const admin = {email: "admin@test.invalid", role: "admin"};
 
+test('sale price and detail restoration is explicit, atomic and preserves original advertisements',async()=>{
+  const {env,db}=fixture();db.exec('ALTER TABLE listings ADD COLUMN sale_price REAL;ALTER TABLE listings ADD COLUMN sale_details_json TEXT;');
+  const before=JSON.stringify({monthlyIncome:350}),after=JSON.stringify({monthlyIncome:370,manualSaleFieldsV1:['monthlyIncome']});
+  db.prepare('UPDATE listings SET sale_price=98000,sale_details_json=?').run(after);
+  db.prepare("INSERT INTO listing_history VALUES(2,'P1','updateProperty','a',?,?)").run(JSON.stringify({sale_price:99500,sale_details_json:before}),JSON.stringify({sale_price:98000,sale_details_json:after}));
+  const preview=await previewListingHistoryRestore(env,admin,{historyId:2});assert.deepEqual(preview.fields.map(f=>f.field),['sale_price','sale_details_json']);
+  await restoreSelectedListingHistory(env,admin,{historyId:2,expectedVersion:7,fields:['sale_price','sale_details_json'],expectedValues:{sale_price:98000,sale_details_json:after}});
+  const row=db.prepare('SELECT * FROM listings').get();assert.equal(row.sale_price,99500);assert.equal(row.sale_details_json,before);assert.equal(db.prepare('SELECT raw_json FROM listing_sources').get().raw_json,'원본 검수 자료');db.close();
+});
+
 test("history preview offers only changed business fields and marks later edits", async () => {
   const {env, db} = fixture();
   const preview = await previewListingHistoryRestore(env, admin, {historyId: 1});

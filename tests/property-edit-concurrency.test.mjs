@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { canonicalListingRoom } from "../cloudflare/src/floor.js";
 import { listingTradeTypesCanMerge } from "../cloudflare/src/listing-trade.js";
 import { reconcileMemoContacts } from "../cloudflare/src/d1-api.js";
+import { salePropertyEditPatch } from "../cloudflare/src/sale-property-edit.js";
 
 const source = readFileSync(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
 function functionSource(name) {
@@ -52,7 +53,7 @@ function fixture() {
       } catch (error) { db.exec("ROLLBACK"); throw error; }
     }
   } };
-  const context = vm.createContext({ crypto, canonicalListingRoom, listingTradeTypesCanMerge, reconcileMemoContacts });
+  const context = vm.createContext({ crypto, canonicalListingRoom, listingTradeTypesCanMerge, reconcileMemoContacts, salePropertyEditPatch });
   for (const name of ["clean", "number", "parseJson", "propertyIdFrom", "propertyEditFieldsV1",
     "propertyEditConflictV1", "propertyEditPatchV1", "propertyEditRecoveryStatementsV1",
     "linkedSourceHistorySnapshot", "latestCompletedSourceSnapshot", "completionSourceRecoveryPlan", "updateProperty"]) {
@@ -120,6 +121,39 @@ for (const incrementVersion of [true, false]) {
     assert.equal(h.history().length, 0); h.db.close();
   });
 }
+
+function saleFixture() {
+  const h=fixture();h.db.exec("ALTER TABLE listings ADD COLUMN sale_price REAL;ALTER TABLE listings ADD COLUMN sale_category TEXT;ALTER TABLE listings ADD COLUMN sale_details_json TEXT;");
+  h.db.prepare("UPDATE listings SET trade_type='sale',sale_price=99500,sale_category='building',sale_details_json=?").run(JSON.stringify({scope:'whole_building',landAreaM2:160,totalDeposit:30000,monthlyIncome:350,descriptionText:'원본 설명'}));
+  h.body.updated={};h.body.saleEdit={saleCategory:'building',original:{salePrice:99500,saleDetails:{landAreaM2:160,totalDeposit:30000,monthlyIncome:350}},patch:{salePrice:98000,monthlyIncome:370,loanAmount:25000}};
+  h.body.saleEdit.original.saleDetails.loanAmount=null;return h;
+}
+
+test('sale edits persist separate sale columns with history, without touching lease fields, ads, media or contacts',async()=>{
+  const h=saleFixture(),before=h.row(),sources=h.db.prepare('SELECT * FROM listing_sources').all(),media=h.db.prepare('SELECT * FROM listing_media').all();
+  const result=await h.save(h.body),after=h.row(),details=JSON.parse(after.sale_details_json);
+  assert.equal(after.sale_price,98000);assert.equal(details.monthlyIncome,370);assert.equal(details.loanAmount,25000);assert.equal(details.totalDeposit,30000);assert.equal(details.descriptionText,'원본 설명');assert.deepEqual(details.manualSaleFieldsV1,['monthlyIncome','loanAmount']);
+  for(const key of ['id','property_id','deposit','monthly_rent','maintenance_fee','premium','area_m2','room','contacts_json','trade_type','sale_category'])assert.equal(after[key],before[key],key);
+  assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),sources);assert.deepEqual(h.db.prepare('SELECT * FROM listing_media').all(),media);
+  assert.equal(result.updated.salePrice,98000);assert.equal(h.history().length,1);assert.equal(JSON.parse(h.history()[0].after_json).sale_price,98000);h.db.close();
+});
+test('sale field conflicts preserve the draft, while unrelated simultaneous updates merge',async()=>{
+  const h=saleFixture();h.db.prepare("UPDATE listings SET sale_details_json=json_set(sale_details_json,'$.grossAreaM2',500)").run();await h.save(h.body);assert.equal(JSON.parse(h.row().sale_details_json).grossAreaM2,500);h.db.close();
+  const c=saleFixture();c.db.prepare("UPDATE listings SET sale_price=100000").run();await assert.rejects(c.save(c.body),{statusCode:409});assert.equal(c.row().sale_price,100000);assert.equal(c.history().length,0);c.db.close();
+});
+test('a concurrent sale change between read and write rejects the complete mutation',async()=>{
+  const h=saleFixture();h.race(db=>db.exec('UPDATE listings SET sale_price=100000'));await assert.rejects(h.save(h.body),{statusCode:409});assert.equal(JSON.parse(h.row().sale_details_json).monthlyIncome,350);assert.equal(h.history().length,0);h.db.close();
+});
+test('sale mutations reject lease fields, land-only violations and invalid amounts',async()=>{
+  for(const patch of [{salePrice:0},{salePrice:-5},{salePrice:true},{landAreaM2:0},{grossAreaM2:'bad'},{descriptionText:'replace original'}]){
+    const h=saleFixture();h.body.saleEdit.patch=patch;await assert.rejects(h.save(h.body),{statusCode:400});assert.equal(h.history().length,0);h.db.close();
+  }
+  const h=saleFixture();h.body.updated={rent:999};await assert.rejects(h.save(h.body),{statusCode:400});h.db.close();
+  const land=saleFixture();land.db.exec("UPDATE listings SET sale_category='land'");land.body.saleEdit.saleCategory='land';land.body.saleEdit.patch={monthlyIncome:100};await assert.rejects(land.save(land.body),{statusCode:400});land.db.close();
+});
+test('explicit clearing stays null rather than zero and is protected as one manual sale field',async()=>{
+  const h=saleFixture();h.body.saleEdit.patch={loanAmount:null,monthlyIncome:0};await h.save(h.body);const d=JSON.parse(h.row().sale_details_json);assert.equal(d.loanAmount,null);assert.equal(d.monthlyIncome,0);assert.deepEqual(d.manualSaleFieldsV1,['loanAmount','monthlyIncome']);h.db.close();
+});
 
 function completedWithDetachedSource(h) {
   h.db.exec("UPDATE listings SET status='계약완료'; UPDATE listing_sources SET listing_id=NULL; UPDATE listing_media SET listing_id=NULL; UPDATE listing_contacts SET listing_id=NULL;");

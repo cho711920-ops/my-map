@@ -16,6 +16,7 @@ import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display
 import { withDaangnLandUse } from "./land-use-display.js";
 import { withSaleAreaDisplay } from "./sale-area-display.js";
 import { withSaleFinancialDisplay } from "./sale-financial-display.js";
+import { salePropertyEditPatch } from "./sale-property-edit.js";
 import { newListingPeriod } from "./new-listing-period.js";
 import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
 import { sourceSnapshotParentSql, sourceSnapshotProofSql, hashSourceSnapshotRows, sourceSnapshotKeysFromReadRows } from "./source-snapshot-proof.js";
@@ -1078,9 +1079,10 @@ async function transactionCandidates(env) {
     completedOnlyTotal: count + manualCompleted, advertisementPolicyVersion: SOURCE_CANDIDATE_POLICY_VERSION, source: "D1" };
 }
 
+const SALE_HISTORY_FIELDS = ["landAreaM2","grossAreaM2","exclusiveAreaM2","buildingAreaM2","totalDeposit","monthlyIncome","monthlyNetIncome","statedMonthlyIncome","loanAmount","investmentAmount","advertisedYield","buildingUse","landUse","zoning","roadAccess","parcelShape"];
 const BUSINESS_HISTORY_FIELDS = [
   "title", "room", "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2",
-  "landlord_phone", "tenant_phone", "operating_memo", "contacts_json", "status"
+  "landlord_phone", "tenant_phone", "operating_memo", "contacts_json", "status", "sale_price", ...SALE_HISTORY_FIELDS.map(k=>"saleDetails."+k)
 ];
 
 const BUSINESS_HISTORY_ALIASES = {
@@ -1105,11 +1107,11 @@ const BUSINESS_HISTORY_ALIASES = {
   contacts: "contacts_json",
   contacts_json: "contacts_json",
   state: "status",
-  status: "status"
+  status: "status", salePrice: "sale_price", sale_price: "sale_price"
 };
 
 const BUSINESS_HISTORY_NUMBERS = new Set([
-  "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2"
+  "deposit", "monthly_rent", "maintenance_fee", "premium", "area_m2", "sale_price"
 ]);
 
 function historyPhone(value) {
@@ -1151,6 +1153,10 @@ export function businessHistorySnapshot(value) {
     if (field === "title" && Object.prototype.hasOwnProperty.call(result, field) && key === "building_name") continue;
     result[field] = normalized;
   }
+  if (Object.prototype.hasOwnProperty.call(input,"sale_details_json")) {
+    const details = parseJson(input.sale_details_json,{});
+    for (const field of SALE_HISTORY_FIELDS) result["saleDetails."+field] = details[field] ?? null;
+  }
   return result;
 }
 
@@ -1163,7 +1169,7 @@ export function businessHistoryDiff(beforeValue, afterValue, includeCreatedField
     const hasAfter = Object.prototype.hasOwnProperty.call(after, field);
     if (!hasAfter || (!hasBefore && !includeCreatedFields)) continue;
     if (!hasBefore && includeCreatedFields) {
-      if (after[field] === "" || after[field] === 0 || (Array.isArray(after[field]) && !after[field].length)) continue;
+      if (after[field] == null || after[field] === "" || after[field] === 0 || (Array.isArray(after[field]) && !after[field].length)) continue;
       changes.push({ field, before: "", after: after[field] });
       continue;
     }
@@ -1415,6 +1421,14 @@ async function updateProperty(env, user, body) {
   const before = await env.DB.prepare("SELECT * FROM listings WHERE property_id = ?1").bind(propertyId).first();
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
   const { value, changes } = propertyEditPatchV1(before, body);
+  const saleEdit = body.saleEdit != null;
+  if (before.trade_type === "sale" && changes.some(c => ["deposit","rent","fee","premium","area"].includes(c.key))) {
+    throw Object.assign(new Error("매매 매물은 매매정보 수정창에서 금액·면적을 수정해 주세요."), { statusCode: 400 });
+  }
+  if (saleEdit) {
+    const sale = salePropertyEditPatch(before, body.saleEdit);
+    changes.push(...sale.changes); Object.assign(value, sale.value);
+  }
   const memoChanged = changes.some((entry) => entry.key === "memo");
   const reconciledContacts = memoChanged
     ? reconcileMemoContacts(before.main_source, parseJson(before.contacts_json, []), value.memo)
@@ -1429,6 +1443,7 @@ async function updateProperty(env, user, body) {
     landlord_phone: before.landlord_phone, tenant_phone: before.tenant_phone,
     operating_memo: before.operating_memo, contacts_json: before.contacts_json, status: before.status
   };
+  if (saleEdit) Object.assign(beforeHistory, { sale_price: before.sale_price, sale_category: before.sale_category, sale_details_json: before.sale_details_json });
   const afterHistory = {
     ...beforeHistory,
     ...Object.fromEntries(changes.map((entry) => [entry.column, entry.value])),
@@ -1466,7 +1481,7 @@ async function updateProperty(env, user, body) {
   // Some collection paths intentionally don't increment version. Compare the
   // values used for this decision as well, inside the same atomic UPDATE.
   for (const column of [...new Set(propertyEditFieldsV1().map((entry) => entry[1])
-    .concat(["contacts_json", "main_source", "building_name", "trade_type"]))]) {
+    .concat(["contacts_json", "main_source", "building_name", "trade_type"], saleEdit ? ["sale_price","sale_category","sale_details_json"] : []))]) {
     checks.push(`${column} IS ${bind(before[column])}`);
   }
   const afterJson = JSON.stringify(afterHistory);

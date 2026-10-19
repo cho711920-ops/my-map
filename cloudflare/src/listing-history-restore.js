@@ -1,7 +1,7 @@
 // Restore only explicitly selected business fields. Source evidence and quality holds
 // are deliberately outside this allowlist and are never modified here.
 const FIELDS = ["title", "building_name", "room", "deposit", "monthly_rent", "maintenance_fee",
-  "premium", "area_m2", "landlord_phone", "tenant_phone", "operating_memo", "contacts_json", "status"];
+  "premium", "area_m2", "landlord_phone", "tenant_phone", "operating_memo", "contacts_json", "status", "sale_price", "sale_details_json"];
 const ACTIONS = new Set(["updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"]);
 const clean = (value) => String(value ?? "").trim();
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);

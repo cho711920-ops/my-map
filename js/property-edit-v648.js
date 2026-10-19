@@ -121,6 +121,12 @@ function ensurePropertyEditModalV630() {
 
 
 function openPropertyEditModalV630(encodedKey) {
+  var saleItem = getPropertyByEncodedKeyV630(encodedKey);
+  if (saleItem && window.JSListingTradeV1 && window.JSListingTradeV1.isSale(saleItem)) {
+    if (window.JSSalePropertyEditV1) return window.JSSalePropertyEditV1.open(saleItem);
+    alert("매매 수정창을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.");
+    return;
+  }
   ensurePropertyEditModalV630();
 
   var item = getPropertyByEncodedKeyV630(encodedKey);
@@ -175,7 +181,8 @@ function openPropertyEditModalV630(encodedKey) {
 
   setTimeout(function() {
     var first = document.getElementById("peNameV630");
-    if (first) first.focus();
+    // Do not steal focus from an input the user has already started editing.
+    if (first && propertyEditTargetV630 === item && modal.classList.contains("open") && !modal.contains(document.activeElement)) first.focus();
   }, 50);
 }
 

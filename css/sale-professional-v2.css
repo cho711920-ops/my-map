@@ -140,6 +140,23 @@ html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-condition
   html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 > .sale-card-facts-v2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
+.sale-property-edit-v1 { width: min(720px,calc(100vw - 24px)); }
+.sale-property-edit-v1 .sale-edit-identity-v1 { margin: 0 0 8px; color: #375d78; font-size: 13px; }
+.sale-edit-notice-v1 { background: #f1f6fa; color: #667c90; border-radius: 7px; padding: 10px; font-size: 11px; line-height: 1.7; }
+.sale-edit-grid-v1 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 16px; }
+.sale-edit-grid-v1 label { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 12px; color: #36536b; }
+.sale-edit-grid-v1 :is(input,select,textarea) { box-sizing: border-box; width: 100%; min-width: 0; padding: 9px; border: 1px solid #d7e1e9; border-radius: 6px; background: white; color: #24435c; font: inherit; font-size: 13px; }
+.sale-edit-grid-v1 small { color: #778b9c; font-size: 10px; line-height: 1.5; }
+.sale-edit-wide-v1 { grid-column: 1 / -1; }
+.sale-edit-actions-v1 { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.sale-edit-actions-v1 > span { flex: 1; }
+.sale-edit-actions-v1 button { border: 1px solid #d2dee8; background: #f6f9fc; color: #315b79; border-radius: 6px; padding: 9px 14px; font: inherit; font-size: 12px; cursor: pointer; }
+.sale-edit-actions-v1 [data-sale-edit-save] { background: #1768d3; color: white; border-color: #1768d3; }
+.sale-edit-actions-v1 [data-sale-edit-delete] { color: #b44242; border-color: #eed8d8; background: #fffafa; }
+.sale-property-edit-v1 [data-sale-edit-status] { color: #526e86; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
+.sale-property-edit-v1 [data-sale-edit-conflict] label { display: block; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; margin: 7px 0; }
+@media(max-width:480px) { .sale-edit-grid-v1 { gap: 10px; } .sale-edit-actions-v1 button { padding: 9px 10px; } }
+
 /* One sale card: each advertised area and financial basis appears once. */
 #list .listing-sale-card-v1 .sale-list-metrics-v16 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0; min-width: 0; max-width: 100%; }
 #list .listing-sale-card-v1 .sale-list-metrics-v16 > div { display: grid; grid-template-columns: auto minmax(0,auto); align-items: baseline; gap: 1px 5px; min-width: 0; }
