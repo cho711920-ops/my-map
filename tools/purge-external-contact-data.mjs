@@ -125,7 +125,7 @@ if (apply) {
     "api-cache/unified-listings-v3-source-search.json",
     "api-cache/unified-listings-v4-actual-gongsil-photos.json",
     "api-cache/unified-listings-v13-absence-date.json", "api-cache/unified-listings-v14-source-proof.json",
-    "api-cache/unified-listings-v15-sale-conditions-source-proof.json"];
+    "api-cache/unified-listings-v16-sale-financial-display.json"];
   for (const key of cacheKeys) {
     run(["exec", "wrangler", "r2", "object", "delete", `js-map-media/${key}`, "--remote", "--force"]);
   }

@@ -15,6 +15,7 @@ import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./l
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
 import { withDaangnLandUse } from "./land-use-display.js";
 import { withSaleAreaDisplay } from "./sale-area-display.js";
+import { withSaleFinancialDisplay } from "./sale-financial-display.js";
 import { newListingPeriod } from "./new-listing-period.js";
 import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
 import { sourceSnapshotParentSql, sourceSnapshotProofSql, hashSourceSnapshotRows, sourceSnapshotKeysFromReadRows } from "./source-snapshot-proof.js";
@@ -366,7 +367,7 @@ export function compactSaleSummary(original) {
   const detail = original.saleDetails;
   const summary = {};
   if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
-  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield"]) {
+  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield"]) {
     if (key === "buildingAreaM2" && (detail.scope === "land" || original.saleCategory === "land")) continue;
     const value = detail[key];
     if (!["number", "string"].includes(typeof value) || clean(value) === "") continue;
@@ -467,6 +468,8 @@ async function unifiedListings(env, listingIds = null) {
         'description', CASE WHEN trim(COALESCE(json_extract(list_snapshot_json, '$.saleDetails.descriptionText'), ''), ${SQL_TRIM_SPACES})=''
           AND json_type(raw_json, '$.content')='text' THEN substr(json_extract(raw_json, '$.content'), 1, 12000) ELSE '' END
       ) END AS daangn_sale_extent_json,
+      CASE WHEN source='네이버' AND json_extract(list_snapshot_json, '$.tradeType')='sale' THEN
+        COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.priceInfo'), json_extract(raw_json, '$.saleRaw.priceInfo')) END AS naver_sale_price_info_json,
       CASE WHEN source='당근' THEN json_extract(raw_json, '$.landType') END AS daangn_land_type`,
     "listing_sources",
     `${publicSourceWhereSql("listing_sources")} AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
@@ -510,7 +513,8 @@ async function unifiedListings(env, listingIds = null) {
       daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
     });
     const original = withSourceOriginalMetadata(
-      withDaangnLandUse(withSaleAreaDisplay(displayed, { source: row.source, daangn }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
+      withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn }),
+        { source: row.source, daangn, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
     if (original.sourceUnavailable) unavailableCount += 1;
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {
@@ -630,7 +634,8 @@ async function unifiedDetail(env, propertyId) {
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
     const provider = saleExtentProvider(raw, row.source);
     return { ...withSourceOriginalMetadata(withDaangnLandUse(
-      withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), provider), raw.landType, row.source
+      withSaleFinancialDisplay(withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), provider),
+        { ...provider, source: row.source, naverPriceInfo: row.source === "네이버" ? raw.saleRaw?.detailInfo?.priceInfo || raw.saleRaw?.priceInfo : undefined }), raw.landType, row.source
     ), row, manualRooms, manualFields), propertyId: clean(parent.property_id || parent.id) };
   });
   if (!originals.length) {

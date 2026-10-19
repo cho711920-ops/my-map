@@ -73,7 +73,8 @@ test('after-interest and unspecified monthly profit never become gross monthly r
   assert.match(ui.saleYieldBadge(r),/광고 연 6.53%/);
   assert.match(ui.saleDetailsHtml(r),/이자 차감 표기/);
   assert.equal(compactSaleSummary(r).advertisedYield,6.53);
-  assert.ok(!('monthlyNetIncome' in compactSaleSummary(r)));
+  assert.equal(compactSaleSummary(r).monthlyNetIncome,202);
+  assert.ok(!('monthlyIncome' in compactSaleSummary(r)));
   const d = saleDescriptionFields('월수익: 202만원\n보증금: 1000만원');
   assert.equal(d.statedMonthlyIncome,202); assert.equal(d.monthlyIncome,null);
   const gross = daangnSaleFields({ ...article, content: content + '\n월 임대수입: 300만원' });

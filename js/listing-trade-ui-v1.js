@@ -209,7 +209,7 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "advertisedYield", "landUse", "zoning"];
+    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "landUse", "zoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
@@ -479,7 +479,7 @@
   // Presentation only. Keep facts tied to this original's price and source.
   function saleCardFactsHtml(item) {
     if (!isSale(item)) return "";
-    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "roadAccess", "parcelShape", "buildingUse"]), land = normalizedSaleCategory(item) === "land", fields = [];
+    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "roadAccess", "parcelShape", "buildingUse"]), land = normalizedSaleCategory(item) === "land", fields = [];
     function money(label, value) {
       var n = nonnegative(value);
       if (n != null) fields.push([label, n.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만원']);
@@ -489,6 +489,10 @@
       if (landText(d.parcelShape)) fields.push(['형상', landText(d.parcelShape)]);
     } else {
       money('보증금 합계', d.totalDeposit); money('월 임대수입', d.monthlyIncome);
+      money('광고 융자금', d.loanAmount);
+      money('광고 월수익 · 이자 차감', d.monthlyNetIncome);
+      money('광고 월수익 · 기준 미확인', d.statedMonthlyIncome);
+      money('광고 실투자금', d.investmentAmount);
       if (landText(d.buildingUse)) fields.push(['용도', landText(d.buildingUse)]);
     }
     return fields.length ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {

@@ -32,6 +32,7 @@ export function saleDescriptionFields(content) {
   const text = String(content || "").slice(0, 24000);
   const warnings = [];
   const evidence = {};
+  const partialFields = new Set();
   function unique(label, pattern, parse) {
     const matches = [...text.matchAll(pattern)].map(m => ({ value: parse(m[1]), text: m[0].trim() }))
       .filter(m => m.value != null && Number.isFinite(m.value));
@@ -40,16 +41,71 @@ export function saleDescriptionFields(content) {
     if (values.length === 1) evidence[label] = matches[0].text;
     return values.length === 1 ? values[0] : null;
   }
-  // An explicit money unit is mandatory, even when the colon is omitted.
-  const money = "([0-9][0-9,. 억천백십만]*(?:만원|억원|만|억|원))(?=\\s|$|[✅✔☑·,;])";
-  const amount = (label, names) => unique(label, new RegExp("(?:^|[\\s✅✔☑*·])(?:" + names + ")\\s*[:：]?\\s*" + money, "g"), koreanMoneyManwon);
+  // Keep quotes as exact substrings of the original for the source-jump UI.
+  // Explicit units remain mandatory; do not infer 만원 from a bare number.
+  const boundary = "(?:^|[\\s✅✔☑*·▶▷●■◆◇🔸🔹⭐/|,;()])";
+  const money = "([0-9][0-9,. \\t억천백십만]*(?:만\\s*원|억\\s*원|만|억|원))(?=\\s|$|[✅✔☑·,;/()▶▷●■◆◇🔸🔹⭐]|으로|에|이며|이고|입니다|임대)";
+  const paired = [...text.matchAll(new RegExp(boundary + "(?:기\\s*)?보\\s*증\\s*금\\s*/\\s*(?:총\\s*)?월\\s*(?:세|차임)\\s*[:：]?\\s*" + money + "\\s*/\\s*" + money, "gu"))];
+  const labelStart = m => m.index + (m[0].match(/^[\s▶▷●■◆◇✅✔☑]+/u)?.[0].length || 0);
+  function contextAt(start, end) {
+    const before = text.slice(Math.max(0, start - 100), start).split(/[\r\n▶▷●■◆◇✅✔☑]/u).at(-1);
+    const after = text.slice(end, end + 70).split(/[\r\n▶▷●■◆◇✅✔☑]/u)[0];
+    return { before, after };
+  }
+  function projected(start, end) {
+    const { before, after } = contextAt(start, end);
+    return /만실\s*(?:시|기준)|예상\s*(?:임대|월세|수익)|시세|임대(?:를)?\s*원하실|전환\s*시/.test(before) ||
+      /^(?:\s|[(),.;]){0,8}(?:예상|만실|시세)/.test(after) || /^.{0,30}(?:인상|증액)\s*(?:여지|가능|예정)?/.test(after);
+  }
+  function markPartial(label, start, quote) {
+    const local = contextAt(start, start + quote.length).before;
+    if (/(?:\d+\s*층|\d+\s*호(?!실)|일부\s*호실).{0,24}$/.test(local) && !/총|합계|전체|매매가|건물현황/.test(local + quote)) {
+      partialFields.add(label === "보증금" ? "totalDeposit" : label === "월 임대수입" ? "monthlyIncome" : label === "이자 차감 월수익" ? "monthlyNetIncome" : "statedMonthlyIncome");
+    }
+  }
+  function amount(label, names, monthly = false) {
+    const matches = [];
+    const rental = ["보증금", "월 임대수입", "이자 차감 월수익", "기준 미확인 월수익"].includes(label);
+    for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")\\s*[:：]?\\s*" + (monthly ? "(?:월\\s*)?" : "") + money, "gu"))) {
+      // In '보증금 / 월세:4000만원 / 290만원', 4000 belongs to the deposit.
+      const prefix = text.slice(Math.max(0, m.index - 25), m.index);
+      if (label === "월 임대수입" && (/보\s*증\s*금\s*\/\s*$/.test(prefix) || /보\s*증\s*금\s*$/.test(prefix) && /^\//.test(m[0]))) continue;
+      if (label === "월 임대수입" && /(?:순|이자\s*(?:차감|공제|제외))\s*$/.test(prefix)) continue;
+      // A numbered next item / next line / floor is not a money suffix.
+      if (/억\s*(?:원)?$/.test(m[1]) && /^[ \t]*(?:\d[\d,]*[ \t]*[천백십만]|[\d,]+(?=[ \t]*(?:$|[\r\n▶▷●■◆◇])))/u.test(text.slice(m.index + m[0].length))) {
+        warnings.push(label + " 금액 단위 불완전: 직접 확인 필요");
+        continue;
+      }
+      const value = koreanMoneyManwon(m[1]);
+      if (value == null) continue;
+      if (rental && projected(labelStart(m), m.index + m[0].length)) {
+        if (!warnings.includes("예상·만실·인상 금액: 기존 임대조건 계산 미적용")) warnings.push("예상·만실·인상 금액: 기존 임대조건 계산 미적용");
+        continue;
+      }
+      if (rental) markPartial(label, labelStart(m), m[0]);
+      matches.push({ value, text: m[0].trim() });
+    }
+    if (label === "보증금" || label === "월 임대수입") for (const m of paired) {
+      if (projected(labelStart(m), m.index + m[0].length)) {
+        warnings.push("예상·만실·인상 금액: 기존 임대조건 계산 미적용");
+        continue;
+      }
+      const value = koreanMoneyManwon(m[label === "보증금" ? 1 : 2]);
+      markPartial(label, labelStart(m), m[0]);
+      if (value != null) matches.push({ value, text: m[0].trim() });
+    }
+    const values = [...new Set(matches.map(m => m.value))];
+    if (values.length > 1) { warnings.push(label + " 설명값 충돌: 직접 확인 필요"); return null; }
+    if (values.length === 1) evidence[label] = matches[0].text;
+    return values.length === 1 ? values[0] : null;
+  }
   const salePrice = amount("매매가", "매매가|매매금액|매매");
-  const loanAmount = amount("융자", "융자금|융자|대출금");
+  const loanAmount = amount("융자", "융\\s*자(?:금(?:액)?)?|대\\s*출\\s*금(?:액)?");
   const totalDeposit = amount("보증금", "보증금\\s*합계|총\\s*보증금|기보증금|보증금");
-  const monthlyIncome = amount("월 임대수입", "월세수입|월\\s*임대수입|월세합계|총\\s*월세|월세");
-  const monthlyNetIncome = amount("이자 차감 월수익", "월수익\\s*\\(이자(?:제외|차감|공제)\\)");
-  const statedMonthlyIncome = amount("기준 미확인 월수익", "월수익");
-  const investmentAmount = amount("실투자금", "실투자금|실 투자금");
+  const monthlyIncome = amount("월 임대수입", "월세수입|월\\s*임대수입|월세합계|총\\s*월세|기\\s*월세|월차임|월임대료|월세", true);
+  const monthlyNetIncome = amount("이자 차감 월수익", "월수익\\s*\\(이자(?:제외|차감|공제)\\)", true);
+  const statedMonthlyIncome = amount("기준 미확인 월수익", "월\\s*수익", true);
+  const investmentAmount = amount("실투자금", "실\\s*투\\s*자\\s*금");
   const advertisedYield = unique("광고 연 수익률", /연\s*수익[률율]\s*[:：]\s*([\d.]+)\s*%/g, Number);
   const area = (label, name) => unique(label, new RegExp(name + "\\s*[:：]\\s*([\\d,.]+)\\s*(?:㎡|m²|m2)", "gi"), s => Number(s.replace(/,/g, "")));
   const landAreaM2 = area("대지면적", "대지면적");
@@ -63,7 +119,7 @@ export function saleDescriptionFields(content) {
   return { salePrice, loanAmount, totalDeposit, monthlyIncome, monthlyNetIncome,
     statedMonthlyIncome, investmentAmount, advertisedYield, landAreaM2, grossAreaM2,
     totalFloors, householdCount, wholeMultifamily, descriptionEvidence: evidence,
-    descriptionWarnings: warnings };
+    descriptionWarnings: [...new Set(warnings)], descriptionPartialFields: [...partialFields] };
 }
 
 export function naverSaleDescription(item = {}) {
@@ -78,7 +134,7 @@ export function naverSaleDescription(item = {}) {
 // Basic fields remain authoritative. Description values remain separately
 // visible when inconsistent, and never silently become the canonical sale price.
 export function supplementSaleDescription(base, described, salePrice, descriptionText) {
-  const result = { ...base, descriptionVersion: 1, descriptionText,
+  const result = { ...base, descriptionVersion: 2, descriptionText,
     descriptionEvidence: described.descriptionEvidence,
     descriptionWarnings: [...(described.descriptionWarnings || [])],
     descriptionFinancials: Object.fromEntries(["salePrice", "loanAmount", "totalDeposit", "monthlyIncome",
@@ -89,6 +145,10 @@ export function supplementSaleDescription(base, described, salePrice, descriptio
     "monthlyNetIncome", "statedMonthlyIncome", "investmentAmount", "advertisedYield", "householdCount"]) {
     const value = described[field];
     if (value == null) continue;
+    if ((base.scope === "whole_building" || base.saleExtent === "whole_building") && described.descriptionPartialFields?.includes(field)) {
+      result.descriptionWarnings.push("일부 층·호실 " + field + ": 건물 합계로 적용 보류");
+      continue;
+    }
     if (base[field] != null && Math.abs(base[field] - value) > 0.1) {
       const labels = { landAreaM2:"대지면적", grossAreaM2:"연면적", totalDeposit:"보증금", monthlyIncome:"월 임대수입",loanAmount:"융자" };
       result.descriptionWarnings.push((labels[field] || field) + ": 기본정보와 설명값 불일치 (기본 " + base[field] + " / 설명 " + value + ")");

@@ -13,8 +13,9 @@
   function compactHtml(item){
     if(!ui().isSale(item))return '';
     var d=ui().saleSummary(item),land=ui().normalizedSaleCategory(item)==='land',y=ui().saleYield(item);
+    var income=num(d.monthlyIncome)!=null?['월 임대수입',fmt(d.monthlyIncome)+'만원']:num(d.monthlyNetIncome)!=null?['광고 월수익 · 이자 차감',fmt(d.monthlyNetIncome)+'만원']:num(d.statedMonthlyIncome)!=null?['광고 월수익 · 기준 미확인',fmt(d.statedMonthlyIncome)+'만원']:['월 임대수입','미제공'];
     var rows=land?[['토지면적',area(d.landAreaM2)],['평당가',global.JSSaleWorkbenchV1.unitPrice(item)==null?'산정 불가':fmt(global.JSSaleWorkbenchV1.unitPrice(item))+'만원/평'],['지목',d.landUse],['용도지역',d.zoning]]:
-      [['대지',area(d.landAreaM2)],['연면적',area(d.grossAreaM2)],['월 임대수입',num(d.monthlyIncome)==null?'미제공':fmt(d.monthlyIncome)+'만원'],['단순 연 수익률',y==null?'산정 불가':fmt(y)+'%']];
+      [['대지',area(d.landAreaM2)],['연면적',area(d.grossAreaM2)],income,['단순 연 수익률',y==null?'산정 불가':fmt(y)+'%']];
     return '<div class="sale-compact-metrics-v8" aria-label="매매 핵심 비교 조건">'+facts(rows)+'</div>';
   }
   function syncLayout(){
