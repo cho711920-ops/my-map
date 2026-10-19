@@ -45,4 +45,14 @@
   전체 테스트 통과로 보고하지 않는다. 이번 변경의 새 실패는 확인되지 않았다.
 - 증거: outputs/sale-design-v24-*.log, outputs/sale-design-v24-verified-images/.
 
-운영 반영: 배포 전. 배포·양 도메인 자산 검증 후 아래에 결과를 추가한다.
+운영 반영 완료
+- 제품 5e5c5f5, codex/sale-design-v24 원격 저장 완료.
+- Worker 5006950d-5950-4ecd-a0ed-8827840f2498.
+- public cache c20f58eb426861dda674ca6b.
+- 배포 직전 최신 운영 Worker가 기존 v22의 8a333ec8임을 확인하고 진행했다.
+- js-map.com / www.js-map.com 각 정적 자산 87개 HTTP200·빌드 SHA256 일치.
+  양쪽 HTML200·no-store·Kakao CSP 유지, 새 CSS 연결 및 보류 v23 미연결 확인.
+  비로그인 실거래 조회401 정상. 정상 로그인 운영 매물 저장은 하지 않았다.
+- 검증 시각 2026-10-20 00:52 KST.
+- 증거 outputs/sale-design-v24-live-verification.json.
+- 이미 열린 사이트는 처음 1회 새로고침. 재수집 불필요.
