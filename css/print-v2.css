@@ -158,6 +158,37 @@ body {
   background:#eeeeee;
 }
 
+/* Sale reports use the full paper width rather than the lease condition table. */
+.js-sale-print-body .js-print-header { align-items:center; gap:12px; }
+.js-sale-print-body .js-print-title { font-size:17pt; white-space:normal; }
+.js-sale-print-body .js-print-meta { flex-direction:column; align-items:flex-end; gap:4px; font-size:8.5pt; }
+.sale-print-card { border:1px solid #9ba9b7; border-radius:6px; margin:0 0 12px; padding:12px; break-inside:avoid; page-break-inside:avoid; overflow-wrap:anywhere; }
+.sale-print-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.sale-print-card-head>div:first-child { min-width:0; }
+.sale-print-kind { font-size:8.5pt; color:#43566a; font-weight:700; }
+.sale-print-card h2 { margin:5px 0; font-size:13pt; line-height:1.35; }
+.sale-print-address { font-size:9pt; line-height:1.5; color:#374151; }
+.sale-print-address span { display:inline-block; margin-left:8px; }
+.sale-print-price { flex-shrink:0; max-width:48%; text-align:right; }
+.sale-print-price small { display:block; margin:0 0 4px; font-size:8pt; color:#4b5563; }
+.sale-print-price strong { font-size:16pt; line-height:1.4; }
+.sale-print-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; margin:12px 0 0; border-top:1px solid #d4dbe2; }
+.sale-print-facts>div { min-width:0; padding:8px 8px 8px 0; border-bottom:1px solid #e1e6eb; }
+.sale-print-facts dt { font-size:8pt; line-height:1.4; color:#4b5563; }
+.sale-print-facts dd { margin:3px 0 0; font-size:9pt; line-height:1.4; font-weight:700; }
+.sale-print-contact { margin-top:9px; font-size:8.5pt; line-height:1.5; }
+.sale-print-memo { margin-top:9px; padding-top:8px; border-top:1px solid #d4dbe2; }
+.sale-print-memo h3 { margin:0 0 4px; font-size:8pt; color:#4b5563; }
+.sale-print-memo>div { font-size:8.5pt; line-height:1.5; white-space:pre-wrap; }
+.sale-print-note,.sale-print-missing { font-size:8pt; line-height:1.5; color:#4b5563; }
+.sale-print-note { margin-top:10px; }
+.sale-print-card.print-row-visit { background:#fff9df; }
+.sale-print-card.print-row-done { background:#eee; color:#555; }
+@media print {
+  .sale-print-card h2,.sale-print-card-head,.sale-print-facts>div { break-inside:avoid; }
+  .sale-print-memo { orphans:3; widows:3; }
+}
+
 @media screen {
   body {
     padding:18px;
