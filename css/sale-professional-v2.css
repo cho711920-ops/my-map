@@ -320,7 +320,12 @@ html #list .listing-land-card-v4 .land-parcel-lookup-v4 { width: auto !important
 #unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dd { font-size: 14px; text-align: right; }
 .sale-photo-slot-v3[hidden] { display: none; }
 .sale-photo-slot-v3 { margin: 16px 0; border-radius: 8px; overflow: hidden; }
-.sale-photo-slot-v3 .unified-detail-gallery-v8 { height: 240px; }
+/* Inspect the complete sale photo in place, with a stable stage while paging. */
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-gallery-v8:not(:has(.unified-gallery-empty-v8)) {
+  height: clamp(200px, 52dvh, 460px) !important; min-height: 0 !important; background: #17222e !important;
+}
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-hero-v8 { background: #17222e !important; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-hero-v8 img { object-fit: contain !important; object-position: center; }
 .sale-review-toolbar-v2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0; }
 .sale-review-toolbar-v2 span { color: #687c8f; font-size: 11px; }
 .sale-compare-controls-v2 { display: flex; justify-content: flex-end; margin-bottom: 10px; }
