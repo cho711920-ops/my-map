@@ -1,7 +1,7 @@
 /* Sale-only presentation and review tools. No original listing writes. */
 (function(global){
   'use strict';
-  var PY=3.305785, layouts={building_sale:false,land_sale:false};
+  var PY=3.305785;
   function ui(){return global.JSListingTradeV1;}
   function text(v){return String(v==null?'':v).trim();}
   function esc(v){return text(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -10,22 +10,8 @@
   function area(v){return num(v)>0?fmt(v/PY)+'평 ('+fmt(v)+'㎡)':'미제공';}
   function date(v){if(global.JSSaleReviewV10)return global.JSSaleReviewV10.dateText(v);var s=text(v).replace(/[^0-9]/g,'');return s.length===8?s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6):text(v);}
   function facts(rows){return '<dl class="sale-review-facts-v8">'+rows.map(function(r){return '<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1]||'미제공')+'</dd></div>';}).join('')+'</dl>';}
-  function compactHtml(item){
-    if(!ui().isSale(item))return '';
-    var d=ui().saleSummary(item),land=ui().normalizedSaleCategory(item)==='land',y=ui().saleYield(item);
-    var income=num(d.monthlyIncome)!=null?['월 임대수입',fmt(d.monthlyIncome)+'만원']:num(d.monthlyNetIncome)!=null?['광고 월수익 · 이자 차감',fmt(d.monthlyNetIncome)+'만원']:num(d.statedMonthlyIncome)!=null?['광고 월수익 · 기준 미확인',fmt(d.statedMonthlyIncome)+'만원']:['월 임대수입','미제공'];
-    var rows=land?[['토지면적',area(d.landAreaM2)],['평당가',global.JSSaleWorkbenchV1.unitPrice(item)==null?'산정 불가':fmt(global.JSSaleWorkbenchV1.unitPrice(item))+'만원/평'],['지목',d.landUse],['용도지역',d.zoning]]:
-      [['대지',area(d.landAreaM2)],['연면적',area(d.grossAreaM2)],income,['단순 연 수익률',y==null?'산정 불가':fmt(y)+'%']];
-    return '<div class="sale-compact-metrics-v8" aria-label="매매 핵심 비교 조건">'+facts(rows)+'</div>';
-  }
   function syncLayout(){
     var mode=ui().getMode(),bar=document.getElementById('saleListLayoutV8');if(bar)bar.hidden=mode==='lease';
-    var wide=!global.matchMedia||global.matchMedia('(min-width:769px)').matches;
-    var compact=!!layouts[mode]&&wide&&!document.documentElement.classList.contains('js-phone-app-v2');
-    var apply=function(){if(compact)document.documentElement.setAttribute('data-sale-list-compact-v8','true');else document.documentElement.removeAttribute('data-sale-list-compact-v8');};
-    var changed=document.documentElement.hasAttribute('data-sale-list-compact-v8')!==compact;
-    if(changed&&typeof global.reflowSaleListDensityV8==='function')global.reflowSaleListDensityV8(apply);else apply();
-    if(bar)bar.querySelectorAll('[data-sale-layout]').forEach(function(b){b.setAttribute('aria-pressed',String((b.dataset.saleLayout==='compact')===!!layouts[mode]));});
     if(global.JSSaleReviewV10)global.JSSaleReviewV10.syncTable();
   }
   function bodyOf(root){return root.closest('.unified-detail-body-v8');}
@@ -117,10 +103,10 @@
       finally{if(dialog.isConnected&&request===revision)print.disabled=false;}
     };
   }
-  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.addEventListener('click',function(event){var b=event.target.closest('[data-sale-layout]');if(!b||ui().getMode()==='lease')return;layouts[ui().getMode()]=b.dataset.saleLayout==='compact';if(global.JSSaleReviewV10)global.JSSaleReviewV10.chooseLayout(b.dataset.saleLayout);syncLayout();});
+  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.addEventListener('click',function(event){var b=event.target.closest('[data-sale-layout]');if(!b||ui().getMode()==='lease')return;if(global.JSSaleReviewV10)global.JSSaleReviewV10.chooseLayout(b.dataset.saleLayout);});
   global.addEventListener('js-listing-trade-mode-change',syncLayout);
   global.addEventListener('js-phone-device-change',syncLayout);
   if(global.matchMedia)global.matchMedia('(min-width:769px)').addEventListener('change',syncLayout);
-  global.JSSaleReviewEnhancementsV8={compactHtml:compactHtml,syncLayout:syncLayout,differences:differences,reference:reference,roadHtml:roadHtml,scenarios:scenarios,mountScenarios:mountScenarios,renderScenarios:renderScenarios,reportHtml:reportHtml,report:report};
+  global.JSSaleReviewEnhancementsV8={syncLayout:syncLayout,differences:differences,reference:reference,roadHtml:roadHtml,scenarios:scenarios,mountScenarios:mountScenarios,renderScenarios:renderScenarios,reportHtml:reportHtml,report:report};
   syncLayout();
 })(window);

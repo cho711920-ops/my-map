@@ -47,7 +47,7 @@
     else {contact.disabled=true;contact.title='연락처 미제공';}
     card.append(row);
   }
-  function chooseLayout(value){layouts[ui().getMode()]=value;syncTable();}
+  function chooseLayout(value){layouts[ui().getMode()]=value==='table'?'table':'card';syncTable();}
   function syncTable(){
     var mode=ui().getMode(),bar=document.getElementById('saleListLayoutV8'),wide=global.matchMedia('(min-width:769px)').matches&&!document.documentElement.classList.contains('js-phone-app-v2');
     var enabled=mode!=='lease'&&wide&&layouts[mode]==='table',old=document.documentElement.hasAttribute('data-sale-table-v10');
@@ -57,7 +57,7 @@
     // existing anchor correction accounts for both on entry and exit.
     function apply(){if(enabled)document.documentElement.setAttribute('data-sale-table-v10',mode==='land_sale'?'land':'building');else document.documentElement.removeAttribute('data-sale-table-v10');if(head)head.hidden=!enabled;}
     if(enabled!==old&&global.reflowSaleListDensityV8)global.reflowSaleListDensityV8(apply);else apply();
-    if(bar)bar.querySelectorAll('[data-sale-layout]').forEach(function(b){if(enabled||b.dataset.saleLayout==='table')b.setAttribute('aria-pressed',String(enabled&&b.dataset.saleLayout==='table'));});
+    if(bar)bar.querySelectorAll('[data-sale-layout]').forEach(function(b){b.setAttribute('aria-pressed',String(enabled?b.dataset.saleLayout==='table':b.dataset.saleLayout==='card'));});
     if(bar&&bar.querySelector(':scope>span'))bar.querySelector(':scope>span').textContent=enabled?'표 · 가로 스크롤':'목록 보기';
     if(!enabled){var sidebar=document.getElementById('sidebar');if(sidebar)sidebar.scrollLeft=0;}
   }

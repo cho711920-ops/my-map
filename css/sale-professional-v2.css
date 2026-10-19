@@ -140,6 +140,24 @@ html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-condition
   html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 > .sale-card-facts-v2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
+/* One sale card: each advertised area and financial basis appears once. */
+#list .listing-sale-card-v1 .sale-list-metrics-v16 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0; min-width: 0; max-width: 100%; }
+#list .listing-sale-card-v1 .sale-list-metrics-v16 > div { display: grid; grid-template-columns: auto minmax(0,auto); align-items: baseline; gap: 1px 5px; min-width: 0; }
+#list .listing-sale-card-v1 .sale-list-metrics-v16 dt { color: #6a7c8e; font-size: 11px; line-height: 1.5; }
+#list .listing-sale-card-v1 .sale-list-metrics-v16 dd { margin: 0; color: #254f6a; font-size: 13px; font-weight: 700; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#list .listing-sale-card-v1 .sale-list-metrics-v16 small { grid-column: 2; color: #708295; font-size: 10px; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#list .listing-sale-card-v1 .sale-list-missing-v16 { color: #7b8c9c; font-size: 11px; line-height: 1.5; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .standard-card-main-v661 { display: flex !important; flex-direction: column !important; justify-content: flex-start !important; gap: 3px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .item-compact-head-v650 { order: 0; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .item-compact-price-v650 { order: 1; min-height: 0 !important; height: auto !important; flex: 0 0 auto !important; margin: 0 !important; flex-wrap: wrap !important; align-items: baseline; gap: 3px 10px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .item-price-values-v652 { flex: 0 1 auto !important; width: auto !important; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .sale-list-metrics-v16,
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .sale-list-missing-v16 { order: 2; flex: 0 0 auto; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 > span:last-child:nth-child(odd) { grid-column: auto; flex-direction: column; align-items: flex-start; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 b { font-size: 13px; overflow-wrap: anywhere; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 > .sale-card-facts-v2 { display: flex; flex-wrap: wrap; gap: 3px 12px; padding: 5px 8px; margin-top: 5px; border-radius: 5px; background: #f2f7f4; font-size: 11px; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 > .sale-card-facts-v2 > span:last-child:nth-child(odd) { flex-direction: row; align-items: baseline; }
+
 /* Property dossier: navigation, an asset summary and readable fact tables. */
 /* Building cards keep the same identity/actions, with asset and income blocks. */
 .sale-card-heading-v5 { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; margin-bottom: 9px; padding-right: 38px; }

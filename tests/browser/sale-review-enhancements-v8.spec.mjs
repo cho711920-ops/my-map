@@ -11,8 +11,8 @@ async function seed(page,market){await page.evaluate(market=>{
     saleDetails:{...base.saleDetails,monthlyIncome:i%2?0:200,roadAccess:'8m 도로 광고',zoning:i%3?'일반주거지역':'검수용으로 긴 용도지역 표시'}}));
   const leases=window.allItems.filter(i=>i.tradeType!=='sale');window.allItems=leases.concat(items);window.JSUnifiedListingsV8.attach(window.allItems,{ok:true,groups:Object.fromEntries(window.allItems.map(i=>[i.propertyId,[{...i,originalId:i.originalId||i.propertyId+'-ORIGINAL',link:location.origin+'/original/'+i.propertyId,saleSummary:i.saleDetails,images:[],photoCount:0}]]))});document.getElementById('fixtureControls').hidden=true;
 },market);}
-for(const market of ['building_sale','land_sale'])test(market+' PC compact view preserves source facts, selection, contacts and virtual scroll',async({page,isMobile},info)=>{
-  test.skip(isMobile,'Compact layout is PC-only; mobile keeps the detail card.');
+for(const market of ['building_sale','land_sale'])test(market+' unified PC card preserves source facts, selection, contacts and virtual scroll',async({page,isMobile},info)=>{
+  test.skip(isMobile,'The layout selector is PC-only.');
   const lease=await page.locator('#list .item').first().innerHTML();
   await seed(page,market);await mode(page,isMobile,market);
   const business=await page.evaluate(()=>JSON.stringify(window.allItems));
@@ -20,19 +20,19 @@ for(const market of ['building_sale','land_sale'])test(market+' PC compact view 
   const phone=await first.locator('.item-phone').count()?first.locator('.item-phone'):first.locator('.item-action-left button').first();
   const phoneStyle=await phone.evaluate(e=>[getComputedStyle(e).color,getComputedStyle(e).backgroundColor]);
   await first.locator('.action-select-check').check();
-  await page.locator('[data-sale-layout="compact"]').click();
-  await expect(first.locator('.sale-compact-metrics-v8')).toBeVisible();
-  expect(await first.evaluate(e=>e.getBoundingClientRect().height)).toBeLessThan(height);
-  const title=await first.locator('.item-building-name').boundingBox(),cardBounds=await first.boundingBox();expect(title.x-cardBounds.x).toBeLessThan(25);
+  await page.locator('[data-sale-layout="card"]').click();
+  await expect(first.locator('.sale-list-metrics-v16')).toBeVisible();
+  expect(await first.evaluate(e=>e.getBoundingClientRect().height)).toBeLessThanOrEqual(height+1);
+  const title=await first.locator('.item-building-name').boundingBox(),cardBounds=await first.boundingBox();expect(title.x-cardBounds.x).toBeGreaterThan(25);
   expect(await phone.evaluate(e=>[getComputedStyle(e).color,getComputedStyle(e).backgroundColor])).toEqual(phoneStyle);
   await expect(first.locator('.action-select-check')).toBeChecked();
-  await page.screenshot({path:info.outputPath(market+'-compact.png')});
+  await page.screenshot({path:info.outputPath(market+'-card.png')});
   await page.setViewportSize({width:720,height:800});await expect(page.locator('html')).not.toHaveAttribute('data-sale-list-compact-v8');
-  await page.setViewportSize({width:1280,height:800});await expect(page.locator('html')).toHaveAttribute('data-sale-list-compact-v8','true');
+  await page.setViewportSize({width:1280,height:800});await expect(page.locator('html')).not.toHaveAttribute('data-sale-list-compact-v8');
   await page.evaluate(()=>{const s=window.getListingScrollContainerV2();s.scrollTop=6000;s.dispatchEvent(new Event('scroll'));});
   await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   const anchor=await page.evaluate(()=>{const s=window.getListingScrollContainerV2(),top=s.getBoundingClientRect().top;const c=[...document.querySelectorAll('#list .item')].find(c=>c.getBoundingClientRect().bottom>top);return {id:c.dataset.propertyId,top:c.getBoundingClientRect().top};});
-  await page.locator('[data-sale-layout="detail"]').click();
+  await page.locator('[data-sale-layout="card"]').click();
   const target=page.locator('#list [data-property-id="'+anchor.id+'"]');
   expect(Math.abs(await target.evaluate(e=>e.getBoundingClientRect().top)-anchor.top)).toBeLessThan(3);
   const before=await page.evaluate(()=>window.getListingScrollContainerV2().scrollTop);

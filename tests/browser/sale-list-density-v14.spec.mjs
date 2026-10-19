@@ -40,6 +40,6 @@ for(const market of ['building_sale','land_sale'])test(market+' shows more cards
 test('rich sale cards retain metrics and lease cards retain original dates and markup',async({page,isMobile})=>{
   await seed(page,'building_sale',true);await page.evaluate(()=>applyFilter());const lease=await page.locator('#list .item').first().innerHTML();await mode(page,isMobile,'building_sale');
   const card=page.locator('#list .listing-sale-card-v1').first();await expect(card).toContainText('월 임대수입');await expect(card).toContainText('연면적');
-  if(!isMobile){await page.locator('[data-sale-layout="compact"]').click();await expect(card.locator('.sale-compact-metrics-v8')).toBeVisible();await page.locator('[data-sale-layout="table"]').click();await expect(page.locator('html')).toHaveAttribute('data-sale-table-v10','building');}
+  if(!isMobile){await page.locator('[data-sale-layout="card"]').click();await expect(card.locator('.sale-list-metrics-v16')).toBeVisible();await page.locator('[data-sale-layout="table"]').click();await expect(page.locator('html')).toHaveAttribute('data-sale-table-v10','building');}
   await mode(page,isMobile,'lease');expect(await page.locator('#list .item').first().innerHTML()).toBe(lease);
 });

@@ -32,11 +32,11 @@ test('road evidence separates advertised access and planning designations withou
   assert.match(html,/광고: 8m 도로/);assert.match(html,/공적자료의 도로 표기/);assert.match(html,/중로1류/);assert.doesNotMatch(html,/교육환경보호구역/);
   assert.match(html,/보증하지 않습니다/);assert.match(e.roadHtml(land,null),/조회 전/);
 });
-test('compact metrics escape originals, keep known zero income and use advertised land area',()=>{
-  assert.match(e.compactHtml({...land,saleDetails:{...land.saleDetails,zoning:'<img src=x>'}}),/&lt;img/);
-  assert.match(e.compactHtml({...land,saleCategory:'building',saleDetails:{monthlyIncome:0}}),/0만원/);
-  assert.match(e.compactHtml(land),/300만원\/평/);
-  assert.equal(e.compactHtml({tradeType:'lease'}),'');
+test('unified card metrics escape originals, keep known zero income and use advertised land area',()=>{
+  assert.match(window.JSListingTradeV1.saleCardFactsHtml({...land,saleDetails:{...land.saleDetails,zoning:'<img src=x>'}},true),/&lt;img/);
+  assert.match(window.JSListingTradeV1.saleCardFactsHtml({...land,saleCategory:'building',saleDetails:{monthlyIncome:0}}),/0만원/);
+  assert.match(window.JSListingTradeV1.saleListMetricsHtml(land),/300만원\/평/);
+  assert.equal(window.JSListingTradeV1.saleCardFactsHtml({tradeType:'lease'}),'');
 });
 test('single report preserves provenance and official units and excludes private data by default',()=>{
   const html=e.reportHtml({...land,buildingName:'<script>name</script>',memo:'PRIVATE LIST NOTE',phone:'010-PRIVATE'},

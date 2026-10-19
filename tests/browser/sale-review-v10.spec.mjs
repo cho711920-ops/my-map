@@ -25,7 +25,7 @@ for(const market of ['building_sale','land_sale'])test(market+' table uses bound
   await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   await page.locator('#list [data-table-open]').first().click();await expect(page.locator('#unifiedDetailDrawerV8')).toHaveAttribute('aria-hidden','false');await page.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await page.screenshot({path:info.outputPath(market+'-table.png'),animations:'disabled'});
-  await page.locator('[data-sale-layout="detail"]').click();await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');await expect(page.locator('#list .item-building-name').first()).toBeVisible();
+  await page.locator('[data-sale-layout="card"]').click();await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');await expect(page.locator('#list .item-building-name').first()).toBeVisible();
   await page.locator('[data-sale-layout="table"]').click();await page.setViewportSize({width:720,height:800});await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');await page.setViewportSize({width:1280,height:800});await expect(page.locator('html')).toHaveAttribute('data-sale-table-v10');
   await page.evaluate(()=>JSMapListPanelV1.close());await expect(page.locator('#saleTableHeadV10')).toBeHidden();await page.evaluate(()=>JSMapListPanelV1.open());await expect(page.locator('#saleTableHeadV10')).toBeVisible();
   expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(data);await mode(page,false,'lease');await expect(page.locator('#saleTableHeadV10')).toBeHidden();expect(await page.locator('#list .item').first().innerHTML()).toBe(lease);
@@ -49,7 +49,7 @@ test('table columns stay aligned horizontally, contact colours stay current, and
   expect(Math.max(...cols)).toBeLessThan(3);
   await page.evaluate(()=>{const s=getListingScrollContainerV2();s.scrollTop=5000;s.dispatchEvent(new Event('scroll'));});await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   const anchor=await page.evaluate(()=>{const s=getListingScrollContainerV2(),c=[...document.querySelectorAll('#list .item')].find(el=>el.getBoundingClientRect().bottom>s.getBoundingClientRect().top);return {id:c.dataset.propertyId,top:c.getBoundingClientRect().top};});
-  await page.locator('[data-sale-layout="detail"]').click();const target=page.locator('#list [data-property-id="'+anchor.id+'"]');expect(Math.abs(await target.evaluate(el=>el.getBoundingClientRect().top)-anchor.top)).toBeLessThan(3);
+  await page.locator('[data-sale-layout="card"]').click();const target=page.locator('#list [data-property-id="'+anchor.id+'"]');expect(Math.abs(await target.evaluate(el=>el.getBoundingClientRect().top)-anchor.top)).toBeLessThan(3);
   await page.locator('[data-sale-layout="table"]').click();await page.screenshot({path:info.outputPath('table-contact-and-scroll.png'),animations:'disabled'});
 });
 test('cashflows update from worksheet inputs and clear an invalid calculation in building and land',async({page,isMobile},info)=>{

@@ -20,7 +20,8 @@ test('existing advertisement shows each financial basis without inventing gross 
   for(const value of ['8,550만원','20,000만원','211만원','38,450만원','광고 월수익 · 기준 미확인'])await expect(facts).toContainText(value);
   await expect(facts).not.toContainText('월 임대수입');
   for(const width of isMobile?[320,390]:[1794,1280,800,700]){await page.setViewportSize({width,height:866});expect(await card.evaluate(c=>c.scrollWidth<=c.clientWidth+1)).toBe(true);}
-  if(!isMobile){await page.setViewportSize({width:1794,height:866});await page.locator('[data-sale-layout="compact"]').click();const compact=card.locator('.sale-compact-metrics-v8');await expect(compact).toContainText('광고 월수익 · 기준 미확인');await expect(compact).toContainText('211만원');await expect(compact).toContainText('산정 불가');await page.locator('[data-sale-layout="detail"]').click();}
+  if(!isMobile)await page.setViewportSize({width:1794,height:866});
+  await expect(card.locator('.sale-compact-metrics-v8')).toHaveCount(0);await expect(facts).not.toContainText('단순 연 수익률');
   await page.screenshot({path:info.outputPath('sale-financial-list.png'),animations:'disabled'});
   await card.locator('.action-select-check').check();await expect(card.locator('.action-select-check')).toBeChecked();
   await card.locator('.item-building-name').click();const drawer=page.locator('#unifiedDetailDrawerV8');

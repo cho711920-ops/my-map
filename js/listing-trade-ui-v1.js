@@ -404,6 +404,19 @@
     });
     return fields.length ? '<div class="building-unit-prices-v5" title="각 단가는 건물 총매매가를 해당 광고면적으로 나눈 비교 지표입니다. 토지만의 가격이 아닙니다.">'+fields.join('')+'</div>' : '';
   }
+  function saleListMetricsHtml(item) {
+    if (!isSale(item)) return '';
+    var land = normalizedSaleCategory(item) === 'land', d = saleSummary(item), price = nonnegative(displayPrice(item));
+    var entries = land ? (nonnegative(d.landAreaM2) > 0 ? [{label:'토지',fullLabel:'토지면적',value:nonnegative(d.landAreaM2)}] : []) : buildingSaleAreas(item);
+    if (!entries.length) return '<span class="sale-list-missing-v16">면적 정보 미제공</span>';
+    function number(v) { return v.toLocaleString('ko-KR',{maximumFractionDigits:1}); }
+    return '<dl class="sale-list-metrics-v16" aria-label="광고 면적과 단가">' + entries.map(function(entry) {
+      var shown = global.JSSaleDossierV9 ? global.JSSaleDossierV9.areaHtml(entry.value,true) : escapeHtml(number(entry.value/3.305785)+'평');
+      var unit = price > 0 && (land || ['대지','연면적'].includes(entry.label)) ? price/(entry.value/3.305785) : null;
+      return '<div data-sale-metric-v16="' + escapeHtml(entry.fullLabel) + '"><dt>' + escapeHtml(entry.label) + '</dt><dd>' + shown + '</dd>' +
+        (unit == null ? '' : '<small title="총매매가 ÷ 광고 ' + escapeHtml(entry.fullLabel) + '(평). 해당 면적 기준 비교 단가입니다.">' + number(unit) + '만원/평</small>') + '</div>';
+    }).join('') + '</dl>';
+  }
   function saleDetailsHtml(item) {
     if (!isSale(item) || !item.saleDetails) return "";
     var detail = item.saleDetails;
@@ -477,14 +490,15 @@
       (detail.descriptionText ? '<details class="listing-sale-description-v1"><summary>수집된 매매 상세설명 전체 보기</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">' + escape(detail.descriptionText) + '</div></details>' : '') : "";
   }
   // Presentation only. Keep facts tied to this original's price and source.
-  function saleCardFactsHtml(item) {
+  function saleCardFactsHtml(item, listCard) {
     if (!isSale(item)) return "";
-    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "roadAccess", "parcelShape", "buildingUse"]), land = normalizedSaleCategory(item) === "land", fields = [];
+    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "zoning", "roadAccess", "parcelShape", "buildingUse"]), land = normalizedSaleCategory(item) === "land", fields = [];
     function money(label, value) {
       var n = nonnegative(value);
       if (n != null) fields.push([label, n.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만원']);
     }
     if (land) {
+      if (listCard && landText(d.zoning)) fields.push(['용도지역', landText(d.zoning)]);
       if (landText(d.roadAccess)) fields.push(['도로', landText(d.roadAccess)]);
       if (landText(d.parcelShape)) fields.push(['형상', landText(d.parcelShape)]);
     } else {
@@ -493,10 +507,15 @@
       money('광고 월수익 · 이자 차감', d.monthlyNetIncome);
       money('광고 월수익 · 기준 미확인', d.statedMonthlyIncome);
       money('광고 실투자금', d.investmentAmount);
+      if (listCard) {
+        var rate = saleYield(item), advertised = nonnegative(d.advertisedYield);
+        if (rate != null) fields.push(['단순 연 수익률', rate.toFixed(2) + '%', yieldExplanation]);
+        else if (advertised != null) fields.push(['광고 연 수익률 · 기준 확인', advertised.toFixed(2) + '%', '광고 기재 연 수익률입니다. 대출·이자 등 계산 기준은 원문 확인이 필요합니다.']);
+      }
       if (landText(d.buildingUse)) fields.push(['용도', landText(d.buildingUse)]);
     }
     return fields.length ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
-      return '<span><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';
+      return '<span' + (f[2] ? ' title="' + escapeHtml(f[2]) + '"' : '') + '><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';
     }).join('') + '</div>' : '';
   }
   function saleOverviewHtml(item) {
@@ -560,6 +579,7 @@
     saleLandInfoHtml: saleLandInfoHtml,
     landCardMetricsHtml: landCardMetricsHtml,
     buildingUnitPricesHtml: buildingUnitPricesHtml,
+    saleListMetricsHtml: saleListMetricsHtml,
     landUseLabel: landUseLabel,
     isSale: isSale
   };

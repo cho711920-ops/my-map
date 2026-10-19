@@ -1,5 +1,5 @@
 /* Scoped to sale cards and explicit review dialogs; lease presentation unchanged. */
-.sale-list-layout-v8[hidden],.sale-compact-metrics-v8{display:none!important}
+.sale-list-layout-v8[hidden]{display:none!important}
 .sale-list-layout-v8{position:sticky;top:80px;z-index:8400;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e5ebf1;background:#fff;font:12px/1.4 var(--js-app-font,Pretendard,sans-serif);color:#63768a}
 .sale-list-layout-v8>div{display:flex;padding:3px;background:#f1f4f7;border-radius:7px}
 .sale-list-layout-v8 button{border:0;border-radius:5px;background:transparent;color:#65788b;font:inherit;padding:6px 12px;cursor:pointer}
@@ -47,28 +47,6 @@
 .sale-report-photo-v8{max-width:100%;max-height:240px;object-fit:contain;display:block;margin:16px auto}
 .sale-single-report-v8 [data-report-note]{white-space:pre-wrap}
 .sale-single-report-v8 [hidden]{display:none!important}
-@media(min-width:769px){
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .item.listing-sale-card-v1{display:flex!important;flex-direction:column;gap:0;padding:10px 12px!important;margin-bottom:12px!important;border-radius:8px!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2):not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1{padding:10px 12px!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8{display:block!important;order:2}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 .sale-review-facts-v8{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:3px 0}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 .sale-review-facts-v8>div{border:0;padding:2px 0;gap:2px}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 dt{font-size:10px;line-height:1.4}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 dd{font-size:12px;line-height:1.4}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.standard-card-grid-v661{order:1;grid-template-columns:64px minmax(0,1fr)!important;grid-template-rows:auto!important;gap:12px!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 .unified-thumb-v8{width:64px!important;min-width:0!important;height:72px!important;min-height:0!important;max-height:72px!important;align-self:start!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.standard-card-grid-v661:has(.no-photo){grid-template-columns:minmax(0,1fr)!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 .standard-card-main-v661{grid-column:2!important;grid-row:1!important;min-width:0!important;width:auto!important;max-width:none!important;justify-self:stretch!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.standard-card-grid-v661:has(>.no-photo)>.standard-card-main-v661{grid-column:1!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 .unified-thumb-v8.no-photo{display:none!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 :is(.land-card-metrics-v4,.building-sale-area-info-v1,.land-card-conditions-v4,.building-unit-prices-v5),
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.sale-card-facts-v2{display:none!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 :is(.sale-card-heading-v5,.land-card-heading-v4){order:0;margin-bottom:5px}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.item-compact-actions-v650{order:3;margin-top:2px!important}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>:is(.sale-card-meta-v5,.land-card-meta-v4){order:4;margin-top:5px}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.item-memo-panel{order:5}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 .listing-sale-price-v1{font-size:19px!important}
-}
 @media(max-width:768px){.sale-list-layout-v8{display:none!important}}
 .js-phone-app-v2 .sale-list-layout-v8{display:none!important}
 @media print{

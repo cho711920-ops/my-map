@@ -4780,8 +4780,8 @@ function addListItem(item, appendTarget) {
             '<div class="item-compact-main-v650 standard-card-main-v661">' +
             '<div class="item-compact-head-v650"><span class="item-building-name">' + escapeHtml(item.name || "매매 매물") + '</span>' +
             '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span></span></div>' +
-            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + pyeongMiniBadge + buildingSaleInfoV1 + '</div></div></div>' +
-            window.JSListingTradeV1.saleCardFactsHtml(item) + window.JSListingTradeV1.buildingUnitPricesHtml(item) +
+            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + window.JSListingTradeV1.saleListMetricsHtml(item) + '</div></div></div>' +
+            window.JSListingTradeV1.saleCardFactsHtml(item, true) +
             '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
     }
     if (landCardV4) {
@@ -4796,13 +4796,10 @@ function addListItem(item, appendTarget) {
             '<div class="item-compact-main-v650 standard-card-main-v661">' +
             '<div class="item-compact-head-v650"><span class="item-building-name" title="' + escapeHtml(landTitleV4) + '">' + escapeHtml(landTitleV4) + '</span>' +
             '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span></span></div>' +
-            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span></div>' +
-            window.JSListingTradeV1.landCardMetricsHtml(item) + '</div></div>' +
-            '<div class="land-card-conditions-v4">' + window.JSListingTradeV1.saleLandInfoHtml(item) + window.JSListingTradeV1.saleCardFactsHtml(item) + '</div>' +
+            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' +
+            window.JSListingTradeV1.saleListMetricsHtml(item) + '</div></div></div>' +
+            window.JSListingTradeV1.saleCardFactsHtml(item, true) +
             '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
-    }
-    if (saleCardV1 && window.JSSaleReviewEnhancementsV8) {
-        div.insertAdjacentHTML('beforeend', window.JSSaleReviewEnhancementsV8.compactHtml(item));
     }
     if (saleCardV1 && window.JSSaleDossierV9) window.JSSaleDossierV9.refreshUnits(div);
     if (saleCardV1 && window.JSSaleReviewV10) window.JSSaleReviewV10.mountCard(div, item);
