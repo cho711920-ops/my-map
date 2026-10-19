@@ -182,6 +182,7 @@ body {
 .sale-print-memo>div { font-size:8.5pt; line-height:1.5; white-space:pre-wrap; }
 .sale-print-note,.sale-print-missing { font-size:8pt; line-height:1.5; color:#4b5563; }
 .sale-print-note { margin-top:10px; }
+.sale-print-warning { margin:8px 0 0; padding:6px 8px; border-left:2px solid #8b6d37; font-size:8pt; line-height:1.5; color:#614a25; }
 .sale-print-card.print-row-visit { background:#fff9df; }
 .sale-print-card.print-row-done { background:#eee; color:#555; }
 @media print {

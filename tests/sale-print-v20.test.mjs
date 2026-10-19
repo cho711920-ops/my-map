@@ -12,7 +12,8 @@ function print(items,visible){let html='',alerts=0,opened=0;
 }
 test('building report uses sale price, canonical areas and finance without legacy rental columns or data writes',()=>{
   const items=[structuredClone(building)],before=JSON.stringify(items),{html}=print(items);
-  for(const text of ['건물매매 검토목록','18억원','대지면적','330.58㎡','연면적','임대보증금 합계','3억원','월 임대수입','642만원','5.14%','광고 융자금','9억원','광고 실투자금','6억원','사용승인일','&lt;원본&gt; 보존 메모'])assert.ok(html.includes(text),text);
+  for(const text of ['건물매매 검토목록','18억원','대지면적','330.58㎡','연면적','임대보증금 합계','3억원','월 임대수입','642만원','7,704만원','5.14%','광고 융자금','9억원','광고 실투자금','6억원','대지 기준 매매단가','1,800만원/평','연면적 기준 매매단가','900만원/평','사용승인일','&lt;원본&gt; 보존 메모'])assert.ok(html.includes(text),text);
+  assert.doesNotMatch(html,/출처 당근/);
   assert.doesNotMatch(html,/보999|월999|관999|권999|<th>등록일|col-date/);assert.equal(JSON.stringify(items),before);
 });
 test('land report uses advertised area, unit price and parcel facts without building/rental fields',()=>{

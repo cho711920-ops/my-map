@@ -134,24 +134,36 @@
     function add(label,value) { if (value != null && String(value).trim() !== "") facts.push('<div><dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd></div>'); }
     function area(label,value) { var n=number(value); if(n>0)add(label,format(n,2)+'㎡ · '+format(n/3.305785,2)+'평'); }
     function amount(label,value) { if(number(value)!=null)add(label,money(value)); }
-    area(isLand?'토지면적':'대지면적',d.landAreaM2);
     if(isLand){
+      area('토지면적',d.landAreaM2);
       if(price>0&&number(d.landAreaM2)>0)add('광고 토지 평당가',format(price/(number(d.landAreaM2)/3.305785),1)+'만원/평');
       add('지목',d.landUse);add('용도지역',d.zoning);add('도로접면',d.roadAccess);add('형상',d.parcelShape);
     }else{
-      area('연면적',d.grossAreaM2);area('전용면적',d.exclusiveAreaM2);area('건축면적',d.buildingAreaM2);
       amount('임대보증금 합계',d.totalDeposit);amount('월 임대수입',d.monthlyIncome);
+      if(number(d.monthlyIncome)!=null)amount('연 임대수입 · 월세 × 12',number(d.monthlyIncome)*12);
       var rate=window.JSListingTradeV1&&window.JSListingTradeV1.saleYield(item);
       if(rate!=null&&Number.isFinite(rate))add('보증금 차감 단순 연 수익률',format(rate,2)+'%');
       amount('광고 융자금',d.loanAmount);amount('광고 실투자금',d.investmentAmount);
       amount('광고 월수익 · 이자 차감',d.monthlyNetIncome);amount('광고 월수익 · 기준 미확인',d.statedMonthlyIncome);
       if(number(d.advertisedYield)!=null)add('광고 연 수익률 · 기준 확인',format(d.advertisedYield,2)+'%');
+      area('대지면적',d.landAreaM2);area('연면적',d.grossAreaM2);area('전용면적',d.exclusiveAreaM2);area('건축면적',d.buildingAreaM2);
+      [['대지 기준 매매단가',d.landAreaM2],['연면적 기준 매매단가',d.grossAreaM2]].forEach(function(field){
+        if(price>0&&number(field[1])>0)add(field[0],format(price/(number(field[1])/3.305785),1)+'만원/평');
+      });
       add('건물 용도',d.buildingUse);
       add('사용승인일',d.approvalDate);
+      if(number(d.householdCount)>0)add('세대 수 · 광고 기재',format(d.householdCount,0)+'세대');
+      if(number(d.familyCount)>0)add('가구 수 · 광고 기재',format(d.familyCount,0)+'가구');
+      if(number(d.roomCount)>0)add('방 수 · 광고 기재',format(d.roomCount,0)+'개');
+      if(number(d.bathroomCount)>0)add('욕실 수 · 광고 기재',format(d.bathroomCount,0)+'개');
       var floor=window.JSListingTradeV1&&window.JSListingTradeV1.buildingFloorLabel(item);
       if(floor&&!/미확인/.test(floor))add('층·호실 (광고)',floor);
     }
-    return facts.length?'<dl class="sale-print-facts">'+facts.join('')+'</dl>':'<p class="sale-print-missing">'+(isLand?'토지면적·토지 조건':'면적·임대수입 등 매매 조건')+' 미제공</p>';
+    var warnings=(d.descriptionWarnings||[]).slice();
+    if(item.printReviewWarningV22)warnings.push(item.printReviewWarningV22);
+    if(!isLand){var missing=[];if(number(d.totalDeposit)==null)missing.push('임대보증금');if(number(d.monthlyIncome)==null)missing.push('월 임대수입');if(missing.length)warnings.push(missing.join('·')+' 미제공 · 계약조건 확인 필요');}
+    return (facts.length?'<dl class="sale-print-facts">'+facts.join('')+'</dl>':'<p class="sale-print-missing">'+(isLand?'토지면적·토지 조건':'면적·임대수입 등 매매 조건')+' 미제공</p>')+
+      (warnings.length?'<p class="sale-print-warning"><b>확인사항</b> '+warnings.map(esc).join(' / ')+'</p>':'');
   }
   function selectedDisplayItems(items) {
     // Match the existing list/comparison display, retaining explicit selection
@@ -168,33 +180,23 @@
       var isSale=sale(item),isLand=isSale&&land(item),ui=window.JSListingTradeV1;
       var kind=isLand?'토지매매':isSale?'건물매매':'상가임대',type=ui?ui.displayType(item):item.type||'';
       var room=!isLand&&item.room?'<span>'+esc(item.room)+'</span>':'';
-      var price=number(item.salePrice??item.sale_price),memo=cleanMemo(item.memo),phones=[];
+      var price=number(item.salePrice??item.sale_price),memo=cleanMemo(item.memo||saleDetails(item).descriptionText),phones=[];
       if(item.landlordPhone)phones.push((isSale?'소유자':'임대인')+' '+item.landlordPhone);
       if(item.tenantPhone&&!isLand)phones.push('임차인 '+item.tenantPhone);
       return '<article class="sale-print-card '+rowClass(item)+'" data-print-trade="'+(isLand?'land':isSale?'building':'lease')+'">'+
         '<header class="sale-print-card-head"><div><div class="sale-print-kind">'+(index+1)+'. '+esc(kind)+(type?' · '+esc(type):'')+'</div><h2>'+esc(item.name||'이름 미제공')+'</h2><div class="sale-print-address">'+esc(item.address||'주소 미제공')+room+'</div></div>'+
         '<div class="sale-print-price">'+(isSale?'<small>매매가</small><strong>'+esc(price>0?money(price):'미제공')+'</strong>':detailHtml(item))+'</div></header>'+
         (isSale?saleFacts(item):'')+
-        '<div class="sale-print-contact">'+esc(phones.join(' · ')||'저장된 연락처 없음')+(item.source?' · 출처 '+esc(item.source):'')+'</div>'+
+        '<div class="sale-print-contact">'+esc(phones.join(' · ')||'저장된 연락처 없음')+'</div>'+
         (memo?'<section class="sale-print-memo"><h3>광고·관리 메모</h3><div>'+esc(memo)+'</div></section>':'')+'</article>';
     }).join('');
     var note='금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
-    if(items.some(function(i){return sale(i)&&!land(i);}))note+=' 단순 연 수익률 = 월 임대수입 × 12 ÷ (매매가 − 임대보증금) × 100. 대출이자·취득비용·세금·공실·운영비 미반영. 기준 미확인 월수익은 임대수입으로 계산하지 않습니다.';
+    if(items.some(function(i){return sale(i)&&!land(i);}))note+=' 단순 연 수익률 = 월 임대수입 × 12 ÷ (매매가 − 임대보증금) × 100. 대출이자·취득비용·세금·공실·운영비 미반영. 연 임대수입은 월 임대수입 × 12입니다. 기준 미확인 월수익은 임대수입으로 계산하지 않습니다. 면적별 단가는 건물 총매매가를 나눈 비교값입니다.';
     if(items.some(function(i){return sale(i)&&land(i);}))note+=' 토지 평당가는 매매가 ÷ 광고 토지면적(평)입니다. 광고 면적과 공부 전체면적은 다를 수 있습니다.';
     return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'+printStylesheet()+'</head><body class="js-print-body js-sale-print-body"><main class="js-print-sheet"><header class="js-print-header"><div class="js-print-title">'+esc(title)+'</div><div class="js-print-meta"><span>출력일: '+esc(todayLabel())+'</span><span>선택 '+items.length+'건</span></div></header>'+cards+'<footer class="sale-print-note">'+esc(note)+'</footer></main><script>window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});<\/script></body></html>';
   }
 
-  window.printSelectedList = function () {
-    var items =
-      typeof getSelectedPrintItems === "function"
-        ? getSelectedPrintItems()
-        : [];
-
-    if (!items.length) {
-      alert("인쇄할 매물을 선택해주세요.");
-      return;
-    }
-
+  function renderPrint(items, printWindow) {
     var rows = items.map(function (item) {
       var memo = cleanMemo(item.memo);
 
@@ -213,7 +215,7 @@
       );
     }).join("");
 
-    var html = items.some(sale) ? saleReport(selectedDisplayItems(items)) :
+    var html = items.some(sale) ? saleReport(items) :
       '<!doctype html>' +
       '<html lang="ko">' +
       '<head>' +
@@ -257,15 +259,30 @@
       '</body>' +
       '</html>';
 
-    var printWindow = window.open("", "_blank", "width=1100,height=850");
-
-    if (!printWindow) {
-      alert("팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 인쇄해주세요.");
-      return;
-    }
-
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
+  }
+
+  var preparingPrint = false;
+  window.printSelectedList = function () {
+    if(preparingPrint)return;
+    var items=typeof getSelectedPrintItems==='function'?getSelectedPrintItems():[];
+    if(!items.length){alert('인쇄할 매물을 선택해주세요.');return;}
+    items=items.some(sale)?selectedDisplayItems(items):items;
+    // Open during the user's click, before awaiting network, to keep popup
+    // permission on mobile. The loading sheet never starts physical printing.
+    var printWindow=window.open('', '_blank', 'width=1100,height=850');
+    if(!printWindow){alert('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 인쇄해주세요.');return;}
+    if(!items.some(sale)||!window.JSUnifiedListingsV8||typeof window.JSUnifiedListingsV8.printItem!=='function'){renderPrint(items,printWindow);return;}
+    preparingPrint=true;
+    printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>매매 검토자료 준비</title></head><body><p role="status">선택 매물의 최신 보증금·임대수입·매매 조건을 확인하고 있습니다…</p></body></html>');printWindow.document.close();
+    var button=document.getElementById('printSelectedBtn'),wasDisabled=button&&button.disabled;
+    if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
+    var result=items.slice(),next=0;
+    async function worker(){while(next<items.length){var index=next++;if(printWindow.closed)return;if(sale(items[index]))result[index]=await window.JSUnifiedListingsV8.printItem(items[index]);}}
+    return Promise.all([worker(),worker()]).then(function(){if(!printWindow.closed)renderPrint(result,printWindow);}).catch(function(){
+      if(!printWindow.closed)renderPrint(items.map(function(item){return sale(item)?Object.assign({},item,{printReviewWarningV22:'최신 상세조건 조회 실패 · 현재 목록정보 기준'}):item;}),printWindow);
+    }).finally(function(){preparingPrint=false;if(button){button.disabled=wasDisabled;button.removeAttribute('aria-busy');}});
   };
 })();

@@ -1024,6 +1024,32 @@
     return item;
   }
 
+  // Printing requests the selected original's complete, current financial
+  // projection. Never borrow another ad merely because it shares an address.
+  function printItem(item) {
+    if (!item || item.tradeType !== "sale" || !text(item.propertyId)) return Promise.resolve(item);
+    var selected = item.unifiedFilterOriginalV2 || (item.unifiedOriginalsV8 || [])[0];
+    var id = text(selected && selected.originalId || item.originalId);
+    return apiGet("unifiedListingDetail", {propertyId: item.propertyId}, true).then(function(result) {
+      if (!result || result.ok === false || !Array.isArray(result.originals)) throw new Error("상세조건 조회 실패");
+      var originals = result.originals;
+      var matches = originals.filter(function(original) {
+        if (original.tradeType !== "sale") return false;
+        if (id) return text(original.originalId) === id;
+        return sourceKey(original.source) === sourceKey(item.source) &&
+          Number(original.salePrice) === Number(item.salePrice) &&
+          (!text(item.sourceLink) || text(original.link) === text(item.sourceLink));
+      });
+      if (matches.length !== 1) throw new Error("선택한 원본의 최신 조건을 특정하지 못했습니다.");
+      var original = matches[0], master = resolveMasterItem(item.propertyId) || item;
+      var base = Object.assign({}, item);
+      if (master.saleDetails && Array.isArray(master.saleDetails.manualSaleFieldsV1)) base.saleDetails = master.saleDetails;
+      return originalDisplayItem(base, Object.assign({}, original, {saleSummary: original.saleDetails || original.saleSummary}));
+    }).catch(function() {
+      return Object.assign({}, item, {printReviewWarningV22: "최신 상세조건 조회 실패 · 현재 목록정보 기준. 보증금·임대수입 등은 원문에서 재확인하세요."});
+    });
+  }
+
   function filterItemForView(master, matches, view) {
     var all = master.unifiedAllOriginalsV1 || [];
     var manual = text(master.state) === "계약완료";
@@ -2492,7 +2518,7 @@
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
     openGallery: openGallery, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,
-    loadContacts: loadContacts, getCachedContacts: getCachedContacts,
+    loadContacts: loadContacts, getCachedContacts: getCachedContacts, printItem: printItem,
     imageError: imageError, thumbnailImageError: thumbnailImageError, thumbnailImageLoaded: thumbnailImageLoaded,
     detailImageLoaded: detailImageLoaded, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError,
