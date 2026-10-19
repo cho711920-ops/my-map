@@ -10,6 +10,7 @@ import {
 import { getBuildingRegister, getElevatorCapacityForListing } from "./building-register-api.js";
 import { getSaleTransactions } from "./sale-transactions.js";
 import { getSaleParcelFacts } from "./sale-parcel-facts.js";
+import { boundaryCapability, getSaleParcelBoundary } from "./sale-parcel-boundary.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
@@ -762,6 +763,9 @@ async function handleDataApi(request, env, context) {
     }
     if (query.action === "saleParcelFacts") {
       return jsonp(query.callback, await getSaleParcelFacts(env, query), {"cache-control": "private, no-store"});
+    }
+    if (query.action === "saleParcelBoundaryConfig" || query.action === "saleParcelBoundary") {
+      return jsonp(query.callback, query.action === "saleParcelBoundaryConfig" ? boundaryCapability(env) : await getSaleParcelBoundary(env, query), {"cache-control": "private, no-store"});
     }
     if (query.action === "buildingRegister") {
       return jsonp(query.callback, await getBuildingRegister(env, query), {

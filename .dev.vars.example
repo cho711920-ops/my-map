@@ -6,3 +6,6 @@ APPS_SCRIPT_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 APPS_SCRIPT_PROXY_SECRET=
 NAVER_MAPS_NCP_KEY_ID=
 LAW_OPEN_DATA_OC=
+# Selected land parcel boundaries only. Dedicated VWorld data API key;
+# DATA_GO_KR_SERVICE_KEY is not a substitute. Never commit real credentials.
+VWORLD_API_KEY=

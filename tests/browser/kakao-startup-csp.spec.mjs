@@ -64,6 +64,34 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   return {errors,forbidden};
 }
 
+test('land parcel boundary uses real SDK polygons with holes and preserves original listing data',async({page},testInfo)=>{
+  test.setTimeout(45000);const checked=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await page.route('**/api/data?*',async route=>{
+    const u=new URL(route.request().url()),action=u.searchParams.get('action');
+    if(action==='saleParcelBoundaryConfig')return route.fulfill({json:{ok:true,available:true}});
+    if(action==='saleParcelBoundary')return route.fulfill({json:{ok:true,pnu:'3017010800100030003',geometry:{type:'MultiPolygon',coordinates:[[
+      [[127.3835,36.3498],[127.3855,36.3498],[127.3855,36.351],[127.3835,36.351],[127.3835,36.3498]],
+      [[127.3842,36.3502],[127.3848,36.3502],[127.3848,36.3506],[127.3842,36.3506],[127.3842,36.3502]]
+    ]]}}});return route.fallback();
+  });
+  await page.evaluate(()=>{
+    window.__boundaryBefore=JSON.stringify(allItems);window.__nativeParcelPolygons=[];
+    const NativePolygon=kakao.maps.Polygon;kakao.maps.Polygon=function(options){const polygon=new NativePolygon(options);__nativeParcelPolygons.push(polygon);return polygon;};
+    JSListingTradeV1.setMode('land_sale');
+    JSParcelExternalLinksV1.resolve=async address=>({address,pnu:'3017010800100030003',links:{}});
+    const root=document.createElement('div');root.id='nativeParcelPanel';root.style='position:fixed;top:130px;left:15px;z-index:1000;background:white;width:330px';document.body.append(root);
+    JSSaleParcelBoundaryV23.mount(root,{tradeType:'sale',saleCategory:'land',address:'대전 서구 괴정동 3-3',saleDetails:{landAreaM2:330}});
+  });
+  await page.locator('[data-boundary-single]').click();await expect(page.locator('.sale-parcel-map-v23')).toBeVisible();await page.locator('#nativeParcelPanel').evaluate(el=>el.remove());
+  await expect(page.locator('.sale-parcel-badge-v23')).toBeVisible();expect(await page.evaluate(()=>__nativeParcelPolygons[0].getPath().length)).toBe(2);
+  expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(await page.evaluate(()=>__boundaryBefore));
+  await page.locator('.sale-parcel-badge-v23').click();await expect(page.locator('[data-boundary-row="1"]')).toHaveClass('selected');
+  await page.screenshot({path:testInfo.outputPath('native-parcel-hole.png')});
+  await page.locator('.sale-parcel-map-v23 button').first().click();await expect(page.locator('.sale-parcel-badge-v23')).toHaveCount(0);
+  expect(await page.evaluate(()=>__nativeParcelPolygons[0].getMap())).toBe(null);expect(checked.errors).toEqual([]);expect(checked.forbidden).toEqual([]);
+});
+
 test('parking overlays and detail coexist with real Kakao clusters without moving or selecting listings',async({page},testInfo)=>{
   test.setTimeout(45000);
   const boundary=await startFullApplication(page);
