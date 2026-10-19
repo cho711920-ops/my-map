@@ -21,7 +21,7 @@ async function prepare(page, context) {
       setCenter(){hoverAudit.pans++;},panTo(){hoverAudit.pans++;},setLevel(){hoverAudit.zooms++;},relayout(){hoverAudit.layouts++;}};
     window.kakao={maps:{LatLng,CustomOverlay:class{
       constructor(options){hoverAudit.created++;this.wrapper=document.createElement('div');
-        this.wrapper.style.cssText='position:absolute;transform:translate(-50%,-50%);z-index:'+options.zIndex;
+        this.wrapper.style.cssText='position:absolute;transform:translate('+(-100*options.xAnchor)+'%,'+(-100*options.yAnchor)+'%);z-index:'+options.zIndex;
         this.wrapper.append(options.content);}
       setPosition(p){hoverAudit.positions.push([p.getLat(),p.getLng()]);
         this.wrapper.style.left=(220+(p.getLng()-127.38)*100000)+'px';this.wrapper.style.top='280px';}
@@ -52,6 +52,12 @@ test('desktop hover reuses one exact-location overlay and preserves selection, v
   await expect(page.locator('.js-listing-hover-pin-v1')).toHaveCount(1);
   await expect(page.locator('.js-listing-hover-pin-v1')).toHaveCSS('pointer-events','none');
   await expect(page.locator('.js-listing-hover-pin-v1').locator('..')).toHaveCSS('pointer-events','none');
+  const tip=await page.locator('.js-listing-hover-pin-v1').evaluate(el=>{
+    const box=el.getBoundingClientRect(),host=document.getElementById('map').getBoundingClientRect();
+    return {dx:box.x+box.width/2-host.x-220,dy:box.bottom-host.y-280,w:box.width,h:box.height,color:getComputedStyle(el,'::before').backgroundColor};
+  });
+  expect(Math.abs(tip.dx)).toBeLessThan(1);expect(Math.abs(tip.dy)).toBeLessThan(1);
+  expect(tip.w).toBe(20);expect(tip.h).toBe(26);expect(tip.color).toBe('rgb(220, 38, 38)');
   await first.locator('.item-roadview-btn').hover();
   await second.locator('.item-building-name').hover();
   expect(await state(page)).toEqual(before);
@@ -68,7 +74,11 @@ test('hover clears on scrolling, card replacement, pointer press, panel close an
   test.skip(isMobile,'Desktop cleanup paths');
   const h=await prepare(page,context),name=page.locator('#list .item .item-building-name').first();
   for(const action of ['scroll','replace','pointerdown','blur','close']){
-    await page.mouse.move(10,65);await name.hover();
+    await page.mouse.move(10,65);
+    // This first row is already visible. Avoid locator.hover's automatic
+    // scroll-into-view, which itself correctly clears the hover preview.
+    const box=await name.boundingBox();
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
     await expect(page.locator('.js-listing-hover-pin-v1')).toHaveCount(1);
     await page.evaluate(action=>{
       if(action==='scroll')document.getElementById('sidebar').dispatchEvent(new Event('scroll'));

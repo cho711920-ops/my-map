@@ -3,10 +3,13 @@
 :root { --js-pro-ink: #1e293b; --js-pro-muted: #64748b; --js-pro-line: #e2e8f0; }
 
 .js-listing-hover-pin-v1 {
-  width: 38px; height: 38px; box-sizing: border-box; border-radius: 50%;
-  border: 2px solid #075fbd; background: transparent;
-  box-shadow: 0 0 0 3px #ffffffb3, 0 0 0 7px #0568e826;
+  width: 20px; height: 26px; box-sizing: border-box;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 1px 1px #26323d66);
   pointer-events: none;
+}
+.js-listing-hover-pin-v1::before {
+  content: ""; display: block; width: 100%; height: 100%; background: #dc2626;
+  clip-path: polygon(30% 0, 70% 0, 70% 52%, 100% 52%, 50% 100%, 0 52%, 30% 52%);
 }
 /* The SDK wrapper must also let pointer input pass to the original map. */
 #map div:has(> .js-listing-hover-pin-v1) { pointer-events: none; }

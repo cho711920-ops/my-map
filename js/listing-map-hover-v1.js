@@ -45,7 +45,8 @@
       marker.className = "js-listing-hover-pin-v1";
       marker.setAttribute("aria-hidden", "true");
       overlay = new global.kakao.maps.CustomOverlay({
-        content: marker, xAnchor: .5, yAnchor: .5, zIndex: 1200
+        // Anchor the arrow tip to the listing coordinate, rather than its center.
+        content: marker, xAnchor: .5, yAnchor: 1, zIndex: 1200
       });
     }
     overlay.setPosition(position);

@@ -206,7 +206,7 @@ test("current production CSP permits full authenticated startup, live Kakao map 
   const hoverLocation=await page.locator('#map .js-listing-hover-pin-v1').evaluate(el=>{
     const box=el.getBoundingClientRect(),host=document.getElementById('map').getBoundingClientRect();
     const expected=map.getProjection().containerPointFromCoords(visibleListItems[0].latlng);
-    return {dx:box.x+box.width/2-host.x-expected.x,dy:box.y+box.height/2-host.y-expected.y,
+    return {dx:box.x+box.width/2-host.x-expected.x,dy:box.bottom-host.y-expected.y,
       events:getComputedStyle(el.parentElement).pointerEvents};
   });
   expect(Math.abs(hoverLocation.dx)).toBeLessThan(2);expect(Math.abs(hoverLocation.dy)).toBeLessThan(2);
