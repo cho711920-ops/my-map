@@ -4772,17 +4772,17 @@ function addListItem(item, appendTarget) {
     if (buildingSaleV1) {
         div.classList.add("listing-building-card-v5");
         div.innerHTML = '<div class="sale-card-heading-v5">' + selectionControlV1 +
-            '<span class="sale-card-category-v5">' + escapeHtml(displayType || "건물매매") + '</span>' + doneLabel + favoriteHeaderButtonV661 + '</div>' +
+            '<span class="sale-card-category-v5">' + escapeHtml(displayType || "건물매매") + '</span>' + doneLabel +
+            '<div class="sale-card-meta-v5"><span class="sale-card-source-v14">' + escapeHtml(item.source || "출처 미제공") + '</span>' +
+            (cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.year ? '<span class="item-building-year-v650' + cachedBuildingYearClassV6519 + '">' + escapeHtml(cachedBuildingYearTextV6519) + '</span>' : '') +
+            buildListElevatorIconV843(item) + sourceLabel + '</div>' + favoriteHeaderButtonV661 + '</div>' +
             '<div class="item-card-grid-v650 standard-card-grid-v661">' + unifiedCardPartsV8.thumbnail +
             '<div class="item-compact-main-v650 standard-card-main-v661">' +
             '<div class="item-compact-head-v650"><span class="item-building-name">' + escapeHtml(item.name || "매매 매물") + '</span>' +
             '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span></span></div>' +
-            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + pyeongMiniBadge + '</div></div></div>' +
-            buildingSaleInfoV1 + window.JSListingTradeV1.saleCardFactsHtml(item) + window.JSListingTradeV1.buildingUnitPricesHtml(item) +
-            '<div class="sale-card-meta-v5">' + escapeHtml(item.source || "출처 미제공") +
-            (regDateLabel ? '<span>등록 ' + escapeHtml(regDateLabel) + '</span>' : '') +
-            (cachedBuildingBadgeV6519 && cachedBuildingBadgeV6519.year ? '<span class="item-building-year-v650' + cachedBuildingYearClassV6519 + '">' + escapeHtml(cachedBuildingYearTextV6519) + '</span>' : '') +
-            buildListElevatorIconV843(item) + sourceLabel + '</div><div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
+            '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + pyeongMiniBadge + buildingSaleInfoV1 + '</div></div></div>' +
+            window.JSListingTradeV1.saleCardFactsHtml(item) + window.JSListingTradeV1.buildingUnitPricesHtml(item) +
+            '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
     }
     if (landCardV4) {
         div.classList.add("listing-land-card-v4");
@@ -4790,7 +4790,8 @@ function addListItem(item, appendTarget) {
         var landTitleV4 = landNameV4 && landNameV4 !== item.address ? landNameV4 : "토지 매물";
         div.innerHTML = '<div class="land-card-heading-v4">' + selectionControlV1 +
             '<span class="land-card-category-v4">토지매매</span>' +
-            '<span class="item-room-badge land-use-badge-v1">' + escapeHtml(landUseLabelV1) + '</span>' + doneLabel + favoriteHeaderButtonV661 + '</div>' +
+            '<span class="item-room-badge land-use-badge-v1">' + escapeHtml(landUseLabelV1) + '</span>' + doneLabel +
+            '<div class="land-card-meta-v4"><span>' + escapeHtml(item.source || "출처 미제공") + '</span>' + sourceLabel + '</div>' + favoriteHeaderButtonV661 + '</div>' +
             '<div class="item-card-grid-v650 standard-card-grid-v661">' + unifiedCardPartsV8.thumbnail +
             '<div class="item-compact-main-v650 standard-card-main-v661">' +
             '<div class="item-compact-head-v650"><span class="item-building-name" title="' + escapeHtml(landTitleV4) + '">' + escapeHtml(landTitleV4) + '</span>' +
@@ -4798,8 +4799,6 @@ function addListItem(item, appendTarget) {
             '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span></div>' +
             window.JSListingTradeV1.landCardMetricsHtml(item) + '</div></div>' +
             '<div class="land-card-conditions-v4">' + window.JSListingTradeV1.saleLandInfoHtml(item) + window.JSListingTradeV1.saleCardFactsHtml(item) + '</div>' +
-            '<div class="land-card-meta-v4"><span>' + escapeHtml(item.source || "출처 미제공") + '</span>' +
-            (regDateLabel ? '<span class="item-reg-date">등록 ' + escapeHtml(regDateLabel) + '</span>' : '') + sourceLabel + '</div>' +
             '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
     }
     if (saleCardV1 && window.JSSaleReviewEnhancementsV8) {

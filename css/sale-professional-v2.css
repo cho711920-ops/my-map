@@ -1,10 +1,10 @@
 /* Sale-only presentation. Lease cards, maps and stored listing facts are unchanged. */
 html #list .item.listing-sale-card-v1 {
-  padding: 12px !important; margin-bottom: 12px !important; border-radius: 12px !important;
+  padding: 6px 10px !important; margin-bottom: 8px !important; border-radius: 10px !important;
 }
 /* Keep each sale property separate from the list surface; selected cards retain their existing highlight. */
 html:not([data-sale-table-v10]):is([data-listing-trade-mode=building_sale],[data-listing-trade-mode=land_sale]) #list { background: #f0f3f6; }
-html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 { padding: 12px !important; margin-bottom: 12px !important; }
+html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 { padding: 6px 10px !important; margin-bottom: 8px !important; }
 html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1:not(.selected):not(:has(.transaction-check-button-v8135)) {
   border-color: #c9d5e1 !important; background: #fff !important; box-shadow: 0 2px 5px #233c5510 !important;
 }
@@ -108,6 +108,37 @@ html #list .item.listing-sale-card-v1 .sale-card-facts-v2 { order: 3; }
   order: 0; flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; padding-right: 30px; gap: 4px !important;
 }
 .js-phone-app-v2 #list .item.listing-sale-card-v1 .item-compact-head-v650 > :is(.item-building-name, .item-address-room-v650) { flex: 0 0 auto !important; min-height: 0 !important; height: auto !important; margin: 0 !important; }
+
+/* Denser sale cards: provenance joins the heading; identity and area share the photo row. */
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 :is(.sale-card-heading-v5,.land-card-heading-v4) { gap: 4px 7px; margin-bottom: 2px; min-height: 20px; }
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 :is(.sale-card-heading-v5,.land-card-heading-v4) > :is(.sale-card-meta-v5,.land-card-meta-v4) { margin: 0; gap: 5px; line-height: 1.4; }
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-head-select-v650 { height: 20px; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .item-compact-main-v650 { gap: 3px !important; min-height: 0 !important; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .standard-card-grid-v661 { min-height: 0 !important; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .item-building-name { font-size: 14px !important; line-height: 1.4 !important; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .item-address-room-v650 { font-size: 12px !important; line-height: 1.4 !important; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .listing-sale-price-v1 { font-size: 19px !important; line-height: 1.4; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 .standard-card-grid-v661 { grid-template-columns: 68px minmax(0,1fr) !important; gap: 10px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 .unified-thumb-v8 { width: 68px !important; height: 68px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 .item-compact-price-v650 { flex-wrap: wrap !important; gap: 3px 10px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 .item-price-values-v652 { flex: 0 1 auto !important; width: auto !important; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 .item-compact-price-v650 > .building-sale-area-info-v1 { margin: 0 !important; padding: 0 !important; flex: 0 1 auto; min-width: 0; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 .item-compact-price-v650 .listing-sale-areas-v1 { display: flex; flex-wrap: wrap; gap: 3px 5px; font-size: 11px; line-height: 1.5; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .item-compact-actions-v650 { margin-top: 4px !important; padding-top: 4px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 > .sale-card-facts-v2 { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px 10px; margin-top: 6px; padding: 6px 8px; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 > .sale-card-facts-v2 > span { gap: 1px; }
+html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 > .sale-card-facts-v2 b { font-size: 13px; }
+html:not([data-sale-table-v10]) #list .listing-building-card-v5 .building-unit-prices-v5 { margin-top: 4px; line-height: 1.4; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .standard-card-grid-v661 { grid-template-columns: 68px minmax(0,1fr) !important; gap: 10px !important; }
+html:not([data-sale-table-v10]) #list .item.listing-land-card-v4 .unified-thumb-v8 { width: 68px !important; height: 68px !important; }
+html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-metrics-v4 { gap: 8px; padding-top: 2px; }
+html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-metrics-v4 > div { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 5px; }
+html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-metrics-v4 strong { font-size: 14px; }
+html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-metrics-v4 > div > small { flex-basis: 100%; }
+html:not([data-sale-table-v10]) #list .listing-land-card-v4 .land-card-conditions-v4 { margin-top: 5px; padding: 5px 8px; gap: 3px 10px; }
+@media (max-width: 420px) {
+  html:not([data-sale-table-v10]) #list .item.listing-building-card-v5 > .sale-card-facts-v2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
 
 /* Property dossier: navigation, an asset summary and readable fact tables. */
 /* Building cards keep the same identity/actions, with asset and income blocks. */

@@ -32,7 +32,7 @@ for(const market of ['building_sale','land_sale'])test(market+' photo and text k
         else if(layout==='compact'&&width>=769&&!isMobile)expect(c.main.x-c.card.x,JSON.stringify(c)).toBeLessThan(25);
       }
       const separation=await page.locator('#list').evaluate(list=>{const cards=[...list.querySelectorAll('.listing-sale-card-v1')],first=cards[0],second=cards[1];return {gap:second.getBoundingClientRect().top-first.getBoundingClientRect().bottom,background:getComputedStyle(list).backgroundColor,card:getComputedStyle(first).backgroundColor,border:getComputedStyle(first).borderTopColor};});
-      expect(separation.gap).toBeGreaterThanOrEqual(11);expect(separation.background).not.toBe(separation.card);expect(separation.border).not.toBe('rgba(0, 0, 0, 0)');
+      expect(separation.gap).toBeGreaterThanOrEqual(7);expect(separation.background).not.toBe(separation.card);expect(separation.border).not.toBe('rgba(0, 0, 0, 0)');
     }
   }
   expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);

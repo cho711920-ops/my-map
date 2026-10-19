@@ -36,7 +36,6 @@
   }
   function mountCard(card,item){
     if(!ui().isSale(item))return;
-    card.querySelectorAll('.sale-card-meta-v5 span,.land-card-meta-v4 .item-reg-date').forEach(function(el){if(/^등록\s/.test(text(el.textContent))&&item.regDate)el.textContent='등록 '+dateText(item.regDate);});
     var row=document.createElement('div');row.className='sale-table-row-v10';row.setAttribute('role','group');row.setAttribute('aria-label','매매 조건 표 행');
     var check=card.querySelector('.action-select-check'),phone=card.querySelector('.item-action-left button'),land=ui().normalizedSaleCategory(item)==='land';
     row.innerHTML='<input type="checkbox" data-table-select aria-label="'+esc(item.address||item.name)+' 비교 선택"'+(check&&check.checked?' checked':'')+'>'+rowValues(item).map(function(value,i){return '<div class="sale-table-cell-v10'+(i>0&&i<(land?4:7)?' numeric':'')+'">'+(i===0?'<button type="button" data-table-open>'+value+'</button><small>'+esc(item.name||item.buildingName||'매매 매물')+'</small>':value)+'</div>';}).join('')+'<button type="button" data-table-phone aria-label="저장 연락처 확인">☎</button>';

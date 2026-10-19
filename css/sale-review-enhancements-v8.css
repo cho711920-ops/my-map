@@ -51,9 +51,10 @@
   html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .item.listing-sale-card-v1{display:flex!important;flex-direction:column;gap:0;padding:10px 12px!important;margin-bottom:12px!important;border-radius:8px!important}
   html[data-sale-list-compact-v8]:not(.js-phone-app-v2):not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1{padding:10px 12px!important}
   html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8{display:block!important;order:2}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 .sale-review-facts-v8{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:5px 0}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 .sale-review-facts-v8>div{border:0;padding:5px 0}
-  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 dd{font-size:12px;line-height:1.6}
+  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 .sale-review-facts-v8{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:3px 0}
+  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 .sale-review-facts-v8>div{border:0;padding:2px 0;gap:2px}
+  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 dt{font-size:10px;line-height:1.4}
+  html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .sale-compact-metrics-v8 dd{font-size:12px;line-height:1.4}
   html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.standard-card-grid-v661{order:1;grid-template-columns:64px minmax(0,1fr)!important;grid-template-rows:auto!important;gap:12px!important}
   html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1 .unified-thumb-v8{width:64px!important;min-width:0!important;height:72px!important;min-height:0!important;max-height:72px!important;align-self:start!important}
   html[data-sale-list-compact-v8]:not(.js-phone-app-v2) #list .listing-sale-card-v1>.standard-card-grid-v661:has(.no-photo){grid-template-columns:minmax(0,1fr)!important}
