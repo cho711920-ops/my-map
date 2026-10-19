@@ -24,4 +24,12 @@
 - 이번에는 관련 검사만 수행. v24에서 기록한 기존 전체 Node 실패12개를 해결한 작업은 아니다.
 - outputs/market-detail-dismiss-v25-*.log에 증거 보관.
 
-배포: 검수 후 결과를 아래에 기록한다. VWorld 및 주거 실거래 API 보류 유지.
+운영 배포 완료
+- 제품 93da206, Worker 12164fba-c575-49c7-9cfa-fd038212c894.
+- public cache e6c90823545f4c2ecf49dda4.
+- 배포 직전 운영 Worker가 이전 v24의 5006950d임을 확인했다.
+- 2026-10-20 01:52 KST, 양 도메인 각각87개 자산 HTTP200/빌드 SHA256 일치.
+- HTML200/no-store/Kakao CSP, 비로그인 실거래401 유지 확인.
+- 증거 outputs/market-detail-dismiss-v25-live-verification.json.
+- 기존 화면은 1회 새로고침. 재수집은 필요 없다.
+- VWorld 및 주거 실거래 API 보류는 유지한다.
