@@ -8,6 +8,14 @@
   function account(){return String(global.JSAuthenticatedAccountEmail||'').toLowerCase();}
   function valid(c){return c.dialog.isConnected&&c.dialog.open&&active===c&&account()===c.account;}
   function normalized(f,v){if(f.type==='number')return v==null||String(v).trim()===''?null:Number(v);return String(v==null?'':v).trim();}
+  function moneyPreview(value){
+    if(value==null||String(value).trim()==='')return '금액 미입력';
+    var n=Number(value),won=Math.round(n*10000);
+    if(!Number.isFinite(n)||n<0||!Number.isSafeInteger(won))return '입력 금액을 확인해 주세요';
+    if(n===0)return '0원';if(won===0)return '1원 미만';
+    var parts=[];[[1e12,'조'],[1e8,'억'],[1e4,'만']].forEach(function(unit){var count=Math.floor(won/unit[0]);if(count){parts.push(count.toLocaleString('ko-KR')+unit[1]);won-=count*unit[0];}});
+    if(won)parts.push(won.toLocaleString('ko-KR'));return parts.join(' ')+'원';
+  }
   function fields(land){
     var list=[{key:'name',label:land?'매물명':'건물명',common:true},{key:'salePrice',label:'매매가',type:'number',unit:'만원'}];
     [['landAreaM2',land?'토지면적':'대지면적']].concat(land?[]:[['grossAreaM2','연면적'],['exclusiveAreaM2','전용면적'],['buildingAreaM2','건축면적']]).forEach(function(p){list.push({key:p[0],label:p[1],type:'number',unit:'㎡'});});
@@ -37,18 +45,20 @@
     c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null;
       if(reference)value=hint[f.key];c.initial[f.key]=normalized(f,value);
       html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+'</span>';
-      var attr=' data-sale-edit="'+f.key+'" aria-label="'+esc(f.label)+'"';
+      var attr=' data-sale-edit="'+f.key+'" aria-label="'+esc(f.label)+'"'+(f.unit==='만원'?' aria-describedby="sale-money-preview-v24-'+f.key+'"':'');
       if(f.type==='memo')html+='<textarea'+attr+' rows="4">'+esc(value)+'</textarea>';
       else if(f.type==='state')html+='<select'+attr+'><option value="">계약가능</option><option value="계약완료"'+(value==='계약완료'?' selected':'')+'>계약완료</option>'+(value&&value!=='계약완료'?'<option value="'+esc(value)+'" selected>'+esc(value)+'</option>':'')+'</select>';
       else html+='<input'+attr+' type="'+(f.type||'text')+'" value="'+esc(value)+'"'+(f.type==='number'?' min="'+(f.key==='salePrice'||/AreaM2$/.test(f.key)?'0.000001':'0')+'" step="any" inputmode="decimal"'+(f.key==='salePrice'?' required':''):' maxlength="'+(f.common?'2000':'160')+'"')+'>';
       if(f.unit==='㎡')html+='<small data-sale-edit-py="'+f.key+'"></small>';
+      if(f.unit==='만원')html+='<small class="sale-edit-money-preview-v24" id="sale-money-preview-v24-'+f.key+'" data-sale-money-preview="'+f.key+'" role="status" aria-live="polite" aria-atomic="true"></small>';
       if(reference)html+='<small class="sale-edit-reference-v1">원본 참고값 · 변경한 경우에만 관리값 저장</small>';
       html+='</label>';
     });
     html+='</div><p data-sale-edit-status role="status" aria-live="polite"></p><div data-sale-edit-conflict></div><footer class="sale-edit-actions-v1"><button type="button" data-sale-edit-delete>매물삭제</button><span></span><button type="button" data-sale-edit-cancel>취소</button><button type="submit" data-sale-edit-save>저장</button></footer></form>';
     c.dialog.querySelector('.sale-workbench-body').innerHTML=html;
     function areas(){c.fields.filter(function(f){return f.unit==='㎡';}).forEach(function(f){var n=Number(input(c,f).value);c.dialog.querySelector('[data-sale-edit-py="'+f.key+'"]').textContent=n>0?(n/3.305785).toLocaleString('ko-KR',{maximumFractionDigits:2})+'평':'';});}
-    c.dialog.querySelector('form').addEventListener('input',areas);areas();
+    function previews(){areas();c.fields.filter(function(f){return f.unit==='만원';}).forEach(function(f){var field=input(c,f),out=c.dialog.querySelector('[data-sale-money-preview="'+f.key+'"]'),value=field.validity.badInput?'입력 금액을 확인해 주세요':moneyPreview(field.value);if(out.textContent!==value)out.textContent=value;out.dataset.empty=String(field.value==='');});}
+    c.dialog.querySelector('form').addEventListener('input',previews);previews();
     c.dialog.querySelector('form').onsubmit=function(e){e.preventDefault();save(c);};
     c.dialog.querySelector('[data-sale-edit-cancel]').onclick=function(){c.dialog.close();};
     c.dialog.querySelector('[data-sale-edit-delete]').onclick=function(){remove(c);};
@@ -99,5 +109,5 @@
     try{c.row=await readRow(c);if(valid(c)){if(!land&&global.JSListingTradeV1.buildingSaleExtent(item)==='unit')c.fields.splice(2,0,{key:'room',label:'매매 대상 층·호실',common:true});render(c);}}
     catch(e){if(valid(c))dialog.querySelector('.sale-workbench-body').textContent=e.message+' 저장하지 않았습니다.';else if(dialog.isConnected)dialog.close();}
   }
-  global.JSSalePropertyEditV1={open:open};
+  global.JSSalePropertyEditV1={open:open,moneyPreview:moneyPreview};
 })(window);

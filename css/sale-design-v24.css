@@ -1,0 +1,152 @@
+/* Sale presentation only. Lease, map markers and source data keep their own styles. */
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) {
+  --sale-ink-v24: #203247;
+  --sale-muted-v24: #5f6e7f;
+  --sale-line-v24: #dde3e9;
+  --sale-surface-v24: #f5f7f9;
+  --sale-accent-v24: #285a80;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 {
+  padding: 10px 12px !important;
+  margin-bottom: 8px !important;
+  border-radius: 7px !important;
+  color: var(--sale-ink-v24);
+  font-family: var(--js-app-font, "Segoe UI", "Malgun Gothic", sans-serif);
+  font-variant-numeric: tabular-nums;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1:not(.selected):not(:has(.transaction-check-button-v8135)) {
+  border-color: var(--sale-line-v24) !important;
+  box-shadow: none !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1.selected:not(:has(.transaction-check-button-v8135)) {
+  border-color: #7295b3 !important;
+  background: #f3f7fb !important;
+  box-shadow: inset 3px 0 0 var(--sale-accent-v24) !important;
+}
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 :is(.sale-card-heading-v5,.land-card-heading-v4) {
+  gap: 5px 8px; margin-bottom: 7px;
+}
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 :is(.sale-card-category-v5,.land-card-category-v4) {
+  background: #edf1f5; color: #425469; border-radius: 3px;
+  font-size: 11px; font-weight: 600; padding: 2px 6px;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .standard-card-grid-v661 {
+  grid-template-columns: 76px minmax(0,1fr) !important;
+  grid-template-rows: auto !important;
+  height: auto !important; min-height: 0 !important; gap: 10px !important;
+  align-items: start !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .unified-thumb-v8 {
+  width: 76px !important; height: 82px !important; min-height: 0 !important;
+  border-radius: 5px !important; border-color: #e1e6eb !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .unified-thumb-v8.no-photo {
+  background: #f2f4f6 !important; color: #687787 !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .item-compact-main-v650 {
+  min-height: 0 !important; height: auto !important; gap: 4px !important;
+  justify-content: flex-start !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .item-building-name {
+  font-size: 14px !important; font-weight: 650 !important;
+  line-height: 1.45 !important; color: var(--sale-ink-v24) !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .item-address-text {
+  font-size: 12px !important; line-height: 1.5 !important; color: var(--sale-muted-v24) !important;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .listing-sale-price-v1 {
+  color: #183e60 !important; font-size: 21px !important; font-weight: 750 !important;
+  line-height: 1.4 !important; letter-spacing: -.35px;
+}
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .sale-list-metrics-v16 {
+  gap: 4px 14px; padding-top: 3px;
+}
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .sale-list-metrics-v16 dt { color: #647182; }
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .sale-list-metrics-v16 dd { color: #34475b; font-weight: 650; }
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .sale-list-metrics-v16 small { color: #647182; font-size: 11px; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 {
+  background: #f5f7f9; border: 0; border-radius: 5px;
+  margin-top: 8px; padding: 8px 10px; gap: 7px 16px;
+}
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 > span { gap: 2px; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 > span > span { color: #5f6e7f; font-size: 11px; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 b { color: #30465c; font-size: 13px; font-weight: 650; }
+html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .item-compact-actions-v650 {
+  padding-top: 8px !important; margin-top: 8px !important;
+  border-top: 1px solid #e6eaef; gap: 4px !important;
+}
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-action-left { flex: 1 1 0 !important; gap: 4px !important; }
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-action-left > button,
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 > .item-compact-actions-v650 > .item-memo-toggle {
+  flex: 0 0 auto !important; border-radius: 4px !important;
+  min-height: 32px !important; height: 32px !important;
+  box-shadow: none !important;
+}
+/* Keep phone/favourite/warning colours: these communicate actual state. */
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-action-left > :is(.item-nav-btn,.item-roadview-btn,.item-edit-btn-v630,.item-source-link-btn,.land-parcel-lookup-v4):not(:disabled):not(.transaction-check-button-v8135):not(.unified-expand-btn-v8) {
+  background: #fff !important; border-color: #e1e6ec !important; color: #536477 !important;
+}
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-action-left > .item-source-link-btn { width: auto !important; }
+html:not([data-sale-table-v10]) #list .listing-sale-card-v1 button:focus-visible {
+  outline: 2px solid #285a80; outline-offset: 2px;
+}
+
+/* A consistent report surface in the sale dossier, including the land variant. */
+#unifiedDetailDrawerV8[data-sale-presentation-v2] { color: #203247; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] > header .sale-fixed-summary-v9 strong { color: #183e60; font-weight: 750; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-dossier-nav-v3 { border-color: #dde3e9; padding: 0 8px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-dossier-nav-v3 button { font-size: 12px; font-weight: 500; color: #627184; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-dossier-nav-v3 button[aria-current] { color: #285a80; border-color: #285a80; font-weight: 700; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .unified-detail-summary-v8 { padding: 16px !important; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2,
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2.land {
+  color: #203247; background: #f5f7f9; border: 1px solid #e0e6ec; border-radius: 7px; padding: 16px;
+}
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-price-v2 > strong { color: #183e60; font-size: 28px; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] :is(.sale-overview-price-v2 > span,.sale-overview-label-v2) { color: #5f6e7f; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 :is(.listing-sale-areas-v1,.sale-land-metrics-v3 strong) { color: #30465c; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .listing-sale-yield-v1 { color: #285a80; border-color: #d9e2eb; background: #fff; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .sale-card-facts-v2 { color: #5f6e7f; border-color: #dde3e9; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-overview-v2 .sale-card-facts-v2 b { color: #30465c; font-size: 15px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] :is(.sale-review-gaps-v2,.sale-land-metrics-v3) { color: #5f6e7f; border-color: #dde3e9; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-land-metrics-v3 span { color: #5f6e7f; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 > dt { font-size: 15px; font-weight: 700; color: #203247; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dt { color: #5f6e7f; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-fact-group-v2 dl dd { color: #30465c; font-weight: 600; font-variant-numeric: tabular-nums; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .building-sale-area-info-v1 .listing-sale-areas-v1 > span { background: #f5f7f9; border-color: #e0e6ec; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .building-sale-area-info-v1 .listing-sale-areas-v1 b { color: #30465c; font-size: 17px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] :is(.sale-tools-v1 button,.sale-secondary-tools-v10 > button,.sale-original-evidence-v10 button) {
+  border-color: #d6dfe7; background: #fff; color: #425a70; border-radius: 5px; box-shadow: none;
+}
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-tools-v1 button:first-child { color: #fff; background: #285a80; border-color: #285a80; }
+
+/* Scope shared workbench elements to sale mode so lease tools are unaffected. */
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) .sale-workbench-dialog {
+  border-radius: 10px; color: #203247; box-shadow: 0 16px 64px #15263833;
+}
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) .sale-workbench-dialog > header { border-color: #e0e6ec; background: #fff; }
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) .sale-workbench-dialog :is(input,select,textarea) { border-color: #cdd6df; border-radius: 5px; color: #203247; background: #fff; }
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) .sale-workbench-dialog :is(input,select,textarea,button):focus-visible { outline: 2px solid #285a80; outline-offset: 2px; }
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) .sale-workbench-dialog :is([data-calc-result],.sale-money-flow-v10) { background: #f5f7f9; border-radius: 6px; border-color: #dde3e9; }
+html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land_sale"]) .sale-workbench-dialog .sale-result-grid-v2 strong { color: #30465c; }
+.sale-property-edit-v1 .sale-edit-identity-v1 { color: #30465c; font-weight: 650; }
+.sale-property-edit-v1 .sale-edit-notice-v1 { background: #f5f7f9; color: #5f6e7f; border-radius: 5px; padding: 10px 12px; line-height: 1.7; }
+.sale-property-edit-v1 .sale-edit-grid-v1 { gap: 6px 18px; }
+.sale-property-edit-v1 .sale-edit-grid-v1 > label > span { color: #425469; font-size: 12px; font-weight: 600; }
+.sale-property-edit-v1 .sale-edit-actions-v1 { padding-top: 14px; border-top: 1px solid #e0e6ec; }
+.sale-property-edit-v1 .sale-edit-actions-v1 [data-sale-edit-save] { color: #fff; background: #285a80; border-color: #285a80; }
+.sale-property-edit-v1 .sale-edit-actions-v1 [data-sale-edit-cancel] { color: #425469; background: #fff; border-color: #cdd6df; }
+.sale-property-edit-v1 .sale-edit-actions-v1 [data-sale-edit-delete] { color: #a32d34; background: #fff; border-color: #e5c6c9; }
+
+@media(max-width:600px) {
+  html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 { padding: 9px 10px !important; }
+  html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .standard-card-grid-v661 { grid-template-columns: 64px minmax(0,1fr) !important; gap: 9px !important; }
+  html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .unified-thumb-v8 { width: 64px !important; height: 76px !important; }
+  html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 .listing-sale-price-v1 { font-size: 20px !important; }
+  html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-action-left > button,
+  html:not([data-sale-table-v10]) #list .listing-sale-card-v1 > .item-compact-actions-v650 > .item-memo-toggle { min-height: 36px !important; height: 36px !important; }
+  .sale-property-edit-v1 .sale-edit-grid-v1 { gap: 6px 12px; }
+}
+@media print {
+  html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 { box-shadow: none !important; }
+}
