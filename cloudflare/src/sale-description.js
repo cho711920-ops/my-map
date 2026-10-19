@@ -1,7 +1,18 @@
 // Conservative, label-based extraction. These are advertiser statements, not
 // verified net income. Never convert after-interest income to gross rent.
 export function koreanMoneyManwon(value) {
-  const text = String(value ?? "").replace(/[,\s]/g, "").replace(/원$/, "");
+  const compact = String(value ?? "").replace(/\s/g, "").replace(/원$/, "");
+  let invalid = false;
+  const text = compact.replace(/\d[\d,.]*/g, (token, index) => {
+    if (token.includes(',') && !/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(token)) { invalid=true; return token; }
+    const cleaned=token.replace(/,/g,'');
+    // Dot grouping before 만/원 is distinct from decimal 억: 90.000만원
+    // is 90,000만원; 8.0억 and 8.000억 both remain decimal 억.
+    if (!token.includes(',') && /^\d{1,3}(?:\.\d{3})+$/.test(token) &&
+        (/^만/.test(compact.slice(index+token.length)) || index+token.length===compact.length && /원\s*$/.test(String(value)))) return token.replace(/\./g,'');
+    return cleaned;
+  });
+  if (invalid) return null;
   if (!text || !/^[\d.억만천백십]+$/.test(text)) return null;
   function small(part) {
     if (!part) return 0;
@@ -22,7 +33,10 @@ export function koreanMoneyManwon(value) {
   if (!match) return null;
   // Without 억/만, only explicit 원 amounts are accepted (e.g. 3000000원).
   if (!match[1] && !match[3] && !/원\s*$/.test(String(value))) return null;
-  if (match[1] && match[2] && !match[3]) return null;
+  // A named financial amount such as 8억8천 omits only the trailing 만원.
+  // Keep ambiguous bare remainders (8억8000) and mixed 원 tails out.
+  if (match[1] && match[2] && !match[3] &&
+      (!/[천백십]$/.test(match[2]) || /원\s*$/.test(String(value)))) return null;
   const amount = Number(match[1] || 0) * 10000 + small(match[2]) /
     (!match[1] && !match[3] ? 10000 : 1);
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
@@ -42,11 +56,12 @@ export function saleDescriptionFields(content) {
     return values.length === 1 ? values[0] : null;
   }
   // Keep quotes as exact substrings of the original for the source-jump UI.
-  // Explicit units remain mandatory; do not infer 만원 from a bare number.
-  const boundary = "(?:^|[\\s✅✔☑*·▶▷●■◆◇🔸🔹⭐/|,;()])";
-  const money = "([0-9][0-9,. \\t억천백십만]*(?:만\\s*원|억\\s*원|만|억|원))(?=\\s|$|[✅✔☑·,;/()▶▷●■◆◇🔸🔹⭐]|으로|에|이며|이고|입니다|임대)";
+  // A bare number still needs a unit. 억 + a lower named unit can omit 만원.
+  const boundary = "(?:^|[^\\p{L}\\p{N}])";
+  const wrappedMoney = "[0-9][0-9,. \\t]*억[ \\t]*\\r?\\n[ \\t]*[0-9][0-9,. \\t천백십]*(?:만\\s*원|만|천|백|십)";
+  const money = "(" + wrappedMoney + "|[0-9][0-9,. \\t억천백십만]*(?:만\\s*원|억\\s*원|만|억|원|천|백|십))(?=\\s|$|[✅✔☑·,;/()▶▷●■◆◇🔸🔹⭐]|으로|에|이며|이고|입니다|임대)";
   const paired = [...text.matchAll(new RegExp(boundary + "(?:기\\s*)?보\\s*증\\s*금\\s*/\\s*(?:총\\s*)?월\\s*(?:세|차임)\\s*[:：]?\\s*" + money + "\\s*/\\s*" + money, "gu"))];
-  const labelStart = m => m.index + (m[0].match(/^[\s▶▷●■◆◇✅✔☑]+/u)?.[0].length || 0);
+  const labelStart = m => m.index + (m[0].match(/^[^\p{L}\p{N}]+/u)?.[0].length || 0);
   function contextAt(start, end) {
     const before = text.slice(Math.max(0, start - 100), start).split(/[\r\n▶▷●■◆◇✅✔☑]/u).at(-1);
     const after = text.slice(end, end + 70).split(/[\r\n▶▷●■◆◇✅✔☑]/u)[0];
@@ -66,7 +81,8 @@ export function saleDescriptionFields(content) {
   function amount(label, names, monthly = false) {
     const matches = [];
     const rental = ["보증금", "월 임대수입", "이자 차감 월수익", "기준 미확인 월수익"].includes(label);
-    for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")\\s*[:：]?\\s*" + (monthly ? "(?:월\\s*)?" : "") + money, "gu"))) {
+    const separator="(?:\\s*[:：=]\\s*|[ \\t]+[-–—][ \\t]+|\\s*)";
+    for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")" + separator + (monthly ? "(?:월\\s*)?" : "") + money, "gu"))) {
       // In '보증금 / 월세:4000만원 / 290만원', 4000 belongs to the deposit.
       const prefix = text.slice(Math.max(0, m.index - 25), m.index);
       if (label === "월 임대수입" && (/보\s*증\s*금\s*\/\s*$/.test(prefix) || /보\s*증\s*금\s*$/.test(prefix) && /^\//.test(m[0]))) continue;
@@ -77,7 +93,7 @@ export function saleDescriptionFields(content) {
         continue;
       }
       const value = koreanMoneyManwon(m[1]);
-      if (value == null) continue;
+      if (value == null) { warnings.push(label + " 금액 표기 확인 필요"); continue; }
       if (rental && projected(labelStart(m), m.index + m[0].length)) {
         if (!warnings.includes("예상·만실·인상 금액: 기존 임대조건 계산 미적용")) warnings.push("예상·만실·인상 금액: 기존 임대조건 계산 미적용");
         continue;
@@ -100,13 +116,14 @@ export function saleDescriptionFields(content) {
     return values.length === 1 ? values[0] : null;
   }
   const salePrice = amount("매매가", "매매가|매매금액|매매");
-  const loanAmount = amount("융자", "융\\s*자(?:금(?:액)?)?|대\\s*출\\s*금(?:액)?");
-  const totalDeposit = amount("보증금", "보증금\\s*합계|총\\s*보증금|기보증금|보증금");
+  const loanAmount = amount("융자", "융\\s*자(?:금(?:액)?)?|대\\s*출(?:\\s*금(?:액)?)?");
+  const depositLabel="보\\s*증\\s*금(?:액)?";
+  const totalDeposit = amount("보증금", "(?:총\\s*)?임대\\s*"+depositLabel+"(?:\\s*(?:합계|총액))?|"+depositLabel+"\\s*(?:합계|총액)|총\\s*"+depositLabel+"|기\\s*"+depositLabel+"|"+depositLabel);
   const monthlyIncome = amount("월 임대수입", "월세수입|월\\s*임대수입|월세합계|총\\s*월세|기\\s*월세|월차임|월임대료|월세", true);
-  const monthlyNetIncome = amount("이자 차감 월수익", "월수익\\s*\\(이자(?:제외|차감|공제)\\)", true);
-  const statedMonthlyIncome = amount("기준 미확인 월수익", "월\\s*수익", true);
+  const monthlyNetIncome = amount("이자 차감 월수익", "월\\s*(?:순\\s*)?수익\\s*\\(\\s*(?:대출\\s*)?이자\\s*(?:제외|차감|공제)(?:\\s*후)?\\s*\\)", true);
+  const statedMonthlyIncome = amount("기준 미확인 월수익", "월\\s*(?:순\\s*)?수익", true);
   const investmentAmount = amount("실투자금", "실\\s*투\\s*자\\s*금");
-  const advertisedYield = unique("광고 연 수익률", /연\s*수익[률율]\s*[:：]\s*([\d.]+)\s*%/g, Number);
+  const advertisedYield = unique("광고 연 수익률", /연\s*수익[률율]?\s*[:：]?\s*([\d.]+)\s*%/g, Number);
   const area = (label, name) => unique(label, new RegExp(name + "\\s*[:：]\\s*([\\d,.]+)\\s*(?:㎡|m²|m2)", "gi"), s => Number(s.replace(/,/g, "")));
   const landAreaM2 = area("대지면적", "대지면적");
   const grossAreaM2 = area("연면적", "연면적");
@@ -134,7 +151,7 @@ export function naverSaleDescription(item = {}) {
 // Basic fields remain authoritative. Description values remain separately
 // visible when inconsistent, and never silently become the canonical sale price.
 export function supplementSaleDescription(base, described, salePrice, descriptionText) {
-  const result = { ...base, descriptionVersion: 2, descriptionText,
+  const result = { ...base, descriptionVersion: 3, descriptionText,
     descriptionEvidence: described.descriptionEvidence,
     descriptionWarnings: [...(described.descriptionWarnings || [])],
     descriptionFinancials: Object.fromEntries(["salePrice", "loanAmount", "totalDeposit", "monthlyIncome",

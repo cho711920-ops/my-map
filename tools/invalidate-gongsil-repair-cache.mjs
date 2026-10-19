@@ -19,11 +19,11 @@ assert.ok(ids.every(id => /^M-[a-z0-9-]+$/.test(id)));
 const keys = [
   'api-cache/d1-sheet-v3-source-proof.csv',
   'api-cache/unified-listings-v14-source-proof.json',
-  'api-cache/unified-listings-v16-sale-financial-display.json',
+  'api-cache/unified-listings-v17-sale-financial-v21.json',
   'api-cache/operations-dashboard-v4-source-evidence.json',
   'api-cache/revision/listings.json',
   'api-cache/revision/operations.json',
-  ...ids.map(id => `api-cache/unified-detail-v14-sale-financial-display/${id}.json`)
+  ...ids.map(id => `api-cache/unified-detail-v15-sale-financial-v21/${id}.json`)
 ];
 assert.equal(new Set(keys).size, keys.length);
 console.log(JSON.stringify({ cacheKeys: keys.length, apply: process.argv.includes('--apply') }));

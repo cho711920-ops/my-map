@@ -11,6 +11,15 @@ const numeric = (value) => {
 };
 const positive = (...values) => values.map(numeric).find((value) => value > 0) ?? null;
 const present = (...values) => values.map(numeric).find((value) => value != null) ?? null;
+// Both fin response shapes use won. The previous* shape uses zero defaults
+// even on empty listings: only positive aliases establish occupied income.
+// Explicit legacy warranty/rent values and manual zeros keep their meaning.
+export function naverSaleFinancialFields(price = {}) {
+  price = price && typeof price === "object" ? price : {};
+  const won = (...values) => { const value = present(...values); return value == null ? null : value / 10000; };
+  return { totalDeposit: won(price.warrantyPrice, positive(price.previousDeposit)),
+    monthlyIncome: won(price.rentPrice, positive(price.previousMonthlyRent)) };
+}
 const pyToM2 = (value) => value > 0 ? Math.round(value * 3.305785 * 100) / 100 : null;
 
 export function saleCategoryFromLabel(value) {
@@ -113,9 +122,8 @@ export function naverSaleFields(item = {}) {
     aboveGroundFloors: present(floors.groundFloorCount, info.groundFloorCount),
     belowGroundFloors: present(floors.undergroundFloorCount, info.undergroundFloorCount),
     // fin API money is won, unlike the normalized collector's manwon fields.
-    totalDeposit: numeric(price.warrantyPrice) == null ? null : numeric(price.warrantyPrice) / 10000,
-    monthlyIncome: numeric(price.rentPrice) == null ? null : numeric(price.rentPrice) / 10000
-  }, saleDescriptionFields(descriptionText), positive(item.salePrice, item.sale_price) ?? (positive(price.dealPrice) || 0) / 10000, descriptionText);
+    ...naverSaleFinancialFields(price)
+  }, saleDescriptionFields(descriptionText), positive(item.salePrice, item.sale_price) ?? (positive(price.dealPrice, price.price) || 0) / 10000, descriptionText);
 }
 
 export function daangnSaleFields(article = {}, category = "other") {

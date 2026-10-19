@@ -28,7 +28,7 @@ test('paired amounts never read the deposit as rent, including zero, Korean unit
 });
 test('the narrow rent synonym and punctuation variants retain explicit units',()=>{
   for(const text of ['보증금:3천만원/월세:280만원','📌 보증금 3천만원 / 월차임 280만원으로 임대중','▶기월세:280만원(부가세 별도)','월임대료 280만 원'])assert.equal(saleDescriptionFields(text).monthlyIncome,280,text);
-  for(const text of ['보증금3억5천','보증금3억 5천','월세280','보증금 1억5천원']){const r=saleDescriptionFields(text);assert.equal(r.totalDeposit,null,text);assert.equal(r.monthlyIncome,null,text);}
+  for(const text of ['월세280','보증금 1억5천원','보증금 1억 5000']){const r=saleDescriptionFields(text);assert.equal(r.totalDeposit,null,text);assert.equal(r.monthlyIncome,null,text);}
 });
 test('future rent and increases do not become current rent; known rent stays separate from net profit',()=>{
   for(const text of ['예상 임대조건 : 보증금 1,000만원 / 월세 70만원','만실시 보증금 10억8천, 월세 6,100만원,','만실 기준 월세 690만','월세 20만원 정도는 인상 여지가 충분히 있습니다'])assert.equal(saleDescriptionFields(text).monthlyIncome,null,text);
@@ -70,6 +70,7 @@ test('SQLite list/detail financial parity is source-local and read-only with str
     {item:original,raw:{},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},
     {item:{...original,saleDetails:{scope:'whole_building'}},raw:{content:description+'\n문의 010-1234-5678'},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},
     {item:{...original,source:'네이버',saleDetails:{scope:'whole_building',descriptionVersion:1,descriptionText:'보증금/월세:4000만원/290만원',monthlyIncome:4000,descriptionFinancials:{monthlyIncome:4000},descriptionEvidence:{'월 임대수입':'월세:4000만원'}}},raw:{saleRaw:{detailInfo:{priceInfo:{rentPrice:3500000}}}},expected:{totalDeposit:4000,monthlyIncome:350}},
+    {item:{...original,source:'네이버',saleDetails:{scope:'whole_building',descriptionVersion:2,descriptionText:'매매가 6억7천만원 / 보증금 8억8천',totalDeposit:null}},raw:{saleRaw:{priceInfo:{previousDeposit:85000000,previousMonthlyRent:2280000}}},expected:{totalDeposit:8500,monthlyIncome:228}},
     {item:{...original,tradeType:'lease',saleDetails:{}},raw:{content:description},expected:{}},
     {item:{...original,saleCategory:'land',saleDetails:{scope:'land'}},raw:{content:description},expected:{}}
   ];
