@@ -112,3 +112,43 @@ test('comparison uses the filtered original shown in the list instead of another
   await page.screenshot({path:info.outputPath('sale-original-comparison-v5.png')});
   expect(await page.evaluate(()=>JSON.stringify(allItems)===window.saleBusinessBeforeV5)).toBe(true);
 });
+
+test('land comparison fills exact official parcels on demand, caps concurrency and preserves ads on partial failure',async({page,isMobile},info)=>{
+  await seed(page,'land_sale');await mode(page,isMobile,'land_sale');
+  const records=await page.evaluate(()=>allItems.filter(i=>i.tradeType==='sale'));
+  let reads=0,inFlight=0,peak=0,writes=0;
+  page.on('request',r=>{if(r.method()==='POST')writes++;});
+  await page.evaluate(()=>{
+    const old=JSParcelExternalLinksV1.resolve;
+    JSParcelExternalLinksV1.resolve=async address=>({address,pnu:'3020010100100040004',links:{eum:'https://example.invalid'}});
+    window.__originalParcelResolverV46=old;
+  });
+  await page.route('**/api/data?*',async route=>{
+    const u=new URL(route.request().url()),action=u.searchParams.get('action');
+    if(action==='unifiedListingDetail'){
+      const item=records.find(i=>i.propertyId===u.searchParams.get('propertyId'));
+      return route.fulfill({json:{ok:true,originals:[{...item,originalId:item.propertyId+'-ORIGINAL',buildingName:item.name}]}});
+    }
+    if(action!=='saleParcelFacts')return route.fallback();
+    reads++;inFlight++;peak=Math.max(peak,inFlight);await new Promise(resolve=>setTimeout(resolve,40));inFlight--;
+    return route.fulfill({json:{ok:true,pnu:u.searchParams.get('pnu'),address:records[0].address,areaM2:400,landUse:'대',complete:true,fetchedAt:new Date().toISOString(),price:{available:true,wonPerM2:1230000,baseYear:2026,baseMonth:1},regulations:[{items:[{label:'제2종일반주거지역'},{label:'지구단위계획구역'}]}]}});
+  });
+  for(const id of ['A','B','C','D'])await page.locator('#list [data-property-id="SALE-V5-'+id+'"] .action-select-check').check();
+  await page.locator('#saleComparisonTrayV5 [data-sale-compare]').click();
+  const dialog=page.locator('.sale-land-comparison-v46');
+  await expect(dialog).not.toContainText('출처');await expect(dialog.locator('[data-land-compare-label="도로접면 · 광고"]')).toBeVisible();
+  expect(reads).toBe(0);await dialog.locator('[data-land-compare-load]').click();
+  await expect(dialog.locator('[data-land-compare-status]')).toContainText('반영 완료');
+  await expect(dialog.locator('[data-land-compare-label="공부면적"]')).toContainText('400㎡');
+  await expect(dialog.locator('[data-land-compare-label="개별공시지가"]')).toContainText('1,230,000원/㎡');
+  await expect(dialog.locator('[data-land-compare-label="공시지가 기준"]')).toContainText('2026.01');
+  expect(peak).toBeLessThanOrEqual(2);expect(reads).toBeGreaterThan(0);
+  expect(await page.evaluate(()=>JSON.stringify(allItems)===saleBusinessBeforeV5)).toBe(true);expect(writes).toBe(0);
+  await page.screenshot({path:info.outputPath('land-comparison-filled-v46.png'),animations:'disabled'});
+  if(process.env.JS_V46_PRINT_QA==='1'&&!isMobile)await page.pdf({path:'outputs/land-comparison-v46-print.pdf',preferCSSPageSize:true,printBackground:true});
+  await page.evaluate(()=>{let calls=0;const load=JSSalePublicReviewV6.landForComparison;JSSalePublicReviewV6.landForComparison=async item=>{if(++calls===4)throw Error('검수용 지번 불일치');return load(item);};});
+  await dialog.locator('[data-land-compare-load]').click();
+  await expect(dialog.locator('[data-land-compare-status]')).toContainText('1개 조회 실패');
+  await expect(dialog.locator('[data-land-compare-label="자료 확인"]')).toContainText('조회 실패');
+  expect(await page.evaluate(()=>JSON.stringify(allItems)===saleBusinessBeforeV5)).toBe(true);expect(writes).toBe(0);
+});

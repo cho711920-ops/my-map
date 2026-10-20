@@ -12,6 +12,24 @@ vm.runInNewContext(fs.readFileSync('js/parcel-external-links-v1.js','utf8'),{win
 window.JSSaleWorkbenchV1={price:v=>String(v)};
 vm.runInNewContext(fs.readFileSync('js/sale-public-review-v6.js','utf8'),{window});
 const ui=window.JSSalePublicReviewV6;
+test('land comparison shares exact parcel reads, validates response identity and never caches a mismatch',async()=>{
+  const item={address:'서구 괴정동 424-2'},pnu='3017010800104240002';
+  async function scenario(overrides={}){
+    let calls=0;
+    const w={JSAuthenticatedAccountEmail:'test@example.invalid',location:{origin:'https://example.invalid'},JSParcelExternalLinksV1:{parseAddress:window.JSParcelExternalLinksV1.parseAddress,resolve:async()=>({pnu,address:item.address})},fetch:async input=>{
+      calls++;const url=new URL(input);assert.equal(url.searchParams.get('expectedAccountEmail'),'test@example.invalid');
+      return {ok:true,json:async()=>({ok:true,pnu,address:item.address,areaM2:300,complete:true,fetchedAt:new Date().toISOString(),...overrides})};
+    }};
+    vm.runInNewContext(fs.readFileSync('js/sale-public-review-v6.js','utf8'),{window:w,URL,AbortSignal});
+    const api=w.JSSalePublicReviewV6;
+    return {api,calls:()=>calls};
+  }
+  const good=await scenario();const results=await Promise.all([good.api.landForComparison(item),good.api.landForComparison(item)]);
+  assert.equal(good.calls(),1);assert.equal(results[0].areaM2,300);assert.equal(good.api.cachedLandForComparison(item).areaM2,300);
+  for(const overrides of [{pnu:'3017010800109990001'},{address:'서구 괴정동 999-1'}]){
+    const bad=await scenario(overrides);await assert.rejects(()=>bad.api.landForComparison(item));assert.equal(bad.api.cachedLandForComparison(item),null);
+  }
+});
 const base={sggCd:'30170',sggNm:'서구',umdNm:'괴정동',jibun:'3**',dealYear:'2026',dealMonth:'9',dealDay:'12',dealAmount:'50,000',dealArea:'330',plottageAr:'330',buildingAr:'650',buildingType:'일반',buildingUse:'제2종근린생활시설',landUse:'일반주거지역',jimok:'대'};
 function xml(rows,total=rows.length,page=1){return '<response><header><resultCode>000</resultCode></header><body><items>'+rows.map(r=>'<item>'+Object.entries(r).map(([k,v])=>'<'+k+'>'+v+'</'+k+'>').join('')+'</item>').join('')+'</items><totalCount>'+total+'</totalCount><pageNo>'+page+'</pageNo></body></response>';}
 

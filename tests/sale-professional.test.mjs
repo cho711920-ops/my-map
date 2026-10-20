@@ -54,14 +54,15 @@ test('land acquisition math separates cost, equity, asking unit price and intere
   assert.ok(w.calculateLand({price:100,acquisition:0,loan:100,interest:0},100).error);
   assert.equal(w.calculateLand({price:100,acquisition:0,loan:0,interest:0},null).costPerPy,null);
 });
-test('comparisons use land conditions or building income without all-empty sections',()=>{
+test('comparisons retain core land conditions and distinguish missing facts from building income',()=>{
   const l=w.comparisonHtml([land,{...land,salePrice:40000}]);
   assert.match(l,/토지 평당가/);assert.match(l,/도로접면/);assert.doesNotMatch(l,/연면적|임대수입|수익률/);
   const b=w.comparisonHtml([building,{...building,salePrice:60000}]);
   assert.match(b,/월 임대수입/);assert.match(b,/사용승인일/);assert.match(b,/단순 연 수익률/);
-  assert.doesNotMatch(w.comparisonHtml([{...land,saleDetails:{}}]),/도로접면|토지 형상/);
+  const missing=w.comparisonHtml([{...land,saleDetails:{}}]);
+  assert.match(missing,/도로접면/);assert.match(missing,/토지 형상/);assert.match(missing,/산정 불가/);assert.doesNotMatch(missing,/출처|연락처\/원본/);
   const ambiguous={...land,source:'네이버',saleDetails:undefined,unifiedOriginalsV8:[{...land,source:'네이버'},{...land,source:'네이버',saleDetails:{...land.saleDetails,roadAccess:'광대한면'}}]};
-  assert.doesNotMatch(w.comparisonHtml([ambiguous]),/도로접면|중로한면|광대한면/);
+  assert.doesNotMatch(w.comparisonHtml([ambiguous]),/중로한면|광대한면/);
 });
 test('dossier highlights missing facts without treating zero rent as missing or changing lease',()=>{
   assert.equal(ui.saleReviewGapsHtml({...land,tradeType:'lease'}),'');

@@ -1,7 +1,7 @@
 /* Sale-only public reference panels. No advertisement, worksheet or listing writes. */
 (function(global){
   'use strict';
-  var PY=3.305785, parcels=new Map(), transactions=new Map(), landFacts=new Map();
+  var PY=3.305785, parcels=new Map(), transactions=new Map(), landFacts=new Map(), landPending=new Map();
   var account=String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
   function text(v){return String(v==null?'':v).trim();}
   function esc(v){return text(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -42,6 +42,26 @@
     var response=await global.fetch(url,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(45000)}),data=await response.json();
     if(!response.ok||!data.ok)throw Object.assign(Error(data.message||'공식 자료를 불러오지 못했습니다. 잠시 후 다시 조회해 주세요.'),{code:data.code||''});
     return data;
+  }
+  function sameComparisonAddress(item,data){
+    var parser=global.JSParcelExternalLinksV1&&global.JSParcelExternalLinksV1.parseAddress,a=parser&&parser(item.address),b=parser&&parser(data.address);
+    return !!a&&!!b&&a.query===b.query&&!item.referenceAddressChangedV8;
+  }
+  function cachedLandForComparison(item){
+    if(item.referenceAddressChangedV8)return null;
+    var parcel=parcels.get(text(item.address)),data=parcel&&landFacts.get(parcel.result.pnu),age=data?Date.now()-Date.parse(data.fetchedAt):Infinity;
+    return data&&data.pnu===parcel.result.pnu&&age>=0&&age<6*3600000&&sameComparisonAddress(item,data)?data:null;
+  }
+  async function landForComparison(item){
+    if(item.referenceAddressChangedV8)throw Error('광고 지번과 조회 지번을 먼저 확인해 주세요.');
+    var result=await resolve(item),saved=landFacts.get(result.pnu),age=saved?Date.now()-Date.parse(saved.fetchedAt):Infinity;
+    if(saved&&age>=0&&age<6*3600000&&sameComparisonAddress(item,saved))return saved;
+    if(!landPending.has(result.pnu))landPending.set(result.pnu,read({action:'saleParcelFacts',pnu:result.pnu}).then(function(data){
+      if(data.pnu!==result.pnu)throw Error('요청한 필지와 응답이 다릅니다.');
+      if(!sameComparisonAddress(item,data))throw Error('광고 지번과 공적자료 지번이 다릅니다.');
+      if(data.complete)cache(landFacts,result.pnu,data);return data;
+    }).finally(function(){landPending.delete(result.pnu);}));
+    var data=await landPending.get(result.pnu);if(!sameComparisonAddress(item,data))throw Error('광고 지번과 공적자료 지번이 다릅니다.');return data;
   }
   function buildingRows(b){
     var self=sumKnown([b.indoorSelfParking,b.outdoorSelfParking]),mechanical=sumKnown([b.indoorMechanicalParking,b.outdoorMechanicalParking]);
@@ -198,5 +218,5 @@
     };
     slot.insertBefore(container,slot.querySelector('.unified-detail-utility-actions-v8'));fill();
   }
-  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,transactionKind:transactionKind,comparable:comparable,transactionHtml:transactionHtml,crosscheckHtml:crosscheckHtml};
+  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,transactionKind:transactionKind,comparable:comparable,transactionHtml:transactionHtml,crosscheckHtml:crosscheckHtml,cachedLandForComparison:cachedLandForComparison,landForComparison:landForComparison};
 })(window);

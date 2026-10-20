@@ -72,3 +72,28 @@
 }
 @media(max-width:768px){[data-sale-layout=table],.sale-table-head-v10{display:none!important}.sale-building-highlights-v10{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media print{.sale-compare-reading-v10{max-height:none;overflow:visible}.sale-compare-reading-v10 :is(th,td){position:static!important}.sale-original-evidence-v10 button,.sale-secondary-tools-v10{display:none!important}}
+.sale-land-comparison-v46 { width:min(1120px,calc(100vw - 32px)); }
+.sale-land-comparison-v46 .sale-compare-controls-v2 { flex-wrap:wrap; gap:8px; align-items:center; }
+.sale-land-comparison-v46 [data-land-compare-status] { flex:1; min-width:170px; color:#60738b; font-size:12px; }
+.sale-land-comparison-v46 table { width:100%; min-width:740px; table-layout:fixed; }
+.sale-land-comparison-v46 :is(th,td) { overflow-wrap:anywhere; line-height:1.45; padding:9px 10px; }
+.sale-land-comparison-v46 thead th:first-child { width:145px; min-width:0; }
+.sale-land-comparison-v46 tr:nth-child(4) td { font-size:12px; font-weight:500; }
+.sale-land-comparison-v46 [data-land-compare-label="매매가"] td { font-size:16px; font-weight:750; color:#163c61; }
+.sale-land-comparison-v46 .sale-land-compare-note-v46 { font-size:11px; line-height:1.5; color:#60738b; }
+@page land-comparison-v46 { size:A4 landscape; margin:10mm; }
+@media print {
+  .sale-land-comparison-v46[open] { page:land-comparison-v46; display:block!important; inset:auto!important; width:auto!important; max-width:none!important; margin:0!important; padding:0!important; border:0!important; border-radius:0!important; box-shadow:none!important; color:#172c40; }
+  body:has(.sale-land-comparison-v46[open]),html:has(.sale-land-comparison-v46[open]) { page:land-comparison-v46; width:auto!important; min-height:0!important; height:auto!important; overflow:visible!important; }
+  .sale-land-comparison-v46 .sale-workbench-body { overflow:visible!important; max-height:none!important; padding:0!important; }
+  .sale-land-comparison-v46 > header { padding:0 0 8px!important; margin:0!important; }
+  .sale-land-comparison-v46 h2 { font-size:18px!important; }
+  .sale-land-comparison-v46 :is(.sale-compare-controls-v2,.sale-compare-differences-control-v5,.sale-land-compare-actions-v46,.sale-unit-switch-v9,th small) { display:none!important; }
+  .sale-land-comparison-v46 .sale-land-compare-intro-v46 { margin:6px 0 9px; font-size:11px; }
+  .sale-land-comparison-v46 table { min-width:0!important; width:100%!important; font-size:11px!important; border-collapse:collapse; }
+  .sale-land-comparison-v46 :is(th,td),.sale-land-comparison-v46 thead th { min-width:0!important; padding:6px 8px!important; font-size:11px!important; line-height:1.35!important; }
+  .sale-land-comparison-v46 thead th:first-child { width:135px; }
+  .sale-land-comparison-v46 [data-land-compare-label="매물"] { display:none!important; }
+  .sale-land-comparison-v46 [data-land-compare-label="매매가"] td { font-size:14px!important; }
+  .sale-land-comparison-v46 .sale-land-compare-note-v46 { margin:8px 0 0; font-size:10px; }
+}
