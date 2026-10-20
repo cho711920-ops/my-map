@@ -23,16 +23,17 @@ html #unifiedDetailDrawerV8[data-wide-detail-v26] > .unified-detail-body-v8 {
 /* One 4:3 viewing frame, matching the reference. Contain preserves every edge;
  * portrait/panoramic photos use quiet letterboxing instead of resizing the card. */
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8:not(:has(.unified-gallery-empty-v8)),
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8:has(.unified-gallery-empty-v8),
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8 {
   height:auto !important; min-height:0 !important; max-height:none !important; background:#f1f3f5 !important;
 }
-html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8:has(.unified-detail-hero-v8) { aspect-ratio:4 / 3; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-gallery-v8 { aspect-ratio:4 / 3; }
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-hero-v8 { position:absolute; inset:0; display:block; width:100%; height:100% !important; background:#f1f3f5 !important; }
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-hero-v8 img {
   display:block; width:100% !important; height:100% !important; min-height:0 !important;
   max-height:none !important; object-fit:contain !important; object-position:center;
 }
-#unifiedDetailDrawerV8[data-wide-detail-v26] .unified-gallery-empty-v8 { min-height:150px; color:#657487; font-size:13px; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-gallery-empty-v8 { position:absolute; inset:0; display:grid; place-items:center; height:auto; min-height:0; padding:20px; color:#657487; font-size:13px; text-align:center; }
 #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-photo-nav-v8 { width:42px; height:42px; border-radius:50%; font-size:30px; background:#14223399; border-color:#ffffffb3; }
 #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-photo-count-v8 { border-radius:5px; font-size:12px; padding:5px 9px; }
 #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-source-address-v827 { gap:10px; margin-bottom:14px; }
