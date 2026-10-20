@@ -19,3 +19,10 @@
 - 기존 사진 재시도/연타/느린 사진/전환 ghost/닫기 후 늦은 응답/축소 모션 검수 포함.
 - 최종 PC/휴대폰 관련 브라우저33건 통과·휴대폰 내장 찜 상세 검사1건은 PC 전용으로 생략. 세로/가로 검수 캡처 육안 확인.
 - Node wide-detail2건, lint/typecheck/build/dry-run 통과. 배포 결과 아래 추가.
+
+배포 완료
+- 제품82c7079, codex/detail-photo-v30 원격 push 완료.
+- Worker11fc026a-c785-4bf3-a86d-8c51ee87306b, public cache e28f9fefb04f47dd020b5641.
+- 2026-10-20 12:00 KST 양 도메인(js-map.com/www.js-map.com) 각각89개 자산 SHA256 로컬 빌드 일치, HTML200/no-store/CSP·비로그인 실거래401 확인.
+- outputs/detail-photo-v30-live-verification.json에 읽기 검증 결과 저장. CSS/HTML/SW만 새 파일 업로드, 기존 서버·원본/찜/매물 데이터 변경 없음.
+- 처음1회 새로고침. 재수집 필요 없음.
