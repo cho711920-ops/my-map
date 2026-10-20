@@ -5718,7 +5718,7 @@ function showAddressErrors() {
     name.textContent=item.name||'이름 미제공';address.textContent=item.address||'주소 미제공';
     reason.textContent=item.geocodeErrorReason||'주소·건물명 검색 결과 없음';
     var originals=item.unifiedDisplayOriginalsV2||item.unifiedAllOriginalsV1||[],source=originals.find(function(o){return o.link;})||item;
-    var link=source.link||item.link;
+    var link=source.link||source.sourceLink||item.sourceLink||item.link;
     if(/^https?:\/\//i.test(link||'')){var original=document.createElement('a');original.href=link;original.target='_blank';original.rel='noopener noreferrer';original.textContent='원본 확인';actions.append(original);}
     retry.type='button';retry.textContent='지번 다시 조회';actions.append(retry);
     var parsed=addressParcelForReviewV41(item.address);

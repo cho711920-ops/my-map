@@ -21,7 +21,7 @@ test('address review separates markets and ignores duplicate or obsolete snapsho
   await page.keyboard.press('Escape');await mode(page,isMobile,'land_sale');await page.locator('#errorStatus').click();await expect(page.locator('#addressReviewV41')).toContainText('테스트 토지매매');
 });
 test('malformed addresses and source text cannot become coordinates or executable markup',async({page})=>{
-  await page.evaluate(()=>{const item=allItems[0];item.address='소형상가 12';item.name='<img src=x onerror=alert(1)>';item.link='javascript:alert(1)';item.unifiedDisplayOriginalsV2=[];item.unifiedAllOriginalsV1=[];errorItems=[item];updateErrorStatus();});
+  await page.evaluate(()=>{const item=allItems[0];item.address='소형상가 12';item.name='<img src=x onerror=alert(1)>';item.link='javascript:alert(1)';item.sourceLink='javascript:alert(1)';item.unifiedDisplayOriginalsV2=[];item.unifiedAllOriginalsV1=[];errorItems=[item];updateErrorStatus();});
   await page.locator('#errorStatus').click();const dialog=page.locator('#addressReviewV41');await expect(dialog.locator('img,a')).toHaveCount(0);await expect(dialog).toContainText('<img src=x onerror=alert(1)>');await expect(dialog.getByRole('button',{name:'지번 다시 조회'})).toBeDisabled();
 });
 async function mockLookup(page,phase){await page.evaluate(phase=>{
@@ -34,10 +34,10 @@ async function mockLookup(page,phase){await page.evaluate(phase=>{
   };}}}};
 },phase);}
 test('an unlocated row stays reviewable after map rendering excludes it, and can rejoin the map',async({page,isMobile})=>{
-  await page.evaluate(()=>{const item=allItems.find(item=>item.tradeType==='lease');addressErrorSnapshotV41=allItems.slice();allItems=allItems.filter(value=>value!==item);errorItems=[item];updateErrorStatus();});
+  await page.evaluate(()=>{const item=allItems.find(item=>item.tradeType==='lease');item.sourceLink='https://fin.land.naver.com/articles/1234567890';item.unifiedDisplayOriginalsV2=[];item.unifiedAllOriginalsV1=[];addressErrorSnapshotV41=allItems.slice();allItems=allItems.filter(value=>value!==item);errorItems=[item];updateErrorStatus();});
   await expect(page.locator('#errorStatus')).toHaveText('주소 확인 1개');
   const count=await page.evaluate(()=>allItems.length);await mockLookup(page,'normal');
-  await page.locator('#errorStatus').click();await page.locator('#addressReviewV41 li').first().getByRole('button',{name:'지번 다시 조회'}).click();
+  await page.locator('#errorStatus').click();await expect(page.locator('#addressReviewV41').getByRole('link',{name:'원본 확인'})).toHaveAttribute('href','https://fin.land.naver.com/articles/1234567890');await page.locator('#addressReviewV41 li').first().getByRole('button',{name:'지번 다시 조회'}).click();
   await expect(page.locator('#addressReviewV41 [role="status"]')).toContainText('보완했습니다');
   expect(await page.evaluate(()=>allItems.length)).toBe(count+1);await expect(page.locator('#errorStatus')).toBeHidden();
 });
