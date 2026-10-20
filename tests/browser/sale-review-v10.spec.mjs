@@ -56,7 +56,8 @@ test('cashflows update from worksheet inputs and clear an invalid calculation in
   const drawer=await open(page,isMobile);await drawer.locator('[data-sale-action="worksheet"]').click();let d=page.locator('#saleWorkbenchDialogV1');
   for(const [k,v] of Object.entries({price:'50000',deposit:'5000',income:'200',loan:'12000',interest:'6',vacancy:'10',expense:'150',acquisition:'1000'}))await d.locator('[data-calc="'+k+'"]').fill(v);
   await expect(d.locator('.sale-money-flow-v10')).toContainText('34,000만원');await expect(d.locator('.sale-money-flow-v10 li.negative')).toContainText('-30만원');
-  await d.locator('[data-calc="income"]').fill('');await expect(d.locator('.sale-money-flow-v10')).toHaveCount(0);await d.locator('[data-calc="income"]').fill('200');
+  await expect(d.locator('[data-calc-result] h3')).toHaveText('내 가정 계산 결과');await expect(d.locator('[data-calc-result]')).toContainText('대출금 12,000만원');await expect(d.locator('[data-calc-result]')).toContainText('연 금리 6%');await expect(d.locator('[data-calc-result]')).toContainText('공실률 10%');
+  await d.locator('[data-calc="income"]').fill('');await expect(d.locator('.sale-money-flow-v10')).toHaveCount(0);await expect(d.locator('[data-calc-result] h3')).toHaveCount(0);await d.locator('[data-calc="income"]').fill('200');
   await d.locator('.sale-money-flow-v10').scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('building-money-flow.png')});await d.locator('[data-sale-close]').click();await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await mode(page,isMobile,'land_sale');await page.locator('#list .item-building-name').click();await drawer.locator('[data-sale-action="worksheet"]').click();d=page.locator('#saleWorkbenchDialogV1');
   await expect(d.locator('.sale-money-flow-v10')).toContainText('총 매입비용');await expect(d.locator('.sale-money-flow-v10')).not.toContainText('임대보증금');

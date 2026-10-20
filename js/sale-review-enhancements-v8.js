@@ -40,7 +40,11 @@
     if(item.referenceAddressChangedV8)el.innerHTML='<strong>다른 지번의 조회자료</strong><p>광고 주소와 다른 조회용 주소입니다. 이 자료를 현재 광고 조건과 자동 대조하지 않습니다.</p>';
     else if(rows.length)el.innerHTML='<strong>광고·공적자료 표기 확인 '+rows.length+'개</strong><p>전체 건물·일부 지분·복수 필지 등 매매범위를 확인하세요. 표기 차이가 광고 오류를 뜻하지 않습니다.</p><div class="sale-reference-table-v8"><table><thead><tr><th>항목</th><th>광고 기재</th><th>공적자료</th></tr></thead><tbody>'+rows.map(function(r){return '<tr>'+r.map(function(v,i){return '<'+(i?'td':'th')+'>'+esc(v)+'</'+(i?'td':'th')+'>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
     else el.innerHTML='<strong>공적자료 조회됨</strong><p>값이 함께 제공된 항목에서 별도 표기 차이를 찾지 못했습니다. 매매범위·누락 항목은 별도로 확인하세요.</p>';
-    var overview=body.querySelector('[data-sale-section="summary"]');if(overview)overview.after(el);
+    var official=body.querySelector('.sale-public-review-v6');
+    // Keep the lookup button stationary until revealResult scrolls to its data.
+    // A comparison inserted above the form can push it out of view mid-request.
+    if(official)official.append(el);
+    else {var overview=body.querySelector('[data-sale-section="summary"]');if(overview)overview.after(el);}
     if(global.JSSaleDossierV9)global.JSSaleDossierV9.refreshUnits(el);
   }
   function roadHtml(item,data){

@@ -29,6 +29,8 @@ test('building public facts load on click, show source and preserve the lease UI
   await drawer.locator('[data-sale-section-target="register"]').click();
   const panel=drawer.locator('[data-sale-section="register"]');await panel.locator('[data-public-load]').click();
   await expect(panel).toContainText('철근콘크리트구조');await expect(panel).toContainText('6대');await expect(panel).toContainText('181.82%');await expect(panel).toContainText('2026. 10. 18.');expect(requested).toBe(1);
+  const crosscheck=panel.locator('.sale-evidence-crosscheck-v36');await expect(crosscheck).toHaveAttribute('open','');
+  await expect(crosscheck.locator('tr.different')).toContainText('연면적');await expect(crosscheck).toContainText('661.16㎡');await expect(crosscheck).toContainText('650㎡');
   expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(snapshot);
   await panel.screenshot({path:info.outputPath('building-public-facts.png'),animations:'disabled'});
   await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
@@ -53,6 +55,8 @@ test('land facts show official area, designations and dated public price without
   await expect(panel.locator('[data-public-status]')).toContainText('공적자료를 불러왔습니다');
   await expect(panel.locator('[data-official-land-data]')).toContainText('986,600');await expect(panel.locator('[data-official-land-data]')).toContainText('2026.01');
   await expect(panel.locator('[data-official-land-data]')).toContainText('1,243㎡');await expect(panel).toContainText('광고면적');
+  await expect(panel.locator('.sale-evidence-crosscheck-v36 tr.different')).toContainText('토지면적');
+  await expect(panel.locator('.sale-evidence-crosscheck-v36')).toContainText('330.58㎡');
   expect(page.__landRequests.length).toBe(1);expect(page.__landRequests[0].searchParams.get('pnu')).toBe('3020010700100040004');
   expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(before);
   await expect(panel.locator('.sale-public-land-price-v7')).toBeInViewport();

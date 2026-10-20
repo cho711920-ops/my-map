@@ -43,6 +43,50 @@
       button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+icons[key]+'</svg><span>'+esc(label)+'</span>';
     });
   }
+  function saleCalculationHtml(item){
+    var ui=global.JSListingTradeV1,d=ui.saleSummary(item),land=ui.normalizedSaleCategory(item)==='land';
+    function numeric(v){if(v==null||typeof v==='boolean'||String(v).trim()==='')return null;var n=Number(String(v).replace(/,/g,''));return Number.isFinite(n)&&n>=0?n:null;}
+    var p=numeric(item.salePrice??item.sale_price);
+    function number(v){return Number(String(v).replace(/,/g,'')).toLocaleString('ko-KR',{maximumFractionDigits:2});}
+    function money(v){return number(v)+'만원';}
+    var cards=[];
+    function card(label,result,basis){cards.push('<div><dt>'+esc(label)+'</dt><dd>'+esc(result)+'</dd><small>'+esc(basis)+'</small></div>');}
+    (land?[['토지 평당가','landAreaM2','토지']]:[['대지 기준 단가','landAreaM2','대지'],['연면적 기준 단가','grossAreaM2','연면적']]).forEach(function(row){
+      var area=numeric(d[row[1]]),unit=p>0&&area>0?p/(area/3.305785):null,valid=unit!=null&&Number.isFinite(unit);
+      var areaLabel=row[2]+(/면적$/.test(row[2])?'':'면적');
+      card(row[0],valid?number(unit)+'만원/평':'산정 불가',valid?'광고 매매가 '+money(p)+' ÷ 광고 '+areaLabel+' '+number(area/3.305785)+'평':'광고 매매가·'+areaLabel+' 확인 필요');
+    });
+    if(!land){var rate=ui.saleYield(item);card('단순 연 수익률',rate==null?'산정 불가':number(rate)+'%',rate==null?'매매가·임대보증금·월 임대수입 확인 필요':'월 임대수입 '+money(d.monthlyIncome)+' × 12 ÷ (매매가 '+money(p)+' − 보증금 '+money(d.totalDeposit)+') × 100');}
+    return '<dl class="sale-evidence-metrics-v36">'+cards.join('')+'</dl><p class="sale-evidence-note-v36">'+(land?'평당가는 광고 토지면적 기준입니다. 공부면적이나 공시지가로 자동 대체하지 않습니다.':'단가는 건물 총매매가를 광고 면적으로 나눈 값입니다. 단순 수익률에는 대출이자·취득비용·세금·공실·운영비를 반영하지 않습니다.')+'</p>';
+  }
+  function evidenceHeading(title,note){var heading=document.createElement('header');heading.className='sale-evidence-heading-v36';heading.innerHTML='<h3>'+esc(title)+'</h3><p>'+esc(note)+'</p>';return heading;}
+  function mountSaleEvidence(body,item,summary,primary){
+    if(!global.JSListingTradeV1||!global.JSListingTradeV1.isSale(item))return;
+    summary.dataset.saleEvidenceV36='advertisement';
+    var overview=primary.querySelector('.sale-overview-v2');
+    if(overview){
+      overview.prepend(evidenceHeading('광고 조건','현재 선택한 원본 광고의 금액·면적'));
+      var indicators=overview.querySelector('.sale-overview-indicators-v2');
+      if(indicators){var badge=indicators.querySelector('.pyeong-mini-badge');if(badge&&!/^광고/.test(badge.textContent.trim()))badge.remove();if(!indicators.textContent.trim())indicators.remove();}
+      var label=overview.querySelector('.sale-overview-label-v2');if(label)label.textContent=global.JSListingTradeV1.displayType(item)+' · 광고 기재';
+    }
+    primary.querySelectorAll('.building-unit-prices-v5').forEach(function(el){el.remove();});
+    summary.prepend(evidenceHeading('광고 상세','광고에서 제공한 내용과 설명 추출값 · 공적자료와 구분'));
+    var details=summary.querySelector('.listing-sale-details-v1');
+    if(details)details.querySelectorAll('.sale-fact-group-v2 > dd > dl > div').forEach(function(row){var dt=row.querySelector('dt');if(dt&&['단순 연 수익률','토지 평당가'].includes(dt.textContent.trim()))row.remove();});
+    if(details)details.querySelectorAll('.sale-fact-group-v2').forEach(function(group){if(!group.querySelector('dd dl > div'))group.remove();});
+    var note=summary.querySelector('.listing-sale-yield-note-v1');
+    if(note){if(item.saleDetails&&item.saleDetails.descriptionVersion)note.textContent='설명에서 추출한 조건은 광고 기재값입니다. 이자 차감 월수익은 월 임대수입으로 사용하지 않습니다.';else note.remove();}
+    var origin=summary.querySelector('.sale-detail-origin-v10');if(origin)origin.remove();
+    var publicData=summary.querySelector('.sale-public-review-v6');
+    if(publicData){publicData.classList.add('sale-evidence-public-v36');publicData.prepend(evidenceHeading('공적자료','조회한 주소·건물과 자료 기준일을 확인하세요. 광고 조건은 유지됩니다.'));summary.after(publicData);}
+    var calc=document.createElement('section');calc.className='sale-evidence-calculation-v36';calc.dataset.saleSection='workbench';
+    calc.append(evidenceHeading('계산 결과','광고 기준 계산과 내 가정 계산을 나누어 확인'));
+    calc.insertAdjacentHTML('beforeend','<h4>광고 기준 계산</h4>'+saleCalculationHtml(item)+'<h4>내 가정 계산·검토</h4><p class="sale-evidence-note-v36">대출·금리·공실·비용을 직접 입력한 결과는 계산창에서 확인합니다. 입력값은 광고 조건을 바꾸지 않습니다.</p>');
+    var tools=summary.querySelector('.sale-tools-v1[data-sale-item]');if(tools){tools.removeAttribute('data-sale-section');calc.append(tools);}
+    (publicData||summary).after(calc);
+    var secondary=summary.querySelector('.sale-secondary-tools-v10');if(secondary)secondary.querySelector('summary').textContent='광고 출처·호가 이력·외부 조회';
+  }
   function position(drawer){
     if(!drawer)return false;
     var phone=global.JSPhoneDeviceV1&&global.JSPhoneDeviceV1.isMobileLayout?global.JSPhoneDeviceV1.isMobileLayout():document.documentElement.classList.contains('js-phone-app-v2');
@@ -105,6 +149,8 @@
     if(actions){decorateActions(actions);if(drawer.__detailPresentationV2&&drawer.__detailPresentationV2.phone)layout.after(actions);else drawer.append(actions);}
     var management=summary.querySelector('.unified-detail-actions-v8');
     if(management){var disclosure=document.createElement('details'),title=document.createElement('summary');disclosure.className='wide-detail-management-v26';title.textContent='광고 관리';disclosure.append(title,management);summary.append(disclosure);}
+    mountSaleEvidence(body,item,summary,primary);
+    if(body._saleDossierSyncV3)body._saleDossierSyncV3();
   }
-  global.JSWideDetailV26={mount:mount,position:position,known:known};
+  global.JSWideDetailV26={mount:mount,position:position,known:known,saleCalculationHtml:saleCalculationHtml};
 })(window);

@@ -65,7 +65,7 @@
     if(gallery&&slot){slot.append(gallery);slot.hidden=!gallery.querySelector('.unified-detail-hero-v8')&&!(Number(item.photoCount)>0);}
     var description=root.querySelector('.listing-sale-description-v1');if(description)description.dataset.saleSection='description';
     var tools=root.querySelector('.sale-tools-v1');if(tools)tools.dataset.saleSection='workbench';
-    var labels=[['요약',['summary']],['토지·건물',['land','building','areas','review']],['공적자료',['register','publicland','transactions']],['매입검토',['workbench','income']],['사진·원문',['photos','description']]];
+    var labels=[['요약',['summary']],['토지·건물',['land','building','areas','review','income']],['공적자료',['register','publicland','transactions']],['매입검토',['workbench']],['사진·원문',['photos','description']]];
     var nav=document.createElement('nav');nav.className='sale-dossier-nav-v3';nav.setAttribute('aria-label','매매 상세 항목 이동');
     labels.forEach(function(entry){
       var keys=entry[1].filter(function(key){var el=root.querySelector('[data-sale-section="'+key+'"]');return el&&!el.hidden;});if(!keys.length)return;
@@ -84,7 +84,7 @@
     function syncNav(){
       var top=root.getBoundingClientRect().top+(root.contains(nav)?nav.offsetHeight:0)+16, best=null, bestTop=-Infinity;
       nav.querySelectorAll('button').forEach(function(button){button.dataset.saleGroupSections.split(',').forEach(function(key){var target=root.querySelector('[data-sale-section="'+key+'"]');if(!target||target.hidden)return;var y=target.getBoundingClientRect().top;if(y<=top&&y>bestTop){best=button;bestTop=y;}});});
-      best=best||nav.querySelector('button');
+      best=root.scrollTop<=1?nav.querySelector('button'):best||nav.querySelector('button');
       nav.querySelectorAll('button').forEach(function(button){if(button===best)button.setAttribute('aria-current','location');else button.removeAttribute('aria-current');});
     }
     root._saleDossierSyncV3=syncNav;

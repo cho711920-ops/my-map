@@ -231,7 +231,8 @@
     if(global.JSSaleReviewV10)global.JSSaleReviewV10.renderFlow(dialog,readCalc(dialog),r);
     if(r.error){out.textContent=r.error;return r;}
     var rows=land?[['총 매입비용',price(r.total)],['가정 실투입',price(r.equity)],['월 대출이자',fmt(r.interest)+'만원'],['부대비용 포함 평당',r.costPerPy==null?'광고면적 필요':fmt(r.costPerPy)+'만원']]:[['가정 실투입',price(r.equity)],['월 현금흐름',fmt(r.monthly)+'만원'],['연 현금흐름',fmt(r.annual)+'만원'],['가정 연 수익률',fmt(r.yield,2)+'%']];
-    out.innerHTML='<span class="sale-result-grid-v2">'+rows.map(function(f){return '<span><small>'+esc(f[0])+'</small><strong>'+esc(f[1])+'</strong></span>';}).join('')+'</span>';
+    var inputs=readCalc(dialog),basis=land?[['매매가',inputs.price],['취득 부대비용',inputs.acquisition],['대출금',inputs.loan]]:[['매매가',inputs.price],['보증금',inputs.deposit],['월 임대수입',inputs.income],['대출금',inputs.loan],['월 운영비',inputs.expense],['취득 부대비용',inputs.acquisition]];
+    out.innerHTML='<h3 class="sale-own-result-title-v36">내 가정 계산 결과</h3><span class="sale-result-grid-v2">'+rows.map(function(f){return '<span><small>'+esc(f[0])+'</small><strong>'+esc(f[1])+'</strong></span>';}).join('')+'</span><p class="sale-evidence-note-v36">현재 입력: '+basis.map(function(pair){return esc(pair[0]+' '+fmt(num(pair[1]),2)+'만원');}).join(' · ')+' · 연 금리 '+esc(fmt(num(inputs.interest),2))+'%'+(land?' · 광고 토지면적 '+esc(fmt(num(dialog.dataset.landArea),2))+'㎡':' · 공실률 '+esc(fmt(num(inputs.vacancy),2))+'%')+'</p>';
     return r;
   }
   async function worksheet(item) {

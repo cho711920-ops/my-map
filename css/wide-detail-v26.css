@@ -146,3 +146,33 @@ html #unifiedDetailDrawerV8[data-wide-detail-v26] > .unified-detail-utility-acti
   html #unifiedDetailDrawerV8[data-wide-detail-v26] > header .wide-detail-address-v35 { width:100%; font-size:11px !important; }
   html #unifiedDetailDrawerV8[data-wide-detail-v26] > header .wide-detail-market-v35 { display:none !important; }
 }
+/* Sale-only evidence hierarchy v36. Lease, gallery and compact header unchanged. */
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-heading-v36 { display:block; margin:0 0 14px; padding:0 0 10px; border-bottom:1px solid #dfe7ee; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-heading-v36 h3 { margin:0; color:#24465f; font-size:16px; line-height:1.5; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-heading-v36 p { margin:3px 0 0; color:#63798b; font-size:12px; line-height:1.6; }
+html #unifiedDetailDrawerV8[data-sale-presentation-v2] .wide-detail-primary-v26 .sale-overview-v2 { background:white; border-color:#d5e1eb; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] [data-sale-evidence-v36="advertisement"] { padding-top:20px !important; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-public-v36,
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-calculation-v36 { margin:20px 0 0; padding:18px 0 0; border-top:2px solid #dce7ed; min-width:0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-public-v36 > .sale-evidence-heading-v36 h3 { color:#345e62; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-public-v36 .sale-public-panel-v6 { box-shadow:none; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-public-v36 .sale-evidence-tag-v10 { display:none; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-calculation-v36 > h4 { margin:14px 0 10px; color:#365873; font-size:14px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 > div { min-width:0; padding:12px; border:1px solid #dce6ef; border-radius:6px; background:#f6f9fc; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 dt { color:#516c80; font-size:12px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 dd { margin:5px 0; color:#244e70; font-size:20px; font-weight:700; overflow-wrap:anywhere; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 small { display:block; color:#62798d; font-size:11px; line-height:1.65; overflow-wrap:anywhere; }
+.sale-evidence-note-v36 { color:#62798d; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.sale-own-result-title-v36 { margin:0 0 12px; color:#254e6c; font-size:16px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 { margin-top:14px; padding:12px; border:1px solid #dce6eb; border-radius:6px; background:white; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 summary { color:#365d6d; cursor:pointer; font-weight:650; font-size:13px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 table { table-layout:fixed; width:100%; margin-top:10px; border-collapse:collapse; font-size:12px; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 :is(th,td) { white-space:normal; overflow-wrap:anywhere; padding:9px 7px; border-bottom:1px solid #e4ebf0; text-align:left; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 th:first-child { width:24%; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 tr.different { background:#fff8eb; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 th small { display:block; font-size:10px; font-weight:400; color:#8a672e; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-crosscheck-v36 p { color:#63798b; font-size:11px; line-height:1.65; }
+@media(max-width:600px) {
+  #unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 { grid-template-columns:1fr; }
+}
