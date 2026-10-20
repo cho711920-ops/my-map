@@ -54,6 +54,7 @@
   }
   function mountDetail(root,item){
     if(!root)return;
+    if(root._saleDossierCleanupV40)root._saleDossierCleanupV40();
     if(!global.JSListingTradeV1||!global.JSListingTradeV1.isSale(item)){
       if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountDetail(root,item);
       if(root._saleDossierBoundV3)root.removeEventListener('scroll',root._saleDossierBoundV3);
@@ -81,17 +82,54 @@
     });
     root.prepend(nav);
     root._saleDossierNavV3=nav;
-    function syncNav(){
-      var top=root.getBoundingClientRect().top+(root.contains(nav)?nav.offsetHeight:0)+16, best=null, bestTop=-Infinity;
-      nav.querySelectorAll('button').forEach(function(button){button.dataset.saleGroupSections.split(',').forEach(function(key){var target=root.querySelector('[data-sale-section="'+key+'"]');if(!target||target.hidden)return;var y=target.getBoundingClientRect().top;if(y<=top&&y>bestTop){best=button;bestTop=y;}});});
-      best=root.scrollTop<=1?nav.querySelector('button'):best||nav.querySelector('button');
-      nav.querySelectorAll('button').forEach(function(button){if(button===best)button.setAttribute('aria-current','location');else button.removeAttribute('aria-current');});
+    // Cache content offsets when layout changes. Wheel/touch scrolling only
+    // compares numbers; it must not scan/re-measure every section each frame.
+    var buttons=Array.from(nav.querySelectorAll('button')),offsets=[],inset=16,current=null,dirty=true,observed=new Set();
+    var observer=global.ResizeObserver?new global.ResizeObserver(invalidate):null;
+    function measure(){
+      dirty=false;offsets=[];
+      var origin=root.getBoundingClientRect().top-root.scrollTop,nodes=new Set([root]);
+      inset=(root.contains(nav)?nav.offsetHeight:0)+16;
+      Array.from(root.children).forEach(function(el){nodes.add(el);});
+      buttons.forEach(function(button){button.dataset.saleGroupSections.split(',').forEach(function(key){
+        var target=root.querySelector('[data-sale-section="'+key+'"]');if(!target)return;
+        for(var el=target;el&&el!==root;el=el.parentElement)nodes.add(el);
+        if(target.hidden)return;var rect=target.getBoundingClientRect();
+        if(rect.width||rect.height)offsets.push({button:button,top:rect.top-origin});
+      });});
+      if(observer){
+        observed.forEach(function(el){if(!nodes.has(el))observer.unobserve(el);});
+        nodes.forEach(function(el){if(!observed.has(el))observer.observe(el);});observed=nodes;
+      }
     }
-    root._saleDossierSyncV3=syncNav;
-    if(!root._saleDossierBoundV3){root._saleDossierBoundV3=function(){
-      if(root._saleDossierFrameV3)return;root._saleDossierFrameV3=global.requestAnimationFrame(function(){root._saleDossierFrameV3=0;if(root._saleDossierNavV3&&root._saleDossierNavV3.isConnected&&root._saleDossierSyncV3)root._saleDossierSyncV3();});
-    };root.addEventListener('scroll',root._saleDossierBoundV3,{passive:true});}
-    syncNav();
+    function update(){
+      if(dirty||!observer)measure();
+      var top=root.scrollTop+inset,best=buttons[0],bestTop=-Infinity;
+      if(root.scrollTop>1)offsets.forEach(function(entry){if(entry.top<=top&&entry.top>bestTop){best=entry.button;bestTop=entry.top;}});
+      if(best===current)return;
+      if(current)current.removeAttribute('aria-current');
+      if(best)best.setAttribute('aria-current','location');current=best;
+    }
+    function queue(){
+      if(root._saleDossierFrameV3)return;
+      root._saleDossierFrameV3=global.requestAnimationFrame(function(){
+        root._saleDossierFrameV3=0;if(nav.isConnected)update();
+      });
+    }
+    function invalidate(){dirty=true;queue();}
+    root._saleDossierSyncV3=function(){dirty=true;update();};
+    root._saleDossierBoundV3=queue;
+    root.addEventListener('scroll',queue,{passive:true});
+    // Disclosure/image changes and late public results invalidate offsets;
+    // nothing scrolls the reader or rebuilds the detail as part of this work.
+    root.addEventListener('toggle',invalidate,true);root.addEventListener('load',invalidate,true);
+    root._saleDossierCleanupV40=function(){
+      if(observer)observer.disconnect();
+      root.removeEventListener('scroll',queue);root.removeEventListener('toggle',invalidate,true);root.removeEventListener('load',invalidate,true);
+      if(root._saleDossierFrameV3)global.cancelAnimationFrame(root._saleDossierFrameV3);
+      root._saleDossierFrameV3=0;root._saleDossierBoundV3=null;root._saleDossierSyncV3=null;root._saleDossierCleanupV40=null;
+    };
+    update();
     if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountDetail(root,item);
     if(global.JSSaleReviewV10)global.JSSaleReviewV10.mountDetail(root,item);
   }

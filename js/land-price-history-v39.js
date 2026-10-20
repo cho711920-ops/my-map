@@ -41,17 +41,28 @@
         '<p class="land-history-selection-v39" aria-live="polite" data-history-selection>마우스를 올리거나 그래프를 터치하면 해당 시점의 금액을 볼 수 있습니다.</p>'+
         '<details class="land-history-table-v39"><summary>연도별 금액 '+records.length+'건 보기</summary><div><table><thead><tr><th>기준연월</th><th>공시지가 ('+(unit==='py'?'원/평':'원/㎡')+')</th><th>전년 동월 대비</th></tr></thead><tbody>'+records.slice().reverse().map(function(r){var c=annualChange(data.records,r);return '<tr><th scope="row">'+period(r)+'</th><td>'+fmt(r.wonPerM2*ratio)+'</td><td>'+(c==null?'—':(c>0?'+':'')+fmt(c)+'%')+'</td></tr>';}).join('')+'</tbody></table></div></details>'+
         '<p class="land-history-source-v39">'+esc(data.source||'토지이음 공개 열람')+' · 조회 '+esc(new Date(data.fetchedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+(data.cached?' · 저장된 조회자료':'')+'</p><p class="land-history-note-v39">제공된 연월만 표시하며 없는 연도는 추정해 연결하지 않습니다. 필지 분할·합병 전후에는 비교 범위를 확인하세요. 공시일자가 아닌 가격 기준연월입니다.</p>';
-      var svg=body.querySelector('svg'),tip=body.querySelector('[data-history-tip]'),caption=body.querySelector('[data-history-selection]'),cursor=body.querySelector('[data-history-cursor]');
-      function select(index,show){
-        var p=chart.points[index];if(!p)return;var r=p.row,c=annualChange(data.records,r);
-        body.querySelectorAll('[data-history-point]').forEach(function(el,i){el.setAttribute('r',i===index?'6':'4');});
+      var svg=body.querySelector('svg'),tip=body.querySelector('[data-history-tip]'),caption=body.querySelector('[data-history-selection]'),cursor=body.querySelector('[data-history-cursor]'),points=Array.from(body.querySelectorAll('[data-history-point]')),selectedIndex=null,selectedWidth=0,pointerFrame=0;
+      function select(index,show,rect){
+        var p=chart.points[index];if(!p)return;
+        // Read before writes; hovering the same year must not rebuild its text,
+        // resize every point or force layout while the user wheels past it.
+        var width=(rect||svg.getBoundingClientRect()).width,r=p.row,c=annualChange(data.records,r);
+        if(index===selectedIndex&&tip.hidden===!show&&width===selectedWidth)return;
+        if(selectedIndex!==index){if(selectedIndex!=null)points[selectedIndex].setAttribute('r','4');points[index].setAttribute('r','6');}
+        selectedIndex=index;selectedWidth=width;
         cursor.setAttribute('x1',p.x);cursor.setAttribute('x2',p.x);cursor.setAttribute('visibility',show?'visible':'hidden');
         caption.textContent=period(r)+' · '+amount(r,unit)+(c==null?' · 전년 동일 기준 자료 없음':' · 전년 동월 대비 '+(c>0?'+':'')+fmt(c)+'%');
         tip.innerHTML='<b>'+period(r)+' 기준</b><strong>'+amount(r,unit)+'</strong><span>전년 동월 대비 '+(c==null?'자료 없음':(c>0?'+':'')+fmt(c)+'%')+'</span><small>동·구 평균: 집계 자료 미연결</small>';
-        tip.hidden=!show;var width=svg.getBoundingClientRect().width;tip.style.left=Math.max(8,Math.min(width-208,p.x/chart.width*width-96))+'px';tip.style.top=Math.max(8,p.y/chart.width*width-96)+'px';
+        tip.hidden=!show;tip.style.left=Math.max(8,Math.min(width-208,p.x/chart.width*width-96))+'px';tip.style.top=Math.max(8,p.y/chart.width*width-96)+'px';
       }
-      function nearest(event){var rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width*chart.width,best=0;chart.points.forEach(function(p,i){if(Math.abs(p.x-x)<Math.abs(chart.points[best].x-x))best=i;});select(best,true);}
-      svg.addEventListener('pointermove',nearest);svg.addEventListener('click',nearest);svg.addEventListener('pointerleave',function(){tip.hidden=true;cursor.setAttribute('visibility','hidden');});
+      function nearest(event){var rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width*chart.width,best=0;chart.points.forEach(function(p,i){if(Math.abs(p.x-x)<Math.abs(chart.points[best].x-x))best=i;});select(best,true,rect);}
+      svg.addEventListener('pointermove',function(event){
+        if(event.pointerType==='touch')return; // A vertical swipe scrolls; a tap selects.
+        if(pointerFrame)global.cancelAnimationFrame(pointerFrame);
+        var clientX=event.clientX;pointerFrame=global.requestAnimationFrame(function(){pointerFrame=0;if(svg.isConnected&&active())nearest({clientX:clientX});});
+      });
+      function hideTip(){if(pointerFrame)global.cancelAnimationFrame(pointerFrame);pointerFrame=0;if(tip.hidden)return;tip.hidden=true;cursor.setAttribute('visibility','hidden');}
+      svg.addEventListener('click',nearest);svg.addEventListener('pointerleave',hideTip);svg.addEventListener('pointercancel',hideTip);
       body.querySelectorAll('[data-history-point]').forEach(function(el,i){el.onfocus=function(){select(i,true);};el.onkeydown=function(event){var next=event.key==='ArrowLeft'?i-1:event.key==='ArrowRight'?i+1:event.key==='Home'?0:event.key==='End'?chart.points.length-1:null;if(next==null)return;event.preventDefault();body.querySelector('[data-history-point="'+Math.max(0,Math.min(chart.points.length-1,next))+'"]').focus({preventScroll:true});};});
       body.querySelectorAll('[data-history-range]').forEach(function(el){el.onclick=function(){range=this.dataset.historyRange;render(data);body.querySelector('[data-history-range="'+range+'"]').focus({preventScroll:true});};});
       body.querySelectorAll('[data-history-unit]').forEach(function(el){el.onclick=function(){unit=this.dataset.historyUnit;render(data);body.querySelector('[data-history-unit="'+unit+'"]').focus({preventScroll:true});};});
