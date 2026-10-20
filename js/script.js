@@ -81,6 +81,7 @@ var currentRoadviewMode = "naver";
 var currentRoadviewItemKey = null;
 var currentRoadviewPosition = null;
 var errorItems = [];
+var addressErrorSnapshotV41 = null;
 var isLoadingSheet = false;
 var pendingAutoUpdate = false;
 var geocodeCacheKey = "JS_REAL_ESTATE_GEOCODE_CACHE_V1";
@@ -5730,11 +5731,12 @@ function showAddressErrors() {
         var result=await recheckAddressV41(item.address);
         if(!dialog.isConnected||!dialog.open)return;
         // A new snapshot must never inherit a response for the old object.
-        if(!allItems.includes(item)){status.textContent='매물 자료가 갱신됐습니다. 주소 확인창을 다시 열어 주세요.';return;}
+        if(!(addressErrorSnapshotV41||allItems).includes(item)){status.textContent='매물 자료가 갱신됐습니다. 주소 확인창을 다시 열어 주세요.';return;}
         item.latlng=new kakao.maps.LatLng(result.lat,result.lng);
         geocodeCache[normalizeAddressForCache(item.address)]={lat:result.lat,lng:result.lng,source:'address',matchedAddress:result.address,savedAt:new Date().toISOString()};
         geocodeCacheDirty=true;saveGeocodeCache();queueSharedGeocodeEntry(item.address,geocodeCache[normalizeAddressForCache(item.address)]);
         errorItems=errorItems.filter(function(value){return value!==item;});
+        if(!allItems.includes(item))allItems.push(item);
         var view=typeof captureAutoUpdateViewState==='function'?captureAutoUpdateViewState():null;
         applyFilter();if(view&&typeof restoreAutoUpdateViewState==='function')restoreAutoUpdateViewState(view);
         reason.textContent='정확한 지번의 지도 위치를 확인했습니다. 광고 주소는 유지됩니다.';row.dataset.resolved='true';retry.textContent='위치 확인됨';updateErrorStatus();
@@ -5750,7 +5752,7 @@ function showAddressErrors() {
 }
 
 function addressErrorsForMarketV41() {
-  var seen=new Set(),current=new Set(allItems||[]);
+  var seen=new Set(),current=new Set(addressErrorSnapshotV41||allItems||[]);
   return (errorItems||[]).filter(function(item){
     if(!item||!current.has(item)||item.latlng||window.JSListingTradeV1&&!window.JSListingTradeV1.matchesItem(item))return false;
     var key=String(item.propertyId||item.key||'')+'|'+String(item.address||'');if(seen.has(key))return false;seen.add(key);return true;

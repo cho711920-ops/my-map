@@ -2191,6 +2191,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   isLoadingSheet = true;
   var loadGenerationV1 = ++jsListingsLoadGenerationV1;
   errorItems = [];
+  addressErrorSnapshotV41 = null;
   if (!isAuto && !(allItems || []).length) window.jsInitialFullListingsLoadingV1 = true;
   document.getElementById("status").innerHTML = isAuto
     ? "자동 업데이트 준비중..."
@@ -2436,6 +2437,9 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         jsInitialFullListingsCacheUnifiedSignatureV1 === liveInitialUnifiedSignatureV1;
 
       liveInitialItemsForCacheV1 = rawItems;
+      // Keep failed geocodes tied to this published snapshot even after the
+      // map's allItems is narrowed to successfully located rows.
+      addressErrorSnapshotV41 = rawItems;
       persistInitialListingsCacheV1();
 
       if (canKeepFullInitialCacheV1 && jsInitialFullListingsCacheItemsV1) {
@@ -2448,6 +2452,8 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
           window.JSUnifiedListingsV8.attach(jsInitialFullListingsCacheItemsV1, unifiedResult);
         }
         allItems = jsInitialFullListingsCacheItemsV1;
+        addressErrorSnapshotV41 = allItems;
+        errorItems = allItems.filter(function(item) { return !item.latlng; });
         jsListingsCompleteBaseV1 = true;
         jsListingsRevisionV682 = snapshotRevision;
         sheetPublishedV1 = true;

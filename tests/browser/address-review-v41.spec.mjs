@@ -33,6 +33,14 @@ async function mockLookup(page,phase){await page.evaluate(phase=>{
     if(phase==='held')window.__lookupRelease=()=>callback([row],'OK');else callback(phase==='empty'?[]:[row],'OK');
   };}}}};
 },phase);}
+test('an unlocated row stays reviewable after map rendering excludes it, and can rejoin the map',async({page,isMobile})=>{
+  await page.evaluate(()=>{const item=allItems.find(item=>item.tradeType==='lease');addressErrorSnapshotV41=allItems.slice();allItems=allItems.filter(value=>value!==item);errorItems=[item];updateErrorStatus();});
+  await expect(page.locator('#errorStatus')).toHaveText('주소 확인 1개');
+  const count=await page.evaluate(()=>allItems.length);await mockLookup(page,'normal');
+  await page.locator('#errorStatus').click();await page.locator('#addressReviewV41 li').first().getByRole('button',{name:'지번 다시 조회'}).click();
+  await expect(page.locator('#addressReviewV41 [role="status"]')).toContainText('보완했습니다');
+  expect(await page.evaluate(()=>allItems.length)).toBe(count+1);await expect(page.locator('#errorStatus')).toBeHidden();
+});
 test('one exact parcel lookup restores only its coordinates without changing the ad or other errors',async({page})=>{
   await mockLookup(page,'normal');const before=await page.evaluate(()=>allItems.map(({address,deposit,rent,salePrice})=>({address,deposit,rent,salePrice})));
   await page.locator('#errorStatus').click();await page.locator('#addressReviewV41 li').first().getByRole('button',{name:'지번 다시 조회'}).click();
