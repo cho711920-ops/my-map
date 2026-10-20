@@ -786,21 +786,47 @@ async function mutationScope(env, requestId) {
     .bind(id).first();
 }
 
-async function claimNaverBatchRequest(env, requestId) {
+async function claimNaverBatchRequest(env, requestId, sessionId = "") {
   const id = clean(requestId).slice(0, 160);
   if (!id) return false;
   // A client deadline does not cancel D1 writes. Keep an unfinished claim
   // until its owner records the result; maintenance must not expire it.
   const claimed = await env.DB.prepare(`INSERT INTO mutation_results (
       request_id, owner_email, action, state, result_json, created_at, expires_at
-    ) VALUES (?1, 'collector', 'saveNaverBatch', 'running', '{}', ?2, '')
-    ON CONFLICT(request_id) DO UPDATE SET state='running', result_json='{}',
+    ) VALUES (?1, 'collector', 'saveNaverBatch', 'running', ?3, ?2, '')
+    ON CONFLICT(request_id) DO UPDATE SET state='running', result_json=excluded.result_json,
       created_at=excluded.created_at, expires_at=''
     WHERE mutation_results.owner_email='collector' AND mutation_results.action='saveNaverBatch'
       AND mutation_results.state='completed' AND mutation_results.expires_at<>''
       AND julianday(mutation_results.expires_at)<=julianday('now')`)
-    .bind(id, nowIso()).run();
+    .bind(id, nowIso(), JSON.stringify({sessionId: clean(sessionId).slice(0,160)})).run();
   return Number(claimed?.meta?.changes || 0) === 1;
+}
+
+const NAVER_RESCAN_CODE = "naver_closed_session_rescan";
+function naverRescanResult() {
+  return {ok:false,code:NAVER_RESCAN_CODE,requiresFreshManifest:true,
+    message:"이전 수집 회차가 응답 없음으로 종료됐습니다. 미확인 저장을 재전송하지 않고 최신 전체목록을 다시 대조합니다."};
+}
+async function closedNaverRequestRecovery(env,id,row) {
+  if(row.state!=="running"||row.action!=="saveNaverBatch")return null;
+  const descriptor=parseJson(row.result_json,{});
+  const legacy=id.match(/^(S-NAVER-\d{13}-[a-z0-9]{1,16})-/);
+  const sessionId=clean(descriptor.sessionId)||(legacy?legacy[1]:"");
+  if(!sessionId||!id.startsWith(sessionId+"-"))return null;
+  const session=await env.DB.prepare(`SELECT source,owner_email,state,started_at,updated_at,finished_at,error_json
+    FROM collector_sessions WHERE id=?1`).bind(sessionId).first();
+  if(!session||session.source!=="네이버"||session.owner_email!=="collector"||session.state!=="abandoned")return null;
+  const failure=parseJson(session.error_json,{}).lastFailure;
+  const claimAt=Date.parse(row.created_at),startedAt=Date.parse(session.started_at),closedAt=Date.parse(session.finished_at),updatedAt=Date.parse(session.updated_at),now=Date.now();
+  // Age alone never releases a claim. Require the exact owning session's
+  // maintenance closure, no later heartbeat, and a settling interval. The
+  // original claim stays reserved forever; this is a rescan requirement,
+  // never a fabricated result or permission to replay that write.
+  if(failure?.type!=="stale-session"||Date.parse(failure.at)!==closedAt||
+      !Number.isFinite(claimAt)||!Number.isFinite(startedAt)||!Number.isFinite(closedAt)||updatedAt!==closedAt||
+      startedAt>claimAt||closedAt<claimAt||now-claimAt<120*60_000||now-closedAt<5*60_000)return null;
+  return naverRescanResult();
 }
 
 async function mutationStatus(env, requestId, owner = "collector", expectedAction = "") {
@@ -809,15 +835,17 @@ async function mutationStatus(env, requestId, owner = "collector", expectedActio
   const scopedAction = clean(expectedAction).slice(0, 120);
   if (!id || !scopedOwner) return { ok: true, ready: false, requestId: id };
   const row = scopedAction
-    ? await env.DB.prepare(`SELECT state, result_json, action FROM mutation_results
+    ? await env.DB.prepare(`SELECT state, result_json, action, created_at FROM mutation_results
         WHERE request_id=?1 AND owner_email=?2 AND action=?3
           AND (expires_at='' OR julianday(expires_at)>julianday('now'))`)
       .bind(id, scopedOwner, scopedAction).first()
-    : await env.DB.prepare(`SELECT state, result_json, action FROM mutation_results
+    : await env.DB.prepare(`SELECT state, result_json, action, created_at FROM mutation_results
         WHERE request_id=?1 AND owner_email=?2
           AND (expires_at='' OR julianday(expires_at)>julianday('now'))`)
       .bind(id, scopedOwner).first();
   if (!row) return { ok: true, ready: false, requestId: id };
+  const rescan=scopedOwner==="collector"?await closedNaverRequestRecovery(env,id,row):null;
+  if(rescan)return {ok:true,ready:true,requestId:id,mutationAction:row.action,result:rescan};
   return { ok: true, ready: row.state === "completed", requestId: id,
     mutationAction: clean(row.action), result: parseJson(row.result_json, {}) };
 }
@@ -3125,6 +3153,10 @@ async function runDaangnChunk(env, body = {}) {
 
 async function executeExternalAction(env, body) {
   const action = clean(body.action);
+  if((action==="saveNaverBatch"||action==="classifySourceManifest"&&sourceName(body.source)==="네이버")&&clean(body.sessionId)){
+    const closed=await env.DB.prepare("SELECT state,source FROM collector_sessions WHERE id=?1").bind(clean(body.sessionId)).first();
+    if(closed?.state==="abandoned"&&closed.source==="네이버")throw Object.assign(new Error(naverRescanResult().message),{code:NAVER_RESCAN_CODE,requiresFreshManifest:true,statusCode:409});
+  }
   if (action === "saveAutomationRunReport") return saveAutomationRunReport(env, body.report);
   if (action === "classifySourceManifest") return classifyManifest(env, body);
   if (action === "saveNaverBatch") return ingestRecords(env, "네이버", Array.isArray(body.data) ? body.data.slice(0, 250) : [], body);
@@ -3218,7 +3250,7 @@ export async function handleCollectorApi(request, env) {
     return response;
   }
   if (action === "saveNaverBatch" && clean(body.requestId) &&
-      !await claimNaverBatchRequest(env, body.requestId)) {
+      !await claimNaverBatchRequest(env, body.requestId, body.sessionId)) {
     // Another request may have claimed or completed the ID after the reads
     // above. Recheck its scope/result without executing or replacing it.
     const scope = await mutationScope(env, body.requestId);
@@ -3243,6 +3275,7 @@ export async function handleCollectorApi(request, env) {
     return response;
   } catch (error) {
     const result = { ok: false, message: clean(error?.message) || "수집 처리에 실패했습니다." };
+    if(error?.code===NAVER_RESCAN_CODE)Object.assign(result,{code:NAVER_RESCAN_CODE,requiresFreshManifest:true});
     if (body.requestId) await saveMutationResult(env, body.requestId, action, result);
     const status = Math.max(400, Math.min(599, Number(error?.statusCode) || 400));
     return jsonResponse(result, status, cors);

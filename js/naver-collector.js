@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.11";
+  var VERSION = "6.0.12";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2929,6 +2929,26 @@
     if (saved && saved.requestId === requestId) localStorage.removeItem(PENDING_SAVE_STORAGE_KEY);
   }
 
+  function resetClosedNaverCheckpoint(sessionId) {
+    // Reset only the closed owning run, never another market/region's progress.
+    try {var city=JSON.parse(localStorage.getItem(CITY_PROGRESS_KEY)||'null');if(city&&city.sessionId===sessionId)localStorage.removeItem(CITY_PROGRESS_KEY);}catch(_){}
+    try {var all=JSON.parse(localStorage.getItem(AUTO_DISTRICT_PROGRESS_KEY)||'{}'),changed=false;
+      Object.keys(all).forEach(function(key){if(all[key]&&all[key].sessionId===sessionId){delete all[key];changed=true;}});
+      if(changed)localStorage.setItem(AUTO_DISTRICT_PROGRESS_KEY,JSON.stringify(all));
+    }catch(_){}
+  }
+
+  function requireFreshNaverManifest(payload,result) {
+    if(!result||result.code!=='naver_closed_session_rescan'||result.requiresFreshManifest!==true)return;
+    var pending=pendingNaverSave(),sessionId=payload.sessionId||pending&&pending.requestId===payload.requestId&&pending.sessionId;
+    if(pending&&pending.requestId===payload.requestId)clearPendingNaverSave(payload.requestId);
+    if(sessionId)resetClosedNaverCheckpoint(sessionId);
+    var error=collectorRequestFailure(payload,new Error(result.message||'종료된 수집 회차입니다. 최신 전체목록부터 다시 대조합니다.'));
+    error.collectorFreshScanRequired=true;
+    // End this attempt; do not replay a batch or finalize its incomplete census.
+    throw error;
+  }
+
   async function reconcilePendingNaverSave(payload, generation) {
     var pending = pendingNaverSave();
     if (!pending) return null;
@@ -2964,6 +2984,7 @@
         if (!collectorRecoveryIsCurrent(generation)) break;
         if (status && status.ok && status.ready && status.result &&
             typeof status.result.ok === "boolean") {
+          requireFreshNaverManifest(payload,status.result);
           if (payload.action === "saveNaverBatch") clearPendingNaverSave(payload.requestId);
           if (!status.result.ok) {
             var confirmedError = new Error(status.result.message || "D1 저장에 실패했습니다.");
@@ -2974,7 +2995,7 @@
           return status.result;
         }
       } catch (statusError) {
-        if (statusError && statusError.collectorFailureConfirmed) throw statusError;
+        if (statusError && (statusError.collectorFailureConfirmed||statusError.collectorFreshScanRequired)) throw statusError;
         // A bounded status read can fail too. It never authorizes replaying the
         // original write, including after a panel replacement or safe stop.
       }
@@ -3012,6 +3033,7 @@
           throw collectorRequestFailure(payload,
             new Error(result.message || "같은 저장 요청이 처리 중입니다. 결과 확인 후 이어갑니다."));
         }
+        requireFreshNaverManifest(payload,result);
         if (payload.action === "saveNaverBatch" && payload.requestId) clearPendingNaverSave(payload.requestId);
         return result;
       } catch (parseError) {
@@ -3019,6 +3041,7 @@
         throw collectorRequestFailure(payload, new Error(invalidResponseMessage));
       }
     } catch (error) {
+      if(error&&error.collectorFreshScanRequired)throw error;
       if (payload.action === "saveNaverBatch" && error && error.collectorDeadlineExceeded) {
         rememberNaverBatchSize(Math.floor(BATCH_SIZE / 2));
       }

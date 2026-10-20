@@ -24,6 +24,27 @@ async function flush() {
   for (let i = 0; i < 100; i += 1) await Promise.resolve();
 }
 
+test('closed-session rescan clears only its pending checkpoint and ends this attempt before any fresh mutation', async()=>{
+  const rescan={ok:false,code:'naver_closed_session_rescan',requiresFreshManifest:true,message:'latest full manifest required'};
+  const h=harness(({payload})=>jsonResponse(payload.action==='mutationStatus'?{ok:true,ready:true,result:rescan}:{ok:true,needsDetail:[]}));
+  h.storage.set('pending-save-test',JSON.stringify({requestId:'old-batch',sessionId:'old-session',fingerprint:'a'.repeat(64),count:5}));
+  h.storage.set('city-progress-test',JSON.stringify({sessionId:'old-session',nextIndex:817}));
+  h.storage.set('auto-progress-test',JSON.stringify({old:{sessionId:'old-session'},other:{sessionId:'other-session',nextIndex:12}}));
+  const payload={action:'classifySourceManifest',requestId:'fresh-manifest',sessionId:'fresh-session',collectorKey:'test-only'};
+  await assert.rejects(h.context.fetchCollectorJson(payload,60000,'invalid'),e=>e.collectorFreshScanRequired&&e.collectorRequestAmbiguous);
+  assert.deepEqual(h.calls.map(c=>c.payload.action),['mutationStatus']);
+  assert.equal(h.storage.has('pending-save-test'),false);assert.equal(h.storage.has('city-progress-test'),false);
+  assert.deepEqual(JSON.parse(h.storage.get('auto-progress-test')),{other:{sessionId:'other-session',nextIndex:12}});
+  await h.context.fetchCollectorJson(payload,60000,'invalid');
+  assert.deepEqual(h.calls.map(c=>c.payload.action),['mutationStatus','classifySourceManifest']);
+});
+
+test('a closed-session direct rejection is never retried or mistaken for a successful batch', async()=>{
+  const h=harness(()=>jsonResponse({ok:false,code:'naver_closed_session_rescan',requiresFreshManifest:true,message:'restart from manifest'}));
+  await assert.rejects(h.context.postBatchWithRetry([],6,{sessionId:'old-session',requestId:'old-batch'}),e=>e.collectorFreshScanRequired);
+  assert.equal(h.calls.length,1);assert.equal(h.calls[0].payload.action,'saveNaverBatch');assert.equal(h.storage.has('pending-save-test'),false);
+});
+
 function harness(fetch) {
   const timers = new Map();
   const calls = [];
@@ -45,6 +66,7 @@ function harness(fetch) {
     BATCH_SIZE: 20, DEFAULT_BATCH_SIZE: 20, MIN_BATCH_SIZE: 5, MAX_BATCH_SIZE: 40,
     BATCH_SIZE_STORAGE_KEY: "batch-size-test",
     PENDING_SAVE_STORAGE_KEY: "pending-save-test",
+    CITY_PROGRESS_KEY: "city-progress-test",AUTO_DISTRICT_PROGRESS_KEY:"auto-progress-test",
     localStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value),
       removeItem: key => storage.delete(key)},
     state: {stopRequested: false, runGeneration: 1},
@@ -78,7 +100,7 @@ function harness(fetch) {
   });
   for (const name of ["loadNaverBatchSize", "rememberNaverBatchSize", "collectorRequestFailure",
     "collectorRecoveryIsCurrent", "recoverCollectorRequest", "naverBatchRequestId",
-    "pendingNaverSave", "rememberPendingNaverSave", "clearPendingNaverSave", "reconcilePendingNaverSave",
+    "pendingNaverSave", "rememberPendingNaverSave", "clearPendingNaverSave", "resetClosedNaverCheckpoint", "requireFreshNaverManifest", "reconcilePendingNaverSave",
     "fetchCollectorText", "fetchCollectorJson", "classifyNaverManifest",
     "postBatch", "postBatchWithRetry", "finalizeNaverSession", "addNaverDiagnostics", "getNaverSessionResult",
     "fetchFinJson", "enrichNaverDetailBatch", "collectAndSave", "retryFailedCityArticles",

@@ -57,6 +57,56 @@ const save = {
   action: "saveNaverBatch", requestId: "same-batch", sessionId: "same-session", data: [listing]
 };
 
+function closeOwningSession(f,sessionId,minutes=10){
+  const now=Date.now(),closed=new Date(now-minutes*60_000).toISOString();
+  f.sqlite.prepare(`UPDATE collector_sessions SET state='abandoned',started_at=?,updated_at=?,finished_at=?,error_json=? WHERE id=?`)
+    .run(new Date(now-4*3600_000).toISOString(),closed,closed,JSON.stringify({lastFailure:{type:'stale-session',at:closed}}),sessionId);
+}
+
+test('a closed exact owning session requires a fresh census without releasing or replaying a possibly committed batch',async t=>{
+  const f=database(t),sessionId='S-NAVER-1700000000000-test123',requestId=sessionId+'-batch-0-'+ 'a'.repeat(64);
+  assert.equal((await f.call({...save,requestId,sessionId})).result.created,1);
+  // Simulate the result ledger being lost after the advertisement was committed.
+  f.sqlite.prepare("UPDATE mutation_results SET state='running',result_json='{}',created_at=?,expires_at='' WHERE request_id=?")
+    .run(new Date(Date.now()-3*3600_000).toISOString(),requestId);
+  closeOwningSession(f,sessionId);
+  const before=f.sqlite.prepare('SELECT * FROM listing_sources').all();
+  const status=await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId});
+  assert.equal(status.result.ready,true);assert.equal(status.result.result.ok,false);
+  assert.equal(status.result.result.requiresFreshManifest,true);
+  assert.equal(status.result.result.code,'naver_closed_session_rescan');
+  const replay=await f.call({...save,requestId,sessionId});assert.equal(replay.result.requiresFreshManifest,true);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM listing_sources').all(),before);
+  assert.equal(f.sqlite.prepare('SELECT state FROM mutation_results WHERE request_id=?').get(requestId).state,'running');
+  assert.equal(f.sqlite.prepare('SELECT state FROM collector_sessions WHERE id=?').get(sessionId).state,'abandoned');
+  const fresh=await f.call({...save,requestId:'fresh-scan-batch',sessionId:'fresh-scan-session'});
+  assert.equal(fresh.result.created,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM listings').get().n,1);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM listing_sources').get().n,1);
+});
+
+test('age alone, recent closure and a different owning source never resolve a running claim',async t=>{
+  const f=database(t),sessionId='S-NAVER-1700000000000-test456',requestId=sessionId+'-batch-0-'+ 'b'.repeat(64);
+  await f.call({...save,requestId,sessionId});
+  f.sqlite.prepare("UPDATE mutation_results SET state='running',created_at=?,expires_at='' WHERE request_id=?")
+    .run(new Date(Date.now()-3*3600_000).toISOString(),requestId);
+  const status=()=>f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId});
+  assert.equal((await status()).result.ready,false);
+  closeOwningSession(f,sessionId,1);assert.equal((await status()).result.ready,false);
+  closeOwningSession(f,sessionId);f.sqlite.prepare("UPDATE collector_sessions SET source='당근' WHERE id=?").run(sessionId);
+  assert.equal((await status()).result.ready,false);
+  f.sqlite.prepare("UPDATE collector_sessions SET source='네이버',owner_email='other@example.test' WHERE id=?").run(sessionId);
+  assert.equal((await status()).result.ready,false);
+});
+
+test('a closed Naver session cannot be resurrected by a new batch or manifest ID',async t=>{
+  const f=database(t),sessionId='closed-session';await f.call({...save,sessionId});closeOwningSession(f,sessionId);
+  for(const body of [{...save,requestId:'different-batch',sessionId},{action:'classifySourceManifest',requestId:'different-manifest',sessionId,source:'네이버',items:[]}]){
+    const result=await f.call(body);assert.equal(result.status,409);assert.equal(result.result.requiresFreshManifest,true);
+  }
+  assert.equal(f.sqlite.prepare('SELECT state FROM collector_sessions WHERE id=?').get(sessionId).state,'abandoned');
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM listings').get().n,1);
+});
+
 test("concurrent duplicate Naver save waits, then status and replay return the original result without orphan masters", async t => {
   const started = deferred();
   const release = deferred();

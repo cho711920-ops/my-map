@@ -1,0 +1,24 @@
+자동수집 네이버 미확인 요청 복구 v37 — 2026-10-20 KST
+
+승인·기준
+- 사용자 "자동수집 바로 수정해줘"로 실제 복구 수정 승인. 예약 점검 권한으로 실행한 작업이 아님.
+- 제품 b35098b / 기록 a563a97에서 codex/naver-pending-recovery-v37 분기. v29~36 UI 유지. 브이월드 준비 코드 제외.
+
+확인한 원인
+- 10월20일 Windows11:00 예약은 시작됐고 당근5구는12:30까지 완료. 네이버5구는 전날 남은 동일 미확인 저장 요청에 막혔다.
+- 10월19일21:10 KST의5건 요청이 mutation_results.running, expires_at 비어 있음. 소유 네이버 세션은 heartbeat120분 초과로23:11 KST maintenance가 abandoned 처리했다.
+- 해당 요청의5개 실제 광고번호/완료 결과를 확보하지 못했으므로 저장 성공/유실로 단정하지 않는다. 원본/매물/찜/상태를 임의 보정하지 않는다.
+
+변경
+- 서버는 running saveNaverBatch의 정확한 소유 세션이 collector 소유 네이버이고 stale-session으로 abandoned된 증거, 시작/요청/종료 시각, 종료 뒤 갱신 없음, 요청120분·종료5분 경과를 모두 확인한다.
+- 조건 충족 시 ok:false / naver_closed_session_rescan / requiresFreshManifest:true를 반환한다. 기존 요청 claim은 계속 running으로 예약해 동일 저장 재전송을 차단한다. 저장 성공을 만들어 내거나 만료/삭제하지 않는다. 실제 완료 결과가 있으면 기존 결과를 그대로 반환한다.
+- 새 claim에는 소유 sessionId만 기록한다. 이전 claim은 정해진 S-NAVER 시각/난수 접두사로 정확히 소유 세션을 찾는다. 소유자/유형 불일치, 종료 증거 없음, 아직 실행 중인 요청은 기존처럼 대기한다.
+- abandoned 네이버 세션으로 새 저장/manifest를 보내 세션을 다시 살리는 경로를 차단한다.
+- 네이버6.0.12는 이 응답을 받으면 같은 요청의 pending descriptor와 그 소유 세션의 checkpoint만 해제하고 현재 시도를 끝낸다. 미완료 전체수집을 완료 처리하지 않는다. 다음 기존 재시도는 새 세션에서 최신 전체 manifest를 대조하고 이미 저장된 광고는 건너뛴다.
+- 확장1.1.18은 새 네이버 클라이언트를 포함한다. 예약/대상/인증/당근 로직은 변경하지 않는다. 운영 DB 직접 SQL 수정/삭제 없음.
+
+사전 검수
+- 핵심135건 + 추가105건 통과. 실제 저장 후 응답 유실, 동일 요청 재전송 차단, 미확인 오류 전파/다른 지역 checkpoint 보존, fresh manifest 재개, 소유자/시각/실행 중 요청 보호 포함.
+- 기존 광고 존재 증명/재노출/거래유형 격리/원본 대표 보존/유지관리 및 자동수집 watchdog/선택 실행 회귀 검사 포함.
+- lint / typecheck / diff check / Cloudflare build 및 Worker dry-run 통과. public cache1c8a6cccaf933de4d66f9c7e.
+- 제품 배포 및 설치본 갱신·실제 재개 결과는 아래 후속 기록으로만 확정한다.
