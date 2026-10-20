@@ -43,21 +43,72 @@
       button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+icons[key]+'</svg><span>'+esc(label)+'</span>';
     });
   }
-  function saleCalculationHtml(item){
+  function officialAreaReview(item,references,confirmation){
+    var ui=global.JSListingTradeV1,land=ui.normalizedSaleCategory(item)==='land',ref=references&&references[land?'land':'building'];
+    var out={reason:'공적자료를 조회하면 확인된 면적으로 단가를 보완합니다.'};
+    if(!ref||!ref.data)return out;
+    var data=ref.data,parser=global.JSParcelExternalLinksV1&&global.JSParcelExternalLinksV1.parseAddress;
+    var advertised=parser&&parser(item.address),official=parser&&parser(land?data.address:data.lotAddress);
+    if(ref.item&&ref.item.referenceAddressChangedV8||!advertised||!official||advertised.query!==official.query){out.reason='광고와 동일한 지번의 공적자료가 확인돼야 계산할 수 있습니다.';return out;}
+    var d=ui.saleSummary(item),scopeText=[item.name,item.buildingName,item.memo,d.description,d.saleNote].filter(Boolean).join(' ');
+    if(/지분|일부\s*(?:매매|매각)|외\s*\d+\s*필지|복수\s*필지|일괄\s*매매/.test(scopeText)){
+      out.reason='지분·일부·복수 필지 매매는 실제 매매 면적을 확인해야 합니다.';return out;
+    }
+    if(data.calculationIncompleteV38){out.reason='조회가 불완전해 매매 대상 면적을 확정하지 못했습니다. 다시 조회해 주세요.';return out;}
+    out.token=JSON.stringify([ref.kind,item.address,data.managementKey,data.pnu,data.siteArea,data.totalArea,data.areaM2,data.fetchedAt,data.calculationBuildingCountV38]);
+    out.address=land?data.address:data.lotAddress;
+    out.source=data.source||(land?'토지이음':'건축물대장');out.date=data.queriedAt||data.fetchedAt||'';
+    if(out.date&&Number.isFinite(Date.parse(out.date)))out.date=new Date(out.date).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'});
+    if(!land){
+      var extent=ui.buildingSaleExtent(item),count=Number(data.calculationBuildingCountV38)||0;
+      var targetText=[d.saleTargetFloor,d.saleTargetRoom,item.room].filter(Boolean).join(' ');
+      if(extent==='unit'||extent!=='whole_building'&&/\d+\s*(?:호|층)/.test(targetText)||/집합|전유|총괄/.test(data.registerType||'')){out.reason='층·호실·집합건물은 전유면적과 대지권을 확인해야 합니다. 전체 대장 면적은 사용하지 않습니다.';return out;}
+      if(!count){out.reason='조회 건물의 전체 범위를 확인하지 못했습니다.';return out;}
+      if(extent!=='whole_building'||count>1||!data.registerType){
+        out.needsConfirmation=true;
+        if(confirmation!==out.token){out.reason='조회한 건물 전체가 매매 대상인지 확인해 주세요.';return out;}
+        out.confirmed=true;
+      }
+      out.landAreaM2=count===1?data.siteArea:null;out.grossAreaM2=data.totalArea;
+      if(count>1)out.reason='여러 건물의 공통 대지일 수 있어 대지 단가는 보류하고, 선택한 건물 연면적으로만 계산합니다.';
+      else out.reason='';
+    }else{out.landAreaM2=data.areaM2;out.reason='';}
+    out.label=land?'공부면적':'대장 면적';
+    return out;
+  }
+  function saleCalculationHtml(item,references,confirmation){
     var ui=global.JSListingTradeV1,d=ui.saleSummary(item),land=ui.normalizedSaleCategory(item)==='land';
     function numeric(v){if(v==null||typeof v==='boolean'||String(v).trim()==='')return null;var n=Number(String(v).replace(/,/g,''));return Number.isFinite(n)&&n>=0?n:null;}
     var p=numeric(item.salePrice??item.sale_price);
     function number(v){return Number(String(v).replace(/,/g,'')).toLocaleString('ko-KR',{maximumFractionDigits:2});}
     function money(v){return number(v)+'만원';}
-    var cards=[];
-    function card(label,result,basis){cards.push('<div><dt>'+esc(label)+'</dt><dd>'+esc(result)+'</dd><small>'+esc(basis)+'</small></div>');}
+    var official=officialAreaReview(item,references,confirmation),cards=[];
+    function card(label,result,basis,extra){cards.push('<div><dt>'+esc(label)+'</dt><dd>'+esc(result)+'</dd><small>'+esc(basis)+'</small>'+(extra||'')+'</div>');}
     (land?[['토지 평당가','landAreaM2','토지']]:[['대지 기준 단가','landAreaM2','대지'],['연면적 기준 단가','grossAreaM2','연면적']]).forEach(function(row){
       var area=numeric(d[row[1]]),unit=p>0&&area>0?p/(area/3.305785):null,valid=unit!=null&&Number.isFinite(unit);
       var areaLabel=row[2]+(/면적$/.test(row[2])?'':'면적');
-      card(row[0],valid?number(unit)+'만원/평':'산정 불가',valid?'광고 매매가 '+money(p)+' ÷ 광고 '+areaLabel+' '+number(area/3.305785)+'평':'광고 매매가·'+areaLabel+' 확인 필요');
+      var officialArea=numeric(official[row[1]]),officialUnit=p>0&&officialArea>0?p/(officialArea/3.305785):null,officialValid=officialUnit!=null&&Number.isFinite(officialUnit);
+      var officialBasis='광고 매매가 '+money(p)+' ÷ '+official.label+' '+areaLabel+' '+number(officialArea/3.305785)+'평 ('+number(officialArea)+'㎡)';
+      var paired=valid&&officialValid?'<div class="sale-official-unit-v38"><span>'+esc(official.label+' 기준')+'</span><strong>'+esc(number(officialUnit)+'만원/평')+'</strong><small>'+esc(officialBasis)+'</small></div>':'';
+      card(row[0]+(!valid&&officialValid?' · '+official.label+' 기준':''),valid?number(unit)+'만원/평':officialValid?number(officialUnit)+'만원/평':'산정 불가',valid?'광고 매매가 '+money(p)+' ÷ 광고 '+areaLabel+' '+number(area/3.305785)+'평':officialValid?officialBasis:'광고 매매가·'+areaLabel+' 확인 필요 · '+official.reason,paired);
     });
     if(!land){var rate=ui.saleYield(item);card('단순 연 수익률',rate==null?'산정 불가':number(rate)+'%',rate==null?'매매가·임대보증금·월 임대수입 확인 필요':'월 임대수입 '+money(d.monthlyIncome)+' × 12 ÷ (매매가 '+money(p)+' − 보증금 '+money(d.totalDeposit)+') × 100');}
-    return '<dl class="sale-evidence-metrics-v36">'+cards.join('')+'</dl><p class="sale-evidence-note-v36">'+(land?'평당가는 광고 토지면적 기준입니다. 공부면적이나 공시지가로 자동 대체하지 않습니다.':'단가는 건물 총매매가를 광고 면적으로 나눈 값입니다. 단순 수익률에는 대출이자·취득비용·세금·공실·운영비를 반영하지 않습니다.')+'</p>';
+    var provenance=official.label?'<p class="sale-evidence-note-v36" data-official-area-source-v38>'+esc(official.source+' · '+official.address+' · 조회 '+(official.date||'일시 미제공'))+'</p>':'';
+    var confirm=official.needsConfirmation?'<label class="sale-area-confirm-v38"><input type="checkbox" data-confirm-official-area-v38'+(official.confirmed?' checked':'')+'> 조회한 건물'+(references.building.data.buildingName||references.building.data.dongName?' ('+esc([references.building.data.buildingName,references.building.data.dongName].filter(Boolean).join(' · '))+')':'')+' 전체가 이번 매매 대상입니다</label>':'';
+    return '<dl class="sale-evidence-metrics-v36">'+cards.join('')+'</dl>'+provenance+confirm+(official.reason?'<p class="sale-evidence-note-v36">'+esc(official.reason)+'</p>':'')+'<p class="sale-evidence-note-v36">'+(land?'광고 면적과 공부면적의 단가를 구분합니다. 공시지가를 매매가로 사용하지 않으며 광고·목록의 값은 변경하지 않습니다.':'단가는 건물 총매매가를 각 기준 면적으로 나눈 참고값입니다. 토지 단독 가격이 아닙니다. 단순 수익률에는 대출이자·취득비용·세금·공실·운영비를 반영하지 않습니다.')+'</p>';
+  }
+  function refreshSaleCalculations(body){
+    var slot=body&&body.querySelector('[data-sale-calculations-v38]'),item=body&&body._saleCalculationItemV38;if(!slot||!item)return;
+    var refs=body._saleCalculationReferencesV38||{};
+    slot.innerHTML=saleCalculationHtml(item,refs,body._saleAreaConfirmationV38);
+    var check=slot.querySelector('[data-confirm-official-area-v38]');if(check)check.onchange=function(){body._saleAreaConfirmationV38=this.checked?officialAreaReview(item,refs).token:null;refreshSaleCalculations(body);slot.querySelector('[data-confirm-official-area-v38]').focus({preventScroll:true});};
+  }
+  function referenceArea(body,item,kind,data){
+    if(!body)return;var refs=body._saleCalculationReferencesV38||(body._saleCalculationReferencesV38={});
+    if(!kind)body._saleCalculationReferencesV38={};
+    else if(data)refs[kind]={item:item,kind:kind,data:data};else delete refs[kind];
+    var target=body._saleCalculationItemV38&&global.JSListingTradeV1.normalizedSaleCategory(body._saleCalculationItemV38)==='land'?'land':'building';
+    if(!kind||kind===target)body._saleAreaConfirmationV38=null;refreshSaleCalculations(body);
   }
   function evidenceHeading(title,note){var heading=document.createElement('header');heading.className='sale-evidence-heading-v36';heading.innerHTML='<h3>'+esc(title)+'</h3><p>'+esc(note)+'</p>';return heading;}
   function mountSaleEvidence(body,item,summary,primary){
@@ -81,10 +132,12 @@
     var publicData=summary.querySelector('.sale-public-review-v6');
     if(publicData){publicData.classList.add('sale-evidence-public-v36');publicData.prepend(evidenceHeading('공적자료','조회한 주소·건물과 자료 기준일을 확인하세요. 광고 조건은 유지됩니다.'));summary.after(publicData);}
     var calc=document.createElement('section');calc.className='sale-evidence-calculation-v36';calc.dataset.saleSection='workbench';
-    calc.append(evidenceHeading('계산 결과','광고 기준 계산과 내 가정 계산을 나누어 확인'));
-    calc.insertAdjacentHTML('beforeend','<h4>광고 기준 계산</h4>'+saleCalculationHtml(item)+'<h4>내 가정 계산·검토</h4><p class="sale-evidence-note-v36">대출·금리·공실·비용을 직접 입력한 결과는 계산창에서 확인합니다. 입력값은 광고 조건을 바꾸지 않습니다.</p>');
+    calc.append(evidenceHeading('계산 결과','단가의 면적 근거와 내 가정 계산을 나누어 확인'));
+    calc.insertAdjacentHTML('beforeend','<h4>광고·공적 면적 기준 계산</h4><div data-sale-calculations-v38 aria-live="polite"></div><button type="button" class="sale-area-lookup-v38">공적자료로 면적 보완</button><h4>내 가정 계산·검토</h4><p class="sale-evidence-note-v36">대출·금리·공실·비용을 직접 입력한 결과는 계산창에서 확인합니다. 입력값은 광고 조건을 바꾸지 않습니다.</p>');
     var tools=summary.querySelector('.sale-tools-v1[data-sale-item]');if(tools){tools.removeAttribute('data-sale-section');calc.append(tools);}
     (publicData||summary).after(calc);
+    body._saleCalculationItemV38=item;refreshSaleCalculations(body);
+    calc.querySelector('.sale-area-lookup-v38').onclick=function(){var panel=body.querySelector('[data-sale-section="'+(global.JSListingTradeV1.normalizedSaleCategory(item)==='land'?'publicland':'register')+'"]'),button=panel&&panel.querySelector('[data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
     var secondary=summary.querySelector('.sale-secondary-tools-v10');if(secondary)secondary.querySelector('summary').textContent='광고 출처·호가 이력·외부 조회';
   }
   function position(drawer){
@@ -152,5 +205,5 @@
     mountSaleEvidence(body,item,summary,primary);
     if(body._saleDossierSyncV3)body._saleDossierSyncV3();
   }
-  global.JSWideDetailV26={mount:mount,position:position,known:known,saleCalculationHtml:saleCalculationHtml};
+  global.JSWideDetailV26={mount:mount,position:position,known:known,saleCalculationHtml:saleCalculationHtml,officialAreaReview:officialAreaReview,referenceArea:referenceArea};
 })(window);

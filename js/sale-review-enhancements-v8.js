@@ -33,6 +33,7 @@
   }
   function reference(root,item,kind,data){
     var body=bodyOf(root);if(!body)return;
+    if(global.JSWideDetailV26)global.JSWideDetailV26.referenceArea(body,item,kind,data);
     var previous=body.querySelector('.sale-reference-summary-v8');if(previous)previous.remove();
     body._saleReferenceV8=data?{item:item,kind:kind,data:data}:null;
     if(!data)return;

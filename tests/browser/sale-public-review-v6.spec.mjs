@@ -32,7 +32,8 @@ test('building public facts load on click, show source and preserve the lease UI
   const crosscheck=panel.locator('.sale-evidence-crosscheck-v36');await expect(crosscheck).toHaveAttribute('open','');
   await expect(crosscheck.locator('tr.different')).toContainText('연면적');await expect(crosscheck).toContainText('661.16㎡');await expect(crosscheck).toContainText('650㎡');
   expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(snapshot);
-  await panel.screenshot({path:info.outputPath('building-public-facts.png'),animations:'disabled'});
+  await expect(drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true})).toBeInViewport();
+  await page.screenshot({path:info.outputPath('building-public-facts.png'),animations:'disabled'});
   await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption('lease');
   expect(await leaseMarkup(page)).toBe(lease);

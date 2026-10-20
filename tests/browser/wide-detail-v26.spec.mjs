@@ -195,7 +195,7 @@ for(const market of ['building_sale','land_sale'])test(market+' separates ad fac
   const ad=body.locator('[data-sale-evidence-v36="advertisement"]'),official=body.locator('.sale-evidence-public-v36'),calc=body.locator('.sale-evidence-calculation-v36');
   await expect(d.locator('.wide-detail-primary-v26 .sale-evidence-heading-v36 h3')).toHaveText('광고 조건');
   await expect(ad.locator(':scope > header h3')).toHaveText('광고 상세');await expect(official.locator(':scope > header h3')).toHaveText('공적자료');
-  await expect(calc.locator(':scope > header h3')).toHaveText('계산 결과');await expect(calc).toContainText('광고 기준 계산');await expect(calc).toContainText('내 가정 계산');
+  await expect(calc.locator(':scope > header h3')).toHaveText('계산 결과');await expect(calc).toContainText('광고·공적 면적 기준 계산');await expect(calc).toContainText('내 가정 계산');
   const order=await body.evaluate(el=>{const nodes=['[data-sale-evidence-v36]','.sale-evidence-public-v36','.sale-evidence-calculation-v36'].map(s=>el.querySelector(s));return nodes.slice(1).every((n,i)=>!!(nodes[i].compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING));});expect(order).toBe(true);
   await expect(calc).toContainText(market==='land_sale'?'300만원/평':'5.33%');
   await expect(ad).not.toContainText('단순 연 수익률');
