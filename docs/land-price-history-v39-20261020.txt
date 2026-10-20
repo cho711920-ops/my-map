@@ -37,3 +37,10 @@
 - 실제 원격 Worker 표본 이력37건 성공과 브이월드 HTTP520을 별도 확인, 원격 프리뷰 종료.
 - lint/typecheck/diff check/Cloudflare build·dry-run 통과. 캐시3bf887f72214857ca4a3479f.
 - 배포 결과는 아래 후속 기록으로만 확정한다.
+
+운영 배포 완료 — 2026-10-20 15:27 KST 검증
+- 제품3f22982 커밋/원격 푸시 완료. Worker266f9bbe-8ca7-4986-8ca6-1d298ac38561 배포, cache3bf887f72214857ca4a3479f.
+- js-map.com / www.js-map.com 각각 연결 자산91개 SHA256 일치, HTML200/no-store/Kakao CSP, 비인증 이력/실거래 API401 확인. checkedAt2026-10-20T06:27:53.152Z.
+- 배포 자산5개: land-price-history-v39.css/js, sale-public-review-v6.js, index.html, sw.js. 서버에는 인증된 이력 읽기 경로/검증/공개자료 캐시만 추가. DB migration/운영 원본 수정/수집기 설치·재시작 없음.
+- 사용 방법: 새로고침1회 → 건물·토지매매 상세 → 공적자료 → 토지정보·공시지가 조회 → 개별공시지가 추이.
+- 필지 추이 구현·운영 배포 완료와 동·구 평균 연결 미완료를 구분해 안내한다. 평균의 미완료 조건은 PENDING-20261020-01에 보존.
