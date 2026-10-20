@@ -87,12 +87,17 @@ html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655) {
   --cluster-font-size: var(--density-font-v1, 14px) !important;
   /* One translucent paint layer keeps roads visible; the fixed highlight adds
    * a soft pearl finish without blur, images or an animated overlay. */
-  --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(255, 222, 143, .58) 0%, rgba(247, 184, 60, .62) 55%, rgba(234, 162, 37, .66) 100%) !important;
+  --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(143, 199, 255, .58) 0%, rgba(35, 132, 245, .62) 55%, rgba(5, 104, 232, .66) 100%) !important;
   --cluster-text: #fff !important;
   border: 0 !important;
   background: var(--cluster-fill) !important; color: var(--cluster-text) !important;
   box-shadow: none !important;
   font-weight: 700 !important; animation: none !important;
+}
+/* Gold means a pending field visit in this cluster, including mixed groups.
+ * A confirmed listing keeps its normal blue even when its source is Gongsil. */
+html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).source-gongsil {
+  --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(255, 222, 143, .58) 0%, rgba(247, 184, 60, .62) 55%, rgba(234, 162, 37, .66) 100%) !important;
 }
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).done { --cluster-fill: rgba(226, 232, 240, .9) !important; --cluster-text: #64748b !important; }
 html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).selected {

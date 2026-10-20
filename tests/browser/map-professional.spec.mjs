@@ -163,6 +163,43 @@ test('density size distinguishes counts and becomes compact when zoomed in witho
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
 
+test('confirmed spatial clusters are blue while pending or mixed visits stay gold across redraws', async ({page, context}) => {
+  const h = await prepare(page, context);
+  await installMap(page);
+  await page.evaluate(() => {
+    const base = allItems[0];
+    const confirmed = {...base, address: '서구 괴정동 424-2', room: '2층', memo: '(확인매물)', sourceTypesV8: ['gongsil']};
+    const pending = {...base, memo: '(임장가자)', sourceTypesV8: ['naver']};
+    paintTestClusters([
+      {key: 'confirmed', worldGrid: true, items: [confirmed]},
+      {key: 'pending', worldGrid: true, items: [pending]},
+      {key: 'mixed', worldGrid: true, items: [confirmed, pending]}
+    ]);
+    redrawSelectedMarkers();
+  });
+  const markers = page.locator('.design-test-overlay .circle-marker');
+  const fills = () => markers.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundImage));
+  const initial = await fills();
+  expect(initial[0]).toContain('35, 132, 245');
+  expect(initial[1]).toContain('247, 184, 60');
+  expect(initial[2]).toContain('247, 184, 60');
+  await expect(markers.nth(0)).not.toHaveClass(/source-gongsil/);
+  await page.evaluate(() => {
+    overlays[1].__cluster.items[0].memo = '(확인매물)';
+    redrawSelectedMarkers();
+  });
+  expect((await fills())[1]).toContain('35, 132, 245');
+  await page.evaluate(() => {selectedGroupKey = 'pending'; redrawSelectedMarkers();});
+  await expect(markers.nth(1)).toHaveCSS('background-color', 'rgb(5, 104, 232)');
+  await page.evaluate(() => {
+    selectedGroupKey = null;
+    overlays[2].__cluster.items.forEach(item => {item.state = '계약완료';});
+    redrawSelectedMarkers();
+  });
+  await expect(markers.nth(2)).toHaveCSS('background-color', 'rgba(226, 232, 240, 0.9)');
+  expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
+});
+
 test('closing and reopening the same cluster preserves a deep list position and filter values', async ({page, context, isMobile}) => {
   test.skip(isMobile, 'Desktop panel scroll position');
   const h = await prepare(page, context);
