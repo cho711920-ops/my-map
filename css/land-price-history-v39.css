@@ -1,0 +1,37 @@
+.land-price-history-v39 { margin-top:18px; padding:16px; border:1px solid #d9e4ec; border-radius:8px; background:#fff; min-width:0; color:#284258; }
+.land-price-history-v39 > header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.land-price-history-v39 h4 { margin:0 0 5px; color:#234f6c; font-size:15px; }
+.land-price-history-v39 header p,.land-history-status-v39,.land-history-note-v39,.land-history-source-v39 { margin:5px 0; color:#62798a; font-size:11px; line-height:1.65; overflow-wrap:anywhere; }
+.land-price-history-v39 button { min-height:32px; padding:6px 10px; border:1px solid #d7e2eb; border-radius:5px; background:#fff; color:#355b76; font-size:12px; cursor:pointer; }
+.land-price-history-v39 button:disabled { opacity:.6; cursor:wait; }
+.land-history-controls-v39 { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:12px 0; }
+.land-history-controls-v39 [role=group] { display:flex; gap:4px; }
+.land-history-controls-v39 [aria-pressed=true] { background:#285f88; border-color:#285f88; color:#fff; }
+.land-history-summary-v39 { display:grid; grid-template-columns:1.4fr 1fr; gap:14px; padding:12px; border-radius:6px; background:#f5f8fc; }
+.land-history-summary-v39 span { display:block; color:#61778b; font-size:11px; }
+.land-history-summary-v39 strong { display:block; margin-top:5px; color:#26597c; font-size:18px; overflow-wrap:anywhere; }
+.land-history-legend-v39 { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:14px 0 4px; font-size:11px; color:#2777bd; }
+.land-history-legend-v39 small { color:#6e8090; }
+.land-history-plot-v39 { position:relative; margin-top:18px; }
+.land-history-axis-v39 { position:absolute; top:-13px; left:0; font-size:10px; color:#6b7f90; }
+.land-history-plot-v39 svg { display:block; width:100%; overflow:visible; touch-action:pan-y; }
+.land-history-plot-v39 text { fill:#6b7f90; font-size:11px; }
+.land-history-plot-v39 [data-history-small=true] text { font-size:16px; }
+.land-history-plot-v39 .history-grid { stroke:#e7edf2; stroke-width:1; }
+.land-history-plot-v39 .history-line { fill:none; stroke:#287ec1; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+.land-history-plot-v39 circle { fill:#fff; stroke:#287ec1; stroke-width:2; cursor:pointer; }
+.land-history-plot-v39 circle:focus { fill:#287ec1; outline:none; stroke-width:4; }
+.land-history-plot-v39 .history-cursor { stroke:#8aafce; stroke-width:1; stroke-dasharray:4 3; pointer-events:none; }
+.land-history-tip-v39 { position:absolute; z-index:2; width:192px; max-width:calc(100% - 16px); padding:10px; box-sizing:border-box; border:1px solid #d3dfe9; border-radius:7px; box-shadow:0 4px 14px #253c5520; background:#fff; pointer-events:none; font-size:11px; line-height:1.65; }
+.land-history-tip-v39 :is(b,strong,span,small) { display:block; }
+.land-history-tip-v39 strong { color:#216498; font-size:14px; }
+.land-history-tip-v39 small { color:#6e8090; }
+.land-history-selection-v39 { min-height:20px; color:#416781; font-size:12px; line-height:1.7; }
+.land-history-table-v39 { border-top:1px solid #e0e8ef; padding-top:10px; font-size:12px; }
+.land-history-table-v39 summary { cursor:pointer; color:#355c76; }
+.land-history-table-v39 > div { overflow:auto; max-height:280px; }
+.land-history-table-v39 table { border-collapse:collapse; width:100%; margin:10px 0; }
+.land-history-table-v39 :is(th,td) { padding:8px 5px; text-align:right; border-bottom:1px solid #e7edf2; font-size:11px; overflow-wrap:anywhere; }
+.land-history-table-v39 th:first-child { text-align:left; }
+.land-price-history-v39 :is(button,circle,input):focus-visible { outline:2px solid #2a6d9e; outline-offset:2px; }
+@media(max-width:600px) { .land-price-history-v39 { padding:12px 8px; } .land-history-summary-v39 { gap:8px; } .land-history-summary-v39 strong { font-size:15px; } .land-price-history-v39 > header { flex-wrap:wrap; } .land-history-controls-v39 button { min-height:36px; } }

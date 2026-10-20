@@ -26,3 +26,15 @@ test('native Workers runtime can fetch parcel references and distinguish denied 
     assert.deepEqual(calls,['www.eum.go.kr','api.eum.go.kr','apis.data.go.kr','apis.data.go.kr']);
   }finally{await runtime.dispose();}
 });
+
+test('native Workers runtime keeps a fresh anonymous public session for historical parcel prices',{timeout:30000},async()=>{
+  const pnu='3011011700100560001',calls=[];
+  const bundled=await build({stdin:{contents:`import {getLandPriceHistory} from './cloudflare/src/land-price-history.js';export default{fetch(){return getLandPriceHistory({},{pnu:'${pnu}'}).then(data=>Response.json(data));}};`,resolveDir:process.cwd()},bundle:true,format:'esm',platform:'browser',target:'es2022',write:false});
+  const runtime=new Miniflare(convertV4MiniflareOptions({modules:true,script:bundled.outputFiles[0].text,compatibilityDate:'2026-08-05',outboundService:async request=>{
+    const url=new URL(request.url);calls.push(url.pathname);
+    if(url.pathname.endsWith('luLandDet.jsp')){const headers=new Headers({'content-type':'text/html;charset=utf-8'});headers.append('set-cookie','JSESSIONID=public-session!worker; HttpOnly');headers.append('set-cookie','elevisor_for_j2ee_uid=public-route; Path=/');return new Response('<input id="pnu" value="'+pnu+'"><table><tr><th>소재지</th><td>대전광역시 동구 홍도동 56-1</td></tr><td><input id="present_class_val" value="대"></td><td id="present_area">1243 ㎡</td><td id="present_mark1"></td><td id="present_mark2"></td><td id="present_mark3"></td></table>',{headers});}
+    assert.equal(url.hostname,'www.eum.go.kr');assert.equal(url.searchParams.get('pnu'),pnu);assert.match(request.headers.get('cookie'),/JSESSIONID=public-session!worker/);assert.match(request.headers.get('cookie'),/elevisor_for_j2ee_uid=public-route/);
+    return new Response('<tr><td>2026/01</td><td>986,600원</td></tr><tr><td>2025/01</td><td>969,900원</td></tr>',{headers:{'content-type':'text/html;charset=utf-8'}});
+  }}));
+  try{const result=await(await runtime.dispatchFetch('http://fixture.test/history')).json();assert.equal(result.ok,true);assert.equal(result.records.length,2);assert.equal(calls.length,2);assert.doesNotMatch(JSON.stringify(result),/public-session|public-route/);}finally{await runtime.dispose();}
+});

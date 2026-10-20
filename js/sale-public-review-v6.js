@@ -121,6 +121,7 @@
       if(data.complete)cache(landFacts,result.pnu,data);
       if(global.JSSaleReviewEnhancementsV8)global.JSSaleReviewEnhancementsV8.reference(root,item,'land',data);
       var target=out.querySelector('[data-official-land-data]');target.innerHTML=landPublicHtml(data,item);status.textContent=data.complete?'공적자료를 불러왔습니다. 광고 기재값과 구분해 확인하세요.':'필지 자료를 불러왔으나 일부 항목은 확인하지 못했습니다.';button.textContent='다시 조회';revealResult(button,target);
+      if(global.JSLandPriceHistoryV39)global.JSLandPriceHistoryV39.mount(target,result.pnu,read,function(){return active(el);});
       if(global.JSSaleDossierV9)global.JSSaleDossierV9.refreshUnits(target);
     }catch(e){if(active(el))status.textContent=e.message;}finally{button.disabled=false;}};
     root.append(el);
