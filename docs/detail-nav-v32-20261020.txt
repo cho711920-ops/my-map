@@ -16,4 +16,7 @@
 - 기존 실패2종(PC/모바일 각2건)은 수정 전2e9c364의 정확한 CSS/JS를 브라우저에 주입해도 동일하게 재현: sale-dossier-v9의 목록 면적 unit span 미존재, sale-workspace-v3의 사진 없는 slot 숨김 기대 실패. 기존 실패를 해결했거나 전체 통과했다고 주장하지 않는다. 이번 제품 변경이나 테스트 기대 완화로 덮지 않음.
 - 임시 baseline 검사 파일은 실행 후 삭제, 운영/사용자 데이터 접근·변경 없음.
 
-배포 결과는 아래에 추가.
+배포 완료
+- 제품2491c20, codex/detail-nav-v32 push 완료. Worker904bbd00-c0ea-4a18-aec5-dacd449ef1c4, cachef884ce5fb46979622d9bd102.
+- 2026-10-20 12:13 KST 양 도메인 각89개 자산 SHA256 로컬 빌드 일치, HTML200/no-store/CSP/비로그인 실거래401 확인.
+- outputs/detail-nav-v32-live-verification.json에 읽기 확인 결과. 처음1회 새로고침, 재수집 불필요.
