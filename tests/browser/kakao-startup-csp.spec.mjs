@@ -180,6 +180,90 @@ test('default open list preserves deep reading during metadata refresh with the 
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 
+test('stationary map keeps the current reader through cache replacement and 24 accelerated refresh polls',async({page},testInfo)=>{
+  test.setTimeout(120000);
+  const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await expect.poll(()=>page.evaluate(()=>isLoadingSheet)).toBe(false);
+  await page.evaluate(()=>{
+    const base=allItems[0];
+    allItems=Array.from({length:10646},(_,n)=>({...base,propertyId:'LIVE-'+n,key:'live-'+n,sheetRow:n+2,
+      name:'새로고침 검사 '+n,source:'직접등록'}));
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{}});applyFilter();
+    togglePrintSelection(encodeURIComponent(actionSelectionKeyV660(allItems[20])));
+    window.refreshFixtureV48={rows:allItems.slice(),revision:'LIVE-0',fullReload:true,ids:[],delta:[],csvReads:0,deltaReads:0};
+    const f=refreshFixtureV48;
+    f.csv=()=>{
+      const rows=f.rows.map(i=>[i.name,i.address,i.room,i.type,i.deposit,i.rent,i.fee,i.premium,i.area,'','','',i.state,i.regDate,'직접등록',i.propertyId,'','',i.buildingYear,'','','','','','',i.latitude,i.longitude,'','lease','','','']);
+      return {revision:f.revision,body:[Array(32).fill('field'),...rows].map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n')};
+    };
+    const read=JSDataAccessV6.read;
+    const fixtureRead=function(action,...args){
+      if(action==='dataRevision')return Promise.resolve({ok:true,revision:f.revision,fullReload:f.fullReload,changeIds:f.ids});
+      if(action==='listingChanges'){f.deltaReads++;return Promise.resolve({ok:true,items:f.delta});}
+      return read.call(this,action,...args);
+    };
+    window.JSDataAccessV6={...JSDataAccessV6,read:fixtureRead,listingsSnapshot:()=>{f.csvReads++;return f.hold?new Promise(resolve=>{f.release=()=>resolve(f.csv());}):Promise.resolve(f.csv());}};
+    window.JSUnifiedListingsV8={...JSUnifiedListingsV8,load:()=>Promise.resolve({ok:true,groups:{},snapshotRevision:f.revision})};
+    window.JSInitialListingsCacheV1={...JSInitialListingsCacheV1,read:()=>Promise.resolve(null)};
+    jsListingsRevisionV682='LIVE-0';
+    f.map={center:map.getCenter().toString(),level:map.getLevel()};
+    f.anchor=()=>{
+      const a=captureListReadingAnchorV29();
+      return {propertyId:a?.propertyId,offset:a?.offset,top:document.getElementById('sidebar').scrollTop};
+    };
+    // This is the actual warm-cache -> latest CSV branch. Read while it waits.
+    jsInitialFullListingsCacheHitV1=true;f.hold=true;
+    f.rows=[...Array.from({length:1098},(_,n)=>({...base,propertyId:'CACHE-ADDED-'+n,name:'새 자료 '+n,source:'직접등록'})),...allItems];
+    f.revision='LIVE-1';f.pending=loadSheet(false,true);
+  });
+  await page.locator('#sidebar').evaluate(el=>{el.scrollTop=el.scrollHeight*.65;});
+  await page.waitForTimeout(150);
+  await page.evaluate(()=>{refreshFixtureV48.before=refreshFixtureV48.anchor();refreshFixtureV48.hold=false;refreshFixtureV48.release();});
+  await expect.poll(()=>page.evaluate(()=>isLoadingSheet)).toBe(false);
+  await page.waitForTimeout(100);
+  const cache=await page.evaluate(()=>({before:refreshFixtureV48.before,after:refreshFixtureV48.anchor(),count:visibleListItems.length}));
+  expect(cache.after.propertyId).toBe(cache.before.propertyId);expect(Math.abs(cache.after.offset-cache.before.offset)).toBeLessThanOrEqual(2);expect(cache.count).toBe(11744);
+  expect(await page.evaluate(()=>getSelectedPrintItems().map(i=>i.propertyId))).toEqual(['LIVE-20']);
+  const cycles=[];
+  // Exercise the same poll callback as the one-minute interval; do not wait
+  // twenty-four wall-clock minutes or touch a production collection session.
+  for(let cycle=0;cycle<24;cycle++){
+    const result=await page.evaluate(async cycle=>{
+      const f=refreshFixtureV48,before=f.anchor();
+      let mutations=0;const observer=new MutationObserver(records=>{mutations+=records.length;});
+      observer.observe(document.getElementById('list'),{childList:true});
+      if(cycle%3===1){
+        f.rows=[{...f.rows[0],propertyId:'POLL-'+cycle,name:'갱신 '+cycle},...f.rows.slice(1),f.rows[0]];
+        f.revision='POLL-'+cycle;f.fullReload=true;
+      }else if(cycle%3===2){
+        const item=f.rows[0];item.rent+=1;f.revision='DELTA-'+cycle;f.fullReload=false;f.ids=[item.propertyId];
+        f.delta=[{property_id:item.propertyId,title:item.name,address:item.address,room:item.room,listing_type:item.type,
+          deposit:item.deposit,monthly_rent:item.rent,area_m2:item.area,status:'active',main_source:'직접등록',
+          first_collected_at:item.regDate,latitude:item.latitude,longitude:item.longitude,trade_type:'lease'}];
+      }
+      await refreshListingsWhenChangedV682();
+      await new Promise(resolve=>setTimeout(resolve,30));
+      observer.disconnect();
+      return {before,after:f.anchor(),count:visibleListItems.length,mapCount:overlays.reduce((n,o)=>n+o.__cluster.items.length,0),
+        rendered:document.querySelectorAll('#list .item').length,checked:getSelectedPrintItems().map(i=>i.propertyId),mutations,map:{center:map.getCenter().toString(),level:map.getLevel()},originalMap:f.map};
+    },cycle);
+    cycles.push(result);
+    expect(result.after.propertyId).toBe(result.before.propertyId);
+    expect(Math.abs(result.after.offset-result.before.offset)).toBeLessThanOrEqual(2);
+    expect(result.after.top).toBeGreaterThan(1000);
+    const expectedCount=11744+Math.floor((cycle+2)/3);
+    expect(result.count).toBe(expectedCount);expect(result.mapCount).toBe(expectedCount);expect(result.rendered).toBeLessThanOrEqual(36);
+    expect(result.map).toEqual(result.originalMap);
+    expect(result.checked).toEqual(['LIVE-20']);
+    if(cycle%3===0)expect(result.mutations).toBe(0);
+  }
+  expect(await page.evaluate(()=>refreshFixtureV48.deltaReads)).toBe(8);
+  await testInfo.attach('accelerated-refresh-cycles',{body:JSON.stringify(cycles),contentType:'application/json'});
+  await page.screenshot({path:testInfo.outputPath('stationary-map-after-24-polls.png')});
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
 test('building sale cards, sorting and comparison work with the production shell and real SDK',async({page},testInfo)=>{
   const boundary=await startFullApplication(page);
   await expect(page.locator('#map .circle-marker')).toHaveCount(1);

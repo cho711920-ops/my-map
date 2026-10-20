@@ -330,16 +330,14 @@ test('scrolling outside an in-flight recovery coalesces one visible follow-up wi
   h.context.visibleListItems=[h.context.allItems[204]];h.context.listRenderStart=0;h.context.listRenderLimit=1;
   h.context.requestVisibleOriginalMetadataV1();h.runTimers();await flush();
   assert.equal(h.scopedReads.length,1,'do not overlap the current pass');
-  for(let index=0;index<4;index++){
-    const request=h.scopedReads[index],batch=request.params.ids.split(',');
-    request.resolve({ok:true,items:batch.map(id=>row(id,{source_snapshot_key:proof(3)})),
-      unified:provenOriginals(batch.map(id=>[id,proof(3)]))});await flush();
-  }
+  const request=h.scopedReads[0],batch=request.params.ids.split(',');
+  request.resolve({ok:true,items:batch.map(id=>row(id,{source_snapshot_key:proof(3)})),
+    unified:provenOriginals(batch.map(id=>[id,proof(3)]))});await flush();
   await recovery;await flush();
-  assert.equal(h.scopedReads.length,4);assert.equal(h.timers.size,1);
+  assert.equal(h.scopedReads.length,1,'yield the remaining background batches to the visible follow-up');assert.equal(h.timers.size,1);
   h.runTimers();await flush();
-  assert.equal(h.scopedReads.length,5);assert.equal(h.scopedReads[4].params.ids,'S204');
-  h.scopedReads[4].reject(new Error('fixture stop'));await flush();
+  assert.equal(h.scopedReads.length,2);assert.equal(h.scopedReads[1].params.ids,'S204');
+  h.scopedReads[1].reject(new Error('fixture stop'));await flush();
 });
 
 test('a proof-bearing Today subset commits only after all rows validate and retains unrelated pending coverage', async () => {
@@ -488,6 +486,7 @@ test("an old complete cache is replaced by today's complete CSV even while origi
   await flush();
   assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['OLD']);
   assert.equal(h.context.jsListingsCompleteBaseV1,true);
+  h.context.testScrollTop=4680; // The user kept reading while the latest CSV waited.
   h.csvReads[0].resolve(csv([row('OLD',{first_collected_at:'2026-10-12T07:00:00Z'}),row('TODAY')],'NEW'));
   await loading;
   assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['OLD','TODAY']);
@@ -495,6 +494,8 @@ test("an old complete cache is replaced by today's complete CSV even while origi
   assert.equal(h.context.isLoadingSheet,false);
   assert.equal(h.context.jsListingsRevisionV682,'NEW');
   assert.equal(h.originalReads.length,1);
+  assert.equal(h.restored.at(-1).scroll,4680);
+  assert.equal(h.restored.at(-1).preserveVisibleListV1,false);
 });
 
 test("late matching originals attach with the current view preserved and one complete cache write", async () => {
@@ -772,5 +773,6 @@ test("a small master delta renders immediately without joining a stalled full-or
   assert.equal(h.context.allItems[0].room,'3층');
   assert.equal(h.renders.length,1);
   assert.equal(h.originalReads.length,1,'master delta never adds or waits for a full metadata request');
-  assert.equal(h.events[0].detail.kind,'delta');
+  assert.equal(h.events.find(event=>event.type==='js-listings-full-snapshot').detail.kind,'delta');
+  assert.equal(h.restored.at(-1).preserveVisibleListV1,false);
 });

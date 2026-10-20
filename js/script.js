@@ -2114,17 +2114,73 @@ function observeUnifiedDuplicateShimmerV812(card) {
 }
 
 
+function remapPassiveListActionSelectionsV48(previousItems, nextItems) {
+  if (!selectedPrintKeys.length) return;
+  var previousByKey = Object.create(null), previousCounts = Object.create(null);
+  var nextKeys = new Set(), nextByProperty = Object.create(null), nextCounts = Object.create(null);
+  (previousItems || []).forEach(function(item) {
+    previousByKey[actionSelectionKeyV660(item)] = item;
+    var id = String(item.propertyId || "");
+    if (id) previousCounts[id] = (previousCounts[id] || 0) + 1;
+  });
+  (nextItems || []).forEach(function(item) {
+    var key = actionSelectionKeyV660(item), id = String(item.propertyId || "");
+    nextKeys.add(key);
+    if (id) { nextByProperty[id] = key; nextCounts[id] = (nextCounts[id] || 0) + 1; }
+  });
+  selectedPrintKeys = Array.from(new Set(selectedPrintKeys.map(function(key) {
+    if (nextKeys.has(key)) return key;
+    var previous = previousByKey[key];
+    if (!previous) return key;
+    var id = String(previous.propertyId || "");
+    return id && previousCounts[id] === 1 && nextCounts[id] === 1 ? nextByProperty[id] : "";
+  }).filter(Boolean)));
+}
+
+function findListReadingAnchorIndexV48(items, anchor) {
+  var exact = (items || []).findIndex(function(item) { return actionSelectionKeyV660(item) === anchor.id; });
+  if (exact >= 0 || !anchor.propertyId) return exact;
+  // CSV row numbers change on a full refresh. Use the property ID only when
+  // unambiguous, without changing the identity used by actions/duplicate rows.
+  var matches = [];
+  (items || []).forEach(function(item, index) {
+    if (String(item.propertyId || "") === anchor.propertyId) matches.push(index);
+  });
+  return matches.length === 1 ? matches[0] : -1;
+}
+
 function captureListReadingAnchorV29(items) {
   var sidebar = getListingScrollContainerV2();
   var list = document.getElementById("list");
   if (!sidebar || !list) return null;
   var allowed = items ? new Set(items.map(actionSelectionKeyV660)) : null;
-  var top = sidebar.getBoundingClientRect().top;
-  var card = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).find(function(card) {
-    return card.getBoundingClientRect().bottom > top &&
-      (!allowed || allowed.has(card.getAttribute("data-list-card-id-v681")));
+  var propertyCounts = Object.create(null);
+  if (items) items.forEach(function(item) {
+    var id = String(item.propertyId || "");
+    if (id) propertyCounts[id] = (propertyCounts[id] || 0) + 1;
   });
-  return card ? {id: card.getAttribute("data-list-card-id-v681"), offset: card.getBoundingClientRect().top - top} : null;
+  var top = sidebar.getBoundingClientRect().top;
+  var cards = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).filter(function(card) {
+    return card.getBoundingClientRect().bottom > top;
+  });
+  var card = cards.find(function(card) {
+    return !allowed || allowed.has(card.getAttribute("data-list-card-id-v681")) ||
+      propertyCounts[card.getAttribute("data-property-id")] === 1;
+  });
+  // If this whole rendered window was removed, stay near its former index
+  // rather than jumping to the first result or retaining deleted listings.
+  if (!card && cards.length && items && items.length) {
+    var oldIndex = (visibleListItems || []).findIndex(function(item) {
+      return actionSelectionKeyV660(item) === cards[0].getAttribute("data-list-card-id-v681");
+    });
+    if (oldIndex >= 0) {
+      var nearest = items[Math.min(oldIndex, items.length - 1)];
+      return {id: actionSelectionKeyV660(nearest), propertyId: String(nearest.propertyId || ""),
+        offset: cards[0].getBoundingClientRect().top - top};
+    }
+  }
+  return card ? {id: card.getAttribute("data-list-card-id-v681"),
+    propertyId: card.getAttribute("data-property-id") || "", offset: card.getBoundingClientRect().top - top} : null;
 }
 
 function restoreListReadingAnchorV29(anchor) {
@@ -2132,9 +2188,14 @@ function restoreListReadingAnchorV29(anchor) {
   var sidebar = getListingScrollContainerV2();
   var list = document.getElementById("list");
   if (!sidebar || !list) return false;
-  var card = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).find(function(card) {
+  var cards = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]"));
+  var card = cards.find(function(card) {
     return card.getAttribute("data-list-card-id-v681") === anchor.id;
   });
+  if (!card && anchor.propertyId) {
+    var matches = cards.filter(function(card) { return card.getAttribute("data-property-id") === anchor.propertyId; });
+    if (matches.length === 1) card = matches[0];
+  }
   if (!card) return false;
   sidebar.scrollTop += card.getBoundingClientRect().top - sidebar.getBoundingClientRect().top - anchor.offset;
   return true;
@@ -2158,7 +2219,7 @@ function showList(items) {
   var reviewStart = 0;
   var reviewTopHeight = 0;
   if (reviewAnchor) {
-    var anchorIndex = items.findIndex(function(item) { return actionSelectionKeyV660(item) === reviewAnchor.id; });
+    var anchorIndex = findListReadingAnchorIndexV48(items, reviewAnchor);
     reviewStart = Math.max(0, anchorIndex - getListRenderChunkSize());
     for (var prefixIndex = 0; prefixIndex < reviewStart; prefixIndex++) {
       reviewTopHeight += Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(items[prefixIndex], prefixIndex)]) || listVirtualEstimatedHeightV2 || 0;
@@ -2183,6 +2244,10 @@ function showList(items) {
     !preserveActionSelectionDuringRender
   ) {
     selectedPrintKeys = [];
+  } else if (preserveActionSelectionDuringRender && previousSignature !== nextSignature) {
+    // Preserve the checked property across row renumbering without leaving
+    // stale checked counts for removed rows or selecting an ambiguous sibling.
+    remapPassiveListActionSelectionsV48(visibleListItems, items);
   }
 
   var previousRenderLimit = listRenderLimit;

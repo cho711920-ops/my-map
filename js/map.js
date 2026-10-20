@@ -260,17 +260,24 @@ function applyListingChangesV683(info) {
     var replacements = (result.items || []).map(listingChangeRowToItemV683).filter(function(item) {
       return item.address && item.state !== "deleted";
     });
-    allItems = retained.concat(replacements);
-    notifyListingsSnapshotV1("delta", info && info.revision);
-    // A bounded master delta must not wait behind a full-sized originals read.
-    // Source changes advertise fullReload and use the separate full-load path.
-    if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
-      window.JSUnifiedListingsV8.attach(allItems);
+    // Capture at commit time, after any scrolling/selection during the read.
+    var view = captureAutoUpdateViewState();
+    view.preserveVisibleListV1 = false;
+    var previousPreserve = preserveActionSelectionDuringRender;
+    preserveActionSelectionDuringRender = true;
+    try {
+      allItems = retained.concat(replacements);
+      // A bounded master delta must not wait behind a full originals download.
+      if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.attach === "function") {
+        window.JSUnifiedListingsV8.attach(allItems);
+      }
+      notifyListingsSnapshotV1("delta", info && info.revision);
+      updateTypeOptions(allItems);
+      applyFilter();
+      restoreAutoUpdateViewState(view);
+    } finally {
+      preserveActionSelectionDuringRender = previousPreserve;
     }
-  }).then(function() {
-    if (generationV1 !== jsListingsLoadGenerationV1) return false;
-    updateTypeOptions(allItems);
-    applyFilter();
     updateErrorStatus();
     var status = document.getElementById("status");
     if (status) status.textContent = "변경된 매물 " + ids.length + "건만 동기화했습니다.";
@@ -2470,7 +2477,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       }
 
       /* 최신 전체 CSV를 먼저 반영하고 필요한 좌표만 별도로 준비합니다. */
-      if (isAuto) {
+      if (isAuto || jsInitialFullListingsCacheHitV1) {
         autoUpdateViewState = captureAutoUpdateViewState();
         autoUpdateViewState.preserveVisibleListV1 = false;
       }
@@ -2502,7 +2509,13 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
        */
       if (allRowsAlreadyLocatedV691 && !isAuto) {
         window.jsInitialFullListingsLoadingV1 = false;
-        applyFilter();
+        preserveActionSelectionDuringRender = !!autoUpdateViewState;
+        try {
+          applyFilter();
+          if (autoUpdateViewState) restoreAutoUpdateViewState(autoUpdateViewState);
+        } finally {
+          preserveActionSelectionDuringRender = false;
+        }
         updateErrorStatus();
         pendingAutoUpdate = false;
         isLoadingSheet = false;
@@ -2515,9 +2528,9 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       // are available to local filters immediately; existing located rows render.
       window.jsInitialFullListingsLoadingV1 = false;
       if (!allRowsAlreadyLocatedV691 && !allRowsReadyWithoutSharedCacheV8213) {
-        preserveActionSelectionDuringRender = !!isAuto;
+        preserveActionSelectionDuringRender = !!autoUpdateViewState;
         applyFilter();
-        if (isAuto && autoUpdateViewState) restoreAutoUpdateViewState(autoUpdateViewState);
+        if (autoUpdateViewState) restoreAutoUpdateViewState(autoUpdateViewState);
         preserveActionSelectionDuringRender = false;
       }
       (allRowsAlreadyLocatedV691 || allRowsReadyWithoutSharedCacheV8213
@@ -2537,7 +2550,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
 
         // The user can scroll or select another cluster while network/geocoding
         // is pending. Capture the live view immediately before replacing it.
-        if (isAuto) {
+        if (isAuto || jsInitialFullListingsCacheHitV1) {
           autoUpdateViewState = captureAutoUpdateViewState();
           autoUpdateViewState.preserveVisibleListV1 = false;
         }
@@ -2564,7 +2577,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
          * 자동업데이트가 같은 화면을 복원하는 동안에는
          * 작업 체크박스 선택을 유지합니다.
          */
-        preserveActionSelectionDuringRender = !!isAuto;
+        preserveActionSelectionDuringRender = !!autoUpdateViewState;
 
         /*
          * 지도/마커와 현재 필터 결과는 최신 데이터로 다시 계산합니다.
@@ -2625,7 +2638,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
             pendingPropertyEditStateV634 = null;
             pendingPropertyEditNewKeyV633 = null;
           }
-        } else if (isAuto && autoUpdateViewState) {
+        } else if (autoUpdateViewState) {
           restoreAutoUpdateViewState(autoUpdateViewState);
         }
 

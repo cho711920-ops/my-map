@@ -123,6 +123,47 @@ test('passive refresh preserves the visible card through reorder, insertion and 
   safe(h);
 });
 
+test('passive CSV row renumbering keeps the same property in place when the total grows',async({page,context,isMobile})=>{
+  const h=await prepare(page,context,isMobile);
+  const checked=await page.evaluate(()=>{
+    selectedPrintKeys=[actionSelectionKeyV660(allItems[0])];showList(allItems);
+    return getSelectedPrintItems()[0].propertyId;
+  });
+  await h.scroller.evaluate(el=>{el.scrollTop=el.scrollHeight*.65;});await page.waitForTimeout(120);
+  const result=await h.scroller.evaluate(el=>{
+    const top=el.getBoundingClientRect().top,card=[...document.querySelectorAll('#list .item')].find(c=>c.getBoundingClientRect().bottom>top);
+    const property=card.dataset.propertyId,offset=card.getBoundingClientRect().top-top;
+    const additions=Array.from({length:100},(_,n)=>({...allItems[0],propertyId:'ADDED-'+n,key:'added-'+n}));
+    const next=additions.concat(allItems).map((item,n)=>({...item,sheetRow:n+1001}));
+    allItems=next;
+    preserveActionSelectionDuringRender=true;try{showList(next);}finally{preserveActionSelectionDuringRender=false;}
+    const restored=[...document.querySelectorAll('#list .item')].find(c=>c.dataset.propertyId===property);
+    return {delta:restored?restored.getBoundingClientRect().top-top-offset:null,top:el.scrollTop,count:visibleListItems.length};
+  });
+  expect(result.delta).not.toBeNull();expect(Math.abs(result.delta)).toBeLessThanOrEqual(2);expect(result.top).toBeGreaterThan(1000);expect(result.count).toBe(340);safe(h);
+  expect(await page.evaluate(()=>getSelectedPrintItems().map(i=>i.propertyId))).toEqual([checked]);
+  expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(1);
+});
+
+test('passive removal of the whole rendered window stays near the reading position without retaining removed rows',async({page,context,isMobile})=>{
+  const h=await prepare(page,context,isMobile);
+  await h.scroller.evaluate(el=>{el.scrollTop=el.scrollHeight*.6;});await page.waitForTimeout(120);
+  const result=await h.scroller.evaluate(el=>{
+    const top=el.getBoundingClientRect().top,cards=[...document.querySelectorAll('#list .item')];
+    const first=cards.find(c=>c.getBoundingClientRect().bottom>top),offset=first.getBoundingClientRect().top-top;
+    const oldIndex=allItems.findIndex(i=>i.propertyId===first.dataset.propertyId),removed=new Set(cards.map(c=>c.dataset.propertyId));
+    selectedPrintKeys=[actionSelectionKeyV660(allItems[oldIndex])];
+    const next=allItems.filter(i=>!removed.has(i.propertyId)),nearest=next[Math.min(oldIndex,next.length-1)];
+    preserveActionSelectionDuringRender=true;try{showList(next);}finally{preserveActionSelectionDuringRender=false;}
+    const restored=[...document.querySelectorAll('#list .item')].find(c=>c.dataset.propertyId===nearest.propertyId);
+    return {delta:restored?restored.getBoundingClientRect().top-top-offset:null,top:el.scrollTop,
+      retained:visibleListItems.some(i=>removed.has(i.propertyId)),count:visibleListItems.length,expected:next.length};
+  });
+  expect(result.delta).not.toBeNull();expect(Math.abs(result.delta)).toBeLessThanOrEqual(2);
+  expect(result.top).toBeGreaterThan(1000);expect(result.retained).toBe(false);expect(result.count).toBe(result.expected);safe(h);
+  expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(0);
+});
+
 test('scroll range stays stable while wheel input crosses virtual windows',async({page,context,isMobile})=>{
   const h=await prepare(page,context,isMobile),initial=await h.scroller.evaluate(snapshot),box=await h.scroller.boundingBox();
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
