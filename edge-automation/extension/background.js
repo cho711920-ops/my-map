@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.18";
+const BACKGROUND_BUILD = "1.1.19";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -902,6 +902,7 @@ async function finalizeRun(state, reportTabId = null) {
       message: `정상 ${normal}개 · 주소보류 ${Number(summary.deferred || 0)}개 · 부분완료 ${Number(summary.partial || 0)}개 · 실패 ${summary.failed}개`
     }).catch(() => {});
   }
+  await restoreSaleCollectorTabPolicy(state);
   await chrome.storage.local.remove([RUN_STATE_KEY, RUN_LOCK_KEY]);
   await cleanupAuxiliaryTabs();
   // Launch only on a later serialized alarm. Starting the lease here could
@@ -1077,6 +1078,9 @@ async function updateTargetHeartbeat(message, senderTabId) {
 async function probeCurrentTarget(state) {
   if (!state || !Number.isInteger(state.currentTabId) || !state.targetRunId) return false;
   const tab = await chrome.tabs.get(state.currentTabId).catch(() => null);
+  const sale = marketForRun(state) === "sale";
+  if (sale) state.connectionIssueV42 = !tab ? "tab_missing" : tab.discarded ? "tab_discarded"
+    : tab.frozen ? "tab_frozen" : tab.status === "loading" ? "tab_loading" : "no_response";
   if (!tab || tab.discarded) return false;
   let timer;
   try {
@@ -1090,7 +1094,11 @@ async function probeCurrentTarget(state) {
         timer = setTimeout(() => resolve(null), COLLECTION_PROBE_TIMEOUT_MS);
       })
     ]).catch(() => null);
-    if (!response || response.ok !== true || response.active !== true) return false;
+    if (!response || response.ok !== true || response.active !== true) {
+      if (sale && response && response.ok === true && response.active !== true) state.connectionIssueV42 = "runtime_missing";
+      return false;
+    }
+    if (sale) state.connectionIssueV42 = "";
     await updateTargetHeartbeat({
       runId: state.runId,
       targetRunId: state.targetRunId,
@@ -1204,6 +1212,28 @@ function providerSourceFromTab(tab) {
   return providerSourceFromUrl(tab && tab.pendingUrl) || providerSourceFromUrl(tab && tab.url);
 }
 
+async function protectSaleCollectorTab(state, tab) {
+  if (marketForRun(state) !== "sale" || !Number.isInteger(tab && tab.id) || !providerSourceFromTab(tab)) return;
+  if (!state.saleTabPolicyV42 || state.saleTabPolicyV42.tabId !== tab.id) {
+    state.saleTabPolicyV42 = {tabId: tab.id, autoDiscardable: tab.autoDiscardable !== false};
+  }
+  // Persist the previous per-tab policy before changing it. MV3 worker restarts
+  // must not turn a temporary collection guard into a permanent tab setting.
+  await saveRunState(state);
+  await chrome.tabs.update(tab.id, {autoDiscardable: false}).catch(() => appendLog({
+    level: "warning", market: "sale", message: "매매 수집 탭의 메모리 회수 방지를 적용하지 못했습니다. 진행 신호를 계속 확인합니다."
+  }));
+}
+
+async function restoreSaleCollectorTabPolicy(state) {
+  const policy = state && state.saleTabPolicyV42;
+  if (!policy || !Number.isInteger(policy.tabId) || typeof policy.autoDiscardable !== "boolean") return;
+  const tab = await chrome.tabs.get(policy.tabId).catch(() => null);
+  if (tab && providerSourceFromTab(tab) && tab.autoDiscardable === false) {
+    await chrome.tabs.update(tab.id, {autoDiscardable: policy.autoDiscardable}).catch(() => {});
+  }
+}
+
 async function removeRedundantProviderTabs(keepTabId = null) {
   const pages = await chrome.tabs.query({}).catch(() => []);
   const providerTabs = pages.filter((tab) =>
@@ -1314,8 +1344,10 @@ async function launchCurrentTarget(state, reuseTabId = null) {
     state.progressMessage = "수집 화면 연결 중";
     state.progressStage = null;
     state.initialPageSignalPending = true;
+    state.connectionIssueV42 = "";
     state.phase = "loading";
     await saveRunState(state);
+    await protectSaleCollectorTab(state, tab);
     await waitForTabComplete(tab.id);
     state.phase = "starting-collector";
     state.progressMessage = "수집 기능 시작 확인 중";
@@ -1812,7 +1844,7 @@ async function recoverAutomaticRun({ allowPendingSchedule = false } = {}) {
   }
   if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection || targetRuntimeExceeded) {
     const target = (state.targets || [])[state.index];
-    const recoveryMessage = stalledLoading
+    let recoveryMessage = stalledLoading
       ? "수집 화면 로딩이 3분 동안 끝나지 않아 다시 시작합니다."
       : stalledStart
         ? "실제 수집 시작 확인이 2분 동안 없어 다시 시작합니다."
@@ -1821,6 +1853,12 @@ async function recoverAutomaticRun({ allowPendingSchedule = false } = {}) {
         : disconnectedCollection
           ? "수집 화면의 상태 신호가 8분 동안 없어 마지막 저장 지점부터 복구합니다."
           : "수집 화면의 숫자가 20분 동안 진행되지 않아 마지막 저장 지점부터 복구합니다.";
+    const connectionLabels = {tab_missing: "수집 탭 종료", tab_discarded: "브라우저 메모리 회수",
+      tab_frozen: "브라우저 탭 동결", tab_loading: "공급처 화면 다시 로딩 중",
+      runtime_missing: "화면은 열려 있으나 수집 연결 없음", no_response: "수집 탭 직접 확인에도 응답 없음"};
+    if (marketForRun(state) === "sale" && disconnectedCollection && connectionLabels[state.connectionIssueV42]) {
+      recoveryMessage += " · " + connectionLabels[state.connectionIssueV42];
+    }
     if (now - Number(state.lastRecoveryNotificationAt || 0) > 15 * 60 * 1000) {
       state.lastRecoveryNotificationAt = now;
       await saveRunState(state);
@@ -1850,6 +1888,7 @@ chrome.runtime.onInstalled.addListener(() => serializeMutation(async () => {
     state.upgradeRecoveredAt = Date.now();
     await restartPersistedRun(state, "자동수집기 업데이트 후 미완료 대상을 저장 지점부터 복구합니다.");
   } else {
+    await restoreSaleCollectorTabPolicy(state);
     await chrome.storage.local.remove(RUN_LOCK_KEY);
   }
 }).catch(logAutomationError));
@@ -1871,6 +1910,7 @@ chrome.runtime.onStartup.addListener(() => serializeMutation(async () => {
     await restartPersistedRun(state, "Edge 재시작 후 미완료 대상을 저장 지점부터 이어서 실행합니다.");
     return;
   }
+  await restoreSaleCollectorTabPolicy(state);
   await chrome.storage.local.remove(RUN_LOCK_KEY);
   await runScheduled("browser-startup");
 }).catch(logAutomationError));

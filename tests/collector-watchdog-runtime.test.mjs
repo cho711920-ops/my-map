@@ -435,6 +435,65 @@ test("a throttled background heartbeat is confirmed by direct tab probe without 
   assert.equal(h.data[RUN].progressMessage, "상세 저장 진행 확인");
 });
 
+test("sale collection protects only its provider tab and persists the previous policy before applying it", async () => {
+  const h = harness({market: "sale"});
+  h.data[RUN].targets.forEach(target => { target.tradeType = "sale"; });
+  const calls = [];
+  h.context.chrome.tabs.update = async (id, options) => {
+    assert.deepEqual(h.data[RUN].saleTabPolicyV42, {tabId: id, autoDiscardable: true});
+    calls.push([id, structuredClone(options)]);
+  };
+  await h.context.protectSaleCollectorTab(h.data[RUN], {id: 42, url: "https://realty.daangn.com/", autoDiscardable: true});
+  await h.context.protectSaleCollectorTab(h.data[RUN], {id: 42, url: "https://realty.daangn.com/", autoDiscardable: false});
+  assert.deepEqual(calls, [[42, {autoDiscardable: false}], [42, {autoDiscardable: false}]]);
+  assert.equal(h.data[RUN].saleTabPolicyV42.autoDiscardable, true);
+  h.data[RUN].market = "lease";
+  h.data[RUN].targets.forEach(target => { target.tradeType = "lease"; });
+  await h.context.protectSaleCollectorTab(h.data[RUN], {id: 43, url: "https://realty.daangn.com/"});
+  h.data[RUN].market = "sale";
+  h.data[RUN].targets.forEach(target => { target.tradeType = "sale"; });
+  await h.context.protectSaleCollectorTab(h.data[RUN], {id: 43, url: "https://unrelated.example/"});
+  assert.equal(calls.length, 2);
+});
+
+test("persisted sale tab policy restores after a cold worker and respects an already protected tab", async () => {
+  const h = harness({market: "sale", saleTabPolicyV42: {tabId: 42, autoDiscardable: true}});
+  const calls = [];
+  h.context.chrome.tabs.get = async id => ({id, url: "https://realty.daangn.com/", autoDiscardable: false});
+  h.context.chrome.tabs.update = async (id, options) => calls.push([id, structuredClone(options)]);
+  await h.context.restoreSaleCollectorTabPolicy(h.data[RUN]);
+  assert.deepEqual(calls, [[42, {autoDiscardable: true}]]);
+  h.data[RUN].saleTabPolicyV42.autoDiscardable = false;
+  await h.context.restoreSaleCollectorTabPolicy(h.data[RUN]);
+  assert.deepEqual(calls[1], [42, {autoDiscardable: false}]);
+  h.context.chrome.tabs.get = async id => ({id, url: "https://unrelated.example/", autoDiscardable: false});
+  await h.context.restoreSaleCollectorTabPolicy(h.data[RUN]);
+  assert.equal(calls.length, 2);
+});
+
+test("sale disconnect reports distinguish discarded, frozen, missing and disconnected runtime without extending deadlines", async () => {
+  for (const [tab, response, issue] of [
+    [null, null, "수집 탭 종료"],
+    [{discarded: true}, null, "브라우저 메모리 회수"],
+    [{frozen: true}, null, "브라우저 탭 동결"],
+    [{status: "loading"}, null, "공급처 화면 다시 로딩 중"],
+    [{}, {ok: true, active: false}, "수집 연결 없음"],
+    [{}, null, "직접 확인에도 응답 없음"]
+  ]) {
+    const h = harness({market: "sale", targetStartedAt: clock - 10 * minute,
+      runtimeStartedAt: clock - 10 * minute, lastHeartbeatAt: clock - 9 * minute, lastProgressAt: clock - 5 * minute});
+    h.data[RUN].targets.forEach(target => { target.tradeType = "sale"; });
+    h.context.chrome.tabs.get = async () => tab;
+    h.context.chrome.tabs.sendMessage = async () => response;
+    let failure;
+    h.context.finishCurrentTarget = async result => { failure = result; return {ok: true}; };
+    await h.context.recoverAutomaticRun();
+    assert.ok(failure && failure.ok === false);
+    assert.ok(failure.message.includes(issue), failure.message);
+    assert.equal(h.data[RUN].lastProgressAt, clock - 5 * minute);
+  }
+});
+
 test("Daangn heartbeat counts survive a terminal 403 without entering a retry loop", async () => {
   const h = harness({ targetStartedAt: clock - minute, runtimeStartedAt: clock - minute,
     lastHeartbeatAt: clock, lastProgressAt: clock, targetAttempt: 4 });
@@ -633,7 +692,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.18");
+  assert.equal(response.backgroundBuild, "1.1.19");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
