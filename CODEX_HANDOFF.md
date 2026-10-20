@@ -4,6 +4,7 @@
 
 - 사용자가 목록 hover의 지도 빨간 화살표를 조금 더 작게 요청. css/map-professional-v1.css 한 줄만 변경:20x26px →16x20px(약20%축소). 화살표 끝의 좌표 앵커(.5,1)·색·그림자·표시/해제 동작은 유지한다.
 - b3ac553에서 codex/hover-arrow-v31 분기. 실제 Kakao SDK 위치 오차2px미만/지도 이동·선택·스크롤 불변/마우스 이탈 해제 기존 검사1통과. lint/build/dry-run 통과. 데이터·수집·원본·사진·찜/브이월드 상태 변경 없음.
+- 운영 완료: 제품7282b7c, Workerf993fabd-2462-496e-ae08-cb00e11120c8, cachef18f1ac88b472a24b3a35d5e. 양 도메인 CSS/SW SHA일치·HTML200/최신 CSS 참조 확인(outputs/hover-arrow-v31-live-verification.json). 새로고침1회.
 
 ## 2026-10-20 광고 사진 동일 크기·잘림 없는 4:3 보기 v30
 
