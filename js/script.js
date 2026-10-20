@@ -5686,9 +5686,14 @@ function updateErrorStatus() {
 
   if (!errorBox) return;
 
-  if (errorItems.length > 0) {
+  var errors = addressErrorsForMarketV41();
+  errorBox.setAttribute('role', 'button');
+  errorBox.tabIndex = 0;
+  errorBox.onkeydown = function(event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showAddressErrors(); } };
+  if (errors.length > 0) {
     errorBox.style.display = "block";
-    errorBox.innerHTML = "주소 오류 " + errorItems.length + "개";
+    errorBox.textContent = "주소 확인 " + errors.length + "개";
+    errorBox.title = '현재 시장의 지도 위치 미확인 매물 · 원본 확인 및 개별 재조회';
   } else {
     errorBox.style.display = "none";
   }
@@ -5696,15 +5701,87 @@ function updateErrorStatus() {
 
 
 function showAddressErrors() {
-  if (!errorItems || errorItems.length === 0) return;
-
-  var lines = errorItems.map(function(item, index) {
-    var reason = item.geocodeErrorReason ? " (" + item.geocodeErrorReason + ")" : "";
-    return (index + 1) + ". " + item.name + " / " + item.address + " / " + item.room + reason;
+  var errors = addressErrorsForMarketV41();
+  if (!errors.length) return;
+  var previous = document.getElementById('addressReviewV41');if (previous) previous.remove();
+  var dialog = document.createElement('dialog');dialog.id = 'addressReviewV41';dialog.className = 'address-review-v41';
+  dialog.setAttribute('aria-labelledby', 'addressReviewTitleV41');
+  var header=document.createElement('header'),title=document.createElement('h2'),close=document.createElement('button');
+  title.id='addressReviewTitleV41';title.textContent=(window.JSListingTradeV1?window.JSListingTradeV1.modeLabel()+' · ':'')+'주소 확인 '+errors.length+'개';
+  close.type='button';close.textContent='×';close.setAttribute('aria-label','주소 확인 닫기');close.onclick=function(){dialog.close();};header.append(title,close);
+  var note=document.createElement('p');note.textContent='지도 위치를 확인하지 못한 매물입니다. 원본 주소를 확인하거나 정확한 지번만 개별 재조회합니다. 광고 주소·가격·찜은 그대로 보존합니다.';
+  var list=document.createElement('ol'),status=document.createElement('p');status.setAttribute('role','status');
+  var busy=false;
+  errors.slice(0,100).forEach(function(item){
+    var row=document.createElement('li'),name=document.createElement('strong'),address=document.createElement('p'),reason=document.createElement('p'),actions=document.createElement('div'),retry=document.createElement('button');
+    name.textContent=item.name||'이름 미제공';address.textContent=item.address||'주소 미제공';
+    reason.textContent=item.geocodeErrorReason||'주소·건물명 검색 결과 없음';
+    var originals=item.unifiedDisplayOriginalsV2||item.unifiedAllOriginalsV1||[],source=originals.find(function(o){return o.link;})||item;
+    var link=source.link||item.link;
+    if(/^https?:\/\//i.test(link||'')){var original=document.createElement('a');original.href=link;original.target='_blank';original.rel='noopener noreferrer';original.textContent='원본 확인';actions.append(original);}
+    retry.type='button';retry.textContent='지번 다시 조회';actions.append(retry);
+    var parsed=addressParcelForReviewV41(item.address);
+    if(!parsed){retry.disabled=true;reason.textContent+=' · 정확한 동·지번을 원본에서 먼저 확인해 주세요.';}
+    retry.onclick=async function(){
+      if(busy)return;
+      if(isLoadingSheet){status.textContent='전체 매물 준비 중입니다. 끝난 뒤 다시 조회해 주세요.';return;}
+      busy=true;list.querySelectorAll('button').forEach(function(b){b.disabled=true;});status.textContent='선택한 지번 한 곳만 확인하고 있습니다…';
+      try{
+        var result=await recheckAddressV41(item.address);
+        if(!dialog.isConnected||!dialog.open)return;
+        // A new snapshot must never inherit a response for the old object.
+        if(!allItems.includes(item)){status.textContent='매물 자료가 갱신됐습니다. 주소 확인창을 다시 열어 주세요.';return;}
+        item.latlng=new kakao.maps.LatLng(result.lat,result.lng);
+        geocodeCache[normalizeAddressForCache(item.address)]={lat:result.lat,lng:result.lng,source:'address',matchedAddress:result.address,savedAt:new Date().toISOString()};
+        geocodeCacheDirty=true;saveGeocodeCache();queueSharedGeocodeEntry(item.address,geocodeCache[normalizeAddressForCache(item.address)]);
+        errorItems=errorItems.filter(function(value){return value!==item;});
+        var view=typeof captureAutoUpdateViewState==='function'?captureAutoUpdateViewState():null;
+        applyFilter();if(view&&typeof restoreAutoUpdateViewState==='function')restoreAutoUpdateViewState(view);
+        reason.textContent='정확한 지번의 지도 위치를 확인했습니다. 광고 주소는 유지됩니다.';row.dataset.resolved='true';retry.textContent='위치 확인됨';updateErrorStatus();
+        status.textContent='선택한 매물의 지도 위치를 보완했습니다.';
+      }catch(error){status.textContent=error.message||'조회 결과를 확인하지 못했습니다.';}
+      finally{busy=false;list.querySelectorAll('button').forEach(function(b){b.disabled=!b.dataset.addressRetryValid||b.closest('li').dataset.resolved==='true';});}
+    };
+    if(parsed)retry.dataset.addressRetryValid='true';row.append(name,address,reason,actions);list.append(row);
   });
-
-  alert("지도에 표시되지 않은 주소 오류 매물입니다.\\n\\n" + lines.join("\\n"));
+  dialog.append(header,note,list,status);document.body.append(dialog);
+  if(errors.length>100){var limit=document.createElement('p');limit.textContent='처음 100건을 표시합니다. 해결 후 다시 열면 남은 건을 확인할 수 있습니다.';status.before(limit);}
+  dialog.addEventListener('close',function(){dialog.remove();});dialog.showModal();close.focus({preventScroll:true});
 }
+
+function addressErrorsForMarketV41() {
+  var seen=new Set(),current=new Set(allItems||[]);
+  return (errorItems||[]).filter(function(item){
+    if(!item||!current.has(item)||item.latlng||window.JSListingTradeV1&&!window.JSListingTradeV1.matchesItem(item))return false;
+    var key=String(item.propertyId||item.key||'')+'|'+String(item.address||'');if(seen.has(key))return false;seen.add(key);return true;
+  });
+}
+
+function recheckAddressV41(address) {
+  return new Promise(function(resolve,reject){
+    var links=window.JSParcelExternalLinksV1,parsed=addressParcelForReviewV41(address),services=window.kakao&&kakao.maps&&kakao.maps.services;
+    if(!parsed){reject(Error('정확한 동·지번이 필요합니다. 층수·평수를 지번으로 추정하지 않습니다.'));return;}
+    if(!services||!services.Geocoder){reject(Error('지도 주소 검색이 준비되지 않았습니다. 잠시 후 다시 확인해 주세요.'));return;}
+    var settled=false,timer=setTimeout(function(){finish(Error('주소 조회 시간이 초과됐습니다. 결과는 변경하지 않았습니다.'));},8000);
+    function finish(error,value){if(settled)return;settled=true;clearTimeout(timer);if(error)reject(error);else resolve(value);}
+    try{new services.Geocoder().addressSearch(parsed.query,function(rows,status){
+      if(settled)return;
+      if(status!==services.Status.OK){finish(Error('주소 검색 결과가 없습니다. 원본의 지번을 확인해 주세요.'));return;}
+      try{
+        var exact=links.matchParcel(address,rows),row=rows.find(function(r){try{return links.matchParcel(address,[r]).pnu===exact.pnu;}catch(_){return false;}});
+        var lat=Number(row&&row.y),lng=Number(row&&row.x);
+        if(!row||!row.y||!row.x||!Number.isFinite(lat)||!Number.isFinite(lng)||lat<30||lat>40||lng<120||lng>135)throw Error('정확한 지번의 좌표를 확인하지 못했습니다.');
+        finish(null,{lat:lat,lng:lng,address:exact.address});
+      }catch(error){finish(error);}
+    },{size:30,analyze_type:services.AnalyzeType?services.AnalyzeType.EXACT:'exact'});}catch(_){finish(Error('주소 검색을 실행하지 못했습니다.'));}
+  });
+}
+function addressParcelForReviewV41(address) {
+  var links=window.JSParcelExternalLinksV1,parsed=links&&links.parseAddress(address);
+  // A descriptive word such as 소형상가 is not a numbered legal town (종로1가).
+  return parsed&&/(?:동|리|\d가)$/.test(parsed.town)?parsed:null;
+}
+window.addEventListener('js-listing-trade-mode-change',function(){updateErrorStatus();var dialog=document.getElementById('addressReviewV41');if(dialog&&dialog.open)dialog.close();});
 
 
 /* === JS부동산 AI 등록 v2.0 오버라이드 === */

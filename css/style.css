@@ -1600,6 +1600,21 @@ button.done-badge.done-restore-button-v1:focus-visible {
   cursor:pointer;
 }
 
+.address-review-v41 { box-sizing:border-box; width:640px; max-width:calc(100vw - 24px); max-height:85dvh; padding:20px; border:1px solid #ccd9e4; border-radius:12px; color:#24405a; overflow:auto; }
+.address-review-v41::backdrop { background:#142a4059; }
+.address-review-v41 header { display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; top:-20px; background:white; padding:10px 0; z-index:1; }
+.address-review-v41 h2 { margin:0; font-size:18px; }
+.address-review-v41 header button { border:0; background:#edf2f6; border-radius:50%; width:36px; height:36px; font-size:24px; }
+.address-review-v41 > p,.address-review-v41 li p { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.address-review-v41 ol { padding:0; list-style:none; }
+.address-review-v41 li { border:1px solid #dce5ed; padding:14px; border-radius:8px; margin:10px 0; }
+.address-review-v41 li[data-resolved="true"] { border-color:#82baa4; background:#f3faf7; }
+.address-review-v41 li > div { display:flex; gap:8px; flex-wrap:wrap; }
+.address-review-v41 li button,.address-review-v41 li a { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; min-height:40px; padding:8px 12px; border:1px solid #cddce8; border-radius:6px; background:#f7fafc; color:#245273; text-decoration:none; font-size:13px; }
+.address-review-v41 button:disabled { opacity:.5; cursor:default; }
+.address-review-v41 [role="status"] { min-height:24px; color:#315f7e; }
+html.js-phone-app-v2 #errorStatus { position:fixed; top:auto; left:auto; right:12px; bottom:calc(var(--jsm-nav-height,60px) + 12px + env(safe-area-inset-bottom)); min-height:36px; box-sizing:border-box; }
+
 @media (max-width:768px) {
   #errorStatus {
     left:10px;
