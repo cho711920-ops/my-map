@@ -3,7 +3,7 @@
 :root { --js-pro-ink: #1e293b; --js-pro-muted: #64748b; --js-pro-line: #e2e8f0; }
 
 .js-listing-hover-pin-v1 {
-  width: 20px; height: 26px; box-sizing: border-box;
+  width: 16px; height: 20px; box-sizing: border-box;
   filter: drop-shadow(0 0 1px #fff) drop-shadow(0 1px 1px #26323d66);
   pointer-events: none;
 }
