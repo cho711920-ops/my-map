@@ -15,9 +15,24 @@
   }
   function leaseSummary(item){
     var box=document.createElement('section');box.className='wide-detail-lease-v26';box.setAttribute('aria-label','선택한 원본 임대조건');
-    box.innerHTML='<div class="wide-detail-prices-v26"><div><span>보증금</span><strong>'+esc(known(item,'deposit','만원'))+'</strong></div><div><span>월세</span><strong>'+esc(known(item,'rent','만원'))+'</strong></div></div><dl class="wide-detail-facts-v26">'+
-      [['광고 면적',known(item,'area','평')],['층·호실',item.room||'미제공'],['관리비',known(item,'fee','만원')],['권리금',known(item,'premium','만원')]].map(function(row){return '<div><dt>'+row[0]+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl>';
+    box.innerHTML='<section class="wide-detail-condition-v35"><h3>임대조건</h3><div class="wide-detail-prices-v26"><div><span>보증금</span><strong>'+esc(known(item,'deposit','만원'))+'</strong></div><div><span>월세</span><strong>'+esc(known(item,'rent','만원'))+'</strong></div></div></section><section class="wide-detail-fact-group-v35"><h3>기본정보</h3><dl class="wide-detail-facts-v26">'+
+      [['광고 면적',known(item,'area','평')],['층·호실',item.room||'미제공'],['관리비',known(item,'fee','만원')],['권리금',known(item,'premium','만원')]].map(function(row){return '<div><dt>'+row[0]+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl></section>';
     return box;
+  }
+  function decorateHeader(drawer,item,address,primary){
+    var header=drawer.querySelector(':scope > header'),title=header.querySelector('#unifiedDetailTitleV8'),subtitle=header.querySelector('#unifiedDetailSubtitleV8');
+    header.querySelectorAll('.wide-detail-address-v35,.wide-detail-market-v35').forEach(function(el){el.remove();});
+    if(!item)return;
+    title.title=title.textContent;
+    var location=document.createElement('span');location.className='wide-detail-address-v35';
+    location.textContent=address&&address.querySelector('strong')?address.querySelector('strong').textContent:item.address||'';
+    location.title=location.textContent;title.after(location);
+    var badge=document.createElement('span');badge.className='wide-detail-market-v35';
+    badge.textContent=drawer.dataset.salePresentationV2==='land'?'토지매매':drawer.dataset.salePresentationV2==='building'?'건물매매':'상가임대';
+    header.insertBefore(badge,header.lastElementChild);
+    if(address&&subtitle){var count=document.createElement('span');count.className='wide-detail-original-count-v35';count.textContent=subtitle.textContent;address.querySelector('.unified-detail-source-row-v827').append(count);}
+    // Keep the existing unit controls usable without spending another header row.
+    var units=header.querySelector('.sale-fixed-summary-v9');if(units&&primary)primary.append(units);
   }
   function decorateActions(actions){
     if(!actions)return;
@@ -56,7 +71,7 @@
     var drawer=body&&body.closest('#unifiedDetailDrawerV8');if(!drawer)return;
     var oldActions=drawer.querySelector(':scope > .unified-detail-utility-actions-v8');if(oldActions)oldActions.remove();
     var oldNav=drawer.querySelector(':scope > .sale-dossier-nav-v3');if(oldNav)oldNav.remove();
-    position(drawer);if(!item)return;
+    position(drawer);if(!item){decorateHeader(drawer,null);return;}
     var summary=body.querySelector('.unified-detail-summary-v8'),gallery=body.querySelector('.unified-detail-gallery-v8');if(!summary||!gallery)return;
     var layout=document.createElement('div');layout.className='wide-detail-layout-v26';
     var media=gallery.closest('.sale-photo-slot-v3');
@@ -65,6 +80,7 @@
     media.dataset.wideEmptyV26=String(!gallery.querySelector('img'));
     var primary=document.createElement('section');primary.className='wide-detail-primary-v26';primary.setAttribute('aria-label','매물 핵심 조건');
     var address=summary.querySelector('.unified-detail-source-address-v827');if(address)primary.append(address);
+    decorateHeader(drawer,item,address,primary);
     var overview=summary.querySelector('.sale-overview-v2');
     if(overview){primary.append(overview);var areas=summary.querySelector('.building-sale-area-info-v1');if(areas)primary.append(areas);}
     else {
@@ -73,6 +89,13 @@
     }
     // Preserve availability warnings at the top, independent of the price style.
     var warning=summary.querySelector('.source-unavailable');if(warning)primary.prepend(warning);
+    var memo=summary.querySelector('.unified-detail-memo-v8');
+    if(memo){
+      var description=document.createElement('section'),heading=document.createElement('h3'),headingRow=document.createElement('div');
+      description.className='wide-detail-description-v35';headingRow.className='wide-detail-description-heading-v35';heading.textContent='상세설명';
+      memo.before(description);headingRow.append(heading);var metadata=summary.querySelector('.unified-detail-meta-v8');if(metadata)headingRow.append(metadata);
+      description.append(headingRow,memo);
+    }
     layout.append(media,primary);summary.before(layout);
     // Keep navigation outside the scrolling photos/facts. A sticky strip inside
     // the padded body exposed content above it and covered the photo on scroll.

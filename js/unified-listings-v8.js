@@ -1974,6 +1974,11 @@
     }
     closeGallery(false);
     if (drawer && global.JSDialogFocusV1) global.JSDialogFocusV1.deactivate(drawer, {restore: false});
+    // Compact headers keep their close button focused across body refreshes.
+    // A market/overlay transition must not leave focus inside the hidden detail.
+    var active = document.activeElement;
+    if (active && typeof active.closest === "function" && typeof active.blur === "function" &&
+        active.closest("#unifiedDetailDrawerV8,#unifiedGalleryV8")) active.blur();
     state.openPropertyId = "";
     state.openOriginalId = "";
     state.detailRequestToken += 1;

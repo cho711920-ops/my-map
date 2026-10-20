@@ -23,6 +23,18 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' wide det
   await expect(d).toHaveAttribute('data-wide-layout-v26',isMobile?'stack':'wide');
   await expect(d).toHaveCSS('transform','matrix(1, 0, 0, 1, 0, 0)');
   await expect(d.locator('.wide-detail-layout-v26')).toHaveCount(1);await expect(d.locator('.unified-detail-gallery-v8')).toHaveCount(1);
+  const header=d.locator(':scope > header');
+  await expect(header).toHaveCSS('background-color','rgb(25, 59, 87)');
+  expect((await header.boundingBox()).height).toBeLessThanOrEqual(60);
+  await expect(header.locator('#unifiedDetailTitleV8')).toHaveCSS('color','rgb(255, 255, 255)');
+  await expect(header.locator('.wide-detail-address-v35')).not.toHaveText('');
+  await expect(d.locator('.wide-detail-original-count-v35')).toContainText('원본');
+  if(market!=='lease'){
+    await expect(header.locator('.sale-fixed-summary-v9')).toHaveCount(0);
+    const units=d.locator('.wide-detail-primary-v26 [data-sale-unit="m2"]');
+    await units.click();await expect(units).toHaveAttribute('aria-pressed','true');
+    await d.locator('.wide-detail-primary-v26 [data-sale-unit="py"]').click();
+  }
   let frame;
   for(let i=0;i<sizes.length;i++){
     await expect.poll(()=>image.evaluate(e=>e.complete&&e.naturalWidth)).toBe(sizes[i][0]);
@@ -152,4 +164,24 @@ test('favorite folder keeps its embedded detail within the host and returns clea
   await page.screenshot({path:info.outputPath('favorite-embedded-wide.png'),animations:'disabled'});
   await page.evaluate(()=>closeUnifiedFavoritesV7());await expect(page.locator('body > #unifiedDetailDrawerV8')).toHaveAttribute('aria-hidden','true');
   await page.evaluate(()=>JSUnifiedListingsV8.open('FIXTURE-LEASE-2'));await expect(page.locator('body > #unifiedDetailDrawerV8')).toHaveAttribute('aria-hidden','false');
+});
+
+test('long title and address keep the compact close control visible without horizontal overflow',async({page,isMobile},info)=>{
+  await mode(page,isMobile,'building_sale');
+  await page.locator('#list .item-building-name').first().click();
+  const drawer=page.locator('#unifiedDetailDrawerV8');
+  await page.evaluate(()=>{
+    const title=document.getElementById('unifiedDetailTitleV8'),address=document.querySelector('.wide-detail-address-v35');
+    title.textContent='긴 건물 이름과 여러 필지로 구성된 상가주택 매매 '.repeat(4);
+    address.textContent='대전광역시 유성구 봉명동 559-30 외 여러 필지 지하1층 및 지상 전체 '.repeat(4);
+  });
+  for(const width of isMobile?[390,320]:[1794,1280,820]){
+    await page.setViewportSize({width,height:900});
+    const header=drawer.locator(':scope > header');
+    expect(await header.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+    await expect(header.getByRole('button',{name:'상세매물보기 닫기',exact:true})).toBeInViewport({ratio:1});
+    expect((await header.boundingBox()).height).toBeLessThanOrEqual(60);
+    expect(await drawer.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  }
+  await page.screenshot({path:info.outputPath('compact-long-header.png'),animations:'disabled'});
 });
