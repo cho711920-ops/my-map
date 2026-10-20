@@ -153,6 +153,7 @@ test('default open list preserves deep reading during metadata refresh with the 
     applyFilter();
   });
   await page.waitForTimeout(500);
+  await page.locator('#list .item .action-select-check').nth(10).check();
   await page.locator('#sidebar').evaluate(el=>{el.scrollTop=el.scrollHeight*.6;});
   await page.waitForTimeout(100);
   const state=await page.evaluate(()=>{
@@ -164,6 +165,9 @@ test('default open list preserves deep reading during metadata refresh with the 
   expect(state.after.id).toBe(state.before.id);
   expect(Math.abs(state.after.offset-state.before.offset)).toBeLessThanOrEqual(2);
   expect(state.count).toBe(175);expect(state.rendered).toBeLessThanOrEqual(36);
+  const filters=await page.locator('#listToolbar').boundingBox(),actions=await page.locator('#selectionActionBar').boundingBox();
+  expect(actions.y).toBeGreaterThanOrEqual(filters.y+filters.height-1);
+  await expect(page.locator('#selectionActionBar .selection-clear-btn')).toBeInViewport({ratio:1});
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 

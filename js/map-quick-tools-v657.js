@@ -153,6 +153,27 @@
     }
   };
 
+  function syncSelectionActionGeometryV33() {
+    var sidebar = byId("sidebar");
+    if (!sidebar) return;
+    var head = sidebar.querySelector(".map-list-panel-head-v1"), toolbar = byId("listToolbar");
+    var fixedHeight = (head ? head.offsetHeight : 0) + (toolbar ? toolbar.offsetHeight : 0);
+    var fixedValue = fixedHeight + "px";
+    if (sidebar.style.getPropertyValue("--list-fixed-controls-height-v33") !== fixedValue) sidebar.style.setProperty("--list-fixed-controls-height-v33", fixedValue);
+    [["selectionActionBar", "--selection-action-height-v33"], ["saleListLayoutV8", "--sale-layout-height-v33"]].forEach(function(entry) {
+      var element = byId(entry[0]);
+      var height = element && !element.hidden ? element.offsetHeight : 0;
+      var value = height + "px";
+      if (sidebar.style.getPropertyValue(entry[1]) !== value) sidebar.style.setProperty(entry[1], value);
+    });
+  }
+  if (typeof ResizeObserver === "function") {
+    var selectionGeometryObserverV33 = new ResizeObserver(syncSelectionActionGeometryV33);
+    [document.querySelector(".map-list-panel-head-v1"), byId("listToolbar"), byId("selectionActionBar"), byId("saleListLayoutV8")].forEach(function(element) {
+      if (element) selectionGeometryObserverV33.observe(element);
+    });
+  }
+
   window.syncSelectionActionBarV657 = function (count) {
     var bar = byId("selectionActionBar");
     var counter = byId("selectionActionCount");
@@ -160,6 +181,7 @@
     if (!bar || !counter) return;
     bar.hidden = numericCount < 1;
     counter.textContent = numericCount.toLocaleString("ko-KR") + "건 선택";
+    syncSelectionActionGeometryV33();
   };
 
   window.toggleDistanceMeasureV657 = function () {
@@ -462,6 +484,7 @@
 
   window.addEventListener("resize", function () {
     syncMapQuickToolGeometryV659();
+    syncSelectionActionGeometryV33();
     if (!isDesktopToolLayout()) {
       closePopovers("");
       window.clearMapMeasurementsV657();

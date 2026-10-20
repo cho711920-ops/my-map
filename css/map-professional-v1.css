@@ -131,6 +131,15 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
     color: #64748b; font-size: 24px; cursor: pointer;
   }
   html:not(.js-phone-app-v2) #listToolbar { top: 40px !important; }
+  html:not(.js-phone-app-v2) #sidebar #selectionActionBar {
+    top:var(--list-fixed-controls-height-v33, 82px); z-index:8401; flex-wrap:wrap;
+  }
+  html:not(.js-phone-app-v2) #sidebar #saleListLayoutV8 {
+    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--selection-action-height-v33, 0px));
+  }
+  html:not(.js-phone-app-v2) #sidebar #saleTableHeadV10 {
+    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--selection-action-height-v33, 0px) + var(--sale-layout-height-v33, 0px)) !important;
+  }
   html #sidebar #list .item { margin-bottom: 7px !important; padding: 8px !important; }
   html #sidebar #list .item .item-compact-main-v650 { gap: 4px !important; }
   html #sidebar #list .item .item-compact-actions-v650 { gap: 6px !important; }

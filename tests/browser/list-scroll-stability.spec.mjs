@@ -39,6 +39,61 @@ const snapshot=el=>({top:el.scrollTop,height:el.scrollHeight,viewport:el.clientH
   count:document.querySelectorAll('#list .item').length});
 function safe(h){expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);}
 
+for(const market of ['lease','building_sale','land_sale'])test(market+' selected actions stay reachable below the filters throughout deep scrolling',async({page,context,isMobile},info)=>{
+  const h=await prepare(page,context,isMobile);
+  if(isMobile){
+    await page.setViewportSize({width:930,height:530});
+    const session=await context.newCDPSession(page);
+    await session.send('Emulation.setDeviceMetricsOverride',{width:930,height:530,screenWidth:1100,screenHeight:720,mobile:true,deviceScaleFactor:1,screenOrientation:{type:'landscapePrimary',angle:90}});
+    await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
+  }
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  if(market!=='lease')await page.evaluate(market=>{
+    allItems=allItems.map(item=>({...item,tradeType:'sale',saleCategory:market==='land_sale'?'land':'building',salePrice:50000,saleDetails:{landAreaM2:330,grossAreaM2:660}}));
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(allItems.map(item=>[item.propertyId,[]]))});
+  },market);
+  await page.locator('#listingTradeModeSelectV1').selectOption(market);
+  await page.locator('#list .item .action-select-check').first().check();
+  await page.locator('#list .item .action-select-check').nth(1).check();
+  await page.locator('#list .item .action-select-check').nth(2).check();
+  const bar=page.locator('#selectionActionBar'),scroller=page.locator('#sidebar');
+  await expect(bar).toContainText('3건 선택');
+  const keys=await page.evaluate(()=>selectedPrintKeys.slice());
+  for(const ratio of [.35,.8,.15]){
+    await scroller.evaluate((el,r)=>{el.scrollTop=(el.scrollHeight-el.clientHeight)*r;},ratio);
+    await page.waitForTimeout(100);
+    const filters=await page.locator('#listToolbar').boundingBox(),actions=await bar.boundingBox(),bounds=await scroller.boundingBox();
+    expect(actions.y).toBeGreaterThanOrEqual(filters.y+filters.height-1);
+    expect(actions.y+actions.height).toBeLessThan(bounds.y+bounds.height);
+    for(const label of ['매물찜하기','계약완료','임장완료','선택인쇄','선택해제'])await expect(bar.getByRole('button',{name:label,exact:true})).toBeInViewport({ratio:1});
+    if(market!=='lease'){
+      const layout=await page.locator('#saleListLayoutV8').boundingBox();
+      expect(layout.y).toBeGreaterThanOrEqual(actions.y+actions.height-1);
+    }
+  }
+  expect(await page.evaluate(()=>selectedPrintKeys)).toEqual(keys);
+  if(market!=='lease'){
+    const oldStyle=await scroller.getAttribute('style');
+    await scroller.evaluate(el=>{for(const property of ['width','min-width','max-width'])el.style.setProperty(property,'420px','important');});
+    await expect.poll(()=>bar.evaluate(el=>el.offsetHeight)).toBeGreaterThan(60);
+    const wrapped=await bar.boundingBox(),below=await page.locator('#saleListLayoutV8').boundingBox();
+    expect(below.y).toBeGreaterThanOrEqual(wrapped.y+wrapped.height-1);
+    await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toBeInViewport({ratio:1});
+    await scroller.evaluate((el,style)=>el.setAttribute('style',style||''),oldStyle);
+    await page.locator('#saleListLayoutV8 [data-sale-layout="table"]').click();
+    const layout=await page.locator('#saleListLayoutV8').boundingBox(),head=await page.locator('#saleTableHeadV10').boundingBox();
+    expect(head.y).toBeGreaterThanOrEqual(layout.y+layout.height-1);
+    await page.locator('#saleListLayoutV8 [data-sale-layout="card"]').click();
+  }
+  await page.screenshot({path:info.outputPath(market+'-sticky-selected-actions.png')});
+  const before=await scroller.evaluate(el=>el.scrollTop);
+  await bar.getByRole('button',{name:'선택해제',exact:true}).click();
+  await expect(bar).toBeHidden();
+  expect(await scroller.evaluate(el=>el.scrollTop)).toBeGreaterThan(before-150);
+  expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(0);
+  safe(h);
+});
+
 test('passive refresh preserves the visible card through reorder, insertion and removal',async({page,context,isMobile})=>{
   const h=await prepare(page,context,isMobile);
   await h.scroller.evaluate(el=>{el.scrollTop=el.scrollHeight*.65;});
