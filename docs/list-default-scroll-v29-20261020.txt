@@ -23,3 +23,11 @@
 - 운영 기준49eabd0(v27)에서 별도 codex/list-default-v29. 브이월드 제품 코드/인덱스/서버/환경 변수 활성화 변경 없음.
 - v28 문서만 동기화. 준비 코드는 codex/sale-design-v24의1b78769, Workers520·운영심사 상태 계속 미해결.
 - 원본 광고/DB/R2/찜/연락처/수집 프로세스 변경·강제 실행 없음. 재수집 불필요.
+
+운영 반영
+- 제품 커밋084c395, codex/list-default-v29 원격 push 완료.
+- Worker1e660042-f5ca-4f0d-8b06-c0d564960b36 배포 완료, public cache46236ffc6b4840b639d08473.
+- 2026-10-20 11:53 KST js-map.com/www.js-map.com 각각89개 HTML 연결 자산+SW SHA256 로컬 빌드 일치. HTML200/no-store/CSP 및 비로그인 실거래401 확인.
+- 브이월드 패널 자산은 HTML에 없음. 기존 v26 와이드 상세/v27 실거래 자산 유지.
+- 작업 중 outputs/list-default-v29-live-verification.json에 원격 확인 결과 저장. 인증정보/개인 매물/연락처 포함 없음.
+- 사용자 화면은 처음1회 새로고침. 재수집 필요 없음.
