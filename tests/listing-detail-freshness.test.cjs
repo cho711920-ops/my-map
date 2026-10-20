@@ -96,6 +96,8 @@ test("opening a stale card shows it immediately and updates only the same open c
   h.advance(300_001);
   request = h.api.open("p1", "o1");
   assert.equal(h.renders[0][1][0].memo, "saved");
+  assert.equal(h.body.scrollTop, 0, "a new opening starts at the top");
+  h.body.scrollTop = 125; // The reader moves while the refresh is pending.
   h.calls[1].resolve(result("o1", "refreshed"));
   await request;
   assert.equal(h.renders[1][1][0].memo, "refreshed");

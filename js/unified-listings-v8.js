@@ -1824,6 +1824,17 @@
     });
   }
 
+  function resetDetailOpeningScrollV34() {
+    var body = document.getElementById("unifiedDetailBodyV8");
+    if (!body) return;
+    // A new user open starts at the photo/summary, including warm cached ads.
+    // Do not reset from renderDetail: background refresh and rotation preserve
+    // the position the user has already reached in the same open detail.
+    if (typeof body.scrollTo === "function") body.scrollTo({top: 0, left: 0, behavior: "instant"});
+    else body.scrollTop = 0;
+    if (body._saleDossierSyncV3) body._saleDossierSyncV3();
+  }
+
   function open(encodedPropertyId, encodedOriginalId) {
     var measurement = global.JSLocalMetricsV1 ? global.JSLocalMetricsV1.start("detail") : null;
     var propertyId = decodeURIComponent(encodedPropertyId || "");
@@ -1843,6 +1854,7 @@
       cached = prepared.originals;
       state.openOriginalId = text(prepared.selected && prepared.selected.originalId) || originalId || text(cached[0] && cached[0].originalId);
       renderDetail(propertyId, cached, state.openOriginalId);
+      resetDetailOpeningScrollV34();
       if (cached.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
       if (prepared.retry || !detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken, measurement, prepared.retry);
       return;
@@ -1850,6 +1862,7 @@
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     state.openOriginalId = originalId;
     renderDetail(propertyId, initial, originalId);
+    resetDetailOpeningScrollV34();
     if (initial.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
     return refreshOpenDetail(propertyId, originalId, requestToken, measurement);
   }

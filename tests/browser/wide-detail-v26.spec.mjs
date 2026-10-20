@@ -65,6 +65,47 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' wide det
   }
   expect(await page.evaluate(id=>JSUnifiedListingsV8.isOpenForProperty(id),id)).toBe(true);expect(errors).toEqual([]);expect(writes).toBe(0);
 });
+for(const market of ['lease','building_sale','land_sale'])test(market+' opens each detail from the top instead of inheriting the previous reading position',async({page,isMobile})=>{
+  await mode(page,isMobile,market);
+  const first=page.locator('#list .item').first(),id=await first.getAttribute('data-property-id');
+  await page.evaluate(id=>JSUnifiedListingsV8.open(id),id);
+  const drawer=page.locator('#unifiedDetailDrawerV8'),body=drawer.locator('#unifiedDetailBodyV8');
+  await expect.poll(()=>body.evaluate(el=>el.scrollTop)).toBe(0);
+  for(const closeFirst of [true,false]){
+    await body.evaluate(el=>{el.scrollTop=Math.min(350,el.scrollHeight-el.clientHeight);});
+    expect(await body.evaluate(el=>el.scrollTop)).toBeGreaterThan(80);
+    if(closeFirst)await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
+    const listTop=await page.locator(isMobile?'#list':'#sidebar').evaluate(el=>el.scrollTop);
+    await page.evaluate(id=>JSUnifiedListingsV8.open(id),id);
+    await expect.poll(()=>body.evaluate(el=>el.scrollTop)).toBe(0);
+    expect(await page.locator(isMobile?'#list':'#sidebar').evaluate(el=>el.scrollTop)).toBe(listTop);
+  }
+});
+
+test('late detail enrichment preserves a reader who has scrolled after the new opening',async({page,isMobile})=>{
+  let release,started;
+  const gate=new Promise(resolve=>{release=resolve;}),pending=new Promise(resolve=>{started=resolve;});
+  await page.route('**/api/data**',async route=>{
+    const url=new URL(route.request().url());
+    if(url.searchParams.get('action')!=='unifiedListingDetail')return route.fallback();
+    const response=await route.fetch(),data=await response.json();
+    for(const original of data.originals||[])Object.assign(original,{buildingName:'지연 응답 확인',images:sizes.map((_,i)=>'/wide-photo-'+i+'.svg'),photoCount:sizes.length});
+    started();await gate;await route.fulfill({response,json:data});
+  });
+  try{
+    await mode(page,isMobile,'building_sale');
+    await page.locator('#list .item-building-name').first().click();
+    await pending;
+    const body=page.locator('#unifiedDetailBodyV8');
+    await expect.poll(()=>body.evaluate(el=>el.scrollTop)).toBe(0);
+    await body.evaluate(el=>{el.scrollTop=300;});
+    const top=await body.evaluate(el=>el.scrollTop);expect(top).toBeGreaterThan(200);
+    release();
+    await expect(page.locator('#unifiedDetailTitleV8')).toHaveText('지연 응답 확인');
+    await expect.poll(()=>body.evaluate(el=>el.scrollTop)).toBe(top);
+  }finally{release();}
+});
+
 for(const market of ['building_sale','land_sale'])test(market+' section menu stays above scrolling content without a clipped or floating strip',async({page,isMobile},info)=>{
   await page.emulateMedia({reducedMotion:'reduce'});
   if(!isMobile)await page.setViewportSize({width:1794,height:865});
