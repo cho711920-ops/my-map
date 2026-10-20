@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-const sizes=[[900,1500],[1600,900],[2000,600]];
+const sizes=[[900,1500],[1600,900],[2000,600],[1200,900]];
 function svg(index){const [w,h]=sizes[index];return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#dfd9cb"/><path d="M0 0H${w}V${h}H0Z" fill="none" stroke="#147e88" stroke-width="40"/><path d="M0 0 ${w} ${h}M${w} 0 0 ${h}" stroke="#af9d88" stroke-width="10"/><text x="${w/2}" y="${h/2}" text-anchor="middle" font-size="70">${w} × ${h}</text></svg>`;}
 test.beforeEach(async({page,context})=>{
   await context.route('**/*',async route=>{
@@ -7,7 +7,7 @@ test.beforeEach(async({page,context})=>{
     if(u.pathname.startsWith('/wide-photo-'))return route.fulfill({contentType:'image/svg+xml',body:svg(Number(u.pathname.match(/wide-photo-(\d)/)[1]))});
     if(u.pathname==='/api/data'&&['unifiedListings','unifiedListingDetail'].includes(u.searchParams.get('action'))){
       const response=await route.fetch(),data=await response.json();
-      for(const o of data.groups?Object.values(data.groups).flat():data.originals||[])Object.assign(o,{images:sizes.map((_,i)=>'/wide-photo-'+i+'.svg'),photoCount:3});
+      for(const o of data.groups?Object.values(data.groups).flat():data.originals||[])Object.assign(o,{images:sizes.map((_,i)=>'/wide-photo-'+i+'.svg'),photoCount:sizes.length});
       return route.fulfill({response,json:data});
     }
     return route.continue();
@@ -15,7 +15,7 @@ test.beforeEach(async({page,context})=>{
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
 });
 async function mode(page,isMobile,value){await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption(value);if(isMobile)await page.locator('[data-mobile-view="list"]').click();}
-for(const market of ['lease','building_sale','land_sale'])test(market+' wide detail preserves complete large photos, icons, source and actions',async({page,isMobile},info)=>{
+for(const market of ['lease','building_sale','land_sale'])test(market+' wide detail keeps a uniform uncropped photo frame, icons, source and actions',async({page,isMobile},info)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));let writes=0;page.on('request',r=>{if(r.method()==='POST')writes++;});
   if(!isMobile)await page.setViewportSize({width:1794,height:1000});
   await mode(page,isMobile,market);const first=page.locator('#list .item').first(),id=await first.getAttribute('data-property-id');
@@ -23,14 +23,28 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' wide det
   await expect(d).toHaveAttribute('data-wide-layout-v26',isMobile?'stack':'wide');
   await expect(d).toHaveCSS('transform','matrix(1, 0, 0, 1, 0, 0)');
   await expect(d.locator('.wide-detail-layout-v26')).toHaveCount(1);await expect(d.locator('.unified-detail-gallery-v8')).toHaveCount(1);
-  for(let i=0;i<3;i++){
+  let frame;
+  for(let i=0;i<sizes.length;i++){
     await expect.poll(()=>image.evaluate(e=>e.complete&&e.naturalWidth)).toBe(sizes[i][0]);
     await expect(g.locator('.photo-transition-ghost-v1')).toHaveCount(0);
     const metrics=await image.evaluate(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e),d=e.closest('#unifiedDetailDrawerV8'),v=d.getBoundingClientRect();return {w:r.width,h:r.height,nw:e.naturalWidth,nh:e.naturalHeight,fit:s.objectFit,overflow:d.scrollWidth>d.clientWidth+1,left:v.left,right:v.right,viewport:innerWidth};});
-    expect(metrics.h).toBeCloseTo(metrics.w*metrics.nh/metrics.nw,1);expect(metrics.fit).toBe('contain');
+    expect(metrics.h).toBeCloseTo(metrics.w*3/4,1);expect(metrics.fit).toBe('contain');
+    const bounds=await g.boundingBox();
+    if(!frame)frame=bounds;
+    expect(bounds.width).toBeCloseTo(frame.width,1);expect(bounds.height).toBeCloseTo(frame.height,1);
+    expect(bounds.y).toBeCloseTo(frame.y,1);
     expect(metrics.w).toBeGreaterThan(isMobile?300:500);expect(metrics.overflow).toBe(false);expect(metrics.left).toBeGreaterThanOrEqual(-1);expect(metrics.right).toBeLessThanOrEqual(metrics.viewport+1);
+    if(i===0)await page.screenshot({path:info.outputPath(market+'-portrait-uniform.png'),animations:'disabled'});
     if(i===1){await d.locator('#unifiedDetailBodyV8').evaluate(el=>el.scrollTop=0);await page.screenshot({path:info.outputPath(market+'-landscape-wide.png'),animations:'disabled'});}
-    if(i<2)await g.locator('.next').click();
+    if(i<sizes.length-1)await g.locator('.next').click();
+  }
+  if(!isMobile){
+    // Portrait phone uses its existing in-detail gallery rather than a modal.
+    await g.locator('.unified-detail-hero-v8').click();
+    const expanded=page.locator('#unifiedGalleryV8');
+    await expect(expanded).toHaveClass(/open/);
+    await expect(expanded.locator('img')).toHaveAttribute('src','/wide-photo-3.svg');
+    await expanded.locator('.close').click();
   }
   await d.locator('#unifiedDetailBodyV8').evaluate(el=>el.scrollTop=0);
   await page.screenshot({path:info.outputPath(market+'-wide.png'),animations:'disabled'});

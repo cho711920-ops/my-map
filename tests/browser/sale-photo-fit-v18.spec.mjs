@@ -31,8 +31,8 @@ for(const market of ['building_sale','land_sale'])test(market+' shows the full p
     await expect(stage.locator('.photo-transition-ghost-v1')).toHaveCount(0);
     const geometry=await image.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect(),g=e.closest('.unified-detail-gallery-v8').getBoundingClientRect();const scale=Math.min(r.width/e.naturalWidth,r.height/e.naturalHeight);return {fit:s.objectFit,w:e.naturalWidth*scale,h:e.naturalHeight*scale,boxW:r.width,boxH:r.height,stageH:g.height,overflow:document.documentElement.scrollWidth>innerWidth};});
     expect(geometry.fit).toBe('contain');expect(geometry.w).toBeLessThanOrEqual(geometry.boxW+.1);expect(geometry.h).toBeLessThanOrEqual(geometry.boxH+.1);expect(geometry.overflow).toBe(false);
-    // v26: full-width natural ratio, without the old fixed/capped photo stage.
-    expect(geometry.boxH).toBeCloseTo(geometry.boxW*dimensions[i][1]/dimensions[i][0],1);
+    // v30: stable reference-size frame with the complete photo contained inside.
+    expect(geometry.boxH).toBeCloseTo(geometry.boxW*3/4,1);
     expect(geometry.stageH).toBeCloseTo(geometry.boxH,1);
     await stage.screenshot({path:info.outputPath(market+'-'+i+'-full-photo.png')});
     if(i<dimensions.length-1){await stage.locator('.next').click();await expect(stage.locator('.photo-transition-ghost-v1')).toHaveCSS('background-size','contain');}
