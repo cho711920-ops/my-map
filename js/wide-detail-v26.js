@@ -55,6 +55,7 @@
   function mount(body,item){
     var drawer=body&&body.closest('#unifiedDetailDrawerV8');if(!drawer)return;
     var oldActions=drawer.querySelector(':scope > .unified-detail-utility-actions-v8');if(oldActions)oldActions.remove();
+    var oldNav=drawer.querySelector(':scope > .sale-dossier-nav-v3');if(oldNav)oldNav.remove();
     position(drawer);if(!item)return;
     var summary=body.querySelector('.unified-detail-summary-v8'),gallery=body.querySelector('.unified-detail-gallery-v8');if(!summary||!gallery)return;
     var layout=document.createElement('div');layout.className='wide-detail-layout-v26';
@@ -73,6 +74,10 @@
     // Preserve availability warnings at the top, independent of the price style.
     var warning=summary.querySelector('.source-unavailable');if(warning)primary.prepend(warning);
     layout.append(media,primary);summary.before(layout);
+    // Keep navigation outside the scrolling photos/facts. A sticky strip inside
+    // the padded body exposed content above it and covered the photo on scroll.
+    var nav=body.querySelector('.sale-dossier-nav-v3');
+    if(nav){body.before(nav);if(body._saleDossierSyncV3)body._saleDossierSyncV3();}
     var actions=summary.querySelector('.unified-detail-utility-actions-v8');
     if(actions){decorateActions(actions);if(drawer.__detailPresentationV2&&drawer.__detailPresentationV2.phone)layout.after(actions);else drawer.append(actions);}
     var management=summary.querySelector('.unified-detail-actions-v8');

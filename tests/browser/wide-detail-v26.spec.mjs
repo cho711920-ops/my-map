@@ -65,6 +65,32 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' wide det
   }
   expect(await page.evaluate(id=>JSUnifiedListingsV8.isOpenForProperty(id),id)).toBe(true);expect(errors).toEqual([]);expect(writes).toBe(0);
 });
+for(const market of ['building_sale','land_sale'])test(market+' section menu stays above scrolling content without a clipped or floating strip',async({page,isMobile},info)=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  if(!isMobile)await page.setViewportSize({width:1794,height:865});
+  await mode(page,isMobile,market);
+  await page.locator('#list .item-building-name').first().click();
+  const drawer=page.locator('#unifiedDetailDrawerV8'),body=drawer.locator('#unifiedDetailBodyV8'),nav=drawer.locator('.sale-dossier-nav-v3');
+  const initial=await nav.boundingBox();
+  for(const offset of [0,100,400,900]){
+    await body.evaluate((el,top)=>{el.scrollTop=top;},offset);
+    const menu=await nav.boundingBox(),content=await body.boundingBox();
+    expect(menu.height).toBeGreaterThanOrEqual(44);
+    expect(menu.y).toBeCloseTo(initial.y,1);
+    expect(menu.y+menu.height).toBeLessThanOrEqual(content.y+1);
+    await expect(nav.getByRole('button').first()).toBeInViewport({ratio:1});
+  }
+  const publicTab=nav.getByRole('button',{name:'공적자료',exact:true});
+  await publicTab.click();
+  await expect(publicTab).toHaveAttribute('aria-current','location');
+  await nav.getByRole('button',{name:'요약',exact:true}).click();
+  await expect.poll(()=>body.evaluate(el=>Math.abs(el.querySelector('[data-sale-section="summary"]').getBoundingClientRect().top-el.getBoundingClientRect().top-10))).toBeLessThanOrEqual(2);
+  await page.screenshot({path:info.outputPath(market+'-fixed-section-menu.png'),animations:'disabled'});
+  // Switching ads/markets must not accumulate fixed menus.
+  await page.evaluate(()=>JSUnifiedListingsV8.open('FIXTURE-LEASE-1'));
+  await expect(drawer.locator('.sale-dossier-nav-v3')).toHaveCount(0);
+});
+
 test('reduced motion removes card movement, and re-opening never duplicates its fixed action bar',async({page,isMobile})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await mode(page,isMobile,'lease');
   for(const id of ['FIXTURE-LEASE-1','FIXTURE-LEASE-2','FIXTURE-LEASE-1']){

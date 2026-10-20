@@ -70,6 +70,7 @@ html #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-summary-v8 { b
 #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-management-v26 > summary { cursor:pointer; padding:6px 0; }
 #unifiedDetailDrawerV8[data-wide-detail-v26] .unified-detail-actions-v8 button { color:#475e73; border-color:#d8e1ea; background:white; border-radius:5px; }
 #unifiedDetailDrawerV8[data-wide-detail-v26] .sale-dossier-nav-v3 { margin:-16px -16px 16px; }
+html #unifiedDetailDrawerV8[data-wide-detail-v26] > .sale-dossier-nav-v3 { position:relative; top:auto; flex:0 0 auto; margin:0; }
 #unifiedDetailDrawerV8[data-wide-detail-v26] .sale-fixed-summary-v9 { grid-template-columns:1fr auto; }
 #unifiedDetailDrawerV8[data-wide-detail-v26][data-wide-layout-v26="wide"] .sale-fixed-summary-v9 > strong,
 #unifiedDetailDrawerV8[data-wide-detail-v26][data-wide-layout-v26="wide"] .sale-fixed-summary-v9 > span:not(.sale-unit-switch-v9) { display:none !important; }
