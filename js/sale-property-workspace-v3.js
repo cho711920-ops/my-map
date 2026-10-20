@@ -61,11 +61,12 @@
       root._saleDossierBoundV3=null;root._saleDossierSyncV3=null;root._saleDossierFrameV3=0;return;
     }
     if(global.JSSalePublicReviewV6)global.JSSalePublicReviewV6.mount(root,item);
+    if(global.JSSaleParcelBoundaryV23)global.JSSaleParcelBoundaryV23.mount(root,item);
     var gallery=root.querySelector('.unified-detail-gallery-v8'),slot=root.querySelector('.sale-photo-slot-v3');
     if(gallery&&slot){slot.append(gallery);slot.hidden=!gallery.querySelector('.unified-detail-hero-v8')&&!(Number(item.photoCount)>0);}
     var description=root.querySelector('.listing-sale-description-v1');if(description)description.dataset.saleSection='description';
     var tools=root.querySelector('.sale-tools-v1');if(tools)tools.dataset.saleSection='workbench';
-    var labels=[['요약',['summary']],['토지·건물',['land','building','areas','review']],['공적자료',['register','publicland','transactions']],['매입검토',['workbench','income']],['사진·원문',['photos','description']]];
+    var labels=[['요약',['summary']],['토지·건물',['land','building','areas','review']],['공적자료',['register','publicland','parcelboundary','transactions']],['매입검토',['workbench','income']],['사진·원문',['photos','description']]];
     var nav=document.createElement('nav');nav.className='sale-dossier-nav-v3';nav.setAttribute('aria-label','매매 상세 항목 이동');
     labels.forEach(function(entry){
       var keys=entry[1].filter(function(key){var el=root.querySelector('[data-sale-section="'+key+'"]');return el&&!el.hidden;});if(!keys.length)return;

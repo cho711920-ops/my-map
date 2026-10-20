@@ -1,0 +1,21 @@
+.sale-parcel-panel-v23{padding:14px;margin:14px 0;border:1px solid #cde5df;border-radius:12px;background:#f6fbf9;color:#264b43}
+.sale-parcel-panel-v23[hidden]{display:none}
+.sale-parcel-panel-v23 h3{margin:0 0 8px;font-size:15px}
+.sale-parcel-panel-v23 p{font-size:12px;line-height:1.6;margin:6px 0}
+.sale-parcel-panel-v23>div{display:flex;flex-wrap:wrap;gap:6px}
+.sale-parcel-panel-v23 button,.sale-parcel-map-v23 button{border:1px solid #b9d9d0;background:#fff;color:#155e50;border-radius:7px;min-height:36px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer}
+.sale-parcel-panel-v23 button:disabled{opacity:.5;cursor:wait}
+.sale-parcel-map-v23{position:absolute;z-index:18;left:12px;bottom:30px;width:min(410px,calc(100% - 90px));max-height:260px;overflow:auto;padding:10px 12px;border:1px solid #b9d9d0;border-radius:12px;background:rgba(255,255,255,.97);box-shadow:0 3px 15px #0f453b22;box-sizing:border-box;color:#254b42}
+.sale-parcel-map-v23 header{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.sale-parcel-map-v23>small,.sale-parcel-map-v23 li small{display:block;font-size:11px;line-height:1.5;color:#557169;margin-top:5px}
+.sale-parcel-map-v23 summary{cursor:pointer;font-size:12px;padding:8px 0}
+.sale-parcel-map-v23 ol{margin:0;padding:0;list-style:none;max-height:120px;overflow:auto}
+.sale-parcel-map-v23 li{padding:6px;border-top:1px solid #e1ede8;border-radius:6px}
+.sale-parcel-map-v23 li.selected{background:#e2f4ed}
+.sale-parcel-map-v23 li button{display:block;width:100%;text-align:left;border:0;background:transparent;overflow-wrap:anywhere}
+.sale-parcel-map-v23 li .sale-parcel-area-check-v23{width:auto;min-height:30px;margin-top:4px;padding:3px 6px;background:#eef7f3;font-size:11px}
+.sale-parcel-map-v23 li button[hidden]{display:none}
+.sale-parcel-badge-v23{width:28px;height:28px;min-width:28px;border:2px solid #fff;border-radius:50%;background:#0f766e;color:#fff;font-size:13px;font-weight:800;box-shadow:0 1px 5px #123a3955;cursor:pointer}
+.sale-parcel-panel-v23 button:focus-visible,.sale-parcel-map-v23 button:focus-visible,.sale-parcel-badge-v23:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+.js-phone-app-v2 .sale-parcel-map-v23{bottom:70px;max-height:230px}
+@media print{.sale-parcel-panel-v23,.sale-parcel-map-v23{display:none!important}}

@@ -1825,6 +1825,7 @@
   }
 
   function open(encodedPropertyId, encodedOriginalId) {
+    if (global.JSSaleParcelBoundaryV23) global.JSSaleParcelBoundaryV23.clear();
     var measurement = global.JSLocalMetricsV1 ? global.JSLocalMetricsV1.start("detail") : null;
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
@@ -1928,7 +1929,10 @@
     }).join("") : '<p>검색되는 연락처가 없습니다.</p>';
   }
 
-  function closeDetail() {
+  function closeDetail(options) {
+    if (!options || options.preserveParcelBoundary !== true) {
+      if (global.JSSaleParcelBoundaryV23) global.JSSaleParcelBoundaryV23.clear();
+    }
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"));
     if (!drawer) return;
@@ -1949,6 +1953,7 @@
   }
 
   function closeDetailForOverlay() {
+    if (global.JSSaleParcelBoundaryV23) global.JSSaleParcelBoundaryV23.clear();
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"));
     if (detailCloseTimerV827) {
