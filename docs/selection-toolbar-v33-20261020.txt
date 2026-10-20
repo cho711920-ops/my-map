@@ -18,4 +18,7 @@
 - 전체 관련 브라우저41통과/기기별7생략, 실제 Kakao SDK/전체 운영 셸 깊은 스크롤·메타데이터 갱신 추가1통과. Node12·lint/타입/build/dry-run 통과. 육안 캡처 확인.
 - 이번 관련 검사에 새 실패 없음. 이전의 별도 원본 복구/매매 오래된 검사 실패를 해결했다거나 전체 저장소 검사가 모두 통과했다고 주장하지 않음.
 
-배포 결과 아래 추가.
+배포 완료
+- 제품7862c29, codex/selection-toolbar-v33 원격 push 완료. Worker98af2f5e-cf8e-4e5e-b7cd-f4078e3699da, cache72a05a48f3401ec847fba88d.
+- 2026-10-20 12:25 KST 양 도메인 각89개 자산 SHA256 로컬 빌드와 일치, HTML200/no-store/CSP 및 비로그인 실거래401 확인.
+- outputs/selection-toolbar-v33-live-verification.json에 확인 결과. 최초1회 새로고침, 재수집 불필요.
