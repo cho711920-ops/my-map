@@ -110,6 +110,8 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   },saleDetail);
   const before=await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}));
   await page.locator('#listingTradeModeSelectV1').selectOption('land_sale');
+  await expect(page.locator('#saleMapViewsV3')).toBeHidden();
+  await page.locator('#saleMapViewsBtnV45').click();
   await expect(page.locator('#saleMapViewsV3')).toBeVisible();
   const listingBefore=await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),ids:overlays.map(o=>o.__cluster.key),data:saleBusinessSnapshotV3()}));
   await page.locator('[data-sale-map-view="satellite"]').click();

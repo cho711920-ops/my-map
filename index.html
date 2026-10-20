@@ -300,6 +300,11 @@
             <span class="map-quick-check" aria-hidden="true"></span><span>계약완료만 보기</span>
           </button>
         </div>
+        <button id="saleMapViewsBtnV45" class="map-quick-tool-btn" type="button" hidden
+          aria-label="지도 종류" aria-controls="saleMapViewsV3" aria-expanded="false" title="지도 종류 선택">
+          <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16M15 5v16"></path></svg>
+          <span>지도 종류</span>
+        </button>
       </div>
 
       <button id="mapRoadviewSelectBtn" class="map-quick-tool-btn map-roadview-select map-roadview-vertical-v8" type="button"
@@ -379,13 +384,14 @@
 
   <div id="map"></div>
   <button id="mapParkingPhoneBtnV1" type="button" aria-label="주차장 표시" aria-pressed="false">Ⓟ 주차장</button>
+  <button id="saleMapViewsPhoneBtnV45" type="button" aria-controls="saleMapViewsV3" aria-expanded="false" hidden>지도 종류</button>
 
   <div id="mapListingCountV825" class="map-listing-count-v825" role="status" aria-live="polite"
     aria-atomic="true" aria-label="현재 지도에 표시된 매물 0개">
     <span>매물</span><strong id="mapListingCountValueV825">0개</strong>
   </div>
-  <div id="saleMapViewsV3" class="sale-map-views-v3" aria-label="매매 검토 지도" hidden>
-    <span>매매 지도</span><div role="group" aria-label="지도 종류"><button type="button" data-sale-map-view="normal" aria-pressed="true">일반</button><button type="button" data-sale-map-view="satellite" aria-pressed="false">위성</button><button type="button" data-sale-map-view="district" aria-pressed="false">지적편집도</button><button type="button" data-sale-map-view="terrain" aria-pressed="false" hidden>지형 보기</button></div>
+  <div id="saleMapViewsV3" class="sale-map-views-v3" role="region" aria-label="지도 종류" hidden>
+    <span>지도 종류</span><div role="group" aria-label="지도 종류 선택"><button type="button" data-sale-map-view="normal" aria-pressed="true">일반</button><button type="button" data-sale-map-view="satellite" aria-pressed="false">위성</button><button type="button" data-sale-map-view="district" aria-pressed="false">지적편집도</button><button type="button" data-sale-map-view="terrain" aria-pressed="false" hidden>지형 보기</button></div>
     <small data-sale-map-note hidden>지적편집도는 참고용이며 현행 지적·법적 경계와 다를 수 있습니다.</small><small data-sale-map-status role="status"></small>
     <small data-sale-terrain-note hidden>주변 지세를 보는 참고용 지형도입니다. 정확한 경사도·개발 가능 여부는 별도로 확인하세요.</small>
   </div>

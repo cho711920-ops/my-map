@@ -2,6 +2,26 @@
 (function(global){
   'use strict';
   var controls=document.getElementById('saleMapViewsV3'), ownedMap=null, previousType=null, baseChanged=false, district=false, terrain=false, terrainMessage=false;
+  var mapViewButtons=[document.getElementById('saleMapViewsBtnV45'),document.getElementById('saleMapViewsPhoneBtnV45')].filter(Boolean);
+  function closeMapViews(){
+    if(controls)controls.hidden=true;
+    mapViewButtons.forEach(function(button){button.setAttribute('aria-expanded','false');button.classList.remove('on');});
+  }
+  function positionMapViews(){
+    if(!controls||controls.hidden)return;
+    controls.style.top='';
+    if(document.documentElement.classList.contains('js-phone-app-v2'))return;
+    var button=mapViewButtons[0],host=controls.offsetParent;
+    if(button&&host){var rect=host.getBoundingClientRect();controls.style.top=Math.max(8,Math.min(button.getBoundingClientRect().top-rect.top,rect.height-controls.offsetHeight-8))+'px';}
+  }
+  function toggleMapViews(){
+    if(!controls||!isSale())return;
+    var open=controls.hidden;
+    if(global.closeMapQuickPopoversV657)global.closeMapQuickPopoversV657();
+    controls.hidden=!open;
+    mapViewButtons.forEach(function(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('on',open);});
+    if(open){update();positionMapViews();}
+  }
   function isSale(){return global.JSListingTradeV1 && global.JSListingTradeV1.getMode()!=='lease';}
   function isLand(){return global.JSListingTradeV1&&global.JSListingTradeV1.getMode()==='land_sale';}
   function removeTerrain(){if(terrain&&ownedMap)ownedMap.removeOverlayMapTypeId(global.kakao.maps.MapTypeId.TERRAIN);terrain=false;}
@@ -15,7 +35,8 @@
   }
   function update(){
     if(!controls)return;
-    controls.hidden=!isSale();
+    mapViewButtons.forEach(function(button){button.hidden=!isSale();});
+    if(!isSale())closeMapViews();
     if(!isLand()&&terrainMessage){controls.querySelector('[data-sale-map-status]').textContent='';terrainMessage=false;}
     var map=global.map,types=global.kakao&&global.kakao.maps&&global.kakao.maps.MapTypeId;
     if(terrain&&(!isLand()||ownedMap!==map))removeTerrain();
@@ -134,6 +155,10 @@
     if(global.JSSaleReviewV10)global.JSSaleReviewV10.mountDetail(root,item);
   }
   if(controls)controls.addEventListener('click',function(event){var button=event.target.closest('[data-sale-map-view]');if(button)choose(button.dataset.saleMapView);});
-  global.addEventListener('js-listing-trade-mode-change',function(){if(!isSale())restore();update();});
+  mapViewButtons.forEach(function(button){button.addEventListener('click',toggleMapViews);});
+  document.addEventListener('click',function(event){if(controls&&!controls.contains(event.target)&&!mapViewButtons.some(function(button){return button.contains(event.target);}))closeMapViews();});
+  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&controls&&!controls.hidden){var inside=controls.contains(document.activeElement);closeMapViews();if(inside){var button=mapViewButtons.find(function(button){return button.getClientRects().length;});if(button)button.focus();}}});
+  global.addEventListener('resize',positionMapViews);
+  global.addEventListener('js-listing-trade-mode-change',function(){closeMapViews();if(!isSale())restore();update();});
   global.JSSalePropertyWorkspaceV3={choose:choose,mountDetail:mountDetail,sync:update};update();
 })(window);

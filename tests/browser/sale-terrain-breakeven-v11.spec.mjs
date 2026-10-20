@@ -9,7 +9,7 @@ async function mapSpy(page,terrain=true){await page.evaluate(hasTerrain=>{
   Object.assign(map,{getCenter:()=>({toString:()=>'36.35,127.38'}),getMapTypeId:()=>type,setMapTypeId:n=>{type=n;__terrainCalls.push(['base',n]);},addOverlayMapTypeId:n=>__terrainCalls.push(['add',n]),removeOverlayMapTypeId:n=>__terrainCalls.push(['remove',n])});
 },terrain);}
 test('terrain is opt-in on land only and restores overlays without moving clusters or modifying listings',async({page,isMobile},info)=>{
-  await mapSpy(page);await mode(page,isMobile,'land_sale','map');const controls=page.locator('#saleMapViewsV3'),terrain=controls.locator('[data-sale-map-view="terrain"]');await expect(terrain).toBeVisible();expect(await page.evaluate(()=>__terrainCalls.length)).toBe(0);
+  await mapSpy(page);await mode(page,isMobile,'land_sale','map');await page.locator(isMobile?'#saleMapViewsPhoneBtnV45':'#saleMapViewsBtnV45').click();const controls=page.locator('#saleMapViewsV3'),terrain=controls.locator('[data-sale-map-view="terrain"]');await expect(terrain).toBeVisible();expect(await page.evaluate(()=>__terrainCalls.length)).toBe(0);
   const before=await page.evaluate(()=>JSON.stringify({items:allItems,center:map.getCenter().toString(),level:map.getLevel(),keys:overlays.map(o=>o.__cluster.key)}));
   await terrain.click();await expect(terrain).toHaveAttribute('aria-pressed','true');await expect(controls.locator('[data-sale-terrain-note]')).toBeVisible();
   await controls.locator('[data-sale-map-view="district"]').click();await controls.locator('[data-sale-map-view="satellite"]').click();await expect(terrain).toHaveAttribute('aria-pressed','true');
@@ -22,7 +22,7 @@ test('terrain is opt-in on land only and restores overlays without moving cluste
   await expect(controls).toBeHidden();expect(await page.evaluate(()=>__terrainCalls)).toEqual([['add',4],['add',8],['base',3],['remove',4],['add',4],['remove',4],['remove',8],['base',1]]);
 });
 test('unavailable terrain support shows a retry message and never pretends the layer is active',async({page,isMobile})=>{
-  await mapSpy(page,false);await mode(page,isMobile,'land_sale','map');const controls=page.locator('#saleMapViewsV3');await controls.locator('[data-sale-map-view="terrain"]').click();await expect(controls.locator('[data-sale-map-status]')).toContainText('지형도를 준비하지 못했습니다');await expect(controls.locator('[data-sale-map-view="terrain"]')).toHaveAttribute('aria-pressed','false');expect(await page.evaluate(()=>__terrainCalls.length)).toBe(0);
+  await mapSpy(page,false);await mode(page,isMobile,'land_sale','map');await page.locator(isMobile?'#saleMapViewsPhoneBtnV45':'#saleMapViewsBtnV45').click();const controls=page.locator('#saleMapViewsV3');await controls.locator('[data-sale-map-view="terrain"]').click();await expect(controls.locator('[data-sale-map-status]')).toContainText('지형도를 준비하지 못했습니다');await expect(controls.locator('[data-sale-map-view="terrain"]')).toHaveAttribute('aria-pressed','false');expect(await page.evaluate(()=>__terrainCalls.length)).toBe(0);
   await mode(page,isMobile,'building_sale','map');await expect(controls.locator('[data-sale-map-status]')).toBeEmpty();
 });
 test('building break-even rates update independently, keep assumptions untouched and stay absent on land',async({page,isMobile},info)=>{

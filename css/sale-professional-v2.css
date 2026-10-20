@@ -333,6 +333,11 @@ html #list .listing-land-card-v4 .land-parcel-lookup-v4 { width: auto !important
 .sale-compare-controls-v2 { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 
 .sale-map-views-v3[hidden], .sale-map-views-v3 [hidden] { display: none !important; }
+#saleMapViewsBtnV45[hidden], #saleMapViewsPhoneBtnV45[hidden] { display:none !important; }
+#saleMapViewsBtnV45 { margin-top:3px; }
+#saleMapViewsPhoneBtnV45 { display:none; }
+.js-phone-app-v2[data-jsm-mobile-view="map"][data-js-phone-favorites="false"] #saleMapViewsPhoneBtnV45:not([hidden]) { display:block; position:fixed; top:calc(var(--jsm-header-height) + 10px); right:100px; z-index:9200; min-height:36px; padding:9px; border:1px solid #dce5ef; border-radius:9px; background:#fff; color:#246bad; font-weight:700; }
+#saleMapViewsPhoneBtnV45.on { background:#205d92 !important; color:white !important; }
 .sale-map-views-v3 { position: absolute; top: 12px; right: 70px; z-index: 9100; max-width: min(240px, calc(100% - 150px)); padding: 7px; border: 1px solid #d7e1eb; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px #17375512; font: 12px/1.4 Pretendard, sans-serif; color: #445b72; }
 .sale-map-views-v3 > span { display: block; font-size: 10px; margin: 0 3px 5px; color: #718297; }
 .sale-map-views-v3 > div { display: flex; gap: 3px; }
