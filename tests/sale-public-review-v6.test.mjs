@@ -25,6 +25,44 @@ test('public transaction normalization excludes cancelled, shared, foreign distr
   assert.equal(result.rawCount,8);assert.equal(result.records.length,1);assert.equal(result.records[0].amount,50000);assert.equal(result.records[0].landAreaM2,330);assert.equal(result.records[0].buildingAreaM2,null);
   assert.equal(parseTransactions(xml([base]),'commercial','30170','202609').records[0].buildingAreaM2,650);
 });
+
+test('single and multifamily endpoint maps total floor area separately from commercial building area',()=>{
+  const row={...base,houseType:'다가구',totalFloorAr:'580.25',buildYear:'2001'};
+  assert.equal(transactionQuery({kind:'house',district:'30170',month:'202609'},new Date('2026-10-20')).kind,'house');
+  const parsed=parseTransactions(xml([row,{...row,cdealType:'O'},{...row,shareDealingType:'지분'}]),'house','30170','202609');
+  assert.equal(parsed.rawCount,3);assert.equal(parsed.records.length,1);
+  assert.equal(parsed.records[0].buildingAreaM2,580.25);assert.equal(parsed.records[0].landAreaM2,330);
+  assert.equal(parsed.records[0].houseType,'다가구');assert.equal(parsed.records[0].buildYear,'2001');
+  const missing=parseTransactions(xml([{...row,totalFloorAr:'',buildYear:'-'}]),'house','30170','202609').records[0];
+  assert.equal(missing.buildingAreaM2,null);assert.equal(missing.buildYear,'');
+});
+
+test('house source uses existing server key, distinct endpoint and cache namespace',async()=>{
+  const before=global.fetch,urls=[],cacheKeys=[];
+  global.fetch=async input=>{urls.push(new URL(input));return new Response(xml([{...base,houseType:'단독',totalFloorAr:'300',buildYear:'1998'}]));};
+  try{
+    const env={MOLIT_TRADE_SERVICE_KEY:'existing+trade-key',MEDIA:{get:async key=>{cacheKeys.push(key);return null;},put:async(key,value)=>{cacheKeys.push(key);assert.doesNotMatch(value,/existing\+trade-key/);}}};
+    const r=await getSaleTransactions(env,{kind:'house',district:'30170',month:'202609'});
+    assert.equal(r.complete,true);assert.match(r.source,/단독·다가구/);assert.match(r.sourcePage,/15126465/);
+    assert.equal(urls[0].pathname,'/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade');
+    assert.equal(urls[0].searchParams.get('serviceKey'),'existing+trade-key');
+    assert.ok(cacheKeys.every(key=>key.includes('/house/')));
+  }finally{global.fetch=before;}
+});
+
+test('house UI uses residential records without requiring the commercial general-building discriminator',()=>{
+  const item={tradeType:'sale',saleCategory:'multifamily',saleDetails:{landAreaM2:330}};
+  assert.equal(ui.transactionKind(item),'house');
+  assert.equal(ui.transactionKind({...item,saleCategory:'house'}),'house');
+  assert.equal(ui.transactionKind({...item,saleCategory:'mixed_house'}),'');
+  assert.equal(ui.transactionKind({...item,saleCategory:'villa'}),'');
+  const records=[{town:'괴정동',lot:'3**',landAreaM2:330,buildingAreaM2:580.25,date:'2026-09-12',amount:50000,houseType:'다가구',buildYear:'2001'}];
+  assert.equal(ui.comparable(records,item,{address:'대전 서구 괴정동 3-3'},{whole:true,size:true}).length,1);
+  const html=ui.transactionHtml(records,false,'house');
+  for(const word of ['주택유형','다가구','대지면적','연면적','580.25','2001년'])assert.ok(html.includes(word),word);
+  assert.doesNotMatch(html,/건물면적|상업·업무용/);
+  assert.doesNotMatch(ui.transactionHtml([{...records[0],houseType:'<script>'}],false,'house'),/<script>/);
+});
 test('malformed upstream and entitlement failures never become empty successful results',()=>{
   assert.throws(()=>parseTransactions('<html>error</html>','land','30170','202609'));
   assert.throws(()=>parseTransactions(xml([base]).replace('<totalCount>1</totalCount>',''),'land','30170','202609'));

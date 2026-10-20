@@ -3,7 +3,8 @@ import { parseXmlRows } from './public-data-xml.js';
 
 const sources = {
   land: ['RTMSDataSvcLandTrade', '15126466', '토지'],
-  commercial: ['RTMSDataSvcNrgTrade', '15126463', '상업·업무용']
+  commercial: ['RTMSDataSvcNrgTrade', '15126463', '상업·업무용'],
+  house: ['RTMSDataSvcSHTrade', '15126465', '단독·다가구']
 };
 const pending = new WeakMap();
 const text = value => String(value ?? '').trim();
@@ -17,7 +18,7 @@ function authenticationFailure(xml) {
   const code = tag(xml, 'resultCode') || tag(xml, 'returnReasonCode');
   return ['20','30','31'].includes(code) || /SERVICE_ACCESS_DENIED|SERVICE_KEY_IS_NOT_REGISTERED|PERMISSION_DENIED|UNREGISTERED|인증|승인/i.test(tag(xml, 'resultMsg') + tag(xml, 'returnAuthMsg'));
 }
-function approvalError() { return Object.assign(new Error('실거래 API 인증이 거부됐습니다. 공공데이터포털의 토지·상업업무용 실거래 활용신청과 인증키를 확인해 주세요.'), {statusCode: 502, publicCode: 'approval_required'}); }
+function approvalError() { return Object.assign(new Error('실거래 API 인증이 거부됐습니다. 공공데이터포털에서 선택한 실거래 유형의 활용신청과 인증키를 확인해 주세요.'), {statusCode: 502, publicCode: 'approval_required'}); }
 
 export function transactionQuery(query, now = new Date()) {
   const kind = text(query.kind), district = text(query.district), month = text(query.month);
@@ -47,7 +48,8 @@ export function parseTransactions(xml, kind, district, month) {
     records.push({date, district: text(row.sggNm).slice(0,60), town: text(row.umdNm).slice(0,60),
       lot: text(row.jibun).slice(0,40), amount, landUse: text(row.jimok).slice(0,40), zoning: text(row.landUse).slice(0,120),
       buildingUse: text(row.buildingUse).slice(0,100), buildingType: text(row.buildingType).slice(0,30),
-      landAreaM2: number(kind === 'land' ? row.dealArea : row.plottageAr), buildingAreaM2: kind === 'land' ? null : number(row.buildingAr),
+      ...(kind === 'house' ? {houseType: text(row.houseType).slice(0,30), buildYear: /^\d{4}$/.test(text(row.buildYear)) ? text(row.buildYear) : ''} : {}),
+      landAreaM2: number(kind === 'land' ? row.dealArea : row.plottageAr), buildingAreaM2: kind === 'land' ? null : number(kind === 'house' ? row.totalFloorAr : row.buildingAr),
       method: text(row.dealingGbn).slice(0,40)});
   }
   const totalText = tag(xml, 'totalCount'), totalCount = Number(totalText);

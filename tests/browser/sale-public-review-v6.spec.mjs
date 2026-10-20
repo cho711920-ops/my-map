@@ -103,6 +103,48 @@ test('approval and empty results are distinct, and a closed/replaced panel ignor
   await drawer.locator('[aria-label="공적자료 조회용 지번"]').fill('서구 괴정동 3-3');await drawer.locator('.sale-public-query-v6 button').click();release();
   await expect(drawer.locator('[data-public-address-status]')).toContainText('조회용 주소를 적용');await expect(drawer.locator('[data-sale-section="transactions"] [data-public-content]')).toBeEmpty();
 });
+
+test('single and multifamily reference selects housing source, preserves areas and switches without stale results',async({page,isMobile},info)=>{
+  const calls=[];
+  await page.route('**/api/data?*',async route=>{
+    const url=new URL(route.request().url());if(url.searchParams.get('action')!=='saleTransactions')return route.fallback();
+    calls.push(url.searchParams.get('kind'));
+    const kind=url.searchParams.get('kind'),row={date:'2026-09-10',district:'서구',town:'괴정동',lot:'3**',amount:40000,landAreaM2:300,buildingAreaM2:580.25,houseType:'다가구',buildYear:'2001',method:'중개거래'};
+    return route.fulfill({json:{ok:true,kind,month:url.searchParams.get('month'),records:kind==='house'?[row,{...row,town:'탄방동',amount:90000}]:[{...row,houseType:'',buildingType:'일반',buildingUse:'근린생활시설',amount:80000}],complete:true,source:kind==='house'?'국토교통부 단독·다가구 매매 실거래가':'국토교통부 상업·업무용 매매 실거래가',fetchedAt:new Date().toISOString()}});
+  });
+  const drawer=await open(page,isMobile,'building_sale');
+  const snapshot=await page.evaluate(()=>JSON.stringify(window.allItems));
+  await page.evaluate(()=>{const root=document.querySelector('#unifiedDetailDrawerV8');root.querySelector('.sale-public-review-v6').remove();window.JSSalePublicReviewV6.mount(root,{tradeType:'sale',saleCategory:'multifamily',address:'대전 서구 괴정동 3-3',salePrice:50000,saleDetails:{landAreaM2:330,zoning:'일반주거지역'}});});
+  await drawer.locator('[data-sale-group-sections*="transactions"]').click();
+  const panel=drawer.locator('[data-sale-section="transactions"]'),selector=panel.getByLabel('실거래 유형',{exact:true});
+  await expect(selector).toHaveValue('house');expect(calls).toEqual([]);
+  await expect(panel.getByText('일반건축물만',{exact:false})).toBeHidden();
+  await expect(panel.locator('[data-trade-filter="zoning"]')).toBeHidden();
+  await panel.locator('[type="month"]').fill('2026-09');await panel.locator('[data-public-load]').click();
+  await expect(panel.locator('[data-public-status]')).toContainText('조건 일치 1건');
+  for(const text of ['다가구','연면적','580.25','2001년','4억원'])await expect(panel.locator('.sale-public-trades-v6')).toContainText(text);
+  await panel.screenshot({path:info.outputPath('single-multifamily-trades.png'),animations:'disabled'});
+  await selector.selectOption('commercial');await expect(panel.locator('.sale-public-trades-v6')).toHaveCount(0);
+  await expect(panel.locator('[data-trade-filter="whole"]')).toBeVisible();expect(calls).toEqual(['house']);
+  await panel.locator('[data-public-load]').click();await expect(panel.locator('.sale-public-trades-v6')).toContainText('8억원');expect(calls).toEqual(['house','commercial']);
+  await selector.selectOption('house');await panel.locator('[data-public-load]').click();
+  await expect(panel.locator('.sale-public-trades-v6')).toContainText('4억원');expect(calls).toEqual(['house','commercial']);
+  expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(snapshot);
+  if(isMobile){await page.setViewportSize({width:320,height:720});expect(await drawer.evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);}
+});
+
+test('ambiguous mixed-use requires transaction source selection and failed housing approval is not zero trades',async({page,isMobile})=>{
+  let calls=0;
+  await page.route('**/api/data?*',async route=>{const url=new URL(route.request().url());if(url.searchParams.get('action')!=='saleTransactions')return route.fallback();calls++;return route.fulfill({json:{ok:false,code:'approval_required',message:'해당 실거래 유형의 승인 확인이 필요합니다.'}});});
+  const drawer=await open(page,isMobile,'building_sale');
+  await page.evaluate(()=>{const root=document.querySelector('#unifiedDetailDrawerV8');root.querySelector('.sale-public-review-v6').remove();window.JSSalePublicReviewV6.mount(root,{tradeType:'sale',saleCategory:'mixed_house',address:'대전 서구 괴정동 3-3',salePrice:50000,saleDetails:{}});});
+  await drawer.locator('[data-sale-group-sections*="transactions"]').click();
+  const panel=drawer.locator('[data-sale-section="transactions"]');await expect(panel.getByLabel('실거래 유형',{exact:true})).toHaveValue('');
+  await panel.locator('[data-public-load]').click();await expect(panel.locator('[data-public-status]')).toContainText('유형을 선택');expect(calls).toBe(0);
+  await panel.getByLabel('실거래 유형',{exact:true}).selectOption('house');await panel.locator('[data-public-load]').click();
+  await expect(panel.locator('[data-public-status]')).toContainText('승인');await expect(panel.locator('.sale-public-approval-v7 a')).toHaveAttribute('href','https://www.data.go.kr/data/15126465/openapi.do');
+  await expect(panel).not.toContainText('공개 거래가 없습니다');expect(calls).toBe(1);
+});
 test('narrow sale detail stays within its viewport',async({page,isMobile})=>{
   test.skip(!isMobile);await page.setViewportSize({width:320,height:720});const drawer=await open(page,true,'land_sale');
   await expect(drawer.locator('.sale-public-review-v6')).toHaveCount(1);

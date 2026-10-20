@@ -118,6 +118,12 @@
     }catch(e){if(active(el))status.textContent=e.message;}finally{button.disabled=false;}};
     root.append(el);
   }
+  function transactionKind(item){
+    var category=global.JSListingTradeV1.normalizedSaleCategory(item);
+    if(category==='land')return 'land';
+    if(category==='house'||category==='multifamily')return 'house';
+    return ['building','commercial','office','knowledge_center'].includes(category)?'commercial':'';
+  }
   function comparable(records,item,parcel,filters){
     var d=item.saleDetails||{},land=global.JSListingTradeV1.normalizedSaleCategory(item)==='land';
     var parsed=global.JSParcelExternalLinksV1.parseAddress(parcel.address),town=parsed&&parsed.town,base=num(d.landAreaM2);
@@ -126,40 +132,49 @@
       if(filters.landUse&&text(r.landUse)!==text(d.landUse))return false;
       if(filters.zoning&&text(r.zoning)!==text(d.zoning))return false;
       if(filters.size&&(!(base>0)||!(r.landAreaM2>0)||r.landAreaM2<base*.5||r.landAreaM2>base*2))return false;
-      if(!land&&filters.whole&&r.buildingType!=='일반')return false;
+      if(!land&&(filters.kind||transactionKind(item))!=='house'&&filters.whole&&r.buildingType!=='일반')return false;
       return true;
     }).sort(function(a,b){return b.date.localeCompare(a.date);});
   }
-  function transactionHtml(records,land){
+  function transactionHtml(records,land,kind){
+    var house=kind==='house';
     return '<div class="sale-public-trades-v6">'+records.map(function(r){var unit=r.landAreaM2>0?r.amount/(r.landAreaM2/PY):null;
-      return '<article><header><b>'+esc(r.date)+'</b><strong>'+esc(money(r.amount))+'</strong></header><p>'+esc([r.district,r.town,r.lot].filter(Boolean).join(' '))+'</p>'+rowsHtml([['용도',land?r.landUse:[r.buildingType,r.buildingUse].filter(Boolean).join(' · ')],['용도지역',r.zoning],['대지·거래면적',area(r.landAreaM2)],['건물면적',area(r.buildingAreaM2)],['대지 기준 단가',unit==null?'':fmt(unit)+'만원/평'],['거래유형',r.method]])+'</article>';
+      return '<article><header><b>'+esc(r.date)+'</b><strong>'+esc(money(r.amount))+'</strong></header><p>'+esc([r.district,r.town,r.lot].filter(Boolean).join(' '))+'</p>'+rowsHtml([[house?'주택유형':'용도',house?r.houseType:land?r.landUse:[r.buildingType,r.buildingUse].filter(Boolean).join(' · ')],['용도지역',r.zoning],[house?'대지면적':'대지·거래면적',area(r.landAreaM2)],[house?'연면적':'건물면적',area(r.buildingAreaM2)],['건축연도',house&&r.buildYear?r.buildYear+'년':''],['대지 기준 단가',unit==null?'':fmt(unit)+'만원/평'],['거래유형',r.method]])+'</article>';
     }).join('')+'</div>';
   }
   function mountTransactions(root,item){
-    var land=global.JSListingTradeV1.normalizedSaleCategory(item)==='land',d=item.saleDetails||{};
-    var el=section('transactions','주변 유사 실거래','같은 법정동의 '+(land?'토지':'상업·업무용')+' 거래를 조건별로 확인합니다.','실거래 조회'),out=el.querySelector('[data-public-content]'),status=el.querySelector('[data-public-status]'),button=el.querySelector('button');
+    var land=global.JSListingTradeV1.normalizedSaleCategory(item)==='land',d=item.saleDetails||{},kind=transactionKind(item);
+    var el=section('transactions','주변 유사 실거래','','실거래 조회'),out=el.querySelector('[data-public-content]'),status=el.querySelector('[data-public-status]'),button=el.querySelector('button');
     var current=new Date(Date.now()+9*3600000).toISOString().slice(0,7),result=null,resolved=null,shown=10;
     var controls=document.createElement('div');controls.className='sale-public-trade-controls-v6';
-    controls.innerHTML='<label>계약월<input type="month" min="2006-01" max="'+current+'" value="'+current+'" aria-label="실거래 계약월"></label><label><input type="checkbox" data-trade-filter="size"'+(num(d.landAreaM2)>0?'':' disabled')+'> 대지·거래면적 0.5~2배</label>'+
+    controls.innerHTML=(!land?'<label>실거래 유형<select aria-label="실거래 유형"><option value="">유형 선택</option><option value="house"'+(kind==='house'?' selected':'')+'>단독·다가구</option><option value="commercial"'+(kind==='commercial'?' selected':'')+'>상업·업무용</option></select></label>':'')+'<label>계약월<input type="month" min="2006-01" max="'+current+'" value="'+current+'" aria-label="실거래 계약월"></label><label><input type="checkbox" data-trade-filter="size"'+(num(d.landAreaM2)>0?'':' disabled')+'> 대지·거래면적 0.5~2배</label>'+
       (land&&d.landUse?'<label><input type="checkbox" data-trade-filter="landUse"> 같은 지목</label>':'')+(d.zoning?'<label><input type="checkbox" data-trade-filter="zoning"> 같은 용도지역</label>':'')+
       (!land?'<label><input type="checkbox" data-trade-filter="whole" checked> 일반건축물만</label>':'');el.insertBefore(controls,status);
-    var footer=document.createElement('p');footer.className='sale-public-footnote-v6';footer.innerHTML='현재 광고 호가 <b>'+esc(money(item.salePrice))+'</b> · 아래 자료는 신고된 실거래입니다. 해제·지분 표기 거래 제외. 주소 일부가 가려져 동일 매물 이력이나 거리순 자료로 볼 수 없습니다.'+(!land?' 상업·업무용 공개자료이며 주택·공장·창고 거래는 포함하지 않습니다.':'')+' <a href="https://rt.molit.go.kr/" target="_blank" rel="noopener noreferrer">국토부 공식 실거래가 ↗</a>';el.append(footer);
+    var footer=document.createElement('p');footer.className='sale-public-footnote-v6';el.append(footer);
+    function syncKind(){
+      var label={land:'토지',house:'단독·다가구',commercial:'상업·업무용'}[kind];
+      el.querySelector('.sale-public-intro-v6').textContent=label?'같은 법정동의 '+label+' 거래를 조건별로 확인합니다.':'실제 매물 용도에 맞는 실거래 유형을 선택해 주세요.';
+      ['whole','zoning'].forEach(function(key){var input=controls.querySelector('[data-trade-filter="'+key+'"]');if(input){input.disabled=kind==='house'||!kind;input.closest('label').hidden=input.disabled;}});
+      footer.innerHTML='현재 광고 호가 <b>'+esc(money(item.salePrice))+'</b> · 아래 자료는 신고된 실거래입니다. 해제·지분 표기 거래 제외. 주소 일부가 가려져 동일 매물 이력이나 거리순 자료로 볼 수 없습니다.'+(!land?' 상가주택 등 혼합용도는 실제 신고 유형에 맞게 선택하세요. 아파트·연립·다세대·오피스텔·공장·창고 전용 실거래는 아직 연결되지 않았습니다.':'')+' <a href="https://rt.molit.go.kr/" target="_blank" rel="noopener noreferrer">국토부 공식 실거래가 ↗</a>';
+    }
+    syncKind();
     function render(){
-      var filters={};controls.querySelectorAll('[data-trade-filter]').forEach(function(e){filters[e.dataset.tradeFilter]=e.checked;});var records=comparable(result.records,item,resolved,filters);
+      var filters={kind:kind};controls.querySelectorAll('[data-trade-filter]').forEach(function(e){filters[e.dataset.tradeFilter]=!e.closest('label').hidden&&e.checked;});var records=comparable(result.records,item,resolved,filters);
       status.textContent=resolved.address+' · '+result.month.slice(0,4)+'.'+result.month.slice(4)+' · 조건 일치 '+records.length+'건'+(!result.complete?' · 일부 페이지만 확인됨':'');
-      out.innerHTML=(records.length?transactionHtml(records.slice(0,shown),land):'<p>'+(result.complete?'선택한 계약월·법정동·조건에 맞는 공개 거래가 없습니다. 다른 계약월이나 조건으로 확인해 주세요.':'확인한 일부 자료에서는 조건에 맞는 거래가 없습니다. 전체 자료의 결과는 공식 사이트에서 확인해 주세요.')+'</p>')+
+      out.innerHTML=(records.length?transactionHtml(records.slice(0,shown),land,kind):'<p>'+(result.complete?'선택한 계약월·법정동·조건에 맞는 공개 거래가 없습니다. 다른 계약월이나 조건으로 확인해 주세요.':'확인한 일부 자료에서는 조건에 맞는 거래가 없습니다. 전체 자료의 결과는 공식 사이트에서 확인해 주세요.')+'</p>')+
         (records.length>shown?'<button type="button" data-trades-more>10건 더 보기</button>':'')+'<p class="sale-public-source-v6">'+esc(result.source)+' · 조회 '+esc(new Date(result.fetchedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+(result.cached?' · 저장된 조회자료':'')+'</p>';
       var more=out.querySelector('[data-trades-more]');if(more)more.onclick=function(){shown+=10;render();};
     }
-    controls.addEventListener('change',function(e){shown=10;if(e.target.type==='month'){result=null;out.innerHTML='';status.textContent='계약월을 변경했습니다. 실거래 조회를 눌러 주세요.';}else if(result)render();});
+    controls.addEventListener('change',function(e){shown=10;if(e.target.tagName==='SELECT'){kind=e.target.value;syncKind();result=null;out.innerHTML='';status.textContent='실거래 유형을 변경했습니다. 실거래 조회를 눌러 주세요.';}else if(e.target.type==='month'){result=null;out.innerHTML='';status.textContent='계약월을 변경했습니다. 실거래 조회를 눌러 주세요.';}else if(result)render();});
     button.onclick=async function(){
+      if(!kind){status.textContent='조회할 실거래 유형을 선택해 주세요.';return;}
       var month=controls.querySelector('[type="month"]').value.replace('-','');if(!/^\d{6}$/.test(month)){status.textContent='조회할 계약월을 선택해 주세요.';return;}
-      button.disabled=true;controls.querySelectorAll('input').forEach(function(e){e.dataset.wasDisabled=String(e.disabled);e.disabled=true;});status.textContent='법정동과 공식 실거래 자료를 확인하고 있습니다…';out.innerHTML='';result=null;
-      try{resolved=await resolve(item);if(!active(el))return;var query={action:'saleTransactions',kind:land?'land':'commercial',district:resolved.pnu.slice(0,5),month:month},key=[query.kind,query.district,month].join(':');
+      button.disabled=true;controls.querySelectorAll('input,select').forEach(function(e){e.dataset.wasDisabled=String(e.disabled);e.disabled=true;});status.textContent='법정동과 공식 실거래 자료를 확인하고 있습니다…';out.innerHTML='';result=null;
+      try{resolved=await resolve(item);if(!active(el))return;var query={action:'saleTransactions',kind:kind,district:resolved.pnu.slice(0,5),month:month},key=[query.kind,query.district,month].join(':');
         var saved=transactions.get(key),age=saved?Date.now()-Date.parse(saved.fetchedAt):Infinity;result=saved&&age>=0&&age<6*3600000?Object.assign({},saved,{cached:true}):await read(query);
         if(!active(el))return;if(!Array.isArray(result.records))throw Error('실거래 자료 형식을 확인하지 못했습니다. 다시 조회해 주세요.');if(result.complete)cache(transactions,key,result);shown=10;render();
-      }catch(e){if(active(el)){status.textContent=e.message;if(e.code==='approval_required')out.innerHTML='<div class="sale-public-approval-v7"><p>실거래 자료의 활용신청·인증 연결을 확인해야 합니다. 조회 실패를 거래 0건으로 표시하지 않습니다.</p><a href="https://www.data.go.kr/data/'+(land?'15126466':'15126463')+'/openapi.do" target="_blank" rel="noopener noreferrer">'+(land?'토지':'상업·업무용')+' 실거래 API 안내 ↗</a></div>';}}
-      finally{button.disabled=false;controls.querySelectorAll('input').forEach(function(e){e.disabled=e.dataset.wasDisabled==='true';});}
+      }catch(e){if(active(el)){status.textContent=e.message;if(e.code==='approval_required')out.innerHTML='<div class="sale-public-approval-v7"><p>실거래 자료의 활용신청·인증 연결을 확인해야 합니다. 조회 실패를 거래 0건으로 표시하지 않습니다.</p><a href="https://www.data.go.kr/data/'+({land:'15126466',house:'15126465',commercial:'15126463'}[kind])+'/openapi.do" target="_blank" rel="noopener noreferrer">'+esc({land:'토지',house:'단독·다가구',commercial:'상업·업무용'}[kind])+' 실거래 API 안내 ↗</a></div>';}}
+      finally{button.disabled=false;controls.querySelectorAll('input,select').forEach(function(e){e.disabled=e.dataset.wasDisabled==='true';});}
     };root.append(el);
   }
   function mount(root,item){
@@ -175,5 +190,5 @@
     };
     slot.insertBefore(container,slot.querySelector('.unified-detail-utility-actions-v8'));fill();
   }
-  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,comparable:comparable,transactionHtml:transactionHtml};
+  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,transactionKind:transactionKind,comparable:comparable,transactionHtml:transactionHtml};
 })(window);
