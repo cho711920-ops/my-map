@@ -22,3 +22,15 @@
 - 기존 광고 존재 증명/재노출/거래유형 격리/원본 대표 보존/유지관리 및 자동수집 watchdog/선택 실행 회귀 검사 포함.
 - lint / typecheck / diff check / Cloudflare build 및 Worker dry-run 통과. public cache1c8a6cccaf933de4d66f9c7e.
 - 제품 배포 및 설치본 갱신·실제 재개 결과는 아래 후속 기록으로만 확정한다.
+
+운영 적용·재개 확인 — 2026-10-20 13:44 KST
+- 제품3967959 커밋/원격 푸시 완료. Worker44ce1de0-a09c-4bef-a31e-c4f8368c3cc0 배포 완료.
+- js-map.com / www.js-map.com 각각 연결 자산89개 SHA256 일치, HTML200/no-store/Kakao CSP/비인증 실거래401 확인(13:41 KST). 캐시1c8a6cccaf933de4d66f9c7e.
+- 전용 Edge 프로필 main process가 없는 것을 재확인한 뒤 설치본 manifest/background/naver 코드3개만 갱신. 기존 코드는 LocalAppData/JSMap/EdgeAutoCollector/code-backups/v37-20261020-134048에 보존. 인증/등록지역/예약/프로필 데이터는 복사·초기화하지 않음.
+- 전용 프로필 재실행 후 manifest만1.1.18, 메모리 background1.1.17 잔류를 실제 확인. chrome.runtime.reload로 새 background를 활성화했고 최종 build/manifest 모두1.1.18, 네이버 패널6.0.12 확인. 일반 사용자 Edge는 종료하지 않음.
+- 직접 URL로 열린 옵션 화면은 ERR_BLOCKED_BY_CLIENT였다. 확장 자체 chrome.runtime.openOptionsPage로 정상 옵션 화면을 열고1.1.18/진행 신호 및 다음11:00 예약 표시 확인. 보안정책/권한을 해제하지 않음.
+- 13:42:30에 old session rescan 메시지 기록, 전날 pending descriptor가 자동 해소됐고 새 세션 S-NAVER-1792471360847-loo2tihj에서 동구 최신 목록1,626건 대조 시작. 기존 동일1,533건 생략, 상세 대상93건으로 진행.
+- 13:44 D1 읽기 검증: 새 세션50건 처리(신규8/통합42/실패0), 새 요청10개 completed. 이전 미확인 요청은 running/만료 없음으로 보존되어 재전송되지 않음. 원본5건의 저장 성공을 추정해 덮어쓰지 않음.
+- 서구는 조회 중 원본 total 변동 및 예상8,349/고유8,348의 불일치가 관측되어 전체수집 검증 실패로 재시도 대기. 이 불일치를 무시하거나 누락 광고를 임의 제외하지 않음.
+- 현재 실행은 상가임대 네이버 미완료5구의 기존 실행 복구다. 완료된 당근은 재실행하지 않았고 매매 전체수집도 새로 시작하지 않음. 전날 매매 미확인5건은 다음 같은 범위 매매 fresh manifest에서 재대조해야 하며 이번 상가임대 재개를 전날 매매 검수 완료로 보고하지 않는다.
+- 전체5구 완료는 아직 확인되지 않음. 자동 수집을 계속 진행하도록 두었으며 후속 상태는 실제 세션/실행 보고로 확인해야 한다.
