@@ -27,4 +27,10 @@
 - 관련 Node33건 통과. lint/typecheck/Cloudflare dry-run/diff 검사 통과.
 - 원본 광고·매물/찜/계산값, 자동수집 코드·프로필·실행, API/DB스키마 변경 없음. 브이월드 경계 gate 및 지역 평균 미연결 상태 유지.
 
-배포 확인은 아래에 최종 기록.
+배포·반영
+- 제품 커밋ef6f75e / origin/codex/detail-scroll-v40 푸시 완료.
+- Worker846d2876-5da4-47c2-9e2d-c368cdedad0d, public cache75dccffe1fea61939e707488.
+- 2026-10-20 16:03 KST: js-map.com/www.js-map.com 각각91개 CSS·JS·SW 자산의 SHA256이 빌드와 일치. HTML200/no-store/Kakao CSP 정상. 비로그인 실거래/공시지가 이력은401 유지.
+- 인앱 실제 상가 매매 상세 새로고침 후 신규 파일build해시 확인, 하단 scrollTop1784 이동과 고정 상단/하단 메뉴 표시 재확인. 프레임 연속성의 정량 평가는 위 로컬 재현 검사 기준이며 인앱 화면 캡처만으로 무조건 무끊김을 단정하지 않음.
+- 검수 중 일부 사진이 일시적으로 불러오기 지연/실패로 보였다가 후속 실제 화면에서 표시됨. 사진 제공처·네트워크 문제를 이번 스크롤 처리 수정으로 해결했다고 주장하지 않음.
+- 진단 파일 outputs/verify-detail-scroll-v40.mjs 및 outputs/detail-scroll-v40-live-verification.json은 운영 민감정보 없이 로컬에 보관, Git에 포함하지 않음.
