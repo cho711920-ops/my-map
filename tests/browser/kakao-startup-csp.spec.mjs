@@ -97,7 +97,7 @@ test('parking overlays and detail coexist with real Kakao clusters without movin
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 
-test('sale-only satellite and cadastral views use the real SDK and restore the lease map',async({page},testInfo)=>{
+test('shared map types use the real SDK and stay selected when returning to lease',async({page},testInfo)=>{
   test.setTimeout(60000);
   const boundary=await startFullApplication(page);
   await expect(page.locator('#map .circle-marker')).toHaveCount(1);
@@ -138,6 +138,13 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   await page.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await page.locator('#listingTradeModeSelectV1').selectOption('lease');
   await expect(page.locator('#saleMapViewsV3')).toBeHidden();
+  await page.locator('#saleMapViewsBtnV45').click();
+  await expect(page.locator('[data-sale-map-view="terrain"]')).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(()=>terrainNativeCallsV11)).toEqual(['add']);
+  expect(await page.evaluate(()=>map.getMapTypeId()===kakao.maps.MapTypeId.HYBRID)).toBe(true);
+  await page.locator('[data-sale-map-view="terrain"]').click();
+  await page.locator('[data-sale-map-view="district"]').click();
+  await page.locator('[data-sale-map-view="normal"]').click();
   expect(await page.evaluate(()=>terrainNativeCallsV11)).toEqual(['add','remove']);
   expect(await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}))).toEqual(before);
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);

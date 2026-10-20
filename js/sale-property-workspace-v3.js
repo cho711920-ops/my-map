@@ -1,7 +1,7 @@
-/* Optional sale-only map views and a navigable property dossier. No data writes. */
+/* Shared opt-in map views and a navigable sale property dossier. No data writes. */
 (function(global){
   'use strict';
-  var controls=document.getElementById('saleMapViewsV3'), ownedMap=null, previousType=null, baseChanged=false, district=false, terrain=false, terrainMessage=false;
+  var controls=document.getElementById('saleMapViewsV3'), ownedMap=null, previousType=null, baseChanged=false, district=false, terrain=false;
   var mapViewButtons=[document.getElementById('saleMapViewsBtnV45'),document.getElementById('saleMapViewsPhoneBtnV45')].filter(Boolean);
   function closeMapViews(){
     if(controls)controls.hidden=true;
@@ -15,15 +15,13 @@
     if(button&&host){var rect=host.getBoundingClientRect();controls.style.top=Math.max(8,Math.min(button.getBoundingClientRect().top-rect.top,rect.height-controls.offsetHeight-8))+'px';}
   }
   function toggleMapViews(){
-    if(!controls||!isSale())return;
+    if(!controls)return;
     var open=controls.hidden;
     if(global.closeMapQuickPopoversV657)global.closeMapQuickPopoversV657();
     controls.hidden=!open;
     mapViewButtons.forEach(function(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('on',open);});
     if(open){update();positionMapViews();}
   }
-  function isSale(){return global.JSListingTradeV1 && global.JSListingTradeV1.getMode()!=='lease';}
-  function isLand(){return global.JSListingTradeV1&&global.JSListingTradeV1.getMode()==='land_sale';}
   function removeTerrain(){if(terrain&&ownedMap)ownedMap.removeOverlayMapTypeId(global.kakao.maps.MapTypeId.TERRAIN);terrain=false;}
   function restore(){
     removeTerrain();
@@ -35,30 +33,26 @@
   }
   function update(){
     if(!controls)return;
-    mapViewButtons.forEach(function(button){button.hidden=!isSale();});
-    if(!isSale())closeMapViews();
-    if(!isLand()&&terrainMessage){controls.querySelector('[data-sale-map-status]').textContent='';terrainMessage=false;}
+    mapViewButtons.forEach(function(button){button.hidden=false;});
     var map=global.map,types=global.kakao&&global.kakao.maps&&global.kakao.maps.MapTypeId;
-    if(terrain&&(!isLand()||ownedMap!==map))removeTerrain();
+    if(terrain&&ownedMap!==map)removeTerrain();
     var current=map&&typeof map.getMapTypeId==='function'?map.getMapTypeId():null;
     controls.querySelectorAll('[data-sale-map-view]').forEach(function(button){
       var key=button.dataset.saleMapView;
-      if(key==='terrain')button.hidden=!isLand();
+      if(key==='terrain')button.hidden=false;
       button.setAttribute('aria-pressed',String(key==='terrain'?terrain:key==='district'?district:key==='satellite'?!!(types&&current===types.HYBRID):!!(types&&current===types.ROADMAP)));
     });
     controls.querySelector('[data-sale-map-note]').hidden=!district;
     var terrainNote=controls.querySelector('[data-sale-terrain-note]');if(terrainNote)terrainNote.hidden=!terrain;
   }
   function choose(view){
-    if(!isSale()||!['normal','satellite','district','terrain'].includes(view)||view==='terrain'&&!isLand())return;
+    if(!['normal','satellite','district','terrain'].includes(view))return;
     var map=global.map,types=global.kakao&&global.kakao.maps&&global.kakao.maps.MapTypeId;
     if(!map||!types||typeof map.setMapTypeId!=='function'||typeof map.addOverlayMapTypeId!=='function'){
-      terrainMessage=view==='terrain';
       if(controls)controls.querySelector('[data-sale-map-status]').textContent='지도가 준비되면 다시 눌러 주세요.';
       return;
     }
     if(view==='terrain'&&(types.TERRAIN==null||typeof map.removeOverlayMapTypeId!=='function')){
-      terrainMessage=true;
       if(controls)controls.querySelector('[data-sale-map-status]').textContent='현재 지도에서 지형도를 준비하지 못했습니다. 새로고침 후 다시 눌러 주세요.';
       return;
     }
@@ -70,7 +64,6 @@
       district=!district;
     }else{map.setMapTypeId(view==='satellite'?types.HYBRID:types.ROADMAP);baseChanged=true;}
     if(controls)controls.querySelector('[data-sale-map-status]').textContent='';
-    terrainMessage=false;
     update();
   }
   function mountDetail(root,item){
@@ -159,6 +152,6 @@
   document.addEventListener('click',function(event){if(controls&&!controls.contains(event.target)&&!mapViewButtons.some(function(button){return button.contains(event.target);}))closeMapViews();});
   document.addEventListener('keydown',function(event){if(event.key==='Escape'&&controls&&!controls.hidden){var inside=controls.contains(document.activeElement);closeMapViews();if(inside){var button=mapViewButtons.find(function(button){return button.getClientRects().length;});if(button)button.focus();}}});
   global.addEventListener('resize',positionMapViews);
-  global.addEventListener('js-listing-trade-mode-change',function(){closeMapViews();if(!isSale())restore();update();});
+  global.addEventListener('js-listing-trade-mode-change',function(){closeMapViews();update();});
   global.JSSalePropertyWorkspaceV3={choose:choose,mountDetail:mountDetail,sync:update};update();
 })(window);

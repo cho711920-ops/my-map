@@ -15,7 +15,7 @@ async function richDetail(page,id,detail){
     await route.fulfill({response,json:data});
   });
 }
-test('sale map view choices preserve clusters, stored data and the prior lease base map',async({page,isMobile})=>{
+test('map view choices stay opt-in and persist across lease, building and land without changing stored data',async({page,isMobile})=>{
   const controls=page.locator('#saleMapViewsV3');await expect(controls).toBeHidden();
   await page.evaluate(()=>{
     window.__saleMapCalls=[];window.kakao=window.kakao||{};window.kakao.maps=window.kakao.maps||{};
@@ -40,11 +40,16 @@ test('sale map view choices preserve clusters, stored data and the prior lease b
   await trigger.click();await trigger.click();await expect(controls).toBeHidden();
   await mode(page,isMobile,'building_sale');if(isMobile)await page.locator('[data-mobile-view="map"]').click();
   await expect(controls).toBeHidden();await trigger.click();await expect(controls).toBeVisible();
-  await expect(controls.locator('[data-sale-map-view="terrain"]')).toBeHidden();
+  await expect(controls.locator('[data-sale-map-view="terrain"]')).toBeVisible();
   const bounds=await controls.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(isMobile?390:1280);
   await mode(page,isMobile,'lease');
   await expect(controls).toBeHidden();
-  await expect(trigger).toBeHidden();
+  if(isMobile)await page.locator('[data-mobile-view="map"]').click();
+  await expect(trigger).toBeVisible();await trigger.click();
+  await expect(controls.locator('[data-sale-map-view="satellite"]')).toHaveAttribute('aria-pressed','true');
+  await expect(controls.locator('[data-sale-map-view="district"]')).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(()=>window.__saleMapCalls)).toEqual([['base',3],['add',8]]);
+  await controls.locator('[data-sale-map-view="district"]').click();await controls.locator('[data-sale-map-view="normal"]').click();
   expect(await page.evaluate(()=>window.__saleMapCalls)).toEqual([['base',3],['add',8],['remove',8],['base',1]]);
   expect(await page.evaluate(()=>JSON.stringify(window.allItems)===window.__saleDataBefore)).toBe(true);
 });
