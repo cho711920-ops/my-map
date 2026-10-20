@@ -36,3 +36,15 @@ test('comparison highlights differences without ranking a winner or exposing mis
   assert.doesNotMatch(html,/최고 매물|추천 매물|>0만원</);
   const safe=w.comparisonHtml([{...building,name:'<script>'},second]);assert.match(safe,/&lt;script&gt;/);
 });
+
+test('building comparison preserves zero income, refuses net income as rent, and blocks unit-wide denominators',()=>{
+  const whole={...building,saleDetails:{...building.saleDetails,saleExtent:'whole_building',totalDeposit:0,monthlyIncome:0,aboveGroundFloors:4,belowGroundFloors:1}};
+  const unit={...whole,saleDetails:{...whole.saleDetails,saleExtent:'unit',saleTargetFloor:'3층',monthlyIncome:null,monthlyNetIncome:999}};
+  const html=w.comparisonHtml([whole,unit]);
+  assert.doesNotMatch(html,/출처|연락처\/원본/);assert.match(html,/건물 전체 매매/);assert.match(html,/특정 층·호실 매매/);
+  const row=label=>html.match(new RegExp('<tr data-building-compare-label="'+label+'"[^>]*>[\\s\\S]*?</tr>'))[0];
+  assert.match(row('월 임대수입'),/>0만원<.*>미확인</);assert.doesNotMatch(row('월 임대수입'),/999/);
+  assert.match(row('단순 연 수익률'),/>0%<.*>산정 불가</);
+  assert.match(row('대지 기준 단가'),/대상 면적 확인 필요/);assert.match(row('광고 월수익 · 별도'),/999만원 \(이자 차감 표기\)/);
+  for(const label of ['임대보증금 합계','월 임대수입','대지/토지 · 광고','사용승인일'])assert.ok(row(label));
+});

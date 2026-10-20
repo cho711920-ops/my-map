@@ -312,51 +312,65 @@
   }
   function comparisonHtml(items,references) {
     if(items.length&&items.every(function(i){return ui().normalizedSaleCategory(i)==='land';}))return landComparisonHtml(items,references);
-    var rows=[['매물',function(i){return i.name||i.buildingName||'-';}],['주소',function(i){return i.address||'미확인';}],['구분',function(i){return categoryLabels[ui().normalizedSaleCategory(i)]||'토지';}],['매매가',function(i){return price(i.salePrice??i.sale_price);}],['대지/토지',function(i){var a=num(ui().saleSummary(i).landAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['연면적',function(i){var a=num(ui().saleSummary(i).grossAreaM2);return a>0?fmt(a/PY)+'평':'미확인';}],['단순 연 수익률',function(i){var y=ui().saleYield(i);return y==null?'미확인':fmt(y,2)+'%';}],['지목 / 용도지역',function(i){var d=ui().saleSummary(i);return (d.landUse||'미확인')+' / '+(d.zoning||'미확인');}],['출처',function(i){return i.source||'직접등록';}]];
-    var land=items.every(function(i){return ui().normalizedSaleCategory(i)==='land';});
-    function areaValue(item,key){var a=num(ui().saleSummary(item,[key])[key]);return a>0?fmt(a/PY)+'평 ('+fmt(a,2)+'㎡)':'미확인';}
-    rows.find(function(r){return r[0]==='대지/토지';})[1]=function(i){return areaValue(i,'landAreaM2');};
-    rows.find(function(r){return r[0]==='연면적';})[1]=function(i){return areaValue(i,'grossAreaM2');};
-    function field(label,key,suffix){return [label,function(i){var v=ui().saleSummary(i,[key])[key];return v==null||clean(v)===''?'미확인':(key==='approvalDate'?date(v):suffix==='만원'&&num(v)!=null?fmt(num(v),2):clean(v))+(suffix||'');}];}
-    if(land){
-      rows=rows.filter(function(r){return !['연면적','단순 연 수익률','지목 / 용도지역'].includes(r[0]);});
-      rows.splice(5,0,['토지 평당가',function(i){var v=unitPrice(i);return v==null?'미확인':fmt(v)+'만원';}],field('지목','landUse'),field('용도지역','zoning'),field('도로접면','roadAccess'),field('토지 형상','parcelShape'));
-    }else{
-      rows.splice(6,0,field('임대보증금 합계','totalDeposit','만원'),field('월 임대수입','monthlyIncome','만원'),field('건축물 용도','buildingUse'),field('사용승인일','approvalDate'));
-      rows.splice(6,0,['전용면적',function(i){return areaValue(i,'exclusiveAreaM2');}],['건축면적',function(i){return areaValue(i,'buildingAreaM2');}]);
-      [['대지 기준 단가','landAreaM2'],['연면적 기준 단가','grossAreaM2']].forEach(function(f){
-        rows.push([f[0],function(i){var p=num(i.salePrice??i.sale_price),a=num(ui().saleSummary(i)[f[1]]);return p>0&&a>0?fmt(p/(a/PY))+'만원/평 (총매매가 기준)':'미확인';}]);
-      });
-    }
-    rows=rows.filter(function(r){return ['매물','주소','구분','매매가','출처'].includes(r[0])||items.some(function(i){return !/^(?:미확인|미확인 \/ 미확인)$/.test(r[1](i));});});
-    return '<p>선택된 대표 매물 '+items.length+'개 · '+(land?'평당가는 각 광고의 토지면적 기준입니다. 지적공부 면적과 구분해 검토하세요.':'수익률은 보증금 차감·대출 미반영 단순 연 수익률입니다.')+'</p><label class="sale-compare-differences-control-v5"><input type="checkbox" data-compare-differences> 서로 다른 항목만 보기</label><div class="sale-compare-scroll"><table><tbody>'+rows.map(function(r){
-      var values=items.map(r[1]),different=values.length>1&&new Set(values).size>1;
-      var highlight=different&&!['매물','주소','출처'].includes(r[0]);
-      return '<tr class="'+(highlight?'sale-compare-different-v5':'')+'"'+(!different?' data-compare-same="true"':'')+'><th scope="row">'+r[0]+(highlight?'<small>조건 차이</small>':'')+'</th>'+values.map(function(value){return '<td>'+esc(value)+'</td>';}).join('')+'</tr>';
-    }).join('')+'<tr><th scope="row">연락처/원본</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button><small>기존 전화·원본 버튼 이용</small></td>';}).join('')+'</tr></tbody></table></div>';
+    function value(i,key){return ui().saleSummary(i,[key])[key];}
+    function field(label,key,suffix){return [label,function(i){var v=value(i,key);return v==null||clean(v)===''?'미확인':suffix==='만원'?(num(v)==null?'미확인':fmt(num(v),2)+'만원'):key==='approvalDate'?date(v):clean(v)+(suffix||'');}];}
+    function area(i,key){var a=num(value(i,key));return a>0?fmt(a/PY,2)+'평 ('+fmt(a,2)+'㎡)':'미확인';}
+    function unit(i,key){var a=num(value(i,key)),p=num(i.salePrice??i.sale_price);if(ui().buildingSaleExtent(i)==='unit')return '대상 면적 확인 필요';return p>0&&a>0?fmt(p/(a/PY),1)+'만원/평':'산정 불가';}
+    var rows=[['매물',function(i){return i.name||i.buildingName||'건물';}],['주소',function(i){return i.address||'미확인';}],
+      ['구분 · 매매 범위',function(i){return (categoryLabels[ui().normalizedSaleCategory(i)]||'기타')+' · '+ui().buildingSaleScopeLabel(i);}],
+      ['매매가',function(i){return price(i.salePrice??i.sale_price);}],field('임대보증금 합계','totalDeposit','만원'),field('월 임대수입','monthlyIncome','만원'),
+      ['단순 연 수익률',function(i){var y=ui().saleYield(i);return y==null?'산정 불가':fmt(y,2)+'%';}],
+      ['매매가 − 보증금',function(i){var p=num(i.salePrice??i.sale_price),d=num(value(i,'totalDeposit'));return p>0&&d!=null&&p>d?price(p-d):'산정 불가';}],
+      field('광고 융자금','loanAmount','만원'),field('광고 실투자금','investmentAmount','만원'),
+      ['대지/토지 · 광고',function(i){return area(i,'landAreaM2');}],['연면적 · 광고',function(i){return area(i,'grossAreaM2');}],['전용면적 · 광고',function(i){return area(i,'exclusiveAreaM2');}],['건축면적 · 광고',function(i){return area(i,'buildingAreaM2');}],
+      ['대지 기준 단가',function(i){return unit(i,'landAreaM2');}],['연면적 기준 단가',function(i){return unit(i,'grossAreaM2');}],
+      ['매매 대상 · 층수',function(i){return ui().buildingFloorLabel(i)||'미확인';}],field('건축물 용도','buildingUse'),field('용도지역','zoning'),field('사용승인일','approvalDate'),
+      ['세대 · 가구 · 방 수',function(i){return [['householdCount','세대'],['familyCount','가구'],['roomCount','실']].map(function(f){var n=num(value(i,f[0]));return n==null?'':fmt(n,0)+f[1];}).filter(Boolean).join(' · ')||'미확인';}],
+      ['조건 확인',function(i){return i.printReviewWarningV22?'상세 재확인 필요 · 목록 기준':i.comparisonDetailCheckedV47?'선택 원본 상세 확인':'목록에 표시된 광고 기준';}]];
+    if(items.some(function(i){return num(value(i,'monthlyNetIncome'))!=null||num(value(i,'statedMonthlyIncome'))!=null;}))rows.splice(10,0,['광고 월수익 · 별도',function(i){var net=num(value(i,'monthlyNetIncome')),stated=num(value(i,'statedMonthlyIncome'));return net!=null?fmt(net,2)+'만원 (이자 차감 표기)':stated!=null?fmt(stated,2)+'만원 (기준 미확인)':'미확인';}]);
+    return '<p class="sale-land-compare-intro-v46">선택 매물 '+items.length+'개 · 선택한 원본의 광고 조건 비교 · A4 가로 인쇄</p><label class="sale-compare-differences-control-v5"><input type="checkbox" data-compare-differences> 서로 다른 항목만 보기</label><div class="sale-compare-scroll"><table><tbody>'+rows.map(function(row){
+      var values=items.map(row[1]),same=new Set(values).size===1;
+      return '<tr data-building-compare-label="'+esc(row[0])+'"'+(same?' data-compare-same="true"':' class="sale-compare-different-v5"')+'><th scope="row">'+esc(row[0])+'</th>'+values.map(function(v){return '<td>'+esc(v)+'</td>';}).join('')+'</tr>';
+    }).join('')+'<tr class="sale-land-compare-actions-v46"><th>상세 보기</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button></td>';}).join('')+'</tr></tbody></table></div><p class="sale-land-compare-note-v46">단순 수익률 = 월 임대수입 × 12 ÷ (매매가 − 보증금). 대출이자·취득비용·세금·공실은 미반영입니다. 광고 월수익·실투자금은 별도 기재값이며, 면적은 광고 기준입니다.</p>';
   }
   function compare() {
     var items=selectedSaleItems();
     if(items.length<2||items.length>4||items.some(function(i){return !ui().isSale(i)||(ui().normalizedSaleCategory(i)==='land')!==(ui().getMode()==='land_sale');}))return global.alert('같은 매매 화면에서 매물 2~4개를 체크해 주세요.');
     var land=ui().getMode()==='land_sale',references=items.map(function(item){var s=global.JSSalePublicReviewV6;return {data:s&&s.cachedLandForComparison?s.cachedLandForComparison(item):null};});
-    var dialog=modal((land?'토지':'건물·공간')+' 매물 비교','<div class="sale-compare-controls-v2">'+(land?'<button type="button" data-land-compare-load>토지정보 채우기</button><span data-land-compare-status role="status">공적자료는 버튼을 누르면 최대 4개 필지만 조회합니다.</span>':'')+'<button type="button" data-sale-print>비교표 인쇄</button></div><div data-compare-content>'+comparisonHtml(items,references)+'</div>','sale-comparison-dialog-v2'+(land?' sale-land-comparison-v46':''));
+    var dialog=modal((land?'토지':'건물·공간')+' 매물 비교','<div class="sale-compare-controls-v2">'+(land?'<button type="button" data-land-compare-load>토지정보 채우기</button><span data-land-compare-status role="status">공적자료는 버튼을 누르면 최대 4개 필지만 조회합니다.</span>':'<button type="button" data-building-compare-load>상세조건 다시 확인</button><span data-land-compare-status role="status"></span>')+'<button type="button" data-sale-print>비교표 인쇄</button></div><div data-compare-content>'+comparisonHtml(items,references)+'</div>','sale-comparison-dialog-v2 sale-a4-comparison-v47'+(land?' sale-land-comparison-v46':' sale-building-comparison-v47'));
     dialog.querySelector('[data-sale-print]').onclick=function(){global.print();};
     function bind(){
       dialog.querySelector('[data-compare-differences]').onchange=function(event){dialog.querySelectorAll('[data-compare-same]').forEach(function(row){row.hidden=event.target.checked;});};
       dialog.querySelectorAll('[data-compare-open]').forEach(function(b){b.onclick=function(){var item=items[Number(b.dataset.compareOpen)];dialog.close();if(global.JSUnifiedListingsV8)global.JSUnifiedListingsV8.open(item.propertyId);};});
     }
     bind();
+    function refreshComparison(){
+      var different=dialog.querySelector('[data-compare-differences]').checked,previous=dialog.querySelector('.sale-compare-scroll'),scrollTop=previous.scrollTop,scrollLeft=previous.scrollLeft;
+      dialog.querySelector('[data-compare-content]').innerHTML=comparisonHtml(items,references);
+      if(global.JSSaleDossierV9)global.JSSaleDossierV9.refreshUnits(dialog);
+      if(global.JSSaleReviewV10)global.JSSaleReviewV10.enhanceComparison(dialog);bind();
+      var control=dialog.querySelector('[data-compare-differences]');control.checked=different;if(different)control.dispatchEvent(new Event('change'));
+      var current=dialog.querySelector('.sale-compare-scroll');current.scrollTop=scrollTop;current.scrollLeft=scrollLeft;
+    }
+    if(!land){
+      var load=dialog.querySelector('[data-building-compare-load]');
+      load.onclick=async function(){
+        var reader=global.JSUnifiedListingsV8,status=dialog.querySelector('[data-land-compare-status]'),next=0,failed=0;
+        if(!reader||!reader.printItem){status.textContent='광고 상세를 준비하지 못했습니다. 현재 목록 기준으로 비교합니다.';return;}
+        load.disabled=true;dialog.querySelector('[data-sale-print]').disabled=true;status.textContent='선택한 원본 광고의 상세조건을 확인하고 있습니다…';
+        await Promise.all([0,1].map(async function(){while(next<items.length&&dialog.isConnected){var n=next++;try{var item=await reader.printItem(items[n]);if(item.printReviewWarningV22)failed++;items[n]=Object.assign({},item,{comparisonDetailCheckedV47:!item.printReviewWarningV22});}catch(e){failed++;items[n]=Object.assign({},items[n],{printReviewWarningV22:true});}}}));
+        if(!dialog.isConnected)return;refreshComparison();load.disabled=false;dialog.querySelector('[data-sale-print]').disabled=false;
+        status.textContent=failed?failed+'개 상세 확인 실패 · 해당 열은 목록 기준입니다.':'선택한 원본의 최신 상세조건을 반영했습니다.';
+      };
+      load.click();
+    }
     if(land)dialog.querySelector('[data-land-compare-load]').onclick=async function(){
       var button=this,status=dialog.querySelector('[data-land-compare-status]'),service=global.JSSalePublicReviewV6,next=0,failed=0;
       if(!service||!service.landForComparison){status.textContent='토지정보 조회를 준비하지 못했습니다. 새로고침 후 다시 눌러 주세요.';return;}
       button.disabled=true;dialog.querySelector('[data-sale-print]').disabled=true;status.textContent='정확한 지번과 토지정보를 확인하고 있습니다…';
       await Promise.all([0,1].map(async function(){while(next<items.length&&dialog.isConnected){var n=next++;try{if(global.JSUnifiedListingsV8&&global.JSUnifiedListingsV8.printItem)items[n]=await global.JSUnifiedListingsV8.printItem(items[n]);if(!dialog.isConnected)return;references[n]={data:await service.landForComparison(items[n])};}catch(e){failed++;references[n]={status:'조회 실패 · 지번 확인 필요'};}}}));
       if(!dialog.isConnected)return;
-      var different=dialog.querySelector('[data-compare-differences]').checked;
-      dialog.querySelector('[data-compare-content]').innerHTML=comparisonHtml(items,references);
-      if(global.JSSaleDossierV9)global.JSSaleDossierV9.refreshUnits(dialog);
-      if(global.JSSaleReviewV10)global.JSSaleReviewV10.enhanceComparison(dialog);bind();
-      var control=dialog.querySelector('[data-compare-differences]');control.checked=different;if(different)control.dispatchEvent(new Event('change'));
+      refreshComparison();
       status.textContent=failed?items.length+'개 중 '+failed+'개 조회 실패 · 나머지 자료를 반영했습니다.':'토지정보 반영 완료 · 선택한 원본의 최신 광고값으로 비교합니다.';button.disabled=false;dialog.querySelector('[data-sale-print]').disabled=false;
     };
   }

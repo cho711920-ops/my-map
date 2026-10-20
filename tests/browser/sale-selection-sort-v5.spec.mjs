@@ -152,3 +152,34 @@ test('land comparison fills exact official parcels on demand, caps concurrency a
   await expect(dialog.locator('[data-land-compare-label="자료 확인"]')).toContainText('조회 실패');
   expect(await page.evaluate(()=>JSON.stringify(allItems)===saleBusinessBeforeV5)).toBe(true);expect(writes).toBe(0);
 });
+
+test('building comparison automatically reads the selected ads, keeps missing income distinct and prints four columns',async({page,isMobile},info)=>{
+  await seed(page,'building_sale');await mode(page,isMobile,'building_sale');
+  const records=await page.evaluate(()=>allItems.filter(i=>i.tradeType==='sale'));
+  let active=0,peak=0,writes=0;
+  page.on('request',request=>{if(request.method()==='POST')writes++;});
+  await page.route('**/api/data?*',async route=>{
+    const u=new URL(route.request().url());if(u.searchParams.get('action')!=='unifiedListingDetail')return route.fallback();
+    const item=records.find(i=>i.propertyId===u.searchParams.get('propertyId'));if(!item)return route.fallback();
+    active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,60));active--;
+    if(item.propertyId==='SALE-V5-D')return route.fulfill({status:503,json:{ok:false,message:'검수용 상세 조회 실패'}});
+    const details={...item.saleDetails,saleExtent:item.propertyId==='SALE-V5-B'?'unit':'whole_building',saleTargetFloor:'3층',aboveGroundFloors:4,belowGroundFloors:1,approvalDate:'2008-06-25',householdCount:12,roomCount:16,loanAmount:10000,investmentAmount:35000,
+      totalDeposit:item.propertyId==='SALE-V5-A'?5000:0,monthlyIncome:item.propertyId==='SALE-V5-A'?320:item.propertyId==='SALE-V5-B'?0:null,monthlyNetIncome:item.propertyId==='SALE-V5-C'?999:null};
+    return route.fulfill({json:{ok:true,originals:[{...item,originalId:'DIFFERENT-AD',salePrice:999999,saleDetails:{monthlyIncome:99999}},{...item,originalId:item.propertyId+'-ORIGINAL',buildingName:item.name,saleDetails:details}]}});
+  });
+  for(const id of ['A','B','C','D'])await page.locator('#list [data-property-id="SALE-V5-'+id+'"] .action-select-check').check();
+  await page.locator('#saleComparisonTrayV5 [data-sale-compare]').click();
+  const dialog=page.locator('.sale-building-comparison-v47'),row=label=>dialog.locator('[data-building-compare-label="'+label+'"]');
+  await expect(dialog.locator('[data-land-compare-status]')).toContainText('1개 상세 확인 실패');
+  await expect(row('월 임대수입').locator('td').nth(0)).toHaveText('320만원');
+  await expect(row('월 임대수입').locator('td').nth(1)).toHaveText('0만원');
+  await expect(row('월 임대수입').locator('td').nth(2)).toHaveText('미확인');
+  await expect(row('단순 연 수익률').locator('td').nth(2)).toHaveText('산정 불가');
+  await expect(row('대지 기준 단가').locator('td').nth(1)).toHaveText('대상 면적 확인 필요');
+  await expect(row('광고 월수익 · 별도').locator('td').nth(2)).toContainText('999만원');
+  await expect(row('조건 확인').locator('td').nth(3)).toContainText('목록 기준');
+  await expect(dialog).not.toContainText('출처');await expect(dialog).not.toContainText('99999만원');
+  expect(peak).toBeLessThanOrEqual(2);expect(writes).toBe(0);expect(await page.evaluate(()=>JSON.stringify(allItems)===saleBusinessBeforeV5)).toBe(true);
+  await page.screenshot({path:info.outputPath('building-comparison-filled-v47.png'),animations:'disabled'});
+  if(process.env.JS_V47_PRINT_QA==='1'&&!isMobile)await page.pdf({path:'outputs/building-comparison-v47-print.pdf',preferCSSPageSize:true,printBackground:true});
+});
