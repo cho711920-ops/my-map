@@ -25,3 +25,10 @@
 - 긴 공적 패널의 element screenshot가 검수 브라우저 viewport를 확장해 고정 상세를 밀어내는 현상 재현. 사용자 화면 그대로 page screenshot을 사용하고 닫기 버튼의 viewport 노출을 검증하도록 검사 보정. 실제 계산 및 조회 동작을 강제 클릭으로 우회하지 않음.
 - lint / typecheck / diff check / Cloudflare build 및 Worker dry-run 통과. public cache560935859e42f0217fc21782.
 - 배포/공개 자산 확인 결과는 후속 기록으로 확정한다.
+
+운영 배포 완료 — 2026-10-20 14:38 KST 검증
+- 제품05c1d2e 커밋/원격 푸시, Workere5347590-6c39-4a08-ab1f-6affb8252585 배포 완료. cache560935859e42f0217fc21782.
+- js-map.com / www.js-map.com 각각 연결 자산89개 SHA256 일치, HTML200/no-store/Kakao CSP/비인증 실거래401 확인. checkedAt2026-10-20T05:38:34.509Z.
+- 배포 변경 자산6개: wide-detail-v26.css/js, sale-public-review-v6.js, sale-review-enhancements-v8.js, index.html, sw.js. 서버 API/DB migration/수집기 설치본 변경 없음.
+- 사용 방법: 새로고침1회 → 건물·토지매매 상세 → 공적자료 → "토지정보·공시지가 조회". 최신 원/㎡·평당 환산·기준연월 표시. 단가 보완은 계산 결과의 "공적자료로 면적 보완" 또는 해당 건물 제원/필지 조회 버튼 사용.
+- 연도별 공시지가 추이·동/구 평균은 아직 미구현. 이번 최신 가격 조회 접근 확대를 그래프 완료로 보고하지 않음.
