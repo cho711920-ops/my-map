@@ -20,4 +20,8 @@
 - Node14·lint/타입/build/Worker dry-run 통과. 사진 검수 fixture 상세 요청1회/추가 사진 반복 통신 없음. 운영 데이터 쓰기0.
 - 실제 Kakao SDK/전체 운영 셸 가상 매물 상세1통과. 외부 공개 SDK GET만 사용, 실제 개인 매물 수정 없음.
 
-운영 배포 결과는 완료 후 아래 기록.
+운영 배포 완료 — 2026-10-20 13:04 KST 검증
+- 제품a7727b6, Worker f9b1c3e6-57a3-4cdb-ba78-d08d15b9f51b, cache497650f72c67ac1a543a2a86.
+- 양 도메인 각각89개 연결 자산 SHA256일치, HTML200/no-store/Kakao CSP/비인증 실거래401 확인. checkedAt2026-10-20T04:04:44.534Z.
+- 운영 자산5개: wide-detail-v26.css/js, unified-listings-v8.js, index.html, sw.js. 이번에는 승인된 디자인 실제 적용 완료.
+- 새로고침1회. 재수집 불필요. 브이월드 준비 코드 미포함/미활성 유지.
