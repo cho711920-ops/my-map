@@ -1,9 +1,9 @@
-/* Map-first desktop browsing. Existing phone navigation remains the owner of
+/* Desktop browsing starts with the list open. Phone navigation owns
  * the portrait list. No listing, favorite or collector data is written here. */
 (function(global) {
   "use strict";
   var root = document.documentElement;
-  var opened = false;
+  var opened = true;
   root.classList.add("js-map-design-v1");
 
   global.JSMapClusterVisualV1 = {
@@ -26,7 +26,7 @@
 
   function sync() {
     root.classList.toggle("js-map-list-closed-v1", !opened && !phoneLayout());
-    root.dataset.mapListPanel = opened ? "open" : "closed";
+    root.dataset.mapListPanel = (phoneLayout() ? root.getAttribute("data-jsm-mobile-view") === "list" : opened) ? "open" : "closed";
     if (typeof global.syncMapQuickToolGeometryV659 === "function") global.syncMapQuickToolGeometryV659();
   }
 
@@ -71,7 +71,7 @@
 
   function open(cluster) {
     var changed = !opened;
-    opened = true;
+    if (!phoneLayout()) opened = true;
     sync();
     syncTitle();
     if (phoneLayout()) {
@@ -82,7 +82,7 @@
   }
 
   function close() {
-    opened = false;
+    if (!phoneLayout()) opened = false;
     sync();
     if (phoneLayout()) {
       if (global.JSMobileAppV1) global.JSMobileAppV1.setView("map");
@@ -93,13 +93,14 @@
     }
   }
 
-  global.JSMapListPanelV1 = {open: open, close: close, syncTitle: syncTitle, isOpen: function() {return opened;}};
+  global.JSMapListPanelV1 = {open: open, close: close, syncTitle: syncTitle, isOpen: function() {
+    return phoneLayout() ? root.getAttribute("data-jsm-mobile-view") === "list" : opened;
+  }};
   global.addEventListener("js-phone-device-change", sync);
   global.addEventListener("resize", sync);
-  // Carry the existing portrait map/list choice into the fitted landscape view.
+  // Portrait navigation must not silently close the desktop/fitted list.
   new MutationObserver(function() {
     if (!phoneLayout()) return;
-    opened = root.getAttribute("data-jsm-mobile-view") === "list";
     sync();
   }).observe(root, {attributes: true, attributeFilter: ["data-jsm-mobile-view"]});
   sync();

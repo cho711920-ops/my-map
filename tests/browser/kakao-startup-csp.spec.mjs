@@ -141,8 +141,35 @@ test('sale-only satellite and cadastral views use the real SDK and restore the l
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 
+test('default open list preserves deep reading during metadata refresh with the real map runtime',async({page})=>{
+  const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await expect(page.locator('html')).not.toHaveClass(/js-map-list-closed-v1/);
+  await expect(page.locator('#list .item').first()).toBeVisible();
+  await page.evaluate(()=>{
+    const base=allItems[0];
+    allItems=Array.from({length:180},(_,n)=>({...base,propertyId:'REAL-SCROLL-'+n,key:'real-scroll-'+n,name:'검수 가상매물 '+n,source:'직접등록'}));
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(allItems.map(item=>[item.propertyId,[]]))});
+    applyFilter();
+  });
+  await page.waitForTimeout(500);
+  await page.locator('#sidebar').evaluate(el=>{el.scrollTop=el.scrollHeight*.6;});
+  await page.waitForTimeout(100);
+  const state=await page.evaluate(()=>{
+    const before=captureListReadingAnchorV29();
+    allItems=allItems.slice(5);
+    refreshOriginalMetadataPresentationV1();
+    return {before,after:captureListReadingAnchorV29(),count:visibleListItems.length,rendered:document.querySelectorAll('#list .item').length};
+  });
+  expect(state.after.id).toBe(state.before.id);
+  expect(Math.abs(state.after.offset-state.before.offset)).toBeLessThanOrEqual(2);
+  expect(state.count).toBe(175);expect(state.rendered).toBeLessThanOrEqual(36);
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
 test('building sale cards, sorting and comparison work with the production shell and real SDK',async({page},testInfo)=>{
   const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
   await page.evaluate(()=>{
     const items=[100,200,0].map((income,n)=>({...allItems[0],propertyId:'FIXTURE-NATIVE-BUILDING-'+n,key:'native-building-'+n,name:'검수용 가상 건물 '+(n+1),room:'전체',type:'건물',source:'직접등록',tradeType:'sale',saleCategory:'building',salePrice:50000+n*1000,
       saleDetails:{landAreaM2:330.5785,grossAreaM2:661.157,totalDeposit:5000,monthlyIncome:income,buildingUse:'제2종근린생활시설'}}));

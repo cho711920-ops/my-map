@@ -76,10 +76,13 @@ async function installMap(page) {
   });
 }
 
-test('desktop map-first list opens on cluster click and preserves search geometry and selection on reopen', async ({page, context, isMobile}, info) => {
+test('desktop list opens by default and preserves search geometry and selection on reopen', async ({page, context, isMobile}, info) => {
   test.skip(isMobile, 'Desktop and unfolded layout use the collapsible right panel');
   const h = await prepare(page, context);
-  await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
+  await expect(page.locator('html')).not.toHaveClass(/js-map-list-closed-v1/);
+  await expectListControls(page, true);
+  expect(await page.locator('#map').evaluate(el => el.clientWidth)).toBeLessThan(1280);
+  await page.locator('#mapListCloseV1').click();
   await expectListControls(page, false);
   const search = await page.locator('#keyword').boundingBox();
   const fullWidth = await page.locator('#map').evaluate(el => el.clientWidth);
@@ -222,9 +225,9 @@ test('unfolded landscape reclaims map width and opens the same fitted desktop li
   await session.send('Emulation.setDeviceMetricsOverride', {width:930, height:530, screenWidth:1100, screenHeight:720,
     mobile:true, deviceScaleFactor:1, screenOrientation:{type:'landscapePrimary', angle:90}});
   await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
-  await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
-  await expectListControls(page, false);
-  await expect.poll(() => page.locator('#map').evaluate(el => el.clientWidth)).toBe(1280);
+  await expect(page.locator('html')).not.toHaveClass(/js-map-list-closed-v1/);
+  await expectListControls(page, true);
+  expect(await page.locator('#map').evaluate(el => el.clientWidth)).toBeLessThan(1280);
   const search = await page.locator('#keyword').boundingBox();
   await installMap(page);
   await page.evaluate(() => paintTestClusters([{key:'unfolded', worldGrid:true, latlng:{x:0,y:0}, items:allItems}]));

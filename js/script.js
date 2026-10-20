@@ -2113,6 +2113,32 @@ function observeUnifiedDuplicateShimmerV812(card) {
 }
 
 
+function captureListReadingAnchorV29(items) {
+  var sidebar = getListingScrollContainerV2();
+  var list = document.getElementById("list");
+  if (!sidebar || !list) return null;
+  var allowed = items ? new Set(items.map(actionSelectionKeyV660)) : null;
+  var top = sidebar.getBoundingClientRect().top;
+  var card = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).find(function(card) {
+    return card.getBoundingClientRect().bottom > top &&
+      (!allowed || allowed.has(card.getAttribute("data-list-card-id-v681")));
+  });
+  return card ? {id: card.getAttribute("data-list-card-id-v681"), offset: card.getBoundingClientRect().top - top} : null;
+}
+
+function restoreListReadingAnchorV29(anchor) {
+  if (!anchor) return false;
+  var sidebar = getListingScrollContainerV2();
+  var list = document.getElementById("list");
+  if (!sidebar || !list) return false;
+  var card = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).find(function(card) {
+    return card.getAttribute("data-list-card-id-v681") === anchor.id;
+  });
+  if (!card) return false;
+  sidebar.scrollTop += card.getBoundingClientRect().top - sidebar.getBoundingClientRect().top - anchor.offset;
+  return true;
+}
+
 function showList(items) {
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.syncTitle(items);
   var list = document.getElementById("list");
@@ -2123,27 +2149,18 @@ function showList(items) {
     ? window.getFavoriteMapRemovalContextV1() : null;
   document.documentElement.classList.toggle("favorite-map-review-v1", !!reviewContext);
   var keepReviewPosition = !!(reviewContext && window.jsFavoriteMapRemovalInProgressV1);
-  var reviewAnchor = null;
+  var sameMembers = (visibleListItems || []).length === items.length && (visibleListItems || []).every(function(item, index) {
+    return actionSelectionKeyV660(item) === actionSelectionKeyV660(items[index]);
+  });
+  var keepReadingPosition = keepReviewPosition || sameMembers || preserveActionSelectionDuringRender || !!window.jsReuseListCardsOnNextRenderV6521;
+  var reviewAnchor = keepReadingPosition ? captureListReadingAnchorV29(items) : null;
   var reviewStart = 0;
   var reviewTopHeight = 0;
-  if (keepReviewPosition && list && sidebar) {
-    var nextCardIds = new Set((items || []).map(actionSelectionKeyV660));
-    var remainingCards = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).filter(function(card) {
-      return nextCardIds.has(card.getAttribute("data-list-card-id-v681"));
-    });
-    var scrollerTop = sidebar.getBoundingClientRect().top;
-    var anchorCard = remainingCards.find(function(card) { return card.getBoundingClientRect().bottom > scrollerTop; });
-    if (anchorCard) reviewAnchor = {
-      id: anchorCard.getAttribute("data-list-card-id-v681"),
-      top: anchorCard.getBoundingClientRect().top
-    };
-    if (remainingCards.length) {
-      reviewStart = (items || []).findIndex(function(item) {
-        return actionSelectionKeyV660(item) === remainingCards[0].getAttribute("data-list-card-id-v681");
-      });
-      for (var prefixIndex = 0; prefixIndex < reviewStart; prefixIndex++) {
-        reviewTopHeight += Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(items[prefixIndex], prefixIndex)]) || listVirtualEstimatedHeightV2 || 0;
-      }
+  if (reviewAnchor) {
+    var anchorIndex = items.findIndex(function(item) { return actionSelectionKeyV660(item) === reviewAnchor.id; });
+    reviewStart = Math.max(0, anchorIndex - getListRenderChunkSize());
+    for (var prefixIndex = 0; prefixIndex < reviewStart; prefixIndex++) {
+      reviewTopHeight += Number(listVirtualItemHeightsV1[getListVirtualItemKeyV1(items[prefixIndex], prefixIndex)]) || listVirtualEstimatedHeightV2 || 0;
     }
   }
   resetUnifiedDuplicateShimmerObserverV812();
@@ -2214,7 +2231,7 @@ function showList(items) {
     return;
   }
 
-  if (keepReviewPosition && reviewAnchor) {
+  if (reviewAnchor) {
     listRenderStart = Math.max(0, reviewStart);
     listRenderLimit = listRenderStart;
     listVirtualTopHeightV1 = reviewTopHeight;
@@ -2228,8 +2245,8 @@ function showList(items) {
   }
   ensureListVirtualTopSpacerV1(list);
   renderNextListChunk(
-    keepReviewPosition && reviewAnchor
-      ? listRenderStart + Math.max(previousRenderLimit - previousRenderStart, getListRenderChunkSize())
+    reviewAnchor
+      ? listRenderStart + getListRenderWindowSizeV1()
       : sameList
       ? Math.max(previousRenderLimit, getListRenderChunkSize())
       : getListRenderChunkSize()
@@ -2237,13 +2254,8 @@ function showList(items) {
   listCardReusePoolV6521 = null;
 
   if (sidebar) {
-    sidebar.scrollTop = sameList || keepReviewPosition ? previousSidebarTop : 0;
-    if (reviewAnchor) {
-      var restoredAnchor = Array.from(list.querySelectorAll(".item[data-list-card-id-v681]")).find(function(card) {
-        return card.getAttribute("data-list-card-id-v681") === reviewAnchor.id;
-      });
-      if (restoredAnchor) sidebar.scrollTop += restoredAnchor.getBoundingClientRect().top - reviewAnchor.top;
-    }
+    sidebar.scrollTop = sameList || reviewAnchor ? previousSidebarTop : 0;
+    restoreListReadingAnchorV29(reviewAnchor);
   }
 
   updatePrintSelectedButton();

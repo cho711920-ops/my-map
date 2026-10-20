@@ -1,4 +1,10 @@
 import {test,expect} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+const mapSource=readFileSync(new URL('../../js/map.js',import.meta.url),'utf8');
+function mapFunction(name){
+  const start=mapSource.indexOf('function '+name+'(');
+  return mapSource.slice(start,mapSource.indexOf('\n}',start)+2);
+}
 test.use({launchOptions:{ignoreDefaultArgs:['--hide-scrollbars']}});
 
 async function prepare(page,context,isMobile){
@@ -33,6 +39,35 @@ const snapshot=el=>({top:el.scrollTop,height:el.scrollHeight,viewport:el.clientH
   count:document.querySelectorAll('#list .item').length});
 function safe(h){expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);}
 
+test('passive refresh preserves the visible card through reorder, insertion and removal',async({page,context,isMobile})=>{
+  const h=await prepare(page,context,isMobile);
+  await h.scroller.evaluate(el=>{el.scrollTop=el.scrollHeight*.65;});
+  await page.waitForTimeout(150);
+  const result=await h.scroller.evaluate(el=>{
+    const top=el.getBoundingClientRect().top;
+    const card=[...document.querySelectorAll('#list .item')].find(c=>c.getBoundingClientRect().bottom>top);
+    const id=card.getAttribute('data-list-card-id-v681'),offset=card.getBoundingClientRect().top-top;
+    const first=allItems[0];
+    // A changed sort result and a newly exposed advertisement during hydration.
+    const next=[{...first,propertyId:'NEW',key:'new'},...allItems.slice(8).reverse()];
+    preserveActionSelectionDuringRender=true;
+    try{showList(next);}finally{preserveActionSelectionDuringRender=false;}
+    const restored=[...document.querySelectorAll('#list .item')].find(c=>c.getAttribute('data-list-card-id-v681')===id);
+    return {delta:restored?restored.getBoundingClientRect().top-top-offset:null,
+      count:document.querySelectorAll('#list .item').length,visible:visibleListItems.length};
+  });
+  expect(result.delta).not.toBeNull();
+  expect(Math.abs(result.delta)).toBeLessThanOrEqual(2);
+  expect(result.count).toBeLessThanOrEqual(isMobile?28:36);
+  expect(result.visible).toBe(233);
+  await page.waitForTimeout(150);
+  expect(await h.scroller.evaluate(el=>el.scrollTop)).toBeGreaterThan(1000);
+  // Explicitly selecting a different result set still starts at its beginning.
+  await page.evaluate(()=>showList(allItems.slice(0,10)));
+  expect(await h.scroller.evaluate(el=>el.scrollTop)).toBe(0);
+  safe(h);
+});
+
 test('scroll range stays stable while wheel input crosses virtual windows',async({page,context,isMobile})=>{
   const h=await prepare(page,context,isMobile),initial=await h.scroller.evaluate(snapshot),box=await h.scroller.boundingBox();
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
@@ -44,6 +79,35 @@ test('scroll range stays stable while wheel input crosses virtual windows',async
     expect(Math.abs(after.height-initial.height)).toBeLessThanOrEqual(1);
     expect(after.count).toBeLessThanOrEqual(isMobile?28:36);
   }
+  safe(h);
+});
+
+test('metadata refresh and later touch or wheel input do not restore an obsolete scroll offset',async({page,context,isMobile})=>{
+  const h=await prepare(page,context,isMobile);
+  await page.addScriptTag({content:['captureAutoUpdateViewState','restoreAutoUpdateViewState','refreshOriginalMetadataPresentationV1'].map(mapFunction).join('\n')});
+  await page.evaluate(()=>{
+    window.captureClusterSelectionSnapshotV638=()=>null;
+    window.redrawSelectedMarkers=()=>{};
+  });
+  await h.scroller.evaluate(el=>{el.scrollTop=el.scrollHeight*.6;});
+  await page.waitForTimeout(100);
+  const result=await h.scroller.evaluate(el=>{
+    const anchor=captureListReadingAnchorV29();
+    window.applyFilter=()=>{
+      const next=allItems.slice(3);
+      next.unshift({...allItems[0],propertyId:'METADATA-NEW',key:'metadata-new'});
+      showList(next);
+    };
+    refreshOriginalMetadataPresentationV1();
+    const after=captureListReadingAnchorV29();
+    // Simulate a new input before the next animation frame.
+    el.scrollTop+=300;
+    return {anchor,after,inputTop:el.scrollTop};
+  });
+  expect(result.after.id).toBe(result.anchor.id);
+  expect(Math.abs(result.after.offset-result.anchor.offset)).toBeLessThanOrEqual(2);
+  await page.waitForTimeout(120);
+  expect(Math.abs(await h.scroller.evaluate(el=>el.scrollTop)-result.inputTop)).toBeLessThanOrEqual(2);
   safe(h);
 });
 

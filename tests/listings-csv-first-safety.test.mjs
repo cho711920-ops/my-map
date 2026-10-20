@@ -89,7 +89,7 @@ function harness(options = {}) {
     applyFilter() {renders.push(context.allItems.map(item => item.propertyId));},
     updateTypeOptions() {}, updateErrorStatus() {},
     normalizeAddressForCache: value => value,
-    captureAutoUpdateViewState() {return {favoriteOnly: context.favoriteOnly, folderId: context.activeFavoriteFolderId, scroll: 77};},
+    captureAutoUpdateViewState() {return {favoriteOnly: context.favoriteOnly, folderId: context.activeFavoriteFolderId, scroll: context.testScrollTop ?? 77};},
     restoreAutoUpdateViewState(value) {restored.push(value);},
     geocodeItems(items, callback) {
       if (options.holdGeocode) geocodeCallback = () => callback(items);
@@ -696,6 +696,24 @@ test("explicit empty scoped original groups clear only their own stale metadata"
   assert.equal(h.context.allItems[1].thumbnailV8,'');
   assert.equal(h.context.allItems[1].sourceListingSearchV6579.length,0);
   assert.match(h.context.allItems[0].thumbnailV8,/outside\.jpg/);
+});
+
+test('automatic completion restores the live reading position after network and geocode waits', async () => {
+  const h = harness({complete:true,holdGeocode:true});
+  h.context.allItems = [h.context.listingChangeRowToItemV683(row('BEFORE'))];
+  h.context.testScrollTop = 100;
+  const loading = h.context.loadSheet(true,true);
+  h.context.testScrollTop = 900;
+  h.csvReads[0].resolve(csv([row('AFTER')],'NEW'));
+  await loading;
+  await flush();
+  h.context.testScrollTop = 1800;
+  h.context.activeFavoriteFolderId = 'chosen-while-loading';
+  h.finishGeocode();
+  assert.equal(h.restored.at(-1).scroll,1800);
+  assert.equal(h.restored.at(-1).folderId,'chosen-while-loading');
+  assert.equal(h.restored.at(-1).preserveVisibleListV1,false);
+  assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['AFTER']);
 });
 
 test("an obsolete geocode completion cannot overwrite a newer scoped result", async () => {

@@ -1623,7 +1623,7 @@ kakao.maps.load(function() {
    - 선택 매물/클러스터 유지
    ========================================================= */
 function captureAutoUpdateViewState() {
-  var sidebar = document.getElementById("sidebar");
+  var sidebar = typeof getListingScrollContainerV2 === "function" ? getListingScrollContainerV2() : document.getElementById("sidebar");
   var clusterSelection = captureClusterSelectionSnapshotV638();
 
   return {
@@ -1641,7 +1641,8 @@ function captureAutoUpdateViewState() {
         ? getLinkedSelectionCardIdV845(item)
         : "";
     }),
-    sidebarScrollTop: sidebar ? sidebar.scrollTop : 0
+    sidebarScrollTop: sidebar ? sidebar.scrollTop : 0,
+    listReadingAnchorV29: typeof captureListReadingAnchorV29 === "function" ? captureListReadingAnchorV29() : null
   };
 }
 
@@ -1680,7 +1681,7 @@ function findItemsBySavedKeys(keys, linkedCardIdsV845) {
 function restoreAutoUpdateViewState(state) {
   if (!state) return;
 
-  var sidebar = document.getElementById("sidebar");
+  var sidebar = typeof getListingScrollContainerV2 === "function" ? getListingScrollContainerV2() : document.getElementById("sidebar");
 
   var restoredList = state.preserveVisibleListV1 === false ? []
     : findItemsBySavedKeys(state.visibleKeys, state.visibleListCardIdsV845);
@@ -1751,11 +1752,13 @@ function restoreAutoUpdateViewState(state) {
 
   redrawSelectedMarkers();
 
-  requestAnimationFrame(function() {
-    if (sidebar) {
-      sidebar.scrollTop = state.sidebarScrollTop || 0;
-    }
-  });
+  // Restore synchronously: a queued frame must never override a new wheel/touch
+  // gesture. showList already restores surviving cards after a passive reorder.
+  if (state.listReadingAnchorV29 && typeof restoreListReadingAnchorV29 === "function") {
+    restoreListReadingAnchorV29(state.listReadingAnchorV29);
+  } else if (sidebar) {
+    sidebar.scrollTop = state.sidebarScrollTop || 0;
+  }
 
 }
 
@@ -2177,11 +2180,10 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   }
 
   /*
-   * 자동업데이트일 때만 현재 화면 상태를 저장합니다.
-   * 최초 로딩과 수동 필터 동작에는 영향을 주지 않습니다.
+   * 자동업데이트의 화면 상태는 응답/좌표 준비 후 실제 렌더 직전에 저장합니다.
+   * 요청을 기다리는 동안의 스크롤·선택 변경을 과거 상태로 되돌리지 않습니다.
    */
-  var autoUpdateViewState = isAuto ? captureAutoUpdateViewState() : null;
-  if (autoUpdateViewState) autoUpdateViewState.preserveVisibleListV1 = false;
+  var autoUpdateViewState = null;
   var autoUpdateDataSignatureV638 = isAuto
     ? getItemsDataSignatureV638(allItems || [])
     : "";
@@ -2462,6 +2464,10 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       }
 
       /* 최신 전체 CSV를 먼저 반영하고 필요한 좌표만 별도로 준비합니다. */
+      if (isAuto) {
+        autoUpdateViewState = captureAutoUpdateViewState();
+        autoUpdateViewState.preserveVisibleListV1 = false;
+      }
       allItems = rawItems;
       jsListingsCompleteBaseV1 = true;
       jsListingsRevisionV682 = snapshotRevision;
@@ -2505,6 +2511,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       if (!allRowsAlreadyLocatedV691 && !allRowsReadyWithoutSharedCacheV8213) {
         preserveActionSelectionDuringRender = !!isAuto;
         applyFilter();
+        if (isAuto && autoUpdateViewState) restoreAutoUpdateViewState(autoUpdateViewState);
         preserveActionSelectionDuringRender = false;
       }
       (allRowsAlreadyLocatedV691 || allRowsReadyWithoutSharedCacheV8213
@@ -2522,6 +2529,12 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
           !unifiedAppliedV1 &&
           autoUpdateDataSignatureV638 === getItemsDataSignatureV638(doneItems);
 
+        // The user can scroll or select another cluster while network/geocoding
+        // is pending. Capture the live view immediately before replacing it.
+        if (isAuto) {
+          autoUpdateViewState = captureAutoUpdateViewState();
+          autoUpdateViewState.preserveVisibleListV1 = false;
+        }
         allItems = doneItems;
         if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
 
