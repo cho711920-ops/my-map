@@ -29,5 +29,8 @@
     "google-auth-library": "11.0.2",
     "typescript": "5.9.3",
     "wrangler": "^4.130.0"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0"
   }
 }

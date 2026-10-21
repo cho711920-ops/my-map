@@ -1,3 +1,6 @@
+import { pbkdf2Async } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+
 const encoder = new TextEncoder();
 
 export const SESSION_COOKIE = "js_realestate_session";
@@ -53,6 +56,14 @@ function constantTimeEqual(left, right) {
 }
 
 async function deriveLocalPassword(password, salt, iterations) {
+  // Production Workers rejects WebCrypto PBKDF2 above 100,000 iterations,
+  // while Node and local workerd allow it. Keep the existing standard PBKDF2
+  // hash format and work factor using the portable implementation above that cap.
+  if (iterations > 100_000) {
+    return pbkdf2Async(sha256, encoder.encode(String(password || "")), salt, {
+      c: iterations, dkLen: 32, asyncTick: 8
+    });
+  }
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(String(password || "")),

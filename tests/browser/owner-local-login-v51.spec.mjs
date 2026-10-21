@@ -3,7 +3,7 @@ import {test, expect} from "@playwright/test";
 test.beforeEach(async ({context}) => context.route("**/*", route =>
   new URL(route.request().url()).hostname === "127.0.0.1" ? route.continue() : route.abort()));
 
-test("operations user management links the owner's existing identity and does not offer another owner", async ({page}) => {
+async function loadManagement(page) {
   await page.route("**/", route => route.fulfill({contentType: "text/html; charset=utf-8", body: `<!doctype html><html><body>
     <button id="operationsTabUsers" hidden onclick="switchOperationsTab('users')">사용자 관리</button>
     <div id="operationsCenterMessage"></div><div id="operationsUsersPanel"></div>
@@ -17,6 +17,10 @@ test("operations user management links the owner's existing identity and does no
     </script><script src="/js/operations-admin-v1.js"></script></body></html>`}));
   await page.goto("/");
   await page.getByRole("button", {name: "사용자 관리"}).click();
+}
+
+test("operations user management links the owner's existing identity and does not offer another owner", async ({page}) => {
+  await loadManagement(page);
   const form = page.locator(".operations-local-user-form-v1");
   await expect(form.locator('select option[value="owner@example.com"]')).toHaveText(/내 계정/);
   await expect(form.locator('select option[value="other@example.com"]')).toHaveCount(0);
@@ -29,6 +33,36 @@ test("operations user management links the owner's existing identity and does no
   await expect(page.locator(".operations-local-user-list-v1")).toContainText("소유자");
   await expect(page.locator('.operations-local-user-form-v1 select option[value="owner@example.com"]')).toHaveCount(0);
   await expect(page.locator('[data-local-password="myowner"]')).toHaveValue("");
+});
+
+test("issuance shows progress, prevents repeated requests and allows retry after a server failure", async ({page}) => {
+  await loadManagement(page);
+  await page.evaluate(() => {
+    window.issueCalls = 0;
+    window.JSDataAccessV6.mutate = (action, payload) => new Promise((resolve, reject) => {
+      window.issueCalls++;
+      window.finishIssue = () => { window.issued = {username: payload.username, linkedEmail: payload.linkedEmail}; resolve({ok: true}); };
+      window.failIssue = () => reject(Error('서버 처리 실패 검사'));
+    });
+  });
+  const form = page.locator('.operations-local-user-form-v1');
+  await form.getByLabel('로그인 아이디').fill('myowner');
+  await form.locator('select').selectOption('owner@example.com');
+  await form.locator('[name="password"]').fill('fixture-private-password');
+  const button = form.locator('button[type="submit"]');
+  await button.click();
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveText('연결 중…');
+  await page.evaluate(() => document.querySelector('.operations-local-user-form-v1').requestSubmit());
+  expect(await page.evaluate(() => window.issueCalls)).toBe(1);
+  await page.evaluate(() => window.failIssue());
+  await expect(page.locator('#operationsCenterMessage')).toHaveText('서버 처리 실패 검사');
+  await expect(button).toBeEnabled();
+  await button.click();
+  expect(await page.evaluate(() => window.issueCalls)).toBe(2);
+  await page.evaluate(() => window.finishIssue());
+  await expect(page.locator('#operationsCenterMessage')).toContainText('로그인 아이디를 연결');
+  await expect(page.locator('.operations-local-user-form-v1 [name="password"]')).toHaveValue('');
 });
 
 test("expired session and unavailable Google library still allow local login and retain same-account storage", async ({page}) => {

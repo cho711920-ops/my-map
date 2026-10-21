@@ -316,6 +316,12 @@
   global.saveLocalAccountV1 = function (event) {
     event.preventDefault();
     var form = event.currentTarget;
+    if (form.dataset.saving === "true") return;
+    if (!form.reportValidity()) return;
+    var submit = form.querySelector('button[type="submit"]');
+    form.dataset.saving = "true";
+    if (submit) { submit.disabled = true; submit.textContent = "연결 중…"; }
+    setMessage("아이디를 기존 계정에 연결하고 있습니다. 잠시 기다려 주세요.", "loading");
     apiPost("saveLocalAccount", {
       username: form.username.value,
       linkedEmail: form.linkedEmail.value,
@@ -324,7 +330,11 @@
       active: true
     }).then(function () { form.reset(); return loadUsers(); })
       .then(function () { setMessage("기존 계정에 로그인 아이디를 연결했습니다. 다음 접속부터 Google 또는 아이디로 로그인할 수 있습니다.", "success"); })
-      .catch(function (error) { setMessage(error.message, "error"); });
+      .catch(function (error) { setMessage(error.message, "error"); })
+      .finally(function () {
+        delete form.dataset.saving;
+        if (submit) { submit.disabled = false; submit.textContent = "아이디 발급"; }
+      });
   };
   global.updateLocalAccountV1 = function (encodedUsername) {
     var username = decodeURIComponent(encodedUsername || "");
