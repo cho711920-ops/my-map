@@ -52,4 +52,7 @@ test('full-size cold list renders without a cached desktop snapshot',async({page
     heap:performance.memory?.usedJSHeapSize,stages:__startupStages}));
   console.log(JSON.stringify({project:test.info().project.name,elapsedMs:Date.now()-start,csvBytes:csv.length,unifiedBytes:unified.length,...report,errors}));
   expect(errors).toEqual([]);
+  // The previous full-size path blocked this CPU-limited fixture for >9s.
+  // Keep a generous margin for hosts while rejecting that regression.
+  expect(report.maxLongTask).toBeLessThan(6000);
 });
