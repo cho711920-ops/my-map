@@ -17,4 +17,9 @@
 - 기존 로드뷰 브라우저PC4개 회귀 통과. 지도 선택 함수는 실제 소스를 사용하고 외부 지도 렌더링/로드뷰 SDK 경계만 대체.
 - 전체1762중1751통과/기존11실패. v53 실패 이름 집합과 정확히 일치.
 - ESLint/typecheck/build/diff 및 Wrangler4.124 dry-run 통과.
-- 실제 로그인 운영 화면 조작은 하지 않음. 운영 배포/확인 결과 후속 기록.
+- 실제 로그인 운영 화면 조작은 하지 않음.
+
+운영 완료
+- 제품2ddf9f1/Worker0556770b-d1b8-4386-ac72-d25f1a2a32fe/정적 캐시a3cc41b22f5d90249084b6dc.
+- 양 도메인 HTML200/no-store/빌드SHA 일치, 연결JS/CSS90개 각각200/SHA 일치. 기존 비로그인401/로그인 설정 유지 확인.
+- outputs/list-action-v54-live-verification.json. 새로고침1회 필요, 재수집 불필요.
