@@ -24,4 +24,9 @@
 - ESLint/TypeScript/build/git diff --check/Worker dry-run 통과.
 - 운영 데이터 일괄 수정, 수집 실행·재시작, 계정 변경은 하지 않음. 기존 수집 데이터로 적용되므로 재수집 불필요.
 
-배포 후 실제 Worker 버전과 공개 자산 대조 결과는 아래 추가 기록.
+운영 반영 완료
+- 제품 커밋8d11241, codex/whole-building-groups-v55 원격 푸시 완료.
+- Worker e2b7ca4f-0e06-4d68-9bb7-43ff053bf7d2 / 공개 캐시997a3bf2ee4b607303d1af39.
+- js-map.com / www.js-map.com HTML200/no-store 및 연결 JS/CSS90개씩 SHA 전부 일치.
+- 미인증 목록/상세API401, 잘못된 세션 쿠키 제거401, 아이디 로그인 활성 상태 유지 확인.
+- 사용자 새로고침1회 안내. 실제 운영 로그인 지도 UI는 여전히 미검증.
