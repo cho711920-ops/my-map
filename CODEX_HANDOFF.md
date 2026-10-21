@@ -1,5 +1,13 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-21 태블릿 로딩·v66 조회 회귀 v67
+
+- 실제 tail에서 CSV/원본 두 요청45.7초 canceled, R2 둘다404 확인. v66 CSV500 page/원본 page마다 helper2회/multipart complete 대기 및 cold build lifetime 누락이 지연에 영향. 로딩 문구만 표시하는 v65로 해결됐다고 말하지 않음.
+- CSV3000 page 복구+bounded 변환(현재 규모 DB왕복73→13), source4000 page 유지+전체 page 뒤 manual helper2회(64→32), compact 수동표현 적용/명시분리 표지 및 final parent 경합 proof 유지. R2 고정5MiB part 최대2개 병행/정렬 complete·실패 abort. Cold build waitUntil, badge-only는 cache 유지+기존 delta, 정기작업은 absent cache만 생성.
+- 실제 D1 SELECT-only 읽기: CSV63,131,006bytes/13조회19.8초, 원본67,334개/32조회42.2초(PC API 왕복 포함, 실제 모바일 완료 시간 아님). R2 CSV22:38·원본22:39:35 KST 완성200 확인. 실제 Samsung 최종 노출은 미확인, 브라우저 재조회1회 필요. 운영/개인 데이터·진행 수집 조작 없음.
+- 신규Node4/관련27통과, 전체1877/1866통과·기존11실패 동일. PC·모바일/Samsung1280 touch 화면 크기 로딩 회귀14통과. local workerd/R2 89.8MB 전후SHA동일, Node heap128제한 성공/관측59MiB(Workers 전체 한도와 구별). lint/type/build/diff 통과.
+- 제품a61c547+a781dae/Worker735c1a22-9c24-4037-b750-c5f1f8024206/프런트cache7bb5793d44d40bc321945cff 유지, 양도메인HTML/90자산·401 확인. [원인·검수·한계](docs/startup-latency-v67-20261021.txt). 매매 수집 완료와 혼동 금지.
+
 ## 2026-10-21 매매 미완료·서버 메모리 v66
 
 - Workers 공식 실행 통계에서 반복 exceededMemory 확인(19:31/20:02/20:05 KST 미확인 claim 시각과 근접). 모든 개별 요청의 stack까지는 미확보. 앞선 속도/receipt 보완이 강제 종료까지 해결하지 못했음.

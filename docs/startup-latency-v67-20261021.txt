@@ -1,0 +1,32 @@
+2026-10-21 태블릿 목록 장기 대기·v66 조회 회귀 보완 v67
+
+제보: Samsung Internet 가로 화면에서 지도만 표시되고 '매물 불러오는 중'이 오래 유지됨.
+
+운영에서 실제 확인한 문제
+- 실시간 Worker tail: /api/sheet와 /api/data?action=unifiedListings가 각각45,737ms/45,747ms에서 canceled. 이는 프런트 전체 body 조회 제한45초와 일치. 이미 배포한 v65는 로딩 안내를 표시했지만 서버 전체 조회가 제한 안에 끝나지 않는 문제까지 해결한 것은 아님.
+- v66 메모리 보완에서 CSV page3000→500으로 DB 왕복을 늘렸고, 원본마다 page별 manual helper2회도 추가했음. multipart complete 이전에는 응답을 주지 않으면서 cold build에 waitUntil도 없어 접속 종료 시 미완성 cache가 반복될 수 있었음. 오늘 변경이 초기 로딩 지연에 영향을 준 회귀임.
+- 조회 당시 R2 전체 CSV/원본 cache가 모두404. 정기 승강기 정보 갱신은 매물 ID delta를 이미 발행하지만 전체 CSV cache도 매번 지우고 있었음. 빈 cache→느린 전체 생성→45초 취소→다시 전체 생성 경로와 맞물림.
+
+보완
+1. CSV는 page3000으로 되돌리되 전체 원문/CSV를 쌓지 않는 v66 bounded 변환 유지. 실제 공개 대상36,035개 규모에서 DB 조회73회 상당→13회.
+2. 원본은 page4000을 유지하면서 narrow manual helper를 모든 source page 뒤에 딱2회 읽고 compact room/floor/manual flags에 적용. 각 광고 금융조건을 바꾸지 않고 명시적 개별 분리 표지도 saleSummary에 유지. final parent proof는 두 helper 뒤에서 대조하므로 편집/원본 추가 경합을 잘못 인증하지 않음. 공개 원본67,334개 기준 전체조회64회 상당→32회.
+3. 두 고정5MiB R2 조각을 동시에 업로드(최대2개), 응답 순서와 무관하게 partNumber로 complete. 전체 payload/무제한 tee 없음. 실패 시 이미 진행한 part를 정리한 뒤 abort, 기존 완성 cache 보존.
+4. Cold build를 context.waitUntil에 즉시 등록, 요청 연결이 끊겨도 허용된 background lifetime 안에 complete할 수 있게 함. 사용자 요청의 기존45초 제한을 늘리지 않음.
+5. 승강기 정보만 바뀌는 정기 작업은 전체 cache를 지우지 않고 기존 exact ID delta/revision 사용. 실제 review/source/수동 변경의 기존 무효화는 유지. 정기 작업은 존재하지 않는 전체 cache만 미리 완성. cache2개 head 확인을 추가하나 이미 있는 cache를 매분 D1 전체 재생성하지 않음.
+
+운영 읽기 검증
+- 동일 제품 함수를 D1 읽기 전용 adapter로 실행(SELECT 외 거절, DB 쓰기0). CSV19,812ms/13queries/63,131,006bytes; 원본42,225ms/32queries/67,334 originals/36,035groups. 이 시간은 PC→Cloudflare API 왕복을 포함한 데이터 읽기 시간이며 모바일 전체 화면 완료나 Worker multipart 업로드 시간으로 말하지 않음. 모든 값은 지도 카드 개수와 다른 원본/DB 범위임.
+- 배포 후 정기/요청 생성으로 R2 CSV cache22:38:23 및22:38:57 KST, 원본 cache22:39:35 KST 완성200 확인. 배포 직후 이전 cold 요청은65/75초 뒤 canceled로도 관측됐으므로 첫 생성 자체를 무조건 빠르다고 보고하지 않음. 실제 기기에서 새로고침 후 최종 표시는 미확인.
+- 실제 UI 자동화는 허용 browser inventory에 수집/사이트 Edge가 없고 앞선 native URL 가드 차단 이력도 있어 우회하지 않음. 인증을 약화시키거나 소유자 cookie를 만들어 실제 로그인한 것처럼 검증하지 않음.
+
+검수·배포
+- 신규Node4개: badge-only cache 보존/review 무효화, missing-only sequential warming, 금융조건·manual room·명시 분리 보존, 지연된 R2 응답의 최대2개 업로드/정확 bytes/정렬 complete. 관련27개 통과. 전체1877개 중1866통과·기존11실패 동일.
+- PC/모바일 v65 로딩·401·오프라인·응답정체·스크롤/메모 보존·Samsung1280 touch 화면 크기 회귀14개 통과(실제 Samsung 기기 시험 아님).
+- local workerd/R2 합성 CSV89,764,846 bytes 전후 SHA 동일. Node heap128MiB 제한 시험에서 수정경로 성공/관측59MiB. Workers 총메모리 한도와 같은 측정치로 일반화하지 않음.
+- lint/type/build/diff 통과. 제품 a61c547 + a781dae, 최종 Worker735c1a22-9c24-4037-b750-c5f1f8024206 배포. 프런트cache7bb5793d44d40bc321945cff 유지. 양 도메인HTML/90자산SHA/invalid session clear·401 확인. 운영 원본/사진/개인 상태/수집 진행 조작 없음. 매매 전체 수집 완료 작업과 구분.
+
+산출물 outputs/v67-live-tail.log, v67-after-deploy-tail.log, v67-steady-tail.log,
+production-read-v67-report.json, v67-final-focused.log, v67-all-tests-final.log,
+v67-loading-browser.log, v67-workerd-memory.log, v67-cache-ready.log,
+v67-deploy-final.log, startup-latency-v67-live-verification.json.
+향후 cache stampede/매우 느린 cold build는 이 시간·query 수·실제 completed cache를 다시 확인해 판단. 단순 timeout 상향이나 보호 기준 완화로 해결하지 말 것.
