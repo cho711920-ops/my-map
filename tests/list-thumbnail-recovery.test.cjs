@@ -323,3 +323,17 @@ test('failed small-photo recovery is bounded to the exact original then its exis
   assert.equal(card.image.getAttribute('data-thumbnail-source-v8144'),raw);
   assert.equal(card.parent.querySelector('[data-thumbnail-error-v8144]').textContent,'사진 불러오기 실패');
 });
+
+test('queued callbacks for detached cards and a replaced scroll root never start old photo requests',()=>{
+  const {api,window}=runtime(),observers=[],attributes=new Map([['data-thumbnail-pending-v69',original]]),writes=[];
+  const image={isConnected:false,getAttribute:key=>attributes.get(key),removeAttribute:key=>attributes.delete(key),setAttribute:(key,value)=>attributes.set(key,value)};
+  Object.defineProperty(image,'src',{set:value=>{writes.push(value);}});
+  const list={querySelectorAll:()=>[image],contains:target=>target===image};let root={};
+  window.document.getElementById=id=>id==='list'?list:root;
+  window.IntersectionObserver=function(callback){this.callback=callback;this.disconnect=()=>{};this.observe=()=>{};this.unobserve=()=>{};observers.push(this);};
+  api.prepareListThumbnails();observers[0].callback([{isIntersecting:true,target:image}]);
+  assert.deepEqual(writes,[]);
+  image.isConnected=true;root={};api.prepareListThumbnails();
+  observers[0].callback([{isIntersecting:true,target:image}]);assert.deepEqual(writes,[]);
+  observers[1].callback([{isIntersecting:true,target:image}]);assert.deepEqual(writes,[original]);
+});

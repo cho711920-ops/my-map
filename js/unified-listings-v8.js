@@ -345,14 +345,16 @@
     if (!thumbnailObserverV69 || thumbnailObserverRootV69 !== root) {
       thumbnailObserverRootV69 = root;
       try {
-        thumbnailObserverV69 = new global.IntersectionObserver(function(entries) {
+        var observer = new global.IntersectionObserver(function(entries) {
+          if (thumbnailObserverV69 !== observer) return;
           var prioritized = 0;
           entries.forEach(function(entry) {
-            if (!entry.isIntersecting) return;
-            thumbnailObserverV69.unobserve(entry.target);
+            if (!entry.isIntersecting || !entry.target.isConnected || !list.contains(entry.target)) return;
+            observer.unobserve(entry.target);
             activate(entry.target, prioritized++ < 2 ? 'high' : 'auto');
           });
         }, {root: root, rootMargin: '160px 0px', threshold: 0});
+        thumbnailObserverV69 = observer;
       } catch (_) {
         thumbnailObserverV69 = null;
         images.forEach(function(image) { activate(image); });
