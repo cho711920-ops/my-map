@@ -39,6 +39,28 @@ function fixture(t) {
 const expand = result => Object.fromEntries(Object.entries(result.groups).map(([key, values]) => [key,
   values.map(value => Object.fromEntries(result.fields.map((field, index) => [field, value[index]])))]));
 
+test('list and detail project explicit Naver address disclosure without inventing coordinates or exposing raw data', async t => {
+  const f = fixture(t);
+  const cases = [
+    [{saleRaw: {detailInfo: {articleDetailInfo: {isAddressExposed: false}}}}, 'hidden'],
+    [{saleRaw: {detailInfo: {articleDetailInfo: {isAddressExposed: true, isJibunAddressExposed: false}}}}, 'hidden'],
+    [{saleRaw: {articleDetailInfo: {isAddressExposed: true}}}, 'public'],
+    [{articleDetailInfo: {isAddressExposed: 'false'}}, ''],
+    [{}, '']
+  ];
+  cases.forEach(([raw], i) => { f.master('disclosure-' + i); f.source('source-' + i, 'disclosure-' + i, 1, {...raw, secretMarker: 'private-raw'}); });
+  const before = JSON.stringify(f.db.prepare('SELECT * FROM listing_sources ORDER BY id').all());
+  const list = expand(await f.get('unifiedListings'));
+  for (const [i] of cases.entries()) {
+    const detail = await handleD1GetAction(f.env, {}, {action: 'unifiedListingDetail', propertyId: 'disclosure-' + i});
+    assert.equal(list['disclosure-' + i][0].addressDisclosure || '', cases[i][1]);
+    assert.equal(detail.originals[0].addressDisclosure, cases[i][1]);
+    assert.doesNotMatch(JSON.stringify(detail), /private-raw|raw_json/);
+    assert.ok(!detail.originals[0].latitude && !detail.originals[0].longitude);
+  }
+  assert.equal(JSON.stringify(f.db.prepare('SELECT * FROM listing_sources ORDER BY id').all()), before);
+});
+
 test('compact and detail retain each ended ad beside nine live siblings, without raw payload leakage', async t => {
   const f = fixture(t); f.master('M');
   for (let index = 0; index < 10; index++) f.source('ad-' + index, 'M', index === 9 ? 0 : 1,

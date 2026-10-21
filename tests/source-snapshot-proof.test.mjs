@@ -100,7 +100,7 @@ test("scoped originals retain public-ID mapping, candidates, manual edits and ex
   assert.equal(result.items[0].id, "internal");
   assert.equal(result.items[0].source_snapshot_key, result.unified.sourceSnapshotKeys.public);
   assert.equal(result.unified.groups.public.length, 2);
-  assert.equal(result.unified.fields.length, 39);
+  assert.equal(result.unified.fields.length, 40);
   const original = result.unified.groups.public[1], fields = result.unified.fields;
   assert.equal(original[fields.indexOf("candidateEligible")], true);
   assert.match(original[fields.indexOf("thumbnail")], /456\.jpg/);

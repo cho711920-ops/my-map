@@ -26,7 +26,13 @@
 
   function request(url, options) {
     var init = Object.assign({ credentials: "same-origin" }, options || {});
-    return global.fetch(url, init);
+    return global.fetch(url, init).then(function(response) {
+      if (response.status === 401 && typeof global.dispatchEvent === "function" && typeof global.Event === "function") {
+        global.dispatchEvent(new global.Event("js-auth-required"));
+      }
+      // Keep the original failure; never replay a write after logging in.
+      return response;
+    });
   }
 
   // Bound the complete read, including its response body, not just the headers.

@@ -30,7 +30,7 @@ const UNIFIED_FIELDS = [
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
   "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice", "saleSummary",
   "sourceListingId", "providerSourceId", "active", "floor", "literalRoom", "sourceFloor", "sourceRoom",
-  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt"
+  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt", "addressDisclosure"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -463,6 +463,14 @@ function originalFloorMetadataSql() {
       'room', ${sourceJsonScalar("room", "hoNumber")}) ELSE '{}' END`;
 }
 
+function originalAddressDisclosureSql() {
+  const paths = ["saleRaw.detailInfo.articleDetailInfo", "saleRaw.articleDetailInfo", "articleDetailInfo"];
+  const flags = name => `COALESCE(${paths.map(path => `json_type(raw_json,'$.${path}.${name}')`).join(",")},'')`;
+  return `CASE WHEN source='네이버' THEN CASE
+    WHEN ${flags("isAddressExposed")}='false' OR ${flags("isJibunAddressExposed")}='false' THEN 'hidden'
+    WHEN ${flags("isAddressExposed")}='true' THEN 'public' ELSE '' END ELSE '' END`;
+}
+
 async function unifiedListings(env, listingIds = null) {
   const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
   if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
@@ -478,6 +486,7 @@ async function unifiedListings(env, listingIds = null) {
       ${availabilityKindSql("listing_sources")} AS availability_kind,
       ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
       ${originalFloorMetadataSql()} AS floor_metadata_json,
+      ${originalAddressDisclosureSql()} AS address_disclosure,
       CASE WHEN source='공실박스' THEN json_extract(raw_json, '$.list.Photos') END AS gongsil_photos_json,
       CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN
         COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) END AS naver_floor_info_json,
@@ -633,7 +642,8 @@ async function unifiedDetail(env, propertyId) {
       active, missing_count, updated_at, last_collected_at, list_snapshot_json, raw_json,
       ${availabilityKindSql("listing_sources")} AS availability_kind,
       ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
-      ${originalFloorMetadataSql()} AS floor_metadata_json
+      ${originalFloorMetadataSql()} AS floor_metadata_json,
+      ${originalAddressDisclosureSql()} AS address_disclosure
     FROM listing_sources WHERE listing_id = ?1 AND ${publicSourceWhereSql("listing_sources")}
       AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
       AND NOT EXISTS (

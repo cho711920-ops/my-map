@@ -1,5 +1,8 @@
 "use strict";
 
+const EXPECTED_COLLECTOR_BUILD = "1.1.22";
+let updateReloadPending = false;
+
 let state = { config: { targets: [] }, logs: [], runState: null, runReport: null, runReports: {} };
 const selectedOnce = new Set();
 let runPreviewMode = "all";
@@ -14,7 +17,8 @@ const SOURCE_LABELS = { naver: "네이버", daangn: "당근", gongsil: "공실�
 const MARKET_LABELS = { lease: "상가임대", sale: "매매" };
 
 function compatibleWorker(response = state) {
-  return Boolean(response && response.backgroundBuild && response.backgroundBuild === chrome.runtime.getManifest().version);
+  return Boolean(response && response.backgroundBuild === EXPECTED_COLLECTOR_BUILD &&
+    chrome.runtime.getManifest().version === EXPECTED_COLLECTOR_BUILD);
 }
 
 function marketForTarget(target) {
@@ -451,7 +455,21 @@ async function load() {
   const response = await runtime({ type: "JS_AUTO_GET_STATE" });
   if (response.ok) state = response;
   render();
-  const workerMismatch = response.ok && response.backgroundBuild !== chrome.runtime.getManifest().version;
+  const workerMismatch = response.ok && !compatibleWorker(response);
+  // Never unload a collector in progress or discard settings being edited.
+  // An old manifest and old worker can agree while both differ from this file.
+  if (workerMismatch && chrome.runtime.getManifest().version !== EXPECTED_COLLECTOR_BUILD &&
+      !updateReloadPending && !settingsDirty && !(response.runState && response.runState.active)) {
+    const key = "js-auto-reload-" + EXPECTED_COLLECTOR_BUILD;
+    let attempted = false;
+    try { attempted = !!sessionStorage.getItem(key); sessionStorage.setItem(key, "1"); } catch (_) {}
+    if (!attempted) {
+      updateReloadPending = true;
+      message("수집이 종료된 것을 확인했습니다. 새 실행기를 적용하고 다시 연결합니다.");
+      chrome.runtime.reload();
+      return;
+    }
+  }
   message(response.ok ? (workerMismatch ? "이전 실행기 사용 중 · 전용 수집 브라우저 재시작 필요 · " : "") + currentRunStatus(response) : "연결 오류");
 }
 

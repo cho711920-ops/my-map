@@ -5902,7 +5902,7 @@ function showAddressErrors() {
   errors.slice(0,100).forEach(function(item){
     var row=document.createElement('li'),name=document.createElement('strong'),address=document.createElement('p'),reason=document.createElement('p'),actions=document.createElement('div'),retry=document.createElement('button');
     name.textContent=item.name||'이름 미제공';address.textContent=item.address||'주소 미제공';
-    reason.textContent=item.geocodeErrorReason||'주소·건물명 검색 결과 없음';
+    reason.textContent=addressReviewReasonV62(item);
     var originals=item.unifiedDisplayOriginalsV2||item.unifiedAllOriginalsV1||[],source=originals.find(function(o){return o.link;})||item;
     var link=source.link||source.sourceLink||item.sourceLink||item.link;
     if(/^https?:\/\//i.test(link||'')){var original=document.createElement('a');original.href=link;original.target='_blank';original.rel='noopener noreferrer';original.textContent='원본 확인';actions.append(original);}
@@ -5943,6 +5943,15 @@ function addressErrorsForMarketV41() {
     if(!item||!current.has(item)||item.latlng||window.JSListingTradeV1&&!window.JSListingTradeV1.matchesItem(item))return false;
     var key=String(item.propertyId||item.key||'')+'|'+String(item.address||'');if(seen.has(key))return false;seen.add(key);return true;
   });
+}
+
+function addressReviewReasonV62(item) {
+  var originals=item.unifiedDisplayOriginalsV2||item.unifiedAllOriginalsV1||[];
+  var active=originals.filter(function(original){return !original.sourceUnavailable&&original.active!==0;});
+  if(active.length&&active.every(function(original){return original.addressDisclosure==='hidden';})) {
+    return '원본 주소 비공개 · 공개 지번으로 위치를 확정하지 못했습니다. 원본 제공자에게 정확한 지번을 확인해 주세요.';
+  }
+  return item.geocodeErrorReason||'주소·건물명 검색 결과 없음';
 }
 
 function recheckAddressV41(address) {

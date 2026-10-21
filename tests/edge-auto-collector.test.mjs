@@ -12,7 +12,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   const background = read("edge-automation/extension/background.js");
   const content = read("edge-automation/extension/content.js");
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.version, "1.1.21");
+  assert.equal(manifest.version, "1.1.22");
   assert.ok(background.includes(`const BACKGROUND_BUILD = "${manifest.version}";`));
   assert.ok(manifest.content_scripts.some((entry) => entry.world === "MAIN" && entry.js.includes("auto-bridge.js")));
   assert.match(background, /const SOURCE_ORDER = \{ naver: 1, daangn: 2, gongsil: 3 \}/);
@@ -210,7 +210,7 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(install, /Stop-Process -Id \$_.ProcessId/);
   assert.match(read("edge-automation/extension/autorun.js"), /JS_AUTO_RUN_REQUEST/);
   assert.match(read("edge-automation/extension/autorun.js"), /chrome\.runtime\.reload\(\)/);
-  assert.match(read("edge-automation/extension/autorun.js"), /workerState\.backgroundBuild !== manifestVersion/);
+  assert.match(read("edge-automation/extension/autorun.js"), /workerState\.backgroundBuild !== EXPECTED_COLLECTOR_BUILD/);
   assert.match(launch, /if \(\$triggerPages\.Count\)/);
   assert.match(launch, /AddSeconds\(25\)/);
   assert.match(install, /edge-auto-profile\.ps1/);

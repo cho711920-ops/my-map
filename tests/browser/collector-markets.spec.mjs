@@ -21,7 +21,7 @@ function fixtureReport(market) {
 }
 
 test.beforeEach(async ({page, baseURL}) => {
-  const snapshot = {ok: true, backgroundBuild: "1.1.15", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
+  const snapshot = {ok: true, backgroundBuild: "1.1.22", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
     runReport: fixtureReport("sale"), runReports: {lease: fixtureReport("lease"), sale: fixtureReport("sale")}, readiness: {enabled: true, schedule: "11:00", windowsSchedule: "11:00", windowsTaskState: "Ready"}};
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -34,7 +34,7 @@ test.beforeEach(async ({page, baseURL}) => {
   await page.addInitScript(({snapshot}) => {
     window.__collectorSnapshot = snapshot;
     window.__collectorMessages = [];
-    window.chrome = {runtime: {getManifest: () => ({version: "1.1.15"}), sendMessage: (message, callback) => {
+    window.chrome = {runtime: {getManifest: () => ({version: "1.1.22"}), sendMessage: (message, callback) => {
       window.__collectorMessages.push(structuredClone(message));
       if (message.type === "JS_AUTO_GET_STATE") callback(structuredClone(window.__collectorSnapshot));
       else if (message.type === "JS_AUTO_SAVE_CONFIG") {
@@ -141,4 +141,23 @@ test("stale background worker cannot launch a mixed run from a new sale UI", asy
   // A dialog opened before the status poll must also fail closed.
   await page.locator("#runConfirmed").dispatchEvent("click");
   expect(await page.evaluate(() => window.__collectorMessages.filter(message => /JS_AUTO_RUN_(NOW|SELECTED)/.test(message.type)))).toEqual([]);
+});
+
+test('old matching manifest and worker wait through an active run and unsaved settings before applying an update once', async ({page}) => {
+  await page.evaluate(async () => {
+    window.__reloads = 0;
+    chrome.runtime.reload = () => window.__reloads++;
+    chrome.runtime.getManifest = () => ({version: '1.1.20'});
+    window.__collectorSnapshot.backgroundBuild = '1.1.20';
+    window.__collectorSnapshot.runState = {active: true};
+    await window.load();
+  });
+  expect(await page.evaluate(() => window.__reloads)).toBe(0);
+  await page.locator('#schedule').fill('12:00');
+  await page.evaluate(async () => { window.__collectorSnapshot.runState = {active: false}; await window.load(); });
+  expect(await page.evaluate(() => window.__reloads)).toBe(0);
+  await page.locator('#save').click();
+  await page.evaluate(async () => { await window.load(); await window.load(); });
+  expect(await page.evaluate(() => window.__reloads)).toBe(1);
+  expect(await page.evaluate(() => window.__collectorMessages.filter(message => /JS_AUTO_RUN_(NOW|SELECTED|REQUEST)/.test(message.type)))).toEqual([]);
 });

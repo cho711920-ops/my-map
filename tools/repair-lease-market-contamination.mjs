@@ -745,11 +745,11 @@ function invalidateRepairCaches(root, directory, listingIds = []) {
   const keys = [
     "api-cache/d1-sheet-v3-source-proof.csv",
     "api-cache/unified-listings-v14-source-proof.json",
-    "api-cache/unified-listings-v22-rental-scenarios-v61.json",
+    "api-cache/unified-listings-v23-address-disclosure-v62.json",
     "api-cache/operations-dashboard-v4-source-evidence.json",
     "api-cache/revision/listings.json",
     "api-cache/revision/operations.json",
-    ...listingIds.map((id) => `api-cache/unified-detail-v20-rental-scenarios-v61/${clean(id)}.json`)
+    ...listingIds.map((id) => `api-cache/unified-detail-v21-address-disclosure-v62/${clean(id)}.json`)
   ].filter(Boolean);
   const results = [...new Set(keys)].map((key) => {
     try {

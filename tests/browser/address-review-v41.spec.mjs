@@ -11,6 +11,19 @@ test.beforeEach(async({page,context})=>{
   });
 });
 async function mode(page,isMobile,value){await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption(value);}
+
+test('original address non-disclosure is explained without hiding the ad or guessing its coordinates', async ({page}) => {
+  await page.evaluate(() => {
+    const item = allItems[0];
+    item.unifiedDisplayOriginalsV2 = [{active: 1, addressDisclosure: 'hidden'}];
+    errorItems = [item]; updateErrorStatus();
+  });
+  await page.locator('#errorStatus').click();
+  await expect(page.locator('#addressReviewV41')).toContainText('원본 주소 비공개');
+  await expect(page.locator('#addressReviewV41')).toContainText('정확한 지번');
+  expect(await page.evaluate(() => !!allItems[0].latlng)).toBe(false);
+  expect(await page.evaluate(() => allItems.length)).toBe(4);
+});
 test('address review separates markets and ignores duplicate or obsolete snapshot errors',async({page,isMobile})=>{
   await expect(page.locator('#errorStatus')).toHaveText('주소 확인 2개');
   await page.locator('#errorStatus').press('Enter');await expect(page.locator('#addressReviewV41 li')).toHaveCount(2);

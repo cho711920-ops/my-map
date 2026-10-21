@@ -80,6 +80,7 @@ export function withSourceOriginalMetadata(original, row, manualRooms = new Map(
     literalRoom, sourceFloor: rawFloor == null ? "" : rawFloor, sourceRoom: literalRoom,
     hasManualRoomOverride: manual, roomManuallyEditedV1: manual,
     sourceListingId, providerSourceId, active: unavailable ? 0 : 1,
+    addressDisclosure: ["hidden", "public"].includes(row.address_disclosure) ? row.address_disclosure : "",
     sourceUnavailable: unavailable, missingCount: unavailable ? Math.max(1, Number(row.missing_count) || 0) : 0,
     ...sourceAvailability(row.active, row.availability_kind),
     manualDisplayFields: MANUAL_REPRESENTATIVE_FIELDS.filter(field => manualFields.get(clean(row.listing_id))?.has(field)).join(","),

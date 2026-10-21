@@ -53,10 +53,10 @@ function representativeBody() {
     ',"groups":{' + groups.join(",") + '},"sourceSearchIds":{},"originalCount":48200,"unavailableCount":6320,"source":"D1"}';
 }
 
-test("the current large D1 compact frame skips full parsing and preserves all 39 wire fields unchanged", () => {
+test("the current large D1 compact frame skips full parsing and preserves all 40 wire fields unchanged", () => {
   const body = representativeBody();
   assert.ok(Buffer.byteLength(body) >= 24_000_000, "Exercise a representative cache at least as large as the observed 23.7 MB body");
-  assert.equal(fields.length, 39);
+  assert.equal(fields.length, 40);
   const h = harness({ forbidParse: true });
   assert.equal(h.convert(body), body);
   assert.equal(h.calls(), 0);

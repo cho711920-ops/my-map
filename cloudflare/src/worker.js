@@ -42,7 +42,7 @@ const CANONICAL_HOST = "js-map.com";
 const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v3-source-proof.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
-const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v22-rental-scenarios-v61.json";
+const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v23-address-disclosure-v62.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-no-crm-v4-source-evidence.json";
 const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
@@ -61,7 +61,7 @@ const BROWSER_REVALIDATED_ACTIONS = new Set(["unifiedListings", "geocodeCache"])
 const UNIFIED_COMPACT_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "thumbnail", "photoCount", "contactCount", "revision", "sourceUnavailable", "missingCount", "active",
-  "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt"
+  "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt", "addressDisclosure"
 ];
 const IMAGE_CACHE_HOSTS = new Set([
   "img.kr.gcp-karroter.net",
@@ -446,7 +446,7 @@ function deleteR2Cache(env, context, keys) {
 
 function unifiedDetailCacheKey(propertyId) {
   const safe = String(propertyId || "").trim();
-  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v20-rental-scenarios-v61/${safe}.json` : "";
+  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v21-address-disclosure-v62/${safe}.json` : "";
 }
 
 function mutationAction(body) {

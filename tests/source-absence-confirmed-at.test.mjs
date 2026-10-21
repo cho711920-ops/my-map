@@ -90,7 +90,7 @@ test('compact, detail and bounded candidate originals expose only verified absen
   f.source('malformed',0,'census_missing','{broken');
   const before=f.db.prepare('SELECT * FROM listing_sources ORDER BY id').all();
   const list=await f.get('unifiedListings');
-  assert.equal(list.fields.at(-1),'absenceConfirmedAt');
+  assert.equal(list.fields.at(-2),'absenceConfirmedAt');
   const detail=await f.get('unifiedListingDetail'),candidates=await f.get('transactionCandidates');
   for (const originals of [expand(list),detail.originals,candidates.candidates[0].candidateOriginals]) {
     assert.equal(originals.find(original=>original.originalId==='valid').absenceConfirmedAt,checkedAt);

@@ -2,6 +2,8 @@ let googleClientId = "";
 let authenticatedAssetsPromise = null;
 let deferredAuthenticatedAssetsPromise = null;
 let sessionRetryTimer = 0;
+let sessionCheckPending = null;
+let lastSessionCheckAt = 0;
 let authenticatedHeadStaticAssetsAppended = false;
 let authenticatedBodyStaticAssetsAppended = false;
 let deferredAuthenticatedScripts = [];
@@ -25,6 +27,7 @@ function setApplicationIsolation(locked) {
 }
 
 function authGate() {
+  setApplicationIsolation(true);
   let gate = document.getElementById("jsAuthGate");
   if (gate) return gate;
   gate = document.createElement("section");
@@ -435,7 +438,20 @@ async function sessionRequest(payload) {
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.message || "로그인 승인에 실패했습니다.");
-  return result;
+  // A successful POST alone does not prove the tablet saved its session cookie.
+  const check = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+  const session = await check.json().catch(() => ({}));
+  if (!check.ok || !session.email) throw new Error("로그인 연결을 확인하지 못했습니다. 브라우저의 사이트 쿠키 허용을 확인하고 다시 로그인해 주세요.");
+  return session;
+}
+
+async function finishLogin(session) {
+  // Reauthentication into the same account keeps the current list and drafts.
+  // A different identity must boot its own account-scoped application.
+  if (window.JSAuthenticatedAccountEmail && window.JSAuthenticatedAccountEmail === session.email) {
+    lastSessionCheckAt = Date.now();
+    await unlock(session.email);
+  } else location.reload();
 }
 
 function loadGoogleLibrary() {
@@ -497,8 +513,7 @@ async function loadLoginOptions() {
 async function loginWithGoogle(response) {
   status("승인된 계정인지 확인하고 있습니다…");
   try {
-    await sessionRequest({ loginType: "google", credential: response && response.credential });
-    location.reload();
+    await finishLogin(await sessionRequest({ loginType: "google", credential: response && response.credential }));
   } catch (error) {
     status(error.message || "로그인에 실패했습니다.");
   }
@@ -511,13 +526,13 @@ async function loginWithLocal(event) {
   status("아이디와 비밀번호를 확인하고 있습니다…");
   if (submit) submit.disabled = true;
   try {
-    await sessionRequest({
+    const session = await sessionRequest({
       loginType: "local",
       username: form.username.value,
       password: form.password.value
     });
     form.password.value = "";
-    location.reload();
+    await finishLogin(session);
   } catch (error) {
     form.password.value = "";
     form.password.focus();
@@ -559,23 +574,31 @@ async function logout(trigger) {
   }
 }
 
-async function start() {
-  authGate();
+async function checkSession(options) {
+  if (!options.background) authGate();
   try {
     const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+    lastSessionCheckAt = Date.now();
     if (response.ok) {
       if (sessionRetryTimer) clearTimeout(sessionRetryTimer);
       sessionRetryTimer = 0;
       const result = await response.json();
+      if (options.background && !document.getElementById("jsAuthGate")) {
+        if (window.JSAuthenticatedAccountEmail !== result.email) location.reload();
+        return;
+      }
       await unlock(result.email);
       return;
     }
     if (response.status !== 401 && response.status !== 403) {
       throw new Error("인터넷 연결을 기다리는 중입니다.");
     }
+    authGate();
     const loginNotice = await loadLoginOptions();
-    status(loginNotice || "");
+    status([options.expired || options.background ? "로그인 세션이 만료되었습니다. 다시 로그인해 주세요." : "", loginNotice].filter(Boolean).join(" "));
   } catch (error) {
+    // A temporary network loss on resume must not lock a usable open screen.
+    if (options.background && !document.getElementById("jsAuthGate")) return;
     status(error.message || "인터넷 연결을 기다리는 중입니다.");
     if (!sessionRetryTimer) {
       sessionRetryTimer = setTimeout(function () {
@@ -585,6 +608,25 @@ async function start() {
     }
   }
 }
+
+function start(options = {}) {
+  if (sessionCheckPending) return sessionCheckPending;
+  sessionCheckPending = checkSession(options).finally(() => { sessionCheckPending = null; });
+  return sessionCheckPending;
+}
+
+window.addEventListener("js-auth-required", () => {
+  authGate();
+  start({ expired: true });
+});
+window.addEventListener("pageshow", event => {
+  if (event.persisted) start({ background: true });
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - lastSessionCheckAt >= 60000) {
+    start({ background: true });
+  }
+});
 
 window.jsSecureLogout = logout;
 if (document.readyState === "loading") {
