@@ -601,7 +601,16 @@ async function handleListingImage(request, env, context) {
 
 async function handleSession(request, env) {
   if (request.method === "GET") {
-    const user = await requireSession(request, env);
+    let user;
+    try {
+      user = await requireSession(request, env);
+    } catch (error) {
+      if (![401, 403].includes(Number(error?.statusCode))) throw error;
+      return json({ ok: false, message: error.message }, Number(error.statusCode), {
+        "cache-control": "no-store",
+        "set-cookie": clearSessionCookieHeader(env)
+      });
+    }
     const headers = { "cache-control": "no-store" };
     if (!user.authType) {
       const upgradedUser = { ...user, authType: "google" };

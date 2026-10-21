@@ -2104,8 +2104,10 @@ async function saveLocalAccount(env, user, body) {
     .bind(username).first();
   const linkedEmail = clean(body.linkedEmail || existing?.linked_email).toLowerCase();
   const linkedProfile = linkedEmail ? await accessProfile(linkedEmail, env) : null;
-  if (!linkedProfile || !new Set(["admin", "member", "viewer"]).has(clean(linkedProfile.role))) {
-    throw Object.assign(new Error("사용 허용된 친구 Google 계정을 선택해 주세요."), { statusCode: 400 });
+  const ownOwnerIdentity = clean(linkedProfile?.role) === "owner" &&
+    linkedEmail === clean(user?.email).toLowerCase();
+  if (!linkedProfile || !ownOwnerIdentity && !new Set(["admin", "member", "viewer"]).has(clean(linkedProfile.role))) {
+    throw Object.assign(new Error("본인 소유자 계정 또는 사용 허용된 Google 계정을 선택해 주세요."), { statusCode: 400 });
   }
   const duplicateLink = await env.DB.prepare(`SELECT username FROM local_accounts
     WHERE lower(linked_email)=lower(?1) AND username<>?2 LIMIT 1`).bind(linkedEmail, username).first();

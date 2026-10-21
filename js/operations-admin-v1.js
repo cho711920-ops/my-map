@@ -132,14 +132,14 @@
     });
     var linkableUsers = state.users.filter(function (entry) {
       var email = text(entry.email).toLowerCase();
-      return entry.active && entry.role !== "owner" && !linkedByEmail[email];
+      return entry.active && (entry.role !== "owner" || email === text(state.profile.email).toLowerCase()) && !linkedByEmail[email];
     });
     var linkOptions = linkableUsers.map(function (entry) {
       return '<option value="' + escapeHtml(entry.email) + '">' +
-        escapeHtml((entry.displayName || entry.email.split("@")[0]) + " · " + entry.email) + '</option>';
+        escapeHtml((entry.role === "owner" ? "내 계정 · " : "") + (entry.displayName || entry.email.split("@")[0]) + " · " + entry.email) + '</option>';
     }).join("");
     panel.innerHTML = '<section class="operations-admin-toolbar"><div><strong>사용자 권한 관리</strong>' +
-      '<span>친구는 같은 계정으로 Google 로그인과 발급 아이디 로그인을 모두 이용합니다.</span></div></section>' +
+      '<span>본인과 승인된 사용자는 같은 계정으로 Google 로그인과 아이디 로그인을 모두 이용합니다.</span></div></section>' +
       '<div class="operations-user-section-title-v1"><strong>Google 승인 계정</strong><span>승인된 Google 이메일만 로그인할 수 있습니다.</span></div>' +
       '<form class="operations-user-form-v1" onsubmit="saveAllowedUserV1(event)">' +
       '<input name="email" type="email" placeholder="Google 이메일" required>' +
@@ -162,9 +162,9 @@
           '<button type="button" data-save-allowed-user="' + escapeHtml(encodeURIComponent(entry.email)) + '">저장</button>') + '</article>';
       }).join("") + '</div>' +
       (state.profile.canManageLocalAccounts ? '<div class="operations-user-section-title-v1 operations-local-title-v1"><strong>발급 아이디</strong>' +
-        '<span>기존 Google 계정에 아이디·비밀번호를 연결하므로 찜·임장 기록과 권한이 그대로 유지됩니다.</span></div>' +
+        '<span>기존 Google 계정에 아이디·비밀번호를 연결하므로 찜·임장 기록과 권한이 그대로 유지됩니다. 본인은 연결할 계정에서 ‘내 계정’을 선택하세요.</span></div>' +
         '<form class="operations-user-form-v1 operations-local-user-form-v1" onsubmit="saveLocalAccountV1(event)">' +
-        '<input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}" placeholder="친구 아이디" autocomplete="off" required>' +
+        '<input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,31}" placeholder="로그인 아이디 (3~32자)" aria-label="로그인 아이디" autocomplete="off" autocapitalize="none" required>' +
         '<select name="linkedEmail" required ' + (linkOptions ? '' : 'disabled') + '><option value="">연결할 Google 계정</option>' + linkOptions + '</select>' +
         '<input name="displayName" type="text" placeholder="표시 이름 (선택)">' +
         '<input name="password" type="password" minlength="10" maxlength="128" placeholder="비밀번호 10자 이상" autocomplete="new-password" required>' +
@@ -323,7 +323,7 @@
       password: form.password.value,
       active: true
     }).then(function () { form.reset(); return loadUsers(); })
-      .then(function () { setMessage("친구용 아이디를 발급했습니다. 비밀번호는 안전하게 직접 전달해 주세요.", "success"); })
+      .then(function () { setMessage("기존 계정에 로그인 아이디를 연결했습니다. 다음 접속부터 Google 또는 아이디로 로그인할 수 있습니다.", "success"); })
       .catch(function (error) { setMessage(error.message, "error"); });
   };
   global.updateLocalAccountV1 = function (encodedUsername) {

@@ -259,3 +259,67 @@ test("login and master user-management UI expose issued accounts without public 
   assert.doesNotMatch(auth, /finally \{\s*location\.reload\(\)/);
   assert.match(html, /operations-admin-v1\.js\?v=1\.2\.0-linked-identity/);
 });
+
+test("owner links an id to the same identity; local and Google sessions retain owner privileges", async () => {
+  let account = null;
+  const db = localDb(null);
+  const basicPrepare = db.prepare;
+  db.prepare = (sql) => ({ bind(...values) {
+    if (/INSERT INTO local_accounts/.test(sql)) return { run: async () => {
+      account = { username: values[0], linked_email: values[1], display_name: values[2], role: values[3],
+        active: values[4], password_salt: values[5], password_hash: values[6], password_iterations: values[7],
+        session_version: 1, failed_attempts: 0, locked_until: "" };
+      return {success: true};
+    }};
+    if (/FROM local_accounts/.test(sql)) return {first: async () => account};
+    if (/UPDATE local_accounts/.test(sql)) return localDb(account).prepare(sql).bind(...values);
+    return basicPrepare(sql).bind(...values);
+  }});
+  const env = { DB: db, ALLOWED_EMAILS: "owner@example.com", SESSION_SECRET: secret,
+    ASSETS: {fetch: async () => new Response("asset")} };
+  const actor = {email: "owner@example.com", role: "owner"};
+  const result = await handleD1PostAction(env, actor, {action: "saveLocalAccount", username: "myowner",
+    linkedEmail: "OWNER@example.com", password: "owner-safe-2026", role: "viewer"});
+  assert.equal(result.role, "owner");
+  assert.equal(account.role, "member", "schema fallback must not grant authority; linked profile supplies owner role");
+  const expired = await createSessionToken(actor, env, Date.now() - 91 * 86400_000);
+  const stale = await worker.fetch(new Request("https://js-map.com/api/session", {
+    headers: {cookie: `js_realestate_session=${expired}`}
+  }), env);
+  assert.equal(stale.status, 401);
+  assert.match((await stale.json()).message, /만료/);
+  assert.match(stale.headers.get("set-cookie"), /Max-Age=0/);
+  assert.equal(stale.headers.get("cache-control"), "no-store");
+  const login = await worker.fetch(new Request("https://js-map.com/api/session", {
+    method: "POST", headers: {origin: "https://js-map.com", "content-type": "application/json", cookie: `js_realestate_session=${expired}`},
+    body: JSON.stringify({loginType: "local", username: "myowner", password: "owner-safe-2026"})
+  }), env);
+  assert.equal(login.status, 200);
+  assert.equal((await login.json()).email, actor.email);
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+  const session = await worker.fetch(new Request("https://js-map.com/api/session", {headers: {cookie}}), env);
+  assert.equal((await session.json()).role, "owner");
+  const google = await verifySessionToken(await createSessionToken({...actor, authType: "google"}, env), env);
+  assert.equal(google.email, actor.email);
+  assert.equal(google.role, "owner");
+  account.active = 0;
+  const revoked = await worker.fetch(new Request("https://js-map.com/api/session", {headers: {cookie}}), env);
+  assert.equal(revoked.status, 403);
+  assert.match(revoked.headers.get("set-cookie"), /Max-Age=0/);
+});
+
+test("non-owners cannot issue ids and an owner cannot issue another owner's login", async () => {
+  for (const role of ["member", "viewer", "admin"]) {
+    await assert.rejects(() => handleD1PostAction({DB: localDb(null)}, {email: "friend@example.com", role}, {
+      action: "saveLocalAccount", username: "myowner", linkedEmail: "owner@example.com", password: "owner-safe-2026"
+    }), error => error.statusCode === 403);
+  }
+  let writes = 0;
+  const env = {ALLOWED_EMAILS: "owner@example.com", DB: {prepare: sql => ({bind: () => ({
+    first: async () => null, run: async () => {if (/local_accounts/.test(sql)) writes++;}
+  })})}};
+  await assert.rejects(() => handleD1PostAction(env, {email: "another@example.com", role: "owner"}, {
+    action: "saveLocalAccount", username: "myowner", linkedEmail: "owner@example.com", password: "owner-safe-2026"
+  }), error => error.statusCode === 400);
+  assert.equal(writes, 0);
+});

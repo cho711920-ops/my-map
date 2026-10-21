@@ -39,7 +39,7 @@ function authGate() {
       <div class="js-auth-logo">J S</div>
       <h1 id="jsAuthTitle">JS부동산</h1>
       <p class="js-auth-subtitle">대전 상가 매물지도</p>
-      <p id="jsAuthDescription">관리자는 Google 계정으로,<br>발급받은 사용자는 아이디로 로그인합니다.</p>
+      <p id="jsAuthDescription">Google 계정 또는 연결한 아이디로 로그인하세요.</p>
       <div id="jsGoogleLogin" class="js-auth-google"></div>
       <div class="js-auth-divider"><span>또는 발급받은 계정</span></div>
       <form id="jsLocalLoginForm" class="js-auth-local" autocomplete="on">
@@ -476,7 +476,12 @@ async function loadLoginOptions() {
     if (!localEnabled) throw new Error("로그인 설정이 아직 완료되지 않았습니다.");
     return;
   }
-  await loadGoogleLibrary();
+  try {
+    await loadGoogleLibrary();
+  } catch (error) {
+    if (!localEnabled) throw error;
+    return "Google 로그인을 불러오지 못했습니다. 연결한 아이디로 로그인할 수 있습니다.";
+  }
   window.google.accounts.id.initialize({
     client_id: googleClientId,
     callback: loginWithGoogle,
@@ -568,8 +573,8 @@ async function start() {
     if (response.status !== 401 && response.status !== 403) {
       throw new Error("인터넷 연결을 기다리는 중입니다.");
     }
-    await loadLoginOptions();
-    status("");
+    const loginNotice = await loadLoginOptions();
+    status(loginNotice || "");
   } catch (error) {
     status(error.message || "인터넷 연결을 기다리는 중입니다.");
     if (!sessionRetryTimer) {
