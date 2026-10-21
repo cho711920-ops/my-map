@@ -2330,27 +2330,22 @@ function showList(items) {
 
 
 function getItemCoordinates(item) {
-  if (!item || !item.latlng) return null;
+  if (!item) return null;
+
+  function validPair(lat, lng) {
+    if (lat == null || lat === "" || lng == null || lng === "") return null;
+    lat = Number(lat); lng = Number(lng);
+    return Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0 &&
+      lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? {lat: lat, lng: lng} : null;
+  }
 
   try {
-    var lat = typeof item.latlng.getLat === "function"
-      ? item.latlng.getLat()
-      : Number(item.lat || item.latitude);
-
-    var lng = typeof item.latlng.getLng === "function"
-      ? item.latlng.getLng()
-      : Number(item.lng || item.longitude);
-
-    if (!isFinite(lat) || !isFinite(lng)) return null;
-
-    return {
-      lat: lat,
-      lng: lng
-    };
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+    var point = item.latlng;
+    var mapped = point && validPair(typeof point.getLat === "function" ? point.getLat() : point.lat,
+      typeof point.getLng === "function" ? point.getLng() : point.lng);
+    if (mapped) return mapped;
+  } catch (_) {}
+  return validPair(item.latitude, item.longitude) || validPair(item.lat, item.lng);
 }
 
 
@@ -3632,6 +3627,50 @@ function startKakaoRoadviewV653(sequence) {
   });
 }
 
+var roadviewCoordinateRequestsV52 = new Map();
+
+function roadviewRoadAddressV52(address) {
+  var match = String(address || "").trim().replace(/\s+/g, " ").match(/^(?:(?:대전광역시|대전) )?(동구|중구|서구|유성구|대덕구) ([가-힣0-9·.\-]+(?:로|길))\s+(\d+)(?:-(\d+))?$/);
+  return match && Number(match[3]) > 0 ? "대전광역시 " + match[1] + " " + match[2] + " " + Number(match[3]) +
+    (Number(match[4]) > 0 ? "-" + Number(match[4]) : "") : "";
+}
+
+function resolveRoadviewCoordinatesV52(item) {
+  var coords = getItemCoordinates(item);
+  if (coords) return Promise.resolve(coords);
+  var address = String(item && item.address || "").trim();
+  var parcel = addressParcelForReviewV41(address);
+  var road = !parcel && roadviewRoadAddressV52(address);
+  var query = parcel ? parcel.query : road;
+  if (!query) return Promise.reject(Error("정확한 지번 또는 건물번호가 있는 도로명주소가 필요합니다. 원본 주소를 확인해 주세요."));
+  if (roadviewCoordinateRequestsV52.has(query)) return roadviewCoordinateRequestsV52.get(query);
+  var pending = parcel ? recheckAddressV41(address) : new Promise(function(resolve, reject) {
+    var services = window.kakao && kakao.maps && kakao.maps.services;
+    if (!services || !services.Geocoder) { reject(Error("지도 주소 검색을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.")); return; }
+    var settled = false;
+    var timer = setTimeout(function() { finish(Error("주소 조회 시간이 초과됐습니다. 다시 로드뷰를 눌러 주세요.")); }, 8000);
+    function finish(error, value) { if (settled) return; settled = true; clearTimeout(timer); if (error) reject(error); else resolve(value); }
+    try {
+      new services.Geocoder().addressSearch(query, function(rows, status) {
+        if (settled) return;
+        if (status !== services.Status.OK) { finish(Error("주소 검색 결과가 없습니다. 원본 주소를 확인해 주세요.")); return; }
+        var matches = new Map();
+        (rows || []).forEach(function(row) {
+          if (roadviewRoadAddressV52(row.road_address && row.road_address.address_name) !== road) return;
+          var point = getItemCoordinates({latitude: row.y, longitude: row.x});
+          if (point && point.lat >= 30 && point.lat <= 40 && point.lng >= 120 && point.lng <= 135) matches.set(point.lat + "," + point.lng, point);
+        });
+        if (matches.size !== 1) { finish(Error("주소와 정확히 일치하는 위치를 하나로 확인하지 못했습니다. 원본 주소를 확인해 주세요.")); return; }
+        finish(null, Array.from(matches.values())[0]);
+      }, {size: 30, analyze_type: services.AnalyzeType ? services.AnalyzeType.EXACT : "exact"});
+    } catch (_) { finish(Error("주소 검색을 실행하지 못했습니다. 잠시 후 다시 시도해 주세요.")); }
+  });
+  roadviewCoordinateRequestsV52.set(query, pending);
+  function clear() { if (roadviewCoordinateRequestsV52.get(query) === pending) roadviewCoordinateRequestsV52.delete(query); }
+  pending.then(clear, clear);
+  return pending;
+}
+
 function openKakaoRoadview(encodedKey) {
   var key = decodeURIComponent(encodedKey);
   var item = allItems.find(function(currentItem) {
@@ -3644,11 +3683,6 @@ function openKakaoRoadview(encodedKey) {
   }
 
   var coords = getItemCoordinates(item);
-
-  if (!coords) {
-    alert("이 매물의 지도 좌표가 아직 준비되지 않았습니다.");
-    return;
-  }
 
   var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
@@ -3679,9 +3713,11 @@ function openKakaoRoadview(encodedKey) {
   }
 
   roadviewOpenSequenceV653 += 1;
+  var sequence = roadviewOpenSequenceV653;
+  var requestedAddress = String(item.address || "");
   currentRoadviewItemKey = item.key;
   currentRoadviewCoords = coords;
-  currentRoadviewPosition = new kakao.maps.LatLng(coords.lat, coords.lng);
+  currentRoadviewPosition = coords ? new kakao.maps.LatLng(coords.lat, coords.lng) : null;
 
   title.textContent = item.name || "네이버 거리뷰";
   address.textContent = [item.address || "", item.room || ""].filter(Boolean).join(" ");
@@ -3693,6 +3729,7 @@ function openKakaoRoadview(encodedKey) {
   setNaverRoadviewHistoryReadyV666(false);
 
   container.innerHTML = "";
+  naverContainer.style.visibility = coords ? "" : "hidden";
   if (naverInfo) {
     naverInfo.hidden = true;
     naverInfo.textContent = "";
@@ -3715,7 +3752,32 @@ function openKakaoRoadview(encodedKey) {
   roadviewCameraPosition = currentRoadviewPosition;
   currentRoadviewPan = 0;
   currentRoadviewMode = "naver";
-  switchRoadviewMode("naver");
+  if (coords) {
+    switchRoadviewMode("naver");
+    return;
+  }
+  status.textContent = naverStatus.textContent = "매물 주소의 정확한 위치를 확인하고 있습니다.";
+  function stillCurrent() {
+    return sequence === roadviewOpenSequenceV653 && modal.classList.contains("open") &&
+      currentRoadviewItemKey === item.key;
+  }
+  resolveRoadviewCoordinatesV52(item).then(function(resolved) {
+    if (!stillCurrent()) return;
+    var live = allItems.find(function(entry) { return entry.key === item.key; });
+    if (!live || String(live.address || "") !== requestedAddress || String(item.address || "") !== requestedAddress) {
+      throw Error("조회 중 매물 정보가 갱신되었습니다. 창을 닫고 다시 로드뷰를 눌러 주세요.");
+    }
+    currentRoadviewCoords = resolved;
+    currentRoadviewPosition = new kakao.maps.LatLng(resolved.lat, resolved.lng);
+    item.latlng = live.latlng = currentRoadviewPosition;
+    roadviewTargetPosition = roadviewCameraPosition = currentRoadviewPosition;
+    naverContainer.style.visibility = "";
+    switchRoadviewMode(currentRoadviewMode);
+  }).catch(function(error) {
+    if (!stillCurrent()) return;
+    status.textContent = naverStatus.textContent = error.message || "매물 위치를 확인하지 못했습니다. 다시 시도해 주세요.";
+    status.className = naverStatus.className = "roadview-inline-status error";
+  });
 }
 
 
