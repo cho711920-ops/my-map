@@ -4968,6 +4968,13 @@ function addListItem(item, appendTarget) {
             window.JSUnifiedListingsV8.handleCardClick(item, event);
         }
     };
+    // Action buttons stop bubbling before the normal card click handler.
+    // Capture their owning card without opening another detail or changing checks.
+    div.addEventListener("click", function(event) {
+        var action = event.target && event.target.closest && event.target.closest("button,a");
+        if (!action || action.disabled || action.getAttribute("aria-disabled") === "true" || !div.closest("#list")) return;
+        selectListingForActionV54(item);
+    }, true);
     div.onpointerenter = function() {
         cancelCardWarmupV6107();
         cardWarmupTimerV6107 = window.setTimeout(function() {
@@ -5283,6 +5290,25 @@ function clearLinkedListingSelectionV845() {
 
 window.getLinkedSelectionCardIdV845 = getLinkedSelectionCardIdV845;
 window.clearLinkedListingSelectionV845 = clearLinkedListingSelectionV845;
+
+function selectListingForActionV54(item) {
+  if (!item || !item.key) return;
+  if (!isLinkedListingSelectedV845(item) && typeof window.selectListingOnMapV844 === "function") {
+    window.selectListingOnMapV844(item);
+  }
+  selectedItemKey = item.key;
+  selectedListCardIdV845 = getLinkedSelectionCardIdV845(item);
+  document.querySelectorAll("#list .item").forEach(function(card) {
+    card.classList.toggle("selected", card.getAttribute("data-list-card-id-v681") === selectedListCardIdV845);
+  });
+  var unified = window.JSUnifiedListingsV8;
+  var drawer = document.getElementById("unifiedDetailDrawerV8");
+  if (drawer && drawer.classList.contains("open") && unified &&
+      typeof unified.isOpenForProperty === "function" && !unified.isOpenForProperty(String(item.propertyId || "")) &&
+      typeof unified.closeForOverlay === "function") {
+    unified.closeForOverlay();
+  }
+}
 
 function togglePrintSelection(encodedKey) {
   var key = decodeURIComponent(encodedKey);
