@@ -20,7 +20,14 @@
 - 운영 DB·실제 사용자 계정·서비스 키를 preview에 연결하지 않았고 완료 후 preview 종료. 결과 outputs/local-auth-v53-remote-runtime.json.
 - 원격 요청 약5.5초는 발급/로그인/기존 해시 확인/오답 확인 등 여러 해시를 한 번에 수행한 테스트이며 단일 로그인 소요시간이 아님. Worker Date.now 값은 시간 측정 근거로 사용하지 않음.
 - 전체1762중1751통과/기존11실패. v52 실패 이름 집합과 정확히 같음. ESLint/typecheck/build/diff 및 Wrangler4.124 dry-run 통과.
-- 실제 사용자의 새 계정 발급은 수행하지 않음. 운영 배포/확인 결과 후속 기록.
+- 실제 사용자의 새 계정 발급은 수행하지 않음.
+
+운영 완료
+- 제품a0e9342, Worker4a768495-5d2a-4def-84b1-63e01b9f93c5, 정적 캐시43892c8d357b6ae59c30e4d4.
+- 양 도메인 HTML200/no-store/SHA 일치, 연결JS/CSS90개 각각200/SHA 일치. 기존 세션 정리·인증401·localLoginEnabled 유지 확인.
+- 실제 운영 /api/session에 무작위 미등록 합성 아이디로 1회 잘못된 로그인 요청: 정상401/일반 아이디·비밀번호 안내, 약2.1초. 실제 사용자 계정/실패 카운터 변경 없이 운영 요청 경로 확인.
+- 운영 확인 outputs/local-account-v53-live-verification.json 및 local-account-v53-production-login-rejection.json.
+- 사용자 새로고침 후 기존 계정 선택·아이디·비밀번호 재입력하여 발급. 실제 본인 계정 발급 성공 여부는 이후 사용자 요청/결과로 확인할 항목.
 
 확인한 1차 자료(2026-10-21)
 - Cloudflare 운영 PBKDF2 제한/로컬과 운영의 차이: https://github.com/cloudflare/workerd/issues/1346
