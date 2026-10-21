@@ -1741,7 +1741,7 @@ function exactCandidate(record, candidates) {
   return classified.decision === "merge" ? classified.candidate : null;
 }
 
-async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets = null) {
+async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets = null, pendingStatements = null) {
   const current = existingAssets || { media: [], contacts: [] };
   const statements = [];
   let mediaChanged = 0;
@@ -1810,7 +1810,8 @@ async function replaceMediaAndContacts(env, record, sourceRowId, listingId, now,
       contactsChanged += 1;
     }
   }
-  if (statements.length) {
+  if (pendingStatements) pendingStatements.push(...statements);
+  else if (statements.length) {
     for (let offset = 0; offset < statements.length; offset += 80) await env.DB.batch(statements.slice(offset, offset + 80));
   }
   return { changed: mediaChanged > 0 || contactsChanged > 0, mediaChanged, contactsChanged };
@@ -1838,6 +1839,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     ? clean(record.originalId)
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
+  const sourceStatements = [];
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
   const observed = record.firstObservedAdvertisementV1 || firstObservedAdvertisement({ source: record.source,
     sourceId: record.sourceId, tradeType: record.tradeType, sourceRows: existingSource ? [existingSource] : [], now });
@@ -1873,7 +1875,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     clean(previous?.contactCaptureStatus) !== clean(snapshot.contactCaptureStatus) ||
     clean(previous?.firstSeen) !== observed.firstObservedAt;
   if (!existingSource) {
-    await env.DB.batch([env.DB.prepare(`INSERT INTO listing_sources (
+    sourceStatements.push(env.DB.prepare(`INSERT INTO listing_sources (
         id, listing_id, source, source_listing_id, source_url, snapshot_hash, list_snapshot_json, raw_json,
         trade_type, sale_category, sale_price,
         session_id, active, missing_count, first_collected_at, last_collected_at, created_at, updated_at
@@ -1883,25 +1885,22 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
         record.salePrice, sessionId, observed.firstObservedAt, now),
       env.DB.prepare(`UPDATE collector_sessions SET totals_json=json_set(totals_json,
           '$.newSourceAds', COALESCE(json_extract(totals_json, '$.newSourceAds'), 0)+?1),
-          updated_at=?2 WHERE id=?3`).bind(observed.previouslyObserved ? 0 : 1, now, sessionId)]);
-    // A previously observed queued ad is publication, not a new advertisement.
-    // An insert failure (including a concurrent duplicate) rolls back both.
-    if (onNewSource && !observed.previouslyObserved) onNewSource();
+          updated_at=?2 WHERE id=?3`).bind(observed.previouslyObserved ? 0 : 1, now, sessionId));
   }
-  const assets = await replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets);
+  const assets = await replaceMediaAndContacts(env, record, sourceRowId, listingId, now, existingAssets, sourceStatements);
   if (existingSource) {
     if (sourceChanged || assets.changed) {
-      await env.DB.prepare(`UPDATE listing_sources SET listing_id=?1, source_url=?2, snapshot_hash=?3,
+      sourceStatements.push(env.DB.prepare(`UPDATE listing_sources SET listing_id=?1, source_url=?2, snapshot_hash=?3,
           list_snapshot_json=?4, raw_json=?5, trade_type=?6, sale_category=?7, sale_price=?8,
           session_id=?9, active=1, missing_count=0,
           last_collected_at=?10, updated_at=?10,
           first_collected_at=CASE WHEN first_collected_at=?12 THEN ?13 ELSE first_collected_at END WHERE id=?11`)
         .bind(listingId, record.link, snapshotHash, snapshotJson, rawJson,
           collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
-          sessionId, now, sourceRowId, existingSource.first_collected_at || "", observed.firstObservedAt).run();
+          sessionId, now, sourceRowId, existingSource.first_collected_at || "", observed.firstObservedAt));
     } else {
-      await env.DB.prepare(`UPDATE listing_sources SET session_id=?1, last_collected_at=?2
-        WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId).run();
+      sourceStatements.push(env.DB.prepare(`UPDATE listing_sources SET session_id=?1, last_collected_at=?2
+        WHERE id=?3 AND (session_id<>?1 OR last_collected_at<>?2)`).bind(sessionId, now, sourceRowId));
     }
   }
   const listingNeedsTouch = !protectListing && (!existingSource || sourceChanged || assets.changed || updateCondition || promoteRepresentative);
@@ -1921,7 +1920,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
     .bind(now, record.link,
       record.latitude, record.longitude, clean(record.roadAddress), listingId) : null;
   const historyNeeded = !existingSource || sourceChanged || assets.changed || updateCondition;
-  const finalStatements = [];
+  const finalStatements = sourceStatements;
   if (update) finalStatements.push(update);
   if (reactivated) {
     finalStatements.push(env.DB.prepare(`UPDATE listings SET status='active', operating_memo=?1,
@@ -1936,7 +1935,14 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   if (historyNeeded) finalStatements.push(env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`).bind(listingId, sourceRowId,
         existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), snapshotJson));
-  if (finalStatements.length) await env.DB.batch(finalStatements);
+  // Keep each advertisement's source, assets and history in one bounded D1
+  // transaction instead of separate network calls. Large legacy galleries
+  // retain the 80-statement bound and the original source-before-assets order.
+  for (let offset = 0; offset < finalStatements.length; offset += 80) {
+    await env.DB.batch(finalStatements.slice(offset, offset + 80));
+    // Count publication only after the source insert/counter has committed.
+    if (offset === 0 && !existingSource && onNewSource && !observed.previouslyObserved) onNewSource();
+  }
   return { sourceRowId, changed: sourceChanged || assets.changed || updateCondition || promoteRepresentative,
     conditionChanged: conditionChanged || updateCondition || promoteRepresentative,
     representativePromoted: promoteRepresentative,
@@ -2047,10 +2053,10 @@ async function savePendingReviewAlias(env, record, sessionId, pendingReview) {
   return id;
 }
 
-async function saveCollectorError(env, record, sessionId, message) {
+async function saveCollectorError(env, record, sessionId, message, pendingStatements = null) {
   const id = `E-${snapshotKey(`${record.source}:${record.sourceId}:${collectorTradeType(record.tradeType, true)}`)}`;
   const at = nowIso();
-  await env.DB.prepare(`INSERT INTO collector_raw (
+  const statement = env.DB.prepare(`INSERT INTO collector_raw (
       id, session_id, source, source_listing_id, snapshot_hash, payload_json,
       trade_type, sale_category, sale_price, processing_state, processed_at, result_json, error_text, created_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'error', ?10, ?11, ?12, ?10)
@@ -2062,7 +2068,9 @@ async function saveCollectorError(env, record, sessionId, message) {
       error_text=excluded.error_text, created_at=excluded.created_at`)
     .bind(id, sessionId, record.source, record.sourceId, snapshotKey(record.listSnapshot || record),
       JSON.stringify(record), collectorTradeType(record.tradeType, true), clean(record.saleCategory), record.salePrice,
-      at, JSON.stringify({ action: "collectorError", reason: clean(message) }), clean(message)).run();
+      at, JSON.stringify({ action: "collectorError", reason: clean(message) }), clean(message));
+  if (pendingStatements) pendingStatements.push(statement);
+  else await statement.run();
   return id;
 }
 
@@ -2093,6 +2101,8 @@ export function staleAdvertisementSave(existing, metadata = {}) {
 }
 
 async function ingestRecords(env, source, values, metadata = {}) {
+  const ingestStarted = Date.now();
+  const preparationErrors = [];
   const collectionTradeType = source === "공실박스" ? gongsilCollectionTradeType(metadata.collectionTradeType) : "";
   const sessionId = await ensureSession(env, metadata.sessionId, source);
   const totals = { received: 0, created: 0, merged: 0, updated: 0, conditionUpdated: 0,
@@ -2121,7 +2131,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
         }
         if (record.tradeType === "sale" && !(record.salePrice > 0)) {
           totals.failed += 1;
-          await saveCollectorError(env, record, sessionId, "매매가 확인 필요: 임대보증금으로 대체하지 않음");
+          await saveCollectorError(env, record, sessionId, "매매가 확인 필요: 임대보증금으로 대체하지 않음", preparationErrors);
           if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: "매매가 확인 필요" });
           continue;
         }
@@ -2157,18 +2167,24 @@ async function ingestRecords(env, source, values, metadata = {}) {
       totals.failed += 1;
       totals.addressMissing += 1;
       const message = source === "공실박스" ? "정확한 지번주소 없음" : "건물번호가 있는 지번·도로명주소 없음";
-      await saveCollectorError(env, record, sessionId, message);
+      await saveCollectorError(env, record, sessionId, message, preparationErrors);
       if (errors.length < 20) errors.push({ sourceId: record.sourceId, message });
       continue;
     }
     records.push(record);
   }
-  const sourceAssets = await loadSourceAssets(env, existingSources);
-  const observedIndex = records.length ? await loadFirstObservedAdvertisements(env, source, records, existingSources, nowIso()) : new Map();
+  for (let offset = 0; offset < preparationErrors.length; offset += 80) {
+    await env.DB.batch(preparationErrors.slice(offset, offset + 80));
+  }
+  const [sourceAssets, observedIndex, candidatesByAddress] = await Promise.all([
+    loadSourceAssets(env, existingSources),
+    records.length ? loadFirstObservedAdvertisements(env, source, records, existingSources, nowIso()) : new Map(),
+    loadCandidateListings(env, records, existingSources)
+  ]);
   for (const record of records) Object.defineProperty(record, "firstObservedAdvertisementV1", {
     value: observedIndex.get(advertisementObservationKey(source, record.sourceId, record.tradeType)), configurable: true
   });
-  const candidatesByAddress = await loadCandidateListings(env, records, existingSources);
+  const preparedAt = Date.now();
   for (const record of records) {
     try {
       const existing = existingSources.get(record.sourceId);
@@ -2254,10 +2270,16 @@ async function ingestRecords(env, source, values, metadata = {}) {
       if (errors.length < 20) errors.push({ sourceId: record.sourceId, message: clean(error?.message) || "D1 저장 실패" });
     }
   }
+  const sourcesSavedAt = Date.now();
   if (salePublications.length) await completePublishedSaleReviews(env, salePublications);
   const representatives = await refreshListingRepresentativesFromActiveSources(env,
     salePublications.map(entry => entry.listingId));
   for (const id of representatives.changedListingIds) affectedListingIds.add(id);
+  // Durations contain no ad payload or credentials. Separate DB preparation,
+  // source writes and representative work from provider/browser waiting.
+  const writeTimingV64 = { prepareMs: preparedAt - ingestStarted,
+    sourcesMs: sourcesSavedAt - preparedAt, representativesMs: Date.now() - sourcesSavedAt,
+    totalMs: Date.now() - ingestStarted, records: records.length };
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const saved = parseJson(previous?.totals_json, {});
   for (const key of ["received", "offerReceived", "created", "merged", "updated", "conditionUpdated", "refreshed",
@@ -2266,11 +2288,15 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
   if (clean(metadata.scope)) saved.scope = clean(metadata.scope).slice(0, 200);
+  const priorTiming = saved.writeTimingV64 || {};
+  saved.writeTimingV64 = Object.fromEntries(Object.entries(writeTimingV64)
+    .map(([key, value]) => [key, Math.max(0, Number(priorTiming[key]) || 0) + value]));
+  saved.writeTimingV64.batches = Math.max(0, Number(priorTiming.batches) || 0) + 1;
   const summaryStatement = env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
     .bind(JSON.stringify(saved), nowIso(), sessionId);
   const result = { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
-    inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
+    inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1", writeTimingV64 };
   if (source === "공실박스" && metadata.requestPolicyVersion === 63) result.requestHashV63 = metadata.requestHashV63;
   if (clean(metadata.requestId) && (source === "네이버" && metadata.action === "saveNaverBatch" ||
       source === "공실박스" && metadata.action === "gongsilImportBatch")) {

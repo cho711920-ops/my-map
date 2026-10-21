@@ -68,11 +68,11 @@ export function gongsilOfferSourceId(providerId, tradeType, savedTypes = new Map
 export async function resolveGongsilOfferIds(env, records) {
   const bases = [...new Set(records.map((r) => gongsilProviderSourceId(r.sourceId)).filter(Boolean))];
   const savedTypes = new Map();
-  for (let offset = 0; offset < bases.length; offset += 33) {
-    const ids = bases.slice(offset, offset + 33).flatMap((id) => [id, `${id}::sale`, `${id}::lease`]);
-    // At most 99 bindings, one indexed query per chunk. Do not download raw
-    // payloads or query once per offer during a large manifest comparison.
-    const rows = await env.DB.prepare(`WITH requested(id) AS (VALUES ${ids.map(() => "(?)").join(",")}),
+  for (let offset = 0; offset < bases.length; offset += 512) {
+    const ids = bases.slice(offset, offset + 512).flatMap((id) => [id, `${id}::sale`, `${id}::lease`]);
+    // One bounded JSON binding, exact source/number index lookups. This covers
+    // manifest, saving and finalization without downloading original payloads.
+    const rows = await env.DB.prepare(`WITH requested(id) AS (SELECT value FROM json_each(?)),
       attached AS (SELECT source_listing_id, COALESCE(NULLIF(trade_type,''),'lease') AS trade_type
         FROM listing_sources WHERE source='공실박스' AND source_listing_id IN (SELECT id FROM requested)),
       pending AS (SELECT source_listing_id, COALESCE(NULLIF(trade_type,''),'lease') AS trade_type,
@@ -81,7 +81,7 @@ export async function resolveGongsilOfferIds(env, records) {
           AND source_listing_id IN (SELECT id FROM requested)
           AND source_listing_id NOT IN (SELECT source_listing_id FROM attached))
       SELECT source_listing_id, trade_type FROM attached
-      UNION ALL SELECT source_listing_id, trade_type FROM pending WHERE rn=1`).bind(...ids).all();
+      UNION ALL SELECT source_listing_id, trade_type FROM pending WHERE rn=1`).bind(JSON.stringify(ids)).all();
     for (const row of rows.results || []) savedTypes.set(row.source_listing_id, row.trade_type);
   }
   return records.map((record) => ({ ...record,

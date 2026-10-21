@@ -136,13 +136,14 @@ test("large manifests are deduplicated and chunked below D1's binding limit with
   const rows = await resolveCollectorOfferIds(env, "네이버", records);
   assert.equal(rows.length, 140);
   assert.equal(new Set(rows.map((r) => r.sourceId)).size, 140);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 1);
   for (const call of calls) {
-    assert.ok(call.args.length <= 97);
+    assert.equal(call.args.length, 2);
     assert.equal(call.args[0], "네이버");
+    assert.equal(JSON.parse(call.args[1]).length, 210);
     assert.doesNotMatch(call.sql, /payload_json|raw_json/);
   }
   assert.deepEqual(await resolveCollectorOfferIds(env, "당근", []), []);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 1);
   await assert.rejects(resolveCollectorOfferIds(env, "", []), /출처/);
 });

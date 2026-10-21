@@ -442,7 +442,7 @@ test("provider-hidden addresses are persisted as retryable collector errors", as
   assert.match(collectorSource, /processing_state <> 'error'/);
   assert.match(collectorSource, /async function saveCollectorError/);
   assert.match(collectorSource, /processing_state='error'/);
-  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, message\)/);
+  assert.match(collectorSource, /await saveCollectorError\(env, record, sessionId, message, preparationErrors\)/);
   assert.match(collectorSource, /hasPublishableCollectorAddress\(source, record.address\)/);
 });
 

@@ -37,11 +37,13 @@ export async function resolveCollectorOfferIds(env, source, records) {
   if (!sourceName) throw new Error("수집 원본 출처가 필요합니다.");
   const bases = [...new Set(records.map((record) => collectorProviderSourceId(record.sourceId)).filter(Boolean))];
   const savedTypes = new Map();
-  for (let offset = 0; offset < bases.length; offset += 32) {
-    const ids = bases.slice(offset, offset + 32).flatMap((id) => [id, `${id}::sale`, `${id}::lease`]);
-    // 96 IDs + one provider binding at most; no per-offer or raw-payload fetch.
+  for (let offset = 0; offset < bases.length; offset += 512) {
+    const ids = bases.slice(offset, offset + 512).flatMap((id) => [id, `${id}::sale`, `${id}::lease`]);
+    // One bounded JSON parameter avoids the 100-bind ceiling and hundreds of
+    // sequential round trips at manifest/finalization. Exact indexed lookups
+    // and legacy/market precedence remain unchanged; no raw payload fetch.
     const rows = await env.DB.prepare(`WITH provider(name) AS (VALUES (?)),
-      requested(id) AS (VALUES ${ids.map(() => "(?)").join(",")}),
+      requested(id) AS (SELECT value FROM json_each(?)),
       attached AS (SELECT s.source_listing_id,
           COALESCE(NULLIF(l.trade_type,''), NULLIF(s.trade_type,''),'lease') AS trade_type
         FROM listing_sources s LEFT JOIN listings l ON l.id=s.listing_id
@@ -53,7 +55,7 @@ export async function resolveCollectorOfferIds(env, source, records) {
           AND source_listing_id IN (SELECT id FROM requested)
           AND source_listing_id NOT IN (SELECT source_listing_id FROM attached))
       SELECT source_listing_id, trade_type FROM attached
-      UNION ALL SELECT source_listing_id, trade_type FROM pending WHERE rn=1`).bind(sourceName, ...ids).all();
+      UNION ALL SELECT source_listing_id, trade_type FROM pending WHERE rn=1`).bind(sourceName, JSON.stringify(ids)).all();
     for (const row of rows.results || []) savedTypes.set(row.source_listing_id, row.trade_type);
   }
   return records.map((record) => ({

@@ -42,11 +42,15 @@ export async function refreshListingRepresentativesFromActiveSources(env, listin
   const report = { changedListingIds: [], unchangedListingIds: [], conflictListingIds: [] };
   for (let offset = 0; offset < targets.length; offset += 75) {
     const ids = targets.slice(offset, offset + 75), packed = JSON.stringify(ids);
-    const masters = await env.DB.prepare(`SELECT id,version,status,trade_type,updated_at,${masterFields.join(",")}
-      FROM listings WHERE id IN (SELECT value FROM json_each(?1)) AND status<>'deleted'`).bind(packed).all();
-    const originals = await env.DB.prepare(`SELECT id,listing_id,source,source_url,active,trade_type,
+    const [masters, originals] = await Promise.all([
+      env.DB.prepare(`SELECT id,version,status,trade_type,updated_at,${masterFields.join(",")}
+      FROM listings WHERE id IN (SELECT value FROM json_each(?1)) AND status<>'deleted'`).bind(packed).all(),
+      env.DB.prepare(`SELECT id,listing_id,source,source_url,active,trade_type,
         updated_at,last_collected_at,snapshot_hash,list_snapshot_json,${representativeFloorSql()} AS floor_metadata_json
-      FROM listing_sources WHERE listing_id IN (SELECT value FROM json_each(?1)) AND active=1`).bind(packed).all();
+      FROM listing_sources WHERE listing_id IN (SELECT value FROM json_each(?1)) AND active=1`).bind(packed).all()
+    ]);
+    // Read manual history after the master snapshot. Reading it earlier could
+    // miss an edit already visible in that master and then pass the CAS guard.
     const manual = await loadManualRepresentativeFields(env, ids);
     const byMaster = new Map();
     for (const row of originals?.results || []) {
