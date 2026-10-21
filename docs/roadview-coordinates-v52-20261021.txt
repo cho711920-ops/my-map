@@ -20,4 +20,9 @@
 - PC는 실제 목록 버튼 클릭, 모바일은 공통 상세 action handler를 호출하는 가상 자료 검증. 외부 파노라마 SDK는 대체했으며 실제 현장 거리뷰 촬영 여부를 확인한 검증은 아님.
 - 전체1761개 중1750통과/11기존실패. v51 실패 이름 집합과 정확히 일치.
 - ESLint/typecheck/build/diff, Wrangler4.124 dry-run 통과.
-- 운영 배포 결과 후속 기록.
+
+운영 완료
+- 제품8b4d1dc, Worker03aecadc-e633-4e91-addd-31bc9fff380a, 정적 캐시59d3aaffa0e061a51ea1ca8d.
+- js-map.com/www.js-map.com 각각 HTML200/no-store/빌드SHA 일치, 연결JS/CSS90개 모두200/SHA 일치.
+- 기존 비로그인 목록/상세401 및 v51 로그인/만료 쿠키 처리 유지 확인. outputs/roadview-v52-live-verification.json.
+- 실제 로그인한 운영 화면/사용자의 특정 매물 로드뷰 영상 확인은 하지 않음. 새로고침1회 필요, 재수집 불필요.
