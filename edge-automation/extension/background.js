@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.20";
+const BACKGROUND_BUILD = "1.1.21";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -1173,7 +1173,10 @@ async function continueOrRetryCycle(state, completedTabId) {
     if (state.closeTabs && completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
     return result;
   }
-  state.targets = retryQueue;
+  const cycle = Math.max(...retryQueue.map((target) => Number(target.retryCycle || 1)), 1);
+  const ordinaryRetryAt = Date.now() + Math.min(30, 5 * cycle) * 60000;
+  const dueAt = target => Number(target.pendingSaveRetryAtV56) || ordinaryRetryAt;
+  state.targets = retryQueue.sort((a, b) => dueAt(a) - dueAt(b));
   state.retryQueue = [];
   state.index = 0;
   state.currentTabId = null;
@@ -1181,8 +1184,7 @@ async function continueOrRetryCycle(state, completedTabId) {
   state.targetStartedAt = null;
   state.targetAttempt = 1;
   if (completedTabId) await chrome.tabs.remove(completedTabId).catch(() => {});
-  const cycle = Math.max(...state.targets.map((target) => Number(target.retryCycle || 1)), 1);
-  const delayMinutes = Math.min(30, 5 * cycle);
+  const delayMinutes = Math.max(1, (dueAt(state.targets[0]) - Date.now()) / 60000);
   return scheduleRecovery(state, delayMinutes,
     `미완료 대상 ${state.targets.length}개를 ${delayMinutes}분 뒤 마지막 저장 지점부터 다시 실행합니다.`);
 }
@@ -1322,11 +1324,22 @@ async function launchCurrentTarget(state, reuseTabId = null) {
   }
 
   const target = state.targets[state.index];
+  if (Number(target.pendingSaveRetryAtV56) > Date.now()) return scheduleRecovery(state,
+    (Number(target.pendingSaveRetryAtV56) - Date.now()) / 60000,
+    "이전 저장 결과 확인 시각까지 대기한 뒤 미완료 지역만 자동으로 이어갑니다.");
+  delete target.pendingSaveRetryAtV56;
   const runtimeTarget = { ...target, url: automaticTargetRuntimeUrl(target) };
   const startedAt = Date.now();
   const targetRunId = `${state.runId}-${state.index}-${Math.random().toString(36).slice(2, 8)}`;
   let tab = null;
   try {
+    // Persist the new attempt before navigation can fail. Otherwise the catch
+    // result has a different ID from storage and gets ignored as an old event.
+    state.currentTabId = null;
+    state.targetRunId = targetRunId;
+    state.targetStartedAt = startedAt;
+    state.phase = "launching";
+    await saveRunState(state);
     await updateRunReport(state, target, "running", {
       startedAt,
       finishedAt: null,
@@ -1456,6 +1469,27 @@ async function finishCurrentTarget(result, senderTabId) {
     progressCounts(target, result.progressStage || state.progressStage),
     resultCounts(result)
   );
+  const wait = result && result.result && result.result.recoveryWaitV56;
+  const retryAt = Number(wait && wait.retryAt);
+  if (cleanSource(target.source) === "naver" && cleanSource(result.result && result.result.source) === "naver" &&
+      wait && wait.code === "naver_save_result_pending" && Number.isFinite(retryAt) &&
+      retryAt >= Date.now() - 60000 && retryAt <= Date.now() + 16 * 60000 &&
+      Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS) {
+    // This is a known uncertain receipt, not another failed collection attempt.
+    // Preserve the ordinary retry budget until the old write can be verified.
+    const waitingTarget = {...target, pendingSaveRetryAtV56: Math.max(Date.now() + 60000, retryAt)};
+    state.retryQueue = uniqueTargets([...(state.retryQueue || []), waitingTarget]);
+    await updateRunReport(state, target, "retry_wait", {finishedAt: null,
+      message: "이전 저장 결과 확인 대기 · 다른 지역 완료 후 자동 확인 · 저장 재전송 없음",
+      counts: interruptedCounts, progressStage: null});
+    await appendLog({level: "warning", source: target.source, target: target.label,
+      message: "이전 저장 결과가 미확인이라 일반 재시도 횟수를 차감하지 않고 자동 확인을 예약했습니다."});
+    state.index += 1;
+    resetTargetRuntimeState(state);
+    state.phase = "between-targets";
+    await saveRunState(state);
+    return continueOrRetryCycle(state, completedTabId);
+  }
   if (!successful && !warningCompletion && elapsedMs < MAX_TARGET_RUNTIME_MS &&
       targetAttempt < MAX_IMMEDIATE_ATTEMPTS && !invalidTradeConfig && retryableTargetFailure(failureMessage, result)) {
     const message = failureMessage;

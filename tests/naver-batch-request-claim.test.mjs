@@ -19,6 +19,8 @@ function database(t, beforeRun = async () => {}) {
     });
     const args = () => indexes.length ? indexes.map(index => values[index]) : values;
     return {
+      sql,
+      executeSync() { return {meta: {changes: Number(sqlite.prepare(compiled).run(...args()).changes)}}; },
       bind: (...parameters) => prepare(sql, parameters),
       async first() { return sqlite.prepare(compiled).get(...args()) || null; },
       async all() { return { results: sqlite.prepare(compiled).all(...args()) }; },
@@ -56,6 +58,57 @@ const listing = {
 const save = {
   action: "saveNaverBatch", requestId: "same-batch", sessionId: "same-session", data: [listing]
 };
+
+test('Naver batch counters and exact result commit together without a later separate receipt write',async t=>{
+  const f=database(t);let transactionalReceipts=0;const ordinaryBatch=f.env.DB.batch;
+  f.env.DB.batch=async statements=>{
+    if(!statements.some(s=>s.sql.includes('INSERT INTO mutation_results')))return ordinaryBatch(statements);
+    assert.equal(statements.length,2);assert.match(statements[0].sql,/UPDATE collector_sessions/);
+    f.sqlite.exec('BEGIN');
+    try{const result=statements.map(s=>s.executeSync());f.sqlite.exec('COMMIT');transactionalReceipts++;return result;}
+    catch(error){f.sqlite.exec('ROLLBACK');throw error;}
+  };
+  const prepare=f.env.DB.prepare;
+  f.env.DB.prepare=(...args)=>{
+    const statement=prepare(...args),bind=statement.bind;
+    statement.bind=(...values)=>{
+      const bound=bind(...values);
+      if(args[0].includes("VALUES (?1, ?2, ?3, 'completed'"))bound.run=()=>{throw Error('separate result write must not execute');};
+      return bound;
+    };return statement;
+  };
+  const response=await f.call(save);assert.equal(response.result.ok,true);assert.equal(transactionalReceipts,1);
+  const ledger=f.sqlite.prepare('SELECT state,result_json FROM mutation_results WHERE request_id=?').get(save.requestId);
+  assert.equal(ledger.state,'completed');assert.deepEqual(JSON.parse(ledger.result_json),response.result);
+  assert.equal(JSON.parse(f.sqlite.prepare('SELECT totals_json FROM collector_sessions WHERE id=?').get(save.sessionId).totals_json).created,1);
+});
+
+test('an uncertain receipt yields a bounded read-only wait, without resolving or replaying it',async t=>{
+  const f=database(t);await f.call(save);
+  f.sqlite.prepare("UPDATE mutation_results SET state='running',result_json='{}',expires_at='' WHERE request_id=?").run(save.requestId);
+  const sources=f.sqlite.prepare('SELECT * FROM listing_sources').all(),ledger=f.sqlite.prepare('SELECT * FROM mutation_results').all();
+  const before=Date.now(),status=await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId:save.requestId});
+  assert.equal(status.result.ready,false);assert.equal(status.result.recoveryWaitV56.code,'naver_save_result_pending');
+  assert.ok(status.result.recoveryWaitV56.retryAt>=before+14*60000);assert.ok(status.result.recoveryWaitV56.retryAt<=Date.now()+16*60000);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM listing_sources').all(),sources);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM mutation_results').all(),ledger);
+});
+
+test('receipt transaction failure rolls back its census counters and never reports collection success',async t=>{
+  const f=database(t),ordinaryBatch=f.env.DB.batch;
+  f.env.DB.batch=async statements=>{
+    if(!statements.some(s=>s.sql.includes('INSERT INTO mutation_results')))return ordinaryBatch(statements);
+    f.sqlite.exec('BEGIN');
+    try{statements[0].executeSync();throw Error('synthetic receipt transaction failure');}
+    catch(error){f.sqlite.exec('ROLLBACK');throw error;}
+  };
+  const response=await f.call(save);assert.equal(response.result.ok,false);
+  assert.match(response.result.message,/receipt transaction failure/);
+  const totals=JSON.parse(f.sqlite.prepare('SELECT totals_json FROM collector_sessions WHERE id=?').get(save.sessionId).totals_json);
+  assert.equal(Number(totals.created||0),0);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM listings').get().n,1,'already-written originals remain available for a fresh census');
+  assert.equal(JSON.parse(f.sqlite.prepare('SELECT result_json FROM mutation_results WHERE request_id=?').get(save.requestId).result_json).ok,false);
+});
 
 function closeOwningSession(f,sessionId,minutes=10){
   const now=Date.now(),closed=new Date(now-minutes*60_000).toISOString();

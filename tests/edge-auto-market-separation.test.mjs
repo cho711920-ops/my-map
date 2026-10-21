@@ -38,6 +38,7 @@ function harness(targets = [target("lease-on", "lease"), target("lease-off", "le
         create(key, value) { alarms.set(key, value); }, onAlarm: event("alarm") },
       tabs: { onRemoved: event("removed"), async get(id) { return { id, status: "complete" }; },
         async query() { return []; }, async remove() {},
+        async update(id, values) { return {id, status: "complete", ...values}; },
         async create(values) { launches.push(values); return { id: 10, status: "complete", ...values }; },
         async sendMessage() { return { started: true }; } },
       runtime: { getManifest: () => ({ version: "1.1.16" }), getURL: path => `chrome-extension://test/${path}`,

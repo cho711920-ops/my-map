@@ -768,15 +768,21 @@ function preserveNewSourceAdsCounters(jsonParameter) {
       THEN 'true' ELSE 'false' END))`;
 }
 
-async function saveMutationResult(env, requestId, action, result, owner = "collector") {
+const NAVER_DURABLE_RESULT_V56 = Symbol("naver-durable-result");
+function mutationResultStatementV56(env, requestId, action, result, owner = "collector") {
   const id = clean(requestId).slice(0, 160);
   if (!id) return;
-  await env.DB.prepare(`INSERT INTO mutation_results (request_id, owner_email, action, state, result_json, created_at, expires_at)
+  return env.DB.prepare(`INSERT INTO mutation_results (request_id, owner_email, action, state, result_json, created_at, expires_at)
     VALUES (?1, ?2, ?3, 'completed', ?4, ?5, datetime('now','+7 days'))
     ON CONFLICT(request_id) DO UPDATE SET state='completed', result_json=excluded.result_json,
       created_at=excluded.created_at, expires_at=excluded.expires_at
     WHERE mutation_results.owner_email=excluded.owner_email AND mutation_results.action=excluded.action`)
-    .bind(id, owner, action, JSON.stringify(result || {}), nowIso()).run();
+    .bind(id, owner, action, JSON.stringify(result || {}), nowIso());
+}
+
+async function saveMutationResult(env, requestId, action, result, owner = "collector") {
+  const statement = mutationResultStatementV56(env, requestId, action, result, owner);
+  if (statement) await statement.run();
 }
 
 async function mutationScope(env, requestId) {
@@ -846,6 +852,12 @@ async function mutationStatus(env, requestId, owner = "collector", expectedActio
   if (!row) return { ok: true, ready: false, requestId: id };
   const rescan=scopedOwner==="collector"?await closedNaverRequestRecovery(env,id,row):null;
   if(rescan)return {ok:true,ready:true,requestId:id,mutationAction:row.action,result:rescan};
+  if (scopedOwner === "collector" && row.state === "running" && row.action === "saveNaverBatch") {
+    // An uncertain write is neither a confirmed failure nor safe to replay.
+    return {ok: true, ready: false, requestId: id, mutationAction: row.action,
+      recoveryWaitV56: {code: "naver_save_result_pending", retryAt: Date.now() + 15 * 60_000,
+        message: "이전 저장 결과 확인 대기 · 중복 전송 없이 자동으로 다시 확인합니다."}};
+  }
   return { ok: true, ready: row.state === "completed", requestId: id,
     mutationAction: clean(row.action), result: parseJson(row.result_json, {}) };
 }
@@ -2228,11 +2240,19 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   if (clean(metadata.collectorVersion)) saved.collectorVersion = clean(metadata.collectorVersion).slice(0, 30);
   if (clean(metadata.scope)) saved.scope = clean(metadata.scope).slice(0, 200);
-  await env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
-    .bind(JSON.stringify(saved), nowIso(), sessionId).run();
-  return { ok: true, sessionId, ...totals, errors,
+  const summaryStatement = env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
+    .bind(JSON.stringify(saved), nowIso(), sessionId);
+  const result = { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
     inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
+  if (source === "네이버" && metadata.action === "saveNaverBatch" && clean(metadata.requestId)) {
+    // Census counters and the exact response commit in one D1 transaction.
+    // A disconnect after these counters commit cannot strand the receipt.
+    await env.DB.batch([summaryStatement,
+      mutationResultStatementV56(env, metadata.requestId, "saveNaverBatch", result)]);
+    Object.defineProperty(result, NAVER_DURABLE_RESULT_V56, {value: true});
+  } else await summaryStatement.run();
+  return result;
 }
 
 export function nextCollectorSourceVisibilityState(current, observed, countMissing) {
@@ -3269,7 +3289,7 @@ export async function handleCollectorApi(request, env) {
   try {
     const result = await executeExternalAction(env, body);
     if (!result) return jsonResponse({ ok: false, message: "지원하지 않는 수집 작업입니다." }, 404, cors);
-    if (body.requestId) await saveMutationResult(env, body.requestId, action, result);
+    if (body.requestId && !result[NAVER_DURABLE_RESULT_V56]) await saveMutationResult(env, body.requestId, action, result);
     const response = jsonResponse(result, 200, cors);
     response.headers.set("x-js-collector-action", action);
     return response;

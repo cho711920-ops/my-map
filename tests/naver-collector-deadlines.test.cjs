@@ -37,6 +37,17 @@ test('closed-session proof clears only its checkpoint and permits a new manifest
   assert.deepEqual(JSON.parse(h.storage.get('auto-progress-test')),{other:{sessionId:'other-session',nextIndex:12}});
 });
 
+test('server-confirmed pending receipts preserve the pending key and return an explicit wait without polling or replay',async()=>{
+  const retryAt=Date.now()+15*60000;
+  const h=harness(()=>jsonResponse({ok:true,ready:false,recoveryWaitV56:{code:'naver_save_result_pending',retryAt,message:'확인 대기'}}));
+  h.storage.set('pending-save-test',JSON.stringify({requestId:'old-batch',sessionId:'old-session',fingerprint:'a'.repeat(64),count:5}));
+  const before=h.storage.get('pending-save-test');
+  await assert.rejects(h.context.fetchCollectorJson({action:'classifySourceManifest',requestId:'new-manifest',sessionId:'new'},60000,'invalid'),
+    error=>error.recoveryWaitV56?.code==='naver_save_result_pending'&&error.recoveryWaitV56.retryAt===retryAt);
+  assert.deepEqual(h.calls.map(x=>x.payload.action),['mutationStatus']);assert.equal(h.storage.get('pending-save-test'),before);
+  assert.equal(h.delays.length,0);
+});
+
 test('a closed-session direct rejection is never retried or mistaken for a successful batch', async()=>{
   const h=harness(()=>jsonResponse({ok:false,code:'naver_closed_session_rescan',requiresFreshManifest:true,message:'restart from manifest'}));
   await assert.rejects(h.context.postBatchWithRetry([],6,{sessionId:'old-session',requestId:'old-batch'}),e=>e.collectorFreshScanRequired);

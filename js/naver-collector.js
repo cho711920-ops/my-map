@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.13";
+  var VERSION = "6.0.14";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -442,6 +442,7 @@
       }
     }
     var runResult = await collectFinSelectedAndSave({automatic: true});
+    if (runResult && runResult.recoveryWaitV56) return {source: "naver", partial: true, recoveryWaitV56: runResult.recoveryWaitV56};
     var finalResult = runResult && runResult.finalResult;
     var expectedCount = Number(finalResult && finalResult.expectedCount || 0);
     var settledPartial = finalResult && finalResult.ok === true && finalResult.state === "partial" &&
@@ -1894,6 +1895,12 @@
     state.dashboard = createEmptyDashboard();
     updateDashboard(state.dashboard);
     try {
+      // Before downloading every page again, reconcile only uncertain receipts.
+      // The probe creates no census and never sends the old batch.
+      if (pendingNaverSaves().length) await reconcilePendingNaverSave({
+        action: "classifySourceManifest", sessionId: createCollectionSessionId(),
+        scope: "대전 " + district.name + " 전체", collectorKey: getCollectorKey()
+      }, Number(state.runGeneration || 0));
       var articles = await collectFinDistrictRaw(district, {});
       state.preparing = false;
       var saveResult = await collectAndSave(articles, "대전 " + district.name + " 전체", {
@@ -1905,7 +1912,9 @@
       return saveResult || {ok: false, complete: false, message: "네이버 수집 결과를 확인하지 못했습니다."};
     } catch (error) {
       state.preparing = false;
-      if (error && error.safeStop) {
+      if (error && error.recoveryWaitV56) {
+        setStatus("네이버 저장 결과 확인 대기", error.message);
+      } else if (error && error.safeStop) {
         setStatus(
           "네이버 안전중단 완료",
           "아직 서버 저장을 시작하기 전 단계에서 중단했습니다. 기존 저장자료에는 영향이 없습니다."
@@ -1922,7 +1931,8 @@
       return {
         ok: false,
         complete: false,
-        message: String(error && error.message ? error.message : error)
+        message: String(error && error.message ? error.message : error),
+        recoveryWaitV56: error && error.recoveryWaitV56 || null
       };
     } finally {
       state.collectingSelection = false;
@@ -3020,6 +3030,15 @@
           collectorKey: payload.collectorKey
         }, COLLECTOR_RESULT_TIMEOUT_MS, "저장 결과 확인 응답을 읽지 못했습니다.");
         if (!collectorRecoveryIsCurrent(generation)) break;
+        if (status && status.ok && status.ready === false &&
+            status.recoveryWaitV56 && status.recoveryWaitV56.code === "naver_save_result_pending") {
+          var retryAt = Number(status.recoveryWaitV56.retryAt);
+          if (Number.isFinite(retryAt) && retryAt >= Date.now() && retryAt <= Date.now() + 16 * 60000) {
+            var waiting = collectorRequestFailure(payload, new Error(status.recoveryWaitV56.message || "이전 저장 결과 확인 대기"));
+            waiting.recoveryWaitV56 = {code: "naver_save_result_pending", retryAt: retryAt, message: waiting.message};
+            throw waiting;
+          }
+        }
         if (status && status.ok && status.ready && status.result &&
             typeof status.result.ok === "boolean") {
           requireFreshNaverManifest(payload,status.result);
@@ -3033,7 +3052,7 @@
           return status.result;
         }
       } catch (statusError) {
-        if (statusError && (statusError.collectorFailureConfirmed||statusError.collectorFreshScanRequired)) throw statusError;
+        if (statusError && (statusError.collectorFailureConfirmed||statusError.collectorFreshScanRequired||statusError.recoveryWaitV56)) throw statusError;
         // A bounded status read can fail too. It never authorizes replaying the
         // original write, including after a panel replacement or safe stop.
       }
@@ -3628,7 +3647,9 @@
         } catch (_) {}
       }
       setProgress(0, 0);
-      if (error && error.safeStop) {
+      if (error && error.recoveryWaitV56) {
+        setStatus("네이버 저장 결과 확인 대기", error.message);
+      } else if (error && error.safeStop) {
         setStatus("네이버 안전중단 완료", "이미 저장된 매물은 유지되며 완전수집 판정은 실행하지 않았습니다.");
       } else {
         updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
@@ -3639,6 +3660,7 @@
         ok: false,
         complete: false,
         message: String(error && error.message ? error.message : error),
+        recoveryWaitV56: error && error.recoveryWaitV56 || null,
         totals: Object.assign({}, totals)
       };
     } finally {

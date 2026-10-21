@@ -280,6 +280,47 @@ function daangnStage(overrides = {}) {
     ...overrides };
 }
 
+test('uncertain Naver saves wait without spending the ordinary retry budget or recollecting completed regions',async()=>{
+  const h=harness({startedAt:clock-90*minute,targetStartedAt:clock-minute,targetAttempt:1});
+  h.data[RUN].targets[3].retryCycle=3;
+  const result={runId:'cycle',targetRunId:'seo',ok:true,result:{source:'naver',partial:true,
+    recoveryWaitV56:{code:'naver_save_result_pending',retryAt:clock+15*minute}}};
+  await h.context.finishCurrentTarget(result,42);
+  assert.equal(h.data[REPORT].items[3].status,'retry_wait');
+  assert.equal(h.data[RUN].retryQueue[0].retryCycle,3);
+  assert.equal(h.data[RUN].retryQueue[0].pendingSaveRetryAtV56,clock+15*minute);
+  assert.equal(h.data[RUN].index,4);assert.equal(h.navigation.length,1);assert.match(h.navigation[0],/test=4$/);
+  assert.equal(h.data[REPORT].items[0].status,'completed');
+});
+
+test('a sole uncertain save has a persisted alarm and does not reopen the provider before it is due',async()=>{
+  const h=harness({startedAt:clock-90*minute,targetStartedAt:clock-minute,index:4,targetRunId:'dong'});
+  await h.context.finishCurrentTarget({runId:'cycle',targetRunId:'dong',ok:true,result:{source:'naver',partial:true,
+    recoveryWaitV56:{code:'naver_save_result_pending',retryAt:clock+15*minute}}},42);
+  assert.equal(h.navigation.length,0);assert.equal(h.data[RUN].phase,'retry-wait');
+  assert.equal(h.data[RUN].targets.length,1);assert.equal(h.data[RUN].targets[0].key,'naver-4');
+  assert.equal(h.alarmMap.get('js-auto-collector-recovery').when,clock+15*minute);
+  await h.context.recoverAutomaticRun();assert.equal(h.navigation.length,0);
+});
+
+test('provider navigation failure remains tied to the new attempt and schedules a retry instead of being ignored',async()=>{
+  const h=harness({startedAt:clock-minute,index:4,currentTabId:null,targetRunId:null,phase:'resuming',targetAttempt:2});
+  h.context.acquireSingleProviderTab=async()=>{throw Error('synthetic tab create failure');};
+  const response=await h.context.launchCurrentTarget(h.data[RUN]);
+  assert.notEqual(response.ignored,true);assert.equal(h.data[REPORT].items[4].status,'retry_wait');
+  assert.equal(h.data[RUN].phase,'retry-wait');assert.equal(h.data[RUN].targets[0].key,'naver-4');
+});
+
+test('a forged indefinite wait and a wait past the run age do not bypass terminal failure limits',async()=>{
+  for(const retryAt of [clock+24*60*minute,clock+15*minute]){
+    const h=harness({startedAt:clock-7*60*minute,targetStartedAt:clock-minute,index:4,targetRunId:'dong',targetAttempt:2});
+    h.context.finalizeRun=async()=>({ok:true});
+    await h.context.finishCurrentTarget({runId:'cycle',targetRunId:'dong',ok:true,result:{source:'naver',partial:true,
+      recoveryWaitV56:{code:'naver_save_result_pending',retryAt}}},42);
+    assert.equal(h.data[REPORT].items[4].status,'failed');assert.equal(h.data[RUN].retryQueue.length,0);
+  }
+});
+
 test("three-hour stalled Seo defers only Seo, keeps completed regions and starts Dong", async () => {
   const h = harness();
   await h.context.recoverAutomaticRun();
@@ -692,7 +733,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.20");
+  assert.equal(response.backgroundBuild, "1.1.21");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -902,7 +943,7 @@ test("automatic Naver listing discovery proceeds to saving and releases its capt
     let saved = 0;
     const state = { selectedDistrict: { name: "서구", cortarNo: "3017000000" } };
     const context = vm.createContext({ state, clearAutoDistrictProgress() {}, beginCollectorRun() {},
-      finishCollectorRun() {}, saveButton: {}, retryButton: {}, cityButton: {},
+      finishCollectorRun() {}, pendingNaverSaves:()=>[], saveButton: {}, retryButton: {}, cityButton: {},
       createEmptyDashboard: () => ({}), updateDashboard() {}, setStatus() {},
       collectFinDistrictRaw: async () => {
         assert.equal(state.collectingSelection, true);
@@ -919,4 +960,19 @@ test("automatic Naver listing discovery proceeds to saving and releases its capt
     assert.equal(saved, fail ? 0 : 1);
     assert.equal(state.collectingSelection, false);
   }
+});
+
+test('an uncertain prior Naver save stops before district discovery and preserves the structured wait',async()=>{
+  const waiting={code:'naver_save_result_pending',retryAt:Date.now()+15*minute};let discoveries=0;
+  const context=vm.createContext({state:{selectedDistrict:{name:'유성구',cortarNo:'3020000000'}},
+    clearAutoDistrictProgress(){},beginCollectorRun(){},finishCollectorRun(){},saveButton:{},retryButton:{},cityButton:{},
+    createEmptyDashboard:()=>({}),updateDashboard(){},setStatus(){},pendingNaverSaves:()=>[{}],
+    createCollectionSessionId:()=> 'probe-session',getCollectorKey:()=> 'synthetic',
+    reconcilePendingNaverSave:async()=>{throw Object.assign(Error('pending'),{recoveryWaitV56:waiting});},
+    collectFinDistrictRaw:async()=>{discoveries++;return [];}});
+  const start=naver.indexOf('  async function collectFinSelectedAndSave('),end=naver.indexOf('  async function collectFinAutomaticDistrict(',start);
+  vm.runInContext(naver.slice(start,end),context);
+  const result=await context.collectFinSelectedAndSave({automatic:true});
+  assert.equal(discoveries,0);assert.equal(result.ok,false);assert.equal(result.recoveryWaitV56.code,waiting.code);
+  assert.equal(context.state.collectingSelection,false);
 });
