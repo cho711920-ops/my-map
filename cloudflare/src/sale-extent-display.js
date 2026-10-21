@@ -113,6 +113,15 @@ export function withSaleExtentDisplay(original, provider = {}) {
     : source === "공실박스" ? gongsilExtent(provider)
       : source === "당근" ? daangnExtent(original, provider) : unknown();
   const details = { ...(displayed.saleDetails || {}), ...result };
+  // Grouping is stricter than the provider's display label. A selected whole
+  // building must not hide a conflicting fractional/unit or multi-building ad.
+  const body = [original.buildingName, original.title, original.saleDetails?.descriptionText,
+    provider.daangn?.tagline, provider.daangn?.description].filter(Boolean).join("\n");
+  const target = descriptionSaleTarget(body);
+  details.wholeBuildingGroupEligibleV55 = result.saleExtent === "whole_building" &&
+    !target.blocked && target.saleExtent !== "unit" &&
+    !/(?:복합상가|단지\s*내\s*상가|지분|공유지분|별동|여러\s*동|(?:[2-9]|[1-9]\d+)\s*개?동\s*(?:일괄|전체|통)?\s*(?:매매|건물)|(?:총|전체|건물)\s*(?:[2-9]|[1-9]\d+)\s*개?동|동수\s*[:：]?\s*(?:[2-9]|[1-9]\d+)|(?:^|[\s(·,:])(?:제\s*)?(?:[A-Z가나다]|\d{1,4})\s*동(?:\s|$|[)·,:]))/i.test(body) &&
+    !saleRoomTarget(provider.room) && !saleRoomTarget(provider.gongsil?.ho, true);
   delete details.saleSourceFloorText;
   const sourceFloors = sourceFloorText(provider, source);
   if (sourceFloors) details.saleSourceFloorText = sourceFloors;

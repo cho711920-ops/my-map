@@ -183,7 +183,7 @@ test("final parent inventory follows both manual helpers and rejects an edit rac
   const result = await f.list();
   const sourceRead = f.queries.findIndex(query => /FROM listing_sources WHERE/.test(query.sql));
   const roomRead = f.queries.findIndex(query => /FROM listing_history h JOIN listings l/.test(query.sql));
-  const fieldsRead = f.queries.findIndex(query => /FROM listing_history WHERE action='updateProperty'/.test(query.sql));
+  const fieldsRead = f.queries.findIndex(query => /FROM listing_history WHERE \(action='updateProperty' OR action='separateOriginalListing'\)/.test(query.sql));
   const parentRead = f.queries.findIndex(query => /AS source_snapshot_source_count/.test(query.sql));
   assert.ok(sourceRead >= 0 && sourceRead < roomRead && roomRead < fieldsRead && fieldsRead < parentRead);
   assert.equal(edited, true);

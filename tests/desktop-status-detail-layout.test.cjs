@@ -18,7 +18,7 @@ assert.match(unified, /function loadDetail\(propertyId, force\)/);
 assert.match(unified, /if \(!force && detailIsFresh\(propertyId\)\)/);
 assert.match(unified, /if \(state\.detailPending\[propertyId\]\) \{/);
 assert.match(unified, /if \(!force \|\| state\.detailPendingForced\[propertyId\]\) return state\.detailPending\[propertyId\]/);
-assert.match(unified, /state\.detailPending\[propertyId\]\.catch\(function\(\) \{\}\)\.then\(function\(\) \{ return loadDetail\(propertyId, true\); \}\)/);
+assert.match(unified, /state\.detailPending\[propertyId\]\.catch\(function\(\) \{\}\)\.then\(function\(\) \{ return loadSingleDetailV55\(propertyId, true\); \}\)/);
 assert.match(unified, /function scheduleDetailWarmup\(items\)/);
 assert.match(unified, /detailRequestToken: 0/);
 assert.match(unified, /requestToken !== state\.detailRequestToken/);

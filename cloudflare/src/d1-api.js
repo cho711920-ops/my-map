@@ -384,6 +384,8 @@ export function compactSaleSummary(original) {
   } else {
     if (typeof detail.buildingUse === "string" && detail.buildingUse.trim()) summary.buildingUse = detail.buildingUse.trim().replace(/\s+/g, " ").slice(0, 160);
     summary.saleExtent = ["whole_building", "unit"].includes(detail.saleExtent) ? detail.saleExtent : "unknown";
+    if (detail.wholeBuildingGroupEligibleV55 === true) summary.wholeBuildingGroupEligibleV55 = true;
+    if (original.saleGroupingSeparatedV55 === true) summary.saleGroupingSeparatedV55 = true;
     summary.saleExtentEvidence = typeof detail.saleExtentEvidence === "string"
       ? detail.saleExtentEvidence.trim().slice(0, 100) : "원본 매매범위 근거 부족";
     if (typeof detail.saleSourceFloorText === "string" && detail.saleSourceFloorText.trim()) summary.saleSourceFloorText = detail.saleSourceFloorText.trim().slice(0, 60);
@@ -634,10 +636,12 @@ async function unifiedDetail(env, propertyId) {
       ? images.length
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
     const provider = saleExtentProvider(raw, row.source);
-    return { ...withSourceOriginalMetadata(withDaangnLandUse(
+    const original = { ...withSourceOriginalMetadata(withDaangnLandUse(
       withSaleFinancialDisplay(withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), provider),
         { ...provider, source: row.source, naverPriceInfo: row.source === "네이버" ? raw.saleRaw?.detailInfo?.priceInfo || raw.saleRaw?.priceInfo : undefined }), raw.landType, row.source
     ), row, manualRooms, manualFields), propertyId: clean(parent.property_id || parent.id) };
+    original.saleSummary = compactSaleSummary(original);
+    return original;
   });
   if (!originals.length) {
     const master = await env.DB.prepare(`SELECT id, property_id, main_source, title, building_name, status,

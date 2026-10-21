@@ -13,14 +13,19 @@ export async function loadManualRepresentativeFields(env, listingIds) {
   const scope = ids ? " AND listing_id IN (SELECT value FROM json_each(?1))" : "";
   const projection = prefix => `json_object(${MANUAL_REPRESENTATIVE_FIELDS.map(key =>
     `'${key}',json_extract(${prefix},'$.${key}')`).join(",")})`;
-  const rows = await env.DB.prepare(`SELECT listing_id, ${projection("before_json")} AS before_fields,
+  const rows = await env.DB.prepare(`SELECT listing_id, action, ${projection("before_json")} AS before_fields,
       ${projection("after_json")} AS after_fields
-    FROM listing_history WHERE action='updateProperty' AND json_valid(before_json) AND json_valid(after_json)
+    FROM listing_history WHERE (action='updateProperty' OR action='separateOriginalListing') AND json_valid(before_json) AND json_valid(after_json)
       ${scope} ORDER BY id`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
   const result = new Map();
   for (const row of rows?.results || []) {
     const before = parsed(row.before_fields), after = parsed(row.after_fields);
     const fields = result.get(clean(row.listing_id)) || new Set();
+    if (row.action === "separateOriginalListing") {
+      fields.add("__separatedV55");
+      result.set(clean(row.listing_id), fields);
+      continue;
+    }
     for (const field of MANUAL_REPRESENTATIVE_FIELDS) {
       const a = after[field], b = before[field];
       if (a == null && b == null || clean(a) === clean(b)) continue;
@@ -78,6 +83,7 @@ export function withSourceOriginalMetadata(original, row, manualRooms = new Map(
     sourceUnavailable: unavailable, missingCount: unavailable ? Math.max(1, Number(row.missing_count) || 0) : 0,
     ...sourceAvailability(row.active, row.availability_kind),
     manualDisplayFields: MANUAL_REPRESENTATIVE_FIELDS.filter(field => manualFields.get(clean(row.listing_id))?.has(field)).join(","),
+    saleGroupingSeparatedV55: manualFields.get(clean(row.listing_id))?.has("__separatedV55") || false,
     lastCheckedAt: clean(row.updated_at || row.last_collected_at),
     // Compatibility alias only: neither field claims the provider's actual end
     // time. Legacy/active/invalid evidence must never manufacture a date.

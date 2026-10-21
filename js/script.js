@@ -1343,7 +1343,8 @@ function getFilteredItems(options) {
     return 0;
   });
 
-  return filtered;
+  return window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.collapseWholeBuildingSalesV55 === "function"
+    ? window.JSUnifiedListingsV8.collapseWholeBuildingSalesV55(filtered) : filtered;
 }
 
 function listingRegistrationTime(item) {

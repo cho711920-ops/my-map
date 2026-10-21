@@ -41,7 +41,7 @@ const CANONICAL_HOST = "js-map.com";
 const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v3-source-proof.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
-const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v18-sale-financial-v50.json";
+const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v19-whole-building-v55.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-no-crm-v4-source-evidence.json";
 const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
@@ -444,7 +444,7 @@ function deleteR2Cache(env, context, keys) {
 
 function unifiedDetailCacheKey(propertyId) {
   const safe = String(propertyId || "").trim();
-  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v16-sale-financial-v50/${safe}.json` : "";
+  return /^[A-Za-z0-9_-]{1,100}$/.test(safe) ? `api-cache/unified-detail-v17-whole-building-v55/${safe}.json` : "";
 }
 
 function mutationAction(body) {

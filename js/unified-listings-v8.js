@@ -168,6 +168,78 @@
     return displayedOriginalProjection(propertyId) || group(propertyId);
   }
 
+  function wholeBuildingKeyV55(item) {
+    if (!item || item.tradeType !== "sale" || item.saleCategory === "land" || text(item.state) === "계약완료") return "";
+    var parser = global.JSParcelExternalLinksV1;
+    var parcel = parser && parser.parseAddress(item.address);
+    if (!parcel || parcel.regionOmitted || !/ [가-힣]+(?:구|군) /.test(parcel.query)) return "";
+    var originals = publicOriginals(item.unifiedAllOriginalsV1 || []);
+    if (!originals.some(function(original) { return !isSourceUnavailable(original); }) || originals.some(function(original) {
+      var detail = original.saleSummary || original.saleDetails || {};
+      var address = parser.parseAddress(original.address || item.address);
+      return original.tradeType !== "sale" || original.saleCategory === "land" ||
+        detail.saleExtent !== "whole_building" || detail.wholeBuildingGroupEligibleV55 !== true ||
+        original.saleGroupingSeparatedV55 || detail.saleGroupingSeparatedV55 || original.hasManualRoomOverride ||
+        /(?:^|,)(?:room|sale_details_json|sale_category|listing_type)(?:,|$)/.test(text(original.manualDisplayFields)) ||
+        !address || address.query !== parcel.query;
+    })) return "";
+    return parcel.query;
+  }
+
+  // Collapse only the already-filtered view. Saved master IDs, source groups,
+  // favorites, visit records and memo edits continue to address their own row.
+  function collapseWholeBuildingSalesV55(items) {
+    var buckets = Object.create(null), result = [];
+    (items || []).forEach(function(item) {
+      var master = resolveMasterItem(item.propertyId) || item;
+      var key = wholeBuildingKeyV55(master);
+      if (!key) { result.push(item); return; }
+      var grouped = buckets[key];
+      if (!grouped) {
+        grouped = Object.assign({}, item, {wholeBuildingMembersV55: [text(item.propertyId)],
+          unifiedDisplayOriginalsV2: (item.unifiedDisplayOriginalsV2 || item.unifiedOriginalsV8 || []).slice()});
+        buckets[key] = grouped;
+        result.push(grouped);
+      } else {
+        grouped.wholeBuildingMembersV55.push(text(item.propertyId));
+        grouped.unifiedDisplayOriginalsV2 = grouped.unifiedDisplayOriginalsV2.concat(item.unifiedDisplayOriginalsV2 || item.unifiedOriginalsV8 || []);
+      }
+    });
+    result.forEach(function(item) {
+      if (!item.wholeBuildingMembersV55 || item.wholeBuildingMembersV55.length < 2) return;
+      var seen = new Set();
+      item.unifiedDisplayOriginalsV2 = item.unifiedDisplayOriginalsV2.filter(function(original) {
+        var id = text(original.originalId);
+        if (seen.has(id)) return false;
+        seen.add(id); return true;
+      }).map(function(original) { return Object.assign({}, original, {displayGroupPropertyIdV55: text(item.propertyId)}); });
+      item.unifiedOriginalsV8 = item.unifiedDisplayOriginalsV2;
+      item.unifiedOriginalCountV8 = item.unifiedDisplayOriginalsV2.length;
+      item.sourceTypesV8 = item.unifiedDisplayOriginalsV2.map(function(original) { return sourceKey(original.source); });
+    });
+    return result;
+  }
+
+  function detailMembersV55(propertyId) {
+    var items = Array.isArray(global.currentItems) ? global.currentItems : [];
+    var displayed = items.filter(function(item) { return text(item.propertyId) === text(propertyId); })[0];
+    return displayed && displayed.wholeBuildingMembersV55 && displayed.wholeBuildingMembersV55.length > 1
+      ? displayed.wholeBuildingMembersV55.slice() : [text(propertyId)];
+  }
+
+  function groupedRecordsHtmlV55(propertyId) {
+    var members = detailMembersV55(propertyId);
+    if (members.length < 2) return "";
+    return '<details class="unified-group-records-v55"><summary>저장된 메모·확인 상태 (' + members.length + '개 기록)</summary>' +
+      members.map(function(id) {
+        var master = resolveMasterItem(id);
+        if (!master) return "";
+        return '<section><strong>' + esc(master.name || master.address) + ' · ' + esc(master.source) + '</strong>' +
+          '<p>' + esc(text(master.state) === "계약완료" ? "계약완료" : typeof global.isConfirmedVisitItem === "function" && global.isConfirmedVisitItem(master) ? "확인" : "미확인") + '</p><p style="white-space:pre-wrap">' + esc(master.memo || "저장된 메모 없음") + '</p>' +
+          '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodeURIComponent(id) + '\')">이 기록 수정</button></section>';
+      }).join("") + '</details>';
+  }
+
   function detailOriginals(originals, propertyId) {
     var visible = visibleOriginalsFrom(originals, propertyId);
     var projection = displayedOriginalProjection(propertyId);
@@ -544,6 +616,23 @@
   }
 
   function loadDetail(propertyId, force) {
+    var members = detailMembersV55(propertyId);
+    if (members.length < 2) return loadSingleDetailV55(propertyId, force);
+    // At most three requests at once; a failed member never produces a
+    // supposedly complete group. Each member retains its own cache/proof.
+    var output = new Array(members.length), cursor = 0;
+    function next() {
+      var index = cursor++;
+      if (index >= members.length) return Promise.resolve();
+      return loadSingleDetailV55(members[index], force).then(function(originals) {
+        output[index] = originals.map(function(original) { return Object.assign({}, original, {displayGroupPropertyIdV55: text(propertyId)}); });
+        return next();
+      });
+    }
+    return Promise.all(members.slice(0, 3).map(next)).then(function() { return orderOriginals([].concat.apply([], output)); });
+  }
+
+  function loadSingleDetailV55(propertyId, force) {
     propertyId = text(propertyId);
     if (!propertyId) return Promise.resolve([]);
     if (!force && detailIsFresh(propertyId)) {
@@ -553,7 +642,7 @@
       if (!force || state.detailPendingForced[propertyId]) return state.detailPending[propertyId];
       // A normal hover prefetch may still be using R2. Its promise is not a
       // cache-bypassing verification, so wait and send one actual forced read.
-      return state.detailPending[propertyId].catch(function() {}).then(function() { return loadDetail(propertyId, true); });
+      return state.detailPending[propertyId].catch(function() {}).then(function() { return loadSingleDetailV55(propertyId, true); });
     }
     if (!force && state.detailCache[propertyId] && Date.now() < Number(state.detailRetryAt[propertyId] || 0)) {
       return Promise.resolve(state.detailCache[propertyId]);
@@ -984,6 +1073,12 @@
   }
 
   function originalDisplayItem(master, original) {
+    // Manual values belong to the original's own master, never another member
+    // chosen as the visible group card.
+    var owner = resolveMasterItem(original.propertyId);
+    if (owner && text(owner.propertyId) !== text(master.propertyId)) {
+      master = Object.assign({}, owner, {propertyId: master.propertyId, key: master.key});
+    }
     var item = Object.assign({}, master);
     var manual = !isCandidateOriginal(original) ? text(original.manualDisplayFields).split(",") : [];
     item.displayValuePresence = Object.assign({}, master.displayValuePresence || {});
@@ -1030,7 +1125,7 @@
     if (!item || item.tradeType !== "sale" || !text(item.propertyId)) return Promise.resolve(item);
     var selected = item.unifiedFilterOriginalV2 || (item.unifiedOriginalsV8 || [])[0];
     var id = text(selected && selected.originalId || item.originalId);
-    return apiGet("unifiedListingDetail", {propertyId: item.propertyId}, true).then(function(result) {
+    return apiGet("unifiedListingDetail", {propertyId: text(selected && selected.propertyId) || item.propertyId}, true).then(function(result) {
       if (!result || result.ok === false || !Array.isArray(result.originals)) throw new Error("상세조건 조회 실패");
       var originals = result.originals;
       var matches = originals.filter(function(original) {
@@ -1151,6 +1246,7 @@
     var pendingLabel = pending ? missingOriginalLabel(item && item.propertyId) : "";
     var pendingRetryable = pending && getOriginalMetadataStatus(item && item.propertyId).retryable;
     var count = originals.length || (all.length || pending ? 0 : 1);
+    var groupLabelV55 = item && item.wholeBuildingMembersV55 && item.wholeBuildingMembersV55.length > 1 ? "원본 광고 " : "동일매물 ";
     var sourceUnavailable = originals.length > 0 && originals.every(function(original) {
       return isCandidateOriginal(original);
     });
@@ -1174,7 +1270,7 @@
     var badge = pending ? '<span class="unified-badge-v8">' + pendingLabel + (pendingRetryable ? ' · 다시 불러오기' : '') + '</span>' : sourceUnavailable
       ? '<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>'
       : count > 1
-        ? '<span class="unified-badge-v8">동일매물 ' + count + '개</span>'
+        ? '<span class="unified-badge-v8">' + groupLabelV55 + count + '개</span>'
         : '';
     var button;
     if (pending) {
@@ -1188,7 +1284,7 @@
     } else if (count > 1) {
       button = '<button type="button" class="item-source-link-btn active unified-expand-btn-v8" ' +
         'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggle(\'' + encodedId + '\', this)">' +
-        '동일매물 ' + count + '개</button>';
+        groupLabelV55 + count + '개</button>';
     } else {
       var link = originals.length ? text(originals[0].link) : text(item && item.sourceLink);
       button = link
@@ -1276,10 +1372,12 @@
   }
 
   function originalRow(original, selected) {
-    var encodedPropertyId = encodeURIComponent(text(original.propertyId));
+    var encodedPropertyId = encodeURIComponent(text(original.displayGroupPropertyIdV55 || original.propertyId));
     var encodedOriginalId = encodeURIComponent(text(original.originalId));
     var thumbnail = originalImage(original);
     var buildingSale = global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(original);
+    var financial = buildingSale && global.JSListingTradeV1.saleSummary(original);
+    function amount(value) { return value != null && value !== "" && Number.isFinite(Number(value)) ? number(value) + "만원" : "미제공"; }
     return '<button type="button" class="unified-original-row-v8' + (selected ? ' selected' : '') + '" ' +
       'data-original-id="' + esc(original.originalId) + '" ' +
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedPropertyId + '\', \'' + encodedOriginalId + '\')" ' +
@@ -1293,7 +1391,8 @@
         sourceKey(original.source) + '">' + esc(original.source) + '</b>' +
         (buildingSale ? '' : '<em>' + esc((global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel ? global.JSListingTradeV1.landUseLabel(original) : '') || originalRoomLabel(original) || '호실 -') + '</em>') + '</span>' +
         (isSourceUnavailable(original) ? '<small class="source-unavailable">원본 광고 미노출 · 거래완료 후보</small>' : '') +
-        conditionLine(original) + '<small>' + esc(original.buildingName || original.address) + '</small></span>' +
+        conditionLine(original) + (financial ? '<small>보증금 ' + esc(amount(financial.totalDeposit)) + ' · 월 임대수입 ' + esc(amount(financial.monthlyIncome)) + '</small>' : '') +
+        '<small>' + esc(original.buildingName || original.address) + '</small></span>' +
       '</button>';
   }
 
@@ -1437,12 +1536,12 @@
     document.getElementById("unifiedDetailTitleV8").textContent = selected
       ? (selected.buildingName || selected.address || "매물 상세") : "매물 상세";
     document.getElementById("unifiedDetailSubtitleV8").textContent = originals.length > 1
-      ? "동일 공간 원본 " + originals.length + "개" : originals.length === 1 ? "원본매물 1개"
+      ? (detailMembersV55(propertyId).length > 1 ? "건물 전체 · 원본 광고 " : "동일 공간 원본 ") + originals.length + "개" : originals.length === 1 ? "원본매물 1개"
       : state.detailStatus[propertyId] === "unavailable" ? "현재 노출 광고 없음"
       : /^(?:mismatch|error|filtered)$/.test(state.detailStatus[propertyId]) ? "원본 연결 확인 필요" : "원본 확인 중";
     var images = originalImages(selected);
     var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
-    var encodedActionPropertyId = encodeURIComponent(text(propertyId));
+    var encodedActionPropertyId = encodeURIComponent(text(selected && selected.propertyId) || text(propertyId));
     var buildingSale = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(selected);
     var salePresentation = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isSale(selected);
     if (salePresentation) drawer.setAttribute('data-sale-presentation-v2', global.JSListingTradeV1.normalizedSaleCategory(selected) === 'land' ? 'land' : 'building');
@@ -1502,10 +1601,10 @@
       '</section>' +
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +
-      '</section>' : ''));
+      '</section>' : '') + groupedRecordsHtmlV55(propertyId));
     var phoneActions = drawer.querySelector('.phone-detail-actions-v2');
     if (phoneActions) phoneActions.remove();
-    if (phoneDetail && selected) drawer.insertAdjacentHTML('beforeend', phoneDetailActionsV2(propertyId, selected));
+    if (phoneDetail && selected) drawer.insertAdjacentHTML('beforeend', phoneDetailActionsV2(text(selected.propertyId) || propertyId, selected));
     var detailGallery = body.querySelector(".unified-detail-gallery-v8");
     if (detailGallery && layoutOptions && layoutOptions.gallery) {
       detailGallery.replaceWith(layoutOptions.gallery);
@@ -1723,6 +1822,43 @@
   }
 
   function prepareDetailOriginals(propertyId, originals, originalId, options) {
+    if (detailMembersV55(propertyId).length > 1) {
+      var members = detailMembersV55(propertyId), selectedGroupOriginal = null;
+      var checked = [], retry = false;
+      members.forEach(function(member) {
+        var own = originals.filter(function(original) { return text(original.propertyId) === member; });
+        var wanted = own.some(function(original) { return text(original.originalId) === originalId; }) ? originalId : "";
+        // Validate and synchronize each actual parent independently. Never
+        // replace one parent's raw source group with the union from the view.
+        var prepared = prepareSingleDetailOriginalsV55(member, own, wanted, Object.assign({}, options, {groupedV55: true}));
+        retry = retry || !!prepared.retry;
+        checked = checked.concat(prepared.originals);
+        if (wanted) selectedGroupOriginal = prepared.selected;
+      });
+      if (!retry && !(options && options.fromCache)) {
+        var masters = members.map(resolveMasterItem).filter(Boolean);
+        members.forEach(function(member) {
+          state.groups[member] = originals.filter(function(original) { return text(original.propertyId) === member; });
+          delete state.sourceSnapshotProofKeys[member];
+        });
+        state.snapshotRevision = "";
+        attach(masters);
+        if (typeof global.applyFilter === "function") global.applyFilter();
+      }
+      checked = detailOriginals(checked, propertyId).map(function(original) {
+        return Object.assign({}, original, {displayGroupPropertyIdV55: propertyId});
+      });
+      if (originalId && !checked.some(function(original) { return text(original.originalId) === originalId; })) {
+        state.detailStatus[propertyId] = "filtered";
+        return {originals: [], retry: false};
+      }
+      state.detailStatus[propertyId] = retry ? "mismatch" : "";
+      return {originals: checked, selected: selectedGroupOriginal || checked[0], retry: retry};
+    }
+    return prepareSingleDetailOriginalsV55(propertyId, originals, originalId, options);
+  }
+
+  function prepareSingleDetailOriginalsV55(propertyId, originals, originalId, options) {
     var before = displayedOriginalProjection(propertyId);
     var previous = (before || state.groups[propertyId] || []).filter(function(original) {
       return text(original.originalId) === originalId;
@@ -1754,7 +1890,7 @@
     // A five-minute browser cache is presentation only. It cannot replace a
     // newer full-snapshot group, even when it happens to contain matching IDs.
     var fromCache = !!(options && options.fromCache);
-    var refreshedList = !fromCache && synchronizeDetailOriginals(propertyId, originals);
+    var refreshedList = !fromCache && !(options && options.groupedV55) && synchronizeDetailOriginals(propertyId, originals);
     var visible = detailOriginals(originals, propertyId);
     if (refreshedList && before && !displayedOriginalProjection(propertyId)) {
       visible = [];
@@ -1848,7 +1984,7 @@
     var initial = displayedOriginals(propertyId);
     var wanted = initial.filter(function(original) { return text(original.originalId) === originalId; })[0] || initial[0];
     state.openOriginalIdentity = sourceIdentity(wanted);
-    var cached = state.detailCache[propertyId];
+    var cached = detailMembersV55(propertyId).length > 1 ? null : state.detailCache[propertyId];
     if (cached) {
       var prepared = prepareDetailOriginals(propertyId, cached, originalId || text(wanted && wanted.originalId), {fromCache: true});
       cached = prepared.originals;
@@ -2533,6 +2669,7 @@
     allOriginals: allOriginals, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
     isSourceUnavailable: isSourceUnavailable,
     isCandidateOriginal: isCandidateOriginal, filterItemForView: filterItemForView,
+    collapseWholeBuildingSalesV55: collapseWholeBuildingSalesV55,
     isTransactionCandidate: isTransactionCandidate, candidateSummary: candidateSummary,
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,

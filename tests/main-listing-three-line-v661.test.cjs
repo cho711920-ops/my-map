@@ -26,7 +26,7 @@ assert.match(script, /toggle\.setAttribute\("aria-label", "메모 " \+ \(isOpen 
 assert.match(unified, /masterMeta:\s*\{\}/);
 assert.match(unified, /regDate:\s*text\(item\.regDate\)/);
 assert.match(unified, /unified-detail-meta-v8/);
-assert.match(unified, /동일매물 ' \+ count \+ '개/);
+assert.match(unified, /groupLabelV55 \+ count \+ '개/);
 assert.doesNotMatch(unified, /원본 ' \+ count \+ '개 펼치기/);
 
 assert.match(
