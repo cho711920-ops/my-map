@@ -1,5 +1,14 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-21 매매 미완료·서버 메모리 v66
+
+- Workers 공식 실행 통계에서 반복 exceededMemory 확인(19:31/20:02/20:05 KST 미확인 claim 시각과 근접). 모든 개별 요청의 stack까지는 미확보. 앞선 속도/receipt 보완이 강제 종료까지 해결하지 못했음.
+- 큰 CSV를 module에 보관/원문 전체와 복수 표현을 겹쳐 생성하던 경로 제거. 실제 R2 환경은 CSV500행/page·원본4000행/page 변환, 정확 proof/수동 편집 경합 유지, 고정5MiB multipart atomic complete/실패 abort/stream·env/key별 cold build 공유. 광고/개인 기록/존재 검증 기준 보존.
+- 별도 미접수 pending 무한 대기 보완: POST status의 exact Naver missing+실제 running 소유 회차에만 원자 실패 fence. 정상 claim과 경합, 이미 접수된 claim 보존, 늦은 POST 차단, ok:false 재대조. GET 읽기 전용. 클라이언트6.0.14 호환, PC 실행 중단/파일교체/수집 강제 재시작 없음.
+- 신규8/관련31통과, 전체1873/1862통과·기존11실패 동일. local workerd+R2의36000행89,764,846 bytes CSV 전후SHA동일. Node heap128MiB 제한 기존OOM exit134→수정exit0/관측61MiB(Workers 전체 한도와 같은 수치로 말하지 않음). lint/type/build/diff/dry-run 통과.
+- 제품49711ff/Worker4ff92956-0882-4bf3-9193-1c45f64a882f/프런트cache7bb5793d44d40bc321945cff 유지. 양 도메인HTML/90자산·인증401 확인. [원인·검수·미완료](docs/collector-memory-v66-20261021.txt).
+- **매매 전체 수집 완료 아님**. 배포 후 조회의 최신 보고21:49:25 KST: 서구5530/6561·대덕607/1920·중구1640/3141·동구106/2910 모두retry_wait/active1. 서구21:23 새 회차는 received290/최종저장21:33/새running claim없음. 다음 예약 시 실제 재개/최종census 확인 필요, 진행 중으로만 성공 보고 금지. 앞선 UI URL 가드 우회 없음; 이번 browser inventory도 수집 Edge를 노출하지 않음.
+
 ## 2026-10-21 모바일·태블릿 매물 빈화면 v65
 
 - 사용자 삼성 인터넷 가로1280 화면 지도만/매물0 제보. 실제 기기 오류로그는 미확보. 주소검색SDK 생성이 지도 Map 이후 초기조회까지 막는 경로, 첫 CSV 실패를 숨은 status에만 남기던 경로 보완. 저장좌표/캐시 위치는 SDK 부재에도 표시, 좌표 없는 행만 오류 분리.

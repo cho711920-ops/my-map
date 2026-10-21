@@ -1,0 +1,31 @@
+2026-10-21 매매 수집 미완료 원인 추적·메모리 보완 v66
+
+사용자 승인: 매매 수집이 계속 완료되지 않는 원인 확인 및 기존 승인 범위의 수정·검수·배포.
+
+확인한 운영 증거
+- Cloudflare 공식 Workers GraphQL 실행 통계에서 exceededMemory가 반복됨. 19:31:30, 20:02:30, 20:05:31 KST에도 해당 오류가 있고, 대덕구·중구·동구의 미확인 저장 접수 시각과 근접함. 과거 요청별 stack/URL은 조회 권한 부족으로 확보하지 못했으므로 모든 개별 실패의 동일 원인까지 확정하지 않음.
+- 앞선 속도·receipt 수정으로도 런타임 강제 종료 자체를 막지 못했음. received 합계와 실행기의 unchanged 포함 processed는 서로 다른 수치이므로 혼용하지 않음.
+- 보관된 운영 CSV 스냅샷은52,751,005 bytes. 기존 cold CSV 경로는 전체 SQL 원문/배열/CSV/UTF-8 해시/응답을 겹쳐 생성하고 module sheetCache에 큰 body를 유지했음. 전체 source 목록도 원문들을 모두 유지한 뒤 compact 변환함. 같은 isolate의 다른 요청/정기 작업에 메모리 압박을 줄 수 있는 구현임.
+- 별도 복구 결함: 클라이언트가 pending descriptor를 보관했지만 POST가 claim 전에 끊기면 서버에는 요청 자체가 없고, 기존 status missing 경로는 계속 기다림. 이는 코드/경합 시험에서 검증한 경로이며 현재 PC의 로컬 pending 내용을 직접 읽어 해당 사례라고 단정하지 않음.
+
+변경
+1. 실제 R2 binding의 CSV cold build를500행씩 변환→고정5 MiB multipart 조각→complete 후 R2 stream으로 변경. 전체 CSV/해시/응답 복사 및 큰 module body 보관 제거. 중간 실패는 abort, 기존 검증 cache 유지. 인증 전 조회 없음, force fresh/304/압축/revision 의미 보존.
+2. unified 원문은 기존4000행 keyset page별로 변환. 원문은 버리고 정확한 source identity proof만 보관, 마지막 parent inventory/count/version과 대조. manual history는 각 source page 이후 해당 parent 범위로 읽음. 편집 경합 검사는 유지. JSON도 작은 그룹별 multipart 직렬화→stream, 같은 env/key cold build만 공유. 광고/사진/검색 ID/대표 조건/공개 제외 기준 유지.
+3. POST mutationStatus에서 정확한 Naver batch ID가 missing이고 실제 소유 Naver 세션이 running일 때만 INSERT...ON CONFLICT DO NOTHING으로 실패 fence 생성. 정상 write claim과 원자 경합하며 fence가 이긴 ID의 지연 POST는 쓰기를 시작할 수 없음. claim이 이미 존재하면 절대 변경/해제하지 않음. 결과는 ok:false/naver_request_not_accepted이며 전체목록 재대조를 요구. 구버전6.0.14도 확정 실패를 받아 로컬 pending을 지우고 다음 자동 시도 가능. 성공/수집완료로 가장하지 않음. GET 상태조회는 계속 읽기 전용. 운영 원본·매물·사진·개인 기록·존재검증 기준 미변경.
+
+검수
+- 신규8개: 큰 CSV 정확한 bytes/UTF-8/CRLF·quote, 고정 part 크기, 실패 abort/이전 cache/재시도, 환경·key별 동시 cold build, unified 완전성, 실제 Worker handler의 인증/cold/warm/force/304/stream, 미접수 fence와 지연 POST/정상 claim 경합, scope/GET 읽기 전용.
+- 관련31개 통과. 전체1873개 중1862통과, 기존11실패 동일. 페이지화 때문에 낡은 SQL 형태만 검사하던2개 assertion을 새 scoped/page 형태로 정정했고 실제 데이터/편집 보호 회귀 시험도 통과함.
+- 로컬 workerd+실제 local R2 multipart에서36,000행 합성 CSV89,764,846 bytes: 수정 전후 SHA256 dd028465fcabb091dbc606a2f891020f2c47be9a564cbf92089977483923f9d1 동일. workerd 로컬 시험이 운영128MB 한도 초과를 재현했다고 말하지 않음.
+- 별도 Node --max-old-space-size=128 제한 시험: 기존 exit134/heap OOM, 수정 exit0/관측 peak JS heap61MiB, 위 bytes/SHA 동일. Node heap과 Workers 전체 isolate 메모리 한도는 동일한 측정치가 아님.
+- lint/type/build/diff/Worker dry-run 통과. 제품49711ff, Worker4ff92956-0882-4bf3-9193-1c45f64a882f 배포 및 push 완료. 프런트 cache7bb5793d44d40bc321945cff 유지. 양 도메인 HTML/90자산 SHA 및 invalid session clear/401 확인. 배포 후55초 tail 관측의 정기 작업1개 ok, 오류 없음. 이 짧은 관측을 장기 무오류로 일반화하지 않음.
+
+현재 미완료와 접근 한계
+- 마지막 서버 자동실행 보고21:49:25 KST: active1, 네이버 매매 서구5530/6561, 대덕607/1920, 중구1640/3141, 동구106/2910, 모두 retry_wait. 서구21:23 새 회차는 received290/최종저장21:33:28/새 running claim 없음. 새 회차까지 이전 claim과 같은 실패라고 단정하지 않음.
+- 배포 후 재조회에서도 위 보고가 최신. 새 전체수집 완료/원본 최종 total·고유ID·마지막 페이지 완료검증은 아직 확보하지 못함. 완료 처리하지 않음.
+- 기존 running claim/진행 브라우저/확장 실행상태를 강제 해제·중단·재시작하지 않았고 PC 확장 파일도 교체하지 않음. 네이티브 UI는 앞선 URL 확인 안전 차단 이력, 이번 허용 browser inventory에는 IAB VWorld만 있어 실제 Edge 수집 조작을 하지 않음.
+- 다음 확인은 실행기의 다음 예약 확인 및 구별 새 회차/최종 census 완료 증거. 기다림만 반복하면 서버 오류 재발 여부와 PC alarm/실행기 상태를 구분해 조사해야 함. 이번 변경을 매매 전체 수집 완료로 보고하지 말 것.
+
+비민감 산출물: outputs/v66-release-all-tests-final.log, v66-final-focused.log, v66-workerd-memory.log,
+v66-heap-old.log, v66-heap-new.log, v66-dry-run.log, v66-deploy.log,
+collector-memory-v66-live-verification.json. 실제 원문/로그는 Git 밖 private-audits에만 보관.
