@@ -20,4 +20,10 @@
 - ESLint/typecheck/build/diff 통과, Wrangler4.124 dry-run 통과.
 - 실제 사용자 태블릿 및 로그인 운영 화면에서 계정 생성·인증은 수행하지 않음. 수집 프로세스 재시작/운영 매물 변경 없음.
 - 1024×768 터치 태블릿 크기 브라우저2개 추가 통과. 실제 태블릿 기기 조작은 아님.
-- 운영 배포 결과는 후속 기록.
+
+운영 완료
+- 제품7832130, Worker ed0bcee0-3dee-4321-94b3-e487809508e5. 정적 캐시9ea39714e7bb9c91d86f13c9.
+- js-map.com/www.js-map.com HTML200/no-store/빌드SHA 일치, 연결JS/CSS90개 각각200/SHA 일치.
+- 양 도메인 잘못된 세션 GET401/no-store/쿠키 Max-Age=0, localLoginEnabled=true 확인. 비로그인 매물 목록/상세401 유지.
+- 운영 확인 outputs/owner-local-v51-live-verification.json. 로그인한 운영 화면에서 실제 아이디 발급/사용자 비밀번호 입력은 수행하지 않음.
+- 사이트 새로고침 후 운영현황 > 사용자 관리 > 발급 아이디에서 ‘내 계정’을 선택하고 직접 아이디/비밀번호 설정. 이후 태블릿 아이디 로그인 가능.
