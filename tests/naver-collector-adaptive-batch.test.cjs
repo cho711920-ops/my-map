@@ -106,3 +106,38 @@ test("adaptive detailed saves cover every candidate once as the batch size chang
   assert.deepEqual(requests.map(request => request.requestId), [0, 20, 45, 75].map(index => `adaptive-session-batch-${index}`));
   assert.equal(dashboard.processed, 80);
 });
+
+test("sale saves remain at most ten records while covering every candidate exactly once", async () => {
+  const h = harness();
+  const requests = [];
+  const dashboard = {};
+  Object.assign(h.context, {
+    state: {busy: false, preparing: false, stopRequested: false, dashboard},
+    window: {setInterval: () => 1, clearInterval() {}},
+    location: {href: "https://fin.land.naver.com/map"},
+    saveButton: {}, retryButton: {},
+    parseFinFilters: () => ({tradeTypes: ["A1"]}),
+    createCollectionSessionId: () => "adaptive-session",
+    normalize: item => item,
+    classifyNaverManifest: async items => ({items, unchanged: 0}),
+    enrichNaverDetailBatch: async items => items.map(item => ({item, valid: true})),
+    postBatchWithRetry: async (items, attempts, metadata) => {
+      requests.push({ids: items.map(item => item.articleNo), requestId: metadata.requestId});
+      return {ok: true, created: items.length, accepted: items.length};
+    },
+    finalizeNaverSession: async () => ({ok: true, complete: true, totals: {created: 80}}),
+    addResultTotals: (totals, result) => { totals.created += result.created; totals.accepted += result.accepted; },
+    updateDashboard: data => Object.assign(dashboard, data),
+    setStatus() {}, setProgress() {}, showNaverSaveWait() {}, finishCollectorRun() {},
+    delay: async () => {}, clean: String, isFinNaver: () => true
+  });
+  vm.runInContext(functionSource("addNaverDiagnostics"), h.context);
+  vm.runInContext(functionSource("collectAndSave"), h.context);
+  const input = Array.from({length: 80}, (_, index) => ({articleNo: String(index + 1)}));
+  const result = await h.context.collectAndSave(input, "서구 전체", {complete: true});
+  assert.equal(result.ok, true);
+  assert.deepEqual(requests.map(request => request.ids.length), Array(8).fill(10));
+  assert.deepEqual(requests.flatMap(request => Array.from(request.ids)), input.map(item => item.articleNo));
+  assert.deepEqual(requests.map(request => request.requestId), [0, 10, 20, 30, 40, 50, 60, 70].map(index => `adaptive-session-batch-${index}`));
+  assert.equal(dashboard.processed, 80);
+});

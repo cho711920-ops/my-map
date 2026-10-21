@@ -24,19 +24,17 @@ async function flush() {
   for (let i = 0; i < 100; i += 1) await Promise.resolve();
 }
 
-test('closed-session rescan clears only its pending checkpoint and ends this attempt before any fresh mutation', async()=>{
+test('closed-session proof clears only its checkpoint and permits a new manifest without replay', async()=>{
   const rescan={ok:false,code:'naver_closed_session_rescan',requiresFreshManifest:true,message:'latest full manifest required'};
   const h=harness(({payload})=>jsonResponse(payload.action==='mutationStatus'?{ok:true,ready:true,result:rescan}:{ok:true,needsDetail:[]}));
   h.storage.set('pending-save-test',JSON.stringify({requestId:'old-batch',sessionId:'old-session',fingerprint:'a'.repeat(64),count:5}));
   h.storage.set('city-progress-test',JSON.stringify({sessionId:'old-session',nextIndex:817}));
   h.storage.set('auto-progress-test',JSON.stringify({old:{sessionId:'old-session'},other:{sessionId:'other-session',nextIndex:12}}));
   const payload={action:'classifySourceManifest',requestId:'fresh-manifest',sessionId:'fresh-session',collectorKey:'test-only'};
-  await assert.rejects(h.context.fetchCollectorJson(payload,60000,'invalid'),e=>e.collectorFreshScanRequired&&e.collectorRequestAmbiguous);
-  assert.deepEqual(h.calls.map(c=>c.payload.action),['mutationStatus']);
-  assert.equal(h.storage.has('pending-save-test'),false);assert.equal(h.storage.has('city-progress-test'),false);
-  assert.deepEqual(JSON.parse(h.storage.get('auto-progress-test')),{other:{sessionId:'other-session',nextIndex:12}});
   await h.context.fetchCollectorJson(payload,60000,'invalid');
   assert.deepEqual(h.calls.map(c=>c.payload.action),['mutationStatus','classifySourceManifest']);
+  assert.equal(h.storage.has('pending-save-test'),false);assert.equal(h.storage.has('city-progress-test'),false);
+  assert.deepEqual(JSON.parse(h.storage.get('auto-progress-test')),{other:{sessionId:'other-session',nextIndex:12}});
 });
 
 test('a closed-session direct rejection is never retried or mistaken for a successful batch', async()=>{
@@ -67,7 +65,7 @@ function harness(fetch) {
     BATCH_SIZE_STORAGE_KEY: "batch-size-test",
     PENDING_SAVE_STORAGE_KEY: "pending-save-test",
     CITY_PROGRESS_KEY: "city-progress-test",AUTO_DISTRICT_PROGRESS_KEY:"auto-progress-test",
-    localStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value),
+    localStorage: {get length() { return storage.size; }, key: index => [...storage.keys()][index] ?? null, getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value),
       removeItem: key => storage.delete(key)},
     state: {stopRequested: false, runGeneration: 1},
     panel: {isConnected: true},
@@ -100,7 +98,7 @@ function harness(fetch) {
   });
   for (const name of ["loadNaverBatchSize", "rememberNaverBatchSize", "collectorRequestFailure",
     "collectorRecoveryIsCurrent", "recoverCollectorRequest", "naverBatchRequestId",
-    "pendingNaverSave", "rememberPendingNaverSave", "clearPendingNaverSave", "resetClosedNaverCheckpoint", "requireFreshNaverManifest", "reconcilePendingNaverSave",
+    "pendingNaverSaves", "pendingNaverSave", "rememberPendingNaverSave", "clearPendingNaverSave", "resetClosedNaverCheckpoint", "requireFreshNaverManifest", "reconcilePendingNaverSave",
     "fetchCollectorText", "fetchCollectorJson", "classifyNaverManifest",
     "postBatch", "postBatchWithRetry", "finalizeNaverSession", "addNaverDiagnostics", "getNaverSessionResult",
     "fetchFinJson", "enrichNaverDetailBatch", "collectAndSave", "retryFailedCityArticles",
@@ -498,15 +496,15 @@ test("a late third-read success reconciles exactly one saved write", async () =>
   const pending = h.context.postBatchWithRetry([{articleNo: "123", contact: "must-not-persist"}], 6,
     {sessionId: "session-late", requestId: "session-late-batch-0"});
   await flush();
-  const descriptor = JSON.parse(h.storage.get("pending-save-test"));
-  assert.deepEqual(Object.keys(descriptor).sort(), ["count", "createdAt", "fingerprint", "requestId", "sessionId"]);
+  const descriptor = h.context.pendingNaverSave();
+  assert.deepEqual(Object.keys(descriptor).sort(), ["count", "createdAt", "fingerprint", "requestId", "scope", "sessionId"]);
   assert.equal(JSON.stringify(descriptor).includes("must-not-persist"), false);
   assert.equal(JSON.stringify(descriptor).includes("test-only-key"), false);
   h.expire(60000);
   assert.deepEqual(JSON.parse(JSON.stringify(await pending)), saved);
   assert.equal(h.context.BATCH_SIZE, 10);
   assert.equal(h.context.loadNaverBatchSize(), 10);
-  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.equal(Boolean(h.context.pendingNaverSave()), false);
   assert.deepEqual(h.delays, [5000, 5000]);
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", ...Array(3).fill("mutationStatus")]);
   for (const call of h.calls.slice(1)) {
@@ -523,7 +521,7 @@ test("a server running claim is polled, never posted again", async () => {
   assert.equal(result.saved, 1);
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
   assert.equal(h.calls[1].payload.requestId, h.calls[0].payload.requestId);
-  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.equal(Boolean(h.context.pendingNaverSave()), false);
 });
 
 test("a recovered confirmed failure is not replayed under the cached request ID", async () => {
@@ -535,7 +533,7 @@ test("a recovered confirmed failure is not replayed under the cached request ID"
   await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "failed-batch"}),
     error => error.collectorFailureConfirmed && error.message === "confirmed storage failure");
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
-  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.equal(Boolean(h.context.pendingNaverSave()), false);
 });
 
 test("a normal terminal save failure is not posted again under its cached ID", async () => {
@@ -543,7 +541,7 @@ test("a normal terminal save failure is not posted again under its cached ID", a
   await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "failed-batch"}),
     error => error.collectorFailureConfirmed && error.message === "confirmed save failure");
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch"]);
-  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.equal(Boolean(h.context.pendingNaverSave()), false);
   assert.deepEqual(h.delays, []);
 });
 
@@ -572,7 +570,7 @@ for (const canceledBy of ["panel", "run"]) {
       await assert.rejects(h.context.postBatchWithRetry([], 6, {requestId: "canceled-batch"}),
         error => error.collectorRequestAmbiguous);
       assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus"]);
-      assert.equal(h.storage.has("pending-save-test"), true);
+      assert.equal(Boolean(h.context.pendingNaverSave()), true);
       assert.equal(h.timers.size, 0);
     });
   }
@@ -590,7 +588,7 @@ test("safe stop reconciles the already-sent write without posting another write"
   assert.equal((await h.context.postBatchWithRetry([], 6, {requestId: "stop-batch"})).saved, 1);
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch", "mutationStatus", "mutationStatus"]);
   assert.equal(h.context.state.stopRequested, true);
-  assert.equal(h.storage.has("pending-save-test"), false);
+  assert.equal(Boolean(h.context.pendingNaverSave()), false);
 });
 
 test("a replaced panel cannot continue the old run after its late normal save response", async () => {
@@ -602,7 +600,7 @@ test("a replaced panel cannot continue the old run after its late normal save re
   release(jsonResponse({ok: true, saved: 1}));
   await assert.rejects(pending, error => error.collectorRequestAmbiguous);
   assert.deepEqual(h.calls.map(call => call.payload.action), ["saveNaverBatch"]);
-  assert.equal(h.storage.has("pending-save-test"), true);
+  assert.equal(Boolean(h.context.pendingNaverSave()), true);
   assert.equal(h.timers.size, 0);
 });
 
@@ -617,7 +615,7 @@ test("unresolved safe stop preserves ambiguity and its pending descriptor", asyn
     error => error.collectorRequestAmbiguous && error.safeStop);
   assert.equal(h.calls.filter(call => call.payload.action === "saveNaverBatch").length, 1);
   assert.equal(h.calls.filter(call => call.payload.action === "mutationStatus").length, 4);
-  assert.equal(h.storage.has("pending-save-test"), true);
+  assert.equal(Boolean(h.context.pendingNaverSave()), true);
 });
 
 for (const nextAction of ["classifySourceManifest", "saveNaverBatch", "finalizeNaverSession"]) {
@@ -633,7 +631,7 @@ for (const nextAction of ["classifySourceManifest", "saveNaverBatch", "finalizeN
       error => error.collectorRequestAmbiguous);
     assert.deepEqual(fresh.calls.map(call => call.payload.action), Array(4).fill("mutationStatus"));
     assert.equal(fresh.calls.every(call => call.payload.requestId === prior.calls[0].payload.requestId), true);
-    assert.equal(fresh.storage.get("pending-save-test"), prior.storage.get("pending-save-test"));
+    assert.deepEqual([...fresh.storage], [...prior.storage]);
   });
 }
 
@@ -649,7 +647,7 @@ test("a fresh tab may compare again only after the exact previous write is confi
   await fresh.context.classifyNaverManifest([{articleNo: "1"}], {sessionId: "fresh-session"});
   assert.deepEqual(fresh.calls.map(call => call.payload.action), ["mutationStatus", "classifySourceManifest"]);
   assert.equal(fresh.calls[0].payload.requestId, prior.calls[0].payload.requestId);
-  assert.equal(fresh.storage.has("pending-save-test"), false);
+  assert.equal(Boolean(fresh.context.pendingNaverSave()), false);
 });
 
 test("a same-payload resumed batch returns its confirmed old result without posting", async () => {
@@ -732,3 +730,45 @@ for (const interruptedAt of ["fetch", "json", "delay"]) {
     assert.equal(capture.prepared, undefined);
   });
 }
+
+
+test("a pending district does not block a different district and both uncertain request IDs survive", async () => {
+  const h = harness(({payload}) => payload.action === "mutationStatus"
+    ? jsonResponse({ok: true, ready: false}) : Promise.reject(new TypeError("lost response")));
+  await assert.rejects(h.context.postBatchWithRetry([{articleNo: "1"}], 6,
+    {sessionId: "seo-session", requestId: "seo-batch-0", scope: "대전 서구 전체"}));
+  const firstId = h.context.pendingNaverSave().requestId;
+  h.calls.length = 0;
+  await assert.rejects(h.context.postBatchWithRetry([{articleNo: "2"}], 6,
+    {sessionId: "dong-session", requestId: "dong-batch-0", scope: "대전 동구 전체"}));
+  assert.equal(h.calls[0].payload.action, "saveNaverBatch");
+  assert.equal(h.calls.some(c => c.payload.requestId === firstId), false);
+  assert.equal(h.context.pendingNaverSaves().length, 2);
+  const records = Array.from(h.context.pendingNaverSaves());
+  h.context.clearPendingNaverSave(records[1].requestId);
+  assert.equal(h.context.pendingNaverSaves().length, 1);
+  assert.equal(h.context.pendingNaverSave().requestId, firstId);
+});
+
+for (const scope of ["대전 서구 전체", "", "선택 클러스터"]) {
+  test(`same/unknown scope '${scope}' cannot bypass an unconfirmed district save`, async () => {
+    const h = harness(({payload}) => payload.action === "mutationStatus"
+      ? jsonResponse({ok:true,ready:false}) : Promise.reject(new TypeError("lost response")));
+    await assert.rejects(h.context.postBatchWithRetry([{articleNo:"1"}], 6,
+      {sessionId:"old", requestId:"old-batch", scope:"대전 서구 전체"}));
+    h.calls.length = 0;
+    await assert.rejects(h.context.fetchCollectorJson({action:"classifySourceManifest",sessionId:"new",
+      requestId:"new-manifest",scope,collectorKey:"test-only"},60000,"invalid"));
+    assert.equal(h.calls.every(c => c.payload.action === "mutationStatus"), true);
+    assert.equal(h.context.pendingNaverSaves().length, 1);
+  });
+}
+
+test("closed-session recovery still forbids a direct save/finalization without a fresh census", async()=>{
+  for (const action of ["saveNaverBatch","finalizeNaverSession"]) {
+    const h=harness(()=>jsonResponse({ok:true,ready:true,result:{ok:false,code:"naver_closed_session_rescan",requiresFreshManifest:true}}));
+    h.storage.set("pending-save-test",JSON.stringify({requestId:"old-batch",sessionId:"old",fingerprint:"a".repeat(64),count:5}));
+    await assert.rejects(h.context.fetchCollectorJson({action,sessionId:"new",requestId:"new-request",data:[]},60000,"invalid"), e=>e.collectorFreshScanRequired);
+    assert.deepEqual(h.calls.map(c=>c.payload.action),["mutationStatus"]);
+  }
+});

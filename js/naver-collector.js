@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "6.0.12";
+  var VERSION = "6.0.13";
   var PANEL_ID = "js-naver-collector-panel";
   var STYLE_ID = "js-naver-collector-style";
   var MAX_PAGES = 500;
@@ -2898,35 +2898,60 @@
       (typeof panel === "undefined" || panel.isConnected !== false);
   }
 
-  function pendingNaverSave() {
-    var raw = localStorage.getItem(PENDING_SAVE_STORAGE_KEY);
-    if (!raw) return null;
-    var saved;
-    try { saved = JSON.parse(raw); } catch (_) {}
-    if (raw.length > 1024 || !saved || typeof saved.requestId !== "string" ||
-        !saved.requestId || saved.requestId.length > 160 ||
-        typeof saved.sessionId !== "string" || saved.sessionId.length > 160 ||
-        !/^[a-f0-9]{64}$/.test(saved.fingerprint) ||
-        !Number.isInteger(saved.count) || saved.count < 0 || saved.count > 250) {
-      throw collectorRequestFailure({action: "saveNaverBatch"},
-        new Error("이전 저장 요청 확인 기록이 올바르지 않습니다. 새 저장 전에 확인이 필요합니다."));
+  function pendingNaverSaves() {
+    // A separate key per request avoids another tab/region overwriting a write
+    // whose outcome is unknown. Continue reading the legacy singleton too.
+    var keys = [PENDING_SAVE_STORAGE_KEY];
+    for (var i = 0; i < localStorage.length; i += 1) {
+      var key = localStorage.key(i);
+      if (key && key.indexOf(PENDING_SAVE_STORAGE_KEY + ":") === 0) keys.push(key);
     }
-    return saved;
+    var records = [];
+    keys.forEach(function(key) {
+      var raw = localStorage.getItem(key);
+      if (!raw) return;
+      var saved;
+      try { saved = JSON.parse(raw); } catch (_) {}
+      if (raw.length > 1024 || !saved || typeof saved.requestId !== "string" ||
+          !saved.requestId || saved.requestId.length > 160 ||
+          typeof saved.sessionId !== "string" || saved.sessionId.length > 160 ||
+          !/^[a-f0-9]{64}$/.test(saved.fingerprint) ||
+          !Number.isInteger(saved.count) || saved.count < 0 || saved.count > 250 ||
+          saved.scope !== undefined && (typeof saved.scope !== "string" || saved.scope.length > 200) ||
+          key !== PENDING_SAVE_STORAGE_KEY && key !== PENDING_SAVE_STORAGE_KEY + ":" + saved.requestId) {
+        throw collectorRequestFailure({action: "saveNaverBatch"},
+          new Error("이전 저장 요청 확인 기록이 올바르지 않습니다. 새 저장 전에 확인이 필요합니다."));
+      }
+      if (!records.some(function(record) { return record.requestId === saved.requestId; })) records.push(saved);
+    });
+    return records;
+  }
+
+  function pendingNaverSave(requestId) {
+    var records = pendingNaverSaves();
+    return requestId ? records.find(function(record) { return record.requestId === requestId; }) || null : records[0] || null;
   }
 
   function rememberPendingNaverSave(payload) {
     var saved = {requestId: payload.requestId, sessionId: String(payload.sessionId || ""),
-      fingerprint: payload.requestId.slice(-64), count: payload.data.length, createdAt: Date.now()};
-    try { localStorage.setItem(PENDING_SAVE_STORAGE_KEY, JSON.stringify(saved)); }
-    catch (_) {
+      fingerprint: payload.requestId.slice(-64), count: payload.data.length, createdAt: Date.now(),
+      scope: clean(payload.scope).slice(0, 200)};
+    try {
+      if (pendingNaverSaves().length >= 40 && !pendingNaverSave(payload.requestId)) throw new Error("pending limit");
+      localStorage.setItem(PENDING_SAVE_STORAGE_KEY + ":" + payload.requestId, JSON.stringify(saved));
+    } catch (_) {
       throw collectorRequestFailure(payload,
         new Error("저장 요청 확인 기록을 보관하지 못해 전송을 중단했습니다. 브라우저 저장공간을 확인해 주세요."));
     }
   }
 
   function clearPendingNaverSave(requestId) {
-    var saved = pendingNaverSave();
-    if (saved && saved.requestId === requestId) localStorage.removeItem(PENDING_SAVE_STORAGE_KEY);
+    var saved = pendingNaverSave(requestId);
+    if (!saved) return;
+    localStorage.removeItem(PENDING_SAVE_STORAGE_KEY + ":" + requestId);
+    var legacy;
+    try { legacy = JSON.parse(localStorage.getItem(PENDING_SAVE_STORAGE_KEY) || "null"); } catch (_) {}
+    if (legacy && legacy.requestId === requestId) localStorage.removeItem(PENDING_SAVE_STORAGE_KEY);
   }
 
   function resetClosedNaverCheckpoint(sessionId) {
@@ -2940,7 +2965,7 @@
 
   function requireFreshNaverManifest(payload,result) {
     if(!result||result.code!=='naver_closed_session_rescan'||result.requiresFreshManifest!==true)return;
-    var pending=pendingNaverSave(),sessionId=payload.sessionId||pending&&pending.requestId===payload.requestId&&pending.sessionId;
+    var pending=pendingNaverSave(payload.requestId),sessionId=payload.sessionId||pending&&pending.requestId===payload.requestId&&pending.sessionId;
     if(pending&&pending.requestId===payload.requestId)clearPendingNaverSave(payload.requestId);
     if(sessionId)resetClosedNaverCheckpoint(sessionId);
     var error=collectorRequestFailure(payload,new Error(result.message||'종료된 수집 회차입니다. 최신 전체목록부터 다시 대조합니다.'));
@@ -2950,21 +2975,34 @@
   }
 
   async function reconcilePendingNaverSave(payload, generation) {
-    var pending = pendingNaverSave();
-    if (!pending) return null;
-    var sameRequest = payload.action === "saveNaverBatch" && payload.requestId === pending.requestId;
-    var previous = {action: "saveNaverBatch", requestId: pending.requestId, collectorKey: payload.collectorKey};
-    var unresolved = collectorRequestFailure(previous,
-      new Error("이전 저장 요청의 결과가 아직 확인되지 않았습니다. 중복 전송 없이 결과 확인 후 이어갑니다."));
-    try {
-      var result = await recoverCollectorRequest(previous, unresolved, generation);
-      return sameRequest ? {result: result} : null;
-    } catch (error) {
-      // A definite previous failure permits a fresh manifest comparison, but
-      // replaying the same failed request ID cannot repair its cached result.
-      if (error && error.collectorFailureConfirmed && !sameRequest) return null;
-      throw error;
+    var records = pendingNaverSaves();
+    for (var index = 0; index < records.length; index += 1) {
+      var pending = records[index];
+      var sameRequest = payload.action === "saveNaverBatch" && payload.requestId === pending.requestId;
+      var districtScope = /^대전 (?:유성구|서구|대덕구|중구|동구) 전체$/;
+      // Only a known different district is independent. Unknown/legacy scopes,
+      // the same session, and the same district keep the conservative barrier.
+      if (!sameRequest && payload.sessionId && pending.sessionId && payload.sessionId !== pending.sessionId &&
+          districtScope.test(payload.scope || "") && districtScope.test(pending.scope || "") &&
+          payload.scope !== pending.scope) continue;
+      var previous = {action: "saveNaverBatch", requestId: pending.requestId,
+        sessionId: pending.sessionId, collectorKey: payload.collectorKey};
+      var unresolved = collectorRequestFailure(previous,
+        new Error("이전 저장 요청의 결과가 아직 확인되지 않았습니다. 중복 전송 없이 결과 확인 후 이어갑니다."));
+      try {
+        var result = await recoverCollectorRequest(previous, unresolved, generation);
+        if (sameRequest) return {result: result};
+      } catch (error) {
+        if (error && error.collectorFailureConfirmed && !sameRequest) continue;
+        // The server proved that the old owning session is closed and cleared
+        // only its checkpoint. A NEW manifest may proceed, never a direct save
+        // or finalization of the incomplete old census.
+        if (error && error.collectorFreshScanRequired && payload.action === "classifySourceManifest" &&
+            payload.sessionId && payload.sessionId !== pending.sessionId) continue;
+        throw error;
+      }
     }
+    return null;
   }
 
   async function recoverCollectorRequest(payload, error, generation) {
@@ -3337,7 +3375,11 @@
 
       for (var index = 0; index < items.length;) {
         if (state.stopRequested) break;
-        var candidateBatch = items.slice(index, index + BATCH_SIZE);
+        // Sale payloads include building/land data and photo/contact work. Keep
+        // their individual writes bounded even after fast batches grow the
+        // shared adaptive preference; confirmed smaller batches still shrink.
+        var activeBatchSize = session.tradeType === "sale" ? Math.min(BATCH_SIZE, 10) : BATCH_SIZE;
+        var candidateBatch = items.slice(index, index + activeBatchSize);
         setStatus(
           "네이버 상세주소·층 확인 중",
           (index + 1) + "~" + (index + candidateBatch.length) + "/" + items.length +
@@ -3402,7 +3444,7 @@
         showNaverSaveWait(index, batch.length, items.length, saveWaitStartedAt);
         setStatus(
           "JS부동산 매물현황 저장 중",
-          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + BATCH_SIZE + "개씩 안전하게 저장합니다."
+          (index + 1) + "~" + (index + batch.length) + "/" + items.length + "개 · 최대 " + activeBatchSize + "개씩 안전하게 저장합니다."
         );
         setProgress(classification.unchanged + index, allItems.length || 1);
         var batchStartedAt = Date.now();

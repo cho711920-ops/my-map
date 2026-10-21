@@ -949,7 +949,14 @@ async function handleApi(request, env, context) {
   if (url.pathname === "/api/session") return handleSession(request, env);
   if (url.pathname === "/api/sheet") return handleSheet(request, env, context);
   if (url.pathname === "/api/collector") {
-    const response = await handleCollectorApi(request, env);
+    const collection = handleCollectorApi(request, env);
+    // A browser timeout/disconnect must not immediately cancel an already
+    // accepted write before its exact request result is recorded. This adds
+    // no replay: status reads still reconcile the original request ID.
+    if (request.method === "POST" && context && typeof context.waitUntil === "function") {
+      context.waitUntil(collection.then(() => null, () => null));
+    }
+    const response = await collection;
     const collectorAction = String(response.headers.get("x-js-collector-action") || "");
     const collectorPayload = response.ok
       ? await response.clone().json().catch(() => ({}))
