@@ -67,6 +67,8 @@ test('SQLite list/detail financial parity is source-local and read-only with str
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());const migrations=new URL('../cloudflare/migrations/',import.meta.url);
   for(const f of fs.readdirSync(migrations).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(new URL(f,migrations),'utf8'));
   const cases=[
+    {item:{...original,source:'네이버',salePrice:80000,saleDetails:{scope:'whole_building',descriptionVersion:4,descriptionText:'매매금액:8억\n보증금:5천\n총월세:253',totalDeposit:null,monthlyIncome:null}},raw:{},expected:{totalDeposit:5000,monthlyIncome:253}},
+    {item:{...original,source:'네이버',salePrice:80000,saleDetails:{scope:'whole_building'}},raw:{description:'검수용 광고',saleRaw:{detailInfo:{articleDetailInfo:{articleDescription:'매매금액:8억\n보증금:5천\n총월세:253'}}}},expected:{totalDeposit:5000,monthlyIncome:253}},
     {item:{...original,salePrice:63000,saleDetails:{scope:'whole_building',descriptionVersion:3,descriptionText:'매매가격:6억3000만원 총 보증금:1억4500만원 월세 수익:월215만원 (연2580만원)'}},raw:{},expected:{totalDeposit:14500,monthlyIncome:215}},
     {item:{...original,source:'네이버',salePrice:69000,saleDetails:{scope:'whole_building',descriptionVersion:3,descriptionText:'현재보증금총액:2억6500만원(조정가능) 월임대료:313만원'}},raw:{},expected:{totalDeposit:26500,monthlyIncome:313}},
     {item:original,raw:{},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},

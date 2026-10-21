@@ -367,6 +367,10 @@ export function compactSaleSummary(original) {
   if (original?.tradeType !== "sale" || !original.saleDetails) return "";
   const detail = original.saleDetails;
   const summary = {};
+  if (Array.isArray(detail.descriptionUnitAssumptions)) {
+    const assumptions = detail.descriptionUnitAssumptions.filter(field => ["totalDeposit", "monthlyIncome"].includes(field));
+    if (assumptions.length) summary.descriptionUnitAssumptions = assumptions;
+  }
   if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
   for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield"]) {
     if (key === "buildingAreaM2" && (detail.scope === "land" || original.saleCategory === "land")) continue;
@@ -473,6 +477,9 @@ async function unifiedListings(env, listingIds = null) {
       ) END AS daangn_sale_extent_json,
       CASE WHEN source='네이버' AND json_extract(list_snapshot_json, '$.tradeType')='sale' THEN
         COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.priceInfo'), json_extract(raw_json, '$.saleRaw.priceInfo')) END AS naver_sale_price_info_json,
+      CASE WHEN source='네이버' AND json_extract(list_snapshot_json, '$.tradeType')='sale'
+        AND trim(COALESCE(json_extract(list_snapshot_json, '$.saleDetails.descriptionText'), ''), ${SQL_TRIM_SPACES})=''
+        THEN substr(${["description", "saleRaw.detailInfo.description", "saleRaw.detailInfo.articleDescription", "saleRaw.detailInfo.articleFeatureDescription", "saleRaw.detailInfo.articleDetailInfo.description", "saleRaw.detailInfo.articleDetailInfo.articleDescription", "saleRaw.detailInfo.articleDetailInfo.articleFeatureDescription", "saleRaw.detailInfo.articleDetailInfo.articleDesc", "saleRaw.articleDetailInfo.articleDescription"].map(path => `COALESCE(${sourceJsonScalar(path)},'')`).join("||char(10)||")},1,12000) END AS naver_sale_description,
       CASE WHEN source='당근' THEN json_extract(raw_json, '$.landType') END AS daangn_land_type`,
     "listing_sources",
     `${publicSourceWhereSql("listing_sources")} AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
@@ -517,7 +524,7 @@ async function unifiedListings(env, listingIds = null) {
     });
     const original = withSourceOriginalMetadata(
       withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn }),
-        { source: row.source, daangn, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
+        { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
     if (original.sourceUnavailable) unavailableCount += 1;
     original.saleSummary = compactSaleSummary(original);
     if (clean(original.source) === "공실박스") {

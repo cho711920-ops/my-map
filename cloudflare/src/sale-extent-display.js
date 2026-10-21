@@ -1,5 +1,5 @@
 import { NAVER_PROPERTY_TYPES } from "./naver-property-types.js";
-import { saleDescriptionFields } from "./sale-description.js";
+import { saleDescriptionFields, naverSaleDescription } from "./sale-description.js";
 import { withNaverSaleFloorDisplay } from "./sale-floor-display.js";
 import { canonicalNaverSaleType, describedWholeMultifamily, descriptionSaleTarget, NAVER_UNIT_TYPES, saleFloorTarget, saleRoomTarget } from "./sale-target-evidence.js";
 
@@ -136,6 +136,7 @@ export function saleExtentProvider(raw = {}, source = "") {
   const list = raw.list && typeof raw.list === "object" ? raw.list : raw;
   return {
     source,
+    naverDescription: source === "네이버" ? naverSaleDescription(raw) : "",
     floorInfo: raw.saleRaw?.detailInfo?.spaceInfo?.floorInfo || raw.saleRaw?.spaceInfo?.floorInfo,
     propertyType: first(raw.realEstateTypeCode, raw.category),
     room: raw.roomInfo,

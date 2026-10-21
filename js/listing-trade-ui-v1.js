@@ -516,6 +516,9 @@
         else if (advertised != null) fields.push(['광고 연 수익률 · 기준 확인', advertised.toFixed(2) + '%', '광고 기재 연 수익률입니다. 대출·이자 등 계산 기준은 원문 확인이 필요합니다.']);
       }
       if (landText(d.buildingUse)) fields.push(['용도', landText(d.buildingUse)]);
+      if (Array.isArray(d.descriptionUnitAssumptions) && d.descriptionUnitAssumptions.length) {
+        fields.push(['금액 단위', '원문 생략 · 만원 기준']);
+      }
     }
     return fields.length ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
       return '<span' + (f[2] ? ' title="' + escapeHtml(f[2]) + '"' : '') + '><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';

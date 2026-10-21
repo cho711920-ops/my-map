@@ -12,7 +12,7 @@ export function withSaleFinancialDisplay(original, provider = {}) {
   if (original?.tradeType !== "sale" || original.saleCategory === "land" || original.saleDetails?.scope === "land" || !["네이버", "당근"].includes(source) || original.masterFallback) return original;
   const detail = original.saleDetails || {};
   const description = typeof detail.descriptionText === "string" && detail.descriptionText.trim()
-    ? detail.descriptionText : source === "당근" ? provider.daangn?.description : "";
+    ? detail.descriptionText : source === "당근" ? provider.daangn?.description : provider.naverDescription || "";
   const hasDescription = typeof description === "string" && Boolean(description.trim());
   if (!hasDescription && source !== "네이버") return original;
   const base = { ...detail };
