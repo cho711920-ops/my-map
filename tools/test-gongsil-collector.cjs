@@ -95,7 +95,7 @@ vm.runInContext(collectorSource, context);
 
 const api = windowObject.__JS_GONGSIL_COLLECTOR__;
 assert.ok(api, "collector API should be exposed");
-assert.strictEqual(api.version, "2.3.2");
+assert.strictEqual(api.version, "2.3.3");
 assert(collectorSource.includes("classifySourceManifest"));
 assert(
   collectorSource.includes("left:50%;top:50%;transform:translate(-50%,-50%)")
@@ -111,18 +111,18 @@ assert(collectorSource.includes("showGongsilDetailWait"));
 assert(collectorSource.includes("showGongsilSaveWait"));
 assert(collectorSource.includes("매물 저장을 마친 뒤 수집 결과"));
 assert(!collectorSource.includes("rejected.length === 0"));
-assert(collectorSource.includes("네트워크 연결을 자동으로 복구 중입니다."));
+assert(collectorSource.includes("같은 요청의 저장 결과를 확인합니다."));
 assert(collectorSource.includes("저장 중단 지점부터 이어갑니다."));
-assert(collectorSource.includes("전송 묶음을 줄여 자동 복구 중입니다."));
+assert(collectorSource.includes("같은 요청의 결과만 확인합니다. 매물을 다시 전송하지 않습니다."));
 assert(collectorSource.includes("이전 오류 화면을 새 수집기로 복구했습니다."));
 assert(collectorSource.includes("window.fetch.__jsGongsilOriginal"));
-assert.strictEqual(
+assert.match(
   api.collectionSignature([
     { externalId: "GB-100", values: ["상가", "서구 둔산동 1"] },
     { externalId: "GB-200", values: ["상가", "서구 둔산동 2"] }
   ]),
-  "2|GB-100|GB-200",
-  "resume signature must identify the actual first and last listings"
+  /^v63\|2\|[0-9a-f]+\|[0-9a-f]+$/,
+  "resume signature covers the entire ordered display payload"
 );
 assert.deepStrictEqual(
   JSON.parse(JSON.stringify(api.observedSourceIds([

@@ -70,12 +70,13 @@ test("lease, sale and old mixed checkpoints cannot reuse each other's offsets", 
   stored = { signature: "1||", updatedAt: new Date().toISOString(), offset: 1 };
   assert.equal(helper.getSavedProgressForRecords(lease), null);
   assert.equal(helper.getSavedProgressForRecords(sale), null);
-  assert.equal(helper.getSavedProgressForRecords(manual).offset, 1);
+  assert.equal(helper.getSavedProgressForRecords(manual), null);
 });
 
 test("both server request stages carry the explicit scoped market without rewriting raw evidence", async () => {
   const requests = [];
-  const context = { VERSION: "test", state: { stopRequested: false }, text: value => String(value || ""),
+  const storage = new Map();
+  const context = { crypto: globalThis.crypto, TextEncoder, Uint8Array, SAVE_PENDING_KEY_V63: "pending", localStorage: {getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value), removeItem: key => storage.delete(key)}, VERSION: "test", state: { stopRequested: false }, text: value => String(value || ""),
     setStatus() {}, updateDashboard() {}, setProgress() {},
     postAppsScriptWithRetry: async body => { requests.push(body); },
     pollMutationStatus: async () => ({ ok: true, unchanged: 0, changed: 0, unknown: 1, needsDetail: ["dual"] }),

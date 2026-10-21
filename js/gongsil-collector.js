@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.3.2";
+  var VERSION = "2.3.3";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -17,7 +17,7 @@
   var MIN_SAVE_BATCH_SIZE = 1;
   var MAX_SAVE_BATCH_SIZE = 8;
   var SAVE_PROGRESS_KEY = "js_gongsil_save_progress_v1";
-  var POST_RETRY_DELAYS = [0, 1200, 3000];
+  var SAVE_PENDING_KEY_V63 = "js_gongsil_pending_request_v63";
   var BUSY_RETRY_DELAYS = [3000, 6000, 10000, 15000, 20000, 30000];
   var PANEL_ID = "js-gongsil-collector-panel";
   var STYLE_ID = "js-gongsil-collector-style";
@@ -35,6 +35,17 @@
   var migratedCapture = null;
   var migratedTransformItem = null;
   if (window.__JS_GONGSIL_COLLECTOR__) {
+    var previousCollector = window.__JS_GONGSIL_COLLECTOR__;
+    var previousPanel = document.getElementById(PANEL_ID);
+    var previousStop = previousPanel && previousPanel.querySelector('[data-action="stop"]');
+    var previousPending = typeof previousCollector.getPendingSave === "function" && previousCollector.getPendingSave();
+    if (typeof previousCollector.isBusy === "function" && previousCollector.isBusy() ||
+        previousStop && previousStop.disabled === false || previousPending) {
+      // Loading an updated bookmark must never replace a running collector or
+      // discard its in-memory records and uncertain save checkpoint.
+      if (previousPanel) previousPanel.style.display = "block";
+      return;
+    }
     if (window.__JS_GONGSIL_COLLECTOR__.version === VERSION) {
       window.__JS_GONGSIL_COLLECTOR__.reopen();
       return;
@@ -101,6 +112,7 @@
 
   window.__JS_GONGSIL_COLLECTOR__ = {
     version: VERSION,
+    isBusy: function() { return state.busy; },
     // Reporting is best-effort and must never prompt for a key or pause collection.
     submitAutomationReport: async function(report) {
       var key = "";
@@ -717,7 +729,7 @@
         collectorKey
       );
       /* 목록은 매번 전수 확인하되 상세·연락처는 신규/변경 또는 마지막 상세확인 후
-       * 20시간이 지난 원본만 갱신합니다. 같은 날 재수집의 중복 요청과 D1 쓰기를 줄입니다. */
+       * 7일이 지난 원본만 갱신합니다. 같은 날 재수집의 중복 요청과 D1 쓰기를 줄입니다. */
       var detailItems = items.filter(function(item) {
         var id = recordSourceId(item);
         return classification.needs[id] || classification.refresh[id];
@@ -755,9 +767,10 @@
       setStatus(
         detailItems.length ? "매물별 상세정보·역할 연락처 확인 중" : "기존 매물 빠른 확인 완료",
         saveMetadata.complete
-          ? "완전수집 목록 " + items.length + "개 · 신규·변경 또는 20시간이 지난 연락처 " + detailItems.length + "개를 확인합니다."
-          : "전체 " + items.length + "개 · 기존 동일 " + classification.unchanged +
-            "개 · 신규·변경·연락처 누락 상세조회 " + detailItems.length + "개"
+          ? "완전수집 목록 " + items.length + "개 · 신규·변경 또는 7일이 지난 연락처 " + detailItems.length + "개를 확인합니다."
+          : "전체 " + items.length + "개 · 신규·변경 " + Object.keys(classification.needs).length +
+            "개 · 기존 상세 재확인 " + Object.keys(classification.refresh).length + "개" +
+            " (기한 도래 " + classification.refreshReasons.expired + " · 연락처 보류 " + classification.refreshReasons.contactDeferred + ")"
       );
 
       var transformed = [];
@@ -950,6 +963,9 @@
           "현재 처리 단위까지 마치고 중단했습니다. 기존 저장자료에는 영향이 없습니다."
         );
         saveButton.textContent = "다시 이어서 수집";
+      } else if (error.isGongsilResultPending) {
+        setStatus("저장 결과 확인 대기", "현재 요청번호와 저장 지점을 보존했습니다. 결과 확인 전에는 새 묶음을 전송하지 않습니다.");
+        saveButton.textContent = "기존 저장 결과 다시 확인";
       } else {
         updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
         setStatus(
@@ -1105,9 +1121,9 @@
       }
     } catch (error) {
       console.error("[JS 공실박스] 저장 이어가기 오류", error);
-      updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
+      if (!error.isGongsilResultPending) updateDashboard({failed: Number(state.dashboard.failed || 0) + 1});
       setStatus(
-        "저장 연결이 아직 복구되지 않았습니다.",
+        error.isGongsilResultPending ? "저장 결과 확인 대기" : "저장 연결이 아직 복구되지 않았습니다.",
         (error && error.message ? error.message : String(error)) +
         "\n다시 누르면 현재 저장 지점부터 계속합니다."
       );
@@ -2414,7 +2430,12 @@
     while (offset < records.length) {
       if (state.stopRequested) break;
       batchIndex += 1;
-      var batch = records.slice(offset, offset + SAVE_BATCH_SIZE);
+      var pendingBatch = JSON.parse(localStorage.getItem(SAVE_PENDING_KEY_V63) || "null");
+      var expectedRequest = "gongsil-" + text(metadata.sessionId || "session") + "-batch-" + batchIndex;
+      var batchSize = pendingBatch && pendingBatch.requestId === expectedRequest &&
+        Number.isInteger(pendingBatch.size) && pendingBatch.size >= 1 && pendingBatch.size <= MAX_SAVE_BATCH_SIZE
+        ? pendingBatch.size : SAVE_BATCH_SIZE;
+      var batch = records.slice(offset, offset + batchSize);
       var batchStartedAt = Date.now();
       var saveWaitTimer = window.setInterval(function () {
         showGongsilSaveWait(offset, batch.length, records.length, batchStartedAt);
@@ -2446,20 +2467,8 @@
           await delay(5000);
           continue;
         }
-        if (batch.length > MIN_SAVE_BATCH_SIZE) {
-          SAVE_BATCH_SIZE = Math.max(
-            MIN_SAVE_BATCH_SIZE,
-            Math.floor(batch.length * 0.5)
-          );
-          setStatus(
-            "전송 묶음을 줄여 자동 복구 중입니다.",
-            batch.length.toLocaleString("ko-KR") + "개 묶음 연결 실패 · " +
-            SAVE_BATCH_SIZE.toLocaleString("ko-KR") +
-            "개씩 다시 전송합니다.\n이미 저장된 매물은 다시 만들지 않습니다."
-          );
-          await delay(1000);
-          continue;
-        }
+        // A transport failure is not proof that the server rejected the write.
+        // The persisted request is reconciled before any later batch can start.
         throw error;
       }
       window.clearInterval(saveWaitTimer);
@@ -2467,85 +2476,14 @@
 
       var failedInBatch = Number(result.failed || 0);
       if (failedInBatch > 0) {
-        var firstBatchError = Array.isArray(result.errors) && result.errors.length
-          ? String(result.errors[0] && (result.errors[0].message || result.errors[0].error) || "")
-          : "";
-        if (batch.length > MIN_SAVE_BATCH_SIZE) {
-          SAVE_BATCH_SIZE = Math.max(
-            MIN_SAVE_BATCH_SIZE,
-            Math.floor(batch.length * 0.5)
-          );
-          setStatus(
-            "저장 실패 항목을 작은 묶음으로 다시 확인합니다.",
-            batch.length.toLocaleString("ko-KR") + "개 중 " +
-            failedInBatch.toLocaleString("ko-KR") + "개 실패 · " +
-            SAVE_BATCH_SIZE.toLocaleString("ko-KR") +
-            "개씩 같은 위치부터 다시 저장합니다." +
-            (firstBatchError ? "\n원인: " + firstBatchError : "")
-          );
-          await delay(600);
-          continue;
-        }
-        addImportResult(totals, result);
-        saveFailureReasons.push({
-          sourceId: recordSignatureId(batch[0]),
-          message: firstBatchError || "D1 저장 실패"
+        // A completed batch is authoritative even when individual ads failed.
+        // Keep those failures visible; do not replay its successful siblings.
+        (Array.isArray(result.errors) ? result.errors : []).forEach(function(error) {
+          saveFailureReasons.push({sourceId: String(error.sourceId || ""), message: String(error.message || error.error || "D1 저장 실패")});
         });
+        if (!Array.isArray(result.errors) || !result.errors.length) saveFailureReasons.push({sourceId: "", message: "저장 실패 " + failedInBatch + "건 · 서버 결과 확인 필요"});
         saveFailureReasons = saveFailureReasons.slice(-200);
         metadata.saveFailureReasons = saveFailureReasons;
-        offset += batch.length;
-        try {
-          localStorage.setItem(SAVE_PROGRESS_KEY, JSON.stringify({
-            signature: signature,
-            sessionId: metadata.sessionId,
-            scope: metadata.scope,
-            offset: offset,
-            batchIndex: batchIndex,
-            totals: totals,
-            saveFailureReasons: saveFailureReasons,
-            rejectedDetails: (metadata.rejectedDetails || []).slice(0, 200),
-            listFailureReasons: (metadata.listFailureReasons || []).slice(0, 200),
-            updatedAt: new Date().toISOString()
-          }));
-        } catch (_) {}
-        updateDashboard({
-          found: itemsLength,
-          processed: Math.min(
-            itemsLength,
-            Number(metadata.unchanged || 0) +
-              Number(metadata.rejectedCount || 0) +
-              listFailedCount + offset
-          ),
-          remaining: Math.max(0, records.length - offset),
-          created: totals.created,
-          merged: totals.merged,
-          updated: totals.updated,
-          conditionUpdated: totals.conditionUpdated,
-          refreshed: totals.refreshed,
-          review: totals.review,
-          duplicate: totals.duplicate,
-          detailedDuplicates: totals.duplicate,
-          skippedUnchanged: Number(metadata.unchanged || 0),
-          contactDeferred: Number(metadata.contactDeferredCount || totals.contactDeferred || 0),
-          failed: listFailedCount + totals.failed
-        });
-        setProgress(
-          Math.min(
-            itemsLength,
-            Number(metadata.unchanged || 0) +
-              Number(metadata.rejectedCount || 0) +
-              listFailedCount + offset
-          ),
-          itemsLength
-        );
-        setStatus(
-          "저장할 수 없는 매물 1건을 분리했습니다.",
-          "원본 " + (recordSignatureId(batch[0]) || "번호 확인 불가") +
-          "은 다음 수집 때 다시 확인하고 나머지 매물을 계속 저장합니다." +
-          (firstBatchError ? "\n원인: " + firstBatchError : "") +
-          "\n기존 매물은 숨기지 않습니다."
-        );
-        continue;
       }
 
       addImportResult(totals, result);
@@ -2563,7 +2501,7 @@
           listFailureReasons: (metadata.listFailureReasons || []).slice(0, 200),
           updatedAt: new Date().toISOString()
         }));
-      } catch (_) {}
+        } catch (_) { throw new Error("저장 지점을 기록하지 못했습니다. 브라우저 저장공간을 확인해 주세요. 추가 전송은 중단했습니다."); }
       updateDashboard({
         found: itemsLength,
         processed: Math.min(
@@ -2599,7 +2537,7 @@
       var elapsed = Date.now() - batchStartedAt;
       if (elapsed > 14000) {
         SAVE_BATCH_SIZE = Math.max(MIN_SAVE_BATCH_SIZE, Math.floor(SAVE_BATCH_SIZE * 0.7));
-      } else if (elapsed < 5000) {
+      } else if (elapsed / Math.max(1, batch.length) < 2500) {
         SAVE_BATCH_SIZE = Math.min(MAX_SAVE_BATCH_SIZE, SAVE_BATCH_SIZE + 1);
       }
       if (state.stopRequested) break;
@@ -2768,6 +2706,7 @@
     var unchanged = 0;
     var changed = 0;
     var unknown = 0;
+    var refreshReasons = {expired: 0, contactDeferred: 0};
     var totalItemCount = Math.max(items.length, Number(metadata && metadata.found || 0));
     var listFailedCount = Number(metadata && metadata.listFailedCount || 0);
     var chunkSize = 2500;
@@ -2782,7 +2721,7 @@
       );
       var requestId =
         "gongsil-manifest-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
-      await postAppsScriptWithRetry({
+      try { await postAppsScriptWithRetry({
         action: "classifySourceManifest",
         requestId: requestId,
         collectorKey: collectorKey,
@@ -2808,7 +2747,8 @@
             room: getRoom(item)
           };
         })
-      }, {label: "기존 매물 빠른 비교"});
+      }, {label: "기존 매물 빠른 비교"}); }
+      catch (_) { setStatus("목록 비교 응답 확인 중", "같은 요청의 결과를 확인합니다."); }
       var result = await pollMutationStatus(
         requestId,
         collectorKey,
@@ -2836,6 +2776,8 @@
       unchanged += Number(result.unchanged || 0);
       changed += Number(result.changed || 0);
       unknown += Number(result.unknown || 0);
+      refreshReasons.expired += Number(result.refreshReasons && result.refreshReasons.expired || 0);
+      refreshReasons.contactDeferred += Number(result.refreshReasons && result.refreshReasons.contactDeferred || 0);
       updateDashboard({
         found: totalItemCount,
         processed: Math.min(
@@ -2853,7 +2795,7 @@
         totalItemCount
       );
     }
-    return {needs: needs, refresh: refresh, unchanged: unchanged, changed: changed, unknown: unknown};
+    return {needs: needs, refresh: refresh, unchanged: unchanged, changed: changed, unknown: unknown, refreshReasons: refreshReasons};
   }
 
   function observedSourceIds(items) {
@@ -2937,13 +2879,15 @@
 
   function collectionSignature(records) {
     records = Array.isArray(records) ? records : [];
-    var signature = [
-      records.length,
-      recordSignatureId(records[0]),
-      recordSignatureId(records[records.length - 1])
-    ].join("|");
-    var collectionTradeType = records[0] && records[0].collectionTradeType;
-    return collectionTradeType ? signature + "|" + collectionTradeType : signature;
+    // Include the full ordered display payload. First/last IDs alone can skip
+    // a changed middle listing when resuming an unrelated collection.
+    var input = JSON.stringify(records, function(key,value) { return key === "raw" || key === "collectorKey" ? undefined : value; });
+    var first = 2166136261, second = 2246822507;
+    for (var i=0;i<input.length;i+=1) {
+      first = Math.imul(first ^ input.charCodeAt(i),16777619);
+      second = Math.imul(second ^ input.charCodeAt(i),3266489909);
+    }
+    return "v63|" + records.length + "|" + (first>>>0).toString(16) + "|" + (second>>>0).toString(16);
   }
 
   function getSavedProgressForRecords(records) {
@@ -2956,14 +2900,7 @@
     if (!savedProgress) return null;
 
     var strongSignature = collectionSignature(records);
-    var legacySignature = [records.length, "", ""].join("|");
-    var isFreshLegacy =
-      !(records[0] && records[0].collectionTradeType) &&
-      savedProgress.signature === legacySignature &&
-      Date.now() - Date.parse(savedProgress.updatedAt || 0) <=
-        12 * 60 * 60 * 1000;
-
-    return savedProgress.signature === strongSignature || isFreshLegacy
+    return savedProgress.signature === strongSignature
       ? savedProgress
       : null;
   }
@@ -2996,49 +2933,65 @@
 
   async function sendAppsScriptBatch(records, collectorKey, batchIndex, metadata) {
     var requestId = "gongsil-" + text(metadata && metadata.sessionId || "session") + "-batch-" + batchIndex;
-    await postAppsScriptWithRetry({
-      action: "gongsilImportBatch",
-      requestId: requestId,
-      collectorKey: collectorKey,
-      collectorVersion: VERSION,
+    var payload = {
+      action: "gongsilImportBatch", requestId: requestId, requestPolicyVersion: 63,
+      collectorKey: collectorKey, collectorVersion: VERSION,
       sessionId: metadata && metadata.sessionId || "",
       scope: metadata && metadata.scope || "공실박스 선택클러스터",
-      validationVersion: 3,
-      presenceScope: metadata && metadata.presenceScope || null,
+      validationVersion: 3, presenceScope: metadata && metadata.presenceScope || null,
       completionProof: metadata && metadata.completionProof || null,
       collectionTradeType: metadata && metadata.collectionTradeType || "",
-      complete: false,
-      manifestRegistered: Boolean(metadata && metadata.manifestRegistered),
-      records: records
-    }, {
-      label: "매물 " + records.length.toLocaleString("ko-KR") + "개 저장"
-    });
-
-    try {
-      var saveResult = await pollMutationStatus(
-        requestId,
-        collectorKey,
-        "gongsilImportBatch"
-      );
-      if (isBusyMutationResult(saveResult)) {
-        var busyError = new Error(saveResult.message || "다른 수집 저장이 진행 중입니다.");
-        busyError.isCollectorBusy = true;
-        throw busyError;
-      }
-      return saveResult;
-    } catch (error) {
-      if (error && error.isCollectorBusy) throw error;
-      throw new Error(
-        "D1 저장 결과 확인이 오래 걸리고 있습니다. " +
-        "저장 지점은 보존되며 다시 시도하면 같은 매물을 만들지 않고 이어갑니다. " +
-        "요청번호: " + requestId
-      );
+      complete: false, manifestRegistered: Boolean(metadata && metadata.manifestRegistered), records: records
+    };
+    var digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload, function(key, value) {
+      return key === "collectorKey" ? undefined : value;
+    })));
+    var hash = Array.from(new Uint8Array(digest), function(n) { return n.toString(16).padStart(2,"0"); }).join("");
+    var pending = JSON.parse(localStorage.getItem(SAVE_PENDING_KEY_V63) || "null");
+    if (pending && (pending.requestId !== requestId || pending.hash !== hash)) {
+      throw new Error("이전 저장 요청이 남아 있습니다. 원래 저장 지점의 결과를 먼저 확인해야 합니다. 다른 매물을 대신 처리하지 않습니다.");
     }
+    payload.requestHashV63 = hash;
+    var descriptor = {requestId: requestId, hash: hash, sessionId: payload.sessionId, batchIndex: batchIndex, size: records.length};
+    // Persist before sending. If storage is unavailable, no write is submitted.
+    localStorage.setItem(SAVE_PENDING_KEY_V63, JSON.stringify(descriptor));
+    if (!pending) {
+      try { await postAppsScriptWithRetry(payload, {label: "매물 " + records.length + "개 저장"}); }
+      catch (_) { setStatus("저장 응답 확인 중", "같은 요청의 결과만 확인합니다. 매물을 다시 전송하지 않습니다."); }
+    } else {
+      var previous = await fetchMutationStatus(requestId, collectorKey, "gongsilImportBatch");
+      // The new server's atomic claim makes this exact-ID reconnect safe even
+      // if the original upload arrives after the missing-status observation.
+      if (previous.requestState === "missing") {
+        try { await postAppsScriptWithRetry(payload, {label: "기존 요청 연결"}); } catch (_) {}
+      }
+    }
+    var result;
+    try { result = await pollMutationStatus(requestId, collectorKey, "gongsilImportBatch"); }
+    catch (error) {
+      error.isGongsilResultPending = true;
+      throw error;
+    }
+    var stored = JSON.parse(localStorage.getItem(SAVE_PENDING_KEY_V63) || "null");
+    if (stored && stored.requestId === requestId && stored.hash === hash) localStorage.removeItem(SAVE_PENDING_KEY_V63);
+    if (result && result.requiresFreshManifest && result.code === "gongsil_closed_session_rescan") {
+      localStorage.removeItem(SAVE_PROGRESS_KEY);
+      state.pendingSave = null;
+      throw new Error(result.message);
+    }
+    if (isBusyMutationResult(result)) {
+      var busyError = new Error(result.message || "다른 수집 저장이 진행 중입니다.");
+      busyError.isCollectorBusy = true;
+      throw busyError;
+    }
+    // Only an authoritative receipt releases this descriptor. The caller's
+    // stable batch index still recovers a crash before its offset checkpoint.
+    return result;
   }
 
   async function finalizeGongsilSession(metadata, collectorKey, complete, stopped) {
     var requestId = "gongsil-finalize-" + text(metadata.sessionId || Date.now());
-    await postAppsScriptWithRetry({
+    try { await postAppsScriptWithRetry({
       action: "finalizeCollectionSession",
       requestId: requestId,
       collectorKey: collectorKey,
@@ -3086,7 +3039,7 @@
           : "선택클러스터 수집 완료")
     }, {
       label: "수집 완료 상태 저장"
-    });
+    }); } catch (_) { setStatus("완료 응답 확인 중", "같은 요청의 결과를 확인합니다."); }
     var finalizeResult = await pollMutationStatus(
       requestId,
       collectorKey,
@@ -3130,46 +3083,26 @@
   }
 
   async function postAppsScriptWithRetry(payload, options) {
-    options = options || {};
-    var lastError = null;
-
-    for (
-      var attempt = 0;
-      attempt < POST_RETRY_DELAYS.length;
-      attempt += 1
-    ) {
-      if (state.stopRequested) {
-        throw new Error("사용자 안전중단");
-      }
-      if (POST_RETRY_DELAYS[attempt]) {
-        await delay(POST_RETRY_DELAYS[attempt]);
-      }
-
-      try {
-        await originalFetch(COLLECTOR_API_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {"content-type": "text/plain;charset=utf-8"},
-          body: JSON.stringify(payload)
-        });
-        return true;
-      } catch (error) {
-        lastError = error;
-        if (attempt + 1 < POST_RETRY_DELAYS.length) {
-          setStatus(
-            "네트워크 연결을 자동으로 복구 중입니다.",
-            (options.label || "D1 저장") + " · 재연결 " +
-            (attempt + 1) + "/" + (POST_RETRY_DELAYS.length - 1) +
-            "\n창을 닫지 않아도 자동으로 다시 시도합니다."
-          );
-        }
-      }
-    }
-
-    throw new Error(
-      "네트워크 연결이 여러 번 끊겼습니다. " +
-      (lastError && lastError.message ? lastError.message : "Failed to fetch")
-    );
+    if (state.stopRequested && payload.action !== "finalizeCollectionSession") throw new Error("사용자 안전중단");
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer, timedOut = false;
+    var deadline = new Promise(function(_resolve, reject) {
+      timer = window.setTimeout(function() {
+        timedOut = true;
+        if (controller) controller.abort();
+        reject(new Error("전송 응답 확인 시간 초과 · 같은 요청의 저장 결과를 확인합니다."));
+      }, 30000);
+    });
+    try {
+      await Promise.race([originalFetch(COLLECTOR_API_URL, {
+        method: "POST", mode: "no-cors", headers: {"content-type": "text/plain;charset=utf-8"},
+        body: JSON.stringify(payload), signal: controller ? controller.signal : undefined
+      }), deadline]);
+      return true;
+    } catch (error) {
+      if (timedOut) throw new Error("전송 응답 확인 시간 초과 · 같은 요청의 저장 결과를 확인합니다.");
+      throw error;
+    } finally { window.clearTimeout(timer); }
   }
 
   function createCollectionSessionId() {

@@ -96,7 +96,7 @@ test("collector mutation status is owner/action scoped and offers a key-safe POS
   }), env);
   assert.equal(matching.status, 200);
   assert.deepEqual(await matching.json(), {
-    ok: true, ready: true, requestId: "shared-id", mutationAction: "saveNaverBatch",
+    ok: true, ready: true, requestId: "shared-id", requestState: "completed", mutationAction: "saveNaverBatch",
     result: { ok: true, saved: 3 }
   });
 

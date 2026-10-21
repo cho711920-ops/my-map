@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-assert.match(source, /var VERSION = "2\.3\.2";/);
+assert.match(source, /var VERSION = "2\.3\.3";/);
 assert.match(source, /var LIST_RETRY_DELAYS = \[0, 800, 2000\];/);
 assert.match(source, /var SAVE_BATCH_SIZE = 8;/);
 assert.match(source, /var MIN_SAVE_BATCH_SIZE = 1;/);
@@ -233,7 +233,7 @@ assert.ok(checkpointPosition > offsetPosition);
 assert.ok(dashboardPosition > checkpointPosition);
 assert.match(
   saveFunction,
-  /if \(failedInBatch > 0\)[\s\S]*?addImportResult\(totals, result\);[\s\S]*?saveFailureReasons\.push[\s\S]*?offset \+= batch\.length;[\s\S]*?continue;/,
+  /if \(failedInBatch > 0\)[\s\S]*?saveFailureReasons\.push[\s\S]*?addImportResult\(totals, result\);[\s\S]*?offset \+= batch\.length;/,
   "단일 저장 실패는 기록한 뒤 나머지 매물 저장을 계속해야 합니다."
 );
 assert.match(

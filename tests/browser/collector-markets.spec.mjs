@@ -21,7 +21,7 @@ function fixtureReport(market) {
 }
 
 test.beforeEach(async ({page, baseURL}) => {
-  const snapshot = {ok: true, backgroundBuild: "1.1.22", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
+  const snapshot = {ok: true, backgroundBuild: "1.1.23", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
     runReport: fixtureReport("sale"), runReports: {lease: fixtureReport("lease"), sale: fixtureReport("sale")}, readiness: {enabled: true, schedule: "11:00", windowsSchedule: "11:00", windowsTaskState: "Ready"}};
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -34,7 +34,7 @@ test.beforeEach(async ({page, baseURL}) => {
   await page.addInitScript(({snapshot}) => {
     window.__collectorSnapshot = snapshot;
     window.__collectorMessages = [];
-    window.chrome = {runtime: {getManifest: () => ({version: "1.1.22"}), sendMessage: (message, callback) => {
+    window.chrome = {runtime: {getManifest: () => ({version: "1.1.23"}), sendMessage: (message, callback) => {
       window.__collectorMessages.push(structuredClone(message));
       if (message.type === "JS_AUTO_GET_STATE") callback(structuredClone(window.__collectorSnapshot));
       else if (message.type === "JS_AUTO_SAVE_CONFIG") {

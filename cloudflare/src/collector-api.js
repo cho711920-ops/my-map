@@ -809,20 +809,32 @@ async function claimNaverBatchRequest(env, requestId, sessionId = "") {
   return Number(claimed?.meta?.changes || 0) === 1;
 }
 
+async function claimGongsilBatchRequestV63(env, body) {
+  const id = clean(body.requestId).slice(0, 160);
+  if (!id) return false;
+  const claimed = await env.DB.prepare(`INSERT INTO mutation_results
+    (request_id,owner_email,action,state,result_json,created_at,expires_at)
+    VALUES (?1,'collector','gongsilImportBatch','running',?2,?3,'')
+    ON CONFLICT(request_id) DO NOTHING`).bind(id,
+    JSON.stringify({sessionId: clean(body.sessionId).slice(0,160),requestHashV63: body.requestHashV63}), nowIso()).run();
+  return Number(claimed?.meta?.changes || 0) === 1;
+}
+
 const NAVER_RESCAN_CODE = "naver_closed_session_rescan";
 function naverRescanResult() {
   return {ok:false,code:NAVER_RESCAN_CODE,requiresFreshManifest:true,
     message:"이전 수집 회차가 응답 없음으로 종료됐습니다. 미확인 저장을 재전송하지 않고 최신 전체목록을 다시 대조합니다."};
 }
 async function closedNaverRequestRecovery(env,id,row) {
-  if(row.state!=="running"||row.action!=="saveNaverBatch")return null;
+  const gongsil = row.action === "gongsilImportBatch";
+  if(row.state!=="running"||row.action!=="saveNaverBatch"&&!gongsil)return null;
   const descriptor=parseJson(row.result_json,{});
   const legacy=id.match(/^(S-NAVER-\d{13}-[a-z0-9]{1,16})-/);
   const sessionId=clean(descriptor.sessionId)||(legacy?legacy[1]:"");
-  if(!sessionId||!id.startsWith(sessionId+"-"))return null;
+  if(!sessionId||!id.startsWith(gongsil ? "gongsil-"+sessionId+"-batch-" : sessionId+"-"))return null;
   const session=await env.DB.prepare(`SELECT source,owner_email,state,started_at,updated_at,finished_at,error_json
     FROM collector_sessions WHERE id=?1`).bind(sessionId).first();
-  if(!session||session.source!=="네이버"||session.owner_email!=="collector"||session.state!=="abandoned")return null;
+  if(!session||session.source!==(gongsil?"공실박스":"네이버")||session.owner_email!=="collector"||session.state!=="abandoned")return null;
   const failure=parseJson(session.error_json,{}).lastFailure;
   const claimAt=Date.parse(row.created_at),startedAt=Date.parse(session.started_at),closedAt=Date.parse(session.finished_at),updatedAt=Date.parse(session.updated_at),now=Date.now();
   // Age alone never releases a claim. Require the exact owning session's
@@ -832,7 +844,8 @@ async function closedNaverRequestRecovery(env,id,row) {
   if(failure?.type!=="stale-session"||Date.parse(failure.at)!==closedAt||
       !Number.isFinite(claimAt)||!Number.isFinite(startedAt)||!Number.isFinite(closedAt)||updatedAt!==closedAt||
       startedAt>claimAt||closedAt<claimAt||now-claimAt<120*60_000||now-closedAt<5*60_000)return null;
-  return naverRescanResult();
+  return gongsil ? {ok:false,code:"gongsil_closed_session_rescan",requiresFreshManifest:true,
+    message:"이전 공실박스 회차가 응답 없음으로 종료됐습니다. 미확인 묶음을 재전송하지 않고 최신 전체목록을 다시 확인해야 합니다."} : naverRescanResult();
 }
 
 async function mutationStatus(env, requestId, owner = "collector", expectedAction = "") {
@@ -849,7 +862,7 @@ async function mutationStatus(env, requestId, owner = "collector", expectedActio
         WHERE request_id=?1 AND owner_email=?2
           AND (expires_at='' OR julianday(expires_at)>julianday('now'))`)
       .bind(id, scopedOwner).first();
-  if (!row) return { ok: true, ready: false, requestId: id };
+  if (!row) return { ok: true, ready: false, requestId: id, requestState: "missing" };
   const rescan=scopedOwner==="collector"?await closedNaverRequestRecovery(env,id,row):null;
   if(rescan)return {ok:true,ready:true,requestId:id,mutationAction:row.action,result:rescan};
   if (scopedOwner === "collector" && row.state === "running" && row.action === "saveNaverBatch") {
@@ -858,7 +871,7 @@ async function mutationStatus(env, requestId, owner = "collector", expectedActio
       recoveryWaitV56: {code: "naver_save_result_pending", retryAt: Date.now() + 15 * 60_000,
         message: "이전 저장 결과 확인 대기 · 중복 전송 없이 자동으로 다시 확인합니다."}};
   }
-  return { ok: true, ready: row.state === "completed", requestId: id,
+  return { ok: true, ready: row.state === "completed", requestId: id, requestState: row.state,
     mutationAction: clean(row.action), result: parseJson(row.result_json, {}) };
 }
 
@@ -1027,6 +1040,7 @@ async function classifyManifest(env, body) {
   }
   const needsDetail = [];
   const refreshDetail = [];
+  const refreshReasons = {expired: 0, contactDeferred: 0, intervalDays: 7};
   const coordinateRepairs = new Map();
   const cacheRepairs = new Map();
   const legacyBackfills = [];
@@ -1061,6 +1075,7 @@ async function classifyManifest(env, body) {
         if (clean(previousSnapshot?.contactCaptureStatus) === "deferred" ||
             shouldRefreshGongsilDetail(row.last_collected_at)) {
           refreshDetail.push(entry.sourceId);
+          entry.refreshReasonV63 = clean(previousSnapshot?.contactCaptureStatus) === "deferred" ? "contactDeferred" : "expired";
         }
       }
     } else {
@@ -1119,9 +1134,20 @@ async function classifyManifest(env, body) {
     originalNeeds = [...states].filter(([, state]) => state !== "unchanged").map(([id]) => id);
     originalRefresh = [...refresh].filter((id) => states.get(id) === "unchanged");
   }
+  if (source === "공실박스") {
+    const reasons = new Map();
+    for (const entry of entries) {
+      const id = entry.providerSourceId || entry.sourceId;
+      if (entry.refreshReasonV63 && reasons.get(id) !== "contactDeferred") reasons.set(id, entry.refreshReasonV63);
+    }
+    for (const id of originalRefresh) {
+      if (reasons.has(id)) refreshReasons[reasons.get(id)] += 1;
+    }
+  }
   const result = { ok: true, action: "classifySourceManifest", source, sessionId, received: originalCount,
     needsDetail: originalNeeds, refreshDetail: originalRefresh, unchanged, changed, unknown, legacyBootstrapped,
-    coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1" };
+    coordinatesRepaired: coordinateRepairs.size, sourceBackend: "D1",
+    ...(source === "공실박스" ? {refreshReasons} : {}) };
   const previous = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(previous?.totals_json, {});
   totals.manifest = Number(totals.manifest || 0) + originalCount;
@@ -2245,11 +2271,13 @@ async function ingestRecords(env, source, values, metadata = {}) {
   const result = { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
     inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1" };
-  if (source === "네이버" && metadata.action === "saveNaverBatch" && clean(metadata.requestId)) {
+  if (source === "공실박스" && metadata.requestPolicyVersion === 63) result.requestHashV63 = metadata.requestHashV63;
+  if (clean(metadata.requestId) && (source === "네이버" && metadata.action === "saveNaverBatch" ||
+      source === "공실박스" && metadata.action === "gongsilImportBatch")) {
     // Census counters and the exact response commit in one D1 transaction.
     // A disconnect after these counters commit cannot strand the receipt.
     await env.DB.batch([summaryStatement,
-      mutationResultStatementV56(env, metadata.requestId, "saveNaverBatch", result)]);
+      mutationResultStatementV56(env, metadata.requestId, metadata.action, result)]);
     Object.defineProperty(result, NAVER_DURABLE_RESULT_V56, {value: true});
   } else await summaryStatement.run();
   return result;
@@ -3264,6 +3292,23 @@ export async function handleCollectorApi(request, env) {
   const existing = clean(body.requestId)
     ? await mutationStatus(env, body.requestId, "collector", action)
     : null;
+  if (action === "gongsilImportBatch" && existing?.result?.code === "gongsil_closed_session_rescan") {
+    return jsonResponse(existing.result,409,cors);
+  }
+  if (action === "gongsilImportBatch" && body.requestPolicyVersion === 63) {
+    const id = clean(body.requestId), sessionId = clean(body.sessionId);
+    if (!sessionId || id.length > 160 || !/^gongsil-[A-Za-z0-9_-]+-batch-\d+$/.test(id) ||
+        !id.startsWith("gongsil-" + sessionId + "-batch-")) {
+      return jsonResponse({ok:false,message:"공실박스 저장 요청번호와 수집 회차를 확인해 주세요."},400,cors);
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(body, (key,value) =>
+      key === "collectorKey" || key === "requestHashV63" ? undefined : value));
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const hash = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2,"0")).join("");
+    if (hash !== body.requestHashV63 || existing && (existing.ready || existing.requestState === "running") && existing.result?.requestHashV63 !== hash) {
+      return jsonResponse({ok:false,message:"같은 요청번호의 매물 내용이 다릅니다. 기존 저장 결과를 덮어쓰지 않았습니다."},409,cors);
+    }
+  }
   if (existing?.ready) {
     const response = jsonResponse(existing.result, 200, cors);
     response.headers.set("x-js-collector-action", action);
@@ -3286,6 +3331,17 @@ export async function handleCollectorApi(request, env) {
     return jsonResponse({ ok: false, requestPending: true,
       message: "같은 저장 요청이 처리 중입니다. 결과를 확인한 뒤 이어갑니다." }, 409, cors);
   }
+  // New clients persist uncertain requests and can reconnect to the same ID.
+  // Old clients in a live collection keep their existing execution contract.
+  if (action === "gongsilImportBatch" && body.requestPolicyVersion === 63 && clean(body.requestId) &&
+      !await claimGongsilBatchRequestV63(env, body)) {
+    const completed = await mutationStatus(env, body.requestId, "collector", action);
+    if (completed.result?.requestHashV63 && completed.result.requestHashV63 !== body.requestHashV63) {
+      return jsonResponse({ok:false,message:"같은 요청번호의 매물 내용이 다릅니다."},409,cors);
+    }
+    if (completed.ready) return jsonResponse(completed.result, 200, cors);
+    return jsonResponse({ok:false, requestPending:true, message:"같은 공실박스 저장 결과를 확인 중입니다. 중복 저장하지 않습니다."},409,cors);
+  }
   try {
     const result = await executeExternalAction(env, body);
     if (!result) return jsonResponse({ ok: false, message: "지원하지 않는 수집 작업입니다." }, 404, cors);
@@ -3295,6 +3351,7 @@ export async function handleCollectorApi(request, env) {
     return response;
   } catch (error) {
     const result = { ok: false, message: clean(error?.message) || "수집 처리에 실패했습니다." };
+    if (action === "gongsilImportBatch" && body.requestPolicyVersion === 63) result.requestHashV63 = body.requestHashV63;
     if(error?.code===NAVER_RESCAN_CODE)Object.assign(result,{code:NAVER_RESCAN_CODE,requiresFreshManifest:true});
     if (body.requestId) await saveMutationResult(env, body.requestId, action, result);
     const status = Math.max(400, Math.min(599, Number(error?.statusCode) || 400));
