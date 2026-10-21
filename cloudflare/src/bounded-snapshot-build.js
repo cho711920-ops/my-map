@@ -45,8 +45,19 @@ async function writeSnapshot(env, key, revision, produce, contentType) {
     httpMetadata: {contentType},
     customMetadata: {savedAt: String(Date.now()), revision}
   });
+  const pending = [];
   try {
     const encoder = new TextEncoder(), parts = [];
+    let partNumber = 0, failure = null;
+    const queuePart = async bytes => {
+      const number = ++partNumber;
+      // Two fixed-size uploads overlap R2 latency without retaining the full
+      // snapshot. Keep completion order independent of network response order.
+      pending.push(upload.uploadPart(number, bytes).then(
+        part => { parts[number - 1] = part; }, error => { failure ||= error; }));
+      if (pending.length >= 2) await pending.shift();
+      if (failure) throw failure;
+    };
     let buffer = new Uint8Array(PART_BYTES), used = 0;
     await produce(async text => {
       const bytes = encoder.encode(text);
@@ -55,14 +66,17 @@ async function writeSnapshot(env, key, revision, produce, contentType) {
         buffer.set(bytes.subarray(offset, offset + count), used);
         used += count; offset += count;
         if (used === buffer.length) {
-          parts.push(await upload.uploadPart(parts.length + 1, buffer));
+          await queuePart(buffer);
           buffer = new Uint8Array(PART_BYTES); used = 0;
         }
       }
     });
-    if (used) parts.push(await upload.uploadPart(parts.length + 1, buffer.subarray(0, used)));
+    if (used) await queuePart(buffer.subarray(0, used));
+    await Promise.all(pending);
+    if (failure) throw failure;
     await upload.complete(parts);
   } catch (error) {
+    await Promise.all(pending);
     await upload.abort().catch(() => {});
     throw error;
   }

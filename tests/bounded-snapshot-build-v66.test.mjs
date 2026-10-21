@@ -72,6 +72,28 @@ test("a failed part preserves the previous cache, aborts unpublished parts, and 
   assert.equal(f.stats.completed,1);assert.equal(f.objects.get("csv").customMetadata.revision,"retry");
 });
 
+test('two bounded uploads overlap latency but completion keeps byte order even when responses arrive out of order',async t=>{
+  const f=fixture(t,701,true),expected=Buffer.from(await buildD1SheetCsv(f.env));
+  let releaseFirst,active=0,peak=0;
+  const secondStarted=new Promise(resolve=>{releaseFirst=resolve;});
+  const stored=new Map(),finished=[];
+  f.env.MEDIA.createMultipartUpload=async()=>({
+    async uploadPart(number,bytes){
+      active++;peak=Math.max(peak,active);assert.ok(active<=2);
+      if(number===1)await secondStarted;
+      stored.set(number,Buffer.from(bytes));finished.push(number);active--;
+      if(number===2)releaseFirst();
+      return {partNumber:number,etag:String(number)};
+    },
+    async complete(parts){
+      assert.deepEqual(parts.map(p=>p.partNumber),Array.from({length:parts.length},(_,i)=>i+1));
+      assert.deepEqual(Buffer.concat(parts.map(p=>stored.get(p.partNumber))),expected);
+    },async abort(){throw Error('unexpected abort');}
+  });
+  await buildSheetSnapshot(f.env,'ordered','r');assert.equal(peak,2);
+  assert.equal(finished[0],2);assert.equal(finished[1],1);
+});
+
 test("concurrent cold reads share only the exact environment and cache key; all originals and proof keys survive JSON serialization", async t => {
   const f = fixture(t,7), other = fixture(t,2), query = {action:"unifiedListings"};
   const expected = await handleD1GetAction(f.env,{},query);
