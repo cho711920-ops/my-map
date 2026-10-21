@@ -46,6 +46,8 @@
 배포
 - Worker 862f5089-7101-4048-90d1-e934a9abdd5c
 - 정적 캐시5213aae0c7463a3441c8a53e
+- 양 도메인 HTML200/no-store·연결90자산 SHA일치, 비인증 sheet/unified/detail401,
+  잘못된 세션 쿠키 정리 및 아이디 로그인 설정 확인.
 - 실제 로그인 지도에서 최종 총 로딩 시간은 아직 측정하지 못함. 새로고침1회 적용.
 - 비공개 실측 사본은 C:/Users/ITP/.codex/private-audits/에 보관, Git 제외.
 - outputs/refresh-v57-*는 로컬 검증 증거, Git 제외.
