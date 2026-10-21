@@ -18,7 +18,7 @@ import { withSaleAreaDisplay } from "./sale-area-display.js";
 import { withSaleFinancialDisplay } from "./sale-financial-display.js";
 import { salePropertyEditPatch } from "./sale-property-edit.js";
 import { newListingPeriod } from "./new-listing-period.js";
-import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
+import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata, withManualOriginalPresentation } from "./source-original-display.js";
 import { sourceSnapshotParentSql, sourceSnapshotProofSql, hashSourceSnapshotRows, createSourceSnapshotReadAccumulator } from "./source-snapshot-proof.js";
 import {
   SOURCE_CANDIDATE_POLICY_VERSION, availabilityKindSql, absenceMetadataSql, candidateSourceWhereSql,
@@ -269,7 +269,7 @@ export async function buildD1SheetCsv(env, consumeChunk = null) {
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
-      )`, 500, [], async rows => {
+      )`, 3_000, [], async rows => {
     await hashSourceSnapshotRows(rows);
     for (const row of rows) await emit(sheetCsvRow(row));
   });
@@ -538,12 +538,6 @@ async function unifiedListings(env, listingIds = null) {
     4_000, bindings, async rows => {
       originalCount += rows.length;
       proof.add(rows);
-      const pageIds = [...new Set(rows.map(row => row.listing_id))];
-      // Read edits after the source/parent snapshot for this page. An edit
-      // racing either helper will fail the final parent proof rather than
-      // certify old manual overrides against a newly read source page.
-      const manualRooms = await loadManualRoomOverrides(env, pageIds);
-      const manualFields = await loadManualRepresentativeFields(env, pageIds);
       const pageIndex = sourceListingSearchIndex(rows);
       for (const [id, values] of Object.entries(pageIndex)) {
         const known = sourceSearchIds[id] || (sourceSearchIds[id] = []);
@@ -564,7 +558,7 @@ async function unifiedListings(env, listingIds = null) {
         });
         const original = withSourceOriginalMetadata(
           withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn }),
-            { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
+            { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row);
         if (original.sourceUnavailable) unavailableCount += 1;
         original.saleSummary = compactSaleSummary(original);
         if (clean(original.source) === "공실박스") {
@@ -583,6 +577,26 @@ async function unifiedListings(env, listingIds = null) {
       }
     }
   );
+  // Exactly two narrow manual-history reads after ALL source pages. Apply to
+  // compact presentation only; the final parent proof still rejects any edit
+  // racing these reads. Avoid two extra network round trips for every page.
+  const manualRooms = await loadManualRoomOverrides(env, scopedIds);
+  const manualFields = await loadManualRepresentativeFields(env, scopedIds);
+  const positions = Object.fromEntries(UNIFIED_FIELDS.map((field, i) => [field, i]));
+  for (const id of new Set([...manualRooms.keys(), ...manualFields.keys()])) {
+    for (const values of groups[id] || []) {
+      const summary = values[positions.saleSummary];
+      if (manualFields.get(id)?.has("__separatedV55") && summary && typeof summary === "object" && "saleExtent" in summary) {
+        summary.saleGroupingSeparatedV55 = true;
+      }
+      const patch = withManualOriginalPresentation({room: values[positions.room], floor: values[positions.floor]}, id, manualRooms, manualFields);
+      for (const [field, value] of Object.entries(patch)) {
+        while (values.length <= positions[field]) values.push("");
+        values[positions[field]] = value ?? "";
+      }
+      while (values.length && values.at(-1) === "") values.pop();
+    }
+  }
   // Read parents after the last source page; concurrent edits still invalidate
   // a proof, exactly as with the former all-rows-in-memory projection.
   const parents = await allRowidPages(env, `id, property_id, version, updated_at, status,

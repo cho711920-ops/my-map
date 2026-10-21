@@ -106,8 +106,23 @@ test('manual field metadata is actual-change-only and never overwrites advertise
   assert.equal(record[fields.indexOf('deposit')],1000);assert.equal(record[fields.indexOf('room')],'직접 호실');
   const detail=await handleD1GetAction(f.env,{}, {action:'unifiedListingDetail',propertyId:'public-M'});
   assert.equal(detail.originals[0].manualDisplayFields,'room,deposit');assert.equal(detail.originals[0].deposit,1000);
-  assert.ok(f.sqls.some(sql=>/FROM listing_history WHERE \(action='updateProperty' OR action='separateOriginalListing'\)/.test(sql)&&sql.includes('listing_id IN')),
-    'manual overrides are read for the current source page instead of retaining the entire history inventory');
+  assert.equal(f.sqls.filter(sql=>/FROM listing_history WHERE \(action='updateProperty' OR action='separateOriginalListing'\)/.test(sql)&&!sql.includes('listing_id IN')).length,1,
+    'manual presentation is read once after all source pages instead of adding network reads to every page');
+});
+
+test('deferred compact manual presentation retains an explicit sale separation and never mixes financial terms',async t=>{
+  const f=fixture(t);f.master('M');f.source('ad','M');f.migrate();
+  f.db.prepare("UPDATE listings SET trade_type='sale',room='2층' WHERE id='M'").run();
+  f.db.prepare(`UPDATE listing_sources SET trade_type='sale',list_snapshot_json=? WHERE id='ad'`).run(JSON.stringify({
+    originalId:'ad',source:'네이버',tradeType:'sale',room:'전체',deposit:5000,rent:253,salePrice:80000,
+    saleCategory:'building',saleDetails:{scope:'whole_building',saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true,totalDeposit:5000,monthlyIncome:253}
+  }));
+  f.db.prepare(`INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES ('M','separateOriginalListing','{}','{}')`).run();
+  f.db.prepare(`INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES ('M','updateProperty','{"room":"전체"}','{"room":"2층"}')`).run();
+  const value=await f.get('unifiedListings'),row=Object.fromEntries(value.fields.map((key,i)=>[key,value.groups.M[0][i]]));
+  assert.equal(row.room,'2층');assert.equal(row.floor,2);assert.equal(row.hasManualRoomOverride,true);
+  assert.equal(row.saleSummary.saleGroupingSeparatedV55,true);
+  assert.equal(row.deposit,5000);assert.equal(row.rent,253);assert.equal(row.saleSummary.monthlyIncome,253);
 });
 
 test('compact list and candidate originals preserve each advertised type without replacing the parent or inventing absent types', async t => {

@@ -52,6 +52,18 @@ export async function loadManualRoomOverrides(env, listingIds = null) {
   return new Map((result?.results || []).map(row => [clean(row.listing_id), clean(row.master_room)]));
 }
 
+// Apply only manual presentation fields after compact source pages have been
+// consumed. Keep the original financial terms and source-derived floor intact.
+export function withManualOriginalPresentation(original, listingId, manualRooms, manualFields) {
+  const id = clean(listingId), manual = manualRooms.has(id);
+  const room = manual ? manualRooms.get(id) : original.room;
+  const floor = manual && /층|(?:^|\s)-?\d+(?:\.\d+)?F\b/i.test(room)
+    ? parseListingFloor(room, false) : null;
+  return {room, floor: floor ?? original.floor ?? "",
+    hasManualRoomOverride: manual, roomManuallyEditedV1: manual,
+    manualDisplayFields: MANUAL_REPRESENTATIVE_FIELDS.filter(field => manualFields.get(id)?.has(field)).join(",")};
+}
+
 export function withSourceOriginalMetadata(original, row, manualRooms = new Map(), manualFields = new Map()) {
   const metadata = parsed(row.floor_metadata_json);
   const manual = manualRooms.has(clean(row.listing_id));

@@ -659,7 +659,9 @@ async function handleSheet(request, env, context) {
     // Capture before the query so a concurrent edit is visible to revision
     // polling. A shared build prevents concurrent cold reads multiplying heap.
     const revision = (await readDataRevision(env, "listings")).revision;
-    await buildSheetSnapshot(env, cacheKey, revision);
+    const build = buildSheetSnapshot(env, cacheKey, revision);
+    if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
+    await build;
     const built = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
     if (built?.response) return built.response;
     throw Object.assign(new Error("매물 목록을 준비하지 못했습니다. 다시 시도해 주세요."), {statusCode: 503});
@@ -872,7 +874,9 @@ async function handleDataApi(request, env, context) {
     }
     if (query.action === "unifiedListings") unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
     if (query.action === "unifiedListings" && !query.callback && typeof env.MEDIA?.createMultipartUpload === "function") {
-      await buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, query);
+      const build = buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, query);
+      if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
+      await build;
       const built = await readR2TextCache(env, r2CacheKey, 60 * 60_000, request);
       if (built?.response) {
         built.response.headers.set("x-js-data-cache", "MISS");
@@ -1041,7 +1045,7 @@ async function runScheduledMaintenance(env, context) {
     : null;
   const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
     return deleteR2Cache(env, null, [
-      D1_SHEET_CACHE_KEY,
+      ...(reviewChanged ? [D1_SHEET_CACHE_KEY] : []),
       ...(reviewChanged ? [UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
         ...(Array.isArray(review?.affectedListingIds)
           ? review.affectedListingIds.map(unifiedDetailCacheKey).filter(Boolean) : [])] : [])
@@ -1055,6 +1059,19 @@ async function runScheduledMaintenance(env, context) {
     changeAction: reviewChanged ? "scheduledReviewRepair" : "scheduledElevatorEnrichment"
   });
   return { collector, review, elevator };
+}
+
+async function warmMissingListingSnapshots(env) {
+  if (!env.DB || typeof env.MEDIA?.head !== "function" || typeof env.MEDIA?.createMultipartUpload !== "function") return;
+  const keys = [D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY];
+  const objects = await Promise.all(keys.map(key => env.MEDIA.head(key)));
+  if (objects.every(Boolean)) return;
+  const revision = (await readDataRevision(env, "listings")).revision;
+  // Populate only absent complete caches. Sequential builds bound memory and
+  // requests in the same isolate join the existing builder. No source writes,
+  // fresh-read frequency changes or periodic full rebuild of existing caches.
+  if (!objects[0]) await buildSheetSnapshot(env, keys[0], revision);
+  if (!objects[1]) await buildUnifiedSnapshot(env, keys[1], revision, {}, {action: "unifiedListings"});
 }
 
 async function runElevatorEnrichmentMaintenance(env, context, changeAction) {
@@ -1106,6 +1123,9 @@ export default {
   },
   async scheduled(_event, env, context) {
     context.waitUntil(runScheduledMaintenance(env, context));
+    context.waitUntil(warmMissingListingSnapshots(env).catch(error => {
+      console.error("listing snapshot warm failed", {name: String(error?.name || "Error")});
+    }));
     context.waitUntil(runScheduledCollectorRetention(env).then((report) => {
       if (!report.ok) console.error("collector-retention failed closed", report.error || report.reason);
     }));
