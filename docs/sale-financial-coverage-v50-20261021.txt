@@ -24,3 +24,9 @@
 - 전체1756검사1745통과/기존과 동일11실패. 이전v49 전체1733중1722통과와 실패 이름 대조. ESLint/typecheck/build/diff/dry-run 통과.
 - 로그인된 기존 수집 브라우저를 재시작·제어하지 않았다. 오전11시 임대 예약 및 v49 활성화 미확인 상태는 그대로 별도 사항.
 - 커밋·운영 배포·확인은 후속 기록에 추가한다.
+
+운영 완료
+- 제품a62976b, Worker3a36d708-a0bc-4e3b-8f65-71772d739362 배포 완료. 공개 정적 캐시a29d70c0dc65fed9bf7d85a3 유지(이번 변경은 서버 표시 파서/조회 캐시).
+- js-map.com/www.js-map.com 각각 HTML200/no-store/빌드 SHA 일치, 연결 JS/CSS90개 전부 HTTP200/SHA 일치. 비로그인 unifiedListings/unifiedListingDetail 각각401 유지.
+- 운영 확인 outputs/sale-financial-v50-live-verification.json. 기존1756검사11실패 이름 집합이v49와 정확히 같음도 재대조.
+- 로그인 실화면 조작은 하지 않았다. 실제 원본 내용 재분석+SQLite 목록/상세 동등성+desktop/mobile 렌더링 및 배포 확인 범위다. 처음1회 새로고침, 재수집 불필요.
