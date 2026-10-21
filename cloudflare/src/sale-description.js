@@ -60,7 +60,7 @@ export function saleDescriptionFields(content) {
   const boundary = "(?:^|[^\\p{L}\\p{N}])";
   const wrappedMoney = "[0-9][0-9,. \\t]*억[ \\t]*\\r?\\n[ \\t]*[0-9][0-9,. \\t천백십]*(?:만\\s*원|만|천|백|십)";
   const money = "(" + wrappedMoney + "|[0-9][0-9,. \\t억천백십만]*(?:만\\s*원|억\\s*원|만|억|원|천|백|십))(?=\\s|$|[✅✔☑·,;/()▶▷●■◆◇🔸🔹⭐]|으로|에|이며|이고|입니다|임대)";
-  const paired = [...text.matchAll(new RegExp(boundary + "(?:기\\s*)?보\\s*증\\s*금\\s*/\\s*(?:총\\s*)?월\\s*(?:세|차임)\\s*[:：]?\\s*" + money + "\\s*/\\s*" + money, "gu"))];
+  const paired = [...text.matchAll(new RegExp(boundary + "(?:(?:현재|현|총|기존|기)\\s*)?보\\s*증\\s*금(?:액)?\\s*(?:/|및)\\s*(?:총\\s*)?월\\s*(?:세|차임|임대료)\\s*(?:\\(\\s*현재\\s*\\))?\\s*[:：]?\\s*" + money + "\\s*/\\s*" + money, "gu"))];
   const labelStart = m => m.index + (m[0].match(/^[^\p{L}\p{N}]+/u)?.[0].length || 0);
   function contextAt(start, end) {
     const before = text.slice(Math.max(0, start - 100), start).split(/[\r\n▶▷●■◆◇✅✔☑]/u).at(-1);
@@ -85,8 +85,10 @@ export function saleDescriptionFields(content) {
     for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")" + separator + (monthly ? "(?:월\\s*)?" : "") + money, "gu"))) {
       // In '보증금 / 월세:4000만원 / 290만원', 4000 belongs to the deposit.
       const prefix = text.slice(Math.max(0, m.index - 25), m.index);
-      if (label === "월 임대수입" && (/보\s*증\s*금\s*\/\s*$/.test(prefix) || /보\s*증\s*금\s*$/.test(prefix) && /^\//.test(m[0]))) continue;
+      if (label === "월 임대수입" && (/보\s*증\s*금(?:액)?\s*(?:\/|및)\s*$/.test(prefix) || /보\s*증\s*금(?:액)?\s*$/.test(prefix) && /^\//.test(m[0]))) continue;
       if (label === "월 임대수입" && /(?:순|이자\s*(?:차감|공제|제외))\s*$/.test(prefix)) continue;
+      const afterMoney = text.slice(m.index + m[0].length, m.index + m[0].length + 45);
+      if (label === "월 임대수입" && /^(?:\s|[(/,·]){0,8}(?:대출\s*)?이자\s*(?:차감|공제|제외)(?!\s*전)/.test(afterMoney)) continue;
       // A numbered next item / next line / floor is not a money suffix.
       if (/억\s*(?:원)?$/.test(m[1]) && /^[ \t]*(?:\d[\d,]*[ \t]*[천백십만]|[\d,]+(?=[ \t]*(?:$|[\r\n▶▷●■◆◇])))/u.test(text.slice(m.index + m[0].length))) {
         warnings.push(label + " 금액 단위 불완전: 직접 확인 필요");
@@ -115,11 +117,11 @@ export function saleDescriptionFields(content) {
     if (values.length === 1) evidence[label] = matches[0].text;
     return values.length === 1 ? values[0] : null;
   }
-  const salePrice = amount("매매가", "매매가|매매금액|매매");
+  const salePrice = amount("매매가", "매매가격|매도가격|매매가|매매금액|매매");
   const loanAmount = amount("융자", "융\\s*자(?:금(?:액)?)?|대\\s*출(?:\\s*금(?:액)?)?");
   const depositLabel="보\\s*증\\s*금(?:액)?";
-  const totalDeposit = amount("보증금", "(?:총\\s*)?임대\\s*"+depositLabel+"(?:\\s*(?:합계|총액))?|"+depositLabel+"\\s*(?:합계|총액)|총\\s*"+depositLabel+"|기\\s*"+depositLabel+"|"+depositLabel);
-  const monthlyIncome = amount("월 임대수입", "월세수입|월\\s*임대수입|월세합계|총\\s*월세|기\\s*월세|월차임|월임대료|월세", true);
+  const totalDeposit = amount("보증금", "(?:(?:현재|현|기존)\\s*)?(?:" + "(?:총\\s*)?(?:임대|임차)\\s*"+depositLabel+"(?:\\s*(?:합계|총액|총합|합))?|"+depositLabel+"\\s*(?:합계|총액|총합|합)|총\\s*"+depositLabel+"|기\\s*"+depositLabel+"|"+depositLabel + ")");
+  const monthlyIncome = amount("월 임대수입", "(?:(?:현재|현|총|기존|기)\\s*)?(?:월\\s*세\\s*(?:수\\s*입|수\\s*익|소\\s*득|합계|총액)?|월\\s*임대\\s*(?:료|수입|수익|합계|총액)|월\\s*차임)", true);
   const monthlyNetIncome = amount("이자 차감 월수익", "월\\s*(?:순\\s*)?수익\\s*\\(\\s*(?:대출\\s*)?이자\\s*(?:제외|차감|공제)(?:\\s*후)?\\s*\\)", true);
   const statedMonthlyIncome = amount("기준 미확인 월수익", "월\\s*(?:순\\s*)?수익", true);
   const investmentAmount = amount("실투자금", "실\\s*투\\s*자\\s*금");
@@ -151,7 +153,7 @@ export function naverSaleDescription(item = {}) {
 // Basic fields remain authoritative. Description values remain separately
 // visible when inconsistent, and never silently become the canonical sale price.
 export function supplementSaleDescription(base, described, salePrice, descriptionText) {
-  const result = { ...base, descriptionVersion: 3, descriptionText,
+  const result = { ...base, descriptionVersion: 4, descriptionText,
     descriptionEvidence: described.descriptionEvidence,
     descriptionWarnings: [...(described.descriptionWarnings || [])],
     descriptionFinancials: Object.fromEntries(["salePrice", "loanAmount", "totalDeposit", "monthlyIncome",

@@ -67,6 +67,8 @@ test('SQLite list/detail financial parity is source-local and read-only with str
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());const migrations=new URL('../cloudflare/migrations/',import.meta.url);
   for(const f of fs.readdirSync(migrations).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(new URL(f,migrations),'utf8'));
   const cases=[
+    {item:{...original,salePrice:63000,saleDetails:{scope:'whole_building',descriptionVersion:3,descriptionText:'매매가격:6억3000만원 총 보증금:1억4500만원 월세 수익:월215만원 (연2580만원)'}},raw:{},expected:{totalDeposit:14500,monthlyIncome:215}},
+    {item:{...original,source:'네이버',salePrice:69000,saleDetails:{scope:'whole_building',descriptionVersion:3,descriptionText:'현재보증금총액:2억6500만원(조정가능) 월임대료:313만원'}},raw:{},expected:{totalDeposit:26500,monthlyIncome:313}},
     {item:original,raw:{},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},
     {item:{...original,saleDetails:{scope:'whole_building'}},raw:{content:description+'\n문의 010-1234-5678'},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},
     {item:{...original,source:'네이버',saleDetails:{scope:'whole_building',descriptionVersion:1,descriptionText:'보증금/월세:4000만원/290만원',monthlyIncome:4000,descriptionFinancials:{monthlyIncome:4000},descriptionEvidence:{'월 임대수입':'월세:4000만원'}}},raw:{saleRaw:{detailInfo:{priceInfo:{rentPrice:3500000}}}},expected:{totalDeposit:4000,monthlyIncome:350}},

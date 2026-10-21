@@ -20,3 +20,7 @@
 - 전체 검사와 기준 코드 비교, 운영 배포·설치 상태·실제 수집 확인은 후속 기록에 추가한다. 이 기록만으로 전체 재수집 완료라고 말하지 않는다.
 
 - 전체 기준1724검사 중1713통과/11실패, 수정본1733검사 중1722통과/동일11실패. 기존 자산/캐시/레이아웃 fixture 등 실패 이름 집합이 일치하며 신규 실패 없음. 비교 산출물 outputs/naver-save-v49-baseline-comparison.json.
+
+후속 상태
+- 제품2695d3c 원격푸시, Worker06589b52-b8f6-4e5a-b006-cb1082b4010e 운영배포 및 PC 파일3개(collector/manifest/background) 교체 완료. 백업LocalAppData/JSMap/EdgeAutoCollector/code-backups/v49-20261021.
+- native Edge 활성화 실패 후 주소 검증 안전 제한으로 화면 제어 중단. 메모리 새 버전 활성화/실제 매매 재실행·정상 완료는 확인하지 못했다. 완료라고 보고하지 않음.
