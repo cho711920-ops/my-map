@@ -65,7 +65,7 @@ export function saleDescriptionFields(content) {
   const moneyEnd = "(?=\\s|$|[✅✔☑·,;/()▶▷●■◆◇🔸🔹⭐]|으로|에|이며|이고|입니다|임대)";
   const money = "(" + moneyToken + ")" + moneyEnd;
   const rentalMoney = "(" + moneyToken + "|[0-9][0-9,. \\t억천백십]*(?![0-9,.억천백십만원]))" + moneyEnd;
-  function rentalAmount(raw, label, start, end) {
+  function rentalAmount(raw, label, start, end, labelledPair = false) {
     const explicit = koreanMoneyManwon(raw);
     if (explicit != null) return {value: explicit, assumed: false};
     const compact = raw.replace(/\s/g, "");
@@ -78,7 +78,7 @@ export function saleDescriptionFields(content) {
     // A lone unlabelled/bare figure is still unknown. Shorthand is supported
     // only for Korean named units, an explicit unit header, or a nearby pair
     // of advertised deposit/rent figures (e.g. 보증금:5천 / 총월세:253).
-    if (!namedUnit && !counterpart && !unitHeader) return null;
+    if (!namedUnit && !counterpart && !unitHeader && !labelledPair) return null;
     const suffix = text.slice(end, end + 25);
     if (/^\s*(?:원|달러|엔|USD|KRW|%|개월|년|평|㎡|호|세대|배)/i.test(suffix)) return null;
     const value = koreanMoneyManwon(compact + "만원");
@@ -86,7 +86,10 @@ export function saleDescriptionFields(content) {
         (value > (label === "보증금" ? 100000 : 10000) || !Number.isInteger(value * 100)))) return null;
     return {value, assumed: true};
   }
-  const paired = [...text.matchAll(new RegExp(boundary + "(?:(?:현재|현|총|기존|기)\\s*)?보\\s*증\\s*금(?:액)?\\s*(?:/|및)\\s*(?:총\\s*)?월\\s*(?:세|차임|임대료)\\s*(?:\\(\\s*현재\\s*\\))?\\s*[:：]?\\s*" + money + "\\s*/\\s*" + money, "gu"))];
+  const paired = [...text.matchAll(new RegExp(boundary + "(?:(?:현재|현|총|기존|기)\\s*)?(?:보\\s*증\\s*금(?:액)?|보)\\s*(?:/|및)\\s*(?:총\\s*)?월\\s*(?:세|차임|임대료)?\\s*(?:\\(\\s*현재\\s*\\))?\\s*[:：]?\\s*" + rentalMoney + "\\s*/\\s*" + rentalMoney, "gu"))];
+  const labelledPairs = [...text.matchAll(new RegExp(boundary +
+    "(?:(?:현재|현|총|기존|기)\\s*)?(?:임대\\s*)?(?:보\\s*증\\s*금(?:액|총액|합계)?|보증|보)\\s*[:：=]?\\s*" + rentalMoney +
+    "\\s*(?:[/／,·|]|및|\\s+)\\s*(?:총\\s*)?(?:월\\s*임대\\s*료|월\\s*차임|임대료|월\\s*세|월|세)\\s*[:：=]?\\s*" + rentalMoney, "gu"))];
   const labelStart = m => m.index + (m[0].match(/^[^\p{L}\p{N}]+/u)?.[0].length || 0);
   function contextAt(start, end) {
     const before = text.slice(Math.max(0, start - 100), start).split(/[\r\n▶▷●■◆◇✅✔☑]/u).at(-1);
@@ -112,7 +115,7 @@ export function saleDescriptionFields(content) {
     for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")" + separator + (monthly ? "(?:월\\s*)?" : "") + (shorthand ? rentalMoney : money), "gu"))) {
       // In '보증금 / 월세:4000만원 / 290만원', 4000 belongs to the deposit.
       const prefix = text.slice(Math.max(0, m.index - 25), m.index);
-      if (label === "월 임대수입" && (/보\s*증\s*금(?:액)?\s*(?:\/|및)\s*$/.test(prefix) || /보\s*증\s*금(?:액)?\s*$/.test(prefix) && /^\//.test(m[0]))) continue;
+      if (label === "월 임대수입" && (/(?:보\s*증\s*금(?:액)?|보)\s*(?:\/|및)\s*$/.test(prefix) || /(?:보\s*증\s*금(?:액)?|보)\s*$/.test(prefix) && /^\//.test(m[0]))) continue;
       if (label === "월 임대수입" && /(?:순|이자\s*(?:차감|공제|제외))\s*$/.test(prefix)) continue;
       const afterMoney = text.slice(m.index + m[0].length, m.index + m[0].length + 45);
       if (label === "월 임대수입" && /^(?:\s|[(/,·]){0,8}(?:대출\s*)?이자\s*(?:차감|공제|제외)(?!\s*전)/.test(afterMoney)) continue;
@@ -121,7 +124,8 @@ export function saleDescriptionFields(content) {
         warnings.push(label + " 금액 단위 불완전: 직접 확인 필요");
         continue;
       }
-      const parsed = shorthand ? rentalAmount(m[1], label, labelStart(m), m.index + m[0].length) : null;
+      const withinPair = labelledPairs.some(pair => m.index >= pair.index && m.index + m[0].length <= pair.index + pair[0].length);
+      const parsed = shorthand ? rentalAmount(m[1], label, labelStart(m), m.index + m[0].length, withinPair) : null;
       const value = parsed ? parsed.value : koreanMoneyManwon(m[1]);
       if (value == null) { warnings.push(label + " 금액 표기 확인 필요"); continue; }
       if (rental && projected(labelStart(m), m.index + m[0].length)) {
@@ -131,14 +135,16 @@ export function saleDescriptionFields(content) {
       if (rental) markPartial(label, labelStart(m), m[0]);
       matches.push({ value, text: m[0].trim(), assumed: !!parsed?.assumed });
     }
-    if (label === "보증금" || label === "월 임대수입") for (const m of paired) {
+    if (label === "보증금" || label === "월 임대수입") for (const m of paired.concat(labelledPairs)) {
       if (projected(labelStart(m), m.index + m[0].length)) {
         warnings.push("예상·만실·인상 금액: 기존 임대조건 계산 미적용");
         continue;
       }
-      const value = koreanMoneyManwon(m[label === "보증금" ? 1 : 2]);
+      const suffix = text.slice(m.index + m[0].length, m.index + m[0].length + 45);
+      if (label === "월 임대수입" && /^(?:\s|[(/,·]){0,8}(?:대출\s*)?이자\s*(?:차감|공제|제외)(?!\s*전)/.test(suffix)) continue;
+      const parsed = rentalAmount(m[label === "보증금" ? 1 : 2], label, labelStart(m), m.index + m[0].length, true);
       markPartial(label, labelStart(m), m[0]);
-      if (value != null) matches.push({ value, text: m[0].trim() });
+      if (parsed) matches.push({value: parsed.value, text: m[0].trim(), assumed: parsed.assumed});
     }
     const values = [...new Set(matches.map(m => m.value))];
     if (values.length > 1) { warnings.push(label + " 설명값 충돌: 직접 확인 필요"); return null; }
@@ -185,7 +191,7 @@ export function naverSaleDescription(item = {}) {
 // Basic fields remain authoritative. Description values remain separately
 // visible when inconsistent, and never silently become the canonical sale price.
 export function supplementSaleDescription(base, described, salePrice, descriptionText) {
-  const result = { ...base, descriptionVersion: 5, descriptionText,
+  const result = { ...base, descriptionVersion: 6, descriptionText,
     descriptionEvidence: described.descriptionEvidence,
     descriptionWarnings: [...(described.descriptionWarnings || [])],
     descriptionFinancials: Object.fromEntries(["salePrice", "loanAmount", "totalDeposit", "monthlyIncome",
@@ -212,5 +218,16 @@ export function supplementSaleDescription(base, described, salePrice, descriptio
   for (const field of result.descriptionUnitAssumptions) {
     result.descriptionWarnings.push((field === "totalDeposit" ? "보증금" : "월 임대수입") + ": 원문 단위 생략 · 만원 기준으로 해석");
   }
+  // Keep the advertiser's known rental figures visible even when they cannot
+  // establish whole-property calculations. These never fill canonical inputs.
+  const rentalReference = {};
+  for (const field of ["totalDeposit", "monthlyIncome"]) {
+    if (result[field] != null || base.manualSaleFieldsV1?.includes(field) || described[field] == null) continue;
+    const reason = described.descriptionPartialFields?.includes(field) ? "partial_scope" : priceConflict ? "price_conflict" : "";
+    if (reason) rentalReference[field] = {value: described[field], reason,
+      unitAssumed: described.descriptionUnitAssumptions?.includes(field) || false};
+  }
+  if (Object.keys(rentalReference).length) result.rentalReference = rentalReference;
+  else delete result.rentalReference;
   return result;
 }

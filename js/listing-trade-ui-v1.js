@@ -215,7 +215,10 @@
     var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "landUse", "zoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
-      return keys.every(function(key) { return clean(summary[key]) === clean(first[key]); });
+      return keys.every(function(key) {
+        return summary[key] && typeof summary[key] === 'object' || first[key] && typeof first[key] === 'object'
+          ? JSON.stringify(summary[key]) === JSON.stringify(first[key]) : clean(summary[key]) === clean(first[key]);
+      });
     }) ? first : {};
   }
 
@@ -495,7 +498,7 @@
   // Presentation only. Keep facts tied to this original's price and source.
   function saleCardFactsHtml(item, listCard) {
     if (!isSale(item)) return "";
-    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "zoning", "roadAccess", "parcelShape", "buildingUse"]), land = normalizedSaleCategory(item) === "land", fields = [];
+    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "zoning", "roadAccess", "parcelShape", "buildingUse", "rentalReference"]), land = normalizedSaleCategory(item) === "land", fields = [];
     function money(label, value) {
       var n = nonnegative(value);
       if (n != null) fields.push([label, n.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만원']);
@@ -506,6 +509,17 @@
       if (landText(d.parcelShape)) fields.push(['형상', landText(d.parcelShape)]);
     } else {
       money('보증금 합계', d.totalDeposit); money('월 임대수입', d.monthlyIncome);
+      if (listCard && d.rentalReference) {
+        [['totalDeposit', '보증금'], ['monthlyIncome', '월세']].forEach(function(pair) {
+          var field = pair[0], fact = d.rentalReference[field];
+          if (nonnegative(d[field]) != null || !fact || (d.manualSaleFieldsV1 || []).indexOf(field) >= 0) return;
+          var amount = nonnegative(fact.value);
+          if (amount == null || ['partial_scope', 'price_conflict'].indexOf(fact.reason) < 0) return;
+          var reason = fact.reason === 'partial_scope' ? '일부 층·호실 조건' : '광고 매매가 불일치';
+          fields.push(['원문 ' + pair[1] + ' · 확인 필요', amount.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만원',
+            reason + ' · 건물 전체 수익률 계산에 미반영' + (fact.unitAssumed ? ' · 원문 단위 생략, 만원 기준' : '')]);
+        });
+      }
       money('광고 융자금', d.loanAmount);
       money('광고 월수익 · 이자 차감', d.monthlyNetIncome);
       money('광고 월수익 · 기준 미확인', d.statedMonthlyIncome);
@@ -516,13 +530,15 @@
         else if (advertised != null) fields.push(['광고 연 수익률 · 기준 확인', advertised.toFixed(2) + '%', '광고 기재 연 수익률입니다. 대출·이자 등 계산 기준은 원문 확인이 필요합니다.']);
       }
       if (landText(d.buildingUse)) fields.push(['용도', landText(d.buildingUse)]);
-      if (Array.isArray(d.descriptionUnitAssumptions) && d.descriptionUnitAssumptions.length) {
-        fields.push(['금액 단위', '원문 생략 · 만원 기준']);
-      }
     }
+    var assumedUnits = !land && (Array.isArray(d.descriptionUnitAssumptions) && d.descriptionUnitAssumptions.length ||
+      listCard && d.rentalReference && Object.keys(d.rentalReference).some(function(field) {
+        return d.rentalReference[field] && d.rentalReference[field].unitAssumed && (d.manualSaleFieldsV1 || []).indexOf(field) < 0;
+      }));
+    var unitNote = assumedUnits ? '<small class="sale-card-unit-note-v59">금액 단위: 원문 생략 · 만원 기준</small>' : '';
     return fields.length ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
       return '<span' + (f[2] ? ' title="' + escapeHtml(f[2]) + '"' : '') + '><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';
-    }).join('') + '</div>' : '';
+    }).join('') + unitNote + '</div>' : '';
   }
   function saleOverviewHtml(item) {
     if (!isSale(item)) return "";

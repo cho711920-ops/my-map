@@ -24,7 +24,7 @@ test('paired amounts never read the deposit as rent, including zero, Korean unit
   for(const [text,deposit,rent] of [['기보증금 / 월세 : 4000만원 / 290만원',4000,290],['보증금/월세:5,000만원/426만원',5000,426],['보증금 / 월세 : 1억 / 700만원',10000,700],['보증금/월세:0만원/100만원',0,100]]){
     const r=saleDescriptionFields(text);assert.equal(r.totalDeposit,deposit,text);assert.equal(r.monthlyIncome,rent,text);
   }
-  assert.equal(saleDescriptionFields('기보증금 / 월세 : 4000 / 290만원').monthlyIncome,null);
+  assert.equal(saleDescriptionFields('기보증금 / 월세 : 4000 / 290만원').monthlyIncome,290);
 });
 test('the narrow rent synonym and punctuation variants retain explicit units',()=>{
   for(const text of ['보증금:3천만원/월세:280만원','📌 보증금 3천만원 / 월차임 280만원으로 임대중','▶기월세:280만원(부가세 별도)','월임대료 280만 원'])assert.equal(saleDescriptionFields(text).monthlyIncome,280,text);
@@ -67,6 +67,7 @@ test('SQLite list/detail financial parity is source-local and read-only with str
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());const migrations=new URL('../cloudflare/migrations/',import.meta.url);
   for(const f of fs.readdirSync(migrations).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(new URL(f,migrations),'utf8'));
   const cases=[
+    {item:{...original,salePrice:89000,saleCategory:'factory_warehouse',saleDetails:{scope:'whole_building',descriptionText:'현세입자 보3천/월250만 - 승계가능 /매수자 입주가능'}},raw:{},expected:{totalDeposit:3000,monthlyIncome:250}},
     {item:{...original,source:'네이버',salePrice:80000,saleDetails:{scope:'whole_building',descriptionVersion:4,descriptionText:'매매금액:8억\n보증금:5천\n총월세:253',totalDeposit:null,monthlyIncome:null}},raw:{},expected:{totalDeposit:5000,monthlyIncome:253}},
     {item:{...original,source:'네이버',salePrice:80000,saleDetails:{scope:'whole_building'}},raw:{description:'검수용 광고',saleRaw:{detailInfo:{articleDetailInfo:{articleDescription:'매매금액:8억\n보증금:5천\n총월세:253'}}}},expected:{totalDeposit:5000,monthlyIncome:253}},
     {item:{...original,salePrice:63000,saleDetails:{scope:'whole_building',descriptionVersion:3,descriptionText:'매매가격:6억3000만원 총 보증금:1억4500만원 월세 수익:월215만원 (연2580만원)'}},raw:{},expected:{totalDeposit:14500,monthlyIncome:215}},

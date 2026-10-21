@@ -371,6 +371,17 @@ export function compactSaleSummary(original) {
     const assumptions = detail.descriptionUnitAssumptions.filter(field => ["totalDeposit", "monthlyIncome"].includes(field));
     if (assumptions.length) summary.descriptionUnitAssumptions = assumptions;
   }
+  if (detail.rentalReference && typeof detail.rentalReference === "object") {
+    const reference = {};
+    for (const field of ["totalDeposit", "monthlyIncome"]) {
+      const fact = detail.rentalReference[field];
+      if (detail[field] == null && fact && Number.isFinite(fact.value) && fact.value >= 0 &&
+          ["partial_scope", "price_conflict"].includes(fact.reason)) {
+        reference[field] = {value: fact.value, reason: fact.reason, ...(fact.unitAssumed ? {unitAssumed: true} : {})};
+      }
+    }
+    if (Object.keys(reference).length) summary.rentalReference = reference;
+  }
   if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
   for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield"]) {
     if (key === "buildingAreaM2" && (detail.scope === "land" || original.saleCategory === "land")) continue;

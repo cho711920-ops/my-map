@@ -71,6 +71,10 @@ html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-fa
 html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 > span { gap: 2px; }
 html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 > span > span { color: #5f6e7f; font-size: 11px; }
 html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .sale-card-facts-v2 b { color: #30465c; font-size: 13px; font-weight: 650; }
+.sale-card-facts-v2 > .sale-card-unit-note-v59 {
+  grid-column: 1 / -1; flex-basis: 100%; color: #647182;
+  font-size: 10px; font-weight: 400; line-height: 1.4;
+}
 html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 > .item-compact-actions-v650 {
   padding-top: 8px !important; margin-top: 8px !important;
   border-top: 1px solid #e6eaef; gap: 4px !important;
