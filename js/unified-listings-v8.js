@@ -1913,8 +1913,22 @@
       var known = sameSourceOriginal(knownIndex, original);
       return known && !originalImage(known) && !!originalImage(original);
     });
+    // Hover-prefetched detail can be fresh while the list still has an older
+    // compact financial projection. Do not publish browser cache over a newer
+    // snapshot: verify once through the existing forced-read path on open.
+    var needsCurrentSaleFacts = fromCache && visible.some(function(original) {
+      var known = sameSourceOriginal(knownIndex, original);
+      if (!known || original.tradeType !== "sale") return false;
+      var incoming = original.saleSummary || original.saleDetails || {};
+      var current = known.saleSummary || known.saleDetails || {};
+      return ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount",
+        "investmentAmount", "advertisedYield", "descriptionUnitAssumptions", "rentalReference"].some(function(key) {
+        return JSON.stringify(incoming[key] == null ? null : incoming[key]) !==
+          JSON.stringify(current[key] == null ? null : current[key]);
+      });
+    });
     return {originals: visible, selected: selected || visible[0],
-      retry: needsCurrentPhoto || state.detailStatus[propertyId] === "mismatch"};
+      retry: needsCurrentPhoto || needsCurrentSaleFacts || state.detailStatus[propertyId] === "mismatch"};
   }
 
   function refreshOpenDetail(propertyId, originalId, requestToken, measurement, force) {

@@ -48,6 +48,29 @@ function harness(replies, initial, extra={}) {
 }
 function preserved(item) {const {propertyId,key,memo,deposit,rent,room,state}=item;return {propertyId,key,memo,deposit,rent,room,state};}
 
+test("fresh hover cache financial differences require one current read before replacing the compact card",async()=>{
+  const summary={scope:"whole_building",totalDeposit:5000,monthlyIncome:253};
+  const current=original({tradeType:"sale",saleCategory:"building",salePrice:80000,lastCheckedAt:"2026-10-21T04:00:00Z",saleSummary:{scope:"whole_building"}});
+  const cached={...current,saleSummary:summary,saleDetails:summary};
+  const verified={...cached,saleSummary:{...summary,monthlyIncome:270},saleDetails:{...summary,monthlyIncome:270}};
+  const h=harness([[verified]],{"M-target":[current]},{tradeType:"sale",salePrice:80000,saleDetails:null});
+  h.state.detailCache["M-target"]=[cached];h.state.detailCachedAt["M-target"]=Date.now();
+  await h.api.open("M-target");
+  assert.equal(h.calls.length,1);assert.equal(h.calls[0].options.headers["X-JS-Force-Refresh"],"1");
+  assert.equal(h.w.currentItems[0].saleDetails.monthlyIncome,270);
+  assert.equal(h.item.saleDetails,null,"Presentation must not rewrite saved conditions");
+  await h.api.open("M-target");assert.equal(h.calls.length,1,"Matching cache does not add a request per open");
+});
+
+test("failed financial verification keeps current list facts instead of copying cached amounts",async()=>{
+  const current=original({tradeType:"sale",saleCategory:"building",salePrice:80000,saleSummary:{totalDeposit:5000,monthlyIncome:270}});
+  const cached={...current,saleSummary:{totalDeposit:5000,monthlyIncome:253}};
+  const h=harness([new Error("temporary failure")],{"M-target":[current]},{tradeType:"sale",salePrice:80000});
+  h.state.detailCache["M-target"]=[cached];h.state.detailCachedAt["M-target"]=Date.now();
+  await h.api.open("M-target");assert.equal(h.calls.length,1);
+  assert.equal(h.w.currentItems[0].saleDetails.monthlyIncome,270);
+});
+
 test("unloaded original metadata stays a fast CSV card but cannot claim one source or no photo",()=>{
   const h=harness([]);
   assert.equal(h.w.currentItems.length,1,"Keep the CSV-first responsive list rather than hiding all listings");

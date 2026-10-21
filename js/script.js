@@ -1871,6 +1871,7 @@ function appendVirtualListItemV1(index, target) {
   if (reusableCard && (reusableCard.getAttribute("data-favorite-map-folder-id") || "") !==
       (favoriteContext ? favoriteContext.folderId : "")) reusableCard = null;
   if (reusableCard) {
+    syncReusableSaleFactsV60(reusableCard, item);
     reusableCard.setAttribute("data-list-index-v1", String(index));
     target.appendChild(reusableCard);
     delete listCardReusePoolV6521[listCardIdV681];
@@ -1879,6 +1880,26 @@ function appendVirtualListItemV1(index, target) {
   var card = addListItem(item, target);
   if (card) card.setAttribute("data-list-index-v1", String(index));
   return card;
+}
+
+function syncReusableSaleFactsV60(card, item) {
+  var ui = window.JSListingTradeV1;
+  if (!ui || !ui.isSale(item) || !card.classList.contains("listing-sale-card-v1")) return;
+  var holder = document.createElement("div");
+  holder.innerHTML = ui.saleCardFactsHtml(item, true);
+  var next = holder.firstElementChild;
+  var previous = card.querySelector(":scope > .sale-card-facts-v2");
+  if ((previous ? previous.outerHTML : "") === (next ? next.outerHTML : "")) return;
+  if (previous && next) previous.replaceWith(next);
+  else if (previous) previous.remove();
+  else if (next) card.insertBefore(next, card.querySelector(":scope > .item-compact-actions-v650"));
+  // The table view shares these exact financial values. Keep the existing card,
+  // actions, memo editor and checkbox instead of rebuilding the whole list.
+  var row = card.querySelector(":scope > .sale-table-row-v10");
+  if (row && window.JSSaleReviewV10) {
+    row.remove();
+    window.JSSaleReviewV10.mountCard(card, item);
+  }
 }
 
 function syncListVirtualMetadataV1(list) {
