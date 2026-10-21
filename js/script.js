@@ -420,54 +420,65 @@ function parseCSVRecordsV655(data) {
   var source = String(data == null ? "" : data).replace(/^\uFEFF/, "");
   var rows = [];
   var row = [];
-  var current = "";
+  var parts = [];
+  var start = 0;
   var insideQuotes = false;
+  var tokens = /[",\r\n]/g;
 
-  function finishCell() {
-    row.push(current);
-    current = "";
+  function finishCell(end) {
+    var tail = source.slice(start, end);
+    row.push(parts.length ? parts.join("") + tail : tail);
+    parts = [];
   }
 
-  function finishRow() {
-    finishCell();
+  function finishRow(end) {
+    finishCell(end);
     rows.push(row);
     row = [];
   }
 
-  for (var i = 0; i < source.length; i++) {
-    var ch = source[i];
+  // Scan separators in native code and copy each text span once. Per-character
+  // concatenation retained millions of string fragments on large full reads.
+  var match;
+  while ((match = tokens.exec(source))) {
+    var i = match.index;
+    var ch = match[0];
 
     if (ch === '"') {
       if (insideQuotes && source[i + 1] === '"') {
-        current += '"';
-        i += 1;
+        parts.push(source.slice(start, i), '"');
+        tokens.lastIndex = i + 2;
       } else {
+        parts.push(source.slice(start, i));
         insideQuotes = !insideQuotes;
       }
+      start = tokens.lastIndex;
       continue;
     }
 
     if (ch === "," && !insideQuotes) {
-      finishCell();
+      finishCell(i);
+      start = tokens.lastIndex;
       continue;
     }
 
     if ((ch === "\r" || ch === "\n") && !insideQuotes) {
-      if (ch === "\r" && source[i + 1] === "\n") i += 1;
-      finishRow();
+      if (ch === "\r" && source[i + 1] === "\n") tokens.lastIndex = i + 2;
+      finishRow(i);
+      start = tokens.lastIndex;
       continue;
     }
 
     if (ch === "\r" && insideQuotes && source[i + 1] === "\n") {
-      current += "\n";
-      i += 1;
+      parts.push(source.slice(start, i), "\n");
+      tokens.lastIndex = i + 2;
+      start = tokens.lastIndex;
       continue;
     }
 
-    current += ch;
   }
 
-  if (current || row.length) finishRow();
+  if (parts.join("") || start < source.length || row.length) finishRow(source.length);
   return rows;
 }
 

@@ -16,7 +16,7 @@ export async function loadManualRepresentativeFields(env, listingIds) {
   const rows = await env.DB.prepare(`SELECT listing_id, action, ${projection("before_json")} AS before_fields,
       ${projection("after_json")} AS after_fields
     FROM listing_history WHERE (action='updateProperty' OR action='separateOriginalListing') AND json_valid(before_json) AND json_valid(after_json)
-      ${scope} ORDER BY id`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
+      ${scope} ORDER BY listing_id, id`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
   const result = new Map();
   for (const row of rows?.results || []) {
     const before = parsed(row.before_fields), after = parsed(row.after_fields);

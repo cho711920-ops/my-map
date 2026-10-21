@@ -14,6 +14,7 @@ import { getLandPriceHistory } from "./land-price-history.js";
 import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
+import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
@@ -316,11 +317,12 @@ function cacheAgeMs(object) {
   return savedAt > 0 ? Date.now() - savedAt : Number.POSITIVE_INFINITY;
 }
 
-async function readR2TextCache(env, key, maxAgeMs, streamRequest = null) {
+async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified") {
   if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
   const object = await env.MEDIA.get(key);
   if (!object || cacheAgeMs(object) > maxAgeMs) return null;
-  const streamed = streamRequest ? await unifiedCacheStream(streamRequest, object) : null;
+  const streamed = streamRequest ? await (streamKind === "sheet"
+    ? sheetCacheStream(streamRequest, object) : unifiedCacheStream(streamRequest, object)) : null;
   if (streamed?.response) return streamed;
   return {
     body: streamed?.body ?? await object.text(),
@@ -329,11 +331,11 @@ async function readR2TextCache(env, key, maxAgeMs, streamRequest = null) {
   };
 }
 
-function writeR2TextCache(env, context, key, body, contentType, revision = "") {
+function writeR2TextCache(env, context, key, body, contentType, revision = "", etag = "") {
   if (!env.MEDIA || typeof env.MEDIA.put !== "function") return;
   const task = env.MEDIA.put(key, body, {
     httpMetadata: { contentType: contentType || "application/json; charset=utf-8" },
-    customMetadata: { savedAt: String(Date.now()), ...(revision ? { revision } : {}) }
+    customMetadata: { savedAt: String(Date.now()), ...(revision ? { revision } : {}), ...(etag ? {etag} : {}) }
   });
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
 }
@@ -651,7 +653,8 @@ async function handleSheet(request, env, context) {
   if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
   const cacheKey = D1_SHEET_CACHE_KEY;
   if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl) {
-    const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl);
+    const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
+    if (cached?.response) return cached.response;
     if (cached && cached.revision) {
       sheetCache = { body: cached.body, revision: cached.revision, etag: await sha256Etag(cached.body), fetchedAt: Date.now(), key: cacheKey };
     } else {
@@ -659,7 +662,7 @@ async function handleSheet(request, env, context) {
       const revision = (await readDataRevision(env, "listings")).revision;
       const body = await buildD1SheetCsv(env);
       sheetCache = { body, revision, etag: await sha256Etag(body), fetchedAt: Date.now(), key: cacheKey };
-      writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8", revision);
+      writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8", revision, sheetCache.etag);
     }
   }
   if (request.headers.get("if-none-match") === sheetCache.etag) {

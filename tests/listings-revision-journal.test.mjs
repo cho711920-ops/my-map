@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import {sheetCacheStream} from "../cloudflare/src/sheet-cache-stream.js";
 
 const worker = readFileSync(new URL("../cloudflare/src/worker.js", import.meta.url), "utf8");
 const map = readFileSync(new URL("../js/map.js", import.meta.url), "utf8");
@@ -30,7 +31,7 @@ function harness() {
       return row;
     }
   } };
-  const context = vm.createContext({ Response, Date, crypto, console,
+  const context = vm.createContext({ Response, Date, crypto, console, sheetCacheStream,
     D1_SHEET_CACHE_KEY: "sheet", LISTINGS_REVISION_KEY: "listings", OPERATIONS_REVISION_KEY: "operations",
     sheetCache: { body: "", fetchedAt: 0 }, requireSession: async () => ({}),
     sha256Etag: async (body) => body,

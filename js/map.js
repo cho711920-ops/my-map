@@ -2433,8 +2433,8 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         window.JSUnifiedListingsV8.attach(rawItems);
       }
 
-      var liveInitialSignatureV1 = getItemsDataSignatureV638(rawItems);
-      var liveInitialUnifiedSignatureV1 = window.JSInitialListingsCacheV1 &&
+      var liveInitialSignatureV1 = jsInitialFullListingsCacheHitV1 ? getItemsDataSignatureV638(rawItems) : "";
+      var liveInitialUnifiedSignatureV1 = jsInitialFullListingsCacheHitV1 && window.JSInitialListingsCacheV1 &&
         typeof window.JSInitialListingsCacheV1.unifiedSignatureForItems === "function"
           ? window.JSInitialListingsCacheV1.unifiedSignatureForItems(rawItems, unifiedResult)
           : "";

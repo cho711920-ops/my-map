@@ -1,6 +1,6 @@
 const COMPACT_PREFIX = '{"ok":true,"version":2,"format":"compact-v2","fields":[';
 
-function gzipAccepted(request) {
+export function gzipAccepted(request) {
   const encodings = new Map(String(request.headers.get("accept-encoding") || "").split(",").map(value => {
     const [name, ...parameters] = value.trim().toLowerCase().split(";");
     const quality = parameters.find(parameter => /^\s*q=/.test(parameter));
