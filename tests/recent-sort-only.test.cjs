@@ -12,7 +12,8 @@ assert.match(sortMenu[0], /sort-menu-check selected[\s\S]*?aria-selected="true"[
 assert.equal((sortMenu[0].match(/data-sort-value=/g) || []).length, 1, "정렬 항목은 최근등록순 하나만 있어야 합니다.");
 assert.doesNotMatch(sortMenu[0], /addressAsc|addressDesc|floorLow|floorHigh|rentLow|rentHigh|depositLow|depositHigh/);
 assert.match(css, /sort-menu-check\.selected::before[\s\S]*?display:none!important;content:none!important/);
-assert.match(script, /if \(sortType === "latest"\)[\s\S]*?listingRegistrationTime\(b\) - listingRegistrationTime\(a\)/);
+assert.match(script, /new Map\(filtered\.map\(function\(item\) \{ return \[item, listingRegistrationTime\(item\)\]; \}\)\)/);
+assert.match(script, /if \(sortType === "latest"\)[\s\S]*?registrationTimesV68\.get\(b\) - registrationTimesV68\.get\(a\)/);
 assert.match(script, /function listingRegistrationTime\(item\)/);
 assert.match(script, /item\.registrationAt \|\| item\.regDate/);
 assert.match(script, /Number\(b\.sheetRow\)[\s\S]*?Number\(a\.sheetRow\)/);

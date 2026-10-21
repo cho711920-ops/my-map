@@ -321,7 +321,8 @@ function cacheAgeMs(object) {
 async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified") {
   if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
   const object = await env.MEDIA.get(key);
-  if (!object || cacheAgeMs(object) > maxAgeMs) return null;
+  if (!object) return null;
+  if (cacheAgeMs(object) > maxAgeMs) { await object.body?.cancel?.(); return null; }
   const streamed = streamRequest ? await (streamKind === "sheet"
     ? sheetCacheStream(streamRequest, object) : unifiedCacheStream(streamRequest, object)) : null;
   if (streamed?.response) return streamed;
@@ -1065,13 +1066,18 @@ async function warmMissingListingSnapshots(env) {
   if (!env.DB || typeof env.MEDIA?.head !== "function" || typeof env.MEDIA?.createMultipartUpload !== "function") return;
   const keys = [D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY];
   const objects = await Promise.all(keys.map(key => env.MEDIA.head(key)));
-  if (objects.every(Boolean)) return;
+  const ttls = [Math.max(5_000, Number(env.SHEET_MEMORY_CACHE_MS || 120_000), Number(env.SHEET_R2_CACHE_MS || 3_600_000)),
+    Math.max(30_000, Number(env.UNIFIED_LISTINGS_CACHE_MS || 3_600_000))];
+  const needed = objects.map((object, index) => !object ||
+    cacheAgeMs(object) >= Math.max(30_000, ttls[index] - 120_000));
+  if (!needed.some(Boolean)) return;
   const revision = (await readDataRevision(env, "listings")).revision;
-  // Populate only absent complete caches. Sequential builds bound memory and
-  // requests in the same isolate join the existing builder. No source writes,
-  // fresh-read frequency changes or periodic full rebuild of existing caches.
-  if (!objects[0]) await buildSheetSnapshot(env, keys[0], revision);
-  if (!objects[1]) await buildUnifiedSnapshot(env, keys[1], revision, {}, {action: "unifiedListings"});
+  // Refresh shortly before expiry, keeping the previous complete object until
+  // atomic multipart completion. A new device must not pay an hourly cold
+  // rebuild simply because the object still exists but is no longer usable.
+  // Sequential builds bound memory; current caches are not rebuilt each minute.
+  if (needed[0]) await buildSheetSnapshot(env, keys[0], revision);
+  if (needed[1]) await buildUnifiedSnapshot(env, keys[1], revision, {}, {action: "unifiedListings"});
 }
 
 async function runElevatorEnrichmentMaintenance(env, context, changeAction) {

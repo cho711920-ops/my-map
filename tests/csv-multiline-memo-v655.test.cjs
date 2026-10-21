@@ -48,7 +48,7 @@ assert.equal(
   '[{"role":"임대인","phone":"010-1111-2222"}]'
 );
 
-assert.match(mapSource, /var rows = parseCSVRecordsV655\(data\);/);
+assert.match(mapSource, /var rows = snapshot\.rows \|\| parseCSVRecordsV655\(data\);/);
 assert.match(mapSource, /var c = rows\[i\];/);
 assert.doesNotMatch(mapSource, /data\.trim\(\)\.split\("\\n"\)/);
 assert.match(indexSource, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);

@@ -10,7 +10,7 @@ assert.match(scriptSource, /function getFilteredItems\(options\)/);
 assert.match(scriptSource, /!item\.latlng \? includeUnlocated : bounds\.contain\(item\.latlng\)/);
 assert.match(
   mapSource,
-  /allItems = rawItems;[\s\S]*?getFilteredItems\(\{ includeUnlocated: true \}\);[\s\S]*?geocodeItems\(rawItems/
+  /allItems = rawItems;[\s\S]*?applyFilter\(\);[\s\S]*?geocodeItems\(rawItems/
 );
 assert.doesNotMatch(mapSource, /개 목록 먼저 표시 · 지도 좌표 준비 중/);
 assert.match(mapSource, /전체 매물 준비 중 · 지도 좌표/);

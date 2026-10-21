@@ -21,13 +21,24 @@ test('badge-only maintenance retains complete large caches and publishes exact d
   }
 });
 
-test('scheduled warming builds only missing full caches sequentially, and never repeats a complete cache',async()=>{
+test('scheduled warming builds missing full caches sequentially, and never repeats a fresh complete cache',async()=>{
   for(const present of [[true,true],[false,true],[false,false]]){
     const calls=[],c=vm.createContext({Promise,D1_SHEET_CACHE_KEY:'csv',UNIFIED_LISTINGS_CACHE_KEY:'originals',
       readDataRevision:async()=>({revision:'r'}),buildSheetSnapshot:async()=>{calls.push('csv');},
-      buildUnifiedSnapshot:async()=>{calls.push('originals');}});
+      buildUnifiedSnapshot:async()=>{calls.push('originals');},cacheAgeMs:object=>Date.now()-Number(object.customMetadata.savedAt)});
     vm.runInContext(fn('warmMissingListingSnapshots'),c);
-    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>present[key==='csv'?0:1]?{}:null,createMultipartUpload(){}}});
+    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>present[key==='csv'?0:1]?{customMetadata:{savedAt:String(Date.now())}}:null,createMultipartUpload(){}}});
     assert.deepEqual(calls,present[0]?[]:present[1]?['csv']:['csv','originals']);
+  }
+});
+
+test('existing snapshots are rebuilt shortly before their serving TTL, not left to expire for the next device',async()=>{
+  for(const ages of [[10_000,10_000],[3_490_000,10_000],[10_000,3_490_000],[3_700_000,3_700_000]]){
+    const calls=[],c=vm.createContext({Promise,D1_SHEET_CACHE_KEY:'csv',UNIFIED_LISTINGS_CACHE_KEY:'originals',
+      cacheAgeMs:object=>object.age,readDataRevision:async()=>({revision:'r'}),
+      buildSheetSnapshot:async()=>{calls.push('csv');},buildUnifiedSnapshot:async()=>{calls.push('originals');}});
+    vm.runInContext(fn('warmMissingListingSnapshots'),c);
+    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>({age:ages[key==='csv'?0:1]}),createMultipartUpload(){}}});
+    assert.deepEqual(calls,['csv','originals'].filter((_key,i)=>ages[i]>=3_480_000));
   }
 });

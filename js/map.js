@@ -2414,22 +2414,24 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
    * 기다리지 않으며 같은 리비전의 원본만 이후 사진·출처 정보로 붙입니다.
    */
   return sheetRequest
-    .then(function(snapshot) {
+    .then(async function(snapshot) {
       if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
       liveInitialDataAppliedV1 = true;
-      sheetSnapshotV1 = snapshot;
+      sheetSnapshotV1 = {revision: snapshot.revision};
       var data = snapshot.body;
       // This complete CSV is the master-list baseline, never a scoped result.
       // Original metadata and reusable pairs still require equal revisions.
       var snapshotRevision = String(snapshot.revision || "");
-      var rows = parseCSVRecordsV655(data);
-      if (!rows.length || rows[0].length < 15 || /^\s*</.test(String(data || ""))) {
+      var rows = snapshot.rows || parseCSVRecordsV655(data);
+      if (!rows.length || rows[0].length < 15 || /^\s*</.test(String(rows[0][0] || ""))) {
         throw new Error("매물 목록 응답을 확인하지 못했습니다.");
       }
       var rawItems = [];
+      var itemSliceStartedV68 = Date.now();
 
       for (var i = 1; i < rows.length; i++) {
         var c = rows[i];
+        if (rows[0].length === 33 && c.length !== 33) throw new Error("매물 목록이 끝까지 수신되지 않았습니다.");
 
         var rawDeposit = clean(c[4]);
         var rawRent = clean(c[5]);
@@ -2491,7 +2493,19 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         }
 
         if (item.address) rawItems.push(item);
+        rows[i] = null;
+        if (i % 128 === 0 && Date.now() - itemSliceStartedV68 >= 12) {
+          await new Promise(function(resolve) { setTimeout(resolve, 0); });
+          if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+          itemSliceStartedV68 = Date.now();
+        }
       }
+      // The network result is consumed once. Release the CSV-only strings and
+      // row arrays before attaching originals/filtering the complete baseline.
+      rows.length = 0;
+      snapshot.rows = null;
+      snapshot.body = null;
+      data = null;
 
       var compatible = compatibleOriginalsResultV1(rawItems, unifiedResult);
       if (compatible) {
@@ -2565,7 +2579,6 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       sheetPublishedV1 = true;
       notifyListingsSnapshotV1("full", snapshotRevision);
       updateTypeOptions(allItems);
-      currentItems = getFilteredItems({ includeUnlocated: true });
       var allRowsAlreadyLocatedV691 = rawItems.length > 0 && rawItems.every(function(item) {
         return !!item.latlng;
       });
@@ -2578,8 +2591,13 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
        * after the map was left idle and generated unnecessary hosting cost.
        */
       document.getElementById("status").innerHTML = allRowsAlreadyLocatedV691
-        ? "전체 매물 " + currentItems.length + "개 표시 중..."
-        : "전체 매물 " + currentItems.length + "개 확인 · 지도 좌표 준비 중...";
+        ? "전체 매물 " + allItems.length + "개 표시 중..."
+        : "전체 매물 " + allItems.length + "개 확인 · 지도 좌표 준비 중...";
+
+      if (!isAuto && !autoUpdateViewState && rawItems.length > 1000) {
+        await new Promise(function(resolve) { setTimeout(resolve, 0); });
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+      }
 
       /*
        * 현재 D1 CSV에 좌표가 모두 있으면 0.7MB 공용 좌표 캐시 요청과

@@ -777,6 +777,33 @@
     }
   }
 
+  async function expandNetworkResultV68(result) {
+    if (!result || !/^compact-v\d+$/.test(result.format || '')) return expandUnifiedResult(result);
+    if (result.ok === false || !Array.isArray(result.fields) || !result.groups ||
+        typeof result.groups !== 'object' || Array.isArray(result.groups)) throw new Error('원본 매물 응답을 확인하지 못했습니다.');
+    var ids = Object.keys(result.groups), started = Date.now(), count = 0;
+    // This network result has a single consumer. Replace each compact row as
+    // it is expanded so both representations never accumulate in full. State
+    // is committed only after all rows and the load generation are validated.
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i], rows = result.groups[id];
+      if (!Array.isArray(rows)) throw new Error('원본 매물 목록을 확인하지 못했습니다.');
+      for (var j = 0; j < rows.length; j++) {
+        var values = rows[j];
+        if (!Array.isArray(values)) throw new Error('원본 매물 항목을 확인하지 못했습니다.');
+        var original = {propertyId: id};
+        for (var k = 0; k < result.fields.length; k++) original[result.fields[k]] = values[k];
+        rows[j] = original;
+        if (++count % 128 === 0 && Date.now() - started >= 12 && typeof global.setTimeout === 'function') {
+          await new Promise(function(resolve) { global.setTimeout(resolve, 0); });
+          started = Date.now();
+        }
+      }
+    }
+    result.format = 'expanded-v2';
+    return result;
+  }
+
   function mergeScoped(result) {
     var expanded;
     try { expanded = expandUnifiedResult(result); } catch (_) { return false; }
@@ -841,9 +868,10 @@
         rows.every(function(original) {
           return typeof original.propertyId === "string" && (original.propertyId === internalId || original.propertyId === publicId);
         });
-      if (valid) {
+      var knownRows = state.groups[publicId] || [];
+      if (valid && knownRows.length) {
         var incomingIndex = sourceOriginalIndex(rows);
-        var missingKnownSource = (state.groups[publicId] || []).some(function(original) {
+        var missingKnownSource = knownRows.some(function(original) {
           return !sameSourceOriginal(incomingIndex, original);
         });
         // A full read can be an older R2 snapshot even if it matches its CSV.
@@ -871,7 +899,12 @@
     accepted.forEach(function(entry) {
       var publicId = entry.publicId, proof = entry.proof, rows = entry.rows, search = entry.search;
       if (state.sourceSnapshotProofKeys[publicId] !== proof || !originalMetadataReady(publicId)) {
-        merged[publicId] = rows.map(function(original) { return Object.assign({}, original, {propertyId: publicId}); });
+        // Most rows already use the public ID. Keep the validated objects in
+        // that case instead of copying every field of the entire inventory.
+        // A genuine internal/public ID remap still receives an isolated copy.
+        merged[publicId] = rows.map(function(original) {
+          return original.propertyId === publicId ? original : Object.assign({}, original, {propertyId: publicId});
+        });
         searchIds[publicId] = (search || []).slice();
         state.detailPropertyGeneration[publicId] = (Number(state.detailPropertyGeneration[publicId]) || 0) + 1;
         delete state.detailCache[publicId];
@@ -923,8 +956,8 @@
     var generation = state.loadGeneration;
     setOriginalLoadPhase("pending");
     var deferredCommit = !!(options && options.deferCommit);
-    var pending = apiGet("unifiedListings", {}, force).then(function(result) {
-      result = expandUnifiedResult(result);
+    var pending = apiGet("unifiedListings", {}, force).then(async function(result) {
+      result = await expandNetworkResultV68(result);
       if (generation !== state.loadGeneration) return {ok: false, superseded: true, groups: {}, snapshotRevision: ""};
       if (deferredCommit) return result;
       if (force) invalidateDetails();

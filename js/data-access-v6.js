@@ -79,7 +79,9 @@
       }
       var init = Object.assign({}, options || {});
       if (controller) init.signal = controller.signal;
-      Promise.resolve().then(function() { return request(url, init); }).then(consume).then(function(value) {
+      Promise.resolve().then(function() { return request(url, init); }).then(function(response) {
+        return consume(response, init.signal);
+      }).then(function(value) {
         if (settled) return;
         settled = true;
         cleanup();
@@ -224,12 +226,71 @@
     });
   }
 
+  // Decode bounded chunks while downloading instead of retaining a second
+  // full CSV string beside every parsed cell. Quoting/UTF-8 may cross chunks.
+  async function streamedCsvRows(response, signal) {
+    var reader = response.body.getReader(), decoder = new global.TextDecoder('utf-8', {fatal: true});
+    var rows = [], row = [], parts = [], carry = '', quoted = false, first = true;
+    var sliceStarted = Date.now();
+    function scan(chunk, final) {
+      var input = carry + chunk, start = 0, end = input.length, tokens = /[",\r\n]/g, match;
+      if (first && input.length) { input = input.replace(/^\uFEFF/, ''); end = input.length; first = false; }
+      if (!final && /["\r]/.test(input.charAt(end - 1))) end--;
+      function cell(stop) { var tail = input.slice(start, stop); row.push(parts.length ? parts.join('') + tail : tail); parts = []; }
+      while ((match = tokens.exec(input)) && match.index < end) {
+        var i = match.index, ch = match[0];
+        if (ch === '"') {
+          if (quoted && input[i + 1] === '"') { parts.push(input.slice(start, i), '"'); tokens.lastIndex = i + 2; }
+          else { parts.push(input.slice(start, i)); quoted = !quoted; }
+          start = tokens.lastIndex;
+        } else if (ch === ',' && !quoted) { cell(i); start = tokens.lastIndex; }
+        else if ((ch === '\r' || ch === '\n') && !quoted) {
+          if (ch === '\r' && input[i + 1] === '\n') tokens.lastIndex = i + 2;
+          cell(i); rows.push(row); row = []; start = tokens.lastIndex;
+        } else if (ch === '\r' && quoted && input[i + 1] === '\n') {
+          parts.push(input.slice(start, i), '\n'); tokens.lastIndex = i + 2; start = tokens.lastIndex;
+        }
+      }
+      end = Math.max(end, start);
+      if (end > start) parts.push(input.slice(start, end));
+      carry = input.slice(end);
+      if (final) {
+        if (quoted) throw new Error('매물 목록이 끝까지 수신되지 않았습니다.');
+        if (parts.length || row.length) { row.push(parts.join('')); rows.push(row); }
+      }
+    }
+    try {
+      while (true) {
+        if (signal && signal.aborted) throw Object.assign(new Error('자료 조회가 취소되었습니다.'), {name: 'AbortError'});
+        var chunk = await reader.read();
+        if (chunk.done) { scan(decoder.decode(), true); return rows; }
+        // A cached response may supply a very large single chunk. Keep both
+        // decode and separator scanning bounded even in that case.
+        for (var offset = 0; offset < chunk.value.length; offset += 65536) {
+          scan(decoder.decode(chunk.value.subarray(offset, offset + 65536), {stream: true}), false);
+          if (Date.now() - sliceStarted >= 12) {
+            await new Promise(function(resolve) { global.setTimeout(resolve, 0); });
+            sliceStarted = Date.now();
+            if (signal && signal.aborted) throw Object.assign(new Error('자료 조회가 취소되었습니다.'), {name: 'AbortError'});
+          }
+        }
+      }
+    } catch (error) { await reader.cancel().catch(function() {}); throw error; }
+    finally { reader.releaseLock(); }
+  }
+
   function listingsCsvNetwork(forceRefresh) {
     var headers = forceRefresh ? { "X-JS-Force-Refresh": "1" } : undefined;
     return boundedRead(LISTINGS_API, {
       cache: forceRefresh ? "reload" : "default",
       headers: headers
-    }, function(response) {
+    }, function(response, signal) {
+      if (response.ok && response.body && typeof response.body.getReader === 'function' &&
+          typeof global.TextDecoder === 'function' && typeof global.setTimeout === 'function') {
+        return streamedCsvRows(response, signal).then(function(rows) {
+          return {rows: rows, revision: String(response.headers.get('x-js-listings-revision') || '')};
+        });
+      }
       return response.text().then(function(body) {
         if (response.ok) return { body: body,
           revision: String(response.headers.get("x-js-listings-revision") || "") };
@@ -252,7 +313,12 @@
   }
 
   function listingsCsv(forceRefresh) {
-    return listingsSnapshot(forceRefresh).then(function(snapshot) { return snapshot.body; });
+    return listingsSnapshot(forceRefresh).then(function(snapshot) {
+      if (!snapshot.rows) return snapshot.body;
+      return snapshot.rows.map(function(row) { return row.map(function(value) {
+        return /[",\r\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value;
+      }).join(','); }).join('\r\n');
+    });
   }
 
   function warmInitialData() {

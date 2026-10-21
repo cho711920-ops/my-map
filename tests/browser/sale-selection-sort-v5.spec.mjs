@@ -31,8 +31,8 @@ test('building sorting is market-specific, missing-last, and preserves lease sor
   }
   const card=page.locator('#list [data-property-id="SALE-V5-A"]');
   await expect(card).toHaveClass(/listing-building-card-v5/);
-  await expect(card.locator('.building-unit-prices-v5')).toContainText('대지 기준 500만원/평');
-  await expect(card.locator('.building-unit-prices-v5')).toContainText('연면적 기준 250만원/평');
+  await expect(card.locator('[data-sale-metric-v16="대지면적"] small')).toHaveText('500만원/평');
+  await expect(card.locator('[data-sale-metric-v16="연면적"] small')).toHaveText('250만원/평');
   await expect(card.locator('.item-memo-toggle')).toBeVisible();
   expect(await card.evaluate(e=>e.scrollWidth-e.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({path:info.outputPath('building-cards-v5.png')});

@@ -1201,6 +1201,7 @@ function getFilteredItems(options) {
   var selectedBrokerageFee = String((document.getElementById("brokerageFeeFilter") || {}).value || "");
   var sortType = document.getElementById("sortFilter").value;
   var industryKeyword = String((document.getElementById("industryFilter") || {}).value || "").trim().toLowerCase();
+  var industryTerms = industryKeyword.split(",").map(function(term) { return term.trim(); }).filter(Boolean);
   var radiusFilter = window.mapRadiusFilterV658 || null;
   var polygonFilter = window.mapPolygonFilterV661 || null;
 
@@ -1241,6 +1242,9 @@ function getFilteredItems(options) {
 
   function matchesListingConditionsV2(item) {
     var matchTradeMode = !window.JSListingTradeV1 || window.JSListingTradeV1.matchesItem(item);
+    // A different market cannot pass any combination of the remaining filters.
+    // Avoid parsing sale finances and long descriptions for these rejected ads.
+    if (!matchTradeMode) return false;
     var matchKeyword = matchesMultiKeyword(item, keyword);
 
     var matchType = !selectedType || getListingTypeLabelV1(item) === selectedType;
@@ -1253,10 +1257,7 @@ function getFilteredItems(options) {
         typeof window.JSCommercialBrokerageV1.matchesFilter === "function" &&
         window.JSCommercialBrokerageV1.matchesFilter(item, selectedBrokerageFee));
 
-    var industryTerms = industryKeyword.split(",").map(function(term) {
-      return term.trim();
-    }).filter(Boolean);
-    var memoTextForIndustry = String(item.memo || "").toLowerCase();
+    var memoTextForIndustry = industryTerms.length ? String(item.memo || "").toLowerCase() : "";
     var matchIndustry = !industryTerms.length || industryTerms.some(function(term) {
       return memoTextForIndustry.indexOf(term) !== -1;
     });
@@ -1274,7 +1275,7 @@ function getFilteredItems(options) {
       (saleMode || (item.area >= minArea && item.area <= maxArea));
     var matchSaleFields = !window.JSSaleWorkbenchV1 || window.JSSaleWorkbenchV1.matches(item, saleFilterValues);
 
-    var itemFloor = getItemFloorNumber(item);
+    var itemFloor = !saleMode && (hasFloorFilter || selectedFloorQuick) ? getItemFloorNumber(item) : null;
     var matchFloor = true;
     var matchQuickFloor =
       saleMode || !selectedFloorQuick ||
@@ -1319,6 +1320,11 @@ function getFilteredItems(options) {
     : doneOnly ? "completed" : hideDone ? "active" : "all");
   var filtered = [];
   candidateItems.forEach(function(master) {
+    // Original projections inherit the master's trade type. Reject another
+    // market before allocating a display copy for each of its originals.
+    // Category filtering stays per-original (manual category overrides matter).
+    if (window.JSListingTradeV1 && typeof window.JSListingTradeV1.normalizedTradeType === "function" &&
+        window.JSListingTradeV1.normalizedTradeType(master) !== (saleMode ? "sale" : "lease")) return;
     // The confirmed Today master gate is identical for every original in this
     // group. Reject unrelated masters before building source projections.
     if (newListingDays === 1 && window.JSTodayListingsV1 && !window.JSTodayListingsV1.matches(master)) return;
@@ -1330,6 +1336,8 @@ function getFilteredItems(options) {
 
   var saleSortValuesV5 = saleMode && window.JSSaleWorkbenchV1 && window.JSSaleWorkbenchV1.sortLabel(sortType)
     ? new Map(filtered.map(function(item) { return [item, window.JSSaleWorkbenchV1.sortValue(item, sortType)]; })) : null;
+  var registrationTimesV68 = sortType === "latest"
+    ? new Map(filtered.map(function(item) { return [item, listingRegistrationTime(item)]; })) : null;
   filtered.sort(function(a, b) {
     if (saleSortValuesV5) return window.JSSaleWorkbenchV1.compareSortValues(saleSortValuesV5.get(a), saleSortValuesV5.get(b), sortType) || compareNaturalAddress(a, b);
     if (sortType === "latest") {
@@ -1337,7 +1345,7 @@ function getFilteredItems(options) {
         var absenceDifference = (Number(b.unifiedAbsenceConfirmedTimeV1) || 0) - (Number(a.unifiedAbsenceConfirmedTimeV1) || 0);
         if (absenceDifference) return absenceDifference;
       }
-      var latestDifference = listingRegistrationTime(b) - listingRegistrationTime(a);
+      var latestDifference = registrationTimesV68.get(b) - registrationTimesV68.get(a);
       if (latestDifference) return latestDifference;
       return (Number(b.sheetRow) || 0) - (Number(a.sheetRow) || 0);
     }

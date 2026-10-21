@@ -133,3 +133,12 @@ test("quick-floor chips remain known-floor selections independent of inclusive r
   h.elements.minFloor.value="";h.elements.maxFloor.value="";
   assert.deepEqual(h.ids(),["known-basement"]);
 });
+
+test('latest sorting preserves date fallback and equal-date row order with a precomputed key',()=>{
+  const h=filterHarness();h.elements.sortFilter.value='latest';
+  h.context.allItems=[h.make('older',{registrationAt:'2026-10-20 10:00:00',sheetRow:8}),
+    h.make('newer-low-row',{regDate:'2026.10.21',sheetRow:3}),
+    h.make('invalid',{registrationAt:'미확인',sheetRow:99}),
+    h.make('newer-high-row',{regDate:'2026.10.21',sheetRow:7})];
+  assert.deepEqual(h.ids(),['newer-high-row','newer-low-row','older','invalid']);
+});
