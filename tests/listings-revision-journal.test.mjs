@@ -50,6 +50,7 @@ function browser(h) {
   const context = vm.createContext({ console, Promise, URLSearchParams,
     jsListingsRevisionV682: "", jsListingsRevisionInfoV683: null, jsListingsRevisionPendingV682: false,
     isLoadingSheet: false, jsListingsLoadGenerationV1: 0,
+    jsListingsCompleteBaseV1:true,jsListingsLoadStateV65:{phase:'ready'},
     window: { JSDataAccessV6: { read: (_action, args) => h.read(args.since) } },
     loadSheet: async () => {
       counts.full++;

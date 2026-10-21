@@ -54,6 +54,8 @@ function harness(options = {}) {
     isLoadingSheet: false, pendingAutoUpdate: false, errorItems: [], allItems: [], currentItems: [],
     jsListingsLoadGenerationV1: 0, jsListingsCompleteBaseV1: !!options.complete,
     jsListingsFullBaseTimerV1: null, jsListingsRevisionV682: 'BASE', jsListingsRevisionPendingV682: false,
+    jsListingsLoadStateV65: {phase:'idle',autoRetries:0,retryTimer:null},
+    setListingsLoadStatusV65(phase) {context.jsListingsLoadStateV65.phase=phase;}, navigator: {onLine:true},
     jsInitialFullListingsCacheHitV1: false, jsInitialFullListingsCacheItemsV1: null,
     jsInitialFullListingsCacheSignatureV1: '', jsInitialFullListingsCacheUnifiedSignatureV1: '',
     jsInitialFullListingsLoadingV1: true, innerWidth: 1280,

@@ -52,6 +52,69 @@ var jsInitialFullListingsCacheUnifiedSignatureV1 = "";
 var jsListingsLoadGenerationV1 = 0;
 var jsListingsCompleteBaseV1 = false;
 var jsListingsFullBaseTimerV1 = null;
+var jsListingsLoadStateV65 = {phase: "idle", autoRetries: 0, retryTimer: null};
+
+function setListingsLoadStatusV65(phase) {
+  jsListingsLoadStateV65.phase = phase;
+  if (jsListingsLoadStateV65.retryTimer !== null) clearTimeout(jsListingsLoadStateV65.retryTimer);
+  jsListingsLoadStateV65.retryTimer = null;
+  var panel = document.getElementById("jsListingsLoadStatusV65");
+  if (phase === "ready" || phase === "loading" && jsListingsCompleteBaseV1 && (allItems || []).length) {
+    if (panel) panel.remove();
+    updateMapListingCountV825();
+    return;
+  }
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = "jsListingsLoadStatusV65";
+    panel.setAttribute("role", "status");
+    panel.setAttribute("aria-live", "polite");
+    var message = document.createElement("p");
+    message.setAttribute("data-listings-load-message", "");
+    var button = document.createElement("button");
+    button.type = "button";
+    button.addEventListener("click", function() {
+      if (jsListingsLoadStateV65.phase === "auth") {
+        window.dispatchEvent(new Event("js-auth-required"));
+      } else retryListingsLoadV65(true);
+    });
+    panel.appendChild(message);
+    panel.appendChild(button);
+    (document.getElementById("wrap") || document.body).appendChild(panel);
+  }
+  panel.dataset.phase = phase;
+  var hasData = !!(allItems || []).length;
+  panel.querySelector("[data-listings-load-message]").textContent = phase === "loading"
+    ? (hasData ? "최근 확인한 매물을 표시하고 최신 정보를 확인하고 있습니다." : "매물을 불러오고 있습니다. 잠시만 기다려 주세요.")
+    : phase === "auth" ? "로그인이 만료되어 매물을 불러오지 못했습니다. 다시 로그인해 주세요."
+      : hasData ? "최신 매물을 확인하지 못했습니다. 최근 확인한 목록을 표시하고 있습니다."
+        : "매물을 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.";
+  var retry = panel.querySelector("button");
+  retry.hidden = phase === "loading";
+  retry.textContent = phase === "auth" ? "다시 로그인" : "다시 불러오기";
+  updateMapListingCountV825();
+}
+
+function retryListingsLoadV65(manual) {
+  if (isLoadingSheet || jsListingsLoadStateV65.phase !== "error") return false;
+  if (!manual && (jsListingsCompleteBaseV1 || jsListingsLoadStateV65.autoRetries >= 1 ||
+      document.visibilityState === "hidden" || navigator.onLine === false)) return false;
+  if (manual) jsListingsLoadStateV65.autoRetries = 0;
+  else jsListingsLoadStateV65.autoRetries += 1;
+  // Retry a read only. Default ETag revalidation avoids rebuilding the server
+  // snapshot; existing cards, filters, drafts and checked selections survive.
+  return loadSheet(jsListingsCompleteBaseV1, false);
+}
+
+window.addEventListener("online", function() { retryListingsLoadV65(false); });
+window.addEventListener("js-auth-restored", function() {
+  if (jsListingsLoadStateV65.phase !== "auth") return;
+  jsListingsLoadStateV65.phase = "error";
+  retryListingsLoadV65(true);
+});
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") retryListingsLoadV65(false);
+});
 
 
 /*
@@ -294,6 +357,7 @@ function rememberListingsRevisionV682() {
 
 function refreshListingsWhenChangedV682() {
   if (jsListingsRevisionPendingV682 || isLoadingSheet) return;
+  if (!jsListingsCompleteBaseV1 && (jsListingsLoadStateV65.phase === "error" || jsListingsLoadStateV65.phase === "auth")) return;
   jsListingsRevisionPendingV682 = true;
   var generationV1 = typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0;
   return fetchDataRevisionV682("listings").then(function(revision) {
@@ -1466,6 +1530,9 @@ function scheduleMapIdleRefreshV638() {
     jsMapIdleTimerV638 = null;
 
     if (isRendering) return;
+    // A map idle event before the first data response must not turn an
+    // unconfirmed load into an apparently successful empty result.
+    if (!jsListingsCompleteBaseV1 && jsListingsLoadStateV65.phase !== "idle") return;
 
     var viewportKey = getMapViewportKeyV638();
     if (viewportKey && viewportKey === jsLastIdleViewportKeyV638) return;
@@ -1537,7 +1604,12 @@ kakao.maps.load(function() {
       : jsLegacyDefaultMapLevelV690
   });
 
-  geocoder = new kakao.maps.services.Geocoder();
+  // Saved coordinates can render even when the optional address-search
+  // library is delayed or blocked on a mobile browser.
+  try {
+    geocoder = kakao.maps.services && typeof kakao.maps.services.Geocoder === "function"
+      ? new kakao.maps.services.Geocoder() : null;
+  } catch (_) { geocoder = null; }
 
   var mapElementV6525 = document.getElementById("map");
   if (mapElementV6525) {
@@ -1812,6 +1884,7 @@ function showInitialFullListingsCacheV1(snapshot) {
   window.jsInitialFullListingsLoadingV1 = false;
   document.documentElement.setAttribute("data-initial-full-list-cache-hit", "true");
   applyFilter();
+  if (jsListingsLoadStateV65.phase === "loading") setListingsLoadStatusV65("loading");
   var statusElement = document.getElementById("status");
   if (statusElement) {
     statusElement.textContent = "전체 매물 " + allItems.length.toLocaleString("ko-KR") +
@@ -2196,6 +2269,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
     : "";
 
   isLoadingSheet = true;
+  setListingsLoadStatusV65("loading");
   var loadGenerationV1 = ++jsListingsLoadGenerationV1;
   errorItems = [];
   addressErrorSnapshotV41 = null;
@@ -2349,6 +2423,9 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       // Original metadata and reusable pairs still require equal revisions.
       var snapshotRevision = String(snapshot.revision || "");
       var rows = parseCSVRecordsV655(data);
+      if (!rows.length || rows[0].length < 15 || /^\s*</.test(String(data || ""))) {
+        throw new Error("매물 목록 응답을 확인하지 못했습니다.");
+      }
       var rawItems = [];
 
       for (var i = 1; i < rows.length; i++) {
@@ -2470,6 +2547,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         updateErrorStatus();
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+        setListingsLoadStatusV65("ready");
         applyLateUnifiedV1();
         document.getElementById("status").innerHTML =
           "매물 " + allItems.length.toLocaleString("ko-KR") + "개 불러옴";
@@ -2519,6 +2597,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         updateErrorStatus();
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+        setListingsLoadStatusV65("ready");
         applyLateUnifiedV1();
         document.getElementById("status").innerHTML = "매물 " + allItems.length + "개 불러옴";
         return true;
@@ -2565,6 +2644,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
           updateErrorStatus();
           pendingAutoUpdate = false;
           isLoadingSheet = false;
+          setListingsLoadStatusV65("ready");
           applyLateUnifiedV1();
           document.getElementById("status").innerHTML =
             "자동 업데이트 확인 완료 " + allItems.length + "개";
@@ -2649,6 +2729,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
         document.getElementById("status").innerHTML = isAuto ? "자동 업데이트 완료 " + allItems.length + "개" + waitText : "매물 " + allItems.length + "개 불러옴" + waitText;
         pendingAutoUpdate = false;
         isLoadingSheet = false;
+        setListingsLoadStatusV65("ready");
         applyLateUnifiedV1();
         }, function(progressItems, remainingCount) {
         /*
@@ -2669,6 +2750,13 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       isLoadingSheet = false;
       if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
       document.getElementById("status").innerHTML = "D1 불러오기 오류";
+      var authFailureV65 = Number(err && err.status) === 401 || Number(err && err.status) === 403;
+      setListingsLoadStatusV65(authFailureV65 ? "auth" : "error");
+      if (!authFailureV65 && !jsListingsCompleteBaseV1 && jsListingsLoadStateV65.autoRetries < 1 &&
+          document.visibilityState !== "hidden" && navigator.onLine !== false &&
+          (!err || err.retryable !== false) && (Number(err && err.status || 0) === 0 || Number(err && err.status) >= 500)) {
+        jsListingsLoadStateV65.retryTimer = setTimeout(function() { retryListingsLoadV65(false); }, 2000);
+      }
       console.error(err);
       return false;
     });
@@ -2833,7 +2921,7 @@ function geocodeItems(items, callback, progressCallback) {
   var requestDelay = 170;
   var retryDelay = 450;
   var maxRetry = 3;
-  var places = new kakao.maps.services.Places();
+  var places = null;
   var lastProgressCount = 0;
 
   if (total === 0) {
@@ -2871,6 +2959,20 @@ function geocodeItems(items, callback, progressCallback) {
   pendingTotal = pendingItems.length;
 
   if (pendingTotal === 0) {
+    callback(done);
+    return;
+  }
+
+  try {
+    if (!kakao.maps.services || typeof kakao.maps.services.Geocoder !== "function" ||
+        typeof kakao.maps.services.Places !== "function") throw new Error("주소검색 모듈 미준비");
+    if (!geocoder) geocoder = new kakao.maps.services.Geocoder();
+    places = new kakao.maps.services.Places();
+  } catch (_) {
+    pendingItems.forEach(function(item) {
+      item.geocodeErrorReason = "지도 주소검색을 불러오지 못했습니다. 저장된 좌표가 있는 매물부터 표시합니다.";
+      errorItems.push(item);
+    });
     callback(done);
     return;
   }
@@ -3103,6 +3205,16 @@ function updateMapListingCountV825(filteredItems) {
   var value = document.getElementById("mapListingCountValueV825");
 
   if (!badge || !value) return count;
+
+  if (!jsListingsCompleteBaseV1 && jsListingsLoadStateV65.phase !== "idle" && jsListingsLoadStateV65.phase !== "ready") {
+    var loadingLabelV65 = jsListingsLoadStateV65.phase === "loading" ? "불러오는 중" : "확인 필요";
+    value.textContent = loadingLabelV65;
+    badge.dataset.pending = "true";
+    badge.removeAttribute("data-listing-count");
+    badge.setAttribute("aria-label", "매물 " + loadingLabelV65 + " · 아직 0건으로 확정하지 않았습니다.");
+    badge.title = "매물 조회가 끝나지 않았습니다.";
+    return count;
+  }
 
   var formattedCount = count.toLocaleString("ko-KR");
   var todayState = Number(window.newListingDays || 0) === 1 && window.JSTodayListingsV1 &&

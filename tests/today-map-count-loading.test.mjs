@@ -8,6 +8,7 @@ const source=map.slice(start,map.indexOf('\n}',start)+2);
 function render(phase,items=[],days=1){
   const badge={dataset:{},setAttribute(key,value){this[key]=value;}},value={};
   const context={window:{newListingDays:days,JSTodayListingsV1:{state:()=>({phase})}},
+    jsListingsCompleteBaseV1:true,jsListingsLoadStateV65:{phase:'ready'},
     document:{getElementById:id=>id==='mapListingCountV825'?badge:id==='mapListingCountValueV825'?value:null},overlays:[]};
   vm.createContext(context);vm.runInContext(source,context);
   return {count:context.updateMapListingCountV825(items),badge,value};

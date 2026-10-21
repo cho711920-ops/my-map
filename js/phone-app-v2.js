@@ -62,7 +62,7 @@
     var originalChips = document.getElementById("activeFilterChipsV844");
     if (originalChips) observer.observe(originalChips, {childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"]});
     var mapCount = document.getElementById("mapListingCountV825");
-    if (mapCount) observer.observe(mapCount, {attributes: true, attributeFilter: ["data-listing-count"]});
+    if (mapCount) observer.observe(mapCount, {attributes: true, attributeFilter: ["data-listing-count", "data-pending", "aria-label"]});
     observer.observe(root, {attributes: true, attributeFilter: ["class"]});
     if (global.ResizeObserver) new global.ResizeObserver(syncHeaderHeight).observe(header);
     global.addEventListener("js-phone-favorites-change", queueSync);
@@ -109,11 +109,14 @@
     }
     var list = document.getElementById("list");
     var count = Math.max(0, Number(list && list.getAttribute("data-total-count")) || 0);
-    var countText = "매물 " + count.toLocaleString("ko-KR") + "개";
-    if (listCount.textContent !== countText) listCount.textContent = countText;
     var mapCount = document.getElementById("mapListingCountV825");
+    var pendingLoad = mapCount && mapCount.dataset.pending === "true" && !mapCount.hasAttribute("data-listing-count");
+    var countValue = document.getElementById("mapListingCountValueV825");
+    var pendingText = countValue && countValue.textContent || "확인 중";
+    var countText = pendingLoad ? "매물 " + pendingText : "매물 " + count.toLocaleString("ko-KR") + "개";
+    if (listCount.textContent !== countText) listCount.textContent = countText;
     var mapTotal = mapCount && mapCount.hasAttribute("data-listing-count") ? Number(mapCount.dataset.listingCount) : count;
-    var mapLabel = "현재 범위 매물 " + Math.max(0, mapTotal || 0).toLocaleString("ko-KR") + "개 보기";
+    var mapLabel = pendingLoad ? "매물 " + pendingText : "현재 범위 매물 " + Math.max(0, mapTotal || 0).toLocaleString("ko-KR") + "개 보기";
     if (mapList.textContent !== mapLabel) mapList.textContent = mapLabel;
     var favoriteOpen = global.JSPhoneFavoritesV2 && global.JSPhoneFavoritesV2.isOpen();
     var currentView = favoriteOpen ? "favorites" : root.getAttribute("data-jsm-mobile-view");

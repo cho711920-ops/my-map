@@ -367,6 +367,7 @@ async function unlock(email) {
   document.documentElement.classList.remove("auth-pending");
   document.getElementById("jsAuthGate")?.remove();
   document.getElementById("jsAuthUser")?.remove();
+  window.dispatchEvent(new Event("js-auth-restored"));
 }
 
 function removeStorageKeys(storage, keys) {
