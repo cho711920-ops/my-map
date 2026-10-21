@@ -106,7 +106,8 @@ test('manual field metadata is actual-change-only and never overwrites advertise
   assert.equal(record[fields.indexOf('deposit')],1000);assert.equal(record[fields.indexOf('room')],'직접 호실');
   const detail=await handleD1GetAction(f.env,{}, {action:'unifiedListingDetail',propertyId:'public-M'});
   assert.equal(detail.originals[0].manualDisplayFields,'room,deposit');assert.equal(detail.originals[0].deposit,1000);
-  assert.ok(f.sqls.some(sql=>/FROM listing_history WHERE \(action='updateProperty' OR action='separateOriginalListing'\)/.test(sql)&&!sql.includes('listing_id IN')));
+  assert.ok(f.sqls.some(sql=>/FROM listing_history WHERE \(action='updateProperty' OR action='separateOriginalListing'\)/.test(sql)&&sql.includes('listing_id IN')),
+    'manual overrides are read for the current source page instead of retaining the entire history inventory');
 });
 
 test('compact list and candidate originals preserve each advertised type without replacing the parent or inventing absent types', async t => {

@@ -19,7 +19,7 @@ import { withSaleFinancialDisplay } from "./sale-financial-display.js";
 import { salePropertyEditPatch } from "./sale-property-edit.js";
 import { newListingPeriod } from "./new-listing-period.js";
 import { loadManualRoomOverrides, loadManualRepresentativeFields, withSourceOriginalMetadata } from "./source-original-display.js";
-import { sourceSnapshotParentSql, sourceSnapshotProofSql, hashSourceSnapshotRows, sourceSnapshotKeysFromReadRows } from "./source-snapshot-proof.js";
+import { sourceSnapshotParentSql, sourceSnapshotProofSql, hashSourceSnapshotRows, createSourceSnapshotReadAccumulator } from "./source-snapshot-proof.js";
 import {
   SOURCE_CANDIDATE_POLICY_VERSION, availabilityKindSql, absenceMetadataSql, candidateSourceWhereSql,
   publicSourceWhereSql, publicMasterWhereSql, publicMasterSourcesWhereSql, candidateMasterWhereSql, candidateAdCountSql
@@ -216,7 +216,7 @@ async function allPages(env, sql, pageSize = 4_000, bindings = []) {
   return rows;
 }
 
-async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000, bindings = []) {
+async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000, bindings = [], consumePage = null) {
   const rows = [];
   let cursor = 0;
   for (;;) {
@@ -224,11 +224,14 @@ async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageS
       FROM ${tableSql} WHERE (${whereSql}) AND rowid > ?${bindings.length + 1} ORDER BY rowid LIMIT ?${bindings.length + 2}`)
       .bind(...bindings, cursor, pageSize).all();
     const page = result?.results || [];
+    const values = [];
     for (const row of page) {
       const { __page_cursor: pageCursor, ...value } = row;
       cursor = Math.max(cursor, Number(pageCursor) || 0);
-      rows.push(value);
+      values.push(value);
     }
+    if (consumePage) await consumePage(values);
+    else rows.push(...values);
     if (page.length < pageSize) break;
   }
   return rows;
@@ -242,8 +245,18 @@ export function isD1PostAction(action) {
   return D1_POST_ACTIONS.has(clean(action));
 }
 
-export async function buildD1SheetCsv(env) {
-  const rows = await allRowidPages(env, `
+export async function buildD1SheetCsv(env, consumeChunk = null) {
+  const header = [
+    "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
+    "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
+    "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
+    "최종수집시각", "위도", "경도"
+  ];
+  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세", "원본연결키");
+  const chunks = [];
+  const emit = async text => { if (consumeChunk) await consumeChunk(text + "\r\n"); else chunks.push(text); };
+  await emit(header.map(csvCell).join(","));
+  await allRowidPages(env, `
     title, address, room, listing_type, deposit, monthly_rent, maintenance_fee, premium, area_m2,
     landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
     property_id, source_url, contacts_json, building_year, building_elevators,
@@ -256,16 +269,15 @@ export async function buildD1SheetCsv(env) {
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listings.id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
-      )`, 3_000);
-  await hashSourceSnapshotRows(rows);
-  const header = [
-    "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
-    "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
-    "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
-    "최종수집시각", "위도", "경도"
-  ];
-  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세", "원본연결키");
-  const body = [header, ...rows.map((row) => [
+      )`, 500, [], async rows => {
+    await hashSourceSnapshotRows(rows);
+    for (const row of rows) await emit(sheetCsvRow(row));
+  });
+  return consumeChunk ? null : chunks.join("\r\n") + "\r\n";
+}
+
+function sheetCsvRow(row) {
+  return [
     row.title, row.address, row.room, row.listing_type, row.deposit, row.monthly_rent,
     row.maintenance_fee, row.premium, row.area_m2, row.landlord_phone, row.tenant_phone,
     row.operating_memo, row.status, row.first_collected_at, row.main_source, row.property_id,
@@ -273,8 +285,7 @@ export async function buildD1SheetCsv(env) {
     row.building_approval_date, row.building_info_checked_at, row.building_info_status,
     row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity,
     row.trade_type, row.sale_category, row.sale_price, row.sale_details_json, row.source_snapshot_key
-  ])].map((row) => row.map(csvCell).join(",")).join("\r\n");
-  return `${body}\r\n`;
+  ].map(csvCell).join(",");
 }
 
 async function listingChanges(env, query) {
@@ -478,7 +489,10 @@ async function unifiedListings(env, listingIds = null) {
   if (scopedIds && scopedIds.length > 75) throw new Error("한 번에 조회할 신규매물 범위를 초과했습니다.");
   const bindings = scopedIds || [];
   const scopeSql = column => scopedIds ? ` AND ${column} IN (${scopedIds.map((_, i) => `?${i + 1}`).join(",")})` : "";
-  const rows = await allRowidPages(
+  const groups = {}, sourceSearchIds = {};
+  const proof = createSourceSnapshotReadAccumulator();
+  let originalCount = 0, unavailableCount = 0;
+  await allRowidPages(
     env,
     `id, listing_id, source, source_listing_id, source_url, snapshot_hash, active, missing_count, updated_at, last_collected_at, list_snapshot_json,
       (SELECT ${sourceSnapshotParentSql("proof_parent")} FROM listings proof_parent WHERE proof_parent.id=listing_sources.listing_id) AS source_snapshot_parent_json,
@@ -521,59 +535,62 @@ async function unifiedListings(env, listingIds = null) {
         WHERE quality_hold.listing_id = listing_sources.listing_id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
       )${scopeSql("listing_id")}`,
-    4_000, bindings
+    4_000, bindings, async rows => {
+      originalCount += rows.length;
+      proof.add(rows);
+      const pageIds = [...new Set(rows.map(row => row.listing_id))];
+      // Read edits after the source/parent snapshot for this page. An edit
+      // racing either helper will fail the final parent proof rather than
+      // certify old manual overrides against a newly read source page.
+      const manualRooms = await loadManualRoomOverrides(env, pageIds);
+      const manualFields = await loadManualRepresentativeFields(env, pageIds);
+      const pageIndex = sourceListingSearchIndex(rows);
+      for (const [id, values] of Object.entries(pageIndex)) {
+        const known = sourceSearchIds[id] || (sourceSearchIds[id] = []);
+        const seen = new Set(known);
+        for (const value of values) if (!seen.has(value)) { known.push(value); seen.add(value); }
+      }
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        rows[index] = null;
+        const daangn = parseJson(row.daangn_sale_extent_json, {});
+        const displayed = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
+          source: row.source,
+          floorInfo: parseJson(row.naver_floor_info_json, null),
+          propertyType: row.naver_property_type,
+          room: row.naver_sale_room,
+          gongsil: parseJson(row.gongsil_sale_extent_json, {}),
+          daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
+        });
+        const original = withSourceOriginalMetadata(
+          withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn }),
+            { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
+        if (original.sourceUnavailable) unavailableCount += 1;
+        original.saleSummary = compactSaleSummary(original);
+        if (clean(original.source) === "공실박스") {
+          const actualImages = actualGongsilImages({
+            list: { Photos: parseJson(row.gongsil_photos_json, []) }
+          });
+          original.thumbnail = actualImages[0] || "";
+          original.photoCount = actualImages.length;
+        }
+        const propertyId = clean(row.listing_id || original.propertyId);
+        if (!propertyId) continue;
+        if (!groups[propertyId]) groups[propertyId] = [];
+        const values = UNIFIED_FIELDS.map((field) => original[field] ?? "");
+        while (values.length && values[values.length - 1] === "") values.pop();
+        groups[propertyId].push(values);
+      }
+    }
   );
-  const groups = {};
-  const manualRooms = await loadManualRoomOverrides(env, scopedIds);
-  const manualFields = await loadManualRepresentativeFields(env, scopedIds);
-  // Read parent tokens/counts last. They may reject a source group changed
-  // between rowid pages; they must never replace the actual read-row proof.
+  // Read parents after the last source page; concurrent edits still invalidate
+  // a proof, exactly as with the former all-rows-in-memory projection.
   const parents = await allRowidPages(env, `id, property_id, version, updated_at, status,
     (SELECT COUNT(*) FROM listing_sources proof_source WHERE proof_source.listing_id=listings.id
       AND ${publicSourceWhereSql("proof_source")}) AS source_snapshot_source_count`, "listings",
     `${publicMasterWhereSql("listings")} AND ${publicMasterSourcesWhereSql("listings")}${scopeSql("id")}`, 3_000, bindings);
-  const sourceProof = await sourceSnapshotKeysFromReadRows(rows, parents);
-  // Parent rows have already been reduced to proof keys. Release the inventory
-  // before building another large representation of all source advertisements.
+  const sourceProof = await proof.finish(parents);
   parents.length = 0;
-  let unavailableCount = 0;
-  // These rows already have the same public-parent, hold and scope guards as
-  // the original-number index. Reuse their rowid order instead of rescanning
-  // every source with OFFSET; the index keeps its own provider/number filter.
-  const sourceSearchIds = sourceListingSearchIndex(rows);
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index];
-    // The snapshot JSON is only an input. Keeping every input row alive while
-    // the compact groups grow doubles peak memory on a cold full-cache build.
-    rows[index] = null;
-    const daangn = parseJson(row.daangn_sale_extent_json, {});
-    const displayed = withSaleExtentDisplay(parseJson(row.list_snapshot_json, {}), {
-      source: row.source,
-      floorInfo: parseJson(row.naver_floor_info_json, null),
-      propertyType: row.naver_property_type,
-      room: row.naver_sale_room,
-      gongsil: parseJson(row.gongsil_sale_extent_json, {}),
-      daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
-    });
-    const original = withSourceOriginalMetadata(
-      withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn }),
-        { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row, manualRooms, manualFields);
-    if (original.sourceUnavailable) unavailableCount += 1;
-    original.saleSummary = compactSaleSummary(original);
-    if (clean(original.source) === "공실박스") {
-      const actualImages = actualGongsilImages({
-        list: { Photos: parseJson(row.gongsil_photos_json, []) }
-      });
-      original.thumbnail = actualImages[0] || "";
-      original.photoCount = actualImages.length;
-    }
-    const propertyId = clean(row.listing_id || original.propertyId);
-    if (!propertyId) continue;
-    if (!groups[propertyId]) groups[propertyId] = [];
-    const values = UNIFIED_FIELDS.map((field) => original[field] ?? "");
-    while (values.length && values[values.length - 1] === "") values.pop();
-    groups[propertyId].push(values);
-  }
   for (const id of Object.keys(sourceProof.keys)) {
     if (!groups[id]) groups[id] = [];
     if (!sourceSearchIds[id]) sourceSearchIds[id] = [];
@@ -587,7 +604,7 @@ async function unifiedListings(env, listingIds = null) {
     sourceSearchIds,
     sourceSnapshotKeys: sourceProof.keys,
     sourceSnapshotPropertyIds: sourceProof.propertyIds,
-    originalCount: rows.length,
+    originalCount,
     unavailableCount,
     source: "D1"
   };

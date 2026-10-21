@@ -20,7 +20,8 @@ test("the source number index includes eligible inactive originals but excludes 
   const d1 = readFileSync(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
   const unified = d1.slice(d1.indexOf("async function unifiedListings("), d1.indexOf("export function masterFallbackOriginal("));
   assert.match(unified, /\$\{publicSourceWhereSql\("listing_sources"\)\} AND EXISTS \(SELECT 1 FROM listings parent WHERE parent\.id=listing_sources\.listing_id AND parent\.status<>'deleted'\)/);
-  assert.match(unified, /const sourceSearchIds = sourceListingSearchIndex\(rows\)/);
+  assert.match(unified, /const pageIndex = sourceListingSearchIndex\(rows\)/);
+  assert.match(unified, /sourceSearchIds\[id\]/);
   assert.doesNotMatch(unified, /FROM listing_sources s JOIN listings/);
   assert.match(d1, /groups,\s*sourceSearchIds,/);
 });

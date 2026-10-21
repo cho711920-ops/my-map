@@ -15,6 +15,7 @@ import { runScheduledElevatorEnrichment } from "./elevator-enrichment.js";
 import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { sheetCacheStream } from "./sheet-cache-stream.js";
+import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
@@ -652,6 +653,17 @@ async function handleSheet(request, env, context) {
   const forceFresh = request.headers.get("x-js-force-refresh") === "1";
   if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
   const cacheKey = D1_SHEET_CACHE_KEY;
+  if (typeof env.MEDIA?.createMultipartUpload === "function") {
+    const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
+    if (cached?.response) return cached.response;
+    // Capture before the query so a concurrent edit is visible to revision
+    // polling. A shared build prevents concurrent cold reads multiplying heap.
+    const revision = (await readDataRevision(env, "listings")).revision;
+    await buildSheetSnapshot(env, cacheKey, revision);
+    const built = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
+    if (built?.response) return built.response;
+    throw Object.assign(new Error("매물 목록을 준비하지 못했습니다. 다시 시도해 주세요."), {statusCode: 503});
+  }
   if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl) {
     const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
     if (cached?.response) return cached.response;
@@ -859,6 +871,15 @@ async function handleDataApi(request, env, context) {
       }
     }
     if (query.action === "unifiedListings") unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
+    if (query.action === "unifiedListings" && !query.callback && typeof env.MEDIA?.createMultipartUpload === "function") {
+      await buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, query);
+      const built = await readR2TextCache(env, r2CacheKey, 60 * 60_000, request);
+      if (built?.response) {
+        built.response.headers.set("x-js-data-cache", "MISS");
+        return built.response;
+      }
+      throw Object.assign(new Error("원본 매물 목록을 준비하지 못했습니다. 다시 시도해 주세요."), {statusCode: 503});
+    }
     let payload = await handleD1GetAction(env, user, query);
     if (!payload) {
       return jsonp(query.callback, { ok: false, action: query.action, message: "지원하지 않는 서버 작업입니다." }, {

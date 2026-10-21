@@ -809,6 +809,25 @@ async function claimNaverBatchRequest(env, requestId, sessionId = "") {
   return Number(claimed?.meta?.changes || 0) === 1;
 }
 
+async function fenceUnacceptedNaverBatch(env, requestId) {
+  const id = clean(requestId);
+  const match = id.match(/^(S-NAVER-\d{13}-[a-z0-9]{1,16})-batch-\d+-[a-f0-9]{64}$/);
+  if (!match || id.length > 160) return;
+  const result = {ok:false,code:"naver_request_not_accepted",requiresFreshManifest:true,
+    writeNotAcceptedV66:true,sessionId:match[1],
+    message:"이전 저장 요청이 서버에 접수되지 않았습니다. 해당 요청의 뒤늦은 실행을 차단했고 최신 전체목록부터 다시 확인합니다."};
+  // Compete atomically with the normal write claim. If that claim exists, do
+  // nothing: even an old running claim may have committed source writes.
+  // If this fence wins, a delayed original POST can only return this failure,
+  // so 'missing' never authorizes replay or indefinite local receipt waiting.
+  await env.DB.prepare(`INSERT INTO mutation_results
+    (request_id,owner_email,action,state,result_json,created_at,expires_at)
+    SELECT ?1,'collector','saveNaverBatch','completed',?2,?3,datetime('now','+7 days')
+    FROM collector_sessions WHERE id=?4 AND source='네이버' AND state='running'
+    ON CONFLICT(request_id) DO NOTHING`)
+    .bind(id,JSON.stringify(result),nowIso(),match[1]).run();
+}
+
 async function claimGongsilBatchRequestV63(env, body) {
   const id = clean(body.requestId).slice(0, 160);
   if (!id) return false;
@@ -3307,7 +3326,12 @@ export async function handleCollectorApi(request, env) {
     if (!targetAction || !EXTERNAL_ACTIONS.has(targetAction) || targetAction === "mutationStatus") {
       return jsonResponse({ ok: false, message: "상태 조회에는 targetAction이 필요합니다." }, 400, cors);
     }
-    return jsonResponse(await mutationStatus(env, body.requestId, "collector", targetAction), 200, cors);
+    let status = await mutationStatus(env, body.requestId, "collector", targetAction);
+    if (targetAction === "saveNaverBatch" && status.requestState === "missing") {
+      await fenceUnacceptedNaverBatch(env, body.requestId);
+      status = await mutationStatus(env, body.requestId, "collector", targetAction);
+    }
+    return jsonResponse(status, 200, cors);
   }
   if (clean(body.requestId)) {
     const scope = await mutationScope(env, body.requestId);

@@ -80,30 +80,44 @@ export async function hashSourceSnapshotRows(rows) {
 // Only the exact source rows used to build the response may establish its key.
 // A later query of the current source fingerprint cannot certify earlier rows.
 export async function sourceSnapshotKeysFromReadRows(rows, parents) {
+  const accumulator = createSourceSnapshotReadAccumulator();
+  accumulator.add(rows);
+  return accumulator.finish(parents);
+}
+
+// Retain only the small identity proof while a caller consumes raw snapshot
+// pages. Full descriptions/photos must not survive until the final parent read.
+export function createSourceSnapshotReadAccumulator() {
   const observed = new Map();
-  for (const row of rows) {
-    const id = value(row.listing_id);
-    let group = observed.get(id);
-    if (!group) {
-      group = { parent: row.source_snapshot_parent_json, rows: [], conflict: false };
-      observed.set(id, group);
+  return {
+    add(rows) {
+      for (const row of rows) {
+        const id = value(row.listing_id);
+        let group = observed.get(id);
+        if (!group) {
+          group = { parent: row.source_snapshot_parent_json, rows: [], conflict: false };
+          observed.set(id, group);
+        }
+        if (!group.parent || group.parent !== row.source_snapshot_parent_json) group.conflict = true;
+        group.rows.push(sourceSnapshotSource(row));
+      }
+    },
+    async finish(parents) {
+      const proofs = [], propertyIds = {};
+      for (const parent of parents) {
+        const id = value(parent.id), group = observed.get(id);
+        if (!id) continue;
+        const parentProof = JSON.stringify(sourceSnapshotParent(parent));
+        const expectedCount = integer(parent.source_snapshot_source_count);
+        // A missing source group is verified empty only when the final,
+        // publication-guarded parent explicitly counted zero public sources.
+        if (group ? group.conflict || group.parent !== parentProof || group.rows.length !== expectedCount : expectedCount !== 0) continue;
+        proofs.push({ id, source_snapshot_proof: [sourceSnapshotParent(parent), group ? group.rows : []] });
+        propertyIds[id] = value(parent.property_id) || id;
+      }
+      await hashSourceSnapshotRows(proofs);
+      observed.clear();
+      return { keys: Object.fromEntries(proofs.map(row => [row.id, row.source_snapshot_key])), propertyIds };
     }
-    if (!group.parent || group.parent !== row.source_snapshot_parent_json) group.conflict = true;
-    group.rows.push(sourceSnapshotSource(row));
-  }
-  const proofs = [];
-  const propertyIds = {};
-  for (const parent of parents) {
-    const id = value(parent.id), group = observed.get(id);
-    if (!id) continue;
-    const parentProof = JSON.stringify(sourceSnapshotParent(parent));
-    const expectedCount = integer(parent.source_snapshot_source_count);
-    // An absent source group is genuine zero only when the final, publication-
-    // guarded parent inventory explicitly counted zero public sources.
-    if (group ? group.conflict || group.parent !== parentProof || group.rows.length !== expectedCount : expectedCount !== 0) continue;
-    proofs.push({ id, source_snapshot_proof: [sourceSnapshotParent(parent), group ? group.rows : []] });
-    propertyIds[id] = value(parent.property_id) || id;
-  }
-  await hashSourceSnapshotRows(proofs);
-  return { keys: Object.fromEntries(proofs.map(row => [row.id, row.source_snapshot_key])), propertyIds };
+  };
 }

@@ -59,6 +59,57 @@ const save = {
   action: "saveNaverBatch", requestId: "same-batch", sessionId: "same-session", data: [listing]
 };
 
+test('an unaccepted exact request is fenced, never reported successful, and a delayed POST cannot write',async t=>{
+  const f=database(t),sessionId='S-NAVER-1792585414743-fence66',requestId=sessionId+'-batch-10-'+'a'.repeat(64);
+  f.sqlite.prepare("INSERT INTO collector_sessions(id,source,state,started_at,updated_at) VALUES (?,'네이버','running',datetime('now'),datetime('now'))").run(sessionId);
+  const status=await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId});
+  assert.equal(status.result.ready,true);assert.equal(status.result.result.ok,false);
+  assert.equal(status.result.result.code,'naver_request_not_accepted');assert.equal(status.result.result.writeNotAcceptedV66,true);
+  const late=await f.call({...save,sessionId,requestId});
+  assert.deepEqual(late.result,status.result.result);
+  for(const table of ['listings','listing_sources','listing_history','collector_raw'])assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM '+table).get().n,0);
+  assert.equal(f.sqlite.prepare('SELECT state FROM collector_sessions WHERE id=?').get(sessionId).state,'running');
+});
+
+test('a fence winning between the original preflight and its write claim prevents all delayed writes',async t=>{
+  const started=deferred(),release=deferred();
+  const f=database(t,async sql=>{if(sql.includes("VALUES (?1, 'collector', 'saveNaverBatch', 'running'")){started.resolve();await release.promise;}});
+  const sessionId='S-NAVER-1792585414743-race66',requestId=sessionId+'-batch-10-'+'b'.repeat(64);
+  f.sqlite.prepare("INSERT INTO collector_sessions(id,source,state) VALUES (?,'네이버','running')").run(sessionId);
+  const original=f.call({...save,sessionId,requestId});await started.promise;
+  const status=await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId});
+  assert.equal(status.result.result.writeNotAcceptedV66,true);release.resolve();
+  assert.deepEqual((await original).result,status.result.result);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM listings').get().n,0);
+});
+
+test('an accepted claim wins against status recovery; it is never fenced or released',async t=>{
+  const started=deferred(),release=deferred();
+  const f=database(t,async sql=>{if(/^INSERT INTO listings\s/.test(sql.trim())){started.resolve();await release.promise;}});
+  const sessionId='S-NAVER-1792585414743-claimed66',requestId=sessionId+'-batch-10-'+'c'.repeat(64);
+  const original=f.call({...save,sessionId,requestId});await started.promise;
+  const before=f.sqlite.prepare('SELECT * FROM mutation_results').all();
+  const status=await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId});
+  assert.equal(status.result.ready,false);assert.deepEqual(f.sqlite.prepare('SELECT * FROM mutation_results').all(),before);
+  release.resolve();assert.equal((await original).result.created,1);
+});
+
+test('unaccepted fencing rejects unknown sessions, other sources, closed sessions and malformed IDs; GET remains read-only',async t=>{
+  const f=database(t),sessionId='S-NAVER-1792585414743-scope66',requestId=sessionId+'-batch-10-'+'d'.repeat(64);
+  const body={action:'mutationStatus',targetAction:'saveNaverBatch',requestId};
+  assert.equal((await f.call(body)).result.requestState,'missing');
+  f.sqlite.prepare("INSERT INTO collector_sessions(id,source,state) VALUES (?,'당근','running')").run(sessionId);
+  assert.equal((await f.call(body)).result.requestState,'missing');
+  f.sqlite.prepare("UPDATE collector_sessions SET source='네이버',state='abandoned' WHERE id=?").run(sessionId);
+  assert.equal((await f.call(body)).result.requestState,'missing');
+  f.sqlite.prepare("UPDATE collector_sessions SET state='running' WHERE id=?").run(sessionId);
+  assert.equal((await f.call({...body,requestId:sessionId+'-batch-10-invalid'})).result.requestState,'missing');
+  const url=new URL('https://js-map.com/api/collector');Object.entries({...body,collectorKey:'test-only'}).forEach(([k,v])=>url.searchParams.set(k,v));
+  const response=await handleCollectorApi(new Request(url,{headers:{Origin:'https://fin.land.naver.com'}}),f.env);
+  assert.equal((await response.json()).requestState,'missing');
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM mutation_results').get().n,0);
+});
+
 test('Naver batch counters and exact result commit together without a later separate receipt write',async t=>{
   const f=database(t);let transactionalReceipts=0;const ordinaryBatch=f.env.DB.batch;
   f.env.DB.batch=async statements=>{
