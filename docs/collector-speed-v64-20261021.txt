@@ -30,4 +30,7 @@
 - 신규 운영 데이터·합성광고 입력/사용자 계정/찜/임장/메모 쓰기 없음. DB 마이그레이션 없음. UI/클라이언트/확장 설치파일은 이번 변경 대상 아님.
 
 배포
-- 서버 배포·두 도메인 검증 결과를 아래에 기록.
+- 제품d213608, Worker ba2903b4-cb2d-402d-9dae-f29911126aaa. 프런트 변경이 없어 공개캐시ab84e5bdedf721efdb610421 유지.
+- js-map.com/www.js-map.com HTML200/no-store/SHA와 연결90자산 SHA일치. 잘못된 세션401/쿠키정리, 목록·상세 비인증401, 아이디로그인 활성 유지 확인.
+- 운영 D1에서도 각 출처 새512개 provider ID(1536개 저장별칭)의 동일 SQL 및 실행계획을 읽기 전용 확인. source/number와 collector_raw_source_listing_created 인덱스 사용, rows_written=0. 부재한 합성 번호 조회만 수행, 광고 데이터 입력 없음. CLI bulk파일 결과의 changed_db 표시가 조회2개/rows_written0에도 true여서, --command 개별 SELECT/EXPLAIN으로 재확인(changed_db=false)함.
+- 이후 서버 요청부터 새 경로 적용. 확장 업데이트/현재 브라우저 새로고침/수집 중단 불필요. 이번 실행에서 실제 새 전체수집 시작·완료나 실사용 총시간 단축률은 검증하지 않음.
