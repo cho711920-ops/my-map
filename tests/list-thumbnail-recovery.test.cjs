@@ -294,3 +294,32 @@ test("null, detached images and detail nodes without a source are harmless", () 
   assert.doesNotThrow(() => api.detailImageLoaded(imageNode("", "data-detail-source-v8144")));
   assert.equal(scans(), 0);
 });
+
+test('list-size transforms preserve saved photos and leave unsupported providers untouched',()=>{
+  const {api}=runtime();
+  for(const [url,resized] of [
+    ['https://img.kr.gcp-karroter.net/realty/photo.webp?s=1440x1440&q=95&t=inside',true],
+    ['https://dnvefa72aowie.cloudfront.net/photo.webp?s=1440x1440&q=95&t=inside',true],
+    ['https://img.kr.gcp-karroter.net/photo.webp?s=160x160&q=95',false],
+    [original,false],['https://file1.gongsilbox.com/file/land_photo/photo.jpg',false],
+    ['https://img.kr.gcp-karroter.net.example.invalid/photo?s=1440x1440&q=95',false]]) {
+    const row={originalId:'P-O',source:'당근',thumbnail:url};
+    api.attach([],{ok:true,groups:{P:[row]}});
+    const html=api.cardParts({propertyId:'P'}).thumbnail;
+    assert.equal(row.thumbnail,url);
+    assert.equal(/data-thumbnail-pending-v69="[^"]*s=320x320/.test(html),resized);
+    if(resized)assert.match(html,/q=80(?:&amp;|"|&)/);
+    assert.doesNotMatch(html,/\ssrc=/,'offscreen photos do not start native preload');
+  }
+});
+
+test('failed small-photo recovery is bounded to the exact original then its existing proxy',()=>{
+  const raw='https://img.kr.gcp-karroter.net/photo.webp?s=1440x1440&q=95&t=inside';
+  const card=thumbnail(raw),{api}=runtime([card.image]);
+  card.image.src=raw.replace('1440x1440','320x320').replace('q=95','q=80');
+  card.image.writes.length=0;
+  for(let i=0;i<8;i++)api.thumbnailImageError(card.image);
+  assert.deepEqual(card.image.writes,[raw,proxyFor(raw)]);
+  assert.equal(card.image.getAttribute('data-thumbnail-source-v8144'),raw);
+  assert.equal(card.parent.querySelector('[data-thumbnail-error-v8144]').textContent,'사진 불러오기 실패');
+});

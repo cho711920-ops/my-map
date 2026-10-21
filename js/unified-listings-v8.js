@@ -302,6 +302,68 @@
     return "";
   }
 
+  function thumbnailDisplayImageUrlV69(url) {
+    var value = text(url);
+    try {
+      var parsed = new URL(value);
+      // These providers already supply a size/quality image transform. Keep
+      // identity, crop mode and the saved original URL intact. Other providers
+      // do not accept these parameters and must retain their exact URL.
+      if (parsed.protocol === 'https:' && !parsed.username && !parsed.password && !parsed.port &&
+          /^(?:img\.kr\.gcp-karroter\.net|dnvefa72aowie\.cloudfront\.net)$/i.test(parsed.hostname) &&
+          /^\d+x\d+$/.test(parsed.searchParams.get('s') || '')) {
+        var dimensions = parsed.searchParams.get('s').split('x').map(Number);
+        if (Math.max.apply(Math, dimensions) > 320) {
+          parsed.searchParams.set('s', '320x320');
+          parsed.searchParams.set('q', '80');
+          return parsed.toString();
+        }
+      }
+    } catch (_) {}
+    return value;
+  }
+
+  var thumbnailObserverV69 = null, thumbnailObserverRootV69 = null;
+  function prepareListThumbnailsV69() {
+    var list = document.getElementById('list');
+    if (!list || typeof list.querySelectorAll !== 'function') return;
+    if (thumbnailObserverV69) thumbnailObserverV69.disconnect();
+    var images = list.querySelectorAll('.unified-thumb-v8 img[data-thumbnail-pending-v69]');
+    function activate(image, priority) {
+      var source = image.getAttribute('data-thumbnail-pending-v69');
+      if (!source) return;
+      image.removeAttribute('data-thumbnail-pending-v69');
+      image.setAttribute('fetchpriority', priority || 'auto');
+      image.src = source;
+    }
+    if (typeof global.IntersectionObserver !== 'function') {
+      images.forEach(function(image) { activate(image); });
+      return;
+    }
+    var root = typeof global.getListingScrollContainerV2 === 'function'
+      ? global.getListingScrollContainerV2() : document.getElementById('sidebar');
+    if (!thumbnailObserverV69 || thumbnailObserverRootV69 !== root) {
+      thumbnailObserverRootV69 = root;
+      try {
+        thumbnailObserverV69 = new global.IntersectionObserver(function(entries) {
+          var prioritized = 0;
+          entries.forEach(function(entry) {
+            if (!entry.isIntersecting) return;
+            thumbnailObserverV69.unobserve(entry.target);
+            activate(entry.target, prioritized++ < 2 ? 'high' : 'auto');
+          });
+        }, {root: root, rootMargin: '160px 0px', threshold: 0});
+      } catch (_) {
+        thumbnailObserverV69 = null;
+        images.forEach(function(image) { activate(image); });
+        return;
+      }
+    }
+    // Only the small virtual window is observed; disconnecting on window reuse
+    // releases detached cards and never retains a full list of image nodes.
+    images.forEach(function(image) { thumbnailObserverV69.observe(image); });
+  }
+
   /*
    * 상세창 폭보다 훨씬 큰 당근 1440px 원본은 전환할 때마다 수신 시간이 길었습니다.
    * 상세/확대 보기에는 선명도가 충분한 960px 이미지를 사용하고 원본 링크는 그대로 보존합니다.
@@ -1292,8 +1354,8 @@
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggleCardDetail(\'' + encodedId + '\')">' +
-      (thumbnail ? '<img src="' + esc(thumbnail) + '" data-thumbnail-source-v8144="' + esc(thumbnail) +
-        '" alt="매물 사진" loading="lazy" referrerpolicy="no-referrer" ' +
+      (thumbnail ? '<img data-thumbnail-pending-v69="' + esc(thumbnailDisplayImageUrlV69(thumbnail)) + '" data-thumbnail-source-v8144="' + esc(thumbnail) +
+        '" alt="매물 사진" loading="lazy" decoding="async" referrerpolicy="no-referrer" ' +
         'onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" ' +
         'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>' + (pending ? pendingLabel : photoPending ? '사진 확인 중' : '사진 없음') + '</span>') +
       (sourceUnavailable
@@ -2199,6 +2261,14 @@
     var original = text(image.getAttribute("data-thumbnail-source-v8144"));
     var proxy = thumbnailProxyUrl(original);
     image._jsThumbnailFailedV8144 = true;
+    // If the provider's small variant is unavailable, retry the exact saved
+    // photo before the existing once-only authenticated proxy recovery.
+    if (original && thumbnailDisplayImageUrlV69(original) !== original &&
+        !image._jsThumbnailOriginalTriedV69 && image.getAttribute('src') !== original && image.getAttribute('src') !== proxy) {
+      image._jsThumbnailOriginalTriedV69 = true;
+      image.src = original;
+      return;
+    }
     // Healthy thumbnails still load directly. Only a failed request uses the
     // existing authenticated image cache, once per thumbnail element.
     if (proxy && !image._jsThumbnailProxyTriedV8144 && image.getAttribute("src") !== proxy) {
@@ -2707,6 +2777,7 @@
   });
 
   global.JSUnifiedListingsV8 = {
+    prepareListThumbnails: prepareListThumbnailsV69,
     load: load, attach: attach, attachCompatible: attachCompatible, canCacheCompatible: canCacheCompatible,
     mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,
     markSnapshotStale: function() { setOriginalLoadPhase("stale"); originalLoadStatus(); },
