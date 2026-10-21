@@ -367,6 +367,19 @@ export function compactSaleSummary(original) {
   if (original?.tradeType !== "sale" || !original.saleDetails) return "";
   const detail = original.saleDetails;
   const summary = {};
+  for (const [key,label] of [["rentalScenarios","kind"],["rentalBreakdown","floor"]]) {
+    const values = (Array.isArray(detail[key]) ? detail[key] : []).slice(0,key === "rentalScenarios" ? 2 : 8).map(row => {
+      if (!row || (label === "kind" ? !["full_occupancy","expected"].includes(row.kind)
+        : !/^(?:지하)?\d{1,2}(?:[~～-]\d{1,2})?층$/.test(row.floor || ""))) return null;
+      const value = {[label]:row[label]};
+      if (label === "floor") { if(row.perUnit === true)value.perUnit=true;if(row.previous === true)value.previous=true; }
+      for (const field of ["totalDeposit","monthlyIncome"]) if (typeof row[field] === "number" && Number.isFinite(row[field]) && row[field]>=0) value[field]=row[field];
+      if (value.totalDeposit == null && value.monthlyIncome == null) return null;
+      value.unitAssumptions = (Array.isArray(row.unitAssumptions) ? row.unitAssumptions : []).filter(field => ["totalDeposit","monthlyIncome"].includes(field));
+      return value;
+    }).filter(Boolean);
+    if (values.length) summary[key]=values;
+  }
   if (Array.isArray(detail.descriptionUnitAssumptions)) {
     const assumptions = detail.descriptionUnitAssumptions.filter(field => ["totalDeposit", "monthlyIncome"].includes(field));
     if (assumptions.length) summary.descriptionUnitAssumptions = assumptions;

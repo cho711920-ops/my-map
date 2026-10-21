@@ -67,6 +67,8 @@ test('SQLite list/detail financial parity is source-local and read-only with str
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());const migrations=new URL('../cloudflare/migrations/',import.meta.url);
   for(const f of fs.readdirSync(migrations).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(new URL(f,migrations),'utf8'));
   const cases=[
+    {item:{...original,salePrice:80000,saleDetails:{scope:'whole_building',descriptionText:'매매가8억 월수익: 보3000/월760만 (만실기준임)'}},raw:{},expected:{},scenario:true},
+    {item:{...original,saleDetails:{scope:'whole_building',descriptionText:'1층 상가2개 보증금2천/월세80만\n2층2가구 보증금4500/월세30만\n3층 보증금6500'}},raw:{},expected:{},breakdown:true},
     {item:{...original,salePrice:89000,saleCategory:'factory_warehouse',saleDetails:{scope:'whole_building',descriptionText:'현세입자 보3천/월250만 - 승계가능 /매수자 입주가능'}},raw:{},expected:{totalDeposit:3000,monthlyIncome:250}},
     {item:{...original,source:'네이버',salePrice:80000,saleDetails:{scope:'whole_building',descriptionVersion:4,descriptionText:'매매금액:8억\n보증금:5천\n총월세:253',totalDeposit:null,monthlyIncome:null}},raw:{},expected:{totalDeposit:5000,monthlyIncome:253}},
     {item:{...original,source:'네이버',salePrice:80000,saleDetails:{scope:'whole_building'}},raw:{description:'검수용 광고',saleRaw:{detailInfo:{articleDetailInfo:{articleDescription:'매매금액:8억\n보증금:5천\n총월세:253'}}}},expected:{totalDeposit:5000,monthlyIncome:253}},
@@ -90,6 +92,8 @@ test('SQLite list/detail financial parity is source-local and read-only with str
   assert.doesNotMatch(JSON.stringify(list),/010-1234-5678|DO_NOT_EXPOSE_FINANCIAL_RAW|descriptionText/);
   for(const c of cases){const result=await handleD1GetAction(env,{}, {action:'unifiedListingDetail',propertyId:c.item.propertyId}),item=result.originals[0];
     const summary=list.groups[c.item.propertyId][0][list.fields.indexOf('saleSummary')]||'';assert.deepEqual(summary,compactSaleSummary(item));
+    if(c.scenario)assert.equal(summary.rentalScenarios[0].monthlyIncome,760);
+    if(c.breakdown)assert.equal(summary.rentalBreakdown[2].totalDeposit,6500);
     for(const key of ['totalDeposit','monthlyIncome','loanAmount','statedMonthlyIncome','investmentAmount'])assert.equal(item.saleDetails[key],c.expected[key],key);
     assert.equal(item.originalId,c.item.originalId);assert.equal(item.source,c.item.source);assert.equal(item.salePrice,c.item.salePrice);
     if(c.raw.content)assert.doesNotMatch(item.saleDetails.descriptionText||'',/010-1234-5678/);

@@ -1922,7 +1922,7 @@
       var incoming = original.saleSummary || original.saleDetails || {};
       var current = known.saleSummary || known.saleDetails || {};
       return ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount",
-        "investmentAmount", "advertisedYield", "descriptionUnitAssumptions", "rentalReference"].some(function(key) {
+        "investmentAmount", "advertisedYield", "descriptionUnitAssumptions", "rentalReference", "rentalScenarios", "rentalBreakdown"].some(function(key) {
         return JSON.stringify(incoming[key] == null ? null : incoming[key]) !==
           JSON.stringify(current[key] == null ? null : current[key]);
       });

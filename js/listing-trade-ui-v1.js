@@ -498,7 +498,7 @@
   // Presentation only. Keep facts tied to this original's price and source.
   function saleCardFactsHtml(item, listCard) {
     if (!isSale(item)) return "";
-    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "zoning", "roadAccess", "parcelShape", "buildingUse", "rentalReference"]), land = normalizedSaleCategory(item) === "land", fields = [];
+    var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "zoning", "roadAccess", "parcelShape", "buildingUse", "rentalReference", "rentalScenarios", "rentalBreakdown"]), land = normalizedSaleCategory(item) === "land", fields = [];
     function money(label, value) {
       var n = nonnegative(value);
       if (n != null) fields.push([label, n.toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만원']);
@@ -509,6 +509,11 @@
       if (landText(d.parcelShape)) fields.push(['형상', landText(d.parcelShape)]);
     } else {
       money('보증금 합계', d.totalDeposit); money('월 임대수입', d.monthlyIncome);
+      (d.rentalScenarios || []).slice(0,2).forEach(function(scenario) {
+        var basis = scenario.kind === 'full_occupancy' ? '만실 기준' : scenario.kind === 'expected' ? '예상' : '';
+        if (!basis) return;
+        money(basis + ' 보증금', scenario.totalDeposit);money(basis + ' 월 임대수입', scenario.monthlyIncome);
+      });
       if (listCard && d.rentalReference) {
         [['totalDeposit', '보증금'], ['monthlyIncome', '월세']].forEach(function(pair) {
           var field = pair[0], fact = d.rentalReference[field];
@@ -536,9 +541,28 @@
         return d.rentalReference[field] && d.rentalReference[field].unitAssumed && (d.manualSaleFieldsV1 || []).indexOf(field) < 0;
       }));
     var unitNote = assumedUnits ? '<small class="sale-card-unit-note-v59">금액 단위: 원문 생략 · 만원 기준</small>' : '';
-    return fields.length ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
+    var supplemental = !land ? rentalSupplementHtmlV61(d) : '';
+    return fields.length || supplemental ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
       return '<span' + (f[2] ? ' title="' + escapeHtml(f[2]) + '"' : '') + '><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';
-    }).join('') + unitNote + '</div>' : '';
+    }).join('') + unitNote + supplemental + '</div>' : '';
+  }
+  function rentalSupplementHtmlV61(detail) {
+    var html = '';
+    if ((detail.rentalScenarios || []).length) html += '<small class="sale-rental-note-v61">광고 가정 조건 · 현재 임대수입·수익률 계산에 미반영' +
+      (detail.rentalScenarios.some(function(s){return (s.unitAssumptions || []).length;}) ? ' · 생략된 금액 단위는 만원 기준' : '') + '</small>';
+    var rows = (detail.rentalBreakdown || []).slice(0,8);
+    if (!rows.length) return html;
+    function money(value) {var n=nonnegative(value);return n==null?'미기재':n.toLocaleString('ko-KR')+'만원';}
+    html += '<section class="sale-rental-breakdown-v61"><strong>층별 임대조건 · 원문 기재</strong><table><thead><tr><th>층</th><th>보증금</th><th>월세</th></tr></thead><tbody>' +
+      rows.map(function(row){return '<tr><th>'+escapeHtml(row.floor+(row.perUnit?' · 호실별':'')+(row.previous?' · 이전 조건':''))+'</th><td>'+escapeHtml(money(row.totalDeposit))+'</td><td>'+escapeHtml(money(row.monthlyIncome))+'</td></tr>';}).join('')+'</tbody></table>';
+    var floors=rows.map(function(r){return r.floor;});
+    if (rows.every(function(r){return !r.perUnit&&!r.previous;}) && floors.every(function(f){return /^(?:지하)?\d+층$/.test(f);}) && new Set(floors).size===floors.length) {
+      var deposits=rows.filter(function(r){return nonnegative(r.totalDeposit)!=null;}),rents=rows.filter(function(r){return nonnegative(r.monthlyIncome)!=null;});
+      html += '<small>층 전체 조건이라는 가정의 기재금액 합: 보증금 '+money(deposits.length?deposits.reduce(function(sum,r){return sum+Number(r.totalDeposit);},0):null)+
+        ' · 월세 '+money(rents.length?rents.reduce(function(sum,r){return sum+Number(r.monthlyIncome);},0):null)+(rents.length<rows.length?' (일부 월세 미기재)':'')+'</small>';
+    }
+    return html+'<small>층 전체·호실별 금액인지 확인 필요 · 호실 수로 곱하지 않음 · 현재 수익률 계산에 미반영' +
+      (rows.some(function(r){return (r.unitAssumptions || []).length;}) ? ' · 원문 생략 금액 단위는 만원 기준' : '') + '</small></section>';
   }
   function saleOverviewHtml(item) {
     if (!isSale(item)) return "";
@@ -566,7 +590,9 @@
     return missing.length ? '<details class="sale-review-gaps-v2"><summary>' +
       (land ? '필지 검토 시 확인할 정보' : '수익 계산을 위해 확인할 금액') + ' · ' + missing.length +
       '개</summary><p>' + missing.map(escapeHtml).join(' · ') +
-      '</p><small>현재 광고에 제공되지 않은 항목입니다. 원본 광고나 제공처에서 확인해 주세요.</small></details>' : '';
+      '</p><small>' + ((d.rentalScenarios || []).length || (d.rentalBreakdown || []).length
+        ? '현재 임대 합계가 확인되지 않았습니다. 광고 가정·층별 조건과 구분해 확인해 주세요.'
+        : '현재 광고에 제공되지 않은 항목입니다. 원본 광고나 제공처에서 확인해 주세요.') + '</small></details>' : '';
   }
   function getMode() { return currentMode; }
   function isSale(item) { return normalizedTradeType(item) === "sale"; }

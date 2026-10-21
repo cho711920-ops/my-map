@@ -42,12 +42,13 @@ export function koreanMoneyManwon(value) {
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
-export function saleDescriptionFields(content) {
+export function saleDescriptionFields(content, options = {}) {
   const text = String(content || "").slice(0, 24000);
   const warnings = [];
   const evidence = {};
   const unitAssumptions = new Set();
   const partialFields = new Set();
+  const scenarioMatches = [];
   function unique(label, pattern, parse) {
     const matches = [...text.matchAll(pattern)].map(m => ({ value: parse(m[1]), text: m[0].trim() }))
       .filter(m => m.value != null && Number.isFinite(m.value));
@@ -70,7 +71,7 @@ export function saleDescriptionFields(content) {
     if (explicit != null) return {value: explicit, assumed: false};
     const compact = raw.replace(/\s/g, "");
     if (!/^[0-9][0-9,.억천백십]*$/.test(compact)) return null;
-    const nearby = text.slice(Math.max(0, start - 180), Math.min(text.length, end + 180));
+    const nearby = text.slice(Math.max(0, start - 180), Math.min(text.length, end + 180)) + (options.rentalContext || "");
     const counterpart = label === "보증금" ? /월\s*(?:세|임대\s*료|차임)\s*[:：=]?\s*\d/.test(nearby)
       : /보\s*증\s*금(?:액|총액|합계)?\s*[:：=]?\s*\d/.test(nearby);
     const namedUnit = /[천백십]/.test(compact) && !/억/.test(compact);
@@ -101,6 +102,14 @@ export function saleDescriptionFields(content) {
     return /만실\s*(?:시|기준)|예상\s*(?:임대|월세|수익)|시세|임대(?:를)?\s*원하실|전환\s*시/.test(before) ||
       /^(?:\s|[(),.;]){0,8}(?:예상|만실|시세)/.test(after) || /^.{0,30}(?:인상|증액)\s*(?:여지|가능|예정)?/.test(after);
   }
+  function collectScenario(label, start, end, parsed) {
+    if (!parsed || !["보증금", "월 임대수입"].includes(label)) return;
+    const {before, after} = contextAt(start, end);
+    const kind = /만실\s*(?:시|기준)/.test(before + after) ? "full_occupancy"
+      : /예상\s*(?:임대|월세|수익)/.test(before) || /^\s*\(?예상/.test(after) ? "expected" : "";
+    if (kind) scenarioMatches.push({kind, field: label === "보증금" ? "totalDeposit" : "monthlyIncome",
+      value: parsed.value, assumed: parsed.assumed});
+  }
   function markPartial(label, start, quote) {
     const local = contextAt(start, start + quote.length).before;
     if (/(?:\d+\s*층|\d+\s*호(?!실)|일부\s*호실).{0,24}$/.test(local) && !/총|합계|전체|매매가|건물현황/.test(local + quote)) {
@@ -129,6 +138,7 @@ export function saleDescriptionFields(content) {
       const value = parsed ? parsed.value : koreanMoneyManwon(m[1]);
       if (value == null) { warnings.push(label + " 금액 표기 확인 필요"); continue; }
       if (rental && projected(labelStart(m), m.index + m[0].length)) {
+        collectScenario(label, labelStart(m), m.index + m[0].length, parsed || {value, assumed:false});
         if (!warnings.includes("예상·만실·인상 금액: 기존 임대조건 계산 미적용")) warnings.push("예상·만실·인상 금액: 기존 임대조건 계산 미적용");
         continue;
       }
@@ -137,6 +147,8 @@ export function saleDescriptionFields(content) {
     }
     if (label === "보증금" || label === "월 임대수입") for (const m of paired.concat(labelledPairs)) {
       if (projected(labelStart(m), m.index + m[0].length)) {
+        collectScenario(label, labelStart(m), m.index + m[0].length,
+          rentalAmount(m[label === "보증금" ? 1 : 2], label, labelStart(m), m.index + m[0].length, true));
         warnings.push("예상·만실·인상 금액: 기존 임대조건 계산 미적용");
         continue;
       }
@@ -172,11 +184,56 @@ export function saleDescriptionFields(content) {
   const wholeMultifamily = landAreaM2 > 0 && grossAreaM2 >= landAreaM2 &&
     totalFloors > 0 && householdCount > 1 &&
     /(?:수익형\s*다가구|매물(?:종류|유형)\s*[:：]\s*다가구|다가구\s*(?:통매매|전체매매))/.test(text);
+  const rentalScenarios = ["full_occupancy", "expected"].map(kind => {
+    const scenario = {kind, unitAssumptions:[]};
+    for (const field of ["totalDeposit", "monthlyIncome"]) {
+      const matches = scenarioMatches.filter(m => m.kind === kind && m.field === field);
+      const values = [...new Set(matches.map(m => m.value))];
+      if (values.length === 1) {
+        scenario[field] = values[0];
+        if (matches.every(m => m.assumed)) scenario.unitAssumptions.push(field);
+      }
+    }
+    return scenario;
+  }).filter(s => s.totalDeposit != null || s.monthlyIncome != null);
   return { salePrice, loanAmount, totalDeposit, monthlyIncome, monthlyNetIncome,
     statedMonthlyIncome, investmentAmount, advertisedYield, landAreaM2, grossAreaM2,
     totalFloors, householdCount, wholeMultifamily, descriptionEvidence: evidence,
     descriptionUnitAssumptions: [...unitAssumptions],
-    descriptionWarnings: [...new Set(warnings)], descriptionPartialFields: [...partialFields] };
+    descriptionWarnings: [...new Set(warnings)], descriptionPartialFields: [...partialFields], rentalScenarios,
+    rentalBreakdown: options.skipBreakdown ? [] : saleRentalBreakdown(text) };
+}
+
+// Keep floor statements visible without multiplying ambiguous per-room amounts
+// or treating an unmentioned rent as zero. Never supplies canonical yield inputs.
+export function saleRentalBreakdown(content) {
+  const text = String(content || "").slice(0,24000);
+  const anchors = [...text.matchAll(/(?:지하\s*)?\d{1,2}(?:\s*[~～-]\s*\d{1,2})?\s*층/g)];
+  if (anchors.length < 2 || anchors.length > 40 || new Set(anchors.map(m=>m[0].replace(/\s/g,""))).size<2) return [];
+  const rows = [];
+  for (let i=0;i<anchors.length && rows.length<8;i++) {
+    const start=anchors[i].index, end=anchors[i+1]?.index ?? Math.min(text.length,start+300);
+    const segment=text.slice(start,Math.min(end,start+300));
+    const firstMoney=segment.search(/(?:보증금|월세|월임대료|보\s*\d)/);
+    if (firstMoney<0 || firstMoney>60 || /수익|투자\s*분석|매매\s*(?:가|금액)|특징|합계|총액|전체|임대\s*현황|주인\s*거주|직접\s*거주|자가\s*거주/.test(segment.slice(0,firstMoney)) ||
+        /총\s*(?:보증금|월세|월임대)|보증금\s*(?:합계|총액)/.test(segment)) continue;
+    const parsed=saleDescriptionFields(segment.replace(/원\.(?=\s|$)/g,"원 "),{skipBreakdown:true,rentalContext:text.slice(Math.max(0,start-180),Math.min(text.length,end+180))});
+    const row={floor:anchors[i][0].replace(/\s/g,""),unitAssumptions:[]};
+    if (/각각|호실당|가구당|세대당|개당/.test(segment)) row.perUnit=true;
+    if (/공실(?!\s*(?:없|아님))/.test(segment.slice(0,firstMoney)) && /기존|이전/.test(segment)) row.previous=true;
+    for (const field of ["totalDeposit","monthlyIncome"]) if (parsed[field]!=null) {
+      row[field]=parsed[field];
+      if (parsed.descriptionUnitAssumptions.includes(field))row.unitAssumptions.push(field);
+    }
+    if (row.totalDeposit!=null || row.monthlyIncome!=null) rows.push(row);
+  }
+  const seen = new Set();
+  const unique = rows.filter(row => {
+    const key=JSON.stringify([row.floor,row.totalDeposit,row.monthlyIncome,row.perUnit,row.previous]);
+    if(seen.has(key))return false;seen.add(key);return true;
+  });
+  // Repeated descriptions of one floor/one ad are not a floor schedule.
+  return new Set(unique.map(row=>row.floor)).size>1 ? unique : [];
 }
 
 export function naverSaleDescription(item = {}) {
@@ -191,7 +248,7 @@ export function naverSaleDescription(item = {}) {
 // Basic fields remain authoritative. Description values remain separately
 // visible when inconsistent, and never silently become the canonical sale price.
 export function supplementSaleDescription(base, described, salePrice, descriptionText) {
-  const result = { ...base, descriptionVersion: 6, descriptionText,
+  const result = { ...base, descriptionVersion: 7, descriptionText,
     descriptionEvidence: described.descriptionEvidence,
     descriptionWarnings: [...(described.descriptionWarnings || [])],
     descriptionFinancials: Object.fromEntries(["salePrice", "loanAmount", "totalDeposit", "monthlyIncome",
@@ -229,5 +286,7 @@ export function supplementSaleDescription(base, described, salePrice, descriptio
   }
   if (Object.keys(rentalReference).length) result.rentalReference = rentalReference;
   else delete result.rentalReference;
+  result.rentalScenarios = described.rentalScenarios || [];
+  result.rentalBreakdown = described.rentalBreakdown || [];
   return result;
 }
