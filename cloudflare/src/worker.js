@@ -1104,6 +1104,13 @@ export default {
       return withSecurityHeaders(response, request);
     } catch (error) {
       const url = new URL(request.url);
+      if (url.pathname === "/api/collector") {
+        const message = String(error?.message || "");
+        // Report only a category: never collector keys, URLs, body, ad text or
+        // contacts. Caught HTTP 500s otherwise appear as runtime 'ok' in Tail.
+        console.error("collector request failed", {category: /DB is overloaded|Requests queued for too long/i.test(message)
+          ? "d1_overloaded" : /D1_ERROR:.*Network connection lost/i.test(message) ? "d1_connection_lost" : "collector_error"});
+      }
       if (url.pathname === "/api/data" && ["buildingRegister", "elevatorCapacity"].includes(url.searchParams.get("action"))) {
         console.error("official-public-data request failed", {
           action: url.searchParams.get("action"),

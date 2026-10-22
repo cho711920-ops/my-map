@@ -12,6 +12,7 @@ import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertis
 import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObservedAdvertisements } from "./collector-first-observed.js";
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
 import { exactCollectorRoadAddress } from "./collector-address.js";
+import { commitCollectorSourceTransaction, isTransientCollectorDatabaseError } from "./collector-source-transaction.js";
 import { DAANGN_GRAPHQL_URL, DAANGN_LIST_FIRST_HASH, DAANGN_LIST_NEXT_HASH, DAANGN_DETAIL_HASH } from "./daangn-provider-contract.js";
 import {
   LISTING_TRADE_TYPES,
@@ -766,6 +767,7 @@ function preserveNewSourceAdsCounters(jsonParameter) {
 }
 
 const NAVER_DURABLE_RESULT_V56 = Symbol("naver-durable-result");
+const COLLECTOR_SOURCE_REQUEST_V78 = Symbol("collector-source-request");
 function mutationResultStatementV56(env, requestId, action, result, owner = "collector") {
   const id = clean(requestId).slice(0, 160);
   if (!id) return;
@@ -784,7 +786,7 @@ async function saveMutationResult(env, requestId, action, result, owner = "colle
     for (let attempt = 0; ; attempt += 1) {
       try { await statement.run(); break; }
       catch (error) {
-        if (attempt >= 2 || !/D1_ERROR:.*(?:Network connection lost|internal error|temporarily unavailable)/i.test(String(error?.message))) throw error;
+        if (attempt >= 2 || !isTransientCollectorDatabaseError(error)) throw error;
         await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
       }
     }
@@ -979,6 +981,10 @@ export async function runCollectorMaintenance(env, options = {}) {
       WHERE expires_at<>'' AND julianday(expires_at)<=julianday(?1)
       ORDER BY expires_at LIMIT ?2
     )`).bind(now, COLLECTOR_MAINTENANCE_DELETE_LIMIT).run();
+  await env.DB.prepare(`DELETE FROM collector_source_write_receipts WHERE id IN (
+    SELECT id FROM collector_source_write_receipts WHERE expires_at<=datetime(?1)
+    ORDER BY expires_at LIMIT ?2
+  )`).bind(now, COLLECTOR_MAINTENANCE_DELETE_LIMIT).run();
   return {
     ok: true,
     staleMinutes,
@@ -1965,7 +1971,9 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   // transaction instead of separate network calls. Large legacy galleries
   // retain the 80-statement bound and the original source-before-assets order.
   for (let offset = 0; offset < finalStatements.length; offset += 80) {
-    await env.DB.batch(finalStatements.slice(offset, offset + 80));
+    await commitCollectorSourceTransaction(env, finalStatements.slice(offset, offset + 80), {
+      requestId: record[COLLECTOR_SOURCE_REQUEST_V78], source: record.source, sourceId: record.sourceId, offset
+    });
     // Count publication only after the source insert/counter has committed.
     if (offset === 0 && !existingSource && onNewSource && !observed.previouslyObserved) onNewSource();
   }
@@ -2176,6 +2184,9 @@ async function ingestRecords(env, source, values, metadata = {}) {
   }
   if (source === "공실박스") normalizedRecords = await resolveGongsilOfferIds(env, normalizedRecords);
   else normalizedRecords = await resolveCollectorOfferIds(env, source, normalizedRecords);
+  if (clean(metadata.requestId) && (source === "네이버" || source === "공실박스" && metadata.requestPolicyVersion === 63)) {
+    for (const record of normalizedRecords) Object.defineProperty(record, COLLECTOR_SOURCE_REQUEST_V78, {value: clean(metadata.requestId)});
+  }
   const uniqueSources = new Set();
   normalizedRecords = normalizedRecords.filter(record => {
     if (uniqueSources.has(record.sourceId)) { totals.duplicate += 1; return false; }
@@ -2344,7 +2355,7 @@ async function ingestRecords(env, source, values, metadata = {}) {
       catch (error) {
         // Guarded summary + exact receipt are safe even if COMMIT succeeded but
         // its response was lost. Never retry the preceding source transactions.
-        if (!guardedReceipt || attempt >= 2 || !/D1_ERROR:.*(?:Network connection lost|internal error|temporarily unavailable)/i.test(String(error?.message))) throw error;
+        if (!guardedReceipt || attempt >= 2 || !isTransientCollectorDatabaseError(error)) throw error;
         await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
       }
     }

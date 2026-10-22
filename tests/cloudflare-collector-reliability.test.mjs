@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { handleCollectorApi, runCollectorMaintenance } from "../cloudflare/src/collector-api.js";
 
 function testDatabase(t) {
   const sqlite = new DatabaseSync(":memory:");
+  const migration = readFileSync(new URL("../cloudflare/migrations/0030_background_lookup_indexes.sql",import.meta.url),"utf8");
+  sqlite.exec(migration.slice(migration.indexOf("CREATE TABLE")));
   sqlite.exec(`
     CREATE TABLE collector_sessions (
       id TEXT PRIMARY KEY, source TEXT NOT NULL, owner_email TEXT NOT NULL DEFAULT '',

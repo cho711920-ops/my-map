@@ -212,14 +212,41 @@ async function enrichElevatorCapacities(env, { candidateLimit = 40, freshLookupL
 
 export async function runScheduledElevatorEnrichment(env, options = {}) {
   if (!env?.DB) return { checked: 0, changed: 0, changedIds: [] };
-  const building = await enrichBuildingBadges(env, options);
-  const capacity = await enrichElevatorCapacities(env, options);
-  const changedIds = [...new Set([...building.changedIds, ...capacity.changedIds])];
-  return {
-    checked: Number(building.checked || 0) + Number(capacity.checked || 0),
-    changed: changedIds.length,
-    changedIds,
-    building,
-    capacity
-  };
+  // The minute cron and collection finalizers both enter here. Full-table
+  // enrichment must not compete with an active census, nor run once per
+  // finalizer/isolate. Explicit public-register requests remain independent.
+  const active = await env.DB.prepare(`SELECT id FROM collector_sessions
+    WHERE state IN ('running','finalizing')
+      AND julianday(updated_at)>=julianday('now','-120 minutes') LIMIT 1`).first();
+  if (active) return { checked: 0, changed: 0, changedIds: [], deferred: "collector-active" };
+  const jobId = "scheduled-elevator-enrichment-v78";
+  const token = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const leaseUntil = new Date(Date.parse(now) + 15 * 60_000).toISOString();
+  const claim = await env.DB.prepare(`INSERT INTO jobs
+      (id,job_type,owner_email,state,leased_until,progress_json,updated_at)
+    VALUES (?1,'scheduled-elevator-enrichment','system','running',?2,?3,?4)
+    ON CONFLICT(id) DO UPDATE SET state='running',leased_until=excluded.leased_until,
+      progress_json=excluded.progress_json,updated_at=excluded.updated_at
+    WHERE jobs.leased_until='' OR julianday(jobs.leased_until)<=julianday(?4)`)
+    .bind(jobId,leaseUntil,JSON.stringify({token}),now).run();
+  if (!Number(claim?.meta?.changes || 0)) return { checked: 0, changed: 0, changedIds: [], deferred: "not-due" };
+  try {
+    const building = await enrichBuildingBadges(env, options);
+    const capacity = await enrichElevatorCapacities(env, options);
+    const changedIds = [...new Set([...building.changedIds, ...capacity.changedIds])];
+    await env.DB.prepare(`UPDATE jobs SET state='completed',updated_at=?1
+      WHERE id=?2 AND json_extract(progress_json,'$.token')=?3`).bind(new Date().toISOString(),jobId,token).run();
+    return {
+      checked: Number(building.checked || 0) + Number(capacity.checked || 0),
+      changed: changedIds.length, changedIds, building, capacity
+    };
+  } catch (error) {
+    // Keep the cooldown even after a transient DB failure. Retrying the entire
+    // optional audit every minute would amplify the same overload.
+    await env.DB.prepare(`UPDATE jobs SET state='failed',updated_at=?1
+      WHERE id=?2 AND json_extract(progress_json,'$.token')=?3`)
+      .bind(new Date().toISOString(),jobId,token).run().catch(() => null);
+    throw error;
+  }
 }
