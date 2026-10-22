@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {extract, read} from "./fixtures/daangn-report-fixture.mjs";
+import {mkdtemp, writeFile, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {readPhotoZip} from './fixtures/photo-zip-check.mjs';
 
 const api = extract(read("js/unified-listings-v8.js"), ["thumbnailProxyUrl", "photoDownloadUrlV73", "photoDownloadFilenameV73"], {
   URL, text: value => String(value == null ? "" : value).trim(),
@@ -24,6 +28,22 @@ test("photo filenames follow actual response format, selected index and safe Kor
   assert.equal(api.photoDownloadFilenameV73("매물", 0, "text/html"), "");
   const filename = api.photoDownloadFilenameV73("../x\\y\n\"<>|*?\u202e", 0, "image/webp");
   assert.doesNotMatch(filename, /[/\\\n"<>|*?\u202e]/);
+});
+
+test('bulk ZIP is independently readable with ten ordered Korean filenames and exact image bytes', async () => {
+  const zipApi = extract(read('js/unified-listings-v8.js'), ['photoZipV74'], {Blob, TextEncoder}, '  ');
+  const entries = Array.from({length: 10}, (_, i) => ({
+    name: api.photoDownloadFilenameV73('서구 괴정동 424-2', i, 'image/png'),
+    bytes: new Uint8Array([137,80,78,71, i, ...Buffer.from('123456789')])
+  }));
+  const folder = await mkdtemp(join(tmpdir(), 'js-photo-zip-'));
+  try {
+    const path = join(folder, 'photos.zip');
+    await writeFile(path, Buffer.from(await zipApi.photoZipV74(entries).arrayBuffer()));
+    const saved = readPhotoZip(path);
+    assert.equal(saved.length, 10);
+    saved.forEach((entry, i) => {assert.equal(entry.name, entries[i].name); assert.deepEqual(entry.bytes, Buffer.from(entries[i].bytes));});
+  } finally {await rm(folder, {recursive: true, force: true});}
 });
 
 test("shared image download transport preserves bytes, uses the session and rejects auth/error/oversized files", async () => {

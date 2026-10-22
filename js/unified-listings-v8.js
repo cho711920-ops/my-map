@@ -1662,8 +1662,8 @@
             'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, -1)">‹</button>' +
           '<button type="button" class="unified-detail-photo-nav-v8 next" aria-label="다음 사진" ' +
             'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, 1)">›</button>' +
-          '<button type="button" class="unified-photo-download-v73" aria-label="현재 사진 다운로드" ' +
-            'onclick="event.stopPropagation(); JSUnifiedListingsV8.downloadPhoto(this)">↓ 사진 다운로드</button>' :
+          '<button type="button" class="unified-photo-download-v73" aria-label="선택한 광고의 사진 전체 ZIP 다운로드" ' +
+            'onclick="event.stopPropagation(); JSUnifiedListingsV8.downloadPhoto(this)">↓ 전체 저장</button>' :
           '<div class="unified-gallery-empty-v8">' + esc(detailPhotoPlaceholder(propertyId, photoCount)) + '</div>') +
       '</section>' +
       '<section class="unified-detail-summary-v8"><div class="unified-detail-source-address-v827">' +
@@ -2575,7 +2575,7 @@
         '<img alt="매물 사진" referrerpolicy="no-referrer">' +
         '<button class="unified-gallery-nav-v8 next" type="button" aria-label="다음 사진">›</button>' +
         '<span></span>' +
-        '<button type="button" class="unified-photo-download-v73" aria-label="현재 사진 다운로드">↓ 사진 다운로드</button>';
+        '<button type="button" class="unified-photo-download-v73" aria-label="선택한 광고의 사진 전체 ZIP 다운로드">↓ 전체 저장</button>';
       modal.querySelector(".close").onclick = function(event) {
         event.stopPropagation();
         closeGallery();
@@ -2603,6 +2603,9 @@
     }
     var index = wrapPhotoIndexV8141(startIndex, images.length);
     modal._imagesV8 = images.slice();
+    modal._propertyIdV8 = propertyId;
+    modal._originalIdV8 = originalId;
+    modal._photoCountV8 = Math.max(images.length, Number(original.photoCount) || 0);
     modal._downloadNameV73 = text(original.address || original.buildingName || propertyId);
     bindPhotoSwipe(modal, function(direction) { stepGallery(direction); });
     renderGalleryImage(modal, index);
@@ -2674,43 +2677,122 @@
     photoDownloadNoticeTimerV73 = global.setTimeout(function() { notice.hidden = true; }, 5000);
   }
 
+  function photoZipV74(entries) {
+    // ZIP STORE: preserve the collected image bytes, UTF-8 names and CRC-32.
+    // No compression library or third-party requests are needed for photos.
+    var parts = [], directory = [], offset = 0, directorySize = 0, table = new Uint32Array(256);
+    for (var code = 0; code < 256; code += 1) {
+      var value = code;
+      for (var bit = 0; bit < 8; bit += 1) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+      table[code] = value >>> 0;
+    }
+    entries.forEach(function(entry) {
+      var name = new TextEncoder().encode(entry.name), bytes = entry.bytes;
+      var crc = 0xffffffff;
+      for (var i = 0; i < bytes.length; i += 1) {
+        crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 255];
+      }
+      crc = (crc ^ 0xffffffff) >>> 0;
+      var local = new Uint8Array(30), lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true);
+      lv.setUint16(6, 0x800, true); lv.setUint16(12, 33, true);
+      lv.setUint32(14, crc, true); lv.setUint32(18, bytes.length, true);
+      lv.setUint32(22, bytes.length, true); lv.setUint16(26, name.length, true);
+      var central = new Uint8Array(46), cv = new DataView(central.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x800, true); cv.setUint16(14, 33, true);
+      cv.setUint32(16, crc, true); cv.setUint32(20, bytes.length, true);
+      cv.setUint32(24, bytes.length, true); cv.setUint16(28, name.length, true);
+      cv.setUint32(42, offset, true);
+      parts.push(local, name, bytes); directory.push(central, name);
+      offset += local.length + name.length + bytes.length;
+      directorySize += central.length + name.length;
+    });
+    var end = new Uint8Array(22), ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, entries.length, true);
+    ev.setUint16(10, entries.length, true); ev.setUint32(12, directorySize, true);
+    ev.setUint32(16, offset, true);
+    return new Blob(parts.concat(directory, [end]), {type: "application/zip"});
+  }
+
   async function downloadPhotoV73(button) {
     if (photoDownloadPendingV73) return;
     var gallery = button && button.closest(".unified-detail-gallery-v8,#unifiedGalleryV8");
-    var index = Number(gallery && gallery._indexV8 || 0);
-    var url = photoDownloadUrlV73(gallery && (gallery._imagesV8 || [])[index]);
-    if (!url) return photoDownloadNoticeV73("다운로드할 사진이 없거나 지원하지 않는 사진 주소입니다.");
-    // Capture the selected original/index before any await. Changing photos or
-    // opening a different ad cannot change the in-flight download's identity.
-    var name = gallery._downloadNameV73;
+    if (!gallery) return;
+    // Snapshot the ad before awaiting. Changing photos or ads must not mix files.
+    var name = gallery._downloadNameV73, propertyId = text(gallery._propertyIdV8);
+    var originalId = text(gallery._originalIdV8), images = (gallery._imagesV8 || []).slice();
+    var expected = Math.max(images.length, Number(gallery._photoCountV8) || 0);
     var controller = new AbortController();
-    var timer = global.setTimeout(function() { controller.abort(); }, 30000);
+    var timer = global.setTimeout(function() { controller.abort(); }, 180000);
+    var imageTimer, entries = [], totalBytes = 0;
     photoDownloadPendingV73 = true;
-    document.querySelectorAll(".unified-photo-download-v73").forEach(function(node) {
-      node.disabled = true; node.textContent = "다운로드 준비 중…";
-    });
+    function progress(label) {
+      document.querySelectorAll(".unified-photo-download-v73").forEach(function(node) {
+        node.disabled = true; node.textContent = label;
+      });
+    }
+    async function detailPhotos(force) {
+      // Bound detail hydration as well as each photo request; leave the shared
+      // cache request intact for other consumers when this download times out.
+      var timeout;
+      try {
+        return await Promise.race([loadDetail(propertyId, force), new Promise(function(resolve, reject) {
+          timeout = global.setTimeout(function() { reject(new Error("전체 사진 목록 조회가 늦어 중단했습니다. 다시 눌러 주세요.")); }, 30000);
+        })]);
+      } finally { global.clearTimeout(timeout); }
+    }
+    progress("사진 확인 중…");
     try {
       if (!global.JSDataAccessV6 || typeof global.JSDataAccessV6.readImageBlob !== "function") throw new Error("사진 다운로드 연결이 준비되지 않았습니다. 새로고침 후 다시 눌러 주세요.");
-      var photo = await global.JSDataAccessV6.readImageBlob(url, {signal: controller.signal});
-      var filename = photoDownloadFilenameV73(name, index, photo.contentType);
-      if (!filename) throw new Error("지원하지 않는 사진 형식입니다.");
-      var objectUrl = URL.createObjectURL(photo.blob);
+      // List cards can carry only one thumbnail while photoCount is ten.
+      // Reuse the normal detail request, then verify once against fresh detail.
+      var originals = await detailPhotos(false);
+      var selected = originals.filter(function(original) { return text(original.originalId) === originalId; })[0];
+      if (selected) {
+        images = originalImages(selected);
+        expected = Math.max(expected, Number(selected.photoCount) || 0, images.length);
+      }
+      if (images.length < expected) {
+        originals = await detailPhotos(true);
+        selected = originals.filter(function(original) { return text(original.originalId) === originalId; })[0];
+        images = selected ? originalImages(selected) : [];
+        expected = Math.max(expected, Number(selected && selected.photoCount) || 0, images.length);
+      }
+      if (!selected || !images.length || images.length < expected) throw new Error("전체 사진 " + expected + "장 중 " + images.length + "장만 확인됩니다. 누락 없이 저장하려면 잠시 후 다시 눌러 주세요.");
+      if (images.length > 100) throw new Error("사진이 100장을 초과해 전체 저장을 준비하지 못했습니다.");
+      for (var index = 0; index < images.length; index += 1) {
+        if (controller.signal.aborted) throw new Error("사진 다운로드 시간이 초과되었습니다.");
+        var url = photoDownloadUrlV73(images[index]);
+        if (!url) throw new Error((index + 1) + "번째 사진 주소를 확인하지 못해 전체 저장을 중단했습니다.");
+        progress("저장 준비 " + index + "/" + images.length);
+        imageTimer = global.setTimeout(function() { controller.abort(); }, 30000);
+        var photo = await global.JSDataAccessV6.readImageBlob(url, {signal: controller.signal});
+        global.clearTimeout(imageTimer);
+        var filename = photoDownloadFilenameV73(name, index, photo.contentType);
+        if (!filename) throw new Error((index + 1) + "번째 사진 형식을 지원하지 않습니다.");
+        totalBytes += photo.blob.size;
+        if (totalBytes > 120 * 1024 * 1024) throw new Error("사진 전체 용량이 120MB를 초과해 저장을 중단했습니다.");
+        entries.push({name: filename, bytes: new Uint8Array(await photo.blob.arrayBuffer())});
+      }
+      progress("ZIP 준비 중…");
+      var objectUrl = URL.createObjectURL(photoZipV74(entries));
       var anchor = document.createElement("a");
-      anchor.href = objectUrl; anchor.download = filename;
+      anchor.href = objectUrl; anchor.download = photoDownloadFilenameV73(name, 0, "image/jpeg").replace(/_사진_01\.jpg$/, "_사진전체_" + entries.length + "장.zip");
       document.body.appendChild(anchor);
       try { anchor.click(); } finally {
         anchor.remove();
         global.setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 60000);
       }
-      photoDownloadNoticeV73("사진 다운로드를 요청했습니다. 브라우저 다운로드 목록에서 확인해 주세요.");
+      photoDownloadNoticeV73("사진 " + entries.length + "장 전체 ZIP 다운로드를 요청했습니다. 브라우저 다운로드 목록에서 확인해 주세요.");
     } catch (error) {
       var message = text(error && error.message);
       photoDownloadNoticeV73(controller.signal.aborted ? "사진 다운로드 응답이 늦어 중단했습니다. 다시 눌러 주세요." :
-        /[가-힣]/.test(message) ? message : "사진 다운로드에 실패했습니다. 네트워크 연결을 확인하고 다시 눌러 주세요.");
+        "전체 사진 저장을 중단했습니다 (" + entries.length + "/" + expected + "장 준비). " + (/[가-힣]/.test(message) ? message : "네트워크 연결을 확인하고 다시 눌러 주세요."));
     } finally {
-      controller.abort(); global.clearTimeout(timer); photoDownloadPendingV73 = false;
+      controller.abort(); global.clearTimeout(timer); global.clearTimeout(imageTimer); photoDownloadPendingV73 = false;
       document.querySelectorAll(".unified-photo-download-v73").forEach(function(node) {
-        node.disabled = false; node.textContent = "↓ 사진 다운로드";
+        node.disabled = false; node.textContent = "↓ 전체 저장";
       });
     }
   }
