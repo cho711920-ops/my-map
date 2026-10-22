@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { DAANGN_GRAPHQL_URL, DAANGN_LIST_FIRST_HASH, DAANGN_LIST_NEXT_HASH, DAANGN_DETAIL_HASH } from "../cloudflare/src/daangn-provider-contract.js";
+import { observeDaangnListPage, daangnPresenceProof } from "../cloudflare/src/collector-api.js";
 
-const ENDPOINT = "https://realty.kr.karrotmarket.com/graphql";
-const LIST_HASH = "6372d5842a05f6a94d520e2045657c0661489faeab85ced23e504e5f0354b28c";
-const DETAIL_HASH = "b8d21cf0c0de5cc8e43981f48123fcef3a45962bbe96317fb4864b3e20934b72";
+// Read-only provider check. No production writes, ad contents, addresses,
+// cursors, credentials or original IDs are printed.
 const headers = {
   accept: "application/json",
   "content-type": "application/json",
@@ -12,9 +13,10 @@ const headers = {
 };
 
 async function query(hash, variables) {
-  const response = await fetch(ENDPOINT, {
+  const response = await fetch(DAANGN_GRAPHQL_URL, {
     method: "POST",
     headers,
+    signal: AbortSignal.timeout(10000),
     body: JSON.stringify({
       variables,
       extensions: { persistedQuery: { version: 1, sha256Hash: hash } }
@@ -26,22 +28,36 @@ async function query(hash, variables) {
   return payload.data || {};
 }
 
-const input = {
-  clusterId: "REGION:1095",
-  propertyFilter: {
-    salesTypes: ["STORE", "OFFICE", "FACTORY"],
-    tradeTypes: ["MONTH"]
+async function verify() {
+  const exhaustive = process.argv.includes("--full-list");
+  const regions = exhaustive ? [1095, 1112, 1130, 1154, 1166] : [1095];
+  for (const trade of process.argv.includes("--sale-only") ? ["BUY"] : ["MONTH", "BUY"]) {
+    for (const region of regions) {
+      const input = {clusterId: `REGION:${region}`, propertyFilter: {
+        salesTypes: trade === "BUY"
+          ? ["STORE", "OFFICE", "FACTORY", "ONE_ROOM", "TWO_ROOM", "OFFICETEL", "HOUSE", "BUILDING", "LAND"]
+          : ["STORE", "OFFICE", "FACTORY"], tradeTypes: [trade]
+      }};
+      const job = {clusterId: input.clusterId, propertyFilter: input.propertyFilter,
+        ids: [], providerIds: [], listPageSignatures: [], page: 0, cursor: "", hasNextPage: true};
+      let detailId = "";
+      do {
+        const data = await query(job.page === 0 ? DAANGN_LIST_FIRST_HASH : DAANGN_LIST_NEXT_HASH,
+          {first: exhaustive ? 100 : 1, after: job.cursor || null, input});
+        const articles = observeDaangnListPage(job, data.articleByClusterId);
+        if (!detailId) detailId = String(articles[0]?.originalId || "");
+        if (job.page > 100) throw new Error("당근 검증 페이지 제한 초과");
+      } while (job.hasNextPage && (exhaustive || job.page < 2));
+      assert.ok(detailId, "당근 계약 검사용 클러스터가 비어 있습니다.");
+      const detail = (await query(DAANGN_DETAIL_HASH, {articleId: detailId})).articleByOriginalArticleId;
+      assert.ok(String(detail?.originalId) === detailId, "당근 상세 원본번호 불일치");
+      assert.ok(Array.isArray(detail.trades), "당근 상세 거래조건 형식이 변경되었습니다.");
+      if (exhaustive) assert.equal(daangnPresenceProof(job).completionProof.listComplete, true);
+      console.log(JSON.stringify({region, trade, pages: job.page, uniqueAds: job.providerIds.length,
+        terminal: !job.hasNextPage, detailVerified: true}));
+    }
   }
-};
+  console.log("Daangn provider contract OK: first + pagination + detail (lease/sale)");
+}
 
-const listData = await query(LIST_HASH, { first: 1, after: null, input });
-const connection = listData.articleByClusterId;
-assert.ok(connection && Array.isArray(connection.edges), "당근 목록 응답 형식이 변경되었습니다.");
-assert.ok(connection.edges.length > 0, "당근 계약 검사용 클러스터가 비어 있습니다.");
-
-const articleId = String(connection.edges[0]?.node?.article?.originalId || "");
-assert.ok(articleId, "당근 목록에서 상세 매물 ID를 찾지 못했습니다.");
-const detailData = await query(DETAIL_HASH, { articleId });
-assert.ok(detailData.articleByOriginalArticleId, "당근 상세 응답 형식이 변경되었습니다.");
-
-console.log("Daangn provider contract OK: list + detail");
+verify().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -12,6 +12,7 @@ import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertis
 import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObservedAdvertisements } from "./collector-first-observed.js";
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
 import { exactCollectorRoadAddress } from "./collector-address.js";
+import { DAANGN_GRAPHQL_URL, DAANGN_LIST_FIRST_HASH, DAANGN_LIST_NEXT_HASH, DAANGN_DETAIL_HASH } from "./daangn-provider-contract.js";
 import {
   LISTING_TRADE_TYPES,
   listingTradeTypesCanMerge,
@@ -43,10 +44,6 @@ const EXTERNAL_ACTIONS = new Set([
   , "saveAutomationRunReport"
 ]);
 
-const DAANGN_GRAPHQL_URL = "https://realty.kr.karrotmarket.com/graphql";
-const DAANGN_LIST_FIRST_HASH = "6372d5842a05f6a94d520e2045657c0661489faeab85ced23e504e5f0354b28c";
-const DAANGN_LIST_NEXT_HASH = DAANGN_LIST_FIRST_HASH;
-const DAANGN_DETAIL_HASH = "b8d21cf0c0de5cc8e43981f48123fcef3a45962bbe96317fb4864b3e20934b72";
 const DAANGN_JOB_PREFIX = "collector-daangn-";
 const DAANGN_DETAIL_MAX_ATTEMPTS = 8;
 const DAANGN_DETAIL_ERROR_LIMIT = 60;
@@ -2720,7 +2717,7 @@ async function daangnGraphql(hash, variables) {
       const message = payload.errors.map((entry) => [entry?.message || "알 수 없는 오류", entry?.extensions?.code]
         .filter(Boolean).join(" ")).join(" / ");
       const error = new Error(`당근 API 오류: ${message}`);
-      error.stopCollection = /UNAUTHENTICATED|UNAUTHORIZED|FORBIDDEN|PersistedQueryNotFound|PERSISTED_QUERY_NOT_FOUND|GRAPHQL_VALIDATION_FAILED|Cannot query field|Unknown (?:argument|field|type|operation)|Expected type|Variable [^\n]* got invalid value|Field [^\n]*(?:is not defined|does not exist)/i.test(message);
+      error.stopCollection = /UNAUTHENTICATED|UNAUTHORIZED|FORBIDDEN|PersistedQueryNotFound|PERSISTED_QUERY_NOT_(?:FOUND|IN_LIST)|GRAPHQL_VALIDATION_FAILED|Cannot query field|Unknown (?:argument|field|type|operation)|Expected type|Variable [^\n]* got invalid value|Field [^\n]*(?:is not defined|does not exist)/i.test(message);
       throw error;
     }
     return payload;

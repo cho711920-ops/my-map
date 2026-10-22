@@ -195,6 +195,7 @@ test("provider auth/schema errors stop detail retries; rate limits retain bounde
   for (const sample of [
     { status: 401 }, { status: 403 },
     { errors: [{ message: "operation unavailable", extensions: { code: "PERSISTED_QUERY_NOT_FOUND" } }] },
+    { errors: [{ message: "operation unavailable", extensions: { code: "PERSISTED_QUERY_NOT_IN_LIST" } }] },
     { errors: [{ message: "Cannot query field originalId" }] },
     { errors: [{ message: "invalid", extensions: { code: "GRAPHQL_VALIDATION_FAILED" } }] },
     { status: 429 }

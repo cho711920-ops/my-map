@@ -472,7 +472,7 @@ test("collector updates reconcile individual media and contacts instead of repla
 
 test("Daangn detail failures stay queued with bounded retries and recorded causes", async () => {
   const source = await readFile(new URL("../cloudflare/src/collector-api.js", import.meta.url), "utf8");
-  assert.match(source, /DAANGN_DETAIL_HASH = "b8d21cf0c0de5cc8e43981f48123fcef3a45962bbe96317fb4864b3e20934b72"/);
+  assert.match(source, /import \{[^}]*DAANGN_DETAIL_HASH[^}]*\} from "\.\/daangn-provider-contract\.js"/);
   assert.match(source, /DAANGN_DETAIL_MAX_ATTEMPTS = 8/);
   assert.match(source, /preserveRepresentative && !updateCondition && !promoteRepresentative/);
   assert.match(source, /refreshListingRepresentativesFromActiveSources\(env,/);
