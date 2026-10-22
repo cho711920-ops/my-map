@@ -333,10 +333,39 @@
     return true;
   }
 
+  async function readImageBlob(url, options) {
+    var target = new URL(String(url || ""), global.location.href);
+    if (target.origin !== global.location.origin || !/^https?:$/.test(target.protocol) || target.username || target.password) {
+      throw new Error("사진 다운로드 주소를 확인하지 못했습니다.");
+    }
+    var response = await global.fetch(target.href, {credentials: "same-origin", signal: options && options.signal, redirect: "error"});
+    if (response.status === 401 || response.status === 403) throw new Error("사진 다운로드 권한을 확인하지 못했습니다. 로그인 상태를 확인해 주세요.");
+    var contentType = String(response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!response.ok || !/^image\//.test(contentType)) throw new Error("사진을 내려받지 못했습니다. 잠시 후 다시 눌러 주세요.");
+    var limit = 12 * 1024 * 1024;
+    if (Number(response.headers.get("content-length")) > limit) throw new Error("사진이 다운로드 크기 제한(12MB)을 초과했습니다.");
+    var reader = response.body.getReader(), chunks = [], size = 0;
+    try {
+      while (true) {
+        var part = await reader.read();
+        if (part.done) break;
+        size += part.value.byteLength;
+        if (size > limit) {
+          await reader.cancel();
+          throw new Error("사진이 다운로드 크기 제한(12MB)을 초과했습니다.");
+        }
+        chunks.push(part.value);
+      }
+    } finally { reader.releaseLock(); }
+    if (!size) throw new Error("사진 파일이 비어 있어 다운로드하지 못했습니다.");
+    return {blob: new Blob(chunks, {type: contentType}), contentType: contentType};
+  }
+
   global.JSDataAccessV6 = Object.freeze({
     endpoints: Object.freeze({ data: DATA_API, listings: LISTINGS_API }),
     read: read,
     mutate: mutate,
+    readImageBlob: readImageBlob,
     listingsCsv: listingsCsv,
     listingsSnapshot: listingsSnapshot,
     warmInitialData: warmInitialData,

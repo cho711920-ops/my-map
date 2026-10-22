@@ -493,7 +493,7 @@
 
     element.addEventListener("pointerdown", function(event) {
       if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (event.target && event.target.closest(".unified-detail-photo-nav-v8,.unified-gallery-nav-v8,.close")) return;
+      if (event.target && event.target.closest(".unified-detail-photo-nav-v8,.unified-gallery-nav-v8,.unified-photo-download-v73,.close")) return;
       cancelPhotoTransitionV1(element);
       gesture = {
         pointerId: event.pointerId,
@@ -1661,7 +1661,9 @@
           '<button type="button" class="unified-detail-photo-nav-v8 prev" aria-label="이전 사진" ' +
             'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, -1)">‹</button>' +
           '<button type="button" class="unified-detail-photo-nav-v8 next" aria-label="다음 사진" ' +
-            'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, 1)">›</button>' :
+            'onclick="event.stopPropagation(); JSUnifiedListingsV8.stepDetailPhoto(this, 1)">›</button>' +
+          '<button type="button" class="unified-photo-download-v73" aria-label="현재 사진 다운로드" ' +
+            'onclick="event.stopPropagation(); JSUnifiedListingsV8.downloadPhoto(this)">↓ 사진 다운로드</button>' :
           '<div class="unified-gallery-empty-v8">' + esc(detailPhotoPlaceholder(propertyId, photoCount)) + '</div>') +
       '</section>' +
       '<section class="unified-detail-summary-v8"><div class="unified-detail-source-address-v827">' +
@@ -1710,6 +1712,7 @@
       detailGallery._photoCountV8 = photoCount;
       detailGallery._propertyIdV8 = propertyId;
       detailGallery._originalIdV8 = selected.originalId;
+      detailGallery._downloadNameV73 = text(selected.address || selected.buildingName || propertyId);
       detailGallery._failedImagesV8 = {};
       bindPhotoSwipe(detailGallery, function(direction) {
         transitionPhotoV8140(detailGallery, direction, function() {
@@ -2571,7 +2574,8 @@
         '<button class="unified-gallery-nav-v8 prev" type="button" aria-label="이전 사진">‹</button>' +
         '<img alt="매물 사진" referrerpolicy="no-referrer">' +
         '<button class="unified-gallery-nav-v8 next" type="button" aria-label="다음 사진">›</button>' +
-        '<span></span>';
+        '<span></span>' +
+        '<button type="button" class="unified-photo-download-v73" aria-label="현재 사진 다운로드">↓ 사진 다운로드</button>';
       modal.querySelector(".close").onclick = function(event) {
         event.stopPropagation();
         closeGallery();
@@ -2584,6 +2588,10 @@
         event.stopPropagation();
         stepGallery(1);
       };
+      modal.querySelector(".unified-photo-download-v73").onclick = function(event) {
+        event.stopPropagation();
+        downloadPhotoV73(this);
+      };
       modal.onclick = function(event) {
         if (event.target === modal) closeGallery();
       };
@@ -2595,6 +2603,7 @@
     }
     var index = wrapPhotoIndexV8141(startIndex, images.length);
     modal._imagesV8 = images.slice();
+    modal._downloadNameV73 = text(original.address || original.buildingName || propertyId);
     bindPhotoSwipe(modal, function(direction) { stepGallery(direction); });
     renderGalleryImage(modal, index);
     modal.classList.add("open");
@@ -2623,6 +2632,87 @@
     transitionPhotoV8140(modal, direction, function() {
       renderGalleryImage(modal, Number(modal._indexV8 || 0) + Number(direction || 0));
     });
+  }
+
+  var photoDownloadPendingV73 = false;
+  var photoDownloadNoticeTimerV73 = null;
+  function photoDownloadUrlV73(value) {
+    if (!text(value)) return "";
+    try {
+      var url = new URL(text(value), global.location.href);
+      if (url.username || url.password) return "";
+      if (url.origin === global.location.origin && /^https?:$/.test(url.protocol)) return url.href;
+      return thumbnailProxyUrl(url.href);
+    } catch (ignore) { return ""; }
+  }
+
+  function photoDownloadFilenameV73(name, index, contentType) {
+    var extensions = {"image/jpeg":"jpg", "image/png":"png", "image/webp":"webp", "image/gif":"gif",
+      "image/avif":"avif", "image/bmp":"bmp", "image/svg+xml":"svg", "image/tiff":"tiff"};
+    var extension = extensions[text(contentType).split(";")[0].trim().toLowerCase()];
+    if (!extension) return "";
+    var label = text(name).replace(/[<>:"/\\|?*\u202a-\u202e\u2066-\u2069]/g, "_").split("").map(function(character) {
+      var code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? "_" : character;
+    }).join("").slice(0, 80).replace(/[.\s]+$/, "") || "매물";
+    return "JS부동산_" + label + "_사진_" + String(Math.max(0, Number(index) || 0) + 1).padStart(2, "0") + "." + extension;
+  }
+
+  function photoDownloadNoticeV73(message) {
+    var notice = document.getElementById("unifiedPhotoDownloadNoticeV73");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "unifiedPhotoDownloadNoticeV73";
+      notice.className = "unified-photo-download-notice-v73";
+      notice.setAttribute("role", "status");
+      notice.setAttribute("aria-live", "polite");
+      document.body.appendChild(notice);
+    }
+    global.clearTimeout(photoDownloadNoticeTimerV73);
+    notice.textContent = message;
+    notice.hidden = false;
+    photoDownloadNoticeTimerV73 = global.setTimeout(function() { notice.hidden = true; }, 5000);
+  }
+
+  async function downloadPhotoV73(button) {
+    if (photoDownloadPendingV73) return;
+    var gallery = button && button.closest(".unified-detail-gallery-v8,#unifiedGalleryV8");
+    var index = Number(gallery && gallery._indexV8 || 0);
+    var url = photoDownloadUrlV73(gallery && (gallery._imagesV8 || [])[index]);
+    if (!url) return photoDownloadNoticeV73("다운로드할 사진이 없거나 지원하지 않는 사진 주소입니다.");
+    // Capture the selected original/index before any await. Changing photos or
+    // opening a different ad cannot change the in-flight download's identity.
+    var name = gallery._downloadNameV73;
+    var controller = new AbortController();
+    var timer = global.setTimeout(function() { controller.abort(); }, 30000);
+    photoDownloadPendingV73 = true;
+    document.querySelectorAll(".unified-photo-download-v73").forEach(function(node) {
+      node.disabled = true; node.textContent = "다운로드 준비 중…";
+    });
+    try {
+      if (!global.JSDataAccessV6 || typeof global.JSDataAccessV6.readImageBlob !== "function") throw new Error("사진 다운로드 연결이 준비되지 않았습니다. 새로고침 후 다시 눌러 주세요.");
+      var photo = await global.JSDataAccessV6.readImageBlob(url, {signal: controller.signal});
+      var filename = photoDownloadFilenameV73(name, index, photo.contentType);
+      if (!filename) throw new Error("지원하지 않는 사진 형식입니다.");
+      var objectUrl = URL.createObjectURL(photo.blob);
+      var anchor = document.createElement("a");
+      anchor.href = objectUrl; anchor.download = filename;
+      document.body.appendChild(anchor);
+      try { anchor.click(); } finally {
+        anchor.remove();
+        global.setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 60000);
+      }
+      photoDownloadNoticeV73("사진 다운로드를 요청했습니다. 브라우저 다운로드 목록에서 확인해 주세요.");
+    } catch (error) {
+      var message = text(error && error.message);
+      photoDownloadNoticeV73(controller.signal.aborted ? "사진 다운로드 응답이 늦어 중단했습니다. 다시 눌러 주세요." :
+        /[가-힣]/.test(message) ? message : "사진 다운로드에 실패했습니다. 네트워크 연결을 확인하고 다시 눌러 주세요.");
+    } finally {
+      controller.abort(); global.clearTimeout(timer); photoDownloadPendingV73 = false;
+      document.querySelectorAll(".unified-photo-download-v73").forEach(function(node) {
+        node.disabled = false; node.textContent = "↓ 사진 다운로드";
+      });
+    }
   }
 
   function closeGallery(restoreFocus) {
@@ -2794,7 +2884,7 @@
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
-    openGallery: openGallery, separate: separate, startMove: startMove,
+    openGallery: openGallery, downloadPhoto: downloadPhotoV73, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts, printItem: printItem,
     imageError: imageError, thumbnailImageError: thumbnailImageError, thumbnailImageLoaded: thumbnailImageLoaded,
