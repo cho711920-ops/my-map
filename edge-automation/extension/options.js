@@ -1,6 +1,6 @@
 "use strict";
 
-const EXPECTED_COLLECTOR_BUILD = "1.1.23";
+const EXPECTED_COLLECTOR_BUILD = "1.1.24";
 let updateReloadPending = false;
 
 let state = { config: { targets: [] }, logs: [], runState: null, runReport: null, runReports: {} };
@@ -19,6 +19,17 @@ const MARKET_LABELS = { lease: "상가임대", sale: "매매" };
 function compatibleWorker(response = state) {
   return Boolean(response && response.backgroundBuild === EXPECTED_COLLECTOR_BUILD &&
     chrome.runtime.getManifest().version === EXPECTED_COLLECTOR_BUILD);
+}
+
+function canQueueFailed(market) {
+  const run = state.runState;
+  return Boolean(run && run.active && run.market === market && run.runId &&
+    reportForMarket(market)?.runId === run.runId);
+}
+
+function executionBlocked(market, mode) {
+  return runLaunchPending || !compatibleWorker() || Boolean(state.runState?.active &&
+    !(mode === "failed" && canQueueFailed(market)));
 }
 
 function marketForTarget(target) {
@@ -333,7 +344,7 @@ function renderTargets(targets) {
       <div class="market-actions">
         <button class="primary" data-run-market="${market}" data-run-mode="all" ${busy ? "disabled" : ""}>${label} 전체 수집</button>
         <button data-run-market="${market}" data-run-mode="selected" ${busy ? "disabled" : ""}>${label} 선택만 수집</button>
-        <button data-run-market="${market}" data-run-mode="failed" ${busy ? "disabled" : ""}>${label} 실패·부분완료 재수집</button>
+        <button data-run-market="${market}" data-run-mode="failed" ${executionBlocked(market, "failed") ? "disabled" : ""}>${label} 실패·부분완료 재수집</button>
         <span class="selection-count" data-selection-market="${market}" aria-live="polite">이번에 수집 ${selected}개 선택</span>
       </div>
       <div class="market-panel-summary run-summary">${renderRunSummary(reportForMarket(market))}</div>
@@ -361,7 +372,7 @@ function render() {
     (ready.windowsCheckedAt && Date.now() - ready.windowsCheckedAt > 86400000 ? " · Windows 확인이 하루 이상 지남" : "") +
     (state.reportPending ? " · 서버 보고 전송 대기(다음 공급처 연결에서 재시도)" : "");
   const targets = Array.isArray(config.targets) ? config.targets : [];
-  document.getElementById("runConfirmed").disabled = runLaunchPending || !compatibleWorker() || Boolean(state.runState && state.runState.active);
+  document.getElementById("runConfirmed").disabled = executionBlocked(runPreviewMarket, runPreviewMode);
   const targetList = document.getElementById("targets");
   const openDetails = new Set([...targetList.querySelectorAll(".target-item")]
     .filter(node => node.querySelector("details[open]"))
@@ -457,15 +468,19 @@ async function load() {
   render();
   const workerMismatch = response.ok && !compatibleWorker(response);
   // Never unload a collector in progress or discard settings being edited.
+  // A saved retry-wait with no owned tab and a future alarm has no active
+  // provider request. Do not reload from an expired/missing retry snapshot.
   // An old manifest and old worker can agree while both differ from this file.
   if (workerMismatch && chrome.runtime.getManifest().version !== EXPECTED_COLLECTOR_BUILD &&
-      !updateReloadPending && !settingsDirty && !(response.runState && response.runState.active)) {
+      !updateReloadPending && !settingsDirty && (!(response.runState && response.runState.active) ||
+        response.runState.phase === "retry-wait" && response.runState.currentTabId === null &&
+        Number(response.runState.retryAt) > Date.now() + 10000)) {
     const key = "js-auto-reload-" + EXPECTED_COLLECTOR_BUILD;
     let attempted = false;
     try { attempted = !!sessionStorage.getItem(key); sessionStorage.setItem(key, "1"); } catch (_) {}
     if (!attempted) {
       updateReloadPending = true;
-      message("수집이 종료된 것을 확인했습니다. 새 실행기를 적용하고 다시 연결합니다.");
+      message("수집 종료 또는 재시도 대기를 확인했습니다. 저장 지점을 유지하고 새 실행기를 적용합니다.");
       chrome.runtime.reload();
       return;
     }
@@ -499,6 +514,9 @@ function previewRows() {
   document.getElementById("runPreviewHint").textContent = runPreviewMarket === "sale"
     ? "매매만 이번에 수동 실행합니다. 상가임대 수집과 매일 예약 설정은 변경하지 않습니다."
     : "상가임대만 이번에 수동 실행합니다. 매매는 실행하지 않으며 매일 예약 설정은 변경하지 않습니다.";
+  if (runPreviewMode === "failed" && canQueueFailed(runPreviewMarket)) {
+    document.getElementById("runPreviewHint").textContent = "실패·부분완료 대상만 다시 실행합니다. 현재 지역 수집 중이면 끝난 뒤 이어서 실행하고, 재시도 대기 중이면 선택한 실패 대상부터 실행합니다. 기존 저장 지점과 예약 설정은 유지됩니다.";
+  }
   document.getElementById("runConfirmed").textContent = `${label} ${targets.length}개 실행`;
   const rows = targets.map((target) => {
     const previous = reportItem(target);
@@ -552,7 +570,7 @@ document.getElementById("runConfirmed").addEventListener("click", async (event) 
       return;
     }
     document.getElementById("runPreview").close();
-    if (fresh.runState && fresh.runState.active) {
+    if (fresh.runState && fresh.runState.active && !(runPreviewMode === "failed" && canQueueFailed(runPreviewMarket))) {
       message("이미 진행 중인 수집이 있습니다. 현재 수집이 끝난 뒤 실행해 주세요.");
       return;
     }

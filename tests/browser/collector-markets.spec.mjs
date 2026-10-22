@@ -21,7 +21,7 @@ function fixtureReport(market) {
 }
 
 test.beforeEach(async ({page, baseURL}) => {
-  const snapshot = {ok: true, backgroundBuild: "1.1.23", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
+  const snapshot = {ok: true, backgroundBuild: "1.1.24", config: {enabled: true, schedule: "11:00", closeTabs: true, targets}, logs: [], runState: null,
     runReport: fixtureReport("sale"), runReports: {lease: fixtureReport("lease"), sale: fixtureReport("sale")}, readiness: {enabled: true, schedule: "11:00", windowsSchedule: "11:00", windowsTaskState: "Ready"}};
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
@@ -34,7 +34,7 @@ test.beforeEach(async ({page, baseURL}) => {
   await page.addInitScript(({snapshot}) => {
     window.__collectorSnapshot = snapshot;
     window.__collectorMessages = [];
-    window.chrome = {runtime: {getManifest: () => ({version: "1.1.23"}), sendMessage: (message, callback) => {
+    window.chrome = {runtime: {getManifest: () => ({version: "1.1.24"}), sendMessage: (message, callback) => {
       window.__collectorMessages.push(structuredClone(message));
       if (message.type === "JS_AUTO_GET_STATE") callback(structuredClone(window.__collectorSnapshot));
       else if (message.type === "JS_AUTO_SAVE_CONFIG") {
@@ -160,4 +160,47 @@ test('old matching manifest and worker wait through an active run and unsaved se
   await page.evaluate(async () => { await window.load(); await window.load(); });
   expect(await page.evaluate(() => window.__reloads)).toBe(1);
   expect(await page.evaluate(() => window.__collectorMessages.filter(message => /JS_AUTO_RUN_(NOW|SELECTED|REQUEST)/.test(message.type)))).toEqual([]);
+});
+
+test('active same-market run enables failed-only retry and confirms only its failed targets', async ({page}) => {
+  await page.evaluate(async () => {
+    const snapshot = window.__collectorSnapshot;
+    snapshot.runState = {active: true, market: 'lease', runId: snapshot.runReports.lease.runId, phase: 'retry-wait', currentTabId: null};
+    await window.load();
+  });
+  await expect(page.locator('[data-run-market="lease"][data-run-mode="failed"]')).toBeEnabled();
+  for (const mode of ['all', 'selected']) await expect(page.locator(`[data-run-market="lease"][data-run-mode="${mode}"]`)).toBeDisabled();
+  await expect(page.locator('[data-run-market="sale"][data-run-mode="failed"]')).toBeDisabled();
+  await page.locator('[data-run-market="lease"][data-run-mode="failed"]').click();
+  await expect(page.locator('#runPreviewHint')).toContainText('실패·부분완료 대상만');
+  await page.locator('#runConfirmed').click();
+  await expect.poll(() => page.evaluate(() => window.__collectorMessages.filter(m => m.type === 'JS_AUTO_RUN_SELECTED'))).toEqual([
+    {type: 'JS_AUTO_RUN_SELECTED', market: 'lease', keys: ['lease-naver'], failedOnly: true}
+  ]);
+});
+
+test('a report changed while confirmation is open cannot queue failures into another run', async ({page}) => {
+  await page.evaluate(async () => {
+    const s = window.__collectorSnapshot;
+    s.runState = {active: true, market: 'lease', runId: s.runReports.lease.runId}; await window.load();
+  });
+  await page.locator('[data-run-market="lease"][data-run-mode="failed"]').click();
+  await page.evaluate(() => { window.__collectorSnapshot.runState.runId = 'different-run'; });
+  await page.locator('#runConfirmed').dispatchEvent('click');
+  expect(await page.evaluate(() => window.__collectorMessages.filter(m => m.type === 'JS_AUTO_RUN_SELECTED'))).toEqual([]);
+});
+
+test('old worker may apply update only during saved retry wait with explicitly no live tab', async ({page}) => {
+  await page.evaluate(async () => {
+    window.__reloads = 0; chrome.runtime.reload = () => window.__reloads++;
+    chrome.runtime.getManifest = () => ({version: '1.1.23'});
+    window.__collectorSnapshot.backgroundBuild = '1.1.23';
+    window.__collectorSnapshot.runState = {active: true, phase: 'retry-wait', currentTabId: 42, retryAt: Date.now() + 60000}; await window.load();
+  });
+  expect(await page.evaluate(() => window.__reloads)).toBe(0);
+  await page.evaluate(async () => { window.__collectorSnapshot.runState.currentTabId = null; window.__collectorSnapshot.runState.retryAt = Date.now() - 1; await window.load(); });
+  expect(await page.evaluate(() => window.__reloads)).toBe(0);
+  await page.evaluate(() => { window.__collectorSnapshot.runState.retryAt = Date.now() + 60000; });
+  await page.evaluate(async () => { window.__collectorSnapshot.runState.currentTabId = null; await window.load(); await window.load(); });
+  expect(await page.evaluate(() => window.__reloads)).toBe(1);
 });

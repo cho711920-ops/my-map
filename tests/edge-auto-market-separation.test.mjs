@@ -12,6 +12,93 @@ const LAST = "jsAutoCollectorLastScheduleV1";
 const VERSION = "jsAutoCollectorLastVersionRunV1";
 const PENDING = "jsAutoCollectorPendingLeaseScheduleV1";
 const clone = value => structuredClone(value);
+const CIRCUITS = "jsAutoCollectorSourceCircuitsV1";
+
+function seedFailedRetry(h, collecting = false) {
+  const waiting = target("waiting", "lease");
+  waiting.pendingSaveRetryAtV56 = Date.now() + 15 * 60000;
+  const failed = target("failed", "lease", "daangn");
+  const done = target("done", "lease");
+  h.data[CONFIG].targets = clone([done, waiting, failed]);
+  const runId = "run-" + Date.now() + "-fixture";
+  const report = {runId, market: "lease", active: true, startedAt: Date.now(), items: [
+    {key: done.key, source: done.source, status: "completed", counts: {processed: 100}},
+    {key: waiting.key, source: waiting.source, status: collecting ? "running" : "retry_wait", counts: {processed: 50}},
+    {key: failed.key, source: failed.source, status: "failed", message: "PersistedQueryNotFound", counts: {failed: 1}}
+  ]};
+  h.data[REPORT] = clone(report); h.data[REPORTS] = {lease: clone(report)};
+  h.data[RUN] = {active: true, runId, market: "lease", startedAt: Date.now(),
+    targets: clone([waiting]), allTargets: clone([done, waiting, failed]), index: 0,
+    completedKeys: [done.key, failed.key], retryQueue: [], sourceCircuits: {
+      daangn: {expiresAt: Date.now() + 86400000}, naver: {expiresAt: Date.now() + 86400000}
+    }, phase: collecting ? "collecting" : "retry-wait", currentTabId: collecting ? 99 : null,
+    targetRunId: collecting ? "live-target" : null, retryAt: waiting.pendingSaveRetryAtV56,
+    closeTabs: true, summary: {}};
+  h.data[CIRCUITS] = clone(h.data[RUN].sourceCircuits);
+  return {waiting, failed, done};
+}
+
+test("manual failed retry during wait launches only failures and preserves waiting checkpoints/time", async () => {
+  const h = harness();
+  const {waiting, failed, done} = seedFailedRetry(h);
+  const retryAt = h.data[RUN].retryAt;
+  const config = clone(h.data[CONFIG]);
+  const result = await h.dispatch({type: "JS_AUTO_RUN_SELECTED", market: "lease", keys: [done.key, waiting.key, failed.key], failedOnly: true});
+  assert.equal(result.ok, true); assert.equal(result.started, true);
+  assert.equal(h.launches.length, 1); assert.match(h.launches[0].url, /realty.daangn.com/);
+  assert.deepEqual(h.data[RUN].targets.map(t => t.key), [failed.key, waiting.key]);
+  assert.equal(h.data[RUN].targets[1].pendingSaveRetryAtV56, retryAt);
+  assert.equal(h.data[RUN].targets[1].retryNotBefore, retryAt);
+  assert.ok(h.data[RUN].completedKeys.includes(done.key));
+  assert.ok(!h.data[RUN].completedKeys.includes(failed.key));
+  assert.equal(h.data[CIRCUITS].daangn, undefined); assert.ok(h.data[CIRCUITS].naver);
+  assert.equal(h.data[REPORT].items.find(i => i.key === done.key).status, "completed");
+  assert.equal(h.data[REPORT].items.find(i => i.key === failed.key).previousAttempt.status, "failed");
+  assert.deepEqual(h.data[CONFIG], config);
+  // After the selected failed district, the old waiting district still cannot
+  // issue a request before its uncertain save's original retry time.
+  delete h.data[CIRCUITS].naver; delete h.data[RUN].sourceCircuits.naver;
+  const after = clone(h.data[RUN]); after.index = 1; after.currentTabId = null;
+  await h.context.launchCurrentTarget(after);
+  assert.equal(h.launches.length, 1);
+  assert.equal(h.data[RUN].phase, "retry-wait");
+  assert.ok(h.data[RUN].retryAt >= retryAt);
+});
+
+test("manual failed retry during collection only appends once and keeps live target/tab intact", async () => {
+  const h = harness(); const {failed} = seedFailedRetry(h, true);
+  const message = {type: "JS_AUTO_RUN_SELECTED", market: "lease", keys: [failed.key], failedOnly: true};
+  const result = await h.dispatch(message);
+  assert.equal(result.queued, true); assert.equal(h.launches.length, 0);
+  assert.equal(h.data[RUN].currentTabId, 99); assert.equal(h.data[RUN].targetRunId, "live-target");
+  assert.equal(h.data[RUN].phase, "collecting"); assert.equal(h.data[RUN].index, 0);
+  assert.deepEqual(h.data[RUN].targets.map(t => t.key), ["waiting", "failed"]);
+  assert.equal((await h.dispatch(message)).ok, false);
+  assert.equal(h.data[RUN].targets.length, 2); assert.equal(h.launches.length, 0);
+});
+
+test("active failed retry rejects mismatched report before clearing circuit or queueing", async () => {
+  const h = harness(); const {failed} = seedFailedRetry(h);
+  h.data[REPORTS].lease.runId = "old-report";
+  h.data[REPORT].runId = "old-report";
+  const before = clone(h.data);
+  const result = await h.dispatch({type: "JS_AUTO_RUN_SELECTED", market: "lease", keys: [failed.key], failedOnly: true});
+  assert.equal(result.ok, false); assert.equal(h.launches.length, 0);
+  assert.deepEqual(h.data, before);
+});
+
+test("idle extension upgrade preserves ordinary retry time and original completed/failed reports", async () => {
+  const h = harness(); const {done, failed} = seedFailedRetry(h);
+  delete h.data[RUN].targets[0].pendingSaveRetryAtV56;
+  delete h.data[RUN].sourceCircuits.naver; delete h.data[CIRCUITS].naver;
+  const retryAt = h.data[RUN].retryAt;
+  await h.installed();
+  assert.equal(h.launches.length, 0);
+  assert.equal(h.data[RUN].phase, "retry-wait");
+  assert.ok(h.data[RUN].retryAt >= retryAt);
+  assert.equal(h.data[REPORT].items.find(i => i.key === done.key).status, "completed");
+  assert.equal(h.data[REPORT].items.find(i => i.key === failed.key).status, "failed");
+});
 
 function target(key, tradeType, source = "naver", enabled = true) {
   return { key, source, label: `${source} ${tradeType} 유성구`, tradeType, enabled,
@@ -53,7 +140,8 @@ function harness(targets = [target("lease-on", "lease"), target("lease-off", "le
   const dispatch = message => new Promise(resolve => events.message(message, { url: "chrome-extension://test/options.html" }, resolve));
   const alarm = async name => { events.alarm({ name }); await vm.runInContext("mutationQueue", context); };
   const startup = async () => { events.startup(); await vm.runInContext("mutationQueue", context); };
-  return { context, data, dispatch, alarms, launches, alarm, startup };
+  const installed = async () => { events.installed(); await vm.runInContext("mutationQueue", context); };
+  return { context, data, dispatch, alarms, launches, alarm, startup, installed };
 }
 
 test("today's settled schedule remains consumed after an extension update or missing legacy version marker", async () => {

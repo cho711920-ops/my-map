@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.23";
+const BACKGROUND_BUILD = "1.1.24";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -1324,10 +1324,12 @@ async function launchCurrentTarget(state, reuseTabId = null) {
   }
 
   const target = state.targets[state.index];
-  if (Number(target.pendingSaveRetryAtV56) > Date.now()) return scheduleRecovery(state,
-    (Number(target.pendingSaveRetryAtV56) - Date.now()) / 60000,
-    "이전 저장 결과 확인 시각까지 대기한 뒤 미완료 지역만 자동으로 이어갑니다.");
+  const notBefore = Math.max(Number(target.pendingSaveRetryAtV56) || 0, Number(target.retryNotBefore) || 0);
+  if (notBefore > Date.now()) return scheduleRecovery(state,
+    (notBefore - Date.now()) / 60000,
+    "예약된 재시도 시각까지 대기한 뒤 미완료 지역만 자동으로 이어갑니다.");
   delete target.pendingSaveRetryAtV56;
+  delete target.retryNotBefore;
   const runtimeTarget = { ...target, url: automaticTargetRuntimeUrl(target) };
   const startedAt = Date.now();
   const targetRunId = `${state.runId}-${state.index}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1594,6 +1596,59 @@ async function finishCurrentTarget(result, senderTabId) {
   return continueOrRetryCycle(state, completedTabId);
 }
 
+async function retryFailedInActiveRun(state, targets, market) {
+  if (marketForRun(state) !== market || targets.some(target => inferredTradeType(target) !== market)) {
+    return {ok: false, busy: true, message: "다른 거래유형 수집이 진행 중입니다."};
+  }
+  const report = await getRunReport(market);
+  if (!report || report.runId !== state.runId || !Array.isArray(report.items)) {
+    return {ok: false, message: "현재 실행의 실패 기록을 확인하지 못했습니다. 현황을 다시 확인해 주세요."};
+  }
+  const failed = new Set(report.items.filter(item => ["failed", "partial"].includes(item.status)).map(item => item.key));
+  const retries = uniqueTargets(targets).filter(target => failed.has(targetKey(target)));
+  if (!retries.length) return {ok: false, message: "다시 실행할 실패·부분완료 대상이 없습니다."};
+  ensureRunCollections(state, report);
+  const keys = new Set(retries.map(targetKey));
+  state.completedKeys = state.completedKeys.filter(key => !keys.has(key));
+  state.allTargets = uniqueTargets(state.allTargets.concat(retries));
+  state.retryQueue = state.retryQueue.filter(target => !keys.has(targetKey(target)));
+  const idle = state.phase === "retry-wait" && state.currentTabId === null;
+  if (idle) {
+    // No provider tab is executing. Run the selected failures now and retain
+    // the waiting targets' checkpoints and original earliest retry time.
+    const waiting = state.targets.slice(Number(state.index || 0)).filter(target => !keys.has(targetKey(target)))
+      .map(target => ({...target, retryNotBefore: Math.max(Number(target.retryNotBefore) || 0, Number(state.retryAt) || 0)}));
+    state.targets = retries.concat(waiting);
+    state.index = 0;
+    state.retryAt = null;
+    state.phase = "between-targets";
+  } else {
+    // Keep the current tab, targetRunId and index intact; never interrupt an
+    // in-flight save or start a second collector alongside it.
+    state.targets = state.targets.concat(retries);
+  }
+  for (const target of retries) await clearSourceCircuit(state, target);
+  for (const item of report.items) {
+    if (!keys.has(item.key)) continue;
+    item.previousAttempt = {status: item.status, message: item.message, counts: item.counts, finishedAt: item.finishedAt};
+    Object.assign(item, {status: "pending", attempt: 0, startedAt: null, finishedAt: null,
+      updatedAt: Date.now(), counts: {}, progressStage: null, terminalCode: "", circuitBlocked: false,
+      message: idle ? "실패 대상 수동 재실행 준비" : "현재 지역 수집 후 실패 대상 재실행 예약"});
+  }
+  report.summary = deriveRunSummary(report, state.summary || {});
+  state.summary = {...report.summary};
+  report.updatedAt = Date.now();
+  await saveRunState(state);
+  await saveRunReport(report);
+  await appendLog({level: "info", market, message: `실패·부분완료 ${retries.length}개만 ${idle ? "재실행합니다" : "재실행 대기열에 추가했습니다"}.`});
+  if (idle) {
+    await chrome.alarms.clear(RECOVERY_ALARM_NAME);
+    await launchCurrentTarget(state);
+  }
+  return {ok: true, started: idle, queued: !idle, added: retries.length, total: retries.length,
+    message: idle ? `실패·부분완료 ${retries.length}개 재실행 시작` : `현재 지역 수집 후 실패·부분완료 ${retries.length}개를 이어서 실행합니다.`};
+}
+
 async function resumeOrExtendActiveRun(state, targets, reason) {
   const market = marketForRun(state);
   if (market === "mixed" || targets.some(target => inferredTradeType(target) !== market)) {
@@ -1732,6 +1787,7 @@ async function runAll(reason = "manual", selection = null, market = "lease") {
     if (marketForRun(activeState) !== market) {
       return { ok: false, started: false, busy: true, message: "다른 거래유형의 수집이 진행 중입니다. 현재 수집 완료 후 실행해 주세요." };
     }
+    if (reason === "manual-failed") return retryFailedInActiveRun(activeState, targets, market);
     return resumeOrExtendActiveRun(activeState, targets, reason);
   }
   if (!await acquireRunLock()) return { ok: false, message: "자동수집 실행 상태를 확인하지 못했습니다. 다시 눌러주세요." };
@@ -1917,14 +1973,20 @@ chrome.runtime.onInstalled.addListener(() => serializeMutation(async () => {
   const config = await getConfig();
   await resetAlarm(config);
   const state = await getRunState();
+  const reopenOptions = state && state.active && state.phase === "retry-wait" && state.currentTabId === null;
   if (state && state.active) {
     await reconcileRunAfterUpdate(state, config);
+    if (reopenOptions && Number(state.retryAt) > Date.now() && state.targets[state.index]) {
+      const target = state.targets[state.index];
+      target.retryNotBefore = Math.max(Number(target.retryNotBefore) || 0, Number(state.retryAt));
+    }
     state.upgradeRecoveredAt = Date.now();
     await restartPersistedRun(state, "자동수집기 업데이트 후 미완료 대상을 저장 지점부터 복구합니다.");
   } else {
     await restoreSaleCollectorTabPolicy(state);
     await chrome.storage.local.remove(RUN_LOCK_KEY);
   }
+  if (reopenOptions) await chrome.runtime.openOptionsPage?.();
 }).catch(logAutomationError));
 
 chrome.runtime.onStartup.addListener(() => serializeMutation(async () => {

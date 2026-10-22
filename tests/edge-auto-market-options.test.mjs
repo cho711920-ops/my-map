@@ -12,9 +12,9 @@ function uiFixture() {
   const nodes = new Map();
   const context = {
     URL,
-    EXPECTED_COLLECTOR_BUILD: "1.1.23",
-    state: { backgroundBuild: '1.1.23', config: { enabled: true, schedule: '11:00', targets }, runReports: {}, runReport: null },
-    chrome: { runtime: { getManifest: () => ({ version: '1.1.23' }) } },
+    EXPECTED_COLLECTOR_BUILD: "1.1.24",
+    state: { backgroundBuild: '1.1.24', config: { enabled: true, schedule: '11:00', targets }, runReports: {}, runReport: null },
+    chrome: { runtime: { getManifest: () => ({ version: '1.1.24' }) } },
     selectedOnce: new Set(),
     runPreviewMode: 'all',
     runPreviewMarket: 'sale',
@@ -27,7 +27,7 @@ function uiFixture() {
     document: { getElementById(id) { if (!nodes.has(id)) nodes.set(id, {}); return nodes.get(id); } }
   };
   const ui = extract(read('edge-automation/extension/options.js'), [
-    'compatibleWorker', 'marketForTarget', 'reportForMarket', 'escapeHtml', 'registeredTime', 'targetSummary',
+    'compatibleWorker', 'canQueueFailed', 'executionBlocked', 'marketForTarget', 'reportForMarket', 'escapeHtml', 'registeredTime', 'targetSummary',
     'reportItem', 'displayCounts', 'countText', 'statusDetail', 'failureGuidance', 'reportStatus',
     'renderDiagnostics', 'renderRunSummary', 'portableTarget', 'renderTarget', 'renderSourceGroups',
     'renderTargets', 'previewRows', 'renderDeferredReview', 'currentRunStatus'
@@ -120,6 +120,18 @@ test('legacy market inference and export keep sales manual-only', () => {
   assert.equal(ui.portableTarget({ tradeType: 'lease', enabled: false }).enabled, false);
 });
 
+test('active same-market run permits only failed retries from its exact report', () => {
+  const {ui, context, targets} = uiFixture();
+  context.state.runState = {active: true, market: 'lease', runId: 'current'};
+  context.state.runReports.lease = {runId: 'current', items: [{key: 'lease-off', status: 'failed'}]};
+  assert.equal(ui.executionBlocked('lease', 'failed'), false);
+  for (const mode of ['all', 'selected']) assert.equal(ui.executionBlocked('lease', mode), true);
+  assert.equal(ui.executionBlocked('sale', 'failed'), true);
+  assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 5);
+  context.state.runReports.lease.runId = 'older';
+  assert.equal(ui.executionBlocked('lease', 'failed'), true);
+});
+
 test('old or unidentified background workers cannot enable any market run action', () => {
   const { ui, context, targets } = uiFixture();
   for (const backgroundBuild of [undefined, '', '1.1.10', '1.1.11']) {
@@ -127,7 +139,7 @@ test('old or unidentified background workers cannot enable any market run action
     assert.equal(ui.compatibleWorker(), false);
     assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 6);
   }
-  context.state.backgroundBuild = '1.1.23';
+  context.state.backgroundBuild = '1.1.24';
   assert.equal(ui.compatibleWorker(), true);
   assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 0);
 });
