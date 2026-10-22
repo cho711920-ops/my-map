@@ -17,7 +17,7 @@ function between(source, start, end) {
 function detailHarness(phone) {
   const calls = [], alerts = [], listeners = {};
   const body = {innerHTML: '', scrollTop: 0, querySelector() { return null; }, querySelectorAll() { return []; }};
-  const drawer = {actions: '', classList: {contains: () => true}, querySelector() { return null; }, insertAdjacentHTML(_, markup) { this.actions = markup; }};
+  const drawer = {actions: '', classList: {contains: () => true}, removeAttribute() {}, querySelector() { return null; }, insertAdjacentHTML(_, markup) { this.actions = markup; }};
   const nodes = {unifiedDetailDrawerV8: drawer, unifiedDetailBodyV8: body, unifiedDetailTitleV8: {}, unifiedDetailSubtitleV8: {}};
   const window = {
     allItems: [{propertyId: 'P1', key: 'same-key'}, {propertyId: 'P2', key: 'same-key'}],
@@ -204,6 +204,7 @@ test('detail CSS is phone-root scoped, not a width-based tablet override', () =>
     if (!selectors) continue;
     for (const selector of selectors.split(',')) assert.match(selector.trim(), /^\.js-phone-app-v2 /);
   }
-  assert.match(main, /div\.ondblclick = function\(event\) \{\s*if \(isPhoneListingV2\(\)\) return;/);
+  assert.doesNotMatch(main, /div\.ondblclick\s*=/, 'card clicks use the unified detail path on every layout');
+  assert.match(main, /JSUnifiedListingsV8\.handleCardClick\(item, event\)/);
   assert.match(main, /getListingScrollContainerV2\(\)[\s\S]*?renderPreviousListChunkV1\(\)/);
 });

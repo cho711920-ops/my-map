@@ -191,7 +191,7 @@ test("unified listing metadata is served from a fresh R2 cache", async () => {
     const cachedEnv = {
       MEDIA: {
         get: async (key) => {
-          assert.equal(key, "api-cache/unified-listings-v16-sale-financial-display.json");
+          assert.equal(key, "api-cache/unified-listings-v23-address-disclosure-v62.json");
           return {
             customMetadata: { savedAt: String(Date.now()), revision: "snapshot-1" },
             httpMetadata: { contentType: "application/json; charset=utf-8" },

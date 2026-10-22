@@ -418,7 +418,7 @@ for (const [name, options] of unchangedDevices) {
       await expect(page.locator("html")).not.toHaveClass(/js-phone-app-v2/);
       await expect(page.locator("#jsPhonePortraitGuardV2")).toBeHidden();
       if (options.viewport.width <= 768) {
-        await expect(page.locator(".jsm-bottom-nav-v1 button:visible")).toHaveText(["지도", "매물", "임장", "고객", "더보기"]);
+        await expect(page.locator(".jsm-bottom-nav-v1 button:visible")).toHaveText(["지도", "매물", "임장", "더보기"]);
         await expect(page.locator(".jsm-quick-add-v1")).toBeVisible();
       } else {
         await expect(page.locator(".desktop-operations-action")).toBeVisible();

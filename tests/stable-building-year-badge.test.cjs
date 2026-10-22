@@ -34,7 +34,7 @@ assert.match(
 );
 assert.equal(
   (script.match(/escapeHtml\(cachedBuildingYearTextV6519\)/g) || []).length,
-  2
+  3
 );
 assert.match(script, /var listCardReusePoolV6521 = null/);
 assert.match(script, /target\.appendChild\(reusableCard\)/);

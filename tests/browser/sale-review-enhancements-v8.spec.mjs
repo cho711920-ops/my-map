@@ -29,7 +29,7 @@ for(const market of ['building_sale','land_sale'])test(market+' unified PC card 
   await page.screenshot({path:info.outputPath(market+'-card.png')});
   await page.setViewportSize({width:720,height:800});await expect(page.locator('html')).not.toHaveAttribute('data-sale-list-compact-v8');
   await page.setViewportSize({width:1280,height:800});await expect(page.locator('html')).not.toHaveAttribute('data-sale-list-compact-v8');
-  await page.evaluate(()=>{const s=window.getListingScrollContainerV2();s.scrollTop=6000;s.dispatchEvent(new Event('scroll'));});
+  await page.evaluate(()=>{const s=window.getListingScrollContainerV2();s.scrollTop=listVirtualOffsetsV2[60];s.dispatchEvent(new Event('scroll'));});
   await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   const anchor=await page.evaluate(()=>{const s=window.getListingScrollContainerV2(),top=s.getBoundingClientRect().top;const c=[...document.querySelectorAll('#list .item')].find(c=>c.getBoundingClientRect().bottom>top);return {id:c.dataset.propertyId,top:c.getBoundingClientRect().top};});
   await page.locator('[data-sale-layout="card"]').click();

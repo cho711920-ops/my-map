@@ -34,7 +34,7 @@ test('sale theme changes no lease, toolbar or map presentation and keeps narrow 
   await page.screenshot({path:info.outputPath('land-narrow.png')});
   await page.setViewportSize({width:isMobile?390:1280,height:844});
   await page.locator('#list .item-building-name').first().click();const drawer=page.locator('#unifiedDetailDrawerV8');
-  await expect(drawer.locator('.sale-overview-v2')).toHaveCSS('background-color','rgb(245, 247, 249)');
+  await expect(drawer.locator('.sale-overview-v2')).toHaveCSS('background-color','rgb(255, 255, 255)');
   await page.screenshot({path:info.outputPath('land-detail.png')});
   await page.evaluate(()=>JSUnifiedListingsV8.close());await mode(page,isMobile,'lease');
 });

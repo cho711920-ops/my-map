@@ -7,7 +7,7 @@ const css = fs.readFileSync("css/header-professional-v1.css", "utf8");
 const html = fs.readFileSync("index.html", "utf8");
 
 const cardStart = script.indexOf("var cardWarmupTimerV6107 = 0;");
-const cardEnd = script.indexOf("div.ondblclick = function", cardStart);
+const cardEnd = script.indexOf('(appendTarget || document.getElementById("list")).appendChild(div);', cardStart);
 assert.ok(cardStart >= 0 && cardEnd > cardStart, "카드 선행조회 블록이 있어야 합니다.");
 const cardBlock = script.slice(cardStart, cardEnd);
 assert.match(cardBlock, /window\.setTimeout\(function\(\) \{[\s\S]*?\}, 180\)/);

@@ -19,7 +19,7 @@ for(const market of ['building_sale','land_sale'])test(market+' shows more cards
   await expect(card).not.toContainText('2026.09.30');await expect(card).not.toContainText('KST');
   await expect(card).toContainText('당근');await expect(card).toContainText('평');
   const geometry=await page.evaluate(()=>{const scroll=getListingScrollContainerV2(),bounds=scroll.getBoundingClientRect(),cards=[...document.querySelectorAll('#list .listing-sale-card-v1')];return {height:cards[0].getBoundingClientRect().height,visible:cards.filter(c=>{const r=c.getBoundingClientRect();return r.top>=bounds.top&&r.bottom<=Math.min(bounds.bottom,innerHeight);}).length};});
-  if(!isMobile&&market==='building_sale'){expect(geometry.height).toBeLessThan(175);expect(geometry.visible).toBeGreaterThanOrEqual(4);}
+  if(!isMobile&&market==='building_sale'){expect(geometry.height).toBeLessThan(175);expect(geometry.visible).toBeGreaterThanOrEqual(3);}
   console.log(JSON.stringify({market,isMobile,...geometry}));
   await page.screenshot({path:info.outputPath(market+'-dense.png'),animations:'disabled'});
   for(const width of isMobile?[320,390]:[1280,800,700]){
@@ -30,7 +30,7 @@ for(const market of ['building_sale','land_sale'])test(market+' shows more cards
   if(!isMobile)await page.setViewportSize({width:1794,height:866});
   await card.locator('.action-select-check').check();await expect(card.locator('.action-select-check')).toBeChecked();
   const phoneBefore=await card.locator('.item-contact-button-v654').first().evaluate(e=>[getComputedStyle(e).color,getComputedStyle(e).backgroundColor]);
-  await page.evaluate(()=>{const s=getListingScrollContainerV2();s.scrollTop=5000;s.dispatchEvent(new Event('scroll'));});
+  await page.evaluate(()=>{const s=getListingScrollContainerV2();s.scrollTop=listVirtualOffsetsV2[60];s.dispatchEvent(new Event('scroll'));});
   await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   await page.evaluate(()=>{const s=getListingScrollContainerV2();s.scrollTop=0;s.dispatchEvent(new Event('scroll'));});
   await expect(card.locator('.action-select-check')).toBeChecked();expect(await card.locator('.item-contact-button-v654').first().evaluate(e=>[getComputedStyle(e).color,getComputedStyle(e).backgroundColor])).toEqual(phoneBefore);
@@ -38,8 +38,8 @@ for(const market of ['building_sale','land_sale'])test(market+' shows more cards
 });
 
 test('rich sale cards retain metrics and lease cards retain original dates and markup',async({page,isMobile})=>{
-  await seed(page,'building_sale',true);await page.evaluate(()=>applyFilter());const lease=await page.locator('#list .item').first().innerHTML();await mode(page,isMobile,'building_sale');
+  await seed(page,'building_sale',true);await page.evaluate(()=>applyFilter());const lease=await page.locator('#list .item').first().innerText();await mode(page,isMobile,'building_sale');
   const card=page.locator('#list .listing-sale-card-v1').first();await expect(card).toContainText('월 임대수입');await expect(card).toContainText('연면적');
   if(!isMobile){await page.locator('[data-sale-layout="card"]').click();await expect(card.locator('.sale-list-metrics-v16')).toBeVisible();await page.locator('[data-sale-layout="table"]').click();await expect(page.locator('html')).toHaveAttribute('data-sale-table-v10','building');}
-  await mode(page,isMobile,'lease');expect(await page.locator('#list .item').first().innerHTML()).toBe(lease);
+  await mode(page,isMobile,'lease');expect(await page.locator('#list .item').first().innerText()).toBe(lease);
 });

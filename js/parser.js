@@ -1275,7 +1275,7 @@ function getQuickDuplicateComparableLegacyV616(values) {
 }
 
 function findQuickDuplicateLegacyV616(values) {
-  var target = getQuickDuplicateComparableV616(values);
+  var target = getQuickDuplicateComparableLegacyV616(values);
 
   if (!target.address) return null;
 
@@ -1322,7 +1322,7 @@ function findQuickDuplicateLegacyV616(values) {
 }
 
 function quickAddFingerprintLegacyV616(values) {
-  var target = getQuickDuplicateComparableV616(values);
+  var target = getQuickDuplicateComparableLegacyV616(values);
 
   if (target.room) {
     return target.address + "|room|" + target.room;
@@ -1536,7 +1536,7 @@ function getQuickDuplicateComparableLegacyV626(values) {
 
 
 function findQuickDuplicateLegacyV626(values) {
-  var target = getQuickDuplicateComparableV616(values);
+  var target = getQuickDuplicateComparableLegacyV626(values);
 
   if (!target.address) return null;
 
@@ -1605,7 +1605,7 @@ function findQuickDuplicateLegacyV626(values) {
 
 
 function quickAddFingerprintLegacyV626(values) {
-  var target = getQuickDuplicateComparableV616(values);
+  var target = getQuickDuplicateComparableLegacyV626(values);
 
   return [
     target.address,

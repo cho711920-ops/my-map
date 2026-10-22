@@ -4,7 +4,19 @@
   // Substitute only the external map SDK boundary. Filtering, card rendering,
   // detail toggling, favorite persistence and mobile controls are real modules.
   window.map = {getBounds: function() {return {contain: function() {return true;}};}, getLevel: function() {return 5;}};
-  window.drawItems = function(items) {window.showList(items);};
+  window.drawItems = function(items) {
+    window.showList(items);
+    // This fixture replaces the map SDK renderer, including its confirmed
+    // count. Leaving the production HTML's pending badge would falsely keep
+    // phone controls in "loading" after the fixture has already loaded.
+    if (typeof window.updateMapListingCountV825 === "function") window.updateMapListingCountV825(items);
+    else {
+      var badge = document.getElementById("mapListingCountV825");
+      var value = document.getElementById("mapListingCountValueV825");
+      if (badge) {badge.dataset.pending = "false";badge.dataset.listingCount = String(items.length);}
+      if (value) value.textContent = items.length.toLocaleString("ko-KR") + "개";
+    }
+  };
   window.selectListingOnMapV844 = function() {};
   window.clearPinnedClusterSelectionV6515 = function() {};
   window.allItems = window.__fixtureItems.map(function(item) {

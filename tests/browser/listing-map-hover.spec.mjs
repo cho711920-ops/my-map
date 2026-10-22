@@ -57,7 +57,7 @@ test('desktop hover reuses one exact-location overlay and preserves selection, v
     return {dx:box.x+box.width/2-host.x-220,dy:box.bottom-host.y-280,w:box.width,h:box.height,color:getComputedStyle(el,'::before').backgroundColor};
   });
   expect(Math.abs(tip.dx)).toBeLessThan(1);expect(Math.abs(tip.dy)).toBeLessThan(1);
-  expect(tip.w).toBe(20);expect(tip.h).toBe(26);expect(tip.color).toBe('rgb(220, 38, 38)');
+  expect(tip.w).toBe(16);expect(tip.h).toBe(20);expect(tip.color).toBe('rgb(220, 38, 38)');
   await first.locator('.item-roadview-btn').hover();
   await second.locator('.item-building-name').hover();
   expect(await state(page)).toEqual(before);

@@ -58,9 +58,9 @@ test("land cards use compact-source land use once, keep zoning, and hide the leg
   await expect(badge).toBeVisible();
   await expect(card.locator(".item-address-room-v650")).not.toContainText("3층");
   await expect(card).not.toContainText("호실 -");
-  await expect(card.locator(".listing-land-info-v1")).toContainText("용도지역");
-  await expect(card.locator(".listing-land-info-v1")).toContainText("제2종일반주거지역");
-  await expect(card.locator(".listing-land-info-v1")).not.toContainText("지목");
+  await expect(card.locator(".sale-card-facts-v2")).toContainText("용도지역");
+  await expect(card.locator(".sale-card-facts-v2")).toContainText("제2종일반주거지역");
+  await expect(card.locator(".sale-card-facts-v2")).not.toContainText("지목");
   expect(((await card.innerText()).match(/지목/g) || []).length).toBe(1);
   await expect(card.locator(".building-sale-info-v1")).toHaveCount(0);
   await expectLandIdentityUnchanged(page);
@@ -88,7 +88,7 @@ test("missing land use is explicit even when an old floor or room is present", a
   await expect(card.locator(".item-room-badge.land-use-badge-v1")).toHaveText("지목 미확인");
   await expect(card).not.toContainText("301호");
   await expect(card).not.toContainText("호실 -");
-  await expect(card.locator(".listing-land-info-v1")).toContainText("제2종일반주거지역");
+  await expect(card.locator(".sale-card-facts-v2")).toContainText("제2종일반주거지역");
   expect(((await card.innerText()).match(/지목/g) || []).length).toBe(1);
   await expectLandIdentityUnchanged(page);
 });
@@ -150,6 +150,6 @@ test("land-use decoration preserves lease floors while building sales use area i
   await expect(page.locator("#list .land-use-badge-v1")).toHaveCount(0);
   await selectMarket(page, isMobile, "building_sale");
   await expect(page.locator("#list .building-sale-scope-v1, #list .building-sale-floor-v1")).toHaveCount(0);
-  await expect(page.locator("#list .building-sale-area-info-v1")).toHaveText("면적 정보 미확인");
+  await expect(page.locator("#list .sale-list-missing-v16")).toHaveText("면적 정보 미제공");
   await expect(page.locator("#list .land-use-badge-v1")).toHaveCount(0);
 });

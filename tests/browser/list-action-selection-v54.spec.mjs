@@ -5,9 +5,16 @@ const source=await readFile('js/map.js','utf8');
 const ast=ts.createSourceFile('map.js',source,ts.ScriptTarget.Latest,true);
 const selector=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='selectListingOnMapV844').getText(ast);
 const card=(page,id)=>page.locator('#list .item[data-property-id="'+id+'"]');
-test.beforeEach(async({page,context})=>{
+test.beforeEach(async({page,context,isMobile})=>{
   await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+  if(isMobile){
+    // This scenario uses the list beside an open detail. Portrait phones use
+    // a covering full-screen detail, so exercise their supported wide layout.
+    await page.setViewportSize({width:930,height:530});
+    await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
+    await page.evaluate(()=>JSMapListPanelV1.open());
+  }
   await page.locator('#fixtureControls').evaluate(el=>el.remove());
   await page.addScriptTag({content:selector});
   await page.evaluate(()=>{

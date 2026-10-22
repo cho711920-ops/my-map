@@ -5,11 +5,12 @@ test.beforeEach(async({page,context})=>{
 });
 async function mode(page,isMobile,value){await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption(value);if(isMobile)await page.locator('[data-mobile-view="list"]').click();}
 async function open(page,isMobile,value='building_sale'){await mode(page,isMobile,value);await page.locator('#list .item-building-name').first().click();return page.locator('#unifiedDetailDrawerV8');}
-test('fixed sale summary stays visible while reading and is removed from lease detail',async({page,isMobile},info)=>{
+test('sale summary preserves exact conditions and navigation stays visible while reading',async({page,isMobile},info)=>{
   const drawer=await open(page,isMobile),summary=drawer.locator('.sale-fixed-summary-v9');
   await expect(summary).toContainText('5억원');await expect(summary).toContainText('괴정동 3-3');
   await drawer.locator('.unified-detail-body-v8').evaluate(el=>el.scrollTop=el.scrollHeight);
-  await expect(summary).toBeInViewport();
+  await expect(drawer.locator('.sale-detail-pager-v12')).toBeInViewport();
+  await summary.scrollIntoViewIfNeeded();
   const buttons=summary.locator('[data-sale-unit]');const a=await buttons.nth(0).boundingBox(),b=await buttons.nth(1).boundingBox();expect(Math.abs(a.y-b.y)).toBeLessThan(2);expect(a.height).toBeLessThan(35);
   await page.screenshot({path:info.outputPath('sale-fixed-summary.png')});
   await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();await mode(page,isMobile,'lease');await page.locator('#list .item-building-name').first().click();await expect(drawer.locator('.sale-fixed-summary-v9')).toHaveCount(0);
@@ -70,7 +71,7 @@ test('area units switch across list, detail, comparison and report without chang
   await mode(page,isMobile,'land_sale');const original=await page.evaluate(()=>JSON.stringify(window.allItems));
   await page.locator('#list .item-building-name').click();const drawer=page.locator('#unifiedDetailDrawerV8');await drawer.locator('[data-sale-unit="m2"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-sale-area-unit-v9','m2');
-  await expect(page.locator('#list .land-card-metrics-v4 .sale-unit-m2-v9').first()).toBeVisible();await expect(page.locator('#list .land-card-metrics-v4 .sale-unit-py-v9').first()).toBeHidden();
+  await expect(page.locator('#list .sale-list-metrics-v16 .sale-unit-m2-v9').first()).toBeVisible();await expect(page.locator('#list .sale-list-metrics-v16 .sale-unit-py-v9').first()).toBeHidden();
   await drawer.locator('[data-sale-action="report"]').click();const dialog=page.locator('.sale-single-report-dialog-v8');await expect(dialog.locator('.sale-review-facts-v8 .sale-unit-m2-v9').first()).toBeVisible();
   await dialog.locator('[data-sale-unit="py"]').click();await expect(dialog.locator('.sale-review-facts-v8 .sale-unit-py-v9').first()).toBeVisible();await dialog.locator('[data-sale-close]').click();
   expect(await page.evaluate(()=>JSON.stringify(window.allItems))).toBe(original);

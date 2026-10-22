@@ -23,12 +23,12 @@ test('land list uses parcel metrics and actions even when collected building fie
   await expect(card.locator('.item-building-year-v650,.item-building-elevator-v843')).toHaveCount(0);
   await expect(card).not.toContainText(/층수|301호|준공|임대조건/);
   await expect(card.locator('.listing-sale-price-v1')).toContainText('3억원');
-  await expect(card.locator('.land-card-metrics-v4')).toContainText('100평');
-  await expect(card.locator('.land-card-metrics-v4')).toContainText('330.6㎡');
-  await expect(card.locator('.land-card-metrics-v4')).toContainText('300만원');
-  await expect(card.locator('.land-card-conditions-v4')).toContainText('제2종일반주거지역');
-  await expect(card.locator('.land-card-conditions-v4')).toContainText('중로한면');
-  await expect(card.locator('.land-card-conditions-v4')).toContainText('장방형');
+  await expect(card.locator('.sale-list-metrics-v16')).toContainText('100평');
+  await expect(card.locator('.sale-list-metrics-v16')).toContainText('330.58㎡');
+  await expect(card.locator('.sale-list-metrics-v16')).toContainText('300만원');
+  await expect(card.locator('.sale-card-facts-v2')).toContainText('제2종일반주거지역');
+  await expect(card.locator('.sale-card-facts-v2')).toContainText('중로한면');
+  await expect(card.locator('.sale-card-facts-v2')).toContainText('장방형');
   await expect(card.locator('.item-edit-btn-v630')).toHaveAttribute('aria-label','매매정보 수정');
   await expect(card.locator('.land-parcel-lookup-v4')).toHaveText('필지조회');
   await expect(card.locator('.item-memo-toggle')).toBeVisible();
@@ -52,9 +52,9 @@ test('land card fits a narrow phone without losing its actions',async({page,isMo
 test('land list does not invent area, unit price, road or shape when absent',async({page,isMobile},info)=>{
   await land(page,isMobile,{});
   const card=page.locator('#list .item');
-  await expect(card.locator('.land-card-metrics-v4')).toContainText('면적 미제공');
-  await expect(card.locator('.land-card-metrics-v4')).toContainText('산정 불가');
-  await expect(card.locator('.land-card-metrics-v4')).not.toContainText(/0평|0만원|100평/);
+  await expect(card.locator('.sale-list-missing-v16')).toHaveText('면적 정보 미제공');
+  await expect(card.locator('.sale-list-metrics-v16')).toHaveCount(0);
+  await expect(card).not.toContainText(/0평|0만원|100평/);
   await expect(card.locator('.sale-card-facts-v2')).toHaveCount(0);
   await expect(card).not.toContainText(/층수|301호|준공/);
   await page.screenshot({path:info.outputPath('land-list-missing-v4.png')});

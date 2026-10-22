@@ -40,7 +40,8 @@ test("reload skips the shared geocode download when source or local coordinates 
 test("reload uses one complete full-list snapshot without a temporary zero or partial list", () => {
   assert.match(html, /initial-listings-cache-v1\.js\?v=1\.2\.0-full-snapshot/);
   assert.match(html, /script\.js\?v=6\.10\.8-favorite-property-id&amp;full-list-cache-v2=1/);
-  assert.match(html, /map\.js\?v=8\.2\.22-full-initial-render&amp;full-list-cache-v2=1/);
+  const mapUrl = new URL(html.match(/src="(js\/map\.js\?[^"]+)"/)[1].replaceAll("&amp;", "&"), "https://fixture.test/");
+  assert.equal(mapUrl.searchParams.get("full-list-cache-v2"), "1");
   assert.match(script, /window\.jsInitialFullListingsLoadingV1 && !\(allItems \|\| \[\]\)\.length/);
   assert.match(script, /전체 매물 한 번에 준비 중/);
   assert.doesNotMatch(initialCache, /MAX_FAST_ITEMS|slice\(0,\s*80\)/);

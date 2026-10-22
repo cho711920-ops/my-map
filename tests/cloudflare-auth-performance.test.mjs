@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import {versionHtmlAssets} from "../tools/build-cloudflare-assets.mjs";
 
 const html = fs.readFileSync("index.html", "utf8");
 const auth = fs.readFileSync("js/auth-gate-v1.js", "utf8");
@@ -36,7 +37,16 @@ test("the authentication gate isolates the application and fits mobile viewports
 });
 
 test("versioned assets receive immutable caching and security headers", () => {
-  assert.doesNotMatch(html, /(?:src|href)="(?:js|css)\/[^"]+\.(?:js|css)"/);
+  const assets = [...html.matchAll(/(?:src|href)="((?:js|css)\/[^"]+)"/g)]
+    .map(match => new URL(match[1].replaceAll("&amp;", "&"), "https://fixture.test/"));
+  assert.ok(assets.length > 0);
+  const digests = new Map(assets.map(url => [url.pathname.slice(1), "1234567890abcdef1234567890abcdef"]));
+  const built = versionHtmlAssets(html, digests).content;
+  const builtAssets = [...built.matchAll(/(?:src|href)="(\/(?:js|css)\/[^"]+)"/g)];
+  assert.equal(builtAssets.length, assets.length);
+  for (const match of builtAssets) {
+    assert.equal(new URL(match[1].replaceAll("&amp;", "&"), "https://fixture.test/").searchParams.get("build"), "1234567890abcdef");
+  }
   assert.match(headers, /\/js\/\*[\s\S]*?max-age=31536000, immutable/);
   assert.match(headers, /\/css\/\*[\s\S]*?max-age=31536000, immutable/);
   assert.match(headers, /Content-Security-Policy:/);

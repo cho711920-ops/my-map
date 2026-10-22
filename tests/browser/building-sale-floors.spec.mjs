@@ -102,6 +102,19 @@ async function expectReadableAreaBadges(area) {
   }
 }
 
+async function expectReadableListMetrics(area) {
+  await expect(area).toBeVisible();
+  await expect(area.locator('dt')).toHaveText(['전용', '대지', '연면적', '건축(건평)']);
+  for (const metric of await area.locator(':scope > div').all()) {
+    await expect(metric.locator('dd')).toBeVisible();
+    expect(await metric.locator('dd').evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(13);
+    expect(await metric.evaluate(element => {
+      const bounds=element.closest('.item').getBoundingClientRect(),rect=element.getBoundingClientRect();
+      return rect.left>=bounds.left-1&&rect.right<=bounds.right+1&&element.scrollWidth<=element.clientWidth+1;
+    })).toBe(true);
+  }
+}
+
 for (const width of [null, 320, 375]) {
   test(`building-sale area badges remain readable and contained in list and detail at ${width || "default"} viewport width`, async ({page, isMobile}, testInfo) => {
     test.skip(width !== null && !isMobile, "narrow-width cases target the smartphone layout");
@@ -112,7 +125,7 @@ for (const width of [null, 320, 375]) {
         grossAreaM2: 444.34, buildingAreaM2: 134.05}
     });
     await buildingList(page, isMobile);
-    await expectReadableAreaBadges(page.locator("#list .building-sale-area-info-v1"));
+    await expectReadableListMetrics(page.locator("#list .sale-list-metrics-v16"));
     await page.screenshot({path: testInfo.outputPath("building-sale-area-badges-list.png")});
     await page.locator("#list .item-building-name").click();
     const drawer = page.locator("#unifiedDetailDrawerV8");
@@ -128,10 +141,10 @@ for (const width of [null, 320, 375]) {
 
 const cases = [
   {name: "Hongdo Cheongu villa first floor in a four-floor building", room: "1/4층", saleCategory: "villa",
-    expectedAreas: ["전용", "11.8평"],
+    expectedAreas: ["전용", "11.76평"],
     saleDetails: {scope: "unit", saleExtent: "unit", saleTargetFloor: "1층", saleTargetRoom: "101호", totalFloors: 4, exclusiveAreaM2: 38.88}},
   {name: "confirmed whole building", room: "지하1층", saleCategory: "building",
-    expectedAreas: ["대지", "67.6평", "연면적", "134.4평", "건축", "40.6평"],
+    expectedAreas: ["대지", "67.61평", "연면적", "134.41평", "건축", "40.55평"],
     saleDetails: {scope: "unit", saleExtent: "whole_building", floorScope: "whole_building", aboveGroundFloors: 5, belowGroundFloors: 1,
       landAreaM2: 223.5, grossAreaM2: 444.34, buildingAreaM2: 134.05}},
   {name: "unknown sale extent with original floor evidence", room: "4층", saleCategory: "house",
@@ -150,12 +163,12 @@ for (const sample of cases) {
     await configure(page, scenario);
     await buildingList(page, isMobile);
     await expect(page.locator("#list .building-sale-info-v1, #list .building-sale-scope-v1, #list .building-sale-floor-v1, #list .item-room-badge")).toHaveCount(0);
-    const listArea = page.locator("#list .building-sale-area-info-v1");
+    const listArea = page.locator("#list .sale-list-metrics-v16, #list .sale-list-missing-v16");
     await expect(listArea).toHaveCount(1);
     await expect(listArea).toBeVisible();
-    for (const text of sample.expectedAreas) await expect(listArea).toContainText(text);
+    for (const text of sample.expectedAreas) await expect(listArea).toContainText(text.replace('미확인', '미제공'));
     if (sample.saleDetails.exclusiveAreaM2) await expect(listArea).not.toContainText(/대지|연면적|건축/);
-    if (sample.expectedAreas[0] === "면적 정보 미확인") await expect(listArea).toHaveText("면적 정보 미확인");
+    if (sample.expectedAreas[0] === "면적 정보 미확인") await expect(listArea).toHaveText("면적 정보 미제공");
     await expect(page.locator("#list .item-building-name")).toContainText("청우빌라");
     await page.screenshot({path: testInfo.outputPath("building-sale-no-scope-floor-list.png")});
     await page.locator("#list .item-building-name").click();

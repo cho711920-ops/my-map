@@ -36,11 +36,11 @@ test("Korean type dropdown filters old codes and new labels together without cha
   await filter.selectOption({label: "오피스텔"});
   if (isMobile) await page.locator(".js-phone-filter-apply").click();
   await expect(page.locator("#list .item")).toHaveCount(2);
-  await expect(page.locator("#list .type-badge")).toHaveText(["오피스텔", "오피스텔"]);
+  await expect(page.locator("#list .sale-card-category-v5")).toHaveText(["오피스텔", "오피스텔"]);
   await page.locator("#list .item").filter({hasText: "테스트 건물매매"}).locator(".item-building-name").click();
   const drawer = page.locator("#unifiedDetailDrawerV8");
   await expect(drawer).toHaveAttribute("aria-hidden", "false");
-  if (isMobile) await expect(drawer.locator(".phone-detail-facts-v2")).toContainText("오피스텔");
+  if (isMobile) await expect(drawer.locator(".sale-overview-v2")).toContainText("오피스텔");
   await expect(drawer).not.toContainText(/\bA02\b/);
   const identity = await page.evaluate(() => {
     const old = window.allItems.find(item => item.propertyId === "FIXTURE-BUILDING");

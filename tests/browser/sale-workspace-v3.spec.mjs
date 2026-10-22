@@ -59,7 +59,8 @@ test('land dossier uses navigable condition tables and a separate asset summary'
   const drawer=page.locator('#unifiedDetailDrawerV8'),body=drawer.locator('.unified-detail-body-v8');
   await expect(drawer.locator('.sale-dossier-nav-v3')).toHaveCount(1);
   await expect(drawer.locator('.sale-land-metrics-v3')).toContainText('제2종일반주거지역');
-  await expect(drawer.locator('.sale-photo-slot-v3')).toBeHidden();
+  await expect(drawer.locator('.sale-photo-slot-v3')).toBeVisible();
+  await expect(drawer.locator('.sale-photo-slot-v3')).toContainText('등록된 사진 없음');
   await drawer.screenshot({path:info.outputPath('land-dossier-summary.png'),animations:'disabled'});
   await drawer.locator('[data-sale-section-target="land"]').click();
   await expect.poll(()=>body.evaluate(e=>e.scrollTop)).toBeGreaterThan(50);

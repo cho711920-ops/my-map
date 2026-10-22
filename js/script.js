@@ -5017,6 +5017,9 @@ function addListItem(item, appendTarget) {
     div.addEventListener("click", function(event) {
         var action = event.target && event.target.closest && event.target.closest("button,a");
         if (!action || action.disabled || action.getAttribute("aria-disabled") === "true" || !div.closest("#list")) return;
+        // Removal owns its confirmation and closes only the removed detail.
+        // Do not move selection or discard another detail before confirmation.
+        if (action.matches(".favorite-map-remove-v1")) return;
         selectListingForActionV54(item);
     }, true);
     div.onpointerenter = function() {

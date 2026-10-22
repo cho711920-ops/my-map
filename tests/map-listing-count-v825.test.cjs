@@ -24,11 +24,11 @@ function extractFunction(source, name) {
 assert.match(html, /id="mapListingCountV825"[^>]*role="status"[^>]*aria-live="polite"/);
 assert.match(html, /<span>매물<\/span><strong id="mapListingCountValueV825">불러오는 중</);
 assert.ok(html.includes("app-final-overrides-v690.css?v=1.0.0&amp;map-listing-count-v825=1"));
-assert.ok(html.includes("map.js?v=8.2.22-full-initial-render&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;map-listing-count-v825=1"));
+const mapUrl = new URL(html.match(/src="(js\/map\.js\?[^"]+)"/)[1].replaceAll("&amp;", "&"), "https://fixture.test/");
+for (const flag of ["full-list-cache-v2", "polygon-filter-v661", "trade-market-v1", "map-listing-count-v825"]) assert.equal(mapUrl.searchParams.get(flag), "1");
 assert.match(css, /\.map-listing-count-v825\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?top:\s*12px;[\s\S]*?left:\s*12px;/);
 assert.match(css, /\.js-mobile-app-v1 \.map-listing-count-v825\s*\{[\s\S]*?top:\s*calc\(var\(--jsm-header-height\) \+ 8px\);/);
-assert.match(css, /body\.ai-side-panel-open \.map-listing-count-v825\s*\{[\s\S]*?left:\s*492px;/);
-assert.match(css, /max-width:\s*1300px[\s\S]*?body\.ai-side-panel-open \.map-listing-count-v825\s*\{[\s\S]*?left:\s*432px;/);
+assert.doesNotMatch(css, /body\.ai-side-panel-open \.map-listing-count-v825/, "map count stays anchored to its map container");
 assert.match(css, /\.map-listing-count-v825\s*\{[\s\S]*?pointer-events:\s*none;/);
 assert.match(mapSource, /function clearMap\(\)[\s\S]*?overlays = \[\];[\s\S]*?updateMapListingCountV825\(\[\]\);/);
 assert.match(mapSource, /function drawMapClustersOnlyV639\(items\)[\s\S]*?overlays\.push\(overlay\);[\s\S]*?updateMapListingCountV825\(items\);/);
