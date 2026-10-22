@@ -1,5 +1,11 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-22 실패 재수집 버튼 비활성화 v72 / 확장 1.1.24
+
+- active이면 전체 버튼을 잠그던 UI와 기존 실패key를 재등록하지 않던 background 둘 다 보완. 동일 시장/동일 run의 실패·부분완료만 active 중 수동 재실행 허용. 대기 중(탭null)이면 실패부터, 실제 수집 중이면 현재 지역 뒤에 추가. 다른 시장/전체 잠금·현재 탭·체크포인트·원래 재시도 시각 유지. 중복 클릭·오래된 보고 차단/선택 공급처 circuit만 해제.
+- 전체Node1898/1898, PC/모바일22통과. 마지막 idle reload 미래시각 보호 후2 재검사·업데이트/대기 유지 등runtime31통과. lint/type/diff 통과. 제품b69e9f4. [검수·범위](docs/active-failed-retry-v72-20261022.txt).
+- **설치 파일4개는 LocalAppData 전용 확장 폴더에 SHA256 검증 배치 완료**, 프로필 강제 종료 안 함. 사용자에게 설정창 새로고침 안내. 새 코드가 탭null+알람10초이상 미래의 retry-wait에서만 안전 reload 및 설정창 재열기. 실제 수집 중에는 적용 대기. **실제 메모리 실행1.1.24·당근5구 재실행/완료는 아직 확인 전**. 기존 서버v71 유지, 불필요한 Worker 재배포 없음.
+
 ## 2026-10-22 당근 전체 실패 v71
 
 - 오늘 11:26 첫 유성구 목록에서 `PersistedQueryNotFound PERSISTED_QUERY_NOT_IN_LIST` 재현. 다른4구는 공급처 circuit 영향. 최신 공개 cluster 첫/다음/상세 operation3개 갱신·Worker와 live 검사 공유. 기존 REGION/CELL·필터·원본번호·마지막 페이지 증명 유지, 다른 지역 feed로 바꾸지 않음.
