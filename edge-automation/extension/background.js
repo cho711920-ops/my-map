@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.24";
+const BACKGROUND_BUILD = "1.1.25";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -943,6 +943,25 @@ async function reconcileRunAfterUpdate(state, config) {
   for (const item of report.items || []) {
     const source = cleanSource(item.source);
     const counts = item.counts || {};
+    const target = state.allTargets.find(target => targetKey(target) === item.key);
+    const retrySaveFailure = source === "naver" && ["partial", "completed"].includes(item.status) &&
+      enabled.has(item.key) && target && Number(counts.failed) > 0 &&
+      Number(target.retryCycle || 0) < MAX_DEFERRED_RETRY_CYCLES &&
+      Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS;
+    if (retrySaveFailure) {
+      item.previousStatus = item.status;
+      item.previousMessage = item.message || "";
+      item.status = "retry_wait";
+      item.finishedAt = null;
+      item.updatedAt = Date.now();
+      item.message = `저장 실패 ${counts.failed}건 · 최신 목록으로 자동 재확인`;
+      state.completedKeys = state.completedKeys.filter(key => key !== item.key);
+      if (!state.retryQueue.some(target => targetKey(target) === item.key)) {
+        state.retryQueue.push({...target, retryCycle: Number(target.retryCycle || 0) + 1});
+      }
+      changed += 1;
+      continue;
+    }
     const removedGongsil = source === "gongsil" && !enabled.has(item.key);
     const addressOnly = source === "daangn" && ["retry_wait", "retrying", "partial"].includes(item.status) &&
       counts.version === 2 && counts.listComplete === true && Number(counts.expected) > 0 &&
@@ -972,7 +991,7 @@ async function reconcileRunAfterUpdate(state, config) {
     state.retryQueue = [];
     state.retryAt = null;
     await saveRunReport(report);
-    await appendLog({level: "info", message: `업데이트 완료 판정 정리 ${changed}개 · 완료 지역 보존 · 제외 대상 재실행 안 함`});
+    await appendLog({level: "info", message: `업데이트 수집 판정 정리 ${changed}개 · 저장 실패 자동 재확인 · 완료 지역 보존`});
   }
   await saveRunState(state);
   return state;
@@ -1530,6 +1549,14 @@ async function finishCurrentTarget(result, senderTabId) {
     const addressDeferred = warningCompletion && counts.version === 2 && counts.listComplete &&
       Number(counts.addressDeferred || 0) > 0 && !Number(counts.failed || 0);
     const partial = !addressDeferred && (result.ok !== true || payloadPartial);
+    // Exhausting the list is not a successful save. Keep operational failures
+    // in the bounded retry queue; address-only holds must not rescan all day.
+    const retryIncompleteNaver = partial && cleanSource(target.source) === "naver" &&
+      counts.failed > 0 && Number(target.retryCycle || 0) < MAX_DEFERRED_RETRY_CYCLES &&
+      Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS;
+    if (retryIncompleteNaver && !state.retryQueue.some(item => targetKey(item) === targetKey(target))) {
+      state.retryQueue.push({...target, retryCycle: Number(target.retryCycle || 0) + 1});
+    }
     await appendLog({
       level: partial ? "warning" : "success",
       source: target.source,
@@ -1542,15 +1569,18 @@ async function finishCurrentTarget(result, senderTabId) {
         ? `${target.label || target.source} ${resultNotice(result)}`
         : `${target.label || target.source} 자동수집 완료${presenceNotice ? " · " + presenceNotice : ""}`
     });
-    await updateRunReport(state, target, addressDeferred ? "deferred" : partial ? "partial" : "completed", {
-      finishedAt: Date.now(),
+    await updateRunReport(state, target, retryIncompleteNaver ? "retry_wait" : addressDeferred ? "deferred" : partial ? "partial" : "completed", {
+      finishedAt: retryIncompleteNaver ? null : Date.now(),
       elapsedMs,
-      message: addressDeferred
+      message: retryIncompleteNaver ? `저장 실패 ${counts.failed}건 · 다른 지역 처리 후 최신 목록으로 자동 재확인` : addressDeferred
         ? `수집완료 · 정확한 지번 미제공 ${Number(counts.addressDeferred).toLocaleString("ko-KR")}건 지도 등록 보류`
         : partial ? resultNotice(result) : "수집 완료" + (presenceNotice ? " · " + presenceNotice : ""),
       counts, replaceCounts: true, progressStage: null, diagnostics: resultDiagnostics(result)
     });
-    rememberCompletedTarget(state, target);
+    if (retryIncompleteNaver) {
+      await appendLog({level: "warning", source: target.source, target: target.label,
+        message: `목록 확인 후 저장 실패 ${counts.failed}건이 남아 자동 재확인을 예약했습니다. 실패 묶음 재전송 없이 최신 목록으로 대조합니다.`});
+    } else rememberCompletedTarget(state, target);
     await clearSourceCircuit(state, target);
   } else {
     const message = failureMessage;

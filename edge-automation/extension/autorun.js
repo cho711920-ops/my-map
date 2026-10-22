@@ -1,7 +1,7 @@
 "use strict";
 
 // This file is read from disk even when Edge retains the old manifest/worker.
-const EXPECTED_COLLECTOR_BUILD = "1.1.24";
+const EXPECTED_COLLECTOR_BUILD = "1.1.25";
 
 const statusElement = document.getElementById("status");
 document.title = `JS 자동수집 v${chrome.runtime.getManifest().version} 실행`;

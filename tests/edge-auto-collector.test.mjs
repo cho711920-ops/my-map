@@ -12,7 +12,7 @@ test("Edge extension schedules one sequential daily collector run", () => {
   const background = read("edge-automation/extension/background.js");
   const content = read("edge-automation/extension/content.js");
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.version, "1.1.24");
+  assert.equal(manifest.version, "1.1.25");
   assert.ok(background.includes(`const BACKGROUND_BUILD = "${manifest.version}";`));
   assert.ok(manifest.content_scripts.some((entry) => entry.world === "MAIN" && entry.js.includes("auto-bridge.js")));
   assert.match(background, /const SOURCE_ORDER = \{ naver: 1, daangn: 2, gongsil: 3 \}/);

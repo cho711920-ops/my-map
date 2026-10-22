@@ -31,7 +31,14 @@ function database(t, beforeRun = async () => {}) {
     };
   };
   const env = { COLLECTOR_ACCESS_KEY: "test-only", DB: {
-    prepare, async batch(statements) { return Promise.all(statements.map(statement => statement.run())); }
+    prepare, async batch(statements) {
+      sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.run());
+        sqlite.exec('COMMIT'); return results;
+      } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+    }
   } };
   const call = async (body, key = "test-only") => {
     const response = await handleCollectorApi(new Request("https://js-map.com/api/collector", {
@@ -132,6 +139,42 @@ test('Naver batch counters and exact result commit together without a later sepa
   const ledger=f.sqlite.prepare('SELECT state,result_json FROM mutation_results WHERE request_id=?').get(save.requestId);
   assert.equal(ledger.state,'completed');assert.deepEqual(JSON.parse(ledger.result_json),response.result);
   assert.equal(JSON.parse(f.sqlite.prepare('SELECT totals_json FROM collector_sessions WHERE id=?').get(save.sessionId).totals_json).created,1);
+});
+
+test('temporary D1 receipt connection loss retries only the guarded receipt transaction, never the original source writes',async t=>{
+  const f=database(t),batch=f.env.DB.batch; let attempts=0,sourceBatches=0;
+  f.env.DB.batch=async statements=>{
+    if(!statements.some(s=>s.sql.includes('INSERT INTO mutation_results'))){
+      if(statements.some(s=>/^INSERT INTO listings/.test(s.sql)))sourceBatches++;
+      return batch(statements);
+    }
+    attempts++;
+    if(attempts<3)throw Error('D1_ERROR: Network connection lost.');
+    return batch(statements);
+  };
+  const response=await f.call(save);
+  assert.equal(response.result.ok,true);assert.equal(attempts,3);assert.equal(sourceBatches,1);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM listing_sources').get().n,1);
+  assert.equal(JSON.parse(f.sqlite.prepare('SELECT totals_json FROM collector_sessions WHERE id=?').get(save.sessionId).totals_json).created,1);
+  assert.equal((await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId:save.requestId})).result.ready,true);
+});
+
+test('a committed receipt whose response is lost never overwrites later census counters on retry',async t=>{
+  const f=database(t),batch=f.env.DB.batch;let attempts=0;
+  f.env.DB.batch=async statements=>{
+    if(!statements.some(s=>s.sql.includes('INSERT INTO mutation_results')))return batch(statements);
+    const output=await batch(statements);attempts++;
+    if(attempts===1){
+      f.sqlite.prepare("UPDATE collector_sessions SET totals_json=json_set(totals_json,'$.created',99) WHERE id=?").run(save.sessionId);
+      throw Error('D1_ERROR: Network connection lost.');
+    }
+    return output;
+  };
+  const response=await f.call(save);
+  assert.equal(response.result.ok,true);assert.equal(attempts,2);
+  assert.equal(response.result.created,1);
+  assert.equal(JSON.parse(f.sqlite.prepare('SELECT totals_json FROM collector_sessions WHERE id=?').get(save.sessionId).totals_json).created,99);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM listings').get().n,1);
 });
 
 test('an uncertain receipt yields a bounded read-only wait, without resolving or replaying it',async t=>{

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const code = fs.readFileSync(new URL('../edge-automation/extension/autorun.js', import.meta.url), 'utf8');
 
-async function runAutorun(states, runResponses = [{ ok: true, resumed: true }], manifestVersion = '1.1.24') {
+async function runAutorun(states, runResponses = [{ ok: true, resumed: true }], manifestVersion = '1.1.25') {
   const status = {};
   const messages = [];
   let reloads = 0;
@@ -28,7 +28,7 @@ async function runAutorun(states, runResponses = [{ ok: true, resumed: true }], 
 }
 
 test('transient worker status failures reconnect without reloading the running extension', async () => {
-  const result = await runAutorun([{ ok: false }, 'no-callback', { ok: true, backgroundBuild: '1.1.24' }]);
+  const result = await runAutorun([{ ok: false }, 'no-callback', { ok: true, backgroundBuild: '1.1.25' }]);
   assert.equal(result.reloads, 0);
   assert.equal(result.messages.filter(message => message.type === 'JS_AUTO_GET_STATE').length, 3);
   assert.equal(result.messages.filter(message => message.type === 'JS_AUTO_RUN_REQUEST').length, 1);
@@ -67,7 +67,7 @@ test('missing or unavailable build state stops after bounded attempts without re
 });
 
 test('failed run requests never unload a verified worker even when the response has no message', async () => {
-  const result = await runAutorun([{ ok: true, backgroundBuild: '1.1.24' }], [{ ok: false }]);
+  const result = await runAutorun([{ ok: true, backgroundBuild: '1.1.25' }], [{ ok: false }]);
   assert.equal(result.reloads, 0);
   assert.equal(result.messages.filter(message => message.type === 'JS_AUTO_RUN_REQUEST').length, 4);
   assert.equal(result.closed, 0);

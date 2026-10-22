@@ -94,6 +94,23 @@ test("upgrade settles proven address holds and excludes removed Gongsil without 
   assert.deepEqual(h.data[CONFIG],configBefore);
 });
 
+test('upgrade requeues an old Naver partial save failure once, retaining other districts and original wait checkpoints', async () => {
+  const h=harness({phase:'retry-wait',currentTabId:null,retryAt:clock+15*minute});
+  h.data[REPORT].items[0].status='partial';
+  h.data[REPORT].items[0].source='naver';
+  h.data[REPORT].items[0].counts={expected:6289,processed:6289,failed:1};
+  h.data[RUN].retryQueue=[{...h.data[RUN].targets[3],pendingSaveRetryAtV56:clock+15*minute}];
+  await h.context.reconcileRunAfterUpdate(h.data[RUN],h.data[CONFIG]);
+  assert.equal(h.data[REPORT].items[0].status,'retry_wait');
+  assert.equal(h.data[RUN].targets[0].key,'naver-0');
+  assert.equal(h.data[RUN].targets[0].retryCycle,1);
+  assert.equal(h.data[RUN].targets.find(target=>target.key==='naver-3').pendingSaveRetryAtV56,clock+15*minute);
+  const snapshot=structuredClone(h.data[RUN]);
+  await h.context.reconcileRunAfterUpdate(h.data[RUN],h.data[CONFIG]);
+  assert.deepEqual(h.data[RUN],snapshot);
+  assert.equal(h.navigation.length,0);
+});
+
 test("upgrade keeps real Daangn failures and incomplete proofs in the remaining queue", async () => {
   for (const override of [{failed:1},{listComplete:false},{version:undefined}]) {
     const h = harness();
@@ -349,6 +366,31 @@ for (const phase of ["between-targets", "retrying", "resuming", "starting", "unk
     assert.match(h.navigation[0], /test=3$/);
   });
 }
+
+test('a finished Naver census with one save failure queues bounded recovery instead of silently settling partial', async () => {
+  const h = harness({targetStartedAt: clock - minute, startedAt: clock - 2 * minute});
+  const target = h.data[RUN].targets[3];
+  await h.context.finishCurrentTarget({ok:true, runId:'cycle',targetRunId:'seo',result:{source:'naver',partial:true,
+    totals:{failed:1}, session:{completeRequested:true,expectedCount:6289,processedCount:6289,failed:1,state:'partial'}}},42);
+  const item = h.data[REPORT].items.find(item => item.key === target.key);
+  assert.equal(item.status,'retry_wait'); assert.equal(item.finishedAt,null);
+  assert.match(item.message,/저장 실패 1건/);
+  assert.equal(h.data[RUN].retryQueue.filter(item => item.key === target.key).length,1);
+  assert.equal(h.data[RUN].retryQueue.find(item => item.key === target.key).retryCycle,1);
+  assert.equal(h.data[RUN].completedKeys.includes(target.key),false);
+  assert.equal(h.data[RUN].index,4);
+});
+
+test('Naver address-only holds settle without retry and operational failures stop after the existing retry budget', async () => {
+  for (const [failed, retryCycle] of [[0,0],[1,3]]) {
+    const h = harness({targetStartedAt:clock-minute,startedAt:clock-2*minute});
+    h.data[RUN].targets[3].retryCycle=retryCycle;
+    await h.context.finishCurrentTarget({ok:true,runId:'cycle',targetRunId:'seo',result:{source:'naver',partial:true,
+      totals:{failed},session:{completeRequested:true,expectedCount:100,processedCount:100,failed,state:'partial'}}},42);
+    assert.equal(h.data[REPORT].items[3].status,'partial');
+    assert.equal(h.data[RUN].retryQueue.length,0);
+  }
+});
 
 test("healthy collection and scheduled retry waits are not restarted", async () => {
   for (const extra of [
@@ -733,7 +775,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.24");
+  assert.equal(response.backgroundBuild, "1.1.25");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
@@ -788,15 +830,15 @@ function naverFunction(name, next) {
     naver.indexOf("  function " + name), naver.indexOf("  function " + next));
 }
 
-test("Naver completed legacy payload with one failure is settled as partial, without rerunning the district", async () => {
+test("Naver completed legacy payload with one failure is queued for recovery and never reported complete", async () => {
   const h=harness({targetStartedAt:clock-minute});
   await h.context.finishCurrentTarget({ok:true,runId:'cycle',targetRunId:'seo',result:{source:'naver',
     session:{ok:true,state:'completed',complete:true,completeRequested:true,expectedCount:8316,
       processedCount:8316,failed:1,addressMissing:81},totals:{failed:1}}},42);
-  assert.equal(h.data[REPORT].items[3].status,'partial');
+  assert.equal(h.data[REPORT].items[3].status,'retry_wait');
   assert.equal(h.data[REPORT].items[3].counts.failed,1);
   assert.equal(h.data[RUN].index,4);
-  assert.equal(h.data[RUN].retryQueue.length,0);
+  assert.equal(h.data[RUN].retryQueue.length,1);
 });
 
 test("stored legacy reports render partial locally without altering collection checkpoints or stored reports", async () => {

@@ -779,7 +779,16 @@ function mutationResultStatementV56(env, requestId, action, result, owner = "col
 
 async function saveMutationResult(env, requestId, action, result, owner = "collector") {
   const statement = mutationResultStatementV56(env, requestId, action, result, owner);
-  if (statement) await statement.run();
+  if (statement) {
+    // This writes the same exact receipt, never replays source writes/counters.
+    for (let attempt = 0; ; attempt += 1) {
+      try { await statement.run(); break; }
+      catch (error) {
+        if (attempt >= 2 || !/D1_ERROR:.*(?:Network connection lost|internal error|temporarily unavailable)/i.test(String(error?.message))) throw error;
+        await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
+      }
+    }
+  }
 }
 
 async function mutationScope(env, requestId) {
@@ -1849,17 +1858,17 @@ function assertSourceTradeBoundary(record, listingTradeType, existingSource = nu
 }
 
 async function attachSource(env, record, listingId, sessionId, existingSource = null, updateCondition = false,
-  actor = "collector", existingAssets = null, preserveListing = false, onNewSource = null) {
+  actor = "collector", existingAssets = null, preserveListing = false, onNewSource = null, creation = null) {
   const now = nowIso();
   const restoredOriginalId = /^O-[A-Za-z0-9_-]{8,160}$/.test(clean(record?.originalId))
     ? clean(record.originalId)
     : "";
   const sourceRowId = clean(existingSource?.id) || restoredOriginalId || `O-${crypto.randomUUID()}`;
-  const sourceStatements = [];
+  const sourceStatements = creation ? creation.statements.slice() : [];
   const previous = existingSource ? parseJson(existingSource.list_snapshot_json, {}) : null;
   const observed = record.firstObservedAdvertisementV1 || firstObservedAdvertisement({ source: record.source,
     sourceId: record.sourceId, tradeType: record.tradeType, sourceRows: existingSource ? [existingSource] : [], now });
-  const currentListing = await env.DB.prepare("SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings WHERE id=?1")
+  const currentListing = creation ? creation.listing : await env.DB.prepare("SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings WHERE id=?1")
     .bind(listingId).first();
   if (!currentListing) throw new Error("연결할 대표매물을 찾지 못했습니다.");
   assertSourceTradeBoundary(record, currentListing.trade_type, existingSource);
@@ -1951,6 +1960,7 @@ async function attachSource(env, record, listingId, sessionId, existingSource = 
   if (historyNeeded) finalStatements.push(env.DB.prepare(`INSERT INTO listing_history (listing_id, source_id, action, actor_email, before_json, after_json)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`).bind(listingId, sourceRowId,
         existingSource ? "sourceUpdated" : "sourceMerged", actor, JSON.stringify(previous || {}), snapshotJson));
+  if (creation) finalStatements.push(creation.history);
   // Keep each advertisement's source, assets and history in one bounded D1
   // transaction instead of separate network calls. Large legacy galleries
   // retain the 80-statement bound and the original source-before-assets order.
@@ -1974,7 +1984,7 @@ async function createListing(env, record, sessionId, actor = "collector", existi
   const observed = record.firstObservedAdvertisementV1 || firstObservedAdvertisement({ source: record.source,
     sourceId: record.sourceId, tradeType: record.tradeType, sourceRows: existingSource ? [existingSource] : [], now });
   const contacts = JSON.stringify(Array.isArray(record.contacts) ? record.contacts : []);
-  await env.DB.prepare(`INSERT INTO listings (
+  const insert = env.DB.prepare(`INSERT INTO listings (
       id, property_id, status, main_source, title, address, road_address, building_name, room, listing_type,
       trade_type, sale_category, sale_price,
       deposit, monthly_rent, maintenance_fee, premium, area_m2, latitude, longitude, operating_memo, source_url,
@@ -1984,10 +1994,15 @@ async function createListing(env, record, sessionId, actor = "collector", existi
     .bind(id, record.source, record.buildingName || "일반상가", record.address, clean(record.roadAddress),
       record.room, record.category, tradeType, clean(record.saleCategory), record.salePrice,
       record.deposit, record.rent, record.fee, record.premium, record.area,
-      record.latitude, record.longitude, record.memo, record.link, contacts, observed.firstObservedAt, now).run();
-  await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets, false, onNewSource);
-  await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
-    VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record)).run();
+      record.latitude, record.longitude, record.memo, record.link, contacts, observed.firstObservedAt, now);
+  const history = env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
+    VALUES (?1, 'collectorCreated', ?2, '{}', ?3)`).bind(id, actor, JSON.stringify(record));
+  // A new master is private to this transaction. Stage it with the source,
+  // assets and creation history instead of leaving an orphan after a disconnect.
+  await attachSource(env, record, id, sessionId, existingSource, false, actor, existingAssets, false, onNewSource, {
+    statements: [insert], history,
+    listing: {main_source: record.source, operating_memo: record.memo, status: "active", trade_type: tradeType, listing_type: record.category}
+  });
   return id;
 }
 
@@ -2308,20 +2323,33 @@ async function ingestRecords(env, source, values, metadata = {}) {
   saved.writeTimingV64 = Object.fromEntries(Object.entries(writeTimingV64)
     .map(([key, value]) => [key, Math.max(0, Number(priorTiming[key]) || 0) + value]));
   saved.writeTimingV64.batches = Math.max(0, Number(priorTiming.batches) || 0) + 1;
-  const summaryStatement = env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3`)
-    .bind(JSON.stringify(saved), nowIso(), sessionId);
+  const durableReceipt = clean(metadata.requestId) && (source === "네이버" && metadata.action === "saveNaverBatch" ||
+    source === "공실박스" && metadata.action === "gongsilImportBatch");
+  const guardedReceipt = durableReceipt && (source === "네이버" || metadata.requestPolicyVersion === 63);
+  const summaryStatement = env.DB.prepare(`UPDATE collector_sessions SET totals_json=${preserveNewSourceAdsCounters("?1")}, updated_at=?2 WHERE id=?3` +
+    (guardedReceipt ? " AND EXISTS (SELECT 1 FROM mutation_results WHERE request_id=?4 AND owner_email='collector' AND action=?5 AND state='running')" : ""));
+  const boundSummary = guardedReceipt
+    ? summaryStatement.bind(JSON.stringify(saved), nowIso(), sessionId, metadata.requestId, metadata.action)
+    : summaryStatement.bind(JSON.stringify(saved), nowIso(), sessionId);
   const result = { ok: true, sessionId, ...totals, errors,
     saved: totals.created + totals.merged + totals.updated,
     inserted: totals.created + totals.merged + totals.updated, sourceBackend: "D1", writeTimingV64 };
   if (source === "공실박스" && metadata.requestPolicyVersion === 63) result.requestHashV63 = metadata.requestHashV63;
-  if (clean(metadata.requestId) && (source === "네이버" && metadata.action === "saveNaverBatch" ||
-      source === "공실박스" && metadata.action === "gongsilImportBatch")) {
+  if (durableReceipt) {
     // Census counters and the exact response commit in one D1 transaction.
     // A disconnect after these counters commit cannot strand the receipt.
-    await env.DB.batch([summaryStatement,
-      mutationResultStatementV56(env, metadata.requestId, metadata.action, result)]);
+    const transaction = [boundSummary, mutationResultStatementV56(env, metadata.requestId, metadata.action, result)];
+    for (let attempt = 0; ; attempt += 1) {
+      try { await env.DB.batch(transaction); break; }
+      catch (error) {
+        // Guarded summary + exact receipt are safe even if COMMIT succeeded but
+        // its response was lost. Never retry the preceding source transactions.
+        if (!guardedReceipt || attempt >= 2 || !/D1_ERROR:.*(?:Network connection lost|internal error|temporarily unavailable)/i.test(String(error?.message))) throw error;
+        await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
+      }
+    }
     Object.defineProperty(result, NAVER_DURABLE_RESULT_V56, {value: true});
-  } else await summaryStatement.run();
+  } else await boundSummary.run();
   return result;
 }
 

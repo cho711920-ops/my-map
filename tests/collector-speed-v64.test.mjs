@@ -6,6 +6,41 @@ import {resolveGongsilOfferIds} from '../cloudflare/src/gongsil-offers.js';
 import {refreshListingRepresentativesFromActiveSources} from '../cloudflare/src/source-representative-selection.js';
 const {ingestRecords,attachSource,normalizedRecord}=await privateCollector();
 
+for (const provider of ['네이버','당근','공실박스']) for (const market of ['lease','sale']) {
+  test(`${provider}/${market}: failed creation history rolls back the new master, source and assets together`, async t => {
+    const f=speedDatabase(); t.after(()=>f.db.close());
+    f.failWhen(sql=>/INSERT INTO listing_history/.test(sql) && /collectorCreated/.test(sql));
+    const result=await ingestRecords(f.env,provider,[speedAd(provider,market)],{sessionId:'atomic-new',collectionTradeType:market});
+    assert.equal(result.failed,1); assert.equal(result.created,0);
+    for(const table of ['listings','listing_sources','listing_media','listing_contacts','listing_history']) {
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM '+table).get().n,0,table);
+    }
+    assert.equal(JSON.parse(f.db.prepare('SELECT totals_json FROM collector_sessions').get().totals_json).newSourceAds,0);
+  });
+}
+
+test('new listing uses one bounded master/source/assets/history transaction without rereading the just-created master', async t => {
+  const f=speedDatabase(); t.after(()=>f.db.close());
+  const result=await ingestRecords(f.env,'네이버',[speedAd('네이버','sale')],{sessionId:'atomic-new'});
+  assert.equal(result.created,1);
+  const transaction=f.batches.find(batch=>batch.some(sql=>/^INSERT INTO listings/.test(sql)));
+  assert.ok(transaction.some(sql=>/INSERT INTO listing_sources/.test(sql)));
+  assert.ok(transaction.some(sql=>/INSERT INTO listing_media/.test(sql)));
+  assert.ok(transaction.some(sql=>/collectorCreated/.test(sql)));
+  assert.ok(transaction.length<=80);
+  assert.equal(f.calls.filter(call=>/SELECT main_source, operating_memo, status, trade_type, listing_type FROM listings/.test(call.sql||'')).length,0);
+});
+
+test('legacy Gongsil receipts without a running claim still save their session counters', async t => {
+  const f=speedDatabase(); t.after(()=>f.db.close());
+  const result=await ingestRecords(f.env,'공실박스',[speedAd('공실박스','sale')],{
+    sessionId:'legacy-receipt',collectionTradeType:'sale',requestId:'legacy-result',action:'gongsilImportBatch'
+  });
+  assert.equal(result.created,1);
+  assert.equal(JSON.parse(f.db.prepare('SELECT totals_json FROM collector_sessions').get().totals_json).created,1);
+  assert.equal(JSON.parse(f.db.prepare('SELECT result_json FROM mutation_results').get().result_json).created,1);
+});
+
 for(const provider of ['네이버','당근','공실박스']) for(const market of ['lease','sale']) {
   test(`${provider}/${market}: changed advertisements commit source, photos and history together`,async t=>{
     const f=speedDatabase();t.after(()=>f.db.close());
