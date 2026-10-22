@@ -111,6 +111,31 @@ test('upgrade requeues an old Naver partial save failure once, retaining other d
   assert.equal(h.navigation.length,0);
 });
 
+test('manual sale targets disabled only for daily scheduling still recover a partial save on upgrade', async () => {
+  const h=harness({phase:'retry-wait',currentTabId:null,market:'sale',retryAt:clock+15*minute});
+  for(const target of h.data[RUN].targets){target.tradeType='sale';target.enabled=false;}
+  h.data[CONFIG].targets=structuredClone(h.data[RUN].targets);
+  h.data[REPORT].items[0].source='naver';h.data[REPORT].items[0].tradeType='sale';
+  h.data[REPORT].items[0].status='partial';h.data[REPORT].items[0].counts={expected:6289,processed:6289,failed:1};
+  await h.context.reconcileRunAfterUpdate(h.data[RUN],h.data[CONFIG]);
+  assert.equal(h.data[REPORT].items[0].status,'retry_wait');
+  assert.equal(h.data[RUN].targets[0].key,'naver-0');
+  assert.equal(h.data[RUN].targets[0].enabled,false);
+  assert.equal(h.navigation.length,0);
+});
+
+test('provider retries receive one parent automation identity while attempt identities change', async () => {
+  const h=harness();const messages=[];
+  h.context.chrome.tabs.sendMessage=async(_id,message)=>{messages.push(message);return {ok:true,started:true};};
+  const target={...h.data[RUN].targets[3],source:'daangn'};
+  const parent='run-1792661633103-fixture';
+  await h.context.sendRunMessage(42,target,'attempt-one',parent);
+  await h.context.sendRunMessage(42,target,'attempt-two',parent);
+  assert.equal(messages[0].target.automationRunId,parent);assert.equal(messages[1].target.automationRunId,parent);
+  assert.notEqual(messages[0].runId,messages[1].runId);
+  assert.equal(target.automationRunId,undefined);
+});
+
 test("upgrade keeps real Daangn failures and incomplete proofs in the remaining queue", async () => {
   for (const override of [{failed:1},{listComplete:false},{version:undefined}]) {
     const h = harness();
@@ -775,7 +800,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.25");
+  assert.equal(response.backgroundBuild, "1.1.26");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);

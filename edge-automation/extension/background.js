@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.25";
+const BACKGROUND_BUILD = "1.1.26";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -509,7 +509,7 @@ async function sendRunMessage(tabId, target, runId, parentRunId) {
       let response;
       try {
         response = await Promise.race([
-          chrome.tabs.sendMessage(tabId, { type: "JS_AUTO_RUN_TARGET", target, runId, parentRunId }),
+          chrome.tabs.sendMessage(tabId, { type: "JS_AUTO_RUN_TARGET", target: {...target, automationRunId: parentRunId}, runId, parentRunId }),
           new Promise((_, reject) => {
             timer = setTimeout(() => reject(new Error("수집 탭 시작 응답이 40초 안에 없어 다시 연결합니다.")), 40000);
           })
@@ -938,6 +938,7 @@ async function reconcileRunAfterUpdate(state, config) {
   const report = await getRunReport();
   if (!report || report.runId !== state.runId) return state;
   ensureRunCollections(state, report);
+  const registered = new Set((config.targets || []).map(targetKey));
   const enabled = new Set((config.targets || []).filter(target => target.enabled !== false).map(targetKey));
   let changed = 0;
   for (const item of report.items || []) {
@@ -945,7 +946,7 @@ async function reconcileRunAfterUpdate(state, config) {
     const counts = item.counts || {};
     const target = state.allTargets.find(target => targetKey(target) === item.key);
     const retrySaveFailure = source === "naver" && ["partial", "completed"].includes(item.status) &&
-      enabled.has(item.key) && target && Number(counts.failed) > 0 &&
+      registered.has(item.key) && target && inferredTradeType(target) === marketForRun(state) && Number(counts.failed) > 0 &&
       Number(target.retryCycle || 0) < MAX_DEFERRED_RETRY_CYCLES &&
       Date.now() - Number(state.startedAt || Date.now()) < MAX_RUN_AGE_MS;
     if (retrySaveFailure) {

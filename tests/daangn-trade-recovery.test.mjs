@@ -76,7 +76,7 @@ test("old corrupt job is rejected before any provider request or database write"
   const api = functions(server, ["runDaangnChunk"], { loadDaangnJob: async () => job,
     daangnJobId: () => "test", validateDaangnJobTrade }, "");
   await assert.rejects(api.runDaangnChunk({}, { tradeType: "sale" }), /거래유형 설정 불일치/);
-  assert.match(server, /if \(action === "danggeunResumeJob"\) validateDaangnJobTrade\(job, body.tradeType\)/);
+  assert.match(server, /if \(action === "danggeunResumeJob"\) \{\s+validateDaangnJobTrade\(job, body.tradeType\)/);
 });
 test("checkpoint filter and incoming request cannot cross markets", () => {
   const job = { url: url(["MONTH"]), tradeType: "lease", propertyFilter: { tradeTypes: ["BUY"] } };

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "1.5.9";
+  var VERSION = "1.5.10";
   var PANEL_ID = "js-daangn-collector-panel";
   var STYLE_ID = "js-daangn-collector-style";
   var COLLECTOR_API_URL = "https://js-map.com/api/collector";
@@ -298,10 +298,12 @@
 
   async function runAutomatic(target) {
     state.automaticRunning = true;
+    state.automationRunId = String(target && target.automationRunId || "");
     try {
       return await runAutomaticTarget(target);
     } finally {
       state.automaticRunning = false;
+      state.automationRunId = "";
     }
   }
 
@@ -671,6 +673,7 @@
       if (
         state.job &&
         state.job.status === "running" &&
+        (!state.automaticRunning || !state.automationRunId || state.job.automationRunId === state.automationRunId) &&
         (!state.selectedUrl || state.job.url === state.selectedUrl)
       ) {
         state.jobRequestGeneration += 1;
@@ -680,7 +683,9 @@
         scheduleNextChunk();
         return;
       }
-      var action = state.job && state.job.status === "paused" &&
+      var action = state.job && (state.job.status === "paused" ||
+        state.automaticRunning && state.automationRunId && state.job.status === "running" &&
+        state.job.automationRunId !== state.automationRunId) &&
         (!state.selectedUrl || state.job.url === state.selectedUrl)
         ? "danggeunResumeJob"
         : "danggeunStartJob";
@@ -1003,6 +1008,7 @@
       collectorKey: collectorKey,
       collectorVersion: VERSION,
       tradeType: state.tradeType === "sale" ? "sale" : "lease",
+      automationRunId: state.automaticRunning ? state.automationRunId || "" : "",
       clientId: getScopedClientId(jobUrl)
     });
     try {

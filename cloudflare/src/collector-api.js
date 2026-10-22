@@ -2865,6 +2865,7 @@ async function saveDaangnJob(env, job) {
   const lastError = clean(job.lastError || job.lastFailure?.message).slice(0, 500);
   const payload = {
     url: job.url, clusterId: job.clusterId, propertyFilter: job.propertyFilter,
+    automationRunId: job.automationRunId || "",
     district: job.district, tradeType: job.tradeType, sessionId: job.sessionId,
     ids: job.ids || [], entries: job.entries || [],
     providerIds: job.providerIds || [], listPageSignatures: job.listPageSignatures || [],
@@ -2946,9 +2947,19 @@ function publicDaangnJob(job) {
 
 async function startDaangnJob(env, body) {
   const parsed = parseDaangnUrl(body.url, body.tradeType);
+  const automationRunId = /^run-\d{10,16}-[a-z0-9]{1,20}$/.test(clean(body.automationRunId)) ? clean(body.automationRunId) : "";
+  if (automationRunId) {
+    const previous = await loadDaangnJob(env, daangnJobId(body));
+    if (completedDaangnRunReusableV76(previous, automationRunId, parsed)) {
+      return {ok: true, job: publicDaangnJob(previous), sourceBackend: "D1", recoveredCompletion: true};
+    }
+    if (sameDaangnRunScopeV76(previous, automationRunId, parsed) && ["running", "paused"].includes(previous.status)) {
+      return {ok: true, job: publicDaangnJob(previous), sourceBackend: "D1", resumedCheckpoint: true};
+    }
+  }
   const sessionId = await ensureSession(env, `DAANGN-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, "당근");
   const job = {
-    ...parsed, _jobId: daangnJobId(body), collectorVersion: clean(body.collectorVersion).slice(0, 30),
+    ...parsed, _jobId: daangnJobId(body), collectorVersion: clean(body.collectorVersion).slice(0, 30), automationRunId,
     sessionId, ids: [], entries: [], providerIds: [], listPageSignatures: [],
     expectedCountKnown: false, providerExpectedCount: null, listTerminalReached: false, listCapturedAt: "",
     detailIds: [], pendingDetailIds: [],
@@ -2962,6 +2973,26 @@ async function startDaangnJob(env, body) {
   };
   await saveDaangnJob(env, job);
   return { ok: true, job: publicDaangnJob(job), sourceBackend: "D1" };
+}
+
+function sameDaangnRunScopeV76(job, automationRunId, parsed) {
+  return Boolean(job && automationRunId && job.automationRunId === automationRunId &&
+    job.url === parsed.url && job.tradeType === parsed.tradeType &&
+    stableJson(job.propertyFilter) === stableJson(parsed.propertyFilter));
+}
+
+function completedDaangnRunReusableV76(job, automationRunId, parsed) {
+  if (!sameDaangnRunScopeV76(job, automationRunId, parsed) ||
+      job.status !== "complete" || job.phase !== "complete" || job.completeCollection !== true ||
+      Number(job.failed || 0) > Number(job.addressMissing || 0) ||
+      Number(job.processed || 0) + Number(job.skippedUnchanged || 0) !== Number(job.found || 0)) return false;
+  const proof = job.completionProof;
+  return proof?.version === 1 && proof.terminalReached === true && proof.listComplete === true &&
+    proof.scopeVerified === true && Number.isFinite(Date.parse(proof.capturedAt)) &&
+    Array.isArray(proof.issueCodes) && proof.issueCodes.length === 0 &&
+    Number.isInteger(proof.observedUniqueCount) && proof.observedUniqueCount === Number(job.found) &&
+    (proof.observedUniqueCount > 0 || proof.emptyConfirmed === true) &&
+    (proof.expectedCountKnown === false || proof.expectedCountKnown === true && proof.providerExpectedCount === proof.observedUniqueCount);
 }
 
 async function fetchDaangnDetail(articleId) {
@@ -3301,7 +3332,12 @@ async function executeExternalAction(env, body) {
   if (action === "danggeunPauseJob" || action === "danggeunResumeJob") {
     const job = await loadDaangnJob(env, daangnJobId(body));
     if (!job) return { ok: true, job: null };
-    if (action === "danggeunResumeJob") validateDaangnJobTrade(job, body.tradeType);
+    if (action === "danggeunResumeJob") {
+      validateDaangnJobTrade(job, body.tradeType);
+      if (/^run-\d{10,16}-[a-z0-9]{1,20}$/.test(clean(body.automationRunId)) && job.status !== "complete") {
+        job.automationRunId = clean(body.automationRunId);
+      }
+    }
     if (action === "danggeunResumeJob" && clean(job.lastError)) {
       job.lastFailure = { message: clean(job.lastError), at: clean(job.failedAt) };
       delete job.lastError;
