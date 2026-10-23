@@ -29,7 +29,7 @@ export async function fixtureHtml() {
     application.replace('id="wrap" inert aria-hidden="true"', 'id="wrap"') +
     '<aside id="fixtureControls" style="position:fixed;left:12px;bottom:88px;z-index:50000;max-width:340px;background:white;padding:6px"><small>가상 데이터 검사</small><label><input type="checkbox" id="fixtureQuotaFailure">저장공간 오류 재현</label><button id="fixtureSave" type="button">저장 검사</button><span id="fixtureSaveResult" role="status"></span><small id="fixtureModules"></small></aside>' +
     `<script>window.JSAuthenticatedAccountEmail=${JSON.stringify(email)};window.__fixtureItems=${JSON.stringify(fixtureItems)};</script>` +
-    scripts.map((name) => `<script src="/js/${name}"></script>`).join("") +
+    scripts.concat("lease-list-view-v80.js").map((name) => `<script src="/js/${name}"></script>`).join("") +
     '<script src="/__fixture/bootstrap.js"></script></body></html>';
 }
 

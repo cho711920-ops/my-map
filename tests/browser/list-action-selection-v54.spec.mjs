@@ -24,7 +24,7 @@ test.beforeEach(async({page,context,isMobile})=>{
   });
 });
 async function selectFirst(page){
-  await card(page,'FIXTURE-LEASE-1').click({position:{x:220,y:25}});
+  await card(page,'FIXTURE-LEASE-1').locator('.item-building-name').click();
   await expect(card(page,'FIXTURE-LEASE-1')).toHaveClass(/\bselected\b/);
   await expect(page.locator('#unifiedDetailDrawerV8')).toHaveClass(/open/);
   await expect(page.locator('#unifiedDetailSubtitleV8')).toContainText('원본');

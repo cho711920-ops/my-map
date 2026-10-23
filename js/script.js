@@ -2009,17 +2009,31 @@ function listIndexAtOffsetV2(offset) {
 
 // Density changes invalidate all estimates. Keep the first visible card at the
 // same viewport position, including lists whose earlier rows are virtualized.
-function reflowSaleListDensityV8(apply) {
-  if (!window.JSListingTradeV1 || window.JSListingTradeV1.getMode() === 'lease') { apply(); return; }
+function reflowListingDensityV80(apply, preferFullyVisible, previousAnchor) {
   var list = document.getElementById('list'), scroller = getListingScrollContainerV2();
   if (!list || !scroller) { apply(); return; }
   var top = scroller.getBoundingClientRect().top;
   var anchor = Array.from(list.querySelectorAll('.item[data-list-index-v1]')).find(function(card) { return card.getBoundingClientRect().bottom > top; });
+  // A partly clipped tall row can become entirely offscreen when shrunk.
+  // Anchor the first full row for lease view changes so both sizes retain it.
+  if (preferFullyVisible) anchor = Array.from(list.querySelectorAll('.item[data-list-index-v1]')).find(function(card) {
+    return card.getBoundingClientRect().top >= top;
+  }) || anchor;
+  // Repeated size toggles should keep the same reading card, even if shrinking
+  // makes an earlier row visible. User scrolling invalidates this saved anchor.
+  if (previousAnchor && previousAnchor.scroller === scroller && previousAnchor.card.isConnected &&
+      Math.abs(previousAnchor.scrollTop - scroller.scrollTop) < 2) anchor = previousAnchor.card;
   var before = anchor ? anchor.getBoundingClientRect().top : null;
   apply();
   listVirtualItemHeightsV1 = Object.create(null); listVirtualEstimatedHeightV2 = 0;
   updateListVirtualSpaceV2(list);
   if (anchor && anchor.isConnected) scroller.scrollTop += anchor.getBoundingClientRect().top - before;
+  return anchor ? {card: anchor, scroller: scroller, scrollTop: scroller.scrollTop} : null;
+}
+
+function reflowSaleListDensityV8(apply) {
+  if (!window.JSListingTradeV1 || window.JSListingTradeV1.getMode() === 'lease') { apply(); return; }
+  reflowListingDensityV80(apply);
 }
 
 function renderPreviousListChunkV1() {
