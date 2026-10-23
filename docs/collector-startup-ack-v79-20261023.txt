@@ -1,0 +1,54 @@
+예약 시작 페이지 차단·실제 시작 확인 v79 — 2026-10-23
+
+증거
+- 사용자11시 화면: emllnilnjhjcjfmdjphppnnenjchogfg 확장 내부 페이지의
+  ERR_BLOCKED_BY_CLIENT. 추가 사용자사진에서 JS 자동수집1.1.26 ON 확인.
+  확장 비활성/구버전으로 원인을 단정하지 않음. 설치 manifest SHA 저장소
+  동일, 전용 profile의 Edge155,9223 소유PID8352와 profile 경로일치 확인.
+- 오늘11:00:01 Windows기동→11:00:06 실행신호전달완료 로그만 존재.
+  서버는 어제20:52 종료/1.1.25 보고만 남아 오늘 시작 미검증.
+- 런처는 /json/new 접속 후 URL 일치 탭이 사라지면 성공처럼 처리.
+  Edge가 chrome-error로 대체한 탭도 URL필터에서 빠져 false success.
+  확장 내부 페이지 차단 자체의 Edge 내부 판단 이유는 확정하지 않음.
+- Cloudflare7403 읽기 실패가 한 번 있었으나 재확인에서 회복.
+
+수정
+1. 확장 내부 autorun/options 주소 대신 이미 허용된 자기사이트 HTTPS
+   /collector-install의 기존 content bridge로 같은 예약신호 전송.
+   JS_AUTO_RUN_REQUEST 기존 계약으로 오늘중복/활성회차/임대·매매 분리 유지.
+   보안설정·권한·등록예약시각·manifest 버전 변경 없음(1.1.26 유지).
+2. 페이지 고유id로 추적. HTTPS자기사이트/정확설치경로/실행token/버전이
+   일치하는 ACK가 있어야 확인. 차단/탭종료/구버전/무응답은 성공 아님.
+   실제active·예약queued·오늘중복skipped·기존매매busy 상태 별도로그.
+3. 기존 설치 content.js 캐시도 자기사이트 JS_AUTO_COLLECTOR_STATE_REQUEST
+   읽기 전용 bridge가 이미 존재. 공개 설치페이지에 작은 상태표시 JS를
+   추가해 확장 재시작 없이 active를 ACK로 확인. 버전·활성여부 외 원문/
+   인증키/개인정보를 제목·로그에 쓰지 않음. 늦은 상태응답도 발행한
+   requestId Set으로 인식하여 매500ms polling이 이전 유효응답을 버리지 않음.
+   매매active는 busy로만 확인하며 임대queue 증명을 추정하지 않음.
+4. 예약/수동 신호 전 전용프로필 강제종료 제거. 저장 도중중단 금지.
+   9223 listen PID가 정확히 전용 profile 소유인지 확인 후 신호 전송.
+5. Windows PowerShell5.1이 한글을 오독하던 런처를 UTF8 BOM으로 저장.
+   실패페이지/공급처탭 자동정리 삭제 없음. 추가 권한·재설치 불필요.
+
+검수·적용·운영 확인
+- Node1938/1938·lint/type/build/diff 통과. VM에서 신호/상태 요청 구분,
+  활성·queued·skipped·구버전·오류·무응답·지연응답 검증. Windows5.1의
+  실제 ACK파서로 차단/종료/다른token·버전·host/이상title 미성공 확인.
+- 변경 설치파일 content.js+런처 두 개는 private-audits/v79-startup-backup
+  백업 후 SHA동일 배치. 브라우저 종료/확장reload/개인설정삭제 없음.
+- 초기 수정11:14 HTTP bridge가 실제1.1.26 임대run을 시작했으나 기존
+  content 캐시가 ACK를 내지 않아 Windows는 pending/error를 정직하게 기록.
+  서버11:14:21 새run확인. 이를 collection실패로 혼동해 중단하지 않음.
+- 공개 상태bridge 배포 후 기존 등록Windows예약작업으로 다시확인.
+  11:20:12 로그 '자동수집 실제 실행 확인 · 실행기1.1.26', 작업exit0.
+  11:14와11:20 서버runId 동일: 새 수집 중복 시작/초기화 없이 유지 확인.
+- 서버11:20:41 유성5688 manifest 완료/실패0, 대덕1414 manifest 진행/
+  received35·실패0. 오늘 원자원본성공receipt353개 운영실제기록 확인
+  (v78 원자쓰기의 실제운영 확인을 이제 할 수 있음). 임대10대상만 시작.
+  매매 재시작이나 전체수집완료로 보고하지 말 것.
+- 제품9ea7cc0, Worker5c86166e-df64-4ea3-a826-25ab9afbbe42,
+  cache dca4204677a3db1e8c693a01. 양도메인HTML/90자산SHA·무효세션401/
+  쿠키해제·아이디로그인설정·보호API401 확인.
+- 직접PS실행은 기존실행정책에 의해 차단되어 실행되지 않았음. 정책은
+  변경하지 않고 기존 등록 예약작업을 정상기동. 신규task/권한 변경 없음.

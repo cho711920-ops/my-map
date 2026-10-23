@@ -1,5 +1,12 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-23 예약 내부페이지 차단·실제 시작 ACK v79
+
+- 사용자11시 ERR_BLOCKED_BY_CLIENT 화면, 추가사진1.1.26 ON. 꺼짐/구버전 단정 금지. 포트9223은 전용profile8352 소유. 런처가 차단 탭의 URL변경/사라짐을 성공으로 오인한 코드 확인; Edge 내부 차단 이유 전체는 미확정.
+- 기존 허용HTTPS 설치페이지의 content bridge로 예약신호, token+버전+pageid+자기host ACK로 실제상태 확인. 프로필 강제종료 제거/포트소유검증/UTF8BOM 한글오독방지. content.js 캐시도 기존 public state bridge를 사용하는 설치페이지 상태JS로 읽기 확인 가능. 신규권한/확장reload/manifest버전 변경 없음(1.1.26 유지).
+- Node1938/1938·lint/type/build/diff. 제품9ea7cc0/Worker5c86166e-df64-4ea3-a826-25ab9afbbe42/cache dca4204677a3db1e8c693a01. 양도메인90자산SHA·인증검증. 설치2파일백업+SHA일치. [근거·실제확인](docs/collector-startup-ack-v79-20261023.txt).
+- 오늘11:14부터 실제1.1.26 상가임대10대상 시작. 초기ACK미확인은 cached content 문제였으며 수집은 유지. 웹compat bridge 배포 뒤 기존Windows예약작업11:20 exit0/'실제 실행 확인1.1.26'. 재확인 전후runId동일=중복재수집 없음. 서버유성5688완료·실패0/대덕1414목록 진행·received35·실패0. 오늘 source receipt353개 실제기록으로v78도 이제 운영쓰기 검증 일부 확보. 전체완료/매매재실행 아님.
+
 ## 2026-10-22 수집 응답 단절·DB 경합 v78
 
 - 사용자는 원본별 기준 설명이 아니라 응답 단절 해결을 요구. 실제 Tail19:25:48 D1 과부하 예외와 collector50010건 확인. 최근1시간 승강기 주소UPDATE232회/931만행 스캔, 전체목록 재생성과 경합. 원인 전체를 확정했다고 말하지 말 것.
