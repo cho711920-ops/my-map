@@ -27,6 +27,8 @@ test('large lease photos, all eight actions, and the original small view remain 
   const card = page.locator('#list .item').first(), thumb = card.locator('.unified-thumb-v8');
   const controls = page.locator('#leaseListViewV80');
   await expect(controls).toBeVisible();
+  await expect(controls.getByRole('button', {name: '작게 보기'})).toHaveAttribute('aria-pressed', 'true');
+  await controls.getByRole('button', {name: '크게 보기'}).click();
   await expect(controls.getByRole('button', {name: '크게 보기'})).toHaveAttribute('aria-pressed', 'true');
   const large = await thumb.boundingBox();
   const image = thumb.locator('img');
@@ -63,10 +65,11 @@ test('large lease photos, all eight actions, and the original small view remain 
 test('the preference survives reload and sale markets keep their own layout', async ({page, context, isMobile}) => {
   const state = await setup(page, context, isMobile);
   const controls = page.locator('#leaseListViewV80');
-  await controls.getByRole('button', {name: '작게 보기'}).click();
+  await expect(controls.getByRole('button', {name: '작게 보기'})).toHaveAttribute('aria-pressed', 'true');
+  await controls.getByRole('button', {name: '크게 보기'}).click();
   await page.reload(); await expect(page.locator('html')).toHaveAttribute('data-fixture-ready', 'true');
   if (isMobile) await page.locator('[data-mobile-view="list"]').click();
-  await expect(controls.getByRole('button', {name: '작게 보기'})).toHaveAttribute('aria-pressed', 'true');
+  await expect(controls.getByRole('button', {name: '크게 보기'})).toHaveAttribute('aria-pressed', 'true');
   for (const mode of ['building_sale', 'land_sale']) {
     await page.evaluate(mode => JSListingTradeV1.setMode(mode), mode);
     await expect(controls).toBeHidden();
@@ -75,12 +78,13 @@ test('the preference survives reload and sale markets keep their own layout', as
   }
   await page.evaluate(() => JSListingTradeV1.setMode('lease'));
   await expect(controls).toBeVisible();
-  await expect(controls.getByRole('button', {name: '작게 보기'})).toHaveAttribute('aria-pressed', 'true');
+  await expect(controls.getByRole('button', {name: '크게 보기'})).toHaveAttribute('aria-pressed', 'true');
   expect(state.errors).toEqual([]);
 });
 
 test('returning from sale remeasures the preferred large lease rows', async ({page, context, isMobile}) => {
   const state = await setup(page, context, isMobile);
+  await page.locator('#leaseListViewV80 [data-lease-list-view="large"]').click();
   await page.evaluate(() => {JSListingTradeV1.setMode('building_sale'); JSListingTradeV1.setMode('lease');});
   await expect(page.locator('html')).toHaveAttribute('data-lease-list-view-v80', 'large');
   const result = await page.evaluate(() => [...document.querySelectorAll('#list .item')].map(card => {
@@ -93,6 +97,7 @@ test('returning from sale remeasures the preferred large lease rows', async ({pa
 
 test('switching size deep in a virtual list retains the card, memo and selection without data requests', async ({page, context, isMobile}) => {
   const state = await setup(page, context, isMobile);
+  await page.locator('#leaseListViewV80 [data-lease-list-view="large"]').click();
   await page.evaluate(() => {
     const base = allItems[0];
     allItems = Array.from({length: 240}, (_, n) => ({...base, propertyId: 'SIZE-' + n, key: 'size-' + n, name: '크기 검수 ' + n}));
@@ -129,6 +134,8 @@ test('blocked local storage still permits both views and memo actions retain the
     Storage.prototype.setItem = function(key, value) {if (key === 'js_map_lease_list_view_v80') throw Error('fixture blocked'); return set.call(this, key, value);};
   });
   const state = await setup(page, context, isMobile);
+  await expect(page.locator('#leaseListViewV80 [data-lease-list-view="small"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#leaseListViewV80 [data-lease-list-view="large"]').click();
   const card = page.locator('#list .item').first(), id = await card.getAttribute('data-property-id');
   await card.locator('.item-memo-toggle').click();
   await expect(card).toHaveClass(/memo-open/);

@@ -4,10 +4,11 @@
   "use strict";
   var root = document.documentElement;
   var storageKey = "js_map_lease_list_view_v80";
-  var preference = "large";
+  var preference = "small";
   var readingAnchor = null;
   try {
-    if (global.localStorage.getItem(storageKey) === "small") preference = "small";
+    var savedPreference = global.localStorage.getItem(storageKey);
+    if (savedPreference === "small" || savedPreference === "large") preference = savedPreference;
   } catch (_) { /* Keep the in-memory choice when device storage is unavailable. */ }
 
   var head = document.querySelector(".map-list-panel-head-v1");
