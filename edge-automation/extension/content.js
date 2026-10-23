@@ -267,10 +267,58 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-if (/^https:\/\/(?:www\.)?js-map\.com\/collector-install/i.test(location.href)) {
+async function acknowledgeWindowsStartup(query) {
+  const token = query.get("js_auto_token") || "";
+  if (!/^\d{10,16}$/.test(token)) return false;
+  const status = document.createElement("p");
+  status.id = "js-auto-startup-status";
+  status.textContent = "자동수집 실행기의 실제 응답을 확인하고 있습니다.";
+  (document.querySelector("main") || document.body).prepend(status);
+  const acknowledge = (state, message) => {
+    // No key, target URL, contact, user account or raw record enters the page.
+    document.title = `JS_AUTO_ACK_V79:${token}:${chrome.runtime.getManifest().version}:${state}`;
+    status.textContent = message;
+  };
+  let current = null;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    current = await sendRuntimeMessage({type:"JS_AUTO_GET_STATE"});
+    if (current && current.ok && current.backgroundBuild) break;
+    await delay(1000);
+  }
+  if (!current || !current.ok || !current.backgroundBuild) {
+    acknowledge("unavailable","자동수집 확장 응답을 확인하지 못했습니다. 확장 관리 화면에서 상태를 확인해 주세요.");
+    return true;
+  }
+  if (current.backgroundBuild !== "1.1.26" || chrome.runtime.getManifest().version !== "1.1.26") {
+    acknowledge("update-required","실행 중인 수집은 유지합니다. 수집 종료 후 확장 업데이트를 적용해 주세요.");
+    return true;
+  }
+  if (query.get("js_auto_run") !== "1" && query.get("js_auto_force") !== "1") {
+    acknowledge(current.runState?.active ? "active" : "idle",current.runState?.active ? "자동수집이 진행 중입니다." : "자동수집 실행기가 연결됐습니다. 현재 실행 중인 수집은 없습니다.");
+    return true;
+  }
+  // The existing run-request contract deduplicates today's schedule and keeps
+  // an active sale/lease run. Never use a page-ready message that closes this
+  // page before the launcher can observe its acknowledgement.
+  const result = await sendRuntimeMessage({type:"JS_AUTO_RUN_REQUEST",forceRun:query.get("js_auto_force")==="1"});
+  if (!result?.ok) {
+    acknowledge("failed","수집 시작이 확인되지 않았습니다. 설정 화면의 실행 상태를 확인해 주세요.");
+    return true;
+  }
+  const after = await sendRuntimeMessage({type:"JS_AUTO_GET_STATE"});
+  const state = after?.ok && after.runState?.active ? "active" : result.queued ? "queued" : result.skipped ? "skipped" : "unconfirmed";
+  acknowledge(state,state === "active" ? "자동수집의 실제 실행을 확인했습니다." : state === "queued" ? "현재 수집을 유지하며 상가임대 예약실행을 대기합니다." : state === "skipped" ? "오늘 예약 실행 여부와 예약 조건을 확인했습니다. 새 수집을 중복 시작하지 않았습니다." : "실행 요청은 전달됐지만 실제 시작은 아직 확인되지 않았습니다.");
+  return true;
+}
+
+if (/^https:\/\/(?:www\.)?js-map\.com\/collector-install(?:\.html)?\/?(?:[?#]|$)/i.test(location.href)) {
   const query = new URLSearchParams(location.search);
   const forceRun = query.get("js_auto_force") === "1";
-  signalScheduledRun(query.get("js_auto_run") === "1" || forceRun, forceRun);
+  if (/^\d{10,16}$/.test(query.get("js_auto_token") || "")) {
+    acknowledgeWindowsStartup(query).catch(() => {
+      document.title = `JS_AUTO_ACK_V79:${query.get("js_auto_token")}:${chrome.runtime.getManifest().version}:failed`;
+    });
+  } else signalScheduledRun(query.get("js_auto_run") === "1" || forceRun, forceRun);
 }
 
 if (/^(?:www\.)?js-map\.com$/i.test(location.hostname)) {

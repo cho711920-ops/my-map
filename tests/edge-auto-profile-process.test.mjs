@@ -43,7 +43,7 @@ test('launcher enumerates JSON-array debug targets before finding or cleaning in
     pageIds: ['first', 'status', 'provider', 'idle'], triggerIds: ['first'], statusIds: ['status'], cleanupIds: ['first', 'idle']
   });
   assert.doesNotMatch(launcher, /Invoke-RestMethod[^\r\n]*\/json\/list[^\r\n]*\|/);
-  assert.equal((launcher.match(/Get-EdgeAutoDebugPages\s*(?:\||\))/g) || []).length, 4);
+  assert.match(launcher,/Get-EdgeAutoDebugPages \| Where-Object \{ \$_.id -eq \$trigger.id \}/);
 });
 
 test('profile argument matching handles Edge escaped paths but excludes every different profile', { skip: process.platform !== 'win32' }, () => {
