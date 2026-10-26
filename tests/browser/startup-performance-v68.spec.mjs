@@ -1,7 +1,10 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {createFixtureServer} from './fixture-server.mjs';
 
-// Private production captures never enter the repository, fixtures or reports.
+// Private captures stay outside the repository. Keep their content out of
+// screenshots/traces; only aggregate timings and a comparison hash are reported.
+test.use({screenshot:'off',trace:'off',video:'off'});
 test('full-size cold list renders without a cached desktop snapshot',async({page,context})=>{
   test.skip(!process.env.JS_STARTUP_CAPTURE_DIR,'Optional private read-only production capture');
   test.setTimeout(180000);
@@ -9,6 +12,23 @@ test('full-size cold list renders without a cached desktop snapshot',async({page
   const csv=await readFile(dir+'/masters.csv');
   const unified=await readFile(dir+'/originals.json');
   let live=false;
+  // Stream large captures over loopback HTTP. DevTools fulfill base64 exceeds
+  // Chromium's 100MB pipe frame limit once a CSV grows beyond about 75MB.
+  const privateServer=createFixtureServer();
+  const fixtureRequest=privateServer.listeners('request')[0];
+  privateServer.removeAllListeners('request');
+  privateServer.on('request',(request,response)=>{
+    const u=new URL(request.url,'http://127.0.0.1');
+    const body=live&&request.method==='GET'?(u.pathname==='/api/sheet'?csv:
+      u.pathname==='/api/data'&&u.searchParams.get('action')==='unifiedListings'?unified:null):null;
+    if(body){response.writeHead(200,{'content-type':u.pathname==='/api/sheet'?'text/csv':'application/json',
+      'x-js-listings-revision':'capture-v68','cache-control':'no-store'});response.end(body);}
+    else fixtureRequest(request,response);
+  });
+  await new Promise(resolve=>privateServer.listen(0,'127.0.0.1',resolve));
+  const privateOrigin='http://127.0.0.1:'+privateServer.address().port;
+  test.info().annotations.push({type:'capture',description:'Private loopback; aggregate measurements only'});
+  context.on('close',()=>{privateServer.closeAllConnections();privateServer.close();});
   const errors=[];
   const photoQa=process.env.JS_STARTUP_PHOTO_QA==='1';
   page.on('pageerror',e=>errors.push(e.name));
@@ -25,10 +45,8 @@ test('full-size cold list renders without a cached desktop snapshot',async({page
     }
     return u.hostname==='127.0.0.1'?r.continue():r.abort();
   });
-  await page.route('**/api/sheet',r=>r.fulfill({headers:{'x-js-listings-revision':'capture-v68'},contentType:'text/csv',body:csv}));
-  await page.route('**/api/data?**',r=>live&&new URL(r.request().url()).searchParams.get('action')==='unifiedListings'
-    ?r.fulfill({headers:{'x-js-listings-revision':'capture-v68'},contentType:'application/json',body:unified}):r.fallback());
-  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+  if(process.env.JS_STARTUP_UNIFIED_SOURCE)await page.route('**/js/unified-listings-v8.js',r=>r.fulfill({contentType:'text/javascript',path:process.env.JS_STARTUP_UNIFIED_SOURCE}));
+  await page.goto(privateOrigin+'/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
   if(photoQa&&await page.locator('[data-mobile-view="list"]').isVisible())await page.locator('[data-mobile-view="list"]').click();
   await page.evaluate(()=>{window.kakao={maps:{load(){},LatLng:function(lat,lng){this.getLat=()=>lat;this.getLng=()=>lng;}}};});
   await page.addScriptTag({content:await readFile(process.env.JS_STARTUP_MAP_SOURCE||new URL('../../js/map.js',import.meta.url),'utf8')});
@@ -54,6 +72,7 @@ test('full-size cold list renders without a cached desktop snapshot',async({page
   });
   const cdp=await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
+  if(process.env.JS_STARTUP_PROFILE==='1'){await cdp.send('Profiler.enable');await cdp.send('Profiler.start');}
   live=true;
   const start=Date.now();
   await page.evaluate(photoQa=>{
@@ -90,13 +109,21 @@ test('full-size cold list renders without a cached desktop snapshot',async({page
       sidebarRect:((r)=>[r.x,r.y,r.width,r.height])(document.getElementById('sidebar').getBoundingClientRect()),
       listRect:((r)=>[r.x,r.y,r.width,r.height])(document.getElementById('list').getBoundingClientRect())}))));throw error;
   });
+  const inventoryHash=await page.evaluate(async()=>{
+    const rows=allItems.map(i=>[i.propertyId,i.key,i.name,i.address,i.room,i.type,i.deposit,i.rent,i.fee,i.premium,i.area,i.tradeType,i.salePrice,i.state,i.source,i.thumbnailV8,
+      JSUnifiedListingsV8.allOriginals(i.propertyId).map(o=>[o.originalId,o.source,o.active,o.deposit,o.rent,o.salePrice,o.thumbnail])]);
+    const bytes=new TextEncoder().encode(JSON.stringify([rows,visibleListItems.map(i=>[i.propertyId,i.key,i.deposit,i.rent,i.fee,i.premium,i.area,i.salePrice,i.source,i.thumbnailV8,i.unifiedDisplayOriginalsV2?.map(o=>o.originalId)])]));
+    return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');
+  });
+  if(process.env.JS_STARTUP_EXPECTED_HASH)expect(inventoryHash).toBe(process.env.JS_STARTUP_EXPECTED_HASH);
   const report=await page.evaluate(()=>({masters:allItems.length,visible:visibleListItems.length,
     maxLongTask:Math.round(Math.max(0,...__startupLongTasks)),longTasks:__startupLongTasks.length,
     originalMs:document.documentElement.getAttribute('data-originals-read-ms'),
     heap:performance.memory?.usedJSHeapSize,stages:__startupStages,
     firstCardMs:Math.round(window.__firstCardV69||0),firstPhotoMs:Math.round(window.__firstPhotoV69||0),
     photoCardShownMs:Math.round(window.__photoCardShownV69||0)}));
-  console.log(JSON.stringify({project:test.info().project.name,elapsedMs:Date.now()-start,csvBytes:csv.length,unifiedBytes:unified.length,...report,errors}));
+  if(process.env.JS_STARTUP_PROFILE==='1'){const {profile}=await cdp.send('Profiler.stop');const nodes=new Map(profile.nodes.map(n=>[n.id,n]));const times=new Map();profile.samples?.forEach((id,i)=>{const name=nodes.get(id)?.callFrame.functionName||'(anonymous)';times.set(name,(times.get(name)||0)+(profile.timeDeltas?.[i]||0));});console.log(JSON.stringify({cpuProfile:[...times].sort((a,b)=>b[1]-a[1]).slice(0,18).map(([name,us])=>({name,ms:Math.round(us/1000)}))}));}
+  console.log(JSON.stringify({project:test.info().project.name,elapsedMs:Date.now()-start,csvBytes:csv.length,unifiedBytes:unified.length,inventoryHash,...report,errors}));
   expect(errors).toEqual([]);
   // The previous full-size path blocked this CPU-limited fixture for >9s.
   // Keep a generous margin for hosts while rejecting that regression.

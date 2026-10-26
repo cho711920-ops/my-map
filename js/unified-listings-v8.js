@@ -97,6 +97,8 @@
   }
   function orderOriginals(originals) {
     var values = originals || [];
+    // Preserve the independent returned array even when no sorting is needed.
+    if (values.length < 2) return values.slice();
     var hasDaangn = values.some(function(original) {
       return sourceKey(original && original.source) === "danggeun";
     });
@@ -1147,6 +1149,12 @@
   }
 
   function sourceKey(value) {
+    // The stored provider labels dominate large inventories. Exact matches
+    // avoid repeated trimming/regex work; aliases retain the existing parser.
+    if (value === "네이버" || value === "naver") return "naver";
+    if (value === "당근" || value === "daangn") return "danggeun";
+    if (value === "공실박스" || value === "gongsil") return "gongsil";
+    if (value === "직접") return "direct";
     value = text(value).toLowerCase();
     if (/당근|daangn|karrot/.test(value)) return "danggeun";
     if (/네이버|naver/.test(value)) return "naver";
@@ -1176,7 +1184,9 @@
     if (owner && text(owner.propertyId) !== text(master.propertyId)) {
       master = Object.assign({}, owner, {propertyId: master.propertyId, key: master.key});
     }
-    var item = Object.assign({}, master);
+    // A fresh own-property copy keeps each advertisement independent without
+    // the slower Object.assign path for these wide master records.
+    var item = {...master};
     var manual = !isCandidateOriginal(original) ? text(original.manualDisplayFields).split(",") : [];
     item.displayValuePresence = Object.assign({}, master.displayValuePresence || {});
     var fields = {deposit:"deposit", rent:"monthly_rent", fee:"maintenance_fee", premium:"premium",
