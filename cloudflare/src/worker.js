@@ -16,6 +16,7 @@ import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
+import { handlePersonalListingCover } from "./personal-listing-cover.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
@@ -1023,6 +1024,18 @@ async function handleApi(request, env, context) {
     return response;
   }
   if (url.pathname === "/api/data") return handleDataApi(request, env, context);
+  if (url.pathname === "/api/personal-cover") {
+    const user=await requireSession(request,env);
+    if(request.method==='GET'){
+      if(!url.searchParams.has('imageId'))requireExpectedAccount(user,url.searchParams.get('expectedAccountEmail'),true);
+      return handlePersonalListingCover(request,env,user,null,context);
+    }
+    if(request.method!=='POST')return new Response(null,{status:405,headers:{allow:'GET, POST'}});
+    requireSameOrigin(request);
+    const body=await readJsonRequestWithLimit(request,MAX_DATA_BODY_BYTES);
+    requireExpectedAccount(user,body?.expectedAccountEmail,true);
+    return handlePersonalListingCover(request,env,user,body,context);
+  }
   if (url.pathname === "/api/listing-image") return handleListingImage(request, env, context);
   if (url.pathname === "/api/naver-maps-config") {
     if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });

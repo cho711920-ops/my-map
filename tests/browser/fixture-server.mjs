@@ -29,7 +29,7 @@ export async function fixtureHtml() {
     application.replace('id="wrap" inert aria-hidden="true"', 'id="wrap"') +
     '<aside id="fixtureControls" style="position:fixed;left:12px;bottom:88px;z-index:50000;max-width:340px;background:white;padding:6px"><small>가상 데이터 검사</small><label><input type="checkbox" id="fixtureQuotaFailure">저장공간 오류 재현</label><button id="fixtureSave" type="button">저장 검사</button><span id="fixtureSaveResult" role="status"></span><small id="fixtureModules"></small></aside>' +
     `<script>window.JSAuthenticatedAccountEmail=${JSON.stringify(email)};window.__fixtureItems=${JSON.stringify(fixtureItems)};</script>` +
-    scripts.concat("lease-list-view-v80.js").map((name) => `<script src="/js/${name}"></script>`).join("") +
+    scripts.concat("lease-list-view-v80.js", "personal-listing-cover-v85.js").map((name) => `<script src="/js/${name}"></script>`).join("") +
     '<script src="/__fixture/bootstrap.js"></script></body></html>';
 }
 
@@ -51,7 +51,7 @@ export function createFixtureServer() {
       if (url.pathname === "/__fixture/health") return json({ok: true, fixture: true});
       if (url.pathname === "/" && request.method === "GET") {
         failWrites = false; jobs = []; cloud.clear();
-        response.setHeader("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; frame-src 'none'; object-src 'none'");
+        response.setHeader("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; frame-src 'none'; object-src 'none'");
         return send(200, "text/html; charset=utf-8", await fixtureHtml());
       }
       if (url.pathname === "/api/session") return json({ok: true, email, role: "owner"});

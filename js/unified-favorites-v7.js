@@ -376,7 +376,9 @@
     dialog.style.maxHeight = height + "px";
   }
 
-  function itemPhoto(item) {
+  function itemPhoto(item, originalOnly) {
+    var personal = !originalOnly && global.JSListingCoverV85 && global.JSListingCoverV85.urlFor(item, true);
+    if (personal) return personal;
     var candidates = [item && item.thumbnailV8, item && item.thumbnail, item && item.photo, item && item.photoUrl,
       item && item.image, item && item.imageUrl, item && item.representativePhoto];
     if (item && Array.isArray(item.images)) candidates = candidates.concat(item.images);
@@ -392,6 +394,13 @@
 
   function isBuildingSaleItem(item) {
     return global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(item);
+  }
+
+  function photoAttributesV85(item, photo) {
+    var personal = global.JSListingCoverV85 && global.JSListingCoverV85.urlFor(item, true);
+    return personal && personal === photo
+      ? ' data-cover-image-v85="' + escapeHtml(personal) + '" data-cover-fallback-v85="' + escapeHtml(itemPhoto(item, true)) + '" onerror="JSListingCoverV85.imageError(this)"'
+      : ' onerror="var parent=this.parentNode;parent.classList.add(\'empty\');this.remove();parent.innerHTML=\'<span>사진 없음</span>\'"';
   }
   function favoriteItemPrice(item) {
     if (!item) return "원본 데이터는 삭제되지 않았습니다";
@@ -416,9 +425,9 @@
     return '<article class="unified-favorite-item-v7">' +
       '<button type="button" class="unified-favorite-open-v7" onclick="openUnifiedFavoriteItemV7(\'' + encodedRef + '\')" ' +
         'aria-label="' + escapeHtml(title) + ' 상세보기">' +
-        '<span class="unified-favorite-thumb-v7">' +
+        '<span class="unified-favorite-thumb-v7" data-cover-property-v85="' + escapeHtml(item && item.propertyId || '') + '" data-cover-original-v85="' + escapeHtml(itemPhoto(item, true)) + '">' +
           (photo ? '<img src="' + escapeHtml(photo) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" ' +
-            'onerror="this.parentNode.classList.add(\'empty\');this.remove();this.parentNode.innerHTML=\'<span>사진 없음</span>\'">' : '<span>사진 없음</span>') +
+            photoAttributesV85(item, photo) + '>' : '<span>사진 없음</span>') +
         '</span><span class="unified-favorite-item-info-v7"><strong>' + escapeHtml(title) + '</strong>' +
           '<span>' + escapeHtml(address) + '</span><b>' + escapeHtml(price) + '</b></span>' +
       '</button>' +
@@ -433,7 +442,7 @@
     var photo = itemPhoto(item);
     return '<article class="phone-favorite-item-v2">' +
       '<button type="button" class="phone-favorite-item-open-v2" onclick="openUnifiedFavoriteItemV7(' + escapeHtml(JSON.stringify(encodeURIComponent(ref))) + ')" aria-label="' + escapeHtml(title) + ' 상세보기">' +
-        '<span class="phone-favorite-thumb-v2">' + (photo ? '<img src="' + escapeHtml(photo) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.hidden=true">' : '<span>사진 없음</span>') + '</span>' +
+        '<span class="phone-favorite-thumb-v2" data-cover-property-v85="' + escapeHtml(item && item.propertyId || '') + '" data-cover-original-v85="' + escapeHtml(itemPhoto(item, true)) + '">' + (photo ? '<img src="' + escapeHtml(photo) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"' + photoAttributesV85(item, photo) + '>' : '<span>사진 없음</span>') + '</span>' +
         '<span class="phone-favorite-item-copy-v2"><strong>' + escapeHtml(favoriteItemPrice(item)) + '</strong><span>' + escapeHtml(title) + '</span><small>' + escapeHtml(address) + '</small></span>' +
       '</button><button type="button" class="phone-favorite-remove-v2" aria-label="' + escapeHtml(title) + ' 찜 제거" onclick="removeUnifiedFavoriteItemV7(' + escapeHtml(JSON.stringify(String(folderId))) + ',' + escapeHtml(JSON.stringify(encodeURIComponent(ref))) + ')">♥</button></article>';
   }

@@ -872,6 +872,7 @@ async function geocodeCache(env) {
 }
 
 function requireActiveCloudScope(value) {
+  if (clean(value) === "personalListingCoverV85") throw Object.assign(new Error("대표사진은 사진 저장 기능을 이용해 주세요."), {statusCode:400});
   if (clean(value) === "permitDiagnosis") {
     throw Object.assign(new Error("업종분석 기능이 종료되었습니다. 기존 저장 자료는 보존됩니다."), { statusCode: 410 });
   }

@@ -3536,6 +3536,7 @@ function switchRoadviewMode(mode) {
   currentRoadviewMode = ["naver", "kakao", "map"].indexOf(mode) >= 0
     ? mode
     : "naver";
+  if (window.JSListingCoverV85) window.JSListingCoverV85.contextChanged();
   var naverActive = currentRoadviewMode === "naver";
   var kakaoActive = currentRoadviewMode === "kakao";
   var mapActive = currentRoadviewMode === "map";
@@ -3730,6 +3731,7 @@ function resolveRoadviewCoordinatesV52(item) {
 }
 
 function openKakaoRoadview(encodedKey) {
+  if (window.JSListingCoverV85) window.JSListingCoverV85.contextChanged();
   var key = decodeURIComponent(encodedKey);
   var item = allItems.find(function(currentItem) {
     return currentItem.key === key;
@@ -3876,6 +3878,7 @@ function openKakaoRoadviewAtPosition(lat, lng) {
 }
 
 function closeRoadviewModal() {
+  if (window.JSListingCoverV85) window.JSListingCoverV85.contextChanged();
   var modal = document.querySelector("#roadviewModal.roadview-modal");
   var container = document.getElementById("roadviewContainer");
   var naverContainer = document.getElementById("naverRoadviewContainer");

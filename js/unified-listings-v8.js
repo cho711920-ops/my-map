@@ -1358,18 +1358,21 @@
       return isCandidateOriginal(original);
     });
     var thumbnail = originals.length ? originalImage(originals[0]) : "";
+    var originalThumbnailV85 = thumbnail;
+    var personalThumbnailV85 = global.JSListingCoverV85 && global.JSListingCoverV85.urlFor(item, true);
+    if (personalThumbnailV85) thumbnail = personalThumbnailV85;
     var photoPending = !thumbnail && originals.some(function(original) { return Number(original.photoCount) > 0; });
     var encodedId = encodeURIComponent(text(item && item.propertyId));
     var thumbnailMarkup = '<button type="button" class="unified-thumb-v8 ' +
-      (thumbnail ? 'has-photo' : 'no-photo') + '" title="' + (pending ? pendingLabel + (pendingRetryable ? ' · 다시 불러오기' : '') : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
+      (thumbnail ? 'has-photo' : 'no-photo') + '" data-cover-property-v85="' + esc(item && item.propertyId) + '" data-cover-original-v85="' + esc(thumbnailDisplayImageUrlV69(originalThumbnailV85)) + '" title="' + (pending ? pendingLabel + (pendingRetryable ? ' · 다시 불러오기' : '') : photoPending ? '사진 확인 중' : '사진 크게 보기') + '" ' +
       'onpointerenter="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onfocus="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onpointerdown="JSUnifiedListingsV8.prefetch(\'' + encodedId + '\')" ' +
       'onclick="event.stopPropagation(); JSUnifiedListingsV8.toggleCardDetail(\'' + encodedId + '\')">' +
       (thumbnail ? '<img data-thumbnail-pending-v69="' + esc(thumbnailDisplayImageUrlV69(thumbnail)) + '" data-thumbnail-source-v8144="' + esc(thumbnail) +
-        '" alt="매물 사진" loading="lazy" decoding="async" referrerpolicy="no-referrer" ' +
+        '" ' + (personalThumbnailV85 ? 'data-cover-image-v85="' + esc(personalThumbnailV85) + '" data-cover-fallback-v85="' + esc(thumbnailDisplayImageUrlV69(originalThumbnailV85)) + '" ' : '') + 'alt="매물 사진" loading="lazy" decoding="async" referrerpolicy="no-referrer" ' +
         'onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" ' +
-        'onerror="JSUnifiedListingsV8.thumbnailImageError(this)">' : '<span>' + (pending ? pendingLabel : photoPending ? '사진 확인 중' : '사진 없음') + '</span>') +
+        'onerror="' + (personalThumbnailV85 ? 'JSListingCoverV85.imageError(this)' : 'JSUnifiedListingsV8.thumbnailImageError(this)') + '">' : '<span>' + (pending ? pendingLabel : photoPending ? '사진 확인 중' : '사진 없음') + '</span>') +
       (sourceUnavailable
         ? '<em class="transaction-check-ribbon-v8135">원본 광고 미노출<b>거래완료 후보</b></em>'
         : '') +
@@ -1739,6 +1742,7 @@
     if (global.JSSalePropertyWorkspaceV3) global.JSSalePropertyWorkspaceV3.mountDetail(body, selected);
     if (global.JSSaleReviewFlowV12) global.JSSaleReviewFlowV12.mountNavigation(drawer);
     if (global.JSWideDetailV26) global.JSWideDetailV26.mount(body, selected);
+    if (global.JSListingCoverV85) global.JSListingCoverV85.decorateDetail(body, {propertyId: propertyId});
     showDetailDrawerV827(drawer);
   }
 
