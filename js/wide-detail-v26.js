@@ -103,12 +103,37 @@
     slot.innerHTML=saleCalculationHtml(item,refs,body._saleAreaConfirmationV38);
     var check=slot.querySelector('[data-confirm-official-area-v38]');if(check)check.onchange=function(){body._saleAreaConfirmationV38=this.checked?officialAreaReview(item,refs).token:null;refreshSaleCalculations(body);slot.querySelector('[data-confirm-official-area-v38]').focus({preventScroll:true});};
   }
+  function buildingBasicsHtml(item,reference){
+    var ui=global.JSListingTradeV1,d=ui.saleSummary(item),unit=ui.buildingSaleExtent(item)==='unit';
+    var fields=[['대지면적','landAreaM2','siteArea'],['건축면적','buildingAreaM2','buildingArea'],['연면적','grossAreaM2','totalArea'],['건폐율','buildingCoverageRatio','buildingCoverageRatio'],['용적률','floorAreaRatio','floorAreaRatio']];
+    function value(raw,ratio,key){
+      if(!['number','string'].includes(typeof raw)||!String(raw).trim())return '원본 미제공';
+      var n=Number(String(raw).replace(/,/g,''));if(!Number.isFinite(n)||!(n>0)||key==='buildingCoverageRatio'&&n>100)return '원본 미제공';
+      return ratio?esc(n.toLocaleString('ko-KR',{maximumFractionDigits:2})+'%'):global.JSSaleDossierV9.areaHtml(n);
+    }
+    function facts(official){return '<dl class="sale-building-facts-v84">'+fields.map(function(f,index){var key=official?f[2]:f[1];return '<div data-building-fact-v84="'+f[1]+'"><dt>'+f[0]+'</dt><dd>'+value((official||d)[key],index>2,f[1]).replace('원본 미제공',official?'대장 미제공':'원본 미제공')+'</dd></div>';}).join('')+'</dl>';}
+    var html='<header><h3>건물 면적·비율</h3><span>광고 기재</span></header>'+
+      (unit&&Number(d.exclusiveAreaM2)>0?'<p class="sale-building-exclusive-v84">매매 대상 전용면적 <b>'+value(d.exclusiveAreaM2,false)+'</b></p>':'')+facts(null)+
+      '<p class="sale-building-note-v84">'+(unit?'대지·건축·연면적과 비율은 건물 전체 기재값이며, 매매 호실의 전용면적·대지권과 구분합니다.':'현재 선택한 원본 기준입니다. 건축면적은 건물의 바닥 점유 면적, 연면적은 각 층 바닥면적의 합계입니다.')+'</p>';
+    var data=reference&&reference.data,parser=global.JSParcelExternalLinksV1&&global.JSParcelExternalLinksV1.parseAddress;
+    var a=parser&&parser(item.address),b=data&&parser&&parser(data.lotAddress);
+    if(data&&a&&b&&a.query===b.query&&!(reference.item&&reference.item.referenceAddressChangedV8)){
+      html+='<section class="sale-building-official-v84"><h4>건축물대장 · '+esc([data.buildingName,data.dongName].filter(Boolean).join(' · ')||'조회한 건물')+'</h4>'+facts(data)+
+        '<p class="sale-building-note-v84">'+esc(data.source||'국토교통부 건축물대장')+' · 조회 '+esc(data.queriedAt||data.fetchedAt||'일시 미제공')+(data.partial?' · 일부 자료 확인 필요':'')+'<br>선택한 건물 전체 제원입니다. 광고 면적·호실 면적·계산 기준은 변경하지 않습니다.</p></section>';
+    }
+    return html+'<button type="button" data-building-area-lookup-v84>대장 제원 확인</button>';
+  }
+  function refreshBuildingBasics(body){
+    var box=body&&body.querySelector('[data-building-basics-v84]'),item=body&&body._saleCalculationItemV38;if(!box||!item)return;
+    box.innerHTML=buildingBasicsHtml(item,(body._saleCalculationReferencesV38||{}).building);
+    box.querySelector('button').onclick=function(){var button=body.querySelector('[data-sale-section="register"] [data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
+  }
   function referenceArea(body,item,kind,data){
     if(!body)return;var refs=body._saleCalculationReferencesV38||(body._saleCalculationReferencesV38={});
     if(!kind)body._saleCalculationReferencesV38={};
     else if(data)refs[kind]={item:item,kind:kind,data:data};else delete refs[kind];
     var target=body._saleCalculationItemV38&&global.JSListingTradeV1.normalizedSaleCategory(body._saleCalculationItemV38)==='land'?'land':'building';
-    if(!kind||kind===target)body._saleAreaConfirmationV38=null;refreshSaleCalculations(body);
+    if(!kind||kind===target)body._saleAreaConfirmationV38=null;refreshSaleCalculations(body);refreshBuildingBasics(body);
   }
   function evidenceHeading(title,note){var heading=document.createElement('header');heading.className='sale-evidence-heading-v36';heading.innerHTML='<h3>'+esc(title)+'</h3><p>'+esc(note)+'</p>';return heading;}
   function mountSaleEvidence(body,item,summary,primary){
@@ -137,6 +162,10 @@
     var tools=summary.querySelector('.sale-tools-v1[data-sale-item]');if(tools){tools.removeAttribute('data-sale-section');calc.append(tools);}
     (publicData||summary).after(calc);
     body._saleCalculationItemV38=item;refreshSaleCalculations(body);
+    if(global.JSListingTradeV1.normalizedSaleCategory(item)!=='land'){
+      var areas=primary.querySelector('.building-sale-area-info-v1');if(areas)areas.remove();
+      var basics=document.createElement('section');basics.className='sale-building-basics-v84';basics.dataset.buildingBasicsV84='';basics.setAttribute('aria-label','건물 면적과 비율');primary.append(basics);refreshBuildingBasics(body);
+    }
     calc.querySelector('.sale-area-lookup-v38').onclick=function(){var panel=body.querySelector('[data-sale-section="'+(global.JSListingTradeV1.normalizedSaleCategory(item)==='land'?'publicland':'register')+'"]'),button=panel&&panel.querySelector('[data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
     var secondary=summary.querySelector('.sale-secondary-tools-v10');if(secondary)secondary.querySelector('summary').textContent='광고 출처·호가 이력·외부 조회';
   }

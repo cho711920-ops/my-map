@@ -3,6 +3,7 @@
 import { saleDescriptionFields, naverSaleDescription, supplementSaleDescription } from "./sale-description.js";
 import { normalizeNaverPropertyType } from "./naver-property-types.js";
 import { daangnLandUse } from "./land-use-display.js";
+import { naverSaleMeasurements, gongsilSaleMeasurements } from "./sale-measurements.js";
 const clean = (value) => String(value ?? "").trim();
 const numeric = (value) => {
   if (value == null || clean(value) === "" || typeof value === "boolean") return null;
@@ -91,6 +92,7 @@ export function gongsilSaleFields(raw = {}) {
     buildingUse: clean(building.MainPurpsCdNm || list.UseType || list.Usage),
     otherUse: clean(building.EtcPurps),
     buildingAreaM2: positive(building.ArchArea),
+    ...gongsilSaleMeasurements(raw),
     aboveGroundFloors: present(building.GrndFlrCnt), belowGroundFloors: present(building.UgrndFlrCnt),
     approvalDate: clean(building.UseAprDay), householdCount: present(building.HhldCnt),
     familyCount: present(building.FmlyCnt), metadataVersion: 2, fieldSources: provenance,
@@ -104,7 +106,6 @@ export function gongsilSaleFields(raw = {}) {
 export function naverSaleFields(item = {}) {
   const original = item.saleRaw || {};
   const detail = original.detailInfo || original;
-  const space = detail.spaceInfo || detail.sizeInfo || original.spaceInfo || item.spaceInfo || {};
   const info = detail.articleDetailInfo || original.articleDetailInfo || {};
   const floors = info.floorDetailInfo || detail.floorDetailInfo || {};
   const price = detail.priceInfo || original.priceInfo || {};
@@ -117,8 +118,8 @@ export function naverSaleFields(item = {}) {
   return supplementSaleDescription({
     sourceType: normalizeNaverPropertyType(item.category, item.realEstateTypeCode).label,
     scope: saleCategory === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
-    landAreaM2: positive(space.landSpace), grossAreaM2: positive(space.floorSpace),
-    buildingAreaM2: positive(space.buildingSpace), exclusiveAreaM2: positive(space.exclusiveSpace),
+    landAreaM2: null, grossAreaM2: null, buildingAreaM2: null, exclusiveAreaM2: null,
+    ...naverSaleMeasurements(item),
     aboveGroundFloors: present(floors.groundFloorCount, info.groundFloorCount),
     belowGroundFloors: present(floors.undergroundFloorCount, info.undergroundFloorCount),
     // fin API money is won, unlike the normalized collector's manwon fields.

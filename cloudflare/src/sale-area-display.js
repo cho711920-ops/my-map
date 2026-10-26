@@ -1,5 +1,11 @@
 // Read-only advertising area supplement. Never infer an area from generic size,
 // building scope, prices or the ambiguous label "건평"; never change stored data.
+import { naverSaleMeasurements, gongsilSaleMeasurements, saleMeasurements } from "./sale-measurements.js";
+
+export function saleAreaProvider(raw = {}, source = "") {
+  return { source, measurements: source === "네이버" ? naverSaleMeasurements(raw)
+    : source === "공실박스" ? gongsilSaleMeasurements(raw) : {} };
+}
 const AREA_FIELDS = {
   전용: "exclusiveAreaM2", 전용면적: "exclusiveAreaM2",
   대지: "landAreaM2", 대지면적: "landAreaM2",
@@ -66,9 +72,11 @@ export function withSaleAreaDisplay(original, provider = {}) {
   if (original?.tradeType !== "sale" || original.saleCategory === "land" || original.saleDetails?.scope === "land") return original;
   const detail = original.saleDetails || {};
   const description = typeof detail.descriptionText === "string" && detail.descriptionText.trim()
-    ? detail.descriptionText : (provider.source || original.source) === "당근" ? provider.daangn?.description : "";
-  const supplement = saleDescriptionAreas(description);
+    ? detail.descriptionText : (provider.source || original.source) === "당근" ? provider.daangn?.description
+      : (provider.source || original.source) === "네이버" ? provider.naverDescription : "";
+  const supplement = { ...saleDescriptionAreas(description), ...saleMeasurements(provider.measurements) };
   const missing = Object.fromEntries(Object.entries(supplement).filter(([key]) =>
-    detail[key] == null || typeof detail[key] === "string" && /^(?:\s*|\s*-\s*)$/.test(detail[key])));
+    !detail.manualSaleFieldsV1?.includes(key) &&
+    (detail[key] == null || typeof detail[key] === "string" && /^(?:\s*|\s*-\s*)$/.test(detail[key]))));
   return Object.keys(missing).length ? { ...original, saleDetails: { ...detail, ...missing } } : original;
 }

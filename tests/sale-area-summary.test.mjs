@@ -104,6 +104,9 @@ test("real SQLite list/detail area parity is sale-only, source-local and perform
   const migrations = new URL("../cloudflare/migrations/", import.meta.url);
   for (const file of readdirSync(migrations).filter(value => value.endsWith(".sql")).sort()) db.exec(readFileSync(new URL(file, migrations), "utf8"));
   const cases = [
+    { name: "naver sizeInfo beside nonempty spaceInfo", source: "네이버", raw: {saleRaw:{detailInfo:{spaceInfo:{floorInfo:{targetFloor:'전체'}},sizeInfo:{landSpace:200,buildingSpace:100,floorSpace:400,buildingCoverageRatio:50,floorAreaRatio:180}}}}, expected: {landAreaM2:200,buildingAreaM2:100,grossAreaM2:400,buildingCoverageRatio:50,floorAreaRatio:180} },
+    { name: "naver legacy spaceInfo", source: "네이버", raw: {saleRaw:{spaceInfo:{landSpace:200,floorSpace:400}}}, expected: {landAreaM2:200,grossAreaM2:400} },
+    { name: "gongsil explicit ratios", source: "공실박스", raw: {detail:{getbilbases:{ArchArea:100,BcRat:50,VlRat:180}}}, expected: {buildingAreaM2:100,buildingCoverageRatio:50,floorAreaRatio:180} },
     { name: "saved advertisement", details: { descriptionText: description }, raw: {}, expected: areas },
     { name: "raw advertisement", raw: { content: description }, expected: areas },
     { name: "blank description", details: { descriptionText: "\t\n\u00a0\u3000" }, raw: { content: description }, expected: areas },
@@ -144,7 +147,7 @@ test("real SQLite list/detail area parity is sale-only, source-local and perform
     const original = result.originals[0];
     const summary = list.groups[snapshot.propertyId][0][list.fields.indexOf("saleSummary")] ?? "";
     assert.equal(JSON.stringify(summary), JSON.stringify(compactSaleSummary(original)), `summary parity: ${item.name}`);
-    for (const key of ["exclusiveAreaM2", "landAreaM2", "grossAreaM2", "buildingAreaM2"]) {
+    for (const key of ["exclusiveAreaM2", "landAreaM2", "grossAreaM2", "buildingAreaM2", "buildingCoverageRatio", "floorAreaRatio"]) {
       assert.equal(original.saleDetails[key], item.expected[key], `${item.name}: ${key}`);
     }
     for (const field of ["originalId", "propertyId", "source", "tradeType", "saleCategory", "room", "area", "salePrice", "deposit", "rent"]) {

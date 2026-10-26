@@ -14,7 +14,8 @@ import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
 import { withDaangnLandUse } from "./land-use-display.js";
-import { withSaleAreaDisplay } from "./sale-area-display.js";
+import { withSaleAreaDisplay, saleAreaProvider } from "./sale-area-display.js";
+import { NAVER_MEASUREMENT_FIELDS, NAVER_MEASUREMENT_PATHS } from "./sale-measurements.js";
 import { withSaleFinancialDisplay } from "./sale-financial-display.js";
 import { salePropertyEditPatch } from "./sale-property-edit.js";
 import { newListingPeriod } from "./new-listing-period.js";
@@ -407,11 +408,12 @@ export function compactSaleSummary(original) {
     if (Object.keys(reference).length) summary.rentalReference = reference;
   }
   if (["land", "whole_building", "unit"].includes(detail.scope)) summary.scope = detail.scope;
-  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield"]) {
-    if (key === "buildingAreaM2" && (detail.scope === "land" || original.saleCategory === "land")) continue;
+  for (const key of ["landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "buildingCoverageRatio", "floorAreaRatio", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield"]) {
+    if (["buildingAreaM2", "buildingCoverageRatio", "floorAreaRatio"].includes(key) && (detail.scope === "land" || original.saleCategory === "land")) continue;
     const value = detail[key];
     if (!["number", "string"].includes(typeof value) || clean(value) === "") continue;
     const parsed = Number(value);
+    if (["buildingCoverageRatio", "floorAreaRatio"].includes(key) && (!(parsed > 0) || key === "buildingCoverageRatio" && parsed > 100)) continue;
     if (Number.isFinite(parsed) && parsed >= 0) summary[key] = parsed;
   }
   if (detail.scope === "land" || original.saleCategory === "land") {
@@ -460,6 +462,19 @@ function gongsilJsonScalar(...names) {
     ELSE ${sourceJsonScalar(...names)} END`;
 }
 
+// Project six numeric measurements, never whole raw payloads or descriptions.
+// Keep candidate containers separate: an existing spaceInfo object may contain
+// only floors while the actual measurements are in sizeInfo.
+function originalSaleMeasurementsSql() {
+  const naver = Object.entries(NAVER_MEASUREMENT_FIELDS).map(([key, field]) =>
+    `'${key}', json_array(${NAVER_MEASUREMENT_PATHS.map(path => sourceJsonScalar(`${path}.${field}`)).join(",")})`).join(",");
+  return `CASE WHEN source='네이버' THEN json_object(${naver})
+    WHEN source='공실박스' THEN json_object(
+      'buildingAreaM2', ${sourceJsonScalar("detail.getbilbases.ArchArea")},
+      'buildingCoverageRatio', ${sourceJsonScalar("detail.getbilbases.BcRat")},
+      'floorAreaRatio', ${sourceJsonScalar("detail.getbilbases.VlRat")}) ELSE '{}' END`;
+}
+
 function originalFloorMetadataSql() {
   return `CASE WHEN source='공실박스' THEN json_object(
       'floor', ${gongsilJsonScalar("Ff", "BfFloor", "Floor", "floor")},
@@ -504,6 +519,7 @@ async function unifiedListings(env, listingIds = null) {
       CASE WHEN source='공실박스' THEN json_extract(raw_json, '$.list.Photos') END AS gongsil_photos_json,
       CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN
         COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) END AS naver_floor_info_json,
+      CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN ${originalSaleMeasurementsSql()} END AS sale_measurements_json,
       CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN ${sourceJsonScalar("realEstateTypeCode", "category")} END AS naver_property_type,
       CASE WHEN source='네이버' AND json_extract(list_snapshot_json, '$.tradeType')='sale'
         AND length(json_extract(raw_json, '$.roomInfo'))<=60 THEN json_extract(raw_json, '$.roomInfo') END AS naver_sale_room,
@@ -557,7 +573,8 @@ async function unifiedListings(env, listingIds = null) {
           daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
         });
         const original = withSourceOriginalMetadata(
-          withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn }),
+          withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn,
+            naverDescription: row.naver_sale_description, measurements: parseJson(row.sale_measurements_json, {}) }),
             { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row);
         if (original.sourceUnavailable) unavailableCount += 1;
         original.saleSummary = compactSaleSummary(original);
@@ -709,7 +726,7 @@ async function unifiedDetail(env, propertyId) {
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
     const provider = saleExtentProvider(raw, row.source);
     const original = { ...withSourceOriginalMetadata(withDaangnLandUse(
-      withSaleFinancialDisplay(withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), provider),
+      withSaleFinancialDisplay(withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), { ...provider, ...saleAreaProvider(raw, row.source) }),
         { ...provider, source: row.source, naverPriceInfo: row.source === "네이버" ? raw.saleRaw?.detailInfo?.priceInfo || raw.saleRaw?.priceInfo : undefined }), raw.landType, row.source
     ), row, manualRooms, manualFields), propertyId: clean(parent.property_id || parent.id) };
     original.saleSummary = compactSaleSummary(original);

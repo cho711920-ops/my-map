@@ -212,7 +212,7 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "landUse", "zoning"];
+    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "buildingCoverageRatio", "floorAreaRatio", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "landUse", "zoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) {
@@ -452,6 +452,8 @@
     area("연면적", detail.grossAreaM2);
     area("건축면적", detail.buildingAreaM2);
     area("전용면적", detail.exclusiveAreaM2);
+    if (nonnegative(detail.buildingCoverageRatio) > 0 && nonnegative(detail.buildingCoverageRatio) <= 100) add("건폐율", detail.buildingCoverageRatio, "%");
+    if (nonnegative(detail.floorAreaRatio) > 0) add("용적률", detail.floorAreaRatio, "%");
     group("광고 면적");
     add("기존 보증금 합계", detail.totalDeposit, "만원");
     add("기존 월 임대수입", detail.monthlyIncome, "만원");
