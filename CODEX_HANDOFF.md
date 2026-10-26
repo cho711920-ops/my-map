@@ -1,5 +1,13 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-26 거리뷰 개인 대표사진 v85
+
+- 사용자 승인: 로드뷰 촬영사진을 본인 계정 해당매물 대표로, 건물 거리뷰만/옆 지도 제외. docs/personal-roadview-cover-v85-20261026.txt 확인.
+- 네이버 왼쪽 panorama panel/카카오 roadviewPane DOM rect만 crop. PC 현재 탭 getDisplayMedia 승인과 Capture Handle 동일 origin/handle 검사. 오른쪽 지도/상단 제외, 내부 출처 유지, 미리보기 후 저장. 미지원 모바일 업로드/붙여넣기, 원래 사진 복원.
+- 목록/상세/찜 표시, 원본사진/원본 다운로드 보존. 계정별 cloud_state 예약scope+R2 본문1280/썸네일320, propertyId별. CAS/계정guard/멱등/실패객체정리/복원tombstone/지연클립보드·촬영 차단. 기존 원본·찜·수집 데이터 변경 및 전역 캐시 무효화 없음. 찜 onerror remove 이후 parentNode 접근 오류도 수정.
+- Node1955/1955, 관련 브라우저95pass5제외 후 최종 사진·찜28pass6제외, 마지막 찜 이미지 복구 보완 후 PC·폰2/2. lint/tsc/globals/build/dry-run 정상. 실제 격리 Edge 탭공유 영상/handle/crop 통과(테스트 자동 승인), 가상 계정·자료 검증으로 사용자 계정/물리기기 실기와 구분.
+- 사전ebc35ba source.zip: private-audits/backups/js-map-personal-cover-20261026-v85. 제품93b65e0 origin/codex/personal-cover-v85. Worker318cd243-055c-4b7f-9c42-b7c6415b0141/cache0cb72853ed66dc5e68cafc1a. 양 도메인HTML/각94JS·CSS SHA일치 및 새 보호API401/CSP확인. 목록v25/상세v22 이전키 유지.
+
 ## 2026-10-26 건물매매 면적 누락 v84
 
 - 사용자는 호실 미특정 복합상가 등과 달리 건물 전체 매매의 대지/건축/연면적/건폐율/용적률 기본 표시 요청. docs/building-sale-measurements-v84-20261026.txt 우선 확인.
