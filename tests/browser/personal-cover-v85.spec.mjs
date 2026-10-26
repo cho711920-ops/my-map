@@ -11,7 +11,7 @@ async function setup(page,mockCapture=true){
     if(req.method()==='POST'){
       const body=req.postDataJSON();state.writes.push(body);
       if(state.fail)return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({ok:false,message:'저장 실패 검사'})});
-      const imageId=body.action==='reset'?'':crypto.randomUUID(),cover={propertyId:body.propertyId,imageId,requestId:body.requestId,version:(state.covers.get(body.propertyId)?.version||0)+1};
+      const imageId=body.action==='reset'?'':crypto.randomUUID(),cover={propertyId:body.propertyId,imageId,requestId:body.requestId,savedAt:new Date().toISOString(),version:(state.covers.get(body.propertyId)?.version||0)+1};
       if(imageId){cover.url='/api/personal-cover?propertyId='+body.propertyId+'&imageId='+imageId;cover.thumbnailUrl=cover.url+'&kind=thumb';state.images.set(imageId,body.image);}
       state.covers.set(body.propertyId,cover);if(state.lost){state.lost=false;return route.abort();}return json({ok:true,persisted:true,cover});
     }
@@ -70,7 +70,7 @@ test('upload persists across reload, affects only exact listing, originals prese
   await page.locator('[data-cover-close-v85]').click();await page.evaluate(()=>closeRoadviewModal());
   await expect(page.locator('img[data-cover-image-v85]')).toHaveCount(1);expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
   await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await expect(page.locator('img[data-cover-image-v85]')).toHaveCount(1);
-  expect(state.indexReads).toBe(2);
+  expect(state.indexReads).toBe(3); // startup, fresh editor lookup, reload
   await page.evaluate(()=>openUnifiedFavoritesV7());
   if(isMobile)await page.evaluate(()=>JSPhoneFavoritesV2.showFolder('fixture-favorites'));else await page.evaluate(()=>toggleUnifiedFavoriteFolderV7('fixture-favorites'));
   await expect(page.locator('#unifiedFavoriteModalV7 [data-cover-property-v85="FIXTURE-LEASE-1"] img')).toHaveAttribute('src',/\/api\/personal-cover/);
@@ -105,6 +105,68 @@ test('delayed clipboard result cannot become another listing photo',async({page}
   });await page.locator('[data-cover-paste-v85]').click();await page.locator('[data-cover-close-v85]').click();await roadview(page,'naver',1);
   await page.evaluate(()=>__clipboardResolve([{types:['image/png'],getType:async()=>{const c=document.createElement('canvas');c.width=c.height=50;return new Promise(resolve=>c.toBlob(resolve,'image/png'));}}]));
   await expect(page.locator('[data-cover-save-v85]')).toBeDisabled();await expect(page.locator('.cover-preview-v85 img')).toBeHidden();expect(state.writes).toHaveLength(0);
+});
+
+async function installWholeBuilding(page){
+  await page.route('**/api/data?**',async route=>{
+    const query=new URL(route.request().url()).searchParams;if(query.get('action')!=='unifiedListingDetail')return route.fallback();
+    await route.fulfill({json:{ok:true,originals:await page.evaluate(id=>__coverGroupOriginals[id]||[],query.get('propertyId'))}});
+  });
+  await page.evaluate(()=>{
+    const seed=allItems.find(x=>x.propertyId==='FIXTURE-BUILDING'),detail={scope:'whole_building',saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true,landAreaM2:412,grossAreaM2:823.55};
+    allItems=Array.from({length:7},(_,i)=>({...seed,propertyId:'SALE-'+i,key:'saved-sale-'+i,name:'탄방 건물 '+i,address:'서구 탄방동 1029',room:'전체',salePrice:450000+i,saleCategory:'building',saleDetails:{...detail}}));
+    allItems.push({...seed,propertyId:'LEASE',key:'saved-lease',tradeType:'lease',address:'서구 탄방동 1029',room:'2층',saleDetails:{}},
+      ...['UNIT','UNKNOWN','LAND','SEPARATE','OTHER'].map(id=>({...seed,propertyId:id,key:'saved-'+id,address:id==='OTHER'?'서구 탄방동 1029-1':'서구 탄방동 1029',saleCategory:id==='LAND'?'land':'building',saleDetails:{...detail,saleExtent:id==='UNIT'?'unit':id==='UNKNOWN'?'unknown':'whole_building',wholeBuildingGroupEligibleV55:!['UNIT','UNKNOWN','LAND'].includes(id)}})));
+    window.__coverGroupOriginals=Object.fromEntries(allItems.map(item=>[item.propertyId,[{...item,originalId:'original-'+item.propertyId,sourceId:'source-'+item.propertyId,buildingName:item.name,saleSummary:item.saleDetails,saleGroupingSeparatedV55:item.propertyId==='SEPARATE',images:[],photoCount:0,active:1,sourceUnavailable:false,revision:1}]]));
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:__coverGroupOriginals});JSListingTradeV1.setMode('building_sale');sortType='address';applyFilter();
+  });
+}
+async function seedCover(page,state,id,savedAt){
+  const image=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=600;c.height=400;c.getContext('2d').fillRect(0,0,600,400);return c.toDataURL('image/jpeg');});
+  const imageId=crypto.randomUUID(),url='/api/personal-cover?propertyId='+id+'&imageId='+imageId;
+  state.images.set(imageId,image);state.covers.set(id,{propertyId:id,imageId,version:2,requestId:crypto.randomUUID(),savedAt,url,thumbnailUrl:url+'&kind=thumb'});
+}
+test('seven-ad building shows an existing member cover on its representative, preserving lease and units',async({page,isMobile})=>{
+  const state=await setup(page);await seedCover(page,state,'SALE-4','2026-10-26T09:09:14.877Z');
+  await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await installWholeBuilding(page);
+  const actual=await page.evaluate(()=>Object.fromEntries(allItems.map(item=>[item.propertyId,JSListingCoverV85.urlFor(item,true)])));
+  for(let i=0;i<7;i++)expect(actual['SALE-'+i]).toContain('propertyId=SALE-4');
+  for(const id of ['LEASE','UNIT','UNKNOWN','LAND','SEPARATE','OTHER'])expect(actual[id]).toBe('');
+  await expect(page.locator('#list [data-property-id="SALE-0"] img[data-cover-image-v85]')).toHaveCount(1);
+  await page.evaluate(()=>JSUnifiedListingsV8.open('SALE-0','original-SALE-4'));
+  await expect(page.locator('.cover-detail-v85>img')).toHaveAttribute('src',/propertyId=SALE-4/);
+  await page.evaluate(()=>JSUnifiedListingsV8.close());await roadview(page,'naver',4);await upload(page);
+  await page.locator('[data-cover-save-v85]').click();await expect(page.locator('.cover-editor-v85 [role=status]')).toContainText('저장했습니다');
+  expect(state.writes[0].propertyId).toBe('SALE-4');expect(state.covers.size).toBe(1);
+  await page.locator('[data-cover-close-v85]').click();await page.evaluate(()=>closeRoadviewModal());
+  const filtered=await page.evaluate(()=>{
+    const item=allItems.find(x=>x.propertyId==='SALE-2'),api=JSUnifiedListingsV8;
+    const view=api.collapseWholeBuildingSalesV55([api.filterItemForView(item,()=>true,'active')]);
+    return {ids:view.map(x=>x.propertyId),photo:JSListingCoverV85.urlFor(view[0],true)};
+  });expect(filtered.ids).toEqual(['SALE-2']);expect(filtered.photo).toContain('propertyId=SALE-4');
+  await roadview(page,'naver',0);await page.locator('[data-cover-reset-v85]').click();await expect(page.locator('.cover-editor-v85 [role=status]')).toContainText('복원했습니다');
+  expect(state.writes.at(-1).propertyId).toBe('SALE-4');expect(state.writes.some(w=>w.propertyId==='LEASE')).toBe(false);
+  expect(await page.evaluate(()=>JSListingCoverV85.urlFor(allItems[0],true))).toBe('');
+});
+test('representative changes reuse latest group cover and scope corrections stop inheritance',async({page})=>{
+  const state=await setup(page);await seedCover(page,state,'SALE-4','2026-10-26T09:09:14.877Z');await seedCover(page,state,'SALE-5','2026-10-26T09:10:14.877Z');
+  await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await installWholeBuilding(page);
+  expect(await page.evaluate(()=>JSListingCoverV85.urlFor(allItems[0],true))).toContain('propertyId=SALE-5');
+  await page.evaluate(()=>{allItems=[...allItems].reverse();JSUnifiedListingsV8.attach(allItems);applyFilter();});
+  expect(await page.evaluate(()=>JSListingCoverV85.urlFor(allItems.find(x=>x.propertyId==='SALE-1'),true))).toContain('propertyId=SALE-5');
+  await page.evaluate(()=>{
+    for(const id of ['SALE-4','SALE-5'])__coverGroupOriginals[id][0].saleSummary={...__coverGroupOriginals[id][0].saleSummary,saleExtent:'unit',wholeBuildingGroupEligibleV55:false};
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:__coverGroupOriginals});applyFilter();
+  });
+  expect(await page.evaluate(()=>JSListingCoverV85.urlFor(allItems.find(x=>x.propertyId==='SALE-1'),true))).toBe('');
+  expect(await page.evaluate(()=>JSListingCoverV85.urlFor(allItems.find(x=>x.propertyId==='SALE-4'),true))).toContain('propertyId=SALE-4');
+});
+test('restore clears legacy covers only inside the verified whole-building sale group',async({page})=>{
+  const state=await setup(page);for(const [id,time]of [['SALE-4','09:09'],['SALE-5','09:10'],['LEASE','09:11'],['UNIT','09:12']])await seedCover(page,state,id,'2026-10-26T'+time+':14.877Z');
+  await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await installWholeBuilding(page);await roadview(page);
+  await page.locator('[data-cover-reset-v85]').click();await expect(page.locator('.cover-editor-v85 [role=status]')).toContainText('복원했습니다');
+  expect(state.writes.map(x=>x.propertyId).sort()).toEqual(['SALE-4','SALE-5']);expect(state.covers.get('LEASE').imageId).toBeTruthy();expect(state.covers.get('UNIT').imageId).toBeTruthy();
+  expect(await page.evaluate(()=>JSListingCoverV85.urlFor(allItems[0],true))).toBe('');
 });
 
 test.describe('native screen sharing in an isolated browser',()=>{

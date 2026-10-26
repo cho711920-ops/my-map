@@ -47,6 +47,16 @@ test('a filtered favorite keeps its exact saved ID, and filtered-out ads are not
   assert.equal(h.api.collapseWholeBuildingSalesV55(filtered)[0].unifiedOriginalCountV8,1);
 });
 
+test('personal photo identity uses proven whole-building sale membership and invalidates corrected scope',()=>{
+  const items=[master('A'),master('B'),master('LEASE',{tradeType:'lease'})],groups={A:[original('A')],B:[original('B')],LEASE:[original('LEASE',{tradeType:'lease'})]};
+  const h=harness(items,groups),key=h.api.personalCoverGroupKeyV86('A');
+  assert.match(key,/^whole-building-sale:/);assert.equal(h.api.personalCoverGroupKeyV86('B'),key);assert.equal(h.api.personalCoverGroupKeyV86('LEASE'),'');
+  h.collapse([items[0]]);assert.equal(h.api.personalCoverGroupKeyV86('B'),key,'a view filter cannot lose the saved member identity');
+  const revision=h.api.personalCoverGroupRevisionV86();groups.B[0].saleSummary={...groups.B[0].saleSummary,saleExtent:'unit',wholeBuildingGroupEligibleV55:false};
+  h.api.attach(items,{ok:true,groups});assert(h.api.personalCoverGroupRevisionV86()>revision);
+  assert.equal(h.api.personalCoverGroupKeyV86('B'),'');assert.equal(h.api.personalCoverGroupKeyV86('A'),key);
+});
+
 test('unit, unknown, land, manually separated, manually changed scope and completed listings remain separate',()=>{
   for(const change of [o=>{o.saleSummary.saleExtent='unit';},o=>{o.saleSummary.saleExtent='unknown';},
     o=>{o.saleCategory='land';},o=>{o.saleGroupingSeparatedV55=true;},o=>{o.hasManualRoomOverride=true;},

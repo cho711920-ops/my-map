@@ -15,7 +15,8 @@
     masterItemsArray: null, masterItemsById: Object.create(null),
     metadataCoverage: Object.create(null), sourceSnapshotProofKeys: Object.create(null),
     pendingProofIds: Object.create(null), pendingProofCount: 0, lastPendingProofCount: 0,
-    displayItemsArray: null, displayItemsById: Object.create(null) };
+    displayItemsArray: null, displayItemsById: Object.create(null),
+    personalCoverGroupKeysV86: Object.create(null), personalCoverGroupRevisionV86: 0 };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function isPhoneDetailV2() {
@@ -191,6 +192,7 @@
   // Collapse only the already-filtered view. Saved master IDs, source groups,
   // favorites, visit records and memo edits continue to address their own row.
   function collapseWholeBuildingSalesV55(items) {
+    invalidatePersonalCoverGroupsV86();
     var buckets = Object.create(null), result = [];
     (items || []).forEach(function(item) {
       var master = resolveMasterItem(item.propertyId) || item;
@@ -227,6 +229,23 @@
     var displayed = items.filter(function(item) { return text(item.propertyId) === text(propertyId); })[0];
     return displayed && displayed.wholeBuildingMembersV55 && displayed.wholeBuildingMembersV55.length > 1
       ? displayed.wholeBuildingMembersV55.slice() : [text(propertyId)];
+  }
+
+  // Reuse the strict whole-building proof, independently of sorting, source
+  // filters or the selected original. Never associate private photos by an
+  // unverified address, a lease, land, unit, floor, share or separated record.
+  function invalidatePersonalCoverGroupsV86() {
+    state.personalCoverGroupKeysV86 = Object.create(null);
+    state.personalCoverGroupRevisionV86 += 1;
+  }
+  function personalCoverGroupKeyV86(propertyId) {
+    var id = text(propertyId), master = resolveMasterItem(id);
+    if (!master) return "";
+    if (!Object.prototype.hasOwnProperty.call(state.personalCoverGroupKeysV86, id)) {
+      var key = wholeBuildingKeyV55(master);
+      state.personalCoverGroupKeysV86[id] = key ? "whole-building-sale:" + key : "";
+    }
+    return state.personalCoverGroupKeysV86[id];
   }
 
   function groupedRecordsHtmlV55(propertyId) {
@@ -1049,6 +1068,7 @@
   }
 
   function attach(items, result, deferStatus) {
+    invalidatePersonalCoverGroupsV86();
     if (result && result.groups) {
       if (state.groups !== result.groups) invalidateDetails();
       state.groups = result.groups;
@@ -1428,6 +1448,7 @@
   }
 
   function indexMasterItems(items) {
+    if (state.masterItemsArray !== items) invalidatePersonalCoverGroupsV86();
     state.masterItemsArray = items;
     state.masterItemsById = Object.create(null);
     items.forEach(function(item) {
@@ -2976,6 +2997,8 @@
     isSourceUnavailable: isSourceUnavailable,
     isCandidateOriginal: isCandidateOriginal, filterItemForView: filterItemForView,
     collapseWholeBuildingSalesV55: collapseWholeBuildingSalesV55,
+    personalCoverGroupKeyV86: personalCoverGroupKeyV86,
+    personalCoverGroupRevisionV86: function() { return state.personalCoverGroupRevisionV86; },
     isTransactionCandidate: isTransactionCandidate, candidateSummary: candidateSummary,
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,

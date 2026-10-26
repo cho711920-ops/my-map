@@ -1,10 +1,24 @@
 (function(global){
   'use strict';
   var account=String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase(),covers=new Map(),broken=new Set(),editor=null,active=null,sequence=0,choiceSequence=0,stream=null,previewUrl='',handle='';
+  var groupCovers=new Map(),groupRevision=-1,groupDirty=true,indexPending=null;
   function currentAccount(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
   function sameAccount(){return !!account&&account===currentAccount();}
   function idOf(item){return String(item&&item.propertyId||'');}
-  function urlFor(item,thumb){var c=sameAccount()&&covers.get(idOf(item)),url=c&&c.imageId?(thumb?c.thumbnailUrl:c.url):'';return broken.has(url)?'':url;}
+  function groupKey(id){return global.JSUnifiedListingsV8?.personalCoverGroupKeyV86?.(id)||'';}
+  function coverFor(item){
+    if(!sameAccount()||!covers.size)return null;
+    var id=idOf(item),key=groupKey(id),revision=global.JSUnifiedListingsV8?.personalCoverGroupRevisionV86?.()||0;
+    if(key&&(groupDirty||revision!==groupRevision)){
+      groupCovers=new Map();covers.forEach(function(cover){
+        if(!cover.imageId)return;var ownKey=groupKey(cover.propertyId),previous=groupCovers.get(ownKey);
+        if(ownKey&&(!previous||String(cover.savedAt||'')>String(previous.savedAt||'')||
+          (cover.savedAt===previous.savedAt&&cover.propertyId>previous.propertyId)))groupCovers.set(ownKey,cover);
+      });groupDirty=false;groupRevision=global.JSUnifiedListingsV8?.personalCoverGroupRevisionV86?.()||0;
+    }
+    return key&&groupCovers.get(key)||covers.get(id)||null;
+  }
+  function urlFor(item,thumb){var c=coverFor(item),url=c&&c.imageId?(thumb?c.thumbnailUrl:c.url):'';return broken.has(url)?'':url;}
   async function api(query,body){
     if(!sameAccount())throw Error('로그인 계정이 변경됐습니다. 새로고침해 주세요.');
     var params=new URLSearchParams(query||{});params.set('expectedAccountEmail',account);
@@ -34,11 +48,12 @@
     var body=document.getElementById('unifiedDetailBodyV8'),saved=body?.closest('#unifiedDetailDrawerV8')?.__detailPresentationV2;
     if(saved)decorateDetail(body,{propertyId:saved.propertyId});
   }
-  async function loadIndex(){
-    if(!sameAccount())return;
-    try{var next='',loaded=new Map();do{var result=await api(next?{cursor:next}:{});result.covers.forEach(function(c){loaded.set(c.propertyId,c);});next=result.nextCursor;}while(next&&sameAccount());
-      if(sameAccount()){covers.forEach(function(cover,key){if(cover.version>(loaded.get(key)?.version||0))loaded.set(key,cover);});covers=loaded;refresh();}
-    }catch(_error){/* Listing startup and originals remain independent of the personal image index. */}
+  function loadIndex(){
+    if(indexPending)return indexPending;
+    indexPending=(async function(){
+      var next='',loaded=new Map();do{var result=await api(next?{cursor:next}:{});result.covers.forEach(function(c){loaded.set(c.propertyId,c);});next=result.nextCursor;}while(next&&sameAccount());
+      if(sameAccount()){covers.forEach(function(cover,key){if(cover.version>(loaded.get(key)?.version||0))loaded.set(key,cover);});covers=loaded;groupDirty=true;refresh();}
+    })().finally(function(){indexPending=null;});return indexPending;
   }
   function decorateDetail(body,item){
     if(!body)return;var gallery=body.querySelector('.unified-detail-gallery-v8');if(!gallery)return;
@@ -82,12 +97,18 @@
     var ctx=roadviewContext();if(!ctx)return;close();ensureEditor();var token=sequence;active={ctx:ctx,ready:false,candidate:null};
     editor.querySelector('.cover-target-v85').textContent=ctx.address;editor.querySelector('.cover-preview-v85 img').hidden=true;editor.querySelector('.cover-preview-v85 span').hidden=false;
     editor.showModal();busy(true);status('현재 대표사진을 확인하고 있습니다.');
-    try{var result=await api({propertyId:ctx.propertyId});if(token!==sequence||!valid(ctx))return;covers.set(ctx.propertyId,result.cover);active.ready=true;busy(false);setControls();status('저장 전에 아래 미리보기에서 범위를 확인해 주세요.');}
+    try{
+      await loadIndex();if(token!==sequence||!valid(ctx))return;
+      var chosen=coverFor({propertyId:ctx.propertyId}),writeId=chosen?.imageId?chosen.propertyId:ctx.propertyId;
+      var result=await api({propertyId:writeId});if(token!==sequence||!valid(ctx))return;
+      covers.set(writeId,result.cover);groupDirty=true;active.writePropertyId=writeId;active.ready=true;busy(false);setControls();
+      status('저장 전에 아래 미리보기에서 범위를 확인해 주세요.');
+    }
     catch(e){if(token===sequence){status(e.message);busy(false);setControls();}}
   }
   function setControls(){
     var state=active;editor.querySelector('[data-cover-save-v85]').disabled=!state?.ready||!state.candidate;
-    editor.querySelector('[data-cover-reset-v85]').disabled=!state?.ready||!covers.get(state.ctx.propertyId)?.imageId;
+    editor.querySelector('[data-cover-reset-v85]').disabled=!state?.ready||!coverFor({propertyId:state.ctx.propertyId})?.imageId;
     editor.querySelector('[data-cover-capture-v85]').disabled=!state?.ready||state.ctx.mode==='map'||!navigator.mediaDevices?.getDisplayMedia;
   }
   function canvasFor(source,maxSide,width,height){var scale=Math.min(1,maxSide/Math.max(width,height)),canvas=document.createElement('canvas');canvas.width=Math.max(16,Math.round(width*scale));canvas.height=Math.max(16,Math.round(height*scale));var draw=canvas.getContext('2d');draw.fillStyle='#fff';draw.fillRect(0,0,canvas.width,canvas.height);draw.drawImage(source,0,0,canvas.width,canvas.height);return canvas;}
@@ -134,10 +155,21 @@
   }
   async function save(reset){
     var state=active,token=sequence;if(!state?.ready||!valid(state.ctx)||(!reset&&!state.candidate))return;busy(true);status('대표사진을 저장하고 있습니다.');
-    var body=Object.assign({},reset?{requestId:state.resetRequestId||(state.resetRequestId=crypto.randomUUID())}:state.candidate,{action:reset?'reset':'save',propertyId:state.ctx.propertyId,expectedVersion:covers.get(state.ctx.propertyId)?.version||0});
-    try{var result;
-      try{result=await api(null,body);}catch(error){var latest=await api({propertyId:state.ctx.propertyId}).catch(function(){return null;});if(latest?.cover.requestId===body.requestId)result=latest;else{if(latest)covers.set(state.ctx.propertyId,latest.cover);throw error;}}
-      covers.set(state.ctx.propertyId,result.cover);refresh();if(token!==sequence||!valid(state.ctx))return;state.candidate=null;release();editor.querySelector('.cover-preview-v85 img').hidden=true;editor.querySelector('.cover-preview-v85 span').hidden=false;
+    try{
+      var writeId=state.writePropertyId||state.ctx.propertyId,key=groupKey(state.ctx.propertyId),ids=[writeId];
+      if(reset&&key)ids=Array.from(covers.values()).filter(function(c){return c.imageId&&groupKey(c.propertyId)===key;}).map(function(c){return c.propertyId;});
+      state.resetRequests=state.resetRequests||new Map();
+      for(var id of ids){
+        if(id!==state.ctx.propertyId&&(!key||groupKey(id)!==key))throw Error('건물 묶음이 변경됐습니다. 창을 다시 열어 대표사진을 확인해 주세요.');
+        if(!state.resetRequests.has(id))state.resetRequests.set(id,crypto.randomUUID());
+        var body=Object.assign({},reset?{requestId:state.resetRequests.get(id)}:state.candidate,{action:reset?'reset':'save',propertyId:id,expectedVersion:covers.get(id)?.version||0}),result;
+        try{result=await api(null,body);}catch(error){
+          var latest=await api({propertyId:id}).catch(function(){return null;});
+          if(latest?.cover.requestId===body.requestId)result=latest;else{if(latest){covers.set(id,latest.cover);groupDirty=true;}throw error;}
+        }
+        covers.set(id,result.cover);groupDirty=true;refresh();if(token!==sequence||!valid(state.ctx))return;
+      }
+      state.candidate=null;release();editor.querySelector('.cover-preview-v85 img').hidden=true;editor.querySelector('.cover-preview-v85 span').hidden=false;
       status(reset?'원래 광고 사진으로 복원했습니다.':'내 계정의 대표사진으로 저장했습니다.');
     }catch(e){if(token===sequence)status(e.message+' 미리보기는 유지됩니다.');}finally{if(token===sequence){busy(false);setControls();}}
   }
@@ -146,7 +178,7 @@
   var button=document.getElementById('roadviewCoverButtonV85');if(button)button.onclick=open;
   // Observer is limited to modal lifecycle attributes; map tiles and listing mutations are ignored.
   var modal=document.getElementById('roadviewModal');if(modal)new MutationObserver(function(){if(!modal.classList.contains('open'))close();if(button)button.disabled=!roadviewContext();}).observe(modal,{attributes:true,attributeFilter:['class']});
-  global.addEventListener('pagehide',close);global.addEventListener('pageshow',function(e){if(e.persisted)loadIndex();});
+  global.addEventListener('pagehide',close);global.addEventListener('pageshow',function(e){if(e.persisted)loadIndex().catch(function(){});});
   document.addEventListener('visibilitychange',function(){if(!sameAccount()){close();covers.clear();refresh();}});
-  setTimeout(loadIndex,0);
+  setTimeout(function(){loadIndex().catch(function(){});},0);
 })(window);
