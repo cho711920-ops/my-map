@@ -150,11 +150,11 @@ test('density size distinguishes counts and becomes compact when zoomed in witho
     const wide = measure(); mapTest.level = 3; paintTestClusters(clusters); const close = measure();
     return {wide, close, counts: overlays.map(o => o.__cluster.items.length)};
   });
-  expect(sizes.wide[0]).toBeLessThan(sizes.wide[1]);
+  expect(sizes.wide[0]).toBe(50); expect(sizes.wide[1]).toBe(50);
   expect(sizes.wide[1]).toBeLessThan(sizes.wide[2]);
   expect(sizes.wide[2]).toBeLessThan(sizes.wide[3]);
   expect(sizes.wide[3]).toBeLessThan(sizes.wide[4]);
-  expect(sizes.wide[0]).toBeGreaterThanOrEqual(40); expect(sizes.close[0]).toBeGreaterThanOrEqual(40);
+  expect(sizes.close[0]).toBe(50);
   expect(sizes.wide[4]).toBe(110); expect(sizes.close[4]).toBeLessThanOrEqual(66);
   expect(sizes.counts).toEqual([1,10,100,500,1000]);
   for (const marker of await page.locator('.design-test-overlay .circle-marker').all()) {

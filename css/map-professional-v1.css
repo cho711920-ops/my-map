@@ -85,7 +85,7 @@ html #list .item .item-contact-button-v654 .item-action-icon-phone-v662 { color:
 /* Flat pastel circles keep roads visible. Selection changes only paint;
  * density size, source membership and the original map hit box stay intact. */
 html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655) {
-  --cluster-size: var(--density-size-v1, 40px) !important;
+  --cluster-size: var(--density-size-v1, 50px) !important;
   --cluster-font-size: var(--density-font-v1, 14px) !important;
   --cluster-fill: rgba(255, 224, 112, .62) !important;
   --cluster-text: #1e293b !important;
