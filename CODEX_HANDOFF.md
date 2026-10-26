@@ -1,5 +1,15 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-26 목록 속도 검수·백업 v81
+
+- 사용자: 지연 구간 실측 후 보완·검수·배포 승인, 수정 전 현 상태 복구 백업 추가 요청. 기존 시안/단순 설명 단계와 구분.
+- 사전 백업 private-audits/backups/js-map-speed-20261026: f8deab4 source.zip·Git bundle·원래 Worker067de7f4·복구안내/체크섬. bundle verify와 ZIP 제품 소스 SHA 재검증. 코드/배포 복구용이며 DB 시점복원 아님.
+- 제품 unified-listings-v8.js 12줄 변경: 넓은 대표의 새 객체 복사 spread/정확한 기존 출처 라벨 fast path/0~1개 원본 독립 slice. 원본 조건·수동값·unknown·정렬·필터·사진 URL/화질/복구·API·수집기·DB/개인기록 변경 없음.
+- 읽기 전용 운영 캡처 CSV83.97MB+원본50.27MB/38430대표. Edge CPU4배 제한+loopback/SVG 통제, 전후 각PC/모바일2회: 첫 카드 PC10.89→9.75초/모바일11.22→9.55초, 첫 사진load PC13.08→11.17초/모바일13.39→10.97초. 필터 약45~48% 감소. 실제 삼성·운영인증망/CDN 개선율 보장 아님. 최초 큰 전체 자료 구조는 남음.
+- 전후8회 재고/원본/금액/목록사진/표시순서 SHA동일(38430/시험표시11840). minified JS 규모검사2도 동일 SHA. 선택적 규모시험은 >75MB CDP fulfill 한도 문제를 loopback HTTP로 해결, 캡처 trace/screenshot/video 차단.
+- Node1941/1941, 관련 PC/모바일135통과/폰전용1제외, 태블릿 가로 touch14통과. iPad세로는 기존 간단 UI로 PC 헤더 전제 시험 실패 후 중단; 변경전/후 native 목록2건 대조 모두 통과. 세로 UI 숨김은 이번 변경 탓 아님/별도 변경 안 함. lint/type/build/dry-run/diff 통과.
+- 제품61e6a89 원격 codex/list-speed-v81 / Worker a5b3035b-23ce-47df-87f9-b04e171aa02d / cache93c12fdcea01188b18e5dfc0 배포. 양도메인 HTML 및 각92 JS/CSS SHA일치·보호API401 유지. [검수 근거·한계](docs/list-speed-v81-20261026.txt).
+
 ## 2026-10-23 상가임대 작게/크게 보기 v80
 
 - 사용자가 시안44 큰 사진 실제 적용 승인, 상가임대만/목록 제목 가운데 작은 크기 선택2개/기존 버튼·정보 유지/나중에 제거 쉽게 요청. 이전의 시안만 요청 단계와 구분.
