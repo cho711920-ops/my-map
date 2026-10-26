@@ -41,6 +41,8 @@ test("clicked region stays distinct through redraw, switching, and reset without
   });
   const regions=page.locator(".admin-test-host button");
   const before=await page.evaluate(()=>JSON.stringify(allItems));
+  await expect(regions.nth(0)).toHaveCSS("background-color","rgb(255, 255, 255)");
+  await expect(regions.nth(1)).toHaveCSS("background-color","rgb(255, 255, 255)");
   await regions.nth(0).click();
   await expect(regions.nth(0)).toHaveAttribute("aria-pressed","true");
   await expect(regions.nth(0)).toHaveCSS("background-color","rgba(255, 255, 255, 0.9)");

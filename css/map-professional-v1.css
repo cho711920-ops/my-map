@@ -108,7 +108,7 @@ html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).done.s
   border-color: #94a3b8 !important;
 }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 {
-  border-color: #eadb9f !important; background: #fff8dd !important;
+  border-color: #eadb9f !important; background: #fff !important;
   box-shadow: none !important; filter: none !important;
 }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 strong { color: #1e293b !important; font-weight: 700 !important; }
