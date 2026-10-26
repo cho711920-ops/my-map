@@ -1,5 +1,11 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-26 개별 원형 클러스터 기본 크기 v87
+
+- 사용자 노란 개별 클러스터가 작다며 기본 크기 확대 요청. JSMapClusterVisualV1.style 최소30→40px/수량곡선 base28→38, CSS 비행정구역 fallback38→40px. 일반 줌1건31→41px, 10건36→46px, 100건54→64px. 최대110/가까운 줌66 및 숫자폰트/색/선택테두리/동·구 흰 카드/수량·묶음·선택 로직 그대로.
+- 사전8b24cbc source.zip·commit·이전Worker 복구안내: private-audits/backups/js-map-cluster-size-20261026-v87. 기존 지도/행정구역 브라우저14pass4플랫폼조건제외, 최소크기와1건 추가확인. lint/전역검사/build/diff 정상. 저영향 크기2줄 변경으로 전체1956 반복 안 함.
+- 제품ddd31d5 origin/codex/cluster-size-v87 푸시. Worker9ebcd242-d1cf-48d2-a3f2-c3f47b7bc630/cacheb213c4fee26be7e9e09e95a4 배포. 양 도메인 HTML/각94JS·CSS SHA일치 확인. 운영 데이터/수집기/개인사진/캐시키 변경 없음.
+
 ## 2026-10-26 대표사진 묶음 표시 오류 v86
 
 - 사용자 탄방동1029/용문동589-25 로드뷰 사진 저장2회 후 미표시 신고. 두 곳 실제 개인사진version2 저장됨. 탄방동 R2본문/썸네일200 확인. v85가 선택원본 부모에 저장하고 묶음 대표 다른 propertyId에서 정확일치 조회한 것이 원인. 이전의 정상 완료 검수에 이 묶음 시나리오가 누락됨.
