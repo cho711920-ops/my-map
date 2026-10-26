@@ -38,3 +38,10 @@
 - 모든 사용자 계정/물리적 삼성·iOS/현장 네트워크에서 모든 데이터를 직접 조작한 검사는 아님.
 - 확인한 범위에서 미해결 재현 오류는 없으나 '전체 웹에 미래 오류가 전혀 없다'는 보장이 아님.
 - 배포 결과는 아래 추가.
+
+배포 완료
+- 제품a36ce7c / origin/codex/web-audit-cluster-v82 푸시 완료.
+- Worker2cfa7503-89ab-45d1-ae4a-6cbc575e80fe / public cachee8b791eb98da9ccaaafcdbf4.
+- 배포 후 두 도메인 HTML200 및 전체 HTML SHA/각92JS·CSS SHA 일치 확인. 비로그인 세션·CSV·원본·이미지401 유지.
+- 업로드 변경3자산: map-professional-v1.css/index.html/sw.js. 서버 비즈니스 코드/진행수집/개인 기록은 변경하지 않음.
+- 현재 열려 있는 화면은 새로고침 후 적용.
