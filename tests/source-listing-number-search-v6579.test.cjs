@@ -44,7 +44,7 @@ assert.match(d1, /sourceSearchIds\[id\] \|\| \(sourceSearchIds\[id\] = \[\]\)/);
 assert.match(d1, /l\.status<>'deleted'/);
 assert.match(unified, /item\.sourceListingSearchV6579 =/);
 assert.match(fs.readFileSync("cloudflare/src/worker.js", "utf8"),
-  /api-cache\/unified-listings-v24-measurements-v84\.json/);
+  /api-cache\/unified-listings-v25-measurements-v84\.json/);
 assert.match(html, /script\.js\?v=[^"\s]+/);
 assert.match(html, /unified-listings-v8\.js\?v=[^"\s]+/);
 

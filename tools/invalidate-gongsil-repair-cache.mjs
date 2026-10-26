@@ -19,7 +19,7 @@ assert.ok(ids.every(id => /^M-[a-z0-9-]+$/.test(id)));
 const keys = [
   'api-cache/d1-sheet-v3-source-proof.csv',
   'api-cache/unified-listings-v14-source-proof.json',
-  'api-cache/unified-listings-v24-measurements-v84.json',
+  'api-cache/unified-listings-v25-measurements-v84.json',
   'api-cache/operations-dashboard-v4-source-evidence.json',
   'api-cache/revision/listings.json',
   'api-cache/revision/operations.json',

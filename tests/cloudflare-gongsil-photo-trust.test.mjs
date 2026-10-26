@@ -41,7 +41,7 @@ test("unified list and detail responses sanitize legacy Gongsilbox media", () =>
   assert.match(d1, /CASE WHEN source='공실박스' THEN json_extract\(raw_json, '\$\.list\.Photos'\) END AS gongsil_photos_json/);
   assert.match(d1, /clean\(original\.source\) === "공실박스"/);
   assert.match(d1, /const isGongsil = clean\(row\.source \|\| snapshot\.source\) === "공실박스"/);
-  assert.match(worker, /unified-listings-v24-measurements-v84\.json/);
+  assert.match(worker, /unified-listings-v25-measurements-v84\.json/);
   assert.match(worker, /unified-detail-v22-measurements-v84/);
   assert.match(d1, /const snapshot = \{ \.\.\.parseJson\(row\.list_snapshot_json, \{\}\) \}/);
   assert.match(d1, /const raw = parseJson\(row\.raw_json, \{\}\)/);
