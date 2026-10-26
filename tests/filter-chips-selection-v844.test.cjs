@@ -222,14 +222,13 @@ test("one chip clears only its own condition and refreshes filtering", () => {
   assert.equal(applyCount, 1);
 });
 
-test("selected listing card and its current map cluster use one strong blue state", () => {
+test("selected listing card remains linked to its current map cluster", () => {
   assert.match(script, /isLinkedListingSelectedV845\(item\) \? " selected"/);
   assert.match(unifiedSource, /handleCardClick[\s\S]*?global\.selectListingOnMapV844\(item\)[\s\S]*?open\(encodeURIComponent\(propertyId\)\)/);
   assert.match(mapSource, /function selectListingOnMapV844\(item\)[\s\S]*?selectedListCardIdV845\s*=[\s\S]*?matchedOverlay[\s\S]*?redrawSelectedMarkers\(\)/);
   assert.match(mapSource, /card\.classList\.toggle\([\s\S]*?"selected"[\s\S]*?data-list-card-id-v681/);
   assert.match(propertyEditSource, /clearLinkedListingSelectionV845\(\)/);
   assert.match(desktopCss, /#list \.item\.selected[\s\S]*?inset 4px 0 0 #0568e8/);
-  assert.match(desktopCss, /\.circle-marker\.selected[\s\S]*?--cluster-fill: rgba\(5, 104, 232, \.98\)/);
   assert.match(mobileCss, /\.js-mobile-app-v1 #list \.item\.selected[\s\S]*?inset 4px 0 0 #0568e8/);
 });
 

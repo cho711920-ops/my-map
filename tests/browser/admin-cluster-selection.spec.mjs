@@ -43,8 +43,9 @@ test("clicked region stays distinct through redraw, switching, and reset without
   const before=await page.evaluate(()=>JSON.stringify(allItems));
   await regions.nth(0).click();
   await expect(regions.nth(0)).toHaveAttribute("aria-pressed","true");
-  await expect(regions.nth(0)).toHaveCSS("background-color","rgb(5, 104, 232)");
-  await expect(regions.nth(0).locator("strong")).toHaveCSS("color","rgb(255, 255, 255)");
+  await expect(regions.nth(0)).toHaveCSS("background-color","rgba(255, 255, 255, 0.9)");
+  await expect(regions.nth(0)).toHaveCSS("border-top-color","rgb(212, 181, 65)");
+  await expect(regions.nth(0).locator("strong")).toHaveCSS("color","rgb(30, 41, 59)");
   await expect(page.locator(".admin-region-selection-badge-v1")).toHaveCount(0);
   await expect(regions.nth(2)).toHaveAttribute("aria-pressed","false");
   await expect(page.locator("#list .item")).toHaveCount(1);
@@ -62,7 +63,7 @@ test("clicked region stays distinct through redraw, switching, and reset without
     const session=await context.newCDPSession(page);
     await session.send("Emulation.setDeviceMetricsOverride",{width:930,height:530,screenWidth:1100,screenHeight:720,mobile:true,deviceScaleFactor:1,screenOrientation:{type:"landscapePrimary",angle:90}});
     await expect(page.locator("html")).toHaveClass(/js-landscape-desktop-fit-v1/);
-    await expect(regions.nth(1)).toHaveCSS("background-color","rgb(5, 104, 232)");
+    await expect(regions.nth(1)).toHaveCSS("background-color","rgba(255, 255, 255, 0.9)");
     await expect(regions.nth(1)).toBeVisible();
   }
   if(!isMobile) await page.screenshot({path:info.outputPath("selected-dong.png")});

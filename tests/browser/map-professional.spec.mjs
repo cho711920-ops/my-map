@@ -93,8 +93,8 @@ test('desktop list opens by default and preserves search geometry and selection 
   await page.locator('.design-test-overlay .circle-marker').click();
   await expect(page.locator('html')).not.toHaveClass(/js-map-list-closed-v1/);
   await expect(page.locator('#mapListTitleV1')).toHaveText('선택한 매물 1개');
-  await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('background-color', 'rgb(5, 104, 232)');
-  await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('border-top-width', '0px');
+  await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('background-color', 'rgba(255, 255, 255, 0.9)');
+  expect(await page.locator('.design-test-overlay .circle-marker').evaluate(el=>parseFloat(getComputedStyle(el).borderTopWidth))).toBeGreaterThanOrEqual(1);
   await expect(page.locator('.design-test-overlay .circle-marker')).toHaveCSS('box-shadow', 'none');
   await expect(page.locator('#list .item')).toHaveCount(1);
   await expectListControls(page, true);
@@ -158,12 +158,40 @@ test('density size distinguishes counts and becomes compact when zoomed in witho
   for (const marker of await page.locator('.design-test-overlay .circle-marker').all()) {
     await expect(marker).toHaveCSS('border-top-width','0px');
     await expect(marker).toHaveCSS('box-shadow','none');
-    await expect(marker).toHaveCSS('color','rgb(255, 255, 255)');
+    await expect(marker).toHaveCSS('color','rgb(30, 41, 59)');
   }
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
 
-test('confirmed spatial clusters are blue while pending or mixed visits stay gold across redraws', async ({page, context}) => {
+test('pastel circles keep the same diameter and counts when selected, hovered and cleared', async ({page, context}, info) => {
+  const h = await prepare(page, context);
+  await installMap(page);
+  await page.evaluate(() => {
+    paintTestClusters([{key:'pastel-626',worldGrid:true,items:Array(626).fill(allItems[0])},
+      {key:'pastel-12',worldGrid:true,items:Array(12).fill(allItems[0])}]);
+  });
+  const marker=page.locator('.design-test-overlay .circle-marker').first();
+  const read=()=>marker.evaluate(el=>{const c=getComputedStyle(el),r=el.getBoundingClientRect();return {
+    width:r.width,height:r.height,fill:c.backgroundColor,image:c.backgroundImage,shadow:c.boxShadow,
+    filter:c.filter,border:parseFloat(c.borderTopWidth),borderColor:c.borderTopColor,text:el.textContent};});
+  const before=await read();
+  expect(before.fill).toBe('rgba(255, 224, 112, 0.62)');
+  expect(before.image).toBe('none');expect(before.shadow).toBe('none');expect(before.text).toBe('626');
+  await marker.hover();expect((await read()).filter).toBe('none');expect((await read()).shadow).toBe('none');
+  await page.evaluate(()=>{selectedGroupKey='pastel-626';redrawSelectedMarkers();});
+  const selected=await read();
+  expect(selected.fill).toBe('rgba(255, 255, 255, 0.9)');expect(selected.borderColor).toBe('rgb(212, 181, 65)');
+  expect(selected.border).toBeGreaterThanOrEqual(1);expect(selected.border).toBeLessThanOrEqual(1.5);
+  expect(selected.width).toBe(before.width);expect(selected.height).toBe(before.height);
+  expect(selected.image).toBe('none');expect(selected.shadow).toBe('none');expect(selected.text).toBe('626');
+  await page.screenshot({path:info.outputPath('pastel-yellow-selected-626.png')});
+  await page.evaluate(()=>{selectedGroupKey=null;redrawSelectedMarkers();});
+  expect((await read()).fill).toBe(before.fill);expect((await read()).border).toBe(0);
+  expect(await page.evaluate(()=>overlays.map(o=>o.__cluster.items.length))).toEqual([626,12]);
+  expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);
+});
+
+test('active spatial clusters stay flat pastel yellow while visit and completion states survive redraws', async ({page, context}) => {
   const h = await prepare(page, context);
   await installMap(page);
   await page.evaluate(() => {
@@ -178,19 +206,20 @@ test('confirmed spatial clusters are blue while pending or mixed visits stay gol
     redrawSelectedMarkers();
   });
   const markers = page.locator('.design-test-overlay .circle-marker');
-  const fills = () => markers.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundImage));
+  const fills = () => markers.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
   const initial = await fills();
-  expect(initial[0]).toContain('35, 132, 245');
-  expect(initial[1]).toContain('247, 184, 60');
-  expect(initial[2]).toContain('247, 184, 60');
+  expect(initial).toEqual(Array(3).fill('rgba(255, 224, 112, 0.62)'));
+  await expect(markers.nth(1)).toHaveClass(/source-gongsil/);
+  await expect(markers.nth(2)).toHaveClass(/source-gongsil/);
   await expect(markers.nth(0)).not.toHaveClass(/source-gongsil/);
   await page.evaluate(() => {
     overlays[1].__cluster.items[0].memo = '(확인매물)';
     redrawSelectedMarkers();
   });
-  expect((await fills())[1]).toContain('35, 132, 245');
+  expect((await fills())[1]).toBe('rgba(255, 224, 112, 0.62)');
+  await expect(markers.nth(1)).not.toHaveClass(/source-gongsil/);
   await page.evaluate(() => {selectedGroupKey = 'pending'; redrawSelectedMarkers();});
-  await expect(markers.nth(1)).toHaveCSS('background-color', 'rgb(5, 104, 232)');
+  await expect(markers.nth(1)).toHaveCSS('background-color', 'rgba(255, 255, 255, 0.9)');
   await page.evaluate(() => {
     selectedGroupKey = null;
     overlays[2].__cluster.items.forEach(item => {item.state = '계약완료';});
@@ -248,8 +277,16 @@ test('phone-number states remain green/gray while ordinary action colors and sel
   await page.screenshot({path: info.outputPath(isMobile ? 'phone-list.png' : 'desktop-contact-states.png')});
   if (isMobile) {
     await expect(page.locator('html')).toHaveAttribute('data-jsm-mobile-view', 'list');
-    await expect(page.locator('#mapListCloseV1')).toBeHidden();
+    // The lease size selector now exposes this header on narrow phones.
+    // Verify its existing close action instead of the pre-v80 hidden state.
+    await expect(page.locator('#mapListCloseV1')).toBeVisible();
     expect(await page.locator('body').evaluate(el => el.scrollWidth <= innerWidth)).toBe(true);
+    const beforeClose=await page.evaluate(()=>JSON.stringify(allItems));
+    await page.locator('#mapListCloseV1').click();
+    await expect(page.locator('html')).toHaveAttribute('data-jsm-mobile-view','map');
+    await page.locator('[data-mobile-view="list"]').click();
+    await expect(page.locator('#list .item')).toHaveCount(2);
+    expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(beforeClose);
   }
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });

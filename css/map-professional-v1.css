@@ -82,41 +82,43 @@ html #list .item .item-contact-button-v654 .item-action-icon-phone-v662 { color:
 
 /* Density sizes are computed from the current zoom and count, independently of
  * source/selection classes. Administrative cards keep their stable hit boxes. */
-html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655) {
+/* Flat pastel circles keep roads visible. Selection changes only paint;
+ * density size, source membership and the original map hit box stay intact. */
+html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655) {
   --cluster-size: var(--density-size-v1, 38px) !important;
   --cluster-font-size: var(--density-font-v1, 14px) !important;
-  /* One translucent paint layer keeps roads visible; the fixed highlight adds
-   * a soft pearl finish without blur, images or an animated overlay. */
-  --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(143, 199, 255, .58) 0%, rgba(35, 132, 245, .62) 55%, rgba(5, 104, 232, .66) 100%) !important;
-  --cluster-text: #fff !important;
+  --cluster-fill: rgba(255, 224, 112, .62) !important;
+  --cluster-text: #1e293b !important;
   border: 0 !important;
   background: var(--cluster-fill) !important; color: var(--cluster-text) !important;
-  box-shadow: none !important;
-  font-weight: 700 !important; animation: none !important;
+  box-shadow: none !important; text-shadow: none !important; filter: none !important;
+  font-weight: 700 !important; animation: none !important; transition: none !important;
 }
-/* Gold means a pending field visit in this cluster, including mixed groups.
- * A confirmed listing keeps its normal blue even when its source is Gongsil. */
-html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).source-gongsil {
-  --cluster-fill: radial-gradient(ellipse at 30% 22%, rgba(255, 222, 143, .58) 0%, rgba(247, 184, 60, .62) 55%, rgba(234, 162, 37, .66) 100%) !important;
+/* Completed groups retain their status color; visit classifications remain in
+ * the data/card badges while active circles share the requested yellow. */
+html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).done {
+  --cluster-fill: rgba(226, 232, 240, .9) !important; --cluster-text: #64748b !important;
 }
-html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).done { --cluster-fill: rgba(226, 232, 240, .9) !important; --cluster-text: #64748b !important; }
-html.js-map-design-v1 .circle-marker:not(.admin-region-cluster-v655).selected {
-  --cluster-fill: #0568e8 !important; --cluster-text: #fff !important;
-  background: #0568e8 !important; color: #fff !important;
-  box-shadow: none !important; filter: none !important;
+html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).selected {
+  --cluster-fill: rgba(255, 255, 255, .9) !important;
+  --cluster-text: #1e293b !important;
+  border: 1.5px solid #d4b541 !important;
+}
+html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).done.selected {
+  border-color: #94a3b8 !important;
 }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 {
-  border-color: #dce3ec !important; background: #fff !important;
-  box-shadow: 0 1px 4px #1e293b1a !important; filter: none !important;
+  border-color: #eadb9f !important; background: #fff8dd !important;
+  box-shadow: none !important; filter: none !important;
 }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 strong { color: #1e293b !important; font-weight: 700 !important; }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 span { color: #64748b !important; font-weight: 500 !important; }
-html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 span b { color: #075fbd !important; font-weight: 650 !important; }
+html.js-map-design-v1 .circle-marker.admin-region-cluster-v655 span b { color: #6f5a16 !important; font-weight: 650 !important; }
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 {
-  border-color: #0568e8 !important; background: #0568e8 !important;
-  box-shadow: 0 1px 4px #124b8b30 !important;
+  border-color: #d4b541 !important; background: rgba(255, 255, 255, .9) !important;
+  box-shadow: none !important;
 }
-html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b) { color: #fff !important; }
+html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b) { color: #1e293b !important; }
 
 .map-list-panel-head-v1 { display: none; }
 #mapListCloseV1:focus-visible { outline: 2px solid #0568e8; outline-offset: 2px; }

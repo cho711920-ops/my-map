@@ -64,6 +64,26 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   return {errors,forbidden};
 }
 
+test('flat pastel circles select with a thin outline on the real map without changing their count or size',async({page},testInfo)=>{
+  const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await page.evaluate(()=>map.setLevel(5));
+  const marker=page.locator('#map .circle-marker.world-grid-cluster-v690').first();
+  await expect(marker).toHaveText('1');
+  await expect(marker).toHaveCSS('background-color','rgba(255, 224, 112, 0.62)');
+  await expect(marker).toHaveCSS('background-image','none');
+  const size=await marker.evaluate(el=>el.getBoundingClientRect().width);
+  await marker.click();
+  await expect(marker).toHaveClass(/selected/);
+  await expect(marker).toHaveCSS('background-color','rgba(255, 255, 255, 0.9)');
+  await expect(marker).toHaveCSS('border-top-color','rgb(212, 181, 65)');
+  await expect(marker).toHaveCSS('box-shadow','none');
+  expect(await marker.evaluate(el=>el.getBoundingClientRect().width)).toBe(size);
+  await expect(marker).toHaveText('1');
+  await page.screenshot({path:testInfo.outputPath('native-pastel-cluster.png')});
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
 test('parking overlays and detail coexist with real Kakao clusters without moving or selecting listings',async({page},testInfo)=>{
   test.setTimeout(45000);
   const boundary=await startFullApplication(page);
