@@ -1,5 +1,10 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-26 원형 클러스터 최소50px v88
+
+- 사용자40px에서50px 재요청. 원형 최소40→50 및 CSS fallback40→50만 변경. 수량곡선/최대110·줌66/동·구 흰 카드·선택테두리 그대로. 작은1·10건50px 실측, 기존 지도·행정구역 PC/폰14pass4플랫폼제외·lint/build/diff 통과.
+- 사전bc48b3c source.zip/commit/이전Worker 복구안내 private-audits/backups/js-map-cluster-50px-20261026-v88. 제품2e71cd0 origin/codex/cluster-50px-v88 푸시. Workera289959d-bddc-4ce3-93f6-7c4a5eb1cbe6/cachebf2a3f1830feefeaf74cba07 배포. 양 도메인 HTML/각94JS·CSS SHA 일치 확인.
+
 ## 2026-10-26 개별 원형 클러스터 기본 크기 v87
 
 - 사용자 노란 개별 클러스터가 작다며 기본 크기 확대 요청. JSMapClusterVisualV1.style 최소30→40px/수량곡선 base28→38, CSS 비행정구역 fallback38→40px. 일반 줌1건31→41px, 10건36→46px, 100건54→64px. 최대110/가까운 줌66 및 숫자폰트/색/선택테두리/동·구 흰 카드/수량·묶음·선택 로직 그대로.
