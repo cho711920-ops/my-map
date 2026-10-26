@@ -156,6 +156,19 @@ test("changed parent tokens across source pages reject only that parent's proof"
   assert.match(result.sourceSnapshotKeys.stable, /^sha256-v1:[a-f0-9]{64}$/);
 });
 
+test("large unified reads bound source pages and renew snapshot ownership between pages without changing proofs", async t => {
+  const f=fixture(t);f.master('bounded');f.db.exec('BEGIN');
+  for(let i=0;i<2101;i++)f.source('bounded-'+i,'bounded');f.db.exec('COMMIT');
+  let progress=0;
+  const result=await handleD1GetAction(f.env,{}, {action:'unifiedListings'}, {onReadPage:async()=>{progress++;}});
+  const sourceReads=f.queries.filter(q=>/FROM listing_sources WHERE/.test(q.sql));
+  assert.equal(sourceReads.length,3);assert.ok(sourceReads.every(q=>q.values.at(-1)===1000));
+  assert.equal(progress,4,'three source pages and the final parent page renew ownership');
+  assert.equal(result.groups.bounded.length,2101);
+  assert.equal(result.sourceSnapshotKeys.bounded,await hashSourceSnapshotProof(f.proof('bounded')));
+  await assert.rejects(handleD1GetAction(f.env,{}, {action:'unifiedListings'}, {onReadPage:async()=>{throw Error('ownership lost');}}),/ownership lost/);
+});
+
 test("a source change between scoped item and metadata reads is exposed as a key mismatch, never retagged", async t => {
   const f = fixture(t); f.master("M"); f.source("123", "M"); let changed = false;
   f.afterRead(sql => {

@@ -150,7 +150,7 @@ test("the Today scoped path keeps provider IDs, market scope and publication gua
   assert.deepEqual(f.snapshot(), before);
 });
 
-test("crossing the 4,000-row page boundary loses neither an advertisement nor a searchable ID", async t => {
+test("crossing multiple 1,000-row page boundaries loses neither an advertisement nor a searchable ID", async t => {
   const f = fixture(t); f.master("many");
   f.db.exec("BEGIN");
   for (let i = 0; i < 4001; i += 1) f.source("S-" + String(i).padStart(5, "0"), "many", "네이버", String(100000 + i));
@@ -164,6 +164,9 @@ test("crossing the 4,000-row page boundary loses neither an advertisement nor a 
   assert.equal(result.sourceSearchIds.many[0], "n:100000");
   assert.equal(result.sourceSearchIds.many.at(-1), "n:104000");
   assert.equal(expand(result, "many").at(-1).photoCount, 7);
-  assertSingleScan(f.queries, 2);
+  assertSingleScan(f.queries, 5);
+  const pages=f.queries.filter(q=>/SELECT rowid AS __page_cursor,[\s\S]*FROM listing_sources WHERE/.test(q.sql));
+  assert.ok(pages.every(q=>q.values.at(-1)===1000));
+  assert.deepEqual(pages.map(q=>q.values.at(-2)),[0,1000,2000,3000,4000]);
   assert.equal(f.db.prepare("SELECT total_changes() AS n").get().n, before);
 });

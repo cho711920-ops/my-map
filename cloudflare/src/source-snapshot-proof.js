@@ -103,21 +103,29 @@ export function createSourceSnapshotReadAccumulator() {
       }
     },
     async finish(parents) {
-      const proofs = [], propertyIds = {};
-      for (const parent of parents) {
-        const id = value(parent.id), group = observed.get(id);
-        if (!id) continue;
-        const parentProof = JSON.stringify(sourceSnapshotParent(parent));
-        const expectedCount = integer(parent.source_snapshot_source_count);
-        // A missing source group is verified empty only when the final,
-        // publication-guarded parent explicitly counted zero public sources.
-        if (group ? group.conflict || group.parent !== parentProof || group.rows.length !== expectedCount : expectedCount !== 0) continue;
-        proofs.push({ id, source_snapshot_proof: [sourceSnapshotParent(parent), group ? group.rows : []] });
-        propertyIds[id] = value(parent.property_id) || id;
+      const keys = {}, propertyIds = {};
+      // Drain proofs as they are hashed. Holding every source fingerprint until
+      // the final digest retains tens of MB beside the complete display groups.
+      // Neither concurrent parent/source edits nor missing-source guards change.
+      for (let offset = 0; offset < parents.length; offset += 24) {
+        const proofs = [];
+        for (const parent of parents.slice(offset, offset + 24)) {
+          const id = value(parent.id), group = observed.get(id);
+          observed.delete(id);
+          if (!id) continue;
+          const parentProof = JSON.stringify(sourceSnapshotParent(parent));
+          const expectedCount = integer(parent.source_snapshot_source_count);
+          // A missing source group is verified empty only when the final,
+          // publication-guarded parent explicitly counted zero public sources.
+          if (group ? group.conflict || group.parent !== parentProof || group.rows.length !== expectedCount : expectedCount !== 0) continue;
+          proofs.push({ id, source_snapshot_proof: [sourceSnapshotParent(parent), group ? group.rows : []] });
+          propertyIds[id] = value(parent.property_id) || id;
+        }
+        await hashSourceSnapshotRows(proofs);
+        for (const row of proofs) keys[row.id] = row.source_snapshot_key;
       }
-      await hashSourceSnapshotRows(proofs);
       observed.clear();
-      return { keys: Object.fromEntries(proofs.map(row => [row.id, row.source_snapshot_key])), propertyIds };
+      return { keys, propertyIds };
     }
   };
 }

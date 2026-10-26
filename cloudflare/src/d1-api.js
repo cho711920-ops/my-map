@@ -217,7 +217,7 @@ async function allPages(env, sql, pageSize = 4_000, bindings = []) {
   return rows;
 }
 
-async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000, bindings = [], consumePage = null) {
+async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000, bindings = [], consumePage = null, onReadPage = null) {
   const rows = [];
   let cursor = 0;
   for (;;) {
@@ -233,6 +233,7 @@ async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageS
     }
     if (consumePage) await consumePage(values);
     else rows.push(...values);
+    if (onReadPage) await onReadPage();
     if (page.length < pageSize) break;
   }
   return rows;
@@ -497,7 +498,7 @@ function originalAddressDisclosureSql() {
     WHEN ${flags("isAddressExposed")}='true' THEN 'public' ELSE '' END ELSE '' END`;
 }
 
-async function unifiedListings(env, listingIds = null) {
+async function unifiedListings(env, listingIds = null, onReadPage = null) {
   const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
   if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
     groups: {}, sourceSearchIds: {}, sourceSnapshotKeys: {}, sourceSnapshotPropertyIds: {}, originalCount: 0, unavailableCount: 0, source: "D1" };
@@ -551,7 +552,9 @@ async function unifiedListings(env, listingIds = null) {
         WHERE quality_hold.listing_id = listing_sources.listing_id
           AND quality_hold.state = 'open' AND quality_hold.blocks_publication = 1
       )${scopeSql("listing_id")}`,
-    4_000, bindings, async rows => {
+    // Smaller source pages leave room for the full display groups and their
+    // identity proofs inside the Worker's 128 MB memory limit.
+    1_000, bindings, async rows => {
       originalCount += rows.length;
       proof.add(rows);
       const pageIndex = sourceListingSearchIndex(rows);
@@ -592,7 +595,7 @@ async function unifiedListings(env, listingIds = null) {
         while (values.length && values[values.length - 1] === "") values.pop();
         groups[propertyId].push(values);
       }
-    }
+    }, onReadPage
   );
   // Exactly two narrow manual-history reads after ALL source pages. Apply to
   // compact presentation only; the final parent proof still rejects any edit
@@ -619,7 +622,7 @@ async function unifiedListings(env, listingIds = null) {
   const parents = await allRowidPages(env, `id, property_id, version, updated_at, status,
     (SELECT COUNT(*) FROM listing_sources proof_source WHERE proof_source.listing_id=listings.id
       AND ${publicSourceWhereSql("proof_source")}) AS source_snapshot_source_count`, "listings",
-    `${publicMasterWhereSql("listings")} AND ${publicMasterSourcesWhereSql("listings")}${scopeSql("id")}`, 3_000, bindings);
+    `${publicMasterWhereSql("listings")} AND ${publicMasterSourcesWhereSql("listings")}${scopeSql("id")}`, 3_000, bindings, null, onReadPage);
   const sourceProof = await proof.finish(parents);
   parents.length = 0;
   for (const id of Object.keys(sourceProof.keys)) {
@@ -1374,11 +1377,11 @@ async function userManagement(env, user) {
   return { ok: true, action: "userManagement", users, localAccounts, source: "D1+ENV" };
 }
 
-export async function handleD1GetAction(env, user, query) {
+export async function handleD1GetAction(env, user, query, options = {}) {
   if (query.action === "listingHistoryRestorePreview") return previewListingHistoryRestore(env, user, query);
   const action = clean(query.action);
   if (!env.DB || !isD1GetAction(action)) return null;
-  if (action === "unifiedListings") return unifiedListings(env);
+  if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null);
   if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
   if (action === "saleAskingHistory") return getSaleAskingHistory(env, query);

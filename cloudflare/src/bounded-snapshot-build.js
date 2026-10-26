@@ -13,7 +13,7 @@ export function buildSheetSnapshot(env, key, revision) {
 
 export function buildUnifiedSnapshot(env, key, revision, user, query) {
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision, async emit => {
-    const payload = await handleD1GetAction(env, user, query);
+    const payload = await handleD1GetAction(env, user, query, { onReadPage: () => lease?.renew() });
     await emit("{");
     let first = true;
     for (const [name, value] of Object.entries(payload)) {
