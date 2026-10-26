@@ -14,7 +14,7 @@
       var factor = level <= 3 ? .72 : level === 4 ? .88 : 1;
       var maximum = level <= 3 ? 66 : level === 4 ? 92 : 110;
       if (!cluster.worldGrid && typeof global.getClusterDistance === "function") maximum = Math.min(maximum, global.getClusterDistance() - 8);
-      var size = Math.max(30, Math.min(maximum, Math.round((28 + 2.6 * Math.sqrt(count)) * factor)));
+      var size = Math.max(40, Math.min(maximum, Math.round((38 + 2.6 * Math.sqrt(count)) * factor)));
       var font = count >= 1000 ? 18 : count >= 100 ? 16 : 14;
       return ' style="--density-size-v1:' + size + 'px;--density-font-v1:' + font + 'px"';
     }

@@ -144,7 +144,7 @@ test('density size distinguishes counts and becomes compact when zoomed in witho
   const h = await prepare(page, context);
   await installMap(page);
   const sizes = await page.evaluate(() => {
-    const clusters = [10, 100, 500, 1000].map(count => ({key: String(count), worldGrid: true, items: Array(count).fill(allItems[0])}));
+    const clusters = [1, 10, 100, 500, 1000].map(count => ({key: String(count), worldGrid: true, items: Array(count).fill(allItems[0])}));
     paintTestClusters(clusters);
     const measure = () => [...document.querySelectorAll('.design-test-overlay .circle-marker')].map(el => el.getBoundingClientRect().width);
     const wide = measure(); mapTest.level = 3; paintTestClusters(clusters); const close = measure();
@@ -153,8 +153,10 @@ test('density size distinguishes counts and becomes compact when zoomed in witho
   expect(sizes.wide[0]).toBeLessThan(sizes.wide[1]);
   expect(sizes.wide[1]).toBeLessThan(sizes.wide[2]);
   expect(sizes.wide[2]).toBeLessThan(sizes.wide[3]);
-  expect(sizes.wide[3]).toBe(110); expect(sizes.close[3]).toBeLessThanOrEqual(66);
-  expect(sizes.counts).toEqual([10,100,500,1000]);
+  expect(sizes.wide[3]).toBeLessThan(sizes.wide[4]);
+  expect(sizes.wide[0]).toBeGreaterThanOrEqual(40); expect(sizes.close[0]).toBeGreaterThanOrEqual(40);
+  expect(sizes.wide[4]).toBe(110); expect(sizes.close[4]).toBeLessThanOrEqual(66);
+  expect(sizes.counts).toEqual([1,10,100,500,1000]);
   for (const marker of await page.locator('.design-test-overlay .circle-marker').all()) {
     await expect(marker).toHaveCSS('border-top-width','0px');
     await expect(marker).toHaveCSS('box-shadow','none');
