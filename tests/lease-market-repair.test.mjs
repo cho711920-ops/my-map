@@ -353,8 +353,8 @@ test("audit SQL is read-only and avoids memo/contact payloads", () => {
 test("an approved repair invalidates only reproducible listing query caches", () => {
   const source = readFileSync(resolve(root, "tools/repair-lease-market-contamination.mjs"), "utf8");
   assert.match(source, /api-cache\/d1-sheet-v3-source-proof\.csv/);
-  assert.match(source, /api-cache\/unified-listings-v25-measurements-v84\.json/);
-  assert.match(source, /api-cache\/unified-detail-v22-measurements-v84\/\$\{clean\(id\)\}\.json/);
+  assert.match(source, /api-cache\/unified-listings-v26-land-facts-v93\.json/);
+  assert.match(source, /api-cache\/unified-detail-v23-land-facts-v93\/\$\{clean\(id\)\}\.json/);
   assert.match(source, /r2", "object", "delete", `js-map-media\/\$\{key\}`, "--remote"/);
   assert.doesNotMatch(source, /r2", "bucket", "delete"/);
 });

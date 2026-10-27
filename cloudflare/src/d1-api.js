@@ -14,6 +14,7 @@ import { validateQuickAddTrade } from "./quick-add-trade.js";
 import { previewListingHistoryRestore, restoreSelectedListingHistory } from "./listing-history-restore.js";
 import { saleExtentProvider, withSaleExtentDisplay } from "./sale-extent-display.js";
 import { withDaangnLandUse } from "./land-use-display.js";
+import { withNaverLandDisplay } from "./land-sale-facts.js";
 import { withSaleAreaDisplay, saleAreaProvider } from "./sale-area-display.js";
 import { NAVER_MEASUREMENT_FIELDS, NAVER_MEASUREMENT_PATHS } from "./sale-measurements.js";
 import { withSaleFinancialDisplay } from "./sale-financial-display.js";
@@ -418,7 +419,7 @@ export function compactSaleSummary(original) {
     if (Number.isFinite(parsed) && parsed >= 0) summary[key] = parsed;
   }
   if (detail.scope === "land" || original.saleCategory === "land") {
-    for (const key of ["landUse", "zoning", "roadAccess", "parcelShape"]) {
+    for (const key of ["landUse", "zoning", "roadAccess", "parcelShape", "currentUse", "recommendedUse", "secondaryZoning"]) {
       if (typeof detail[key] !== "string") continue;
       const value = detail[key].trim().replace(/\s+/g, " ").slice(0, 160);
       if (value) summary[key] = value;
@@ -498,6 +499,17 @@ function originalAddressDisclosureSql() {
     WHEN ${flags("isAddressExposed")}='true' THEN 'public' ELSE '' END ELSE '' END`;
 }
 
+function originalLandMetadataSql() {
+  const spaces = ['saleRaw.detailInfo.spaceInfo','saleRaw.spaceInfo','spaceInfo'];
+  const articles = ['saleRaw.detailInfo.articleDetailInfo','saleRaw.articleDetailInfo','articleDetailInfo'];
+  return `CASE WHEN source='네이버' AND json_extract(list_snapshot_json,'$.tradeType')='sale' AND json_extract(list_snapshot_json,'$.saleCategory')='land' THEN json_object(
+    'articleName', ${sourceJsonScalar(...articles.map(p => p+'.articleName'))},
+    'landAreaM2', json_array(${NAVER_MEASUREMENT_PATHS.map(p => sourceJsonScalar(p+'.landSpace')).join(',')}),
+    ${['areaUsage','currentPurpose','recommendedPurpose'].map(k => `'${k}', ${sourceJsonScalar(...spaces.map(p => p+'.'+k))}`).join(',')},
+    'approachRoadType', COALESCE(${spaces.map(p => `CASE WHEN json_type(raw_json,'$.${p}.approachRoad') IN ('true','false') THEN json_type(raw_json,'$.${p}.approachRoad') END`).join(',')})
+  ) ELSE '{}' END`;
+}
+
 async function unifiedListings(env, listingIds = null, onReadPage = null) {
   const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
   if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
@@ -517,6 +529,7 @@ async function unifiedListings(env, listingIds = null, onReadPage = null) {
       ${absenceMetadataSql("listing_sources")} AS absence_metadata_json,
       ${originalFloorMetadataSql()} AS floor_metadata_json,
       ${originalAddressDisclosureSql()} AS address_disclosure,
+      ${originalLandMetadataSql()} AS naver_land_metadata_json,
       CASE WHEN source='공실박스' THEN json_extract(raw_json, '$.list.Photos') END AS gongsil_photos_json,
       CASE WHEN json_extract(list_snapshot_json, '$.tradeType')='sale' THEN
         COALESCE(json_extract(raw_json, '$.saleRaw.detailInfo.spaceInfo.floorInfo'), json_extract(raw_json, '$.saleRaw.spaceInfo.floorInfo')) END AS naver_floor_info_json,
@@ -575,10 +588,10 @@ async function unifiedListings(env, listingIds = null, onReadPage = null) {
           gongsil: parseJson(row.gongsil_sale_extent_json, {}),
           daangn: { ...daangn, isEntireBuilding: daangn.entireBuildingType === "true" ? true : daangn.entireBuildingType === "false" ? false : undefined }
         });
-        const original = withSourceOriginalMetadata(
+        const original = withSourceOriginalMetadata(withNaverLandDisplay(
           withDaangnLandUse(withSaleFinancialDisplay(withSaleAreaDisplay(displayed, { source: row.source, daangn,
             naverDescription: row.naver_sale_description, measurements: parseJson(row.sale_measurements_json, {}) }),
-            { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), row);
+            { source: row.source, daangn, naverDescription: row.naver_sale_description, naverPriceInfo: parseJson(row.naver_sale_price_info_json, null) }), row.daangn_land_type, row.source), parseJson(row.naver_land_metadata_json, {}), row.source), row);
         if (original.sourceUnavailable) unavailableCount += 1;
         original.saleSummary = compactSaleSummary(original);
         if (clean(original.source) === "공실박스") {
@@ -728,10 +741,10 @@ async function unifiedDetail(env, propertyId) {
       ? images.length
       : Math.max(images.length, Number(snapshot.photoCount) || 0);
     const provider = saleExtentProvider(raw, row.source);
-    const original = { ...withSourceOriginalMetadata(withDaangnLandUse(
+    const original = { ...withSourceOriginalMetadata(withNaverLandDisplay(withDaangnLandUse(
       withSaleFinancialDisplay(withSaleAreaDisplay(withSaleExtentDisplay(snapshot, provider), { ...provider, ...saleAreaProvider(raw, row.source) }),
         { ...provider, source: row.source, naverPriceInfo: row.source === "네이버" ? raw.saleRaw?.detailInfo?.priceInfo || raw.saleRaw?.priceInfo : undefined }), raw.landType, row.source
-    ), row, manualRooms, manualFields), propertyId: clean(parent.property_id || parent.id) };
+    ), raw, row.source), row, manualRooms, manualFields), propertyId: clean(parent.property_id || parent.id) };
     original.saleSummary = compactSaleSummary(original);
     return original;
   });

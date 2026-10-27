@@ -128,12 +128,28 @@
     box.innerHTML=buildingBasicsHtml(item,(body._saleCalculationReferencesV38||{}).building);
     box.querySelector('button').onclick=function(){var button=body.querySelector('[data-sale-section="register"] [data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
   }
+  function refreshLandBasics(body){
+    var box=body&&body.querySelector('[data-land-basics-v93]'),item=body&&body._saleCalculationItemV38;if(!box||!item)return;
+    var ui=global.JSListingTradeV1;
+    box.innerHTML='<header><h3>토지 기본정보</h3><span>광고 기재</span></header>'+ui.landCardMetricsHtml(item)+ui.landFactsHtml(item,true)+
+      '<p class="sale-building-note-v84">도로·추천 용도는 광고 표기입니다. 법적 접도와 건축 가능 여부, 지분·복수 필지 범위는 별도 확인이 필요합니다.</p>';
+    var ref=(body._saleCalculationReferencesV38||{}).land,data=ref&&ref.data,parser=global.JSParcelExternalLinksV1&&global.JSParcelExternalLinksV1.parseAddress;
+    var a=parser&&parser(item.address),b=data&&parser&&parser(data.address);
+    if(data&&a&&b&&a.query===b.query&&!(ref.item&&ref.item.referenceAddressChangedV8)){
+      var price=data.price||{},won=Number(price.wonPerM2),rows=[['공식 지목',data.landUse||'자료 미제공'],['공부면적',Number(data.areaM2)>0?global.JSSaleDossierV9.areaHtml(Number(data.areaM2)):'자료 미제공'],
+        ['개별공시지가',price.available&&Number.isFinite(won)&&won>0?won.toLocaleString('ko-KR')+'원/㎡':'자료 미제공']];
+      box.insertAdjacentHTML('beforeend','<section class="sale-land-official-v93"><h4>토지이음 조회값</h4><dl>'+rows.map(function(r,index){return '<div><dt>'+r[0]+'</dt><dd>'+(index===1?r[1]:esc(r[1]))+'</dd></div>';}).join('')+'</dl><p class="sale-building-note-v84">'+esc(data.address)+' · '+esc(data.source||'토지이음')+' · 조회 '+esc(data.fetchedAt||'일시 미제공')+(data.complete===false?' · 일부 자료 확인 필요':'')+'<br>공부면적·공시지가는 광고면적·매도호가와 구분합니다.</p></section>');
+    }
+    box.insertAdjacentHTML('beforeend','<button type="button" data-land-lookup-v93>토지이음·규제 확인</button>');
+    box.querySelector('[data-land-lookup-v93]').onclick=function(){var button=body.querySelector('[data-sale-section="publicland"] [data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
+    if(global.JSSaleDossierV9)global.JSSaleDossierV9.refreshUnits(box);
+  }
   function referenceArea(body,item,kind,data){
     if(!body)return;var refs=body._saleCalculationReferencesV38||(body._saleCalculationReferencesV38={});
     if(!kind)body._saleCalculationReferencesV38={};
     else if(data)refs[kind]={item:item,kind:kind,data:data};else delete refs[kind];
     var target=body._saleCalculationItemV38&&global.JSListingTradeV1.normalizedSaleCategory(body._saleCalculationItemV38)==='land'?'land':'building';
-    if(!kind||kind===target)body._saleAreaConfirmationV38=null;refreshSaleCalculations(body);refreshBuildingBasics(body);
+    if(!kind||kind===target)body._saleAreaConfirmationV38=null;refreshSaleCalculations(body);refreshBuildingBasics(body);refreshLandBasics(body);
   }
   function evidenceHeading(title,note){var heading=document.createElement('header');heading.className='sale-evidence-heading-v36';heading.innerHTML='<h3>'+esc(title)+'</h3><p>'+esc(note)+'</p>';return heading;}
   function mountSaleEvidence(body,item,summary,primary){
@@ -165,6 +181,9 @@
     if(global.JSListingTradeV1.normalizedSaleCategory(item)!=='land'){
       var areas=primary.querySelector('.building-sale-area-info-v1');if(areas)areas.remove();
       var basics=document.createElement('section');basics.className='sale-building-basics-v84';basics.dataset.buildingBasicsV84='';basics.setAttribute('aria-label','건물 면적과 비율');primary.append(basics);refreshBuildingBasics(body);
+    }else{
+      if(overview)overview.querySelectorAll('.sale-land-metrics-v3,.sale-overview-indicators-v2').forEach(function(el){el.remove();});
+      var landBasics=document.createElement('section');landBasics.className='sale-land-basics-v93';landBasics.dataset.landBasicsV93='';landBasics.setAttribute('aria-label','토지 기본정보');primary.append(landBasics);refreshLandBasics(body);
     }
     calc.querySelector('.sale-area-lookup-v38').onclick=function(){var panel=body.querySelector('[data-sale-section="'+(global.JSListingTradeV1.normalizedSaleCategory(item)==='land'?'publicland':'register')+'"]'),button=panel&&panel.querySelector('[data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
     var secondary=summary.querySelector('.sale-secondary-tools-v10');if(secondary)secondary.querySelector('summary').textContent='광고 출처·호가 이력·외부 조회';

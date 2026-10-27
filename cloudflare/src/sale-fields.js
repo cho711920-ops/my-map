@@ -4,6 +4,7 @@ import { saleDescriptionFields, naverSaleDescription, supplementSaleDescription 
 import { normalizeNaverPropertyType } from "./naver-property-types.js";
 import { daangnLandUse } from "./land-use-display.js";
 import { naverSaleMeasurements, gongsilSaleMeasurements } from "./sale-measurements.js";
+import { naverLandFields } from "./land-sale-facts.js";
 const clean = (value) => String(value ?? "").trim();
 const numeric = (value) => {
   if (value == null || clean(value) === "" || typeof value === "boolean") return null;
@@ -120,6 +121,7 @@ export function naverSaleFields(item = {}) {
     scope: saleCategory === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
     landAreaM2: null, grossAreaM2: null, buildingAreaM2: null, exclusiveAreaM2: null,
     ...naverSaleMeasurements(item),
+    ...(saleCategory === 'land' ? naverLandFields(item) : {}),
     aboveGroundFloors: present(floors.groundFloorCount, info.groundFloorCount),
     belowGroundFloors: present(floors.undergroundFloorCount, info.undergroundFloorCount),
     // fin API money is won, unlike the normalized collector's manwon fields.

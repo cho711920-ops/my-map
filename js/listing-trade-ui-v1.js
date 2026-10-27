@@ -212,7 +212,7 @@
     if (linked.length) candidates = linked;
     if (!candidates.length) return {};
     var first = candidates[0].saleDetails || candidates[0].saleSummary || {};
-    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "buildingCoverageRatio", "floorAreaRatio", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "landUse", "zoning"];
+    var keys = comparisonKeys || ["scope", "landAreaM2", "grossAreaM2", "exclusiveAreaM2", "buildingAreaM2", "buildingCoverageRatio", "floorAreaRatio", "totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "landUse", "zoning", "roadAccess", "parcelShape", "currentUse", "recommendedUse", "secondaryZoning"];
     return candidates.every(function(original) {
       var summary = original.saleDetails || original.saleSummary || {};
       return keys.every(function(key) {
@@ -500,6 +500,7 @@
   // Presentation only. Keep facts tied to this original's price and source.
   function saleCardFactsHtml(item, listCard) {
     if (!isSale(item)) return "";
+    if (listCard && normalizedSaleCategory(item) === 'land') return landFactsHtml(item, false);
     var d = saleSummary(item, ["totalDeposit", "monthlyIncome", "monthlyNetIncome", "statedMonthlyIncome", "loanAmount", "investmentAmount", "advertisedYield", "zoning", "roadAccess", "parcelShape", "buildingUse", "rentalReference", "rentalScenarios", "rentalBreakdown"]), land = normalizedSaleCategory(item) === "land", fields = [];
     function money(label, value) {
       var n = nonnegative(value);
@@ -547,6 +548,14 @@
     return fields.length || supplemental ? '<div class="sale-card-facts-v2">' + fields.map(function(f) {
       return '<span' + (f[2] ? ' title="' + escapeHtml(f[2]) + '"' : '') + '><span>' + escapeHtml(f[0]) + '</span><b>' + escapeHtml(f[1]) + '</b></span>';
     }).join('') + unitNote + supplemental + '</div>' : '';
+  }
+  function landFactsHtml(item, detailed) {
+    if (!isSale(item) || normalizedSaleCategory(item) !== 'land') return '';
+    var d=saleSummary(item), fields=[['용도지역',d.zoning],['도로접면',d.roadAccess],['현재 이용',d.currentUse],['토지 형상',d.parcelShape]];
+    if (detailed) fields.unshift(['지목',d.landUse]);
+    if (detailed || landText(d.secondaryZoning)) fields.push(['추가 용도지역',d.secondaryZoning]);
+    if (detailed && landText(d.recommendedUse)) fields.push(['추천 용도 · 광고',d.recommendedUse]);
+    return '<dl class="sale-card-facts-v2 land-facts-v93" data-land-facts-v93 aria-label="광고 토지 기본정보">'+fields.map(function(f){var value=landText(f[1]);return '<div'+(value?'':' class="unavailable"')+'><dt>'+escapeHtml(f[0])+'</dt><dd>'+escapeHtml(value||'원본 미제공')+'</dd></div>';}).join('')+'</dl>';
   }
   function rentalSupplementHtmlV61(detail) {
     var html = '';
@@ -613,6 +622,7 @@
     displayPrice: displayPrice,
     saleDetailsHtml: saleDetailsHtml,
     saleCardFactsHtml: saleCardFactsHtml,
+    landFactsHtml: landFactsHtml,
     saleOverviewHtml: saleOverviewHtml,
     saleReviewGapsHtml: saleReviewGapsHtml,
     saleSummary: saleSummary,

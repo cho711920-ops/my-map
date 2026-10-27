@@ -1,4 +1,25 @@
 /* Sale-only presentation. Lease cards, maps and stored listing facts are unchanged. */
+.sale-card-facts-v2.land-facts-v93 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:10px 0; }
+.land-facts-v93 > div { min-width:0; padding:7px 9px; border-radius:5px; background:#f3f7f6; }
+.land-facts-v93 dt { font-size:11px; color:#64748b; margin-bottom:4px; }
+.land-facts-v93 dd { margin:0; font-size:13px; font-weight:700; line-height:1.5; color:#244b45; overflow-wrap:anywhere; }
+.land-facts-v93 .unavailable dd { color:#7b8794; font-weight:500; }
+html #list .listing-land-card-v4 .land-facts-v93 { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); padding:0 !important; gap:6px; }
+html #list .listing-land-card-v4 .land-facts-v93 > div { min-width:0; }
+.sale-land-basics-v93 { padding:14px; border:1px solid #d4e2dc; border-radius:8px; background:#fff; min-width:0; }
+.sale-land-basics-v93 header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.sale-land-basics-v93 h3,.sale-land-basics-v93 h4 { margin:0; font-size:14px; color:#244b45; }
+.sale-land-basics-v93 header > span { font-size:11px; color:#64748b; }
+.sale-land-basics-v93 .land-card-metrics-v4 { margin:0 0 12px; }
+.sale-land-basics-v93 button { padding:6px 10px; font-size:12px; border:1px solid #c4d7cd; border-radius:5px; color:#244b45; background:#f3f8f5; cursor:pointer; }
+.sale-land-official-v93 { border-top:1px solid #d4e2dc; margin:12px 0; padding-top:12px; }
+.sale-land-official-v93 > dl { margin:10px 0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.sale-land-official-v93 > dl > div { min-width:0; }
+.sale-land-official-v93 dt { font-size:12px; color:#64748b; }
+.sale-land-official-v93 dd { margin:4px 0 0; font-size:14px; font-weight:700; overflow-wrap:anywhere; }
+/* On narrow screens the land conditions are more useful than an empty photo. */
+#unifiedDetailDrawerV8[data-sale-presentation-v2="land"][data-wide-layout-v26="stack"] .wide-detail-primary-v26 { grid-row:1; }
+#unifiedDetailDrawerV8[data-sale-presentation-v2="land"][data-wide-layout-v26="stack"] .wide-detail-media-v26 { grid-row:2; }
 html #list .item.listing-sale-card-v1 {
   padding: 6px 10px !important; margin-bottom: 8px !important; border-radius: 10px !important;
 }

@@ -63,7 +63,8 @@ test('land review separates acquisition cost and preserves old hidden assumption
   await page.locator('#list .item-building-name').click();
   const drawer=page.locator('#unifiedDetailDrawerV8');
   await expect(drawer).toHaveAttribute('data-sale-presentation-v2','land');
-  await expect(drawer.locator('.sale-overview-v2')).toContainText('토지 100평');
+  await expect(drawer.locator('[data-land-basics-v93] .land-card-metrics-v4')).toContainText('토지면적');
+  await expect(drawer.locator('[data-land-basics-v93] .land-card-metrics-v4')).toContainText('100평');
   await expect(drawer.locator('[data-sale-calculations-v38]')).toContainText('300');
   await page.screenshot({path:info.outputPath('land-detail.png'),animations:'disabled'});
   await page.evaluate(async()=>{
