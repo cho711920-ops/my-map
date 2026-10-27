@@ -94,8 +94,11 @@ html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655) {
   box-shadow: none !important; text-shadow: none !important; filter: none !important;
   font-weight: 700 !important; animation: none !important; transition: none !important;
 }
-/* Completed groups retain their status color; visit classifications remain in
- * the data/card badges while active circles share the requested yellow. */
+/* Confirmed active listings use the same state as the list badge. Unknown or
+ * mixed groups keep yellow; completed groups retain their gray status. */
+html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).visit-confirmed-v89 {
+  --cluster-fill: rgba(151, 201, 245, .68) !important;
+}
 html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).done {
   --cluster-fill: rgba(226, 232, 240, .9) !important; --cluster-text: #64748b !important;
 }
@@ -103,6 +106,10 @@ html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).select
   --cluster-fill: rgba(255, 255, 255, .9) !important;
   --cluster-text: #1e293b !important;
   border: 1.5px solid #d4b541 !important;
+}
+html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).visit-confirmed-v89.selected {
+  --cluster-fill: rgba(255, 255, 255, .9) !important;
+  border-color: #70a9d9 !important;
 }
 html.js-map-design-v1 #map .circle-marker:not(.admin-region-cluster-v655).done.selected {
   border-color: #94a3b8 !important;

@@ -3328,17 +3328,18 @@ function buildClusterOverlayContentV655(cluster, classNames) {
 
 function getFieldVisitClusterClassV684(cluster, allDone) {
   if (allDone) return "";
-
-  /*
-   * 노란 클러스터는 공실박스라는 출처 표시가 아니라 아직 임장 확인이
-   * 필요한 매물이 있다는 뜻입니다. 통합 원본에 공실박스가 남아 있어도
-   * (확인매물)로 바뀐 뒤에는 노란색을 제거해야 합니다.
-   */
-  var hasPendingVisit = ((cluster && cluster.items) || []).some(function(item) {
-    return typeof isFieldVisitItem === "function" && isFieldVisitItem(item);
-  });
-
-  return hasPendingVisit ? " source-gongsil" : "";
+  var items = (cluster && cluster.items) || [], activeCount = 0, allConfirmed = true;
+  // Match the existing list badge: pending markers take priority, followed
+  // by explicit confirmation or its legacy Gongsil confirmation condition.
+  for (var index = 0; index < items.length; index++) {
+    var item = items[index];
+    if (typeof isDone === "function" && isDone(item)) continue;
+    activeCount += 1;
+    if (typeof isFieldVisitItem === "function" && isFieldVisitItem(item)) return " source-gongsil";
+    if (!((typeof isConfirmedVisitItem === "function" && isConfirmedVisitItem(item)) ||
+      (typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item)))) allConfirmed = false;
+  }
+  return activeCount > 0 && allConfirmed ? " visit-confirmed-v89" : "";
 }
 
 function drawMapClustersOnlyV639(items) {
@@ -3374,8 +3375,8 @@ function drawMapClustersOnlyV639(items) {
     var gongsilClass = getFieldVisitClusterClassV684(cluster, allDone);
 
     /*
-     * 클러스터는 출처와 무관하게 기본 파란색을 사용합니다.
-     * 클러스터 안의 모든 매물이 거래완료일 때만 done 클래스가 붙어 회색이 됩니다.
+     * 출처와 무관하게 미확인은 노랑, 활성 매물 모두 확인된 묶음은 연파랑.
+     * 모든 매물이 거래완료일 때는 done 클래스의 회색을 유지합니다.
      */
     var overlayContent = buildClusterOverlayContentV655(
       cluster,
@@ -3595,7 +3596,7 @@ function redrawSelectedMarkers() {
 
     /*
      * 선택 상태가 바뀌어 다시 그릴 때도
-     * 일반 클러스터는 파란색, 전부 거래완료인 클러스터만 회색을 유지합니다.
+     * 확인 상태별 노랑/연파랑과 전부 거래완료인 묶음의 회색을 유지합니다.
      */
     var content = buildClusterOverlayContentV655(
       cluster,

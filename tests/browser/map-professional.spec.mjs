@@ -193,7 +193,7 @@ test('pastel circles keep the same diameter and counts when selected, hovered an
   expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);
 });
 
-test('active spatial clusters stay flat pastel yellow while visit and completion states survive redraws', async ({page, context}) => {
+test('unconfirmed clusters are yellow and confirmed clusters are pastel blue through redraw, selection and completion', async ({page, context}, info) => {
   const h = await prepare(page, context);
   await installMap(page);
   await page.evaluate(() => {
@@ -210,7 +210,9 @@ test('active spatial clusters stay flat pastel yellow while visit and completion
   const markers = page.locator('.design-test-overlay .circle-marker');
   const fills = () => markers.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
   const initial = await fills();
-  expect(initial).toEqual(Array(3).fill('rgba(255, 224, 112, 0.62)'));
+  expect(initial).toEqual(['rgba(151, 201, 245, 0.68)','rgba(255, 224, 112, 0.62)','rgba(255, 224, 112, 0.62)']);
+  await expect(markers.nth(0)).toHaveClass(/visit-confirmed-v89/);
+  await page.screenshot({path:info.outputPath('yellow-pending-blue-confirmed.png')});
   await expect(markers.nth(1)).toHaveClass(/source-gongsil/);
   await expect(markers.nth(2)).toHaveClass(/source-gongsil/);
   await expect(markers.nth(0)).not.toHaveClass(/source-gongsil/);
@@ -218,10 +220,13 @@ test('active spatial clusters stay flat pastel yellow while visit and completion
     overlays[1].__cluster.items[0].memo = '(확인매물)';
     redrawSelectedMarkers();
   });
-  expect((await fills())[1]).toBe('rgba(255, 224, 112, 0.62)');
+  expect((await fills())[1]).toBe('rgba(151, 201, 245, 0.68)');
   await expect(markers.nth(1)).not.toHaveClass(/source-gongsil/);
   await page.evaluate(() => {selectedGroupKey = 'pending'; redrawSelectedMarkers();});
   await expect(markers.nth(1)).toHaveCSS('background-color', 'rgba(255, 255, 255, 0.9)');
+  await expect(markers.nth(1)).toHaveCSS('border-top-color','rgb(112, 169, 217)');
+  await page.evaluate(()=>{selectedGroupKey=null;redrawSelectedMarkers();});
+  await expect(markers.nth(1)).toHaveCSS('background-color','rgba(151, 201, 245, 0.68)');
   await page.evaluate(() => {
     selectedGroupKey = null;
     overlays[2].__cluster.items.forEach(item => {item.state = '계약완료';});
