@@ -28,4 +28,9 @@
 - 새기능검수는가상계정/자료브라우저+실제저장원본읽기. 사용자로그인화면전체조작/물리기기실기와구분.
 - 사전847ee44 source.zip/commit/이전Worker참조 private-audits/backups/js-map-land-facts-20261027-v93. 롤백시기존Worker및소스복원. 운영자료시점복원은이번변경과별개.
 
-배포검증은아래추가.
+배포검증
+- 제품 cd7c955를 origin/codex/land-facts-v93 푸시. Worker512d36eb-f9cf-4e26-a2b1-51fe4beceb82/publiccacheb441832573f614aadc7dcb83 배포.
+- js-map.com/www.js-map.com HTML200 및 각94JS·CSS SHA가 로컬빌드와일치. manifest/sw/offline/수집기설치페이지200,보호API5종401,CSP유지.
+- 새 unified v26-land-facts-v93 cold빌드 14:13:18→14:15:59 KST completed/last_error빈값. 14:17:57 KST 실제R2게시객체53,942,083bytes/전체원본80,082 확인. 게시객체내 네이버토지원본3,097 중 지목3,097/용도지역2,393/진입도로3,097/현재이용1,724/면적3,097 포함. 위활성DB집계와기준이다른게시원본집계이므로활성카드수로주장하지않음.
+- 기존광고DB일괄변경·수집중단·재시작없음. 이전Worker와목록/상세R2캐시는복구용으로유지.
+- 배포직후Tail35초3event 및 새캐시완료후35초19event 전부ok/예외0/error로그0 표본. 후자는실제/api/data7·/api/listing-image11요청포함. 전수·장기무오류보장은아님.
