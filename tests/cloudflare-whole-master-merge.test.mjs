@@ -34,7 +34,7 @@ test("merged source card is removed immediately from all live list arrays", () =
 test("merge completion is announced immediately while full-list synchronization continues in background", () => {
   assert.match(unified, /function showMergeNoticeV8139\(message, stateName, persistent\)/);
   assert.match(unified, /대표매물 통합 완료 · 이전 카드를 제거했고 최신 목록을 동기화하고 있습니다/);
-  assert.match(unified, /refreshAfterMoveV8139\(result, consolidateWholeMaster\);\s*return result/);
+  assert.match(unified, /refreshAfterMoveV8139\(result, consolidateWholeMaster, cacheInvalidatedV94\);\s*return result/);
   assert.doesNotMatch(unified, /return load\(true\)[\s\S]*?alert\("대표매물 전체 합치기가 완료되었습니다/);
   assert.match(unified, /저장은 완료됐지만 최신 목록 동기화가 지연됩니다/);
 });

@@ -123,6 +123,58 @@ function harness(options = {}) {
 }
 
 const proof = number => 'sha256-v1:' + String(number).padStart(64, '0');
+
+test('post-mutation full refresh replaces the invalidated browser snapshot without caching ordinary polls', async () => {
+  const h = harness();
+  h.context.JSInitialListingsCacheV1.version = () => 'after-split';
+  h.context.JSInitialListingsCacheV1.needsRefresh = () => true;
+  const loading = h.context.loadSheet(true,true);
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(2)})],'LATEST'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(2),'latest']]));
+  await flush();
+  assert.equal(h.writes.length,1);
+  assert.match(h.writes[0].result.groups.A[0].thumbnail,/latest/);
+  h.context.JSInitialListingsCacheV1.needsRefresh = () => false;
+  const poll = h.context.loadSheet(true,true);
+  h.csvReads[1].resolve(csv([row('A',{source_snapshot_key:proof(2)})],'LATEST'));
+  await poll;
+  h.originalReads[1].resolve(provenOriginals([['A',proof(2),'latest']]));
+  await flush();
+  assert.equal(h.writes.length,1,'ordinary polling keeps its prior no-extra-IDB-write behavior');
+});
+
+test('a full read begun before a split cannot write a snapshot after the split', async () => {
+  const h = harness();
+  let epoch = 'before';
+  h.context.JSInitialListingsCacheV1.version = () => epoch;
+  const loading = h.context.loadSheet(false,false);
+  epoch = 'after';
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1)})],'OLD'));
+  await loading;
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1),'old']]));
+  await flush();
+  assert.equal(h.writes.length,0);
+});
+
+test('post-mutation refresh supersedes an older full read and uses one fresh CSV/original pair', async () => {
+  const h = harness();
+  vm.runInContext(fn(map,'reloadListingsAfterMutationV94'),h.context);
+  const old = h.context.loadSheet(false,false);
+  const fresh = h.context.reloadListingsAfterMutationV94();
+  h.originalReads[0].resolve(provenOriginals([['A',proof(1),'old']]));
+  h.csvReads[0].resolve(csv([row('A',{source_snapshot_key:proof(1),monthly_rent:85})],'OLD'));
+  await old;
+  assert.equal(h.context.allItems.length,0);
+  h.originalReads[1].resolve(provenOriginals([['A',proof(2),'latest']]));
+  h.csvReads[1].resolve(csv([row('A',{source_snapshot_key:proof(2),monthly_rent:210})],'NEW'));
+  await fresh;
+  await flush();
+  assert.equal(h.context.allItems[0].rent,210);
+  assert.match(h.context.allItems[0].thumbnailV8,/latest/);
+  assert.equal(h.csvReads.length,2);
+  assert.equal(h.originalReads.length,2);
+});
 function provenOriginals(entries, revision = 'UNRELATED-GLOBAL') {
   const groups = {}, sourceSnapshotKeys = {}, sourceSnapshotPropertyIds = {}, sourceSearchIds = {};
   for (const [publicId, key, photo = publicId] of entries) {

@@ -100,6 +100,49 @@ test("old snapshots are rejected and source-evidence changes invalidate the unif
   assert.notEqual(api.unifiedSignature({groups:{P:[{...groups.P[0],absenceConfirmedAt:"2026-10-15T02:00:00.000Z"}]}}),before);
 });
 
+test("a saved split invalidates old membership snapshots across reloads and other tabs", async () => {
+  const storage = new Map();
+  const localStorage = {getItem: key => storage.get(key), setItem: (key,value) => storage.set(key,value)};
+  function tab() {
+    const context = {localStorage, Date, Promise, setTimeout};
+    vm.runInNewContext(cacheSource, context);
+    return context.JSInitialListingsCacheV1;
+  }
+  const first = tab(), other = tab();
+  const old = first.snapshot([{propertyId:'A',address:'가상 주소'}],{ok:true,groups:{A:Array.from({length:9},(_,n)=>({originalId:'O'+n}))}});
+  assert.equal(other.usable(old),true);
+  await first.clear();
+  assert.equal(first.usable(old),false);
+  assert.equal(other.usable(old),false);
+  assert.equal(tab().usable(old),false);
+  assert.equal(first.needsRefresh(),true);
+  const fresh = first.snapshot(old.items,{ok:true,groups:{A:old.unified.groups.A.slice(0,7),B:old.unified.groups.A.slice(7)}});
+  assert.equal(other.usable(fresh),true);
+});
+
+test("an idle snapshot write queued before invalidation cannot resurrect pre-split groups", async () => {
+  const idle = [];
+  const context = {Date, Promise, requestIdleCallback: callback => idle.push(callback)};
+  vm.runInNewContext(cacheSource, context);
+  const api = context.JSInitialListingsCacheV1;
+  const queued = api.write([{propertyId:'A',address:'가상 주소'}],{ok:true,groups:{A:[{originalId:'moved'}]}});
+  const before = api.version();
+  await api.clear();
+  assert.notEqual(api.version(),before);
+  idle[0]();
+  assert.equal(await queued,false);
+});
+
+test("storage write denial still invalidates the current tab's pre-split snapshot", async () => {
+  const context = {Date, Promise, setTimeout,localStorage:{getItem:()=>null,setItem(){throw Error('quota');}}};
+  vm.runInNewContext(cacheSource, context);
+  const api = context.JSInitialListingsCacheV1;
+  const old = api.snapshot([{propertyId:'A',address:'가상 주소'}],{ok:true,groups:{A:[{originalId:'moved'}]}});
+  assert.equal(api.usable(old),true);
+  await api.clear();
+  assert.equal(api.usable(old),false);
+});
+
 test("the map renders only a complete full snapshot and refreshes it without a second unchanged render", () => {
   assert.match(mapSource, /function showInitialFullListingsCacheV1\(snapshot\)/);
   assert.match(mapSource, /Number\(snapshot\.itemCount\) !== Number\(snapshot\.totalItemCount\)/);

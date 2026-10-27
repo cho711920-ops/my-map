@@ -2392,13 +2392,25 @@
     return notice;
   }
 
-  function refreshAfterMoveV8139(result, consolidateWholeMaster) {
-    return Promise.resolve().then(function() {
+  function refreshAfterMoveV8139(result, consolidateWholeMaster, cacheInvalidatedV94) {
+    return Promise.resolve(cacheInvalidatedV94).then(function() {
+      if (global.JSListingRefreshV1 && typeof global.JSListingRefreshV1.reloadAfterMutation === "function") {
+        return global.JSListingRefreshV1.reloadAfterMutation();
+      }
       return load(true);
-    }).then(function() {
+    }).then(function(refreshed) {
+      if (refreshed === false || refreshed && refreshed.ok === false) throw new Error("최신 목록 조회 실패");
+      if (global.JSListingRefreshV1 && typeof global.JSListingRefreshV1.reloadAfterMutation === "function") return result;
       if (typeof global.loadSheet !== "function") return result;
-      return Promise.resolve(global.loadSheet(true)).then(function() { return result; });
+      return Promise.resolve(global.loadSheet(true)).then(function(applied) {
+        if (applied === false) throw new Error("최신 목록 조회 실패");
+        return result;
+      });
     }).then(function() {
+      if (state.pendingProofCount || state.originalLoadPhase !== "ready") {
+        showMergeNoticeV8139("저장은 완료됐습니다. 최신 원본 연결을 확인하고 있습니다.", "warning", false);
+        return result;
+      }
       showMergeNoticeV8139(consolidateWholeMaster
         ? "대표매물 통합 완료 · 최신 목록 반영도 끝났습니다."
         : "매물 변경 완료 · 최신 목록 반영도 끝났습니다.", "success", false);
@@ -2471,6 +2483,11 @@
         ? Number(result && result.consolidated || 0) > 0
         : result && result.persisted === true;
       if (!result || result.ok === false || !persisted) throw new Error(result && result.message || "D1 저장 확인 실패");
+      // Invalidate synchronously before announcing success. Other tabs and a
+      // reload must reject the old full snapshot, even if IDB deletion is slow.
+      var cacheInvalidatedV94 = global.JSInitialListingsCacheV1 &&
+        typeof global.JSInitialListingsCacheV1.clear === "function" ? global.JSInitialListingsCacheV1.clear() : null;
+      invalidatePendingLoad();
       setSaving(false, false);
       if (consolidateWholeMaster) removeConsolidatedMasterFromView(sourceMasterId, targetMasterId);
       state.loaded = false;
@@ -2490,7 +2507,7 @@
        * 전체 통합정보와 전체 CSV 재조회는 수 초 걸릴 수 있으므로 안내를
        * 지연시키지 않고 백그라운드에서 이어 간다.
        */
-      refreshAfterMoveV8139(result, consolidateWholeMaster);
+      refreshAfterMoveV8139(result, consolidateWholeMaster, cacheInvalidatedV94);
       return result;
     }).catch(function(error) {
       setSaving(false, true);

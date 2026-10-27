@@ -1868,6 +1868,8 @@ function hydrateInitialFullListingsCacheItemsV1(snapshot) {
 
 function showInitialFullListingsCacheV1(snapshot) {
   if (!snapshot || Number(snapshot.itemCount) !== Number(snapshot.totalItemCount) ||
+      (window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.usable === "function" &&
+        !window.JSInitialListingsCacheV1.usable(snapshot)) ||
       !window.JSUnifiedListingsV8 ||
       typeof window.JSUnifiedListingsV8.attach !== "function") return false;
   var cachedItems = hydrateInitialFullListingsCacheItemsV1(snapshot);
@@ -2062,6 +2064,16 @@ window.JSListingRefreshV1.generation = function() { return jsListingsLoadGenerat
 window.JSListingRefreshV1.hasCompleteBase = function() { return jsListingsCompleteBaseV1; };
 window.JSListingRefreshV1.recoverOriginals = function() { return recoverOriginalMetadataV1(jsListingsLoadGenerationV1, true); };
 window.JSListingRefreshV1.requestVisibleOriginals = requestVisibleOriginalMetadataV1;
+function reloadListingsAfterMutationV94() {
+  // A pre-save full read must not publish or write its old group memberships.
+  jsListingsLoadGenerationV1 += 1;
+  if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.invalidatePendingLoad === "function") window.JSUnifiedListingsV8.invalidatePendingLoad();
+  if (window.JSDataAccessV6 && typeof window.JSDataAccessV6.invalidateRead === "function") window.JSDataAccessV6.invalidateRead("listingsCsv");
+  isLoadingSheet = false;
+  pendingAutoUpdate = false;
+  return loadSheet(true, true);
+}
+window.JSListingRefreshV1.reloadAfterMutation = reloadListingsAfterMutationV94;
 
 function compatibleOriginalsResultV1(items, result, scoped) {
   if (!result || result.ok === false || !result.sourceSnapshotKeys || !result.sourceSnapshotPropertyIds ||
@@ -2271,6 +2283,8 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   isLoadingSheet = true;
   setListingsLoadStatusV65("loading");
   var loadGenerationV1 = ++jsListingsLoadGenerationV1;
+  var initialCacheVersionV94 = window.JSInitialListingsCacheV1 &&
+    typeof window.JSInitialListingsCacheV1.version === "function" ? window.JSInitialListingsCacheV1.version() : "";
   errorItems = [];
   addressErrorSnapshotV41 = null;
   if (!isAuto && !(allItems || []).length) window.jsInitialFullListingsLoadingV1 = true;
@@ -2362,13 +2376,17 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   }
   function persistInitialListingsCacheV1() {
     if (
-      (isAuto && !originalsRecoveryAttempt) || initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
+      (isAuto && !originalsRecoveryAttempt && !(window.JSInitialListingsCacheV1 &&
+        typeof window.JSInitialListingsCacheV1.needsRefresh === "function" && window.JSInitialListingsCacheV1.needsRefresh())) ||
+      initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
       !unifiedResult || unifiedResult.ok === false ||
       loadGenerationV1 !== jsListingsLoadGenerationV1 ||
       (!compatibleCacheResultV1 && !matchingListingSnapshotRevisionV1(sheetSnapshotV1, unifiedResult)) ||
       !window.JSInitialListingsCacheV1 ||
       typeof window.JSInitialListingsCacheV1.write !== "function"
     ) return;
+    if (typeof window.JSInitialListingsCacheV1.version === "function" &&
+        initialCacheVersionV94 !== window.JSInitialListingsCacheV1.version()) return;
     initialCacheWriteStartedV1 = true;
     window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, compatibleCacheResultV1 || unifiedResult).then(function(saved) {
       if (saved && loadGenerationV1 === jsListingsLoadGenerationV1) document.documentElement.setAttribute("data-initial-list-cache-live", "true");

@@ -6,6 +6,14 @@
   var SNAPSHOT_KEY = "latest";
   var SCHEMA_VERSION = 5;
   var MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+  var EPOCH_KEY_V94 = "js-initial-listings-epoch-v94";
+  var localEpochV94 = "", writtenEpochV94 = "", generationV94 = 0, localEpochOnlyV94 = false;
+  function epochV94() {
+    if (localEpochOnlyV94) return localEpochV94;
+    try { return String(global.localStorage.getItem(EPOCH_KEY_V94) || ""); }
+    catch (_) { return localEpochV94; }
+  }
+  function versionV94() { return generationV94 + ":" + epochV94(); }
   var BASE_ITEM_FIELDS = [
     "name", "address", "room", "type", "deposit", "rent", "fee", "premium", "area",
     "landlordPhone", "tenantPhone", "memo", "state", "regDate", "source", "propertyId",
@@ -99,6 +107,7 @@
     };
     return {
       schema: SCHEMA_VERSION,
+      cacheEpochV94: epochV94(),
       savedAt: Date.now(),
       itemCount: completeItems.length,
       totalItemCount: completeItems.length,
@@ -111,6 +120,7 @@
   function usable(value) {
     return !!(
       value && value.schema === SCHEMA_VERSION &&
+      String(value.cacheEpochV94 || "") === epochV94() &&
       Number(value.savedAt) > Date.now() - MAX_AGE_MS &&
       Array.isArray(value.items) && value.items.length > 0 &&
       Number(value.itemCount) === value.items.length &&
@@ -140,7 +150,11 @@
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readonly");
         var request = transaction.objectStore(STORE_NAME).get(SNAPSHOT_KEY);
-        request.onsuccess = function() { resolve(usable(request.result) ? request.result : null); };
+        request.onsuccess = function() {
+          var valid = usable(request.result);
+          if (valid) writtenEpochV94 = epochV94();
+          resolve(valid ? request.result : null);
+        };
         request.onerror = function() { resolve(null); };
         transaction.oncomplete = function() { database.close(); };
         transaction.onerror = function() { database.close(); };
@@ -149,13 +163,19 @@
     }).catch(function() { return null; });
   }
 
-  function storeSnapshot(value) {
+  function storeSnapshot(value, version) {
     if (!value) return Promise.resolve(false);
     return openDatabase().then(function(database) {
+      if (version !== versionV94()) { database.close(); return false; }
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readwrite");
         transaction.objectStore(STORE_NAME).put(value, SNAPSHOT_KEY);
-        transaction.oncomplete = function() { database.close(); resolve(true); };
+        transaction.oncomplete = function() {
+          database.close();
+          var current = version === versionV94();
+          if (current) writtenEpochV94 = epochV94();
+          resolve(current);
+        };
         transaction.onerror = function() { database.close(); resolve(false); };
         transaction.onabort = function() { database.close(); resolve(false); };
       });
@@ -163,17 +183,23 @@
   }
 
   function write(items, unifiedResult) {
+    var version = versionV94();
     return new Promise(function(resolve) {
       var schedule = typeof global.requestIdleCallback === "function"
         ? function(callback) { global.requestIdleCallback(callback, { timeout: 900 }); }
         : function(callback) { global.setTimeout(callback, 40); };
       schedule(function() {
-        storeSnapshot(snapshot(items, unifiedResult)).then(resolve);
+        if (version !== versionV94()) { resolve(false); return; }
+        storeSnapshot(snapshot(items, unifiedResult), version).then(resolve);
       });
     });
   }
 
   function clear() {
+    generationV94 += 1;
+    localEpochV94 = Date.now() + "-" + Math.random().toString(36).slice(2);
+    try { global.localStorage.setItem(EPOCH_KEY_V94, localEpochV94); localEpochOnlyV94 = false; }
+    catch (_) { localEpochOnlyV94 = true; }
     return openDatabase().then(function(database) {
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readwrite");
@@ -189,6 +215,8 @@
     read: read,
     write: write,
     clear: clear,
+    version: versionV94,
+    needsRefresh: function() { return writtenEpochV94 !== epochV94(); },
     snapshot: snapshot,
     unifiedSignature: unifiedSignature,
     unifiedSignatureForItems: unifiedSignatureForItems,
