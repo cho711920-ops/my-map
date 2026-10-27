@@ -1,5 +1,13 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-27 동일매물 분리 뒤 이전 묶음 표시 v94
+
+- 사용자 탄방동674 분리후새로고침에서9+2로보이다7+2정상화. D1읽기전용으로화면의두그룹활성7/2·조건보3000월210/보1000월85 저장확인. 분리취소아님. 실제탭네트워크지연초는미측정. docs/split-refresh-v94-20261027.txt 상세.
+- move성공시IndexedDB초기전체캐시무효화누락+후속자동갱신캐시쓰기제외로이전묶음먼저표시. 캐시clear세대토큰(다른탭/재실행포함),idle/진행중쓰기·분리전전체조회세대차단,무효화후정상증명된전체자료1회재저장. 평소빠른캐시·자동폴링추가쓰기제외유지.
+- 저장뒤전용reloadAfterMutation은이전CSV/원본조회취소후새1쌍만요청. 실패/연결확인중동기화완료안내금지. 원본분리서버처리·수집기·개인기록변경없음.
+- Node1971/1971,최종PC·폰Edge29pass1기기조건제외(실제IDB9→7+2/재실행·다른탭/이전idle쓰기/갱신실패/상세스크롤·임대보기),lint/type/globals/build/dry-run/diff정상. 가상계정·자료검사와실제사용자재분리쓰기실기를구분. 화면육안확인.
+- 사전6124e8b source.zip/이전Worker참조백업 private-audits/backups/js-map-split-refresh-20261027-v94. 제품3ffdecc origin/codex/split-refresh-v94 푸시. Worker cda8d5e0-309c-4e2f-ab90-bc3055d143d6/cache074b0c5d213e119104351c34 배포. 양도메인HTML/각94JS·CSS SHA일치. Tail35초78event전부ok/예외0/error0표본. 목록v26/상세v23/CSV키유지,새코드적용은페이지새로고침필요.
+
 ## 2026-10-27 토지매매 기본정보 v93
 
 - 사용자 토지매매 목록·상세 정보 보완 및 필요한 항목 검토 요청. docs/land-facts-v93-20261027.txt 상세. 사전847ee44 소스/이전Worker참조 백업 private-audits/backups/js-map-land-facts-20261027-v93.

@@ -19,4 +19,8 @@
 - lint/설정범위typecheck/브라우저전역검사/build/dry-run/diff정상. 사용자실제계정에서재분리하는쓰기검사는안함. 운영D1조회는rows_written0.
 - 사전6124e8b소스/이전Worker참조백업 private-audits/backups/js-map-split-refresh-20261027-v94. 이전Worker512d36eb-f9cf-4e26-a2b1-51fe4beceb82/cacheb441832573f614aadc7dcb83.
 
-배포검증 별도추가.
+배포검증
+- 제품3ffdecc origin/codex/split-refresh-v94 커밋·푸시. Worker cda8d5e0-309c-4e2f-ab90-bc3055d143d6/publiccache074b0c5d213e119104351c34 배포.
+- js-map.com/www.js-map.com HTML200 및각94JS·CSS SHA가현재빌드와일치. 공개manifest/sw/offline/collector-install200,보호API5종401,CSP유지. 새캐시세대표식은코드실행다음분리/합치기저장부터적용,이미열어둔페이지는새로고침으로새코드적용필요.
+- 배포뒤35초Tail78event모두ok/예외0/error로그0 표본. 실제/api/data3·/api/listing-image3 포함,장기무오류보장아님.
+- 기존목록v26-land-facts-v93/상세v23-land-facts-v93/CSV 캐시키유지. 서버전체캐시교체·재수집·수집기재시작·운영매물/개인기록수정없음.
