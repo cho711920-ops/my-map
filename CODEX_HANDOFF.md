@@ -1,5 +1,13 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-27 웹 전체 오류 검수 v92
+
+- 사용자 다른오류코드확인 요청. docs/web-error-audit-v92-20261027.txt 상세. 사전5760093 소스/이전Worker참조 백업 private-audits/backups/js-map-web-audit-20261027-v92.
+- 제품기능의 새 미해결재현오류 없음. 검사2곳보완: PS5helper파일의정상BOM을중간EncodedCommand에삽입한테스트오류→검사에서선두BOM제거; v84로교체된면적패널의옛선택자→현재5제원/미제공/호실전용면적/좁은폰잘림/원본보존 검사.
+- Node최종1961/1961,전체lint·설정범위type·미정의전역0·빌드/dry-run 통과. 전체브라우저786는680pass94조건부제외12옛면적검사실패; 보완후해당12포함관련24pass2조건제외. 변경후전체786재통과라고주장금지. 실제카카오SDK8/8 별도통과.
+- 두도메인HTML200/각94JS·CSS SHA일치,공개보조페이지200/보호API5종401. 실제비로그인PC·폰·태블릿UI 예외/5xx/가로넘침없음. 로그인후기능은가상계정·매물로검수,실제사용자전체조작아님. Tail35초83event전부ok/예외0/error로그0,20분256success+2clientDisconnected/servererrors0 표본(장기무오류아님).
+- 검사/문서만변경하여웹재배포없음. Worker1f2546aa/publiccachee230a781 및 설치v90/v91 유지. 수집/운영자료/개인기록변경·재시작없음.
+
 ## 2026-10-27 자동실행 수집목록 창 v91
 
 - 사용자 설명창만열리고목록안보임 문의. v79 HTTPS실행ACK뒤 옵션창열기누락 원인. 실행기 ACK뒤 정확한전용확장worker의 chrome.runtime.openOptionsPage 정식API로 목록열기/기존창재사용. 직접확장URL새탭탐색 안함. 상세 docs/collector-status-window-v91-20261027.txt.

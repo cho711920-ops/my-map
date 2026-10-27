@@ -38,10 +38,13 @@ async function buildingList(page, isMobile) {
   await expect(page.locator("#list .item")).toHaveCount(1);
 }
 
-async function expectReadableAreaBadges(area) {
+async function expectReadableBuildingFacts(area) {
   await expect(area).toBeVisible();
-  const badges = area.locator(".listing-sale-areas-v1 > span");
-  await expect(badges).toHaveCount(4);
+  const badges = area.locator("[data-building-fact-v84]");
+  await expect(badges).toHaveCount(5);
+  await expect(badges.locator('dt')).toHaveText(['대지면적','건축면적','연면적','건폐율','용적률']);
+  // Both unit variants are in the DOM; verify what is actually displayed.
+  await expect(badges.locator('dd')).toHaveText([/^67\.61평\s*223\.5㎡$/,/^40\.55평\s*134\.05㎡$/,/^134\.41평\s*444\.34㎡$/,'원본 미제공','원본 미제공'], {useInnerText:true});
   const metrics = await area.evaluate(element => {
     const rectangle = node => {
       const {left, right, top, bottom, width, height} = node.getBoundingClientRect();
@@ -50,39 +53,29 @@ async function expectReadableAreaBadges(area) {
     return {
       container: rectangle(element),
       viewportWidth: window.innerWidth,
-      separatorsHidden: Array.from(element.querySelectorAll(".listing-sale-areas-v1 > i"))
-        .every(node => getComputedStyle(node).display === "none"),
-      badges: Array.from(element.querySelectorAll(".listing-sale-areas-v1 > span")).map(node => {
-        const style = getComputedStyle(node);
-        const value = node.querySelector("b");
+      badges: Array.from(element.querySelectorAll("[data-building-fact-v84]")).map(node => {
+        const style = getComputedStyle(node.querySelector('dt'));
+        const value = node.querySelector("dd");
         return {
-          label: Array.from(node.childNodes).filter(child => child.nodeType === Node.TEXT_NODE)
-            .map(child => child.textContent).join("").trim(),
+          label: node.querySelector('dt').textContent.trim(),
           text: node.textContent.trim(),
           fontSize: parseFloat(style.fontSize),
-          fontWeight: Number(style.fontWeight),
           valueFontSize: parseFloat(getComputedStyle(value).fontSize),
-          backgroundColor: style.backgroundColor,
-          borderWidth: parseFloat(style.borderTopWidth),
-          borderStyle: style.borderTopStyle,
-          borderColor: style.borderTopColor,
+          backgroundColor: getComputedStyle(node).backgroundColor,
+          fits: node.scrollWidth <= node.clientWidth + 1,
           rect: rectangle(node)
         };
       })
     };
   });
-  expect(metrics.badges.map(badge => badge.label)).toEqual(["전용", "대지", "연면적", "건축(건평)"]);
-  expect(metrics.separatorsHidden, "separate area badges do not retain dot separators").toBe(true);
+  expect(metrics.badges.map(badge => badge.label)).toEqual(['대지면적','건축면적','연면적','건폐율','용적률']);
   for (const badge of metrics.badges) {
     const message = badge.text;
-    expect(badge.fontSize, `${message}: label font size`).toBeGreaterThanOrEqual(13);
-    expect(badge.fontWeight, `${message}: label font weight`).toBeGreaterThanOrEqual(700);
+    expect(badge.fontSize, `${message}: label font size`).toBeGreaterThanOrEqual(12);
     expect(badge.valueFontSize, `${message}: numeric font size`).toBeGreaterThanOrEqual(14);
     expect(badge.backgroundColor, `${message}: visible non-white badge background`)
       .not.toMatch(/^(?:transparent|rgba\([^)]*,\s*0\)|rgb\(255,\s*255,\s*255\)|rgba\(255,\s*255,\s*255,\s*1\))$/);
-    expect(badge.borderWidth, `${message}: visible badge border`).toBeGreaterThan(0);
-    expect(badge.borderStyle, `${message}: visible badge border`).not.toBe("none");
-    expect(badge.borderColor, `${message}: visible badge border`).not.toMatch(/^(?:transparent|rgba\([^)]*,\s*0\))$/);
+    expect(badge.fits, `${message}: text stays within fact cell`).toBe(true);
     expect(badge.rect.width, message).toBeGreaterThan(0);
     expect(badge.rect.height, message).toBeGreaterThan(0);
     expect(badge.rect.left, `${message}: stays inside area row`).toBeGreaterThanOrEqual(metrics.container.left - 1);
@@ -134,7 +127,11 @@ for (const width of [null, 320, 375]) {
     await drawer.evaluate(async element => {
       await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {})));
     });
-    await expectReadableAreaBadges(drawer.locator(".building-sale-area-info-v1"));
+    await expectReadableBuildingFacts(drawer.locator("[data-building-basics-v84]"));
+    // The primary panel separates whole-building measurements; the original
+    // exclusive area remains in the advertisement's detailed area information.
+    await expect(drawer.locator('.listing-sale-details-v1')).toContainText('전용면적');
+    await expect(drawer.locator('.listing-sale-details-v1')).toContainText('134.41평');
     await page.screenshot({path: testInfo.outputPath("building-sale-area-badges-detail.png")});
   });
 }
@@ -177,10 +174,19 @@ for (const sample of cases) {
     await expect(drawer.locator(".building-sale-info-v1, .building-sale-scope-v1, .building-sale-floor-v1")).toHaveCount(0);
     await expect(drawer.locator(".unified-detail-source-address-v827 > strong")).toHaveText(scenario.address);
     await expect(drawer.locator(".listing-sale-details-v1 dt").filter({hasText: hiddenLabels})).toHaveCount(0);
-    const detailArea = drawer.locator(".building-sale-area-info-v1");
+    const detailArea = drawer.locator("[data-building-basics-v84]");
     await expect(detailArea).toHaveCount(1);
     await expect(detailArea).toBeVisible();
-    for (const text of sample.expectedAreas) await expect(detailArea).toContainText(text);
+    await expect(detailArea.locator('[data-building-fact-v84]')).toHaveCount(5);
+    if (sample.expectedAreas[0] === '면적 정보 미확인') {
+      await expect(detailArea.locator('[data-building-fact-v84] dd')).toHaveText(Array(5).fill('원본 미제공'));
+    } else {
+      for (const text of sample.expectedAreas) await expect(detailArea).toContainText(text);
+      if (sample.saleDetails.exclusiveAreaM2) {
+        await expect(detailArea.locator('[data-building-fact-v84] dd')).toHaveText(Array(5).fill('원본 미제공'));
+        await expect(detailArea).toContainText('매매 대상 전용면적');
+      }
+    }
     if (sample.saleDetails.grossAreaM2) await expect(drawer.locator(".listing-sale-details-v1")).toContainText("연면적");
     if (sample.saleDetails.exclusiveAreaM2) await expect(drawer.locator(".listing-sale-details-v1")).toContainText("전용면적");
     await expect(drawer.locator(".listing-sale-details-v1")).toContainText("기존 월 임대수입");

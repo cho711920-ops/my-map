@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 
-const helper=fs.readFileSync('tools/open-edge-auto-status.ps1','utf8');
+// A BOM is needed for a standalone PS5 UTF-8 file, but is not whitespace when
+// that file is embedded in the middle of a different EncodedCommand script.
+const helper=fs.readFileSync('tools/open-edge-auto-status.ps1','utf8').replace(/^\uFEFF/, '');
 test('status opener rejects wrong extension contexts, owners and remote websocket addresses before connecting',{skip:process.platform!=='win32'},()=>{
   const script=`$ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new()
