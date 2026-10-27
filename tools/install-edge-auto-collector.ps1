@@ -45,6 +45,7 @@ foreach ($collectorFile in @('naver-collector.js', 'daangn-collector.js', 'gongs
 }
 Copy-Item -LiteralPath $sourceLauncher -Destination $installedLauncher -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'edge-auto-profile.ps1') -Destination (Join-Path $automationRoot 'edge-auto-profile.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'open-edge-auto-status.ps1') -Destination (Join-Path $automationRoot 'open-edge-auto-status.ps1') -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'read-edge-auto-schedule.ps1') -Destination (Join-Path $automationRoot 'read-edge-auto-schedule.ps1') -Force
 
 $powerShellPath = (Get-Command powershell.exe).Source

@@ -1,5 +1,11 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-27 자동실행 수집목록 창 v91
+
+- 사용자 설명창만열리고목록안보임 문의. v79 HTTPS실행ACK뒤 옵션창열기누락 원인. 실행기 ACK뒤 정확한전용확장worker의 chrome.runtime.openOptionsPage 정식API로 목록열기/기존창재사용. 직접확장URL새탭탐색 안함. 상세 docs/collector-status-window-v91-20261027.txt.
+- 실제현재수집유지하며 목록창열림/반복1개/상가임대10·매매10·당근유성구진행표시 확인,스크린샷육안검수. PS5.1실제열림도통과. 관련82/82/lint/PS파서/diff정상. 최소화정책유지,표시실패WARN만/수집재시작금지.
+- dd8fe76 소스·설치launcher 백업 private-audits/backups/js-map-collector-status-window-20261027-v91. 설치launcher/새open-edge-auto-status.ps1 복사SHA검증. 다음예약자동목록열기적용,현재목록창도열어둠. 확장1.1.26/웹Worker/수집데이터변경없음.
+
 ## 2026-10-27 예약 실행기 연결 복구 v90
 
 - 사용자 오늘11시 자동수집 시작 실패 점검·보완 승인. 설치/원본 동일,11:00:12 연결오류 종료1/오늘실행보고없음. 최초연결 이후 PUT/상태조회 재시도 누락과 OS실패재시도없음 확인. 예전로그 단계부재로 정확한 실패요청/최초연결원인은 미확정. docs/collector-startup-transport-v90-20261027.txt.

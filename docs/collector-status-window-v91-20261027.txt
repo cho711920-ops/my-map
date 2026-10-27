@@ -1,0 +1,20 @@
+2026-10-27 자동실행 수집 목록 창 v91
+
+원인
+- v79 Edge 내부페이지 직접 탐색 차단 대응 이후 Windows 실행기는 HTTPS collector-install에서 실제수집 ACK를 확인하고 종료함.
+- 확인 이후 options.html 수집목록을 여는 처리가 없어 설명/연결확인 탭만 남았음. 수집 중단과 별개인 창 열기 누락.
+
+보완
+- 실제수집 ACK 이후 동일 전용 프로필의 정확한 확장 service_worker 컨텍스트에서 chrome.runtime.openOptionsPage() 호출.
+- Edge가 차단한 확장 내부URL 직접 새탭 탐색은 사용하지 않음. 기존 목록창 재사용/활성화, 신규 수집 요청·확장reload·브라우저종료 없음.
+- 전용포트 소유자/확장ID/worker타입과 정확한URL 검증. WebSocket 127.0.0.1:9223/devtools/page/*만 허용,8초제한/64KiB응답제한. 옵션 탭 실제 생성도 확인.
+- 창 열기 실패는 WARN만 기록. 이미 ACK를 받은 수집을 실패로 바꾸거나 예약 재시작시키지 않음.
+- 현재 창 최소화 정책 유지. 수집기 창을 열면 목록 탭이 선택되어 있음. 설명 확인 탭은 보존.
+
+검수/설치
+- 관련82/82, 새 테스트lint/세PS스크립트파서/git diff --check 정상.
+- 실제 실행 중인1.1.26 확장에서 정식API로 목록창 열림 및 재호출시1개 유지 확인. 일반Edge/수집탭 유지.
+- Windows PowerShell5.1.19041.2673에서도 실제 열림/옵션탭1개 재검증. 처음 일반PS호출은 기존실행정책 때문에 실행되지 않았고, 기존예약과 같은 process-local ExecutionPolicy Bypass로 재검증. 시스템정책 변경 없음.
+- Playwright 읽기 검수: 제목 JS 자동수집 설정, 상가임대10개/매매10개 목록 렌더링, 상가임대6/10 당근유성구87% 실제 표시. 스크린샷 육안 확인. 수집재실행 없음.
+- 설치launcher/새helper만 복사해 원본SHA 일치 확인. 확장1.1.26/기존실행/웹배포/운영데이터 변경 없음. 다음 예약실행부터 ACK뒤 목록창자동열기 적용, 현재 목록창도 열어둠.
+- 사전dd8fe76 소스ZIP/commit/설치launcher 백업: 원래프로젝트 private-audits/backups/js-map-collector-status-window-20261027-v91.

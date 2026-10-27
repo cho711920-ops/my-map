@@ -211,6 +211,15 @@ if ($Setup) {
   }
   $expectedVersion = (Get-Content -LiteralPath (Join-Path $extensionPath 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
   $acknowledgement = Invoke-EdgeAutoStartup -Token $runToken -ExpectedVersion $expectedVersion -ProfilePath $profilePath -ForceValue $forceValue
+  $script:edgeAutoStage = 'status-window'
+  try {
+    . (Join-Path $PSScriptRoot 'open-edge-auto-status.ps1')
+    Open-EdgeAutoStatusPage -ProfilePath $profilePath -ExtensionId $extensionId | Out-Null
+    Write-AutoCollectorLog 'INFO' '수집 목록 창 열림 확인'
+  } catch {
+    # A display problem must not restart a successfully acknowledged collection.
+    Write-AutoCollectorLog 'WARN' ('수집은 유지합니다. 목록 창 열기 실패: ' + $_.Exception.Message)
+  }
   $script:edgeAutoStage = 'window-state'
   # Keep the acknowledged HTTPS status page. No provider/failed tab is closed.
   Add-Type @'
