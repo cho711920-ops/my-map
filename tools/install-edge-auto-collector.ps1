@@ -52,7 +52,7 @@ $taskArguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `
 $action = New-ScheduledTaskAction -Execute $powerShellPath -Argument $taskArguments
 $scheduleTime = [datetime]::ParseExact($Schedule, 'HH:mm', [Globalization.CultureInfo]::InvariantCulture)
 $trigger = New-ScheduledTaskTrigger -Daily -At $scheduleTime
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 6) -MultipleInstances IgnoreNew
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 6) -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description 'JS부동산 Edge 자동수집' -Force | Out-Null
 . (Join-Path $PSScriptRoot 'read-edge-auto-schedule.ps1')

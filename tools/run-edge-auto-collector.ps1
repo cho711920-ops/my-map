@@ -28,6 +28,89 @@ function Get-EdgeAutoStartupAcknowledgement {
   if ($result -in @('active','queued','skipped','busy','idle','unavailable','update-required','failed','unconfirmed')) { return $result }
   return 'pending'
 }
+function Test-EdgeAutoTransientConnectionError {
+  param([object]$Failure)
+  $exception = $Failure.Exception
+  while ($exception) {
+    if ($exception -is [Net.WebException]) {
+      if (-not $exception.Response) { return $true }
+      return ([int]$exception.Response.StatusCode -in @(408,429,500,502,503,504))
+    }
+    if ($exception -is [IO.IOException] -or $exception -is [Net.Sockets.SocketException]) { return $true }
+    $exception = $exception.InnerException
+  }
+  return $false
+}
+function Assert-EdgeAutoDebugOwner {
+  param([string]$ProfilePath)
+  $debugOwners = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object { $_.LocalPort -eq 9223 } | Select-Object -ExpandProperty OwningProcess -Unique)
+  if (-not $debugOwners.Count) {
+    throw [Net.WebException]::new('전용 브라우저 연결 포트 대기 중', [Net.WebExceptionStatus]::ConnectFailure)
+  }
+  $ownedProcesses = @(Get-EdgeAutoProfileProcesses -ProfilePath $ProfilePath | Select-Object -ExpandProperty ProcessId)
+  if ($debugOwners.Count -ne 1 -or $debugOwners[0] -notin $ownedProcesses) {
+    throw '브라우저 연결 포트가 수집 전용 프로필 소유가 아니므로 실행 신호를 보내지 않았습니다.'
+  }
+}
+function Invoke-EdgeAutoStartup {
+  param([long]$Token,[string]$ExpectedVersion,[string]$ProfilePath,[string]$ForceValue,
+    [double]$TimeoutSeconds = 45,[int]$PollMilliseconds = 500)
+  $autorunUrl = "https://js-map.com/collector-install?js_auto_run=1&js_auto_force=$ForceValue&js_auto_token=$Token&js_auto_expected=$ExpectedVersion"
+  foreach ($stage in @('debug-ready','open-request','acknowledgement')) {
+    $script:edgeAutoStage = $stage
+    Write-AutoCollectorLog 'INFO' ('시작 단계: ' + $stage)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $ready = $false
+    $connectionFailures = 0
+    $createIssued = $false
+    do {
+      $creating = $false
+      try {
+        # A missing listener may reconnect; another profile's owner is a fatal
+        # error. Check again before every request, including after reconnection.
+        if ($stage -ne 'debug-ready') { Assert-EdgeAutoDebugOwner -ProfilePath $ProfilePath }
+        if ($stage -eq 'debug-ready') {
+          Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/version' -TimeoutSec 2 | Out-Null
+          $ready = $true
+        } elseif ($stage -eq 'open-request') {
+          # A PUT can succeed even when its response is lost. Recover the same
+          # token's tab before considering a new request; never blindly resend.
+          $trigger = @(Get-EdgeAutoDebugPages | Where-Object { $_.url -eq $autorunUrl }) | Select-Object -First 1
+          if (-not $trigger -and -not $createIssued) {
+            $encodedUrl = [Uri]::EscapeDataString($autorunUrl)
+            $createIssued = $true
+            $creating = $true
+            $trigger = Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedUrl" -TimeoutSec 5
+            if (-not $trigger.id) { throw '실행 요청 페이지의 고유번호를 확인하지 못했습니다.' }
+          }
+          $ready = [bool]($trigger -and $trigger.id)
+        } else {
+          $page = @(Get-EdgeAutoDebugPages | Where-Object { $_.id -eq $trigger.id }) | Select-Object -First 1
+          $acknowledgement = Get-EdgeAutoStartupAcknowledgement -Page $page -Token ([string]$Token) -ExpectedVersion $ExpectedVersion
+          if ($acknowledgement -ne 'pending') {
+            if ($acknowledgement -notin @('active','queued','skipped','busy')) {
+              throw ('자동수집의 실제 응답을 확인하지 못했습니다 (' + $acknowledgement + '). 실행 성공으로 처리하지 않았습니다.')
+            }
+            $ready = $true
+          }
+        }
+      } catch {
+        if (-not (Test-EdgeAutoTransientConnectionError -Failure $_)) { throw }
+        $connectionFailures++
+        if ($connectionFailures -eq 1) { Write-AutoCollectorLog 'WARN' ('일시 연결 오류, 제한 시간 내 재연결: ' + $stage) }
+        # ConnectFailure means the TCP connection never opened. For timeouts or
+        # lost responses keep createIssued=true and only recover the existing tab.
+        if ($creating -and $_.Exception -is [Net.WebException] -and
+            $_.Exception.Status -eq [Net.WebExceptionStatus]::ConnectFailure) { $createIssued = $false }
+      }
+      if ($ready) { break }
+      Start-Sleep -Milliseconds $PollMilliseconds
+    } while ((Get-Date) -lt $deadline)
+    if (-not $ready) { throw ('자동수집 시작 제한 시간 초과: ' + $stage + ' (연결 오류 ' + $connectionFailures + '회). 수집 성공으로 기록하지 않았습니다.') }
+    if ($connectionFailures) { Write-AutoCollectorLog 'INFO' ('재연결 성공: ' + $stage + ' · 오류 ' + $connectionFailures + '회') }
+  }
+  return $acknowledgement
+}
 $edgeCandidates = @(@(
   (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
   (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
@@ -50,7 +133,7 @@ function Write-AutoCollectorLog([string]$Level, [string]$Message) {
   Add-Content -LiteralPath $dailyLog -Value $line -Encoding UTF8
 }
 trap {
-  Write-AutoCollectorLog 'ERROR' ([string]$_.Exception.Message)
+  Write-AutoCollectorLog 'ERROR' ('단계=' + $script:edgeAutoStage + ' · 줄=' + $_.InvocationInfo.ScriptLineNumber + ' · ' + $_.Exception.GetType().Name + ' · ' + [string]$_.Exception.Message)
   exit 1
 }
 $launchMessage = 'Windows 예약실행 시작'
@@ -60,6 +143,7 @@ if ($Setup) {
   $launchMessage = '상가임대 수동 전체실행 시작 (매매 제외)'
 }
 Write-AutoCollectorLog 'INFO' $launchMessage
+$script:edgeAutoStage = 'configuration'
 
 if (-not (Test-Path -LiteralPath (Join-Path $extensionPath 'manifest.json'))) {
   throw 'JS 자동수집 확장 프로그램이 설치되지 않았습니다. install-edge-auto-collector.ps1을 먼저 실행해주세요.'
@@ -119,53 +203,15 @@ if ($Setup) {
 if ($Setup) {
   Start-Process -FilePath $edgePath -ArgumentList $arguments
 } else {
+  $script:edgeAutoStage = 'launch-browser'
   if ($Force) {
     Start-Process -FilePath $edgePath -ArgumentList $arguments
   } else {
     Start-Process -FilePath $edgePath -ArgumentList $arguments -WindowStyle Hidden
   }
-  $debugReady = $false
-  $debugDeadline = (Get-Date).AddSeconds(45)
-  do {
-    try {
-      Invoke-RestMethod -Uri 'http://127.0.0.1:9223/json/version' -TimeoutSec 2 | Out-Null
-      $debugReady = $true
-      break
-    } catch {
-      Start-Sleep -Milliseconds 500
-    }
-  } while ((Get-Date) -lt $debugDeadline)
-  if (-not $debugReady) {
-    throw '전용 Edge 자동수집 실행기에 연결하지 못했습니다.'
-  }
-  $debugOwners = @(Get-NetTCPConnection -LocalPort 9223 -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
-  $ownedProcesses = @(Get-EdgeAutoProfileProcesses -ProfilePath $profilePath | Select-Object -ExpandProperty ProcessId)
-  if ($debugOwners.Count -ne 1 -or $debugOwners[0] -notin $ownedProcesses) {
-    throw '브라우저 연결 포트가 수집 전용 프로필 소유가 아니므로 실행 신호를 보내지 않았습니다.'
-  }
-  $openAutorun = {
-    param([long]$Token)
-    # The existing permitted HTTPS content bridge wakes the same extension.
-    # Do not infer success from navigating to an extension-internal page:
-    # Edge can replace it with ERR_BLOCKED_BY_CLIENT and change its URL.
-    $autorunUrl = "https://js-map.com/collector-install?js_auto_run=1&js_auto_force=$forceValue&js_auto_token=$Token&js_auto_expected=$expectedVersion"
-    $encodedUrl = [Uri]::EscapeDataString($autorunUrl)
-    $created = Invoke-RestMethod -Method Put -Uri "http://127.0.0.1:9223/json/new?$encodedUrl" -TimeoutSec 5
-    if (-not $created.id) { throw '실행 요청 페이지의 고유번호를 확인하지 못했습니다.' }
-    return $created
-  }
   $expectedVersion = (Get-Content -LiteralPath (Join-Path $extensionPath 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
-  $trigger = & $openAutorun $runToken
-  $triggerDeadline = (Get-Date).AddSeconds(45)
-  $acknowledgement = 'pending'
-  do {
-    Start-Sleep -Milliseconds 500
-    $page = @(Get-EdgeAutoDebugPages | Where-Object { $_.id -eq $trigger.id }) | Select-Object -First 1
-    $acknowledgement = Get-EdgeAutoStartupAcknowledgement -Page $page -Token ([string]$runToken) -ExpectedVersion $expectedVersion
-  } while ($acknowledgement -eq 'pending' -and (Get-Date) -lt $triggerDeadline)
-  if ($acknowledgement -notin @('active','queued','skipped','busy')) {
-    throw ('자동수집의 실제 응답을 확인하지 못했습니다 (' + $acknowledgement + '). 차단·미연결을 실행 성공으로 처리하지 않았습니다. 확장 관리 화면의 다시 로드 후 상태를 확인해 주세요.')
-  }
+  $acknowledgement = Invoke-EdgeAutoStartup -Token $runToken -ExpectedVersion $expectedVersion -ProfilePath $profilePath -ForceValue $forceValue
+  $script:edgeAutoStage = 'window-state'
   # Keep the acknowledged HTTPS status page. No provider/failed tab is closed.
   Add-Type @'
 using System;

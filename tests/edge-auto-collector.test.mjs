@@ -198,7 +198,8 @@ test("Windows installer creates a daily recoverable scheduled task", () => {
   assert.match(launch, /Write-AutoCollectorLog/);
   assert.match(launch, /\$launchMessage = 'Windows 예약실행 시작'/);
   assert.doesNotMatch(launch, /\(if \(\$Setup\)/);
-  assert.match(launch, /AddSeconds\(45\)/);
+  assert.match(launch, /\[double\]\$TimeoutSeconds = 45/);
+  assert.match(launch, /AddSeconds\(\$TimeoutSeconds\)/);
   assert.match(launch, /\[switch\]\$Force/);
   assert.match(launch, /JSMapWindow/);
   assert.doesNotMatch(launch, /Stop-Process/);
