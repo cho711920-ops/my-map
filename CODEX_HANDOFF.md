@@ -1,5 +1,12 @@
 # JS부동산 Codex 인수인계
 
+## 2026-10-27 확인/미확인 클러스터 색상 v89
+
+- 사용자 미확인 노랑/확인 연파랑이어야 한다고 교정. v82 CSS 활성 원형 전부 노랑 덮기로 상태 시각 구분이 빠진 원인. 데이터 확인표식 손실 아님. docs/cluster-status-colors-v89-20261027.txt.
+- 활성 모두 목록 확인배지 조건 충족 시 visit-confirmed-v89/연파랑 rgba(151,201,245,.68); 미확인·불명확·혼합 노랑, 전부완료 회색. (임장가자)/(공실박스) 미확인 우선, 기존 확인표식 및 목록과 동일한 legacy 공실박스 확인 조건 유지. 부분완료는 활성 판정에서 제외. 선택 흰 내부+상태색 테두리. 단일순회, 최소50px/동·구 흰색/수량/선택/데이터 보존.
+- Node1957/1957 후 최종 배지일치·순회 보완 관련11/11, PC·폰14pass4조건제외 및 최종상태2/2. lint/type/globals/build/diff 정상. 가상자료 화면 육안 확인, 실제 로그인 UI 실기 아님.
+- 사전28625a7 source.zip·commit·이전Worker 백업 private-audits/backups/js-map-cluster-status-20261027-v89. 제품b75b3e4 origin/codex/cluster-status-v89 푸시. Worker1f2546aa-5064-4e0a-abbc-74fb3d70a7d5/cachee230a781c0640144a57b757f 배포. 양 도메인 HTML/각94JS·CSS SHA일치. 운영 매물·개인사진·수집기 변경 없음.
+
 ## 2026-10-26 원형 클러스터 최소50px v88
 
 - 사용자40px에서50px 재요청. 원형 최소40→50 및 CSS fallback40→50만 변경. 수량곡선/최대110·줌66/동·구 흰 카드·선택테두리 그대로. 작은1·10건50px 실측, 기존 지도·행정구역 PC/폰14pass4플랫폼제외·lint/build/diff 통과.
