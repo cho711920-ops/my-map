@@ -35,11 +35,17 @@
 백업/검수
 - 사전341aba2 소스ZIP/commit/기존Worker복구정보: 원래프로젝트 private-audits/backups/js-map-gongsil-presence-20261029-v95.
 - 이전Worker cda8d5e0-309c-4e2f-ab90-bc3055d143d6 / publiccache074b0c5d213e119104351c34.
-- Node1984/1984,lint/type/browserglobals0/build/dry-run통과. PC/폰관련52건(최종재검수결과배포기록에확정).
+- Node1984/1984,lint/type/browserglobals0/build/dry-run 통과. 최종 PC/폰 관련52/52 통과.
 - SQLite실제API로첫기준/1건미노출/상세실패와분리/재등장/replay/필터·시장경계/빈지도/잘못된증명보류검사.
 - 브라우저로수동북마크의실제의존성로딩/포착/완료전송/기준기억/창범위변경시1회조회/기존지도보존/활성수집보존검사. 실제사용자계정자료쓰기없음.
 - 3982광고ID준비에서추가광고별네트워크0검사. 실제사용자전체수집시간전후실측은미실시.
 
 배포 결과
-- 후속기록에커밋/원격/Worker/설치파일SHA·운영응답검증을추가한다.
+- 제품 커밋06528c6, origin/codex/gongsil-full-presence-v95 푸시 완료.
+- Worker345363bd-1be6-43fa-bc89-8a8dd2cbbe2b / publiccachee235d46dcc3c028e764c2cf6 배포 완료.
+- js-map.com/www.js-map.com의 loader/collector/census/scope/install 관련5파일씩10응답 모두200, 빌드산출물과SHA256일치.
+- 전용 PC 설치코드4파일(scope/collector/census/manifest) SHA일치. 이전설치코드도 사전백업 폴더에보존. 확장1.1.26 유지, 공실박스수집기만2.3.4.
+- 진행중수집을보존하려고 설치기/확장reload/브라우저종료는실행하지않음. 파일별교체만수행. 다음새수집문서부터새코드적용.
+- 13:15KST D1읽기: 기존12:11:31시작2.3.3 수동수집running, 비교기준0행. 운영데이터쓰기없는확인. 새버전실수집/첫운영기준생성은아직미확인.
+- 배포후Tail표본12event 모두ok/예외0/error로그0. 제한된표본이며장기무오류보장아님.
 - R2 목록/상세/CSV캐시키·매물목록스킨·사용자상태 변경없음. 스키마마이그레이션없음.
