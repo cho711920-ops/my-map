@@ -9,6 +9,7 @@ import { normalizeNaverPropertyType, resolveNaverSaleCategory } from "./naver-pr
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector-offer-identity.js";
 import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertisement-presence.js";
+import { gongsilCensusV95 } from "./gongsil-census-v95.js";
 import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObservedAdvertisements } from "./collector-first-observed.js";
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
 import { exactCollectorRoadAddress } from "./collector-address.js";
@@ -2614,10 +2615,19 @@ async function finalizeSessionWork(env, body) {
     ? gongsilPresenceMarkets(body) : [tradeType];
   const scopeOffers = source === "공실박스" ? gongsilOffers
     : presenceObserved.map(sourceId => ({ sourceId, tradeType }));
-  const scopedPresence = await trackAdvertisementPresence(env, {
-    source, body, sessionId, offers: scopeOffers, markets, complete,
-    providerCount: providerObserved ? providerObserved.length : observed.length
-  });
+  const censusV95 = source === "공실박스" ? await gongsilCensusV95(env,body,markets) : null;
+  const scopedPresence = censusV95 && !censusV95.valid
+    ? {presenceReset:0,missingMarked:0,deactivated:0,adsReappeared:0,presenceTracking:false,
+      presenceScopeEstablished:false,presenceTrackingIssue:censusV95.issue,affectedListingIds:[]}
+    : await trackAdvertisementPresence(env, {
+      source, body: censusV95 ? censusV95.body : body, sessionId,
+      offers: censusV95 ? censusV95.offers : scopeOffers, markets,
+      complete: censusV95 ? true : complete,
+      providerCount: censusV95 ? censusV95.providerCount : providerObserved ? providerObserved.length : observed.length
+    });
+  if (source === "공실박스" && !censusV95 && clean(body.censusIssueV95)) {
+    scopedPresence.presenceTrackingIssue = clean(body.censusIssueV95).slice(0,300);
+  }
   presenceReset = scopedPresence.presenceReset;
   missingMarked = scopedPresence.missingMarked;
   deactivated = scopedPresence.deactivated;
@@ -2635,8 +2645,9 @@ async function finalizeSessionWork(env, body) {
   totals.deactivated = deactivated;
   const reappeared = Number(totals.adsReappeared || 0) + scopedPresence.adsReappeared;
   Object.assign(totals, scopedPresence, { adsReappeared: reappeared });
+  if (censusV95) Object.assign(totals,{censusValidatedV95:censusV95.valid,censusObservedV95:censusV95.providerCount || 0});
   totals.presenceReported = true;
-  totals.presenceScopeKind = clean(body.presenceScope?.selectionKind);
+  totals.presenceScopeKind = clean(censusV95?.valid ? censusV95.body.presenceScope?.selectionKind : body.presenceScope?.selectionKind);
   totals.note = clean(body.note);
   totals.completeRequested = audit.requested;
   totals.completionValidated = audit.complete;

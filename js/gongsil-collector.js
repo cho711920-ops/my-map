@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.3.3";
+  var VERSION = "2.3.4";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -274,6 +274,7 @@
         '<button type="button" class="jsg-close" data-action="close" aria-label="닫기">×</button>' +
       '</div>' +
       '<div class="jsg-body">' +
+        '<div class="jsg-rule" data-role="census">광고번호 비교: 수집창을 먼저 열고 지도 이동 후 전체 선택하세요. 같은 필터의 첫 정상 범위를 기억합니다.</div>' +
         '<div class="jsg-card">' +
           '<div class="jsg-status-line"><div class="jsg-status" data-role="status"></div>' +
           '<div class="jsg-percent" data-role="percent">0%</div></div>' +
@@ -657,6 +658,14 @@
       }
 
       setStatus("클러스터 전체 목록을 읽는 중입니다.", "잠시만 기다려 주세요.");
+      var censusApiV95 = await loadCensusModuleV95();
+      var censusStateV95 = censusApiV95
+        ? await censusApiV95.prepare(state.capture, {fetch:originalFetch,market:state.collectionTradeType,stopped:function() {return state.stopRequested;}})
+        : {census:null,issue:"전체 지도범위 확인 모듈 없음"};
+      var censusLabelV95 = panel.querySelector('[data-role="census"]');
+      if (censusLabelV95) censusLabelV95.textContent = censusStateV95.census
+        ? "광고번호 전체대조 준비 · 기준범위 " + censusStateV95.census.ids.length.toLocaleString("ko-KR") + "건 · 주소/상세 저장 결과와 별도 확인"
+        : "광고번호 비교 보류: " + censusStateV95.issue;
       var items = await loadAllCapturedItems(state.capture);
 
       if (state.stopRequested) {
@@ -676,6 +685,7 @@
       var providerItemCount = items.length;
       var providerSelectedCount = selectedCount;
       var providerObservedSourceIds = observedSourceIds(items);
+      var providerObservedOffersV95 = observedOffers(items);
       var presenceScope = await capturedGongsilPresenceScope(state.capture, items);
       var completionProof = gongsilCompletionProof(state.capture, items, presenceScope, listFailures);
       if (collectionTradeType) {
@@ -719,6 +729,9 @@
         completionProof: completionProof,
         providerExpectedCount: providerSelectedCount,
         providerObservedSourceIds: providerObservedSourceIds,
+        providerObservedOffersV95: providerObservedOffersV95,
+        censusV95: censusStateV95.census,
+        censusIssueV95: censusStateV95.issue,
         observedSourceIds: observedSourceIds(items),
         observedOffers: observedOffers(items, collectionTradeType),
         manifestRegistered: true
@@ -979,6 +992,25 @@
       saveButton.disabled = false;
       finishCollectorRun();
     }
+  }
+
+  async function loadCensusModuleV95() {
+    if (window.JSGongsilCensusV95) return window.JSGongsilCensusV95;
+    // Older in-memory extension manifests can still load the new collector.
+    // Only fetch this tiny dependency on an actual collection, never on the
+    // main map startup or by replacing a running collector.
+    return new Promise(function(resolve) {
+      var script = document.createElement("script"), done = false;
+      script.charset = "utf-8";
+      var timer = window.setTimeout(function() {finish();},8000);
+      function finish() {
+        if (done) return;done=true;window.clearTimeout(timer);
+        resolve(window.JSGongsilCensusV95 || null);
+      }
+      script.src = "https://js-map.com/js/gongsil-census-v95.js?v=95";
+      script.onload = finish;script.onerror = finish;
+      (document.head || document.documentElement).appendChild(script);
+    });
   }
 
   async function resumePendingSave() {
@@ -2405,6 +2437,11 @@
     if (savedProgress && savedProgress.sessionId) {
       metadata.sessionId = savedProgress.sessionId;
       metadata.scope = savedProgress.scope || metadata.scope;
+      // A resumed upload belongs to its original frozen census. Never attach a
+      // newer map proof to an old session just because prices stayed the same.
+      metadata.censusV95 = savedProgress.censusV95 || null;
+      metadata.censusIssueV95 = savedProgress.censusIssueV95 || "이전 저장 회차의 광고 전체대조는 보류합니다";
+      metadata.providerObservedOffersV95 = savedProgress.providerObservedOffersV95 || [];
       if (Array.isArray(savedProgress.saveFailureReasons)) {
         saveFailureReasons = savedProgress.saveFailureReasons.slice(-200);
         metadata.saveFailureReasons = saveFailureReasons;
@@ -2493,6 +2530,9 @@
           signature: signature,
           sessionId: metadata.sessionId,
           scope: metadata.scope,
+          censusV95: metadata.censusV95 || null,
+          censusIssueV95: metadata.censusIssueV95 || "",
+          providerObservedOffersV95: metadata.providerObservedOffersV95 || [],
           offset: offset,
           batchIndex: batchIndex,
           totals: totals,
@@ -2558,6 +2598,15 @@
           Number(metadata.rejectedCount || 0) === 0,
         stopped
       );
+      if (metadata.censusV95 && window.JSGongsilCensusV95) {
+        var pinnedV95 = window.JSGongsilCensusV95.commit(metadata.censusV95, finalization);
+        var labelV95 = panel && panel.querySelector('[data-role="census"]');
+        if (labelV95) labelV95.textContent = finalization && finalization.censusValidatedV95 && finalization.presenceTracking
+          ? (finalization.presenceScopeEstablished ? "광고 비교기준 저장" : "광고 전체대조 완료") +
+            " · 미노출 " + Number(finalization.deactivated || 0) + "건 · 재등장 " + Number(finalization.adsReappeared || 0) + "건" +
+            (pinnedV95 ? " · 기준범위 기억됨" : " · 기기 기준범위 저장 확인 필요")
+          : "광고번호 비교 보류: " + text(finalization && finalization.presenceTrackingIssue || metadata.censusIssueV95 || "검증 미완료");
+      }
     }
     if (!stopped) {
       try { localStorage.removeItem(SAVE_PROGRESS_KEY); } catch (_) {}
@@ -3005,6 +3054,9 @@
       presenceVersion: 1,
       presenceScope: metadata.presenceScope || null,
       completionProof: metadata.completionProof || null,
+      censusV95: metadata.censusV95 || null,
+      censusIssueV95: metadata.censusIssueV95 || "",
+      providerObservedOffersV95: metadata.providerObservedOffersV95 || [],
       providerExpectedCount: Number(metadata.providerExpectedCount || 0),
       providerObservedSourceIds: Array.isArray(metadata.providerObservedSourceIds) ? metadata.providerObservedSourceIds : [],
       complete: Boolean(complete),
@@ -3278,6 +3330,10 @@
   function gongsilCompletionTitle(result, rejectedCount) {
     if (result.stopped) return "공실박스 안전중단 완료";
     var missing = Number(rejectedCount || 0) + Number(result.failed || 0);
+    if (result.finalization && result.finalization.censusValidatedV95 && result.presenceTracking) {
+      var prefix = result.presenceScopeEstablished ? "첫 광고 비교기준 저장" : "광고 전체대조 완료";
+      return prefix + (missing ? " · 저장 제외/실패 " + missing + "건" : " · 수집·저장 완료");
+    }
     return missing ? "수집 완료 · 제외/실패 " + missing + "건" : "수집·저장 완료";
   }
 

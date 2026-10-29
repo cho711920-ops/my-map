@@ -42,7 +42,7 @@
     },
     {
       "matches": ["https://gongsilbox.com/*", "https://*.gongsilbox.com/*"],
-      "js": ["collectors/gongsil-collector.js", "auto-bridge.js"],
+      "js": ["collectors/gongsil-census-v95.js", "collectors/gongsil-collector.js", "auto-bridge.js"],
       "run_at": "document_idle",
       "world": "MAIN"
     },

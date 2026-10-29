@@ -22,9 +22,21 @@
     return;
   }
 
+  // Loading the bookmark during a running/pending collection must not install
+  // new hooks or replace its frozen scope and uncertain save checkpoint.
+  if (runtimeName === "__JS_GONGSIL_COLLECTOR__") {
+    var active = window[runtimeName];
+    if (active && (typeof active.isBusy === "function" && active.isBusy() ||
+        typeof active.getPendingSave === "function" && active.getPendingSave())) {
+      if (typeof active.reopen === "function") active.reopen();
+      return;
+    }
+  }
+
   var previous = document.getElementById("js-realestate-collector-runtime");
   if (previous) previous.remove();
   var script = document.createElement("script");
+  script.charset = "utf-8";
   script.id = "js-realestate-collector-runtime";
   script.async = true;
   script.src = BASE_URL + filename + "?v=" + Date.now();
@@ -65,5 +77,17 @@
   script.onerror = function () {
     alert("JS 수집기 최신 버전을 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 눌러 주세요.");
   };
-  (document.head || document.documentElement).appendChild(script);
+  function dependency(path, next) {
+    var part = document.createElement("script");
+    part.charset = "utf-8";
+    part.src = BASE_URL + path + "?v=" + Date.now();
+    part.onload = next;
+    // Collection itself remains usable; missing scope proof never ages ads.
+    part.onerror = next;
+    (document.head || document.documentElement).appendChild(part);
+  }
+  function launch() {(document.head || document.documentElement).appendChild(script);}
+  if (runtimeName === "__JS_GONGSIL_COLLECTOR__") {
+    dependency("gongsil-scope-capture.js", function() {dependency("gongsil-census-v95.js",launch);});
+  } else launch();
 })();

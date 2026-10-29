@@ -40,7 +40,7 @@ do {
 if ($stillRunning.Count) { throw '전용 수집 브라우저가 종료되지 않아 코드 교체를 중단했습니다.' }
 
 Copy-Item -Path (Join-Path $sourceExtension '*') -Destination $installedExtension -Recurse -Force
-foreach ($collectorFile in @('naver-collector.js', 'daangn-collector.js', 'gongsil-collector.js')) {
+foreach ($collectorFile in @('naver-collector.js', 'daangn-collector.js', 'gongsil-collector.js', 'gongsil-census-v95.js')) {
   Copy-Item -LiteralPath (Join-Path $repoRoot "js\$collectorFile") -Destination (Join-Path $installedCollectors $collectorFile) -Force
 }
 Copy-Item -LiteralPath $sourceLauncher -Destination $installedLauncher -Force

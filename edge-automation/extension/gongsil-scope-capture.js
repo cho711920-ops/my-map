@@ -3,7 +3,7 @@
 (() => {
   "use strict";
   if (window.__JS_GONGSIL_SCOPE_CAPTURE_V1__) return;
-  const state = { version: 1, sequence: 0, capture: null };
+  const state = { version: 95, sequence: 0, capture: null };
   window.__JS_GONGSIL_SCOPE_CAPTURE_V1__ = state;
   const isCircle = input => {
     try {
@@ -13,6 +13,7 @@
   };
   const finish = (sequence, body, result) => {
     if (sequence !== state.sequence || !body || result?.res !== "success") return;
+    if (result.more === true || result.nextCursor || result.datas?.more === true || result.datas?.nextCursor) return;
     if (!Array.isArray(result?.datas?.res)) return;
     const groups = result.datas.res;
     if (groups.some(row => !row || !Array.isArray(row.fidxs))) return;
@@ -34,7 +35,7 @@
   const originalFetch = window.fetch;
   if (typeof originalFetch === "function") {
     window.fetch = async function(input, init) {
-      const circle = isCircle(input);
+      const circle = isCircle(input) && init?.__jsGongsilCensusV95 !== true;
       const sequence = circle ? ++state.sequence : 0;
       if (circle) state.capture = null;
       // Clone Request bodies before native fetch consumes them.

@@ -89,6 +89,7 @@ test("only an explicit successful empty group array can prove an empty map", asy
 });
 
 test("extension installs only the small scope hook at document_start and leaves collectors at document_idle", () => {
+  assert.equal(fs.readFileSync('js/gongsil-scope-capture.js','utf8'),source,'manual and extension capture stay identical');
   const manifest = JSON.parse(fs.readFileSync("edge-automation/extension/manifest.json", "utf8"));
   const early = manifest.content_scripts.find(entry => entry.js.includes("gongsil-scope-capture.js"));
   assert.equal(early.run_at, "document_start"); assert.equal(early.world, "MAIN");
@@ -96,4 +97,12 @@ test("extension installs only the small scope hook at document_start and leaves 
   const collector = manifest.content_scripts.find(entry => entry.js.includes("collectors/gongsil-collector.js"));
   assert.equal(collector.run_at, "document_idle");
   assert.doesNotMatch(source, /setInterval|setTimeout|createElement|querySelector/);
+});
+
+test('pinned verification reads never replace the provider visual map capture',async()=>{
+  const h=harness(async()=>response(['one']));
+  await h.window.fetch('/api/maps/circle',{method:'POST',body:requestBody});await settle();
+  const before=h.window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture;
+  await h.window.fetch('/api/maps/circle',{method:'POST',body:requestBody,__jsGongsilCensusV95:true});await settle();
+  assert.equal(h.window.__JS_GONGSIL_SCOPE_CAPTURE_V1__.capture,before);assert.equal(h.calls.length,2);
 });

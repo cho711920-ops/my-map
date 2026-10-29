@@ -14,7 +14,7 @@ test('the new collector opens in an isolated browser without sending provider re
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.addScriptTag({content:source});
   await expect(page.locator('#js-gongsil-collector-panel')).toBeVisible();
-  expect(await page.evaluate(()=>window.__JS_GONGSIL_COLLECTOR__.version)).toBe('2.3.3');
+  expect(await page.evaluate(()=>window.__JS_GONGSIL_COLLECTOR__.version)).toBe('2.3.4');
   expect(await page.evaluate(()=>window.__JS_GONGSIL_COLLECTOR__.isBusy())).toBe(false);
   expect(errors).toEqual([]);
 });
