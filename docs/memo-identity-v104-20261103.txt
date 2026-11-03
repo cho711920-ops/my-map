@@ -37,3 +37,9 @@
 백업
 - 변경 전 소스a13af23 / 이전 Worker07f116b4-e486-4010-b109-0cf36212a98f.
 - 원래 프로젝트 private-audits/backups/js-map-memo-identity-20261103-v104/source.zip 및 RESTORE.txt.
+
+배포
+- 제품3e3b221 / origin/codex/memo-identity-v104 커밋·푸시.
+- Workerf17289d7-0fc7-42c6-8837-6363735bedd7 / public cacheeaa7737e36089b3cfd630f03 배포.
+- 양 도메인 HTML·script/map·병합JS/CSS·임장공유JS·SW 총14응답200/빌드SHA256 일치 확인.
+- 기존 페이지 새로고침 후 새 메모 대상 연결 적용.

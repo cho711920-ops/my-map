@@ -6,6 +6,7 @@
 - Node2008/2008, 관련 Edge36/36, 실제 itemKey 최종 메모8/8, lint/type/globals/diff/build/dry-run 검증. 인라인 메모 PC/폰가로 지원 화면 검사, 폰세로 구성 변경 없음.
 - 운영 메모 오저장 자동 이동/수정 없음(원래 대상 확인 필요). 수집기 조작 없음. docs/memo-identity-v104-20261103.txt 참조.
 - 사전 백업 원래프로젝트 private-audits/backups/js-map-memo-identity-20261103-v104 (소스a13af23/이전Worker07f116b4).
+- 제품3e3b221 origin/codex/memo-identity-v104 푸시. Workerf17289d7-0fc7-42c6-8837-6363735bedd7/cacheeaa7737e36089b3cfd630f03 배포. 양 도메인 관련14응답200/SHA일치. 페이지 새로고침 필요.
 
 ## 2026-11-03 선택바 버튼 순서 v103
 
