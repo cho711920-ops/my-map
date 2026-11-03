@@ -3,7 +3,7 @@
 - 사용자 데스크톱 지도표시/목록0/확인필요 및 다시불러오기 동일오류. 실제 사용자 탭 HTTP·콘솔 미접속으로 단일원인 미확정. D1 조회정상, R2 CSV87.8MB/원본57.3MB 구조정상, CSV 44,095행 확인. docs/listings-load-v97-20261103.txt 상세.
 - 큰 읽기의 고정45초 중단 경로 보완: 첫 응답준비90초/이후 실제 바이트 무진행45초/전체120초 한도. 작은15초 및 명시timeout/쓰기 유지. JSON 진행관찰은 native 소비 유지. LIST_TIMEOUT/HTTP_n/NETWORK/RESPONSE로 오류구분. 재시도/원본proof/찜·메모 보존, 수집 및 DB 변경 없음.
 - Node1991/1991·최종PC/폰/태블릿18pass2SDK기기제외,lint/type/globals/build/dry-run/diff 정상. 실자료 isolated Edge/loopback 44,095건 ready 3.739초(좌표변환no-op/사진차단; 실사용 속도 아님). 실제 사용자 복구 확인은 아직 필요.
-- 사전9a88921/Worker6827fe1b-4a00-43ee-9683-b5b06e8f5452 백업 private-audits/backups/js-map-listings-load-20261103-v97. 현재 codex/listings-load-v97. 배포 후 기록 추가 예정.
+- 사전9a88921/Worker6827fe1b-4a00-43ee-9683-b5b06e8f5452 백업 private-audits/backups/js-map-listings-load-20261103-v97. 제품2347931 origin/codex/listings-load-v97 푸시. Worker c8c55bc2-f27e-403a-8569-5040201aed8b/cache419f80f2d8f09d0438da2b7b 배포. 양도메인 HTML/data-access/map/SW 8응답200 및 SHA일치. 실제 사용자 복구는 페이지 새로고침 후 확인 필요.
 
 # JS부동산 Codex 인수인계
 

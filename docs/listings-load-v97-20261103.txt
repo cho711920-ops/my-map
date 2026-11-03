@@ -42,3 +42,9 @@ DB/수집기/수집 세션/스키마/운영 매물/찜/메모/개인사진 변�
 새 코드 적용에는 열려 있는 지도 페이지 새로고침 필요. 실제 사용자 화면 복구는 아직 미확인.
 다시 실패하면 새 화면의 LIST_* 코드와 해당 시점 요청을 대조해야 한다.
 원본 자료를 줄이거나 수집 성능을 개선한 작업으로 보고하지 않는다.
+
+배포 기록
+제품 commit 2347931 / origin/codex/listings-load-v97 푸시.
+Worker c8c55bc2-f27e-403a-8569-5040201aed8b / public cache419f80f2d8f09d0438da2b7b.
+양 도메인 HTML/data-access/map/SW 8응답200, 빌드 SHA일치 확인.
+민감한 진단 원본은 원래 프로젝트 private-audits/listings-load-v97-20261103으로 이동하고 커밋하지 않았다.
