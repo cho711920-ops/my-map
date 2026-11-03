@@ -113,3 +113,35 @@ test('an inherited cover reads the original owner-scoped asset; reset preserves 
     {action:'reset',propertyId:'public-A',expectedVersion:1,requestId:'00000000-0000-4000-8000-000000000002'});
   assert.equal(reset.status,200);assert.deepEqual(deletes,[]);
 });
+for (const confirmedId of ['A','B']) for (const primaryId of ['A','B']) test('confirmed '+confirmedId+' survives selected merge with primary '+primaryId+' and preserves memo paragraphs',async t=>{
+ const f=fixture(t),other=primaryId==='A'?'B':'A';
+ f.db.prepare('UPDATE listings SET operating_memo=? WHERE id=?').run('(확인매물) / 확인 본문\n둘째 줄',confirmedId);
+ f.db.prepare('UPDATE listings SET operating_memo=? WHERE id=?').run('(임장가자) / 미확인 본문\n다음 줄',confirmedId==='A'?'B':'A');
+ const originalB=JSON.parse(f.db.prepare("SELECT list_snapshot_json FROM listing_sources WHERE id='O-B'").get().list_snapshot_json);
+ const body={...f.body,primaryMasterId:'public-'+primaryId,duplicateMasterIds:['public-'+other]};
+ const result=await mergeSelectedMasters(f.env,owner,body);
+ const memo=f.db.prepare('SELECT operating_memo FROM listings WHERE id=?').get(primaryId).operating_memo;
+ assert.match(memo,/^\(확인매물\)/);assert.doesNotMatch(memo,/\(\s*(?:임장가자|공실박스)\s*\)/);
+ assert.ok(memo.includes('확인 본문\n둘째 줄'));assert.ok(memo.includes('미확인 본문\n다음 줄'));
+ assert.equal((memo.match(/\(확인매물\)/g)||[]).length,1);
+ assert.equal(result.confirmedVisit,true);assert.equal(result.primaryOperatingMemo,memo);
+ const fresh=await handleD1GetAction(f.env,owner,{action:'listingOriginals',ids:'public-'+primaryId});
+ assert.equal(fresh.items[0].operating_memo,memo);
+
+ const replay=await mergeSelectedMasters(f.env,owner,body);assert.equal(replay.replayed,true);assert.equal(replay.primaryOperatingMemo,memo);
+ const moved=JSON.parse(f.db.prepare("SELECT list_snapshot_json FROM listing_sources WHERE id='O-B'").get().list_snapshot_json);
+ assert.equal(moved.deposit,originalB.deposit);assert.equal(moved.rent,originalB.rent);
+});
+
+test('only pending selections stay pending; source-based confirmation is carried only without a pending marker',async t=>{
+ for(const gongsilConfirmed of [false,true]){
+  const f=fixture(t);f.db.exec("UPDATE listings SET operating_memo='(공실박스) / 대기 본문' WHERE id IN ('A','B')");
+  f.db.exec("UPDATE listing_sources SET source='공실박스' WHERE listing_id='B'");
+  if(gongsilConfirmed)f.db.exec("UPDATE listings SET operating_memo='출입 확인 메모' WHERE id='B'");
+  const result=await mergeSelectedMasters(f.env,owner,{...f.body,duplicateMasterIds:['public-B']});
+  const memo=f.db.prepare("SELECT operating_memo FROM listings WHERE id='A'").get().operating_memo;
+  if(gongsilConfirmed){assert.match(memo,/^\(확인매물\)/);assert.doesNotMatch(memo,/\(공실박스\)/);}
+  else{assert.doesNotMatch(memo,/\(확인매물\)/);assert.match(memo,/\(공실박스\)/);}
+  assert.equal(result.confirmedVisit,gongsilConfirmed);
+ }
+});

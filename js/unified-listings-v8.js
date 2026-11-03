@@ -3033,6 +3033,13 @@
   global.JSUnifiedListingsV8 = {
     acceptSavedFinancialEdit: acceptSavedFinancialEditV106,
     finishSelectedMerge: function(result) {
+      if (result && result.persisted === true && typeof result.primaryOperatingMemo === "string") {
+        var primary = resolveMasterItem(result.primaryPropertyId || result.primaryMasterId);
+        if (primary) {
+          primary.memo = result.primaryOperatingMemo;
+          if (typeof global.applyFilter === "function") global.applyFilter();
+        }
+      }
       invalidatePendingLoad(); invalidateDetails(); closeDetail();
       showMergeNoticeV8139("선택매물 병합 저장 완료 · 변경된 매물을 반영하고 있습니다.", "success syncing", true);
       return refreshAfterMoveV8139(result, true, null);

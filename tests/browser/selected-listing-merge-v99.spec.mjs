@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 const source=await readFile(new URL('../../js/map.js',import.meta.url),'utf8');
 const ast=ts.createSourceFile('map.js',source,ts.ScriptTarget.Latest,true);
-const names=new Set(['listingChangeRowToItemV683','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','refreshMovedListingsV99']);
+const names=new Set(['listingChangeRowToItemV683','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','refreshMovedListingsV99','getFieldVisitClusterClassV684']);
 const functions=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&names.has(node.name.text)).map(node=>node.getText(ast)).join('\n');
 const proof='sha256-v1:'+'9'.repeat(64);
 async function setup(page,isMobile){
@@ -127,4 +127,36 @@ test('off-screen virtual choices retain list positions and hidden selections are
  await page.locator('#selectedMergeDialogV99 [data-submit]').click();
  await expect(page.locator('.merge-message-v99')).toContainText('선택 매물이나 계정이 변경');
  expect(await page.evaluate(()=>__unexpectedWrite)).toBe(false);
+});
+
+test('confirmed status survives choosing a pending representative immediately and after scoped reload',async({page,context,isMobile})=>{
+ await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+ await setup(page,isMobile);
+ await page.evaluate(()=>{
+  allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1').memo='(확인매물) / 확인 메모\n둘째 줄';
+  allItems.find(i=>i.propertyId==='FIXTURE-LEASE-2').memo='(임장가자) / 미확인 메모\n다음 줄';
+  applyFilter();
+ });
+ const memo='(확인매물) / 미확인 메모\n다음 줄\n\n확인 메모\n둘째 줄';
+ let releaseRead;const readGate=new Promise(resolve=>{releaseRead=resolve;});
+ await page.route('**/api/data',async route=>{
+  const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();
+  await route.fulfill({json:{...response(body.primaryMasterId,body.duplicateMasterIds),confirmedVisit:true,primaryOperatingMemo:memo}});
+ });
+ await page.route('**/api/data?*',async route=>{
+  if(new URL(route.request().url()).searchParams.get('action')!=='listingOriginals')return route.fallback();
+  await readGate;
+  const primary='FIXTURE-LEASE-2',other='FIXTURE-LEASE-1';
+  await route.fulfill({json:{ok:true,requestedIds:[primary,other],missingIds:[other],items:[{property_id:primary,title:'병합 대표',address:'대전 서구 탄방동 2-2',room:'2층',listing_type:'상가',trade_type:'lease',deposit:3000,monthly_rent:150,area_m2:40,status:'active',source_snapshot_key:proof,operating_memo:memo}],
+   unified:{ok:true,format:'compact-v2',fields:['originalId','source','rent'],groups:{[primary]:[['ad-one','네이버',90],['ad-two','당근',150]]},sourceSnapshotKeys:{[primary]:proof},sourceSnapshotPropertyIds:{[primary]:primary},sourceSearchIds:{}}}});
+ });
+ await page.locator('#mergeSelectedListingsBtnV99').click();await page.locator('input[value="FIXTURE-LEASE-2"]').check();
+ await page.locator('#selectedMergeDialogV99 [data-submit]').click();await expect(page.locator('#selectedMergeDialogV99')).not.toBeVisible();
+ const result=()=>page.evaluate(()=>{const item=allItems.find(i=>i.propertyId==='FIXTURE-LEASE-2');return {confirmed:isConfirmedVisitItem(item),pending:isFieldVisitItem(item),cluster:getFieldVisitClusterClassV684({items:[item]},false),memo:item.memo};});
+ await expect.poll(async()=> (await result()).confirmed).toBe(true);
+ expect(await result()).toEqual({confirmed:true,pending:false,cluster:' visit-confirmed-v89',memo});
+ await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"] .verification-done-v661')).toHaveText('확인');
+ releaseRead();await expect.poll(()=>page.evaluate(()=>allItems.some(i=>i.propertyId==='FIXTURE-LEASE-1'))).toBe(false);
+ expect(await result()).toEqual({confirmed:true,pending:false,cluster:' visit-confirmed-v89',memo});
+ await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"] .verification-pending-v661')).toHaveCount(0);
 });

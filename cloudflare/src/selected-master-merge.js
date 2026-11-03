@@ -1,4 +1,5 @@
 import { listingTradeTypesCanMerge } from './listing-trade.js';
+import { hasConfirmedVisitMemo } from './visit-status.js';
 
 const clean=value=>String(value??'').trim();
 const parse=value=>{try{return JSON.parse(value);}catch{return null;}};
@@ -42,7 +43,21 @@ export async function mergeSelectedMasters(env,user,body){
   const keyMap=Object.create(null);
   for(const row of duplicates)for(const key of [legacyKey(row),'property:'+row.id,'property:'+publicId(row)])keyMap[key]='property:'+targetId;
   const memos=[...new Set(selected.map(row=>clean(row.operating_memo)).filter(Boolean))];
-  const memo=memos.join('\n\n');
+  let confirmedVisit=memos.some(hasConfirmedVisitMemo);
+  if(!confirmedVisit){
+    // Match the legacy confirmed badge for an active Gongsil source. Explicit
+    // pending markers still make that particular selected card unconfirmed.
+    const gongsil=(await env.DB.prepare(`SELECT DISTINCT listing_id FROM listing_sources
+      WHERE source='공실박스' AND active=1 AND listing_id IN (SELECT value FROM json_each(?1))`)
+      .bind(JSON.stringify(selected.map(row=>row.id))).all())?.results||[];
+    const known=new Set(gongsil.map(row=>row.listing_id));
+    confirmedVisit=selected.some(row=>known.has(row.id) && !/\(\s*(?:임장가자|공실박스)\s*\)/i.test(clean(row.operating_memo)));
+  }
+  // Remove only operational status markers, keeping every memo body and its
+  // paragraph breaks. Pending+confirmed markers must never coexist after merge.
+  const bodies=confirmedVisit?memos.map(memo=>memo.replace(/\(\s*(?:임장가자|공실박스|확인매물)\s*\)[ \t]*(?:\/[ \t]*)?/gi,'').trim()).filter(Boolean):memos;
+  const bodyMemo=[...new Set(bodies)].join('\n\n');
+  const memo=confirmedVisit?'(확인매물)'+(bodyMemo?' / '+bodyMemo:''):bodyMemo;
   const cloud=(await env.DB.prepare(`SELECT owner_email,scope,record_key,value_json,version FROM cloud_state
     WHERE (scope IN ('favorites','visitLists') AND EXISTS(SELECT 1 FROM json_each(?1) WHERE instr(value_json,value)>0))
       OR (scope='personalListingCoverV85' AND record_key IN (SELECT value FROM json_each(?2))) LIMIT 501`)
@@ -72,7 +87,7 @@ export async function mergeSelectedMasters(env,user,body){
     coverCopies.push({owner:row.owner_email,source:row,value:JSON.stringify({...value,assetPropertyId:value.assetPropertyId||row.record_key})});
   }
   const result={ok:true,persisted:true,action:'consolidateExistingMasters',selectedMerge:true,consolidated:duplicates.length,
-    primaryMasterId:primary.id,primaryPropertyId:targetId,duplicateMasterIds:duplicates.map(row=>row.id),
+    primaryMasterId:primary.id,primaryPropertyId:targetId,confirmedVisit,primaryOperatingMemo:memo,duplicateMasterIds:duplicates.map(row=>row.id),
     duplicatePropertyIds:duplicates.map(publicId),affectedPropertyIds:selected.map(publicId),keyMap,
     operationAdjustments:{activeMaster:-duplicates.length,history:1},source:'D1'};
   const args=[requestId,owner,JSON.stringify({fingerprint,result}),
@@ -96,7 +111,7 @@ export async function mergeSelectedMasters(env,user,body){
     env.DB.prepare('UPDATE listings SET operating_memo=?1,version=version+1,updated_at=?2 WHERE id=?3').bind(memo,now,primary.id),
     env.DB.prepare(`UPDATE listings SET status='deleted',version=version+1,updated_at=?1 WHERE id IN (SELECT value FROM json_each(?2))`).bind(now,duplicateIds),
     env.DB.prepare(`INSERT INTO listing_history(listing_id,action,actor_email,before_json,after_json)
-      VALUES(?1,'consolidateSelectedMasters',?2,?3,?4)`).bind(primary.id,owner,JSON.stringify({selected}),JSON.stringify({primaryId:primary.id,duplicateIds:duplicates.map(row=>row.id),requestId}))];
+      VALUES(?1,'consolidateSelectedMasters',?2,?3,?4)`).bind(primary.id,owner,JSON.stringify({selected}),JSON.stringify({primaryId:primary.id,duplicateIds:duplicates.map(row=>row.id),requestId,confirmedVisit,operatingMemo:memo}))];
   // A manually registered card may have no source row. Preserve that card as
   // an explicit internal snapshot, rather than silently dropping its terms.
   let snapshotInsertion=1;
