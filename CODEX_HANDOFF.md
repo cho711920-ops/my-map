@@ -1,3 +1,12 @@
+## 2026-11-03 목록503/생성CPU 중단 v108
+
+- 사용자 오늘반복 LIST_HTTP_503. 실제Tail unifiedListings CPU32500ms/벽시계93839ms 후CPU한도취소 직접확인. 캡처의 sheet503 전문은 미포착. 원장44730/전체원본134311(활성수 아님). 점검때현재생성job완료도확인.
+- CPU상한 기본30→유한60초. 인코딩64Ki문자배치, JSONentries배열/행중복복사 제거. 원자R2/5MiB파트2개/내용/proof/원본보존.
+- follower40→80초 유한대기 +2초마다작은owner상태/token확인. 교체owner완성수용/실패·만료빠른503/중복전체조회금지. 목록5xx 안전category로그 추가(개인정보/쿠키/파라미터/예외메시지미기록).
+- Node2015/2015, PC/폰/태블릿목록복구16/16, lint/type/globals/diff/build/dry-run정상.43초생성/실패owner/교체token/80초상한검사. 합성인코딩100002→118회/CPU312→187ms/동일SHA(전체운영속도주장아님).
+- 실제새cold생성CPU개선폭은 다음자연생성 로그대조 필요. 강제재생성/재수집/운영자료수정 없음. docs/listing-snapshot-v108-20261103.txt 참조.
+- 백업 원래프로젝트 private-audits/backups/js-map-listing-snapshot-20261103-v108 (소스20de1da/이전Worker7a6b69ed).
+
 ## 2026-11-03 네이버 거리뷰 CSP 누락 v107
 
 - 사용자: 네이버 지도는 뜨지만 거리뷰 빈 화면/지연. 공개 CSP에 panorama.map.naver.com script-src 누락. 실제 공식SDK nearby/metadata JSONP 차단 재현,4방향까지 모두차단.

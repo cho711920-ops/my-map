@@ -1127,6 +1127,17 @@ export default {
       return withSecurityHeaders(response, request);
     } catch (error) {
       const url = new URL(request.url);
+      const listingRead = url.pathname === "/api/sheet" ? "sheet"
+        : url.pathname === "/api/data" && url.searchParams.get("action") === "unifiedListings" ? "unifiedListings" : "";
+      if (listingRead && (Number(error?.statusCode) || 500) >= 500) {
+        // Safe categories only: no cookies, query strings, SQL, listing data or
+        // exception messages. HTTP 503 otherwise appears as runtime "ok" in Tail.
+        const message = String(error?.message || "");
+        const code = ["listing_snapshot_pending", "listing_snapshot_owner_unavailable"].includes(error?.code) ? error.code : "";
+        console.error("listing read failed", {action:listingRead,statusCode:Number(error?.statusCode) || 500,
+          category:code || (/DB is overloaded|Requests queued for too long/i.test(message) ? "d1_overloaded"
+            : /D1_ERROR:.*Network connection lost/i.test(message) ? "d1_connection_lost" : "listing_read_failed")});
+      }
       if (url.pathname === "/api/collector") {
         const message = String(error?.message || "");
         // Report only a category: never collector keys, URLs, body, ad text or

@@ -64,3 +64,62 @@ test("an expired snapshot lease can recover, while an old owner cannot publish o
   const job=f.db.prepare("SELECT state,progress_json FROM jobs").get();
   assert.equal(job.state,"running");assert.equal(JSON.parse(job.progress_json).token,"new-owner");
 });
+async function flush(){for(let i=0;i<24;i++)await Promise.resolve();}
+
+test('a healthy shared build exceeding 40 seconds is awaited without duplicate scans or a premature 503',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+  const f=fixture(t),entered=deferred(),release=deferred(),polled=deferred();
+  const create=f.env.MEDIA.createMultipartUpload,head=f.env.MEDIA.head;
+  f.env.MEDIA.createMultipartUpload=async(...args)=>{const u=await create(...args);entered.resolve();await release.promise;return u;};
+  f.env.MEDIA.head=async(...args)=>{polled.resolve();return head(...args);};
+  const owner=buildSheetSnapshot(f.env,'csv','r');await entered.promise;
+  let outcome='pending';const follower=buildSheetSnapshot({...f.env,DB:{...f.env.DB}},'csv','r').then(()=>{outcome='ready';},e=>{outcome=e;});
+  await polled.promise;
+  for(let i=0;i<86;i++){t.mock.timers.tick(500);await flush();}
+  assert.equal(outcome,'pending','live owner may legitimately need more than forty seconds');
+  release.resolve();await owner; t.mock.timers.tick(500);await flush();await follower;
+  assert.equal(outcome,'ready');assert.equal(f.stats.created,1);assert.equal(f.stats.completed,1);
+});
+
+test('a failed owner releases followers promptly instead of leaving every device waiting for the full deadline',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+  const f=fixture(t),entered=deferred(),release=deferred(),polled=deferred();
+  const create=f.env.MEDIA.createMultipartUpload,head=f.env.MEDIA.head;
+  f.env.MEDIA.createMultipartUpload=async(...args)=>{const u=await create(...args);entered.resolve();await release.promise;return u;};
+  f.env.MEDIA.head=async(...args)=>{polled.resolve();return head(...args);};
+  const owner=buildSheetSnapshot(f.env,'csv','r');const oldOwner=assert.rejects(owner,/소유권/);await entered.promise;
+  const follower=buildSheetSnapshot({...f.env,DB:{...f.env.DB}},'csv','r');
+  const failure=assert.rejects(follower,{statusCode:503,code:'listing_snapshot_owner_unavailable'});await polled.promise;
+  f.db.prepare("UPDATE jobs SET state='failed'").run();
+  for(let i=0;i<6;i++){t.mock.timers.tick(500);await flush();}
+  await failure;release.resolve();await oldOwner;
+  assert.equal(f.stats.created,1);assert.equal(f.stats.completed,0);
+});
+
+test('followers follow a replacement lease token and accept its complete object, never the abandoned owner',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+  const f=fixture(t),entered=deferred(),release=deferred(),polled=deferred();
+  const create=f.env.MEDIA.createMultipartUpload,head=f.env.MEDIA.head;
+  f.env.MEDIA.createMultipartUpload=async(...args)=>{const u=await create(...args);entered.resolve();await release.promise;return u;};
+  f.env.MEDIA.head=async(...args)=>{polled.resolve();return head(...args);};
+  const owner=buildSheetSnapshot(f.env,'csv','r'),oldOwner=assert.rejects(owner,/소유권/);await entered.promise;
+  const follower=buildSheetSnapshot({...f.env,DB:{...f.env.DB}},'csv','r');await polled.promise;
+  f.db.prepare("UPDATE jobs SET progress_json=?").run(JSON.stringify({token:'replacement'}));
+  f.objects.set('csv',{customMetadata:{snapshotBuildToken:'replacement'},bytes:Buffer.from('complete replacement')});
+  for(let i=0;i<6;i++){t.mock.timers.tick(500);await flush();}
+  await follower;release.resolve();await oldOwner;
+  assert.equal(f.stats.created,1);assert.equal(f.objects.get('csv').customMetadata.snapshotBuildToken,'replacement');
+});
+
+test('an unresponsive owner still has a finite follower deadline and never starts another full query',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+  const f=fixture(t),entered=deferred(),release=deferred(),polled=deferred();
+  const create=f.env.MEDIA.createMultipartUpload,head=f.env.MEDIA.head;
+  f.env.MEDIA.createMultipartUpload=async(...args)=>{const u=await create(...args);entered.resolve();await release.promise;return u;};
+  f.env.MEDIA.head=async(...args)=>{polled.resolve();return head(...args);};
+  const owner=buildSheetSnapshot(f.env,'csv','r');await entered.promise;
+  const follower=buildSheetSnapshot({...f.env,DB:{...f.env.DB}},'csv','r');
+  const failure=assert.rejects(follower,{statusCode:503,code:'listing_snapshot_pending'});await polled.promise;
+  for(let i=0;i<162;i++){t.mock.timers.tick(500);await flush();}
+  await failure;assert.equal(f.stats.created,1);release.resolve();await owner;
+});

@@ -1,6 +1,8 @@
 import { buildD1SheetCsv, handleD1GetAction } from "./d1-api.js";
 
 const PART_BYTES = 5 * 1024 * 1024;
+const ENCODE_CHARS = 64 * 1024;
+const FOLLOWER_WAIT_MS = 80_000;
 const builds = new WeakMap();
 
 // Complete atomically in R2 before serving. No full CSV string, duplicate hash
@@ -20,8 +22,8 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
       await emit((first ? "" : ",") + JSON.stringify(name) + ":"); first = false;
       if (value && typeof value === "object" && !Array.isArray(value)) {
         await emit("{"); let firstEntry = true;
-        for (const [id, entry] of Object.entries(value)) {
-          await emit((firstEntry ? "" : ",") + JSON.stringify(id) + ":" + JSON.stringify(entry)); firstEntry = false;
+        for (const id of Object.keys(value)) {
+          await emit((firstEntry ? "" : ",") + JSON.stringify(id) + ":" + JSON.stringify(value[id])); firstEntry = false;
         }
         await emit("}");
       } else await emit(JSON.stringify(value));
@@ -58,15 +60,28 @@ async function sharedBuild(env, key, run) {
     const owner = await env.DB.prepare("SELECT progress_json,updated_at FROM jobs WHERE id=?1").bind(id).first();
     let ownerToken = "";
     try { ownerToken = JSON.parse(owner?.progress_json || "{}").token || ""; } catch { /* Remain pending. */ }
-    // Do not turn a simultaneous cache miss into another full D1 query. A
-    // retryable response is preferable to amplifying overload indefinitely.
+    // Follow a live owner without duplicating its full query. Large snapshots
+    // can legitimately take longer than the former 40-second follower limit.
+    // Re-read only the tiny lease every two seconds, so a failed/abandoned owner
+    // does not leave every device sleeping until the entire wait expires.
+    let lastOwnerCheck = started;
     do {
       const object = await env.MEDIA.head(key);
       if (ownerToken && object?.customMetadata?.snapshotBuildToken === ownerToken) return;
+      if (Date.now()-lastOwnerCheck >= 2_000) {
+        const currentOwner = await env.DB.prepare("SELECT state,leased_until,progress_json FROM jobs WHERE id=?1").bind(id).first();
+        if (!currentOwner || currentOwner.state === "failed" ||
+            currentOwner.state === "running" && Date.parse(currentOwner.leased_until || "") <= Date.now()) {
+          throw snapshotPending("listing_snapshot_owner_unavailable");
+        }
+        try { ownerToken = JSON.parse(currentOwner.progress_json || "{}").token || ""; } catch { ownerToken = ""; }
+        lastOwnerCheck = Date.now();
+      }
       await new Promise(resolve => setTimeout(resolve,500));
-    } while (Date.now()-started<40_000);
-    throw Object.assign(new Error("매물 목록을 준비 중입니다. 잠시 후 다시 시도해 주세요."),{statusCode:503,code:"listing_snapshot_pending"});
+    } while (Date.now()-started<FOLLOWER_WAIT_MS);
+    throw snapshotPending("listing_snapshot_pending");
   }
+
   let renewed = started;
   const lease = {
     token,
@@ -94,6 +109,10 @@ async function sharedBuild(env, key, run) {
   }
 }
 
+function snapshotPending(code) {
+  return Object.assign(new Error("매물 목록을 준비 중입니다. 잠시 후 다시 시도해 주세요."), {statusCode:503,code});
+}
+
 async function writeSnapshot(env, key, revision, produce, contentType, lease = null) {
   const upload = await env.MEDIA.createMultipartUpload(key, {
     httpMetadata: {contentType},
@@ -113,7 +132,11 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
       if (failure) throw failure;
     };
     let buffer = new Uint8Array(PART_BYTES), used = 0;
-    await produce(async text => {
+    // Coalesce small CSV rows / JSON tokens before encoding. Keep at most one
+    // small character batch beside the two fixed-size multipart upload buffers.
+    // No complete CSV/JSON body or second full encoded copy is retained.
+    let textBatch = [], textChars = 0;
+    const encode = async text => {
       await lease?.renew();
       const bytes = encoder.encode(text);
       for (let offset = 0; offset < bytes.length;) {
@@ -125,7 +148,15 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
           buffer = new Uint8Array(PART_BYTES); used = 0;
         }
       }
+    };
+    await produce(async text => {
+      textBatch.push(text); textChars += text.length;
+      if (textChars >= ENCODE_CHARS) {
+        const joined = textBatch.join(""); textBatch = []; textChars = 0;
+        await encode(joined);
+      }
     });
+    if (textChars) { await encode(textBatch.join("")); textBatch = []; }
     if (used) await queuePart(buffer.subarray(0, used));
     await Promise.all(pending);
     if (failure) throw failure;

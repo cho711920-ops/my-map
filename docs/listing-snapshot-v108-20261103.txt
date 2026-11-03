@@ -1,0 +1,52 @@
+2026-11-03 목록 HTTP503/CPU 중단 보완 v108
+
+증거 / 범위
+- 사용자 LIST_HTTP_503 캡처 및 오늘 반복 발생 보고.
+- 실제 Worker Tail에서 GET /api/data?action=unifiedListings가 CPU32,500ms/벽시계93,839ms 후 canceled,
+  예외 Worker exceeded CPU time limit 확인. 그 외 dataRevision/listingOriginals는 응답.
+- 이 로그는 통합원본 생성 중단의 직접 증거다. 특정 캡처의 /api/sheet503 응답 전문을 잡은 것은 아니다.
+- 동시에 기존 공유 생성 follower는40초 후503. owner 교체 후 처음 읽은 token만 기다리므로
+  새 owner가 완성본을 게시해도 이전 token을 기다릴 수 있었다.
+- D1 읽기 점검: 원장44,730행/전체 원본134,311행. 모든 행이 공개/활성 매물이라는 뜻은 아니다.
+  점검 시 CSV와 통합원본 생성 job completed도 확인. 강제 재수집/수집기 중단 없음.
+- 앞선 v107 거리뷰 CSP 설정과 별도 서버 목록 경로. v107 허용 설정 유지.
+
+변경
+- Wrangler [limits] cpu_ms=60000 지정: 기본30초에서 관측32.5초 중단을 넘길 여유 제공.
+  유한60초 상한 유지. 새 서비스/요금제 가입 없음. 정상 캐시 읽기에 추가 CPU 실행을 강제하지 않음.
+- CSV행/JSON조각 인코딩을64Ki문자 배치로 합침. 완성본 문자열을 통째로 만들지 않음.
+  기존5MiB R2파트·동시전송2개·순서·실패시abort·원자적완료·revision/proof 유지.
+- JSON 객체 전체의 entries 쌍 배열을 만들지 않고 key 배열로 순회.
+- D1 페이지의 신선한 행에서 paging용 커서만 제거하고 불필요한 행 복사/배열 복제 제거.
+  원장/원본 값 및 DB 쓰기 동작은 바꾸지 않음.
+- follower 대기를 유한80초로 조정(초기 응답 준비90초 클라이언트보다 짧음).
+  R2작은head만 조회하고2초 간격으로 작은 owner상태/token 재확인.
+  새 owner의 완성 token을 따라감. 실패/만료 owner는 빠르게503으로 풀어 다음 재시도에서 정상 claim 가능.
+  중복 전체 D1 생성 금지/완성 R2만 수용/마지막 소유권 확인 보호 유지.
+- 목록5xx는 action/status/category만 기록. URL파라미터/주소/광고/쿠키/예외메시지는 로그하지 않음.
+  사용자 화면에 정상0건으로 위장하거나 불완전한 목록/이전 snapshot을 최신으로 표시하지 않음.
+
+검증
+- Node2015/2015, Edge PC/모바일/태블릿 목록복구16/16, lint/type/browser globals/diff/build/Worker dry-run 정상.
+- 새 가상시계 검사:43초 정상생성 대기 성공(기존40초초과), 실패owner 빠른 해제,
+  교체owner token 완료 수용,80초 상한 유지. 별도 Worker 환경도 전체 생성1개만 수행.
+- 기존 큰CSV UTF-8/한글/emoji 바이트 일치, multipart 역순응답 순서보존, 업로드실패abort,
+  이전완성본보존, lease탈취시이전owner게시금지, 원본/증명키보존 검사 통과.
+- 합성100,000 JSON조각/8,277,761bytes 인코딩 구간: 호출100,002→118,
+  로컬CPU312→187ms, SHA256완전히일치. 전체 운영 응답 속도40% 개선 측정으로 해석하지 않는다.
+- 실제CPU 한도는 원격배포에서 적용. 인코딩/복사 최적화가 전체생성 CPU를 얼마나 줄이는지는
+  다음 자연 발생 cold생성 Tail과 대조해야 하며, 운영 전체재생성을 강제로 유발하지 않음.
+- 개인정보 로그 미노출 검사 통과. 민감 진단 원본은 private-audits로 보관하고 커밋하지 않음.
+
+공식 확인2026-11-03
+- https://developers.cloudflare.com/workers/platform/limits/
+- https://developers.cloudflare.com/workers/wrangler/configuration/#limits
+  Workers유료 기본CPU30초 및 limits.cpu_ms 설정 확인. 요청 전체 벽시계시간과 CPU시간 구분.
+
+복원
+- 소스20de1da / Worker7a6b69ed-05ee-4217-8b24-bce2c3a7ba3f.
+- 원래 프로젝트 private-audits/backups/js-map-listing-snapshot-20261103-v108/source.zip + RESTORE.txt.
+- 복원 시 운영 DB/사진/메모를 덮어쓰지 않는다.
+
+배포
+- 제품 commit/Worker/공개 응답/CPU설정 확인 결과 추가 예정.

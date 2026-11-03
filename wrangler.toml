@@ -40,6 +40,11 @@ COLLECTOR_RETENTION_RAW_DAYS = "90"
 COLLECTOR_RETENTION_SESSION_DAYS = "180"
 COLLECTOR_RETENTION_BATCH_LIMIT = "50"
 
+# A cold full snapshot must fit the current dataset without a 30s CPU kill.
+# Keep a finite 60s ceiling; normal cached responses do not use this budget.
+[limits]
+cpu_ms = 60000
+
 [observability]
 enabled = true
 

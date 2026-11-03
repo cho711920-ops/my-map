@@ -252,3 +252,13 @@ test("public login rejects an oversized streamed body before parsing or authenti
   const response = await worker.fetch(request, baseEnv);
   assert.equal(response.status, 413);
 });
+
+test('listing 503 records only safe failure categories, never private query or exception contents',async t=>{
+ const calls=[];t.mock.method(console,'error',(...values)=>calls.push(values));
+ const response=await authenticatedRequest('/api/sheet?private=must-not-log',{
+   DB:{},MEDIA:{get:async()=>{throw Object.assign(new Error('D1_ERROR: Network connection lost secret@example.invalid private-address'),{statusCode:503});}}
+ });
+ assert.equal(response.status,503);
+ assert.deepEqual(calls,[['listing read failed',{action:'sheet',statusCode:503,category:'d1_connection_lost'}]]);
+ assert.doesNotMatch(JSON.stringify(await response.json()),/secret@example|private-address|must-not-log/);
+});

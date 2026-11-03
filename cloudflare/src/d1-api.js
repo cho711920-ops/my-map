@@ -226,14 +226,14 @@ async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageS
       FROM ${tableSql} WHERE (${whereSql}) AND rowid > ?${bindings.length + 1} ORDER BY rowid LIMIT ?${bindings.length + 2}`)
       .bind(...bindings, cursor, pageSize).all();
     const page = result?.results || [];
-    const values = [];
+    // D1 returns fresh rows owned by this read. Remove the paging-only field
+    // in place instead of cloning every wide source/master record a second time.
     for (const row of page) {
-      const { __page_cursor: pageCursor, ...value } = row;
-      cursor = Math.max(cursor, Number(pageCursor) || 0);
-      values.push(value);
+      cursor = Math.max(cursor, Number(row.__page_cursor) || 0);
+      delete row.__page_cursor;
     }
-    if (consumePage) await consumePage(values);
-    else rows.push(...values);
+    if (consumePage) await consumePage(page);
+    else rows.push(...page);
     if (onReadPage) await onReadPage();
     if (page.length < pageSize) break;
   }
