@@ -920,6 +920,11 @@ function updateCurrentLocationOverlayV630(position, displayOnly) {
     jsCurrentLocationOverlayV630.setPosition(coords);
     jsCurrentLocationOverlayV630.setMap(map);
   }
+  // A waiting explicit navigation can consume the ordinary watcher's fresh fix.
+  // Dot updates by themselves still never move or zoom the map.
+  if (displayOnly !== true && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+    window.dispatchEvent(new CustomEvent("js-current-location-fix-v100", {detail:{position:position}}));
+  }
 }
 
 
@@ -932,6 +937,7 @@ function startCurrentLocationTrackingV630() {
       function(error) {
         console.warn("현재 위치 표시 실패", error);
         if (error && error.code === 1 && jsCurrentLocationWatchIdV630 !== null) {
+          jsLastCurrentLocationPositionV1 = null;
           navigator.geolocation.clearWatch(jsCurrentLocationWatchIdV630);
           jsCurrentLocationWatchIdV630 = null;
         }

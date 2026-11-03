@@ -43,7 +43,7 @@ test('one tap accepts a recent browser position and moves to level 1 while prese
   await h.button.click();
   await expect(h.button).toBeDisabled();
   await page.locator('[data-current-location-v96]').evaluateAll(buttons => buttons.forEach(b => b.click()));
-  expect(await page.evaluate(() => locationTestV96.requests)).toEqual([{enableHighAccuracy: false, maximumAge: 8000, timeout: 4000}]);
+  expect(await page.evaluate(() => locationTestV96.requests)).toEqual([{enableHighAccuracy: false, maximumAge: 8000, timeout: 1500}]);
   await page.evaluate(() => locationTestV96.calls[0].success({coords: {latitude: 36.3504, longitude: 127.3845, accuracy: 12}}));
   await expect(h.button).toBeEnabled();
   expect(await page.evaluate(() => ({level: locationTestV96.level, center: locationTestV96.center, selected: locationTestV96.selected, overlays: locationTestV96.overlays, refreshes: locationTestV96.refreshes, viewportKey: jsLastIdleViewportKeyV638})))
@@ -125,9 +125,9 @@ test('portrait and landscape keep exactly one reachable location button', async 
 test('a slow or unavailable quick position falls back once and ignores its late callback', async ({page, context}) => {
   const h = await prepare(page, context);await page.clock.install();
   await h.button.click();
-  await page.clock.runFor(4001);
+  await page.clock.runFor(1501);
   expect(await page.evaluate(() => locationTestV96.requests)).toEqual([
-    {enableHighAccuracy: false, maximumAge: 8000, timeout: 4000},
+    {enableHighAccuracy: false, maximumAge: 8000, timeout: 1500},
     {enableHighAccuracy: true, maximumAge: 0, timeout: 7000}
   ]);
   await expect(page.locator('#mapCurrentLocationStatusV96')).toContainText('다시 확인');
@@ -175,5 +175,54 @@ test('location is the last vertical tool after polygon drawing', async ({page, c
   const [last,draw] = await Promise.all([location.boundingBox(),page.locator('#mapPolygonBtn').boundingBox()]);
   expect(last.y).toBeGreaterThanOrEqual(draw.y+draw.height);
   await page.screenshot({path:info.outputPath('current-location-last.png')});
+  expect(h.errors).toEqual([]);
+});
+
+test('a recent accurate ordinary GPS fix moves synchronously without a new browser position request',async({page,context})=>{
+  const h=await prepare(page,context);
+  const result=await page.evaluate(()=>{
+    window.jsLastCurrentLocationPositionV1={timestamp:Date.now()-1000,coords:{latitude:36.352,longitude:127.382,accuracy:12}};
+    const button=Array.from(document.querySelectorAll('[data-current-location-v96]')).find(b=>b.getBoundingClientRect().width>0);
+    button.click();
+    return {requests:locationTestV96.requests.length,center:locationTestV96.center,level:locationTestV96.level,busy:button.disabled,refreshes:locationTestV96.refreshes};
+  });
+  expect(result).toEqual({requests:0,center:[36.352,127.382],level:1,busy:false,refreshes:1});
+  expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);
+});
+
+test('an existing watcher can finish a pending tap early, without recursion or later automatic following',async({page,context})=>{
+  const h=await prepare(page,context);await page.clock.install();
+  await h.button.click();
+  await page.clock.runFor(200);
+  await page.evaluate(()=>{
+    window.updateCurrentLocationOverlayV630=position=>{
+      locationTestV96.overlays++;
+      window.dispatchEvent(new CustomEvent('js-current-location-fix-v100',{detail:{position}}));
+    };
+    window.dispatchEvent(new CustomEvent('js-current-location-fix-v100',{detail:{position:{timestamp:Date.now(),coords:{latitude:36.353,longitude:127.383,accuracy:10}}}}));
+  });
+  await expect(h.button).toBeEnabled();
+  expect(await page.evaluate(()=>({center:locationTestV96.center,refreshes:locationTestV96.refreshes,overlays:locationTestV96.overlays})))
+    .toEqual({center:[36.353,127.383],refreshes:1,overlays:1});
+  await page.evaluate(()=>{
+    locationTestV96.calls[0].success({coords:{latitude:37,longitude:128,accuracy:1}});
+    window.dispatchEvent(new CustomEvent('js-current-location-fix-v100',{detail:{position:{timestamp:Date.now(),coords:{latitude:36.4,longitude:127.4,accuracy:1}}}}));
+  });
+  await page.clock.runFor(15000);
+  expect(await page.evaluate(()=>locationTestV96.center)).toEqual([36.353,127.383]);
+  expect(await page.evaluate(()=>locationTestV96.requests.length)).toBe(1);
+  expect(h.errors).toEqual([]);
+});
+
+test('stale, coarse and future memory fixes never shortcut GPS verification',async({page,context})=>{
+  const h=await prepare(page,context);
+  for(const data of [{age:8001,accuracy:5},{age:1000,accuracy:51},{age:-10000,accuracy:1}]){
+    await page.evaluate(({age,accuracy})=>{window.jsLastCurrentLocationPositionV1={timestamp:Date.now()-age,coords:{latitude:37,longitude:128,accuracy}};},data);
+    const index=await page.evaluate(()=>locationTestV96.requests.length);
+    await h.button.click();await expect(h.button).toBeDisabled();
+    expect(await page.evaluate(()=>locationTestV96.center)).toEqual([36.3,127.3]);
+    await page.evaluate(index=>locationTestV96.calls[index].error({code:1}),index);
+    await expect(h.button).toBeEnabled();
+  }
   expect(h.errors).toEqual([]);
 });

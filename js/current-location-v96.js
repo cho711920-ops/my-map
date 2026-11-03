@@ -2,7 +2,7 @@
  * No new location watcher, provider API, server write or persistent GPS cache. */
 (function(global) {
   "use strict";
-  var busy = false, sequence = 0, deadline = null, attemptDeadline = null, statusTimer = null;
+  var busy = false, sequence = 0, deadline = null, attemptDeadline = null, statusTimer = null, fixListener = null, resumeAfter = 0;
   var buttons = Array.from(document.querySelectorAll("[data-current-location-v96]"));
   var status = document.getElementById("mapCurrentLocationStatusV96");
 
@@ -22,9 +22,22 @@
       if (label) label.textContent = value ? "확인 중" : "현위치";
     });
   }
+  function detachFixListener() {
+    if (fixListener) global.removeEventListener("js-current-location-fix-v100", fixListener);
+    fixListener = null;
+  }
+  function recentAccurate(position) {
+    var coords = position && position.coords, age = position && Date.now() - position.timestamp;
+    return !!(coords && Number.isFinite(position.timestamp) && position.timestamp > resumeAfter &&
+      Number.isFinite(age) && age >= 0 && age <= 8000 &&
+      Number.isFinite(coords.accuracy) && coords.accuracy >= 0 && coords.accuracy <= 50 &&
+      Number.isFinite(coords.latitude) && Math.abs(coords.latitude) <= 90 &&
+      Number.isFinite(coords.longitude) && Math.abs(coords.longitude) <= 180);
+  }
   function finish(token, text) {
     if (token !== sequence) return false;
     sequence += 1;
+    detachFixListener();
     global.clearTimeout(deadline);
     global.clearTimeout(attemptDeadline);
     setBusy(false);
@@ -46,10 +59,54 @@
     var token = ++sequence;
     setBusy(true);
     message("현재 위치를 확인하고 있습니다… 위치 권한 요청이 뜨면 허용해 주세요.", true);
+    function applyPosition(position) {
+      if (token !== sequence) return;
+      // Detach before updating the dot; that update also publishes a fix event.
+      detachFixListener();
+      var coords = position && position.coords;
+      if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) ||
+          Math.abs(coords.latitude) > 90 || Math.abs(coords.longitude) > 180) {
+        finish(token, "현재 위치를 확인하지 못했습니다. 다시 눌러 주세요.");
+        return;
+      }
+      if (global.map !== map) {
+        finish(token, "지도가 변경되었습니다. 현위치 버튼을 다시 눌러 주세요.");
+        return;
+      }
+      try {
+        var point = new maps.LatLng(coords.latitude, coords.longitude);
+        if (typeof global.closeMapQuickPopoversV657 === "function") global.closeMapQuickPopoversV657();
+        if (typeof global.setMapRoadviewSelection === "function") global.setMapRoadviewSelection(false);
+        if (typeof global.clearMapListSelectionForNavigationV6571 === "function") global.clearMapListSelectionForNavigationV6571();
+        if (typeof global.markMapUserNavigationIntentV6525 === "function") global.markMapUserNavigationIntentV6525();
+        // A cleared pinned selection needs one refresh even at the same bounds.
+        if (typeof global.jsLastIdleViewportKeyV638 === "string") global.jsLastIdleViewportKeyV638 = "";
+        if (typeof map.jump === "function") map.jump(point, 1, {animate: false});
+        else { map.setLevel(1, {animate: false}); map.setCenter(point); }
+        if (typeof global.updateCurrentLocationOverlayV630 === "function") global.updateCurrentLocationOverlayV630(position);
+        if (typeof global.scheduleMapIdleRefreshV638 === "function") global.scheduleMapIdleRefreshV638();
+        var accuracy = Number(coords.accuracy);
+        finish(token, "현위치로 이동했습니다." +
+          (Number.isFinite(accuracy) && accuracy > 100 ? " 위치 오차 약 " + Math.round(accuracy).toLocaleString("ko-KR") + "m" : ""));
+      } catch (_) {
+        finish(token, "지도 이동에 실패했습니다. 잠시 후 다시 눌러 주세요.");
+      }
+    }
+    // The ordinary dot already receives GPS updates. Reuse only a <=8-second,
+    // <=50m fix in this page's memory; never pan to a stale or coarse dot.
+    if (recentAccurate(global.jsLastCurrentLocationPositionV1)) {
+      applyPosition(global.jsLastCurrentLocationPositionV1);
+      return;
+    }
+    fixListener = function(event) {
+      var position = event && event.detail && event.detail.position;
+      if (token === sequence && recentAccurate(position)) applyPosition(position);
+    };
+    global.addEventListener("js-current-location-fix-v100", fixListener);
     // Also bound a missing browser callback; late results must not move the map.
     deadline = global.setTimeout(function() {
       finish(token, "현재 위치 확인이 지연되고 있습니다. 브라우저·기기의 위치 사용 허용을 확인한 뒤 다시 눌러 주세요.");
-    }, 12000);
+    }, 9000);
     var attempt = 0;
     function fail(error) {
       var text = error && error.code === 1
@@ -62,7 +119,7 @@
       if (token !== sequence) return;
       var currentAttempt = ++attempt;
       global.clearTimeout(attemptDeadline);
-      var timeoutMs = precise ? 7000 : 4000;
+      var timeoutMs = precise ? 7000 : 1500;
       function reject(error) {
         if (token !== sequence || currentAttempt !== attempt) return;
         if (!precise && (!error || error.code !== 1)) {
@@ -76,34 +133,7 @@
       try {
         navigator.geolocation.getCurrentPosition(function(position) {
           if (token !== sequence || currentAttempt !== attempt) return;
-          var coords = position && position.coords;
-          if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) ||
-              Math.abs(coords.latitude) > 90 || Math.abs(coords.longitude) > 180) {
-            finish(token, "현재 위치를 확인하지 못했습니다. 다시 눌러 주세요.");
-            return;
-          }
-          if (global.map !== map) {
-            finish(token, "지도가 변경되었습니다. 현위치 버튼을 다시 눌러 주세요.");
-            return;
-          }
-          try {
-            var point = new maps.LatLng(coords.latitude, coords.longitude);
-            if (typeof global.closeMapQuickPopoversV657 === "function") global.closeMapQuickPopoversV657();
-            if (typeof global.setMapRoadviewSelection === "function") global.setMapRoadviewSelection(false);
-            if (typeof global.clearMapListSelectionForNavigationV6571 === "function") global.clearMapListSelectionForNavigationV6571();
-            if (typeof global.markMapUserNavigationIntentV6525 === "function") global.markMapUserNavigationIntentV6525();
-            // A cleared pinned selection needs one refresh even at the same bounds.
-            if (typeof global.jsLastIdleViewportKeyV638 === "string") global.jsLastIdleViewportKeyV638 = "";
-            if (typeof map.jump === "function") map.jump(point, 1, {animate: false});
-            else { map.setLevel(1, {animate: false}); map.setCenter(point); }
-            if (typeof global.updateCurrentLocationOverlayV630 === "function") global.updateCurrentLocationOverlayV630(position);
-            if (typeof global.scheduleMapIdleRefreshV638 === "function") global.scheduleMapIdleRefreshV638();
-            var accuracy = Number(coords.accuracy);
-            finish(token, "현위치로 이동했습니다." +
-              (Number.isFinite(accuracy) && accuracy > 100 ? " 위치 오차 약 " + Math.round(accuracy).toLocaleString("ko-KR") + "m" : ""));
-          } catch (_) {
-            finish(token, "지도 이동에 실패했습니다. 잠시 후 다시 눌러 주세요.");
-          }
+          applyPosition(position);
         }, reject, {enableHighAccuracy: precise, maximumAge: precise ? 0 : 8000, timeout: timeoutMs});
       } catch (_) {
         finish(token, "현재 위치를 사용할 수 없습니다. 브라우저·기기의 위치 권한을 확인해 주세요.");
@@ -116,6 +146,8 @@
   buttons.forEach(function(button) {button.addEventListener("click", locate);});
   global.addEventListener("pagehide", function() {
     sequence += 1;
+    resumeAfter = Date.now();
+    detachFixListener();
     global.clearTimeout(deadline);
     global.clearTimeout(attemptDeadline);
     global.clearTimeout(statusTimer);
