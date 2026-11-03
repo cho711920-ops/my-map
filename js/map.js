@@ -374,7 +374,7 @@ function refreshListingsWhenChangedV682() {
     if (generationV1 !== (typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0)) return;
     if (!revision) return;
     if (!jsListingsRevisionV682) {
-      return loadSheet(true, true);
+      return loadSheet(true, true, false, revision);
     }
     if (revision === jsListingsRevisionV682) {
       // A failed refresh can leave a complete, unchanged snapshot on screen.
@@ -390,7 +390,7 @@ function refreshListingsWhenChangedV682() {
         if (revision !== "0" && jsListingsCompleteBaseV1 && jsListingsLoadStateV65.phase === "error") setListingsLoadStatusV65("ready");
         return;
       }
-      return loadSheet(true, true);
+      return loadSheet(true, true, false, revision);
     });
   }).catch(function(error) {
     console.warn("Listing revision check failed", error);
@@ -2351,7 +2351,7 @@ function recoverOriginalMetadataV1(generation, force) {
   return pendingIds.length ? refreshScopedOriginalsV1(pendingIds, generation) : loadSheet(true, true, true);
 }
 
-function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
+function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevision) {
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
     document.getElementById("status").innerHTML = "주소 변환중... 자동 업데이트 대기";
@@ -2521,6 +2521,17 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
   return sheetRequest
     .then(async function(snapshot) {
       if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+      // A shared server build may have started before the revision that caused
+      // this refresh. Keep the complete visible snapshot until the requested
+      // version (or a server-verified newer version) is actually available.
+      if (isAuto && jsListingsCompleteBaseV1 && expectedRevision && expectedRevision !== "0" &&
+          String(snapshot.revision || "") !== expectedRevision) {
+        var latestRevisionV112 = await fetchDataRevisionV682("listings");
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+        if (!snapshot.revision || snapshot.revision === "0" || snapshot.revision !== latestRevisionV112) {
+          throw new Error("최신 목록이 아직 준비되지 않았습니다. 기존 목록을 유지합니다.");
+        }
+      }
       liveInitialDataAppliedV1 = true;
       sheetSnapshotV1 = {revision: snapshot.revision};
       var data = snapshot.body;

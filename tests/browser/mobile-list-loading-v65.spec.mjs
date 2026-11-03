@@ -123,6 +123,34 @@ test('a confirmed empty CSV is distinct from an invalid HTML response',async({pa
   await expect(page.locator('#jsListingsLoadStatusV65')).toContainText('매물을 불러오지 못했습니다');
 });
 
+test('idle revision refresh keeps the current count until the announced complete snapshot is available',async({page})=>{
+  const stats=await setup(page,{mode:'success'});await page.evaluate(()=>__v65Load());
+  await expect.poll(()=>page.evaluate(()=>visibleListItems.length)).toBe(2);
+  let fresh=false;
+  await page.route('**/api/sheet',route=>route.fulfill({headers:{'x-js-listings-revision':fresh?'announced-v112':'old-build-v112'},
+    contentType:'text/csv',body:[fields,...(fresh?[row(1)]:[row(1),row(2),row(3)])].map(r=>r.join(',')).join('\n')}));
+  await page.route('**/api/data?**',route=>{
+    const action=new URL(route.request().url()).searchParams.get('action');
+    if(action==='dataRevision')return route.fulfill({json:{ok:true,revision:'announced-v112',fullReload:true,changeIds:[]}});
+    if(action==='unifiedListings')return route.fulfill({headers:{'x-js-listings-revision':fresh?'announced-v112':'old-build-v112'},json:{ok:true,groups:{},sourceSearchIds:{}}});
+    return route.fallback();
+  });
+  await page.evaluate(()=>{
+    window.__v112Counts=[document.getElementById('mapListingCountValueV825').textContent];
+    new MutationObserver(()=>__v112Counts.push(document.getElementById('mapListingCountValueV825').textContent))
+      .observe(document.getElementById('mapListingCountValueV825'),{childList:true,subtree:true,characterData:true});
+  });
+  await page.evaluate(()=>refreshListingsWhenChangedV682());
+  expect(await page.evaluate(()=>allItems.length)).toBe(2);
+  expect(await page.evaluate(()=>jsListingsRevisionV682)).toBe('fixture-v65');
+  await expect(page.locator('#mapListingCountValueV825')).toHaveText('2개');
+  fresh=true;await page.evaluate(()=>refreshListingsWhenChangedV682());
+  await expect(page.locator('#mapListingCountValueV825')).toHaveText('1개');
+  for(let i=0;i<3;i++)await page.evaluate(()=>refreshListingsWhenChangedV682());
+  expect(await page.evaluate(()=>__v112Counts.every(count=>count==='2개'||count==='1개'))).toBe(true);
+  expect(await page.evaluate(()=>jsListingsRevisionV682)).toBe('announced-v112');expect(stats.writes).toBe(0);
+});
+
 test('a stalled response body reaches its deadline and never leaves an endless zero-count screen',async({page})=>{
   await setup(page,{mode:'success'});await page.clock.install();
   await page.evaluate(()=>{

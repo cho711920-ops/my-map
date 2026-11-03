@@ -157,6 +157,33 @@ test('a full read begun before a split cannot write a snapshot after the split',
   assert.equal(h.writes.length,0);
 });
 
+test('a background full read cannot publish an older build after a newer revision was announced', async () => {
+  const h=harness({complete:true});
+  const prior=h.context.listingChangeRowToItemV683(row('VISIBLE'));
+  h.context.allItems=[prior];h.context.jsListingsRevisionV682='BASE';
+  h.context.JSUnifiedListingsV8.attach(h.context.allItems,originals('VISIBLE','BASE','kept'));
+  const pending=h.context.loadSheet(true,true,false,'ANNOUNCED');
+  h.originalReads[0].resolve(originals('OBSOLETE','OLD','wrong'));
+  h.csvReads[0].resolve(csv([row('OBSOLETE'),row('EXTRA')],'OLD'));
+  assert.equal(await pending,false);await flush();
+  assert.equal(h.context.allItems[0],prior);assert.equal(h.context.allItems.length,1);
+  assert.equal(h.context.jsListingsRevisionV682,'BASE');assert.equal(h.renders.length,0);
+  assert.equal(h.writes.length,0);assert.match(prior.thumbnailV8,/kept/);
+});
+
+test('a concurrent newer background snapshot is accepted only after checking its actual server revision', async () => {
+  const h=harness({complete:true});h.context.allItems=[h.context.listingChangeRowToItemV683(row('VISIBLE'))];
+  const read=h.context.JSDataAccessV6.read;
+  h.context.JSDataAccessV6.read=(action,params)=>action==='dataRevision'
+    ?Promise.resolve({ok:true,revision:'NEWER'}):read(action,params);
+  const pending=h.context.loadSheet(true,true,false,'ANNOUNCED');
+  h.originalReads[0].resolve(originals('CURRENT','NEWER','current'));
+  h.csvReads[0].resolve(csv([row('CURRENT')],'NEWER'));
+  assert.equal(await pending,true);await flush();
+  assert.equal(h.context.allItems[0].propertyId,'CURRENT');
+  assert.equal(h.context.jsListingsRevisionV682,'NEWER');
+});
+
 test('post-mutation refresh supersedes an older full read and uses one fresh CSV/original pair', async () => {
   const h = harness();
   vm.runInContext(fn(map,'reloadListingsAfterMutationV94'),h.context);

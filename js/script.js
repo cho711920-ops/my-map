@@ -172,6 +172,7 @@ var listRenderLimit = 0;
 var listRenderStart = 0;
 var listRenderScrollBound = false;
 var listCardReusePoolV6521 = null;
+var listThumbnailReusePoolV112 = null;
 var listVirtualTopHeightV1 = 0;
 var listVirtualScrollScheduledV1 = false;
 var listVirtualItemHeightsV1 = Object.create(null);
@@ -2265,6 +2266,14 @@ function showList(items) {
   var list = document.getElementById("list");
   var sidebar = getListingScrollContainerV2();
   var previousSidebarTop = sidebar ? sidebar.scrollTop : 0;
+  listThumbnailReusePoolV112 = Object.create(null);
+  if (list) list.querySelectorAll(".item[data-list-card-id-v681]").forEach(function(card) {
+    var image = card.querySelector(".unified-thumb-v8 img");
+    var id = card.getAttribute("data-list-card-id-v681");
+    if (id && image && image.complete && image.naturalWidth > 0 && !image._jsThumbnailFailedV8144) {
+      listThumbnailReusePoolV112[id] = image;
+    }
+  });
   cacheRenderedListCardHeightsV1(list);
   var reviewContext = typeof window.getFavoriteMapRemovalContextV1 === "function"
     ? window.getFavoriteMapRemovalContextV1() : null;
@@ -2350,6 +2359,7 @@ function showList(items) {
       '</b><span>' + escapeHtml(todayEmptyV1 ? todayEmptyV1.description : "검색어를 줄이거나 필터를 초기화해 보세요.") + '</span></div>';
     syncListVirtualMetadataV1(list);
     listCardReusePoolV6521 = null;
+    listThumbnailReusePoolV112 = null;
     if (sidebar) sidebar.scrollTop = 0;
     updatePrintSelectedButton();
     syncListMasterCheckbox();
@@ -2377,6 +2387,7 @@ function showList(items) {
       : getListRenderChunkSize()
   );
   listCardReusePoolV6521 = null;
+  listThumbnailReusePoolV112 = null;
 
   if (sidebar) {
     sidebar.scrollTop = sameList || reviewAnchor ? previousSidebarTop : 0;
@@ -4822,6 +4833,26 @@ function buildListElevatorIconV843(item) {
 }
 
 
+function prepareListThumbnailReuseV112(item, markup) {
+  var image = listThumbnailReusePoolV112 && listThumbnailReusePoolV112[actionSelectionKeyV660(item)];
+  if (!image) return null;
+  // Template content stays inert: do not start a duplicate image request while
+  // deciding whether the already decoded photograph can be retained.
+  var template = document.createElement("template");
+  template.innerHTML = markup;
+  var next = template.content.querySelector(".unified-thumb-v8 img");
+  if (!next) return null;
+  var identity = ["data-thumbnail-source-v8144", "data-cover-image-v85", "data-cover-fallback-v85"];
+  if (!identity.some(function(name) { return next.getAttribute(name); }) || identity.some(function(name) {
+    return (image.getAttribute(name) || "") !== (next.getAttribute(name) || "");
+  })) return null;
+  var placeholder = document.createElement("span");
+  placeholder.setAttribute("data-list-thumbnail-reuse-v112", "");
+  var hooks = {load: next.getAttribute("onload"), error: next.getAttribute("onerror")};
+  next.replaceWith(placeholder);
+  return {markup: template.innerHTML, image: image, hooks: hooks};
+}
+
 function addListItem(item, appendTarget) {
     var div = document.createElement("div");
     var favoriteMapContextV1 = typeof window.getFavoriteMapRemovalContextV1 === "function"
@@ -4898,6 +4929,8 @@ function addListItem(item, appendTarget) {
         typeof window.JSUnifiedListingsV8.cardParts === "function"
         ? window.JSUnifiedListingsV8.cardParts(item)
         : { thumbnail: "", badge: "", sourceButton: "" };
+    var reusedThumbnailV112 = prepareListThumbnailReuseV112(item, unifiedCardPartsV8.thumbnail);
+    if (reusedThumbnailV112) unifiedCardPartsV8 = Object.assign({}, unifiedCardPartsV8, {thumbnail: reusedThumbnailV112.markup});
     var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
     var sourceLinkButton = hasSourceLink
         ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
@@ -5055,6 +5088,21 @@ function addListItem(item, appendTarget) {
             window.JSListingTradeV1.saleListMetricsHtml(item) + '</div></div></div>' +
             window.JSListingTradeV1.saleCardFactsHtml(item, true) +
             '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;
+    }
+    if (reusedThumbnailV112) {
+        var imagePlaceholderV112 = div.querySelector("[data-list-thumbnail-reuse-v112]");
+        if (imagePlaceholderV112) {
+            var imageV112 = reusedThumbnailV112.image;
+            // Replace any old cover callback that captured its previous button.
+            imageV112.onload = null; imageV112.onerror = null;
+            ["load", "error"].forEach(function(event) {
+                var hook = reusedThumbnailV112.hooks[event];
+                if (hook) imageV112.setAttribute("on" + event, hook);
+                else imageV112.removeAttribute("on" + event);
+            });
+            imagePlaceholderV112.replaceWith(imageV112);
+            delete listThumbnailReusePoolV112[actionSelectionKeyV660(item)];
+        }
     }
     if (saleCardV1 && window.JSSaleDossierV9) window.JSSaleDossierV9.refreshUnits(div);
     if (saleCardV1 && window.JSSaleReviewV10) window.JSSaleReviewV10.mountCard(div, item);
