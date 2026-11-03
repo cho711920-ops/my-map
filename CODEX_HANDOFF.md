@@ -6,6 +6,7 @@
 - Node2015/2015, PC/폰/태블릿목록복구16/16, lint/type/globals/diff/build/dry-run정상.43초생성/실패owner/교체token/80초상한검사. 합성인코딩100002→118회/CPU312→187ms/동일SHA(전체운영속도주장아님).
 - 실제새cold생성CPU개선폭은 다음자연생성 로그대조 필요. 강제재생성/재수집/운영자료수정 없음. docs/listing-snapshot-v108-20261103.txt 참조.
 - 백업 원래프로젝트 private-audits/backups/js-map-listing-snapshot-20261103-v108 (소스20de1da/이전Worker7a6b69ed).
+- 제품132a58d origin/codex/listing-snapshot-v108 푸시. Workerff0c6c71-03ff-42c1-a67c-94017a257f90/cache2f27c81acda4a59102568e98 배포. 원격versions CPU60000 실제확인/양도메인10응답200/SHA/CSP일치. 실제scoped읽기표본정상(전체cold원격재검증은아님).
 
 ## 2026-11-03 네이버 거리뷰 CSP 누락 v107
 

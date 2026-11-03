@@ -49,4 +49,10 @@
 - 복원 시 운영 DB/사진/메모를 덮어쓰지 않는다.
 
 배포
-- 제품 commit/Worker/공개 응답/CPU설정 확인 결과 추가 예정.
+- 제품132a58d / origin/codex/listing-snapshot-v108 커밋·푸시.
+- Workerff0c6c71-03ff-42c1-a67c-94017a257f90 / public cache2f27c81acda4a59102568e98 배포.
+- Cloudflare versions view 원격버전에서 usage_model=standard/limits.cpu_ms=60000 실제설정 확인.
+- 양 도메인 공개HTML/CSP/관련JS/SW10응답200/빌드SHA일치 확인.
+- 변경 후 실제dataRevision 및listingOriginals 표본 정상,CPU5/34ms,예외0.
+  전체cold생성 원격CPU 재측정 표본과 구분한다. 다음 자연생성의 감소폭/재발없음을 확정하지 않음.
+- 서버 수정이므로 기존화면 다시불러오기도 새서버 사용. 기존사용자입력/자료보존.
