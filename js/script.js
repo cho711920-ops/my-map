@@ -5509,14 +5509,15 @@ function markSelectedAsVisited() {
 
   var selectedItems = getSelectedPrintItems();
   var targetItems = selectedItems.filter(function(item) {
-    return isFieldVisitItem(item);
+    return item.state !== "계약완료";
   });
 
   if (!targetItems.length) {
-    alert("선택한 매물 중 (임장가자) 매물이 없습니다.");
+    alert("선택한 매물은 이미 계약완료 상태입니다.");
     return;
   }
 
+  var shareSnapshotV101 = window.JSVisitKakaoShareV101 ? window.JSVisitKakaoShareV101.capture(targetItems) : null;
   var skippedCount = selectedItems.length - targetItems.length;
 
   var confirmText = targetItems.length === 1
@@ -5524,7 +5525,7 @@ function markSelectedAsVisited() {
     : "선택한 " + targetItems.length + "개 매물의 임장을 완료할까요?";
 
   if (skippedCount > 0) {
-    confirmText += "\n임장 대상이 아닌 " + skippedCount + "개 매물은 제외됩니다.";
+    confirmText += "\n계약완료 상태인 " + skippedCount + "개 매물은 제외됩니다.";
   }
 
   if (!confirm(confirmText)) return;
@@ -5583,8 +5584,19 @@ function markSelectedAsVisited() {
     document.getElementById("status").innerHTML =
       "임장 처리 " + targetItems.length + "개 저장 요청 완료";
 
+    if (shareSnapshotV101 && window.JSVisitKakaoShareV101 && (results || []).every(function(result) { return result && result.persisted === true && !result.queued; })) {
+      try { window.JSVisitKakaoShareV101.open(shareSnapshotV101); }
+      catch (shareError) { console.warn("임장완료는 저장됐지만 공유창을 열지 못했습니다.", shareError); }
+    }
     if (!(results || []).some(function(result) { return result && result.queued; })) {
-      setTimeout(function() { loadSheet(true); }, 1800);
+      // Preserve the saved visit even if sharing or its small refresh fails.
+      if (window.JSInitialListingsCacheV1) window.JSInitialListingsCacheV1.clear();
+      var changedIdsV101 = Array.from(new Set(targetItems.map(function(item) { return item.propertyId; }).filter(Boolean)));
+      if (changedIdsV101.length && changedIdsV101.length <= 51 && window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved) {
+        setTimeout(function() {
+          Promise.resolve(window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:changedIdsV101})).catch(function(error) { console.warn("임장완료 목록 갱신 지연", error); });
+        }, 1800);
+      } else setTimeout(function() { loadSheet(true); }, 1800);
     }
   }).catch(function(error) {
     console.error(error);

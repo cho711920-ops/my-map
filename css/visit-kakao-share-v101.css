@@ -1,0 +1,10 @@
+#visitKakaoShareDialogV101 { width:min(540px,calc(100vw - 32px)); max-height:85dvh; box-sizing:border-box; border:1px solid #dce5ef; border-radius:14px; padding:22px; color:#20364b; }
+#visitKakaoShareDialogV101::backdrop { background:#14263f66; }
+#visitKakaoShareDialogV101 h2 { font-size:19px; margin:0 0 12px; }
+#visitKakaoShareDialogV101 p { font-size:13px; line-height:1.6; }
+#visitKakaoShareDialogV101 textarea { width:100%; min-height:110px; max-height:45dvh; box-sizing:border-box; padding:12px; border:1px solid #dce5ef; border-radius:8px; font:inherit; font-size:15px; line-height:1.8; resize:vertical; color:inherit; background:#f8fafc; }
+#visitKakaoShareDialogV101 [role="status"] { min-height:22px; color:#60738b; }
+#visitKakaoShareDialogV101 footer { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+#visitKakaoShareDialogV101 button { border:1px solid #dce5ef; border-radius:7px; padding:9px 12px; cursor:pointer; }
+#visitKakaoShareDialogV101 [data-share] { background:#fee500; border-color:#e4ce00; color:#292015; font-weight:700; }
+#visitKakaoShareDialogV101 button:disabled { opacity:.5; cursor:default; }
