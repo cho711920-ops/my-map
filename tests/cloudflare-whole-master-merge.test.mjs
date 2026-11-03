@@ -44,7 +44,7 @@ test("merge cache invalidation finishes before the response is rendered", () => 
   assert.match(worker, /const invalidation = deleteR2Cache\(env, null, \[\s*D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, \.\.\.wholeMergeDetailKeys/);
   assert.match(worker, /context\.waitUntil\(dashboardInvalidation\)/);
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
-  assert.match(worker, /\["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory"\]\.includes\(mutationAction\(body\)\)\) \{\s*await invalidation;/);
+  assert.match(worker, /\["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory", "updateProperty"\]\.includes\(mutationAction\(body\)\)\) \{\s*await invalidation;/);
   assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.43-card-detail-toggle/);
   assert.match(html, /css\/unified-listings-v8\.css\?v=8\.1\.40-smooth-photo-expand/);
 });

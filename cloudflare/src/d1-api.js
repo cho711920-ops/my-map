@@ -1546,7 +1546,7 @@ async function updateProperty(env, user, body) {
   value.state = value.state === "active" ? "" : value.state;
   value.contacts = reconciledContacts;
   if (!changes.length) return { ok: true, persisted: true, queued: false, propertyId,
-    updated: value, noChange: true, operationAdjustments: {}, source: "D1" };
+    updated: value, changedFields: [], noChange: true, operationAdjustments: {}, source: "D1" };
   const beforeHistory = {
     title: before.title, room: before.room, deposit: before.deposit, monthly_rent: before.monthly_rent,
     maintenance_fee: before.maintenance_fee, premium: before.premium, area_m2: before.area_m2,
@@ -1604,6 +1604,7 @@ async function updateProperty(env, user, body) {
   ]);
   if (Number(results?.[0]?.meta?.changes || 0) !== 1) throw propertyEditConflictV1();
   return { ok: true, persisted: true, queued: false, propertyId, updated: value,
+    changedFields: changes.map(entry => entry.column),
     sourceCount: linkedSourcesAfter.length,
     activeSourceCount: linkedSourcesAfter.filter((row) => Number(row?.active) === 1).length,
     restoredSourceCount: recovery.recovered.length,

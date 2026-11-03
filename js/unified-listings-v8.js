@@ -1197,6 +1197,26 @@
     return !!(item && Number(item.unifiedCandidateOriginalCountV2 || 0) > 0 && text(item.state) !== "계약완료");
   }
 
+  var financialColumnsV106 = {deposit:'deposit',rent:'monthly_rent',fee:'maintenance_fee',premium:'premium',area:'area_m2'};
+  function manualFieldsV106(master,original) {
+    return isCandidateOriginal(original) ? [] : text(original.manualDisplayFields).split(',').concat(master.manualFinancialFieldsV106 || []);
+  }
+  function financialDetailV106(original,propertyId) {
+    if (!original || original.tradeType === 'sale') return original;
+    var master = resolveMasterItem(original.propertyId || propertyId);
+    if (!master) return original;
+    var manual = manualFieldsV106(master,original), fields = Object.keys(financialColumnsV106).filter(function(key) { return manual.indexOf(financialColumnsV106[key]) >= 0; });
+    if (!fields.length) return original;
+    var displayed = Object.assign({},original,{manualFinancialDisplayV106:true});
+    fields.forEach(function(key) { displayed[key] = master.displayValuePresence && master.displayValuePresence[key] === false ? null : master[key]; });
+    return displayed;
+  }
+  function acceptSavedFinancialEditV106(master,result) {
+    var allowed = Object.keys(financialColumnsV106).map(function(key) { return financialColumnsV106[key]; });
+    master.manualFinancialFieldsV106 = Array.from(new Set((master.manualFinancialFieldsV106 || []).concat(
+      (Array.isArray(result.changedFields) ? result.changedFields : []).filter(function(field) { return allowed.indexOf(field) >= 0; }))));
+    if (state.openPropertyId === text(master.propertyId)) syncDetailPresentationV2(true);
+  }
   function originalDisplayItem(master, original) {
     // Manual values belong to the original's own master, never another member
     // chosen as the visible group card.
@@ -1207,7 +1227,7 @@
     // A fresh own-property copy keeps each advertisement independent without
     // the slower Object.assign path for these wide master records.
     var item = {...master};
-    var manual = !isCandidateOriginal(original) ? text(original.manualDisplayFields).split(",") : [];
+    var manual = manualFieldsV106(master,original);
     item.displayValuePresence = Object.assign({}, master.displayValuePresence || {});
     var fields = {deposit:"deposit", rent:"monthly_rent", fee:"maintenance_fee", premium:"premium",
       area:"area_m2", salePrice:"sale_price", type:"listing_type", saleCategory:"sale_category"};
@@ -1659,6 +1679,7 @@
     var selected = originals.filter(function(original) {
       return text(original.originalId) === text(selectedOriginalId);
     })[0] || originals[0];
+    selected = financialDetailV106(selected,propertyId);
     var masterMeta = state.masterMeta[text(propertyId)] || {};
     var phoneDetail = isPhoneDetailV2();
     var drawer = ensureDrawer();
@@ -1721,6 +1742,7 @@
           (!phoneDetail ? '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'register\', \'' + encodedActionPropertyId + '\')">대장</button>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' : '') +
         '</div>' +
+        (selected.manualFinancialDisplayV106 ? '<p class="unified-detail-manual-condition-v106">직접 수정한 항목의 관리값을 표시합니다.</p>' : '') +
         detailDateMetadata(masterMeta, selected) +
         (!phoneDetail ? '<div class="unified-detail-actions-v8" aria-label="원본매물 정리 작업">' +
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
@@ -1767,12 +1789,12 @@
     showDetailDrawerV827(drawer);
   }
 
-  function syncDetailPresentationV2() {
+  function syncDetailPresentationV2(force) {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     if (!drawer || (!drawer.classList.contains("open") && !drawer.classList.contains("opening-v827"))) return;
     var saved = drawer.__detailPresentationV2;
     var body = document.getElementById("unifiedDetailBodyV8");
-    if (!saved || !body || saved.phone === isPhoneDetailV2()) { positionDrawer(drawer); return; }
+    if (!saved || !body || saved.phone === isPhoneDetailV2() && force !== true) { positionDrawer(drawer); return; }
     var gallery = body.querySelector(".unified-detail-gallery-v8");
     var scrollTop = body.scrollTop;
     var key = text(saved.propertyId) + ":" + text(saved.originalId);
@@ -3009,6 +3031,7 @@
   });
 
   global.JSUnifiedListingsV8 = {
+    acceptSavedFinancialEdit: acceptSavedFinancialEditV106,
     finishSelectedMerge: function(result) {
       invalidatePendingLoad(); invalidateDetails(); closeDetail();
       showMergeNoticeV8139("선택매물 병합 저장 완료 · 변경된 매물을 반영하고 있습니다.", "success syncing", true);

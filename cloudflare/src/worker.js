@@ -960,7 +960,7 @@ async function handleDataApi(request, env, context) {
       ? deleteR2Cache(env, null, [OPERATIONS_DASHBOARD_CACHE_KEY]) : null);
   if (context && typeof context.waitUntil === "function") context.waitUntil(dashboardInvalidation);
   const invalidation = deleteR2Cache(env, null, invalidatedKeys.filter(key => key !== OPERATIONS_DASHBOARD_CACHE_KEY));
-  if (["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory"].includes(mutationAction(body))) {
+  if (["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory", "updateProperty"].includes(mutationAction(body))) {
     await invalidation;
   } else if (context && typeof context.waitUntil === "function") {
     context.waitUntil(invalidation);

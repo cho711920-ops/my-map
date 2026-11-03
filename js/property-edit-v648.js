@@ -547,6 +547,9 @@ function savePropertyEditV630() {
       originalValues: propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1.slice(),
       updated: updated
   }).then(function(queueResult) {
+    if (!queueResult || queueResult.persisted !== true || queueResult.queued || queueResult.propertyId && String(queueResult.propertyId) !== String(item.propertyId)) {
+      throw new Error("매물 수정 저장 결과를 확인하지 못했습니다.");
+    }
     /*
      * QA3 안정화:
      * gviz 캐시를 이용한 성공/실패 판정은 제거합니다.
@@ -571,6 +574,10 @@ function savePropertyEditV630() {
     item.state = updated.state;
     item.contactListRaw = JSON.stringify(updated.contacts || []);
     item.key = itemKey(item);
+    if (window.JSInitialListingsCacheV1) {
+      try { Promise.resolve(window.JSInitialListingsCacheV1.clear()).catch(function() {}); } catch (_) {}
+    }
+    if (window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.acceptSavedFinancialEdit) window.JSUnifiedListingsV8.acceptSavedFinancialEdit(item,queueResult);
 
     var editAliasesV634 = mergeEditAliasesV634(
       oldKey,
@@ -627,7 +634,17 @@ function savePropertyEditV630() {
       mainStatus.innerHTML = "매물 수정 요청 완료 · 최신 D1 동기화 중";
     }
 
-    if (!queueResult || !queueResult.queued) schedulePropertyEditReloadV634();
+    if (!queueResult.fullReload && window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved) {
+      var savedView = pendingPropertyEditStateV634;
+      Promise.resolve().then(function() { return window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[item.propertyId]}); }).then(function(applied) {
+        if (!applied) { if (pendingPropertyEditStateV634 === savedView) schedulePropertyEditReloadV634(); return; }
+        if (pendingPropertyEditStateV634 === savedView) {
+          pendingPropertyEditStateV634 = null;
+          pendingPropertyEditNewKeyV633 = null;
+          if (mainStatus && mainStatus.textContent === "매물 수정 요청 완료 · 최신 D1 동기화 중") mainStatus.textContent = "매물 수정 저장 완료";
+        }
+      }).catch(function() { if (pendingPropertyEditStateV634 === savedView) schedulePropertyEditReloadV634(); });
+    } else schedulePropertyEditReloadV634();
   }).catch(function(error) {
     console.error(error);
     pendingPropertyEditNewKeyV633 = null;

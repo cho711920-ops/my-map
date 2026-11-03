@@ -70,6 +70,14 @@ function fixture() {
   };
 }
 
+for (const premium of [800,0]) test('premium edit '+premium+' returns only accepted changed fields and leaves raw advertisements intact',async()=>{
+  const h=fixture();h.db.exec('UPDATE listings SET premium=2000');h.body.originalValues[7]=2000;h.body.updated.premium=premium;
+  const before=h.db.prepare('SELECT * FROM listing_sources').all();
+  const result=await h.save(h.body);assert.equal(h.row().premium,premium);assert.deepEqual(Array.from(result.changedFields),['premium']);
+  assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),before);
+  assert.equal(JSON.parse(h.history()[0].before_json).premium,2000);assert.equal(JSON.parse(h.history()[0].after_json).premium,premium);h.db.close();
+});
+
 test("stale memo-only edit preserves another user's room and completed status", async () => {
   const h = fixture();
   h.db.exec("UPDATE listings SET room='102호',status='계약완료',version=3");
