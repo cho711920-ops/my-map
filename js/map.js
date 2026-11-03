@@ -1620,6 +1620,11 @@ kakao.maps.load(function() {
       : jsLegacyDefaultMapLevelV690
   });
 
+  // Tile recovery is supplementary; it must never block listing startup.
+  try {
+    if (typeof window !== "undefined" && window.JSMapTileRecoveryV105) window.JSMapTileRecoveryV105.attach(viewport,map);
+  } catch (_) { console.warn("지도 타일 복구 연결을 확인하지 못했습니다."); }
+
   // Saved coordinates can render even when the optional address-search
   // library is delayed or blocked on a mobile browser.
   try {

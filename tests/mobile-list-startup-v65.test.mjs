@@ -22,6 +22,9 @@ test('map startup still requests listings when the optional Kakao address-search
   context.kakao.maps.services={Geocoder(){throw Error('blocked library');}};
   vm.runInNewContext(bootstrap,context);await Promise.resolve();
   assert.equal(loadCalls,2);assert.equal(context.geocoder,null);
+  context.window={JSMapTileRecoveryV105:{attach(){throw Error('optional tile recovery failed');}}};
+  vm.runInNewContext(bootstrap,context);await Promise.resolve();
+  assert.equal(loadCalls,3,'an optional tile helper must not prevent listing startup');
 });
 
 function geocoding(services){

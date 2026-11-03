@@ -1,3 +1,11 @@
+## 2026-11-03 지도 타일 누락 복구 v105
+
+- 사용자 캡처: 배경만 흰 사각형 누락. 실제 SDK 격리 검사에서 타일3개 일시 실패→opacity0/tilesloaded 미완료 재현. 원래 URL 재요청으로 SDK load 정상 완료 확인. 사용자 PC 당시 네트워크 원인 직접 확인은 아님.
+- 새 map-tile-recovery-v105.js를 map 전에 연결. 지도 내부 카카오 타일 실패만 최대2회/URL·이미지, 분당32회. 정상 타일 재요청0, SDK 버퍼 포함(실패img 크기0 주의), 드래그/확대/숨김/오프라인 대기, URL 재사용·수명·타이머 보호.
+- 중심/축척/선택/목록 idle 갱신/수집기 변경 없음. SDK opacity·레이어 직접 변경 없음. 보조 연결 실패가 매물 로딩 차단하지 않게 보호.
+- Node2008/2008, 타일 Edge PC/폰16/16 + 지도/클러스터 회귀14통과4skip, 실제SDK3개복구/이동확대후실패img0, lint/type/globals/diff/build/dry-run 정상. docs/map-tile-recovery-v105-20261103.txt 참조.
+- 사전 백업 원래프로젝트 private-audits/backups/js-map-tile-recovery-20261103-v105 (소스26ee56e/이전Workerf17289d7).
+
 ## 2026-11-03 동일 지번 메모 오대상 저장 v104
 
 - itemKey(이름|주소|층호실|유형)가 같은 원장에서 메모 getMemoItem.find가 첫 원장 선택. 변경 전 합성 재현으로 MEMO-1 카드에 MEMO-2 메모 표시 확인.
