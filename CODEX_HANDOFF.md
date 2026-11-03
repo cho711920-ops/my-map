@@ -1,3 +1,11 @@
+## 2026-11-03 네이버 거리뷰 CSP 누락 v107
+
+- 사용자: 네이버 지도는 뜨지만 거리뷰 빈 화면/지연. 공개 CSP에 panorama.map.naver.com script-src 누락. 실제 공식SDK nearby/metadata JSONP 차단 재현,4방향까지 모두차단.
+- 정확한 해당 서버1곳만 script-src 추가. 스크립트 전체https/와일드카드 허용 없음. 기존 SDK/재사용/지연안내/촬영/카카오/과거사진 흐름 유지.
+- 실제 SDK PC/폰 첫열기·재열기·다른 위치 사진 확인 및 CSP차단0/런타임오류0. CSP회귀+실SDK6/6,기존SDK재시도6/6·좌표8/8. 촬영18pass/기기제외4skip. Node2010/2010, lint/type/globals/diff/build/dry-run 정상.
+- 실제SDK/운영CSP/HTML/CSS 격리검사. 공개 SDK/사진/JS키 GET 외 운영자료 접근·쓰기·수집기조작 없음. 기존 특정 PC의 모든 지연 원인 단정 불가.
+- 백업 원래프로젝트 private-audits/backups/js-map-naver-roadview-20261103-v107 (소스6d7b507/이전Worker4044bcfb). docs/naver-roadview-csp-v107-20261103.txt 참조.
+
 ## 2026-11-03 권리금 수정 표시/재조회 v106
 
 - 사용자: 다른 금액 저장해도 목록은 이전 권리금. 합성2000→800 저장 후 목록2000 재현. 원본의 오래된 manual 필드가 수정 원장값을 표시에서 덮음.

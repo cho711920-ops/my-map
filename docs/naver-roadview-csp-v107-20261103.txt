@@ -1,0 +1,44 @@
+2026-11-03 네이버 거리뷰 빈 화면·검색 지연 원인 보완 v107
+
+원인 / 실제 재현
+- 사용자: 연동 지도는 표시되지만 거리뷰가 빈 화면에서 오래 로딩/응답지연.
+- 공개 웹 js-map.com 응답과 저장소 _headers의 script-src에 panorama.map.naver.com 누락 확인.
+- 실제 공식 SDK는 해당 서버의 nearby와 metadata를 JSONP SCRIPT로 요청한다.
+  connect-src https: 및 img-src https: 허용만으로 JSONP SCRIPT는 허용되지 않는다.
+- 기존 CSP 격리 재현: nearby SCRIPT CSP 차단. 4방향 재시도 포함5개 요청 모두차단,
+  panoId/사진 없음. 실제 SDK 검사에서 failed reason=csp 확인.
+- SDK를 대체한 기존 검사만으로는 SDK 내부 동적 JSONP 도메인 누락을 검출하지 못했다.
+
+변경
+- _headers script-src에 정확한 https://panorama.map.naver.com 한 곳 추가.
+- 임의 HTTPS 스크립트/와일드카드 허용 없음. 다른 보안 지시자 유지.
+- SDK/파노라마/지도 재사용·닫을 때 정상 종료·사진촬영·과거사진·카카오탭 흐름 유지.
+- 시간제한을 줄이거나 빈 화면을 연결 성공으로 가장하는 변경 없음.
+  기존 네이버 오류/주변 탐색/12초 지연 안내 유지. 웹 목록/수집기/API 데이터 변경 없음.
+- 사용자의 모든 당시 네트워크 원인이 이것뿐이었다고 단정하지 않는다.
+
+검증
+- 실제 네이버 공개 SDK + 운영과 같은 CSP/HTML/CSS의 격리 페이지에서 사진 표시 육안 확인.
+- SDK 준비 약917ms, 준비 후 첫 연결177ms/사진414ms(사진 검사 뒤150ms 대기 포함).
+  반복 생성 연결80/82ms, 사진271/270ms(각150ms 대기 포함). 특정 환경 측정이며 속도 보장 아님.
+- 최종 Edge PC/모바일 실제 SDK에서 첫 열기·닫기/재열기·다른 위치로 이동 각3회 사진 확인.
+  현재 panoId의 이미지 실제 naturalWidth>0, 패널 크기 확인. CSP차단0/pageerror0.
+- 브라우저 회귀: 이전 CSP로 차단 재현2건 + 현재 CSP에서 JSONP→메타데이터→사진2건,
+  실제 SDK PC/폰2건 총6/6. 기존 SDK재시도6/6·좌표8/8. 촬영 회귀18통과/기기제외4skip(기존 조건부 검사).
+- Node2010/2010, lint/type/browser globals/diff/build/Worker dry-run 통과.
+- 테스트는 운영 계정/사용자 프로필/매물 데이터를 읽거나 쓰지 않음. 로컬 HTML/CSS/가상데이터 사용.
+  실제 공개 SDK/사진 GET 및 공개 JS키 설정 GET만 사용. SDK 선택적 로그 수집 POST도 차단.
+- 신규 tests/browser/naver-roadview-csp-v107.spec.mjs의 실제 SDK 검사는
+  JS_NAVER_REAL_SDK=1 일 때만 실행. 기존 CSP 실패와 현재 CSP 성공은 네트워크 대체 검사로 상시 실행.
+
+참조 / 확인일2026-11-03
+- https://navermaps.github.io/maps.js.ncp/docs/naver.maps.Panorama.html
+- https://navermaps.github.io/maps.js.ncp/docs/tutorial-Panorama.html
+  공식 문서 이벤트/메서드를 참고. CSP 누락은 실제 SDK 네트워크/CSP 이벤트와 공개 응답으로 검증.
+
+복원
+- 변경 전 소스6d7b507 / Worker4044bcfb-fc16-42d7-a222-dcd63ea31404.
+- 원래 프로젝트 private-audits/backups/js-map-naver-roadview-20261103-v107/source.zip + RESTORE.txt.
+
+배포
+- 제품 커밋·푸시 및 Worker/양 도메인 확인 결과 추가 예정.
