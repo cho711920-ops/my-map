@@ -5,6 +5,7 @@
 - 원장 ID/서명과 표시 조건 분리하여 저장 보호 유지. 열린 창 뒤 정렬도 선택 ID 변경 안 됨. 새 상세 API 요청 없음.
 - Node2008/2008, Edge PC/폰 관련28/28 및 육안 검증. 운영 병합/삭제/수집기 조작 없음. docs/merge-choice-order-v102-20261103.txt 참조.
 - 백업 원래프로젝트 private-audits/backups/js-map-merge-choice-order-20261103-v102 (소스8608e0a/이전Worker38024d4b).
+- 제품7f7d232 origin/codex/merge-choice-order-v102 푸시. Worker3f273718-70e5-4523-8ad5-0e56c9f5bcc6/cachebb482b8bc1fbd58ce0f92799 배포. 양도메인10응답200/SHA일치. 새로고침 후 적용.
 
 ## 2026-11-03 임장완료 지번 메모·카톡 공유 v101
 

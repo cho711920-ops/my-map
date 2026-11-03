@@ -30,3 +30,10 @@
 복원
 - 변경 전 소스8608e0a / Worker38024d4b-bee8-4973-9558-0fe22a91ed93.
 - 원래 프로젝트 private-audits/backups/js-map-merge-choice-order-20261103-v102/source.zip 및 RESTORE.txt.
+
+배포
+- lint/type/browser globals/diff/build/Worker dry-run 정상.
+- 제품7f7d232 / origin/codex/merge-choice-order-v102 커밋·푸시.
+- Worker3f273718-70e5-4523-8ad5-0e56c9f5bcc6 / public cachebb482b8bc1fbd58ce0f92799 배포.
+- 양 도메인 HTML·병합JS/CSS·임장공유JS·SW 총10응답200/빌드SHA256 일치 확인.
+- 사용자 페이지 새로고침 후 적용.
