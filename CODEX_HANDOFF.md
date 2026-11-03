@@ -1,3 +1,11 @@
+## 2026-11-03 선택매물 병합·병합/분리 속도 v99
+
+- 사용자 체크박스 일괄병합/선택해제 오른쪽 빨간 버튼 및 기존 병합·분리 속도 개선 요청. docs/selected-merge-speed-v99-20261103.txt 상세.
+- 2~51개 선택→남길 대표 선택→D1 단일 batch. 거래유형 경계/메모작성 차단/계정 검증, 원본·사진·연락처·운영메모/계정별 찜·임장키·대표사진 연결 보존. 직접등록 source-less 내부 원본 생성. CAS/영수증 원자 저장 및 재시도 replay, 실패 시 영수증 읽기만(자동 POST 재전송 없음). soft-delete는 중복 대표만이며 광고 완료처리 아님.
+- 저장 직후 전체 CSV/원본 재다운로드 대신 affectedPropertyIds의 uncached listingOriginals로 대표+원본 proof 검증 후 갱신. 새 분리 대표 삽입/삭제 대표 제거, 이전 전체조회 generation/IDB 무효화 유지. 운영집계 완료를 저장응답이 기다리던 연결 분리, 목록·상세 캐시 삭제는 계속 await. 1분 폴링/전체리비전 보수정책 유지(모든 전체조회 제거 아님), 실제 사용자 체감 지연초 미측정.
+- 전체 Node2004/2004, Edge PC/폰75pass3기기제외+최종UI4/4, lint/type/globals/build/dry-run/diff 정상. SQLite 실제 scoped API 및 원자 롤백/사진 계정격리,9→7+2 IDB 회귀/스크롤 검사. 운영매물 실제 병합·분리 쓰기 검증 없음. 수집기/프로필 중단·재시작 없음.
+- 백업 원래프로젝트 private-audits/backups/js-map-selected-merge-20261103-v99 (소스8ddd3b0/이전Workerd3eab4cb). 제품c95daf7 origin/codex/selected-listing-merge-v99 푸시. Worker a349587b-9fed-4631-9359-20b0f3ad80df/cachebe323ebe8769117443f4f5a7 배포, 양도메인 관련20응답200/SHA일치. 지도 새로고침 필요.
+
 ## 2026-11-03 현위치 확인 지연·도구 아래 배치 v98
 
 - 사용자 확인중/이동안됨 및 세로도구맨아래요청. 기존고정밀새위치만요청하던경로 보완. 최근8초browser위치허용 빠른4초→불가/무응답시고정밀7초1회,전체12초상한유지. 권한거부즉시종료/양단계타이머/늦은단계·이전클릭좌표차단/pagehide정리. 정확한사용자기기GPS실패원인단정없음.
