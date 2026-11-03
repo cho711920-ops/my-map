@@ -1,0 +1,19 @@
+#selectionActionBar #mergeSelectedListingsBtnV99,
+#selectedMergeDialogV99 [data-submit] { background:#dc303d; border:1px solid #c32632; color:#fff; font-weight:700; }
+#selectionActionBar #mergeSelectedListingsBtnV99:disabled { opacity:.45; cursor:default; }
+#selectedMergeDialogV99 { width:min(540px,calc(100vw - 32px)); max-height:85dvh; box-sizing:border-box; padding:22px; border:1px solid #dce5ef; border-radius:14px; color:#20364b; }
+#selectedMergeDialogV99::backdrop { background:#14263f66; }
+#selectedMergeDialogV99 h2 { margin:0 0 12px; font-size:19px; }
+#selectedMergeDialogV99 p { font-size:13px; line-height:1.6; }
+#selectedMergeDialogV99 .merge-choices-v99 { max-height:45dvh; overflow:auto; }
+#selectedMergeDialogV99 label { display:flex; align-items:center; gap:10px; padding:13px 10px; margin:6px 0; border:1px solid #dce5ef; border-radius:8px; cursor:pointer; font-size:13px; line-height:1.7; }
+#selectedMergeDialogV99 label:has(input:checked) { background:#fff4f4; border-color:#dc303d; }
+#selectedMergeDialogV99 input { flex-shrink:0; accent-color:#dc303d; }
+#selectedMergeDialogV99 footer { display:flex; justify-content:flex-end; gap:8px; }
+#selectedMergeDialogV99 footer button { padding:9px 14px; border:1px solid #dce5ef; border-radius:7px; cursor:pointer; }
+#selectedMergeDialogV99 button:disabled { opacity:.55; cursor:wait; }
+#selectedMergeDialogV99 .merge-message-v99 { min-height:22px; color:#a52933; }
+/* Existing portrait selection controls are hidden. Expose the requested bulk
+   action in the same bar without expanding all desktop controls on a phone. */
+.js-phone-app-v2 #sidebar #selectionActionBar:not([hidden]) { display:flex!important; flex-wrap:wrap; flex-shrink:0; padding:6px 10px; gap:6px; }
+.js-phone-app-v2 #selectionActionBar > button:not(#mergeSelectedListingsBtnV99):not(.selection-clear-btn) { display:none!important; }

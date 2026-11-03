@@ -2394,6 +2394,12 @@
 
   function refreshAfterMoveV8139(result, consolidateWholeMaster, cacheInvalidatedV94) {
     return Promise.resolve(cacheInvalidatedV94).then(function() {
+      if (global.JSListingRefreshV1 && typeof global.JSListingRefreshV1.refreshMoved === "function" && result.affectedPropertyIds) {
+        return global.JSListingRefreshV1.refreshMoved(result).then(function(applied) {
+          if (!applied) throw new Error("변경 매물 조회를 다시 확인해 주세요.");
+          return true;
+        });
+      }
       if (global.JSListingRefreshV1 && typeof global.JSListingRefreshV1.reloadAfterMutation === "function") {
         return global.JSListingRefreshV1.reloadAfterMutation();
       }
@@ -2490,7 +2496,7 @@
       invalidatePendingLoad();
       setSaving(false, false);
       if (consolidateWholeMaster) removeConsolidatedMasterFromView(sourceMasterId, targetMasterId);
-      state.loaded = false;
+      if (!result.affectedPropertyIds) state.loaded = false;
       invalidateDetails();
       state.pendingMove = null;
       setMoveBannerSaving(false);
@@ -3003,6 +3009,11 @@
   });
 
   global.JSUnifiedListingsV8 = {
+    finishSelectedMerge: function(result) {
+      invalidatePendingLoad(); invalidateDetails(); closeDetail();
+      showMergeNoticeV8139("선택매물 병합 저장 완료 · 변경된 매물을 반영하고 있습니다.", "success syncing", true);
+      return refreshAfterMoveV8139(result, true, null);
+    },
     prepareListThumbnails: prepareListThumbnailsV69,
     load: load, attach: attach, attachCompatible: attachCompatible, canCacheCompatible: canCacheCompatible,
     mergeScoped: mergeScoped, invalidatePendingLoad: invalidatePendingLoad,

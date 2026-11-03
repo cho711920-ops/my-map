@@ -2085,6 +2085,64 @@ function reloadListingsAfterMutationV94() {
 }
 window.JSListingRefreshV1.reloadAfterMutation = reloadListingsAfterMutationV94;
 
+// Refresh only the masters and originals touched by a committed merge/split.
+// A generation fence rejects any older full response without advancing the
+// complete-dataset revision (concurrent collector changes still get polled).
+async function refreshMovedListingsV99(result) {
+  var ids = Array.from(new Set((result && result.affectedPropertyIds || []).map(clean).filter(Boolean)));
+  if (!ids.length || ids.length > 51 || !window.JSDataAccessV6) return false;
+  jsListingsLoadGenerationV1 += 1;
+  var generation = jsListingsLoadGenerationV1;
+  window.JSUnifiedListingsV8.invalidatePendingLoad();
+  window.JSDataAccessV6.invalidateRead("listingsCsv");
+  isLoadingSheet = false;
+  pendingAutoUpdate = false;
+  var context = captureScopedReadV1(), parts = [];
+  for (var start = 0; start < ids.length; start += 50) {
+    var batch = ids.slice(start, start + 50);
+    var part = await window.JSDataAccessV6.read("listingOriginals", {ids: batch.join(",")}, {cache: "no-store"});
+    if (generation !== jsListingsLoadGenerationV1) return false;
+    if (!part || part.ok !== true || !Array.isArray(part.items) || !Array.isArray(part.missingIds) || !part.unified ||
+        !part.unified.sourceSnapshotKeys || !part.unified.sourceSnapshotPropertyIds || !Array.isArray(part.requestedIds) ||
+        part.requestedIds.length !== batch.length || batch.some(function(id) { return part.requestedIds.indexOf(id) < 0; })) return false;
+    var returned = part.items.map(function(row) { return clean(row.property_id) || clean(row.id); });
+    if (returned.concat(part.missingIds).length !== batch.length || new Set(returned.concat(part.missingIds)).size !== batch.length ||
+        returned.concat(part.missingIds).some(function(id) { return batch.indexOf(id) < 0; })) return false;
+    parts.push(part);
+  }
+  var combined = {ok:true, items:[], missingIds:[], snapshotConsistency:"per-property-v1",
+    unified:{ok:true,snapshotConsistency:"per-property-v1",groups:{},sourceSearchIds:{},sourceSnapshotKeys:{},sourceSnapshotPropertyIds:{}}};
+  combined.unified.format = parts[0].unified.format;
+  combined.unified.fields = parts[0].unified.fields;
+  parts.forEach(function(part) {
+    combined.items = combined.items.concat(part.items);
+    combined.missingIds = combined.missingIds.concat(part.missingIds);
+    ["groups","sourceSearchIds","sourceSnapshotKeys","sourceSnapshotPropertyIds"].forEach(function(key) {
+      Object.assign(combined.unified[key], part.unified[key]);
+    });
+  });
+  var currentById = Object.create(null);
+  (allItems || []).forEach(function(item) { currentById[item.propertyId] = item; });
+  if (combined.missingIds.some(function(id) {
+    var current = currentById[id], before = context[id];
+    return current && (!before || before.blocked || originalMetadataMutationPendingV1(current) ||
+      scopedReadLocalValuesV1(current).some(function(value,index) { return value !== before.values[index]; }));
+  })) return false;
+  var view = captureAutoUpdateViewState();
+  if (!applyScopedListingsV1(combined, context)) return false;
+  var missing = new Set(combined.missingIds);
+  allItems = allItems.filter(function(item) { return !missing.has(item.propertyId); });
+  window.JSUnifiedListingsV8.attach(allItems);
+  view.preserveVisibleListV1 = false;
+  preserveActionSelectionDuringRender = true;
+  try { applyFilter(); restoreAutoUpdateViewState(view); }
+  finally { preserveActionSelectionDuringRender = false; }
+  notifyListingsSnapshotV1("mutation-scoped", jsListingsRevisionV682);
+  return true;
+}
+window.JSListingRefreshV1.refreshMoved = refreshMovedListingsV99;
+
+
 function compatibleOriginalsResultV1(items, result, scoped) {
   if (!result || result.ok === false || !result.sourceSnapshotKeys || !result.sourceSnapshotPropertyIds ||
       !window.JSUnifiedListingsV8 || typeof window.JSUnifiedListingsV8.attachCompatible !== "function") return null;

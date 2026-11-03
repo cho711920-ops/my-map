@@ -70,6 +70,7 @@
 <link rel="stylesheet" href="css/map-parking-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/lease-list-view-v80.css?v=1.0.0">
 <link rel="stylesheet" href="css/personal-listing-cover-v85.css?v=1.0.0">
+<link rel="stylesheet" href="css/selected-listing-merge-v99.css?v=1">
 </template>
 </head>
 
@@ -274,6 +275,7 @@
       <button type="button" class="selection-visit-btn" onclick="markSelectedAsVisited()">임장완료</button>
       <button type="button" onclick="printSelectedList()">선택인쇄</button>
       <button type="button" class="selection-clear-btn" onclick="clearSelectedPrintItems()">선택해제</button>
+      <button type="button" id="mergeSelectedListingsBtnV99" disabled onclick="JSSelectedListingMergeV99.open()">선택매물병합</button>
       <strong id="selectionActionCount">0건 선택</strong>
     </div>
 
@@ -733,6 +735,7 @@
 <script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;admin-selection-v1=2&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;map-listing-count-v825=1&amp;snapshot-revision-v1=1"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1&amp;new-listing-periods-v1=1"></script>
 <script src="js/current-location-v96.js?v=1.0.0"></script>
+<script data-auth-critical src="js/selected-listing-merge-v99.js?v=1"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>
   <script src="js/operations-collection-v8.js?v=7.26.1-review-audit"></script>
   <script src="js/operations-admin-v1.js?v=1.2.0-linked-identity&amp;live-role-v1=1&amp;owner-local-v51=1&amp;issue-progress-v53=1"></script>

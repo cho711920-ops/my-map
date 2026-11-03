@@ -174,7 +174,7 @@
     }catch(e){if(token===sequence)status(e.message+' 미리보기는 유지됩니다.');}finally{if(token===sequence){busy(false);setControls();}}
   }
   try{if(navigator.mediaDevices?.setCaptureHandleConfig){handle=crypto.randomUUID();navigator.mediaDevices.setCaptureHandleConfig({handle:handle,exposeOrigin:true,permittedOrigins:[location.origin]});}}catch(_e){handle='';}
-  global.JSListingCoverV85={urlFor:urlFor,decorateDetail:decorateDetail,imageError:fallback,contextChanged:contextChanged,open:open};
+  global.JSListingCoverV85={reload:loadIndex,urlFor:urlFor,decorateDetail:decorateDetail,imageError:fallback,contextChanged:contextChanged,open:open};
   var button=document.getElementById('roadviewCoverButtonV85');if(button)button.onclick=open;
   // Observer is limited to modal lifecycle attributes; map tiles and listing mutations are ignored.
   var modal=document.getElementById('roadviewModal');if(modal)new MutationObserver(function(){if(!modal.classList.contains('open'))close();if(button)button.disabled=!roadviewContext();}).observe(modal,{attributes:true,attributeFilter:['class']});

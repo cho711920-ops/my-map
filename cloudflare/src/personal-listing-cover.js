@@ -64,7 +64,9 @@ export async function handlePersonalListingCover(request,env,user,body,context){
       if(url.searchParams.get("owner")!==ownerHash)throw fail("현재 계정의 사진이 아닙니다.",403);
       const row=await read(env,owner,propertyId),data=metadata(row),imageId=url.searchParams.get("imageId");
       if(!propertyId||!uuidPattern.test(imageId||"")||data?.imageId!==imageId)throw fail("대표사진이 변경되었거나 삭제되었습니다.",404);
-      const object=await env.MEDIA.get(keys(ownerHash,propertyId,imageId)[url.searchParams.get("kind")==="thumb"?1:0]);
+      const assetId=data.assetPropertyId||propertyId;
+      if(!idPattern.test(assetId))throw fail("대표사진 연결을 확인해 주세요.",404);
+      const object=await env.MEDIA.get(keys(ownerHash,assetId,imageId)[url.searchParams.get("kind")==="thumb"?1:0]);
       if(!object)throw fail("대표사진을 찾지 못했습니다.",404);
       return new Response(object.body,{headers:{"content-type":"image/jpeg","cache-control":"private, max-age=86400, immutable"}});
     }
@@ -104,6 +106,6 @@ export async function handlePersonalListingCover(request,env,user,body,context){
       throw fail("다른 기기에서 대표사진이 변경됐습니다. 최신 사진을 확인해 주세요.",409);
     }
   }catch(error){if(!saved&&newKeys.length)await env.MEDIA.delete(newKeys).catch(()=>{});throw error;}
-  if(previous?.imageId){const cleanup=env.MEDIA.delete(keys(ownerHash,propertyId,previous.imageId)).catch(()=>{});if(context?.waitUntil)context.waitUntil(cleanup);else await cleanup;}
+  if(previous?.imageId&&!previous.assetPropertyId){const cleanup=env.MEDIA.delete(keys(ownerHash,propertyId,previous.imageId)).catch(()=>{});if(context?.waitUntil)context.waitUntil(cleanup);else await cleanup;}
   return json({ok:true,persisted:true,cover:entry(saved,propertyId,ownerHash)});
 }

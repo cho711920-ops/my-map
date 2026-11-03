@@ -5455,6 +5455,7 @@ function updatePrintSelectedButton() {
   if (typeof window.syncSelectionActionBarV657 === "function") {
     window.syncSelectionActionBarV657(count);
   }
+  if (window.JSSelectedListingMergeV99) window.JSSelectedListingMergeV99.sync();
   if (window.JSSaleWorkbenchV1) window.JSSaleWorkbenchV1.syncComparisonTray();
 }
 

@@ -31,7 +31,7 @@ test("merged source card is removed immediately from all live list arrays", () =
   assert.match(unified, /if \(typeof global\.applyFilter === "function"\) global\.applyFilter\(\)/);
 });
 
-test("merge completion is announced immediately while full-list synchronization continues in background", () => {
+test("merge completion is announced immediately while changed-list synchronization continues in background", () => {
   assert.match(unified, /function showMergeNoticeV8139\(message, stateName, persistent\)/);
   assert.match(unified, /대표매물 통합 완료 · 이전 카드를 제거했고 최신 목록을 동기화하고 있습니다/);
   assert.match(unified, /refreshAfterMoveV8139\(result, consolidateWholeMaster, cacheInvalidatedV94\);\s*return result/);
@@ -41,7 +41,8 @@ test("merge completion is announced immediately while full-list synchronization 
 
 test("merge cache invalidation finishes before the response is rendered", () => {
   assert.match(worker, /wholeMergeDetailKeys[\s\S]*?body\.primaryMasterId[\s\S]*?body\.duplicateMasterIds/);
-  assert.match(worker, /OPERATIONS_DASHBOARD_CACHE_KEY,[\s\S]*?\.\.\.wholeMergeDetailKeys/);
+  assert.match(worker, /const invalidation = deleteR2Cache\(env, null, \[\s*D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, \.\.\.wholeMergeDetailKeys/);
+  assert.match(worker, /context\.waitUntil\(dashboardInvalidation\)/);
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /\["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory"\]\.includes\(mutationAction\(body\)\)\) \{\s*await invalidation;/);
   assert.match(html, /js\/unified-listings-v8\.js\?v=8\.1\.43-card-detail-toggle/);

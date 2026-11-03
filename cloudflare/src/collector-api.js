@@ -4,6 +4,7 @@ import { collectorDiagnostics } from "./collector-diagnostics.js";
 import { normalizeCollectionCounts, normalizeNewSourceAdCounts, collectionDateRange, summarizeCollectionDay, collectorActionGuidance } from "./collection-status-summary.js";
 import { saveAutomationRunReport, readAutomationRunReports } from "./automation-run-reports.js";
 import { carryConfirmedVisitMemo, preserveConfirmedVisitMemo } from "./visit-status.js";
+import { mergeSelectedMasters } from "./selected-master-merge.js";
 import { gongsilSaleFields, naverSaleFields, daangnSaleFields, saleCategoryFromLabel, SALE_CATEGORY_LABELS } from "./sale-fields.js";
 import { normalizeNaverPropertyType, resolveNaverSaleCategory } from "./naver-property-types.js";
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
@@ -3840,15 +3841,17 @@ async function applyReviewBatch(env, user, body) {
 }
 
 async function consolidateExisting(env, user, body) {
+  if (body.selectedMerge === true) return mergeSelectedMasters(env, user, body);
   const primaryId = clean(body.primaryMasterId);
   const duplicates = [...new Set((Array.isArray(body.duplicateMasterIds) ? body.duplicateMasterIds : []).map(clean).filter((id) => id && id !== primaryId))].slice(0, 50);
-  const primary = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
+  const primary = await env.DB.prepare("SELECT id, property_id, operating_memo, trade_type FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
     .bind(primaryId).first();
   if (!primary) throw new Error("대표매물을 찾지 못했습니다.");
   let primaryMemo = clean(primary.operating_memo);
   let consolidated = 0;
+  const affectedPropertyIds = [clean(primary.property_id) || primary.id];
   for (const duplicateId of duplicates) {
-    const duplicate = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
+    const duplicate = await env.DB.prepare("SELECT id, property_id, operating_memo, trade_type FROM listings WHERE id=?1 OR property_id=?1 LIMIT 1")
       .bind(duplicateId).first();
     if (!duplicate || duplicate.id === primary.id) continue;
     if (!listingTradeTypesCanMerge(primary.trade_type, duplicate.trade_type)) {
@@ -3876,8 +3879,9 @@ async function consolidateExisting(env, user, body) {
     await env.DB.batch(statements);
     primaryMemo = mergedMemo;
     consolidated += 1;
+    affectedPropertyIds.push(clean(duplicate.property_id) || duplicate.id);
   }
-  return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id,
+  return { ok: true, action: "consolidateExistingMasters", consolidated, primaryMasterId: primary.id, affectedPropertyIds,
     operationAdjustments: { activeMaster: -consolidated, history: consolidated }, source: "D1" };
 }
 

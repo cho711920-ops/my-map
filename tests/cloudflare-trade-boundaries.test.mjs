@@ -28,7 +28,7 @@ function moveEnv(overrides = {}, targetTrade = "lease") {
               assert.match(sql, /l\.trade_type AS master_trade_type/);
               return row;
             }
-            if (sql.includes("SELECT id, operating_memo, trade_type")) return { id: "M-TARGET", trade_type: targetTrade };
+            if (/SELECT id, (?:property_id, )?operating_memo, trade_type/.test(sql)) return { id: "M-TARGET", trade_type: targetTrade };
             throw new Error("Unexpected query: " + sql);
           },
           async all() { return { results: [] }; },

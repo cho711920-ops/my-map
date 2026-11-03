@@ -914,7 +914,7 @@ async function handleDataApi(request, env, context) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw Object.assign(new Error("잘못된 요청 형식입니다."), { statusCode: 400 });
   }
-  requireExpectedAccount(user, body.expectedAccountEmail, mutationAction(body) === "saveCloudState");
+  requireExpectedAccount(user, body.expectedAccountEmail, mutationAction(body) === "saveCloudState" || body.selectedMerge === true);
   delete body.expectedAccountEmail;
   const collectorAdmin = await handleCollectorAdminPost(env, user, body);
   if (collectorAdmin) {
@@ -928,12 +928,12 @@ async function handleDataApi(request, env, context) {
     const snapshotUpdate = collectorAdmin.operationRefresh
       ? refreshOperationsDashboard(env)
       : adjustOperationsDashboard(env, collectorAdmin.operationAdjustments || {});
-    const invalidation = Promise.resolve(snapshotUpdate).catch(() => null).then(() => {
-      return deleteR2Cache(env, null, [
-        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
-        ...wholeMergeDetailKeys, ...collectorDetailKeys
-      ]);
-    });
+    const dashboardInvalidation = Promise.resolve(snapshotUpdate).catch(() => null)
+      .then(() => deleteR2Cache(env, null, [OPERATIONS_DASHBOARD_CACHE_KEY]));
+    if (context && typeof context.waitUntil === "function") context.waitUntil(dashboardInvalidation);
+    const invalidation = deleteR2Cache(env, null, [
+      D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, ...wholeMergeDetailKeys, ...collectorDetailKeys
+    ]);
     if (String(body.action || "") === "consolidateExistingMasters") {
       await invalidation;
     } else if (context && typeof context.waitUntil === "function") {
@@ -955,9 +955,11 @@ async function handleDataApi(request, env, context) {
       ? adjustOperationsDashboard(env, d1Result.operationAdjustments)
       : refreshOperationsDashboard(env))
     : null;
-  const invalidation = Promise.resolve(operationSnapshot).catch(() => null).then(() => {
-    return deleteR2Cache(env, null, invalidatedKeys);
-  });
+  const dashboardInvalidation = Promise.resolve(operationSnapshot).catch(() => null)
+    .then(() => invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY)
+      ? deleteR2Cache(env, null, [OPERATIONS_DASHBOARD_CACHE_KEY]) : null);
+  if (context && typeof context.waitUntil === "function") context.waitUntil(dashboardInvalidation);
+  const invalidation = deleteR2Cache(env, null, invalidatedKeys.filter(key => key !== OPERATIONS_DASHBOARD_CACHE_KEY));
   if (["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory"].includes(mutationAction(body))) {
     await invalidation;
   } else if (context && typeof context.waitUntil === "function") {
@@ -1023,7 +1025,15 @@ async function handleApi(request, env, context) {
     }
     return response;
   }
-  if (url.pathname === "/api/data") return handleDataApi(request, env, context);
+  if (url.pathname === "/api/data") {
+    const operation = handleDataApi(request, env, context);
+    // Keep an accepted mutation and its cache invalidation alive if the client
+    // disconnects. Receipt reconciliation never replays a write automatically.
+    if (request.method === "POST" && context && typeof context.waitUntil === "function") {
+      context.waitUntil(operation.then(() => null, () => null));
+    }
+    return operation;
+  }
   if (url.pathname === "/api/personal-cover") {
     const user=await requireSession(request,env);
     if(request.method==='GET'){

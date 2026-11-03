@@ -2006,7 +2006,7 @@ function refreshMasterTermsStatement(env, value, masterId, now) {
 async function moveOriginal(env, user, body) {
   const originalId = clean(body.originalId).slice(0, 160);
   const targetMasterId = clean(body.targetMasterId).slice(0, 100);
-  const source = await env.DB.prepare(`SELECT s.*, l.main_source, l.title, l.address, l.building_name,
+  const source = await env.DB.prepare(`SELECT s.*, l.property_id AS master_property_id, l.main_source, l.title, l.address, l.building_name,
       l.room, l.listing_type, l.deposit, l.monthly_rent, l.maintenance_fee, l.premium,
       l.trade_type AS master_trade_type, l.sale_category AS master_sale_category, l.sale_price AS master_sale_price,
       l.area_m2, l.latitude, l.longitude, l.operating_memo, l.source_url AS master_source_url,
@@ -2086,10 +2086,11 @@ async function moveOriginal(env, user, body) {
     const sourceMasterRemoved = Number(results?.[results.length - 1]?.meta?.changes || 0) > 0;
     return { ok: true, persisted: true, queued: false, separated: true, originalId,
       propertyId: value.id, sourceMasterId: source.listing_id, targetMasterId: value.id,
+      affectedPropertyIds: [clean(source.master_property_id) || source.listing_id, value.id],
       sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
       operationAdjustments: { activeMaster: sourceMasterRemoved ? 0 : 1, history: 1 }, source: "D1" };
   }
-  const target = await env.DB.prepare("SELECT id, operating_memo, trade_type FROM listings WHERE id=?1 AND status <> 'deleted'")
+  const target = await env.DB.prepare("SELECT id, property_id, operating_memo, trade_type FROM listings WHERE id=?1 AND status <> 'deleted'")
     .bind(targetMasterId).first();
   if (!target) throw Object.assign(new Error("통합할 대상매물을 찾을 수 없습니다."), { statusCode: 404 });
   if (!listingTradeTypesCanMerge(sourceTrade, target.trade_type)) {
@@ -2139,6 +2140,7 @@ async function moveOriginal(env, user, body) {
   }
   return { ok: true, persisted: true, queued: false, originalId, sourceMasterId: source.listing_id,
     targetMasterId, sourceMasterRemoved, sourceMasterRefreshed: !!remainingValue,
+    affectedPropertyIds: [clean(source.master_property_id) || source.listing_id, clean(target.property_id) || target.id],
     operationAdjustments: { activeMaster: sourceMasterRemoved ? -1 : 0,
       history: (sourceMasterRemoved ? 1 : 0) + (confirmationTransferred ? 1 : 0) }, source: "D1" };
 }

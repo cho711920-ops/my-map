@@ -1544,6 +1544,23 @@
     bindMobileDetailButtonFix();
   }, 100);
 
+  window.JSRemapMergedListReferencesV99 = function(keyMap) {
+    ["favorite", "visit"].forEach(function(type) {
+      var changed = false;
+      var lists = loadLists(type).map(function(list) {
+        if (!list || !Array.isArray(list.itemKeys)) return list;
+        var keys = Array.from(new Set(list.itemKeys.map(function(key) {
+          return keyMap[key] || keyMap[String(key).replace(/\|row:\d+$/, "")] || key;
+        })));
+        if (JSON.stringify(keys) === JSON.stringify(list.itemKeys)) return list;
+        changed = true;
+        return Object.assign({}, list, {itemKeys:keys});
+      });
+      if (changed) saveLists(type, lists);
+    });
+    restoreActiveFavoriteFolderFilter(loadLists("favorite"), {silent:true});
+  };
+
   prepareAccountStorage().then(function () {
     migrateLegacyFavorites();
     restoreActiveFavoriteFolderFilter(loadLists("favorite"), { silent: true });
