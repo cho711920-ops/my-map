@@ -84,6 +84,37 @@ test('failed refresh preserves existing cards, selection and memo drafts without
   expect(stats.writes).toBe(0);
 });
 
+test('a successful unchanged revision check clears a previous refresh warning without another full download',async({page})=>{
+  const stats=await setup(page,{mode:'failure',preserve:true});
+  let revisionMode='failure';
+  await page.route('**/api/data?**',route=>{
+    const action=new URL(route.request().url()).searchParams.get('action');
+    if(action!=='dataRevision')return route.fallback();
+    return revisionMode==='failure' ? route.fulfill({status:503,json:{ok:false}})
+      : route.fulfill({json:{ok:true,revision:revisionMode==='changed'?'fixture-v111-new':'fixture-v111-base',
+        fullReload:revisionMode==='changed',changeIds:[]}});
+  });
+  const before=await page.evaluate(()=>{
+    jsListingsRevisionV682='fixture-v111-base';selectedPrintKeys=['fixture-lease-1'];
+    memoDraftValuesV655['fixture-lease-1']='현장 작성 중 메모';window.__v111Card=document.querySelector('#list .item');
+    __v65Load();return visibleListItems.map(item=>item.propertyId);
+  });
+  await expect(page.locator('#jsListingsLoadStatusV65')).toContainText('최근 확인한 목록');
+  // A failed check and an unapplied newer revision must keep the warning.
+  await page.evaluate(()=>refreshListingsWhenChangedV682());
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(1);
+  revisionMode='changed';await page.evaluate(()=>refreshListingsWhenChangedV682());
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(1);
+  expect(stats.requests).toBe(2);
+  revisionMode='unchanged';await page.evaluate(()=>refreshListingsWhenChangedV682());
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(stats.requests).toBe(2);expect(stats.writes).toBe(0);
+  expect(await page.evaluate(()=>visibleListItems.map(item=>item.propertyId))).toEqual(before);
+  expect(await page.evaluate(()=>({same:__v111Card===document.querySelector('#list .item'),
+    selected:selectedPrintKeys,draft:memoDraftValuesV655['fixture-lease-1']})))
+    .toEqual({same:true,selected:['fixture-lease-1'],draft:'현장 작성 중 메모'});
+});
+
 test('a confirmed empty CSV is distinct from an invalid HTML response',async({page})=>{
   const stats=await setup(page,{mode:'empty'});await page.evaluate(()=>__v65Load());
   await expect(page.locator('#mapListingCountValueV825')).toHaveText('0개');

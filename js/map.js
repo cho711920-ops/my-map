@@ -376,11 +376,18 @@ function refreshListingsWhenChangedV682() {
     if (!jsListingsRevisionV682) {
       return loadSheet(true, true);
     }
-    if (revision === jsListingsRevisionV682) return recoverOriginalMetadataV1(generationV1);
+    if (revision === jsListingsRevisionV682) {
+      // A failed refresh can leave a complete, unchanged snapshot on screen.
+      // Once the server verifies that exact revision, the old warning is no
+      // longer true. Do not require another full download just to clear it.
+      if (revision !== "0" && jsListingsCompleteBaseV1 && jsListingsLoadStateV65.phase === "error") setListingsLoadStatusV65("ready");
+      return recoverOriginalMetadataV1(generationV1);
+    }
     return applyListingChangesV683(jsListingsRevisionInfoV683).then(function(applied) {
       if (generationV1 !== (typeof jsListingsLoadGenerationV1 === "number" ? jsListingsLoadGenerationV1 : 0)) return;
       if (applied) {
         jsListingsRevisionV682 = revision;
+        if (revision !== "0" && jsListingsCompleteBaseV1 && jsListingsLoadStateV65.phase === "error") setListingsLoadStatusV65("ready");
         return;
       }
       return loadSheet(true, true);

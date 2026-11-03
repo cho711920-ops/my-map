@@ -207,6 +207,38 @@ test("failed refresh cannot advance baseline; successful refresh owns its baseli
   assert.equal(b.context.jsListingsRevisionV682, "SNAPSHOT-DURING-REFRESH");
 });
 
+test("revision recovery clears only a verified complete-list error, including a successful delta", async () => {
+  const h=harness();await h.write({changeIds:["BASE"]});
+  const b=browser(h),statuses=[];
+  b.context.setListingsLoadStatusV65=phase=>{statuses.push(phase);b.context.jsListingsLoadStateV65.phase=phase;};
+  b.context.jsListingsRevisionV682=(await h.read()).revision;
+  b.context.jsListingsLoadStateV65.phase="error";
+  await b.context.refreshListingsWhenChangedV682();
+  assert.deepEqual(statuses,["ready"]);assert.equal(b.counts.full,0);
+  for(let i=0;i<3;i++)await b.context.refreshListingsWhenChangedV682();
+  assert.equal(statuses.length,1,"unchanged healthy polling must not touch the UI repeatedly");
+  b.context.jsListingsLoadStateV65.phase="error";
+  await h.write({changeIds:["CHANGED"]});
+  await b.context.refreshListingsWhenChangedV682();
+  assert.equal(b.counts.delta,1);assert.equal(b.counts.full,0);assert.equal(statuses.length,2);
+  assert.equal(b.context.jsListingsRevisionV682,(await h.read()).revision);
+
+  b.context.jsListingsLoadStateV65.phase="auth";
+  await b.context.refreshListingsWhenChangedV682();assert.equal(statuses.length,2,"an authentication prompt must not be dismissed");
+  b.context.jsListingsLoadStateV65.phase="error";
+  b.context.loadSheet=async()=>false;
+  await h.write({fullReload:true});
+  const previous=b.context.jsListingsRevisionV682;
+  await b.context.refreshListingsWhenChangedV682();
+  assert.equal(statuses.length,2);assert.equal(b.context.jsListingsRevisionV682,previous);
+  b.context.window.JSDataAccessV6.read=async()=>{throw Error("synthetic network failure");};
+  b.context.console={warn(){}};
+  await b.context.refreshListingsWhenChangedV682();assert.equal(statuses.length,2);
+  b.context.jsListingsRevisionV682="0";
+  b.context.window.JSDataAccessV6.read=async()=>({revision:"0"});
+  await b.context.refreshListingsWhenChangedV682();assert.equal(statuses.length,2,"an unknown initial revision is not freshness proof");
+});
+
 test("snapshot access reuses initial warmup and keeps text compatibility", async () => {
   let reads = 0;
   const window = { fetch: async () => { reads++; return new Response("csv", { headers: { "x-js-listings-revision": "R1" } }); } };
