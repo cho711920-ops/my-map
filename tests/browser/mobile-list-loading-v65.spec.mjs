@@ -105,6 +105,7 @@ test('a stalled response body reaches its deadline and never leaves an endless z
   await expect(page.locator('#mapListingCountValueV825')).toHaveText('불러오는 중');
   await page.clock.fastForward(45001);
   await expect(page.locator('#jsListingsLoadStatusV65')).toContainText('매물을 불러오지 못했습니다');
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveAttribute('data-error-code','LIST_TIMEOUT');
   await page.clock.fastForward(2001);
   await expect.poll(()=>page.evaluate(()=>__v65Held)).toBe(2);
   await page.clock.fastForward(45001);
@@ -112,6 +113,33 @@ test('a stalled response body reaches its deadline and never leaves an endless z
   await expect(page.getByRole('button',{name:'다시 불러오기',exact:true})).toBeVisible();
   await page.clock.fastForward(120000);
   expect(await page.evaluate(()=>__v65Held)).toBe(2);
+});
+
+test('a progressing full response completes beyond 45 seconds without partial cards or a second request',async({page})=>{
+  await setup(page,{mode:'success'});await page.clock.install();
+  await page.evaluate(()=>{
+    const original=window.fetch;window.__v97Reads=0;
+    window.fetch=function(url,options){
+      if(String(url)!=='/api/sheet')return original(url,options);
+      __v97Reads++;
+      return Promise.resolve(new Response(new ReadableStream({start(controller){window.__v97Body=controller;}}),
+        {headers:{'x-js-listings-revision':'fixture-v65'}}));
+    };
+    __v65Load();
+  });
+  const middle=Math.floor(csv.length/2);
+  await page.evaluate(text=>__v97Body.enqueue(new TextEncoder().encode(text)),csv.slice(0,middle));
+  await page.clock.fastForward(30000);
+  await page.evaluate(()=>__v97Body.enqueue(new TextEncoder().encode('')));
+  // Only actual bytes extend the idle deadline.
+  await page.evaluate(text=>__v97Body.enqueue(new TextEncoder().encode(text)),csv.slice(middle,middle+10));
+  await page.clock.fastForward(30000);
+  expect(await page.evaluate(()=>({phase:jsListingsLoadStateV65.phase,count:allItems.length,reads:__v97Reads})))
+    .toEqual({phase:'loading',count:0,reads:1});
+  await page.evaluate(text=>{__v97Body.enqueue(new TextEncoder().encode(text));__v97Body.close();},csv.slice(middle+10));
+  await expect.poll(()=>page.evaluate(()=>visibleListItems.length)).toBe(2);
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(await page.evaluate(()=>__v97Reads)).toBe(1);
 });
 
 test('Samsung tablet landscape keeps a visible retry and loads listings after a connection failure',async({browser})=>{

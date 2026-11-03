@@ -54,8 +54,13 @@ var jsListingsCompleteBaseV1 = false;
 var jsListingsFullBaseTimerV1 = null;
 var jsListingsLoadStateV65 = {phase: "idle", autoRetries: 0, retryTimer: null};
 
-function setListingsLoadStatusV65(phase) {
+function setListingsLoadStatusV65(phase, error) {
   jsListingsLoadStateV65.phase = phase;
+  jsListingsLoadStateV65.errorCode = phase === "error"
+    ? error && error.name === "TimeoutError" ? "LIST_TIMEOUT"
+      : Number(error && error.status) > 0 ? "LIST_HTTP_" + Number(error.status)
+        : error && error.name === "TypeError" ? "LIST_NETWORK" : "LIST_RESPONSE"
+    : "";
   if (jsListingsLoadStateV65.retryTimer !== null) clearTimeout(jsListingsLoadStateV65.retryTimer);
   jsListingsLoadStateV65.retryTimer = null;
   var panel = document.getElementById("jsListingsLoadStatusV65");
@@ -83,12 +88,17 @@ function setListingsLoadStatusV65(phase) {
     (document.getElementById("wrap") || document.body).appendChild(panel);
   }
   panel.dataset.phase = phase;
+  panel.dataset.errorCode = jsListingsLoadStateV65.errorCode;
   var hasData = !!(allItems || []).length;
   panel.querySelector("[data-listings-load-message]").textContent = phase === "loading"
     ? (hasData ? "최근 확인한 매물을 표시하고 최신 정보를 확인하고 있습니다." : "매물을 불러오고 있습니다. 잠시만 기다려 주세요.")
     : phase === "auth" ? "로그인이 만료되어 매물을 불러오지 못했습니다. 다시 로그인해 주세요."
       : hasData ? "최신 매물을 확인하지 못했습니다. 최근 확인한 목록을 표시하고 있습니다."
-        : "매물을 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.";
+        : "매물을 불러오지 못했습니다. " +
+          (jsListingsLoadStateV65.errorCode === "LIST_TIMEOUT" ? "목록 응답이 지연되었습니다. " :
+            jsListingsLoadStateV65.errorCode.indexOf("LIST_HTTP_") === 0 ? "서버 응답을 확인해야 합니다. " :
+              jsListingsLoadStateV65.errorCode === "LIST_NETWORK" ? "서버와 연결하지 못했습니다. " : "목록 응답을 확인해야 합니다. ") +
+          "다시 시도해 주세요. (" + jsListingsLoadStateV65.errorCode + ")";
   var retry = panel.querySelector("button");
   retry.hidden = phase === "loading";
   retry.textContent = phase === "auth" ? "다시 로그인" : "다시 불러오기";
@@ -2787,7 +2797,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt) {
       if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
       document.getElementById("status").innerHTML = "D1 불러오기 오류";
       var authFailureV65 = Number(err && err.status) === 401 || Number(err && err.status) === 403;
-      setListingsLoadStatusV65(authFailureV65 ? "auth" : "error");
+      setListingsLoadStatusV65(authFailureV65 ? "auth" : "error", err);
       if (!authFailureV65 && !jsListingsCompleteBaseV1 && jsListingsLoadStateV65.autoRetries < 1 &&
           document.visibilityState !== "hidden" && navigator.onLine !== false &&
           (!err || err.retryable !== false) && (Number(err && err.status || 0) === 0 || Number(err && err.status) >= 500)) {

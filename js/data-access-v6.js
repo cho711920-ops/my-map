@@ -11,6 +11,8 @@
   var pendingReads = Object.create(null);
   var NORMAL_READ_TIMEOUT = 15000;
   var LARGE_READ_TIMEOUT = 45000;
+  var LARGE_READ_HEADERS_TIMEOUT = 90000;
+  var LARGE_READ_MAX_DURATION = 120000;
 
   function messageFromPayload(payload, fallback) {
     return String(payload && payload.message || fallback || "요청을 처리하지 못했습니다.");
@@ -37,11 +39,14 @@
 
   // Bound the complete read, including its response body, not just the headers.
   // Mutations deliberately keep their existing reconciliation/retry semantics.
-  function boundedRead(url, options, consume, timeoutMs, key) {
+  function boundedRead(url, options, consume, timeoutMs, key, progressive) {
     if (key && pendingReads[key]) return pendingReads[key].promise;
     var controller = typeof global.AbortController === "function" ? new global.AbortController() : null;
     var externalSignal = options && options.signal;
     var timer = null;
+    var startedAt = Date.now();
+    var lastProgressAt = startedAt;
+    var awaitingHeaders = true;
     var settled = false;
     var rejectRead;
     var entry = { promise: null, cancel: null };
@@ -72,15 +77,29 @@
       if (externalSignal && typeof externalSignal.addEventListener === "function") {
         externalSignal.addEventListener("abort", onExternalAbort, { once: true });
       }
+      function checkDeadline() {
+        var now = Date.now();
+        var remaining = progressive
+          ? Math.min((awaitingHeaders ? LARGE_READ_HEADERS_TIMEOUT : timeoutMs) -
+            (now - (awaitingHeaders ? startedAt : lastProgressAt)), LARGE_READ_MAX_DURATION - (now - startedAt))
+          : timeoutMs - (now - startedAt);
+        if (remaining <= 0) cancel("최신 자료 조회가 지연되고 있습니다. 잠시 후 다시 확인해 주세요.", true);
+        else if (typeof global.setTimeout === "function") timer = global.setTimeout(checkDeadline, remaining);
+      }
       if (typeof global.setTimeout === "function") {
-        timer = global.setTimeout(function() {
-          cancel("최신 자료 조회가 지연되고 있습니다. 잠시 후 다시 확인해 주세요.", true);
-        }, timeoutMs);
+        timer = global.setTimeout(checkDeadline, progressive ? LARGE_READ_HEADERS_TIMEOUT : timeoutMs);
       }
       var init = Object.assign({}, options || {});
       if (controller) init.signal = controller.signal;
       Promise.resolve().then(function() { return request(url, init); }).then(function(response) {
-        return consume(response, init.signal);
+        if (settled) return;
+        awaitingHeaders = false;
+        lastProgressAt = Date.now();
+        if (progressive) {
+          if (timer !== null && typeof global.clearTimeout === "function") global.clearTimeout(timer);
+          checkDeadline();
+        }
+        return consume(response, init.signal, function() { lastProgressAt = Date.now(); });
       }).then(function(value) {
         if (settled) return;
         settled = true;
@@ -96,6 +115,20 @@
     entry.cancel = function() { cancel("더 최신 자료가 도착하여 이전 조회를 취소했습니다.", false); };
     if (key && !settled) pendingReads[key] = entry;
     return entry.promise;
+  }
+
+  function jsonWithProgress(response, progress) {
+    if (!response.body || typeof response.body.getReader !== "function" ||
+        typeof global.TransformStream !== "function" || typeof global.Response !== "function") return response.json();
+    // Let the native JSON consumer retain its own bounded stream buffers;
+    // observing bytes must not create another full text/byte copy of originals.
+    var stream = response.body.pipeThrough(new global.TransformStream({
+      transform: function(chunk, controller) {
+        if (chunk.byteLength) progress();
+        controller.enqueue(chunk);
+      }
+    }));
+    return new global.Response(stream).json();
   }
 
   function readKey(action, params, options) {
@@ -130,12 +163,13 @@
     var timeoutMs = Number(settings.timeoutMs) > 0 ? Math.min(Number(settings.timeoutMs), 120000) :
       (revalidated ? LARGE_READ_TIMEOUT : NORMAL_READ_TIMEOUT);
     var startedAt = Date.now();
+    var progressive = action === "unifiedListings" && !(Number(settings.timeoutMs) > 0);
     return boundedRead(DATA_API + "?" + query.toString(), {
       cache: settings.cache || (revalidated ? "default" : "no-store"),
       headers: settings.headers || undefined,
       signal: settings.signal || undefined
-    }, function(response) {
-      return response.json().catch(function() { return null; }).then(function(payload) {
+    }, function(response, signal, progress) {
+      return (progressive ? jsonWithProgress(response, progress) : response.json()).catch(function() { return null; }).then(function(payload) {
         if (!response.ok) {
           throw httpError(
             messageFromPayload(payload, (settings.errorMessage || "운영자료 조회 실패") + " (HTTP " + response.status + ")"),
@@ -157,7 +191,7 @@
         }
         return payload;
       });
-    }, timeoutMs, readKey(action, params, settings));
+    }, timeoutMs, readKey(action, params, settings), progressive);
   }
 
   function settledWarmup(promise) {
@@ -228,7 +262,7 @@
 
   // Decode bounded chunks while downloading instead of retaining a second
   // full CSV string beside every parsed cell. Quoting/UTF-8 may cross chunks.
-  async function streamedCsvRows(response, signal) {
+  async function streamedCsvRows(response, signal, progress) {
     var reader = response.body.getReader(), decoder = new global.TextDecoder('utf-8', {fatal: true});
     var rows = [], row = [], parts = [], carry = '', quoted = false, first = true;
     var sliceStarted = Date.now();
@@ -264,6 +298,7 @@
         if (signal && signal.aborted) throw Object.assign(new Error('자료 조회가 취소되었습니다.'), {name: 'AbortError'});
         var chunk = await reader.read();
         if (chunk.done) { scan(decoder.decode(), true); return rows; }
+        if (chunk.value.byteLength && progress) progress();
         // A cached response may supply a very large single chunk. Keep both
         // decode and separator scanning bounded even in that case.
         for (var offset = 0; offset < chunk.value.length; offset += 65536) {
@@ -284,10 +319,10 @@
     return boundedRead(LISTINGS_API, {
       cache: forceRefresh ? "reload" : "default",
       headers: headers
-    }, function(response, signal) {
+    }, function(response, signal, progress) {
       if (response.ok && response.body && typeof response.body.getReader === 'function' &&
           typeof global.TextDecoder === 'function' && typeof global.setTimeout === 'function') {
-        return streamedCsvRows(response, signal).then(function(rows) {
+        return streamedCsvRows(response, signal, progress).then(function(rows) {
           return {rows: rows, revision: String(response.headers.get('x-js-listings-revision') || '')};
         });
       }
@@ -299,7 +334,7 @@
         var fallback = "D1 매물 데이터를 불러오지 못했습니다. (HTTP " + response.status + ")";
         throw httpError(messageFromPayload(payload, fallback), response, payload);
       });
-    }, LARGE_READ_TIMEOUT, readKey("listingsCsv", {}, {cache: forceRefresh ? "reload" : "default"}));
+    }, LARGE_READ_TIMEOUT, readKey("listingsCsv", {}, {cache: forceRefresh ? "reload" : "default"}), true);
   }
 
   function listingsSnapshot(forceRefresh) {

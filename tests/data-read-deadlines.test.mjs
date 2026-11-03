@@ -12,16 +12,20 @@ function deferred() {
 async function flush() { for (let index = 0; index < 6; index++) await Promise.resolve(); }
 function harness(fetch) {
   const timers = new Map();
-  let nextTimer = 0;
+  let nextTimer = 0, now = 0;
   const window = {
     fetch, AbortController,
-    setTimeout(callback, ms) { const id = ++nextTimer; timers.set(id, {callback, ms}); return id; },
+    setTimeout(callback, ms) { const id = ++nextTimer; timers.set(id, {callback, ms, at: now + ms}); return id; },
     clearTimeout(id) { timers.delete(id); }
   };
-  vm.runInNewContext(source, {window, URLSearchParams});
+  vm.runInNewContext(source, {window, URLSearchParams, Date: {now: () => now}});
   return {
     client: window.JSDataAccessV6, timers,
-    timeout() { const pending = [...timers.values()]; pending.forEach(timer => timer.callback()); }
+    timeout() {
+      const pending = [...timers.entries()];
+      if (pending.length) now = Math.max(...pending.map(([,timer]) => timer.at));
+      pending.forEach(([id,timer]) => { timers.delete(id); timer.callback(); });
+    }
   };
 }
 
