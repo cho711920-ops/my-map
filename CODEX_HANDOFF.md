@@ -4,6 +4,7 @@
 - 상가임대 표시 순서: 매물찜하기→선택인쇄→선택해제→선택매물병합→계약완료→임장완료. 매매 비교는 기존 위치 유지. 휴대폰의 기존 버튼 노출 규칙 유지.
 - 기존 UI action 검사 및 Edge PC/폰 병합·임장완료 관련16/16 통과. build/Worker dry-run/diff 정상. 운영 자료 변경 없음.
 - 변경 전 소스acffe65 / Worker3f273718-70e5-4523-8ad5-0e56c9f5bcc6. 백업 원래프로젝트 private-audits/backups/js-map-selection-action-order-20261103-v103.
+- 제품5fa4038 origin/codex/selection-action-order-v103 푸시. Worker07f116b4-e486-4010-b109-0cf36212a98f/cache4fdcdfa204261a5c03d2ff1b 배포. 양 도메인10응답200/SHA일치 확인. 새로고침 후 적용.
 
 ## 2026-11-03 선택매물병합 선택창 순서·식별 v102
 
