@@ -36,14 +36,14 @@ async function prepare(page, context) {
   return {button, errors, writes};
 }
 
-test('one tap gets a fresh position and moves to level 1 while preserving filters and checked listings', async ({page, context}, info) => {
+test('one tap accepts a recent browser position and moves to level 1 while preserving filters and checked listings', async ({page, context}, info) => {
   const h = await prepare(page, context);
   const before = await page.evaluate(() => ({source: document.getElementById('sourceFilter').value, market: window.currentListingTradeTypeV8, checked: (window.selectedPrintKeys || []).slice()}));
   expect(await page.evaluate(() => locationTestV96.requests.length)).toBe(0);
   await h.button.click();
   await expect(h.button).toBeDisabled();
   await page.locator('[data-current-location-v96]').evaluateAll(buttons => buttons.forEach(b => b.click()));
-  expect(await page.evaluate(() => locationTestV96.requests)).toEqual([{enableHighAccuracy: true, maximumAge: 0, timeout: 10000}]);
+  expect(await page.evaluate(() => locationTestV96.requests)).toEqual([{enableHighAccuracy: false, maximumAge: 8000, timeout: 4000}]);
   await page.evaluate(() => locationTestV96.calls[0].success({coords: {latitude: 36.3504, longitude: 127.3845, accuracy: 12}}));
   await expect(h.button).toBeEnabled();
   expect(await page.evaluate(() => ({level: locationTestV96.level, center: locationTestV96.center, selected: locationTestV96.selected, overlays: locationTestV96.overlays, refreshes: locationTestV96.refreshes, viewportKey: jsLastIdleViewportKeyV638})))
@@ -75,11 +75,13 @@ test('a missing callback expires and a late old fix cannot override a new reques
   await page.clock.runFor(12001);
   await expect(h.button).toBeEnabled();
   await expect(page.locator('#mapCurrentLocationStatusV96')).toContainText('지연');
+  expect(await page.evaluate(() => locationTestV96.requests.length)).toBe(2);
+  const retryIndex = await page.evaluate(() => locationTestV96.calls.length);
   await h.button.click();
   await page.evaluate(() => locationTestV96.calls[0].success({coords: {latitude: 37, longitude: 128, accuracy: 1}}));
   expect(await page.evaluate(() => locationTestV96.center)).toEqual([36.3, 127.3]);
   await expect(h.button).toBeDisabled();
-  await page.evaluate(() => locationTestV96.calls[1].success({coords: {latitude: 36.35, longitude: 127.38, accuracy: 250}}));
+  await page.evaluate(index => locationTestV96.calls[index].success({coords: {latitude: 36.35, longitude: 127.38, accuracy: 250}}), retryIndex);
   await expect(h.button).toBeEnabled();
   await expect(page.locator('#mapCurrentLocationStatusV96')).toContainText('위치 오차 약 250m');
   expect(await page.evaluate(() => locationTestV96.center)).toEqual([36.35, 127.38]);
@@ -90,9 +92,12 @@ test('unavailable GPS, invalid coordinates and unsupported browsers never move t
   const h = await prepare(page, context);
   await h.button.click();
   await page.evaluate(() => locationTestV96.calls[0].error({code: 2}));
+  await expect(h.button).toBeDisabled();
+  await page.evaluate(() => locationTestV96.calls[1].error({code: 2}));
   await expect(h.button).toBeEnabled();
+  await expect(page.locator('#mapCurrentLocationStatusV96')).toContainText('기기에서 현재 위치를 제공하지 못했습니다');
   await h.button.click();
-  await page.evaluate(() => locationTestV96.calls[1].success({coords: {latitude: 999, longitude: null}}));
+  await page.evaluate(() => locationTestV96.calls[2].success({coords: {latitude: 999, longitude: null}}));
   await expect(h.button).toBeEnabled();
   await page.evaluate(() => Object.defineProperty(navigator, 'geolocation', {configurable: true, value: null}));
   await h.button.click();
@@ -109,9 +114,66 @@ test('portrait and landscape keep exactly one reachable location button', async 
   expect(location.y).toBeGreaterThanOrEqual(parking.y + parking.height);
   await page.setViewportSize({width: 844, height: 390});
   await expect(page.locator('#mapCurrentLocationBtnV96')).toBeVisible();
+  await page.locator('#mapCurrentLocationBtnV96').scrollIntoViewIfNeeded();
   await expect(page.locator('#mapCurrentLocationBtnV96')).toBeInViewport();
   await expect(page.locator('#mapCurrentLocationPhoneBtnV96')).toBeHidden();
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.locator('#mapCurrentLocationPhoneBtnV96')).toBeVisible();
+  expect(h.errors).toEqual([]);
+});
+
+test('a slow or unavailable quick position falls back once and ignores its late callback', async ({page, context}) => {
+  const h = await prepare(page, context);await page.clock.install();
+  await h.button.click();
+  await page.clock.runFor(4001);
+  expect(await page.evaluate(() => locationTestV96.requests)).toEqual([
+    {enableHighAccuracy: false, maximumAge: 8000, timeout: 4000},
+    {enableHighAccuracy: true, maximumAge: 0, timeout: 7000}
+  ]);
+  await expect(page.locator('#mapCurrentLocationStatusV96')).toContainText('다시 확인');
+  await page.evaluate(() => locationTestV96.calls[0].success({coords: {latitude: 37, longitude: 128, accuracy: 2000}}));
+  expect(await page.evaluate(() => locationTestV96.center)).toEqual([36.3, 127.3]);
+  await page.evaluate(() => locationTestV96.calls[1].success({coords: {latitude: 36.35, longitude: 127.38, accuracy: 15}}));
+  await expect(h.button).toBeEnabled();
+  expect(await page.evaluate(() => ({center:locationTestV96.center,level:locationTestV96.level})))
+    .toEqual({center:[36.35,127.38],level:1});
+  await page.clock.runFor(60000);
+  expect(await page.evaluate(() => locationTestV96.requests.length)).toBe(2);
+  expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);
+});
+
+test('permission denial never falls back or moves the map and the button recovers its label', async ({page, context}) => {
+  const h = await prepare(page, context);await page.clock.install();
+  await h.button.click();await expect(h.button.locator('span')).toHaveText('확인 중');
+  await page.evaluate(() => locationTestV96.calls[0].error({code:1}));
+  await expect(h.button).toBeEnabled();await expect(h.button.locator('span')).toHaveText('현위치');
+  await expect(page.locator('#mapCurrentLocationStatusV96')).toContainText('위치 권한');
+  await page.clock.runFor(13000);
+  expect(await page.evaluate(() => locationTestV96.requests.length)).toBe(1);
+  expect(await page.evaluate(() => locationTestV96.center)).toEqual([36.3,127.3]);
+  expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);
+});
+
+test('leaving the page cancels the pending fallback and ignores late coordinates', async ({page, context}) => {
+  const h = await prepare(page, context);await page.clock.install();
+  await h.button.click();await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await page.clock.runFor(13000);
+  await page.evaluate(() => locationTestV96.calls[0].success({coords:{latitude:37,longitude:128,accuracy:10}}));
+  await expect(h.button).toBeEnabled();await expect(h.button.locator('span')).toHaveText('현위치');
+  expect(await page.evaluate(() => locationTestV96.requests.length)).toBe(1);
+  expect(await page.evaluate(() => locationTestV96.center)).toEqual([36.3,127.3]);
+  await h.button.click();expect(await page.evaluate(() => locationTestV96.requests.length)).toBe(2);
+  expect(h.errors).toEqual([]);expect(h.writes).toEqual([]);
+});
+
+test('location is the last vertical tool after polygon drawing', async ({page, context, isMobile}, info) => {
+  const h = await prepare(page, context);
+  if(isMobile)await page.setViewportSize({width:844,height:390});
+  const location = page.locator('#mapCurrentLocationBtnV96');
+  await expect(page.locator('.map-quick-tools-inner > :last-child')).toHaveAttribute('id','mapCurrentLocationBtnV96');
+  await expect(location).toBeVisible();await location.scrollIntoViewIfNeeded();await expect(location).toBeInViewport();
+  const [last,draw] = await Promise.all([location.boundingBox(),page.locator('#mapPolygonBtn').boundingBox()]);
+  expect(last.y).toBeGreaterThanOrEqual(draw.y+draw.height);
+  await page.screenshot({path:info.outputPath('current-location-last.png')});
   expect(h.errors).toEqual([]);
 });

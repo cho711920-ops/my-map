@@ -64,13 +64,16 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   return {errors,forbidden};
 }
 
-test('a simulated location fix uses the real Kakao map at 20m without following later GPS updates',async({page},testInfo)=>{
+for (const preciseFallback of [false,true]) test('a simulated location fix '+(preciseFallback?'after quick failure ':'')+'uses the real Kakao map at 20m without following later GPS updates',async({page},testInfo)=>{
   // The location boundary is synthetic; SDK, application and scale are real.
   // Host Windows GPS availability is not a prerequisite for this contract.
-  await page.addInitScript(()=>Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
-    getCurrentPosition(success){success({coords:{latitude:36.3504,longitude:127.3845,accuracy:12},timestamp:Date.now()});},
+  await page.addInitScript(preciseFallback=>Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+    getCurrentPosition(success,failure,options){
+      if(preciseFallback&&!options.enableHighAccuracy){failure({code:2});return;}
+      success({coords:{latitude:36.3504,longitude:127.3845,accuracy:12},timestamp:Date.now()});
+    },
     watchPosition(success){window.__locationWatchV96=success;return 96;},clearWatch(){}
-  }}));
+  }}),preciseFallback);
   const boundary=await startFullApplication(page);
   await expect(page.locator('#map .circle-marker')).toHaveCount(1);
   await expect.poll(()=>page.evaluate(()=>!isRendering&&!isLoadingSheet&&jsListingsLoadStateV65.phase==='ready')).toBe(true);
