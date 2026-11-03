@@ -5,6 +5,7 @@
 - 확정메모/확인여부 영수증·이력포함, 성공 후 정확한 대표ID 즉시표시 및 scoped재조회 유지. 원본금액/자료/찜/사진/연락처/원자batch/CAS/replay보호 유지. 과거운영메모 일괄변경 없음.
 - Node2020/2020, PC/폰선택병합10/10, lint/type/globals/diff/build/dry-run 검증. 확인A/B×대표A/B4조합/미확인끼리/공실박스근거/문단보존/새API재조회 검사. docs/merge-confirmation-v109-20261103.txt 참조.
 - 백업 원래프로젝트 private-audits/backups/js-map-merge-confirmation-20261103-v109 (소스edf5195/이전Workerff0c6c71).
+- 제품a9a0cb5 origin/codex/merge-confirmation-v109 푸시. Worker7273eef6-3b17-4692-8e43-252bc7967bc8/cache6450f0ab1680b2e2d09c8702 배포. 양도메인10응답200/SHA/CSP일치. 새로고침 후 적용.
 
 ## 2026-11-03 목록503/생성CPU 중단 v108
 

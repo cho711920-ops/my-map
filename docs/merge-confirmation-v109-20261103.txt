@@ -32,4 +32,7 @@
 - 원래 프로젝트 private-audits/backups/js-map-merge-confirmation-20261103-v109/source.zip + RESTORE.txt.
 
 배포
-- 제품 commit/Worker/공개 검증 결과 추가 예정.
+- 제품a9a0cb5 / origin/codex/merge-confirmation-v109 커밋·푸시.
+- Worker7273eef6-3b17-4692-8e43-252bc7967bc8 / public cache6450f0ab1680b2e2d09c8702 배포.
+- 양 도메인 HTML/CSP/통합목록·편집·타일JS/SW10응답200/빌드SHA256 일치 확인.
+- 새로고침 후 새 클라이언트 적용. 기존에 열린 클라이언트도 서버의 새 확인 메모가 scoped조회 때 반영됨.
