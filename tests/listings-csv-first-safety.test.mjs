@@ -144,6 +144,22 @@ test('post-mutation full refresh replaces the invalidated browser snapshot witho
   assert.equal(h.writes.length,1,'ordinary polling keeps its prior no-extra-IDB-write behavior');
 });
 
+test('a newer financial display projection replaces stale compatible cache even when source proof is unchanged',()=>{
+  const h=harness({complete:true}),item=h.context.listingChangeRowToItemV683(row('A',{source_snapshot_key:proof(1)}));
+  h.context.allItems=[item];
+  const old=provenOriginals([['A',proof(1),'same-photo']]);
+  old.groups['internal-A'][0].saleSummary={scope:'whole_building',monthlyIncome:2200};
+  h.context.JSUnifiedListingsV8.attachCompatible([item],old);
+  const fresh=provenOriginals([['A',proof(1),'same-photo']]);
+  fresh.groups['internal-A'][0].saleSummary={scope:'whole_building',monthlyIncome:220,financialDisplayVersion:113,
+    monthlyIncomeConflict:{structured:2200,description:220,basis:'description'}};
+  const result=h.context.JSUnifiedListingsV8.attachCompatible([item],fresh);
+  assert.equal(result.complete,true);
+  assert.equal(h.context.JSUnifiedListingsV8.allOriginals('A')[0].saleSummary.monthlyIncome,220);
+  assert.equal(item.unifiedAllOriginalsV1[0].saleSummary.monthlyIncomeConflict.structured,2200);
+  assert.equal(h.context.allItems[0],item);assert.equal(h.originalReads.length,0);
+});
+
 test('a full read begun before a split cannot write a snapshot after the split', async () => {
   const h = harness();
   let epoch = 'before';

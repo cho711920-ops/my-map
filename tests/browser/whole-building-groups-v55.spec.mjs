@@ -69,3 +69,20 @@ test('price filter keeps only the matching ad and unknown scope never collapses'
   });
   expect(result).toEqual({price:[{id:'B',count:1,income:410}],count:2});
 });
+
+test('search, yield sort and latest sort cannot silently swap the representative ad',async({page,isMobile})=>{
+  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+  for(const sort of ['saleYieldHigh','latest','saleIncomeHigh','address','salePriceHigh']){
+    await page.evaluate(sort=>{document.getElementById('sortFilter').value=sort;applyFilter();},sort);
+    await expect(page.locator('#list .item')).toHaveAttribute('data-property-id','A');
+    await expect(page.locator('#list .item')).toContainText('394만원');
+    await page.evaluate(()=>{document.getElementById('keyword').value='1197';applyFilter();});
+    await expect(page.locator('#list .item')).toHaveAttribute('data-property-id','A');
+    await expect(page.locator('#list .item')).toContainText('394만원');
+    await page.evaluate(()=>{allItems=allItems.slice().reverse();document.getElementById('keyword').value='';applyFilter();});
+    await expect(page.locator('#list .item')).toHaveAttribute('data-property-id','A');
+  }
+  await page.locator('#list .item-building-name').click();
+  await expect(page.locator('#unifiedDetailTitleV8')).toHaveText('다가구 광고 A');
+  await expect(page.locator('.wide-detail-primary-v26')).toContainText('394만원');
+});

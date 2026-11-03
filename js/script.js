@@ -1336,6 +1336,11 @@ function getFilteredItems(options) {
     if (projected) filtered.push(projected);
   });
 
+  // Sorting places complete building cards; it must not pick a different ad
+  // as the representative merely because a yield/price order was selected.
+  if (window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.collapseWholeBuildingSalesV55 === "function") {
+    filtered = window.JSUnifiedListingsV8.collapseWholeBuildingSalesV55(filtered);
+  }
   var saleSortValuesV5 = saleMode && window.JSSaleWorkbenchV1 && window.JSSaleWorkbenchV1.sortLabel(sortType)
     ? new Map(filtered.map(function(item) { return [item, window.JSSaleWorkbenchV1.sortValue(item, sortType)]; })) : null;
   var registrationTimesV68 = sortType === "latest"
@@ -1364,8 +1369,7 @@ function getFilteredItems(options) {
     return 0;
   });
 
-  return window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.collapseWholeBuildingSalesV55 === "function"
-    ? window.JSUnifiedListingsV8.collapseWholeBuildingSalesV55(filtered) : filtered;
+  return filtered;
 }
 
 function listingRegistrationTime(item) {

@@ -30,7 +30,31 @@ export function withSaleFinancialDisplay(original, provider = {}) {
   if (source === "네이버") for (const [field,value] of Object.entries(naverSaleFinancialFields(provider.naverPriceInfo))) {
     if (value != null && base[field] == null && !manualFields.includes(field)) base[field] = value;
   }
-  const projected = hasDescription ? supplementSaleDescription(base, saleDescriptionFields(description), numeric(original.salePrice), detail.descriptionText || "") : base;
+  const described = hasDescription ? saleDescriptionFields(description) : null;
+  const projected = hasDescription ? supplementSaleDescription(base, described, numeric(original.salePrice), detail.descriptionText || "") : base;
+  // The advertiser's explicit current rent may disagree with the numeric
+  // provider field. Show that same ad's unambiguous description amount, with
+  // both values retained for review. Never infer gross rent from net profit,
+  // another floor/ad, a future scenario or a mismatched asking price.
+  delete projected.monthlyIncomeConflict;
+  const priorConflict = detail.monthlyIncomeConflict;
+  const providerIncome = source === "네이버" ? numeric(naverSaleFinancialFields(provider.naverPriceInfo).monthlyIncome) : null;
+  const structuredIncome = priorConflict?.basis === "description" && numeric(base.monthlyIncome) === numeric(priorConflict.description)
+    ? providerIncome ?? numeric(priorConflict.structured)
+    : numeric(base.monthlyIncome);
+  const descriptionIncome = numeric(described?.monthlyIncome);
+  const priceMatches = described?.salePrice == null || numeric(original.salePrice) === described.salePrice;
+  const depositMatches = described?.totalDeposit == null || numeric(base.totalDeposit) == null ||
+    Math.abs(numeric(base.totalDeposit) - described.totalDeposit) <= 0.1;
+  if (!manualFields.includes("monthlyIncome") && structuredIncome != null && descriptionIncome != null &&
+      providerIncome != null && structuredIncome === providerIncome &&
+      Math.abs(structuredIncome - descriptionIncome) > 0.1 && priceMatches && depositMatches &&
+      !described.descriptionPartialFields?.includes("monthlyIncome") &&
+      !described.descriptionUnitAssumptions?.includes("monthlyIncome")) {
+    projected.monthlyIncome = descriptionIncome;
+    projected.monthlyIncomeConflict = {structured: structuredIncome, description: descriptionIncome, basis: "description"};
+    projected.financialDisplayVersion = 113;
+  }
   for (const field of manualFields) if (field !== "salePrice" && Object.hasOwn(evidenceLabels,field) && Object.hasOwn(detail,field)) projected[field] = detail[field];
   return { ...original, saleDetails: projected };
 }

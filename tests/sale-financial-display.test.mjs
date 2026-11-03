@@ -38,7 +38,9 @@ test('future rent and increases do not become current rent; known rent stays sep
 test('read-only correction of marked v1 values keeps provider values, overrides, leases, land and other sources separate',()=>{
   const old={...original,source:'네이버',saleDetails:{descriptionVersion:1,descriptionText:'기보증금 / 월세 : 4000만원 / 290만원',monthlyIncome:4000,descriptionFinancials:{monthlyIncome:4000},descriptionEvidence:{'월 임대수입':'월세 : 4000만원'}}};
   const corrected=withSaleFinancialDisplay(old,{naverPriceInfo:{dealPrice:670000000,warrantyPrice:null,rentPrice:null}});assert.equal(corrected.saleDetails.monthlyIncome,290);assert.equal(corrected.saleDetails.totalDeposit,4000);
-  assert.equal(withSaleFinancialDisplay(old,{naverPriceInfo:{rentPrice:3500000}}).saleDetails.monthlyIncome,350);
+  const conflicting=withSaleFinancialDisplay(old,{naverPriceInfo:{rentPrice:3500000}});
+  assert.equal(conflicting.saleDetails.monthlyIncome,290);
+  assert.equal(conflicting.saleDetails.monthlyIncomeConflict.structured,350);
   assert.equal(withSaleFinancialDisplay({...old,saleDetails:{...old.saleDetails,monthlyIncome:500}},{naverPriceInfo:{}}).saleDetails.monthlyIncome,500);
   for(const patch of [{tradeType:'lease'},{saleCategory:'land'},{source:'공실박스'},{masterFallback:true}]){const item={...original,...patch};assert.equal(withSaleFinancialDisplay(item),item);}
   const fallback=withSaleFinancialDisplay({...original,saleDetails:{}},{daangn:{description:description+'\n문의 010-1234-5678'}});assert.equal(fallback.saleDetails.statedMonthlyIncome,211);assert.doesNotMatch(JSON.stringify(fallback),/010-1234-5678/);
@@ -63,7 +65,7 @@ test('numbered items, newlines and building composition do not suppress valid cu
   }
 });
 
-test('SQLite list/detail financial parity is source-local and read-only with structured provider precedence',async t=>{
+test('SQLite list/detail financial parity is source-local and read-only with explicit rent conflicts retained',async t=>{
   const db=new DatabaseSync(':memory:');t.after(()=>db.close());const migrations=new URL('../cloudflare/migrations/',import.meta.url);
   for(const f of fs.readdirSync(migrations).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(new URL(f,migrations),'utf8'));
   const cases=[
@@ -76,7 +78,7 @@ test('SQLite list/detail financial parity is source-local and read-only with str
     {item:{...original,source:'네이버',salePrice:69000,saleDetails:{scope:'whole_building',descriptionVersion:3,descriptionText:'현재보증금총액:2억6500만원(조정가능) 월임대료:313만원'}},raw:{},expected:{totalDeposit:26500,monthlyIncome:313}},
     {item:original,raw:{},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},
     {item:{...original,saleDetails:{scope:'whole_building'}},raw:{content:description+'\n문의 010-1234-5678'},expected:{totalDeposit:8550,loanAmount:20000,statedMonthlyIncome:211,investmentAmount:38450}},
-    {item:{...original,source:'네이버',saleDetails:{scope:'whole_building',descriptionVersion:1,descriptionText:'보증금/월세:4000만원/290만원',monthlyIncome:4000,descriptionFinancials:{monthlyIncome:4000},descriptionEvidence:{'월 임대수입':'월세:4000만원'}}},raw:{saleRaw:{detailInfo:{priceInfo:{rentPrice:3500000}}}},expected:{totalDeposit:4000,monthlyIncome:350}},
+    {item:{...original,source:'네이버',saleDetails:{scope:'whole_building',descriptionVersion:1,descriptionText:'보증금/월세:4000만원/290만원',monthlyIncome:4000,descriptionFinancials:{monthlyIncome:4000},descriptionEvidence:{'월 임대수입':'월세:4000만원'}}},raw:{saleRaw:{detailInfo:{priceInfo:{rentPrice:3500000}}}},expected:{totalDeposit:4000,monthlyIncome:290}},
     {item:{...original,source:'네이버',saleDetails:{scope:'whole_building',descriptionVersion:2,descriptionText:'매매가 6억7천만원 / 보증금 8억8천',totalDeposit:null}},raw:{saleRaw:{priceInfo:{previousDeposit:85000000,previousMonthlyRent:2280000}}},expected:{totalDeposit:8500,monthlyIncome:228}},
     {item:{...original,tradeType:'lease',saleDetails:{}},raw:{content:description},expected:{}},
     {item:{...original,saleCategory:'land',saleDetails:{scope:'land'}},raw:{content:description},expected:{}}

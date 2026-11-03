@@ -194,6 +194,8 @@
   function collapseWholeBuildingSalesV55(items) {
     invalidatePersonalCoverGroupsV86();
     var buckets = Object.create(null), result = [];
+    // Choose the same saved master before applying a view's price/yield sort.
+    // Filtering may legitimately remove it; never borrow a filtered-out ad.
     (items || []).forEach(function(item) {
       var master = resolveMasterItem(item.propertyId) || item;
       var key = wholeBuildingKeyV55(master);
@@ -205,18 +207,29 @@
         buckets[key] = grouped;
         result.push(grouped);
       } else {
+        if (text(item.propertyId) < text(grouped.propertyId)) {
+          var members = grouped.wholeBuildingMembersV55, originals = grouped.unifiedDisplayOriginalsV2;
+          Object.assign(grouped, item);
+          grouped.wholeBuildingMembersV55 = members;
+          grouped.unifiedDisplayOriginalsV2 = originals;
+        }
         grouped.wholeBuildingMembersV55.push(text(item.propertyId));
         grouped.unifiedDisplayOriginalsV2 = grouped.unifiedDisplayOriginalsV2.concat(item.unifiedDisplayOriginalsV2 || item.unifiedOriginalsV8 || []);
       }
     });
     result.forEach(function(item) {
       if (!item.wholeBuildingMembersV55 || item.wholeBuildingMembersV55.length < 2) return;
+      item.wholeBuildingMembersV55.sort();
       var seen = new Set();
       item.unifiedDisplayOriginalsV2 = item.unifiedDisplayOriginalsV2.filter(function(original) {
         var id = text(original.originalId);
         if (seen.has(id)) return false;
         seen.add(id); return true;
       }).map(function(original) { return Object.assign({}, original, {displayGroupPropertyIdV55: text(item.propertyId)}); });
+      // Photo, condition, memo and default detail all start from the same ad.
+      item.unifiedDisplayOriginalsV2.sort(function(a, b) {
+        return Number(text(b.propertyId) === text(item.propertyId)) - Number(text(a.propertyId) === text(item.propertyId));
+      });
       item.unifiedOriginalsV8 = item.unifiedDisplayOriginalsV2;
       item.unifiedOriginalCountV8 = item.unifiedDisplayOriginalsV2.length;
       item.sourceTypesV8 = item.unifiedDisplayOriginalsV2.map(function(original) { return sourceKey(original.source); });
@@ -983,7 +996,13 @@
     if (options && options.supersedePending && matchedIds.length) invalidatePendingLoad();
     accepted.forEach(function(entry) {
       var publicId = entry.publicId, proof = entry.proof, rows = entry.rows, search = entry.search;
-      if (state.sourceSnapshotProofKeys[publicId] !== proof || !originalMetadataReady(publicId)) {
+      var financialProjectionChanged = rows.some(function(original) {
+        var previous = (state.groups[publicId] || []).filter(function(row) { return text(row.originalId) === text(original.originalId); })[0];
+        var currentDetail = original.saleSummary || original.saleDetails || {};
+        var previousDetail = previous && (previous.saleSummary || previous.saleDetails) || {};
+        return Number(currentDetail.financialDisplayVersion || 0) > Number(previousDetail.financialDisplayVersion || 0);
+      });
+      if (state.sourceSnapshotProofKeys[publicId] !== proof || !originalMetadataReady(publicId) || financialProjectionChanged) {
         // Most rows already use the public ID. Keep the validated objects in
         // that case instead of copying every field of the entire inventory.
         // A genuine internal/public ID remap still receives an isolated copy.
@@ -1246,6 +1265,7 @@
         item.saleDetails = Object.assign({}, original.saleSummary);
         manualSale.forEach(function(key) { if (Object.prototype.hasOwnProperty.call(master.saleDetails,key)) item.saleDetails[key]=master.saleDetails[key]; });
         item.saleDetails.manualSaleFieldsV1 = manualSale.slice();
+        if (manualSale.indexOf("monthlyIncome") >= 0) delete item.saleDetails.monthlyIncomeConflict;
       }
     }
     item.name = manual.indexOf("title") >= 0 || manual.indexOf("building_name") >= 0

@@ -381,6 +381,13 @@ export function compactSaleSummary(original) {
   if (original?.tradeType !== "sale" || !original.saleDetails) return "";
   const detail = original.saleDetails;
   const summary = {};
+  if (detail.financialDisplayVersion === 113) summary.financialDisplayVersion = 113;
+  const incomeConflict = detail.monthlyIncomeConflict;
+  if (incomeConflict?.basis === "description" && typeof incomeConflict.structured === "number" &&
+      typeof incomeConflict.description === "number" && Number.isFinite(incomeConflict.structured) &&
+      Number.isFinite(incomeConflict.description) && incomeConflict.structured >= 0 && incomeConflict.description >= 0) {
+    summary.monthlyIncomeConflict = {structured: incomeConflict.structured, description: incomeConflict.description, basis: "description"};
+  }
   for (const [key,label] of [["rentalScenarios","kind"],["rentalBreakdown","floor"]]) {
     const values = (Array.isArray(detail[key]) ? detail[key] : []).slice(0,key === "rentalScenarios" ? 2 : 8).map(row => {
       if (!row || (label === "kind" ? !["full_occupancy","expected"].includes(row.kind)

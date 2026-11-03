@@ -47,6 +47,19 @@ test('a filtered favorite keeps its exact saved ID, and filtered-out ads are not
   assert.equal(h.api.collapseWholeBuildingSalesV55(filtered)[0].unifiedOriginalCountV8,1);
 });
 
+test('whole-building representative and its first photo stay the same after input order or financial sorting changes',()=>{
+  const a=master('A'),b=master('B'),h=harness([a,b],{A:[original('A',{thumbnail:'photo-A'})],
+    B:[original('B',{thumbnail:'photo-B',salePrice:82000,saleSummary:{saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true,totalDeposit:24000,monthlyIncome:2200}})]});
+  const first=h.collapse([a,b])[0],reversed=h.collapse([b,a])[0];
+  for(const value of [first,reversed]){
+    assert.equal(value.propertyId,'A');assert.equal(value.saleDetails.monthlyIncome,394);
+    assert.equal(value.unifiedDisplayOriginalsV2[0].originalId,'source-A');
+    assert.deepEqual(plain(value.wholeBuildingMembersV55),['A','B']);
+  }
+  assert.equal(h.collapse([b])[0].propertyId,'B','a real filter may exclude A; never borrow its conditions');
+  assert.equal(h.collapse([a,b])[0].propertyId,'A');assert.equal(h.reads.length,0);
+});
+
 test('personal photo identity uses proven whole-building sale membership and invalidates corrected scope',()=>{
   const items=[master('A'),master('B'),master('LEASE',{tradeType:'lease'})],groups={A:[original('A')],B:[original('B')],LEASE:[original('LEASE',{tradeType:'lease'})]};
   const h=harness(items,groups),key=h.api.personalCoverGroupKeyV86('A');

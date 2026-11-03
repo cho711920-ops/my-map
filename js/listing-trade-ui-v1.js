@@ -457,6 +457,7 @@
     group("광고 면적");
     add("기존 보증금 합계", detail.totalDeposit, "만원");
     add("기존 월 임대수입", detail.monthlyIncome, "만원");
+    if (detail.monthlyIncomeConflict) add("월 임대수입 숫자·설명 불일치", "설명 " + detail.monthlyIncomeConflict.description + "만원 표시 · 숫자 항목 " + detail.monthlyIncomeConflict.structured + "만원");
     add("광고 융자금", detail.loanAmount, "만원");
     add("광고 월수익 (이자 차감 표기)", detail.monthlyNetIncome, "만원");
     add("광고 월수익 (계산 기준 미확인)", detail.statedMonthlyIncome, "만원");
@@ -511,7 +512,8 @@
       if (landText(d.roadAccess)) fields.push(['도로', landText(d.roadAccess)]);
       if (landText(d.parcelShape)) fields.push(['형상', landText(d.parcelShape)]);
     } else {
-      money('보증금 합계', d.totalDeposit); money('월 임대수입', d.monthlyIncome);
+      money('보증금 합계', d.totalDeposit); money(d.monthlyIncomeConflict ? '월 임대수입 · 설명 기준' : '월 임대수입', d.monthlyIncome);
+      if (d.monthlyIncomeConflict) fields.push(['숫자·설명 불일치', '숫자 항목 ' + Number(d.monthlyIncomeConflict.structured).toLocaleString('ko-KR') + '만원', '같은 원본 광고의 명시된 월 임대수입을 표시합니다. 숫자 항목과 설명이 달라 확인이 필요합니다.']);
       (d.rentalScenarios || []).slice(0,2).forEach(function(scenario) {
         var basis = scenario.kind === 'full_occupancy' ? '만실 기준' : scenario.kind === 'expected' ? '예상' : '';
         if (!basis) return;
