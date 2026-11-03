@@ -5,6 +5,7 @@
 - 실제 SDK PC/폰 첫열기·재열기·다른 위치 사진 확인 및 CSP차단0/런타임오류0. CSP회귀+실SDK6/6,기존SDK재시도6/6·좌표8/8. 촬영18pass/기기제외4skip. Node2010/2010, lint/type/globals/diff/build/dry-run 정상.
 - 실제SDK/운영CSP/HTML/CSS 격리검사. 공개 SDK/사진/JS키 GET 외 운영자료 접근·쓰기·수집기조작 없음. 기존 특정 PC의 모든 지연 원인 단정 불가.
 - 백업 원래프로젝트 private-audits/backups/js-map-naver-roadview-20261103-v107 (소스6d7b507/이전Worker4044bcfb). docs/naver-roadview-csp-v107-20261103.txt 참조.
+- 제품6fcf114 origin/codex/naver-roadview-v107 푸시. Worker7a6b69ed-05ee-4217-8b24-bce2c3a7ba3f/cache2f27c81acda4a59102568e98 배포. 양도메인CSP일치·관련10응답200/SHA일치 확인. 새로고침 필요.
 
 ## 2026-11-03 권리금 수정 표시/재조회 v106
 
