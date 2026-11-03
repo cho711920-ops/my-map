@@ -64,6 +64,37 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   return {errors,forbidden};
 }
 
+test('a simulated location fix uses the real Kakao map at 20m without following later GPS updates',async({page},testInfo)=>{
+  // The location boundary is synthetic; SDK, application and scale are real.
+  // Host Windows GPS availability is not a prerequisite for this contract.
+  await page.addInitScript(()=>Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+    getCurrentPosition(success){success({coords:{latitude:36.3504,longitude:127.3845,accuracy:12},timestamp:Date.now()});},
+    watchPosition(success){window.__locationWatchV96=success;return 96;},clearWatch(){}
+  }}));
+  const boundary=await startFullApplication(page);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await expect.poll(()=>page.evaluate(()=>!isRendering&&!isLoadingSheet&&jsListingsLoadStateV65.phase==='ready')).toBe(true);
+  await page.evaluate(()=>{
+    window.__locationTilesReadyV96=false;
+    function ready(){if(map.getLevel()===1){window.__locationTilesReadyV96=true;kakao.maps.event.removeListener(map,'tilesloaded',ready);}}
+    kakao.maps.event.addListener(map,'tilesloaded',ready);
+  });
+  await page.locator('#mapCurrentLocationBtnV96').click();
+  await expect(page.locator('#mapCurrentLocationStatusV96')).toHaveText('현위치로 이동했습니다.');
+  await expect.poll(()=>page.evaluate(()=>map.getLevel())).toBe(1);
+  const center=await page.evaluate(()=>({lat:map.getCenter().getLat(),lng:map.getCenter().getLng()}));
+  expect(center.lat).toBeCloseTo(36.3504,5);expect(center.lng).toBeCloseTo(127.3845,5);
+  await expect(page.locator('#map')).toContainText('20m');
+  await expect.poll(()=>page.evaluate(()=>window.__locationTilesReadyV96),{timeout:15000}).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>jsLastIdleViewportKeyV638===getMapViewportKeyV638())).toBe(true);
+  await expect(page.locator('#map .circle-marker')).toHaveCount(1);
+  await page.screenshot({path:testInfo.outputPath('real-sdk-current-location-20m.png')});
+  await page.evaluate(()=>window.__locationWatchV96({coords:{latitude:36.36,longitude:127.39,accuracy:12},timestamp:Date.now()}));
+  await expect.poll(()=>page.evaluate(()=>jsLastCurrentLocationPositionV1?.coords?.latitude)).toBeCloseTo(36.36,5);
+  expect(await page.evaluate(()=>map.getCenter().getLat())).toBeCloseTo(center.lat,5);
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+});
+
 test('flat pastel circles select with a thin outline on the real map without changing their count or size',async({page},testInfo)=>{
   const boundary=await startFullApplication(page);
   await expect(page.locator('#map .circle-marker')).toHaveCount(1);

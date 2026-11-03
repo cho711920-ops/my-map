@@ -58,6 +58,7 @@
 <link rel="stylesheet" href="css/handheld-detail-landscape-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/landscape-desktop-fit-v1.css?v=1.0.0">
 <link rel="stylesheet" href="css/map-professional-v1.css?v=1.0.0">
+<link rel="stylesheet" href="css/current-location-v96.css?v=1.0.0">
 <link rel="stylesheet" href="css/sale-professional-v2.css?v=2.0.0">
 <link rel="stylesheet" href="css/sale-review-enhancements-v8.css?v=8.0.0">
 <link rel="stylesheet" href="css/sale-dossier-v9.css?v=9.0.0">
@@ -282,6 +283,11 @@
 
   <aside id="mapQuickTools" class="map-quick-tools" aria-label="지도 빠른 도구">
     <div class="map-quick-tools-inner">
+      <button id="mapCurrentLocationBtnV96" class="map-quick-tool-btn" type="button" data-current-location-v96
+        aria-label="현위치로 이동, 20m 축척" title="현위치로 이동 · 20m">
+        <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>
+        <span>현위치</span>
+      </button>
       <div class="map-quick-tool-wrap">
         <button id="mapQuickViewBtn" class="map-quick-tool-btn" type="button"
           onclick="toggleMapQuickPopoverV657('view', event)" aria-expanded="false">
@@ -385,6 +391,10 @@
   </aside>
 
   <div id="map"></div>
+  <button id="mapCurrentLocationPhoneBtnV96" type="button" data-current-location-v96 aria-label="현위치로 이동, 20m 축척" title="현위치로 이동 · 20m">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg><span>현위치</span>
+  </button>
+  <div id="mapCurrentLocationStatusV96" role="status" aria-live="polite" aria-atomic="true" hidden></div>
   <button id="mapParkingPhoneBtnV1" type="button" aria-label="주차장 표시" aria-pressed="false">Ⓟ 주차장</button>
   <button id="saleMapViewsPhoneBtnV45" type="button" aria-controls="saleMapViewsV3" aria-expanded="false" hidden>지도 종류</button>
 
@@ -721,6 +731,7 @@
 <script src="js/unified-favorites-v7.js?v=7.0.15-ai-visit-entry&amp;favorite-folder-filter-v1=1&amp;dialog-focus-v1=1&amp;handheld-layout-v1=1"></script>
 <script data-auth-critical src="js/map.js?v=8.2.22-full-initial-render&amp;admin-selection-v1=2&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;map-listing-count-v825=1&amp;snapshot-revision-v1=1"></script>
 <script src="js/map-quick-tools-v657.js?v=6.5.10-done-only-filter&amp;polygon-filter-v661=1&amp;new-listing-periods-v1=1"></script>
+<script src="js/current-location-v96.js?v=1.0.0"></script>
   <script src="js/operations-center-v7.js?v=7.22.7-list-transaction-link"></script>
   <script src="js/operations-collection-v8.js?v=7.26.1-review-audit"></script>
   <script src="js/operations-admin-v1.js?v=1.2.0-linked-identity&amp;live-role-v1=1&amp;owner-local-v51=1&amp;issue-progress-v53=1"></script>
