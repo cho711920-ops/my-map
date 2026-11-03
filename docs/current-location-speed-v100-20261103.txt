@@ -1,0 +1,27 @@
+2026-11-03 현위치 이동 대기 단축 v100
+
+원인과 적용
+- 기존 위치점은 watchPosition 좌표를 jsLastCurrentLocationPositionV1에 보관하고 있었으나,
+  현위치 버튼은 항상 getCurrentPosition 응답을 새로 기다렸다.
+- 최근8초/오차50m이하/유효좌표/미래시각 아님 조건의 기존 메모리 위치는 추가 요청 없이
+  같은 클릭에서 즉시 기존 jump(level1,animate:false) 경로로 이동한다.
+- 새 위치를 기다리는 중 기존 watcher가 신선하고 정확한 좌표를 받으면 그 이벤트로 즉시 이동.
+  dot 갱신 전 listener를 해제해 재귀/중복 이동을 막는다. 완료 후 늦은 응답이나 이후 watcher는
+  지도 이동을 유발하지 않는다. 위치점만 계속 갱신하는 기존 동작 유지.
+- 오래된/거친/미래시각 좌표는 바로 사용하지 않고 기존 브라우저 위치 확인 경로 유지.
+  빠른 조회 대기4초→1.5초, 이후 고정밀 조회7초1회 유지, 전체 무응답 상한12초→9초.
+  위치 미확보/권한 거부 상태까지 즉시 이동한다고 보장하지 않는다.
+- pagehide listener/타이머 정리 및 이전 좌표 재사용 차단, watcher 권한 거부 시 메모리 위치 제거.
+  새 watcher·영구 GPS 저장·외부 위치 API·서버쓰기 없음. 20m축척/도구맨아래/필터·선택 유지.
+
+검증과 배포
+- 전체 Node2004/2004, Edge PC/폰23pass1기기제외, lint/type/globals/diff/build/dry-run 정상.
+  신선한 좌표는 클릭 함수가 끝나기 전 이동되고 getCurrentPosition0회인 것을 확인.
+  기존 watcher 200ms 후 좌표로 조기 완료/재귀 차단/이후 추적 이동 없음/지연·권한·재시도 회귀.
+  합성 GPS 입력 검사이며 사용자의 실제 GPS 확보 시간을 실측한 것은 아님.
+- 사전25e8dc5/Workera349587b 백업: 원래프로젝트 private-audits/backups/js-map-current-location-speed-20261103-v100.
+- 제품c8849cf / origin/codex/current-location-speed-v100 커밋·푸시.
+- Worker7ce85c98-268d-4988-80ed-dad5609989b5 / public cachea6fcbb3c7fa2b0ab7960a5a2 배포.
+  양도메인HTML/현위치JS/map/SW 8응답200 및 빌드SHA일치. 페이지 새로고침 필요.
+- 카톡 임장메모의 주소는 선택 매물 지번을 사용하며 GPS와 무관하다.
+  사용자 선택: 다른 채팅방을 직접 선택, 마지막 '출입기준' 고정. 카톡 연동은 후속 작업.

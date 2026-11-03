@@ -1,3 +1,10 @@
+## 2026-11-03 현위치 이동 대기 단축 v100
+
+- 기존 위치점의 메모리 좌표를 버튼에서 사용하지 않고 재요청하던 대기 확인. 최근8초/오차50m이하 좌표는 같은 클릭에 즉시20m 이동, 대기 중 기존 watcher 신선 좌표도 조기 수용. 완료 전 listener해제해 재귀/중복/이후자동추적 차단, stale/coarse/future좌표 즉시재사용 불가. 빠른대기4→1.5초/고정밀7초1회/전체상한12→9초. 위치·권한 미확보 실제 GPS시간을 단축 보장하지 않음.
+- 전체Node2004/2004·PC/폰23pass1기기제외/lint/type/globals/build/dry-run/diff정상. 합성GPS에서동기이동/브라우저추가요청0 및200mswatcher조기완료 확인. 새로운watch·영구저장·서버쓰기없음. docs/current-location-speed-v100-20261103.txt 상세.
+- 사전25e8dc5/Workera349587b 백업 private-audits/backups/js-map-current-location-speed-20261103-v100. 제품c8849cf origin/codex/current-location-speed-v100 푸시. Worker7ce85c98-268d-4988-80ed-dad5609989b5/cachea6fcbb3c7fa2b0ab7960a5a2 배포, 양도메인8응답200/SHA일치.
+- 별도 진행 카톡임장메모: 사용자 다른채팅방직접선택/말미출입기준고정 답변. 매물지번·카드정보만사용하고 GPS불필요함을명확히설명. 카톡연동아직미구현.
+
 ## 2026-11-03 선택매물 병합·병합/분리 속도 v99
 
 - 사용자 체크박스 일괄병합/선택해제 오른쪽 빨간 버튼 및 기존 병합·분리 속도 개선 요청. docs/selected-merge-speed-v99-20261103.txt 상세.
