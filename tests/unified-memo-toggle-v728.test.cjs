@@ -9,7 +9,7 @@ assert.match(script, /item-memo-label-v728/);
 assert.match(script, /memoOpen \? '메모 ▲' : '메모 ▼'/);
 assert.match(script, /isOpen \? '메모 ▲' : '메모 ▼'/);
 assert.doesNotMatch(script, /buildMemoEmojiIconV664/);
-assert.match(script, /toggleItemMemo\([^\n]+encodedKey[^\n]+this\)/);
+assert.match(script, /toggleItemMemo\([^\n]+encodedMemoKeyV104[^\n]+this\)/);
 assert.match(script, /var activeMemoCardV728 = null/);
 assert.match(script, /function getMemoCardV655\(key, preferredCard\)/);
 

@@ -2173,8 +2173,9 @@ function compatibleOriginalsCacheV1(items) {
 
 function originalMetadataMutationPendingV1(item) {
   var key = item && (item.key || itemKey(item));
+  var memoKey = typeof window.memoItemKeyV104 === "function" ? window.memoItemKeyV104(item) : key;
   var selectionKey = typeof window.actionSelectionKeyV660 === "function" ? window.actionSelectionKeyV660(item) : "";
-  return !!(window.memoSavePendingKeysV655 && window.memoSavePendingKeysV655[key] ||
+  return !!(window.memoSavePendingKeysV655 && (window.memoSavePendingKeysV655[key] || window.memoSavePendingKeysV655[memoKey]) ||
     window.doneTogglePendingKeys && (window.doneTogglePendingKeys[key] || window.doneTogglePendingKeys[selectionKey]));
 }
 

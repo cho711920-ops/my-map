@@ -71,6 +71,7 @@ var editingMemoKey = null;
 var memoEditMode = "replace";
 var memoSavePendingKeysV655 = Object.create(null);
 var memoDraftValuesV655 = Object.create(null);
+var memoDraftModesV104 = Object.create(null);
 var memoStatusMessagesV655 = Object.create(null);
 var roadviewFullMap = null;
 var roadviewFullMapMarker = null;
@@ -4040,6 +4041,7 @@ function toggleItemMemo(encodedKey, sourceButton) {
   var clickedCard = sourceButton && sourceButton.closest
     ? sourceButton.closest('.item[data-listing-key]')
     : null;
+  if (clickedCard) key = clickedCard.getAttribute("data-memo-key-v104") || key;
   var closingCurrent = openMemoKey === key &&
     (!clickedCard || !previousOpenCard || clickedCard === previousOpenCard);
 
@@ -4047,7 +4049,6 @@ function toggleItemMemo(encodedKey, sourceButton) {
   activeMemoCardV728 = closingCurrent ? null : clickedCard;
   editingMemoKey = null;
   memoEditMode = "replace";
-  delete memoDraftValuesV655[key];
 
   if (previousOpenKey && previousOpenCard &&
       (previousOpenKey !== key || previousOpenCard !== clickedCard || closingCurrent)) {
@@ -4064,9 +4065,9 @@ function beginMemoEdit(encodedKey) {
   var previousOpenKey = openMemoKey;
 
   editingMemoKey = key;
-  memoEditMode = "replace";
+  memoEditMode = memoDraftModesV104[key] || "replace";
+  memoDraftModesV104[key] = memoEditMode;
   openMemoKey = key;
-  delete memoDraftValuesV655[key];
   delete memoStatusMessagesV655[key];
 
   if (previousOpenKey && previousOpenKey !== key) {
@@ -4083,7 +4084,8 @@ function beginMemoAdd(encodedKey) {
   editingMemoKey = key;
   memoEditMode = "append";
   openMemoKey = key;
-  memoDraftValuesV655[key] = "";
+  if (memoDraftModesV104[key] !== "append") memoDraftValuesV655[key] = "";
+  memoDraftModesV104[key] = "append";
   delete memoStatusMessagesV655[key];
 
   if (previousOpenKey && previousOpenKey !== key) {
@@ -4109,6 +4111,7 @@ function cancelMemoEdit() {
   editingMemoKey = null;
   memoEditMode = "replace";
   delete memoDraftValuesV655[key];
+  delete memoDraftModesV104[key];
   delete memoStatusMessagesV655[key];
   refreshMemoCardV655(key, false);
 }
@@ -4141,27 +4144,48 @@ function autoResizeMemoEditor(element, immediate) {
 }
 
 
+function memoItemKeyV104(item) {
+  var id = String(item && item.propertyId || "").trim();
+  return id ? "property:" + id : String(item && item.key || "");
+}
+
 function getMemoItemV655(key) {
-  return (allItems || []).find(function(item) {
-    return item && item.key === key;
-  }) || (visibleListItems || []).find(function(item) {
-    return item && item.key === key;
-  }) || null;
+  if (String(key || "").indexOf("property:") === 0) {
+    return (allItems || []).find(function(item) { return item && memoItemKeyV104(item) === key; }) ||
+      (visibleListItems || []).find(function(item) { return item && memoItemKeyV104(item) === key; }) || null;
+  }
+  // Compatibility for older callers is safe only when the legacy key belongs
+  // to exactly one master. Never pick the first same-parcel sibling.
+  var legacy = (allItems || []).filter(function(item) { return item && item.key === key; });
+  if (!legacy.length) legacy = (visibleListItems || []).filter(function(item) { return item && item.key === key; });
+  return legacy.length === 1 ? legacy[0] : null;
+}
+
+function publishMemoValuesV104(item) {
+  var key = memoItemKeyV104(item);
+  [allItems,visibleListItems,currentItems].forEach(function(items) {
+    (items || []).forEach(function(row) {
+      if (memoItemKeyV104(row) !== key) return;
+      row.memo = item.memo;
+      if (item.contactListRaw != null) row.contactListRaw = item.contactListRaw;
+    });
+  });
 }
 
 
 function getMemoCardV655(key, preferredCard) {
   if (!key) return null;
-  if (preferredCard && preferredCard.isConnected &&
-      preferredCard.getAttribute("data-listing-key") === key) {
+  function matches(card) {
+    return card && card.isConnected && card.getAttribute("data-memo-key-v104") === key;
+  }
+  if (matches(preferredCard)) {
     return preferredCard;
   }
-  if (activeMemoCardV728 && activeMemoCardV728.isConnected &&
-      activeMemoCardV728.getAttribute("data-listing-key") === key) {
+  if (matches(activeMemoCardV728)) {
     return activeMemoCardV728;
   }
   var cards = Array.from(document.querySelectorAll(
-    '.item[data-listing-key="' + CSS.escape(key) + '"]'
+    '.item[data-memo-key-v104="' + CSS.escape(key) + '"]'
   ));
   return cards.find(function(card) { return card.offsetParent !== null; }) || cards[0] || null;
 }
@@ -4179,7 +4203,7 @@ function memoStatusMarkupV655(key) {
 
 function buildMemoPanelMarkupV655(item) {
   if (!item) return "";
-  var key = item.key;
+  var key = memoItemKeyV104(item);
   var encodedKey = encodeURIComponent(key);
   var safeKey = escapeHtml(key);
   var saving = !!memoSavePendingKeysV655[key];
@@ -4257,7 +4281,8 @@ function refreshMemoCardV655(key, focusEditor, preferredCard, forceOpen) {
   var item = getMemoItemV655(key);
   var isOpen = typeof forceOpen === "boolean"
     ? forceOpen
-    : openMemoKey === key && (!activeMemoCardV728 || card === activeMemoCardV728);
+    : openMemoKey === key && (!activeMemoCardV728 || !activeMemoCardV728.isConnected || card === activeMemoCardV728);
+  if (isOpen) activeMemoCardV728 = card;
   var toggle = card.querySelector(".item-memo-toggle");
   var panel = card.querySelector(".item-memo-panel");
 
@@ -4343,6 +4368,7 @@ function saveItemMemo(encodedKey) {
     mode: savingMode
   };
   item.memo = newMemo;
+  publishMemoValuesV104(item);
   editingMemoKey = null;
   memoEditMode = "replace";
   delete memoDraftValuesV655[key];
@@ -4363,6 +4389,9 @@ function saveItemMemo(encodedKey) {
     if (!result || result.persisted !== true) {
       throw new Error("메모 저장값을 D1에서 재확인하지 못했습니다.");
     }
+    if (result.propertyId && String(result.propertyId).trim() !== String(item.propertyId).trim()) {
+      throw new Error("메모 저장 대상이 일치하지 않습니다. 새로고침 후 확인해 주세요.");
+    }
     var savedPhoneKeys = Object.create(null);
     (Array.isArray(result && result.contacts) ? result.contacts : []).forEach(function(contact) {
       var savedPhone = normalizeListPhoneV650(contact && (contact.phone || contact.number));
@@ -4381,10 +4410,12 @@ function saveItemMemo(encodedKey) {
     if (result && typeof result.memo === "string") {
       item.memo = result.memo;
     }
+    publishMemoValuesV104(item);
+    if (window.JSInitialListingsCacheV1) Promise.resolve(window.JSInitialListingsCacheV1.clear()).catch(function() {});
     delete memoSavePendingKeysV655[key];
     delete memoDraftValuesV655[key];
-    editingMemoKey = null;
-    memoEditMode = "replace";
+    delete memoDraftModesV104[key];
+    if (editingMemoKey === key) { editingMemoKey = null; memoEditMode = "replace"; }
     showMemoStatusV655(key, "저장완료", "success", 1400);
     document.getElementById("status").innerHTML = "메모 저장완료";
   }).catch(function(error) {
@@ -4395,18 +4426,22 @@ function saveItemMemo(encodedKey) {
       mode: savingMode
     };
     item.memo = pending.previousMemo;
+    publishMemoValuesV104(item);
     delete memoSavePendingKeysV655[key];
     memoDraftValuesV655[key] = pending.enteredMemo;
+    memoDraftModesV104[key] = pending.mode || "replace";
     memoStatusMessagesV655[key] = {
       text: error && error.message
         ? error.message
         : "메모 저장에 실패했습니다.",
       tone: "error"
     };
-    openMemoKey = key;
-    editingMemoKey = key;
-    memoEditMode = pending.mode || "replace";
-    refreshMemoCardV655(key, true);
+    if (!openMemoKey || openMemoKey === key) {
+      openMemoKey = key;
+      editingMemoKey = key;
+      memoEditMode = pending.mode || "replace";
+      refreshMemoCardV655(key, true);
+    }
     document.getElementById("status").innerHTML = "메모 저장 실패 · 입력내용 유지";
   });
 }
@@ -4775,8 +4810,8 @@ function addListItem(item, appendTarget) {
     var favoriteMapContextV1 = typeof window.getFavoriteMapRemovalContextV1 === "function"
         ? window.getFavoriteMapRemovalContextV1(item) : null;
     var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
-    var memoOpen = openMemoKey === item.key;
-    var memoEditing = editingMemoKey === item.key;
+    var memoOpen = openMemoKey === memoItemKeyV104(item);
+    var memoEditing = editingMemoKey === memoItemKeyV104(item);
     var cachedBuildingBadgeV6519 = window.JSBuildingRegisterBadges &&
         typeof window.JSBuildingRegisterBadges.getCached === "function"
         ? window.JSBuildingRegisterBadges.getCached(item)
@@ -4794,6 +4829,7 @@ function addListItem(item, appendTarget) {
             (printSelected ? " print-selected" : "") +
             (memoOpen ? " memo-open" : "");
     var encodedKey = encodeURIComponent(item.key);
+    var encodedMemoKeyV104 = encodeURIComponent(memoItemKeyV104(item));
     var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
     var selectionControlV1 = '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
         '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') +
@@ -4877,7 +4913,7 @@ function addListItem(item, appendTarget) {
             '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>';
     var memoToggleButton = '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
         'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
-        'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedKey + '\', this)">' +
+        'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedMemoKeyV104 + '\', this)">' +
         '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
         '</button>';
     var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
@@ -4900,6 +4936,7 @@ function addListItem(item, appendTarget) {
         registerButtonV721 + favoriteButtonV721 + editButtonV721 + sourceLinkButton;
     var standardActionsV721 = "" + '<div class="item-action-left">' + regularActionButtonsV721 + '</div>' + memoToggleButton;
     div.setAttribute("data-listing-key", item.key);
+    div.setAttribute("data-memo-key-v104", memoItemKeyV104(item));
     div.setAttribute("data-list-card-id-v681", actionSelectionKeyV660(item));
     div.setAttribute("data-property-id", String(item.propertyId || "").trim());
     if (saleCardV1)

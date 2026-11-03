@@ -83,7 +83,8 @@
     }
     if (items.some(function(item) {
       var drafts = global.memoDraftValuesV655 || {}, pending = global.memoSavePendingKeysV655 || {};
-      return pending[item.key] || Object.prototype.hasOwnProperty.call(drafts,item.key) && drafts[item.key] !== String(item.memo || '');
+      var memoKey = typeof global.memoItemKeyV104 === 'function' ? global.memoItemKeyV104(item) : item.key;
+      return [memoKey,item.key].some(function(key) { return pending[key] || Object.prototype.hasOwnProperty.call(drafts,key) && drafts[key] !== String(item.memo || ''); });
     })) { global.alert('작성 중인 메모를 먼저 저장한 뒤 병합해 주세요.'); return; }
     var market = function(item) { return (item.tradeType || 'lease') + ':' + (item.tradeType === 'sale' ? item.saleCategory || '' : ''); };
     if (items.some(function(item) { return market(item) !== market(items[0]); })) { global.alert('같은 거래유형의 매물끼리 선택해 주세요.'); return; }
