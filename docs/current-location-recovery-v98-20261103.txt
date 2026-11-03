@@ -34,3 +34,10 @@
 적용
 지도 페이지 새로고침 필요. 기기 위치 제공이 꺼져 있거나 브라우저 권한이 거부된 경우에는
 그 사실을 안내하며 다른 좌표를 현재 위치로 추정하지 않는다.
+
+배포 기록
+제품 c80fa80 / origin/codex/current-location-recovery-v98 커밋·푸시.
+Worker d3eab4cb-9a5d-4b57-8738-e4a4a1378f46 / public cache1724bd00677a2cee66729148.
+양 도메인 HTML/현위치JS·CSS/data-access/SW 10응답200 및 빌드SHA일치.
+Permissions-Policy geolocation=(self) 확인, 기존 v97 매물 읽기 보완 유지.
+build/dry-run 통과. 실제 사용자 기기 위치 획득·복구 여부는 아직 미확인.

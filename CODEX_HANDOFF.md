@@ -3,7 +3,7 @@
 - 사용자 확인중/이동안됨 및 세로도구맨아래요청. 기존고정밀새위치만요청하던경로 보완. 최근8초browser위치허용 빠른4초→불가/무응답시고정밀7초1회,전체12초상한유지. 권한거부즉시종료/양단계타이머/늦은단계·이전클릭좌표차단/pagehide정리. 정확한사용자기기GPS실패원인단정없음.
 - 세로도구 DOM맨마지막(그리기아래),폰세로주차장아래전용버튼유지. 성공20m/idle/기존위치점,필터·선택보존,자동추적·새watch·외부API·서버쓰기없음. docs/current-location-recovery-v98-20261103.txt 상세.
 - Node1991/1991,최종PC/폰22pass4기기조건제외,lint/type/globals/diff정상. 실제Kakao SDK 빠른성공/고정밀전환성공2경로 20m확인(위치입력은합성;실제GPS실측아님). 화면육안검수. 사전8ec7482/Workerc8c55bc2-f27e-403a-8569-5040201aed8b 백업 private-audits/backups/js-map-current-location-recovery-20261103-v98.
-- codex/current-location-recovery-v98 작업. 배포기록 추가 예정. 목록 읽기v97 유지/수집작업중단·재시작없음.
+- 제품c80fa80 origin/codex/current-location-recovery-v98 푸시. Worker d3eab4cb-9a5d-4b57-8738-e4a4a1378f46/cache1724bd00677a2cee66729148 배포. 양도메인HTML/현위치JS·CSS/data-access/SW 10응답200·SHA일치,geolocation self허용 확인. 실제 사용자 GPS는 새로고침 후 확인 필요. 목록 읽기v97 유지/수집작업중단·재시작없음.
 
 ## 2026-11-03 매물 목록 재시도 실패 보완 v97
 
