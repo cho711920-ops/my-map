@@ -26,7 +26,10 @@ function fixture(t, count = 1, large = false) {
     async get(key) {
       const o = objects.get(key); if (!o) return null;
       return {...o,body:new ReadableStream({start(c){c.enqueue(o.bytes);c.close();}}),
-        async text(){stats.readText++;throw Error("Full cached text must never be loaded");}};
+        async text(){
+          if (key === "api-cache/revision/listings.json") return o.bytes.toString();
+          stats.readText++;throw Error("Full cached text must never be loaded");
+        }};
     },
     async createMultipartUpload(key, metadata) {
       stats.created++; const parts = [];
@@ -110,7 +113,12 @@ test("authenticated Worker cold/warm/forced/304 reads use the complete R2 stream
   const f = fixture(t,3), env = {...f.env,ALLOWED_EMAILS:"snapshot-test@example.invalid",
     SESSION_SECRET:"synthetic-v66-secret-more-than-32-characters"};
   const token = await createSessionToken({email:env.ALLOWED_EMAILS,sub:"synthetic"},env);
+  const revisionKey = "api-cache/revision/listings.json";
+  function revision(value) {
+    f.objects.set(revisionKey,{bytes:Buffer.from(JSON.stringify({revision:value})),customMetadata:{savedAt:String(Date.now())}});
+  }
   for (const action of ["sheet","data?action=unifiedListings"]) {
+    revision("current-"+action);
     const url="https://js-map.com/api/"+action;
     assert.equal((await worker.fetch(new Request(url),env)).status,401);
     const headers = {cookie:SESSION_COOKIE+"="+token};
@@ -124,7 +132,29 @@ test("authenticated Worker cold/warm/forced/304 reads use the complete R2 stream
     assert.equal(unchanged.status,304);
     const forced=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env);
     assert.equal(forced.status,200);assert.deepEqual(Buffer.from(await forced.arrayBuffer()),bytes);
-    assert.equal(f.stats.created,count+1);
+    assert.equal(f.stats.created,count,"a verified current snapshot must not scan the database again");
+    const forced304=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1","if-none-match":warm.headers.get("etag")}}),env);
+    assert.equal(forced304.status,304);assert.equal(f.stats.created,count);
+
+    // A real edit must bypass the previous complete snapshot, even inside TTL.
+    f.db.prepare("UPDATE listings SET operating_memo=operating_memo||' changed' WHERE id='M0'").run();
+    f.db.prepare("UPDATE listing_sources SET list_snapshot_json=json_set(list_snapshot_json,'$.salePrice',?) WHERE id='S0'").run(action==="sheet"?99999:88888);
+    revision("edited-"+action);
+    const changed=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env);
+    assert.equal(changed.status,200);const changedBytes=Buffer.from(await changed.arrayBuffer());
+    assert.notDeepEqual(changedBytes,bytes);assert.equal(f.stats.created,count+1);
+    assert.equal(changed.headers.get("x-js-listings-revision"),"edited-"+action);
+
+    // Neither an unverifiable revision nor an expired matching cache is fresh.
+    f.objects.delete(revisionKey);
+    const unknown=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env);
+    assert.equal(unknown.status,200);await unknown.arrayBuffer();assert.equal(f.stats.created,count+2);
+    revision("edited-"+action);
+    const key=[...f.objects.keys()].find(key=>action==="sheet"?key.endsWith(".csv"):key.includes("unified-listings"));
+    Object.assign(f.objects.get(key).customMetadata,{revision:"edited-"+action,savedAt:"1"});
+    const expired=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env);
+    assert.equal(expired.status,200);assert.deepEqual(Buffer.from(await expired.arrayBuffer()),changedBytes);
+    assert.equal(f.stats.created,count+3);
   }
   assert.equal(f.stats.readText,0);
 });

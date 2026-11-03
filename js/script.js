@@ -2857,15 +2857,32 @@ function loadNaverMapsSdkV653() {
   }
 
   naverRoadviewSdkReadyV1 = false;
-  var sdkRequest = fetch("/api/naver-maps-config", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "same-origin"
-  })
-    .then(function(response) {
+  // Bound both headers and JSON body. A hung warmup used to keep the shared
+  // promise pending forever, so reopening the modal could never retry it.
+  var configController = typeof AbortController === "function" ? new AbortController() : null;
+  var configRequest = new Promise(function(resolve, reject) {
+    var configTimer = setTimeout(function() {
+      clearTimeout(configTimer);
+      reject(new Error("NAVER_MAPS_CONFIG_TIMEOUT"));
+      if (configController) configController.abort();
+    }, 8000);
+    fetch("/api/naver-maps-config", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      ...(configController ? {signal: configController.signal} : {})
+    }).then(function(response) {
       if (!response.ok) throw new Error("NAVER_MAPS_CONFIG_FAILED");
       return response.json();
-    })
+    }).then(function(config) {
+      clearTimeout(configTimer);
+      resolve(config);
+    }, function(error) {
+      clearTimeout(configTimer);
+      reject(error);
+    });
+  });
+  var sdkRequest = configRequest
     .then(function(config) {
       var ncpKeyId = String(config && config.ncpKeyId || "").trim();
       if (isInvalidNaverMapsKeyV662(ncpKeyId)) {

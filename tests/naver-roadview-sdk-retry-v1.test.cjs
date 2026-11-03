@@ -99,6 +99,32 @@ test("a previously ready SDK with a lost Panorama namespace is recreated", async
   succeed(h); await retry;
 });
 
+for (const stage of ["headers", "body"]) test("hung config "+stage+" expires, releases shared warmup, and ignores a late reply", async () => {
+  const h = harness();
+  let release;
+  const stuck = new Promise(resolve => {release=resolve;});
+  h.sandbox.AbortController=AbortController;
+  let signal;
+  h.sandbox.fetch=async (_url,options)=>{
+    signal=options.signal;
+    return stage==="headers" ? stuck : {ok:true,json:()=>stuck};
+  };
+  const first=h.sandbox.loadNaverMapsSdkV653();
+  assert.equal(first,h.sandbox.loadNaverMapsSdkV653());
+  const failure=assert.rejects(first,/NAVER_MAPS_CONFIG_TIMEOUT/);
+  await flush();
+  [...h.timers.values()].find(timer=>timer.delay===8000).callback();
+  await failure;
+  assert.equal(signal.aborted,true);assert.equal(h.timers.size,0);
+  assert.equal(h.sandbox.naverRoadviewSdkPromiseV653,null);
+  h.sandbox.fetch=async()=>({ok:true,json:async()=>({ncpKeyId:"fixture-valid-key"})});
+  const retry=h.sandbox.loadNaverMapsSdkV653();
+  await flush();succeed(h);await retry;
+  release(stage==="headers" ? {ok:true,json:async()=>({ncpKeyId:"old-late-key"})} : {ncpKeyId:"old-late-key"});
+  await flush();assert.equal(h.scripts.length,1);assert.equal(h.timers.size,0);
+  assert.equal(h.sandbox.naverRoadviewSdkReadyV1,true);
+});
+
 for (const readyState of ["complete", "loading"]) {
   test("roadview warmup schedules one idle attempt with document " + readyState, async () => {
     const idle = [];

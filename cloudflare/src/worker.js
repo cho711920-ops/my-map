@@ -319,11 +319,17 @@ function cacheAgeMs(object) {
   return savedAt > 0 ? Date.now() - savedAt : Number.POSITIVE_INFINITY;
 }
 
-async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified") {
+async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified", expectedRevision = null) {
   if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
   const object = await env.MEDIA.get(key);
   if (!object) return null;
   if (cacheAgeMs(object) > maxAgeMs) { await object.body?.cancel?.(); return null; }
+  // A forced read still requires current data, but an already complete snapshot
+  // at that exact revision is current. Never trust an absent/initial revision.
+  if (expectedRevision !== null && (!expectedRevision || expectedRevision === "0" ||
+      String(object.customMetadata?.revision || "") !== expectedRevision)) {
+    await object.body?.cancel?.(); return null;
+  }
   const streamed = streamRequest ? await (streamKind === "sheet"
     ? sheetCacheStream(streamRequest, object) : unifiedCacheStream(streamRequest, object)) : null;
   if (streamed?.response) return streamed;
@@ -655,12 +661,13 @@ async function handleSheet(request, env, context) {
   const forceFresh = request.headers.get("x-js-force-refresh") === "1";
   if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
   const cacheKey = D1_SHEET_CACHE_KEY;
+  const forcedRevision = forceFresh ? (await readDataRevision(env, "listings")).revision : null;
   if (typeof env.MEDIA?.createMultipartUpload === "function") {
-    const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
+    const cached = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet", forcedRevision);
     if (cached?.response) return cached.response;
     // Capture before the query so a concurrent edit is visible to revision
     // polling. A shared build prevents concurrent cold reads multiplying heap.
-    const revision = (await readDataRevision(env, "listings")).revision;
+    const revision = forcedRevision ?? (await readDataRevision(env, "listings")).revision;
     const build = buildSheetSnapshot(env, cacheKey, revision);
     if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
     await build;
@@ -669,13 +676,13 @@ async function handleSheet(request, env, context) {
     throw Object.assign(new Error("매물 목록을 준비하지 못했습니다. 다시 시도해 주세요."), {statusCode: 503});
   }
   if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl) {
-    const cached = forceFresh ? null : await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
+    const cached = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet", forcedRevision);
     if (cached?.response) return cached.response;
     if (cached && cached.revision) {
       sheetCache = { body: cached.body, revision: cached.revision, etag: await sha256Etag(cached.body), fetchedAt: Date.now(), key: cacheKey };
     } else {
       // Capture BEFORE the query: concurrent writes must remain visible on the next revision check.
-      const revision = (await readDataRevision(env, "listings")).revision;
+      const revision = forcedRevision ?? (await readDataRevision(env, "listings")).revision;
       const body = await buildD1SheetCsv(env);
       sheetCache = { body, revision, etag: await sha256Etag(body), fetchedAt: Date.now(), key: cacheKey };
       writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8", revision, sheetCache.etag);
@@ -849,8 +856,12 @@ async function handleDataApi(request, env, context) {
       const validTtl = Number.isFinite(configuredTtl) && configuredTtl > 0 ? configuredTtl : defaultTtl;
       const boundedTtl = detailCacheKey ? Math.min(5 * 60_000, validTtl) : validTtl;
       const forceFresh = (query.action === "unifiedListings" || Boolean(detailCacheKey)) && request.headers.get("x-js-force-refresh") === "1";
-      const cached = forceFresh ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl),
-        query.action === "unifiedListings" && !query.callback ? request : null);
+      if (forceFresh && query.action === "unifiedListings") {
+        unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
+      }
+      const cached = forceFresh && detailCacheKey ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl),
+        query.action === "unifiedListings" && !query.callback ? request : null, "unified",
+        forceFresh ? unifiedSnapshotRevision : null);
       if (cached?.response) return cached.response;
       if (cached && (query.action !== "unifiedListings" || cached.revision)) {
         const cachedBody = query.action === "unifiedListings"
@@ -874,7 +885,7 @@ async function handleDataApi(request, env, context) {
         });
       }
     }
-    if (query.action === "unifiedListings") unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
+    if (query.action === "unifiedListings" && !unifiedSnapshotRevision) unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
     if (query.action === "unifiedListings" && !query.callback && typeof env.MEDIA?.createMultipartUpload === "function") {
       const build = buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, query);
       if (context?.waitUntil) context.waitUntil(build.catch(() => {}));

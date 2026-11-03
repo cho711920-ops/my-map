@@ -179,6 +179,21 @@ test("legacy CSV cache without a snapshot revision is rebuilt once", async () =>
   assert.equal(h.counts.d1, 1);
 });
 
+test("forced fallback CSV reuses only a complete current-revision R2 cache, ignoring old process memory", async () => {
+  const h = harness();
+  await h.write({ changeIds: ["BASE"] });
+  const base = (await h.read()).revision;
+  h.context.sheetCache={body:"OLD MEMORY",revision:"old",fetchedAt:Date.now(),key:"sheet",etag:"old"};
+  await h.env.MEDIA.put("sheet","CURRENT",{customMetadata:{savedAt:String(Date.now()),revision:base}});
+  const request=new Request("http://local/api/sheet",{headers:{"x-js-force-refresh":"1"}});
+  assert.equal(await (await h.context.handleSheet(request,h.env,null)).text(),"CURRENT");
+  assert.equal(h.counts.d1,0);
+  await h.write({changeIds:["CHANGED"]});
+  const response=await h.context.handleSheet(request,h.env,null);
+  assert.equal(await response.text(),"NEW");assert.equal(h.counts.d1,1);
+  assert.equal(response.headers.get("x-js-listings-revision"),(await h.read()).revision);
+});
+
 test("failed refresh cannot advance baseline; successful refresh owns its baseline", async () => {
   const h = harness();
   await h.write({ fullReload: true });

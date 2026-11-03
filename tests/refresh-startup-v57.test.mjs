@@ -88,7 +88,7 @@ test("CSV stream negotiates gzip without manual double compression", async () =>
   assert.equal(await sheetCacheStream(new Request("https://js-map.com/api/sheet"),{...cached(),customMetadata:{}}),null);
 });
 
-test("Worker protects streamed CSV, rejects expired cache and bypasses it for forced latest reads", async () => {
+test("Worker protects streamed CSV and rejects expired or unverifiable cache on forced latest reads", async () => {
   let gets = 0, reads = 0;
   let stale = false;
   const writes = [], tasks = [];
@@ -109,5 +109,5 @@ test("Worker protects streamed CSV, rejects expired cache and bypasses it for fo
   assert.equal(reads,1); assert.equal(writes[0][2].customMetadata.etag,fresh.headers.get("etag"));
   const oldGets = gets;
   const forced = await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env,{waitUntil(p){tasks.push(p);}});
-  await forced.text(); assert.equal(reads,2); assert.equal(gets,oldGets+1,"Only the revision lookup may use R2 on a forced read");
+  await forced.text(); assert.equal(reads,2); assert.equal(gets,oldGets+2,"Check the revision and cache metadata before rebuilding; never use an unverified body");
 });
