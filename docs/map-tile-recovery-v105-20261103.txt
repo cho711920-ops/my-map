@@ -46,3 +46,9 @@
 복원
 - 변경 전 소스26ee56e / Workerf17289d7-0fc7-42c6-8837-6363735bedd7.
 - 원래 프로젝트 private-audits/backups/js-map-tile-recovery-20261103-v105/source.zip 및 RESTORE.txt.
+
+배포
+- 제품30b0a47 / origin/codex/map-tile-recovery-v105 커밋·푸시.
+- Worker32466da4-b3b8-44d1-91df-0dc626e703bc / public cachea4a1f26c71625f3f69241f09 배포.
+- 양 도메인 HTML·신규 타일복구/map/script/병합/임장공유JS·SW 총14응답200/빌드SHA256 일치 확인.
+- 사용자 페이지 새로고침 후 적용. 일시적 타일 실패를 자동 복구하며 지속적인 네트워크 차단/서버 장애까지 해결했다고 주장하지 않는다.

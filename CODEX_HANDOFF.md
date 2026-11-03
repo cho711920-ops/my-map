@@ -5,6 +5,7 @@
 - 중심/축척/선택/목록 idle 갱신/수집기 변경 없음. SDK opacity·레이어 직접 변경 없음. 보조 연결 실패가 매물 로딩 차단하지 않게 보호.
 - Node2008/2008, 타일 Edge PC/폰16/16 + 지도/클러스터 회귀14통과4skip, 실제SDK3개복구/이동확대후실패img0, lint/type/globals/diff/build/dry-run 정상. docs/map-tile-recovery-v105-20261103.txt 참조.
 - 사전 백업 원래프로젝트 private-audits/backups/js-map-tile-recovery-20261103-v105 (소스26ee56e/이전Workerf17289d7).
+- 제품30b0a47 origin/codex/map-tile-recovery-v105 푸시. Worker32466da4-b3b8-44d1-91df-0dc626e703bc/cachea4a1f26c71625f3f69241f09 배포. 양도메인 관련14응답200/SHA일치. 페이지 새로고침 필요.
 
 ## 2026-11-03 동일 지번 메모 오대상 저장 v104
 
