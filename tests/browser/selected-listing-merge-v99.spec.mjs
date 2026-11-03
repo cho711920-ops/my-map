@@ -67,3 +67,64 @@ test('failed save keeps selection and retries with the same request ID without a
  expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(2);
  await page.locator('#selectedMergeDialogV99 [data-submit]').click();await expect.poll(()=>writes.length).toBe(2);expect(writes[0].requestId).toBe(writes[1].requestId);
 });
+
+test('representative choices follow the displayed order and conditions, not storage or click order',async({page,isMobile})=>{
+ await setup(page,isMobile);
+ await page.route('**/__fixture/merge-photo-*',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="100"><rect width="80" height="100" fill="'+(route.request().url().endsWith('a')?'#accade':'#d8c5b0')+'"/><text x="30" y="55" font-size="25">'+(route.request().url().endsWith('a')?'A':'B')+'</text></svg>'}));
+ await page.evaluate(()=>{
+   const items=allItems.filter(i=>i.tradeType==='lease');
+   const originals=(count,photo)=>Array.from({length:count},(_,index)=>({originalId:photo+index,thumbnail:location.origin+'/__fixture/merge-photo-'+photo,source:'네이버'}));
+   const first={...items[1],name:'일반상가',address:'서구 괴정동 425-5',room:'1층',deposit:3000,rent:270,area:26,unifiedDisplayOriginalsV2:originals(4,'a')};
+   const second={...items[0],name:'일반상가',address:first.address,room:'1층',deposit:3000,rent:270,area:31,unifiedDisplayOriginalsV2:originals(2,'b')};
+   showList([first,second]);selectedPrintKeys=items.map(actionSelectionKeyV660);updatePrintSelectedButton();
+ });
+ const requests=[];page.on('request',req=>{if(req.url().includes('/api/data'))requests.push(req.url());});
+ await page.locator('#mergeSelectedListingsBtnV99').click();
+ const rows=page.locator('#selectedMergeDialogV99 label');
+ await expect(rows).toHaveCount(2);
+ await expect(rows.nth(0).locator('input')).toHaveValue('FIXTURE-LEASE-2');await expect(rows.nth(0).locator('input')).toBeChecked();
+ await expect(rows.nth(0)).toContainText('목록 1번');await expect(rows.nth(0)).toContainText('26평');await expect(rows.nth(0)).toContainText('동일매물 4개');
+ await expect(rows.nth(1)).toContainText('목록 2번');await expect(rows.nth(1)).toContainText('31평');await expect(rows.nth(1)).toContainText('동일매물 2개');
+ await expect(rows.nth(0).locator('img')).toHaveAttribute('src',/merge-photo-a/);await expect(rows.nth(1).locator('img')).toHaveAttribute('src',/merge-photo-b/);
+ await expect.poll(()=>rows.nth(0).locator('img').evaluate(img=>img.naturalWidth)).toBe(80);
+ expect(requests).toEqual([]);
+ expect(await page.locator('#selectedMergeDialogV99').evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);
+ await mkdir('outputs/v102',{recursive:true});await page.screenshot({path:'outputs/v102/choices-'+(isMobile?'mobile':'desktop')+'.png'});
+ // A sort behind the open chooser cannot retarget the already chosen ID.
+ const writes=[];
+ await page.route('**/api/data',async route=>{
+   const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();
+   writes.push(body);await route.fulfill({json:response(body.primaryMasterId,body.duplicateMasterIds)});
+ });
+ await page.evaluate(()=>{visibleListItems.reverse();JSUnifiedListingsV8.finishSelectedMerge=()=>{};});
+ await rows.nth(1).locator('input').check();await page.locator('#selectedMergeDialogV99 [data-submit]').click();
+ await expect(page.locator('#selectedMergeDialogV99')).not.toBeVisible();
+ expect(writes).toHaveLength(1);expect(writes[0].primaryMasterId).toBe('FIXTURE-LEASE-1');
+ expect(writes[0].duplicateMasterIds).toEqual(['FIXTURE-LEASE-2']);
+});
+
+test('off-screen virtual choices retain list positions and hidden selections are clearly identified',async({page,isMobile})=>{
+ await setup(page,isMobile);
+ await page.evaluate(()=>{
+   const items=allItems.filter(i=>i.tradeType==='lease');
+   const fillers=Array.from({length:70},(_,i)=>({...items[0],propertyId:'FILLER-'+i,key:'filler-'+i}));
+   showList([items[1],...fillers,items[0]]);selectedPrintKeys=items.map(actionSelectionKeyV660);updatePrintSelectedButton();
+ });
+ await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]')).toHaveCount(0);
+ await page.locator('#mergeSelectedListingsBtnV99').click();
+ await expect(page.locator('#selectedMergeDialogV99 label').nth(1)).toContainText('목록 72번');
+ await page.locator('#selectedMergeDialogV99 [data-cancel]').click();
+ await page.evaluate(()=>{visibleListItems=visibleListItems.slice(0,1);});
+ await page.locator('#mergeSelectedListingsBtnV99').click();
+ await expect(page.locator('#selectedMergeDialogV99 label')).toHaveCount(2);
+ await expect(page.locator('#selectedMergeDialogV99 label').nth(1)).toContainText('현재 목록 밖 선택');
+ // Unknown area must not turn into 0평, and changes while reviewing block save.
+ await page.locator('#selectedMergeDialogV99 [data-cancel]').click();
+ await page.evaluate(()=>{allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1').displayValuePresence={area:false};});
+ await page.locator('#mergeSelectedListingsBtnV99').click();
+ await expect(page.locator('#selectedMergeDialogV99 label').nth(1)).toContainText('면적 미확인');
+ await page.evaluate(()=>{allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1').memo='외부 변경';window.__unexpectedWrite=false;JSDataAccessV6={...JSDataAccessV6,mutate:()=>{__unexpectedWrite=true;}};});
+ await page.locator('#selectedMergeDialogV99 [data-submit]').click();
+ await expect(page.locator('.merge-message-v99')).toContainText('선택 매물이나 계정이 변경');
+ expect(await page.evaluate(()=>__unexpectedWrite)).toBe(false);
+});
