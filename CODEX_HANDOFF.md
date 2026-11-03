@@ -5,6 +5,7 @@
 - 기존2200ms 후 전체 읽기→해당ID scoped 재조회/IDB무효화. 실패/fullReload fallback 유지, 오래된 응답이 후속 편집 상태 삭제 금지. updateProperty 캐시 무효화 응답 전 완료.
 - Node2010/2010. Edge 권리금6/6·수정충돌4/4·매매8/8, lint/type/globals/diff/build/dry-run 정상. 배포 정보는 아래 문서에 기록.
 - 백업 원래프로젝트 private-audits/backups/js-map-premium-edit-20261103-v106 (HEAD8938944/이전Worker32466da4). docs/premium-edit-v106-20261103.txt 참조.
+- 제품5bb0a7e origin/codex/premium-edit-v106 푸시. Worker4044bcfb-fc16-42d7-a222-dcd63ea31404/cache567b93a6ad46b7b7d3d3e5e9 배포, 양도메인10응답200/SHA일치. 새로고침 후 적용.
 
 ## 2026-11-03 지도 타일 누락 복구 v105
 
