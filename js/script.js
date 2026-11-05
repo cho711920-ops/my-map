@@ -2390,6 +2390,10 @@ function showList(items) {
       ? Math.max(previousRenderLimit, getListRenderChunkSize())
       : getListRenderChunkSize()
   );
+  if (visibleListItems.length && !document.documentElement.hasAttribute("data-first-list-render-ms") &&
+      window.performance && typeof window.performance.now === "function") {
+    document.documentElement.setAttribute("data-first-list-render-ms", String(Math.round(window.performance.now())));
+  }
   listCardReusePoolV6521 = null;
   listThumbnailReusePoolV112 = null;
 

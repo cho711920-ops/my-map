@@ -552,9 +552,28 @@
       if (attribute.name !== "src") entry.image.setAttribute(attribute.name, attribute.value);
     });
     previous.replaceWith(entry.image);
+    previous.onload = previous.onerror = null;
+    previous.removeAttribute("src");
     render(container, safeIndex);
     detailImageLoaded(entry.image);
     return true;
+  }
+
+  function adoptPendingPhotoV124(container, source) {
+    var entry = state.photoPreloads[source], previous = container && container.querySelector("img");
+    if (!entry || !previous || entry.image === previous) return previous;
+    // A next-photo click can arrive before decode finishes. Keep the exact
+    // in-flight node instead of starting the same URL again on another Image.
+    delete state.photoPreloads[source];
+    entry.image.onload = entry.image.onerror = null;
+    if (previous._photoLoadCleanupV114) previous._photoLoadCleanupV114();
+    Array.prototype.forEach.call(previous.attributes, function(attribute) {
+      if (attribute.name !== "src") entry.image.setAttribute(attribute.name, attribute.value);
+    });
+    previous.replaceWith(entry.image);
+    previous.onload = previous.onerror = null;
+    previous.removeAttribute("src");
+    return entry.image;
   }
 
   function apiGet(action, params, force) {
@@ -727,6 +746,8 @@
   // slow or failed destination must not erase the last decoded photo.
   function loadPhotoV114(container, image, source, originalSource) {
     if (image._photoLoadCleanupV114) image._photoLoadCleanupV114();
+    var photoStartedV124 = Date.now();
+    container.setAttribute("data-photo-ready-ms", "pending");
     var notice = container.querySelector(".photo-load-status-v114");
     if (!notice) {
       notice = document.createElement("div");
@@ -775,6 +796,7 @@
       if (!current() || !image.complete || !image.naturalWidth) return;
       finished = true;
       stopWaiting();
+      container.setAttribute("data-photo-ready-ms", String(Date.now() - photoStartedV124));
       notice.hidden = true;
       if (!container._photoTransitionCleanupV1 && container._photoTransitionGhostV1) {
         container._photoTransitionGhostV1.remove();
@@ -837,7 +859,7 @@
       status(false);
       timer = global.setTimeout(unavailable, 15000);
       if (alternate) hedgeTimer = global.setTimeout(startAlternate, 1200);
-      image.src = source;
+      if (image.getAttribute("src") !== source) image.src = source;
       if (image.complete && image.naturalWidth) loaded();
     }
   }
@@ -915,9 +937,14 @@
     image.style.transform = "";
     // The loaded old frame stays visible until the destination is available.
     if (ghost) image.style.opacity = "0";
+    commit();
+    // The renderer may adopt an already downloading adjacent Image. Bind the
+    // transition to that live node, never to the outgoing detached image.
+    image = container.querySelector("img") || image;
+    image.style.transition = "none";
+    if (ghost) image.style.opacity = "0";
     image.addEventListener("load", start, {once: true});
     image.addEventListener("error", fail, {once: true});
-    commit();
     if (finished) return;
     if (image.complete && image.naturalWidth) start();
     // loadPhotoV114 owns bounded request failure/retry; never drop a decoded
@@ -2130,6 +2157,7 @@
       image.style.display = "block";
       /* 대표 썸네일은 이미 목록에서 받은 동일 URL을 써서 중복 다운로드를 피합니다. */
       var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
+      image = adoptPendingPhotoV124(gallery, displaySource) || image;
       image.setAttribute("data-detail-source-v8144", text(images[safeIndex]));
       try { image.fetchPriority = "high"; } catch (ignore) {}
       loadPhotoV114(gallery, image, displaySource, text(images[safeIndex]));
@@ -3161,6 +3189,7 @@
     modal._indexV8 = safeIndex;
     var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
     var modalImage = modal.querySelector("img");
+    modalImage = adoptPendingPhotoV124(modal, displaySource) || modalImage;
     try { modalImage.fetchPriority = "high"; } catch (ignore) {}
     loadPhotoV114(modal, modalImage, displaySource, text(images[safeIndex]));
     modal.querySelector("span:not(.photo-transition-ghost-v1)").textContent = (safeIndex + 1) + " / " + images.length;

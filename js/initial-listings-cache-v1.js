@@ -155,7 +155,8 @@
     });
   }
 
-  function read() {
+  var warmReadV124 = null;
+  function readSnapshotV124() {
     var key = snapshotKeyV123(), version = versionV94();
     return openDatabase().then(function(database) {
       return new Promise(function(resolve) {
@@ -172,6 +173,30 @@
         transaction.onabort = function() { database.close(); };
       });
     }).catch(function() { return null; });
+  }
+
+  // Start the one complete IndexedDB read while the map SDK is loading. Do
+  // not clone the large snapshot again, or reuse it after an edit/scope change.
+  function warm() {
+    var version = versionV94();
+    if (!warmReadV124 || warmReadV124.version !== version) {
+      var started = Date.now();
+      warmReadV124 = {version: version, promise: readSnapshotV124().then(function(value) {
+        if (version === versionV94() && global.document && global.document.documentElement) {
+          global.document.documentElement.setAttribute("data-initial-cache-read-ms", String(Date.now() - started));
+        }
+        return value;
+      })};
+    }
+    return warmReadV124.promise;
+  }
+  function read() {
+    var warmed = warmReadV124;
+    warmReadV124 = null;
+    if (!warmed || warmed.version !== versionV94()) return readSnapshotV124();
+    return warmed.promise.then(function(value) {
+      return warmed.version === versionV94() && usable(value) ? value : null;
+    });
   }
 
   function storeSnapshot(value, version) {
@@ -194,6 +219,7 @@
   }
 
   function write(items, unifiedResult) {
+    warmReadV124 = null;
     var version = versionV94();
     return new Promise(function(resolve) {
       var schedule = typeof global.requestIdleCallback === "function"
@@ -214,6 +240,7 @@
     if (!id || !receipt || receipt.persisted !== true || receipt.queued ||
         String(receipt.propertyId || "").trim() !== id) return Promise.resolve(false);
     if (receipt.fullReload || receipt.sourceLinksChanged) return clear();
+    warmReadV124 = null;
     var patch = {}, updated = receipt.updated || {};
     BASE_ITEM_FIELDS.forEach(function(field) {
       if (Object.prototype.hasOwnProperty.call(updated, field)) patch[field] = updated[field];
@@ -263,6 +290,7 @@
   }
 
   function clear() {
+    warmReadV124 = null;
     generationV94 += 1;
     localEpochV94 = Date.now() + "-" + Math.random().toString(36).slice(2);
     try { global.localStorage.setItem(EPOCH_KEY_V94, localEpochV94); localEpochOnlyV94 = false; }
@@ -280,6 +308,7 @@
   }
 
   global.JSInitialListingsCacheV1 = Object.freeze({
+    warm: warm,
     read: read,
     write: write,
     commitItem: commitItem,

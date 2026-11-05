@@ -23,7 +23,7 @@ test("initial data warmup starts before the Kakao SDK and critical UI scripts", 
   const map = html.indexOf('data-auth-critical src="js/map.js');
 
   assert.ok(access >= 0 && access < kakao);
-  assert.ok(kakao < main && main < cache && cache < parser && parser < map);
+  assert.ok(access < cache && cache < kakao && kakao < main && main < parser && parser < map);
   assert.match(html, /parser\.js\?v=6\.4\.19-distinct-listing-save/);
   assert.match(mapSource, /setupQuickAddShortcuts\(\);/);
   assert.match(auth, /const criticalScripts = scripts\.filter/);

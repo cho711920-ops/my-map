@@ -121,6 +121,10 @@ function loadScriptInOrder(sourceScript, target = document.body) {
 }
 
 function warmInitialDataAfterScript(script) {
+  if (/(?:^|\/)initial-listings-cache-v1\.js(?:\?|$)/.test(script.getAttribute("src") || "") &&
+      window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.warm === "function") {
+    window.JSInitialListingsCacheV1.warm();
+  }
   if (
     /(?:^|\/)data-access-v6\.js(?:\?|$)/.test(script.getAttribute("src") || "") &&
     window.JSDataAccessV6 &&
@@ -130,7 +134,7 @@ function warmInitialDataAfterScript(script) {
   }
 }
 
-async function appendAuthenticatedBodyAssets() {
+async function appendAuthenticatedBodyAssets(earlyPreloadLinks = []) {
   const template = document.getElementById("jsAuthenticatedBodyAssets");
   if (!template) return;
   const nodes = Array.from(template.content.childNodes);
@@ -142,7 +146,7 @@ async function appendAuthenticatedBodyAssets() {
   // Do not compete with the map and the complete-list snapshot for bandwidth.
   // Only startup-critical files are preloaded; secondary panels begin once the
   // first screen has yielded to the browser.
-  const preloadLinks = criticalScripts.map((node) => {
+  const preloadLinks = earlyPreloadLinks.length ? earlyPreloadLinks : criticalScripts.map((node) => {
     const preload = document.createElement("link");
     preload.rel = "preload";
     preload.as = "script";
@@ -347,8 +351,15 @@ function loadAuthenticatedAssets() {
   if (authenticatedAssetsPromise) return authenticatedAssetsPromise;
   const pending = (async () => {
     appendAuthenticatedApplication();
-    await appendAuthenticatedHeadAssets();
-    await appendAuthenticatedBodyAssets();
+    const bodyTemplate = document.getElementById("jsAuthenticatedBodyAssets");
+    const earlyPreloads = preloadAuthenticatedScripts(Array.from(bodyTemplate?.content.querySelectorAll("script[data-auth-critical][src]") || []));
+    try {
+      await appendAuthenticatedHeadAssets();
+      await appendAuthenticatedBodyAssets(earlyPreloads);
+    } catch (error) {
+      earlyPreloads.forEach(preload => preload.remove());
+      throw error;
+    }
   })();
   authenticatedAssetsPromise = pending.catch((error) => {
     // Templates and successfully loaded URLs are retained, so a later session
